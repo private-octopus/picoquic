@@ -43,6 +43,8 @@ extern "C" {
 
     void picohash_delete(picohash_table * hash_table, int delete_key_too);
 
+    uint64_t picohash_bytes(uint8_t * key, uint32_t length);
+
 
 #ifdef  __cplusplus
 }

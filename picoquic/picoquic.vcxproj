@@ -131,8 +131,9 @@
     <Text Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="ctxhash.c" />
+    <ClCompile Include="quicctx.c" />
     <ClCompile Include="packet.c" />
+    <ClCompile Include="parse_util.c" />
     <ClCompile Include="picohash.c" />
   </ItemGroup>
   <ItemGroup>

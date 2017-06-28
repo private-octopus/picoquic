@@ -1,4 +1,6 @@
 #include "../picoquic/picohash.h"
+#include <stdlib.h>
+#include <malloc.h>
 
 struct hashtestkey
 {
@@ -20,7 +22,7 @@ static int hashtest_compare(void * v1, void *v2)
     return (k1->x == k2->x) ? 0 : -1;
 }
 
-static picohash_item * hashtest_item(uint64_t x)
+static struct hashtestkey * hashtest_item(uint64_t x)
 {
     struct hashtestkey * p = (struct hashtestkey *) malloc(sizeof(struct hashtestkey));
 

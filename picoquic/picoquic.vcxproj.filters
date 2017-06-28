@@ -21,10 +21,13 @@
     <ClCompile Include="packet.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="ctxhash.c">
+    <ClCompile Include="picohash.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="picohash.c">
+    <ClCompile Include="parse_util.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="quicctx.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

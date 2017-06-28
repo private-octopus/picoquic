@@ -116,3 +116,17 @@ void picohash_delete(picohash_table * hash_table, int delete_key_too)
     free(hash_table->hash_bin);
     free(hash_table);
 }
+
+
+uint64_t picohash_bytes(uint8_t * key, uint32_t length)
+{
+    uint64_t hash = 0xDEADBEEF;
+
+    for (uint32_t i = 0; i < length; i++)
+    {
+        hash ^= key[i];
+        hash ^= ((hash << 31) ^ (hash >> 17));
+    }
+
+    return hash;
+}
