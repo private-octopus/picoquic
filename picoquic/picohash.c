@@ -49,6 +49,8 @@ picohash_item * picohash_retrieve(picohash_table * hash_table, void * key)
             item = item->next_in_bin;
         }
     }
+
+    return item;
 }
 
 int picohash_insert(picohash_table * hash_table, void* key)
@@ -67,6 +69,8 @@ int picohash_insert(picohash_table * hash_table, void* key)
         item->hash = hash;
         item->key = key;
         item->next_in_bin = hash_table->hash_bin[bin];
+        hash_table->hash_bin[bin] = item;
+        hash_table->count++;
     }
     
     return ret;
