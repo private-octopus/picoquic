@@ -59,7 +59,9 @@ picoquic_quic * picoquic_create(uint32_t nb_connections)
     {
         /* TODO: winsock init */
         /* TODO: open UDP sockets - maybe */
-        /* TODO: chain of connections - maybe */
+
+        quic->cnx_list = NULL;
+        quic->cnx_last = NULL;
 
         quic->table_cnx_by_id = picohash_create(nb_connections * 4,
             picoquic_cnx_id_hash, picoquic_cnx_id_compare);
@@ -182,6 +184,11 @@ int picoquic_register_net_id(picoquic_quic * quic, picoquic_cnx * cnx, struct so
         }
     }
 
+    if (key != NULL && ret != 0)
+    {
+        free(key);
+    }
+
     return ret;
 }
 
@@ -214,6 +221,7 @@ picoquic_cnx * picoquic_create_cnx(picoquic_quic * quic,
         cnx->next_in_table = quic->cnx_list;
         cnx->previous_in_table = NULL;
         quic->cnx_list = cnx;
+        cnx->quic = quic;
     }
 
     return cnx;
@@ -274,7 +282,7 @@ void picoquic_delete_cnx(picoquic_cnx * cnx)
 }
 
 /* Context retrieval functions */
-picoquic_cnx * get_cnx_by_id(picoquic_quic * quic, uint64_t cnx_id)
+picoquic_cnx * picoquic_cnx_by_id(picoquic_quic * quic, uint64_t cnx_id)
 {
     picoquic_cnx * ret = NULL;
     picohash_item * item;
@@ -290,7 +298,7 @@ picoquic_cnx * get_cnx_by_id(picoquic_quic * quic, uint64_t cnx_id)
     return ret;
 }
 
-picoquic_cnx * get_cnx_by_net(picoquic_quic * quic, struct sockaddr* addr)
+picoquic_cnx * picoquic_cnx_by_net(picoquic_quic * quic, struct sockaddr* addr)
 {
     picoquic_cnx * ret = NULL;
     picohash_item * item;
@@ -305,11 +313,11 @@ picoquic_cnx * get_cnx_by_net(picoquic_quic * quic, struct sockaddr* addr)
         memcpy(&key.saddr, addr, sizeof(struct sockaddr_in6));
     }
 
-    item = picohash_retrieve(quic->table_cnx_by_id, &key);
+    item = picohash_retrieve(quic->table_cnx_by_net, &key);
 
     if (item != NULL)
     {
-        ret = ((picoquic_cnx_id *)item->key)->cnx;
+        ret = ((picoquic_net_id *)item->key)->cnx;
     }
     return ret;
 }

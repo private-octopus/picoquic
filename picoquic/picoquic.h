@@ -51,8 +51,8 @@ extern "C" {
     void picoquic_delete_cnx(picoquic_cnx * cnx);
 
     /* Connection context retrieval functions */
-    picoquic_cnx * get_cnx_by_id(picoquic_quic * quic, uint64_t cnx_id);
-    picoquic_cnx * get_cnx_by_net(picoquic_quic * quic, struct sockaddr* addr);
+    picoquic_cnx * picoquic_cnx_by_id(picoquic_quic * quic, uint64_t cnx_id);
+    picoquic_cnx * picoquic_cnx_by_net(picoquic_quic * quic, struct sockaddr* addr);
 
 
 /* Parsing macros */

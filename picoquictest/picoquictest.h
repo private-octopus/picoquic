@@ -6,6 +6,7 @@ extern "C" {
 #endif
 
     int picohash_test();
+    int cnxcreation_test();
 
 
 #ifdef  __cplusplus
