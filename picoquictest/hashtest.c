@@ -61,7 +61,10 @@ int picohash_test()
             hk.x = i;
             picohash_item * pi = picohash_retrieve(t, &hk);
 
-            ret = (pi != NULL)?0:-1;
+            if (pi == NULL)
+            {
+                ret = -1;
+            }
         }
 
         /* Create a bunch of collisions */
