@@ -21,6 +21,9 @@
     <ClCompile Include="hashtest.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="CnxCreationTest.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquictest.h">

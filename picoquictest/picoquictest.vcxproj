@@ -131,6 +131,7 @@
     <Text Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="CnxCreationTest.c" />
     <ClCompile Include="hashtest.c" />
   </ItemGroup>
   <ItemGroup>

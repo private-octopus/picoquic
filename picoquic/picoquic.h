@@ -17,6 +17,9 @@ extern "C" {
      */
     typedef struct _picoquic_quic
     {
+        struct _picoquic_cnx * cnx_list;
+        struct _picoquic_cnx * cnx_last;
+
         picohash_table * table_cnx_by_id;
         picohash_table * table_cnx_by_net;
 
@@ -30,6 +33,7 @@ extern "C" {
     {
         picoquic_quic * quic;
         struct _picoquic_cnx * next_in_table;
+        struct _picoquic_cnx * previous_in_table;
         struct _picoquic_cnx_id * first_cnx_id;
         struct _picoquic_net_id * first_net_id;
 
@@ -41,7 +45,12 @@ extern "C" {
     picoquic_quic * picoquic_create(uint32_t nb_connections);
     void picoquic_free(picoquic_quic * quic);
 
-    /* Context retrieval functions */
+    /* Connection context creation and registration */
+    picoquic_cnx * picoquic_create_cnx(picoquic_quic * quic, 
+        uint64_t cnx_id, struct sockaddr * addr);
+    void picoquic_delete_cnx(picoquic_cnx * cnx);
+
+    /* Connection context retrieval functions */
     picoquic_cnx * get_cnx_by_id(picoquic_quic * quic, uint64_t cnx_id);
     picoquic_cnx * get_cnx_by_net(picoquic_quic * quic, struct sockaddr* addr);
 
