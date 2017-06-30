@@ -11,7 +11,13 @@
 #ifdef  __cplusplus
 extern "C" {
 #endif
-
+    /*
+     * Quic context flags
+     */
+    typedef enum {
+        picoquic_context_client = 0,
+        picoquic_context_server = 1
+    } picoquic_context_flags;
     /*
      * QUIC context, defining the tables of connections,
      * open sockets, etc.
@@ -19,6 +25,8 @@ extern "C" {
     typedef struct _picoquic_quic
     {
         picotlsapi tls_api;
+
+        uint32_t flags;
 
         struct _picoquic_cnx * cnx_list;
         struct _picoquic_cnx * cnx_last;
@@ -46,6 +54,8 @@ extern "C" {
         uint64_t initial_cnxid;
         uint64_t server_cnxid;
 
+        uint64_t highest_number_received;
+        /* Todo: out of order packets */
         uint64_t last_sequence_sent;
         uint64_t last_sequence_received;
 
@@ -93,13 +103,16 @@ extern "C" {
         uint32_t vn;
         uint32_t offset;
         picoquic_packet_type_enum ptype;
-        int pn_length;
+        uint64_t pnmask;
+        uint64_t pn64;
     } picoquic_packet_header;
 
     int picoquic_parse_packet_header(
         uint8_t * bytes,
         uint32_t length,
         picoquic_packet_header * ph);
+
+    uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t pn);
 
 
 #ifdef  __cplusplus

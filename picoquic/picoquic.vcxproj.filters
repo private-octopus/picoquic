@@ -24,9 +24,6 @@
     <ClCompile Include="picohash.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="parse_util.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="quicctx.c">
       <Filter>Source Files</Filter>
     </ClCompile>

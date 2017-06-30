@@ -16,13 +16,15 @@ int picoquic_parse_packet_header(
 {
     uint8_t first_byte = bytes[0];
 
+    ph->pn64 = 0;
+
     if ((first_byte & 0x80) != 0)
     {
         /* long packet format */
         ph->cnx_id = PICOPARSE_64(&bytes[1]);
         ph->pn = PICOPARSE_32(&bytes[9]);
         ph->vn = PICOPARSE_32(&bytes[13]);
-        ph->pn_length = 4;
+        ph->pnmask = 0xFFFFFFFF00000000ull;
         ph->offset = 17;
         ph->ptype = (picoquic_packet_type_enum)first_byte & 0x7F;
         if (ph->ptype >= picoquic_packet_type_max)
@@ -62,17 +64,17 @@ int picoquic_parse_packet_header(
         {
         case 1:
             ph->pn = bytes[ph->offset];
-            ph->pn_length = 1;
+            ph->pnmask = 0xFFFFFFFFFFFFFF00ull;
             ph->offset += 2;
             break;
         case 2:
             ph->pn = PICOPARSE_16(&bytes[ph->offset]);
-            ph->pn_length = 2;
+            ph->pnmask = 0xFFFFFFFFFFFF0000ull;
             ph->offset += 2;
             break;
         case 3:
             ph->pn = PICOPARSE_32(&bytes[ph->offset]);
-            ph->pn_length = 4;
+            ph->pnmask = 0xFFFFFFFF00000000ull;
             ph->offset += 4;
             break;
         default:
@@ -84,16 +86,146 @@ int picoquic_parse_packet_header(
     return ((ph->ptype == picoquic_packet_error) ? -1 : 0);
 }
 
-#if 0
+/* The packet number logic */
+uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t pn)
+{
+    uint64_t not_mask = ~mask;
+    uint64_t window = not_mask >> 1;
+    uint64_t pn64 = (highest&mask) | pn;
+
+    if (pn64 < highest)
+    {
+        if ((pn64 + window) < highest)
+        {
+            /* Numbers most probably rolled */
+            pn64 += not_mask + 1;
+        }
+    }
+    else
+    {
+        if (highest + window < pn64 &&
+            (pn64&mask) > 0)
+        {
+            /* Out of sequence packet from previous roll */
+            pn64 -= not_mask + 1;
+        }
+    }
+    
+    return pn64;
+}
+
+
 int picoquic_incoming_packet(
+    picoquic_quic * quic,
     uint8_t * bytes,
     uint32_t length,
-    struct soackaddr * addr_from)
+    struct sockaddr * addr_from)
 {
-    /* Parse the clear text header */
+    int ret = 0;
     picoquic_cnx * cnx = NULL;
+    picoquic_packet_header ph;
+
+    /* Parse the clear text header */
+    ret = picoquic_parse_packet_header(bytes, length, &ph);
+
     /* Retrieve the connection context */
+    if (ret == 0)
+    {
+        cnx = picoquic_cnx_by_net(quic, addr_from);
 
+        if (cnx == NULL && ph.cnx_id != 0)
+        {
+            cnx = picoquic_cnx_by_id(quic, ph.cnx_id);
+        }
+    }
 
+    if (ret == 0 && cnx == NULL)
+    {
+        /* If this is an initial packet, we may create a context */
+        if (ph.ptype == picoquic_packet_client_initial &&
+           (quic->flags&picoquic_context_server) != 0)
+        {
+            /* if listening is OK, listen */
+            cnx = picoquic_create_cnx(quic, ph.cnx_id, addr_from);
+            if (cnx == NULL)
+            {
+                ret = -1;
+            }
+            else
+            {
+                /* Set the initial packet number */
+                ph.pn64 = ph.pn;
+            }
+        }
+        else
+        {
+            /* unexpected packet */
+            ret = -1;
+        }
+    }
+    else
+    {
+        /* Build a packet number to 64 bits */
+        ph.pn64 = picoquic_get_packet_number64(
+            cnx->highest_number_received, ph.pnmask, ph.pn);
+
+        /* TODO: verify that the packet is new */
+    }
+
+    /* Verify that the packet decrypts correctly */
+    if (ret == 0)
+    {
+        switch (ph.ptype)
+        {
+        case picoquic_packet_version_negotiation:
+        case picoquic_packet_client_initial:
+        case picoquic_packet_server_stateless:
+        case picoquic_packet_server_cleartext:
+        case picoquic_packet_client_cleartext:
+            /* TODO : check the FN1V checksum */
+            break;
+        case picoquic_packet_0rtt_protected:
+            /* TODO : decrypt with 0RTT key */
+        case picoquic_packet_1rtt_protected_phi0:
+        case picoquic_packet_1rtt_protected_phi1:
+            /* TODO : roll key based on PHI */
+            /* TODO : decrypt with 1RTT key of epoch */
+            break;
+        case picoquic_packet_public_reset:
+            /* TODO : check whether the secret matches */
+            break;
+        default:
+            break;
+        }
+    }
+
+    /* If the packet decrypts correctly, pass to higher level */
+    if (ret == 0)
+    {
+        switch (ph.ptype)
+        {
+        case picoquic_packet_version_negotiation:
+        case picoquic_packet_client_initial:
+        case picoquic_packet_server_stateless:
+        case picoquic_packet_server_cleartext:
+        case picoquic_packet_client_cleartext:
+            /* TODO : check the FN1V checksum */
+            break;
+        case picoquic_packet_0rtt_protected:
+            /* TODO : decrypt with 0RTT key */
+        case picoquic_packet_1rtt_protected_phi0:
+        case picoquic_packet_1rtt_protected_phi1:
+            /* TODO : roll key based on PHI */
+            /* TODO : decrypt with 1RTT key of epoch */
+            break;
+        case picoquic_packet_public_reset:
+            /* TODO : check whether the secret matches */
+            break;
+        default:
+            break;
+        }
+    }
+
+    return ret;
 }
-#endif
+

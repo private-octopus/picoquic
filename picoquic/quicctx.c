@@ -60,6 +60,8 @@ picoquic_quic * picoquic_create(uint32_t nb_connections)
         /* TODO: winsock init */
         /* TODO: open UDP sockets - maybe */
 
+        quic->flags = 0;
+
         quic->cnx_list = NULL;
         quic->cnx_last = NULL;
 
@@ -85,7 +87,6 @@ void picoquic_free(picoquic_quic * quic)
     if (quic != NULL)
     {
         /* TODO: close the network sockets */
-
 
         /* delete all the connection contexts */
         while (quic->cnx_list != NULL)

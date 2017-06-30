@@ -8,10 +8,11 @@ extern "C" {
     int picohash_test();
     int cnxcreation_test();
     int parseheadertest();
+    int pn2pn64test();
 
 
 #ifdef  __cplusplus
 }
 #endif
 
-#endif
+#endif /* PICOQUICTEST_H */
