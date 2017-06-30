@@ -6,6 +6,7 @@
 #include <Ws2def.h>
 #include <WS2tcpip.h>
 #include "picohash.h"
+#include "picotlsapi.h"
 
 #ifdef  __cplusplus
 extern "C" {
@@ -17,12 +18,13 @@ extern "C" {
      */
     typedef struct _picoquic_quic
     {
+        picotlsapi tls_api;
+
         struct _picoquic_cnx * cnx_list;
         struct _picoquic_cnx * cnx_last;
 
         picohash_table * table_cnx_by_id;
         picohash_table * table_cnx_by_net;
-
     } picoquic_quic;
 
     /*
@@ -32,13 +34,21 @@ extern "C" {
     typedef struct _picoquic_cnx
     {
         picoquic_quic * quic;
+
         struct _picoquic_cnx * next_in_table;
         struct _picoquic_cnx * previous_in_table;
         struct _picoquic_cnx_id * first_cnx_id;
         struct _picoquic_net_id * first_net_id;
 
+        uint32_t version;
+
+        /* Todo: allow for multiple cnxid */
+        uint64_t initial_cnxid;
+        uint64_t server_cnxid;
+
         uint64_t last_sequence_sent;
         uint64_t last_sequence_received;
+
     } picoquic_cnx;
 
     /* QUIC context create and dispose */
@@ -60,6 +70,36 @@ extern "C" {
 #define PICOPARSE_32(b) ((((uint32_t)PICOPARSE_16(b))<<16)|PICOPARSE_16((b)+2))
 #define PICOPARSE_64(b) ((((uint64_t)PICOPARSE_32(b))<<16)|PICOPARSE_32((b)+4))
 
+/* Packet parsing */
+
+    typedef enum
+    {
+        picoquic_packet_error = 0,
+        picoquic_packet_version_negotiation = 1,
+        picoquic_packet_client_initial = 2,
+        picoquic_packet_server_stateless = 3,
+        picoquic_packet_server_cleartext = 4,
+        picoquic_packet_client_cleartext = 5,
+        picoquic_packet_0rtt_protected = 6,
+        picoquic_packet_1rtt_protected_phi0 = 7,
+        picoquic_packet_1rtt_protected_phi1 = 8,
+        picoquic_packet_public_reset = 9,
+        picoquic_packet_type_max = 10
+    } picoquic_packet_type_enum;
+
+    typedef struct _packet_header {
+        uint64_t cnx_id;
+        uint32_t pn;
+        uint32_t vn;
+        uint32_t offset;
+        picoquic_packet_type_enum ptype;
+        int pn_length;
+    } picoquic_packet_header;
+
+    int picoquic_parse_packet_header(
+        uint8_t * bytes,
+        uint32_t length,
+        picoquic_packet_header * ph);
 
 
 #ifdef  __cplusplus

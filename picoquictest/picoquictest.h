@@ -7,6 +7,7 @@ extern "C" {
 
     int picohash_test();
     int cnxcreation_test();
+    int parseheadertest();
 
 
 #ifdef  __cplusplus

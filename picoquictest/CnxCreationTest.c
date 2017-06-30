@@ -31,7 +31,11 @@ int cnxcreation_test()
     const uint8_t test_ipv6[16] = { 0x20, 0x01,0x0D, 0xB8, 0, 0, 0, 0,  0, 0, 0, 0, 0, 0, 0, 0x01 };
     const uint64_t test_cnx_id[5] = { 0, 1, 2, 3, 4 };
     struct sockaddr * test_cnx_addr[5] = { 
-        &test4[0], &test4[1], &test4[2], &test6[0], &test6[1] };
+        (struct sockaddr *) &test4[0],
+        (struct sockaddr *) &test4[1], 
+        (struct sockaddr *) &test4[2], 
+        (struct sockaddr *) &test6[0], 
+        (struct sockaddr *) &test6[1] };
 
 
     /* Create QUIC context */
@@ -127,7 +131,7 @@ int cnxcreation_test()
 
     if (ret == 0)
     {
-        picoquic_cnx * cnx = picoquic_cnx_by_net(quic, &test4[3]);
+        picoquic_cnx * cnx = picoquic_cnx_by_net(quic, (struct sockaddr*) &test4[3]);
         if (cnx != NULL)
         {
             ret = -1;

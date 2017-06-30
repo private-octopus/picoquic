@@ -133,6 +133,8 @@
   <ItemGroup>
     <ClCompile Include="CnxCreationTest.c" />
     <ClCompile Include="hashtest.c" />
+    <ClCompile Include="mocksecurity.c" />
+    <ClCompile Include="parseheadertest.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquictest.h" />

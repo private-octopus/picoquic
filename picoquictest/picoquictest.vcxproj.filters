@@ -24,6 +24,12 @@
     <ClCompile Include="CnxCreationTest.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="mocksecurity.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="parseheadertest.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquictest.h">

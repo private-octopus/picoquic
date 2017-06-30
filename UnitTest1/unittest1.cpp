@@ -22,5 +22,12 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(test_parse_header)
+        {
+            int ret = parseheadertest();
+
+            Assert::AreEqual(ret, 0);
+        }
 	};
 }
