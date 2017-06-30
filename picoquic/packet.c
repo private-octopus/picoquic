@@ -89,25 +89,29 @@ int picoquic_parse_packet_header(
 /* The packet number logic */
 uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t pn)
 {
-    uint64_t not_mask = ~mask;
-    uint64_t window = not_mask >> 1;
-    uint64_t pn64 = (highest&mask) | pn;
+    uint64_t expected = highest + 1;
+    uint64_t not_mask_plus_one = (~mask) + 1;
+    uint64_t pn64 = (expected&mask) | pn;
 
-    if (pn64 < highest)
+    if (pn64 < expected)
     {
-        if ((pn64 + window) < highest)
+        uint64_t delta1 = expected - pn64;
+        uint64_t delta2 = not_mask_plus_one - delta1;
+        if (delta2 < delta1)
         {
-            /* Numbers most probably rolled */
-            pn64 += not_mask + 1;
+            pn64 += not_mask_plus_one;
         }
     }
     else
     {
-        if (highest + window < pn64 &&
+        uint64_t delta1 = pn64 - expected;
+        uint64_t delta2 = not_mask_plus_one - delta1;
+
+        if (delta2 <= delta1 &&
             (pn64&mask) > 0)
         {
             /* Out of sequence packet from previous roll */
-            pn64 -= not_mask + 1;
+            pn64 -= not_mask_plus_one;
         }
     }
     
