@@ -11,7 +11,7 @@
 
 int picoquic_parse_packet_header(
     uint8_t * bytes,
-    uint32_t length,
+    size_t length,
     picoquic_packet_header * ph)
 {
     uint8_t first_byte = bytes[0];

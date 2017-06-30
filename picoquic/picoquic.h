@@ -109,7 +109,7 @@ extern "C" {
 
     int picoquic_parse_packet_header(
         uint8_t * bytes,
-        uint32_t length,
+        size_t length,
         picoquic_packet_header * ph);
 
     uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t pn);

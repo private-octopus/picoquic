@@ -131,11 +131,13 @@
     <Text Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="fnv1a.c" />
     <ClCompile Include="quicctx.c" />
     <ClCompile Include="packet.c" />
     <ClCompile Include="picohash.c" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="fnv1a.h" />
     <ClInclude Include="picohash.h" />
     <ClInclude Include="picotlsapi.h" />
     <ClInclude Include="picoquic.h" />

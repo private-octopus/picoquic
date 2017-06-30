@@ -27,6 +27,9 @@
     <ClCompile Include="quicctx.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="fnv1a.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquic.h">
@@ -35,7 +38,10 @@
     <ClInclude Include="picohash.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="PicoTlsApi.h">
+    <ClInclude Include="fnv1a.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="picotlsapi.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
