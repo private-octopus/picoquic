@@ -9,7 +9,8 @@ extern "C" {
     int cnxcreation_test();
     int parseheadertest();
     int pn2pn64test();
-
+    int intformattest();
+    int fnv1atest();
 
 #ifdef  __cplusplus
 }

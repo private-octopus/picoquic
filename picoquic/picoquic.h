@@ -75,10 +75,15 @@ extern "C" {
     picoquic_cnx * picoquic_cnx_by_net(picoquic_quic * quic, struct sockaddr* addr);
 
 
-/* Parsing macros */
+/* Integer parsing macros */
 #define PICOPARSE_16(b) ((((uint16_t)(b)[0])<<8)|(b)[1])
 #define PICOPARSE_32(b) ((((uint32_t)PICOPARSE_16(b))<<16)|PICOPARSE_16((b)+2))
-#define PICOPARSE_64(b) ((((uint64_t)PICOPARSE_32(b))<<16)|PICOPARSE_32((b)+4))
+#define PICOPARSE_64(b) ((((uint64_t)PICOPARSE_32(b))<<32)|PICOPARSE_32((b)+4))
+
+/* Integer formatting functions */
+    void picoformat_16(uint8_t *bytes, uint16_t n16);
+    void picoformat_32(uint8_t *bytes, uint32_t n32);
+    void picoformat_64(uint8_t *bytes, uint64_t n64);
 
 /* Packet parsing */
 
@@ -113,7 +118,6 @@ extern "C" {
         picoquic_packet_header * ph);
 
     uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t pn);
-
 
 #ifdef  __cplusplus
 }

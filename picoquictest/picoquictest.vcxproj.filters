@@ -33,6 +33,12 @@
     <ClCompile Include="pn2pn64test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="fnv1atest.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="intformattest.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquictest.h">

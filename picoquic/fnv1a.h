@@ -29,5 +29,7 @@ value is encoded as 8 octets in network byte order.
 #define FNV1A_PRIME 0x100000001b3ull
 
 uint64_t fnv1a_hash(uint64_t hash, uint8_t * bytes, size_t length);
+size_t fnv1a_protect(uint8_t * bytes, size_t length, size_t length_max);
+size_t fnv1a_check(uint8_t * bytes, size_t length);
 
 #endif

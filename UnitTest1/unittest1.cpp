@@ -36,5 +36,19 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(test_intformat)
+        {
+            int ret = intformattest();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(test_fnv1a)
+        {
+            int ret = fnv1atest();
+
+            Assert::AreEqual(ret, 0);
+        }
 	};
 }

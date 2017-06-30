@@ -30,6 +30,9 @@
     <ClCompile Include="fnv1a.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="intformat.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquic.h">
