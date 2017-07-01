@@ -8,6 +8,7 @@
 
 #include <stdint.h>
 #include "picoquic.h"
+#include "fnv1a.h"
 
 int picoquic_parse_packet_header(
     uint8_t * bytes,
@@ -118,7 +119,6 @@ uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t 
     return pn64;
 }
 
-
 int picoquic_incoming_packet(
     picoquic_quic * quic,
     uint8_t * bytes,
@@ -128,6 +128,7 @@ int picoquic_incoming_packet(
     int ret = 0;
     picoquic_cnx * cnx = NULL;
     picoquic_packet_header ph;
+    size_t decoded_length = 0;
 
     /* Parse the clear text header */
     ret = picoquic_parse_packet_header(bytes, length, &ph);
@@ -186,7 +187,8 @@ int picoquic_incoming_packet(
         case picoquic_packet_server_stateless:
         case picoquic_packet_server_cleartext:
         case picoquic_packet_client_cleartext:
-            /* TODO : check the FN1V checksum */
+            /* check the FN1V checksum */
+            decoded_length = fnv1a_check(bytes, length);
             break;
         case picoquic_packet_0rtt_protected:
             /* TODO : decrypt with 0RTT key */
@@ -194,9 +196,11 @@ int picoquic_incoming_packet(
         case picoquic_packet_1rtt_protected_phi1:
             /* TODO : roll key based on PHI */
             /* TODO : decrypt with 1RTT key of epoch */
+            decoded_length = 0;
             break;
         case picoquic_packet_public_reset:
             /* TODO : check whether the secret matches */
+            decoded_length = fnv1a_check(bytes, length);
             break;
         default:
             break;
@@ -204,7 +208,7 @@ int picoquic_incoming_packet(
     }
 
     /* If the packet decrypts correctly, pass to higher level */
-    if (ret == 0)
+    if (ret == 0 && decoded_length > 0)
     {
         switch (ph.ptype)
         {
