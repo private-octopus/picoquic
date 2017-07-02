@@ -33,6 +33,12 @@
     <ClCompile Include="intformat.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="frames.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="tlsapi.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquic.h">
@@ -45,6 +51,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="picotlsapi.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="wincompat.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

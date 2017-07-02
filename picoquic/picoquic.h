@@ -38,26 +38,43 @@ extern "C" {
     /*
      * Connection context, and links between context and addresses
      */
+    typedef enum
+    {
+        picoquic_state_client_init,
+        picoquic_state_server_init,
+        picoquic_state_client_handshake_start,
+        picoquic_state_client_handshake_progress,
+        picoquic_state_client_ready,
+        picoquic_state_server_handshake_progress,
+        picoquic_state_server_ready,
+        picoquic_state_disconnected
+    } picoquic_state_enum;
 
     typedef struct _picoquic_cnx
     {
         picoquic_quic * quic;
 
+        /* Management of context retrieval tables */
         struct _picoquic_cnx * next_in_table;
         struct _picoquic_cnx * previous_in_table;
         struct _picoquic_cnx_id * first_cnx_id;
         struct _picoquic_net_id * first_net_id;
 
+        /* negotiated version */
         uint32_t version;
 
-        /* Todo: allow for multiple cnxid */
+        /* connection state, ID, etc. Todo: allow for multiple cnxid */
+        picoquic_state_enum cnx_state;
         uint64_t initial_cnxid;
         uint64_t server_cnxid;
+        struct sockaddr_storage peer_address;
 
+        /* TLS context, TLS Send Buffer, chain of receive buffers (todo) */
+        void * tls_ctx;
+        struct st_ptls_buffer_t * tls_sendbuf;
+
+        /* Receive state */
         uint64_t highest_number_received;
-        /* Todo: out of order packets */
-        uint64_t last_sequence_sent;
-        uint64_t last_sequence_received;
 
     } picoquic_cnx;
 

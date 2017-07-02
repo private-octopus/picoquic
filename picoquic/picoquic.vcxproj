@@ -78,6 +78,7 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>..\..\picotls\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -132,16 +133,19 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="fnv1a.c" />
+    <ClCompile Include="frames.c" />
     <ClCompile Include="intformat.c" />
     <ClCompile Include="quicctx.c" />
     <ClCompile Include="packet.c" />
     <ClCompile Include="picohash.c" />
+    <ClCompile Include="tlsapi.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="fnv1a.h" />
     <ClInclude Include="picohash.h" />
     <ClInclude Include="picotlsapi.h" />
     <ClInclude Include="picoquic.h" />
+    <ClInclude Include="wincompat.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
