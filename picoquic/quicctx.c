@@ -223,6 +223,10 @@ picoquic_cnx * picoquic_create_cnx(picoquic_quic * quic,
         cnx->previous_in_table = NULL;
         quic->cnx_list = cnx;
         cnx->quic = quic;
+
+        cnx->first_sack_item.start_of_sack_range = 0;
+        cnx->first_sack_item.end_of_sack_range = 0;
+        cnx->first_sack_item.next_sack = NULL;
     }
 
     return cnx;

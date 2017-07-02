@@ -50,6 +50,19 @@ extern "C" {
         picoquic_state_disconnected
     } picoquic_state_enum;
 
+    /*
+     * SACK dashboard item, part of conenction context.
+     */
+
+    typedef struct _picoquic_sack_item {
+        struct _picoquic_sack_item * next_sack;
+        uint64_t start_of_sack_range;
+        uint64_t end_of_sack_range;
+    } picoquic_sack_item;
+
+    /*
+     * Per connection context.
+     */
     typedef struct _picoquic_cnx
     {
         picoquic_quic * quic;
@@ -74,7 +87,9 @@ extern "C" {
         struct st_ptls_buffer_t * tls_sendbuf;
 
         /* Receive state */
-        uint64_t highest_number_received;
+        struct _picoquic_sack_item first_sack_item;
+
+        /* Retransmission state */
 
     } picoquic_cnx;
 
@@ -119,7 +134,7 @@ extern "C" {
         picoquic_packet_type_max = 10
     } picoquic_packet_type_enum;
 
-    typedef struct _packet_header {
+    typedef struct _picoquic_packet_header {
         uint64_t cnx_id;
         uint32_t pn;
         uint32_t vn;
@@ -135,6 +150,10 @@ extern "C" {
         picoquic_packet_header * ph);
 
     uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t pn);
+
+    /* handling of ACK logic */
+    int picoquic_is_pn_already_received(picoquic_cnx * cnx, uint64_t pn64);
+    int picoquic_record_pn_received(picoquic_cnx * cnx, uint64_t pn64);
 
 #ifdef  __cplusplus
 }

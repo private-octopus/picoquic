@@ -119,6 +119,129 @@ uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t 
     return pn64;
 }
 
+/*
+ * Processing of an incoming client initial packet,
+ * on an unknown connection context.
+ */
+
+picoquic_cnx * picoquic_incoming_initial(
+    picoquic_quic * quic,
+    uint8_t * bytes,
+    uint32_t length,
+    struct sockaddr * addr_from,
+    picoquic_packet_header * ph)
+{
+    picoquic_cnx * cnx = NULL;
+    size_t decoded_length = 0;
+
+    if (ph->ptype != picoquic_packet_client_initial ||
+        (quic->flags&picoquic_context_server) != 0)
+    {
+        /* TODO: may want to send stateless reject */
+        /* Unexpected packet, drop and log. */
+    }
+    else
+    {
+        decoded_length = fnv1a_check(bytes, length);
+        if (decoded_length == 0)
+        {
+            /* Incorrect checksum, drop and log. */
+        }
+        else
+        {
+            /* TODO: version negotiation. */
+            /* TODO: if wrong version, send version negotiation, do not go any further */
+            /* if listening is OK, listen */
+            cnx = picoquic_create_cnx(quic, ph->cnx_id, addr_from);
+            if (cnx != NULL)
+            {
+                /* processing of client initial packet */
+                /* initialization of context */
+                /* registration of context */
+            }
+        }
+    }
+
+    return cnx;
+}
+
+/*
+ * Processing of a server clear text packet.
+ */
+
+int picoquic_incoming_server_cleartext(
+    picoquic_cnx * cnx,
+    uint8_t * bytes,
+    uint32_t length, 
+    picoquic_packet_header * ph)
+{
+    int ret = 0;
+    size_t decoded_length = 0;
+
+    if (cnx->cnx_state == picoquic_state_client_handshake_start ||
+        cnx->cnx_state == picoquic_state_client_handshake_progress)
+    {
+        /* Verify the checksum */
+        decoded_length = fnv1a_check(bytes, length);
+        if (decoded_length == 0)
+        {
+            /* Incorrect checksum, drop and log. */
+        }
+        else
+        {
+            /* Perform the handshake negotiation */
+            /* Progress the state, etc. */
+        }
+    }
+    else
+    {
+        /* Not expected. Log and ignore. */
+        ret = -1;
+    }
+
+    return ret;
+}
+
+/*
+ * Processing of client clear text packet.
+ */
+int picoquic_incoming_client_cleartext(
+    picoquic_cnx * cnx,
+    uint8_t * bytes,
+    uint32_t length,
+    picoquic_packet_header * ph)
+{
+    int ret = 0;
+    size_t decoded_length = 0;
+
+    if (cnx->cnx_state == picoquic_state_server_handshake_progress)
+    {
+        /* Verify the checksum */
+        decoded_length = fnv1a_check(bytes, length);
+        if (decoded_length == 0)
+        {
+            /* Incorrect checksum, drop and log. */
+        }
+        else
+        {
+            /* Perform the handshake negotiation */
+            /* Progress the state, etc. */
+        }
+    }
+    else
+    {
+        /* Not expected. Log and ignore. */
+        ret = -1;
+    }
+
+    return ret;
+}
+
+
+/*
+ * Processing of the packet that was just received from the network.
+ */
+
 int picoquic_incoming_packet(
     picoquic_quic * quic,
     uint8_t * bytes,
@@ -144,115 +267,78 @@ int picoquic_incoming_packet(
         }
     }
 
-    if (ret == 0 && cnx == NULL)
+    if (ret == 0)
     {
-        if (ph.ptype != picoquic_packet_client_initial ||
-            (quic->flags&picoquic_context_server) != 0)
+        if (cnx == NULL)
         {
-            /* Unexpected packet, drop and log. */
-            ret = -1;
+            cnx = picoquic_incoming_initial(quic, bytes, length, addr_from, &ph);
         }
         else
         {
-            decoded_length = fnv1a_check(bytes, length);
-            if (decoded_length == 0)
-            {
-                ret = -1;
-            }
-            else
-            {
-                /* TODO: version negotiation. */
-                /* TODO: if wrong version, send version negotiation, do not go any further */
-                /* if listening is OK, listen */
-                cnx = picoquic_create_cnx(quic, ph.cnx_id, addr_from);
-                if (cnx == NULL)
-                {
-                    ret = -1;
-                }
-                else
-                {
-                    /* processing of client initial packet */
-                    /* initialization of context */
-                    /* registration of context */
-                }
-            }
-        }
-    }
-    else
-    {
-        /* Build a packet number to 64 bits */
-        ph.pn64 = picoquic_get_packet_number64(
-            cnx->highest_number_received, ph.pnmask, ph.pn);
-        /* TODO: verify that the packet is new */
+            /* Build a packet number to 64 bits */
+            ph.pn64 = picoquic_get_packet_number64(
+                cnx->first_sack_item.end_of_sack_range, ph.pnmask, ph.pn);
+            /* TODO: verify that the packet is new */
 
-
-        /* Verify that the packet decrypts correctly */
-        if (ret == 0)
-        {
-            switch (ph.ptype)
+            /* Verify that the packet decrypts correctly */
+            if (ret == 0)
             {
-            case picoquic_packet_version_negotiation:
-                if (cnx->cnx_state == picoquic_state_client_handshake_start)
+                switch (ph.ptype)
                 {
-                    /* Verify the checksum */
-                    /* Proceed with version negotiation*/
-                    /* Process version negotiation */
-                    /* Schedule repeat of initial message */
-                }
-                else
-                {
-                    /* This is an unexpected packet. Log and drop.*/
-                }
-                break;
-            case picoquic_packet_client_initial:
-                /* Not expected here. Log and ignore. */
-                ret = -1;
-                break;
-            case picoquic_packet_server_stateless:
-                /* Not implemented yet. Log and ignore. */
-                ret = -1;
-                break;
-            case picoquic_packet_server_cleartext:
-                if (cnx->cnx_state == picoquic_state_client_handshake_start ||
-                    cnx->cnx_state == picoquic_state_client_handshake_progress)
-                {
-                    /* Verify the checksum */
-                    /* Perform the handshake negotiation */
-                    /* Progress the state, etc. */
-                }
-                else
-                {
-                    /* Not expected. Log and ignore. */
+                case picoquic_packet_version_negotiation:
+                    if (cnx->cnx_state == picoquic_state_client_handshake_start)
+                    {
+                        /* Verify the checksum */
+                        /* Proceed with version negotiation*/
+                        /* Process version negotiation */
+                        /* Schedule repeat of initial message */
+                    }
+                    else
+                    {
+                        /* This is an unexpected packet. Log and drop.*/
+                    }
+                    break;
+                case picoquic_packet_client_initial:
+                    /* Not expected here. Log and ignore. */
                     ret = -1;
+                    break;
+                case picoquic_packet_server_stateless:
+                    /* Not implemented yet. Log and ignore. */
+                    ret = -1;
+                    break;
+                case picoquic_packet_server_cleartext:
+                    ret = picoquic_incoming_server_cleartext(cnx, bytes, length, &ph);
+                    break;
+                case picoquic_packet_client_cleartext:
+                    if (cnx->cnx_state == picoquic_state_server_handshake_progress)
+                    {
+                        /* check the FN1V checksum */
+                        decoded_length = fnv1a_check(bytes, length);
+                        /* perform the negotiation */
+                    }
+                    break;
+                case picoquic_packet_0rtt_protected:
+                    /* TODO : decrypt with 0RTT key */
+                    /* Not implemented. Log and ignore */
+                    ret = -1;
+                    break;
+                case picoquic_packet_1rtt_protected_phi0:
+                case picoquic_packet_1rtt_protected_phi1:
+                    /* TODO : roll key based on PHI */
+                    /* TODO : decrypt with 1RTT key of epoch */
+                    /* Not implemented yet. */
+                    decoded_length = 0;
+                    break;
+                case picoquic_packet_public_reset:
+                    /* TODO : check whether the secret matches */
+                    /* Not implemented. Log and ignore */
+                    ret = -1;
+                    break;
+                default:
+                    /* Packet type error. Log and ignore */
+                    ret = -1;
+                    break;
                 }
-            case picoquic_packet_client_cleartext:
-                if (cnx->cnx_state == picoquic_state_server_handshake_progress)
-                {
-                    /* check the FN1V checksum */
-                    decoded_length = fnv1a_check(bytes, length);
-                    /* perform the negotiation */
-                }
-                break;
-            case picoquic_packet_0rtt_protected:
-                /* TODO : decrypt with 0RTT key */
-                /* Not implemented. Log and ignore */
-                ret = -1;
-                break;
-            case picoquic_packet_1rtt_protected_phi0:
-            case picoquic_packet_1rtt_protected_phi1:
-                /* TODO : roll key based on PHI */
-                /* TODO : decrypt with 1RTT key of epoch */
-                decoded_length = 0;
-                break;
-            case picoquic_packet_public_reset:
-                /* TODO : check whether the secret matches */
-                /* Not implemented. Log and ignore */
-                ret = -1;
-                break;
-            default:
-                /* Packet type error. Log and ignore */
-                ret = -1;
-                break;
             }
         }
     }
@@ -263,32 +349,4 @@ int picoquic_incoming_packet(
     }
 
     return ret;
-}
-
-
-/*
- * Packet sequence recording prepares the next ACK:
- *
- * Maintain largest acknowledged number & the timestamp of that
- * arrival used to calculate the ACK delay.
- *
- * Maintain the lis of ACK 
- 0                   1                   2                   3
- 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|[Num Blocks(8)]|   NumTS (8)   |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|                Largest Acknowledged (8/16/32/64)            ...
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|        ACK Delay (16)         |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|                     ACK Block Section (*)                   ...
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|                     Timestamp Section (*)                   ...
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-
- */
-int packet_sequence_recording(picoquic_cnx * cnx, uint64_t pn64)
-{
-    return -1;
 }

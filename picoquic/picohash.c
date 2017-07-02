@@ -2,6 +2,7 @@
  * Basic hash implementation, like we have seen tons off already.
  */
 #include <stdlib.h>
+#include <strings.h>
 #include "picohash.h"
 
 

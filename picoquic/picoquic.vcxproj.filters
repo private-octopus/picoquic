@@ -39,6 +39,9 @@
     <ClCompile Include="tlsapi.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="sacks.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquic.h">
