@@ -132,6 +132,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CnxCreationTest.c" />
+    <ClCompile Include="float16test.c" />
     <ClCompile Include="fnv1atest.c" />
     <ClCompile Include="hashtest.c" />
     <ClCompile Include="intformattest.c" />

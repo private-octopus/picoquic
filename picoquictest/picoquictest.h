@@ -12,6 +12,7 @@ extern "C" {
     int intformattest();
     int fnv1atest();
     int sacktest();
+    int float16test();
 
 #ifdef  __cplusplus
 }

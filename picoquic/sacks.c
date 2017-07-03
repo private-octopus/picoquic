@@ -155,3 +155,60 @@ int picoquic_record_pn_received(picoquic_cnx * cnx, uint64_t pn64)
 
     return ret;
 }
+
+/*
+ * Float16 format required for encoding the time deltas in current QUIC draft.
+ *
+ * The time format used in the ACK frame above is a 16-bit unsigned float with 
+ * 11 explicit bits of mantissa and 5 bits of explicit exponent, specifying time 
+ * in microseconds. The bit format is loosely modeled after IEEE 754. For example,
+ * 1 microsecond is represented as 0x1, which has an exponent of zero, presented 
+ * in the 5 high order bits, and mantissa of 1, presented in the 11 low order bits.
+ * When the explicit exponent is greater than zero, an implicit high-order 12th bit
+ * of 1 is assumed in the mantissa. For example, a floating value of 0x800 has an 
+ * explicit exponent of 1, as well as an explicit mantissa of 0, but then has an
+ * effective mantissa of 4096 (12th bit is assumed to be 1). Additionally, the actual
+ * exponent is one-less than the explicit exponent, and the value represents 4096 
+ * microseconds. Any values larger than the representable range are clamped to 0xFFFF.
+ */
+
+uint16_t picoquic_deltat_to_float16(uint64_t delta_t)
+{
+    uint16_t ret;
+    uint64_t exponent = 0;
+    uint64_t mantissa = delta_t;
+
+    while (mantissa > 0x0FFFLLU)
+    {
+        exponent++;
+        mantissa >>= 1;
+    }
+
+    if (exponent > 30)
+    {
+        ret = 0xFFFF;
+    }
+    else if (mantissa & 0x0800LLU)
+    {
+        ret = (uint16_t)((mantissa & 0x07FFLLU) | ((exponent + 1) << 11));
+    }
+    else
+    {
+        ret = (uint16_t)(mantissa);
+    }
+
+    return ret;
+}
+
+uint64_t picoquic_float16_to_deltat(uint16_t float16)
+{
+    int exponent = float16 >> 11;
+    uint64_t ret = (float16 & 0x07FF);
+
+    if (exponent != 0)
+    {
+        ret |= (0x0800);
+        ret <<= (exponent - 1);
+    }
+    return ret;
+}
