@@ -39,6 +39,9 @@
     <ClCompile Include="intformattest.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="sacktest.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquictest.h">

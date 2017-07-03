@@ -60,6 +60,14 @@ int picoquic_record_pn_received(picoquic_cnx * cnx, uint64_t pn64)
     picoquic_sack_item * sack = &cnx->first_sack_item;
     picoquic_sack_item * previous = NULL;
 
+    if (sack->start_of_sack_range == 0 &&
+        sack->end_of_sack_range == 0)
+    {
+        /* This is the first packet ever received.. */
+        sack->start_of_sack_range = pn64;
+        sack->end_of_sack_range = pn64;
+    }
+    else 
     do
     {
         if (pn64 > sack->end_of_sack_range)
@@ -73,66 +81,74 @@ int picoquic_record_pn_received(picoquic_cnx * cnx, uint64_t pn64)
                 if (previous != NULL && pn64 + 1 >= previous->start_of_sack_range)
                 {
                     previous->start_of_sack_range = sack->start_of_sack_range;
-                    previous->next_sack = sack;
+                    previous->next_sack = sack->next_sack;
                     free(sack);
                 }
                 break;
             }
+            else if (previous != NULL && pn64 + 1 == previous->start_of_sack_range)
+            {
+                /* just extend the previous range */
+                previous->start_of_sack_range = pn64;
+            }
             else
             {
-                if (previous != NULL && pn64 + 1 >= previous->start_of_sack_range)
+                /* Found a new hole */
+                picoquic_sack_item * new_hole = (picoquic_sack_item *)malloc(sizeof(picoquic_sack_item));
+                if (new_hole == NULL)
                 {
-                    /* just extend the previous range */
+                    /* memory error. That's infortunate */
+                    ret = -1;
                 }
                 else
                 {
-                    /* Found a new hole */
-                    picoquic_sack_item * new_hole = (picoquic_sack_item *)malloc(sizeof(picoquic_sack_item));
-                    if (new_hole == NULL)
-                    {
-                        /* memory error. That's infortunate */
-                        ret = -1;
-                    }
-                    else
-                    {
-                        /* swap old and new, so it works even if previous == NULL */
-                        new_hole->start_of_sack_range = sack->start_of_sack_range;
-                        new_hole->end_of_sack_range = sack->end_of_sack_range;
-                        new_hole->next_sack = sack->next_sack;
-                        sack->start_of_sack_range = pn64;
-                        sack->end_of_sack_range = pn64;
-                        sack->next_sack = new_hole;
-                    }
+                    /* swap old and new, so it works even if previous == NULL */
+                    new_hole->start_of_sack_range = sack->start_of_sack_range;
+                    new_hole->end_of_sack_range = sack->end_of_sack_range;
+                    new_hole->next_sack = sack->next_sack;
+                    sack->start_of_sack_range = pn64;
+                    sack->end_of_sack_range = pn64;
+                    sack->next_sack = new_hole;
                 }
             }
+            break;
         }
         else if (pn64 >= sack->start_of_sack_range)
         {
             /* packet was already received */
+            ret = 1;
             break;
         }
         else if (sack->next_sack == NULL)
         {
-            /* this is an old packet, beyond the current range of SACK */
-            /* TODO: manage "old and forgettable" test */
-            /* Found a new hole */
-            picoquic_sack_item * new_hole = (picoquic_sack_item *)malloc(sizeof(picoquic_sack_item));
-            if (new_hole == NULL)
+            if (pn64 + 1 == sack->start_of_sack_range)
             {
-                /* memory error. That's infortunate */
-                ret = -1;
+                sack->start_of_sack_range = pn64;
             }
             else
             {
-                /* swap old and new, so it works even if previous == NULL */
-                new_hole->start_of_sack_range = pn64;
-                new_hole->end_of_sack_range = pn64;
-                new_hole->next_sack = NULL;
-                sack->next_sack = new_hole;
+                /* this is an old packet, beyond the current range of SACK */
+                /* Found a new hole */
+                picoquic_sack_item * new_hole = (picoquic_sack_item *)malloc(sizeof(picoquic_sack_item));
+                if (new_hole == NULL)
+                {
+                    /* memory error. That's infortunate */
+                    ret = -1;
+                }
+                else
+                {
+                    /* swap old and new, so it works even if previous == NULL */
+                    new_hole->start_of_sack_range = pn64;
+                    new_hole->end_of_sack_range = pn64;
+                    new_hole->next_sack = NULL;
+                    sack->next_sack = new_hole;
+                }
             }
+            break;
         }
         else
         {
+            previous = sack;
             sack = sack->next_sack;
         }
     } while (sack != NULL);

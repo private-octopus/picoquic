@@ -138,6 +138,7 @@
     <ClCompile Include="mocksecurity.c" />
     <ClCompile Include="parseheadertest.c" />
     <ClCompile Include="pn2pn64test.c" />
+    <ClCompile Include="sacktest.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquictest.h" />

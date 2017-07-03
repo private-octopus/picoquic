@@ -11,6 +11,7 @@ extern "C" {
     int pn2pn64test();
     int intformattest();
     int fnv1atest();
+    int sacktest();
 
 #ifdef  __cplusplus
 }
