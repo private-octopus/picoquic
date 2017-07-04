@@ -190,7 +190,7 @@ uint16_t picoquic_deltat_to_float16(uint64_t delta_t)
     }
     else if (mantissa & 0x0800LLU)
     {
-        ret = (uint16_t)((mantissa & 0x07FFLLU) | ((exponent + 1) << 11));
+        ret = (uint16_t)((mantissa & 0x07FFLLU) | ((exponent+1) << 11));
     }
     else
     {
