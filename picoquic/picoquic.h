@@ -89,6 +89,7 @@ extern "C" {
 
         /* Receive state */
         struct _picoquic_sack_item first_sack_item;
+        uint64_t sack_block_size_max;
 
         /* Retransmission state */
 

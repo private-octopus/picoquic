@@ -54,6 +54,7 @@ int picoquic_record_pn_received(picoquic_cnx * cnx, uint64_t pn64, uint64_t curr
         sack->start_of_sack_range = pn64;
         sack->end_of_sack_range = pn64;
         sack->time_stamp_last_in_range = current_microsec;
+        cnx->sack_block_size_max = 1;
     }
     else 
     do
@@ -65,8 +66,14 @@ int picoquic_record_pn_received(picoquic_cnx * cnx, uint64_t pn64, uint64_t curr
                 /* if this actually fills the hole, merge with previous item */
                 if (previous != NULL && pn64 + 1 >= previous->start_of_sack_range)
                 {
+                    uint64_t block_size;
                     previous->start_of_sack_range = sack->start_of_sack_range;
                     previous->next_sack = sack->next_sack;
+                    block_size = previous->end_of_sack_range - previous->start_of_sack_range;
+                    if (block_size > cnx->sack_block_size_max)
+                    {
+                        cnx->sack_block_size_max = block_size;
+                    }
                     free(sack);
                 }
                 else
@@ -79,8 +86,14 @@ int picoquic_record_pn_received(picoquic_cnx * cnx, uint64_t pn64, uint64_t curr
             }
             else if (previous != NULL && pn64 + 1 == previous->start_of_sack_range)
             {
+                uint64_t block_size;
                 /* just extend the previous range */
                 previous->start_of_sack_range = pn64;
+                block_size = previous->end_of_sack_range - previous->start_of_sack_range;
+                if (block_size > cnx->sack_block_size_max)
+                {
+                    cnx->sack_block_size_max = block_size;
+                }
             }
             else
             {
@@ -116,7 +129,13 @@ int picoquic_record_pn_received(picoquic_cnx * cnx, uint64_t pn64, uint64_t curr
         {
             if (pn64 + 1 == sack->start_of_sack_range)
             {
+                uint64_t block_size;
                 sack->start_of_sack_range = pn64;
+                block_size = sack->end_of_sack_range - sack->start_of_sack_range;
+                if (block_size > cnx->sack_block_size_max)
+                {
+                    cnx->sack_block_size_max = block_size;
+                }
             }
             else
             {
@@ -130,7 +149,7 @@ int picoquic_record_pn_received(picoquic_cnx * cnx, uint64_t pn64, uint64_t curr
                 }
                 else
                 {
-                    /* swap old and new, so it works even if previous == NULL */
+                    /* Create new hole at the tail. */
                     new_hole->start_of_sack_range = pn64;
                     new_hole->end_of_sack_range = pn64;
                     new_hole->time_stamp_last_in_range = current_microsec;
@@ -243,80 +262,167 @@ uint64_t picoquic_float16_to_deltat(uint16_t float16)
 int picoquic_encode_sack_frame(picoquic_cnx * cnx, uint8_t * bytes,
     size_t bytes_max, size_t * nb_bytes, uint64_t current_time)
 {
-    /* encode the ACK type
-     * ACK block present if sack->next!= NULL.
-     * Time stamp present - same test as numblock.
-     * Number encoding on 32 bits for now.
-     * Sack range encoding based on max value.
-     */
+    int ret = -1;
     size_t nb_blocks = 0;
-    size_t max_block_size = cnx->first_sack_item.end_of_sack_range -
-        cnx->first_sack_item.start_of_sack_range;
+    picoquic_sack_item * previous_sack = &cnx->first_sack_item;
     picoquic_sack_item * sack = &cnx->first_sack_item.next_sack;
+    size_t block_size;
+    uint64_t gap;
     uint8_t ack_type = 0xA8;
     uint8_t mm = 0;
+    int length_mm = 1;
     size_t byte_index = 0;
     uint16_t encoded_delay;
 
-    while (sack != NULL)
+    if (cnx->sack_block_size_max < 0xFFFF)
     {
-        size_t block_size = sack->end_of_sack_range - sack->start_of_sack_range;
-
-        if (block_size > max_block_size)
-        {
-            max_block_size = block_size;
-        }
-        nb_blocks++;
-        sack = sack->next_sack;
-    }
-
-    if (nb_blocks > 0)
-    {
-        ack_type |= 0x10;
-    }
-    else if (nb_blocks > 255)
-    {
-        nb_blocks = 255;
-    }
-
-    if (max_block_size > 0xFFFF)
-    {
-        if (max_block_size > 0xFF)
+        if (cnx->sack_block_size_max > 0xFF)
         {
             mm = 1;
+            length_mm = 2;
         }
     }
-    else if (max_block_size <= 0xFFFFFFFF)
+    else if (cnx->sack_block_size_max <= 0xFFFFFFFF)
     {
         mm = 2;
+        length_mm = 4;
     }
     else
     {
         mm = 3;
+        length_mm = 8;
     }
 
-    /* Todo: compute size of message, if too big reduce block count */
-
-    ack_type |= mm;
-    bytes[byte_index++] = ack_type;
-
-    if (nb_blocks > 0)
+    if (bytes_max < 1 + 2 + 4 + 2 + length_mm)
     {
-        bytes[byte_index++] = nb_bytes;
-        bytes[byte_index++] = nb_bytes;
+        *nb_bytes = 0;
+        ret = -1;
     }
-    /*
-     * Encode the max received.
-     */
-    picoformat_32(bytes + byte_index, (uint32_t)cnx->first_sack_item.end_of_sack_range);
-    byte_index += 4;
-    /* 
-     * Encode the ack delay
-     */
-    picoformat_16(bytes + byte_index, picoquic_deltat_to_float16(
-        current_time - cnx->first_sack_item.time_stamp_last_in_range));
-    byte_index += 4;
-    /* encode num blocks and num TS -- usinng one TS per block */
+    else
+    {
+        ack_type |= mm;
+        bytes[byte_index++] = ack_type;
 
-    return 0;
+        if (sack != NULL)
+        {
+            /* reserve space for encoding the nb_blocks and nb_time_stamps later */
+            byte_index += 2;
+        }
+        /*
+         * Encode the max received.
+         */
+        picoformat_32(bytes + byte_index, (uint32_t)cnx->first_sack_item.end_of_sack_range);
+        byte_index += 4;
+        /*
+         * Encode the ack delay
+         */
+        picoformat_16(bytes + byte_index, picoquic_deltat_to_float16(
+            current_time - cnx->first_sack_item.time_stamp_last_in_range));
+        byte_index += 4;
+        /*
+         * From the spec:
+         * 0                   1                   2                   3
+         * 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+         * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+         * |              First ACK Block Length (8/16/32/64)            ...
+         * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+         * |  [Gap 1 (8)]  |       [ACK Block 1 Length (8/16/32/64)]     ...
+         * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+         * |  [Gap 2 (8)]  |       [ACK Block 2 Length (8/16/32/64)]     ...
+         * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+         * ...
+         * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+         * |  [Gap N (8)]  |       [ACK Block N Length (8/16/32/64)]     ...
+         * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+         * Notice the 'reverse order" of blocks
+         */
+         /* Encode first ACK block length */
+        block_size = cnx->first_sack_item.end_of_sack_range - cnx->first_sack_item.start_of_sack_range + 1;
+        /* Encode each block */
+        switch (mm)
+        {
+        case 0:
+            bytes[byte_index] = (uint8_t)block_size;
+            break;
+        case 1:
+            picoformat_16(bytes + byte_index, (uint16_t)block_size);
+            break;
+        case 2:
+            picoformat_32(bytes + byte_index, (uint32_t)block_size);
+            break;
+        case 3:
+            picoformat_64(bytes + byte_index, block_size);
+            break;
+        default:
+            break;
+        }
+        byte_index += length_mm;
+
+        while (sack != NULL && nb_blocks < 255)
+        {
+            size_t gap = previous_sack->start_of_sack_range - sack->end_of_sack_range - 1;
+            int blocks_needed = (gap + 254) / 255;
+
+            block_size = sack->end_of_sack_range - sack->start_of_sack_range + 1;
+            if (nb_blocks + blocks_needed > 255 ||
+                (byte_index + blocks_needed*(1 + length_mm)) > bytes_max)
+            {
+                break;
+            }
+
+            while (gap > 255)
+            {
+                /* Encode a null block */
+                bytes[byte_index++] = 255;
+                for (int i = 0; i < length_mm; i++)
+                {
+                    bytes[byte_index++] = 0;
+                }
+                gap -= 255;
+            }
+            bytes[byte_index++] = gap;
+            switch (mm)
+            {
+            case 0:
+                bytes[byte_index] = (uint8_t)block_size;
+                break;
+            case 1:
+                picoformat_16(bytes + byte_index, (uint16_t)block_size);
+                break;
+            case 2:
+                picoformat_32(bytes + byte_index, (uint32_t)block_size);
+                break;
+            case 3:
+                picoformat_64(bytes + byte_index, block_size);
+                break;
+            default:
+                break;
+            }
+            byte_index += length_mm;
+            nb_blocks += blocks_needed;
+            previous_sack = sack;
+            sack = sack->next_sack;
+        }
+
+        /*
+         * encode the time stamps: we never send a list in this version of the code.
+         * to do: consider the last received? Would be a way to help RTT computation
+         * and evaluation of out of order deliveries.
+         */
+
+        if (cnx->first_sack_item.next_sack != NULL)
+        {
+            bytes[1] = (uint8_t)nb_blocks;
+            bytes[2] = 0;
+        }
+
+        *nb_bytes = byte_index;
+    }
+    return ret;
+}
+
+int picoquic_decode_sack_frame(picoquic_cnx * cnx, uint8_t * bytes,
+    size_t bytes_max, size_t * nb_bytes, uint64_t current_time)
+{
+    return -1;
 }

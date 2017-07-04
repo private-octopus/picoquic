@@ -227,6 +227,7 @@ picoquic_cnx * picoquic_create_cnx(picoquic_quic * quic,
         cnx->first_sack_item.start_of_sack_range = 0;
         cnx->first_sack_item.end_of_sack_range = 0;
         cnx->first_sack_item.next_sack = NULL;
+        cnx->sack_block_size_max = 0;
     }
 
     return cnx;
