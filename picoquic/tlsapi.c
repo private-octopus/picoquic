@@ -21,7 +21,7 @@
 int picoquic_tlsinput(picoquic_cnx * cnx, picoquic_packet_type_enum ptype,
     uint8_t * bytes, size_t length, size_t * consumed, struct st_ptls_buffer_t * sendbuf)
 {
-    ptls_context_t * tls_ctx = (ptls_context_t *)cnx->tls_ctx;
+    ptls_t * tls_ctx = (ptls_t *)cnx->tls_ctx;
     size_t inlen = 0, roff = 0;
     int ret = 0;
 

@@ -58,6 +58,7 @@ extern "C" {
         struct _picoquic_sack_item * next_sack;
         uint64_t start_of_sack_range;
         uint64_t end_of_sack_range;
+        uint64_t time_stamp_last_in_range;
     } picoquic_sack_item;
 
     /*
@@ -153,7 +154,7 @@ extern "C" {
 
     /* handling of ACK logic */
     int picoquic_is_pn_already_received(picoquic_cnx * cnx, uint64_t pn64);
-    int picoquic_record_pn_received(picoquic_cnx * cnx, uint64_t pn64);
+    int picoquic_record_pn_received(picoquic_cnx * cnx, uint64_t pn64, uint64_t current_microsec);
     uint16_t picoquic_deltat_to_float16(uint64_t delta_t);
     uint64_t picoquic_float16_to_deltat(uint16_t float16);
 
