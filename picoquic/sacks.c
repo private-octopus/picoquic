@@ -170,6 +170,17 @@ int picoquic_record_pn_received(picoquic_cnx * cnx, uint64_t pn64, uint64_t curr
 }
 
 /*
+ * Manage the received ACK.
+ * This is expressed as a series of SACK blocks, of the form "last acknowledged, size"
+ */
+
+int picoquic_record_sack(picoquic_cnx * cnx, uint64_t pn64, uint64_t block_size)
+{
+
+}
+
+
+/*
  * Float16 format required for encoding the time deltas in current QUIC draft.
  *
  * The time format used in the ACK frame above is a 16-bit unsigned float with 
@@ -337,8 +348,7 @@ int picoquic_encode_sack_frame(picoquic_cnx * cnx, uint8_t * bytes,
          * Notice the 'reverse order" of blocks
          */
          /* Encode first ACK block length */
-        block_size = cnx->first_sack_item.end_of_sack_range - cnx->first_sack_item.start_of_sack_range + 1;
-        /* Encode each block */
+        block_size = cnx->first_sack_item.end_of_sack_range - cnx->first_sack_item.start_of_sack_range;
         switch (mm)
         {
         case 0:
@@ -358,12 +368,13 @@ int picoquic_encode_sack_frame(picoquic_cnx * cnx, uint8_t * bytes,
         }
         byte_index += length_mm;
 
+        /* Encode each block */
         while (sack != NULL && nb_blocks < 255)
         {
             size_t gap = previous_sack->start_of_sack_range - sack->end_of_sack_range - 1;
             int blocks_needed = (gap + 254) / 255;
 
-            block_size = sack->end_of_sack_range - sack->start_of_sack_range + 1;
+            block_size = sack->end_of_sack_range - sack->start_of_sack_range;
             if (nb_blocks + blocks_needed > 255 ||
                 (byte_index + blocks_needed*(1 + length_mm)) > bytes_max)
             {
