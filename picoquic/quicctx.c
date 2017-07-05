@@ -228,6 +228,8 @@ picoquic_cnx * picoquic_create_cnx(picoquic_quic * quic,
         cnx->first_sack_item.end_of_sack_range = 0;
         cnx->first_sack_item.next_sack = NULL;
         cnx->sack_block_size_max = 0;
+
+        cnx->first_stream = NULL;
     }
 
     return cnx;
@@ -281,6 +283,11 @@ void picoquic_delete_cnx(picoquic_cnx * cnx)
         else
         {
             cnx->previous_in_table->next_in_table = cnx->next_in_table;
+        }
+
+        while (cnx->first_stream != NULL)
+        {
+            /* TODO: delete stream data */
         }
 
         free(cnx);

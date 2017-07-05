@@ -51,7 +51,7 @@ extern "C" {
     } picoquic_state_enum;
 
     /*
-     * SACK dashboard item, part of conenction context.
+     * SACK dashboard item, part of connection context.
      */
 
     typedef struct _picoquic_sack_item {
@@ -60,6 +60,28 @@ extern "C" {
         uint64_t end_of_sack_range;
         uint64_t time_stamp_last_in_range;
     } picoquic_sack_item;
+
+    /*
+     * Stream head. 
+     * Stream contains bytes of data, which are not always delivered in order.
+     * When in order data is available, the application can read it,
+     * or a callback can be set.
+     */
+
+    typedef struct _picoquic_stream_data {
+        struct _picoquic_stream_data * next_stream_data;
+        uint64_t offset;
+        size_t length;
+        uint8_t * bytes;
+    } picoquic_stream_data;
+
+    typedef struct _picoquic_stream_head {
+        struct _picoquic_stream_head * next_stream;
+        uint64_t stream_id;
+        uint64_t consumed_offset;
+        uint64_t fin_offset;
+        picoquic_stream_data * stream_data;
+    } picoquic_stream_head;
 
     /*
      * Per connection context.
@@ -93,6 +115,9 @@ extern "C" {
 
         /* Retransmission state */
 
+        /* Management of streams */
+        picoquic_stream_head * first_stream;
+
     } picoquic_cnx;
 
     /* QUIC context create and dispose */
@@ -111,6 +136,7 @@ extern "C" {
 
 /* Integer parsing macros */
 #define PICOPARSE_16(b) ((((uint16_t)(b)[0])<<8)|(b)[1])
+#define PICOPARSE_24(b) ((((uint32_t)PICOPARSE_16(b))<<16)|((b)[2]))
 #define PICOPARSE_32(b) ((((uint32_t)PICOPARSE_16(b))<<16)|PICOPARSE_16((b)+2))
 #define PICOPARSE_64(b) ((((uint64_t)PICOPARSE_32(b))<<32)|PICOPARSE_32((b)+4))
 
@@ -158,6 +184,10 @@ extern "C" {
     int picoquic_record_pn_received(picoquic_cnx * cnx, uint64_t pn64, uint64_t current_microsec);
     uint16_t picoquic_deltat_to_float16(uint64_t delta_t);
     uint64_t picoquic_float16_to_deltat(uint16_t float16);
+
+    /* stream management */
+    int picoquic_stream_input(picoquic_cnx * cnx, uint32_t stream_id, 
+        uint64_t offset, int fin, uint8_t * bytes, size_t length);
 
 #ifdef  __cplusplus
 }
