@@ -50,7 +50,7 @@ int sacktest()
             }
         }
 
-        for (int j = i+1; ret == 0 && j < nb_test_pn64; j++)
+        for (size_t j = i+1; ret == 0 && j < nb_test_pn64; j++)
         {
             if (picoquic_is_pn_already_received(&cnx, test_pn64[j]) != 0)
             {

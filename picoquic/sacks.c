@@ -276,14 +276,12 @@ int picoquic_encode_sack_frame(picoquic_cnx * cnx, uint8_t * bytes,
     int ret = -1;
     size_t nb_blocks = 0;
     picoquic_sack_item * previous_sack = &cnx->first_sack_item;
-    picoquic_sack_item * sack = &cnx->first_sack_item.next_sack;
-    size_t block_size;
-    uint64_t gap;
+    picoquic_sack_item * sack = cnx->first_sack_item.next_sack;
+    uint64_t block_size;
     uint8_t ack_type = 0xA8;
     uint8_t mm = 0;
     int length_mm = 1;
     size_t byte_index = 0;
-    uint16_t encoded_delay;
 
     if (cnx->sack_block_size_max < 0xFFFF)
     {
@@ -304,7 +302,7 @@ int picoquic_encode_sack_frame(picoquic_cnx * cnx, uint8_t * bytes,
         length_mm = 8;
     }
 
-    if (bytes_max < 1 + 2 + 4 + 2 + length_mm)
+    if (bytes_max < 1u + 2u + 4u + 2u + length_mm)
     {
         *nb_bytes = 0;
         ret = -1;
@@ -371,8 +369,8 @@ int picoquic_encode_sack_frame(picoquic_cnx * cnx, uint8_t * bytes,
         /* Encode each block */
         while (sack != NULL && nb_blocks < 255)
         {
-            size_t gap = previous_sack->start_of_sack_range - sack->end_of_sack_range - 1;
-            int blocks_needed = (gap + 254) / 255;
+            uint64_t gap = previous_sack->start_of_sack_range - sack->end_of_sack_range - 1;
+            uint32_t blocks_needed = (uint32_t)((gap + 254) / 255);
 
             block_size = sack->end_of_sack_range - sack->start_of_sack_range;
             if (nb_blocks + blocks_needed > 255 ||
@@ -391,7 +389,7 @@ int picoquic_encode_sack_frame(picoquic_cnx * cnx, uint8_t * bytes,
                 }
                 gap -= 255;
             }
-            bytes[byte_index++] = gap;
+            bytes[byte_index++] = (uint8_t) gap;
             switch (mm)
             {
             case 0:

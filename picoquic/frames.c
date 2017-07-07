@@ -42,6 +42,125 @@
  */
 static const int picoquic_offset_length_code[4] = { 0, 2, 4, 8 };
 
+picoquic_stream_head * find_stream(picoquic_cnx * cnx, uint32_t stream_id, int create)
+{
+    picoquic_stream_head * stream = &cnx->first_stream;
+
+    do {
+        if (stream->stream_id == stream_id)
+        {
+            break;
+        }
+        else
+        {
+            stream = stream->next_stream;
+        }
+    } while (stream);
+
+    if (create != 0 && stream == NULL)
+    {
+        stream = (picoquic_stream_head *)malloc(sizeof(picoquic_stream_head));
+        if (stream != NULL)
+        {
+            stream->consumed_offset = 0;
+            stream->fin_offset = 0;
+            stream->next_stream = cnx->first_stream.next_stream;
+            stream->stream_id = stream_id;
+            cnx->first_stream.next_stream = stream;
+        }
+    }
+
+    return stream;
+}
+
+int picoquic_stream_input(picoquic_cnx * cnx, uint32_t stream_id,
+    uint64_t offset, int fin, uint8_t * bytes, size_t length)
+{
+    int ret = 0;
+    /* Is there such a stream, is it still open? */
+    picoquic_stream_head * stream = find_stream(cnx, stream_id, 1);
+
+    if (stream == NULL)
+    {
+        ret = -1;
+    }
+    else
+    {
+        picoquic_stream_data ** pprevious = &stream->stream_data;
+        picoquic_stream_data * next = stream->stream_data;
+        size_t start = 0;
+        int overlap = 0;
+
+        if (offset <= stream->consumed_offset)
+        {
+            if (offset + length <= stream->consumed_offset)
+            {
+                /* already received */
+                start = length;
+            }
+            else
+            {
+                start = (size_t)(stream->consumed_offset - offset);
+            }
+        }
+        
+        /* Queue of a block in the stream */
+
+        while (next != NULL && start < length && next->offset <= offset + start )
+        {
+            if (offset + length <= next->offset + next->length)
+            {
+                start = length;
+            }
+            else if (offset < next->offset + next->length)
+            {
+                start = (size_t)(next->offset + next->length - offset);
+            }
+            pprevious = &next->next_stream_data;
+            next = next->next_stream_data;
+        }
+
+        if (start < length)
+        {
+            size_t data_length = length - start;
+
+            if (next != NULL && next->offset < offset + length)
+            {
+                data_length -= (offset + length - next->offset);
+            }
+
+            if (data_length > 0)
+            {
+                picoquic_stream_data * data = (picoquic_stream_data*)malloc(sizeof(picoquic_stream_data));
+
+                if (data == NULL)
+                {
+                    ret = -1;
+                }
+                else
+                {
+                    data->length = data_length;
+                    data->bytes = (uint8_t *)malloc(data_length);
+                    if (data->bytes == NULL)
+                    {
+                        ret = -1;
+                        free(data);
+                    }
+                    else
+                    {
+                        data->offset = offset + start;
+                        memcpy(data->bytes, bytes + start, data_length);
+                        data->next_stream_data = next;
+                        *pprevious = data;
+                    }
+                }
+            }
+        }
+    }
+    
+    return ret;
+}
+
 int picoquic_decode_stream_frame(picoquic_cnx * cnx, uint8_t * bytes,
     size_t bytes_max, int restricted, size_t * consumed)
 {
@@ -56,10 +175,11 @@ int picoquic_decode_stream_frame(picoquic_cnx * cnx, uint8_t * bytes,
     uint64_t offset;
 
 
-    if (bytes_max < (1 + stream_id_length + offset_length + data_length_length))
+    *consumed = 0;
+
+    if (bytes_max < (1u + stream_id_length + offset_length + data_length_length))
     {
         ret = -1;
-        *consumed = 0;
     }
     else
     {
@@ -121,6 +241,8 @@ int picoquic_decode_stream_frame(picoquic_cnx * cnx, uint8_t * bytes,
 
             if (ret == 0)
             {
+                *consumed = byte_index + data_length;
+
                 ret = picoquic_stream_input(cnx, stream_id, offset, first_byte & 32,
                     bytes + byte_index, data_length);
             }
@@ -130,11 +252,6 @@ int picoquic_decode_stream_frame(picoquic_cnx * cnx, uint8_t * bytes,
     return ret;
 }
 
-int picoquic_stream_input(picoquic_cnx * cnx, uint32_t stream_id,
-    uint64_t offset, int fin, uint8_t * bytes, size_t length)
-{
-    return -1;
-}
 
 /*
  * Decoding of the received frames.
@@ -170,6 +287,11 @@ int picoquic_decode_frames(picoquic_cnx * cnx, uint8_t * bytes,
         if (first_byte <= 0xc0)
         {
             /* decode stream frame */
+            size_t consumed = 0;
+
+            ret = picoquic_decode_stream_frame(cnx, bytes + byte_index, bytes_max - byte_index, restricted, &consumed);
+
+            byte_index += consumed;
         }
         else if (first_byte < 0xa0)
         {

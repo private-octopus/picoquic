@@ -116,7 +116,7 @@ extern "C" {
         /* Retransmission state */
 
         /* Management of streams */
-        picoquic_stream_head * first_stream;
+        picoquic_stream_head first_stream;
 
     } picoquic_cnx;
 
@@ -188,6 +188,8 @@ extern "C" {
     /* stream management */
     int picoquic_stream_input(picoquic_cnx * cnx, uint32_t stream_id, 
         uint64_t offset, int fin, uint8_t * bytes, size_t length);
+    int picoquic_decode_stream_frame(picoquic_cnx * cnx, uint8_t * bytes,
+        size_t bytes_max, int restricted, size_t * consumed);
 
 #ifdef  __cplusplus
 }

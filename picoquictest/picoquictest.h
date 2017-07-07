@@ -13,6 +13,7 @@ extern "C" {
     int fnv1atest();
     int sacktest();
     int float16test();
+    int StreamZeroFrameTest();
 
 #ifdef  __cplusplus
 }
