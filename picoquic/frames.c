@@ -126,7 +126,7 @@ int picoquic_stream_input(picoquic_cnx * cnx, uint32_t stream_id,
 
             if (next != NULL && next->offset < offset + length)
             {
-                data_length -= (offset + length - next->offset);
+                data_length -= (size_t) (offset + length - next->offset);
             }
 
             if (data_length > 0)
@@ -252,6 +252,106 @@ int picoquic_decode_stream_frame(picoquic_cnx * cnx, uint8_t * bytes,
     return ret;
 }
 
+
+int picoquic_prepare_stream_frame(picoquic_cnx * cnx, picoquic_stream_head * stream,
+    uint8_t * bytes, size_t bytes_max, size_t * consumed)
+{
+    int ret = 0;
+    size_t byte_index = 1;
+    uint8_t ss_bits = 0;
+    uint8_t oo_bits = 0;
+    size_t length;
+
+    /*
+     * Encode the stream ID length
+     */
+    if (stream->stream_id < 256)
+    {
+        bytes[byte_index++] = (uint8_t)stream->stream_id;
+        ss_bits = 0;
+    }
+    else if (stream->stream_id < 0x10000)
+    {
+        picoformat_16(&bytes[byte_index], (uint16_t)stream->stream_id);
+        byte_index += 2;
+        ss_bits = 1;
+    }
+    else
+    {
+        picoformat_32(&bytes[byte_index], (uint32_t) stream->stream_id);
+        byte_index += 4;
+        ss_bits = 3;
+    }
+    /*
+     * Encode the offset 
+     */
+    if (stream->sent_offset > 0)
+    {
+
+        if (stream->sent_offset < 0x10000)
+        {
+            picoformat_16(&bytes[byte_index], (uint16_t)stream->sent_offset);
+            byte_index += 2;
+            oo_bits = 1;
+        }
+        else if (stream->sent_offset < 0x100000000ull)
+        {
+            picoformat_32(&bytes[byte_index], (uint32_t)stream->sent_offset);
+            byte_index += 4;
+            oo_bits = 2;
+        }
+        else
+        {
+            picoformat_64(&bytes[byte_index], stream->sent_offset);
+            byte_index += 8;
+            oo_bits = 3;
+        }
+    }
+    /*
+     * Compute the available length
+     */
+    length = bytes_max - byte_index - 2;
+
+    if (stream->send_queue == NULL)
+    {
+        length = 0;
+    }
+    else
+    {
+        size_t available = (size_t)(stream->send_queue->length - stream->send_queue->offset);
+
+        if (available < length)
+        {
+            length = available;
+        }
+    }
+    /* Encode the length */    
+    picoformat_16(&bytes[byte_index], (uint16_t)length);
+    byte_index += 2;
+
+    if (length > 0)
+    {
+        memcpy(&bytes[byte_index], stream->send_queue->bytes + stream->send_queue->offset, length);
+        byte_index += length;
+
+        stream->send_queue->offset += length;
+        if (stream->send_queue->offset >= stream->send_queue->length)
+        {
+            picoquic_stream_data * next = stream->send_queue->next_stream_data;
+            free(stream->send_queue->bytes);
+            free(stream->send_queue);
+            stream->send_queue = next;
+        }
+
+        stream->sent_offset += length;
+    }
+
+    bytes[0] = 0xA1 | (ss_bits << 3) | (oo_bits << 1);
+
+    *consumed = byte_index;
+
+    return ret;
+}
 
 /*
  * Decoding of the received frames.

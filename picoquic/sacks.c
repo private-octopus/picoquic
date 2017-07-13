@@ -176,7 +176,7 @@ int picoquic_record_pn_received(picoquic_cnx * cnx, uint64_t pn64, uint64_t curr
 
 int picoquic_record_sack(picoquic_cnx * cnx, uint64_t pn64, uint64_t block_size)
 {
-
+    return -1;
 }
 
 

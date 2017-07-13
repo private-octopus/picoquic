@@ -1,4 +1,5 @@
 #include "picoquic.h"
+#include "tls_api.h"
 
 /*
 * Structures used in the hash table of connections
@@ -51,7 +52,7 @@ static int picoquic_net_id_compare(void * key1, void * key2)
 }
 
 /* QUIC context create and dispose */
-picoquic_quic * picoquic_create(uint32_t nb_connections)
+picoquic_quic * picoquic_create(uint32_t nb_connections, char * cert_file_name, char * key_file_name)
 {
     picoquic_quic * quic = (picoquic_quic *)malloc(sizeof(picoquic_quic));
 
@@ -61,6 +62,11 @@ picoquic_quic * picoquic_create(uint32_t nb_connections)
         /* TODO: open UDP sockets - maybe */
 
         quic->flags = 0;
+
+        if (cert_file_name != NULL)
+        {
+            quic->flags |= picoquic_context_server;
+        }
 
         quic->cnx_list = NULL;
         quic->cnx_last = NULL;
@@ -72,7 +78,8 @@ picoquic_quic * picoquic_create(uint32_t nb_connections)
             picoquic_net_id_hash, picoquic_net_id_compare);
 
         if (quic->table_cnx_by_id == NULL ||
-            quic->table_cnx_by_net == NULL)
+            quic->table_cnx_by_net == NULL ||
+            picoquic_master_tlscontext(quic, cert_file_name, key_file_name) != 0)
         {
             picoquic_free(quic);
             quic = NULL;
@@ -102,6 +109,13 @@ void picoquic_free(picoquic_quic * quic)
         if (quic->table_cnx_by_net != NULL)
         {
             picohash_delete(quic->table_cnx_by_net, 1);
+        }
+
+        /* Delete the picotls context */
+        if (quic->tls_master_ctx != NULL)
+        {
+            free(quic->tls_master_ctx);
+            quic->tls_master_ctx = NULL;
         }
     }
 }
@@ -201,15 +215,6 @@ picoquic_cnx * picoquic_create_cnx(picoquic_quic * quic,
     if (cnx != NULL)
     {
         memset(cnx, 0, sizeof(picoquic_cnx));
-        if (cnx_id != 0)
-        {
-            (void)picoquic_register_cnx_id(quic, cnx, cnx_id);
-        }
-
-        if (addr != NULL)
-        {
-            (void)picoquic_register_net_id(quic, cnx, addr);
-        }
 
         if (quic->cnx_list != NULL)
         {
@@ -224,6 +229,26 @@ picoquic_cnx * picoquic_create_cnx(picoquic_quic * quic,
         quic->cnx_list = cnx;
         cnx->quic = quic;
 
+        if (picoquic_tlscontext_create(quic, cnx) != 0)
+        {
+            /* Cannot just do partial creation! */
+            picoquic_delete_cnx(cnx);
+            cnx = NULL;
+        }
+    }
+
+    if (cnx != NULL)
+    {
+        if (cnx_id != 0)
+        {
+            (void)picoquic_register_cnx_id(quic, cnx, cnx_id);
+        }
+
+        if (addr != NULL)
+        {
+            (void)picoquic_register_net_id(quic, cnx, addr);
+        }
+
         cnx->first_sack_item.start_of_sack_range = 0;
         cnx->first_sack_item.end_of_sack_range = 0;
         cnx->first_sack_item.next_sack = NULL;
@@ -234,13 +259,38 @@ picoquic_cnx * picoquic_create_cnx(picoquic_quic * quic,
         cnx->first_stream.fin_offset = 0;
         cnx->first_stream.next_stream = NULL;
         cnx->first_stream.stream_data = NULL;
+        cnx->first_stream.sent_offset = 0;
+        cnx->first_stream.send_queue = NULL;
     }
 
     return cnx;
 }
 
+void picoquic_clear_stream(picoquic_stream_head * stream)
+{
+    picoquic_stream_data ** pdata[2] = { &stream->stream_data, &stream->send_queue };
+
+    for (int i = 0; i < 2; i++)
+    {
+        picoquic_stream_data * next; 
+
+        while ((next = *pdata[i]) != NULL)
+        {
+            *pdata[i] = next->next_stream_data;
+
+            if (next->bytes != NULL)
+            {
+                free(next->bytes);
+            }
+            free(next);
+        }
+    }
+}
+
 void picoquic_delete_cnx(picoquic_cnx * cnx)
 {
+    picoquic_stream_head * stream;
+
     if (cnx != NULL)
     {
         while (cnx->first_cnx_id != NULL)
@@ -289,9 +339,18 @@ void picoquic_delete_cnx(picoquic_cnx * cnx)
             cnx->previous_in_table->next_in_table = cnx->next_in_table;
         }
 
-        while (cnx->first_stream.next_stream != NULL)
+        while ((stream = cnx->first_stream.next_stream) != NULL)
         {
-            /* TODO: delete stream data */
+            cnx->first_stream.next_stream = stream->next_stream;
+            picoquic_clear_stream(stream);
+            free(stream);
+        }
+        picoquic_clear_stream(&cnx->first_stream);
+
+        if (cnx->tls_ctx != NULL)
+        {
+            picoquic_tlscontext_free(cnx->tls_ctx);
+            cnx->tls_ctx = NULL;
         }
 
         free(cnx);

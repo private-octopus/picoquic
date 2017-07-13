@@ -11,11 +11,13 @@
 #ifdef  __cplusplus
 extern "C" {
 #endif
+
+#define PICOQUIC_MAX_PACKET_SIZE 1536
+
     /*
      * Quic context flags
      */
     typedef enum {
-        picoquic_context_client = 0,
         picoquic_context_server = 1
     } picoquic_context_flags;
     /*
@@ -24,7 +26,7 @@ extern "C" {
      */
     typedef struct _picoquic_quic
     {
-        picotlsapi tls_api;
+        void* tls_master_ctx;
 
         uint32_t flags;
 
@@ -81,7 +83,40 @@ extern "C" {
         uint64_t consumed_offset;
         uint64_t fin_offset;
         picoquic_stream_data * stream_data;
+        uint64_t sent_offset;
+        picoquic_stream_data * send_queue;
     } picoquic_stream_head;
+
+    /*
+     * Packet sent, and queued for retransmission.
+     * The packet is not encrypted.
+     */
+
+    typedef enum
+    {
+        picoquic_packet_error = 0,
+        picoquic_packet_version_negotiation = 1,
+        picoquic_packet_client_initial = 2,
+        picoquic_packet_server_stateless = 3,
+        picoquic_packet_server_cleartext = 4,
+        picoquic_packet_client_cleartext = 5,
+        picoquic_packet_0rtt_protected = 6,
+        picoquic_packet_1rtt_protected_phi0 = 7,
+        picoquic_packet_1rtt_protected_phi1 = 8,
+        picoquic_packet_public_reset = 9,
+        picoquic_packet_type_max = 10
+    } picoquic_packet_type_enum;
+
+    typedef struct _picoquic_packet {
+        struct _picoquic_packet * previous_packet;
+        struct _picoquic_packet * next_packet;
+
+        uint64_t sequence_number;
+        size_t length;
+
+        picoquic_packet_type_enum packet_type;
+        uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE];
+    } picoquic_packet;
 
     /*
      * Per connection context.
@@ -121,7 +156,7 @@ extern "C" {
     } picoquic_cnx;
 
     /* QUIC context create and dispose */
-    picoquic_quic * picoquic_create(uint32_t nb_connections);
+    picoquic_quic * picoquic_create(uint32_t nb_connections, char * cert_file_name, char * key_file_name);
     void picoquic_free(picoquic_quic * quic);
 
     /* Connection context creation and registration */
@@ -147,20 +182,6 @@ extern "C" {
 
 /* Packet parsing */
 
-    typedef enum
-    {
-        picoquic_packet_error = 0,
-        picoquic_packet_version_negotiation = 1,
-        picoquic_packet_client_initial = 2,
-        picoquic_packet_server_stateless = 3,
-        picoquic_packet_server_cleartext = 4,
-        picoquic_packet_client_cleartext = 5,
-        picoquic_packet_0rtt_protected = 6,
-        picoquic_packet_1rtt_protected_phi0 = 7,
-        picoquic_packet_1rtt_protected_phi1 = 8,
-        picoquic_packet_public_reset = 9,
-        picoquic_packet_type_max = 10
-    } picoquic_packet_type_enum;
 
     typedef struct _picoquic_packet_header {
         uint64_t cnx_id;
@@ -190,6 +211,13 @@ extern "C" {
         uint64_t offset, int fin, uint8_t * bytes, size_t length);
     int picoquic_decode_stream_frame(picoquic_cnx * cnx, uint8_t * bytes,
         size_t bytes_max, int restricted, size_t * consumed);
+    int picoquic_prepare_stream_frame(picoquic_cnx * cnx, picoquic_stream_head * stream,
+        uint8_t * bytes, size_t bytes_max, size_t * consumed);
+    int picoquic_add_to_stream(picoquic_cnx * cnx, uint32_t stream_id, uint8_t * data, size_t length);
+
+    /* send/receive */
+    int picoquic_decode_frames(picoquic_cnx * cnx, uint8_t * bytes,
+        size_t bytes_max, int restricted);
 
 #ifdef  __cplusplus
 }

@@ -46,7 +46,7 @@ int float16test()
 {
     int ret = 0;
 
-    for (int i = 0; ret == 0 && i < nb_float16_test_case; i++)
+    for (size_t i = 0; ret == 0 && i < nb_float16_test_case; i++)
     {
         uint16_t encoded = picoquic_deltat_to_float16(float16_test_case[i].n64);
         uint64_t decoded = picoquic_float16_to_deltat(float16_test_case[i].f16);

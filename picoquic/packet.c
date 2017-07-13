@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include "picoquic.h"
 #include "fnv1a.h"
+#include "tls_api.h"
 
 int picoquic_parse_packet_header(
     uint8_t * bytes,
@@ -135,7 +136,7 @@ picoquic_cnx * picoquic_incoming_initial(
     size_t decoded_length = 0;
 
     if (ph->ptype != picoquic_packet_client_initial ||
-        (quic->flags&picoquic_context_server) != 0)
+        (quic->flags&picoquic_context_server) == 0)
     {
         /* TODO: may want to send stateless reject */
         /* Unexpected packet, drop and log. */
@@ -155,9 +156,20 @@ picoquic_cnx * picoquic_incoming_initial(
             cnx = picoquic_create_cnx(quic, ph->cnx_id, addr_from);
             if (cnx != NULL)
             {
+                int ret = picoquic_decode_frames(cnx, bytes, decoded_length, 1);
+
                 /* processing of client initial packet */
-                /* initialization of context */
-                /* registration of context */
+                if (ret == 0)
+                {
+                    /* initialization of context & creation of data */
+                    /* TODO: find path to send data produced by TLS. */
+                    ret = picoquic_tlsinput_stream_zero(cnx);
+                }
+
+                if (ret != 0)
+                {
+                    /* This is bad. should just delete the context, log the packet, etc */
+                }
             }
         }
     }

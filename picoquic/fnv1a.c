@@ -8,6 +8,8 @@ uint64_t fnv1a_hash(uint64_t hash, uint8_t * bytes, size_t length)
         hash ^= bytes[i];
         hash *= FNV1A_PRIME;
     }
+
+    return hash;
 }
 
 size_t fnv1a_protect(uint8_t * bytes, size_t length, size_t length_max)
