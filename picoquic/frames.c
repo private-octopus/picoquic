@@ -431,8 +431,12 @@ int picoquic_decode_frames(picoquic_cnx * cnx, uint8_t * bytes,
                 byte_index++;
             } while (byte_index < bytes_max && bytes[byte_index] == 0);
             break;
-        case 0x01: /* RST_STREAM */
         case 0x02: /* CONNECTION_CLOSE */
+                   /* TODO: parse, check for errors, signal on the API */
+            cnx->cnx_state = picoquic_state_disconnected;
+            byte_index = bytes_max;
+            break;
+        case 0x01: /* RST_STREAM */
         case 0x03: /* GOAWAY */
         case 0x04: /* MAX_DATA */
         case 0x05: /* MAX_STREAM_DATA */
@@ -448,5 +452,26 @@ int picoquic_decode_frames(picoquic_cnx * cnx, uint8_t * bytes,
             break;
         }
     } 
+    return ret;
+}
+
+int picoquic_prepare_connection_close_frame(picoquic_cnx * cnx,
+    uint8_t * bytes, size_t bytes_max, size_t * consumed)
+{
+    int ret = 0;
+
+    if (bytes_max < 7)
+    {
+        *consumed = 0;
+        ret = -1;
+    }
+    else
+    {
+        bytes[0] = 0x02; /* CONNECTION_CLOSE */
+        picoformat_32(bytes + 1, 0);
+        picoformat_16(bytes + 5, 0);
+        *consumed = 7;
+    }
+
     return ret;
 }

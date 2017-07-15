@@ -51,6 +51,7 @@ extern "C" {
         picoquic_state_server_handshake_progress,
         picoquic_state_server_almost_ready,
         picoquic_state_server_ready,
+        picoquic_state_disconnecting,
         picoquic_state_disconnected
     } picoquic_state_enum;
 
@@ -148,6 +149,10 @@ extern "C" {
         uint64_t send_sequence;
         uint32_t send_mtu;
 
+        /* Encryption and decryption objects */
+        void * aead_encrypt_ctx;
+        void * aead_decrypt_ctx;
+
         /* Receive state */
         struct _picoquic_sack_item first_sack_item;
         uint64_t sack_block_size_max;
@@ -172,6 +177,7 @@ extern "C" {
     picoquic_cnx * picoquic_cnx_by_id(picoquic_quic * quic, uint64_t cnx_id);
     picoquic_cnx * picoquic_cnx_by_net(picoquic_quic * quic, struct sockaddr* addr);
 
+    int picoquic_close(picoquic_cnx * cnx);
 
 /* Integer parsing macros */
 #define PICOPARSE_16(b) ((((uint16_t)(b)[0])<<8)|(b)[1])
@@ -218,6 +224,8 @@ extern "C" {
     int picoquic_prepare_stream_frame(picoquic_cnx * cnx, picoquic_stream_head * stream,
         uint8_t * bytes, size_t bytes_max, size_t * consumed);
     int picoquic_add_to_stream(picoquic_cnx * cnx, uint32_t stream_id, uint8_t * data, size_t length);
+    int picoquic_prepare_connection_close_frame(picoquic_cnx * cnx,
+        uint8_t * bytes, size_t bytes_max, size_t * consumed);
 
     /* send/receive */
 

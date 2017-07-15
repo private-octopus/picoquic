@@ -52,7 +52,6 @@ int tls_api_test()
     server_addr.sin_addr.S_un.S_addr = 0x0A000001;
     server_addr.sin_port = 4321;
 
-
     /* Test the creation of the client and server contexts */
     /* Create QUIC context */
     qclient = picoquic_create(8, NULL, NULL);
@@ -77,7 +76,6 @@ int tls_api_test()
     while (ret == 0 && nb_trials < 6 &&
         (cnx_client->cnx_state != picoquic_state_client_ready ||
         (cnx_server == NULL || cnx_server->cnx_state != picoquic_state_server_ready)))
-
     {
         nb_trials++;
 
@@ -106,6 +104,23 @@ int tls_api_test()
         cnx_server == NULL || cnx_server->cnx_state != picoquic_state_server_ready)
     {
         ret = -1;
+    }
+    else
+    {
+        ret = picoquic_close(cnx_client);
+
+        if (ret == 0)
+        {
+            /* packet from client to server */
+            ret = tls_api_one_packet(cnx_client, qserver, (struct sockaddr *)&client_addr);
+        }
+
+        if (ret == 0 && (
+            cnx_client->cnx_state != picoquic_state_disconnected ||
+            cnx_server->cnx_state != picoquic_state_disconnected))
+        {
+            ret = -1;
+        }
     }
 
     if (qclient != NULL)

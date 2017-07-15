@@ -263,7 +263,60 @@ int picoquic_incoming_client_cleartext(
             int ret = picoquic_decode_frames(cnx,
                 bytes + ph->offset, decoded_length - ph->offset, 1);
 
-            /* processing of client initial packet */
+            /* processing of client clear text packet */
+            if (ret == 0)
+            {
+                /* initialization of context & creation of data */
+                /* TODO: find path to send data produced by TLS. */
+                ret = picoquic_tlsinput_stream_zero(cnx);
+            }
+
+            if (ret != 0)
+            {
+                /* This is bad. should just delete the context, log the packet, etc */
+            }
+        }
+    }
+    else
+    {
+        /* Not expected. Log and ignore. */
+        ret = -1;
+    }
+
+    return ret;
+}
+/*
+* Processing of client clear text packet.
+*/
+int picoquic_incoming_client_encrypted(
+    picoquic_cnx * cnx,
+    uint8_t * bytes,
+    uint32_t length,
+    picoquic_packet_header * ph)
+{
+    int ret = 0;
+    size_t decoded_length = 0;
+
+    if (cnx->cnx_state == picoquic_state_client_almost_ready ||
+        cnx->cnx_state == picoquic_state_client_ready ||
+        cnx->cnx_state == picoquic_state_server_almost_ready ||
+        cnx->cnx_state == picoquic_state_server_ready)
+    {
+        /* AEAD Decrypt, in place */
+        decoded_length = picoquic_aead_decrypt(cnx, bytes + ph->offset,
+            bytes + ph->offset, length - ph->offset, ph->pn, bytes, ph->offset);
+
+        if (decoded_length > length)
+        {
+            /* Bad packet should be ignored */
+        }
+        else
+        {
+            /* Accept the incoming frames */
+            int ret = picoquic_decode_frames(cnx,
+                bytes + ph->offset, decoded_length - ph->offset, 1);
+
+            /* processing of client encrypted packet */
             if (ret == 0)
             {
                 /* initialization of context & creation of data */
@@ -368,10 +421,10 @@ int picoquic_incoming_packet(
                     break;
                 case picoquic_packet_1rtt_protected_phi0:
                 case picoquic_packet_1rtt_protected_phi1:
+                    ret = picoquic_incoming_client_encrypted(cnx, bytes, length, &ph);
                     /* TODO : roll key based on PHI */
-                    /* TODO : decrypt with 1RTT key of epoch */
+                    /* decrypt with 1RTT key of epoch */
                     /* Not implemented yet. */
-                    decoded_length = 0;
                     break;
                 case picoquic_packet_public_reset:
                     /* TODO : check whether the secret matches */

@@ -280,6 +280,9 @@ picoquic_cnx * picoquic_create_cnx(picoquic_quic * quic,
         cnx->first_stream.stream_data = NULL;
         cnx->first_stream.sent_offset = 0;
 
+        cnx->aead_decrypt_ctx = NULL;
+        cnx->aead_encrypt_ctx = NULL;
+
         picoquic_crypto_random(quic, &random_sequence, sizeof(uint32_t));
         cnx->send_sequence = random_sequence;
         cnx->send_mtu = 1200; /* TODO: replace by constant */
@@ -372,6 +375,18 @@ void picoquic_delete_cnx(picoquic_cnx * cnx)
         else
         {
             cnx->previous_in_table->next_in_table = cnx->next_in_table;
+        }
+
+        if (cnx->aead_decrypt_ctx != NULL)
+        {
+            picoquic_aead_free(cnx->aead_decrypt_ctx);
+            cnx->aead_decrypt_ctx = NULL;
+        }
+
+        if (cnx->aead_encrypt_ctx != NULL)
+        {
+            picoquic_aead_free(cnx->aead_encrypt_ctx);
+            cnx->aead_encrypt_ctx = NULL;
         }
 
         while ((stream = cnx->first_stream.next_stream) != NULL)

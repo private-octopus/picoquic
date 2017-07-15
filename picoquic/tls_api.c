@@ -65,8 +65,7 @@ void picoquic_crypto_random(picoquic_quic * quic, void * buf, size_t len)
     int ret = 0;
     ptls_context_t *ctx = (ptls_context_t *)quic->tls_master_ctx;
 
-    return (ctx->random_bytes(buf, len));
-
+    ctx->random_bytes(buf, len);
 }
 
 int picoquic_master_tlscontext(picoquic_quic * quic, char * cert_file_name, char * key_file_name)
@@ -206,7 +205,116 @@ int picoquic_initialize_stream_zero(picoquic_cnx * cnx)
     return ret;
 }
 
+/*
 
+Using function ptls_aead_new(cipher->aead, cipher->hash, is_enc, pp->secret);
+is_enc == 0 => decryption key;
+is_enc != 0 => encryption key;
+returns * ptls_aead_context
+
+To use:
+size_t ptls_aead_encrypt(aead_context, void* output, void* input, size_t input_len,
+64bit seq, auth_data, auth_data_length);
+
+Similar for aead_decrypt
+Decrypt returns size_t_max (-1) if decryption fails, number of bytes in output otherwise
+
+*/
+
+
+#define PICOQUIC_LABEL_0RTT "EXPORTER-QUIC 0-RTT Secret"
+#define PICOQUIC_LABEL_1RTT_CLIENT "EXPORTER-QUIC client 1-RTT Secret"
+#define PICOQUIC_LABEL_1RTT_SERVER "EXPORTER-QUIC server 1-RTT Secret"
+
+void picoquic_aead_free(void* aead_context)
+{
+    ptls_aead_free((ptls_aead_context_t *)aead_context);
+}
+
+int picoquic_setup_1RTT_aead_contexts(picoquic_cnx * cnx, int is_server)
+{
+    int ret = 0;
+    uint8_t * secret[256]; /* secret_max */
+    ptls_cipher_suite_t * cipher = ptls_get_cipher((ptls_t *) cnx->tls_ctx);
+
+    if (cipher == NULL)
+    {
+        ret = -1;
+    }
+    else if ( cipher->hash->digest_size > sizeof(secret))
+    {
+        ret = -1;
+    }
+    else
+    {
+        /* Set up the encryption AEAD */
+        ret = ptls_export_secret((ptls_t *)cnx->tls_ctx, secret, cipher->hash->digest_size,
+            (is_server == 0)? PICOQUIC_LABEL_1RTT_CLIENT: PICOQUIC_LABEL_1RTT_SERVER,
+            ptls_iovec_init(NULL, 0));
+
+        if (ret == 0)
+        {
+            cnx->aead_encrypt_ctx = (void *) ptls_aead_new(cipher->aead, cipher->hash, 1, secret);
+
+            if (cnx->aead_encrypt_ctx == NULL)
+            {
+                ret = -1;
+            }
+        }
+
+        /* Now set up the corresponding decryption */
+        if (ret == 0)
+        {
+            ret = ptls_export_secret((ptls_t *)cnx->tls_ctx, secret, cipher->hash->digest_size,
+                (is_server != 0) ? PICOQUIC_LABEL_1RTT_CLIENT : PICOQUIC_LABEL_1RTT_SERVER,
+                ptls_iovec_init(NULL, 0));
+        }
+
+        if (ret == 0)
+        {
+            cnx->aead_decrypt_ctx = (void *)ptls_aead_new(cipher->aead, cipher->hash, 0, secret);
+
+            if (cnx->aead_decrypt_ctx == NULL)
+            {
+                ret = -1;
+            }
+        }
+    }
+
+    return ret;
+}
+
+size_t picoquic_aead_decrypt(picoquic_cnx *cnx, uint8_t * output, uint8_t * input, size_t input_length,
+    uint64_t seq_num, uint8_t * auth_data, size_t auth_data_length)
+{
+    size_t decrypted;
+
+    if (cnx->aead_decrypt_ctx == NULL)
+    {
+        decrypted = (uint64_t)(-1ll);
+    }
+    else
+    {
+        decrypted = ptls_aead_decrypt((ptls_aead_context_t *)cnx->aead_decrypt_ctx,
+            (void*)output, (const void *)input, input_length, seq_num,
+            (void *)auth_data, auth_data_length);
+    }
+
+    return decrypted;
+}
+
+size_t picoquic_aead_encrypt(picoquic_cnx *cnx, uint8_t * output, uint8_t * input, size_t input_length,
+    uint64_t seq_num, uint8_t * auth_data, size_t auth_data_length)
+{
+    size_t encrypted = ptls_aead_encrypt((ptls_aead_context_t *)cnx->aead_encrypt_ctx,
+        (void*)output, (const void *)input, input_length, seq_num,
+        (void *)auth_data, auth_data_length);
+
+    return encrypted;
+}
+
+/* Input stream zero data to TLS context
+ */
 
 int picoquic_tlsinput_stream_zero(picoquic_cnx * cnx)
 {
@@ -252,11 +360,13 @@ int picoquic_tlsinput_stream_zero(picoquic_cnx * cnx)
         case picoquic_state_client_handshake_progress:
             /* Extract and install the client 1-RTT key */
             cnx->cnx_state = picoquic_state_client_almost_ready;
+            ret = picoquic_setup_1RTT_aead_contexts(cnx, 0);
             break;
         case picoquic_state_server_init:
         case picoquic_state_server_handshake_progress:
             /* Extract and install the server 0-RTT and 1-RTT key */
             cnx->cnx_state = picoquic_state_server_almost_ready;
+            ret = picoquic_setup_1RTT_aead_contexts(cnx, 1);
             break;
         case picoquic_state_client_almost_ready:
         case picoquic_state_client_ready:
