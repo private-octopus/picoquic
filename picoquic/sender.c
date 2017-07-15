@@ -99,6 +99,7 @@ int picoquic_prepare_packet(picoquic_cnx * cnx, picoquic_packet * packet)
     picoquic_packet_type_enum packet_type = 0;
     size_t checksum_overhead = 8;
     int use_fnv1a = 1;
+    size_t data_bytes = 0;
 
     /* Prepare header -- depend on connection state */
     /* TODO: 0-RTT work. */
@@ -111,10 +112,16 @@ int picoquic_prepare_packet(picoquic_cnx * cnx, picoquic_packet * packet)
     case picoquic_state_server_init:
         packet_type = picoquic_packet_server_cleartext;
         break;
+    case picoquic_state_server_almost_ready:
+        packet_type = picoquic_packet_server_cleartext;
+        break;
     case picoquic_state_client_handshake_start: 
         packet_type = picoquic_packet_client_cleartext;
         break;
     case picoquic_state_client_handshake_progress:
+        packet_type = picoquic_packet_client_cleartext;
+        break;
+    case picoquic_state_client_almost_ready:
         packet_type = picoquic_packet_client_cleartext;
         break;
     case picoquic_state_client_ready: 
@@ -133,14 +140,23 @@ int picoquic_prepare_packet(picoquic_cnx * cnx, picoquic_packet * packet)
     case picoquic_state_disconnected: 
         ret = -1; 
         break;
+    default:
+        ret = -1;
+        break;
     }
 
-    if (ret == 0)
+    if (use_fnv1a && cnx->first_stream.send_queue == NULL)
+    {
+        /* when in a clear text mode, only send packets if there is
+         * actually something to send */
+
+        packet->length = 0;
+    }
+    else if (ret == 0)
     {
         /* Prepare the packet header */
         int bytes_index = 0;
         uint8_t * bytes = packet->bytes;
-        size_t data_bytes;
         size_t length;
 
         /* Create a long packet */
@@ -180,6 +196,39 @@ int picoquic_prepare_packet(picoquic_cnx * cnx, picoquic_packet * packet)
             }
 
             packet->length = length;
+        }
+
+        /* If the stream zero packets are sent, progress the state */
+        if (ret == 0 && stream->stream_id == 0 && data_bytes > 0 &&
+            stream->send_queue == NULL)
+        {
+            switch (cnx->cnx_state)
+            {
+            case picoquic_state_client_init:
+                break;
+            case picoquic_state_server_init:
+                break;
+            case picoquic_state_server_almost_ready:
+                cnx->cnx_state = picoquic_state_server_ready;
+                break;
+            case picoquic_state_client_handshake_start:
+                break;
+            case picoquic_state_client_handshake_progress:
+                break;
+            case picoquic_state_client_almost_ready:
+                cnx->cnx_state = picoquic_state_client_ready;
+                break;
+            case picoquic_state_client_ready:
+                break;
+            case picoquic_state_server_handshake_progress:
+                break;
+            case picoquic_state_server_ready:
+                break;
+            case picoquic_state_disconnected:
+                break;
+            default:
+                break;
+            }
         }
     }
 

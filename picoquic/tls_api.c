@@ -60,12 +60,21 @@ static void SetSignCertificate(char * keypem, ptls_context_t * ctx)
     ctx->sign_certificate = &signer.super;
 }
 
+void picoquic_crypto_random(picoquic_quic * quic, void * buf, size_t len)
+{
+    int ret = 0;
+    ptls_context_t *ctx = (ptls_context_t *)quic->tls_master_ctx;
+
+    return (ctx->random_bytes(buf, len));
+
+}
+
 int picoquic_master_tlscontext(picoquic_quic * quic, char * cert_file_name, char * key_file_name)
 {
     /* Create a client context or a server context */
     int ret = 0;
     ptls_context_t *ctx;
-    ptls_openssl_verify_certificate_t verifier;
+    ptls_openssl_verify_certificate_t * verifier = NULL;
 
     ctx = (ptls_context_t *)malloc(sizeof(ptls_context_t));
 
@@ -95,8 +104,9 @@ int picoquic_master_tlscontext(picoquic_quic * quic, char * cert_file_name, char
         }
         else
         {
-            ptls_openssl_init_verify_certificate(&verifier, NULL);
-            ctx->verify_certificate = &verifier.super;
+            verifier = (ptls_openssl_verify_certificate_t *)malloc(sizeof(ptls_openssl_verify_certificate_t));
+            ptls_openssl_init_verify_certificate(verifier, NULL);
+            ctx->verify_certificate = &verifier->super;
         }
 
         if (ret == 0)
@@ -204,6 +214,12 @@ int picoquic_tlsinput_stream_zero(picoquic_cnx * cnx)
     picoquic_stream_data * data = cnx->first_stream.stream_data;
     struct st_ptls_buffer_t sendbuf;
 
+    if (data != NULL &&
+        data->offset > cnx->first_stream.consumed_offset)
+    {
+        return 0;
+    }
+
     ptls_buffer_init(&sendbuf, "", 0);
 
     while (
@@ -223,6 +239,7 @@ int picoquic_tlsinput_stream_zero(picoquic_cnx * cnx)
             free(data->bytes);
             cnx->first_stream.stream_data = data->next_stream_data;
             free(data);
+            data = cnx->first_stream.stream_data;
         }
     }
 
@@ -234,13 +251,17 @@ int picoquic_tlsinput_stream_zero(picoquic_cnx * cnx)
         case picoquic_state_client_handshake_start:
         case picoquic_state_client_handshake_progress:
             /* Extract and install the client 1-RTT key */
+            cnx->cnx_state = picoquic_state_client_almost_ready;
             break;
         case picoquic_state_server_init:
         case picoquic_state_server_handshake_progress:
             /* Extract and install the server 0-RTT and 1-RTT key */
+            cnx->cnx_state = picoquic_state_server_almost_ready;
             break;
+        case picoquic_state_client_almost_ready:
         case picoquic_state_client_ready:
         case picoquic_state_server_ready:
+        case picoquic_state_server_almost_ready: 
         case picoquic_state_disconnected:
         default:
             break;

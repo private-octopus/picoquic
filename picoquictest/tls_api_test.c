@@ -36,9 +36,10 @@ int tls_api_test()
 {
 
     int ret = 0;
-    picoquic_quic * qclient, * qserver;
-    picoquic_cnx * cnx_client = NULL;
+    picoquic_quic * qclient = NULL, * qserver = NULL;
+    picoquic_cnx * cnx_client = NULL, * cnx_server = NULL;
     struct sockaddr_in client_addr, server_addr;
+    int nb_trials = 0;
 
     /* Init of the IP addresses */
     memset(&client_addr, 0, sizeof(struct sockaddr_in));
@@ -73,41 +74,38 @@ int tls_api_test()
         }
     }
 
-    if (ret == 0)
+    while (ret == 0 && nb_trials < 6 &&
+        (cnx_client->cnx_state != picoquic_state_client_ready ||
+        (cnx_server == NULL || cnx_server->cnx_state != picoquic_state_server_ready)))
+
     {
+        nb_trials++;
+
         /* packet from client to server */
         ret = tls_api_one_packet(cnx_client, qserver, (struct sockaddr *)&client_addr);
-        /*
-        if (cnx_server == NULL)
-        {
-        }
-        */
-    }
-#if 0
-        /* Simulate a connection */
-        picoquic_packet * p = picoquic_create_packet();
 
-
-        if (p == NULL)
+        if (ret == 0)
         {
-            ret = -1;
-        }
-        else
-        {
-            ret = picoquic_prepare_packet(cnx_client, p);
+            if (cnx_server == NULL)
+            {
+                cnx_server = qserver->cnx_list;
+            }
 
-            if (p->length == 0)
+            if (cnx_server == NULL)
             {
                 ret = -1;
             }
-
-            if (ret == 0)
+            else
             {
-                /* Submit the packet to the server */
-                ret = picoquic_incoming_packet(qserver, p->bytes, p->length, (struct sockaddr *)&client_addr);
+                ret = tls_api_one_packet(cnx_server, qclient, (struct sockaddr *)&server_addr);
             }
         }
-#endif
+    }
+
+    if (cnx_client->cnx_state != picoquic_state_client_ready ||
+        cnx_server == NULL || cnx_server->cnx_state != picoquic_state_server_ready)
+    {
+        ret = -1;
     }
 
     if (qclient != NULL)

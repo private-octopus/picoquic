@@ -211,6 +211,7 @@ picoquic_cnx * picoquic_create_cnx(picoquic_quic * quic,
     uint64_t cnx_id, struct sockaddr * addr)
 {
     picoquic_cnx * cnx = (picoquic_cnx *)malloc(sizeof(picoquic_cnx));
+    uint32_t random_sequence;
 
     if (cnx != NULL)
     {
@@ -237,37 +238,34 @@ picoquic_cnx * picoquic_create_cnx(picoquic_quic * quic,
         }
     }
 
-    if (cnx != NULL && (quic->flags &picoquic_context_server) == 0)
+    if (cnx != NULL)
     {
-        /* Initialize the connection */
-        int ret = picoquic_initialize_stream_zero(cnx);
-
-        if (ret != 0)
+        if ((quic->flags &picoquic_context_server) == 0)
         {
-            /* Cannot just do partial initialization! */
-            picoquic_delete_cnx(cnx);
-            cnx = NULL;
+            /* Initialize the connection */
+            int ret = picoquic_initialize_stream_zero(cnx);
+
+            if (ret != 0)
+            {
+                /* Cannot just do partial initialization! */
+                picoquic_delete_cnx(cnx);
+                cnx = NULL;
+            }
+            else
+            {
+                cnx->version = 0xff000004;
+                cnx->cnx_state = picoquic_state_client_init;
+                cnx->initial_cnxid = cnx_id;
+                cnx->server_cnxid = 0;
+
+            }
         }
         else
         {
-            cnx->version = 0xff000004;
-        }
-    }
-    else
-    {
-        cnx->first_stream.send_queue = NULL;
-    }
-
-    if (cnx != NULL)
-    {
-        if (cnx_id != 0)
-        {
-            (void)picoquic_register_cnx_id(quic, cnx, cnx_id);
-        }
-
-        if (addr != NULL)
-        {
-            (void)picoquic_register_net_id(quic, cnx, addr);
+            cnx->first_stream.send_queue = NULL;
+            cnx->cnx_state = picoquic_state_server_init;
+            cnx->initial_cnxid = 0;
+            cnx->server_cnxid = cnx_id;
         }
 
         cnx->first_sack_item.start_of_sack_range = 0;
@@ -282,8 +280,22 @@ picoquic_cnx * picoquic_create_cnx(picoquic_quic * quic,
         cnx->first_stream.stream_data = NULL;
         cnx->first_stream.sent_offset = 0;
 
-        cnx->send_sequence = 123456789; /* TODO: should be random */
+        picoquic_crypto_random(quic, &random_sequence, sizeof(uint32_t));
+        cnx->send_sequence = random_sequence;
         cnx->send_mtu = 1200; /* TODO: replace by constant */
+    }
+
+    if (cnx != NULL)
+    {
+        if (cnx_id != 0)
+        {
+            (void)picoquic_register_cnx_id(quic, cnx, cnx_id);
+        }
+
+        if (addr != NULL)
+        {
+            (void)picoquic_register_net_id(quic, cnx, addr);
+        }
     }
 
     return cnx;

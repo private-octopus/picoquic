@@ -154,6 +154,7 @@ picoquic_cnx * picoquic_incoming_initial(
             /* TODO: if wrong version, send version negotiation, do not go any further */
             /* if listening is OK, listen */
             cnx = picoquic_create_cnx(quic, ph->cnx_id, addr_from);
+
             if (cnx != NULL)
             {
                 int ret = picoquic_decode_frames(cnx, 
@@ -191,6 +192,11 @@ int picoquic_incoming_server_cleartext(
     int ret = 0;
     size_t decoded_length = 0;
 
+    if (cnx->cnx_state == picoquic_state_client_init)
+    {
+        cnx->cnx_state = picoquic_state_client_handshake_start;
+    }
+
     if (cnx->cnx_state == picoquic_state_client_handshake_start ||
         cnx->cnx_state == picoquic_state_client_handshake_progress)
     {
@@ -202,8 +208,22 @@ int picoquic_incoming_server_cleartext(
         }
         else
         {
-            /* Perform the handshake negotiation */
-            /* Progress the state, etc. */
+            /* Accept the incoming frames */
+            int ret = picoquic_decode_frames(cnx,
+                bytes + ph->offset, decoded_length - ph->offset, 1);
+
+            /* processing of client initial packet */
+            if (ret == 0)
+            {
+                /* initialization of context & creation of data */
+                /* TODO: find path to send data produced by TLS. */
+                ret = picoquic_tlsinput_stream_zero(cnx);
+            }
+
+            if (ret != 0)
+            {
+                /* This is bad. should just delete the context, log the packet, etc */
+            }
         }
     }
     else
@@ -227,7 +247,9 @@ int picoquic_incoming_client_cleartext(
     int ret = 0;
     size_t decoded_length = 0;
 
-    if (cnx->cnx_state == picoquic_state_server_handshake_progress)
+    if (cnx->cnx_state == picoquic_state_server_handshake_progress ||
+        cnx->cnx_state == picoquic_state_server_almost_ready ||
+        cnx->cnx_state == picoquic_state_server_ready)
     {
         /* Verify the checksum */
         decoded_length = fnv1a_check(bytes, length);
@@ -237,8 +259,22 @@ int picoquic_incoming_client_cleartext(
         }
         else
         {
-            /* Perform the handshake negotiation */
-            /* Progress the state, etc. */
+            /* Accept the incoming frames */
+            int ret = picoquic_decode_frames(cnx,
+                bytes + ph->offset, decoded_length - ph->offset, 1);
+
+            /* processing of client initial packet */
+            if (ret == 0)
+            {
+                /* initialization of context & creation of data */
+                /* TODO: find path to send data produced by TLS. */
+                ret = picoquic_tlsinput_stream_zero(cnx);
+            }
+
+            if (ret != 0)
+            {
+                /* This is bad. should just delete the context, log the packet, etc */
+            }
         }
     }
     else
@@ -323,12 +359,7 @@ int picoquic_incoming_packet(
                     ret = picoquic_incoming_server_cleartext(cnx, bytes, length, &ph);
                     break;
                 case picoquic_packet_client_cleartext:
-                    if (cnx->cnx_state == picoquic_state_server_handshake_progress)
-                    {
-                        /* check the FN1V checksum */
-                        decoded_length = fnv1a_check(bytes, length);
-                        /* perform the negotiation */
-                    }
+                    ret = picoquic_incoming_client_cleartext(cnx, bytes, length, &ph);
                     break;
                 case picoquic_packet_0rtt_protected:
                     /* TODO : decrypt with 0RTT key */
