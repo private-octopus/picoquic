@@ -237,6 +237,27 @@ picoquic_cnx * picoquic_create_cnx(picoquic_quic * quic,
         }
     }
 
+    if (cnx != NULL && (quic->flags &picoquic_context_server) == 0)
+    {
+        /* Initialize the connection */
+        int ret = picoquic_initialize_stream_zero(cnx);
+
+        if (ret != 0)
+        {
+            /* Cannot just do partial initialization! */
+            picoquic_delete_cnx(cnx);
+            cnx = NULL;
+        }
+        else
+        {
+            cnx->version = 0xff000004;
+        }
+    }
+    else
+    {
+        cnx->first_stream.send_queue = NULL;
+    }
+
     if (cnx != NULL)
     {
         if (cnx_id != 0)
@@ -260,7 +281,9 @@ picoquic_cnx * picoquic_create_cnx(picoquic_quic * quic,
         cnx->first_stream.next_stream = NULL;
         cnx->first_stream.stream_data = NULL;
         cnx->first_stream.sent_offset = 0;
-        cnx->first_stream.send_queue = NULL;
+
+        cnx->send_sequence = 123456789; /* TODO: should be random */
+        cnx->send_mtu = 1200; /* TODO: replace by constant */
     }
 
     return cnx;

@@ -78,6 +78,18 @@ int picoquic_add_to_stream(picoquic_cnx * cnx, uint32_t stream_id, uint8_t * dat
     return ret;
 }
 
+picoquic_packet * picoquic_create_packet()
+{
+    picoquic_packet * packet = (picoquic_packet *)malloc(sizeof(picoquic_packet));
+
+    if (packet != NULL)
+    {
+        memset(packet, 0, sizeof(picoquic_packet));
+    }
+
+    return packet;
+}
+
 
 int picoquic_prepare_packet(picoquic_cnx * cnx, picoquic_packet * packet)
 {
@@ -85,6 +97,8 @@ int picoquic_prepare_packet(picoquic_cnx * cnx, picoquic_packet * packet)
     int ret = 0;
     picoquic_stream_head * stream = &cnx->first_stream;
     picoquic_packet_type_enum packet_type = 0;
+    size_t checksum_overhead = 8;
+    int use_fnv1a = 1;
 
     /* Prepare header -- depend on connection state */
     /* TODO: 0-RTT work. */
@@ -92,6 +106,7 @@ int picoquic_prepare_packet(picoquic_cnx * cnx, picoquic_packet * packet)
     {
     case picoquic_state_client_init:
         packet_type = picoquic_packet_client_initial;
+        /* In the initial state, need to actually create the first bytes */
         break;
     case picoquic_state_server_init:
         packet_type = picoquic_packet_server_cleartext;
@@ -104,12 +119,16 @@ int picoquic_prepare_packet(picoquic_cnx * cnx, picoquic_packet * packet)
         break;
     case picoquic_state_client_ready: 
         packet_type = picoquic_packet_1rtt_protected_phi0;
+        use_fnv1a = 0;
+        checksum_overhead = 16;
         break;
     case picoquic_state_server_handshake_progress:
         packet_type = picoquic_packet_server_stateless;
         break;
     case picoquic_state_server_ready: 
         packet_type = picoquic_packet_1rtt_protected_phi0;
+        use_fnv1a = 0;
+        checksum_overhead = 16;
         break;
     case picoquic_state_disconnected: 
         ret = -1; 
@@ -119,10 +138,50 @@ int picoquic_prepare_packet(picoquic_cnx * cnx, picoquic_packet * packet)
     if (ret == 0)
     {
         /* Prepare the packet header */
+        int bytes_index = 0;
+        uint8_t * bytes = packet->bytes;
+        size_t data_bytes;
+        size_t length;
+
+        /* Create a long packet */
+        bytes[0] = 0x80 | packet_type;
+
+        picoformat_64(&bytes[1], cnx->first_cnx_id);
+        picoformat_32(&bytes[9], (uint32_t) cnx->send_sequence);
+        picoformat_32(&bytes[13], cnx->version);
+
+        length = 17;
+
+        /* TODO: Check whether ACK is needed */
+
+        /* Encode the stream frame */
+
+        ret = picoquic_prepare_stream_frame(cnx, stream, &bytes[length], 
+            cnx->send_mtu - checksum_overhead - length, &data_bytes);
+
+        if (ret == 0)
+        {
+            length += data_bytes;
+            if (packet_type == picoquic_packet_client_initial)
+            {
+                while (length < cnx->send_mtu - checksum_overhead)
+                {
+                    bytes[length++] = 0; /* TODO: Padding frame type, which is 0 */
+                }
+            }
+
+            if (use_fnv1a)
+            {
+                length = fnv1a_protect(bytes, length, sizeof(packet->bytes));
+            }
+            else
+            {
+                /* TODO: AEAD */
+            }
+
+            packet->length = length;
+        }
     }
-    /* Check whether ACK is needed */
 
-    /* Encode the stream frame */
-
-    return -1;
+    return ret;
 }

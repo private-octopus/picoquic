@@ -48,6 +48,9 @@
     <ClCompile Include="StreamZeroFrameTest.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="tls_api_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquictest.h">

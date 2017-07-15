@@ -143,6 +143,8 @@ extern "C" {
         /* TLS context, TLS Send Buffer, chain of receive buffers (todo) */
         void * tls_ctx;
         struct st_ptls_buffer_t * tls_sendbuf;
+        uint64_t send_sequence;
+        uint32_t send_mtu;
 
         /* Receive state */
         struct _picoquic_sack_item first_sack_item;
@@ -216,6 +218,18 @@ extern "C" {
     int picoquic_add_to_stream(picoquic_cnx * cnx, uint32_t stream_id, uint8_t * data, size_t length);
 
     /* send/receive */
+
+
+    int picoquic_incoming_packet(
+        picoquic_quic * quic,
+        uint8_t * bytes,
+        uint32_t length,
+        struct sockaddr * addr_from);
+
+    picoquic_packet * picoquic_create_packet();
+
+    int picoquic_prepare_packet(picoquic_cnx * cnx, picoquic_packet * packet);
+
     int picoquic_decode_frames(picoquic_cnx * cnx, uint8_t * bytes,
         size_t bytes_max, int restricted);
 

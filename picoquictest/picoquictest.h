@@ -14,6 +14,7 @@ extern "C" {
     int sacktest();
     int float16test();
     int StreamZeroFrameTest();
+    int tls_api_test();
 
 #ifdef  __cplusplus
 }

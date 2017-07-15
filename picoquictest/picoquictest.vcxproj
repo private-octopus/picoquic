@@ -141,6 +141,7 @@
     <ClCompile Include="pn2pn64test.c" />
     <ClCompile Include="sacktest.c" />
     <ClCompile Include="StreamZeroFrameTest.c" />
+    <ClCompile Include="tls_api_test.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquictest.h" />

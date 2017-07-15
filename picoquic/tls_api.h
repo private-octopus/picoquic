@@ -10,6 +10,8 @@ void picoquic_tlscontext_free(void * ctx);
 
 int picoquic_tlsinput_stream_zero(picoquic_cnx * cnx);
 
+int picoquic_initialize_stream_zero(picoquic_cnx * cnx);
+
 
 
 

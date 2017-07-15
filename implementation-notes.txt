@@ -1,6 +1,6 @@
 Designing the QUIC processor:
 
-Client-IDLE:
+Client-Starting:
 - on start connection:
 	- Send a first handshake message in Client Initial packet.
         - Move to Client-Handshake-Start

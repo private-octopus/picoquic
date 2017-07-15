@@ -156,7 +156,8 @@ picoquic_cnx * picoquic_incoming_initial(
             cnx = picoquic_create_cnx(quic, ph->cnx_id, addr_from);
             if (cnx != NULL)
             {
-                int ret = picoquic_decode_frames(cnx, bytes, decoded_length, 1);
+                int ret = picoquic_decode_frames(cnx, 
+                    bytes +ph->offset, decoded_length - ph->offset, 1);
 
                 /* processing of client initial packet */
                 if (ret == 0)

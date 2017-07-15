@@ -62,7 +62,7 @@ static void SetSignCertificate(char * keypem, ptls_context_t * ctx)
 
 int picoquic_master_tlscontext(picoquic_quic * quic, char * cert_file_name, char * key_file_name)
 {
-    /* Create a client context  and a server context */
+    /* Create a client context or a server context */
     int ret = 0;
     ptls_context_t *ctx;
     ptls_openssl_verify_certificate_t verifier;
@@ -169,6 +169,35 @@ int picoquic_tlsinput_segment(picoquic_cnx * cnx,
     return ret;
 }
 
+int picoquic_initialize_stream_zero(picoquic_cnx * cnx)
+{
+    int ret = 0;
+    struct st_ptls_buffer_t sendbuf;
+    ptls_t * tls_ctx = (ptls_t *)cnx->tls_ctx;
+
+    ptls_buffer_init(&sendbuf, "", 0);
+    ret = ptls_handshake(tls_ctx, &sendbuf, NULL, NULL, NULL);
+
+    if ((ret == 0 || ret == PTLS_ERROR_IN_PROGRESS))
+    {
+        if (sendbuf.off > 0)
+        {
+            ret = picoquic_add_to_stream(cnx, 0, sendbuf.base, sendbuf.off);
+        }
+        ret = 0;
+    }
+    else
+    {
+        ret = -1;
+    }
+
+    ptls_buffer_dispose(&sendbuf);
+
+    return ret;
+}
+
+
+
 int picoquic_tlsinput_stream_zero(picoquic_cnx * cnx)
 {
     int ret = 0;
@@ -219,7 +248,7 @@ int picoquic_tlsinput_stream_zero(picoquic_cnx * cnx)
     }
     else if (ret == PTLS_ERROR_IN_PROGRESS && cnx->cnx_state == picoquic_state_client_init)
     {
-        /* Extract and install the client 1-RTT key */
+        /* Extract and install the client 0-RTT key */
     }
 
     if ((ret == 0 || ret == PTLS_ERROR_IN_PROGRESS))
