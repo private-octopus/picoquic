@@ -314,7 +314,7 @@ int picoquic_incoming_client_encrypted(
         {
             /* Accept the incoming frames */
             int ret = picoquic_decode_frames(cnx,
-                bytes + ph->offset, decoded_length - ph->offset, 1);
+                bytes + ph->offset, decoded_length - ph->offset, 0);
 
             /* processing of client encrypted packet */
             if (ret == 0)

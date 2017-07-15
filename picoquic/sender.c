@@ -227,6 +227,7 @@ int picoquic_prepare_packet(picoquic_cnx * cnx, picoquic_packet * packet)
                 length = picoquic_aead_encrypt(cnx, bytes + header_length,
                     bytes + header_length, length - header_length,
                     cnx->send_sequence, bytes, header_length);
+                length += header_length;
             }
 
             packet->length = length;

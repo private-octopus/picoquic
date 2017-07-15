@@ -287,7 +287,7 @@ int picoquic_setup_1RTT_aead_contexts(picoquic_cnx * cnx, int is_server)
 size_t picoquic_aead_decrypt(picoquic_cnx *cnx, uint8_t * output, uint8_t * input, size_t input_length,
     uint64_t seq_num, uint8_t * auth_data, size_t auth_data_length)
 {
-    size_t decrypted;
+    size_t decrypted = 0;
 
     if (cnx->aead_decrypt_ctx == NULL)
     {
