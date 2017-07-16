@@ -253,11 +253,14 @@ picoquic_cnx * picoquic_create_cnx(picoquic_quic * quic,
             }
             else
             {
-                cnx->version = 0xff000004;
+                cnx->version = 0xff000005;
                 cnx->cnx_state = picoquic_state_client_init;
+                if (cnx_id == 0)
+                {
+                    picoquic_crypto_random(quic, &cnx_id, sizeof(uint64_t));
+                }
                 cnx->initial_cnxid = cnx_id;
                 cnx->server_cnxid = 0;
-
             }
         }
         else

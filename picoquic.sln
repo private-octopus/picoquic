@@ -13,6 +13,11 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "UnitTest1", "UnitTest1\Unit
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "picoquictest", "picoquictest\picoquictest.vcxproj", "{B04168BD-4D56-4DE9-B1E3-CF4C16FE21C7}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "picoquicfirst", "picoquicfirst\picoquicfirst.vcxproj", "{995745F2-E8BA-48C1-AF6D-BA554B869D47}"
+	ProjectSection(ProjectDependencies) = postProject
+		{63E1E6B7-DB5F-4EDC-8AC8-7E9F5990D11F} = {63E1E6B7-DB5F-4EDC-8AC8-7E9F5990D11F}
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -45,6 +50,14 @@ Global
 		{B04168BD-4D56-4DE9-B1E3-CF4C16FE21C7}.Release|x64.Build.0 = Release|x64
 		{B04168BD-4D56-4DE9-B1E3-CF4C16FE21C7}.Release|x86.ActiveCfg = Release|Win32
 		{B04168BD-4D56-4DE9-B1E3-CF4C16FE21C7}.Release|x86.Build.0 = Release|Win32
+		{995745F2-E8BA-48C1-AF6D-BA554B869D47}.Debug|x64.ActiveCfg = Debug|x64
+		{995745F2-E8BA-48C1-AF6D-BA554B869D47}.Debug|x64.Build.0 = Debug|x64
+		{995745F2-E8BA-48C1-AF6D-BA554B869D47}.Debug|x86.ActiveCfg = Debug|Win32
+		{995745F2-E8BA-48C1-AF6D-BA554B869D47}.Debug|x86.Build.0 = Debug|Win32
+		{995745F2-E8BA-48C1-AF6D-BA554B869D47}.Release|x64.ActiveCfg = Release|x64
+		{995745F2-E8BA-48C1-AF6D-BA554B869D47}.Release|x64.Build.0 = Release|x64
+		{995745F2-E8BA-48C1-AF6D-BA554B869D47}.Release|x86.ActiveCfg = Release|Win32
+		{995745F2-E8BA-48C1-AF6D-BA554B869D47}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

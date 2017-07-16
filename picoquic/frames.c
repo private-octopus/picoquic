@@ -362,6 +362,103 @@ int picoquic_prepare_stream_frame(picoquic_cnx * cnx, picoquic_stream_head * str
 }
 
 /*
+The type byte for a ACK frame contains embedded flags, and is formatted as 101NLLMM. These bits are parsed as follows:
+
+The first three bits must be set to 101 indicating that this is an ACK frame.
+The N bit indicates whether the frame contains a Num Blocks field.
+The two LL bits encode the length of the Largest Acknowledged field. The values 00, 01, 02, and 03 indicate lengths of 8, 16, 32, and 64 bits respectively.
+The two MM bits encode the length of the ACK Block Length fields. The values 00, 01, 02, and 03 indicate lengths of 8, 16, 32, and 64 bits respectively.
+
+An ACK frame is shown below.
+
+0                   1                   2                   3
+0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|[Num Blocks(8)]|   NumTS (8)   |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                Largest Acknowledged (8/16/32/64)            ...
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|        ACK Delay (16)         |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                     ACK Block Section (*)                   ...
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                     Timestamp Section (*)                   ...
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+*/
+
+int picoquic_decode_ack_frame(picoquic_cnx * cnx, uint8_t * bytes,
+    size_t bytes_max, int restricted, size_t * consumed)
+{
+    int ret = 0;
+    size_t byte_index = 1;
+    uint8_t first_byte = bytes[0];
+    int has_num_block = (first_byte >> 4) & 1;
+    int num_block = 0;
+    int num_ts;
+    int ll = (first_byte >> 2) & 3;
+    int mm = (first_byte & 3);
+
+    if (has_num_block)
+    {
+        num_block = bytes[byte_index++];
+    }
+    num_ts = bytes[byte_index++];
+
+    /* skipping the largest */
+    switch (ll)
+    {
+    case 0:
+        byte_index++;
+        break;
+    case 1:
+        byte_index+=2;
+        break;
+    case 2:
+        byte_index += 4;
+        break;
+    case 3:
+        byte_index += 8;
+        break;
+    }
+    /* ACK delay */
+    byte_index += 2;
+
+    if (num_block > 0)
+    {
+        switch (mm)
+        {
+        case 0:
+            byte_index += num_block *(1 + 1);
+            break;
+        case 1:
+            byte_index += num_block *(1 + 2);
+            break;
+        case 2:
+            byte_index += num_block *(1 + 4);
+            break;
+        case 3:
+            byte_index += num_block *(1 + 8);
+            break;
+        }
+    }
+
+    byte_index += 5;
+    byte_index += num_ts * 3;
+
+    if (byte_index > bytes_max)
+    {
+        *consumed = bytes_max;
+    }
+    else
+    {
+        *consumed = byte_index;
+    }
+
+    return ret;
+}
+
+
+/*
  * Decoding of the received frames.
  Type   Frame
  0x00 	PADDING
@@ -406,6 +503,11 @@ int picoquic_decode_frames(picoquic_cnx * cnx, uint8_t * bytes,
             else
             {
                 /* ACK processing */
+                size_t consumed = 0;
+
+                ret = picoquic_decode_ack_frame(cnx, bytes + byte_index, bytes_max - byte_index, restricted, &consumed);
+
+                byte_index += consumed;
             }
         }
         else if (restricted)
