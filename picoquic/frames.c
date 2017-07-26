@@ -457,6 +457,89 @@ int picoquic_decode_ack_frame(picoquic_cnx * cnx, uint8_t * bytes,
     return ret;
 }
 
+int picoquic_prepare_ack_frame(picoquic_cnx * cnx, uint64_t current_time,
+	uint8_t * bytes, size_t bytes_max, size_t * consumed)
+{
+	int ret = 0;
+	size_t byte_index = 1;
+	int has_num_block = 0; 
+	int num_block = 0;
+	int num_ts = 0;
+	int ll = 2; /* always use 32 bits encoding for now*/
+	int mm = 2;
+	uint8_t first_byte = 0xBA; 
+	picoquic_sack_item * next_sack = cnx->first_sack_item.next_sack;
+	uint64_t ack_delay = 0;
+	uint64_t ack_range = 0;
+	uint64_t lowest_acknowledged = 0;
+
+	/* Check that there is enough room in the packet, and something to acknowledge */
+	if (cnx->first_sack_item.start_of_sack_range == 0 &&
+		cnx->first_sack_item.end_of_sack_range == 0)
+	{
+		*consumed = 0;
+	}
+	else if (bytes_max < 13)
+	{
+		/* A valid ACK, with our encoding, uses at least 13 bytes.
+		 * If there is not enough space, don't attempt to encode it.
+		 */
+		*consumed = 0;
+		ret = -1;
+	}
+	else
+	{
+		/* Encode the first byte as 101NLLMM, with N=1, LL=2, MM=2 */
+		bytes[byte_index++] = 0xBA;
+		/* Encode the number of blocks, always present. Will be overwritten later */
+		bytes[byte_index++] = 0;
+		/* Encode a number of time stamps -- set to zero for now */
+		bytes[byte_index++] = 0;
+		/* Encode the largest seen on 4 bytes */
+		picoformat_32(bytes + byte_index, (uint32_t)cnx->first_sack_item.end_of_sack_range);
+		byte_index += 4;
+		/* Encode the ACK delay for the largest seen */
+		if (current_time > cnx->first_sack_item.time_stamp_last_in_range)
+		{
+			ack_delay = current_time - cnx->first_sack_item.time_stamp_last_in_range;
+		}
+		picoformat_16(bytes + byte_index, picoquic_deltat_to_float16(ack_delay));
+		byte_index += 2;
+		/* Encode the size of the first ack range */
+		ack_range = cnx->first_sack_item.end_of_sack_range - cnx->first_sack_item.start_of_sack_range;
+		picoformat_32(bytes + byte_index, (uint32_t)ack_range);
+		byte_index += 4;
+		/* Set the lowest acknowledged */
+		lowest_acknowledged = cnx->first_sack_item.start_of_sack_range;
+		/* Encode each of the ack block items */
+		while (next_sack != NULL && num_block < 255 && (byte_index + 5) <= bytes_max)
+		{
+			uint64_t gap = lowest_acknowledged - next_sack->end_of_sack_range;
+			while (gap > 255 && num_block < 255 && (byte_index + 5) <= bytes_max)
+			{
+				bytes[byte_index++] = 255;
+				picoformat_32(bytes + byte_index, (uint32_t)ack_range);
+				byte_index += 4;
+				gap -= 255;
+				num_block++;
+			}
+			if (num_block < 255 && (byte_index + 5) <= bytes_max)
+			{
+				ack_range = next_sack->end_of_sack_range - next_sack->start_of_sack_range;
+				bytes[byte_index++] = (uint8_t)gap;
+				picoformat_32(bytes + byte_index, (uint32_t)ack_range);
+				byte_index += 4;
+				lowest_acknowledged = next_sack->start_of_sack_range;
+				next_sack = next_sack->next_sack;
+			}
+		}
+
+		/* Do not encode additional time stamps yet */
+		*consumed = byte_index;
+	}
+
+	return ret;
+}
 
 /*
  * Decoding of the received frames.

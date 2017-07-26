@@ -92,7 +92,8 @@ picoquic_packet * picoquic_create_packet()
 }
 
 
-int picoquic_prepare_packet(picoquic_cnx * cnx, picoquic_packet * packet)
+int picoquic_prepare_packet(picoquic_cnx * cnx, picoquic_packet * packet,
+	uint64_t current_time)
 {
     /* TODO: Check for interesting streams */
     int ret = 0;
@@ -197,6 +198,12 @@ int picoquic_prepare_packet(picoquic_cnx * cnx, picoquic_packet * packet)
         else
         {
             /* TODO: Check whether ACK is needed */
+			ret = picoquic_prepare_ack_frame(cnx, current_time, &bytes[length],
+				cnx->send_mtu - checksum_overhead - length, &data_bytes);
+			if (ret == 0)
+			{
+				length += data_bytes;
+			}
 
             /* Encode the stream frame */
             ret = picoquic_prepare_stream_frame(cnx, stream, &bytes[length],

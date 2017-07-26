@@ -130,7 +130,7 @@ int do_select(SOCKET fd,
             /* Read the incoming response */
             *from_length = sizeof(struct sockaddr_storage);
             bytes_recv = recvfrom(fd, (char*)buffer, buffer_max, 0,
-                (struct sockaddr *)&addr_from, from_length);
+                (struct sockaddr *)addr_from, from_length);
             if (bytes_recv <= 0)
             {
                 fprintf(stderr, "Could not receive packet on UDP socket!\n");
@@ -237,7 +237,7 @@ int quic_server(char * server_name, int server_port, char * pem_cert, char * pem
                 }
                 else
                 {
-                    ret = picoquic_prepare_packet(cnx_server, p);
+                    ret = picoquic_prepare_packet(cnx_server, p, 0);
 
                     if (ret == 0)
                     {
@@ -397,7 +397,7 @@ int quic_client(char * ip_address_text, int server_port)
                 }
                 else
                 {
-                    ret = picoquic_prepare_packet(cnx_client, p);
+                    ret = picoquic_prepare_packet(cnx_client, p, 0);
 
                     if (ret == 0)
                     {
@@ -481,7 +481,7 @@ int main(int argc, char ** argv)
         /* Run as server */
         printf("Starting PicoQUIC server on port %d, server name = %s\n", server_port, server_name);
         ret = quic_server(server_name, server_port, server_cert_file, server_key_file);
-        printf("Client exit with code = %d\n", ret);
+        printf("Server exit with code = %d\n", ret);
     }
     else
     {

@@ -223,6 +223,8 @@ extern "C" {
         size_t bytes_max, int restricted, size_t * consumed);
     int picoquic_prepare_stream_frame(picoquic_cnx * cnx, picoquic_stream_head * stream,
         uint8_t * bytes, size_t bytes_max, size_t * consumed);
+	int picoquic_prepare_ack_frame(picoquic_cnx * cnx, uint64_t current_time,
+		uint8_t * bytes, size_t bytes_max, size_t * consumed);
     int picoquic_add_to_stream(picoquic_cnx * cnx, uint32_t stream_id, uint8_t * data, size_t length);
     int picoquic_prepare_connection_close_frame(picoquic_cnx * cnx,
         uint8_t * bytes, size_t bytes_max, size_t * consumed);
@@ -238,7 +240,8 @@ extern "C" {
 
     picoquic_packet * picoquic_create_packet();
 
-    int picoquic_prepare_packet(picoquic_cnx * cnx, picoquic_packet * packet);
+    int picoquic_prepare_packet(picoquic_cnx * cnx, picoquic_packet * packet,
+		uint64_t current_time);
 
     int picoquic_decode_frames(picoquic_cnx * cnx, uint8_t * bytes,
         size_t bytes_max, int restricted);

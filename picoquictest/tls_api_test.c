@@ -13,7 +13,7 @@ int tls_api_one_packet(picoquic_cnx * cnx, picoquic_quic * qreceive,
     }
     else
     {
-        ret = picoquic_prepare_packet(cnx, p);
+        ret = picoquic_prepare_packet(cnx, p, 0);
 
         if (ret == 0)
         {
