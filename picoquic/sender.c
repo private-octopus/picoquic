@@ -93,10 +93,11 @@ picoquic_packet * picoquic_create_packet()
 
 
 int picoquic_prepare_packet(picoquic_cnx * cnx, picoquic_packet * packet,
-	uint64_t current_time)
+	uint64_t current_time, uint8_t * send_buffer, size_t send_buffer_max, size_t * send_length)
 {
     /* TODO: Check for interesting streams */
     int ret = 0;
+	/* TODO: manage multiple streams. */
     picoquic_stream_head * stream = &cnx->first_stream;
     picoquic_packet_type_enum packet_type = 0;
     size_t checksum_overhead = 8;
@@ -224,22 +225,40 @@ int picoquic_prepare_packet(picoquic_cnx * cnx, picoquic_packet * packet,
 
         if (ret == 0 && length > 0)
         {
+			packet->length = length;
+
             if (use_fnv1a)
             {
-                length = fnv1a_protect(bytes, length, sizeof(packet->bytes));
+				memcpy(send_buffer, packet->bytes, length);
+                length = fnv1a_protect(send_buffer, length, send_buffer_max);
             }
             else
             {
-                /* AEAD Encrypt, in place */
-                length = picoquic_aead_encrypt(cnx, bytes + header_length,
+                /* AEAD Encrypt, to the send buffer */
+				memcpy(send_buffer, packet->bytes, header_length);
+                length = picoquic_aead_encrypt(cnx, send_buffer + header_length,
                     bytes + header_length, length - header_length,
                     cnx->send_sequence, bytes, header_length);
                 length += header_length;
             }
 
-            packet->length = length;
+			*send_length = length;
 
-            /* If the stream zero packets are sent, progress the state */
+			/* Manage the double linked packet list for retransmissions */
+			packet->previous_packet = NULL;
+			if (cnx->retransmit_newest == NULL)
+			{
+				packet->next_packet = NULL;
+				cnx->retransmit_oldest = packet;
+			}
+			else
+			{
+				packet->next_packet = cnx->retransmit_newest;
+				packet->next_packet->previous_packet = packet;
+			}
+			cnx->retransmit_newest = packet;
+
+            /* If stream zero packets are sent, progress the state */
             if (ret == 0 && stream->stream_id == 0 && data_bytes > 0 &&
                 stream->send_queue == NULL)
             {

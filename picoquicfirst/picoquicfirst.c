@@ -154,6 +154,8 @@ int quic_server(char * server_name, int server_port, char * pem_cert, char * pem
     int from_length;
     int client_addr_length;
     uint8_t buffer[1536];
+	uint8_t send_buffer[1536];
+	size_t send_length = 0;
     int bytes_recv;
     int bytes_sent;
     picoquic_packet * p = NULL;
@@ -237,7 +239,8 @@ int quic_server(char * server_name, int server_port, char * pem_cert, char * pem
                 }
                 else
                 {
-                    ret = picoquic_prepare_packet(cnx_server, p, 0);
+                    ret = picoquic_prepare_packet(cnx_server, p, 0, 
+						send_buffer, sizeof(send_buffer), &send_length);
 
                     if (ret == 0)
                     {
@@ -246,8 +249,8 @@ int quic_server(char * server_name, int server_port, char * pem_cert, char * pem
                             cnx_server->cnx_state);
                         if (p->length > 0)
                         {
-                            printf("Sending packet, %d bytes\n", p->length);
-                            bytes_sent = sendto(fd, p->bytes, p->length, 0,
+                            printf("Sending packet, %d bytes\n", send_length);
+                            bytes_sent = sendto(fd, send_buffer, send_length, 0,
                                 (struct sockaddr *) &addr_from, from_length);
                         }
                         else
@@ -288,6 +291,8 @@ int quic_client(char * ip_address_text, int server_port)
     int from_length;
     int server_addr_length = 0;
     uint8_t buffer[1536];
+	uint8_t send_buffer[1536];
+	size_t send_length = 0;
     int bytes_recv;
     int bytes_sent;
     picoquic_packet * p = NULL;
@@ -397,18 +402,18 @@ int quic_client(char * ip_address_text, int server_port)
                 }
                 else
                 {
-                    ret = picoquic_prepare_packet(cnx_client, p, 0);
+                    ret = picoquic_prepare_packet(cnx_client, p, 0, 
+						send_buffer, sizeof(send_buffer), &send_length);
 
-                    if (ret == 0)
-                    {
-                        if (p->length > 0)
-                        {
-                            bytes_sent = sendto(fd, p->bytes, p->length, 0,
-                                (struct sockaddr *) &server_address, server_addr_length);
-                        }
+					if (ret == 0 && send_length > 0)
+					{
+						bytes_sent = sendto(fd, send_buffer, send_length, 0,
+							(struct sockaddr *) &server_address, server_addr_length);
+					}
+					else
+					{
+						free(p);
                     }
-					/* TODO: add packet to sent queue, pre acknowledgment */
-					free(p);
                 }
             }
         }

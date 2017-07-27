@@ -276,6 +276,9 @@ picoquic_cnx * picoquic_create_cnx(picoquic_quic * quic,
         cnx->first_sack_item.next_sack = NULL;
         cnx->sack_block_size_max = 0;
 
+		cnx->retransmit_newest = NULL;
+		cnx->retransmit_oldest = NULL;
+
         cnx->first_stream.stream_id = 0;
         cnx->first_stream.consumed_offset = 0;
         cnx->first_stream.fin_offset = 0;
@@ -391,6 +394,13 @@ void picoquic_delete_cnx(picoquic_cnx * cnx)
             picoquic_aead_free(cnx->aead_encrypt_ctx);
             cnx->aead_encrypt_ctx = NULL;
         }
+
+		while (cnx->retransmit_newest != NULL)
+		{
+			picoquic_packet * p = cnx->retransmit_newest;
+			cnx->retransmit_newest = p->next_packet;
+			free(p);
+		}
 
         while ((stream = cnx->first_stream.next_stream) != NULL)
         {

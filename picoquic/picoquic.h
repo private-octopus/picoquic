@@ -158,6 +158,8 @@ extern "C" {
         uint64_t sack_block_size_max;
 
         /* Retransmission state */
+		picoquic_packet * retransmit_newest;
+		picoquic_packet * retransmit_oldest;
 
         /* Management of streams */
         picoquic_stream_head first_stream;
@@ -241,7 +243,7 @@ extern "C" {
     picoquic_packet * picoquic_create_packet();
 
     int picoquic_prepare_packet(picoquic_cnx * cnx, picoquic_packet * packet,
-		uint64_t current_time);
+		uint64_t current_time, uint8_t * send_buffer, size_t send_buffer_max, size_t * send_length);
 
     int picoquic_decode_frames(picoquic_cnx * cnx, uint8_t * bytes,
         size_t bytes_max, int restricted);

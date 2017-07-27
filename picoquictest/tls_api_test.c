@@ -6,6 +6,8 @@ int tls_api_one_packet(picoquic_cnx * cnx, picoquic_quic * qreceive,
     /* Simulate a connection */
     int ret = 0;
     picoquic_packet * p = picoquic_create_packet();
+	uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE];
+	size_t send_length = 0;
 
     if (p == NULL)
     {
@@ -13,20 +15,17 @@ int tls_api_one_packet(picoquic_cnx * cnx, picoquic_quic * qreceive,
     }
     else
     {
-        ret = picoquic_prepare_packet(cnx, p, 0);
+        ret = picoquic_prepare_packet(cnx, p, 0, bytes, PICOQUIC_MAX_PACKET_SIZE, &send_length);
 
-        if (ret == 0)
-        {
-            if (p->length > 0)
-            {
-                /* Submit the packet to the server */
-                ret = picoquic_incoming_packet(qreceive, p->bytes, p->length, sender_addr);
-            }
-            else
-            {
-                free(p);
-            }
-        }
+		if (ret == 0 && p->length > 0)
+		{
+			/* Submit the packet to the server */
+			ret = picoquic_incoming_packet(qreceive, bytes, send_length, sender_addr);
+		}
+		else
+		{
+			free(p);
+		}
     }
 
     return ret;

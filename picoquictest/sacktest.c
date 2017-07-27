@@ -109,7 +109,7 @@ static void ack_range_mask(uint64_t * mask, uint64_t highest, uint64_t range)
 {
 	for (uint64_t i = 0; i < range; i++)
 	{
-		*mask |= 1 << (highest & 63);
+		*mask |= 1ull << (highest & 63);
 		highest--;
 	}
 }
@@ -301,7 +301,7 @@ int sendacktest()
 			consumed = 0;
 			ret = picoquic_prepare_ack_frame(&cnx, 0, bytes, sizeof(bytes), &consumed);
 
-			received_mask |= 1 << (test_pn64[i] & 63);
+			received_mask |= 1ull << (test_pn64[i] & 63);
 
 			if (ret == 0)
 			{
