@@ -406,11 +406,9 @@ int quic_client(char * ip_address_text, int server_port)
                             bytes_sent = sendto(fd, p->bytes, p->length, 0,
                                 (struct sockaddr *) &server_address, server_addr_length);
                         }
-                        else
-                        {
-                            free(p);
-                        }
                     }
+					/* TODO: add packet to sent queue, pre acknowledgment */
+					free(p);
                 }
             }
         }

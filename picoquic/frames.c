@@ -461,13 +461,12 @@ int picoquic_prepare_ack_frame(picoquic_cnx * cnx, uint64_t current_time,
 	uint8_t * bytes, size_t bytes_max, size_t * consumed)
 {
 	int ret = 0;
-	size_t byte_index = 1;
+	size_t byte_index = 0;
 	int has_num_block = 0; 
 	int num_block = 0;
 	int num_ts = 0;
 	int ll = 2; /* always use 32 bits encoding for now*/
 	int mm = 2;
-	uint8_t first_byte = 0xBA; 
 	picoquic_sack_item * next_sack = cnx->first_sack_item.next_sack;
 	uint64_t ack_delay = 0;
 	uint64_t ack_range = 0;
@@ -514,7 +513,7 @@ int picoquic_prepare_ack_frame(picoquic_cnx * cnx, uint64_t current_time,
 		/* Encode each of the ack block items */
 		while (next_sack != NULL && num_block < 255 && (byte_index + 5) <= bytes_max)
 		{
-			uint64_t gap = lowest_acknowledged - next_sack->end_of_sack_range;
+			uint64_t gap = lowest_acknowledged - next_sack->end_of_sack_range -1;
 			while (gap > 255 && num_block < 255 && (byte_index + 5) <= bytes_max)
 			{
 				bytes[byte_index++] = 255;
@@ -523,16 +522,19 @@ int picoquic_prepare_ack_frame(picoquic_cnx * cnx, uint64_t current_time,
 				gap -= 255;
 				num_block++;
 			}
+
 			if (num_block < 255 && (byte_index + 5) <= bytes_max)
 			{
 				ack_range = next_sack->end_of_sack_range - next_sack->start_of_sack_range;
 				bytes[byte_index++] = (uint8_t)gap;
-				picoformat_32(bytes + byte_index, (uint32_t)ack_range);
+				picoformat_32(bytes + byte_index, (uint32_t)ack_range + 1);
 				byte_index += 4;
 				lowest_acknowledged = next_sack->start_of_sack_range;
 				next_sack = next_sack->next_sack;
+				num_block++;
 			}
 		}
+		bytes[1] = num_block;
 
 		/* Do not encode additional time stamps yet */
 		*consumed = byte_index;
