@@ -12,7 +12,7 @@ int picoquic_tlsinput_stream_zero(picoquic_cnx * cnx);
 
 int picoquic_initialize_stream_zero(picoquic_cnx * cnx);
 
-int picoquic_crypto_random(picoquic_quic * quic, void * buf, size_t len);
+void picoquic_crypto_random(picoquic_quic * quic, void * buf, size_t len);
 
 int picoquic_setup_1RTT_aead_contexts(picoquic_cnx * cnx, int is_server);
 

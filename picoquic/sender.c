@@ -179,6 +179,7 @@ int picoquic_prepare_packet(picoquic_cnx * cnx, picoquic_packet * packet,
 
         length = 17;
         header_length = length;
+		packet->sequence_number = cnx->send_sequence;
 
         if (cnx->cnx_state == picoquic_state_disconnecting)
         {
@@ -226,6 +227,7 @@ int picoquic_prepare_packet(picoquic_cnx * cnx, picoquic_packet * packet,
         if (ret == 0 && length > 0)
         {
 			packet->length = length;
+			cnx->send_sequence++;
 
             if (use_fnv1a)
             {
@@ -237,8 +239,8 @@ int picoquic_prepare_packet(picoquic_cnx * cnx, picoquic_packet * packet,
                 /* AEAD Encrypt, to the send buffer */
 				memcpy(send_buffer, packet->bytes, header_length);
                 length = picoquic_aead_encrypt(cnx, send_buffer + header_length,
-                    bytes + header_length, length - header_length,
-                    cnx->send_sequence, bytes, header_length);
+					packet->bytes + header_length, length - header_length,
+                    packet->sequence_number, send_buffer, header_length);
                 length += header_length;
             }
 
