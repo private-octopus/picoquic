@@ -159,6 +159,7 @@ int quic_server(char * server_name, int server_port, char * pem_cert, char * pem
     int bytes_recv;
     int bytes_sent;
     picoquic_packet * p = NULL;
+	uint64_t current_time = 0;
 
     /* Open a UDP socket */
 
@@ -212,9 +213,11 @@ int quic_server(char * server_name, int server_port, char * pem_cert, char * pem
         {
             if (bytes_recv > 0)
             {
+				current_time += 1000;
+
                 /* Submit the packet to the server */
                 ret = picoquic_incoming_packet(qserver, buffer, 
-                    (size_t) bytes_recv, (struct sockaddr *) &addr_from);
+                    (size_t) bytes_recv, (struct sockaddr *) &addr_from, current_time);
 
                 if (cnx_server == NULL && qserver->cnx_list != NULL)
                 {
@@ -227,7 +230,11 @@ int quic_server(char * server_name, int server_port, char * pem_cert, char * pem
                     print_address((struct sockaddr*)&client_from, client_addr_length,
                         "Client address:");
                 }
-            } 
+            }
+			else
+			{
+				current_time += 1000000;
+			}
 
             if (ret == 0 && cnx_server != NULL)
             {
@@ -239,7 +246,7 @@ int quic_server(char * server_name, int server_port, char * pem_cert, char * pem
                 }
                 else
                 {
-                    ret = picoquic_prepare_packet(cnx_server, p, 0, 
+                    ret = picoquic_prepare_packet(cnx_server, p, current_time,
 						send_buffer, sizeof(send_buffer), &send_length);
 
                     if (ret == 0)
@@ -296,6 +303,7 @@ int quic_client(char * ip_address_text, int server_port)
     int bytes_recv;
     int bytes_sent;
     picoquic_packet * p = NULL;
+	uint64_t current_time = 0;
 
     /* get the IP address of the server */
     if (ret == 0)
@@ -378,19 +386,24 @@ int quic_client(char * ip_address_text, int server_port)
         {
             if (bytes_recv > 0)
             {
+				current_time += 1000;
                 /* Submit the packet to the client */
                 ret = picoquic_incoming_packet(qclient, buffer,
-                    (size_t)bytes_recv, (struct sockaddr *) &packet_from);
+                    (size_t)bytes_recv, (struct sockaddr *) &packet_from, current_time);
 
                 printf("Processed %d bytes, state=%d\n", bytes_recv,
                     cnx_client->cnx_state);
             }
-            else if (bytes_recv == 0 &&
-                cnx_client->cnx_state == picoquic_state_client_ready)
-            {
-                printf("Connection established. Disconnecting now.\n");
-                ret = picoquic_close(cnx_client);
-            }
+			else if (bytes_recv == 0)
+			{
+				current_time += 1000000;
+
+				if (cnx_client->cnx_state == picoquic_state_client_ready)
+				{
+					printf("Connection established. Disconnecting now.\n");
+					ret = picoquic_close(cnx_client);
+				}
+			}
 
             if (ret == 0)
             {
@@ -402,7 +415,7 @@ int quic_client(char * ip_address_text, int server_port)
                 }
                 else
                 {
-                    ret = picoquic_prepare_packet(cnx_client, p, 0, 
+                    ret = picoquic_prepare_packet(cnx_client, p, current_time, 
 						send_buffer, sizeof(send_buffer), &send_length);
 
 					if (ret == 0 && send_length > 0)

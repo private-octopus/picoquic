@@ -470,18 +470,18 @@ int picoquic_decode_ack_frame(picoquic_cnx * cnx, uint8_t * bytes,
 		case 0:
 			largest = bytes[byte_index++];
 			largest = picoquic_get_packet_number64(cnx->send_sequence,
-				0xFFFFFFFFFFFFFF00ull, largest);
+				0xFFFFFFFFFFFFFF00ull, (uint32_t) largest);
 			break;
 		case 1:
 			largest = PICOPARSE_16(bytes + byte_index);
 			largest = picoquic_get_packet_number64(cnx->send_sequence,
-				0xFFFFFFFFFFFF0000ull, largest);
+				0xFFFFFFFFFFFF0000ull, (uint32_t)largest);
 			byte_index += 2;
 			break;
 		case 2:
 			largest = PICOPARSE_32(bytes + byte_index);
 			largest = picoquic_get_packet_number64(cnx->send_sequence,
-				0xFFFFFFFF00000000ull, largest);
+				0xFFFFFFFF00000000ull, (uint32_t) largest);
 			byte_index += 4;
 			break;
 		case 3:
