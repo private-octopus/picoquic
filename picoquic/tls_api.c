@@ -1,3 +1,24 @@
+/*
+* Author: Christian Huitema
+* Copyright (c) 2017, Private Octopus, Inc.
+* All rights reserved.
+*
+* Permission to use, copy, modify, and distribute this software for any
+* purpose with or without fee is hereby granted, provided that the above
+* copyright notice and this permission notice appear in all copies.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+* ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+* DISCLAIMED. IN NO EVENT SHALL Private Octopus, Inc. BE LIABLE FOR ANY
+* DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+* (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+* LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+* ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+* (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+* SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+
 #ifdef WIN32
 #include "wincompat.h"
 #endif
@@ -25,39 +46,76 @@ static int get_certificates(char * pem_fname, ptls_iovec_t ** list, int * nb_cer
     int ret = 0;
     size_t count = 0;
     X509 *cert;
-    static ptls_iovec_t certs[16];
+    ptls_iovec_t * certs;
 
     *nb_certs = 0;
     *list = NULL;
 
-    cert = openPemFile(pem_fname);
+	certs = (ptls_iovec_t *)malloc(sizeof(ptls_iovec_t) * 16);
 
-    if (cert == NULL)
-    {
-        ret = -1;
-    }
-    else
-    {
-        ptls_iovec_t *dst = certs + count++;
-        dst->len = i2d_X509(cert, &dst->base);
-    }
+	if (certs == NULL)
+	{
+		ret = -1;
+	}
+	else
+	{
+		cert = openPemFile(pem_fname);
+		memset(certs, 0, sizeof(ptls_iovec_t) * 16);
 
+		if (cert == NULL)
+		{
+			ret = -1;
+		}
+		else
+		{
+			ptls_iovec_t *dst = &certs[count++];
+			dst->len = i2d_X509(cert, &dst->base);
+		}
+	}
     *nb_certs = count;
     *list = certs;
 
     return ret;
 }
 
-static void SetSignCertificate(char * keypem, ptls_context_t * ctx)
+static int SetSignCertificate(char * keypem, ptls_context_t * ctx)
 {
-    static ptls_openssl_sign_certificate_t signer;
+	int ret = 0;
+    ptls_openssl_sign_certificate_t * signer;
+	EVP_PKEY *pkey = EVP_PKEY_new();
 
-    EVP_PKEY *pkey = EVP_PKEY_new();
-    BIO* bio_key = BIO_new_file(keypem, "rb");
-    PEM_read_bio_PrivateKey(bio_key, &pkey, NULL, NULL);
-    ptls_openssl_init_sign_certificate(&signer, pkey);
-    EVP_PKEY_free(pkey);
-    ctx->sign_certificate = &signer.super;
+	signer = (ptls_openssl_sign_certificate_t *)malloc(sizeof(ptls_openssl_sign_certificate_t));
+
+	if (signer == NULL || pkey == NULL)
+	{
+		ret = -1;
+	}
+	else
+	{
+		BIO* bio_key = BIO_new_file(keypem, "rb");
+		EVP_PKEY * ret_pkey = PEM_read_bio_PrivateKey(bio_key, &pkey, NULL, NULL);
+		if (ret_pkey == NULL)
+		{
+			ret = -1;
+		}
+		else
+		{
+			ret = ptls_openssl_init_sign_certificate(signer, pkey);
+		}
+		ctx->sign_certificate = &signer->super;
+	}
+
+	if (pkey != NULL)
+	{
+		EVP_PKEY_free(pkey);
+	}
+
+	if (ret != 0 && signer != NULL)
+	{
+		free(signer);
+	}
+
+	return ret;
 }
 
 void picoquic_crypto_random(picoquic_quic * quic, void * buf, size_t len)
@@ -98,18 +156,14 @@ int picoquic_master_tlscontext(picoquic_quic * quic, char * cert_file_name, char
             }
             else
             {
-                SetSignCertificate(key_file_name, ctx);
+                ret = SetSignCertificate(key_file_name, ctx);
             }
         }
         else
         {
-#if 0
-			ctx->verify_certificate = NULL;
-#else
             verifier = (ptls_openssl_verify_certificate_t *)malloc(sizeof(ptls_openssl_verify_certificate_t));
             ptls_openssl_init_verify_certificate(verifier, NULL);
             ctx->verify_certificate = &verifier->super;
-#endif
         }
 
         if (ret == 0)
@@ -123,6 +177,48 @@ int picoquic_master_tlscontext(picoquic_quic * quic, char * cert_file_name, char
     }
 
     return ret;
+}
+
+void picoquic_master_tlscontext_free(picoquic_quic * quic)
+{
+	if (quic->tls_master_ctx != NULL)
+	{
+		ptls_context_t *ctx = (ptls_context_t *)quic->tls_master_ctx;
+
+		if (quic->flags&picoquic_context_server)
+		{
+			if (ctx->certificates.list != NULL)
+			{
+#if 0
+				/* TODO: call proper openssl API to free the CERT */
+				for (size_t i = 0; i < ctx->certificates.count; i++)
+				{
+					if (ctx->certificates.list[i].base != NULL)
+					{
+						free(ctx->certificates.list[i].base);
+						ctx->certificates.list[i].base = NULL;
+					}
+					ctx->certificates.list[i].len = 0;
+				}
+#endif
+				free(ctx->certificates.list);
+			}
+
+			if (ctx->verify_certificate != NULL)
+			{
+				free(ctx->verify_certificate);
+				ctx->verify_certificate = NULL;
+			}
+		}
+		else
+		{
+			if (ctx->verify_certificate != NULL)
+			{
+				free(ctx->verify_certificate);
+				ctx->verify_certificate = NULL;
+			}
+		}
+	}
 }
 
 /*

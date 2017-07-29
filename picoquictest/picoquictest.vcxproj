@@ -136,7 +136,6 @@
     <ClCompile Include="fnv1atest.c" />
     <ClCompile Include="hashtest.c" />
     <ClCompile Include="intformattest.c" />
-    <ClCompile Include="mocksecurity.c" />
     <ClCompile Include="parseheadertest.c" />
     <ClCompile Include="pn2pn64test.c" />
     <ClCompile Include="sacktest.c" />
