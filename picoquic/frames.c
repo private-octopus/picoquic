@@ -772,6 +772,164 @@ int picoquic_decode_frames(picoquic_cnx * cnx, uint8_t * bytes,
     return ret;
 }
 
+int picoquic_skip_frame(uint8_t * bytes, size_t bytes_max, size_t * consumed, int * pure_ack)
+{
+	int ret = 0;
+	size_t byte_index = 0;
+	uint8_t first_byte = bytes[byte_index++];
+
+	*pure_ack = 1;
+	*consumed = 0;
+
+	if (first_byte >= 0xa0)
+	{
+		if (first_byte >= 0xc0)
+		{
+			/* skip stream frame */
+			uint8_t stream_id_length = 1 + ((first_byte >> 3) & 3);
+			uint8_t offset_length = picoquic_offset_length_code[(first_byte >> 1) & 3];
+			uint8_t data_length_length = (first_byte & 1)*2;
+			size_t data_length;
+
+			*pure_ack = 0;
+
+			if (bytes_max < (1u + stream_id_length + offset_length + data_length_length))
+			{
+				ret = -1;
+			}
+			else
+			{
+				byte_index += stream_id_length;
+				byte_index += offset_length;
+
+				if (data_length_length == 0)
+				{
+					data_length = bytes_max - byte_index;
+				}
+				else
+				{
+					data_length = PICOPARSE_16(&bytes[byte_index]);
+					byte_index += 2;
+
+					if (byte_index + data_length > bytes_max)
+					{
+						ret = -1;
+					}
+				}
+
+				if (ret == 0)
+				{
+					*consumed = byte_index + data_length;
+				}
+			}
+		}
+		else
+		{
+			/* skip ack frame */
+			int has_num_block = (first_byte >> 4) & 1;
+			int num_block = 0;
+			int num_ts;
+			int ll = (first_byte >> 2) & 3;
+			int mm = (first_byte & 3);
+
+			if (bytes_max < 3)
+			{
+				ret = -1;
+			}
+			else
+			{
+				if (has_num_block)
+				{
+					num_block = bytes[byte_index++];
+				}
+
+				num_ts = bytes[byte_index++];
+
+				switch (ll)
+				{
+				case 0:
+					byte_index++;
+					break;
+				case 1:
+					byte_index += 2;
+					break;
+				case 2:
+					byte_index += 4;
+					break;
+				case 3:
+					byte_index += 8;
+					break;
+				}
+				/* ACK delay */
+				byte_index += 2;
+
+				/* last range and blocks */
+				switch (mm)
+				{
+				case 0:
+					byte_index += 1 + num_block*(1 + 1);
+					break;
+				case 1:
+					byte_index += 2 + num_block*(2 + 2);
+					break;
+				case 2:
+					byte_index += 4 + num_block*(2 + 4);
+					break;
+				case 3:
+					byte_index += 8 + num_block*(2 + 8);
+					break;
+				}
+
+				byte_index += num_ts * 3;
+
+				if (byte_index > bytes_max)
+				{
+					ret = -1;
+					*consumed = 0;
+				}
+				else
+				{
+					*consumed = byte_index;
+				}
+			}
+		}
+	}
+	else
+	{
+		switch (first_byte)
+		{
+		case 0:
+			/* Padding */
+			do {
+				byte_index++;
+			} while (byte_index < bytes_max && bytes[byte_index] == 0);
+
+			break;
+		case 0x02: /* CONNECTION_CLOSE */
+			byte_index = 7;
+			*pure_ack = 0;
+			break;
+		case 0x01: /* RST_STREAM */
+		case 0x03: /* GOAWAY */
+		case 0x04: /* MAX_DATA */
+		case 0x05: /* MAX_STREAM_DATA */
+		case 0x06: /* MAX_STREAM_ID */
+		case 0x07: /* PING */
+		case 0x08: /* BLOCKED */
+		case 0x09: /* STREAM_BLOCKED */
+		case 0x0a: /* STREAM_ID_NEEDED */
+		case 0x0b: /* NEW_CONNECTION_ID */
+		default:
+			/* Not implemented yet! */
+			ret = -1;
+			break;
+		}
+		*consumed = byte_index;
+	}
+
+	return ret;
+}
+
 int picoquic_prepare_connection_close_frame(picoquic_cnx * cnx,
     uint8_t * bytes, size_t bytes_max, size_t * consumed)
 {

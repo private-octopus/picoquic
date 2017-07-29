@@ -15,40 +15,41 @@ static int tls_api_loss_simulator(uint64_t * loss_mask)
 }
 
 static int tls_api_one_packet(picoquic_cnx * cnx, picoquic_quic * qreceive, 
-    struct sockaddr * sender_addr, uint64_t * loss_mask)
+    struct sockaddr * sender_addr, uint64_t * loss_mask, uint64_t * simulated_time)
 {
     /* Simulate a connection */
     int ret = 0;
     picoquic_packet * p = picoquic_create_packet();
 	uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE];
 	size_t send_length = 0;
-	static uint64_t simulated_time = 0;
 
     if (p == NULL)
     {
         ret = -1;
+		DebugBreak();
     }
     else
     {
-		simulated_time += 500;
+		*simulated_time += 500;
 
-        ret = picoquic_prepare_packet(cnx, p, simulated_time, 
+        ret = picoquic_prepare_packet(cnx, p, *simulated_time, 
 			bytes, PICOQUIC_MAX_PACKET_SIZE, &send_length);
 
 		if (ret == 0 && p->length > 0)
 		{
-			simulated_time += 500;
+			*simulated_time += 500;
 
 			if (loss_mask == NULL ||
 				tls_api_loss_simulator(loss_mask) == 0)
 			{
 				/* Submit the packet to the server */
 				ret = picoquic_incoming_packet(qreceive, bytes, send_length, sender_addr, 
-					simulated_time);
+					*simulated_time);
 			}
 		}
 		else
 		{
+			*simulated_time += 100000;
 			free(p);
 		}
     }
@@ -64,6 +65,7 @@ static int tls_api_test_with_loss(uint64_t  * loss_mask)
     picoquic_cnx * cnx_client = NULL, * cnx_server = NULL;
     struct sockaddr_in client_addr, server_addr;
     int nb_trials = 0;
+	uint64_t simulated_time = 0;
 
     /* Init of the IP addresses */
     memset(&client_addr, 0, sizeof(struct sockaddr_in));
@@ -89,11 +91,12 @@ static int tls_api_test_with_loss(uint64_t  * loss_mask)
     if (ret == 0)
     {
         /* Create a client connection */
-        cnx_client = picoquic_create_cnx(qclient, 12345, (struct sockaddr *)&server_addr);
+        cnx_client = picoquic_create_cnx(qclient, 12345, (struct sockaddr *)&server_addr, 0);
 
         if (cnx_client == NULL)
         {
             ret = -1;
+			DebugBreak();
         }
     }
 
@@ -104,7 +107,8 @@ static int tls_api_test_with_loss(uint64_t  * loss_mask)
         nb_trials++;
 
         /* packet from client to server */
-        ret = tls_api_one_packet(cnx_client, qserver, (struct sockaddr *)&client_addr, loss_mask);
+        ret = tls_api_one_packet(cnx_client, qserver, (struct sockaddr *)&client_addr, 
+			loss_mask, &simulated_time);
 
         if (ret == 0)
         {
@@ -115,11 +119,12 @@ static int tls_api_test_with_loss(uint64_t  * loss_mask)
 
             if (cnx_server == NULL)
             {
-                ret = -1;
+				simulated_time += 1000000;
             }
             else
             {
-                ret = tls_api_one_packet(cnx_server, qclient, (struct sockaddr *)&server_addr, loss_mask);
+                ret = tls_api_one_packet(cnx_server, qclient, (struct sockaddr *)&server_addr, 
+					loss_mask, &simulated_time);
             }
         }
     }
@@ -128,6 +133,7 @@ static int tls_api_test_with_loss(uint64_t  * loss_mask)
         cnx_server == NULL || cnx_server->cnx_state != picoquic_state_server_ready)
     {
         ret = -1;
+		DebugBreak();
     }
     else
     {
@@ -137,7 +143,8 @@ static int tls_api_test_with_loss(uint64_t  * loss_mask)
         {
             /* packet from client to server */
 			/* Do not simulate losses there, as there is no way to correct them */
-            ret = tls_api_one_packet(cnx_client, qserver, (struct sockaddr *)&client_addr, NULL);
+            ret = tls_api_one_packet(cnx_client, qserver, (struct sockaddr *)&client_addr, NULL,
+				&simulated_time);
         }
 
         if (ret == 0 && (
@@ -145,6 +152,7 @@ static int tls_api_test_with_loss(uint64_t  * loss_mask)
             cnx_server->cnx_state != picoquic_state_disconnected))
         {
             ret = -1;
+			DebugBreak();
         }
     }
 
@@ -171,4 +179,21 @@ int tls_api_loss_test(uint64_t mask)
 	uint64_t loss_mask = mask;
 
 	return tls_api_test_with_loss(&loss_mask);
+}
+
+int tls_api_many_losses()
+{
+	uint64_t loss_mask = 0;
+	int ret = 0;
+
+	for (uint64_t i = 0; ret == 0 && i < 6; i++)
+	{
+		for (uint64_t j = 1; ret == 0 && j < 4; j++)
+		{
+			loss_mask = ((1 << j) - 1) << i;
+			ret = tls_api_test_with_loss(&loss_mask);
+		}
+	}
+
+	return ret;
 }

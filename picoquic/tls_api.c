@@ -356,6 +356,7 @@ int picoquic_tlsinput_stream_zero(picoquic_cnx * cnx)
         switch (cnx->cnx_state)
         {
         case picoquic_state_client_init:
+		case picoquic_state_client_init_sent:
         case picoquic_state_client_handshake_start:
         case picoquic_state_client_handshake_progress:
             /* Extract and install the client 1-RTT key */
@@ -377,7 +378,9 @@ int picoquic_tlsinput_stream_zero(picoquic_cnx * cnx)
             break;
         }
     }
-    else if (ret == PTLS_ERROR_IN_PROGRESS && cnx->cnx_state == picoquic_state_client_init)
+    else if (ret == PTLS_ERROR_IN_PROGRESS && 
+		(cnx->cnx_state == picoquic_state_client_init ||
+			picoquic_state_client_init_sent))
     {
         /* Extract and install the client 0-RTT key */
     }

@@ -1,0 +1,8 @@
+﻿  stdafx.cpp
+  unittest1.cpp
+LINK : warning LNK4075: ignoring '/INCREMENTAL' due to '/LTCG' specification
+     Creating library C:\Users\Christian\Documents\GitHub\picoquic\Release\UnitTest1.lib and object C:\Users\Christian\Documents\GitHub\picoquic\Release\UnitTest1.exp
+  Generating code
+  All 374 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  UnitTest1.vcxproj -> C:\Users\Christian\Documents\GitHub\picoquic\Release\UnitTest1.dll

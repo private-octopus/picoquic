@@ -208,7 +208,7 @@ int picoquic_register_net_id(picoquic_quic * quic, picoquic_cnx * cnx, struct so
 }
 
 picoquic_cnx * picoquic_create_cnx(picoquic_quic * quic,
-    uint64_t cnx_id, struct sockaddr * addr)
+    uint64_t cnx_id, struct sockaddr * addr, uint64_t start_time)
 {
     picoquic_cnx * cnx = (picoquic_cnx *)malloc(sizeof(picoquic_cnx));
     uint32_t random_sequence;
@@ -276,8 +276,6 @@ picoquic_cnx * picoquic_create_cnx(picoquic_quic * quic,
         cnx->first_sack_item.next_sack = NULL;
         cnx->sack_block_size_max = 0;
 
-		cnx->retransmit_newest = NULL;
-		cnx->retransmit_oldest = NULL;
 
         cnx->first_stream.stream_id = 0;
         cnx->first_stream.consumed_offset = 0;
@@ -292,6 +290,12 @@ picoquic_cnx * picoquic_create_cnx(picoquic_quic * quic,
         picoquic_crypto_random(quic, &random_sequence, sizeof(uint32_t));
         cnx->send_sequence = random_sequence;
         cnx->send_mtu = 1200; /* TODO: replace by constant */
+
+		cnx->retransmit_newest = NULL;
+		cnx->retransmit_oldest = NULL;
+		cnx->highest_acknowledged = cnx->send_sequence - 1;
+		cnx->latest_time_acknowledged = start_time;
+		cnx->latest_ack_received_time = start_time;
     }
 
     if (cnx != NULL)

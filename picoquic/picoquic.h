@@ -49,7 +49,8 @@ extern "C" {
      */
     typedef enum
     {
-        picoquic_state_client_init,
+        picoquic_state_client_init, 
+		picoquic_state_client_init_sent,
         picoquic_state_server_init,
         picoquic_state_client_handshake_start,
         picoquic_state_client_handshake_progress,
@@ -122,9 +123,9 @@ extern "C" {
         struct _picoquic_packet * next_packet;
 
         uint64_t sequence_number;
+		uint64_t send_time;
         size_t length;
 
-        picoquic_packet_type_enum packet_type;
         uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE];
     } picoquic_packet;
 
@@ -165,6 +166,9 @@ extern "C" {
         uint64_t sack_block_size_max;
 
         /* Retransmission state */
+		uint64_t highest_acknowledged;
+		uint64_t latest_time_acknowledged;
+		uint64_t latest_ack_received_time;
 		picoquic_packet * retransmit_newest;
 		picoquic_packet * retransmit_oldest;
 
@@ -179,7 +183,7 @@ extern "C" {
 
     /* Connection context creation and registration */
     picoquic_cnx * picoquic_create_cnx(picoquic_quic * quic, 
-        uint64_t cnx_id, struct sockaddr * addr);
+        uint64_t cnx_id, struct sockaddr * addr, uint64_t start_time);
     void picoquic_delete_cnx(picoquic_cnx * cnx);
 
     /* Connection context retrieval functions */
@@ -254,6 +258,8 @@ extern "C" {
 
     int picoquic_decode_frames(picoquic_cnx * cnx, uint8_t * bytes,
         size_t bytes_max, int restricted);
+
+	int picoquic_skip_frame(uint8_t * bytes, size_t bytes_max, size_t * consumed, int * pure_ack);
 
 #ifdef  __cplusplus
 }

@@ -1,0 +1,12 @@
+﻿  CnxCreationTest.c
+  float16test.c
+  fnv1atest.c
+  hashtest.c
+  intformattest.c
+  mocksecurity.c
+  parseheadertest.c
+  pn2pn64test.c
+  sacktest.c
+  StreamZeroFrameTest.c
+  tls_api_test.c
+  picoquictest.vcxproj -> C:\Users\Christian\Documents\GitHub\picoquic\Release\picoquictest.lib

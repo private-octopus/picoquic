@@ -130,7 +130,8 @@ picoquic_cnx * picoquic_incoming_initial(
     uint8_t * bytes,
     uint32_t length,
     struct sockaddr * addr_from,
-    picoquic_packet_header * ph)
+    picoquic_packet_header * ph,
+	uint64_t current_time)
 {
     picoquic_cnx * cnx = NULL;
     size_t decoded_length = 0;
@@ -153,7 +154,7 @@ picoquic_cnx * picoquic_incoming_initial(
             /* TODO: version negotiation. */
             /* TODO: if wrong version, send version negotiation, do not go any further */
             /* if listening is OK, listen */
-            cnx = picoquic_create_cnx(quic, ph->cnx_id, addr_from);
+            cnx = picoquic_create_cnx(quic, ph->cnx_id, addr_from, current_time);
 
 			if (cnx != NULL)
 			{
@@ -161,8 +162,6 @@ picoquic_cnx * picoquic_incoming_initial(
 				uint32_t seq_init = 0;
 
 				picoquic_crypto_random(quic, &cnx->server_cnxid, sizeof(cnx->server_cnxid));
-				picoquic_crypto_random(quic, &seq_init, sizeof(seq_init));
-				cnx->send_sequence = seq_init;
 				
 				ret = picoquic_decode_frames(cnx,
                     bytes +ph->offset, decoded_length - ph->offset, 1);
@@ -202,7 +201,7 @@ int picoquic_incoming_server_cleartext(
     int ret = 0;
     size_t decoded_length = 0;
 
-    if (cnx->cnx_state == picoquic_state_client_init)
+    if (cnx->cnx_state == picoquic_state_client_init_sent)
     {
         cnx->cnx_state = picoquic_state_client_handshake_start;
     }
@@ -387,7 +386,7 @@ int picoquic_incoming_packet(
     {
         if (cnx == NULL)
         {
-            cnx = picoquic_incoming_initial(quic, bytes, length, addr_from, &ph);
+            cnx = picoquic_incoming_initial(quic, bytes, length, addr_from, &ph, current_time);
         }
         else
         {
