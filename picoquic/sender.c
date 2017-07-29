@@ -311,9 +311,8 @@ int picoquic_prepare_packet(picoquic_cnx * cnx, picoquic_packet * packet,
 		/* Set the new checksum length */
 		checksum_overhead = (use_fnv1a) ? 8 : 16;
 		/* Check whether it makes sens to add an ACK at the end of the retransmission */
-		ret = picoquic_prepare_ack_frame(cnx, current_time, &bytes[length],
-			cnx->send_mtu - checksum_overhead - length, &data_bytes);
-		if (ret == 0)
+		if (picoquic_prepare_ack_frame(cnx, current_time, &bytes[length],
+			cnx->send_mtu - checksum_overhead - length, &data_bytes) == 0)
 		{
 			length += data_bytes;
 			packet->length = length;

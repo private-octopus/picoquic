@@ -49,7 +49,7 @@ static int tls_api_one_packet(picoquic_cnx * cnx, picoquic_quic * qreceive,
 		}
 		else
 		{
-			*simulated_time += 100000;
+			*simulated_time += 500000;
 			free(p);
 		}
     }
@@ -96,7 +96,6 @@ static int tls_api_test_with_loss(uint64_t  * loss_mask)
         if (cnx_client == NULL)
         {
             ret = -1;
-			DebugBreak();
         }
     }
 
@@ -125,15 +124,22 @@ static int tls_api_test_with_loss(uint64_t  * loss_mask)
             {
                 ret = tls_api_one_packet(cnx_server, qclient, (struct sockaddr *)&server_addr, 
 					loss_mask, &simulated_time);
+				if (ret != 0)
+				{
+					break;
+				}
             }
         }
+		else
+		{
+			break;
+		}
     }
 
     if (cnx_client->cnx_state != picoquic_state_client_ready ||
         cnx_server == NULL || cnx_server->cnx_state != picoquic_state_server_ready)
     {
         ret = -1;
-		DebugBreak();
     }
     else
     {
@@ -152,7 +158,6 @@ static int tls_api_test_with_loss(uint64_t  * loss_mask)
             cnx_server->cnx_state != picoquic_state_disconnected))
         {
             ret = -1;
-			DebugBreak();
         }
     }
 

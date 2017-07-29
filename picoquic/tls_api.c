@@ -103,9 +103,13 @@ int picoquic_master_tlscontext(picoquic_quic * quic, char * cert_file_name, char
         }
         else
         {
+#if 0
+			ctx->verify_certificate = NULL;
+#else
             verifier = (ptls_openssl_verify_certificate_t *)malloc(sizeof(ptls_openssl_verify_certificate_t));
             ptls_openssl_init_verify_certificate(verifier, NULL);
             ctx->verify_certificate = &verifier->super;
+#endif
         }
 
         if (ret == 0)

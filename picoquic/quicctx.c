@@ -267,8 +267,8 @@ picoquic_cnx * picoquic_create_cnx(picoquic_quic * quic,
         {
             cnx->first_stream.send_queue = NULL;
             cnx->cnx_state = picoquic_state_server_init;
-            cnx->initial_cnxid = 0;
-            cnx->server_cnxid = cnx_id;
+            cnx->initial_cnxid = cnx_id;
+			picoquic_crypto_random(quic, &cnx->server_cnxid, sizeof(uint64_t));
         }
 
         cnx->first_sack_item.start_of_sack_range = 0;

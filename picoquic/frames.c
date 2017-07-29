@@ -614,7 +614,6 @@ int picoquic_prepare_ack_frame(picoquic_cnx * cnx, uint64_t current_time,
 		 * If there is not enough space, don't attempt to encode it.
 		 */
 		*consumed = 0;
-		ret = -1;
 	}
 	else
 	{

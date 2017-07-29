@@ -101,9 +101,16 @@ namespace UnitTest1
 			Assert::AreEqual(ret, 0);
 		}
 
-		TEST_METHOD(test_tls_api_many_losses)
+		TEST_METHOD(test_tls_api_client_losses)
 		{
-			int ret = tls_api_loss_test(2ull);
+			int ret = tls_api_loss_test(3ull);
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(test_tls_api_server_losses)
+		{
+			int ret = tls_api_loss_test(6ull);
 
 			Assert::AreEqual(ret, 0);
 		}

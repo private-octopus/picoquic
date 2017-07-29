@@ -419,8 +419,11 @@ int picoquic_incoming_packet(
                     }
                     break;
                 case picoquic_packet_client_initial:
-                    /* Not expected here. Log and ignore. */
-                    ret = -1;
+                    /* Not expected here. Treat as a duplicate. */
+					if (ph.cnx_id == cnx->initial_cnxid)
+						ret = PICOQUIC_ERROR_SPURIOUS_REPEAT;
+					else
+						ret = -1;
                     break;
                 case picoquic_packet_server_stateless:
                     /* Not implemented yet. Log and ignore. */
@@ -458,7 +461,7 @@ int picoquic_incoming_packet(
         }
     }
 
-	if (ret == 0)
+	if (ret == 0 || ret == PICOQUIC_ERROR_SPURIOUS_REPEAT)
 	{
 		if (cnx != NULL)
 		{
