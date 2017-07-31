@@ -142,6 +142,74 @@ uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t 
 }
 
 /*
+ * Processing of a version renegotiation packet.
+ *
+ * From the specification: When the client receives a Version Negotiation packet 
+ * from the server, it should select an acceptable protocol version. If the server
+ * lists an acceptable version, the client selects that version and reattempts to
+ * create a connection using that version. Though the contents of a packet might
+ * not change in response to version negotiation, a client MUST increase the packet
+ * number it uses on every packet it sends. Packets MUST continue to use long headers
+ * and MUST include the new negotiated protocol version.
+ */
+int picoquic_incoming_version_negotiation(
+	picoquic_cnx * cnx,
+	uint8_t * bytes,
+	uint32_t length,
+	struct sockaddr * addr_from,
+	picoquic_packet_header * ph,
+	uint64_t current_time)
+{
+	/* Parse the content */
+	size_t byte_index = ph->offset;
+	uint32_t proposed_version;
+	int ret = -1;
+
+	if (ph->cnx_id != cnx->initial_cnxid ||
+		ph->vn != cnx->version ||
+		(cnx->retransmit_newest == NULL || ph->pn64 > cnx->retransmit_newest->sequence_number) ||
+		(cnx->retransmit_oldest == NULL || ph->pn64 < cnx->retransmit_oldest->sequence_number))
+	{
+		/* Packet should be logged and ignored */
+		ret = 0;
+	}
+	else while (ret != 0 && byte_index + 4 < length)
+	{
+		proposed_version = PICOPARSE_32(bytes + byte_index);
+		byte_index += 4;
+
+		for (size_t i = 0; i < picoquic_nb_supported_versions; i++)
+		{
+			if (proposed_version == picoquic_supported_versions[i])
+			{
+				/* Clear the initial packet from the queue of packets to retransmit */
+				/* TODO: what about 0-RTT packets ? */
+				/* TODO: move this to common function */
+				while (cnx->retransmit_oldest != NULL)
+				{
+					picoquic_packet * to_delete = cnx->retransmit_oldest;
+					cnx->retransmit_oldest = to_delete->previous_packet;
+					if (to_delete->previous_packet != NULL)
+					{
+						to_delete->previous_packet->next_packet = NULL;
+					}
+					else
+					{
+						cnx->retransmit_newest = NULL;
+					}
+					free(to_delete);
+				}
+				cnx->version = proposed_version;
+				cnx->cnx_state = picoquic_state_client_init;
+				ret = 0;
+				break;
+			}
+		}
+	}
+
+	return ret;
+}
+/*
  * Processing of an incoming client initial packet,
  * on an unknown connection context.
  */
@@ -175,7 +243,7 @@ picoquic_cnx * picoquic_incoming_initial(
             /* TODO: version negotiation. */
             /* TODO: if wrong version, send version negotiation, do not go any further */
             /* if listening is OK, listen */
-            cnx = picoquic_create_cnx(quic, ph->cnx_id, addr_from, current_time);
+            cnx = picoquic_create_cnx(quic, ph->cnx_id, addr_from, current_time, 0);
 
 			if (cnx != NULL)
 			{
@@ -427,12 +495,14 @@ int picoquic_incoming_packet(
                 switch (ph.ptype)
                 {
                 case picoquic_packet_version_negotiation:
-                    if (cnx->cnx_state == picoquic_state_client_handshake_start)
+                    if (cnx->cnx_state == picoquic_state_client_init_sent)
                     {
                         /* Verify the checksum */
                         /* Proceed with version negotiation*/
                         /* Process version negotiation */
                         /* Schedule repeat of initial message */
+						ret = picoquic_incoming_version_negotiation(
+							cnx, bytes, length, addr_from, &ph, current_time);
                     }
                     else
                     {

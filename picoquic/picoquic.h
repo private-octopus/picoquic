@@ -43,6 +43,11 @@ extern "C" {
 #define PICOQUIC_ERROR_MEMORY (PICOQUIC_ERROR_CLASS  + 5)
 #define PICOQUIC_ERROR_SPURIOUS_REPEAT (PICOQUIC_ERROR_CLASS  + 6)
 
+	/*
+	 * Supported versions
+	 */
+	extern const uint32_t picoquic_supported_versions[];
+	extern const size_t picoquic_nb_supported_versions;
     /*
      * Quic context flags
      */
@@ -164,7 +169,8 @@ extern "C" {
         struct _picoquic_cnx_id * first_cnx_id;
         struct _picoquic_net_id * first_net_id;
 
-        /* negotiated version */
+		/* Proposed and negotiated version */
+		uint32_t proposed_version;
         uint32_t version;
 
         /* connection state, ID, etc. Todo: allow for multiple cnxid */
@@ -205,7 +211,7 @@ extern "C" {
 
     /* Connection context creation and registration */
     picoquic_cnx * picoquic_create_cnx(picoquic_quic * quic, 
-        uint64_t cnx_id, struct sockaddr * addr, uint64_t start_time);
+        uint64_t cnx_id, struct sockaddr * addr, uint64_t start_time, uint32_t preferred_version);
     void picoquic_delete_cnx(picoquic_cnx * cnx);
 
     /* Connection context retrieval functions */

@@ -379,7 +379,7 @@ int quic_client(char * ip_address_text, int server_port)
         uint64_t cnx_id = 0;
 
         cnx_client = picoquic_create_cnx(qclient, 0, 
-            (struct sockaddr *)&server_address, current_time);
+            (struct sockaddr *)&server_address, current_time, 0);
 
         if (cnx_client == NULL)
         {

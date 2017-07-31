@@ -72,6 +72,20 @@ static int picoquic_net_id_compare(void * key1, void * key2)
     return memcmp(&net1->saddr, &net2->saddr, sizeof(net1->saddr));
 }
 
+/*
+ * Supported versions. Specific versions may mandate different processing of different
+ * formats.
+ * The first version in the list is the preferred version.
+ * The protection of clear text packets will be a function of the version negotiation.
+ */
+
+const uint32_t picoquic_supported_versions[] = {
+	0xFF000005
+};
+
+const size_t picoquic_nb_supported_versions = sizeof(picoquic_supported_versions) / sizeof(uint32_t);
+
+
 /* QUIC context create and dispose */
 picoquic_quic * picoquic_create(uint32_t nb_connections, char * cert_file_name, char * key_file_name)
 {
@@ -231,7 +245,7 @@ int picoquic_register_net_id(picoquic_quic * quic, picoquic_cnx * cnx, struct so
 }
 
 picoquic_cnx * picoquic_create_cnx(picoquic_quic * quic,
-    uint64_t cnx_id, struct sockaddr * addr, uint64_t start_time)
+    uint64_t cnx_id, struct sockaddr * addr, uint64_t start_time, uint32_t preferred_version)
 {
     picoquic_cnx * cnx = (picoquic_cnx *)malloc(sizeof(picoquic_cnx));
     uint32_t random_sequence;
@@ -276,7 +290,16 @@ picoquic_cnx * picoquic_create_cnx(picoquic_quic * quic,
             }
             else
             {
-                cnx->version = 0xff000005;
+				if (preferred_version == 0)
+				{
+					cnx->proposed_version = picoquic_supported_versions[0];
+				}
+				else
+				{
+					cnx->proposed_version = preferred_version;
+				}
+				cnx->version = cnx->proposed_version;
+
                 cnx->cnx_state = picoquic_state_client_init;
                 if (cnx_id == 0)
                 {
@@ -298,7 +321,6 @@ picoquic_cnx * picoquic_create_cnx(picoquic_quic * quic,
         cnx->first_sack_item.end_of_sack_range = 0;
         cnx->first_sack_item.next_sack = NULL;
         cnx->sack_block_size_max = 0;
-
 
         cnx->first_stream.stream_id = 0;
         cnx->first_stream.consumed_offset = 0;

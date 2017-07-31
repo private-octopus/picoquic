@@ -112,7 +112,7 @@ static int tls_api_test_with_loss(uint64_t  * loss_mask)
     if (ret == 0)
     {
         /* Create a client connection */
-        cnx_client = picoquic_create_cnx(qclient, 12345, (struct sockaddr *)&server_addr, 0);
+        cnx_client = picoquic_create_cnx(qclient, 12345, (struct sockaddr *)&server_addr, 0, 0);
 
         if (cnx_client == NULL)
         {

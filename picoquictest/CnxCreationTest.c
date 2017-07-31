@@ -101,7 +101,7 @@ int cnxcreation_test()
 
     for (int i = 0; ret == 0 && i < 5; i++)
     {
-        test_cnx[i] = picoquic_create_cnx(quic, test_cnx_id[i], test_cnx_addr[i], 0);
+        test_cnx[i] = picoquic_create_cnx(quic, test_cnx_id[i], test_cnx_addr[i], 0, 0);
         if (test_cnx[i] == NULL)
         {
             ret = -1;
