@@ -54,6 +54,20 @@ extern "C" {
     typedef enum {
         picoquic_context_server = 1
     } picoquic_context_flags;
+
+	/*
+	 * The stateless packet structure is used to temporarily store
+	 * stateless packets before they can be sent by servers.
+	 */
+
+	typedef struct _picoquic_stateless_packet {
+		struct _picoquic_packet * next_packet;
+		struct sockaddr_storage addr_to;
+		size_t length;
+
+		uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE];
+	} picoquic_stateless_packet;
+
     /*
      * QUIC context, defining the tables of connections,
      * open sockets, etc.
@@ -63,6 +77,8 @@ extern "C" {
         void* tls_master_ctx;
 
         uint32_t flags;
+
+		picoquic_stateless_packet * pending_stateless_packet;
 
         struct _picoquic_cnx * cnx_list;
         struct _picoquic_cnx * cnx_last;
@@ -145,6 +161,10 @@ extern "C" {
         picoquic_packet_type_max = 10
     } picoquic_packet_type_enum;
 
+	/*
+	 * The simple packet structure is used to store packets that
+	 * have been sent but are not yet acknowledged.
+	 */
     typedef struct _picoquic_packet {
         struct _picoquic_packet * previous_packet;
         struct _picoquic_packet * next_packet;
@@ -208,6 +228,12 @@ extern "C" {
     /* QUIC context create and dispose */
     picoquic_quic * picoquic_create(uint32_t nb_connections, char * cert_file_name, char * key_file_name);
     void picoquic_free(picoquic_quic * quic);
+
+	/* Handling of stateless packets */
+	picoquic_stateless_packet * picoquic_create_stateless_packet(picoquic_quic * quic);
+	void picoquic_delete_stateless_packet(picoquic_stateless_packet * sp);
+	void picoquic_queue_stateless_packet(picoquic_quic * quic, picoquic_stateless_packet * sp);
+	picoquic_stateless_packet * picoquic_dequeue_stateless_packet(picoquic_quic * quic);
 
     /* Connection context creation and registration */
     picoquic_cnx * picoquic_create_cnx(picoquic_quic * quic, 

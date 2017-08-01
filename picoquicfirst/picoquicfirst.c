@@ -181,6 +181,7 @@ int quic_server(char * server_name, int server_port, char * pem_cert, char * pem
     int bytes_sent;
     picoquic_packet * p = NULL;
 	uint64_t current_time = 0;
+	picoquic_stateless_packet * sp;
 
     /* Open a UDP socket */
 
@@ -239,6 +240,15 @@ int quic_server(char * server_name, int server_port, char * pem_cert, char * pem
                 /* Submit the packet to the server */
                 ret = picoquic_incoming_packet(qserver, buffer, 
                     (size_t) bytes_recv, (struct sockaddr *) &addr_from, current_time);
+
+				while ((sp = picoquic_dequeue_stateless_packet(qserver)) != NULL)
+				{
+					int sent = sendto(fd, sp->bytes, sp->length, 0,
+						(struct sockaddr *) &addr_from, from_length);
+
+					printf("Sending stateless packet, %d bytes\n", sent);
+					picoquic_delete_stateless_packet(sp);
+				}
 
                 if (cnx_server == NULL && qserver->cnx_list != NULL)
                 {

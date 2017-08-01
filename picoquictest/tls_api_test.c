@@ -35,50 +35,75 @@ static int tls_api_loss_simulator(uint64_t * loss_mask)
 	return ret;
 }
 
-static int tls_api_one_packet(picoquic_cnx * cnx, picoquic_quic * qreceive, 
+static int tls_api_one_packet(picoquic_quic * qsender, picoquic_cnx * cnx, picoquic_quic * qreceive,
     struct sockaddr * sender_addr, uint64_t * loss_mask, uint64_t * simulated_time)
 {
     /* Simulate a connection */
     int ret = 0;
-    picoquic_packet * p = picoquic_create_packet();
-	uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE];
+	picoquic_stateless_packet * sp = picoquic_dequeue_stateless_packet(qsender);
 	size_t send_length = 0;
 
-    if (p == NULL)
-    {
-        ret = -1;
-		DebugBreak();
-    }
-    else
-    {
-		*simulated_time += 500;
-
-        ret = picoquic_prepare_packet(cnx, p, *simulated_time, 
-			bytes, PICOQUIC_MAX_PACKET_SIZE, &send_length);
-
-		if (ret == 0 && p->length > 0)
+	if (sp != NULL)
+	{
+		if (sp->length > 0)
 		{
-			*simulated_time += 500;
+			*simulated_time += 100000;
 
 			if (loss_mask == NULL ||
 				tls_api_loss_simulator(loss_mask) == 0)
 			{
 				/* Submit the packet to the server */
-				ret = picoquic_incoming_packet(qreceive, bytes, send_length, sender_addr, 
+				ret = picoquic_incoming_packet(qreceive, sp->bytes, sp->length, sender_addr,
 					*simulated_time);
 			}
 		}
+		picoquic_delete_stateless_packet(sp);
+	}
+	else if (cnx != NULL)
+	{
+		picoquic_packet * p = picoquic_create_packet();
+		uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE];
+		size_t send_length = 0;
+
+		if (p == NULL)
+		{
+			ret = -1;
+		}
 		else
 		{
-			*simulated_time += 500000;
-			free(p);
+			*simulated_time += 500;
+
+			ret = picoquic_prepare_packet(cnx, p, *simulated_time,
+				bytes, PICOQUIC_MAX_PACKET_SIZE, &send_length);
+
+			if (ret == 0 && p->length > 0)
+			{
+				*simulated_time += 500;
+
+				if (loss_mask == NULL ||
+					tls_api_loss_simulator(loss_mask) == 0)
+				{
+					/* Submit the packet to the server */
+					ret = picoquic_incoming_packet(qreceive, bytes, send_length, sender_addr,
+						*simulated_time);
+				}
+			}
+			else
+			{
+				*simulated_time += 500000;
+				free(p);
+			}
 		}
-    }
+	}
+	else
+	{
+		simulated_time += 1000000;
+	}
 
     return ret;
 }
 
-static int tls_api_test_with_loss(uint64_t  * loss_mask)
+static int tls_api_test_with_loss(uint64_t  * loss_mask, uint32_t proposed_version)
 {
 
     int ret = 0;
@@ -112,7 +137,7 @@ static int tls_api_test_with_loss(uint64_t  * loss_mask)
     if (ret == 0)
     {
         /* Create a client connection */
-        cnx_client = picoquic_create_cnx(qclient, 12345, (struct sockaddr *)&server_addr, 0, 0);
+        cnx_client = picoquic_create_cnx(qclient, 12345, (struct sockaddr *)&server_addr, 0, proposed_version);
 
         if (cnx_client == NULL)
         {
@@ -127,7 +152,7 @@ static int tls_api_test_with_loss(uint64_t  * loss_mask)
         nb_trials++;
 
         /* packet from client to server */
-        ret = tls_api_one_packet(cnx_client, qserver, (struct sockaddr *)&client_addr, 
+        ret = tls_api_one_packet(qclient, cnx_client, qserver, (struct sockaddr *)&client_addr,
 			loss_mask, &simulated_time);
 
         if (ret == 0)
@@ -136,20 +161,13 @@ static int tls_api_test_with_loss(uint64_t  * loss_mask)
             {
                 cnx_server = qserver->cnx_list;
             }
-
-            if (cnx_server == NULL)
-            {
-				simulated_time += 1000000;
-            }
-            else
-            {
-                ret = tls_api_one_packet(cnx_server, qclient, (struct sockaddr *)&server_addr, 
+			
+			ret = tls_api_one_packet(qserver, cnx_server, qclient, (struct sockaddr *)&server_addr,
 					loss_mask, &simulated_time);
-				if (ret != 0)
-				{
-					break;
-				}
-            }
+			if (ret != 0)
+			{
+				break;
+			}
         }
 		else
 		{
@@ -170,7 +188,7 @@ static int tls_api_test_with_loss(uint64_t  * loss_mask)
         {
             /* packet from client to server */
 			/* Do not simulate losses there, as there is no way to correct them */
-            ret = tls_api_one_packet(cnx_client, qserver, (struct sockaddr *)&client_addr, NULL,
+            ret = tls_api_one_packet(qclient, cnx_client, qserver, (struct sockaddr *)&client_addr, NULL,
 				&simulated_time);
         }
 
@@ -197,14 +215,14 @@ static int tls_api_test_with_loss(uint64_t  * loss_mask)
 
 int tls_api_test()
 {
-	return tls_api_test_with_loss(NULL);
+	return tls_api_test_with_loss(NULL, 0);
 }
 
 int tls_api_loss_test(uint64_t mask)
 {
 	uint64_t loss_mask = mask;
 
-	return tls_api_test_with_loss(&loss_mask);
+	return tls_api_test_with_loss(&loss_mask, 0);
 }
 
 int tls_api_many_losses()
@@ -217,9 +235,15 @@ int tls_api_many_losses()
 		for (uint64_t j = 1; ret == 0 && j < 4; j++)
 		{
 			loss_mask = ((1 << j) - 1) << i;
-			ret = tls_api_test_with_loss(&loss_mask);
+			ret = tls_api_test_with_loss(&loss_mask, 0);
 		}
 	}
 
 	return ret;
+}
+
+int tls_api_version_negotiation_test()
+{
+	const uint32_t version_grease = 0x0aca4a0a;
+	return tls_api_test_with_loss(NULL, version_grease);
 }

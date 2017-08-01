@@ -98,6 +98,8 @@ picoquic_quic * picoquic_create(uint32_t nb_connections, char * cert_file_name, 
 
         quic->flags = 0;
 
+		quic->pending_stateless_packet = NULL;
+
         if (cert_file_name != NULL)
         {
             quic->flags |= picoquic_context_server;
@@ -130,6 +132,14 @@ void picoquic_free(picoquic_quic * quic)
     {
         /* TODO: close the network sockets */
 
+		/* delete all pending packets */
+		while (quic->pending_stateless_packet != NULL)
+		{
+			picoquic_stateless_packet * to_delete = quic->pending_stateless_packet;
+			quic->pending_stateless_packet = to_delete->next_packet;
+			free(to_delete);
+		}
+
         /* delete all the connection contexts */
         while (quic->cnx_list != NULL)
         {
@@ -155,6 +165,42 @@ void picoquic_free(picoquic_quic * quic)
             quic->tls_master_ctx = NULL;
         }
     }
+}
+
+picoquic_stateless_packet * picoquic_create_stateless_packet(picoquic_quic * quic)
+{
+	return (picoquic_stateless_packet *)malloc(sizeof(picoquic_stateless_packet));
+}
+
+void picoquic_delete_stateless_packet(picoquic_stateless_packet * sp)
+{
+	free(sp);
+}
+
+void picoquic_queue_stateless_packet(picoquic_quic * quic, picoquic_stateless_packet * sp)
+{
+	picoquic_stateless_packet ** pnext = &quic->pending_stateless_packet;
+
+	while ((*pnext) != NULL)
+	{
+		pnext = &(*pnext)->next_packet;
+	}
+
+	*pnext = sp;
+	sp->next_packet = NULL;
+}
+
+picoquic_stateless_packet * picoquic_dequeue_stateless_packet(picoquic_quic * quic)
+{
+	picoquic_stateless_packet * sp = quic->pending_stateless_packet;
+
+	if (sp != NULL)
+	{
+		quic->pending_stateless_packet = sp->next_packet;
+		sp->next_packet = NULL;
+	}
+
+	return sp;
 }
 
 /* Connection context creation and registration */

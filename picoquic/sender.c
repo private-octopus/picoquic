@@ -263,7 +263,7 @@ int picoquic_prepare_packet(picoquic_cnx * cnx, picoquic_packet * packet,
 	size_t bytes_index = 0;
 	int header_length = 0;
 	uint8_t * bytes = packet->bytes;
-	size_t length;
+	size_t length = 0;
 
 	/* Prepare header -- depend on connection state */
 	/* TODO: 0-RTT work. */

@@ -170,11 +170,13 @@ int picoquic_incoming_version_negotiation(
 		(cnx->retransmit_newest == NULL || ph->pn64 > cnx->retransmit_newest->sequence_number) ||
 		(cnx->retransmit_oldest == NULL || ph->pn64 < cnx->retransmit_oldest->sequence_number))
 	{
-		/* Packet should be logged and ignored */
+		/* Packet that do not match the "echo" checks should be logged and ignored */
 		ret = 0;
 	}
-	else while (ret != 0 && byte_index + 4 < length)
+	else while (ret != 0 && byte_index + 4 <= length)
 	{
+		/* parsing the packet. We do not try to understand any integrity check yet, 
+		 * because the spec is ambiguous. */
 		proposed_version = PICOPARSE_32(bytes + byte_index);
 		byte_index += 4;
 
@@ -209,6 +211,67 @@ int picoquic_incoming_version_negotiation(
 
 	return ret;
 }
+
+/*
+ * Check that the version is supported. If that fails,
+ * best effort attemt to send a version negotiation packet if
+ * an initial message is received with an unsupported version
+ */
+
+int picoquic_verify_version(
+	picoquic_quic * quic,
+	uint8_t * bytes,
+	uint32_t length,
+	struct sockaddr * addr_from,
+	picoquic_packet_header * ph,
+	uint64_t current_time)
+{
+	int ret = -1;
+
+	for (size_t i = 0; i < picoquic_nb_supported_versions; i++)
+	{
+		if (picoquic_supported_versions[i] == ph->vn)
+		{
+			ret = 0;
+			break;
+		}
+	}
+
+	if (ret != 0)
+	{
+		picoquic_stateless_packet * sp = picoquic_create_stateless_packet(quic);
+
+		if (sp != NULL)
+		{
+			uint8_t * bytes = sp->bytes;
+			size_t byte_index = 0;
+			/* Packet type set to version negotiation */
+			bytes[byte_index++] = 0x80 | picoquic_packet_version_negotiation;
+			/* Copy the incoming header */
+			picoformat_64(bytes + byte_index, ph->cnx_id);
+			byte_index += 8;
+			picoformat_32(bytes + byte_index, ph->pn);
+			byte_index += 4;
+			picoformat_32(bytes + byte_index, ph->vn);
+			byte_index += 4;
+			/* Set the payload to the list of versions */
+			for (size_t i = 0; i < picoquic_nb_supported_versions; i++)
+			{
+				picoformat_32(bytes + byte_index, picoquic_supported_versions[i]);
+				byte_index += 4;
+			}
+
+			sp->length = byte_index;
+			memset(&sp->addr_to, 0, sizeof(sp->addr_to));
+			memcpy(&sp->addr_to, addr_from,
+				(addr_from->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
+			picoquic_queue_stateless_packet(quic, sp);
+		}
+	}
+
+	return ret;
+}
+
 /*
  * Processing of an incoming client initial packet,
  * on an unknown connection context.
@@ -238,9 +301,8 @@ picoquic_cnx * picoquic_incoming_initial(
         {
             /* Incorrect checksum, drop and log. */		
         }
-        else
+        else if (picoquic_verify_version(quic, bytes, length, addr_from, ph, current_time) == 0)
         {
-            /* TODO: version negotiation. */
             /* TODO: if wrong version, send version negotiation, do not go any further */
             /* if listening is OK, listen */
             cnx = picoquic_create_cnx(quic, ph->cnx_id, addr_from, current_time, 0);
@@ -554,7 +616,7 @@ int picoquic_incoming_packet(
 
 	if (ret == 0 || ret == PICOQUIC_ERROR_SPURIOUS_REPEAT)
 	{
-		if (cnx != NULL)
+		if (cnx != NULL && ph.ptype != picoquic_packet_version_negotiation)
 		{
 			/* Mark the sequence number as received */
 			ret = picoquic_record_pn_received(cnx, ph.pn64, current_time);
