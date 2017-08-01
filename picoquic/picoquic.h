@@ -42,6 +42,7 @@ extern "C" {
 #define PICOQUIC_ERROR_UNEXPECTED_PACKET (PICOQUIC_ERROR_CLASS  + 4)
 #define PICOQUIC_ERROR_MEMORY (PICOQUIC_ERROR_CLASS  + 5)
 #define PICOQUIC_ERROR_SPURIOUS_REPEAT (PICOQUIC_ERROR_CLASS  + 6)
+#define PICOQUIC_ERROR_CNXID_CHECK (PICOQUIC_ERROR_CLASS  + 7)
 
 	/*
 	 * Supported versions
@@ -94,12 +95,14 @@ extern "C" {
     {
         picoquic_state_client_init, 
 		picoquic_state_client_init_sent,
+		picoquic_state_client_renegotiate,
+		picoquic_state_client_renegotiating,
         picoquic_state_server_init,
         picoquic_state_client_handshake_start,
         picoquic_state_client_handshake_progress,
         picoquic_state_client_almost_ready,
         picoquic_state_client_ready,
-        picoquic_state_server_handshake_progress,
+        // picoquic_state_server_handshake_progress,
         picoquic_state_server_almost_ready,
         picoquic_state_server_ready,
         picoquic_state_disconnecting,
@@ -234,6 +237,10 @@ extern "C" {
 	void picoquic_delete_stateless_packet(picoquic_stateless_packet * sp);
 	void picoquic_queue_stateless_packet(picoquic_quic * quic, picoquic_stateless_packet * sp);
 	picoquic_stateless_packet * picoquic_dequeue_stateless_packet(picoquic_quic * quic);
+
+	/* handling of retransmission queue */
+	void picoquic_enqueue_retransmit_packet(picoquic_cnx * cnx, picoquic_packet * p);
+	void picoquic_dequeue_retransmit_packet(picoquic_cnx * cnx, picoquic_packet * p, int should_free);
 
     /* Connection context creation and registration */
     picoquic_cnx * picoquic_create_cnx(picoquic_quic * quic, 

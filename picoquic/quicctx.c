@@ -426,6 +426,48 @@ void picoquic_clear_stream(picoquic_stream_head * stream)
     }
 }
 
+void picoquic_enqueue_retransmit_packet(picoquic_cnx * cnx, picoquic_packet * p)
+{
+	if (cnx->retransmit_oldest == NULL)
+	{
+		p->previous_packet = NULL;
+		cnx->retransmit_newest = p;
+	}
+	else
+	{
+		cnx->retransmit_oldest->next_packet = p;
+		p->previous_packet = cnx->retransmit_oldest;
+	}
+	p->next_packet = NULL;
+	cnx->retransmit_oldest = p;
+}
+
+void picoquic_dequeue_retransmit_packet(picoquic_cnx * cnx, picoquic_packet * p, int should_free)
+{
+	if (p->previous_packet == NULL)
+	{
+		cnx->retransmit_newest = p->next_packet;
+	}
+	else
+	{
+		p->previous_packet->next_packet = p->next_packet;
+	}
+
+	if (p->next_packet == NULL)
+	{
+		cnx->retransmit_oldest = p->previous_packet;
+	}
+	else
+	{
+		p->next_packet->previous_packet = p->previous_packet;
+	}
+
+	if (should_free)
+	{
+		free(p);
+	}
+}
+
 void picoquic_delete_cnx(picoquic_cnx * cnx)
 {
     picoquic_stream_head * stream;
@@ -492,9 +534,7 @@ void picoquic_delete_cnx(picoquic_cnx * cnx)
 
 		while (cnx->retransmit_newest != NULL)
 		{
-			picoquic_packet * p = cnx->retransmit_newest;
-			cnx->retransmit_newest = p->next_packet;
-			free(p);
+			picoquic_dequeue_retransmit_packet(cnx, cnx->retransmit_newest, 1);
 		}
 
         while ((stream = cnx->first_stream.next_stream) != NULL)

@@ -184,25 +184,8 @@ int picoquic_incoming_version_negotiation(
 		{
 			if (proposed_version == picoquic_supported_versions[i])
 			{
-				/* Clear the initial packet from the queue of packets to retransmit */
-				/* TODO: what about 0-RTT packets ? */
-				/* TODO: move this to common function */
-				while (cnx->retransmit_oldest != NULL)
-				{
-					picoquic_packet * to_delete = cnx->retransmit_oldest;
-					cnx->retransmit_oldest = to_delete->previous_packet;
-					if (to_delete->previous_packet != NULL)
-					{
-						to_delete->previous_packet->next_packet = NULL;
-					}
-					else
-					{
-						cnx->retransmit_newest = NULL;
-					}
-					free(to_delete);
-				}
 				cnx->version = proposed_version;
-				cnx->cnx_state = picoquic_state_client_init;
+				cnx->cnx_state = picoquic_state_client_renegotiate;
 				ret = 0;
 				break;
 			}
@@ -311,8 +294,6 @@ picoquic_cnx * picoquic_incoming_initial(
 			{
 				int ret = 0;
 				uint32_t seq_init = 0;
-
-				picoquic_crypto_random(quic, &cnx->server_cnxid, sizeof(cnx->server_cnxid));
 				
 				ret = picoquic_decode_frames(cnx,
                     bytes +ph->offset, decoded_length - ph->offset, 1);
@@ -369,9 +350,25 @@ int picoquic_incoming_server_cleartext(
         }
         else
         {
-            /* Accept the incoming frames */
-            ret = picoquic_decode_frames(cnx,
-                bytes + ph->offset, decoded_length - ph->offset, 1);
+			/* Check the server cnx id */
+			if (cnx->server_cnxid == 0)
+			{
+				cnx->server_cnxid = ph->cnx_id;
+			}
+			else
+			{
+				if (cnx->server_cnxid != ph->cnx_id)
+				{
+					ret = -1; /* protocol error */
+				}
+			}
+
+			if (ret == 0)
+			{
+				/* Accept the incoming frames */
+				ret = picoquic_decode_frames(cnx,
+					bytes + ph->offset, decoded_length - ph->offset, 1);
+			}
 
             /* processing of client initial packet */
             if (ret == 0)
@@ -390,7 +387,7 @@ int picoquic_incoming_server_cleartext(
     else
     {
         /* Not expected. Log and ignore. */
-        ret = PICOQUIC_ERROR_UNEXPECTED_PACKET;
+        ret = PICOQUIC_ERROR_SPURIOUS_REPEAT;
     }
 
     return ret;
@@ -408,8 +405,7 @@ int picoquic_incoming_client_cleartext(
     int ret = 0;
     size_t decoded_length = 0;
 
-    if (cnx->cnx_state == picoquic_state_server_handshake_progress ||
-        cnx->cnx_state == picoquic_state_server_almost_ready ||
+    if (cnx->cnx_state == picoquic_state_server_almost_ready ||
         cnx->cnx_state == picoquic_state_server_ready)
     {
         /* Verify the checksum */
@@ -419,7 +415,11 @@ int picoquic_incoming_client_cleartext(
             /* Incorrect checksum, drop and log. */
 			ret = PICOQUIC_ERROR_FNV1A_CHECK;
         }
-        else
+		else if (ph->cnx_id != cnx->server_cnxid)
+		{
+			ret = PICOQUIC_ERROR_CNXID_CHECK;
+		}
+		else
         {
             /* Accept the incoming frames */
             ret = picoquic_decode_frames(cnx,

@@ -335,6 +335,7 @@ int quic_client(char * ip_address_text, int server_port)
     int bytes_sent;
     picoquic_packet * p = NULL;
 	uint64_t current_time = 0;
+	int client_ready_loop = 0;
 
     /* get the IP address of the server */
     if (ret == 0)
@@ -395,6 +396,31 @@ int quic_client(char * ip_address_text, int server_port)
         {
             ret = -1;
         }
+		else
+		{
+			p = picoquic_create_packet();
+
+			if (p == NULL)
+			{
+				ret = -1;
+			}
+			else
+			{
+				ret = picoquic_prepare_packet(cnx_client, p, current_time,
+					send_buffer, sizeof(send_buffer), &send_length);
+
+				if (ret == 0 && send_length > 0)
+				{
+					bytes_sent = sendto(fd, send_buffer, send_length, 0,
+						(struct sockaddr *) &server_address, server_addr_length);
+					printf("Sending initial packet, %d bytes.\n", send_length);
+				}
+				else
+				{
+					free(p);
+				}
+			}
+		}
     }
 
     /* Wait for packets */
@@ -425,11 +451,12 @@ int quic_client(char * ip_address_text, int server_port)
                 printf("Processed %d bytes, state=%d\n", bytes_recv,
                     cnx_client->cnx_state);
             }
-			else if (bytes_recv == 0)
-			{
-				current_time += 1000000;
 
-				if (cnx_client->cnx_state == picoquic_state_client_ready)
+			if (ret == 0 && cnx_client->cnx_state == picoquic_state_client_ready)
+			{
+				client_ready_loop++;
+
+				if (bytes_recv == 0 || client_ready_loop > 4)
 				{
 					printf("Connection established. Disconnecting now.\n");
 					ret = picoquic_close(cnx_client);
@@ -453,6 +480,7 @@ int quic_client(char * ip_address_text, int server_port)
 					{
 						bytes_sent = sendto(fd, send_buffer, send_length, 0,
 							(struct sockaddr *) &server_address, server_addr_length);
+						printf("Sending packet, %d bytes.\n", send_length);
 					}
 					else
 					{

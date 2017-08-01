@@ -421,30 +421,10 @@ static picoquic_packet * picoquic_process_ack_range(
 		{
 			if (p->sequence_number == highest)
 			{
-				picoquic_packet * p2free = p;
-
-				if (p->previous_packet == NULL)
-				{
-					cnx->retransmit_newest = p->next_packet;
-				}
-				else
-				{
-					p->previous_packet->next_packet = p->next_packet;
-				}
-
-				if (p->next_packet == NULL)
-				{
-					cnx->retransmit_oldest = p->previous_packet;
-				}
-				else
-				{
-					p->next_packet->previous_packet = p->previous_packet;
-				}
-
-				p = p->next_packet;
 				/* TODO: RTT Estimate */
-
-				free(p2free);
+				picoquic_packet * next = p->next_packet;
+				picoquic_dequeue_retransmit_packet(cnx, p, 1);
+				p = next;
 			}
 
 			range--;

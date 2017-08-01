@@ -113,6 +113,60 @@ picoquic_packet * picoquic_create_packet()
 }
 
 /*
+ * Retransmit the client initial, but no other packet, after
+ * receiving a version negotiation from the server
+ */
+int picoquic_retransmit_initial(picoquic_cnx * cnx, picoquic_packet * packet)
+{
+	int ret = 0;
+	picoquic_packet * p = cnx->retransmit_oldest;
+	picoquic_packet ** previous = &cnx->retransmit_oldest;
+	picoquic_packet_header ph;
+	uint8_t * bytes = packet->bytes;
+
+	while ((p = *previous) != NULL)
+	{
+		int ret = picoquic_parse_packet_header(p->bytes, p->length, &ph);
+		if (ret == 0 && ph.ptype == picoquic_packet_client_initial)
+		{
+			break;
+		}
+		*previous = &p->next_packet;
+	}
+
+	if (p == NULL)
+	{
+		ret = -1;
+	}
+	else
+	{
+		int ret = 0;
+		int packet_is_pure_ack = 1;
+		int frame_is_pure_ack = 0;
+		uint8_t * bytes = packet->bytes;
+		size_t header_length = 0;
+		size_t frame_length = 0;
+		size_t byte_index = 0; /* Used when parsing the old packet */
+		size_t checksum_length = 16;
+
+		/* Create a long packet. TODO: special case for 0-RTT data. TODO: short packets. */
+		bytes[0] = 0x80 | ph.ptype;
+
+		picoformat_64(&bytes[1], ph.cnx_id);
+		picoformat_32(&bytes[9], (uint32_t)cnx->send_sequence);
+		picoformat_32(&bytes[13], cnx->version);
+
+		memcpy(&bytes[17], &p->bytes[ph.offset], p->length - ph.offset);
+		packet->length = p->length - ph.offset + 17;
+
+		/* deueue and free the queued packet */
+		picoquic_dequeue_retransmit_packet(cnx, p, 1);
+	}
+
+	return ret;
+}
+
+/*
  * If a retransmit is needed, fill the packet with the required
  * retransmission. Also, prune the retransmit queue as needed.
  */
@@ -211,16 +265,7 @@ int picoquic_retransmit_needed(picoquic_cnx * cnx, uint64_t current_time,
 			}
 
 			/* Remove old packet from queue */
-			if (p->previous_packet == NULL)
-			{
-				cnx->retransmit_newest = NULL;
-			}
-			else
-			{
-				p->previous_packet->next_packet = NULL;
-			}
-			cnx->retransmit_oldest = p->previous_packet;
-			free(p);
+			picoquic_dequeue_retransmit_packet(cnx, p, 1);
 
 			/* If we have a good packet, return it */
 			if (packet_is_pure_ack)
@@ -279,6 +324,10 @@ int picoquic_prepare_packet(picoquic_cnx * cnx, picoquic_packet * packet,
 		cnx_id = cnx->initial_cnxid;
 		retransmit_possible = 1;
 		break;
+	case picoquic_state_client_renegotiate:
+		packet_type = picoquic_packet_client_initial;
+		cnx_id = cnx->initial_cnxid;
+		break;
 	case picoquic_state_server_init:
 		packet_type = picoquic_packet_server_cleartext;
 		break;
@@ -302,10 +351,6 @@ int picoquic_prepare_packet(picoquic_cnx * cnx, picoquic_packet * packet,
 		use_fnv1a = 0;
 		checksum_overhead = 16;
 		break;
-	case picoquic_state_server_handshake_progress:
-		packet_type = picoquic_packet_server_stateless;
-		retransmit_possible = 1;
-		break;
 	case picoquic_state_server_ready:
 		packet_type = picoquic_packet_1rtt_protected_phi0;
 		use_fnv1a = 0;
@@ -325,8 +370,16 @@ int picoquic_prepare_packet(picoquic_cnx * cnx, picoquic_packet * packet,
 		break;
 	}
 
-	/* Todo: check whether it would make sense to retransmit the oldest frame */
-	if (retransmit_possible &&
+	if (cnx->cnx_state == picoquic_state_client_renegotiate)
+	{
+		ret = picoquic_retransmit_initial(cnx, packet);
+		if (ret == 0)
+		{
+			length = packet->length;
+			cnx->cnx_state = picoquic_state_client_init_sent;
+		}
+	} 
+	else if (retransmit_possible &&
 		(length = picoquic_retransmit_needed(cnx, current_time, packet, &use_fnv1a)) > 0)
 	{
 		/* Set the new checksum length */
