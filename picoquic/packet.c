@@ -272,8 +272,9 @@ picoquic_cnx * picoquic_incoming_initial(
     size_t decoded_length = 0;
 
     if (ph->ptype != picoquic_packet_client_initial ||
-        (quic->flags&picoquic_context_server) == 0)
-    {
+        (quic->flags&picoquic_context_server) == 0 ||
+		length < PICOQUIC_ENFORCED_INITIAL_MTU)
+	{
         /* TODO: may want to send stateless reject */
         /* Unexpected packet, drop and log. */
     }

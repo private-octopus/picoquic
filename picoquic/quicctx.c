@@ -380,7 +380,7 @@ picoquic_cnx * picoquic_create_cnx(picoquic_quic * quic,
 
         picoquic_crypto_random(quic, &random_sequence, sizeof(uint32_t));
         cnx->send_sequence = random_sequence;
-        cnx->send_mtu = 1200; /* TODO: replace by constant */
+        cnx->send_mtu = PICOQUIC_INITIAL_MTU;
 
 		cnx->retransmit_newest = NULL;
 		cnx->retransmit_oldest = NULL;
