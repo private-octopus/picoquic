@@ -131,7 +131,7 @@ int picoquic_retransmit_initial(picoquic_cnx * cnx, picoquic_packet * packet)
 		{
 			break;
 		}
-		*previous = &p->next_packet;
+		previous = &p->next_packet;
 	}
 
 	if (p == NULL)

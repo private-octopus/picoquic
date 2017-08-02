@@ -65,7 +65,7 @@ extern "C" {
 	 */
 
 	typedef struct _picoquic_stateless_packet {
-		struct _picoquic_packet * next_packet;
+		struct _picoquic_stateless_packet * next_packet;
 		struct sockaddr_storage addr_to;
 		size_t length;
 

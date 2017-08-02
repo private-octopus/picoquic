@@ -64,7 +64,7 @@
 void picoquic_log_packet(FILE* F, picoquic_quic * quic, picoquic_cnx * cnx,
 	struct sockaddr * addr_peer, int receiving,
 	uint8_t * bytes, size_t length);
-void picoquic_log_processing(FILE* F, picoquic_cnx * cnx, size_t length);
+void picoquic_log_processing(FILE* F, picoquic_cnx * cnx, size_t length, int ret);
 
 void print_address(struct sockaddr * address, int address_length, char * label)
 {

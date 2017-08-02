@@ -447,8 +447,8 @@ int picoquic_decode_ack_frame(picoquic_cnx * cnx, uint8_t * bytes,
 	int ll = (first_byte >> 2) & 3;
 	int mm = (first_byte & 3);
 	uint64_t largest;
-	uint64_t last_range;
-	uint64_t ack_range;
+	uint64_t last_range = 0;
+	uint64_t ack_range = 0;
 	uint64_t acked_mask = 0;
 	uint64_t gap_begin;
 	picoquic_packet * top_packet = cnx->retransmit_newest;
