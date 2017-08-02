@@ -572,7 +572,10 @@ int picoquic_decode_ack_frame(picoquic_cnx * cnx, uint8_t * bytes,
 
 		if (ret == 0)
 		{
-			byte_index += num_ts * 3;
+			if (num_ts > 0)
+			{
+				byte_index += 2 + num_ts * 3;
+			}
 
 			if (byte_index > bytes_max)
 			{
@@ -870,17 +873,20 @@ int picoquic_skip_frame(uint8_t * bytes, size_t bytes_max, size_t * consumed, in
 					byte_index += 1 + num_block*(1 + 1);
 					break;
 				case 1:
-					byte_index += 2 + num_block*(2 + 2);
+					byte_index += 2 + num_block*(1 + 2);
 					break;
 				case 2:
-					byte_index += 4 + num_block*(2 + 4);
+					byte_index += 4 + num_block*(1 + 4);
 					break;
 				case 3:
-					byte_index += 8 + num_block*(2 + 8);
+					byte_index += 8 + num_block*(1 + 8);
 					break;
 				}
 
-				byte_index += num_ts * 3;
+				if (num_ts > 0)
+				{
+					byte_index += 2 + num_ts * 3;
+				}
 
 				if (byte_index > bytes_max)
 				{

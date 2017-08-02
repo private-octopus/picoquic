@@ -45,6 +45,9 @@
     <ClCompile Include="tls_api.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="logger.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquic.h">

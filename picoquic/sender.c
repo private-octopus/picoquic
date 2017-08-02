@@ -517,6 +517,10 @@ int picoquic_prepare_packet(picoquic_cnx * cnx, picoquic_packet * packet,
 		}
 		cnx->retransmit_newest = packet;
 	}
+	else
+	{
+		*send_length = 0;
+	}
 	
 
 	return ret;

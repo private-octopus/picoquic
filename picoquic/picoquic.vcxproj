@@ -138,6 +138,7 @@
     <ClCompile Include="fnv1a.c" />
     <ClCompile Include="frames.c" />
     <ClCompile Include="intformat.c" />
+    <ClCompile Include="logger.c" />
     <ClCompile Include="quicctx.c" />
     <ClCompile Include="packet.c" />
     <ClCompile Include="picohash.c" />

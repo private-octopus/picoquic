@@ -61,6 +61,11 @@
 #endif
 #endif
 
+void picoquic_log_packet(FILE* F, picoquic_quic * quic, picoquic_cnx * cnx,
+	struct sockaddr * addr_peer, int receiving,
+	uint8_t * bytes, size_t length);
+void picoquic_log_processing(FILE* F, picoquic_cnx * cnx, size_t length);
+
 void print_address(struct sockaddr * address, int address_length, char * label)
 {
     char hostname[256];
@@ -413,7 +418,9 @@ int quic_client(char * ip_address_text, int server_port)
 				{
 					bytes_sent = sendto(fd, send_buffer, send_length, 0,
 						(struct sockaddr *) &server_address, server_addr_length);
-					printf("Sending initial packet, %d bytes.\n", send_length);
+
+					picoquic_log_packet(stdout, qclient, cnx_client, (struct sockaddr *) &server_address,
+						0, send_buffer, bytes_sent);
 				}
 				else
 				{
@@ -433,6 +440,9 @@ int quic_client(char * ip_address_text, int server_port)
         if (bytes_recv != 0)
         {
             printf("Select returns %d, from length %d\n", bytes_recv, from_length);
+
+			picoquic_log_packet(stdout, qclient, cnx_client, (struct sockaddr *) &packet_from,
+				1, buffer, bytes_recv);
         }
 
         if (bytes_recv < 0)
@@ -448,11 +458,16 @@ int quic_client(char * ip_address_text, int server_port)
                 ret = picoquic_incoming_packet(qclient, buffer,
                     (size_t)bytes_recv, (struct sockaddr *) &packet_from, current_time);
 
-                printf("Processed %d bytes, state=%d\n", bytes_recv,
-                    cnx_client->cnx_state);
+				picoquic_log_processing(stdout, cnx_client, bytes_recv, ret);
+
+				if (cnx_client->cnx_state == picoquic_state_client_almost_ready)
+				{
+					fprintf(stdout, "Almost ready!\n\n");
+				}
             }
 
-			if (ret == 0 && cnx_client->cnx_state == picoquic_state_client_ready)
+			if (ret == 0 && cnx_client->cnx_state == picoquic_state_client_ready &&
+				cnx_client->first_stream.stream_data == NULL)
 			{
 				client_ready_loop++;
 
@@ -473,6 +488,8 @@ int quic_client(char * ip_address_text, int server_port)
                 }
                 else
                 {
+					send_length = 1000000;
+
                     ret = picoquic_prepare_packet(cnx_client, p, current_time, 
 						send_buffer, sizeof(send_buffer), &send_length);
 
@@ -480,7 +497,8 @@ int quic_client(char * ip_address_text, int server_port)
 					{
 						bytes_sent = sendto(fd, send_buffer, send_length, 0,
 							(struct sockaddr *) &server_address, server_addr_length);
-						printf("Sending packet, %d bytes.\n", send_length);
+						picoquic_log_packet(stdout, qclient, cnx_client, (struct sockaddr *)  &server_address,
+								0, send_buffer, send_length);
 					}
 					else
 					{
