@@ -57,7 +57,32 @@ uint8_t client_param2[] = {
 	0, 0, 0, 5, 0, 2, 0x05, 0xC8,
 };
 
-int transport_param_client_test(uint32_t version, uint32_t proposed_version, 
+uint8_t server_param1[] = {
+	0x08,
+	0xFF, 0, 0, 5,
+	0x50, 0x43, 0x51, 0x30,
+	0, 0x2E,
+	0, 0, 0, 0, 0, 4, 0, 0, 0xFF, 0xFF,
+	0, 0, 0, 1, 0, 4, 0, 0x40, 0, 0,
+	0, 0, 0, 2, 0, 4, 0, 0, 0xFF, 0xFF,
+	0, 0, 0, 3, 0, 2, 0, 0x1E,
+	0, 0, 0, 5, 0, 2, 0x05, 0xC8
+};
+
+uint8_t server_param2[] = {
+	0x08,
+	0xFF, 0, 0, 5,
+	0x50, 0x43, 0x51, 0x30,
+	0, 0x34,
+	0, 0, 0, 0, 0, 4, 0x01, 0, 0, 0,
+	0, 0, 0, 1, 0, 4, 0x01, 0, 0, 0,
+	0, 0, 0, 2, 0, 4, 0x01, 0, 0, 0,
+	0, 0, 0, 3, 0, 2, 0, 0xFF,
+	0, 0, 0, 4, 0, 0,
+	0, 0, 0, 5, 0, 2, 0x05, 0xC8,
+};
+
+int transport_param_one_test(int mode, uint32_t version, uint32_t proposed_version, 
 	picoquic_transport_parameters * param, uint8_t * target, size_t target_length)
 {
 	int ret = 0;
@@ -70,7 +95,7 @@ int transport_param_client_test(uint32_t version, uint32_t proposed_version,
 	test_cnx.version = version;
 	test_cnx.proposed_version = proposed_version;
 
-	ret = picoquic_prepare_transport_extensions(&test_cnx, 0, buffer, sizeof(buffer), &encoded);
+	ret = picoquic_prepare_transport_extensions(&test_cnx, mode, buffer, sizeof(buffer), &encoded);
 
 	if (ret == 0)
 	{
@@ -93,7 +118,7 @@ int transport_param_client_test(uint32_t version, uint32_t proposed_version,
 
 	if (ret == 0)
 	{
-		ret = picoquic_receive_transport_extensions(&test_cnx, 0, buffer, encoded, &decoded);
+		ret = picoquic_receive_transport_extensions(&test_cnx, mode, buffer, encoded, &decoded);
 
 		if (ret == 0 &&
 			memcmp(&test_cnx.remote_parameters, param,
@@ -106,20 +131,110 @@ int transport_param_client_test(uint32_t version, uint32_t proposed_version,
 	return ret;
 }
 
+int transport_param_fuzz_test(int mode, uint32_t version, uint32_t proposed_version,
+	picoquic_transport_parameters * param, uint8_t * target, size_t target_length, uint64_t * proof)
+{
+	int ret = 0;
+	int fuzz_ret = 0;
+	picoquic_cnx test_cnx = { { 0 } };
+	uint8_t buffer[256];
+	size_t decoded;
+	uint8_t fuzz_byte = 1;
+
+	/* test for valid arguments */
+	if (target_length < 8 || target_length > sizeof(buffer))
+	{
+		return -1;
+	}
+
+	/* initialize the connection object to the test parameters */
+	memcpy(&test_cnx.local_parameters, param, sizeof(picoquic_transport_parameters));
+	test_cnx.version = version;
+	test_cnx.proposed_version = proposed_version;
+
+	/* add computation of the proof argument to make sure the compiler 
+	 * will not optimize the loop to nothing */
+
+	*proof = 0;
+
+	/* repeat multiple times */
+	for (size_t l = 0; l < 8; l++)
+	{
+		for (size_t i = 0; i < target_length - l; i++)
+		{
+			/* copy message to buffer */
+			memcpy(buffer, target, target_length);
+
+			/* fuzz */
+			for (size_t j = 0; j < l; j++)
+			{
+				buffer[i + j] ^= fuzz_byte;
+				fuzz_byte++;
+			}
+
+			/* decode */
+			fuzz_ret = picoquic_receive_transport_extensions(&test_cnx, mode, buffer, 
+				target_length, &decoded);
+
+			if (fuzz_ret != 0)
+			{
+				*proof += (uint64_t)fuzz_ret;
+			}
+			else
+			{
+				*proof += test_cnx.remote_parameters.initial_max_stream_data;
+
+				if (decoded > target_length)
+				{
+					ret = -1;
+				}
+			}
+
+		}
+	}
+
+	return ret;
+}
+
 int transport_param_test()
 {
 	int ret = 0;
+	uint64_t proof = 0;
 
 	if (ret == 0)
 	{
-		ret = transport_param_client_test(0xFF000005, 0xFF000005,
+		ret = transport_param_one_test(0, 0xFF000005, 0xFF000005,
 			&transport_param_test1, client_param1, sizeof(client_param1));
 	}
 
 	if (ret == 0)
 	{
-		ret = transport_param_client_test(0xFF000005, 0x0A1A0A1A,
+		ret = transport_param_one_test(0, 0xFF000005, 0x0A1A0A1A,
 			&transport_param_test2, client_param2, sizeof(client_param2));
+	}
+
+	if (ret == 0)
+	{
+		ret = transport_param_one_test(1, 0xFF000005, 0xFF000005,
+			&transport_param_test1, server_param1, sizeof(server_param1));
+	}
+
+	if (ret == 0)
+	{
+		ret = transport_param_one_test(1, 0xFF000005, 0x0A1A0A1A,
+			&transport_param_test2, server_param2, sizeof(server_param2));
+	}
+
+	if (ret == 0)
+	{
+		ret = transport_param_fuzz_test(0, 0xFF000005, 0x0A1A0A1A,
+			&transport_param_test2, client_param2, sizeof(client_param2), &proof);
+	}
+
+	if (ret == 0)
+	{
+		ret = transport_param_fuzz_test(1, 0xFF000005, 0x0A1A0A1A,
+			&transport_param_test2, server_param2, sizeof(server_param2), &proof);
 	}
 
 	return ret;
