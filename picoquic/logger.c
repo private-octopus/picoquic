@@ -449,16 +449,18 @@ void picoquic_log_frames(FILE* F, uint8_t * bytes, size_t length)
 		}
 		else
 		{
-			if (bytes[byte_index] < picoquic_nb_log_frame_names)
+			uint32_t frame_id = bytes[byte_index];
+
+			if (frame_id < picoquic_nb_log_frame_names)
 			{
-				fprintf(F, "    %s frame\n", picoquic_log_frame_names[bytes[byte_index]]);
+				fprintf(F, "    %s frame\n", picoquic_log_frame_names[frame_id]);
 			}
 			else
 			{
-				fprintf(F, "    Unknown frame, type: %x\n", bytes[byte_index]);
+				fprintf(F, "    Unknown frame, type: %x\n", frame_id);
 			}
 
-			switch (bytes[byte_index])
+			switch (frame_id)
 			{
 			case 0x02: /* CONNECTION_CLOSE */
 				byte_index += 7;

@@ -48,6 +48,9 @@
     <ClCompile Include="logger.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="transport.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquic.h">

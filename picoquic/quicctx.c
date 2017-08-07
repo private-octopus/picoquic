@@ -80,7 +80,8 @@ static int picoquic_net_id_compare(void * key1, void * key2)
  */
 
 const uint32_t picoquic_supported_versions[] = {
-	0xFF000005
+	PICOQUIC_FIRST_INTEROP_VERSION,
+	PICOQUIC_INTERNAL_TEST_VERSION_1
 };
 
 const size_t picoquic_nb_supported_versions = sizeof(picoquic_supported_versions) / sizeof(uint32_t);
@@ -290,6 +291,19 @@ int picoquic_register_net_id(picoquic_quic * quic, picoquic_cnx * cnx, struct so
     return ret;
 }
 
+
+void picoquic_int_transport_parameters(picoquic_transport_parameters * tp)
+{
+	tp->initial_max_stream_data = 65535;
+	tp->initial_max_data = 0x400000;
+	tp->initial_max_stream_id = 65535;
+	tp->idle_timeout = 30;
+	tp->omit_connection_id = 0;
+	tp->max_packet_size = PICOQUIC_MAX_PACKET_SIZE - 16 - 40;
+}
+
+
+
 picoquic_cnx * picoquic_create_cnx(picoquic_quic * quic,
     uint64_t cnx_id, struct sockaddr * addr, uint64_t start_time, uint32_t preferred_version)
 {
@@ -365,6 +379,9 @@ picoquic_cnx * picoquic_create_cnx(picoquic_quic * quic,
 
 		if (cnx != NULL)
 		{
+			picoquic_int_transport_parameters(&cnx->local_parameters);
+			picoquic_int_transport_parameters(&cnx->remote_parameters);
+
 			cnx->first_sack_item.start_of_sack_range = 0;
 			cnx->first_sack_item.end_of_sack_range = 0;
 			cnx->first_sack_item.next_sack = NULL;
@@ -383,6 +400,8 @@ picoquic_cnx * picoquic_create_cnx(picoquic_quic * quic,
 			picoquic_crypto_random(quic, &random_sequence, sizeof(uint32_t));
 			cnx->send_sequence = random_sequence;
 			cnx->send_mtu = PICOQUIC_INITIAL_MTU;
+
+			cnx->nb_retransmit = 0;
 
 			cnx->retransmit_newest = NULL;
 			cnx->retransmit_oldest = NULL;

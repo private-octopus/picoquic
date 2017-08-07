@@ -40,6 +40,7 @@ extern "C" {
 	int tls_api_loss_test(uint64_t mask);
 	int tls_api_many_losses();
 	int tls_api_version_negotiation_test();
+	int transport_param_test();
 
 #ifdef  __cplusplus
 }

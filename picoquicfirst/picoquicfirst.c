@@ -465,6 +465,10 @@ int quic_client(char * ip_address_text, int server_port)
 					fprintf(stdout, "Almost ready!\n\n");
 				}
             }
+			else
+			{
+				current_time += 1000000;
+			}
 
 			if (ret == 0 && cnx_client->cnx_state == picoquic_state_client_ready &&
 				cnx_client->first_stream.stream_data == NULL)

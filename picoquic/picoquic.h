@@ -46,12 +46,22 @@ extern "C" {
 #define PICOQUIC_ERROR_SPURIOUS_REPEAT (PICOQUIC_ERROR_CLASS  + 6)
 #define PICOQUIC_ERROR_CNXID_CHECK (PICOQUIC_ERROR_CLASS  + 7)
 #define PICOQUIC_ERROR_INITIAL_TOO_SHORT (PICOQUIC_ERROR_CLASS  + 8)
+#define PICOQUIC_ERROR_VERSION_NEGOTIATION_SPOOFED (PICOQUIC_ERROR_CLASS  + 9)
+#define PICOQUIC_ERROR_MALFORMED_TRANSPORT_EXTENSION (PICOQUIC_ERROR_CLASS  + 10)
+#define PICOQUIC_ERROR_EXTENSION_BUFFER_TOO_SMALL (PICOQUIC_ERROR_CLASS  + 11)
 
 	/*
 	 * Supported versions
 	 */
+#define PICOQUIC_FIRST_INTEROP_VERSION   0xFF000005
+#define PICOQUIC_INTERNAL_TEST_VERSION_1 0x50435130 
+
 	extern const uint32_t picoquic_supported_versions[];
 	extern const size_t picoquic_nb_supported_versions;
+	typedef enum {
+		picoquic_version_negotiate_transport = 1
+	} picoquic_version_feature_flags;
+
     /*
      * Quic context flags
      */
@@ -110,6 +120,19 @@ extern "C" {
         picoquic_state_disconnecting,
         picoquic_state_disconnected
     } picoquic_state_enum;
+
+	/*
+	 * Transport parameters, as defined by the QUIC transport specification
+	 */
+
+	typedef struct _picoquic_transport_parameters {
+		uint32_t initial_max_stream_data;
+		uint32_t initial_max_data;
+		uint32_t initial_max_stream_id;
+		uint32_t idle_timeout;
+		uint32_t omit_connection_id;
+		uint32_t max_packet_size;
+	} picoquic_transport_parameters;
 
     /*
      * SACK dashboard item, part of connection context.
@@ -194,9 +217,14 @@ extern "C" {
         struct _picoquic_cnx_id * first_cnx_id;
         struct _picoquic_net_id * first_net_id;
 
-		/* Proposed and negotiated version */
+		/* Proposed and negotiated version. Feature flags denote version dependent features */
 		uint32_t proposed_version;
         uint32_t version;
+		uint32_t versioned_features_flags;
+
+		/* Local and remote parameters */
+		picoquic_transport_parameters local_parameters;
+		picoquic_transport_parameters remote_parameters;
 
         /* connection state, ID, etc. Todo: allow for multiple cnxid */
         picoquic_state_enum cnx_state;
@@ -219,6 +247,7 @@ extern "C" {
         uint64_t sack_block_size_max;
 
         /* Retransmission state */
+		uint64_t nb_retransmit;
 		uint64_t highest_acknowledged;
 		uint64_t latest_time_acknowledged;
 		uint64_t latest_ack_received_time;
@@ -323,6 +352,12 @@ extern "C" {
         size_t bytes_max, int restricted);
 
 	int picoquic_skip_frame(uint8_t * bytes, size_t bytes_max, size_t * consumed, int * pure_ack);
+
+	int picoquic_prepare_transport_extensions(picoquic_cnx * cnx, int extension_mode,
+		uint8_t * bytes, size_t bytes_max, size_t * consumed);
+
+	int picoquic_receive_transport_extensions(picoquic_cnx * cnx, int extension_mode,
+		uint8_t * bytes, size_t bytes_max, size_t * consumed);
 
 #ifdef  __cplusplus
 }

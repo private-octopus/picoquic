@@ -145,6 +145,7 @@
     <ClCompile Include="sacks.c" />
     <ClCompile Include="sender.c" />
     <ClCompile Include="tls_api.c" />
+    <ClCompile Include="transport.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="fnv1a.h" />

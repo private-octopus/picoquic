@@ -283,6 +283,8 @@ int picoquic_retransmit_needed(picoquic_cnx * cnx, uint64_t current_time,
 					}
 				}
 				packet->length = length;
+				cnx->nb_retransmit++;
+
 				break;
 			}
 		}

@@ -131,7 +131,7 @@
     <Text Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="CnxCreationTest.c" />
+    <ClCompile Include="cnx_creation_test.c" />
     <ClCompile Include="float16test.c" />
     <ClCompile Include="fnv1atest.c" />
     <ClCompile Include="hashtest.c" />
@@ -139,8 +139,9 @@
     <ClCompile Include="parseheadertest.c" />
     <ClCompile Include="pn2pn64test.c" />
     <ClCompile Include="sacktest.c" />
-    <ClCompile Include="StreamZeroFrameTest.c" />
+    <ClCompile Include="stream0_frame_test.c" />
     <ClCompile Include="tls_api_test.c" />
+    <ClCompile Include="transport_param_test.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquictest.h" />

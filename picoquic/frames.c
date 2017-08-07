@@ -191,9 +191,9 @@ int picoquic_decode_stream_frame(picoquic_cnx * cnx, uint8_t * bytes,
     uint8_t stream_id_length = 1 + ((first_byte >> 3) & 3);
     uint8_t offset_length = picoquic_offset_length_code[(first_byte >> 1) & 3];
     uint8_t data_length_length = (first_byte & 1) * 2;
-    uint32_t stream_id;
+    uint32_t stream_id = 0;
     size_t data_length;
-    uint64_t offset;
+    uint64_t offset = 0;
 
 
     *consumed = 0;
@@ -446,7 +446,7 @@ int picoquic_decode_ack_frame(picoquic_cnx * cnx, uint8_t * bytes,
 	int num_ts;
 	int ll = (first_byte >> 2) & 3;
 	int mm = (first_byte & 3);
-	uint64_t largest;
+	uint64_t largest = 0;
 	uint64_t last_range = 0;
 	uint64_t ack_range = 0;
 	uint64_t acked_mask = 0;
