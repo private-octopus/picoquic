@@ -162,7 +162,6 @@ int picoquic_incoming_version_negotiation(
 {
 	/* Parse the content */
 	size_t byte_index = ph->offset;
-	uint32_t proposed_version;
 	int ret = -1;
 
 	if (ph->cnx_id != cnx->initial_cnxid ||

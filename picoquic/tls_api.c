@@ -28,6 +28,24 @@
 #include "picotls/openssl.h"
 #include "picoquic.h"
 
+#define PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION 26
+#define PICOQUIC_TRANSPORT_PARAMETERS_MAX_SIZE 512
+
+typedef struct st_picoquic_tls_ctx_t {
+	ptls_t *tls;
+	picoquic_cnx * cnx;
+	int client_mode;
+	ptls_raw_extension_t ext[2];
+	ptls_handshake_properties_t handshake_properties;
+	uint8_t ext_data[512];
+} picoquic_tls_ctx_t;
+
+int picoquic_receive_transport_extensions(picoquic_cnx * cnx, int extension_mode,
+	uint8_t * bytes, size_t bytes_max, size_t * consumed);
+
+int picoquic_prepare_transport_extensions(picoquic_cnx * cnx, int extension_mode,
+	uint8_t * bytes, size_t bytes_max, size_t * consumed);
+
 /*
 * Using the open ssl library to load the test certificate
 */
@@ -118,6 +136,8 @@ static int SetSignCertificate(char * keypem, ptls_context_t * ctx)
 	return ret;
 }
 
+/* TODO: may want to provide a layer of isolation to not reveal
+ * internal state of random number generator */
 void picoquic_crypto_random(picoquic_quic * quic, void * buf, size_t len)
 {
     int ret = 0;
@@ -126,12 +146,116 @@ void picoquic_crypto_random(picoquic_quic * quic, void * buf, size_t len)
     ctx->random_bytes(buf, len);
 }
 
+/*
+ * The collect extensions call back is called by the picotls stack upon
+ * reception of a handshake message containing extensions. It should return true (1)
+ * if the stack can process the extension, false (0) otherwise.
+ */
+
+int picoquic_tls_collect_extensions_cb(ptls_t *tls, struct st_ptls_handshake_properties_t *properties, uint16_t type)
+{
+	return type == PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION;
+}
+
+
+void picoquic_tls_set_extensions(picoquic_cnx * cnx, picoquic_tls_ctx_t *tls_ctx)
+{
+	size_t consumed;
+	int ret = picoquic_prepare_transport_extensions(cnx, (tls_ctx->client_mode)?0:1,
+		tls_ctx->ext_data, sizeof(tls_ctx->ext_data), &consumed);
+
+	if (ret == 0)
+	{
+		tls_ctx->ext[0].type = PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION;
+		tls_ctx->ext[0].data.base = tls_ctx->ext_data;
+		tls_ctx->ext[0].data.len = consumed;
+		tls_ctx->ext[1].type = 0xFFFF;
+		tls_ctx->ext[1].data.base = NULL;
+		tls_ctx->ext[1].data.len = 0;
+	}
+	else
+	{
+		tls_ctx->ext[0].type = 0xFFFF;
+		tls_ctx->ext[0].data.base = NULL;
+		tls_ctx->ext[0].data.len = 0;
+	}
+
+	tls_ctx->handshake_properties.additional_extensions = tls_ctx->ext;
+}
+
+/*
+ * The collected extensions call back is called by the stack upon
+ * reception of a handshake message containing supported extensions.
+ */
+
+int picoquic_tls_collected_extensions_cb(ptls_t *tls, ptls_handshake_properties_t *properties,
+	ptls_raw_extension_t *slots)
+{
+	int ret = 0;
+	size_t consumed = 0;
+	/* Find the context from the TLS context */
+	picoquic_tls_ctx_t * ctx = (picoquic_tls_ctx_t *)
+		((char *)properties - offsetof(struct st_picoquic_tls_ctx_t, handshake_properties));
+
+	if (slots[0].type == PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION && slots[1].type == 0xFFFF)
+	{
+		/* Retrieve the transport parameters */
+		ret = picoquic_receive_transport_extensions(ctx->cnx, (ctx->client_mode)?1:0,
+			slots[0].data.base, slots[0].data.len, &consumed);
+
+		/* In server mode, only compose the extensions if properly received from client */
+		if (ctx->client_mode == 0)
+		{
+			picoquic_tls_set_extensions(ctx->cnx, ctx);
+		}
+	}
+
+	return ret;
+}
+
+/*
+ * The Hello Call Back is called on the server side upon reception of the 
+ * Client Hello. The picotls code will parse the client hello and retrieve
+ * parameters such as SNI and proposed ALPN.
+ * TODO: check the SNI in case several are supported.
+ * TODO: check the ALPN in case several are supported.
+ */
+
+int picoquic_client_hello_call_back(ptls_on_client_hello_t * on_hello_cb_ctx,
+	ptls_t *tls, ptls_iovec_t server_name, const ptls_iovec_t *negotiated_protocols,
+	size_t num_negotiated_protocols, const uint16_t *signature_algorithms, size_t num_signature_algorithms)
+{
+	/* Find the context from the TLS context */
+	picoquic_tls_ctx_t * ctx = (picoquic_tls_ctx_t *)
+		((char *)tls - offsetof(struct st_picoquic_tls_ctx_t, tls));
+
+	/* TODO: check against the supported protocols */
+
+	for (size_t i = 0; i < num_negotiated_protocols; i++)
+	{
+		if (negotiated_protocols[i].len  > 0)
+		{
+			ptls_set_negotiated_protocol(tls, 
+				negotiated_protocols[i].base, negotiated_protocols[i].len);
+			break;
+		}
+	}
+
+	return 0;
+}
+
+/*
+ * Setting the master TLS context.
+ * On servers, this implies setting the "on hello" call back
+ */
+
 int picoquic_master_tlscontext(picoquic_quic * quic, char * cert_file_name, char * key_file_name)
 {
     /* Create a client context or a server context */
     int ret = 0;
     ptls_context_t *ctx;
     ptls_openssl_verify_certificate_t * verifier = NULL;
+	ptls_on_client_hello_t * och = NULL;
 
     ctx = (ptls_context_t *)malloc(sizeof(ptls_context_t));
 
@@ -170,6 +294,13 @@ int picoquic_master_tlscontext(picoquic_quic * quic, char * cert_file_name, char
 			{
 				ptls_openssl_init_verify_certificate(verifier, NULL);
 				ctx->verify_certificate = &verifier->super;
+			}
+
+			och = (ptls_on_client_hello_t *)malloc(sizeof(ptls_on_client_hello_t));
+			if (och != NULL)
+			{
+				och->cb = picoquic_client_hello_call_back;
+				ctx->on_client_hello = och;
 			}
         }
 
@@ -210,43 +341,78 @@ void picoquic_master_tlscontext_free(picoquic_quic * quic)
 #endif
 				free(ctx->certificates.list);
 			}
-
-			if (ctx->verify_certificate != NULL)
-			{
-				free(ctx->verify_certificate);
-				ctx->verify_certificate = NULL;
-			}
 		}
-		else
+		
+		if (ctx->verify_certificate != NULL)
 		{
-			if (ctx->verify_certificate != NULL)
-			{
-				free(ctx->verify_certificate);
-				ctx->verify_certificate = NULL;
-			}
+			free(ctx->verify_certificate);
+			ctx->verify_certificate = NULL;
+		}
+
+		if (ctx->on_client_hello != NULL)
+		{
+			free(ctx->on_client_hello);
 		}
 	}
 }
 
 /*
- * Creation of a TLS context
+ * Creation of a TLS context.
+ * This includes setting the handshake properties that will later be 
+ * used during the TLS handshake.
+ * TODO: document ALPN.
+ * TODO: document SNI.
  */
 int picoquic_tlscontext_create(picoquic_quic * quic, picoquic_cnx * cnx)
 {
     int ret = 0;
-    cnx->tls_ctx = ptls_new((ptls_context_t *) quic->tls_master_ctx, (quic->flags&picoquic_context_server)?1:0);
+	/* allocate a context structure */
+	picoquic_tls_ctx_t * ctx = (picoquic_tls_ctx_t *)malloc(sizeof(picoquic_tls_ctx_t));
 
-    if (cnx->tls_ctx == NULL)
-    {
-        ret = -1;
-    }
+	/* Create the TLS context */
+	if (ctx == NULL)
+	{
+		ret = -1;
+	}
+	else
+	{
+		memset(ctx, 0, sizeof(picoquic_tls_ctx_t));
+
+		ctx->cnx = cnx;
+
+		ctx->handshake_properties.collect_extension = picoquic_tls_collect_extensions_cb;
+		ctx->handshake_properties.collected_extensions = picoquic_tls_collected_extensions_cb;
+		ctx->client_mode = (quic->flags&picoquic_context_server) ? 0 : 1;
+
+		ctx->tls = ptls_new((ptls_context_t *)quic->tls_master_ctx, 
+			(ctx->client_mode)?0:1);
+
+		if (ctx->tls == NULL)
+		{
+			free(ctx);
+			ctx = NULL;
+			ret = -1;
+		}
+		else if (ctx->client_mode)
+		{
+			picoquic_tls_set_extensions(cnx, ctx);
+		}
+	}
+
+	cnx->tls_ctx = (void *)ctx;
 
     return ret;
 }
 
-void picoquic_tlscontext_free(void * ctx)
+void picoquic_tlscontext_free(void * vctx)
 {
-    ptls_free((ptls_t *)ctx);
+	picoquic_tls_ctx_t * ctx = (picoquic_tls_ctx_t *)vctx;
+	if (ctx->tls != NULL)
+	{
+		ptls_free((ptls_t *)ctx->tls);
+		ctx->tls = NULL;
+	}
+	free(ctx);
 }
 
 /*
@@ -266,17 +432,18 @@ void picoquic_tlscontext_free(void * ctx)
 int picoquic_tlsinput_segment(picoquic_cnx * cnx,
     uint8_t * bytes, size_t length, size_t * consumed, struct st_ptls_buffer_t * sendbuf)
 {
-    ptls_t * tls_ctx = (ptls_t *)cnx->tls_ctx;
+	picoquic_tls_ctx_t * ctx = (picoquic_tls_ctx_t *)cnx->tls_ctx;
     size_t inlen = 0, roff = 0;
     int ret = 0;
 
     ptls_buffer_init(sendbuf, "", 0);
 
+	/* TODO: handshake properties! */
     /* Provide the data */
     while (roff < length && (ret == 0 || ret == PTLS_ERROR_IN_PROGRESS))
     {
         inlen = length - roff;
-        ret = ptls_handshake(tls_ctx, sendbuf, bytes + roff, &inlen, NULL);
+        ret = ptls_handshake(ctx->tls, sendbuf, bytes + roff, &inlen, &ctx->handshake_properties);
         roff += inlen;
     }
 
@@ -289,10 +456,11 @@ int picoquic_initialize_stream_zero(picoquic_cnx * cnx)
 {
     int ret = 0;
     struct st_ptls_buffer_t sendbuf;
-    ptls_t * tls_ctx = (ptls_t *)cnx->tls_ctx;
+	picoquic_tls_ctx_t * ctx = (picoquic_tls_ctx_t *)cnx->tls_ctx;
 
+	/* TODO: handshake properties */
     ptls_buffer_init(&sendbuf, "", 0);
-    ret = ptls_handshake(tls_ctx, &sendbuf, NULL, NULL, NULL);
+    ret = ptls_handshake(ctx->tls, &sendbuf, NULL, NULL, &ctx->handshake_properties);
 
     if ((ret == 0 || ret == PTLS_ERROR_IN_PROGRESS))
     {
@@ -342,7 +510,8 @@ int picoquic_setup_1RTT_aead_contexts(picoquic_cnx * cnx, int is_server)
 {
     int ret = 0;
     uint8_t * secret[256]; /* secret_max */
-    ptls_cipher_suite_t * cipher = ptls_get_cipher((ptls_t *) cnx->tls_ctx);
+	picoquic_tls_ctx_t * ctx = (picoquic_tls_ctx_t *)cnx->tls_ctx;
+    ptls_cipher_suite_t * cipher = ptls_get_cipher(ctx->tls);
 
     if (cipher == NULL)
     {
@@ -355,7 +524,7 @@ int picoquic_setup_1RTT_aead_contexts(picoquic_cnx * cnx, int is_server)
     else
     {
         /* Set up the encryption AEAD */
-        ret = ptls_export_secret((ptls_t *)cnx->tls_ctx, secret, cipher->hash->digest_size,
+        ret = ptls_export_secret(ctx->tls, secret, cipher->hash->digest_size,
             (is_server == 0)? PICOQUIC_LABEL_1RTT_CLIENT: PICOQUIC_LABEL_1RTT_SERVER,
             ptls_iovec_init(NULL, 0));
 
@@ -372,7 +541,7 @@ int picoquic_setup_1RTT_aead_contexts(picoquic_cnx * cnx, int is_server)
         /* Now set up the corresponding decryption */
         if (ret == 0)
         {
-            ret = ptls_export_secret((ptls_t *)cnx->tls_ctx, secret, cipher->hash->digest_size,
+            ret = ptls_export_secret(ctx->tls, secret, cipher->hash->digest_size,
                 (is_server != 0) ? PICOQUIC_LABEL_1RTT_CLIENT : PICOQUIC_LABEL_1RTT_SERVER,
                 ptls_iovec_init(NULL, 0));
         }

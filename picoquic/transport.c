@@ -112,7 +112,7 @@ int picoquic_prepare_transport_extensions(picoquic_cnx * cnx, int extension_mode
 			byte_index += 4;
 			break;
 		case 1: // Server encrypted extension
-			bytes[byte_index++] = (uint8_t) 4 * picoquic_nb_supported_versions;
+			bytes[byte_index++] = (uint8_t) (4 * picoquic_nb_supported_versions);
 			for (size_t i = 0; i < picoquic_nb_supported_versions; i++)
 			{
 				picoformat_32(bytes + byte_index, picoquic_supported_versions[i]);

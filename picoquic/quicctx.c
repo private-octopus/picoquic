@@ -25,18 +25,18 @@
 /*
 * Structures used in the hash table of connections
 */
-typedef struct _picoquic_cnx_id
+typedef struct st_picoquic_cnx_id_t
 {
     uint64_t cnx_id;
     picoquic_cnx * cnx;
-    struct _picoquic_cnx_id * next_cnx_id;
+    struct st_picoquic_cnx_id_t * next_cnx_id;
 } picoquic_cnx_id;
 
-typedef struct _picoquic_net_id
+typedef struct st_picoquic_net_id_t
 {
     struct sockaddr_storage saddr;
     picoquic_cnx * cnx;
-    struct _picoquic_net_id * next_net_id;
+    struct st_picoquic_net_id_t * next_net_id;
 } picoquic_net_id;
 
 /* Hash and compare for CNX hash tables */
@@ -326,49 +326,35 @@ picoquic_cnx * picoquic_create_cnx(picoquic_quic * quic,
         cnx->previous_in_table = NULL;
         quic->cnx_list = cnx;
         cnx->quic = quic;
-
-        if (picoquic_tlscontext_create(quic, cnx) != 0)
-        {
-            /* Cannot just do partial creation! */
-            picoquic_delete_cnx(cnx);
-            cnx = NULL;
-        }
     }
 
     if (cnx != NULL)
     {
-        if ((quic->flags &picoquic_context_server) == 0)
-        {
-            /* Initialize the tls connection */
-            int ret = picoquic_initialize_stream_zero(cnx);
+		picoquic_int_transport_parameters(&cnx->local_parameters);
+		picoquic_int_transport_parameters(&cnx->remote_parameters);
 
-            if (ret != 0)
-            {
-                /* Cannot just do partial initialization! */
-                picoquic_delete_cnx(cnx);
-                cnx = NULL;
-            }
-            else
-            {
-				if (preferred_version == 0)
-				{
-					cnx->proposed_version = picoquic_supported_versions[0];
-				}
-				else
-				{
-					cnx->proposed_version = preferred_version;
-				}
-				cnx->version = cnx->proposed_version;
+		if ((quic->flags &picoquic_context_server) == 0)
+		{
+			int ret = 0;
 
-                cnx->cnx_state = picoquic_state_client_init;
-                if (cnx_id == 0)
-                {
-                    picoquic_crypto_random(quic, &cnx_id, sizeof(uint64_t));
-                }
-                cnx->initial_cnxid = cnx_id;
-                cnx->server_cnxid = 0;
-            }
-        }
+			if (preferred_version == 0)
+			{
+				cnx->proposed_version = picoquic_supported_versions[0];
+			}
+			else
+			{
+				cnx->proposed_version = preferred_version;
+			}
+			cnx->version = cnx->proposed_version;
+
+			cnx->cnx_state = picoquic_state_client_init;
+			if (cnx_id == 0)
+			{
+				picoquic_crypto_random(quic, &cnx_id, sizeof(uint64_t));
+			}
+			cnx->initial_cnxid = cnx_id;
+			cnx->server_cnxid = 0;
+		}
         else
         {
             cnx->first_stream.send_queue = NULL;
@@ -379,8 +365,6 @@ picoquic_cnx * picoquic_create_cnx(picoquic_quic * quic,
 
 		if (cnx != NULL)
 		{
-			picoquic_int_transport_parameters(&cnx->local_parameters);
-			picoquic_int_transport_parameters(&cnx->remote_parameters);
 
 			cnx->first_sack_item.start_of_sack_range = 0;
 			cnx->first_sack_item.end_of_sack_range = 0;
@@ -413,6 +397,27 @@ picoquic_cnx * picoquic_create_cnx(picoquic_quic * quic,
 			cnx->latest_ack_received_time = start_time;
 		}
     }
+
+	/* Only initialize TLS after all parameters have been set */
+
+	if (picoquic_tlscontext_create(quic, cnx) != 0)
+	{
+		/* Cannot just do partial creation! */
+		picoquic_delete_cnx(cnx);
+		cnx = NULL;
+	}
+	else if ((quic->flags &picoquic_context_server) == 0)
+	{
+		/* Initialize the tls connection */
+		int ret = picoquic_initialize_stream_zero(cnx);
+
+		if (ret != 0)
+		{
+			/* Cannot just do partial initialization! */
+			picoquic_delete_cnx(cnx);
+			cnx = NULL;
+		}
+	}
 
     if (cnx != NULL)
     {

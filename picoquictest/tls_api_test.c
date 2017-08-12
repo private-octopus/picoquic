@@ -103,6 +103,40 @@ static int tls_api_one_packet(picoquic_quic * qsender, picoquic_cnx * cnx, picoq
     return ret;
 }
 
+static int verify_transport_extension(picoquic_cnx * cnx_client, picoquic_cnx * cnx_server)
+{
+	int ret = 0;
+
+	/* verify that local parameters have a sensible value */
+	if (cnx_client->local_parameters.idle_timeout == 0 ||
+		cnx_client->local_parameters.initial_max_data == 0 ||
+		cnx_client->local_parameters.initial_max_stream_data == 0 ||
+		cnx_client->local_parameters.max_packet_size == 0)
+	{
+		ret = -1;
+	}
+	else if (cnx_server->local_parameters.idle_timeout == 0 ||
+		cnx_server->local_parameters.initial_max_data == 0 ||
+		cnx_server->local_parameters.initial_max_stream_data == 0 ||
+		cnx_server->local_parameters.max_packet_size == 0)
+	{
+		ret = -1;
+	}
+	/* Verify that the negotiation completed */
+	else if (memcmp(&cnx_client->local_parameters, &cnx_server->remote_parameters,
+		sizeof(picoquic_transport_parameters)) != 0)
+	{
+		ret = -1;
+	}
+	else if (memcmp(&cnx_server->local_parameters, &cnx_client->remote_parameters,
+		sizeof(picoquic_transport_parameters)) != 0)
+	{
+		ret = -1;
+	}
+
+	return ret;
+}
+
 static int tls_api_test_with_loss(uint64_t  * loss_mask, uint32_t proposed_version)
 {
 
@@ -198,6 +232,11 @@ static int tls_api_test_with_loss(uint64_t  * loss_mask, uint32_t proposed_versi
         {
             ret = -1;
         }
+
+		if (ret == 0)
+		{
+			ret = verify_transport_extension(cnx_client, cnx_server);
+		}
     }
 
     if (qclient != NULL)

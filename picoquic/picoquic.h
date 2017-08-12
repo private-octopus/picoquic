@@ -95,8 +95,8 @@ extern "C" {
 
 		picoquic_stateless_packet * pending_stateless_packet;
 
-        struct _picoquic_cnx * cnx_list;
-        struct _picoquic_cnx * cnx_last;
+        struct st_picoquic_cnx_t * cnx_list;
+        struct st_picoquic_cnx_t * cnx_last;
 
         picohash_table * table_cnx_by_id;
         picohash_table * table_cnx_by_net;
@@ -208,15 +208,15 @@ extern "C" {
     /*
      * Per connection context.
      */
-    typedef struct _picoquic_cnx
+    typedef struct st_picoquic_cnx_t
     {
         picoquic_quic * quic;
 
         /* Management of context retrieval tables */
-        struct _picoquic_cnx * next_in_table;
-        struct _picoquic_cnx * previous_in_table;
-        struct _picoquic_cnx_id * first_cnx_id;
-        struct _picoquic_net_id * first_net_id;
+        struct st_picoquic_cnx_t * next_in_table;
+        struct st_picoquic_cnx_t * previous_in_table;
+        struct st_picoquic_cnx_id_t * first_cnx_id;
+        struct st_picoquic_net_id_t * first_net_id;
 
 		/* Proposed and negotiated version. Feature flags denote version dependent features */
 		uint32_t proposed_version;
