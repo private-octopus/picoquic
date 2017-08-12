@@ -399,9 +399,12 @@ picoquic_cnx * picoquic_create_cnx(picoquic_quic * quic,
 
 			picoquic_crypto_random(quic, &random_sequence, sizeof(uint32_t));
 			cnx->send_sequence = random_sequence;
-			cnx->send_mtu = PICOQUIC_INITIAL_MTU;
+
+			cnx->send_mtu = (addr == NULL || addr->sa_family == AF_INET)?
+				PICOQUIC_INITIAL_MTU_IPV4 : PICOQUIC_INITIAL_MTU_IPV6;
 
 			cnx->nb_retransmit = 0;
+			cnx->latest_retransmit_time = 0;
 
 			cnx->retransmit_newest = NULL;
 			cnx->retransmit_oldest = NULL;
@@ -517,7 +520,8 @@ int picoquic_reset_cnx_version(picoquic_cnx * cnx, uint8_t * bytes, size_t lengt
 	if (cnx->cnx_state == picoquic_state_client_init ||
 		cnx->cnx_state == picoquic_state_client_init_sent)
 	{
-		while (proposed_version == 0 && byte_index + 4 <= length)
+		while (cnx->cnx_state != picoquic_state_client_renegotiate && 
+			byte_index + 4 <= length)
 		{
 			/* parsing the list of proposed versions encoded in renegotiation packet */
 			proposed_version = PICOPARSE_32(bytes + byte_index);

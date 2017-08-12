@@ -425,6 +425,8 @@ static picoquic_packet * picoquic_process_ack_range(
 				picoquic_packet * next = p->next_packet;
 				picoquic_dequeue_retransmit_packet(cnx, p, 1);
 				p = next;
+				/* Any acknowledgement shows progress */
+				cnx->nb_retransmit = 0;
 			}
 
 			range--;

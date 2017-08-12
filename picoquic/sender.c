@@ -179,6 +179,17 @@ int picoquic_retransmit_needed(picoquic_cnx * cnx, uint64_t current_time,
 	picoquic_packet * p;
 	size_t length = 0;
 
+	/* Only retransmit at reasonable intervals */
+	if (cnx->nb_retransmit > 0 &&
+		(cnx->latest_retransmit_time + 1000000ull * cnx->nb_retransmit) > current_time)
+	{
+		return 0;
+	}
+	else if (cnx->nb_retransmit > 4)
+	{
+		cnx->cnx_state = picoquic_state_disconnected;
+	}
+
 	/* TODO: while packets are pure ACK, drop them from retransmit queue */
 	while ((p = cnx->retransmit_oldest) != NULL)
 	{
@@ -286,6 +297,7 @@ int picoquic_retransmit_needed(picoquic_cnx * cnx, uint64_t current_time,
 				}
 				packet->length = length;
 				cnx->nb_retransmit++;
+				cnx->latest_retransmit_time = current_time;
 
 				break;
 			}

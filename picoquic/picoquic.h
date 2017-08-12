@@ -34,7 +34,8 @@ extern "C" {
 #endif
 
 #define PICOQUIC_MAX_PACKET_SIZE 1536
-#define PICOQUIC_INITIAL_MTU 1232
+#define PICOQUIC_INITIAL_MTU_IPV4 1252
+#define PICOQUIC_INITIAL_MTU_IPV6 1232
 #define PICOQUIC_ENFORCED_INITIAL_MTU 1200
 
 #define PICOQUIC_ERROR_CLASS 0x400
@@ -248,6 +249,7 @@ extern "C" {
 
         /* Retransmission state */
 		uint64_t nb_retransmit;
+		uint64_t latest_retransmit_time;
 		uint64_t highest_acknowledged;
 		uint64_t latest_time_acknowledged;
 		uint64_t latest_ack_received_time;
