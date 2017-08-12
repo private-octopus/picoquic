@@ -109,7 +109,7 @@ extern "C" {
         picoquic_state_client_init, 
 		picoquic_state_client_init_sent,
 		picoquic_state_client_renegotiate,
-		picoquic_state_client_renegotiating,
+		picoquic_state_client_init_resent,
         picoquic_state_server_init,
         picoquic_state_client_handshake_start,
         picoquic_state_client_handshake_progress,
@@ -277,6 +277,9 @@ extern "C" {
     picoquic_cnx * picoquic_create_cnx(picoquic_quic * quic, 
         uint64_t cnx_id, struct sockaddr * addr, uint64_t start_time, uint32_t preferred_version);
     void picoquic_delete_cnx(picoquic_cnx * cnx);
+
+	/* Reset connection after receiving version negotiation */
+	int picoquic_reset_cnx_version(picoquic_cnx * cnx, uint8_t * bytes, size_t length);
 
     /* Connection context retrieval functions */
     picoquic_cnx * picoquic_cnx_by_id(picoquic_quic * quic, uint64_t cnx_id);

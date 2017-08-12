@@ -173,23 +173,10 @@ int picoquic_incoming_version_negotiation(
 		/* Packet that do not match the "echo" checks should be logged and ignored */
 		ret = 0;
 	}
-	else while (ret != 0 && byte_index + 4 <= length)
+	else
 	{
-		/* parsing the packet. We do not try to understand any integrity check yet, 
-		 * because the spec is ambiguous. */
-		proposed_version = PICOPARSE_32(bytes + byte_index);
-		byte_index += 4;
-
-		for (size_t i = 0; i < picoquic_nb_supported_versions; i++)
-		{
-			if (proposed_version == picoquic_supported_versions[i])
-			{
-				cnx->version = proposed_version;
-				cnx->cnx_state = picoquic_state_client_renegotiate;
-				ret = 0;
-				break;
-			}
-		}
+		/* Trying to renegotiate the version, just ignore the packet if not good. */
+		ret = picoquic_reset_cnx_version( cnx, bytes + ph->offset, length - ph->offset);
 	}
 
 	return ret;
@@ -334,7 +321,8 @@ int picoquic_incoming_server_cleartext(
     int ret = 0;
     size_t decoded_length = 0;
 
-    if (cnx->cnx_state == picoquic_state_client_init_sent)
+    if (cnx->cnx_state == picoquic_state_client_init_sent ||
+		cnx->cnx_state == picoquic_state_client_init_resent)
     {
         cnx->cnx_state = picoquic_state_client_handshake_start;
     }

@@ -339,7 +339,7 @@ picoquic_cnx * picoquic_create_cnx(picoquic_quic * quic,
     {
         if ((quic->flags &picoquic_context_server) == 0)
         {
-            /* Initialize the connection */
+            /* Initialize the tls connection */
             int ret = picoquic_initialize_stream_zero(cnx);
 
             if (ret != 0)
@@ -488,6 +488,75 @@ void picoquic_dequeue_retransmit_packet(picoquic_cnx * cnx, picoquic_packet * p,
 	{
 		free(p);
 	}
+}
+
+
+/*
+* Reset the version to a new supported value.
+*
+* Can only happen after sending the client init packet.
+* Result of reset:
+*
+* - connection ID is not changed.
+* - sequence number is not changed.
+* - all queued 0-RTT retransmission will be considered lost (to do with 0-RTT)
+* - Client Initial packet is considered lost, free. A new one will have to be formatted.
+* - Stream 0 is reset, all data is freed.
+* - TLS API is called again.
+* - State changes.
+*/
+
+int picoquic_reset_cnx_version(picoquic_cnx * cnx, uint8_t * bytes, size_t length)
+{
+	/* First parse the incoming connection negotiation to choose the
+	* new version. If none is available, return an error */
+	size_t byte_index = 0;
+	uint32_t proposed_version = 0;
+	int ret = 0;
+
+	if (cnx->cnx_state == picoquic_state_client_init ||
+		cnx->cnx_state == picoquic_state_client_init_sent)
+	{
+		while (proposed_version == 0 && byte_index + 4 <= length)
+		{
+			/* parsing the list of proposed versions encoded in renegotiation packet */
+			proposed_version = PICOPARSE_32(bytes + byte_index);
+			byte_index += 4;
+
+			for (size_t i = 0; i < picoquic_nb_supported_versions; i++)
+			{
+				if (proposed_version == picoquic_supported_versions[i])
+				{
+					cnx->version = proposed_version;
+					cnx->cnx_state = picoquic_state_client_renegotiate;
+
+					/* Delete the packets queued for retransmission */
+					while (cnx->retransmit_newest != NULL)
+					{
+						picoquic_dequeue_retransmit_packet(cnx, cnx->retransmit_newest, 1);
+					}
+
+					/* Reset the streams */
+					picoquic_clear_stream(&cnx->first_stream);
+					cnx->first_stream.consumed_offset = 0;
+					cnx->first_stream.fin_offset = 0;
+					cnx->first_stream.sent_offset = 0;
+
+					/* Reset the TLS context, Re-initialize the tls connection */
+					picoquic_tlscontext_free(cnx->tls_ctx);
+					cnx->tls_ctx = NULL;
+					ret = picoquic_tlscontext_create(cnx->quic, cnx);
+					if (ret == 0)
+					{
+						ret = picoquic_initialize_stream_zero(cnx);
+					}
+					break;
+				}
+			}
+		}
+	}
+
+	return ret;
 }
 
 void picoquic_delete_cnx(picoquic_cnx * cnx)

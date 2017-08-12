@@ -486,7 +486,7 @@ int picoquic_tlsinput_stream_zero(picoquic_cnx * cnx)
     }
     else if (ret == PTLS_ERROR_IN_PROGRESS && 
 		(cnx->cnx_state == picoquic_state_client_init ||
-			picoquic_state_client_init_sent))
+	     cnx->cnx_state == picoquic_state_client_init_sent))
     {
         /* Extract and install the client 0-RTT key */
     }

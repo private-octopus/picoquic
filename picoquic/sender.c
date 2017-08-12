@@ -112,6 +112,7 @@ picoquic_packet * picoquic_create_packet()
     return packet;
 }
 
+#ifdef PICOQUIC_RETRANSMIT_INITIAL_USEFUL
 /*
  * Retransmit the client initial, but no other packet, after
  * receiving a version negotiation from the server
@@ -165,6 +166,7 @@ int picoquic_retransmit_initial(picoquic_cnx * cnx, picoquic_packet * packet)
 
 	return ret;
 }
+#endif /* PICOQUIC_RETRANSMIT_INITIAL_USEFUL */
 
 /*
  * If a retransmit is needed, fill the packet with the required
@@ -322,6 +324,7 @@ int picoquic_prepare_packet(picoquic_cnx * cnx, picoquic_packet * packet,
 		/* In the initial state, need to actually create the first bytes */
 		break;
 	case picoquic_state_client_init_sent:
+	case picoquic_state_client_init_resent:
 		packet_type = picoquic_packet_client_initial;
 		cnx_id = cnx->initial_cnxid;
 		retransmit_possible = 1;
@@ -371,17 +374,8 @@ int picoquic_prepare_packet(picoquic_cnx * cnx, picoquic_packet * packet,
 		ret = -1;
 		break;
 	}
-
-	if (cnx->cnx_state == picoquic_state_client_renegotiate)
-	{
-		ret = picoquic_retransmit_initial(cnx, packet);
-		if (ret == 0)
-		{
-			length = packet->length;
-			cnx->cnx_state = picoquic_state_client_init_sent;
-		}
-	} 
-	else if (retransmit_possible &&
+	
+	if (retransmit_possible &&
 		(length = picoquic_retransmit_needed(cnx, current_time, packet, &use_fnv1a)) > 0)
 	{
 		/* Set the new checksum length */
@@ -469,6 +463,9 @@ int picoquic_prepare_packet(picoquic_cnx * cnx, picoquic_packet * packet,
 				{
 				case picoquic_state_client_init:
 					cnx->cnx_state = picoquic_state_client_init_sent;
+					break;
+				case picoquic_state_client_renegotiate:
+					cnx->cnx_state = picoquic_state_client_init_resent;
 					break;
 				case picoquic_state_server_almost_ready:
 					cnx->cnx_state = picoquic_state_server_ready;
