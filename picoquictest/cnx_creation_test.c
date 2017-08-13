@@ -60,7 +60,7 @@ int cnxcreation_test()
 
 
     /* Create QUIC context */
-    quic = picoquic_create(8, NULL, NULL);
+    quic = picoquic_create(8, NULL, NULL, NULL, NULL);
     if (quic == NULL)
     {
         ret = -1;
@@ -101,7 +101,7 @@ int cnxcreation_test()
 
     for (int i = 0; ret == 0 && i < 5; i++)
     {
-        test_cnx[i] = picoquic_create_cnx(quic, test_cnx_id[i], test_cnx_addr[i], 0, 0);
+        test_cnx[i] = picoquic_create_cnx(quic, test_cnx_id[i], test_cnx_addr[i], 0, 0, NULL, NULL);
         if (test_cnx[i] == NULL)
         {
             ret = -1;

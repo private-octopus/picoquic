@@ -88,7 +88,9 @@ const size_t picoquic_nb_supported_versions = sizeof(picoquic_supported_versions
 
 
 /* QUIC context create and dispose */
-picoquic_quic_t * picoquic_create(uint32_t nb_connections, char * cert_file_name, char * key_file_name)
+picoquic_quic_t * picoquic_create(uint32_t nb_connections, char * cert_file_name, char * key_file_name,
+	picoquic_stream_data_cb_fn default_callback_fn,
+	void * default_callback_ctx)
 {
     picoquic_quic_t * quic = (picoquic_quic_t *)malloc(sizeof(picoquic_quic_t));
 
@@ -100,6 +102,9 @@ picoquic_quic_t * picoquic_create(uint32_t nb_connections, char * cert_file_name
         quic->flags = 0;
 
 		quic->pending_stateless_packet = NULL;
+
+		quic->default_callback_fn = default_callback_fn;
+		quic->default_callback_ctx = default_callback_ctx;
 
         if (cert_file_name != NULL)
         {
@@ -302,10 +307,9 @@ void picoquic_int_transport_parameters(picoquic_transport_parameters * tp)
 	tp->max_packet_size = PICOQUIC_MAX_PACKET_SIZE - 16 - 40;
 }
 
-
-
-picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
-    uint64_t cnx_id, struct sockaddr * addr, uint64_t start_time, uint32_t preferred_version)
+picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic, 
+    uint64_t cnx_id, struct sockaddr * addr, uint64_t start_time, uint32_t preferred_version,
+	char const * sni, char const * alpn)
 {
     picoquic_cnx_t * cnx = (picoquic_cnx_t *)malloc(sizeof(picoquic_cnx_t));
     uint32_t random_sequence;
@@ -332,6 +336,19 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
     {
 		picoquic_int_transport_parameters(&cnx->local_parameters);
 		picoquic_int_transport_parameters(&cnx->remote_parameters);
+
+		if (sni != NULL)
+		{
+			cnx->sni = picoquic_string_duplicate(sni);
+		}
+
+		if (alpn != NULL)
+		{
+			cnx->alpn = picoquic_string_duplicate(alpn);
+		}
+
+		cnx->callback_fn = quic->default_callback_fn;
+		cnx->callback_ctx = quic->default_callback_ctx;
 
 		if ((quic->flags &picoquic_context_server) == 0)
 		{
@@ -433,6 +450,23 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
     }
 
     return cnx;
+}
+
+picoquic_cnx_t * picoquic_create_client_cnx(picoquic_quic_t * quic, 
+	struct sockaddr * addr, uint64_t start_time, uint32_t preferred_version,
+	char const * sni, char const * alpn, picoquic_stream_data_cb_fn callback_fn, void * callback_ctx)
+{
+	picoquic_cnx_t * cnx = picoquic_create_cnx(quic, 0, addr, start_time, preferred_version, sni, alpn);
+
+	if (cnx != NULL)
+	{
+		if (callback_fn != NULL)
+			cnx->callback_fn = callback_fn;
+		if (callback_ctx != NULL)
+			cnx->callback_ctx = callback_ctx;
+	}
+
+	return cnx;
 }
 
 picoquic_state_enum picoquic_get_cnx_state(picoquic_cnx_t * cnx)

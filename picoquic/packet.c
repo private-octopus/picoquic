@@ -275,7 +275,7 @@ picoquic_cnx_t * picoquic_incoming_initial(
         {
             /* TODO: if wrong version, send version negotiation, do not go any further */
             /* if listening is OK, listen */
-            cnx = picoquic_create_cnx(quic, ph->cnx_id, addr_from, current_time, 0);
+            cnx = picoquic_create_cnx(quic, ph->cnx_id, addr_from, current_time, 0, NULL, NULL);
 
 			if (cnx != NULL)
 			{

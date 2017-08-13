@@ -146,6 +146,7 @@
     <ClCompile Include="sender.c" />
     <ClCompile Include="tls_api.c" />
     <ClCompile Include="transport.c" />
+    <ClCompile Include="util.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="fnv1a.h" />

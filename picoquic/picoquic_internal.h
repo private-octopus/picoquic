@@ -62,6 +62,8 @@ extern "C" {
 	typedef struct st_picoquic_quic_t
 	{
 		void* tls_master_ctx;
+		picoquic_stream_data_cb_fn default_callback_fn;
+		void * default_callback_ctx;
 
 		uint32_t flags;
 
@@ -165,6 +167,13 @@ extern "C" {
 		/* Local and remote parameters */
 		picoquic_transport_parameters local_parameters;
 		picoquic_transport_parameters remote_parameters;
+		/* On clients, document the SNI and ALPN expected from the server */
+		/* TODO: there may be a need to propose multiple ALPN */
+		char const * sni;
+		char const * alpn;
+		/* Call back function and context */
+		picoquic_stream_data_cb_fn callback_fn;
+		void * callback_ctx;
 
 		/* connection state, ID, etc. Todo: allow for multiple cnxid */
 		picoquic_state_enum cnx_state;
@@ -225,6 +234,9 @@ extern "C" {
 	void picoformat_16(uint8_t *bytes, uint16_t n16);
 	void picoformat_32(uint8_t *bytes, uint32_t n32);
 	void picoformat_64(uint8_t *bytes, uint64_t n64);
+
+	/* utilities */
+	char * picoquic_string_duplicate(const char * original);
 
 	/* Packet parsing */
 

@@ -97,14 +97,29 @@ extern "C" {
 	typedef struct st_picoquic_quic_t picoquic_quic_t;
 	typedef struct st_picoquic_cnx_t picoquic_cnx_t;
 
+	/* Callback function for providing stream data to the application */
+	typedef void(*picoquic_stream_data_cb_fn) (picoquic_cnx_t * cnx,
+		uint32_t stream_id, uint8_t bytes, uint8_t length, int fin_noted, void * callback_ctx);
+
+
 	/* QUIC context create and dispose */
-	picoquic_quic_t * picoquic_create(uint32_t nb_connections, 
-		char * cert_file_name, char * key_file_name);
+	picoquic_quic_t * picoquic_create(uint32_t nb_connections,
+		char * cert_file_name, char * key_file_name,
+		picoquic_stream_data_cb_fn default_callback_fn,
+		void * default_callback_ctx);
+
 	void picoquic_free(picoquic_quic_t * quic);
 
 	/* Connection context creation and registration */
 	picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
-		uint64_t cnx_id, struct sockaddr * addr, uint64_t start_time, uint32_t preferred_version);
+		uint64_t cnx_id, struct sockaddr * addr, uint64_t start_time, uint32_t preferred_version,
+		char const * sni, char const * alpn);
+
+	picoquic_cnx_t * picoquic_create_client_cnx(picoquic_quic_t * quic, 
+		struct sockaddr * addr, uint64_t start_time, uint32_t preferred_version,
+		char const * sni, char const * alpn, 
+		picoquic_stream_data_cb_fn callback_fn, void * callback_ctx);
+
 	void picoquic_delete_cnx(picoquic_cnx_t * cnx);
 
 	int picoquic_close(picoquic_cnx_t * cnx);

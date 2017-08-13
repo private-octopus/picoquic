@@ -160,8 +160,8 @@ static int tls_api_test_with_loss(uint64_t  * loss_mask, uint32_t proposed_versi
 
     /* Test the creation of the client and server contexts */
     /* Create QUIC context */
-    qclient = picoquic_create(8, NULL, NULL);
-    qserver = picoquic_create(8, "..\\certs\\cert.pem", "..\\certs\\key.pem");
+    qclient = picoquic_create(8, NULL, NULL, NULL, NULL);
+    qserver = picoquic_create(8, "..\\certs\\cert.pem", "..\\certs\\key.pem", NULL, NULL);
 
     if (qclient == NULL || qserver == NULL)
     {
@@ -171,7 +171,8 @@ static int tls_api_test_with_loss(uint64_t  * loss_mask, uint32_t proposed_versi
     if (ret == 0)
     {
         /* Create a client connection */
-        cnx_client = picoquic_create_cnx(qclient, 12345, (struct sockaddr *)&server_addr, 0, proposed_version);
+        cnx_client = picoquic_create_cnx(qclient, 12345, (struct sockaddr *)&server_addr, 0, 
+			proposed_version, NULL, NULL);
 
         if (cnx_client == NULL)
         {

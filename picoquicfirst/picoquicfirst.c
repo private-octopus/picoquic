@@ -211,7 +211,7 @@ int quic_server(char * server_name, int server_port, char * pem_cert, char * pem
     if (ret == 0)
     {
         /* Create QUIC context */
-        qserver = picoquic_create(8, pem_cert, pem_key);
+        qserver = picoquic_create(8, pem_cert, pem_key, NULL, NULL);
 
         if (qserver == NULL)
         {
@@ -383,7 +383,7 @@ int quic_client(char * ip_address_text, int server_port)
     /* Create QUIC context */
     if (ret == 0)
     {
-        qclient = picoquic_create(8, NULL, NULL);
+        qclient = picoquic_create(8, NULL, NULL, NULL, NULL);
 
         if (qclient == NULL)
         {
@@ -397,7 +397,7 @@ int quic_client(char * ip_address_text, int server_port)
         uint64_t cnx_id = 0;
 
         cnx_client = picoquic_create_cnx(qclient, 0, 
-            (struct sockaddr *)&server_address, current_time, 0x6a7a8a9a);
+            (struct sockaddr *)&server_address, current_time, 0x6a7a8a9a, NULL, NULL);
 
         if (cnx_client == NULL)
         {
