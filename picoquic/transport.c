@@ -88,10 +88,10 @@ int picoquic_prepare_transport_extensions(picoquic_cnx * cnx, int extension_mode
 		break;
 	}
 	/* add the mandatory parameters */
-	param_size = (4 + 2 + 4) + (4 + 2 + 4) + (4 + 2 + 4) + (4 + 2 + 2) + (4 + 2 + 2);
+	param_size = (2 + 2 + 4) + (2 + 2 + 4) + (2 + 2 + 4) + (2 + 2 + 2) + (2 + 2 + 2);
 	if (cnx->local_parameters.omit_connection_id)
 	{
-		param_size += 2 + 4;
+		param_size += 2 + 2;
 	}
 	min_size += param_size + 2;
 
@@ -126,29 +126,29 @@ int picoquic_prepare_transport_extensions(picoquic_cnx * cnx, int extension_mode
 		picoformat_16(bytes + byte_index, param_size);
 		byte_index += 2;
 
-		picoformat_32(bytes + byte_index, picoquic_transport_parameter_initial_max_stream_data);
-		byte_index += 4;
+		picoformat_16(bytes + byte_index, picoquic_transport_parameter_initial_max_stream_data);
+		byte_index += 2;
 		picoformat_16(bytes + byte_index, 4);
 		byte_index += 2;
 		picoformat_32(bytes + byte_index, cnx->local_parameters.initial_max_stream_data);
 		byte_index += 4;
 
-		picoformat_32(bytes + byte_index, picoquic_transport_parameter_initial_max_data);
-		byte_index += 4;
+		picoformat_16(bytes + byte_index, picoquic_transport_parameter_initial_max_data);
+		byte_index += 2;
 		picoformat_16(bytes + byte_index, 4);
 		byte_index += 2;
 		picoformat_32(bytes + byte_index, cnx->local_parameters.initial_max_data);
 		byte_index += 4;
 
-		picoformat_32(bytes + byte_index, picoquic_transport_parameter_initial_max_stream_id);
-		byte_index += 4;
+		picoformat_16(bytes + byte_index, picoquic_transport_parameter_initial_max_stream_id);
+		byte_index += 2;
 		picoformat_16(bytes + byte_index, 4);
 		byte_index += 2;
 		picoformat_32(bytes + byte_index, cnx->local_parameters.initial_max_stream_id);
 		byte_index += 4;
 
-		picoformat_32(bytes + byte_index, picoquic_transport_parameter_idle_timeout);
-		byte_index += 4;
+		picoformat_16(bytes + byte_index, picoquic_transport_parameter_idle_timeout);
+		byte_index += 2;
 		picoformat_16(bytes + byte_index, 2);
 		byte_index += 2;
 		picoformat_16(bytes + byte_index, cnx->local_parameters.idle_timeout);
@@ -156,14 +156,14 @@ int picoquic_prepare_transport_extensions(picoquic_cnx * cnx, int extension_mode
 
 		if (cnx->local_parameters.omit_connection_id)
 		{
-			picoformat_32(bytes + byte_index, picoquic_transport_parameter_omit_connection_id);
-			byte_index += 4;
+			picoformat_16(bytes + byte_index, picoquic_transport_parameter_omit_connection_id);
+			byte_index += 2;
 			picoformat_16(bytes + byte_index, 0);
 			byte_index += 2;
 		}
 
-		picoformat_32(bytes + byte_index, picoquic_transport_parameter_max_packet_size);
-		byte_index += 4;
+		picoformat_16(bytes + byte_index, picoquic_transport_parameter_max_packet_size);
+		byte_index += 2;
 		picoformat_16(bytes + byte_index, 2);
 		byte_index += 2;
 		picoformat_16(bytes + byte_index, cnx->local_parameters.max_packet_size);
@@ -266,15 +266,15 @@ int picoquic_receive_transport_extensions(picoquic_cnx * cnx, int extension_mode
 		}
 		else while (ret == 0 && byte_index < extensions_end)
 		{
-			if (byte_index + 6 > extensions_end)
+			if (byte_index + 4 > extensions_end)
 			{
 				ret = PICOQUIC_ERROR_MALFORMED_TRANSPORT_EXTENSION;
 			}
 			else
 			{
-				uint32_t extension_type = PICOPARSE_32(bytes + byte_index);
-				uint16_t extension_length = PICOPARSE_16(bytes + byte_index + 4);
-				byte_index += 6;
+				uint16_t extension_type = PICOPARSE_16(bytes + byte_index);
+				uint16_t extension_length = PICOPARSE_16(bytes + byte_index + 2);
+				byte_index += 4;
 
 				if (byte_index + extension_length > extensions_end)
 				{
@@ -327,7 +327,17 @@ int picoquic_receive_transport_extensions(picoquic_cnx * cnx, int extension_mode
 					case picoquic_transport_parameter_omit_connection_id:
 						if (extension_length != 0)
 						{
-							ret = PICOQUIC_ERROR_MALFORMED_TRANSPORT_EXTENSION;
+							/* trying to be tolerant for now */
+							if (extension_length == 4)
+							{
+								uint32_t omit_value = PICOPARSE_32(bytes + byte_index);
+
+								cnx->remote_parameters.omit_connection_id = (omit_value) ? 1 : 0;
+							}
+							else
+							{
+								ret = PICOQUIC_ERROR_MALFORMED_TRANSPORT_EXTENSION;
+							}
 						}
 						else
 						{

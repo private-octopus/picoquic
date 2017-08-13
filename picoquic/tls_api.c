@@ -37,7 +37,10 @@ typedef struct st_picoquic_tls_ctx_t {
 	int client_mode;
 	ptls_raw_extension_t ext[2];
 	ptls_handshake_properties_t handshake_properties;
-	uint8_t ext_data[512];
+	uint8_t ext_data[128];
+	uint8_t ext_received[128];
+	size_t ext_received_length;
+	int ext_received_return;
 } picoquic_tls_ctx_t;
 
 int picoquic_receive_transport_extensions(picoquic_cnx * cnx, int extension_mode,
@@ -45,6 +48,24 @@ int picoquic_receive_transport_extensions(picoquic_cnx * cnx, int extension_mode
 
 int picoquic_prepare_transport_extensions(picoquic_cnx * cnx, int extension_mode,
 	uint8_t * bytes, size_t bytes_max, size_t * consumed);
+
+/*
+ * Provide access to transport received transport extension for
+ * logging purpose.
+ */
+void picoquic_provide_received_transport_extensions(picoquic_cnx * cnx,
+	uint8_t ** ext_received,
+	size_t * ext_received_length,
+	int * ext_received_return,
+	int * client_mode)
+{
+	picoquic_tls_ctx_t * ctx = cnx->tls_ctx;
+
+	*ext_received = ctx->ext_received;
+	*ext_received_length = ctx->ext_received_length;
+	*ext_received_return = ctx->ext_received_return;
+	*client_mode = ctx->client_mode;
+}
 
 /*
 * Using the open ssl library to load the test certificate
@@ -199,9 +220,20 @@ int picoquic_tls_collected_extensions_cb(ptls_t *tls, ptls_handshake_properties_
 
 	if (slots[0].type == PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION && slots[1].type == 0xFFFF)
 	{
+		size_t copied_length = sizeof(ctx->ext_received);
+
 		/* Retrieve the transport parameters */
 		ret = picoquic_receive_transport_extensions(ctx->cnx, (ctx->client_mode)?1:0,
 			slots[0].data.base, slots[0].data.len, &consumed);
+
+		/* Copy the extensions in the local context for further debugging */
+		ctx->ext_received_length = slots[0].data.len;
+		if (copied_length > ctx->ext_received_length)
+			copied_length = ctx->ext_received_length;
+		memcpy(ctx->ext_received, slots[0].data.base, copied_length);
+		ctx->ext_received_return = ret;
+		/* For now, override the value in case of default */
+		ret = 0;
 
 		/* In server mode, only compose the extensions if properly received from client */
 		if (ctx->client_mode == 0)

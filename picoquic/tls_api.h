@@ -47,4 +47,10 @@ size_t picoquic_aead_encrypt(picoquic_cnx *cnx, uint8_t * output, uint8_t * inpu
 
 void picoquic_aead_free(void* aead_context);
 
+void picoquic_provide_received_transport_extensions(picoquic_cnx * cnx,
+	uint8_t ** ext_received,
+	size_t * ext_received_length,
+	int * ext_received_return,
+	int * client_mode);
+
 #endif /* TLS_API_H */

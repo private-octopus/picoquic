@@ -622,3 +622,175 @@ void picoquic_log_processing(FILE* F, picoquic_cnx * cnx, size_t length, int ret
 		picoquic_log_state_name[(size_t)cnx->cnx_state] : "unknown",
 		ret);
 }
+
+void picoquic_log_transport_extension(FILE* F, picoquic_cnx * cnx)
+{
+
+	uint8_t * bytes = NULL;
+	size_t bytes_max = 0;
+	int ext_received_return = 0;
+	int client_mode = 1;
+	int ret = 0;
+	size_t byte_index = 0;
+
+	picoquic_provide_received_transport_extensions(cnx,
+		&bytes, &bytes_max, &ext_received_return, &client_mode);
+
+	if (bytes_max == 0)
+	{
+		fprintf(F, "Did not receive transport parameter TLS extension.\n");
+	}
+	else if (bytes_max < 128)
+	{
+		fprintf(F, "Received transport parameter TLS extension (%d bytes):\n", (uint32_t)bytes_max);
+		switch (client_mode)
+		{
+		case 0: // Client hello
+			if (bytes_max < 8)
+			{
+				fprintf(F, "Malformed extension\n");
+				ret = -1;
+			}
+			else
+			{
+				uint32_t version;
+				uint32_t proposed_version;
+
+				version = PICOPARSE_32(bytes + byte_index);
+				byte_index += 4;
+				proposed_version = PICOPARSE_32(bytes + byte_index);
+				byte_index += 4;
+
+				fprintf(F, "Version: %08x\nProposed version: %08x\n", version, proposed_version);
+			}
+			break;
+		case 1: // Server encrypted extension
+		{
+			if (bytes_max < 1)
+			{
+				fprintf(F, "Malformed extension\n");
+				ret = -1;
+			}
+			else
+			{
+				size_t supported_versions_size = bytes[byte_index++];
+
+				if ((supported_versions_size & 3) != 0)
+				{
+					fprintf(F,
+						"Malformed extension, supported version size = %d, not multiple of 4.\n",
+						(uint32_t)supported_versions_size);
+					ret = -1;
+
+				}
+				else if (supported_versions_size > 252 ||
+					byte_index + supported_versions_size > bytes_max)
+				{
+					fprintf(F, "    Malformed extension, supported version size = %d, max %d or 252\n",
+						(uint32_t)supported_versions_size, (uint32_t)(bytes_max - byte_index));
+					ret = -1;
+				}
+				else
+				{
+					size_t nb_supported_versions = supported_versions_size / 4;
+					fprintf(F, "    Supported version (%d bytes):\n", supported_versions_size);
+
+					for (size_t i = 0; i < nb_supported_versions; i++)
+					{
+						uint32_t supported_version = PICOPARSE_32(bytes + byte_index);
+
+						byte_index += 4;
+						if (supported_version == cnx->proposed_version &&
+							cnx->proposed_version != cnx->version)
+						{
+							fprintf(F, "        %08x (same as proposed!)\n", supported_version);
+						}
+						else
+						{
+							fprintf(F, "        %08x\n", supported_version);
+						}
+					}
+				}
+			}
+			break;
+		}
+		default: // New session ticket
+			break;
+		}
+
+		if (ret == 0 && byte_index + 2 > bytes_max)
+		{
+			fprintf(F, "    Malformed extension list\n");
+			ret = -1;
+		}
+		else
+		{
+			uint16_t extensions_size = PICOPARSE_16(bytes + byte_index);
+			size_t extensions_end;
+			byte_index += 2;
+			extensions_end = byte_index + extensions_size;
+
+			if (extensions_end > bytes_max)
+			{
+				fprintf(F, "    Extension list too long (%d bytes vs %d)\n",
+					(uint32_t)extensions_size, (uint32_t)(bytes_max - byte_index));
+			}
+			else
+			{
+				fprintf(F, "    Extension list (%d bytes):\n",
+					(uint32_t)extensions_size);
+				while (ret == 0 && byte_index < extensions_end)
+				{
+					if (byte_index + 6 > extensions_end)
+					{
+						fprintf(F, "        Malformed extension.\n");
+						ret = -1;
+					}
+					else
+					{
+						uint16_t extension_type = PICOPARSE_16(bytes + byte_index);
+						uint16_t extension_length = PICOPARSE_16(bytes + byte_index + 2);
+						byte_index += 4;
+
+						fprintf(F, "        Extension type: %d, length %d (0x%04x / 0x%04x), ",
+							extension_type, extension_length, extension_type, extension_length);
+
+						if (byte_index + extension_length > extensions_end)
+						{
+							fprintf(F, "Malformed extension.\n");
+							ret = -1;
+						}
+						else
+						{
+							for (uint16_t i = 0; i < extension_length; i++)
+							{
+								fprintf(F, "%02x", bytes[byte_index++]);
+							}
+							fprintf(F, "\n");
+						}
+					}
+				}
+			}
+		}
+		if (byte_index < bytes_max)
+		{
+			fprintf(F, "    Remaining bytes (%d)\n", (uint32_t)(bytes_max - byte_index));
+		}
+	}
+	else
+	{
+		printf(F, "Received transport parameter TLS extension (%d bytes):\n", (uint32_t)bytes_max);
+		fprintf(F, "    First 128 received bytes (%d):\n", (uint32_t)(bytes_max - byte_index));
+	}
+
+	while (byte_index < bytes_max && byte_index < 128)
+	{
+		fprintf(F, "        ");
+		for (int i = 0; i < 32 && byte_index < bytes_max && byte_index < 128; i++)
+		{
+			fprintf(F, "%02x", bytes[byte_index++]);
+		}
+		fprintf(F, "\n");
+	}
+	fprintf(F, "\n");
+}

@@ -65,6 +65,7 @@ void picoquic_log_packet(FILE* F, picoquic_quic * quic, picoquic_cnx * cnx,
 	struct sockaddr * addr_peer, int receiving,
 	uint8_t * bytes, size_t length);
 void picoquic_log_processing(FILE* F, picoquic_cnx * cnx, size_t length, int ret);
+void picoquic_log_transport_extension(FILE* F, picoquic_cnx * cnx);
 
 void print_address(struct sockaddr * address, int address_length, char * label)
 {
@@ -265,6 +266,7 @@ int quic_server(char * server_name, int server_port, char * pem_cert, char * pem
                     client_addr_length = from_length;
                     print_address((struct sockaddr*)&client_from, client_addr_length,
                         "Client address:");
+					picoquic_log_transport_extension(stdout, cnx_server);
                 }
             }
 			else
@@ -477,6 +479,7 @@ int quic_client(char * ip_address_text, int server_port)
 
 				if (bytes_recv == 0 || client_ready_loop > 4)
 				{
+					picoquic_log_transport_extension(stdout, cnx_client);
 					printf("Connection established. Disconnecting now.\n");
 					ret = picoquic_close(cnx_client);
 				}
