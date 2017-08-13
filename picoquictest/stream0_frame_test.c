@@ -19,7 +19,7 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "../picoquic/picoquic.h"
+#include "../picoquic/picoquic_internal.h"
 
 /*
  * Testing Arrival of Frame for Stream Zero
@@ -151,7 +151,7 @@ size_t nb_test_cases = sizeof(test_case) / sizeof(struct test_case_st);
 static int StreamZeroFrameOneTest(struct test_case_st * test)
 {
     int ret = 0;
-    picoquic_cnx cnx = { 0 };
+    picoquic_cnx_t cnx = { 0 };
     size_t consumed = 0;
     size_t offset_max = 0;
 

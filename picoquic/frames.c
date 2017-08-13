@@ -20,7 +20,7 @@
 */
 
 /* Decoding of the various frames, and application to context */
-#include "picoquic.h"
+#include "picoquic_internal.h"
 
 /*
  * Decoding of a stream frame.
@@ -63,7 +63,7 @@
  */
 static const int picoquic_offset_length_code[4] = { 0, 2, 4, 8 };
 
-picoquic_stream_head * find_stream(picoquic_cnx * cnx, uint32_t stream_id, int create)
+picoquic_stream_head * find_stream(picoquic_cnx_t * cnx, uint32_t stream_id, int create)
 {
     picoquic_stream_head * stream = &cnx->first_stream;
 
@@ -94,7 +94,7 @@ picoquic_stream_head * find_stream(picoquic_cnx * cnx, uint32_t stream_id, int c
     return stream;
 }
 
-int picoquic_stream_input(picoquic_cnx * cnx, uint32_t stream_id,
+int picoquic_stream_input(picoquic_cnx_t * cnx, uint32_t stream_id,
     uint64_t offset, int fin, uint8_t * bytes, size_t length)
 {
     int ret = 0;
@@ -182,7 +182,7 @@ int picoquic_stream_input(picoquic_cnx * cnx, uint32_t stream_id,
     return ret;
 }
 
-int picoquic_decode_stream_frame(picoquic_cnx * cnx, uint8_t * bytes,
+int picoquic_decode_stream_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
     size_t bytes_max, int restricted, size_t * consumed)
 {
     int ret = 0;
@@ -274,7 +274,7 @@ int picoquic_decode_stream_frame(picoquic_cnx * cnx, uint8_t * bytes,
 }
 
 
-int picoquic_prepare_stream_frame(picoquic_cnx * cnx, picoquic_stream_head * stream,
+int picoquic_prepare_stream_frame(picoquic_cnx_t * cnx, picoquic_stream_head * stream,
     uint8_t * bytes, size_t bytes_max, size_t * consumed)
 {
     int ret = 0;
@@ -408,7 +408,7 @@ An ACK frame is shown below.
 */
 
 static picoquic_packet * picoquic_process_ack_range(
-	picoquic_cnx * cnx, uint64_t highest, uint64_t range, picoquic_packet * p)
+	picoquic_cnx_t * cnx, uint64_t highest, uint64_t range, picoquic_packet * p)
 {
 	/* Compare the range to the retransmit queue */
 	while (p != NULL && range > 0)
@@ -437,7 +437,7 @@ static picoquic_packet * picoquic_process_ack_range(
 	return p;
 }
 
-int picoquic_decode_ack_frame(picoquic_cnx * cnx, uint8_t * bytes,
+int picoquic_decode_ack_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
     size_t bytes_max, int restricted, size_t * consumed)
 {
 	int ret = 0;
@@ -593,7 +593,7 @@ int picoquic_decode_ack_frame(picoquic_cnx * cnx, uint8_t * bytes,
 	return ret;
 }
 
-int picoquic_prepare_ack_frame(picoquic_cnx * cnx, uint64_t current_time,
+int picoquic_prepare_ack_frame(picoquic_cnx_t * cnx, uint64_t current_time,
 	uint8_t * bytes, size_t bytes_max, size_t * consumed)
 {
 	int ret = 0;
@@ -699,7 +699,7 @@ int picoquic_prepare_ack_frame(picoquic_cnx * cnx, uint64_t current_time,
  * In some cases, the expected frames are "restricted" to only ACK, STREAM 0 and PADDING.
  */
 
-int picoquic_decode_frames(picoquic_cnx * cnx, uint8_t * bytes,
+int picoquic_decode_frames(picoquic_cnx_t * cnx, uint8_t * bytes,
     size_t bytes_max, int restricted)
 {
     int ret = 0;
@@ -938,7 +938,7 @@ int picoquic_skip_frame(uint8_t * bytes, size_t bytes_max, size_t * consumed, in
 	return ret;
 }
 
-int picoquic_prepare_connection_close_frame(picoquic_cnx * cnx,
+int picoquic_prepare_connection_close_frame(picoquic_cnx_t * cnx,
     uint8_t * bytes, size_t bytes_max, size_t * consumed)
 {
     int ret = 0;

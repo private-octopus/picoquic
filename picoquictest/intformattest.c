@@ -19,7 +19,7 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "../picoquic/picoquic.h"
+#include "../picoquic/picoquic_internal.h"
 
 static const uint64_t test_number[] = {
     0,

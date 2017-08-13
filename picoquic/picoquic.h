@@ -26,17 +26,10 @@
 #include <winsock2.h>
 #include <Ws2def.h>
 #include <WS2tcpip.h>
-#include "picohash.h"
-#include "picotlsapi.h"
 
 #ifdef  __cplusplus
 extern "C" {
 #endif
-
-#define PICOQUIC_MAX_PACKET_SIZE 1536
-#define PICOQUIC_INITIAL_MTU_IPV4 1252
-#define PICOQUIC_INITIAL_MTU_IPV6 1232
-#define PICOQUIC_ENFORCED_INITIAL_MTU 1200
 
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS  + 1)
@@ -51,318 +44,92 @@ extern "C" {
 #define PICOQUIC_ERROR_MALFORMED_TRANSPORT_EXTENSION (PICOQUIC_ERROR_CLASS  + 10)
 #define PICOQUIC_ERROR_EXTENSION_BUFFER_TOO_SMALL (PICOQUIC_ERROR_CLASS  + 11)
 
+#define PICOQUIC_MAX_PACKET_SIZE 1536
+
 	/*
-	 * Supported versions
+	 * Connection states, useful to expose the state to the application.
 	 */
-#define PICOQUIC_FIRST_INTEROP_VERSION   0xFF000005
-#define PICOQUIC_INTERNAL_TEST_VERSION_1 0x50435130 
-
-	extern const uint32_t picoquic_supported_versions[];
-	extern const size_t picoquic_nb_supported_versions;
-	typedef enum {
-		picoquic_version_negotiate_transport = 1
-	} picoquic_version_feature_flags;
-
-    /*
-     * Quic context flags
-     */
-    typedef enum {
-        picoquic_context_server = 1
-    } picoquic_context_flags;
+	typedef enum
+	{
+		picoquic_state_client_init,
+		picoquic_state_client_init_sent,
+		picoquic_state_client_renegotiate,
+		picoquic_state_client_init_resent,
+		picoquic_state_server_init,
+		picoquic_state_client_handshake_start,
+		picoquic_state_client_handshake_progress,
+		picoquic_state_client_almost_ready,
+		picoquic_state_client_ready,
+		picoquic_state_server_almost_ready,
+		picoquic_state_server_ready,
+		picoquic_state_disconnecting,
+		picoquic_state_disconnected
+	} picoquic_state_enum;
 
 	/*
 	 * The stateless packet structure is used to temporarily store
 	 * stateless packets before they can be sent by servers.
 	 */
 
-	typedef struct _picoquic_stateless_packet {
-		struct _picoquic_stateless_packet * next_packet;
+	typedef struct st_picoquic_stateless_packet_t {
+		struct st_picoquic_stateless_packet_t * next_packet;
 		struct sockaddr_storage addr_to;
 		size_t length;
 
 		uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE];
-	} picoquic_stateless_packet;
-
-    /*
-     * QUIC context, defining the tables of connections,
-     * open sockets, etc.
-     */
-    typedef struct _picoquic_quic
-    {
-        void* tls_master_ctx;
-
-        uint32_t flags;
-
-		picoquic_stateless_packet * pending_stateless_packet;
-
-        struct st_picoquic_cnx_t * cnx_list;
-        struct st_picoquic_cnx_t * cnx_last;
-
-        picohash_table * table_cnx_by_id;
-        picohash_table * table_cnx_by_net;
-    } picoquic_quic;
-
-    /*
-     * Connection context, and links between context and addresses
-     */
-    typedef enum
-    {
-        picoquic_state_client_init, 
-		picoquic_state_client_init_sent,
-		picoquic_state_client_renegotiate,
-		picoquic_state_client_init_resent,
-        picoquic_state_server_init,
-        picoquic_state_client_handshake_start,
-        picoquic_state_client_handshake_progress,
-        picoquic_state_client_almost_ready,
-        picoquic_state_client_ready,
-        picoquic_state_server_almost_ready,
-        picoquic_state_server_ready,
-        picoquic_state_disconnecting,
-        picoquic_state_disconnected
-    } picoquic_state_enum;
-
-	/*
-	 * Transport parameters, as defined by the QUIC transport specification
-	 */
-
-	typedef struct _picoquic_transport_parameters {
-		uint32_t initial_max_stream_data;
-		uint32_t initial_max_data;
-		uint32_t initial_max_stream_id;
-		uint32_t idle_timeout;
-		uint32_t omit_connection_id;
-		uint32_t max_packet_size;
-	} picoquic_transport_parameters;
-
-    /*
-     * SACK dashboard item, part of connection context.
-     */
-
-    typedef struct _picoquic_sack_item {
-        struct _picoquic_sack_item * next_sack;
-        uint64_t start_of_sack_range;
-        uint64_t end_of_sack_range;
-        uint64_t time_stamp_last_in_range;
-    } picoquic_sack_item;
-
-    /*
-     * Stream head. 
-     * Stream contains bytes of data, which are not always delivered in order.
-     * When in order data is available, the application can read it,
-     * or a callback can be set.
-     */
-
-    typedef struct _picoquic_stream_data {
-        struct _picoquic_stream_data * next_stream_data;
-        uint64_t offset;
-        size_t length;
-        uint8_t * bytes;
-    } picoquic_stream_data;
-
-    typedef struct _picoquic_stream_head {
-        struct _picoquic_stream_head * next_stream;
-        uint64_t stream_id;
-        uint64_t consumed_offset;
-        uint64_t fin_offset;
-        picoquic_stream_data * stream_data;
-        uint64_t sent_offset;
-        picoquic_stream_data * send_queue;
-    } picoquic_stream_head;
-
-    /*
-     * Packet sent, and queued for retransmission.
-     * The packet is not encrypted.
-     */
-
-    typedef enum
-    {
-        picoquic_packet_error = 0,
-        picoquic_packet_version_negotiation = 1,
-        picoquic_packet_client_initial = 2,
-        picoquic_packet_server_stateless = 3,
-        picoquic_packet_server_cleartext = 4,
-        picoquic_packet_client_cleartext = 5,
-        picoquic_packet_0rtt_protected = 6,
-        picoquic_packet_1rtt_protected_phi0 = 7,
-        picoquic_packet_1rtt_protected_phi1 = 8,
-        picoquic_packet_public_reset = 9,
-        picoquic_packet_type_max = 10
-    } picoquic_packet_type_enum;
+	} picoquic_stateless_packet_t;
 
 	/*
 	 * The simple packet structure is used to store packets that
 	 * have been sent but are not yet acknowledged.
 	 */
-    typedef struct _picoquic_packet {
-        struct _picoquic_packet * previous_packet;
-        struct _picoquic_packet * next_packet;
+	typedef struct _picoquic_packet {
+		struct _picoquic_packet * previous_packet;
+		struct _picoquic_packet * next_packet;
 
-        uint64_t sequence_number;
+		uint64_t sequence_number;
 		uint64_t send_time;
-        size_t length;
+		size_t length;
 
-        uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE];
-    } picoquic_packet;
+		uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE];
+	} picoquic_packet;
 
-    /*
-     * Per connection context.
-     */
-    typedef struct st_picoquic_cnx_t
-    {
-        picoquic_quic * quic;
+	typedef struct st_picoquic_quic_t picoquic_quic_t;
+	typedef struct st_picoquic_cnx_t picoquic_cnx_t;
 
-        /* Management of context retrieval tables */
-        struct st_picoquic_cnx_t * next_in_table;
-        struct st_picoquic_cnx_t * previous_in_table;
-        struct st_picoquic_cnx_id_t * first_cnx_id;
-        struct st_picoquic_net_id_t * first_net_id;
+	/* QUIC context create and dispose */
+	picoquic_quic_t * picoquic_create(uint32_t nb_connections, 
+		char * cert_file_name, char * key_file_name);
+	void picoquic_free(picoquic_quic_t * quic);
 
-		/* Proposed and negotiated version. Feature flags denote version dependent features */
-		uint32_t proposed_version;
-        uint32_t version;
-		uint32_t versioned_features_flags;
+	/* Connection context creation and registration */
+	picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
+		uint64_t cnx_id, struct sockaddr * addr, uint64_t start_time, uint32_t preferred_version);
+	void picoquic_delete_cnx(picoquic_cnx_t * cnx);
 
-		/* Local and remote parameters */
-		picoquic_transport_parameters local_parameters;
-		picoquic_transport_parameters remote_parameters;
+	int picoquic_close(picoquic_cnx_t * cnx);
 
-        /* connection state, ID, etc. Todo: allow for multiple cnxid */
-        picoquic_state_enum cnx_state;
-        uint64_t initial_cnxid;
-        uint64_t server_cnxid;
-        struct sockaddr_storage peer_address;
+	picoquic_cnx_t * picoquic_get_first_cnx(picoquic_quic_t * quic);
 
-        /* TLS context, TLS Send Buffer, chain of receive buffers (todo) */
-        void * tls_ctx;
-        struct st_ptls_buffer_t * tls_sendbuf;
-        uint64_t send_sequence;
-        uint32_t send_mtu;
+	picoquic_state_enum picoquic_get_cnx_state(picoquic_cnx_t * cnx);
 
-        /* Encryption and decryption objects */
-        void * aead_encrypt_ctx;
-        void * aead_decrypt_ctx;
+	/* Send and receive */
 
-        /* Receive state */
-        struct _picoquic_sack_item first_sack_item;
-        uint64_t sack_block_size_max;
-
-        /* Retransmission state */
-		uint64_t nb_retransmit;
-		uint64_t latest_retransmit_time;
-		uint64_t highest_acknowledged;
-		uint64_t latest_time_acknowledged;
-		uint64_t latest_ack_received_time;
-		picoquic_packet * retransmit_newest;
-		picoquic_packet * retransmit_oldest;
-
-        /* Management of streams */
-        picoquic_stream_head first_stream;
-
-    } picoquic_cnx;
-
-    /* QUIC context create and dispose */
-    picoquic_quic * picoquic_create(uint32_t nb_connections, char * cert_file_name, char * key_file_name);
-    void picoquic_free(picoquic_quic * quic);
-
-	/* Handling of stateless packets */
-	picoquic_stateless_packet * picoquic_create_stateless_packet(picoquic_quic * quic);
-	void picoquic_delete_stateless_packet(picoquic_stateless_packet * sp);
-	void picoquic_queue_stateless_packet(picoquic_quic * quic, picoquic_stateless_packet * sp);
-	picoquic_stateless_packet * picoquic_dequeue_stateless_packet(picoquic_quic * quic);
-
-	/* handling of retransmission queue */
-	void picoquic_enqueue_retransmit_packet(picoquic_cnx * cnx, picoquic_packet * p);
-	void picoquic_dequeue_retransmit_packet(picoquic_cnx * cnx, picoquic_packet * p, int should_free);
-
-    /* Connection context creation and registration */
-    picoquic_cnx * picoquic_create_cnx(picoquic_quic * quic, 
-        uint64_t cnx_id, struct sockaddr * addr, uint64_t start_time, uint32_t preferred_version);
-    void picoquic_delete_cnx(picoquic_cnx * cnx);
-
-	/* Reset connection after receiving version negotiation */
-	int picoquic_reset_cnx_version(picoquic_cnx * cnx, uint8_t * bytes, size_t length);
-
-    /* Connection context retrieval functions */
-    picoquic_cnx * picoquic_cnx_by_id(picoquic_quic * quic, uint64_t cnx_id);
-    picoquic_cnx * picoquic_cnx_by_net(picoquic_quic * quic, struct sockaddr* addr);
-
-    int picoquic_close(picoquic_cnx * cnx);
-
-/* Integer parsing macros */
-#define PICOPARSE_16(b) ((((uint16_t)(b)[0])<<8)|(b)[1])
-#define PICOPARSE_24(b) ((((uint32_t)PICOPARSE_16(b))<<16)|((b)[2]))
-#define PICOPARSE_32(b) ((((uint32_t)PICOPARSE_16(b))<<16)|PICOPARSE_16((b)+2))
-#define PICOPARSE_64(b) ((((uint64_t)PICOPARSE_32(b))<<32)|PICOPARSE_32((b)+4))
-
-/* Integer formatting functions */
-    void picoformat_16(uint8_t *bytes, uint16_t n16);
-    void picoformat_32(uint8_t *bytes, uint32_t n32);
-    void picoformat_64(uint8_t *bytes, uint64_t n64);
-
-/* Packet parsing */
-
-
-    typedef struct _picoquic_packet_header {
-        uint64_t cnx_id;
-        uint32_t pn;
-        uint32_t vn;
-        uint32_t offset;
-        picoquic_packet_type_enum ptype;
-        uint64_t pnmask;
-        uint64_t pn64;
-    } picoquic_packet_header;
-
-    int picoquic_parse_packet_header(
-        uint8_t * bytes,
-        size_t length,
-        picoquic_packet_header * ph);
-
-    uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t pn);
-
-    /* handling of ACK logic */
-    int picoquic_is_pn_already_received(picoquic_cnx * cnx, uint64_t pn64);
-    int picoquic_record_pn_received(picoquic_cnx * cnx, uint64_t pn64, uint64_t current_microsec);
-    uint16_t picoquic_deltat_to_float16(uint64_t delta_t);
-    uint64_t picoquic_float16_to_deltat(uint16_t float16);
-
-    /* stream management */
-    int picoquic_stream_input(picoquic_cnx * cnx, uint32_t stream_id, 
-        uint64_t offset, int fin, uint8_t * bytes, size_t length);
-    int picoquic_decode_stream_frame(picoquic_cnx * cnx, uint8_t * bytes,
-        size_t bytes_max, int restricted, size_t * consumed);
-    int picoquic_prepare_stream_frame(picoquic_cnx * cnx, picoquic_stream_head * stream,
-        uint8_t * bytes, size_t bytes_max, size_t * consumed);
-	int picoquic_prepare_ack_frame(picoquic_cnx * cnx, uint64_t current_time,
-		uint8_t * bytes, size_t bytes_max, size_t * consumed);
-    int picoquic_add_to_stream(picoquic_cnx * cnx, uint32_t stream_id, uint8_t * data, size_t length);
-    int picoquic_prepare_connection_close_frame(picoquic_cnx * cnx,
-        uint8_t * bytes, size_t bytes_max, size_t * consumed);
-
-    /* send/receive */
+	picoquic_stateless_packet_t * picoquic_dequeue_stateless_packet(picoquic_quic_t * quic);
+	void picoquic_delete_stateless_packet(picoquic_stateless_packet_t * sp);
 
 	int picoquic_incoming_packet(
-		picoquic_quic * quic,
+		picoquic_quic_t * quic,
 		uint8_t * bytes,
 		uint32_t length,
 		struct sockaddr * addr_from,
 		uint64_t current_time);
 
-    picoquic_packet * picoquic_create_packet();
+	picoquic_packet * picoquic_create_packet();
 
-    int picoquic_prepare_packet(picoquic_cnx * cnx, picoquic_packet * packet,
+	int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 		uint64_t current_time, uint8_t * send_buffer, size_t send_buffer_max, size_t * send_length);
 
-    int picoquic_decode_frames(picoquic_cnx * cnx, uint8_t * bytes,
-        size_t bytes_max, int restricted);
-
-	int picoquic_skip_frame(uint8_t * bytes, size_t bytes_max, size_t * consumed, int * pure_ack);
-
-	int picoquic_prepare_transport_extensions(picoquic_cnx * cnx, int extension_mode,
-		uint8_t * bytes, size_t bytes_max, size_t * consumed);
-
-	int picoquic_receive_transport_extensions(picoquic_cnx * cnx, int extension_mode,
-		uint8_t * bytes, size_t bytes_max, size_t * consumed);
 
 #ifdef  __cplusplus
 }

@@ -21,7 +21,7 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include "../picoquic/picoquic.h"
+#include "../picoquic/picoquic_internal.h"
 
 /*
  * Test of the SACK functionality
@@ -68,7 +68,7 @@ static struct expected_ack_t expected_ack[] =
 int sacktest()
 {
     int ret = 0;
-    picoquic_cnx cnx;
+    picoquic_cnx_t cnx;
     uint64_t current_time;
     uint64_t highest_seen = 0;
     uint64_t highest_seen_time;
@@ -298,7 +298,7 @@ static int basic_ack_parse(uint8_t * bytes, size_t bytes_max,
 int sendacktest()
 {
 	int ret = 0;
-	picoquic_cnx cnx;
+	picoquic_cnx_t cnx;
 	uint64_t current_time;
 	uint64_t received_mask = 0;
 	uint8_t bytes[256];

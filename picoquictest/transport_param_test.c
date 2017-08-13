@@ -21,7 +21,7 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include "../picoquic/picoquic.h"
+#include "../picoquic/picoquic_internal.h"
 
 /* Start with a series of test vectors to test that 
  * encoding and decoding are OK. 
@@ -86,7 +86,7 @@ int transport_param_one_test(int mode, uint32_t version, uint32_t proposed_versi
 	picoquic_transport_parameters * param, uint8_t * target, size_t target_length)
 {
 	int ret = 0;
-	picoquic_cnx test_cnx = { {0} };
+	picoquic_cnx_t test_cnx = { {0} };
 	uint8_t buffer[256];
 	size_t encoded, decoded;
 
@@ -136,7 +136,7 @@ int transport_param_fuzz_test(int mode, uint32_t version, uint32_t proposed_vers
 {
 	int ret = 0;
 	int fuzz_ret = 0;
-	picoquic_cnx test_cnx = { { 0 } };
+	picoquic_cnx_t test_cnx = { { 0 } };
 	uint8_t buffer[256];
 	size_t decoded;
 	uint8_t fuzz_byte = 1;

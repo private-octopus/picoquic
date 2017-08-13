@@ -19,7 +19,7 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "../picoquic/picoquic.h"
+#include "../picoquic/picoquic_internal.h"
 #include <stdlib.h>
 #include <malloc.h>
 
@@ -44,8 +44,8 @@
 int cnxcreation_test()
 {
     int ret = 0;
-    picoquic_quic * quic = NULL;
-    picoquic_cnx * test_cnx[5] = { NULL,  NULL, NULL, NULL, NULL };
+    picoquic_quic_t * quic = NULL;
+    picoquic_cnx_t * test_cnx[5] = { NULL,  NULL, NULL, NULL, NULL };
     struct sockaddr_in test4[4];
     struct sockaddr_in6 test6[2];
     const uint8_t test_ipv4[4] = { 192, 0, 2, 0 };
@@ -115,7 +115,7 @@ int cnxcreation_test()
      */
     for (int i = 0; ret == 0 && i < 5; i++)
     {
-        picoquic_cnx * cnx = picoquic_cnx_by_net(quic, test_cnx_addr[i]);
+        picoquic_cnx_t * cnx = picoquic_cnx_by_net(quic, test_cnx_addr[i]);
 
         if (cnx == NULL)
         {
@@ -125,7 +125,7 @@ int cnxcreation_test()
 
     for (int i = 0; ret == 0 && i < 5; i++)
     {
-        picoquic_cnx * cnx = picoquic_cnx_by_id(quic, test_cnx_id[i]);
+        picoquic_cnx_t * cnx = picoquic_cnx_by_id(quic, test_cnx_id[i]);
 
         if (test_cnx_id[i] == 0 && cnx != NULL)
         {
@@ -143,7 +143,7 @@ int cnxcreation_test()
 
     if (ret == 0)
     {
-        picoquic_cnx * cnx = picoquic_cnx_by_id(quic, 123456789);
+        picoquic_cnx_t * cnx = picoquic_cnx_by_id(quic, 123456789);
         if (cnx != NULL)
         {
             ret = -1;
@@ -152,7 +152,7 @@ int cnxcreation_test()
 
     if (ret == 0)
     {
-        picoquic_cnx * cnx = picoquic_cnx_by_net(quic, (struct sockaddr*) &test4[3]);
+        picoquic_cnx_t * cnx = picoquic_cnx_by_net(quic, (struct sockaddr*) &test4[3]);
         if (cnx != NULL)
         {
             ret = -1;
@@ -171,7 +171,7 @@ int cnxcreation_test()
     {
         if (test_cnx_id[i] != 0)
         {
-            picoquic_cnx * cnx = picoquic_cnx_by_id(quic, test_cnx_id[i]);
+            picoquic_cnx_t * cnx = picoquic_cnx_by_id(quic, test_cnx_id[i]);
 
             if (cnx != NULL && (i & 1) == 0)
             {
@@ -186,7 +186,7 @@ int cnxcreation_test()
 
     for (int i = 0; ret == 0 && i < 5; i++)
     {
-        picoquic_cnx * cnx = picoquic_cnx_by_net(quic, test_cnx_addr[i]);
+        picoquic_cnx_t * cnx = picoquic_cnx_by_net(quic, test_cnx_addr[i]);
 
         if (cnx != NULL && (i & 1) == 0)
         {

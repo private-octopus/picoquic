@@ -19,7 +19,7 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "picoquic.h"
+#include "picoquic_internal.h"
 #include "tls_api.h"
 
 /*
@@ -28,14 +28,14 @@
 typedef struct st_picoquic_cnx_id_t
 {
     uint64_t cnx_id;
-    picoquic_cnx * cnx;
+    picoquic_cnx_t * cnx;
     struct st_picoquic_cnx_id_t * next_cnx_id;
 } picoquic_cnx_id;
 
 typedef struct st_picoquic_net_id_t
 {
     struct sockaddr_storage saddr;
-    picoquic_cnx * cnx;
+    picoquic_cnx_t * cnx;
     struct st_picoquic_net_id_t * next_net_id;
 } picoquic_net_id;
 
@@ -88,9 +88,9 @@ const size_t picoquic_nb_supported_versions = sizeof(picoquic_supported_versions
 
 
 /* QUIC context create and dispose */
-picoquic_quic * picoquic_create(uint32_t nb_connections, char * cert_file_name, char * key_file_name)
+picoquic_quic_t * picoquic_create(uint32_t nb_connections, char * cert_file_name, char * key_file_name)
 {
-    picoquic_quic * quic = (picoquic_quic *)malloc(sizeof(picoquic_quic));
+    picoquic_quic_t * quic = (picoquic_quic_t *)malloc(sizeof(picoquic_quic_t));
 
     if (quic != NULL)
     {
@@ -127,7 +127,7 @@ picoquic_quic * picoquic_create(uint32_t nb_connections, char * cert_file_name, 
     return quic;
 }
 
-void picoquic_free(picoquic_quic * quic)
+void picoquic_free(picoquic_quic_t * quic)
 {
     if (quic != NULL)
     {
@@ -136,7 +136,7 @@ void picoquic_free(picoquic_quic * quic)
 		/* delete all pending packets */
 		while (quic->pending_stateless_packet != NULL)
 		{
-			picoquic_stateless_packet * to_delete = quic->pending_stateless_packet;
+			picoquic_stateless_packet_t * to_delete = quic->pending_stateless_packet;
 			quic->pending_stateless_packet = to_delete->next_packet;
 			free(to_delete);
 		}
@@ -168,19 +168,19 @@ void picoquic_free(picoquic_quic * quic)
     }
 }
 
-picoquic_stateless_packet * picoquic_create_stateless_packet(picoquic_quic * quic)
+picoquic_stateless_packet_t * picoquic_create_stateless_packet(picoquic_quic_t * quic)
 {
-	return (picoquic_stateless_packet *)malloc(sizeof(picoquic_stateless_packet));
+	return (picoquic_stateless_packet_t *)malloc(sizeof(picoquic_stateless_packet_t));
 }
 
-void picoquic_delete_stateless_packet(picoquic_stateless_packet * sp)
+void picoquic_delete_stateless_packet(picoquic_stateless_packet_t * sp)
 {
 	free(sp);
 }
 
-void picoquic_queue_stateless_packet(picoquic_quic * quic, picoquic_stateless_packet * sp)
+void picoquic_queue_stateless_packet(picoquic_quic_t * quic, picoquic_stateless_packet_t * sp)
 {
-	picoquic_stateless_packet ** pnext = &quic->pending_stateless_packet;
+	picoquic_stateless_packet_t ** pnext = &quic->pending_stateless_packet;
 
 	while ((*pnext) != NULL)
 	{
@@ -191,9 +191,9 @@ void picoquic_queue_stateless_packet(picoquic_quic * quic, picoquic_stateless_pa
 	sp->next_packet = NULL;
 }
 
-picoquic_stateless_packet * picoquic_dequeue_stateless_packet(picoquic_quic * quic)
+picoquic_stateless_packet_t * picoquic_dequeue_stateless_packet(picoquic_quic_t * quic)
 {
-	picoquic_stateless_packet * sp = quic->pending_stateless_packet;
+	picoquic_stateless_packet_t * sp = quic->pending_stateless_packet;
 
 	if (sp != NULL)
 	{
@@ -205,7 +205,7 @@ picoquic_stateless_packet * picoquic_dequeue_stateless_packet(picoquic_quic * qu
 }
 
 /* Connection context creation and registration */
-int picoquic_register_cnx_id(picoquic_quic * quic, picoquic_cnx * cnx, uint64_t cnx_id)
+int picoquic_register_cnx_id(picoquic_quic_t * quic, picoquic_cnx_t * cnx, uint64_t cnx_id)
 {
     int ret = 0;
     picohash_item * item;
@@ -242,7 +242,7 @@ int picoquic_register_cnx_id(picoquic_quic * quic, picoquic_cnx * cnx, uint64_t 
     return ret;
 }
 
-int picoquic_register_net_id(picoquic_quic * quic, picoquic_cnx * cnx, struct sockaddr * addr)
+int picoquic_register_net_id(picoquic_quic_t * quic, picoquic_cnx_t * cnx, struct sockaddr * addr)
 {
     int ret = 0;
     picohash_item * item;
@@ -304,15 +304,15 @@ void picoquic_int_transport_parameters(picoquic_transport_parameters * tp)
 
 
 
-picoquic_cnx * picoquic_create_cnx(picoquic_quic * quic,
+picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
     uint64_t cnx_id, struct sockaddr * addr, uint64_t start_time, uint32_t preferred_version)
 {
-    picoquic_cnx * cnx = (picoquic_cnx *)malloc(sizeof(picoquic_cnx));
+    picoquic_cnx_t * cnx = (picoquic_cnx_t *)malloc(sizeof(picoquic_cnx_t));
     uint32_t random_sequence;
 
     if (cnx != NULL)
     {
-        memset(cnx, 0, sizeof(picoquic_cnx));
+        memset(cnx, 0, sizeof(picoquic_cnx_t));
 
         if (quic->cnx_list != NULL)
         {
@@ -435,6 +435,16 @@ picoquic_cnx * picoquic_create_cnx(picoquic_quic * quic,
     return cnx;
 }
 
+picoquic_state_enum picoquic_get_cnx_state(picoquic_cnx_t * cnx)
+{
+	return cnx->cnx_state;
+}
+
+picoquic_cnx_t * picoquic_get_first_cnx(picoquic_quic_t * quic)
+{
+	return quic->cnx_list;
+}
+
 void picoquic_clear_stream(picoquic_stream_head * stream)
 {
     picoquic_stream_data ** pdata[2] = { &stream->stream_data, &stream->send_queue };
@@ -456,7 +466,7 @@ void picoquic_clear_stream(picoquic_stream_head * stream)
     }
 }
 
-void picoquic_enqueue_retransmit_packet(picoquic_cnx * cnx, picoquic_packet * p)
+void picoquic_enqueue_retransmit_packet(picoquic_cnx_t * cnx, picoquic_packet * p)
 {
 	if (cnx->retransmit_oldest == NULL)
 	{
@@ -472,7 +482,7 @@ void picoquic_enqueue_retransmit_packet(picoquic_cnx * cnx, picoquic_packet * p)
 	cnx->retransmit_oldest = p;
 }
 
-void picoquic_dequeue_retransmit_packet(picoquic_cnx * cnx, picoquic_packet * p, int should_free)
+void picoquic_dequeue_retransmit_packet(picoquic_cnx_t * cnx, picoquic_packet * p, int should_free)
 {
 	if (p->previous_packet == NULL)
 	{
@@ -514,7 +524,7 @@ void picoquic_dequeue_retransmit_packet(picoquic_cnx * cnx, picoquic_packet * p,
 * - State changes.
 */
 
-int picoquic_reset_cnx_version(picoquic_cnx * cnx, uint8_t * bytes, size_t length)
+int picoquic_reset_cnx_version(picoquic_cnx_t * cnx, uint8_t * bytes, size_t length)
 {
 	/* First parse the incoming connection negotiation to choose the
 	* new version. If none is available, return an error */
@@ -568,7 +578,7 @@ int picoquic_reset_cnx_version(picoquic_cnx * cnx, uint8_t * bytes, size_t lengt
 	return ret;
 }
 
-void picoquic_delete_cnx(picoquic_cnx * cnx)
+void picoquic_delete_cnx(picoquic_cnx_t * cnx)
 {
     picoquic_stream_head * stream;
 
@@ -656,9 +666,9 @@ void picoquic_delete_cnx(picoquic_cnx * cnx)
 }
 
 /* Context retrieval functions */
-picoquic_cnx * picoquic_cnx_by_id(picoquic_quic * quic, uint64_t cnx_id)
+picoquic_cnx_t * picoquic_cnx_by_id(picoquic_quic_t * quic, uint64_t cnx_id)
 {
-    picoquic_cnx * ret = NULL;
+    picoquic_cnx_t * ret = NULL;
     picohash_item * item;
     picoquic_cnx_id key = { 0 };
     key.cnx_id = cnx_id;
@@ -672,9 +682,9 @@ picoquic_cnx * picoquic_cnx_by_id(picoquic_quic * quic, uint64_t cnx_id)
     return ret;
 }
 
-picoquic_cnx * picoquic_cnx_by_net(picoquic_quic * quic, struct sockaddr* addr)
+picoquic_cnx_t * picoquic_cnx_by_net(picoquic_quic_t * quic, struct sockaddr* addr)
 {
-    picoquic_cnx * ret = NULL;
+    picoquic_cnx_t * ret = NULL;
     picohash_item * item;
     picoquic_net_id key = { 0 };
 

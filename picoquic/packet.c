@@ -28,7 +28,7 @@
  */
 
 #include <stdint.h>
-#include "picoquic.h"
+#include "picoquic_internal.h"
 #include "fnv1a.h"
 #include "tls_api.h"
 
@@ -153,7 +153,7 @@ uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t 
  * and MUST include the new negotiated protocol version.
  */
 int picoquic_incoming_version_negotiation(
-	picoquic_cnx * cnx,
+	picoquic_cnx_t * cnx,
 	uint8_t * bytes,
 	uint32_t length,
 	struct sockaddr * addr_from,
@@ -188,7 +188,7 @@ int picoquic_incoming_version_negotiation(
  */
 
 int picoquic_verify_version(
-	picoquic_quic * quic,
+	picoquic_quic_t * quic,
 	uint8_t * bytes,
 	uint32_t length,
 	struct sockaddr * addr_from,
@@ -208,7 +208,7 @@ int picoquic_verify_version(
 
 	if (ret != 0)
 	{
-		picoquic_stateless_packet * sp = picoquic_create_stateless_packet(quic);
+		picoquic_stateless_packet_t * sp = picoquic_create_stateless_packet(quic);
 
 		if (sp != NULL)
 		{
@@ -246,15 +246,15 @@ int picoquic_verify_version(
  * on an unknown connection context.
  */
 
-picoquic_cnx * picoquic_incoming_initial(
-    picoquic_quic * quic,
+picoquic_cnx_t * picoquic_incoming_initial(
+    picoquic_quic_t * quic,
     uint8_t * bytes,
     uint32_t length,
     struct sockaddr * addr_from,
     picoquic_packet_header * ph,
 	uint64_t current_time)
 {
-    picoquic_cnx * cnx = NULL;
+    picoquic_cnx_t * cnx = NULL;
     size_t decoded_length = 0;
 
     if (ph->ptype != picoquic_packet_client_initial ||
@@ -312,7 +312,7 @@ picoquic_cnx * picoquic_incoming_initial(
  */
 
 int picoquic_incoming_server_cleartext(
-    picoquic_cnx * cnx,
+    picoquic_cnx_t * cnx,
     uint8_t * bytes,
     uint32_t length, 
     picoquic_packet_header * ph)
@@ -385,7 +385,7 @@ int picoquic_incoming_server_cleartext(
  * Processing of client clear text packet.
  */
 int picoquic_incoming_client_cleartext(
-    picoquic_cnx * cnx,
+    picoquic_cnx_t * cnx,
     uint8_t * bytes,
     uint32_t length,
     picoquic_packet_header * ph)
@@ -439,7 +439,7 @@ int picoquic_incoming_client_cleartext(
 * Processing of client encrypted packet.
 */
 int picoquic_incoming_encrypted(
-    picoquic_cnx * cnx,
+    picoquic_cnx_t * cnx,
     uint8_t * bytes,
     uint32_t length,
     picoquic_packet_header * ph)
@@ -495,14 +495,14 @@ int picoquic_incoming_encrypted(
  */
 
 int picoquic_incoming_packet(
-    picoquic_quic * quic,
+    picoquic_quic_t * quic,
     uint8_t * bytes,
     uint32_t length,
     struct sockaddr * addr_from,
 	uint64_t current_time)
 {
     int ret = 0;
-    picoquic_cnx * cnx = NULL;
+    picoquic_cnx_t * cnx = NULL;
     picoquic_packet_header ph;
     size_t decoded_length = 0;
 

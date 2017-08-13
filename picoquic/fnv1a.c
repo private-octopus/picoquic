@@ -19,7 +19,7 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "picoquic.h"
+#include "picoquic_internal.h"
 #include "fnv1a.h"
 
 uint64_t fnv1a_hash(uint64_t hash, uint8_t * bytes, size_t length)

@@ -19,7 +19,7 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "../picoquic/picoquic.h"
+#include "../picoquic/picoquic_internal.h"
 #include <stdlib.h>
 
 struct _pn2pn64test_entry

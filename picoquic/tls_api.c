@@ -26,14 +26,14 @@
 #include <openssl/pem.h>
 #include "picotls.h"
 #include "picotls/openssl.h"
-#include "picoquic.h"
+#include "picoquic_internal.h"
 
 #define PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION 26
 #define PICOQUIC_TRANSPORT_PARAMETERS_MAX_SIZE 512
 
 typedef struct st_picoquic_tls_ctx_t {
 	ptls_t *tls;
-	picoquic_cnx * cnx;
+	picoquic_cnx_t * cnx;
 	int client_mode;
 	ptls_raw_extension_t ext[2];
 	ptls_handshake_properties_t handshake_properties;
@@ -43,17 +43,17 @@ typedef struct st_picoquic_tls_ctx_t {
 	int ext_received_return;
 } picoquic_tls_ctx_t;
 
-int picoquic_receive_transport_extensions(picoquic_cnx * cnx, int extension_mode,
+int picoquic_receive_transport_extensions(picoquic_cnx_t * cnx, int extension_mode,
 	uint8_t * bytes, size_t bytes_max, size_t * consumed);
 
-int picoquic_prepare_transport_extensions(picoquic_cnx * cnx, int extension_mode,
+int picoquic_prepare_transport_extensions(picoquic_cnx_t * cnx, int extension_mode,
 	uint8_t * bytes, size_t bytes_max, size_t * consumed);
 
 /*
  * Provide access to transport received transport extension for
  * logging purpose.
  */
-void picoquic_provide_received_transport_extensions(picoquic_cnx * cnx,
+void picoquic_provide_received_transport_extensions(picoquic_cnx_t * cnx,
 	uint8_t ** ext_received,
 	size_t * ext_received_length,
 	int * ext_received_return,
@@ -159,7 +159,7 @@ static int SetSignCertificate(char * keypem, ptls_context_t * ctx)
 
 /* TODO: may want to provide a layer of isolation to not reveal
  * internal state of random number generator */
-void picoquic_crypto_random(picoquic_quic * quic, void * buf, size_t len)
+void picoquic_crypto_random(picoquic_quic_t * quic, void * buf, size_t len)
 {
     int ret = 0;
     ptls_context_t *ctx = (ptls_context_t *)quic->tls_master_ctx;
@@ -179,7 +179,7 @@ int picoquic_tls_collect_extensions_cb(ptls_t *tls, struct st_ptls_handshake_pro
 }
 
 
-void picoquic_tls_set_extensions(picoquic_cnx * cnx, picoquic_tls_ctx_t *tls_ctx)
+void picoquic_tls_set_extensions(picoquic_cnx_t * cnx, picoquic_tls_ctx_t *tls_ctx)
 {
 	size_t consumed;
 	int ret = picoquic_prepare_transport_extensions(cnx, (tls_ctx->client_mode)?0:1,
@@ -281,7 +281,7 @@ int picoquic_client_hello_call_back(ptls_on_client_hello_t * on_hello_cb_ctx,
  * On servers, this implies setting the "on hello" call back
  */
 
-int picoquic_master_tlscontext(picoquic_quic * quic, char * cert_file_name, char * key_file_name)
+int picoquic_master_tlscontext(picoquic_quic_t * quic, char * cert_file_name, char * key_file_name)
 {
     /* Create a client context or a server context */
     int ret = 0;
@@ -349,7 +349,7 @@ int picoquic_master_tlscontext(picoquic_quic * quic, char * cert_file_name, char
     return ret;
 }
 
-void picoquic_master_tlscontext_free(picoquic_quic * quic)
+void picoquic_master_tlscontext_free(picoquic_quic_t * quic)
 {
 	if (quic->tls_master_ctx != NULL)
 	{
@@ -395,7 +395,7 @@ void picoquic_master_tlscontext_free(picoquic_quic * quic)
  * TODO: document ALPN.
  * TODO: document SNI.
  */
-int picoquic_tlscontext_create(picoquic_quic * quic, picoquic_cnx * cnx)
+int picoquic_tlscontext_create(picoquic_quic_t * quic, picoquic_cnx_t * cnx)
 {
     int ret = 0;
 	/* allocate a context structure */
@@ -461,7 +461,7 @@ void picoquic_tlscontext_free(void * vctx)
  *   May provide 1-RTT init
  */
 
-int picoquic_tlsinput_segment(picoquic_cnx * cnx,
+int picoquic_tlsinput_segment(picoquic_cnx_t * cnx,
     uint8_t * bytes, size_t length, size_t * consumed, struct st_ptls_buffer_t * sendbuf)
 {
 	picoquic_tls_ctx_t * ctx = (picoquic_tls_ctx_t *)cnx->tls_ctx;
@@ -484,7 +484,7 @@ int picoquic_tlsinput_segment(picoquic_cnx * cnx,
     return ret;
 }
 
-int picoquic_initialize_stream_zero(picoquic_cnx * cnx)
+int picoquic_initialize_stream_zero(picoquic_cnx_t * cnx)
 {
     int ret = 0;
     struct st_ptls_buffer_t sendbuf;
@@ -538,7 +538,7 @@ void picoquic_aead_free(void* aead_context)
     ptls_aead_free((ptls_aead_context_t *)aead_context);
 }
 
-int picoquic_setup_1RTT_aead_contexts(picoquic_cnx * cnx, int is_server)
+int picoquic_setup_1RTT_aead_contexts(picoquic_cnx_t * cnx, int is_server)
 {
     int ret = 0;
     uint8_t * secret[256]; /* secret_max */
@@ -592,7 +592,7 @@ int picoquic_setup_1RTT_aead_contexts(picoquic_cnx * cnx, int is_server)
     return ret;
 }
 
-size_t picoquic_aead_decrypt(picoquic_cnx *cnx, uint8_t * output, uint8_t * input, size_t input_length,
+size_t picoquic_aead_decrypt(picoquic_cnx_t *cnx, uint8_t * output, uint8_t * input, size_t input_length,
     uint64_t seq_num, uint8_t * auth_data, size_t auth_data_length)
 {
     size_t decrypted = 0;
@@ -611,7 +611,7 @@ size_t picoquic_aead_decrypt(picoquic_cnx *cnx, uint8_t * output, uint8_t * inpu
     return decrypted;
 }
 
-size_t picoquic_aead_encrypt(picoquic_cnx *cnx, uint8_t * output, uint8_t * input, size_t input_length,
+size_t picoquic_aead_encrypt(picoquic_cnx_t *cnx, uint8_t * output, uint8_t * input, size_t input_length,
     uint64_t seq_num, uint8_t * auth_data, size_t auth_data_length)
 {
     size_t encrypted = ptls_aead_encrypt((ptls_aead_context_t *)cnx->aead_encrypt_ctx,
@@ -624,7 +624,7 @@ size_t picoquic_aead_encrypt(picoquic_cnx *cnx, uint8_t * output, uint8_t * inpu
 /* Input stream zero data to TLS context
  */
 
-int picoquic_tlsinput_stream_zero(picoquic_cnx * cnx)
+int picoquic_tlsinput_stream_zero(picoquic_cnx_t * cnx)
 {
     int ret = 0;
     picoquic_stream_data * data = cnx->first_stream.stream_data;

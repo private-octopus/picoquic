@@ -61,11 +61,11 @@
 #endif
 #endif
 
-void picoquic_log_packet(FILE* F, picoquic_quic * quic, picoquic_cnx * cnx,
+void picoquic_log_packet(FILE* F, picoquic_quic_t * quic, picoquic_cnx_t * cnx,
 	struct sockaddr * addr_peer, int receiving,
 	uint8_t * bytes, size_t length);
-void picoquic_log_processing(FILE* F, picoquic_cnx * cnx, size_t length, int ret);
-void picoquic_log_transport_extension(FILE* F, picoquic_cnx * cnx);
+void picoquic_log_processing(FILE* F, picoquic_cnx_t * cnx, size_t length, int ret);
+void picoquic_log_transport_extension(FILE* F, picoquic_cnx_t * cnx);
 
 void print_address(struct sockaddr * address, int address_length, char * label)
 {
@@ -172,8 +172,8 @@ int quic_server(char * server_name, int server_port, char * pem_cert, char * pem
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
-    picoquic_quic *qserver = NULL;
-    picoquic_cnx *cnx_server = NULL;
+    picoquic_quic_t *qserver = NULL;
+    picoquic_cnx_t *cnx_server = NULL;
     struct sockaddr_in server_addr;
     SOCKET_TYPE fd = INVALID_SOCKET;
     struct sockaddr_storage addr_from;
@@ -187,7 +187,7 @@ int quic_server(char * server_name, int server_port, char * pem_cert, char * pem
     int bytes_sent;
     picoquic_packet * p = NULL;
 	uint64_t current_time = 0;
-	picoquic_stateless_packet * sp;
+	picoquic_stateless_packet_t * sp;
 
     /* Open a UDP socket */
 
@@ -222,7 +222,7 @@ int quic_server(char * server_name, int server_port, char * pem_cert, char * pem
 
     /* Wait for packets */
     while (ret == 0 && (cnx_server == NULL ||
-        cnx_server->cnx_state != picoquic_state_disconnected))
+        picoquic_get_cnx_state(cnx_server)!= picoquic_state_disconnected))
     {
         bytes_recv = do_select(fd, &addr_from, &from_length,
             buffer, sizeof(buffer));
@@ -256,11 +256,11 @@ int quic_server(char * server_name, int server_port, char * pem_cert, char * pem
 					picoquic_delete_stateless_packet(sp);
 				}
 
-                if (cnx_server == NULL && qserver->cnx_list != NULL)
+                if (cnx_server == NULL && picoquic_get_first_cnx(qserver) != NULL)
                 {
                     printf("Connection established, state = %d, from length: %d\n",
-                        qserver->cnx_list->cnx_state, from_length);
-                    cnx_server = qserver->cnx_list;
+                        picoquic_get_cnx_state(picoquic_get_first_cnx(qserver)), from_length);
+                    cnx_server = picoquic_get_first_cnx(qserver);
                     memset(&client_from, 0, sizeof(client_from));
                     memcpy(&client_from, &addr_from, from_length);
                     client_addr_length = from_length;
@@ -291,7 +291,7 @@ int quic_server(char * server_name, int server_port, char * pem_cert, char * pem
                     {
 
                         printf("Connection state = %d\n",
-                            cnx_server->cnx_state);
+                            picoquic_get_cnx_state(cnx_server));
                         if (p->length > 0)
                         {
                             printf("Sending packet, %d bytes\n", send_length);
@@ -326,8 +326,8 @@ int quic_client(char * ip_address_text, int server_port)
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
-    picoquic_quic *qclient = NULL;
-    picoquic_cnx *cnx_client = NULL;
+    picoquic_quic_t *qclient = NULL;
+    picoquic_cnx_t *cnx_client = NULL;
     SOCKET_TYPE fd = INVALID_SOCKET;
     struct sockaddr_storage server_address;
     struct sockaddr_in * ipv4_dest = (struct sockaddr_in *)&server_address;
@@ -434,7 +434,7 @@ int quic_client(char * ip_address_text, int server_port)
 
     /* Wait for packets */
     while (ret == 0 &&
-        cnx_client->cnx_state != picoquic_state_disconnected)
+        picoquic_get_cnx_state(cnx_client) != picoquic_state_disconnected)
     {
         bytes_recv = do_select(fd, &packet_from, &from_length,
             buffer, sizeof(buffer));
@@ -462,7 +462,7 @@ int quic_client(char * ip_address_text, int server_port)
 
 				picoquic_log_processing(stdout, cnx_client, bytes_recv, ret);
 
-				if (cnx_client->cnx_state == picoquic_state_client_almost_ready)
+				if (picoquic_get_cnx_state(cnx_client) == picoquic_state_client_almost_ready)
 				{
 					fprintf(stdout, "Almost ready!\n\n");
 				}
@@ -472,8 +472,8 @@ int quic_client(char * ip_address_text, int server_port)
 				current_time += 1000000;
 			}
 
-			if (ret == 0 && cnx_client->cnx_state == picoquic_state_client_ready &&
-				cnx_client->first_stream.stream_data == NULL)
+			if (ret == 0 && picoquic_get_cnx_state(cnx_client) == picoquic_state_client_ready /* &&
+				cnx_client->first_stream.stream_data == NULL */)
 			{
 				client_ready_loop++;
 

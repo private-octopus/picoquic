@@ -57,7 +57,7 @@
  *   } TransportParameters;
  */
 
-#include "picoquic.h"
+#include "picoquic_internal.h"
 
 typedef enum {
 	picoquic_transport_parameter_initial_max_stream_data = 0,
@@ -68,7 +68,7 @@ typedef enum {
 	picoquic_transport_parameter_max_packet_size = 5
 } picoquic_transport_parameter_enum;
 
-int picoquic_prepare_transport_extensions(picoquic_cnx * cnx, int extension_mode,
+int picoquic_prepare_transport_extensions(picoquic_cnx_t * cnx, int extension_mode,
 	uint8_t * bytes, size_t bytes_max, size_t * consumed)
 {
 	int ret = 0;
@@ -173,7 +173,7 @@ int picoquic_prepare_transport_extensions(picoquic_cnx * cnx, int extension_mode
 	return ret;
 }
 
-int picoquic_receive_transport_extensions(picoquic_cnx * cnx, int extension_mode,
+int picoquic_receive_transport_extensions(picoquic_cnx_t * cnx, int extension_mode,
 	uint8_t * bytes, size_t bytes_max, size_t * consumed)
 {
 	int ret = 0;

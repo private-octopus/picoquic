@@ -19,7 +19,7 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "picoquic.h"
+#include "picoquic_internal.h"
 #include "fnv1a.h"
 #include "tls_api.h"
 
@@ -43,7 +43,7 @@
  * subject to flow control.
  */
 
-int picoquic_add_to_stream(picoquic_cnx * cnx, uint32_t stream_id, uint8_t * data, size_t length)
+int picoquic_add_to_stream(picoquic_cnx_t * cnx, uint32_t stream_id, uint8_t * data, size_t length)
 {
     int ret = 0;
     picoquic_stream_head * stream = NULL;
@@ -117,7 +117,7 @@ picoquic_packet * picoquic_create_packet()
  * Retransmit the client initial, but no other packet, after
  * receiving a version negotiation from the server
  */
-int picoquic_retransmit_initial(picoquic_cnx * cnx, picoquic_packet * packet)
+int picoquic_retransmit_initial(picoquic_cnx_t * cnx, picoquic_packet * packet)
 {
 	int ret = 0;
 	picoquic_packet * p = cnx->retransmit_oldest;
@@ -173,7 +173,7 @@ int picoquic_retransmit_initial(picoquic_cnx * cnx, picoquic_packet * packet)
  * retransmission. Also, prune the retransmit queue as needed.
  */
 
-int picoquic_retransmit_needed(picoquic_cnx * cnx, uint64_t current_time, 
+int picoquic_retransmit_needed(picoquic_cnx_t * cnx, uint64_t current_time, 
 	picoquic_packet * packet, int * use_fnv1a)
 {
 	picoquic_packet * p;
@@ -307,7 +307,7 @@ int picoquic_retransmit_needed(picoquic_cnx * cnx, uint64_t current_time,
 	return length;
 }
 
-int picoquic_prepare_packet(picoquic_cnx * cnx, picoquic_packet * packet,
+int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 	uint64_t current_time, uint8_t * send_buffer, size_t send_buffer_max, size_t * send_length)
 {
 	/* TODO: Check for interesting streams */
@@ -537,7 +537,7 @@ int picoquic_prepare_packet(picoquic_cnx * cnx, picoquic_packet * packet,
 	return ret;
 }
 
-int picoquic_close(picoquic_cnx * cnx)
+int picoquic_close(picoquic_cnx_t * cnx)
 {
     int ret = 0;
     if (cnx->cnx_state == picoquic_state_server_ready ||

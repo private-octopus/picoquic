@@ -19,7 +19,7 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "../picoquic/picoquic.h"
+#include "../picoquic/picoquic_internal.h"
 
 /*
  * Simulate losses based on a loss pattern.
@@ -35,12 +35,12 @@ static int tls_api_loss_simulator(uint64_t * loss_mask)
 	return ret;
 }
 
-static int tls_api_one_packet(picoquic_quic * qsender, picoquic_cnx * cnx, picoquic_quic * qreceive,
+static int tls_api_one_packet(picoquic_quic_t * qsender, picoquic_cnx_t * cnx, picoquic_quic_t * qreceive,
     struct sockaddr * sender_addr, uint64_t * loss_mask, uint64_t * simulated_time)
 {
     /* Simulate a connection */
     int ret = 0;
-	picoquic_stateless_packet * sp = picoquic_dequeue_stateless_packet(qsender);
+	picoquic_stateless_packet_t * sp = picoquic_dequeue_stateless_packet(qsender);
 	size_t send_length = 0;
 
 	if (sp != NULL)
@@ -103,7 +103,7 @@ static int tls_api_one_packet(picoquic_quic * qsender, picoquic_cnx * cnx, picoq
     return ret;
 }
 
-static int verify_transport_extension(picoquic_cnx * cnx_client, picoquic_cnx * cnx_server)
+static int verify_transport_extension(picoquic_cnx_t * cnx_client, picoquic_cnx_t * cnx_server)
 {
 	int ret = 0;
 
@@ -141,8 +141,8 @@ static int tls_api_test_with_loss(uint64_t  * loss_mask, uint32_t proposed_versi
 {
 
     int ret = 0;
-    picoquic_quic * qclient = NULL, * qserver = NULL;
-    picoquic_cnx * cnx_client = NULL, * cnx_server = NULL;
+    picoquic_quic_t * qclient = NULL, * qserver = NULL;
+    picoquic_cnx_t * cnx_client = NULL, * cnx_server = NULL;
     struct sockaddr_in client_addr, server_addr;
     int nb_trials = 0;
 	uint64_t simulated_time = 0;

@@ -19,7 +19,7 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "picoquic.h"
+#include "picoquic_internal.h"
 
 
 /*
@@ -34,7 +34,7 @@
 /*
  * Check whether the packet was already received.
  */
-int picoquic_is_pn_already_received(picoquic_cnx * cnx, uint64_t pn64)
+int picoquic_is_pn_already_received(picoquic_cnx_t * cnx, uint64_t pn64)
 {
     int is_received = 0;
     picoquic_sack_item * sack = &cnx->first_sack_item;
@@ -62,7 +62,7 @@ int picoquic_is_pn_already_received(picoquic_cnx * cnx, uint64_t pn64)
  * Record it in the chain.
  */
 
-int picoquic_record_pn_received(picoquic_cnx * cnx, uint64_t pn64, uint64_t current_microsec)
+int picoquic_record_pn_received(picoquic_cnx_t * cnx, uint64_t pn64, uint64_t current_microsec)
 {
     int ret = 0;
     picoquic_sack_item * sack = &cnx->first_sack_item;
@@ -195,7 +195,7 @@ int picoquic_record_pn_received(picoquic_cnx * cnx, uint64_t pn64, uint64_t curr
  * This is expressed as a series of SACK blocks, of the form "last acknowledged, size"
  */
 
-int picoquic_record_sack(picoquic_cnx * cnx, uint64_t pn64, uint64_t block_size)
+int picoquic_record_sack(picoquic_cnx_t * cnx, uint64_t pn64, uint64_t block_size)
 {
     return -1;
 }
@@ -291,7 +291,7 @@ uint64_t picoquic_float16_to_deltat(uint16_t float16)
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 */
 
-int picoquic_encode_sack_frame(picoquic_cnx * cnx, uint8_t * bytes,
+int picoquic_encode_sack_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
     size_t bytes_max, size_t * nb_bytes, uint64_t current_time)
 {
     int ret = -1;
@@ -451,7 +451,7 @@ int picoquic_encode_sack_frame(picoquic_cnx * cnx, uint8_t * bytes,
     return ret;
 }
 
-int picoquic_decode_sack_frame(picoquic_cnx * cnx, uint8_t * bytes,
+int picoquic_decode_sack_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
     size_t bytes_max, size_t * nb_bytes, uint64_t current_time)
 {
     return -1;

@@ -23,11 +23,11 @@
 * Packet logging.
 */
 #include <stdio.h>
-#include "picoquic.h"
+#include "picoquic_internal.h"
 #include "fnv1a.h"
 #include "tls_api.h"
 
-void picoquic_log_packet_address(FILE* F, picoquic_cnx * cnx,
+void picoquic_log_packet_address(FILE* F, picoquic_cnx_t * cnx,
 	struct sockaddr * addr_peer, int receiving, size_t length)
 {
 	fprintf(F, (receiving)? "Receiving %d bytes from ":"Sending %d bytes to ",
@@ -96,7 +96,7 @@ char const * picoquic_log_ptype_name(picoquic_packet_type_enum ptype)
 	}
 }
 
-void picoquic_log_packet_header(FILE* F, picoquic_cnx * cnx, picoquic_packet_header * ph)
+void picoquic_log_packet_header(FILE* F, picoquic_cnx_t * cnx, picoquic_packet_header * ph)
 {
 	fprintf(F, "    Type: %d(%s), CnxID: %llx%s, Seq: %x, Version %x\n",
 		ph->ptype, picoquic_log_ptype_name(ph->ptype), ph->cnx_id,
@@ -503,7 +503,7 @@ uint32_t picoquic_log_decrypt_clear_text(FILE* F,
 }
 
 void picoquic_log_decrypt_encrypted(FILE* F,
-	picoquic_cnx * cnx,
+	picoquic_cnx_t * cnx,
 	uint8_t * bytes, size_t length, picoquic_packet_header * ph)
 {
 	/* decrypt in a separate copy */
@@ -523,7 +523,7 @@ void picoquic_log_decrypt_encrypted(FILE* F,
 }
 
 
-void picoquic_log_packet(FILE* F, picoquic_quic * quic, picoquic_cnx * cnx, 
+void picoquic_log_packet(FILE* F, picoquic_quic_t * quic, picoquic_cnx_t * cnx, 
 	struct sockaddr * addr_peer, int receiving,
 	uint8_t * bytes,  size_t length)
 {
@@ -614,7 +614,7 @@ static char const * picoquic_log_state_name[] = {
 
 static const size_t picoquic_nb_log_state_name = sizeof(picoquic_log_state_name) / sizeof(char const *);
 
-void picoquic_log_processing(FILE* F, picoquic_cnx * cnx, size_t length, int ret)
+void picoquic_log_processing(FILE* F, picoquic_cnx_t * cnx, size_t length, int ret)
 {
 	fprintf(F, "Processed %d bytes, state = %d (%s), return %d\n\n",
 		length, cnx->cnx_state,
@@ -623,7 +623,7 @@ void picoquic_log_processing(FILE* F, picoquic_cnx * cnx, size_t length, int ret
 		ret);
 }
 
-void picoquic_log_transport_extension(FILE* F, picoquic_cnx * cnx)
+void picoquic_log_transport_extension(FILE* F, picoquic_cnx_t * cnx)
 {
 
 	uint8_t * bytes = NULL;
@@ -779,7 +779,7 @@ void picoquic_log_transport_extension(FILE* F, picoquic_cnx * cnx)
 	}
 	else
 	{
-		printf(F, "Received transport parameter TLS extension (%d bytes):\n", (uint32_t)bytes_max);
+		fprintf(F, "Received transport parameter TLS extension (%d bytes):\n", (uint32_t)bytes_max);
 		fprintf(F, "    First 128 received bytes (%d):\n", (uint32_t)(bytes_max - byte_index));
 	}
 

@@ -150,6 +150,7 @@
   <ItemGroup>
     <ClInclude Include="fnv1a.h" />
     <ClInclude Include="picohash.h" />
+    <ClInclude Include="picoquic_internal.h" />
     <ClInclude Include="picotlsapi.h" />
     <ClInclude Include="picoquic.h" />
     <ClInclude Include="tls_api.h" />

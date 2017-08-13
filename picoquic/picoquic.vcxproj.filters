@@ -71,5 +71,8 @@
     <ClInclude Include="tls_api.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="picoquic_internal.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
