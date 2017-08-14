@@ -632,7 +632,26 @@ void picoquic_log_transport_extension(FILE* F, picoquic_cnx_t * cnx)
 	int client_mode = 1;
 	int ret = 0;
 	size_t byte_index = 0;
+	char const * sni = picoquic_tls_get_sni(cnx);
+	char const * alpn = picoquic_tls_get_negotiated_alpn(cnx);
 
+	if (sni == NULL)
+	{
+		fprintf(F, "SNI not received.\n");
+	}
+	else
+	{
+		fprintf(F, "Received SNI: %s\n", sni);
+	}
+
+	if (alpn == NULL)
+	{
+		fprintf(F, "ALPN not received.\n");
+	}
+	else
+	{
+		fprintf(F, "Received ALPN: %s\n", alpn);
+	}
 	picoquic_provide_received_transport_extensions(cnx,
 		&bytes, &bytes_max, &ext_received_return, &client_mode);
 
