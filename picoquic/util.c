@@ -22,22 +22,35 @@
 /* Simple set of utilities */
 #include "picoquic_internal.h"
 
-char * picoquic_string_duplicate(const char * original)
+char * picoquic_string_create(const char * original, size_t len)
 {
-	size_t len = strlen(original);
 	char * str = (char *)malloc(len + 1);
 
 	if (str != NULL)
 	{
-#ifdef WIN32
-		if (strcpy_s(str, len + 1, original) != 0)
+		if (original == NULL || len == 0)
 		{
-			free(str);
-			str = NULL;
+			str[0] = 0;
 		}
-#else
-		strcpy(str, original);
-#endif
+		else
+		{
+			memcpy(str, original, len);
+			str[len] = 0;
+		}
+	}
+
+	return str;
+}
+
+char * picoquic_string_duplicate(const char * original)
+{
+	char * str = NULL;
+
+	if (original != NULL)
+	{
+		size_t len = strlen(original);
+
+		str = picoquic_string_create(original, len);
 	}
 
 	return str;

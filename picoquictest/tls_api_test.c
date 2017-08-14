@@ -20,6 +20,11 @@
 */
 
 #include "../picoquic/picoquic_internal.h"
+#include "../picoquic/tls_api.h"
+
+#define PICOQUIC_TEST_SNI "picoquic.test"
+#define PICOQUIC_TEST_ALPN "picoquic-test"
+#define PICOQUIC_TEST_WRONG_ALPN "picoquic-bla-bla"
 
 /*
  * Simulate losses based on a loss pattern.
@@ -137,7 +142,114 @@ static int verify_transport_extension(picoquic_cnx_t * cnx_client, picoquic_cnx_
 	return ret;
 }
 
-static int tls_api_test_with_loss(uint64_t  * loss_mask, uint32_t proposed_version)
+static int verify_sni(picoquic_cnx_t * cnx_client, picoquic_cnx_t * cnx_server,
+	char const * sni)
+{
+	int ret = 0;
+	char const * client_sni = picoquic_tls_get_sni(cnx_client);
+	char const * server_sni = picoquic_tls_get_sni(cnx_server);
+
+
+	if (sni == NULL)
+	{
+		if (cnx_client->sni != NULL)
+		{
+			ret = -1;
+		}
+		else if (client_sni != NULL)
+		{
+			ret = -1;
+		}
+		else if (server_sni != NULL)
+		{
+			ret = -1;
+		}
+	}
+	else
+	{
+		if (cnx_client->sni == NULL)
+		{
+			ret = -1;
+		}
+		else if (client_sni == NULL)
+		{
+			ret = -1;
+		}
+		else if (server_sni == NULL)
+		{
+			ret = -1;
+		}
+		else if (strcmp(cnx_client->sni, sni) != 0)
+		{
+			ret = -1;
+		}
+		else if (strcmp(client_sni, sni) != 0)
+		{
+			ret = -1;
+		}
+		else if (strcmp(server_sni, sni) != 0)
+		{
+			ret = -1;
+		}
+	}
+
+	return ret;
+}
+
+static int verify_alpn(picoquic_cnx_t * cnx_client, picoquic_cnx_t * cnx_server,
+	char const * alpn)
+{
+	int ret = 0;
+	char const * client_alpn = picoquic_tls_get_negotiated_alpn(cnx_client);
+	char const * server_alpn = picoquic_tls_get_negotiated_alpn(cnx_server);
+
+	if (alpn == NULL)
+	{
+		if (cnx_client->alpn != NULL)
+		{
+			ret = -1;
+		}
+		else if (client_alpn != NULL)
+		{
+			ret = -1;
+		}
+		else if (server_alpn != NULL)
+		{
+			ret = -1;
+		}
+	}
+	else
+	{
+		if (cnx_client->alpn == NULL)
+		{
+			ret = -1;
+		}
+		else if (client_alpn == NULL)
+		{
+			ret = -1;
+		}
+		else if (server_alpn == NULL)
+		{
+			ret = -1;
+		}
+		else if (strcmp(cnx_client->alpn, alpn) != 0)
+		{
+			ret = -1;
+		}
+		else if (strcmp(client_alpn, alpn) != 0)
+		{
+			ret = -1;
+		}
+		else if (strcmp(server_alpn, alpn) != 0)
+		{
+			ret = -1;
+		}
+	}
+
+	return ret;
+}
+static int tls_api_test_with_loss(uint64_t  * loss_mask, uint32_t proposed_version,
+	char const * sni, char const * alpn)
 {
 
     int ret = 0;
@@ -160,8 +272,10 @@ static int tls_api_test_with_loss(uint64_t  * loss_mask, uint32_t proposed_versi
 
     /* Test the creation of the client and server contexts */
     /* Create QUIC context */
-    qclient = picoquic_create(8, NULL, NULL, NULL, NULL);
-    qserver = picoquic_create(8, "..\\certs\\cert.pem", "..\\certs\\key.pem", NULL, NULL);
+    qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL);
+    qserver = picoquic_create(8, 
+		"..\\certs\\cert.pem", "..\\certs\\key.pem",
+		PICOQUIC_TEST_ALPN, NULL, NULL);
 
     if (qclient == NULL || qserver == NULL)
     {
@@ -172,7 +286,7 @@ static int tls_api_test_with_loss(uint64_t  * loss_mask, uint32_t proposed_versi
     {
         /* Create a client connection */
         cnx_client = picoquic_create_cnx(qclient, 12345, (struct sockaddr *)&server_addr, 0, 
-			proposed_version, NULL, NULL);
+			proposed_version, sni, alpn);
 
         if (cnx_client == NULL)
         {
@@ -238,6 +352,16 @@ static int tls_api_test_with_loss(uint64_t  * loss_mask, uint32_t proposed_versi
 		{
 			ret = verify_transport_extension(cnx_client, cnx_server);
 		}
+
+		if (ret == 0)
+		{
+			ret = verify_sni(cnx_client, cnx_server, sni);
+		}
+
+		if (ret == 0)
+		{
+			ret = verify_alpn(cnx_client, cnx_server, alpn);
+		}
     }
 
     if (qclient != NULL)
@@ -255,14 +379,14 @@ static int tls_api_test_with_loss(uint64_t  * loss_mask, uint32_t proposed_versi
 
 int tls_api_test()
 {
-	return tls_api_test_with_loss(NULL, 0);
+	return tls_api_test_with_loss(NULL, 0, NULL, NULL);
 }
 
 int tls_api_loss_test(uint64_t mask)
 {
 	uint64_t loss_mask = mask;
 
-	return tls_api_test_with_loss(&loss_mask, 0);
+	return tls_api_test_with_loss(&loss_mask, 0, NULL, NULL);
 }
 
 int tls_api_many_losses()
@@ -275,7 +399,7 @@ int tls_api_many_losses()
 		for (uint64_t j = 1; ret == 0 && j < 4; j++)
 		{
 			loss_mask = ((1 << j) - 1) << i;
-			ret = tls_api_test_with_loss(&loss_mask, 0);
+			ret = tls_api_test_with_loss(&loss_mask, 0, NULL, NULL);
 		}
 	}
 
@@ -285,5 +409,20 @@ int tls_api_many_losses()
 int tls_api_version_negotiation_test()
 {
 	const uint32_t version_grease = 0x0aca4a0a;
-	return tls_api_test_with_loss(NULL, version_grease);
+	return tls_api_test_with_loss(NULL, version_grease, NULL, NULL);
+}
+
+int tls_api_sni_test()
+{
+	return tls_api_test_with_loss(NULL, 0, PICOQUIC_TEST_SNI, NULL);
+}
+
+int tls_api_alpn_test()
+{
+	return tls_api_test_with_loss(NULL, 0, NULL, PICOQUIC_TEST_ALPN);
+}
+
+int tls_api_wrong_alpn_test()
+{
+	return tls_api_test_with_loss(NULL, 0, NULL, PICOQUIC_TEST_WRONG_ALPN);
 }

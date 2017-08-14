@@ -37,6 +37,7 @@ typedef struct st_picoquic_tls_ctx_t {
 	int client_mode;
 	ptls_raw_extension_t ext[2];
 	ptls_handshake_properties_t handshake_properties;
+	ptls_iovec_t alpn_vec;
 	uint8_t ext_data[128];
 	uint8_t ext_received[128];
 	size_t ext_received_length;
@@ -257,19 +258,42 @@ int picoquic_client_hello_call_back(ptls_on_client_hello_t * on_hello_cb_ctx,
 	ptls_t *tls, ptls_iovec_t server_name, const ptls_iovec_t *negotiated_protocols,
 	size_t num_negotiated_protocols, const uint16_t *signature_algorithms, size_t num_signature_algorithms)
 {
-	/* Find the context from the TLS context */
-	picoquic_tls_ctx_t * ctx = (picoquic_tls_ctx_t *)
-		((char *)tls - offsetof(struct st_picoquic_tls_ctx_t, tls));
+	int alpn_found = 0;
+	picoquic_quic_t ** ppquic = (picoquic_quic_t **)(
+		((char*)on_hello_cb_ctx) + sizeof(ptls_on_client_hello_t));
+	picoquic_quic_t * quic = *ppquic;
 
-	/* TODO: check against the supported protocols */
-
-	for (size_t i = 0; i < num_negotiated_protocols; i++)
+	/* Check if the client is proposing the expected ALPN */
+	if (quic->default_alpn != NULL)
 	{
-		if (negotiated_protocols[i].len  > 0)
+		size_t len = strlen(quic->default_alpn);
+
+		for (size_t i = 0; i < num_negotiated_protocols; i++)
 		{
-			ptls_set_negotiated_protocol(tls, 
-				negotiated_protocols[i].base, negotiated_protocols[i].len);
-			break;
+			if (negotiated_protocols[i].len == len &&
+				memcmp(negotiated_protocols[i].base, quic->default_alpn, len) == 0)
+			{
+				alpn_found = 1;
+				ptls_set_negotiated_protocol(tls, quic->default_alpn, len);
+				break;
+			}
+		}
+	}
+
+	/* If no common ALPN found, pick the first choice of the client. 
+	 * This could be problematic, but right now alpn use in quic is in flux.
+	 */
+
+	if (alpn_found == 0)
+	{
+		for (size_t i = 0; i < num_negotiated_protocols; i++)
+		{
+			if (negotiated_protocols[i].len > 0)
+			{
+				ptls_set_negotiated_protocol(tls,
+					negotiated_protocols[i].base, negotiated_protocols[i].len);
+				break;
+			}
 		}
 	}
 
@@ -314,6 +338,18 @@ int picoquic_master_tlscontext(picoquic_quic_t * quic, char * cert_file_name, ch
             {
                 ret = SetSignCertificate(key_file_name, ctx);
             }
+
+			och = (ptls_on_client_hello_t *)malloc(sizeof(ptls_on_client_hello_t) + 
+				sizeof(picoquic_quic_t *));
+			if (och != NULL)
+			{
+				picoquic_quic_t ** ppquic = (picoquic_quic_t **)(
+					((char*)och) + sizeof(ptls_on_client_hello_t));
+
+				och->cb = picoquic_client_hello_call_back;
+				ctx->on_client_hello = och;
+				*ppquic = quic;
+			}
         }
         else
         {
@@ -326,13 +362,6 @@ int picoquic_master_tlscontext(picoquic_quic_t * quic, char * cert_file_name, ch
 			{
 				ptls_openssl_init_verify_certificate(verifier, NULL);
 				ctx->verify_certificate = &verifier->super;
-			}
-
-			och = (ptls_on_client_hello_t *)malloc(sizeof(ptls_on_client_hello_t));
-			if (och != NULL)
-			{
-				och->cb = picoquic_client_hello_call_back;
-				ctx->on_client_hello = och;
 			}
         }
 
@@ -392,8 +421,6 @@ void picoquic_master_tlscontext_free(picoquic_quic_t * quic)
  * Creation of a TLS context.
  * This includes setting the handshake properties that will later be 
  * used during the TLS handshake.
- * TODO: document ALPN.
- * TODO: document SNI.
  */
 int picoquic_tlscontext_create(picoquic_quic_t * quic, picoquic_cnx_t * cnx)
 {
@@ -427,6 +454,19 @@ int picoquic_tlscontext_create(picoquic_quic_t * quic, picoquic_cnx_t * cnx)
 		}
 		else if (ctx->client_mode)
 		{
+			if (cnx->sni != NULL)
+			{
+				ptls_set_server_name(ctx->tls, cnx->sni, strlen(cnx->sni));
+			}
+
+			if (cnx->alpn != NULL)
+			{
+				ctx->alpn_vec.base = cnx->alpn;
+				ctx->alpn_vec.len = strlen(cnx->alpn);
+				ctx->handshake_properties.client.negotiated_protocols.count = 1;
+				ctx->handshake_properties.client.negotiated_protocols.list = &ctx->alpn_vec;
+			}
+
 			picoquic_tls_set_extensions(cnx, ctx);
 		}
 	}
@@ -445,6 +485,20 @@ void picoquic_tlscontext_free(void * vctx)
 		ctx->tls = NULL;
 	}
 	free(ctx);
+}
+
+char const * picoquic_tls_get_negotiated_alpn(picoquic_cnx_t * cnx)
+{
+	picoquic_tls_ctx_t * ctx = (picoquic_tls_ctx_t *)cnx->tls_ctx;
+
+	return ptls_get_negotiated_protocol(ctx->tls);
+}
+
+char const * picoquic_tls_get_sni(picoquic_cnx_t * cnx)
+{
+	picoquic_tls_ctx_t * ctx = (picoquic_tls_ctx_t *)cnx->tls_ctx;
+
+	return ptls_get_server_name(ctx->tls);
 }
 
 /*

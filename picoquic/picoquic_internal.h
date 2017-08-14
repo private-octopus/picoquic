@@ -64,6 +64,7 @@ extern "C" {
 		void* tls_master_ctx;
 		picoquic_stream_data_cb_fn default_callback_fn;
 		void * default_callback_ctx;
+		char const * default_alpn;
 
 		uint32_t flags;
 
@@ -236,6 +237,7 @@ extern "C" {
 	void picoformat_64(uint8_t *bytes, uint64_t n64);
 
 	/* utilities */
+	char * picoquic_string_create(const char * original, size_t len);
 	char * picoquic_string_duplicate(const char * original);
 
 	/* Packet parsing */

@@ -211,7 +211,7 @@ int quic_server(char * server_name, int server_port, char * pem_cert, char * pem
     if (ret == 0)
     {
         /* Create QUIC context */
-        qserver = picoquic_create(8, pem_cert, pem_key, NULL, NULL);
+        qserver = picoquic_create(8, pem_cert, pem_key, NULL, NULL, NULL);
 
         if (qserver == NULL)
         {
@@ -383,7 +383,7 @@ int quic_client(char * ip_address_text, int server_port)
     /* Create QUIC context */
     if (ret == 0)
     {
-        qclient = picoquic_create(8, NULL, NULL, NULL, NULL);
+        qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL);
 
         if (qclient == NULL)
         {

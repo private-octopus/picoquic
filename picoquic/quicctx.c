@@ -88,7 +88,10 @@ const size_t picoquic_nb_supported_versions = sizeof(picoquic_supported_versions
 
 
 /* QUIC context create and dispose */
-picoquic_quic_t * picoquic_create(uint32_t nb_connections, char * cert_file_name, char * key_file_name,
+picoquic_quic_t * picoquic_create(uint32_t nb_connections, 
+	char * cert_file_name, 
+	char * key_file_name,
+	char const * default_alpn,
 	picoquic_stream_data_cb_fn default_callback_fn,
 	void * default_callback_ctx)
 {
@@ -105,6 +108,7 @@ picoquic_quic_t * picoquic_create(uint32_t nb_connections, char * cert_file_name
 
 		quic->default_callback_fn = default_callback_fn;
 		quic->default_callback_ctx = default_callback_ctx;
+		quic->default_alpn = picoquic_string_duplicate(default_alpn);
 
         if (cert_file_name != NULL)
         {
@@ -137,6 +141,12 @@ void picoquic_free(picoquic_quic_t * quic)
     if (quic != NULL)
     {
         /* TODO: close the network sockets */
+
+		if (quic->default_alpn != NULL)
+		{
+			free(quic->default_alpn);
+			quic->default_alpn = NULL;
+		}
 
 		/* delete all pending packets */
 		while (quic->pending_stateless_packet != NULL)
@@ -618,6 +628,18 @@ void picoquic_delete_cnx(picoquic_cnx_t * cnx)
 
     if (cnx != NULL)
     {
+		if (cnx->alpn != NULL)
+		{
+			free(cnx->alpn);
+			cnx->alpn = NULL;
+		}
+
+		if (cnx->sni != NULL)
+		{
+			free(cnx->sni);
+			cnx->sni = NULL;
+		}
+
         while (cnx->first_cnx_id != NULL)
         {
             picohash_item * item;

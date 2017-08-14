@@ -53,4 +53,7 @@ void picoquic_provide_received_transport_extensions(picoquic_cnx_t * cnx,
 	int * ext_received_return,
 	int * client_mode);
 
+char const * picoquic_tls_get_negotiated_alpn(picoquic_cnx_t * cnx);
+char const * picoquic_tls_get_sni(picoquic_cnx_t * cnx);
+
 #endif /* TLS_API_H */
