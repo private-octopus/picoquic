@@ -72,6 +72,10 @@ int picoquic_add_to_stream(picoquic_cnx_t * cnx, uint32_t stream_id,
 					ret = -1;
 				}
 			}
+			else
+			{
+				stream->stream_flags |= picoquic_stream_flag_fin_notified;
+			}
 		}
 	}
 
@@ -455,7 +459,8 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 		}
 		/* include here the actual retransmission, copying bytes
 		 * from the old packet to the new one */
-		else if (stream->send_queue == NULL)
+		else if ((stream == NULL || stream->send_queue == NULL) &&
+			picoquic_is_ack_needed(cnx, current_time) == 0)
 		{
 			length = 0;
 		}

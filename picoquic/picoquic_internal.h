@@ -203,6 +203,8 @@ extern "C" {
 		/* Receive state */
 		struct _picoquic_sack_item first_sack_item;
 		uint64_t sack_block_size_max;
+		uint64_t highest_ack_sent;
+		uint64_t highest_ack_time;
 
 		/* Retransmission state */
 		uint64_t nb_retransmit;
@@ -269,6 +271,8 @@ extern "C" {
 	uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t pn);
 
 	/* handling of ACK logic */
+	int picoquic_is_ack_needed(picoquic_cnx_t * cnx, uint64_t current_time);
+
 	int picoquic_is_pn_already_received(picoquic_cnx_t * cnx, uint64_t pn64);
 	int picoquic_record_pn_received(picoquic_cnx_t * cnx, uint64_t pn64, uint64_t current_microsec);
 	uint16_t picoquic_deltat_to_float16(uint64_t delta_t);

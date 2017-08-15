@@ -97,9 +97,9 @@ void picoquic_stream_data_callback(picoquic_cnx_t * cnx, picoquic_stream_head * 
 {
 	picoquic_stream_data * data = stream->stream_data;
 
-	while (data != NULL && data->offset <= cnx->first_stream.consumed_offset)
+	while (data != NULL && data->offset <= stream->consumed_offset)
 	{
-		size_t start = (size_t)(cnx->first_stream.consumed_offset - data->offset);
+		size_t start = (size_t)(stream->consumed_offset - data->offset);
 		size_t data_length = data->length - start;
 		int fin_now = 0;
 		
@@ -353,7 +353,7 @@ picoquic_stream_head * picoquic_find_ready_stream(picoquic_cnx_t * cnx, int rest
 {
 	picoquic_stream_head * stream = &cnx->first_stream;
 
-	if (restricted != 0)
+	if (restricted == 0)
 	{
 		do {
 			if ((stream->send_queue != NULL &&
@@ -779,6 +779,24 @@ int picoquic_prepare_ack_frame(picoquic_cnx_t * cnx, uint64_t current_time,
 
 		/* Do not encode additional time stamps yet */
 		*consumed = byte_index;
+
+		/* Remember the ACK value and time */
+		cnx->highest_ack_sent = cnx->first_sack_item.end_of_sack_range;
+		cnx->highest_ack_time = current_time;
+	}
+
+	return ret;
+}
+
+int picoquic_is_ack_needed(picoquic_cnx_t * cnx, uint64_t current_time)
+{
+	int ret = 0;
+
+	if (cnx->highest_ack_sent + 2 <= cnx->first_sack_item.end_of_sack_range ||
+		(cnx->first_sack_item.next_sack != NULL &&
+			cnx->highest_ack_time + 10000 <= current_time))
+	{
+		ret = 1;
 	}
 
 	return ret;

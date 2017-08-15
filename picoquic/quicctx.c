@@ -397,6 +397,8 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
 			cnx->first_sack_item.end_of_sack_range = 0;
 			cnx->first_sack_item.next_sack = NULL;
 			cnx->sack_block_size_max = 0;
+			cnx->highest_ack_sent = 0;
+			cnx->highest_ack_time = 0;
 
 			cnx->first_stream.stream_id = 0;
 			cnx->first_stream.consumed_offset = 0;

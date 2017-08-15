@@ -611,6 +611,7 @@ int picoquic_incoming_packet(
 	}
 	else if (ret == PICOQUIC_ERROR_AEAD_CHECK ||
 		ret == PICOQUIC_ERROR_DUPLICATE ||
+		ret == PICOQUIC_ERROR_UNEXPECTED_PACKET ||
 		ret == PICOQUIC_ERROR_FNV1A_CHECK)
 	{
 		/* Bad packets are dropped silently */
