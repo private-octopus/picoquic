@@ -684,7 +684,7 @@ int picoquic_tlsinput_stream_zero(picoquic_cnx_t * cnx)
     picoquic_stream_data * data = cnx->first_stream.stream_data;
     struct st_ptls_buffer_t sendbuf;
 
-    if (data != NULL &&
+    if (data == NULL ||
         data->offset > cnx->first_stream.consumed_offset)
     {
         return 0;

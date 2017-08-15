@@ -44,6 +44,7 @@ extern "C" {
 	int tls_api_sni_test();
 	int tls_api_alpn_test();
 	int tls_api_wrong_alpn_test();
+	int tls_api_oneway_stream_test();
 
 #ifdef  __cplusplus
 }

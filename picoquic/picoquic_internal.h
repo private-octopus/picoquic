@@ -118,8 +118,9 @@ extern "C" {
 
 	typedef enum picoquic_stream_flags {
 		picoquic_stream_flag_fin_received = 1,
-		picoquic_stream_flag_fin_notified = 2,
-		picoquic_stream_flag_fin_sent = 4,
+		picoquic_stream_flag_fin_signalled = 2,
+		picoquic_stream_flag_fin_notified = 4,
+		picoquic_stream_flag_fin_sent = 8,
 	} picoquic_stream_flags;
 
 	typedef struct _picoquic_stream_head {

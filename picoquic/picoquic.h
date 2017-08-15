@@ -99,7 +99,7 @@ extern "C" {
 
 	/* Callback function for providing stream data to the application */
 	typedef void(*picoquic_stream_data_cb_fn) (picoquic_cnx_t * cnx,
-		uint32_t stream_id, uint8_t bytes, uint8_t length, int fin_noted, void * callback_ctx);
+		uint32_t stream_id, uint8_t * bytes, size_t length, int fin_noted, void * callback_ctx);
 
 
 	/* QUIC context create and dispose */

@@ -170,5 +170,12 @@ namespace UnitTest1
 
 			Assert::AreEqual(ret, 0);
 		}
+
+		TEST_METHOD(test_one_way_stream)
+		{
+			int ret = tls_api_oneway_stream_test();
+
+			Assert::AreEqual(ret, 0);
+		}
 	};
 }
