@@ -116,9 +116,16 @@ extern "C" {
 		uint8_t * bytes;
 	} picoquic_stream_data;
 
+	typedef enum picoquic_stream_flags {
+		picoquic_stream_flag_fin_received = 1,
+		picoquic_stream_flag_fin_notified = 2,
+		picoquic_stream_flag_fin_sent = 4,
+	} picoquic_stream_flags;
+
 	typedef struct _picoquic_stream_head {
 		struct _picoquic_stream_head * next_stream;
-		uint64_t stream_id;
+		uint32_t stream_id;
+		uint32_t stream_flags;
 		uint64_t consumed_offset;
 		uint64_t fin_offset;
 		picoquic_stream_data * stream_data;
@@ -267,7 +274,8 @@ extern "C" {
 	uint64_t picoquic_float16_to_deltat(uint16_t float16);
 
 	/* stream management */
-	int picoquic_stream_input(picoquic_cnx_t * cnx, uint32_t stream_id,
+	picoquic_stream_head * picoquic_find_stream(picoquic_cnx_t * cnx, uint32_t stream_id, int create);
+	int picoquic_stream_network_input(picoquic_cnx_t * cnx, uint32_t stream_id,
 		uint64_t offset, int fin, uint8_t * bytes, size_t length);
 	int picoquic_decode_stream_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
 		size_t bytes_max, int restricted, size_t * consumed);
@@ -275,7 +283,6 @@ extern "C" {
 		uint8_t * bytes, size_t bytes_max, size_t * consumed);
 	int picoquic_prepare_ack_frame(picoquic_cnx_t * cnx, uint64_t current_time,
 		uint8_t * bytes, size_t bytes_max, size_t * consumed);
-	int picoquic_add_to_stream(picoquic_cnx_t * cnx, uint32_t stream_id, uint8_t * data, size_t length);
 	int picoquic_prepare_connection_close_frame(picoquic_cnx_t * cnx,
 		uint8_t * bytes, size_t bytes_max, size_t * consumed);
 

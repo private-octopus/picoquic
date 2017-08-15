@@ -552,7 +552,7 @@ int picoquic_initialize_stream_zero(picoquic_cnx_t * cnx)
     {
         if (sendbuf.off > 0)
         {
-            ret = picoquic_add_to_stream(cnx, 0, sendbuf.base, sendbuf.off);
+            ret = picoquic_add_to_stream(cnx, 0, sendbuf.base, sendbuf.off, 0);
         }
         ret = 0;
     }
@@ -750,7 +750,7 @@ int picoquic_tlsinput_stream_zero(picoquic_cnx_t * cnx)
     {
         if (sendbuf.off > 0)
         {
-            ret = picoquic_add_to_stream(cnx, 0, sendbuf.base, sendbuf.off);
+            ret = picoquic_add_to_stream(cnx, 0, sendbuf.base, sendbuf.off, 0);
         }
         ret = 0;
     }

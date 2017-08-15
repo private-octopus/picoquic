@@ -129,7 +129,7 @@ extern "C" {
 
 	picoquic_state_enum picoquic_get_cnx_state(picoquic_cnx_t * cnx);
 
-	/* Send and receive */
+	/* Send and receive network packets */
 
 	picoquic_stateless_packet_t * picoquic_dequeue_stateless_packet(picoquic_quic_t * quic);
 	void picoquic_delete_stateless_packet(picoquic_stateless_packet_t * sp);
@@ -145,6 +145,10 @@ extern "C" {
 
 	int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 		uint64_t current_time, uint8_t * send_buffer, size_t send_buffer_max, size_t * send_length);
+
+	/* send and receive data on streams */
+	int picoquic_add_to_stream(picoquic_cnx_t * cnx,
+		uint32_t stream_id, uint8_t * data, size_t length, int set_fin);
 
 
 #ifdef  __cplusplus

@@ -27,6 +27,31 @@
 #define PICOQUIC_TEST_WRONG_ALPN "picoquic-bla-bla"
 
 /*
+ * Generic call back function.
+ */
+typedef struct st_test_api_callback_t {
+	int client_mode;
+	int fin_received;
+	uint32_t nb_bytes_received;
+} test_api_callback_t;
+
+typedef struct st_picoquic_test_tls_api_ctx_t {
+	picoquic_quic_t * qclient;
+	picoquic_quic_t * qserver;
+	picoquic_cnx_t * cnx_client;
+	picoquic_cnx_t * cnx_server;
+	struct sockaddr_in client_addr;
+	struct sockaddr_in server_addr;
+	test_api_callback_t client_callback;
+	test_api_callback_t server_callback;
+} picoquic_test_tls_api_ctx_t;
+
+static void test_api_callback(picoquic_cnx_t * cnx,
+	uint32_t stream_id, uint8_t bytes, uint8_t length, int fin_noted, void * callback_ctx)
+{
+	/* Nothing much now. Just absorb the data silently */
+}
+/*
  * Simulate losses based on a loss pattern.
  * Loss will only apply to the first 64 transmissions
  */
@@ -248,131 +273,175 @@ static int verify_alpn(picoquic_cnx_t * cnx_client, picoquic_cnx_t * cnx_server,
 
 	return ret;
 }
-static int tls_api_test_with_loss(uint64_t  * loss_mask, uint32_t proposed_version,
+
+static int tls_api_init_ctx(picoquic_test_tls_api_ctx_t ** pctx, uint32_t proposed_version,
 	char const * sni, char const * alpn)
 {
+	int ret = 0;
+	picoquic_test_tls_api_ctx_t * test_ctx = (picoquic_test_tls_api_ctx_t *)
+		malloc(sizeof(picoquic_test_tls_api_ctx_t));
 
-    int ret = 0;
-    picoquic_quic_t * qclient = NULL, * qserver = NULL;
-    picoquic_cnx_t * cnx_client = NULL, * cnx_server = NULL;
-    struct sockaddr_in client_addr, server_addr;
-    int nb_trials = 0;
-	uint64_t simulated_time = 0;
+	*pctx = test_ctx;
 
-    /* Init of the IP addresses */
-    memset(&client_addr, 0, sizeof(struct sockaddr_in));
-    client_addr.sin_family = AF_INET;
-    client_addr.sin_addr.S_un.S_addr = 0x0A000002;
-    client_addr.sin_port = 1234;
+	if (test_ctx != NULL)
+	{
+		/* Init to NULL */
+		memset(test_ctx, 0, sizeof(picoquic_test_tls_api_ctx_t));
+		test_ctx->client_callback.client_mode = 1;
 
-    memset(&server_addr, 0, sizeof(struct sockaddr_in));
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.S_un.S_addr = 0x0A000001;
-    server_addr.sin_port = 4321;
+		/* Init of the IP addresses */
+		memset(&test_ctx->client_addr, 0, sizeof(struct sockaddr_in));
+		test_ctx->client_addr.sin_family = AF_INET;
+		test_ctx->client_addr.sin_addr.S_un.S_addr = 0x0A000002;
+		test_ctx->client_addr.sin_port = 1234;
 
-    /* Test the creation of the client and server contexts */
-    /* Create QUIC context */
-    qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL);
-    qserver = picoquic_create(8, 
-		"..\\certs\\cert.pem", "..\\certs\\key.pem",
-		PICOQUIC_TEST_ALPN, NULL, NULL);
+		memset(&test_ctx->server_addr, 0, sizeof(struct sockaddr_in));
+		test_ctx->server_addr.sin_family = AF_INET;
+		test_ctx->server_addr.sin_addr.S_un.S_addr = 0x0A000001;
+		test_ctx->server_addr.sin_port = 4321;
 
-    if (qclient == NULL || qserver == NULL)
-    {
-        ret = -1;
-    }
+		/* Test the creation of the client and server contexts */
+		/* Create QUIC context */
+		test_ctx->qclient = picoquic_create(8, NULL, NULL, NULL, test_api_callback, 
+			(void*)&test_ctx->client_callback);
 
-    if (ret == 0)
-    {
-        /* Create a client connection */
-        cnx_client = picoquic_create_cnx(qclient, 12345, (struct sockaddr *)&server_addr, 0, 
-			proposed_version, sni, alpn);
+		test_ctx->qserver = picoquic_create(8,
+			"..\\certs\\cert.pem", "..\\certs\\key.pem",
+			PICOQUIC_TEST_ALPN, test_api_callback, (void*)&test_ctx->server_callback);
 
-        if (cnx_client == NULL)
-        {
-            ret = -1;
-        }
-    }
+		if (test_ctx->qclient == NULL || test_ctx->qserver == NULL)
+		{
+			ret = -1;
+		}
 
-    while (ret == 0 && nb_trials < 12 &&
-        (cnx_client->cnx_state != picoquic_state_client_ready ||
-        (cnx_server == NULL || cnx_server->cnx_state != picoquic_state_server_ready)))
-    {
-        nb_trials++;
+		if (ret == 0)
+		{
+			/* Create a client connection */
+			test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient, 12345,
+				(struct sockaddr *)&test_ctx->server_addr, 0,
+				proposed_version, sni, alpn);
 
-        /* packet from client to server */
-        ret = tls_api_one_packet(qclient, cnx_client, qserver, (struct sockaddr *)&client_addr,
-			loss_mask, &simulated_time);
+			if (test_ctx->cnx_client == NULL)
+			{
+				ret = -1;
+			}
+		}
+	}
 
-        if (ret == 0)
-        {
-            if (cnx_server == NULL)
-            {
-                cnx_server = qserver->cnx_list;
-            }
-			
-			ret = tls_api_one_packet(qserver, cnx_server, qclient, (struct sockaddr *)&server_addr,
-					loss_mask, &simulated_time);
+	return ret;
+}
+
+static void tls_api_delete_ctx(picoquic_test_tls_api_ctx_t * test_ctx)
+{
+	if (test_ctx->qclient != NULL)
+	{
+		picoquic_free(test_ctx->qclient);
+	}
+
+	if (test_ctx->qserver != NULL)
+	{
+		picoquic_free(test_ctx->qserver);
+	}
+}
+
+static int tls_api_connection_loop(picoquic_test_tls_api_ctx_t * test_ctx, 
+	uint64_t  * loss_mask, uint64_t *simulated_time)
+{
+	int ret = 0;
+	int nb_trials = 0;
+
+	while (ret == 0 && nb_trials < 12 &&
+		(test_ctx->cnx_client->cnx_state != picoquic_state_client_ready ||
+		(test_ctx->cnx_server == NULL ||
+			test_ctx->cnx_server->cnx_state != picoquic_state_server_ready)))
+	{
+		nb_trials++;
+
+		/* packet from client to server */
+		ret = tls_api_one_packet(test_ctx->qclient, test_ctx->cnx_client, test_ctx->qserver,
+			(struct sockaddr *)&test_ctx->client_addr, loss_mask, simulated_time);
+
+		if (ret == 0)
+		{
+			if (test_ctx->cnx_server == NULL)
+			{
+				test_ctx->cnx_server = test_ctx->qserver->cnx_list;
+			}
+
+			ret = tls_api_one_packet(test_ctx->qserver, test_ctx->cnx_server, test_ctx->qclient,
+				(struct sockaddr *)&test_ctx->server_addr, loss_mask, simulated_time);
 			if (ret != 0)
 			{
 				break;
 			}
-        }
+		}
 		else
 		{
 			break;
 		}
-    }
+	}
 
-    if (cnx_client->cnx_state != picoquic_state_client_ready ||
-        cnx_server == NULL || cnx_server->cnx_state != picoquic_state_server_ready)
-    {
-        ret = -1;
-    }
-    else
-    {
-        ret = picoquic_close(cnx_client);
+	if (test_ctx->cnx_client->cnx_state != picoquic_state_client_ready ||
+		test_ctx->cnx_server == NULL || test_ctx->cnx_server->cnx_state != picoquic_state_server_ready)
+	{
+		ret = -1;
+	}
+
+	return ret;
+}
+
+static int tls_api_test_with_loss(uint64_t  * loss_mask, uint32_t proposed_version,
+	char const * sni, char const * alpn)
+{
+	uint64_t simulated_time = 0;
+	picoquic_test_tls_api_ctx_t * test_ctx = NULL;
+	int ret = tls_api_init_ctx(&test_ctx, proposed_version, sni, alpn);
+
+	if (ret == 0)
+	{
+		ret = tls_api_connection_loop(test_ctx, loss_mask, &simulated_time);
+	}
+
+	if (ret == 0)
+	{
+		ret = picoquic_close(test_ctx->cnx_client);
 
         if (ret == 0)
         {
             /* packet from client to server */
 			/* Do not simulate losses there, as there is no way to correct them */
-            ret = tls_api_one_packet(qclient, cnx_client, qserver, (struct sockaddr *)&client_addr, NULL,
-				&simulated_time);
+            ret = tls_api_one_packet(test_ctx->qclient, test_ctx->cnx_client, test_ctx->qserver, 
+				(struct sockaddr *)&test_ctx->client_addr, NULL, &simulated_time);
         }
 
         if (ret == 0 && (
-            cnx_client->cnx_state != picoquic_state_disconnected ||
-            cnx_server->cnx_state != picoquic_state_disconnected))
+            test_ctx->cnx_client->cnx_state != picoquic_state_disconnected ||
+			test_ctx->cnx_server->cnx_state != picoquic_state_disconnected))
         {
             ret = -1;
         }
 
 		if (ret == 0)
 		{
-			ret = verify_transport_extension(cnx_client, cnx_server);
+			ret = verify_transport_extension(test_ctx->cnx_client, test_ctx->cnx_server);
 		}
 
 		if (ret == 0)
 		{
-			ret = verify_sni(cnx_client, cnx_server, sni);
+			ret = verify_sni(test_ctx->cnx_client, test_ctx->cnx_server, sni);
 		}
 
 		if (ret == 0)
 		{
-			ret = verify_alpn(cnx_client, cnx_server, alpn);
+			ret = verify_alpn(test_ctx->cnx_client, test_ctx->cnx_server, alpn);
 		}
     }
 
-    if (qclient != NULL)
-    {
-        picoquic_free(qclient);
-    }
-
-    if (qserver != NULL)
-    {
-        picoquic_free(qserver);
-    }
+	if (test_ctx != NULL)
+	{
+		tls_api_delete_ctx(test_ctx);
+		test_ctx = NULL;
+	}
 
     return ret;
 }
@@ -425,4 +494,47 @@ int tls_api_alpn_test()
 int tls_api_wrong_alpn_test()
 {
 	return tls_api_test_with_loss(NULL, 0, NULL, PICOQUIC_TEST_WRONG_ALPN);
+}
+
+/*
+ * Transmission test number one. Client sends data on stream 1,
+ * verify that data is received properly.
+ */
+
+int tls_api_one_stream_test()
+{
+	uint64_t simulated_time = 0;
+	picoquic_test_tls_api_ctx_t * test_ctx = NULL;
+	int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN);
+
+	if (ret == 0)
+	{
+		ret = tls_api_connection_loop(test_ctx, 0, &simulated_time);
+	}
+
+	/* Send data on stream 1 */
+	if (ret = 0)
+	{
+
+
+	}
+
+	/* Perform a data sending loop */
+
+
+
+
+
+	if (ret == 0)
+	{
+		ret = picoquic_close(test_ctx->cnx_client);
+	}
+
+	if (test_ctx != NULL)
+	{
+		tls_api_delete_ctx(test_ctx);
+		test_ctx = NULL;
+	}
+
+	return ret;
 }

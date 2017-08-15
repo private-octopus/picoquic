@@ -63,7 +63,7 @@
  */
 static const int picoquic_offset_length_code[4] = { 0, 2, 4, 8 };
 
-picoquic_stream_head * find_stream(picoquic_cnx_t * cnx, uint32_t stream_id, int create)
+picoquic_stream_head * picoquic_find_stream(picoquic_cnx_t * cnx, uint32_t stream_id, int create)
 {
     picoquic_stream_head * stream = &cnx->first_stream;
 
@@ -85,6 +85,7 @@ picoquic_stream_head * find_stream(picoquic_cnx_t * cnx, uint32_t stream_id, int
         {
             stream->consumed_offset = 0;
             stream->fin_offset = 0;
+			stream->stream_flags = 0;
             stream->next_stream = cnx->first_stream.next_stream;
             stream->stream_id = stream_id;
             cnx->first_stream.next_stream = stream;
@@ -94,18 +95,35 @@ picoquic_stream_head * find_stream(picoquic_cnx_t * cnx, uint32_t stream_id, int
     return stream;
 }
 
-int picoquic_stream_input(picoquic_cnx_t * cnx, uint32_t stream_id,
+int picoquic_stream_network_input(picoquic_cnx_t * cnx, uint32_t stream_id,
     uint64_t offset, int fin, uint8_t * bytes, size_t length)
 {
     int ret = 0;
     /* Is there such a stream, is it still open? */
-    picoquic_stream_head * stream = find_stream(cnx, stream_id, 1);
+    picoquic_stream_head * stream = picoquic_find_stream(cnx, stream_id, 1);
 
     if (stream == NULL)
     {
         ret = -1;
     }
-    else
+	else if ((stream->stream_flags&picoquic_stream_flag_fin_received) != 0)
+	{
+		if (offset + length > stream->fin_offset)
+		{
+			ret = -1;
+		}
+		else if (fin != 0 && stream->fin_offset != (offset + length))
+		{
+			ret = -1;
+		}
+	}
+	else if (fin)
+	{
+		stream->fin_offset = offset + length;
+		stream->stream_flags |= picoquic_stream_flag_fin_received;
+	}
+
+	if (ret == 0)
     {
         picoquic_stream_data ** pprevious = &stream->stream_data;
         picoquic_stream_data * next = stream->stream_data;
@@ -141,42 +159,42 @@ int picoquic_stream_input(picoquic_cnx_t * cnx, uint32_t stream_id,
             next = next->next_stream_data;
         }
 
-        if (start < length)
-        {
-            size_t data_length = length - start;
+		if (start < length)
+		{
+			size_t data_length = length - start;
 
-            if (next != NULL && next->offset < offset + length)
-            {
-                data_length -= (size_t) (offset + length - next->offset);
-            }
+			if (next != NULL && next->offset < offset + length)
+			{
+				data_length -= (size_t)(offset + length - next->offset);
+			}
 
-            if (data_length > 0)
-            {
-                picoquic_stream_data * data = (picoquic_stream_data*)malloc(sizeof(picoquic_stream_data));
+			if (data_length > 0)
+			{
+				picoquic_stream_data * data = (picoquic_stream_data*)malloc(sizeof(picoquic_stream_data));
 
-                if (data == NULL)
-                {
-                    ret = -1;
-                }
-                else
-                {
-                    data->length = data_length;
-                    data->bytes = (uint8_t *)malloc(data_length);
-                    if (data->bytes == NULL)
-                    {
-                        ret = -1;
-                        free(data);
-                    }
-                    else
-                    {
-                        data->offset = offset + start;
-                        memcpy(data->bytes, bytes + start, data_length);
-                        data->next_stream_data = next;
-                        *pprevious = data;
-                    }
-                }
-            }
-        }
+				if (data == NULL)
+				{
+					ret = -1;
+				}
+				else
+				{
+					data->length = data_length;
+					data->bytes = (uint8_t *)malloc(data_length);
+					if (data->bytes == NULL)
+					{
+						ret = -1;
+						free(data);
+					}
+					else
+					{
+						data->offset = offset + start;
+						memcpy(data->bytes, bytes + start, data_length);
+						data->next_stream_data = next;
+						*pprevious = data;
+					}
+				}
+			}
+		}
     }
     
     return ret;
@@ -264,7 +282,7 @@ int picoquic_decode_stream_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
             {
                 *consumed = byte_index + data_length;
 
-                ret = picoquic_stream_input(cnx, stream_id, offset, first_byte & 32,
+                ret = picoquic_stream_network_input(cnx, stream_id, offset, first_byte & 32,
                     bytes + byte_index, data_length);
             }
         }
@@ -273,6 +291,30 @@ int picoquic_decode_stream_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
     return ret;
 }
 
+
+picoquic_stream_head * picoquic_find_ready_stream(picoquic_cnx_t * cnx, int restricted)
+{
+	picoquic_stream_head * stream = &cnx->first_stream;
+
+	if (restricted != 0)
+	{
+		do {
+			if ((stream->send_queue != NULL &&
+				stream->send_queue->length > stream->send_queue->offset) ||
+				((stream->stream_flags&picoquic_stream_flag_fin_notified) != 0 &&
+				(stream->stream_flags&picoquic_stream_flag_fin_sent) == 0))
+			{
+				break;
+			}
+			else
+			{
+				stream = stream->next_stream;
+			}
+		} while (stream);
+	}
+
+	return stream;
+}
 
 int picoquic_prepare_stream_frame(picoquic_cnx_t * cnx, picoquic_stream_head * stream,
     uint8_t * bytes, size_t bytes_max, size_t * consumed)
@@ -283,8 +325,10 @@ int picoquic_prepare_stream_frame(picoquic_cnx_t * cnx, picoquic_stream_head * s
     uint8_t oo_bits = 0;
     size_t length;
 
-    if (stream->send_queue == NULL ||
-        stream->send_queue->length <= stream->send_queue->offset)
+    if ((stream->send_queue == NULL ||
+        stream->send_queue->length <= stream->send_queue->offset) &&
+		((stream->stream_flags&picoquic_stream_flag_fin_notified) == 0 ||
+		(stream->stream_flags&picoquic_stream_flag_fin_sent) != 0))
     {
         *consumed = 0;
     }
@@ -315,7 +359,6 @@ int picoquic_prepare_stream_frame(picoquic_cnx_t * cnx, picoquic_stream_head * s
          */
         if (stream->sent_offset > 0)
         {
-
             if (stream->sent_offset < 0x10000)
             {
                 picoformat_16(&bytes[byte_index], (uint16_t)stream->sent_offset);
@@ -375,7 +418,13 @@ int picoquic_prepare_stream_frame(picoquic_cnx_t * cnx, picoquic_stream_head * s
         }
 
         bytes[0] = 0xC1 | (ss_bits << 3) | (oo_bits << 1);
-
+		if ((stream->stream_flags&picoquic_stream_flag_fin_notified) != 0 &&
+			stream->send_queue == 0)
+		{
+			/* Set the fin bit */
+			stream->stream_flags |= picoquic_stream_flag_fin_sent;
+			bytes[0] |= 0x20;
+		}
         *consumed = byte_index;
     }
 

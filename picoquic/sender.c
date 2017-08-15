@@ -43,7 +43,8 @@
  * subject to flow control.
  */
 
-int picoquic_add_to_stream(picoquic_cnx_t * cnx, uint32_t stream_id, uint8_t * data, size_t length)
+int picoquic_add_to_stream(picoquic_cnx_t * cnx, uint32_t stream_id, 
+	uint8_t * data, size_t length, int set_fin)
 {
     int ret = 0;
     picoquic_stream_head * stream = NULL;
@@ -53,12 +54,28 @@ int picoquic_add_to_stream(picoquic_cnx_t * cnx, uint32_t stream_id, uint8_t * d
     {
         stream = &cnx->first_stream;
     }
+	else
+	{
+		stream = picoquic_find_stream(cnx, stream_id, 1);
 
-    if (stream == NULL)
-    {
-        ret = -1;
-    }
-    else
+		if (stream == NULL)
+		{
+			ret = -1;
+		}
+		else if (set_fin)
+		{
+			if ((stream->stream_flags&picoquic_stream_flag_fin_notified) != 0)
+			{
+				/* app error, notified the fin twice*/
+				if (length > 0)
+				{
+					ret = -1;
+				}
+			}
+		}
+	}
+
+	if (ret == 0 && length > 0)
     {
         picoquic_stream_data * stream_data = (picoquic_stream_data *)malloc(sizeof(picoquic_stream_data));
 
@@ -367,6 +384,7 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 		retransmit_possible = 1;
 		use_fnv1a = 0;
 		checksum_overhead = 16;
+		stream = picoquic_find_ready_stream(cnx, 0);
 		break;
 	case picoquic_state_server_ready:
 		packet_type = picoquic_packet_1rtt_protected_phi0;
@@ -452,8 +470,11 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 			}
 
 			/* Encode the stream frame */
-			ret = picoquic_prepare_stream_frame(cnx, stream, &bytes[length],
-				cnx->send_mtu - checksum_overhead - length, &data_bytes);
+			if (stream != NULL)
+			{
+				ret = picoquic_prepare_stream_frame(cnx, stream, &bytes[length],
+					cnx->send_mtu - checksum_overhead - length, &data_bytes);
+			}
 
 			if (ret == 0)
 			{
@@ -533,7 +554,6 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 		*send_length = 0;
 	}
 	
-
 	return ret;
 }
 

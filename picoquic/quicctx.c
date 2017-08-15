@@ -400,6 +400,7 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
 
 			cnx->first_stream.stream_id = 0;
 			cnx->first_stream.consumed_offset = 0;
+			cnx->first_stream.stream_flags = 0;
 			cnx->first_stream.fin_offset = 0;
 			cnx->first_stream.next_stream = NULL;
 			cnx->first_stream.stream_data = NULL;
@@ -602,6 +603,7 @@ int picoquic_reset_cnx_version(picoquic_cnx_t * cnx, uint8_t * bytes, size_t len
 					/* Reset the streams */
 					picoquic_clear_stream(&cnx->first_stream);
 					cnx->first_stream.consumed_offset = 0;
+					cnx->first_stream.stream_flags = 0;
 					cnx->first_stream.fin_offset = 0;
 					cnx->first_stream.sent_offset = 0;
 
