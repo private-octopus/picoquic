@@ -25,13 +25,38 @@
 #define PICOQUIC_TEST_SNI "picoquic.test"
 #define PICOQUIC_TEST_ALPN "picoquic-test"
 #define PICOQUIC_TEST_WRONG_ALPN "picoquic-bla-bla"
+#define PICOQUIC_TEST_MAX_TEST_STREAMS 8
 
 /*
  * Generic call back function.
  */
+
+typedef struct st_test_api_stream_desc_t {
+	uint32_t stream_id;
+	uint32_t previous_stream_id;
+	size_t q_len;
+	size_t r_len;
+} test_api_stream_desc_t;
+
+typedef struct st_test_api_stream_t {
+	uint32_t stream_id;
+	uint32_t previous_stream_id;
+	int q_sent;
+	int r_sent;
+	size_t q_len;
+	size_t q_recv_nb;
+	size_t r_len;
+	size_t r_recv_nb;
+	uint8_t * q_src;
+	uint8_t * q_rcv;
+	uint8_t * r_src;
+	uint8_t * r_rcv;
+} test_api_stream_t;
+
 typedef struct st_test_api_callback_t {
 	int client_mode;
 	int fin_received;
+	int error_detected;
 	uint32_t nb_bytes_received;
 } test_api_callback_t;
 
@@ -44,7 +69,106 @@ typedef struct st_picoquic_test_tls_api_ctx_t {
 	struct sockaddr_in server_addr;
 	test_api_callback_t client_callback;
 	test_api_callback_t server_callback;
+	size_t nb_test_streams;
+	test_api_stream_t test_stream[PICOQUIC_TEST_MAX_TEST_STREAMS];
 } picoquic_test_tls_api_ctx_t;
+
+static int test_api_init_stream_buffers(size_t len, uint8_t ** src_bytes, uint8_t ** rcv_bytes)
+{
+	static uint64_t rnd = 0xF1E2D3C4B5A688ull;
+	int ret = 0;
+
+	*src_bytes = (uint8_t *)malloc(len);
+	*rcv_bytes = (uint8_t *)malloc(len);
+
+	if (*src_bytes != NULL && *rcv_bytes != NULL)
+	{
+		memset(*rcv_bytes, 0, len);
+
+		for (size_t i = 0; i < len; i++)
+		{
+			*src_bytes[i] = (uint8_t)(rnd & 0xFF);
+			rnd ^= (rnd << 29) ^ (rnd >> 17) ^ (0xdeadbeefull);
+		}
+	}
+	else
+	{
+		ret = -1;
+
+		if (*src_bytes != NULL)
+		{
+			free(*src_bytes);
+			*src_bytes = NULL;
+		}
+
+		if (*rcv_bytes != NULL)
+		{
+			free(*rcv_bytes);
+			*rcv_bytes = NULL;
+		}
+	}
+
+	return ret;
+}
+
+static int test_api_init_test_stream(test_api_stream_t * test_stream,
+	uint32_t stream_id, uint32_t previous_stream_id, size_t q_len, size_t r_len)
+{
+	int ret = 0;
+
+	memset(test_stream, 0, sizeof(test_stream));
+
+	if (q_len != 0)
+	{
+		ret = test_api_init_stream_buffers(q_len, &test_stream->q_src, &test_stream->q_rcv);
+		if (ret == 0)
+		{
+			test_stream->q_len = q_len;
+		}
+	}
+
+	if (ret == 0 && r_len != 0)
+	{
+		ret = test_api_init_stream_buffers(q_len, &test_stream->r_src, &test_stream->r_rcv);
+		if (ret == 0)
+		{
+			test_stream->q_len = q_len;
+		}
+	}
+
+	if (ret == 0)
+	{
+		test_stream->previous_stream_id = previous_stream_id;
+		test_stream->stream_id = stream_id;
+	}
+
+	return ret;
+}
+
+static void test_api_delete_test_stream(test_api_stream_t * test_stream)
+{
+	if (test_stream->q_src != NULL)
+	{
+		free(test_stream->q_src);
+	}
+
+	if (test_stream->q_rcv != NULL)
+	{
+		free(test_stream->q_rcv);
+	}
+
+	if (test_stream->r_src != NULL)
+	{
+		free(test_stream->q_src);
+	}
+
+	if (test_stream->r_rcv != NULL)
+	{
+		free(test_stream->q_rcv);
+	}
+
+	memset(test_stream, 0, sizeof(test_stream));
+}
 
 static void test_api_callback(picoquic_cnx_t * cnx,
 	uint32_t stream_id, uint8_t * bytes, size_t length, int fin_noted, void * callback_ctx)
@@ -57,17 +181,19 @@ static void test_api_callback(picoquic_cnx_t * cnx,
 }
 
 /*
- * Simulate losses based on a loss pattern.
- * Loss will only apply to the first 64 transmissions
+ * Simulate losses based on a 64 bit loss pattern.
+ * This is defined to create large rates while allowing test of
+ * specific scenarios, such as "lose 2nd packet"
  */
 static int tls_api_loss_simulator(uint64_t * loss_mask)
 {
 	/* Last bit indicates loss or not */
-	int ret = (int)((*loss_mask) & 1ull);
+	uint64_t ret = (uint64_t)((*loss_mask) & 1ull);
 	/* Shift 1 to prepare next round */
 	*loss_mask >>= 1;
+	*loss_mask ^= (ret << 63);
 
-	return ret;
+	return (int)ret;
 }
 
 static int tls_api_one_packet(picoquic_quic_t * qsender, picoquic_cnx_t * cnx, picoquic_quic_t * qreceive,
@@ -351,6 +477,35 @@ static void tls_api_delete_ctx(picoquic_test_tls_api_ctx_t * test_ctx)
 	{
 		picoquic_free(test_ctx->qserver);
 	}
+
+	for (size_t i = 0; i < test_ctx->nb_test_streams; i++)
+	{
+		test_api_delete_test_stream(&test_ctx->test_stream[i]);
+	}
+}
+
+static int test_api_init_send_recv_scenario(picoquic_test_tls_api_ctx_t * test_ctx,
+	test_api_stream_desc_t * stream_desc, size_t size_of_scenarios)
+{
+	int ret = 0;
+	size_t nb_stream_desc = size_of_scenarios / sizeof(test_api_stream_desc_t);
+
+	if (nb_stream_desc > PICOQUIC_TEST_MAX_TEST_STREAMS)
+	{
+		ret = -1;
+	}
+	else
+	{
+		for (size_t i = 0; ret == 0 && i < nb_stream_desc; i++)
+		{
+			ret = test_api_init_test_stream(&test_ctx->test_stream[i],
+				stream_desc[i].stream_id, stream_desc[i].previous_stream_id,
+				stream_desc[i].q_len, stream_desc[i].r_len);
+		}
+	}
+
+	/* TODO: Perform the "end of stream 0" callback */
+	return ret;
 }
 
 static int tls_api_connection_loop(picoquic_test_tls_api_ctx_t * test_ctx, 
