@@ -154,7 +154,7 @@ static int test_api_init_test_stream(test_api_stream_t * test_stream,
 		ret = test_api_init_stream_buffers(q_len, &test_stream->r_src, &test_stream->r_rcv);
 		if (ret == 0)
 		{
-			test_stream->q_len = q_len;
+			test_stream->r_len = r_len;
 		}
 	}
 
@@ -181,12 +181,12 @@ static void test_api_delete_test_stream(test_api_stream_t * test_stream)
 
 	if (test_stream->r_src != NULL)
 	{
-		free(test_stream->q_src);
+		free(test_stream->r_src);
 	}
 
 	if (test_stream->r_rcv != NULL)
 	{
-		free(test_stream->q_rcv);
+		free(test_stream->r_rcv);
 	}
 
 	memset(test_stream, 0, sizeof(test_stream));
@@ -205,7 +205,7 @@ static void test_api_receive_stream_data(
 	{
 		memcpy(buffer + *nb_received, bytes, length);
 
-		if (memcmp(reference + +*nb_received, bytes, length) != 0)
+		if (memcmp(reference + *nb_received, bytes, length) != 0)
 		{
 			*error_detected |= test_api_fail_data_does_not_match;
 		}
@@ -290,7 +290,7 @@ static void test_api_callback(picoquic_cnx_t * cnx,
 			test_api_receive_stream_data(bytes, length, fin_noted,
 				ctx->test_stream[stream_index].r_rcv,
 				ctx->test_stream[stream_index].r_len,
-				ctx->test_stream[stream_index].r_sent,
+				ctx->test_stream[stream_index].r_src,
 				&ctx->test_stream[stream_index].r_recv_nb,
 				&ctx->test_stream[stream_index].r_received,
 				&cb_ctx->error_detected);
@@ -319,7 +319,7 @@ static void test_api_callback(picoquic_cnx_t * cnx,
 				{
 					/* send a response */
 					if (picoquic_add_to_stream(ctx->cnx_server, stream_id,
-						ctx->test_stream[stream_index].r_sent,
+						ctx->test_stream[stream_index].r_src,
 						ctx->test_stream[stream_index].r_len, 1) != 0)
 					{
 						cb_ctx->error_detected |= test_api_fail_cannot_send_response;
@@ -352,7 +352,7 @@ static void test_api_callback(picoquic_cnx_t * cnx,
 				{
 					/* send a response */
 					if (picoquic_add_to_stream(ctx->cnx_client, stream_id,
-						ctx->test_stream[stream_index].r_sent,
+						ctx->test_stream[stream_index].r_src,
 						ctx->test_stream[stream_index].r_len, 1) != 0)
 					{
 						cb_ctx->error_detected |= test_api_fail_cannot_send_response;

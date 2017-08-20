@@ -394,6 +394,7 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 		packet_type = picoquic_packet_1rtt_protected_phi0;
 		use_fnv1a = 0;
 		checksum_overhead = 16;
+		stream = picoquic_find_ready_stream(cnx, 0);
 		retransmit_possible = 1;
 		break;
 	case picoquic_state_disconnecting:
@@ -494,7 +495,7 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 			}
 
 			/* If stream zero packets are sent, progress the state */
-			if (ret == 0 && stream->stream_id == 0 && data_bytes > 0 &&
+			if (ret == 0 && stream != NULL && stream->stream_id == 0 && data_bytes > 0 &&
 				stream->send_queue == NULL)
 			{
 				switch (cnx->cnx_state)
