@@ -280,6 +280,7 @@ extern "C" {
 
 	/* stream management */
 	picoquic_stream_head * picoquic_find_stream(picoquic_cnx_t * cnx, uint32_t stream_id, int create);
+	picoquic_stream_head * picoquic_find_ready_stream(picoquic_cnx_t * cnx, int restricted);
 	int picoquic_stream_network_input(picoquic_cnx_t * cnx, uint32_t stream_id,
 		uint64_t offset, int fin, uint8_t * bytes, size_t length);
 	int picoquic_decode_stream_frame(picoquic_cnx_t * cnx, uint8_t * bytes,

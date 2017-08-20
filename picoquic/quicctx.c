@@ -144,7 +144,7 @@ void picoquic_free(picoquic_quic_t * quic)
 
 		if (quic->default_alpn != NULL)
 		{
-			free(quic->default_alpn);
+			free((void*)quic->default_alpn);
 			quic->default_alpn = NULL;
 		}
 
@@ -634,13 +634,13 @@ void picoquic_delete_cnx(picoquic_cnx_t * cnx)
     {
 		if (cnx->alpn != NULL)
 		{
-			free(cnx->alpn);
+			free((void*)cnx->alpn);
 			cnx->alpn = NULL;
 		}
 
 		if (cnx->sni != NULL)
 		{
-			free(cnx->sni);
+			free((void*)cnx->sni);
 			cnx->sni = NULL;
 		}
 

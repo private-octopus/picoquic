@@ -96,7 +96,6 @@ static test_api_stream_desc_t test_scenario_q_and_r[] = {
 
 static int test_api_init_stream_buffers(size_t len, uint8_t ** src_bytes, uint8_t ** rcv_bytes)
 {
-	static uint64_t rnd = 0xF1E2D3C4B5A688ull;
 	int ret = 0;
 
 	*src_bytes = (uint8_t *)malloc(len);
@@ -108,9 +107,7 @@ static int test_api_init_stream_buffers(size_t len, uint8_t ** src_bytes, uint8_
 
 		for (size_t i = 0; i < len; i++)
 		{
-			uint64_t mix = (rnd << 29) ^ (rnd >> 17);
-			(*src_bytes)[i] = (uint8_t)(rnd & 0xFF);
-			rnd ^= (0xdeadbeefull)^mix;
+			(*src_bytes)[i] = (uint8_t)(i);
 		}
 	}
 	else
@@ -151,7 +148,7 @@ static int test_api_init_test_stream(test_api_stream_t * test_stream,
 
 	if (ret == 0 && r_len != 0)
 	{
-		ret = test_api_init_stream_buffers(q_len, &test_stream->r_src, &test_stream->r_rcv);
+		ret = test_api_init_stream_buffers(r_len, &test_stream->r_src, &test_stream->r_rcv);
 		if (ret == 0)
 		{
 			test_stream->r_len = r_len;
@@ -194,8 +191,8 @@ static void test_api_delete_test_stream(test_api_stream_t * test_stream)
 
 
 static void test_api_receive_stream_data(
-	uint8_t * bytes, size_t length, int fin_noted,
-	uint8_t * buffer, size_t max_len, uint8_t * reference, size_t * nb_received, int * received, int * error_detected)
+	const uint8_t * bytes, size_t length, int fin_noted,
+	uint8_t * buffer, size_t max_len, const uint8_t * reference, size_t * nb_received, int * received, int * error_detected)
 {
 	if (*nb_received + length > max_len)
 	{
@@ -336,7 +333,7 @@ static void test_api_callback(picoquic_cnx_t * cnx,
 			test_api_receive_stream_data(bytes, length, fin_noted,
 				ctx->test_stream[stream_index].q_rcv,
 				ctx->test_stream[stream_index].q_len,
-				ctx->test_stream[stream_index].q_sent,
+				ctx->test_stream[stream_index].q_src,
 				&ctx->test_stream[stream_index].q_recv_nb,
 				&ctx->test_stream[stream_index].q_received,
 				&cb_ctx->error_detected);
@@ -366,7 +363,7 @@ static void test_api_callback(picoquic_cnx_t * cnx,
 			test_api_receive_stream_data(bytes, length, fin_noted,
 				ctx->test_stream[stream_index].r_rcv,
 				ctx->test_stream[stream_index].r_len,
-				ctx->test_stream[stream_index].r_sent,
+				ctx->test_stream[stream_index].r_src,
 				&ctx->test_stream[stream_index].r_recv_nb,
 				&ctx->test_stream[stream_index].r_received,
 				&cb_ctx->error_detected);

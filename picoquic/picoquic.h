@@ -148,7 +148,7 @@ extern "C" {
 
 	/* send and receive data on streams */
 	int picoquic_add_to_stream(picoquic_cnx_t * cnx,
-		uint32_t stream_id, uint8_t * data, size_t length, int set_fin);
+		uint32_t stream_id, const uint8_t * data, size_t length, int set_fin);
 
 
 #ifdef  __cplusplus

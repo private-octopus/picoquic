@@ -461,7 +461,7 @@ int picoquic_tlscontext_create(picoquic_quic_t * quic, picoquic_cnx_t * cnx)
 
 			if (cnx->alpn != NULL)
 			{
-				ctx->alpn_vec.base = cnx->alpn;
+				ctx->alpn_vec.base = (uint8_t *) cnx->alpn;
 				ctx->alpn_vec.len = strlen(cnx->alpn);
 				ctx->handshake_properties.client.negotiated_protocols.count = 1;
 				ctx->handshake_properties.client.negotiated_protocols.list = &ctx->alpn_vec;

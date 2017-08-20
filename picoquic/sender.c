@@ -44,7 +44,7 @@
  */
 
 int picoquic_add_to_stream(picoquic_cnx_t * cnx, uint32_t stream_id, 
-	uint8_t * data, size_t length, int set_fin)
+	const uint8_t * data, size_t length, int set_fin)
 {
     int ret = 0;
     picoquic_stream_head * stream = NULL;
