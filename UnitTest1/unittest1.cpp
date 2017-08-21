@@ -184,5 +184,26 @@ namespace UnitTest1
 
 			Assert::AreEqual(ret, 0);
 		}
+
+		TEST_METHOD(test_q2_and_r2_stream)
+		{
+			int ret = tls_api_q2_and_r2_stream_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(test_server_reset)
+		{
+			int ret = tls_api_server_reset_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(test_bad_server_reset)
+		{
+			int ret = tls_api_bad_server_reset_test();
+
+			Assert::AreEqual(ret, 0);
+		}
 	};
 }

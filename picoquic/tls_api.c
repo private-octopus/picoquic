@@ -168,6 +168,18 @@ void picoquic_crypto_random(picoquic_quic_t * quic, void * buf, size_t len)
     ctx->random_bytes(buf, len);
 }
 
+uint64_t picoquic_crypto_uniform_random(picoquic_quic_t * quic, uint64_t rnd_max)
+{
+	uint64_t rnd;
+	uint64_t rnd_min = ((uint64_t)((int64_t)-1)) % rnd_max;
+
+	do {
+		picoquic_crypto_random(quic, &rnd, sizeof(rnd));
+	} while (rnd < rnd_min);
+
+	return rnd%rnd_max;
+}
+
 /*
  * The collect extensions call back is called by the picotls stack upon
  * reception of a handshake message containing extensions. It should return true (1)
@@ -762,4 +774,38 @@ int picoquic_tlsinput_stream_zero(picoquic_cnx_t * cnx)
     ptls_buffer_dispose(&sendbuf);
 
     return ret;
+}
+
+/*
+ * Compute the 16 byte reset secret associated with a connection ID.
+ * We implement it as the hash of a secret seed maintianed per QUIC context
+ * and the 8 bytes connection ID. 
+ * This is written using PTLS portable hash API, initialized
+ * for now with the OpenSSL implementation. Will have to adapt if we
+ * decide to use the minicrypto API.
+ */
+
+int picoquic_create_cnxid_reset_secret(picoquic_quic_t * quic, uint64_t cnx_id,
+	uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE])
+{
+	/* Using OpenSSL for now: ptls_hash_algorithm_t ptls_openssl_sha256 */
+	int ret = 0;
+	ptls_hash_algorithm_t *algo = &ptls_openssl_sha256;
+	ptls_hash_context_t *hash_ctx = algo->create();
+	uint8_t final_hash[PTLS_MAX_DIGEST_SIZE];
+
+	if (hash_ctx == NULL)
+	{
+		ret = -1;
+		memset(reset_secret, 0, PICOQUIC_RESET_SECRET_SIZE);
+	}
+	else
+	{
+		hash_ctx->update(hash_ctx, quic->reset_seed, sizeof(quic->reset_seed));
+		hash_ctx->update(hash_ctx, &cnx_id, sizeof(cnx_id));
+		hash_ctx->final(hash_ctx, final_hash, PTLS_HASH_FINAL_MODE_FREE);
+		memcpy(reset_secret, final_hash, PICOQUIC_RESET_SECRET_SIZE);
+	}
+
+	return(ret);
 }

@@ -65,7 +65,8 @@ typedef enum {
 	picoquic_transport_parameter_initial_max_stream_id = 2,
 	picoquic_transport_parameter_idle_timeout = 3,
 	picoquic_transport_parameter_omit_connection_id = 4,
-	picoquic_transport_parameter_max_packet_size = 5
+	picoquic_transport_parameter_max_packet_size = 5,
+	picoquic_transport_parameter_reset_secret = 6
 } picoquic_transport_parameter_enum;
 
 int picoquic_prepare_transport_extensions(picoquic_cnx_t * cnx, int extension_mode,
@@ -92,6 +93,10 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t * cnx, int extension_mo
 	if (cnx->local_parameters.omit_connection_id)
 	{
 		param_size += 2 + 2;
+	}
+	if (extension_mode == 1)
+	{
+		param_size += 2 + 2 + PICOQUIC_RESET_SECRET_SIZE;
 	}
 	min_size += param_size + 2;
 
@@ -168,6 +173,16 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t * cnx, int extension_mo
 		byte_index += 2;
 		picoformat_16(bytes + byte_index, cnx->local_parameters.max_packet_size);
 		byte_index += 2;
+
+		if (extension_mode == 1)
+		{
+			picoformat_16(bytes + byte_index, picoquic_transport_parameter_reset_secret);
+			byte_index += 2;
+			picoformat_16(bytes + byte_index, PICOQUIC_RESET_SECRET_SIZE);
+			byte_index += 2;
+			memcpy(bytes + byte_index, cnx->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
+			byte_index += PICOQUIC_RESET_SECRET_SIZE;
+		}
 	}
 	
 	return ret;
@@ -352,6 +367,20 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t * cnx, int extension_mo
 						else
 						{
 							cnx->remote_parameters.max_packet_size = PICOPARSE_16(bytes + byte_index);
+						}
+						break;
+					case picoquic_transport_parameter_reset_secret:
+						if (extension_mode != 1)
+						{
+							ret = PICOQUIC_ERROR_ILLEGAL_TRANSPORT_EXTENSION;
+						}
+						else if (extension_length != PICOQUIC_RESET_SECRET_SIZE)
+						{
+							ret = PICOQUIC_ERROR_MALFORMED_TRANSPORT_EXTENSION;
+						}
+						else
+						{
+							memcpy(cnx->reset_secret, bytes + byte_index, PICOQUIC_RESET_SECRET_SIZE);
 						}
 						break;
 					default:

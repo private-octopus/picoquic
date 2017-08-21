@@ -93,6 +93,10 @@ static test_api_stream_desc_t test_scenario_q_and_r[] = {
 	{ 1, 0, 257, 2000 }
 };
 
+static test_api_stream_desc_t test_scenario_q2_and_r2[] = {
+	{ 1, 0, 257, 2000 },
+	{ 3, 0, 531, 11000 }
+};
 
 static int test_api_init_stream_buffers(size_t len, uint8_t ** src_bytes, uint8_t ** rcv_bytes)
 {
@@ -927,26 +931,26 @@ int tls_api_wrong_alpn_test()
 }
 
 /*
- * Transmission test number one. Client sends data on stream 1,
- * verify that data is received properly.
+ * Scenario based transmission tests.
  */
 
 int tls_api_one_scenario_test(test_api_stream_desc_t * scenario, 
 	size_t sizeof_scenario, uint64_t init_loss_mask)
 {
 	uint64_t simulated_time = 0;
-	uint64_t loss_mask = init_loss_mask;
+	uint64_t loss_mask = 0;
 	picoquic_test_tls_api_ctx_t * test_ctx = NULL;
 	int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN);
 
 	if (ret == 0)
 	{
-		ret = tls_api_connection_loop(test_ctx, 0, &simulated_time);
+		ret = tls_api_connection_loop(test_ctx, &loss_mask, &simulated_time);
 	}
 
-	/* Send data on stream 1 */
+	/* Prepare to send data */
 	if (ret == 0)
 	{
+		loss_mask = init_loss_mask;
 		ret = test_api_init_send_recv_scenario(test_ctx, scenario, sizeof_scenario);
 	}
 
@@ -1003,3 +1007,131 @@ int tls_api_q_and_r_stream_test()
 	return tls_api_one_scenario_test(test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0);
 }
 
+int tls_api_q2_and_r2_stream_test()
+{
+	return tls_api_one_scenario_test(test_scenario_q2_and_r2, sizeof(test_scenario_q2_and_r2), 0);
+}
+
+/*
+ * Server reset test.
+ * Establish a connection between server and client.
+ * When the connection is established, delete the server connection, and prime the client
+ * to send data.
+ * Expected result: the client sends a packet with a stream frame, the server responds
+ * with a stateless reset, the client closes its own connection.
+ */
+
+int tls_api_server_reset_test()
+{
+	 uint64_t simulated_time = 0;
+	 uint64_t loss_mask = 0;
+	 picoquic_test_tls_api_ctx_t * test_ctx = NULL;
+	 int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN);
+	 uint8_t buffer[128];
+	 int was_active = 0;
+
+	 if (ret == 0)
+	 {
+		 ret = tls_api_connection_loop(test_ctx, &loss_mask, &simulated_time);
+	 }
+
+	 /* verify that client and server have the same reset secret */
+	 if (ret == 0 &&
+		 memcmp(test_ctx->cnx_client->reset_secret,
+			 test_ctx->cnx_server->reset_secret,
+			 PICOQUIC_RESET_SECRET_SIZE) != 0)
+	 {
+		 ret = -1;
+	 }
+
+	 /* Prepare to reset */
+	 if (ret == 0)
+	 {
+		 picoquic_delete_cnx(test_ctx->cnx_server);
+		 test_ctx->cnx_server = NULL;
+
+		 memset(buffer, 0xaa, sizeof(buffer));
+		 ret = picoquic_add_to_stream(test_ctx->cnx_client, 1, buffer, sizeof(buffer), 1);
+	 }
+
+	 /* Perform a round of sending data */
+	 if (ret == 0)
+	 {
+		 ret = tls_api_one_packet(test_ctx->qclient, test_ctx->cnx_client, test_ctx->qserver,
+			 (struct sockaddr *)&test_ctx->client_addr, &loss_mask, &simulated_time, &was_active);
+	 }
+
+	 if (ret == 0)
+	 {
+		 ret = tls_api_one_packet(test_ctx->qserver, test_ctx->cnx_server, test_ctx->qclient,
+			 (struct sockaddr *)&test_ctx->server_addr, &loss_mask, &simulated_time, &was_active);
+	 }
+
+	 /* Client should now be in state disconnected */
+	 if (ret == 0 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected)
+	 {
+		 ret = -1;
+	 }
+
+	 if (test_ctx != NULL)
+	 {
+		 tls_api_delete_ctx(test_ctx);
+		 test_ctx = NULL;
+	 }
+
+	 return ret;
+}
+
+/*
+* Server reset negative test.
+* Establish a connection between server and client.
+* When the connection is established, fabricate a bogus server reset and
+* send it to the client.
+* Expected result: the client ignores the bogus reset.
+*/
+int tls_api_bad_server_reset_test()
+{
+	uint64_t simulated_time = 0;
+	uint64_t loss_mask = 0;
+	picoquic_test_tls_api_ctx_t * test_ctx = NULL;
+	int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN);
+	uint8_t buffer[128];
+	int was_active = 0;
+
+	if (ret == 0)
+	{
+		ret = tls_api_connection_loop(test_ctx, &loss_mask, &simulated_time);
+	}
+
+	/* Prepare the bogus reset */
+	if (ret == 0)
+	{
+		size_t byte_index = 0;
+		buffer[byte_index++] = 0x41;
+		picoformat_64(&buffer[byte_index], test_ctx->cnx_client->server_cnxid);
+		byte_index += 8;
+		memset(buffer + byte_index, 0xcc, sizeof(buffer) - byte_index);
+	}
+
+	/* Submit bogus request to client */
+	if (ret == 0)
+	{
+		ret = picoquic_incoming_packet(test_ctx->qclient, buffer, sizeof(buffer),
+			(struct sockaddr*)(&test_ctx->server_addr), simulated_time);
+	}
+
+	/* check that the client is still up */
+	if (ret == 0 &&
+		test_ctx->cnx_client->cnx_state != picoquic_state_client_ready)
+	{
+		ret = -1;
+	}
+
+	if (test_ctx != NULL)
+	{
+		tls_api_delete_ctx(test_ctx);
+		test_ctx = NULL;
+	}
+
+	return ret;
+}

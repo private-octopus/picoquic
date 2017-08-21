@@ -131,6 +131,13 @@ picoquic_quic_t * picoquic_create(uint32_t nb_connections,
             picoquic_free(quic);
             quic = NULL;
         }
+		else
+		{
+			/* the random generator was initialized as part of the TLS context. 
+			 * Use it to create the seed for generating the per context stateless
+			 * resets. */
+			picoquic_crypto_random(quic, quic->reset_seed, sizeof(quic->reset_seed));
+		}
     }
 
     return quic;
@@ -381,6 +388,11 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
 			}
 			cnx->initial_cnxid = cnx_id;
 			cnx->server_cnxid = 0;
+			/* Initialize the reset secret to a random value. This
+			 * will prevent spurious matches to an all zero value, for example.
+			 * The real value will be set when receiving the transport parameters. 
+			 */
+			picoquic_crypto_random(quic, cnx->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
 		}
         else
         {
@@ -388,6 +400,8 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
             cnx->cnx_state = picoquic_state_server_init;
             cnx->initial_cnxid = cnx_id;
 			picoquic_crypto_random(quic, &cnx->server_cnxid, sizeof(uint64_t));
+			(void)picoquic_create_cnxid_reset_secret(quic, cnx->server_cnxid,
+				cnx->reset_secret);
         }
 
 		if (cnx != NULL)

@@ -34,6 +34,7 @@ extern "C" {
 #define PICOQUIC_INITIAL_MTU_IPV4 1252
 #define PICOQUIC_INITIAL_MTU_IPV6 1232
 #define PICOQUIC_ENFORCED_INITIAL_MTU 1200
+#define PICOQUIC_RESET_SECRET_SIZE 16
 
 	/*
 	* Supported versions
@@ -56,15 +57,16 @@ extern "C" {
 
 
 	/*
-	* QUIC context, defining the tables of connections,
-	* open sockets, etc.
-	*/
+	 * QUIC context, defining the tables of connections,
+	 * open sockets, etc.
+	 */
 	typedef struct st_picoquic_quic_t
 	{
 		void* tls_master_ctx;
 		picoquic_stream_data_cb_fn default_callback_fn;
 		void * default_callback_ctx;
 		char const * default_alpn;
+		uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE];
 
 		uint32_t flags;
 
@@ -92,8 +94,8 @@ extern "C" {
 	} picoquic_transport_parameters;
 
 	/*
-	* SACK dashboard item, part of connection context.
-	*/
+	 * SACK dashboard item, part of connection context.
+	 */
 
 	typedef struct _picoquic_sack_item {
 		struct _picoquic_sack_item * next_sack;
@@ -103,11 +105,11 @@ extern "C" {
 	} picoquic_sack_item;
 
 	/*
-	* Stream head.
-	* Stream contains bytes of data, which are not always delivered in order.
-	* When in order data is available, the application can read it,
-	* or a callback can be set.
-	*/
+	 * Stream head.
+	 * Stream contains bytes of data, which are not always delivered in order.
+	 * When in order data is available, the application can read it,
+	 * or a callback can be set.
+	 */
 
 	typedef struct _picoquic_stream_data {
 		struct _picoquic_stream_data * next_stream_data;
@@ -135,9 +137,9 @@ extern "C" {
 	} picoquic_stream_head;
 
 	/*
-	* Packet sent, and queued for retransmission.
-	* The packet is not encrypted.
-	*/
+	 * Packet sent, and queued for retransmission.
+	 * The packet is not encrypted.
+	 */
 
 	typedef enum
 	{
@@ -150,10 +152,8 @@ extern "C" {
 		picoquic_packet_0rtt_protected = 6,
 		picoquic_packet_1rtt_protected_phi0 = 7,
 		picoquic_packet_1rtt_protected_phi1 = 8,
-		picoquic_packet_public_reset = 9,
-		picoquic_packet_type_max = 10
+		picoquic_packet_type_max = 9
 	} picoquic_packet_type_enum;
-
 
 	/*
 	 * Per connection context.
@@ -189,6 +189,7 @@ extern "C" {
 		uint64_t initial_cnxid;
 		uint64_t server_cnxid;
 		struct sockaddr_storage peer_address;
+		uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE];
 
 		/* TLS context, TLS Send Buffer, chain of receive buffers (todo) */
 		void * tls_ctx;

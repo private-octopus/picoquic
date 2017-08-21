@@ -583,11 +583,6 @@ void picoquic_log_packet(FILE* F, picoquic_quic_t * quic, picoquic_cnx_t * cnx,
 				picoquic_log_decrypt_encrypted(F, cnx, bytes, length, &ph);
 			}
 			break;
-		case picoquic_packet_public_reset:
-			/* TODO : check whether the secret matches */
-			/* Not implemented. Log and ignore */
-			ret = -1;
-			break;
 		default:
 			/* Packet type error. Log and ignore */
 			break;

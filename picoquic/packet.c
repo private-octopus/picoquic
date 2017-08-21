@@ -242,6 +242,48 @@ int picoquic_verify_version(
 }
 
 /*
+ * Process an unexpected connection ID. This could be an old packet from a 
+ * previous connection. If the packet type correspond to an encrypted value,
+ * the server can respond with a public reset
+ */
+void picoquic_process_unexpected_cnxid(
+	picoquic_quic_t * quic,
+	uint32_t length,
+	struct sockaddr * addr_from,
+	picoquic_packet_header * ph)
+{
+	if ((ph->ptype == picoquic_packet_1rtt_protected_phi0 ||
+		 ph->ptype == picoquic_packet_1rtt_protected_phi1) &&
+		length > 26)
+	{
+		picoquic_stateless_packet_t * sp = picoquic_create_stateless_packet(quic);
+
+		if (sp != NULL)
+		{
+			uint8_t * bytes = sp->bytes;
+			size_t byte_index = 0;
+			size_t pad_size = (size_t)(picoquic_crypto_uniform_random(quic, length - 26) + 26 - 17);
+			/* Packet type set to short header, with cnxid, key phase 0, 1 byte seq */
+			bytes[byte_index++] = 0x41;
+			/* Copy the connection ID */
+			picoformat_64(bytes + byte_index, ph->cnx_id);
+			byte_index += 8;
+			/* Compute a public reset secret */
+			(void)picoquic_create_cnxid_reset_secret(quic, ph->cnx_id, bytes + byte_index);
+			byte_index += PICOQUIC_RESET_SECRET_SIZE;
+			/* Add some random bytes to look good. */
+			picoquic_crypto_random(quic, bytes + byte_index, pad_size);
+			byte_index += pad_size;
+			sp->length = byte_index;
+			memset(&sp->addr_to, 0, sizeof(sp->addr_to));
+			memcpy(&sp->addr_to, addr_from,
+				(addr_from->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
+			picoquic_queue_stateless_packet(quic, sp);
+		}
+	}
+}
+
+/*
  * Processing of an incoming client initial packet,
  * on an unknown connection context.
  */
@@ -261,8 +303,8 @@ picoquic_cnx_t * picoquic_incoming_initial(
         (quic->flags&picoquic_context_server) == 0 ||
 		length < PICOQUIC_ENFORCED_INITIAL_MTU)
 	{
-        /* TODO: may want to send stateless reject */
-        /* Unexpected packet, drop and log. */
+        /* Unexpected packet. Reject, drop and log. */
+		picoquic_process_unexpected_cnxid(quic, length, addr_from, ph);
     }
     else
     {
@@ -452,13 +494,22 @@ int picoquic_incoming_encrypted(
         cnx->cnx_state == picoquic_state_server_almost_ready ||
         cnx->cnx_state == picoquic_state_server_ready)
     {
+		/* Check the possible reset before performaing in place AEAD decrypt */
+		int cmp_reset_secret = memcmp(bytes + 9, cnx->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
         /* AEAD Decrypt, in place */
         decoded_length = picoquic_aead_decrypt(cnx, bytes + ph->offset,
             bytes + ph->offset, length - ph->offset, ph->pn, bytes, ph->offset);
 
         if (decoded_length > (length - ph->offset))
         {
-            /* Bad packet should be ignored */
+            /* Bad packet should be ignored -- unless it is actually a server reset */
+			if (ph->vn == 0 && length >= (9 + PICOQUIC_RESET_SECRET_SIZE) &&
+				cmp_reset_secret == 0)
+			{
+				/* Stateless reset. The connection should be abandonned */
+				/* TODO: clean up the pending streams. */
+				cnx->cnx_state = picoquic_state_disconnected;
+			}
 			ret = PICOQUIC_ERROR_AEAD_CHECK;
         }
         else
@@ -586,11 +637,6 @@ int picoquic_incoming_packet(
                     /* TODO : roll key based on PHI */
                     /* decrypt with 1RTT key of epoch */
                     /* Not implemented yet. */
-                    break;
-                case picoquic_packet_public_reset:
-                    /* TODO : check whether the secret matches */
-                    /* Not implemented. Log and ignore */
-                    ret = -1;
                     break;
                 default:
                     /* Packet type error. Log and ignore */

@@ -34,6 +34,10 @@ static picoquic_transport_parameters transport_param_test1 = {
 static picoquic_transport_parameters transport_param_test2 = { 
 	0x1000000, 0x1000000, 0x1000000, 255, 1, 1480 };
 
+static uint8_t transport_param_reset_secret[PICOQUIC_RESET_SECRET_SIZE] = {
+	1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
+};
+
 uint8_t client_param1[] = {
 	0xFF, 0, 0, 5,
 	0xFF, 0, 0, 5,
@@ -54,32 +58,34 @@ uint8_t client_param2[] = {
 	0, 2, 0, 4, 0x01, 0, 0, 0,
 	0, 3, 0, 2, 0, 0xFF,
 	0, 4, 0, 0,
-	0, 5, 0, 2, 0x05, 0xC8,
+	0, 5, 0, 2, 0x05, 0xC8
 };
 
 uint8_t server_param1[] = {
 	0x08,
 	0xFF, 0, 0, 5,
 	0x50, 0x43, 0x51, 0x30,
-	0, 0x24,
+	0, 0x38,
 	0, 0, 0, 4, 0, 0, 0xFF, 0xFF,
 	0, 1, 0, 4, 0, 0x40, 0, 0,
 	0, 2, 0, 4, 0, 0, 0xFF, 0xFF,
 	0, 3, 0, 2, 0, 0x1E,
 	0, 5, 0, 2, 0x05, 0xC8,
+	0, 6, 0, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
 };
 
 uint8_t server_param2[] = {
 	0x08,
 	0xFF, 0, 0, 5,
 	0x50, 0x43, 0x51, 0x30,
-	0, 0x28,
+	0, 0x3C,
 	0, 0, 0, 4, 0x01, 0, 0, 0,
 	0, 1, 0, 4, 0x01, 0, 0, 0,
 	0, 2, 0, 4, 0x01, 0, 0, 0,
 	0, 3, 0, 2, 0, 0xFF,
 	0, 4, 0, 0,
 	0, 5, 0, 2, 0x05, 0xC8,
+	0, 6, 0, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
 };
 
 int transport_param_one_test(int mode, uint32_t version, uint32_t proposed_version, 
@@ -94,6 +100,7 @@ int transport_param_one_test(int mode, uint32_t version, uint32_t proposed_versi
 	memcpy(&test_cnx.local_parameters, param, sizeof(picoquic_transport_parameters));
 	test_cnx.version = version;
 	test_cnx.proposed_version = proposed_version;
+	memcpy(test_cnx.reset_secret, transport_param_reset_secret, PICOQUIC_RESET_SECRET_SIZE);
 
 	ret = picoquic_prepare_transport_extensions(&test_cnx, mode, buffer, sizeof(buffer), &encoded);
 
