@@ -590,6 +590,5 @@ int main(int argc, char ** argv)
         ret = quic_client(server_name, server_port);
 
         printf("Client exit with code = %d\n", ret);
-
     }
 }

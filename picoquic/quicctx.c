@@ -380,6 +380,7 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
 				cnx->proposed_version = preferred_version;
 			}
 			cnx->version = cnx->proposed_version;
+			cnx->local_parameters.omit_connection_id = 1;
 
 			cnx->cnx_state = picoquic_state_client_init;
 			if (cnx_id == 0)

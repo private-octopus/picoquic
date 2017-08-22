@@ -98,10 +98,10 @@ char const * picoquic_log_ptype_name(picoquic_packet_type_enum ptype)
 
 void picoquic_log_packet_header(FILE* F, picoquic_cnx_t * cnx, picoquic_packet_header * ph)
 {
-	fprintf(F, "    Type: %d(%s), CnxID: %llx%s, Seq: %x, Version %x\n",
+	fprintf(F, "    Type: %d(%s), CnxID: %llx%s, Seq: %x (%llx), Version %x\n",
 		ph->ptype, picoquic_log_ptype_name(ph->ptype), ph->cnx_id,
 		(cnx == NULL) ? " (unknown)" : "",
-		ph->pn, ph->vn);
+		ph->pn, ph->pn64, ph->vn);
 }
 
 void picoquic_log_negotiation_packet(FILE* F, 
@@ -509,7 +509,7 @@ void picoquic_log_decrypt_encrypted(FILE* F,
 	/* decrypt in a separate copy */
 	uint8_t decrypted[PICOQUIC_MAX_PACKET_SIZE];
 	size_t decrypted_length = picoquic_aead_decrypt(cnx, decrypted,
-		bytes + ph->offset, length - ph->offset, ph->pn, bytes, ph->offset);
+		bytes + ph->offset, length - ph->offset, ph->pn64, bytes, ph->offset);
 
 	if (decrypted_length > length)
 	{
@@ -549,6 +549,16 @@ void picoquic_log_packet(FILE* F, picoquic_quic_t * quic, picoquic_cnx_t * cnx,
 		if (cnx == NULL && ph.cnx_id != 0)
 		{
 			cnx = picoquic_cnx_by_id(quic, ph.cnx_id);
+		}
+
+		if (cnx != NULL)
+		{
+			ph.pn64 = picoquic_get_packet_number64(
+				cnx->first_sack_item.end_of_sack_range, ph.pnmask, ph.pn);
+		}
+		else
+		{
+			ph.pn64 = ph.pn;
 		}
 
 		picoquic_log_packet_header(F, cnx, &ph);

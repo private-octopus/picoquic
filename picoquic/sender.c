@@ -433,15 +433,35 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 	else if (ret == 0)
 	{
 		/* Prepare the packet header */
+		if (packet_type == picoquic_packet_1rtt_protected_phi0 ||
+			packet_type == picoquic_packet_1rtt_protected_phi1)
+		{
+			/* Create a short packet -- using 32 bit sequence numbers for now */
+			uint8_t C = (cnx->remote_parameters.omit_connection_id != 0) ? 0 : 0x40;
+			uint8_t K = (packet_type == picoquic_packet_1rtt_protected_phi0) ? 0 : 0x20;
+			uint8_t PT = 3;
 
-		/* Create a long packet */
-		bytes[0] = 0x80 | packet_type;
+			length = 0;
+			bytes[length++] = (C | K | PT);
+			if (C != 0)
+			{
+				picoformat_64(&bytes[length], cnx_id);
+				length += 8;
+			}
+			picoformat_32(&bytes[length], (uint32_t)cnx->send_sequence);
+			length += 4;
+		}
+		else
+		{
+			/* Create a long packet */
+			bytes[0] = 0x80 | packet_type;
 
-		picoformat_64(&bytes[1], cnx_id);
-		picoformat_32(&bytes[9], (uint32_t)cnx->send_sequence);
-		picoformat_32(&bytes[13], cnx->version);
+			picoformat_64(&bytes[1], cnx_id);
+			picoformat_32(&bytes[9], (uint32_t)cnx->send_sequence);
+			picoformat_32(&bytes[13], cnx->version);
 
-		length = 17;
+			length = 17;
+		}
 		header_length = length;
 		packet->sequence_number = cnx->send_sequence;
 		packet->send_time = current_time;

@@ -385,13 +385,11 @@ int picoquic_incoming_server_cleartext(
 			{
 				cnx->server_cnxid = ph->cnx_id;
 			}
-			else
+			else if (cnx->server_cnxid != ph->cnx_id)
 			{
-				if (cnx->server_cnxid != ph->cnx_id)
-				{
-					ret = -1; /* protocol error */
-				}
+				ret = PICOQUIC_ERROR_CNXID_CHECK; /* protocol error */
 			}
+
 
 			if (ret == 0)
 			{
@@ -477,19 +475,28 @@ int picoquic_incoming_client_cleartext(
 
     return ret;
 }
-/*
-* Processing of client encrypted packet.
-*/
-int picoquic_incoming_encrypted(
-    picoquic_cnx_t * cnx,
-    uint8_t * bytes,
-    uint32_t length,
-    picoquic_packet_header * ph)
-{
-    int ret = 0;
-    size_t decoded_length = 0;
 
-    if (cnx->cnx_state == picoquic_state_client_almost_ready ||
+/*
+ * Processing of client encrypted packet.
+ */
+int picoquic_incoming_encrypted(
+	picoquic_cnx_t * cnx,
+	uint8_t * bytes,
+	uint32_t length,
+	picoquic_packet_header * ph)
+{
+	int ret = 0;
+	size_t decoded_length = 0;
+
+
+	if (ph->cnx_id != cnx->server_cnxid &&
+		(ph->cnx_id != 0 ||
+			cnx->local_parameters.omit_connection_id == 0))
+	{
+		ret = PICOQUIC_ERROR_CNXID_CHECK;
+	}
+	else  if (
+		cnx->cnx_state == picoquic_state_client_almost_ready ||
         cnx->cnx_state == picoquic_state_client_ready ||
         cnx->cnx_state == picoquic_state_server_almost_ready ||
         cnx->cnx_state == picoquic_state_server_ready)
@@ -498,7 +505,7 @@ int picoquic_incoming_encrypted(
 		int cmp_reset_secret = memcmp(bytes + 9, cnx->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
         /* AEAD Decrypt, in place */
         decoded_length = picoquic_aead_decrypt(cnx, bytes + ph->offset,
-            bytes + ph->offset, length - ph->offset, ph->pn, bytes, ph->offset);
+            bytes + ph->offset, length - ph->offset, ph->pn64, bytes, ph->offset);
 
         if (decoded_length > (length - ph->offset))
         {
@@ -629,7 +636,7 @@ int picoquic_incoming_packet(
                 case picoquic_packet_0rtt_protected:
                     /* TODO : decrypt with 0RTT key */
                     /* Not implemented. Log and ignore */
-                    ret = -1;
+                    ret = PICOQUIC_ERROR_UNEXPECTED_PACKET;
                     break;
                 case picoquic_packet_1rtt_protected_phi0:
                 case picoquic_packet_1rtt_protected_phi1:
@@ -658,7 +665,8 @@ int picoquic_incoming_packet(
 	else if (ret == PICOQUIC_ERROR_AEAD_CHECK ||
 		ret == PICOQUIC_ERROR_DUPLICATE ||
 		ret == PICOQUIC_ERROR_UNEXPECTED_PACKET ||
-		ret == PICOQUIC_ERROR_FNV1A_CHECK)
+		ret == PICOQUIC_ERROR_FNV1A_CHECK ||
+		ret == PICOQUIC_ERROR_CNXID_CHECK)
 	{
 		/* Bad packets are dropped silently */
 		ret = 0;
