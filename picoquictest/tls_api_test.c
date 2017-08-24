@@ -52,8 +52,8 @@ typedef struct st_test_api_stream_t {
 	uint32_t previous_stream_id;
 	int q_sent;
 	int r_sent;
-	int q_received;
-	int r_received;
+	picoquic_call_back_event_t q_received;
+	picoquic_call_back_event_t r_received;
 	size_t q_len;
 	size_t q_recv_nb;
 	size_t r_len;
@@ -195,8 +195,9 @@ static void test_api_delete_test_stream(test_api_stream_t * test_stream)
 
 
 static void test_api_receive_stream_data(
-	const uint8_t * bytes, size_t length, int fin_noted,
-	uint8_t * buffer, size_t max_len, const uint8_t * reference, size_t * nb_received, int * received, int * error_detected)
+	const uint8_t * bytes, size_t length, picoquic_call_back_event_t fin_or_event,
+	uint8_t * buffer, size_t max_len, const uint8_t * reference, size_t * nb_received, 
+	picoquic_call_back_event_t * received, int * error_detected)
 {
 	if (*nb_received + length > max_len)
 	{
@@ -214,14 +215,14 @@ static void test_api_receive_stream_data(
 
 	*nb_received += length;
 
-	if (fin_noted)
+	if (fin_or_event != picoquic_callback_no_event)
 	{
-		if (*received)
+		if (*received != picoquic_callback_no_event)
 		{
 			*error_detected |= test_api_fail_fin_received_twice;
 		}
 
-		*received |= 1;
+		*received = fin_or_event;
 	}
 }
 
@@ -250,14 +251,15 @@ static int test_api_queue_initial_queries(picoquic_test_tls_api_ctx_t * test_ctx
 }
 
 static void test_api_callback(picoquic_cnx_t * cnx,
-	uint32_t stream_id, uint8_t * bytes, size_t length, int fin_noted, void * callback_ctx)
+	uint32_t stream_id, uint8_t * bytes, size_t length, 
+	picoquic_call_back_event_t fin_or_event, void * callback_ctx)
 {
 	/* Need to implement the server sending strategy */
 	test_api_callback_t * cb_ctx = (test_api_callback_t *)callback_ctx;
 	picoquic_test_tls_api_ctx_t * ctx = NULL;
 	size_t stream_index = 0;
 	int is_client_stream = (stream_id & 1);
-	int stream_finished = 0;
+	picoquic_call_back_event_t stream_finished = picoquic_callback_no_event;
 
 	if (cb_ctx->client_mode)
 	{
@@ -288,7 +290,7 @@ static void test_api_callback(picoquic_cnx_t * cnx,
 		if (cb_ctx->client_mode)
 		{
 			/* this is a response from the server to a client stream */
-			test_api_receive_stream_data(bytes, length, fin_noted,
+			test_api_receive_stream_data(bytes, length, fin_or_event,
 				ctx->test_stream[stream_index].r_rcv,
 				ctx->test_stream[stream_index].r_len,
 				ctx->test_stream[stream_index].r_src,
@@ -296,12 +298,12 @@ static void test_api_callback(picoquic_cnx_t * cnx,
 				&ctx->test_stream[stream_index].r_received,
 				&cb_ctx->error_detected);
 
-			stream_finished = fin_noted;
+			stream_finished = fin_or_event;
 		}
 		else
 		{
 			/* this is a query to a server */
-			test_api_receive_stream_data(bytes, length, fin_noted,
+			test_api_receive_stream_data(bytes, length, fin_or_event,
 				ctx->test_stream[stream_index].q_rcv,
 				ctx->test_stream[stream_index].q_len,
 				ctx->test_stream[stream_index].q_src,
@@ -309,12 +311,13 @@ static void test_api_callback(picoquic_cnx_t * cnx,
 				&ctx->test_stream[stream_index].q_received,
 				&cb_ctx->error_detected);
 
-			if (fin_noted )
+			if (fin_or_event != 0)
 			{
-				if (ctx->test_stream[stream_index].r_len == 0)
+				if (ctx->test_stream[stream_index].r_len == 0 ||
+					fin_or_event == picoquic_callback_stream_reset)
 				{
 					ctx->test_stream[stream_index].r_received = 1;
-					stream_finished = 1;
+					stream_finished = fin_or_event;
 				}
 				else if (cb_ctx->error_detected == 0)
 				{
@@ -334,7 +337,7 @@ static void test_api_callback(picoquic_cnx_t * cnx,
 		if (cb_ctx->client_mode)
 		{
 			/* this is a query from the server to the client */
-			test_api_receive_stream_data(bytes, length, fin_noted,
+			test_api_receive_stream_data(bytes, length, fin_or_event,
 				ctx->test_stream[stream_index].q_rcv,
 				ctx->test_stream[stream_index].q_len,
 				ctx->test_stream[stream_index].q_src,
@@ -342,12 +345,13 @@ static void test_api_callback(picoquic_cnx_t * cnx,
 				&ctx->test_stream[stream_index].q_received,
 				&cb_ctx->error_detected);
 
-			if (fin_noted)
+			if (fin_or_event != 0)
 			{
-				if (ctx->test_stream[stream_index].r_len == 0)
+				if (ctx->test_stream[stream_index].r_len == 0 ||
+					fin_or_event == picoquic_callback_stream_reset)
 				{
 					ctx->test_stream[stream_index].r_received = 1;
-					stream_finished = 1;
+					stream_finished = fin_or_event;
 				}
 				else if (cb_ctx->error_detected == 0)
 				{
@@ -364,7 +368,7 @@ static void test_api_callback(picoquic_cnx_t * cnx,
 		else
 		{
 			/* this is a response to the server */
-			test_api_receive_stream_data(bytes, length, fin_noted,
+			test_api_receive_stream_data(bytes, length, fin_or_event,
 				ctx->test_stream[stream_index].r_rcv,
 				ctx->test_stream[stream_index].r_len,
 				ctx->test_stream[stream_index].r_src,
@@ -372,11 +376,11 @@ static void test_api_callback(picoquic_cnx_t * cnx,
 				&ctx->test_stream[stream_index].r_received,
 				&cb_ctx->error_detected);
 
-			stream_finished = fin_noted;
+			stream_finished = fin_or_event;
 		}
 	}
 
-	if (stream_finished && cb_ctx->error_detected == 0)
+	if (stream_finished == picoquic_callback_stream_fin && cb_ctx->error_detected == 0)
 	{
 		/* queue the new queries initiated by that stream */
 		if (test_api_queue_initial_queries(ctx, stream_id) != 0)
@@ -974,7 +978,17 @@ int tls_api_one_scenario_test(test_api_stream_desc_t * scenario,
 		{
 			for (size_t i = 0; ret == 0 && i < test_ctx->nb_test_streams; i++)
 			{
-				if (test_ctx->test_stream[i].q_received == 0 ||
+				if (test_ctx->test_stream[i].q_recv_nb !=
+					test_ctx->test_stream[i].q_len)
+				{
+					ret = -1;
+				}
+				else if (test_ctx->test_stream[i].r_recv_nb !=
+					test_ctx->test_stream[i].r_len)
+				{
+					ret = -1;
+				}
+				else if (test_ctx->test_stream[i].q_received == 0 ||
 					test_ctx->test_stream[i].r_received == 0)
 				{
 					ret = -1;

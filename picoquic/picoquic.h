@@ -44,6 +44,27 @@ extern "C" {
 #define PICOQUIC_ERROR_MALFORMED_TRANSPORT_EXTENSION (PICOQUIC_ERROR_CLASS  + 10)
 #define PICOQUIC_ERROR_EXTENSION_BUFFER_TOO_SMALL (PICOQUIC_ERROR_CLASS  + 11)
 #define PICOQUIC_ERROR_ILLEGAL_TRANSPORT_EXTENSION (PICOQUIC_ERROR_CLASS  + 12)
+#define PICOQUIC_ERROR_CANNOT_RESET_STREAM_ZERO (PICOQUIC_ERROR_CLASS  + 13)
+#define PICOQUIC_ERROR_INVALID_STREAM_ID (PICOQUIC_ERROR_CLASS  + 14)
+#define PICOQUIC_ERROR_STREAM_ALREADY_CLOSED (PICOQUIC_ERROR_CLASS  + 15)
+#define PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL (PICOQUIC_ERROR_CLASS  + 16)
+#define PICOQUIC_ERROR_INVALID_FRAME (PICOQUIC_ERROR_CLASS  + 17)
+
+#define PICOQUIC_TRANSPORT_ERROR_NO_ERROR (0x80000000)
+#define PICOQUIC_TRANSPORT_ERROR_INTERNAL (0x80000001)
+#define PICOQUIC_TRANSPORT_ERROR_CANCELLED (0x80000002) /* RST STREAM only */
+#define PICOQUIC_TRANSPORT_ERROR_FLOW_CONTROL_ERROR (0x80000003)
+#define PICOQUIC_TRANSPORT_ERROR_STREAM_ID_ERROR (0x80000004)
+#define PICOQUIC_TRANSPORT_ERROR_STREAM_STATE_ERROR (0x80000005)
+#define PICOQUIC_TRANSPORT_ERROR_FINAL_OFFSET_ERROR (0x80000006)
+#define PICOQUIC_TRANSPORT_ERROR_FRAME_FORMAT_ERROR (0x80000007)
+#define PICOQUIC_TRANSPORT_ERROR_TRANSPORT_PARAMETER_ERROR (0x80000008)
+#define PICOQUIC_TRANSPORT_ERROR_VERSION_NEGOTIATION_ERROR (0x80000009)
+#define PICOQUIC_TRANSPORT_ERROR_PROTOCOL_VIOLATION (0x8000000A) :
+#define PICOQUIC_TRANSPORT_ERROR_QUIC_RECEIVED_RST (0x80000035) 
+#define PICOQUIC_TRANSPORT_ERROR_FRAME_ERROR_MIN (0x80000100)
+#define PICOQUIC_TRANSPORT_ERROR_FRAME_ERROR_MAX (0x800001FF)
+#define PICOQUIC_TRANSPORT_ERROR_FRAME_ERROR(frame_id) (0x80000100|(frame_id)) /* XX is replaced by actual frame type */
 
 #define PICOQUIC_MAX_PACKET_SIZE 1536
 
@@ -98,9 +119,16 @@ extern "C" {
 	typedef struct st_picoquic_quic_t picoquic_quic_t;
 	typedef struct st_picoquic_cnx_t picoquic_cnx_t;
 
+	typedef enum {
+		picoquic_callback_no_event = 0,
+		picoquic_callback_stream_fin,
+		picoquic_callback_stream_reset
+	} picoquic_call_back_event_t;
+
 	/* Callback function for providing stream data to the application */
 	typedef void(*picoquic_stream_data_cb_fn) (picoquic_cnx_t * cnx,
-		uint32_t stream_id, uint8_t * bytes, size_t length, int fin_noted, void * callback_ctx);
+		uint32_t stream_id, uint8_t * bytes, size_t length, 
+		picoquic_call_back_event_t fin_or_event, void * callback_ctx);
 
 
 	/* QUIC context create and dispose */
@@ -150,6 +178,9 @@ extern "C" {
 	/* send and receive data on streams */
 	int picoquic_add_to_stream(picoquic_cnx_t * cnx,
 		uint32_t stream_id, const uint8_t * data, size_t length, int set_fin);
+
+	int picoquic_reset_stream(picoquic_cnx_t * cnx,
+		uint32_t stream_id);
 
 
 #ifdef  __cplusplus

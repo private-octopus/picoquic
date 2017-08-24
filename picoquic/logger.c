@@ -402,6 +402,220 @@ size_t picoquic_log_ack_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
 	return byte_index;
 }
 
+size_t picoquic_log_reset_stream_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
+{
+	int ret = 0;
+	size_t byte_index = 1;
+	const size_t min_size = 1 + 4 + 4 + 8;
+	uint32_t stream_id;
+	uint32_t error_code;
+	uint64_t offset;
+
+	if (min_size > bytes_max)
+	{
+		fprintf(F, "    Malformed RESET STREAM, requires %d bytes out of %d\n", min_size, bytes_max);
+		return bytes_max;
+	}
+
+	/* Now that the size is good, parse and print it */
+	stream_id = PICOPARSE_32(bytes + byte_index);
+	byte_index += 4;
+	error_code = PICOPARSE_32(bytes + byte_index);
+	byte_index += 4;
+	offset = PICOPARSE_64(bytes + byte_index);
+	byte_index += 8;
+
+
+	fprintf(F, "    Stream %d (0x%08x), Error 0x%08x, Offset 0x%llx.\n", 
+		stream_id, stream_id, error_code, offset);
+
+	return byte_index;
+}
+
+size_t picoquic_log_go_away_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
+{
+	int ret = 0;
+	size_t byte_index = 1;
+	const size_t min_size = 1 + 4 + 4;
+	uint32_t max_stream_id_client;
+	uint32_t max_stream_id_server;
+
+	if (min_size > bytes_max)
+	{
+		fprintf(F, "    Malformed MAX STREAM ID, requires %d bytes out of %d\n", min_size, bytes_max);
+		return bytes_max;
+	}
+
+	/* Now that the size is good, parse and print it */
+	max_stream_id_client = PICOPARSE_32(bytes + byte_index);
+	byte_index += 4;
+	
+	max_stream_id_server = PICOPARSE_32(bytes + byte_index);
+	byte_index += 4;
+
+	fprintf(F, "    Max stream client %d (0x%08x), server %d (0x%08x).\n",
+		max_stream_id_client, max_stream_id_client,
+		max_stream_id_server, max_stream_id_server);
+
+	return byte_index;
+}
+
+size_t picoquic_log_connection_close_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
+{
+	int ret = 0;
+	size_t byte_index = 1;
+	size_t min_size = 1 + 4 + 2;
+	uint32_t error_code;
+	uint16_t string_length;
+
+	if (min_size > bytes_max)
+	{
+		fprintf(F, "    Malformed CONNECTION CLOSE, requires %d bytes out of %d\n", min_size, bytes_max);
+		return bytes_max;
+	}
+
+	/* Now that the size is above the minimum */
+	error_code = PICOPARSE_32(bytes + byte_index);
+	byte_index += 4;
+	string_length = PICOPARSE_16(bytes + byte_index);
+	byte_index += 2;
+
+
+	fprintf(F, "    Connection close, Error 0x%08x, Reason length %d (0x%04x):\n",
+		error_code, string_length, string_length);
+	if (byte_index + string_length > bytes_max)
+	{
+		fprintf(F, "    Malformed CONNECTION CLOSE, requires %d bytes out of %d\n", 
+			byte_index + string_length, bytes_max);
+		byte_index = bytes_max;
+	}
+	else
+	{
+		/* TODO: print the UTF8 string */
+		byte_index += string_length;
+	}
+
+	return byte_index;
+}
+
+size_t picoquic_log_max_data_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
+{
+	int ret = 0;
+	size_t byte_index = 1;
+	const size_t min_size = 1 + 8;
+	uint64_t max_data;
+
+	if (min_size > bytes_max)
+	{
+		fprintf(F, "    Malformed MAX DATA, requires %d bytes out of %d\n", min_size, bytes_max);
+		return bytes_max;
+	}
+
+	/* Now that the size is good, parse and print it */
+	max_data = PICOPARSE_64(bytes + byte_index);
+	byte_index += 8;
+
+	fprintf(F, "    Max data: 0x%llx.\n", max_data);
+
+	return byte_index;
+}
+
+size_t picoquic_log_max_stream_data_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
+{
+	int ret = 0;
+	size_t byte_index = 1;
+	const size_t min_size = 1 + 4 + 8;
+	uint32_t stream_id;
+	uint64_t max_data;
+
+	if (min_size > bytes_max)
+	{
+		fprintf(F, "    Malformed MAX STREAM DATA, requires %d bytes out of %d\n", min_size, bytes_max);
+		return bytes_max;
+	}
+
+	/* Now that the size is good, parse and print it */
+	stream_id = PICOPARSE_32(bytes + byte_index);
+	byte_index += 4;
+	max_data = PICOPARSE_64(bytes + byte_index);
+	byte_index += 8;
+
+	fprintf(F, "    Stream: %d (0x%08x), max data: 0x%llx.\n", 
+		stream_id, stream_id, max_data);
+
+	return byte_index;
+}
+
+size_t picoquic_log_max_stream_id_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
+{
+	int ret = 0;
+	size_t byte_index = 1;
+	const size_t min_size = 1 + 4;
+	uint32_t max_stream_id;
+
+	if (min_size > bytes_max)
+	{
+		fprintf(F, "    Malformed MAX STREAM ID, requires %d bytes out of %d\n", min_size, bytes_max);
+		return bytes_max;
+	}
+
+	/* Now that the size is good, parse and print it */
+	max_stream_id = PICOPARSE_32(bytes + byte_index);
+	byte_index += 4;
+
+	fprintf(F, "    Max stream: %d (0x%08x).\n",
+		max_stream_id, max_stream_id);
+
+	return byte_index;
+}
+
+size_t picoquic_log_stream_blocked_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
+{
+	int ret = 0;
+	size_t byte_index = 1;
+	const size_t min_size = 1 + 4;
+	uint32_t blocked_stream_id;
+
+	if (min_size > bytes_max)
+	{
+		fprintf(F, "    Malformed STREAM BLOCKED, requires %d bytes out of %d\n", min_size, bytes_max);
+		return bytes_max;
+	}
+
+	/* Now that the size is good, parse and print it */
+	blocked_stream_id = PICOPARSE_32(bytes + byte_index);
+	byte_index += 4;
+
+	fprintf(F, "    Stream blocked: %d (0x%08x).\n",
+		blocked_stream_id, blocked_stream_id);
+
+	return byte_index;
+}
+
+size_t picoquic_log_new_connection_id_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
+{
+	int ret = 0;
+	size_t byte_index = 1;
+	const size_t min_size = 1 + 8;
+	uint64_t new_cnx_id;
+
+	if (min_size > bytes_max)
+	{
+		fprintf(F, "    Malformed New Connection Id, requires %d bytes out of %d\n", min_size, bytes_max);
+		return bytes_max;
+	}
+
+	/* Now that the size is good, parse and print it */
+	new_cnx_id = PICOPARSE_64(bytes + byte_index);
+	byte_index += 8;
+
+	fprintf(F, "    New connection id: 0x%016llx.\n",
+		new_cnx_id);
+
+	return byte_index;
+}
+
+
 static char const * picoquic_log_frame_names[] =
 {
 	"Padding",
@@ -462,19 +676,51 @@ void picoquic_log_frames(FILE* F, uint8_t * bytes, size_t length)
 
 			switch (frame_id)
 			{
-			case 0x02: /* CONNECTION_CLOSE */
-				byte_index += 7;
-				break;
 			case 0x01: /* RST_STREAM */
+				byte_index += picoquic_log_reset_stream_frame(F, bytes + byte_index, 
+					length - byte_index);
+				break;
+			case 0x02: /* CONNECTION_CLOSE */
+				byte_index += picoquic_log_connection_close_frame(F, bytes + byte_index,
+					length - byte_index);
+				break;
 			case 0x03: /* GOAWAY */
+				/* Not supported anymore. */
+				byte_index += picoquic_log_go_away_frame(F, bytes + byte_index,
+					length - byte_index);
+				break;
 			case 0x04: /* MAX_DATA */
+				byte_index += picoquic_log_max_data_frame(F, bytes + byte_index,
+					length - byte_index);
+				break;
 			case 0x05: /* MAX_STREAM_DATA */
+				byte_index += picoquic_log_max_stream_data_frame(F, bytes + byte_index,
+					length - byte_index);
+				break;
 			case 0x06: /* MAX_STREAM_ID */
-			case 0x07: /* PING */
+				byte_index += picoquic_log_max_stream_id_frame(F, bytes + byte_index,
+					length - byte_index);
+				break;
+			case 0x07: /* PING -- Format depends on version! */
+				/* No payload in current version */
+				byte_index++;
+				break;
 			case 0x08: /* BLOCKED */
+				/* No payload */
+				byte_index++;
+				break;
 			case 0x09: /* STREAM_BLOCKED */
+				byte_index += picoquic_log_stream_blocked_frame(F, bytes + byte_index,
+					length - byte_index);
+				break;
 			case 0x0a: /* STREAM_ID_NEEDED */
+				/* No payload */
+				byte_index++;
+				break;
 			case 0x0b: /* NEW_CONNECTION_ID */
+				byte_index += picoquic_log_new_connection_id_frame(F, bytes + byte_index,
+					length - byte_index);
+				break;
 			default:
 				/* Not implemented yet! */
 				byte_index = length;

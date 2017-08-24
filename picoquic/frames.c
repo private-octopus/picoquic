@@ -22,8 +22,170 @@
 /* Decoding of the various frames, and application to context */
 #include "picoquic_internal.h"
 
+picoquic_stream_head * picoquic_find_stream(picoquic_cnx_t * cnx, uint32_t stream_id, int create)
+{
+	picoquic_stream_head * stream = &cnx->first_stream;
+
+	do {
+		if (stream->stream_id == stream_id)
+		{
+			break;
+		}
+		else
+		{
+			stream = stream->next_stream;
+		}
+	} while (stream);
+
+	if (create != 0 && stream == NULL)
+	{
+		stream = (picoquic_stream_head *)malloc(sizeof(picoquic_stream_head));
+		if (stream != NULL)
+		{
+			memset(stream, 0, sizeof(picoquic_stream_head));
+			stream->next_stream = cnx->first_stream.next_stream;
+			stream->stream_id = stream_id;
+			cnx->first_stream.next_stream = stream;
+		}
+	}
+
+	return stream;
+}
+
 /*
- * Decoding of a stream frame.
+ * RST_STREAM Frame
+ * 
+ * An endpoint may use a RST_STREAM frame (type=0x01) to abruptly terminate a stream.
+ *
+ * After sending a RST_STREAM, an endpoint ceases transmission of STREAM frames on 
+ * the identified stream. A receiver of RST_STREAM can discard any data that it 
+ * already received on that stream. An endpoint sends a RST_STREAM in response to 
+ * a RST_STREAM unless the stream is already closed.
+ *
+ * The RST_STREAM frame is as follows:
+ *
+ *  0                   1                   2                   3
+ *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ * |                        Stream ID (32)                         |
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ * |                        Error Code (32)                        |
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ * |                                                               |
+ * +                       Final Offset (64)                       +
+ * |                                                               |
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ * The fields are:
+ *
+ * Stream ID:
+ *     The 32-bit Stream ID of the stream being terminated.
+ * Error code:
+ *     A 32-bit error code which indicates why the stream is being closed.
+ * Final offset:
+ *     A 64-bit unsigned integer indicating the absolute byte offset of the 
+ *     end of data written on this stream by the RST_STREAM sender.
+ */
+
+int picoquic_prepare_stream_reset_frame(picoquic_cnx_t * cnx, picoquic_stream_head * stream,
+	uint8_t * bytes, size_t bytes_max, size_t * consumed)
+{
+	int ret = 0;
+	const size_t min_length = 1 + 4 + 4 + 8;
+
+	if (bytes_max < min_length)
+	{
+		ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
+	}
+	else if ((stream->stream_flags&picoquic_stream_flag_reset_requested) == 0 ||
+		(stream->stream_flags&picoquic_stream_flag_reset_sent) != 0)
+	{
+		*consumed = 0;
+	}
+	else
+	{
+		bytes[0] = picoquic_frame_type_reset_stream;
+		picoformat_32(bytes + 1, stream->stream_id);
+		picoformat_32(bytes + 5, stream->local_error);
+		picoformat_64(bytes + 9, stream->sent_offset);
+		*consumed = 17;
+
+		stream->stream_flags |= picoquic_stream_flag_reset_sent;
+	}
+
+	return ret;
+}
+
+int picoquic_decode_stream_reset_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
+	size_t bytes_max, size_t * consumed)
+{
+	int ret = 0;
+	const size_t min_length = 1 + 4 + 4 + 8;
+	uint32_t stream_id;
+	uint32_t error_code;
+	uint32_t final_offset;
+	picoquic_stream_head * stream = NULL;
+
+	if (bytes_max < min_length)
+	{
+		/* TODO: protocol error */
+		ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
+		*consumed = bytes_max;
+	}
+	else
+	{
+		stream_id = PICOPARSE_32(bytes + 1);
+		error_code = PICOPARSE_32(bytes + 5);
+		final_offset = PICOPARSE_64(bytes + 9);
+		*consumed = 17;
+
+		if (stream_id == 0)
+		{
+			ret = PICOQUIC_ERROR_CANNOT_RESET_STREAM_ZERO;
+		}
+		else
+		{
+			stream = picoquic_find_stream(cnx, stream_id, 0);
+
+			if (stream == NULL)
+			{
+				ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
+			}
+			else
+			{
+				if ((stream->stream_flags&
+					(picoquic_stream_flag_fin_received| picoquic_stream_flag_reset_received)) != 0)
+				{
+					ret = PICOQUIC_ERROR_STREAM_ALREADY_CLOSED;
+				}
+				else
+				{
+					stream->stream_flags |= picoquic_stream_flag_reset_received;
+					stream->remote_error = error_code;
+
+					if (cnx->callback_fn != NULL)
+					{
+						cnx->callback_fn(cnx, stream->stream_id, NULL, 0, 
+							picoquic_callback_stream_reset, cnx->callback_ctx);
+						stream->stream_flags |= picoquic_stream_flag_reset_signalled;
+					}
+
+					if ((stream->stream_flags&
+						(picoquic_stream_flag_fin_notified | picoquic_stream_flag_reset_requested)) == 0)
+					{
+						stream->local_error = PICOQUIC_TRANSPORT_ERROR_QUIC_RECEIVED_RST;
+						stream->stream_flags |= picoquic_stream_flag_reset_requested;
+					}
+				}
+			}
+		}
+	}
+
+	return ret;
+}
+
+/*
+ * Stream frame.
  * In our implementation, stream 0 is special, and feeds directly
  * into the SSL API.
  *
@@ -63,36 +225,6 @@
  */
 static const int picoquic_offset_length_code[4] = { 0, 2, 4, 8 };
 
-picoquic_stream_head * picoquic_find_stream(picoquic_cnx_t * cnx, uint32_t stream_id, int create)
-{
-    picoquic_stream_head * stream = &cnx->first_stream;
-
-    do {
-        if (stream->stream_id == stream_id)
-        {
-            break;
-        }
-        else
-        {
-            stream = stream->next_stream;
-        }
-    } while (stream);
-
-    if (create != 0 && stream == NULL)
-    {
-        stream = (picoquic_stream_head *)malloc(sizeof(picoquic_stream_head));
-        if (stream != NULL)
-        {
-			memset(stream, 0, sizeof(picoquic_stream_head));
-            stream->next_stream = cnx->first_stream.next_stream;
-            stream->stream_id = stream_id;
-            cnx->first_stream.next_stream = stream;
-        }
-    }
-
-    return stream;
-}
-
 void picoquic_stream_data_callback(picoquic_cnx_t * cnx, picoquic_stream_head * stream)
 {
 	picoquic_stream_data * data = stream->stream_data;
@@ -101,7 +233,7 @@ void picoquic_stream_data_callback(picoquic_cnx_t * cnx, picoquic_stream_head * 
 	{
 		size_t start = (size_t)(stream->consumed_offset - data->offset);
 		size_t data_length = data->length - start;
-		int fin_now = 0;
+		picoquic_call_back_event_t fin_now = picoquic_callback_no_event;
 		
 		stream->consumed_offset += data_length;
 
@@ -110,7 +242,7 @@ void picoquic_stream_data_callback(picoquic_cnx_t * cnx, picoquic_stream_head * 
 			(picoquic_stream_flag_fin_received | picoquic_stream_flag_fin_signalled)) ==
 			picoquic_stream_flag_fin_received)
 		{
-			fin_now = 1;
+			fin_now = picoquic_callback_stream_fin;
 			stream->stream_flags |= picoquic_stream_flag_fin_signalled;
 		}
 
@@ -130,7 +262,7 @@ void picoquic_stream_data_callback(picoquic_cnx_t * cnx, picoquic_stream_head * 
 		(picoquic_stream_flag_fin_received | picoquic_stream_flag_fin_signalled)) ==
 		picoquic_stream_flag_fin_received)
 	{
-		cnx->callback_fn(cnx, stream->stream_id, NULL, 0, 1,
+		cnx->callback_fn(cnx, stream->stream_id, NULL, 0, picoquic_callback_stream_fin,
 			cnx->callback_ctx);
 		stream->stream_flags |= picoquic_stream_flag_fin_signalled;
 	}
@@ -359,7 +491,9 @@ picoquic_stream_head * picoquic_find_ready_stream(picoquic_cnx_t * cnx, int rest
 			if ((stream->send_queue != NULL &&
 				stream->send_queue->length > stream->send_queue->offset) ||
 				((stream->stream_flags&picoquic_stream_flag_fin_notified) != 0 &&
-				(stream->stream_flags&picoquic_stream_flag_fin_sent) == 0))
+				(stream->stream_flags&picoquic_stream_flag_fin_sent) == 0) ||
+				((stream->stream_flags&picoquic_stream_flag_reset_requested) != 0 &&
+				(stream->stream_flags&picoquic_stream_flag_reset_sent) == 0))
 			{
 				break;
 			}
@@ -368,6 +502,18 @@ picoquic_stream_head * picoquic_find_ready_stream(picoquic_cnx_t * cnx, int rest
 				stream = stream->next_stream;
 			}
 		} while (stream);
+	}
+	else
+	{
+		if ((stream->send_queue == NULL ||
+			stream->send_queue->length <= stream->send_queue->offset) &&
+			((stream->stream_flags&picoquic_stream_flag_fin_notified) == 0 ||
+			(stream->stream_flags&picoquic_stream_flag_fin_sent) != 0) &&
+				((stream->stream_flags&picoquic_stream_flag_reset_requested) == 0 ||
+			(stream->stream_flags&picoquic_stream_flag_reset_sent) != 0))
+		{
+			stream = NULL;
+		}
 	}
 
 	return stream;
@@ -381,6 +527,11 @@ int picoquic_prepare_stream_frame(picoquic_cnx_t * cnx, picoquic_stream_head * s
     uint8_t ss_bits = 0;
     uint8_t oo_bits = 0;
     size_t length;
+
+	if ((stream->stream_flags&picoquic_stream_flag_reset_requested) != 0)
+	{
+		return picoquic_prepare_stream_reset_frame(cnx, stream, bytes, bytes_max, consumed);
+	}
 
     if ((stream->send_queue == NULL ||
         stream->send_queue->length <= stream->send_queue->offset) &&
@@ -832,13 +983,13 @@ int picoquic_decode_frames(picoquic_cnx_t * cnx, uint8_t * bytes,
     while (byte_index < bytes_max && ret == 0)
     {
         uint8_t first_byte = bytes[byte_index];
+		size_t consumed = 0;
 
-        if (first_byte >= 0xa0)
+        if (first_byte >= picoquic_frame_type_ack_range_min)
         {
-            if (first_byte >= 0xc0)
+            if (first_byte >= picoquic_frame_type_stream_range_min)
             {
                 /* decode stream frame */
-                size_t consumed = 0;
 
                 ret = picoquic_decode_stream_frame(cnx, bytes + byte_index, bytes_max - byte_index, restricted, &consumed);
 
@@ -857,32 +1008,36 @@ int picoquic_decode_frames(picoquic_cnx_t * cnx, uint8_t * bytes,
         else if (restricted)
         {
            /* forbidden! */
-            if (first_byte == 0)
+            if (first_byte == picoquic_frame_type_padding)
             {
                 /* Padding */
                 do {
                     byte_index++;
-                } while (byte_index < bytes_max && bytes[byte_index] == 0);
+                } while (byte_index < bytes_max && 
+					bytes[byte_index] == picoquic_frame_type_padding);
             }
             else
             {
-                ret = -1;
+                ret = PICOQUIC_ERROR_INVALID_FRAME;
             }
         }
         else switch (first_byte)
         {
-        case 0:
-            /* Padding */
+        case picoquic_frame_type_padding:
             do {
                 byte_index++;
-            } while (byte_index < bytes_max && bytes[byte_index] == 0);
+            } while (byte_index < bytes_max && 
+				bytes[byte_index] == picoquic_frame_type_padding);
             break;
-        case 0x02: /* CONNECTION_CLOSE */
+		case picoquic_frame_type_reset_stream:
+			ret = picoquic_decode_stream_reset_frame(cnx, bytes, bytes_max, &consumed);
+			byte_index += consumed;
+			break;
+        case picoquic_frame_type_connection_close:
                    /* TODO: parse, check for errors, signal on the API */
             cnx->cnx_state = picoquic_state_disconnected;
             byte_index = bytes_max;
             break;
-        case 0x01: /* RST_STREAM */
         case 0x03: /* GOAWAY */
         case 0x04: /* MAX_DATA */
         case 0x05: /* MAX_STREAM_DATA */
@@ -910,9 +1065,9 @@ int picoquic_skip_frame(uint8_t * bytes, size_t bytes_max, size_t * consumed, in
 	*pure_ack = 1;
 	*consumed = 0;
 
-	if (first_byte >= 0xa0)
+	if (first_byte >= picoquic_frame_type_ack_range_min)
 	{
-		if (first_byte >= 0xc0)
+		if (first_byte >= picoquic_frame_type_stream_range_min)
 		{
 			/* skip stream frame */
 			uint8_t stream_id_length = 1 + ((first_byte >> 3) & 3);
@@ -1030,27 +1185,53 @@ int picoquic_skip_frame(uint8_t * bytes, size_t bytes_max, size_t * consumed, in
 	{
 		switch (first_byte)
 		{
-		case 0:
+		case picoquic_frame_type_padding:
 			/* Padding */
 			do {
 				byte_index++;
-			} while (byte_index < bytes_max && bytes[byte_index] == 0);
+			} while (byte_index < bytes_max && bytes[byte_index] == picoquic_frame_type_padding);
 
 			break;
-		case 0x02: /* CONNECTION_CLOSE */
-			byte_index = 7;
+		case picoquic_frame_type_reset_stream: 
+			byte_index += 17;
 			*pure_ack = 0;
 			break;
-		case 0x01: /* RST_STREAM */
-		case 0x03: /* GOAWAY */
-		case 0x04: /* MAX_DATA */
-		case 0x05: /* MAX_STREAM_DATA */
-		case 0x06: /* MAX_STREAM_ID */
-		case 0x07: /* PING */
-		case 0x08: /* BLOCKED */
-		case 0x09: /* STREAM_BLOCKED */
-		case 0x0a: /* STREAM_ID_NEEDED */
-		case 0x0b: /* NEW_CONNECTION_ID */
+		case picoquic_frame_type_connection_close: 
+			byte_index += 7;
+			*pure_ack = 0;
+			break;
+		case picoquic_frame_type_goaway:
+			byte_index += 9;
+			break;
+		case picoquic_frame_type_max_data:
+			byte_index += 9;
+			*pure_ack = 0;
+			break;
+		case picoquic_frame_type_max_stream_data:
+			byte_index += 13;
+			*pure_ack = 0;
+			break;
+		case picoquic_frame_type_max_stream_id:
+			byte_index += 5;
+			*pure_ack = 0;
+			break;
+		case picoquic_frame_type_ping:
+			byte_index++;
+			*pure_ack = 0;
+			break;
+		case picoquic_frame_type_blocked:
+			byte_index++;
+			break;
+		case picoquic_frame_type_stream_blocked:
+			byte_index += 5;
+			break;
+		case picoquic_frame_type_stream_id_needed:
+			byte_index++;
+			break;
+		case picoquic_frame_type_new_connection_id:
+			byte_index += 9;
+			*pure_ack = 0;
+			break;
 		default:
 			/* Not implemented yet! */
 			ret = -1;

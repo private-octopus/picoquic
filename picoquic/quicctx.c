@@ -422,6 +422,9 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
 			cnx->first_stream.next_stream = NULL;
 			cnx->first_stream.stream_data = NULL;
 			cnx->first_stream.sent_offset = 0;
+			cnx->first_stream.local_error = 0;
+			cnx->first_stream.remote_error = 0;
+
 
 			cnx->aead_decrypt_ctx = NULL;
 			cnx->aead_encrypt_ctx = NULL;

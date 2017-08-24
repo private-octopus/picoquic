@@ -105,6 +105,28 @@ extern "C" {
 	} picoquic_sack_item;
 
 	/*
+	 * Types of frames
+	 */
+	typedef enum {
+		picoquic_frame_type_padding = 0,
+		picoquic_frame_type_reset_stream = 1,
+		picoquic_frame_type_connection_close = 2,
+		picoquic_frame_type_goaway = 3,
+		picoquic_frame_type_max_data = 4,
+		picoquic_frame_type_max_stream_data = 5,
+		picoquic_frame_type_max_stream_id = 6,
+		picoquic_frame_type_ping = 7,
+		picoquic_frame_type_blocked = 8,
+		picoquic_frame_type_stream_blocked = 9,
+		picoquic_frame_type_stream_id_needed = 0x0a,
+		picoquic_frame_type_new_connection_id = 0x0b,
+		picoquic_frame_type_ack_range_min = 0xa0,
+		picoquic_frame_type_ack_range_max = 0xbf,
+		picoquic_frame_type_stream_range_min = 0xc0,
+		picoquic_frame_type_stream_range_max = 0xcf
+	} picoquic_frame_type_enum_t;
+
+	/*
 	 * Stream head.
 	 * Stream contains bytes of data, which are not always delivered in order.
 	 * When in order data is available, the application can read it,
@@ -123,6 +145,10 @@ extern "C" {
 		picoquic_stream_flag_fin_signalled = 2,
 		picoquic_stream_flag_fin_notified = 4,
 		picoquic_stream_flag_fin_sent = 8,
+		picoquic_stream_flag_reset_requested = 16,
+		picoquic_stream_flag_reset_sent = 32,
+		picoquic_stream_flag_reset_received = 64,
+		picoquic_stream_flag_reset_signalled = 128
 	} picoquic_stream_flags;
 
 	typedef struct _picoquic_stream_head {
@@ -131,6 +157,8 @@ extern "C" {
 		uint32_t stream_flags;
 		uint64_t consumed_offset;
 		uint64_t fin_offset;
+		uint32_t local_error;
+		uint32_t remote_error;
 		picoquic_stream_data * stream_data;
 		uint64_t sent_offset;
 		picoquic_stream_data * send_queue;
@@ -190,6 +218,8 @@ extern "C" {
 		uint64_t server_cnxid;
 		struct sockaddr_storage peer_address;
 		uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE];
+		uint32_t local_error;
+		uint32_t remote_error;
 
 		/* TLS context, TLS Send Buffer, chain of receive buffers (todo) */
 		void * tls_ctx;

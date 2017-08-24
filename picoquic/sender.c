@@ -121,6 +121,39 @@ int picoquic_add_to_stream(picoquic_cnx_t * cnx, uint32_t stream_id,
     return ret;
 }
 
+int picoquic_reset_stream(picoquic_cnx_t * cnx,
+	uint32_t stream_id)
+{
+	int ret = 0;
+	picoquic_stream_head * stream = NULL;
+
+	/* TODO: check for other streams. */
+	if (stream_id == 0)
+	{
+		ret = PICOQUIC_ERROR_CANNOT_RESET_STREAM_ZERO;
+	}
+	else
+	{
+		stream = picoquic_find_stream(cnx, stream_id, 1);
+
+		if (stream == NULL)
+		{
+			ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
+		}
+		else if ((stream->stream_flags & picoquic_stream_flag_fin_sent) != 0)
+		{
+			ret = PICOQUIC_ERROR_STREAM_ALREADY_CLOSED;
+		}
+		else if ((stream->stream_flags&picoquic_stream_flag_reset_requested) == 0)
+		{
+			stream->local_error = PICOQUIC_TRANSPORT_ERROR_CANCELLED;
+			stream->stream_flags |= picoquic_stream_flag_reset_requested;
+		}
+	}
+
+	return ret;
+}
+
 picoquic_packet * picoquic_create_packet()
 {
     picoquic_packet * packet = (picoquic_packet *)malloc(sizeof(picoquic_packet));
@@ -334,7 +367,8 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 	/* TODO: Check for interesting streams */
 	int ret = 0;
 	/* TODO: manage multiple streams. */
-	picoquic_stream_head * stream = &cnx->first_stream;
+	picoquic_stream_head * stream = NULL;
+	int stream_restricted = 1;
 	picoquic_packet_type_enum packet_type = 0;
 	size_t checksum_overhead = 8;
 	int use_fnv1a = 1;
@@ -346,6 +380,7 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 	int header_length = 0;
 	uint8_t * bytes = packet->bytes;
 	size_t length = 0;
+
 
 	/* Prepare header -- depend on connection state */
 	/* TODO: 0-RTT work. */
@@ -388,13 +423,13 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 		retransmit_possible = 1;
 		use_fnv1a = 0;
 		checksum_overhead = 16;
-		stream = picoquic_find_ready_stream(cnx, 0);
+		stream_restricted = 0;
 		break;
 	case picoquic_state_server_ready:
 		packet_type = picoquic_packet_1rtt_protected_phi0;
 		use_fnv1a = 0;
 		checksum_overhead = 16;
-		stream = picoquic_find_ready_stream(cnx, 0);
+		stream_restricted = 0;
 		retransmit_possible = 1;
 		break;
 	case picoquic_state_disconnecting:
@@ -409,7 +444,9 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 		ret = -1;
 		break;
 	}
-	
+
+	stream = picoquic_find_ready_stream(cnx, stream_restricted);
+
 	if (retransmit_possible &&
 		(length = picoquic_retransmit_needed(cnx, current_time, packet, &use_fnv1a)) > 0)
 	{
@@ -423,7 +460,7 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 			packet->length = length;
 		}
 	}
-	else if (use_fnv1a && cnx->first_stream.send_queue == NULL)
+	else if (use_fnv1a && stream == NULL)
 	{
 		/* when in a clear text mode, only send packets if there is
 		 * actually something to send, or resend */
@@ -480,7 +517,7 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 		}
 		/* include here the actual retransmission, copying bytes
 		 * from the old packet to the new one */
-		else if ((stream == NULL || stream->send_queue == NULL) &&
+		else if (stream == NULL &&
 			picoquic_is_ack_needed(cnx, current_time) == 0)
 		{
 			length = 0;
