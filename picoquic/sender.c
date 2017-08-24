@@ -233,6 +233,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t * cnx, uint64_t current_time,
 	picoquic_packet * p;
 	size_t length = 0;
 
+#if 0
 	/* Only retransmit at reasonable intervals */
 	if (cnx->nb_retransmit > 0 &&
 		(cnx->latest_retransmit_time + 1000000ull * cnx->nb_retransmit) > current_time)
@@ -243,34 +244,63 @@ int picoquic_retransmit_needed(picoquic_cnx_t * cnx, uint64_t current_time,
 	{
 		cnx->cnx_state = picoquic_state_disconnected;
 	}
+#endif
 
 	/* TODO: while packets are pure ACK, drop them from retransmit queue */
 	while ((p = cnx->retransmit_oldest) != NULL)
 	{
 		int64_t delta_seq = cnx->highest_acknowledged - p->sequence_number;
+		int should_retransmit = 0;
+		int timer_based_retransmit = 0;
 
 		length = 0;
 
-		if (delta_seq < 3)
+		if (delta_seq > 3)
+		{
+			/*
+			 * SACK Logic.
+			 * more than N packets were seen at the receiver after this one.
+			 */
+			should_retransmit = 1;
+		}
+		else
 		{
 			int64_t delta_t = cnx->latest_time_acknowledged - p->send_time;
 
 			/* TODO: out of order delivery time ought to be dynamic */
-			if (delta_t < 10000)
+			if (delta_t > 10000)
+			{
+				/*
+				 * RACK logic.
+				 * The latest acknowledged was sent more than X ms after this one.
+				 */
+				should_retransmit = 1;
+			}
+			else
 			{
 				/* Don't fire yet, because of possible out of order delivery */
 				int64_t time_out = current_time - p->send_time;
+				uint64_t retransmit_timer = 1000000ull << cnx->nb_retransmit;
 
 				/* TODO: timer limit ought to be dynamic */
-				if (time_out < 1000000)
+				if (time_out < retransmit_timer)
 				{
-					p = NULL;
+					/* Do not retransmit if the timer has not yet elapsed */
+					should_retransmit = 0;
+				}
+				else
+				{
+					should_retransmit = 1;
+					timer_based_retransmit = 1;
 				}
 			}
 		}
 
-		if (p == NULL)
+		if (should_retransmit == 0)
 		{
+			/*
+			 * Always retransmit in order. If not this one, then nothing.
+			 */
 			break;
 		}
 		else
@@ -338,22 +368,43 @@ int picoquic_retransmit_needed(picoquic_cnx_t * cnx, uint64_t current_time,
 			if (packet_is_pure_ack)
 			{
 				length = 0;
+				should_retransmit = 0;
 			}
 			else
 			{
-				/* special case for the client initial */
-				if (ph.ptype == picoquic_packet_client_initial)
+				if (timer_based_retransmit != 0)
 				{
-					while (length < (cnx->send_mtu - checksum_length))
+					if (cnx->nb_retransmit > 4)
 					{
-						bytes[length++] = 0;
+						/*
+						 * Max retransmission count was exceeded. Disconnect.
+						 */
+						cnx->cnx_state = picoquic_state_disconnected;
+						length = 0;
+						should_retransmit = 0;
+						break;
+					}
+					else
+					{
+						cnx->nb_retransmit++;
+						cnx->latest_retransmit_time = current_time;
 					}
 				}
-				packet->length = length;
-				cnx->nb_retransmit++;
-				cnx->latest_retransmit_time = current_time;
 
-				break;
+				if (should_retransmit != 0)
+				{
+					/* special case for the client initial */
+					if (ph.ptype == picoquic_packet_client_initial)
+					{
+						while (length < (cnx->send_mtu - checksum_length))
+						{
+							bytes[length++] = 0;
+						}
+					}
+					packet->length = length;
+
+					break;
+				}
 			}
 		}
 	} 

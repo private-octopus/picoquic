@@ -730,7 +730,7 @@ static int tls_api_connection_loop(picoquic_test_tls_api_ctx_t * test_ctx,
 	int nb_trials = 0;
 	int nb_inactive = 0;
 
-	while (ret == 0 && nb_trials < 12 && nb_inactive < 4 &&
+	while (ret == 0 && nb_trials < 24 && nb_inactive < 16 &&
 		(test_ctx->cnx_client->cnx_state != picoquic_state_client_ready ||
 		(test_ctx->cnx_server == NULL ||
 			test_ctx->cnx_server->cnx_state != picoquic_state_server_ready)))
