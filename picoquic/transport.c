@@ -317,6 +317,8 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t * cnx, int extension_mo
 						else
 						{
 							cnx->remote_parameters.initial_max_data = PICOPARSE_32(bytes + byte_index);
+							cnx->maxdata_remote = ((uint64_t)cnx->remote_parameters.initial_max_data) << 10;
+							cnx->max_stream_id_remote = cnx->local_parameters.initial_max_stream_id;
 						}
 						break;
 					case picoquic_transport_parameter_initial_max_stream_id:

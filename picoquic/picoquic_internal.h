@@ -157,6 +157,8 @@ extern "C" {
 		uint32_t stream_flags;
 		uint64_t consumed_offset;
 		uint64_t fin_offset;
+		uint64_t maxdata_local;
+		uint64_t maxdata_remote;
 		uint32_t local_error;
 		uint32_t remote_error;
 		picoquic_stream_data * stream_data;
@@ -220,6 +222,17 @@ extern "C" {
 		uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE];
 		uint32_t local_error;
 		uint32_t remote_error;
+
+		/* Flow control information */
+		uint64_t data_sent;
+		uint64_t data_received;
+		uint64_t maxdata_local;
+		uint64_t maxdata_remote;
+		uint32_t highest_stream_id_local;
+		uint32_t highest_stream_id_remote;
+		uint32_t max_stream_id_local;
+		uint32_t max_stream_id_remote;
+
 
 		/* TLS context, TLS Send Buffer, chain of receive buffers (todo) */
 		void * tls_ctx;

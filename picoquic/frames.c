@@ -45,6 +45,9 @@ picoquic_stream_head * picoquic_find_stream(picoquic_cnx_t * cnx, uint32_t strea
 			memset(stream, 0, sizeof(picoquic_stream_head));
 			stream->next_stream = cnx->first_stream.next_stream;
 			stream->stream_id = stream_id;
+			stream->maxdata_local = cnx->local_parameters.initial_max_stream_data;
+			stream->maxdata_remote = cnx->remote_parameters.initial_max_stream_data;
+
 			cnx->first_stream.next_stream = stream;
 		}
 	}
@@ -954,22 +957,282 @@ int picoquic_is_ack_needed(picoquic_cnx_t * cnx, uint64_t current_time)
 }
 
 /*
+ * Connection close frame
+ */
+
+
+int picoquic_prepare_connection_close_frame(picoquic_cnx_t * cnx,
+	uint8_t * bytes, size_t bytes_max, size_t * consumed)
+{
+	int ret = 0;
+
+	if (bytes_max < 7)
+	{
+		*consumed = 0;
+		ret = -1;
+	}
+	else
+	{
+		bytes[0] = picoquic_frame_type_connection_close;
+		picoformat_32(bytes + 1, cnx->local_error);
+		picoformat_16(bytes + 5, 0);
+		*consumed = 7;
+	}
+
+	return ret;
+}
+
+int picoquic_decode_connection_close_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
+	size_t bytes_max, size_t * consumed)
+{
+	int ret = 0;
+	const size_t min_length = 1 + 4 + 2;
+	uint32_t error_code;
+	uint16_t string_length;
+	uint64_t maxdata_1k;
+	int byte_index = 0;
+
+	if (bytes_max < min_length)
+	{
+		/* TODO: protocol error */
+		ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
+		*consumed = bytes_max;
+	}
+	else
+	{
+		error_code = PICOPARSE_32(bytes + 1);
+		string_length = PICOPARSE_16(bytes + 5);
+
+		if (string_length + 7 > bytes_max)
+		{
+			ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
+			*consumed = bytes_max;
+		}
+		else
+		{
+			cnx->cnx_state = picoquic_state_disconnected;
+			cnx->remote_error = error_code;
+			*consumed = string_length + 7;
+			/* TODO: call back */
+		}
+	}
+
+	return ret;
+}
+
+/*
+ * Max data frame
+ *
+ * The MAX_DATA frame (type=0x04) is used in flow control to inform the peer of the maximum 
+ * amount of data that can be sent on the connection as a whole.
+ *
+ * The frame is as follows:
+ *
+ *  0                   1                   2                   3
+ *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *  |                                                               |
+ *  +                        Maximum Data (64)                      +
+ *  |                                                               |
+ *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *  The fields in the MAX_DATA frame are as follows:
+ *
+ * Maximum Data:
+ *  A 64-bit unsigned integer indicating the maximum amount of data that can be sent on 
+ *  the entire connection, in units of 1024 octets. That is, the updated connection-level 
+ *  data limit is determined by multiplying the encoded value by 1024.
+ */
+
+#define PICOQUIC_MAX_MAXDATA ((uint64_t)((int64_t)-1))
+#define PICOQUIC_MAX_MAXDATA_1K (PICOQUIC_MAX_MAXDATA >> 10)
+#define PICOQUIC_MAX_MAXDATA_1K_MASK (PICOQUIC_MAX_MAXDATA << 10)
+
+int picoquic_prepare_max_data_frame(picoquic_cnx_t * cnx, uint64_t maxdata_increase,
+	uint8_t * bytes, size_t bytes_max, size_t * consumed)
+{
+	int ret = 0;
+	const size_t min_length = 1 + 8;
+
+	if (bytes_max < min_length)
+	{
+		ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
+	}
+	else
+	{
+		bytes[0] = picoquic_frame_type_max_data;
+		cnx->maxdata_local = (cnx->maxdata_local + maxdata_increase)&PICOQUIC_MAX_MAXDATA_1K_MASK;
+		picoformat_64(bytes + 5, cnx->maxdata_local >> 10);
+		*consumed = 13;
+	}
+
+	return ret;
+}
+
+int picoquic_decode_max_data_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
+	size_t bytes_max, size_t * consumed)
+{
+	int ret = 0;
+	const size_t min_length = 1 + 8;
+	uint64_t maxdata_1k;
+
+	if (bytes_max < min_length)
+	{
+		/* TODO: protocol error */
+		ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
+		*consumed = bytes_max;
+	}
+	else
+	{
+		maxdata_1k = PICOPARSE_64(bytes + 1);
+		*consumed = 9;
+
+		/* TODO: call back if the connection was blocked? */
+		uint64_t maxdata = (maxdata_1k > PICOQUIC_MAX_MAXDATA_1K) ?
+			PICOQUIC_MAX_MAXDATA : maxdata_1k << 10;
+		if (maxdata > cnx->maxdata_remote)
+		{
+			cnx->maxdata_remote = maxdata;
+		}
+	}
+
+	return ret;
+}
+
+/*
+ * Max stream data frame
+ */
+
+int picoquic_prepare_max_stream_data_frame(picoquic_cnx_t * cnx, picoquic_stream_head * stream,
+	uint8_t * bytes, size_t bytes_max, size_t * consumed)
+{
+	int ret = 0;
+	const size_t min_length = 1 + 4 + 8;
+
+	if (bytes_max < min_length)
+	{
+		ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
+	}
+	else if ((stream->stream_flags&picoquic_stream_flag_reset_requested) == 0 ||
+		(stream->stream_flags&picoquic_stream_flag_reset_sent) != 0)
+	{
+		*consumed = 0;
+	}
+	else
+	{
+		bytes[0] = picoquic_frame_type_max_stream_data;
+		picoformat_32(bytes + 1, stream->stream_id);
+		picoformat_64(bytes + 5, stream->maxdata_local);
+		*consumed = 13;
+	}
+
+	return ret;
+}
+
+int picoquic_decode_max_stream_data_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
+	size_t bytes_max, size_t * consumed)
+{
+	int ret = 0;
+	const size_t min_length = 1 + 4 + 8;
+	uint32_t stream_id;
+	uint64_t maxdata;
+	picoquic_stream_head * stream = NULL;
+
+	if (bytes_max < min_length)
+	{
+		/* TODO: protocol error */
+		ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
+		*consumed = bytes_max;
+	}
+	else
+	{
+		stream_id = PICOPARSE_32(bytes + 1);
+		maxdata = PICOPARSE_64(bytes + 5);
+		*consumed = 13;
+
+		if (stream_id == 0)
+		{
+			ret = PICOQUIC_ERROR_CANNOT_CONTROL_STREAM_ZERO;
+		}
+		else
+		{
+			stream = picoquic_find_stream(cnx, stream_id, 1);
+
+			if (stream == NULL)
+			{
+				ret = PICOQUIC_ERROR_MEMORY;
+			}
+			else
+			{
+				/* TODO: call back if the stream was blocked? */
+				uint64_t maxdata = (maxdata > ((uint64_t)((int64_t)-1)) >> 10) ?
+					((uint64_t)((int64_t)-1)) : maxdata << 10;
+				if (maxdata > stream->maxdata_remote)
+				{
+					stream->maxdata_remote = maxdata;
+				}
+			}
+		}
+	}
+
+	return ret;
+}
+
+/*
+ * Max stream ID frame
+ */
+
+int picoquic_prepare_max_stream_ID_frame(picoquic_cnx_t * cnx, uint32_t increment,
+	uint8_t * bytes, size_t bytes_max, size_t * consumed)
+{
+	int ret = 0;
+	const size_t min_length = 1 + 4;
+
+	if (bytes_max < min_length)
+	{
+		ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
+	}
+	else
+	{
+		bytes[0] = picoquic_frame_type_max_stream_id;
+		cnx->max_stream_id_local += increment;
+		picoformat_32(bytes + 1, cnx->max_stream_id_local);
+		*consumed = 5;
+	}
+
+	return ret;
+}
+
+int picoquic_decode_max_stream_id_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
+	size_t bytes_max, size_t * consumed)
+{
+	int ret = 0;
+	const size_t min_length = 1 + 4;
+	uint32_t max_stream_id;
+	picoquic_stream_head * stream = NULL;
+
+	if (bytes_max < min_length)
+	{
+		/* TODO: protocol error */
+		ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
+		*consumed = bytes_max;
+	}
+	else
+	{
+		max_stream_id = PICOPARSE_32(bytes + 1);
+		*consumed = 5;
+
+		if (max_stream_id > cnx->max_stream_id_remote)
+		{
+			cnx->max_stream_id_remote = max_stream_id;
+		}
+	}
+
+	return ret;
+}
+
+/*
  * Decoding of the received frames.
- Type   Frame
- 0x00 	PADDING
- 0x01 	RST_STREAM
- 0x02 	CONNECTION_CLOSE
- 0x03 	GOAWAY
- 0x04 	MAX_DATA
- 0x05 	MAX_STREAM_DATA
- 0x06 	MAX_STREAM_ID
- 0x07 	PING
- 0x08 	BLOCKED
- 0x09 	STREAM_BLOCKED
- 0x0a 	STREAM_ID_NEEDED
- 0x0b 	NEW_CONNECTION_ID
- 0xa0 - 0xbf 	ACK
- 0xc0 - 0xff 	STREAM
  *
  * In some cases, the expected frames are "restricted" to only ACK, STREAM 0 and PADDING.
  */
@@ -1034,19 +1297,40 @@ int picoquic_decode_frames(picoquic_cnx_t * cnx, uint8_t * bytes,
 			byte_index += consumed;
 			break;
         case picoquic_frame_type_connection_close:
-                   /* TODO: parse, check for errors, signal on the API */
-            cnx->cnx_state = picoquic_state_disconnected;
-            byte_index = bytes_max;
+			ret = picoquic_decode_connection_close_frame(cnx, bytes, bytes_max, &consumed);
+			byte_index += consumed;
             break;
-        case 0x03: /* GOAWAY */
-        case 0x04: /* MAX_DATA */
-        case 0x05: /* MAX_STREAM_DATA */
-        case 0x06: /* MAX_STREAM_ID */
-        case 0x07: /* PING */
-        case 0x08: /* BLOCKED */
-        case 0x09: /* STREAM_BLOCKED */
-        case 0x0a: /* STREAM_ID_NEEDED */
-        case 0x0b: /* NEW_CONNECTION_ID */
+        case picoquic_frame_type_goaway:
+			/* This really should be an error, as go away is not supported anymore */
+			byte_index += 9;
+			break;
+        case picoquic_frame_type_max_data:
+			ret = picoquic_decode_max_data_frame(cnx, bytes, bytes_max, &consumed);
+			byte_index += consumed;
+			break;
+        case picoquic_frame_type_max_stream_data:
+			ret = picoquic_decode_max_stream_data_frame(cnx, bytes, bytes_max, &consumed);
+			byte_index += consumed;
+			break;
+        case picoquic_frame_type_max_stream_id: /* MAX_STREAM_ID */
+			ret = picoquic_decode_max_stream_id_frame(cnx, bytes, bytes_max, &consumed);
+			byte_index += consumed;
+			break;
+        case picoquic_frame_type_ping: /* PING */
+			byte_index ++;
+			break;
+        case picoquic_frame_type_blocked: /* BLOCKED */
+			byte_index++;
+			break;
+        case picoquic_frame_type_stream_blocked: /* STREAM_BLOCKED */
+			byte_index+=5;
+			break;
+        case picoquic_frame_type_stream_id_needed: /* STREAM_ID_NEEDED */
+			byte_index++;
+			break;
+        case picoquic_frame_type_new_connection_id: /* NEW_CONNECTION_ID */
+			byte_index+=9;
+			break;
         default:
             /* Not implemented yet! */
             ret = -1;
@@ -1241,25 +1525,4 @@ int picoquic_skip_frame(uint8_t * bytes, size_t bytes_max, size_t * consumed, in
 	}
 
 	return ret;
-}
-
-int picoquic_prepare_connection_close_frame(picoquic_cnx_t * cnx,
-    uint8_t * bytes, size_t bytes_max, size_t * consumed)
-{
-    int ret = 0;
-
-    if (bytes_max < 7)
-    {
-        *consumed = 0;
-        ret = -1;
-    }
-    else
-    {
-        bytes[0] = 0x02; /* CONNECTION_CLOSE */
-        picoformat_32(bytes + 1, 0);
-        picoformat_16(bytes + 5, 0);
-        *consumed = 7;
-    }
-
-    return ret;
 }

@@ -314,7 +314,7 @@ int picoquic_register_net_id(picoquic_quic_t * quic, picoquic_cnx_t * cnx, struc
 }
 
 
-void picoquic_int_transport_parameters(picoquic_transport_parameters * tp)
+void picoquic_init_transport_parameters(picoquic_transport_parameters * tp)
 {
 	tp->initial_max_stream_data = 65535;
 	tp->initial_max_data = 0x400000;
@@ -351,8 +351,16 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
 
     if (cnx != NULL)
     {
-		picoquic_int_transport_parameters(&cnx->local_parameters);
-		picoquic_int_transport_parameters(&cnx->remote_parameters);
+		picoquic_init_transport_parameters(&cnx->local_parameters);
+		picoquic_init_transport_parameters(&cnx->remote_parameters);
+		/* Initialize local flow control variables to advertised values */
+		cnx->maxdata_local = ((uint64_t)cnx->local_parameters.initial_max_data) << 10;
+		cnx->max_stream_id_local = cnx->local_parameters.initial_max_stream_id;
+		/* Initialize remote variables to some plausible value. 
+		 * Hopefully, this will be overwritten by the parameters received in
+		 * the TLS transport parameter extension */
+		cnx->maxdata_remote = ((uint64_t)cnx->remote_parameters.initial_max_data) << 10;
+		cnx->max_stream_id_remote = cnx->local_parameters.initial_max_stream_id;
 
 		if (sni != NULL)
 		{
@@ -424,6 +432,8 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
 			cnx->first_stream.sent_offset = 0;
 			cnx->first_stream.local_error = 0;
 			cnx->first_stream.remote_error = 0;
+			cnx->first_stream.maxdata_local = (uint64_t)((int64_t)-1);
+			cnx->first_stream.maxdata_remote = (uint64_t)((int64_t)-1);
 
 
 			cnx->aead_decrypt_ctx = NULL;
