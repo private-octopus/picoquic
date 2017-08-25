@@ -22,6 +22,23 @@
 /* Decoding of the various frames, and application to context */
 #include "picoquic_internal.h"
 
+picoquic_stream_head * picoquic_create_stream(picoquic_cnx_t * cnx, uint32_t stream_id)
+{
+	picoquic_stream_head * stream = (picoquic_stream_head *)malloc(sizeof(picoquic_stream_head));
+	if (stream != NULL)
+	{
+		memset(stream, 0, sizeof(picoquic_stream_head));
+		stream->next_stream = cnx->first_stream.next_stream;
+		stream->stream_id = stream_id;
+		stream->maxdata_local = cnx->local_parameters.initial_max_stream_data;
+		stream->maxdata_remote = cnx->remote_parameters.initial_max_stream_data;
+
+		cnx->first_stream.next_stream = stream;
+	}
+
+	return stream;
+}
+
 picoquic_stream_head * picoquic_find_stream(picoquic_cnx_t * cnx, uint32_t stream_id, int create)
 {
 	picoquic_stream_head * stream = &cnx->first_stream;
@@ -39,21 +56,93 @@ picoquic_stream_head * picoquic_find_stream(picoquic_cnx_t * cnx, uint32_t strea
 
 	if (create != 0 && stream == NULL)
 	{
-		stream = (picoquic_stream_head *)malloc(sizeof(picoquic_stream_head));
-		if (stream != NULL)
-		{
-			memset(stream, 0, sizeof(picoquic_stream_head));
-			stream->next_stream = cnx->first_stream.next_stream;
-			stream->stream_id = stream_id;
-			stream->maxdata_local = cnx->local_parameters.initial_max_stream_data;
-			stream->maxdata_remote = cnx->remote_parameters.initial_max_stream_data;
-
-			cnx->first_stream.next_stream = stream;
-		}
+		stream = picoquic_create_stream(cnx, stream_id);
 	}
 
 	return stream;
 }
+
+int picoquic_find_or_create_stream(picoquic_cnx_t * cnx, uint32_t stream_id,
+	picoquic_stream_head ** stream, int is_remote)
+{
+	int ret = 0;
+
+	/* Verify the stream ID control conditions */
+	if (stream_id > cnx->max_stream_id_local)
+	{
+		ret = PICOQUIC_TRANSPORT_ERROR_STREAM_ID_ERROR;
+	}
+	else
+	{
+		*stream = picoquic_find_stream(cnx, stream_id, 0);
+
+		if (*stream == NULL)
+		{
+			/* Check parity */
+			int parity = ((cnx->quic->flags&picoquic_context_server) == 0) ?
+				is_remote^1 : is_remote;
+			if ((stream_id & 1) != parity)
+			{
+				ret = PICOQUIC_TRANSPORT_ERROR_STREAM_ID_ERROR;
+			}
+			else
+			{
+				*stream = picoquic_create_stream(cnx, stream_id);
+
+				if (*stream == NULL)
+				{
+					ret = PICOQUIC_ERROR_MEMORY;
+				}
+			}
+		}
+	}
+
+	return ret;
+}
+
+/*
+ * Check of the number of newly received bytes, or newly committed bytes
+ * when a new max offset is learnt for a stream.
+ */
+
+int picoquic_flow_control_check_stream_offset(picoquic_cnx_t * cnx, picoquic_stream_head * stream,
+	uint64_t new_fin_offset)
+{
+	int ret = 0;
+
+	if (stream->stream_id == 0)
+	{
+		return 0;
+	}
+
+	if (new_fin_offset > stream->maxdata_local)
+	{
+		/* protocol violation */
+		ret = PICOQUIC_TRANSPORT_ERROR_FLOW_CONTROL_ERROR;
+	}
+	else
+	{
+		/* Checking the flow control limits. Need to pay attention
+		* to possible integer overflow */
+
+		uint64_t new_bytes = new_fin_offset - stream->fin_offset;
+
+		if (new_bytes > cnx->maxdata_local ||
+			cnx->maxdata_local - new_bytes < cnx->data_received)
+		{
+			/* protocol violation */
+			ret = PICOQUIC_TRANSPORT_ERROR_FLOW_CONTROL_ERROR;
+		}
+		else
+		{
+			cnx->data_received += new_bytes;
+			stream->fin_offset = new_fin_offset;
+		}
+	}
+
+	return ret;
+}
+
 
 /*
  * RST_STREAM Frame
@@ -148,13 +237,9 @@ int picoquic_decode_stream_reset_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
 		}
 		else
 		{
-			stream = picoquic_find_stream(cnx, stream_id, 0);
+			ret = picoquic_find_or_create_stream(cnx, stream_id, &stream, 1);
 
-			if (stream == NULL)
-			{
-				ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
-			}
-			else
+			if (ret == 0)
 			{
 				if ((stream->stream_flags&
 					(picoquic_stream_flag_fin_received| picoquic_stream_flag_reset_received)) != 0)
@@ -166,18 +251,24 @@ int picoquic_decode_stream_reset_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
 					stream->stream_flags |= picoquic_stream_flag_reset_received;
 					stream->remote_error = error_code;
 
-					if (cnx->callback_fn != NULL)
-					{
-						cnx->callback_fn(cnx, stream->stream_id, NULL, 0, 
-							picoquic_callback_stream_reset, cnx->callback_ctx);
-						stream->stream_flags |= picoquic_stream_flag_reset_signalled;
-					}
+					ret = picoquic_flow_control_check_stream_offset(cnx, stream, final_offset);
 
-					if ((stream->stream_flags&
-						(picoquic_stream_flag_fin_notified | picoquic_stream_flag_reset_requested)) == 0)
+					if (ret == 0)
 					{
-						stream->local_error = PICOQUIC_TRANSPORT_ERROR_QUIC_RECEIVED_RST;
-						stream->stream_flags |= picoquic_stream_flag_reset_requested;
+
+						if (cnx->callback_fn != NULL)
+						{
+							cnx->callback_fn(cnx, stream->stream_id, NULL, 0,
+								picoquic_callback_stream_reset, cnx->callback_ctx);
+							stream->stream_flags |= picoquic_stream_flag_reset_signalled;
+						}
+
+						if ((stream->stream_flags&
+							(picoquic_stream_flag_fin_notified | picoquic_stream_flag_reset_requested)) == 0)
+						{
+							stream->local_error = PICOQUIC_TRANSPORT_ERROR_QUIC_RECEIVED_RST;
+							stream->stream_flags |= picoquic_stream_flag_reset_requested;
+						}
 					}
 				}
 			}
@@ -277,35 +368,41 @@ int picoquic_stream_network_input(picoquic_cnx_t * cnx, uint32_t stream_id,
     int ret = 0;
 	uint32_t should_notify = 0;
     /* Is there such a stream, is it still open? */
-    picoquic_stream_head * stream = picoquic_find_stream(cnx, stream_id, 1);
+	picoquic_stream_head * stream = NULL; 
+	uint64_t new_fin_offset = offset + length;
 
-    if (stream == NULL)
-    {
-        ret = -1;
-    }
-	else if ((stream->stream_flags&picoquic_stream_flag_fin_received) != 0)
+	ret = picoquic_find_or_create_stream(cnx, stream_id, &stream, 1);
+	
+	if (ret == 0)
 	{
-		if (offset + length > stream->fin_offset)
+		if ((stream->stream_flags&picoquic_stream_flag_fin_received) != 0)
 		{
-			ret = -1;
+			if (new_fin_offset > stream->fin_offset)
+			{
+				ret = -1;
+			}
+			else if (fin != 0 && stream->fin_offset != new_fin_offset)
+			{
+				ret = -1;
+			}
 		}
-		else if (fin != 0 && stream->fin_offset != (offset + length))
+		else if (fin)
 		{
-			ret = -1;
+			if (stream_id == 0)
+			{
+				ret = -1;
+			}
+			else
+			{
+				stream->stream_flags |= picoquic_stream_flag_fin_received;
+				should_notify = stream_id;
+			}
 		}
 	}
-	else if (fin)
+
+	if (ret == 0 && new_fin_offset > stream->fin_offset)
 	{
-		if (stream_id == 0)
-		{
-			ret = -1;
-		}
-		else
-		{
-			stream->fin_offset = offset + length;
-			stream->stream_flags |= picoquic_stream_flag_fin_received;
-			should_notify = stream_id;
-		}
+		ret = picoquic_flow_control_check_stream_offset(cnx, stream, new_fin_offset);
 	}
 
 	if (ret == 0)
@@ -492,18 +589,42 @@ picoquic_stream_head * picoquic_find_ready_stream(picoquic_cnx_t * cnx, int rest
 	{
 		do {
 			if ((stream->send_queue != NULL &&
-				stream->send_queue->length > stream->send_queue->offset) ||
+				stream->send_queue->length > stream->send_queue->offset &&
+				(stream->stream_id == 0 ||
+				stream->sent_offset < stream->maxdata_remote)) ||
 				((stream->stream_flags&picoquic_stream_flag_fin_notified) != 0 &&
 				(stream->stream_flags&picoquic_stream_flag_fin_sent) == 0) ||
 				((stream->stream_flags&picoquic_stream_flag_reset_requested) != 0 &&
 				(stream->stream_flags&picoquic_stream_flag_reset_sent) == 0))
 			{
-				break;
+				/* if the stream is not active yet, verify that it fits under
+				 * the max stream id limit */
+
+				if (stream == 0)
+				{
+					break;
+				}
+				else
+				{
+					/* Check parity */
+					int parity = ((cnx->quic->flags&picoquic_context_server) == 0) ? 0 : 1;
+
+					if (((stream->stream_id & 1) ^ parity) == 1)
+					{
+						if (stream->stream_id < cnx->max_stream_id_remote)
+						{
+							break;
+						}
+					}
+					else
+					{
+						break;
+					}
+				}
 			}
-			else
-			{
-				stream = stream->next_stream;
-			}
+
+			stream = stream->next_stream;
+
 		} while (stream);
 	}
 	else
@@ -606,7 +727,22 @@ int picoquic_prepare_stream_frame(picoquic_cnx_t * cnx, picoquic_stream_head * s
             {
                 length = available;
             }
+
+			/* Abide by flow control and packet size  restrictions */
+			if (stream->stream_id != 0)
+			{
+				if (length > (cnx->maxdata_remote - cnx->data_sent))
+				{
+					length = cnx->maxdata_remote - cnx->data_sent;
+				}
+
+				if (length > (stream->maxdata_remote - stream->sent_offset))
+				{
+					length = stream->maxdata_remote - stream->sent_offset;
+				}
+			}
         }
+
         /* Encode the length */
         picoformat_16(&bytes[byte_index], (uint16_t)length);
         byte_index += 2;
@@ -626,6 +762,7 @@ int picoquic_prepare_stream_frame(picoquic_cnx_t * cnx, picoquic_stream_head * s
             }
 
             stream->sent_offset += length;
+			cnx->data_sent += length;
         }
 
         bytes[0] = 0xC1 | (ss_bits << 3) | (oo_bits << 1);
