@@ -435,7 +435,6 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
 			cnx->first_stream.maxdata_local = (uint64_t)((int64_t)-1);
 			cnx->first_stream.maxdata_remote = (uint64_t)((int64_t)-1);
 
-
 			cnx->aead_decrypt_ctx = NULL;
 			cnx->aead_encrypt_ctx = NULL;
 
@@ -453,6 +452,17 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
 			cnx->highest_acknowledged = cnx->send_sequence - 1;
 			cnx->latest_time_acknowledged = start_time;
 			cnx->latest_ack_received_time = start_time;
+
+
+			/* Time measurement */
+			cnx->smoothed_rtt = PICOQUIC_INITIAL_RTT;
+			cnx->rtt_variant = 0;
+			cnx->retransmit_timer = PICOQUIC_INITIAL_RETRANSMIT_TIMER;
+			cnx->rtt_min = 0;
+
+			/* Congestion control state */
+			cnx->cwin = 0;
+			cnx->bytes_in_transit = 0;
 		}
     }
 

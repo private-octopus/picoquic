@@ -36,6 +36,11 @@ extern "C" {
 #define PICOQUIC_ENFORCED_INITIAL_MTU 1200
 #define PICOQUIC_RESET_SECRET_SIZE 16
 
+#define PICOQUIC_INITIAL_RTT 250000 /* 250 ms */
+#define PICOQUIC_INITIAL_RETRANSMIT_TIMER 1000000 /* one second */
+#define PICOQUIC_MIN_RETRANSMIT_TIMER 50000 /* 50 ms */
+#define PICOQUIC_ACK_DELAY_MAX 20000 /* 20 ms */
+
 	/*
 	* Supported versions
 	*/
@@ -250,6 +255,17 @@ extern "C" {
 		uint64_t highest_ack_sent;
 		uint64_t highest_ack_time;
 
+		/* Time measurement */
+		uint64_t smoothed_rtt;
+		uint64_t rtt_variant;
+		uint64_t retransmit_timer;
+		uint64_t rtt_min;
+
+		/* Congestion control state */
+		uint64_t cwin;
+		uint64_t bytes_in_transit;
+
+
 		/* Retransmission state */
 		uint64_t nb_retransmit;
 		uint64_t latest_retransmit_time;
@@ -258,6 +274,7 @@ extern "C" {
 		uint64_t latest_ack_received_time;
 		picoquic_packet * retransmit_newest;
 		picoquic_packet * retransmit_oldest;
+
 
 		/* Management of streams */
 		picoquic_stream_head first_stream;
@@ -339,7 +356,7 @@ extern "C" {
 	/* send/receive */
 
 	int picoquic_decode_frames(picoquic_cnx_t * cnx, uint8_t * bytes,
-		size_t bytes_max, int restricted);
+		size_t bytes_max, int restricted, uint64_t current_time);
 
 	int picoquic_skip_frame(uint8_t * bytes, size_t bytes_max, size_t * consumed, int * pure_ack);
 

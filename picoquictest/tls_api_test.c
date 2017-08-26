@@ -473,35 +473,35 @@ static int tls_api_one_packet(picoquic_quic_t * qsender, picoquic_cnx_t * cnx, p
 		}
 		else
 		{
-			*simulated_time += 500;
+			*simulated_time += 50000;
 
 			ret = picoquic_prepare_packet(cnx, p, *simulated_time,
 				bytes, PICOQUIC_MAX_PACKET_SIZE, &send_length);
 
 			if (ret == 0 && p->length > 0)
 			{
-				*simulated_time += 500;
+				*simulated_time += 50000;
 
 				*was_active |= 1;
 
 				if (loss_mask == NULL ||
 					tls_api_loss_simulator(loss_mask) == 0)
 				{
-					/* Submit the packet to the server */
+					/* Submit the packet to the receiver */
 					ret = picoquic_incoming_packet(qreceive, bytes, send_length, sender_addr,
 						*simulated_time);
 				}
 			}
 			else
 			{
-				*simulated_time += 500000;
+				*simulated_time += 100000;
 				free(p);
 			}
 		}
 	}
 	else
 	{
-		simulated_time += 1000000;
+		simulated_time += 100000;
 	}
 
     return ret;
@@ -1068,17 +1068,22 @@ int tls_api_server_reset_test()
 		 ret = picoquic_add_to_stream(test_ctx->cnx_client, 1, buffer, sizeof(buffer), 1);
 	 }
 
-	 /* Perform a round of sending data */
-	 if (ret == 0)
+	 /* Perform a couple rounds of sending data */
+	 for (int i = 0; ret == 0 && i < 4 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected; i++)
 	 {
-		 ret = tls_api_one_packet(test_ctx->qclient, test_ctx->cnx_client, test_ctx->qserver,
-			 (struct sockaddr *)&test_ctx->client_addr, &loss_mask, &simulated_time, &was_active);
-	 }
+		 was_active = 0;
 
-	 if (ret == 0)
-	 {
-		 ret = tls_api_one_packet(test_ctx->qserver, test_ctx->cnx_server, test_ctx->qclient,
-			 (struct sockaddr *)&test_ctx->server_addr, &loss_mask, &simulated_time, &was_active);
+		 if (ret == 0)
+		 {
+			 ret = tls_api_one_packet(test_ctx->qclient, test_ctx->cnx_client, test_ctx->qserver,
+				 (struct sockaddr *)&test_ctx->client_addr, &loss_mask, &simulated_time, &was_active);
+		 }
+
+		 if (ret == 0)
+		 {
+			 ret = tls_api_one_packet(test_ctx->qserver, test_ctx->cnx_server, test_ctx->qclient,
+				 (struct sockaddr *)&test_ctx->server_addr, &loss_mask, &simulated_time, &was_active);
+		 }
 	 }
 
 	 /* Client should now be in state disconnected */

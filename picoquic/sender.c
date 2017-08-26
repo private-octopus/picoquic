@@ -276,14 +276,28 @@ int picoquic_retransmit_needed(picoquic_cnx_t * cnx, uint64_t current_time,
 				 */
 				should_retransmit = 1;
 			}
-			else
+			else if (delta_t > 0)
+			{
+				/* If the delta-t is larger than zero, add the time since the
+				 * last ACK was received. If that is larger than the inter packet
+				 * time, consider that there is a loss */
+				uint64_t time_from_last_ack = current_time - cnx->latest_time_acknowledged + delta_t;
+
+				if (time_from_last_ack > 10000)
+				{
+					should_retransmit = 1;
+				}
+			}
+
+			if (should_retransmit == 0)
 			{
 				/* Don't fire yet, because of possible out of order delivery */
 				int64_t time_out = current_time - p->send_time;
-				uint64_t retransmit_timer = 1000000ull << cnx->nb_retransmit;
+				uint64_t retransmit_timer = (cnx->nb_retransmit == 0) ?
+					cnx->retransmit_timer : (1000000 << (cnx->nb_retransmit - 1));
 
 				/* TODO: timer limit ought to be dynamic */
-				if (time_out < retransmit_timer)
+				if ((uint64_t) time_out < retransmit_timer)
 				{
 					/* Do not retransmit if the timer has not yet elapsed */
 					should_retransmit = 0;

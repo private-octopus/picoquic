@@ -733,12 +733,12 @@ int picoquic_prepare_stream_frame(picoquic_cnx_t * cnx, picoquic_stream_head * s
 			{
 				if (length > (cnx->maxdata_remote - cnx->data_sent))
 				{
-					length = cnx->maxdata_remote - cnx->data_sent;
+					length = (size_t)(cnx->maxdata_remote - cnx->data_sent);
 				}
 
 				if (length > (stream->maxdata_remote - stream->sent_offset))
 				{
-					length = stream->maxdata_remote - stream->sent_offset;
+					length = (size_t)(stream->maxdata_remote - stream->sent_offset);
 				}
 			}
         }
@@ -804,6 +804,88 @@ An ACK frame is shown below.
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 */
 
+static picoquic_packet * picoquic_update_rtt(picoquic_cnx_t * cnx, uint64_t largest,
+	uint64_t current_time, uint64_t ack_delay)
+{
+	picoquic_packet * packet = cnx->retransmit_newest;
+
+	/* Check whether this is a new acknowledgement */
+	if (largest > cnx->highest_acknowledged )
+	{
+		cnx->highest_acknowledged = largest;
+		cnx->latest_ack_received_time = current_time;
+
+		if (ack_delay < PICOQUIC_ACK_DELAY_MAX)
+		{
+			/* if the ACK is reasonably recent, use it to update the RTT */
+			/* find the stored copy of the largest acknowledged packet */
+
+			while (packet != NULL && packet->sequence_number > largest)
+			{
+				packet = packet->next_packet;
+			}
+
+			if (packet == NULL || packet->sequence_number < largest)
+			{
+				/* There is no copy of this packet in store.
+				 * This can only come from some kind of fake acknowledgement,
+				 * hitting a deliberate hole */
+
+				/* TODO: treat as protocol error */
+			}
+			else
+			{
+				uint64_t acknowledged_time = current_time - ack_delay;
+				int64_t rtt_estimate = acknowledged_time - packet->send_time;
+
+				cnx->latest_ack_received_time = packet->send_time;
+
+				if (rtt_estimate > 0)
+				{
+					if (cnx->smoothed_rtt == PICOQUIC_INITIAL_RTT &&
+						cnx->rtt_variant == 0)
+					{
+						cnx->smoothed_rtt = rtt_estimate;
+						cnx->rtt_variant = rtt_estimate / 2;
+						cnx->rtt_min = rtt_estimate;
+						cnx->retransmit_timer = 3 * rtt_estimate;
+					}
+					else
+					{
+						/* Computation per RFC 6298 */
+						int64_t delta_rtt = rtt_estimate - cnx->smoothed_rtt;
+						int64_t delta_rtt_average = 0;
+						cnx->smoothed_rtt += delta_rtt / 8;
+						if (delta_rtt < 0)
+						{
+							delta_rtt_average = (-delta_rtt) - cnx->rtt_variant;
+						}
+						else
+						{
+							delta_rtt_average = delta_rtt - cnx->rtt_variant;
+						}
+						cnx->rtt_variant += delta_rtt_average / 4;
+
+						cnx->retransmit_timer = cnx->smoothed_rtt + 4 * cnx->rtt_variant;
+
+						if (rtt_estimate < cnx->rtt_min)
+						{
+							cnx->rtt_min = rtt_estimate;
+						}
+					}
+
+					if (PICOQUIC_MIN_RETRANSMIT_TIMER > cnx->retransmit_timer)
+					{
+						cnx->retransmit_timer = PICOQUIC_MIN_RETRANSMIT_TIMER;
+					}
+				}
+			}
+		}
+	}
+
+	return packet;
+}
+
 static picoquic_packet * picoquic_process_ack_range(
 	picoquic_cnx_t * cnx, uint64_t highest, uint64_t range, picoquic_packet * p)
 {
@@ -835,7 +917,7 @@ static picoquic_packet * picoquic_process_ack_range(
 }
 
 int picoquic_decode_ack_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
-    size_t bytes_max, int restricted, size_t * consumed)
+    size_t bytes_max, int restricted, size_t * consumed, uint64_t current_time)
 {
 	int ret = 0;
 	size_t byte_index = 1;
@@ -850,6 +932,7 @@ int picoquic_decode_ack_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
 	uint64_t ack_range = 0;
 	uint64_t acked_mask = 0;
 	uint64_t gap_begin;
+	uint64_t ack_delay = 0;
 	picoquic_packet * top_packet = cnx->retransmit_newest;
 
 	if (first_byte < 0xA0 || first_byte > 0xBF)
@@ -890,6 +973,7 @@ int picoquic_decode_ack_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
 			break;
 		}
 		/* ACK delay */
+		ack_delay = picoquic_float16_to_deltat(PICOPARSE_16(bytes + byte_index));
 		byte_index += 2;
 
 		/* last range */
@@ -913,6 +997,10 @@ int picoquic_decode_ack_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
 			break;
 		}
 
+		/* Attempt to update the RTT */
+		top_packet = picoquic_update_rtt(cnx, largest, current_time, ack_delay);
+
+		/* Process the first range, which is always present */
 		if (last_range < largest)
 		{
 			top_packet = picoquic_process_ack_range(cnx, largest, last_range + 1, top_packet);
@@ -1126,7 +1214,6 @@ int picoquic_decode_connection_close_frame(picoquic_cnx_t * cnx, uint8_t * bytes
 	const size_t min_length = 1 + 4 + 2;
 	uint32_t error_code;
 	uint16_t string_length;
-	uint64_t maxdata_1k;
 	int byte_index = 0;
 
 	if (bytes_max < min_length)
@@ -1140,7 +1227,7 @@ int picoquic_decode_connection_close_frame(picoquic_cnx_t * cnx, uint8_t * bytes
 		error_code = PICOPARSE_32(bytes + 1);
 		string_length = PICOPARSE_16(bytes + 5);
 
-		if (string_length + 7 > bytes_max)
+		if (string_length + 7u > bytes_max)
 		{
 			ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
 			*consumed = bytes_max;
@@ -1302,8 +1389,6 @@ int picoquic_decode_max_stream_data_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
 			else
 			{
 				/* TODO: call back if the stream was blocked? */
-				uint64_t maxdata = (maxdata > ((uint64_t)((int64_t)-1)) >> 10) ?
-					((uint64_t)((int64_t)-1)) : maxdata << 10;
 				if (maxdata > stream->maxdata_remote)
 				{
 					stream->maxdata_remote = maxdata;
@@ -1375,7 +1460,7 @@ int picoquic_decode_max_stream_id_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
  */
 
 int picoquic_decode_frames(picoquic_cnx_t * cnx, uint8_t * bytes,
-    size_t bytes_max, int restricted)
+    size_t bytes_max, int restricted, uint64_t current_time)
 {
     int ret = 0;
     size_t byte_index = 0;
@@ -1400,7 +1485,8 @@ int picoquic_decode_frames(picoquic_cnx_t * cnx, uint8_t * bytes,
                 /* ACK processing */
                 size_t consumed = 0;
 
-                ret = picoquic_decode_ack_frame(cnx, bytes + byte_index, bytes_max - byte_index, restricted, &consumed);
+                ret = picoquic_decode_ack_frame(cnx, bytes + byte_index, bytes_max - byte_index, 
+					restricted, &consumed, current_time);
 
                 byte_index += consumed;
             }

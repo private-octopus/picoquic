@@ -325,7 +325,7 @@ picoquic_cnx_t * picoquic_incoming_initial(
 				uint32_t seq_init = 0;
 				
 				ret = picoquic_decode_frames(cnx,
-                    bytes +ph->offset, decoded_length - ph->offset, 1);
+                    bytes +ph->offset, decoded_length - ph->offset, 1, current_time);
 
                 /* processing of client initial packet */
                 if (ret == 0)
@@ -357,7 +357,8 @@ int picoquic_incoming_server_cleartext(
     picoquic_cnx_t * cnx,
     uint8_t * bytes,
     uint32_t length, 
-    picoquic_packet_header * ph)
+    picoquic_packet_header * ph,
+	uint64_t current_time)
 {
     int ret = 0;
     size_t decoded_length = 0;
@@ -395,7 +396,7 @@ int picoquic_incoming_server_cleartext(
 			{
 				/* Accept the incoming frames */
 				ret = picoquic_decode_frames(cnx,
-					bytes + ph->offset, decoded_length - ph->offset, 1);
+					bytes + ph->offset, decoded_length - ph->offset, 1, current_time);
 			}
 
             /* processing of client initial packet */
@@ -428,7 +429,8 @@ int picoquic_incoming_client_cleartext(
     picoquic_cnx_t * cnx,
     uint8_t * bytes,
     uint32_t length,
-    picoquic_packet_header * ph)
+    picoquic_packet_header * ph,
+	uint64_t current_time)
 {
     int ret = 0;
     size_t decoded_length = 0;
@@ -451,7 +453,7 @@ int picoquic_incoming_client_cleartext(
         {
             /* Accept the incoming frames */
             ret = picoquic_decode_frames(cnx,
-                bytes + ph->offset, decoded_length - ph->offset, 1);
+                bytes + ph->offset, decoded_length - ph->offset, 1, current_time);
 
             /* processing of client clear text packet */
             if (ret == 0)
@@ -483,7 +485,8 @@ int picoquic_incoming_encrypted(
 	picoquic_cnx_t * cnx,
 	uint8_t * bytes,
 	uint32_t length,
-	picoquic_packet_header * ph)
+	picoquic_packet_header * ph,
+	uint64_t current_time)
 {
 	int ret = 0;
 	size_t decoded_length = 0;
@@ -523,7 +526,7 @@ int picoquic_incoming_encrypted(
         {
             /* Accept the incoming frames */
             ret = picoquic_decode_frames(cnx,
-                bytes + ph->offset, decoded_length, 0);
+                bytes + ph->offset, decoded_length, 0, current_time);
 
             /* processing of client encrypted packet */
             if (ret == 0)
@@ -582,6 +585,7 @@ int picoquic_incoming_packet(
     {
         if (cnx == NULL)
         {
+			ph.pn64 = ph.pn;
             cnx = picoquic_incoming_initial(quic, bytes, length, addr_from, &ph, current_time);
         }
         else
@@ -628,10 +632,10 @@ int picoquic_incoming_packet(
                     ret = -1;
                     break;
                 case picoquic_packet_server_cleartext:
-                    ret = picoquic_incoming_server_cleartext(cnx, bytes, length, &ph);
+                    ret = picoquic_incoming_server_cleartext(cnx, bytes, length, &ph, current_time);
                     break;
                 case picoquic_packet_client_cleartext:
-                    ret = picoquic_incoming_client_cleartext(cnx, bytes, length, &ph);
+                    ret = picoquic_incoming_client_cleartext(cnx, bytes, length, &ph, current_time);
                     break;
                 case picoquic_packet_0rtt_protected:
                     /* TODO : decrypt with 0RTT key */
@@ -640,7 +644,7 @@ int picoquic_incoming_packet(
                     break;
                 case picoquic_packet_1rtt_protected_phi0:
                 case picoquic_packet_1rtt_protected_phi1:
-                    ret = picoquic_incoming_encrypted(cnx, bytes, length, &ph);
+                    ret = picoquic_incoming_encrypted(cnx, bytes, length, &ph, current_time);
                     /* TODO : roll key based on PHI */
                     /* decrypt with 1RTT key of epoch */
                     /* Not implemented yet. */
