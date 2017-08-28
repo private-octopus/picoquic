@@ -222,13 +222,58 @@ int picoquic_retransmit_initial(picoquic_cnx_t * cnx, picoquic_packet * packet)
 }
 #endif /* PICOQUIC_RETRANSMIT_INITIAL_USEFUL */
 
+
+size_t picoquic_create_packet_header(
+	picoquic_cnx_t * cnx,
+	picoquic_packet_type_enum packet_type,
+	uint64_t cnx_id,
+	uint64_t sequence_number,
+	uint8_t * bytes
+	)
+{
+	size_t length = 0;
+
+	/* Prepare the packet header */
+	if (packet_type == picoquic_packet_1rtt_protected_phi0 ||
+		packet_type == picoquic_packet_1rtt_protected_phi1)
+	{
+		/* Create a short packet -- using 32 bit sequence numbers for now */
+		uint8_t C = (cnx->remote_parameters.omit_connection_id != 0) ? 0 : 0x40;
+		uint8_t K = (packet_type == picoquic_packet_1rtt_protected_phi0) ? 0 : 0x20;
+		uint8_t PT = 3;
+
+		length = 0;
+		bytes[length++] = (C | K | PT);
+		if (C != 0)
+		{
+			picoformat_64(&bytes[length], cnx_id);
+			length += 8;
+		}
+		picoformat_32(&bytes[length], (uint32_t)sequence_number);
+		length += 4;
+	}
+	else
+	{
+		/* Create a long packet */
+		bytes[0] = 0x80 | packet_type;
+
+		picoformat_64(&bytes[1], cnx_id);
+		picoformat_32(&bytes[9], (uint32_t)sequence_number);
+		picoformat_32(&bytes[13], cnx->version);
+
+		length = 17;
+	}
+
+	return length;
+}
+
 /*
  * If a retransmit is needed, fill the packet with the required
  * retransmission. Also, prune the retransmit queue as needed.
  */
 
 int picoquic_retransmit_needed(picoquic_cnx_t * cnx, uint64_t current_time, 
-	picoquic_packet * packet, int * use_fnv1a)
+	picoquic_packet * packet, int * use_fnv1a, size_t * header_length)
 {
 	picoquic_packet * p;
 	size_t length = 0;
@@ -325,38 +370,19 @@ int picoquic_retransmit_needed(picoquic_cnx_t * cnx, uint64_t current_time,
 			int packet_is_pure_ack = 1;
 			int frame_is_pure_ack = 0;
 			uint8_t * bytes = packet->bytes;
-			size_t header_length = 0;
 			size_t frame_length = 0;
 			size_t byte_index = 0; /* Used when parsing the old packet */
 			size_t checksum_length = 16;
 
+
+			*header_length = 0;
 			/* Get the packet type */
 			ret = picoquic_parse_packet_header(p->bytes, p->length, &ph);
 
-			switch (ph.ptype)
-			{
-			case picoquic_packet_client_initial:
-			case picoquic_packet_server_cleartext:
-			case picoquic_packet_client_cleartext:
-				*use_fnv1a = 1;
-				checksum_length = 8;
-				break;
-			default:
-				*use_fnv1a = 0;
-				break;
-			}
+			length = picoquic_create_packet_header(cnx, ph.ptype, ph.cnx_id, cnx->send_sequence, 
+				bytes);
 
-			/* Create a long packet. TODO: special case for 0-RTT data. TODO: short packets. */
-			bytes[0] = 0x80 | ph.ptype;
-
-			picoformat_64(&bytes[1], ph.cnx_id);
-			picoformat_32(&bytes[9], (uint32_t)cnx->send_sequence);
-			picoformat_32(&bytes[13], cnx->version);
-
-			length = 17;
-			header_length = length;
-			packet->sequence_number = cnx->send_sequence;
-			packet->send_time = current_time;
+			*header_length = length;
 
 			/* Copy the relevant bytes from one packet to the next */
 			byte_index = ph.offset;
@@ -513,7 +539,7 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 	stream = picoquic_find_ready_stream(cnx, stream_restricted);
 
 	if (retransmit_possible &&
-		(length = picoquic_retransmit_needed(cnx, current_time, packet, &use_fnv1a)) > 0)
+		(length = picoquic_retransmit_needed(cnx, current_time, packet, &use_fnv1a, &header_length)) > 0)
 	{
 		/* Set the new checksum length */
 		checksum_overhead = (use_fnv1a) ? 8 : 16;
@@ -534,36 +560,8 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 	}
 	else if (ret == 0)
 	{
-		/* Prepare the packet header */
-		if (packet_type == picoquic_packet_1rtt_protected_phi0 ||
-			packet_type == picoquic_packet_1rtt_protected_phi1)
-		{
-			/* Create a short packet -- using 32 bit sequence numbers for now */
-			uint8_t C = (cnx->remote_parameters.omit_connection_id != 0) ? 0 : 0x40;
-			uint8_t K = (packet_type == picoquic_packet_1rtt_protected_phi0) ? 0 : 0x20;
-			uint8_t PT = 3;
-
-			length = 0;
-			bytes[length++] = (C | K | PT);
-			if (C != 0)
-			{
-				picoformat_64(&bytes[length], cnx_id);
-				length += 8;
-			}
-			picoformat_32(&bytes[length], (uint32_t)cnx->send_sequence);
-			length += 4;
-		}
-		else
-		{
-			/* Create a long packet */
-			bytes[0] = 0x80 | packet_type;
-
-			picoformat_64(&bytes[1], cnx_id);
-			picoformat_32(&bytes[9], (uint32_t)cnx->send_sequence);
-			picoformat_32(&bytes[13], cnx->version);
-
-			length = 17;
-		}
+		length = picoquic_create_packet_header(
+			cnx, packet_type, cnx_id, cnx->send_sequence, bytes);
 		header_length = length;
 		packet->sequence_number = cnx->send_sequence;
 		packet->send_time = current_time;
