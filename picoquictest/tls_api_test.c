@@ -419,6 +419,7 @@ static int test_api_init_send_recv_scenario(picoquic_test_tls_api_ctx_t * test_c
 
 	return ret;
 }
+
 /*
  * Simulate losses based on a 64 bit loss pattern.
  * This is defined to create large rates while allowing test of

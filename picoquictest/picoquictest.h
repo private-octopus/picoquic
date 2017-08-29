@@ -49,6 +49,7 @@ extern "C" {
 	int tls_api_q2_and_r2_stream_test();
 	int tls_api_server_reset_test();
 	int tls_api_bad_server_reset_test();
+	int sim_link_test();
 
 #ifdef  __cplusplus
 }
