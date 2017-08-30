@@ -21,6 +21,7 @@
 
 #include "../picoquic/picoquic_internal.h"
 #include "../picoquic/tls_api.h"
+#include "picoquictest_internal.h"
 
 #define PICOQUIC_TEST_SNI "picoquic.test"
 #define PICOQUIC_TEST_ALPN "picoquic-test"
@@ -82,8 +83,9 @@ typedef struct st_picoquic_test_tls_api_ctx_t {
 	test_api_callback_t server_callback;
 	size_t nb_test_streams;
 	test_api_stream_t test_stream[PICOQUIC_TEST_MAX_TEST_STREAMS];
+	picoquictest_sim_link_t * c_to_s_link;
+	picoquictest_sim_link_t * s_to_c_link;
 } picoquic_test_tls_api_ctx_t;
-
 
 static test_api_stream_desc_t test_scenario_oneway[] = {
 	{ 1, 0, 257, 0 }
@@ -420,94 +422,6 @@ static int test_api_init_send_recv_scenario(picoquic_test_tls_api_ctx_t * test_c
 	return ret;
 }
 
-/*
- * Simulate losses based on a 64 bit loss pattern.
- * This is defined to create large rates while allowing test of
- * specific scenarios, such as "lose 2nd packet"
- */
-static int tls_api_loss_simulator(uint64_t * loss_mask)
-{
-	/* Last bit indicates loss or not */
-	uint64_t ret = (uint64_t)((*loss_mask) & 1ull);
-	/* Shift 1 to prepare next round */
-	*loss_mask >>= 1;
-	*loss_mask ^= (ret << 63);
-
-	return (int)ret;
-}
-
-static int tls_api_one_packet(picoquic_quic_t * qsender, picoquic_cnx_t * cnx, picoquic_quic_t * qreceive,
-    struct sockaddr * sender_addr, uint64_t * loss_mask, uint64_t * simulated_time, int * was_active)
-{
-    /* Simulate a connection */
-    int ret = 0;
-	picoquic_stateless_packet_t * sp = picoquic_dequeue_stateless_packet(qsender);
-	size_t send_length = 0;
-
-	if (sp != NULL)
-	{
-		if (sp->length > 0)
-		{
-			*simulated_time += 100000;
-
-			*was_active |= 1;
-
-			if (loss_mask == NULL ||
-				tls_api_loss_simulator(loss_mask) == 0)
-			{
-				/* Submit the packet to the server */
-				ret = picoquic_incoming_packet(qreceive, sp->bytes, sp->length, sender_addr,
-					*simulated_time);
-			}
-		}
-		picoquic_delete_stateless_packet(sp);
-	}
-	else if (cnx != NULL)
-	{
-		picoquic_packet * p = picoquic_create_packet();
-		uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE];
-		size_t send_length = 0;
-
-		if (p == NULL)
-		{
-			ret = -1;
-		}
-		else
-		{
-			*simulated_time += 50000;
-
-			ret = picoquic_prepare_packet(cnx, p, *simulated_time,
-				bytes, PICOQUIC_MAX_PACKET_SIZE, &send_length);
-
-			if (ret == 0 && p->length > 0)
-			{
-				*simulated_time += 50000;
-
-				*was_active |= 1;
-
-				if (loss_mask == NULL ||
-					tls_api_loss_simulator(loss_mask) == 0)
-				{
-					/* Submit the packet to the receiver */
-					ret = picoquic_incoming_packet(qreceive, bytes, send_length, sender_addr,
-						*simulated_time);
-				}
-			}
-			else
-			{
-				*simulated_time += 100000;
-				free(p);
-			}
-		}
-	}
-	else
-	{
-		simulated_time += 100000;
-	}
-
-    return ret;
-}
-
 static int verify_transport_extension(picoquic_cnx_t * cnx_client, picoquic_cnx_t * cnx_server)
 {
 	int ret = 0;
@@ -649,6 +563,35 @@ static int verify_alpn(picoquic_cnx_t * cnx_client, picoquic_cnx_t * cnx_server,
 	return ret;
 }
 
+static void tls_api_delete_ctx(picoquic_test_tls_api_ctx_t * test_ctx)
+{
+	if (test_ctx->qclient != NULL)
+	{
+		picoquic_free(test_ctx->qclient);
+	}
+
+	if (test_ctx->qserver != NULL)
+	{
+		picoquic_free(test_ctx->qserver);
+	}
+
+	for (size_t i = 0; i < test_ctx->nb_test_streams; i++)
+	{
+		test_api_delete_test_stream(&test_ctx->test_stream[i]);
+	}
+
+	if (test_ctx->c_to_s_link != NULL)
+	{
+		picoquictest_sim_link_delete(test_ctx->c_to_s_link);
+	}
+
+	if (test_ctx->s_to_c_link != NULL)
+	{
+		picoquictest_sim_link_delete(test_ctx->s_to_c_link);
+	}
+}
+
+
 static int tls_api_init_ctx(picoquic_test_tls_api_ctx_t ** pctx, uint32_t proposed_version,
 	char const * sni, char const * alpn)
 {
@@ -689,6 +632,18 @@ static int tls_api_init_ctx(picoquic_test_tls_api_ctx_t ** pctx, uint32_t propos
 			ret = -1;
 		}
 
+		/* register the links */
+		if (ret == 0)
+		{
+			test_ctx->c_to_s_link = picoquictest_sim_link_create(0.01, 10000, 0, 0);
+			test_ctx->s_to_c_link = picoquictest_sim_link_create(0.01, 10000, 0, 0);
+
+			if (test_ctx->c_to_s_link == NULL || test_ctx->s_to_c_link == NULL)
+			{
+				ret = -1;
+			}
+		}
+
 		if (ret == 0)
 		{
 			/* Create a client connection */
@@ -701,37 +656,154 @@ static int tls_api_init_ctx(picoquic_test_tls_api_ctx_t ** pctx, uint32_t propos
 				ret = -1;
 			}
 		}
+
+		if (ret != 0)
+		{
+			tls_api_delete_ctx(test_ctx);
+			*pctx = NULL;
+		}
 	}
 
 	return ret;
 }
 
-static void tls_api_delete_ctx(picoquic_test_tls_api_ctx_t * test_ctx)
+static int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t * test_ctx, 
+	uint64_t *simulated_time, int * was_active)
 {
-	if (test_ctx->qclient != NULL)
+	int ret = 0;
+	picoquictest_sim_link_t * target_link = NULL;
+
+	/* If one of the sources can send a packet, send it, keep time as it */
+
+	picoquictest_sim_packet_t * packet = picoquictest_sim_link_create_packet();
+
+	if (packet == NULL)
 	{
-		picoquic_free(test_ctx->qclient);
+		ret = -1;
+	}
+	else
+	{
+		picoquic_stateless_packet_t * sp = picoquic_dequeue_stateless_packet(test_ctx->qserver);
+
+		if (sp != NULL)
+		{
+			if (sp->length > 0)
+			{
+				*simulated_time += 100000;
+
+				*was_active |= 1;
+
+				memcpy(packet->bytes, sp->bytes, sp->length);
+				packet->length = sp->length;
+
+				target_link = test_ctx->s_to_c_link;
+			}
+			picoquic_delete_stateless_packet(sp);
+		}
+
+		if (packet->length == 0)
+		{
+			/* check whether the client has something to send */
+			picoquic_packet * p = picoquic_create_packet();
+
+			if (p == NULL)
+			{
+				ret = -1;
+			}
+			else
+			{
+				if (test_ctx->cnx_client->cnx_state != picoquic_state_disconnected)
+				{
+					ret = picoquic_prepare_packet(test_ctx->cnx_client, p, *simulated_time,
+						packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length);
+				}
+				else
+				{
+					p->length = 0;
+					packet->length = 0;
+				}
+
+				if (ret == 0)
+				{
+					if (p->length > 0)
+					{
+						/* queue in c_to_s */
+						target_link = test_ctx->c_to_s_link;
+					}
+					else if (test_ctx->cnx_server != NULL)
+					{
+						ret = picoquic_prepare_packet(test_ctx->cnx_server, p, *simulated_time,
+							packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length);
+						if (ret == 0 && p->length > 0)
+						{
+							/* copy and queue in s to c */
+							target_link = test_ctx->s_to_c_link;
+						}
+					}
+				}
+			}
+		}
+
+		if (packet->length > 0)
+		{
+			picoquictest_sim_link_submit(target_link, packet, *simulated_time);
+			*was_active |= 1;
+		}
+		else
+		{
+			uint64_t next_time;
+
+			free(packet);
+
+			*simulated_time += 5000;
+			next_time = picoquictest_sim_link_next_arrival(test_ctx->s_to_c_link, *simulated_time);
+			next_time = picoquictest_sim_link_next_arrival(test_ctx->c_to_s_link, next_time);
+
+			packet = picoquictest_sim_link_dequeue(test_ctx->s_to_c_link, next_time);
+
+			if (packet != NULL)
+			{
+				*simulated_time = next_time;
+				ret = picoquic_incoming_packet(test_ctx->qclient, packet->bytes, packet->length,
+					(struct sockaddr *)&test_ctx->server_addr, *simulated_time);
+				*was_active |= 1;
+			}
+			else
+			{
+				packet = picoquictest_sim_link_dequeue(test_ctx->c_to_s_link, next_time);
+
+				if (packet != NULL)
+				{
+					*simulated_time = next_time;
+					ret = picoquic_incoming_packet(test_ctx->qserver, packet->bytes, packet->length,
+						(struct sockaddr *)&test_ctx->client_addr, *simulated_time);
+
+					if (test_ctx->cnx_server == NULL)
+					{
+						test_ctx->cnx_server = test_ctx->qserver->cnx_list;
+					}
+
+					*was_active |= 1;
+				}
+			}
+		}
 	}
 
-	if (test_ctx->qserver != NULL)
-	{
-		picoquic_free(test_ctx->qserver);
-	}
+	return ret;
 
-	for (size_t i = 0; i < test_ctx->nb_test_streams; i++)
-	{
-		test_api_delete_test_stream(&test_ctx->test_stream[i]);
-	}
 }
 
-static int tls_api_connection_loop(picoquic_test_tls_api_ctx_t * test_ctx, 
+static int tls_api_connection_loop(picoquic_test_tls_api_ctx_t * test_ctx,
 	uint64_t  * loss_mask, uint64_t *simulated_time)
 {
 	int ret = 0;
 	int nb_trials = 0;
 	int nb_inactive = 0;
 
-	while (ret == 0 && nb_trials < 24 && nb_inactive < 16 &&
+	test_ctx->c_to_s_link->loss_mask = loss_mask;
+	test_ctx->s_to_c_link->loss_mask = loss_mask;
+
+	while (ret == 0 && nb_trials < 1024 && nb_inactive < 512 &&
 		(test_ctx->cnx_client->cnx_state != picoquic_state_client_ready ||
 		(test_ctx->cnx_server == NULL ||
 			test_ctx->cnx_server->cnx_state != picoquic_state_server_ready)))
@@ -739,28 +811,7 @@ static int tls_api_connection_loop(picoquic_test_tls_api_ctx_t * test_ctx,
 		int was_active = 0;
 		nb_trials++;
 
-		/* packet from client to server */
-		ret = tls_api_one_packet(test_ctx->qclient, test_ctx->cnx_client, test_ctx->qserver,
-			(struct sockaddr *)&test_ctx->client_addr, loss_mask, simulated_time, &was_active);
-
-		if (ret == 0)
-		{
-			if (test_ctx->cnx_server == NULL)
-			{
-				test_ctx->cnx_server = test_ctx->qserver->cnx_list;
-			}
-
-			ret = tls_api_one_packet(test_ctx->qserver, test_ctx->cnx_server, test_ctx->qclient,
-				(struct sockaddr *)&test_ctx->server_addr, loss_mask, simulated_time, &was_active);
-			if (ret != 0)
-			{
-				break;
-			}
-		}
-		else
-		{
-			break;
-		}
+		ret = tls_api_one_sim_round(test_ctx, simulated_time, &was_active);
 
 		if (was_active)
 		{
@@ -772,12 +823,6 @@ static int tls_api_connection_loop(picoquic_test_tls_api_ctx_t * test_ctx,
 		}
 	}
 
-	if (test_ctx->cnx_client->cnx_state != picoquic_state_client_ready ||
-		test_ctx->cnx_server == NULL || test_ctx->cnx_server->cnx_state != picoquic_state_server_ready)
-	{
-		ret = -1;
-	}
-
 	return ret;
 }
 
@@ -787,32 +832,17 @@ static int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t * test_ctx,
 	int ret = 0;
 	int nb_trials = 0;
 	int nb_inactive = 0;
+	
+	test_ctx->c_to_s_link->loss_mask = loss_mask;
+	test_ctx->s_to_c_link->loss_mask = loss_mask;
 
-	while (ret == 0 && nb_trials < 1000 && nb_inactive < 4 &&
+	while (ret == 0 && nb_trials < 1000 && nb_inactive < 12 &&
 		test_ctx->cnx_client->cnx_state == picoquic_state_client_ready &&
 		test_ctx->cnx_server->cnx_state == picoquic_state_server_ready)
 	{
 		int was_active = 0;
-		nb_trials++;
 
-		/* packet from client to server */
-		ret = tls_api_one_packet(test_ctx->qclient, test_ctx->cnx_client, test_ctx->qserver,
-			(struct sockaddr *)&test_ctx->client_addr, loss_mask, simulated_time, &was_active);
-
-		if (ret == 0)
-		{
-			ret = tls_api_one_packet(test_ctx->qserver, test_ctx->cnx_server, test_ctx->qclient,
-				(struct sockaddr *)&test_ctx->server_addr, loss_mask, simulated_time, &was_active);
-
-			if (ret != 0)
-			{
-				break;
-			}
-		}
-		else
-		{
-			break;
-		}
+		ret = tls_api_one_sim_round(test_ctx, simulated_time, &was_active);
 
 		if (was_active)
 		{
@@ -847,10 +877,21 @@ static int tls_api_test_with_loss(uint64_t  * loss_mask, uint32_t proposed_versi
         {
             /* packet from client to server */
 			/* Do not simulate losses there, as there is no way to correct them */
-			int is_active = 0;
 
-            ret = tls_api_one_packet(test_ctx->qclient, test_ctx->cnx_client, test_ctx->qserver, 
-				(struct sockaddr *)&test_ctx->client_addr, NULL, &simulated_time, &is_active);
+			int nb_rounds = 0;
+
+			test_ctx->c_to_s_link->loss_mask = 0;
+			test_ctx->s_to_c_link->loss_mask = 0;
+
+			while (ret == 0 && (
+				test_ctx->cnx_client->cnx_state != picoquic_state_disconnected ||
+				test_ctx->cnx_server->cnx_state != picoquic_state_disconnected) &&
+				nb_rounds < 16)
+			{
+				int was_active = 0;
+				ret = tls_api_one_sim_round(test_ctx, &simulated_time, &was_active);
+				nb_rounds++;
+			}
         }
 
         if (ret == 0 && (
@@ -1070,21 +1111,11 @@ int tls_api_server_reset_test()
 	 }
 
 	 /* Perform a couple rounds of sending data */
-	 for (int i = 0; ret == 0 && i < 4 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected; i++)
+	 for (int i = 0; ret == 0 && i < 32 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected; i++)
 	 {
 		 was_active = 0;
 
-		 if (ret == 0)
-		 {
-			 ret = tls_api_one_packet(test_ctx->qclient, test_ctx->cnx_client, test_ctx->qserver,
-				 (struct sockaddr *)&test_ctx->client_addr, &loss_mask, &simulated_time, &was_active);
-		 }
-
-		 if (ret == 0)
-		 {
-			 ret = tls_api_one_packet(test_ctx->qserver, test_ctx->cnx_server, test_ctx->qclient,
-				 (struct sockaddr *)&test_ctx->server_addr, &loss_mask, &simulated_time, &was_active);
-		 }
+		 ret = tls_api_one_sim_round(test_ctx, &simulated_time, &was_active);
 	 }
 
 	 /* Client should now be in state disconnected */

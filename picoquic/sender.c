@@ -311,6 +311,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t * cnx, uint64_t current_time,
 
 			length = picoquic_create_packet_header(cnx, ph.ptype, ph.cnx_id, cnx->send_sequence, 
 				bytes);
+			packet->sequence_number = cnx->send_sequence;
 
 			*header_length = length;
 
@@ -492,6 +493,8 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 			length += data_bytes;
 			packet->length = length;
 		}
+		/* document the send time */
+		packet->send_time = current_time;
 	}
 	else if (use_fnv1a && stream == NULL)
 	{

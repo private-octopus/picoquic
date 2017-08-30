@@ -30,29 +30,10 @@
  */
 
 #include "../picoquic/picoquic_internal.h"
-
-typedef struct st_picoquictest_sim_packet_t {
-	struct st_picoquictest_sim_packet_t * next_packet;
-	uint64_t sent_time;
-	uint64_t arrival_time;
-	size_t length;
-	uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE];
-} picoquictest_sim_packet_t;
-
-typedef struct st_picoquictest_sim_link_t {
-	uint64_t next_send_time;
-	uint64_t queue_time;
-	uint64_t picosec_per_byte;
-	uint64_t microsec_latency;
-	uint64_t loss_mask;
-	uint64_t packets_dropped;
-	uint64_t packets_sent;
-	picoquictest_sim_packet_t * first_packet;
-	picoquictest_sim_packet_t * last_packet;
-} picoquictest_sim_link_t;
+#include "picoquictest_internal.h"
 
 picoquictest_sim_link_t * picoquictest_sim_link_create(double data_rate_in_gps,
-	uint64_t microsec_latency, uint64_t loss_mask, uint64_t current_time)
+	uint64_t microsec_latency, uint64_t * loss_mask, uint64_t current_time)
 {
 	picoquictest_sim_link_t * link = 
 		(picoquictest_sim_link_t*)malloc(sizeof(picoquictest_sim_link_t));
@@ -63,7 +44,7 @@ picoquictest_sim_link_t * picoquictest_sim_link_create(double data_rate_in_gps,
 		link->next_send_time = current_time;
 		link->queue_time = current_time;
 		link->picosec_per_byte = (uint64_t)((data_rate_in_gps <= 0) ? 0 : (8000.0 / data_rate_in_gps));
-		link->microsec_latency = loss_mask;
+		link->microsec_latency = microsec_latency;
 		link->packets_dropped = 0;
 		link->packets_sent = 0;
 		link->first_packet = NULL;
@@ -134,10 +115,26 @@ picoquictest_sim_packet_t * picoquictest_sim_link_dequeue(picoquictest_sim_link_
 	return packet;
 }
 
+static int picoquictest_sim_link_testloss(uint64_t * loss_mask)
+{
+	uint64_t loss_bit = 0;
+	
+	if (loss_mask != NULL)
+	{
+		/* Last bit indicates loss or not */
+		loss_bit = (uint64_t)((*loss_mask) & 1ull);
+		
+		/* Rotate loss mask by 1 to prepare next round */
+		*loss_mask >>= 1;
+		*loss_mask ^= (loss_bit << 63);
+	}
+
+	return (int)loss_bit;
+}
+
 void picoquictest_sim_link_submit(picoquictest_sim_link_t * link, picoquictest_sim_packet_t * packet,
 	uint64_t current_time)
 {
-	uint64_t loss_bit = (uint64_t)((link->loss_mask) & 1ull); /* Last bit indicates loss or not */
 	uint64_t queue_delay = (current_time > link->queue_time) ? 0 : 
 		link->queue_time - current_time;
 	uint64_t transmit_time = ((link->picosec_per_byte * packet->length) >> 20);
@@ -146,14 +143,8 @@ void picoquictest_sim_link_submit(picoquictest_sim_link_t * link, picoquictest_s
 
 	link->queue_time = current_time + queue_delay + transmit_time;
 
-
-	/* Rotate loss mask by 1 to prepare next round */
-	link->loss_mask >>= 1;
-
-
-	if (loss_bit != 0)
+	if (picoquictest_sim_link_testloss(link->loss_mask) != 0)
 	{
-		link->loss_mask ^= (loss_bit << 63);
 		link->packets_dropped++;
 		free(packet);
 	}
@@ -175,7 +166,7 @@ void picoquictest_sim_link_submit(picoquictest_sim_link_t * link, picoquictest_s
 }
 
 
-int sim_link_one_test(uint64_t loss_mask, uint64_t nb_losses)
+int sim_link_one_test(uint64_t * loss_mask, uint64_t nb_losses)
 {
 	int ret = 0;
 	uint64_t current_time = 0;
@@ -243,23 +234,26 @@ int sim_link_one_test(uint64_t loss_mask, uint64_t nb_losses)
 	return ret;
 }
 
-int sim_link_test(uint64_t loss_mask)
+int sim_link_test()
 {
 	int ret = 0;
+	uint64_t loss_mask = 0;
 
 	if (ret == 0)
 	{
-		ret = sim_link_one_test(0, 0);
+		ret = sim_link_one_test(&loss_mask, 0);
 	}
 
 	if (ret == 0)
 	{
-		ret = sim_link_one_test(8, 1);
+		loss_mask = 8;
+		ret = sim_link_one_test(&loss_mask, 1);
 	}
 
 	if (ret == 0)
 	{
-		ret = sim_link_one_test(0x18, 2);
+		loss_mask = 0x18;
+		ret = sim_link_one_test(&loss_mask, 2);
 	}
 
 	return ret;

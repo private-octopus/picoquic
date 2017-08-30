@@ -59,5 +59,8 @@
     <ClInclude Include="picoquictest.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="picoquictest_internal.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
