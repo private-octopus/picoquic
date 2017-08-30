@@ -523,16 +523,13 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 			}
 			cnx->cnx_state = picoquic_state_disconnected;
 		}
-		/* include here the actual retransmission, copying bytes
-		 * from the old packet to the new one */
-		else if (stream == NULL &&
+		else if ((stream == NULL || cnx->cwin <= cnx->bytes_in_transit) &&
 			picoquic_is_ack_needed(cnx, current_time) == 0)
 		{
 			length = 0;
 		}
 		else
 		{
-			/* TODO: Check whether ACK is needed */
 			ret = picoquic_prepare_ack_frame(cnx, current_time, &bytes[length],
 				cnx->send_mtu - checksum_overhead - length, &data_bytes);
 			if (ret == 0)
@@ -541,7 +538,7 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 			}
 
 			/* Encode the stream frame */
-			if (stream != NULL)
+			if (stream != NULL && cnx->cwin > cnx->bytes_in_transit)
 			{
 				ret = picoquic_prepare_stream_frame(cnx, stream, &bytes[length],
 					cnx->send_mtu - checksum_overhead - length, &data_bytes);
@@ -605,6 +602,9 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 		}
 
 		*send_length = length;
+
+		/* Account for bytes in transit, for congestion control */
+		cnx->bytes_in_transit += length;
 
 		/* Manage the double linked packet list for retransmissions */
 		packet->previous_packet = NULL;

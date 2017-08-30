@@ -452,6 +452,7 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
 			cnx->highest_acknowledged = cnx->send_sequence - 1;
 			cnx->latest_time_acknowledged = start_time;
 			cnx->latest_ack_received_time = start_time;
+			cnx->ack_needed = 0;
 
 
 			/* Time measurement */
@@ -461,7 +462,7 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
 			cnx->rtt_min = 0;
 
 			/* Congestion control state */
-			cnx->cwin = 0;
+			cnx->cwin = PICOQUIC_CWIN_INITIAL;
 			cnx->bytes_in_transit = 0;
 		}
     }
@@ -565,6 +566,9 @@ void picoquic_enqueue_retransmit_packet(picoquic_cnx_t * cnx, picoquic_packet * 
 	}
 	p->next_packet = NULL;
 	cnx->retransmit_oldest = p;
+
+	/* Account for bytes in transit, for congestion control */
+	cnx->bytes_in_transit += p->length;
 }
 
 void picoquic_dequeue_retransmit_packet(picoquic_cnx_t * cnx, picoquic_packet * p, int should_free)
@@ -585,6 +589,16 @@ void picoquic_dequeue_retransmit_packet(picoquic_cnx_t * cnx, picoquic_packet * 
 	else
 	{
 		p->next_packet->previous_packet = p->previous_packet;
+	}
+
+	/* Account for bytes in transit, for congestion control */
+	if (cnx->bytes_in_transit > p->length)
+	{
+		cnx->bytes_in_transit -= p->length;
+	}
+	else
+	{
+		cnx->bytes_in_transit = 0;
 	}
 
 	if (should_free)

@@ -41,6 +41,8 @@ extern "C" {
 #define PICOQUIC_MIN_RETRANSMIT_TIMER 50000 /* 50 ms */
 #define PICOQUIC_ACK_DELAY_MAX 20000 /* 20 ms */
 
+#define PICOQUIC_CWIN_INITIAL  (10*PICOQUIC_MAX_PACKET_SIZE)
+
 	/*
 	* Supported versions
 	*/
@@ -83,7 +85,6 @@ extern "C" {
 		picohash_table * table_cnx_by_id;
 		picohash_table * table_cnx_by_net;
 	} picoquic_quic_t;
-
 
 	/*
 	* Transport parameters, as defined by the QUIC transport specification
@@ -228,17 +229,6 @@ extern "C" {
 		uint32_t local_error;
 		uint32_t remote_error;
 
-		/* Flow control information */
-		uint64_t data_sent;
-		uint64_t data_received;
-		uint64_t maxdata_local;
-		uint64_t maxdata_remote;
-		uint32_t highest_stream_id_local;
-		uint32_t highest_stream_id_remote;
-		uint32_t max_stream_id_local;
-		uint32_t max_stream_id_remote;
-
-
 		/* TLS context, TLS Send Buffer, chain of receive buffers (todo) */
 		void * tls_ctx;
 		struct st_ptls_buffer_t * tls_sendbuf;
@@ -254,17 +244,13 @@ extern "C" {
 		uint64_t sack_block_size_max;
 		uint64_t highest_ack_sent;
 		uint64_t highest_ack_time;
+		int ack_needed;
 
 		/* Time measurement */
 		uint64_t smoothed_rtt;
 		uint64_t rtt_variant;
 		uint64_t retransmit_timer;
 		uint64_t rtt_min;
-
-		/* Congestion control state */
-		uint64_t cwin;
-		uint64_t bytes_in_transit;
-
 
 		/* Retransmission state */
 		uint64_t nb_retransmit;
@@ -275,6 +261,19 @@ extern "C" {
 		picoquic_packet * retransmit_newest;
 		picoquic_packet * retransmit_oldest;
 
+		/* Congestion control state */
+		uint64_t cwin;
+		uint64_t bytes_in_transit;
+
+		/* Flow control information */
+		uint64_t data_sent;
+		uint64_t data_received;
+		uint64_t maxdata_local;
+		uint64_t maxdata_remote;
+		uint32_t highest_stream_id_local;
+		uint32_t highest_stream_id_remote;
+		uint32_t max_stream_id_local;
+		uint32_t max_stream_id_remote;
 
 		/* Management of streams */
 		picoquic_stream_head first_stream;
