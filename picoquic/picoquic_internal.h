@@ -255,9 +255,9 @@ extern "C" {
 		/* Retransmission state */
 		uint64_t nb_retransmit;
 		uint64_t latest_retransmit_time;
-		uint64_t highest_acknowledged;
-		uint64_t latest_time_acknowledged;
-		uint64_t latest_ack_received_time;
+		uint64_t highest_acknowledged; 
+		uint64_t latest_time_acknowledged; /* time at which the highest acknowledged was sent */
+		uint64_t latest_ack_received_time; /* last local time at which an ack was received */
 		picoquic_packet * retransmit_newest;
 		picoquic_packet * retransmit_oldest;
 
@@ -350,6 +350,10 @@ extern "C" {
 	int picoquic_prepare_ack_frame(picoquic_cnx_t * cnx, uint64_t current_time,
 		uint8_t * bytes, size_t bytes_max, size_t * consumed);
 	int picoquic_prepare_connection_close_frame(picoquic_cnx_t * cnx,
+		uint8_t * bytes, size_t bytes_max, size_t * consumed);
+	int picoquic_prepare_required_max_stream_data_frame(picoquic_cnx_t * cnx,
+		uint8_t * bytes, size_t bytes_max, size_t * consumed);
+	int picoquic_prepare_max_data_frame(picoquic_cnx_t * cnx, uint64_t maxdata_increase,
 		uint8_t * bytes, size_t bytes_max, size_t * consumed);
 
 	/* send/receive */

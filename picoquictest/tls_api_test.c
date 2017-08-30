@@ -100,6 +100,10 @@ static test_api_stream_desc_t test_scenario_q2_and_r2[] = {
 	{ 3, 0, 531, 11000 }
 };
 
+static test_api_stream_desc_t test_scenario_very_long[] = {
+	{ 1, 0, 257, 1000000 }
+};
+
 static int test_api_init_stream_buffers(size_t len, uint8_t ** src_bytes, uint8_t ** rcv_bytes)
 {
 	int ret = 0;
@@ -854,7 +858,7 @@ static int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t * test_ctx,
 		}
 	}
 
-	return ret;
+	return ret; /* end of sending loop */
 }
 
 static int tls_api_test_with_loss(uint64_t  * loss_mask, uint32_t proposed_version,
@@ -981,7 +985,7 @@ int tls_api_wrong_alpn_test()
  */
 
 int tls_api_one_scenario_test(test_api_stream_desc_t * scenario, 
-	size_t sizeof_scenario, uint64_t init_loss_mask)
+	size_t sizeof_scenario, uint64_t init_loss_mask, uint64_t max_data)
 {
 	uint64_t simulated_time = 0;
 	uint64_t loss_mask = 0;
@@ -991,6 +995,14 @@ int tls_api_one_scenario_test(test_api_stream_desc_t * scenario,
 	if (ret == 0)
 	{
 		ret = tls_api_connection_loop(test_ctx, &loss_mask, &simulated_time);
+	}
+
+	if (ret == 0 && max_data != 0)
+	{
+		test_ctx->cnx_client->maxdata_local = max_data;
+		test_ctx->cnx_client->maxdata_remote = max_data;
+		test_ctx->cnx_server->maxdata_local = max_data;
+		test_ctx->cnx_server->maxdata_remote = max_data;
 	}
 
 	/* Prepare to send data */
@@ -1055,17 +1067,32 @@ int tls_api_one_scenario_test(test_api_stream_desc_t * scenario,
 
 int tls_api_oneway_stream_test()
 {
-	return tls_api_one_scenario_test(test_scenario_oneway, sizeof(test_scenario_oneway), 0);
+	return tls_api_one_scenario_test(test_scenario_oneway, sizeof(test_scenario_oneway), 0, 0);
 }
 
 int tls_api_q_and_r_stream_test()
 {
-	return tls_api_one_scenario_test(test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0);
+	return tls_api_one_scenario_test(test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0, 0);
 }
 
 int tls_api_q2_and_r2_stream_test()
 {
-	return tls_api_one_scenario_test(test_scenario_q2_and_r2, sizeof(test_scenario_q2_and_r2), 0);
+	return tls_api_one_scenario_test(test_scenario_q2_and_r2, sizeof(test_scenario_q2_and_r2), 0, 0);
+}
+
+int tls_api_very_long_stream_test()
+{
+	return tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0);
+}
+
+int tls_api_very_long_max_test()
+{
+	return tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0, 128000);
+}
+
+int tls_api_very_long_with_err_test()
+{
+	return tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0x30000, 128000);
 }
 
 /*

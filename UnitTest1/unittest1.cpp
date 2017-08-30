@@ -212,5 +212,26 @@ namespace UnitTest1
 
 			Assert::AreEqual(ret, 0);
 		}
+
+		TEST_METHOD(test_very_long_stream)
+		{
+			int ret = tls_api_very_long_stream_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(test_very_long_max)
+		{
+			int ret = tls_api_very_long_max_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(test_very_long_with_err)
+		{
+			int ret = tls_api_very_long_with_err_test();
+
+			Assert::AreEqual(ret, 0);
+		}
 	};
 }

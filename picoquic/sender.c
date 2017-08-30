@@ -537,13 +537,34 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 				length += data_bytes;
 			}
 
-			/* Encode the stream frame */
-			if (stream != NULL && cnx->cwin > cnx->bytes_in_transit)
+			if (cnx->cwin > cnx->bytes_in_transit)
 			{
-				ret = picoquic_prepare_stream_frame(cnx, stream, &bytes[length],
-					cnx->send_mtu - checksum_overhead - length, &data_bytes);
-			}
+				/* If necessary, encode the max data frame */
+				if (2 * cnx->data_received > cnx->maxdata_local)
+				{
+					ret = picoquic_prepare_max_data_frame(cnx, 2 * cnx->data_received, &bytes[length],
+						cnx->send_mtu - checksum_overhead - length, &data_bytes);
 
+					if (ret == 0)
+					{
+						length += data_bytes;
+					}
+				}
+				/* If necessary, encode the max stream data frames */
+				ret = picoquic_prepare_required_max_stream_data_frame(cnx, &bytes[length],
+					cnx->send_mtu - checksum_overhead - length, &data_bytes);
+
+				if (ret == 0)
+				{
+					length += data_bytes;
+				}
+				/* Encode the stream frame */
+				if (stream != NULL)
+				{
+					ret = picoquic_prepare_stream_frame(cnx, stream, &bytes[length],
+						cnx->send_mtu - checksum_overhead - length, &data_bytes);
+				}
+			}
 			if (ret == 0)
 			{
 				length += data_bytes;
