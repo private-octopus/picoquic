@@ -42,6 +42,7 @@ extern "C" {
 #define PICOQUIC_ACK_DELAY_MAX 20000 /* 20 ms */
 
 #define PICOQUIC_CWIN_INITIAL  (10*PICOQUIC_MAX_PACKET_SIZE)
+#define PICOQUIC_CWIN_MINIMUM  (2*PICOQUIC_MAX_PACKET_SIZE)
 
 	/*
 	* Supported versions
@@ -78,6 +79,8 @@ extern "C" {
 		uint32_t flags;
 
 		picoquic_stateless_packet_t * pending_stateless_packet;
+
+		picoquic_congestion_algorithm_t const * default_congestion_alg;
 
 		struct st_picoquic_cnx_t * cnx_list;
 		struct st_picoquic_cnx_t * cnx_last;
@@ -264,6 +267,8 @@ extern "C" {
 		/* Congestion control state */
 		uint64_t cwin;
 		uint64_t bytes_in_transit;
+		void * congestion_alg_state;
+		picoquic_congestion_algorithm_t const * congestion_alg;
 
 		/* Flow control information */
 		uint64_t data_sent;

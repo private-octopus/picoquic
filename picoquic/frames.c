@@ -878,6 +878,13 @@ static picoquic_packet * picoquic_update_rtt(picoquic_cnx_t * cnx, uint64_t larg
 					{
 						cnx->retransmit_timer = PICOQUIC_MIN_RETRANSMIT_TIMER;
 					}
+
+					if (cnx->congestion_alg != NULL)
+					{
+						cnx->congestion_alg->alg_notify(cnx,
+							picoquic_congestion_notification_rtt_measurement,
+							rtt_estimate, 0, 0, current_time);
+					}
 				}
 			}
 		}
@@ -1014,7 +1021,8 @@ void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t * cnx, picoquic_p
 }
 
 static picoquic_packet * picoquic_process_ack_range(
-	picoquic_cnx_t * cnx, uint64_t highest, uint64_t range, picoquic_packet * p)
+	picoquic_cnx_t * cnx, uint64_t highest, uint64_t range, picoquic_packet * p,
+	uint64_t current_time)
 {
 	/* Compare the range to the retransmit queue */
 	while (p != NULL && range > 0)
@@ -1032,6 +1040,12 @@ static picoquic_packet * picoquic_process_ack_range(
 			{
 				/* TODO: RTT Estimate */
 				picoquic_packet * next = p->next_packet;
+				if (cnx->congestion_alg != NULL)
+				{
+					cnx->congestion_alg->alg_notify(cnx,
+						picoquic_congestion_notification_acknowledgement,
+						0, p->length, 0, current_time);
+				}
 				picoquic_dequeue_retransmit_packet(cnx, p, 1);
 				p = next;
 				/* Any acknowledgement shows progress */
@@ -1133,7 +1147,7 @@ int picoquic_decode_ack_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
 		/* Process the first range, which is always present */
 		if (last_range < largest)
 		{
-			top_packet = picoquic_process_ack_range(cnx, largest, last_range + 1, top_packet);
+			top_packet = picoquic_process_ack_range(cnx, largest, last_range + 1, top_packet, current_time);
 			gap_begin = largest - last_range - 1;
 		}
 		else
@@ -1175,7 +1189,7 @@ int picoquic_decode_ack_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
 				if (gap_begin >= ack_range)
 				{
 					/* mark the range as received */
-					top_packet = picoquic_process_ack_range(cnx, gap_begin, ack_range, top_packet);
+					top_packet = picoquic_process_ack_range(cnx, gap_begin, ack_range, top_packet, current_time);
 
 					/* start of next gap */
 					gap_begin -= ack_range;

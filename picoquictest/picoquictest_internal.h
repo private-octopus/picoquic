@@ -50,6 +50,7 @@ extern "C" {
 	typedef struct st_picoquictest_sim_link_t {
 		uint64_t next_send_time;
 		uint64_t queue_time;
+		uint64_t queue_delay_max;
 		uint64_t picosec_per_byte;
 		uint64_t microsec_latency;
 		uint64_t *loss_mask;
@@ -60,7 +61,7 @@ extern "C" {
 	} picoquictest_sim_link_t;
 
 	picoquictest_sim_link_t * picoquictest_sim_link_create(double data_rate_in_gps,
-		uint64_t microsec_latency, uint64_t * loss_mask, uint64_t current_time);
+		uint64_t microsec_latency, uint64_t * loss_mask, uint64_t queue_delay_max, uint64_t current_time);
 
 	void picoquictest_sim_link_delete(picoquictest_sim_link_t * link);
 

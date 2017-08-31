@@ -227,6 +227,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t * cnx, uint64_t current_time,
 		int64_t delta_seq = cnx->highest_acknowledged - p->sequence_number;
 		int should_retransmit = 0;
 		int timer_based_retransmit = 0;
+		uint64_t lost_packet_number = p->sequence_number;
 
 		length = 0;
 
@@ -344,7 +345,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t * cnx, uint64_t current_time,
 				byte_index += frame_length;
 			}
 
-			/* Remove old packet from queue */
+			/* Update the number of bytes in transit and remove old packet from queue */
 			picoquic_dequeue_retransmit_packet(cnx, p, 1);
 
 			/* If we have a good packet, return it */
@@ -385,6 +386,16 @@ int picoquic_retransmit_needed(picoquic_cnx_t * cnx, uint64_t current_time,
 						}
 					}
 					packet->length = length;
+
+
+					if (cnx->congestion_alg != NULL)
+					{
+						cnx->congestion_alg->alg_notify(cnx,
+							(timer_based_retransmit == 0)?
+							picoquic_congestion_notification_repeat:
+							picoquic_congestion_notification_timeout,
+							0, 0, lost_packet_number, current_time);
+					}
 
 					break;
 				}
@@ -493,8 +504,9 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 			length += data_bytes;
 			packet->length = length;
 		}
-		/* document the send time */
+		/* document the send time & overhead */
 		packet->send_time = current_time;
+		packet->checksum_overhead = checksum_overhead;
 	}
 	else if (use_fnv1a && stream == NULL)
 	{
@@ -611,6 +623,7 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 		{
 			memcpy(send_buffer, packet->bytes, length);
 			length = fnv1a_protect(send_buffer, length, send_buffer_max);
+			packet->checksum_overhead = 8;
 		}
 		else
 		{
@@ -620,6 +633,7 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 				packet->bytes + header_length, length - header_length,
 				packet->sequence_number, send_buffer, header_length);
 			length += header_length;
+			packet->checksum_overhead = 16;
 		}
 
 		*send_length = length;

@@ -233,5 +233,12 @@ namespace UnitTest1
 
 			Assert::AreEqual(ret, 0);
 		}
+
+		TEST_METHOD(test_very_long_congestion)
+		{
+			int ret = tls_api_very_long_congestion_test();
+
+			Assert::AreEqual(ret, 0);
+		}
 	};
 }

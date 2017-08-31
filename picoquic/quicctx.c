@@ -23,6 +23,13 @@
 #include "tls_api.h"
 
 /*
+ * Default congestion algorithm
+ */
+extern picoquic_congestion_algorithm_t * picoquic_newreno_algorithm;
+
+#define PICOQUIC_DEFAULT_CONGESTION_ALGORITHM picoquic_newreno_algorithm;
+
+/*
 * Structures used in the hash table of connections
 */
 typedef struct st_picoquic_cnx_id_t
@@ -108,6 +115,7 @@ picoquic_quic_t * picoquic_create(uint32_t nb_connections,
 
 		quic->default_callback_fn = default_callback_fn;
 		quic->default_callback_ctx = default_callback_ctx;
+		quic->default_congestion_alg = PICOQUIC_DEFAULT_CONGESTION_ALGORITHM;
 		quic->default_alpn = picoquic_string_duplicate(default_alpn);
 
         if (cert_file_name != NULL)
@@ -374,6 +382,7 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
 
 		cnx->callback_fn = quic->default_callback_fn;
 		cnx->callback_ctx = quic->default_callback_ctx;
+		cnx->congestion_alg = quic->default_congestion_alg;
 
 		if ((quic->flags &picoquic_context_server) == 0)
 		{
@@ -464,6 +473,12 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
 			/* Congestion control state */
 			cnx->cwin = PICOQUIC_CWIN_INITIAL;
 			cnx->bytes_in_transit = 0;
+			cnx->congestion_alg_state = NULL;
+			cnx->congestion_alg = cnx->quic->default_congestion_alg;
+			if (cnx->congestion_alg != NULL)
+			{
+				cnx->congestion_alg->alg_init(cnx);
+			}
 		}
     }
 
@@ -592,21 +607,28 @@ void picoquic_dequeue_retransmit_packet(picoquic_cnx_t * cnx, picoquic_packet * 
 	}
 
 	/* Account for bytes in transit, for congestion control */
-	if (cnx->bytes_in_transit > p->length)
-	{
-		cnx->bytes_in_transit -= p->length;
-	}
-	else
+	if (cnx->retransmit_newest == NULL)
 	{
 		cnx->bytes_in_transit = 0;
 	}
+	else
+	{
+		size_t dequeued_length = p->length + p->checksum_overhead;
 
+		if (cnx->bytes_in_transit > dequeued_length)
+		{
+			cnx->bytes_in_transit -= dequeued_length;
+		}
+		else
+		{
+			cnx->bytes_in_transit = 0;
+		}
+	}
 	if (should_free)
 	{
 		free(p);
 	}
 }
-
 
 /*
 * Reset the version to a new supported value.
@@ -773,6 +795,11 @@ void picoquic_delete_cnx(picoquic_cnx_t * cnx)
             cnx->tls_ctx = NULL;
         }
 
+		if (cnx->congestion_alg != NULL)
+		{
+			cnx->congestion_alg->alg_delete(cnx);
+		}
+
         free(cnx);
     }
 }
@@ -816,4 +843,29 @@ picoquic_cnx_t * picoquic_cnx_by_net(picoquic_quic_t * quic, struct sockaddr* ad
         ret = ((picoquic_net_id *)item->key)->cnx;
     }
     return ret;
+}
+
+/*
+ * Set or reset the congestion control algorithm
+ */
+
+
+void picoquic_set_default_congestion_algorithm(picoquic_quic_t * quic, picoquic_congestion_algorithm_t const * alg)
+{
+	quic->default_congestion_alg = alg;
+}
+
+void picoquic_set_congestion_algorithm(picoquic_cnx_t * cnx, picoquic_congestion_algorithm_t const * alg)
+{
+	if (cnx->congestion_alg != NULL)
+	{
+		cnx->congestion_alg->alg_delete(cnx);
+	}
+
+	cnx->congestion_alg = alg;
+
+	if (cnx->congestion_alg != NULL)
+	{
+		cnx->congestion_alg->alg_init(cnx);
+	}
 }

@@ -33,7 +33,7 @@
 #include "picoquictest_internal.h"
 
 picoquictest_sim_link_t * picoquictest_sim_link_create(double data_rate_in_gps,
-	uint64_t microsec_latency, uint64_t * loss_mask, uint64_t current_time)
+	uint64_t microsec_latency, uint64_t * loss_mask, uint64_t queue_delay_max, uint64_t current_time)
 {
 	picoquictest_sim_link_t * link = 
 		(picoquictest_sim_link_t*)malloc(sizeof(picoquictest_sim_link_t));
@@ -43,6 +43,7 @@ picoquictest_sim_link_t * picoquictest_sim_link_create(double data_rate_in_gps,
 		pico_d *= (1.024*1.024); /* account for binary units */
 		link->next_send_time = current_time;
 		link->queue_time = current_time;
+		link->queue_delay_max = queue_delay_max;
 		link->picosec_per_byte = (uint64_t)((data_rate_in_gps <= 0) ? 0 : (8000.0 / data_rate_in_gps));
 		link->microsec_latency = microsec_latency;
 		link->packets_dropped = 0;
@@ -141,37 +142,47 @@ void picoquictest_sim_link_submit(picoquictest_sim_link_t * link, picoquictest_s
 	if (transmit_time <= 0)
 		transmit_time = 1;
 
-	link->queue_time = current_time + queue_delay + transmit_time;
+	if (link->queue_delay_max == 0 || queue_delay < link->queue_delay_max)
+	{
 
-	if (picoquictest_sim_link_testloss(link->loss_mask) != 0)
-	{
-		link->packets_dropped++;
-		free(packet);
-	}
-	else
-	{
-		link->packets_sent++;
-		if (link->last_packet == NULL)
+		link->queue_time = current_time + queue_delay + transmit_time;
+
+		if (picoquictest_sim_link_testloss(link->loss_mask) != 0)
 		{
-			link->first_packet = packet;
+			link->packets_dropped++;
+			free(packet);
 		}
 		else
 		{
-			link->last_packet->next_packet = packet;
+			link->packets_sent++;
+			if (link->last_packet == NULL)
+			{
+				link->first_packet = packet;
+			}
+			else
+			{
+				link->last_packet->next_packet = packet;
+			}
+			link->last_packet = packet;
+			packet->next_packet = NULL;
+			packet->arrival_time = link->queue_time + link->microsec_latency;
 		}
-		link->last_packet = packet;
-		packet->next_packet = NULL;
-		packet->arrival_time = link->queue_time + link->microsec_latency;
+	}
+	else
+	{
+		/* simulate congestion loss on queue full */
+		link->packets_dropped++;
+		free(packet);
 	}
 }
 
 
-int sim_link_one_test(uint64_t * loss_mask, uint64_t nb_losses)
+int sim_link_one_test(uint64_t * loss_mask, uint64_t queue_delay_max,  uint64_t nb_losses)
 {
 	int ret = 0;
 	uint64_t current_time = 0;
 	uint64_t departure_time = 0;
-	picoquictest_sim_link_t * link = picoquictest_sim_link_create(0.01, 10000, loss_mask, current_time);
+	picoquictest_sim_link_t * link = picoquictest_sim_link_create(0.01, 10000, loss_mask, queue_delay_max, current_time);
 	uint64_t dequeued = 0;
 	uint64_t queued = 0;
 	const uint64_t nb_packets = 16;
@@ -241,19 +252,19 @@ int sim_link_test()
 
 	if (ret == 0)
 	{
-		ret = sim_link_one_test(&loss_mask, 0);
+		ret = sim_link_one_test(&loss_mask, 0, 0);
 	}
 
 	if (ret == 0)
 	{
 		loss_mask = 8;
-		ret = sim_link_one_test(&loss_mask, 1);
+		ret = sim_link_one_test(&loss_mask, 0, 1);
 	}
 
 	if (ret == 0)
 	{
 		loss_mask = 0x18;
-		ret = sim_link_one_test(&loss_mask, 2);
+		ret = sim_link_one_test(&loss_mask, 0, 2);
 	}
 
 	return ret;

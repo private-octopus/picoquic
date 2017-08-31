@@ -639,8 +639,8 @@ static int tls_api_init_ctx(picoquic_test_tls_api_ctx_t ** pctx, uint32_t propos
 		/* register the links */
 		if (ret == 0)
 		{
-			test_ctx->c_to_s_link = picoquictest_sim_link_create(0.01, 10000, 0, 0);
-			test_ctx->s_to_c_link = picoquictest_sim_link_create(0.01, 10000, 0, 0);
+			test_ctx->c_to_s_link = picoquictest_sim_link_create(0.01, 10000, 0, 0, 0);
+			test_ctx->s_to_c_link = picoquictest_sim_link_create(0.01, 10000, 0, 0, 0);
 
 			if (test_ctx->c_to_s_link == NULL || test_ctx->s_to_c_link == NULL)
 			{
@@ -798,7 +798,7 @@ static int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t * test_ctx,
 }
 
 static int tls_api_connection_loop(picoquic_test_tls_api_ctx_t * test_ctx,
-	uint64_t  * loss_mask, uint64_t *simulated_time)
+	uint64_t  * loss_mask, uint64_t queue_delay_max, uint64_t *simulated_time)
 {
 	int ret = 0;
 	int nb_trials = 0;
@@ -806,6 +806,9 @@ static int tls_api_connection_loop(picoquic_test_tls_api_ctx_t * test_ctx,
 
 	test_ctx->c_to_s_link->loss_mask = loss_mask;
 	test_ctx->s_to_c_link->loss_mask = loss_mask;
+
+	test_ctx->c_to_s_link->queue_delay_max = queue_delay_max;
+	test_ctx->s_to_c_link->queue_delay_max = queue_delay_max;
 
 	while (ret == 0 && nb_trials < 1024 && nb_inactive < 512 &&
 		(test_ctx->cnx_client->cnx_state != picoquic_state_client_ready ||
@@ -840,7 +843,7 @@ static int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t * test_ctx,
 	test_ctx->c_to_s_link->loss_mask = loss_mask;
 	test_ctx->s_to_c_link->loss_mask = loss_mask;
 
-	while (ret == 0 && nb_trials < 1000 && nb_inactive < 12 &&
+	while (ret == 0 && nb_trials < 1000 && nb_inactive < 256 &&
 		test_ctx->cnx_client->cnx_state == picoquic_state_client_ready &&
 		test_ctx->cnx_server->cnx_state == picoquic_state_server_ready)
 	{
@@ -870,7 +873,7 @@ static int tls_api_test_with_loss(uint64_t  * loss_mask, uint32_t proposed_versi
 
 	if (ret == 0)
 	{
-		ret = tls_api_connection_loop(test_ctx, loss_mask, &simulated_time);
+		ret = tls_api_connection_loop(test_ctx, loss_mask, 0, &simulated_time);
 	}
 
 	if (ret == 0)
@@ -985,7 +988,7 @@ int tls_api_wrong_alpn_test()
  */
 
 int tls_api_one_scenario_test(test_api_stream_desc_t * scenario, 
-	size_t sizeof_scenario, uint64_t init_loss_mask, uint64_t max_data)
+	size_t sizeof_scenario, uint64_t init_loss_mask, uint64_t max_data, uint64_t queue_delay_max)
 {
 	uint64_t simulated_time = 0;
 	uint64_t loss_mask = 0;
@@ -994,7 +997,7 @@ int tls_api_one_scenario_test(test_api_stream_desc_t * scenario,
 
 	if (ret == 0)
 	{
-		ret = tls_api_connection_loop(test_ctx, &loss_mask, &simulated_time);
+		ret = tls_api_connection_loop(test_ctx, &loss_mask, queue_delay_max, &simulated_time);
 	}
 
 	if (ret == 0 && max_data != 0)
@@ -1067,33 +1070,39 @@ int tls_api_one_scenario_test(test_api_stream_desc_t * scenario,
 
 int tls_api_oneway_stream_test()
 {
-	return tls_api_one_scenario_test(test_scenario_oneway, sizeof(test_scenario_oneway), 0, 0);
+	return tls_api_one_scenario_test(test_scenario_oneway, sizeof(test_scenario_oneway), 0, 0, 0);
 }
 
 int tls_api_q_and_r_stream_test()
 {
-	return tls_api_one_scenario_test(test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0, 0);
+	return tls_api_one_scenario_test(test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0, 0, 0);
 }
 
 int tls_api_q2_and_r2_stream_test()
 {
-	return tls_api_one_scenario_test(test_scenario_q2_and_r2, sizeof(test_scenario_q2_and_r2), 0, 0);
+	return tls_api_one_scenario_test(test_scenario_q2_and_r2, sizeof(test_scenario_q2_and_r2), 0, 0, 0);
 }
 
 int tls_api_very_long_stream_test()
 {
-	return tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0);
+	return tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0, 0);
 }
 
 int tls_api_very_long_max_test()
 {
-	return tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0, 128000);
+	return tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0, 128000, 0);
 }
 
 int tls_api_very_long_with_err_test()
 {
-	return tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0x30000, 128000);
+	return tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0x30000, 128000, 0);
 }
+
+int tls_api_very_long_congestion_test()
+{
+	return tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0, 128000, 10000);
+}
+
 
 /*
  * Server reset test.
@@ -1115,7 +1124,7 @@ int tls_api_server_reset_test()
 
 	 if (ret == 0)
 	 {
-		 ret = tls_api_connection_loop(test_ctx, &loss_mask, &simulated_time);
+		 ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
 	 }
 
 	 /* verify that client and server have the same reset secret */
@@ -1178,7 +1187,7 @@ int tls_api_bad_server_reset_test()
 
 	if (ret == 0)
 	{
-		ret = tls_api_connection_loop(test_ctx, &loss_mask, &simulated_time);
+		ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
 	}
 
 	/* Prepare the bogus reset */

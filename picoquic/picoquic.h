@@ -105,6 +105,8 @@ extern "C" {
 	/*
 	 * The simple packet structure is used to store packets that
 	 * have been sent but are not yet acknowledged.
+	 * Packets are stored in unencrypted format.
+	 * The checksum length is the difference between encrypted and unencrypted.
 	 */
 	typedef struct _picoquic_packet {
 		struct _picoquic_packet * previous_packet;
@@ -113,6 +115,7 @@ extern "C" {
 		uint64_t sequence_number;
 		uint64_t send_time;
 		size_t length;
+		size_t checksum_overhead;
 
 		uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE];
 	} picoquic_packet;
@@ -183,6 +186,35 @@ extern "C" {
 	int picoquic_reset_stream(picoquic_cnx_t * cnx,
 		uint32_t stream_id);
 
+
+	/* Congestion algorithm definition */
+	typedef enum {
+		picoquic_congestion_notification_acknowledgement,
+		picoquic_congestion_notification_repeat,
+		picoquic_congestion_notification_timeout,
+		picoquic_congestion_notification_spurious_repeat,
+		picoquic_congestion_notification_rtt_measurement
+	} picoquic_congestion_notification_t;
+
+	typedef void(*picoquic_congestion_algorithm_init) (picoquic_cnx_t * cnx);
+	typedef void(*picoquic_congestion_algorithm_notify)(picoquic_cnx_t * cnx,
+		picoquic_congestion_notification_t notification,
+		uint64_t rtt_measurement,
+		uint64_t nb_bytes_acknowledged,
+		uint64_t lost_packet_number,
+		uint64_t current_time);
+	typedef void(*picoquic_congestion_algorithm_delete) (picoquic_cnx_t * cnx);
+
+	typedef struct st_picoquic_congestion_algorithm_t {
+		uint32_t congestion_algorithm_id;
+		picoquic_congestion_algorithm_init alg_init;
+		picoquic_congestion_algorithm_notify alg_notify;
+		picoquic_congestion_algorithm_delete alg_delete;
+	} picoquic_congestion_algorithm_t;
+
+	void picoquic_set_default_congestion_algorithm(picoquic_quic_t * quic, picoquic_congestion_algorithm_t const * algo);
+
+	void picoquic_set_congestion_algorithm(picoquic_cnx_t * cnx, picoquic_congestion_algorithm_t const * algo);
 
 #ifdef  __cplusplus
 }
