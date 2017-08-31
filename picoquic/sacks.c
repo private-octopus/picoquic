@@ -37,7 +37,7 @@
 int picoquic_is_pn_already_received(picoquic_cnx_t * cnx, uint64_t pn64)
 {
     int is_received = 0;
-    picoquic_sack_item * sack = &cnx->first_sack_item;
+    picoquic_sack_item_t * sack = &cnx->first_sack_item;
 
     do
     {
@@ -65,8 +65,8 @@ int picoquic_is_pn_already_received(picoquic_cnx_t * cnx, uint64_t pn64)
 int picoquic_record_pn_received(picoquic_cnx_t * cnx, uint64_t pn64, uint64_t current_microsec)
 {
     int ret = 0;
-    picoquic_sack_item * sack = &cnx->first_sack_item;
-    picoquic_sack_item * previous = NULL;
+    picoquic_sack_item_t * sack = &cnx->first_sack_item;
+    picoquic_sack_item_t * previous = NULL;
 
     if (sack->start_of_sack_range == 0 &&
         sack->end_of_sack_range == 0)
@@ -119,7 +119,7 @@ int picoquic_record_pn_received(picoquic_cnx_t * cnx, uint64_t pn64, uint64_t cu
             else
             {
                 /* Found a new hole */
-                picoquic_sack_item * new_hole = (picoquic_sack_item *)malloc(sizeof(picoquic_sack_item));
+                picoquic_sack_item_t * new_hole = (picoquic_sack_item_t *)malloc(sizeof(picoquic_sack_item_t));
                 if (new_hole == NULL)
                 {
                     /* memory error. That's infortunate */
@@ -162,7 +162,7 @@ int picoquic_record_pn_received(picoquic_cnx_t * cnx, uint64_t pn64, uint64_t cu
             {
                 /* this is an old packet, beyond the current range of SACK */
                 /* Found a new hole */
-                picoquic_sack_item * new_hole = (picoquic_sack_item *)malloc(sizeof(picoquic_sack_item));
+                picoquic_sack_item_t * new_hole = (picoquic_sack_item_t *)malloc(sizeof(picoquic_sack_item_t));
                 if (new_hole == NULL)
                 {
                     /* memory error. That's infortunate */
@@ -296,8 +296,8 @@ int picoquic_encode_sack_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
 {
     int ret = -1;
     size_t nb_blocks = 0;
-    picoquic_sack_item * previous_sack = &cnx->first_sack_item;
-    picoquic_sack_item * sack = cnx->first_sack_item.next_sack;
+    picoquic_sack_item_t * previous_sack = &cnx->first_sack_item;
+    picoquic_sack_item_t * sack = cnx->first_sack_item.next_sack;
     uint64_t block_size;
     uint8_t ack_type = 0xA8;
     uint8_t mm = 0;

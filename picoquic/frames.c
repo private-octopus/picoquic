@@ -868,7 +868,7 @@ static picoquic_packet * picoquic_update_rtt(picoquic_cnx_t * cnx, uint64_t larg
 
 						cnx->retransmit_timer = cnx->smoothed_rtt + 4 * cnx->rtt_variant;
 
-						if (rtt_estimate < cnx->rtt_min)
+						if (rtt_estimate < (int64_t) cnx->rtt_min)
 						{
 							cnx->rtt_min = rtt_estimate;
 						}
@@ -886,6 +886,133 @@ static picoquic_packet * picoquic_update_rtt(picoquic_cnx_t * cnx, uint64_t larg
 	return packet;
 }
 
+static int picoquic_process_ack_of_ack_frame(picoquic_cnx_t * cnx, uint8_t * bytes, size_t bytes_max)
+{
+	int ret = 0;
+	size_t byte_index = 1;
+	uint8_t first_byte = bytes[0];
+	int has_num_block = (first_byte >> 4) & 1;
+	uint64_t target_sequence = 0;
+	picoquic_sack_item_t * sack = &cnx->first_sack_item;
+	picoquic_sack_item_t * previous_sack;
+	uint64_t largest = 0;
+	int ll = (first_byte >> 2) & 3;
+	size_t min_len = 1 + has_num_block + 1 + (1 << ll);
+	int sack_count;
+
+	/* Decode the first bytes of the ACK, until finding the largest data value */
+	if (first_byte < 0xA0 || first_byte > 0xBF || min_len > bytes_max)
+	{
+		ret = -1;
+	}
+	else
+	{
+		/* Find the oldest ACK range, in order to calibrate the
+		* extension of the largest number to 64 bits */
+
+		while (sack->next_sack != NULL)
+		{
+			sack = sack->next_sack;
+		}
+		target_sequence = sack->start_of_sack_range - 1;
+
+		if (has_num_block)
+		{
+			/* skip num_block */
+			byte_index++;
+		}
+		/* skip num ts */
+		byte_index++;
+
+		/* decoding the largest */
+		switch (ll)
+		{
+		case 0:
+			largest = bytes[byte_index++];
+			largest = picoquic_get_packet_number64(target_sequence,
+				0xFFFFFFFFFFFFFF00ull, (uint32_t)largest);
+			break;
+		case 1:
+			largest = PICOPARSE_16(bytes + byte_index);
+			largest = picoquic_get_packet_number64(target_sequence,
+				0xFFFFFFFFFFFF0000ull, (uint32_t)largest);
+			byte_index += 2;
+			break;
+		case 2:
+			largest = PICOPARSE_32(bytes + byte_index);
+			largest = picoquic_get_packet_number64(target_sequence,
+				0xFFFFFFFF00000000ull, (uint32_t)largest);
+			byte_index += 4;
+			break;
+		case 3:
+			largest = PICOPARSE_64(bytes + byte_index);
+			byte_index += 8;
+			break;
+		}
+		/* Skip everything else -- we are only interested in ACK parsing */
+		sack = &cnx->first_sack_item;
+		previous_sack = NULL;
+		sack_count = 0;
+
+		do {
+			if (sack->start_of_sack_range < largest &&
+				sack->end_of_sack_range < largest)
+			{
+				sack_count++;
+
+				if (sack_count > 2)
+				{
+					previous_sack->next_sack = sack->next_sack;
+					free(sack);
+					sack = previous_sack->next_sack;
+				}
+				else
+				{
+					previous_sack = sack;
+					sack = sack->next_sack;
+				}
+			}
+			else
+			{
+				previous_sack = sack;
+				sack = sack->next_sack;
+			}
+		} while (sack != NULL);
+	}
+
+	return ret;
+}
+
+void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t * cnx, picoquic_packet * p)
+{
+	int ret = 0;
+	size_t byte_index;
+	picoquic_packet_header ph;
+	int packet_is_pure_ack = 1;
+	int frame_is_pure_ack = 0;
+	size_t frame_length = 0;
+
+	/* Get the packet type */
+	ret = picoquic_parse_packet_header(p->bytes, p->length, &ph);
+	byte_index = ph.offset;
+
+	while (ret == 0 && byte_index < p->length)
+	{
+		if (p->bytes[byte_index] >= picoquic_frame_type_ack_range_min &&
+			p->bytes[byte_index] <= picoquic_frame_type_ack_range_max)
+		{
+			ret = picoquic_process_ack_of_ack_frame(cnx, &p->bytes[byte_index], p->length - byte_index);
+			break;
+		}
+		else
+		{
+			ret = picoquic_skip_frame(&p->bytes[byte_index],
+				p->length - ph.offset, &frame_length, &frame_is_pure_ack);
+			byte_index += frame_length;
+		}
+	}
+}
+
 static picoquic_packet * picoquic_process_ack_range(
 	picoquic_cnx_t * cnx, uint64_t highest, uint64_t range, picoquic_packet * p)
 {
@@ -898,6 +1025,9 @@ static picoquic_packet * picoquic_process_ack_range(
 		}
 		else
 		{
+			/* If the packet contained an ACK frame, perform the ACK of ACK pruning logic */
+			picoquic_process_possible_ack_of_ack_frame(cnx, p);
+
 			if (p->sequence_number == highest)
 			{
 				/* TODO: RTT Estimate */
@@ -1088,7 +1218,7 @@ int picoquic_prepare_ack_frame(picoquic_cnx_t * cnx, uint64_t current_time,
 	int num_ts = 0;
 	int ll = 2; /* always use 32 bits encoding for now*/
 	int mm = 2;
-	picoquic_sack_item * next_sack = cnx->first_sack_item.next_sack;
+	picoquic_sack_item_t * next_sack = cnx->first_sack_item.next_sack;
 	uint64_t ack_delay = 0;
 	uint64_t ack_range = 0;
 	uint64_t lowest_acknowledged = 0;
@@ -1333,7 +1463,7 @@ int picoquic_decode_max_data_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
  */
 
 int picoquic_prepare_max_stream_data_frame(picoquic_cnx_t * cnx, picoquic_stream_head * stream,
-	uint8_t * bytes, size_t bytes_max, size_t new_max_data, size_t * consumed)
+	uint8_t * bytes, size_t bytes_max, uint64_t new_max_data, size_t * consumed)
 {
 	int ret = 0;
 	const size_t min_length = 1 + 4 + 8;
@@ -1407,7 +1537,7 @@ int picoquic_decode_max_stream_data_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
 	return ret;
 }
 
-int picoquic_prepare_required_max_stream_data_frame(picoquic_cnx_t * cnx,
+int picoquic_prepare_required_max_stream_data_frames(picoquic_cnx_t * cnx,
 	uint8_t * bytes, size_t bytes_max, size_t * consumed)
 {
 	int ret = 0;

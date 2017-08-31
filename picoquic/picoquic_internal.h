@@ -103,12 +103,12 @@ extern "C" {
 	 * SACK dashboard item, part of connection context.
 	 */
 
-	typedef struct _picoquic_sack_item {
-		struct _picoquic_sack_item * next_sack;
+	typedef struct st_picoquic_sack_item_t {
+		struct st_picoquic_sack_item_t * next_sack;
 		uint64_t start_of_sack_range;
 		uint64_t end_of_sack_range;
 		uint64_t time_stamp_last_in_range;
-	} picoquic_sack_item;
+	} picoquic_sack_item_t;
 
 	/*
 	 * Types of frames
@@ -240,7 +240,7 @@ extern "C" {
 		void * aead_decrypt_ctx;
 
 		/* Receive state */
-		struct _picoquic_sack_item first_sack_item;
+		picoquic_sack_item_t first_sack_item;
 		uint64_t sack_block_size_max;
 		uint64_t highest_ack_sent;
 		uint64_t highest_ack_time;
@@ -351,7 +351,7 @@ extern "C" {
 		uint8_t * bytes, size_t bytes_max, size_t * consumed);
 	int picoquic_prepare_connection_close_frame(picoquic_cnx_t * cnx,
 		uint8_t * bytes, size_t bytes_max, size_t * consumed);
-	int picoquic_prepare_required_max_stream_data_frame(picoquic_cnx_t * cnx,
+	int picoquic_prepare_required_max_stream_data_frames(picoquic_cnx_t * cnx,
 		uint8_t * bytes, size_t bytes_max, size_t * consumed);
 	int picoquic_prepare_max_data_frame(picoquic_cnx_t * cnx, uint64_t maxdata_increase,
 		uint8_t * bytes, size_t bytes_max, size_t * consumed);
