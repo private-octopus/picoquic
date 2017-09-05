@@ -33,8 +33,8 @@
 static uint64_t http09_rand(seed)
 {
     const uint64_t a = 6364136223846793005ull;
-    const uint64_t b = 1442695040888963407ull;
-    uint64_t x = seed*a + b;
+    const uint64_t c = 1442695040888963407ull;
+    uint64_t x = seed*a + c;
 
     return x;
 }
@@ -50,22 +50,20 @@ static uint64_t http09_random_chars(uint64_t seed, uint8_t * bytes, size_t bytes
 {
     size_t byte_index = 0;
     uint8_t rchar = 0;
+    size_t text_mod = strlen(http09_ok_text);
+    uint64_t text_index = 0;
 
     while (byte_index < bytes_max)
     {
         seed = http09_rand(seed);
+        text_index = seed % text_mod;
 
-        rchar = (uint8_t)http09_ok_text[seed % http09_ok_text_len];
+        rchar = (uint8_t)http09_ok_text[text_index];
         bytes[byte_index++] = rchar;
 
         if ((byte_index % 72) == 0 && byte_index < bytes_max)
         {
-            bytes[byte_index++] = (uint8_t) '/r';
-
-            if (byte_index < bytes_max)
-            {
-                bytes[byte_index++] = (uint8_t) '/n';
-            }
+            bytes[byte_index++] = (uint8_t) '\n';
         }
     }
 
@@ -248,7 +246,7 @@ static int http09_index_html(uint8_t * bytes, size_t bytes_max,
         http09_index_title, http09_head2,
         http09_index_1, http09_index_2, http09_index_3,
         http09_index_4, http09_index_5, http09_index_6,
-        http09_index_6, http09_final};
+        http09_index_7, http09_final};
     size_t nb_index_blocks = sizeof(index_text) / sizeof(char * const);
     size_t byte_index = 0;
 

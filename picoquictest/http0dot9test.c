@@ -60,20 +60,21 @@ int http0dot9_test_one(char const * command, int expected_ret, size_t expected_l
 int http0dot9_test()
 {
     int ret = 0;
+    const size_t index_html_size = 558;
 
     if (ret == 0)
     {
-        ret = http0dot9_test_one("get /", 0, 615, "http09_index.html");
+        ret = http0dot9_test_one("get /", 0, index_html_size, "http09_index.html");
     }
 
     if (ret == 0)
     {
-        ret = http0dot9_test_one("get /\r\n", 0, 615, "http09_index2.html");
+        ret = http0dot9_test_one("get /\r\n", 0, index_html_size, "http09_index2.html");
     }
 
     if (ret == 0)
     {
-        ret = http0dot9_test_one("get index.html", 0, 615, "http09_index3.html");
+        ret = http0dot9_test_one("get index.html", 0, index_html_size, "http09_index3.html");
     }
 
     if (ret == 0)
