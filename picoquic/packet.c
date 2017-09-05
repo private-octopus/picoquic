@@ -350,6 +350,90 @@ picoquic_cnx_t * picoquic_incoming_initial(
 }
 
 /*
+ * Processing of a server stateless packet.
+ *
+ * The packet number and connection ID fields echo the corresponding fields from the 
+ * triggering client packet. This allows a client to verify that the server received its packet.
+ *
+ * A Server Stateless Retry packet is never explicitly acknowledged in an ACK frame by a client.
+ * Receiving another Client Initial packet implicitly acknowledges a Server Stateless Retry packet.
+ *
+ * After receiving a Server Stateless Retry packet, the client uses a new Client Initial packet 
+ * containing the next cryptographic handshake message. The client retains the state of its 
+ * cryptographic handshake, but discards all transport state. In effect, the next cryptographic
+ * handshake message is sent on a new connection. The new Client Initial packet is sent in a 
+ * packet with a newly randomized packet number and starting at a stream offset of 0.
+ *
+ * Continuing the cryptographic handshake is necessary to ensure that an attacker cannot force
+ * a downgrade of any cryptographic parameters. In addition to continuing the cryptographic 
+ * handshake, the client MUST remember the results of any version negotiation that occurred 
+ * (see Section 7.1). The client MAY also retain any observed RTT or congestion state that it 
+ * has accumulated for the flow, but other transport state MUST be discarded.
+ */
+
+int picoquic_incoming_server_stateless(
+	picoquic_cnx_t * cnx,
+	uint8_t * bytes,
+	uint32_t length,
+	picoquic_packet_header * ph,
+	uint64_t current_time)
+{
+	int ret = 0;
+	size_t decoded_length = 0;
+
+	if (cnx->cnx_state != picoquic_state_client_init_sent &&
+		cnx->cnx_state != picoquic_state_client_init_resent)
+	{
+		ret = PICOQUIC_ERROR_UNEXPECTED_PACKET;
+	}
+	else
+	{
+		/* Verify the checksum */
+		decoded_length = fnv1a_check(bytes, length);
+		if (decoded_length == 0)
+		{
+			/* Incorrect checksum, drop and log. */
+			ret = PICOQUIC_ERROR_FNV1A_CHECK;
+		}
+		else
+		{
+			/* Verify that the header is a proper echo of what was sent */
+			if (ph->cnx_id != cnx->initial_cnxid ||
+				ph->vn != cnx->version ||
+				(cnx->retransmit_newest == NULL || ph->pn64 > cnx->retransmit_newest->sequence_number) ||
+				(cnx->retransmit_oldest == NULL || ph->pn64 < cnx->retransmit_oldest->sequence_number))
+			{
+				/* Packet that do not match the "echo" checks should be logged and ignored */
+				ret = PICOQUIC_ERROR_UNEXPECTED_PACKET;
+			}
+		}
+
+		if (ret == 0)
+		{
+			/* Accept the incoming frames */
+			ret = picoquic_decode_frames(cnx,
+				bytes + ph->offset, decoded_length - ph->offset, 1, current_time);
+		}
+
+		/* processing of the TLS message */
+		if (ret == 0)
+		{
+			/* set the state to HRR received, will trigger behavior when processing stream zero */
+			cnx->cnx_state = picoquic_state_client_hrr_received;
+			/* submit the embedded message (presumably HRR) to stream zero */
+			ret = picoquic_tlsinput_stream_zero(cnx);
+		}
+		if (ret == 0)
+		{
+			/* Mark the packet as not required for ack */
+			ret = PICOQUIC_ERROR_HRR;
+		}
+	}
+
+	return ret;
+}
+
+/*
  * Processing of a server clear text packet.
  */
 
@@ -629,7 +713,7 @@ int picoquic_incoming_packet(
                     break;
                 case picoquic_packet_server_stateless:
                     /* Not implemented yet. Log and ignore. */
-                    ret = -1;
+                    ret = picoquic_incoming_server_stateless( cnx, bytes, length, &ph, current_time);
                     break;
                 case picoquic_packet_server_cleartext:
                     ret = picoquic_incoming_server_cleartext(cnx, bytes, length, &ph, current_time);
@@ -670,7 +754,8 @@ int picoquic_incoming_packet(
 		ret == PICOQUIC_ERROR_DUPLICATE ||
 		ret == PICOQUIC_ERROR_UNEXPECTED_PACKET ||
 		ret == PICOQUIC_ERROR_FNV1A_CHECK ||
-		ret == PICOQUIC_ERROR_CNXID_CHECK)
+		ret == PICOQUIC_ERROR_CNXID_CHECK ||
+		ret == PICOQUIC_ERROR_HRR)
 	{
 		/* Bad packets are dropped silently */
 		ret = 0;

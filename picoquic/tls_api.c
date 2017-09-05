@@ -478,7 +478,7 @@ int picoquic_tlscontext_create(picoquic_quic_t * quic, picoquic_cnx_t * cnx)
 				ctx->handshake_properties.client.negotiated_protocols.count = 1;
 				ctx->handshake_properties.client.negotiated_protocols.list = &ctx->alpn_vec;
 			}
-
+			ctx->handshake_properties.client.negotiate_before_key_exchange = 0;// 1;
 			picoquic_tls_set_extensions(cnx, ctx);
 		}
 	}
@@ -729,6 +729,9 @@ int picoquic_tlsinput_stream_zero(picoquic_cnx_t * cnx)
     {
         switch (cnx->cnx_state)
         {
+		case picoquic_state_client_hrr_received:
+			/* This is not supposed to happen -- HRR should generate "error in progress" */
+			break;
         case picoquic_state_client_init:
 		case picoquic_state_client_init_sent:
         case picoquic_state_client_handshake_start:
@@ -757,6 +760,24 @@ int picoquic_tlsinput_stream_zero(picoquic_cnx_t * cnx)
     {
         /* Extract and install the client 0-RTT key */
     }
+	else if (ret == PTLS_ERROR_IN_PROGRESS &&
+		(cnx->cnx_state == picoquic_state_client_hrr_received))
+	{
+		/* Need to reset the transport state of the connection */
+		cnx->cnx_state = picoquic_state_client_init;
+		/* Delete the packets queued for retransmission */
+		while (cnx->retransmit_newest != NULL)
+		{
+			picoquic_dequeue_retransmit_packet(cnx, cnx->retransmit_newest, 1);
+		}
+
+		/* Reset the streams */
+		picoquic_clear_stream(&cnx->first_stream);
+		cnx->first_stream.consumed_offset = 0;
+		cnx->first_stream.stream_flags = 0;
+		cnx->first_stream.fin_offset = 0;
+		cnx->first_stream.sent_offset = 0;
+	}
 
     if ((ret == 0 || ret == PTLS_ERROR_IN_PROGRESS))
     {

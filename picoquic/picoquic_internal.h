@@ -360,6 +360,7 @@ extern "C" {
 		uint8_t * bytes, size_t bytes_max, size_t * consumed);
 	int picoquic_prepare_max_data_frame(picoquic_cnx_t * cnx, uint64_t maxdata_increase,
 		uint8_t * bytes, size_t bytes_max, size_t * consumed);
+    void picoquic_clear_stream(picoquic_stream_head * stream);
 
 	/* send/receive */
 

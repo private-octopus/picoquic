@@ -240,5 +240,12 @@ namespace UnitTest1
 
 			Assert::AreEqual(ret, 0);
 		}
+
+        TEST_METHOD(test_http0dot9)
+        {
+            int ret = http0dot9_test();
+
+            Assert::AreEqual(ret, 0);
+        }
 	};
 }

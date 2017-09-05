@@ -27,6 +27,23 @@
 #include "fnv1a.h"
 #include "tls_api.h"
 
+void picoquic_log_error_packet(FILE * F, uint8_t * bytes, size_t bytes_max, int ret)
+{
+	fprintf(F, "Packet length %d caused error: %d\n", (int)bytes_max, ret);
+
+	for (size_t i = 0; i < bytes_max;)
+	{
+		fprintf(F, "%04x:  ", i);
+
+		for (int j = 0; j < 16 && i < bytes_max; j++, i++)
+		{
+			fprintf(F, "%02x ", bytes[i]);
+		}
+		fprintf(F, "\n");
+	}
+	fprintf(F, "\n");
+}
+
 void picoquic_log_packet_address(FILE* F, picoquic_cnx_t * cnx,
 	struct sockaddr * addr_peer, int receiving, size_t length)
 {
@@ -120,6 +137,7 @@ void picoquic_log_negotiation_packet(FILE* F,
 	}
 	fprintf(F, "\n");
 }
+
 
 int picoquic_log_stream_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
 {
@@ -816,8 +834,6 @@ void picoquic_log_packet(FILE* F, picoquic_quic_t * quic, picoquic_cnx_t * cnx,
 			picoquic_log_negotiation_packet(F, bytes, length, &ph);
 			break;
 		case picoquic_packet_server_stateless:
-			/* log server less packet */
-			break;
 		case picoquic_packet_client_initial:
 		case picoquic_packet_server_cleartext:
 		case picoquic_packet_client_cleartext:

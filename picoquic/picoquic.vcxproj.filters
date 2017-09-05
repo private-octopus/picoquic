@@ -57,6 +57,9 @@
     <ClCompile Include="newreno.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="http0dot9.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquic.h">

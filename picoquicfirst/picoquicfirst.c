@@ -61,6 +61,8 @@
 #endif
 #endif
 
+void picoquic_log_error_packet(FILE * F, uint8_t * bytes, size_t bytes_max, int ret);
+
 void picoquic_log_packet(FILE* F, picoquic_quic_t * quic, picoquic_cnx_t * cnx,
 	struct sockaddr * addr_peer, int receiving,
 	uint8_t * bytes, size_t length);
@@ -466,6 +468,11 @@ int quic_client(char * ip_address_text, int server_port)
 				{
 					fprintf(stdout, "Almost ready!\n\n");
 				}
+
+				if (ret != 0)
+				{
+					picoquic_log_error_packet(stdout, buffer, (size_t)bytes_recv, ret);
+				}
             }
 			else
 			{
@@ -539,6 +546,8 @@ int main(int argc, char ** argv)
     int is_client = 1;
     WSADATA wsaData;
     int ret = 0;
+
+    /* HTTP09 test */
 
     /* Get the parameters */
     if (argc > 1)

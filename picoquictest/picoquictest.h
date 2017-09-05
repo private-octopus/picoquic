@@ -54,6 +54,7 @@ extern "C" {
 	int tls_api_very_long_max_test();
 	int tls_api_very_long_with_err_test();
 	int tls_api_very_long_congestion_test();
+    int http0dot9_test();
 
 #ifdef  __cplusplus
 }
