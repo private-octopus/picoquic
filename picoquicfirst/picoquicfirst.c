@@ -345,6 +345,7 @@ int quic_client(char * ip_address_text, int server_port)
     picoquic_packet * p = NULL;
 	uint64_t current_time = 0;
 	int client_ready_loop = 0;
+    char * sni = NULL;
 
     /* get the IP address of the server */
     if (ret == 0)
@@ -367,15 +368,61 @@ int quic_client(char * ip_address_text, int server_port)
         }
         else
         {
-            fprintf(stderr, "Could not parse the address: %s\n", ip_address_text);
-            ret = -1;
+            /* Server is described by name. Do a lookup for the IP address,
+             * and then use the name as SNI parameter */
+            struct addrinfo *result = NULL;
+            struct addrinfo *ptr = NULL;
+            struct addrinfo hints;
+
+            memset(&hints, 0, sizeof(hints));
+            hints.ai_family = AF_UNSPEC;
+            hints.ai_socktype = SOCK_DGRAM;
+            hints.ai_protocol = IPPROTO_UDP;
+
+            if (getaddrinfo(ip_address_text, NULL, &hints, &result) != 0)
+            {
+                fprintf(stderr, "Cannot get IP address for %s\n", ip_address_text);
+                ret = -1;
+            }
+            else
+            {
+                sni = ip_address_text;
+
+                switch (result->ai_family)
+                {
+                case AF_INET:
+                    ipv4_dest->sin_family = AF_INET;
+                    ipv4_dest->sin_port = htons(server_port);
+                    ipv4_dest->sin_addr.S_un.S_addr =
+                        ((struct sockaddr_in *) result->ai_addr)->sin_addr.S_un.S_addr;
+                    server_addr_length = sizeof(struct sockaddr_in);
+                    break;
+                case AF_INET6:
+                    ipv6_dest->sin6_family = AF_INET6;
+                    ipv6_dest->sin6_port = htons(server_port);
+                    memcpy(&ipv6_dest->sin6_addr,
+                        &((struct sockaddr_in6 *) result->ai_addr)->sin6_addr,
+                        sizeof(ipv6_dest->sin6_addr));
+                    break;
+                default:
+                    fprintf(stderr, "Error getting IPv6 address for %s, family = %d\n",
+                        ip_address_text, result->ai_family);
+                    ret = -1;
+                    break;
+                }
+
+                freeaddrinfo(result);
+            }
         }
     }
 
     /* Open a UDP socket */
 
-    fd = socket(server_address.ss_family, SOCK_DGRAM, IPPROTO_UDP);
-    ret = (fd != INVALID_SOCKET) ? 0 : -1;
+    if (ret == 0)
+    {
+        fd = socket(server_address.ss_family, SOCK_DGRAM, IPPROTO_UDP);
+        ret = (fd != INVALID_SOCKET) ? 0 : -1;
+    }
 
     if (ret == 0)
     {
@@ -399,7 +446,7 @@ int quic_client(char * ip_address_text, int server_port)
         uint64_t cnx_id = 0;
 
         cnx_client = picoquic_create_cnx(qclient, 0, 
-            (struct sockaddr *)&server_address, current_time, 0, NULL, "hq-05");
+            (struct sockaddr *)&server_address, current_time, 0, sni, "hq-05");
 
         if (cnx_client == NULL)
         {
