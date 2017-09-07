@@ -41,6 +41,8 @@ extern "C" {
 #define PICOQUIC_MIN_RETRANSMIT_TIMER 50000 /* 50 ms */
 #define PICOQUIC_ACK_DELAY_MAX 20000 /* 20 ms */
 
+#define PICOQUIC_MICROSEC_SILENCE_MAX 120000000 /* 120 seconds for now */
+
 #define PICOQUIC_CWIN_INITIAL  (10*PICOQUIC_MAX_PACKET_SIZE)
 #define PICOQUIC_CWIN_MINIMUM  (2*PICOQUIC_MAX_PACKET_SIZE)
 
@@ -238,6 +240,9 @@ extern "C" {
 		uint64_t send_sequence;
 		uint32_t send_mtu;
 
+        /* Liveness detection */
+        uint64_t latest_progress_time; /* last local time at which the connection progressed */
+
 		/* Encryption and decryption objects */
 		void * aead_encrypt_ctx;
 		void * aead_decrypt_ctx;
@@ -260,7 +265,6 @@ extern "C" {
 		uint64_t latest_retransmit_time;
 		uint64_t highest_acknowledged; 
 		uint64_t latest_time_acknowledged; /* time at which the highest acknowledged was sent */
-		uint64_t latest_ack_received_time; /* last local time at which an ack was received */
 		picoquic_packet * retransmit_newest;
 		picoquic_packet * retransmit_oldest;
 
@@ -347,9 +351,9 @@ extern "C" {
 	picoquic_stream_head * picoquic_find_stream(picoquic_cnx_t * cnx, uint32_t stream_id, int create);
 	picoquic_stream_head * picoquic_find_ready_stream(picoquic_cnx_t * cnx, int restricted);
 	int picoquic_stream_network_input(picoquic_cnx_t * cnx, uint32_t stream_id,
-		uint64_t offset, int fin, uint8_t * bytes, size_t length);
+		uint64_t offset, int fin, uint8_t * bytes, size_t length, uint64_t current_time);
 	int picoquic_decode_stream_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
-		size_t bytes_max, int restricted, size_t * consumed);
+		size_t bytes_max, int restricted, size_t * consumed, uint64_t current_time);
 	int picoquic_prepare_stream_frame(picoquic_cnx_t * cnx, picoquic_stream_head * stream,
 		uint8_t * bytes, size_t bytes_max, size_t * consumed);
 	int picoquic_prepare_ack_frame(picoquic_cnx_t * cnx, uint64_t current_time,

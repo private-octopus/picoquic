@@ -460,7 +460,7 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
 			cnx->retransmit_oldest = NULL;
 			cnx->highest_acknowledged = cnx->send_sequence - 1;
 			cnx->latest_time_acknowledged = start_time;
-			cnx->latest_ack_received_time = start_time;
+			cnx->latest_progress_time = start_time;
 			cnx->ack_needed = 0;
 
 

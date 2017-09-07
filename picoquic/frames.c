@@ -363,7 +363,7 @@ void picoquic_stream_data_callback(picoquic_cnx_t * cnx, picoquic_stream_head * 
 }
 
 int picoquic_stream_network_input(picoquic_cnx_t * cnx, uint32_t stream_id,
-    uint64_t offset, int fin, uint8_t * bytes, size_t length)
+    uint64_t offset, int fin, uint8_t * bytes, size_t length, uint64_t current_time)
 {
     int ret = 0;
 	uint32_t should_notify = 0;
@@ -396,6 +396,7 @@ int picoquic_stream_network_input(picoquic_cnx_t * cnx, uint32_t stream_id,
 			{
 				stream->stream_flags |= picoquic_stream_flag_fin_received;
 				should_notify = stream_id;
+                cnx->latest_progress_time = current_time;
 			}
 		}
 	}
@@ -474,6 +475,7 @@ int picoquic_stream_network_input(picoquic_cnx_t * cnx, uint32_t stream_id,
 						data->next_stream_data = next;
 						*pprevious = data;
 						should_notify = stream_id; /* this way, do not notify stream 0 */
+                        cnx->latest_progress_time = current_time;
 					}
 				}
 			}
@@ -490,7 +492,7 @@ int picoquic_stream_network_input(picoquic_cnx_t * cnx, uint32_t stream_id,
 }
 
 int picoquic_decode_stream_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
-    size_t bytes_max, int restricted, size_t * consumed)
+    size_t bytes_max, int restricted, size_t * consumed, uint64_t current_time)
 {
     int ret = 0;
     size_t byte_index = 1;
@@ -572,7 +574,7 @@ int picoquic_decode_stream_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
                 *consumed = byte_index + data_length;
 
                 ret = picoquic_stream_network_input(cnx, stream_id, offset, first_byte & 32,
-                    bytes + byte_index, data_length);
+                    bytes + byte_index, data_length, current_time);
             }
         }
     }
@@ -813,7 +815,6 @@ static picoquic_packet * picoquic_update_rtt(picoquic_cnx_t * cnx, uint64_t larg
 	if (largest > cnx->highest_acknowledged )
 	{
 		cnx->highest_acknowledged = largest;
-		cnx->latest_ack_received_time = current_time;
 
 		if (ack_delay < PICOQUIC_ACK_DELAY_MAX)
 		{
@@ -839,6 +840,7 @@ static picoquic_packet * picoquic_update_rtt(picoquic_cnx_t * cnx, uint64_t larg
 				int64_t rtt_estimate = acknowledged_time - packet->send_time;
 
 				cnx->latest_time_acknowledged = packet->send_time;
+                cnx->latest_progress_time = current_time;
 
 				if (rtt_estimate > 0)
 				{
@@ -1674,7 +1676,8 @@ int picoquic_decode_frames(picoquic_cnx_t * cnx, uint8_t * bytes,
             {
                 /* decode stream frame */
 
-                ret = picoquic_decode_stream_frame(cnx, bytes + byte_index, bytes_max - byte_index, restricted, &consumed);
+                ret = picoquic_decode_stream_frame(cnx, bytes + byte_index, bytes_max - byte_index, 
+                    restricted, &consumed, current_time);
 				cnx->ack_needed = 1;
 
                 byte_index += consumed;
