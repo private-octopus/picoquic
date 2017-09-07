@@ -536,6 +536,16 @@ picoquic_cnx_t * picoquic_create_client_cnx(picoquic_quic_t * quic,
 	return cnx;
 }
 
+uint64_t picoquic_get_cnxid(picoquic_cnx_t * cnx)
+{
+    return cnx->server_cnxid;
+}
+
+uint64_t picoquic_get_initial_cnxid(picoquic_cnx_t * cnx)
+{
+    return cnx->initial_cnxid;
+}
+
 picoquic_state_enum picoquic_get_cnx_state(picoquic_cnx_t * cnx)
 {
 	return cnx->cnx_state;
@@ -544,6 +554,13 @@ picoquic_state_enum picoquic_get_cnx_state(picoquic_cnx_t * cnx)
 picoquic_cnx_t * picoquic_get_first_cnx(picoquic_quic_t * quic)
 {
 	return quic->cnx_list;
+}
+
+void picoquic_set_callback(picoquic_cnx_t * cnx,
+    picoquic_stream_data_cb_fn callback_fn, void * callback_ctx)
+{
+    cnx->callback_fn = callback_fn;
+    cnx->callback_ctx = callback_ctx;
 }
 
 void picoquic_clear_stream(picoquic_stream_head * stream)

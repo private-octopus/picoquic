@@ -128,7 +128,8 @@ extern "C" {
 	typedef enum {
 		picoquic_callback_no_event = 0,
 		picoquic_callback_stream_fin,
-		picoquic_callback_stream_reset
+		picoquic_callback_stream_reset,
+        picoquic_callback_close
 	} picoquic_call_back_event_t;
 
 	/* Callback function for providing stream data to the application */
@@ -163,6 +164,12 @@ extern "C" {
 	picoquic_cnx_t * picoquic_get_first_cnx(picoquic_quic_t * quic);
 
 	picoquic_state_enum picoquic_get_cnx_state(picoquic_cnx_t * cnx);
+
+    uint64_t picoquic_get_cnxid(picoquic_cnx_t * cnx);
+    uint64_t picoquic_get_initial_cnxid(picoquic_cnx_t * cnx);
+
+    void picoquic_set_callback(picoquic_cnx_t * cnx,
+        picoquic_stream_data_cb_fn callback_fn, void * callback_ctx);
 
 	/* Send and receive network packets */
 

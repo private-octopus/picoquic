@@ -170,6 +170,174 @@ int do_select(SOCKET fd,
     return bytes_recv;
 }
 
+#define PICOQUIC_FIRST_COMMAND_MAX 128
+#define PICOQUIC_FIRST_RESPONSE_MAX (1<<20)
+
+typedef enum
+{
+    picoquic_first_server_stream_status_none = 0,
+    picoquic_first_server_stream_status_receiving,
+    picoquic_first_server_stream_status_finished
+} picoquic_first_server_stream_status_t;
+
+typedef struct st_picoquic_first_server_stream_ctx_t {
+    struct st_picoquic_first_server_stream_ctx_t * next_stream;
+    picoquic_first_server_stream_status_t status;
+    uint32_t stream_id;
+    size_t command_length;
+    size_t response_length;
+    uint8_t command[PICOQUIC_FIRST_COMMAND_MAX];
+} picoquic_first_server_stream_ctx_t;
+
+typedef struct st_picoquic_first_server_callback_ctx_t {
+    picoquic_first_server_stream_ctx_t * first_stream;
+    size_t buffer_max;
+    uint8_t * buffer;
+} picoquic_first_server_callback_ctx_t;
+
+static picoquic_first_server_callback_ctx_t * first_server_callback_create_context()
+{
+    picoquic_first_server_callback_ctx_t * ctx =
+        (picoquic_first_server_callback_ctx_t*)
+        malloc(sizeof(picoquic_first_server_callback_ctx_t));
+
+    if (ctx != NULL)
+    {
+        ctx->first_stream = NULL;
+        ctx->buffer = (uint8_t *)malloc(PICOQUIC_FIRST_RESPONSE_MAX);
+        if (ctx->buffer == NULL)
+        {
+            free(ctx);
+            ctx = NULL;
+        }
+        else
+        {
+            ctx->buffer_max = PICOQUIC_FIRST_RESPONSE_MAX;
+        }
+    }
+
+    return ctx;
+}
+
+static void first_server_callback_delete_context(picoquic_first_server_callback_ctx_t * ctx)
+{
+    picoquic_first_server_stream_ctx_t * stream_ctx;
+
+    while ((stream_ctx = ctx->first_stream) != NULL)
+    {
+        ctx->first_stream = stream_ctx->next_stream;
+        free(stream_ctx);
+    }
+
+    free(ctx);
+}
+
+static void first_server_callback(picoquic_cnx_t * cnx,
+    uint32_t stream_id, uint8_t * bytes, size_t length,
+    picoquic_call_back_event_t fin_or_event, void * callback_ctx)
+{
+    picoquic_first_server_callback_ctx_t * ctx =
+        (picoquic_first_server_callback_ctx_t*)callback_ctx;
+    picoquic_first_server_stream_ctx_t * stream_ctx = NULL;
+
+    if (fin_or_event == picoquic_callback_close)
+    {
+        if (ctx != NULL)
+        {
+            first_server_callback_delete_context(ctx);
+            picoquic_set_callback(cnx, first_server_callback, NULL);
+        }
+
+        return;
+    }
+
+    if (ctx == NULL)
+    {
+        picoquic_first_server_callback_ctx_t * new_ctx =
+            first_server_callback_create_context();
+        if (new_ctx == NULL)
+        {
+            /* cannot handle the connection */
+            picoquic_close(cnx);
+            return;
+        }
+        else
+        {
+            picoquic_set_callback(cnx, first_server_callback, new_ctx);
+            ctx = new_ctx;
+        }
+    }
+
+    stream_ctx = ctx->first_stream;
+
+    /* if stream is already present, check its state. New bytes? */
+    while (stream_ctx != NULL && stream_ctx->stream_id != stream_id)
+    {
+        stream_ctx = stream_ctx->next_stream;
+    }
+
+    if (stream_ctx == NULL)
+    {
+        stream_ctx = (picoquic_first_server_stream_ctx_t *)
+            malloc(sizeof(picoquic_first_server_stream_ctx_t));
+        if (stream_ctx == NULL)
+        {
+            /* Could not handle this stream */
+            picoquic_reset_stream(cnx, stream_id);
+            return;
+        }
+        else
+        {
+            memset(stream_ctx, 0, sizeof(picoquic_first_server_stream_ctx_t));
+            stream_ctx->next_stream = ctx->first_stream;
+            ctx->first_stream = stream_ctx;
+        }
+    }
+
+    /* verify state and copy data to the stream buffer */
+    if (fin_or_event == picoquic_callback_stream_reset)
+    {
+        stream_ctx->status = picoquic_first_server_stream_status_finished;
+        picoquic_reset_stream(cnx, stream_id);
+        return;
+    }
+    else if (stream_ctx->status == picoquic_first_server_stream_status_finished ||
+        stream_ctx->command_length + length > PICOQUIC_FIRST_COMMAND_MAX)
+    {
+        /* send after fin, or too many bytes => reset! */
+        picoquic_reset_stream(cnx, stream_id);
+        return;
+    }
+    else
+    {
+        if (length > 0)
+        {
+            memcpy(&stream_ctx->command[stream_ctx->command_length],
+                bytes, length);
+            stream_ctx->command_length += length;
+        }
+
+        /* if FIN present, process request through http 0.9 */
+        if (fin_or_event == picoquic_callback_stream_fin)
+        {
+            /* if data generated, just send it. Otherwise, just FIN the stream. */
+            stream_ctx->status = picoquic_first_server_stream_status_finished;
+            if (http0dot9_get(stream_ctx->command, stream_ctx->command_length,
+                ctx->buffer, ctx->buffer_max, &stream_ctx->response_length) != 0)
+            {
+                picoquic_reset_stream(cnx, stream_id);
+            }
+            else
+            {
+                picoquic_add_to_stream(cnx, stream_id, ctx->buffer,
+                    stream_ctx->response_length, 1);
+            }
+        }
+    }
+
+    /* that's it */
+}
+
 int quic_server(char * server_name, int server_port, char * pem_cert, char * pem_key)
 {
     /* Start: start the QUIC process with cert and key files */
@@ -213,7 +381,7 @@ int quic_server(char * server_name, int server_port, char * pem_cert, char * pem
     if (ret == 0)
     {
         /* Create QUIC context */
-        qserver = picoquic_create(8, pem_cert, pem_key, NULL, NULL, NULL);
+        qserver = picoquic_create(8, pem_cert, pem_key, NULL, first_server_callback, NULL);
 
         if (qserver == NULL)
         {
@@ -324,12 +492,210 @@ int quic_server(char * server_name, int server_port, char * pem_cert, char * pem
     return ret;
 }
 
+typedef struct st_picoquic_first_client_stream_ctx_t {
+    struct st_picoquic_first_client_stream_ctx_t * next_stream;
+    uint32_t stream_id;
+    uint8_t command[PICOQUIC_FIRST_COMMAND_MAX+1]; /* starts with "GET " */
+    size_t received_length;
+    FILE* F; /* NULL if stream is closed. */
+} picoquic_first_client_stream_ctx_t;
+
+typedef struct st_picoquic_first_client_callback_ctx_t {
+    struct st_picoquic_first_client_stream_ctx_t * first_stream;
+    int nb_open_streams;
+    uint32_t nb_client_streams;
+} picoquic_first_client_callback_ctx_t;
+
+static void first_client_callback(picoquic_cnx_t * cnx,
+    uint32_t stream_id, uint8_t * bytes, size_t length,
+    picoquic_call_back_event_t fin_or_event, void * callback_ctx)
+{
+    picoquic_first_client_callback_ctx_t * ctx =
+        (picoquic_first_client_callback_ctx_t*)callback_ctx;
+    picoquic_first_client_stream_ctx_t * stream_ctx = ctx->first_stream;
+
+    if (fin_or_event == picoquic_callback_close)
+    {
+        fprintf(stdout, "Received a request to close the connection.\n");
+
+        while (stream_ctx != NULL)
+        {
+            if (stream_ctx->F != NULL)
+            {
+                fclose(stream_ctx->F);
+                stream_ctx->F = NULL;
+                ctx->nb_open_streams--;
+
+                fprintf(stdout, "On stream %d, command: %s stopped after %d bytes\n",
+                    stream_ctx->stream_id, stream_ctx->command, stream_ctx->received_length);
+
+            }
+            stream_ctx = stream_ctx->next_stream;
+        }
+
+        return;
+    }
+
+    /* if stream is already present, check its state. New bytes? */
+    while (stream_ctx != NULL && stream_ctx->stream_id != stream_id)
+    {
+        stream_ctx = stream_ctx->next_stream;
+    }
+
+    if (stream_ctx == NULL || stream_ctx->F == NULL)
+    {
+        /* Unexpected stream. */
+        picoquic_reset_stream(cnx, stream_id);
+        return;
+    }
+    else if (fin_or_event == picoquic_callback_stream_reset)
+    {
+        picoquic_reset_stream(cnx, stream_id);
+        if (stream_ctx->F != NULL)
+        {
+            fclose(stream_ctx->F);
+            stream_ctx->F = NULL;
+            ctx->nb_open_streams--;
+
+            fprintf(stdout, "Reset received on stream %d, command: %s, after %d bytes\n",
+                stream_ctx->stream_id, stream_ctx->command, stream_ctx->received_length);
+        }
+        return;
+    }
+    else
+    {
+        if (length > 0)
+        {
+            (void)fwrite(bytes, 1, length, stream_ctx->F);
+        }
+
+        /* if FIN present, process request through http 0.9 */
+        if (fin_or_event == picoquic_callback_stream_fin)
+        {
+            /* if data generated, just send it. Otherwise, just FIN the stream. */
+            fclose(stream_ctx->F);
+            stream_ctx->F = NULL;
+            ctx->nb_open_streams--;
+
+            fprintf(stdout, "Received file %s, after %d bytes, closing stream %d\n",
+                &stream_ctx->command[4], stream_ctx->received_length, stream_ctx->stream_id);
+        }
+    }
+
+    /* that's it */
+}
+
+int quic_client_ui(picoquic_cnx_t * cnx, picoquic_first_client_callback_ctx_t * ctx)
+{
+    int ret = 0;
+    char text[PICOQUIC_FIRST_COMMAND_MAX];
+    size_t text_len = 0;
+    picoquic_first_client_stream_ctx_t * stream_ctx;
+
+    for (;;) {
+        fprintf(stdout, "Enter the requested document name, or return:\n");
+        if (fgets(text, sizeof(text), stdin))
+        {
+            /* remove trailing blanks */
+            text_len = strlen(text);
+            while (text_len >= 1)
+            {
+                int c = text[text_len - 1];
+
+                if (c == ' ' || c == '\t' || c == '\r' || c == '\n')
+                {
+                    text_len--;
+                    text[text_len] = 0;
+                }
+                else
+                {
+                    break;
+                }
+            }
+        }
+        else
+        {
+            text[0] = 0;
+            text_len = 0;
+        }
+
+        if (text_len == 0)
+        {
+            break;
+        }
+        else if (text_len + 7 > PICOQUIC_FIRST_COMMAND_MAX)
+        {
+            fprintf(stdout, "Name too long!\n");
+        }
+        else
+        {
+            stream_ctx = (picoquic_first_client_stream_ctx_t *)
+                malloc(sizeof(picoquic_first_client_stream_ctx_t));
+            if (stream_ctx == NULL)
+            {
+                fprintf(stdout, "Memory error!\n");
+                break;
+            }
+            else
+            {
+                memset(stream_ctx, 0, sizeof(picoquic_first_client_stream_ctx_t));
+                stream_ctx->command[0] = 'G';
+                stream_ctx->command[1] = 'E';
+                stream_ctx->command[2] = 'T';
+                stream_ctx->command[3] = ' ';
+                memcpy(&stream_ctx->command[4], text, text_len);
+                stream_ctx->command[text_len + 4] = '\r';
+                stream_ctx->command[text_len + 5] = '\n';
+                stream_ctx->command[text_len + 6] = 0;
+                stream_ctx->stream_id = (ctx->nb_client_streams * 2) + 1;
+
+                stream_ctx->next_stream = ctx->first_stream;
+                ctx->first_stream = stream_ctx;
+
+
+#ifdef WIN32
+                if (fopen_s(&stream_ctx->F, text, "w") != 0) {
+                    ret = -1;
+                }
+#else
+                stream_ctx->F = fopen(pem_fname, "r");
+                if (stream_ctx->F == NULL) {
+                    ret = -1;
+                }
+#endif
+                if (ret != 0)
+                {
+                    fprintf(stdout, "Cannot create file: %s\n", text);
+                }
+                else
+                {
+                    ctx->nb_client_streams++;
+                    ctx->nb_open_streams++;
+                }
+
+                (void) picoquic_add_to_stream(cnx, stream_ctx->stream_id, stream_ctx->command,
+                    text_len + 6, 1);
+            }
+        }
+    }
+
+    if (ctx->nb_open_streams == 0)
+    {
+
+        fprintf(stdout, "Closing the connection.\n");
+        ret = picoquic_close(cnx);
+    }
+
+    return ret;
+}
+
 int quic_client(char * ip_address_text, int server_port)
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
     picoquic_quic_t *qclient = NULL;
     picoquic_cnx_t *cnx_client = NULL;
+    picoquic_first_client_callback_ctx_t callback_ctx = { {0} };
     SOCKET_TYPE fd = INVALID_SOCKET;
     struct sockaddr_storage server_address;
     struct sockaddr_in * ipv4_dest = (struct sockaddr_in *)&server_address;
@@ -345,6 +711,7 @@ int quic_client(char * ip_address_text, int server_port)
     picoquic_packet * p = NULL;
 	uint64_t current_time = 0;
 	int client_ready_loop = 0;
+    int established = 0;
     char * sni = NULL;
 
     /* get the IP address of the server */
@@ -454,6 +821,8 @@ int quic_client(char * ip_address_text, int server_port)
         }
 		else
 		{
+            picoquic_set_callback(cnx_client, first_client_callback, &callback_ctx);
+
 			p = picoquic_create_packet();
 
 			if (p == NULL)
@@ -526,16 +895,23 @@ int quic_client(char * ip_address_text, int server_port)
 				current_time += 1000000;
 			}
 
-			if (ret == 0 && picoquic_get_cnx_state(cnx_client) == picoquic_state_client_ready /* &&
-				cnx_client->first_stream.stream_data == NULL */)
+			if (ret == 0 && picoquic_get_cnx_state(cnx_client) == picoquic_state_client_ready)
 			{
-				client_ready_loop++;
+                if (established == 0)
+                {
+                    picoquic_log_transport_extension(stdout, cnx_client);
+                    printf("Connection established.\n");
+                    established = 1;
+                }
 
-				if (bytes_recv == 0 || client_ready_loop > 4)
+                client_ready_loop++;
+
+
+				if ((bytes_recv == 0 || client_ready_loop > 4 ) &&
+                    callback_ctx.nb_open_streams == 0)
 				{
-					picoquic_log_transport_extension(stdout, cnx_client);
-					printf("Connection established. Disconnecting now.\n");
-					ret = picoquic_close(cnx_client);
+                    ret = quic_client_ui(cnx_client, &callback_ctx);
+                    client_ready_loop = 0;
 				}
 			}
 

@@ -267,6 +267,12 @@ static void test_api_callback(picoquic_cnx_t * cnx,
 	int is_client_stream = (stream_id & 1);
 	picoquic_call_back_event_t stream_finished = picoquic_callback_no_event;
 
+    if (fin_or_event == picoquic_callback_close)
+    {
+        /* do nothing in our tests */
+        return;
+    }
+
 	if (cb_ctx->client_mode)
 	{
 		ctx = (picoquic_test_tls_api_ctx_t *)(

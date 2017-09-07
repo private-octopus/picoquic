@@ -364,6 +364,10 @@ int picoquic_retransmit_needed(picoquic_cnx_t * cnx, uint64_t current_time,
 						 * Max retransmission count was exceeded. Disconnect.
 						 */
 						cnx->cnx_state = picoquic_state_disconnected;
+                        if (cnx->callback_fn)
+                        {
+                            (cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx);
+                        }
 						length = 0;
 						should_retransmit = 0;
 						break;
@@ -525,15 +529,29 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 
 		if (cnx->cnx_state == picoquic_state_disconnecting)
 		{
-			/* Content is just a disconnect frame */
-			size_t consumed = 0;
-			ret = picoquic_prepare_connection_close_frame(cnx, bytes + header_length,
+            size_t consumed = 0;
+            /* add a final ack so receiver gets clean state */
+            ret = picoquic_prepare_ack_frame(cnx, current_time, &bytes[length],
+                cnx->send_mtu - checksum_overhead - length, &consumed);
+            if (ret == 0)
+            {
+                length += consumed;
+            }
+
+            consumed = 0;
+			/* Send the disconnect frame */
+			ret = picoquic_prepare_connection_close_frame(cnx, bytes + length,
 				cnx->send_mtu - checksum_overhead - length, &consumed);
 			if (ret == 0)
 			{
 				length += consumed;
 			}
+
 			cnx->cnx_state = picoquic_state_disconnected;
+            if (cnx->callback_fn)
+            {
+                (cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx);
+            }
 		}
 		else if ((stream == NULL || cnx->cwin <= cnx->bytes_in_transit) &&
 			picoquic_is_ack_needed(cnx, current_time) == 0)

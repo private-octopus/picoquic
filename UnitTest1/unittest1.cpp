@@ -100,7 +100,6 @@ namespace UnitTest1
 			Assert::AreEqual(ret, 0);
 		}
 
-
 		TEST_METHOD(test_tls_api)
 		{
 			int ret = tls_api_test();

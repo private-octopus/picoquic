@@ -601,8 +601,12 @@ int picoquic_incoming_encrypted(
 				cmp_reset_secret == 0)
 			{
 				/* Stateless reset. The connection should be abandonned */
-				/* TODO: clean up the pending streams. */
 				cnx->cnx_state = picoquic_state_disconnected;
+
+                if (cnx->callback_fn)
+                {
+                    (cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx);
+                }
 			}
 			ret = PICOQUIC_ERROR_AEAD_CHECK;
         }

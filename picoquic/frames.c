@@ -1386,7 +1386,10 @@ int picoquic_decode_connection_close_frame(picoquic_cnx_t * cnx, uint8_t * bytes
 			cnx->cnx_state = picoquic_state_disconnected;
 			cnx->remote_error = error_code;
 			*consumed = string_length + 7;
-			/* TODO: call back */
+            if (cnx->callback_fn)
+            {
+                (cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx);
+            }
 		}
 	}
 
