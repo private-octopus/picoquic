@@ -15,7 +15,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="picoquicfirst.c">
+    <ClCompile Include="picoquicdemo.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
