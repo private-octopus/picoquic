@@ -567,6 +567,7 @@ static void first_client_callback(picoquic_cnx_t * cnx,
         if (length > 0)
         {
             (void)fwrite(bytes, 1, length, stream_ctx->F);
+            stream_ctx->received_length += length;
         }
 
         /* if FIN present, process request through http 0.9 */
