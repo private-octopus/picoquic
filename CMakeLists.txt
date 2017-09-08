@@ -46,7 +46,7 @@ ADD_LIBRARY(picoquic-core ${PICOQUIC_LIBRARY_FILES})
 
 ADD_LIBRARY(picoquic-test ${PICOQUIC_TEST_LIBRARY_FILES})
 
-ADD_EXECUTABLE(picoquicdemo picoquicdemo/picoquicdemo.c ${PICOQUIC_LIBRARY_FILES})
+ADD_EXECUTABLE(picoquicdemo picoquicfirst/picoquicdemo.c ${PICOQUIC_LIBRARY_FILES})
 
 ADD_EXECUTABLE(picoquicclitest picoquicclitest/picoquicclitest.c ${PICOQUIC_TEST_LIBRARY_FILES} ${PICOQUIC_LIBRARY_FILES})
 
