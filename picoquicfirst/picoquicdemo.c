@@ -44,6 +44,15 @@
 #define WSA_START(x, y) WSAStartup((x), (y))
 #endif
 #else
+#include <stdint.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
 #ifndef SOCKET_TYPE 
 #define SOCKET_TYPE int
 #endif
