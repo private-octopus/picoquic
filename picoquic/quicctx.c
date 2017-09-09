@@ -19,6 +19,8 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <stdlib.h>
+#include <string.h>
 #include "picoquic_internal.h"
 #include "tls_api.h"
 
@@ -386,8 +388,6 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
 
 		if ((quic->flags &picoquic_context_server) == 0)
 		{
-			int ret = 0;
-
 			if (preferred_version == 0)
 			{
 				cnx->proposed_version = picoquic_supported_versions[0];

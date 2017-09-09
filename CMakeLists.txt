@@ -7,7 +7,7 @@ PROJECT(picoquic)
 
 SET(CMAKE_C_FLAGS "-std=c99 -Wall -O2 -g ${CC_WARNING_FLAGS} ${CMAKE_C_FLAGS}")
 
-INCLUDE_DIRECTORIES(picoquic picoquictest)
+INCLUDE_DIRECTORIES(picoquic picoquictest $PICOTLS_INCLUDE_DIR $OPENSSL_INCLUDE_DIR)
 
 SET(PICOQUIC_LIBRARY_FILES
     picoquic/fnv1a.c

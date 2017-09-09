@@ -30,7 +30,7 @@
  * simple and easy to program. But we don't use rand() because visual studio 
  * would call it unsafe, or other packages because we don't want to be bothered
  * with portability issues. The constant here are those of Knuth's MMIX */
-static uint64_t http09_rand(seed)
+static uint64_t http09_rand(uint64_t seed)
 {
     const uint64_t a = 6364136223846793005ull;
     const uint64_t c = 1442695040888963407ull;

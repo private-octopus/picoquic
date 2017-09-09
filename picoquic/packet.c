@@ -28,6 +28,8 @@
  */
 
 #include <stdint.h>
+#include <string.h>
+#include <stdlib.h>
 #include "picoquic_internal.h"
 #include "fnv1a.h"
 #include "tls_api.h"
@@ -161,7 +163,6 @@ int picoquic_incoming_version_negotiation(
 	uint64_t current_time)
 {
 	/* Parse the content */
-	size_t byte_index = ph->offset;
 	int ret = -1;
 
 	if (ph->cnx_id != cnx->initial_cnxid ||
@@ -322,7 +323,6 @@ picoquic_cnx_t * picoquic_incoming_initial(
 			if (cnx != NULL)
 			{
 				int ret = 0;
-				uint32_t seq_init = 0;
 				
 				ret = picoquic_decode_frames(cnx,
                     bytes +ph->offset, decoded_length - ph->offset, 1, current_time);
@@ -653,7 +653,6 @@ int picoquic_incoming_packet(
     int ret = 0;
     picoquic_cnx_t * cnx = NULL;
     picoquic_packet_header ph;
-    size_t decoded_length = 0;
 
     /* Parse the clear text header */
     ret = picoquic_parse_packet_header(bytes, length, &ph);

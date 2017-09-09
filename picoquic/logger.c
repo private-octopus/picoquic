@@ -33,7 +33,7 @@ void picoquic_log_error_packet(FILE * F, uint8_t * bytes, size_t bytes_max, int 
 
 	for (size_t i = 0; i < bytes_max;)
 	{
-		fprintf(F, "%04x:  ", i);
+		fprintf(F, "%04x:  ", (int)i);
 
 		for (int j = 0; j < 16 && i < bytes_max; j++, i++)
 		{
@@ -48,23 +48,21 @@ void picoquic_log_packet_address(FILE* F, picoquic_cnx_t * cnx,
 	struct sockaddr * addr_peer, int receiving, size_t length)
 {
 	fprintf(F, (receiving)? "Receiving %d bytes from ":"Sending %d bytes to ",
-		length);
+		(int)length);
 
 	if (addr_peer->sa_family == AF_INET)
 	{
 		struct sockaddr_in * s4 = (struct sockaddr_in *)addr_peer;
+                uint8_t * addr = (uint8_t *) &s4->sin_addr;
 
 		fprintf(F, "%d.%d.%d.%d:%d\n",
-			s4->sin_addr.S_un.S_un_b.s_b1,
-			s4->sin_addr.S_un.S_un_b.s_b2,
-			s4->sin_addr.S_un.S_un_b.s_b3,
-			s4->sin_addr.S_un.S_un_b.s_b4,
+			addr[0], addr[1], addr[2], addr[3],
 			ntohs(s4->sin_port));
 	}
 	else
 	{
-		int zero_found = 0;
 		struct sockaddr_in6 * s6 = (struct sockaddr_in6 *)addr_peer;
+                uint8_t * addr = (uint8_t *) &s6->sin6_addr;
 
 		for (int i = 0; i < 8; i++)
 		{
@@ -73,13 +71,13 @@ void picoquic_log_packet_address(FILE* F, picoquic_cnx_t * cnx,
 				fprintf(F, ":");
 			}
 
-			if (s6->sin6_addr.u.Byte[2 * i] != 0)
+			if (addr[2 * i] != 0)
 			{
-				fprintf(F, "%x%02x", s6->sin6_addr.u.Byte[2 * i], s6->sin6_addr.u.Byte[(2 * i) + 1]);
+				fprintf(F, "%x%02x", addr[2 * i], addr[(2 * i) + 1]);
 			}
 			else
 			{
-				fprintf(F, "%x", s6->sin6_addr.u.Byte[(2 * i) + 1]);
+				fprintf(F, "%x", addr[(2 * i) + 1]);
 			}
 		}
 		fprintf(F, "\n");
@@ -116,9 +114,10 @@ char const * picoquic_log_ptype_name(picoquic_packet_type_enum ptype)
 void picoquic_log_packet_header(FILE* F, picoquic_cnx_t * cnx, picoquic_packet_header * ph)
 {
 	fprintf(F, "    Type: %d(%s), CnxID: %llx%s, Seq: %x (%llx), Version %x\n",
-		ph->ptype, picoquic_log_ptype_name(ph->ptype), ph->cnx_id,
+		ph->ptype, picoquic_log_ptype_name(ph->ptype),
+                (unsigned long long)ph->cnx_id,
 		(cnx == NULL) ? " (unknown)" : "",
-		ph->pn, ph->pn64, ph->vn);
+		ph->pn, (unsigned long long)ph->pn64, ph->vn);
 }
 
 void picoquic_log_negotiation_packet(FILE* F, 
@@ -141,7 +140,6 @@ void picoquic_log_negotiation_packet(FILE* F,
 
 int picoquic_log_stream_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
 {
-	int ret = 0;
 	size_t byte_index = 1;
 	uint8_t first_byte = bytes[0];
 	uint8_t stream_id_length = 1 + ((first_byte >> 3) & 3);
@@ -219,7 +217,8 @@ int picoquic_log_stream_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
 			byte_index += 2;
 		}
 
-		fprintf(F, "    Stream %d, offset %llu, length %d", stream_id, offset, data_length);
+		fprintf(F, "    Stream %d, offset %llu, length %d", stream_id, 
+                    (unsigned long long)offset, (int)data_length);
 
 		if (byte_index + data_length > bytes_max)
 		{
@@ -255,7 +254,6 @@ size_t picoquic_log_ack_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
 	uint64_t largest;
 	uint64_t last_range = 0;
 	uint64_t ack_range = 0;
-	uint64_t acked_mask = 0;
 	uint64_t gap;
 	size_t min_size;
 
@@ -316,7 +314,8 @@ size_t picoquic_log_ack_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
 
 	if (min_size > bytes_max)
 	{
-		fprintf(F, "    Malformed ACK, requires %d bytes out of %d\n", min_size, bytes_max);
+		fprintf(F, "    Malformed ACK, requires %d bytes out of %d\n", 
+                    (int) min_size, (int) bytes_max);
 		return bytes_max;
 	}
 
@@ -343,7 +342,7 @@ size_t picoquic_log_ack_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
 		break;
 	case 3:
 		largest = PICOPARSE_64(bytes + byte_index);
-		fprintf(F, "Largest = %llx, ", largest);
+		fprintf(F, "Largest = %llx, ", (unsigned long long) largest);
 		byte_index += 8;
 		break;
 	}
@@ -370,7 +369,7 @@ size_t picoquic_log_ack_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
 		byte_index += 8;
 		break;
 	}
-	fprintf(F, "range: %llx, ", last_range);
+	fprintf(F, "range: %llx, ", (unsigned long long) last_range);
 
 	for (int i = 0; ret == 0 && i < num_block; i++)
 	{
@@ -396,7 +395,8 @@ size_t picoquic_log_ack_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
 			break;
 		}
 
-		fprintf(F, "gap: %llx, range: %llx, ", gap, ack_range);
+		fprintf(F, "gap: %llx, range: %llx, ", 
+                     (unsigned long long) gap, (unsigned long long) ack_range);
 	}
 
 	if (ret == 0)
@@ -422,7 +422,6 @@ size_t picoquic_log_ack_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
 
 size_t picoquic_log_reset_stream_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
 {
-	int ret = 0;
 	size_t byte_index = 1;
 	const size_t min_size = 1 + 4 + 4 + 8;
 	uint32_t stream_id;
@@ -431,7 +430,7 @@ size_t picoquic_log_reset_stream_frame(FILE * F, uint8_t * bytes, size_t bytes_m
 
 	if (min_size > bytes_max)
 	{
-		fprintf(F, "    Malformed RESET STREAM, requires %d bytes out of %d\n", min_size, bytes_max);
+		fprintf(F, "    Malformed RESET STREAM, requires %d bytes out of %d\n", (int) min_size, (int) bytes_max);
 		return bytes_max;
 	}
 
@@ -445,14 +444,13 @@ size_t picoquic_log_reset_stream_frame(FILE * F, uint8_t * bytes, size_t bytes_m
 
 
 	fprintf(F, "    Stream %d (0x%08x), Error 0x%08x, Offset 0x%llx.\n", 
-		stream_id, stream_id, error_code, offset);
+		stream_id, stream_id, error_code, (unsigned long long) offset);
 
 	return byte_index;
 }
 
 size_t picoquic_log_go_away_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
 {
-	int ret = 0;
 	size_t byte_index = 1;
 	const size_t min_size = 1 + 4 + 4;
 	uint32_t max_stream_id_client;
@@ -460,7 +458,7 @@ size_t picoquic_log_go_away_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
 
 	if (min_size > bytes_max)
 	{
-		fprintf(F, "    Malformed MAX STREAM ID, requires %d bytes out of %d\n", min_size, bytes_max);
+		fprintf(F, "    Malformed MAX STREAM ID, requires %d bytes out of %d\n", (int)min_size, (int)bytes_max);
 		return bytes_max;
 	}
 
@@ -480,7 +478,6 @@ size_t picoquic_log_go_away_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
 
 size_t picoquic_log_connection_close_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
 {
-	int ret = 0;
 	size_t byte_index = 1;
 	size_t min_size = 1 + 4 + 2;
 	uint32_t error_code;
@@ -488,7 +485,7 @@ size_t picoquic_log_connection_close_frame(FILE * F, uint8_t * bytes, size_t byt
 
 	if (min_size > bytes_max)
 	{
-		fprintf(F, "    Malformed CONNECTION CLOSE, requires %d bytes out of %d\n", min_size, bytes_max);
+		fprintf(F, "    Malformed CONNECTION CLOSE, requires %d bytes out of %d\n", (int) min_size, (int) bytes_max);
 		return bytes_max;
 	}
 
@@ -504,7 +501,7 @@ size_t picoquic_log_connection_close_frame(FILE * F, uint8_t * bytes, size_t byt
 	if (byte_index + string_length > bytes_max)
 	{
 		fprintf(F, "    Malformed CONNECTION CLOSE, requires %d bytes out of %d\n", 
-			byte_index + string_length, bytes_max);
+			(int)(byte_index + string_length), (int) bytes_max);
 		byte_index = bytes_max;
 	}
 	else
@@ -518,14 +515,13 @@ size_t picoquic_log_connection_close_frame(FILE * F, uint8_t * bytes, size_t byt
 
 size_t picoquic_log_max_data_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
 {
-	int ret = 0;
 	size_t byte_index = 1;
 	const size_t min_size = 1 + 8;
 	uint64_t max_data;
 
 	if (min_size > bytes_max)
 	{
-		fprintf(F, "    Malformed MAX DATA, requires %d bytes out of %d\n", min_size, bytes_max);
+		fprintf(F, "    Malformed MAX DATA, requires %d bytes out of %d\n", (int) min_size, (int) bytes_max);
 		return bytes_max;
 	}
 
@@ -533,14 +529,13 @@ size_t picoquic_log_max_data_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
 	max_data = PICOPARSE_64(bytes + byte_index);
 	byte_index += 8;
 
-	fprintf(F, "    Max data: 0x%llx.\n", max_data);
+	fprintf(F, "    Max data: 0x%llx.\n", (unsigned long long) max_data);
 
 	return byte_index;
 }
 
 size_t picoquic_log_max_stream_data_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
 {
-	int ret = 0;
 	size_t byte_index = 1;
 	const size_t min_size = 1 + 4 + 8;
 	uint32_t stream_id;
@@ -548,7 +543,7 @@ size_t picoquic_log_max_stream_data_frame(FILE * F, uint8_t * bytes, size_t byte
 
 	if (min_size > bytes_max)
 	{
-		fprintf(F, "    Malformed MAX STREAM DATA, requires %d bytes out of %d\n", min_size, bytes_max);
+		fprintf(F, "    Malformed MAX STREAM DATA, requires %d bytes out of %d\n", (int) min_size, (int) bytes_max);
 		return bytes_max;
 	}
 
@@ -559,21 +554,20 @@ size_t picoquic_log_max_stream_data_frame(FILE * F, uint8_t * bytes, size_t byte
 	byte_index += 8;
 
 	fprintf(F, "    Stream: %d (0x%08x), max data: 0x%llx.\n", 
-		stream_id, stream_id, max_data);
+		stream_id, stream_id, (unsigned long long) max_data);
 
 	return byte_index;
 }
 
 size_t picoquic_log_max_stream_id_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
 {
-	int ret = 0;
 	size_t byte_index = 1;
 	const size_t min_size = 1 + 4;
 	uint32_t max_stream_id;
 
 	if (min_size > bytes_max)
 	{
-		fprintf(F, "    Malformed MAX STREAM ID, requires %d bytes out of %d\n", min_size, bytes_max);
+		fprintf(F, "    Malformed MAX STREAM ID, requires %d bytes out of %d\n", (int) min_size, (int) bytes_max);
 		return bytes_max;
 	}
 
@@ -589,14 +583,13 @@ size_t picoquic_log_max_stream_id_frame(FILE * F, uint8_t * bytes, size_t bytes_
 
 size_t picoquic_log_stream_blocked_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
 {
-	int ret = 0;
 	size_t byte_index = 1;
 	const size_t min_size = 1 + 4;
 	uint32_t blocked_stream_id;
 
 	if (min_size > bytes_max)
 	{
-		fprintf(F, "    Malformed STREAM BLOCKED, requires %d bytes out of %d\n", min_size, bytes_max);
+		fprintf(F, "    Malformed STREAM BLOCKED, requires %d bytes out of %d\n", (int) min_size, (int) bytes_max);
 		return bytes_max;
 	}
 
@@ -612,14 +605,13 @@ size_t picoquic_log_stream_blocked_frame(FILE * F, uint8_t * bytes, size_t bytes
 
 size_t picoquic_log_new_connection_id_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
 {
-	int ret = 0;
 	size_t byte_index = 1;
 	const size_t min_size = 1 + 8;
 	uint64_t new_cnx_id;
 
 	if (min_size > bytes_max)
 	{
-		fprintf(F, "    Malformed New Connection Id, requires %d bytes out of %d\n", min_size, bytes_max);
+		fprintf(F, "    Malformed New Connection Id, requires %d bytes out of %d\n", (int) min_size, (int) bytes_max);
 		return bytes_max;
 	}
 
@@ -628,7 +620,7 @@ size_t picoquic_log_new_connection_id_frame(FILE * F, uint8_t * bytes, size_t by
 	byte_index += 8;
 
 	fprintf(F, "    New connection id: 0x%016llx.\n",
-		new_cnx_id);
+		(unsigned long long) new_cnx_id);
 
 	return byte_index;
 }
@@ -655,7 +647,6 @@ static const size_t picoquic_nb_log_frame_names = sizeof(picoquic_log_frame_name
 void picoquic_log_frames(FILE* F, uint8_t * bytes, size_t length)
 {
 	size_t byte_index = 0;
-	size_t consumed = 0;
 
 	while (byte_index < length)
 	{
@@ -669,7 +660,7 @@ void picoquic_log_frames(FILE* F, uint8_t * bytes, size_t length)
 		}
 		else if(bytes[byte_index] == 0)
 		{
-			size_t nb_pad = 0;
+			int nb_pad = 0;
 
 			while (bytes[byte_index] == 0)
 			{
@@ -677,7 +668,7 @@ void picoquic_log_frames(FILE* F, uint8_t * bytes, size_t length)
 				nb_pad++;
 			}
 
-			fprintf(F, "Padding, %d bytes\n", nb_pad);
+			fprintf(F, "    Padding, %d bytes\n", nb_pad);
 		}
 		else
 		{
@@ -781,7 +772,7 @@ void picoquic_log_decrypt_encrypted(FILE* F,
 	}
 	else
 	{
-		fprintf(F, "    Decrypted %d bytes\n", decrypted_length);
+		fprintf(F, "    Decrypted %d bytes\n", (int) decrypted_length);
 		picoquic_log_frames(F, decrypted, decrypted_length);
 	}
 }
@@ -885,7 +876,7 @@ static const size_t picoquic_nb_log_state_name = sizeof(picoquic_log_state_name)
 void picoquic_log_processing(FILE* F, picoquic_cnx_t * cnx, size_t length, int ret)
 {
 	fprintf(F, "Processed %d bytes, state = %d (%s), return %d\n\n",
-		length, cnx->cnx_state,
+		(int) length, cnx->cnx_state,
 		(((size_t)cnx->cnx_state) < picoquic_nb_log_state_name) ?
 		picoquic_log_state_name[(size_t)cnx->cnx_state] : "unknown",
 		ret);
@@ -980,7 +971,7 @@ void picoquic_log_transport_extension(FILE* F, picoquic_cnx_t * cnx)
 				else
 				{
 					size_t nb_supported_versions = supported_versions_size / 4;
-					fprintf(F, "    Supported version (%d bytes):\n", supported_versions_size);
+					fprintf(F, "    Supported version (%d bytes):\n", (int) supported_versions_size);
 
 					for (size_t i = 0; i < nb_supported_versions; i++)
 					{

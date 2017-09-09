@@ -19,6 +19,8 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <string.h>
+#include <stdlib.h>
 #include "picoquic_internal.h"
 #include "fnv1a.h"
 #include "tls_api.h"
@@ -424,9 +426,7 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 	size_t data_bytes = 0;
 	uint64_t cnx_id = cnx->server_cnxid;
 	int retransmit_possible = 0;
-	picoquic_packet * retransmit_packet = NULL;
-	size_t bytes_index = 0;
-	int header_length = 0;
+	size_t header_length = 0;
 	uint8_t * bytes = packet->bytes;
 	size_t length = 0;
 

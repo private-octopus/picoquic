@@ -20,6 +20,8 @@
 */
 
 /* Decoding of the various frames, and application to context */
+#include <stdlib.h>
+#include <string.h>
 #include "picoquic_internal.h"
 
 picoquic_stream_head * picoquic_create_stream(picoquic_cnx_t * cnx, uint32_t stream_id)
@@ -411,7 +413,6 @@ int picoquic_stream_network_input(picoquic_cnx_t * cnx, uint32_t stream_id,
         picoquic_stream_data ** pprevious = &stream->stream_data;
         picoquic_stream_data * next = stream->stream_data;
         size_t start = 0;
-        int overlap = 0;
 
         if (offset <= stream->consumed_offset)
         {
@@ -997,7 +998,6 @@ void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t * cnx, picoquic_p
 	int ret = 0;
 	size_t byte_index;
 	picoquic_packet_header ph;
-	int packet_is_pure_ack = 1;
 	int frame_is_pure_ack = 0;
 	size_t frame_length = 0;
 
@@ -1076,7 +1076,6 @@ int picoquic_decode_ack_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
 	uint64_t largest = 0;
 	uint64_t last_range = 0;
 	uint64_t ack_range = 0;
-	uint64_t acked_mask = 0;
 	uint64_t gap_begin;
 	uint64_t ack_delay = 0;
 	picoquic_packet * top_packet = cnx->retransmit_newest;
@@ -1229,11 +1228,7 @@ int picoquic_prepare_ack_frame(picoquic_cnx_t * cnx, uint64_t current_time,
 {
 	int ret = 0;
 	size_t byte_index = 0;
-	int has_num_block = 0; 
 	int num_block = 0;
-	int num_ts = 0;
-	int ll = 2; /* always use 32 bits encoding for now*/
-	int mm = 2;
 	picoquic_sack_item_t * next_sack = cnx->first_sack_item.next_sack;
 	uint64_t ack_delay = 0;
 	uint64_t ack_range = 0;
@@ -1365,7 +1360,6 @@ int picoquic_decode_connection_close_frame(picoquic_cnx_t * cnx, uint8_t * bytes
 	const size_t min_length = 1 + 4 + 2;
 	uint32_t error_code;
 	uint16_t string_length;
-	int byte_index = 0;
 
 	if (bytes_max < min_length)
 	{
@@ -1631,7 +1625,6 @@ int picoquic_decode_max_stream_id_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
 	int ret = 0;
 	const size_t min_length = 1 + 4;
 	uint32_t max_stream_id;
-	picoquic_stream_head * stream = NULL;
 
 	if (bytes_max < min_length)
 	{
