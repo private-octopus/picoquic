@@ -22,6 +22,7 @@
 #ifdef WIN32
 #include "wincompat.h"
 #endif
+#include <string.h>
 #include <stdio.h>
 #include <openssl/pem.h>
 #include "picotls.h"
@@ -81,7 +82,7 @@ static X509* openPemFile(char* filename)
     return cert;
 }
 
-static int get_certificates(char * pem_fname, ptls_iovec_t ** list, int * nb_certs)
+static int get_certificates(char * pem_fname, ptls_iovec_t ** list, size_t * nb_certs)
 {
     int ret = 0;
     size_t count = 0;
@@ -162,7 +163,6 @@ static int SetSignCertificate(char * keypem, ptls_context_t * ctx)
  * internal state of random number generator */
 void picoquic_crypto_random(picoquic_quic_t * quic, void * buf, size_t len)
 {
-    int ret = 0;
     ptls_context_t *ctx = (ptls_context_t *)quic->tls_master_ctx;
 
     ctx->random_bytes(buf, len);
@@ -303,7 +303,7 @@ int picoquic_client_hello_call_back(ptls_on_client_hello_t * on_hello_cb_ctx,
 			if (negotiated_protocols[i].len > 0)
 			{
 				ptls_set_negotiated_protocol(tls,
-					negotiated_protocols[i].base, negotiated_protocols[i].len);
+					(char const *)negotiated_protocols[i].base, negotiated_protocols[i].len);
 				break;
 			}
 		}

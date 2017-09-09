@@ -22,6 +22,7 @@
 #include "../picoquic/picoquic_internal.h"
 #include <stdlib.h>
 #include <malloc.h>
+#include <string.h>
 
 /* 
  * Cnx creation unit test
@@ -71,24 +72,26 @@ int cnxcreation_test()
      */
     for (int i = 0; i < 4; i++)
     {
+        uint8_t * addr = (uint8_t*)&test4[i].sin_addr;
         memset(&test4[i], 0, sizeof(test4[i]));
         test4[i].sin_family = AF_INET;
-        test4[i].sin_addr.S_un.S_un_b.s_b1 = test_ipv4[0];
-        test4[i].sin_addr.S_un.S_un_b.s_b2 = test_ipv4[1];
-        test4[i].sin_addr.S_un.S_un_b.s_b3 = test_ipv4[2];
-        test4[i].sin_addr.S_un.S_un_b.s_b4 = (i == 0) ? 1 : 2;
+        addr[0] = test_ipv4[0];
+        addr[1] = test_ipv4[1];
+        addr[2] = test_ipv4[2];
+        addr[3] = (i == 0) ? 1 : 2;
         test4[i].sin_port = 1000 + i;
     }
 
     for (int i = 0; i < 2; i++)
     {
+        uint8_t * addr = (uint8_t*)&test6[i].sin6_addr;
         memset(&test6[i], 0, sizeof(test6[i]));
         test6[i].sin6_family = AF_INET6;
         for (int j = 0; j < 15; j++)
         {
-            test6[i].sin6_addr.u.Byte[j] = test_ipv6[j];
+            addr[j] = test_ipv6[j];
         }
-        test6[i].sin6_addr.u.Byte[15] = i + 1;
+        addr[15] = i + 1;
         test6[i].sin6_port = 1000 + i;
     }
 

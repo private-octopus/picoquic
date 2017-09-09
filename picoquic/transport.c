@@ -57,6 +57,7 @@
  *   } TransportParameters;
  */
 
+#include <string.h>
 #include "picoquic_internal.h"
 
 typedef enum {

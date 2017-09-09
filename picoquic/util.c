@@ -20,6 +20,9 @@
 */
 
 /* Simple set of utilities */
+
+#include <stdlib.h>
+#include <string.h>
 #include "picoquic_internal.h"
 
 char * picoquic_string_create(const char * original, size_t len)

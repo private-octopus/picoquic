@@ -7,7 +7,9 @@ PROJECT(picoquic)
 
 SET(CMAKE_C_FLAGS "-std=c99 -Wall -O2 -g ${CC_WARNING_FLAGS} ${CMAKE_C_FLAGS}")
 
-INCLUDE_DIRECTORIES(picoquic picoquictest $PICOTLS_INCLUDE_DIR $OPENSSL_INCLUDE_DIR)
+INCLUDE_DIRECTORIES(picoquic picoquictest ../picotls/include
+    ${PICOTLS_INCLUDE_DIR}
+    ${OPENSSL_INCLUDE_DIR})
 
 SET(PICOQUIC_LIBRARY_FILES
     picoquic/fnv1a.c
@@ -48,6 +50,6 @@ ADD_LIBRARY(picoquic-test ${PICOQUIC_TEST_LIBRARY_FILES})
 
 ADD_EXECUTABLE(picoquicdemo picoquicfirst/picoquicdemo.c ${PICOQUIC_LIBRARY_FILES})
 
-ADD_EXECUTABLE(picoquicclitest picoquicclitest/picoquicclitest.c ${PICOQUIC_TEST_LIBRARY_FILES} ${PICOQUIC_LIBRARY_FILES})
+ADD_EXECUTABLE(picoquic_t picoquic_t/picoquic_t.c ${PICOQUIC_TEST_LIBRARY_FILES} ${PICOQUIC_LIBRARY_FILES})
 
-SET(TEST_EXES picoquicclitest)
+SET(TEST_EXES picoquic_t)
