@@ -19,8 +19,9 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "../picoquic/fnv1a.h"
 #include <stdlib.h>
+#include <stdint.h>
+#include "../picoquic/fnv1a.h"
 
 int fnv1atest()
 {

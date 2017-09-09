@@ -153,7 +153,6 @@ static int StreamZeroFrameOneTest(struct test_case_st * test)
     int ret = 0;
     picoquic_cnx_t cnx = { 0 };
     size_t consumed = 0;
-    size_t offset_max = 0;
     uint64_t current_time = 0;
 
     for (size_t i = 0; ret == 0 && i < test->list_size; i++)
@@ -169,9 +168,7 @@ static int StreamZeroFrameOneTest(struct test_case_st * test)
     {
         /* Check the content of all the data in the context */
         picoquic_stream_data * data = cnx.first_stream.stream_data;
-        size_t combined_length = 0;
         size_t data_rank = 0;
-        size_t offset = 0;
 
         while (data != NULL)
         {

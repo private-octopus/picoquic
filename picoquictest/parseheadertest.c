@@ -23,8 +23,6 @@
 #include <stdlib.h>
 
 /* test vectors and corresponding structure */
-static uint8_t perror_empty[] = {
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 
 static uint8_t pinitial[] = {
     0x82,

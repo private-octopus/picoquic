@@ -1,7 +1,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-
+#include <string.h>
 
 
 int http0dot9_get(uint8_t * command, size_t command_length,
@@ -38,7 +38,7 @@ int http0dot9_test_one(char const * command, int expected_ret, size_t expected_l
                 ret = -1;
             }
 #else
-            F = fopen(pem_fname, "r");
+            F = fopen(fileName, "r");
             if (F == NULL) {
                 ret = -1;
             }

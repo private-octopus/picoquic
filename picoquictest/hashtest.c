@@ -19,9 +19,9 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "../picoquic/picohash.h"
 #include <stdlib.h>
 #include <malloc.h>
+#include "../picoquic/picohash.h"
 
 struct hashtestkey
 {
@@ -59,7 +59,6 @@ int picohash_test()
 {
     /* Create a hash table */
     int ret = 0;
-    const int bin_size = 32;
     picohash_table * t = picohash_create(32, hashtest_hash, hashtest_compare);
 
     if (t == NULL)

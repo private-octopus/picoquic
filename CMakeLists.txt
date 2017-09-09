@@ -50,6 +50,6 @@ ADD_LIBRARY(picoquic-test ${PICOQUIC_TEST_LIBRARY_FILES})
 
 ADD_EXECUTABLE(picoquicdemo picoquicfirst/picoquicdemo.c ${PICOQUIC_LIBRARY_FILES})
 
-ADD_EXECUTABLE(picoquic_t picoquic_t/picoquic_t.c ${PICOQUIC_TEST_LIBRARY_FILES} ${PICOQUIC_LIBRARY_FILES})
+ADD_EXECUTABLE(picoquic_ct picoquic_t/picoquic_t.c ${PICOQUIC_TEST_LIBRARY_FILES} ${PICOQUIC_LIBRARY_FILES})
 
-SET(TEST_EXES picoquic_t)
+SET(TEST_EXES picoquic_ct)

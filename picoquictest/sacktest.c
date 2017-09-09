@@ -21,6 +21,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <stdlib.h>
 #include "../picoquic/picoquic_internal.h"
 
 /*
@@ -71,7 +72,7 @@ int sacktest()
     picoquic_cnx_t cnx;
     uint64_t current_time;
     uint64_t highest_seen = 0;
-    uint64_t highest_seen_time;
+    uint64_t highest_seen_time = 0;
 
     memset(&cnx, 0, sizeof(cnx));
 

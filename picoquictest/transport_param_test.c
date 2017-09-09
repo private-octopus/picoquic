@@ -92,9 +92,11 @@ int transport_param_one_test(int mode, uint32_t version, uint32_t proposed_versi
 	picoquic_transport_parameters * param, uint8_t * target, size_t target_length)
 {
 	int ret = 0;
-	picoquic_cnx_t test_cnx = { {0} };
+	picoquic_cnx_t test_cnx;
 	uint8_t buffer[256];
 	size_t encoded, decoded;
+
+	memset(&test_cnx, 0, sizeof(picoquic_cnx_t));
 
 	/* initialize the connection object to the test parameters */
 	memcpy(&test_cnx.local_parameters, param, sizeof(picoquic_transport_parameters));
@@ -143,11 +145,12 @@ int transport_param_fuzz_test(int mode, uint32_t version, uint32_t proposed_vers
 {
 	int ret = 0;
 	int fuzz_ret = 0;
-	picoquic_cnx_t test_cnx = { { 0 } };
+	picoquic_cnx_t test_cnx;
 	uint8_t buffer[256];
 	size_t decoded;
 	uint8_t fuzz_byte = 1;
 
+	memset(&test_cnx, 0, sizeof(picoquic_cnx_t));
 	/* test for valid arguments */
 	if (target_length < 8 || target_length > sizeof(buffer))
 	{

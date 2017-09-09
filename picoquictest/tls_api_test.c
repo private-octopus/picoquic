@@ -19,6 +19,9 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <stdlib.h>
+#include <string.h>
+#include <stddef.h>
 #include "../picoquic/picoquic_internal.h"
 #include "../picoquic/tls_api.h"
 #include "picoquictest_internal.h"
@@ -145,7 +148,7 @@ static int test_api_init_test_stream(test_api_stream_t * test_stream,
 {
 	int ret = 0;
 
-	memset(test_stream, 0, sizeof(test_stream));
+	memset(test_stream, 0, sizeof(test_api_stream_t));
 
 	if (q_len != 0)
 	{
@@ -196,7 +199,7 @@ static void test_api_delete_test_stream(test_api_stream_t * test_stream)
 		free(test_stream->r_rcv);
 	}
 
-	memset(test_stream, 0, sizeof(test_stream));
+	memset(test_stream, 0, sizeof(test_api_stream_t));
 }
 
 
@@ -620,12 +623,20 @@ static int tls_api_init_ctx(picoquic_test_tls_api_ctx_t ** pctx, uint32_t propos
 		/* Init of the IP addresses */
 		memset(&test_ctx->client_addr, 0, sizeof(struct sockaddr_in));
 		test_ctx->client_addr.sin_family = AF_INET;
+#ifdef WIN32
 		test_ctx->client_addr.sin_addr.S_un.S_addr = 0x0A000002;
+#else
+		test_ctx->client_addr.sin_addr.s_addr = 0x0A000002;
+#endif
 		test_ctx->client_addr.sin_port = 1234;
 
 		memset(&test_ctx->server_addr, 0, sizeof(struct sockaddr_in));
 		test_ctx->server_addr.sin_family = AF_INET;
+#ifdef WIN32
 		test_ctx->server_addr.sin_addr.S_un.S_addr = 0x0A000001;
+#else
+		test_ctx->server_addr.sin_addr.s_addr = 0x0A000001;
+#endif
 		test_ctx->server_addr.sin_port = 4321;
 
 		/* Test the creation of the client and server contexts */
@@ -1189,7 +1200,6 @@ int tls_api_bad_server_reset_test()
 	picoquic_test_tls_api_ctx_t * test_ctx = NULL;
 	int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN);
 	uint8_t buffer[128];
-	int was_active = 0;
 
 	if (ret == 0)
 	{
