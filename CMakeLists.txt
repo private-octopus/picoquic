@@ -44,18 +44,41 @@ SET(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/transport_param_test.c
 )
 
-ADD_LIBRARY(picoquic-core 
+FIND_LIBRARY(PTLS_CORE picotls-core PATH ../picotls)
+MESSAGE(STATUS "Found picotls-core at : ${PTLS_CORE} " )
+
+FIND_LIBRARY(PTLS_MINICRYPTO picotls-minicrypto PATH ../picotls)
+MESSAGE(STATUS "Found picotls-crypto at : ${PTLS_MINICRYPTO} " )
+
+FIND_LIBRARY(PTLS_OPENSSL picotls-openssl PATH ../picotls)
+MESSAGE(STATUS "Found picotls-openssl at : ${PTLS_OPENSSL} " )
+
+ADD_LIBRARY(openssl-crypto STATIC IMPORTED)
+SET_PROPERTY(TARGET openssl-crypto PROPERTY IMPORTED_LOCATION ../openssl-1.0.1g/libcrypto.a)
+
+ADD_LIBRARY(picoquic-core
     ${PICOQUIC_LIBRARY_FILES}
 )
 
-ADD_LIBRARY(../picotls/libpicotls-core.a IMPORTED STATIC)
-#TARGET_LINK_LIBRARIES(../picotls/libpicotls-core.a
-#    ../picotls/libpicotls-minicrypto.a
-#    ../picotls/libpicotls-openssl.a
-#    ${OPENSSL_LIBRARIES})
+ADD_EXECUTABLE(picoquicdemo picoquicfirst/picoquicdemo.c )
+TARGET_LINK_LIBRARIES(picoquicdemo picoquic-core
+    ${PTLS_CORE}
+    ${PTLS_OPENSSL}    
+    ${PTLS_MINICRYPTO}
+    openssl-crypto
+    ${CMAKE_DL_LIBS}
+)
 
-ADD_EXECUTABLE(picoquicdemo picoquicfirst/picoquicdemo.c ${PICOQUIC_LIBRARY_FILES})
-
-ADD_EXECUTABLE(picoquic_ct picoquic_t/picoquic_t.c ${PICOQUIC_TEST_LIBRARY_FILES} ${PICOQUIC_LIBRARY_FILES})
+ADD_EXECUTABLE(picoquic_ct picoquic_t/picoquic_t.c
+ ${PICOQUIC_TEST_LIBRARY_FILES} )
+TARGET_LINK_LIBRARIES(picoquic_ct picoquic-core
+    ${PTLS_CORE}
+    ${PTLS_OPENSSL}    
+    ${PTLS_MINICRYPTO}
+    ${PTLS_OPENSSL}
+    ${PTLS_CORE}
+    openssl-crypto
+    ${CMAKE_DL_LIBS}
+)
 
 SET(TEST_EXES picoquic_ct)
