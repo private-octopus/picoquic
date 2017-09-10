@@ -19,8 +19,6 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "../picoquic/picoquic.h"
-
 #ifdef WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
@@ -43,17 +41,30 @@
 #ifndef WSA_START
 #define WSA_START(x, y) WSAStartup((x), (y))
 #endif
+#ifndef WSA_LAST_ERROR
+#define WSA_LAST_ERROR(x)  WSAGetLastError()
+#endif
+#ifndef socklen_t
+#define socklen_t int
+#endif 
+
 #else
+
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <unistd.h>
+/* #include <unistd.h> */
 #include <sys/types.h>
 #include <sys/socket.h>
+
+#ifndef __USE_XOPEN2K
+#define __USE_XOPEN2K
+#endif
 #include <netdb.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <sys/select.h>
 
 #ifndef SOCKET_TYPE 
 #define SOCKET_TYPE int
@@ -70,8 +81,13 @@
 #ifndef WSA_START
 #define WSA_START(x, y) (*y = 0, true)
 #endif
+#ifndef WSA_LAST_ERROR
+#define WSA_LAST_ERROR(x) ((long)(x))
 #endif
 
+#endif
+
+#include "../picoquic/picoquic.h"
 void picoquic_log_error_packet(FILE * F, uint8_t * bytes, size_t bytes_max, int ret);
 
 void picoquic_log_packet(FILE* F, picoquic_quic_t * quic, picoquic_cnx_t * cnx,
@@ -84,6 +100,7 @@ void print_address(struct sockaddr * address, int address_length, char * label)
 {
     char hostname[256];
     char servInfo[256];
+
     int ret  = getnameinfo(address, address_length,
         hostname, 256, servInfo, 256, NI_NUMERICSERV);
 
@@ -91,17 +108,15 @@ void print_address(struct sockaddr * address, int address_length, char * label)
         if (address->sa_family == AF_INET)
         {
             struct sockaddr_in * s4 = (struct sockaddr_in *)address;
+            uint8_t * addr = (uint8_t*) &s4->sin_addr;
 
             printf("%s %d.%d.%d.%d:%d\n", label,
-                s4->sin_addr.S_un.S_un_b.s_b1,
-                s4->sin_addr.S_un.S_un_b.s_b2,
-                s4->sin_addr.S_un.S_un_b.s_b3,
-                s4->sin_addr.S_un.S_un_b.s_b4,
+                addr[0], addr[1], addr[2], addr[3],
                 ntohs(s4->sin_port));
         }
         else
         {
-            printf("getnameinfo failed with error # %ld\n", WSAGetLastError());
+            printf("getnameinfo failed with error # %ld\n", WSA_LAST_ERROR(ret));
         }
     }
     else {
@@ -109,7 +124,7 @@ void print_address(struct sockaddr * address, int address_length, char * label)
     }
 }
 
-int bind_to_port(SOCKET fd, int af, int port)
+int bind_to_port(SOCKET_TYPE fd, int af, int port)
 {
     struct sockaddr_storage sa;
     int addr_length = 0;
@@ -136,9 +151,9 @@ int bind_to_port(SOCKET fd, int af, int port)
     return bind(fd, (struct sockaddr *) &sa, addr_length);
 }
 
-int do_select(SOCKET fd,
+int do_select(SOCKET_TYPE fd,
     struct sockaddr_storage * addr_from,
-    int * from_length,
+    socklen_t * from_length,
     uint8_t * buffer, int buffer_max)
 {
 
@@ -359,13 +374,12 @@ int quic_server(char * server_name, int server_port, char * pem_cert, char * pem
     SOCKET_TYPE fd = INVALID_SOCKET;
     struct sockaddr_storage addr_from;
     struct sockaddr_storage client_from;
-    int from_length;
+    socklen_t from_length;
     int client_addr_length;
     uint8_t buffer[1536];
 	uint8_t send_buffer[1536];
 	size_t send_length = 0;
     int bytes_recv;
-    int bytes_sent;
     picoquic_packet * p = NULL;
 	uint64_t current_time = 0;
 	picoquic_stateless_packet_t * sp;
@@ -374,7 +388,11 @@ int quic_server(char * server_name, int server_port, char * pem_cert, char * pem
 
     memset(&server_addr, 0, sizeof(struct sockaddr_in));
     server_addr.sin_family = AF_INET;
+#ifdef WIN32
     server_addr.sin_addr.S_un.S_addr = 0;
+#else
+    server_addr.sin_addr.s_addr = 0;
+#endif
     server_addr.sin_port = htons(server_port);
     fd = socket(server_addr.sin_family, SOCK_DGRAM, IPPROTO_UDP);
 
@@ -475,8 +493,8 @@ int quic_server(char * server_name, int server_port, char * pem_cert, char * pem
                             picoquic_get_cnx_state(cnx_server));
                         if (p->length > 0)
                         {
-                            printf("Sending packet, %d bytes\n", send_length);
-                            bytes_sent = sendto(fd, send_buffer, send_length, 0,
+                            printf("Sending packet, %d bytes\n", (int) send_length);
+                            (void) sendto(fd, send_buffer, send_length, 0,
                                 (struct sockaddr *) &addr_from, from_length);
                         }
                         else
@@ -538,7 +556,7 @@ static void first_client_callback(picoquic_cnx_t * cnx,
                 ctx->nb_open_streams--;
 
                 fprintf(stdout, "On stream %d, command: %s stopped after %d bytes\n",
-                    stream_ctx->stream_id, stream_ctx->command, stream_ctx->received_length);
+                    stream_ctx->stream_id, stream_ctx->command, (int)stream_ctx->received_length);
 
             }
             stream_ctx = stream_ctx->next_stream;
@@ -569,7 +587,7 @@ static void first_client_callback(picoquic_cnx_t * cnx,
             ctx->nb_open_streams--;
 
             fprintf(stdout, "Reset received on stream %d, command: %s, after %d bytes\n",
-                stream_ctx->stream_id, stream_ctx->command, stream_ctx->received_length);
+                stream_ctx->stream_id, stream_ctx->command, (int)stream_ctx->received_length);
         }
         return;
     }
@@ -590,7 +608,7 @@ static void first_client_callback(picoquic_cnx_t * cnx,
             ctx->nb_open_streams--;
 
             fprintf(stdout, "Received file %s, after %d bytes, closing stream %d\n",
-                &stream_ctx->command[4], stream_ctx->received_length, stream_ctx->stream_id);
+                &stream_ctx->command[4], (int)stream_ctx->received_length, stream_ctx->stream_id);
         }
     }
 
@@ -670,7 +688,7 @@ int quic_client_ui(picoquic_cnx_t * cnx, picoquic_first_client_callback_ctx_t * 
                     ret = -1;
                 }
 #else
-                stream_ctx->F = fopen(pem_fname, "r");
+                stream_ctx->F = fopen(text, "r");
                 if (stream_ctx->F == NULL) {
                     ret = -1;
                 }
@@ -707,13 +725,13 @@ int quic_client(char * ip_address_text, int server_port)
     int ret = 0;
     picoquic_quic_t *qclient = NULL;
     picoquic_cnx_t *cnx_client = NULL;
-    picoquic_first_client_callback_ctx_t callback_ctx = { {0} };
+    picoquic_first_client_callback_ctx_t callback_ctx;
     SOCKET_TYPE fd = INVALID_SOCKET;
     struct sockaddr_storage server_address;
     struct sockaddr_in * ipv4_dest = (struct sockaddr_in *)&server_address;
     struct sockaddr_in6 * ipv6_dest = (struct sockaddr_in6 *)&server_address;
     struct sockaddr_storage packet_from;
-    int from_length;
+    socklen_t from_length;
     int server_addr_length = 0;
     uint8_t buffer[1536];
 	uint8_t send_buffer[1536];
@@ -726,19 +744,30 @@ int quic_client(char * ip_address_text, int server_port)
     int established = 0;
     char * sni = NULL;
 
+    memset(&callback_ctx, 0, sizeof(picoquic_first_client_callback_ctx_t));
+
     /* get the IP address of the server */
     if (ret == 0)
     {
         memset(&server_address, 0, sizeof(server_address));
 
+#ifdef WIN32
         if (InetPtonA(AF_INET, ip_address_text, &ipv4_dest->sin_addr) == 1)
+#else
+        if (inet_pton(AF_INET, ip_address_text, &ipv4_dest->sin_addr) == 1)
+#endif
         {
             /* Valid IPv4 address */
             ipv4_dest->sin_family = AF_INET;
             ipv4_dest->sin_port = htons(server_port);
             server_addr_length = sizeof(struct sockaddr_in);
         }
-        else if (InetPtonA(AF_INET6, ip_address_text, &ipv6_dest->sin6_addr) == 1)
+        else
+#ifdef WIN32
+        if (InetPtonA(AF_INET6, ip_address_text, &ipv6_dest->sin6_addr) == 1)
+#else        
+        if (inet_pton(AF_INET, ip_address_text, &ipv4_dest->sin_addr) == 1)
+#endif
         {
             /* Valid IPv6 address */
             ipv6_dest->sin6_family = AF_INET6;
@@ -750,7 +779,6 @@ int quic_client(char * ip_address_text, int server_port)
             /* Server is described by name. Do a lookup for the IP address,
              * and then use the name as SNI parameter */
             struct addrinfo *result = NULL;
-            struct addrinfo *ptr = NULL;
             struct addrinfo hints;
 
             memset(&hints, 0, sizeof(hints));
@@ -772,9 +800,14 @@ int quic_client(char * ip_address_text, int server_port)
                 case AF_INET:
                     ipv4_dest->sin_family = AF_INET;
                     ipv4_dest->sin_port = htons(server_port);
+#ifdef WIN32
                     ipv4_dest->sin_addr.S_un.S_addr =
                         ((struct sockaddr_in *) result->ai_addr)->sin_addr.S_un.S_addr;
-                    server_addr_length = sizeof(struct sockaddr_in);
+#else
+                    ipv4_dest->sin_addr.s_addr =
+                        ((struct sockaddr_in *) result->ai_addr)->sin_addr.s_addr;
+#endif
+                   server_addr_length = sizeof(struct sockaddr_in);
                     break;
                 case AF_INET6:
                     ipv6_dest->sin6_family = AF_INET6;
@@ -822,7 +855,6 @@ int quic_client(char * ip_address_text, int server_port)
     if (ret == 0)
     {
         /* Create a client connection */
-        uint64_t cnx_id = 0;
 
         cnx_client = picoquic_create_cnx(qclient, 0, 
             (struct sockaddr *)&server_address, current_time, 0, sni, "hq-05");
@@ -979,7 +1011,9 @@ int main(int argc, char ** argv)
     char * server_key_file = (char *) "..\\certs\\key.pem";
     int server_port = 4443;
     int is_client = 1;
+#ifdef WIN32
     WSADATA wsaData;
+#endif
     int ret = 0;
 
     /* HTTP09 test */
@@ -1011,6 +1045,7 @@ int main(int argc, char ** argv)
         }
     }
 
+#ifdef WIN32
     // Init WSA.
     if (ret == 0)
     {
@@ -1019,6 +1054,7 @@ int main(int argc, char ** argv)
             ret = -1;
         }
     }
+#endif
 
     if (is_client == 0)
     {

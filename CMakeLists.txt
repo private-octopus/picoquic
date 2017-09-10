@@ -44,11 +44,15 @@ SET(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/transport_param_test.c
 )
 
-ADD_LIBRARY(picoquic-core ${PICOQUIC_LIBRARY_FILES})
+ADD_LIBRARY(picoquic-core 
+    ${PICOQUIC_LIBRARY_FILES}
+)
 
-ADD_LIBRARY(picoquic-test ${PICOQUIC_TEST_LIBRARY_FILES})
-
-TARGET_LINK_LIBRARIES(../picotls ${OPENSSL_LIBRARIES})
+ADD_LIBRARY(../picotls/libpicotls-core.a IMPORTED STATIC)
+#TARGET_LINK_LIBRARIES(../picotls/libpicotls-core.a
+#    ../picotls/libpicotls-minicrypto.a
+#    ../picotls/libpicotls-openssl.a
+#    ${OPENSSL_LIBRARIES})
 
 ADD_EXECUTABLE(picoquicdemo picoquicfirst/picoquicdemo.c ${PICOQUIC_LIBRARY_FILES})
 
