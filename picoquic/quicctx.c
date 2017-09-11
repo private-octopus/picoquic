@@ -110,10 +110,7 @@ picoquic_quic_t * picoquic_create(uint32_t nb_connections,
     {
         /* TODO: winsock init */
         /* TODO: open UDP sockets - maybe */
-
-        quic->flags = 0;
-
-		quic->pending_stateless_packet = NULL;
+        memset(quic, 0, sizeof(picoquic_quic_t));
 
 		quic->default_callback_fn = default_callback_fn;
 		quic->default_callback_ctx = default_callback_ctx;
@@ -124,9 +121,6 @@ picoquic_quic_t * picoquic_create(uint32_t nb_connections,
         {
             quic->flags |= picoquic_context_server;
         }
-
-        quic->cnx_list = NULL;
-        quic->cnx_last = NULL;
 
         quic->table_cnx_by_id = picohash_create(nb_connections * 4,
             picoquic_cnx_id_hash, picoquic_cnx_id_compare);
