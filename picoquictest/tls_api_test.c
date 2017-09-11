@@ -645,7 +645,11 @@ static int tls_api_init_ctx(picoquic_test_tls_api_ctx_t ** pctx, uint32_t propos
 			(void*)&test_ctx->client_callback);
 
 		test_ctx->qserver = picoquic_create(8,
+#ifdef WIN32
 			"..\\certs\\cert.pem", "..\\certs\\key.pem",
+#else
+			"certs/cert.pem", "certs/key.pem",
+#endif
 			PICOQUIC_TEST_ALPN, test_api_callback, (void*)&test_ctx->server_callback);
 
 		if (test_ctx->qclient == NULL || test_ctx->qserver == NULL)

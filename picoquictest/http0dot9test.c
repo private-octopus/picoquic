@@ -38,7 +38,7 @@ int http0dot9_test_one(char const * command, int expected_ret, size_t expected_l
                 ret = -1;
             }
 #else
-            F = fopen(fileName, "r");
+            F = fopen(fileName, "w");
             if (F == NULL) {
                 ret = -1;
             }
