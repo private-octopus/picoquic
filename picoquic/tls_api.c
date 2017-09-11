@@ -351,17 +351,20 @@ int picoquic_master_tlscontext(picoquic_quic_t * quic, char * cert_file_name, ch
                 ret = SetSignCertificate(key_file_name, ctx);
             }
 
-			och = (ptls_on_client_hello_t *)malloc(sizeof(ptls_on_client_hello_t) + 
-				sizeof(picoquic_quic_t *));
-			if (och != NULL)
-			{
-				picoquic_quic_t ** ppquic = (picoquic_quic_t **)(
-					((char*)och) + sizeof(ptls_on_client_hello_t));
+            if (ret == 0)
+            {
+                och = (ptls_on_client_hello_t *)malloc(sizeof(ptls_on_client_hello_t) +
+                    sizeof(picoquic_quic_t *));
+                if (och != NULL)
+                {
+                    picoquic_quic_t ** ppquic = (picoquic_quic_t **)(
+                        ((char*)och) + sizeof(ptls_on_client_hello_t));
 
-				och->cb = picoquic_client_hello_call_back;
-				ctx->on_client_hello = och;
-				*ppquic = quic;
-			}
+                    och->cb = picoquic_client_hello_call_back;
+                    ctx->on_client_hello = och;
+                    *ppquic = quic;
+                }
+            }
         }
         else
         {
