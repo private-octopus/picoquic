@@ -65,6 +65,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/select.h>
+#include <errno.h>
 
 #ifndef SOCKET_TYPE 
 #define SOCKET_TYPE int
@@ -151,7 +152,7 @@ int bind_to_port(SOCKET_TYPE fd, int af, int port)
 #define PICOQUIC_NB_SERVER_SOCKETS 1
 #endif
 typedef struct st_picoquic_server_sockets_t {
-    SOCKET s_socket[PICOQUIC_NB_SERVER_SOCKETS];
+    SOCKET_TYPE s_socket[PICOQUIC_NB_SERVER_SOCKETS];
 } picoquic_server_sockets_t;
 
 int picoquic_open_server_sockets(picoquic_server_sockets_t * sockets, int port)
@@ -263,7 +264,7 @@ int send_to_server_sockets(
 #ifdef WIN32
     int socket_index = (addr_dest->sa_family == AF_INET) ? 1 : 0;
 #else
-    const int socket_index = 1;
+    const int socket_index = 0;
 #endif
 
     int sent = sendto(sockets->s_socket[socket_index], bytes, length, 0,
@@ -446,7 +447,6 @@ int quic_server(char * server_name, int server_port, char * pem_cert, char * pem
     int ret = 0;
     picoquic_quic_t *qserver = NULL;
     picoquic_cnx_t *cnx_server = NULL;
-    struct sockaddr_in server_addr;
     picoquic_server_sockets_t server_sockets;
     struct sockaddr_storage addr_from;
     struct sockaddr_storage client_from;
