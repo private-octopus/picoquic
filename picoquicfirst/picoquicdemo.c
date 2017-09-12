@@ -75,17 +75,12 @@
 #ifndef SOCKET_CLOSE
 #define SOCKET_CLOSE(x) close(x)
 #endif
-#ifndef WSA_START_DATA
-#define WSA_START_DATA int
-#endif
-#ifndef WSA_START
-#define WSA_START(x, y) (*y = 0, true)
-#endif
 #ifndef WSA_LAST_ERROR
 #define WSA_LAST_ERROR(x) ((long)(x))
 #endif
 
 #endif
+
 
 #include "../picoquic/picoquic.h"
 void picoquic_log_error_packet(FILE * F, uint8_t * bytes, size_t bytes_max, int ret);
@@ -104,23 +99,22 @@ void print_address(struct sockaddr * address, int address_length, char * label)
     int ret  = getnameinfo(address, address_length,
         hostname, 256, servInfo, 256, NI_NUMERICSERV);
 
-    if (ret != 0) {
-        if (address->sa_family == AF_INET)
-        {
-            struct sockaddr_in * s4 = (struct sockaddr_in *)address;
-            uint8_t * addr = (uint8_t*) &s4->sin_addr;
+    if (ret == 0) {
+        printf("%s %s:%s\n", label, hostname, servInfo);
+    }
+    else
+    {
+        const char * x = inet_ntop(address->sa_family, address, hostname, sizeof(hostname));
 
-            printf("%s %d.%d.%d.%d:%d\n", label,
-                addr[0], addr[1], addr[2], addr[3],
-                ntohs(s4->sin_port));
+        if (x != NULL)
+        {
+            printf("%s %s\n", label, x);
         }
         else
         {
-            printf("getnameinfo failed with error # %ld\n", WSA_LAST_ERROR(ret));
+            ret = -1;
+            printf("inet_ntop failed with error # %ld\n", WSA_LAST_ERROR(errno));
         }
-    }
-    else {
-        printf("%s %s:%s\n", label, hostname, servInfo);
     }
 }
 
@@ -151,7 +145,57 @@ int bind_to_port(SOCKET_TYPE fd, int af, int port)
     return bind(fd, (struct sockaddr *) &sa, addr_length);
 }
 
-int do_select(SOCKET_TYPE fd,
+#ifdef WIN32
+#define PICOQUIC_NB_SERVER_SOCKETS 2
+#else
+#define PICOQUIC_NB_SERVER_SOCKETS 1
+#endif
+typedef struct st_picoquic_server_sockets_t {
+    SOCKET s_socket[PICOQUIC_NB_SERVER_SOCKETS];
+} picoquic_server_sockets_t;
+
+int picoquic_open_server_sockets(picoquic_server_sockets_t * sockets, int port)
+{
+    int ret = 0;
+    const int sock_af[] = { AF_INET6, AF_INET };
+
+    for (int i = 0; i < PICOQUIC_NB_SERVER_SOCKETS; i++)
+    {
+        if (ret == 0)
+        {
+            sockets->s_socket[i] = socket(sock_af[i], SOCK_DGRAM, IPPROTO_UDP);
+        }
+        else
+        {
+            sockets->s_socket[i] = INVALID_SOCKET;
+        }
+
+        if (sockets->s_socket[i] == INVALID_SOCKET)
+        {
+            ret = -1;
+        }
+        else
+        {
+            ret = bind_to_port(sockets->s_socket[i], sock_af[i], port);
+        }
+    }
+
+    return ret;
+}
+
+void picoquic_close_server_sockets(picoquic_server_sockets_t * sockets)
+{
+    for (int i = 0; i < PICOQUIC_NB_SERVER_SOCKETS; i++)
+    {
+        if (sockets->s_socket[i] != INVALID_SOCKET)
+        {
+            SOCKET_CLOSE(sockets->s_socket[i]);
+            sockets->s_socket[i] = INVALID_SOCKET;
+        }
+    }
+}
+
+int do_select(SOCKET_TYPE * sockets, int nb_sockets,
     struct sockaddr_storage * addr_from,
     socklen_t * from_length,
     uint8_t * buffer, int buffer_max)
@@ -161,14 +205,23 @@ int do_select(SOCKET_TYPE fd,
     struct timeval tv;
     int ret_select = 0;
     int bytes_recv = 0;
+    int sockmax = 0;
 
     FD_ZERO(&readfds);
-    FD_SET(fd, &readfds);
+
+    for (int i = 0; i < nb_sockets; i++)
+    {
+        if (sockmax < sockets[i])
+        {
+            sockmax = sockets[i];
+        }
+        FD_SET(sockets[i], &readfds);
+    }
 
     tv.tv_sec = 1;
     tv.tv_usec = 0;
 
-    ret_select = select(fd, &readfds, NULL, NULL, &tv);
+    ret_select = select(sockmax+1, &readfds, NULL, NULL, &tv);
 
     if (ret_select < 0)
     {
@@ -180,20 +233,43 @@ int do_select(SOCKET_TYPE fd,
     }
     else
     {
-        if (FD_ISSET(fd, &readfds))
+        for (int i = 0; i < nb_sockets; i++)
         {
-            /* Read the incoming response */
-            *from_length = sizeof(struct sockaddr_storage);
-            bytes_recv = recvfrom(fd, (char*)buffer, buffer_max, 0,
-                (struct sockaddr *)addr_from, from_length);
-            if (bytes_recv <= 0)
+            if (FD_ISSET(sockets[i], &readfds))
             {
-                fprintf(stderr, "Could not receive packet on UDP socket!\n");
+                /* Read the incoming response */
+                *from_length = sizeof(struct sockaddr_storage);
+                bytes_recv = recvfrom(sockets[i], (char*)buffer, buffer_max, 0,
+                    (struct sockaddr *)addr_from, from_length);
+                if (bytes_recv <= 0)
+                {
+                    fprintf(stderr, "Could not receive packet on UDP socket[%d]= %d!\n",
+                        i, (int) sockets[i]);
+                }
+                break;
             }
         }
     }
 
     return bytes_recv;
+}
+
+int send_to_server_sockets(
+    picoquic_server_sockets_t * sockets, 
+    struct sockaddr * addr_dest, socklen_t addr_length,
+    const char * bytes, int length)
+{
+    /* Linux uses a single socket for V6 and V4, Windows uses 2 */
+#ifdef WIN32
+    int socket_index = (addr_dest->sa_family == AF_INET) ? 1 : 0;
+#else
+    const int socket_index = 1;
+#endif
+
+    int sent = sendto(sockets->s_socket[socket_index], bytes, length, 0,
+        addr_dest, addr_length);
+
+    return sent;
 }
 
 #define PICOQUIC_FIRST_COMMAND_MAX 128
@@ -371,7 +447,7 @@ int quic_server(char * server_name, int server_port, char * pem_cert, char * pem
     picoquic_quic_t *qserver = NULL;
     picoquic_cnx_t *cnx_server = NULL;
     struct sockaddr_in server_addr;
-    SOCKET_TYPE fd = INVALID_SOCKET;
+    picoquic_server_sockets_t server_sockets;
     struct sockaddr_storage addr_from;
     struct sockaddr_storage client_from;
     socklen_t from_length;
@@ -385,7 +461,8 @@ int quic_server(char * server_name, int server_port, char * pem_cert, char * pem
 	picoquic_stateless_packet_t * sp;
 
     /* Open a UDP socket */
-
+    ret = picoquic_open_server_sockets(&server_sockets, server_port);
+#if 0
     memset(&server_addr, 0, sizeof(struct sockaddr_in));
     server_addr.sin_family = AF_INET;
 #ifdef WIN32
@@ -405,6 +482,7 @@ int quic_server(char * server_name, int server_port, char * pem_cert, char * pem
             fprintf(stderr, "Could not bind socket to port %d\n", server_port);
         }
     }
+#endif
 
     /* Wait for packets and process them */
     if (ret == 0)
@@ -423,7 +501,8 @@ int quic_server(char * server_name, int server_port, char * pem_cert, char * pem
     while (ret == 0 && (cnx_server == NULL ||
         picoquic_get_cnx_state(cnx_server)!= picoquic_state_disconnected))
     {
-        bytes_recv = do_select(fd, &addr_from, &from_length,
+        bytes_recv = do_select(server_sockets.s_socket, PICOQUIC_NB_SERVER_SOCKETS,
+            &addr_from, &from_length,
             buffer, sizeof(buffer));
 
         if (bytes_recv != 0)
@@ -448,8 +527,9 @@ int quic_server(char * server_name, int server_port, char * pem_cert, char * pem
 
 				while ((sp = picoquic_dequeue_stateless_packet(qserver)) != NULL)
 				{
-					int sent = sendto(fd, sp->bytes, sp->length, 0,
-						(struct sockaddr *) &addr_from, from_length);
+                    int sent = send_to_server_sockets(&server_sockets,
+                        (struct sockaddr *) &addr_from, from_length,
+                        (const char *)sp->bytes, (int) sp->length);
 
 					printf("Sending stateless packet, %d bytes\n", sent);
 					picoquic_delete_stateless_packet(sp);
@@ -493,9 +573,11 @@ int quic_server(char * server_name, int server_port, char * pem_cert, char * pem
                             picoquic_get_cnx_state(cnx_server));
                         if (p->length > 0)
                         {
-                            printf("Sending packet, %d bytes\n", (int) send_length);
-                            (void) sendto(fd, send_buffer, send_length, 0,
-                                (struct sockaddr *) &addr_from, from_length);
+                            int sent = send_to_server_sockets(&server_sockets,
+                                (struct sockaddr *) &addr_from, from_length,
+                                (const char *)send_buffer, (int)send_length);
+                            printf("Sending packet, %d bytes (sent: %d)\n", 
+                                (int)send_length, sent);
                         }
                         else
                         {
@@ -513,10 +595,7 @@ int quic_server(char * server_name, int server_port, char * pem_cert, char * pem
         picoquic_free(qserver);
     }
 
-    if (fd != INVALID_SOCKET)
-    {
-        SOCKET_CLOSE(fd);
-    }
+    picoquic_close_server_sockets(&server_sockets);
 
     return ret;
 }
@@ -688,7 +767,7 @@ int quic_client_ui(picoquic_cnx_t * cnx, picoquic_first_client_callback_ctx_t * 
                     ret = -1;
                 }
 #else
-                stream_ctx->F = fopen(text, "r");
+                stream_ctx->F = fopen(text, "w");
                 if (stream_ctx->F == NULL) {
                     ret = -1;
                 }
@@ -751,11 +830,7 @@ int quic_client(char * ip_address_text, int server_port)
     {
         memset(&server_address, 0, sizeof(server_address));
 
-#ifdef WIN32
-        if (InetPtonA(AF_INET, ip_address_text, &ipv4_dest->sin_addr) == 1)
-#else
         if (inet_pton(AF_INET, ip_address_text, &ipv4_dest->sin_addr) == 1)
-#endif
         {
             /* Valid IPv4 address */
             ipv4_dest->sin_family = AF_INET;
@@ -763,11 +838,8 @@ int quic_client(char * ip_address_text, int server_port)
             server_addr_length = sizeof(struct sockaddr_in);
         }
         else
-#ifdef WIN32
-        if (InetPtonA(AF_INET6, ip_address_text, &ipv6_dest->sin6_addr) == 1)
-#else        
-        if (inet_pton(AF_INET, ip_address_text, &ipv4_dest->sin_addr) == 1)
-#endif
+       
+        if (inet_pton(AF_INET6, ip_address_text, &ipv6_dest->sin6_addr) == 1)
         {
             /* Valid IPv6 address */
             ipv6_dest->sin6_family = AF_INET6;
@@ -898,7 +970,7 @@ int quic_client(char * ip_address_text, int server_port)
     while (ret == 0 &&
         picoquic_get_cnx_state(cnx_client) != picoquic_state_disconnected)
     {
-        bytes_recv = do_select(fd, &packet_from, &from_length,
+        bytes_recv = do_select(&fd, 1, &packet_from, &from_length,
             buffer, sizeof(buffer));
 
         if (bytes_recv != 0)
