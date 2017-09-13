@@ -59,6 +59,7 @@ extern "C" {
 #define PICOQUIC_ERROR_INVALID_FRAME (PICOQUIC_ERROR_CLASS  + 17)
 #define PICOQUIC_ERROR_CANNOT_CONTROL_STREAM_ZERO (PICOQUIC_ERROR_CLASS  + 18)
 #define PICOQUIC_ERROR_HRR (PICOQUIC_ERROR_CLASS  + 19)
+#define PICOQUIC_ERROR_DISCONNECTED (PICOQUIC_ERROR_CLASS  + 20)
 
 #define PICOQUIC_TRANSPORT_ERROR_NO_ERROR (0x80000000)
 #define PICOQUIC_TRANSPORT_ERROR_INTERNAL (0x80000001)
@@ -170,8 +171,11 @@ extern "C" {
 	int picoquic_close(picoquic_cnx_t * cnx);
 
 	picoquic_cnx_t * picoquic_get_first_cnx(picoquic_quic_t * quic);
+    picoquic_cnx_t * picoquic_get_next_cnx(picoquic_cnx_t * cnx);
 
 	picoquic_state_enum picoquic_get_cnx_state(picoquic_cnx_t * cnx);
+
+    void picoquic_get_peer_addr(picoquic_cnx_t * cnx, struct sockaddr ** addr, int * addr_len);
 
     uint64_t picoquic_get_cnxid(picoquic_cnx_t * cnx);
     uint64_t picoquic_get_initial_cnxid(picoquic_cnx_t * cnx);

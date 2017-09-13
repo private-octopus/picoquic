@@ -355,6 +355,10 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
 
     if (cnx != NULL)
     {
+        cnx->peer_addr_len = (int)((addr->sa_family == AF_INET) ?
+            sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
+        memcpy(&cnx->peer_addr, addr, cnx->peer_addr_len);
+
 		picoquic_init_transport_parameters(&cnx->local_parameters);
 		picoquic_init_transport_parameters(&cnx->remote_parameters);
 		/* Initialize local flow control variables to advertised values */
@@ -530,6 +534,12 @@ picoquic_cnx_t * picoquic_create_client_cnx(picoquic_quic_t * quic,
 	return cnx;
 }
 
+void picoquic_get_peer_addr(picoquic_cnx_t * cnx, struct sockaddr ** addr, int * addr_len)
+{
+    *addr = &cnx->peer_addr;
+    *addr_len = cnx->peer_addr_len;
+}
+
 uint64_t picoquic_get_cnxid(picoquic_cnx_t * cnx)
 {
     return cnx->server_cnxid;
@@ -548,6 +558,12 @@ picoquic_state_enum picoquic_get_cnx_state(picoquic_cnx_t * cnx)
 picoquic_cnx_t * picoquic_get_first_cnx(picoquic_quic_t * quic)
 {
 	return quic->cnx_list;
+}
+
+
+picoquic_cnx_t * picoquic_get_next_cnx(picoquic_cnx_t * cnx)
+{
+    return cnx->next_in_table;
 }
 
 void picoquic_set_callback(picoquic_cnx_t * cnx,

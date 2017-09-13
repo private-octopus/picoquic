@@ -225,11 +225,14 @@ extern "C" {
 		picoquic_stream_data_cb_fn callback_fn;
 		void * callback_ctx;
 
+        /* Peer address. To do: allow for multiple addresses */
+        struct sockaddr_storage peer_addr;
+        int peer_addr_len;
+
 		/* connection state, ID, etc. Todo: allow for multiple cnxid */
 		picoquic_state_enum cnx_state;
 		uint64_t initial_cnxid;
 		uint64_t server_cnxid;
-		struct sockaddr_storage peer_address;
 		uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE];
 		uint32_t local_error;
 		uint32_t remote_error;

@@ -629,8 +629,8 @@ size_t picoquic_log_new_connection_id_frame(FILE * F, uint8_t * bytes, size_t by
 static char const * picoquic_log_frame_names[] =
 {
 	"Padding",
+    "RST_STREAM",
 	"CONNECTION_CLOSE",
-	"RST_STREAM",
 	"GOAWAY",
 	"MAX_DATA",
 	"MAX_STREAM_DATA",
@@ -685,48 +685,48 @@ void picoquic_log_frames(FILE* F, uint8_t * bytes, size_t length)
 
 			switch (frame_id)
 			{
-			case 0x01: /* RST_STREAM */
+			case picoquic_frame_type_reset_stream: /* RST_STREAM */
 				byte_index += picoquic_log_reset_stream_frame(F, bytes + byte_index, 
 					length - byte_index);
 				break;
-			case 0x02: /* CONNECTION_CLOSE */
+			case picoquic_frame_type_connection_close: /* CONNECTION_CLOSE */
 				byte_index += picoquic_log_connection_close_frame(F, bytes + byte_index,
 					length - byte_index);
 				break;
-			case 0x03: /* GOAWAY */
+			case picoquic_frame_type_goaway: /* GOAWAY */
 				/* Not supported anymore. */
 				byte_index += picoquic_log_go_away_frame(F, bytes + byte_index,
 					length - byte_index);
 				break;
-			case 0x04: /* MAX_DATA */
+			case picoquic_frame_type_max_data: /* MAX_DATA */
 				byte_index += picoquic_log_max_data_frame(F, bytes + byte_index,
 					length - byte_index);
 				break;
-			case 0x05: /* MAX_STREAM_DATA */
+			case picoquic_frame_type_max_stream_data: /* MAX_STREAM_DATA */
 				byte_index += picoquic_log_max_stream_data_frame(F, bytes + byte_index,
 					length - byte_index);
 				break;
-			case 0x06: /* MAX_STREAM_ID */
+			case picoquic_frame_type_max_stream_id: /* MAX_STREAM_ID */
 				byte_index += picoquic_log_max_stream_id_frame(F, bytes + byte_index,
 					length - byte_index);
 				break;
-			case 0x07: /* PING -- Format depends on version! */
+			case picoquic_frame_type_ping: /* PING -- Format depends on version! */
 				/* No payload in current version */
 				byte_index++;
 				break;
-			case 0x08: /* BLOCKED */
+			case picoquic_frame_type_blocked: /* BLOCKED */
 				/* No payload */
 				byte_index++;
 				break;
-			case 0x09: /* STREAM_BLOCKED */
+			case picoquic_frame_type_stream_blocked: /* STREAM_BLOCKED */
 				byte_index += picoquic_log_stream_blocked_frame(F, bytes + byte_index,
 					length - byte_index);
 				break;
-			case 0x0a: /* STREAM_ID_NEEDED */
+			case picoquic_frame_type_stream_id_needed: /* STREAM_ID_NEEDED */
 				/* No payload */
 				byte_index++;
 				break;
-			case 0x0b: /* NEW_CONNECTION_ID */
+			case picoquic_frame_type_new_connection_id: /* NEW_CONNECTION_ID */
 				byte_index += picoquic_log_new_connection_id_frame(F, bytes + byte_index,
 					length - byte_index);
 				break;

@@ -498,7 +498,7 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 		checksum_overhead = 16;
 		break;
 	case picoquic_state_disconnected:
-		ret = -1;
+		ret = PICOQUIC_ERROR_DISCONNECTED;
 		break;
 	default:
 		ret = -1;
@@ -507,7 +507,7 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 
 	stream = picoquic_find_ready_stream(cnx, stream_restricted);
 
-	if (retransmit_possible &&
+	if (ret == 0 && retransmit_possible &&
 		(length = picoquic_retransmit_needed(cnx, current_time, packet, &use_fnv1a, &header_length)) > 0)
 	{
 		/* Set the new checksum length */
@@ -523,7 +523,7 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 		packet->send_time = current_time;
 		packet->checksum_overhead = checksum_overhead;
 	}
-	else if (use_fnv1a && stream == NULL)
+	else if (ret == 0 && use_fnv1a && stream == NULL)
 	{
 		/* when in a clear text mode, only send packets if there is
 		 * actually something to send, or resend */
