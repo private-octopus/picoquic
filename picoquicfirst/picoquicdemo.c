@@ -56,6 +56,7 @@
 #include <stdio.h>
 #include <string.h>
 /* #include <unistd.h> */
+#include <sys/time.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 
@@ -89,7 +90,7 @@ void picoquic_log_error_packet(FILE * F, uint8_t * bytes, size_t bytes_max, int 
 
 void picoquic_log_packet(FILE* F, picoquic_quic_t * quic, picoquic_cnx_t * cnx,
 	struct sockaddr * addr_peer, int receiving,
-	uint8_t * bytes, size_t length);
+	uint8_t * bytes, size_t length, uint64_t current_time);
 void picoquic_log_processing(FILE* F, picoquic_cnx_t * cnx, size_t length, int ret);
 void picoquic_log_transport_extension(FILE* F, picoquic_cnx_t * cnx);
 
@@ -197,6 +198,40 @@ void picoquic_close_server_sockets(picoquic_server_sockets_t * sockets)
     }
 }
 
+uint64_t get_current_time()
+{
+    uint64_t now;
+#ifdef WIN32
+    FILETIME ft;
+    /*
+    * The GetSystemTimeAsFileTime API returns  the number
+    * of 100-nanosecond intervals since January 1, 1601 (UTC),
+    * in FILETIME format.
+    */
+    GetSystemTimeAsFileTime(&ft);
+
+    /*
+    * Convert to plain 64 bit format, without making
+    * assumptions about the FILETIME structure alignment.
+    */
+    now |= ft.dwHighDateTime;
+    now <<= 32;
+    now |= ft.dwLowDateTime;
+    /*
+    * Convert units from 100ns to 1us
+    */
+    now /= 10;
+    /*
+    * Account for microseconds elapsed between 1601 and 1970.
+    */
+    now -= 11644473600000000ULL;
+#else
+    (void) gettimeofday(&tv, NULL);
+    now = (tv.tv_sec * 1000000ull) + tv.tv_usec;
+#endif
+    return now;
+}
+
 int do_select(SOCKET_TYPE * sockets, int nb_sockets,
     struct sockaddr_storage * addr_from,
     socklen_t * from_length,
@@ -243,11 +278,7 @@ int do_select(SOCKET_TYPE * sockets, int nb_sockets,
             fprintf(stderr, "Error: select returns %d\n", ret_select);
         }
     }
-    else if (ret_select == 0)
-    {
-        *current_time += (is_active) ? 100 : 1000000;
-    }
-    else
+    else if (ret_select > 0)
     {
         for (int i = 0; i < nb_sockets; i++)
         {
@@ -280,6 +311,8 @@ int do_select(SOCKET_TYPE * sockets, int nb_sockets,
             }
         }
     }
+
+    *current_time = get_current_time();
 
     return bytes_recv;
 }
@@ -653,6 +686,8 @@ typedef struct st_picoquic_first_client_callback_ctx_t {
     struct st_picoquic_first_client_stream_ctx_t * first_stream;
     int nb_open_streams;
     uint32_t nb_client_streams;
+    uint64_t last_interaction_time;
+    int progress_observed;
 } picoquic_first_client_callback_ctx_t;
 
 static void first_client_callback(picoquic_cnx_t * cnx,
@@ -662,6 +697,8 @@ static void first_client_callback(picoquic_cnx_t * cnx,
     picoquic_first_client_callback_ctx_t * ctx =
         (picoquic_first_client_callback_ctx_t*)callback_ctx;
     picoquic_first_client_stream_ctx_t * stream_ctx = ctx->first_stream;
+
+    ctx->progress_observed = 1;
 
     if (fin_or_event == picoquic_callback_close)
     {
@@ -735,12 +772,14 @@ static void first_client_callback(picoquic_cnx_t * cnx,
     /* that's it */
 }
 
-int quic_client_ui(picoquic_cnx_t * cnx, picoquic_first_client_callback_ctx_t * ctx)
+int quic_client_ui(picoquic_cnx_t * cnx, picoquic_first_client_callback_ctx_t * ctx,
+    uint64_t * current_time)
 {
     int ret = 0;
     char text[PICOQUIC_FIRST_COMMAND_MAX];
     size_t text_len = 0;
     picoquic_first_client_stream_ctx_t * stream_ctx;
+    int nb_doc_added = 0;
 
     for (;;) {
         fprintf(stdout, "Enter the requested document name, or return:\n");
@@ -825,11 +864,16 @@ int quic_client_ui(picoquic_cnx_t * cnx, picoquic_first_client_callback_ctx_t * 
 
                 (void) picoquic_add_to_stream(cnx, stream_ctx->stream_id, stream_ctx->command,
                     text_len + 6, 1);
+                nb_doc_added++;
             }
         }
     }
 
-    if (ctx->nb_open_streams == 0)
+    *current_time = get_current_time();
+    ctx->last_interaction_time = *current_time;
+    ctx->progress_observed = 0;
+
+    if (nb_doc_added == 0)
     {
 
         fprintf(stdout, "Closing the connection.\n");
@@ -962,6 +1006,8 @@ int quic_client(char * ip_address_text, int server_port)
     */
 
     /* Create QUIC context */
+    current_time = get_current_time();
+
     if (ret == 0)
     {
         qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL);
@@ -1005,7 +1051,7 @@ int quic_client(char * ip_address_text, int server_port)
 						(struct sockaddr *) &server_address, server_addr_length);
 
 					picoquic_log_packet(stdout, qclient, cnx_client, (struct sockaddr *) &server_address,
-						0, send_buffer, bytes_sent);
+						0, send_buffer, bytes_sent, current_time);
 				}
 				else
 				{
@@ -1027,7 +1073,7 @@ int quic_client(char * ip_address_text, int server_port)
             printf("Select returns %d, from length %d\n", bytes_recv, from_length);
 
 			picoquic_log_packet(stdout, qclient, cnx_client, (struct sockaddr *) &packet_from,
-				1, buffer, bytes_recv);
+				1, buffer, bytes_recv, current_time);
         }
 
         if (bytes_recv < 0)
@@ -1066,13 +1112,28 @@ int quic_client(char * ip_address_text, int server_port)
 
                 client_ready_loop++;
 
+                if ((bytes_recv == 0 || client_ready_loop > 4) &&
+                    picoquic_is_cnx_backlog_empty(cnx_client))
+                {
+                    if (callback_ctx.nb_open_streams == 0)
+                    {
+                        ret = quic_client_ui(cnx_client, &callback_ctx, &current_time);
+                        client_ready_loop = 0;
+                    }
+                    else if (callback_ctx.progress_observed != 0)
+                    {
+                        callback_ctx.last_interaction_time = current_time;
+                        callback_ctx.progress_observed = 0;
+                    }
+                    else if (current_time - callback_ctx.last_interaction_time >
+                        10000000ull)
+                    {
+                        fprintf(stdout, "No progress for 10 seconds.\n");
 
-				if ((bytes_recv == 0 || client_ready_loop > 4 ) &&
-                    callback_ctx.nb_open_streams == 0)
-				{
-                    ret = quic_client_ui(cnx_client, &callback_ctx);
-                    client_ready_loop = 0;
-				}
+                        ret = quic_client_ui(cnx_client, &callback_ctx, &current_time);
+                        client_ready_loop = 0;
+                    }
+                }
 			}
 
             if (ret == 0)
@@ -1095,7 +1156,7 @@ int quic_client(char * ip_address_text, int server_port)
 						bytes_sent = sendto(fd, send_buffer, send_length, 0,
 							(struct sockaddr *) &server_address, server_addr_length);
 						picoquic_log_packet(stdout, qclient, cnx_client, (struct sockaddr *)  &server_address,
-								0, send_buffer, send_length);
+								0, send_buffer, send_length, current_time);
 
                         is_active = 1;
 					}

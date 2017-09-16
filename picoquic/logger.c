@@ -45,8 +45,12 @@ void picoquic_log_error_packet(FILE * F, uint8_t * bytes, size_t bytes_max, int 
 }
 
 void picoquic_log_packet_address(FILE* F, picoquic_cnx_t * cnx,
-	struct sockaddr * addr_peer, int receiving, size_t length)
+	struct sockaddr * addr_peer, int receiving, size_t length, uint64_t current_time)
 {
+    uint64_t delta_t = 0;  
+    uint64_t time_sec = 0;
+    uint32_t time_usec = 0;
+
 	fprintf(F, (receiving)? "Receiving %d bytes from ":"Sending %d bytes to ",
 		(int)length);
 
@@ -55,7 +59,7 @@ void picoquic_log_packet_address(FILE* F, picoquic_cnx_t * cnx,
 		struct sockaddr_in * s4 = (struct sockaddr_in *)addr_peer;
                 uint8_t * addr = (uint8_t *) &s4->sin_addr;
 
-		fprintf(F, "%d.%d.%d.%d:%d\n",
+		fprintf(F, "%d.%d.%d.%d:%d",
 			addr[0], addr[1], addr[2], addr[3],
 			ntohs(s4->sin_port));
 	}
@@ -80,8 +84,18 @@ void picoquic_log_packet_address(FILE* F, picoquic_cnx_t * cnx,
 				fprintf(F, "%x", addr[(2 * i) + 1]);
 			}
 		}
-		fprintf(F, "\n");
 	}
+
+    if (cnx != NULL)
+    {
+        delta_t = current_time - cnx->start_time;
+        time_sec = delta_t / 1000000;
+        time_usec = (uint32_t)(delta_t % 1000000);
+    }
+
+    fprintf(F, "\n at T=%llu.%06d (%llx)\n",
+        (unsigned long long) time_sec, time_usec,
+        (unsigned long long) current_time);
 }
 
 static char const * picoquic_ptype_names[] = {
@@ -354,7 +368,6 @@ size_t picoquic_log_ack_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
 	{
 	case 0:
 		last_range = bytes[byte_index++];
-		byte_index += 1;
 		break;
 	case 1:
 		last_range = PICOPARSE_16(bytes + byte_index);
@@ -443,7 +456,7 @@ size_t picoquic_log_reset_stream_frame(FILE * F, uint8_t * bytes, size_t bytes_m
 	byte_index += 8;
 
 
-	fprintf(F, "    Stream %d (0x%08x), Error 0x%08x, Offset 0x%llx.\n", 
+	fprintf(F, "    RESET STREAM %d (0x%08x), Error 0x%08x, Offset 0x%llx.\n", 
 		stream_id, stream_id, error_code, (unsigned long long) offset);
 
 	return byte_index;
@@ -458,7 +471,7 @@ size_t picoquic_log_go_away_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
 
 	if (min_size > bytes_max)
 	{
-		fprintf(F, "    Malformed MAX STREAM ID, requires %d bytes out of %d\n", (int)min_size, (int)bytes_max);
+		fprintf(F, "    Malformed GO AWAY, requires %d bytes out of %d\n", (int)min_size, (int)bytes_max);
 		return bytes_max;
 	}
 
@@ -469,7 +482,7 @@ size_t picoquic_log_go_away_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
 	max_stream_id_server = PICOPARSE_32(bytes + byte_index);
 	byte_index += 4;
 
-	fprintf(F, "    Max stream client %d (0x%08x), server %d (0x%08x).\n",
+	fprintf(F, "    GO AWAY, max stream client %d (0x%08x), server %d (0x%08x).\n",
 		max_stream_id_client, max_stream_id_client,
 		max_stream_id_server, max_stream_id_server);
 
@@ -496,7 +509,7 @@ size_t picoquic_log_connection_close_frame(FILE * F, uint8_t * bytes, size_t byt
 	byte_index += 2;
 
 
-	fprintf(F, "    Connection close, Error 0x%08x, Reason length %d (0x%04x):\n",
+	fprintf(F, "    CONNECTION CLOSE, Error 0x%08x, Reason length %d (0x%04x):\n",
 		error_code, string_length, string_length);
 	if (byte_index + string_length > bytes_max)
 	{
@@ -529,7 +542,7 @@ size_t picoquic_log_max_data_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
 	max_data = PICOPARSE_64(bytes + byte_index);
 	byte_index += 8;
 
-	fprintf(F, "    Max data: 0x%llx.\n", (unsigned long long) max_data);
+	fprintf(F, "    MAX DATA: 0x%llx.\n", (unsigned long long) max_data);
 
 	return byte_index;
 }
@@ -553,7 +566,7 @@ size_t picoquic_log_max_stream_data_frame(FILE * F, uint8_t * bytes, size_t byte
 	max_data = PICOPARSE_64(bytes + byte_index);
 	byte_index += 8;
 
-	fprintf(F, "    Stream: %d (0x%08x), max data: 0x%llx.\n", 
+	fprintf(F, "    MAX STREAM DATA, Stream: %d (0x%08x), max data: 0x%llx.\n", 
 		stream_id, stream_id, (unsigned long long) max_data);
 
 	return byte_index;
@@ -575,7 +588,7 @@ size_t picoquic_log_max_stream_id_frame(FILE * F, uint8_t * bytes, size_t bytes_
 	max_stream_id = PICOPARSE_32(bytes + byte_index);
 	byte_index += 4;
 
-	fprintf(F, "    Max stream: %d (0x%08x).\n",
+	fprintf(F, "    MAX STREAM ID: %d (0x%08x).\n",
 		max_stream_id, max_stream_id);
 
 	return byte_index;
@@ -597,7 +610,7 @@ size_t picoquic_log_stream_blocked_frame(FILE * F, uint8_t * bytes, size_t bytes
 	blocked_stream_id = PICOPARSE_32(bytes + byte_index);
 	byte_index += 4;
 
-	fprintf(F, "    Stream blocked: %d (0x%08x).\n",
+	fprintf(F, "    STREAM BLOCKED: %d (0x%08x).\n",
 		blocked_stream_id, blocked_stream_id);
 
 	return byte_index;
@@ -611,7 +624,7 @@ size_t picoquic_log_new_connection_id_frame(FILE * F, uint8_t * bytes, size_t by
 
 	if (min_size > bytes_max)
 	{
-		fprintf(F, "    Malformed New Connection Id, requires %d bytes out of %d\n", (int) min_size, (int) bytes_max);
+		fprintf(F, "    Malformed NEW CONNECTION ID, requires %d bytes out of %d\n", (int) min_size, (int) bytes_max);
 		return bytes_max;
 	}
 
@@ -619,7 +632,7 @@ size_t picoquic_log_new_connection_id_frame(FILE * F, uint8_t * bytes, size_t by
 	new_cnx_id = PICOPARSE_64(bytes + byte_index);
 	byte_index += 8;
 
-	fprintf(F, "    New connection id: 0x%016llx.\n",
+	fprintf(F, "    NEW CONNECTION ID: 0x%016llx.\n",
 		(unsigned long long) new_cnx_id);
 
 	return byte_index;
@@ -674,15 +687,6 @@ void picoquic_log_frames(FILE* F, uint8_t * bytes, size_t length)
 		{
 			uint32_t frame_id = bytes[byte_index];
 
-			if (frame_id < picoquic_nb_log_frame_names)
-			{
-				fprintf(F, "    %s frame\n", picoquic_log_frame_names[frame_id]);
-			}
-			else
-			{
-				fprintf(F, "    Unknown frame, type: %x\n", frame_id);
-			}
-
 			switch (frame_id)
 			{
 			case picoquic_frame_type_reset_stream: /* RST_STREAM */
@@ -712,6 +716,7 @@ void picoquic_log_frames(FILE* F, uint8_t * bytes, size_t length)
 				break;
 			case picoquic_frame_type_ping: /* PING -- Format depends on version! */
 				/* No payload in current version */
+                fprintf(F, "    %s frame\n", picoquic_log_frame_names[frame_id]);
 				byte_index++;
 				break;
 			case picoquic_frame_type_blocked: /* BLOCKED */
@@ -724,6 +729,7 @@ void picoquic_log_frames(FILE* F, uint8_t * bytes, size_t length)
 				break;
 			case picoquic_frame_type_stream_id_needed: /* STREAM_ID_NEEDED */
 				/* No payload */
+                fprintf(F, "    %s frame\n", picoquic_log_frame_names[frame_id]);
 				byte_index++;
 				break;
 			case picoquic_frame_type_new_connection_id: /* NEW_CONNECTION_ID */
@@ -732,7 +738,8 @@ void picoquic_log_frames(FILE* F, uint8_t * bytes, size_t length)
 				break;
 			default:
 				/* Not implemented yet! */
-				byte_index = length;
+                fprintf(F, "    Unknown frame, type: %x\n", frame_id);
+                byte_index = length;
 				break;
 			}
 		}
@@ -780,14 +787,14 @@ void picoquic_log_decrypt_encrypted(FILE* F,
 
 void picoquic_log_packet(FILE* F, picoquic_quic_t * quic, picoquic_cnx_t * cnx, 
 	struct sockaddr * addr_peer, int receiving,
-	uint8_t * bytes,  size_t length)
+	uint8_t * bytes,  size_t length, uint64_t current_time)
 {
 	int ret = 0;
 	picoquic_packet_header ph;
 	size_t decoded_length = 0;
 
 	/* first log line */
-	picoquic_log_packet_address(F, cnx, addr_peer, receiving, length);
+	picoquic_log_packet_address(F, cnx, addr_peer, receiving, length, current_time);
 	/* Parse the clear text header */
 	ret = picoquic_parse_packet_header(bytes, length, &ph);
 

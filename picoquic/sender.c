@@ -412,6 +412,59 @@ int picoquic_retransmit_needed(picoquic_cnx_t * cnx, uint64_t current_time,
 	return length;
 }
 
+/*
+ * Returns true if there is nothing to repeat in the retransmission queue
+ */
+int picoquic_is_cnx_backlog_empty(picoquic_cnx_t * cnx)
+{
+    picoquic_packet * p = cnx->retransmit_oldest;
+    int backlog_empty = 1;
+
+    /* TODO: while packets are pure ACK, drop them from retransmit queue */
+    while (p != NULL && backlog_empty == 1)
+    {
+        /* check if this is an ACK only packet */
+        picoquic_packet_header ph;
+        int ret = 0;
+        int frame_is_pure_ack = 0;
+        size_t frame_length = 0;
+        size_t byte_index = 0; /* Used when parsing the old packet */
+        size_t checksum_length;
+        /* Get the packet type */
+        ret = picoquic_parse_packet_header(p->bytes, p->length, &ph);
+
+        if (ph.ptype == picoquic_packet_1rtt_protected_phi0 ||
+            ph.ptype == picoquic_packet_1rtt_protected_phi1)
+        {
+            checksum_length = 16;
+        }
+        else
+        {
+            checksum_length = 8;
+        }
+
+        /* Copy the relevant bytes from one packet to the next */
+        byte_index = ph.offset;
+
+        while (ret == 0 && byte_index < p->length)
+        {
+            ret = picoquic_skip_frame(&p->bytes[byte_index],
+                p->length - ph.offset, &frame_length, &frame_is_pure_ack);
+
+            if (!frame_is_pure_ack)
+            {
+                backlog_empty = 0;
+                break;
+            }
+            byte_index += frame_length;
+        }
+
+        p = p->previous_packet;
+    }
+
+    return backlog_empty;
+}
+
 int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 	uint64_t current_time, uint8_t * send_buffer, size_t send_buffer_max, size_t * send_length)
 {

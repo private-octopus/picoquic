@@ -179,6 +179,9 @@ extern "C" {
 
     uint64_t picoquic_get_cnxid(picoquic_cnx_t * cnx);
     uint64_t picoquic_get_initial_cnxid(picoquic_cnx_t * cnx);
+    uint64_t picoquic_get_cnx_start_time(picoquic_cnx_t * cnx);
+
+    int picoquic_is_cnx_backlog_empty(picoquic_cnx_t * cnx);
 
     void picoquic_set_callback(picoquic_cnx_t * cnx,
         picoquic_stream_data_cb_fn callback_fn, void * callback_ctx);

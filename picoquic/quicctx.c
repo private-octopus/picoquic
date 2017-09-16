@@ -351,6 +351,7 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
         cnx->previous_in_table = NULL;
         quic->cnx_list = cnx;
         cnx->quic = quic;
+        cnx->start_time = start_time;
     }
 
     if (cnx != NULL)
@@ -457,6 +458,7 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
 			cnx->retransmit_newest = NULL;
 			cnx->retransmit_oldest = NULL;
 			cnx->highest_acknowledged = cnx->send_sequence - 1;
+
 			cnx->latest_time_acknowledged = start_time;
 			cnx->latest_progress_time = start_time;
 			cnx->ack_needed = 0;
@@ -536,7 +538,7 @@ picoquic_cnx_t * picoquic_create_client_cnx(picoquic_quic_t * quic,
 
 void picoquic_get_peer_addr(picoquic_cnx_t * cnx, struct sockaddr ** addr, int * addr_len)
 {
-    *addr = &cnx->peer_addr;
+    *addr = (struct sockaddr *) &cnx->peer_addr;
     *addr_len = cnx->peer_addr_len;
 }
 
@@ -548,6 +550,12 @@ uint64_t picoquic_get_cnxid(picoquic_cnx_t * cnx)
 uint64_t picoquic_get_initial_cnxid(picoquic_cnx_t * cnx)
 {
     return cnx->initial_cnxid;
+}
+
+
+uint64_t picoquic_get_cnx_start_time(picoquic_cnx_t * cnx)
+{
+    return cnx->start_time;
 }
 
 picoquic_state_enum picoquic_get_cnx_state(picoquic_cnx_t * cnx)

@@ -233,6 +233,7 @@ extern "C" {
 		picoquic_state_enum cnx_state;
 		uint64_t initial_cnxid;
 		uint64_t server_cnxid;
+        uint64_t start_time;
 		uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE];
 		uint32_t local_error;
 		uint32_t remote_error;

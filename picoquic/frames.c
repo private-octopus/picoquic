@@ -1126,7 +1126,6 @@ int picoquic_decode_ack_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
 		{
 		case 0:
 			last_range = bytes[byte_index++];
-			byte_index += 1;
 			break;
 		case 1:
 			last_range = PICOPARSE_16(bytes + byte_index);
