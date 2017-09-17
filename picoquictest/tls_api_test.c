@@ -885,6 +885,44 @@ static int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t * test_ctx,
 	return ret; /* end of sending loop */
 }
 
+static int tls_api_attempt_to_close(
+    picoquic_test_tls_api_ctx_t * test_ctx, uint64_t * simulated_time)
+{
+    int ret = 0;
+
+    ret = picoquic_close(test_ctx->cnx_client);
+
+    if (ret == 0)
+    {
+        /* packet from client to server */
+        /* Do not simulate losses there, as there is no way to correct them */
+
+        int nb_rounds = 0;
+
+        test_ctx->c_to_s_link->loss_mask = 0;
+        test_ctx->s_to_c_link->loss_mask = 0;
+
+        while (ret == 0 && (
+            test_ctx->cnx_client->cnx_state != picoquic_state_disconnected ||
+            test_ctx->cnx_server->cnx_state != picoquic_state_disconnected) &&
+            nb_rounds < 16)
+        {
+            int was_active = 0;
+            ret = tls_api_one_sim_round(test_ctx, simulated_time, &was_active);
+            nb_rounds++;
+        }
+    }
+
+    if (ret == 0 && (
+        test_ctx->cnx_client->cnx_state != picoquic_state_disconnected ||
+        test_ctx->cnx_server->cnx_state != picoquic_state_disconnected))
+    {
+        ret = -1;
+    }
+
+    return ret;
+}
+
 static int tls_api_test_with_loss(uint64_t  * loss_mask, uint32_t proposed_version,
 	char const * sni, char const * alpn)
 {
@@ -899,35 +937,7 @@ static int tls_api_test_with_loss(uint64_t  * loss_mask, uint32_t proposed_versi
 
 	if (ret == 0)
 	{
-		ret = picoquic_close(test_ctx->cnx_client);
-
-        if (ret == 0)
-        {
-            /* packet from client to server */
-			/* Do not simulate losses there, as there is no way to correct them */
-
-			int nb_rounds = 0;
-
-			test_ctx->c_to_s_link->loss_mask = 0;
-			test_ctx->s_to_c_link->loss_mask = 0;
-
-			while (ret == 0 && (
-				test_ctx->cnx_client->cnx_state != picoquic_state_disconnected ||
-				test_ctx->cnx_server->cnx_state != picoquic_state_disconnected) &&
-				nb_rounds < 16)
-			{
-				int was_active = 0;
-				ret = tls_api_one_sim_round(test_ctx, &simulated_time, &was_active);
-				nb_rounds++;
-			}
-        }
-
-        if (ret == 0 && (
-            test_ctx->cnx_client->cnx_state != picoquic_state_disconnected ||
-			test_ctx->cnx_server->cnx_state != picoquic_state_disconnected))
-        {
-            ret = -1;
-        }
+        ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
 
 		if (ret == 0)
 		{
@@ -1241,4 +1251,38 @@ int tls_api_bad_server_reset_test()
 	}
 
 	return ret;
+}
+
+/*
+ * verify that a connection is correctly established after a stateless redirect
+ */
+
+int tls_api_hrr_test()
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t * test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN);
+    int was_active = 0;
+
+    if (ret == 0)
+    {
+        /* Set the server in HRR/Cookies mode */
+        picoquic_set_cookie_mode(test_ctx->qserver, 1);
+        /* Try the connection */
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    if (ret == 0)
+    {
+        ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
+    }
+
+    if (test_ctx != NULL)
+    {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
 }
