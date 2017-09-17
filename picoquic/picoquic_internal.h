@@ -35,6 +35,7 @@ extern "C" {
 #define PICOQUIC_INITIAL_MTU_IPV6 1232
 #define PICOQUIC_ENFORCED_INITIAL_MTU 1200
 #define PICOQUIC_RESET_SECRET_SIZE 16
+#define PICOQUIC_RETRY_SECRET_SIZE 64
 
 #define PICOQUIC_INITIAL_RTT 250000 /* 250 ms */
 #define PICOQUIC_INITIAL_RETRANSMIT_TIMER 1000000 /* one second */
@@ -59,10 +60,11 @@ extern "C" {
 	} picoquic_version_feature_flags;
 
 	/*
-	* Quic context flags
-	*/
+	 * Quic context flags
+	 */
 	typedef enum {
-		picoquic_context_server = 1
+		picoquic_context_server = 1,
+        picoquic_context_check_cookie = 2
 	} picoquic_context_flags;
 
 
@@ -77,6 +79,7 @@ extern "C" {
 		void * default_callback_ctx;
 		char const * default_alpn;
 		uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE];
+        uint8_t retry_seed[PICOQUIC_RETRY_SECRET_SIZE];
 
 		uint32_t flags;
 

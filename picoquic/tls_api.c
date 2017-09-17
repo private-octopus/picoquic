@@ -481,9 +481,25 @@ int picoquic_tlscontext_create(picoquic_quic_t * quic, picoquic_cnx_t * cnx)
 				ctx->handshake_properties.client.negotiated_protocols.count = 1;
 				ctx->handshake_properties.client.negotiated_protocols.list = &ctx->alpn_vec;
 			}
-			ctx->handshake_properties.client.negotiate_before_key_exchange = 0;// 1;
+
 			picoquic_tls_set_extensions(cnx, ctx);
 		}
+        else
+        {
+            /* Enable server side HRR if cookie mode is required */
+            if ((quic->flags&picoquic_context_check_cookie) != 0)
+            {
+                /* if the server should enforce the client to do a stateless retry */
+                ctx->handshake_properties.server.cookie.enforce_use = 1;
+                /* secret used for signing / verifying the cookie(internally uses HMAC) */
+                ctx->handshake_properties.server.cookie.key = cnx->quic->retry_seed;
+                /* additional data to be used for signing / verification */
+                ctx->handshake_properties.server.cookie.additional_data.base
+                    = (uint8_t *)&cnx->peer_addr;
+                ctx->handshake_properties.server.cookie.additional_data.len
+                    = cnx->peer_addr_len;
+            }
+        }
 	}
 
 	cnx->tls_ctx = (void *)ctx;
@@ -539,7 +555,6 @@ int picoquic_tlsinput_segment(picoquic_cnx_t * cnx,
 
     ptls_buffer_init(sendbuf, "", 0);
 
-	/* TODO: handshake properties! */
     /* Provide the data */
     while (roff < length && (ret == 0 || ret == PTLS_ERROR_IN_PROGRESS))
     {
@@ -781,8 +796,12 @@ int picoquic_tlsinput_stream_zero(picoquic_cnx_t * cnx)
 		cnx->first_stream.fin_offset = 0;
 		cnx->first_stream.sent_offset = 0;
 	}
+    else if (ret == PTLS_ERROR_STATELESS_RETRY)
+    {
+        cnx->cnx_state = picoquic_state_server_send_hrr;
+    }
 
-    if ((ret == 0 || ret == PTLS_ERROR_IN_PROGRESS))
+    if ((ret == 0 || ret == PTLS_ERROR_IN_PROGRESS || ret == PTLS_ERROR_STATELESS_RETRY))
     {
         if (sendbuf.off > 0)
         {
@@ -802,7 +821,7 @@ int picoquic_tlsinput_stream_zero(picoquic_cnx_t * cnx)
 
 /*
  * Compute the 16 byte reset secret associated with a connection ID.
- * We implement it as the hash of a secret seed maintianed per QUIC context
+ * We implement it as the hash of a secret seed maintained per QUIC context
  * and the 8 bytes connection ID. 
  * This is written using PTLS portable hash API, initialized
  * for now with the OpenSSL implementation. Will have to adapt if we

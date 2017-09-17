@@ -504,7 +504,7 @@ static void first_server_callback(picoquic_cnx_t * cnx,
 }
 
 int quic_server(char * server_name, int server_port, 
-    char * pem_cert, char * pem_key, int just_once)
+    char * pem_cert, char * pem_key, int just_once, int do_hrr)
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
@@ -538,6 +538,10 @@ int quic_server(char * server_name, int server_port,
         {
             fprintf(stderr, "Could not create server context\n");
             ret = -1;
+        }
+        else if (do_hrr != 0)
+        {
+            picoquic_set_cookie_mode(qserver, 1);
         }
     }
 
@@ -1191,6 +1195,8 @@ int main(int argc, char ** argv)
     int server_port = 4443;
     int is_client = 1;
     int just_once = 0;
+    int do_hrr = 0;
+
 #ifdef WIN32
     WSADATA wsaData;
 #endif
@@ -1223,7 +1229,10 @@ int main(int argc, char ** argv)
 
                     if (argc > 5)
                     {
-                        just_once = 1;
+                        if (strcmp(argv[5], "once") == 0)
+                            just_once = 1;
+                        else if (strcmp(argv[5], "hrr") == 0)
+                            do_hrr = 1;
                     }
                 }
             }
@@ -1244,10 +1253,10 @@ int main(int argc, char ** argv)
     if (is_client == 0)
     {
         /* Run as server */
-        printf("Starting PicoQUIC server on port %d, server name = %s, just_once = %d\n", 
-            server_port, server_name, just_once);
+        printf("Starting PicoQUIC server on port %d, server name = %s, just_once = %d, hrr= %d\n", 
+            server_port, server_name, just_once, do_hrr);
         ret = quic_server(server_name, server_port, 
-            server_cert_file, server_key_file, just_once);
+            server_cert_file, server_key_file, just_once, do_hrr);
         printf("Server exit with code = %d\n", ret);
     }
     else

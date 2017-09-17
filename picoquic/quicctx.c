@@ -194,6 +194,19 @@ void picoquic_free(picoquic_quic_t * quic)
     }
 }
 
+void picoquic_set_cookie_mode(picoquic_quic_t * quic, int cookie_mode)
+{
+    if (cookie_mode)
+    {
+        quic->flags |= picoquic_context_check_cookie;
+        picoquic_crypto_random(quic, quic->retry_seed, PICOQUIC_RETRY_SECRET_SIZE);
+    }
+    else
+    {
+        quic->flags &= ~picoquic_context_check_cookie;
+    }
+}
+
 picoquic_stateless_packet_t * picoquic_create_stateless_packet(picoquic_quic_t * quic)
 {
 	return (picoquic_stateless_packet_t *)malloc(sizeof(picoquic_stateless_packet_t));

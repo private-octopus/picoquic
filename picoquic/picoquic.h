@@ -82,22 +82,23 @@ extern "C" {
 	/*
 	 * Connection states, useful to expose the state to the application.
 	 */
-	typedef enum
-	{
-		picoquic_state_client_init,
-		picoquic_state_client_init_sent,
-		picoquic_state_client_renegotiate,
-		picoquic_state_client_hrr_received,
-		picoquic_state_client_init_resent,
-		picoquic_state_server_init,
-		picoquic_state_client_handshake_start,
-		picoquic_state_client_handshake_progress,
-		picoquic_state_client_almost_ready,
-		picoquic_state_client_ready,
-		picoquic_state_server_almost_ready,
-		picoquic_state_server_ready,
-		picoquic_state_disconnecting,
-		picoquic_state_disconnected
+    typedef enum
+    {
+        picoquic_state_client_init,
+        picoquic_state_client_init_sent,
+        picoquic_state_client_renegotiate,
+        picoquic_state_client_hrr_received,
+        picoquic_state_client_init_resent,
+        picoquic_state_server_init,
+        picoquic_state_client_handshake_start,
+        picoquic_state_client_handshake_progress,
+        picoquic_state_client_almost_ready,
+        picoquic_state_client_ready,
+        picoquic_state_server_almost_ready,
+        picoquic_state_server_ready,
+        picoquic_state_disconnecting,
+        picoquic_state_disconnected,
+        picoquic_state_server_send_hrr
 	} picoquic_state_enum;
 
 	/*
@@ -155,6 +156,9 @@ extern "C" {
 		void * default_callback_ctx);
 
 	void picoquic_free(picoquic_quic_t * quic);
+
+    /* Set cookie mode on QUIC context when under stress */
+    void picoquic_set_cookie_mode(picoquic_quic_t * quic, int cookie_mode);
 
 	/* Connection context creation and registration */
 	picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,

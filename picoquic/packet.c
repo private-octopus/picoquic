@@ -285,6 +285,51 @@ void picoquic_process_unexpected_cnxid(
 }
 
 /*
+ * Queue a stateless reset packet
+ */
+
+void picoquic_queue_stateless_reset(picoquic_cnx_t * cnx, 
+    picoquic_packet_header * ph, struct sockaddr* addr_from)
+{
+    picoquic_stateless_packet_t * sp = picoquic_create_stateless_packet(cnx->quic);
+    size_t checksum_length = 8;
+
+    if (sp != NULL)
+    {
+        uint8_t * bytes = sp->bytes;
+        size_t byte_index = 0;
+        size_t data_bytes = 0;
+        /* Packet type set to long header, with cnxid */
+        bytes[byte_index++] = 0x80 | picoquic_packet_server_stateless;
+        /* Copy the connection ID */
+        picoformat_64(bytes + byte_index, ph->cnx_id);
+        byte_index += 8;
+        /* Copy the sequence number */
+        picoformat_32(bytes + byte_index, ph->pn);
+        byte_index += 4;
+        /* Copy the version number */
+        picoformat_32(bytes + byte_index, ph->vn);
+        byte_index += 4;
+        /* Copy the stream zero data */
+        if (picoquic_prepare_stream_frame(cnx, &cnx->first_stream, bytes + byte_index,
+            PICOQUIC_MAX_PACKET_SIZE - byte_index - checksum_length, &data_bytes) == 0)
+        {
+            byte_index += data_bytes;
+            sp->length = fnv1a_protect(bytes, byte_index, PICOQUIC_MAX_PACKET_SIZE);
+            memset(&sp->addr_to, 0, sizeof(sp->addr_to));
+            memcpy(&sp->addr_to, addr_from,
+                (addr_from->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
+            picoquic_queue_stateless_packet(cnx->quic, sp);
+        }
+        else
+        {
+            picoquic_delete_stateless_packet(sp);
+        }
+    }
+}
+
+
+/*
  * Processing of an incoming client initial packet,
  * on an unknown connection context.
  */
@@ -333,14 +378,20 @@ picoquic_cnx_t * picoquic_incoming_initial(
                     /* initialization of context & creation of data */
                     /* TODO: find path to send data produced by TLS. */
                     ret = picoquic_tlsinput_stream_zero(cnx);
+
+                    if (cnx->cnx_state == picoquic_state_server_send_hrr)
+                    {
+                        picoquic_queue_stateless_reset(cnx, ph, addr_from);
+                        cnx->cnx_state = picoquic_state_disconnected;
+                    }
                 }
 
-                if (ret != 0)
+                if (ret != 0 || cnx->cnx_state == picoquic_state_disconnected)
                 {
                     /* This is bad. should just delete the context, log the packet, etc */
 					picoquic_delete_cnx(cnx);
-					free(cnx);
 					cnx = NULL;
+                    ret = 0;
                 }
             }
         }
@@ -715,7 +766,6 @@ int picoquic_incoming_packet(
 						ret = -1;
                     break;
                 case picoquic_packet_server_stateless:
-                    /* Not implemented yet. Log and ignore. */
                     ret = picoquic_incoming_server_stateless( cnx, bytes, length, &ph, current_time);
                     break;
                 case picoquic_packet_server_cleartext:
