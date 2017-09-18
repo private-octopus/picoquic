@@ -236,7 +236,7 @@ int do_select(SOCKET_TYPE * sockets, int nb_sockets,
     struct sockaddr_storage * addr_from,
     socklen_t * from_length,
     uint8_t * buffer, int buffer_max,
-    int is_active,
+    int64_t delta_t,
     uint64_t * current_time)
 {
 
@@ -257,15 +257,23 @@ int do_select(SOCKET_TYPE * sockets, int nb_sockets,
         FD_SET(sockets[i], &readfds);
     }
 
-    if (is_active)
+    if (delta_t <= 0)
     {
         tv.tv_sec = 0;
-        tv.tv_usec = 100;
+        tv.tv_usec = 0;
     }
     else
     {
-        tv.tv_sec = 1;
-        tv.tv_usec = 0;
+        if (delta_t > 10000000)
+        {
+            tv.tv_sec = (long)10;
+            tv.tv_usec = 0;
+        }
+        else
+        {
+            tv.tv_sec = (long)(delta_t / 1000000);
+            tv.tv_usec = (long)(delta_t % 1000000);
+        }
     }
 
     ret_select = select(sockmax+1, &readfds, NULL, NULL, &tv);
@@ -524,6 +532,7 @@ int quic_server(char * server_name, int server_port,
 	uint64_t current_time = 0;
 	picoquic_stateless_packet_t * sp;
     int is_active = 0;
+    int64_t delay_max = 10000000;
 
     /* Open a UDP socket */
     ret = picoquic_open_server_sockets(&server_sockets, server_port);
@@ -551,7 +560,8 @@ int quic_server(char * server_name, int server_port,
     {
         bytes_recv = do_select(server_sockets.s_socket, PICOQUIC_NB_SERVER_SOCKETS,
             &addr_from, &from_length,
-            buffer, sizeof(buffer), is_active, &current_time);
+            buffer, sizeof(buffer), 
+            picoquic_get_next_wake_delay(qserver, current_time, delay_max), &current_time);
 
         if (bytes_recv != 0)
         {
@@ -836,10 +846,11 @@ int quic_client_ui(picoquic_cnx_t * cnx, picoquic_first_client_callback_ctx_t * 
                 stream_ctx->command[1] = 'E';
                 stream_ctx->command[2] = 'T';
                 stream_ctx->command[3] = ' ';
-                memcpy(&stream_ctx->command[4], text, text_len);
-                stream_ctx->command[text_len + 4] = '\r';
-                stream_ctx->command[text_len + 5] = '\n';
-                stream_ctx->command[text_len + 6] = 0;
+                stream_ctx->command[4] = '/';
+                memcpy(&stream_ctx->command[5], text, text_len);
+                stream_ctx->command[text_len + 5] = '\r';
+                stream_ctx->command[text_len + 6] = '\n';
+                stream_ctx->command[text_len + 7] = 0;
                 stream_ctx->stream_id = (ctx->nb_client_streams * 2) + 1;
 
                 stream_ctx->next_stream = ctx->first_stream;
@@ -912,6 +923,7 @@ int quic_client(char * ip_address_text, int server_port)
     int established = 0;
     char * sni = NULL;
     int is_active = 0;
+    int64_t delay_max = 10000000;
 
     memset(&callback_ctx, 0, sizeof(picoquic_first_client_callback_ctx_t));
 
@@ -1002,13 +1014,6 @@ int quic_client(char * ip_address_text, int server_port)
 
     }
 
-    /*
-    if (ret == 0)
-    {
-        ret = bind_to_port(fd, server_address.ss_family, server_port + 1);
-    }
-    */
-
     /* Create QUIC context */
     current_time = get_current_time();
 
@@ -1069,8 +1074,20 @@ int quic_client(char * ip_address_text, int server_port)
     while (ret == 0 &&
         picoquic_get_cnx_state(cnx_client) != picoquic_state_disconnected)
     {
+        if (picoquic_is_cnx_backlog_empty(cnx_client) &&
+            callback_ctx.nb_open_streams == 0)
+        {
+            delay_max = 1000;
+        }
+        else
+        {
+            delay_max = 10000000;
+        }
+
         bytes_recv = do_select(&fd, 1, &packet_from, &from_length,
-            buffer, sizeof(buffer), is_active, &current_time);
+            buffer, sizeof(buffer), 
+            picoquic_get_next_wake_delay(qclient, current_time, delay_max), 
+            &current_time);
 
         if (bytes_recv != 0)
         {

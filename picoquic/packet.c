@@ -801,6 +801,10 @@ int picoquic_incoming_packet(
 		{
 			/* Mark the sequence number as received */
 			ret = picoquic_record_pn_received(cnx, ph.pn64, current_time);
+            if (ret == 0)
+            {
+                cnx->ack_needed = 1;
+            }
 		}
 	}
 	else if (ret == PICOQUIC_ERROR_AEAD_CHECK ||
@@ -810,9 +814,18 @@ int picoquic_incoming_packet(
 		ret == PICOQUIC_ERROR_CNXID_CHECK ||
 		ret == PICOQUIC_ERROR_HRR)
 	{
-		/* Bad packets are dropped silently */
+		/* Bad packets are dropped silently, but duplicates should be acknowledged */
+        if (cnx != NULL)
+        {
+            cnx->ack_needed = 1;
+        }
 		ret = 0;
 	}
+
+    if (cnx != NULL)
+    {
+        picoquic_cnx_set_next_wake_time(cnx, current_time);
+    }
 
     return ret;
 }

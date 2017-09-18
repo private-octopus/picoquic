@@ -371,50 +371,61 @@ int http0dot9_get(uint8_t * command, size_t command_length,
         *response_length = 0;
     }
     /* if the doc name  is a known value, return it */
-    else if (http09_compare_name(command, command_length, byte_index, "/") == 0 ||
-        http09_compare_name(command, command_length, byte_index, "index.html") == 0)
+    else if (http09_compare_name(command, command_length, byte_index, "/") == 0)
     {
         ret = http09_index_html(response, response_max, response_length);
     }
     else
     {
-        /* if the doc name is of form doc-NNNNNNNN.html,
-         * generate the html text, stopping at response_length_max if the number is too long.
-         */
-        if (command_length < byte_index + 9 ||
-            (command[byte_index + 0] != 'D' && command[byte_index + 0] != 'd') ||
-            (command[byte_index + 1] != 'O' && command[byte_index + 1] != 'o') ||
-            (command[byte_index + 2] != 'C' && command[byte_index + 2] != 'c') ||
-            (command[byte_index + 3] != '-'))
+        if (command[byte_index] == '/')
         {
-            ret = -1;
+            byte_index++;
+        }
+
+        if (http09_compare_name(command, command_length, byte_index, "index.html") == 0)
+        {
+            ret = http09_index_html(response, response_max, response_length);
         }
         else
         {
-            byte_index += 4;
-
-            while (byte_index < command_length &&
-                command[byte_index] >= '0' && command[byte_index] <= '9')
+            /* if the doc name is of form doc-NNNNNNNN.html,
+             * generate the html text, stopping at response_length_max if the number is too long.
+             */
+            if (command_length < byte_index + 9 ||
+                (command[byte_index + 0] != 'D' && command[byte_index + 0] != 'd') ||
+                (command[byte_index + 1] != 'O' && command[byte_index + 1] != 'o') ||
+                (command[byte_index + 2] != 'C' && command[byte_index + 2] != 'c') ||
+                (command[byte_index + 3] != '-'))
             {
-                doc_length *= 10;
-                doc_length += command[byte_index] - '0';
-                byte_index++;
-            }
-
-            if (doc_length == 0 ||
-                http09_compare_name(command, command_length, byte_index, ".html") == 0)
-            {
-                /* HTML by default */
-                ret = http09_random_html(doc_length, response, response_max, response_length);
-            }
-            else if (http09_compare_name(command, command_length, byte_index, ".txt") == 0)
-            {
-                /* Random text */
-                ret = http09_random_txt(doc_length, response, response_max, response_length);
+                ret = -1;
             }
             else
             {
-                ret = -1;
+                byte_index += 4;
+
+                while (byte_index < command_length &&
+                    command[byte_index] >= '0' && command[byte_index] <= '9')
+                {
+                    doc_length *= 10;
+                    doc_length += command[byte_index] - '0';
+                    byte_index++;
+                }
+
+                if (doc_length == 0 ||
+                    http09_compare_name(command, command_length, byte_index, ".html") == 0)
+                {
+                    /* HTML by default */
+                    ret = http09_random_html(doc_length, response, response_max, response_length);
+                }
+                else if (http09_compare_name(command, command_length, byte_index, ".txt") == 0)
+                {
+                    /* Random text */
+                    ret = http09_random_txt(doc_length, response, response_max, response_length);
+                }
+                else
+                {
+                    ret = -1;
+                }
             }
         }
     }

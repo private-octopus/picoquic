@@ -176,6 +176,9 @@ extern "C" {
 
 	picoquic_cnx_t * picoquic_get_first_cnx(picoquic_quic_t * quic);
     picoquic_cnx_t * picoquic_get_next_cnx(picoquic_cnx_t * cnx);
+    int64_t picoquic_get_next_wake_delay(picoquic_quic_t * quic, 
+        uint64_t current_time,
+        int64_t delay_max);
 
 	picoquic_state_enum picoquic_get_cnx_state(picoquic_cnx_t * cnx);
 

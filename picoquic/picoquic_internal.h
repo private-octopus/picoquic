@@ -43,6 +43,7 @@ extern "C" {
 #define PICOQUIC_ACK_DELAY_MAX 20000 /* 20 ms */
 
 #define PICOQUIC_MICROSEC_SILENCE_MAX 120000000 /* 120 seconds for now */
+#define PICOQUIC_MICROSEC_WAIT_MAX 10000000 /* 10 seconds for now */
 
 #define PICOQUIC_CWIN_INITIAL  (10*PICOQUIC_MAX_PACKET_SIZE)
 #define PICOQUIC_CWIN_MINIMUM  (2*PICOQUIC_MAX_PACKET_SIZE)
@@ -241,6 +242,9 @@ extern "C" {
 		uint32_t local_error;
 		uint32_t remote_error;
 
+        /* Next time sending data is expected */
+        uint64_t next_wake_time;
+
 		/* TLS context, TLS Send Buffer, chain of receive buffers (todo) */
 		void * tls_ctx;
 		struct st_ptls_buffer_t * tls_sendbuf;
@@ -310,6 +314,12 @@ extern "C" {
 	/* Connection context retrieval functions */
 	picoquic_cnx_t * picoquic_cnx_by_id(picoquic_quic_t * quic, uint64_t cnx_id);
 	picoquic_cnx_t * picoquic_cnx_by_net(picoquic_quic_t * quic, struct sockaddr* addr);
+
+    /* Next time is used to order the list of available connections,
+     * so ready connections are polled first */
+    void picoquic_reinsert_by_wake_time(picoquic_quic_t * quic, picoquic_cnx_t * cnx);
+
+    void picoquic_cnx_set_next_wake_time(picoquic_cnx_t * cnx, uint64_t current_time);
 
 	/* Integer parsing macros */
 #define PICOPARSE_16(b) ((((uint16_t)(b)[0])<<8)|(b)[1])

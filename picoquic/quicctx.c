@@ -341,6 +341,62 @@ void picoquic_init_transport_parameters(picoquic_transport_parameters * tp)
 	tp->max_packet_size = PICOQUIC_MAX_PACKET_SIZE - 16 - 40;
 }
 
+static void picoquic_insert_cnx_by_wake_time(picoquic_quic_t * quic, picoquic_cnx_t * cnx)
+{
+    picoquic_cnx_t * cnx_next = quic->cnx_list;
+    picoquic_cnx_t * previous = NULL;
+    while (cnx_next != NULL &&
+        cnx_next->next_wake_time <= cnx->next_wake_time)
+    {
+        previous = cnx_next;
+        cnx_next = cnx_next->next_in_table;
+    }
+
+    cnx->previous_in_table = previous;
+    if (previous == NULL)
+    {
+        quic->cnx_list = cnx;
+    }
+    else
+    {
+        previous->next_in_table = cnx;
+    }
+
+    cnx->next_in_table = cnx_next;
+
+    if (cnx_next == NULL)
+    {
+        quic->cnx_last = cnx;
+    }
+    else
+    {
+        cnx_next->previous_in_table = cnx;
+    }
+}
+
+void picoquic_reinsert_by_wake_time(picoquic_quic_t * quic, picoquic_cnx_t * cnx)
+{
+    if (cnx->next_in_table == NULL)
+    {
+        quic->cnx_last = cnx->previous_in_table;
+    }
+    else
+    {
+        cnx->next_in_table->previous_in_table = cnx->previous_in_table;
+    }
+
+    if (cnx->previous_in_table == NULL)
+    {
+        quic->cnx_list = cnx->next_in_table;
+    }
+    else
+    {
+        cnx->previous_in_table->next_in_table = cnx->next_in_table;
+    }
+
+    picoquic_insert_cnx_by_wake_time(quic, cnx);
+}
+
 picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic, 
     uint64_t cnx_id, struct sockaddr * addr, uint64_t start_time, uint32_t preferred_version,
 	char const * sni, char const * alpn)
@@ -352,19 +408,11 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
     {
         memset(cnx, 0, sizeof(picoquic_cnx_t));
 
-        if (quic->cnx_list != NULL)
-        {
-            quic->cnx_list->previous_in_table = cnx;
-        }
-        else
-        {
-            quic->cnx_last = cnx;
-        }
-        cnx->next_in_table = quic->cnx_list;
-        cnx->previous_in_table = NULL;
-        quic->cnx_list = cnx;
-        cnx->quic = quic;
+        cnx->next_wake_time = start_time;
         cnx->start_time = start_time;
+
+        cnx->quic = quic;
+        picoquic_insert_cnx_by_wake_time(quic, cnx);
     }
 
     if (cnx != NULL)
@@ -586,6 +634,30 @@ picoquic_cnx_t * picoquic_get_next_cnx(picoquic_cnx_t * cnx)
 {
     return cnx->next_in_table;
 }
+
+
+int64_t picoquic_get_next_wake_delay(picoquic_quic_t * quic, 
+    uint64_t current_time, int64_t delay_max)
+{
+    int64_t wake_delay;
+
+    if (quic->cnx_list != NULL)
+    {
+        wake_delay = quic->cnx_list->next_wake_time - current_time;
+
+        if (wake_delay > delay_max)
+        {
+            wake_delay = delay_max;
+        }
+    }
+    else
+    {
+        wake_delay = delay_max;
+    }
+
+    return wake_delay;
+}
+
 
 void picoquic_set_callback(picoquic_cnx_t * cnx,
     picoquic_stream_data_cb_fn callback_fn, void * callback_ctx)

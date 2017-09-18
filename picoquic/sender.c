@@ -217,6 +217,71 @@ size_t picoquic_create_packet_header(
  * retransmission. Also, prune the retransmit queue as needed.
  */
 
+static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t * cnx, 
+    picoquic_packet * p, uint64_t current_time, int * timer_based)
+{
+
+    int64_t delta_seq = cnx->highest_acknowledged - p->sequence_number;
+    int should_retransmit = 0;
+
+    if (delta_seq > 3)
+    {
+        /*
+         * SACK Logic.
+         * more than N packets were seen at the receiver after this one.
+         */
+        should_retransmit = 1;
+    }
+    else
+    {
+        int64_t delta_t = cnx->latest_time_acknowledged - p->send_time;
+
+        /* TODO: out of order delivery time ought to be dynamic */
+        if (delta_t > 10000)
+        {
+            /*
+             * RACK logic.
+             * The latest acknowledged was sent more than X ms after this one.
+             */
+            should_retransmit = 1;
+        }
+        else if (delta_t > 0)
+        {
+            /* If the delta-t is larger than zero, add the time since the
+            * last ACK was received. If that is larger than the inter packet
+            * time, consider that there is a loss */
+            uint64_t time_from_last_ack = current_time - cnx->latest_time_acknowledged + delta_t;
+
+            if (time_from_last_ack > 10000)
+            {
+                should_retransmit = 1;
+            }
+        }
+
+        if (should_retransmit == 0)
+        {
+            /* Don't fire yet, because of possible out of order delivery */
+            int64_t time_out = current_time - p->send_time;
+            uint64_t retransmit_timer = (cnx->nb_retransmit == 0) ?
+                cnx->retransmit_timer : (1000000 << (cnx->nb_retransmit - 1));
+
+            /* TODO: timer limit ought to be dynamic */
+            if ((uint64_t)time_out < retransmit_timer)
+            {
+                /* Do not retransmit if the timer has not yet elapsed */
+                should_retransmit = 0;
+            }
+            else
+            {
+                should_retransmit = 1;
+                *timer_based = 1;
+            }
+        }
+    }
+
+    return should_retransmit;
+}
+
 int picoquic_retransmit_needed(picoquic_cnx_t * cnx, uint64_t current_time, 
 	picoquic_packet * packet, int * use_fnv1a, size_t * header_length)
 {
@@ -233,6 +298,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t * cnx, uint64_t current_time,
 
 		length = 0;
 
+#if 0
 		if (delta_seq > 3)
 		{
 			/*
@@ -287,6 +353,9 @@ int picoquic_retransmit_needed(picoquic_cnx_t * cnx, uint64_t current_time,
 				}
 			}
 		}
+#else
+        should_retransmit = picoquic_retransmit_needed_by_packet(cnx, p, current_time, &timer_based_retransmit);
+#endif
 
 		if (should_retransmit == 0)
 		{
@@ -463,6 +532,103 @@ int picoquic_is_cnx_backlog_empty(picoquic_cnx_t * cnx)
     }
 
     return backlog_empty;
+}
+
+/* Decide whether MAX data need to be sent or not */
+int picoquic_should_send_max_data(picoquic_cnx_t * cnx)
+{
+    int ret = 0;
+
+    if (2 * cnx->data_received > cnx->maxdata_local)
+        ret = 1;
+
+    return ret;
+}
+
+
+/* Decide the next time at which the connection should send data */
+void picoquic_cnx_set_next_wake_time(picoquic_cnx_t * cnx, uint64_t current_time)
+{
+    uint64_t old_time = cnx->next_wake_time;
+    uint64_t next_time = cnx->latest_progress_time + PICOQUIC_MICROSEC_SILENCE_MAX;
+    picoquic_packet * p = cnx->retransmit_oldest;
+    picoquic_stream_head * stream = NULL;
+    int timer_based = 0;
+    int blocked = 1;
+
+    if (cnx->cnx_state == picoquic_state_disconnecting)
+    {
+        blocked = 0;
+    }
+    else if (p != NULL && picoquic_retransmit_needed_by_packet(cnx, p, current_time, &timer_based))
+    {
+        blocked = 0;
+    }
+    else if (picoquic_is_ack_needed(cnx, current_time))
+    {
+        blocked = 0;
+    }
+    else if (cnx->cwin > cnx->bytes_in_transit)
+    {
+        if (picoquic_should_send_max_data(cnx))
+        {
+            blocked = 0;
+        }
+        else
+        {
+            int restricted = (cnx->cnx_state == picoquic_state_client_ready ||
+                cnx->cnx_state == picoquic_state_server_ready) ? 0 : 1;
+            picoquic_find_ready_stream(cnx, restricted);
+
+            if (stream != NULL)
+            {
+                blocked = 0;
+            }
+        }
+    }
+
+    if (blocked == 0)
+    {
+        next_time = current_time;
+    }
+    else
+    {
+        /* Consider delayed ACK */
+        if (cnx->ack_needed)
+        {
+            next_time = cnx->highest_ack_time + 10000;
+        }
+
+        /* Consider delayed RACK */
+        if (p != NULL)
+        {
+            if (cnx->latest_time_acknowledged > p->send_time &&
+                p->send_time + 10000 < next_time)
+            {
+                next_time = p->send_time + 10000;
+            }
+
+            if (cnx->nb_retransmit == 0)
+            {
+                if (p->send_time + cnx->retransmit_timer < next_time)
+                {
+                    next_time = p->send_time + cnx->retransmit_timer;
+                }
+            }
+            else
+            {
+                if (p->send_time + (1000000ull << (cnx->nb_retransmit - 1)) < next_time)
+                {
+                    next_time = p->send_time + (1000000ull << (cnx->nb_retransmit - 1));
+                }
+            }
+        }
+    }
+
+    cnx->next_wake_time = next_time;
+
+    /* reset the connection at its new logical position */
+    picoquic_reinsert_by_wake_time(cnx->quic, cnx);
 }
 
 int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
@@ -741,6 +907,8 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 	{
 		*send_length = 0;
 	}
+
+    picoquic_cnx_set_next_wake_time(cnx, current_time);
 	
 	return ret;
 }
