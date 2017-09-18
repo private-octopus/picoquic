@@ -90,7 +90,7 @@ int picoquic_parse_packet_header(
         case 1:
             ph->pn = bytes[ph->offset];
             ph->pnmask = 0xFFFFFFFFFFFFFF00ull;
-            ph->offset += 2;
+            ph->offset += 1;
             break;
         case 2:
             ph->pn = PICOPARSE_16(&bytes[ph->offset]);

@@ -826,7 +826,7 @@ int quic_client_ui(picoquic_cnx_t * cnx, picoquic_first_client_callback_ctx_t * 
         {
             break;
         }
-        else if (text_len + 7 > PICOQUIC_FIRST_COMMAND_MAX)
+        else if (text_len + 8 > PICOQUIC_FIRST_COMMAND_MAX)
         {
             fprintf(stdout, "Name too long!\n");
         }
@@ -878,7 +878,7 @@ int quic_client_ui(picoquic_cnx_t * cnx, picoquic_first_client_callback_ctx_t * 
                 }
 
                 (void) picoquic_add_to_stream(cnx, stream_ctx->stream_id, stream_ctx->command,
-                    text_len + 6, 1);
+                    text_len + 7, 0);
                 nb_doc_added++;
             }
         }
@@ -923,6 +923,7 @@ int quic_client(char * ip_address_text, int server_port)
     int established = 0;
     char * sni = NULL;
     int is_active = 0;
+    int backlog_empty = 0;
     int64_t delay_max = 10000000;
 
     memset(&callback_ctx, 0, sizeof(picoquic_first_client_callback_ctx_t));
@@ -1077,7 +1078,7 @@ int quic_client(char * ip_address_text, int server_port)
         if (picoquic_is_cnx_backlog_empty(cnx_client) &&
             callback_ctx.nb_open_streams == 0)
         {
-            delay_max = 1000;
+            delay_max = 10000;
         }
         else
         {
@@ -1138,8 +1139,16 @@ int quic_client(char * ip_address_text, int server_port)
                 {
                     if (callback_ctx.nb_open_streams == 0)
                     {
-                        ret = quic_client_ui(cnx_client, &callback_ctx, &current_time);
-                        client_ready_loop = 0;
+                        if (backlog_empty < 8)
+                        {
+                            backlog_empty++;
+                        }
+                        else
+                        {
+                            ret = quic_client_ui(cnx_client, &callback_ctx, &current_time);
+                            client_ready_loop = 0;
+                            backlog_empty = 0;
+                        }
                     }
                     else if (callback_ctx.progress_observed != 0)
                     {
