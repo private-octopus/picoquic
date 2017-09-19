@@ -646,12 +646,16 @@ int picoquic_setup_1RTT_aead_contexts(picoquic_cnx_t * cnx, int is_server)
 
         if (ret == 0)
         {
-            cnx->aead_encrypt_ctx = (void *) ptls_aead_new(cipher->aead, cipher->hash, 1, secret);
+            cnx->aead_encrypt_ctx = (void *) 
+                ptls_aead_new(cipher->aead, cipher->hash, 1, secret);
 
             if (cnx->aead_encrypt_ctx == NULL)
             {
                 ret = -1;
             }
+
+            cnx->aead_de_encrypt_ctx = (void *) 
+                ptls_aead_new(cipher->aead, cipher->hash, 0, secret);
         }
 
         /* Now set up the corresponding decryption */
@@ -688,6 +692,25 @@ size_t picoquic_aead_decrypt(picoquic_cnx_t *cnx, uint8_t * output, uint8_t * in
     else
     {
         decrypted = ptls_aead_decrypt((ptls_aead_context_t *)cnx->aead_decrypt_ctx,
+            (void*)output, (const void *)input, input_length, seq_num,
+            (void *)auth_data, auth_data_length);
+    }
+
+    return decrypted;
+}
+
+size_t picoquic_aead_de_encrypt(picoquic_cnx_t *cnx, uint8_t * output, uint8_t * input, size_t input_length,
+    uint64_t seq_num, uint8_t * auth_data, size_t auth_data_length)
+{
+    size_t decrypted = 0;
+
+    if (cnx->aead_decrypt_ctx == NULL)
+    {
+        decrypted = (uint64_t)(-1ll);
+    }
+    else
+    {
+        decrypted = ptls_aead_decrypt((ptls_aead_context_t *)cnx->aead_de_encrypt_ctx,
             (void*)output, (const void *)input, input_length, seq_num,
             (void *)auth_data, auth_data_length);
     }

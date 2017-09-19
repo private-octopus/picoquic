@@ -334,7 +334,7 @@ int picoquic_register_net_id(picoquic_quic_t * quic, picoquic_cnx_t * cnx, struc
 void picoquic_init_transport_parameters(picoquic_transport_parameters * tp)
 {
 	tp->initial_max_stream_data = 65535;
-	tp->initial_max_data = 0x400000;
+	tp->initial_max_data = 0x100000;
 	tp->initial_max_stream_id = 65535;
 	tp->idle_timeout = 30;
 	tp->omit_connection_id = 0;
@@ -490,7 +490,7 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
 			cnx->first_sack_item.next_sack = NULL;
 			cnx->sack_block_size_max = 0;
 			cnx->highest_ack_sent = 0;
-			cnx->highest_ack_time = 0;
+			cnx->highest_ack_time = start_time;
 
 			cnx->first_stream.stream_id = 0;
 			cnx->first_stream.consumed_offset = 0;
@@ -506,6 +506,7 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
 
 			cnx->aead_decrypt_ctx = NULL;
 			cnx->aead_encrypt_ctx = NULL;
+            cnx->aead_de_encrypt_ctx = NULL;
 
 			picoquic_crypto_random(quic, &random_sequence, sizeof(uint32_t));
 			cnx->send_sequence = random_sequence;
@@ -643,11 +644,18 @@ int64_t picoquic_get_next_wake_delay(picoquic_quic_t * quic,
 
     if (quic->cnx_list != NULL)
     {
-        wake_delay = quic->cnx_list->next_wake_time - current_time;
-
-        if (wake_delay > delay_max)
+        if (quic->cnx_list->next_wake_time > current_time)
         {
-            wake_delay = delay_max;
+            wake_delay = quic->cnx_list->next_wake_time - current_time;
+
+            if (wake_delay > delay_max)
+            {
+                wake_delay = delay_max;
+            }
+        }
+        else
+        {
+            wake_delay = 0;
         }
     }
     else
@@ -893,6 +901,12 @@ void picoquic_delete_cnx(picoquic_cnx_t * cnx)
         if (cnx->aead_encrypt_ctx != NULL)
         {
             picoquic_aead_free(cnx->aead_encrypt_ctx);
+            cnx->aead_encrypt_ctx = NULL;
+        }
+
+        if (cnx->aead_de_encrypt_ctx != NULL)
+        {
+            picoquic_aead_free(cnx->aead_de_encrypt_ctx);
             cnx->aead_encrypt_ctx = NULL;
         }
 

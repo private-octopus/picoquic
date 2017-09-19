@@ -255,8 +255,9 @@ extern "C" {
         uint64_t latest_progress_time; /* last local time at which the connection progressed */
 
 		/* Encryption and decryption objects */
-		void * aead_encrypt_ctx;
+		void * aead_encrypt_ctx; 
 		void * aead_decrypt_ctx;
+        void * aead_de_encrypt_ctx; /* used by logging functions to see what is sent. */
 
 		/* Receive state */
 		picoquic_sack_item_t first_sack_item;

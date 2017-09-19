@@ -765,13 +765,23 @@ uint32_t picoquic_log_decrypt_clear_text(FILE* F,
 }
 
 void picoquic_log_decrypt_encrypted(FILE* F,
-	picoquic_cnx_t * cnx,
+	picoquic_cnx_t * cnx, int receiving,
 	uint8_t * bytes, size_t length, picoquic_packet_header * ph)
 {
 	/* decrypt in a separate copy */
 	uint8_t decrypted[PICOQUIC_MAX_PACKET_SIZE];
-	size_t decrypted_length = picoquic_aead_decrypt(cnx, decrypted,
-		bytes + ph->offset, length - ph->offset, ph->pn64, bytes, ph->offset);
+    size_t decrypted_length = 0;
+    
+    if (receiving)
+    {
+        decrypted_length = picoquic_aead_decrypt(cnx, decrypted,
+            bytes + ph->offset, length - ph->offset, ph->pn64, bytes, ph->offset);
+    }
+    else
+    {
+        decrypted_length = picoquic_aead_de_encrypt(cnx, decrypted,
+            bytes + ph->offset, length - ph->offset, ph->pn64, bytes, ph->offset);
+    }
 
 	if (decrypted_length > length)
 	{
@@ -848,10 +858,7 @@ void picoquic_log_packet(FILE* F, picoquic_quic_t * quic, picoquic_cnx_t * cnx,
 			break;
 		case picoquic_packet_1rtt_protected_phi0:
 		case picoquic_packet_1rtt_protected_phi1:
-			if (receiving)
-			{
-				picoquic_log_decrypt_encrypted(F, cnx, bytes, length, &ph);
-			}
+            picoquic_log_decrypt_encrypted(F, cnx, receiving, bytes, length, &ph);
 			break;
 		default:
 			/* Packet type error. Log and ignore */

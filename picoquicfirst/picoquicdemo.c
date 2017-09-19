@@ -86,6 +86,7 @@
 
 
 #include "../picoquic/picoquic.h"
+
 void picoquic_log_error_packet(FILE * F, uint8_t * bytes, size_t bytes_max, int ret);
 
 void picoquic_log_packet(FILE* F, picoquic_quic_t * quic, picoquic_cnx_t * cnx,
@@ -688,6 +689,23 @@ int quic_server(char * server_name, int server_port,
     return ret;
 }
 
+
+typedef struct st_demo_stream_desc_t {
+    uint32_t stream_id;
+    uint32_t previous_stream_id;
+    char const * doc_name;
+    int is_binary;
+} demo_stream_desc_t;
+
+static const demo_stream_desc_t test_scenario[] = {
+    { 1, 0, "index.html", 0 },
+    { 3, 1, "test.html", 0 },
+    { 5, 1, "doc-123456.html", 0 },
+    { 7, 1, "main.jpg", 1}
+};
+
+static const size_t test_scenario_nb = sizeof(test_scenario) / sizeof(demo_stream_desc_t);
+
 typedef struct st_picoquic_first_client_stream_ctx_t {
     struct st_picoquic_first_client_stream_ctx_t * next_stream;
     uint32_t stream_id;
@@ -697,6 +715,9 @@ typedef struct st_picoquic_first_client_stream_ctx_t {
 } picoquic_first_client_stream_ctx_t;
 
 typedef struct st_picoquic_first_client_callback_ctx_t {
+    demo_stream_desc_t const * demo_stream;
+    size_t nb_demo_streams;
+
     struct st_picoquic_first_client_stream_ctx_t * first_stream;
     int nb_open_streams;
     uint32_t nb_client_streams;
@@ -704,10 +725,85 @@ typedef struct st_picoquic_first_client_callback_ctx_t {
     int progress_observed;
 } picoquic_first_client_callback_ctx_t;
 
+static void demo_client_open_stream(picoquic_cnx_t * cnx,
+    picoquic_first_client_callback_ctx_t * ctx, 
+    uint32_t stream_id, char const * text, size_t text_len, int is_binary)
+{
+    int ret = 0;
+
+    picoquic_first_client_stream_ctx_t *stream_ctx = 
+        (picoquic_first_client_stream_ctx_t *)
+        malloc(sizeof(picoquic_first_client_stream_ctx_t));
+
+    if (stream_ctx == NULL)
+    {
+        fprintf(stdout, "Memory error!\n");
+    }
+    else
+    {
+        fprintf(stdout, "Opening stream %d to GET /%s\n", stream_id, text);
+
+        memset(stream_ctx, 0, sizeof(picoquic_first_client_stream_ctx_t));
+        stream_ctx->command[0] = 'G';
+        stream_ctx->command[1] = 'E';
+        stream_ctx->command[2] = 'T';
+        stream_ctx->command[3] = ' ';
+        stream_ctx->command[4] = '/';
+        memcpy(&stream_ctx->command[5], text, text_len);
+        stream_ctx->command[text_len + 5] = '\r';
+        stream_ctx->command[text_len + 6] = '\n';
+        stream_ctx->command[text_len + 7] = 0;
+        stream_ctx->stream_id = stream_id;
+
+        stream_ctx->next_stream = ctx->first_stream;
+        ctx->first_stream = stream_ctx;
+
+#ifdef WIN32
+        if (fopen_s(&stream_ctx->F, text, (is_binary == 0)?"w":"wb") != 0) {
+            ret = -1;
+        }
+#else
+        stream_ctx->F = fopen(text, (is_binary == 0) ? "w" : "wb");
+        if (stream_ctx->F == NULL) {
+            ret = -1;
+        }
+#endif
+        if (ret != 0)
+        {
+            fprintf(stdout, "Cannot create file: %s\n", text);
+        }
+        else
+        {
+            ctx->nb_open_streams++;
+            ctx->nb_client_streams++;
+        }
+
+        (void)picoquic_add_to_stream(cnx, stream_ctx->stream_id, stream_ctx->command,
+            text_len + 7, 0);
+    }
+}
+
+static void demo_client_start_streams(picoquic_cnx_t * cnx,
+    picoquic_first_client_callback_ctx_t * ctx, uint32_t fin_stream_id)
+{
+    for (size_t i = 0; i < ctx->nb_demo_streams; i++)
+    {
+        if (ctx->demo_stream[i].previous_stream_id == fin_stream_id)
+        {
+            demo_client_open_stream(cnx, ctx, ctx->demo_stream[i].stream_id,
+                ctx->demo_stream[i].doc_name, strlen(ctx->demo_stream[i].doc_name),
+                ctx->demo_stream[i].is_binary);
+        }
+    }
+
+}
+
 static void first_client_callback(picoquic_cnx_t * cnx,
     uint32_t stream_id, uint8_t * bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void * callback_ctx)
 {
+    uint32_t fin_stream_id = 0;
+
     picoquic_first_client_callback_ctx_t * ctx =
         (picoquic_first_client_callback_ctx_t*)callback_ctx;
     picoquic_first_client_stream_ctx_t * stream_ctx = ctx->first_stream;
@@ -751,11 +847,13 @@ static void first_client_callback(picoquic_cnx_t * cnx,
     else if (fin_or_event == picoquic_callback_stream_reset)
     {
         picoquic_reset_stream(cnx, stream_id);
+
         if (stream_ctx->F != NULL)
         {
             fclose(stream_ctx->F);
             stream_ctx->F = NULL;
             ctx->nb_open_streams--;
+            fin_stream_id = stream_id;
 
             fprintf(stdout, "Reset received on stream %d, command: %s, after %d bytes\n",
                 stream_ctx->stream_id, stream_ctx->command, (int)stream_ctx->received_length);
@@ -777,15 +875,21 @@ static void first_client_callback(picoquic_cnx_t * cnx,
             fclose(stream_ctx->F);
             stream_ctx->F = NULL;
             ctx->nb_open_streams--;
+            fin_stream_id = stream_id;
 
             fprintf(stdout, "Received file %s, after %d bytes, closing stream %d\n",
                 &stream_ctx->command[4], (int)stream_ctx->received_length, stream_ctx->stream_id);
         }
     }
 
+    if (fin_stream_id != 0)
+    {
+        demo_client_start_streams(cnx, ctx, fin_stream_id);
+    }
+
     /* that's it */
 }
-
+#if 0
 int quic_client_ui(picoquic_cnx_t * cnx, picoquic_first_client_callback_ctx_t * ctx,
     uint64_t * current_time)
 {
@@ -897,6 +1001,7 @@ int quic_client_ui(picoquic_cnx_t * cnx, picoquic_first_client_callback_ctx_t * 
 
     return ret;
 }
+#endif
 
 int quic_client(char * ip_address_text, int server_port)
 {
@@ -927,6 +1032,8 @@ int quic_client(char * ip_address_text, int server_port)
     int64_t delay_max = 10000000;
 
     memset(&callback_ctx, 0, sizeof(picoquic_first_client_callback_ctx_t));
+    callback_ctx.demo_stream = test_scenario;
+    callback_ctx.nb_demo_streams = test_scenario_nb;
 
     /* get the IP address of the server */
     if (ret == 0)
@@ -1017,6 +1124,7 @@ int quic_client(char * ip_address_text, int server_port)
 
     /* Create QUIC context */
     current_time = get_current_time();
+    callback_ctx.last_interaction_time = current_time;
 
     if (ret == 0)
     {
@@ -1130,12 +1238,27 @@ int quic_client(char * ip_address_text, int server_port)
                     picoquic_log_transport_extension(stdout, cnx_client);
                     printf("Connection established.\n");
                     established = 1;
+                    demo_client_start_streams(cnx_client, &callback_ctx, 0);
                 }
 
                 client_ready_loop++;
 
                 if ((bytes_recv == 0 || client_ready_loop > 4) &&
                     picoquic_is_cnx_backlog_empty(cnx_client))
+                {
+                    if (callback_ctx.nb_open_streams == 0)
+                    {
+                        fprintf(stdout, "All done, Closing the connection.\n");
+                        ret = picoquic_close(cnx_client);
+                    }
+                    else if (current_time - callback_ctx.last_interaction_time >
+                        10000000ull)
+                    {
+                        fprintf(stdout, "No progress for 10 seconds. Closing. \n");
+                        ret = picoquic_close(cnx_client);
+                    }
+                }
+#if 0
                 {
                     if (callback_ctx.nb_open_streams == 0)
                     {
@@ -1164,6 +1287,7 @@ int quic_client(char * ip_address_text, int server_port)
                         client_ready_loop = 0;
                     }
                 }
+#endif
 			}
 
             if (ret == 0)

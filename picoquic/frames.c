@@ -29,13 +29,34 @@ picoquic_stream_head * picoquic_create_stream(picoquic_cnx_t * cnx, uint32_t str
 	picoquic_stream_head * stream = (picoquic_stream_head *)malloc(sizeof(picoquic_stream_head));
 	if (stream != NULL)
 	{
+        picoquic_stream_head * previous_stream = NULL;
+        picoquic_stream_head * next_stream = cnx->first_stream.next_stream;
+
 		memset(stream, 0, sizeof(picoquic_stream_head));
-		stream->next_stream = cnx->first_stream.next_stream;
 		stream->stream_id = stream_id;
 		stream->maxdata_local = cnx->local_parameters.initial_max_stream_data;
 		stream->maxdata_remote = cnx->remote_parameters.initial_max_stream_data;
 
-		cnx->first_stream.next_stream = stream;
+        /*
+         * Make sure that the streams are open in order.
+         */
+
+        while (next_stream != NULL && next_stream->stream_id < stream_id)
+        {
+            previous_stream = next_stream;
+            next_stream = next_stream->next_stream;
+        }
+
+        stream->next_stream = next_stream;
+
+        if (previous_stream == NULL)
+        {
+            cnx->first_stream.next_stream = stream;
+        }
+        else
+        {
+            previous_stream->next_stream = stream;
+        }
 	}
 
 	return stream;
@@ -244,7 +265,8 @@ int picoquic_decode_stream_reset_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
 			if (ret == 0)
 			{
 				if ((stream->stream_flags&
-					(picoquic_stream_flag_fin_received| picoquic_stream_flag_reset_received)) != 0)
+					(picoquic_stream_flag_fin_received| picoquic_stream_flag_reset_received)) != 0 &&
+                    final_offset != stream->fin_offset)
 				{
 					ret = PICOQUIC_ERROR_STREAM_ALREADY_CLOSED;
 				}
@@ -258,7 +280,8 @@ int picoquic_decode_stream_reset_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
 					if (ret == 0)
 					{
 
-						if (cnx->callback_fn != NULL)
+						if (cnx->callback_fn != NULL && 
+                            (stream->stream_flags&picoquic_stream_flag_reset_received) == 0)
 						{
 							cnx->callback_fn(cnx, stream->stream_id, NULL, 0,
 								picoquic_callback_stream_reset, cnx->callback_ctx);
