@@ -1281,9 +1281,9 @@ int picoquic_prepare_ack_frame(picoquic_cnx_t * cnx, uint64_t current_time,
 		picoformat_32(bytes + byte_index, (uint32_t)cnx->first_sack_item.end_of_sack_range);
 		byte_index += 4;
 		/* Encode the ACK delay for the largest seen */
-		if (current_time > cnx->first_sack_item.time_stamp_last_in_range)
+		if (current_time > cnx->time_stamp_largest_received)
 		{
-			ack_delay = current_time - cnx->first_sack_item.time_stamp_last_in_range;
+			ack_delay = current_time - cnx->time_stamp_largest_received;
 		}
 		picoformat_16(bytes + byte_index, picoquic_deltat_to_float16(ack_delay));
 		byte_index += 2;

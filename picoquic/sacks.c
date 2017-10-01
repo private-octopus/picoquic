@@ -29,7 +29,7 @@
 * Maintain largest acknowledged number & the timestamp of that
 * arrival used to calculate the ACK delay.
 *
-* Maintain the lis of ACK
+* Maintain the list of ACK
 */
 
 /*
@@ -62,7 +62,7 @@ int picoquic_is_pn_already_received(picoquic_cnx_t * cnx, uint64_t pn64)
  * Packet was already received and checksum, etc. was properly verified.
  * Record it in the chain.
  */
-
+#if 0
 int picoquic_record_pn_received(picoquic_cnx_t * cnx, uint64_t pn64, uint64_t current_microsec)
 {
     int ret = 0;
@@ -75,121 +75,327 @@ int picoquic_record_pn_received(picoquic_cnx_t * cnx, uint64_t pn64, uint64_t cu
         /* This is the first packet ever received.. */
         sack->start_of_sack_range = pn64;
         sack->end_of_sack_range = pn64;
-        sack->time_stamp_last_in_range = current_microsec;
+        cnx->time_stamp_largest_received = current_microsec;
         cnx->sack_block_size_max = 1;
     }
-    else 
-    do
+    else
     {
         if (pn64 > sack->end_of_sack_range)
         {
-            if (pn64 == sack->end_of_sack_range + 1)
+            cnx->time_stamp_largest_received = current_microsec;
+        }
+        do
+        {
+            if (pn64 > sack->end_of_sack_range)
             {
-                /* if this actually fills the hole, merge with previous item */
-                if (previous != NULL && pn64 + 1 >= previous->start_of_sack_range)
+                if (pn64 == sack->end_of_sack_range + 1)
+                {
+                    /* if this actually fills the hole, merge with previous item */
+                    if (previous != NULL && pn64 + 1 >= previous->start_of_sack_range)
+                    {
+                        uint64_t block_size;
+                        previous->start_of_sack_range = sack->start_of_sack_range;
+                        previous->next_sack = sack->next_sack;
+                        block_size = previous->end_of_sack_range - previous->start_of_sack_range;
+                        if (block_size > cnx->sack_block_size_max)
+                        {
+                            cnx->sack_block_size_max = block_size;
+                        }
+                        free(sack);
+                    }
+                    else
+                    {
+                        /* add 1 item at end of range */
+                        sack->end_of_sack_range = pn64;
+                    }
+                    break;
+                }
+                else if (previous != NULL && pn64 + 1 == previous->start_of_sack_range)
                 {
                     uint64_t block_size;
-                    previous->start_of_sack_range = sack->start_of_sack_range;
-                    previous->next_sack = sack->next_sack;
+                    /* just extend the previous range */
+                    previous->start_of_sack_range = pn64;
                     block_size = previous->end_of_sack_range - previous->start_of_sack_range;
                     if (block_size > cnx->sack_block_size_max)
                     {
                         cnx->sack_block_size_max = block_size;
                     }
-                    free(sack);
                 }
                 else
                 {
-                    /* add 1 item at end of range */
-                    sack->end_of_sack_range = pn64;
-                    sack->time_stamp_last_in_range = current_microsec;
+                    /* Found a new hole */
+                    picoquic_sack_item_t * new_hole = (picoquic_sack_item_t *)malloc(sizeof(picoquic_sack_item_t));
+                    if (new_hole == NULL)
+                    {
+                        /* memory error. That's infortunate */
+                        ret = -1;
+                    }
+                    else
+                    {
+                        /* swap old and new, so it works even if previous == NULL */
+                        new_hole->start_of_sack_range = sack->start_of_sack_range;
+                        new_hole->end_of_sack_range = sack->end_of_sack_range;
+                        new_hole->next_sack = sack->next_sack;
+                        sack->start_of_sack_range = pn64;
+                        sack->end_of_sack_range = pn64;
+                        sack->next_sack = new_hole;
+                    }
                 }
                 break;
             }
-            else if (previous != NULL && pn64 + 1 == previous->start_of_sack_range)
+            else if (pn64 >= sack->start_of_sack_range)
             {
-                uint64_t block_size;
-                /* just extend the previous range */
-                previous->start_of_sack_range = pn64;
-                block_size = previous->end_of_sack_range - previous->start_of_sack_range;
-                if (block_size > cnx->sack_block_size_max)
-                {
-                    cnx->sack_block_size_max = block_size;
-                }
+                /* packet was already received */
+                ret = 1;
+                break;
             }
-            else
+            else if (sack->next_sack == NULL)
             {
-                /* Found a new hole */
-                picoquic_sack_item_t * new_hole = (picoquic_sack_item_t *)malloc(sizeof(picoquic_sack_item_t));
-                if (new_hole == NULL)
+                if (pn64 + 1 == sack->start_of_sack_range)
                 {
-                    /* memory error. That's infortunate */
-                    ret = -1;
-                }
-                else
-                {
-                    /* swap old and new, so it works even if previous == NULL */
-                    new_hole->start_of_sack_range = sack->start_of_sack_range;
-                    new_hole->end_of_sack_range = sack->end_of_sack_range;
-                    new_hole->time_stamp_last_in_range = sack->time_stamp_last_in_range;
-                    new_hole->next_sack = sack->next_sack;
+                    uint64_t block_size;
                     sack->start_of_sack_range = pn64;
-                    sack->end_of_sack_range = pn64;
-                    sack->time_stamp_last_in_range = current_microsec;
-                    sack->next_sack = new_hole;
-                }
-            }
-            break;
-        }
-        else if (pn64 >= sack->start_of_sack_range)
-        {
-            /* packet was already received */
-            ret = 1;
-            break;
-        }
-        else if (sack->next_sack == NULL)
-        {
-            if (pn64 + 1 == sack->start_of_sack_range)
-            {
-                uint64_t block_size;
-                sack->start_of_sack_range = pn64;
-                block_size = sack->end_of_sack_range - sack->start_of_sack_range;
-                if (block_size > cnx->sack_block_size_max)
-                {
-                    cnx->sack_block_size_max = block_size;
-                }
-            }
-            else
-            {
-                /* this is an old packet, beyond the current range of SACK */
-                /* Found a new hole */
-                picoquic_sack_item_t * new_hole = (picoquic_sack_item_t *)malloc(sizeof(picoquic_sack_item_t));
-                if (new_hole == NULL)
-                {
-                    /* memory error. That's infortunate */
-                    ret = -1;
+                    block_size = sack->end_of_sack_range - sack->start_of_sack_range;
+                    if (block_size > cnx->sack_block_size_max)
+                    {
+                        cnx->sack_block_size_max = block_size;
+                    }
                 }
                 else
                 {
-                    /* Create new hole at the tail. */
-                    new_hole->start_of_sack_range = pn64;
-                    new_hole->end_of_sack_range = pn64;
-                    new_hole->time_stamp_last_in_range = current_microsec;
-                    new_hole->next_sack = NULL;
-                    sack->next_sack = new_hole;
+                    /* this is an old packet, beyond the current range of SACK */
+                    /* Found a new hole */
+                    picoquic_sack_item_t * new_hole = (picoquic_sack_item_t *)malloc(sizeof(picoquic_sack_item_t));
+                    if (new_hole == NULL)
+                    {
+                        /* memory error. That's infortunate */
+                        ret = -1;
+                    }
+                    else
+                    {
+                        /* Create new hole at the tail. */
+                        new_hole->start_of_sack_range = pn64;
+                        new_hole->end_of_sack_range = pn64;
+                        new_hole->next_sack = NULL;
+                        sack->next_sack = new_hole;
+                    }
                 }
+                break;
             }
-            break;
-        }
-        else
-        {
-            previous = sack;
-            sack = sack->next_sack;
-        }
-    } while (sack != NULL);
+            else
+            {
+                previous = sack;
+                sack = sack->next_sack;
+            }
+        } while (sack != NULL);
+    }
 
     return ret;
 }
+#else
+int picoquic_update_sack_list(picoquic_sack_item_t * sack, 
+    uint64_t pn64_min, uint64_t pn64_max,
+    uint64_t * sack_block_size_max)
+{
+    int ret = 1; /* duplicate by default, reset to 0 if update found */
+    picoquic_sack_item_t * previous = NULL;
+    uint64_t block_size;
+
+    if (sack->start_of_sack_range == 0 &&
+        sack->end_of_sack_range == 0)
+    {
+        /* This is the first packet ever received.. */
+        sack->start_of_sack_range = pn64_min;
+        sack->end_of_sack_range = pn64_max;
+        *sack_block_size_max = 1;
+        ret = 0;
+    }
+    else
+    {
+        do
+        {
+            if (pn64_max > sack->end_of_sack_range)
+            {
+                ret = 0;
+
+                if (pn64_min <= sack->end_of_sack_range + 1)
+                {
+                    /* if this actually fills the hole, merge with previous item */
+                    if (previous != NULL && pn64_max + 1 >= previous->start_of_sack_range)
+                    {
+                        previous->start_of_sack_range = sack->start_of_sack_range;
+                        previous->next_sack = sack->next_sack;
+                        free(sack);
+                        sack = previous;
+                    }
+                    else
+                    {
+                        /* add at end of range */
+                        sack->end_of_sack_range = pn64_max;
+                    }
+
+                    block_size = sack->end_of_sack_range - sack->start_of_sack_range;
+                    if (block_size > *sack_block_size_max)
+                    {
+                        *sack_block_size_max = block_size;
+                    }
+
+                    /* Check whether there is a need to continue */ 
+                    if (pn64_min >= sack->start_of_sack_range)
+                    {
+                        break;
+                    }
+                    else if (sack->next_sack == NULL)
+                    {
+                        /* Last in range. Just expand. */
+                        sack->start_of_sack_range = pn64_min;
+                    }
+                    else
+                    {
+                        /* Continue with reminder of range */
+                        pn64_max = sack->start_of_sack_range - 1;
+                        previous = sack;
+                        sack = sack->next_sack;
+                    }
+                }
+                else if (previous != NULL && pn64_max + 1 >= previous->start_of_sack_range)
+                {
+                    /* Extend the previous range */
+                    previous->start_of_sack_range = pn64_min;
+                    block_size = previous->end_of_sack_range - previous->start_of_sack_range;
+                    if (block_size > *sack_block_size_max)
+                    {
+                        *sack_block_size_max = block_size;
+                    }
+                }
+                else
+                {
+                    /* Found a new hole */
+                    picoquic_sack_item_t * new_hole = (picoquic_sack_item_t *)malloc(sizeof(picoquic_sack_item_t));
+                    if (new_hole == NULL)
+                    {
+                        /* memory error. That's infortunate */
+                        ret = -1;
+                    }
+                    else
+                    {
+                        /* swap old and new, so it works even if previous == NULL */
+                        new_hole->start_of_sack_range = sack->start_of_sack_range;
+                        new_hole->end_of_sack_range = sack->end_of_sack_range;
+                        new_hole->next_sack = sack->next_sack;
+                        sack->start_of_sack_range = pn64_min;
+                        sack->end_of_sack_range = pn64_max;
+                        sack->next_sack = new_hole; 
+                        
+                        block_size = sack->end_of_sack_range - sack->start_of_sack_range;
+                        if (block_size > *sack_block_size_max)
+                        {
+                            *sack_block_size_max = block_size;
+                        }
+                    }
+                }
+                /* No need to continue, everything is consumed. */
+                break;
+            }
+            else if (pn64_max >= sack->start_of_sack_range)
+            {
+                if (pn64_min < sack->start_of_sack_range)
+                {
+                    ret = 0;
+
+                    if (sack->next_sack == NULL)
+                    {
+                        /* Just extend the last range */
+                        sack->start_of_sack_range = pn64_min;
+
+                        block_size = sack->end_of_sack_range - pn64_min;
+                        if (block_size > *sack_block_size_max)
+                        {
+                            *sack_block_size_max = block_size;
+                        }
+                        
+                        break;
+                    }
+                    else
+                    {
+                        /* continue with reminder. */
+                        pn64_max = sack->start_of_sack_range - 1;
+                        previous = sack;
+                        sack = sack->next_sack;
+                    }
+                }
+                else
+                {
+                    /*comple overlap */
+                    break;
+                }
+            }
+            else if (sack->next_sack == NULL)
+            {
+                ret = 0;
+                if (pn64_max + 1 == sack->start_of_sack_range)
+                {
+                    uint64_t block_size;
+                    sack->start_of_sack_range = pn64_min;
+                    block_size = sack->end_of_sack_range - sack->start_of_sack_range;
+                    if (block_size > *sack_block_size_max)
+                    {
+                        *sack_block_size_max = block_size;
+                    }
+                }
+                else
+                {
+                    /* this is an old packet, beyond the current range of SACK */
+                    /* Found a new hole */
+                    picoquic_sack_item_t * new_hole = (picoquic_sack_item_t *)malloc(sizeof(picoquic_sack_item_t));
+                    if (new_hole == NULL)
+                    {
+                        /* memory error. That's infortunate */
+                        ret = -1;
+                    }
+                    else
+                    {
+                        /* Create new hole at the tail. */
+                        new_hole->start_of_sack_range = pn64_min;
+                        new_hole->end_of_sack_range = pn64_max;
+                        new_hole->next_sack = NULL;
+                        sack->next_sack = new_hole;
+                        block_size = pn64_max - pn64_min;
+                        if (block_size > *sack_block_size_max)
+                        {
+                            *sack_block_size_max = block_size;
+                        }
+                    }
+                }
+                break;
+            }
+            else
+            {
+                previous = sack;
+                sack = sack->next_sack;
+            }
+        } while (sack != NULL);
+    }
+
+    return ret;
+}
+
+int picoquic_record_pn_received(picoquic_cnx_t * cnx, uint64_t pn64, uint64_t current_microsec)
+{
+    int ret = 0;
+    picoquic_sack_item_t * sack = &cnx->first_sack_item;
+
+    if ((sack->start_of_sack_range == 0 &&
+        sack->end_of_sack_range == 0) ||
+        pn64 > sack->end_of_sack_range)
+    {
+        /* This is the first packet ever received.. */
+        cnx->time_stamp_largest_received = current_microsec;
+    }
+
+    ret = picoquic_update_sack_list(sack, pn64, pn64, &cnx->sack_block_size_max);
+}
+#endif
 
 /*
  * Manage the received ACK.
@@ -348,7 +554,7 @@ int picoquic_encode_sack_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
          * Encode the ack delay
          */
         picoformat_16(bytes + byte_index, picoquic_deltat_to_float16(
-            current_time - cnx->first_sack_item.time_stamp_last_in_range));
+            current_time - cnx->time_stamp_largest_received));
         byte_index += 4;
         /*
          * From the spec:

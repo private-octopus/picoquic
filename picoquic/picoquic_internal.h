@@ -116,7 +116,7 @@ extern "C" {
 		struct st_picoquic_sack_item_t * next_sack;
 		uint64_t start_of_sack_range;
 		uint64_t end_of_sack_range;
-		uint64_t time_stamp_last_in_range;
+		// uint64_t time_stamp_last_in_range;
 	} picoquic_sack_item_t;
 
 	/*
@@ -179,6 +179,7 @@ extern "C" {
 		picoquic_stream_data * stream_data;
 		uint64_t sent_offset;
 		picoquic_stream_data * send_queue;
+        picoquic_sack_item_t first_sack_item;
 	} picoquic_stream_head;
 
 	/*
@@ -261,6 +262,7 @@ extern "C" {
 
 		/* Receive state */
 		picoquic_sack_item_t first_sack_item;
+        uint64_t time_stamp_largest_received;
 		uint64_t sack_block_size_max;
 		uint64_t highest_ack_sent;
 		uint64_t highest_ack_time;

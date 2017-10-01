@@ -117,7 +117,7 @@ int sacktest()
     {
         if (cnx.first_sack_item.end_of_sack_range != 21 ||
             cnx.first_sack_item.start_of_sack_range != 1 ||
-            cnx.first_sack_item.time_stamp_last_in_range != highest_seen_time ||
+            cnx.time_stamp_largest_received != highest_seen_time ||
             cnx.first_sack_item.next_sack != NULL)
         {
             ret = -1;
