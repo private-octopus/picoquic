@@ -53,8 +53,11 @@ MESSAGE(STATUS "Found picotls-crypto at : ${PTLS_MINICRYPTO} " )
 FIND_LIBRARY(PTLS_OPENSSL picotls-openssl PATH ../picotls)
 MESSAGE(STATUS "Found picotls-openssl at : ${PTLS_OPENSSL} " )
 
-ADD_LIBRARY(openssl-crypto STATIC IMPORTED)
-SET_PROPERTY(TARGET openssl-crypto PROPERTY IMPORTED_LOCATION ../openssl-1.0.1g/libcrypto.a)
+FIND_PACKAGE(OpenSSL )
+MESSAGE("root: ${OPENSSL_ROOT_DIR}")
+MESSAGE("OpenSSL_VERSION: ${OPENSSL_VERSION}")
+MESSAGE("OpenSSL_INCLUDE_DIR: ${OPENSSL_INCLUDE_DIR}")
+MESSAGE("OpenSSL_LIBRARIES: ${OPENSSL_LIBRARIES}")
 
 ADD_LIBRARY(picoquic-core
     ${PICOQUIC_LIBRARY_FILES}
@@ -65,7 +68,7 @@ TARGET_LINK_LIBRARIES(picoquicdemo picoquic-core
     ${PTLS_CORE}
     ${PTLS_OPENSSL}    
     ${PTLS_MINICRYPTO}
-    openssl-crypto
+    ${OPENSSL_LIBRARIES}
     ${CMAKE_DL_LIBS}
 )
 
@@ -77,7 +80,7 @@ TARGET_LINK_LIBRARIES(picoquic_ct picoquic-core
     ${PTLS_MINICRYPTO}
     ${PTLS_OPENSSL}
     ${PTLS_CORE}
-    openssl-crypto
+    ${OPENSSL_LIBRARIES}
     ${CMAKE_DL_LIBS}
 )
 
