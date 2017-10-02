@@ -370,6 +370,11 @@ extern "C" {
     int picoquic_update_sack_list(picoquic_sack_item_t * sack,
         uint64_t pn64_min, uint64_t pn64_max,
         uint64_t * sack_block_size_max);
+    /*
+     * Check whether the data fills a hole. returns 0 if it does, -1 otherwise.
+     */
+    int picoquic_check_sack_list(picoquic_sack_item_t * sack,
+        uint64_t pn64_min, uint64_t pn64_max);
 
 	/* stream management */
 	picoquic_stream_head * picoquic_find_stream(picoquic_cnx_t * cnx, uint32_t stream_id, int create);

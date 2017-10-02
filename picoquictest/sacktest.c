@@ -363,8 +363,24 @@ int ackrange_test()
 
     for (size_t i = 0; i < nb_ack_range; i++)
     {
-        ret = picoquic_update_sack_list(&sack0,
-            ack_range[i].range_min, ack_range[i].range_max, &blockmax);
+        ret = picoquic_check_sack_list(&sack0,
+            ack_range[i].range_min, ack_range[i].range_max);
+
+        if (ret == 0)
+        {
+            ret = picoquic_update_sack_list(&sack0,
+                ack_range[i].range_min, ack_range[i].range_max, &blockmax);
+        }
+
+        for (size_t j = 0; j < i; j++)
+        {
+            if (picoquic_check_sack_list(&sack0,
+                ack_range[j].range_min, ack_range[j].range_max) == 0)
+            {
+                ret = -1;
+                break;
+            }
+        }
 
         if (ret != 0)
         {
