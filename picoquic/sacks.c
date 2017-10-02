@@ -248,7 +248,8 @@ int picoquic_update_sack_list(picoquic_sack_item_t * sack,
                     else if (sack->next_sack == NULL)
                     {
                         /* Last in range. Just expand. */
-                        sack->start_of_sack_range = pn64_min;
+                        sack->start_of_sack_range = pn64_min; 
+                        break;
                     }
                     else
                     {
@@ -267,6 +268,7 @@ int picoquic_update_sack_list(picoquic_sack_item_t * sack,
                     {
                         *sack_block_size_max = block_size;
                     }
+                    break;
                 }
                 else
                 {
@@ -293,9 +295,9 @@ int picoquic_update_sack_list(picoquic_sack_item_t * sack,
                             *sack_block_size_max = block_size;
                         }
                     }
+                    /* No need to continue, everything is consumed. */
+                    break;
                 }
-                /* No need to continue, everything is consumed. */
-                break;
             }
             else if (pn64_max >= sack->start_of_sack_range)
             {

@@ -348,7 +348,7 @@ static const test_ack_range_t ack_range[] = {
     { 5001, 6000},
     { 1501, 2500},
     { 501, 1500},
-    { 501, 4500}
+    { 501, 7500}
 };
 
 static const size_t nb_ack_range = sizeof(ack_range) / sizeof(test_ack_range_t);
@@ -372,7 +372,7 @@ int ackrange_test()
         }
     }
 
-    if (ret == 0 && blockmax != 7000)
+    if (ret == 0 && blockmax != 7500)
     {
         ret = -1;
     }
@@ -382,7 +382,7 @@ int ackrange_test()
         ret = -1;
     }
 
-    if (ret == 0 && sack0.end_of_sack_range != 7000)
+    if (ret == 0 && sack0.end_of_sack_range != 7500)
     {
         ret = -1;
     }
