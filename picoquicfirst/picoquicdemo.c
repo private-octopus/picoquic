@@ -63,6 +63,9 @@
 #ifndef __USE_XOPEN2K
 #define __USE_XOPEN2K
 #endif
+#ifndef __USE_POSIX
+#define __USE_POSIX
+#endif
 #include <netdb.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -227,6 +230,7 @@ uint64_t get_current_time()
     */
     now -= 11644473600000000ULL;
 #else
+    struct timeval tv;
     (void) gettimeofday(&tv, NULL);
     now = (tv.tv_sec * 1000000ull) + tv.tv_usec;
 #endif
