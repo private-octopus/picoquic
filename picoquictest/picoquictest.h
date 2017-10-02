@@ -56,6 +56,7 @@ extern "C" {
 	int tls_api_very_long_congestion_test();
     int http0dot9_test();
     int tls_api_hrr_test();
+    int ackrange_test();
 
 #ifdef  __cplusplus
 }

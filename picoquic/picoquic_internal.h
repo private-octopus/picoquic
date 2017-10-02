@@ -367,6 +367,10 @@ extern "C" {
 	uint16_t picoquic_deltat_to_float16(uint64_t delta_t);
 	uint64_t picoquic_float16_to_deltat(uint16_t float16);
 
+    int picoquic_update_sack_list(picoquic_sack_item_t * sack,
+        uint64_t pn64_min, uint64_t pn64_max,
+        uint64_t * sack_block_size_max);
+
 	/* stream management */
 	picoquic_stream_head * picoquic_find_stream(picoquic_cnx_t * cnx, uint32_t stream_id, int create);
 	picoquic_stream_head * picoquic_find_ready_stream(picoquic_cnx_t * cnx, int restricted);

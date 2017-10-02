@@ -333,3 +333,64 @@ int sendacktest()
 
 	return ret;
 }
+
+typedef struct st_test_ack_range_t
+{
+    uint64_t range_min;
+    uint64_t range_max;
+} test_ack_range_t;
+
+static const test_ack_range_t ack_range[] = {
+    { 0, 1000 },
+    { 3001, 4000},
+    { 4001, 5000},
+    { 6001, 7000},
+    { 5001, 6000},
+    { 1501, 2500},
+    { 501, 1500},
+    { 501, 4500}
+};
+
+static const size_t nb_ack_range = sizeof(ack_range) / sizeof(test_ack_range_t);
+
+int ackrange_test()
+{
+    int ret = 0;
+    picoquic_sack_item_t sack0;
+    uint64_t blockmax = 0;
+
+    memset(&sack0, 0, sizeof(picoquic_sack_item_t));
+
+    for (size_t i = 0; i < nb_ack_range; i++)
+    {
+        ret = picoquic_update_sack_list(&sack0,
+            ack_range[i].range_min, ack_range[i].range_max, &blockmax);
+
+        if (ret != 0)
+        {
+            break;
+        }
+    }
+
+    if (ret == 0 && blockmax != 7000)
+    {
+        ret = -1;
+    }
+
+    if (ret == 0 && sack0.start_of_sack_range != 0)
+    {
+        ret = -1;
+    }
+
+    if (ret == 0 && sack0.end_of_sack_range != 7000)
+    {
+        ret = -1;
+    }
+
+    if (ret == 0 && sack0.next_sack != NULL)
+    {
+        ret = -1;
+    }
+
+    return ret;
+}
