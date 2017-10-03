@@ -25,6 +25,7 @@
 #include "picoquic.h"
 #include "picohash.h"
 #include "picotlsapi.h"
+#include "util.h"
 
 #ifdef  __cplusplus
 extern "C" {

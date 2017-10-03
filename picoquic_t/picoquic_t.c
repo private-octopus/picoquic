@@ -20,7 +20,9 @@
 */
 
 #include <stdio.h>
+#include <string.h>
 #include "../picoquic/picoquic.h"
+#include "../picoquic/util.h"
 #include "../picoquictest/picoquictest.h"
 
 typedef struct st_picoquic_test_def_t {
@@ -67,12 +69,12 @@ static int do_one_test(size_t i, FILE * F)
 
     if (i >= nb_tests)
     {
-        fprintf(F, "Invalid test number %d\n", i);
+        fprintf(F, "Invalid test number %" PRIst "\n", i);
         ret = -1;
     }
     else
     {
-        fprintf(F, "Starting test number %d, %s\n", i, test_table[i].test_name);
+        fprintf(F, "Starting test number %" PRIst ", %s\n", i, test_table[i].test_name);
         ret = test_table[i].test_fn();
         if (ret == 0)
         {
