@@ -73,7 +73,7 @@ void picoquic_provide_received_transport_extensions(picoquic_cnx_t * cnx,
 * Using the open ssl library to load the test certificate
 */
 
-static X509* openPemFile(char* filename)
+static X509* openPemFile(char const * filename)
 {
 
     X509* cert = X509_new();
@@ -82,7 +82,7 @@ static X509* openPemFile(char* filename)
     return cert;
 }
 
-static int get_certificates(char * pem_fname, ptls_iovec_t ** list, size_t * nb_certs)
+static int get_certificates(char const * pem_fname, ptls_iovec_t ** list, size_t * nb_certs)
 {
     int ret = 0;
     size_t count = 0;
@@ -119,7 +119,7 @@ static int get_certificates(char * pem_fname, ptls_iovec_t ** list, size_t * nb_
     return ret;
 }
 
-static int SetSignCertificate(char * keypem, ptls_context_t * ctx)
+static int SetSignCertificate(char const * keypem, ptls_context_t * ctx)
 {
 	int ret = 0;
     ptls_openssl_sign_certificate_t * signer;
@@ -317,7 +317,7 @@ int picoquic_client_hello_call_back(ptls_on_client_hello_t * on_hello_cb_ctx,
  * On servers, this implies setting the "on hello" call back
  */
 
-int picoquic_master_tlscontext(picoquic_quic_t * quic, char * cert_file_name, char * key_file_name)
+int picoquic_master_tlscontext(picoquic_quic_t * quic, char const * cert_file_name, char const * key_file_name)
 {
     /* Create a client context or a server context */
     int ret = 0;

@@ -63,7 +63,8 @@ ADD_LIBRARY(picoquic-core
     ${PICOQUIC_LIBRARY_FILES}
 )
 
-ADD_EXECUTABLE(picoquicdemo picoquicfirst/picoquicdemo.c )
+ADD_EXECUTABLE(picoquicdemo picoquicfirst/picoquicdemo.c
+                            picoquicfirst/getopt.c )
 TARGET_LINK_LIBRARIES(picoquicdemo picoquic-core
     ${PTLS_CORE}
     ${PTLS_OPENSSL}    

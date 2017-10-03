@@ -98,8 +98,8 @@ const size_t picoquic_nb_supported_versions = sizeof(picoquic_supported_versions
 
 /* QUIC context create and dispose */
 picoquic_quic_t * picoquic_create(uint32_t nb_connections, 
-	char * cert_file_name, 
-	char * key_file_name,
+	char const * cert_file_name, 
+	char const * key_file_name,
 	char const * default_alpn,
 	picoquic_stream_data_cb_fn default_callback_fn,
 	void * default_callback_ctx)
