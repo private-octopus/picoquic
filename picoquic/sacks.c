@@ -46,7 +46,10 @@ int picoquic_is_pn_already_received(picoquic_cnx_t * cnx, uint64_t pn64)
             break;
         else if (pn64 >= sack->start_of_sack_range)
         {
-            is_received = 1;
+            if (sack->start_of_sack_range == 0 && sack->end_of_sack_range == 0)
+                is_received = 0;
+            else
+                is_received = 1;
             break;
         }
         else
