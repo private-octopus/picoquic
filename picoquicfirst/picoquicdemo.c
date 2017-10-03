@@ -49,7 +49,10 @@
 #define socklen_t int
 #endif 
 
-#else
+static const char *default_server_cert_file = "..\\certs\\cert.pem";
+static const char *default_server_key_file  = "..\\certs\\key.pem";
+
+#else  /* Linux */
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -85,10 +88,17 @@
 #define WSA_LAST_ERROR(x) ((long)(x))
 #endif
 
+static const char *default_server_cert_file = "certs/cert.pem";
+static const char *default_server_key_file  = "certs/key.pem";
+
 #endif
 
+static const int   default_server_port = 4443;
+static const char *default_server_name = "::";
 
 #include "../picoquic/picoquic.h"
+#include "getopt.h"
+
 
 void picoquic_log_error_packet(FILE * F, uint8_t * bytes, size_t bytes_max, int ret);
 
@@ -516,8 +526,9 @@ static void first_server_callback(picoquic_cnx_t * cnx,
     /* that's it */
 }
 
-int quic_server(char * server_name, int server_port, 
-    char * pem_cert, char * pem_key, int just_once, int do_hrr)
+int quic_server(const char * server_name, int server_port, 
+				const char * pem_cert, const char * pem_key,
+				int just_once, int do_hrr)
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
@@ -1007,7 +1018,7 @@ int quic_client_ui(picoquic_cnx_t * cnx, picoquic_first_client_callback_ctx_t * 
 }
 #endif
 
-int quic_client(char * ip_address_text, int server_port)
+int quic_client(const char * ip_address_text, int server_port)
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
@@ -1030,7 +1041,7 @@ int quic_client(char * ip_address_text, int server_port)
 	uint64_t current_time = 0;
 	int client_ready_loop = 0;
     int established = 0;
-    char * sni = NULL;
+    const char * sni = NULL;
     int is_active = 0;
     int backlog_empty = 0;
     int64_t delay_max = 10000000;
@@ -1341,13 +1352,29 @@ int quic_client(char * ip_address_text, int server_port)
     return ret;
 }
 
+void usage()
+{
+	fprintf(stderr, "PicoQUIC demo client and server\n");
+	fprintf(stderr, "Usage: picoquicdemo [server_name [port]] <options>\n");
+	fprintf(stderr, "  For the client mode, specify sever_name and port.\n");
+	fprintf(stderr, "  For the server mode, use -p to specify the port.\n");
+	fprintf(stderr, "Options:\n");
+	fprintf(stderr, "  -c file     cert file (default: %s)\n", default_server_cert_file);
+	fprintf(stderr, "  -k file     key file (default: %s)\n", default_server_key_file);
+	fprintf(stderr, "  -p port     server port (default: %d)\n", default_server_port);
+	fprintf(stderr, "  -1          Once\n");
+	fprintf(stderr, "  -r          Do Reset Request\n");
+	fprintf(stderr, "  -h          This help message\n");
+	exit(1);
+}
+
 int main(int argc, char ** argv)
 {
-    char * server_name = (char *) "::";
-    char * server_cert_file = (char *) "..\\certs\\cert.pem";
-    char * server_key_file = (char *) "..\\certs\\key.pem";
-    int server_port = 4443;
-    int is_client = 1;
+    const char * server_name      = default_server_name;
+    const char * server_cert_file = default_server_cert_file;
+    const char * server_key_file  = default_server_key_file;
+    int server_port               = default_server_port;
+    int is_client = 0;
     int just_once = 0;
     int do_hrr = 0;
 
@@ -1359,40 +1386,53 @@ int main(int argc, char ** argv)
     /* HTTP09 test */
 
     /* Get the parameters */
-    if (argc > 1)
-    {
-        server_name = argv[1];
-
-        if (argc > 2)
-        {
-            server_port = atoi(argv[2]);
-
-            if (server_port <= 0)
-            {
-                fprintf(stderr, "Invalid port: %s\n", argv[2]);
-                ret = -1;
-            }
-            else if (argc > 3)
-            {
-                is_client = 0;
-                server_cert_file = argv[3];
-
-                if (argc > 4)
-                {
-                    server_key_file = argv[4];
-
-                    if (argc > 5)
-                    {
-                        if (strcmp(argv[5], "once") == 0)
-                            just_once = 1;
-                        else if (strcmp(argv[5], "hrr") == 0)
-                            do_hrr = 1;
-                    }
-                }
-            }
-        }
+	int opt;
+	while( (opt = getopt(argc, argv, "c:k:p:1rh")) != -1 )
+	{
+		switch (opt)
+		{
+			case 'c':
+				server_cert_file = optarg;
+				break;
+			case 'k':
+				server_key_file = optarg;
+				break;
+			case 'p':
+				if ((server_port = atoi(optarg)) <= 0)
+				{
+					fprintf(stderr, "Invalid port: %s\n", optarg);
+					usage();
+				}
+				break;
+			case '1':
+				just_once = 1;
+				break;
+			case 'r':
+				do_hrr = 1;
+				break;
+			case 'h':
+				usage();
+				break;
+		}
     }
 
+	/* Simplified style params */
+	if (optind < argc)
+	{
+		server_name = argv[optind++];
+		is_client = 1;
+	}
+
+	if (optind < argc)
+	{
+		if ((server_port = atoi(argv[optind++])) <= 0)
+		{
+			fprintf(stderr, "Invalid port: %s\n", optarg);
+			usage();
+		}
+	}
+	
+	
 #ifdef WIN32
     // Init WSA.
     if (ret == 0)
