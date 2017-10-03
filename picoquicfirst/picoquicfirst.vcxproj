@@ -142,7 +142,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="getopt.c" />
     <ClCompile Include="picoquicdemo.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="getopt.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
