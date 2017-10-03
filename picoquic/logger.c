@@ -816,7 +816,10 @@ void picoquic_log_packet(FILE* F, picoquic_quic_t * quic, picoquic_cnx_t * cnx,
 	}
 	else 
 	{
-		cnx = picoquic_cnx_by_net(quic, addr_peer);
+        if (cnx == NULL)
+        {
+            cnx = picoquic_cnx_by_net(quic, addr_peer);
+        }
 
 		if (cnx == NULL && ph.cnx_id != 0)
 		{

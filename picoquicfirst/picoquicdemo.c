@@ -418,6 +418,9 @@ static void first_server_callback(picoquic_cnx_t * cnx,
         (picoquic_first_server_callback_ctx_t*)callback_ctx;
     picoquic_first_server_stream_ctx_t * stream_ctx = NULL;
 
+    fprintf(stderr, "Server CB, Stream: %d, %d bytes, fin=%d\n",
+        stream_id, length, fin_or_event);
+
     if (fin_or_event == picoquic_callback_close)
     {
         if (ctx != NULL)
@@ -582,7 +585,13 @@ int quic_server(char * server_name, int server_port,
         {
             if (bytes_recv > 0)
             {
-                current_time += 1000;
+                //current_time += 1000;
+
+                if (cnx_server != NULL && just_once != 0)
+                {
+                    picoquic_log_packet(stdout, qserver, cnx_server, (struct sockaddr *) &addr_from,
+                        1, buffer, bytes_recv, current_time);
+                }
 
                 /* Submit the packet to the server */
                 ret = picoquic_incoming_packet(qserver, buffer,
@@ -651,16 +660,22 @@ int quic_server(char * server_name, int server_port,
                             int peer_addr_len = 0;
                             struct sockaddr * peer_addr;
 
-                            printf("Connection state = %d\n",
-                                picoquic_get_cnx_state(cnx_next));
                             if (p->length > 0)
                             {
+                                printf("Connection state = %d\n",
+                                    picoquic_get_cnx_state(cnx_next));
 
                                 picoquic_get_peer_addr(cnx_next, &peer_addr, &peer_addr_len);
 
                                 int sent = send_to_server_sockets(&server_sockets,
                                     peer_addr, peer_addr_len,
                                     (const char *)send_buffer, (int)send_length);
+
+                                if (cnx_server != NULL && just_once != 0)
+                                {
+                                    picoquic_log_packet(stdout, qserver, cnx_server, (struct sockaddr *) peer_addr,
+                                        0, send_buffer, send_length, current_time);
+                                }
                                 printf("Sending packet, %d bytes (sent: %d)\n",
                                     (int)send_length, sent);
                                 is_active = 1;
@@ -783,7 +798,7 @@ static void demo_client_open_stream(picoquic_cnx_t * cnx,
         }
 
         (void)picoquic_add_to_stream(cnx, stream_ctx->stream_id, stream_ctx->command,
-            text_len + 7, 0);
+            text_len + 7, 1);
     }
 }
 

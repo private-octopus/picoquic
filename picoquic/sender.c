@@ -907,9 +907,12 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 	{
 		*send_length = 0;
 	}
-
-    picoquic_cnx_set_next_wake_time(cnx, current_time);
 	
+    if (*send_length > 0)
+    {
+        picoquic_cnx_set_next_wake_time(cnx, current_time);
+    }
+
 	return ret;
 }
 
