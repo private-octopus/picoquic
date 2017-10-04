@@ -269,6 +269,7 @@ int picoquic_record_pn_received(picoquic_cnx_t * cnx, uint64_t pn64, uint64_t cu
     }
 
     ret = picoquic_update_sack_list(sack, pn64, pn64, &cnx->sack_block_size_max);
+    return ret;
 }
 
 /*

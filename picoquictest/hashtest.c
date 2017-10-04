@@ -20,7 +20,9 @@
 */
 
 #include <stdlib.h>
+#ifndef __APPLE__
 #include <malloc.h>
+#endif
 #include "../picoquic/picohash.h"
 
 struct hashtestkey

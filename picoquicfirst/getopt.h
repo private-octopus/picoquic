@@ -1,4 +1,5 @@
 #ifndef GETOPT_H
+#ifndef __APPLE__
 
 #define GETOPT_H
 
@@ -10,4 +11,5 @@ extern const char *optarg;  /* argument associated with option */
 
 int getopt(int nargc, char * const nargv[], const char *ostr);
 
+#endif
 #endif

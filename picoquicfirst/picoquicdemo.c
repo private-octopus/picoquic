@@ -422,7 +422,7 @@ static void first_server_callback(picoquic_cnx_t * cnx,
         (picoquic_first_server_callback_ctx_t*)callback_ctx;
     picoquic_first_server_stream_ctx_t * stream_ctx = NULL;
 
-    fprintf(stderr, "Server CB, Stream: %d, %d bytes, fin=%d\n",
+    fprintf(stderr, "Server CB, Stream: %d, %zu bytes, fin=%d\n",
         stream_id, length, fin_or_event);
 
     if (fin_or_event == picoquic_callback_close)

@@ -20,6 +20,7 @@
 */
 
 #include <stdio.h>
+#include <string.h>
 #include "../picoquic/picoquic.h"
 #include "../picoquictest/picoquictest.h"
 
@@ -67,12 +68,12 @@ static int do_one_test(size_t i, FILE * F)
 
     if (i >= nb_tests)
     {
-        fprintf(F, "Invalid test number %d\n", i);
+        fprintf(F, "Invalid test number %zu\n", i);
         ret = -1;
     }
     else
     {
-        fprintf(F, "Starting test number %d, %s\n", i, test_table[i].test_name);
+        fprintf(F, "Starting test number %zu, %s\n", i, test_table[i].test_name);
         ret = test_table[i].test_fn();
         if (ret == 0)
         {
