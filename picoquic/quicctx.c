@@ -962,7 +962,7 @@ picoquic_cnx_t * picoquic_cnx_by_net(picoquic_quic_t * quic, struct sockaddr* ad
 {
     picoquic_cnx_t * ret = NULL;
     picohash_item * item;
-    picoquic_net_id key = { 0 };
+    picoquic_net_id key = { {0} };
 
     if (addr->sa_family == AF_INET)
     {

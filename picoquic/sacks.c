@@ -257,7 +257,6 @@ int picoquic_update_sack_list(picoquic_sack_item_t * sack,
 
 int picoquic_record_pn_received(picoquic_cnx_t * cnx, uint64_t pn64, uint64_t current_microsec)
 {
-    int ret = 0;
     picoquic_sack_item_t * sack = &cnx->first_sack_item;
 
     if ((sack->start_of_sack_range == 0 &&
@@ -268,8 +267,7 @@ int picoquic_record_pn_received(picoquic_cnx_t * cnx, uint64_t pn64, uint64_t cu
         cnx->time_stamp_largest_received = current_microsec;
     }
 
-    ret = picoquic_update_sack_list(sack, pn64, pn64, &cnx->sack_block_size_max);
-    return ret;
+    return picoquic_update_sack_list(sack, pn64, pn64, &cnx->sack_block_size_max);
 }
 
 /*
@@ -279,8 +277,6 @@ int picoquic_check_sack_list(picoquic_sack_item_t * sack,
     uint64_t pn64_min, uint64_t pn64_max)
 {
     int ret = -1; /* duplicate by default, reset to 0 if update found */
-    picoquic_sack_item_t * previous = NULL;
-    uint64_t block_size;
 
     if (sack->start_of_sack_range == 0 &&
         sack->end_of_sack_range == 0)
@@ -316,7 +312,6 @@ int picoquic_check_sack_list(picoquic_sack_item_t * sack,
             }
             else
             {
-                previous = sack;
                 sack = sack->next_sack;
             }
         } while (sack != NULL);

@@ -135,16 +135,19 @@ static struct packet list3[] = {
 
 struct test_case_st
 {
+    const char *name;
     struct packet * list;
     size_t list_size;
     size_t expected_length;
 };
 
 static struct test_case_st test_case[] = {
-    { list1, sizeof(list1) / sizeof(struct packet), 50},
-    { list2, sizeof(list2) / sizeof(struct packet), 50 },
-    { list3, sizeof(list3) / sizeof(struct packet), 50 }
+    { "test1", list1, sizeof(list1) / sizeof(struct packet), 50},
+    { "test2", list2, sizeof(list2) / sizeof(struct packet), 50 },
+    { "test3", list3, sizeof(list3) / sizeof(struct packet), 50 }
 };
+
+#define FAIL(test, fmt, ...) DBG_PRINTF("Test %s failed: " fmt, (test)->name, __VA_ARGS__)
 
 size_t nb_test_cases = sizeof(test_case) / sizeof(struct test_case_st);
 
@@ -160,6 +163,7 @@ static int StreamZeroFrameOneTest(struct test_case_st * test)
         if (0 != picoquic_decode_stream_frame(&cnx, test->list[i].packet,
             test->list[i].packet_length, 1, &consumed, current_time))
         {
+            FAIL(test, "packet %" PRIst, i);
             ret = -1;
         }
     }
@@ -174,6 +178,7 @@ static int StreamZeroFrameOneTest(struct test_case_st * test)
         {
             if (data->bytes == NULL)
             {
+                FAIL(test, "%s", "No data bytes");
                 ret = -1;
             }
 
@@ -181,6 +186,7 @@ static int StreamZeroFrameOneTest(struct test_case_st * test)
                 data_rank++;
                 if (data->bytes[i] != data_rank)
                 {
+                    FAIL(test, "byte %" PRIst " is %u instead of %" PRIst, i, data->bytes[i], data_rank);
                     ret = -1;
                 }
             }
@@ -190,6 +196,7 @@ static int StreamZeroFrameOneTest(struct test_case_st * test)
 
         if (ret == 0 && data_rank != test->expected_length)
         {
+            FAIL(test, "total byte %" PRIst " bytes instead of %" PRIst, data_rank, test->expected_length);
             ret = -1;
         }
     }

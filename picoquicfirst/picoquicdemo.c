@@ -97,6 +97,7 @@ static const int   default_server_port = 4443;
 static const char *default_server_name = "::";
 
 #include "../picoquic/picoquic.h"
+#include "../picoquic/util.h"
 #include "getopt.h"
 
 
@@ -422,7 +423,7 @@ static void first_server_callback(picoquic_cnx_t * cnx,
         (picoquic_first_server_callback_ctx_t*)callback_ctx;
     picoquic_first_server_stream_ctx_t * stream_ctx = NULL;
 
-    fprintf(stderr, "Server CB, Stream: %d, %zu bytes, fin=%d\n",
+    fprintf(stderr, "Server CB, Stream: %d, %" PRIst " bytes, fin=%d\n",
         stream_id, length, fin_or_event);
 
     if (fin_or_event == picoquic_callback_close)
@@ -544,7 +545,6 @@ int quic_server(const char * server_name, int server_port,
     picoquic_packet * p = NULL;
 	uint64_t current_time = 0;
 	picoquic_stateless_packet_t * sp;
-    int is_active = 0;
     int64_t delay_max = 10000000;
 
     /* Open a UDP socket */
@@ -625,8 +625,6 @@ int quic_server(const char * server_name, int server_port,
 
             if (ret == 0)
             {
-                is_active = 0;
-
                 while ((sp = picoquic_dequeue_stateless_packet(qserver)) != NULL)
                 {
                     int sent = send_to_server_sockets(&server_sockets,
@@ -635,7 +633,6 @@ int quic_server(const char * server_name, int server_port,
 
                     printf("Sending stateless packet, %d bytes\n", sent);
                     picoquic_delete_stateless_packet(sp);
-                    is_active = 1;
                 }
 
                 cnx_next = picoquic_get_first_cnx(qserver);
@@ -657,7 +654,6 @@ int quic_server(const char * server_name, int server_port,
                             ret = 0;
                             free(p);
                             picoquic_delete_cnx(cnx_next);
-                            is_active = 1;
                             break;
                         }
                         else if (ret == 0)
@@ -683,7 +679,6 @@ int quic_server(const char * server_name, int server_port,
                                 }
                                 printf("Sending packet, %d bytes (sent: %d)\n",
                                     (int)send_length, sent);
-                                is_active = 1;
                             }
                             else
                             {
@@ -1051,8 +1046,6 @@ int quic_client(const char * ip_address_text, int server_port)
 	int client_ready_loop = 0;
     int established = 0;
     const char * sni = NULL;
-    int is_active = 0;
-    int backlog_empty = 0;
     int64_t delay_max = 10000000;
 
     memset(&callback_ctx, 0, sizeof(picoquic_first_client_callback_ctx_t));
@@ -1282,36 +1275,6 @@ int quic_client(const char * ip_address_text, int server_port)
                         ret = picoquic_close(cnx_client);
                     }
                 }
-#if 0
-                {
-                    if (callback_ctx.nb_open_streams == 0)
-                    {
-                        if (backlog_empty < 8)
-                        {
-                            backlog_empty++;
-                        }
-                        else
-                        {
-                            ret = quic_client_ui(cnx_client, &callback_ctx, &current_time);
-                            client_ready_loop = 0;
-                            backlog_empty = 0;
-                        }
-                    }
-                    else if (callback_ctx.progress_observed != 0)
-                    {
-                        callback_ctx.last_interaction_time = current_time;
-                        callback_ctx.progress_observed = 0;
-                    }
-                    else if (current_time - callback_ctx.last_interaction_time >
-                        10000000ull)
-                    {
-                        fprintf(stdout, "No progress for 10 seconds.\n");
-
-                        ret = quic_client_ui(cnx_client, &callback_ctx, &current_time);
-                        client_ready_loop = 0;
-                    }
-                }
-#endif
 			}
 
             if (ret == 0)
@@ -1336,7 +1299,6 @@ int quic_client(const char * ip_address_text, int server_port)
 						picoquic_log_packet(stdout, qclient, cnx_client, (struct sockaddr *)  &server_address,
 								0, send_buffer, send_length, current_time);
 
-                        is_active = 1;
 					}
 					else
 					{

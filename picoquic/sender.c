@@ -291,7 +291,6 @@ int picoquic_retransmit_needed(picoquic_cnx_t * cnx, uint64_t current_time,
 	/* TODO: while packets are pure ACK, drop them from retransmit queue */
 	while ((p = cnx->retransmit_oldest) != NULL)
 	{
-		int64_t delta_seq = cnx->highest_acknowledged - p->sequence_number;
 		int should_retransmit = 0;
 		int timer_based_retransmit = 0;
 		uint64_t lost_packet_number = p->sequence_number;
@@ -498,19 +497,8 @@ int picoquic_is_cnx_backlog_empty(picoquic_cnx_t * cnx)
         int frame_is_pure_ack = 0;
         size_t frame_length = 0;
         size_t byte_index = 0; /* Used when parsing the old packet */
-        size_t checksum_length;
         /* Get the packet type */
         ret = picoquic_parse_packet_header(p->bytes, p->length, &ph);
-
-        if (ph.ptype == picoquic_packet_1rtt_protected_phi0 ||
-            ph.ptype == picoquic_packet_1rtt_protected_phi1)
-        {
-            checksum_length = 16;
-        }
-        else
-        {
-            checksum_length = 8;
-        }
 
         /* Copy the relevant bytes from one packet to the next */
         byte_index = ph.offset;
@@ -549,7 +537,6 @@ int picoquic_should_send_max_data(picoquic_cnx_t * cnx)
 /* Decide the next time at which the connection should send data */
 void picoquic_cnx_set_next_wake_time(picoquic_cnx_t * cnx, uint64_t current_time)
 {
-    uint64_t old_time = cnx->next_wake_time;
     uint64_t next_time = cnx->latest_progress_time + PICOQUIC_MICROSEC_SILENCE_MAX;
     picoquic_packet * p = cnx->retransmit_oldest;
     picoquic_stream_head * stream = NULL;
