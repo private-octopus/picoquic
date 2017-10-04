@@ -358,6 +358,16 @@ extern "C" {
 		size_t length,
 		picoquic_packet_header * ph);
 
+    int picoquic_parse_stream_header(
+		const uint8_t * bytes, size_t bytes_max,
+		uint32_t * stream_id, uint64_t * offset, size_t * data_length,
+		size_t * consumed);
+
+	int picoquic_parse_ack_header(
+		uint8_t const * bytes, size_t bytes_max, uint64_t target_sequence,
+		unsigned * num_block, unsigned * num_ts, uint64_t * largest,
+		uint64_t * ack_delay, unsigned * mm, size_t * consumed);
+  
 	uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t pn);
 
 	/* handling of ACK logic */

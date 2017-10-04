@@ -113,7 +113,6 @@ void print_address(struct sockaddr * address, int address_length, char * label)
 {
     char hostname[256];
 
-    int ret = 0;
     const char * x = inet_ntop(address->sa_family, address, hostname, sizeof(hostname));
 
     if (x != NULL)
@@ -125,7 +124,6 @@ void print_address(struct sockaddr * address, int address_length, char * label)
     }
     else
     {
-        ret = -1;
         printf("inet_ntop failed with error # %ld\n", WSA_LAST_ERROR(errno));
     }
 }
