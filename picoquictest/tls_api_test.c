@@ -576,6 +576,45 @@ static int verify_alpn(picoquic_cnx_t * cnx_client, picoquic_cnx_t * cnx_server,
 	return ret;
 }
 
+
+static int verify_version(picoquic_cnx_t * cnx_client, picoquic_cnx_t * cnx_server)
+{
+    int ret = 0;
+
+    if (cnx_client->version != cnx_server->version)
+    {
+        ret = -1;
+    }
+    else
+    {
+        for (size_t i = 0; i < picoquic_nb_supported_versions; i++)
+        {
+            if (cnx_client->proposed_version != cnx_client->version &&
+                cnx_client->proposed_version == picoquic_supported_versions[i])
+            {
+                ret = -1;
+                break;
+            }
+        }
+
+        if (ret == 0)
+        {
+            ret = -1;
+
+            for (size_t i = 0; i < picoquic_nb_supported_versions; i++)
+            {
+                if (cnx_client->version == picoquic_supported_versions[i])
+                {
+                    ret = 0;
+                    break;
+                }
+            }
+        }
+    }
+
+    return ret;
+}
+
 static void tls_api_delete_ctx(picoquic_test_tls_api_ctx_t * test_ctx)
 {
 	if (test_ctx->qclient != NULL)
@@ -953,6 +992,11 @@ static int tls_api_test_with_loss(uint64_t  * loss_mask, uint32_t proposed_versi
 		{
 			ret = verify_alpn(test_ctx->cnx_client, test_ctx->cnx_server, alpn);
 		}
+
+        if (ret == 0)
+        {
+            ret = verify_version(test_ctx->cnx_client, test_ctx->cnx_server);
+        }
     }
 
 	if (test_ctx != NULL)

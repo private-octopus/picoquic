@@ -480,6 +480,8 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
 			picoquic_crypto_random(quic, &cnx->server_cnxid, sizeof(uint64_t));
 			(void)picoquic_create_cnxid_reset_secret(quic, cnx->server_cnxid,
 				cnx->reset_secret);
+            cnx->proposed_version = preferred_version;
+            cnx->version = cnx->proposed_version;
         }
 
 		if (cnx != NULL)

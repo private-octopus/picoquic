@@ -111,27 +111,21 @@ void picoquic_log_transport_extension(FILE* F, picoquic_cnx_t * cnx);
 void print_address(struct sockaddr * address, int address_length, char * label)
 {
     char hostname[256];
-    char servInfo[256];
 
-    int ret  = getnameinfo(address, address_length,
-        hostname, 256, servInfo, 256, NI_NUMERICSERV);
+    int ret = 0;
+    const char * x = inet_ntop(address->sa_family, address, hostname, sizeof(hostname));
 
-    if (ret == 0) {
-        printf("%s %s:%s\n", label, hostname, servInfo);
+    if (x != NULL)
+    {
+        printf("%s, port %d\n", label,
+            (address->sa_family == AF_INET) ?
+            ((struct sockaddr_in *) address)->sin_port :
+            ((struct sockaddr_in6 *) address)->sin6_port);
     }
     else
     {
-        const char * x = inet_ntop(address->sa_family, address, hostname, sizeof(hostname));
-
-        if (x != NULL)
-        {
-            printf("%s %s\n", label, x);
-        }
-        else
-        {
-            ret = -1;
-            printf("inet_ntop failed with error # %ld\n", WSA_LAST_ERROR(errno));
-        }
+        ret = -1;
+        printf("inet_ntop failed with error # %ld\n", WSA_LAST_ERROR(errno));
     }
 }
 
