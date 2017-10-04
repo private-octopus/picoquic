@@ -44,7 +44,6 @@ static uint64_t http09_rand(uint64_t seed)
  * For now, the only things that matter is character frequency.
  */
 static char const * http09_ok_text = "The quick brown fox jumps over the lazy dog. 0123456789.,!?";
-static size_t const http09_ok_text_len = 64;
 
 static uint64_t http09_random_chars(uint64_t seed, uint8_t * bytes, size_t bytes_max)
 {

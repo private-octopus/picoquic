@@ -75,6 +75,7 @@ static int do_one_test(size_t i, FILE * F)
     else
     {
         fprintf(F, "Starting test number %" PRIst ", %s\n", i, test_table[i].test_name);
+       
         ret = test_table[i].test_fn();
         if (ret == 0)
         {
