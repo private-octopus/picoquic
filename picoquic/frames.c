@@ -344,6 +344,89 @@ int picoquic_decode_stream_reset_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
  */
 static const int picoquic_offset_length_code[4] = { 0, 2, 4, 8 };
 
+static int picoquic_parse_stream_header(picoquic_cnx_t * cnx, const uint8_t * bytes, size_t bytes_max,
+                                        uint32_t * stream_id, uint64_t * offset, size_t * data_length,
+                                        size_t * consumed)
+{
+    int     ret = 0;
+    size_t  byte_index = 1;
+    uint8_t first_byte = bytes[0];
+    uint8_t stream_id_length = 1 + ((first_byte >> 3) & 3);
+    uint8_t offset_length = picoquic_offset_length_code[(first_byte >> 1) & 3];
+    uint8_t data_length_length = (first_byte & 1) * 2;
+
+    if (bytes_max < (1u + stream_id_length + offset_length + data_length_length))
+    {
+        DBG_PRINTF("stream frame header too large: first_byte=0x%02x, max_bytes=%" PRIst,
+                   first_byte, bytes_max);
+        ret = -1;
+    }
+    else
+    {
+        switch (stream_id_length)
+        {
+        case 1:
+            *stream_id = bytes[byte_index];
+            break;
+        case 2:
+            *stream_id = PICOPARSE_16(&bytes[byte_index]);
+            break;
+        case 3:
+            *stream_id = PICOPARSE_24(&bytes[byte_index]);
+            break;
+        case 4:
+            *stream_id = PICOPARSE_32(&bytes[byte_index]);
+            break;
+        default:
+            DBG_FATAL_PRINTF("Internal error: invalid stream_id_length=%u", stream_id_length);
+            break;
+        }
+
+        byte_index += stream_id_length;
+
+        switch (offset_length)
+        {
+        case 0:
+            *offset = 0;
+            break;
+        case 2:
+            *offset = PICOPARSE_16(&bytes[byte_index]);
+            break;
+        case 4:
+            *offset = PICOPARSE_32(&bytes[byte_index]);
+            break;
+        case 8:
+            *offset = PICOPARSE_64(&bytes[byte_index]);
+            break;
+        default:
+            DBG_FATAL_PRINTF("Internal Error: invalid offset_length %u", offset_length);
+            break;
+        }
+
+        byte_index += offset_length;
+
+        if (data_length_length == 0)
+        {
+            *data_length = bytes_max - byte_index;
+        }
+        else
+        {
+            *data_length = PICOPARSE_16(&bytes[byte_index]);
+            byte_index += 2;
+
+            if (byte_index + *data_length > bytes_max)
+            {
+                DBG_PRINTF("stream data past the end of the packet: first_byte=0x%02x, data_length=%" PRIst ", max_bytes=%" PRIst,
+                           first_byte, *data_length, bytes_max);
+                ret = -1;
+            }
+        }
+        *consumed = byte_index;
+    }
+
+    return ret;
+}
+
 void picoquic_stream_data_callback(picoquic_cnx_t * cnx, picoquic_stream_head * stream)
 {
 	picoquic_stream_data * data = stream->stream_data;
@@ -518,89 +601,24 @@ int picoquic_stream_network_input(picoquic_cnx_t * cnx, uint32_t stream_id,
 int picoquic_decode_stream_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
     size_t bytes_max, int restricted, size_t * consumed, uint64_t current_time)
 {
-    int ret = 0;
-    size_t byte_index = 1;
-    uint8_t first_byte = bytes[0];
-    uint8_t stream_id_length = 1 + ((first_byte >> 3) & 3);
-    uint8_t offset_length = picoquic_offset_length_code[(first_byte >> 1) & 3];
-    uint8_t data_length_length = (first_byte & 1) * 2;
-    uint32_t stream_id = 0;
-    size_t data_length;
-    uint64_t offset = 0;
+    int      ret;
+    uint32_t stream_id;
+    size_t   data_length;
+    uint64_t offset;
 
+    ret = picoquic_parse_stream_header(cnx, bytes, bytes_max,
+                                       &stream_id, &offset, &data_length, consumed);
 
-    *consumed = 0;
-
-    if (bytes_max < (1u + stream_id_length + offset_length + data_length_length))
+    if (restricted && stream_id != 0)
     {
+        DBG_PRINTF("non-zero stream (%u), where only stream 0 is expected", stream_id);
         ret = -1;
     }
     else
     {
-        switch (stream_id_length)
-        {
-        case 1:
-            stream_id = bytes[byte_index];
-            break;
-        case 2:
-            stream_id = PICOPARSE_16(&bytes[byte_index]);
-            break;
-        case 3:
-            stream_id = PICOPARSE_24(&bytes[byte_index]);
-            break;
-        case 4:
-            stream_id = PICOPARSE_32(&bytes[byte_index]);
-            break;
-        }
-
-        if (restricted && stream_id != 0)
-        {
-            ret = -1;
-        }
-        else
-        {
-            byte_index += stream_id_length;
-
-            switch (offset_length)
-            {
-            case 0:
-                offset = 0;
-                break;
-            case 2:
-                offset = PICOPARSE_16(&bytes[byte_index]);
-                break;
-            case 4:
-                offset = PICOPARSE_32(&bytes[byte_index]);
-                break;
-            case 8:
-                offset = PICOPARSE_64(&bytes[byte_index]);
-                break;
-            }
-            byte_index += offset_length;
-
-            if (data_length_length == 0)
-            {
-                data_length = bytes_max - byte_index;
-            }
-            else
-            {
-                data_length = PICOPARSE_16(&bytes[byte_index]);
-                byte_index += 2;
-
-                if (byte_index + data_length > bytes_max)
-                {
-                    ret = -1;
-                }
-            }
-
-            if (ret == 0)
-            {
-                *consumed = byte_index + data_length;
-
-                ret = picoquic_stream_network_input(cnx, stream_id, offset, first_byte & 32,
-                    bytes + byte_index, data_length, current_time);
-            }
-        }
+        ret = picoquic_stream_network_input(cnx, stream_id, offset, bytes[0] & 32,
+                                            bytes + *consumed, data_length, current_time);
+        *consumed += data_length;
     }
 
     return ret;
@@ -930,10 +948,10 @@ static int picoquic_process_ack_of_ack_frame(picoquic_cnx_t * cnx, uint8_t * byt
 	picoquic_sack_item_t * sack = &cnx->first_sack_item;
 	picoquic_sack_item_t * previous_sack;
 	uint64_t largest = 0;
-	int ll = (first_byte >> 2) & 3;
-    int mm = (first_byte & 3);
-    int num_block = 0;
-    int num_ts = 0;
+	unsigned ll = (first_byte >> 2) & 3;
+        unsigned mm = (first_byte & 3);
+        unsigned num_block = 0;
+        unsigned num_ts = 0;
 	size_t min_len = 1 + has_num_block + 1 + (1 << ll);
 	int sack_count;
 
@@ -983,6 +1001,9 @@ static int picoquic_process_ack_of_ack_frame(picoquic_cnx_t * cnx, uint8_t * byt
 			largest = PICOPARSE_64(bytes + byte_index);
 			byte_index += 8;
 			break;
+                default:
+                        DBG_FATAL_PRINTF("Internal error: invalid ll=%u", ll);
+                        break;
 		}
 		/* Skip everything else -- we are only interested in ACK parsing */
 
@@ -1002,6 +1023,9 @@ static int picoquic_process_ack_of_ack_frame(picoquic_cnx_t * cnx, uint8_t * byt
             break;
         case 3:
             byte_index += 8 + num_block*(1 + 8);
+            break;
+        default:
+            DBG_FATAL_PRINTF("Internal error: invalid mm=%u", mm);
             break;
         }
 
@@ -1049,88 +1073,27 @@ static int picoquic_process_ack_of_ack_frame(picoquic_cnx_t * cnx, uint8_t * byt
 static int picoquic_process_ack_of_stream_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
     size_t bytes_max, size_t * consumed)
 {
-
-    /* skip stream frame */
-    int ret = 0;
-    size_t byte_index = 1;
-    uint8_t first_byte = bytes[0];
-    uint8_t stream_id_length = 1 + ((first_byte >> 3) & 3);
-    uint8_t offset_length = picoquic_offset_length_code[(first_byte >> 1) & 3];
-    uint8_t data_length_length = (first_byte & 1) * 2;
-    size_t data_length;
+    int      ret;
+    size_t   data_length;
     uint32_t stream_id;
     uint64_t offset;
     picoquic_stream_head * stream = NULL;
 
-    if (bytes_max < (1u + stream_id_length + offset_length + data_length_length))
+    /* skip stream frame */
+    ret = picoquic_parse_stream_header(cnx, bytes, bytes_max,
+                                       &stream_id, &offset, &data_length, consumed);
+
+    if (ret == 0)
     {
-        ret = -1;
-    }
-    else
-    {
-        switch (stream_id_length)
+        *consumed += data_length;
+
+        /* record the ack range for the stream */
+        stream = picoquic_find_stream(cnx, stream_id, 0);
+        if (stream != NULL)
         {
-        case 1:
-            stream_id = bytes[byte_index];
-            break;
-        case 2:
-            stream_id = PICOPARSE_16(&bytes[byte_index]);
-            break;
-        case 3:
-            stream_id = PICOPARSE_24(&bytes[byte_index]);
-            break;
-        case 4:
-            stream_id = PICOPARSE_32(&bytes[byte_index]);
-            break;
-        }
-        
-        byte_index += stream_id_length;
-
-        switch (offset_length)
-        {
-        case 0:
-            offset = 0;
-            break;
-        case 2:
-            offset = PICOPARSE_16(&bytes[byte_index]);
-            break;
-        case 4:
-            offset = PICOPARSE_32(&bytes[byte_index]);
-            break;
-        case 8:
-            offset = PICOPARSE_64(&bytes[byte_index]);
-            break;
-        }
-
-        if (data_length_length == 0)
-        {
-            data_length = bytes_max - byte_index;
-        }
-        else
-        {
-            data_length = PICOPARSE_16(&bytes[byte_index]);
-            byte_index += 2;
-
-            if (byte_index + data_length > bytes_max)
-            {
-                ret = -1;
-            }
-        }
-
-        if (ret == 0)
-        {
-            *consumed = byte_index + data_length;
-
-            /* record the ack range for the stream */
-
-            stream = picoquic_find_stream(cnx, stream_id, 0);
-
-            if (stream != NULL)
-            {
-                uint64_t blocksize;
-                (void)picoquic_update_sack_list(&stream->first_sack_item,
+            uint64_t blocksize;
+            (void)picoquic_update_sack_list(&stream->first_sack_item,
                     offset, offset + data_length - 1, &blocksize);
-            }
         }
     }
 
@@ -1222,8 +1185,8 @@ int picoquic_decode_ack_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
 	int has_num_block = (first_byte >> 4) & 1;
 	int num_block = 0;
 	int num_ts;
-	int ll = (first_byte >> 2) & 3;
-	int mm = (first_byte & 3);
+	unsigned ll = (first_byte >> 2) & 3;
+	unsigned mm = (first_byte & 3);
 	uint64_t largest = 0;
 	uint64_t last_range = 0;
 	uint64_t ack_range = 0;
@@ -1267,6 +1230,9 @@ int picoquic_decode_ack_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
 			largest = PICOPARSE_64(bytes + byte_index);
 			byte_index += 8;
 			break;
+		default:
+			DBG_FATAL_PRINTF("Internal error: out of range ll=%u", ll);
+			break;
 		}
 		/* ACK delay */
 		ack_delay = picoquic_float16_to_deltat(PICOPARSE_16(bytes + byte_index));
@@ -1289,6 +1255,9 @@ int picoquic_decode_ack_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
 		case 3:
 			last_range = PICOPARSE_64(bytes + byte_index);
 			byte_index += 8;
+			break;
+		default:
+			DBG_FATAL_PRINTF("Internal error: out of range mm=%u", mm);
 			break;
 		}
 
@@ -1334,6 +1303,9 @@ int picoquic_decode_ack_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
 				case 3:
 					ack_range = PICOPARSE_64(bytes + byte_index);
 					byte_index += 8;
+					break;
+				default:
+					DBG_FATAL_PRINTF("Internal error: out of range mm=%u", mm);
 					break;
 				}
 
@@ -2020,6 +1992,9 @@ int picoquic_skip_frame(uint8_t * bytes, size_t bytes_max, size_t * consumed, in
 					break;
 				case 3:
 					byte_index += 8 + num_block*(1 + 8);
+					break;
+			    default:
+					DBG_FATAL_PRINTF("Internal error: out of range mm=%u", mm);
 					break;
 				}
 
