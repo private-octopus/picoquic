@@ -344,9 +344,9 @@ int picoquic_decode_stream_reset_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
  */
 static const int picoquic_offset_length_code[4] = { 0, 2, 4, 8 };
 
-static int picoquic_parse_stream_header(picoquic_cnx_t * cnx, const uint8_t * bytes, size_t bytes_max,
-                                        uint32_t * stream_id, uint64_t * offset, size_t * data_length,
-                                        size_t * consumed)
+int picoquic_parse_stream_header(const uint8_t * bytes, size_t bytes_max,
+								 uint32_t * stream_id, uint64_t * offset, size_t * data_length,
+								 size_t * consumed)
 {
     int     ret = 0;
     size_t  byte_index = 1;
@@ -357,7 +357,7 @@ static int picoquic_parse_stream_header(picoquic_cnx_t * cnx, const uint8_t * by
 
     if (bytes_max < (1u + stream_id_length + offset_length + data_length_length))
     {
-        DBG_PRINTF("stream frame header too large: first_byte=0x%02x, max_bytes=%" PRIst,
+        DBG_PRINTF("stream frame header too large: first_byte=0x%02x, bytes_max=%" PRIst,
                    first_byte, bytes_max);
         ret = -1;
     }
@@ -606,7 +606,7 @@ int picoquic_decode_stream_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
     size_t   data_length;
     uint64_t offset;
 
-    ret = picoquic_parse_stream_header(cnx, bytes, bytes_max,
+    ret = picoquic_parse_stream_header(bytes, bytes_max,
                                        &stream_id, &offset, &data_length, consumed);
 
     if (restricted && stream_id != 0)
@@ -848,6 +848,86 @@ An ACK frame is shown below.
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 */
 
+int picoquic_parse_ack_header(uint8_t const * bytes, size_t bytes_max, uint64_t target_sequence,
+							  unsigned * num_block, unsigned * num_ts, uint64_t * largest,
+							  uint64_t * ack_delay, unsigned * mm, size_t * consumed)
+{
+	int ret = 0;
+	size_t byte_index = 1;
+	uint8_t first_byte = bytes[0];
+	int has_num_block = (first_byte >> 4) & 1;
+	unsigned ll = (first_byte >> 2) & 3;
+	*mm = (first_byte & 3);
+	size_t min_len = 1 + has_num_block + 1 + (1 << ll) + 2 + (1 << *mm);
+
+	if (first_byte < 0xA0 || first_byte > 0xBF)
+	{
+		DBG_PRINTF("Invalid first byte: 0x%02x", first_byte);
+		ret = -1;
+	}
+	else if (min_len > bytes_max)
+	{
+        DBG_PRINTF("ack frame fixed header too large: first_byte=0x%02x, bytes_max=%" PRIst,
+                   first_byte, bytes_max);
+		ret = -1;
+	}
+	else
+	{
+		if (has_num_block)
+		{
+			*num_block = bytes[byte_index++];
+		}
+		else
+		{
+			*num_block = 0;
+		}
+		*num_ts = bytes[byte_index++];
+
+		/* decoding the largest */
+		switch (ll)
+		{
+		case 0:
+			*largest = bytes[byte_index++];
+			*largest = picoquic_get_packet_number64(target_sequence,
+				0xFFFFFFFFFFFFFF00ull, (uint32_t) *largest);
+			break;
+		case 1:
+			*largest = PICOPARSE_16(bytes + byte_index);
+			*largest = picoquic_get_packet_number64(target_sequence,
+				0xFFFFFFFFFFFF0000ull, (uint32_t) *largest);
+			byte_index += 2;
+			break;
+		case 2:
+			*largest = PICOPARSE_32(bytes + byte_index);
+			*largest = picoquic_get_packet_number64(target_sequence,
+				0xFFFFFFFF00000000ull, (uint32_t) *largest);
+			byte_index += 4;
+			break;
+		case 3:
+			*largest = PICOPARSE_64(bytes + byte_index);
+			byte_index += 8;
+			break;
+		default:
+			DBG_FATAL_PRINTF("Internal error: out of range ll=%u", ll);
+			break;
+		}
+
+		/* ACK delay */
+		*ack_delay = picoquic_float16_to_deltat(PICOPARSE_16(bytes + byte_index));
+		byte_index += 2;
+
+		if (byte_index + (*num_block)*(1+(1<<*mm)) + (*num_ts)*3 + 2 > bytes_max)
+		{
+			DBG_PRINTF("ack frame header too large: fixed=%" PRIst ", ack_blk=%u, ts=%u, bytes_max=%" PRIst,
+					   byte_index, (*num_block)*(1+(1<<*mm)), (*num_ts)*3 + 2, bytes_max);
+			ret = -1;
+		}
+	}
+
+	*consumed = byte_index;
+	return ret;
+}
+
 static picoquic_packet * picoquic_update_rtt(picoquic_cnx_t * cnx, uint64_t largest,
 	uint64_t current_time, uint64_t ack_delay)
 {
@@ -940,108 +1020,44 @@ static picoquic_packet * picoquic_update_rtt(picoquic_cnx_t * cnx, uint64_t larg
 static int picoquic_process_ack_of_ack_frame(picoquic_cnx_t * cnx, uint8_t * bytes, 
     size_t bytes_max, size_t * consumed)
 {
-	int ret = 0;
-	size_t byte_index = 1;
-	uint8_t first_byte = bytes[0];
-	int has_num_block = (first_byte >> 4) & 1;
-	uint64_t target_sequence = 0;
-	picoquic_sack_item_t * sack = &cnx->first_sack_item;
-	picoquic_sack_item_t * previous_sack;
-	uint64_t largest = 0;
-	unsigned ll = (first_byte >> 2) & 3;
-        unsigned mm = (first_byte & 3);
-        unsigned num_block = 0;
-        unsigned num_ts = 0;
-	size_t min_len = 1 + has_num_block + 1 + (1 << ll);
-	int sack_count;
+	int ret;
+	uint64_t largest;
+	uint64_t ack_delay;
+	unsigned mm;
+	unsigned num_block;
+	unsigned num_ts;
 
-	/* Decode the first bytes of the ACK, until finding the largest data value */
-	if (first_byte < 0xA0 || first_byte > 0xBF || min_len > bytes_max)
+	/* Find the oldest ACK range, in order to calibrate the
+	 * extension of the largest number to 64 bits */
+
+	picoquic_sack_item_t const * target_sack = &cnx->first_sack_item;
+	while (target_sack->next_sack != NULL)
 	{
-		ret = -1;
+		target_sack = target_sack->next_sack;
 	}
-	else
+	uint64_t target_sequence = target_sack->start_of_sack_range - 1;
+
+	ret = picoquic_parse_ack_header(bytes, bytes_max, target_sequence,
+									&num_block, &num_ts, &largest,
+									&ack_delay, &mm, consumed);
+
+	if (ret == 0)
 	{
-		/* Find the oldest ACK range, in order to calibrate the
-		* extension of the largest number to 64 bits */
-
-		while (sack->next_sack != NULL)
-		{
-			sack = sack->next_sack;
-		}
-		target_sequence = sack->start_of_sack_range - 1;
-
-		if (has_num_block)
-		{
-            num_block = bytes[byte_index++];
-		}
-        num_ts = bytes[byte_index++];
-
-		/* decoding the largest */
-		switch (ll)
-		{
-		case 0:
-			largest = bytes[byte_index++];
-			largest = picoquic_get_packet_number64(target_sequence,
-				0xFFFFFFFFFFFFFF00ull, (uint32_t)largest);
-			break;
-		case 1:
-			largest = PICOPARSE_16(bytes + byte_index);
-			largest = picoquic_get_packet_number64(target_sequence,
-				0xFFFFFFFFFFFF0000ull, (uint32_t)largest);
-			byte_index += 2;
-			break;
-		case 2:
-			largest = PICOPARSE_32(bytes + byte_index);
-			largest = picoquic_get_packet_number64(target_sequence,
-				0xFFFFFFFF00000000ull, (uint32_t)largest);
-			byte_index += 4;
-			break;
-		case 3:
-			largest = PICOPARSE_64(bytes + byte_index);
-			byte_index += 8;
-			break;
-                default:
-                        DBG_FATAL_PRINTF("Internal error: invalid ll=%u", ll);
-                        break;
-		}
-		/* Skip everything else -- we are only interested in ACK parsing */
-
-        byte_index += 2; /* ACK delay */
-
-        /* last range and blocks */
-        switch (mm)
-        {
-        case 0:
-            byte_index += 1 + num_block*(1 + 1);
-            break;
-        case 1:
-            byte_index += 2 + num_block*(1 + 2);
-            break;
-        case 2:
-            byte_index += 4 + num_block*(1 + 4);
-            break;
-        case 3:
-            byte_index += 8 + num_block*(1 + 8);
-            break;
-        default:
-            DBG_FATAL_PRINTF("Internal error: invalid mm=%u", mm);
-            break;
-        }
+        /* consume last range and blocks */
+		*consumed += (1 << mm) + num_block*(1 + (1 << mm));
 
         if (num_ts > 0)
         {
-            byte_index += 2 + num_ts * 3;
+            *consumed += 2 + num_ts * 3;
         }
 
-        *consumed = byte_index;
-
         /* Process the parsed ACK */
-		sack = &cnx->first_sack_item;
-		previous_sack = NULL;
-		sack_count = 0;
+		picoquic_sack_item_t * sack          = &cnx->first_sack_item;
+		picoquic_sack_item_t * previous_sack = NULL;
+		unsigned               sack_count    = 0;
 
 		do {
+			/* TODO: Clarify logic here and simplify */
 			if (sack->start_of_sack_range < largest &&
 				sack->end_of_sack_range < largest)
 			{
@@ -1080,7 +1096,7 @@ static int picoquic_process_ack_of_stream_frame(picoquic_cnx_t * cnx, uint8_t * 
     picoquic_stream_head * stream = NULL;
 
     /* skip stream frame */
-    ret = picoquic_parse_stream_header(cnx, bytes, bytes_max,
+    ret = picoquic_parse_stream_header(bytes, bytes_max,
                                        &stream_id, &offset, &data_length, consumed);
 
     if (ret == 0)
@@ -1179,167 +1195,83 @@ static picoquic_packet * picoquic_process_ack_range(
 int picoquic_decode_ack_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
     size_t bytes_max, int restricted, size_t * consumed, uint64_t current_time)
 {
-	int ret = 0;
-	size_t byte_index = 1;
-	uint8_t first_byte = bytes[0];
-	int has_num_block = (first_byte >> 4) & 1;
-	int num_block = 0;
-	int num_ts;
-	unsigned ll = (first_byte >> 2) & 3;
-	unsigned mm = (first_byte & 3);
-	uint64_t largest = 0;
-	uint64_t last_range = 0;
-	uint64_t ack_range = 0;
-	uint64_t gap_begin;
-	uint64_t ack_delay = 0;
-	picoquic_packet * top_packet = cnx->retransmit_newest;
+	int ret;
+	unsigned num_block;
+	unsigned num_ts;
+	unsigned mm;
+	uint64_t largest;
+	uint64_t ack_delay;
 
-	if (first_byte < 0xA0 || first_byte > 0xBF)
+	ret = picoquic_parse_ack_header(bytes, bytes_max, cnx->send_sequence,
+									&num_block, &num_ts, &largest,
+									&ack_delay, &mm, consumed);
+
+	if (ret == 0)
 	{
-		ret = -1;
-	}
-	else
-	{
-		if (has_num_block)
-		{
-			num_block = bytes[byte_index++];
-		}
-		num_ts = bytes[byte_index++];
-
-		/* decoding the largest */
-		switch (ll)
-		{
-		case 0:
-			largest = bytes[byte_index++];
-			largest = picoquic_get_packet_number64(cnx->send_sequence,
-				0xFFFFFFFFFFFFFF00ull, (uint32_t) largest);
-			break;
-		case 1:
-			largest = PICOPARSE_16(bytes + byte_index);
-			largest = picoquic_get_packet_number64(cnx->send_sequence,
-				0xFFFFFFFFFFFF0000ull, (uint32_t)largest);
-			byte_index += 2;
-			break;
-		case 2:
-			largest = PICOPARSE_32(bytes + byte_index);
-			largest = picoquic_get_packet_number64(cnx->send_sequence,
-				0xFFFFFFFF00000000ull, (uint32_t) largest);
-			byte_index += 4;
-			break;
-		case 3:
-			largest = PICOPARSE_64(bytes + byte_index);
-			byte_index += 8;
-			break;
-		default:
-			DBG_FATAL_PRINTF("Internal error: out of range ll=%u", ll);
-			break;
-		}
-		/* ACK delay */
-		ack_delay = picoquic_float16_to_deltat(PICOPARSE_16(bytes + byte_index));
-		byte_index += 2;
-
-		/* last range */
-		switch (mm)
-		{
-		case 0:
-			last_range = bytes[byte_index++];
-			break;
-		case 1:
-			last_range = PICOPARSE_16(bytes + byte_index);
-			byte_index += 2;
-			break;
-		case 2:
-			last_range = PICOPARSE_32(bytes + byte_index);
-			byte_index += 4;
-			break;
-		case 3:
-			last_range = PICOPARSE_64(bytes + byte_index);
-			byte_index += 8;
-			break;
-		default:
-			DBG_FATAL_PRINTF("Internal error: out of range mm=%u", mm);
-			break;
-		}
+		size_t byte_index = *consumed;
 
 		/* Attempt to update the RTT */
-		top_packet = picoquic_update_rtt(cnx, largest, current_time, ack_delay);
+		picoquic_packet * top_packet = picoquic_update_rtt(cnx, largest, current_time, ack_delay);
+		unsigned extra_ack = 1;
 
-		/* Process the first range, which is always present */
-		if (last_range < largest)
+		while(1)
 		{
-			top_packet = picoquic_process_ack_range(cnx, largest, last_range + 1, top_packet, current_time);
-			gap_begin = largest - last_range - 1;
-		}
-		else
-		{
-			ret = -1;
-		}
+			uint64_t range;
 
-		for (int i = 0; ret == 0 && i < num_block; i++)
-		{
+			switch (mm)
+			{
+			case 0:
+				range = bytes[byte_index++];
+				break;
+			case 1:
+				range = PICOPARSE_16(bytes + byte_index);
+				byte_index += 2;
+				break;
+			case 2:
+				range = PICOPARSE_32(bytes + byte_index);
+				byte_index += 4;
+				break;
+			case 3:
+				range = PICOPARSE_64(bytes + byte_index);
+				byte_index += 8;
+				break;
+			default:
+				DBG_FATAL_PRINTF("Internal error: out of range mm=%u", mm);
+				break;
+			}
+
+			range += extra_ack;
+			if (largest + 1 < range)
+			{
+				DBG_PRINTF("ack range error: largest=%" PRIx64 ", range=%" PRIx64, largest, range);
+				ret = -1;
+				break;
+			}
+
+			top_packet = picoquic_process_ack_range(cnx, largest, range, top_packet, current_time);
+
+			if (num_block-- == 0)
+				break;
+
 			/* Skip the gap */
-			if (gap_begin < bytes[byte_index])
+			uint64_t block_to_block = range + bytes[byte_index++];
+			if (largest < block_to_block)
 			{
+				DBG_PRINTF("ack gap error: largest=%" PRIx64 ", range=%" PRIx64 ", gap=%" PRIu64,
+						   largest, range, block_to_block-range);
 				ret = -1;
+				break;
 			}
-			else
-			{
-				gap_begin -= bytes[byte_index++];
 
-				switch (mm)
-				{
-				case 0:
-					ack_range = bytes[byte_index++];
-					byte_index += 1;
-					break;
-				case 1:
-					ack_range = PICOPARSE_16(bytes + byte_index);
-					byte_index += 2;
-					break;
-				case 2:
-					ack_range = PICOPARSE_32(bytes + byte_index);
-					byte_index += 4;
-					break;
-				case 3:
-					ack_range = PICOPARSE_64(bytes + byte_index);
-					byte_index += 8;
-					break;
-				default:
-					DBG_FATAL_PRINTF("Internal error: out of range mm=%u", mm);
-					break;
-				}
-
-				if (gap_begin >= ack_range)
-				{
-					/* mark the range as received */
-					top_packet = picoquic_process_ack_range(cnx, gap_begin, ack_range, top_packet, current_time);
-
-					/* start of next gap */
-					gap_begin -= ack_range;
-				}
-				else
-				{
-					ret = -1;
-				}
-			}
+			largest -= block_to_block;
+			extra_ack = 0;
 		}
 
-		if (ret == 0)
+		if (num_ts > 0)
 		{
-			if (num_ts > 0)
-			{
-				byte_index += 2 + num_ts * 3;
-			}
-
-			if (byte_index > bytes_max)
-			{
-				ret = -1;
-			}
-			else
-			{
-				*consumed = byte_index;
-			}
+			byte_index += 2 + num_ts * 3;
 		}
+		*consumed = byte_index;
 	}
 
 	return ret;

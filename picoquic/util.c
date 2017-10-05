@@ -23,6 +23,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
 #include "picoquic_internal.h"
 
 char * picoquic_string_create(const char * original, size_t len)
@@ -57,4 +58,34 @@ char * picoquic_string_duplicate(const char * original)
 	}
 
 	return str;
+}
+
+static FILE *debug_out;
+
+void debug_printf(const char *fmt, ...)
+{
+	va_list args;
+	va_start(args, fmt);
+	vfprintf(debug_out ? debug_out : stderr, fmt, args);
+	va_end(args);
+}
+
+void debug_printf_push_stream(FILE *f)
+{
+	if (debug_out)
+	{
+		fprintf(stderr, "Nested err out not supported\n");
+		exit(1);
+	}
+	debug_out = f;
+}
+
+void debug_printf_pop_stream(void)
+{
+	if (debug_out == NULL)
+	{
+		fprintf(stderr, "No current err out\n");
+		exit(1);
+	}
+	debug_out = NULL;
 }
