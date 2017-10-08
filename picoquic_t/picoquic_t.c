@@ -58,7 +58,8 @@ static picoquic_test_def_t test_table[] = {
     { "tls_api_very_long_with_err", tls_api_very_long_with_err_test },
     { "tls_api_very_long_congestion", tls_api_very_long_congestion_test },
     { "http0dot9", http0dot9_test },
-    { "hrr", tls_api_hrr_test }
+    { "hrr", tls_api_hrr_test },
+    { "ack_of_ack", ack_of_ack_test }
 };
 
 static size_t nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);
