@@ -128,6 +128,27 @@ void print_address(struct sockaddr * address, int address_length, char * label)
     }
 }
 
+static char * strip_endofline(char * buf, size_t bufmax, char const * line)
+{
+    for (size_t i = 0; i < bufmax; i++)
+    {
+        int c = line[i];
+
+        if (c == 0 || c == '\r' || c == '\n')
+        {
+            buf[i] = 0;
+            break;
+        }
+        else
+        {
+            buf[i] = c;
+        }
+    }
+
+    buf[bufmax - 1] = 0;
+    return buf;
+}
+
 int bind_to_port(SOCKET_TYPE fd, int af, int port)
 {
     struct sockaddr_storage sa;
@@ -718,7 +739,8 @@ static const demo_stream_desc_t test_scenario[] = {
     { 1, 0, "index.html", 0 },
     { 3, 1, "test.html", 0 },
     { 5, 1, "doc-123456.html", 0 },
-    { 7, 1, "main.jpg", 1}
+    { 7, 1, "main.jpg", 1},
+    { 9, 1, "war-and-peace.txt", 0}
 };
 
 static const size_t test_scenario_nb = sizeof(test_scenario) / sizeof(demo_stream_desc_t);
@@ -888,6 +910,7 @@ static void first_client_callback(picoquic_cnx_t * cnx,
         /* if FIN present, process request through http 0.9 */
         if (fin_or_event == picoquic_callback_stream_fin)
         {
+            char buf[256];
             /* if data generated, just send it. Otherwise, just FIN the stream. */
             fclose(stream_ctx->F);
             stream_ctx->F = NULL;
@@ -895,7 +918,8 @@ static void first_client_callback(picoquic_cnx_t * cnx,
             fin_stream_id = stream_id;
 
             fprintf(stdout, "Received file %s, after %d bytes, closing stream %d\n",
-                &stream_ctx->command[4], (int)stream_ctx->received_length, stream_ctx->stream_id);
+                strip_endofline(buf, sizeof(buf), (char *) &stream_ctx->command[4]),
+                (int)stream_ctx->received_length, stream_ctx->stream_id);
         }
     }
 

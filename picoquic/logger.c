@@ -670,7 +670,8 @@ void picoquic_log_packet(FILE* F, picoquic_quic_t * quic, picoquic_cnx_t * cnx,
 		if (cnx != NULL)
 		{
 			ph.pn64 = picoquic_get_packet_number64(
-				cnx->first_sack_item.end_of_sack_range, ph.pnmask, ph.pn);
+                (receiving == 0)?cnx->send_sequence:cnx->first_sack_item.end_of_sack_range, 
+                ph.pnmask, ph.pn);
 		}
 		else
 		{

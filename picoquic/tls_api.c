@@ -559,7 +559,14 @@ int picoquic_tlsinput_segment(picoquic_cnx_t * cnx,
     while (roff < length && (ret == 0 || ret == PTLS_ERROR_IN_PROGRESS))
     {
         inlen = length - roff;
-        ret = ptls_handshake(ctx->tls, sendbuf, bytes + roff, &inlen, &ctx->handshake_properties);
+        if (ptls_handshake_is_complete(ctx->tls))
+        {
+            ret = ptls_receive(ctx->tls, sendbuf, bytes + roff, &inlen);
+        }
+        else
+        {
+            ret = ptls_handshake(ctx->tls, sendbuf, bytes + roff, &inlen, &ctx->handshake_properties);
+        }
         roff += inlen;
     }
 
