@@ -26,8 +26,12 @@
 
 #ifdef WIN32
 # define PRIst "Iu"
+#ifndef PRIu64
 # define PRIu64 "I64u"
+#endif
+#ifndef PRIx64
 # define PRIx64 "I64x"
+#endif
 #else
 # include <inttypes.h>
 # define PRIst "zu"

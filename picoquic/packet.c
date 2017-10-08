@@ -613,6 +613,25 @@ int picoquic_incoming_client_cleartext(
 }
 
 /*
+* Processing of stateless reset packet.
+*/
+int picoquic_incoming_stateless_reset(
+    picoquic_cnx_t * cnx)
+{
+    int ret = 0;
+
+    /* Stateless reset. The connection should be abandonned */
+    cnx->cnx_state = picoquic_state_disconnected;
+
+    if (cnx->callback_fn)
+    {
+        (cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx);
+    }
+
+    return PICOQUIC_ERROR_AEAD_CHECK;
+}
+
+/*
  * Processing of client encrypted packet.
  */
 int picoquic_incoming_encrypted(
@@ -647,18 +666,15 @@ int picoquic_incoming_encrypted(
         if (decoded_length > (length - ph->offset))
         {
             /* Bad packet should be ignored -- unless it is actually a server reset */
-			if (ph->vn == 0 && length >= (9 + PICOQUIC_RESET_SECRET_SIZE) &&
-				cmp_reset_secret == 0)
-			{
-				/* Stateless reset. The connection should be abandonned */
-				cnx->cnx_state = picoquic_state_disconnected;
-
-                if (cnx->callback_fn)
-                {
-                    (cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx);
-                }
-			}
-			ret = PICOQUIC_ERROR_AEAD_CHECK;
+            if (ph->vn == 0 && length >= (9 + PICOQUIC_RESET_SECRET_SIZE) &&
+                cmp_reset_secret == 0)
+            {
+                ret = picoquic_incoming_stateless_reset(cnx);
+            }
+            else
+            {
+                ret = PICOQUIC_ERROR_AEAD_CHECK;
+            }
         }
         else
         {
@@ -734,7 +750,18 @@ int picoquic_incoming_packet(
             /* verify that the packet is new */
 			if (picoquic_is_pn_already_received(cnx, ph.pn64) != 0)
 			{
-				ret = PICOQUIC_ERROR_DUPLICATE;
+                /* Check the possible reset which may be hiding under the duplicate */
+                if (ph.vn == 0 && (ph.ptype == picoquic_packet_1rtt_protected_phi0 ||
+                    ph.ptype == picoquic_packet_1rtt_protected_phi1) &&
+                    length >= (9 + PICOQUIC_RESET_SECRET_SIZE) &&
+                    memcmp(bytes + 9, cnx->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0)
+                {
+                    ret = picoquic_incoming_stateless_reset(cnx);
+                }
+                else
+                {
+                    ret = PICOQUIC_ERROR_DUPLICATE;
+                }
 			}
 
             /* Verify that the packet decrypts correctly */

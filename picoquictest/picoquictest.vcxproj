@@ -131,6 +131,7 @@
     <Text Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="ack_of_ack_test.c" />
     <ClCompile Include="cnx_creation_test.c" />
     <ClCompile Include="float16test.c" />
     <ClCompile Include="fnv1atest.c" />

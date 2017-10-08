@@ -1017,8 +1017,51 @@ static picoquic_packet * picoquic_update_rtt(picoquic_cnx_t * cnx, uint64_t larg
 	return packet;
 }
 
-static int picoquic_process_ack_of_ack_frame(picoquic_cnx_t * cnx, uint8_t * bytes, 
-    size_t bytes_max, size_t * consumed)
+static void picoquic_process_ack_of_ack_range(picoquic_sack_item_t * first_sack, 
+    uint64_t start_of_range, uint64_t end_of_range)
+{
+    if (first_sack->start_of_sack_range == start_of_range)
+    {
+        if (end_of_range < first_sack->end_of_sack_range)
+        {
+            first_sack->start_of_sack_range = end_of_range + 1;
+        }
+        else
+        {
+            first_sack->start_of_sack_range = first_sack->end_of_sack_range;
+        }
+    }
+    else
+    {
+        picoquic_sack_item_t * previous = first_sack;
+        picoquic_sack_item_t * next = previous->next_sack;
+
+        while (next != NULL)
+        {
+            if (next->end_of_sack_range == end_of_range &&
+                next->start_of_sack_range == start_of_range)
+            {
+                /* Matching range should be removed */
+                previous->next_sack = next->next_sack;
+                free(next);
+                break;
+            }
+            else if (next->end_of_sack_range > end_of_range)
+            {
+                previous = next;
+                next = next->next_sack;
+            }
+            else
+            {
+                break;
+            }
+        }
+    }
+}
+
+int picoquic_process_ack_of_ack_frame(
+    picoquic_sack_item_t * first_sack,
+    uint8_t * bytes, size_t bytes_max, size_t * consumed)
 {
 	int ret;
 	uint64_t largest;
@@ -1030,12 +1073,12 @@ static int picoquic_process_ack_of_ack_frame(picoquic_cnx_t * cnx, uint8_t * byt
 	/* Find the oldest ACK range, in order to calibrate the
 	 * extension of the largest number to 64 bits */
 
-	picoquic_sack_item_t const * target_sack = &cnx->first_sack_item;
+	picoquic_sack_item_t * target_sack = first_sack;
 	while (target_sack->next_sack != NULL)
 	{
 		target_sack = target_sack->next_sack;
 	}
-	uint64_t target_sequence = target_sack->start_of_sack_range - 1;
+	uint64_t target_sequence = target_sack->start_of_sack_range;
 
 	ret = picoquic_parse_ack_header(bytes, bytes_max, target_sequence,
 									&num_block, &num_ts, &largest,
@@ -1043,45 +1086,73 @@ static int picoquic_process_ack_of_ack_frame(picoquic_cnx_t * cnx, uint8_t * byt
 
 	if (ret == 0)
 	{
-        /* consume last range and blocks */
-		*consumed += (1 << mm) + num_block*(1 + (1 << mm));
+        size_t byte_index = *consumed;
+        uint64_t extra_ack = 1;
+
+        /* Process each successive range */
+
+        while (1)
+        {
+            uint64_t range;
+
+            switch (mm)
+            {
+            case 0:
+                range = bytes[byte_index++];
+                break;
+            case 1:
+                range = PICOPARSE_16(bytes + byte_index);
+                byte_index += 2;
+                break;
+            case 2:
+                range = PICOPARSE_32(bytes + byte_index);
+                byte_index += 4;
+                break;
+            case 3:
+                range = PICOPARSE_64(bytes + byte_index);
+                byte_index += 8;
+                break;
+            default:
+                DBG_FATAL_PRINTF("Internal error: out of range mm=%u", mm);
+                break;
+            }
+
+            range += extra_ack;
+            if (largest + 1 < range)
+            {
+                DBG_PRINTF("ack range error: largest=%" PRIx64 ", range=%" PRIx64, largest, range);
+                ret = -1;
+                break;
+            }
+
+            if (range > 0)
+            {
+                picoquic_process_ack_of_ack_range(first_sack, largest + 1 - range, largest);
+            }
+
+            if (num_block-- == 0)
+                break;
+
+            /* Skip the gap */
+            uint64_t block_to_block = range + bytes[byte_index++];
+            if (largest < block_to_block)
+            {
+                DBG_PRINTF("ack gap error: largest=%" PRIx64 ", range=%" PRIx64 ", gap=%" PRIu64,
+                    largest, range, block_to_block - range);
+                ret = -1;
+                break;
+            }
+
+            largest -= block_to_block;
+            extra_ack = 0;
+        }
 
         if (num_ts > 0)
         {
-            *consumed += 2 + num_ts * 3;
+            byte_index += 2 + num_ts * 3;
         }
-
-        /* Process the parsed ACK */
-		picoquic_sack_item_t * sack          = &cnx->first_sack_item;
-		picoquic_sack_item_t * previous_sack = NULL;
-		unsigned               sack_count    = 0;
-
-		do {
-			/* TODO: Clarify logic here and simplify */
-			if (sack->start_of_sack_range < largest &&
-				sack->end_of_sack_range < largest)
-			{
-				sack_count++;
-
-				if (sack_count > 2)
-				{
-					previous_sack->next_sack = sack->next_sack;
-					free(sack);
-					sack = previous_sack->next_sack;
-				}
-				else
-				{
-					previous_sack = sack;
-					sack = sack->next_sack;
-				}
-			}
-			else
-			{
-				previous_sack = sack;
-				sack = sack->next_sack;
-			}
-		} while (sack != NULL);
-	}
+        *consumed = byte_index;
+    }
 
 	return ret;
 }
@@ -1133,7 +1204,7 @@ void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t * cnx, picoquic_p
 		if (p->bytes[byte_index] >= picoquic_frame_type_ack_range_min &&
 			p->bytes[byte_index] <= picoquic_frame_type_ack_range_max)
 		{
-			ret = picoquic_process_ack_of_ack_frame(cnx, &p->bytes[byte_index], 
+			ret = picoquic_process_ack_of_ack_frame(&cnx->first_sack_item, &p->bytes[byte_index], 
                 p->length - byte_index, &frame_length);
             byte_index += frame_length;
 		}

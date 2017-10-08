@@ -342,7 +342,6 @@ extern "C" {
 
 	/* Packet parsing */
 
-
 	typedef struct _picoquic_packet_header {
 		uint64_t cnx_id;
 		uint32_t pn;
@@ -386,6 +385,13 @@ extern "C" {
      */
     int picoquic_check_sack_list(picoquic_sack_item_t * sack,
         uint64_t pn64_min, uint64_t pn64_max);
+
+    /*
+     * Process ack of ack
+     */
+    int picoquic_process_ack_of_ack_frame(
+        picoquic_sack_item_t * first_sack,
+        uint8_t * bytes, size_t bytes_max, size_t * consumed);
 
 	/* stream management */
 	picoquic_stream_head * picoquic_find_stream(picoquic_cnx_t * cnx, uint32_t stream_id, int create);
