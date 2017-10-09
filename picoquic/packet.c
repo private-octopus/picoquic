@@ -519,6 +519,7 @@ int picoquic_incoming_server_cleartext(
 			if (cnx->server_cnxid == 0)
 			{
 				cnx->server_cnxid = ph->cnx_id;
+                (void)picoquic_register_cnx_id(cnx->quic, cnx, cnx->server_cnxid);
 			}
 			else if (cnx->server_cnxid != ph->cnx_id)
 			{
@@ -726,11 +727,27 @@ int picoquic_incoming_packet(
     /* Retrieve the connection context */
     if (ret == 0)
     {
-        cnx = picoquic_cnx_by_net(quic, addr_from);
-
-        if (cnx == NULL && ph.cnx_id != 0)
+        if (ph.cnx_id != 0)
         {
             cnx = picoquic_cnx_by_id(quic, ph.cnx_id);
+        }
+
+        if (cnx == NULL)
+        {
+            if ((quic->flags &picoquic_context_server) == 0)
+            {
+                cnx = picoquic_cnx_by_net(quic, addr_from);
+            }
+            else if (ph.cnx_id != 0)
+            {
+                /* TODO: get better code! */
+                cnx = quic->cnx_list;
+
+                while (cnx != NULL && cnx->initial_cnxid != ph.cnx_id)
+                {
+                    cnx = cnx->next_in_table;
+                }
+            }
         }
     }
 

@@ -267,5 +267,13 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+
+        TEST_METHOD(test_two_connections)
+        {
+            int ret = tls_api_two_connections_test();
+
+            Assert::AreEqual(ret, 0);
+        }
 	};
 }

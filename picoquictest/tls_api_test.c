@@ -711,7 +711,7 @@ static int tls_api_init_ctx(picoquic_test_tls_api_ctx_t ** pctx, uint32_t propos
 		if (ret == 0)
 		{
 			/* Create a client connection */
-			test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient, 12345,
+			test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient, 0,
 				(struct sockaddr *)&test_ctx->server_addr, 0,
 				proposed_version, sni, alpn);
 
@@ -730,6 +730,7 @@ static int tls_api_init_ctx(picoquic_test_tls_api_ctx_t ** pctx, uint32_t propos
 
 	return ret;
 }
+
 
 static int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t * test_ctx, 
 	uint64_t *simulated_time, int * was_active)
@@ -844,7 +845,15 @@ static int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t * test_ctx,
 
 					if (test_ctx->cnx_server == NULL)
 					{
-						test_ctx->cnx_server = test_ctx->qserver->cnx_list;
+                        uint64_t target_cnxid = test_ctx->cnx_client->initial_cnxid;
+                        picoquic_cnx_t * next = test_ctx->qserver->cnx_list;
+
+                        while (next != NULL && next->initial_cnxid != target_cnxid)
+                        {
+                            next = next->next_in_table;
+                        }
+
+						test_ctx->cnx_server = next;
 					}
 
 					*was_active |= 1;
@@ -1328,4 +1337,83 @@ int tls_api_hrr_test()
     }
 
     return ret;
+}
+
+/*
+ * Test two successive connections from the same client.
+ */
+
+int tls_api_two_connections_test()
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t * test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, 0, NULL, "test-alpn");
+
+    if (ret == 0)
+    {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    /*
+    if (ret == 0)
+    {
+        ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
+    }
+    */
+
+    if (ret == 0)
+    {
+        /* Verify that the connection is fully established */
+        uint64_t target_time = simulated_time + 2000000;
+
+        while (ret == 0 &&
+            test_ctx->cnx_client->cnx_state == picoquic_state_client_ready &&
+            test_ctx->cnx_server->cnx_state == picoquic_state_server_ready &&
+            simulated_time < target_time)
+        {
+            int was_active = 0;
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, &was_active);
+        }
+
+        /* Delete the client connection from the client context,
+         * without sending notification to the server */
+        while (test_ctx->qclient->cnx_list != NULL)
+        {
+            picoquic_delete_cnx(test_ctx->qclient->cnx_list);
+        }
+
+        /* Erase the server connection reference */
+        test_ctx->cnx_server = NULL;
+
+        /* Create a new connection in the client context */
+
+        test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient, 0,
+            (struct sockaddr *)&test_ctx->server_addr, 0, 0, NULL, "test-alpn");
+
+        if (test_ctx->cnx_client == NULL)
+        {
+            ret = -1;
+        }
+    }
+
+    /* Now, restart a connection in the same context */
+    if (ret == 0)
+    {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    if (ret == 0)
+    {
+        ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
+    }
+
+    if (test_ctx != NULL)
+    {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+
 }

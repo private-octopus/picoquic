@@ -570,9 +570,9 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
 
     if (cnx != NULL)
     {
-        if (cnx_id != 0)
+        if (cnx->server_cnxid != 0)
         {
-            (void)picoquic_register_cnx_id(quic, cnx, cnx_id);
+            (void)picoquic_register_cnx_id(quic, cnx, cnx->server_cnxid);
         }
 
         if (addr != NULL)

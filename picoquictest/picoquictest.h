@@ -58,6 +58,7 @@ extern "C" {
     int tls_api_hrr_test();
     int ackrange_test();
     int ack_of_ack_test();
+    int tls_api_two_connections_test();
 
 #ifdef  __cplusplus
 }
