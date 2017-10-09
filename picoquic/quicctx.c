@@ -511,8 +511,16 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
 			cnx->aead_encrypt_ctx = NULL;
             cnx->aead_de_encrypt_ctx = NULL;
 
-			picoquic_crypto_random(quic, &random_sequence, sizeof(uint32_t));
-			cnx->send_sequence = random_sequence;
+            /* Set the initial sequence randomly between 1 and 2^31 - 1 
+             * The spec does not require avoiding the value 0, but doing
+             * so minimizes risks of triggering bugs in other implementations.
+             */
+            do
+            {
+                picoquic_crypto_random(quic, &random_sequence, sizeof(uint32_t));
+                random_sequence &= 0x7FFFFFFF;
+            } while (random_sequence == 0);
+            cnx->send_sequence = random_sequence;
 
 			cnx->send_mtu = (addr == NULL || addr->sa_family == AF_INET)?
 				PICOQUIC_INITIAL_MTU_IPV4 : PICOQUIC_INITIAL_MTU_IPV6;
