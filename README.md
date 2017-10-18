@@ -58,7 +58,7 @@ and with ngtcp2 (https://github.com/ngtcp2/ngtcp2).
 
 The next milestone was the second implementation draft
 (https://github.com/quicwg/base-drafts/wiki/Second-Implementation-Draft).
-It was used as the bais for interop tests in Seattle in October 2017.
+It was used as the basis for interop tests in Seattle in October 2017.
 Picoquic supports all of these features, including:
 
 * Handshake
@@ -73,12 +73,40 @@ Picoquic supports all of these features, including:
 We demonstrated interop with a number of implementations, and also found a few bugs that
 have been fixed -- see closed issues for details. 
 
+## Second and an half implementation draft
+
+The next coming milestone will still be based on the second implementation draft.
+The feature set and the tests will remain the same, the emphasis being on actually
+verifying that all these features work. This entails documenting the tests that
+should pass to claim interop on the various functions. The only change is that
+the interop will be based on draft-07 instead of draft-05.
+
+Just changing the draft number does not look like much, but the draft-07 brings in a
+number of protocol changes:
+
+* Change the protection of clear text packets to use AES-GCM instead of FNV-1A,
+  with a version dependent key that prevents "dumb" firewalls from messing with
+  the packet content.
+
+* Removal of the option to send 1-RTT packets using the long header form.
+
+* Change the ACK format to remove the timestamps. (They may be reintroduced later
+  as a negotiated option.)
+
+* Addition of an APPLICATION_CLOSE frame.
+
+* Change of the format of the Stateless Reset packet.
+
+These are all incompatible changes, and the developers will have to
+implement and test them before the IETF meeting in Singapore. That should keep us
+quite busy in October and early November.
+
 ## Further milestones
 
-Of course, the second implementation draft is not the final one. 
-The second interoperation draft is based on the draft-05 of the
-QUIC spec: https://tools.ietf.org/html/draft-ietf-quic-transport-05.
-Everybody expects that spec to evolve. 
+Of course, even the second implementation draft "and an half" is not the final one. 
+The interoperation draft is based on the draft-07 of the
+QUIC spec: https://tools.ietf.org/html/draft-ietf-quic-transport-07.
+Everybody expects that spec to still evolve. 
 The interop plan does not test every feature of the transport. The big missing
 feature at the transport level is 0-RTT support. Picoquic will have that soon, but the interop tests
 will probably have to wait until at least November 2017. After that, the big transport features will
@@ -91,7 +119,7 @@ We might, but that's a lot of work. If someone is interested doing that and want
 to collaborate, they are welcome. In parallel, we plan to do an implementation
 of DNS over QUIC (https://datatracker.ietf.org/doc/draft-huitema-quic-dnsoquic/).
 
-After October, we will start to spend time bettering the implementation. Until now 
+After November, we will start to spend time bettering the implementation. Until now 
 the focus has been on correctness rather than performance. We will keep correctness,
 but we will improve performance, especially in light of practical experience with 
 applications. Suggestions are wellcome.
@@ -119,8 +147,8 @@ To build Picoquic on Windows, you need to:
 
 ## Picoquic on Linux
 
-The build expereince on Linux is now much improved, thanks to check-ins from Deb Banerjee,
-Igor Lubashev. 
+The build experience on Linux is now much improved, thanks to check-ins from Deb Banerjee
+and Igor Lubashev. 
 
 To build Picoquic on Linux, you need to:
 
@@ -145,7 +173,7 @@ are the same as for Linux.
 Sorry, not all that much documentation yet. This will come as we populate the wiki. Your
 best bet is to look at the demonstration program "picoquicdemo" that is included in the
 release. The sources are in "picoquicfirst/picoquicdemo.c".
-~~~
+
 
  
 
