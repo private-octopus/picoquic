@@ -112,7 +112,8 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t * cnx, int extension_mo
 		switch (extension_mode)
 		{
 		case 0: // Client hello
-			picoformat_32(bytes + byte_index, cnx->version);
+			picoformat_32(bytes + byte_index, 
+                picoquic_supported_versions[cnx->version_index].version);
 			byte_index += 4;
 			picoformat_32(bytes + byte_index, cnx->proposed_version);
 			byte_index += 4;
@@ -121,7 +122,7 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t * cnx, int extension_mo
 			bytes[byte_index++] = (uint8_t) (4 * picoquic_nb_supported_versions);
 			for (size_t i = 0; i < picoquic_nb_supported_versions; i++)
 			{
-				picoformat_32(bytes + byte_index, picoquic_supported_versions[i]);
+				picoformat_32(bytes + byte_index, picoquic_supported_versions[i].version);
 				byte_index += 4;
 			}
 			break;
@@ -216,7 +217,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t * cnx, int extension_mo
 			{
 				for (size_t i = 0; ret == 0 && i < picoquic_nb_supported_versions; i++)
 				{
-					if (proposed_version == picoquic_supported_versions[i])
+					if (proposed_version == picoquic_supported_versions[i].version)
 					{
 						ret = PICOQUIC_ERROR_VERSION_NEGOTIATION_SPOOFED;
 					}
@@ -240,7 +241,8 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t * cnx, int extension_mo
 			{
 				ret = PICOQUIC_ERROR_MALFORMED_TRANSPORT_EXTENSION;
 			}
-			else if (cnx->proposed_version == cnx->version)
+			else if (cnx->proposed_version == 
+                picoquic_supported_versions[cnx->version_index].version)
 			{
 				byte_index += supported_versions_size;
 			}

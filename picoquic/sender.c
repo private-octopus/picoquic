@@ -204,7 +204,8 @@ size_t picoquic_create_packet_header(
 
 		picoformat_64(&bytes[1], cnx_id);
 		picoformat_32(&bytes[9], (uint32_t)sequence_number);
-		picoformat_32(&bytes[13], cnx->version);
+		picoformat_32(&bytes[13], 
+            picoquic_supported_versions[cnx->version_index].version);
 
 		length = 17;
 	}

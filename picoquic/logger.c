@@ -838,7 +838,8 @@ void picoquic_log_transport_extension(FILE* F, picoquic_cnx_t * cnx)
 
 						byte_index += 4;
 						if (supported_version == cnx->proposed_version &&
-							cnx->proposed_version != cnx->version)
+							cnx->proposed_version != 
+                            picoquic_supported_versions[cnx->version_index].version)
 						{
 							fprintf(F, "        %08x (same as proposed!)\n", supported_version);
 						}

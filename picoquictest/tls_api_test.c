@@ -581,7 +581,7 @@ static int verify_version(picoquic_cnx_t * cnx_client, picoquic_cnx_t * cnx_serv
 {
     int ret = 0;
 
-    if (cnx_client->version != cnx_server->version)
+    if (cnx_client->version_index != cnx_server->version_index)
     {
         ret = -1;
     }
@@ -589,8 +589,9 @@ static int verify_version(picoquic_cnx_t * cnx_client, picoquic_cnx_t * cnx_serv
     {
         for (size_t i = 0; i < picoquic_nb_supported_versions; i++)
         {
-            if (cnx_client->proposed_version != cnx_client->version &&
-                cnx_client->proposed_version == picoquic_supported_versions[i])
+            if (cnx_client->proposed_version != 
+                picoquic_supported_versions[cnx_client->version_index].version &&
+                cnx_client->proposed_version == picoquic_supported_versions[i].version)
             {
                 ret = -1;
                 break;
@@ -599,16 +600,24 @@ static int verify_version(picoquic_cnx_t * cnx_client, picoquic_cnx_t * cnx_serv
 
         if (ret == 0)
         {
+#if 0
             ret = -1;
 
             for (size_t i = 0; i < picoquic_nb_supported_versions; i++)
             {
-                if (cnx_client->version == picoquic_supported_versions[i])
+                if (cnx_client->version == picoquic_supported_versions[i].version)
                 {
                     ret = 0;
                     break;
                 }
             }
+#else
+            if (cnx_client->version_index < 0 ||
+                cnx_client->version_index >= picoquic_nb_supported_versions)
+            {
+                ret = -1;
+            }
+#endif
         }
     }
 

@@ -100,7 +100,8 @@ int transport_param_one_test(int mode, uint32_t version, uint32_t proposed_versi
 
 	/* initialize the connection object to the test parameters */
 	memcpy(&test_cnx.local_parameters, param, sizeof(picoquic_transport_parameters));
-	test_cnx.version = version;
+	// test_cnx.version = version;
+    test_cnx.version_index = picoquic_get_version_index(version);
 	test_cnx.proposed_version = proposed_version;
 	memcpy(test_cnx.reset_secret, transport_param_reset_secret, PICOQUIC_RESET_SECRET_SIZE);
 
@@ -159,7 +160,7 @@ int transport_param_fuzz_test(int mode, uint32_t version, uint32_t proposed_vers
 
 	/* initialize the connection object to the test parameters */
 	memcpy(&test_cnx.local_parameters, param, sizeof(picoquic_transport_parameters));
-	test_cnx.version = version;
+	test_cnx.version_index = picoquic_get_version_index(version);
 	test_cnx.proposed_version = proposed_version;
 
 	/* add computation of the proof argument to make sure the compiler 

@@ -166,7 +166,7 @@ int picoquic_incoming_version_negotiation(
 	int ret = -1;
 
 	if (ph->cnx_id != cnx->initial_cnxid ||
-		ph->vn != cnx->version ||
+		ph->vn != picoquic_supported_versions[cnx->version_index].version ||
 		(cnx->retransmit_newest == NULL || ph->pn64 > cnx->retransmit_newest->sequence_number) ||
 		(cnx->retransmit_oldest == NULL || ph->pn64 < cnx->retransmit_oldest->sequence_number))
 	{
@@ -198,13 +198,9 @@ int picoquic_verify_version(
 {
 	int ret = -1;
 
-	for (size_t i = 0; i < picoquic_nb_supported_versions; i++)
-	{
-		if (picoquic_supported_versions[i] == ph->vn)
-		{
-			ret = 0;
-			break;
-		}
+    if (picoquic_get_version_index(ph->vn) >= 0)
+    {
+        ret = 0;
 	}
 
 	if (ret != 0)
@@ -227,7 +223,7 @@ int picoquic_verify_version(
 			/* Set the payload to the list of versions */
 			for (size_t i = 0; i < picoquic_nb_supported_versions; i++)
 			{
-				picoformat_32(bytes + byte_index, picoquic_supported_versions[i]);
+				picoformat_32(bytes + byte_index, picoquic_supported_versions[i].version);
 				byte_index += 4;
 			}
 
@@ -449,7 +445,7 @@ int picoquic_incoming_server_stateless(
 		{
 			/* Verify that the header is a proper echo of what was sent */
 			if (ph->cnx_id != cnx->initial_cnxid ||
-				ph->vn != cnx->version ||
+				ph->vn != picoquic_supported_versions[cnx->version_index].version ||
 				(cnx->retransmit_newest == NULL || ph->pn64 > cnx->retransmit_newest->sequence_number) ||
 				(cnx->retransmit_oldest == NULL || ph->pn64 < cnx->retransmit_oldest->sequence_number))
 			{

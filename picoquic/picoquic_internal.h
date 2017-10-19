@@ -55,11 +55,20 @@ extern "C" {
 #define PICOQUIC_FIRST_INTEROP_VERSION   0xFF000005
 #define PICOQUIC_INTERNAL_TEST_VERSION_1 0x50435130 
 
-	extern const uint32_t picoquic_supported_versions[];
+    typedef enum {
+        picoquic_version_negotiate_transport = 1
+    } picoquic_version_feature_flags;
+
+    typedef struct st_picoquic_version_parameters_t {
+        uint32_t version;
+        uint32_t version_flags;
+        size_t version_aead_key_length;
+        uint8_t * version_aead_key;
+    } picoquic_version_parameters_t;
+
+    extern const picoquic_version_parameters_t picoquic_supported_versions[];
 	extern const size_t picoquic_nb_supported_versions;
-	typedef enum {
-		picoquic_version_negotiate_transport = 1
-	} picoquic_version_feature_flags;
+    int picoquic_get_version_index(uint32_t proposed_version);
 
 	/*
 	 * Quic context flags
@@ -217,7 +226,8 @@ extern "C" {
 
 		/* Proposed and negotiated version. Feature flags denote version dependent features */
 		uint32_t proposed_version;
-		uint32_t version;
+		// uint32_t version;
+        int version_index;
 		uint32_t versioned_features_flags;
 
 		/* Local and remote parameters */
@@ -257,6 +267,7 @@ extern "C" {
         uint64_t latest_progress_time; /* last local time at which the connection progressed */
 
 		/* Encryption and decryption objects */
+        void * aead_cleartext_ctx;
 		void * aead_encrypt_ctx; 
 		void * aead_decrypt_ctx;
         void * aead_de_encrypt_ctx; /* used by logging functions to see what is sent. */

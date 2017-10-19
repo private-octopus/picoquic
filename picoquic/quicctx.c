@@ -53,7 +53,7 @@ static uint64_t picoquic_cnx_id_hash(void * key)
 {
     picoquic_cnx_id * cid = (picoquic_cnx_id *)key;
 
-    // TODO: should scramble the value for security and DOS protection
+    /* TODO: should scramble the value for security and DOS protection */
 
     return cid->cnx_id;
 }
@@ -88,13 +88,12 @@ static int picoquic_net_id_compare(void * key1, void * key2)
  * The protection of clear text packets will be a function of the version negotiation.
  */
 
-const uint32_t picoquic_supported_versions[] = {
-	PICOQUIC_FIRST_INTEROP_VERSION,
-	PICOQUIC_INTERNAL_TEST_VERSION_1
+const picoquic_version_parameters_t picoquic_supported_versions[] = {
+    { PICOQUIC_FIRST_INTEROP_VERSION, 0, 0, NULL },
+    { PICOQUIC_INTERNAL_TEST_VERSION_1, 0, 0, NULL }
 };
 
-const size_t picoquic_nb_supported_versions = sizeof(picoquic_supported_versions) / sizeof(uint32_t);
-
+const size_t picoquic_nb_supported_versions = sizeof(picoquic_supported_versions) / sizeof(picoquic_version_parameters_t);
 
 /* QUIC context create and dispose */
 picoquic_quic_t * picoquic_create(uint32_t nb_connections, 
@@ -397,6 +396,23 @@ void picoquic_reinsert_by_wake_time(picoquic_quic_t * quic, picoquic_cnx_t * cnx
     picoquic_insert_cnx_by_wake_time(quic, cnx);
 }
 
+
+int picoquic_get_version_index(uint32_t proposed_version)
+{
+    int ret = -1;
+
+    for (size_t i = 0; i < picoquic_nb_supported_versions; i++)
+    {
+        if (picoquic_supported_versions[i].version == proposed_version)
+        {
+            ret = i;
+            break;
+        }
+    }
+
+    return ret;
+}
+
 picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic, 
     uint64_t cnx_id, struct sockaddr * addr, uint64_t start_time, uint32_t preferred_version,
 	char const * sni, char const * alpn)
@@ -450,13 +466,22 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
 		{
 			if (preferred_version == 0)
 			{
-				cnx->proposed_version = picoquic_supported_versions[0];
+				cnx->proposed_version = picoquic_supported_versions[0].version;
+                cnx->version_index = 0;
 			}
 			else
 			{
-				cnx->proposed_version = preferred_version;
+                cnx->version_index = picoquic_get_version_index(preferred_version);
+                if (cnx->version_index < 0)
+                {
+                    cnx->version_index = 0;
+                    cnx->proposed_version = picoquic_supported_versions[0].version;
+                }
+                else
+                {
+                    cnx->proposed_version = preferred_version;
+                }
 			}
-			cnx->version = cnx->proposed_version;
 			cnx->local_parameters.omit_connection_id = 1;
 
 			cnx->cnx_state = picoquic_state_client_init;
@@ -480,13 +505,22 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
 			picoquic_crypto_random(quic, &cnx->server_cnxid, sizeof(uint64_t));
 			(void)picoquic_create_cnxid_reset_secret(quic, cnx->server_cnxid,
 				cnx->reset_secret);
-            cnx->proposed_version = preferred_version;
-            cnx->version = cnx->proposed_version;
+
+            cnx->version_index = picoquic_get_version_index(preferred_version);
+            if (cnx->version_index < 0)
+            {
+                /* TODO: this is an internal error condition, should not happen */
+                cnx->version_index = 0;
+                cnx->proposed_version = picoquic_supported_versions[0].version;
+            }
+            else
+            {
+                cnx->proposed_version = preferred_version;
+            }
         }
 
 		if (cnx != NULL)
 		{
-
 			cnx->first_sack_item.start_of_sack_range = 0;
 			cnx->first_sack_item.end_of_sack_range = 0;
 			cnx->first_sack_item.next_sack = NULL;
@@ -507,6 +541,7 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
 			cnx->first_stream.maxdata_local = (uint64_t)((int64_t)-1);
 			cnx->first_stream.maxdata_remote = (uint64_t)((int64_t)-1);
 
+            cnx->aead_cleartext_ctx = NULL;
 			cnx->aead_decrypt_ctx = NULL;
 			cnx->aead_encrypt_ctx = NULL;
             cnx->aead_de_encrypt_ctx = NULL;
@@ -790,7 +825,7 @@ int picoquic_reset_cnx_version(picoquic_cnx_t * cnx, uint8_t * bytes, size_t len
 	* new version. If none is available, return an error */
 	size_t byte_index = 0;
 	uint32_t proposed_version = 0;
-	int ret = 0;
+	int ret = -1;
 
 	if (cnx->cnx_state == picoquic_state_client_init ||
 		cnx->cnx_state == picoquic_state_client_init_sent)
@@ -804,10 +839,12 @@ int picoquic_reset_cnx_version(picoquic_cnx_t * cnx, uint8_t * bytes, size_t len
 
 			for (size_t i = 0; i < picoquic_nb_supported_versions; i++)
 			{
-				if (proposed_version == picoquic_supported_versions[i])
+				if (proposed_version == picoquic_supported_versions[i].version)
 				{
-					cnx->version = proposed_version;
+                    cnx->version_index = (int) i;
 					cnx->cnx_state = picoquic_state_client_renegotiate;
+
+                    /* TODO: Reset the clear text context */
 
 					/* Delete the packets queued for retransmission */
 					while (cnx->retransmit_newest != NULL)
@@ -821,6 +858,7 @@ int picoquic_reset_cnx_version(picoquic_cnx_t * cnx, uint8_t * bytes, size_t len
 					cnx->first_stream.stream_flags = 0;
 					cnx->first_stream.fin_offset = 0;
 					cnx->first_stream.sent_offset = 0;
+                    /* TODO: reset clear text AEAD */
 
 					/* Reset the TLS context, Re-initialize the tls connection */
 					picoquic_tlscontext_free(cnx->tls_ctx);
@@ -901,6 +939,13 @@ void picoquic_delete_cnx(picoquic_cnx_t * cnx)
         else
         {
             cnx->previous_in_table->next_in_table = cnx->next_in_table;
+        }
+
+
+        if (cnx->aead_cleartext_ctx != NULL)
+        {
+            picoquic_aead_free(cnx->aead_cleartext_ctx);
+            cnx->aead_cleartext_ctx = NULL;
         }
 
         if (cnx->aead_decrypt_ctx != NULL)
