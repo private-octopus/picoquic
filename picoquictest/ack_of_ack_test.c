@@ -19,7 +19,7 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "..\picoquic\picoquic_internal.h"
+#include "../picoquic/picoquic_internal.h"
 
 /*
  * The purpose of the ACK of ACK logic is to prune the sack list from blocks that
