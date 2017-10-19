@@ -19,6 +19,7 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <stdlib.h>
 #include "../picoquic/picoquic_internal.h"
 
 /*
@@ -198,11 +199,8 @@ static int cmp_test_sack_list(picoquic_sack_item_t * sack_head,
 static size_t build_test_ack(test_ack_range_t const * ranges, size_t nb_ranges,
     uint8_t * bytes, size_t bytes_max, uint32_t version_flags)
 {
-
-    int ret = 0;
     size_t byte_index = 0;
     uint8_t num_block = 0;
-    uint64_t ack_delay = 0;
     uint64_t ack_range = 0;
 
     /* Encode the first byte as 101NLLMM, with N=1, LL=2, MM=2 */

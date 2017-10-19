@@ -319,6 +319,9 @@ extern "C" {
 	picoquic_stateless_packet_t * picoquic_create_stateless_packet(picoquic_quic_t * quic);
 	void picoquic_queue_stateless_packet(picoquic_quic_t * quic, picoquic_stateless_packet_t * sp);
 
+    /* Registration of connection ID in server context */
+    int picoquic_register_cnx_id(picoquic_quic_t * quic, picoquic_cnx_t * cnx, uint64_t cnx_id);
+
 	/* handling of retransmission queue */
 	void picoquic_enqueue_retransmit_packet(picoquic_cnx_t * cnx, picoquic_packet * p);
 	void picoquic_dequeue_retransmit_packet(picoquic_cnx_t * cnx, picoquic_packet * p, int should_free);

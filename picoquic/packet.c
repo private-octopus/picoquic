@@ -615,8 +615,6 @@ int picoquic_incoming_client_cleartext(
 int picoquic_incoming_stateless_reset(
     picoquic_cnx_t * cnx)
 {
-    int ret = 0;
-
     /* Stateless reset. The connection should be abandonned */
     cnx->cnx_state = picoquic_state_disconnected;
 
