@@ -97,6 +97,9 @@ number of protocol changes:
 
 * Change of the format of the Stateless Reset packet.
 
+* Change of the format of the CONNECTION_CLOSE and STOP_SENDING frames, with 
+  the error code now being 16 bits instead of 32 bits.
+
 These are all incompatible changes, and the developers will have to
 implement and test them before the IETF meeting in Singapore. That should keep us
 quite busy in October and early November.
