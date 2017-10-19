@@ -613,7 +613,7 @@ static int verify_version(picoquic_cnx_t * cnx_client, picoquic_cnx_t * cnx_serv
             }
 #else
             if (cnx_client->version_index < 0 ||
-                cnx_client->version_index >= picoquic_nb_supported_versions)
+                cnx_client->version_index >= (int) picoquic_nb_supported_versions)
             {
                 ret = -1;
             }

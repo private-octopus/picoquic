@@ -181,7 +181,8 @@ size_t picoquic_log_stream_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
 	return byte_index + data_length;
 }
 
-size_t picoquic_log_ack_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
+size_t picoquic_log_ack_frame(FILE * F, uint8_t * bytes, size_t bytes_max, 
+    uint32_t version_flags)
 {
 	size_t   byte_index;
 	unsigned num_block;
@@ -193,8 +194,8 @@ size_t picoquic_log_ack_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
 	debug_printf_push_stream(F);
 
 	int ret = picoquic_parse_ack_header(bytes, bytes_max, 0,
-										&num_block, &num_ts, &largest,
-										&ack_delay, &mm, &byte_index);
+        &num_block, &num_ts, &largest, &ack_delay, &mm, &byte_index,
+        version_flags);
 
 	debug_printf_pop_stream();
 
@@ -498,7 +499,7 @@ static char const * picoquic_log_frame_names[] =
 
 static const size_t picoquic_nb_log_frame_names = sizeof(picoquic_log_frame_names) / sizeof(char const *);
 
-void picoquic_log_frames(FILE* F, uint8_t * bytes, size_t length)
+void picoquic_log_frames(FILE* F, uint8_t * bytes, size_t length, uint32_t version_flags)
 {
 	size_t byte_index = 0;
 
@@ -510,7 +511,8 @@ void picoquic_log_frames(FILE* F, uint8_t * bytes, size_t length)
 		}
 		else if (bytes[byte_index] > 0xA0)
 		{
-			byte_index += picoquic_log_ack_frame(F, bytes + byte_index, length - byte_index);
+			byte_index += picoquic_log_ack_frame(F, bytes + byte_index, length - byte_index,
+                version_flags);
 		}
 		else if(bytes[byte_index] == 0)
 		{
@@ -631,7 +633,8 @@ void picoquic_log_decrypt_encrypted(FILE* F,
 	else
 	{
 		fprintf(F, "    Decrypted %d bytes\n", (int) decrypted_length);
-		picoquic_log_frames(F, decrypted, decrypted_length);
+		picoquic_log_frames(F, decrypted, decrypted_length,
+            picoquic_supported_versions[cnx->version_index].version_flags);
 	}
 }
 
@@ -695,7 +698,8 @@ void picoquic_log_packet(FILE* F, picoquic_quic_t * quic, picoquic_cnx_t * cnx,
 			if (decoded_length > 0)
 			{
 				/* log the frames */
-				picoquic_log_frames(F, bytes + ph.offset, decoded_length - ph.offset);
+				picoquic_log_frames(F, bytes + ph.offset, decoded_length - ph.offset,
+                    picoquic_supported_versions[cnx->version_index].version_flags);
 			}
 			break;
 		case picoquic_packet_0rtt_protected:

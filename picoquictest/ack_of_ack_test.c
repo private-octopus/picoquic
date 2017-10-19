@@ -89,6 +89,7 @@ typedef struct st_test_ack_of_ack_t {
     size_t nb_ack;
     test_ack_range_t const * result;
     size_t nb_result;
+    uint32_t version_flags;
 } test_ack_of_ack_t;
 
 static const test_ack_of_ack_t test_ack_of_ack_list[] = {
@@ -96,19 +97,22 @@ static const test_ack_of_ack_t test_ack_of_ack_list[] = {
         "simple",
         test_range_in_1 , sizeof(test_range_in_1 ) / sizeof(test_ack_range_t ),
         test_range_ack_1, sizeof(test_range_ack_1) / sizeof(test_ack_range_t),
-        test_range_res_1, sizeof(test_range_res_1) / sizeof(test_ack_range_t)
+        test_range_res_1, sizeof(test_range_res_1) / sizeof(test_ack_range_t),
+        0
     },
     {
         "two ranges",
         test_range_in_2 , sizeof(test_range_in_2) / sizeof(test_ack_range_t),
         test_range_ack_2, sizeof(test_range_ack_2) / sizeof(test_ack_range_t),
-        test_range_res_2, sizeof(test_range_res_2) / sizeof(test_ack_range_t)
+        test_range_res_2, sizeof(test_range_res_2) / sizeof(test_ack_range_t),
+        0
     },
     {
         "no op",
         test_range_in_3 , sizeof(test_range_in_3) / sizeof(test_ack_range_t),
         test_range_ack_3, sizeof(test_range_ack_3) / sizeof(test_ack_range_t),
-        test_range_res_3, sizeof(test_range_res_3) / sizeof(test_ack_range_t)
+        test_range_res_3, sizeof(test_range_res_3) / sizeof(test_ack_range_t),
+        0
     }
 };
 
@@ -192,7 +196,7 @@ static int cmp_test_sack_list(picoquic_sack_item_t * sack_head,
  * Build a SACK frame from a range
  */
 static size_t build_test_ack(test_ack_range_t const * ranges, size_t nb_ranges,
-    uint8_t * bytes, size_t bytes_max)
+    uint8_t * bytes, size_t bytes_max, uint32_t version_flags)
 {
 
     int ret = 0;
@@ -205,8 +209,11 @@ static size_t build_test_ack(test_ack_range_t const * ranges, size_t nb_ranges,
     bytes[byte_index++] = 0xBA;
     /* Encode the number of blocks -- will know at the end of the process */
     bytes[byte_index++] = 0;
-    /* Encode a number of time stamps -- set to zero for now */
-    bytes[byte_index++] = 0;
+    if ((version_flags & picoquic_version_basic_time_stamp) != 0)
+    {
+        /* Encode a number of time stamps -- set to zero for now */
+        bytes[byte_index++] = 0;
+    }
     /* Encode the largest seen on 4 bytes */
     picoformat_32(bytes + byte_index, (uint32_t)ranges[0].end_of_sack_range);
     byte_index += 4;
@@ -256,9 +263,11 @@ static int ack_of_ack_do_one_test(test_ack_of_ack_t const * sample)
     size_t consumed;
 
     fill_test_sack_list(&sack_head, sample->initial, sample->nb_initial);
-    ack_length = build_test_ack(sample->ack, sample->nb_ack, ack, sizeof(ack));
+    ack_length = build_test_ack(sample->ack, sample->nb_ack, ack, sizeof(ack),
+        sample->version_flags);
 
-    ret = picoquic_process_ack_of_ack_frame(&sack_head, ack, ack_length, &consumed);
+    ret = picoquic_process_ack_of_ack_frame(&sack_head, ack, ack_length, &consumed, 
+        sample->version_flags);
 
     if (ret == 0)
     {

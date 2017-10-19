@@ -329,7 +329,6 @@ int picoquic_register_net_id(picoquic_quic_t * quic, picoquic_cnx_t * cnx, struc
     return ret;
 }
 
-
 void picoquic_init_transport_parameters(picoquic_transport_parameters * tp)
 {
 	tp->initial_max_stream_data = 65535;

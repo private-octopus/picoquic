@@ -137,7 +137,8 @@ static void ack_range_mask(uint64_t * mask, uint64_t highest, uint64_t range)
 }
 
 static int basic_ack_parse(uint8_t * bytes, size_t bytes_max,
-	struct expected_ack_t * expected_ack, uint64_t expected_mask)
+	struct expected_ack_t * expected_ack, uint64_t expected_mask,
+    uint32_t version_flags)
 {
 	int ret = 0;
 	size_t byte_index = 1;
@@ -163,7 +164,15 @@ static int basic_ack_parse(uint8_t * bytes, size_t bytes_max,
 		{
 			num_block = bytes[byte_index++];
 		}
-		num_ts = bytes[byte_index++];
+
+        if ((version_flags&picoquic_version_basic_time_stamp) != 0)
+        {
+            num_ts = bytes[byte_index++];
+        }
+        else
+        {
+            num_ts = 0;
+        }
 
 		/* decoding the largest */
 		switch (ll)
@@ -310,8 +319,6 @@ int sendacktest()
 	{
 		current_time = i * 100;
 
-		
-
 		if (picoquic_record_pn_received(&cnx, test_pn64[i], current_time) != 0)
 		{
 			ret = -1;
@@ -326,7 +333,8 @@ int sendacktest()
 
 			if (ret == 0)
 			{
-				ret = basic_ack_parse(bytes, consumed, &expected_ack[i], received_mask);
+				ret = basic_ack_parse(bytes, consumed, &expected_ack[i], received_mask,
+                    picoquic_supported_versions[cnx.version_index].version_flags);
 			}
 		}
 	}

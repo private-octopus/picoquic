@@ -848,9 +848,10 @@ An ACK frame is shown below.
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 */
 
-int picoquic_parse_ack_header(uint8_t const * bytes, size_t bytes_max, uint64_t target_sequence,
-							  unsigned * num_block, unsigned * num_ts, uint64_t * largest,
-							  uint64_t * ack_delay, unsigned * mm, size_t * consumed)
+int picoquic_parse_ack_header(uint8_t const * bytes, size_t bytes_max, 
+    uint64_t target_sequence, unsigned * num_block, unsigned * num_ts, 
+    uint64_t * largest, uint64_t * ack_delay, unsigned * mm, size_t * consumed,
+    uint32_t version_flags)
 {
 	int ret = 0;
 	size_t byte_index = 1;
@@ -858,7 +859,12 @@ int picoquic_parse_ack_header(uint8_t const * bytes, size_t bytes_max, uint64_t 
 	int has_num_block = (first_byte >> 4) & 1;
 	unsigned ll = (first_byte >> 2) & 3;
 	*mm = (first_byte & 3);
-	size_t min_len = 1 + has_num_block + 1 + (1 << ll) + 2 + (1 << *mm);
+	size_t min_len = has_num_block + 1 + (1 << ll) + 2 + (1 << *mm);
+
+    if ((version_flags&picoquic_version_basic_time_stamp) != 0)
+    {
+        min_len++;
+    }
 
 	if (first_byte < 0xA0 || first_byte > 0xBF)
 	{
@@ -881,7 +887,15 @@ int picoquic_parse_ack_header(uint8_t const * bytes, size_t bytes_max, uint64_t 
 		{
 			*num_block = 0;
 		}
-		*num_ts = bytes[byte_index++];
+
+        if ((version_flags&picoquic_version_basic_time_stamp) != 0)
+        {
+            *num_ts = bytes[byte_index++];
+        }
+        else
+        {
+            *num_ts = 0;
+        }
 
 		/* decoding the largest */
 		switch (ll)
@@ -1061,7 +1075,7 @@ static void picoquic_process_ack_of_ack_range(picoquic_sack_item_t * first_sack,
 
 int picoquic_process_ack_of_ack_frame(
     picoquic_sack_item_t * first_sack,
-    uint8_t * bytes, size_t bytes_max, size_t * consumed)
+    uint8_t * bytes, size_t bytes_max, size_t * consumed, uint32_t version_flags)
 {
 	int ret;
 	uint64_t largest;
@@ -1081,8 +1095,7 @@ int picoquic_process_ack_of_ack_frame(
 	uint64_t target_sequence = target_sack->start_of_sack_range;
 
 	ret = picoquic_parse_ack_header(bytes, bytes_max, target_sequence,
-									&num_block, &num_ts, &largest,
-									&ack_delay, &mm, consumed);
+        &num_block, &num_ts, &largest, &ack_delay, &mm, consumed, version_flags);
 
 	if (ret == 0)
 	{
@@ -1205,7 +1218,8 @@ void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t * cnx, picoquic_p
 			p->bytes[byte_index] <= picoquic_frame_type_ack_range_max)
 		{
 			ret = picoquic_process_ack_of_ack_frame(&cnx->first_sack_item, &p->bytes[byte_index], 
-                p->length - byte_index, &frame_length);
+                p->length - byte_index, &frame_length,
+                picoquic_supported_versions[cnx->version_index].version_flags);
             byte_index += frame_length;
 		}
         else if (p->bytes[byte_index] >= picoquic_frame_type_stream_range_min &&
@@ -1217,7 +1231,8 @@ void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t * cnx, picoquic_p
         else
 		{
 			ret = picoquic_skip_frame(&p->bytes[byte_index],
-				p->length - ph.offset, &frame_length, &frame_is_pure_ack);
+				p->length - ph.offset, &frame_length, &frame_is_pure_ack,
+                picoquic_supported_versions[cnx->version_index].version_flags);
 			byte_index += frame_length;
 		}
 	}
@@ -1274,8 +1289,8 @@ int picoquic_decode_ack_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
 	uint64_t ack_delay;
 
 	ret = picoquic_parse_ack_header(bytes, bytes_max, cnx->send_sequence,
-									&num_block, &num_ts, &largest,
-									&ack_delay, &mm, consumed);
+        &num_block, &num_ts, &largest, &ack_delay, &mm, consumed,
+        picoquic_supported_versions[cnx->version_index].version_flags);
 
 	if (ret == 0)
 	{
@@ -1378,8 +1393,14 @@ int picoquic_prepare_ack_frame(picoquic_cnx_t * cnx, uint64_t current_time,
 		bytes[byte_index++] = 0xBA;
 		/* Encode the number of blocks, always present. Will be overwritten later */
 		bytes[byte_index++] = 0;
-		/* Encode a number of time stamps -- set to zero for now */
-		bytes[byte_index++] = 0;
+
+        if ((picoquic_supported_versions[cnx->version_index].version_flags&
+            picoquic_version_basic_time_stamp) != 0)
+        {
+            /* Encode a number of time stamps -- set to zero for now */
+            bytes[byte_index++] = 0;
+        }
+
 		/* Encode the largest seen on 4 bytes */
 		picoformat_32(bytes + byte_index, (uint32_t)cnx->first_sack_item.end_of_sack_range);
 		byte_index += 4;
@@ -1890,7 +1911,8 @@ int picoquic_decode_frames(picoquic_cnx_t * cnx, uint8_t * bytes,
     return ret;
 }
 
-int picoquic_skip_frame(uint8_t * bytes, size_t bytes_max, size_t * consumed, int * pure_ack)
+int picoquic_skip_frame(uint8_t * bytes, size_t bytes_max, size_t * consumed, 
+    int * pure_ack, uint32_t version_flags)
 {
 	int ret = 0;
 	size_t byte_index = 0;
@@ -1961,7 +1983,14 @@ int picoquic_skip_frame(uint8_t * bytes, size_t bytes_max, size_t * consumed, in
 					num_block = bytes[byte_index++];
 				}
 
-				num_ts = bytes[byte_index++];
+                if (version_flags&picoquic_version_basic_time_stamp)
+                {
+                    num_ts = bytes[byte_index++];
+                }
+                else
+                {
+                    num_ts = 0;
+                }
 
 				switch (ll)
 				{

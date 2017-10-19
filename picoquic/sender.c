@@ -414,7 +414,8 @@ int picoquic_retransmit_needed(picoquic_cnx_t * cnx, uint64_t current_time,
 			while (ret == 0 && byte_index < p->length)
 			{
 				ret = picoquic_skip_frame(&p->bytes[byte_index],
-					p->length - ph.offset, &frame_length, &frame_is_pure_ack);
+					p->length - ph.offset, &frame_length, &frame_is_pure_ack,
+                    picoquic_supported_versions[cnx->version_index].version_flags);
 
 				if (!frame_is_pure_ack)
 				{
@@ -516,7 +517,8 @@ int picoquic_is_cnx_backlog_empty(picoquic_cnx_t * cnx)
         while (ret == 0 && byte_index < p->length)
         {
             ret = picoquic_skip_frame(&p->bytes[byte_index],
-                p->length - ph.offset, &frame_length, &frame_is_pure_ack);
+                p->length - ph.offset, &frame_length, &frame_is_pure_ack,
+                picoquic_supported_versions[cnx->version_index].version_flags);
 
             if (!frame_is_pure_ack)
             {

@@ -376,7 +376,8 @@ extern "C" {
 	int picoquic_parse_ack_header(
 		uint8_t const * bytes, size_t bytes_max, uint64_t target_sequence,
 		unsigned * num_block, unsigned * num_ts, uint64_t * largest,
-		uint64_t * ack_delay, unsigned * mm, size_t * consumed);
+		uint64_t * ack_delay, unsigned * mm, size_t * consumed,
+        uint32_t version_flags);
   
 	uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t pn);
 
@@ -402,7 +403,7 @@ extern "C" {
      */
     int picoquic_process_ack_of_ack_frame(
         picoquic_sack_item_t * first_sack,
-        uint8_t * bytes, size_t bytes_max, size_t * consumed);
+        uint8_t * bytes, size_t bytes_max, size_t * consumed, uint32_t version_flags);
 
 	/* stream management */
 	picoquic_stream_head * picoquic_find_stream(picoquic_cnx_t * cnx, uint32_t stream_id, int create);
@@ -428,7 +429,8 @@ extern "C" {
 	int picoquic_decode_frames(picoquic_cnx_t * cnx, uint8_t * bytes,
 		size_t bytes_max, int restricted, uint64_t current_time);
 
-	int picoquic_skip_frame(uint8_t * bytes, size_t bytes_max, size_t * consumed, int * pure_ack);
+	int picoquic_skip_frame(uint8_t * bytes, size_t bytes_max, size_t * consumed, 
+        int * pure_ack, uint32_t version_flags);
 
 	int picoquic_prepare_transport_extensions(picoquic_cnx_t * cnx, int extension_mode,
 		uint8_t * bytes, size_t bytes_max, size_t * consumed);
