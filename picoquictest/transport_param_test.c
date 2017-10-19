@@ -39,8 +39,8 @@ static uint8_t transport_param_reset_secret[PICOQUIC_RESET_SECRET_SIZE] = {
 };
 
 uint8_t client_param1[] = {
-	0xFF, 0, 0, 5,
-	0xFF, 0, 0, 5,
+	0x50, 0x43, 0x51, 0x30,
+	0x50, 0x43, 0x51, 0x30,
 	0, 0x24,
 	0, 0, 0, 4, 0, 0, 0xFF, 0xFF,
 	0, 1, 0, 4, 0, 0x40, 0, 0,
@@ -50,7 +50,7 @@ uint8_t client_param1[] = {
 };
 
 uint8_t client_param2[] = {
-	0xFF, 0, 0, 5,
+	0x50, 0x43, 0x51, 0x30,
 	0x0A, 0x1A, 0x0A, 0x1A,
 	0, 0x28,
 	0, 0, 0, 4, 0x01, 0, 0, 0,
@@ -63,8 +63,8 @@ uint8_t client_param2[] = {
 
 uint8_t server_param1[] = {
 	0x08,
+    0x50, 0x43, 0x51, 0x30,
 	0xFF, 0, 0, 5,
-	0x50, 0x43, 0x51, 0x30,
 	0, 0x38,
 	0, 0, 0, 4, 0, 0, 0xFF, 0xFF,
 	0, 1, 0, 4, 0, 0x40, 0, 0,
@@ -76,8 +76,8 @@ uint8_t server_param1[] = {
 
 uint8_t server_param2[] = {
 	0x08,
+    0x50, 0x43, 0x51, 0x30,
 	0xFF, 0, 0, 5,
-	0x50, 0x43, 0x51, 0x30,
 	0, 0x3C,
 	0, 0, 0, 4, 0x01, 0, 0, 0,
 	0, 1, 0, 4, 0x01, 0, 0, 0,
@@ -211,40 +211,41 @@ int transport_param_test()
 {
 	int ret = 0;
 	uint64_t proof = 0;
+    uint32_t version_default = picoquic_supported_versions[0].version;
 
 	if (ret == 0)
 	{
-		ret = transport_param_one_test(0, 0xFF000005, 0xFF000005,
+		ret = transport_param_one_test(0, version_default, version_default,
 			&transport_param_test1, client_param1, sizeof(client_param1));
 	}
 
 	if (ret == 0)
 	{
-		ret = transport_param_one_test(0, 0xFF000005, 0x0A1A0A1A,
+		ret = transport_param_one_test(0, version_default, 0x0A1A0A1A,
 			&transport_param_test2, client_param2, sizeof(client_param2));
 	}
 
 	if (ret == 0)
 	{
-		ret = transport_param_one_test(1, 0xFF000005, 0xFF000005,
+		ret = transport_param_one_test(1, version_default, version_default,
 			&transport_param_test1, server_param1, sizeof(server_param1));
 	}
 
 	if (ret == 0)
 	{
-		ret = transport_param_one_test(1, 0xFF000005, 0x0A1A0A1A,
+		ret = transport_param_one_test(1, version_default, 0x0A1A0A1A,
 			&transport_param_test2, server_param2, sizeof(server_param2));
 	}
 
 	if (ret == 0)
 	{
-		ret = transport_param_fuzz_test(0, 0xFF000005, 0x0A1A0A1A,
+		ret = transport_param_fuzz_test(0, version_default, 0x0A1A0A1A,
 			&transport_param_test2, client_param2, sizeof(client_param2), &proof);
 	}
 
 	if (ret == 0)
 	{
-		ret = transport_param_fuzz_test(1, 0xFF000005, 0x0A1A0A1A,
+		ret = transport_param_fuzz_test(1, version_default, 0x0A1A0A1A,
 			&transport_param_test2, server_param2, sizeof(server_param2), &proof);
 	}
 

@@ -166,7 +166,7 @@ int picoquic_incoming_version_negotiation(
 	int ret = -1;
 
 	if (ph->cnx_id != cnx->initial_cnxid ||
-		ph->vn != picoquic_supported_versions[cnx->version_index].version ||
+        ph->vn != cnx->proposed_version ||
 		(cnx->retransmit_newest == NULL || ph->pn64 > cnx->retransmit_newest->sequence_number) ||
 		(cnx->retransmit_oldest == NULL || ph->pn64 < cnx->retransmit_oldest->sequence_number))
 	{
