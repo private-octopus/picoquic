@@ -136,7 +136,7 @@ extern "C" {
 		picoquic_frame_type_padding = 0,
 		picoquic_frame_type_reset_stream = 1,
 		picoquic_frame_type_connection_close = 2,
-		picoquic_frame_type_goaway = 3,
+		picoquic_frame_type_application_close = 3,
 		picoquic_frame_type_max_data = 4,
 		picoquic_frame_type_max_stream_data = 5,
 		picoquic_frame_type_max_stream_id = 6,
@@ -145,6 +145,7 @@ extern "C" {
 		picoquic_frame_type_stream_blocked = 9,
 		picoquic_frame_type_stream_id_needed = 0x0a,
 		picoquic_frame_type_new_connection_id = 0x0b,
+        picoquic_frame_type_stop_sending = 0x0c,
 		picoquic_frame_type_ack_range_min = 0xa0,
 		picoquic_frame_type_ack_range_max = 0xbf,
 		picoquic_frame_type_stream_range_min = 0xc0,
@@ -251,7 +252,9 @@ extern "C" {
 		uint64_t server_cnxid;
         uint64_t start_time;
 		uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE];
+        uint32_t application_error;
 		uint32_t local_error;
+        uint32_t remote_application_error;
 		uint32_t remote_error;
 
         /* Next time sending data is expected */
@@ -328,6 +331,9 @@ extern "C" {
 
 	/* Reset connection after receiving version negotiation */
 	int picoquic_reset_cnx_version(picoquic_cnx_t * cnx, uint8_t * bytes, size_t length);
+
+    /* Notify error on connection */
+    int picoquic_connection_error(picoquic_cnx_t * cnx, uint32_t local_error);
 
 	/* Connection context retrieval functions */
 	picoquic_cnx_t * picoquic_cnx_by_id(picoquic_quic_t * quic, uint64_t cnx_id);

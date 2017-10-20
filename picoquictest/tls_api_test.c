@@ -270,7 +270,8 @@ static void test_api_callback(picoquic_cnx_t * cnx,
 	int is_client_stream = (stream_id & 1);
 	picoquic_call_back_event_t stream_finished = picoquic_callback_no_event;
 
-    if (fin_or_event == picoquic_callback_close)
+    if (fin_or_event == picoquic_callback_close || 
+        fin_or_event == picoquic_callback_application_close)
     {
         /* do nothing in our tests */
         return;
@@ -804,7 +805,8 @@ static int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t * test_ctx,
 						/* queue in c_to_s */
 						target_link = test_ctx->c_to_s_link;
 					}
-					else if (test_ctx->cnx_server != NULL)
+					else if (test_ctx->cnx_server != NULL &&
+                        test_ctx->cnx_server->cnx_state != picoquic_state_disconnected)
 					{
 						ret = picoquic_prepare_packet(test_ctx->cnx_server, p, *simulated_time,
 							packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length);
@@ -825,49 +827,77 @@ static int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t * test_ctx,
 		}
 		else
 		{
-			uint64_t next_time;
+			uint64_t next_time = *simulated_time += 5000;
+            uint64_t client_arrival, server_arrival;
 
 			free(packet);
 
-			*simulated_time += 5000;
-			next_time = picoquictest_sim_link_next_arrival(test_ctx->s_to_c_link, *simulated_time);
-			next_time = picoquictest_sim_link_next_arrival(test_ctx->c_to_s_link, next_time);
+            if (test_ctx->cnx_client != NULL &&
+                test_ctx->cnx_client->cnx_state != picoquic_state_disconnected)
+            {
+                if (test_ctx->cnx_server != NULL &&
+                    test_ctx->cnx_server->cnx_state != picoquic_state_disconnected &&
+                    test_ctx->cnx_server->next_wake_time <
+                    test_ctx->cnx_client->next_wake_time)
+                {
+                    next_time = test_ctx->cnx_server->next_wake_time;
+                }
+                else
+                {
+                    next_time = test_ctx->cnx_client->next_wake_time;
+                }
+            }
+            else if (test_ctx->cnx_server != NULL &&
+                test_ctx->cnx_server->cnx_state != picoquic_state_disconnected)
+            {
+                next_time = test_ctx->cnx_server->next_wake_time;
+            }
 
-			packet = picoquictest_sim_link_dequeue(test_ctx->s_to_c_link, next_time);
+            if (next_time < *simulated_time + 5000)
+            {
+                next_time = *simulated_time + 5000;
+            }
 
-			if (packet != NULL)
+            client_arrival = picoquictest_sim_link_next_arrival(test_ctx->s_to_c_link, next_time);
+            server_arrival = picoquictest_sim_link_next_arrival(test_ctx->c_to_s_link, next_time);
+
+            if (client_arrival < server_arrival && client_arrival < next_time &&
+                (packet = picoquictest_sim_link_dequeue(test_ctx->s_to_c_link, client_arrival)) != NULL)
 			{
+                next_time = client_arrival;
 				*simulated_time = next_time;
 				ret = picoquic_incoming_packet(test_ctx->qclient, packet->bytes, packet->length,
 					(struct sockaddr *)&test_ctx->server_addr, *simulated_time);
 				*was_active |= 1;
 			}
-			else
-			{
-				packet = picoquictest_sim_link_dequeue(test_ctx->c_to_s_link, next_time);
+            else if (server_arrival < next_time &&
+                (packet = picoquictest_sim_link_dequeue(test_ctx->c_to_s_link, server_arrival)) != NULL)
+            {
 
-				if (packet != NULL)
-				{
-					*simulated_time = next_time;
-					ret = picoquic_incoming_packet(test_ctx->qserver, packet->bytes, packet->length,
-						(struct sockaddr *)&test_ctx->client_addr, *simulated_time);
+                next_time = server_arrival;
+                *simulated_time = next_time;
+                ret = picoquic_incoming_packet(test_ctx->qserver, packet->bytes, packet->length,
+                    (struct sockaddr *)&test_ctx->client_addr, *simulated_time);
 
-					if (test_ctx->cnx_server == NULL)
-					{
-                        uint64_t target_cnxid = test_ctx->cnx_client->initial_cnxid;
-                        picoquic_cnx_t * next = test_ctx->qserver->cnx_list;
+                if (test_ctx->cnx_server == NULL)
+                {
+                    uint64_t target_cnxid = test_ctx->cnx_client->initial_cnxid;
+                    picoquic_cnx_t * next = test_ctx->qserver->cnx_list;
 
-                        while (next != NULL && next->initial_cnxid != target_cnxid)
-                        {
-                            next = next->next_in_table;
-                        }
+                    while (next != NULL && next->initial_cnxid != target_cnxid)
+                    {
+                        next = next->next_in_table;
+                    }
 
-						test_ctx->cnx_server = next;
-					}
+                    test_ctx->cnx_server = next;
+                }
 
-					*was_active |= 1;
-				}
-			}
+                *was_active |= 1;
+            }
+            else
+            {
+                *simulated_time = next_time;
+            }
 		}
 	}
 
@@ -946,15 +976,14 @@ static int tls_api_attempt_to_close(
     picoquic_test_tls_api_ctx_t * test_ctx, uint64_t * simulated_time)
 {
     int ret = 0;
+    int nb_rounds = 0;
 
-    ret = picoquic_close(test_ctx->cnx_client);
+    ret = picoquic_close(test_ctx->cnx_client, 0);
 
     if (ret == 0)
     {
         /* packet from client to server */
         /* Do not simulate losses there, as there is no way to correct them */
-
-        int nb_rounds = 0;
 
         test_ctx->c_to_s_link->loss_mask = 0;
         test_ctx->s_to_c_link->loss_mask = 0;
@@ -962,7 +991,7 @@ static int tls_api_attempt_to_close(
         while (ret == 0 && (
             test_ctx->cnx_client->cnx_state != picoquic_state_disconnected ||
             test_ctx->cnx_server->cnx_state != picoquic_state_disconnected) &&
-            nb_rounds < 16)
+            nb_rounds < 64)
         {
             int was_active = 0;
             ret = tls_api_one_sim_round(test_ctx, simulated_time, &was_active);
@@ -1149,7 +1178,7 @@ int tls_api_one_scenario_test(test_api_stream_desc_t * scenario,
 
 	if (ret == 0)
 	{
-		ret = picoquic_close(test_ctx->cnx_client);
+		ret = picoquic_close(test_ctx->cnx_client, 0);
 	}
 
 	if (test_ctx != NULL)

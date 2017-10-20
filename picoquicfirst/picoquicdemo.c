@@ -445,7 +445,8 @@ static void first_server_callback(picoquic_cnx_t * cnx,
     fprintf(stderr, "Server CB, Stream: %d, %" PRIst " bytes, fin=%d\n",
         stream_id, length, fin_or_event);
 
-    if (fin_or_event == picoquic_callback_close)
+    if (fin_or_event == picoquic_callback_close ||
+        fin_or_event == picoquic_callback_application_close)
     {
         if (ctx != NULL)
         {
@@ -463,7 +464,7 @@ static void first_server_callback(picoquic_cnx_t * cnx,
         if (new_ctx == NULL)
         {
             /* cannot handle the connection */
-            picoquic_close(cnx);
+            picoquic_close(cnx, PICOQUIC_ERROR_MEMORY);
             return;
         }
         else
@@ -488,7 +489,7 @@ static void first_server_callback(picoquic_cnx_t * cnx,
         if (stream_ctx == NULL)
         {
             /* Could not handle this stream */
-            picoquic_reset_stream(cnx, stream_id);
+            picoquic_reset_stream(cnx, stream_id, 0);
             return;
         }
         else
@@ -503,14 +504,14 @@ static void first_server_callback(picoquic_cnx_t * cnx,
     if (fin_or_event == picoquic_callback_stream_reset)
     {
         stream_ctx->status = picoquic_first_server_stream_status_finished;
-        picoquic_reset_stream(cnx, stream_id);
+        picoquic_reset_stream(cnx, stream_id, 0);
         return;
     }
     else if (stream_ctx->status == picoquic_first_server_stream_status_finished ||
         stream_ctx->command_length + length > PICOQUIC_FIRST_COMMAND_MAX)
     {
         /* send after fin, or too many bytes => reset! */
-        picoquic_reset_stream(cnx, stream_id);
+        picoquic_reset_stream(cnx, stream_id, 0);
         return;
     }
     else
@@ -530,7 +531,7 @@ static void first_server_callback(picoquic_cnx_t * cnx,
             if (http0dot9_get(stream_ctx->command, stream_ctx->command_length,
                 ctx->buffer, ctx->buffer_max, &stream_ctx->response_length) != 0)
             {
-                picoquic_reset_stream(cnx, stream_id);
+                picoquic_reset_stream(cnx, stream_id, 0);
             }
             else
             {
@@ -849,9 +850,17 @@ static void first_client_callback(picoquic_cnx_t * cnx,
 
     ctx->progress_observed = 1;
 
-    if (fin_or_event == picoquic_callback_close)
+    if (fin_or_event == picoquic_callback_close ||
+        fin_or_event == picoquic_callback_application_close)
     {
-        fprintf(stdout, "Received a request to close the connection.\n");
+        if (fin_or_event == picoquic_callback_application_close)
+        {
+            fprintf(stdout, "Received a request to close the application.\n");
+        }
+        else
+        {
+            fprintf(stdout, "Received a request to close the connection.\n");
+        }
 
         while (stream_ctx != NULL)
         {
@@ -880,12 +889,12 @@ static void first_client_callback(picoquic_cnx_t * cnx,
     if (stream_ctx == NULL || stream_ctx->F == NULL)
     {
         /* Unexpected stream. */
-        picoquic_reset_stream(cnx, stream_id);
+        picoquic_reset_stream(cnx, stream_id, 0);
         return;
     }
     else if (fin_or_event == picoquic_callback_stream_reset)
     {
-        picoquic_reset_stream(cnx, stream_id);
+        picoquic_reset_stream(cnx, stream_id, 0);
 
         if (stream_ctx->F != NULL)
         {
@@ -1288,13 +1297,13 @@ int quic_client(const char * ip_address_text, int server_port)
                     if (callback_ctx.nb_open_streams == 0)
                     {
                         fprintf(stdout, "All done, Closing the connection.\n");
-                        ret = picoquic_close(cnx_client);
+                        ret = picoquic_close(cnx_client, 0);
                     }
                     else if (current_time - callback_ctx.last_interaction_time >
                         10000000ull)
                     {
                         fprintf(stdout, "No progress for 10 seconds. Closing. \n");
-                        ret = picoquic_close(cnx_client);
+                        ret = picoquic_close(cnx_client, 0);
                     }
                 }
 			}
