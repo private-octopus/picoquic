@@ -265,12 +265,12 @@ void picoquic_process_unexpected_cnxid(
 			/* Copy the connection ID */
 			picoformat_64(bytes + byte_index, ph->cnx_id);
 			byte_index += 8;
-			/* Compute a public reset secret */
+            /* Add some random bytes to look good. */
+            picoquic_crypto_random(quic, bytes + byte_index, pad_size);
+            byte_index += pad_size;
+			/* Add the public reset secret */
 			(void)picoquic_create_cnxid_reset_secret(quic, ph->cnx_id, bytes + byte_index);
 			byte_index += PICOQUIC_RESET_SECRET_SIZE;
-			/* Add some random bytes to look good. */
-			picoquic_crypto_random(quic, bytes + byte_index, pad_size);
-			byte_index += pad_size;
 			sp->length = byte_index;
 			memset(&sp->addr_to, 0, sizeof(sp->addr_to));
 			memcpy(&sp->addr_to, addr_from,
@@ -652,8 +652,15 @@ int picoquic_incoming_encrypted(
         cnx->cnx_state == picoquic_state_server_almost_ready ||
         cnx->cnx_state == picoquic_state_server_ready)
     {
+        /* TODO: supporting two variants for now. Will need to focus on just one. */
 		/* Check the possible reset before performaing in place AEAD decrypt */
 		int cmp_reset_secret = memcmp(bytes + 9, cnx->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
+        /* Allow for test at the end as well. */
+        if (cmp_reset_secret != 0)
+        {
+            cmp_reset_secret = memcmp(bytes + length - PICOQUIC_RESET_SECRET_SIZE, 
+                cnx->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
+        }
         /* AEAD Decrypt, in place */
         decoded_length = picoquic_aead_decrypt(cnx, bytes + ph->offset,
             bytes + ph->offset, length - ph->offset, ph->pn64, bytes, ph->offset);
@@ -761,11 +768,14 @@ int picoquic_incoming_packet(
             /* verify that the packet is new */
 			if (picoquic_is_pn_already_received(cnx, ph.pn64) != 0)
 			{
+                /* TODO: supporting two variants for now. Need to clean up later */
                 /* Check the possible reset which may be hiding under the duplicate */
                 if (ph.vn == 0 && (ph.ptype == picoquic_packet_1rtt_protected_phi0 ||
                     ph.ptype == picoquic_packet_1rtt_protected_phi1) &&
                     length >= (9 + PICOQUIC_RESET_SECRET_SIZE) &&
-                    memcmp(bytes + 9, cnx->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0)
+                    ((memcmp(bytes + 9, cnx->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0) ||
+                    (memcmp(bytes + length - PICOQUIC_RESET_SECRET_SIZE, 
+                        cnx->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0)))
                 {
                     ret = picoquic_incoming_stateless_reset(cnx);
                 }
