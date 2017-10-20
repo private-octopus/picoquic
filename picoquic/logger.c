@@ -534,8 +534,6 @@ static char const * picoquic_log_frame_names[] =
 	"NEW_CONNECTION_ID"
 };
 
-static const size_t picoquic_nb_log_frame_names = sizeof(picoquic_log_frame_names) / sizeof(char const *);
-
 void picoquic_log_frames(FILE* F, uint8_t * bytes, size_t length, uint32_t version_flags)
 {
 	size_t byte_index = 0;

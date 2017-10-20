@@ -427,6 +427,8 @@ extern "C" {
 		uint8_t * bytes, size_t bytes_max, size_t * consumed);
 	int picoquic_prepare_connection_close_frame(picoquic_cnx_t * cnx,
 		uint8_t * bytes, size_t bytes_max, size_t * consumed);
+        int picoquic_prepare_application_close_frame(picoquic_cnx_t * cnx,
+                uint8_t * bytes, size_t bytes_max, size_t * consumed);
 	int picoquic_prepare_required_max_stream_data_frames(picoquic_cnx_t * cnx,
 		uint8_t * bytes, size_t bytes_max, size_t * consumed);
 	int picoquic_prepare_max_data_frame(picoquic_cnx_t * cnx, uint64_t maxdata_increase,
