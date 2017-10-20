@@ -3,6 +3,10 @@
 
 #define GETOPT_H
 
+#ifndef _GETOPT_H
+#define _GETOPT_H
+#endif
+
 extern int opterr;    /* if error message should be printed */
 extern int optind;    /* index into parent argv vector */
 extern int optopt;    /* character checked for validity */

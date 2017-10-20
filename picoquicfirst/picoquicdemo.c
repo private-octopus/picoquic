@@ -29,6 +29,7 @@
 #include <WinSock2.h>
 #include <iphlpapi.h>
 #include <ws2tcpip.h>
+#include "getopt.h"
 
 #ifndef SOCKET_TYPE 
 #define SOCKET_TYPE SOCKET
@@ -55,10 +56,10 @@ static const char *default_server_key_file  = "..\\certs\\key.pem";
 #else  /* Linux */
 
 #include <stdint.h>
+#include "getopt.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-/* #include <unistd.h> */
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -98,7 +99,6 @@ static const char *default_server_name = "::";
 
 #include "../picoquic/picoquic.h"
 #include "../picoquic/util.h"
-#include "getopt.h"
 
 
 void picoquic_log_error_packet(FILE * F, uint8_t * bytes, size_t bytes_max, int ret);
