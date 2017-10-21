@@ -646,11 +646,9 @@ int picoquic_incoming_encrypted(
 	{
 		ret = PICOQUIC_ERROR_CNXID_CHECK;
 	}
-	else  if (
-		cnx->cnx_state == picoquic_state_client_almost_ready ||
-        cnx->cnx_state == picoquic_state_client_ready ||
-        cnx->cnx_state == picoquic_state_server_almost_ready ||
-        cnx->cnx_state == picoquic_state_server_ready)
+	else if (
+		cnx->cnx_state >= picoquic_state_client_almost_ready &&
+        cnx->cnx_state <= picoquic_state_draining)
     {
         /* TODO: supporting two variants for now. Will need to focus on just one. */
 		/* Check the possible reset before performaing in place AEAD decrypt */
@@ -680,9 +678,24 @@ int picoquic_incoming_encrypted(
         }
         else
         {
-            /* Accept the incoming frames */
-            ret = picoquic_decode_frames(cnx,
-                bytes + ph->offset, decoded_length, 0, current_time);
+            /* all frames are ignored in draining mode */
+            if (cnx->cnx_state == picoquic_state_draining)
+            {
+                cnx->ack_needed = 1;
+            }
+            /* VN = 0 indicates "long" header encoding, which is now banned.
+             * The error is only generated if the packet can be properly
+             * decrypted. */
+            else if (ph->vn != 0)
+            {
+                ret = PICOQUIC_TRANSPORT_ERROR_PROTOCOL_VIOLATION;
+            }
+            else
+            {
+                /* Accept the incoming frames */
+                ret = picoquic_decode_frames(cnx,
+                    bytes + ph->offset, decoded_length, 0, current_time);
+            }
 
             /* processing of client encrypted packet */
             if (ret == 0)
@@ -848,10 +861,6 @@ int picoquic_incoming_packet(
 		{
 			/* Mark the sequence number as received */
 			ret = picoquic_record_pn_received(cnx, ph.pn64, current_time);
-            if (ret == 0)
-            {
-                cnx->ack_needed = 1;
-            }
 		}
 	}
 	else if (ret == PICOQUIC_ERROR_AEAD_CHECK ||

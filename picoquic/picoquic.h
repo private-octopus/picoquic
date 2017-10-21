@@ -71,7 +71,7 @@ extern "C" {
 #define PICOQUIC_TRANSPORT_ERROR_FRAME_FORMAT_ERROR (0x80000007)
 #define PICOQUIC_TRANSPORT_ERROR_TRANSPORT_PARAMETER_ERROR (0x80000008)
 #define PICOQUIC_TRANSPORT_ERROR_VERSION_NEGOTIATION_ERROR (0x80000009)
-#define PICOQUIC_TRANSPORT_ERROR_PROTOCOL_VIOLATION (0x8000000A) :
+#define PICOQUIC_TRANSPORT_ERROR_PROTOCOL_VIOLATION (0x8000000A)
 #define PICOQUIC_TRANSPORT_ERROR_QUIC_RECEIVED_RST (0x80000035) 
 #define PICOQUIC_TRANSPORT_ERROR_FRAME_ERROR_MIN (0x80000100)
 #define PICOQUIC_TRANSPORT_ERROR_FRAME_ERROR_MAX (0x800001FF)
@@ -97,6 +97,7 @@ extern "C" {
         picoquic_state_server_almost_ready,
         picoquic_state_server_ready,
         picoquic_state_disconnecting,
+        picoquic_state_draining,
         picoquic_state_disconnected,
         picoquic_state_server_send_hrr
 	} picoquic_state_enum;

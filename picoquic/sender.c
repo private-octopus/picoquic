@@ -649,7 +649,8 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 	size_t length = 0;
 
     /* Check that the connection is still alive */
-    if ((current_time - cnx->latest_progress_time) > PICOQUIC_MICROSEC_SILENCE_MAX)
+    if (cnx->cnx_state < picoquic_state_disconnecting &&
+        (current_time - cnx->latest_progress_time) > PICOQUIC_MICROSEC_SILENCE_MAX)
     {
         /* Too long silence, break it. */
         cnx->cnx_state = picoquic_state_disconnected;
@@ -715,6 +716,11 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 		use_fnv1a = 0;
 		checksum_overhead = 16;
 		break;
+    case picoquic_state_draining:
+        packet_type = picoquic_packet_1rtt_protected_phi0;
+        use_fnv1a = 0;
+        checksum_overhead = 16;
+        break;
 	case picoquic_state_disconnected:
 		ret = PICOQUIC_ERROR_DISCONNECTED;
 		break;
@@ -748,6 +754,48 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 
 		packet->length = 0;
 	}
+    else if (ret == 0 && cnx->cnx_state == picoquic_state_draining)
+    {
+        /* if more than 3*RTO is elapsed, move to disconnected */
+        uint64_t exit_time = cnx->latest_progress_time + 3 * cnx->retransmit_timer;
+
+        if (current_time >= exit_time)
+        {
+            cnx->cnx_state = picoquic_state_disconnected;
+        }
+        else if (current_time > cnx->next_wake_time)
+        {
+            uint64_t delta_t = cnx->rtt_min;
+            if (delta_t * 2 < cnx->retransmit_timer)
+            {
+                delta_t = cnx->retransmit_timer / 2;
+            }
+            /* if more than N packet received, repeat and erase */
+            if (cnx->ack_needed)
+            {
+                size_t consumed = 0;
+                length = picoquic_create_packet_header(
+                    cnx, packet_type, cnx_id, cnx->send_sequence, bytes);
+                header_length = length;
+                packet->sequence_number = cnx->send_sequence;
+                packet->send_time = current_time;
+
+                /* Send the disconnect frame */
+                ret = picoquic_prepare_connection_close_frame(cnx, bytes + length,
+                    cnx->send_mtu - checksum_overhead - length, &consumed);
+                if (ret == 0)
+                {
+                    length += consumed;
+                }
+                cnx->ack_needed = 0;
+            }
+            cnx->next_wake_time = current_time + delta_t;
+            if (cnx->next_wake_time > exit_time)
+            {
+                cnx->next_wake_time = exit_time;
+            }
+        }
+    }
 	else if (ret == 0)
 	{
 		length = picoquic_create_packet_header(
@@ -759,6 +807,13 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 		if (cnx->cnx_state == picoquic_state_disconnecting)
 		{
             size_t consumed = 0;
+            uint64_t delta_t = cnx->rtt_min;
+
+            if (2 * delta_t < cnx->retransmit_timer)
+            {
+                delta_t = cnx->retransmit_timer / 2;
+            }
+
             /* add a final ack so receiver gets clean state */
             ret = picoquic_prepare_ack_frame(cnx, current_time, &bytes[length],
                 cnx->send_mtu - checksum_overhead - length, &consumed);
@@ -776,7 +831,11 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 				length += consumed;
 			}
 
-			cnx->cnx_state = picoquic_state_disconnected;
+			cnx->cnx_state = picoquic_state_draining;
+            cnx->latest_progress_time = current_time;
+            cnx->next_wake_time = current_time + delta_t;
+            cnx->ack_needed = 0;
+
             if (cnx->callback_fn)
             {
                 (cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx);
@@ -907,7 +966,7 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 		*send_length = 0;
 	}
 	
-    if (*send_length > 0)
+    if (*send_length > 0 && cnx->cnx_state != picoquic_state_draining)
     {
         picoquic_cnx_set_next_wake_time(cnx, current_time);
     }
