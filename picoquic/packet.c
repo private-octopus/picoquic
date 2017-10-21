@@ -688,7 +688,7 @@ int picoquic_incoming_encrypted(
              * decrypted. */
             else if (ph->vn != 0)
             {
-                ret = PICOQUIC_TRANSPORT_ERROR_PROTOCOL_VIOLATION;
+                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION);
             }
             else
             {
@@ -718,7 +718,6 @@ int picoquic_incoming_encrypted(
 
     return ret;
 }
-
 
 /*
  * Processing of the packet that was just received from the network.
@@ -868,7 +867,8 @@ int picoquic_incoming_packet(
 		ret == PICOQUIC_ERROR_UNEXPECTED_PACKET ||
 		ret == PICOQUIC_ERROR_FNV1A_CHECK ||
 		ret == PICOQUIC_ERROR_CNXID_CHECK ||
-		ret == PICOQUIC_ERROR_HRR)
+		ret == PICOQUIC_ERROR_HRR ||
+        ret == PICOQUIC_ERROR_DETECTED)
 	{
 		/* Bad packets are dropped silently, but duplicates should be acknowledged */
         if (cnx != NULL)

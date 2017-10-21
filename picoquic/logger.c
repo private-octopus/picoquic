@@ -368,6 +368,43 @@ size_t picoquic_log_connection_close_frame(FILE * F, uint8_t * bytes, size_t byt
 	return byte_index;
 }
 
+size_t picoquic_log_application_close_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
+{
+    size_t byte_index = 1;
+    size_t min_size = 1 + 4 + 2;
+    uint32_t error_code;
+    uint16_t string_length;
+
+    if (min_size > bytes_max)
+    {
+        fprintf(F, "    Malformed APPLICATION CLOSE, requires %d bytes out of %d\n", (int)min_size, (int)bytes_max);
+        return bytes_max;
+    }
+
+    /* Now that the size is above the minimum */
+    error_code = PICOPARSE_32(bytes + byte_index);
+    byte_index += 4;
+    string_length = PICOPARSE_16(bytes + byte_index);
+    byte_index += 2;
+
+
+    fprintf(F, "    APPLICATION CLOSE, Error 0x%08x, Reason length %d (0x%04x):\n",
+        error_code, string_length, string_length);
+    if (byte_index + string_length > bytes_max)
+    {
+        fprintf(F, "    Malformed APPLICATION CLOSE, requires %d bytes out of %d\n",
+            (int)(byte_index + string_length), (int)bytes_max);
+        byte_index = bytes_max;
+    }
+    else
+    {
+        /* TODO: print the UTF8 string */
+        byte_index += string_length;
+    }
+
+    return byte_index;
+}
+
 size_t picoquic_log_max_data_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
 {
 	size_t byte_index = 1;
@@ -540,7 +577,7 @@ void picoquic_log_frames(FILE* F, uint8_t * bytes, size_t length, uint32_t versi
 				byte_index += picoquic_log_connection_close_frame(F, bytes + byte_index,
 					length - byte_index);
 				break;
-			case picoquic_frame_type_goaway: /* GOAWAY */
+			case picoquic_frame_type_application_close: /* GOAWAY */
 				/* Not supported anymore. */
 				byte_index += picoquic_log_go_away_frame(F, bytes + byte_index,
 					length - byte_index);

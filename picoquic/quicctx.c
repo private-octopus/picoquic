@@ -884,6 +884,18 @@ int picoquic_reset_cnx_version(picoquic_cnx_t * cnx, uint8_t * bytes, size_t len
 	return ret;
 }
 
+int picoquic_connection_error(picoquic_cnx_t * cnx, uint32_t local_error)
+{
+    if (cnx->cnx_state == picoquic_state_client_ready ||
+        cnx->cnx_state == picoquic_state_server_ready)
+    {
+        cnx->local_error = local_error;
+        cnx->cnx_state = picoquic_state_disconnecting;
+    }
+
+    return PICOQUIC_ERROR_DETECTED;
+}
+
 void picoquic_delete_cnx(picoquic_cnx_t * cnx)
 {
     picoquic_stream_head * stream;

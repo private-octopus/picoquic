@@ -51,7 +51,6 @@ int picoquic_add_to_stream(picoquic_cnx_t * cnx, uint32_t stream_id,
     int ret = 0;
     picoquic_stream_head * stream = NULL;
 
-    /* TODO: check for other streams. */
     if (stream_id == 0)
     {
         stream = &cnx->first_stream;
@@ -124,12 +123,11 @@ int picoquic_add_to_stream(picoquic_cnx_t * cnx, uint32_t stream_id,
 }
 
 int picoquic_reset_stream(picoquic_cnx_t * cnx,
-	uint32_t stream_id)
+	uint32_t stream_id, uint16_t local_stream_error)
 {
 	int ret = 0;
 	picoquic_stream_head * stream = NULL;
 
-	/* TODO: check for other streams. */
 	if (stream_id == 0)
 	{
 		ret = PICOQUIC_ERROR_CANNOT_RESET_STREAM_ZERO;
@@ -148,7 +146,7 @@ int picoquic_reset_stream(picoquic_cnx_t * cnx,
 		}
 		else if ((stream->stream_flags&picoquic_stream_flag_reset_requested) == 0)
 		{
-			stream->local_error = PICOQUIC_TRANSPORT_ERROR_CANCELLED;
+			stream->local_error = local_stream_error;
 			stream->stream_flags |= picoquic_stream_flag_reset_requested;
 		}
 	}
@@ -275,7 +273,6 @@ static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t * cnx,
             uint64_t retransmit_timer = (cnx->nb_retransmit == 0) ?
                 cnx->retransmit_timer : (1000000 << (cnx->nb_retransmit - 1));
 
-            /* TODO: timer limit ought to be dynamic */
             if ((uint64_t)time_out < retransmit_timer)
             {
                 /* Do not retransmit if the timer has not yet elapsed */
@@ -307,64 +304,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t * cnx, uint64_t current_time,
 
 		length = 0;
 
-#if 0
-		if (delta_seq > 3)
-		{
-			/*
-			 * SACK Logic.
-			 * more than N packets were seen at the receiver after this one.
-			 */
-			should_retransmit = 1;
-		}
-		else
-		{
-			int64_t delta_t = cnx->latest_time_acknowledged - p->send_time;
-
-			/* TODO: out of order delivery time ought to be dynamic */
-			if (delta_t > 10000)
-			{
-				/*
-				 * RACK logic.
-				 * The latest acknowledged was sent more than X ms after this one.
-				 */
-				should_retransmit = 1;
-			}
-			else if (delta_t > 0)
-			{
-				/* If the delta-t is larger than zero, add the time since the
-				 * last ACK was received. If that is larger than the inter packet
-				 * time, consider that there is a loss */
-				uint64_t time_from_last_ack = current_time - cnx->latest_time_acknowledged + delta_t;
-
-				if (time_from_last_ack > 10000)
-				{
-					should_retransmit = 1;
-				}
-			}
-
-			if (should_retransmit == 0)
-			{
-				/* Don't fire yet, because of possible out of order delivery */
-				int64_t time_out = current_time - p->send_time;
-				uint64_t retransmit_timer = (cnx->nb_retransmit == 0) ?
-					cnx->retransmit_timer : (1000000 << (cnx->nb_retransmit - 1));
-
-				/* TODO: timer limit ought to be dynamic */
-				if ((uint64_t) time_out < retransmit_timer)
-				{
-					/* Do not retransmit if the timer has not yet elapsed */
-					should_retransmit = 0;
-				}
-				else
-				{
-					should_retransmit = 1;
-					timer_based_retransmit = 1;
-				}
-			}
-		}
-#else
         should_retransmit = picoquic_retransmit_needed_by_packet(cnx, p, current_time, &timer_based_retransmit);
-#endif
 
 		if (should_retransmit == 0)
 		{
@@ -499,7 +439,6 @@ int picoquic_is_cnx_backlog_empty(picoquic_cnx_t * cnx)
     picoquic_packet * p = cnx->retransmit_oldest;
     int backlog_empty = 1;
 
-    /* TODO: while packets are pure ACK, drop them from retransmit queue */
     while (p != NULL && backlog_empty == 1)
     {
         /* check if this is an ACK only packet */
@@ -633,7 +572,7 @@ void picoquic_cnx_set_next_wake_time(picoquic_cnx_t * cnx, uint64_t current_time
 int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 	uint64_t current_time, uint8_t * send_buffer, size_t send_buffer_max, size_t * send_length)
 {
-	/* TODO: Check for interesting streams */
+
 	int ret = 0;
 	/* TODO: manage multiple streams. */
 	picoquic_stream_head * stream = NULL;
@@ -780,9 +719,17 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
                 packet->sequence_number = cnx->send_sequence;
                 packet->send_time = current_time;
 
-                /* Send the disconnect frame */
-                ret = picoquic_prepare_connection_close_frame(cnx, bytes + length,
-                    cnx->send_mtu - checksum_overhead - length, &consumed);
+                /* Resend the disconnect frame */
+                if (cnx->local_error == 0)
+                {
+                    ret = picoquic_prepare_application_close_frame(cnx, bytes + length,
+                        cnx->send_mtu - checksum_overhead - length, &consumed);
+                }
+                else
+                {
+                    ret = picoquic_prepare_connection_close_frame(cnx, bytes + length,
+                        cnx->send_mtu - checksum_overhead - length, &consumed);
+                }
                 if (ret == 0)
                 {
                     length += consumed;
@@ -806,6 +753,7 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 
 		if (cnx->cnx_state == picoquic_state_disconnecting)
 		{
+            /* send either app close or connection close, depending on error code */
             size_t consumed = 0;
             uint64_t delta_t = cnx->rtt_min;
 
@@ -824,8 +772,17 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 
             consumed = 0;
 			/* Send the disconnect frame */
-			ret = picoquic_prepare_connection_close_frame(cnx, bytes + length,
-				cnx->send_mtu - checksum_overhead - length, &consumed);
+            if (cnx->local_error == 0)
+            {
+                ret = picoquic_prepare_application_close_frame(cnx, bytes + length,
+                    cnx->send_mtu - checksum_overhead - length, &consumed);
+            }
+            else
+            {
+                ret = picoquic_prepare_connection_close_frame(cnx, bytes + length,
+                    cnx->send_mtu - checksum_overhead - length, &consumed);
+            }
+
 			if (ret == 0)
 			{
 				length += consumed;
@@ -974,13 +931,14 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 	return ret;
 }
 
-int picoquic_close(picoquic_cnx_t * cnx)
+int picoquic_close(picoquic_cnx_t * cnx, uint16_t reason_code)
 {
     int ret = 0;
     if (cnx->cnx_state == picoquic_state_server_ready ||
         cnx->cnx_state == picoquic_state_client_ready)
     {
         cnx->cnx_state = picoquic_state_disconnecting;
+        cnx->application_error = reason_code;
     }
     else
     {

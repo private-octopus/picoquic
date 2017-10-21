@@ -60,22 +60,21 @@ extern "C" {
 #define PICOQUIC_ERROR_CANNOT_CONTROL_STREAM_ZERO (PICOQUIC_ERROR_CLASS  + 18)
 #define PICOQUIC_ERROR_HRR (PICOQUIC_ERROR_CLASS  + 19)
 #define PICOQUIC_ERROR_DISCONNECTED (PICOQUIC_ERROR_CLASS  + 20)
+#define PICOQUIC_ERROR_DETECTED (PICOQUIC_ERROR_CLASS  + 21)
 
-#define PICOQUIC_TRANSPORT_ERROR_NO_ERROR (0x80000000)
-#define PICOQUIC_TRANSPORT_ERROR_INTERNAL (0x80000001)
-#define PICOQUIC_TRANSPORT_ERROR_CANCELLED (0x80000002) /* RST STREAM only */
-#define PICOQUIC_TRANSPORT_ERROR_FLOW_CONTROL_ERROR (0x80000003)
-#define PICOQUIC_TRANSPORT_ERROR_STREAM_ID_ERROR (0x80000004)
-#define PICOQUIC_TRANSPORT_ERROR_STREAM_STATE_ERROR (0x80000005)
-#define PICOQUIC_TRANSPORT_ERROR_FINAL_OFFSET_ERROR (0x80000006)
-#define PICOQUIC_TRANSPORT_ERROR_FRAME_FORMAT_ERROR (0x80000007)
-#define PICOQUIC_TRANSPORT_ERROR_TRANSPORT_PARAMETER_ERROR (0x80000008)
-#define PICOQUIC_TRANSPORT_ERROR_VERSION_NEGOTIATION_ERROR (0x80000009)
-#define PICOQUIC_TRANSPORT_ERROR_PROTOCOL_VIOLATION (0x8000000A)
-#define PICOQUIC_TRANSPORT_ERROR_QUIC_RECEIVED_RST (0x80000035) 
-#define PICOQUIC_TRANSPORT_ERROR_FRAME_ERROR_MIN (0x80000100)
-#define PICOQUIC_TRANSPORT_ERROR_FRAME_ERROR_MAX (0x800001FF)
-#define PICOQUIC_TRANSPORT_ERROR_FRAME_ERROR(frame_id) (0x80000100|(frame_id)) /* XX is replaced by actual frame type */
+/*
+ * Protocol errors defined in the QUIC spec
+ */
+#define PICOQUIC_TRANSPORT_INTERNAL_ERROR (0x1)
+#define PICOQUIC_TRANSPORT_FLOW_CONTROL_ERROR (0x3)
+#define PICOQUIC_TRANSPORT_STREAM_ID_ERROR (0x4)
+#define PICOQUIC_TRANSPORT_STREAM_STATE_ERROR (0x5)
+#define PICOQUIC_TRANSPORT_FINAL_OFFSET_ERROR (0x6)
+#define PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR (0x7)
+#define PICOQUIC_TRANSPORT_TRANSPORT_PARAMETER_ERROR (0x8)
+#define PICOQUIC_TRANSPORT_VERSION_NEGOTIATION_ERROR (0x9)
+#define PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION (0xA)
+#define PICOQUIC_TRANSPORT_FRAME_ERROR(FrameType) (0x100|((int)FrameType)) 
 
 #define PICOQUIC_MAX_PACKET_SIZE 1536
 
@@ -140,7 +139,8 @@ extern "C" {
 		picoquic_callback_no_event = 0,
 		picoquic_callback_stream_fin,
 		picoquic_callback_stream_reset,
-        picoquic_callback_close
+        picoquic_callback_close,
+        picoquic_callback_application_close
 	} picoquic_call_back_event_t;
 
 	/* Callback function for providing stream data to the application */
@@ -173,7 +173,7 @@ extern "C" {
 
 	void picoquic_delete_cnx(picoquic_cnx_t * cnx);
 
-	int picoquic_close(picoquic_cnx_t * cnx);
+	int picoquic_close(picoquic_cnx_t * cnx, uint16_t reason_code);
 
 	picoquic_cnx_t * picoquic_get_first_cnx(picoquic_quic_t * quic);
     picoquic_cnx_t * picoquic_get_next_cnx(picoquic_cnx_t * cnx);
@@ -216,7 +216,7 @@ extern "C" {
 		uint32_t stream_id, const uint8_t * data, size_t length, int set_fin);
 
 	int picoquic_reset_stream(picoquic_cnx_t * cnx,
-		uint32_t stream_id);
+		uint32_t stream_id, uint16_t local_stream_error);
 
 
 	/* Congestion algorithm definition */

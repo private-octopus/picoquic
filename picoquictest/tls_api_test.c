@@ -270,7 +270,8 @@ static void test_api_callback(picoquic_cnx_t * cnx,
 	int is_client_stream = (stream_id & 1);
 	picoquic_call_back_event_t stream_finished = picoquic_callback_no_event;
 
-    if (fin_or_event == picoquic_callback_close)
+    if (fin_or_event == picoquic_callback_close || 
+        fin_or_event == picoquic_callback_application_close)
     {
         /* do nothing in our tests */
         return;
@@ -977,7 +978,7 @@ static int tls_api_attempt_to_close(
     int ret = 0;
     int nb_rounds = 0;
 
-    ret = picoquic_close(test_ctx->cnx_client);
+    ret = picoquic_close(test_ctx->cnx_client, 0);
 
     if (ret == 0)
     {
@@ -1177,7 +1178,7 @@ int tls_api_one_scenario_test(test_api_stream_desc_t * scenario,
 
 	if (ret == 0)
 	{
-		ret = picoquic_close(test_ctx->cnx_client);
+		ret = picoquic_close(test_ctx->cnx_client, 0);
 	}
 
 	if (test_ctx != NULL)
