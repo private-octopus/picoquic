@@ -154,6 +154,38 @@ int picoquic_reset_stream(picoquic_cnx_t * cnx,
 	return ret;
 }
 
+int picoquic_stop_sending(picoquic_cnx_t * cnx,
+    uint32_t stream_id, uint16_t local_stream_error)
+{
+    int ret = 0;
+    picoquic_stream_head * stream = NULL;
+
+    if (stream_id == 0)
+    {
+        ret = PICOQUIC_ERROR_CANNOT_STOP_STREAM_ZERO;
+    }
+    else
+    {
+        stream = picoquic_find_stream(cnx, stream_id, 1);
+
+        if (stream == NULL)
+        {
+            ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
+        }
+        else if ((stream->stream_flags & picoquic_stream_flag_reset_received) != 0)
+        {
+            ret = PICOQUIC_ERROR_STREAM_ALREADY_CLOSED;
+        }
+        else if ((stream->stream_flags&picoquic_stream_flag_stop_sending_requested) == 0)
+        {
+            stream->local_stop_error = local_stream_error;
+            stream->stream_flags |= picoquic_stream_flag_stop_sending_requested;
+        }
+    }
+
+    return ret;
+}
+
 picoquic_packet * picoquic_create_packet()
 {
     picoquic_packet * packet = (picoquic_packet *)malloc(sizeof(picoquic_packet));

@@ -175,7 +175,11 @@ extern "C" {
 		picoquic_stream_flag_reset_requested = 16,
 		picoquic_stream_flag_reset_sent = 32,
 		picoquic_stream_flag_reset_received = 64,
-		picoquic_stream_flag_reset_signalled = 128
+		picoquic_stream_flag_reset_signalled = 128,
+        picoquic_stream_flag_stop_sending_requested = 256,
+        picoquic_stream_flag_stop_sending_sent = 512,
+        picoquic_stream_flag_stop_sending_received = 1024,
+        picoquic_stream_flag_stop_sending_signalled = 2048
 	} picoquic_stream_flags;
 
 	typedef struct _picoquic_stream_head {
@@ -188,6 +192,8 @@ extern "C" {
 		uint64_t maxdata_remote;
 		uint32_t local_error;
 		uint32_t remote_error;
+        uint32_t local_stop_error;
+        uint32_t remote_stop_error;
 		picoquic_stream_data * stream_data;
 		uint64_t sent_offset;
 		picoquic_stream_data * send_queue;

@@ -334,6 +334,142 @@ int picoquic_decode_stream_reset_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
 }
 
 /*
+ * STOP SENDING Frame
+ * 
+ *   An endpoint may use a STOP_SENDING frame (type=0x0c) to communicate
+ *   that incoming data is being discarded on receipt at application
+ *   request.  This signals a peer to abruptly terminate transmission on a
+ *   stream.
+ *
+ *
+ *   The STOP_SENDING frame is as follows:
+ *
+ *    0                   1                   2                   3
+ *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |                        Stream ID (32)                         |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |  Application Error Code (16)  |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *   The fields are:
+ *
+ *   Stream ID:  The 32-bit Stream ID of the stream being ignored.
+ *
+ *   Application Error Code:  A 16-bit, application-specified reason the
+ *      sender is ignoring the stream (see Section 12.4).
+ */
+
+int picoquic_prepare_stop_sending_frame(picoquic_cnx_t * cnx, picoquic_stream_head * stream,
+    uint8_t * bytes, size_t bytes_max, size_t * consumed)
+{
+    int ret = 0;
+    const size_t min_length = ((picoquic_supported_versions[cnx->version_index].version_flags&
+        picoquic_version_long_error_codes) != 0) ? 1 + 4 + 4 : 1 + 4 + 2;
+    size_t byte_index = 0;
+
+    if (bytes_max < min_length)
+    {
+        ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
+    }
+    else if ((stream->stream_flags&picoquic_stream_flag_stop_sending_requested) == 0 ||
+        (stream->stream_flags&picoquic_stream_flag_stop_sending_sent) != 0 ||
+        (stream->stream_flags&picoquic_stream_flag_fin_received) != 0 ||
+        (stream->stream_flags&picoquic_stream_flag_reset_received) != 0)
+    {
+        *consumed = 0;
+    }
+    else
+    {
+        bytes[byte_index++] = picoquic_frame_type_stop_sending;
+        picoformat_32(bytes + byte_index, stream->stream_id);
+        byte_index += 4;
+        if ((picoquic_supported_versions[cnx->version_index].version_flags&
+            picoquic_version_long_error_codes) != 0)
+        {
+            picoformat_32(bytes + byte_index, stream->local_stop_error);
+            byte_index += 4;
+        }
+        else
+        {
+            picoformat_16(bytes + byte_index, stream->local_stop_error);
+            byte_index += 2;
+        }
+        *consumed = byte_index;
+
+        stream->stream_flags |= picoquic_stream_flag_stop_sending_sent;
+    }
+
+    return ret;
+}
+
+int picoquic_decode_stop_sending_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
+    size_t bytes_max, size_t * consumed)
+{
+    int ret = 0;
+    const size_t min_length = ((picoquic_supported_versions[cnx->version_index].version_flags&
+        picoquic_version_long_error_codes) != 0) ? 1 + 4 + 4 : 1 + 4 + 2;
+    uint32_t stream_id;
+    uint32_t error_code;
+    picoquic_stream_head * stream = NULL;
+    size_t byte_index = 1;
+
+    if (bytes_max < min_length)
+    {
+        ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR);
+        *consumed = bytes_max;
+    }
+    else
+    {
+        stream_id = PICOPARSE_32(bytes + byte_index);
+        byte_index += 4;
+
+        if ((picoquic_supported_versions[cnx->version_index].version_flags&
+            picoquic_version_long_error_codes) != 0)
+        {
+            error_code = PICOPARSE_32(bytes + byte_index);
+            byte_index += 4;
+        }
+        else
+        {
+            error_code = PICOPARSE_32(bytes + byte_index);
+            byte_index += 2;
+        }
+
+        *consumed = byte_index;
+
+        if (stream_id == 0)
+        {
+            ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_STREAM_STATE_ERROR);
+        }
+        else
+        {
+            ret = picoquic_find_or_create_stream(cnx, stream_id, &stream, 1);
+
+            if (ret == 0)
+            {
+                if ((stream->stream_flags&picoquic_stream_flag_stop_sending_received) == 0 &&
+                    (stream->stream_flags&picoquic_stream_flag_reset_requested) == 0)
+                {
+                    stream->remote_stop_error = error_code;
+                    stream->stream_flags |= picoquic_stream_flag_stop_sending_received;
+                    
+                    if (cnx->callback_fn != NULL)
+                    {
+                        cnx->callback_fn(cnx, stream->stream_id, NULL, 0,
+                            picoquic_callback_stop_sending, cnx->callback_ctx);
+                        stream->stream_flags |= picoquic_stream_flag_stop_sending_signalled;
+                    }
+                }
+            }
+        }
+    }
+
+    return ret;
+}
+
+
+/*
  * Stream frame.
  * In our implementation, stream 0 is special, and feeds directly
  * into the SSL API.
@@ -2066,6 +2202,11 @@ int picoquic_decode_frames(picoquic_cnx_t * cnx, uint8_t * bytes,
 			byte_index+=9;
 			cnx->ack_needed = 1;
 			break;
+        case picoquic_frame_type_stop_sending:
+            ret = picoquic_decode_stop_sending_frame(cnx, bytes + byte_index, bytes_max - byte_index, &consumed);
+            byte_index += consumed;
+            cnx->ack_needed = 1;
+            break;
         default:
             /* Not implemented yet! */
             ret = picoquic_connection_error(cnx,
@@ -2272,6 +2413,11 @@ int picoquic_skip_frame(uint8_t * bytes, size_t bytes_max, size_t * consumed,
 			byte_index += 9;
 			*pure_ack = 0;
 			break;
+        case picoquic_frame_type_stop_sending:
+            byte_index += ((version_flags&
+                picoquic_version_long_error_codes) != 0) ? 1 + 4 + 4 : 1 + 4 + 2;
+            *pure_ack = 0;
+            break;
 		default:
 			/* Not implemented yet! */
 			ret = -1;

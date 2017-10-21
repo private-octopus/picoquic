@@ -501,7 +501,13 @@ static void first_server_callback(picoquic_cnx_t * cnx,
     }
 
     /* verify state and copy data to the stream buffer */
-    if (fin_or_event == picoquic_callback_stream_reset)
+    if (fin_or_event == picoquic_callback_stop_sending)
+    {
+        stream_ctx->status = picoquic_first_server_stream_status_finished;
+        picoquic_reset_stream(cnx, stream_id, 0);
+        return;
+    }
+    else if (fin_or_event == picoquic_callback_stream_reset)
     {
         stream_ctx->status = picoquic_first_server_stream_status_finished;
         picoquic_reset_stream(cnx, stream_id, 0);
@@ -906,6 +912,14 @@ static void first_client_callback(picoquic_cnx_t * cnx,
             fprintf(stdout, "Reset received on stream %d, command: %s, after %d bytes\n",
                 stream_ctx->stream_id, stream_ctx->command, (int)stream_ctx->received_length);
         }
+        return;
+    }
+    else if (fin_or_event == picoquic_callback_stop_sending)
+    {
+        picoquic_reset_stream(cnx, stream_id, 0);
+
+        fprintf(stdout, "Stop sending received on stream %d, command: %s\n",
+            stream_ctx->stream_id, stream_ctx->command);
         return;
     }
     else

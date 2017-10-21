@@ -301,7 +301,12 @@ static void test_api_callback(picoquic_cnx_t * cnx,
 	{
 		cb_ctx->error_detected |= test_api_fail_data_on_unknown_stream;
 	}
-	else if (is_client_stream)
+	else if (fin_or_event == picoquic_callback_stop_sending)
+    {
+        /* Respond with a reset, no matter what. Should be smarter later */
+        picoquic_reset_stream(cnx, stream_id, 0);
+    }
+    else if (is_client_stream)
 	{
 		if (cb_ctx->client_mode)
 		{

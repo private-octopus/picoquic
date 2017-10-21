@@ -301,8 +301,8 @@ size_t picoquic_log_reset_stream_frame(FILE * F, uint8_t * bytes, size_t bytes_m
     }
     else
     {
-        error_code = PICOPARSE_32(bytes + byte_index);
-        byte_index += 4;
+        error_code = PICOPARSE_16(bytes + byte_index);
+        byte_index += 2;
     }
 	offset = PICOPARSE_64(bytes + byte_index);
 	byte_index += 8;
@@ -312,6 +312,42 @@ size_t picoquic_log_reset_stream_frame(FILE * F, uint8_t * bytes, size_t bytes_m
 		stream_id, stream_id, error_code, (unsigned long long) offset);
 
 	return byte_index;
+}
+
+size_t picoquic_log_stop_sending_frame(FILE * F, uint8_t * bytes, size_t bytes_max,
+    uint32_t version_flags)
+{
+    size_t byte_index = 1;
+    const size_t min_size = ((version_flags&picoquic_version_long_error_codes) != 0) ?
+        1 + 4 + 4 : 1 + 4 + 2;
+    uint32_t stream_id;
+    uint32_t error_code;
+
+    if (min_size > bytes_max)
+    {
+        fprintf(F, "    Malformed STOP SENDING, requires %d bytes out of %d\n", (int)min_size, (int)bytes_max);
+        return bytes_max;
+    }
+
+    /* Now that the size is good, parse and print it */
+    stream_id = PICOPARSE_32(bytes + byte_index);
+    byte_index += 4;
+    if ((version_flags&picoquic_version_long_error_codes) != 0)
+    {
+        error_code = PICOPARSE_32(bytes + byte_index);
+        byte_index += 4;
+    }
+    else
+    {
+        error_code = PICOPARSE_16(bytes + byte_index);
+        byte_index += 2;
+    }
+
+
+    fprintf(F, "    STOP SENDING %d (0x%08x), Error 0x%x, Offset 0x%llx.\n",
+        stream_id, stream_id, error_code);
+
+    return byte_index;
 }
 
 size_t picoquic_log_connection_close_frame(FILE * F, uint8_t * bytes,
@@ -615,6 +651,10 @@ void picoquic_log_frames(FILE* F, uint8_t * bytes, size_t length, uint32_t versi
 				byte_index += picoquic_log_new_connection_id_frame(F, bytes + byte_index,
 					length - byte_index);
 				break;
+            case picoquic_frame_type_stop_sending: /* STOP_SENDING */
+                byte_index += picoquic_log_stop_sending_frame(F, bytes + byte_index,
+                    length - byte_index, version_flags);
+                break;
 			default:
 				/* Not implemented yet! */
                 fprintf(F, "    Unknown frame, type: %x\n", frame_id);

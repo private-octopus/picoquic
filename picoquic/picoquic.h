@@ -61,6 +61,7 @@ extern "C" {
 #define PICOQUIC_ERROR_HRR (PICOQUIC_ERROR_CLASS  + 19)
 #define PICOQUIC_ERROR_DISCONNECTED (PICOQUIC_ERROR_CLASS  + 20)
 #define PICOQUIC_ERROR_DETECTED (PICOQUIC_ERROR_CLASS  + 21)
+#define PICOQUIC_ERROR_CANNOT_STOP_STREAM_ZERO (PICOQUIC_ERROR_CLASS  + 22)
 
 /*
  * Protocol errors defined in the QUIC spec
@@ -139,6 +140,7 @@ extern "C" {
 		picoquic_callback_no_event = 0,
 		picoquic_callback_stream_fin,
 		picoquic_callback_stream_reset,
+        picoquic_callback_stop_sending,
         picoquic_callback_close,
         picoquic_callback_application_close
 	} picoquic_call_back_event_t;
@@ -217,6 +219,9 @@ extern "C" {
 
 	int picoquic_reset_stream(picoquic_cnx_t * cnx,
 		uint32_t stream_id, uint16_t local_stream_error);
+
+    int picoquic_stop_sending(picoquic_cnx_t * cnx,
+        uint32_t stream_id, uint16_t local_stream_error);
 
 
 	/* Congestion algorithm definition */
