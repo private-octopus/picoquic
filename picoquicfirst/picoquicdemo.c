@@ -1053,7 +1053,7 @@ int quic_client_ui(picoquic_cnx_t * cnx, picoquic_first_client_callback_ctx_t * 
 }
 #endif
 
-int quic_client(const char * ip_address_text, int server_port)
+int quic_client(const char * ip_address_text, int server_port, uint32_t proposed_version)
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
@@ -1190,7 +1190,8 @@ int quic_client(const char * ip_address_text, int server_port)
         /* Create a client connection */
 
         cnx_client = picoquic_create_cnx(qclient, 0, 
-            (struct sockaddr *)&server_address, current_time, 0, sni, "hq-05");
+            (struct sockaddr *)&server_address, current_time, 
+            proposed_version, sni, "hq-05");
 
         if (cnx_client == NULL)
         {
@@ -1354,6 +1355,43 @@ int quic_client(const char * ip_address_text, int server_port)
     return ret;
 }
 
+uint32_t parse_target_version(char const * v_arg)
+{
+    /* Expect the version to be encoded in base 16 */
+    uint32_t v = 0;
+    char const * x = v_arg;
+
+    while (*x != 0)
+    {
+        int c = *x;
+
+        if (c >= '0' && c <= '9')
+        {
+            c -= '0';
+        }
+        else if (c >= 'a' && c <= 'f')
+        {
+            c -= 'a';
+            c -= 10;
+        }
+        else if (c >= 'A' && c <= 'F')
+        {
+            c -= 'A';
+            c -= 10;
+        }
+        else
+        {
+            v = 0;
+            break;
+        }
+        v *= 16;
+        v += c;
+        x++;
+    }
+
+    return v;
+}
+
 void usage()
 {
 	fprintf(stderr, "PicoQUIC demo client and server\n");
@@ -1366,7 +1404,8 @@ void usage()
 	fprintf(stderr, "  -p port     server port (default: %d)\n", default_server_port);
 	fprintf(stderr, "  -1          Once\n");
 	fprintf(stderr, "  -r          Do Reset Request\n");
-	fprintf(stderr, "  -h          This help message\n");
+	fprintf(stderr, "  -v version  Version proposed by client, e.g. -v ff000005\n");
+    fprintf(stderr, "  -h          This help message\n");
 	exit(1);
 }
 
@@ -1376,6 +1415,7 @@ int main(int argc, char ** argv)
     const char * server_cert_file = default_server_cert_file;
     const char * server_key_file  = default_server_key_file;
     int server_port               = default_server_port;
+    uint32_t proposed_version = 0;
     int is_client = 0;
     int just_once = 0;
     int do_hrr = 0;
@@ -1389,7 +1429,7 @@ int main(int argc, char ** argv)
 
     /* Get the parameters */
 	int opt;
-	while( (opt = getopt(argc, argv, "c:k:p:1rh")) != -1 )
+	while( (opt = getopt(argc, argv, "c:k:p:v:1rh")) != -1 )
 	{
 		switch (opt)
 		{
@@ -1406,6 +1446,14 @@ int main(int argc, char ** argv)
 					usage();
 				}
 				break;
+            case 'v':
+                if ((proposed_version = parse_target_version(optarg)) <= 0)
+                {
+                    fprintf(stderr, "Invalid version: %s\n", optarg);
+                    usage();
+                }
+                break;
+
 			case '1':
 				just_once = 1;
 				break;
@@ -1459,7 +1507,7 @@ int main(int argc, char ** argv)
     {
         /* Run as client */
         printf("Starting PicoQUIC contection to server IP = %s, port = %d\n", server_name, server_port);
-        ret = quic_client(server_name, server_port);
+        ret = quic_client(server_name, server_port, proposed_version);
 
         printf("Client exit with code = %d\n", ret);
     }
