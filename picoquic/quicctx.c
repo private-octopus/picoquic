@@ -90,7 +90,8 @@ static int picoquic_net_id_compare(void * key1, void * key2)
 
 const picoquic_version_parameters_t picoquic_supported_versions[] = {
     { PICOQUIC_INTERNAL_TEST_VERSION_1, 0, 0, NULL },
-    { PICOQUIC_FIRST_INTEROP_VERSION, picoquic_version_basic_time_stamp, 0, NULL }
+    { PICOQUIC_FIRST_INTEROP_VERSION, 
+    picoquic_version_basic_time_stamp|picoquic_version_long_error_codes, 0, NULL }
 };
 
 const size_t picoquic_nb_supported_versions = sizeof(picoquic_supported_versions) / sizeof(picoquic_version_parameters_t);

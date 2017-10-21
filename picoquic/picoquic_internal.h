@@ -56,7 +56,8 @@ extern "C" {
 #define PICOQUIC_INTERNAL_TEST_VERSION_1 0x50435130 
 
     typedef enum {
-        picoquic_version_basic_time_stamp = 1
+        picoquic_version_basic_time_stamp = 1,
+        picoquic_version_long_error_codes = 2
     } picoquic_version_feature_flags;
 
     typedef struct st_picoquic_version_parameters_t {

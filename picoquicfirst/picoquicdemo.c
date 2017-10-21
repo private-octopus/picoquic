@@ -939,119 +939,6 @@ static void first_client_callback(picoquic_cnx_t * cnx,
 
     /* that's it */
 }
-#if 0
-int quic_client_ui(picoquic_cnx_t * cnx, picoquic_first_client_callback_ctx_t * ctx,
-    uint64_t * current_time)
-{
-    int ret = 0;
-    char text[PICOQUIC_FIRST_COMMAND_MAX];
-    size_t text_len = 0;
-    picoquic_first_client_stream_ctx_t * stream_ctx;
-    int nb_doc_added = 0;
-
-    for (;;) {
-        fprintf(stdout, "Enter the requested document name, or return:\n");
-        if (fgets(text, sizeof(text), stdin))
-        {
-            /* remove trailing blanks */
-            text_len = strlen(text);
-            while (text_len >= 1)
-            {
-                int c = text[text_len - 1];
-
-                if (c == ' ' || c == '\t' || c == '\r' || c == '\n')
-                {
-                    text_len--;
-                    text[text_len] = 0;
-                }
-                else
-                {
-                    break;
-                }
-            }
-        }
-        else
-        {
-            text[0] = 0;
-            text_len = 0;
-        }
-
-        if (text_len == 0)
-        {
-            break;
-        }
-        else if (text_len + 8 > PICOQUIC_FIRST_COMMAND_MAX)
-        {
-            fprintf(stdout, "Name too long!\n");
-        }
-        else
-        {
-            stream_ctx = (picoquic_first_client_stream_ctx_t *)
-                malloc(sizeof(picoquic_first_client_stream_ctx_t));
-            if (stream_ctx == NULL)
-            {
-                fprintf(stdout, "Memory error!\n");
-                break;
-            }
-            else
-            {
-                memset(stream_ctx, 0, sizeof(picoquic_first_client_stream_ctx_t));
-                stream_ctx->command[0] = 'G';
-                stream_ctx->command[1] = 'E';
-                stream_ctx->command[2] = 'T';
-                stream_ctx->command[3] = ' ';
-                stream_ctx->command[4] = '/';
-                memcpy(&stream_ctx->command[5], text, text_len);
-                stream_ctx->command[text_len + 5] = '\r';
-                stream_ctx->command[text_len + 6] = '\n';
-                stream_ctx->command[text_len + 7] = 0;
-                stream_ctx->stream_id = (ctx->nb_client_streams * 2) + 1;
-
-                stream_ctx->next_stream = ctx->first_stream;
-                ctx->first_stream = stream_ctx;
-
-
-#ifdef WIN32
-                if (fopen_s(&stream_ctx->F, text, "w") != 0) {
-                    ret = -1;
-                }
-#else
-                stream_ctx->F = fopen(text, "w");
-                if (stream_ctx->F == NULL) {
-                    ret = -1;
-                }
-#endif
-                if (ret != 0)
-                {
-                    fprintf(stdout, "Cannot create file: %s\n", text);
-                }
-                else
-                {
-                    ctx->nb_client_streams++;
-                    ctx->nb_open_streams++;
-                }
-
-                (void) picoquic_add_to_stream(cnx, stream_ctx->stream_id, stream_ctx->command,
-                    text_len + 7, 0);
-                nb_doc_added++;
-            }
-        }
-    }
-
-    *current_time = get_current_time();
-    ctx->last_interaction_time = *current_time;
-    ctx->progress_observed = 0;
-
-    if (nb_doc_added == 0)
-    {
-
-        fprintf(stdout, "Closing the connection.\n");
-        ret = picoquic_close(cnx);
-    }
-
-    return ret;
-}
-#endif
 
 int quic_client(const char * ip_address_text, int server_port, uint32_t proposed_version)
 {
@@ -1372,12 +1259,12 @@ uint32_t parse_target_version(char const * v_arg)
         else if (c >= 'a' && c <= 'f')
         {
             c -= 'a';
-            c -= 10;
+            c += 10;
         }
         else if (c >= 'A' && c <= 'F')
         {
             c -= 'A';
-            c -= 10;
+            c += 10;
         }
         else
         {
