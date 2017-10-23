@@ -101,8 +101,9 @@ number of protocol changes:
   the error code now being 16 bits instead of 32 bits.
 
 These are all incompatible changes, and the developers will have to
-implement and test them before the IETF meeting in Singapore. That should keep us
-quite busy in October and early November.
+implement and test them before the IETF meeting in Singapore. All these changes are
+now implemented in Picoquic, which supports the version 0xFF00007. But we still
+need to do some interoperability test!
 
 ## Further milestones
 
