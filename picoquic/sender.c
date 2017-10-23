@@ -253,6 +253,29 @@ size_t picoquic_create_packet_header(
 }
 
 /*
+ * Management of protection of cleartext packets
+ */
+size_t picoquic_get_checksum_length(picoquic_cnx_t * cnx, int is_cleartext_mode)
+{
+    size_t ret = 8;
+
+    if (is_cleartext_mode)
+    {
+        if ((picoquic_supported_versions[cnx->version_index].version_flags&
+            picoquic_version_use_fnv1a) == 0)
+        {
+            ret = picoquic_aead_get_checksum_length(cnx->aead_encrypt_cleartext_ctx);
+        }
+    }
+    else
+    {
+        ret = picoquic_aead_get_checksum_length(cnx->aead_encrypt_ctx);
+    }
+
+    return ret;
+}
+
+/*
  * If a retransmit is needed, fill the packet with the required
  * retransmission. Also, prune the retransmit queue as needed.
  */
@@ -322,7 +345,7 @@ static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t * cnx,
 }
 
 int picoquic_retransmit_needed(picoquic_cnx_t * cnx, uint64_t current_time, 
-	picoquic_packet * packet, int * use_fnv1a, size_t * header_length)
+	picoquic_packet * packet, int * is_cleartext_mode, size_t * header_length)
 {
 	picoquic_packet * p;
 	size_t length = 0;
@@ -371,12 +394,12 @@ int picoquic_retransmit_needed(picoquic_cnx_t * cnx, uint64_t current_time,
 			if (ph.ptype == picoquic_packet_1rtt_protected_phi0 ||
 				ph.ptype == picoquic_packet_1rtt_protected_phi1)
 			{
-				*use_fnv1a = 0;
+				*is_cleartext_mode = 0;
 				checksum_length = 16;
 			}
 			else
 			{
-				*use_fnv1a = 1;
+				*is_cleartext_mode = 1;
 				checksum_length = 8;
 			}
 
@@ -604,14 +627,13 @@ void picoquic_cnx_set_next_wake_time(picoquic_cnx_t * cnx, uint64_t current_time
 int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 	uint64_t current_time, uint8_t * send_buffer, size_t send_buffer_max, size_t * send_length)
 {
-
 	int ret = 0;
 	/* TODO: manage multiple streams. */
 	picoquic_stream_head * stream = NULL;
 	int stream_restricted = 1;
 	picoquic_packet_type_enum packet_type = 0;
 	size_t checksum_overhead = 8;
-	int use_fnv1a = 1;
+	int is_cleartext_mode = 1;
 	size_t data_bytes = 0;
 	uint64_t cnx_id = cnx->server_cnxid;
 	int retransmit_possible = 0;
@@ -671,26 +693,22 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 	case picoquic_state_client_ready:
 		packet_type = picoquic_packet_1rtt_protected_phi0;
 		retransmit_possible = 1;
-		use_fnv1a = 0;
-		checksum_overhead = 16;
+		is_cleartext_mode = 0;
 		stream_restricted = 0;
 		break;
 	case picoquic_state_server_ready:
 		packet_type = picoquic_packet_1rtt_protected_phi0;
-		use_fnv1a = 0;
-		checksum_overhead = 16;
+		is_cleartext_mode = 0;
 		stream_restricted = 0;
 		retransmit_possible = 1;
 		break;
 	case picoquic_state_disconnecting:
 		packet_type = picoquic_packet_1rtt_protected_phi0;
-		use_fnv1a = 0;
-		checksum_overhead = 16;
+		is_cleartext_mode = 0;
 		break;
     case picoquic_state_draining:
         packet_type = picoquic_packet_1rtt_protected_phi0;
-        use_fnv1a = 0;
-        checksum_overhead = 16;
+        is_cleartext_mode = 0;
         break;
 	case picoquic_state_disconnected:
 		ret = PICOQUIC_ERROR_DISCONNECTED;
@@ -699,14 +717,15 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 		ret = -1;
 		break;
 	}
+    checksum_overhead = picoquic_get_checksum_length(cnx, is_cleartext_mode);
 
 	stream = picoquic_find_ready_stream(cnx, stream_restricted);
 
 	if (ret == 0 && retransmit_possible &&
-		(length = picoquic_retransmit_needed(cnx, current_time, packet, &use_fnv1a, &header_length)) > 0)
+		(length = picoquic_retransmit_needed(cnx, current_time, packet, &is_cleartext_mode, &header_length)) > 0)
 	{
 		/* Set the new checksum length */
-		checksum_overhead = (use_fnv1a) ? 8 : 16;
+		checksum_overhead = picoquic_get_checksum_length(cnx, is_cleartext_mode);
 		/* Check whether it makes sens to add an ACK at the end of the retransmission */
 		if (picoquic_prepare_ack_frame(cnx, current_time, &bytes[length],
 			cnx->send_mtu - checksum_overhead - length, &data_bytes) == 0)
@@ -718,7 +737,7 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 		packet->send_time = current_time;
 		packet->checksum_overhead = checksum_overhead;
 	}
-	else if (ret == 0 && use_fnv1a && stream == NULL)
+	else if (ret == 0 && is_cleartext_mode && stream == NULL)
 	{
 		/* when in a clear text mode, only send packets if there is
 		 * actually something to send, or resend */
@@ -914,11 +933,23 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 		packet->length = length;
 		cnx->send_sequence++;
 
-		if (use_fnv1a)
+		if (is_cleartext_mode)
 		{
-			memcpy(send_buffer, packet->bytes, length);
-			length = fnv1a_protect(send_buffer, length, send_buffer_max);
-			packet->checksum_overhead = 8;
+            if ((picoquic_supported_versions[cnx->version_index].version_flags&
+                picoquic_version_use_fnv1a) != 0)
+            {
+                memcpy(send_buffer, packet->bytes, length);
+                length = fnv1a_protect(send_buffer, length, send_buffer_max);
+            }
+            else
+            {
+                /* AEAD Encrypt, to the send buffer */
+                memcpy(send_buffer, packet->bytes, header_length);
+                length = picoquic_aead_cleartext_encrypt(cnx, send_buffer + header_length,
+                    packet->bytes + header_length, length - header_length,
+                    packet->sequence_number, send_buffer, header_length);
+                length += header_length;
+            }
 		}
 		else
 		{
@@ -928,9 +959,9 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 				packet->bytes + header_length, length - header_length,
 				packet->sequence_number, send_buffer, header_length);
 			length += header_length;
-			packet->checksum_overhead = 16;
 		}
 
+        packet->checksum_overhead = checksum_overhead;
 		*send_length = length;
 
 		/* Account for bytes in transit, for congestion control */

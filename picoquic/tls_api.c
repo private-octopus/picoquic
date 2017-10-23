@@ -629,10 +629,15 @@ void picoquic_aead_free(void* aead_context)
     ptls_aead_free((ptls_aead_context_t *)aead_context);
 }
 
+size_t picoquic_aead_get_checksum_length(void* aead_context)
+{
+    return ((ptls_aead_context_t *)aead_context)->algo->tag_size;
+}
+
 int picoquic_setup_1RTT_aead_contexts(picoquic_cnx_t * cnx, int is_server)
 {
     int ret = 0;
-    uint8_t * secret[256]; /* secret_max */
+    uint8_t secret[256]; /* secret_max */
 	picoquic_tls_ctx_t * ctx = (picoquic_tls_ctx_t *)cnx->tls_ctx;
     ptls_cipher_suite_t * cipher = ptls_get_cipher(ctx->tls);
 
@@ -729,6 +734,191 @@ size_t picoquic_aead_encrypt(picoquic_cnx_t *cnx, uint8_t * output, uint8_t * in
     uint64_t seq_num, uint8_t * auth_data, size_t auth_data_length)
 {
     size_t encrypted = ptls_aead_encrypt((ptls_aead_context_t *)cnx->aead_encrypt_ctx,
+        (void*)output, (const void *)input, input_length, seq_num,
+        (void *)auth_data, auth_data_length);
+
+    return encrypted;
+}
+
+/* Computation of the clear text AEAD encryption based on per version secret */
+#define PICOQUIC_LABEL_CLEAR_TEXT_CLIENT "tls13 QUIC client cleartext Secret"
+#define PICOQUIC_LABEL_CLEAR_TEXT_SERVER "tls13 QUIC server cleartext Secret"
+#define PICOQUIC_LABEL_CLEAR_TEXT_KEY "tls13 key"
+#define PICOQUIC_LABEL_CLEAR_TEXT_IV "tls13 iv"
+
+uint8_t picoquic_cleartext_version_1_salt[] = {
+    0xaf, 0xc8, 0x24, 0xec, 0x5f, 0xc7, 0x7e, 0xca,
+    0x1e, 0x9d, 0x36, 0xf3, 0x7f, 0xb2, 0xd4, 0x65,
+    0x18, 0xc3, 0x66, 0x39 };
+
+/*
+    cleartext_secret = HKDF-Extract(quic_version_1_salt,
+    client_connection_id):
+    Set hash algorithm to SHA-256, salt to the chosen value, ikm to the cnxid encoded on 8 bytes.
+    int ptls_hkdf_extract(ptls_hash_algorithm_t *algo, void *output, ptls_iovec_t salt, ptls_iovec_t ikm)
+
+    client_cleartext_secret =
+    HKDF-Expand-Label(cleartext_secret,
+        "QUIC client cleartext Secret",
+        "", Hash.length)
+    server_cleartext_secret =
+    HKDF-Expand-Label(cleartext_secret,
+        "QUIC server cleartext Secret",
+        "", Hash.length)
+
+        HKDF-Expand-Label uses HKDF-Expand [RFC5869] with a specially
+        formatted info parameter, as shown:
+
+        HKDF-Expand-Label(Secret, Label, HashValue, Length) =
+        HKDF-Expand(Secret, HkdfLabel, Length)
+
+        Where HkdfLabel is specified as:
+
+        struct {
+        uint16 length = Length;
+        opaque label<10..255> = "tls13 " + Label;
+        uint8 hashLength;     // Always 0
+        } HkdfLabel;
+
+*/
+
+static size_t picoquic_setup_clear_text_aead_label(uint8_t label[256], char const * label_text)
+{
+    size_t text_length = strlen(label_text);
+    uint16_t label_length = (uint16_t)(1 + text_length + 1);
+    size_t byte_index = 0;
+
+    if (label_length > 254)
+    {
+        /* There are practical limits to what we want to do */
+        return 0;
+    }
+    picoformat_16(label, label_length);
+    byte_index += 2;
+    label[byte_index++] = (uint8_t) text_length;
+    memcpy(&label[byte_index], label_text, text_length);
+    byte_index += text_length;
+    label[byte_index++] = 0;
+
+    return byte_index;
+}
+
+int picoquic_setup_cleartext_aead_contexts(picoquic_cnx_t * cnx, int is_server)
+{
+    int ret = 0;
+    uint8_t master_secret[256]; /* secret_max */
+    uint8_t cnx_id[8]; /* serialized cnx_id */
+    ptls_hash_algorithm_t * algo = &ptls_openssl_sha256;
+    ptls_aead_algorithm_t * aead = &ptls_openssl_aes128gcm;
+    ptls_iovec_t salt;
+    ptls_iovec_t ikm;
+    uint8_t label[256];
+    uint8_t client_secret[256];
+    uint8_t server_secret[256];
+    uint8_t * secret1, * secret2;
+    ptls_iovec_t prk;
+    ptls_iovec_t info;
+
+    picoformat_64(cnx_id, cnx->initial_cnxid);
+    salt.base = picoquic_cleartext_version_1_salt;
+    salt.len = sizeof(picoquic_cleartext_version_1_salt);
+    ikm.base = cnx_id;
+    ikm.len = sizeof(cnx_id);
+
+    /* Extract the master key -- key length will be 32 per SHA256 */
+    ret = ptls_hkdf_extract(algo, master_secret, salt, ikm);
+    if (ret == 0)
+    {
+        prk.base = master_secret;
+        prk.len = algo->digest_size;
+        /* Compose the client label */
+        info.base = label;
+        info.len = picoquic_setup_clear_text_aead_label(label, 
+            PICOQUIC_LABEL_CLEAR_TEXT_CLIENT);
+        /* extract the client key */
+        ret = ptls_hkdf_expand(algo, client_secret, sizeof(client_secret), prk, info);
+
+        if (ret == 0)
+        {
+            /* Compose the server label */
+            info.base = label;
+            info.len = picoquic_setup_clear_text_aead_label(label, 
+                PICOQUIC_LABEL_CLEAR_TEXT_SERVER);
+            /* extract the client key */
+            ret = ptls_hkdf_expand(algo, server_secret, sizeof(server_secret), prk, info);
+        }
+    }
+
+    if (ret == 0)
+    {
+        if (is_server)
+        {
+            secret1 = server_secret;
+            secret2 = client_secret;
+        }
+        else
+        {
+            secret1 = client_secret;
+            secret2 = server_secret;
+        }
+        
+        if (ret == 0)
+        {
+            /* Create the AEAD contexts */
+            cnx->aead_encrypt_cleartext_ctx = (void *)
+                ptls_aead_new(aead, algo, 1, secret1);
+            cnx->aead_decrypt_cleartext_ctx = (void *)
+                ptls_aead_new(aead, algo, 0, secret2);
+            cnx->aead_de_encrypt_cleartext_ctx = (void *)
+                ptls_aead_new(aead, algo, 0, secret1);
+        }
+    }
+
+    return ret;
+}
+
+size_t picoquic_aead_cleartext_decrypt(picoquic_cnx_t *cnx, uint8_t * output, uint8_t * input, size_t input_length,
+    uint64_t seq_num, uint8_t * auth_data, size_t auth_data_length)
+{
+    size_t decrypted = 0;
+
+    if (cnx->aead_decrypt_cleartext_ctx == NULL)
+    {
+        decrypted = (uint64_t)(-1ll);
+    }
+    else
+    {
+        decrypted = ptls_aead_decrypt((ptls_aead_context_t *)cnx->aead_decrypt_cleartext_ctx,
+            (void*)output, (const void *)input, input_length, seq_num,
+            (void *)auth_data, auth_data_length);
+    }
+
+    return decrypted;
+}
+
+size_t picoquic_aead_cleartext_de_encrypt(picoquic_cnx_t *cnx, uint8_t * output, uint8_t * input, size_t input_length,
+    uint64_t seq_num, uint8_t * auth_data, size_t auth_data_length)
+{
+    size_t decrypted = 0;
+
+    if (cnx->aead_de_encrypt_cleartext_ctx == NULL)
+    {
+        decrypted = (uint64_t)(-1ll);
+    }
+    else
+    {
+        decrypted = ptls_aead_decrypt((ptls_aead_context_t *)cnx->aead_de_encrypt_cleartext_ctx,
+            (void*)output, (const void *)input, input_length, seq_num,
+            (void *)auth_data, auth_data_length);
+    }
+
+    return decrypted;
+}
+
+size_t picoquic_aead_cleartext_encrypt(picoquic_cnx_t *cnx, uint8_t * output, uint8_t * input, size_t input_length,
+    uint64_t seq_num, uint8_t * auth_data, size_t auth_data_length)
+{
+    size_t encrypted = ptls_aead_encrypt((ptls_aead_context_t *)cnx->aead_encrypt_cleartext_ctx,
         (void*)output, (const void *)input, input_length, seq_num,
         (void *)auth_data, auth_data_length);
 

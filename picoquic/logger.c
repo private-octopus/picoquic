@@ -344,7 +344,7 @@ size_t picoquic_log_stop_sending_frame(FILE * F, uint8_t * bytes, size_t bytes_m
     }
 
 
-    fprintf(F, "    STOP SENDING %d (0x%08x), Error 0x%x, Offset 0x%llx.\n",
+    fprintf(F, "    STOP SENDING %d (0x%08x), Error 0x%x.\n",
         stream_id, stream_id, error_code);
 
     return byte_index;
@@ -714,6 +714,37 @@ void picoquic_log_decrypt_encrypted(FILE* F,
 	}
 }
 
+void picoquic_log_decrypt_encrypted_cleartext(FILE* F,
+    picoquic_cnx_t * cnx, int receiving,
+    uint8_t * bytes, size_t length, picoquic_packet_header * ph)
+{
+    /* decrypt in a separate copy */
+    uint8_t decrypted[PICOQUIC_MAX_PACKET_SIZE];
+    size_t decrypted_length = 0;
+
+    if (receiving)
+    {
+        decrypted_length = picoquic_aead_cleartext_decrypt(cnx, decrypted,
+            bytes + ph->offset, length - ph->offset, ph->pn64, bytes, ph->offset);
+    }
+    else
+    {
+        decrypted_length = picoquic_aead_cleartext_de_encrypt(cnx, decrypted,
+            bytes + ph->offset, length - ph->offset, ph->pn64, bytes, ph->offset);
+    }
+
+    if (decrypted_length > length)
+    {
+        fprintf(F, "    Decryption failed!\n");
+    }
+    else
+    {
+        fprintf(F, "    Decrypted %d bytes\n", (int)decrypted_length);
+        picoquic_log_frames(F, decrypted, decrypted_length,
+            picoquic_supported_versions[cnx->version_index].version_flags);
+    }
+}
+
 
 void picoquic_log_packet(FILE* F, picoquic_quic_t * quic, picoquic_cnx_t * cnx, 
 	struct sockaddr * addr_peer, int receiving,
@@ -769,14 +800,26 @@ void picoquic_log_packet(FILE* F, picoquic_quic_t * quic, picoquic_cnx_t * cnx,
 		case picoquic_packet_client_initial:
 		case picoquic_packet_server_cleartext:
 		case picoquic_packet_client_cleartext:
-			/* log clear text packet */
-			decoded_length = picoquic_log_decrypt_clear_text(F, bytes, length);
-			if (decoded_length > 0)
-			{
-				/* log the frames */
-				picoquic_log_frames(F, bytes + ph.offset, decoded_length - ph.offset,
-                    picoquic_supported_versions[cnx->version_index].version_flags);
-			}
+            if (cnx != NULL)
+            {
+                if ((picoquic_supported_versions[cnx->version_index].version_flags&
+                    picoquic_version_use_fnv1a) != 0)
+                {
+                    decoded_length = picoquic_log_decrypt_clear_text(F, bytes, length);
+
+                    /* log clear text packet */
+                    if (decoded_length > 0)
+                    {
+                        /* log the frames */
+                        picoquic_log_frames(F, bytes + ph.offset, decoded_length - ph.offset,
+                            picoquic_supported_versions[cnx->version_index].version_flags);
+                    }
+                }
+                else
+                {
+                    picoquic_log_decrypt_encrypted_cleartext(F, cnx, receiving, bytes, length, &ph);
+                }
+            }
 			break;
 		case picoquic_packet_0rtt_protected:
 			/* log 0-rtt packet */

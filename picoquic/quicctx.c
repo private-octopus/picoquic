@@ -89,9 +89,12 @@ static int picoquic_net_id_compare(void * key1, void * key2)
  */
 
 const picoquic_version_parameters_t picoquic_supported_versions[] = {
+    { PICOQUIC_SECOND_INTEROP_VERSION, 0, 0, NULL},
     { PICOQUIC_INTERNAL_TEST_VERSION_1, 0, 0, NULL },
     { PICOQUIC_FIRST_INTEROP_VERSION, 
-    picoquic_version_basic_time_stamp|picoquic_version_long_error_codes, 0, NULL }
+    picoquic_version_basic_time_stamp|
+    picoquic_version_long_error_codes|
+    picoquic_version_use_fnv1a, 0, NULL }
 };
 
 const size_t picoquic_nb_supported_versions = sizeof(picoquic_supported_versions) / sizeof(picoquic_version_parameters_t);
@@ -549,7 +552,6 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
 			cnx->first_stream.maxdata_local = (uint64_t)((int64_t)-1);
 			cnx->first_stream.maxdata_remote = (uint64_t)((int64_t)-1);
 
-            cnx->aead_cleartext_ctx = NULL;
 			cnx->aead_decrypt_ctx = NULL;
 			cnx->aead_encrypt_ctx = NULL;
             cnx->aead_de_encrypt_ctx = NULL;
@@ -618,6 +620,23 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
 			cnx = NULL;
 		}
 	}
+
+    if (cnx != NULL)
+    {
+        cnx->aead_encrypt_cleartext_ctx = NULL;
+        cnx->aead_decrypt_cleartext_ctx = NULL;
+        cnx->aead_de_encrypt_cleartext_ctx = NULL;
+
+        if ((picoquic_supported_versions[cnx->version_index].version_flags
+            &picoquic_version_use_fnv1a) == 0 &&
+            picoquic_setup_cleartext_aead_contexts(cnx,
+            (quic->flags &picoquic_context_server) != 0) != 0)
+        {
+            /* Cannot initialize clear text aead */
+            picoquic_delete_cnx(cnx);
+            cnx = NULL;
+        }
+    }
 
     if (cnx != NULL)
     {
@@ -876,6 +895,32 @@ int picoquic_reset_cnx_version(picoquic_cnx_t * cnx, uint8_t * bytes, size_t len
 					{
 						ret = picoquic_initialize_stream_zero(cnx);
 					}
+
+                    if (cnx->aead_encrypt_cleartext_ctx != NULL)
+                    {
+                        picoquic_aead_free(cnx->aead_encrypt_cleartext_ctx);
+                        cnx->aead_encrypt_cleartext_ctx = NULL;
+                    }
+
+                    if (cnx->aead_decrypt_cleartext_ctx != NULL)
+                    {
+                        picoquic_aead_free(cnx->aead_decrypt_cleartext_ctx);
+                        cnx->aead_decrypt_cleartext_ctx = NULL;
+                    }
+
+                    if (cnx->aead_de_encrypt_cleartext_ctx != NULL)
+                    {
+                        picoquic_aead_free(cnx->aead_de_encrypt_cleartext_ctx);
+                        cnx->aead_de_encrypt_cleartext_ctx = NULL;
+                    }
+
+                    if (ret == 0 &&
+                        (picoquic_supported_versions[cnx->version_index].version_flags
+                        &picoquic_version_use_fnv1a) == 0)
+                    {
+                        ret = picoquic_setup_cleartext_aead_contexts(cnx,
+                            (cnx->quic->flags &picoquic_context_server) != 0);
+                    }
 					break;
 				}
 			}
@@ -961,11 +1006,22 @@ void picoquic_delete_cnx(picoquic_cnx_t * cnx)
             cnx->previous_in_table->next_in_table = cnx->next_in_table;
         }
 
-
-        if (cnx->aead_cleartext_ctx != NULL)
+        if (cnx->aead_encrypt_cleartext_ctx != NULL)
         {
-            picoquic_aead_free(cnx->aead_cleartext_ctx);
-            cnx->aead_cleartext_ctx = NULL;
+            picoquic_aead_free(cnx->aead_encrypt_cleartext_ctx);
+            cnx->aead_encrypt_cleartext_ctx = NULL;
+        }
+
+        if (cnx->aead_decrypt_cleartext_ctx != NULL)
+        {
+            picoquic_aead_free(cnx->aead_decrypt_cleartext_ctx);
+            cnx->aead_decrypt_cleartext_ctx = NULL;
+        }
+
+        if (cnx->aead_de_encrypt_cleartext_ctx != NULL)
+        {
+            picoquic_aead_free(cnx->aead_de_encrypt_cleartext_ctx);
+            cnx->aead_de_encrypt_cleartext_ctx = NULL;
         }
 
         if (cnx->aead_decrypt_ctx != NULL)
@@ -1058,7 +1114,6 @@ picoquic_cnx_t * picoquic_cnx_by_net(picoquic_quic_t * quic, struct sockaddr* ad
 /*
  * Set or reset the congestion control algorithm
  */
-
 
 void picoquic_set_default_congestion_algorithm(picoquic_quic_t * quic, picoquic_congestion_algorithm_t const * alg)
 {

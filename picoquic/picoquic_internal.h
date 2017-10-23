@@ -53,11 +53,13 @@ extern "C" {
 	* Supported versions
 	*/
 #define PICOQUIC_FIRST_INTEROP_VERSION   0xFF000005
+#define PICOQUIC_SECOND_INTEROP_VERSION  0xFF000007
 #define PICOQUIC_INTERNAL_TEST_VERSION_1 0x50435130 
 
     typedef enum {
         picoquic_version_basic_time_stamp = 1,
-        picoquic_version_long_error_codes = 2
+        picoquic_version_long_error_codes = 2,
+        picoquic_version_use_fnv1a = 4
     } picoquic_version_feature_flags;
 
     typedef struct st_picoquic_version_parameters_t {
@@ -277,7 +279,9 @@ extern "C" {
         uint64_t latest_progress_time; /* last local time at which the connection progressed */
 
 		/* Encryption and decryption objects */
-        void * aead_cleartext_ctx;
+        void * aead_encrypt_cleartext_ctx;
+        void * aead_decrypt_cleartext_ctx;
+        void * aead_de_encrypt_cleartext_ctx; /* used by logging functions to see what is sent. */
 		void * aead_encrypt_ctx; 
 		void * aead_decrypt_ctx;
         void * aead_de_encrypt_ctx; /* used by logging functions to see what is sent. */
@@ -396,6 +400,9 @@ extern "C" {
         uint32_t version_flags);
   
 	uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t pn);
+
+    size_t picoquic_decrypt_cleartext(picoquic_cnx_t * cnx,
+        uint8_t * bytes, size_t length, picoquic_packet_header * ph);
 
 	/* handling of ACK logic */
 	int picoquic_is_ack_needed(picoquic_cnx_t * cnx, uint64_t current_time);
