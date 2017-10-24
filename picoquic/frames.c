@@ -1025,7 +1025,7 @@ int picoquic_parse_ack_header(uint8_t const * bytes, size_t bytes_max,
 	int has_num_block = (first_byte >> 4) & 1;
 	unsigned ll = (first_byte >> 2) & 3;
 	*mm = (first_byte & 3);
-	size_t min_len = has_num_block + 1 + (1 << ll) + 2 + (1 << *mm);
+	size_t min_len = has_num_block + (1 << ll) + 2 + (1 << *mm);
 
     if ((version_flags&picoquic_version_basic_time_stamp) != 0)
     {
@@ -1096,12 +1096,15 @@ int picoquic_parse_ack_header(uint8_t const * bytes, size_t bytes_max,
 		*ack_delay = picoquic_float16_to_deltat(PICOPARSE_16(bytes + byte_index));
 		byte_index += 2;
 
-		if (byte_index + (*num_block)*(1+(1<<*mm)) + (*num_ts)*3 + 2 > bytes_max)
-		{
-			DBG_PRINTF("ack frame header too large: fixed=%" PRIst ", ack_blk=%u, ts=%u, bytes_max=%" PRIst,
-					   byte_index, (*num_block)*(1+(1<<*mm)), (*num_ts)*3 + 2, bytes_max);
-			ret = -1;
-		}
+        if ((version_flags&picoquic_version_basic_time_stamp) != 0)
+        {
+            if (byte_index + (*num_block)*(1 + (1 << *mm)) + (*num_ts) * 3 + 2 > bytes_max)
+            {
+                DBG_PRINTF("ack frame header too large: fixed=%" PRIst ", ack_blk=%u, ts=%u, bytes_max=%" PRIst,
+                    byte_index, (*num_block)*(1 + (1 << *mm)), (*num_ts) * 3 + 2, bytes_max);
+                ret = -1;
+            }
+        }
 	}
 
 	*consumed = byte_index;

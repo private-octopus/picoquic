@@ -782,18 +782,18 @@ uint8_t picoquic_cleartext_version_1_salt[] = {
 
 */
 
-static size_t picoquic_setup_clear_text_aead_label(uint8_t label[256], char const * label_text)
+static size_t picoquic_setup_clear_text_aead_label(
+    size_t out_len, uint8_t label[256], char const * label_text)
 {
     size_t text_length = strlen(label_text);
-    uint16_t label_length = (uint16_t)(1 + text_length + 1);
     size_t byte_index = 0;
 
-    if (label_length > 254)
+    if (text_length > 252)
     {
         /* There are practical limits to what we want to do */
         return 0;
     }
-    picoformat_16(label, label_length);
+    picoformat_16(label, (uint16_t) out_len);
     byte_index += 2;
     label[byte_index++] = (uint8_t) text_length;
     memcpy(&label[byte_index], label_text, text_length);
@@ -833,19 +833,19 @@ int picoquic_setup_cleartext_aead_contexts(picoquic_cnx_t * cnx, int is_server)
         prk.len = algo->digest_size;
         /* Compose the client label */
         info.base = label;
-        info.len = picoquic_setup_clear_text_aead_label(label, 
-            PICOQUIC_LABEL_CLEAR_TEXT_CLIENT);
+        info.len = picoquic_setup_clear_text_aead_label(algo->digest_size,
+            label, PICOQUIC_LABEL_CLEAR_TEXT_CLIENT);
         /* extract the client key */
-        ret = ptls_hkdf_expand(algo, client_secret, sizeof(client_secret), prk, info);
+        ret = ptls_hkdf_expand(algo, client_secret, algo->digest_size, prk, info);
 
         if (ret == 0)
         {
             /* Compose the server label */
             info.base = label;
-            info.len = picoquic_setup_clear_text_aead_label(label, 
-                PICOQUIC_LABEL_CLEAR_TEXT_SERVER);
-            /* extract the client key */
-            ret = ptls_hkdf_expand(algo, server_secret, sizeof(server_secret), prk, info);
+            info.len = picoquic_setup_clear_text_aead_label(algo->digest_size, 
+                label, PICOQUIC_LABEL_CLEAR_TEXT_SERVER);
+            /* extract the server key */
+            ret = ptls_hkdf_expand(algo, server_secret, algo->digest_size, prk, info);
         }
     }
 

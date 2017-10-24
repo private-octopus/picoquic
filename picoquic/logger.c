@@ -850,6 +850,7 @@ static char const * picoquic_log_state_name[] = {
 	"server_almost_ready",
 	"server_ready",
 	"disconnecting",
+    "draining",
 	"disconnected"
 };
 
