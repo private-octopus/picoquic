@@ -102,8 +102,9 @@ number of protocol changes:
 
 These are all incompatible changes, and the developers will have to
 implement and test them before the IETF meeting in Singapore. All these changes are
-now implemented in Picoquic, which supports the version 0xFF00007. But we still
-need to do some interoperability test!
+now implemented in Picoquic, which supports the version 0xFF00007. We have managed
+already to demonstrate interoperability with two implementations of draft-07:
+nghttp2 and winquic.
 
 ## Further milestones
 
