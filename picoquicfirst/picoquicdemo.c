@@ -58,6 +58,7 @@ static const char *default_server_key_file  = "..\\certs\\key.pem";
 #include <stdint.h>
 #include "getopt.h"
 #include <stdlib.h>
+#include <alloca.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/time.h>
@@ -553,7 +554,7 @@ static void first_server_callback(picoquic_cnx_t * cnx,
 int quic_server(const char * server_name, int server_port, 
 				const char * pem_cert, const char * pem_key,
 				int just_once, int do_hrr, cnx_id_cb_fn cnx_id_callback,
-				void * cnx_id_callback_ctx)
+				void * cnx_id_callback_ctx, uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE])
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
@@ -582,7 +583,7 @@ int quic_server(const char * server_name, int server_port,
     {
         /* Create QUIC context */
         qserver = picoquic_create(8, pem_cert, pem_key, NULL, first_server_callback, NULL,
-                cnx_id_callback, cnx_id_callback_ctx);
+                cnx_id_callback, cnx_id_callback_ctx, reset_seed);
 
         if (qserver == NULL)
         {
@@ -1079,7 +1080,7 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
 
     if (ret == 0)
     {
-        qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+        qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 
         if (qclient == NULL)
         {
@@ -1307,6 +1308,7 @@ void usage()
 	fprintf(stderr, "  -p port               server port (default: %d)\n", default_server_port);
 	fprintf(stderr, "  -1                    Once\n");
 	fprintf(stderr, "  -r                    Do Reset Request\n");
+	fprintf(stderr, "  -s <64b 64b>        Reset seed\n");
 	fprintf(stderr, "  -i <src mask value>   Connection ID modification: (src & ~mask) || val\n");
 	fprintf(stderr, "                          where <src> is int:\n");
 	fprintf(stderr, "                            0: picoquic_cnx_id_random\n");
@@ -1352,6 +1354,8 @@ int main(int argc, char ** argv)
 			.cnx_id_val = 0
     };
 
+    uint64_t *reset_seed = NULL;
+
 #ifdef WIN32
     WSADATA wsaData;
 #endif
@@ -1361,7 +1365,7 @@ int main(int argc, char ** argv)
 
     /* Get the parameters */
 	int opt;
-	while( (opt = getopt(argc, argv, "c:k:p:v:1rhi:")) != -1 )
+	while( (opt = getopt(argc, argv, "c:k:p:v:1rhi:s:")) != -1 )
 	{
 		switch (opt)
 		{
@@ -1391,6 +1395,16 @@ int main(int argc, char ** argv)
 				break;
 			case 'r':
 				do_hrr = 1;
+				break;
+			case 's':
+				if (optind + 1 > argc) {
+					fprintf(stderr, "option requires more arguments -- s\n");
+					usage();
+				}
+
+				reset_seed = (uint64_t *) alloca(2 * sizeof(uint64_t));
+				reset_seed[1] = strtoul(argv[optind], NULL, 0);
+				reset_seed[0] = strtoul(argv[optind++], NULL, 0);
 				break;
 			case 'i':
 				if (optind + 2 > argc) {
@@ -1442,7 +1456,8 @@ int main(int argc, char ** argv)
         printf("Starting PicoQUIC server on port %d, server name = %s, just_once = %d, hrr= %d\n", 
             server_port, server_name, just_once, do_hrr);
         ret = quic_server(server_name, server_port, 
-            server_cert_file, server_key_file, just_once, do_hrr, cnx_id_callback, (void *)&cnx_id_cbdata);
+            server_cert_file, server_key_file, just_once, do_hrr, cnx_id_callback, (void *)&cnx_id_cbdata,
+			(uint8_t *) reset_seed);
         printf("Server exit with code = %d\n", ret);
     }
     else

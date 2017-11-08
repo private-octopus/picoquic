@@ -78,6 +78,7 @@ extern "C" {
 #define PICOQUIC_TRANSPORT_FRAME_ERROR(FrameType) (0x100|((int)FrameType)) 
 
 #define PICOQUIC_MAX_PACKET_SIZE 1536
+#define PICOQUIC_RESET_SECRET_SIZE 16
 
 	/*
 	 * Connection states, useful to expose the state to the application.
@@ -160,7 +161,8 @@ extern "C" {
 		picoquic_stream_data_cb_fn default_callback_fn,
 		void * default_callback_ctx,
 		cnx_id_cb_fn cnx_id_callback,
-		void * cnx_id_callback_data);
+		void * cnx_id_callback_data,
+		uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE]);
 
 	void picoquic_free(picoquic_quic_t * quic);
 

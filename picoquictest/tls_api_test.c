@@ -696,7 +696,7 @@ static int tls_api_init_ctx(picoquic_test_tls_api_ctx_t ** pctx, uint32_t propos
 		/* Test the creation of the client and server contexts */
 		/* Create QUIC context */
 		test_ctx->qclient = picoquic_create(8, NULL, NULL, NULL, test_api_callback, 
-			(void*)&test_ctx->client_callback, NULL, NULL);
+			(void*)&test_ctx->client_callback, NULL, NULL, NULL);
 
 		test_ctx->qserver = picoquic_create(8,
 #ifdef WIN32
@@ -704,7 +704,7 @@ static int tls_api_init_ctx(picoquic_test_tls_api_ctx_t ** pctx, uint32_t propos
 #else
 			"certs/cert.pem", "certs/key.pem",
 #endif
-			PICOQUIC_TEST_ALPN, test_api_callback, (void*)&test_ctx->server_callback, NULL, NULL);
+			PICOQUIC_TEST_ALPN, test_api_callback, (void*)&test_ctx->server_callback, NULL, NULL, NULL);
 
 		if (test_ctx->qclient == NULL || test_ctx->qserver == NULL)
 		{

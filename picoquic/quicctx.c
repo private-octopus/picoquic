@@ -107,7 +107,8 @@ picoquic_quic_t * picoquic_create(uint32_t nb_connections,
 	picoquic_stream_data_cb_fn default_callback_fn,
 	void * default_callback_ctx,
 	cnx_id_cb_fn cnx_id_callback,
-	void * cnx_id_callback_ctx)
+	void * cnx_id_callback_ctx,
+	uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE])
 {
     picoquic_quic_t * quic = (picoquic_quic_t *)malloc(sizeof(picoquic_quic_t));
 
@@ -147,7 +148,11 @@ picoquic_quic_t * picoquic_create(uint32_t nb_connections,
 			/* the random generator was initialized as part of the TLS context. 
 			 * Use it to create the seed for generating the per context stateless
 			 * resets. */
-			picoquic_crypto_random(quic, quic->reset_seed, sizeof(quic->reset_seed));
+
+			if (!reset_seed)
+				picoquic_crypto_random(quic, quic->reset_seed, sizeof(quic->reset_seed));
+			else
+				memcpy(quic->reset_seed, reset_seed, sizeof(quic->reset_seed));
 		}
     }
 
