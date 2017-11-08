@@ -81,7 +81,6 @@ extern "C" {
         picoquic_context_check_cookie = 2
 	} picoquic_context_flags;
 
-
 	/*
 	 * QUIC context, defining the tables of connections,
 	 * open sockets, etc.
@@ -106,6 +105,9 @@ extern "C" {
 
 		picohash_table * table_cnx_by_id;
 		picohash_table * table_cnx_by_net;
+
+		cnx_id_cb_fn cnx_id_callback_fn;
+		void * cnx_id_callback_ctx;
 	} picoquic_quic_t;
 
 	/*

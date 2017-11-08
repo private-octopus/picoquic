@@ -101,11 +101,13 @@ const size_t picoquic_nb_supported_versions = sizeof(picoquic_supported_versions
 
 /* QUIC context create and dispose */
 picoquic_quic_t * picoquic_create(uint32_t nb_connections, 
-	char const * cert_file_name, 
+	char const * cert_file_name,
 	char const * key_file_name,
 	char const * default_alpn,
 	picoquic_stream_data_cb_fn default_callback_fn,
-	void * default_callback_ctx)
+	void * default_callback_ctx,
+	cnx_id_cb_fn cnx_id_callback,
+	void * cnx_id_callback_ctx)
 {
     picoquic_quic_t * quic = (picoquic_quic_t *)malloc(sizeof(picoquic_quic_t));
 
@@ -119,6 +121,8 @@ picoquic_quic_t * picoquic_create(uint32_t nb_connections,
 		quic->default_callback_ctx = default_callback_ctx;
 		quic->default_congestion_alg = PICOQUIC_DEFAULT_CONGESTION_ALGORITHM;
 		quic->default_alpn = picoquic_string_duplicate(default_alpn);
+		quic->cnx_id_callback_fn = cnx_id_callback;
+		quic->cnx_id_callback_ctx = cnx_id_callback_ctx;
 
         if (cert_file_name != NULL)
         {
@@ -500,6 +504,10 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
 			{
 				picoquic_crypto_random(quic, &cnx_id, sizeof(uint64_t));
 			}
+
+			if (quic->cnx_id_callback_fn)
+				cnx_id = quic->cnx_id_callback_fn(cnx_id, 0, quic->cnx_id_callback_ctx);
+
 			cnx->initial_cnxid = cnx_id;
 			cnx->server_cnxid = 0;
 			/* Initialize the reset secret to a random value. This
@@ -514,6 +522,11 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
             cnx->cnx_state = picoquic_state_server_init;
             cnx->initial_cnxid = cnx_id;
 			picoquic_crypto_random(quic, &cnx->server_cnxid, sizeof(uint64_t));
+
+			if (quic->cnx_id_callback_fn)
+				cnx->server_cnxid = quic->cnx_id_callback_fn(cnx->server_cnxid, cnx->initial_cnxid,
+						quic->cnx_id_callback_ctx);
+
 			(void)picoquic_create_cnxid_reset_secret(quic, cnx->server_cnxid,
 				cnx->reset_secret);
 

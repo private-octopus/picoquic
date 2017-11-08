@@ -552,7 +552,8 @@ static void first_server_callback(picoquic_cnx_t * cnx,
 
 int quic_server(const char * server_name, int server_port, 
 				const char * pem_cert, const char * pem_key,
-				int just_once, int do_hrr)
+				int just_once, int do_hrr, cnx_id_cb_fn cnx_id_callback,
+				void * cnx_id_callback_ctx)
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
@@ -580,7 +581,8 @@ int quic_server(const char * server_name, int server_port,
     if (ret == 0)
     {
         /* Create QUIC context */
-        qserver = picoquic_create(8, pem_cert, pem_key, NULL, first_server_callback, NULL);
+        qserver = picoquic_create(8, pem_cert, pem_key, NULL, first_server_callback, NULL,
+                cnx_id_callback, cnx_id_callback_ctx);
 
         if (qserver == NULL)
         {
@@ -1077,7 +1079,7 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
 
     if (ret == 0)
     {
-        qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL);
+        qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 
         if (qclient == NULL)
         {
@@ -1300,14 +1302,38 @@ void usage()
 	fprintf(stderr, "  For the client mode, specify sever_name and port.\n");
 	fprintf(stderr, "  For the server mode, use -p to specify the port.\n");
 	fprintf(stderr, "Options:\n");
-	fprintf(stderr, "  -c file     cert file (default: %s)\n", default_server_cert_file);
-	fprintf(stderr, "  -k file     key file (default: %s)\n", default_server_key_file);
-	fprintf(stderr, "  -p port     server port (default: %d)\n", default_server_port);
-	fprintf(stderr, "  -1          Once\n");
-	fprintf(stderr, "  -r          Do Reset Request\n");
-	fprintf(stderr, "  -v version  Version proposed by client, e.g. -v ff000005\n");
-    fprintf(stderr, "  -h          This help message\n");
+	fprintf(stderr, "  -c file               cert file (default: %s)\n", default_server_cert_file);
+	fprintf(stderr, "  -k file               key file (default: %s)\n", default_server_key_file);
+	fprintf(stderr, "  -p port               server port (default: %d)\n", default_server_port);
+	fprintf(stderr, "  -1                    Once\n");
+	fprintf(stderr, "  -r                    Do Reset Request\n");
+	fprintf(stderr, "  -i <src mask value>   Connection ID modification: (src & ~mask) || val\n");
+	fprintf(stderr, "                          where <src> is int:\n");
+	fprintf(stderr, "                            0: picoquic_cnx_id_random\n");
+	fprintf(stderr, "                            1: picoquic_cnx_id_remote (client)\n");
+	fprintf(stderr, "  -v version            Version proposed by client, e.g. -v ff000005\n");
+	fprintf(stderr, "  -h                    This help message\n");
 	exit(1);
+}
+
+enum picoquic_cnx_id_select {
+	picoquic_cnx_id_random = 0,
+	picoquic_cnx_id_remote = 1
+};
+
+typedef struct {
+	enum picoquic_cnx_id_select cnx_id_select;
+	uint64_t cnx_id_mask;
+	uint64_t cnx_id_val;
+} cnx_id_callback_ctx_t;
+
+static uint64_t cnx_id_callback(uint64_t cnx_id_local, uint64_t cnx_id_remote, void *cnx_id_callback_ctx) {
+	cnx_id_callback_ctx_t *ctx = (cnx_id_callback_ctx_t *) cnx_id_callback_ctx;
+
+	if (ctx->cnx_id_select == picoquic_cnx_id_remote)
+		cnx_id_local = cnx_id_remote;
+
+	return (cnx_id_local & ctx->cnx_id_mask) | ctx->cnx_id_val;
 }
 
 int main(int argc, char ** argv)
@@ -1320,6 +1346,11 @@ int main(int argc, char ** argv)
     int is_client = 0;
     int just_once = 0;
     int do_hrr = 0;
+    cnx_id_callback_ctx_t cnx_id_cbdata = {
+    		.cnx_id_select = 0,
+    		.cnx_id_mask = UINT64_MAX,
+			.cnx_id_val = 0
+    };
 
 #ifdef WIN32
     WSADATA wsaData;
@@ -1330,7 +1361,7 @@ int main(int argc, char ** argv)
 
     /* Get the parameters */
 	int opt;
-	while( (opt = getopt(argc, argv, "c:k:p:v:1rh")) != -1 )
+	while( (opt = getopt(argc, argv, "c:k:p:v:1rhi:")) != -1 )
 	{
 		switch (opt)
 		{
@@ -1360,6 +1391,16 @@ int main(int argc, char ** argv)
 				break;
 			case 'r':
 				do_hrr = 1;
+				break;
+			case 'i':
+				if (optind + 2 > argc) {
+					fprintf(stderr, "option requires more arguments -- i\n");
+					usage();
+				}
+
+				cnx_id_cbdata.cnx_id_select = atoi(optarg);
+				cnx_id_cbdata.cnx_id_mask = ~strtoul(argv[optind++], NULL, 0);
+				cnx_id_cbdata.cnx_id_val = strtoul(argv[optind++], NULL, 0);
 				break;
 			case 'h':
 				usage();
@@ -1401,7 +1442,7 @@ int main(int argc, char ** argv)
         printf("Starting PicoQUIC server on port %d, server name = %s, just_once = %d, hrr= %d\n", 
             server_port, server_name, just_once, do_hrr);
         ret = quic_server(server_name, server_port, 
-            server_cert_file, server_key_file, just_once, do_hrr);
+            server_cert_file, server_key_file, just_once, do_hrr, cnx_id_callback, (void *)&cnx_id_cbdata);
         printf("Server exit with code = %d\n", ret);
     }
     else

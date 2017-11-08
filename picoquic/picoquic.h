@@ -150,13 +150,17 @@ extern "C" {
 		uint32_t stream_id, uint8_t * bytes, size_t length, 
 		picoquic_call_back_event_t fin_or_event, void * callback_ctx);
 
+	typedef uint64_t (*cnx_id_cb_fn)(uint64_t cnx_id_local,
+			uint64_t cnx_id_remote, void *cnx_id_cb_data);
 
 	/* QUIC context create and dispose */
 	picoquic_quic_t * picoquic_create(uint32_t nb_connections,
 		char const * cert_file_name, char const * key_file_name,
 		char const * default_alpn,
 		picoquic_stream_data_cb_fn default_callback_fn,
-		void * default_callback_ctx);
+		void * default_callback_ctx,
+		cnx_id_cb_fn cnx_id_callback,
+		void * cnx_id_callback_data);
 
 	void picoquic_free(picoquic_quic_t * quic);
 
