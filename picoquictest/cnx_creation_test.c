@@ -63,7 +63,7 @@ int cnxcreation_test()
 
 
     /* Create QUIC context */
-    quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL);
+    quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
     if (quic == NULL)
     {
         ret = -1;

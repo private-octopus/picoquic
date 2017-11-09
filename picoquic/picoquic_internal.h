@@ -35,7 +35,6 @@ extern "C" {
 #define PICOQUIC_INITIAL_MTU_IPV4 1252
 #define PICOQUIC_INITIAL_MTU_IPV6 1232
 #define PICOQUIC_ENFORCED_INITIAL_MTU 1200
-#define PICOQUIC_RESET_SECRET_SIZE 16
 #define PICOQUIC_RETRY_SECRET_SIZE 64
 
 #define PICOQUIC_INITIAL_RTT 250000 /* 250 ms */
@@ -81,7 +80,6 @@ extern "C" {
         picoquic_context_check_cookie = 2
 	} picoquic_context_flags;
 
-
 	/*
 	 * QUIC context, defining the tables of connections,
 	 * open sockets, etc.
@@ -106,6 +104,9 @@ extern "C" {
 
 		picohash_table * table_cnx_by_id;
 		picohash_table * table_cnx_by_net;
+
+		cnx_id_cb_fn cnx_id_callback_fn;
+		void * cnx_id_callback_ctx;
 	} picoquic_quic_t;
 
 	/*
