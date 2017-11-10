@@ -1355,6 +1355,7 @@ int main(int argc, char ** argv)
     };
 
     uint64_t *reset_seed = NULL;
+    uint64_t reset_seed_x[2];
 
 #ifdef WIN32
     WSADATA wsaData;
@@ -1402,7 +1403,7 @@ int main(int argc, char ** argv)
 					usage();
 				}
 
-				reset_seed = (uint64_t *) alloca(2 * sizeof(uint64_t));
+				reset_seed = reset_seed_x; /* replacing the original alloca, which is not supported in Windows */
 				reset_seed[1] = strtoul(argv[optind], NULL, 0);
 				reset_seed[0] = strtoul(argv[optind++], NULL, 0);
 				break;

@@ -74,14 +74,15 @@ int cleartext_aead_test()
     struct sockaddr_in test_addr_c, test_addr_s;
     picoquic_cnx_t * cnx_client = NULL;
     picoquic_cnx_t * cnx_server = NULL;
-    picoquic_quic_t * qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL);
+    picoquic_quic_t * qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL, 
+        NULL, NULL, NULL);
     picoquic_quic_t * qserver = picoquic_create(8,
 #ifdef WIN32
         "..\\certs\\cert.pem", "..\\certs\\key.pem",
 #else
         "certs/cert.pem", "certs/key.pem",
 #endif
-        "test", NULL, NULL);
+        "test", NULL, NULL, NULL, NULL, NULL);
     if (qclient == NULL || qserver == NULL)
     {
         ret = -1;
