@@ -395,13 +395,13 @@ int picoquic_retransmit_needed(picoquic_cnx_t * cnx, uint64_t current_time,
 				ph.ptype == picoquic_packet_1rtt_protected_phi1)
 			{
 				*is_cleartext_mode = 0;
-				checksum_length = 16;
 			}
 			else
 			{
 				*is_cleartext_mode = 1;
-				checksum_length = 8;
 			}
+
+            checksum_length = picoquic_get_checksum_length(cnx, is_cleartext_mode);
 
 			/* Copy the relevant bytes from one packet to the next */
 			byte_index = ph.offset;
