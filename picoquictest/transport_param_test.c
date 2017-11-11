@@ -34,6 +34,9 @@ static picoquic_transport_parameters transport_param_test1 = {
 static picoquic_transport_parameters transport_param_test2 = { 
 	0x1000000, 0x1000000, 0x1000000, 255, 1, 1480 };
 
+static picoquic_transport_parameters transport_param_test3 = {
+    0x1000000, 0x1000000, 0x1000000, 255, 1, 1480 };
+
 static uint8_t transport_param_reset_secret[PICOQUIC_RESET_SECRET_SIZE] = {
 	1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
 };
@@ -59,6 +62,17 @@ uint8_t client_param2[] = {
 	0, 3, 0, 2, 0, 0xFF,
 	0, 4, 0, 0,
 	0, 5, 0, 2, 0x05, 0xC8
+};
+
+uint8_t client_param3[] = {
+    0xFF, 0x00, 0x00, 0x07,
+    0x0A, 0x1A, 0x0A, 0x1A,
+    0, 0x22,
+    0, 0, 0, 4, 0x01, 0, 0, 0,
+    0, 1, 0, 4, 0x01, 0, 0, 0,
+    0, 2, 0, 4, 0x01, 0, 0, 0,
+    0, 3, 0, 2, 0, 0xFF,
+    0, 4, 0, 0
 };
 
 uint8_t server_param1[] = {
@@ -143,6 +157,36 @@ int transport_param_one_test(int mode, uint32_t version, uint32_t proposed_versi
 	return ret;
 }
 
+
+int transport_param_decode_test(int mode, uint32_t version, uint32_t proposed_version,
+    picoquic_transport_parameters * param, uint8_t * target, size_t target_length)
+{
+    int ret = 0;
+    picoquic_cnx_t test_cnx;
+    uint8_t buffer[256];
+    size_t decoded;
+
+    picoquic_init_transport_parameters(&test_cnx.remote_parameters);
+    
+    ret = picoquic_receive_transport_extensions(&test_cnx, mode, 
+        target, target_length, &decoded);
+
+    if (ret == 0 && decoded != target_length)
+    {
+        ret = -1;
+    }
+
+    if (ret == 0 &&
+        memcmp(&test_cnx.remote_parameters, param,
+            sizeof(picoquic_transport_parameters)) != 0)
+    {
+        ret = -1;
+    }
+    
+    return ret;
+}
+
+
 int transport_param_fuzz_test(int mode, uint32_t version, uint32_t proposed_version,
 	picoquic_transport_parameters * param, uint8_t * target, size_t target_length, uint64_t * proof)
 {
@@ -226,6 +270,12 @@ int transport_param_test()
 		ret = transport_param_one_test(0, version_default, 0x0A1A0A1A,
 			&transport_param_test2, client_param2, sizeof(client_param2));
 	}
+
+    if (ret == 0)
+    {
+        ret = transport_param_decode_test(0, version_default, 0x0A1A0A1A,
+            &transport_param_test3, client_param3, sizeof(client_param3));
+    }
 
 	if (ret == 0)
 	{

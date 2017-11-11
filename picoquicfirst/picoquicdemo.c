@@ -1080,7 +1080,7 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
 
     if (ret == 0)
     {
-        qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+        qclient = picoquic_create(8, NULL, NULL, "hq07", NULL, NULL, NULL, NULL, NULL);
 
         if (qclient == NULL)
         {

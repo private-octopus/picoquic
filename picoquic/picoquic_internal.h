@@ -330,6 +330,9 @@ extern "C" {
 
 	} picoquic_cnx_t;
 
+    /* Init of transport parameters */
+    void picoquic_init_transport_parameters(picoquic_transport_parameters * tp);
+
 	/* Handling of stateless packets */
 	picoquic_stateless_packet_t * picoquic_create_stateless_packet(picoquic_quic_t * quic);
 	void picoquic_queue_stateless_packet(picoquic_quic_t * quic, picoquic_stateless_packet_t * sp);

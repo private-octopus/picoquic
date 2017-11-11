@@ -347,17 +347,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t * cnx, int extension_mo
 					case picoquic_transport_parameter_omit_connection_id:
 						if (extension_length != 0)
 						{
-							/* trying to be tolerant for now */
-							if (extension_length == 4)
-							{
-								uint32_t omit_value = PICOPARSE_32(bytes + byte_index);
-
-								cnx->remote_parameters.omit_connection_id = (omit_value) ? 1 : 0;
-							}
-							else
-							{
-								ret = PICOQUIC_ERROR_MALFORMED_TRANSPORT_EXTENSION;
-							}
+                            ret = PICOQUIC_ERROR_MALFORMED_TRANSPORT_EXTENSION;
 						}
 						else
 						{
