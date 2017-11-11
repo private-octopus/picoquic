@@ -1095,7 +1095,7 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
 
         cnx_client = picoquic_create_cnx(qclient, 0, 
             (struct sockaddr *)&server_address, current_time, 
-            proposed_version, sni, "hq-05");
+            proposed_version, sni, "hq-07");
 
         if (cnx_client == NULL)
         {
