@@ -706,6 +706,14 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 		packet_type = picoquic_packet_1rtt_protected_phi0;
 		is_cleartext_mode = 0;
 		break;
+    case picoquic_state_closing_received:
+        packet_type = picoquic_packet_1rtt_protected_phi0;
+        is_cleartext_mode = 0;
+        break;
+    case picoquic_state_closing:
+        packet_type = picoquic_packet_1rtt_protected_phi0;
+        is_cleartext_mode = 0;
+        break;
     case picoquic_state_draining:
         packet_type = picoquic_packet_1rtt_protected_phi0;
         is_cleartext_mode = 0;
@@ -744,7 +752,37 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 
 		packet->length = 0;
 	}
-    else if (ret == 0 && cnx->cnx_state == picoquic_state_draining)
+    else if (ret == 0 && cnx->cnx_state == picoquic_state_closing_received)
+    {
+        /* Send a closing frame, move to closing state */
+        size_t consumed = 0;
+        uint64_t exit_time = cnx->latest_progress_time + 3 * cnx->retransmit_timer;
+
+        length = picoquic_create_packet_header(
+            cnx, packet_type, cnx_id, cnx->send_sequence, bytes);
+        header_length = length;
+        packet->sequence_number = cnx->send_sequence;
+        packet->send_time = current_time;
+
+        /* Send the disconnect frame */
+        if (cnx->local_error == 0)
+        {
+            ret = picoquic_prepare_application_close_frame(cnx, bytes + length,
+                cnx->send_mtu - checksum_overhead - length, &consumed);
+        }
+        else
+        {
+            ret = picoquic_prepare_connection_close_frame(cnx, bytes + length,
+                cnx->send_mtu - checksum_overhead - length, &consumed);
+        }
+        if (ret == 0)
+        {
+            length += consumed;
+        }
+        cnx->cnx_state = picoquic_state_draining;
+        cnx->next_wake_time = exit_time;
+    }
+    else if (ret == 0 && cnx->cnx_state == picoquic_state_closing)
     {
         /* if more than 3*RTO is elapsed, move to disconnected */
         uint64_t exit_time = cnx->latest_progress_time + 3 * cnx->retransmit_timer;
@@ -794,6 +832,22 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
             }
         }
     }
+    else if (ret == 0 && cnx->cnx_state == picoquic_state_draining)
+    {
+        /* Nothing is ever sent in the draining state */
+        /* if more than 3*RTO is elapsed, move to disconnected */
+        uint64_t exit_time = cnx->latest_progress_time + 3 * cnx->retransmit_timer;
+
+        if (current_time >= exit_time)
+        {
+            cnx->cnx_state = picoquic_state_disconnected;
+        }
+        else
+        {
+            cnx->next_wake_time = exit_time;
+        }
+        length = 0;
+    }
 	else if (ret == 0)
 	{
 		length = picoquic_create_packet_header(
@@ -839,7 +893,7 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 				length += consumed;
 			}
 
-			cnx->cnx_state = picoquic_state_draining;
+			cnx->cnx_state = picoquic_state_closing;
             cnx->latest_progress_time = current_time;
             cnx->next_wake_time = current_time + delta_t;
             cnx->ack_needed = 0;

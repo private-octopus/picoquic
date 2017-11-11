@@ -2431,3 +2431,36 @@ int picoquic_skip_frame(uint8_t * bytes, size_t bytes_max, size_t * consumed,
 
 	return ret;
 }
+
+int picoquic_decode_closing_frames(picoquic_cnx_t * cnx, uint8_t * bytes,
+    size_t bytes_max, int *closing_received)
+{
+
+    int ret = 0;
+    size_t byte_index = 0;
+
+    *closing_received = 0;
+    while (ret == 0 && byte_index < bytes_max)
+    {
+        uint8_t first_byte = bytes[byte_index];
+
+        if (first_byte == picoquic_frame_type_connection_close ||
+            first_byte == picoquic_frame_type_application_close)
+        {
+            *closing_received = 1;
+            break;
+        }
+        else
+        {
+            size_t consumed = 0;
+            int pure_ack = 0;
+
+            ret = picoquic_skip_frame(bytes + byte_index, 
+                bytes_max - byte_index, &consumed, &pure_ack, 
+                picoquic_supported_versions[cnx->version_index].version_flags);
+            byte_index += consumed;
+        }
+    }
+
+    return ret;
+}

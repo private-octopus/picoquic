@@ -709,7 +709,7 @@ int picoquic_incoming_encrypted(
 	}
 	else if (
 		cnx->cnx_state >= picoquic_state_client_almost_ready &&
-        cnx->cnx_state <= picoquic_state_draining)
+        cnx->cnx_state <= picoquic_state_closing)
     {
         /* TODO: supporting two variants for now. Will need to focus on just one. */
 		/* Check the possible reset before performaing in place AEAD decrypt */
@@ -739,10 +739,31 @@ int picoquic_incoming_encrypted(
         }
         else
         {
-            /* all frames are ignored in draining mode */
-            if (cnx->cnx_state == picoquic_state_draining)
+            /* only look for closing frames in closing mode */
+            if (cnx->cnx_state == picoquic_state_closing)
             {
-                cnx->ack_needed = 1;
+                int closing_received = 0;
+
+                ret = picoquic_decode_closing_frames(cnx,
+                    bytes + ph->offset, decoded_length, &closing_received);
+
+                if (ret == 0)
+                {
+                    if (closing_received)
+                    {
+                        cnx->cnx_state = picoquic_state_draining;
+                    }
+                    else
+                    {
+                        cnx->ack_needed = 1;
+                    }
+                }
+            }
+            else
+            /* all frames are ignored in draining mode, or after receiving a closing frame */
+            if (cnx->cnx_state == picoquic_state_draining ||
+                cnx->cnx_state == picoquic_state_closing_received)
+            {
             }
             /* VN = 0 indicates "long" header encoding, which is now banned.
              * The error is only generated if the packet can be properly

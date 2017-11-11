@@ -1464,7 +1464,7 @@ int main(int argc, char ** argv)
     else
     {
         /* Run as client */
-        printf("Starting PicoQUIC contection to server IP = %s, port = %d\n", server_name, server_port);
+        printf("Starting PicoQUIC connection to server IP = %s, port = %d\n", server_name, server_port);
         ret = quic_client(server_name, server_port, proposed_version);
 
         printf("Client exit with code = %d\n", ret);

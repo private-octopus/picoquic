@@ -98,6 +98,8 @@ extern "C" {
         picoquic_state_server_almost_ready,
         picoquic_state_server_ready,
         picoquic_state_disconnecting,
+        picoquic_state_closing_received,
+        picoquic_state_closing,
         picoquic_state_draining,
         picoquic_state_disconnected,
         picoquic_state_server_send_hrr

@@ -461,6 +461,9 @@ extern "C" {
 	int picoquic_skip_frame(uint8_t * bytes, size_t bytes_max, size_t * consumed, 
         int * pure_ack, uint32_t version_flags);
 
+    int picoquic_decode_closing_frames(picoquic_cnx_t * cnx, uint8_t * bytes,
+        size_t bytes_max, int *closing_received);
+
 	int picoquic_prepare_transport_extensions(picoquic_cnx_t * cnx, int extension_mode,
 		uint8_t * bytes, size_t bytes_max, size_t * consumed);
 
