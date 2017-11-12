@@ -523,15 +523,26 @@ static void first_server_callback(picoquic_cnx_t * cnx,
     }
     else
     {
+        int crlf_present = 0;
+
         if (length > 0)
         {
             memcpy(&stream_ctx->command[stream_ctx->command_length],
                 bytes, length);
             stream_ctx->command_length += length;
+            for (size_t i = 0; i < length; i++)
+            {
+                if (bytes[i] == '\r' || bytes[i] == '\n')
+                {
+                    crlf_present = 1;
+                    break;
+                }
+            }
         }
 
         /* if FIN present, process request through http 0.9 */
-        if (fin_or_event == picoquic_callback_stream_fin)
+        if ((fin_or_event == picoquic_callback_stream_fin ||
+            crlf_present != 0) && stream_ctx->response_length == 0)
         {
             /* if data generated, just send it. Otherwise, just FIN the stream. */
             stream_ctx->status = picoquic_first_server_stream_status_finished;

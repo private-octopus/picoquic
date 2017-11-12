@@ -370,7 +370,7 @@ int http0dot9_get(uint8_t * command, size_t command_length,
         *response_length = 0;
     }
     /* if the doc name  is a known value, return it */
-    else if (http09_compare_name(command, command_length, byte_index, "/") == 0)
+    else if (http09_compare_name(command, command_length, byte_index, "") == 0)
     {
         ret = http09_index_html(response, response_max, response_length);
     }

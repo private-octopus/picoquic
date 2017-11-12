@@ -163,7 +163,6 @@ int transport_param_decode_test(int mode, uint32_t version, uint32_t proposed_ve
 {
     int ret = 0;
     picoquic_cnx_t test_cnx;
-    uint8_t buffer[256];
     size_t decoded;
 
     picoquic_init_transport_parameters(&test_cnx.remote_parameters);
