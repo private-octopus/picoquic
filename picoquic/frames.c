@@ -311,7 +311,7 @@ int picoquic_decode_stream_reset_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
 					{
 
 						if (cnx->callback_fn != NULL && 
-                            (stream->stream_flags&picoquic_stream_flag_reset_received) == 0)
+                            (stream->stream_flags&picoquic_stream_flag_reset_signalled) == 0)
 						{
 							cnx->callback_fn(cnx, stream->stream_id, NULL, 0,
 								picoquic_callback_stream_reset, cnx->callback_ctx);
@@ -1597,10 +1597,14 @@ int picoquic_prepare_ack_frame(picoquic_cnx_t * cnx, uint64_t current_time,
 		while (next_sack != NULL && num_block < 255 && (byte_index + 5) <= bytes_max)
 		{
 			uint64_t gap = lowest_acknowledged - next_sack->end_of_sack_range -1;
+            if (gap > 16320)
+            {
+                break;
+            }
 			while (gap > 255 && num_block < 255 && (byte_index + 5) <= bytes_max)
 			{
 				bytes[byte_index++] = 255;
-				picoformat_32(bytes + byte_index, (uint32_t)ack_range);
+				picoformat_32(bytes + byte_index, (uint32_t)0);
 				byte_index += 4;
 				gap -= 255;
 				num_block++;

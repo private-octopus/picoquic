@@ -110,22 +110,24 @@ void picoquic_log_packet(FILE* F, picoquic_quic_t * quic, picoquic_cnx_t * cnx,
 void picoquic_log_processing(FILE* F, picoquic_cnx_t * cnx, size_t length, int ret);
 void picoquic_log_transport_extension(FILE* F, picoquic_cnx_t * cnx);
 
-void print_address(struct sockaddr * address, int address_length, char * label)
+void print_address(struct sockaddr * address, char * label, uint64_t cnx_id)
 {
     char hostname[256];
 
     const char * x = inet_ntop(address->sa_family, address, hostname, sizeof(hostname));
 
+    printf("%" PRIx64 ": ", cnx_id);
+
     if (x != NULL)
     {
-        printf("%s, port %d\n", label,
+        printf("%s %s, port %d\n", label, x,
             (address->sa_family == AF_INET) ?
             ((struct sockaddr_in *) address)->sin_port :
             ((struct sockaddr_in6 *) address)->sin6_port);
     }
     else
     {
-        printf("inet_ntop failed with error # %ld\n", WSA_LAST_ERROR(errno));
+        printf("%s: inet_ntop failed with error # %ld\n", label, WSA_LAST_ERROR(errno));
     }
 }
 
@@ -443,7 +445,7 @@ static void first_server_callback(picoquic_cnx_t * cnx,
         (picoquic_first_server_callback_ctx_t*)callback_ctx;
     picoquic_first_server_stream_ctx_t * stream_ctx = NULL;
 
-    fprintf(stderr, "Server CB, Stream: %d, %" PRIst " bytes, fin=%d\n",
+    printf("Server CB, Stream: %d, %" PRIst " bytes, fin=%d\n",
         stream_id, length, fin_or_event);
 
     if (fin_or_event == picoquic_callback_close ||
@@ -515,10 +517,12 @@ static void first_server_callback(picoquic_cnx_t * cnx,
         return;
     }
     else if (stream_ctx->status == picoquic_first_server_stream_status_finished ||
-        stream_ctx->command_length + length > PICOQUIC_FIRST_COMMAND_MAX)
+        stream_ctx->command_length + length > (PICOQUIC_FIRST_COMMAND_MAX-1))
     {
         /* send after fin, or too many bytes => reset! */
         picoquic_reset_stream(cnx, stream_id, 0);
+        printf("Server CB, Stream: %d, RESET, too long or after FIN\n",
+            stream_id);
         return;
     }
     else
@@ -544,6 +548,9 @@ static void first_server_callback(picoquic_cnx_t * cnx,
         if ((fin_or_event == picoquic_callback_stream_fin ||
             crlf_present != 0) && stream_ctx->response_length == 0)
         {
+            stream_ctx->command[stream_ctx->command_length] = 0;
+            printf("Server CB, Stream: %d, Processing command: %s\n",
+                stream_id, stream_ctx->command);
             /* if data generated, just send it. Otherwise, just FIN the stream. */
             stream_ctx->status = picoquic_first_server_stream_status_finished;
             if (http0dot9_get(stream_ctx->command, stream_ctx->command_length,
@@ -556,6 +563,12 @@ static void first_server_callback(picoquic_cnx_t * cnx,
                 picoquic_add_to_stream(cnx, stream_id, ctx->buffer,
                     stream_ctx->response_length, 1);
             }
+        }
+        else if (stream_ctx->response_length == 0)
+        {
+            stream_ctx->command[stream_ctx->command_length] = 0;
+            printf("Server CB, Stream: %d, Partial command: %s\n",
+                stream_id, stream_ctx->command);
         }
     }
 
@@ -598,7 +611,7 @@ int quic_server(const char * server_name, int server_port,
 
         if (qserver == NULL)
         {
-            fprintf(stderr, "Could not create server context\n");
+            printf("Could not create server context\n");
             ret = -1;
         }
         else if (do_hrr != 0)
@@ -619,7 +632,7 @@ int quic_server(const char * server_name, int server_port,
         if (bytes_recv != 0)
         {
             printf("Select returns %d, from length %d\n", bytes_recv, from_length);
-            print_address((struct sockaddr *)&addr_from, from_length, "recv from:");
+            print_address((struct sockaddr *)&addr_from, "recv from:", 0);
         }
 
         if (bytes_recv < 0)
@@ -651,14 +664,15 @@ int quic_server(const char * server_name, int server_port,
                 if (cnx_server != picoquic_get_first_cnx(qserver) &&
                     picoquic_get_first_cnx(qserver) != NULL)
                 {
+                    cnx_server = picoquic_get_first_cnx(qserver);
+                    printf("%" PRIx64 ": ", picoquic_get_initial_cnxid(cnx_server));
                     printf("Connection established, state = %d, from length: %d\n",
                         picoquic_get_cnx_state(picoquic_get_first_cnx(qserver)), from_length);
-                    cnx_server = picoquic_get_first_cnx(qserver);
                     memset(&client_from, 0, sizeof(client_from));
                     memcpy(&client_from, &addr_from, from_length);
                     client_addr_length = from_length;
-                    print_address((struct sockaddr*)&client_from, client_addr_length,
-                        "Client address:");
+                    print_address((struct sockaddr*)&client_from, "Client address:", 
+                        picoquic_get_initial_cnxid(cnx_server));
                     picoquic_log_transport_extension(stdout, cnx_server);
                 }
             }
@@ -703,6 +717,7 @@ int quic_server(const char * server_name, int server_port,
 
                             if (p->length > 0)
                             {
+                                printf("%" PRIx64 ": ", picoquic_get_initial_cnxid(cnx_next));
                                 printf("Connection state = %d\n",
                                     picoquic_get_cnx_state(cnx_next));
 
@@ -717,6 +732,8 @@ int quic_server(const char * server_name, int server_port,
                                     picoquic_log_packet(stdout, qserver, cnx_server, (struct sockaddr *) peer_addr,
                                         0, send_buffer, send_length, current_time);
                                 }
+
+                                printf("%" PRIx64 ": ", picoquic_get_initial_cnxid(cnx_next));
                                 printf("Sending packet, %d bytes (sent: %d)\n",
                                     (int)send_length, sent);
                             }
