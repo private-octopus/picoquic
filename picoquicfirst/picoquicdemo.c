@@ -857,6 +857,7 @@ static void first_client_callback(picoquic_cnx_t * cnx,
         (picoquic_first_client_callback_ctx_t*)callback_ctx;
     picoquic_first_client_stream_ctx_t * stream_ctx = ctx->first_stream;
 
+    ctx->last_interaction_time = get_current_time();
     ctx->progress_observed = 1;
 
     if (fin_or_event == picoquic_callback_close ||
@@ -1204,7 +1205,9 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
                         fprintf(stdout, "All done, Closing the connection.\n");
                         ret = picoquic_close(cnx_client, 0);
                     }
-                    else if (current_time - callback_ctx.last_interaction_time >
+                    else if (
+                        current_time > callback_ctx.last_interaction_time &&
+                        current_time - callback_ctx.last_interaction_time >
                         10000000ull)
                     {
                         fprintf(stdout, "No progress for 10 seconds. Closing. \n");
