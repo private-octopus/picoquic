@@ -179,11 +179,8 @@ int bind_to_port(SOCKET_TYPE fd, int af, int port)
     return bind(fd, (struct sockaddr *) &sa, addr_length);
 }
 
-#ifdef WIN32
 #define PICOQUIC_NB_SERVER_SOCKETS 2
-#else
-#define PICOQUIC_NB_SERVER_SOCKETS 1
-#endif
+
 typedef struct st_picoquic_server_sockets_t {
     SOCKET_TYPE s_socket[PICOQUIC_NB_SERVER_SOCKETS];
 } picoquic_server_sockets_t;
@@ -210,6 +207,15 @@ int picoquic_open_server_sockets(picoquic_server_sockets_t * sockets, int port)
         }
         else
         {
+#ifndef WIN32
+        	if (sock_af[i] == AF_INET6) {
+        		int val = 1;
+        		ret = setsockopt(sockets->s_socket[i], IPPROTO_IPV6, IPV6_V6ONLY,
+        				&val, sizeof(val));
+        		if (ret)
+        			return ret;
+        	}
+#endif
             ret = bind_to_port(sockets->s_socket[i], sock_af[i], port);
         }
     }
