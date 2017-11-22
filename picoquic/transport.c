@@ -351,7 +351,8 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t * cnx, int extension_mo
 						}
 						else
 						{
-							cnx->remote_parameters.omit_connection_id = 1;
+							if (cnx->quic->flags & picoquic_context_unconditional_cnx_id == 0)
+								cnx->remote_parameters.omit_connection_id = 1;
 						}
 						break;
 					case picoquic_transport_parameter_max_packet_size:

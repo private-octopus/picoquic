@@ -125,6 +125,11 @@ picoquic_quic_t * picoquic_create(uint32_t nb_connections,
 		quic->cnx_id_callback_fn = cnx_id_callback;
 		quic->cnx_id_callback_ctx = cnx_id_callback_ctx;
 
+		if (cnx_id_callback != NULL)
+		{
+			quic->flags |= picoquic_context_unconditional_cnx_id;
+		}
+
         if (cert_file_name != NULL)
         {
             quic->flags |= picoquic_context_server;

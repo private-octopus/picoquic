@@ -1347,6 +1347,7 @@ void usage()
 	fprintf(stderr, "  -r                    Do Reset Request\n");
 	fprintf(stderr, "  -s <64b 64b>        Reset seed\n");
 	fprintf(stderr, "  -i <src mask value>   Connection ID modification: (src & ~mask) || val\n");
+	fprintf(stderr, "                        Implies unconditional server cnx_id xmit\n");
 	fprintf(stderr, "                          where <src> is int:\n");
 	fprintf(stderr, "                            0: picoquic_cnx_id_random\n");
 	fprintf(stderr, "                            1: picoquic_cnx_id_remote (client)\n");

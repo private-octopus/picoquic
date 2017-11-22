@@ -77,7 +77,8 @@ extern "C" {
 	 */
 	typedef enum {
 		picoquic_context_server = 1,
-        picoquic_context_check_cookie = 2
+		picoquic_context_check_cookie = 2,
+		picoquic_context_unconditional_cnx_id = 4
 	} picoquic_context_flags;
 
 	/*
