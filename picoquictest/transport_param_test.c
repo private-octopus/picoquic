@@ -108,11 +108,14 @@ int transport_param_one_test(int mode, uint32_t version, uint32_t proposed_versi
 	picoquic_transport_parameters * param, uint8_t * target, size_t target_length)
 {
 	int ret = 0;
+    picoquic_quic_t quic_ctx;
 	picoquic_cnx_t test_cnx;
 	uint8_t buffer[256];
 	size_t encoded, decoded;
 
+    memset(&quic_ctx, 0, sizeof(quic_ctx));
 	memset(&test_cnx, 0, sizeof(picoquic_cnx_t));
+    test_cnx.quic = &quic_ctx;
 
 	/* initialize the connection object to the test parameters */
 	memcpy(&test_cnx.local_parameters, param, sizeof(picoquic_transport_parameters));
@@ -162,8 +165,13 @@ int transport_param_decode_test(int mode, uint32_t version, uint32_t proposed_ve
     picoquic_transport_parameters * param, uint8_t * target, size_t target_length)
 {
     int ret = 0;
+    picoquic_quic_t quic_ctx;
     picoquic_cnx_t test_cnx;
     size_t decoded;
+
+    memset(&quic_ctx, 0, sizeof(quic_ctx));
+    memset(&test_cnx, 0, sizeof(picoquic_cnx_t));
+    test_cnx.quic = &quic_ctx;
 
     picoquic_init_transport_parameters(&test_cnx.remote_parameters);
     
@@ -191,12 +199,16 @@ int transport_param_fuzz_test(int mode, uint32_t version, uint32_t proposed_vers
 {
 	int ret = 0;
 	int fuzz_ret = 0;
+    picoquic_quic_t quic_ctx;
 	picoquic_cnx_t test_cnx;
 	uint8_t buffer[256];
 	size_t decoded;
 	uint8_t fuzz_byte = 1;
 
-	memset(&test_cnx, 0, sizeof(picoquic_cnx_t));
+    memset(&quic_ctx, 0, sizeof(quic_ctx));
+    memset(&test_cnx, 0, sizeof(picoquic_cnx_t));
+    test_cnx.quic = &quic_ctx;
+
 	/* test for valid arguments */
 	if (target_length < 8 || target_length > sizeof(buffer))
 	{
