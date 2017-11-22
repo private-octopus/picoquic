@@ -1494,9 +1494,11 @@ int main(int argc, char ** argv)
         /* Run as server */
         printf("Starting PicoQUIC server on port %d, server name = %s, just_once = %d, hrr= %d\n", 
             server_port, server_name, just_once, do_hrr);
-        ret = quic_server(server_name, server_port, 
-            server_cert_file, server_key_file, just_once, do_hrr, cnx_id_callback, (void *)&cnx_id_cbdata,
-			(uint8_t *) reset_seed);
+        ret = quic_server(server_name, server_port,
+            server_cert_file, server_key_file, just_once, do_hrr,
+            (cnx_id_cbdata.cnx_id_mask == UINT64_MAX) ? NULL : cnx_id_callback,
+            (cnx_id_cbdata.cnx_id_mask == UINT64_MAX) ? NULL : (void *)&cnx_id_cbdata,
+            (uint8_t *)reset_seed);
         printf("Server exit with code = %d\n", ret);
     }
     else
