@@ -746,10 +746,40 @@ size_t picoquic_aead_encrypt(picoquic_cnx_t *cnx, uint8_t * output, uint8_t * in
 #define PICOQUIC_LABEL_CLEAR_TEXT_KEY "tls13 key"
 #define PICOQUIC_LABEL_CLEAR_TEXT_IV "tls13 iv"
 
+uint8_t picoquic_cleartext_null_salt[] = {
+    0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,
+    0,0,0,0
+};
+
+uint8_t picoquic_cleartext_internal_test_1_salt[] = {
+    0x30, 0x67, 0x16, 0xd7, 0x63, 0x75, 0xd5, 0x55, 
+    0x4b, 0x2f, 0x60, 0x5e, 0xef, 0x78, 0xd8, 0x33, 
+    0x3d, 0xc1, 0xca, 0x36 };
+
 uint8_t picoquic_cleartext_version_1_salt[] = {
     0xaf, 0xc8, 0x24, 0xec, 0x5f, 0xc7, 0x7e, 0xca,
     0x1e, 0x9d, 0x36, 0xf3, 0x7f, 0xb2, 0xd4, 0x65,
     0x18, 0xc3, 0x66, 0x39 };
+
+typedef struct st_picoquic_cleartext_version_salt_t {
+    uint32_t version;
+    uint8_t const * salt;
+    size_t salt_len;
+} picoquic_cleartext_version_salt_t;
+
+static const picoquic_cleartext_version_salt_t picoquic_version_salts[] =
+{
+    { PICOQUIC_SECOND_INTEROP_VERSION,
+    picoquic_cleartext_version_1_salt,
+    sizeof(picoquic_cleartext_version_1_salt)},
+    { PICOQUIC_INTERNAL_TEST_VERSION_1,
+    picoquic_cleartext_internal_test_1_salt,
+    sizeof(picoquic_cleartext_internal_test_1_salt) }
+};
+
+static const size_t nb_picoquic_version_salts = sizeof(picoquic_version_salts) / 
+sizeof(picoquic_cleartext_version_salt_t);
 
 /*
     cleartext_secret = HKDF-Extract(quic_version_1_salt,
@@ -803,6 +833,22 @@ static size_t picoquic_setup_clear_text_aead_label(
     return byte_index;
 }
 
+static void picoquic_setup_cleartext_aead_salt(uint32_t version, ptls_iovec_t * salt)
+{
+    salt->base = picoquic_cleartext_null_salt;
+    salt->len = sizeof(picoquic_cleartext_null_salt);
+
+    for (size_t i = 0; i < nb_picoquic_version_salts; i++)
+    {
+        if (picoquic_version_salts[i].version == version)
+        {
+            salt->base = picoquic_version_salts[i].salt;
+            salt->len = picoquic_version_salts[i].salt_len;
+            break;
+        }
+    }
+}
+
 int picoquic_setup_cleartext_aead_contexts(picoquic_cnx_t * cnx, int is_server)
 {
     int ret = 0;
@@ -820,8 +866,7 @@ int picoquic_setup_cleartext_aead_contexts(picoquic_cnx_t * cnx, int is_server)
     ptls_iovec_t info;
 
     picoformat_64(cnx_id, cnx->initial_cnxid);
-    salt.base = picoquic_cleartext_version_1_salt;
-    salt.len = sizeof(picoquic_cleartext_version_1_salt);
+    picoquic_setup_cleartext_aead_salt(cnx->initial_cnxid, &salt);
     ikm.base = cnx_id;
     ikm.len = sizeof(cnx_id);
 
