@@ -88,16 +88,30 @@ static int picoquic_net_id_compare(void * key1, void * key2)
  * The protection of clear text packets will be a function of the version negotiation.
  */
 
+static uint8_t picoquic_cleartext_internal_test_1_salt[] = {
+    0x30, 0x67, 0x16, 0xd7, 0x63, 0x75, 0xd5, 0x55,
+    0x4b, 0x2f, 0x60, 0x5e, 0xef, 0x78, 0xd8, 0x33,
+    0x3d, 0xc1, 0xca, 0x36 };
+
+static uint8_t picoquic_cleartext_version_1_salt[] = {
+    0xaf, 0xc8, 0x24, 0xec, 0x5f, 0xc7, 0x7e, 0xca,
+    0x1e, 0x9d, 0x36, 0xf3, 0x7f, 0xb2, 0xd4, 0x65,
+    0x18, 0xc3, 0x66, 0x39 };
+
 const picoquic_version_parameters_t picoquic_supported_versions[] = {
-    { PICOQUIC_SECOND_INTEROP_VERSION, 0, 0, NULL},
-    { PICOQUIC_INTERNAL_TEST_VERSION_1, 0, 0, NULL },
-    { PICOQUIC_FIRST_INTEROP_VERSION, 
+    { PICOQUIC_SECOND_INTEROP_VERSION, picoquic_version_fix_ints,
+    sizeof(picoquic_cleartext_version_1_salt), picoquic_cleartext_version_1_salt },
+    { PICOQUIC_INTERNAL_TEST_VERSION_1, 0, 
+    sizeof(picoquic_cleartext_internal_test_1_salt), picoquic_cleartext_internal_test_1_salt },
+    { PICOQUIC_FIRST_INTEROP_VERSION,
+    picoquic_version_fix_ints |
     picoquic_version_basic_time_stamp|
     picoquic_version_long_error_codes|
     picoquic_version_use_fnv1a, 0, NULL }
 };
 
-const size_t picoquic_nb_supported_versions = sizeof(picoquic_supported_versions) / sizeof(picoquic_version_parameters_t);
+const size_t picoquic_nb_supported_versions = sizeof(picoquic_supported_versions) / 
+    sizeof(picoquic_version_parameters_t);
 
 /* QUIC context create and dispose */
 picoquic_quic_t * picoquic_create(uint32_t nb_connections, 

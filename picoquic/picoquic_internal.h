@@ -58,7 +58,8 @@ extern "C" {
     typedef enum {
         picoquic_version_basic_time_stamp = 1,
         picoquic_version_long_error_codes = 2,
-        picoquic_version_use_fnv1a = 4
+        picoquic_version_use_fnv1a = 4,
+        picoquic_version_fix_ints = 8
     } picoquic_version_feature_flags;
 
     typedef struct st_picoquic_version_parameters_t {

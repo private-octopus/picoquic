@@ -752,35 +752,6 @@ uint8_t picoquic_cleartext_null_salt[] = {
     0,0,0,0
 };
 
-uint8_t picoquic_cleartext_internal_test_1_salt[] = {
-    0x30, 0x67, 0x16, 0xd7, 0x63, 0x75, 0xd5, 0x55, 
-    0x4b, 0x2f, 0x60, 0x5e, 0xef, 0x78, 0xd8, 0x33, 
-    0x3d, 0xc1, 0xca, 0x36 };
-
-uint8_t picoquic_cleartext_version_1_salt[] = {
-    0xaf, 0xc8, 0x24, 0xec, 0x5f, 0xc7, 0x7e, 0xca,
-    0x1e, 0x9d, 0x36, 0xf3, 0x7f, 0xb2, 0xd4, 0x65,
-    0x18, 0xc3, 0x66, 0x39 };
-
-typedef struct st_picoquic_cleartext_version_salt_t {
-    uint32_t version;
-    uint8_t const * salt;
-    size_t salt_len;
-} picoquic_cleartext_version_salt_t;
-
-static const picoquic_cleartext_version_salt_t picoquic_version_salts[] =
-{
-    { PICOQUIC_SECOND_INTEROP_VERSION,
-    picoquic_cleartext_version_1_salt,
-    sizeof(picoquic_cleartext_version_1_salt)},
-    { PICOQUIC_INTERNAL_TEST_VERSION_1,
-    picoquic_cleartext_internal_test_1_salt,
-    sizeof(picoquic_cleartext_internal_test_1_salt) }
-};
-
-static const size_t nb_picoquic_version_salts = sizeof(picoquic_version_salts) / 
-sizeof(picoquic_cleartext_version_salt_t);
-
 /*
     cleartext_secret = HKDF-Extract(quic_version_1_salt,
     client_connection_id):
@@ -838,12 +809,16 @@ static void picoquic_setup_cleartext_aead_salt(uint32_t version, ptls_iovec_t * 
     salt->base = picoquic_cleartext_null_salt;
     salt->len = sizeof(picoquic_cleartext_null_salt);
 
-    for (size_t i = 0; i < nb_picoquic_version_salts; i++)
+    for (size_t i = 0; i < picoquic_nb_supported_versions; i++)
     {
-        if (picoquic_version_salts[i].version == version)
+        if (picoquic_supported_versions[i].version == version)
         {
-            salt->base = picoquic_version_salts[i].salt;
-            salt->len = picoquic_version_salts[i].salt_len;
+            if (picoquic_supported_versions[i].version_aead_key != NULL &&
+                picoquic_supported_versions[i].version_aead_key_length > 0)
+            {
+                salt->base = picoquic_supported_versions[i].version_aead_key;
+                salt->len = picoquic_supported_versions[i].version_aead_key_length;
+            }
             break;
         }
     }
