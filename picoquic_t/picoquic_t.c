@@ -60,7 +60,8 @@ static picoquic_test_def_t test_table[] = {
     { "http0dot9", http0dot9_test },
     { "hrr", tls_api_hrr_test },
     { "ack_of_ack", ack_of_ack_test },
-    { "two_connections", tls_api_two_connections_test }
+    { "two_connections", tls_api_two_connections_test },
+    { "multiple versions", tls_api_multiple_versions_test }
 };
 
 static size_t nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);

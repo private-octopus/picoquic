@@ -281,5 +281,12 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(test_multiple_versions)
+        {
+            int ret = tls_api_multiple_versions_test();
+
+            Assert::AreEqual(ret, 0);
+        }
 	};
 }
