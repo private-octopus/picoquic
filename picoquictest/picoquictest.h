@@ -61,6 +61,7 @@ extern "C" {
     int tls_api_two_connections_test();
     int cleartext_aead_test();
     int tls_api_multiple_versions_test();
+    int varint_test();
 
 #ifdef  __cplusplus
 }

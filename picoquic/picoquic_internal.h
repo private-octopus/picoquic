@@ -372,6 +372,9 @@ extern "C" {
 	void picoformat_32(uint8_t *bytes, uint32_t n32);
 	void picoformat_64(uint8_t *bytes, uint64_t n64);
 
+    size_t picoquic_varint_encode(uint8_t *bytes, size_t max_bytes, uint64_t n64);
+    size_t picoquic_varint_decode(uint8_t *bytes, size_t max_bytes, uint64_t * n64);
+
 	/* utilities */
 	char * picoquic_string_create(const char * original, size_t len);
 	char * picoquic_string_duplicate(const char * original);

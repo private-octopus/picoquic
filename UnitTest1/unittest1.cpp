@@ -288,5 +288,12 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(test_varints)
+        {
+            int ret = varint_test();
+
+            Assert::AreEqual(ret, 0);
+        }
 	};
 }

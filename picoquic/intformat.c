@@ -46,3 +46,87 @@ void picoformat_64(uint8_t *bytes, uint64_t n64)
     bytes[6] = (uint8_t)(n64 >> 8);
     bytes[7] = (uint8_t)(n64);
 }
+
+/*
+ * Summary of Integer Encodings
+ * 2Bit 	Length 	Usable Bits 	Range
+ * 00       1        6       0-63
+ * 01       2       14       0-16383
+ * 10       4       30       0-1073741823
+ * 11       8       62       0-4611686018427387903
+ */
+
+size_t picoquic_varint_encode(uint8_t *bytes, size_t max_bytes, uint64_t n64)
+{
+    uint8_t *x = bytes;
+
+    if (n64 < 16384)
+    {
+        if (n64 < 64)
+        {
+            if (max_bytes >= 0)
+            {
+                *x++ = (uint8_t)(n64);
+            }
+        }
+        else
+        {
+            if (max_bytes >= 2)
+            {
+                *x++ = (uint8_t)((n64 >> 8) | 0x40);
+                *x++ = (uint8_t)(n64);
+            }
+        }
+    }
+    else if (n64 < 1073741824)
+    {
+        if (max_bytes >= 4)
+        {
+            *x++ = (uint8_t)((n64 >> 24) | 0x80);
+            *x++ = (uint8_t)(n64 >> 16);
+            *x++ = (uint8_t)(n64 >> 8);
+            *x++ = (uint8_t)(n64);
+        }
+    }
+    else
+    {
+        if (max_bytes >= 8)
+        {
+            *x++ = (uint8_t)((n64 >> 56) | 0xC0);
+            *x++ = (uint8_t)(n64 >> 48);
+            *x++ = (uint8_t)(n64 >> 40);
+            *x++ = (uint8_t)(n64 >> 32);
+            *x++ = (uint8_t)(n64 >> 24);
+            *x++ = (uint8_t)(n64 >> 16);
+            *x++ = (uint8_t)(n64 >> 8);
+            *x++ = (uint8_t)(n64);
+        }
+    }
+
+    return (x - bytes);
+}
+
+size_t picoquic_varint_decode(uint8_t *bytes, size_t max_bytes, uint64_t * n64)
+{
+    size_t length = 1 << ((bytes[0] & 0xC0) >> 6);
+
+    if (length > max_bytes)
+    {
+        length = 0;
+        *n64 = 0;
+    }
+    else
+    {
+        uint64_t v = *bytes++ & 0x3F;
+
+        for (size_t i = 1; i < length; i++)
+        {
+            v <<= 8;
+            v += *bytes++;
+        }
+
+        *n64 = v;
+    }
+
+    return length;
+}
