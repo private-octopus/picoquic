@@ -444,14 +444,14 @@ static void first_server_callback_delete_context(picoquic_first_server_callback_
 }
 
 static void first_server_callback(picoquic_cnx_t * cnx,
-    uint32_t stream_id, uint8_t * bytes, size_t length,
+    uint64_t stream_id, uint8_t * bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void * callback_ctx)
 {
     picoquic_first_server_callback_ctx_t * ctx =
         (picoquic_first_server_callback_ctx_t*)callback_ctx;
     picoquic_first_server_stream_ctx_t * stream_ctx = NULL;
 
-    printf("Server CB, Stream: %d, %" PRIst " bytes, fin=%d\n",
+    printf("Server CB, Stream: %" PRIu64 ", %" PRIst " bytes, fin=%d\n",
         stream_id, length, fin_or_event);
 
     if (fin_or_event == picoquic_callback_close ||
@@ -527,7 +527,7 @@ static void first_server_callback(picoquic_cnx_t * cnx,
     {
         /* send after fin, or too many bytes => reset! */
         picoquic_reset_stream(cnx, stream_id, 0);
-        printf("Server CB, Stream: %d, RESET, too long or after FIN\n",
+        printf("Server CB, Stream: %" PRIu64 ", RESET, too long or after FIN\n",
             stream_id);
         return;
     }
@@ -555,7 +555,7 @@ static void first_server_callback(picoquic_cnx_t * cnx,
             crlf_present != 0) && stream_ctx->response_length == 0)
         {
             stream_ctx->command[stream_ctx->command_length] = 0;
-            printf("Server CB, Stream: %d, Processing command: %s\n",
+            printf("Server CB, Stream: %" PRIu64 ", Processing command: %s\n",
                 stream_id, stream_ctx->command);
             /* if data generated, just send it. Otherwise, just FIN the stream. */
             stream_ctx->status = picoquic_first_server_stream_status_finished;
@@ -573,7 +573,7 @@ static void first_server_callback(picoquic_cnx_t * cnx,
         else if (stream_ctx->response_length == 0)
         {
             stream_ctx->command[stream_ctx->command_length] = 0;
-            printf("Server CB, Stream: %d, Partial command: %s\n",
+            printf("Server CB, Stream: %" PRIu64 ", Partial command: %s\n",
                 stream_id, stream_ctx->command);
         }
     }
@@ -867,7 +867,7 @@ static void demo_client_open_stream(picoquic_cnx_t * cnx,
 }
 
 static void demo_client_start_streams(picoquic_cnx_t * cnx,
-    picoquic_first_client_callback_ctx_t * ctx, uint32_t fin_stream_id)
+    picoquic_first_client_callback_ctx_t * ctx, uint64_t fin_stream_id)
 {
     for (size_t i = 0; i < ctx->nb_demo_streams; i++)
     {
@@ -882,10 +882,10 @@ static void demo_client_start_streams(picoquic_cnx_t * cnx,
 }
 
 static void first_client_callback(picoquic_cnx_t * cnx,
-    uint32_t stream_id, uint8_t * bytes, size_t length,
+    uint64_t stream_id, uint8_t * bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void * callback_ctx)
 {
-    uint32_t fin_stream_id = 0;
+    uint64_t fin_stream_id = 0;
 
     picoquic_first_client_callback_ctx_t * ctx =
         (picoquic_first_client_callback_ctx_t*)callback_ctx;

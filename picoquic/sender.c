@@ -45,7 +45,7 @@
  * subject to flow control.
  */
 
-int picoquic_add_to_stream(picoquic_cnx_t * cnx, uint32_t stream_id, 
+int picoquic_add_to_stream(picoquic_cnx_t * cnx, uint64_t stream_id, 
 	const uint8_t * data, size_t length, int set_fin)
 {
     int ret = 0;
@@ -123,7 +123,7 @@ int picoquic_add_to_stream(picoquic_cnx_t * cnx, uint32_t stream_id,
 }
 
 int picoquic_reset_stream(picoquic_cnx_t * cnx,
-	uint32_t stream_id, uint16_t local_stream_error)
+	uint64_t stream_id, uint16_t local_stream_error)
 {
 	int ret = 0;
 	picoquic_stream_head * stream = NULL;
@@ -155,7 +155,7 @@ int picoquic_reset_stream(picoquic_cnx_t * cnx,
 }
 
 int picoquic_stop_sending(picoquic_cnx_t * cnx,
-    uint32_t stream_id, uint16_t local_stream_error)
+    uint64_t stream_id, uint16_t local_stream_error)
 {
     int ret = 0;
     picoquic_stream_head * stream = NULL;
@@ -401,7 +401,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t * cnx, uint64_t current_time,
 				*is_cleartext_mode = 1;
 			}
 
-            checksum_length = picoquic_get_checksum_length(cnx, is_cleartext_mode);
+            checksum_length = picoquic_get_checksum_length(cnx, *is_cleartext_mode);
 
 			/* Copy the relevant bytes from one packet to the next */
 			byte_index = ph.offset;

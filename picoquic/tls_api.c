@@ -804,23 +804,18 @@ static size_t picoquic_setup_clear_text_aead_label(
     return byte_index;
 }
 
-static void picoquic_setup_cleartext_aead_salt(uint32_t version, ptls_iovec_t * salt)
-{
-    salt->base = picoquic_cleartext_null_salt;
-    salt->len = sizeof(picoquic_cleartext_null_salt);
-
-    for (size_t i = 0; i < picoquic_nb_supported_versions; i++)
+static void picoquic_setup_cleartext_aead_salt(size_t version_index, ptls_iovec_t * salt)
+{ 
+    if (picoquic_supported_versions[version_index].version_aead_key != NULL &&
+        picoquic_supported_versions[version_index].version_aead_key_length > 0)
     {
-        if (picoquic_supported_versions[i].version == version)
-        {
-            if (picoquic_supported_versions[i].version_aead_key != NULL &&
-                picoquic_supported_versions[i].version_aead_key_length > 0)
-            {
-                salt->base = picoquic_supported_versions[i].version_aead_key;
-                salt->len = picoquic_supported_versions[i].version_aead_key_length;
-            }
-            break;
-        }
+        salt->base = picoquic_supported_versions[version_index].version_aead_key;
+        salt->len = picoquic_supported_versions[version_index].version_aead_key_length;
+    }
+    else
+    {
+        salt->base = picoquic_cleartext_null_salt;
+        salt->len = sizeof(picoquic_cleartext_null_salt);
     }
 }
 
@@ -841,7 +836,7 @@ int picoquic_setup_cleartext_aead_contexts(picoquic_cnx_t * cnx, int is_server)
     ptls_iovec_t info;
 
     picoformat_64(cnx_id, cnx->initial_cnxid);
-    picoquic_setup_cleartext_aead_salt(cnx->initial_cnxid, &salt);
+    picoquic_setup_cleartext_aead_salt(cnx->version_index, &salt);
     ikm.base = cnx_id;
     ikm.len = sizeof(cnx_id);
 

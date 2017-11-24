@@ -130,3 +130,10 @@ size_t picoquic_varint_decode(uint8_t *bytes, size_t max_bytes, uint64_t * n64)
 
     return length;
 }
+
+size_t picoquic_varint_skip(uint8_t *bytes)
+{
+    size_t length = 1 << ((bytes[0] & 0xC0) >> 6);
+
+    return length;
+}

@@ -45,15 +45,15 @@ typedef enum {
 } test_api_fail_mode;
 
 typedef struct st_test_api_stream_desc_t {
-	uint32_t stream_id;
-	uint32_t previous_stream_id;
+	uint64_t stream_id;
+	uint64_t previous_stream_id;
 	size_t q_len;
 	size_t r_len;
 } test_api_stream_desc_t;
 
 typedef struct st_test_api_stream_t {
-	uint32_t stream_id;
-	uint32_t previous_stream_id;
+	uint64_t stream_id;
+	uint64_t previous_stream_id;
 	int q_sent;
 	int r_sent;
 	picoquic_call_back_event_t q_received;
@@ -144,7 +144,7 @@ static int test_api_init_stream_buffers(size_t len, uint8_t ** src_bytes, uint8_
 }
 
 static int test_api_init_test_stream(test_api_stream_t * test_stream,
-	uint32_t stream_id, uint32_t previous_stream_id, size_t q_len, size_t r_len)
+	uint64_t stream_id, uint64_t previous_stream_id, size_t q_len, size_t r_len)
 {
 	int ret = 0;
 
@@ -235,7 +235,7 @@ static void test_api_receive_stream_data(
 	}
 }
 
-static int test_api_queue_initial_queries(picoquic_test_tls_api_ctx_t * test_ctx, uint32_t stream_id)
+static int test_api_queue_initial_queries(picoquic_test_tls_api_ctx_t * test_ctx, uint64_t stream_id)
 {
 	int ret = 0;
 
@@ -260,7 +260,7 @@ static int test_api_queue_initial_queries(picoquic_test_tls_api_ctx_t * test_ctx
 }
 
 static void test_api_callback(picoquic_cnx_t * cnx,
-	uint32_t stream_id, uint8_t * bytes, size_t length, 
+	uint64_t stream_id, uint8_t * bytes, size_t length, 
 	picoquic_call_back_event_t fin_or_event, void * callback_ctx)
 {
 	/* Need to implement the server sending strategy */

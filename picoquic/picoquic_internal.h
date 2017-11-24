@@ -189,12 +189,12 @@ extern "C" {
 
 	typedef struct _picoquic_stream_head {
 		struct _picoquic_stream_head * next_stream;
-		uint32_t stream_id;
-		uint32_t stream_flags;
+		uint64_t stream_id;
 		uint64_t consumed_offset;
 		uint64_t fin_offset;
 		uint64_t maxdata_local;
 		uint64_t maxdata_remote;
+        uint32_t stream_flags;
 		uint32_t local_error;
 		uint32_t remote_error;
         uint32_t local_stop_error;
@@ -322,10 +322,10 @@ extern "C" {
 		uint64_t data_received;
 		uint64_t maxdata_local;
 		uint64_t maxdata_remote;
-		uint32_t highest_stream_id_local;
-		uint32_t highest_stream_id_remote;
-		uint32_t max_stream_id_local;
-		uint32_t max_stream_id_remote;
+		uint64_t highest_stream_id_local;
+		uint64_t highest_stream_id_remote;
+		uint64_t max_stream_id_local;
+		uint64_t max_stream_id_remote;
 
 		/* Management of streams */
 		picoquic_stream_head first_stream;
@@ -375,6 +375,7 @@ extern "C" {
 
     size_t picoquic_varint_encode(uint8_t *bytes, size_t max_bytes, uint64_t n64);
     size_t picoquic_varint_decode(uint8_t *bytes, size_t max_bytes, uint64_t * n64);
+    size_t picoquic_varint_skip(uint8_t *bytes);
 
 	/* utilities */
 	char * picoquic_string_create(const char * original, size_t len);
@@ -399,7 +400,7 @@ extern "C" {
 
     int picoquic_parse_stream_header(
 		const uint8_t * bytes, size_t bytes_max,
-		uint32_t * stream_id, uint64_t * offset, size_t * data_length,
+		uint64_t * stream_id, uint64_t * offset, size_t * data_length,
 		size_t * consumed);
 
 	int picoquic_parse_ack_header(
@@ -438,9 +439,9 @@ extern "C" {
         uint8_t * bytes, size_t bytes_max, size_t * consumed, uint32_t version_flags);
 
 	/* stream management */
-	picoquic_stream_head * picoquic_find_stream(picoquic_cnx_t * cnx, uint32_t stream_id, int create);
+	picoquic_stream_head * picoquic_find_stream(picoquic_cnx_t * cnx, uint64_t stream_id, int create);
 	picoquic_stream_head * picoquic_find_ready_stream(picoquic_cnx_t * cnx, int restricted);
-	int picoquic_stream_network_input(picoquic_cnx_t * cnx, uint32_t stream_id,
+	int picoquic_stream_network_input(picoquic_cnx_t * cnx, uint64_t stream_id,
 		uint64_t offset, int fin, uint8_t * bytes, size_t length, uint64_t current_time);
 	int picoquic_decode_stream_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
 		size_t bytes_max, int restricted, size_t * consumed, uint64_t current_time);

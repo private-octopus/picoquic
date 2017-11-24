@@ -24,7 +24,7 @@
 #include <string.h>
 #include "picoquic_internal.h"
 
-picoquic_stream_head * picoquic_create_stream(picoquic_cnx_t * cnx, uint32_t stream_id)
+picoquic_stream_head * picoquic_create_stream(picoquic_cnx_t * cnx, uint64_t stream_id)
 {
 	picoquic_stream_head * stream = (picoquic_stream_head *)malloc(sizeof(picoquic_stream_head));
 	if (stream != NULL)
@@ -62,7 +62,7 @@ picoquic_stream_head * picoquic_create_stream(picoquic_cnx_t * cnx, uint32_t str
 	return stream;
 }
 
-picoquic_stream_head * picoquic_find_stream(picoquic_cnx_t * cnx, uint32_t stream_id, int create)
+picoquic_stream_head * picoquic_find_stream(picoquic_cnx_t * cnx, uint64_t stream_id, int create)
 {
 	picoquic_stream_head * stream = &cnx->first_stream;
 
@@ -85,7 +85,7 @@ picoquic_stream_head * picoquic_find_stream(picoquic_cnx_t * cnx, uint32_t strea
 	return stream;
 }
 
-int picoquic_find_or_create_stream(picoquic_cnx_t * cnx, uint32_t stream_id,
+int picoquic_find_or_create_stream(picoquic_cnx_t * cnx, uint64_t stream_id,
 	picoquic_stream_head ** stream, int is_remote)
 {
 	int ret = 0;
@@ -222,7 +222,7 @@ int picoquic_prepare_stream_reset_frame(picoquic_cnx_t * cnx, picoquic_stream_he
 	else
 	{
 		bytes[byte_index++] = picoquic_frame_type_reset_stream;
-		picoformat_32(bytes + byte_index, stream->stream_id);
+		picoformat_32(bytes + byte_index, (uint32_t) stream->stream_id);
         byte_index += 4;
         if ((picoquic_supported_versions[cnx->version_index].version_flags&
             picoquic_version_long_error_codes) != 0)
@@ -251,7 +251,7 @@ int picoquic_decode_stream_reset_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
 	int ret = 0;
 	const size_t min_length = ((picoquic_supported_versions[cnx->version_index].version_flags&
             picoquic_version_long_error_codes) != 0) ? 1 + 4 + 4 + 8 : 1 + 4 + 2 + 8;
-	uint32_t stream_id;
+	uint64_t stream_id;
 	uint32_t error_code;
 	uint32_t final_offset;
 	picoquic_stream_head * stream = NULL;
@@ -379,10 +379,21 @@ int picoquic_prepare_stop_sending_frame(picoquic_cnx_t * cnx, picoquic_stream_he
     {
         *consumed = 0;
     }
+    else if ((picoquic_supported_versions[cnx->version_index].version_flags&
+        picoquic_version_fix_ints) == 0)
+    {
+        bytes[byte_index++] = picoquic_frame_type_stop_sending;
+        byte_index += picoquic_varint_encode(bytes+byte_index, bytes_max - byte_index, 
+            (uint64_t)stream->stream_id);
+        picoformat_16(bytes + byte_index, stream->local_stop_error);
+        byte_index += 2;
+        *consumed = byte_index;
+        stream->stream_flags |= picoquic_stream_flag_stop_sending_sent;
+    }
     else
     {
         bytes[byte_index++] = picoquic_frame_type_stop_sending;
-        picoformat_32(bytes + byte_index, stream->stream_id);
+        picoformat_32(bytes + byte_index, (uint32_t) stream->stream_id);
         byte_index += 4;
         if ((picoquic_supported_versions[cnx->version_index].version_flags&
             picoquic_version_long_error_codes) != 0)
@@ -409,7 +420,7 @@ int picoquic_decode_stop_sending_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
     int ret = 0;
     const size_t min_length = ((picoquic_supported_versions[cnx->version_index].version_flags&
         picoquic_version_long_error_codes) != 0) ? 1 + 4 + 4 : 1 + 4 + 2;
-    uint32_t stream_id;
+    uint64_t stream_id;
     uint32_t error_code;
     picoquic_stream_head * stream = NULL;
     size_t byte_index = 1;
@@ -418,6 +429,13 @@ int picoquic_decode_stop_sending_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
     {
         ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR);
         *consumed = bytes_max;
+    }
+    else if ((picoquic_supported_versions[cnx->version_index].version_flags&
+        picoquic_version_fix_ints) == 0)
+    {
+        byte_index += picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &stream_id);
+        error_code = PICOPARSE_16(bytes + byte_index);
+        byte_index += 2;
     }
     else
     {
@@ -432,10 +450,13 @@ int picoquic_decode_stop_sending_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
         }
         else
         {
-            error_code = PICOPARSE_32(bytes + byte_index);
+            error_code = PICOPARSE_16(bytes + byte_index);
             byte_index += 2;
         }
+    }
 
+    if (ret == 0)
+    {
         *consumed = byte_index;
 
         if (stream_id == 0)
@@ -444,6 +465,7 @@ int picoquic_decode_stop_sending_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
         }
         else
         {
+            /* TODO: change stream_id to 64 bits! */
             ret = picoquic_find_or_create_stream(cnx, stream_id, &stream, 1);
 
             if (ret == 0)
@@ -511,7 +533,7 @@ int picoquic_decode_stop_sending_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
 static const int picoquic_offset_length_code[4] = { 0, 2, 4, 8 };
 
 int picoquic_parse_stream_header(const uint8_t * bytes, size_t bytes_max,
-								 uint32_t * stream_id, uint64_t * offset, size_t * data_length,
+								 uint64_t * stream_id, uint64_t * offset, size_t * data_length,
 								 size_t * consumed)
 {
     int     ret = 0;
@@ -636,11 +658,11 @@ void picoquic_stream_data_callback(picoquic_cnx_t * cnx, picoquic_stream_head * 
 	}
 }
 
-int picoquic_stream_network_input(picoquic_cnx_t * cnx, uint32_t stream_id,
+int picoquic_stream_network_input(picoquic_cnx_t * cnx, uint64_t stream_id,
     uint64_t offset, int fin, uint8_t * bytes, size_t length, uint64_t current_time)
 {
     int ret = 0;
-	uint32_t should_notify = 0;
+	uint64_t should_notify = 0;
     /* Is there such a stream, is it still open? */
 	picoquic_stream_head * stream = NULL; 
 	uint64_t new_fin_offset = offset + length;
@@ -768,7 +790,7 @@ int picoquic_decode_stream_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
     size_t bytes_max, int restricted, size_t * consumed, uint64_t current_time)
 {
     int      ret;
-    uint32_t stream_id;
+    uint64_t stream_id;
     size_t   data_length;
     uint64_t offset;
 
@@ -1344,7 +1366,7 @@ static int picoquic_process_ack_of_stream_frame(picoquic_cnx_t * cnx, uint8_t * 
 {
     int      ret;
     size_t   data_length;
-    uint32_t stream_id;
+    uint64_t stream_id;
     uint64_t offset;
     picoquic_stream_head * stream = NULL;
 
@@ -1946,7 +1968,7 @@ int picoquic_prepare_max_stream_data_frame(picoquic_cnx_t * cnx, picoquic_stream
 		stream->maxdata_local = new_max_data;
 
 		bytes[0] = picoquic_frame_type_max_stream_data;
-		picoformat_32(bytes + 1, stream->stream_id);
+		picoformat_32(bytes + 1, (uint32_t) stream->stream_id);
 		picoformat_64(bytes + 5, stream->maxdata_local);
 		*consumed = 13;
 	}
@@ -2064,7 +2086,7 @@ int picoquic_prepare_max_stream_ID_frame(picoquic_cnx_t * cnx, uint32_t incremen
 	{
 		bytes[0] = picoquic_frame_type_max_stream_id;
 		cnx->max_stream_id_local += increment;
-		picoformat_32(bytes + 1, cnx->max_stream_id_local);
+		picoformat_32(bytes + 1, (uint32_t) cnx->max_stream_id_local);
 		*consumed = 5;
 	}
 
@@ -2421,9 +2443,16 @@ int picoquic_skip_frame(uint8_t * bytes, size_t bytes_max, size_t * consumed,
 			*pure_ack = 0;
 			break;
         case picoquic_frame_type_stop_sending:
-            byte_index += ((version_flags&
-                picoquic_version_long_error_codes) != 0) ? 1 + 4 + 4 : 1 + 4 + 2;
-            *pure_ack = 0;
+            if ((version_flags&picoquic_version_fix_ints) == 0)
+            {
+                byte_index += 1 + picoquic_varint_skip(bytes + byte_index + 1) + 2;
+            }
+            else
+            {
+                byte_index += ((version_flags&
+                    picoquic_version_long_error_codes) != 0) ? 1 + 4 + 4 : 1 + 4 + 2;
+                *pure_ack = 0;
+            }
             break;
 		default:
 			/* Not implemented yet! */

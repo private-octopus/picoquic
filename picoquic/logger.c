@@ -155,7 +155,7 @@ void picoquic_log_negotiation_packet(FILE* F,
 size_t picoquic_log_stream_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
 {
 	size_t byte_index;
-	uint32_t stream_id;
+	uint64_t stream_id;
 	size_t data_length;
 	uint64_t offset;
 
@@ -318,9 +318,11 @@ size_t picoquic_log_stop_sending_frame(FILE * F, uint8_t * bytes, size_t bytes_m
     uint32_t version_flags)
 {
     size_t byte_index = 1;
-    const size_t min_size = ((version_flags&picoquic_version_long_error_codes) != 0) ?
-        1 + 4 + 4 : 1 + 4 + 2;
-    uint32_t stream_id;
+    const size_t min_size = ((version_flags&picoquic_version_fix_ints) == 0)?
+        (1 + picoquic_varint_skip(bytes+1) + 2)
+        :(((version_flags&picoquic_version_long_error_codes) != 0) ?
+        1 + 4 + 4 : 1 + 4 + 2);
+    uint64_t stream_id;
     uint32_t error_code;
 
     if (min_size > bytes_max)
@@ -330,22 +332,30 @@ size_t picoquic_log_stop_sending_frame(FILE * F, uint8_t * bytes, size_t bytes_m
     }
 
     /* Now that the size is good, parse and print it */
-    stream_id = PICOPARSE_32(bytes + byte_index);
-    byte_index += 4;
-    if ((version_flags&picoquic_version_long_error_codes) != 0)
+    if ((version_flags&picoquic_version_fix_ints) == 0)
     {
-        error_code = PICOPARSE_32(bytes + byte_index);
-        byte_index += 4;
-    }
-    else
-    {
+        byte_index += picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &stream_id);
         error_code = PICOPARSE_16(bytes + byte_index);
         byte_index += 2;
     }
-
+    else
+    {
+        stream_id = PICOPARSE_32(bytes + byte_index);
+        byte_index += 4;
+        if ((version_flags&picoquic_version_long_error_codes) != 0)
+        {
+            error_code = PICOPARSE_32(bytes + byte_index);
+            byte_index += 4;
+        }
+        else
+        {
+            error_code = PICOPARSE_16(bytes + byte_index);
+            byte_index += 2;
+        }
+    }
 
     fprintf(F, "    STOP SENDING %d (0x%08x), Error 0x%x.\n",
-        stream_id, stream_id, error_code);
+        (uint32_t) stream_id, (uint32_t) stream_id, error_code);
 
     return byte_index;
 }

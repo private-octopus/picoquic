@@ -150,7 +150,7 @@ extern "C" {
 
 	/* Callback function for providing stream data to the application */
 	typedef void(*picoquic_stream_data_cb_fn) (picoquic_cnx_t * cnx,
-		uint32_t stream_id, uint8_t * bytes, size_t length, 
+		uint64_t stream_id, uint8_t * bytes, size_t length, 
 		picoquic_call_back_event_t fin_or_event, void * callback_ctx);
 
 	typedef uint64_t (*cnx_id_cb_fn)(uint64_t cnx_id_local,
@@ -223,13 +223,13 @@ extern "C" {
 
 	/* send and receive data on streams */
 	int picoquic_add_to_stream(picoquic_cnx_t * cnx,
-		uint32_t stream_id, const uint8_t * data, size_t length, int set_fin);
+		uint64_t stream_id, const uint8_t * data, size_t length, int set_fin);
 
 	int picoquic_reset_stream(picoquic_cnx_t * cnx,
-		uint32_t stream_id, uint16_t local_stream_error);
+		uint64_t stream_id, uint16_t local_stream_error);
 
     int picoquic_stop_sending(picoquic_cnx_t * cnx,
-        uint32_t stream_id, uint16_t local_stream_error);
+        uint64_t stream_id, uint16_t local_stream_error);
 
 
 	/* Congestion algorithm definition */
