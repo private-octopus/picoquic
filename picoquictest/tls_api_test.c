@@ -88,6 +88,7 @@ typedef struct st_picoquic_test_tls_api_ctx_t {
 	test_api_stream_t test_stream[PICOQUIC_TEST_MAX_TEST_STREAMS];
 	picoquictest_sim_link_t * c_to_s_link;
 	picoquictest_sim_link_t * s_to_c_link;
+    int test_finished;
 } picoquic_test_tls_api_ctx_t;
 
 static test_api_stream_desc_t test_scenario_oneway[] = {
@@ -238,6 +239,7 @@ static void test_api_receive_stream_data(
 static int test_api_queue_initial_queries(picoquic_test_tls_api_ctx_t * test_ctx, uint64_t stream_id)
 {
 	int ret = 0;
+    int more_stream = 0;
 
 	for (size_t i = 0; ret == 0 && i < test_ctx->nb_test_streams; i++)
 	{
@@ -252,9 +254,20 @@ static int test_api_queue_initial_queries(picoquic_test_tls_api_ctx_t * test_ctx
 			if (ret == 0)
 			{
 				test_ctx->test_stream[i].q_sent = 1;
+                more_stream = 1;
 			}
 		}
 	}
+
+    if (more_stream == 0)
+    {
+        /* TODO: check whether the test is actually finished */
+        test_ctx->test_finished = 1;
+    }
+    else
+    {
+        test_ctx->test_finished = 0;
+    }
 
 	return ret;
 }
@@ -424,6 +437,7 @@ static int test_api_init_send_recv_scenario(picoquic_test_tls_api_ctx_t * test_c
 	else
 	{
 		test_ctx->nb_test_streams = nb_stream_desc;
+        test_ctx->test_finished = 0;
 
 		for (size_t i = 0; ret == 0 && i < nb_stream_desc; i++)
 		{
@@ -606,24 +620,11 @@ static int verify_version(picoquic_cnx_t * cnx_client, picoquic_cnx_t * cnx_serv
 
         if (ret == 0)
         {
-#if 0
-            ret = -1;
-
-            for (size_t i = 0; i < picoquic_nb_supported_versions; i++)
-            {
-                if (cnx_client->version == picoquic_supported_versions[i].version)
-                {
-                    ret = 0;
-                    break;
-                }
-            }
-#else
             if (cnx_client->version_index < 0 ||
                 cnx_client->version_index >= (int) picoquic_nb_supported_versions)
             {
                 ret = -1;
             }
-#endif
         }
     }
 
@@ -931,7 +932,7 @@ static int tls_api_connection_loop(picoquic_test_tls_api_ctx_t * test_ctx,
 		int was_active = 0;
 		nb_trials++;
 
-		ret = tls_api_one_sim_round(test_ctx, simulated_time, &was_active);
+        ret = tls_api_one_sim_round(test_ctx, simulated_time, &was_active);
 
 		if (was_active)
 		{
@@ -972,6 +973,15 @@ static int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t * test_ctx,
 		{
 			nb_inactive++;
 		}
+
+        if (test_ctx->test_finished)
+        {
+            if (picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) &&
+                picoquic_is_cnx_backlog_empty(test_ctx->cnx_server))
+            {
+                break;
+            }
+        }
 	}
 
 	return ret; /* end of sending loop */
@@ -996,7 +1006,7 @@ static int tls_api_attempt_to_close(
         while (ret == 0 && (
             test_ctx->cnx_client->cnx_state != picoquic_state_disconnected ||
             test_ctx->cnx_server->cnx_state != picoquic_state_disconnected) &&
-            nb_rounds < 64)
+            nb_rounds < 256)
         {
             int was_active = 0;
             ret = tls_api_one_sim_round(test_ctx, simulated_time, &was_active);
@@ -1062,7 +1072,7 @@ static int tls_api_test_with_loss(uint64_t  * loss_mask, uint32_t proposed_versi
 
 int tls_api_test()
 {
-	return tls_api_test_with_loss(NULL, 0, NULL, NULL);
+	return tls_api_test_with_loss(NULL, PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, NULL);
 }
 
 int tls_api_loss_test(uint64_t mask)
@@ -1401,13 +1411,6 @@ int tls_api_two_connections_test()
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
     }
 
-    /*
-    if (ret == 0)
-    {
-        ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
-    }
-    */
-
     if (ret == 0)
     {
         /* Verify that the connection is fully established */
@@ -1435,7 +1438,7 @@ int tls_api_two_connections_test()
         /* Create a new connection in the client context */
 
         test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient, 0,
-            (struct sockaddr *)&test_ctx->server_addr, 0, 0, NULL, "test-alpn");
+            (struct sockaddr *)&test_ctx->server_addr, simulated_time, 0, NULL, "test-alpn");
 
         if (test_ctx->cnx_client == NULL)
         {
@@ -1464,6 +1467,16 @@ int tls_api_two_connections_test()
 
 }
 
+int tls_api_client_losses_test()
+{
+    return tls_api_loss_test(3ull);
+}
+
+int tls_api_server_losses_test()
+{
+    return tls_api_loss_test(6ull);
+}
+
 /*
  * Do a simple test for all supported versions
  */
@@ -1471,7 +1484,7 @@ int tls_api_multiple_versions_test()
 {
     int ret = 0;
 
-    for (size_t i = 0; ret == 0 && i < picoquic_nb_supported_versions; i++)
+    for (size_t i = 1; ret == 0 && i < picoquic_nb_supported_versions; i++)
     {
         ret = tls_api_one_scenario_test(test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0, 0, 0, 
             picoquic_supported_versions[i].version);

@@ -196,7 +196,7 @@ static int cmp_test_sack_list(picoquic_sack_item_t * sack_head,
 /*
  * Build a SACK frame from a range
  */
-static size_t build_test_ack(test_ack_range_t const * ranges, size_t nb_ranges,
+static size_t build_test_ack_old(test_ack_range_t const * ranges, size_t nb_ranges,
     uint8_t * bytes, size_t bytes_max, uint32_t version_flags)
 {
     size_t byte_index = 0;
@@ -246,6 +246,39 @@ static size_t build_test_ack(test_ack_range_t const * ranges, size_t nb_ranges,
     }
 
     bytes[1] = num_block;
+    return byte_index;
+}
+
+static size_t build_test_ack(test_ack_range_t const * ranges, size_t nb_ranges,
+    uint8_t * bytes, size_t bytes_max, uint32_t version_flags)
+{
+    size_t byte_index = 0;
+    uint64_t ack_range = 0;
+
+    if ((version_flags&picoquic_version_fix_ints) != 0)
+    {
+        return build_test_ack_old(ranges, nb_ranges, bytes, bytes_max, version_flags);
+    }
+
+    /* Encode the first byte */
+    bytes[byte_index++] = picoquic_frame_type_ack;
+    /* Encode the largest seen */
+    byte_index += picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index, ranges[0].end_of_sack_range);
+    /* Set the ACK delay to zero for these tests */
+    byte_index += picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index, 0);
+    /* Encode the number of blocks -- assume nb_ranges always lower than 64 */
+    bytes[byte_index++] = nb_ranges - 1;
+    /* Encode the size of the first ack range */
+    ack_range = ranges[0].end_of_sack_range - ranges[0].start_of_sack_range;
+    byte_index += picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index, ack_range);
+    /* Encode each of the ack block items */
+    for (size_t i = 1; i < nb_ranges && byte_index + 5 < bytes_max; i++)
+    {
+        uint64_t gap = ranges[i - 1].start_of_sack_range - ranges[i].end_of_sack_range - 1;
+        byte_index += picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index, gap);
+        ack_range = ranges[i].end_of_sack_range - ranges[i].start_of_sack_range + 1;
+        byte_index += picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index, ack_range);
+    }
     return byte_index;
 }
 

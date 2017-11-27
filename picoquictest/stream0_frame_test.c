@@ -42,13 +42,17 @@
  *  0                   1                   2                   3
  * 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
  * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *| Stream ID(8 / 16 / 24 / 32)                   ...
+ *| Stream ID                  ...
  * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *| Offset(0 / 16 / 32 / 64)                    ...
+ *| Offset                  ...
  * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *| [Data Length(16)] | Stream Data(*)      ...
+ *| Data Length .. | Stream Data(*)      ...
  * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
  *
+ */
+
+/*
+ * Old definitions, using fixed int coding.
  */
 static uint8_t f0_1[] = {
     0xC0, /* Start Byte: F=0, SS=0, OO=0, D=0 */
@@ -95,6 +99,56 @@ static uint8_t f0_45_overlap[] = {
     0xFF , 0xFF ,0xFF , 0xFF , 0xFF , 0xFF ,0xFF ,0xFF, 0xFF, 0xFF /* Some random data */
 };
 
+
+/*
+ * New definitions, using variable int coding.
+ */
+
+static uint8_t v0_1[] = {
+    0x10, /* Start Byte: F=0, Len=0, Off=0 */
+    0, /* One byte stream ID */
+    1 , 2, 3, 4, 5, 6, 7, 8, 9, 10 /* Some random data */
+};
+
+static uint8_t v0_2[] = {
+    0x14, /* Start Byte: F=0, Len=0, Off=4 */
+    0, /* One byte stream ID */
+    10, /* One byte offset */
+    11 , 12, 13, 14, 15, 16, 17, 18, 19, 20 /* Some random data */
+};
+
+static uint8_t v0_3[] = {
+    0x14, /* Start Byte: F=0, Len=0, Off=4 */
+    0x40, 0, /* Two  byte stream ID, still 0 */
+    0x40, 20, /* Two byte offset */
+    21 , 22, 23, 24, 25, 26, 27, 28, 29, 30 /* Some random data */
+};
+
+static uint8_t v0_4[] = {
+    0x16, /* Start Byte: F=0, Len=2, Off=4 */
+    0x40, 0, /* Two  byte stream ID */
+    0x80, 0, 0, 30, /* Four byte offset */
+    0x40, 10, /* two byte length */
+    31 , 32, 33, 34, 35, 36, 37, 38, 39, 40 /* Some random data */
+};
+
+static uint8_t v0_5[] = {
+    0x16, /* Start Byte: F=0, Len=2, Off=4 */
+    0x80, 0, 0, 0, /* Four  byte stream ID */
+    0xC0, 0, 0, 0, 0, 0, 0, 40, /* Eight byte offset */
+    0x40, 10, /* Two byte length */
+    41 , 42, 43, 44, 45, 46, 47, 48, 49, 50, /* Some random data */
+    0, 0, 0, 0, 0 /* Some random padding */
+};
+
+static uint8_t v0_45_overlap[] = {
+    0x16, /* Start Byte: F=0, Len=2, Off=4 */
+    0, /* One  byte stream ID */
+    0x40, 35, /* Two byte offset */
+    0x40, 10, /* Two byte length */
+    0xFF , 0xFF ,0xFF , 0xFF , 0xFF , 0xFF ,0xFF ,0xFF, 0xFF, 0xFF /* Some random data */
+};
+
 struct packet
 {
     uint8_t * packet;
@@ -133,6 +187,38 @@ static struct packet list3[] = {
     { f0_45_overlap, sizeof(f0_45_overlap), 35, 10, 0 }
 };
 
+
+static struct packet list_v1[] = {
+    { v0_1, sizeof(v0_1), 0, 10, 0 },
+    { v0_2, sizeof(v0_2), 10, 10, 0 },
+    { v0_3, sizeof(v0_3), 20, 10, 0 },
+    { v0_4, sizeof(v0_4), 30, 10, 0 },
+    { v0_5, sizeof(v0_5), 40, 10, 0 }
+};
+
+
+static struct packet list_v2[] = {
+    { v0_2, sizeof(v0_2), 10, 10, 0 },
+    { v0_3, sizeof(v0_3), 20, 10, 0 },
+    { v0_1, sizeof(v0_1), 0, 10, 0 },
+    { v0_5, sizeof(v0_5), 40, 10, 0 },
+    { v0_4, sizeof(v0_4), 30, 10, 0 },
+};
+
+static struct packet list_v3[] = {
+    { v0_1, sizeof(v0_1), 0, 10, 0 },
+    { v0_2, sizeof(v0_2), 10, 10, 0 },
+    { v0_3, sizeof(v0_3), 20, 10, 0 },
+    { v0_2, sizeof(v0_2), 10, 10, 0 },
+    { v0_3, sizeof(v0_3), 20, 10, 0 },
+    { v0_4, sizeof(v0_4), 30, 10, 0 },
+    { v0_4, sizeof(v0_4), 30, 10, 0 },
+    { v0_5, sizeof(v0_5), 40, 10, 0 },
+    { v0_45_overlap, sizeof(v0_45_overlap), 35, 10, 0 }
+};
+
+
+
 struct test_case_st
 {
     const char *name;
@@ -147,6 +233,12 @@ static struct test_case_st test_case[] = {
     { "test3", list3, sizeof(list3) / sizeof(struct packet), 50 }
 };
 
+static struct test_case_st test_case_v[] = {
+    { "test_v1", list_v1, sizeof(list_v1) / sizeof(struct packet), 50 },
+    { "test_v2", list_v2, sizeof(list_v2) / sizeof(struct packet), 50 },
+    { "test_v3", list_v3, sizeof(list_v3) / sizeof(struct packet), 50 }
+};
+
 #define FAIL(test, fmt, ...) DBG_PRINTF("Test %s failed: " fmt, (test)->name, __VA_ARGS__)
 
 size_t nb_test_cases = sizeof(test_case) / sizeof(struct test_case_st);
@@ -154,6 +246,7 @@ size_t nb_test_cases = sizeof(test_case) / sizeof(struct test_case_st);
 static int StreamZeroFrameOneTest(struct test_case_st * test)
 {
     int ret = 0;
+
     picoquic_cnx_t cnx = { 0 };
     size_t consumed = 0;
     uint64_t current_time = 0;
@@ -208,9 +301,19 @@ int StreamZeroFrameTest()
 {
     int ret = 0;
 
-    for (size_t i = 0; i < nb_test_cases; i++)
+    if ((picoquic_supported_versions[0].version_flags & picoquic_version_fix_ints) == 0)
     {
-        ret = StreamZeroFrameOneTest(&test_case[i]);
+        for (size_t i = 0; ret == 0 && i < nb_test_cases; i++)
+        {
+            ret = StreamZeroFrameOneTest(&test_case_v[i]);
+        }
+    }
+    else
+    {
+        for (size_t i = 0; ret == 0 && i < nb_test_cases; i++)
+        {
+            ret = StreamZeroFrameOneTest(&test_case[i]);
+        }
     }
 
     return ret;

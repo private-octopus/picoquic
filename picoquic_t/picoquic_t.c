@@ -36,13 +36,16 @@ static picoquic_test_def_t test_table[] = {
     { "parseheader", parseheadertest },
     { "pn2pn64", pn2pn64test },
     { "intformat", intformattest},
-    {"fnv1a", fnv1atest},
-    { "sack", sacktest },
+    { "fnv1a", fnv1atest},
     { "float16", float16test },
+    { "varint", varint_test },
     { "StreamZeroFrame", StreamZeroFrameTest },
+    { "sack", sacktest },
     { "sendack", sendacktest },
+    { "ack_of_ack", ack_of_ack_test },
+    { "sim_link", sim_link_test },
     { "tls_api", tls_api_test },
-    {"tls_api_version_negotiation", tls_api_version_negotiation_test},
+    { "tls_api_version_negotiation", tls_api_version_negotiation_test},
     { "transport_param", transport_param_test },
     { "tls_api_sni", tls_api_sni_test },
     { "tls_api_alpn", tls_api_alpn_test },
@@ -52,17 +55,16 @@ static picoquic_test_def_t test_table[] = {
     { "tls_api_q2_and_r2_stream", tls_api_q2_and_r2_stream_test },
     { "tls_api_server_reset", tls_api_server_reset_test },
     { "tls_api_bad_server_reset", tls_api_bad_server_reset_test },
-    { "sim_link", sim_link_test },
     { "tls_api_very_long_stream", tls_api_very_long_stream_test },
     { "tls_api_very_long_max", tls_api_very_long_max_test },
     { "tls_api_very_long_with_err", tls_api_very_long_with_err_test },
     { "tls_api_very_long_congestion", tls_api_very_long_congestion_test },
     { "http0dot9", http0dot9_test },
     { "hrr", tls_api_hrr_test },
-    { "ack_of_ack", ack_of_ack_test },
+    { "client_losses", tls_api_client_losses_test },
+    { "server_losses", tls_api_server_losses_test },
     { "two_connections", tls_api_two_connections_test },
-    { "multiple_versions", tls_api_multiple_versions_test },
-    { "varint", varint_test }
+    { "multiple_versions", tls_api_multiple_versions_test }
 };
 
 static size_t nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);
@@ -79,6 +81,8 @@ static int do_one_test(size_t i, FILE * F)
     else
     {
         fprintf(F, "Starting test number %" PRIst ", %s\n", i, test_table[i].test_name);
+
+        fflush(F);
        
         ret = test_table[i].test_fn();
         if (ret == 0)
@@ -90,6 +94,8 @@ static int do_one_test(size_t i, FILE * F)
             fprintf(F, "    Fails, error: %d.\n", ret);
         }
     }
+
+    fflush(F);
 
     return ret;
 }

@@ -409,11 +409,20 @@ int picoquic_retransmit_needed(picoquic_cnx_t * cnx, uint64_t current_time,
 			while (ret == 0 && byte_index < p->length)
 			{
 				ret = picoquic_skip_frame(&p->bytes[byte_index],
-					p->length - ph.offset, &frame_length, &frame_is_pure_ack,
+					p->length - byte_index, &frame_length, &frame_is_pure_ack,
                     picoquic_supported_versions[cnx->version_index].version_flags);
 
 				if (!frame_is_pure_ack)
 				{
+                    if (picoquic_test_stream_frame_unlimited(cnx, &p->bytes[byte_index]) != 0)
+                    {
+                        /* Need to PAD to the end of the frame to avoid sending extra bytes */
+                        while (checksum_length + length + frame_length < cnx->send_mtu)
+                        {
+                            bytes[length] = picoquic_frame_type_padding;
+                            length++;
+                        }
+                    }
 					memcpy(&bytes[length], &p->bytes[byte_index], frame_length);
 					length += frame_length;
 					packet_is_pure_ack = 0;
@@ -1040,7 +1049,7 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 		*send_length = 0;
 	}
 	
-    if (*send_length > 0 && cnx->cnx_state != picoquic_state_draining)
+    if (/* *send_length > 0 && */ cnx->cnx_state != picoquic_state_draining)
     {
         picoquic_cnx_set_next_wake_time(cnx, current_time);
     }

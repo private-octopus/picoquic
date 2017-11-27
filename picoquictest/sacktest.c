@@ -136,7 +136,7 @@ static void ack_range_mask(uint64_t * mask, uint64_t highest, uint64_t range)
 	}
 }
 
-static int basic_ack_parse(uint8_t * bytes, size_t bytes_max,
+static int basic_ack_parse_old(uint8_t * bytes, size_t bytes_max,
 	struct expected_ack_t * expected_ack, uint64_t expected_mask,
     uint32_t version_flags)
 {
@@ -302,6 +302,156 @@ static int basic_ack_parse(uint8_t * bytes, size_t bytes_max,
 	}
 
 	return ret;
+}
+
+static int basic_ack_parse(uint8_t * bytes, size_t bytes_max,
+    struct expected_ack_t * expected_ack, uint64_t expected_mask,
+    uint32_t version_flags)
+{
+    int ret = 0;
+    size_t byte_index = 1;
+    uint8_t first_byte = bytes[0];
+    uint64_t num_block = 0;
+    uint64_t largest;
+    uint64_t last_range;
+    uint64_t ack_range;
+    uint64_t acked_mask = 0;
+    uint64_t gap_begin;
+    size_t l_largest = 0;
+    size_t l_delay = 0;
+    size_t l_num_block = 0;
+    size_t l_last_range = 0;
+
+    if ((version_flags&picoquic_version_fix_ints) != 0)
+    {
+        return basic_ack_parse_old(bytes, bytes_max, expected_ack, expected_mask, version_flags);
+    }
+
+
+    if (first_byte != picoquic_frame_type_ack)
+    {
+        ret = -1;
+    }
+    else
+    {
+        /* Largest */
+        if (byte_index < bytes_max)
+        {
+            l_largest = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &largest);
+            byte_index += l_largest;
+        }
+
+        /* ACK delay */
+        if (byte_index < bytes_max)
+        {
+            l_delay = picoquic_varint_skip(bytes + byte_index);
+            byte_index += l_delay;
+        }
+
+        /* Num blocks */
+        if (byte_index < bytes_max)
+        {
+            l_num_block = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &num_block);
+            byte_index += l_num_block;
+        }
+
+        /* last range */
+        if (byte_index < bytes_max)
+        {
+            l_last_range = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &last_range);
+            byte_index += l_last_range;
+        }
+
+        if (l_largest == 0 || l_delay == 0 || l_num_block == 0 || l_last_range == 0 || byte_index > bytes_max)
+        {
+            ret = -1;
+        }
+        else
+        {
+            if (last_range < largest)
+            {
+                ack_range_mask(&acked_mask, largest, last_range + 1);
+                gap_begin = largest - last_range - 1;
+            }
+            else
+            {
+                ret = -1;
+            }
+
+            for (int i = 0; ret == 0 && i < num_block; i++)
+            {
+                size_t l_gap = 0;
+                size_t l_range = 0;
+                uint64_t gap;
+
+                /* Decode the gap */
+                if (byte_index < bytes_max)
+                {
+                    l_gap = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &gap);
+                    byte_index += l_gap;
+                }
+                /* decode the range */
+                if (byte_index < bytes_max)
+                {
+                    l_range = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &ack_range);
+                    byte_index += l_range;
+                }
+                if (l_gap == 0 || l_range == 0)
+                {
+                    ret = -1;
+                }
+                else if (gap > gap_begin)
+                {
+                    ret = -1;
+                }
+                else
+                {
+                    gap_begin -= gap;
+
+                    if (gap_begin >= ack_range)
+                    {
+                        /* mark the range as received */
+                        ack_range_mask(&acked_mask, gap_begin, ack_range);
+
+                        /* start of next gap */
+                        gap_begin -= ack_range;
+                    }
+                    else
+                    {
+                        ret = -1;
+                    }
+                }
+            }
+        }
+
+        if (ret == 0)
+        {
+            if (byte_index != bytes_max)
+            {
+                ret = -1;
+            }
+        }
+
+        if (ret == 0)
+        {
+            if (largest != expected_ack->highest_received ||
+                last_range != expected_ack->last_range ||
+                num_block != expected_ack->num_blocks)
+            {
+                ret = -1;
+            }
+        }
+
+        if (ret == 0)
+        {
+            if (acked_mask != expected_mask)
+            {
+                ret = -1;
+            }
+        }
+    }
+
+    return ret;
 }
 
 int sendacktest()

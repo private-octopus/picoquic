@@ -99,10 +99,10 @@ static uint8_t picoquic_cleartext_version_1_salt[] = {
     0x18, 0xc3, 0x66, 0x39 };
 
 const picoquic_version_parameters_t picoquic_supported_versions[] = {
+    { PICOQUIC_INTERNAL_TEST_VERSION_1, 0,
+    sizeof(picoquic_cleartext_internal_test_1_salt), picoquic_cleartext_internal_test_1_salt },
     { PICOQUIC_SECOND_INTEROP_VERSION, picoquic_version_fix_ints,
     sizeof(picoquic_cleartext_version_1_salt), picoquic_cleartext_version_1_salt },
-    { PICOQUIC_INTERNAL_TEST_VERSION_1, 0, 
-    sizeof(picoquic_cleartext_internal_test_1_salt), picoquic_cleartext_internal_test_1_salt },
     { PICOQUIC_FIRST_INTEROP_VERSION,
     picoquic_version_fix_ints |
     picoquic_version_basic_time_stamp|

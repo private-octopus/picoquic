@@ -86,6 +86,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(test_varints)
+        {
+            int ret = varint_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(test_StreamZeroFrame)
         {
             int ret = StreamZeroFrameTest();
@@ -93,12 +100,33 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-		TEST_METHOD(test_sendsack)
+		TEST_METHOD(test_sendack)
 		{
 			int ret = sendacktest();
 
 			Assert::AreEqual(ret, 0);
 		}
+
+        TEST_METHOD(test_ackrange)
+        {
+            int ret = ackrange_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(test_ack_of_ack)
+        {
+            int ret = ack_of_ack_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(test_sim_link)
+        {
+            int ret = sim_link_test();
+
+            Assert::AreEqual(ret, 0);
+        }
 
 		TEST_METHOD(test_tls_api)
 		{
@@ -123,14 +151,14 @@ namespace UnitTest1
 
 		TEST_METHOD(test_tls_api_client_losses)
 		{
-			int ret = tls_api_loss_test(3ull);
+			int ret = tls_api_client_losses_test();
 
 			Assert::AreEqual(ret, 0);
 		}
 
 		TEST_METHOD(test_tls_api_server_losses)
 		{
-			int ret = tls_api_loss_test(6ull);
+			int ret = tls_api_server_losses_test();
 
 			Assert::AreEqual(ret, 0);
 		}
@@ -205,13 +233,6 @@ namespace UnitTest1
 			Assert::AreEqual(ret, 0);
 		}
 
-		TEST_METHOD(test_sim_link)
-		{
-			int ret = sim_link_test();
-
-			Assert::AreEqual(ret, 0);
-		}
-
 		TEST_METHOD(test_very_long_stream)
 		{
 			int ret = tls_api_very_long_stream_test();
@@ -254,20 +275,6 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(test_ackrange)
-        {
-            int ret = ackrange_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(test_ack_of_ack)
-        {
-            int ret = ack_of_ack_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
         TEST_METHOD(test_two_connections)
         {
             int ret = tls_api_two_connections_test();
@@ -285,13 +292,6 @@ namespace UnitTest1
         TEST_METHOD(test_multiple_versions)
         {
             int ret = tls_api_multiple_versions_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(test_varints)
-        {
-            int ret = varint_test();
 
             Assert::AreEqual(ret, 0);
         }

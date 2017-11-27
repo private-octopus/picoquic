@@ -42,8 +42,8 @@ static uint8_t transport_param_reset_secret[PICOQUIC_RESET_SECRET_SIZE] = {
 };
 
 uint8_t client_param1[] = {
-	0xFF, 0x00, 0x00, 0x07,
-    0xFF, 0x00, 0x00, 0x07,
+	'P', 'C', 'Q', '0',
+    'P', 'C', 'Q', '0',
 	0, 0x24,
 	0, 0, 0, 4, 0, 0, 0xFF, 0xFF,
 	0, 1, 0, 4, 0, 0x40, 0, 0,
@@ -53,7 +53,7 @@ uint8_t client_param1[] = {
 };
 
 uint8_t client_param2[] = {
-    0xFF, 0x00, 0x00, 0x07,
+    'P', 'C', 'Q', '0',
 	0x0A, 0x1A, 0x0A, 0x1A,
 	0, 0x28,
 	0, 0, 0, 4, 0x01, 0, 0, 0,
@@ -65,7 +65,7 @@ uint8_t client_param2[] = {
 };
 
 uint8_t client_param3[] = {
-    0xFF, 0x00, 0x00, 0x07,
+    'P', 'C', 'Q', '0',
     0x0A, 0x1A, 0x0A, 0x1A,
     0, 0x22,
     0, 0, 0, 4, 0x01, 0, 0, 0,
@@ -77,8 +77,8 @@ uint8_t client_param3[] = {
 
 uint8_t server_param1[] = {
 	0x0c,
+    'P', 'C', 'Q', '0',
     0xFF, 0x00, 0x00, 0x07,
-    0x50, 0x43, 0x51, 0x30,
 	0xFF, 0, 0, 5,
 	0, 0x38,
 	0, 0, 0, 4, 0, 0, 0xFF, 0xFF,
@@ -91,8 +91,8 @@ uint8_t server_param1[] = {
 
 uint8_t server_param2[] = {
     0x0c,
+    'P', 'C', 'Q', '0',
     0xFF, 0x00, 0x00, 0x07,
-    0x50, 0x43, 0x51, 0x30,
 	0xFF, 0, 0, 5,
 	0, 0x3C,
 	0, 0, 0, 4, 0x01, 0, 0, 0,

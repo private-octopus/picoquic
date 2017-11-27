@@ -152,10 +152,14 @@ extern "C" {
 		picoquic_frame_type_stream_id_needed = 0x0a,
 		picoquic_frame_type_new_connection_id = 0x0b,
         picoquic_frame_type_stop_sending = 0x0c,
-		picoquic_frame_type_ack_range_min = 0xa0,
-		picoquic_frame_type_ack_range_max = 0xbf,
-		picoquic_frame_type_stream_range_min = 0xc0,
-		picoquic_frame_type_stream_range_max = 0xcf
+        picoquic_frame_type_pong = 0x0d,
+        picoquic_frame_type_ack = 0x0e,
+        picoquic_frame_type_stream_range_min = 0x10,
+        picoquic_frame_type_stream_range_max = 0x1F,
+		picoquic_frame_type_ack_range_min_old = 0xa0,
+		picoquic_frame_type_ack_range_max_old = 0xbf,
+		picoquic_frame_type_stream_range_min_old = 0xc0,
+		picoquic_frame_type_stream_range_max_old = 0xcf
 	} picoquic_frame_type_enum_t;
 
 	/*
@@ -374,7 +378,7 @@ extern "C" {
 	void picoformat_64(uint8_t *bytes, uint64_t n64);
 
     size_t picoquic_varint_encode(uint8_t *bytes, size_t max_bytes, uint64_t n64);
-    size_t picoquic_varint_decode(uint8_t *bytes, size_t max_bytes, uint64_t * n64);
+    size_t picoquic_varint_decode(const uint8_t *bytes, size_t max_bytes, uint64_t * n64);
     size_t picoquic_varint_skip(uint8_t *bytes);
 
 	/* utilities */
@@ -398,14 +402,16 @@ extern "C" {
 		size_t length,
 		picoquic_packet_header * ph);
 
+    int picoquic_test_stream_frame_unlimited(picoquic_cnx_t * cnx, uint8_t * bytes);
+
     int picoquic_parse_stream_header(
 		const uint8_t * bytes, size_t bytes_max,
-		uint64_t * stream_id, uint64_t * offset, size_t * data_length,
+		uint64_t * stream_id, uint64_t * offset, size_t * data_length, int * fin,
 		size_t * consumed);
 
 	int picoquic_parse_ack_header(
 		uint8_t const * bytes, size_t bytes_max, uint64_t target_sequence,
-		unsigned * num_block, unsigned * num_ts, uint64_t * largest,
+		uint64_t * num_block, unsigned * num_ts, uint64_t * largest,
 		uint64_t * ack_delay, unsigned * mm, size_t * consumed,
         uint32_t version_flags);
   

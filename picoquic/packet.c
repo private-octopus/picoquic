@@ -953,7 +953,7 @@ int picoquic_incoming_packet(
         ret == PICOQUIC_ERROR_DETECTED)
 	{
 		/* Bad packets are dropped silently, but duplicates should be acknowledged */
-        if (cnx != NULL)
+        if (cnx != NULL && ret == PICOQUIC_ERROR_DUPLICATE)
         {
             cnx->ack_needed = 1;
         }

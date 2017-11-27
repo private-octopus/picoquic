@@ -106,7 +106,7 @@ size_t picoquic_varint_encode(uint8_t *bytes, size_t max_bytes, uint64_t n64)
     return (x - bytes);
 }
 
-size_t picoquic_varint_decode(uint8_t *bytes, size_t max_bytes, uint64_t * n64)
+size_t picoquic_varint_decode(const uint8_t *bytes, size_t max_bytes, uint64_t * n64)
 {
     size_t length = 1 << ((bytes[0] & 0xC0) >> 6);
 
