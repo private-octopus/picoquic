@@ -20,6 +20,9 @@
 */
 
 #include <stdint.h>
+#ifndef WIN32
+#include <sys/types.h>
+#endif
 
 void picoformat_16(uint8_t *bytes, uint16_t n16)
 {
@@ -64,7 +67,7 @@ size_t picoquic_varint_encode(uint8_t *bytes, size_t max_bytes, uint64_t n64)
     {
         if (n64 < 64)
         {
-            if (max_bytes >= 0)
+            if (max_bytes > 0)
             {
                 *x++ = (uint8_t)(n64);
             }

@@ -229,7 +229,7 @@ size_t picoquic_log_ack_frame(FILE * F, uint8_t * bytes, size_t bytes_max,
                 byte_index = bytes_max;
                 ret = -1;
                 fprintf(F, "    Malformed ACK RANGE, requires %d bytes out of %d\n", (int)picoquic_varint_skip(bytes),
-                    (int)bytes_max - byte_index);
+                    (int)(bytes_max - byte_index));
                 break;
             }
             else
@@ -297,7 +297,7 @@ size_t picoquic_log_ack_frame(FILE * F, uint8_t * bytes, size_t bytes_max,
                     byte_index = bytes_max;
                     ret = -1;
                     fprintf(F, "    Malformed ACK GAP, requires %d bytes out of %d\n", (int)picoquic_varint_skip(bytes),
-                        (int)bytes_max - byte_index);
+                        (int)(bytes_max - byte_index));
                     break;
                 }
                 else
@@ -362,7 +362,7 @@ size_t picoquic_log_reset_stream_frame(FILE * F, uint8_t * bytes, size_t bytes_m
         if (l1 == 0 || l2 == 0)
         {
             fprintf(F, "    Malformed RESET STREAM, requires %d bytes out of %d\n", (int)(byte_index +
-                (l1==0)?(picoquic_varint_skip(bytes+1) + 3):picoquic_varint_skip(bytes + byte_index)),
+                ((l1==0)?(picoquic_varint_skip(bytes+1) + 3):picoquic_varint_skip(bytes + byte_index))),
                 (int)bytes_max);
             byte_index = bytes_max;
         }
@@ -648,7 +648,7 @@ size_t picoquic_log_max_stream_data_frame(FILE * F, uint8_t * bytes, size_t byte
         if (l1 == 0 || l2 == 0)
         {
             fprintf(F, "    Malformed MAX STREAM DATA, requires %d bytes out of %d\n",
-                (int)1 + l1 + l2, (int)bytes_max);
+                (int)(1 + l1 + l2), (int)bytes_max);
             return bytes_max;
         }
         else

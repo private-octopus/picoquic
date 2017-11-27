@@ -1472,7 +1472,6 @@ int picoquic_parse_ack_header(uint8_t const * bytes, size_t bytes_max,
     size_t l_largest = 0;
     size_t l_delay = 0;
     size_t l_blocks = 0;
-    size_t l_first_block = 0;
 
     if ((version_flags&picoquic_version_fix_ints) != 0)
     {
@@ -2348,8 +2347,15 @@ int picoquic_prepare_connection_close_frame(picoquic_cnx_t * cnx,
             bytes[byte_index++] = picoquic_frame_type_connection_close;
             picoformat_16(bytes + byte_index, cnx->local_error);
             byte_index += 2;
-            byte_index += picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index, 0);
+            l1 = picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index, 0);
+            byte_index += l1;
             *consumed = byte_index;
+        
+            if (l1 == 0)
+            {
+                *consumed = 0;
+                ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
+            }
         }
         else
         {
@@ -2489,8 +2495,15 @@ int picoquic_prepare_application_close_frame(picoquic_cnx_t * cnx,
             bytes[byte_index++] = picoquic_frame_type_application_close;
             picoformat_16(bytes + byte_index, cnx->application_error);
             byte_index += 2;
-            byte_index += picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index, 0);
+            l1 = picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index, 0);
+            byte_index += l1;
             *consumed = byte_index;
+
+            if (l1 == 0)
+            {
+                *consumed = 0;
+                ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
+            }
         }
         else
         {
@@ -2674,7 +2687,6 @@ int picoquic_decode_max_data_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
     /* TODO: what about reason message? */
     if ((picoquic_supported_versions[cnx->version_index].version_flags&picoquic_version_fix_ints) == 0)
     {
-        size_t byte_index = 1;
         size_t l1 = picoquic_varint_decode(bytes + 1, bytes_max - 1, &maxdata);
 
         if (l1 > 0)
@@ -3153,7 +3165,6 @@ int picoquic_decode_frames(picoquic_cnx_t * cnx, uint8_t * bytes,
 static int picoquic_skip_stream_frame(uint8_t * bytes, size_t bytes_max, size_t * consumed)
 {  
     int ret = 0;
-    int fin = bytes[0] & 1;
     int len = bytes[0] & 2;
     int off = bytes[0] & 4;
     uint64_t length = 0;

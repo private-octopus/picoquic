@@ -411,7 +411,6 @@ picoquic_cnx_t * picoquic_incoming_initial(
 
             if (cnx != NULL)
             {
-                int ret = 0;
                 decoded_length = picoquic_decrypt_cleartext(cnx, bytes, length, ph);
 
                 if (decoded_length == 0)
