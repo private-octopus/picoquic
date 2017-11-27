@@ -1880,7 +1880,7 @@ void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t * cnx, picoquic_p
             else
             {
                 ret = picoquic_skip_frame(&p->bytes[byte_index],
-                    p->length - ph.offset, &frame_length, &frame_is_pure_ack,
+                    p->length - byte_index, &frame_length, &frame_is_pure_ack,
                     picoquic_supported_versions[cnx->version_index].version_flags);
                 byte_index += frame_length;
             }
@@ -2025,7 +2025,7 @@ int picoquic_decode_ack_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
 			if (num_block-- == 0)
 				break;
 
-			/* Skip the gap *//* Skip the gap */
+			/* Skip the gap */
 
             if (byte_index >= bytes_max)
             {
@@ -3311,10 +3311,9 @@ int picoquic_skip_frame(uint8_t * bytes, size_t bytes_max, size_t * consumed,
     }
     else
     {
-        ack_or_data = 1;
-
         if (first_byte >= picoquic_frame_type_ack_range_min_old)
         {
+            ack_or_data = 1;
             if (first_byte >= picoquic_frame_type_stream_range_min_old)
             {
                 /* skip stream frame */
