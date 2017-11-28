@@ -148,7 +148,7 @@ int skip_frame_test()
 {
     int ret = 0;
     uint8_t buffer[256];
-    const uint8_t extra_bytes[4] = { '0xFF', 0, 0, 0 };
+    const uint8_t extra_bytes[4] = { 0xFF, 0, 0, 0 };
 
     for (size_t i = 0; i < nb_test_skip_list; i++)
     {
