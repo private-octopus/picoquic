@@ -3489,7 +3489,7 @@ int picoquic_skip_frame(uint8_t * bytes, size_t bytes_max, size_t * consumed,
             else
             {
                 byte_index += ((version_flags&
-                    picoquic_version_long_error_codes) != 0) ? 1 + 4 + 4 + 8 : 1 + 4 + 2 + 8;
+                    picoquic_version_long_error_codes) != 0) ? 4 + 4 + 8 : 4 + 2 + 8;
             }
 			*pure_ack = 0;
 			break;
@@ -3592,7 +3592,7 @@ int picoquic_skip_frame(uint8_t * bytes, size_t bytes_max, size_t * consumed,
             else
             {
                 byte_index += ((version_flags&
-                    picoquic_version_long_error_codes) != 0) ? 1 + 4 + 4 : 1 + 4 + 2;
+                    picoquic_version_long_error_codes) != 0) ? 4 + 4 : 4 + 2;
                 *pure_ack = 0;
             }
             *pure_ack = 0;
