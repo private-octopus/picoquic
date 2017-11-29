@@ -38,6 +38,7 @@ SET(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/parseheadertest.c
     picoquictest/pn2pn64test.c
     picoquictest/sacktest.c
+    picoquictest/skip_frame_test.c
     picoquictest/sim_link.c
     picoquictest/stream0_frame_test.c
     picoquictest/tls_api_test.c
