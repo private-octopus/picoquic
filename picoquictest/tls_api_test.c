@@ -1538,7 +1538,6 @@ int ping_pong_test()
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t * test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN);
-    uint8_t buffer[128];
     int was_active = 0;
 
     /*
