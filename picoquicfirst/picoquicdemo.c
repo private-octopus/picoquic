@@ -19,7 +19,7 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifdef WIN32
+#ifdef _WINDOWS
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 #include <assert.h>
@@ -238,7 +238,7 @@ void picoquic_close_server_sockets(picoquic_server_sockets_t * sockets)
 uint64_t get_current_time()
 {
     uint64_t now;
-#ifdef WIN32
+#ifdef _WINDOWS
     FILETIME ft;
     /*
     * The GetSystemTimeAsFileTime API returns  the number
@@ -337,7 +337,7 @@ int do_select(SOCKET_TYPE * sockets, int nb_sockets,
 
                 if (bytes_recv <= 0)
                 {
-#ifdef WIN32
+#ifdef _WINDOWS
                     int last_error = WSAGetLastError();
 
                     if (last_error == WSAECONNRESET)
@@ -369,7 +369,7 @@ int send_to_server_sockets(
     const char * bytes, int length)
 {
     /* Linux uses a single socket for V6 and V4, Windows uses 2 */
-#ifdef WIN32
+#ifdef _WINDOWS
     int socket_index = (addr_dest->sa_family == AF_INET) ? 1 : 0;
 #else
     const int socket_index = 0;
@@ -841,7 +841,7 @@ static void demo_client_open_stream(picoquic_cnx_t * cnx,
         stream_ctx->next_stream = ctx->first_stream;
         ctx->first_stream = stream_ctx;
 
-#ifdef WIN32
+#ifdef _WINDOWS
         if (fopen_s(&stream_ctx->F, text, (is_binary == 0)?"w":"wb") != 0) {
             ret = -1;
         }
@@ -1069,7 +1069,7 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
                 case AF_INET:
                     ipv4_dest->sin_family = AF_INET;
                     ipv4_dest->sin_port = htons(server_port);
-#ifdef WIN32
+#ifdef _WINDOWS
                     ipv4_dest->sin_addr.S_un.S_addr =
                         ((struct sockaddr_in *) result->ai_addr)->sin_addr.S_un.S_addr;
 #else
@@ -1395,7 +1395,7 @@ int main(int argc, char ** argv)
     uint64_t *reset_seed = NULL;
     uint64_t reset_seed_x[2];
 
-#ifdef WIN32
+#ifdef _WINDOWS
     WSADATA wsaData;
 #endif
     int ret = 0;
@@ -1478,7 +1478,7 @@ int main(int argc, char ** argv)
 	}
 	
 	
-#ifdef WIN32
+#ifdef _WINDOWS
     // Init WSA.
     if (ret == 0)
     {

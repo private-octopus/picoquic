@@ -32,7 +32,7 @@ int http0dot9_test_one(char const * command, int expected_ret, size_t expected_l
         else if (c_ret == 0 && fileName != 0)
         {
             FILE * F = NULL;
-#ifdef WIN32
+#ifdef _WINDOWS
             errno_t err = fopen_s(&F, fileName, "w");
             if (err != 0) {
                 ret = -1;

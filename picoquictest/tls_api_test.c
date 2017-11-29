@@ -678,7 +678,7 @@ static int tls_api_init_ctx(picoquic_test_tls_api_ctx_t ** pctx, uint32_t propos
 		/* Init of the IP addresses */
 		memset(&test_ctx->client_addr, 0, sizeof(struct sockaddr_in));
 		test_ctx->client_addr.sin_family = AF_INET;
-#ifdef WIN32
+#ifdef _WINDOWS
 		test_ctx->client_addr.sin_addr.S_un.S_addr = 0x0A000002;
 #else
 		test_ctx->client_addr.sin_addr.s_addr = 0x0A000002;
@@ -687,7 +687,7 @@ static int tls_api_init_ctx(picoquic_test_tls_api_ctx_t ** pctx, uint32_t propos
 
 		memset(&test_ctx->server_addr, 0, sizeof(struct sockaddr_in));
 		test_ctx->server_addr.sin_family = AF_INET;
-#ifdef WIN32
+#ifdef _WINDOWS
 		test_ctx->server_addr.sin_addr.S_un.S_addr = 0x0A000001;
 #else
 		test_ctx->server_addr.sin_addr.s_addr = 0x0A000001;
@@ -700,7 +700,7 @@ static int tls_api_init_ctx(picoquic_test_tls_api_ctx_t ** pctx, uint32_t propos
 			(void*)&test_ctx->client_callback, NULL, NULL, NULL);
 
 		test_ctx->qserver = picoquic_create(8,
-#ifdef WIN32
+#ifdef _WINDOWS
 			"..\\certs\\cert.pem", "..\\certs\\key.pem",
 #else
 			"certs/cert.pem", "certs/key.pem",

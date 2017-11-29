@@ -93,6 +93,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(test_skip_frames)
+        {
+            int ret = skip_frame_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(test_StreamZeroFrame)
         {
             int ret = StreamZeroFrameTest();

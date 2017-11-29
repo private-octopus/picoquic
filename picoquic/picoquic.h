@@ -23,7 +23,7 @@
 #define PICOQUIC_H
 
 #include <stdint.h>
-#ifdef WIN32
+#ifdef _WINDOWS
 #include <winsock2.h>
 #include <Ws2def.h>
 #include <WS2tcpip.h>

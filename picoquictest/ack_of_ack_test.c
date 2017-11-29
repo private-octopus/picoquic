@@ -267,7 +267,7 @@ static size_t build_test_ack(test_ack_range_t const * ranges, size_t nb_ranges,
     /* Set the ACK delay to zero for these tests */
     byte_index += picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index, 0);
     /* Encode the number of blocks -- assume nb_ranges always lower than 64 */
-    bytes[byte_index++] = nb_ranges - 1;
+    bytes[byte_index++] = (uint8_t) (nb_ranges - 1);
     /* Encode the size of the first ack range */
     ack_range = ranges[0].end_of_sack_range - ranges[0].start_of_sack_range;
     byte_index += picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index, ack_range);

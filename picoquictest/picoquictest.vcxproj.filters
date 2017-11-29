@@ -63,6 +63,9 @@
     <ClCompile Include="cleartext_aead_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="skip_frame_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquictest.h">

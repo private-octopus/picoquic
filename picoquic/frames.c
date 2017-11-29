@@ -3561,11 +3561,10 @@ int picoquic_skip_frame(uint8_t * bytes, size_t bytes_max, size_t * consumed,
 			break;
 		case picoquic_frame_type_ping:
             /* TODO: LONG PING! */
-			byte_index++;
 			*pure_ack = 0;
 			break;
 		case picoquic_frame_type_blocked:
-			byte_index++;
+            *pure_ack = 0;
 			break;
 		case picoquic_frame_type_stream_blocked:
             if ((version_flags&picoquic_version_fix_ints) == 0)
@@ -3576,9 +3575,10 @@ int picoquic_skip_frame(uint8_t * bytes, size_t bytes_max, size_t * consumed,
             {
                 byte_index += 4;
             }
+            *pure_ack = 0;
 			break;
 		case picoquic_frame_type_stream_id_needed:
-			byte_index++;
+            *pure_ack = 0;
 			break;
 		case picoquic_frame_type_new_connection_id:
 			byte_index += 8 + 16;
@@ -3595,6 +3595,7 @@ int picoquic_skip_frame(uint8_t * bytes, size_t bytes_max, size_t * consumed,
                     picoquic_version_long_error_codes) != 0) ? 1 + 4 + 4 : 1 + 4 + 2;
                 *pure_ack = 0;
             }
+            *pure_ack = 0;
             break;
             /* TODO: PONG! */
 		default:

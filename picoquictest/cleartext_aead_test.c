@@ -77,7 +77,7 @@ int cleartext_aead_test()
     picoquic_quic_t * qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL, 
         NULL, NULL, NULL);
     picoquic_quic_t * qserver = picoquic_create(8,
-#ifdef WIN32
+#ifdef _WINDOWS
         "..\\certs\\cert.pem", "..\\certs\\key.pem",
 #else
         "certs/cert.pem", "certs/key.pem",

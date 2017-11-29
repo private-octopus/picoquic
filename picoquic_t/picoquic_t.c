@@ -39,6 +39,7 @@ static picoquic_test_def_t test_table[] = {
     { "fnv1a", fnv1atest},
     { "float16", float16test },
     { "varint", varint_test },
+    { "skip_frames", skip_frame_test },
     { "StreamZeroFrame", StreamZeroFrameTest },
     { "sack", sacktest },
     { "sendack", sendacktest },

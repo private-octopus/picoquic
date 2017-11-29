@@ -64,6 +64,7 @@ extern "C" {
     int varint_test();
     int tls_api_client_losses_test();
     int tls_api_server_losses_test();
+    int skip_frame_test();
 
 #ifdef  __cplusplus
 }
