@@ -774,16 +774,9 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
         packet->send_time = current_time;
 
         /* Send the disconnect frame */
-        if (cnx->local_error == 0)
-        {
-            ret = picoquic_prepare_application_close_frame(cnx, bytes + length,
+        ret = picoquic_prepare_connection_close_frame(cnx, bytes + length,
                 cnx->send_mtu - checksum_overhead - length, &consumed);
-        }
-        else
-        {
-            ret = picoquic_prepare_connection_close_frame(cnx, bytes + length,
-                cnx->send_mtu - checksum_overhead - length, &consumed);
-        }
+
         if (ret == 0)
         {
             length += consumed;

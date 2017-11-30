@@ -2463,7 +2463,7 @@ int picoquic_decode_connection_close_frame(picoquic_cnx_t * cnx, uint8_t * bytes
 
     if (ret == 0)
     {
-        cnx->cnx_state = picoquic_state_disconnected;
+        cnx->cnx_state = picoquic_state_closing_received;
         cnx->remote_error = error_code;
         *consumed = (size_t)(string_length + byte_index);
         if (cnx->callback_fn)
@@ -2610,7 +2610,7 @@ int picoquic_decode_application_close_frame(picoquic_cnx_t * cnx, uint8_t * byte
 
     if (ret == 0)
     {
-        cnx->cnx_state = picoquic_state_disconnected;
+        cnx->cnx_state = picoquic_state_closing_received;
         cnx->remote_application_error = error_code;
         *consumed = (size_t)(string_length + byte_index);
         if (cnx->callback_fn)
