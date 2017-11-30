@@ -20,8 +20,8 @@ The code in this repo is a work in progress. In fact, the specification itself
 is a work in progress. The working group is progressing by running a series
 of meetings and of interop trials between several implementations, listed
 at https://github.com/quicwg/base-drafts/wiki/Implementations. The current
-interoperability matrix is listed at 
-https://docs.google.com/spreadsheets/d/14Vw0EX8XG0YRKxSdcDxloBjOkTt9FpbJMpBAg1Hvbmc/edit#gid=0.
+interoperability matrix is listed at
+https://docs.google.com/spreadsheets/d/1D0tW89vOoaScs3IY9RGC0UesWGAwE6xyLk0l4JtvTVg/edit#gid=273618597.
 
 # Development
 
