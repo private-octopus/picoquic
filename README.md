@@ -75,13 +75,14 @@ have been fixed -- see closed issues for details.
 
 ## Second and an half implementation draft
 
-The next coming milestone will still be based on the second implementation draft.
-The feature set and the tests will remain the same, the emphasis being on actually
-verifying that all these features work. This entails documenting the tests that
+The interop test during the Singapore IETF were still based on the second
+implementation draft.
+The feature set and the tests remained the same, the emphasis being on actually
+verifying that all these features work. This entailed documenting the tests that
 should pass to claim interop on the various functions. The only change is that
 the interop will be based on draft-07 instead of draft-05.
 
-Just changing the draft number does not look like much, but the draft-07 brings in a
+Just changing the draft number does not look like much, but the draft-07 brought in a
 number of protocol changes:
 
 * Change the protection of clear text packets to use AES-GCM instead of FNV-1A,
@@ -100,21 +101,43 @@ number of protocol changes:
 * Change of the format of the CONNECTION_CLOSE and STOP_SENDING frames, with 
   the error code now being 16 bits instead of 32 bits.
 
-These are all incompatible changes, and the developers will have to
+These are all incompatible changes, and the developers had to
 implement and test them before the IETF meeting in Singapore. All these changes are
 now implemented in Picoquic, which supports the version 0xFF00007. We have managed
-already to demonstrate interoperability with two implementations of draft-07:
-nghttp2 and winquic.
+already to demonstrate interoperability with several implementations of draft-07,
+such as nghttp2 and winquic.
+
+## December 2017 Interop
+
+The next scheduled Interop will happen "on line", in December 2017. It will be based
+on draft-08, which is not yet published. Based on the current editor copy,
+we know that draft-08 will bring a number of changes, some of witch are very disruptive:
+
+* Format changes of pretty much all frames, with a new variable length integer
+  format replacing the multiple ad hoc compression schemes inherited from Google QUIC.
+
+* Redefinition of the "stream ID", to allow both bidirectional and unidirectional
+  streams.
+
+* Redefinition of the "ping" frame to carry an optional payload that the peer should
+  repeat in a "pong" frame.
+
+* Tightening of the closing logic.
+
+* Change of format of the QUIC header, with the version field moving in front of the
+  sequence number.
+
+The variable length integers and the closing logic are already implemented in the test
+version of Picoquic, and we are working on the other changes. Interop tests have not
+yet begun.
 
 ## Further milestones
 
-Of course, even the second implementation draft "and an half" is not the final one. 
-The interoperation draft is based on the draft-07 of the
-QUIC spec: https://tools.ietf.org/html/draft-ietf-quic-transport-07.
+Of course, even the draft-08 will not be the final one. 
 Everybody expects that spec to still evolve. 
 The interop plan does not test every feature of the transport. The big missing
 feature at the transport level is 0-RTT support. Picoquic will have that soon, but the interop tests
-will probably have to wait until at least November 2017. After that, the big transport features will
+will probably have to wait until at least December 2017. After that, the big transport features will
 be connection mobility and possibly multipath. But that will come later.
 
 The interop plan is also punting on application mapping. The data transfers are using HTTP 0.9,
@@ -124,7 +147,7 @@ We might, but that's a lot of work. If someone is interested doing that and want
 to collaborate, they are welcome. In parallel, we plan to do an implementation
 of DNS over QUIC (https://datatracker.ietf.org/doc/draft-huitema-quic-dnsoquic/).
 
-After November, we will start to spend time bettering the implementation. Until now 
+After December, we will start to spend time bettering the implementation. Until now 
 the focus has been on correctness rather than performance. We will keep correctness,
 but we will improve performance, especially in light of practical experience with 
 applications. Suggestions are wellcome.
