@@ -65,7 +65,8 @@ static picoquic_test_def_t test_table[] = {
     { "client_losses", tls_api_client_losses_test },
     { "server_losses", tls_api_server_losses_test },
     { "two_connections", tls_api_two_connections_test },
-    { "multiple_versions", tls_api_multiple_versions_test }
+    { "multiple_versions", tls_api_multiple_versions_test },
+    { "ping_pong", ping_pong_test }
 };
 
 static size_t nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);

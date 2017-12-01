@@ -2998,6 +2998,125 @@ int picoquic_decode_max_stream_id_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
 }
 
 /*
+ * Sending of miscellaneous frames
+ */
+
+int picoquic_prepare_misc_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
+    size_t bytes_max, size_t * consumed)
+{
+    int ret = 0;
+    picoquic_misc_frame_header_t * misc_frame = cnx->first_misc_frame;
+
+    if (misc_frame->length > bytes_max)
+    {
+        ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
+        *consumed = 0;
+    }
+    else
+    {
+        uint8_t * frame = ((uint8_t *)misc_frame) + sizeof(picoquic_misc_frame_header_t);
+        memcpy(bytes, frame, misc_frame->length);
+        *consumed = misc_frame->length;
+        cnx->first_misc_frame = misc_frame->next_misc_frame;
+        free(misc_frame);
+    }
+
+    return ret;
+}
+
+/*
+ * Ping and Pong frames
+ */
+
+int picoquic_decode_ping_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
+    size_t bytes_max, size_t * consumed)
+{
+    int ret = 0;
+    size_t byte_index = 1;
+
+    if ((picoquic_supported_versions[cnx->version_index].version_flags&
+        picoquic_version_short_pings) != 0)
+    {
+        /* Nothing to do here, besides waiting for ACK. */
+    }
+    else
+    {
+        size_t ping_length = bytes[byte_index++];
+
+        if (byte_index + ping_length > bytes_max)
+        {
+            byte_index = bytes_max;
+
+            ret = picoquic_connection_error(cnx,
+                PICOQUIC_TRANSPORT_FRAME_ERROR(picoquic_frame_type_ping));
+        }
+        else if (ping_length > 0)
+        {
+            /*
+             * Queue a Pong frame as response to Ping.
+             */
+            uint8_t frame_buffer[258];
+
+            byte_index += ping_length;
+
+            memcpy(frame_buffer, bytes, byte_index);
+            frame_buffer[0] = picoquic_frame_type_pong;
+
+            ret = picoquic_queue_misc_frame(cnx, frame_buffer, byte_index);
+        }
+    }
+    
+    *consumed = byte_index;
+
+    return ret;
+}
+
+int picoquic_decode_pong_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
+    size_t bytes_max, size_t * consumed)
+{
+    int ret = 0;
+    size_t byte_index = 1;
+
+    if ((picoquic_supported_versions[cnx->version_index].version_flags&
+        picoquic_version_short_pings) != 0)
+    {
+        /* Pong frames not supported in the old versions. */
+        byte_index = bytes_max;
+        ret = picoquic_connection_error(cnx,
+            PICOQUIC_TRANSPORT_FRAME_ERROR(picoquic_frame_type_pong));
+    }
+    else
+    {
+        size_t ping_length = bytes[byte_index++];
+
+        if (byte_index + ping_length > bytes_max)
+        {
+            byte_index = bytes_max;
+
+            ret = picoquic_connection_error(cnx,
+                PICOQUIC_TRANSPORT_FRAME_ERROR(picoquic_frame_type_pong));
+        }
+        else if (ping_length > 0)
+        {
+            /*
+             * Submit the pong frame to the call back if there is one.
+             */
+
+            byte_index += ping_length;
+
+            if (cnx->callback_fn != NULL)
+            {
+                cnx->callback_fn(cnx, 0, bytes, byte_index, 0, cnx->callback_ctx);
+            }
+        }
+    }
+
+    *consumed = byte_index;
+
+    return ret;
+}
+
+/*
  * Decoding of the received frames.
  *
  * In some cases, the expected frames are "restricted" to only ACK, STREAM 0 and PADDING.
@@ -3118,7 +3237,8 @@ int picoquic_decode_frames(picoquic_cnx_t * cnx, uint8_t * bytes,
                 cnx->ack_needed = 1;
                 break;
             case picoquic_frame_type_ping: /* PING */
-                byte_index++;
+                ret = picoquic_decode_ping_frame(cnx, bytes + byte_index, bytes_max - byte_index, &consumed);
+                byte_index += consumed;
                 cnx->ack_needed = 1;
                 break;
             case picoquic_frame_type_blocked: /* BLOCKED */
@@ -3144,6 +3264,11 @@ int picoquic_decode_frames(picoquic_cnx_t * cnx, uint8_t * bytes,
                 break;
             case picoquic_frame_type_stop_sending:
                 ret = picoquic_decode_stop_sending_frame(cnx, bytes + byte_index, bytes_max - byte_index, &consumed);
+                byte_index += consumed;
+                cnx->ack_needed = 1;
+                break;
+            case picoquic_frame_type_pong:
+                ret = picoquic_decode_pong_frame(cnx, bytes + byte_index, bytes_max - byte_index, &consumed);
                 byte_index += consumed;
                 cnx->ack_needed = 1;
                 break;
@@ -3560,8 +3685,12 @@ int picoquic_skip_frame(uint8_t * bytes, size_t bytes_max, size_t * consumed,
 			*pure_ack = 0;
 			break;
 		case picoquic_frame_type_ping:
-            /* TODO: LONG PING! */
 			*pure_ack = 0;
+            if ((version_flags&picoquic_version_short_pings) == 0)
+            {
+                size_t ping_length = bytes[byte_index++];
+                byte_index += ping_length;
+            }
 			break;
 		case picoquic_frame_type_blocked:
             *pure_ack = 0;
@@ -3597,8 +3726,15 @@ int picoquic_skip_frame(uint8_t * bytes, size_t bytes_max, size_t * consumed,
             }
             *pure_ack = 0;
             break;
-            /* TODO: PONG! */
-		default:
+        case picoquic_frame_type_pong:
+            *pure_ack = 0;
+            if ((version_flags&picoquic_version_short_pings) == 0)
+            {
+                size_t ping_length = bytes[byte_index++];
+                byte_index += ping_length;
+            }
+            break;
+        default:
 			/* Not implemented yet! */
 			ret = -1;
 			break;

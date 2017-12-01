@@ -59,7 +59,8 @@ extern "C" {
         picoquic_version_basic_time_stamp = 1,
         picoquic_version_long_error_codes = 2,
         picoquic_version_use_fnv1a = 4,
-        picoquic_version_fix_ints = 8
+        picoquic_version_fix_ints = 8,
+        picoquic_version_short_pings = 16
     } picoquic_version_feature_flags;
 
     typedef struct st_picoquic_version_parameters_t {
@@ -209,6 +210,19 @@ extern "C" {
         picoquic_sack_item_t first_sack_item;
 	} picoquic_stream_head;
 
+    /*
+     * Frame queue. This is used for miscellaneous packets, such as the PONG
+     * response to a PING.
+     *
+     * The misc frame are allocated in meory as blobs, starting with the
+     * misc_frame_header, followed by the misc frame content.
+     */
+
+    typedef struct st_picoquic_misc_frame_header_t {
+        struct st_picoquic_misc_frame_header_t * next_misc_frame;
+        size_t length;
+    } picoquic_misc_frame_header_t;
+
 	/*
 	 * Packet sent, and queued for retransmission.
 	 * The packet is not encrypted.
@@ -330,6 +344,9 @@ extern "C" {
 		uint64_t highest_stream_id_remote;
 		uint64_t max_stream_id_local;
 		uint64_t max_stream_id_remote;
+
+        /* Queue for frames waiting to be sent */
+        picoquic_misc_frame_header_t * first_misc_frame;
 
 		/* Management of streams */
 		picoquic_stream_head first_stream;
@@ -464,6 +481,9 @@ extern "C" {
 	int picoquic_prepare_max_data_frame(picoquic_cnx_t * cnx, uint64_t maxdata_increase,
 		uint8_t * bytes, size_t bytes_max, size_t * consumed);
     void picoquic_clear_stream(picoquic_stream_head * stream);
+
+    int picoquic_prepare_misc_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
+        size_t bytes_max, size_t * consumed);
 
 	/* send/receive */
 

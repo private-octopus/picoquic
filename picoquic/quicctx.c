@@ -101,9 +101,11 @@ static uint8_t picoquic_cleartext_version_1_salt[] = {
 const picoquic_version_parameters_t picoquic_supported_versions[] = {
     { PICOQUIC_INTERNAL_TEST_VERSION_1, 0,
     sizeof(picoquic_cleartext_internal_test_1_salt), picoquic_cleartext_internal_test_1_salt },
-    { PICOQUIC_SECOND_INTEROP_VERSION, picoquic_version_fix_ints,
+    { PICOQUIC_SECOND_INTEROP_VERSION, 
+    picoquic_version_short_pings | picoquic_version_fix_ints,
     sizeof(picoquic_cleartext_version_1_salt), picoquic_cleartext_version_1_salt },
     { PICOQUIC_FIRST_INTEROP_VERSION,
+    picoquic_version_short_pings |
     picoquic_version_fix_ints |
     picoquic_version_basic_time_stamp|
     picoquic_version_long_error_codes|
@@ -784,6 +786,27 @@ void picoquic_set_callback(picoquic_cnx_t * cnx,
     cnx->callback_ctx = callback_ctx;
 }
 
+int picoquic_queue_misc_frame(picoquic_cnx_t * cnx, uint8_t * bytes, size_t length)
+{
+    int ret = 0;
+    uint8_t * misc_frame = (uint8_t *) malloc(sizeof(picoquic_misc_frame_header_t) + length);
+
+    if (misc_frame == NULL)
+    {
+        ret = PICOQUIC_ERROR_MEMORY;
+    }
+    else
+    {
+        picoquic_misc_frame_header_t * head = (picoquic_misc_frame_header_t*)misc_frame;
+        head->length = length;
+        memcpy(misc_frame + sizeof(picoquic_misc_frame_header_t), bytes, length);
+        head->next_misc_frame = cnx->first_misc_frame;
+        cnx->first_misc_frame = head;
+    }
+
+    return ret;
+}
+
 void picoquic_clear_stream(picoquic_stream_head * stream)
 {
     picoquic_stream_data ** pdata[2] = { &stream->stream_data, &stream->send_queue };
@@ -982,6 +1005,7 @@ int picoquic_connection_error(picoquic_cnx_t * cnx, uint32_t local_error)
 void picoquic_delete_cnx(picoquic_cnx_t * cnx)
 {
     picoquic_stream_head * stream;
+    picoquic_misc_frame_header_t * misc_frame;
 
     if (cnx != NULL)
     {
@@ -1083,6 +1107,12 @@ void picoquic_delete_cnx(picoquic_cnx_t * cnx)
 		{
 			picoquic_dequeue_retransmit_packet(cnx, cnx->retransmit_newest, 1);
 		}
+
+        while ((misc_frame = cnx->first_misc_frame) != NULL)
+        {
+            cnx->first_misc_frame = misc_frame->next_misc_frame;
+            free(misc_frame);
+        }
 
         while ((stream = cnx->first_stream.next_stream) != NULL)
         {

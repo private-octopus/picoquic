@@ -905,7 +905,7 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
                 (cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx);
             }
 		}
-		else if ((stream == NULL || cnx->cwin <= cnx->bytes_in_transit) &&
+		else if (((stream == NULL && cnx->first_misc_frame == NULL) || cnx->cwin <= cnx->bytes_in_transit) &&
 			picoquic_is_ack_needed(cnx, current_time) == 0)
 		{
 			length = 0;
@@ -921,6 +921,21 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 
 			if (cnx->cwin > cnx->bytes_in_transit)
 			{
+                /* If present, send misc frame */
+                while (cnx->first_misc_frame != NULL)
+                {
+                    ret = picoquic_prepare_misc_frame(cnx, &bytes[length],
+                        cnx->send_mtu - checksum_overhead - length, &data_bytes);
+
+                    if (ret == 0)
+                    {
+                        length += data_bytes;
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
 				/* If necessary, encode the max data frame */
 				if (2 * cnx->data_received > cnx->maxdata_local)
 				{

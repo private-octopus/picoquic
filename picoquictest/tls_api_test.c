@@ -1492,3 +1492,132 @@ int tls_api_multiple_versions_test()
 
     return ret;
 }
+
+/*
+ * Ping pong test.
+ */
+
+typedef struct st_ping_pong_test_callback_ctx_t {
+    picoquic_stream_data_cb_fn master_fn;
+    void * master_ctx;
+    int pong_received;
+    int error_received;
+    size_t ping_length;
+    uint8_t ping_frame[256];
+} ping_pong_test_callback_ctx_t;
+
+static void ping_pong_callback(picoquic_cnx_t * cnx,
+    uint64_t stream_id, uint8_t * bytes, size_t length,
+    picoquic_call_back_event_t fin_or_event, void * callback_ctx)
+{
+    ping_pong_test_callback_ctx_t * ping_pong_ctx = (ping_pong_test_callback_ctx_t *)callback_ctx;
+    if (stream_id == 0 && fin_or_event == 0)
+    {
+        /* This is a special frame call back. */
+        if (length == ping_pong_ctx->ping_length &&
+            bytes[0] == picoquic_frame_type_pong &&
+            memcmp(bytes + 1, &ping_pong_ctx->ping_frame[1], length - 1) == 0)
+        {
+            ping_pong_ctx->pong_received++;
+        }
+        else
+        {
+            ping_pong_ctx->error_received++;
+        }
+    }
+    else if (ping_pong_ctx->master_fn != NULL)
+    {
+        ping_pong_ctx->master_fn(cnx, stream_id, bytes, length, fin_or_event, ping_pong_ctx->master_ctx);
+    }
+}
+
+int ping_pong_test()
+{
+    ping_pong_test_callback_ctx_t ping_pong_ctx;
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t * test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN);
+    uint8_t buffer[128];
+    int was_active = 0;
+
+    /*
+     * Before initializing the context, set up a filter to intercept the call backs.
+     */
+    if (ret == 0)
+    {
+        memset(&ping_pong_ctx, 0, sizeof(ping_pong_test_callback_ctx_t));
+        ping_pong_ctx.master_ctx = test_ctx->cnx_client->callback_ctx;
+        ping_pong_ctx.master_fn = test_ctx->cnx_client->callback_fn;
+        test_ctx->cnx_client->callback_ctx = &ping_pong_ctx;
+        test_ctx->cnx_client->callback_fn = ping_pong_callback;
+    }
+
+    /*
+     * setup the connections.
+     */
+
+    if (ret == 0)
+    {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    /*
+     * Format and queue the ping frame
+     */
+    if (ret == 0)
+    {
+        ping_pong_ctx.ping_length = 18;
+        ping_pong_ctx.ping_frame[0] = picoquic_frame_type_ping;
+        ping_pong_ctx.ping_frame[1] = 16;
+        for (uint8_t i = 2; i < 18; i++)
+        {
+            ping_pong_ctx.ping_frame[i] = 'a' + i - 2;
+        }
+
+        ret = picoquic_queue_misc_frame(test_ctx->cnx_client, ping_pong_ctx.ping_frame, ping_pong_ctx.ping_length);
+    }
+    
+    /* Perform a couple rounds of sending data */
+    for (int i = 0; ret == 0 && i < 32 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected; i++)
+    {
+        was_active = 0;
+
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, &was_active);
+
+        if (ping_pong_ctx.pong_received != 0 &&
+            picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) &&
+            picoquic_is_cnx_backlog_empty(test_ctx->cnx_server))
+        {
+            break;
+        }
+    }
+
+    /* Check that there was exactly one matching pong received */
+    if (ret == 0 && (ping_pong_ctx.error_received != 0 || ping_pong_ctx.pong_received != 1))
+    {
+        ret = -1;
+    }
+
+    /* Close the connection */
+    if (ret == 0)
+    {
+        ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
+    }
+
+    /* Verify that no error was received during closing */
+    if (ret == 0 && (ping_pong_ctx.error_received != 0 || ping_pong_ctx.pong_received != 1))
+    {
+        ret = -1;
+    }
+
+    /* Clean up */
+    if (test_ctx != NULL)
+    {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+
+}

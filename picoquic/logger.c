@@ -27,6 +27,65 @@
 #include "fnv1a.h"
 #include "tls_api.h"
 
+
+
+static char const * picoquic_ptype_names[] = {
+    "error",
+    "version negotiation",
+    "client initial",
+    "server stateless",
+    "server cleartext",
+    "client cleartext",
+    "0rtt protected",
+    "1rtt protected phi0",
+    "1rtt protected phi1",
+    "public reset"
+};
+
+static const size_t picoquic_nb_ptype_names = sizeof(picoquic_ptype_names) / sizeof(char const *);
+
+static char const * picoquic_log_state_name[] = {
+    "client_init",
+    "client_init_sent",
+    "client_renegotiate",
+    "picoquic_state_client_hrr_received",
+    "client_init_resent",
+    "server_init",
+    "client_handshake_start",
+    "client_handshake_progress",
+    "client_almost_ready",
+    "client_ready",
+    "server_almost_ready",
+    "server_ready",
+    "disconnecting",
+    "closing_received",
+    "closing",
+    "draining",
+    "disconnected"
+};
+
+static const size_t picoquic_nb_log_state_name = sizeof(picoquic_log_state_name) / sizeof(char const *);
+
+static char const * picoquic_log_frame_names[] =
+{
+    "Padding",
+    "RST_STREAM",
+    "CONNECTION_CLOSE",
+    "GOAWAY",
+    "MAX_DATA",
+    "MAX_STREAM_DATA",
+    "MAX_STREAM_ID",
+    "PING",
+    "BLOCKED",
+    "STREAM_BLOCKED",
+    "STREAM_ID_NEEDED",
+    "NEW_CONNECTION_ID",
+    "STOP_SENDING",
+    "PONG",
+    "ACK"
+};
+
+
 void picoquic_log_error_packet(FILE * F, uint8_t * bytes, size_t bytes_max, int ret)
 {
 	fprintf(F, "Packet length %d caused error: %d\n", (int)bytes_max, ret);
@@ -98,21 +157,6 @@ void picoquic_log_packet_address(FILE* F, picoquic_cnx_t * cnx,
         (unsigned long long) current_time);
 }
 
-static char const * picoquic_ptype_names[] = {
-	"error",
-	"version negotiation",
-	"client initial",
-	"server stateless",
-	"server cleartext",
-	"client cleartext",
-	"0rtt protected",
-	"1rtt protected phi0",
-	"1rtt protected phi1",
-	"public reset"
-};
-
-static const size_t picoquic_nb_ptype_names = sizeof(picoquic_ptype_names) / sizeof(char const *);
-
 char const * picoquic_log_ptype_name(picoquic_packet_type_enum ptype)
 {
 	if (((size_t)ptype) < picoquic_nb_ptype_names)
@@ -150,7 +194,6 @@ void picoquic_log_negotiation_packet(FILE* F,
 	}
 	fprintf(F, "\n");
 }
-
 
 size_t picoquic_log_stream_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
 {
@@ -760,22 +803,69 @@ size_t picoquic_log_new_connection_id_frame(FILE * F, uint8_t * bytes, size_t by
 	return byte_index;
 }
 
-
-static char const * picoquic_log_frame_names[] =
+size_t picoquic_log_ping_pong_frame(FILE * F, uint8_t * bytes, size_t bytes_max, uint32_t version_flags)
 {
-	"Padding",
-    "RST_STREAM",
-	"CONNECTION_CLOSE",
-	"GOAWAY",
-	"MAX_DATA",
-	"MAX_STREAM_DATA",
-	"MAX_STREAM_ID",
-	"PING",
-	"BLOCKED",
-	"STREAM_BLOCKED",
-	"STREAM_ID_NEEDED",
-	"NEW_CONNECTION_ID"
-};
+    size_t byte_index = 1;
+
+    if ((version_flags&picoquic_version_short_pings) != 0)
+    {
+        if (bytes[0] == picoquic_frame_type_ping)
+        {
+            /* No payload in old versions */
+            fprintf(F, "    %s frame\n", picoquic_log_frame_names[bytes[0]]);
+        }
+        else
+        {
+            fprintf(F, "    Unexpected PONG frame.\n");
+            byte_index = bytes_max;
+        }
+    }
+    else
+    {
+        size_t ping_length = bytes[byte_index++];
+
+        if (byte_index + ping_length > bytes_max)
+        {
+            fprintf("    Malformed %s frame, length %d, %d bytes needed, %d available\n",
+                picoquic_log_frame_names[bytes[0]], ping_length,
+                ping_length + 2, bytes_max);
+            byte_index = bytes_max;
+        }
+        else if (ping_length == 0)
+        {
+            if (bytes[0] == picoquic_frame_type_ping)
+            {
+                fprintf(F, "    %s frame, length = 0.\n",
+                    picoquic_log_frame_names[bytes[0]]);
+            }
+            else
+            {
+                fprintf(F, "    Unexpected empty %s frame.\n",
+                    picoquic_log_frame_names[bytes[0]]);
+                byte_index = bytes_max;
+            }
+        }
+        else
+        {
+            fprintf(F, "    %s length %d: ", picoquic_log_frame_names[bytes[0]], ping_length);
+
+            for (size_t i = 0; i < ping_length && i < 16; i++)
+            {
+                fprintf(F, "%02x", bytes[byte_index + i]);
+            }
+
+            if (ping_length > 16)
+            {
+                fprintf(F, " ...");
+            }
+            fprintf(F, "\n");
+
+            byte_index += ping_length;
+        }
+    }
+
+    return byte_index;
+}
 
 void picoquic_log_frames(FILE* F, uint8_t * bytes, size_t length, uint32_t version_flags)
 {
@@ -834,10 +924,9 @@ void picoquic_log_frames(FILE* F, uint8_t * bytes, size_t length, uint32_t versi
 				byte_index += picoquic_log_max_stream_id_frame(F, bytes + byte_index,
 					length - byte_index, version_flags);
 				break;
-			case picoquic_frame_type_ping: /* PING -- Format depends on version! */
-				/* No payload in current version */
-                fprintf(F, "    %s frame\n", picoquic_log_frame_names[frame_id]);
-				byte_index++;
+			case picoquic_frame_type_ping:
+                byte_index += picoquic_log_ping_pong_frame(F, bytes + byte_index,
+                    length - byte_index, version_flags);
 				break;
 			case picoquic_frame_type_blocked: /* BLOCKED */
 				/* No payload */
@@ -858,6 +947,10 @@ void picoquic_log_frames(FILE* F, uint8_t * bytes, size_t length, uint32_t versi
 				break;
             case picoquic_frame_type_stop_sending: /* STOP_SENDING */
                 byte_index += picoquic_log_stop_sending_frame(F, bytes + byte_index,
+                    length - byte_index, version_flags);
+                break;
+            case picoquic_frame_type_pong: /* PONG */
+                byte_index += picoquic_log_ping_pong_frame(F, bytes + byte_index,
                     length - byte_index, version_flags);
                 break;
 			default:
@@ -1041,28 +1134,6 @@ void picoquic_log_packet(FILE* F, picoquic_quic_t * quic, picoquic_cnx_t * cnx,
 	fprintf(F, "\n");
 }
 
-static char const * picoquic_log_state_name[] = {
-	"client_init",
-	"client_init_sent",
-	"client_renegotiate",
-    "picoquic_state_client_hrr_received",
-	"client_init_resent",
-	"server_init",
-	"client_handshake_start",
-	"client_handshake_progress",
-	"client_almost_ready",
-	"client_ready",
-	"server_almost_ready",
-	"server_ready",
-	"disconnecting",
-    "closing_received",
-    "closing",
-    "draining",
-	"disconnected"
-};
-
-static const size_t picoquic_nb_log_state_name = sizeof(picoquic_log_state_name) / sizeof(char const *);
-
 void picoquic_log_processing(FILE* F, picoquic_cnx_t * cnx, size_t length, int ret)
 {
 	fprintf(F, "Processed %d bytes, state = %d (%s), return %d\n\n",
@@ -1074,7 +1145,6 @@ void picoquic_log_processing(FILE* F, picoquic_cnx_t * cnx, size_t length, int r
 
 void picoquic_log_transport_extension(FILE* F, picoquic_cnx_t * cnx)
 {
-
 	uint8_t * bytes = NULL;
 	size_t bytes_max = 0;
 	int ext_received_return = 0;
