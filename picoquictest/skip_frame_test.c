@@ -197,3 +197,148 @@ int skip_frame_test()
     return ret;
 }
 
+void picoquic_log_frames(FILE* F, uint8_t * bytes, size_t length, uint32_t version_flags);
+
+static char const * log_test_file = "log_test.txt";
+
+#ifdef _WINDOWS
+#ifndef _WINDOWS64
+static char const * log_test_ref = "..\\picoquictest\\log_test_ref.txt";
+#else
+static char const * log_test_ref = "..\\..\\picoquictest\\log_test_ref.txt";
+#endif
+#else
+static char const * log_test_ref = "picoquictest/log_test_ref.txt";
+#endif
+
+static int compare_lines(char const * b1, char const * b2)
+{
+    while (*b1 != 0 && *b2 != 0)
+    {
+        if (*b1 != *b2)
+        {
+            break;
+        }
+        b1++;
+        b2++;
+    }
+
+    while (*b1 == '\n' || *b1 == '\r')
+    {
+        b1++;
+    }
+
+    while (*b2 == '\n' || *b2 == '\r')
+    {
+        b2++;
+    }
+
+    return (*b1 == 0 && *b2 == 0) ? 0 : -1;
+}
+
+
+static int compare_files(char const * fname1, char const * fname2)
+{
+    FILE* F1 = NULL;
+    FILE* F2 = NULL;
+    int ret = 0;
+
+#ifdef _WINDOWS
+    errno_t err = fopen_s(&F1, fname1, "r");
+    if (err != 0)
+    {
+        ret = -1;
+    }
+    else
+    {
+        err = fopen_s(&F2, fname2, "r");
+        if (err != 0)
+        {
+            ret = -1;
+        }
+    }
+#else
+    F1 = fopen(fname1, "r");
+    if (F1 == NULL)
+    {
+        ret = -1;
+    }
+    else
+    {
+        F2 = fopen(fname2, "r");
+        if (F2 == NULL)
+        {
+            ret = -1;
+        }
+    }
+#endif
+    if (ret == 0 && F1 != NULL && F2 != NULL)
+    {
+        char buffer1[256];
+        char buffer2[256];
+
+        while (ret == 0 && fgets(buffer1, sizeof(buffer1), F1) != NULL)
+        {
+            if (fgets(buffer2, sizeof(buffer2), F2) == NULL)
+            {
+                /* F2 is too short */
+                ret = -1;
+            }
+            else
+            {
+                ret = compare_lines(buffer1, buffer2);
+            }
+        }
+
+        if (ret == 0 && fgets(buffer2, sizeof(buffer2), F2) != NULL)
+        {
+            /* F2 is too long */
+            ret = -1;
+        }
+    }
+
+
+    if (F1 != NULL)
+    {
+        fclose(F1);
+    }
+
+    if (F2 != NULL)
+    {
+        fclose(F2);
+    }
+
+    return ret;
+}
+
+int logger_test()
+{
+    FILE * F = NULL;
+    int ret = 0;
+
+#ifdef _WINDOWS
+    if (fopen_s(&F, log_test_file, "w") != 0) {
+        ret = -1;
+    }
+#else
+    F = fopen(log_test_file, "w");
+    if (F == NULL) {
+        ret = -1;
+    }
+#endif
+
+    for (size_t i = 0; i < nb_test_skip_list; i++)
+    {
+        picoquic_log_frames(F, test_skip_list[i].val, test_skip_list[i].len, 0);
+    }
+
+    fclose(F);
+
+    if (ret == 0)
+    {
+        ret = compare_files(log_test_file, log_test_ref);
+    }
+
+    return ret;
+}
+

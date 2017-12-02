@@ -66,6 +66,7 @@ extern "C" {
     int tls_api_server_losses_test();
     int skip_frame_test();
     int ping_pong_test();
+    int logger_test();
 
 #ifdef  __cplusplus
 }

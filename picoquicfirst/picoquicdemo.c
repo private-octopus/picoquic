@@ -506,6 +506,7 @@ static void first_server_callback(picoquic_cnx_t * cnx,
             memset(stream_ctx, 0, sizeof(picoquic_first_server_stream_ctx_t));
             stream_ctx->next_stream = ctx->first_stream;
             ctx->first_stream = stream_ctx;
+            stream_ctx->stream_id = stream_id;
         }
     }
 
@@ -861,8 +862,22 @@ static void demo_client_open_stream(picoquic_cnx_t * cnx,
             ctx->nb_client_streams++;
         }
 
-        (void)picoquic_add_to_stream(cnx, stream_ctx->stream_id, stream_ctx->command,
-            text_len + 7, 1);
+        
+        if (stream_ctx->stream_id == 1)
+        {
+            /* Horrible hack to test sending in three blocks */
+            (void)picoquic_add_to_stream(cnx, stream_ctx->stream_id, stream_ctx->command,
+                5, 0);
+            (void)picoquic_add_to_stream(cnx, stream_ctx->stream_id, &stream_ctx->command[5],
+                text_len, 0);
+            (void)picoquic_add_to_stream(cnx, stream_ctx->stream_id, &stream_ctx->command[5 + text_len],
+                2, 1);
+        }
+        else
+        {
+            (void)picoquic_add_to_stream(cnx, stream_ctx->stream_id, stream_ctx->command,
+                text_len + 7, 1);
+        }
     }
 }
 

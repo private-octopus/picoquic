@@ -220,7 +220,7 @@ int picoquic_prepare_stream_reset_frame(picoquic_cnx_t * cnx, picoquic_stream_he
             size_t l1 = 0, l2 = 0;
             if (bytes_max > 2)
             {
-                byte_index += 1;
+                bytes[byte_index++] = picoquic_frame_type_reset_stream;
                 l1 = picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index, stream->stream_id);
                 byte_index += l1;
                 if (l1 > 0 && bytes_max > byte_index + 3)
@@ -292,10 +292,9 @@ int picoquic_decode_stream_reset_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
         size_t l1 = 0, l2 = 0;
         if (bytes_max > 2)
         {
-            byte_index += 1;
             l1 = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &stream_id);
             byte_index += l1;
-            if (l1 > 0 && bytes_max > byte_index + 3)
+            if (l1 > 0 && bytes_max >= byte_index + 3)
             {
                 error_code = PICOPARSE_16(bytes + byte_index);
                 byte_index += 2;
@@ -2408,7 +2407,7 @@ int picoquic_decode_connection_close_frame(picoquic_cnx_t * cnx, uint8_t * bytes
     if ((picoquic_supported_versions[cnx->version_index].version_flags&picoquic_version_fix_ints) == 0)
     {
         size_t l1 = 0;
-        if (bytes_max > 4)
+        if (bytes_max >= 4)
         {
             error_code = PICOPARSE_16(bytes + byte_index);
             byte_index += 2;
@@ -2417,7 +2416,7 @@ int picoquic_decode_connection_close_frame(picoquic_cnx_t * cnx, uint8_t * bytes
             byte_index += (size_t)string_length;
         }
 
-        if (l1 == 0 || byte_index >= bytes_max)
+        if (l1 == 0 || byte_index > bytes_max)
         {
             ret = picoquic_connection_error(cnx,
                 PICOQUIC_TRANSPORT_FRAME_ERROR(picoquic_frame_type_connection_close));
@@ -2490,7 +2489,7 @@ int picoquic_prepare_application_close_frame(picoquic_cnx_t * cnx,
     {
         size_t l1 = 0;
 
-        if (bytes_max > 4)
+        if (bytes_max >= 4)
         {
             bytes[byte_index++] = picoquic_frame_type_application_close;
             picoformat_16(bytes + byte_index, cnx->application_error);
@@ -3217,7 +3216,6 @@ int picoquic_decode_frames(picoquic_cnx_t * cnx, uint8_t * bytes,
                 byte_index += consumed;
                 break;
             case picoquic_frame_type_application_close:
-                /* This really should be an error, as go away is not supported anymore */
                 ret = picoquic_decode_application_close_frame(cnx, bytes + byte_index, bytes_max - byte_index, &consumed);
                 byte_index += consumed;
                 break;
