@@ -48,7 +48,6 @@ int picoquic_parse_packet_header(
     picoquic_cnx_t ** pcnx)
 {
     int ret = 0;
-    picoquic_version_parameters_t version_encoding;
 
     /* Is this a long header of a short header? */
     if ((bytes[0] & 0x80) == 0x80)
