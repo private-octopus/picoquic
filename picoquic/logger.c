@@ -833,8 +833,8 @@ size_t picoquic_log_ping_pong_frame(FILE * F, uint8_t * bytes, size_t bytes_max,
         if (byte_index + ping_length > bytes_max)
         {
             fprintf(F, "    Malformed %s frame, length %d, %d bytes needed, %d available\n",
-                picoquic_log_frame_names[bytes[0]], ping_length,
-                ping_length + 2, bytes_max);
+                picoquic_log_frame_names[bytes[0]], (int) ping_length,
+                (int)(ping_length + 2), bytes_max);
             byte_index = bytes_max;
         }
         else if (ping_length == 0)
