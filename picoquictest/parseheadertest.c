@@ -24,94 +24,208 @@
 
 /* test vectors and corresponding structure */
 
-static uint8_t pinitial[] = {
+#define TEST_CNXID_INI_BYTES  0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 
+#define TEST_CNXID_INI_VAL    0x0001020304050607ull
+
+#define TEST_CNXID_07_BYTES  0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08
+#define TEST_CNXID_07_VAL    0x0102030405060708ull
+
+static uint8_t pinitial07[] = {
     0x82,
-    0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+    TEST_CNXID_INI_BYTES,
     0xDE, 0xAD, 0xBE, 0xEF,
-    0xFF, 0, 0, 13
+    0xFF, 0, 0, 7
 };
 
-static picoquic_packet_header hinitial = {
-    0x0102030405060708ull,
+static picoquic_packet_header hinitial07 = {
+    TEST_CNXID_INI_VAL,
     0xDEADBEEF,
-    0xFF00000Dul,
+    0xFF000007ul,
     17,
     picoquic_packet_client_initial,
-    0xFFFFFFFF00000000ull
+    0xFFFFFFFF00000000ull,
+    0, 1
 };
 
-static uint8_t packet_short_phi0_c_32[] = {
-    0x23,
-    0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+static uint8_t packet_short_phi0_c_32_07[] = {
+    0x43,
+    TEST_CNXID_07_BYTES,
     0xDE, 0xAD, 0xBE, 0xEF
 };
 
-static picoquic_packet_header hphi0_c_32 = {
-    0x0102030405060708ull,
+static picoquic_packet_header hphi0_c_32_07 = {
+    TEST_CNXID_07_VAL,
     0xDEADBEEF,
     0,
-    5,
+    13,
     picoquic_packet_1rtt_protected_phi0,
-    0xFFFFFFFF00000000ull
+    0xFFFFFFFF00000000ull,
+    0, 1
 };
 
-static uint8_t packet_short_phi1_c_16[] = {
-    0x22,
-    0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
-    0xBE, 0xEF
+static uint8_t packet_short_phi0_noc_16_07[] = {
+    0x02,
+    0xBE, 0xEF,
 };
 
-static picoquic_packet_header hphi1_c_16 = {
-    0x0102030405060708ull,
-    0xBEEF,
-    0,
-    3,
-    picoquic_packet_1rtt_protected_phi1,
-    0xFFFFFFFFFFFF0000ull
-};
-
-static uint8_t packet_short_phi1_c_8[] = {
-    0x21,
-    0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
-    0xEF
-};
-
-static picoquic_packet_header hphi1_c_8 = {
-    0x0102030405060708ull,
-    0xEF,
-    0,
-    3,
-    picoquic_packet_1rtt_protected_phi1,
-    0xFFFFFFFFFFFFFF00ull
-};
-
-
-static uint8_t packet_short_phi0_noc_16[] = {
-    0x03,
-    0xBE, 0xEF
-};
-
-static picoquic_packet_header hphi0_noc_16 = {
+static picoquic_packet_header hphi0_noc_16_07 = {
     0,
     0xBEEF,
     0,
     3,
     picoquic_packet_1rtt_protected_phi0,
-    0xFFFFFFFFFFFF0000ull
+    0xFFFFFFFFFFFF0000ull,
+    0, 1
 };
 
-static uint8_t packet_short_phi0_noc_8[] = {
-    0x03,
+static uint8_t packet_short_phi0_noc_8_07[] = {
+    0x01,
     0xEF
 };
 
-static picoquic_packet_header hphi0_noc_8 = {
+static picoquic_packet_header hphi0_noc_8_07 = {
     0,
     0xEF,
     0,
+    2,
+    picoquic_packet_1rtt_protected_phi0,
+    0xFFFFFFFFFFFFFF00ull,
+    0, 1
+};
+
+static uint8_t packet_short_phi1_c_16_07[] = {
+    0x62,
+    TEST_CNXID_07_BYTES,
+    0xBE, 0xEF
+};
+
+static picoquic_packet_header hphi1_c_16_07 = {
+    TEST_CNXID_07_VAL,
+    0xBEEF,
+    0,
+    11,
+    picoquic_packet_1rtt_protected_phi1,
+    0xFFFFFFFFFFFF0000ull,
+    0, 1
+};
+
+static uint8_t packet_short_phi1_c_8_07[] = {
+    0x61,
+    TEST_CNXID_07_BYTES,
+    0xEF
+};
+
+static picoquic_packet_header hphi1_c_8_07 = {
+    TEST_CNXID_07_VAL,
+    0xEF,
+    0,
+    10,
+    picoquic_packet_1rtt_protected_phi1,
+    0xFFFFFFFFFFFFFF00ull,
+    0, 1
+};
+
+/*
+ * New definitions
+ */
+
+#define TEST_CNXID_08_BYTES  0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09
+#define TEST_CNXID_08_VAL    0x0203040506070809ull
+
+static uint8_t pinitial08[] = {
+    0xFE,
+    TEST_CNXID_INI_BYTES,
+    0x50, 0x43, 0x51, 0x30,
+    0xDE, 0xAD, 0xBE, 0xEF
+};
+
+static picoquic_packet_header hinitial08 = {
+    TEST_CNXID_INI_VAL,
+    0xDEADBEEF,
+    0x50435130,
+    17,
+    picoquic_packet_client_initial,
+    0xFFFFFFFF00000000ull,
+    0, 0
+};
+
+static uint8_t packet_short_phi0_c_32_08[] = {
+    0x1D,
+    TEST_CNXID_08_BYTES,
+    0xDE, 0xAD, 0xBE, 0xEF
+};
+
+static picoquic_packet_header hphi0_c_32_08 = {
+    TEST_CNXID_08_VAL,
+    0xDEADBEEF,
+    0,
+    13,
+    picoquic_packet_1rtt_protected_phi0,
+    0xFFFFFFFF00000000ull,
+    0, 0
+};
+
+static uint8_t packet_short_phi1_c_16_08[] = {
+    0x3E,
+    TEST_CNXID_08_BYTES,
+    0xBE, 0xEF
+};
+
+static picoquic_packet_header hphi1_c_16_08 = {
+    TEST_CNXID_08_VAL,
+    0xBEEF,
+    0,
+    11,
+    picoquic_packet_1rtt_protected_phi1,
+    0xFFFFFFFFFFFF0000ull,
+    0, 0
+};
+
+static uint8_t packet_short_phi1_c_8_08[] = {
+    0x3F,
+    TEST_CNXID_08_BYTES,
+    0xEF
+};
+
+static picoquic_packet_header hphi1_c_8_08 = {
+    TEST_CNXID_08_VAL,
+    0xEF,
+    0,
+    10,
+    picoquic_packet_1rtt_protected_phi1,
+    0xFFFFFFFFFFFFFF00ull,
+    0, 0
+};
+
+
+static uint8_t packet_short_phi0_noc_16_08[] = {
+    0x5E,
+    0xBE, 0xEF,
+};
+
+static picoquic_packet_header hphi0_noc_16_08 = {
+    0,
+    0xBEEF,
+    0,
     3,
     picoquic_packet_1rtt_protected_phi0,
-    0xFFFFFFFFFFFFFF00ull
+    0xFFFFFFFFFFFF0000ull,
+    0, 0
+};
+
+static uint8_t packet_short_phi0_noc_8_08[] = {
+    0x5F,
+    0xEF
+};
+
+static picoquic_packet_header hphi0_noc_8_08 = {
+    0,
+    0xEF,
+    0,
+    2,
+    picoquic_packet_1rtt_protected_phi0,
+    0xFFFFFFFFFFFFFF00ull,
+    0, 0
 };
 
 struct _test_entry {
@@ -121,12 +235,18 @@ struct _test_entry {
 };
 
 static struct _test_entry test_entries[] = {
-    { pinitial , sizeof(pinitial), &hinitial },
-    { packet_short_phi0_c_32, sizeof(packet_short_phi0_c_32), &hphi0_c_32 },
-    { packet_short_phi1_c_16 , sizeof(packet_short_phi1_c_16), &hphi1_c_16 },
-    { packet_short_phi1_c_8, sizeof(packet_short_phi1_c_8), &hphi1_c_8 },
-    { packet_short_phi0_noc_16, sizeof(packet_short_phi0_noc_16), &hphi0_noc_16 },
-    { packet_short_phi0_noc_8, sizeof(packet_short_phi0_noc_8), &hphi0_noc_8 }
+    { pinitial07 , sizeof(pinitial07), &hinitial07 },
+    { packet_short_phi0_c_32_07, sizeof(packet_short_phi0_c_32_07), &hphi0_c_32_07 },
+    { packet_short_phi1_c_16_07 , sizeof(packet_short_phi1_c_16_07), &hphi1_c_16_07 },
+    { packet_short_phi1_c_8_07, sizeof(packet_short_phi1_c_8_07), &hphi1_c_8_07 },
+    { packet_short_phi0_noc_16_07, sizeof(packet_short_phi0_noc_16_07), &hphi0_noc_16_07 },
+    { packet_short_phi0_noc_8_07, sizeof(packet_short_phi0_noc_8_07), &hphi0_noc_8_07 },
+    { pinitial08 , sizeof(pinitial08), &hinitial08 },
+    { packet_short_phi0_c_32_08, sizeof(packet_short_phi0_c_32_08), &hphi0_c_32_08 },
+    { packet_short_phi1_c_16_08 , sizeof(packet_short_phi1_c_16_08), &hphi1_c_16_08 },
+    { packet_short_phi1_c_8_08, sizeof(packet_short_phi1_c_8_08), &hphi1_c_8_08 },
+    { packet_short_phi0_noc_16_08, sizeof(packet_short_phi0_noc_16_08), &hphi0_noc_16_08 },
+    { packet_short_phi0_noc_8_08, sizeof(packet_short_phi0_noc_8_08), &hphi0_noc_8_08 }
 };
 
 static const size_t nb_test_entries = sizeof(test_entries) / sizeof(struct _test_entry);
@@ -135,11 +255,56 @@ int parseheadertest()
 {
     int ret = 0;
     picoquic_packet_header ph;
+    picoquic_quic_t * quic = NULL;
+    picoquic_cnx_t * cnx_07 = NULL;
+    picoquic_cnx_t * cnx_08 = NULL;
+    struct sockaddr_in addr_07;
+    struct sockaddr_in addr_08;
+    picoquic_cnx_t * pcnx;
 
-    for (size_t i = 0; ret && i < nb_test_entries; i++)
+
+    /* Initialize the quic context and the connection contexts */
+    memset(&addr_07, 0, sizeof(struct sockaddr_in));
+    memset(&addr_08, 0, sizeof(struct sockaddr_in));
+    addr_07.sin_family = AF_INET;
+    addr_08.sin_family = AF_INET;
+#ifdef _WINDOWS
+    addr_07.sin_addr.S_un.S_addr = 0x0A000001;
+    addr_08.sin_addr.S_un.S_addr = 0x0A000002;
+#else
+    addr_07.sin_addr.s_addr = 0x0A000001;
+    addr_08.sin_addr.s_addr = 0x0A000002;
+#endif
+    addr_07.sin_port = 4433;
+    addr_08.sin_port = 4434;
+
+    quic = picoquic_create(8, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL);
+    if (quic == NULL)
     {
-        if (picoquic_parse_packet_header(
-            test_entries[i].packet, test_entries[i].length, &ph) != 0)
+        ret = -1;
+    }
+    else
+    {
+        cnx_07 = picoquic_create_cnx(quic, TEST_CNXID_07_VAL, (struct sockaddr *) &addr_07,
+            0, PICOQUIC_SECOND_INTEROP_VERSION, NULL, NULL);
+
+        cnx_08 = picoquic_create_cnx(quic, TEST_CNXID_08_VAL, (struct sockaddr *) &addr_08,
+            0, PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, NULL);
+
+        if (cnx_07 == NULL || cnx_08 == NULL)
+        {
+            ret = -1;
+        }
+    }
+
+    for (size_t i = 0; ret == 0 && i < nb_test_entries; i++)
+    {
+        pcnx = NULL;
+
+        if (picoquic_parse_packet_header(quic, test_entries[i].packet, test_entries[i].length,
+            (test_entries[i].ph->version_index == 0) ? (struct sockaddr *)&addr_08 : (struct sockaddr *)&addr_07,
+            0, &ph, &pcnx) != 0)
         {
             ret = -1;
         }

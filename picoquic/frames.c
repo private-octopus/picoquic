@@ -1828,9 +1828,12 @@ void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t * cnx, picoquic_p
 	picoquic_packet_header ph;
 	int frame_is_pure_ack = 0;
 	size_t frame_length = 0;
+    picoquic_cnx_t * pcnx = cnx;
 
 	/* Get the packet type */
-	ret = picoquic_parse_packet_header(p->bytes, p->length, &ph);
+    ret = picoquic_parse_packet_header(cnx->quic, p->bytes, p->length, NULL,
+        ((cnx->quic->flags&picoquic_context_server) == 0) ? 1 : 0, &ph, &pcnx);
+
 	byte_index = ph.offset;
 
 	while (ret == 0 && byte_index < p->length)

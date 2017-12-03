@@ -48,12 +48,63 @@ extern "C" {
 #define PICOQUIC_CWIN_INITIAL  (10*PICOQUIC_MAX_PACKET_SIZE)
 #define PICOQUIC_CWIN_MINIMUM  (2*PICOQUIC_MAX_PACKET_SIZE)
 
+
+    /*
+     * Nominal packet types. These are the packet types used internally by the
+     * implementation. The wire encoding depends on the version.
+     */
+    typedef enum
+    {
+        picoquic_packet_error = 0,
+        picoquic_packet_version_negotiation = 1,
+        picoquic_packet_client_initial = 2,
+        picoquic_packet_server_stateless = 3,
+        picoquic_packet_server_cleartext = 4,
+        picoquic_packet_client_cleartext = 5,
+        picoquic_packet_0rtt_protected = 6,
+        picoquic_packet_1rtt_protected_phi0 = 7,
+        picoquic_packet_1rtt_protected_phi1 = 8,
+        picoquic_packet_type_max = 9
+    } picoquic_packet_type_enum;
+
+    /*
+     * Types of frames
+     */
+    typedef enum {
+        picoquic_frame_type_padding = 0,
+        picoquic_frame_type_reset_stream = 1,
+        picoquic_frame_type_connection_close = 2,
+        picoquic_frame_type_application_close = 3,
+        picoquic_frame_type_max_data = 4,
+        picoquic_frame_type_max_stream_data = 5,
+        picoquic_frame_type_max_stream_id = 6,
+        picoquic_frame_type_ping = 7,
+        picoquic_frame_type_blocked = 8,
+        picoquic_frame_type_stream_blocked = 9,
+        picoquic_frame_type_stream_id_needed = 0x0a,
+        picoquic_frame_type_new_connection_id = 0x0b,
+        picoquic_frame_type_stop_sending = 0x0c,
+        picoquic_frame_type_pong = 0x0d,
+        picoquic_frame_type_ack = 0x0e,
+        picoquic_frame_type_stream_range_min = 0x10,
+        picoquic_frame_type_stream_range_max = 0x1F,
+        picoquic_frame_type_ack_range_min_old = 0xa0,
+        picoquic_frame_type_ack_range_max_old = 0xbf,
+        picoquic_frame_type_stream_range_min_old = 0xc0,
+        picoquic_frame_type_stream_range_max_old = 0xcf
+    } picoquic_frame_type_enum_t;
+
 	/*
 	* Supported versions
 	*/
 #define PICOQUIC_FIRST_INTEROP_VERSION   0xFF000005
 #define PICOQUIC_SECOND_INTEROP_VERSION  0xFF000007
 #define PICOQUIC_INTERNAL_TEST_VERSION_1 0x50435130 
+
+    /* 
+     * Flags used to describe the capbilities of different
+     * versions.
+     */
 
     typedef enum {
         picoquic_version_basic_time_stamp = 1,
@@ -63,9 +114,18 @@ extern "C" {
         picoquic_version_short_pings = 16
     } picoquic_version_feature_flags;
 
+    /*
+     * Codes used for representing the various types of packet encodings
+     */
+    typedef enum {
+        picoquic_version_header_05_07 = 0,
+        picoquic_version_header_08 
+    } picoquic_version_header_encoding;
+
     typedef struct st_picoquic_version_parameters_t {
         uint32_t version;
         uint32_t version_flags;
+        picoquic_version_header_encoding version_header_encoding;
         size_t version_aead_key_length;
         uint8_t * version_aead_key;
     } picoquic_version_parameters_t;
@@ -136,32 +196,6 @@ extern "C" {
 		// uint64_t time_stamp_last_in_range;
 	} picoquic_sack_item_t;
 
-	/*
-	 * Types of frames
-	 */
-	typedef enum {
-		picoquic_frame_type_padding = 0,
-		picoquic_frame_type_reset_stream = 1,
-		picoquic_frame_type_connection_close = 2,
-		picoquic_frame_type_application_close = 3,
-		picoquic_frame_type_max_data = 4,
-		picoquic_frame_type_max_stream_data = 5,
-		picoquic_frame_type_max_stream_id = 6,
-		picoquic_frame_type_ping = 7,
-		picoquic_frame_type_blocked = 8,
-		picoquic_frame_type_stream_blocked = 9,
-		picoquic_frame_type_stream_id_needed = 0x0a,
-		picoquic_frame_type_new_connection_id = 0x0b,
-        picoquic_frame_type_stop_sending = 0x0c,
-        picoquic_frame_type_pong = 0x0d,
-        picoquic_frame_type_ack = 0x0e,
-        picoquic_frame_type_stream_range_min = 0x10,
-        picoquic_frame_type_stream_range_max = 0x1F,
-		picoquic_frame_type_ack_range_min_old = 0xa0,
-		picoquic_frame_type_ack_range_max_old = 0xbf,
-		picoquic_frame_type_stream_range_min_old = 0xc0,
-		picoquic_frame_type_stream_range_max_old = 0xcf
-	} picoquic_frame_type_enum_t;
 
 	/*
 	 * Stream head.
@@ -223,24 +257,6 @@ extern "C" {
         size_t length;
     } picoquic_misc_frame_header_t;
 
-	/*
-	 * Packet sent, and queued for retransmission.
-	 * The packet is not encrypted.
-	 */
-
-	typedef enum
-	{
-		picoquic_packet_error = 0,
-		picoquic_packet_version_negotiation = 1,
-		picoquic_packet_client_initial = 2,
-		picoquic_packet_server_stateless = 3,
-		picoquic_packet_server_cleartext = 4,
-		picoquic_packet_client_cleartext = 5,
-		picoquic_packet_0rtt_protected = 6,
-		picoquic_packet_1rtt_protected_phi0 = 7,
-		picoquic_packet_1rtt_protected_phi1 = 8,
-		picoquic_packet_type_max = 9
-	} picoquic_packet_type_enum;
 
 	/*
 	 * Per connection context.
@@ -412,12 +428,17 @@ extern "C" {
 		picoquic_packet_type_enum ptype;
 		uint64_t pnmask;
 		uint64_t pn64;
+        int version_index;
 	} picoquic_packet_header;
 
 	int picoquic_parse_packet_header(
-		uint8_t * bytes,
-		size_t length,
-		picoquic_packet_header * ph);
+        picoquic_quic_t * quic,
+        uint8_t * bytes,
+        uint32_t length,
+        struct sockaddr * addr_from,
+        int to_server,
+        picoquic_packet_header * ph,
+        picoquic_cnx_t ** pcnx);
 
     int picoquic_test_stream_frame_unlimited(picoquic_cnx_t * cnx, uint8_t * bytes);
 

@@ -198,7 +198,7 @@ picoquic_packet * picoquic_create_packet()
     return packet;
 }
 
-size_t picoquic_create_packet_header(
+size_t picoquic_create_packet_header_05_07(
 	picoquic_cnx_t * cnx,
 	picoquic_packet_type_enum packet_type,
 	uint64_t cnx_id,
@@ -250,6 +250,104 @@ size_t picoquic_create_packet_header(
 	}
 
 	return length;
+}
+
+size_t picoquic_create_packet_header_08(
+    picoquic_cnx_t * cnx,
+    picoquic_packet_type_enum packet_type,
+    uint64_t cnx_id,
+    uint64_t sequence_number,
+    uint8_t * bytes
+)
+{
+    size_t length = 0;
+
+    /* Prepare the packet header */
+    if (packet_type == picoquic_packet_1rtt_protected_phi0 ||
+        packet_type == picoquic_packet_1rtt_protected_phi1)
+    {
+        /* Create a short packet -- using 32 bit sequence numbers for now */
+        uint8_t C = (cnx->remote_parameters.omit_connection_id != 0) ? 0x40 : 0;
+        uint8_t K = (packet_type == picoquic_packet_1rtt_protected_phi0) ? 0 : 0x20;
+        uint8_t PT = 0x1D;
+
+        length = 0;
+        bytes[length++] = (C | K | PT);
+        if (C == 0)
+        {
+            picoformat_64(&bytes[length], cnx_id);
+            length += 8;
+        }
+        picoformat_32(&bytes[length], (uint32_t)sequence_number);
+        length += 4;
+    }
+    else
+    {
+        /* Create a long packet */
+        switch (packet_type)
+        {
+        case picoquic_packet_version_negotiation:
+            bytes[0] = 0xFF;
+            break;
+        case picoquic_packet_client_initial:
+            bytes[0] = 0xFE;
+            break;
+        case picoquic_packet_server_stateless:
+            bytes[0] = 0xFD;
+            break;
+        case picoquic_packet_server_cleartext:
+        case picoquic_packet_client_cleartext:
+            bytes[0] = 0xFC;
+            break;
+        case picoquic_packet_0rtt_protected:
+            bytes[0] = 0xFB;
+            break;
+        default:
+            bytes[0] = 0x80;
+            break;
+        }
+
+        picoformat_64(&bytes[1], cnx_id);
+        if ((cnx->cnx_state == picoquic_state_client_init ||
+            cnx->cnx_state == picoquic_state_client_init_sent) &&
+            packet_type == picoquic_packet_client_initial)
+        {
+            picoformat_32(&bytes[9], cnx->proposed_version);
+        }
+        else
+        {
+            picoformat_32(&bytes[9],
+                picoquic_supported_versions[cnx->version_index].version);
+        }
+        picoformat_32(&bytes[13], (uint32_t)sequence_number);
+
+        length = 17;
+    }
+
+    return length;
+}
+
+size_t picoquic_create_packet_header(
+    picoquic_cnx_t * cnx,
+    picoquic_packet_type_enum packet_type,
+    uint64_t cnx_id,
+    uint64_t sequence_number,
+    uint8_t * bytes
+)
+{
+    size_t header_length = 0;
+    switch (picoquic_supported_versions[cnx->version_index].version_header_encoding)
+    {
+    case picoquic_version_header_05_07:
+        header_length = picoquic_create_packet_header_05_07(cnx, packet_type, cnx_id, sequence_number, bytes);
+        break;
+    case picoquic_version_header_08:
+        header_length = picoquic_create_packet_header_08(cnx, packet_type, cnx_id, sequence_number, bytes);
+        break;
+    default:
+        break;
+    }
+    return header_length;
 }
 
 /*
@@ -379,11 +477,13 @@ int picoquic_retransmit_needed(picoquic_cnx_t * cnx, uint64_t current_time,
 			size_t frame_length = 0;
 			size_t byte_index = 0; /* Used when parsing the old packet */
 			size_t checksum_length;
+            picoquic_cnx_t * pcnx = cnx;
 
 
 			*header_length = 0;
 			/* Get the packet type */
-			ret = picoquic_parse_packet_header(p->bytes, p->length, &ph);
+            ret = picoquic_parse_packet_header(cnx->quic, p->bytes, p->length, NULL,
+                ((cnx->quic->flags&picoquic_context_server) == 0) ? 1 : 0, &ph, &pcnx);
 
 			length = picoquic_create_packet_header(cnx, ph.ptype, ph.cnx_id, cnx->send_sequence, 
 				bytes);
@@ -511,8 +611,11 @@ int picoquic_is_cnx_backlog_empty(picoquic_cnx_t * cnx)
         int frame_is_pure_ack = 0;
         size_t frame_length = 0;
         size_t byte_index = 0; /* Used when parsing the old packet */
+        picoquic_cnx_t * pcnx = cnx;
+
         /* Get the packet type */
-        ret = picoquic_parse_packet_header(p->bytes, p->length, &ph);
+        ret = picoquic_parse_packet_header(cnx->quic, p->bytes, p->length, NULL,
+            ((cnx->quic->flags&picoquic_context_server) == 0) ? 1 : 0, &ph, &pcnx);
 
         /* Copy the relevant bytes from one packet to the next */
         byte_index = ph.offset;

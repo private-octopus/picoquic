@@ -1082,11 +1082,15 @@ void picoquic_log_packet(FILE* F, picoquic_quic_t * quic, picoquic_cnx_t * cnx,
 	int ret = 0;
 	picoquic_packet_header ph;
 	size_t decoded_length = 0;
+    picoquic_cnx_t * pcnx = cnx;
 
 	/* first log line */
 	picoquic_log_packet_address(F, cnx, addr_peer, receiving, length, current_time);
+
 	/* Parse the clear text header */
-	ret = picoquic_parse_packet_header(bytes, length, &ph);
+    ret = picoquic_parse_packet_header(quic, bytes, length, NULL,
+        ((cnx->quic->flags&picoquic_context_server) == 0) ? 
+        ((receiving == 0)?1:0): ((receiving == 0) ? 0 : 1), &ph, &pcnx);
 
 
 	if (ret != 0)
