@@ -286,21 +286,18 @@ size_t picoquic_create_packet_header_08(
         /* Create a long packet */
         switch (packet_type)
         {
-        case picoquic_packet_version_negotiation:
+        case picoquic_packet_client_initial:
             bytes[0] = 0xFF;
             break;
-        case picoquic_packet_client_initial:
-            bytes[0] = 0xFE;
-            break;
         case picoquic_packet_server_stateless:
-            bytes[0] = 0xFD;
+            bytes[0] = 0xFE;
             break;
         case picoquic_packet_server_cleartext:
         case picoquic_packet_client_cleartext:
-            bytes[0] = 0xFC;
+            bytes[0] = 0xFD;
             break;
         case picoquic_packet_0rtt_protected:
-            bytes[0] = 0xFB;
+            bytes[0] = 0xFC;
             break;
         default:
             bytes[0] = 0x80;

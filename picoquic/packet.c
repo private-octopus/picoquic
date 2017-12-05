@@ -67,7 +67,7 @@ int picoquic_parse_packet_header(
             ph->pn = PICOPARSE_32(bytes + 13);
             ph->version_index = picoquic_get_version_index(ph->vn);
 
-            if (ph->version_index < 0 && (ph->vn & 0x0A0A0A0A) == 0x0A0A0A0A)
+            if (ph->version_index < 0 && ph->vn == 0)
             {
                 if (to_server == 0)
                 {
@@ -92,11 +92,12 @@ int picoquic_parse_packet_header(
                     ph->version_index = -1;
                 }
             }
-            else if (ph->version_index < 0)
+            
+            if (ph->version_index < 0)
             {
                 /* Version and Sequence number were swapped in the old versions.
                  * TODO: suppress this code when we forget about the old versions */
-                if ((ph->pn & 0x0A0A0A0A0) == 0x0A0A0A0A)
+                if ((ph->pn & 0x0A0A0A0A) == 0x0A0A0A0A)
                 {
                     uint32_t x = ph->vn;
                     ph->vn = ph->pn;
@@ -140,6 +141,14 @@ int picoquic_parse_packet_header(
                 ph->offset = 17;
                 ph->ptype = picoquic_packet_error;
             }
+            else if (ph->vn == 0 &&
+                picoquic_supported_versions[ph->version_index].version_header_encoding != picoquic_version_header_05_07)
+            {
+                ph->ptype = picoquic_packet_version_negotiation;
+                ph->offset = 13;
+                ph->pn = 0;
+                ph->pnmask = 0;
+            }
             else
             {
                 /* If the version is supported now, the format field in the version table
@@ -161,18 +170,15 @@ int picoquic_parse_packet_header(
                     switch (bytes[0])
                     {
                     case 0xFF:
-                        ph->ptype = picoquic_packet_version_negotiation;
-                        break;
-                    case 0xFE:
                         ph->ptype = picoquic_packet_client_initial;
                         break;
-                    case 0xFD:
+                    case 0xFE:
                         ph->ptype = picoquic_packet_server_stateless;
                         break;
-                    case 0xFC:
+                    case 0xFD:
                         ph->ptype = (to_server == 0) ? picoquic_packet_server_cleartext : picoquic_packet_client_cleartext;
                         break;
-                    case 0xFB:
+                    case 0xFC:
                         ph->ptype = picoquic_packet_0rtt_protected;
                         break;
                     default:
@@ -519,15 +525,28 @@ int picoquic_incoming_version_negotiation(
 	/* Parse the content */
 	int ret = -1;
 
-	if (ph->cnx_id != cnx->initial_cnxid ||
-        ph->vn != cnx->proposed_version ||
-		(cnx->retransmit_newest == NULL || ph->pn64 > cnx->retransmit_newest->sequence_number) ||
-		(cnx->retransmit_oldest == NULL || ph->pn64 < cnx->retransmit_oldest->sequence_number))
-	{
-		/* Packet that do not match the "echo" checks should be logged and ignored */
-		ret = 0;
-	}
-	else
+    if (picoquic_supported_versions[cnx->version_index].version_header_encoding == picoquic_version_header_05_07)
+    {
+        if (ph->cnx_id != cnx->initial_cnxid ||
+            ph->vn != cnx->proposed_version ||
+            (cnx->retransmit_newest == NULL || ph->pn64 > cnx->retransmit_newest->sequence_number) ||
+            (cnx->retransmit_oldest == NULL || ph->pn64 < cnx->retransmit_oldest->sequence_number))
+        {
+            /* Packet that do not match the "echo" checks should be logged and ignored */
+            ret = 0;
+        }
+    }
+    else
+    {
+        if (ph->cnx_id != cnx->initial_cnxid ||
+            ph->vn != 0)
+        {
+            /* Packet that do not match the "echo" checks should be logged and ignored */
+            ret = 0;
+        }
+    }
+
+	if (ret != 0)
 	{
 		/* Trying to renegotiate the version, just ignore the packet if not good. */
 		ret = picoquic_reset_cnx_version( cnx, bytes + ph->offset, length - ph->offset);
@@ -627,15 +646,12 @@ int picoquic_prepare_version_negotiation(
         }
         else
         {
-            bytes[byte_index++] = 0xFF;
+            bytes[byte_index++] = 0xFF; /* TODO: Should be randomized */
             /* Copy the incoming connection ID */
             picoformat_64(bytes + byte_index, ph->cnx_id);
             byte_index += 8;
-            /* Copy the incoming version number */
-            picoformat_32(bytes + byte_index, ph->vn);
-            byte_index += 4;
-            /* Copy the packet number */
-            picoformat_32(bytes + byte_index, ph->pn);
+            /* Set the version number to zero */
+            picoformat_32(bytes + byte_index, 0);
             byte_index += 4;
         }
 
@@ -735,7 +751,7 @@ void picoquic_queue_stateless_reset(picoquic_cnx_t * cnx,
         else
         {
             /* Packet type set to long header, with cnxid */
-            bytes[byte_index++] = 0x80 | 0x7D;
+            bytes[byte_index++] = 0x80 | 0x7E;
             /* Copy the connection ID */
             picoformat_64(bytes + byte_index, ph->cnx_id);
             byte_index += 8;

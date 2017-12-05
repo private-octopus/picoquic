@@ -48,6 +48,25 @@ static picoquic_packet_header hinitial07 = {
     0, 1
 };
 
+static uint8_t pvnego07[] = {
+    0x81,
+    TEST_CNXID_07_BYTES,
+    0xDE, 0xAD, 0xBE, 0xEF,
+    0x1A, 0x2A, 0x3A, 0x4A,
+    0xFF, 0, 0, 7,
+    0x50, 0x43, 0x51, 0x30
+};
+
+static picoquic_packet_header hvnego07 = {
+    TEST_CNXID_07_VAL,
+    0xDEADBEEF,
+    0x1A2A3A4Aul,
+    17,
+    picoquic_packet_version_negotiation,
+    0xFFFFFFFF00000000ull,
+    0, 1
+};
+
 static uint8_t packet_short_phi0_c_32_07[] = {
     0x43,
     TEST_CNXID_07_BYTES,
@@ -134,7 +153,7 @@ static picoquic_packet_header hphi1_c_8_07 = {
 #define TEST_CNXID_08_VAL    0x0203040506070809ull
 
 static uint8_t pinitial08[] = {
-    0xFE,
+    0xFF,
     TEST_CNXID_INI_BYTES,
     0x50, 0x43, 0x51, 0x30,
     0xDE, 0xAD, 0xBE, 0xEF
@@ -147,6 +166,32 @@ static picoquic_packet_header hinitial08 = {
     17,
     picoquic_packet_client_initial,
     0xFFFFFFFF00000000ull,
+    0, 0
+};
+
+static uint8_t pvnego08[] = {
+    0xFF,
+    TEST_CNXID_08_BYTES,
+    0, 0, 0, 0,
+    0x50, 0x43, 0x51, 0x30,
+    0xFF, 0, 0, 7
+};
+
+static uint8_t pvnegobis08[] = {
+    0xAA,
+    TEST_CNXID_08_BYTES,
+    0, 0, 0, 0,
+    0x50, 0x43, 0x51, 0x30,
+    0xFF, 0, 0, 7
+};
+
+static picoquic_packet_header hvnego08 = {
+    TEST_CNXID_08_VAL,
+    0,
+    0,
+    13,
+    picoquic_packet_version_negotiation,
+    0,
     0, 0
 };
 
@@ -237,12 +282,15 @@ struct _test_entry {
 
 static struct _test_entry test_entries[] = {
     { pinitial07 , sizeof(pinitial07), &hinitial07 },
+    { pvnego07 , sizeof(pvnego07), &hvnego07 },
     { packet_short_phi0_c_32_07, sizeof(packet_short_phi0_c_32_07), &hphi0_c_32_07 },
     { packet_short_phi1_c_16_07 , sizeof(packet_short_phi1_c_16_07), &hphi1_c_16_07 },
     { packet_short_phi1_c_8_07, sizeof(packet_short_phi1_c_8_07), &hphi1_c_8_07 },
     { packet_short_phi0_noc_16_07, sizeof(packet_short_phi0_noc_16_07), &hphi0_noc_16_07 },
     { packet_short_phi0_noc_8_07, sizeof(packet_short_phi0_noc_8_07), &hphi0_noc_8_07 },
     { pinitial08 , sizeof(pinitial08), &hinitial08 },
+    { pvnego08, sizeof(pvnego08), &hvnego08},
+    { pvnegobis08, sizeof(pvnegobis08), &hvnego08 },
     { packet_short_phi0_c_32_08, sizeof(packet_short_phi0_c_32_08), &hphi0_c_32_08 },
     { packet_short_phi1_c_16_08 , sizeof(packet_short_phi1_c_16_08), &hphi1_c_16_08 },
     { packet_short_phi1_c_8_08, sizeof(packet_short_phi1_c_8_08), &hphi1_c_8_08 },
