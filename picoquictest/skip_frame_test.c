@@ -72,17 +72,21 @@ static uint8_t test_frame_type_ping_long[] = {
     1, 2, 3, 4, 5, 6, 7, 8  
 };
 static uint8_t test_frame_type_blocked[] = { 
-    picoquic_frame_type_blocked
+    picoquic_frame_type_blocked,
+    0x80, 0x01, 0, 0
 };
 static uint8_t test_frame_type_stream_blocked[] = { 
     picoquic_frame_type_stream_blocked,
-    0x80, 1, 0, 0
+    0x80, 1, 0, 0,
+    0x80, 0x01, 0, 0
 };
 static uint8_t test_frame_type_stream_id_needed[] = { 
-    picoquic_frame_type_stream_id_needed
+    picoquic_frame_type_stream_id_needed,
+    0x41, 0
 };
 static uint8_t test_frame_type_new_connection_id[] = { 
     picoquic_frame_type_new_connection_id,
+    0x41, 0,
     1, 2, 3, 4, 5, 6, 7, 8,
     0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7, 
     0xA8, 0xA9, 0xAA, 0xAB, 0xAC, 0xAD, 0xAE, 0xAF

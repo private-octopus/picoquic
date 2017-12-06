@@ -3237,7 +3237,7 @@ int picoquic_decode_frames(picoquic_cnx_t * cnx, uint8_t * bytes,
                 break;
             case picoquic_frame_type_max_stream_id: /* MAX_STREAM_ID */
                 ret = picoquic_decode_max_stream_id_frame(cnx, bytes + byte_index, bytes_max - byte_index, &consumed);
-                byte_index += consumed;
+                byte_index += consumed; 
                 cnx->ack_needed = 1;
                 break;
             case picoquic_frame_type_ping: /* PING */
@@ -3247,23 +3247,47 @@ int picoquic_decode_frames(picoquic_cnx_t * cnx, uint8_t * bytes,
                 break;
             case picoquic_frame_type_blocked: /* BLOCKED */
                 byte_index++;
+                if ((picoquic_supported_versions[cnx->version_index].version_flags&picoquic_version_fix_ints) == 0)
+                {
+                    /* Skip the max data offset */
+                    byte_index += picoquic_varint_skip(&bytes[byte_index]);
+                }
+                cnx->ack_needed = 1;
                 break;
             case picoquic_frame_type_stream_blocked: /* STREAM_BLOCKED */
                 if ((picoquic_supported_versions[cnx->version_index].version_flags&picoquic_version_fix_ints) == 0)
                 {
                     byte_index += 1 + picoquic_varint_skip(bytes + byte_index + 1);
+                    /* Skip the max data offset */
+                    byte_index += picoquic_varint_skip(&bytes[byte_index]);
                 }
                 else
                 {
                     byte_index += 5;
                 }
+                cnx->ack_needed = 1;
                 break;
             case picoquic_frame_type_stream_id_needed: /* STREAM_ID_NEEDED */
                 byte_index++;
+                if ((picoquic_supported_versions[cnx->version_index].version_flags&picoquic_version_fix_ints) == 0)
+                {
+                    /* Skip the stream ID */
+                    byte_index += picoquic_varint_skip(&bytes[byte_index]);
+                }
                 cnx->ack_needed = 1;
                 break;
             case picoquic_frame_type_new_connection_id: /* NEW_CONNECTION_ID */
-                byte_index += 1 + 8 + 16;
+                byte_index += 1;
+                if ((picoquic_supported_versions[cnx->version_index].version_flags&picoquic_version_fix_ints) == 0)
+                {
+                    /* Skip the sequence index */
+                    byte_index += picoquic_varint_skip(&bytes[byte_index]);
+                }
+                else
+                {
+                    byte_index += 2;
+                }
+                byte_index += 8 + 16;
                 cnx->ack_needed = 1;
                 break;
             case picoquic_frame_type_stop_sending:
@@ -3698,11 +3722,18 @@ int picoquic_skip_frame(uint8_t * bytes, size_t bytes_max, size_t * consumed,
 			break;
 		case picoquic_frame_type_blocked:
             *pure_ack = 0;
+            if ((version_flags&picoquic_version_fix_ints) == 0)
+            {
+                /* Skip the max data offset */
+                byte_index += picoquic_varint_skip(&bytes[byte_index]);
+            }
 			break;
 		case picoquic_frame_type_stream_blocked:
             if ((version_flags&picoquic_version_fix_ints) == 0)
             {
                 byte_index += picoquic_varint_skip(bytes + byte_index);
+                /* Skip the max stream data offset */
+                byte_index += picoquic_varint_skip(&bytes[byte_index]);
             }
             else
             {
@@ -3711,9 +3742,23 @@ int picoquic_skip_frame(uint8_t * bytes, size_t bytes_max, size_t * consumed,
             *pure_ack = 0;
 			break;
 		case picoquic_frame_type_stream_id_needed:
+            if ((version_flags&picoquic_version_fix_ints) == 0)
+            {
+                /* Skip the stream ID */
+                byte_index += picoquic_varint_skip(&bytes[byte_index]);
+            }
             *pure_ack = 0;
 			break;
 		case picoquic_frame_type_new_connection_id:
+            if ((version_flags&picoquic_version_fix_ints) == 0)
+            {
+                /* Skip the sequence */
+                byte_index += picoquic_varint_skip(&bytes[byte_index]);
+            }
+            else
+            {
+                byte_index += 2;
+            }
 			byte_index += 8 + 16;
 			*pure_ack = 0;
 			break;

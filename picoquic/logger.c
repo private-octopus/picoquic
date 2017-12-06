@@ -767,6 +767,7 @@ size_t picoquic_log_stream_blocked_frame(FILE * F, uint8_t * bytes, size_t bytes
     if ((version_flags&picoquic_version_fix_ints) == 0)
     {
         byte_index += picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &blocked_stream_id);
+        byte_index += picoquic_varint_skip(&bytes[byte_index]);
     }
     else
     {
@@ -780,11 +781,19 @@ size_t picoquic_log_stream_blocked_frame(FILE * F, uint8_t * bytes, size_t bytes
 	return byte_index;
 }
 
-size_t picoquic_log_new_connection_id_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
+size_t picoquic_log_new_connection_id_frame(FILE * F, uint8_t * bytes, size_t bytes_max, uint32_t version_flags)
 {
 	size_t byte_index = 1;
-	const size_t min_size = 1 + 8 + 16;
+	size_t min_size = 1 + 8 + 16;
 	uint64_t new_cnx_id;
+    size_t l_seq = 2;
+
+    if ((version_flags&picoquic_version_fix_ints) == 0)
+    {
+        l_seq = picoquic_varint_skip(&bytes[byte_index]);
+    }
+
+    min_size += l_seq;
 
 	if (min_size > bytes_max)
 	{
@@ -792,6 +801,7 @@ size_t picoquic_log_new_connection_id_frame(FILE * F, uint8_t * bytes, size_t by
 		return bytes_max;
 	}
 
+    byte_index += l_seq;
 	/* Now that the size is good, parse and print it */
 	new_cnx_id = PICOPARSE_64(bytes + byte_index);
 	byte_index += 8;
@@ -961,6 +971,10 @@ void picoquic_log_frames(FILE* F, uint8_t * bytes, size_t length, uint32_t versi
                 case picoquic_frame_type_blocked: /* BLOCKED */
                     /* No payload */
                     byte_index++;
+                    if ((version_flags&picoquic_version_fix_ints) == 0)
+                    {
+                        byte_index += picoquic_varint_skip(&bytes[byte_index]);
+                    }
                     break;
                 case picoquic_frame_type_stream_blocked: /* STREAM_BLOCKED */
                     byte_index += picoquic_log_stream_blocked_frame(F, bytes + byte_index,
@@ -970,10 +984,14 @@ void picoquic_log_frames(FILE* F, uint8_t * bytes, size_t length, uint32_t versi
                     /* No payload */
                     fprintf(F, "    %s frame\n", picoquic_log_frame_names[frame_id]);
                     byte_index++;
+                    if ((version_flags&picoquic_version_fix_ints) == 0)
+                    {
+                        byte_index += picoquic_varint_skip(&bytes[byte_index]);
+                    }
                     break;
                 case picoquic_frame_type_new_connection_id: /* NEW_CONNECTION_ID */
                     byte_index += picoquic_log_new_connection_id_frame(F, bytes + byte_index,
-                        length - byte_index);
+                        length - byte_index, version_flags);
                     break;
                 case picoquic_frame_type_stop_sending: /* STOP_SENDING */
                     byte_index += picoquic_log_stop_sending_frame(F, bytes + byte_index,
