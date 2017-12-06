@@ -111,7 +111,8 @@ extern "C" {
         picoquic_version_long_error_codes = 2,
         picoquic_version_use_fnv1a = 4,
         picoquic_version_fix_ints = 8,
-        picoquic_version_short_pings = 16
+        picoquic_version_short_pings = 16,
+        picoquic_version_old_parameters = 32
     } picoquic_version_feature_flags;
 
     /*
@@ -179,10 +180,12 @@ extern "C" {
 	typedef struct _picoquic_transport_parameters {
 		uint32_t initial_max_stream_data;
 		uint32_t initial_max_data;
-		uint32_t initial_max_stream_id;
+		uint32_t initial_max_stream_id_bidir;
+        uint32_t initial_max_stream_id_unidir;
 		uint32_t idle_timeout;
 		uint32_t omit_connection_id;
 		uint32_t max_packet_size;
+        uint8_t ack_delay_exponent;
 	} picoquic_transport_parameters;
 
 	/*
@@ -356,10 +359,12 @@ extern "C" {
 		uint64_t data_received;
 		uint64_t maxdata_local;
 		uint64_t maxdata_remote;
-		uint64_t highest_stream_id_local;
-		uint64_t highest_stream_id_remote;
-		uint64_t max_stream_id_local;
-		uint64_t max_stream_id_remote;
+		//uint64_t highest_stream_id_local;
+		//uint64_t highest_stream_id_remote;
+		uint64_t max_stream_id_bidir_local;
+        uint64_t max_stream_id_unidir_local;
+		uint64_t max_stream_id_bidir_remote;
+        uint64_t max_stream_id_unidir_remote;
 
         /* Queue for frames waiting to be sent */
         picoquic_misc_frame_header_t * first_misc_frame;
@@ -451,7 +456,7 @@ extern "C" {
 		uint8_t const * bytes, size_t bytes_max, uint64_t target_sequence,
 		uint64_t * num_block, unsigned * num_ts, uint64_t * largest,
 		uint64_t * ack_delay, unsigned * mm, size_t * consumed,
-        uint32_t version_flags);
+        uint32_t version_flags, uint8_t ack_delay_exponent);
   
 	uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t pn);
 

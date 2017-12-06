@@ -91,7 +91,7 @@ int picoquic_find_or_create_stream(picoquic_cnx_t * cnx, uint64_t stream_id,
 	int ret = 0;
 
 	/* Verify the stream ID control conditions */
-	if (stream_id > cnx->max_stream_id_local)
+	if (stream_id > cnx->max_stream_id_bidir_local)
 	{
 		ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_STREAM_ID_ERROR);
 	}
@@ -1018,7 +1018,7 @@ picoquic_stream_head * picoquic_find_ready_stream(picoquic_cnx_t * cnx, int rest
 
 					if (((stream->stream_id & 1) ^ parity) == 1)
 					{
-						if (stream->stream_id < cnx->max_stream_id_remote)
+						if (stream->stream_id < cnx->max_stream_id_bidir_remote)
 						{
 							break;
 						}
@@ -1463,7 +1463,7 @@ static int picoquic_parse_ack_header_old(uint8_t const * bytes, size_t bytes_max
 int picoquic_parse_ack_header(uint8_t const * bytes, size_t bytes_max, 
     uint64_t target_sequence, uint64_t * num_block, unsigned * num_ts, 
     uint64_t * largest, uint64_t * ack_delay, unsigned * mm, size_t * consumed,
-    uint32_t version_flags)
+    uint32_t version_flags, uint8_t ack_delay_exponent)
 {
 	int ret = 0;
 	size_t byte_index = 1;
@@ -1489,6 +1489,7 @@ int picoquic_parse_ack_header(uint8_t const * bytes, size_t bytes_max,
     if (bytes_max > byte_index)
     {
         l_delay = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, ack_delay);
+        *ack_delay <<= ack_delay_exponent;
         byte_index += l_delay;
     }
 
@@ -1663,7 +1664,7 @@ int picoquic_process_ack_of_ack_frame(
 	uint64_t target_sequence = target_sack->start_of_sack_range;
 
 	ret = picoquic_parse_ack_header(bytes, bytes_max, target_sequence,
-        &num_block, &num_ts, &largest, &ack_delay, &mm, consumed, version_flags);
+        &num_block, &num_ts, &largest, &ack_delay, &mm, consumed, version_flags, 0);
 
 	if (ret == 0)
 	{
@@ -1941,7 +1942,8 @@ int picoquic_decode_ack_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
 
 	ret = picoquic_parse_ack_header(bytes, bytes_max, cnx->send_sequence,
         &num_block, &num_ts, &largest, &ack_delay, &mm, consumed,
-        picoquic_supported_versions[cnx->version_index].version_flags);
+        picoquic_supported_versions[cnx->version_index].version_flags,
+        cnx->remote_parameters.ack_delay_exponent);
 
     if (ret != 0)
     {
@@ -2236,6 +2238,7 @@ int picoquic_prepare_ack_frame(picoquic_cnx_t * cnx, uint64_t current_time,
             if (current_time > cnx->time_stamp_largest_received)
             {
                 ack_delay = current_time - cnx->time_stamp_largest_received;
+                ack_delay >>= cnx->local_parameters.ack_delay_exponent;
             }
             l_delay = picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index,
                 ack_delay);
@@ -2918,7 +2921,7 @@ int picoquic_prepare_max_stream_ID_frame(picoquic_cnx_t * cnx, uint32_t incremen
     if ((picoquic_supported_versions[cnx->version_index].version_flags&
         picoquic_version_fix_ints) == 0)
     {
-        size_t l1 = picoquic_varint_encode(bytes + 1, bytes_max - 1, cnx->max_stream_id_local + increment);
+        size_t l1 = picoquic_varint_encode(bytes + 1, bytes_max - 1, cnx->max_stream_id_bidir_local + increment);
 
         if (l1 == 0)
         {
@@ -2927,7 +2930,7 @@ int picoquic_prepare_max_stream_ID_frame(picoquic_cnx_t * cnx, uint32_t incremen
         else
         {
             bytes[0] = picoquic_frame_type_max_stream_id;
-            cnx->max_stream_id_local += increment;
+            cnx->max_stream_id_bidir_local += increment;
             *consumed = 1 + l1;
         }
     }
@@ -2942,8 +2945,8 @@ int picoquic_prepare_max_stream_ID_frame(picoquic_cnx_t * cnx, uint32_t incremen
         else
         {
             bytes[0] = picoquic_frame_type_max_stream_id;
-            cnx->max_stream_id_local += increment;
-            picoformat_32(bytes + 1, (uint32_t)cnx->max_stream_id_local);
+            cnx->max_stream_id_bidir_local += increment;
+            picoformat_32(bytes + 1, (uint32_t)cnx->max_stream_id_bidir_local);
             *consumed = 5;
         }
 	}
@@ -2991,9 +2994,9 @@ int picoquic_decode_max_stream_id_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
         }
     }
 
-    if (max_stream_id > cnx->max_stream_id_remote)
+    if (max_stream_id > cnx->max_stream_id_bidir_remote)
     {
-        cnx->max_stream_id_remote = max_stream_id;
+        cnx->max_stream_id_bidir_remote = max_stream_id;
     }
 
 	return ret;

@@ -239,7 +239,7 @@ size_t picoquic_log_ack_frame(FILE * F, uint8_t * bytes, size_t bytes_max,
 
 	int ret = picoquic_parse_ack_header(bytes, bytes_max, 0,
         &num_block, &num_ts, &largest, &ack_delay, &mm, &byte_index,
-        version_flags);
+        version_flags, 0);
 
 	debug_printf_pop_stream();
 
