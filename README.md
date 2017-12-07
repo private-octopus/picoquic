@@ -107,7 +107,7 @@ now implemented in Picoquic, which supports the version 0xFF00007. We have manag
 already to demonstrate interoperability with several implementations of draft-07,
 such as nghttp2 and winquic.
 
-## December 2017 Interop
+## Third implementation draft
 
 The next scheduled Interop will happen "on line", in December 2017. It will be based
 on draft-08, which is not yet published. Based on the current editor copy,
@@ -127,21 +127,19 @@ we know that draft-08 will bring a number of changes, some of witch are very dis
 * Change of format of the QUIC header, with the version field moving in front of the
   sequence number.
 
-The variable length integers and the closing logic are already implemented in the test
-version of Picoquic, and we are working on the other changes. Interop tests have not
-yet begun.
+All of these are already implemented in the test version of Picoquic. Next we need to compile with the TLD draft 22 version of PicoTLS, and fix the issues in the list. Two of those are "session resume and "0 RTT". These two may or may not be fixed by December 18.
+The interop plan requires them, but it may be hard. Worst case, we will demonstrate them at
+the next interop session in Melbourne in January. In any case, Interop tests have not yet begun. 
 
 ## Further milestones
 
 Of course, even the draft-08 will not be the final one. 
 Everybody expects that spec to still evolve. 
-The interop plan does not test every feature of the transport. The big missing
-feature at the transport level is 0-RTT support. Picoquic will have that soon, but the interop tests
-will probably have to wait until at least December 2017. After that, the big transport features will
+After that, the big transport features will
 be connection mobility and possibly multipath. But that will come later.
 
-The interop plan is also punting on application mapping. The data transfers are using HTTP 0.9,
-which is a fine test tool but not quite on par with HTTP 2.0. 
+The interop plan is also punting on application mapping. The data transfers are using 
+HTTP 0.9, which is a fine test tool but not quite on par with HTTP 2.0. 
 We don't know yet whether we will implement an HTTP2 mapping in Picoquic.
 We might, but that's a lot of work. If someone is interested doing that and want
 to collaborate, they are welcome. In parallel, we plan to do an implementation
