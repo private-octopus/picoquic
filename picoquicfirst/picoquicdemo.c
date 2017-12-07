@@ -99,6 +99,7 @@ static const int   default_server_port = 4443;
 static const char *default_server_name = "::";
 
 #include "../picoquic/picoquic.h"
+#include "../picoquic/picoquic_internal.h"
 #include "../picoquic/util.h"
 
 
@@ -781,14 +782,23 @@ typedef struct st_demo_stream_desc_t {
 } demo_stream_desc_t;
 
 static const demo_stream_desc_t test_scenario[] = {
+    { 4, 0, "index.html", 0 },
+    { 8, 4, "test.html", 0 },
+    { 12, 4, "doc-123456.html", 0 },
+    { 16, 4, "main.jpg", 1},
+    { 20, 4, "war-and-peace.txt", 0}
+};
+
+static const demo_stream_desc_t test_scenario_old[] = {
     { 1, 0, "index.html", 0 },
     { 3, 1, "test.html", 0 },
     { 5, 1, "doc-123456.html", 0 },
-    { 7, 1, "main.jpg", 1},
-    { 9, 1, "war-and-peace.txt", 0}
+    { 7, 1, "main.jpg", 1 },
+    { 9, 1, "war-and-peace.txt", 0 }
 };
 
 static const size_t test_scenario_nb = sizeof(test_scenario) / sizeof(demo_stream_desc_t);
+static const size_t test_scenario_old_nb = sizeof(test_scenario_old) / sizeof(demo_stream_desc_t);
 
 typedef struct st_picoquic_first_client_stream_ctx_t {
     struct st_picoquic_first_client_stream_ctx_t * next_stream;
@@ -1034,8 +1044,6 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
     int64_t delay_max = 10000000;
 
     memset(&callback_ctx, 0, sizeof(picoquic_first_client_callback_ctx_t));
-    callback_ctx.demo_stream = test_scenario;
-    callback_ctx.nb_demo_streams = test_scenario_nb;
 
     /* get the IP address of the server */
     if (ret == 0)
@@ -1241,6 +1249,19 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
                     picoquic_log_transport_extension(stdout, cnx_client);
                     printf("Connection established.\n");
                     established = 1;
+
+                    if ((picoquic_supported_versions[cnx_client->version_index].version_flags&
+                        picoquic_version_bidir_only) == 0)
+                    {
+                        callback_ctx.demo_stream = test_scenario;
+                        callback_ctx.nb_demo_streams = test_scenario_nb;
+                    }
+                    else
+                    {
+                        callback_ctx.demo_stream = test_scenario_old;
+                        callback_ctx.nb_demo_streams = test_scenario_old_nb;
+                    }
+
                     demo_client_start_streams(cnx_client, &callback_ctx, 0);
                 }
 
