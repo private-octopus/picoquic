@@ -104,10 +104,12 @@ const picoquic_version_parameters_t picoquic_supported_versions[] = {
     sizeof(picoquic_cleartext_internal_test_1_salt), 
     picoquic_cleartext_internal_test_1_salt },
     { PICOQUIC_SECOND_INTEROP_VERSION, 
+    picoquic_version_bidir_only |
     picoquic_version_short_pings | picoquic_version_fix_ints| picoquic_version_old_parameters,
     picoquic_version_header_05_07,
     sizeof(picoquic_cleartext_version_1_salt), picoquic_cleartext_version_1_salt },
     { PICOQUIC_FIRST_INTEROP_VERSION,
+    picoquic_version_bidir_only |
     picoquic_version_old_parameters|
     picoquic_version_short_pings |
     picoquic_version_fix_ints |
@@ -368,12 +370,21 @@ int picoquic_register_net_id(picoquic_quic_t * quic, picoquic_cnx_t * cnx, struc
     return ret;
 }
 
-void picoquic_init_transport_parameters(picoquic_transport_parameters * tp)
+void picoquic_init_transport_parameters(picoquic_transport_parameters * tp, int is_server)
 {
 	tp->initial_max_stream_data = 65535;
 	tp->initial_max_data = 0x100000;
-	tp->initial_max_stream_id_bidir = 65535;
-    tp->initial_max_stream_id_unidir = 65535;
+    if (is_server == 0)
+    {
+        tp->initial_max_stream_id_bidir = 65533;
+        tp->initial_max_stream_id_unidir = 65535;
+    }
+    else
+    {
+        tp->initial_max_stream_id_bidir = 65532;
+        tp->initial_max_stream_id_unidir = 65534;
+
+    }
 	tp->idle_timeout = 30;
 	tp->omit_connection_id = 0;
 	tp->max_packet_size = PICOQUIC_MAX_PACKET_SIZE - 16 - 40;
@@ -477,8 +488,8 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
             sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
         memcpy(&cnx->peer_addr, addr, cnx->peer_addr_len);
 
-		picoquic_init_transport_parameters(&cnx->local_parameters);
-		picoquic_init_transport_parameters(&cnx->remote_parameters);
+		picoquic_init_transport_parameters(&cnx->local_parameters, quic->flags&picoquic_context_server);
+		// picoquic_init_transport_parameters(&cnx->remote_parameters);
 		/* Initialize local flow control variables to advertised values */
 		cnx->maxdata_local = ((uint64_t)cnx->local_parameters.initial_max_data) << 10;
 		cnx->max_stream_id_bidir_local = cnx->local_parameters.initial_max_stream_id_bidir;

@@ -2994,11 +2994,51 @@ int picoquic_decode_max_stream_id_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
         }
     }
 
-    if (max_stream_id > cnx->max_stream_id_bidir_remote)
+    if (ret == 0)
     {
-        cnx->max_stream_id_bidir_remote = max_stream_id;
-    }
+        if ((picoquic_supported_versions[cnx->version_index].version_flags&
+            picoquic_version_bidir_only) == 0)
+        {
+            if ((cnx->quic->flags&picoquic_context_server) == 0)
+            {
+                /* Should only accept client stream ID */
+                if ((max_stream_id & 1) != 0)
+                {
+                    ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_STREAM_ID_ERROR);
+                }
+            }
+            else
+            {
+                if ((max_stream_id & 1) == 0)
+                {
+                    ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_STREAM_ID_ERROR);
+                }
+            }
 
+            if (ret == 0)
+            {
+                if ((max_stream_id & 2) == 0)
+                {
+                    if (max_stream_id > cnx->max_stream_id_bidir_remote)
+                    {
+                        cnx->max_stream_id_bidir_remote = max_stream_id;
+                    }
+                }
+                else
+                {
+                    if (max_stream_id > cnx->max_stream_id_unidir_remote)
+                    {
+                        cnx->max_stream_id_unidir_remote = max_stream_id;
+                    }
+                }
+            }
+
+        }
+        else if (max_stream_id > cnx->max_stream_id_bidir_remote)
+        {
+            cnx->max_stream_id_bidir_remote = max_stream_id;
+        }
+    }
 	return ret;
 }
 

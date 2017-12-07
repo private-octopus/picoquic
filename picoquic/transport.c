@@ -446,6 +446,16 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t * cnx, int extension_mo
 						else
 						{
 							cnx->remote_parameters.initial_max_stream_id_bidir = PICOPARSE_32(bytes + byte_index);
+
+                            if ((picoquic_supported_versions[cnx->version_index].version_flags&picoquic_version_bidir_only) == 0)
+                            {
+                                if (((extension_mode == 0) && (cnx->remote_parameters.initial_max_stream_id_bidir & 1) == 0) ||
+                                    ((extension_mode == 1) && (cnx->remote_parameters.initial_max_stream_id_bidir & 1) != 0) ||
+                                    ((cnx->remote_parameters.initial_max_stream_id_bidir & 2) != 0))
+                                {
+                                    ret = PICOQUIC_ERROR_MALFORMED_TRANSPORT_EXTENSION;
+                                }
+                            }
 						}
 						break;
 					case picoquic_transport_parameter_idle_timeout:
@@ -511,6 +521,16 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t * cnx, int extension_mo
                         else
                         {
                             cnx->remote_parameters.initial_max_stream_id_unidir = PICOPARSE_32(bytes + byte_index);
+
+                            if ((picoquic_supported_versions[cnx->version_index].version_flags&picoquic_version_bidir_only) == 0)
+                            {
+                                if (((extension_mode == 0) && (cnx->remote_parameters.initial_max_stream_id_unidir & 1) == 0) ||
+                                    ((extension_mode == 1) && (cnx->remote_parameters.initial_max_stream_id_unidir & 1) != 0) ||
+                                    ((cnx->remote_parameters.initial_max_stream_id_unidir & 2) == 0))
+                                {
+                                    ret = PICOQUIC_ERROR_MALFORMED_TRANSPORT_EXTENSION;
+                                }
+                            }
                         }
                         break;
 					default:

@@ -99,6 +99,7 @@ extern "C" {
 	*/
 #define PICOQUIC_FIRST_INTEROP_VERSION   0xFF000005
 #define PICOQUIC_SECOND_INTEROP_VERSION  0xFF000007
+#define PICOQUIC_THIRD_INTEROP_VERSION  0xFF000008
 #define PICOQUIC_INTERNAL_TEST_VERSION_1 0x50435130 
 
     /* 
@@ -112,7 +113,8 @@ extern "C" {
         picoquic_version_use_fnv1a = 4,
         picoquic_version_fix_ints = 8,
         picoquic_version_short_pings = 16,
-        picoquic_version_old_parameters = 32
+        picoquic_version_old_parameters = 32,
+        picoquic_version_bidir_only = 64
     } picoquic_version_feature_flags;
 
     /*

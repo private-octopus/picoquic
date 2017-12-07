@@ -29,13 +29,19 @@
  */
 
 static picoquic_transport_parameters transport_param_test1 = {
-	65535, 0x400000, 65535, 0, 30, 0, 1480, 3 };
+	65535, 0x400000, 65533, 0, 30, 0, 1480, 3 };
 
 static picoquic_transport_parameters transport_param_test2 = { 
-	0x1000000, 0x1000000, 0x1000000, 0, 255, 1, 1480, 3 };
+	0x1000000, 0x1000000, 0x1000001, 0, 255, 1, 1480, 3 };
 
 static picoquic_transport_parameters transport_param_test3 = {
-    0x1000000, 0x1000000, 0x1000000, 0, 255, 1, 0, 3 };
+    0x1000000, 0x1000000, 0x1000001, 0, 255, 1, 0, 3 };
+
+static picoquic_transport_parameters transport_param_test4 = {
+    65535, 0x400000, 65532, 0, 30, 0, 1480, 3 };
+
+static picoquic_transport_parameters transport_param_test5 = {
+    0x1000000, 0x1000000, 0x1000000, 0, 255, 1, 1480, 3 };
 
 static uint8_t transport_param_reset_secret[PICOQUIC_RESET_SECRET_SIZE] = {
 	1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
@@ -46,7 +52,7 @@ uint8_t client_param1[] = {
 	0, 0x24,
 	0, 0, 0, 4, 0, 0, 0xFF, 0xFF,
 	0, 1, 0, 4, 0, 0x40, 0, 0,
-	0, 2, 0, 4, 0, 0, 0xFF, 0xFF,
+	0, 2, 0, 4, 0, 0, 0xFF, 0xFD,
 	0, 3, 0, 2, 0, 0x1E,
 	0, 5, 0, 2, 0x05, 0xC8,
 };
@@ -56,7 +62,7 @@ uint8_t client_param2[] = {
 	0, 0x28,
 	0, 0, 0, 4, 0x01, 0, 0, 0,
 	0, 1, 0, 4, 0x01, 0, 0, 0,
-	0, 2, 0, 4, 0x01, 0, 0, 0,
+	0, 2, 0, 4, 0x01, 0, 0, 1,
 	0, 3, 0, 2, 0, 0xFF,
 	0, 4, 0, 0,
 	0, 5, 0, 2, 0x05, 0xC8
@@ -67,7 +73,7 @@ uint8_t client_param3[] = {
     0, 0x22,
     0, 0, 0, 4, 0x01, 0, 0, 0,
     0, 1, 0, 4, 0x01, 0, 0, 0,
-    0, 2, 0, 4, 0x01, 0, 0, 0,
+    0, 2, 0, 4, 0x01, 0, 0, 1,
     0, 3, 0, 2, 0, 0xFF,
     0, 4, 0, 0
 };
@@ -81,7 +87,7 @@ uint8_t server_param1[] = {
 	0, 0x38,
 	0, 0, 0, 4, 0, 0, 0xFF, 0xFF,
 	0, 1, 0, 4, 0, 0x40, 0, 0,
-	0, 2, 0, 4, 0, 0, 0xFF, 0xFF,
+	0, 2, 0, 4, 0, 0, 0xFF, 0xFC,
 	0, 3, 0, 2, 0, 0x1E,
 	0, 5, 0, 2, 0x05, 0xC8,
 	0, 6, 0, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
@@ -290,13 +296,13 @@ int transport_param_test()
 	if (ret == 0)
 	{
 		ret = transport_param_one_test(1, version_default, version_default,
-			&transport_param_test1, server_param1, sizeof(server_param1));
+			&transport_param_test4, server_param1, sizeof(server_param1));
 	}
 
 	if (ret == 0)
 	{
 		ret = transport_param_one_test(1, version_default, 0x0A1A0A1A,
-			&transport_param_test2, server_param2, sizeof(server_param2));
+			&transport_param_test5, server_param2, sizeof(server_param2));
 	}
 
 	if (ret == 0)
