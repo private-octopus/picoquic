@@ -49,36 +49,97 @@ int picoquic_add_to_stream(picoquic_cnx_t * cnx, uint64_t stream_id,
 	const uint8_t * data, size_t length, int set_fin)
 {
     int ret = 0;
+    int is_unidir = 0;
     picoquic_stream_head * stream = NULL;
 
     if (stream_id == 0)
     {
         stream = &cnx->first_stream;
     }
-	else
-	{
-		stream = picoquic_find_stream(cnx, stream_id, 1);
+    else
+    {
+        stream = picoquic_find_stream(cnx, stream_id, 0);
 
-		if (stream == NULL)
-		{
-			ret = -1;
-		}
-		else if (set_fin)
-		{
-			if ((stream->stream_flags&picoquic_stream_flag_fin_notified) != 0)
-			{
-				/* app error, notified the fin twice*/
-				if (length > 0)
-				{
-					ret = -1;
-				}
-			}
-			else
-			{
-				stream->stream_flags |= picoquic_stream_flag_fin_notified;
-			}
-		}
-	}
+        if (stream == NULL)
+        {
+            /* Need to check that the ID is authorized */
+            if ((picoquic_supported_versions[cnx->version_index].version_flags&picoquic_version_bidir_only) == 0)
+            {
+                /* Check parity */
+                int parity = ((cnx->quic->flags&picoquic_context_server) == 0) ? 0 : 1;
+                if ((stream_id & 1) != parity)
+                {
+                    ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
+                }
+                else
+                {
+                    if ((stream_id & 2) == 0)
+                    {
+                        if (stream_id > cnx->max_stream_id_bidir_remote)
+                        {
+                            ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
+                        }
+                    }
+                    else
+                    {
+                        is_unidir = 1;
+
+                        if (stream_id > cnx->max_stream_id_unidir_remote)
+                        {
+                            ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                int parity = ((cnx->quic->flags&picoquic_context_server) == 0) ? 1 : 0;
+                if ((stream_id & 1) != parity)
+                {
+                    ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
+                }
+                else
+                {
+                    if (stream_id > cnx->max_stream_id_bidir_remote)
+                    {
+                        ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
+                    }
+                }
+            }
+
+            if (ret == 0)
+            {
+                stream = picoquic_create_stream(cnx, stream_id);
+
+                if (stream == NULL)
+                {
+                    ret = PICOQUIC_ERROR_MEMORY;
+                }
+                else if (is_unidir)
+                {
+                    /* Mark the stream as already finished in remote direction */
+                    stream->stream_flags |= picoquic_stream_flag_fin_signalled |
+                        picoquic_stream_flag_fin_notified;
+                }
+            }
+        }
+    }
+
+    if (ret == 0 && set_fin)
+    {
+        if ((stream->stream_flags&picoquic_stream_flag_fin_notified) != 0)
+        {
+            /* app error, notified the fin twice*/
+            if (length > 0)
+            {
+                ret = -1;
+            }
+        }
+        else
+        {
+            stream->stream_flags |= picoquic_stream_flag_fin_notified;
+        }
+    }
 
 	if (ret == 0 && length > 0)
     {
