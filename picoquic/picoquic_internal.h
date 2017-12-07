@@ -490,6 +490,7 @@ extern "C" {
         uint8_t * bytes, size_t bytes_max, size_t * consumed, uint32_t version_flags);
 
 	/* stream management */
+    picoquic_stream_head * picoquic_create_stream(picoquic_cnx_t * cnx, uint64_t stream_id);
 	picoquic_stream_head * picoquic_find_stream(picoquic_cnx_t * cnx, uint64_t stream_id, int create);
 	picoquic_stream_head * picoquic_find_ready_stream(picoquic_cnx_t * cnx, int restricted);
 	int picoquic_stream_network_input(picoquic_cnx_t * cnx, uint64_t stream_id,
