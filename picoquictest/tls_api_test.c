@@ -1673,7 +1673,7 @@ int transport_parameter_client_error_test()
 
     if (ret == 0)
     {
-        ret = tls_api_connection_loop(test_ctx, loss_mask, 0, &simulated_time);
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
 
         if (test_ctx->cnx_client == NULL)
         {
@@ -1702,3 +1702,4 @@ int transport_parameter_client_error_test()
 
     return ret;
 }
+
