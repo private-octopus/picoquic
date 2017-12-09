@@ -1138,7 +1138,7 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
 
     if (ret == 0)
     {
-        qclient = picoquic_create(8, NULL, NULL, "hq07", NULL, NULL, NULL, NULL, NULL);
+        qclient = picoquic_create(8, NULL, NULL, "hq08", NULL, NULL, NULL, NULL, NULL);
 
         if (qclient == NULL)
         {
@@ -1418,7 +1418,7 @@ int main(int argc, char ** argv)
     const char * server_cert_file = default_server_cert_file;
     const char * server_key_file  = default_server_key_file;
     int server_port               = default_server_port;
-    uint32_t proposed_version = 0;
+    uint32_t proposed_version = 0xFF000008;
     int is_client = 0;
     int just_once = 0;
     int do_hrr = 0;

@@ -103,6 +103,10 @@ const picoquic_version_parameters_t picoquic_supported_versions[] = {
     picoquic_version_header_08,
     sizeof(picoquic_cleartext_internal_test_1_salt), 
     picoquic_cleartext_internal_test_1_salt },
+    { PICOQUIC_THIRD_INTEROP_VERSION, 0,
+    picoquic_version_header_08,
+    sizeof(picoquic_cleartext_version_1_salt),
+    picoquic_cleartext_version_1_salt },
     { PICOQUIC_SECOND_INTEROP_VERSION, 
     picoquic_version_bidir_only |
     picoquic_version_short_pings | picoquic_version_fix_ints| picoquic_version_old_parameters,

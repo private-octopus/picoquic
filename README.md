@@ -122,21 +122,29 @@ we know that draft-08 will bring a number of changes, some of witch are very dis
 * Redefinition of the "ping" frame to carry an optional payload that the peer should
   repeat in a "pong" frame.
 
+* Allowing connection close frames before the completion of the handshake, to 
+  indicate handshake failures.
+
 * Tightening of the closing logic.
 
 * Change of format of the QUIC header, with the version field moving in front of the
-  sequence number.
+  sequence number, and the redefinition of the version negotiation frame.
 
-All of these are already implemented in the test version of Picoquic. Next we need to compile with the TLD draft 22 version of PicoTLS, and fix the issues in the list. Two of those are "session resume and "0 RTT". These two may or may not be fixed by December 18.
+All of these are already implemented in the test version of Picoquic, which in principle 
+supports draft-08.
+Next we need to compile with the TLD draft 22 version of PicoTLS, and fix the issues in the list. 
+Two of those are "session resume and "0 RTT". These two may or may not be fixed by December 18.
 The interop plan requires them, but it may be hard. Worst case, we will demonstrate them at
 the next interop session in Melbourne in January. In any case, Interop tests have not yet begun. 
 
 ## Further milestones
 
-Of course, even the draft-08 will not be the final one. 
+Of course, the draft-08 will not be the final one. 
 Everybody expects that spec to still evolve. 
-After that, the big transport features will
+The next big transport features to be tested will
 be connection mobility and possibly multipath. But that will come later.
+Before that, we may want to check automatic NAT rebinding, which involves
+testing connectivity with the new address presented by the client.
 
 The interop plan is also punting on application mapping. The data transfers are using 
 HTTP 0.9, which is a fine test tool but not quite on par with HTTP 2.0. 
