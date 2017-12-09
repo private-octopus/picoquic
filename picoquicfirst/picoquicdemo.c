@@ -208,7 +208,7 @@ int picoquic_open_server_sockets(picoquic_server_sockets_t * sockets, int port)
         }
         else
         {
-#ifndef WIN32
+#ifndef _WINDOWS
         	if (sock_af[i] == AF_INET6) {
         		int val = 1;
         		ret = setsockopt(sockets->s_socket[i], IPPROTO_IPV6, IPV6_V6ONLY,
@@ -369,12 +369,8 @@ int send_to_server_sockets(
     struct sockaddr * addr_dest, socklen_t addr_length,
     const char * bytes, int length)
 {
-    /* Linux uses a single socket for V6 and V4, Windows uses 2 */
-#ifdef _WINDOWS
+    /* Both Linux and Windows use separate sockets for V4 and V6 */
     int socket_index = (addr_dest->sa_family == AF_INET) ? 1 : 0;
-#else
-    const int socket_index = 0;
-#endif
 
     int sent = sendto(sockets->s_socket[socket_index], bytes, length, 0,
         addr_dest, addr_length);
