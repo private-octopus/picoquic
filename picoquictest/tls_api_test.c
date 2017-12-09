@@ -1657,3 +1657,48 @@ int ping_pong_test()
     return ret;
 
 }
+
+/*
+ * In this test, the client attempts to setup a connection, but deliberately 
+ * introduces an error in the transport parameters -- in our case, an illegal
+ * max stream ID. This should cause the connection to fail.
+ */
+int transport_parameter_client_error_test()
+{
+
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t * test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_ERRONEOUS_SNI, "test-alpn");
+
+    if (ret == 0)
+    {
+        ret = tls_api_connection_loop(test_ctx, loss_mask, 0, &simulated_time);
+
+        if (test_ctx->cnx_client == NULL)
+        {
+            ret = -1;
+        }
+        else if (test_ctx->cnx_client->cnx_state != picoquic_state_disconnected)
+        {
+            ret = -1;
+        }
+        else if (
+            test_ctx->cnx_client->remote_error != PICOQUIC_TRANSPORT_TRANSPORT_PARAMETER_ERROR)
+        {
+            ret = -1;
+        }
+        else
+        {
+            ret = 0;
+        }
+    }
+
+    if (test_ctx != NULL)
+    {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}

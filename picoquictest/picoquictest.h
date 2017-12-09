@@ -67,6 +67,7 @@ extern "C" {
     int skip_frame_test();
     int ping_pong_test();
     int logger_test();
+    int transport_parameter_client_error_test();
 
 #ifdef  __cplusplus
 }

@@ -489,11 +489,18 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
         memcpy(&cnx->peer_addr, addr, cnx->peer_addr_len);
 
 		picoquic_init_transport_parameters(&cnx->local_parameters, quic->flags&picoquic_context_server);
+        /* Special provision for test -- create a deliberate transport parameters error */
+        if (sni != NULL && (quic->flags&picoquic_context_server) == 0 && strcmp(sni, PICOQUIC_ERRONEOUS_SNI) == 0)
+        {
+            /* Illegal value: server limits should be odd */
+            cnx->local_parameters.initial_max_stream_id_bidir = 0x202;
+        }
 		// picoquic_init_transport_parameters(&cnx->remote_parameters);
 		/* Initialize local flow control variables to advertised values */
 		cnx->maxdata_local = ((uint64_t)cnx->local_parameters.initial_max_data) << 10;
 		cnx->max_stream_id_bidir_local = cnx->local_parameters.initial_max_stream_id_bidir;
         cnx->max_stream_id_unidir_local = cnx->local_parameters.initial_max_stream_id_unidir;
+
 		/* Initialize remote variables to some plausible value. 
 		 * Hopefully, this will be overwritten by the parameters received in
 		 * the TLS transport parameter extension */

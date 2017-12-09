@@ -316,5 +316,12 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(test_tparam_client_error)
+        {
+            int ret = transport_parameter_client_error_test();
+
+            Assert::AreEqual(ret, 0);
+        }
 	};
 }

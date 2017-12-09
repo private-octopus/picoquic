@@ -48,6 +48,8 @@ extern "C" {
 #define PICOQUIC_CWIN_INITIAL  (10*PICOQUIC_MAX_PACKET_SIZE)
 #define PICOQUIC_CWIN_MINIMUM  (2*PICOQUIC_MAX_PACKET_SIZE)
 
+#define PICOQUIC_ERRONEOUS_SNI "erroneous-sni"
+
 
     /*
      * Nominal packet types. These are the packet types used internally by the

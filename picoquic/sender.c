@@ -1062,7 +1062,14 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 				length += consumed;
 			}
 
-			cnx->cnx_state = picoquic_state_closing;
+            if (cnx->cnx_state == picoquic_state_handshake_failure)
+            {
+                cnx->cnx_state = picoquic_state_disconnected;
+            }
+            else
+            {
+                cnx->cnx_state = picoquic_state_closing;
+            }
             cnx->latest_progress_time = current_time;
             cnx->next_wake_time = current_time + delta_t;
             cnx->ack_needed = 0;
