@@ -2506,7 +2506,14 @@ int picoquic_decode_connection_close_frame(picoquic_cnx_t * cnx, uint8_t * bytes
 
     if (ret == 0)
     {
-        cnx->cnx_state = picoquic_state_closing_received;
+        if (cnx->cnx_state < picoquic_state_client_ready)
+        {
+            cnx->cnx_state = picoquic_state_disconnected;
+        }
+        else
+        {
+            cnx->cnx_state = picoquic_state_closing_received;
+        }
         cnx->remote_error = error_code;
         *consumed = (size_t)(string_length + byte_index);
         if (cnx->callback_fn)
@@ -3265,22 +3272,11 @@ int picoquic_decode_frames(picoquic_cnx_t * cnx, uint8_t * bytes,
 
         if (ack_or_data == 0)
         {
-            if (restricted)
-            {
-                /* forbidden! */
-                if (first_byte == picoquic_frame_type_padding)
-                {
-                    /* Padding */
-                    do {
-                        byte_index++;
-                    } while (byte_index < bytes_max &&
-                        bytes[byte_index] == picoquic_frame_type_padding);
-                }
-                else
-                {
-                    ret = picoquic_connection_error(cnx,
+            if (restricted && first_byte != picoquic_frame_type_padding &&
+                first_byte != picoquic_frame_type_connection_close)
+            {            
+                ret = picoquic_connection_error(cnx,
                         PICOQUIC_TRANSPORT_FRAME_ERROR(first_byte));
-                }
             }
             else switch (first_byte)
             {

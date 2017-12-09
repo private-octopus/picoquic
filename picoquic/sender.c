@@ -719,7 +719,8 @@ void picoquic_cnx_set_next_wake_time(picoquic_cnx_t * cnx, uint64_t current_time
     int timer_based = 0;
     int blocked = 1;
 
-    if (cnx->cnx_state == picoquic_state_disconnecting)
+    if (cnx->cnx_state == picoquic_state_disconnecting ||
+        cnx->cnx_state == picoquic_state_handshake_failure)
     {
         blocked = 0;
     }
@@ -860,6 +861,10 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 	case picoquic_state_client_almost_ready:
 		packet_type = picoquic_packet_client_cleartext;
 		break;
+    case picoquic_state_handshake_failure:
+        packet_type = ((cnx->quic->flags & picoquic_context_server) == 0) ?
+            picoquic_packet_client_cleartext : picoquic_packet_server_cleartext;
+        break;
 	case picoquic_state_client_ready:
 		packet_type = picoquic_packet_1rtt_protected_phi0;
 		retransmit_possible = 1;
@@ -1019,7 +1024,8 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 		packet->sequence_number = cnx->send_sequence;
 		packet->send_time = current_time;
 
-		if (cnx->cnx_state == picoquic_state_disconnecting)
+		if (cnx->cnx_state == picoquic_state_disconnecting ||
+            cnx->cnx_state == picoquic_state_handshake_failure)
 		{
             /* send either app close or connection close, depending on error code */
             size_t consumed = 0;
@@ -1233,6 +1239,11 @@ int picoquic_close(picoquic_cnx_t * cnx, uint16_t reason_code)
         cnx->cnx_state == picoquic_state_client_ready)
     {
         cnx->cnx_state = picoquic_state_disconnecting;
+        cnx->application_error = reason_code;
+    }
+    else if (cnx->cnx_state < picoquic_state_client_ready)
+    {
+        cnx->cnx_state = picoquic_state_handshake_failure;
         cnx->application_error = reason_code;
     }
     else
