@@ -63,6 +63,7 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <unistd.h>
 
 #ifndef __USE_XOPEN2K
 #define __USE_XOPEN2K

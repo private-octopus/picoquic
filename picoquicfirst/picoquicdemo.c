@@ -798,19 +798,17 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
     picoquic_first_client_callback_ctx_t callback_ctx;
     SOCKET_TYPE fd = INVALID_SOCKET;
     struct sockaddr_storage server_address;
-    struct sockaddr_in * ipv4_dest = (struct sockaddr_in *)&server_address;
-    struct sockaddr_in6 * ipv6_dest = (struct sockaddr_in6 *)&server_address;
     struct sockaddr_storage packet_from;
     socklen_t from_length;
     int server_addr_length = 0;
     uint8_t buffer[1536];
-	uint8_t send_buffer[1536];
-	size_t send_length = 0;
+    uint8_t send_buffer[1536];
+    size_t send_length = 0;
     int bytes_recv;
     int bytes_sent;
     picoquic_packet * p = NULL;
-	uint64_t current_time = 0;
-	int client_ready_loop = 0;
+    uint64_t current_time = 0;
+    int client_ready_loop = 0;
     int established = 0;
     int is_name = 0;
     const char * sni = NULL;
@@ -821,7 +819,7 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
     ret = picoquic_get_server_address(ip_address_text, server_port, &server_address, &server_addr_length, &is_name);
     if (is_name != 0)
     {
-        sni = is_name;
+        sni = ip_address_text;
     }
 
     /* Open a UDP socket */

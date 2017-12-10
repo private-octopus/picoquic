@@ -68,7 +68,8 @@ static int socket_ping_pong(SOCKET_TYPE fd, struct sockaddr * server_addr, int s
         }
 
         if (picoquic_send_through_server_sockets(server_sockets,
-            (struct sockaddr *)&addr_from, from_length, buffer, bytes_recv) != bytes_recv)
+            (struct sockaddr *)&addr_from, from_length, 
+            (char *) buffer, bytes_recv) != bytes_recv)
         {
             ret = -1;
         }
