@@ -1495,6 +1495,17 @@ int tls_api_two_connections_test()
 
 }
 
+int tls_api_client_first_loss_test()
+{
+    return tls_api_loss_test(1ull);
+}
+
+int tls_api_client_second_loss_test()
+{
+    return tls_api_loss_test(2ull);
+}
+
+
 int tls_api_client_losses_test()
 {
     return tls_api_loss_test(3ull);
