@@ -19,6 +19,7 @@ SET(PICOQUIC_LIBRARY_FILES
     picoquic/newreno.c
     picoquic/packet.c
     picoquic/picohash.c
+    picoquic/picosocks.c
     picoquic/quicctx.c
     picoquic/sacks.c
     picoquic/sender.c
@@ -40,6 +41,7 @@ SET(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/sacktest.c
     picoquictest/skip_frame_test.c
     picoquictest/sim_link.c
+    picoquictest/socket_test.c
     picoquictest/stream0_frame_test.c
     picoquictest/tls_api_test.c
     picoquictest/transport_param_test.c
