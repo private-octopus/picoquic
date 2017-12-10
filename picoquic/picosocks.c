@@ -88,12 +88,13 @@ int picoquic_open_server_sockets(picoquic_server_sockets_t * sockets, int port)
                 if (ret == 0)
                 {
                     val = 1;
-                    ret = setsockopt(sockets->s_socket[i], IPPROTO_IPV6, IPV6_PKTINFO, (char*)&val, sizeof(int));
+                    ret = setsockopt(sockets->s_socket[i], IPPROTO_IPV6, IPV6_RECVPKTINFO, (char*)&val, sizeof(int));
                 }
             }
             else
             {
-                ret = setsockopt(sockets->s_socket[i], IPPROTO_IP, IP_PKTINFO, (char*)&option_value, sizeof(int));
+                int val = 1;
+                ret = setsockopt(sockets->s_socket[i], IPPROTO_IP, IP_PKTINFO, (char*)&val, sizeof(int));
             }
 #endif
             if (ret == 0)
@@ -181,7 +182,7 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
 
     if (dest_if != NULL)
     {
-        *dest_if;
+        *dest_if = 0;
     }
 
     nResult = WSAIoctl(fd, SIO_GET_EXTENSION_FUNCTION_POINTER,
@@ -281,7 +282,7 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
 
     if (dest_if != NULL)
     {
-        *dest_if;
+        *dest_if = 0;
     }
 
     dataBuf.iov_base = (char*)buffer;
@@ -295,10 +296,10 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
     msg.msg_control = (void *) cmsg_buffer;
     msg.msg_controllen = sizeof(cmsg_buffer);
 
-    bytes_recv = recvmsg(udpSocket, &msg, 0);
+    bytes_recv = recvmsg(fd, &msg, 0);
 
     if (bytes_recv <= 0) 
-	{
+    {
         *from_length = 0;
     }
     else
@@ -312,7 +313,7 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
             {
                 if (addr_dest != NULL && dest_length != NULL)
                 {
-                    IN_PKTINFO *pPktInfo = (IN_PKTINFO *)CMSG_DATA(cmsg);
+                    struct in_pktinfo *pPktInfo = (struct in_pktinfo *)CMSG_DATA(cmsg);
                     memcpy(addr_dest, &pPktInfo->ipi_addr, sizeof(struct sockaddr_in));
                     *dest_length = sizeof(struct sockaddr_in);
 
@@ -326,7 +327,8 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
             {
                 if (addr_dest != NULL && dest_length != NULL)
                 {
-                    IN6_PKTINFO *pPktInfo6 = (IN6_PKTINFO *)CMSG_DATA(cmsg);
+                    struct in6_pktinfo *pPktInfo6 = (struct in6_pktinfo *)CMSG_DATA(cmsg);
+
                     ((struct sockaddr_in6 *)addr_dest)->sin6_family = AF_INET6;
                     ((struct sockaddr_in6 *)addr_dest)->sin6_port = 0;
                     memcpy(&((struct sockaddr_in6 *)addr_dest)->sin6_addr, &pPktInfo6->ipi6_addr, sizeof(struct in6_addr));
@@ -448,24 +450,21 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
 }
 #else
 {
-    int bytes_recv = 0;
     struct msghdr msg;
     struct iovec dataBuf;
     char cmsg_buffer[1024];
     int control_length = 0;
-    int ret = 0;
     int bytes_sent;
-    int last_error;
     struct cmsghdr *cmsg;
 
     /* Format the message header */
 
-    dataBuf.iov_base = (char*)buffer;
-    dataBuf.iov_len = buffer_max;
+    dataBuf.iov_base = (char*)bytes;
+    dataBuf.iov_len = length;
 
     memset(&msg, 0, sizeof(msg));
-    msg.name = addr_dest;
-    msg.namelen = dest_length;
+    msg.msg_name = addr_dest;
+    msg.msg_namelen = dest_length;
     msg.msg_iov = &dataBuf;
     msg.msg_iovlen = 1;
     msg.msg_control = (void *)cmsg_buffer;
@@ -474,7 +473,7 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
     /* Format the control message */
     cmsg = CMSG_FIRSTHDR(&msg);
 
-    if (addr_from != NULL && from_length != NULL)
+    if (addr_from != NULL && from_length != 0)
     {
         if (addr_from->sa_family == AF_INET)
         {
@@ -488,23 +487,27 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
 
             control_length += CMSG_SPACE(sizeof(struct in_pktinfo));
         }
-        else
+        else if (addr_from->sa_family == AF_INET6)
         {
             memset(cmsg, 0, CMSG_SPACE(sizeof(struct in6_pktinfo)));
             cmsg->cmsg_level = IPPROTO_IPV6;
             cmsg->cmsg_type = IPV6_PKTINFO;
             cmsg->cmsg_len = CMSG_LEN(sizeof(struct in6_pktinfo));
             struct in6_pktinfo *pktinfo6 = (struct in6_pktinfo *)CMSG_DATA(cmsg);
-            memcpy(&pktinfo6->ipi6_addr, &((struct sockaddr_in6 *)addr_from)->sin6_addr, sizeof(IN6_ADDR));
+            memcpy(&pktinfo6->ipi6_addr, &((struct sockaddr_in6 *)addr_from)->sin6_addr, sizeof(struct in6_addr));
             pktinfo6->ipi6_ifindex = dest_if;
 
             control_length += CMSG_SPACE(sizeof(struct in6_pktinfo));
         }
+        else
+        {
+            DBG_PRINTF("Unexpected address family: %d\n", addr_from->sa_family);
+        }
     }
-    msg.Control.len = control_length;
+    msg.msg_controllen = control_length;
     if (control_length == 0)
     {
-        msg.Control.buf = NULL;
+        msg.msg_control = NULL;
     }
 
     bytes_sent = sendmsg(fd, &msg, 0);
@@ -576,8 +579,6 @@ int picoquic_select(SOCKET_TYPE * sockets,
         {
             if (FD_ISSET(sockets[i], &readfds))
             {
-                int last_error = 0;
-
                 bytes_recv = picoquic_recvmsg(sockets[i], addr_from, from_length, 
 				addr_dest, dest_length, dest_if, 
 				buffer, buffer_max);
@@ -631,7 +632,7 @@ int picoquic_send_through_server_sockets(
 #else
         int last_error = errno;
 #endif
-        DBG_PRINTF("Could not receive packet on UDP socket[%d]= %d!\n",
+        DBG_PRINTF("Could not send packet on UDP socket[%d]= %d!\n",
             socket_index, last_error);
     }
 

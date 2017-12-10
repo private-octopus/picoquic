@@ -73,6 +73,9 @@
 #ifndef __USE_POSIX
 #define __USE_POSIX
 #endif
+#ifndef __USE_GNU
+#define __USE_GNU
+#endif
 #include <netdb.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
