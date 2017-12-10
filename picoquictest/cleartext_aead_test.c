@@ -19,6 +19,7 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <string.h>
 #include "../picoquic/picoquic_internal.h"
 #include "../picoquic/tls_api.h"
 
@@ -173,3 +174,4 @@ int cleartext_aead_test()
 
     return ret;
 }
+
