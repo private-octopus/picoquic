@@ -144,6 +144,7 @@
     <ClCompile Include="pn2pn64test.c" />
     <ClCompile Include="sacktest.c" />
     <ClCompile Include="skip_frame_test.c" />
+    <ClCompile Include="socket_test.c" />
     <ClCompile Include="stream0_frame_test.c" />
     <ClCompile Include="tls_api_test.c" />
     <ClCompile Include="transport_param_test.c" />

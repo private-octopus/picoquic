@@ -101,6 +101,7 @@ static const char *default_server_name = "::";
 #include "../picoquic/picoquic.h"
 #include "../picoquic/picoquic_internal.h"
 #include "../picoquic/util.h"
+#include "../picoquic/picosocks.h"
 
 
 void picoquic_log_error_packet(FILE * F, uint8_t * bytes, size_t bytes_max, int ret);
@@ -153,231 +154,6 @@ static char * strip_endofline(char * buf, size_t bufmax, char const * line)
     return buf;
 }
 
-int bind_to_port(SOCKET_TYPE fd, int af, int port)
-{
-    struct sockaddr_storage sa;
-    int addr_length = 0;
-
-    memset(&sa, 0, sizeof(sa));
-
-    if (af == AF_INET)
-    {
-        struct sockaddr_in * s4 = (struct sockaddr_in *)&sa;
-
-        s4->sin_family = af;
-        s4->sin_port = htons(port);
-        addr_length = sizeof(struct sockaddr_in);
-    }
-    else
-    {
-        struct sockaddr_in6 * s6 = (struct sockaddr_in6 *)&sa;
-
-        s6->sin6_family = AF_INET6;
-        s6->sin6_port = htons(port);
-        addr_length = sizeof(struct sockaddr_in6);
-    }
-
-    return bind(fd, (struct sockaddr *) &sa, addr_length);
-}
-
-#define PICOQUIC_NB_SERVER_SOCKETS 2
-
-typedef struct st_picoquic_server_sockets_t {
-    SOCKET_TYPE s_socket[PICOQUIC_NB_SERVER_SOCKETS];
-} picoquic_server_sockets_t;
-
-int picoquic_open_server_sockets(picoquic_server_sockets_t * sockets, int port)
-{
-    int ret = 0;
-    const int sock_af[] = { AF_INET6, AF_INET };
-
-    for (int i = 0; i < PICOQUIC_NB_SERVER_SOCKETS; i++)
-    {
-        if (ret == 0)
-        {
-            sockets->s_socket[i] = socket(sock_af[i], SOCK_DGRAM, IPPROTO_UDP);
-        }
-        else
-        {
-            sockets->s_socket[i] = INVALID_SOCKET;
-        }
-
-        if (sockets->s_socket[i] == INVALID_SOCKET)
-        {
-            ret = -1;
-        }
-        else
-        {
-#ifndef _WINDOWS
-        	if (sock_af[i] == AF_INET6) {
-        		int val = 1;
-        		ret = setsockopt(sockets->s_socket[i], IPPROTO_IPV6, IPV6_V6ONLY,
-        				&val, sizeof(val));
-        		if (ret)
-        			return ret;
-        	}
-#endif
-            ret = bind_to_port(sockets->s_socket[i], sock_af[i], port);
-        }
-    }
-
-    return ret;
-}
-
-void picoquic_close_server_sockets(picoquic_server_sockets_t * sockets)
-{
-    for (int i = 0; i < PICOQUIC_NB_SERVER_SOCKETS; i++)
-    {
-        if (sockets->s_socket[i] != INVALID_SOCKET)
-        {
-            SOCKET_CLOSE(sockets->s_socket[i]);
-            sockets->s_socket[i] = INVALID_SOCKET;
-        }
-    }
-}
-
-uint64_t get_current_time()
-{
-    uint64_t now;
-#ifdef _WINDOWS
-    FILETIME ft;
-    /*
-    * The GetSystemTimeAsFileTime API returns  the number
-    * of 100-nanosecond intervals since January 1, 1601 (UTC),
-    * in FILETIME format.
-    */
-    GetSystemTimeAsFileTime(&ft);
-
-    /*
-    * Convert to plain 64 bit format, without making
-    * assumptions about the FILETIME structure alignment.
-    */
-    now |= ft.dwHighDateTime;
-    now <<= 32;
-    now |= ft.dwLowDateTime;
-    /*
-    * Convert units from 100ns to 1us
-    */
-    now /= 10;
-    /*
-    * Account for microseconds elapsed between 1601 and 1970.
-    */
-    now -= 11644473600000000ULL;
-#else
-    struct timeval tv;
-    (void) gettimeofday(&tv, NULL);
-    now = (tv.tv_sec * 1000000ull) + tv.tv_usec;
-#endif
-    return now;
-}
-
-int do_select(SOCKET_TYPE * sockets, int nb_sockets,
-    struct sockaddr_storage * addr_from,
-    socklen_t * from_length,
-    uint8_t * buffer, int buffer_max,
-    int64_t delta_t,
-    uint64_t * current_time)
-{
-
-    fd_set   readfds;
-    struct timeval tv;
-    int ret_select = 0;
-    int bytes_recv = 0;
-    int sockmax = 0;
-
-    FD_ZERO(&readfds);
-
-    for (int i = 0; i < nb_sockets; i++)
-    {
-        if (sockmax < (int) sockets[i])
-        {
-            sockmax = sockets[i];
-        }
-        FD_SET(sockets[i], &readfds);
-    }
-
-    if (delta_t <= 0)
-    {
-        tv.tv_sec = 0;
-        tv.tv_usec = 0;
-    }
-    else
-    {
-        if (delta_t > 10000000)
-        {
-            tv.tv_sec = (long)10;
-            tv.tv_usec = 0;
-        }
-        else
-        {
-            tv.tv_sec = (long)(delta_t / 1000000);
-            tv.tv_usec = (long)(delta_t % 1000000);
-        }
-    }
-
-    ret_select = select(sockmax+1, &readfds, NULL, NULL, &tv);
-
-    if (ret_select < 0)
-    {
-        bytes_recv = -1;
-        if (bytes_recv <= 0)
-        {
-            fprintf(stderr, "Error: select returns %d\n", ret_select);
-        }
-    }
-    else if (ret_select > 0)
-    {
-        for (int i = 0; i < nb_sockets; i++)
-        {
-            if (FD_ISSET(sockets[i], &readfds))
-            {
-                /* Read the incoming response */
-                *from_length = sizeof(struct sockaddr_storage);
-                bytes_recv = recvfrom(sockets[i], (char*)buffer, buffer_max, 0,
-                    (struct sockaddr *)addr_from, from_length);
-
-                if (bytes_recv <= 0)
-                {
-#ifdef _WINDOWS
-                    int last_error = WSAGetLastError();
-
-                    if (last_error == WSAECONNRESET)
-                    {
-                        bytes_recv = 0;
-                        continue;
-                    }
-#endif
-                    fprintf(stderr, "Could not receive packet on UDP socket[%d]= %d!\n",
-                        i, (int) sockets[i]);
-                    break;
-                }
-                else
-                {
-                    break;
-                }
-            }
-        }
-    }
-
-    *current_time = get_current_time();
-
-    return bytes_recv;
-}
-
-int send_to_server_sockets(
-    picoquic_server_sockets_t * sockets, 
-    struct sockaddr * addr_dest, socklen_t addr_length,
-    const char * bytes, int length)
-{
-    /* Both Linux and Windows use separate sockets for V4 and V6 */
-    int socket_index = (addr_dest->sa_family == AF_INET) ? 1 : 0;
-
-    int sent = sendto(sockets->s_socket[socket_index], bytes, length, 0,
-        addr_dest, addr_length);
-
-    return sent;
-}
-
 #define PICOQUIC_FIRST_COMMAND_MAX 128
 #define PICOQUIC_FIRST_RESPONSE_MAX (1<<20)
 
@@ -391,7 +167,7 @@ typedef enum
 typedef struct st_picoquic_first_server_stream_ctx_t {
     struct st_picoquic_first_server_stream_ctx_t * next_stream;
     picoquic_first_server_stream_status_t status;
-    uint32_t stream_id;
+    uint64_t stream_id;
     size_t command_length;
     size_t response_length;
     uint8_t command[PICOQUIC_FIRST_COMMAND_MAX];
@@ -628,7 +404,7 @@ int quic_server(const char * server_name, int server_port,
     while (ret == 0 && (just_once == 0 || cnx_server == NULL ||
         picoquic_get_cnx_state(cnx_server)!= picoquic_state_disconnected))
     {
-        bytes_recv = do_select(server_sockets.s_socket, PICOQUIC_NB_SERVER_SOCKETS,
+        bytes_recv = picoquic_select(server_sockets.s_socket, PICOQUIC_NB_SERVER_SOCKETS,
             &addr_from, &from_length,
             buffer, sizeof(buffer), 
             picoquic_get_next_wake_delay(qserver, current_time, delay_max), &current_time);
@@ -685,7 +461,7 @@ int quic_server(const char * server_name, int server_port,
             {
                 while ((sp = picoquic_dequeue_stateless_packet(qserver)) != NULL)
                 {
-                    int sent = send_to_server_sockets(&server_sockets,
+                    int sent = picoquic_send_through_server_sockets(&server_sockets,
                         (struct sockaddr *) &addr_from, from_length,
                         (const char *)sp->bytes, (int)sp->length);
 
@@ -727,7 +503,7 @@ int quic_server(const char * server_name, int server_port,
 
                                 picoquic_get_peer_addr(cnx_next, &peer_addr, &peer_addr_len);
 
-                                int sent = send_to_server_sockets(&server_sockets,
+                                int sent = picoquic_send_through_server_sockets(&server_sockets,
                                     peer_addr, peer_addr_len,
                                     (const char *)send_buffer, (int)send_length);
 
@@ -912,7 +688,7 @@ static void first_client_callback(picoquic_cnx_t * cnx,
         (picoquic_first_client_callback_ctx_t*)callback_ctx;
     picoquic_first_client_stream_ctx_t * stream_ctx = ctx->first_stream;
 
-    ctx->last_interaction_time = get_current_time();
+    ctx->last_interaction_time = picoquic_current_time();
     ctx->progress_observed = 1;
 
     if (fin_or_event == picoquic_callback_close ||
@@ -1036,84 +812,16 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
 	uint64_t current_time = 0;
 	int client_ready_loop = 0;
     int established = 0;
+    int is_name = 0;
     const char * sni = NULL;
     int64_t delay_max = 10000000;
 
     memset(&callback_ctx, 0, sizeof(picoquic_first_client_callback_ctx_t));
 
-    /* get the IP address of the server */
-    if (ret == 0)
+    ret = picoquic_get_server_address(ip_address_text, server_port, &server_address, &server_addr_length, &is_name);
+    if (is_name != 0)
     {
-        memset(&server_address, 0, sizeof(server_address));
-
-        if (inet_pton(AF_INET, ip_address_text, &ipv4_dest->sin_addr) == 1)
-        {
-            /* Valid IPv4 address */
-            ipv4_dest->sin_family = AF_INET;
-            ipv4_dest->sin_port = htons(server_port);
-            server_addr_length = sizeof(struct sockaddr_in);
-        }
-        else
-       
-        if (inet_pton(AF_INET6, ip_address_text, &ipv6_dest->sin6_addr) == 1)
-        {
-            /* Valid IPv6 address */
-            ipv6_dest->sin6_family = AF_INET6;
-            ipv6_dest->sin6_port = htons(server_port);
-            server_addr_length = sizeof(struct sockaddr_in6);
-        }
-        else
-        {
-            /* Server is described by name. Do a lookup for the IP address,
-             * and then use the name as SNI parameter */
-            struct addrinfo *result = NULL;
-            struct addrinfo hints;
-
-            memset(&hints, 0, sizeof(hints));
-            hints.ai_family = AF_UNSPEC;
-            hints.ai_socktype = SOCK_DGRAM;
-            hints.ai_protocol = IPPROTO_UDP;
-
-            if (getaddrinfo(ip_address_text, NULL, &hints, &result) != 0)
-            {
-                fprintf(stderr, "Cannot get IP address for %s\n", ip_address_text);
-                ret = -1;
-            }
-            else
-            {
-                sni = ip_address_text;
-
-                switch (result->ai_family)
-                {
-                case AF_INET:
-                    ipv4_dest->sin_family = AF_INET;
-                    ipv4_dest->sin_port = htons(server_port);
-#ifdef _WINDOWS
-                    ipv4_dest->sin_addr.S_un.S_addr =
-                        ((struct sockaddr_in *) result->ai_addr)->sin_addr.S_un.S_addr;
-#else
-                    ipv4_dest->sin_addr.s_addr =
-                        ((struct sockaddr_in *) result->ai_addr)->sin_addr.s_addr;
-#endif
-                   server_addr_length = sizeof(struct sockaddr_in);
-                    break;
-                case AF_INET6:
-                    ipv6_dest->sin6_family = AF_INET6;
-                    ipv6_dest->sin6_port = htons(server_port);
-                    memcpy(&ipv6_dest->sin6_addr,
-                        &((struct sockaddr_in6 *) result->ai_addr)->sin6_addr,
-                        sizeof(ipv6_dest->sin6_addr));
-                    break;
-                default:
-                    fprintf(stderr, "Error getting IPv6 address for %s, family = %d\n",
-                        ip_address_text, result->ai_family);
-                    ret = -1;
-                    break;
-                }
-
-                freeaddrinfo(result);
-            }
-        }
+        sni = is_name;
     }
 
     /* Open a UDP socket */
@@ -1129,7 +837,7 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
     }
 
     /* Create QUIC context */
-    current_time = get_current_time();
+    current_time = picoquic_current_time();
     callback_ctx.last_interaction_time = current_time;
 
     if (ret == 0)
@@ -1200,7 +908,7 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
             delay_max = 10000000;
         }
 
-        bytes_recv = do_select(&fd, 1, &packet_from, &from_length,
+        bytes_recv = picoquic_select(&fd, 1, &packet_from, &from_length,
             buffer, sizeof(buffer), 
             picoquic_get_next_wake_delay(qclient, current_time, delay_max), 
             &current_time);

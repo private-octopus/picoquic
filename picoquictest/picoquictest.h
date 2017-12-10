@@ -68,6 +68,7 @@ extern "C" {
     int ping_pong_test();
     int logger_test();
     int transport_parameter_client_error_test();
+    int socket_test();
 
 #ifdef  __cplusplus
 }

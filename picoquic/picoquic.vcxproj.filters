@@ -60,6 +60,9 @@
     <ClCompile Include="http0dot9.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="picosocks.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquic.h">
@@ -81,6 +84,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="picoquic_internal.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="picosocks.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
