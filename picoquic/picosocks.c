@@ -222,7 +222,7 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
         }
         else
         {
-			struct cmsghdr *cmsg;
+            struct cmsghdr *cmsg;
 
             bytes_recv = NumberOfBytes;
             *from_length = msg.namelen;
@@ -306,6 +306,7 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
     {
         /* Get the control information */
         struct cmsghdr *cmsg;
+        *from_length = msg.msg_namelen;
 
         for (cmsg = CMSG_FIRSTHDR(&msg); cmsg != NULL; cmsg = CMSG_NXTHDR(&msg, cmsg))
         {
@@ -636,6 +637,8 @@ int picoquic_send_through_server_sockets(
 #endif
         DBG_PRINTF("Could not send packet on UDP socket[%d]= %d!\n",
             socket_index, last_error);
+        DBG_PRINTF("Dest address length: %d, family: %d.\n",
+            dest_length, addr_dest->sa_family);
     }
 
     return sent;
