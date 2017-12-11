@@ -314,7 +314,9 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
                 if (addr_dest != NULL && dest_length != NULL)
                 {
                     struct in_pktinfo *pPktInfo = (struct in_pktinfo *)CMSG_DATA(cmsg);
-                    memcpy(addr_dest, &pPktInfo->ipi_addr, sizeof(struct sockaddr_in));
+                    ((struct sockaddr_in *)addr_dest)->sin_family = AF_INET;
+                    ((struct sockaddr_in *)addr_dest)->sin_port = 0;
+                    ((struct sockaddr_in *)addr_dest)->sin_addr.s_addr = pPktInfo->ipi_addr.s_addr;
                     *dest_length = sizeof(struct sockaddr_in);
 
                     if (dest_if != NULL)
