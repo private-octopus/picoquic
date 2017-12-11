@@ -482,7 +482,7 @@ int picoquic_prepare_version_negotiation(
     picoquic_quic_t * quic,
     struct sockaddr * addr_from,
     struct sockaddr * addr_to,
-    int if_index_to,
+    unsigned long if_index_to,
     picoquic_packet_header * ph)
 {
     int ret = -1;
@@ -549,7 +549,7 @@ void picoquic_process_unexpected_cnxid(
 	uint32_t length,
 	struct sockaddr * addr_from,
     struct sockaddr * addr_to,
-    int if_index_to,
+    unsigned long if_index_to,
 	picoquic_packet_header * ph)
 {
 	if ((ph->ptype == picoquic_packet_1rtt_protected_phi0 ||
@@ -594,7 +594,7 @@ void picoquic_process_unexpected_cnxid(
 void picoquic_queue_stateless_reset(picoquic_cnx_t * cnx, 
     picoquic_packet_header * ph, struct sockaddr* addr_from,
     struct sockaddr * addr_to,
-    int if_index_to )
+    unsigned long if_index_to )
 {
     picoquic_stateless_packet_t * sp = picoquic_create_stateless_packet(cnx->quic);
     size_t checksum_length = 8;
@@ -689,7 +689,7 @@ picoquic_cnx_t * picoquic_incoming_initial(
     uint32_t length,
     struct sockaddr * addr_from,
     struct sockaddr * addr_to,
-    int if_index_to,
+    unsigned long if_index_to,
     picoquic_packet_header * ph,
 	uint64_t current_time)
 {
@@ -850,7 +850,7 @@ int picoquic_incoming_server_cleartext(
     uint8_t * bytes,
     uint32_t length,
     struct sockaddr * addr_to,
-    int if_index_to,
+    unsigned long if_index_to,
     picoquic_packet_header * ph,
 	uint64_t current_time)
 {

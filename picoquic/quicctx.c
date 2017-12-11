@@ -753,7 +753,7 @@ void picoquic_get_local_addr(picoquic_cnx_t * cnx, struct sockaddr ** addr, int 
     *addr_len = cnx->dest_addr_len;
 }
 
-int picoquic_get_local_if_index(picoquic_cnx_t * cnx)
+unsigned long picoquic_get_local_if_index(picoquic_cnx_t * cnx)
 {
     return cnx->if_index_dest;
 }

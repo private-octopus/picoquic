@@ -368,7 +368,7 @@ int quic_server(const char * server_name, int server_port,
     picoquic_server_sockets_t server_sockets;
     struct sockaddr_storage addr_from;
     struct sockaddr_storage addr_to;
-    int if_index_to;
+    unsigned long if_index_to;
     struct sockaddr_storage client_from;
     socklen_t from_length;
     socklen_t to_length;
@@ -817,7 +817,7 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
     struct sockaddr_storage server_address;
     struct sockaddr_storage packet_from;
     struct sockaddr_storage packet_to;
-    int if_index_to;
+    unsigned long if_index_to;
     socklen_t from_length;
     socklen_t to_length;
     int server_addr_length = 0;
