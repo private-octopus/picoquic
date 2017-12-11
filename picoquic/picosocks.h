@@ -32,6 +32,8 @@
 #include <WinSock2.h>
 #include <iphlpapi.h>
 #include <ws2tcpip.h>
+#include <Mswsock.h>
+#include <Ws2def.h>
 
 #ifndef SOCKET_TYPE 
 #define SOCKET_TYPE SOCKET
@@ -107,6 +109,9 @@ uint64_t picoquic_current_time();
 int picoquic_select(SOCKET_TYPE * sockets, int nb_sockets,
     struct sockaddr_storage * addr_from,
     socklen_t * from_length,
+    struct sockaddr_storage * addr_dest,
+    socklen_t * dest_length,
+    unsigned long * dest_if,
     uint8_t * buffer, int buffer_max,
     int64_t delta_t,
     uint64_t * current_time);
@@ -114,6 +119,7 @@ int picoquic_select(SOCKET_TYPE * sockets, int nb_sockets,
 int picoquic_send_through_server_sockets(
     picoquic_server_sockets_t * sockets,
     struct sockaddr * addr_dest, socklen_t addr_length,
+    struct sockaddr * addr_from, socklen_t from_length, unsigned long from_if,
     const char * bytes, int length);
 
 int picoquic_get_server_address(const char * ip_address_text, int server_port,

@@ -79,7 +79,11 @@ int cleartext_aead_test()
         NULL, NULL, NULL);
     picoquic_quic_t * qserver = picoquic_create(8,
 #ifdef _WINDOWS
+#ifdef _WINDOWS64
+        "..\\..\\certs\\cert.pem", "..\\..\\certs\\key.pem",
+#else
         "..\\certs\\cert.pem", "..\\certs\\key.pem",
+#endif
 #else
         "certs/cert.pem", "certs/key.pem",
 #endif

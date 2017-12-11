@@ -71,16 +71,35 @@ int picoquic_open_server_sockets(picoquic_server_sockets_t * sockets, int port)
         }
         else
         {
-#ifndef _WINDOWS
+#ifdef _WINDOWS
+            int option_value = 1;
+            if (sock_af[i] == AF_INET6) {
+                ret = setsockopt(sockets->s_socket[i], IPPROTO_IPV6, IPV6_PKTINFO, (char*)&option_value, sizeof(int));
+            }
+            else
+            {
+                ret = setsockopt(sockets->s_socket[i], IPPROTO_IP, IP_PKTINFO, (char*)&option_value, sizeof(int));
+            }
+#else
             if (sock_af[i] == AF_INET6) {
                 int val = 1;
                 ret = setsockopt(sockets->s_socket[i], IPPROTO_IPV6, IPV6_V6ONLY,
                     &val, sizeof(val));
-                if (ret)
-                    return ret;
+                if (ret == 0)
+                {
+                    val = 1;
+                    ret = setsockopt(sockets->s_socket[i], IPPROTO_IPV6, IPV6_PKTINFO, (char*)&val, sizeof(int));
+                }
+            }
+            else
+            {
+                ret = setsockopt(sockets->s_socket[i], IPPROTO_IP, IP_PKTINFO, (char*)&option_value, sizeof(int));
             }
 #endif
-            ret = bind_to_port(sockets->s_socket[i], sock_af[i], port);
+            if (ret == 0)
+            {
+                ret = bind_to_port(sockets->s_socket[i], sock_af[i], port);
+            }
         }
     }
 
@@ -134,9 +153,373 @@ uint64_t picoquic_current_time()
     return now;
 }
 
-int picoquic_select(SOCKET_TYPE * sockets, int nb_sockets,
+int picoquic_recvmsg(SOCKET_TYPE fd,
     struct sockaddr_storage * addr_from,
     socklen_t * from_length,
+    struct sockaddr_storage * addr_dest,
+    socklen_t * dest_length,
+    unsigned long * dest_if,
+    uint8_t * buffer, int buffer_max)
+#ifdef _WINDOWS
+{
+    GUID WSARecvMsg_GUID = WSAID_WSARECVMSG;
+    LPFN_WSARECVMSG WSARecvMsg;
+    char cmsg_buffer[1024];
+    DWORD NumberOfBytes;
+    int nResult;
+    DWORD dwBytesRecvd = 0;
+    WSAMSG msg;
+    WSABUF dataBuf;
+    int recv_ret = 0;
+    int bytes_recv;
+    int last_error;
+
+    if (dest_length != NULL)
+    {
+        *dest_length = 0;
+    }
+
+    if (dest_if != NULL)
+    {
+        *dest_if;
+    }
+
+    nResult = WSAIoctl(fd, SIO_GET_EXTENSION_FUNCTION_POINTER,
+        &WSARecvMsg_GUID, sizeof WSARecvMsg_GUID,
+        &WSARecvMsg, sizeof WSARecvMsg,
+        &NumberOfBytes, NULL, NULL);
+
+    if (nResult == SOCKET_ERROR) {
+        last_error = WSAGetLastError();
+        DBG_PRINTF("Could not initialize WSARecvMsg) on UDP socket %d= %d!\n",
+            (int)fd, last_error);
+        bytes_recv = -1;
+        *from_length = 0;
+    }
+    else
+    {
+        dataBuf.buf = (char*)buffer;
+        dataBuf.len = buffer_max;
+
+        msg.name = (struct sockaddr *)addr_from;
+        msg.namelen = *from_length;
+        msg.lpBuffers = &dataBuf;
+        msg.dwBufferCount = 1;
+        msg.dwFlags = 0;
+        msg.Control.buf = cmsg_buffer;
+        msg.Control.len = sizeof(cmsg_buffer);
+
+        recv_ret = WSARecvMsg(fd, &msg, &NumberOfBytes, NULL, NULL);
+
+        if (recv_ret != 0)
+        {
+            last_error = WSAGetLastError();
+            DBG_PRINTF("Could not receive message (WSARecvMsg) on UDP socket %d = %d!\n",
+                (int) fd, last_error);
+            bytes_recv = -1;
+            *from_length = 0;
+        }
+        else
+        {
+			struct cmsghdr *cmsg;
+
+            bytes_recv = NumberOfBytes;
+            *from_length = msg.namelen;
+
+            /* Get the control information */
+            for (cmsg = WSA_CMSG_FIRSTHDR(&msg); cmsg != NULL; cmsg = WSA_CMSG_NXTHDR(&msg, cmsg))
+            {
+                if ((cmsg->cmsg_level == IPPROTO_IP) && (cmsg->cmsg_type == IP_PKTINFO))
+                {
+                    if (addr_dest != NULL && dest_length != NULL)
+                    {
+                        IN_PKTINFO *pPktInfo = (IN_PKTINFO *)WSA_CMSG_DATA(cmsg);
+                        ((struct sockaddr_in *)addr_dest)->sin_family = AF_INET;
+                        ((struct sockaddr_in *)addr_dest)->sin_port = 0;
+                        ((struct sockaddr_in *)addr_dest)->sin_addr.s_addr = pPktInfo->ipi_addr.s_addr;
+                        *dest_length = sizeof(struct sockaddr_in);
+
+                        if (dest_if != NULL)
+                        {
+                            *dest_if = pPktInfo->ipi_ifindex;
+                        }
+                    }
+                }
+                else if ((cmsg->cmsg_level == IPPROTO_IPV6) && (cmsg->cmsg_type == IPV6_PKTINFO))
+                {
+                    if (addr_dest != NULL && dest_length != NULL)
+                    {
+                        IN6_PKTINFO *pPktInfo6 = (IN6_PKTINFO *)WSA_CMSG_DATA(cmsg);
+                        ((struct sockaddr_in6 *)addr_dest)->sin6_family = AF_INET6;
+                        ((struct sockaddr_in6 *)addr_dest)->sin6_port = 0;
+                        memcpy(&((struct sockaddr_in6 *)addr_dest)->sin6_addr, &pPktInfo6->ipi6_addr, sizeof(IN6_ADDR));
+                        *dest_length = sizeof(struct sockaddr_in6);
+
+                        if (dest_if != NULL)
+                        {
+                            *dest_if = pPktInfo6->ipi6_ifindex;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return bytes_recv;
+}
+#else
+{
+    int bytes_recv = 0;
+    struct msghdr msg;
+    struct iovec dataBuf;
+    char cmsg_buffer[1024];
+
+    if (dest_length != NULL)
+    {
+        *dest_length = 0;
+    }
+
+    if (dest_if != NULL)
+    {
+        *dest_if;
+    }
+
+    dataBuf.iov_base = (char*)buffer;
+    dataBuf.iov_len = buffer_max;
+
+    msg.msg_name = (struct sockaddr *)addr_from;
+    msg.msg_namelen = *from_length;
+    msg.msg_iov = &dataBuf;
+    msg.msg_iovlen = 1;
+    msg.msg_flags = 0;
+    msg.msg_control = (void *) cmsg_buffer;
+    msg.msg_controllen = sizeof(cmsg_buffer);
+
+    bytes_recv = recvmsg(udpSocket, &msg, 0);
+
+    if (bytes_recv <= 0) 
+	{
+        *from_length = 0;
+    }
+    else
+    {
+        /* Get the control information */
+        struct cmsghdr *cmsg;
+
+        for (cmsg = CMSG_FIRSTHDR(&msg); cmsg != NULL; cmsg = CMSG_NXTHDR(&msg, cmsg))
+        {
+            if ((cmsg->cmsg_level == IPPROTO_IP) && (cmsg->cmsg_type == IP_PKTINFO))
+            {
+                if (addr_dest != NULL && dest_length != NULL)
+                {
+                    IN_PKTINFO *pPktInfo = (IN_PKTINFO *)CMSG_DATA(cmsg);
+                    memcpy(addr_dest, &pPktInfo->ipi_addr, sizeof(struct sockaddr_in));
+                    *dest_length = sizeof(struct sockaddr_in);
+
+                    if (dest_if != NULL)
+                    {
+                        *dest_if = pPktInfo->ipi_ifindex;
+                    }
+                }
+            }
+            else if ((cmsg->cmsg_level == IPPROTO_IPV6) && (cmsg->cmsg_type == IPV6_PKTINFO))
+            {
+                if (addr_dest != NULL && dest_length != NULL)
+                {
+                    IN6_PKTINFO *pPktInfo6 = (IN6_PKTINFO *)CMSG_DATA(cmsg);
+                    ((struct sockaddr_in6 *)addr_dest)->sin6_family = AF_INET6;
+                    ((struct sockaddr_in6 *)addr_dest)->sin6_port = 0;
+                    memcpy(&((struct sockaddr_in6 *)addr_dest)->sin6_addr, &pPktInfo6->ipi6_addr, sizeof(struct in6_addr));
+                    *dest_length = sizeof(struct sockaddr_in6);
+
+                    if (dest_if != NULL)
+                    {
+                        *dest_if = pPktInfo6->ipi6_ifindex;
+                    }
+                }
+            }
+        }
+    }
+
+	return bytes_recv;
+}
+#endif
+
+
+int picoquic_sendmsg(SOCKET_TYPE fd,
+    struct sockaddr * addr_dest,
+    socklen_t dest_length,
+    struct sockaddr * addr_from,
+    socklen_t from_length,
+    unsigned long dest_if,
+    const char * bytes, int length)
+#ifdef _WINDOWS
+{
+    GUID WSASendMsg_GUID = WSAID_WSASENDMSG;
+    LPFN_WSASENDMSG WSASendMsg;
+    char cmsg_buffer[1024];
+    int control_length = 0;
+    DWORD NumberOfBytes;
+    int ret = 0;
+    DWORD dwBytesSent = 0;
+    WSAMSG msg;
+    WSABUF dataBuf;
+    int bytes_sent;
+    int last_error;
+    WSACMSGHDR *cmsg;
+
+
+    ret = WSAIoctl(fd, SIO_GET_EXTENSION_FUNCTION_POINTER,
+        &WSASendMsg_GUID, sizeof WSASendMsg_GUID,
+        &WSASendMsg, sizeof WSASendMsg,
+        &NumberOfBytes, NULL, NULL);
+
+    if (ret == SOCKET_ERROR) {
+        last_error = WSAGetLastError();
+        DBG_PRINTF("Could not initialize WSARecvMsg) on UDP socket %d= %d!\n",
+            (int)fd, last_error);
+        bytes_sent = -1;
+    }
+    else
+    {
+        /* Format the message header */
+
+        memset(&msg, 0, sizeof(msg));
+        msg.name = addr_dest;
+        msg.namelen = dest_length;
+        dataBuf.buf = (char*)bytes;
+        dataBuf.len = length;
+        msg.lpBuffers = &dataBuf;
+        msg.dwBufferCount = 1;
+        msg.Control.buf = (char *)cmsg_buffer;
+        msg.Control.len = sizeof(cmsg_buffer);
+
+        /* Format the control message */
+        cmsg = WSA_CMSG_FIRSTHDR(&msg);
+
+        if (addr_from != NULL && from_length != 0)
+        {
+            if (addr_from->sa_family == AF_INET)
+            {
+                memset(cmsg, 0, WSA_CMSG_SPACE(sizeof(struct in_pktinfo)));
+                cmsg->cmsg_level = IPPROTO_IP;
+                cmsg->cmsg_type = IP_PKTINFO;
+                cmsg->cmsg_len = WSA_CMSG_LEN(sizeof(struct in_pktinfo));
+                struct in_pktinfo *pktinfo = (struct in_pktinfo *)WSA_CMSG_DATA(cmsg);
+                pktinfo->ipi_addr.s_addr = ((struct sockaddr_in *)addr_from)->sin_addr.s_addr;
+                pktinfo->ipi_ifindex = dest_if;
+
+                control_length += WSA_CMSG_SPACE(sizeof(struct in_pktinfo));
+            }
+            else
+            {
+                memset(cmsg, 0, WSA_CMSG_SPACE(sizeof(struct in6_pktinfo)));
+                cmsg->cmsg_level = IPPROTO_IPV6;
+                cmsg->cmsg_type = IPV6_PKTINFO;
+                cmsg->cmsg_len = WSA_CMSG_LEN(sizeof(struct in6_pktinfo));
+                struct in6_pktinfo *pktinfo6 = (struct in6_pktinfo *)WSA_CMSG_DATA(cmsg);
+                memcpy(&pktinfo6->ipi6_addr.u, &((struct sockaddr_in6 *)addr_from)->sin6_addr.u, sizeof(IN6_ADDR));
+                pktinfo6->ipi6_ifindex = dest_if;
+
+                control_length += WSA_CMSG_SPACE(sizeof(struct in6_pktinfo));
+            }
+        }
+        msg.Control.len = control_length;
+        if (control_length == 0)
+        {
+            msg.Control.buf = NULL;
+        }
+
+		/* Send the message */
+
+        ret = WSASendMsg(fd, &msg, 0, &dwBytesSent, NULL, NULL);
+
+        if (ret != 0)
+        {
+            bytes_sent = -1;
+        }
+        else
+        {
+            bytes_sent = (int) dwBytesSent;
+        }
+    }
+
+    return bytes_sent;
+}
+#else
+{
+    int bytes_recv = 0;
+    struct msghdr msg;
+    struct iovec dataBuf;
+    char cmsg_buffer[1024];
+    int control_length = 0;
+    int ret = 0;
+    int bytes_sent;
+    int last_error;
+    struct cmsghdr *cmsg;
+
+    /* Format the message header */
+
+    dataBuf.iov_base = (char*)buffer;
+    dataBuf.iov_len = buffer_max;
+
+    memset(&msg, 0, sizeof(msg));
+    msg.name = addr_dest;
+    msg.namelen = dest_length;
+    msg.msg_iov = &dataBuf;
+    msg.msg_iovlen = 1;
+    msg.msg_control = (void *)cmsg_buffer;
+    msg.msg_controllen = sizeof(cmsg_buffer);
+
+    /* Format the control message */
+    cmsg = CMSG_FIRSTHDR(&msg);
+
+    if (addr_from != NULL && from_length != NULL)
+    {
+        if (addr_from->sa_family == AF_INET)
+        {
+            memset(cmsg, 0, CMSG_SPACE(sizeof(struct in_pktinfo)));
+            cmsg->cmsg_level = IPPROTO_IP;
+            cmsg->cmsg_type = IP_PKTINFO;
+            cmsg->cmsg_len = CMSG_LEN(sizeof(struct in_pktinfo));
+            struct in_pktinfo *pktinfo = (struct in_pktinfo *)CMSG_DATA(cmsg);
+            pktinfo->ipi_addr.s_addr = ((struct sockaddr_in *)addr_from)->sin_addr.s_addr;
+            pktinfo->ipi_ifindex = dest_if;
+
+            control_length += CMSG_SPACE(sizeof(struct in_pktinfo));
+        }
+        else
+        {
+            memset(cmsg, 0, CMSG_SPACE(sizeof(struct in6_pktinfo)));
+            cmsg->cmsg_level = IPPROTO_IPV6;
+            cmsg->cmsg_type = IPV6_PKTINFO;
+            cmsg->cmsg_len = CMSG_LEN(sizeof(struct in6_pktinfo));
+            struct in6_pktinfo *pktinfo6 = (struct in6_pktinfo *)CMSG_DATA(cmsg);
+            memcpy(&pktinfo6->ipi6_addr, &((struct sockaddr_in6 *)addr_from)->sin6_addr, sizeof(IN6_ADDR));
+            pktinfo6->ipi6_ifindex = dest_if;
+
+            control_length += CMSG_SPACE(sizeof(struct in6_pktinfo));
+        }
+    }
+    msg.Control.len = control_length;
+    if (control_length == 0)
+    {
+        msg.Control.buf = NULL;
+    }
+
+    bytes_sent = sendmsg(fd, &msg, 0);
+
+    return bytes_sent;
+}
+#endif
+
+int picoquic_select(SOCKET_TYPE * sockets, 
+	int nb_sockets,
+    struct sockaddr_storage * addr_from,
+    socklen_t * from_length,
+    struct sockaddr_storage * addr_dest,
+    socklen_t * dest_length,
+	unsigned long * dest_if,
     uint8_t * buffer, int buffer_max,
     int64_t delta_t,
     uint64_t * current_time)
@@ -193,10 +576,12 @@ int picoquic_select(SOCKET_TYPE * sockets, int nb_sockets,
         {
             if (FD_ISSET(sockets[i], &readfds))
             {
-                /* Read the incoming response */
-                *from_length = sizeof(struct sockaddr_storage);
-                bytes_recv = recvfrom(sockets[i], (char*)buffer, buffer_max, 0,
-                    (struct sockaddr *)addr_from, from_length);
+                int last_error = 0;
+
+                bytes_recv = picoquic_recvmsg(sockets[i], addr_from, from_length, 
+				addr_dest, dest_length, dest_if, 
+				buffer, buffer_max);
+				// bytes_recv = recvfrom(socket[i], buffer, buffer_max, 0, addr_from, from_length);
 
                 if (bytes_recv <= 0)
                 {
@@ -229,14 +614,26 @@ int picoquic_select(SOCKET_TYPE * sockets, int nb_sockets,
 
 int picoquic_send_through_server_sockets(
     picoquic_server_sockets_t * sockets,
-    struct sockaddr * addr_dest, socklen_t addr_length,
+    struct sockaddr * addr_dest, socklen_t dest_length,
+    struct sockaddr * addr_from, socklen_t from_length, unsigned long from_if,
     const char * bytes, int length)
 {
     /* Both Linux and Windows use separate sockets for V4 and V6 */
     int socket_index = (addr_dest->sa_family == AF_INET) ? 1 : 0;
 
-    int sent = sendto(sockets->s_socket[socket_index], bytes, length, 0,
-        addr_dest, addr_length);
+    int sent = picoquic_sendmsg(sockets->s_socket[socket_index], addr_dest, dest_length,
+        addr_from, from_length, from_if, bytes, length);
+
+    if (sent <= 0)
+    {
+#ifdef _WINDOWS
+        int last_error = WSAGetLastError();
+#else
+        int last_error = errno;
+#endif
+        DBG_PRINTF("Could not receive packet on UDP socket[%d]= %d!\n",
+            socket_index, last_error);
+    }
 
     return sent;
 }

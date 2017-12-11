@@ -405,7 +405,8 @@ int quic_server(const char * server_name, int server_port,
         picoquic_get_cnx_state(cnx_server)!= picoquic_state_disconnected))
     {
         bytes_recv = picoquic_select(server_sockets.s_socket, PICOQUIC_NB_SERVER_SOCKETS,
-            &addr_from, &from_length,
+            &addr_from, &from_length, 
+            NULL, NULL, NULL,
             buffer, sizeof(buffer), 
             picoquic_get_next_wake_delay(qserver, current_time, delay_max), &current_time);
 
@@ -463,6 +464,7 @@ int quic_server(const char * server_name, int server_port,
                 {
                     int sent = picoquic_send_through_server_sockets(&server_sockets,
                         (struct sockaddr *) &addr_from, from_length,
+                        NULL, 0, 0,
                         (const char *)sp->bytes, (int)sp->length);
 
                     printf("Sending stateless packet, %d bytes\n", sent);
@@ -504,7 +506,7 @@ int quic_server(const char * server_name, int server_port,
                                 picoquic_get_peer_addr(cnx_next, &peer_addr, &peer_addr_len);
 
                                 int sent = picoquic_send_through_server_sockets(&server_sockets,
-                                    peer_addr, peer_addr_len,
+                                    peer_addr, peer_addr_len, NULL, 0, 0,
                                     (const char *)send_buffer, (int)send_length);
 
                                 if (cnx_server != NULL && just_once != 0)
@@ -907,6 +909,7 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
         }
 
         bytes_recv = picoquic_select(&fd, 1, &packet_from, &from_length,
+            NULL, NULL, NULL,
             buffer, sizeof(buffer), 
             picoquic_get_next_wake_delay(qclient, current_time, delay_max), 
             &current_time);
