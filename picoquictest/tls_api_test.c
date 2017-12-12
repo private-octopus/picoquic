@@ -898,7 +898,9 @@ static int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t * test_ctx,
                 next_time = client_arrival;
 				*simulated_time = next_time;
 				ret = picoquic_incoming_packet(test_ctx->qclient, packet->bytes, packet->length,
-					(struct sockaddr *)&test_ctx->server_addr, *simulated_time);
+					(struct sockaddr *)&test_ctx->server_addr,
+                    (struct sockaddr *)&test_ctx->client_addr, 0,
+                    *simulated_time);
 				*was_active |= 1;
 			}
             else if (server_arrival < next_time &&
@@ -908,7 +910,9 @@ static int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t * test_ctx,
                 next_time = server_arrival;
                 *simulated_time = next_time;
                 ret = picoquic_incoming_packet(test_ctx->qserver, packet->bytes, packet->length,
-                    (struct sockaddr *)&test_ctx->client_addr, *simulated_time);
+                    (struct sockaddr *)&test_ctx->client_addr,
+                    (struct sockaddr *)&test_ctx->server_addr, 0,
+                    *simulated_time);
 
                 if (test_ctx->cnx_server == NULL)
                 {
@@ -1371,7 +1375,9 @@ int tls_api_bad_server_reset_test()
 	if (ret == 0)
 	{
 		ret = picoquic_incoming_packet(test_ctx->qclient, buffer, sizeof(buffer),
-			(struct sockaddr*)(&test_ctx->server_addr), simulated_time);
+			(struct sockaddr*)(&test_ctx->server_addr),
+            (struct sockaddr*)(&test_ctx->client_addr), 0,
+            simulated_time);
 	}
 
 	/* check that the client is still up */

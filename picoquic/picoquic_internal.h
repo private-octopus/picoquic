@@ -298,6 +298,9 @@ extern "C" {
         /* Peer address. To do: allow for multiple addresses */
         struct sockaddr_storage peer_addr;
         int peer_addr_len;
+        struct sockaddr_storage dest_addr;
+        int dest_addr_len;
+        int if_index_dest;
 
 		/* connection state, ID, etc. Todo: allow for multiple cnxid */
 		picoquic_state_enum cnx_state;

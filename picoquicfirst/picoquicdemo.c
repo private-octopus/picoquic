@@ -367,8 +367,11 @@ int quic_server(const char * server_name, int server_port,
     picoquic_cnx_t *cnx_next = NULL;
     picoquic_server_sockets_t server_sockets;
     struct sockaddr_storage addr_from;
+    struct sockaddr_storage addr_to;
+    int if_index_to;
     struct sockaddr_storage client_from;
     socklen_t from_length;
+    socklen_t to_length;
     int client_addr_length;
     uint8_t buffer[1536];
 	uint8_t send_buffer[1536];
@@ -404,9 +407,12 @@ int quic_server(const char * server_name, int server_port,
     while (ret == 0 && (just_once == 0 || cnx_server == NULL ||
         picoquic_get_cnx_state(cnx_server)!= picoquic_state_disconnected))
     {
+        from_length = to_length = sizeof(struct sockaddr_storage);
+        if_index_to = 0;
+
         bytes_recv = picoquic_select(server_sockets.s_socket, PICOQUIC_NB_SERVER_SOCKETS,
             &addr_from, &from_length, 
-            NULL, NULL, NULL,
+            &addr_to, &to_length, &if_index_to,
             buffer, sizeof(buffer), 
             picoquic_get_next_wake_delay(qserver, current_time, delay_max), &current_time);
 
@@ -434,7 +440,9 @@ int quic_server(const char * server_name, int server_port,
 
                 /* Submit the packet to the server */
                 ret = picoquic_incoming_packet(qserver, buffer,
-                    (size_t)bytes_recv, (struct sockaddr *) &addr_from, current_time);
+                    (size_t)bytes_recv, (struct sockaddr *) &addr_from, 
+                    (struct sockaddr *) &addr_to, if_index_to,
+                    current_time);
 
                 if (ret != 0)
                 {
@@ -463,8 +471,11 @@ int quic_server(const char * server_name, int server_port,
                 while ((sp = picoquic_dequeue_stateless_packet(qserver)) != NULL)
                 {
                     int sent = picoquic_send_through_server_sockets(&server_sockets,
-                        (struct sockaddr *) &addr_from, from_length,
-                        NULL, 0, 0,
+                        (struct sockaddr *) &sp->addr_to, 
+                        (sp->addr_to.ss_family == AF_INET)?sizeof(struct sockaddr_in): sizeof(struct sockaddr_in6),
+                        (struct sockaddr *) &sp->addr_local,
+                        (sp->addr_local.ss_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6),
+                        sp->if_index_local,
                         (const char *)sp->bytes, (int)sp->length);
 
                     printf("Sending stateless packet, %d bytes\n", sent);
@@ -496,6 +507,8 @@ int quic_server(const char * server_name, int server_port,
                         {
                             int peer_addr_len = 0;
                             struct sockaddr * peer_addr;
+                            int local_addr_len = 0;
+                            struct sockaddr * local_addr;
 
                             if (p->length > 0)
                             {
@@ -504,9 +517,11 @@ int quic_server(const char * server_name, int server_port,
                                     picoquic_get_cnx_state(cnx_next));
 
                                 picoquic_get_peer_addr(cnx_next, &peer_addr, &peer_addr_len);
+                                picoquic_get_local_addr(cnx_next, &local_addr, &local_addr_len);
 
                                 int sent = picoquic_send_through_server_sockets(&server_sockets,
-                                    peer_addr, peer_addr_len, NULL, 0, 0,
+                                    peer_addr, peer_addr_len, local_addr, local_addr_len, 
+                                    picoquic_get_local_if_index(cnx_next),
                                     (const char *)send_buffer, (int)send_length);
 
                                 if (cnx_server != NULL && just_once != 0)
@@ -801,7 +816,10 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
     SOCKET_TYPE fd = INVALID_SOCKET;
     struct sockaddr_storage server_address;
     struct sockaddr_storage packet_from;
+    struct sockaddr_storage packet_to;
+    int if_index_to;
     socklen_t from_length;
+    socklen_t to_length;
     int server_addr_length = 0;
     uint8_t buffer[1536];
     uint8_t send_buffer[1536];
@@ -908,8 +926,10 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
             delay_max = 10000000;
         }
 
-        bytes_recv = picoquic_select(&fd, 1, &packet_from, &from_length,
-            NULL, NULL, NULL,
+        from_length = to_length = sizeof(struct sockaddr_storage);
+
+        bytes_recv = picoquic_select(&fd, 1, &packet_from, &from_length, 
+            &packet_to, &to_length, &if_index_to,
             buffer, sizeof(buffer), 
             picoquic_get_next_wake_delay(qclient, current_time, delay_max), 
             &current_time);
@@ -932,7 +952,9 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
             {
                 /* Submit the packet to the client */
                 ret = picoquic_incoming_packet(qclient, buffer,
-                    (size_t)bytes_recv, (struct sockaddr *) &packet_from, current_time);
+                    (size_t)bytes_recv, (struct sockaddr *) &packet_from, 
+                    (struct sockaddr *) &packet_to, if_index_to,
+                    current_time);
 
 				picoquic_log_processing(stdout, cnx_client, bytes_recv, ret);
 

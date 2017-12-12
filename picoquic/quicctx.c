@@ -747,6 +747,17 @@ void picoquic_get_peer_addr(picoquic_cnx_t * cnx, struct sockaddr ** addr, int *
     *addr_len = cnx->peer_addr_len;
 }
 
+void picoquic_get_local_addr(picoquic_cnx_t * cnx, struct sockaddr ** addr, int * addr_len)
+{
+    *addr = (struct sockaddr *) &cnx->dest_addr;
+    *addr_len = cnx->dest_addr_len;
+}
+
+int picoquic_get_local_if_index(picoquic_cnx_t * cnx)
+{
+    return cnx->if_index_dest;
+}
+
 uint64_t picoquic_get_cnxid(picoquic_cnx_t * cnx)
 {
     return cnx->server_cnxid;

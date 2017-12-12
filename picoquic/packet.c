@@ -473,64 +473,6 @@ int picoquic_incoming_version_negotiation(
 	return ret;
 }
 
-#if 0
-/*
- * Check that the version is supported. If that fails,
- * best effort attemt to send a version negotiation packet if
- * an initial message is received with an unsupported version
- */
-
-int picoquic_verify_version(
-	picoquic_quic_t * quic,
-	uint8_t * bytes,
-	uint32_t length,
-	struct sockaddr * addr_from,
-	picoquic_packet_header * ph,
-	uint64_t current_time)
-{
-	int ret = -1;
-
-    if (picoquic_get_version_index(ph->vn) >= 0)
-    {
-        ret = 0;
-	}
-
-	if (ret != 0)
-	{
-		picoquic_stateless_packet_t * sp = picoquic_create_stateless_packet(quic);
-
-		if (sp != NULL)
-		{
-			uint8_t * bytes = sp->bytes;
-			size_t byte_index = 0;
-			/* Packet type set to version negotiation */
-			bytes[byte_index++] = 0x80 | picoquic_packet_version_negotiation;
-			/* Copy the incoming header */
-			picoformat_64(bytes + byte_index, ph->cnx_id);
-			byte_index += 8;
-			picoformat_32(bytes + byte_index, ph->pn);
-			byte_index += 4;
-			picoformat_32(bytes + byte_index, ph->vn);
-			byte_index += 4;
-			/* Set the payload to the list of versions */
-			for (size_t i = 0; i < picoquic_nb_supported_versions; i++)
-			{
-				picoformat_32(bytes + byte_index, picoquic_supported_versions[i].version);
-				byte_index += 4;
-			}
-
-			sp->length = byte_index;
-			memset(&sp->addr_to, 0, sizeof(sp->addr_to));
-			memcpy(&sp->addr_to, addr_from,
-				(addr_from->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
-			picoquic_queue_stateless_packet(quic, sp);
-		}
-	}
-
-	return ret;
-}
-#endif
-
 /*
  * Send a version negotiation packet in response to an incoming packet
  * sporting the wrong version number.
@@ -539,6 +481,8 @@ int picoquic_verify_version(
 int picoquic_prepare_version_negotiation(
     picoquic_quic_t * quic,
     struct sockaddr * addr_from,
+    struct sockaddr * addr_to,
+    int if_index_to,
     picoquic_packet_header * ph)
 {
     int ret = -1;
@@ -584,6 +528,10 @@ int picoquic_prepare_version_negotiation(
         memset(&sp->addr_to, 0, sizeof(sp->addr_to));
         memcpy(&sp->addr_to, addr_from,
             (addr_from->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
+        memset(&sp->addr_local, 0, sizeof(sp->addr_local));
+        memcpy(&sp->addr_local, addr_to,
+            (addr_to->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
+        sp->if_index_local = if_index_to;
         picoquic_queue_stateless_packet(quic, sp);
     }
     
@@ -600,6 +548,8 @@ void picoquic_process_unexpected_cnxid(
 	picoquic_quic_t * quic,
 	uint32_t length,
 	struct sockaddr * addr_from,
+    struct sockaddr * addr_to,
+    int if_index_to,
 	picoquic_packet_header * ph)
 {
 	if ((ph->ptype == picoquic_packet_1rtt_protected_phi0 ||
@@ -628,6 +578,10 @@ void picoquic_process_unexpected_cnxid(
 			memset(&sp->addr_to, 0, sizeof(sp->addr_to));
 			memcpy(&sp->addr_to, addr_from,
 				(addr_from->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
+            memset(&sp->addr_local, 0, sizeof(sp->addr_local));
+            memcpy(&sp->addr_local, addr_to,
+                (addr_to->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
+            sp->if_index_local = if_index_to;
 			picoquic_queue_stateless_packet(quic, sp);
 		}
 	}
@@ -638,7 +592,9 @@ void picoquic_process_unexpected_cnxid(
  */
 
 void picoquic_queue_stateless_reset(picoquic_cnx_t * cnx, 
-    picoquic_packet_header * ph, struct sockaddr* addr_from)
+    picoquic_packet_header * ph, struct sockaddr* addr_from,
+    struct sockaddr * addr_to,
+    int if_index_to )
 {
     picoquic_stateless_packet_t * sp = picoquic_create_stateless_packet(cnx->quic);
     size_t checksum_length = 8;
@@ -705,6 +661,13 @@ void picoquic_queue_stateless_reset(picoquic_cnx_t * cnx,
                     ph->pn, sp->bytes, header_length);
                 sp->length += header_length;
             }
+            memset(&sp->addr_to, 0, sizeof(sp->addr_to));
+            memcpy(&sp->addr_to, addr_from,
+                (addr_from->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
+            memset(&sp->addr_local, 0, sizeof(sp->addr_local));
+            memcpy(&sp->addr_local, addr_to,
+                (addr_to->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
+            sp->if_index_local = if_index_to;
             picoquic_queue_stateless_packet(cnx->quic, sp);
         }
         else
@@ -725,6 +688,8 @@ picoquic_cnx_t * picoquic_incoming_initial(
     uint8_t * bytes,
     uint32_t length,
     struct sockaddr * addr_from,
+    struct sockaddr * addr_to,
+    int if_index_to,
     picoquic_packet_header * ph,
 	uint64_t current_time)
 {
@@ -741,7 +706,7 @@ picoquic_cnx_t * picoquic_incoming_initial(
         cnx = picoquic_create_cnx(quic, ph->cnx_id, addr_from, current_time, ph->vn, NULL, NULL);
 
         if (cnx != NULL)
-        {
+        {          
             decoded_length = picoquic_decrypt_cleartext(cnx, bytes, length, ph);
 
             if (decoded_length == 0)
@@ -766,7 +731,7 @@ picoquic_cnx_t * picoquic_incoming_initial(
 
                     if (cnx->cnx_state == picoquic_state_server_send_hrr)
                     {
-                        picoquic_queue_stateless_reset(cnx, ph, addr_from);
+                        picoquic_queue_stateless_reset(cnx, ph, addr_from, addr_to, if_index_to);
                         cnx->cnx_state = picoquic_state_disconnected;
                     }
                 }
@@ -777,6 +742,13 @@ picoquic_cnx_t * picoquic_incoming_initial(
                     picoquic_delete_cnx(cnx);
                     cnx = NULL;
                     ret = 0;
+                }
+                else
+                {
+                    /* remember the local address on which the initial packet arrived. */
+                    cnx->if_index_dest = if_index_to;
+                    cnx->dest_addr_len = (addr_to->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
+                    memcpy(&cnx->dest_addr, addr_to, cnx->dest_addr_len);
                 }
             }
         }
@@ -876,7 +848,9 @@ int picoquic_incoming_server_stateless(
 int picoquic_incoming_server_cleartext(
     picoquic_cnx_t * cnx,
     uint8_t * bytes,
-    uint32_t length, 
+    uint32_t length,
+    struct sockaddr * addr_to,
+    int if_index_to,
     picoquic_packet_header * ph,
 	uint64_t current_time)
 {
@@ -904,7 +878,11 @@ int picoquic_incoming_server_cleartext(
 			/* Check the server cnx id */
 			if (cnx->server_cnxid == 0)
 			{
+                /* On first response from the server, copy the cnx ID and the incoming address */
 				cnx->server_cnxid = ph->cnx_id;
+                cnx->dest_addr_len = (addr_to->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
+                memcpy(&cnx->dest_addr, addr_to, cnx->dest_addr_len);
+
                 (void)picoquic_register_cnx_id(cnx->quic, cnx, cnx->server_cnxid);
 			}
 			else if (cnx->server_cnxid != ph->cnx_id)
@@ -1139,6 +1117,8 @@ int picoquic_incoming_packet(
     uint8_t * bytes,
     uint32_t length,
     struct sockaddr * addr_from,
+    struct sockaddr * addr_to,
+    int if_index_to,
     uint64_t current_time)
 {
     int ret = 0;
@@ -1161,19 +1141,19 @@ int picoquic_incoming_packet(
             else if (ph.ptype == picoquic_packet_client_initial)
             {
                 ph.pn64 = ph.pn;
-                cnx = picoquic_incoming_initial(quic, bytes, length, addr_from, &ph, current_time);
+                cnx = picoquic_incoming_initial(quic, bytes, length, addr_from, addr_to, if_index_to, &ph, current_time);
             }
             else if (ph.version_index < 0 && ph.vn != 0)      
             {
                 /* use the result of parsing to consider version negotiation */
-                picoquic_prepare_version_negotiation(quic, addr_from, &ph);
+                picoquic_prepare_version_negotiation(quic, addr_from, addr_to, if_index_to, &ph);
             }
             else
             {
                 /* Unexpected packet. Reject, drop and log. */
                 if (ph.cnx_id != 0)
                 {
-                    picoquic_process_unexpected_cnxid(quic, length, addr_from, &ph);
+                    picoquic_process_unexpected_cnxid(quic, length, addr_from, addr_to, if_index_to, &ph);
                 }
                 ret = PICOQUIC_ERROR_DETECTED;
             }
@@ -1236,7 +1216,7 @@ int picoquic_incoming_packet(
                     ret = picoquic_incoming_server_stateless(cnx, bytes, length, &ph, current_time);
                     break;
                 case picoquic_packet_server_cleartext:
-                    ret = picoquic_incoming_server_cleartext(cnx, bytes, length, &ph, current_time);
+                    ret = picoquic_incoming_server_cleartext(cnx, bytes, length, addr_to, if_index_to, &ph, current_time);
                     break;
                 case picoquic_packet_client_cleartext:
                     ret = picoquic_incoming_client_cleartext(cnx, bytes, length, &ph, current_time);

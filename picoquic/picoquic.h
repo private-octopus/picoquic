@@ -115,6 +115,8 @@ extern "C" {
 	typedef struct st_picoquic_stateless_packet_t {
 		struct st_picoquic_stateless_packet_t * next_packet;
 		struct sockaddr_storage addr_to;
+        struct sockaddr_storage addr_local;
+        int if_index_local;
 		size_t length;
 
 		uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE];
@@ -199,6 +201,8 @@ extern "C" {
 	picoquic_state_enum picoquic_get_cnx_state(picoquic_cnx_t * cnx);
 
     void picoquic_get_peer_addr(picoquic_cnx_t * cnx, struct sockaddr ** addr, int * addr_len);
+    void picoquic_get_local_addr(picoquic_cnx_t * cnx, struct sockaddr ** addr, int * addr_len);
+    int picoquic_get_local_if_index(picoquic_cnx_t * cnx);
 
     uint64_t picoquic_get_cnxid(picoquic_cnx_t * cnx);
     uint64_t picoquic_get_initial_cnxid(picoquic_cnx_t * cnx);
@@ -222,6 +226,8 @@ extern "C" {
 		uint8_t * bytes,
 		uint32_t length,
 		struct sockaddr * addr_from,
+        struct sockaddr * addr_to,
+        int if_index_to,
 		uint64_t current_time);
 
 	picoquic_packet * picoquic_create_packet();
