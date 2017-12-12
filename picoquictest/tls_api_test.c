@@ -726,7 +726,11 @@ static int tls_api_init_ctx(picoquic_test_tls_api_ctx_t ** pctx, uint32_t propos
 
 		test_ctx->qserver = picoquic_create(8,
 #ifdef _WINDOWS
-			"..\\certs\\cert.pem", "..\\certs\\key.pem",
+#ifdef _WINDOWS64
+			"..\\..\\certs\\cert.pem", "..\\..\\certs\\key.pem",
+#else
+            "..\\certs\\cert.pem", "..\\certs\\key.pem",
+#endif
 #else
 			"certs/cert.pem", "certs/key.pem",
 #endif
