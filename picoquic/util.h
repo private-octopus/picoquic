@@ -40,6 +40,8 @@
 void debug_printf(const char *fmt, ...);
 void debug_printf_push_stream(FILE *f);
 void debug_printf_pop_stream(void);
+void debug_printf_suspend(void);
+void debug_printf_resume(void);
 
 #ifndef MIN
 # define MAX(a, b) ((a) > (b) ? (a) : (b))

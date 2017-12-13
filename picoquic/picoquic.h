@@ -171,7 +171,8 @@ extern "C" {
 		void * default_callback_ctx,
 		cnx_id_cb_fn cnx_id_callback,
 		void * cnx_id_callback_data,
-		uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE]);
+		uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE],
+        uint64_t * p_simulated_time);
 
 	void picoquic_free(picoquic_quic_t * quic);
 

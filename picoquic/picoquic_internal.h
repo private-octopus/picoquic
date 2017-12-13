@@ -160,6 +160,7 @@ extern "C" {
 		char const * default_alpn;
 		uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE];
         uint8_t retry_seed[PICOQUIC_RETRY_SECRET_SIZE];
+        uint64_t * p_simulated_time;
 
 		uint32_t flags;
 

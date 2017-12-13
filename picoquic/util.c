@@ -61,13 +61,17 @@ char * picoquic_string_duplicate(const char * original)
 }
 
 static FILE *debug_out;
+static int debug_suspended = 0;
 
 void debug_printf(const char *fmt, ...)
 {
-	va_list args;
-	va_start(args, fmt);
-	vfprintf(debug_out ? debug_out : stderr, fmt, args);
-	va_end(args);
+    if (debug_suspended == 0)
+    {
+        va_list args;
+        va_start(args, fmt);
+        vfprintf(debug_out ? debug_out : stderr, fmt, args);
+        va_end(args);
+    }
 }
 
 void debug_printf_push_stream(FILE *f)
@@ -88,4 +92,14 @@ void debug_printf_pop_stream(void)
 		exit(1);
 	}
 	debug_out = NULL;
+}
+
+void debug_printf_suspend(void)
+{
+    debug_suspended = 1;
+}
+
+void debug_printf_resume(void)
+{
+    debug_suspended = 0;
 }

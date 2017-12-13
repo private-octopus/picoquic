@@ -135,7 +135,8 @@ picoquic_quic_t * picoquic_create(uint32_t nb_connections,
 	void * default_callback_ctx,
 	cnx_id_cb_fn cnx_id_callback,
 	void * cnx_id_callback_ctx,
-	uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE])
+	uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE],
+    uint64_t * p_simulated_time)
 {
     picoquic_quic_t * quic = (picoquic_quic_t *)malloc(sizeof(picoquic_quic_t));
 
@@ -151,6 +152,7 @@ picoquic_quic_t * picoquic_create(uint32_t nb_connections,
 		quic->default_alpn = picoquic_string_duplicate(default_alpn);
 		quic->cnx_id_callback_fn = cnx_id_callback;
 		quic->cnx_id_callback_ctx = cnx_id_callback_ctx;
+        quic->p_simulated_time = p_simulated_time;
 
 		if (cnx_id_callback != NULL)
 		{

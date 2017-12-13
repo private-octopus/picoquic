@@ -222,6 +222,8 @@ int transport_param_fuzz_test(int mode, uint32_t version, uint32_t proposed_vers
 		return -1;
 	}
 
+    debug_printf_suspend();
+
 	/* initialize the connection object to the test parameters */
 	memcpy(&test_cnx.local_parameters, param, sizeof(picoquic_transport_parameters));
 	test_cnx.version_index = picoquic_get_version_index(version);
@@ -268,6 +270,8 @@ int transport_param_fuzz_test(int mode, uint32_t version, uint32_t proposed_vers
 		}
 	}
 
+    debug_printf_resume();
+
 	return ret;
 }
 
@@ -307,6 +311,8 @@ int transport_param_test()
 			&transport_param_test5, server_param2, sizeof(server_param2));
 	}
 
+    DBG_PRINTF("Starting transport parameters fuzz test.\n");
+
 	if (ret == 0)
 	{
 		ret = transport_param_fuzz_test(0, version_default, 0x0A1A0A1A,
@@ -319,5 +325,6 @@ int transport_param_test()
 			&transport_param_test2, server_param2, sizeof(server_param2), &proof);
 	}
 
+    DBG_PRINTF("End of transport parameters fuzz test.\n");
 	return ret;
 }

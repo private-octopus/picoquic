@@ -390,7 +390,7 @@ int quic_server(const char * server_name, int server_port,
     {
         /* Create QUIC context */
         qserver = picoquic_create(8, pem_cert, pem_key, NULL, first_server_callback, NULL,
-                cnx_id_callback, cnx_id_callback_ctx, reset_seed);
+                cnx_id_callback, cnx_id_callback_ctx, reset_seed, NULL);
 
         if (qserver == NULL)
         {
@@ -860,7 +860,7 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
 
     if (ret == 0)
     {
-        qclient = picoquic_create(8, NULL, NULL, "hq08", NULL, NULL, NULL, NULL, NULL);
+        qclient = picoquic_create(8, NULL, NULL, "hq08", NULL, NULL, NULL, NULL, NULL, NULL);
 
         if (qclient == NULL)
         {

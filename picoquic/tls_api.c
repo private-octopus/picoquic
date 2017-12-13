@@ -313,6 +313,60 @@ int picoquic_client_hello_call_back(ptls_on_client_hello_t * on_hello_cb_ctx,
 }
 
 /*
+ * The server will generate session tickets if some parameters are set in the server
+ * TLS context, including:
+ *  - the session ticket encryption callback, defined per the "encrypt_ticket" member of the context.
+ *  - the session ticket lifetime, defined per the "ticket_life_time" member of the context.
+ * The encrypt call back is called on the server side when a session resume ticket is ready.
+ * The call is:
+ * cb(tls->ctx->encrypt_ticket, tls, 1, sendbuf,
+ *    ptls_iovec_init(session_id.base, session_id.off))
+ * The call to decrypt is:
+ * tls->ctx->encrypt_ticket->cb(tls->ctx->encrypt_ticket, tls, 0, &decbuf, identity->identity)
+ * Should return 0 if the ticket is good, etc.
+ */
+
+int picoquic_server_encrypt_ticket_call_back(ptls_encrypt_ticket_t * encrypt_ticket_ctx,
+    ptls_t *tls, int is_encrypt, ptls_buffer_t *dst, ptls_iovec_t src)
+{
+    /* For now, we are just doing tests... */
+    int ret = 0;
+
+    if (ret = ptls_buffer_reserve(dst, src.len) == 0)
+    {
+        ret = ptls_buffer__do_pushv(dst, src.base, src.len);
+    }
+
+    return ret;
+}
+
+/*
+ * The client signals its willingness to receive session resume tickets by providing
+ * the "save ticket" callback in the client's quic context.
+ */
+
+int picoquic_client_save_ticket_call_back(ptls_encrypt_ticket_t * encrypt_ticket_ctx,
+    ptls_t *tls, ptls_iovec_t input)
+{
+    /* For now, we are just doing tests... */
+    int ret = 0;
+
+    DBG_PRINTF("received a session resume ticket, length = %d\n", input.len);
+
+    return ret;
+}
+
+/*
+ * Time get callback
+ */
+uint64_t picoquic_get_simulated_time_cb(ptls_get_time_t *self)
+{
+    uint64_t ** pp_simulated_time = (uint64_t **)(((char *)self) + sizeof(ptls_get_time_t));
+    return (**pp_simulated_time);
+}
+
+
+/*
  * Setting the master TLS context.
  * On servers, this implies setting the "on hello" call back
  */
@@ -324,6 +378,8 @@ int picoquic_master_tlscontext(picoquic_quic_t * quic, char const * cert_file_na
     ptls_context_t *ctx;
     ptls_openssl_verify_certificate_t * verifier = NULL;
 	ptls_on_client_hello_t * och = NULL;
+    ptls_encrypt_ticket_t *encrypt_ticket = NULL;
+    ptls_save_ticket_t *save_ticket = NULL;
 
     ctx = (ptls_context_t *)malloc(sizeof(ptls_context_t));
 
@@ -337,6 +393,28 @@ int picoquic_master_tlscontext(picoquic_quic_t * quic, char const * cert_file_na
         ctx->random_bytes = ptls_openssl_random_bytes;
         ctx->key_exchanges = ptls_openssl_key_exchanges;
         ctx->cipher_suites = ptls_openssl_cipher_suites;
+
+        if (quic->p_simulated_time == NULL)
+        {
+            ctx->get_time = &ptls_get_time;
+        }
+        else
+        {
+            ptls_get_time_t * time_getter = (ptls_get_time_t *)malloc(sizeof(ptls_get_time_t) +
+                sizeof(uint64_t *));
+            if (time_getter == NULL)
+            {
+                ret = PICOQUIC_ERROR_MEMORY;
+            }
+            else
+            {
+                uint64_t ** pp_simulated_time = (uint64_t **)(((char *)time_getter) + sizeof(ptls_get_time_t));
+
+                time_getter->cb = picoquic_get_simulated_time_cb;
+                *pp_simulated_time = quic->p_simulated_time;
+                ctx->get_time = time_getter;
+            }
+        }
 
         if (quic->flags&picoquic_context_server)
         {
@@ -364,6 +442,22 @@ int picoquic_master_tlscontext(picoquic_quic_t * quic, char const * cert_file_na
                     ctx->on_client_hello = och;
                     *ppquic = quic;
                 }
+
+                encrypt_ticket = (ptls_encrypt_ticket_t *)malloc(sizeof(ptls_encrypt_ticket_t) +
+                    sizeof(picoquic_quic_t *));
+                if (encrypt_ticket != NULL)
+                {
+                    /* TODO: something smarter once we actually encrypt the data */
+                    picoquic_quic_t ** ppquic = (picoquic_quic_t **)(
+                        ((char*)encrypt_ticket) + sizeof(ptls_encrypt_ticket_t));
+
+                    encrypt_ticket->cb = picoquic_server_encrypt_ticket_call_back;
+                    ctx->encrypt_ticket = encrypt_ticket;
+                    ctx->ticket_lifetime = 100000; /* 100,000 seconds, a bit more than one day */
+                    ctx->require_dhe_on_psk = 0;
+                    ctx->max_early_data_size = 0xFFFFFFFF;
+                    *ppquic = quic;
+                }
             }
         }
         else
@@ -378,6 +472,19 @@ int picoquic_master_tlscontext(picoquic_quic_t * quic, char const * cert_file_na
 				ptls_openssl_init_verify_certificate(verifier, NULL);
 				ctx->verify_certificate = &verifier->super;
 			}
+
+            save_ticket = (ptls_save_ticket_t *)malloc(sizeof(ptls_save_ticket_t) +
+                sizeof(picoquic_quic_t *));
+            if (encrypt_ticket != NULL)
+            {
+                /* TODO: something smarter once we actually encrypt the data */
+                picoquic_quic_t ** ppquic = (picoquic_quic_t **)(
+                    ((char*)save_ticket) + sizeof(ptls_save_ticket_t));
+
+                save_ticket->cb = picoquic_client_save_ticket_call_back;
+                ctx->save_ticket = save_ticket;
+                *ppquic = quic;
+            }
         }
 
         if (ret == 0)
@@ -398,6 +505,12 @@ void picoquic_master_tlscontext_free(picoquic_quic_t * quic)
 	if (quic->tls_master_ctx != NULL)
 	{
 		ptls_context_t *ctx = (ptls_context_t *)quic->tls_master_ctx;
+
+        if (quic->p_simulated_time != NULL && ctx->get_time != NULL)
+        {
+            free(ctx->get_time);
+            ctx->get_time = NULL;
+        }
 
 		if (quic->flags&picoquic_context_server)
 		{
@@ -429,6 +542,11 @@ void picoquic_master_tlscontext_free(picoquic_quic_t * quic)
 		{
 			free(ctx->on_client_hello);
 		}
+
+        if (ctx->encrypt_ticket != NULL)
+        {
+            free(ctx->encrypt_ticket);
+        }
 	}
 }
 
@@ -987,6 +1105,8 @@ int picoquic_tlsinput_stream_zero(picoquic_cnx_t * cnx)
 			break;
         case picoquic_state_client_init:
 		case picoquic_state_client_init_sent:
+        case picoquic_state_client_renegotiate:
+        case picoquic_state_client_init_resent:
         case picoquic_state_client_handshake_start:
         case picoquic_state_client_handshake_progress:
             /* Extract and install the client 1-RTT key */
@@ -999,17 +1119,25 @@ int picoquic_tlsinput_stream_zero(picoquic_cnx_t * cnx)
             ret = picoquic_setup_1RTT_aead_contexts(cnx, 1);
             break;
         case picoquic_state_client_almost_ready:
+        case picoquic_state_handshake_failure:
         case picoquic_state_client_ready:
+        case picoquic_state_server_almost_ready:
         case picoquic_state_server_ready:
-        case picoquic_state_server_almost_ready: 
+        case picoquic_state_disconnecting:
+        case picoquic_state_closing_received:
+        case picoquic_state_closing:
+        case picoquic_state_draining:
         case picoquic_state_disconnected:
+            break;
         default:
+            DBG_PRINTF("Unexpected connection state: %d\n", cnx->cnx_state);
             break;
         }
     }
     else if (ret == PTLS_ERROR_IN_PROGRESS && 
-		(cnx->cnx_state == picoquic_state_client_init ||
-	     cnx->cnx_state == picoquic_state_client_init_sent))
+        (cnx->cnx_state == picoquic_state_client_init ||
+            cnx->cnx_state == picoquic_state_client_init_sent ||
+            cnx->cnx_state == picoquic_state_client_init_resent))
     {
         /* Extract and install the client 0-RTT key */
     }
