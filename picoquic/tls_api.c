@@ -332,7 +332,7 @@ int picoquic_server_encrypt_ticket_call_back(ptls_encrypt_ticket_t * encrypt_tic
     /* For now, we are just doing tests... */
     int ret = 0;
 
-    if (ret = ptls_buffer_reserve(dst, src.len) == 0)
+    if ((ret = ptls_buffer_reserve(dst, src.len)) == 0)
     {
         ret = ptls_buffer__do_pushv(dst, src.base, src.len);
     }
@@ -345,7 +345,7 @@ int picoquic_server_encrypt_ticket_call_back(ptls_encrypt_ticket_t * encrypt_tic
  * the "save ticket" callback in the client's quic context.
  */
 
-int picoquic_client_save_ticket_call_back(ptls_encrypt_ticket_t * encrypt_ticket_ctx,
+int picoquic_client_save_ticket_call_back(ptls_save_ticket_t * encrypt_ticket_ctx,
     ptls_t *tls, ptls_iovec_t input)
 {
     /* For now, we are just doing tests... */

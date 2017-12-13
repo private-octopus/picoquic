@@ -21,6 +21,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include "../picoquic/util.h"
 #include "../picoquic/picoquic_internal.h"
 
 /* Start with a series of test vectors to test that 
@@ -311,7 +312,7 @@ int transport_param_test()
 			&transport_param_test5, server_param2, sizeof(server_param2));
 	}
 
-    DBG_PRINTF("Starting transport parameters fuzz test.\n");
+    DBG_PRINTF("%s", "Starting transport parameters fuzz test.\n");
 
 	if (ret == 0)
 	{
@@ -325,6 +326,6 @@ int transport_param_test()
 			&transport_param_test2, server_param2, sizeof(server_param2), &proof);
 	}
 
-    DBG_PRINTF("End of transport parameters fuzz test.\n");
+    DBG_PRINTF("%s", "End of transport parameters fuzz test.\n");
 	return ret;
 }
