@@ -19,6 +19,7 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <string.h>
 #include <stdlib.h>
 #include "../picoquic/picoquic_internal.h"
 
@@ -104,7 +105,6 @@ int ticket_store_test()
     uint64_t current_time = 50000000000ull;
     uint64_t retrieve_time = 60000000000ull;
     uint64_t too_late_time = 150000000000ull;
-    uint64_t create_time = 10000000ull;
     uint32_t ttl = 100000;
     uint8_t ticket[128];
 

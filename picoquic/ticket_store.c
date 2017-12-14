@@ -19,6 +19,9 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <stddef.h>
+#include <string.h>
+#include <stdlib.h>
 #include "picoquic_internal.h"
 
 int picoquic_store_ticket(picoquic_stored_ticket_t ** pp_first_ticket,
@@ -81,7 +84,7 @@ int picoquic_store_ticket(picoquic_stored_ticket_t ** pp_first_ticket,
                 next_p += alpn_length;
                 *next_p++ = 0;
 
-                stored->ticket = next_p;
+                stored->ticket = (uint8_t *)next_p;
                 stored->ticket_length = ticket_length;
                 memcpy(next_p, ticket, ticket_length);
 
@@ -191,8 +194,6 @@ int picoquic_load_tickets(picoquic_stored_ticket_t ** pp_first_ticket,
     picoquic_stored_ticket_t * next;
     uint32_t record_size;
     uint32_t storage_size;
-    size_t size_read = 0;
-    size_t size_blob = 0;
 
 #ifdef _WINDOWS
     errno_t err = fopen_s(&F, ticket_file_name, "rb");
