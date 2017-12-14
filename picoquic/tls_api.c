@@ -362,7 +362,7 @@ int picoquic_client_save_ticket_call_back(ptls_save_ticket_t * encrypt_ticket_ct
 uint64_t picoquic_get_simulated_time_cb(ptls_get_time_t *self)
 {
     uint64_t ** pp_simulated_time = (uint64_t **)(((char *)self) + sizeof(ptls_get_time_t));
-    return (**pp_simulated_time);
+    return ((**pp_simulated_time)/1000);
 }
 
 
@@ -454,7 +454,7 @@ int picoquic_master_tlscontext(picoquic_quic_t * quic, char const * cert_file_na
                     encrypt_ticket->cb = picoquic_server_encrypt_ticket_call_back;
                     ctx->encrypt_ticket = encrypt_ticket;
                     ctx->ticket_lifetime = 100000; /* 100,000 seconds, a bit more than one day */
-                    ctx->require_dhe_on_psk = 0;
+                    ctx->require_dhe_on_psk = 1;
                     ctx->max_early_data_size = 0xFFFFFFFF;
                     *ppquic = quic;
                 }
@@ -475,7 +475,7 @@ int picoquic_master_tlscontext(picoquic_quic_t * quic, char const * cert_file_na
 
             save_ticket = (ptls_save_ticket_t *)malloc(sizeof(ptls_save_ticket_t) +
                 sizeof(picoquic_quic_t *));
-            if (encrypt_ticket != NULL)
+            if (save_ticket != NULL)
             {
                 /* TODO: something smarter once we actually encrypt the data */
                 picoquic_quic_t ** ppquic = (picoquic_quic_t **)(

@@ -23,6 +23,7 @@ SET(PICOQUIC_LIBRARY_FILES
     picoquic/quicctx.c
     picoquic/sacks.c
     picoquic/sender.c
+    picoquic/ticket_store.c
     picoquic/tls_api.c
     picoquic/transport.c
     picoquic/util.c
@@ -44,6 +45,7 @@ SET(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/sim_link.c
     picoquictest/socket_test.c
     picoquictest/stream0_frame_test.c
+    picoquictest/ticket_store_test.c
     picoquictest/tls_api_test.c
     picoquictest/transport_param_test.c
 )

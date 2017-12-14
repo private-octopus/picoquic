@@ -63,6 +63,9 @@
     <ClCompile Include="picosocks.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="ticket_store.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquic.h">

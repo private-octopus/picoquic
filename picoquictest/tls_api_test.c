@@ -1724,3 +1724,70 @@ int transport_parameter_client_error_test()
     return ret;
 }
 
+/*
+ * Session resume test.
+ */
+
+int session_resume_test()
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t * test_ctx = NULL;
+    char const * sni = "test-sni";
+    char const * alpn = "test-alpn";
+    uint64_t loss_mask = 0;
+    int ret = 0;
+
+    /* Initialize an empty ticket store */
+
+    /* Set up the context, while setting the ticket store parameter for the client */
+    if (ret == 0)
+    {
+        ret = tls_api_init_ctx(&test_ctx, 0, sni, alpn, &simulated_time);
+    }
+
+    if (ret == 0)
+    {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    if (ret == 0)
+    {
+        ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
+
+        if (ret == 0)
+        {
+            ret = verify_transport_extension(test_ctx->cnx_client, test_ctx->cnx_server);
+        }
+
+        if (ret == 0)
+        {
+            ret = verify_sni(test_ctx->cnx_client, test_ctx->cnx_server, sni);
+        }
+
+        if (ret == 0)
+        {
+            ret = verify_alpn(test_ctx->cnx_client, test_ctx->cnx_server, alpn);
+        }
+
+        if (ret == 0)
+        {
+            ret = verify_version(test_ctx->cnx_client, test_ctx->cnx_server);
+        }
+    }
+
+    /* Verify that the session ticket has been received correctly */
+
+    /* Start a new connection with the new ticket now available */
+
+    /* Verify that the connection has been properly resumed */
+
+    /* Tear down and free everything */
+
+    if (test_ctx != NULL)
+    {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}

@@ -139,6 +139,37 @@ extern "C" {
 	extern const size_t picoquic_nb_supported_versions;
     int picoquic_get_version_index(uint32_t proposed_version);
 
+
+    /*
+     * Definition of the session ticket store that can be associated with a 
+     * client context.
+     */
+    typedef struct st_picoquic_stored_ticket_t {
+        struct st_picoquic_stored_ticket_t * next_ticket;
+        char * sni;
+        char * alpn;
+        uint8_t * ticket;
+        uint64_t time_valid_until;
+        uint16_t sni_length;
+        uint16_t alpn_length;
+        uint16_t ticket_length;
+    } picoquic_stored_ticket_t;
+
+    int picoquic_store_ticket(picoquic_stored_ticket_t ** p_first_ticket,
+        uint64_t current_time,
+        char const * sni, uint16_t sni_length, char const * alpn, uint16_t alpn_length,
+        uint8_t * ticket, uint16_t ticket_length);
+    int picoquic_get_ticket(picoquic_stored_ticket_t * p_first_ticket,
+        uint64_t current_time,
+        char const * sni, uint16_t sni_length, char const * alpn, uint16_t alpn_length,
+        uint8_t ** ticket, uint16_t * ticket_length);
+
+    int picoquic_save_tickets(picoquic_stored_ticket_t * first_ticket,
+        uint64_t current_time, char const * ticket_file_name);
+    int picoquic_load_tickets(picoquic_stored_ticket_t ** pp_first_ticket,
+        uint64_t current_time, char const * ticket_file_name);
+    void picoquic_free_tickets(picoquic_stored_ticket_t ** pp_first_ticket);
+
 	/*
 	 * Quic context flags
 	 */
