@@ -124,8 +124,8 @@ void print_address(struct sockaddr * address, char * label, uint64_t cnx_id)
 
     const char * x = inet_ntop(address->sa_family, 
         (address->sa_family == AF_INET)?
-        &((struct sockaddr_in *)address)->sin_addr:
-        &((struct sockaddr_in6 *)address)->sin6_addr,
+        (void *)&(((struct sockaddr_in *)address)->sin_addr):
+        (void *)&(((struct sockaddr_in6 *)address)->sin6_addr),
         hostname, sizeof(hostname));
 
     printf("%" PRIx64 ": ", cnx_id);
@@ -842,7 +842,6 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
     int client_ready_loop = 0;
     int established = 0;
     int is_name = 0;
-    int is_connected = 0;
     const char * sni = NULL;
     int64_t delay_max = 10000000;
 
