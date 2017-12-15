@@ -205,6 +205,8 @@ extern "C" {
 
 	picoquic_state_enum picoquic_get_cnx_state(picoquic_cnx_t * cnx);
 
+    int picoquic_tls_is_psk_handshake(picoquic_cnx_t * cnx);
+
     void picoquic_get_peer_addr(picoquic_cnx_t * cnx, struct sockaddr ** addr, int * addr_len);
     void picoquic_get_local_addr(picoquic_cnx_t * cnx, struct sockaddr ** addr, int * addr_len);
     unsigned long picoquic_get_local_if_index(picoquic_cnx_t * cnx);
