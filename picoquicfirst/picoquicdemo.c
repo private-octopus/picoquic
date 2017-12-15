@@ -122,7 +122,11 @@ void print_address(struct sockaddr * address, char * label, uint64_t cnx_id)
 {
     char hostname[256];
 
-    const char * x = inet_ntop(address->sa_family, address, hostname, sizeof(hostname));
+    const char * x = inet_ntop(address->sa_family, 
+        (address->sa_family == AF_INET)?
+        &((struct sockaddr_in *)address)->sin_addr:
+        &((struct sockaddr_in6 *)address)->sin6_addr,
+        hostname, sizeof(hostname));
 
     printf("%" PRIx64 ": ", cnx_id);
 
@@ -813,7 +817,7 @@ static void first_client_callback(picoquic_cnx_t * cnx,
     /* that's it */
 }
 
-int quic_client(const char * ip_address_text, int server_port, uint32_t proposed_version)
+int quic_client(const char * ip_address_text, int server_port, uint32_t proposed_version, FILE * F_log)
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
@@ -909,7 +913,7 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
 					bytes_sent = sendto(fd, send_buffer, send_length, 0,
 						(struct sockaddr *) &server_address, server_addr_length);
 
-					picoquic_log_packet(stdout, qclient, cnx_client, (struct sockaddr *) &server_address,
+					picoquic_log_packet(F_log, qclient, cnx_client, (struct sockaddr *) &server_address,
 						0, send_buffer, bytes_sent, current_time);
 				}
 				else
@@ -944,9 +948,9 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
 
         if (bytes_recv != 0)
         {
-            printf("Select returns %d, from length %d\n", bytes_recv, from_length);
+            fprintf(F_log, "Select returns %d, from length %d\n", bytes_recv, from_length);
 
-			picoquic_log_packet(stdout, qclient, cnx_client, (struct sockaddr *) &packet_from,
+			picoquic_log_packet(F_log, qclient, cnx_client, (struct sockaddr *) &packet_from,
 				1, buffer, bytes_recv, current_time);
         }
 
@@ -964,7 +968,7 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
                     (struct sockaddr *) &packet_to, if_index_to,
                     current_time);
 
-				picoquic_log_processing(stdout, cnx_client, bytes_recv, ret);
+				picoquic_log_processing(F_log, cnx_client, bytes_recv, ret);
 
 				if (picoquic_get_cnx_state(cnx_client) == picoquic_state_client_almost_ready)
 				{
@@ -977,7 +981,7 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
 
 				if (ret != 0)
 				{
-					picoquic_log_error_packet(stdout, buffer, (size_t)bytes_recv, ret);
+					picoquic_log_error_packet(F_log, buffer, (size_t)bytes_recv, ret);
 				}
             }
 
@@ -985,7 +989,7 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
 			{
                 if (established == 0)
                 {
-                    picoquic_log_transport_extension(stdout, cnx_client);
+                    picoquic_log_transport_extension(F_log, cnx_client);
                     printf("Connection established.\n");
                     established = 1;
 
@@ -1044,7 +1048,7 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
 					{
 						bytes_sent = sendto(fd, send_buffer, send_length, 0,
 							(struct sockaddr *) &server_address, server_addr_length);
-						picoquic_log_packet(stdout, qclient, cnx_client, (struct sockaddr *)  &server_address,
+						picoquic_log_packet(F_log, qclient, cnx_client, (struct sockaddr *)  &server_address,
 								0, send_buffer, send_length, current_time);
 
 					}
@@ -1130,7 +1134,8 @@ void usage()
 	fprintf(stderr, "                          where <src> is int:\n");
 	fprintf(stderr, "                            0: picoquic_cnx_id_random\n");
 	fprintf(stderr, "                            1: picoquic_cnx_id_remote (client)\n");
-	fprintf(stderr, "  -v version            Version proposed by client, e.g. -v ff000005\n");
+	fprintf(stderr, "  -v version            Version proposed by client, e.g. -v ff000008\n");
+    fprintf(stderr, "  -l file               Log file\n");
 	fprintf(stderr, "  -h                    This help message\n");
 	exit(1);
 }
@@ -1160,6 +1165,7 @@ int main(int argc, char ** argv)
     const char * server_name      = default_server_name;
     const char * server_cert_file = default_server_cert_file;
     const char * server_key_file  = default_server_key_file;
+    const char * log_file = NULL;
     int server_port               = default_server_port;
     uint32_t proposed_version = 0xFF000008;
     int is_client = 0;
@@ -1183,7 +1189,7 @@ int main(int argc, char ** argv)
 
     /* Get the parameters */
 	int opt;
-	while( (opt = getopt(argc, argv, "c:k:p:v:1rhi:s:")) != -1 )
+	while( (opt = getopt(argc, argv, "c:k:p:v:1rhi:s:l:")) != -1 )
 	{
 		switch (opt)
 		{
@@ -1201,13 +1207,16 @@ int main(int argc, char ** argv)
 				}
 				break;
             case 'v':
+                if (optind + 1 > argc) {
+                    fprintf(stderr, "option requires more arguments -- s\n");
+                    usage();
+                }
                 if ((proposed_version = parse_target_version(optarg)) <= 0)
                 {
                     fprintf(stderr, "Invalid version: %s\n", optarg);
                     usage();
                 }
                 break;
-
 			case '1':
 				just_once = 1;
 				break;
@@ -1219,7 +1228,6 @@ int main(int argc, char ** argv)
 					fprintf(stderr, "option requires more arguments -- s\n");
 					usage();
 				}
-
 				reset_seed = reset_seed_x; /* replacing the original alloca, which is not supported in Windows */
 				reset_seed[1] = strtoul(argv[optind], NULL, 0);
 				reset_seed[0] = strtoul(argv[optind++], NULL, 0);
@@ -1234,6 +1242,13 @@ int main(int argc, char ** argv)
 				cnx_id_cbdata.cnx_id_mask = ~strtoul(argv[optind++], NULL, 0);
 				cnx_id_cbdata.cnx_id_val = strtoul(argv[optind++], NULL, 0);
 				break;
+            case 'l':
+                if (optind + 1 > argc) {
+                    fprintf(stderr, "option requires more arguments -- s\n");
+                    usage();
+                }
+                log_file = optarg;
+                break;
 			case 'h':
 				usage();
 				break;
@@ -1282,10 +1297,37 @@ int main(int argc, char ** argv)
     }
     else
     {
+        FILE * F_log = NULL;
+
+        if (log_file != NULL)
+        {
+#ifdef _WINDOWS
+            if (fopen_s(&F_log, log_file, "w") != 0) {
+                F_log = NULL;
+            }
+#else
+            F_log = fopen(log_file, "w");
+#endif
+            if (F_log == NULL)
+            {
+                fprintf(stderr, "Could not open the log file <%s>\n", log_file);
+            }
+        }
+
+        if (F_log == NULL)
+        {
+            F_log = stdout;
+        }
+
         /* Run as client */
         printf("Starting PicoQUIC connection to server IP = %s, port = %d\n", server_name, server_port);
-        ret = quic_client(server_name, server_port, proposed_version);
+        ret = quic_client(server_name, server_port, proposed_version, F_log);
 
         printf("Client exit with code = %d\n", ret);
+
+        if (F_log != NULL && F_log != stdout)
+        {
+            fclose(F_log);
+        }
     }
 }

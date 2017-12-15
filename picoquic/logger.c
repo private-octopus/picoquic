@@ -54,6 +54,7 @@ static char const * picoquic_log_state_name[] = {
     "client_handshake_start",
     "client_handshake_progress",
     "client_almost_ready",
+    "handshake_failure",
     "client_ready",
     "server_almost_ready",
     "server_ready",
@@ -61,7 +62,8 @@ static char const * picoquic_log_state_name[] = {
     "closing_received",
     "closing",
     "draining",
-    "disconnected"
+    "disconnected",
+    "send_hrr"
 };
 
 static const size_t picoquic_nb_log_state_name = sizeof(picoquic_log_state_name) / sizeof(char const *);
@@ -1206,6 +1208,7 @@ void picoquic_log_transport_extension(FILE* F, picoquic_cnx_t * cnx)
 	size_t byte_index = 0;
 	char const * sni = picoquic_tls_get_sni(cnx);
 	char const * alpn = picoquic_tls_get_negotiated_alpn(cnx);
+    int old_format = picoquic_supported_versions[cnx->version_index].version_flags&picoquic_version_old_parameters;
 
 	if (sni == NULL)
 	{
@@ -1237,12 +1240,19 @@ void picoquic_log_transport_extension(FILE* F, picoquic_cnx_t * cnx)
 		switch (client_mode)
 		{
 		case 0: // Client hello
-			if (bytes_max < 8)
-			{
+            if ((old_format == 0 && bytes_max < 4) || bytes_max < 8)
+            {
 				fprintf(F, "Malformed extension\n");
 				ret = -1;
 			}
-			else
+            else if (old_format == 0)
+            {
+                uint32_t proposed_version;
+                proposed_version = PICOPARSE_32(bytes + byte_index);
+                byte_index += 4;
+                fprintf(F, "Proposed version: %08x\n", proposed_version);
+            }
+            else
 			{
 				uint32_t version;
 				uint32_t proposed_version;
@@ -1264,45 +1274,66 @@ void picoquic_log_transport_extension(FILE* F, picoquic_cnx_t * cnx)
 			}
 			else
 			{
-				size_t supported_versions_size = bytes[byte_index++];
+                if (old_format == 0)
+                {
+                    if (bytes_max < byte_index + 4)
+                    {
+                        fprintf(F, "Malformed extension\n");
+                        ret = -1;
+                    }
+                    else
+                    {
+                        uint32_t version;
 
-				if ((supported_versions_size & 3) != 0)
-				{
-					fprintf(F,
-						"Malformed extension, supported version size = %d, not multiple of 4.\n",
-						(uint32_t)supported_versions_size);
-					ret = -1;
+                        version = PICOPARSE_32(bytes + byte_index);
+                        byte_index += 4; 
+                        
+                        fprintf(F, "Version: %08x\n", version);
+                    }
+                }
 
-				}
-				else if (supported_versions_size > 252 ||
-					byte_index + supported_versions_size > bytes_max)
-				{
-					fprintf(F, "    Malformed extension, supported version size = %d, max %d or 252\n",
-						(uint32_t)supported_versions_size, (uint32_t)(bytes_max - byte_index));
-					ret = -1;
-				}
-				else
-				{
-					size_t nb_supported_versions = supported_versions_size / 4;
-					fprintf(F, "    Supported version (%d bytes):\n", (int) supported_versions_size);
+                if (ret == 0)
+                {
+                    size_t supported_versions_size = bytes[byte_index++];
 
-					for (size_t i = 0; i < nb_supported_versions; i++)
-					{
-						uint32_t supported_version = PICOPARSE_32(bytes + byte_index);
+                    if ((supported_versions_size & 3) != 0)
+                    {
+                        fprintf(F,
+                            "Malformed extension, supported version size = %d, not multiple of 4.\n",
+                            (uint32_t)supported_versions_size);
+                        ret = -1;
 
-						byte_index += 4;
-						if (supported_version == cnx->proposed_version &&
-							cnx->proposed_version != 
-                            picoquic_supported_versions[cnx->version_index].version)
-						{
-							fprintf(F, "        %08x (same as proposed!)\n", supported_version);
-						}
-						else
-						{
-							fprintf(F, "        %08x\n", supported_version);
-						}
-					}
-				}
+                    }
+                    else if (supported_versions_size > 252 ||
+                        byte_index + supported_versions_size > bytes_max)
+                    {
+                        fprintf(F, "    Malformed extension, supported version size = %d, max %d or 252\n",
+                            (uint32_t)supported_versions_size, (uint32_t)(bytes_max - byte_index));
+                        ret = -1;
+                    }
+                    else
+                    {
+                        size_t nb_supported_versions = supported_versions_size / 4;
+                        fprintf(F, "    Supported version (%d bytes):\n", (int)supported_versions_size);
+
+                        for (size_t i = 0; i < nb_supported_versions; i++)
+                        {
+                            uint32_t supported_version = PICOPARSE_32(bytes + byte_index);
+
+                            byte_index += 4;
+                            if (supported_version == cnx->proposed_version &&
+                                cnx->proposed_version !=
+                                picoquic_supported_versions[cnx->version_index].version)
+                            {
+                                fprintf(F, "        %08x (same as proposed!)\n", supported_version);
+                            }
+                            else
+                            {
+                                fprintf(F, "        %08x\n", supported_version);
+                            }
+                        }
+                    }
+                }
 			}
 			break;
 		}
