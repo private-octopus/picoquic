@@ -328,7 +328,7 @@ int parseheadertest()
     addr_08.sin_port = 4434;
 
     quic = picoquic_create(8, NULL, NULL, NULL, NULL,
-        NULL, NULL, NULL, NULL, NULL);
+        NULL, NULL, NULL, NULL, 0, NULL, NULL);
     if (quic == NULL)
     {
         ret = -1;

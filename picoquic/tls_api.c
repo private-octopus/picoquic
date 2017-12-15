@@ -345,13 +345,25 @@ int picoquic_server_encrypt_ticket_call_back(ptls_encrypt_ticket_t * encrypt_tic
  * the "save ticket" callback in the client's quic context.
  */
 
-int picoquic_client_save_ticket_call_back(ptls_save_ticket_t * encrypt_ticket_ctx,
+int picoquic_client_save_ticket_call_back(ptls_save_ticket_t * save_ticket_ctx,
     ptls_t *tls, ptls_iovec_t input)
 {
-    /* For now, we are just doing tests... */
     int ret = 0;
+    picoquic_quic_t * quic = *((picoquic_quic_t **)(
+        ((char*)save_ticket_ctx) + sizeof(ptls_save_ticket_t)));
+    const char * sni = ptls_get_server_name(tls);
+    const char * alpn = ptls_get_negotiated_protocol(tls);
 
-    DBG_PRINTF("received a session resume ticket, length = %d\n", input.len);
+    if (sni != NULL && alpn != NULL)
+    {
+        ret = picoquic_store_ticket(&quic->p_first_ticket, 0, sni, (uint16_t)strlen(sni),
+            alpn, (uint16_t)strlen(alpn), input.base, (uint16_t)input.len);
+    }
+    else
+    {
+        DBG_PRINTF("Received incorrect session resume ticket, sni = %s, alpn = %s, length = %d\n", 
+            (sni == NULL)?"NULL":sni, (alpn == NULL)?"NULL":alpn, (int) input.len);
+    }
 
     return ret;
 }
@@ -473,17 +485,19 @@ int picoquic_master_tlscontext(picoquic_quic_t * quic, char const * cert_file_na
 				ctx->verify_certificate = &verifier->super;
 			}
 
-            save_ticket = (ptls_save_ticket_t *)malloc(sizeof(ptls_save_ticket_t) +
-                sizeof(picoquic_quic_t *));
-            if (save_ticket != NULL)
+            if (quic->ticket_file_name != NULL)
             {
-                /* TODO: something smarter once we actually encrypt the data */
-                picoquic_quic_t ** ppquic = (picoquic_quic_t **)(
-                    ((char*)save_ticket) + sizeof(ptls_save_ticket_t));
+                save_ticket = (ptls_save_ticket_t *)malloc(sizeof(ptls_save_ticket_t) +
+                    sizeof(picoquic_quic_t *));
+                if (save_ticket != NULL)
+                {
+                    picoquic_quic_t ** ppquic = (picoquic_quic_t **)(
+                        ((char*)save_ticket) + sizeof(ptls_save_ticket_t));
 
-                save_ticket->cb = picoquic_client_save_ticket_call_back;
-                ctx->save_ticket = save_ticket;
-                *ppquic = quic;
+                    save_ticket->cb = picoquic_client_save_ticket_call_back;
+                    ctx->save_ticket = save_ticket;
+                    *ppquic = quic;
+                }
             }
         }
 
@@ -555,7 +569,7 @@ void picoquic_master_tlscontext_free(picoquic_quic_t * quic)
  * This includes setting the handshake properties that will later be 
  * used during the TLS handshake.
  */
-int picoquic_tlscontext_create(picoquic_quic_t * quic, picoquic_cnx_t * cnx)
+int picoquic_tlscontext_create(picoquic_quic_t * quic, picoquic_cnx_t * cnx, uint64_t current_time)
 {
     int ret = 0;
 	/* allocate a context structure */
@@ -601,6 +615,20 @@ int picoquic_tlscontext_create(picoquic_quic_t * quic, picoquic_cnx_t * cnx)
 			}
 
 			picoquic_tls_set_extensions(cnx, ctx);
+
+            if (cnx->sni != NULL && cnx->alpn != NULL)
+            {
+                uint8_t * ticket = NULL;
+                uint16_t ticket_length = 0;
+
+                if (picoquic_get_ticket(cnx->quic->p_first_ticket, current_time,
+                    cnx->sni, (uint16_t)strlen(cnx->sni), cnx->alpn, (uint16_t)strlen(cnx->alpn),
+                    &ticket, &ticket_length) == 0)
+                { 
+                    ctx->handshake_properties.client.session_ticket.base = ticket;
+                    ctx->handshake_properties.client.session_ticket.len = ticket_length;
+                }
+            }
 		}
         else
         {
@@ -648,6 +676,12 @@ char const * picoquic_tls_get_sni(picoquic_cnx_t * cnx)
 	picoquic_tls_ctx_t * ctx = (picoquic_tls_ctx_t *)cnx->tls_ctx;
 
 	return ptls_get_server_name(ctx->tls);
+}
+
+int picoquic_tls_is_psk_handshake(picoquic_cnx_t * cnx)
+{
+    int ret = cnx->is_psk_handshake;
+    return ret;
 }
 
 /*
@@ -1110,11 +1144,13 @@ int picoquic_tlsinput_stream_zero(picoquic_cnx_t * cnx)
         case picoquic_state_client_handshake_start:
         case picoquic_state_client_handshake_progress:
             /* Extract and install the client 1-RTT key */
+            cnx->is_psk_handshake = ptls_is_psk_handshake((ptls_t *)(cnx->tls_ctx));
             cnx->cnx_state = picoquic_state_client_almost_ready;
             ret = picoquic_setup_1RTT_aead_contexts(cnx, 0);
             break;
         case picoquic_state_server_init:
             /* Extract and install the server 0-RTT and 1-RTT key */
+            cnx->is_psk_handshake = ptls_is_psk_handshake((ptls_t *)(cnx->tls_ctx));
             cnx->cnx_state = picoquic_state_server_almost_ready;
             ret = picoquic_setup_1RTT_aead_contexts(cnx, 1);
             break;

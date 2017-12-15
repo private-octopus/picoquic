@@ -136,9 +136,12 @@ picoquic_quic_t * picoquic_create(uint32_t nb_connections,
 	cnx_id_cb_fn cnx_id_callback,
 	void * cnx_id_callback_ctx,
 	uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE],
-    uint64_t * p_simulated_time)
+    uint64_t current_time,
+    uint64_t * p_simulated_time,
+    char const * ticket_file_name)
 {
     picoquic_quic_t * quic = (picoquic_quic_t *)malloc(sizeof(picoquic_quic_t));
+    int ret = 0;
 
     if (quic != NULL)
     {
@@ -152,7 +155,6 @@ picoquic_quic_t * picoquic_create(uint32_t nb_connections,
 		quic->default_alpn = picoquic_string_duplicate(default_alpn);
 		quic->cnx_id_callback_fn = cnx_id_callback;
 		quic->cnx_id_callback_ctx = cnx_id_callback_ctx;
-        quic->p_simulated_time = p_simulated_time;
 
 		if (cnx_id_callback != NULL)
 		{
@@ -162,6 +164,11 @@ picoquic_quic_t * picoquic_create(uint32_t nb_connections,
         if (cert_file_name != NULL)
         {
             quic->flags |= picoquic_context_server;
+        }
+        else if (ticket_file_name != NULL)
+        {
+            quic->ticket_file_name = ticket_file_name;
+            ret = picoquic_load_tickets(&quic->p_first_ticket, current_time, ticket_file_name);
         }
 
         quic->table_cnx_by_id = picohash_create(nb_connections * 4,
@@ -204,6 +211,9 @@ void picoquic_free(picoquic_quic_t * quic)
 			free((void*)quic->default_alpn);
 			quic->default_alpn = NULL;
 		}
+
+        /* delete the stored tickets */
+        picoquic_free_tickets(&quic->p_first_ticket);
 
 		/* delete all pending packets */
 		while (quic->pending_stateless_packet != NULL)
@@ -674,7 +684,7 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
 
 	/* Only initialize TLS after all parameters have been set */
 
-	if (picoquic_tlscontext_create(quic, cnx) != 0)
+	if (picoquic_tlscontext_create(quic, cnx, start_time) != 0)
 	{
 		/* Cannot just do partial creation! */
 		picoquic_delete_cnx(cnx);
@@ -950,7 +960,7 @@ void picoquic_dequeue_retransmit_packet(picoquic_cnx_t * cnx, picoquic_packet * 
 * - State changes.
 */
 
-int picoquic_reset_cnx_version(picoquic_cnx_t * cnx, uint8_t * bytes, size_t length)
+int picoquic_reset_cnx_version(picoquic_cnx_t * cnx, uint8_t * bytes, size_t length, uint64_t current_time)
 {
 	/* First parse the incoming connection negotiation to choose the
 	* new version. If none is available, return an error */
@@ -994,7 +1004,7 @@ int picoquic_reset_cnx_version(picoquic_cnx_t * cnx, uint8_t * bytes, size_t len
 					/* Reset the TLS context, Re-initialize the tls connection */
 					picoquic_tlscontext_free(cnx->tls_ctx);
 					cnx->tls_ctx = NULL;
-					ret = picoquic_tlscontext_create(cnx->quic, cnx);
+					ret = picoquic_tlscontext_create(cnx->quic, cnx, current_time);
 					if (ret == 0)
 					{
 						ret = picoquic_initialize_stream_zero(cnx);

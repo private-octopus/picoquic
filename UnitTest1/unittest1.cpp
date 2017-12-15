@@ -337,5 +337,12 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(test_session_resume)
+        {
+            int ret = session_resume_test();
+
+            Assert::AreEqual(ret, 0);
+        }
 	};
 }

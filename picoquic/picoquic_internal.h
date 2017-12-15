@@ -192,6 +192,8 @@ extern "C" {
 		uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE];
         uint8_t retry_seed[PICOQUIC_RETRY_SECRET_SIZE];
         uint64_t * p_simulated_time;
+        char const * ticket_file_name;
+        picoquic_stored_ticket_t * p_first_ticket;
 
 		uint32_t flags;
 
@@ -312,9 +314,7 @@ extern "C" {
 
 		/* Proposed and negotiated version. Feature flags denote version dependent features */
 		uint32_t proposed_version;
-		// uint32_t version;
         int version_index;
-		uint32_t versioned_features_flags;
 
 		/* Local and remote parameters */
 		picoquic_transport_parameters local_parameters;
@@ -326,6 +326,7 @@ extern "C" {
 		/* Call back function and context */
 		picoquic_stream_data_cb_fn callback_fn;
 		void * callback_ctx;
+        int is_psk_handshake;
 
         /* Peer address. To do: allow for multiple addresses */
         struct sockaddr_storage peer_addr;
@@ -428,7 +429,7 @@ extern "C" {
 	void picoquic_dequeue_retransmit_packet(picoquic_cnx_t * cnx, picoquic_packet * p, int should_free);
 
 	/* Reset connection after receiving version negotiation */
-	int picoquic_reset_cnx_version(picoquic_cnx_t * cnx, uint8_t * bytes, size_t length);
+	int picoquic_reset_cnx_version(picoquic_cnx_t * cnx, uint8_t * bytes, size_t length, uint64_t current_time);
 
     /* Notify error on connection */
     int picoquic_connection_error(picoquic_cnx_t * cnx, uint32_t local_error);

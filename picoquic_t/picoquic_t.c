@@ -74,7 +74,8 @@ static picoquic_test_def_t test_table[] = {
     { "ping_pong", ping_pong_test },
     { "transport_parameter_client_error", transport_parameter_client_error_test },
     { "sockets", socket_test },
-    { "ticket_store", ticket_store_test }
+    { "ticket_store", ticket_store_test },
+    { "session_resume", session_resume_test}
 };
 
 static size_t nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);

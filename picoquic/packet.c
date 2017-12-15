@@ -467,7 +467,7 @@ int picoquic_incoming_version_negotiation(
 	if (ret != 0)
 	{
 		/* Trying to renegotiate the version, just ignore the packet if not good. */
-		ret = picoquic_reset_cnx_version( cnx, bytes + ph->offset, length - ph->offset);
+		ret = picoquic_reset_cnx_version( cnx, bytes + ph->offset, length - ph->offset, current_time);
 	}
 
 	return ret;

@@ -76,7 +76,7 @@ int cleartext_aead_test()
     picoquic_cnx_t * cnx_client = NULL;
     picoquic_cnx_t * cnx_server = NULL;
     picoquic_quic_t * qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL, 
-        NULL, NULL, NULL, NULL);
+        NULL, NULL, NULL, 0, NULL, NULL);
     picoquic_quic_t * qserver = picoquic_create(8,
 #ifdef _WINDOWS
 #ifdef _WINDOWS64
@@ -87,7 +87,7 @@ int cleartext_aead_test()
 #else
         "certs/cert.pem", "certs/key.pem",
 #endif
-        "test", NULL, NULL, NULL, NULL, NULL, NULL);
+        "test", NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL);
     if (qclient == NULL || qserver == NULL)
     {
         ret = -1;

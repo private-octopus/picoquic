@@ -72,6 +72,7 @@ extern "C" {
     int transport_parameter_client_error_test();
     int socket_test();
     int ticket_store_test();
+    int session_resume_test();
 
 #ifdef  __cplusplus
 }

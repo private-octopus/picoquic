@@ -27,7 +27,7 @@ int picoquic_master_tlscontext(picoquic_quic_t * quic, char const * cert_file_na
 
 void picoquic_master_tlscontext_free(picoquic_quic_t * quic);
 
-int picoquic_tlscontext_create(picoquic_quic_t * quic, picoquic_cnx_t * cnx);
+int picoquic_tlscontext_create(picoquic_quic_t * quic, picoquic_cnx_t * cnx, uint64_t current_time);
 
 void picoquic_tlscontext_free(void * ctx);
 
@@ -76,5 +76,6 @@ void picoquic_provide_received_transport_extensions(picoquic_cnx_t * cnx,
 
 char const * picoquic_tls_get_negotiated_alpn(picoquic_cnx_t * cnx);
 char const * picoquic_tls_get_sni(picoquic_cnx_t * cnx);
+int picoquic_tls_is_psk_handshake(picoquic_cnx_t * cnx);
 
 #endif /* TLS_API_H */

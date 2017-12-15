@@ -53,7 +53,7 @@ int picoquic_store_ticket(picoquic_stored_ticket_t ** pp_first_ticket,
 
         time_valid_until = (ticket_issued_time * 1000) + (ttl_seconds * 1000000);
 
-        if (time_valid_until < current_time)
+        if (current_time != 0 && time_valid_until < current_time)
         {
             ret = PICOQUIC_ERROR_INVALID_TICKET;
         }
