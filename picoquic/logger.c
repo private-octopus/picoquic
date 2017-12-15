@@ -197,17 +197,27 @@ void picoquic_log_negotiation_packet(FILE* F,
 	fprintf(F, "\n");
 }
 
-size_t picoquic_log_stream_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
+size_t picoquic_log_stream_frame(FILE * F, uint8_t * bytes, size_t bytes_max, uint32_t version_flags)
 {
 	size_t byte_index;
 	uint64_t stream_id;
 	size_t data_length;
 	uint64_t offset;
     int fin;
+    int ret = 0;
 
 	debug_printf_push_stream(F);
 
-	int ret = picoquic_parse_stream_header(bytes, bytes_max, &stream_id, &offset, &data_length, &fin, &byte_index);
+    if ((version_flags&picoquic_version_fix_ints) == 0)
+    {
+        ret = picoquic_parse_stream_header(bytes, bytes_max,
+            &stream_id, &offset, &data_length, &fin, &byte_index);
+    }
+    else
+    {
+        ret = picoquic_parse_stream_header_old(bytes, bytes_max, 
+            &stream_id, &offset, &data_length, &fin, &byte_index);
+    }
 
 	debug_printf_pop_stream();
 
@@ -899,7 +909,7 @@ void picoquic_log_frames(FILE* F, uint8_t * bytes, size_t length, uint32_t versi
                 bytes[byte_index] <= picoquic_frame_type_stream_range_max)
             {
                 ack_or_data = 1;
-                byte_index += picoquic_log_stream_frame(F, bytes + byte_index, length - byte_index);
+                byte_index += picoquic_log_stream_frame(F, bytes + byte_index, length - byte_index, version_flags);
             }
             else if (bytes[byte_index] == picoquic_frame_type_ack)
             {
@@ -912,7 +922,7 @@ void picoquic_log_frames(FILE* F, uint8_t * bytes, size_t length, uint32_t versi
             if (bytes[byte_index] >= 0xC0)
             {
                 ack_or_data = 1;
-                byte_index += picoquic_log_stream_frame(F, bytes + byte_index, length - byte_index);
+                byte_index += picoquic_log_stream_frame(F, bytes + byte_index, length - byte_index, version_flags);
             }
             else if (bytes[byte_index] > 0xA0)
             {

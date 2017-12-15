@@ -494,6 +494,11 @@ extern "C" {
 		uint64_t * stream_id, uint64_t * offset, size_t * data_length, int * fin,
 		size_t * consumed);
 
+    int picoquic_parse_stream_header_old(
+        const uint8_t * bytes, size_t bytes_max,
+        uint64_t * stream_id, uint64_t * offset, size_t * data_length, int * fin,
+        size_t * consumed);
+
 	int picoquic_parse_ack_header(
 		uint8_t const * bytes, size_t bytes_max, uint64_t target_sequence,
 		uint64_t * num_block, unsigned * num_ts, uint64_t * largest,

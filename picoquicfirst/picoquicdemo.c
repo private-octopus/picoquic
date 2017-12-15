@@ -338,9 +338,11 @@ static void first_server_callback(picoquic_cnx_t * cnx,
         if ((fin_or_event == picoquic_callback_stream_fin ||
             crlf_present != 0) && stream_ctx->response_length == 0)
         {
+            char buf[256];
+
             stream_ctx->command[stream_ctx->command_length] = 0;
             printf("Server CB, Stream: %" PRIu64 ", Processing command: %s\n",
-                stream_id, stream_ctx->command);
+                stream_id, strip_endofline(buf, sizeof(buf), (char *)&stream_ctx->command));
             /* if data generated, just send it. Otherwise, just FIN the stream. */
             stream_ctx->status = picoquic_first_server_stream_status_finished;
             if (http0dot9_get(stream_ctx->command, stream_ctx->command_length,
@@ -356,9 +358,11 @@ static void first_server_callback(picoquic_cnx_t * cnx,
         }
         else if (stream_ctx->response_length == 0)
         {
+            char buf[256];
+
             stream_ctx->command[stream_ctx->command_length] = 0;
             printf("Server CB, Stream: %" PRIu64 ", Partial command: %s\n",
-                stream_id, stream_ctx->command);
+                stream_id, strip_endofline(buf, sizeof(buf), (char *)&stream_ctx->command));
         }
     }
 
@@ -767,22 +771,28 @@ static void first_client_callback(picoquic_cnx_t * cnx,
 
         if (stream_ctx->F != NULL)
         {
+            char buf[256];
+
             fclose(stream_ctx->F);
             stream_ctx->F = NULL;
             ctx->nb_open_streams--;
             fin_stream_id = stream_id;
 
             fprintf(stdout, "Reset received on stream %d, command: %s, after %d bytes\n",
-                stream_ctx->stream_id, stream_ctx->command, (int)stream_ctx->received_length);
+                stream_ctx->stream_id, 
+                strip_endofline(buf, sizeof(buf), (char *)&stream_ctx->command), 
+                (int)stream_ctx->received_length);
         }
         return;
     }
     else if (fin_or_event == picoquic_callback_stop_sending)
     {
+        char buf[256];
         picoquic_reset_stream(cnx, stream_id, 0);
 
         fprintf(stdout, "Stop sending received on stream %d, command: %s\n",
-            stream_ctx->stream_id, stream_ctx->command);
+            stream_ctx->stream_id,
+            strip_endofline(buf, sizeof(buf), (char *)&stream_ctx->command));
         return;
     }
     else
@@ -886,7 +896,7 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
 
         cnx_client = picoquic_create_cnx(qclient, 0, 
             (struct sockaddr *)&server_address, current_time, 
-            proposed_version, sni, "hq-07");
+            proposed_version, sni, (proposed_version == 0xFF000007)?"hq-07":"hq-08");
 
         if (cnx_client == NULL)
         {
