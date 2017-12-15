@@ -323,10 +323,12 @@ extern "C" {
 		/* TODO: there may be a need to propose multiple ALPN */
 		char const * sni;
 		char const * alpn;
+        /* On clients, receives the maximum 0RTT size accepted by server, and whether 0-RTT is accepted */
+        size_t max_early_data_size;
+        int is_0RTT_accepted;
 		/* Call back function and context */
 		picoquic_stream_data_cb_fn callback_fn;
 		void * callback_ctx;
-        int is_psk_handshake;
 
         /* Peer address. To do: allow for multiple addresses */
         struct sockaddr_storage peer_addr;

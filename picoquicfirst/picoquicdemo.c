@@ -50,8 +50,13 @@
 #define socklen_t int
 #endif 
 
+#ifdef _WINDOWS64
+static const char *default_server_cert_file = "..\\..\\certs\\cert.pem";
+static const char *default_server_key_file  = "..\\..\\certs\\key.pem";
+#else
 static const char *default_server_cert_file = "..\\certs\\cert.pem";
-static const char *default_server_key_file  = "..\\certs\\key.pem";
+static const char *default_server_key_file = "..\\certs\\key.pem";
+#endif
 
 #else  /* Linux */
 
@@ -97,6 +102,7 @@ static const char *default_server_key_file  = "certs/key.pem";
 
 static const int   default_server_port = 4443;
 static const char *default_server_name = "::";
+static const char *ticket_store_filename = "demo_ticket_store.bin";
 
 #include "../picoquic/picoquic.h"
 #include "../picoquic/picoquic_internal.h"
@@ -832,6 +838,7 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
     int client_ready_loop = 0;
     int established = 0;
     int is_name = 0;
+    int is_connected = 0;
     const char * sni = NULL;
     int64_t delay_max = 10000000;
 
@@ -861,7 +868,7 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
 
     if (ret == 0)
     {
-        qclient = picoquic_create(8, NULL, NULL, "hq08", NULL, NULL, NULL, NULL, NULL, current_time, NULL, NULL);
+        qclient = picoquic_create(8, NULL, NULL, "hq08", NULL, NULL, NULL, NULL, NULL, current_time, NULL, ticket_store_filename);
 
         if (qclient == NULL)
         {
@@ -961,6 +968,10 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
 
 				if (picoquic_get_cnx_state(cnx_client) == picoquic_state_client_almost_ready)
 				{
+                    if (picoquic_tls_is_psk_handshake(cnx_client))
+                    {
+                        fprintf(stdout, "The session was properly resumed!\n");
+                    }
 					fprintf(stdout, "Almost ready!\n\n");
 				}
 
@@ -1049,6 +1060,10 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
     /* Clean up */
     if (qclient != NULL)
     {
+        if (picoquic_save_tickets(qclient->p_first_ticket, current_time, ticket_store_filename) != 0)
+        {
+            fprintf(stderr, "Could not store the saved session tickets.\n");
+        }
         picoquic_free(qclient);
     }
 

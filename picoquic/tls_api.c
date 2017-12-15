@@ -627,6 +627,8 @@ int picoquic_tlscontext_create(picoquic_quic_t * quic, picoquic_cnx_t * cnx, uin
                 { 
                     ctx->handshake_properties.client.session_ticket.base = ticket;
                     ctx->handshake_properties.client.session_ticket.len = ticket_length;
+
+                    ctx->handshake_properties.client.max_early_data_size = &cnx->max_early_data_size;
                 }
             }
 		}
@@ -680,7 +682,8 @@ char const * picoquic_tls_get_sni(picoquic_cnx_t * cnx)
 
 int picoquic_tls_is_psk_handshake(picoquic_cnx_t * cnx)
 {
-    int ret = cnx->is_psk_handshake;
+    /* int ret = cnx->is_psk_handshake; */
+    int ret = ptls_is_psk_handshake(((picoquic_tls_ctx_t *)(cnx->tls_ctx))->tls);
     return ret;
 }
 
@@ -1144,13 +1147,11 @@ int picoquic_tlsinput_stream_zero(picoquic_cnx_t * cnx)
         case picoquic_state_client_handshake_start:
         case picoquic_state_client_handshake_progress:
             /* Extract and install the client 1-RTT key */
-            cnx->is_psk_handshake = ptls_is_psk_handshake((ptls_t *)(cnx->tls_ctx));
             cnx->cnx_state = picoquic_state_client_almost_ready;
             ret = picoquic_setup_1RTT_aead_contexts(cnx, 0);
             break;
         case picoquic_state_server_init:
             /* Extract and install the server 0-RTT and 1-RTT key */
-            cnx->is_psk_handshake = ptls_is_psk_handshake((ptls_t *)(cnx->tls_ctx));
             cnx->cnx_state = picoquic_state_server_almost_ready;
             ret = picoquic_setup_1RTT_aead_contexts(cnx, 1);
             break;

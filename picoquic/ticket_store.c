@@ -65,7 +65,7 @@ int picoquic_store_ticket(picoquic_stored_ticket_t ** pp_first_ticket,
             picoquic_stored_ticket_t * stored = (picoquic_stored_ticket_t *)malloc(ticket_size);
             char * next_p = ((char *)stored) + sizeof(picoquic_stored_ticket_t);
 
-            if (ticket == NULL)
+            if (stored == NULL)
             {
                 ret = PICOQUIC_ERROR_MEMORY;
             }

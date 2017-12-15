@@ -1753,16 +1753,17 @@ int session_resume_test()
         {
             ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
         }
-#if 0
+
         if (ret == 0 && i == 1)
         {
             /* If resume succeeded, the second connection will have a type "PSK" */
-            if (picoquic_tls_is_psk_handshake(test_ctx->cnx_server) == 0)
+            if (picoquic_tls_is_psk_handshake(test_ctx->cnx_server) == 0 ||
+                picoquic_tls_is_psk_handshake(test_ctx->cnx_client) == 0)
             {
                 ret = -1;
             }
         }
-#endif
+
         if (ret == 0)
         {
             ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
