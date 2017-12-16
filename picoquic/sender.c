@@ -1174,14 +1174,10 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t * cnx, picoquic_packet * pack
 {
     int ret = 0;
     /* TODO: manage multiple streams. */
-    picoquic_stream_head * stream = NULL;
-    int stream_restricted = 1;
     picoquic_packet_type_enum packet_type = 0;
     size_t checksum_overhead = 8;
     int is_cleartext_mode = 1;
-    size_t data_bytes = 0;
     uint64_t cnx_id = cnx->server_cnxid;
-    int retransmit_possible = 0;
     size_t header_length = 0;
     uint8_t * bytes = packet->bytes;
     size_t length = 0;
@@ -2091,19 +2087,7 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 	uint64_t current_time, uint8_t * send_buffer, size_t send_buffer_max, size_t * send_length)
 {
-	int ret = 0;
-	/* TODO: manage multiple streams. */
-	picoquic_stream_head * stream = NULL;
-	int stream_restricted = 1;
-	picoquic_packet_type_enum packet_type = 0;
-	size_t checksum_overhead = 8;
-	int is_cleartext_mode = 1;
-	size_t data_bytes = 0;
-	uint64_t cnx_id = cnx->server_cnxid;
-	int retransmit_possible = 0;
-	size_t header_length = 0;
-	uint8_t * bytes = packet->bytes;
-	size_t length = 0;
+    int ret = 0;
 
     /* Check that the connection is still alive */
     if (cnx->cnx_state < picoquic_state_disconnecting &&
