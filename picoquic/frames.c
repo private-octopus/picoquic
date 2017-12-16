@@ -152,8 +152,8 @@ int picoquic_find_or_create_stream(picoquic_cnx_t * cnx, uint64_t stream_id,
             else if (is_unidir)
             {
                 /* Mark the stream as already finished in our direction */
-                (*stream)->stream_flags |= picoquic_stream_flag_fin_received |
-                    picoquic_stream_flag_fin_signalled;
+                (*stream)->stream_flags |= picoquic_stream_flag_fin_notified |
+                    picoquic_stream_flag_fin_sent;
             }
         }
     }
