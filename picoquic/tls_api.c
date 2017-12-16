@@ -896,6 +896,8 @@ size_t picoquic_aead_encrypt(picoquic_cnx_t *cnx, uint8_t * output, uint8_t * in
 }
 
 /* Computation of the clear text AEAD encryption based on per version secret */
+#define PICOQUIC_LABEL_HANDSHAKE_CLIENT "tls13 QUIC client handshake secret"
+#define PICOQUIC_LABEL_HANDSHAKE_SERVER "tls13 QUIC server handshake secret"
 #define PICOQUIC_LABEL_CLEAR_TEXT_CLIENT "tls13 QUIC client cleartext Secret"
 #define PICOQUIC_LABEL_CLEAR_TEXT_SERVER "tls13 QUIC server cleartext Secret"
 #define PICOQUIC_LABEL_CLEAR_TEXT_KEY "tls13 key"
@@ -989,6 +991,8 @@ int picoquic_setup_cleartext_aead_contexts(picoquic_cnx_t * cnx, int is_server)
     uint8_t * secret1, * secret2;
     ptls_iovec_t prk;
     ptls_iovec_t info;
+    int use_old_secret = (picoquic_supported_versions[cnx->version_index].version_flags&
+        picoquic_version_old_aead_secret);
 
     picoformat_64(cnx_id, cnx->initial_cnxid);
     picoquic_setup_cleartext_aead_salt(cnx->version_index, &salt);
@@ -1004,7 +1008,7 @@ int picoquic_setup_cleartext_aead_contexts(picoquic_cnx_t * cnx, int is_server)
         /* Compose the client label */
         info.base = label;
         info.len = picoquic_setup_clear_text_aead_label(algo->digest_size,
-            label, PICOQUIC_LABEL_CLEAR_TEXT_CLIENT);
+            label, (use_old_secret == 0)? PICOQUIC_LABEL_HANDSHAKE_CLIENT : PICOQUIC_LABEL_CLEAR_TEXT_CLIENT);
         /* extract the client key */
         ret = ptls_hkdf_expand(algo, client_secret, algo->digest_size, prk, info);
 
@@ -1013,7 +1017,7 @@ int picoquic_setup_cleartext_aead_contexts(picoquic_cnx_t * cnx, int is_server)
             /* Compose the server label */
             info.base = label;
             info.len = picoquic_setup_clear_text_aead_label(algo->digest_size, 
-                label, PICOQUIC_LABEL_CLEAR_TEXT_SERVER);
+                label, (use_old_secret == 0) ? PICOQUIC_LABEL_HANDSHAKE_SERVER : PICOQUIC_LABEL_CLEAR_TEXT_SERVER);
             /* extract the server key */
             ret = ptls_hkdf_expand(algo, server_secret, algo->digest_size, prk, info);
         }

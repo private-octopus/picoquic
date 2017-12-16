@@ -116,7 +116,8 @@ extern "C" {
         picoquic_version_fix_ints = 8,
         picoquic_version_short_pings = 16,
         picoquic_version_old_parameters = 32,
-        picoquic_version_bidir_only = 64
+        picoquic_version_bidir_only = 64,
+        picoquic_version_old_aead_secret = 128
     } picoquic_version_feature_flags;
 
     /*

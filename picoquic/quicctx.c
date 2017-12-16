@@ -108,7 +108,7 @@ const picoquic_version_parameters_t picoquic_supported_versions[] = {
     sizeof(picoquic_cleartext_version_1_salt),
     picoquic_cleartext_version_1_salt },
     { PICOQUIC_SECOND_INTEROP_VERSION, 
-    picoquic_version_bidir_only |
+    picoquic_version_bidir_only | picoquic_version_old_aead_secret |
     picoquic_version_short_pings | picoquic_version_fix_ints| picoquic_version_old_parameters,
     picoquic_version_header_05_07,
     sizeof(picoquic_cleartext_version_1_salt), picoquic_cleartext_version_1_salt },
