@@ -436,11 +436,13 @@ int quic_server(const char * server_name, int server_port,
             delta_t, &current_time);
 #endif
 
+#if 0
         if (bytes_recv != 0)
         {
             printf("Select returns %d, from length %d\n", bytes_recv, from_length);
             print_address((struct sockaddr *)&addr_from, "recv from:", 0);
         }
+#endif
 
         if (bytes_recv < 0)
         {
@@ -480,6 +482,7 @@ int quic_server(const char * server_name, int server_port,
                     memset(&client_from, 0, sizeof(client_from));
                     memcpy(&client_from, &addr_from, from_length);
                     client_addr_length = from_length;
+                    printf("%" PRIx64 ": ", picoquic_get_initial_cnxid(cnx_server));
                     print_address((struct sockaddr*)&client_from, "Client address:",
                         picoquic_get_initial_cnxid(cnx_server));
                     picoquic_log_transport_extension(stdout, cnx_server);
@@ -538,9 +541,11 @@ int quic_server(const char * server_name, int server_port,
 
                                 if (p->length > 0)
                                 {
+#if 0
                                     printf("%" PRIx64 ": ", picoquic_get_initial_cnxid(cnx_next));
                                     printf("Connection state = %d\n",
                                         picoquic_get_cnx_state(cnx_next));
+#endif
 
                                     picoquic_get_peer_addr(cnx_next, &peer_addr, &peer_addr_len);
                                     picoquic_get_local_addr(cnx_next, &local_addr, &local_addr_len);
@@ -555,10 +560,11 @@ int quic_server(const char * server_name, int server_port,
                                         picoquic_log_packet(stdout, qserver, cnx_server, (struct sockaddr *) peer_addr,
                                             0, send_buffer, send_length, current_time);
                                     }
-
+#if 0
                                     printf("%" PRIx64 ": ", picoquic_get_initial_cnxid(cnx_next));
                                     printf("Sending packet, %d bytes (sent: %d)\n",
                                         (int)send_length, sent);
+#endif
                                 }
                                 else
                                 {
