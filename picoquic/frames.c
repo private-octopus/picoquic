@@ -1625,6 +1625,12 @@ static picoquic_packet * picoquic_update_rtt(picoquic_cnx_t * cnx, uint64_t larg
 						}
 					}
 
+					if (PICOQUIC_MIN_RETRANSMIT_TIMER > cnx->retransmit_timer)
+					{
+						cnx->retransmit_timer = PICOQUIC_MIN_RETRANSMIT_TIMER;
+					}
+
+
 					if (cnx->congestion_alg != NULL)
 					{
 						cnx->congestion_alg->alg_notify(cnx,
