@@ -633,7 +633,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t * cnx, uint64_t current_time,
 						}
 					}
 					packet->length = length;
-
+                    cnx->nb_retransmission_total++;
 
 					if (cnx->congestion_alg != NULL)
 					{

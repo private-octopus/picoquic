@@ -369,10 +369,10 @@ static void first_server_callback(picoquic_cnx_t * cnx,
     /* that's it */
 }
 
-int quic_server(const char * server_name, int server_port, 
-				const char * pem_cert, const char * pem_key,
-				int just_once, int do_hrr, cnx_id_cb_fn cnx_id_callback,
-				void * cnx_id_callback_ctx, uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE])
+int quic_server(const char * server_name, int server_port,
+    const char * pem_cert, const char * pem_key,
+    int just_once, int do_hrr, cnx_id_cb_fn cnx_id_callback,
+    void * cnx_id_callback_ctx, uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE])
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
@@ -388,12 +388,12 @@ int quic_server(const char * server_name, int server_port,
     socklen_t to_length;
     int client_addr_length;
     uint8_t buffer[1536];
-	uint8_t send_buffer[1536];
-	size_t send_length = 0;
+    uint8_t send_buffer[1536];
+    size_t send_length = 0;
     int bytes_recv;
     picoquic_packet * p = NULL;
-	uint64_t current_time = 0;
-	picoquic_stateless_packet_t * sp;
+    uint64_t current_time = 0;
+    picoquic_stateless_packet_t * sp;
     int64_t delay_max = 10000000;
     int64_t delta_t = 0;
 
@@ -406,7 +406,7 @@ int quic_server(const char * server_name, int server_port,
         current_time = picoquic_current_time();
         /* Create QUIC context */
         qserver = picoquic_create(8, pem_cert, pem_key, NULL, first_server_callback, NULL,
-                cnx_id_callback, cnx_id_callback_ctx, reset_seed, current_time, NULL, NULL);
+            cnx_id_callback, cnx_id_callback_ctx, reset_seed, current_time, NULL, NULL);
 
         if (qserver == NULL)
         {
@@ -421,7 +421,7 @@ int quic_server(const char * server_name, int server_port,
 
     /* Wait for packets */
     while (ret == 0 && (just_once == 0 || cnx_server == NULL ||
-        picoquic_get_cnx_state(cnx_server)!= picoquic_state_disconnected))
+        picoquic_get_cnx_state(cnx_server) != picoquic_state_disconnected))
     {
         from_length = to_length = sizeof(struct sockaddr_storage);
         if_index_to = 0;
@@ -430,19 +430,13 @@ int quic_server(const char * server_name, int server_port,
             &addr_from, &from_length,
             &addr_to, &to_length, &if_index_to,
             buffer, sizeof(buffer),
-#if 0
             picoquic_get_next_wake_delay(qserver, current_time, delay_max), &current_time);
-#else
-            delta_t, &current_time);
-#endif
 
-#if 0
         if (bytes_recv != 0)
         {
             printf("Select returns %d, from length %d\n", bytes_recv, from_length);
             print_address((struct sockaddr *)&addr_from, "recv from:", 0);
         }
-#endif
 
         if (bytes_recv < 0)
         {
@@ -452,8 +446,6 @@ int quic_server(const char * server_name, int server_port,
         {
             if (bytes_recv > 0)
             {
-                //current_time += 1000;
-
                 if (cnx_server != NULL && just_once != 0)
                 {
                     picoquic_log_packet(stdout, qserver, cnx_server, (struct sockaddr *) &addr_from,
@@ -487,123 +479,95 @@ int quic_server(const char * server_name, int server_port,
                         picoquic_get_initial_cnxid(cnx_server));
                     picoquic_log_transport_extension(stdout, cnx_server);
                 }
-#if 0
             }
-#else
-                delta_t = 0;
-            }
-            else
+            if (ret == 0)
             {
-#endif
-                if (ret == 0)
+                while ((sp = picoquic_dequeue_stateless_packet(qserver)) != NULL)
                 {
-                    while ((sp = picoquic_dequeue_stateless_packet(qserver)) != NULL)
-                    {
-                        int sent = picoquic_send_through_server_sockets(&server_sockets,
-                            (struct sockaddr *) &sp->addr_to,
-                            (sp->addr_to.ss_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6),
-                            (struct sockaddr *) &sp->addr_local,
-                            (sp->addr_local.ss_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6),
-                            sp->if_index_local,
-                            (const char *)sp->bytes, (int)sp->length);
+                    int sent = picoquic_send_through_server_sockets(&server_sockets,
+                        (struct sockaddr *) &sp->addr_to,
+                        (sp->addr_to.ss_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6),
+                        (struct sockaddr *) &sp->addr_local,
+                        (sp->addr_local.ss_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6),
+                        sp->if_index_local,
+                        (const char *)sp->bytes, (int)sp->length);
 
-                        printf("Sending stateless packet, %d bytes\n", sent);
-                        picoquic_delete_stateless_packet(sp);
+                    printf("Sending stateless packet, %d bytes\n", sent);
+                    picoquic_delete_stateless_packet(sp);
+                }
+
+                cnx_next = picoquic_get_first_cnx(qserver);
+                while (ret == 0 && cnx_next != NULL)
+                {
+                    p = picoquic_create_packet();
+
+                    if (p == NULL)
+                    {
+                        ret = -1;
                     }
-
-                    cnx_next = picoquic_get_first_cnx(qserver);
-                    while (ret == 0 && cnx_next != NULL)
+                    else
                     {
-                            p = picoquic_create_packet();
+                        ret = picoquic_prepare_packet(cnx_next, p, current_time,
+                            send_buffer, sizeof(send_buffer), &send_length);
 
-                            if (p == NULL)
+                        if (ret == PICOQUIC_ERROR_DISCONNECTED)
+                        {
+                            ret = 0;
+                            free(p);
+                            picoquic_delete_cnx(cnx_next);
+                            break;
+                        }
+                        else if (ret == 0)
+                        {
+                            int peer_addr_len = 0;
+                            struct sockaddr * peer_addr;
+                            int local_addr_len = 0;
+                            struct sockaddr * local_addr;
+
+                            if (p->length > 0)
                             {
-                                ret = -1;
+                                printf("%" PRIx64 ": ", picoquic_get_initial_cnxid(cnx_next));
+                                printf("Connection state = %d\n",
+                                    picoquic_get_cnx_state(cnx_next));
+
+                                picoquic_get_peer_addr(cnx_next, &peer_addr, &peer_addr_len);
+                                picoquic_get_local_addr(cnx_next, &local_addr, &local_addr_len);
+
+                                int sent = picoquic_send_through_server_sockets(&server_sockets,
+                                    peer_addr, peer_addr_len, local_addr, local_addr_len,
+                                    picoquic_get_local_if_index(cnx_next),
+                                    (const char *)send_buffer, (int)send_length);
+
+                                if (cnx_server != NULL && just_once != 0)
+                                {
+                                    picoquic_log_packet(stdout, qserver, cnx_server, (struct sockaddr *) peer_addr,
+                                        0, send_buffer, send_length, current_time);
+                                }
+                                printf("%" PRIx64 ": ", picoquic_get_initial_cnxid(cnx_next));
+                                printf("Sending packet, %d bytes (sent: %d)\n",
+                                    (int)send_length, sent);
+
                             }
                             else
                             {
-                                ret = picoquic_prepare_packet(cnx_next, p, current_time,
-                                    send_buffer, sizeof(send_buffer), &send_length);
-
-                                if (ret == PICOQUIC_ERROR_DISCONNECTED)
-                                {
-                                    ret = 0;
-                                    free(p);
-                                    picoquic_delete_cnx(cnx_next);
-                                    break;
-                                }
-                                else if (ret == 0)
-                                {
-#if 1
-                                    do {
-#endif
-                                        int peer_addr_len = 0;
-                                        struct sockaddr * peer_addr;
-                                        int local_addr_len = 0;
-                                        struct sockaddr * local_addr;
-
-                                        if (p->length > 0)
-                                        {
-#if 0
-                                            printf("%" PRIx64 ": ", picoquic_get_initial_cnxid(cnx_next));
-                                            printf("Connection state = %d\n",
-                                                picoquic_get_cnx_state(cnx_next));
-#endif
-
-                                            picoquic_get_peer_addr(cnx_next, &peer_addr, &peer_addr_len);
-                                            picoquic_get_local_addr(cnx_next, &local_addr, &local_addr_len);
-
-                                            int sent = picoquic_send_through_server_sockets(&server_sockets,
-                                                peer_addr, peer_addr_len, local_addr, local_addr_len,
-                                                picoquic_get_local_if_index(cnx_next),
-                                                (const char *)send_buffer, (int)send_length);
-
-                                            if (cnx_server != NULL && just_once != 0)
-                                            {
-                                                picoquic_log_packet(stdout, qserver, cnx_server, (struct sockaddr *) peer_addr,
-                                                    0, send_buffer, send_length, current_time);
-                                            }
-#if 0
-                                            printf("%" PRIx64 ": ", picoquic_get_initial_cnxid(cnx_next));
-                                            printf("Sending packet, %d bytes (sent: %d)\n",
-                                                (int)send_length, sent);
-#endif
-#if 1
-                                            /* Try to send a new packet */
-                                            p = picoquic_create_packet();
-
-                                            if (p == NULL)
-                                            {
-                                                ret = -1;
-                                            }
-#endif
-
-                                        }
-                                        else
-                                        {
-                                            free(p);
-                                            p = NULL;
-                                        }
-#if 1
-                                    } while (p != NULL);
-#endif
-                                }
-
-                                else
-                                {
-                                    break;
-                                }
-
-                                cnx_next = picoquic_get_next_cnx(cnx_next);
+                                picoquic_log_congestion_state(stdout, cnx_next, current_time);
+                                free(p);
+                                p = NULL;
                             }
+                        }
+
+                        else
+                        {
+                            break;
+                        }
+
+                        cnx_next = picoquic_get_next_cnx(cnx_next);
                     }
                 }
-#if 1
-                delta_t = picoquic_get_next_wake_delay(qserver, current_time, delay_max);
             }
-#endif
         }
     }
+
 
     /* Clean up */
     if (qserver != NULL)

@@ -396,6 +396,7 @@ extern "C" {
 		/* Congestion control state */
 		uint64_t cwin;
 		uint64_t bytes_in_transit;
+        uint64_t nb_retransmission_total;
 		void * congestion_alg_state;
 		picoquic_congestion_algorithm_t const * congestion_alg;
 

@@ -87,7 +87,6 @@ static char const * picoquic_log_frame_names[] =
     "ACK"
 };
 
-
 void picoquic_log_error_packet(FILE * F, uint8_t * bytes, size_t bytes_max, int ret)
 {
 	fprintf(F, "Packet length %d caused error: %d\n", (int)bytes_max, ret);
@@ -103,6 +102,17 @@ void picoquic_log_error_packet(FILE * F, uint8_t * bytes, size_t bytes_max, int 
 		fprintf(F, "\n");
 	}
 	fprintf(F, "\n");
+}
+
+static void picoquic_log_time(FILE* F, picoquic_cnx_t * cnx, uint64_t current_time, 
+    const char * label1, const char * label2)
+{
+    uint64_t delta_t = (cnx == NULL)? current_time: current_time - cnx->start_time;
+    uint64_t time_sec = delta_t / 1000000;
+    uint32_t time_usec = (uint32_t)(delta_t % 1000000);
+
+    fprintf(F, "%s%llu.%06d%s", label1,
+        (unsigned long long) time_sec, time_usec, label2);
 }
 
 void picoquic_log_packet_address(FILE* F, picoquic_cnx_t * cnx,
@@ -1426,4 +1436,18 @@ void picoquic_log_transport_extension(FILE* F, picoquic_cnx_t * cnx)
 		fprintf(F, "\n");
 	}
 	fprintf(F, "\n");
+}
+
+void picoquic_log_congestion_state(FILE* F, picoquic_cnx_t * cnx, uint64_t current_time)
+{
+    fprintf(F, "%" PRIx64 ": ", picoquic_get_initial_cnxid(cnx));
+    picoquic_log_time(F, cnx, current_time, "T= ", ", ");
+    fprintf(F, "cwin: %d,", (int)cnx->cwin);
+    fprintf(F, "flight: %d,", (int)cnx->bytes_in_transit);;
+    fprintf(F, "nb_ret: %d,", (int)cnx->nb_retransmission_total);
+    fprintf(F, "rtt_min: %d,", (int)cnx->rtt_min);
+    fprintf(F, "rtt: %d,", (int)cnx->smoothed_rtt);
+    fprintf(F, "rtt_var: %d,", (int)cnx->rtt_variant);
+    fprintf(F, "max_ack_delay: %d,", (int)cnx->max_ack_delay);
+    fprintf(F, "state: %d\n", (int)cnx->cnx_state);
 }
