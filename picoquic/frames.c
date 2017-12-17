@@ -1582,18 +1582,24 @@ static picoquic_packet * picoquic_update_rtt(picoquic_cnx_t * cnx, uint64_t larg
 				uint64_t acknowledged_time = current_time - ack_delay;
 				int64_t rtt_estimate = acknowledged_time - packet->send_time;
 
+
 				cnx->latest_time_acknowledged = packet->send_time;
                 cnx->latest_progress_time = current_time;
 
 				if (rtt_estimate > 0)
 				{
+                    if (ack_delay > cnx->max_ack_delay)
+                    {
+                        cnx->max_ack_delay = ack_delay;
+                    }
+
 					if (cnx->smoothed_rtt == PICOQUIC_INITIAL_RTT &&
 						cnx->rtt_variant == 0)
 					{
 						cnx->smoothed_rtt = rtt_estimate;
 						cnx->rtt_variant = rtt_estimate / 2;
 						cnx->rtt_min = rtt_estimate;
-						cnx->retransmit_timer = 3 * rtt_estimate;
+						cnx->retransmit_timer = 3 * rtt_estimate + cnx->max_ack_delay;
 					}
 					else
 					{
@@ -1611,17 +1617,12 @@ static picoquic_packet * picoquic_update_rtt(picoquic_cnx_t * cnx, uint64_t larg
 						}
 						cnx->rtt_variant += delta_rtt_average / 4;
 
-						cnx->retransmit_timer = cnx->smoothed_rtt + 4 * cnx->rtt_variant;
+						cnx->retransmit_timer = cnx->smoothed_rtt + 4 * cnx->rtt_variant + cnx->max_ack_delay;
 
 						if (rtt_estimate < (int64_t) cnx->rtt_min)
 						{
 							cnx->rtt_min = rtt_estimate;
 						}
-					}
-
-					if (PICOQUIC_MIN_RETRANSMIT_TIMER > cnx->retransmit_timer)
-					{
-						cnx->retransmit_timer = PICOQUIC_MIN_RETRANSMIT_TIMER;
 					}
 
 					if (cnx->congestion_alg != NULL)

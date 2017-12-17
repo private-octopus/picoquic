@@ -378,6 +378,7 @@ extern "C" {
 		int ack_needed;
 
 		/* Time measurement */
+        uint64_t max_ack_delay;
 		uint64_t smoothed_rtt;
 		uint64_t rtt_variant;
 		uint64_t retransmit_timer;
