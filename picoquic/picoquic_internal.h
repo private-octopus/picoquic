@@ -383,6 +383,7 @@ extern "C" {
 		uint64_t rtt_variant;
 		uint64_t retransmit_timer;
 		uint64_t rtt_min;
+        uint64_t ack_delay_local;
 
 		/* Retransmission state */
 		uint64_t nb_retransmit;

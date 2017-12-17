@@ -670,6 +670,8 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
 			cnx->retransmit_timer = PICOQUIC_INITIAL_RETRANSMIT_TIMER;
 			cnx->rtt_min = 0;
 
+            cnx->ack_delay_local = 10000;
+
 			/* Congestion control state */
 			cnx->cwin = PICOQUIC_CWIN_INITIAL;
 			cnx->bytes_in_transit = 0;

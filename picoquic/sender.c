@@ -760,16 +760,16 @@ void picoquic_cnx_set_next_wake_time(picoquic_cnx_t * cnx, uint64_t current_time
         /* Consider delayed ACK */
         if (cnx->ack_needed)
         {
-            next_time = cnx->highest_ack_time + 10000;
+            next_time = cnx->highest_ack_time + cnx->ack_delay_local;
         }
 
         /* Consider delayed RACK */
         if (p != NULL)
         {
             if (cnx->latest_time_acknowledged > p->send_time &&
-                p->send_time + 10000 < next_time)
+                p->send_time + cnx->max_ack_delay < next_time)
             {
-                next_time = p->send_time + 10000;
+                next_time = p->send_time + cnx->max_ack_delay;
             }
 
             if (cnx->nb_retransmit == 0)

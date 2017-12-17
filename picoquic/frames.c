@@ -1600,6 +1600,11 @@ static picoquic_packet * picoquic_update_rtt(picoquic_cnx_t * cnx, uint64_t larg
 						cnx->rtt_variant = rtt_estimate / 2;
 						cnx->rtt_min = rtt_estimate;
 						cnx->retransmit_timer = 3 * rtt_estimate + cnx->max_ack_delay;
+                        cnx->ack_delay_local = cnx->rtt_min / 4;
+                        if (cnx->ack_delay_local < 1000)
+                        {
+                            cnx->ack_delay_local = 1000;
+                        }
 					}
 					else
 					{
@@ -1622,6 +1627,12 @@ static picoquic_packet * picoquic_update_rtt(picoquic_cnx_t * cnx, uint64_t larg
 						if (rtt_estimate < (int64_t) cnx->rtt_min)
 						{
 							cnx->rtt_min = rtt_estimate;
+
+                            cnx->ack_delay_local = cnx->rtt_min / 4;
+                            if (cnx->ack_delay_local < 1000)
+                            {
+                                cnx->ack_delay_local = 1000;
+                            }
 						}
 					}
 
@@ -2368,8 +2379,7 @@ int picoquic_is_ack_needed(picoquic_cnx_t * cnx, uint64_t current_time)
 	int ret = 0;
 
 	if (cnx->highest_ack_sent + 2 <= cnx->first_sack_item.end_of_sack_range ||
-		(/*cnx->first_sack_item.next_sack != NULL && */
-			cnx->highest_ack_time + 10000 <= current_time))
+			cnx->highest_ack_time + cnx->ack_delay_local <= current_time)
 	{
 		ret = cnx->ack_needed;
 	}
