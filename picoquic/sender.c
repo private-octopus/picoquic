@@ -742,7 +742,7 @@ void picoquic_cnx_set_next_wake_time(picoquic_cnx_t * cnx, uint64_t current_time
         {
             int restricted = (cnx->cnx_state == picoquic_state_client_ready ||
                 cnx->cnx_state == picoquic_state_server_ready) ? 0 : 1;
-            picoquic_find_ready_stream(cnx, restricted);
+            stream = picoquic_find_ready_stream(cnx, restricted);
 
             if (stream != NULL)
             {

@@ -396,7 +396,6 @@ int quic_server(const char * server_name, int server_port,
     uint64_t current_time = 0;
     picoquic_stateless_packet_t * sp;
     int64_t delay_max = 10000000;
-    int64_t delta_t = 0;
 
     /* Open a UDP socket */
     ret = picoquic_open_server_sockets(&server_sockets, server_port);
@@ -435,6 +434,11 @@ int quic_server(const char * server_name, int server_port,
             delta_t = 1;
         }
 
+        if (just_once != 0 && delta_t > 10000 && cnx_server != NULL)
+        {
+            picoquic_log_congestion_state(stdout, cnx_server, current_time);
+        }
+
         bytes_recv = picoquic_select(server_sockets.s_socket, PICOQUIC_NB_SERVER_SOCKETS,
             &addr_from, &from_length,
             &addr_to, &to_length, &if_index_to,
@@ -447,7 +451,7 @@ int quic_server(const char * server_name, int server_port,
                 bytes_recv, from_length, (int)(current_time - time_before), (int)delta_t);
             print_address((struct sockaddr *)&addr_from, "recv from:", 0);
         }
-        else
+        else if (just_once != 0)
         {
             printf("Select return %d, after %d us (wait for %d us)\n", bytes_recv,
                 (int)(current_time - time_before), (int) delta_t);
@@ -566,7 +570,6 @@ int quic_server(const char * server_name, int server_port,
                             }
                             else
                             {
-                                picoquic_log_congestion_state(stdout, cnx_next, current_time);
                                 free(p);
                                 p = NULL;
                             }
