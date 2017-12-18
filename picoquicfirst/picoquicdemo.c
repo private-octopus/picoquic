@@ -604,23 +604,30 @@ typedef struct st_demo_stream_desc_t {
     uint32_t stream_id;
     uint32_t previous_stream_id;
     char const * doc_name;
+    char const * f_name;
     int is_binary;
 } demo_stream_desc_t;
 
 static const demo_stream_desc_t test_scenario[] = {
-    { 4, 0, "index.html", 0 },
-    { 8, 4, "test.html", 0 },
-    { 12, 4, "doc-123456.html", 0 },
-    { 16, 4, "main.jpg", 1},
-    { 20, 4, "war-and-peace.txt", 0}
+#ifdef PICOQUIC_TEST_AGAINST_ATS
+    { 4, 0, "", "slash.html",0 },
+    { 8, 4, "en/latest/", "slash_en_slash_latest.html", 0 }
+#else
+    { 4, 0, "index.html", "index.html",0 },
+    { 8, 4, "test.html", "slash.html", 0 },
+    { 12, 4, "doc-123456.html", "doc-123456.html", 0 },
+    { 16, 4, "main.jpg", "main.jpg",1},
+    { 20, 4, "war-and-peace.txt", "war-and-peace.txt", 0},
+    { 24, 4, "en/latest/", "slash_en_slash_latest.html", 0 }
+#endif
 };
 
 static const demo_stream_desc_t test_scenario_old[] = {
-    { 1, 0, "index.html", 0 },
-    { 3, 1, "test.html", 0 },
-    { 5, 1, "doc-123456.html", 0 },
-    { 7, 1, "main.jpg", 1 },
-    { 9, 1, "war-and-peace.txt", 0 }
+    { 1, 0, "index.html", "index.html", 0 },
+    { 3, 1, "test.html", "test.html",0 },
+    { 5, 1, "doc-123456.html", "doc-123456.html",0 },
+    { 7, 1, "main.jpg", "main.jpg", 1 },
+    { 9, 1, "war-and-peace.txt", "war-and-peace.txt", 0 }
 };
 
 static const size_t test_scenario_nb = sizeof(test_scenario) / sizeof(demo_stream_desc_t);
@@ -647,7 +654,7 @@ typedef struct st_picoquic_first_client_callback_ctx_t {
 
 static void demo_client_open_stream(picoquic_cnx_t * cnx,
     picoquic_first_client_callback_ctx_t * ctx, 
-    uint32_t stream_id, char const * text, size_t text_len, int is_binary)
+    uint32_t stream_id, char const * text, size_t text_len, char const * fname, int is_binary)
 {
     int ret = 0;
 
@@ -669,7 +676,10 @@ static void demo_client_open_stream(picoquic_cnx_t * cnx,
         stream_ctx->command[2] = 'T';
         stream_ctx->command[3] = ' ';
         stream_ctx->command[4] = '/';
-        memcpy(&stream_ctx->command[5], text, text_len);
+        if (text_len > 0)
+        {
+            memcpy(&stream_ctx->command[5], text, text_len);
+        }
         stream_ctx->command[text_len + 5] = '\r';
         stream_ctx->command[text_len + 6] = '\n';
         stream_ctx->command[text_len + 7] = 0;
@@ -679,18 +689,18 @@ static void demo_client_open_stream(picoquic_cnx_t * cnx,
         ctx->first_stream = stream_ctx;
 
 #ifdef _WINDOWS
-        if (fopen_s(&stream_ctx->F, text, (is_binary == 0)?"w":"wb") != 0) {
+        if (fopen_s(&stream_ctx->F, fname, (is_binary == 0)?"w":"wb") != 0) {
             ret = -1;
         }
 #else
-        stream_ctx->F = fopen(text, (is_binary == 0) ? "w" : "wb");
+        stream_ctx->F = fopen(fname, (is_binary == 0) ? "w" : "wb");
         if (stream_ctx->F == NULL) {
             ret = -1;
         }
 #endif
         if (ret != 0)
         {
-            fprintf(stdout, "Cannot create file: %s\n", text);
+            fprintf(stdout, "Cannot create file: %s\n", fname);
         }
         else
         {
@@ -726,6 +736,7 @@ static void demo_client_start_streams(picoquic_cnx_t * cnx,
         {
             demo_client_open_stream(cnx, ctx, ctx->demo_stream[i].stream_id,
                 ctx->demo_stream[i].doc_name, strlen(ctx->demo_stream[i].doc_name),
+                ctx->demo_stream[i].f_name,
                 ctx->demo_stream[i].is_binary);
         }
     }

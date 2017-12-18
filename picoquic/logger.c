@@ -1065,13 +1065,13 @@ void picoquic_log_decrypt_encrypted(FILE* F,
     /* Check first whether this could be a reset packet */
     if (length > PICOQUIC_RESET_SECRET_SIZE + 10)
     {
-        cmp_reset_secret = memcmp(bytes + length - PICOQUIC_RESET_SECRET_SIZE,
-            cnx->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
+        cmp_reset_secret = (memcmp(bytes + length - PICOQUIC_RESET_SECRET_SIZE,
+            cnx->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0);
 
         if (cmp_reset_secret == 0)
         {
-            cmp_reset_secret = memcmp(bytes + 9, cnx->reset_secret, 
-                PICOQUIC_RESET_SECRET_SIZE);
+            cmp_reset_secret = (memcmp(bytes + 9, cnx->reset_secret,
+                PICOQUIC_RESET_SECRET_SIZE) == 0);
             cmp_reset_secret_old = cmp_reset_secret;
         }
     }

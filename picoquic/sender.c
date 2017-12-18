@@ -559,34 +559,43 @@ int picoquic_retransmit_needed(picoquic_cnx_t * cnx, uint64_t current_time,
 				*is_cleartext_mode = 1;
 			}
 
-            checksum_length = picoquic_get_checksum_length(cnx, *is_cleartext_mode);
+            if (ph.ptype == picoquic_packet_client_initial &&
+                cnx->cnx_state >= picoquic_state_client_handshake_start)
+            {
+                /* pretending this is a pure ACK to avoid undue retransmission */
+                packet_is_pure_ack = 1;
+            }
+            else
+            {
+                checksum_length = picoquic_get_checksum_length(cnx, *is_cleartext_mode);
 
-			/* Copy the relevant bytes from one packet to the next */
-			byte_index = ph.offset;
+                /* Copy the relevant bytes from one packet to the next */
+                byte_index = ph.offset;
 
-			while (ret == 0 && byte_index < p->length)
-			{
-				ret = picoquic_skip_frame(&p->bytes[byte_index],
-					p->length - byte_index, &frame_length, &frame_is_pure_ack,
-                    picoquic_supported_versions[cnx->version_index].version_flags);
+                while (ret == 0 && byte_index < p->length)
+                {
+                    ret = picoquic_skip_frame(&p->bytes[byte_index],
+                        p->length - byte_index, &frame_length, &frame_is_pure_ack,
+                        picoquic_supported_versions[cnx->version_index].version_flags);
 
-				if (!frame_is_pure_ack)
-				{
-                    if (picoquic_test_stream_frame_unlimited(cnx, &p->bytes[byte_index]) != 0)
+                    if (!frame_is_pure_ack)
                     {
-                        /* Need to PAD to the end of the frame to avoid sending extra bytes */
-                        while (checksum_length + length + frame_length < cnx->send_mtu)
+                        if (picoquic_test_stream_frame_unlimited(cnx, &p->bytes[byte_index]) != 0)
                         {
-                            bytes[length] = picoquic_frame_type_padding;
-                            length++;
+                            /* Need to PAD to the end of the frame to avoid sending extra bytes */
+                            while (checksum_length + length + frame_length < cnx->send_mtu)
+                            {
+                                bytes[length] = picoquic_frame_type_padding;
+                                length++;
+                            }
                         }
+                        memcpy(&bytes[length], &p->bytes[byte_index], frame_length);
+                        length += frame_length;
+                        packet_is_pure_ack = 0;
                     }
-					memcpy(&bytes[length], &p->bytes[byte_index], frame_length);
-					length += frame_length;
-					packet_is_pure_ack = 0;
-				}
-				byte_index += frame_length;
-			}
+                    byte_index += frame_length;
+                }
+            }
 
 			/* Update the number of bytes in transit and remove old packet from queue */
 			picoquic_dequeue_retransmit_packet(cnx, p, 1);
