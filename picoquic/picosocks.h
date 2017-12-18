@@ -76,6 +76,10 @@
 #ifndef __USE_GNU
 #define __USE_GNU
 #endif
+#ifndef __APPLE_USE_RFC_3542
+#define __APPLE_USE_RFC_3542 /* IPV6_PKTINFO */
+#endif
+
 #include <netdb.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
