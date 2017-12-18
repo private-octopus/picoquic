@@ -117,6 +117,7 @@ void picoquic_log_packet(FILE* F, picoquic_quic_t * quic, picoquic_cnx_t * cnx,
 	uint8_t * bytes, size_t length, uint64_t current_time);
 void picoquic_log_processing(FILE* F, picoquic_cnx_t * cnx, size_t length, int ret);
 void picoquic_log_transport_extension(FILE* F, picoquic_cnx_t * cnx);
+void picoquic_log_congestion_state(FILE* F, picoquic_cnx_t * cnx, uint64_t current_time);
 
 void print_address(struct sockaddr * address, char * label, uint64_t cnx_id)
 {
@@ -423,19 +424,33 @@ int quic_server(const char * server_name, int server_port,
     while (ret == 0 && (just_once == 0 || cnx_server == NULL ||
         picoquic_get_cnx_state(cnx_server) != picoquic_state_disconnected))
     {
+        int64_t delta_t = picoquic_get_next_wake_delay(qserver, current_time, delay_max);
+        uint64_t time_before = current_time;
+
         from_length = to_length = sizeof(struct sockaddr_storage);
         if_index_to = 0;
+
+        if (delta_t <= 0)
+        {
+            delta_t = 1;
+        }
 
         bytes_recv = picoquic_select(server_sockets.s_socket, PICOQUIC_NB_SERVER_SOCKETS,
             &addr_from, &from_length,
             &addr_to, &to_length, &if_index_to,
             buffer, sizeof(buffer),
-            picoquic_get_next_wake_delay(qserver, current_time, delay_max), &current_time);
+            delta_t, &current_time);
 
         if (bytes_recv != 0)
         {
-            printf("Select returns %d, from length %d\n", bytes_recv, from_length);
+            printf("Select returns %d, from length %d after %d us (wait for %d us)\n", 
+                bytes_recv, from_length, (int)(current_time - time_before), (int)delta_t);
             print_address((struct sockaddr *)&addr_from, "recv from:", 0);
+        }
+        else
+        {
+            printf("Select return %d, after %d us (wait for %d us)\n", bytes_recv,
+                (int)(current_time - time_before), (int) delta_t);
         }
 
         if (bytes_recv < 0)
@@ -497,6 +512,7 @@ int quic_server(const char * server_name, int server_port,
                 }
 
                 cnx_next = picoquic_get_first_cnx(qserver);
+
                 while (ret == 0 && cnx_next != NULL)
                 {
                     p = picoquic_create_packet();

@@ -104,7 +104,7 @@ void picoquic_log_error_packet(FILE * F, uint8_t * bytes, size_t bytes_max, int 
 	fprintf(F, "\n");
 }
 
-static void picoquic_log_time(FILE* F, picoquic_cnx_t * cnx, uint64_t current_time, 
+void picoquic_log_time(FILE* F, picoquic_cnx_t * cnx, uint64_t current_time, 
     const char * label1, const char * label2)
 {
     uint64_t delta_t = (cnx == NULL)? current_time: current_time - cnx->start_time;
