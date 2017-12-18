@@ -1059,28 +1059,53 @@ void picoquic_log_decrypt_encrypted(FILE* F,
 	/* decrypt in a separate copy */
 	uint8_t decrypted[PICOQUIC_MAX_PACKET_SIZE];
     size_t decrypted_length = 0;
-    
-    if (receiving)
+    int cmp_reset_secret = 0;  
+    int cmp_reset_secret_old = 0;
+
+    /* Check first whether this could be a reset packet */
+    if (length > PICOQUIC_RESET_SECRET_SIZE + 10)
     {
-        decrypted_length = picoquic_aead_decrypt(cnx, decrypted,
-            bytes + ph->offset, length - ph->offset, ph->pn64, bytes, ph->offset);
+        cmp_reset_secret = memcmp(bytes + length - PICOQUIC_RESET_SECRET_SIZE,
+            cnx->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
+
+        if (cmp_reset_secret == 0)
+        {
+            cmp_reset_secret = memcmp(bytes + 9, cnx->reset_secret, 
+                PICOQUIC_RESET_SECRET_SIZE);
+            cmp_reset_secret_old = cmp_reset_secret;
+        }
+    }
+
+    if (cmp_reset_secret != 0)
+    {
+        fprintf(F, "    Stateless reset packet%s, %d bytes\n", 
+            (cmp_reset_secret_old == 0)?"":" (old format)",
+            (int)length);
     }
     else
     {
-        decrypted_length = picoquic_aead_de_encrypt(cnx, decrypted,
-            bytes + ph->offset, length - ph->offset, ph->pn64, bytes, ph->offset);
-    }
+        if (receiving)
+        {
+            decrypted_length = picoquic_aead_decrypt(cnx, decrypted,
+                bytes + ph->offset, length - ph->offset, ph->pn64, bytes, ph->offset);
+        }
+        else
+        {
+            decrypted_length = picoquic_aead_de_encrypt(cnx, decrypted,
+                bytes + ph->offset, length - ph->offset, ph->pn64, bytes, ph->offset);
+        }
 
-	if (decrypted_length > length)
-	{
-		fprintf(F, "    Decryption failed!\n");
-	}
-	else
-	{
-		fprintf(F, "    Decrypted %d bytes\n", (int) decrypted_length);
-		picoquic_log_frames(F, decrypted, decrypted_length,
-            picoquic_supported_versions[cnx->version_index].version_flags);
-	}
+        if (decrypted_length > length)
+        {
+            fprintf(F, "    Decryption failed!\n");
+        }
+        else
+        {
+            fprintf(F, "    Decrypted %d bytes\n", (int)decrypted_length);
+            picoquic_log_frames(F, decrypted, decrypted_length,
+                picoquic_supported_versions[cnx->version_index].version_flags);
+        }
+    }
 }
 
 void picoquic_log_decrypt_encrypted_cleartext(FILE* F,
