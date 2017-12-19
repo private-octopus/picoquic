@@ -1058,7 +1058,7 @@ int picoquic_incoming_encrypted(
                 {
                     if (closing_received)
                     {
-                        if (cnx->quic->flags&picoquic_context_server == 0)
+                        if ((cnx->quic->flags&picoquic_context_server) == 0)
                         {
                             cnx->cnx_state = picoquic_state_disconnected;
                         }

@@ -553,7 +553,7 @@ int quic_server(const char * server_name, int server_port,
                                 picoquic_get_peer_addr(cnx_next, &peer_addr, &peer_addr_len);
                                 picoquic_get_local_addr(cnx_next, &local_addr, &local_addr_len);
 
-                                int sent = picoquic_send_through_server_sockets(&server_sockets,
+                                (void) picoquic_send_through_server_sockets(&server_sockets,
                                     peer_addr, peer_addr_len, local_addr, local_addr_len,
                                     picoquic_get_local_if_index(cnx_next),
                                     (const char *)send_buffer, (int)send_length);
