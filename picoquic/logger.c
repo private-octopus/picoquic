@@ -22,6 +22,7 @@
 /*
 * Packet logging.
 */
+#include <string.h>
 #include <stdio.h>
 #include "picoquic_internal.h"
 #include "fnv1a.h"
