@@ -429,11 +429,6 @@ int quic_server(const char * server_name, int server_port,
         from_length = to_length = sizeof(struct sockaddr_storage);
         if_index_to = 0;
 
-        if (delta_t <= 0)
-        {
-            delta_t = 1;
-        }
-
         if (just_once != 0 && delta_t > 10000 && cnx_server != NULL)
         {
             picoquic_log_congestion_state(stdout, cnx_server, current_time);
@@ -445,16 +440,19 @@ int quic_server(const char * server_name, int server_port,
             buffer, sizeof(buffer),
             delta_t, &current_time);
 
-        if (bytes_recv != 0)
+        if (just_once != 0)
         {
-            printf("Select returns %d, from length %d after %d us (wait for %d us)\n", 
-                bytes_recv, from_length, (int)(current_time - time_before), (int)delta_t);
-            print_address((struct sockaddr *)&addr_from, "recv from:", 0);
-        }
-        else if (just_once != 0)
-        {
-            printf("Select return %d, after %d us (wait for %d us)\n", bytes_recv,
-                (int)(current_time - time_before), (int) delta_t);
+            if (bytes_recv != 0)
+            {
+                printf("Select returns %d, from length %d after %d us (wait for %d us)\n",
+                    bytes_recv, from_length, (int)(current_time - time_before), (int)delta_t);
+                print_address((struct sockaddr *)&addr_from, "recv from:", 0);
+            }
+            else
+            {
+                printf("Select return %d, after %d us (wait for %d us)\n", bytes_recv,
+                    (int)(current_time - time_before), (int)delta_t);
+            }
         }
 
         if (bytes_recv < 0)
@@ -481,7 +479,6 @@ int quic_server(const char * server_name, int server_port,
                 {
                     ret = 0;
                 }
-
 
                 if (cnx_server != picoquic_get_first_cnx(qserver) &&
                     picoquic_get_first_cnx(qserver) != NULL)
@@ -546,9 +543,12 @@ int quic_server(const char * server_name, int server_port,
 
                             if (p->length > 0)
                             {
+                                if (just_once != 0)
+                                {
                                 printf("%" PRIx64 ": ", picoquic_get_initial_cnxid(cnx_next));
                                 printf("Connection state = %d\n",
                                     picoquic_get_cnx_state(cnx_next));
+                                }
 
                                 picoquic_get_peer_addr(cnx_next, &peer_addr, &peer_addr_len);
                                 picoquic_get_local_addr(cnx_next, &local_addr, &local_addr_len);
@@ -563,10 +563,6 @@ int quic_server(const char * server_name, int server_port,
                                     picoquic_log_packet(stdout, qserver, cnx_server, (struct sockaddr *) peer_addr,
                                         0, send_buffer, send_length, current_time);
                                 }
-                                printf("%" PRIx64 ": ", picoquic_get_initial_cnxid(cnx_next));
-                                printf("Sending packet, %d bytes (sent: %d)\n",
-                                    (int)send_length, sent);
-
                             }
                             else
                             {

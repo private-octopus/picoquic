@@ -1058,7 +1058,14 @@ int picoquic_incoming_encrypted(
                 {
                     if (closing_received)
                     {
-                        cnx->cnx_state = picoquic_state_draining;
+                        if (cnx->quic->flags&picoquic_context_server == 0)
+                        {
+                            cnx->cnx_state = picoquic_state_disconnected;
+                        }
+                        else
+                        {
+                            cnx->cnx_state = picoquic_state_draining;
+                        }
                     }
                     else
                     {

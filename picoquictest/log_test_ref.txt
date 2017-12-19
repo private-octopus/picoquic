@@ -7,6 +7,7 @@
     MAX STREAM ID: 256.
     PING frame, length = 0.
     PING length 8: 0102030405060708
+    BLOCKED: offset 65536.
     STREAM BLOCKED: 65536.
     STREAM_ID_NEEDED frame
     NEW CONNECTION ID: 0x0102030405060708, a0a1a2a3a4a5a6a7a8a9aaabacadaeaf
