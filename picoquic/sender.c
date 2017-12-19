@@ -741,6 +741,10 @@ void picoquic_cnx_set_next_wake_time(picoquic_cnx_t * cnx, uint64_t current_time
     {
         blocked = 0;
     }
+    else if (picoquic_should_send_max_data(cnx))
+    {
+        blocked = 0;
+    }
     else if (cnx->cwin > cnx->bytes_in_transit)
     {
         if (picoquic_should_send_max_data(cnx))

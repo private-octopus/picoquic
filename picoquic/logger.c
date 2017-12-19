@@ -663,13 +663,12 @@ size_t picoquic_log_max_data_frame(FILE * F, uint8_t * bytes, size_t bytes_max, 
 {
 	size_t byte_index = 1;
 	uint64_t max_data;
-    const size_t min_size = 1 + 8;
 
     if ((version_flags&picoquic_version_fix_ints) == 0)
     {
         size_t l1 = picoquic_varint_decode(bytes + 1, bytes_max - 1, &max_data);
 
-        if (min_size > bytes_max)
+        if (1+ l1 > bytes_max)
         {
             fprintf(F, "    Malformed MAX DATA, requires %d bytes out of %d\n", (int)(1+l1), (int)bytes_max);
             return bytes_max;
@@ -681,6 +680,8 @@ size_t picoquic_log_max_data_frame(FILE * F, uint8_t * bytes, size_t bytes_max, 
     }
     else
     {
+        const size_t min_size = 1 + 8;
+
         if (min_size > bytes_max)
         {
             fprintf(F, "    Malformed MAX DATA, requires %d bytes out of %d\n", (int)min_size, (int)bytes_max);
@@ -769,6 +770,37 @@ size_t picoquic_log_max_stream_id_frame(FILE * F, uint8_t * bytes, size_t bytes_
 	fprintf(F, "    MAX STREAM ID: %" PRIu64 ".\n", max_stream_id);
 
 	return byte_index;
+}
+
+size_t picoquic_log_blocked_frame(FILE * F, uint8_t * bytes, size_t bytes_max, uint32_t version_flags)
+{
+    size_t byte_index = 1;
+    const size_t min_size = ((version_flags&picoquic_version_fix_ints) == 0) ?
+        1 + picoquic_varint_skip(bytes + 1) :
+        1;
+    uint64_t blocked_offset = 0;
+
+    if (min_size > bytes_max)
+    {
+        fprintf(F, "    Malformed BLOCKED, requires %d bytes out of %d\n", (int)min_size, (int)bytes_max);
+        return bytes_max;
+    }
+
+    /* Now that the size is good, parse and print it */
+    if ((version_flags&picoquic_version_fix_ints) == 0)
+    {
+        byte_index += picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &blocked_offset);
+        byte_index += picoquic_varint_skip(&bytes[byte_index]);
+    }
+    else
+    {
+        blocked_offset = 0;
+    }
+
+    fprintf(F, "    BLOCKED: offset %" PRIu64 ".\n",
+        blocked_offset);
+
+    return byte_index;
 }
 
 size_t picoquic_log_stream_blocked_frame(FILE * F, uint8_t * bytes, size_t bytes_max, uint32_t version_flags)
@@ -992,11 +1024,8 @@ void picoquic_log_frames(FILE* F, uint8_t * bytes, size_t length, uint32_t versi
                     break;
                 case picoquic_frame_type_blocked: /* BLOCKED */
                     /* No payload */
-                    byte_index++;
-                    if ((version_flags&picoquic_version_fix_ints) == 0)
-                    {
-                        byte_index += picoquic_varint_skip(&bytes[byte_index]);
-                    }
+                    byte_index += picoquic_log_blocked_frame(F, bytes + byte_index,
+                        length - byte_index, version_flags);
                     break;
                 case picoquic_frame_type_stream_blocked: /* STREAM_BLOCKED */
                     byte_index += picoquic_log_stream_blocked_frame(F, bytes + byte_index,
