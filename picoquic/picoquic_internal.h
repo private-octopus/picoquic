@@ -458,6 +458,12 @@ extern "C" {
 	picoquic_cnx_t * picoquic_cnx_by_id(picoquic_quic_t * quic, uint64_t cnx_id);
 	picoquic_cnx_t * picoquic_cnx_by_net(picoquic_quic_t * quic, struct sockaddr* addr);
 
+    /*
+     * Reset the pacing data after CWIN is updated
+     */
+
+    void picoquic_update_pacing_data(picoquic_cnx_t * cnx);
+
     /* Next time is used to order the list of available connections,
      * so ready connections are polled first */
     void picoquic_reinsert_by_wake_time(picoquic_quic_t * quic, picoquic_cnx_t * cnx);
