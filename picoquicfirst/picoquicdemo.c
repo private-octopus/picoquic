@@ -531,6 +531,12 @@ int quic_server(const char * server_name, int server_port,
                         {
                             ret = 0;
                             free(p);
+
+                            printf("%" PRIx64 ": ", picoquic_get_initial_cnxid(cnx_next));
+                            printf("retrans= %d, spurious= %d, max sp gap = %d, max sp delay = %d\n",
+                                (int)cnx_next->nb_retransmission_total, (int)cnx_next->nb_spurious,
+                                (int)cnx_next->max_reorder_gap, (int)cnx_next->max_spurious_rtt);
+
                             picoquic_delete_cnx(cnx_next);
                             break;
                         }

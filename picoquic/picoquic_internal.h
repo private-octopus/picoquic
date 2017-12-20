@@ -390,6 +390,9 @@ extern "C" {
 		/* Retransmission state */
 		uint64_t nb_retransmit;
         uint64_t nb_spurious;
+        uint64_t max_spurious_rtt;
+        uint64_t max_reorder_delay;
+        uint64_t max_reorder_gap;
 		uint64_t latest_retransmit_time;
 		uint64_t highest_acknowledged; 
 		uint64_t latest_time_acknowledged; /* time at which the highest acknowledged was sent */

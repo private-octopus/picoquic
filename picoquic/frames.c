@@ -1549,7 +1549,8 @@ int picoquic_parse_ack_header(uint8_t const * bytes, size_t bytes_max,
 	return ret;
 }
 
-void picoquic_check_spurious_retransmission(picoquic_cnx_t * cnx, uint64_t start_of_range, uint64_t end_of_range)
+void picoquic_check_spurious_retransmission(picoquic_cnx_t * cnx, 
+    uint64_t start_of_range, uint64_t end_of_range, uint64_t current_time)
 {
     picoquic_packet * p = cnx->retransmitted_newest;
 
@@ -1558,7 +1559,27 @@ void picoquic_check_spurious_retransmission(picoquic_cnx_t * cnx, uint64_t start
         picoquic_packet * should_delete = NULL;
 
         if (p->sequence_number >= start_of_range && p->sequence_number <= end_of_range)
-        { 
+        {
+
+            uint64_t max_spurious_rtt = current_time - p->send_time;
+            uint64_t max_reorder_delay = cnx->latest_time_acknowledged - p->send_time;
+            uint64_t max_reorder_gap = cnx->highest_acknowledged - p->sequence_number;
+
+            if (max_spurious_rtt > cnx->max_spurious_rtt)
+            {
+                cnx->max_spurious_rtt = max_spurious_rtt;
+            }
+
+            if (max_reorder_delay > cnx->max_reorder_delay)
+            {
+                cnx->max_reorder_delay = max_reorder_delay;
+            }
+
+            if (max_reorder_gap > cnx->max_reorder_gap)
+            {
+                cnx->max_reorder_gap = max_reorder_gap;
+            }
+
             cnx->nb_spurious++;
             should_delete = p;
         }
@@ -2134,7 +2155,7 @@ int picoquic_decode_ack_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
 
             if (range > 0)
             {
-                picoquic_check_spurious_retransmission(cnx, largest + 1 - range, largest);
+                picoquic_check_spurious_retransmission(cnx, largest + 1 - range, largest, current_time);
             }
 
 			if (num_block-- == 0)
