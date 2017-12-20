@@ -949,10 +949,28 @@ void picoquic_dequeue_retransmit_packet(picoquic_cnx_t * cnx, picoquic_packet * 
 			cnx->bytes_in_transit = 0;
 		}
 	}
-	if (should_free)
-	{
-		free(p);
-	}
+
+    if (should_free)
+    {
+        free(p);
+    }
+    else
+    {
+        p->next_packet = NULL;
+
+        /* add this packet to the retransmitted list */
+        if (cnx->retransmitted_oldest == NULL)
+        {
+            cnx->retransmitted_newest = p;
+            p->previous_packet = NULL;
+        }
+        else
+        {
+            cnx->retransmitted_oldest->next_packet = p;
+            p->previous_packet = cnx->retransmitted_oldest;
+            cnx->retransmitted_oldest = p;
+        }
+    }
 }
 
 /*
@@ -1181,6 +1199,14 @@ void picoquic_delete_cnx(picoquic_cnx_t * cnx)
 		{
 			picoquic_dequeue_retransmit_packet(cnx, cnx->retransmit_newest, 1);
 		}
+
+        while (cnx->retransmitted_newest != NULL)
+        {
+            picoquic_packet * p = cnx->retransmitted_newest;
+            cnx->retransmitted_newest = p->next_packet;
+            free(p);
+        }
+        cnx->retransmitted_oldest = NULL;
 
         while ((misc_frame = cnx->first_misc_frame) != NULL)
         {

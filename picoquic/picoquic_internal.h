@@ -42,6 +42,8 @@ extern "C" {
 #define PICOQUIC_MIN_RETRANSMIT_TIMER 50000 /* 50 ms */
 #define PICOQUIC_ACK_DELAY_MAX 20000 /* 20 ms */
 
+#define PICOQUIC_SPURIOUS_RETRANSMIT_DELAY_MAX 1000000 /* one second */
+
 #define PICOQUIC_MICROSEC_SILENCE_MAX 120000000 /* 120 seconds for now */
 #define PICOQUIC_MICROSEC_WAIT_MAX 10000000 /* 10 seconds for now */
 
@@ -387,11 +389,15 @@ extern "C" {
 
 		/* Retransmission state */
 		uint64_t nb_retransmit;
+        uint64_t nb_spurious;
 		uint64_t latest_retransmit_time;
 		uint64_t highest_acknowledged; 
 		uint64_t latest_time_acknowledged; /* time at which the highest acknowledged was sent */
 		picoquic_packet * retransmit_newest;
 		picoquic_packet * retransmit_oldest;
+        picoquic_packet * retransmitted_newest;
+        picoquic_packet * retransmitted_oldest;
+
 
 		/* Congestion control state */
 		uint64_t cwin;

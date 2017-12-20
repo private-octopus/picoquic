@@ -598,7 +598,9 @@ int picoquic_retransmit_needed(picoquic_cnx_t * cnx, uint64_t current_time,
             }
 
 			/* Update the number of bytes in transit and remove old packet from queue */
-			picoquic_dequeue_retransmit_packet(cnx, p, 1);
+            /* If not pure ack, the packet will be placed in the "retransmitted" queue,
+             * in order to enable detection of spurious restransmissions */
+			picoquic_dequeue_retransmit_packet(cnx, p, packet_is_pure_ack == 0);
 
 			/* If we have a good packet, return it */
 			if (packet_is_pure_ack)

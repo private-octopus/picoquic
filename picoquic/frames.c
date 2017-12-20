@@ -1549,6 +1549,51 @@ int picoquic_parse_ack_header(uint8_t const * bytes, size_t bytes_max,
 	return ret;
 }
 
+void picoquic_check_spurious_retransmission(picoquic_cnx_t * cnx, uint64_t start_of_range, uint64_t end_of_range)
+{
+    picoquic_packet * p = cnx->retransmitted_newest;
+
+    while (p != NULL)
+    {
+        picoquic_packet * should_delete = NULL;
+
+        if (p->sequence_number >= start_of_range && p->sequence_number <= end_of_range)
+        { 
+            cnx->nb_spurious++;
+            should_delete = p;
+        }
+        else if (p->send_time + PICOQUIC_SPURIOUS_RETRANSMIT_DELAY_MAX < cnx->latest_time_acknowledged)
+        {
+            should_delete = p;
+        }
+        
+        p = p->next_packet;
+
+        if (should_delete != NULL)
+        {
+            if (should_delete->previous_packet == NULL)
+            {
+                cnx->retransmitted_newest = should_delete->next_packet;
+            }
+            else
+            {
+                should_delete->previous_packet->next_packet = should_delete->next_packet;
+            }
+
+            if (should_delete->next_packet == NULL)
+            {
+                cnx->retransmitted_oldest = should_delete->previous_packet;
+            }
+            else
+            {
+                should_delete->next_packet->previous_packet = should_delete->previous_packet;
+            }
+
+            free(should_delete);
+        }
+    }
+}
+
 static picoquic_packet * picoquic_update_rtt(picoquic_cnx_t * cnx, uint64_t largest,
 	uint64_t current_time, uint64_t ack_delay)
 {
@@ -1571,11 +1616,9 @@ static picoquic_packet * picoquic_update_rtt(picoquic_cnx_t * cnx, uint64_t larg
 
 			if (packet == NULL || packet->sequence_number < largest)
 			{
-				/* There is no copy of this packet in store.
-				 * This can only come from some kind of fake acknowledgement,
-				 * hitting a deliberate hole */
-
-				/* TODO: treat as protocol error */
+				/* There is no copy of this packet in store. It may have
+                 * been deleted because too old, or maybe already
+                 * retransmitted */
 			}
 			else
 			{
@@ -2088,6 +2131,11 @@ int picoquic_decode_ack_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
 			}
 
 			top_packet = picoquic_process_ack_range(cnx, largest, range, top_packet, current_time);
+
+            if (range > 0)
+            {
+                picoquic_check_spurious_retransmission(cnx, largest + 1 - range, largest);
+            }
 
 			if (num_block-- == 0)
 				break;
