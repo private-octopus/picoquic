@@ -388,6 +388,7 @@ extern "C" {
         uint64_t ack_delay_local;
 
 		/* Retransmission state */
+        uint64_t nb_retransmission_total;
 		uint64_t nb_retransmit;
         uint64_t nb_spurious;
         uint64_t max_spurious_rtt;
@@ -401,13 +402,17 @@ extern "C" {
         picoquic_packet * retransmitted_newest;
         picoquic_packet * retransmitted_oldest;
 
-
 		/* Congestion control state */
 		uint64_t cwin;
 		uint64_t bytes_in_transit;
-        uint64_t nb_retransmission_total;
 		void * congestion_alg_state;
 		picoquic_congestion_algorithm_t const * congestion_alg;
+
+        /* Pacing */
+        uint64_t packet_time_nano_sec;
+        uint64_t pacing_reminder_nano_sec;
+        uint64_t pacing_margin_micros;
+        uint64_t next_pacing_time;
 
 		/* Flow control information */
 		uint64_t data_sent;

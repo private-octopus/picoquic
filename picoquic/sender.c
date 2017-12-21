@@ -432,6 +432,44 @@ size_t picoquic_get_checksum_length(picoquic_cnx_t * cnx, int is_cleartext_mode)
 }
 
 /*
+ * Reset the pacing data after CWIN is updated
+ */
+
+void picoquic_update_pacing_data(picoquic_cnx_t * cnx)
+{
+    cnx->packet_time_nano_sec = cnx->smoothed_rtt * 1000ull *cnx->send_mtu;
+    cnx->packet_time_nano_sec /= cnx->cwin;
+
+    cnx->pacing_margin_micros = 16 * cnx->packet_time_nano_sec;
+    if (cnx->pacing_margin_micros > (cnx->rtt_min / 4))
+    {
+        cnx->pacing_margin_micros = (cnx->rtt_min / 4);
+    }
+    if (cnx->pacing_margin_micros < 1000)
+    {
+        cnx->pacing_margin_micros = 1000;
+    }
+}
+
+/* 
+ * Update the pacing data after sending a packet
+ */
+void picoquic_update_pacing_after_send(picoquic_cnx_t * cnx, uint64_t current_time)
+{
+    if (cnx->next_pacing_time < current_time)
+    {
+        cnx->next_pacing_time = current_time;
+        cnx->pacing_reminder_nano_sec = 0;
+    }
+    else
+    {
+        cnx->pacing_reminder_nano_sec += cnx->packet_time_nano_sec;
+        cnx->next_pacing_time += (cnx->pacing_reminder_nano_sec >> 10);
+        cnx->pacing_reminder_nano_sec &= 0x3FF;
+    }
+}
+
+/*
  * If a retransmit is needed, fill the packet with the required
  * retransmission. Also, prune the retransmit queue as needed.
  */
@@ -729,6 +767,7 @@ void picoquic_cnx_set_next_wake_time(picoquic_cnx_t * cnx, uint64_t current_time
     picoquic_stream_head * stream = NULL;
     int timer_based = 0;
     int blocked = 1;
+    int pacing = 0;
 
     if (cnx->cnx_state == picoquic_state_disconnecting ||
         cnx->cnx_state == picoquic_state_handshake_failure)
@@ -743,25 +782,20 @@ void picoquic_cnx_set_next_wake_time(picoquic_cnx_t * cnx, uint64_t current_time
     {
         blocked = 0;
     }
-    else if (picoquic_should_send_max_data(cnx))
-    {
-        blocked = 0;
-    }
     else if (cnx->cwin > cnx->bytes_in_transit)
     {
-        if (picoquic_should_send_max_data(cnx))
+        if (picoquic_should_send_max_data(cnx) ||
+            (stream = picoquic_find_ready_stream(cnx,
+            (cnx->cnx_state == picoquic_state_client_ready ||
+                cnx->cnx_state == picoquic_state_server_ready) ? 0 : 1)) != NULL)
         {
-            blocked = 0;
-        }
-        else
-        {
-            int restricted = (cnx->cnx_state == picoquic_state_client_ready ||
-                cnx->cnx_state == picoquic_state_server_ready) ? 0 : 1;
-            stream = picoquic_find_ready_stream(cnx, restricted);
-
-            if (stream != NULL)
+            if (cnx->next_pacing_time < current_time + cnx->pacing_margin_micros)
             {
                 blocked = 0;
+            }
+            else
+            {
+                pacing = 1;
             }
         }
     }
@@ -769,6 +803,10 @@ void picoquic_cnx_set_next_wake_time(picoquic_cnx_t * cnx, uint64_t current_time
     if (blocked == 0)
     {
         next_time = current_time;
+    }
+    else if (pacing != 0)
+    {
+        next_time = cnx->next_pacing_time;
     }
     else
     {
@@ -1641,6 +1679,9 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t * cnx, picoquic_packet * packet
             packet->next_packet->previous_packet = packet;
         }
         cnx->retransmit_newest = packet;
+
+        /* Update the pacing data */
+        picoquic_update_pacing_after_send(cnx, current_time);
     }
     else
     {

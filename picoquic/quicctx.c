@@ -689,6 +689,11 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
 			{
 				cnx->congestion_alg->alg_init(cnx);
 			}
+            /* Pacing state */
+            cnx->packet_time_nano_sec = 0;
+            cnx->pacing_reminder_nano_sec = 0;
+            cnx->pacing_margin_micros = 1000;
+            cnx->next_pacing_time = start_time;
 		}
     }
 

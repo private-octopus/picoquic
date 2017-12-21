@@ -183,6 +183,9 @@ void picoquic_newreno_notify(picoquic_cnx_t * cnx,
 		default:
 			break;
 		}
+
+        /* Compute pacing data */
+        picoquic_update_pacing_data(cnx);
 	}
 }
 
