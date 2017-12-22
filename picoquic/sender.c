@@ -635,7 +635,8 @@ int picoquic_retransmit_needed(picoquic_cnx_t * cnx, uint64_t current_time,
                 *header_length = length;
 
                 if (ph.ptype == picoquic_packet_1rtt_protected_phi0 ||
-                    ph.ptype == picoquic_packet_1rtt_protected_phi1)
+                    ph.ptype == picoquic_packet_1rtt_protected_phi1 ||
+                    ph.ptype == picoquic_packet_0rtt_protected)
                 {
                     *is_cleartext_mode = 0;
                 }
@@ -2280,6 +2281,9 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
             break;
         case picoquic_state_disconnected:
             ret = PICOQUIC_ERROR_DISCONNECTED;
+            break;
+        case picoquic_state_client_hrr_received:
+        case picoquic_state_server_send_hrr:
             break;
         default:
             DBG_PRINTF("Unexpected connection state: %d\n", cnx->cnx_state);

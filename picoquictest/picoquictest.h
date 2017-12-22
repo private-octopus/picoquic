@@ -73,6 +73,7 @@ extern "C" {
     int socket_test();
     int ticket_store_test();
     int session_resume_test();
+    int zero_rtt_test();
 
 #ifdef  __cplusplus
 }

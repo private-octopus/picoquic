@@ -1792,3 +1792,115 @@ int session_resume_test()
 
     return ret;
 }
+
+/*
+ * Zero RTT test. Like the session resume test, but with a twist...
+ */
+int zero_rtt_test()
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t * test_ctx = NULL;
+    char const * sni = "test-sni";
+    char const * alpn = "test-alpn";
+    uint64_t loss_mask = 0;
+    int ret = 0;
+
+    /* Initialize an empty ticket store */
+    ret = picoquic_save_tickets(NULL, simulated_time, ticket_file_name);
+
+    for (int i = 0; i < 2; i++)
+    {
+        /* Set up the context, while setting the ticket store parameter for the client */
+        if (ret == 0)
+        {
+            ret = tls_api_init_ctx(&test_ctx, 0, sni, alpn, &simulated_time, ticket_file_name);
+        }
+
+        if (ret == 0 && i == 1)
+        {
+            /* set the link delays to 100 ms, for realistic testing */
+            if (ret == 0)
+            {
+                test_ctx->c_to_s_link->microsec_latency = 100000;
+                test_ctx->s_to_c_link->microsec_latency = 100000;
+            }
+
+            /* Queue an initial frame on the client connection */
+            uint8_t ping_frame[2] = { picoquic_frame_type_ping, 0 };
+
+            picoquic_queue_misc_frame(test_ctx->cnx_client, ping_frame, 2);
+        }
+
+        if (ret == 0)
+        {
+            ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+        }
+
+        if (ret == 0 && i == 1)
+        {
+            /* If resume succeeded, the second connection will have a type "PSK" */
+            if (picoquic_tls_is_psk_handshake(test_ctx->cnx_server) == 0 ||
+                picoquic_tls_is_psk_handshake(test_ctx->cnx_client) == 0)
+            {
+                ret = -1;
+            }
+            else
+            {
+                /* run a receive loop until no outstanding data */ 
+                for (int i = 0; ret == 0 && i < 32 && 
+                    test_ctx->cnx_client->cnx_state != picoquic_state_disconnected; i++)
+                {
+                    int was_active = 0;
+
+                    ret = tls_api_one_sim_round(test_ctx, &simulated_time, &was_active);
+
+                    if (picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) &&
+                        picoquic_is_cnx_backlog_empty(test_ctx->cnx_server))
+                    {
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (ret == 0)
+        {
+            ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
+        }
+
+        /* Verify that the 0RTT data was sent and acknowledged */
+        if (ret == 0 && i == 1)
+        {
+            if (test_ctx->cnx_client->nb_zero_rtt_sent == 0)
+            {
+                ret = -1;
+            }
+            else if (test_ctx->cnx_client->nb_zero_rtt_acked != test_ctx->cnx_client->nb_zero_rtt_sent)
+            {
+                ret = -1;
+            }
+        }
+
+        /* Verify that the session ticket has been received correctly */
+        if (ret == 0)
+        {
+            if (test_ctx->qclient->p_first_ticket == NULL)
+            {
+                ret = -1;
+            }
+            else
+            {
+                ret = picoquic_save_tickets(test_ctx->qclient->p_first_ticket, simulated_time, ticket_file_name);
+            }
+        }
+
+        /* Tear down and free everything */
+        if (test_ctx != NULL)
+        {
+            tls_api_delete_ctx(test_ctx);
+            test_ctx = NULL;
+        }
+    }
+
+    return ret;
+}

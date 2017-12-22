@@ -1034,8 +1034,8 @@ int picoquic_incoming_0rtt(
             /* Accept the incoming frames */
             ret = picoquic_decode_frames(cnx,
                 bytes + ph->offset, decoded_length, 0, current_time);
-            /* Yell if there is data coming on stream zero */
 
+            /* Yell if there is data coming on stream zero */
             if (ret == 0)
             {
                 picoquic_stream_data * data = cnx->first_stream.stream_data;

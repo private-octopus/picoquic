@@ -635,6 +635,8 @@ static const demo_stream_desc_t test_scenario_old[] = {
 static const size_t test_scenario_nb = sizeof(test_scenario) / sizeof(demo_stream_desc_t);
 static const size_t test_scenario_old_nb = sizeof(test_scenario_old) / sizeof(demo_stream_desc_t);
 
+static const uint8_t test_ping[2] = { picoquic_frame_type_ping, 0 };
+
 typedef struct st_picoquic_first_client_stream_ctx_t {
     struct st_picoquic_first_client_stream_ctx_t * next_stream;
     uint32_t stream_id;
@@ -980,8 +982,12 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
 					picoquic_log_packet(F_log, qclient, cnx_client, (struct sockaddr *) &server_address,
 						0, send_buffer, bytes_sent, current_time);
 
+                    /* Queue a simple frame to perform 0-RTT test */
+                    picoquic_queue_misc_frame(cnx_client, test_ping, sizeof(test_ping));
+#if 0
                     /* Start the scenario */
                     quic_client_launch_scenario(cnx_client, &callback_ctx);
+#endif
 				}
 				else
 				{
@@ -1044,6 +1050,10 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
                         fprintf(stdout, "The session was properly resumed!\n");
                     }
                     fprintf(stdout, "Almost ready!\n\n");
+#if 1
+                    /* Start the scenario */
+                    quic_client_launch_scenario(cnx_client, &callback_ctx);
+#endif
                 }
 
                 if (ret != 0)
