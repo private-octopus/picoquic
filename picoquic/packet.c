@@ -195,7 +195,8 @@ int picoquic_parse_packet_header(
                     /* TODO: something for the case of client initial, e.g. source IP + initial CNX_ID */
                     if (*pcnx == NULL && (
                         ph->ptype == picoquic_packet_server_cleartext ||
-                        ph->ptype == picoquic_packet_server_stateless))
+                        ph->ptype == picoquic_packet_server_stateless ||
+                        ph->ptype == picoquic_packet_0rtt_protected))
                     {
                         *pcnx = picoquic_cnx_by_net(quic, addr_from);
                     }
@@ -995,6 +996,67 @@ int picoquic_incoming_stateless_reset(
 }
 
 /*
+ * Processing of 0-RTT packet 
+ */
+
+int picoquic_incoming_0rtt(
+    picoquic_cnx_t * cnx,
+    uint8_t * bytes,
+    uint32_t length,
+    picoquic_packet_header * ph,
+    uint64_t current_time)
+{
+    int ret = 0;
+    size_t decoded_length = 0;
+
+
+    if (ph->cnx_id != cnx->initial_cnxid)
+    {
+        ret = PICOQUIC_ERROR_CNXID_CHECK;
+    }
+    else if (cnx->cnx_state == picoquic_state_server_almost_ready ||
+            cnx->cnx_state == picoquic_state_server_ready)
+    {
+        /* AEAD Decrypt, in place */
+        decoded_length = picoquic_aead_0rtt_decrypt(cnx, bytes + ph->offset,
+            bytes + ph->offset, length - ph->offset, ph->pn64, bytes, ph->offset);
+
+        if (decoded_length > (length - ph->offset))
+        {
+            ret = PICOQUIC_ERROR_AEAD_CHECK;
+        }
+        else if (ph->vn != picoquic_supported_versions[cnx->version_index].version)
+        {
+            ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION);
+        }
+        else
+        {
+            /* Accept the incoming frames */
+            ret = picoquic_decode_frames(cnx,
+                bytes + ph->offset, decoded_length, 0, current_time);
+            /* Yell if there is data coming on stream zero */
+
+            if (ret == 0)
+            {
+                picoquic_stream_data * data = cnx->first_stream.stream_data;
+
+                if (data != NULL && data->offset < cnx->first_stream.consumed_offset)
+                {
+                    ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION);
+                }
+            }
+        }
+    }
+    else
+    {
+        /* Not expected. Log and ignore. */
+        ret = PICOQUIC_ERROR_UNEXPECTED_PACKET;
+    }
+
+    return ret;
+}
+
+/*
  * Processing of client encrypted packet.
  */
 int picoquic_incoming_encrypted(
@@ -1093,16 +1155,10 @@ int picoquic_incoming_encrypted(
                     bytes + ph->offset, decoded_length, 0, current_time);
             }
 
-            /* processing of client encrypted packet */
             if (ret == 0)
             {
-                /* initialization of context & creation of data */
+                /* Processing of TLS messages  */
                 ret = picoquic_tlsinput_stream_zero(cnx);
-            }
-
-            if (ret != 0)
-            {
-                /* This is bad. should just delete the context, log the packet, etc */
             }
         }
     }
@@ -1231,7 +1287,7 @@ int picoquic_incoming_packet(
                 case picoquic_packet_0rtt_protected:
                     /* TODO : decrypt with 0RTT key */
                     /* Not implemented. Log and ignore */
-                    ret = PICOQUIC_ERROR_UNEXPECTED_PACKET;
+                    ret = picoquic_incoming_0rtt(cnx, bytes, length, &ph, current_time);
                     break;
                 case picoquic_packet_1rtt_protected_phi0:
                 case picoquic_packet_1rtt_protected_phi1:

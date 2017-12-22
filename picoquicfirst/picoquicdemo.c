@@ -862,6 +862,25 @@ static void first_client_callback(picoquic_cnx_t * cnx,
     /* that's it */
 }
 
+void quic_client_launch_scenario(picoquic_cnx_t *cnx_client,
+    picoquic_first_client_callback_ctx_t *callback_ctx)
+{
+    /* Start the download scenario */
+    if ((picoquic_supported_versions[cnx_client->version_index].version_flags&
+        picoquic_version_bidir_only) == 0)
+    {
+        callback_ctx->demo_stream = test_scenario;
+        callback_ctx->nb_demo_streams = test_scenario_nb;
+    }
+    else
+    {
+        callback_ctx->demo_stream = test_scenario_old;
+        callback_ctx->nb_demo_streams = test_scenario_old_nb;
+    }
+
+    demo_client_start_streams(cnx_client, callback_ctx, 0);
+}
+
 int quic_client(const char * ip_address_text, int server_port, uint32_t proposed_version, FILE * F_log)
 {
     /* Start: start the QUIC process with cert and key files */
@@ -889,9 +908,7 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
     int is_name = 0;
     const char * sni = NULL;
     int64_t delay_max = 10000000;
-#if 1
     int64_t delta_t = 0;
-#endif
 
     memset(&callback_ctx, 0, sizeof(picoquic_first_client_callback_ctx_t));
 
@@ -962,6 +979,9 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
 
 					picoquic_log_packet(F_log, qclient, cnx_client, (struct sockaddr *) &server_address,
 						0, send_buffer, bytes_sent, current_time);
+
+                    /* Start the scenario */
+                    quic_client_launch_scenario(cnx_client, &callback_ctx);
 				}
 				else
 				{
@@ -990,11 +1010,7 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
         bytes_recv = picoquic_select(&fd, 1, &packet_from, &from_length, 
             &packet_to, &to_length, &if_index_to,
             buffer, sizeof(buffer), 
-#if 0
-            picoquic_get_next_wake_delay(qclient, current_time, delay_max), 
-#else
             delta_t,
-#endif
             &current_time);
 
         if (bytes_recv != 0)
@@ -1034,14 +1050,11 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
                 {
                     picoquic_log_error_packet(F_log, buffer, (size_t)bytes_recv, ret);
                 }
-#if 0
-            }
-#else
+
                 delta_t = 0;
             }
             else
             {
-#endif
                 if (ret == 0 && picoquic_get_cnx_state(cnx_client) == picoquic_state_client_ready)
                 {
                     if (established == 0)
@@ -1049,7 +1062,8 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
                         picoquic_log_transport_extension(F_log, cnx_client);
                         printf("Connection established.\n");
                         established = 1;
-
+#if 0
+                        /* Start the download scenario */
                         if ((picoquic_supported_versions[cnx_client->version_index].version_flags&
                             picoquic_version_bidir_only) == 0)
                         {
@@ -1063,6 +1077,7 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
                         }
 
                         demo_client_start_streams(cnx_client, &callback_ctx, 0);
+#endif
                     }
 
                     client_ready_loop++;
@@ -1072,6 +1087,11 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
                     {
                         if (callback_ctx.nb_open_streams == 0)
                         {
+                            if (cnx_client->nb_zero_rtt_sent != 0)
+                            {
+                                fprintf(stdout, "Out of %d zero RTT packets, %d were acked by the server.\n",
+                                    cnx_client->nb_zero_rtt_sent, cnx_client->nb_zero_rtt_acked);
+                            }
                             fprintf(stdout, "All done, Closing the connection.\n");
                             ret = picoquic_close(cnx_client, 0);
                         }
@@ -1115,10 +1135,9 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
                         }
                     }
                 }
-#if 1
+
                 delta_t = picoquic_get_next_wake_delay(qclient, current_time, delay_max);
             }
-#endif
         }
     }
 

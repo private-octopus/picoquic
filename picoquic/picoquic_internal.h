@@ -36,6 +36,7 @@ extern "C" {
 #define PICOQUIC_INITIAL_MTU_IPV6 1232
 #define PICOQUIC_ENFORCED_INITIAL_MTU 1200
 #define PICOQUIC_RETRY_SECRET_SIZE 64
+#define PICOQUIC_DEFAULT_0RTT_WINDOW 4096
 
 #define PICOQUIC_INITIAL_RTT 250000 /* 250 ms */
 #define PICOQUIC_INITIAL_RETRANSMIT_TIMER 1000000 /* one second */
@@ -359,6 +360,7 @@ extern "C" {
 		struct st_ptls_buffer_t * tls_sendbuf;
 		uint64_t send_sequence;
 		uint32_t send_mtu;
+        uint16_t psk_cipher_suite_id;
 
         /* Liveness detection */
         uint64_t latest_progress_time; /* last local time at which the connection progressed */
@@ -370,6 +372,8 @@ extern "C" {
 		void * aead_encrypt_ctx; 
 		void * aead_decrypt_ctx;
         void * aead_de_encrypt_ctx; /* used by logging functions to see what is sent. */
+        void * aead_0rtt_encrypt_ctx; /* setup on client if 0-RTT is possible */
+        void * aead_0rtt_decrypt_ctx; /* setup on server if 0-RTT is possible, also used on client for logging */
 
 		/* Receive state */
 		picoquic_sack_item_t first_sack_item;
@@ -388,6 +392,8 @@ extern "C" {
         uint64_t ack_delay_local;
 
 		/* Retransmission state */
+        uint32_t nb_zero_rtt_sent;
+        uint32_t nb_zero_rtt_acked;
         uint64_t nb_retransmission_total;
 		uint64_t nb_retransmit;
         uint64_t nb_spurious;
@@ -560,6 +566,7 @@ extern "C" {
 
 	/* stream management */
     picoquic_stream_head * picoquic_create_stream(picoquic_cnx_t * cnx, uint64_t stream_id);
+    void picoquic_update_stream_initial_remote(picoquic_cnx_t * cnx);
 	picoquic_stream_head * picoquic_find_stream(picoquic_cnx_t * cnx, uint64_t stream_id, int create);
 	picoquic_stream_head * picoquic_find_ready_stream(picoquic_cnx_t * cnx, int restricted);
 	int picoquic_stream_network_input(picoquic_cnx_t * cnx, uint64_t stream_id,

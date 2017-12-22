@@ -39,6 +39,8 @@ void picoquic_crypto_random(picoquic_quic_t * quic, void * buf, size_t len);
 
 uint64_t picoquic_crypto_uniform_random(picoquic_quic_t * quic, uint64_t rnd_max);
 
+int picoquic_setup_0RTT_aead_contexts(picoquic_cnx_t * cnx, int is_server);
+
 int picoquic_setup_1RTT_aead_contexts(picoquic_cnx_t * cnx, int is_server);
 
 size_t picoquic_aead_get_checksum_length(void* aead_context);
@@ -50,6 +52,12 @@ size_t picoquic_aead_encrypt(picoquic_cnx_t *cnx, uint8_t * output, uint8_t * in
     uint64_t seq_num, uint8_t * auth_data, size_t auth_data_length);
 
 size_t picoquic_aead_de_encrypt(picoquic_cnx_t *cnx, uint8_t * output, uint8_t * input, size_t input_length,
+    uint64_t seq_num, uint8_t * auth_data, size_t auth_data_length);
+
+size_t picoquic_aead_0rtt_encrypt(picoquic_cnx_t *cnx, uint8_t * output, uint8_t * input, size_t input_length,
+    uint64_t seq_num, uint8_t * auth_data, size_t auth_data_length);
+
+size_t picoquic_aead_0rtt_decrypt(picoquic_cnx_t *cnx, uint8_t * output, uint8_t * input, size_t input_length,
     uint64_t seq_num, uint8_t * auth_data, size_t auth_data_length);
 
 int picoquic_setup_cleartext_aead_contexts(picoquic_cnx_t * cnx, int is_server);

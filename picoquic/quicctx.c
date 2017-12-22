@@ -155,6 +155,7 @@ picoquic_quic_t * picoquic_create(uint32_t nb_connections,
 		quic->default_alpn = picoquic_string_duplicate(default_alpn);
 		quic->cnx_id_callback_fn = cnx_id_callback;
 		quic->cnx_id_callback_ctx = cnx_id_callback_ctx;
+        quic->p_simulated_time = p_simulated_time;
 
 		if (cnx_id_callback != NULL)
 		{
@@ -528,9 +529,10 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
 		/* Initialize remote variables to some plausible value. 
 		 * Hopefully, this will be overwritten by the parameters received in
 		 * the TLS transport parameter extension */
-		cnx->maxdata_remote = ((uint64_t)cnx->remote_parameters.initial_max_data) << 10;
-		cnx->max_stream_id_bidir_remote = cnx->local_parameters.initial_max_stream_id_bidir;
-        cnx->max_stream_id_unidir_remote = cnx->local_parameters.initial_max_stream_id_unidir;
+		cnx->maxdata_remote = PICOQUIC_DEFAULT_0RTT_WINDOW;
+        cnx->remote_parameters.initial_max_stream_data = PICOQUIC_DEFAULT_0RTT_WINDOW;
+		cnx->max_stream_id_bidir_remote = 4;
+        cnx->max_stream_id_unidir_remote = 2;
 
 		if (sni != NULL)
 		{
@@ -878,7 +880,9 @@ int picoquic_queue_misc_frame(picoquic_cnx_t * cnx, uint8_t * bytes, size_t leng
 
 void picoquic_clear_stream(picoquic_stream_head * stream)
 {
-    picoquic_stream_data ** pdata[2] = { &stream->stream_data, &stream->send_queue };
+    picoquic_stream_data ** pdata[2];
+    pdata[0] = &stream->stream_data;
+    pdata[1] = &stream->send_queue;
 
     for (int i = 0; i < 2; i++)
     {
@@ -1059,6 +1063,18 @@ int picoquic_reset_cnx_version(picoquic_cnx_t * cnx, uint8_t * bytes, size_t len
                     {
                         picoquic_aead_free(cnx->aead_de_encrypt_cleartext_ctx);
                         cnx->aead_de_encrypt_cleartext_ctx = NULL;
+                    }
+
+                    if (cnx->aead_0rtt_decrypt_ctx != NULL)
+                    {
+                        picoquic_aead_free(cnx->aead_0rtt_decrypt_ctx);
+                        cnx->aead_0rtt_decrypt_ctx = NULL;
+                    }
+
+                    if (cnx->aead_0rtt_encrypt_ctx != NULL)
+                    {
+                        picoquic_aead_free(cnx->aead_0rtt_encrypt_ctx);
+                        cnx->aead_0rtt_encrypt_ctx = NULL;
                     }
 
                     if (ret == 0 &&

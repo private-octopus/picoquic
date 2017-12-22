@@ -28,8 +28,6 @@
 #include "fnv1a.h"
 #include "tls_api.h"
 
-
-
 static char const * picoquic_ptype_names[] = {
     "error",
     "version negotiation",
@@ -403,9 +401,9 @@ size_t picoquic_log_reset_stream_frame(FILE * F, uint8_t * bytes, size_t bytes_m
     uint32_t version_flags)
 {
 	size_t byte_index = 1;
-	uint64_t stream_id;
-	uint32_t error_code;
-	uint64_t offset;
+	uint64_t stream_id = 0;
+	uint32_t error_code = 0;
+	uint64_t offset = 0;
 
 
     if ((version_flags&picoquic_version_fix_ints) == 0)
@@ -521,8 +519,8 @@ size_t picoquic_log_connection_close_frame(FILE * F, uint8_t * bytes,
     size_t bytes_max, uint32_t version_flags)
 {
     size_t byte_index = 1;
-    uint32_t error_code;
-    uint64_t string_length;
+    uint32_t error_code = 0;
+    uint64_t string_length = 0;
 
 
     if ((version_flags&picoquic_version_fix_ints) == 0)
@@ -593,8 +591,8 @@ size_t picoquic_log_application_close_frame(FILE * F, uint8_t * bytes, size_t by
     uint32_t version_flags)
 {
     size_t byte_index = 1;
-    uint32_t error_code;
-    uint64_t string_length;
+    uint32_t error_code = 0;
+    uint64_t string_length = 0;
 
     if ((version_flags&picoquic_version_fix_ints) == 0)
     {
@@ -1138,6 +1136,28 @@ void picoquic_log_decrypt_encrypted(FILE* F,
     }
 }
 
+void picoquic_log_decrypt_0rtt(FILE* F,
+    picoquic_cnx_t * cnx, uint8_t * bytes, size_t length, picoquic_packet_header * ph)
+{
+    /* decrypt in a separate copy */
+    uint8_t decrypted[PICOQUIC_MAX_PACKET_SIZE];
+    size_t decrypted_length = 0;
+
+    decrypted_length = picoquic_aead_0rtt_decrypt(cnx, decrypted,
+        bytes + ph->offset, length - ph->offset, ph->pn64, bytes, ph->offset);
+
+    if (decrypted_length > length)
+    {
+        fprintf(F, "    Decryption failed!\n");
+    }
+    else
+    {
+        fprintf(F, "    Decrypted %d bytes\n", (int)decrypted_length);
+        picoquic_log_frames(F, decrypted, decrypted_length,
+            picoquic_supported_versions[cnx->version_index].version_flags);
+    }
+}
+
 void picoquic_log_decrypt_encrypted_cleartext(FILE* F,
     picoquic_cnx_t * cnx, int receiving,
     uint8_t * bytes, size_t length, picoquic_packet_header * ph)
@@ -1251,6 +1271,7 @@ void picoquic_log_packet(FILE* F, picoquic_quic_t * quic, picoquic_cnx_t * cnx,
 			break;
 		case picoquic_packet_0rtt_protected:
 			/* log 0-rtt packet */
+            picoquic_log_decrypt_0rtt(F, cnx, bytes, length, &ph);
 			break;
 		case picoquic_packet_1rtt_protected_phi0:
 		case picoquic_packet_1rtt_protected_phi1:

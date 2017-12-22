@@ -199,7 +199,7 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t * cnx, int extension_mo
 		byte_index += 2;
 		picoformat_16(bytes + byte_index, 2);
 		byte_index += 2;
-		picoformat_16(bytes + byte_index, cnx->local_parameters.idle_timeout);
+		picoformat_16(bytes + byte_index, (uint16_t) cnx->local_parameters.idle_timeout);
 		byte_index += 2;
 
 		if (cnx->local_parameters.omit_connection_id)
@@ -214,7 +214,7 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t * cnx, int extension_mo
 		byte_index += 2;
 		picoformat_16(bytes + byte_index, 2);
 		byte_index += 2;
-		picoformat_16(bytes + byte_index, cnx->local_parameters.max_packet_size);
+		picoformat_16(bytes + byte_index, (uint16_t) cnx->local_parameters.max_packet_size);
 		byte_index += 2;
 
 		if (extension_mode == 1)
@@ -425,6 +425,10 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t * cnx, int extension_mo
 						{
 							cnx->remote_parameters.initial_max_stream_data = PICOPARSE_32(bytes + byte_index);
 						}
+                        /* If we sent zero rtt data, the streams were created with the
+                         * old value of the remote parameter. We need to update that.
+                         */
+                        picoquic_update_stream_initial_remote(cnx);
 						break;
 					case picoquic_transport_parameter_initial_max_data:
 						if (extension_length != 4)
