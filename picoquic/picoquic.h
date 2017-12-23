@@ -180,7 +180,7 @@ extern "C" {
         uint64_t current_time,
         uint64_t * p_simulated_time,
         char const * ticket_file_name,
-        uint8_t * ticket_encryption_key,
+        const uint8_t * ticket_encryption_key,
         size_t ticket_encryption_key_length);
 
 	void picoquic_free(picoquic_quic_t * quic);

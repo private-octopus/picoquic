@@ -61,7 +61,7 @@ static size_t picoquic_aead_decrypt_generic(uint8_t * output, uint8_t * input, s
 
 int picoquic_server_setup_ticket_aead_contexts(picoquic_quic_t * quic,
     ptls_context_t *tls_ctx,
-    uint8_t * secret, size_t secret_length);
+    const uint8_t * secret, size_t secret_length);
 
 /*
  * Provide access to transport received transport extension for
@@ -973,7 +973,7 @@ int picoquic_setup_1RTT_aead_contexts(picoquic_cnx_t * cnx, int is_server)
 
 int picoquic_server_setup_ticket_aead_contexts(picoquic_quic_t * quic,
     ptls_context_t *tls_ctx,
-    uint8_t * secret, size_t secret_length)
+    const uint8_t * secret, size_t secret_length)
 {
     int ret = 0;
     uint8_t temp_secret[256]; /* secret_max */
