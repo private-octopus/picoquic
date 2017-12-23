@@ -1091,8 +1091,12 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t * cnx, picoquic_packet * 
             {
                 length += data_bytes;
             }
+            else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL)
+            {
+                ret = 0;
+            }
 
-            if (cnx->cwin > cnx->bytes_in_transit)
+            if (ret == 0 && cnx->cwin > cnx->bytes_in_transit)
             {
                 /* Encode the stream frame */
                 if (stream != NULL)
@@ -1103,6 +1107,10 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t * cnx, picoquic_packet * 
                     if (ret == 0)
                     {
                         length += data_bytes;
+                    }
+                    else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL)
+                    {
+                        ret = 0;
                     }
                 }
 
@@ -1259,9 +1267,8 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t * cnx, picoquic_packet * 
         }
         else
         {
-            ret = picoquic_prepare_ack_frame(cnx, current_time, &bytes[length],
-                cnx->send_mtu - checksum_overhead - length, &data_bytes);
-            if (ret == 0)
+            if (picoquic_prepare_ack_frame(cnx, current_time, &bytes[length],
+                cnx->send_mtu - checksum_overhead - length, &data_bytes) == 0)
             {
                 length += data_bytes;
             }
@@ -1276,6 +1283,10 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t * cnx, picoquic_packet * 
                     if (ret == 0)
                     {
                         length += data_bytes;
+                    }
+                    else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL)
+                    {
+                        ret = 0;
                     }
                 }
             }
@@ -1646,9 +1657,8 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t * cnx, picoquic_packet * packet
         }
         else
         {
-            ret = picoquic_prepare_ack_frame(cnx, current_time, &bytes[length],
-                cnx->send_mtu - checksum_overhead - length, &data_bytes);
-            if (ret == 0)
+            if (picoquic_prepare_ack_frame(cnx, current_time, &bytes[length],
+                cnx->send_mtu - checksum_overhead - length, &data_bytes) == 0)
             {
                 length += data_bytes;
             }
@@ -1660,18 +1670,21 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t * cnx, picoquic_packet * packet
                 {
                     ret = picoquic_prepare_misc_frame(cnx, &bytes[length],
                         cnx->send_mtu - checksum_overhead - length, &data_bytes);
-
                     if (ret == 0)
                     {
                         length += data_bytes;
                     }
                     else
                     {
+                        if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL)
+                        {
+                            ret = 0;
+                        }
                         break;
                     }
                 }
                 /* If necessary, encode the max data frame */
-                if (2 * cnx->data_received > cnx->maxdata_local)
+                if (ret == 0 && 2 * cnx->data_received > cnx->maxdata_local)
                 {
                     ret = picoquic_prepare_max_data_frame(cnx, 2 * cnx->data_received, &bytes[length],
                         cnx->send_mtu - checksum_overhead - length, &data_bytes);
@@ -1679,6 +1692,10 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t * cnx, picoquic_packet * packet
                     if (ret == 0)
                     {
                         length += data_bytes;
+                    }
+                    else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL)
+                    {
+                        ret = 0;
                     }
                 }
                 /* If necessary, encode the max stream data frames */
@@ -1694,41 +1711,16 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t * cnx, picoquic_packet * packet
                 {
                     ret = picoquic_prepare_stream_frame(cnx, stream, &bytes[length],
                         cnx->send_mtu - checksum_overhead - length, &data_bytes);
+
+                    if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL)
+                    {
+                        ret = 0;
+                    }
                 }
             }
             if (ret == 0)
             {
                 length += data_bytes;
-                if (packet_type == picoquic_packet_client_initial)
-                {
-                    while (length < cnx->send_mtu - checksum_overhead)
-                    {
-                        bytes[length++] = 0; /* TODO: Padding frame type, which is 0 */
-                    }
-                }
-            }
-
-            /* If stream zero packets are sent, progress the state */
-            if (ret == 0 && stream != NULL && stream->stream_id == 0 && data_bytes > 0 &&
-                stream->send_queue == NULL)
-            {
-                switch (cnx->cnx_state)
-                {
-                case picoquic_state_client_init:
-                    cnx->cnx_state = picoquic_state_client_init_sent;
-                    break;
-                case picoquic_state_client_renegotiate:
-                    cnx->cnx_state = picoquic_state_client_init_resent;
-                    break;
-                case picoquic_state_server_almost_ready:
-                    cnx->cnx_state = picoquic_state_server_ready;
-                    break;
-                case picoquic_state_client_almost_ready:
-                    cnx->cnx_state = picoquic_state_client_ready;
-                    break;
-                default:
-                    break;
-                }
             }
         }
     }
