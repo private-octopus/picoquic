@@ -635,7 +635,15 @@ static const demo_stream_desc_t test_scenario_old[] = {
 static const size_t test_scenario_nb = sizeof(test_scenario) / sizeof(demo_stream_desc_t);
 static const size_t test_scenario_old_nb = sizeof(test_scenario_old) / sizeof(demo_stream_desc_t);
 
-static const uint8_t test_ping[2] = { picoquic_frame_type_ping, 0 };
+static const uint8_t test_ping[] = { picoquic_frame_type_ping, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 typedef struct st_picoquic_first_client_stream_ctx_t {
     struct st_picoquic_first_client_stream_ctx_t * next_stream;
@@ -911,6 +919,7 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
     const char * sni = NULL;
     int64_t delay_max = 10000000;
     int64_t delta_t = 0;
+    int notified_ready = 0;
 
     memset(&callback_ctx, 0, sizeof(picoquic_first_client_callback_ctx_t));
 
@@ -984,10 +993,10 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
 
                     /* Queue a simple frame to perform 0-RTT test */
                     picoquic_queue_misc_frame(cnx_client, test_ping, sizeof(test_ping));
-#if 0
+
                     /* Start the scenario */
                     quic_client_launch_scenario(cnx_client, &callback_ctx);
-#endif
+
 				}
 				else
 				{
@@ -1043,17 +1052,15 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
 
                 picoquic_log_processing(F_log, cnx_client, bytes_recv, ret);
 
-                if (picoquic_get_cnx_state(cnx_client) == picoquic_state_client_almost_ready)
+                if (picoquic_get_cnx_state(cnx_client) == picoquic_state_client_almost_ready &&
+                    notified_ready == 0)
                 {
                     if (picoquic_tls_is_psk_handshake(cnx_client))
                     {
                         fprintf(stdout, "The session was properly resumed!\n");
                     }
                     fprintf(stdout, "Almost ready!\n\n");
-#if 1
-                    /* Start the scenario */
-                    quic_client_launch_scenario(cnx_client, &callback_ctx);
-#endif
+                    notified_ready = 1;
                 }
 
                 if (ret != 0)

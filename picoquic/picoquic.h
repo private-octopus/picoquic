@@ -223,7 +223,7 @@ extern "C" {
         picoquic_stream_data_cb_fn callback_fn, void * callback_ctx);
 
     /* Send extra frames */
-    int picoquic_queue_misc_frame(picoquic_cnx_t * cnx, uint8_t * bytes, size_t length);
+    int picoquic_queue_misc_frame(picoquic_cnx_t * cnx, const uint8_t * bytes, size_t length);
 
 	/* Send and receive network packets */
 

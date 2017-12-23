@@ -1123,6 +1123,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t * cnx, picoquic_packet * 
                 {
                 case picoquic_state_client_init:
                     cnx->cnx_state = picoquic_state_client_init_sent;
+                    cnx->next_pacing_time = current_time + 10000;
                     break;
                 case picoquic_state_client_renegotiate:
                     cnx->cnx_state = picoquic_state_client_init_resent;

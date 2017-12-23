@@ -857,7 +857,7 @@ void picoquic_set_callback(picoquic_cnx_t * cnx,
     cnx->callback_ctx = callback_ctx;
 }
 
-int picoquic_queue_misc_frame(picoquic_cnx_t * cnx, uint8_t * bytes, size_t length)
+int picoquic_queue_misc_frame(picoquic_cnx_t * cnx, const uint8_t * bytes, size_t length)
 {
     int ret = 0;
     uint8_t * misc_frame = (uint8_t *) malloc(sizeof(picoquic_misc_frame_header_t) + length);

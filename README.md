@@ -109,9 +109,8 @@ such as nghttp2 and winquic.
 
 ## Third implementation draft
 
-The next scheduled Interop will happen "on line", in December 2017. It will be based
-on draft-08, which is not yet published. Based on the current editor copy,
-we know that draft-08 will bring a number of changes, some of witch are very disruptive:
+The next Interop was held "on line", on December 18, 2017. It was based
+on draft-00, which brought a number of changes, some of which are very disruptive:
 
 * Format changes of pretty much all frames, with a new variable length integer
   format replacing the multiple ad hoc compression schemes inherited from Google QUIC.
@@ -130,12 +129,16 @@ we know that draft-08 will bring a number of changes, some of witch are very dis
 * Change of format of the QUIC header, with the version field moving in front of the
   sequence number, and the redefinition of the version negotiation frame.
 
-All of these are already implemented in the test version of Picoquic, which in principle 
-supports draft-08.
-Next we need to compile with the TLD draft 22 version of PicoTLS, and fix the issues in the list. 
-Two of those are "session resume and "0 RTT". These two may or may not be fixed by December 18.
-The interop plan requires them, but it may be hard. Worst case, we will demonstrate them at
-the next interop session in Melbourne in January. In any case, Interop tests have not yet begun. 
+* TLS/1.3 draft 22, instead of the draft 18 version used in the previous interop tests.
+
+All of these were already implemented in the test version of Picoquic, which in principle 
+supports draft-08. By December 18, Picoquic supported "session resume" but not "0 RTT". But
+since this is an online test, it could continue. We tested Picoquic's implementation
+of 0-RTT on December 22, and demonstrated 0-RTT interop with mozquic, winquic and nghttp2.
+
+If you look at the interop matrix, you will see that many other implementations were not
+yet ready. They should come there progressively, probably in time for the next interop
+test during the QUIC WG meeting in Melbourne in January 2018.
 
 ## Further milestones
 
@@ -162,7 +165,9 @@ applications. Suggestions are wellcome.
 
 Picoquic is developed in C, and can be built under Windows or Linux. Building the
 project requires first managing the dependencies, Picotls (https://github.com/h2o/picotls)
-and OpenSSL.
+and OpenSSL. Please note that you will need a recent version of Picotls -- we had
+to get a few changes in the API to enable 0-RTT in QUIC, and these changes were checked in
+on December 20 and 21, 2017.
 
 ## Picoquic on Windows
 
@@ -171,10 +176,11 @@ To build Picoquic on Windows, you need to:
  * Install and build Openssl on your machine
 
  * Document the location of the Openssl install in the environment variable OPENSSLDIR
+   (OPENSSL64DIR for the x64 builds)
 
  * Clone and compile Picotls, using the Picotls for Windows options
 
- * Clone and compile Picoquic, using the Visual Studio 2017 solution picotls.sln included in 
+ * Clone and compile Picoquic, using the Visual Studio 2017 solution picoquic.sln included in 
    the sources.
 
  * You can use the unit tests included in the Visual Studio solution to verify the port.
