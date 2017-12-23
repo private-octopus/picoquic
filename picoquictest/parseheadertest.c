@@ -328,7 +328,7 @@ int parseheadertest()
     addr_08.sin_port = 4434;
 
     quic = picoquic_create(8, NULL, NULL, NULL, NULL,
-        NULL, NULL, NULL, NULL, 0, NULL, NULL);
+        NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, 0);
     if (quic == NULL)
     {
         ret = -1;
@@ -351,7 +351,7 @@ int parseheadertest()
     {
         pcnx = NULL;
 
-        if (picoquic_parse_packet_header(quic, test_entries[i].packet, test_entries[i].length,
+        if (picoquic_parse_packet_header(quic, test_entries[i].packet, (uint32_t)test_entries[i].length,
             (test_entries[i].ph->version_index == 0) ? (struct sockaddr *)&addr_08 : (struct sockaddr *)&addr_07,
             0, &ph, &pcnx) != 0)
         {

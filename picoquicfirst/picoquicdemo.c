@@ -406,7 +406,7 @@ int quic_server(const char * server_name, int server_port,
         current_time = picoquic_current_time();
         /* Create QUIC context */
         qserver = picoquic_create(8, pem_cert, pem_key, NULL, first_server_callback, NULL,
-            cnx_id_callback, cnx_id_callback_ctx, reset_seed, current_time, NULL, NULL);
+            cnx_id_callback, cnx_id_callback_ctx, reset_seed, current_time, NULL, NULL, NULL, 0);
 
         if (qserver == NULL)
         {
@@ -947,7 +947,7 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
 
     if (ret == 0)
     {
-        qclient = picoquic_create(8, NULL, NULL, "hq08", NULL, NULL, NULL, NULL, NULL, current_time, NULL, ticket_store_filename);
+        qclient = picoquic_create(8, NULL, NULL, "hq08", NULL, NULL, NULL, NULL, NULL, current_time, NULL, ticket_store_filename, NULL, 0);
 
         if (qclient == NULL)
         {
@@ -985,7 +985,7 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
 
 				if (ret == 0 && send_length > 0)
 				{
-					bytes_sent = sendto(fd, send_buffer, send_length, 0,
+					bytes_sent = sendto(fd, send_buffer, (int)send_length, 0,
 						(struct sockaddr *) &server_address, server_addr_length);
 
 					picoquic_log_packet(F_log, qclient, cnx_client, (struct sockaddr *) &server_address,
@@ -1140,7 +1140,7 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
 
                         if (ret == 0 && send_length > 0)
                         {
-                            bytes_sent = sendto(fd, send_buffer, send_length, 0,
+                            bytes_sent = sendto(fd, send_buffer, (int)send_length, 0,
                                 (struct sockaddr *) &server_address, server_addr_length);
                             picoquic_log_packet(F_log, qclient, cnx_client, (struct sockaddr *)  &server_address,
                                 0, send_buffer, send_length, current_time);

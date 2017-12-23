@@ -66,6 +66,7 @@ extern "C" {
 #define PICOQUIC_ERROR_INVALID_FILE (PICOQUIC_ERROR_CLASS  + 24)
 #define PICOQUIC_ERROR_SEND_BUFFER_TOO_SMALL (PICOQUIC_ERROR_CLASS  + 25)
 #define PICOQUIC_ERROR_UNEXPECTED_STATE (PICOQUIC_ERROR_CLASS  + 26)
+#define PICOQUIC_ERROR_UNEXPECTED_ERROR (PICOQUIC_ERROR_CLASS  + 27)
 
 /*
  * Protocol errors defined in the QUIC spec
@@ -178,7 +179,9 @@ extern "C" {
 		uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE],
         uint64_t current_time,
         uint64_t * p_simulated_time,
-        char const * ticket_file_name);
+        char const * ticket_file_name,
+        uint8_t * ticket_encryption_key,
+        size_t ticket_encryption_key_length);
 
 	void picoquic_free(picoquic_quic_t * quic);
 

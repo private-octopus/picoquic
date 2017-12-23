@@ -213,6 +213,9 @@ extern "C" {
 
 		cnx_id_cb_fn cnx_id_callback_fn;
 		void * cnx_id_callback_ctx;
+
+        void * aead_encrypt_ticket_ctx;
+        void * aead_decrypt_ticket_ctx;
 	} picoquic_quic_t;
 
 	/*

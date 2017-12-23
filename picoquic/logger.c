@@ -1066,7 +1066,7 @@ uint32_t picoquic_log_decrypt_clear_text(FILE* F,
 	uint8_t * bytes, size_t length)
 {
 	/* Verify the checksum */
-	uint32_t decoded_length = fnv1a_check(bytes, length);
+	uint32_t decoded_length = (uint32_t) fnv1a_check(bytes, length);
 	if (decoded_length == 0)
 	{
 		/* Incorrect checksum, drop and log. */
@@ -1203,7 +1203,7 @@ void picoquic_log_packet(FILE* F, picoquic_quic_t * quic, picoquic_cnx_t * cnx,
 	picoquic_log_packet_address(F, cnx, addr_peer, receiving, length, current_time);
 
 	/* Parse the clear text header */
-    ret = picoquic_parse_packet_header(quic, bytes, length, NULL,
+    ret = picoquic_parse_packet_header(quic, bytes, (uint32_t)length, NULL,
         ((cnx->quic->flags&picoquic_context_server) == 0) ? 
         ((receiving == 0)?1:0): ((receiving == 0) ? 0 : 1), &ph, &pcnx);
 

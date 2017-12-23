@@ -31,6 +31,11 @@
 #define PICOQUIC_TEST_WRONG_ALPN "picoquic-bla-bla"
 #define PICOQUIC_TEST_MAX_TEST_STREAMS 8
 
+static const uint8_t test_ticket_encrypt_key[32] = {
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+    16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
+};
+
 /*
  * Generic call back function.
  */
@@ -721,7 +726,8 @@ static int tls_api_init_ctx(picoquic_test_tls_api_ctx_t ** pctx, uint32_t propos
 
 		/* Test the creation of the client and server contexts */
 		test_ctx->qclient = picoquic_create(8, NULL, NULL, NULL, test_api_callback, 
-			(void*)&test_ctx->client_callback, NULL, NULL, NULL, *p_simulated_time, p_simulated_time, ticket_file_name);
+			(void*)&test_ctx->client_callback, NULL, NULL, NULL, *p_simulated_time,
+            p_simulated_time, ticket_file_name, NULL, 0);
 
 		test_ctx->qserver = picoquic_create(8,
 #ifdef _WINDOWS
@@ -734,7 +740,8 @@ static int tls_api_init_ctx(picoquic_test_tls_api_ctx_t ** pctx, uint32_t propos
 			"certs/cert.pem", "certs/key.pem",
 #endif
 			PICOQUIC_TEST_ALPN, test_api_callback, (void*)&test_ctx->server_callback, NULL, NULL, NULL, 
-            *p_simulated_time, p_simulated_time, NULL);
+            *p_simulated_time, p_simulated_time, NULL,
+            test_ticket_encrypt_key, sizeof(test_ticket_encrypt_key));
 
 		if (test_ctx->qclient == NULL || test_ctx->qserver == NULL)
 		{
@@ -901,7 +908,7 @@ static int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t * test_ctx,
 			{
                 next_time = client_arrival;
 				*simulated_time = next_time;
-				ret = picoquic_incoming_packet(test_ctx->qclient, packet->bytes, packet->length,
+				ret = picoquic_incoming_packet(test_ctx->qclient, packet->bytes, (uint32_t) packet->length,
 					(struct sockaddr *)&test_ctx->server_addr,
                     (struct sockaddr *)&test_ctx->client_addr, 0,
                     *simulated_time);
@@ -913,7 +920,7 @@ static int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t * test_ctx,
 
                 next_time = server_arrival;
                 *simulated_time = next_time;
-                ret = picoquic_incoming_packet(test_ctx->qserver, packet->bytes, packet->length,
+                ret = picoquic_incoming_packet(test_ctx->qserver, packet->bytes, (uint32_t)packet->length,
                     (struct sockaddr *)&test_ctx->client_addr,
                     (struct sockaddr *)&test_ctx->server_addr, 0,
                     *simulated_time);

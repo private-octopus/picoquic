@@ -56,6 +56,13 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t * cnx, int extension_mo
 int picoquic_prepare_transport_extensions(picoquic_cnx_t * cnx, int extension_mode,
 	uint8_t * bytes, size_t bytes_max, size_t * consumed);
 
+static size_t picoquic_aead_decrypt_generic(uint8_t * output, uint8_t * input, size_t input_length,
+    uint64_t seq_num, uint8_t * auth_data, size_t auth_data_length, void * aead_ctx);
+
+int picoquic_server_setup_ticket_aead_contexts(picoquic_quic_t * quic,
+    ptls_context_t *tls_ctx,
+    uint8_t * secret, size_t secret_length);
+
 /*
  * Provide access to transport received transport extension for
  * logging purpose.
@@ -334,12 +341,66 @@ int picoquic_client_hello_call_back(ptls_on_client_hello_t * on_hello_cb_ctx,
 int picoquic_server_encrypt_ticket_call_back(ptls_encrypt_ticket_t * encrypt_ticket_ctx,
     ptls_t *tls, int is_encrypt, ptls_buffer_t *dst, ptls_iovec_t src)
 {
-    /* For now, we are just doing tests... */
-    int ret = 0;
 
-    if ((ret = ptls_buffer_reserve(dst, src.len)) == 0)
+    /* Assume that the keys are in the quic context 
+     * The tickets are composed of a 64 bit "sequence number" 
+     * followed by the result of the clear text encryption.
+     */
+    int ret = 0;
+    picoquic_quic_t ** ppquic = (picoquic_quic_t **)(
+        ((char*)encrypt_ticket_ctx) + sizeof(ptls_encrypt_ticket_t));
+    picoquic_quic_t * quic = *ppquic;
+
+    if (is_encrypt != 0)
     {
-        ret = ptls_buffer__do_pushv(dst, src.base, src.len);
+        ptls_aead_context_t * aead_enc = (ptls_aead_context_t *)quic->aead_encrypt_ticket_ctx;
+        /* Encoding*/
+        if (aead_enc == NULL)
+        {
+            ret = -1;
+        }
+        else if ((ret = ptls_buffer_reserve(dst, 8 + src.len + aead_enc->algo->tag_size)) == 0)
+        {
+            /* Create and store the ticket sequence number */
+            uint64_t seq_num;
+            picoquic_crypto_random(quic, &seq_num, 8);
+            picoformat_64(dst->base + dst->off, seq_num);
+            dst->off += 8;
+            /* Run AEAD encryption */
+            dst->off += ptls_aead_encrypt(aead_enc, dst->base + dst->off,
+                src.base, src.len, seq_num, NULL, 0);
+        }
+    }
+    else
+    {
+        ptls_aead_context_t * aead_dec = (ptls_aead_context_t *)quic->aead_decrypt_ticket_ctx;
+        /* Encoding*/
+        if (aead_dec == NULL)
+        {
+            ret = -1;
+        }
+        else if (src.len < 8 + aead_dec->algo->tag_size)
+        {
+            ret = -1;
+        }
+        else if ((ret = ptls_buffer_reserve(dst, src.len)) == 0)
+        {
+            /* Decode the ticket sequence number */
+            uint64_t seq_num = PICOPARSE_64(src.base);
+            /* Decrypt */
+            size_t decrypted = ptls_aead_decrypt(aead_dec, dst->base + dst->off,
+                src.base + 8, src.len - 8, seq_num, NULL, 0);
+
+            if (decrypted > src.len - 8)
+            {
+                /* decryption error */
+                ret = -1;
+            }
+            else
+            {
+                dst->off += decrypted;
+            }
+        }
     }
 
     return ret;
@@ -388,7 +449,9 @@ uint64_t picoquic_get_simulated_time_cb(ptls_get_time_t *self)
  * On servers, this implies setting the "on hello" call back
  */
 
-int picoquic_master_tlscontext(picoquic_quic_t * quic, char const * cert_file_name, char const * key_file_name)
+int picoquic_master_tlscontext(picoquic_quic_t * quic, 
+    char const * cert_file_name, char const * key_file_name,
+    const uint8_t * ticket_key, size_t ticket_key_length)
 {
     /* Create a client context or a server context */
     int ret = 0;
@@ -459,21 +522,33 @@ int picoquic_master_tlscontext(picoquic_quic_t * quic, char const * cert_file_na
                     ctx->on_client_hello = och;
                     *ppquic = quic;
                 }
+            }
 
+            if (ret == 0)
+            {
+                ret = picoquic_server_setup_ticket_aead_contexts(quic, ctx, ticket_key, ticket_key_length);
+            }
+            
+            if (ret == 0)
+            {
                 encrypt_ticket = (ptls_encrypt_ticket_t *)malloc(sizeof(ptls_encrypt_ticket_t) +
                     sizeof(picoquic_quic_t *));
-                if (encrypt_ticket != NULL)
+                if (encrypt_ticket == NULL)
                 {
-                    /* TODO: something smarter once we actually encrypt the data */
+                    ret = PICOQUIC_ERROR_MEMORY;
+                }
+                else
+                {
                     picoquic_quic_t ** ppquic = (picoquic_quic_t **)(
                         ((char*)encrypt_ticket) + sizeof(ptls_encrypt_ticket_t));
 
                     encrypt_ticket->cb = picoquic_server_encrypt_ticket_call_back;
+                    *ppquic = quic;
+
                     ctx->encrypt_ticket = encrypt_ticket;
                     ctx->ticket_lifetime = 100000; /* 100,000 seconds, a bit more than one day */
                     ctx->require_dhe_on_psk = 1;
                     ctx->max_early_data_size = 0xFFFFFFFF;
-                    *ppquic = quic;
                 }
             }
         }
@@ -800,17 +875,6 @@ int picoquic_setup_0RTT_aead_contexts(picoquic_cnx_t * cnx, int is_server)
     uint8_t secret[256]; /* secret_max */
     picoquic_tls_ctx_t * ctx = (picoquic_tls_ctx_t *)cnx->tls_ctx;
     ptls_cipher_suite_t * cipher = ptls_get_cipher(ctx->tls);
-#if 0
-    if (cipher == NULL)
-    {
-        ptls_context_t *master_ctx = (ptls_context_t *) cnx->quic->tls_master_ctx;
-        ptls_cipher_suite_t **cs;
-
-        for (cs = master_ctx->cipher_suites; *cs != NULL && (*cs)->id != cnx->psk_cipher_suite_id; ++cs)
-            ;
-        cipher = *cs;
-    }
-#endif
 
     if (cipher == NULL)
     {
@@ -818,7 +882,7 @@ int picoquic_setup_0RTT_aead_contexts(picoquic_cnx_t * cnx, int is_server)
     }
     else if (cipher->hash->digest_size > sizeof(secret))
     {
-        ret = -1;
+        ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
     }
     else
     {
@@ -833,7 +897,7 @@ int picoquic_setup_0RTT_aead_contexts(picoquic_cnx_t * cnx, int is_server)
 
             if (cnx->aead_0rtt_encrypt_ctx == NULL)
             {
-                ret = -1;
+                ret = PICOQUIC_ERROR_MEMORY;
             }
         }
 
@@ -853,35 +917,35 @@ int picoquic_setup_1RTT_aead_contexts(picoquic_cnx_t * cnx, int is_server)
 {
     int ret = 0;
     uint8_t secret[256]; /* secret_max */
-	picoquic_tls_ctx_t * ctx = (picoquic_tls_ctx_t *)cnx->tls_ctx;
+    picoquic_tls_ctx_t * ctx = (picoquic_tls_ctx_t *)cnx->tls_ctx;
     ptls_cipher_suite_t * cipher = ptls_get_cipher(ctx->tls);
 
     if (cipher == NULL)
     {
         ret = -1;
     }
-    else if ( cipher->hash->digest_size > sizeof(secret))
+    else if (cipher->hash->digest_size > sizeof(secret))
     {
-        ret = -1;
+        ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
     }
     else
     {
         /* Set up the encryption AEAD */
         ret = ptls_export_secret(ctx->tls, secret, cipher->hash->digest_size,
-            (is_server == 0)? PICOQUIC_LABEL_1RTT_CLIENT: PICOQUIC_LABEL_1RTT_SERVER,
+            (is_server == 0) ? PICOQUIC_LABEL_1RTT_CLIENT : PICOQUIC_LABEL_1RTT_SERVER,
             ptls_iovec_init(NULL, 0), 0);
 
         if (ret == 0)
         {
-            cnx->aead_encrypt_ctx = (void *) 
+            cnx->aead_encrypt_ctx = (void *)
                 ptls_aead_new(cipher->aead, cipher->hash, 1, secret);
 
             if (cnx->aead_encrypt_ctx == NULL)
             {
-                ret = -1;
+                ret = PICOQUIC_ERROR_MEMORY;
             }
 
-            cnx->aead_de_encrypt_ctx = (void *) 
+            cnx->aead_de_encrypt_ctx = (void *)
                 ptls_aead_new(cipher->aead, cipher->hash, 0, secret);
         }
 
@@ -902,6 +966,47 @@ int picoquic_setup_1RTT_aead_contexts(picoquic_cnx_t * cnx, int is_server)
                 ret = -1;
             }
         }
+    }
+
+    return ret;
+}
+
+int picoquic_server_setup_ticket_aead_contexts(picoquic_quic_t * quic,
+    ptls_context_t *tls_ctx,
+    uint8_t * secret, size_t secret_length)
+{
+    int ret = 0;
+    uint8_t temp_secret[256]; /* secret_max */
+    ptls_hash_algorithm_t * algo = &ptls_openssl_sha256;
+    ptls_aead_algorithm_t * aead = &ptls_openssl_aes128gcm;
+
+    if (algo->digest_size > sizeof(temp_secret))
+    {
+        ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
+    }
+    else
+    {
+        if (secret != NULL && secret_length > 0)
+        {
+            memset(temp_secret, 0, algo->digest_size);
+            memcpy(temp_secret, secret, (secret_length > algo->digest_size) ? algo->digest_size : secret_length);
+        }
+        else
+        {
+            tls_ctx->random_bytes(temp_secret, algo->digest_size);
+        }
+
+        /* Create the AEAD contexts */
+        quic->aead_encrypt_ticket_ctx = (void *)ptls_aead_new(aead, algo, 1, temp_secret);
+        quic->aead_decrypt_ticket_ctx = (void *)ptls_aead_new(aead, algo, 0, temp_secret);
+
+        if (quic->aead_encrypt_ticket_ctx == NULL || quic->aead_decrypt_ticket_ctx == NULL)
+        {
+            ret = PICOQUIC_ERROR_MEMORY;
+        }
+
+        /* erase the temporary secret */
+        ptls_clear_memory(temp_secret, algo->digest_size);
     }
 
     return ret;

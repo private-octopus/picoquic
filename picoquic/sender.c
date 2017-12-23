@@ -606,7 +606,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t * cnx, uint64_t current_time,
 
             *header_length = 0;
             /* Get the packet type */
-            ret = picoquic_parse_packet_header(cnx->quic, p->bytes, p->length, NULL,
+            ret = picoquic_parse_packet_header(cnx->quic, p->bytes, (uint32_t)p->length, NULL,
                 ((cnx->quic->flags&picoquic_context_server) == 0) ? 1 : 0, &ph, &pcnx);
 
             if (ph.ptype == picoquic_packet_0rtt_protected)
@@ -753,7 +753,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t * cnx, uint64_t current_time,
         p = p_next;
     }
 
-	return length;
+	return (int) length;
 }
 
 /*
@@ -775,7 +775,7 @@ int picoquic_is_cnx_backlog_empty(picoquic_cnx_t * cnx)
         picoquic_cnx_t * pcnx = cnx;
 
         /* Get the packet type */
-        ret = picoquic_parse_packet_header(cnx->quic, p->bytes, p->length, NULL,
+        ret = picoquic_parse_packet_header(cnx->quic, p->bytes, (uint32_t)p->length, NULL,
             ((cnx->quic->flags&picoquic_context_server) == 0) ? 1 : 0, &ph, &pcnx);
 
         /* Copy the relevant bytes from one packet to the next */

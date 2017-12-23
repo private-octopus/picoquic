@@ -23,7 +23,8 @@
 #define TLS_API_H
 #include "picoquic_internal.h"
 
-int picoquic_master_tlscontext(picoquic_quic_t * quic, char const * cert_file_name, char const * key_file_name);
+int picoquic_master_tlscontext(picoquic_quic_t * quic, char const * cert_file_name, char const * key_file_name,
+    uint8_t * ticket_key, size_t ticket_key_length);
 
 void picoquic_master_tlscontext_free(picoquic_quic_t * quic);
 

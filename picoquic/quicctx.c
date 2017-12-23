@@ -138,7 +138,9 @@ picoquic_quic_t * picoquic_create(uint32_t nb_connections,
 	uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE],
     uint64_t current_time,
     uint64_t * p_simulated_time,
-    char const * ticket_file_name)
+    char const * ticket_file_name,
+    const uint8_t * ticket_encryption_key,
+    size_t ticket_encryption_key_length)
 {
     picoquic_quic_t * quic = (picoquic_quic_t *)malloc(sizeof(picoquic_quic_t));
     int ret = 0;
@@ -180,7 +182,8 @@ picoquic_quic_t * picoquic_create(uint32_t nb_connections,
 
         if (quic->table_cnx_by_id == NULL ||
             quic->table_cnx_by_net == NULL ||
-            picoquic_master_tlscontext(quic, cert_file_name, key_file_name) != 0)
+            picoquic_master_tlscontext(quic, cert_file_name, key_file_name,
+                ticket_encryption_key, ticket_encryption_key_length) != 0)
         {
             picoquic_free(quic);
             quic = NULL;
@@ -205,7 +208,17 @@ void picoquic_free(picoquic_quic_t * quic)
 {
     if (quic != NULL)
     {
-        /* TODO: close the network sockets */
+        if (quic->aead_encrypt_ticket_ctx != NULL)
+        {
+            picoquic_aead_free(quic->aead_encrypt_ticket_ctx);
+            quic->aead_encrypt_ticket_ctx = NULL;
+        }
+
+        if (quic->aead_decrypt_ticket_ctx != NULL)
+        {
+            picoquic_aead_free(quic->aead_decrypt_ticket_ctx);
+            quic->aead_decrypt_ticket_ctx = NULL;
+        }
 
 		if (quic->default_alpn != NULL)
 		{
@@ -473,7 +486,7 @@ int picoquic_get_version_index(uint32_t proposed_version)
     {
         if (picoquic_supported_versions[i].version == proposed_version)
         {
-            ret = i;
+            ret = (int)i;
             break;
         }
     }
