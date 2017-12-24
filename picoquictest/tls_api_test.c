@@ -104,10 +104,6 @@ static test_api_stream_desc_t test_scenario_q_and_r[] = {
 	{ 4, 0, 257, 2000 }
 };
 
-static test_api_stream_desc_t test_scenario_q_and_r_old[] = {
-    { 1, 0, 257, 2000 }
-};
-
 static test_api_stream_desc_t test_scenario_q2_and_r2[] = {
 	{ 4, 0, 257, 2000 },
 	{ 8, 0, 531, 11000 }
@@ -1884,3 +1880,4 @@ int zero_rtt_test()
 
     return ret;
 }
+
