@@ -410,14 +410,14 @@ void picoquic_process_unexpected_cnxid(
 		{
 			uint8_t * bytes = sp->bytes;
 			size_t byte_index = 0;
-			size_t pad_size = (size_t)(picoquic_crypto_uniform_random(quic, length - 26) + 26 - 17);
+			size_t pad_size = (size_t)(picoquic_public_uniform_random(length - 26) + 26 - 17);
 			/* Packet type set to short header, with cnxid, key phase 0, 1 byte seq */
 			bytes[byte_index++] = 0x41;
 			/* Copy the connection ID */
 			picoformat_64(bytes + byte_index, ph->cnx_id);
 			byte_index += 8;
             /* Add some random bytes to look good. */
-            picoquic_crypto_random(quic, bytes + byte_index, pad_size);
+            picoquic_public_random(bytes + byte_index, pad_size);
             byte_index += pad_size;
 			/* Add the public reset secret */
 			(void)picoquic_create_cnxid_reset_secret(quic, ph->cnx_id, bytes + byte_index);

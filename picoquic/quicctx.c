@@ -585,7 +585,7 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
 			 * will prevent spurious matches to an all zero value, for example.
 			 * The real value will be set when receiving the transport parameters. 
 			 */
-			picoquic_crypto_random(quic, cnx->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
+            picoquic_public_random(cnx->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
 		}
         else
         {
@@ -646,8 +646,7 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
              */
             do
             {
-                picoquic_crypto_random(quic, &random_sequence, sizeof(uint32_t));
-                random_sequence &= 0x7FFFFFFF;
+                random_sequence = (uint32_t)(0x7FFFFFFF & picoquic_public_random_64());
             } while (random_sequence == 0);
             cnx->send_sequence = random_sequence;
 

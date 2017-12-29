@@ -193,6 +193,64 @@ uint64_t picoquic_crypto_uniform_random(picoquic_quic_t * quic, uint64_t rnd_max
 }
 
 /*
+ * Non crypto public random generator. This is meant to provide good enough randomness
+ * without disclosing the state of the crypto random number generator. This is
+ * adequate for non critical random numbers, such as sequence numbers or padding.
+ *
+ * The following is an implementation of xorshift1024* suggested by Vigna.
+ * The state must be seeded so that it is not everywhere zero. */
+
+static uint64_t public_random_seed[16];
+static int public_random_index = 0;
+
+uint64_t picoquic_public_random_64(void) {
+    const uint64_t s0 = public_random_seed[public_random_index++];
+    uint64_t s1 = public_random_seed[public_random_index &= 15];
+    s1 ^= s1 << 31; // a
+    s1 ^= s1 >> 11; // b
+    s1 ^= s0 ^ (s0 >> 30); // c
+    public_random_seed[public_random_index] = s1;
+    return s1 * (uint64_t)1181783497276652981;
+}
+
+void picoquic_public_random_seed(picoquic_quic_t * quic)
+{
+    picoquic_crypto_random(quic, public_random_seed, sizeof(public_random_seed));
+    for (int i = 0; i < 16; i++)
+    {
+        (void)picoquic_public_random_64();
+    }
+}
+
+void picoquic_public_random(void * buf, size_t len)
+{
+    uint8_t *x = buf;
+
+    while (len > 0)
+    {
+        uint64_t y = picoquic_public_random_64();
+        for (int i = 0; i < 8 && len > 0; i++)
+        {
+            *x++ = (uint8_t)( y & 255);
+            y >>= 8;
+            len--;
+        }
+    }
+}
+
+uint64_t picoquic_public_uniform_random(uint64_t rnd_max)
+{
+    uint64_t rnd;
+    uint64_t rnd_min = ((uint64_t)((int64_t)-1)) % rnd_max;
+
+    do {
+        rnd = picoquic_public_random_64();
+    } while (rnd < rnd_min);
+
+    return rnd%rnd_max;
+}
+
+/*
  * The collect extensions call back is called by the picotls stack upon
  * reception of a handshake message containing extensions. It should return true (1)
  * if the stack can process the extension, false (0) otherwise.
@@ -362,8 +420,7 @@ int picoquic_server_encrypt_ticket_call_back(ptls_encrypt_ticket_t * encrypt_tic
         else if ((ret = ptls_buffer_reserve(dst, 8 + src.len + aead_enc->algo->tag_size)) == 0)
         {
             /* Create and store the ticket sequence number */
-            uint64_t seq_num;
-            picoquic_crypto_random(quic, &seq_num, 8);
+            uint64_t seq_num = picoquic_public_random_64();
             picoformat_64(dst->base + dst->off, seq_num);
             dst->off += 8;
             /* Run AEAD encryption */
@@ -584,6 +641,7 @@ int picoquic_master_tlscontext(picoquic_quic_t * quic,
         if (ret == 0)
         {
             quic->tls_master_ctx = ctx;
+            picoquic_public_random_seed(quic);
         }
         else
         {

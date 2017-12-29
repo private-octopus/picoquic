@@ -37,11 +37,14 @@ int picoquic_tlsinput_stream_zero(picoquic_cnx_t * cnx);
 int picoquic_initialize_stream_zero(picoquic_cnx_t * cnx);
 
 void picoquic_crypto_random(picoquic_quic_t * quic, void * buf, size_t len);
-
 uint64_t picoquic_crypto_uniform_random(picoquic_quic_t * quic, uint64_t rnd_max);
 
-int picoquic_setup_0RTT_aead_contexts(picoquic_cnx_t * cnx, int is_server);
+uint64_t picoquic_public_random_64(void);
+void picoquic_public_random_seed(picoquic_quic_t * quic);
+void picoquic_public_random(void * buf, size_t len);
+uint64_t picoquic_public_uniform_random(uint64_t rnd_max);
 
+int picoquic_setup_0RTT_aead_contexts(picoquic_cnx_t * cnx, int is_server);
 int picoquic_setup_1RTT_aead_contexts(picoquic_cnx_t * cnx, int is_server);
 
 size_t picoquic_aead_get_checksum_length(void* aead_context);
