@@ -81,56 +81,6 @@ void picoquic_provide_received_transport_extensions(picoquic_cnx_t * cnx,
 	*client_mode = ctx->client_mode;
 }
 
-/*
-* Using the open ssl library to load the test certificate
-*/
-
-static X509* openPemFile(char const * filename)
-{
-
-    X509* cert = X509_new();
-    BIO* bio_cert = BIO_new_file(filename, "rb");
-    PEM_read_bio_X509(bio_cert, &cert, NULL, NULL);
-    return cert;
-}
-
-static int get_certificates(char const * pem_fname, ptls_iovec_t ** list, size_t * nb_certs)
-{
-    int ret = 0;
-    size_t count = 0;
-    X509 *cert;
-    ptls_iovec_t * certs;
-
-    *nb_certs = 0;
-    *list = NULL;
-
-	certs = (ptls_iovec_t *)malloc(sizeof(ptls_iovec_t) * 16);
-
-	if (certs == NULL)
-	{
-		ret = -1;
-	}
-	else
-	{
-		cert = openPemFile(pem_fname);
-		memset(certs, 0, sizeof(ptls_iovec_t) * 16);
-
-		if (cert == NULL)
-		{
-			ret = -1;
-		}
-		else
-		{
-			ptls_iovec_t *dst = &certs[count++];
-			dst->len = i2d_X509(cert, &dst->base);
-		}
-	}
-    *nb_certs = count;
-    *list = certs;
-
-    return ret;
-}
-
 static int SetSignCertificate(char const * keypem, ptls_context_t * ctx)
 {
 	int ret = 0;
@@ -171,8 +121,8 @@ static int SetSignCertificate(char const * keypem, ptls_context_t * ctx)
 	return ret;
 }
 
-/* TODO: may want to provide a layer of isolation to not reveal
- * internal state of random number generator */
+/* Crypto random number generator */
+
 void picoquic_crypto_random(picoquic_quic_t * quic, void * buf, size_t len)
 {
     ptls_context_t *ctx = (ptls_context_t *)quic->tls_master_ctx;
@@ -197,13 +147,26 @@ uint64_t picoquic_crypto_uniform_random(picoquic_quic_t * quic, uint64_t rnd_max
  * without disclosing the state of the crypto random number generator. This is
  * adequate for non critical random numbers, such as sequence numbers or padding.
  *
- * The following is an implementation of xorshift1024* suggested by Vigna.
- * The state must be seeded so that it is not everywhere zero. */
+ * The following is an implementation of xorshift1024* suggested by Sebastiano Vigna,
+ * following the general xorshift design by George Marsaglia.
+ * The state must be seeded so that it is not everywhere zero. 
+ *
+ * The seed operation gets 64 bits from the crypto random generator. We then run the
+ * generator 16 times to mix that input into the 1024 bits of seed[16].
+ *
+ * If we were really paranoid, we would want to break possible discovery by passing
+ * the seeding bits from the crypto random generator through SHA256 or something 
+ * similar, so there would be really no way to get at the state of crypto random 
+ * generator. The 16 rounds of the xorshift process give a pretty good hash, but
+ * that can probably be broken by linear analysis. Or at least we have no proof
+ * that it cannot be broken.
+ */
 
-static uint64_t public_random_seed[16];
+static uint64_t public_random_seed[16] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
 static int public_random_index = 0;
 
-uint64_t picoquic_public_random_64(void) {
+uint64_t picoquic_public_random_64(void) 
+{
     const uint64_t s0 = public_random_seed[public_random_index++];
     uint64_t s1 = public_random_seed[public_random_index &= 15];
     s1 ^= s1 << 31; // a
@@ -215,7 +178,11 @@ uint64_t picoquic_public_random_64(void) {
 
 void picoquic_public_random_seed(picoquic_quic_t * quic)
 {
-    picoquic_crypto_random(quic, public_random_seed, sizeof(public_random_seed));
+    uint64_t seed;
+    picoquic_crypto_random(quic, &seed, sizeof(seed));
+
+    public_random_seed[public_random_index] ^= seed;
+
     for (int i = 0; i < 16; i++)
     {
         (void)picoquic_public_random_64();
@@ -556,8 +523,7 @@ int picoquic_master_tlscontext(picoquic_quic_t * quic,
         if (quic->flags&picoquic_context_server)
         {
             /* Read the certificate file */
-
-            if (get_certificates(cert_file_name, &ctx->certificates.list, &ctx->certificates.count) != 0)
+            if (ptls_load_certificates(ctx, (char *)cert_file_name) != 0)
             {
                 ret = -1;
             }
@@ -668,18 +634,6 @@ void picoquic_master_tlscontext_free(picoquic_quic_t * quic)
 		{
 			if (ctx->certificates.list != NULL)
 			{
-#if 0
-				/* TODO: call proper openssl API to free the CERT */
-				for (size_t i = 0; i < ctx->certificates.count; i++)
-				{
-					if (ctx->certificates.list[i].base != NULL)
-					{
-						free(ctx->certificates.list[i].base);
-						ctx->certificates.list[i].base = NULL;
-					}
-					ctx->certificates.list[i].len = 0;
-				}
-#endif
 				free(ctx->certificates.list);
 			}
 		}
