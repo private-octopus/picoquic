@@ -120,7 +120,6 @@ extern "C" {
      * Codes used for representing the various types of packet encodings
      */
     typedef enum {
-        picoquic_version_header_05_07 = 0,
         picoquic_version_header_08 
     } picoquic_version_header_encoding;
 

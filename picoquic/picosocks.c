@@ -541,7 +541,7 @@ int picoquic_select(SOCKET_TYPE * sockets,
     {
         if (sockmax < (int)sockets[i])
         {
-            sockmax = sockets[i];
+            sockmax = (int)sockets[i];
         }
         FD_SET(sockets[i], &readfds);
     }

@@ -379,9 +379,6 @@ size_t picoquic_create_packet_header(
     size_t header_length = 0;
     switch (picoquic_supported_versions[cnx->version_index].version_header_encoding)
     {
-    case picoquic_version_header_05_07:
-        header_length = picoquic_create_packet_header_05_07(cnx, packet_type, cnx_id, sequence_number, bytes);
-        break;
     case picoquic_version_header_08:
         header_length = picoquic_create_packet_header_08(cnx, packet_type, cnx_id, sequence_number, bytes);
         break;
