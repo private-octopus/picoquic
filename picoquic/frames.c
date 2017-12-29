@@ -259,8 +259,7 @@ int picoquic_prepare_stream_reset_frame(picoquic_cnx_t * cnx, picoquic_stream_he
 	uint8_t * bytes, size_t bytes_max, size_t * consumed)
 {
 	int ret = 0;
-	const size_t min_length = ((picoquic_supported_versions[cnx->version_index].version_flags&
-        picoquic_version_long_error_codes) != 0) ? 1 + 4 + 4 + 8 : 1 + 4 + 2 + 8;
+	const size_t min_length = 1 + 4 + 2 + 8;
     size_t byte_index = 0;
 
     if ((stream->stream_flags&picoquic_stream_flag_reset_requested) == 0 ||
@@ -310,17 +309,10 @@ int picoquic_prepare_stream_reset_frame(picoquic_cnx_t * cnx, picoquic_stream_he
                 bytes[byte_index++] = picoquic_frame_type_reset_stream;
                 picoformat_32(bytes + byte_index, (uint32_t)stream->stream_id);
                 byte_index += 4;
-                if ((picoquic_supported_versions[cnx->version_index].version_flags&
-                    picoquic_version_long_error_codes) != 0)
-                {
-                    picoformat_32(bytes + byte_index, stream->local_error);
-                    byte_index += 4;
-                }
-                else
-                {
-                    picoformat_16(bytes + byte_index, (uint16_t)stream->local_error);
-                    byte_index += 2;
-                }
+                
+                picoformat_16(bytes + byte_index, (uint16_t)stream->local_error);
+                byte_index += 2;
+
                 picoformat_64(bytes + 9, stream->sent_offset);
                 byte_index += 8;
                 *consumed = byte_index;
@@ -370,8 +362,7 @@ int picoquic_decode_stream_reset_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
     }
     else
     {
-        const size_t min_length = ((picoquic_supported_versions[cnx->version_index].version_flags&
-            picoquic_version_long_error_codes) != 0) ? 1 + 4 + 4 + 8 : 1 + 4 + 2 + 8;
+        const size_t min_length = 1 + 4 + 2 + 8;
 
         if (bytes_max < min_length)
         {
@@ -383,17 +374,8 @@ int picoquic_decode_stream_reset_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
             stream_id = PICOPARSE_32(bytes + byte_index);
             byte_index += 4;
 
-            if ((picoquic_supported_versions[cnx->version_index].version_flags&
-                picoquic_version_long_error_codes) != 0)
-            {
-                error_code = PICOPARSE_32(bytes + byte_index);
-                byte_index += 4;
-            }
-            else
-            {
-                error_code = PICOPARSE_16(bytes + byte_index);
-                byte_index += 2;
-            }
+            error_code = PICOPARSE_16(bytes + byte_index);
+            byte_index += 2;
 
             final_offset = PICOPARSE_64(bytes + byte_index);
             byte_index += 8;
@@ -477,8 +459,7 @@ int picoquic_prepare_stop_sending_frame(picoquic_cnx_t * cnx, picoquic_stream_he
     uint8_t * bytes, size_t bytes_max, size_t * consumed)
 {
     int ret = 0;
-    const size_t min_length = ((picoquic_supported_versions[cnx->version_index].version_flags&
-        picoquic_version_long_error_codes) != 0) ? 1 + 4 + 4 : 1 + 4 + 2;
+    const size_t min_length = 1 + 4 + 2;
     size_t byte_index = 0;
 
     if (bytes_max < min_length)
@@ -508,17 +489,10 @@ int picoquic_prepare_stop_sending_frame(picoquic_cnx_t * cnx, picoquic_stream_he
         bytes[byte_index++] = picoquic_frame_type_stop_sending;
         picoformat_32(bytes + byte_index, (uint32_t) stream->stream_id);
         byte_index += 4;
-        if ((picoquic_supported_versions[cnx->version_index].version_flags&
-            picoquic_version_long_error_codes) != 0)
-        {
-            picoformat_32(bytes + byte_index, stream->local_stop_error);
-            byte_index += 4;
-        }
-        else
-        {
-            picoformat_16(bytes + byte_index, (uint16_t)stream->local_stop_error);
-            byte_index += 2;
-        }
+        
+        picoformat_16(bytes + byte_index, (uint16_t)stream->local_stop_error);
+        byte_index += 2;
+
         *consumed = byte_index;
 
         stream->stream_flags |= picoquic_stream_flag_stop_sending_sent;
@@ -533,8 +507,7 @@ int picoquic_decode_stop_sending_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
     int ret = 0;
     const size_t min_length = ((picoquic_supported_versions[cnx->version_index].version_flags&
         picoquic_version_fix_ints) == 0)?(1 + picoquic_varint_skip(bytes+1) + 2)
-        :(((picoquic_supported_versions[cnx->version_index].version_flags&
-        picoquic_version_long_error_codes) != 0) ? 1 + 4 + 4 : 1 + 4 + 2);
+        :(1 + 4 + 2);
     uint64_t stream_id = 0;
     uint32_t error_code = 0;
     picoquic_stream_head * stream = NULL;
@@ -557,17 +530,8 @@ int picoquic_decode_stop_sending_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
         stream_id = PICOPARSE_32(bytes + byte_index);
         byte_index += 4;
 
-        if ((picoquic_supported_versions[cnx->version_index].version_flags&
-            picoquic_version_long_error_codes) != 0)
-        {
-            error_code = PICOPARSE_32(bytes + byte_index);
-            byte_index += 4;
-        }
-        else
-        {
-            error_code = PICOPARSE_16(bytes + byte_index);
-            byte_index += 2;
-        }
+        error_code = PICOPARSE_16(bytes + byte_index);
+        byte_index += 2;
     }
 
     if (ret == 0)
@@ -1431,11 +1395,6 @@ static int picoquic_parse_ack_header_old(uint8_t const * bytes, size_t bytes_max
     *mm = (first_byte & 3);
     size_t min_len = has_num_block + (1 << ll) + 2 + (1 << *mm);
 
-    if ((version_flags&picoquic_version_basic_time_stamp) != 0)
-    {
-        min_len++;
-    }
-
     if (first_byte < 0xA0 || first_byte > 0xBF)
     {
         DBG_PRINTF("Invalid first byte: 0x%02x", first_byte);
@@ -1458,14 +1417,7 @@ static int picoquic_parse_ack_header_old(uint8_t const * bytes, size_t bytes_max
             *num_block = 0;
         }
 
-        if ((version_flags&picoquic_version_basic_time_stamp) != 0)
-        {
-            *num_ts = bytes[byte_index++];
-        }
-        else
-        {
-            *num_ts = 0;
-        }
+        *num_ts = 0;
 
         /* decoding the largest */
         switch (ll)
@@ -1499,16 +1451,6 @@ static int picoquic_parse_ack_header_old(uint8_t const * bytes, size_t bytes_max
         /* ACK delay */
         *ack_delay = picoquic_float16_to_deltat(PICOPARSE_16(bytes + byte_index));
         byte_index += 2;
-
-        if ((version_flags&picoquic_version_basic_time_stamp) != 0)
-        {
-            if (byte_index + (*num_block)*(1 + (1 << *mm)) + (*num_ts) * 3 + 2 > bytes_max)
-            {
-                DBG_PRINTF("ack frame header too large: fixed=%" PRIst ", ack_blk=%u, ts=%u, bytes_max=%" PRIst,
-                    byte_index, (*num_block)*(1 + (1 << *mm)), (*num_ts) * 3 + 2, bytes_max);
-                ret = -1;
-            }
-        }
     }
 
     *consumed = byte_index;
@@ -2273,13 +2215,6 @@ static int picoquic_prepare_ack_frame_old (picoquic_cnx_t * cnx, uint64_t curren
 		/* Encode the number of blocks, always present. Will be overwritten later */
 		bytes[byte_index++] = 0;
 
-        if ((picoquic_supported_versions[cnx->version_index].version_flags&
-            picoquic_version_basic_time_stamp) != 0)
-        {
-            /* Encode a number of time stamps -- set to zero for now */
-            bytes[byte_index++] = 0;
-        }
-
 		/* Encode the largest seen on 4 bytes */
 		picoformat_32(bytes + byte_index, (uint32_t)cnx->first_sack_item.end_of_sack_range);
 		byte_index += 4;
@@ -2525,8 +2460,7 @@ int picoquic_prepare_connection_close_frame(picoquic_cnx_t * cnx,
     }
     else
     {
-        size_t size_required = ((picoquic_supported_versions[cnx->version_index].version_flags&
-            picoquic_version_long_error_codes) != 0) ? 7 : 5;
+        size_t size_required = 5;
 
         if (bytes_max < size_required)
         {
@@ -2537,17 +2471,9 @@ int picoquic_prepare_connection_close_frame(picoquic_cnx_t * cnx,
         {
             bytes[byte_index++] = picoquic_frame_type_connection_close;
 
-            if ((picoquic_supported_versions[cnx->version_index].version_flags&
-                picoquic_version_long_error_codes) != 0)
-            {
-                picoformat_32(bytes + byte_index, cnx->local_error);
-                byte_index += 4;
-            }
-            else
-            {
-                picoformat_16(bytes + byte_index, (uint16_t)cnx->local_error);
-                byte_index += 2;
-            }
+            picoformat_16(bytes + byte_index, (uint16_t)cnx->local_error);
+            byte_index += 2;
+            
             picoformat_16(bytes + byte_index, 0);
             byte_index += 2;
             *consumed = byte_index;
@@ -2586,8 +2512,7 @@ int picoquic_decode_connection_close_frame(picoquic_cnx_t * cnx, uint8_t * bytes
     }
     else
     {
-        size_t min_length = ((picoquic_supported_versions[cnx->version_index].version_flags&
-            picoquic_version_long_error_codes) != 0) ? 7 : 5;
+        size_t min_length = 5;
 
         if (bytes_max < min_length)
         {
@@ -2597,17 +2522,8 @@ int picoquic_decode_connection_close_frame(picoquic_cnx_t * cnx, uint8_t * bytes
         }
         else
         {
-            if ((picoquic_supported_versions[cnx->version_index].version_flags&
-                picoquic_version_long_error_codes) != 0)
-            {
-                error_code = PICOPARSE_32(bytes + byte_index);
-                byte_index += 4;
-            }
-            else
-            {
-                error_code = PICOPARSE_16(bytes + byte_index);
+            error_code = PICOPARSE_16(bytes + byte_index);
                 byte_index += 2;
-            }
 
             string_length = PICOPARSE_16(bytes + byte_index);
             byte_index += 2;
@@ -2680,8 +2596,7 @@ int picoquic_prepare_application_close_frame(picoquic_cnx_t * cnx,
     }
     else
     {
-        size_t size_required = ((picoquic_supported_versions[cnx->version_index].version_flags&
-            picoquic_version_long_error_codes) != 0) ? 7 : 5;
+        size_t size_required = 5;
 
         if (bytes_max < size_required)
         {
@@ -2692,17 +2607,9 @@ int picoquic_prepare_application_close_frame(picoquic_cnx_t * cnx,
         {
             bytes[byte_index++] = picoquic_frame_type_application_close;
 
-            if ((picoquic_supported_versions[cnx->version_index].version_flags&
-                picoquic_version_long_error_codes) != 0)
-            {
-                picoformat_32(bytes + byte_index, cnx->application_error);
-                byte_index += 4;
-            }
-            else
-            {
-                picoformat_16(bytes + byte_index, (uint16_t)cnx->application_error);
-                byte_index += 2;
-            }
+            picoformat_16(bytes + byte_index, (uint16_t)cnx->application_error);
+            byte_index += 2;
+
             picoformat_16(bytes + byte_index, 0);
             byte_index += 2;
 
@@ -2717,8 +2624,7 @@ int picoquic_decode_application_close_frame(picoquic_cnx_t * cnx, uint8_t * byte
     size_t bytes_max, size_t * consumed)
 {
     int ret = 0;
-    size_t min_length = ((picoquic_supported_versions[cnx->version_index].version_flags&
-        picoquic_version_long_error_codes) != 0) ? 7 : 5;
+    size_t min_length = 5;
     uint32_t error_code = 0;
     uint64_t string_length = 0;
     size_t byte_index = 1;
@@ -2752,17 +2658,9 @@ int picoquic_decode_application_close_frame(picoquic_cnx_t * cnx, uint8_t * byte
         }
         else
         {
-            if ((picoquic_supported_versions[cnx->version_index].version_flags&
-                picoquic_version_long_error_codes) != 0)
-            {
-                error_code = PICOPARSE_32(bytes + byte_index);
-                byte_index += 4;
-            }
-            else
-            {
-                error_code = PICOPARSE_16(bytes + byte_index);
-                byte_index += 2;
-            }
+            error_code = PICOPARSE_16(bytes + byte_index);
+            byte_index += 2;
+
             string_length = PICOPARSE_16(bytes + byte_index);
             byte_index += 2;
 
@@ -3725,15 +3623,7 @@ int picoquic_skip_frame(uint8_t * bytes, size_t bytes_max, size_t * consumed,
                     {
                         num_block = bytes[byte_index++];
                     }
-
-                    if (version_flags&picoquic_version_basic_time_stamp)
-                    {
-                        num_ts = bytes[byte_index++];
-                    }
-                    else
-                    {
-                        num_ts = 0;
-                    }
+                    num_ts = 0;
 
                     switch (ll)
                     {
@@ -3829,8 +3719,7 @@ int picoquic_skip_frame(uint8_t * bytes, size_t bytes_max, size_t * consumed,
             }
             else
             {
-                byte_index += ((version_flags&
-                    picoquic_version_long_error_codes) != 0) ? 4 + 4 + 8 : 4 + 2 + 8;
+                byte_index += 4 + 2 + 8;
             }
 			*pure_ack = 0;
 			break;
@@ -3844,7 +3733,7 @@ int picoquic_skip_frame(uint8_t * bytes, size_t bytes_max, size_t * consumed,
             }
             else
             {
-                byte_index += (version_flags&picoquic_version_long_error_codes) ? 5 : 2;
+                byte_index += 2;
                 reason_length = PICOPARSE_16(bytes + byte_index);
                 byte_index += 2 + reason_length;
             }
@@ -3860,7 +3749,7 @@ int picoquic_skip_frame(uint8_t * bytes, size_t bytes_max, size_t * consumed,
             }
             else
             {
-                byte_index += (version_flags&picoquic_version_long_error_codes) ? 5 : 2;
+                byte_index += 2;
                 reason_length = PICOPARSE_16(bytes + byte_index);
                 byte_index += 2 + reason_length;
             }
@@ -3957,8 +3846,7 @@ int picoquic_skip_frame(uint8_t * bytes, size_t bytes_max, size_t * consumed,
             }
             else
             {
-                byte_index += ((version_flags&
-                    picoquic_version_long_error_codes) != 0) ? 4 + 4 : 4 + 2;
+                byte_index += 4 + 2;
                 *pure_ack = 0;
             }
             *pure_ack = 0;

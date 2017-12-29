@@ -111,16 +111,7 @@ const picoquic_version_parameters_t picoquic_supported_versions[] = {
     picoquic_version_bidir_only | picoquic_version_old_aead_secret |
     picoquic_version_short_pings | picoquic_version_fix_ints| picoquic_version_old_parameters,
     picoquic_version_header_05_07,
-    sizeof(picoquic_cleartext_version_1_salt), picoquic_cleartext_version_1_salt },
-    { PICOQUIC_FIRST_INTEROP_VERSION,
-    picoquic_version_bidir_only |
-    picoquic_version_old_parameters|
-    picoquic_version_short_pings |
-    picoquic_version_fix_ints |
-    picoquic_version_basic_time_stamp|
-    picoquic_version_long_error_codes|
-    picoquic_version_use_fnv1a,
-    picoquic_version_header_05_07, 0, NULL }
+    sizeof(picoquic_cleartext_version_1_salt), picoquic_cleartext_version_1_salt }
 };
 
 const size_t picoquic_nb_supported_versions = sizeof(picoquic_supported_versions) / 
@@ -739,9 +730,7 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
         cnx->aead_decrypt_cleartext_ctx = NULL;
         cnx->aead_de_encrypt_cleartext_ctx = NULL;
 
-        if ((picoquic_supported_versions[cnx->version_index].version_flags
-            &picoquic_version_use_fnv1a) == 0 &&
-            picoquic_setup_cleartext_aead_contexts(cnx,
+        if (picoquic_setup_cleartext_aead_contexts(cnx,
             (quic->flags &picoquic_context_server) != 0) != 0)
         {
             /* Cannot initialize clear text aead */
@@ -1090,9 +1079,7 @@ int picoquic_reset_cnx_version(picoquic_cnx_t * cnx, uint8_t * bytes, size_t len
                         cnx->aead_0rtt_encrypt_ctx = NULL;
                     }
 
-                    if (ret == 0 &&
-                        (picoquic_supported_versions[cnx->version_index].version_flags
-                        &picoquic_version_use_fnv1a) == 0)
+                    if (ret == 0)
                     {
                         ret = picoquic_setup_cleartext_aead_contexts(cnx,
                             (cnx->quic->flags &picoquic_context_server) != 0);

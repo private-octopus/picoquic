@@ -164,15 +164,7 @@ static int basic_ack_parse_old(uint8_t * bytes, size_t bytes_max,
 		{
 			num_block = bytes[byte_index++];
 		}
-
-        if ((version_flags&picoquic_version_basic_time_stamp) != 0)
-        {
-            num_ts = bytes[byte_index++];
-        }
-        else
-        {
-            num_ts = 0;
-        }
+        num_ts = 0;
 
 		/* decoding the largest */
 		switch (ll)

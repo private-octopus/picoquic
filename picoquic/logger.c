@@ -437,8 +437,7 @@ size_t picoquic_log_reset_stream_frame(FILE * F, uint8_t * bytes, size_t bytes_m
     }
     else
     {
-        const size_t min_size = ((version_flags&picoquic_version_long_error_codes) != 0) ?
-            1 + 4 + 4 + 8 : 1 + 4 + 2 + 8;
+        const size_t min_size = 1 + 4 + 2 + 8;
 
         if (min_size > bytes_max)
         {
@@ -449,16 +448,9 @@ size_t picoquic_log_reset_stream_frame(FILE * F, uint8_t * bytes, size_t bytes_m
         /* Now that the size is good, parse and print it */
         stream_id = PICOPARSE_32(bytes + byte_index);
         byte_index += 4;
-        if ((version_flags&picoquic_version_long_error_codes) != 0)
-        {
-            error_code = PICOPARSE_32(bytes + byte_index);
-            byte_index += 4;
-        }
-        else
-        {
-            error_code = PICOPARSE_16(bytes + byte_index);
-            byte_index += 2;
-        }
+        error_code = PICOPARSE_16(bytes + byte_index);
+        byte_index += 2;
+
         offset = PICOPARSE_64(bytes + byte_index);
         byte_index += 8;
 
@@ -475,8 +467,7 @@ size_t picoquic_log_stop_sending_frame(FILE * F, uint8_t * bytes, size_t bytes_m
     size_t byte_index = 1;
     const size_t min_size = ((version_flags&picoquic_version_fix_ints) == 0)?
         (1 + picoquic_varint_skip(bytes+1) + 2)
-        :(((version_flags&picoquic_version_long_error_codes) != 0) ?
-        1 + 4 + 4 : 1 + 4 + 2);
+        : (1 + 4 + 2);
     uint64_t stream_id;
     uint32_t error_code;
 
@@ -497,16 +488,9 @@ size_t picoquic_log_stop_sending_frame(FILE * F, uint8_t * bytes, size_t bytes_m
     {
         stream_id = PICOPARSE_32(bytes + byte_index);
         byte_index += 4;
-        if ((version_flags&picoquic_version_long_error_codes) != 0)
-        {
-            error_code = PICOPARSE_32(bytes + byte_index);
-            byte_index += 4;
-        }
-        else
-        {
-            error_code = PICOPARSE_16(bytes + byte_index);
-            byte_index += 2;
-        }
+
+        error_code = PICOPARSE_16(bytes + byte_index);
+        byte_index += 2;
     }
 
     fprintf(F, "    STOP SENDING %d (0x%08x), Error 0x%x.\n",
@@ -546,7 +530,7 @@ size_t picoquic_log_connection_close_frame(FILE * F, uint8_t * bytes,
     }
     else
     {
-        size_t min_size = ((version_flags&picoquic_version_long_error_codes) != 0) ? 7 : 5;
+        size_t min_size = 5;
 
         if (min_size > bytes_max)
         {
@@ -555,16 +539,8 @@ size_t picoquic_log_connection_close_frame(FILE * F, uint8_t * bytes,
         }
 
         /* Now that the size is above the minimum */
-        if ((version_flags&picoquic_version_long_error_codes) != 0)
-        {
-            error_code = PICOPARSE_32(bytes + byte_index);
-            byte_index += 4;
-        }
-        else
-        {
-            error_code = PICOPARSE_16(bytes + byte_index);
-            byte_index += 2;
-        }
+        error_code = PICOPARSE_16(bytes + byte_index);
+        byte_index += 2;
 
         string_length = PICOPARSE_16(bytes + byte_index);
         byte_index += 2;
@@ -617,7 +593,7 @@ size_t picoquic_log_application_close_frame(FILE * F, uint8_t * bytes, size_t by
     }
     else
     {
-        size_t min_size = ((version_flags&picoquic_version_long_error_codes) != 0) ? 7 : 5;
+        size_t min_size = 5;
 
         if (min_size > bytes_max)
         {
@@ -626,16 +602,8 @@ size_t picoquic_log_application_close_frame(FILE * F, uint8_t * bytes, size_t by
         }
 
         /* Now that the size is above the minimum */
-        if ((version_flags&picoquic_version_long_error_codes) != 0)
-        {
-            error_code = PICOPARSE_32(bytes + byte_index);
-            byte_index += 4;
-        }
-        else
-        {
-            error_code = PICOPARSE_16(bytes + byte_index);
-            byte_index += 2;
-        }
+        error_code = PICOPARSE_16(bytes + byte_index);
+        byte_index += 2;
 
         string_length = PICOPARSE_16(bytes + byte_index);
         byte_index += 2;
@@ -1250,23 +1218,7 @@ void picoquic_log_packet(FILE* F, picoquic_quic_t * quic, picoquic_cnx_t * cnx,
 		case picoquic_packet_client_cleartext:
             if (cnx != NULL)
             {
-                if ((picoquic_supported_versions[cnx->version_index].version_flags&
-                    picoquic_version_use_fnv1a) != 0)
-                {
-                    decoded_length = picoquic_log_decrypt_clear_text(F, bytes, length);
-
-                    /* log clear text packet */
-                    if (decoded_length > 0)
-                    {
-                        /* log the frames */
-                        picoquic_log_frames(F, bytes + ph.offset, decoded_length - ph.offset,
-                            picoquic_supported_versions[cnx->version_index].version_flags);
-                    }
-                }
-                else
-                {
-                    picoquic_log_decrypt_encrypted_cleartext(F, cnx, receiving, bytes, length, &ph);
-                }
+                picoquic_log_decrypt_encrypted_cleartext(F, cnx, receiving, bytes, length, &ph);
             }
 			break;
 		case picoquic_packet_0rtt_protected:

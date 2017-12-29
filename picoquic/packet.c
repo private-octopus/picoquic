@@ -396,27 +396,17 @@ uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t 
 size_t picoquic_decrypt_cleartext(picoquic_cnx_t * cnx,
     uint8_t * bytes, size_t length, picoquic_packet_header * ph)
 {
-    size_t decoded_length = 0;
+    size_t decoded_length = picoquic_aead_cleartext_decrypt(cnx, bytes + ph->offset,
+        bytes + ph->offset, length - ph->offset, ph->pn64, bytes, ph->offset);
 
-    if ((picoquic_supported_versions[cnx->version_index].version_flags&
-        picoquic_version_use_fnv1a) != 0)
+    if (decoded_length > (length - ph->offset))
     {
-        decoded_length = fnv1a_check(bytes, length);
+        /* detect an error */
+        decoded_length = 0;
     }
     else
     {
-        decoded_length = picoquic_aead_cleartext_decrypt(cnx, bytes + ph->offset,
-            bytes + ph->offset, length - ph->offset, ph->pn64, bytes, ph->offset);
-
-        if (decoded_length > (length - ph->offset))
-        {
-            /* detect an error */
-            decoded_length = 0;
-        }
-        else
-        {
-            decoded_length += ph->offset;
-        }
+        decoded_length += ph->offset;
     }
 
     return decoded_length;
@@ -647,21 +637,13 @@ void picoquic_queue_stateless_reset(picoquic_cnx_t * cnx,
 
             byte_index += data_bytes;
 
-            if ((picoquic_supported_versions[cnx->version_index].version_flags&
-                picoquic_version_use_fnv1a) != 0)
-            {
-                memcpy(sp->bytes, cleartext, byte_index);
-                sp->length = fnv1a_protect(sp->bytes, byte_index, sizeof(sp->bytes));
-            }
-            else
-            {
-                /* AEAD Encrypt, to the send buffer */
-                memcpy(sp->bytes, cleartext, header_length);
-                sp->length = picoquic_aead_cleartext_encrypt(cnx, sp->bytes + header_length,
-                    cleartext + header_length, byte_index - header_length,
-                    ph->pn, sp->bytes, header_length);
-                sp->length += header_length;
-            }
+            /* AEAD Encrypt, to the send buffer */
+            memcpy(sp->bytes, cleartext, header_length);
+            sp->length = picoquic_aead_cleartext_encrypt(cnx, sp->bytes + header_length,
+                cleartext + header_length, byte_index - header_length,
+                ph->pn, sp->bytes, header_length);
+            sp->length += header_length;
+
             memset(&sp->addr_to, 0, sizeof(sp->addr_to));
             memcpy(&sp->addr_to, addr_from,
                 (addr_from->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));

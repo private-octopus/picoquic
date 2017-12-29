@@ -413,15 +413,11 @@ size_t picoquic_create_packet_header(
  */
 size_t picoquic_get_checksum_length(picoquic_cnx_t * cnx, int is_cleartext_mode)
 {
-    size_t ret = 8;
+    size_t ret = 16;
 
     if (is_cleartext_mode )
     {
-        if ((picoquic_supported_versions[cnx->version_index].version_flags&
-            picoquic_version_use_fnv1a) == 0)
-        {
-            ret = picoquic_aead_get_checksum_length(cnx->aead_encrypt_cleartext_ctx);
-        }
+        ret = picoquic_aead_get_checksum_length(cnx->aead_encrypt_cleartext_ctx);
     }
     else
     {
@@ -1160,21 +1156,12 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t * cnx, picoquic_packet * 
 
             if (is_cleartext_mode)
             {
-                if ((picoquic_supported_versions[cnx->version_index].version_flags&
-                    picoquic_version_use_fnv1a) != 0)
-                {
-                    memcpy(send_buffer, packet->bytes, length);
-                    length = fnv1a_protect(send_buffer, length, cnx->send_mtu);
-                }
-                else
-                {
-                    /* AEAD Encrypt, to the send buffer */
-                    memcpy(send_buffer, packet->bytes, header_length);
-                    length = picoquic_aead_cleartext_encrypt(cnx, send_buffer + header_length,
-                        packet->bytes + header_length, length - header_length,
-                        packet->sequence_number, send_buffer, header_length);
-                    length += header_length;
-                }
+                /* AEAD Encrypt, to the send buffer */
+                memcpy(send_buffer, packet->bytes, header_length);
+                length = picoquic_aead_cleartext_encrypt(cnx, send_buffer + header_length,
+                    packet->bytes + header_length, length - header_length,
+                    packet->sequence_number, send_buffer, header_length);
+                length += header_length;
             }
             else
             {
@@ -1313,21 +1300,12 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t * cnx, picoquic_packet * 
 
         if (is_cleartext_mode)
         {
-            if ((picoquic_supported_versions[cnx->version_index].version_flags&
-                picoquic_version_use_fnv1a) != 0)
-            {
-                memcpy(send_buffer, packet->bytes, length);
-                length = fnv1a_protect(send_buffer, length, cnx->send_mtu);
-            }
-            else
-            {
-                /* AEAD Encrypt, to the send buffer */
-                memcpy(send_buffer, packet->bytes, header_length);
-                length = picoquic_aead_cleartext_encrypt(cnx, send_buffer + header_length,
-                    packet->bytes + header_length, length - header_length,
-                    packet->sequence_number, send_buffer, header_length);
-                length += header_length;
-            }
+            /* AEAD Encrypt, to the send buffer */
+            memcpy(send_buffer, packet->bytes, header_length);
+            length = picoquic_aead_cleartext_encrypt(cnx, send_buffer + header_length,
+                packet->bytes + header_length, length - header_length,
+                packet->sequence_number, send_buffer, header_length);
+            length += header_length;
         }
         else
         {
@@ -1566,21 +1544,12 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t * cnx, picoquic_packet * pack
 
         if (is_cleartext_mode)
         {
-            if ((picoquic_supported_versions[cnx->version_index].version_flags&
-                picoquic_version_use_fnv1a) != 0)
-            {
-                memcpy(send_buffer, packet->bytes, length);
-                length = fnv1a_protect(send_buffer, length, cnx->send_mtu);
-            }
-            else
-            {
-                /* AEAD Encrypt, to the send buffer */
-                memcpy(send_buffer, packet->bytes, header_length);
-                length = picoquic_aead_cleartext_encrypt(cnx, send_buffer + header_length,
-                    packet->bytes + header_length, length - header_length,
-                    packet->sequence_number, send_buffer, header_length);
-                length += header_length;
-            }
+            /* AEAD Encrypt, to the send buffer */
+            memcpy(send_buffer, packet->bytes, header_length);
+            length = picoquic_aead_cleartext_encrypt(cnx, send_buffer + header_length,
+                packet->bytes + header_length, length - header_length,
+                packet->sequence_number, send_buffer, header_length);
+            length += header_length;
         }
         else
         {
@@ -1732,21 +1701,12 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t * cnx, picoquic_packet * packet
 
         if (is_cleartext_mode)
         {
-            if ((picoquic_supported_versions[cnx->version_index].version_flags&
-                picoquic_version_use_fnv1a) != 0)
-            {
-                memcpy(send_buffer, packet->bytes, length);
-                length = fnv1a_protect(send_buffer, length, cnx->send_mtu);
-            }
-            else
-            {
-                /* AEAD Encrypt, to the send buffer */
-                memcpy(send_buffer, packet->bytes, header_length);
-                length = picoquic_aead_cleartext_encrypt(cnx, send_buffer + header_length,
-                    packet->bytes + header_length, length - header_length,
-                    packet->sequence_number, send_buffer, header_length);
-                length += header_length;
-            }
+            /* AEAD Encrypt, to the send buffer */
+            memcpy(send_buffer, packet->bytes, header_length);
+            length = picoquic_aead_cleartext_encrypt(cnx, send_buffer + header_length,
+                packet->bytes + header_length, length - header_length,
+                packet->sequence_number, send_buffer, header_length);
+            length += header_length;
         }
         else
         {

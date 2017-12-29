@@ -207,11 +207,6 @@ static size_t build_test_ack_old(test_ack_range_t const * ranges, size_t nb_rang
     bytes[byte_index++] = 0xBA;
     /* Encode the number of blocks -- will know at the end of the process */
     bytes[byte_index++] = 0;
-    if ((version_flags & picoquic_version_basic_time_stamp) != 0)
-    {
-        /* Encode a number of time stamps -- set to zero for now */
-        bytes[byte_index++] = 0;
-    }
     /* Encode the largest seen on 4 bytes */
     picoformat_32(bytes + byte_index, (uint32_t)ranges[0].end_of_sack_range);
     byte_index += 4;
