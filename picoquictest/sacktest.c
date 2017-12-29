@@ -314,12 +314,6 @@ static int basic_ack_parse(uint8_t * bytes, size_t bytes_max,
     size_t l_num_block = 0;
     size_t l_last_range = 0;
 
-    if ((version_flags&picoquic_version_fix_ints) != 0)
-    {
-        return basic_ack_parse_old(bytes, bytes_max, expected_ack, expected_mask, version_flags);
-    }
-
-
     if (first_byte != picoquic_frame_type_ack)
     {
         ret = -1;

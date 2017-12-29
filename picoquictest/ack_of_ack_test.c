@@ -193,67 +193,11 @@ static int cmp_test_sack_list(picoquic_sack_item_t * sack_head,
     return (next == NULL && nb_compared == nb_ranges) ? 0 : -1;
 }
 
-/*
- * Build a SACK frame from a range
- */
-static size_t build_test_ack_old(test_ack_range_t const * ranges, size_t nb_ranges,
-    uint8_t * bytes, size_t bytes_max, uint32_t version_flags)
-{
-    size_t byte_index = 0;
-    uint8_t num_block = 0;
-    uint64_t ack_range = 0;
-
-    /* Encode the first byte as 101NLLMM, with N=1, LL=2, MM=2 */
-    bytes[byte_index++] = 0xBA;
-    /* Encode the number of blocks -- will know at the end of the process */
-    bytes[byte_index++] = 0;
-    /* Encode the largest seen on 4 bytes */
-    picoformat_32(bytes + byte_index, (uint32_t)ranges[0].end_of_sack_range);
-    byte_index += 4;
-    /* Set the ACK delay to zero for these tests */
-    picoformat_16(bytes + byte_index, picoquic_deltat_to_float16(0));
-    byte_index += 2;
-    /* Encode the size of the first ack range */
-    ack_range = ranges[0].end_of_sack_range - ranges[0].start_of_sack_range;
-    picoformat_32(bytes + byte_index, (uint32_t)ack_range);
-    byte_index += 4;
-    /* Encode each of the ack block items */
-    for (size_t i = 1; i < nb_ranges && byte_index + 5 < bytes_max; i++)
-    {
-        uint64_t gap = ranges[i - 1].start_of_sack_range - ranges[i].end_of_sack_range - 1;
-        while (gap > 255 && num_block < 255 && (byte_index + 5) <= bytes_max)
-        {
-            bytes[byte_index++] = 255;
-            picoformat_32(bytes + byte_index, 0);
-            byte_index += 4;
-            gap -= 255;
-            num_block++;
-        }
-
-        if (num_block < 255 && (byte_index + 5) <= bytes_max)
-        {
-            ack_range = ranges[i].end_of_sack_range - ranges[i].start_of_sack_range;
-            bytes[byte_index++] = (uint8_t)gap;
-            picoformat_32(bytes + byte_index, (uint32_t)ack_range + 1);
-            byte_index += 4;
-            num_block++;
-        }
-    }
-
-    bytes[1] = num_block;
-    return byte_index;
-}
-
 static size_t build_test_ack(test_ack_range_t const * ranges, size_t nb_ranges,
     uint8_t * bytes, size_t bytes_max, uint32_t version_flags)
 {
     size_t byte_index = 0;
     uint64_t ack_range = 0;
-
-    if ((version_flags&picoquic_version_fix_ints) != 0)
-    {
-        return build_test_ack_old(ranges, nb_ranges, bytes, bytes_max, version_flags);
-    }
 
     /* Encode the first byte */
     bytes[byte_index++] = picoquic_frame_type_ack;
@@ -292,8 +236,7 @@ static int ack_of_ack_do_one_test(test_ack_of_ack_t const * sample)
     ack_length = build_test_ack(sample->ack, sample->nb_ack, ack, sizeof(ack),
         sample->version_flags);
 
-    ret = picoquic_process_ack_of_ack_frame(&sack_head, ack, ack_length, &consumed, 
-        sample->version_flags);
+    ret = picoquic_process_ack_of_ack_frame(&sack_head, ack, ack_length, &consumed);
 
     if (ret == 0)
     {

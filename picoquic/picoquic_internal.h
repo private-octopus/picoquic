@@ -113,9 +113,9 @@ extern "C" {
      */
 
     typedef enum {
-        picoquic_version_fix_ints = 8,
+        // picoquic_version_fix_ints = 8,
         picoquic_version_short_pings = 16,
-        picoquic_version_old_parameters = 32,
+        // picoquic_version_old_parameters = 32,
         picoquic_version_bidir_only = 64,
         picoquic_version_old_aead_secret = 128
     } picoquic_version_feature_flags;
@@ -517,23 +517,18 @@ extern "C" {
         picoquic_packet_header * ph,
         picoquic_cnx_t ** pcnx);
 
-    int picoquic_test_stream_frame_unlimited(picoquic_cnx_t * cnx, uint8_t * bytes);
+    int picoquic_test_stream_frame_unlimited(uint8_t * bytes);
 
     int picoquic_parse_stream_header(
 		const uint8_t * bytes, size_t bytes_max,
 		uint64_t * stream_id, uint64_t * offset, size_t * data_length, int * fin,
 		size_t * consumed);
 
-    int picoquic_parse_stream_header_old(
-        const uint8_t * bytes, size_t bytes_max,
-        uint64_t * stream_id, uint64_t * offset, size_t * data_length, int * fin,
-        size_t * consumed);
-
 	int picoquic_parse_ack_header(
-		uint8_t const * bytes, size_t bytes_max, uint64_t target_sequence,
-		uint64_t * num_block, unsigned * num_ts, uint64_t * largest,
-		uint64_t * ack_delay, unsigned * mm, size_t * consumed,
-        uint32_t version_flags, uint8_t ack_delay_exponent);
+		uint8_t const * bytes, size_t bytes_max,
+		uint64_t * num_block, uint64_t * largest,
+		uint64_t * ack_delay, size_t * consumed,
+        uint8_t ack_delay_exponent);
   
 	uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t pn);
 
@@ -562,7 +557,7 @@ extern "C" {
      */
     int picoquic_process_ack_of_ack_frame(
         picoquic_sack_item_t * first_sack,
-        uint8_t * bytes, size_t bytes_max, size_t * consumed, uint32_t version_flags);
+        uint8_t * bytes, size_t bytes_max, size_t * consumed);
 
 	/* stream management */
     picoquic_stream_head * picoquic_create_stream(picoquic_cnx_t * cnx, uint64_t stream_id);

@@ -79,28 +79,16 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t * cnx, int extension_mo
 	size_t byte_index = 0;
 	size_t min_size = 0;
 	uint16_t param_size = 0;
-    int old_format = picoquic_supported_versions[cnx->version_index].version_flags&picoquic_version_old_parameters;
 
     /* TODO: version code dependent on version type */
 
 	switch (extension_mode)
 	{
 	case 0: // Client hello
-        if (old_format == 0)
-        {
-            min_size = 4;
-        }
-        else
-        {
-            min_size = 8;
-        }
+        min_size = 4;
 		break;
 	case 1: // Server encrypted extension
-		min_size = 1 + 4 * picoquic_nb_supported_versions;
-        if (old_format == 0)
-        {
-            min_size += 4;
-        }
+		min_size = 1 + 4 + 4 * picoquic_nb_supported_versions;
 		break;
 	default: // New session ticket
 		break;
@@ -141,22 +129,14 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t * cnx, int extension_mo
 		switch (extension_mode)
 		{
 		case 0: // Client hello
-            if (old_format != 0)
-            {
-                picoformat_32(bytes + byte_index,
-                    picoquic_supported_versions[cnx->version_index].version);
-                byte_index += 4;
-            }
 			picoformat_32(bytes + byte_index, cnx->proposed_version);
 			byte_index += 4;
 			break;
 		case 1: // Server encrypted extension
-            if (old_format == 0)
-            {
-                picoformat_32(bytes + byte_index,
+            picoformat_32(bytes + byte_index,
                     picoquic_supported_versions[cnx->version_index].version);
-                byte_index += 4;
-            }
+            byte_index += 4;
+
 			bytes[byte_index++] = (uint8_t) (4 * picoquic_nb_supported_versions);
 			for (size_t i = 0; i < picoquic_nb_supported_versions; i++)
 			{
@@ -256,31 +236,17 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t * cnx, int extension_mo
 	int ret = 0;
 	size_t byte_index = 0;
     uint32_t present_flag = 0;
-    int old_format = picoquic_supported_versions[cnx->version_index].version_flags&picoquic_version_old_parameters;
 
     switch (extension_mode)
     {
     case 0: // Client hello
-        if ((old_format == 0 && bytes_max < 4) || bytes_max < 8)
+        if (bytes_max < 4)
         {
             ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_TRANSPORT_PARAMETER_ERROR);
         }
         else
         {
             uint32_t proposed_version;
-
-            if (old_format != 0)
-            {
-                uint32_t version;
-
-                version = PICOPARSE_32(bytes + byte_index);
-                byte_index += 4;
-
-                if (version != picoquic_supported_versions[cnx->version_index].version)
-                {
-                    ret = PICOQUIC_ERROR_VERSION_NEGOTIATION_SPOOFED;
-                }
-            }
 
             proposed_version = PICOPARSE_32(bytes + byte_index);
             byte_index += 4;
@@ -306,23 +272,20 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t * cnx, int extension_mo
 		}
 		else
 		{
-            if (old_format == 0)
+            if (bytes_max < byte_index + 4)
             {
-                if (bytes_max < byte_index + 4)
-                {
-                    ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_TRANSPORT_PARAMETER_ERROR);
-                }
-                else
-                {
-                    uint32_t version;
+                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_TRANSPORT_PARAMETER_ERROR);
+            }
+            else
+            {
+                uint32_t version;
 
-                    version = PICOPARSE_32(bytes + byte_index);
-                    byte_index += 4;
+                version = PICOPARSE_32(bytes + byte_index);
+                byte_index += 4;
 
-                    if (version != picoquic_supported_versions[cnx->version_index].version)
-                    {
-                        ret = PICOQUIC_ERROR_VERSION_NEGOTIATION_SPOOFED;
-                    }
+                if (version != picoquic_supported_versions[cnx->version_index].version)
+                {
+                    ret = PICOQUIC_ERROR_VERSION_NEGOTIATION_SPOOFED;
                 }
             }
 
@@ -438,14 +401,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t * cnx, int extension_mo
 						else
 						{
 							cnx->remote_parameters.initial_max_data = PICOPARSE_32(bytes + byte_index);
-                            if (old_format == 0)
-                            {
-                                cnx->maxdata_remote = cnx->remote_parameters.initial_max_data;
-                            }
-                            else
-                            {
-                                cnx->maxdata_remote = ((uint64_t)cnx->remote_parameters.initial_max_data) << 10;
-                            }
+                            cnx->maxdata_remote = cnx->remote_parameters.initial_max_data;
 							cnx->max_stream_id_bidir_remote = cnx->local_parameters.initial_max_stream_id_bidir;
 						}
 						break;

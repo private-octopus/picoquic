@@ -109,7 +109,7 @@ const picoquic_version_parameters_t picoquic_supported_versions[] = {
     picoquic_cleartext_version_1_salt },
     { PICOQUIC_SECOND_INTEROP_VERSION, 
     picoquic_version_bidir_only | picoquic_version_old_aead_secret |
-    picoquic_version_short_pings | picoquic_version_fix_ints| picoquic_version_old_parameters,
+    picoquic_version_short_pings,
     picoquic_version_header_05_07,
     sizeof(picoquic_cleartext_version_1_salt), picoquic_cleartext_version_1_salt }
 };
@@ -518,15 +518,8 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
         }
 		// picoquic_init_transport_parameters(&cnx->remote_parameters);
 		/* Initialize local flow control variables to advertised values */
-        if ((picoquic_supported_versions[cnx->version_index].version_flags &
-            picoquic_version_fix_ints) == 0)
-        {
-            cnx->maxdata_local = ((uint64_t)cnx->local_parameters.initial_max_data);
-        }
-        else
-        {
-            cnx->maxdata_local = ((uint64_t)cnx->local_parameters.initial_max_data) << 10;
-        }
+        
+        cnx->maxdata_local = ((uint64_t)cnx->local_parameters.initial_max_data);
 		cnx->max_stream_id_bidir_local = cnx->local_parameters.initial_max_stream_id_bidir;
         cnx->max_stream_id_unidir_local = cnx->local_parameters.initial_max_stream_id_unidir;
 

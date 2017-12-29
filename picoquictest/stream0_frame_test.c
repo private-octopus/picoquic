@@ -158,36 +158,6 @@ struct packet
     size_t invalid_length;
 };
 
-static struct packet list1[] = {
-    { f0_1, sizeof(f0_1), 0, 10, 0},
-    { f0_2, sizeof(f0_2), 10, 10, 0 },
-    { f0_3, sizeof(f0_3), 20, 10, 0 },
-    { f0_4, sizeof(f0_4), 30, 10, 0 },
-    { f0_5, sizeof(f0_5), 40, 10, 0 }
-};
-
-
-static struct packet list2[] = {
-    { f0_2, sizeof(f0_2), 10, 10, 0 },
-    { f0_3, sizeof(f0_3), 20, 10, 0 },
-    { f0_1, sizeof(f0_1), 0, 10, 0 },
-    { f0_5, sizeof(f0_5), 40, 10, 0 },
-    { f0_4, sizeof(f0_4), 30, 10, 0 },
-};
-
-static struct packet list3[] = {
-    { f0_1, sizeof(f0_1), 0, 10, 0 },
-    { f0_2, sizeof(f0_2), 10, 10, 0 },
-    { f0_3, sizeof(f0_3), 20, 10, 0 },
-    { f0_2, sizeof(f0_2), 10, 10, 0 },
-    { f0_3, sizeof(f0_3), 20, 10, 0 },
-    { f0_4, sizeof(f0_4), 30, 10, 0 },
-    { f0_4, sizeof(f0_4), 30, 10, 0 },
-    { f0_5, sizeof(f0_5), 40, 10, 0 },
-    { f0_45_overlap, sizeof(f0_45_overlap), 35, 10, 0 }
-};
-
-
 static struct packet list_v1[] = {
     { v0_1, sizeof(v0_1), 0, 10, 0 },
     { v0_2, sizeof(v0_2), 10, 10, 0 },
@@ -228,20 +198,14 @@ struct test_case_st
 };
 
 static struct test_case_st test_case[] = {
-    { "test1", list1, sizeof(list1) / sizeof(struct packet), 50},
-    { "test2", list2, sizeof(list2) / sizeof(struct packet), 50 },
-    { "test3", list3, sizeof(list3) / sizeof(struct packet), 50 }
-};
-
-static struct test_case_st test_case_v[] = {
     { "test_v1", list_v1, sizeof(list_v1) / sizeof(struct packet), 50 },
     { "test_v2", list_v2, sizeof(list_v2) / sizeof(struct packet), 50 },
     { "test_v3", list_v3, sizeof(list_v3) / sizeof(struct packet), 50 }
 };
 
-#define FAIL(test, fmt, ...) DBG_PRINTF("Test %s failed: " fmt, (test)->name, __VA_ARGS__)
+static size_t const nb_test_cases = sizeof(test_case) / sizeof(struct test_case_st);
 
-size_t nb_test_cases = sizeof(test_case) / sizeof(struct test_case_st);
+#define FAIL(test, fmt, ...) DBG_PRINTF("Test %s failed: " fmt, (test)->name, __VA_ARGS__)
 
 static int StreamZeroFrameOneTest(struct test_case_st * test)
 {
@@ -301,20 +265,10 @@ int StreamZeroFrameTest()
 {
     int ret = 0;
 
-    if ((picoquic_supported_versions[0].version_flags & picoquic_version_fix_ints) == 0)
-    {
-        for (size_t i = 0; ret == 0 && i < nb_test_cases; i++)
-        {
-            ret = StreamZeroFrameOneTest(&test_case_v[i]);
-        }
-    }
-    else
-    {
-        for (size_t i = 0; ret == 0 && i < nb_test_cases; i++)
+    for (size_t i = 0; ret == 0 && i < nb_test_cases; i++)
         {
             ret = StreamZeroFrameOneTest(&test_case[i]);
         }
-    }
 
     return ret;
 }
