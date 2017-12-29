@@ -113,50 +113,34 @@ int picoquic_find_or_create_stream(picoquic_cnx_t * cnx, uint64_t stream_id,
     if (*stream == NULL)
     {
         /* Verify the stream ID control conditions */
-        if ((picoquic_supported_versions[cnx->version_index].version_flags&picoquic_version_bidir_only) == 0)
+
+        /* Check parity */
+        int parity = ((cnx->quic->flags&picoquic_context_server) == 0) ?
+            is_remote : is_remote ^ 1;
+        if ((stream_id & 1) != parity)
         {
-
-            /* Check parity */
-            int parity = ((cnx->quic->flags&picoquic_context_server) == 0) ?
-                is_remote : is_remote ^ 1;
-            if ((stream_id & 1) != parity)
-            {
-                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_STREAM_ID_ERROR);
-            }
-            else
-            {
-                if ((stream_id & 2) == 0)
-                {
-                    if (stream_id > cnx->max_stream_id_bidir_local)
-                    {
-                        ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_STREAM_ID_ERROR);
-                    }
-                }
-                else
-                {
-                    is_unidir = 1;
-
-                    if (stream_id > cnx->max_stream_id_unidir_local)
-                    {
-                        ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_STREAM_ID_ERROR);
-                    }
-                }
-            }
+            ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_STREAM_ID_ERROR);
         }
         else
         {
-            int parity = ((cnx->quic->flags&picoquic_context_server) == 0) ?
-                is_remote ^ 1 : is_remote;
-
-            if ((stream_id & 1) != parity)
+            if ((stream_id & 2) == 0)
             {
-                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_STREAM_ID_ERROR);
+                if (stream_id > cnx->max_stream_id_bidir_local)
+                {
+                    ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_STREAM_ID_ERROR);
+                }
             }
-            else if (stream_id > cnx->max_stream_id_bidir_local)
+            else
             {
-                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_STREAM_ID_ERROR);
+                is_unidir = 1;
+
+                if (stream_id > cnx->max_stream_id_unidir_local)
+                {
+                    ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_STREAM_ID_ERROR);
+                }
             }
         }
+
 
         if (ret == 0)
         {
@@ -1455,8 +1439,7 @@ void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t * cnx, picoquic_p
         else
         {
             ret = picoquic_skip_frame(&p->bytes[byte_index],
-                p->length - ph.offset, &frame_length, &frame_is_pure_ack,
-                picoquic_supported_versions[cnx->version_index].version_flags);
+                p->length - ph.offset, &frame_length, &frame_is_pure_ack);
             byte_index += frame_length;
         }
     }
@@ -2149,49 +2132,41 @@ int picoquic_decode_max_stream_id_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
 
     if (ret == 0)
     {
-        if ((picoquic_supported_versions[cnx->version_index].version_flags&
-            picoquic_version_bidir_only) == 0)
+        if ((cnx->quic->flags&picoquic_context_server) == 0)
         {
-            if ((cnx->quic->flags&picoquic_context_server) == 0)
+            /* Should only accept client stream ID */
+            if ((max_stream_id & 1) != 0)
             {
-                /* Should only accept client stream ID */
-                if ((max_stream_id & 1) != 0)
+                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_STREAM_ID_ERROR);
+            }
+        }
+        else
+        {
+            if ((max_stream_id & 1) == 0)
+            {
+                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_STREAM_ID_ERROR);
+            }
+        }
+
+        if (ret == 0)
+        {
+            if ((max_stream_id & 2) == 0)
+            {
+                if (max_stream_id > cnx->max_stream_id_bidir_remote)
                 {
-                    ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_STREAM_ID_ERROR);
+                    cnx->max_stream_id_bidir_remote = max_stream_id;
                 }
             }
             else
             {
-                if ((max_stream_id & 1) == 0)
+                if (max_stream_id > cnx->max_stream_id_unidir_remote)
                 {
-                    ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_STREAM_ID_ERROR);
+                    cnx->max_stream_id_unidir_remote = max_stream_id;
                 }
             }
-
-            if (ret == 0)
-            {
-                if ((max_stream_id & 2) == 0)
-                {
-                    if (max_stream_id > cnx->max_stream_id_bidir_remote)
-                    {
-                        cnx->max_stream_id_bidir_remote = max_stream_id;
-                    }
-                }
-                else
-                {
-                    if (max_stream_id > cnx->max_stream_id_unidir_remote)
-                    {
-                        cnx->max_stream_id_unidir_remote = max_stream_id;
-                    }
-                }
-            }
-
-        }
-        else if (max_stream_id > cnx->max_stream_id_bidir_remote)
-        {
-            cnx->max_stream_id_bidir_remote = max_stream_id;
         }
     }
+
     return ret;
 }
 
@@ -2231,39 +2206,30 @@ int picoquic_decode_ping_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
 {
     int ret = 0;
     size_t byte_index = 1;
+    size_t ping_length = bytes[byte_index++];
 
-    if ((picoquic_supported_versions[cnx->version_index].version_flags&
-        picoquic_version_short_pings) != 0)
+    if (byte_index + ping_length > bytes_max)
     {
-        /* Nothing to do here, besides waiting for ACK. */
+        byte_index = bytes_max;
+
+        ret = picoquic_connection_error(cnx,
+            PICOQUIC_TRANSPORT_FRAME_ERROR(picoquic_frame_type_ping));
     }
-    else
+    else if (ping_length > 0)
     {
-        size_t ping_length = bytes[byte_index++];
+        /*
+         * Queue a Pong frame as response to Ping.
+         */
+        uint8_t frame_buffer[258];
 
-        if (byte_index + ping_length > bytes_max)
-        {
-            byte_index = bytes_max;
+        byte_index += ping_length;
 
-            ret = picoquic_connection_error(cnx,
-                PICOQUIC_TRANSPORT_FRAME_ERROR(picoquic_frame_type_ping));
-        }
-        else if (ping_length > 0)
-        {
-            /*
-             * Queue a Pong frame as response to Ping.
-             */
-            uint8_t frame_buffer[258];
+        memcpy(frame_buffer, bytes, byte_index);
+        frame_buffer[0] = picoquic_frame_type_pong;
 
-            byte_index += ping_length;
-
-            memcpy(frame_buffer, bytes, byte_index);
-            frame_buffer[0] = picoquic_frame_type_pong;
-
-            ret = picoquic_queue_misc_frame(cnx, frame_buffer, byte_index);
-        }
+        ret = picoquic_queue_misc_frame(cnx, frame_buffer, byte_index);
     }
-    
+
     *consumed = byte_index;
 
     return ret;
@@ -2274,38 +2240,26 @@ int picoquic_decode_pong_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
 {
     int ret = 0;
     size_t byte_index = 1;
+    size_t ping_length = bytes[byte_index++];
 
-    if ((picoquic_supported_versions[cnx->version_index].version_flags&
-        picoquic_version_short_pings) != 0)
+    if (byte_index + ping_length > bytes_max)
     {
-        /* Pong frames not supported in the old versions. */
         byte_index = bytes_max;
+
         ret = picoquic_connection_error(cnx,
             PICOQUIC_TRANSPORT_FRAME_ERROR(picoquic_frame_type_pong));
     }
-    else
+    else if (ping_length > 0)
     {
-        size_t ping_length = bytes[byte_index++];
+        /*
+         * Submit the pong frame to the call back if there is one.
+         */
 
-        if (byte_index + ping_length > bytes_max)
+        byte_index += ping_length;
+
+        if (cnx->callback_fn != NULL)
         {
-            byte_index = bytes_max;
-
-            ret = picoquic_connection_error(cnx,
-                PICOQUIC_TRANSPORT_FRAME_ERROR(picoquic_frame_type_pong));
-        }
-        else if (ping_length > 0)
-        {
-            /*
-             * Submit the pong frame to the call back if there is one.
-             */
-
-            byte_index += ping_length;
-
-            if (cnx->callback_fn != NULL)
-            {
-                cnx->callback_fn(cnx, 0, bytes, byte_index, 0, cnx->callback_ctx);
-            }
+            cnx->callback_fn(cnx, 0, bytes, byte_index, 0, cnx->callback_ctx);
         }
     }
 
@@ -2577,8 +2531,8 @@ static int picoquic_skip_ack_frame(uint8_t * bytes, size_t bytes_max, size_t * c
     return ret;
 }
 
-int picoquic_skip_frame(uint8_t * bytes, size_t bytes_max, size_t * consumed, 
-    int * pure_ack, uint32_t version_flags)
+int picoquic_skip_frame(uint8_t * bytes, size_t bytes_max, size_t * consumed,
+    int * pure_ack)
 {
 	int ret = 0;
 	size_t byte_index = 0;
@@ -2663,7 +2617,6 @@ int picoquic_skip_frame(uint8_t * bytes, size_t bytes_max, size_t * consumed,
 			break;
 		case picoquic_frame_type_ping:
 			*pure_ack = 0;
-            if ((version_flags&picoquic_version_short_pings) == 0)
             {
                 size_t ping_length = bytes[byte_index++];
                 byte_index += ping_length;
@@ -2696,7 +2649,6 @@ int picoquic_skip_frame(uint8_t * bytes, size_t bytes_max, size_t * consumed,
             break;
         case picoquic_frame_type_pong:
             *pure_ack = 0;
-            if ((version_flags&picoquic_version_short_pings) == 0)
             {
                 size_t ping_length = bytes[byte_index++];
                 byte_index += ping_length;
@@ -2713,7 +2665,7 @@ int picoquic_skip_frame(uint8_t * bytes, size_t bytes_max, size_t * consumed,
 	return ret;
 }
 
-int picoquic_decode_closing_frames(picoquic_cnx_t * cnx, uint8_t * bytes,
+int picoquic_decode_closing_frames(uint8_t * bytes,
     size_t bytes_max, int *closing_received)
 {
 
@@ -2737,8 +2689,7 @@ int picoquic_decode_closing_frames(picoquic_cnx_t * cnx, uint8_t * bytes,
             int pure_ack = 0;
 
             ret = picoquic_skip_frame(bytes + byte_index, 
-                bytes_max - byte_index, &consumed, &pure_ack, 
-                picoquic_supported_versions[cnx->version_index].version_flags);
+                bytes_max - byte_index, &consumed, &pure_ack);
             byte_index += consumed;
         }
     }

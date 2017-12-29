@@ -177,7 +177,7 @@ int skip_frame_test()
             byte_max += sizeof(extra_bytes);
         }
 
-        t_ret = picoquic_skip_frame(buffer, byte_max, &consumed, &pure_ack, 0);
+        t_ret = picoquic_skip_frame(buffer, byte_max, &consumed, &pure_ack);
 
         if (t_ret != 0)
         {
@@ -201,7 +201,7 @@ int skip_frame_test()
     return ret;
 }
 
-void picoquic_log_frames(FILE* F, uint8_t * bytes, size_t length, uint32_t version_flags);
+void picoquic_log_frames(FILE* F, uint8_t * bytes, size_t length);
 
 static char const * log_test_file = "log_test.txt";
 
@@ -333,7 +333,7 @@ int logger_test()
 
     for (size_t i = 0; i < nb_test_skip_list; i++)
     {
-        picoquic_log_frames(F, test_skip_list[i].val, test_skip_list[i].len, 0);
+        picoquic_log_frames(F, test_skip_list[i].val, test_skip_list[i].len);
     }
 
     fclose(F);

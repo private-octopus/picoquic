@@ -624,16 +624,7 @@ static const demo_stream_desc_t test_scenario[] = {
 #endif
 };
 
-static const demo_stream_desc_t test_scenario_old[] = {
-    { 1, 0, "index.html", "index.html", 0 },
-    { 3, 1, "test.html", "test.html",0 },
-    { 5, 1, "doc-123456.html", "doc-123456.html",0 },
-    { 7, 1, "main.jpg", "main.jpg", 1 },
-    { 9, 1, "war-and-peace.txt", "war-and-peace.txt", 0 }
-};
-
 static const size_t test_scenario_nb = sizeof(test_scenario) / sizeof(demo_stream_desc_t);
-static const size_t test_scenario_old_nb = sizeof(test_scenario_old) / sizeof(demo_stream_desc_t);
 
 static const uint8_t test_ping[] = { picoquic_frame_type_ping, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -876,17 +867,8 @@ void quic_client_launch_scenario(picoquic_cnx_t *cnx_client,
     picoquic_first_client_callback_ctx_t *callback_ctx)
 {
     /* Start the download scenario */
-    if ((picoquic_supported_versions[cnx_client->version_index].version_flags&
-        picoquic_version_bidir_only) == 0)
-    {
-        callback_ctx->demo_stream = test_scenario;
-        callback_ctx->nb_demo_streams = test_scenario_nb;
-    }
-    else
-    {
-        callback_ctx->demo_stream = test_scenario_old;
-        callback_ctx->nb_demo_streams = test_scenario_old_nb;
-    }
+    callback_ctx->demo_stream = test_scenario;
+    callback_ctx->nb_demo_streams = test_scenario_nb;
 
     demo_client_start_streams(cnx_client, callback_ctx, 0);
 }

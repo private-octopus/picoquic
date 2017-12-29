@@ -413,16 +413,13 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t * cnx, int extension_mo
 						else
 						{
 							cnx->remote_parameters.initial_max_stream_id_bidir = PICOPARSE_32(bytes + byte_index);
-
-                            if ((picoquic_supported_versions[cnx->version_index].version_flags&picoquic_version_bidir_only) == 0)
-                            {
-                                if (cnx->remote_parameters.initial_max_stream_id_bidir != 0 &&
-                                    (((extension_mode == 0) && (cnx->remote_parameters.initial_max_stream_id_bidir & 1) == 0) ||
-                                    ((extension_mode == 1) && (cnx->remote_parameters.initial_max_stream_id_bidir & 1) != 0) ||
+                            
+                            if (cnx->remote_parameters.initial_max_stream_id_bidir != 0 &&
+                                (((extension_mode == 0) && (cnx->remote_parameters.initial_max_stream_id_bidir & 1) == 0) ||
+                                ((extension_mode == 1) && (cnx->remote_parameters.initial_max_stream_id_bidir & 1) != 0) ||
                                     ((cnx->remote_parameters.initial_max_stream_id_bidir & 2) != 0)))
-                                {
-                                    ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_TRANSPORT_PARAMETER_ERROR);
-                                }
+                            {
+                                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_TRANSPORT_PARAMETER_ERROR);
                             }
 						}
 						break;
@@ -489,16 +486,13 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t * cnx, int extension_mo
                         else
                         {
                             cnx->remote_parameters.initial_max_stream_id_unidir = PICOPARSE_32(bytes + byte_index);
-
-                            if ((picoquic_supported_versions[cnx->version_index].version_flags&picoquic_version_bidir_only) == 0)
-                            {
-                                if (cnx->remote_parameters.initial_max_stream_id_unidir != 0 &&
-                                    (((extension_mode == 0) && (cnx->remote_parameters.initial_max_stream_id_unidir & 1) == 0) ||
-                                    ((extension_mode == 1) && (cnx->remote_parameters.initial_max_stream_id_unidir & 1) != 0) ||
+                            
+                            if (cnx->remote_parameters.initial_max_stream_id_unidir != 0 &&
+                                (((extension_mode == 0) && (cnx->remote_parameters.initial_max_stream_id_unidir & 1) == 0) ||
+                                ((extension_mode == 1) && (cnx->remote_parameters.initial_max_stream_id_unidir & 1) != 0) ||
                                     ((cnx->remote_parameters.initial_max_stream_id_unidir & 2) == 0)))
-                                {
-                                    ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_TRANSPORT_PARAMETER_ERROR);
-                                }
+                            {
+                                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_TRANSPORT_PARAMETER_ERROR);
                             }
                         }
                         break;

@@ -255,18 +255,9 @@ static int test_api_queue_initial_queries(picoquic_test_tls_api_ctx_t * test_ctx
 		if (test_ctx->test_stream[i].previous_stream_id == stream_id)
 		{
             picoquic_cnx_t * cnx = NULL;
-
-            if ((picoquic_supported_versions[test_ctx->cnx_client->version_index].version_flags&
-                picoquic_version_bidir_only) == 0)
-            {
-                cnx = (test_ctx->test_stream[i].stream_id & 1) ?
+            
+            cnx = (test_ctx->test_stream[i].stream_id & 1) ?
                     test_ctx->cnx_server: test_ctx->cnx_client;
-            }
-            else
-            {
-                cnx = (test_ctx->test_stream[i].stream_id & 1) ?
-                    test_ctx->cnx_client : test_ctx->cnx_server;
-            }
 
 			ret = picoquic_add_to_stream(cnx, test_ctx->test_stream[i].stream_id,
 				test_ctx->test_stream[i].q_src,
@@ -304,14 +295,7 @@ static void test_api_callback(picoquic_cnx_t * cnx,
 	int is_client_stream = 0;
 	picoquic_call_back_event_t stream_finished = picoquic_callback_no_event;
 
-    if ((picoquic_supported_versions[cnx->version_index].version_flags&picoquic_version_bidir_only) == 0)
-    {
-        is_client_stream = ((stream_id & 1) == 0) ? 1 : 0;
-    }
-    else
-    {
-        is_client_stream = stream_id & 1;
-    }
+    is_client_stream = ((stream_id & 1) == 0) ? 1 : 0;
 
     if (fin_or_event == picoquic_callback_close || 
         fin_or_event == picoquic_callback_application_close)
@@ -1323,9 +1307,7 @@ int tls_api_server_reset_test()
 		 test_ctx->cnx_server = NULL;
 
 		 memset(buffer, 0xaa, sizeof(buffer));
-		 ret = picoquic_add_to_stream(test_ctx->cnx_client, 
-             ((picoquic_supported_versions[test_ctx->cnx_client->version_index].version_flags&
-                 picoquic_version_bidir_only)==0)?4:1,
+		 ret = picoquic_add_to_stream(test_ctx->cnx_client, 4,
              buffer, sizeof(buffer), 1);
 	 }
 
@@ -1542,17 +1524,8 @@ int tls_api_multiple_versions_test()
 
     for (size_t i = 1; ret == 0 && i < picoquic_nb_supported_versions; i++)
     {
-        if ((picoquic_supported_versions[i].version_flags&picoquic_version_bidir_only) == 0)
-        {
-            ret = tls_api_one_scenario_test(test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0, 0, 0,
-                picoquic_supported_versions[i].version);
-        }
-        else
-        {
-            ret = tls_api_one_scenario_test(test_scenario_q_and_r_old, sizeof(test_scenario_q_and_r_old), 0, 0, 0,
-                picoquic_supported_versions[i].version);
-
-        }
+        ret = tls_api_one_scenario_test(test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0, 0, 0,
+            picoquic_supported_versions[i].version);
     }
 
     return ret;

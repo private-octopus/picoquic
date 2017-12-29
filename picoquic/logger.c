@@ -639,71 +639,54 @@ size_t picoquic_log_new_connection_id_frame(FILE * F, uint8_t * bytes, size_t by
 	return byte_index;
 }
 
-size_t picoquic_log_ping_pong_frame(FILE * F, uint8_t * bytes, size_t bytes_max, uint32_t version_flags)
+size_t picoquic_log_ping_pong_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
 {
     size_t byte_index = 1;
+    size_t ping_length = bytes[byte_index++];
 
-    if ((version_flags&picoquic_version_short_pings) != 0)
+    if (byte_index + ping_length > bytes_max)
+    {
+        fprintf(F, "    Malformed %s frame, length %d, %d bytes needed, %d available\n",
+            picoquic_log_frame_names[bytes[0]], (int)ping_length,
+            (int)(ping_length + 2), (int)bytes_max);
+        byte_index = bytes_max;
+    }
+    else if (ping_length == 0)
     {
         if (bytes[0] == picoquic_frame_type_ping)
         {
-            /* No payload in old versions */
-            fprintf(F, "    %s frame\n", picoquic_log_frame_names[bytes[0]]);
+            fprintf(F, "    %s frame, length = 0.\n",
+                picoquic_log_frame_names[bytes[0]]);
         }
         else
         {
-            fprintf(F, "    Unexpected PONG frame.\n");
+            fprintf(F, "    Unexpected empty %s frame.\n",
+                picoquic_log_frame_names[bytes[0]]);
             byte_index = bytes_max;
         }
     }
     else
     {
-        size_t ping_length = bytes[byte_index++];
+        fprintf(F, "    %s length %d: ", picoquic_log_frame_names[bytes[0]], (int)ping_length);
 
-        if (byte_index + ping_length > bytes_max)
+        for (size_t i = 0; i < ping_length && i < 16; i++)
         {
-            fprintf(F, "    Malformed %s frame, length %d, %d bytes needed, %d available\n",
-                picoquic_log_frame_names[bytes[0]], (int) ping_length,
-                (int)(ping_length + 2), (int) bytes_max);
-            byte_index = bytes_max;
+            fprintf(F, "%02x", bytes[byte_index + i]);
         }
-        else if (ping_length == 0)
+
+        if (ping_length > 16)
         {
-            if (bytes[0] == picoquic_frame_type_ping)
-            {
-                fprintf(F, "    %s frame, length = 0.\n",
-                    picoquic_log_frame_names[bytes[0]]);
-            }
-            else
-            {
-                fprintf(F, "    Unexpected empty %s frame.\n",
-                    picoquic_log_frame_names[bytes[0]]);
-                byte_index = bytes_max;
-            }
+            fprintf(F, " ...");
         }
-        else
-        {
-            fprintf(F, "    %s length %d: ", picoquic_log_frame_names[bytes[0]], (int) ping_length);
+        fprintf(F, "\n");
 
-            for (size_t i = 0; i < ping_length && i < 16; i++)
-            {
-                fprintf(F, "%02x", bytes[byte_index + i]);
-            }
-
-            if (ping_length > 16)
-            {
-                fprintf(F, " ...");
-            }
-            fprintf(F, "\n");
-
-            byte_index += ping_length;
-        }
+        byte_index += ping_length;
     }
 
     return byte_index;
 }
 
-void picoquic_log_frames(FILE* F, uint8_t * bytes, size_t length, uint32_t version_flags)
+void picoquic_log_frames(FILE* F, uint8_t * bytes, size_t length)
 {
 	size_t byte_index = 0;
 
@@ -770,7 +753,7 @@ void picoquic_log_frames(FILE* F, uint8_t * bytes, size_t length, uint32_t versi
                     break;
                 case picoquic_frame_type_ping:
                     byte_index += picoquic_log_ping_pong_frame(F, bytes + byte_index,
-                        length - byte_index, version_flags);
+                        length - byte_index);
                     break;
                 case picoquic_frame_type_blocked: /* BLOCKED */
                     /* No payload */
@@ -797,7 +780,7 @@ void picoquic_log_frames(FILE* F, uint8_t * bytes, size_t length, uint32_t versi
                     break;
                 case picoquic_frame_type_pong: /* PONG */
                     byte_index += picoquic_log_ping_pong_frame(F, bytes + byte_index,
-                        length - byte_index, version_flags);
+                        length - byte_index);
                     break;
                 default:
                     /* Not implemented yet! */
@@ -878,8 +861,7 @@ void picoquic_log_decrypt_encrypted(FILE* F,
         else
         {
             fprintf(F, "    Decrypted %d bytes\n", (int)decrypted_length);
-            picoquic_log_frames(F, decrypted, decrypted_length,
-                picoquic_supported_versions[cnx->version_index].version_flags);
+            picoquic_log_frames(F, decrypted, decrypted_length);
         }
     }
 }
@@ -901,8 +883,7 @@ void picoquic_log_decrypt_0rtt(FILE* F,
     else
     {
         fprintf(F, "    Decrypted %d bytes\n", (int)decrypted_length);
-        picoquic_log_frames(F, decrypted, decrypted_length,
-            picoquic_supported_versions[cnx->version_index].version_flags);
+        picoquic_log_frames(F, decrypted, decrypted_length);
     }
 }
 
@@ -932,8 +913,7 @@ void picoquic_log_decrypt_encrypted_cleartext(FILE* F,
     else
     {
         fprintf(F, "    Decrypted %d bytes\n", (int)decrypted_length);
-        picoquic_log_frames(F, decrypted, decrypted_length,
-            picoquic_supported_versions[cnx->version_index].version_flags);
+        picoquic_log_frames(F, decrypted, decrypted_length);
     }
 }
 

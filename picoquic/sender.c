@@ -63,44 +63,27 @@ int picoquic_add_to_stream(picoquic_cnx_t * cnx, uint64_t stream_id,
         if (stream == NULL)
         {
             /* Need to check that the ID is authorized */
-            if ((picoquic_supported_versions[cnx->version_index].version_flags&picoquic_version_bidir_only) == 0)
-            {
-                /* Check parity */
-                int parity = ((cnx->quic->flags&picoquic_context_server) == 0) ? 0 : 1;
-                if ((stream_id & 1) != parity)
-                {
-                    ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
-                }
-                else
-                {
-                    if ((stream_id & 2) == 0)
-                    {
-                        if (stream_id > cnx->max_stream_id_bidir_remote)
-                        {
-                            ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
-                        }
-                    }
-                    else
-                    {
-                        is_unidir = 1;
 
-                        if (stream_id > cnx->max_stream_id_unidir_remote)
-                        {
-                            ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
-                        }
-                    }
-                }
+            /* Check parity */
+            int parity = ((cnx->quic->flags&picoquic_context_server) == 0) ? 0 : 1;
+            if ((stream_id & 1) != parity)
+            {
+                ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
             }
             else
             {
-                int parity = ((cnx->quic->flags&picoquic_context_server) == 0) ? 1 : 0;
-                if ((stream_id & 1) != parity)
+                if ((stream_id & 2) == 0)
                 {
-                    ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
+                    if (stream_id > cnx->max_stream_id_bidir_remote)
+                    {
+                        ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
+                    }
                 }
                 else
                 {
-                    if (stream_id > cnx->max_stream_id_bidir_remote)
+                    is_unidir = 1;
+
+                    if (stream_id > cnx->max_stream_id_unidir_remote)
                     {
                         ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
                     }
@@ -657,8 +640,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t * cnx, uint64_t current_time,
                     while (ret == 0 && byte_index < p->length)
                     {
                         ret = picoquic_skip_frame(&p->bytes[byte_index],
-                            p->length - byte_index, &frame_length, &frame_is_pure_ack,
-                            picoquic_supported_versions[cnx->version_index].version_flags);
+                            p->length - byte_index, &frame_length, &frame_is_pure_ack);
 
                         if (!frame_is_pure_ack)
                         {
@@ -780,8 +762,7 @@ int picoquic_is_cnx_backlog_empty(picoquic_cnx_t * cnx)
         while (ret == 0 && byte_index < p->length)
         {
             ret = picoquic_skip_frame(&p->bytes[byte_index],
-                p->length - ph.offset, &frame_length, &frame_is_pure_ack,
-                picoquic_supported_versions[cnx->version_index].version_flags);
+                p->length - ph.offset, &frame_length, &frame_is_pure_ack);
 
             if (!frame_is_pure_ack)
             {

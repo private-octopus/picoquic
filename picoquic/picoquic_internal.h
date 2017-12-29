@@ -113,11 +113,7 @@ extern "C" {
      */
 
     typedef enum {
-        // picoquic_version_fix_ints = 8,
-        picoquic_version_short_pings = 16,
-        // picoquic_version_old_parameters = 32,
-        picoquic_version_bidir_only = 64,
-        picoquic_version_old_aead_secret = 128
+        picoquic_version_no_flag = 0
     } picoquic_version_feature_flags;
 
     /*
@@ -591,9 +587,9 @@ extern "C" {
 		size_t bytes_max, int restricted, uint64_t current_time);
 
 	int picoquic_skip_frame(uint8_t * bytes, size_t bytes_max, size_t * consumed, 
-        int * pure_ack, uint32_t version_flags);
+        int * pure_ack);
 
-    int picoquic_decode_closing_frames(picoquic_cnx_t * cnx, uint8_t * bytes,
+    int picoquic_decode_closing_frames(uint8_t * bytes,
         size_t bytes_max, int *closing_received);
 
 	int picoquic_prepare_transport_extensions(picoquic_cnx_t * cnx, int extension_mode,
