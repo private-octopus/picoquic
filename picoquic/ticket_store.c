@@ -31,8 +31,6 @@ int picoquic_store_ticket(picoquic_stored_ticket_t ** pp_first_ticket,
 {
     int ret = 0;
 
-    /* TO DO: remove other tickets for that SNI/ALPN */
-
     if (ticket_length < 17)
     {
         ret = PICOQUIC_ERROR_INVALID_TICKET;
@@ -71,6 +69,9 @@ int picoquic_store_ticket(picoquic_stored_ticket_t ** pp_first_ticket,
             }
             else
             {
+                picoquic_stored_ticket_t * next;
+                picoquic_stored_ticket_t ** pprevious;
+
                 stored->time_valid_until = time_valid_until;
                 stored->sni = next_p;
                 stored->sni_length = sni_length;
@@ -88,8 +89,31 @@ int picoquic_store_ticket(picoquic_stored_ticket_t ** pp_first_ticket,
                 stored->ticket_length = ticket_length;
                 memcpy(next_p, ticket, ticket_length);
 
-                stored->next_ticket = *pp_first_ticket;
+                stored->next_ticket = next = *pp_first_ticket;
                 *pp_first_ticket = stored;
+                pprevious = &stored->next_ticket;
+
+                /* Now remove the old tickets for that SNI & ALPN */
+                while (next != NULL)
+                {
+                    if (next->time_valid_until <= stored->time_valid_until &&
+                        next->sni_length == sni_length &&
+                        next->alpn_length == alpn_length &&
+                        memcmp(next->sni, sni, sni_length) == 0 &&
+                        memcmp(next->alpn, alpn, alpn_length) == 0)
+                    {
+                        picoquic_stored_ticket_t * deleted = next;
+                        next = next->next_ticket;
+                        *pprevious = next;
+                        memset(&deleted->ticket, 0, deleted->ticket_length);
+                        free(deleted);
+                    }
+                    else
+                    {
+                        pprevious = &next->next_ticket;
+                        next = next->next_ticket;
+                    }
+                }
             }
         }
     }
