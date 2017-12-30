@@ -74,6 +74,7 @@ extern "C" {
     int ticket_store_test();
     int session_resume_test();
     int zero_rtt_test();
+    int stop_sending_test();
 
 #ifdef  __cplusplus
 }

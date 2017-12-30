@@ -242,6 +242,7 @@ picoquic_packet * picoquic_create_packet()
     return packet;
 }
 
+#if 0
 size_t picoquic_create_packet_header_05_07(
 	picoquic_cnx_t * cnx,
 	picoquic_packet_type_enum packet_type,
@@ -295,6 +296,7 @@ size_t picoquic_create_packet_header_05_07(
 
 	return length;
 }
+#endif
 
 size_t picoquic_create_packet_header_08(
     picoquic_cnx_t * cnx,
@@ -1559,7 +1561,6 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t * cnx, picoquic_packet * packet
     int ret = 0;
     /* TODO: manage multiple streams. */
     picoquic_stream_head * stream = NULL;
-    int stream_restricted = 0;
     picoquic_packet_type_enum packet_type = picoquic_packet_1rtt_protected_phi0;
     int is_cleartext_mode = 0;
     size_t data_bytes = 0;
@@ -1570,7 +1571,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t * cnx, picoquic_packet * packet
     size_t length = 0;
     size_t checksum_overhead = picoquic_get_checksum_length(cnx, is_cleartext_mode);
 
-    stream = picoquic_find_ready_stream(cnx, stream_restricted);
+    stream = picoquic_find_ready_stream(cnx, 0);
 
     if (ret == 0 && retransmit_possible &&
         (length = picoquic_retransmit_needed(cnx, current_time, packet, &is_cleartext_mode, &header_length)) > 0)

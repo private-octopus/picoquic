@@ -275,7 +275,16 @@ int picoquic_prepare_stream_reset_frame(picoquic_stream_head * stream,
         else
         {
             *consumed = byte_index;
-            stream->stream_flags |= picoquic_stream_flag_reset_sent;
+            stream->stream_flags |= picoquic_stream_flag_reset_sent | picoquic_stream_flag_fin_sent;
+
+            /* Free the queued data */
+            while (stream->send_queue != NULL)
+            {
+                picoquic_stream_data * next = stream->send_queue->next_stream_data;
+                free(stream->send_queue->bytes);
+                free(stream->send_queue);
+                stream->send_queue = next;
+            }
         }
     }
 
@@ -799,7 +808,9 @@ picoquic_stream_head * picoquic_find_ready_stream(picoquic_cnx_t * cnx, int rest
 				((stream->stream_flags&picoquic_stream_flag_fin_notified) != 0 &&
 				(stream->stream_flags&picoquic_stream_flag_fin_sent) == 0) ||
 				((stream->stream_flags&picoquic_stream_flag_reset_requested) != 0 &&
-				(stream->stream_flags&picoquic_stream_flag_reset_sent) == 0))
+				(stream->stream_flags&picoquic_stream_flag_reset_sent) == 0) ||
+                    ((stream->stream_flags&picoquic_stream_flag_stop_sending_requested) != 0 &&
+                (stream->stream_flags&picoquic_stream_flag_stop_sending_sent) == 0))
 			{
 				/* if the stream is not active yet, verify that it fits under
 				 * the max stream id limit */
@@ -838,7 +849,9 @@ picoquic_stream_head * picoquic_find_ready_stream(picoquic_cnx_t * cnx, int rest
 			((stream->stream_flags&picoquic_stream_flag_fin_notified) == 0 ||
 			(stream->stream_flags&picoquic_stream_flag_fin_sent) != 0) &&
 				((stream->stream_flags&picoquic_stream_flag_reset_requested) == 0 ||
-			(stream->stream_flags&picoquic_stream_flag_reset_sent) != 0))
+			(stream->stream_flags&picoquic_stream_flag_reset_sent) != 0) &&
+                    ((stream->stream_flags&picoquic_stream_flag_stop_sending_requested) == 0 ||
+            (stream->stream_flags&picoquic_stream_flag_stop_sending_sent) != 0))
 		{
 			stream = NULL;
 		}
@@ -855,6 +868,12 @@ int picoquic_prepare_stream_frame(picoquic_cnx_t * cnx, picoquic_stream_head * s
     if ((stream->stream_flags&picoquic_stream_flag_reset_requested) != 0)
     {
         return picoquic_prepare_stream_reset_frame(stream, bytes, bytes_max, consumed);
+    }
+
+    if ((stream->stream_flags&picoquic_stream_flag_stop_sending_requested) != 0 &&
+        (stream->stream_flags&picoquic_stream_flag_stop_sending_sent) == 0)
+    {
+        return picoquic_prepare_stop_sending_frame(stream, bytes, bytes_max, consumed);
     }
 
     if ((stream->send_queue == NULL ||

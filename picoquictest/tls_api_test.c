@@ -113,6 +113,11 @@ static test_api_stream_desc_t test_scenario_very_long[] = {
 	{ 4, 0, 257, 1000000 }
 };
 
+static test_api_stream_desc_t test_scenario_stop_sending[] = {
+    { 4, 0, 257, 1000000 },
+    { 8, 4, 531, 11000 }
+};
+
 static int test_api_init_stream_buffers(size_t len, uint8_t ** src_bytes, uint8_t ** rcv_bytes)
 {
 	int ret = 0;
@@ -424,7 +429,8 @@ static void test_api_callback(picoquic_cnx_t * cnx,
 		}
 	}
 
-	if (stream_finished == picoquic_callback_stream_fin && cb_ctx->error_detected == 0)
+	if (stream_finished != 0
+        && cb_ctx->error_detected == 0)
 	{
 		/* queue the new queries initiated by that stream */
 		if (test_api_queue_initial_queries(ctx, stream_id) != 0)
@@ -968,7 +974,7 @@ static int tls_api_connection_loop(picoquic_test_tls_api_ctx_t * test_ctx,
 }
 
 static int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t * test_ctx,
-	uint64_t  * loss_mask, uint64_t *simulated_time)
+	uint64_t  * loss_mask, uint64_t *simulated_time, int max_trials)
 {
 	int ret = 0;
 	int nb_trials = 0;
@@ -977,11 +983,18 @@ static int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t * test_ctx,
 	test_ctx->c_to_s_link->loss_mask = loss_mask;
 	test_ctx->s_to_c_link->loss_mask = loss_mask;
 
-	while (ret == 0 && nb_trials < 1000 && nb_inactive < 256 &&
+    if (max_trials <= 0)
+    {
+        max_trials = 10000;
+    }
+
+	while (ret == 0 && nb_trials < max_trials && nb_inactive < 256 &&
 		test_ctx->cnx_client->cnx_state == picoquic_state_client_ready &&
 		test_ctx->cnx_server->cnx_state == picoquic_state_server_ready)
 	{
 		int was_active = 0;
+
+        nb_trials++;
 
 		ret = tls_api_one_sim_round(test_ctx, simulated_time, &was_active);
 
@@ -1178,7 +1191,7 @@ int tls_api_one_scenario_test(test_api_stream_desc_t * scenario,
 	/* Perform a data sending loop */
 	if (ret == 0)
 	{
-		ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time);
+		ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 0);
 	}
 
 	if (ret == 0)
@@ -1881,3 +1894,106 @@ int zero_rtt_test()
     return ret;
 }
 
+/*
+ * Stop sending test. Start a long transmission, but after receiving some bytes,
+ * send a stop sending request. Then ask for another transmission. The
+ * test succeeds if only few bytes of the first are received, and all bytes
+ * of the second.
+ */
+
+int stop_sending_test()
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t * test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL);
+    int nb_initial_loop = 0;
+
+    if (ret == 0)
+    {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    /* Prepare to send data */
+    if (ret == 0)
+    {
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_stop_sending, sizeof(test_scenario_stop_sending));
+    }
+
+    /* Perform a data sending loop for a few rounds, until some bytes are received on the first stream */
+    while (ret == 0 && nb_initial_loop < 64)
+    {
+        nb_initial_loop++;
+
+        ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 16);
+
+        if (test_ctx->test_stream[0].r_recv_nb != 0)
+        {
+            break;
+        }
+    }
+
+    /* issue the stop sending command */
+    if (ret == 0 && test_ctx->cnx_client != NULL)
+    {
+        ret = picoquic_stop_sending(test_ctx->cnx_client, test_scenario_stop_sending[0].stream_id, 1);
+    }
+
+    /* resume the sending scenario */
+    if (ret == 0)
+    {
+        ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 0);
+    }
+
+    if (ret == 0)
+    {
+        if (test_ctx->server_callback.error_detected)
+        {
+            ret = -1;
+        }
+        else if (test_ctx->client_callback.error_detected)
+        {
+            ret = -1;
+        }
+        else
+        {
+            for (size_t i = 0; ret == 0 && i < test_ctx->nb_test_streams; i++)
+            {
+                if (test_ctx->test_stream[i].q_recv_nb !=
+                    test_ctx->test_stream[i].q_len)
+                {
+                    ret = -1;
+                }
+                else if (i == 0 && test_ctx->test_stream[i].r_recv_nb ==
+                    test_ctx->test_stream[i].r_len)
+                {
+                    ret = -1;
+                }
+                else if (i != 0 && test_ctx->test_stream[i].r_recv_nb !=
+                    test_ctx->test_stream[i].r_len)
+                {
+                    ret = -1;
+                }
+                else if (test_ctx->test_stream[i].q_received == 0 ||
+                    test_ctx->test_stream[i].r_received == 0)
+                {
+                    ret = -1;
+                }
+            }
+        }
+    }
+
+    if (ret == 0)
+    {
+        ret = picoquic_close(test_ctx->cnx_client, 0);
+    }
+
+    if (test_ctx != NULL)
+    {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
