@@ -77,7 +77,8 @@ static picoquic_test_def_t test_table[] = {
     { "ticket_store", ticket_store_test },
     { "session_resume", session_resume_test},
     { "zero_rtt", zero_rtt_test },
-    { "stop_sending", stop_sending_test }
+    { "stop_sending", stop_sending_test },
+    { "unidir", unidir_test }
 };
 
 static size_t nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);

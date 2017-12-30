@@ -102,7 +102,7 @@ int picoquic_add_to_stream(picoquic_cnx_t * cnx, uint64_t stream_id,
                 {
                     /* Mark the stream as already finished in remote direction */
                     stream->stream_flags |= picoquic_stream_flag_fin_signalled |
-                        picoquic_stream_flag_fin_notified;
+                        picoquic_stream_flag_fin_received;
                 }
             }
         }

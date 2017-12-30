@@ -118,6 +118,11 @@ static test_api_stream_desc_t test_scenario_stop_sending[] = {
     { 8, 4, 531, 11000 }
 };
 
+static test_api_stream_desc_t test_scenario_unidir[] = {
+    { 2, 0, 4000, 0 },
+    { 3, 0, 5000, 0 }
+};
+
 static int test_api_init_stream_buffers(size_t len, uint8_t ** src_bytes, uint8_t ** rcv_bytes)
 {
 	int ret = 0;
@@ -1276,6 +1281,10 @@ int tls_api_very_long_congestion_test()
 	return tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0, 128000, 10000, 0);
 }
 
+int unidir_test()
+{
+    return tls_api_one_scenario_test(test_scenario_unidir, sizeof(test_scenario_unidir), 0, 128000, 10000, 0);
+}
 
 /*
  * Server reset test.

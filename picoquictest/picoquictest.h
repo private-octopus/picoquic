@@ -75,6 +75,7 @@ extern "C" {
     int session_resume_test();
     int zero_rtt_test();
     int stop_sending_test();
+    int unidir_test();
 
 #ifdef  __cplusplus
 }

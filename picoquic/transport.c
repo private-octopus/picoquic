@@ -413,6 +413,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t * cnx, int extension_mo
 						else
 						{
 							cnx->remote_parameters.initial_max_stream_id_bidir = PICOPARSE_32(bytes + byte_index);
+                            cnx->max_stream_id_bidir_remote = cnx->remote_parameters.initial_max_stream_id_bidir;
                             
                             if (cnx->remote_parameters.initial_max_stream_id_bidir != 0 &&
                                 (((extension_mode == 0) && (cnx->remote_parameters.initial_max_stream_id_bidir & 1) == 0) ||
@@ -486,6 +487,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t * cnx, int extension_mo
                         else
                         {
                             cnx->remote_parameters.initial_max_stream_id_unidir = PICOPARSE_32(bytes + byte_index);
+                            cnx->max_stream_id_unidir_remote = cnx->remote_parameters.initial_max_stream_id_unidir;
                             
                             if (cnx->remote_parameters.initial_max_stream_id_unidir != 0 &&
                                 (((extension_mode == 0) && (cnx->remote_parameters.initial_max_stream_id_unidir & 1) == 0) ||

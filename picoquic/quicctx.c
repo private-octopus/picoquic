@@ -523,8 +523,8 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
 		 * the TLS transport parameter extension */
 		cnx->maxdata_remote = PICOQUIC_DEFAULT_0RTT_WINDOW;
         cnx->remote_parameters.initial_max_stream_data = PICOQUIC_DEFAULT_0RTT_WINDOW;
-		cnx->max_stream_id_bidir_remote = 4;
-        cnx->max_stream_id_unidir_remote = 2;
+		cnx->max_stream_id_bidir_remote = 0;
+        cnx->max_stream_id_unidir_remote = 0;
 
 		if (sni != NULL)
 		{
