@@ -513,6 +513,8 @@ extern "C" {
         picoquic_cnx_t ** pcnx);
 
     int picoquic_test_stream_frame_unlimited(uint8_t * bytes);
+    int picoquic_check_stream_frame_already_acked(picoquic_cnx_t * cnx, uint8_t * bytes,
+        size_t bytes_max, int * no_need_to_repeat);
 
     int picoquic_parse_stream_header(
 		const uint8_t * bytes, size_t bytes_max,
@@ -569,8 +571,8 @@ extern "C" {
 		uint8_t * bytes, size_t bytes_max, size_t * consumed);
 	int picoquic_prepare_connection_close_frame(picoquic_cnx_t * cnx,
 		uint8_t * bytes, size_t bytes_max, size_t * consumed);
-        int picoquic_prepare_application_close_frame(picoquic_cnx_t * cnx,
-                uint8_t * bytes, size_t bytes_max, size_t * consumed);
+    int picoquic_prepare_application_close_frame(picoquic_cnx_t * cnx,
+        uint8_t * bytes, size_t bytes_max, size_t * consumed);
 	int picoquic_prepare_required_max_stream_data_frames(picoquic_cnx_t * cnx,
 		uint8_t * bytes, size_t bytes_max, size_t * consumed);
 	int picoquic_prepare_max_data_frame(picoquic_cnx_t * cnx, uint64_t maxdata_increase,

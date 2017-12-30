@@ -641,7 +641,16 @@ int picoquic_retransmit_needed(picoquic_cnx_t * cnx, uint64_t current_time,
                         ret = picoquic_skip_frame(&p->bytes[byte_index],
                             p->length - byte_index, &frame_length, &frame_is_pure_ack);
 
-                        if (!frame_is_pure_ack)
+                        /* Check whether the data was already acked, which may happen in 
+                         * case of spurious retransmissions */
+                        if (ret == 0)
+                        {
+                            ret = picoquic_check_stream_frame_already_acked(cnx, &p->bytes[byte_index],
+                                frame_length, &frame_is_pure_ack);
+                        }
+
+                        /* Prepare retransmission if needed */
+                        if (ret == 0 && !frame_is_pure_ack)
                         {
                             if (picoquic_test_stream_frame_unlimited(&p->bytes[byte_index]) != 0)
                             {

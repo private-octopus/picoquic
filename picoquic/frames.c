@@ -210,33 +210,6 @@ int picoquic_flow_control_check_stream_offset(picoquic_cnx_t * cnx, picoquic_str
  * RST_STREAM Frame
  * 
  * An endpoint may use a RST_STREAM frame (type=0x01) to abruptly terminate a stream.
- *
- * After sending a RST_STREAM, an endpoint ceases transmission of STREAM frames on 
- * the identified stream. A receiver of RST_STREAM can discard any data that it 
- * already received on that stream. An endpoint sends a RST_STREAM in response to 
- * a RST_STREAM unless the stream is already closed.
- *
- * The RST_STREAM frame is as follows:
- *
- *  0                   1                   2                   3
- *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
- * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- * |                        Stream ID ...
- * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- * |                        Error Code (16)                        |
- * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- * |                      Final Offset ...                       
- * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *
- * The fields are:
- *
- * Stream ID:
- *     The Stream ID of the stream being terminated.
- * Error code:
- *     A 16-bit error code which indicates why the stream is being closed.
- * Final offset:
- *     The absolute byte offset of the 
- *     end of data written on this stream by the RST_STREAM sender.
  */
 
 int picoquic_prepare_stream_reset_frame(picoquic_stream_head * stream,
@@ -1354,6 +1327,50 @@ int picoquic_process_ack_of_ack_frame(
     }
 
 	return ret;
+}
+
+int picoquic_check_stream_frame_already_acked(picoquic_cnx_t * cnx, uint8_t * bytes,
+    size_t bytes_max, int * no_need_to_repeat)
+{
+    int ret = 0;
+    int      fin;
+    size_t   data_length;
+    uint64_t stream_id;
+    uint64_t offset;
+    picoquic_stream_head * stream = NULL;
+    size_t consumed = 0;
+
+    *no_need_to_repeat = 0;
+
+    if (bytes[0] >= picoquic_frame_type_stream_range_min && bytes[0] <= picoquic_frame_type_stream_range_max)
+    {
+        ret = picoquic_parse_stream_header(bytes, bytes_max,
+            &stream_id, &offset, &data_length, &fin, &consumed);
+
+        if (ret == 0)
+        {
+            stream = picoquic_find_stream(cnx, stream_id, 0);
+            if (stream == NULL)
+            {
+                /* this is weird -- the stream was destroyed. */
+                *no_need_to_repeat = 1;
+            }
+            else
+            {
+                if ((stream->stream_flags&picoquic_stream_flag_reset_sent) != 0)
+                {
+                    *no_need_to_repeat = 1;
+                }
+                else
+                {
+                    /* Check whether the ack was already received */
+                    *no_need_to_repeat = picoquic_check_sack_list(&stream->first_sack_item, offset, offset + data_length);
+                }
+            }
+        }
+    }
+
+    return ret;
 }
 
 static int picoquic_process_ack_of_stream_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
