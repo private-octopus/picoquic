@@ -468,41 +468,7 @@ int picoquic_decode_stop_sending_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
  * into the SSL API.
  *
  * STREAM frames implicitly create a stream and carry stream data. 
- * The type byte for a STREAM frame contains embedded flags, and is 
- * formatted as 11FSSOOD. These bits are parsed as follows:
- *
- * The first two bits must be set to 11, indicating that this is a STREAM frame.
- *
- * F is the FIN bit, which is used for stream termination.
- *
- * The SS bits encode the length of the Stream ID header field. The values 00, 01, 
- * 02, and 03 indicate lengths of 8, 16, 24, and 32 bits long respectively.
- *
- * The OO bits encode the length of the Offset header field. The values 00, 01, 02, 
- * and 03 indicate lengths of 0, 16, 32, and 64 bits long respectively.
- * 
- * The D bit indicates whether a Data Length field is present in the STREAM header. 
- * When set to 0, this field indicates that the Stream Data field extends to the end
- * of the packet. When set to 1, this field indicates that Data Length field contains
- * the length (in bytes) of the Stream Data field. The option to omit the length should 
- * only be used when the packet is a "full-sized" packet, to avoid the risk of corruption
- * via padding.
- *
- * A STREAM frame is shown below.
- * 
- *  0                   1                   2                   3
- *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
- * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- * |                    Stream ID (8/16/24/32)                   ...
- * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- * |                      Offset (0/16/32/64)                    ...
- * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- * |       [Data Length (16)]      |        Stream Data (*)      ...
- * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *
  */
-static const int picoquic_offset_length_code[4] = { 0, 2, 4, 8 };
-
 
 int picoquic_test_stream_frame_unlimited(uint8_t * bytes)
 {
