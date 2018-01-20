@@ -47,6 +47,9 @@ static picoquic_transport_parameters transport_param_test5 = {
 static picoquic_transport_parameters transport_param_test6 = {
     0x10000, 0xffffffff, 0, 0, 30, 1, 1480, 3 };
 
+static picoquic_transport_parameters transport_param_test7 = {
+    8192, 16384, 5, 0, 10, 1, 1472, 3 };
+
 static uint8_t transport_param_reset_secret[PICOQUIC_RESET_SECRET_SIZE] = {
 	1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
 };
@@ -91,6 +94,19 @@ uint8_t client_param4[] = {
     0, 4, 0, 0,
     0, 5, 0, 2, 0x05, 0xC8
 };
+
+uint8_t client_param5[] = {
+    0xBA, 0xBA, 0xBA, 0xBA,
+    0, 0x2D,
+    0, 0x04, 0, 0,
+    0, 0x03, 0, 0x02, 0, 0x0A,
+    0, 0x02, 0, 0x04, 0, 0, 0, 0x05,
+    0, 0x00, 0, 0x04, 0, 0, 0x20, 0,
+    0, 0x01, 0, 0x04, 0, 0, 0x40, 0,
+    0, 0x05, 0, 0x02, 0x05, 0xC0,
+    0, 0x07, 0, 0x01, 0x03
+};
+
 
 uint8_t server_param1[] = {
     'P', 'C', 'Q', '0',
@@ -323,6 +339,12 @@ int transport_param_test()
     {
         ret = transport_param_decode_test(0, version_default, 0x0A1A0A1A,
             &transport_param_test6, client_param4, sizeof(client_param4));
+    }
+
+    if (ret == 0)
+    {
+        ret = transport_param_decode_test(0, version_default, 0xBABABABA,
+            &transport_param_test7, client_param5, sizeof(client_param5));
     }
 
     DBG_PRINTF("%s", "Starting transport parameters fuzz test.\n");

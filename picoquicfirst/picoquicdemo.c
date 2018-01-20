@@ -242,6 +242,8 @@ static void first_server_callback(picoquic_cnx_t * cnx,
     if (fin_or_event == picoquic_callback_close ||
         fin_or_event == picoquic_callback_application_close)
     {
+        printf("%" PRIx64 ": %s\n", picoquic_get_initial_cnxid(cnx),
+            (fin_or_event == picoquic_callback_close)?"Connection closed":"Application closed");
         if (ctx != NULL)
         {
             first_server_callback_delete_context(ctx);
