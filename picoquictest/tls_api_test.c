@@ -123,6 +123,10 @@ static test_api_stream_desc_t test_scenario_unidir[] = {
     { 3, 0, 5000, 0 }
 };
 
+static test_api_stream_desc_t test_mtu_discovery[] = {
+    { 2, 0, 100000, 0 }
+};
+
 static int test_api_init_stream_buffers(size_t len, uint8_t ** src_bytes, uint8_t ** rcv_bytes)
 {
 	int ret = 0;
@@ -1381,7 +1385,7 @@ int tls_api_server_reset_test()
 	 }
 
 	 /* Perform a couple rounds of sending data */
-	 for (int i = 0; ret == 0 && i < 32 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected; i++)
+	 for (int i = 0; ret == 0 && i < 64 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected; i++)
 	 {
 		 was_active = 0;
 
@@ -1725,7 +1729,6 @@ int ping_pong_test()
     }
 
     return ret;
-
 }
 
 /*
@@ -2047,6 +2050,53 @@ int stop_sending_test()
     if (ret == 0)
     {
         ret = picoquic_close(test_ctx->cnx_client, 0);
+    }
+
+    if (test_ctx != NULL)
+    {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+/*
+* MTU discovery test. Perform a moderate transmission.
+* Verify that MTU was properly set to expected value
+*/
+
+int mtu_discovery_test()
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t * test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL);
+    int nb_initial_loop = 0;
+
+    if (ret == 0)
+    {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+    /* Perform a data sending loop */
+    if (ret == 0)
+    {
+        ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 0);
+    }
+
+    if (ret == 0)
+    {
+        if (test_ctx->cnx_client->send_mtu != 
+            test_ctx->cnx_server->local_parameters.max_packet_size)
+        {
+            ret = -1;
+        }
+        else if (test_ctx->cnx_server->send_mtu !=
+            test_ctx->cnx_client->local_parameters.max_packet_size)
+        {
+            ret = -1;
+        }
     }
 
     if (test_ctx != NULL)

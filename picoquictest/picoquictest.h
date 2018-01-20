@@ -77,6 +77,7 @@ extern "C" {
     int zero_rtt_test();
     int stop_sending_test();
     int unidir_test();
+    int mtu_discovery_test();
 
 #ifdef  __cplusplus
 }

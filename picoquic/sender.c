@@ -528,7 +528,7 @@ static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t * cnx,
             uint64_t retransmit_timer = (cnx->nb_retransmit == 0) ?
                 cnx->retransmit_timer : (1000000 << (cnx->nb_retransmit - 1));
 
-            if ((uint64_t)time_out < retransmit_timer)
+            if ((uint64_t)time_out <= retransmit_timer)
             {
                 /* Do not retransmit if the timer has not yet elapsed */
                 should_retransmit = 0;
@@ -575,6 +575,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t * cnx, uint64_t current_time,
             picoquic_packet_header ph;
             int ret = 0;
             int packet_is_pure_ack = 1;
+            int do_not_detect_spurious = 1;
             int frame_is_pure_ack = 0;
             uint8_t * bytes = packet->bytes;
             size_t frame_length = 0;
@@ -623,7 +624,16 @@ int picoquic_retransmit_needed(picoquic_cnx_t * cnx, uint64_t current_time,
                     *is_cleartext_mode = 1;
                 }
 
-                if (ph.ptype == picoquic_packet_client_initial &&
+                if ((p->length + p->checksum_overhead) > cnx->send_mtu)
+                {
+                    /* MTU probe was lost, presumably because of packet too big */
+                    cnx->mtu_probe_sent = 0;
+                    cnx->send_mtu_max_tried = p->length + p->checksum_overhead;
+                    /* MTU probes should not be retransmitted */
+                    packet_is_pure_ack = 1;
+                    do_not_detect_spurious = 0;
+                }
+                else if (ph.ptype == picoquic_packet_client_initial &&
                     cnx->cnx_state >= picoquic_state_client_handshake_start)
                 {
                     /* pretending this is a pure ACK to avoid undue retransmission */
@@ -672,7 +682,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t * cnx, uint64_t current_time,
                 /* Update the number of bytes in transit and remove old packet from queue */
                 /* If not pure ack, the packet will be placed in the "retransmitted" queue,
                  * in order to enable detection of spurious restransmissions */
-                picoquic_dequeue_retransmit_packet(cnx, p, packet_is_pure_ack == 0);
+                picoquic_dequeue_retransmit_packet(cnx, p, packet_is_pure_ack&do_not_detect_spurious);
 
                 /* If we have a good packet, return it */
                 if (packet_is_pure_ack)
@@ -797,6 +807,49 @@ int picoquic_should_send_max_data(picoquic_cnx_t * cnx)
     return ret;
 }
 
+/* Decide whether to send an MTU probe */
+int picoquic_is_mtu_probe_needed(picoquic_cnx_t * cnx)
+{
+    int ret = 0;
+    if ((cnx->cnx_state == picoquic_state_client_ready ||
+        cnx->cnx_state == picoquic_state_server_ready) &&
+        cnx->mtu_probe_sent == 0 && 
+        (cnx->send_mtu_max_tried == 0 ||
+        (cnx->send_mtu + 10) < cnx->send_mtu_max_tried))
+    {
+        ret = 1;
+    }
+
+    return ret;
+}
+
+/* Prepare an MTU probe packet */
+size_t picoquic_prepare_mtu_probe(picoquic_cnx_t * cnx, size_t header_length, size_t checksum_length,
+    uint8_t * bytes)
+{
+    size_t probe_length;
+    size_t length = header_length;
+
+    if (cnx->send_mtu_max_tried == 0)
+    {
+        probe_length = cnx->remote_parameters.max_packet_size;
+
+        if (probe_length > PICOQUIC_MAX_PACKET_SIZE)
+        {
+            probe_length = PICOQUIC_MAX_PACKET_SIZE;
+        }
+    }
+    else
+    {
+        probe_length = (cnx->send_mtu + cnx->send_mtu_max_tried) / 2;
+    }
+
+    bytes[length++] = picoquic_frame_type_ping;
+    bytes[length++] = 0;
+    memset(&bytes[length], 0, probe_length - checksum_length - length);
+
+    return probe_length - checksum_length;
+}
 
 /* Decide the next time at which the connection should send data */
 void picoquic_cnx_set_next_wake_time(picoquic_cnx_t * cnx, uint64_t current_time)
@@ -818,6 +871,10 @@ void picoquic_cnx_set_next_wake_time(picoquic_cnx_t * cnx, uint64_t current_time
         blocked = 0;
     }
     else if (picoquic_is_ack_needed(cnx, current_time))
+    {
+        blocked = 0;
+    }
+    else if (picoquic_is_mtu_probe_needed(cnx))
     {
         blocked = 0;
     }
@@ -1609,8 +1666,17 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t * cnx, picoquic_packet * packet
         if (((stream == NULL && cnx->first_misc_frame == NULL) || cnx->cwin <= cnx->bytes_in_transit) &&
             picoquic_is_ack_needed(cnx, current_time) == 0)
         {
-            length = 0;
-            cnx->ack_needed = 0;
+            if (ret == 0 && picoquic_is_mtu_probe_needed(cnx))
+            {
+                length = picoquic_prepare_mtu_probe(cnx, header_length, checksum_overhead, bytes);
+                packet->length = length;
+                cnx->mtu_probe_sent = 1;
+            }
+            else
+            {
+                length = 0;
+                cnx->ack_needed = 0;
+            }
         }
         else
         {

@@ -79,7 +79,8 @@ static picoquic_test_def_t test_table[] = {
     { "session_resume", session_resume_test},
     { "zero_rtt", zero_rtt_test },
     { "stop_sending", stop_sending_test },
-    { "unidir", unidir_test }
+    { "unidir", unidir_test },
+    { "mtu_discovery", mtu_discovery_test }
 };
 
 static size_t nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);

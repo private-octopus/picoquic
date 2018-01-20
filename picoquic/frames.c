@@ -1014,6 +1014,16 @@ void picoquic_check_spurious_retransmission(picoquic_cnx_t * cnx,
             uint64_t max_reorder_delay = cnx->latest_time_acknowledged - p->send_time;
             uint64_t max_reorder_gap = cnx->highest_acknowledged - p->sequence_number;
 
+            if (p->length + p->checksum_overhead > cnx->send_mtu)
+            {
+                cnx->send_mtu = p->length + p->checksum_overhead;
+                if (cnx->send_mtu > cnx->send_mtu_max_tried)
+                {
+                    cnx->send_mtu_max_tried = cnx->send_mtu;
+                }
+                cnx->mtu_probe_sent = 0;
+            }
+
             if (max_spurious_rtt > cnx->max_spurious_rtt)
             {
                 cnx->max_spurious_rtt = max_spurious_rtt;
@@ -1472,6 +1482,13 @@ static picoquic_packet * picoquic_process_ack_range(
 
                 /* If the packet contained an ACK frame, perform the ACK of ACK pruning logic */
                 picoquic_process_possible_ack_of_ack_frame(cnx, p);
+
+                /* If packet is larger than the current MTU, update the MTU */
+                if ((p->length + p->checksum_overhead) > cnx->send_mtu)
+                {
+                    cnx->send_mtu = p->length + p->checksum_overhead;
+                    cnx->mtu_probe_sent = 0;
+                }
 
 				picoquic_dequeue_retransmit_packet(cnx, p, 1);
 				p = next;

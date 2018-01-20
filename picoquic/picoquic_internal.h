@@ -355,7 +355,9 @@ extern "C" {
 		struct st_ptls_buffer_t * tls_sendbuf;
 		uint64_t send_sequence;
 		uint32_t send_mtu;
+        uint32_t send_mtu_max_tried;
         uint16_t psk_cipher_suite_id;
+        int mtu_probe_sent;
 
         /* Liveness detection */
         uint64_t latest_progress_time; /* last local time at which the connection progressed */
