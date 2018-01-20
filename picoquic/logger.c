@@ -277,7 +277,7 @@ size_t picoquic_log_ack_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
         {
             byte_index = bytes_max;
             ret = -1;
-            fprintf(F, "    Malformed ACK RANGE, requires %d bytes out of %d\n", (int)picoquic_varint_skip(bytes),
+            fprintf(F, "    Malformed ACK RANGE, requires %d bytes out of %d", (int)picoquic_varint_skip(bytes),
                 (int)(bytes_max - byte_index));
             break;
         }
@@ -289,8 +289,10 @@ size_t picoquic_log_ack_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
         range += extra_ack;
         if (largest + 1 < range)
         {
-            fprintf(F, "ack range error: largest=%" PRIx64 ", range=%" PRIx64 "\n", largest, range);
-            return bytes_max;
+            fprintf(F, "ack range error: largest=%" PRIx64 ", range=%" PRIx64, largest, range);
+            byte_index = bytes_max;
+            ret = -1;
+            break;
         }
 
         if (range > 1)
@@ -307,7 +309,8 @@ size_t picoquic_log_ack_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
 
         if (byte_index >= bytes_max)
         {
-            fprintf(F, "    Malformed ACK GAP, %d blocks remain.\n", (int)num_block);
+            fprintf(F, "\n    Malformed ACK GAP, %d blocks remain.", (int)num_block);
+            byte_index = bytes_max;
             ret = -1;
             break;
         }
@@ -318,7 +321,7 @@ size_t picoquic_log_ack_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
             {
                 byte_index = bytes_max;
                 ret = -1;
-                fprintf(F, "    Malformed ACK GAP, requires %d bytes out of %d\n", (int)picoquic_varint_skip(bytes),
+                fprintf(F, "\n    Malformed ACK GAP, requires %d bytes out of %d", (int)picoquic_varint_skip(bytes),
                     (int)(bytes_max - byte_index));
                 break;
             }
@@ -331,9 +334,11 @@ size_t picoquic_log_ack_frame(FILE * F, uint8_t * bytes, size_t bytes_max)
 
         if (largest < block_to_block)
         {
-            fprintf(F, "ack gap error: largest=%" PRIx64 ", range=%" PRIx64 ", gap=%" PRIu64 "\n",
+            fprintf(F, "\n    ack gap error: largest=%" PRIx64 ", range=%" PRIx64 ", gap=%" PRIu64,
                 largest, range, block_to_block - range);
-            return bytes_max;
+            byte_index = bytes_max;
+            ret = -1;
+            break;
         }
 
         largest -= block_to_block;
