@@ -44,6 +44,9 @@ static picoquic_transport_parameters transport_param_test4 = {
 static picoquic_transport_parameters transport_param_test5 = {
     0x1000000, 0x1000000, 0x1000000, 0, 255, 1, 1480, 3 };
 
+static picoquic_transport_parameters transport_param_test6 = {
+    0x10000, 0xffffffff, 0, 0, 30, 1, 1480, 3 };
+
 static uint8_t transport_param_reset_secret[PICOQUIC_RESET_SECRET_SIZE] = {
 	1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
 };
@@ -81,13 +84,14 @@ uint8_t client_param3[] = {
 
 uint8_t client_param4[] = {
     0x0A, 0x1A, 0x0A, 0x1A,
-    0, 0x22,
-    0, 0, 0, 4, 0x01, 0, 0, 0,
-    0, 1, 0, 4, 0x01, 0, 0, 0,
-    0, 2, 0, 4, 0x01, 0, 0, 1,
-    0, 3, 0, 2, 0, 0xFF,
-    0, 4, 0, 0
+    0, 0x20,
+    0, 0, 0, 4,  0, 0x01, 0, 0,
+    0, 1, 0, 4, 0xFF, 0xFF, 0xFF, 0xFF,
+    0, 3, 0, 2, 0, 0x1E,
+    0, 4, 0, 0,
+    0, 5, 0, 2, 0x05, 0xC8
 };
+
 uint8_t server_param1[] = {
     'P', 'C', 'Q', '0',
 	0x08,
@@ -185,8 +189,6 @@ int transport_param_decode_test(int mode, uint32_t version, uint32_t proposed_ve
     memset(&quic_ctx, 0, sizeof(quic_ctx));
     memset(&test_cnx, 0, sizeof(picoquic_cnx_t));
     test_cnx.quic = &quic_ctx;
-
-    // picoquic_init_transport_parameters(&test_cnx.remote_parameters);
     
     ret = picoquic_receive_transport_extensions(&test_cnx, mode, 
         target, target_length, &decoded);
@@ -316,6 +318,12 @@ int transport_param_test()
 		ret = transport_param_one_test(1, version_default, 0x0A1A0A1A,
 			&transport_param_test5, server_param2, sizeof(server_param2));
 	}
+
+    if (ret == 0)
+    {
+        ret = transport_param_decode_test(0, version_default, 0x0A1A0A1A,
+            &transport_param_test6, client_param4, sizeof(client_param4));
+    }
 
     DBG_PRINTF("%s", "Starting transport parameters fuzz test.\n");
 
