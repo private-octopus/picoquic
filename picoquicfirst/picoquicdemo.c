@@ -116,7 +116,7 @@ void picoquic_log_packet(FILE* F, picoquic_quic_t * quic, picoquic_cnx_t * cnx,
 	struct sockaddr * addr_peer, int receiving,
 	uint8_t * bytes, size_t length, uint64_t current_time);
 void picoquic_log_processing(FILE* F, picoquic_cnx_t * cnx, size_t length, int ret);
-void picoquic_log_transport_extension(FILE* F, picoquic_cnx_t * cnx);
+void picoquic_log_transport_extension(FILE* F, picoquic_cnx_t * cnx, int log_cnxid);
 void picoquic_log_congestion_state(FILE* F, picoquic_cnx_t * cnx, uint64_t current_time);
 
 void print_address(struct sockaddr * address, char * label, uint64_t cnx_id)
@@ -235,6 +235,7 @@ static void first_server_callback(picoquic_cnx_t * cnx,
         (picoquic_first_server_callback_ctx_t*)callback_ctx;
     picoquic_first_server_stream_ctx_t * stream_ctx = NULL;
 
+    printf("%" PRIx64 ": ", picoquic_get_initial_cnxid(cnx));
     printf("Server CB, Stream: %" PRIu64 ", %" PRIst " bytes, fin=%d\n",
         stream_id, length, fin_or_event);
 
@@ -312,6 +313,7 @@ static void first_server_callback(picoquic_cnx_t * cnx,
     {
         /* send after fin, or too many bytes => reset! */
         picoquic_reset_stream(cnx, stream_id, 0);
+        printf("%" PRIx64 ": ", picoquic_get_initial_cnxid(cnx));
         printf("Server CB, Stream: %" PRIu64 ", RESET, too long or after FIN\n",
             stream_id);
         return;
@@ -342,17 +344,21 @@ static void first_server_callback(picoquic_cnx_t * cnx,
             char buf[256];
 
             stream_ctx->command[stream_ctx->command_length] = 0;
-            printf("Server CB, Stream: %" PRIu64 ", Processing command: %s\n",
-                stream_id, strip_endofline(buf, sizeof(buf), (char *)&stream_ctx->command));
             /* if data generated, just send it. Otherwise, just FIN the stream. */
             stream_ctx->status = picoquic_first_server_stream_status_finished;
             if (http0dot9_get(stream_ctx->command, stream_ctx->command_length,
                 ctx->buffer, ctx->buffer_max, &stream_ctx->response_length) != 0)
             {
+                printf("%" PRIx64 ": ", picoquic_get_initial_cnxid(cnx));
+                printf("Server CB, Stream: %" PRIu64 ", Resetting after command: %s\n",
+                    stream_id, strip_endofline(buf, sizeof(buf), (char *)&stream_ctx->command));
                 picoquic_reset_stream(cnx, stream_id, 0);
             }
             else
             {
+                printf("%" PRIx64 ": ", picoquic_get_initial_cnxid(cnx));
+                printf("Server CB, Stream: %" PRIu64 ", Processing command: %s\n",
+                    stream_id, strip_endofline(buf, sizeof(buf), (char *)&stream_ctx->command));
                 picoquic_add_to_stream(cnx, stream_id, ctx->buffer,
                     stream_ctx->response_length, 1);
             }
@@ -361,6 +367,7 @@ static void first_server_callback(picoquic_cnx_t * cnx,
         {
             char buf[256];
 
+            printf("%" PRIx64 ": ", picoquic_get_initial_cnxid(cnx));
             stream_ctx->command[stream_ctx->command_length] = 0;
             printf("Server CB, Stream: %" PRIu64 ", Partial command: %s\n",
                 stream_id, strip_endofline(buf, sizeof(buf), (char *)&stream_ctx->command));
@@ -490,10 +497,10 @@ int quic_server(const char * server_name, int server_port,
                     memset(&client_from, 0, sizeof(client_from));
                     memcpy(&client_from, &addr_from, from_length);
                     client_addr_length = from_length;
-                    printf("%" PRIx64 ": ", picoquic_get_initial_cnxid(cnx_server));
+
                     print_address((struct sockaddr*)&client_from, "Client address:",
                         picoquic_get_initial_cnxid(cnx_server));
-                    picoquic_log_transport_extension(stdout, cnx_server);
+                    picoquic_log_transport_extension(stdout, cnx_server, 1);
                 }
             }
             if (ret == 0)
@@ -533,11 +540,19 @@ int quic_server(const char * server_name, int server_port,
                             free(p);
 
                             printf("%" PRIx64 ": ", picoquic_get_initial_cnxid(cnx_next));
-                            printf("retrans= %d, spurious= %d, max sp gap = %d, max sp delay = %d\n",
+                            printf("Closed. Retrans= %d, spurious= %d, max sp gap = %d, max sp delay = %d\n",
                                 (int)cnx_next->nb_retransmission_total, (int)cnx_next->nb_spurious,
                                 (int)cnx_next->max_reorder_gap, (int)cnx_next->max_spurious_rtt);
 
+                            if (cnx_next == cnx_server)
+                            {
+                                cnx_server = NULL;
+                            }
+
                             picoquic_delete_cnx(cnx_next);
+
+                            fflush(stdout);
+
                             break;
                         }
                         else if (ret == 0)
@@ -551,9 +566,9 @@ int quic_server(const char * server_name, int server_port,
                             {
                                 if (just_once != 0)
                                 {
-                                printf("%" PRIx64 ": ", picoquic_get_initial_cnxid(cnx_next));
-                                printf("Connection state = %d\n",
-                                    picoquic_get_cnx_state(cnx_next));
+                                    printf("%" PRIx64 ": ", picoquic_get_initial_cnxid(cnx_next));
+                                    printf("Connection state = %d\n",
+                                        picoquic_get_cnx_state(cnx_next));
                                 }
 
                                 picoquic_get_peer_addr(cnx_next, &peer_addr, &peer_addr_len);
@@ -564,7 +579,7 @@ int quic_server(const char * server_name, int server_port,
                                     picoquic_get_local_if_index(cnx_next),
                                     (const char *)send_buffer, (int)send_length);
 
-                                if (cnx_server != NULL && just_once != 0)
+                                if (cnx_server != NULL && just_once != 0 && cnx_next == cnx_server)
                                 {
                                     picoquic_log_packet(stdout, qserver, cnx_server, (struct sockaddr *) peer_addr,
                                         0, send_buffer, send_length, current_time);
@@ -944,7 +959,7 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
 
         cnx_client = picoquic_create_cnx(qclient, 0, 
             (struct sockaddr *)&server_address, current_time, 
-            proposed_version, sni, (proposed_version == 0xFF000007)?"hq-07":"hq-08");
+            proposed_version, sni, "hq-08");
 
         if (cnx_client == NULL)
         {
@@ -972,13 +987,21 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
 
 					picoquic_log_packet(F_log, qclient, cnx_client, (struct sockaddr *) &server_address,
 						0, send_buffer, bytes_sent, current_time);
-
-                    /* Queue a simple frame to perform 0-RTT test */
-                    picoquic_queue_misc_frame(cnx_client, test_ping, sizeof(test_ping));
+#if 1
+                    if (picoquic_is_0rtt_available(cnx_client))
+                    {
+                        /* Queue a simple frame to perform 0-RTT test */
+                        picoquic_queue_misc_frame(cnx_client, test_ping, sizeof(test_ping));
+                    }
+#endif
+#if 0
 
                     /* Start the scenario */
-                    quic_client_launch_scenario(cnx_client, &callback_ctx);
-
+                    /* Start the download scenario */
+                    callback_ctx.demo_stream = test_scenario;
+                    callback_ctx.nb_demo_streams = test_scenario_nb;
+                    demo_client_start_streams(cnx_client, &callback_ctx, 0);
+#endif
 				}
 				else
 				{
@@ -1058,22 +1081,13 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
                 {
                     if (established == 0)
                     {
-                        picoquic_log_transport_extension(F_log, cnx_client);
+                        picoquic_log_transport_extension(F_log, cnx_client, 0);
                         printf("Connection established.\n");
                         established = 1;
-#if 0
+#if 1
                         /* Start the download scenario */
-                        if ((picoquic_supported_versions[cnx_client->version_index].version_flags&
-                            picoquic_version_bidir_only) == 0)
-                        {
-                            callback_ctx.demo_stream = test_scenario;
-                            callback_ctx.nb_demo_streams = test_scenario_nb;
-                        }
-                        else
-                        {
-                            callback_ctx.demo_stream = test_scenario_old;
-                            callback_ctx.nb_demo_streams = test_scenario_old_nb;
-                        }
+                        callback_ctx.demo_stream = test_scenario;
+                        callback_ctx.nb_demo_streams = test_scenario_nb;
 
                         demo_client_start_streams(cnx_client, &callback_ctx, 0);
 #endif

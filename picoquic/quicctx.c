@@ -808,6 +808,11 @@ picoquic_cnx_t * picoquic_get_next_cnx(picoquic_cnx_t * cnx)
     return cnx->next_in_table;
 }
 
+uint64_t picoquic_is_0rtt_available(picoquic_cnx_t * cnx)
+{
+    return (cnx->aead_0rtt_encrypt_ctx == NULL) ? 0 : 1;
+}
+
 
 int64_t picoquic_get_next_wake_delay(picoquic_quic_t * quic, 
     uint64_t current_time, int64_t delay_max)

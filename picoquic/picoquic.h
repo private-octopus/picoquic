@@ -219,6 +219,7 @@ extern "C" {
     uint64_t picoquic_get_cnxid(picoquic_cnx_t * cnx);
     uint64_t picoquic_get_initial_cnxid(picoquic_cnx_t * cnx);
     uint64_t picoquic_get_cnx_start_time(picoquic_cnx_t * cnx);
+    uint64_t picoquic_is_0rtt_available(picoquic_cnx_t * cnx);
 
     int picoquic_is_cnx_backlog_empty(picoquic_cnx_t * cnx);
 

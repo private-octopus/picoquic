@@ -458,7 +458,6 @@ int picoquic_test_stream_frame_unlimited(uint8_t * bytes)
     return ret;
 }
 
-
 int picoquic_parse_stream_header(const uint8_t * bytes, size_t bytes_max,
 								 uint64_t * stream_id, uint64_t * offset, size_t * data_length, int * fin,
 								 size_t * consumed)
