@@ -48,6 +48,7 @@ static picoquic_test_def_t test_table[] = {
     { "sim_link", sim_link_test },
     { "logger", logger_test },
     { "tls_api", tls_api_test },
+    { "silence_test", tls_api_silence_test },
     { "tls_api_version_negotiation", tls_api_version_negotiation_test},
     { "first_loss", tls_api_client_first_loss_test },
     { "second_loss", tls_api_client_second_loss_test },

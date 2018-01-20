@@ -1113,6 +1113,57 @@ int tls_api_test()
 	return tls_api_test_with_loss(NULL, PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, NULL);
 }
 
+int tls_api_silence_test()
+{
+    uint64_t  loss_mask = 0;
+    uint64_t simulated_time = 0;
+    uint64_t next_time = 0;
+    picoquic_test_tls_api_ctx_t * test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, 0, NULL, NULL, &simulated_time, NULL);
+
+    if (ret == 0)
+    {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+    
+    /* simulate 5 seconds of silence */
+    next_time = simulated_time + 5000000;
+    while (ret == 0 && simulated_time < next_time &&
+        test_ctx->cnx_client->cnx_state == picoquic_state_client_ready &&
+        test_ctx->cnx_server->cnx_state == picoquic_state_server_ready)
+    {
+        int was_active = 0;
+
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, &was_active);
+    }
+
+    if (ret == 0)
+    {
+        ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
+    }
+
+    if (ret == 0)
+    {
+        /* verify the absence of any spurious retransmission */
+        if (test_ctx->cnx_client->nb_retransmission_total != 0)
+        {
+            ret = -1;
+        }
+        else if (test_ctx->cnx_server->nb_retransmission_total != 0)
+        {
+            ret = -1;
+        }
+    }
+
+    if (test_ctx != NULL)
+    {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
 int tls_api_loss_test(uint64_t mask)
 {
 	uint64_t loss_mask = mask;

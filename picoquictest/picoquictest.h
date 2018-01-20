@@ -36,7 +36,8 @@ extern "C" {
     int float16test();
     int StreamZeroFrameTest();
 	int sendacktest();
-    int tls_api_test(); 
+    int tls_api_test();
+    int tls_api_silence_test();
 	int tls_api_loss_test(uint64_t mask);
     int tls_api_client_first_loss_test();
     int tls_api_client_second_loss_test();
