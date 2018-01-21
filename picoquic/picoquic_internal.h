@@ -601,6 +601,9 @@ extern "C" {
 	int picoquic_receive_transport_extensions(picoquic_cnx_t * cnx, int extension_mode,
 		uint8_t * bytes, size_t bytes_max, size_t * consumed);
 
+    /* Check whether a packet was sent in clear text */
+    int picoquic_is_packet_encrypted(picoquic_cnx_t * cnx, uint8_t byte_zero);
+
 #ifdef  __cplusplus
 }
 #endif

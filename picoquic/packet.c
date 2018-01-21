@@ -242,6 +242,39 @@ int picoquic_parse_packet_header(
     return 0;
 }
 
+/* Check whether a packet was sent in clear text */
+int picoquic_is_packet_encrypted(
+    picoquic_cnx_t * cnx,
+    uint8_t byte_zero)
+{
+    int ret = 0;
+
+    /* Is this a long header of a short header? */
+    if ((byte_zero & 0x80) == 0x80)
+    {
+        switch (picoquic_supported_versions[cnx->version_index].version_header_encoding)
+        {
+        case picoquic_version_header_08:
+            switch (byte_zero)
+            {
+            case 0xFC: /* picoquic_packet_0rtt_protected*/
+                ret = 1;
+                break;
+            default:
+                break;
+            }
+        }
+    }
+    else
+    {
+        /* If this is a short header, weknow that the packet is encrypted  */
+        ret = 1;
+    }
+
+    return ret;
+}
+
+
 /* The packet number logic */
 uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t pn)
 {

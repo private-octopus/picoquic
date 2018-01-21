@@ -1157,6 +1157,10 @@ static picoquic_packet * picoquic_update_rtt(picoquic_cnx_t * cnx, uint64_t larg
                             {
                                 cnx->ack_delay_local = 1000;
                             }
+                            else if (cnx->ack_delay_local > 10000)
+                            {
+                                cnx->ack_delay_local = 10000;
+                            }
 						}
 
                         if (4 * cnx->rtt_variant < cnx->rtt_min)
@@ -1458,7 +1462,7 @@ void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t * cnx, picoquic_p
 
 static picoquic_packet * picoquic_process_ack_range(
 	picoquic_cnx_t * cnx, uint64_t highest, uint64_t range, picoquic_packet * p,
-	uint64_t current_time)
+	uint64_t current_time, int restricted, int * ret)
 {
 	/* Compare the range to the retransmit queue */
 	while (p != NULL && range > 0)
@@ -1469,6 +1473,19 @@ static picoquic_packet * picoquic_process_ack_range(
 		}
 		else
 		{
+            if (restricted)
+            {
+                /* check that the packet was sent in clear text */
+                if (picoquic_is_packet_encrypted(cnx, p->bytes[0]))
+                {
+                    /* Protocol error! */
+                    *ret = picoquic_connection_error(cnx, 
+                        PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION);
+                    p = NULL;
+                    break;
+                }
+            }
+
 			if (p->sequence_number == highest)
 			{
 				/* TODO: RTT Estimate */
@@ -1505,7 +1522,7 @@ static picoquic_packet * picoquic_process_ack_range(
 }
 
 int picoquic_decode_ack_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
-    size_t bytes_max, size_t * consumed, uint64_t current_time)
+    size_t bytes_max, size_t * consumed, uint64_t current_time, int restricted)
 {
 	int ret;
 	uint64_t num_block;
@@ -1529,7 +1546,7 @@ int picoquic_decode_ack_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
 		picoquic_packet * top_packet = picoquic_update_rtt(cnx, largest, current_time, ack_delay);
 		unsigned extra_ack = 1;
 
-        while (1)
+        while (ret == 0)
         {
             uint64_t range;
             uint64_t block_to_block;
@@ -1566,7 +1583,13 @@ int picoquic_decode_ack_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
                 break;
             }
 
-            top_packet = picoquic_process_ack_range(cnx, largest, range, top_packet, current_time);
+            top_packet = picoquic_process_ack_range(cnx, largest, range, 
+                top_packet, current_time, restricted, &ret);
+
+            if (ret != 0)
+            {
+                break;
+            }
 
             if (range > 0)
             {
@@ -1759,6 +1782,10 @@ int picoquic_is_ack_needed(picoquic_cnx_t * cnx, uint64_t current_time)
 	{
 		ret = cnx->ack_needed;
 	}
+    else if (cnx->ack_needed)
+    {
+        ret = 0;
+    }
 
 	return ret;
 }
@@ -2314,7 +2341,7 @@ int picoquic_decode_frames(picoquic_cnx_t * cnx, uint8_t * bytes,
         else if (first_byte == picoquic_frame_type_ack)
         {
             ret = picoquic_decode_ack_frame(cnx, bytes + byte_index,
-                bytes_max - byte_index, &consumed, current_time);
+                bytes_max - byte_index, &consumed, current_time, restricted);
             byte_index += consumed;
         }
         else

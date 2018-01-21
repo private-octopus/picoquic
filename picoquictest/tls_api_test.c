@@ -123,7 +123,7 @@ static test_api_stream_desc_t test_scenario_unidir[] = {
     { 3, 0, 5000, 0 }
 };
 
-static test_api_stream_desc_t test_mtu_discovery[] = {
+static test_api_stream_desc_t test_scenario_mtu_discovery[] = {
     { 2, 0, 100000, 0 }
 };
 
@@ -2079,6 +2079,13 @@ int mtu_discovery_test()
     {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
     }
+
+    /* Prepare to send data */
+    if (ret == 0)
+    {
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_mtu_discovery, sizeof(test_scenario_mtu_discovery));
+    }
+
     /* Perform a data sending loop */
     if (ret == 0)
     {
@@ -2094,6 +2101,68 @@ int mtu_discovery_test()
         }
         else if (test_ctx->cnx_server->send_mtu !=
             test_ctx->cnx_client->local_parameters.max_packet_size)
+        {
+            ret = -1;
+        }
+    }
+
+    if (test_ctx != NULL)
+    {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+/*
+ * Trying to reproduce the scenario that resulted in 
+ * spurious retransmissions,and checking that it is fixed.
+ */
+
+int spurious_retransmit_test()
+{
+    uint64_t  loss_mask = 0;
+    uint64_t simulated_time = 0;
+    uint64_t next_time = 0;
+    picoquic_test_tls_api_ctx_t * test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, 0, NULL, NULL, &simulated_time, NULL);
+
+    if (ret == 0)
+    {
+        test_ctx->c_to_s_link->microsec_latency = 50000;
+        test_ctx->s_to_c_link->microsec_latency = 50000;
+    }
+
+    if (ret == 0)
+    {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    /* simulate 1 second of silence */
+    next_time = simulated_time + 1000000;
+    while (ret == 0 && simulated_time < next_time &&
+        test_ctx->cnx_client->cnx_state == picoquic_state_client_ready &&
+        test_ctx->cnx_server->cnx_state == picoquic_state_server_ready)
+    {
+        int was_active = 0;
+
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, &was_active);
+    }
+
+    if (ret == 0)
+    {
+        ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
+    }
+
+    if (ret == 0)
+    {
+        /* verify the absence of any spurious retransmission */
+        if (test_ctx->cnx_client->nb_spurious != 0)
+        {
+            ret = -1;
+        }
+        else if (test_ctx->cnx_server->nb_spurious != 0)
         {
             ret = -1;
         }

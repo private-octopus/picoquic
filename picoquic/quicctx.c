@@ -1093,7 +1093,7 @@ int picoquic_connection_error(picoquic_cnx_t * cnx, uint32_t local_error)
         cnx->local_error = local_error;
         cnx->cnx_state = picoquic_state_disconnecting;
 
-        DBG_PRINTF("Protocol error %x", local_error);
+        DBG_PRINTF("Protocol error (%x)", local_error);
     }
     else if (cnx->cnx_state < picoquic_state_client_ready)
     {

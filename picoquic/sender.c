@@ -1121,21 +1121,25 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t * cnx, picoquic_packet * 
         packet->send_time = current_time;
 
         if (((stream == NULL) || cnx->cwin <= cnx->bytes_in_transit) &&
-            picoquic_is_ack_needed(cnx, current_time) == 0)
+            (cnx->cnx_state == picoquic_state_client_almost_ready ||
+            picoquic_is_ack_needed(cnx, current_time) == 0))
         {
             length = 0;
         }
         else
         {
-            ret = picoquic_prepare_ack_frame(cnx, current_time, &bytes[length],
-                cnx->send_mtu - checksum_overhead - length, &data_bytes);
-            if (ret == 0)
+            if (cnx->cnx_state != picoquic_state_client_almost_ready)
             {
-                length += data_bytes;
-            }
-            else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL)
-            {
-                ret = 0;
+                ret = picoquic_prepare_ack_frame(cnx, current_time, &bytes[length],
+                    cnx->send_mtu - checksum_overhead - length, &data_bytes);
+                if (ret == 0)
+                {
+                    length += data_bytes;
+                }
+                else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL)
+                {
+                    ret = 0;
+                }
             }
 
             if (ret == 0 && cnx->cwin > cnx->bytes_in_transit)
@@ -1644,12 +1648,16 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t * cnx, picoquic_packet * packet
     {
         /* Set the new checksum length */
         checksum_overhead = picoquic_get_checksum_length(cnx, is_cleartext_mode);
-        /* Check whether it makes sens to add an ACK at the end of the retransmission */
-        if (picoquic_prepare_ack_frame(cnx, current_time, &bytes[length],
-            cnx->send_mtu - checksum_overhead - length, &data_bytes) == 0)
+        /* Check whether it makes sense to add an ACK at the end of the retransmission */
+        /* Don't do that if it risks mixing clear text and encrypted ack */
+        if (is_cleartext_mode == 0)
         {
-            length += data_bytes;
-            packet->length = length;
+            if (picoquic_prepare_ack_frame(cnx, current_time, &bytes[length],
+                cnx->send_mtu - checksum_overhead - length, &data_bytes) == 0)
+            {
+                length += data_bytes;
+                packet->length = length;
+            }
         }
         /* document the send time & overhead */
         packet->send_time = current_time;
@@ -1666,7 +1674,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t * cnx, picoquic_packet * packet
         if (((stream == NULL && cnx->first_misc_frame == NULL) || cnx->cwin <= cnx->bytes_in_transit) &&
             picoquic_is_ack_needed(cnx, current_time) == 0)
         {
-            if (ret == 0 && picoquic_is_mtu_probe_needed(cnx))
+            if (ret == 0 && cnx->cwin > cnx->bytes_in_transit && picoquic_is_mtu_probe_needed(cnx))
             {
                 length = picoquic_prepare_mtu_probe(cnx, header_length, checksum_overhead, bytes);
                 packet->length = length;
@@ -1675,7 +1683,6 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t * cnx, picoquic_packet * packet
             else
             {
                 length = 0;
-                cnx->ack_needed = 0;
             }
         }
         else
