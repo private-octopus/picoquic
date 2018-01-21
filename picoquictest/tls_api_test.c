@@ -2073,7 +2073,6 @@ int mtu_discovery_test()
     picoquic_test_tls_api_ctx_t * test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL);
-    int nb_initial_loop = 0;
 
     if (ret == 0)
     {
