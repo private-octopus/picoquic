@@ -318,6 +318,7 @@ extern "C" {
 		/* Local and remote parameters */
 		picoquic_transport_parameters local_parameters;
 		picoquic_transport_parameters remote_parameters;
+        int remote_parameters_received;
 		/* On clients, document the SNI and ALPN expected from the server */
 		/* TODO: there may be a need to propose multiple ALPN */
 		char const * sni;

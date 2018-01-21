@@ -1318,9 +1318,17 @@ int picoquic_tlsinput_stream_zero(picoquic_cnx_t * cnx)
         case picoquic_state_client_init_resent:
         case picoquic_state_client_handshake_start:
         case picoquic_state_client_handshake_progress:
-            /* Extract and install the client 1-RTT key */
-            cnx->cnx_state = picoquic_state_client_almost_ready;
-            ret = picoquic_setup_1RTT_aead_contexts(cnx, 0);
+            if (cnx->remote_parameters_received == 0)
+            {
+                ret = picoquic_connection_error(cnx,
+                    PICOQUIC_TRANSPORT_TRANSPORT_PARAMETER_ERROR);
+            }
+            else
+            {
+                /* Extract and install the client 1-RTT key */
+                cnx->cnx_state = picoquic_state_client_almost_ready;
+                ret = picoquic_setup_1RTT_aead_contexts(cnx, 0);
+            }
             break;
         case picoquic_state_server_init:
             /* Extract and install the server 0-RTT and 1-RTT key */

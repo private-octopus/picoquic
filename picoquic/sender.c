@@ -833,8 +833,11 @@ size_t picoquic_prepare_mtu_probe(picoquic_cnx_t * cnx, size_t header_length, si
     if (cnx->send_mtu_max_tried == 0)
     {
         probe_length = cnx->remote_parameters.max_packet_size;
-
-        if (probe_length > PICOQUIC_MAX_PACKET_SIZE)
+        if (probe_length == 0)
+        {
+            probe_length = PICOQUIC_MAX_PACKET_SIZE;
+        }
+        else if (probe_length > PICOQUIC_MAX_PACKET_SIZE)
         {
             probe_length = PICOQUIC_MAX_PACKET_SIZE;
         }

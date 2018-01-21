@@ -237,6 +237,8 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t * cnx, int extension_mo
 	size_t byte_index = 0;
     uint32_t present_flag = 0;
 
+    cnx->remote_parameters_received = 1;
+
     switch (extension_mode)
     {
     case 0: // Client hello
