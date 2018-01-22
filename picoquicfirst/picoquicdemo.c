@@ -632,12 +632,16 @@ static const demo_stream_desc_t test_scenario[] = {
     { 4, 0, "", "slash.html",0 },
     { 8, 4, "en/latest/", "slash_en_slash_latest.html", 0 }
 #else
+#ifdef PICOQUIC_TEST_AGAINST_QUICKLY
+{ 4, 0, "123.txt", "123.txt", 0 }
+#else
     { 4, 0, "index.html", "index.html",0 },
     { 8, 4, "test.html", "test.html", 0 },
     { 12, 4, "doc-123456.html", "doc-123456.html", 0 },
     { 16, 4, "main.jpg", "main.jpg",1},
     { 20, 4, "war-and-peace.txt", "war-and-peace.txt", 0},
     { 24, 4, "en/latest/", "slash_en_slash_latest.html", 0 }
+#endif
 #endif
 };
 
