@@ -118,6 +118,8 @@ void picoquic_log_packet(FILE* F, picoquic_quic_t * quic, picoquic_cnx_t * cnx,
 void picoquic_log_processing(FILE* F, picoquic_cnx_t * cnx, size_t length, int ret);
 void picoquic_log_transport_extension(FILE* F, picoquic_cnx_t * cnx, int log_cnxid);
 void picoquic_log_congestion_state(FILE* F, picoquic_cnx_t * cnx, uint64_t current_time);
+void picoquic_log_picotls_ticket(FILE* F, uint64_t cnx_id,
+    uint8_t * ticket, uint16_t ticket_length);
 
 void print_address(struct sockaddr * address, char * label, uint64_t cnx_id)
 {
@@ -923,6 +925,7 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
     int64_t delay_max = 10000000;
     int64_t delta_t = 0;
     int notified_ready = 0;
+    const char * alpn = "hq-08";
 
     memset(&callback_ctx, 0, sizeof(picoquic_first_client_callback_ctx_t));
 
@@ -950,7 +953,7 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
 
     if (ret == 0)
     {
-        qclient = picoquic_create(8, NULL, NULL, "hq08", NULL, NULL, NULL, NULL, NULL, current_time, NULL, ticket_store_filename, NULL, 0);
+        qclient = picoquic_create(8, NULL, NULL, alpn, NULL, NULL, NULL, NULL, NULL, current_time, NULL, ticket_store_filename, NULL, 0);
 
         if (qclient == NULL)
         {
@@ -965,7 +968,7 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
 
         cnx_client = picoquic_create_cnx(qclient, 0, 
             (struct sockaddr *)&server_address, current_time, 
-            proposed_version, sni, "hq-08");
+            proposed_version, sni, alpn);
 
         if (cnx_client == NULL)
         {
@@ -1163,6 +1166,16 @@ int quic_client(const char * ip_address_text, int server_port, uint32_t proposed
     /* Clean up */
     if (qclient != NULL)
     {
+        uint8_t *ticket;
+        uint16_t ticket_length;
+
+        if (sni != NULL && 0 == picoquic_get_ticket(qclient->p_first_ticket, current_time,
+            sni, (uint16_t)strlen(sni), alpn, (uint16_t)strlen(alpn), &ticket, &ticket_length))
+        {
+            fprintf(F_log, "Received ticket from %s:\n", sni);
+            picoquic_log_picotls_ticket(F_log, 0, ticket, ticket_length);
+        }
+
         if (picoquic_save_tickets(qclient->p_first_ticket, current_time, ticket_store_filename) != 0)
         {
             fprintf(stderr, "Could not store the saved session tickets.\n");

@@ -444,6 +444,11 @@ int picoquic_client_save_ticket_call_back(ptls_save_ticket_t * save_ticket_ctx,
     const char * sni = ptls_get_server_name(tls);
     const char * alpn = ptls_get_negotiated_protocol(tls);
 
+    if (alpn == NULL && quic != NULL)
+    {
+        alpn = quic->default_alpn;
+    }
+
     if (sni != NULL && alpn != NULL)
     {
         ret = picoquic_store_ticket(&quic->p_first_ticket, 0, sni, (uint16_t)strlen(sni),
