@@ -101,7 +101,7 @@ int cleartext_aead_test()
         test_addr_c.sin_port = 12345;
 
         cnx_client = picoquic_create_cnx(qclient, 0,
-            (struct sockaddr *)&test_addr_c, 0, 0, NULL, NULL);
+            (struct sockaddr *)&test_addr_c, 0, 0, NULL, NULL, 1);
         if (cnx_client == NULL)
         {
             ret = -1;
@@ -118,7 +118,7 @@ int cleartext_aead_test()
 
         cnx_server = picoquic_create_cnx(qserver, cnx_client->initial_cnxid, 
             (struct sockaddr *)&test_addr_s, 0,
-            cnx_client->proposed_version, NULL, NULL);
+            cnx_client->proposed_version, NULL, NULL, 0);
 
         if (cnx_server == NULL)
         {

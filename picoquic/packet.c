@@ -43,7 +43,6 @@ int picoquic_parse_packet_header(
     uint8_t * bytes,
     uint32_t length,
     struct sockaddr * addr_from,
-    int to_server,
     picoquic_packet_header * ph,
     picoquic_cnx_t ** pcnx)
 {
@@ -71,7 +70,7 @@ int picoquic_parse_packet_header(
                 ph->pnmask = 0;
                 ph->version_index = -1;
 
-                if (to_server == 0 && *pcnx == NULL)
+                if (*pcnx == NULL)
                 {
                     *pcnx = picoquic_cnx_by_id(quic, ph->cnx_id);
 
@@ -93,6 +92,23 @@ int picoquic_parse_packet_header(
                 }
                 else
                 {
+                    /* Is the context found by using the `addr_from`? */
+                    char context_by_addr = 0;
+                    /* Retrieve the connection context */
+                    if (*pcnx == NULL)
+                    {
+                        *pcnx = picoquic_cnx_by_id(quic, ph->cnx_id);
+
+                        /* TODO: something for the case of client initial, e.g. source IP + initial CNX_ID */
+                        if (*pcnx == NULL)
+                        {
+                            *pcnx = picoquic_cnx_by_net(quic, addr_from);
+                            context_by_addr = 1;
+                        }
+                    }
+
+                    char is_client = *pcnx && (*pcnx)->client_mode;
+
                     /* If the version is supported now, the format field in the version table
                      * describes the encoding. */
                     switch (picoquic_supported_versions[ph->version_index].version_header_encoding)
@@ -109,7 +125,7 @@ int picoquic_parse_packet_header(
                             ph->ptype = picoquic_packet_server_stateless;
                             break;
                         case 0xFD:
-                            ph->ptype = (to_server == 0) ? picoquic_packet_server_cleartext : picoquic_packet_client_cleartext;
+                            ph->ptype = is_client ? picoquic_packet_server_cleartext : picoquic_packet_client_cleartext;
                             break;
                         case 0xFC:
                             ph->ptype = picoquic_packet_0rtt_protected;
@@ -120,19 +136,14 @@ int picoquic_parse_packet_header(
                         }
                     }
 
-                    /* Retrieve the connection context */
-                    if (*pcnx == NULL)
+                    /* If the context was found by using `addr_from`, but the packet type
+                     * does not allow that, reset the context to NULL. */
+                    if (context_by_addr && !(
+                        ph->ptype == picoquic_packet_server_cleartext ||
+                        ph->ptype == picoquic_packet_server_stateless ||
+                        ph->ptype == picoquic_packet_0rtt_protected))
                     {
-                        *pcnx = picoquic_cnx_by_id(quic, ph->cnx_id);
-
-                        /* TODO: something for the case of client initial, e.g. source IP + initial CNX_ID */
-                        if (*pcnx == NULL && (
-                            ph->ptype == picoquic_packet_server_cleartext ||
-                            ph->ptype == picoquic_packet_server_stateless ||
-                            ph->ptype == picoquic_packet_0rtt_protected))
-                        {
-                            *pcnx = picoquic_cnx_by_net(quic, addr_from);
-                        }
+                        *pcnx = NULL;
                     }
                 }
             }
@@ -149,7 +160,7 @@ int picoquic_parse_packet_header(
         ph->vn = 0;
         ph->pn = 0;
 
-        if (*pcnx == NULL && to_server == 0)
+        if (*pcnx == NULL)
         {
             *pcnx = picoquic_cnx_by_net(quic, addr_from);
         }
@@ -558,10 +569,10 @@ picoquic_cnx_t * picoquic_incoming_initial(
     else
     {
         /* if listening is OK, listen */
-        cnx = picoquic_create_cnx(quic, ph->cnx_id, addr_from, current_time, ph->vn, NULL, NULL);
+        cnx = picoquic_create_cnx(quic, ph->cnx_id, addr_from, current_time, ph->vn, NULL, NULL, 0);
 
         if (cnx != NULL)
-        {          
+        {
             decoded_length = picoquic_decrypt_cleartext(cnx, bytes, length, ph);
 
             if (decoded_length == 0)
@@ -974,7 +985,7 @@ int picoquic_incoming_encrypted(
                 {
                     if (closing_received)
                     {
-                        if ((cnx->quic->flags&picoquic_context_server) == 0)
+                        if (cnx->client_mode)
                         {
                             cnx->cnx_state = picoquic_state_disconnected;
                         }
@@ -1043,24 +1054,18 @@ int picoquic_incoming_packet(
     picoquic_packet_header ph;
 
     /* Parse the clear text header. Ret == 0 means an incorrect packet that could not be parsed */
-    ret = picoquic_parse_packet_header(quic, bytes, length, addr_from, 
-        (quic->flags & picoquic_context_server)?1:0, &ph, &cnx);
+    ret = picoquic_parse_packet_header(quic, bytes, length, addr_from, &ph, &cnx);
 
     if (ret == 0)
     {
         if (cnx == NULL)
         {
-            if ((quic->flags&picoquic_context_server) == 0)
-            {
-                /* Client just ignores spurious packets that it does not understand. */
-                ret = PICOQUIC_ERROR_DETECTED;
-            }
-            else if (ph.ptype == picoquic_packet_client_initial)
+            if (ph.ptype == picoquic_packet_client_initial)
             {
                 ph.pn64 = ph.pn;
                 cnx = picoquic_incoming_initial(quic, bytes, length, addr_from, addr_to, if_index_to, &ph, current_time);
             }
-            else if (ph.version_index < 0 && ph.vn != 0)      
+            else if (ph.version_index < 0 && ph.vn != 0)
             {
                 /* use the result of parsing to consider version negotiation */
                 picoquic_prepare_version_negotiation(quic, addr_from, addr_to, if_index_to, &ph);

@@ -44,7 +44,6 @@
  * Stream 0 is special, in the sense that it cannot be closed or reset, and is not
  * subject to flow control.
  */
-
 int picoquic_add_to_stream(picoquic_cnx_t * cnx, uint64_t stream_id, 
 	const uint8_t * data, size_t length, int set_fin)
 {
@@ -65,7 +64,7 @@ int picoquic_add_to_stream(picoquic_cnx_t * cnx, uint64_t stream_id,
             /* Need to check that the ID is authorized */
 
             /* Check parity */
-            int parity = ((cnx->quic->flags&picoquic_context_server) == 0) ? 0 : 1;
+            int parity = cnx->client_mode ? 0 : 1;
             if ((stream_id & 1) != parity)
             {
                 ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
@@ -585,13 +584,11 @@ int picoquic_retransmit_needed(picoquic_cnx_t * cnx, uint64_t current_time,
 
             *header_length = 0;
             /* Get the packet type */
-            ret = picoquic_parse_packet_header(cnx->quic, p->bytes, (uint32_t)p->length, NULL,
-                ((cnx->quic->flags&picoquic_context_server) == 0) ? 1 : 0, &ph, &pcnx);
+            ret = picoquic_parse_packet_header(cnx->quic, p->bytes, (uint32_t)p->length, NULL, &ph, &pcnx);
 
             if (ph.ptype == picoquic_packet_0rtt_protected)
             {
-                if (cnx->cnx_state < picoquic_state_client_ready &&
-                    (cnx->quic->flags&picoquic_context_server) == 0)
+                if (cnx->cnx_state < picoquic_state_client_ready && cnx->client_mode)
                 {
                     should_retransmit = 0;
                 }
@@ -771,8 +768,7 @@ int picoquic_is_cnx_backlog_empty(picoquic_cnx_t * cnx)
         picoquic_cnx_t * pcnx = cnx;
 
         /* Get the packet type */
-        ret = picoquic_parse_packet_header(cnx->quic, p->bytes, (uint32_t)p->length, NULL,
-            ((cnx->quic->flags&picoquic_context_server) == 0) ? 1 : 0, &ph, &pcnx);
+        ret = picoquic_parse_packet_header(cnx->quic, p->bytes, (uint32_t)p->length, NULL, &ph, &pcnx);
 
         /* Copy the relevant bytes from one packet to the next */
         byte_index = ph.offset;
@@ -1379,7 +1375,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t * cnx, picoquic_packet * 
     {
         *send_length = 0;
     }
-    
+
     picoquic_cnx_set_next_wake_time(cnx, current_time);
 
     return ret;
@@ -1406,7 +1402,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t * cnx, picoquic_packet * pack
     switch (cnx->cnx_state)
     {
     case picoquic_state_handshake_failure:
-        packet_type = ((cnx->quic->flags & picoquic_context_server) == 0) ?
+        packet_type = cnx->client_mode ?
             picoquic_packet_client_cleartext : picoquic_packet_server_cleartext;
         break;
     case picoquic_state_disconnecting:
@@ -1868,7 +1864,7 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
         packet_type = picoquic_packet_client_cleartext;
         break;
     case picoquic_state_handshake_failure:
-        packet_type = ((cnx->quic->flags & picoquic_context_server) == 0) ?
+        packet_type = cnx->client_mode ?
             picoquic_packet_client_cleartext : picoquic_packet_server_cleartext;
         break;
     case picoquic_state_client_ready:
@@ -2267,7 +2263,6 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
     }
     else
     {
-
         /* Prepare header -- depend on connection state */
         /* TODO: 0-RTT work. */
         switch (cnx->cnx_state)
@@ -2316,6 +2311,7 @@ int picoquic_prepare_packet(picoquic_cnx_t * cnx, picoquic_packet * packet,
 int picoquic_close(picoquic_cnx_t * cnx, uint16_t reason_code)
 {
     int ret = 0;
+
     if (cnx->cnx_state == picoquic_state_server_ready ||
         cnx->cnx_state == picoquic_state_client_ready)
     {

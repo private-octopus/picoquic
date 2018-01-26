@@ -478,7 +478,7 @@ uint64_t picoquic_get_simulated_time_cb(ptls_get_time_t *self)
  * On servers, this implies setting the "on hello" call back
  */
 
-int picoquic_master_tlscontext(picoquic_quic_t * quic, 
+int picoquic_master_tlscontext(picoquic_quic_t * quic,
     char const * cert_file_name, char const * key_file_name,
     const uint8_t * ticket_key, size_t ticket_key_length)
 {
@@ -525,7 +525,7 @@ int picoquic_master_tlscontext(picoquic_quic_t * quic,
             }
         }
 
-        if (quic->flags&picoquic_context_server)
+        if (cert_file_name != NULL && key_file_name != NULL)
         {
             /* Read the certificate file */
             if (ptls_load_certificates(ctx, (char *)cert_file_name) != 0)
@@ -556,7 +556,7 @@ int picoquic_master_tlscontext(picoquic_quic_t * quic,
             {
                 ret = picoquic_server_setup_ticket_aead_contexts(quic, ctx, ticket_key, ticket_key_length);
             }
-            
+
             if (ret == 0)
             {
                 encrypt_ticket = (ptls_encrypt_ticket_t *)malloc(sizeof(ptls_encrypt_ticket_t) +
@@ -580,8 +580,7 @@ int picoquic_master_tlscontext(picoquic_quic_t * quic,
                 }
             }
         }
-        else
-        {
+
             verifier = (ptls_openssl_verify_certificate_t *)malloc(sizeof(ptls_openssl_verify_certificate_t));
 			if (verifier == NULL)
 			{
@@ -607,7 +606,6 @@ int picoquic_master_tlscontext(picoquic_quic_t * quic,
                     *ppquic = quic;
                 }
             }
-        }
 
         if (ret == 0)
         {
@@ -635,14 +633,11 @@ void picoquic_master_tlscontext_free(picoquic_quic_t * quic)
             ctx->get_time = NULL;
         }
 
-		if (quic->flags&picoquic_context_server)
-		{
 			if (ctx->certificates.list != NULL)
 			{
 				free(ctx->certificates.list);
 			}
-		}
-		
+
 		if (ctx->verify_certificate != NULL)
 		{
 			free(ctx->verify_certificate);
@@ -663,7 +658,7 @@ void picoquic_master_tlscontext_free(picoquic_quic_t * quic)
 
 /*
  * Creation of a TLS context.
- * This includes setting the handshake properties that will later be 
+ * This includes setting the handshake properties that will later be
  * used during the TLS handshake.
  */
 int picoquic_tlscontext_create(picoquic_quic_t * quic, picoquic_cnx_t * cnx, uint64_t current_time)
@@ -685,9 +680,9 @@ int picoquic_tlscontext_create(picoquic_quic_t * quic, picoquic_cnx_t * cnx, uin
 
 		ctx->handshake_properties.collect_extension = picoquic_tls_collect_extensions_cb;
 		ctx->handshake_properties.collected_extensions = picoquic_tls_collected_extensions_cb;
-		ctx->client_mode = (quic->flags&picoquic_context_server) ? 0 : 1;
+		ctx->client_mode = cnx->client_mode;
 
-		ctx->tls = ptls_new((ptls_context_t *)quic->tls_master_ctx, 
+		ctx->tls = ptls_new((ptls_context_t *)quic->tls_master_ctx,
 			(ctx->client_mode)?0:1);
 
 		if (ctx->tls == NULL)
@@ -721,7 +716,7 @@ int picoquic_tlscontext_create(picoquic_quic_t * quic, picoquic_cnx_t * cnx, uin
                 if (picoquic_get_ticket(cnx->quic->p_first_ticket, current_time,
                     cnx->sni, (uint16_t)strlen(cnx->sni), cnx->alpn, (uint16_t)strlen(cnx->alpn),
                     &ticket, &ticket_length) == 0)
-                { 
+                {
                     ctx->handshake_properties.client.session_ticket.base = ticket;
                     ctx->handshake_properties.client.session_ticket.len = ticket_length;
 
@@ -733,8 +728,14 @@ int picoquic_tlscontext_create(picoquic_quic_t * quic, picoquic_cnx_t * cnx, uin
 		}
         else
         {
+            /* A server side connection, but no cert/key where given for the master context */
+            if (((ptls_context_t *)quic->tls_master_ctx)->encrypt_ticket == NULL) {
+                ret = PICOQUIC_ERROR_TLS_SERVER_CON_WITHOUT_CERT;
+                picoquic_tlscontext_free(ctx);
+                ctx = NULL;
+            }
             /* Enable server side HRR if cookie mode is required */
-            if ((quic->flags&picoquic_context_check_cookie) != 0)
+            else if ((quic->flags&picoquic_context_check_cookie) != 0)
             {
                 /* if the server should enforce the client to do a stateless retry */
                 ctx->handshake_properties.server.cookie.send_mode = 
@@ -1206,7 +1207,7 @@ static void picoquic_setup_cleartext_aead_salt(size_t version_index, ptls_iovec_
     }
 }
 
-int picoquic_setup_cleartext_aead_contexts(picoquic_cnx_t * cnx, int is_server)
+int picoquic_setup_cleartext_aead_contexts(picoquic_cnx_t * cnx)
 {
     int ret = 0;
     uint8_t master_secret[256]; /* secret_max */
@@ -1253,7 +1254,7 @@ int picoquic_setup_cleartext_aead_contexts(picoquic_cnx_t * cnx, int is_server)
 
     if (ret == 0)
     {
-        if (is_server)
+        if (!cnx->client_mode)
         {
             secret1 = server_secret;
             secret2 = client_secret;
@@ -1263,7 +1264,7 @@ int picoquic_setup_cleartext_aead_contexts(picoquic_cnx_t * cnx, int is_server)
             secret1 = client_secret;
             secret2 = server_secret;
         }
-        
+
         if (ret == 0)
         {
             /* Create the AEAD contexts */

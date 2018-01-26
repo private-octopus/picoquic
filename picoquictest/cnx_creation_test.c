@@ -106,14 +106,14 @@ int cnxcreation_test()
 
     for (int i = 0; ret == 0 && i < 5; i++)
     {
-        test_cnx[i] = picoquic_create_cnx(quic, test_cnx_id[i], test_cnx_addr[i], 0, 0, NULL, NULL);
+        test_cnx[i] = picoquic_create_cnx(quic, test_cnx_id[i], test_cnx_addr[i], 0, 0, NULL, NULL, 1);
         if (test_cnx[i] == NULL)
         {
             ret = -1;
         }
     }
 
- 
+
     /*
      *  -Verify that all these connections can be retrieved using their
      *    registered attributes.

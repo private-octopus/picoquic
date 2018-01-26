@@ -150,11 +150,7 @@ picoquic_quic_t * picoquic_create(uint32_t nb_connections,
 			quic->flags |= picoquic_context_unconditional_cnx_id;
 		}
 
-        if (cert_file_name != NULL)
-        {
-            quic->flags |= picoquic_context_server;
-        }
-        else if (ticket_file_name != NULL)
+        if (ticket_file_name != NULL && cert_file_name == NULL)
         {
             quic->ticket_file_name = ticket_file_name;
             ret = picoquic_load_tickets(&quic->p_first_ticket, current_time, ticket_file_name);
@@ -480,9 +476,9 @@ int picoquic_get_version_index(uint32_t proposed_version)
     return ret;
 }
 
-picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic, 
+picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
     uint64_t cnx_id, struct sockaddr * addr, uint64_t start_time, uint32_t preferred_version,
-	char const * sni, char const * alpn)
+	char const * sni, char const * alpn, char client_mode)
 {
     picoquic_cnx_t * cnx = (picoquic_cnx_t *)malloc(sizeof(picoquic_cnx_t));
     uint32_t random_sequence;
@@ -493,6 +489,7 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
 
         cnx->next_wake_time = start_time;
         cnx->start_time = start_time;
+        cnx->client_mode = client_mode;
 
         cnx->quic = quic;
         picoquic_insert_cnx_by_wake_time(quic, cnx);
@@ -504,16 +501,16 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
             sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
         memcpy(&cnx->peer_addr, addr, cnx->peer_addr_len);
 
-		picoquic_init_transport_parameters(&cnx->local_parameters, quic->flags&picoquic_context_server);
+        picoquic_init_transport_parameters(&cnx->local_parameters, !cnx->client_mode);
         /* Special provision for test -- create a deliberate transport parameters error */
-        if (sni != NULL && (quic->flags&picoquic_context_server) == 0 && strcmp(sni, PICOQUIC_ERRONEOUS_SNI) == 0)
+        if (sni != NULL && cnx->client_mode && strcmp(sni, PICOQUIC_ERRONEOUS_SNI) == 0)
         {
             /* Illegal value: server limits should be odd */
             cnx->local_parameters.initial_max_stream_id_bidir = 0x202;
         }
 		// picoquic_init_transport_parameters(&cnx->remote_parameters);
 		/* Initialize local flow control variables to advertised values */
-        
+
         cnx->maxdata_local = ((uint64_t)cnx->local_parameters.initial_max_data);
 		cnx->max_stream_id_bidir_local = cnx->local_parameters.initial_max_stream_id_bidir;
         cnx->max_stream_id_unidir_local = cnx->local_parameters.initial_max_stream_id_unidir;
@@ -540,7 +537,7 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
 		cnx->callback_ctx = quic->default_callback_ctx;
 		cnx->congestion_alg = quic->default_congestion_alg;
 
-		if ((quic->flags &picoquic_context_server) == 0)
+		if (cnx->client_mode)
 		{
 			if (preferred_version == 0)
 			{
@@ -698,7 +695,7 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
 		picoquic_delete_cnx(cnx);
 		cnx = NULL;
 	}
-	else if ((quic->flags &picoquic_context_server) == 0)
+	else if (cnx->client_mode)
 	{
 		/* Initialize the tls connection */
 		int ret = picoquic_initialize_stream_zero(cnx);
@@ -717,8 +714,7 @@ picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
         cnx->aead_decrypt_cleartext_ctx = NULL;
         cnx->aead_de_encrypt_cleartext_ctx = NULL;
 
-        if (picoquic_setup_cleartext_aead_contexts(cnx,
-            (quic->flags &picoquic_context_server) != 0) != 0)
+        if (picoquic_setup_cleartext_aead_contexts(cnx))
         {
             /* Cannot initialize clear text aead */
             picoquic_delete_cnx(cnx);
@@ -746,7 +742,7 @@ picoquic_cnx_t * picoquic_create_client_cnx(picoquic_quic_t * quic,
 	struct sockaddr * addr, uint64_t start_time, uint32_t preferred_version,
 	char const * sni, char const * alpn, picoquic_stream_data_cb_fn callback_fn, void * callback_ctx)
 {
-	picoquic_cnx_t * cnx = picoquic_create_cnx(quic, 0, addr, start_time, preferred_version, sni, alpn);
+	picoquic_cnx_t * cnx = picoquic_create_cnx(quic, 0, addr, start_time, preferred_version, sni, alpn, 1);
 
 	if (cnx != NULL)
 	{
@@ -1073,8 +1069,7 @@ int picoquic_reset_cnx_version(picoquic_cnx_t * cnx, uint8_t * bytes, size_t len
 
                     if (ret == 0)
                     {
-                        ret = picoquic_setup_cleartext_aead_contexts(cnx,
-                            (cnx->quic->flags &picoquic_context_server) != 0);
+                        ret = picoquic_setup_cleartext_aead_contexts(cnx);
                     }
 					break;
 				}
