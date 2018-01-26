@@ -74,6 +74,16 @@ int http0dot9_test()
 
     if (ret == 0)
     {
+        ret = http0dot9_test_one("get / HTTP/0.9", 0, index_html_size, "http09_index.html");
+    }
+
+    if (ret == 0)
+    {
+        ret = http0dot9_test_one("get / HTTP/0.9\r\n", 0, index_html_size, "http09_index.html");
+    }
+
+    if (ret == 0)
+    {
         ret = http0dot9_test_one("get index.html", 0, index_html_size, "http09_index3.html");
     }
 

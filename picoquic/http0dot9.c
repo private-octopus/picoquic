@@ -341,6 +341,27 @@ int http0dot9_get(uint8_t * command, size_t command_length,
         }
     }
 
+    /* Check whether someone added an HTTP/0.9 tag at the end of the command */
+    if (command_length > 8 &&
+        command[command_length - 1] == '9' &&
+        command[command_length - 2] == '.' &&
+        command[command_length - 3] == '0' &&
+        command[command_length - 4] == '/' &&
+        (command[command_length - 5] == 'p' || command[command_length - 5] == 'P') &&
+        (command[command_length - 6] == 't' || command[command_length - 6] == 'T') &&
+        (command[command_length - 7] == 't' || command[command_length - 7] == 'T') &&
+        (command[command_length - 8] == 'h' || command[command_length - 8] == 'H'))
+    {
+        command_length -= 8;
+
+        while (command_length > 0 &&
+            (command[command_length - 1] == ' ' ||
+                command[command_length - 1] == '\t'))
+        {
+            command_length--;
+        }
+    }
+
     /* Parse the input. It should be "get <docname> */
     if (command_length < 4 ||
         (command[0] != 'G' && command[0] != 'g') ||
