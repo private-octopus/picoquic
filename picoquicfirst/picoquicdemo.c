@@ -61,7 +61,6 @@ static const char *default_server_key_file = "..\\certs\\key.pem";
 #else  /* Linux */
 
 #include <stdint.h>
-#include "getopt.h"
 #include <stdlib.h>
 #include <alloca.h>
 #include <stdio.h>
