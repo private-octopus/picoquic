@@ -605,6 +605,12 @@ extern "C" {
     /* Check whether a packet was sent in clear text */
     int picoquic_is_packet_encrypted(picoquic_cnx_t * cnx, uint8_t byte_zero);
 
+    /* Queue stateless reset */
+    void picoquic_queue_stateless_reset(picoquic_cnx_t * cnx,
+        picoquic_packet_header * ph, struct sockaddr* addr_from,
+        struct sockaddr * addr_to,
+        unsigned long if_index_to);
+
 #ifdef  __cplusplus
 }
 #endif

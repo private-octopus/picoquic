@@ -1386,6 +1386,11 @@ int picoquic_tlsinput_stream_zero(picoquic_cnx_t * cnx)
     {
         cnx->cnx_state = picoquic_state_server_send_hrr;
     }
+    else if (ret == PTLS_ERROR_IN_PROGRESS &&
+        cnx->cnx_state == picoquic_state_server_init)
+    {
+        cnx->cnx_state = picoquic_state_server_send_hrr;
+    }
 
     if ((ret == 0 || ret == PTLS_ERROR_IN_PROGRESS || ret == PTLS_ERROR_STATELESS_RETRY))
     {

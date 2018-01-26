@@ -2175,3 +2175,186 @@ int spurious_retransmit_test()
 
     return ret;
 }
+
+/*
+ * Test whether the server correctly sends an HRR in response to a 
+ * Client Hello proposing an unsupported key share.
+ */
+
+static uint8_t clientHello25519[] = {
+    /* Stream 0 header, including length */
+    0x12, 0x00, 0x41, 0x09,
+    /* TLS Record Header, end with 2 bytes length*/
+    0x16, 0x03, 0x01, 0x01, 0x04,
+    /* Handshake protocol header for CH, end with 3 bytes length */
+    0x01, 0x00, 0x01, 0x00,
+    /* Fixed part of CH, end with 2 byte length of extenstions */
+    0x03, 0x03, 0xc4, 0xe2, 0xea, 0xb7, 0xcc, 0x4b, 0xbb, 0x43,
+    0x7d, 0xfa, 0xb4, 0x7c, 0xa5, 0x6a, 0xf8, 0xa0, 0xdb, 0x07,
+    0x2b, 0x90, 0xe5, 0x36, 0xf9, 0xc4, 0xa4, 0x9f, 0xac, 0x89,
+    0x84, 0x9c, 0x10, 0xb2, 0x00, 0x00, 0x06, 0x13, 0x01, 0x13,
+    0x03, 0x13, 0x02, 0x01, 0x00, 0x00, 0xd1,
+    /* Series of extenstion, 2 bytes type + 2 bytes length, total = 209 */
+    /* Extension type 0, SNI, 15 bytes */
+    0x00, 0x00, 0x00, 0x0b,
+    0x00, 0x09, 0x00, 0x00, 0x06, 0x73, 0x65, 0x72, 0x76, 0x65, 0x72,
+    /* Extension type 16, ALPN, 12 bytes */
+    /* TODO: update hq-08 to supported version */
+    0x00, 0x10, 0x00, 0x08, 
+    0x00, 0x06, 0x05, 0x68, 0x71, 0x2d, 0x30, 0x38,
+    /* Some extended value, 5 bytes */
+    0xff, 0x01, 0x00, 0x01, 0x00,
+    /* Extension type 10, Supported groups, 24 bytes */
+    0x00, 0x0a, 0x00, 0x14, 0x00, 0x12,
+    0x00, 0x1d, 0x00, 0x17, 0x00, 0x18, 0x00, 0x19, 0x01, 0x00, 0x01, 0x01,
+    0x01, 0x02, 0x01, 0x03, 0x01, 0x04,
+    /* Extension type 35, 4 bytes. */
+    0x00, 0x23, 0x00, 0x00,
+    /* Extension type 40, key share, 42 bytes for X25519 */
+    /* (TODO: renumber after switch to draft 23) */
+    0x00, 0x28, 0x00, 0x26, 0x00, 0x24,
+    0x00, 0x1d,
+    0x00, 0x20,
+    0x78, 0xe5, 0x89, 0x74, 0x13, 0xf1, 0x71, 0x53, 0xc7, 0x0c, 0xf3, 0x3f,
+    0xa3, 0x4c, 0x84, 0x97, 0x72, 0x4b, 0xda, 0xb4, 0xf5, 0x7f, 0x9d, 0x01,
+    0xc9, 0x53, 0xf5, 0x88, 0xf0, 0x30, 0x46, 0x61,
+    /* Extension type 43, supported_versions, 7 bytes */
+    /* (TODO: update from 0x7F-0x16 to next supported draft) */
+    0x00, 0x2b, 0x00, 0x03, 0x02, 0x7f, 0x16,
+    /* Extension type 13, signature_algorithms, 36 bytes */
+    0x00, 0x0d, 0x00, 0x20, 0x00, 0x1e,
+    0x04, 0x03, 0x05, 0x03, 0x06, 0x03, 0x02, 0x03, 0x08, 0x04, 0x08, 0x05,
+    0x08, 0x06, 0x04, 0x01, 0x05, 0x01, 0x06, 0x01, 0x02, 0x01, 0x04, 0x02,
+    0x05, 0x02, 0x06, 0x02, 0x02, 0x02,
+    /* Extension type 45, psk_key_exchange_modes, 6 bytes */
+    0x00, 0x2d, 0x00, 0x02, 0x01, 0x01,
+    /* Extension type 26, QUIC transport parameters, 58 bytes */
+    0x00, 0x1a, 0x00, 0x36, 
+    0xff, 0x00, 0x00, 0x08, 0x00, 0x30, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 
+    0xff, 0xff, 0x00, 0x01, 0x00, 0x04, 0x00, 0x10, 0x00, 0x00, 0x00, 0x02, 
+    0x00, 0x04, 0x00, 0x00, 0xff, 0xfd, 0x00, 0x03, 0x00, 0x02, 0x00, 0x1e, 
+    0x00, 0x04, 0x00, 0x00, 0x00, 0x05, 0x00, 0x02, 0x05, 0xc8, 0x00, 0x08, 
+    0x00, 0x04, 0x00, 0x00, 0xff, 0xff
+};
+
+int wrong_keyshare_test()
+{
+    picoquic_quic_t * qserver = NULL;
+    picoquic_cnx_t * cnx;
+    test_api_callback_t server_callback;
+    uint64_t simulated_time = 0;
+    uint64_t cnx_id = 0x0102030405060708ull;
+    struct sockaddr_in addr_from;
+    int ret = 0;
+
+    qserver = picoquic_create(8,
+#ifdef _WINDOWS
+#ifdef _WINDOWS64
+        "..\\..\\certs\\cert.pem", "..\\..\\certs\\key.pem",
+#else
+        "..\\certs\\cert.pem", "..\\certs\\key.pem",
+#endif
+#else
+        "certs/cert.pem", "certs/key.pem",
+#endif
+        PICOQUIC_TEST_ALPN, test_api_callback, (void*)&server_callback, NULL, NULL, NULL,
+        simulated_time, &simulated_time, NULL,
+        test_ticket_encrypt_key, sizeof(test_ticket_encrypt_key));
+
+    if (qserver == NULL)
+    {
+        ret = -1;
+    }
+    else
+    {
+        /* Simulate an incoming client initial packet */
+        memset(&addr_from, 0, sizeof(struct sockaddr_in));
+        addr_from.sin_family = AF_INET;
+#ifdef _WINDOWS
+        addr_from.sin_addr.S_un.S_addr = 0x0A000001;
+#else
+        addr_from.sin_addr.s_addr = 0x0A000001;
+#endif
+        addr_from.sin_port = 4321;
+
+        cnx = picoquic_create_cnx(qserver, cnx_id, 
+            (struct sockaddr *) &addr_from, simulated_time, 
+            PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, NULL);
+
+        if (cnx == NULL)
+        {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0)
+    {
+        ret = picoquic_decode_frames(cnx,
+            clientHello25519, sizeof(clientHello25519), 1, simulated_time);
+
+        /* processing of client initial packet */
+        if (ret == 0)
+        {
+            /* We do expect that the server will be ready to send an HRR */
+            ret = picoquic_tlsinput_stream_zero(cnx);
+
+            if (cnx->cnx_state != picoquic_state_server_send_hrr)
+            {
+                ret = -1;
+            }
+            else
+            {
+                /* check that the message queue on stream 0 is proper HRR */
+                if (cnx->first_stream.stream_id != 0 ||
+                    cnx->first_stream.send_queue == NULL ||
+                    cnx->first_stream.send_queue->length == 0 ||
+                    cnx->first_stream.send_queue->bytes == NULL)
+                {
+                    ret = -1;
+                }
+                else if (cnx->first_stream.send_queue->length <= 49 ||
+                    cnx->first_stream.send_queue->bytes[0] != 0x16 || 
+                    cnx->first_stream.send_queue->bytes[5] != 0x02)
+                {
+                    ret = -1;
+                }
+            }
+        }
+
+        if (ret == 0)
+        {
+            /* Simulate preparing an HRR */
+            picoquic_packet_header ph;
+            picoquic_stateless_packet_t * sp = NULL;
+
+            memset(&ph, 0, sizeof(ph));
+            ph.cnx_id = cnx_id;
+            ph.vn = PICOQUIC_INTERNAL_TEST_VERSION_1;
+
+            picoquic_queue_stateless_reset(cnx, &ph,
+                (struct sockaddr *) &addr_from,
+                (struct sockaddr *) &addr_from, 0);
+
+            cnx->cnx_state = picoquic_state_disconnected;
+
+            sp = picoquic_dequeue_stateless_packet(qserver);
+
+            if (sp == NULL)
+            {
+                ret = -1;
+            }
+            else
+            {
+                picoquic_delete_stateless_packet(sp);
+            }
+        }
+    }
+
+
+    if (qserver != NULL)
+    {
+        picoquic_free(qserver);
+    }
+
+    return ret;
+}

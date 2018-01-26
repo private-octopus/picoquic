@@ -79,6 +79,7 @@ extern "C" {
     int unidir_test();
     int mtu_discovery_test();
     int spurious_retransmit_test();
+    int wrong_keyshare_test();
 
 #ifdef  __cplusplus
 }
