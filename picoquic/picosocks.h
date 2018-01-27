@@ -24,18 +24,18 @@
 
 #ifdef _WINDOWS
 #define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
-#include <assert.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <WinSock2.h>
-#include <iphlpapi.h>
-#include <ws2tcpip.h>
 #include <Mswsock.h>
+#include <WinSock2.h>
+#include <Windows.h>
 #include <Ws2def.h>
+#include <assert.h>
+#include <iphlpapi.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <ws2tcpip.h>
 
-#ifndef SOCKET_TYPE 
+#ifndef SOCKET_TYPE
 #define SOCKET_TYPE SOCKET
 #endif
 #ifndef SOCKET_CLOSE
@@ -48,23 +48,23 @@
 #define WSA_START(x, y) WSAStartup((x), (y))
 #endif
 #ifndef WSA_LAST_ERROR
-#define WSA_LAST_ERROR(x)  WSAGetLastError()
+#define WSA_LAST_ERROR(x) WSAGetLastError()
 #endif
 #ifndef socklen_t
 #define socklen_t int
-#endif 
+#endif
 
-#else  /* Linux */
+#else /* Linux */
 
-#include <stdint.h>
 #include "getopt.h"
-#include <stdlib.h>
 #include <alloca.h>
+#include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/types.h>
-#include <sys/socket.h>
 #include <unistd.h>
 
 #ifndef __USE_XOPEN2K
@@ -80,16 +80,16 @@
 #define __APPLE_USE_RFC_3542 /* IPV6_PKTINFO */
 #endif
 
+#include <arpa/inet.h>
+#include <errno.h>
 #include <netdb.h>
 #include <netinet/in.h>
-#include <arpa/inet.h>
 #include <sys/select.h>
-#include <errno.h>
 
-#ifndef SOCKET_TYPE 
+#ifndef SOCKET_TYPE
 #define SOCKET_TYPE int
 #endif
-#ifndef INVALID_SOCKET 
+#ifndef INVALID_SOCKET
 #define INVALID_SOCKET -1
 #endif
 #ifndef SOCKET_CLOSE
@@ -100,38 +100,37 @@
 #endif
 #endif
 
-
 #define PICOQUIC_NB_SERVER_SOCKETS 2
 
 typedef struct st_picoquic_server_sockets_t {
     SOCKET_TYPE s_socket[PICOQUIC_NB_SERVER_SOCKETS];
 } picoquic_server_sockets_t;
 
-int picoquic_open_server_sockets(picoquic_server_sockets_t * sockets, int port);
+int picoquic_open_server_sockets(picoquic_server_sockets_t* sockets, int port);
 
-void picoquic_close_server_sockets(picoquic_server_sockets_t * sockets);
+void picoquic_close_server_sockets(picoquic_server_sockets_t* sockets);
 
 uint64_t picoquic_current_time();
 
-int picoquic_select(SOCKET_TYPE * sockets, int nb_sockets,
-    struct sockaddr_storage * addr_from,
-    socklen_t * from_length,
-    struct sockaddr_storage * addr_dest,
-    socklen_t * dest_length,
-    unsigned long * dest_if,
-    uint8_t * buffer, int buffer_max,
+int picoquic_select(SOCKET_TYPE* sockets, int nb_sockets,
+    struct sockaddr_storage* addr_from,
+    socklen_t* from_length,
+    struct sockaddr_storage* addr_dest,
+    socklen_t* dest_length,
+    unsigned long* dest_if,
+    uint8_t* buffer, int buffer_max,
     int64_t delta_t,
-    uint64_t * current_time);
+    uint64_t* current_time);
 
 int picoquic_send_through_server_sockets(
-    picoquic_server_sockets_t * sockets,
-    struct sockaddr * addr_dest, socklen_t addr_length,
-    struct sockaddr * addr_from, socklen_t from_length, unsigned long from_if,
-    const char * bytes, int length);
+    picoquic_server_sockets_t* sockets,
+    struct sockaddr* addr_dest, socklen_t addr_length,
+    struct sockaddr* addr_from, socklen_t from_length, unsigned long from_if,
+    const char* bytes, int length);
 
-int picoquic_get_server_address(const char * ip_address_text, int server_port,
-    struct sockaddr_storage *server_address,
-    int * server_addr_length,
-    int * is_name);
+int picoquic_get_server_address(const char* ip_address_text, int server_port,
+    struct sockaddr_storage* server_address,
+    int* server_addr_length,
+    int* is_name);
 
 #endif

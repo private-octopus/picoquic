@@ -19,8 +19,8 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <stdlib.h>
 #include "../picoquic/picoquic_internal.h"
+#include <stdlib.h>
 
 /*
  * The purpose of the ACK of ACK logic is to prune the sack list from blocks that
@@ -47,23 +47,23 @@ typedef struct st_test_ack_range_t {
 } test_ack_range_t;
 
 static const test_ack_range_t test_range_in_1[] = {
-    { 1, 9}
+    { 1, 9 }
 };
 
 static const test_ack_range_t test_range_ack_1[] = {
-    { 1, 8}
+    { 1, 8 }
 };
 
 static const test_ack_range_t test_range_res_1[] = {
-    { 9, 9}
+    { 9, 9 }
 };
 
 static const test_ack_range_t test_range_in_2[] = {
-    { 8, 9 }, { 5, 6}, { 1, 3 },
+    { 8, 9 }, { 5, 6 }, { 1, 3 },
 };
 
 static const test_ack_range_t test_range_ack_2[] = {
-    { 5, 6 },{ 1, 3 },
+    { 5, 6 }, { 1, 3 },
 };
 
 static const test_ack_range_t test_range_res_2[] = {
@@ -79,68 +79,58 @@ static const test_ack_range_t test_range_ack_3[] = {
 };
 
 static const test_ack_range_t test_range_res_3[] = {
-    { 8, 9 },{ 1, 6 }
+    { 8, 9 }, { 1, 6 }
 };
 
 typedef struct st_test_ack_of_ack_t {
-    char const * test_name;
-    test_ack_range_t const * initial;
+    char const* test_name;
+    test_ack_range_t const* initial;
     size_t nb_initial;
-    test_ack_range_t const * ack;
+    test_ack_range_t const* ack;
     size_t nb_ack;
-    test_ack_range_t const * result;
+    test_ack_range_t const* result;
     size_t nb_result;
     uint32_t version_flags;
 } test_ack_of_ack_t;
 
 static const test_ack_of_ack_t test_ack_of_ack_list[] = {
-    {
-        "simple",
-        test_range_in_1 , sizeof(test_range_in_1 ) / sizeof(test_ack_range_t ),
+    { "simple",
+        test_range_in_1, sizeof(test_range_in_1) / sizeof(test_ack_range_t),
         test_range_ack_1, sizeof(test_range_ack_1) / sizeof(test_ack_range_t),
         test_range_res_1, sizeof(test_range_res_1) / sizeof(test_ack_range_t),
-        0
-    },
-    {
-        "two ranges",
-        test_range_in_2 , sizeof(test_range_in_2) / sizeof(test_ack_range_t),
+        0 },
+    { "two ranges",
+        test_range_in_2, sizeof(test_range_in_2) / sizeof(test_ack_range_t),
         test_range_ack_2, sizeof(test_range_ack_2) / sizeof(test_ack_range_t),
         test_range_res_2, sizeof(test_range_res_2) / sizeof(test_ack_range_t),
-        0
-    },
-    {
-        "no op",
-        test_range_in_3 , sizeof(test_range_in_3) / sizeof(test_ack_range_t),
+        0 },
+    { "no op",
+        test_range_in_3, sizeof(test_range_in_3) / sizeof(test_ack_range_t),
         test_range_ack_3, sizeof(test_range_ack_3) / sizeof(test_ack_range_t),
         test_range_res_3, sizeof(test_range_res_3) / sizeof(test_ack_range_t),
-        0
-    }
+        0 }
 };
 
 /*
  * Fill a structured SACK list from a test range 
  */
 
-static void fill_test_sack_list(picoquic_sack_item_t * sack_head,
-    test_ack_range_t const * ranges, size_t nb_ranges)
+static void fill_test_sack_list(picoquic_sack_item_t* sack_head,
+    test_ack_range_t const* ranges, size_t nb_ranges)
 {
-    picoquic_sack_item_t ** previous;
+    picoquic_sack_item_t** previous;
 
     sack_head->start_of_sack_range = ranges[0].start_of_sack_range;
     sack_head->end_of_sack_range = ranges[0].end_of_sack_range;
     sack_head->next_sack = NULL;
     previous = &sack_head->next_sack;
 
-    for (size_t i = 1; i < nb_ranges; i++)
-    {
-        picoquic_sack_item_t * range = (picoquic_sack_item_t *)malloc(sizeof(picoquic_sack_item_t));
+    for (size_t i = 1; i < nb_ranges; i++) {
+        picoquic_sack_item_t* range = (picoquic_sack_item_t*)malloc(sizeof(picoquic_sack_item_t));
 
-        if (range == NULL)
-        {
+        if (range == NULL) {
             break;
-        }
-        else
-        {
+        } else {
             *previous = range;
             range->start_of_sack_range = ranges[i].start_of_sack_range;
             range->end_of_sack_range = ranges[i].end_of_sack_range;
@@ -153,11 +143,10 @@ static void fill_test_sack_list(picoquic_sack_item_t * sack_head,
 /*
  * Release the memory still allocated in a sack list
  */
-static void free_test_sack_list(picoquic_sack_item_t * sack_head)
+static void free_test_sack_list(picoquic_sack_item_t* sack_head)
 {
-    picoquic_sack_item_t * next;
-    while ((next = sack_head->next_sack) != NULL)
-    {
+    picoquic_sack_item_t* next;
+    while ((next = sack_head->next_sack) != NULL) {
         sack_head->next_sack = next->next_sack;
         free(next);
     }
@@ -166,17 +155,14 @@ static void free_test_sack_list(picoquic_sack_item_t * sack_head)
  * Compare a structured list to a test range
  */
 
-static int cmp_test_sack_list(picoquic_sack_item_t * sack_head,
-    test_ack_range_t const * ranges, size_t nb_ranges)
+static int cmp_test_sack_list(picoquic_sack_item_t* sack_head,
+    test_ack_range_t const* ranges, size_t nb_ranges)
 {
     size_t nb_compared = 0;
-    picoquic_sack_item_t * next = sack_head;
+    picoquic_sack_item_t* next = sack_head;
 
-    for (size_t i = 0; i < nb_ranges; i++)
-    {
-        if (next->start_of_sack_range != ranges[i].start_of_sack_range ||
-            next->end_of_sack_range != ranges[i].end_of_sack_range)
-        {
+    for (size_t i = 0; i < nb_ranges; i++) {
+        if (next->start_of_sack_range != ranges[i].start_of_sack_range || next->end_of_sack_range != ranges[i].end_of_sack_range) {
             break;
         }
 
@@ -184,8 +170,7 @@ static int cmp_test_sack_list(picoquic_sack_item_t * sack_head,
 
         next = next->next_sack;
 
-        if (next == NULL)
-        {
+        if (next == NULL) {
             break;
         }
     }
@@ -193,8 +178,8 @@ static int cmp_test_sack_list(picoquic_sack_item_t * sack_head,
     return (next == NULL && nb_compared == nb_ranges) ? 0 : -1;
 }
 
-static size_t build_test_ack(test_ack_range_t const * ranges, size_t nb_ranges,
-    uint8_t * bytes, size_t bytes_max, uint32_t version_flags)
+static size_t build_test_ack(test_ack_range_t const* ranges, size_t nb_ranges,
+    uint8_t* bytes, size_t bytes_max, uint32_t version_flags)
 {
     size_t byte_index = 0;
     uint64_t ack_range = 0;
@@ -206,13 +191,12 @@ static size_t build_test_ack(test_ack_range_t const * ranges, size_t nb_ranges,
     /* Set the ACK delay to zero for these tests */
     byte_index += picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index, 0);
     /* Encode the number of blocks -- assume nb_ranges always lower than 64 */
-    bytes[byte_index++] = (uint8_t) (nb_ranges - 1);
+    bytes[byte_index++] = (uint8_t)(nb_ranges - 1);
     /* Encode the size of the first ack range */
     ack_range = ranges[0].end_of_sack_range - ranges[0].start_of_sack_range;
     byte_index += picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index, ack_range);
     /* Encode each of the ack block items */
-    for (size_t i = 1; i < nb_ranges && byte_index + 5 < bytes_max; i++)
-    {
+    for (size_t i = 1; i < nb_ranges && byte_index + 5 < bytes_max; i++) {
         uint64_t gap = ranges[i - 1].start_of_sack_range - ranges[i].end_of_sack_range - 1;
         byte_index += picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index, gap);
         ack_range = ranges[i].end_of_sack_range - ranges[i].start_of_sack_range + 1;
@@ -224,7 +208,7 @@ static size_t build_test_ack(test_ack_range_t const * ranges, size_t nb_ranges,
 /*
  * Single sample test.
  */
-static int ack_of_ack_do_one_test(test_ack_of_ack_t const * sample)
+static int ack_of_ack_do_one_test(test_ack_of_ack_t const* sample)
 {
     int ret = 0;
     picoquic_sack_item_t sack_head;
@@ -238,8 +222,7 @@ static int ack_of_ack_do_one_test(test_ack_of_ack_t const * sample)
 
     ret = picoquic_process_ack_of_ack_frame(&sack_head, ack, ack_length, &consumed);
 
-    if (ret == 0)
-    {
+    if (ret == 0) {
         ret = cmp_test_sack_list(&sack_head, sample->result, sample->nb_result);
     }
 
@@ -256,12 +239,10 @@ int ack_of_ack_test()
 {
     int ret = 0;
 
-    for (size_t i = 0; i < sizeof(test_ack_of_ack_list) / sizeof(test_ack_of_ack_t); i++)
-    {
+    for (size_t i = 0; i < sizeof(test_ack_of_ack_list) / sizeof(test_ack_of_ack_t); i++) {
         ret = ack_of_ack_do_one_test(&test_ack_of_ack_list[i]);
 
-        if (ret != 0)
-        {
+        if (ret != 0) {
             break;
         }
     }

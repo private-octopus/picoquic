@@ -19,8 +19,8 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <string.h>
 #include "../picoquic/picoquic_internal.h"
+#include <string.h>
 
 static const uint64_t test_number[] = {
     0,
@@ -32,12 +32,11 @@ static const uint64_t test_number[] = {
 
 static size_t nb_test_numbers = sizeof(test_number) / sizeof(const uint64_t);
 
-static uint64_t decode_number(uint8_t * bytes, size_t length)
+static uint64_t decode_number(uint8_t* bytes, size_t length)
 {
     uint64_t n = 0;
 
-    for (size_t i = 0; i < length; i++)
-    {
+    for (size_t i = 0; i < length; i++) {
         n <<= 8;
 
         n += bytes[i];
@@ -58,60 +57,45 @@ int intformattest()
     uint64_t test64;
 
     /* First test with 16 bits macros */
-    for (size_t i = 0; ret == 0 && i < nb_test_numbers; i++)
-    {
+    for (size_t i = 0; ret == 0 && i < nb_test_numbers; i++) {
         test16 = (uint16_t)test_number[i];
         picoformat_16(bytes, test16);
         decoded = decode_number(bytes, 2);
-        if (decoded != test16)
-        {
+        if (decoded != test16) {
             ret = -1;
-        }
-        else
-        {
+        } else {
             parsed = PICOPARSE_16(bytes);
-            if (parsed != test16)
-            {
+            if (parsed != test16) {
                 ret = -1;
             }
         }
     }
 
     /* Next test with 32 bits macros */
-    for (size_t i = 0; ret == 0 && i < nb_test_numbers; i++)
-    {
+    for (size_t i = 0; ret == 0 && i < nb_test_numbers; i++) {
         test32 = (uint32_t)test_number[i];
         picoformat_32(bytes, test32);
         decoded = decode_number(bytes, 4);
-        if (decoded != test32)
-        {
+        if (decoded != test32) {
             ret = -1;
-        }
-        else
-        {
+        } else {
             parsed = PICOPARSE_32(bytes);
-            if (parsed != test32)
-            {
+            if (parsed != test32) {
                 ret = -1;
             }
         }
     }
 
     /* Final test with 64 bits macros */
-    for (size_t i = 0; ret == 0 && i < nb_test_numbers; i++)
-    {
+    for (size_t i = 0; ret == 0 && i < nb_test_numbers; i++) {
         test64 = test_number[i];
         picoformat_64(bytes, test64);
         decoded = decode_number(bytes, 8);
-        if (decoded != test64)
-        {
+        if (decoded != test64) {
             ret = -1;
-        }
-        else
-        {
+        } else {
             parsed = PICOPARSE_64(bytes);
-            if (parsed != test64)
-            {
+            if (parsed != test64) {
                 ret = -1;
             }
         }
@@ -128,60 +112,42 @@ typedef struct st_picoquic_varintformat_test_t {
 } picoquic_varintformat_test_t;
 
 static picoquic_varintformat_test_t varint_test_cases[] = {
-    {
-        {0, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC },
+    { { 0, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC },
         1,
         0,
-        1
-    },
-    {
-        { 1, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC },
+        1 },
+    { { 1, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC },
         1,
         1,
-        1
-    },
-    {
-        { 63, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC },
+        1 },
+    { { 63, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC },
         1,
         63,
-        1
-    },
-    {
-        { 0x40, 64, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC },
+        1 },
+    { { 0x40, 64, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC },
         2,
         64,
-        1
-    },
-    {
-        { 0x7F, 0xFF, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC },
+        1 },
+    { { 0x7F, 0xFF, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC },
         2,
         0x3FFF,
-        1
-    },
-    {
-        { 0x80, 0, 0x40, 0, 0xCC, 0xCC, 0xCC, 0xCC },
+        1 },
+    { { 0x80, 0, 0x40, 0, 0xCC, 0xCC, 0xCC, 0xCC },
         4,
         0x4000,
-        1
-    },
-    {
-        { 0xBF, 0xFF, 0xFF, 0xFF, 0xCC, 0xCC, 0xCC, 0xCC },
+        1 },
+    { { 0xBF, 0xFF, 0xFF, 0xFF, 0xCC, 0xCC, 0xCC, 0xCC },
         4,
         0x3FFFFFFF,
-        1
-    },
-    {
-        { 0xC0, 0, 0, 0, 0x40, 0, 0, 0 },
+        1 },
+    { { 0xC0, 0, 0, 0, 0x40, 0, 0, 0 },
         8,
         0x40000000,
-        1
-    },
-    {
-        { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+        1 },
+    { { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF },
         8,
         0x3FFFFFFFFFFFFFFFull,
-        1
-    },
+        1 },
     /* For example, the eight octet sequence c2 19 7c 5e ff 14 e8 8c (in hexadecimal) 
      * decodes to the decimal value 151288809941952652; 
      * the four octet sequence 9d 7f 3e 7d decodes to 494878333; 
@@ -191,50 +157,35 @@ static picoquic_varintformat_test_t varint_test_cases[] = {
         { 0xc2, 0x19, 0x7c, 0x5e, 0xff, 0x14, 0xe8, 0x8c },
         8,
         151288809941952652ull,
-        1
-    },
-    {
-        { 0x9d, 0x7f, 0x3e, 0x7d, 0xff, 0x14, 0xe8, 0x8c },
+        1 },
+    { { 0x9d, 0x7f, 0x3e, 0x7d, 0xff, 0x14, 0xe8, 0x8c },
         4,
         494878333,
-        1
-    },
-    {
-        { 0xC0, 0, 0, 0, 0x1d, 0x7f, 0x3e, 0x7d },
+        1 },
+    { { 0xC0, 0, 0, 0, 0x1d, 0x7f, 0x3e, 0x7d },
         8,
         494878333,
-        0
-    },
-    {
-        { 0x7b, 0xbd, 0x3e, 0x7d, 0xff, 0x14, 0xe8, 0x8c },
+        0 },
+    { { 0x7b, 0xbd, 0x3e, 0x7d, 0xff, 0x14, 0xe8, 0x8c },
         2,
         15293,
-        1
-    },
-    {
-        { 0x80, 0, 0x3b, 0xbd, 0x3e, 0x7d, 0xff, 0x14 },
+        1 },
+    { { 0x80, 0, 0x3b, 0xbd, 0x3e, 0x7d, 0xff, 0x14 },
         4,
         15293,
-        0
-    },
-    {
-        { 0xC0, 0, 0, 0, 0, 0, 0x3b, 0xbd },
+        0 },
+    { { 0xC0, 0, 0, 0, 0, 0, 0x3b, 0xbd },
         8,
         15293,
-        0
-    },
-    {
-        { 0x25, 0xbd, 0x3e, 0x7d, 0xff, 0x14, 0xe8, 0x8c },
+        0 },
+    { { 0x25, 0xbd, 0x3e, 0x7d, 0xff, 0x14, 0xe8, 0x8c },
         1,
         37,
-        1
-    },
-    {
-        { 0x40, 0x25, 0xbd, 0x3e, 0x7d, 0xff, 0x14, 0xe8 },
+        1 },
+    { { 0x40, 0x25, 0xbd, 0x3e, 0x7d, 0xff, 0x14, 0xe8 },
         2,
         37,
-        0
-    }
+        0 }
 };
 
 static size_t nb_varint_test_cases = sizeof(varint_test_cases) / sizeof(picoquic_varintformat_test_t);
@@ -243,36 +194,28 @@ int varint_test()
 {
     int ret = 0;
 
-    for (size_t i = 0; i < nb_varint_test_cases; i++)
-    {
+    for (size_t i = 0; i < nb_varint_test_cases; i++) {
         uint64_t n64;
         size_t length = picoquic_varint_decode(
             varint_test_cases[i].encoding, 8, &n64);
 
-        if (length != varint_test_cases[i].length)
-        {
+        if (length != varint_test_cases[i].length) {
             ret = -1;
-        }
-        else if (n64 != varint_test_cases[i].decoded)
-        {
+        } else if (n64 != varint_test_cases[i].decoded) {
             ret = -1;
-        }
-        else if (varint_test_cases[i].is_canonical != 0)
-        {
+        } else if (varint_test_cases[i].is_canonical != 0) {
             uint8_t encoding[8];
             size_t coded_length = picoquic_varint_encode(
                 encoding,
                 varint_test_cases[i].length,
                 n64);
 
-            if (coded_length != varint_test_cases[i].length)
-            {
+            if (coded_length != varint_test_cases[i].length) {
                 ret = -1;
-            }
-            else if (memcmp(encoding,
-                varint_test_cases[i].encoding,
-                coded_length) != 0)
-            {
+            } else if (memcmp(encoding,
+                           varint_test_cases[i].encoding,
+                           coded_length)
+                != 0) {
                 ret = -1;
             }
         }

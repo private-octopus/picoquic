@@ -19,15 +19,15 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <stdio.h>
-#include <string.h>
 #include "../picoquic/picoquic.h"
 #include "../picoquic/util.h"
 #include "../picoquictest/picoquictest.h"
+#include <stdio.h>
+#include <string.h>
 
 typedef struct st_picoquic_test_def_t {
-    char const * test_name;
-    int(*test_fn)();
+    char const* test_name;
+    int (*test_fn)();
 } picoquic_test_def_t;
 
 static picoquic_test_def_t test_table[] = {
@@ -35,8 +35,8 @@ static picoquic_test_def_t test_table[] = {
     { "cnxcreation", cnxcreation_test },
     { "parseheader", parseheadertest },
     { "pn2pn64", pn2pn64test },
-    { "intformat", intformattest},
-    { "fnv1a", fnv1atest},
+    { "intformat", intformattest },
+    { "fnv1a", fnv1atest },
     { "float16", float16test },
     { "varint", varint_test },
     { "skip_frames", skip_frame_test },
@@ -49,7 +49,7 @@ static picoquic_test_def_t test_table[] = {
     { "logger", logger_test },
     { "tls_api", tls_api_test },
     { "silence_test", tls_api_silence_test },
-    { "tls_api_version_negotiation", tls_api_version_negotiation_test},
+    { "tls_api_version_negotiation", tls_api_version_negotiation_test },
     { "first_loss", tls_api_client_first_loss_test },
     { "second_loss", tls_api_client_second_loss_test },
     { "client_losses", tls_api_client_losses_test },
@@ -76,7 +76,7 @@ static picoquic_test_def_t test_table[] = {
     { "transport_parameter_client_error", transport_parameter_client_error_test },
     { "sockets", socket_test },
     { "ticket_store", ticket_store_test },
-    { "session_resume", session_resume_test},
+    { "session_resume", session_resume_test },
     { "zero_rtt", zero_rtt_test },
     { "stop_sending", stop_sending_test },
     { "unidir", unidir_test },
@@ -87,28 +87,22 @@ static picoquic_test_def_t test_table[] = {
 
 static size_t nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);
 
-static int do_one_test(size_t i, FILE * F)
+static int do_one_test(size_t i, FILE* F)
 {
     int ret = 0;
 
-    if (i >= nb_tests)
-    {
+    if (i >= nb_tests) {
         fprintf(F, "Invalid test number %" PRIst "\n", i);
         ret = -1;
-    }
-    else
-    {
+    } else {
         fprintf(F, "Starting test number %" PRIst ", %s\n", i, test_table[i].test_name);
 
         fflush(F);
-       
+
         ret = test_table[i].test_fn();
-        if (ret == 0)
-        {
+        if (ret == 0) {
             fprintf(F, "    Success.\n");
-        }
-        else
-        {
+        } else {
             fprintf(F, "    Fails, error: %d.\n", ret);
         }
     }
@@ -118,39 +112,30 @@ static int do_one_test(size_t i, FILE * F)
     return ret;
 }
 
-int main(int argc, char ** argv)
+int main(int argc, char** argv)
 {
     int ret = 0;
     int arg_err = 0;
     int nb_test_tried = 0;
     int nb_test_failed = 0;
 
-    if (argc <= 1)
-    {
-        for (size_t i = 0; i < nb_tests; i++)
-        {
+    if (argc <= 1) {
+        for (size_t i = 0; i < nb_tests; i++) {
             nb_test_tried++;
-            if (do_one_test(i, stdout) != 0)
-            {
+            if (do_one_test(i, stdout) != 0) {
                 nb_test_failed++;
                 ret = -1;
             }
         }
-    }
-    else
-    {
-        for (int arg_num = 1; arg_num < argc; arg_num++)
-        {
+    } else {
+        for (int arg_num = 1; arg_num < argc; arg_num++) {
             int tried = 0;
 
-            for (size_t i = 0; i < nb_tests; i++)
-            {
-                if (strcmp(argv[arg_num], test_table[i].test_name) == 0)
-                {
+            for (size_t i = 0; i < nb_tests; i++) {
+                if (strcmp(argv[arg_num], test_table[i].test_name) == 0) {
                     tried = 1;
                     nb_test_tried++;
-                    if (do_one_test(i, stdout) != 0)
-                    {
+                    if (do_one_test(i, stdout) != 0) {
                         nb_test_failed++;
                         ret = -1;
                     }
@@ -158,8 +143,7 @@ int main(int argc, char ** argv)
                 }
             }
 
-            if (tried == 0)
-            {
+            if (tried == 0) {
                 fprintf(stderr, "Incorrect test name: %s\n", argv[arg_num]);
                 arg_err++;
                 ret = -1;
@@ -168,22 +152,18 @@ int main(int argc, char ** argv)
         }
     }
 
-    if (nb_test_tried > 1)
-    {
+    if (nb_test_tried > 1) {
         fprintf(stdout, "Tried %d tests, %d fail%s.\n", nb_test_tried,
             nb_test_failed, (nb_test_failed > 1) ? "" : "s");
     }
 
-    if (arg_err != 0)
-    {
+    if (arg_err != 0) {
         fprintf(stderr, "\nUsage: %s [test1 [test2 ..[testN]]]\n\n", argv[0]);
         fprintf(stderr, "Valid test names are: \n");
-        for (size_t x = 0; x < nb_tests; x++)
-        {
+        for (size_t x = 0; x < nb_tests; x++) {
             fprintf(stderr, "    ");
 
-            for (int j = 0; j < 4 && x < nb_tests; j++, x++)
-            {
+            for (int j = 0; j < 4 && x < nb_tests; j++, x++) {
                 fprintf(stderr, "%s, ", test_table[x].test_name);
             }
             fprintf(stderr, "\n");

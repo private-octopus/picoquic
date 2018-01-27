@@ -95,3 +95,15 @@ TARGET_LINK_LIBRARIES(picoquic_ct picoquic-core
 )
 
 SET(TEST_EXES picoquic_ct)
+
+# get all project files for formatting
+file(GLOB_RECURSE CLANG_FORMAT_SOURCE_FILES *.c *.h)
+
+# Adds clangformat as target that formats all source files
+add_custom_target(
+    clangformat
+    COMMAND clang-format
+    -style=Webkit
+    -i
+    ${CLANG_FORMAT_SOURCE_FILES}
+)

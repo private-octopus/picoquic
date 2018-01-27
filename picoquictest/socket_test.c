@@ -19,12 +19,11 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "../picoquic/util.h"
 #include "../picoquic/picosocks.h"
+#include "../picoquic/util.h"
 
-
-static int socket_ping_pong(SOCKET_TYPE fd, struct sockaddr * server_addr, int server_address_length, 
-    picoquic_server_sockets_t * server_sockets)
+static int socket_ping_pong(SOCKET_TYPE fd, struct sockaddr* server_addr, int server_address_length,
+    picoquic_server_sockets_t* server_sockets)
 {
     int ret = 0;
     uint64_t current_time = picoquic_current_time();
@@ -40,70 +39,58 @@ static int socket_ping_pong(SOCKET_TYPE fd, struct sockaddr * server_addr, int s
     struct sockaddr_storage addr_back;
     socklen_t back_length;
 
-
     /* send from client to sever address */
-    bytes_sent = sendto(fd, (const char *) &message, sizeof(message), 0, server_addr, server_address_length);
+    bytes_sent = sendto(fd, (const char*)&message, sizeof(message), 0, server_addr, server_address_length);
 
-    if (bytes_sent != (int) sizeof(message))
-    {
+    if (bytes_sent != (int)sizeof(message)) {
         ret = -1;
     }
 
     /* perform select at server */
-    if (ret == 0)
-    {
+    if (ret == 0) {
         memset(buffer, 0, sizeof(buffer));
-        from_length = (socklen_t) sizeof(struct sockaddr_storage);
+        from_length = (socklen_t)sizeof(struct sockaddr_storage);
 
         bytes_recv = picoquic_select(server_sockets->s_socket, PICOQUIC_NB_SERVER_SOCKETS,
             &addr_from, &from_length, &addr_dest, &dest_length, &dest_if,
             buffer, sizeof(buffer), 1000000, &current_time);
 
-        if (bytes_recv != bytes_sent)
-        {
+        if (bytes_recv != bytes_sent) {
             ret = -1;
         }
     }
 
     /* Convert message using XOR  and send to address from which the message was received */
-    if (ret == 0)
-    {
-        for (int i = 0; i < bytes_recv; i++)
-        {
+    if (ret == 0) {
+        for (int i = 0; i < bytes_recv; i++) {
             buffer[i] ^= 0xFF;
         }
 
         if (picoquic_send_through_server_sockets(server_sockets,
-            (struct sockaddr *)&addr_from, from_length, 
-            (struct sockaddr *)&addr_dest, dest_length, dest_if,
-            (char *) buffer, bytes_recv) != bytes_recv)
-        {
+                (struct sockaddr*)&addr_from, from_length,
+                (struct sockaddr*)&addr_dest, dest_length, dest_if,
+                (char*)buffer, bytes_recv)
+            != bytes_recv) {
             ret = -1;
         }
     }
 
     /* perform select at client */
-    if (ret == 0)
-    {
+    if (ret == 0) {
         memset(buffer, 0, sizeof(buffer));
 
         bytes_recv = picoquic_select(&fd, 1,
             &addr_back, &back_length, NULL, NULL, NULL,
             buffer, sizeof(buffer), 1000000, &current_time);
 
-        if (bytes_recv != bytes_sent)
-        {
+        if (bytes_recv != bytes_sent) {
             ret = -1;
-        }
-        else
-        {
+        } else {
             /* Check that the message matches what was sent initially */
-            uint8_t * x = (uint8_t *)&message;
+            uint8_t* x = (uint8_t*)&message;
 
-            for (int i = 0; ret == 0 && i < bytes_recv; i++)
-            {
-                if (x[i] != (buffer[i]^0xFF))
-                {
+            for (int i = 0; ret == 0 && i < bytes_recv; i++) {
+                if (x[i] != (buffer[i] ^ 0xFF)) {
                     ret = -1;
                 }
             }
@@ -113,9 +100,8 @@ static int socket_ping_pong(SOCKET_TYPE fd, struct sockaddr * server_addr, int s
     return ret;
 }
 
-
-static int socket_test_one(char const * addr_text, int server_port, int should_be_name, 
-    picoquic_server_sockets_t * server_sockets)
+static int socket_test_one(char const* addr_text, int server_port, int should_be_name,
+    picoquic_server_sockets_t* server_sockets)
 {
     int ret = 0;
     struct sockaddr_storage server_address;
@@ -126,22 +112,15 @@ static int socket_test_one(char const * addr_text, int server_port, int should_b
     /* Resolve the server address -- check the "is_name" property */
     ret = picoquic_get_server_address(addr_text, server_port, &server_address, &server_address_length, &is_name);
 
-    if (ret == 0)
-    {
-        if (is_name != should_be_name)
-        {
+    if (ret == 0) {
+        if (is_name != should_be_name) {
             ret = -1;
-        }
-        else
-        {
+        } else {
             fd = socket(server_address.ss_family, SOCK_DGRAM, IPPROTO_UDP);
-            if (fd == INVALID_SOCKET)
-            {
+            if (fd == INVALID_SOCKET) {
                 ret = -1;
-            }
-            else
-            {
-                ret = socket_ping_pong(fd, (struct sockaddr *) &server_address, server_address_length, server_sockets);
+            } else {
+                ret = socket_ping_pong(fd, (struct sockaddr*)&server_address, server_address_length, server_sockets);
             }
 
             SOCKET_CLOSE(fd);
@@ -167,19 +146,13 @@ int socket_test()
     /* Open server sockets */
     ret = picoquic_open_server_sockets(&server_sockets, test_port);
 
-    if (ret == 0)
-    {
+    if (ret == 0) {
         /* For a series of server addresses, do a ping pong test */
-        if (socket_test_one("127.0.0.1", test_port, 0, &server_sockets) != 0)
-        {
+        if (socket_test_one("127.0.0.1", test_port, 0, &server_sockets) != 0) {
             ret = -1;
-        }
-        else if (socket_test_one("::1", test_port, 0, &server_sockets) != 0)
-        {
+        } else if (socket_test_one("::1", test_port, 0, &server_sockets) != 0) {
             ret = -1;
-        }
-        else if (socket_test_one("localhost", test_port, 1, &server_sockets) != 0)
-        {
+        } else if (socket_test_one("localhost", test_port, 1, &server_sockets) != 0) {
             ret = -1;
         }
         /* Close the sockets */

@@ -24,13 +24,13 @@
 #include <sys/types.h>
 #endif
 
-void picoformat_16(uint8_t *bytes, uint16_t n16)
+void picoformat_16(uint8_t* bytes, uint16_t n16)
 {
     bytes[0] = (uint8_t)(n16 >> 8);
     bytes[1] = (uint8_t)(n16);
 }
 
-void picoformat_32(uint8_t *bytes, uint32_t n32)
+void picoformat_32(uint8_t* bytes, uint32_t n32)
 {
     bytes[0] = (uint8_t)(n32 >> 24);
     bytes[1] = (uint8_t)(n32 >> 16);
@@ -38,7 +38,7 @@ void picoformat_32(uint8_t *bytes, uint32_t n32)
     bytes[3] = (uint8_t)(n32);
 }
 
-void picoformat_64(uint8_t *bytes, uint64_t n64)
+void picoformat_64(uint8_t* bytes, uint64_t n64)
 {
     bytes[0] = (uint8_t)(n64 >> 56);
     bytes[1] = (uint8_t)(n64 >> 48);
@@ -59,42 +59,30 @@ void picoformat_64(uint8_t *bytes, uint64_t n64)
  * 11       8       62       0-4611686018427387903
  */
 
-size_t picoquic_varint_encode(uint8_t *bytes, size_t max_bytes, uint64_t n64)
+size_t picoquic_varint_encode(uint8_t* bytes, size_t max_bytes, uint64_t n64)
 {
-    uint8_t *x = bytes;
+    uint8_t* x = bytes;
 
-    if (n64 < 16384)
-    {
-        if (n64 < 64)
-        {
-            if (max_bytes > 0)
-            {
+    if (n64 < 16384) {
+        if (n64 < 64) {
+            if (max_bytes > 0) {
                 *x++ = (uint8_t)(n64);
             }
-        }
-        else
-        {
-            if (max_bytes >= 2)
-            {
+        } else {
+            if (max_bytes >= 2) {
                 *x++ = (uint8_t)((n64 >> 8) | 0x40);
                 *x++ = (uint8_t)(n64);
             }
         }
-    }
-    else if (n64 < 1073741824)
-    {
-        if (max_bytes >= 4)
-        {
+    } else if (n64 < 1073741824) {
+        if (max_bytes >= 4) {
             *x++ = (uint8_t)((n64 >> 24) | 0x80);
             *x++ = (uint8_t)(n64 >> 16);
             *x++ = (uint8_t)(n64 >> 8);
             *x++ = (uint8_t)(n64);
         }
-    }
-    else
-    {
-        if (max_bytes >= 8)
-        {
+    } else {
+        if (max_bytes >= 8) {
             *x++ = (uint8_t)((n64 >> 56) | 0xC0);
             *x++ = (uint8_t)(n64 >> 48);
             *x++ = (uint8_t)(n64 >> 40);
@@ -109,21 +97,17 @@ size_t picoquic_varint_encode(uint8_t *bytes, size_t max_bytes, uint64_t n64)
     return (x - bytes);
 }
 
-size_t picoquic_varint_decode(const uint8_t *bytes, size_t max_bytes, uint64_t * n64)
+size_t picoquic_varint_decode(const uint8_t* bytes, size_t max_bytes, uint64_t* n64)
 {
     size_t length = 1 << ((bytes[0] & 0xC0) >> 6);
 
-    if (length > max_bytes)
-    {
+    if (length > max_bytes) {
         length = 0;
         *n64 = 0;
-    }
-    else
-    {
+    } else {
         uint64_t v = *bytes++ & 0x3F;
 
-        for (size_t i = 1; i < length; i++)
-        {
+        for (size_t i = 1; i < length; i++) {
             v <<= 8;
             v += *bytes++;
         }
@@ -134,7 +118,7 @@ size_t picoquic_varint_decode(const uint8_t *bytes, size_t max_bytes, uint64_t *
     return length;
 }
 
-size_t picoquic_varint_skip(uint8_t *bytes)
+size_t picoquic_varint_skip(uint8_t* bytes)
 {
     size_t length = 1 << ((bytes[0] & 0xC0) >> 6);
 

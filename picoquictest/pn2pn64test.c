@@ -22,8 +22,7 @@
 #include "../picoquic/picoquic_internal.h"
 #include <stdlib.h>
 
-struct _pn2pn64test_entry
-{
+struct _pn2pn64test_entry {
     uint64_t highest;
     uint64_t mask;
     uint32_t pn;
@@ -31,7 +30,7 @@ struct _pn2pn64test_entry
 };
 
 static struct _pn2pn64test_entry test_entries[] = {
-    { 0x10000, 0xFFFFFFFFFFFF0000ull, 0x8000, 0x18000},
+    { 0x10000, 0xFFFFFFFFFFFF0000ull, 0x8000, 0x18000 },
     { 0xFFFE, 0xFFFFFFFFFFFF0000ull, 0x8000, 0x8000 },
     { 0xFFFF, 0xFFFFFFFFFFFF0000ull, 0x8000, 0x8000 },
     { 0xDEADBEEF, 0xFFFFFFFF00000000ull, 0xDEADBEF0, 0xDEADBEF0 },
@@ -67,15 +66,13 @@ int pn2pn64test()
 {
     int ret = 0;
 
-    for (size_t i = 0; i < nb_test_entries; i++)
-    {
+    for (size_t i = 0; i < nb_test_entries; i++) {
         uint64_t pn64 = picoquic_get_packet_number64(
             test_entries[i].highest,
             test_entries[i].mask,
             test_entries[i].pn);
 
-        if (pn64 != test_entries[i].expected)
-        {
+        if (pn64 != test_entries[i].expected) {
             ret = -1;
         }
     }

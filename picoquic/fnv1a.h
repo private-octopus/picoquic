@@ -44,13 +44,14 @@ The offset basis for the 64-bit FNV-1a is the decimal value
 Once all octets have been processed in this fashion, the final integer
 value is encoded as 8 octets in network byte order.
 */
+#include <stddef.h>
 #include <stdint.h>
 
 #define FNV1A_OFFSET 0xcbf29ce484222325ull
 #define FNV1A_PRIME 0x100000001b3ull
 
-uint64_t fnv1a_hash(uint64_t hash, uint8_t * bytes, size_t length);
-size_t fnv1a_protect(uint8_t * bytes, size_t length, size_t length_max);
-size_t fnv1a_check(uint8_t * bytes, size_t length);
+uint64_t fnv1a_hash(uint64_t hash, uint8_t* bytes, size_t length);
+size_t fnv1a_protect(uint8_t* bytes, size_t length, size_t length_max);
+size_t fnv1a_check(uint8_t* bytes, size_t length);
 
 #endif

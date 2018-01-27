@@ -19,10 +19,9 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include "../picoquic/picoquic_internal.h"
 #include <stdlib.h>
 #include <string.h>
-#include <stdlib.h>
-#include "../picoquic/picoquic_internal.h"
 
 /*
  * Test of the skip frame API.
@@ -32,14 +31,14 @@
 
 static uint8_t test_frame_type_padding[] = { 0, 0, 0 };
 
-static uint8_t test_frame_type_reset_stream[] = { 
+static uint8_t test_frame_type_reset_stream[] = {
     picoquic_frame_type_reset_stream,
     17,
     0, 1,
     1
 };
 
-static uint8_t test_type_connection_close[] = { 
+static uint8_t test_type_connection_close[] = {
     picoquic_frame_type_connection_close,
     0xcf, 0xff,
     9,
@@ -49,49 +48,49 @@ static uint8_t test_type_connection_close[] = {
 static uint8_t test_type_application_close[] = {
     picoquic_frame_type_application_close,
     0, 0,
-    0 
+    0
 };
-static uint8_t test_frame_type_max_data[] = { 
+static uint8_t test_frame_type_max_data[] = {
     picoquic_frame_type_max_data,
     0xC0, 0, 0x01, 0, 0, 0, 0, 0
 };
-static uint8_t test_frame_type_max_stream_data[] = { 
+static uint8_t test_frame_type_max_stream_data[] = {
     picoquic_frame_type_max_stream_data,
     1,
-    0x80, 0x01, 0, 0 
+    0x80, 0x01, 0, 0
 };
-static uint8_t test_frame_type_max_stream_id[] = { 
+static uint8_t test_frame_type_max_stream_id[] = {
     picoquic_frame_type_max_stream_id,
-    0x41, 0 
+    0x41, 0
 };
-static uint8_t test_frame_type_ping[] = { 
+static uint8_t test_frame_type_ping[] = {
     picoquic_frame_type_ping, 0
 };
 static uint8_t test_frame_type_ping_long[] = {
     picoquic_frame_type_ping, 8,
-    1, 2, 3, 4, 5, 6, 7, 8  
+    1, 2, 3, 4, 5, 6, 7, 8
 };
-static uint8_t test_frame_type_blocked[] = { 
+static uint8_t test_frame_type_blocked[] = {
     picoquic_frame_type_blocked,
     0x80, 0x01, 0, 0
 };
-static uint8_t test_frame_type_stream_blocked[] = { 
+static uint8_t test_frame_type_stream_blocked[] = {
     picoquic_frame_type_stream_blocked,
     0x80, 1, 0, 0,
     0x80, 0x01, 0, 0
 };
-static uint8_t test_frame_type_stream_id_needed[] = { 
+static uint8_t test_frame_type_stream_id_needed[] = {
     picoquic_frame_type_stream_id_needed,
     0x41, 0
 };
-static uint8_t test_frame_type_new_connection_id[] = { 
+static uint8_t test_frame_type_new_connection_id[] = {
     picoquic_frame_type_new_connection_id,
     0x41, 0,
     1, 2, 3, 4, 5, 6, 7, 8,
-    0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7, 
+    0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7,
     0xA8, 0xA9, 0xAA, 0xAB, 0xAC, 0xAD, 0xAE, 0xAF
 };
-static uint8_t test_frame_type_stop_sending[] = { 
+static uint8_t test_frame_type_stop_sending[] = {
     picoquic_frame_type_stop_sending,
     17,
     0x40, 0
@@ -100,22 +99,22 @@ static uint8_t test_frame_type_pong[] = {
     picoquic_frame_type_pong, 8,
     1, 2, 3, 4, 5, 6, 7, 8
 };
-static uint8_t test_frame_type_ack[] = { 
+static uint8_t test_frame_type_ack[] = {
     picoquic_frame_type_ack,
-    0xC0, 0, 0, 1, 2 ,3, 4, 5,
+    0xC0, 0, 0, 1, 2, 3, 4, 5,
     0x44, 0,
     0,
-    5 
+    5
 };
-static uint8_t test_frame_type_stream_range_min[] = { 
+static uint8_t test_frame_type_stream_range_min[] = {
     picoquic_frame_type_stream_range_min,
     0,
     0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7,
     0xA8, 0xA9, 0xAA, 0xAB, 0xAC, 0xAD, 0xAE, 0xAF
 };
 
-static uint8_t test_frame_type_stream_range_max[] = { 
-    picoquic_frame_type_stream_range_min + 2 + 4, 
+static uint8_t test_frame_type_stream_range_max[] = {
+    picoquic_frame_type_stream_range_min + 2 + 4,
     1,
     0x44, 0,
     0x10,
@@ -124,14 +123,17 @@ static uint8_t test_frame_type_stream_range_max[] = {
 };
 
 typedef struct st_test_skip_frames_t {
-    char const * name;
-    uint8_t * val;
+    char const* name;
+    uint8_t* val;
     size_t len;
     int is_pure_ack;
     int must_be_last;
 } test_skip_frames_t;
 
-#define TEST_SKIP_ITEM(n, x, a, l) { n, x, sizeof(x), a, l }
+#define TEST_SKIP_ITEM(n, x, a, l) \
+    {                              \
+        n, x, sizeof(x), a, l      \
+    }
 
 static test_skip_frames_t test_skip_list[] = {
     TEST_SKIP_ITEM("padding", test_frame_type_padding, 1, 0),
@@ -162,8 +164,7 @@ int skip_frame_test()
     uint8_t buffer[256];
     const uint8_t extra_bytes[4] = { 0xFF, 0, 0, 0 };
 
-    for (size_t i = 0; i < nb_test_skip_list; i++)
-    {
+    for (size_t i = 0; i < nb_test_skip_list; i++) {
         size_t consumed = 0;
         size_t byte_max = 0;
         int pure_ack;
@@ -171,27 +172,21 @@ int skip_frame_test()
 
         memcpy(buffer, test_skip_list[i].val, test_skip_list[i].len);
         byte_max = test_skip_list[i].len;
-        if (test_skip_list[i].must_be_last == 0)
-        {
+        if (test_skip_list[i].must_be_last == 0) {
             memcpy(buffer + byte_max, extra_bytes, sizeof(extra_bytes));
             byte_max += sizeof(extra_bytes);
         }
 
         t_ret = picoquic_skip_frame(buffer, byte_max, &consumed, &pure_ack);
 
-        if (t_ret != 0)
-        {
+        if (t_ret != 0) {
             DBG_PRINTF("Skip frame <%s> fails, ret = %d\n", test_skip_list[i].name, t_ret);
             ret = t_ret;
-        }
-        else if (consumed != test_skip_list[i].len)
-        {
-            DBG_PRINTF("Skip frame <%s> fails, wrong length, %d instead of %d\n", 
-                test_skip_list[i].name, (int) consumed, (int)test_skip_list[i].len);
+        } else if (consumed != test_skip_list[i].len) {
+            DBG_PRINTF("Skip frame <%s> fails, wrong length, %d instead of %d\n",
+                test_skip_list[i].name, (int)consumed, (int)test_skip_list[i].len);
             ret = -1;
-        }
-        else if (pure_ack != test_skip_list[i].is_pure_ack)
-        {
+        } else if (pure_ack != test_skip_list[i].is_pure_ack) {
             DBG_PRINTF("Skip frame <%s> fails, wrong pure ack, %d instead of %d\n",
                 test_skip_list[i].name, (int)pure_ack, (int)test_skip_list[i].is_pure_ack);
             ret = -1;
@@ -201,47 +196,42 @@ int skip_frame_test()
     return ret;
 }
 
-void picoquic_log_frames(FILE* F, uint8_t * bytes, size_t length);
+void picoquic_log_frames(FILE* F, uint8_t* bytes, size_t length);
 
-static char const * log_test_file = "log_test.txt";
+static char const* log_test_file = "log_test.txt";
 
 #ifdef _WINDOWS
 #ifndef _WINDOWS64
-static char const * log_test_ref = "..\\picoquictest\\log_test_ref.txt";
+static char const* log_test_ref = "..\\picoquictest\\log_test_ref.txt";
 #else
-static char const * log_test_ref = "..\\..\\picoquictest\\log_test_ref.txt";
+static char const* log_test_ref = "..\\..\\picoquictest\\log_test_ref.txt";
 #endif
 #else
-static char const * log_test_ref = "picoquictest/log_test_ref.txt";
+static char const* log_test_ref = "picoquictest/log_test_ref.txt";
 #endif
 
-static int compare_lines(char const * b1, char const * b2)
+static int compare_lines(char const* b1, char const* b2)
 {
-    while (*b1 != 0 && *b2 != 0)
-    {
-        if (*b1 != *b2)
-        {
+    while (*b1 != 0 && *b2 != 0) {
+        if (*b1 != *b2) {
             break;
         }
         b1++;
         b2++;
     }
 
-    while (*b1 == '\n' || *b1 == '\r')
-    {
+    while (*b1 == '\n' || *b1 == '\r') {
         b1++;
     }
 
-    while (*b2 == '\n' || *b2 == '\r')
-    {
+    while (*b2 == '\n' || *b2 == '\r') {
         b2++;
     }
 
     return (*b1 == 0 && *b2 == 0) ? 0 : -1;
 }
 
-
-static int compare_files(char const * fname1, char const * fname2)
+static int compare_files(char const* fname1, char const* fname2)
 {
     FILE* F1 = NULL;
     FILE* F2 = NULL;
@@ -249,66 +239,49 @@ static int compare_files(char const * fname1, char const * fname2)
 
 #ifdef _WINDOWS
     errno_t err = fopen_s(&F1, fname1, "r");
-    if (err != 0)
-    {
+    if (err != 0) {
         ret = -1;
-    }
-    else
-    {
+    } else {
         err = fopen_s(&F2, fname2, "r");
-        if (err != 0)
-        {
+        if (err != 0) {
             ret = -1;
         }
     }
 #else
     F1 = fopen(fname1, "r");
-    if (F1 == NULL)
-    {
+    if (F1 == NULL) {
         ret = -1;
-    }
-    else
-    {
+    } else {
         F2 = fopen(fname2, "r");
-        if (F2 == NULL)
-        {
+        if (F2 == NULL) {
             ret = -1;
         }
     }
 #endif
-    if (ret == 0 && F1 != NULL && F2 != NULL)
-    {
+    if (ret == 0 && F1 != NULL && F2 != NULL) {
         char buffer1[256];
         char buffer2[256];
 
-        while (ret == 0 && fgets(buffer1, sizeof(buffer1), F1) != NULL)
-        {
-            if (fgets(buffer2, sizeof(buffer2), F2) == NULL)
-            {
+        while (ret == 0 && fgets(buffer1, sizeof(buffer1), F1) != NULL) {
+            if (fgets(buffer2, sizeof(buffer2), F2) == NULL) {
                 /* F2 is too short */
                 ret = -1;
-            }
-            else
-            {
+            } else {
                 ret = compare_lines(buffer1, buffer2);
             }
         }
 
-        if (ret == 0 && fgets(buffer2, sizeof(buffer2), F2) != NULL)
-        {
+        if (ret == 0 && fgets(buffer2, sizeof(buffer2), F2) != NULL) {
             /* F2 is too long */
             ret = -1;
         }
     }
 
-
-    if (F1 != NULL)
-    {
+    if (F1 != NULL) {
         fclose(F1);
     }
 
-    if (F2 != NULL)
-    {
+    if (F2 != NULL) {
         fclose(F2);
     }
 
@@ -317,7 +290,7 @@ static int compare_files(char const * fname1, char const * fname2)
 
 int logger_test()
 {
-    FILE * F = NULL;
+    FILE* F = NULL;
     int ret = 0;
 
 #ifdef _WINDOWS
@@ -331,18 +304,15 @@ int logger_test()
     }
 #endif
 
-    for (size_t i = 0; i < nb_test_skip_list; i++)
-    {
+    for (size_t i = 0; i < nb_test_skip_list; i++) {
         picoquic_log_frames(F, test_skip_list[i].val, test_skip_list[i].len);
     }
 
     fclose(F);
 
-    if (ret == 0)
-    {
+    if (ret == 0) {
         ret = compare_files(log_test_file, log_test_ref);
     }
 
     return ret;
 }
-

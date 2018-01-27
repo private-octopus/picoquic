@@ -44,10 +44,10 @@ struct _float16test_st {
 };
 
 static struct _float16test_st float16_test_case[] = {
-    { 0, 0, 0},
-    { 1, 1, 1},
-    { 0x7FF, 0x7FF, 0x7FF},
-    { 0x800, 0x800, 0x800},
+    { 0, 0, 0 },
+    { 1, 1, 1 },
+    { 0x7FF, 0x7FF, 0x7FF },
+    { 0x800, 0x800, 0x800 },
     { 0x801, 0x801, 0x801 },
     { 0xFFF, 0xFFF, 0xFFF },
     { 0x1000, 0x1000, 0x1000 },
@@ -67,17 +67,13 @@ int float16test()
 {
     int ret = 0;
 
-    for (size_t i = 0; ret == 0 && i < nb_float16_test_case; i++)
-    {
+    for (size_t i = 0; ret == 0 && i < nb_float16_test_case; i++) {
         uint16_t encoded = picoquic_deltat_to_float16(float16_test_case[i].n64);
         uint64_t decoded = picoquic_float16_to_deltat(float16_test_case[i].f16);
 
-        if (encoded != float16_test_case[i].f16)
-        {
+        if (encoded != float16_test_case[i].f16) {
             ret = -1;
-        }
-        else if (decoded != float16_test_case[i].n64_decoded)
-        {
+        } else if (decoded != float16_test_case[i].n64_decoded) {
             ret = -1;
         }
     }
