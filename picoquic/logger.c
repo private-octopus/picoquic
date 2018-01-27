@@ -923,7 +923,7 @@ void picoquic_log_decrypt_encrypted_cleartext(FILE* F,
 }
 
 
-void picoquic_log_packet(FILE* F, picoquic_quic_t * quic, picoquic_cnx_t * cnx, 
+void picoquic_log_packet(FILE* F, picoquic_quic_t * quic, picoquic_cnx_t * cnx,
 	struct sockaddr * addr_peer, int receiving,
 	uint8_t * bytes,  size_t length, uint64_t current_time)
 {
@@ -935,16 +935,14 @@ void picoquic_log_packet(FILE* F, picoquic_quic_t * quic, picoquic_cnx_t * cnx,
 	picoquic_log_packet_address(F, cnx, addr_peer, receiving, length, current_time);
 
 	/* Parse the clear text header */
-    ret = picoquic_parse_packet_header(quic, bytes, (uint32_t)length, NULL,
-        ((cnx->quic->flags&picoquic_context_server) == 0) ? 
-        ((receiving == 0)?1:0): ((receiving == 0) ? 0 : 1), &ph, &pcnx);
+    ret = picoquic_parse_packet_header(quic, bytes, (uint32_t)length, NULL, &ph, &pcnx);
 
 	if (ret != 0)
 	{
 		/* packet does not even parse */
 		fprintf(F, "   Cannot parse the packet header.\n");
 	}
-	else 
+	else
 	{
         if (cnx == NULL)
         {
@@ -959,7 +957,7 @@ void picoquic_log_packet(FILE* F, picoquic_quic_t * quic, picoquic_cnx_t * cnx,
 		if (cnx != NULL)
 		{
 			ph.pn64 = picoquic_get_packet_number64(
-                (receiving == 0)?cnx->send_sequence:cnx->first_sack_item.end_of_sack_range, 
+                (receiving == 0)?cnx->send_sequence:cnx->first_sack_item.end_of_sack_range,
                 ph.pnmask, ph.pn);
 		}
 		else

@@ -265,9 +265,9 @@ static int test_api_queue_initial_queries(picoquic_test_tls_api_ctx_t * test_ctx
 		if (test_ctx->test_stream[i].previous_stream_id == stream_id)
 		{
             picoquic_cnx_t * cnx = NULL;
-            
+
             cnx = (test_ctx->test_stream[i].stream_id & 1) ?
-                    test_ctx->cnx_server: test_ctx->cnx_client;
+                    test_ctx->cnx_server : test_ctx->cnx_client;
 
 			ret = picoquic_add_to_stream(cnx, test_ctx->test_stream[i].stream_id,
 				test_ctx->test_stream[i].q_src,
@@ -760,7 +760,7 @@ static int tls_api_init_ctx(picoquic_test_tls_api_ctx_t ** pctx, uint32_t propos
 			/* Create a client connection */
 			test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient, 0,
 				(struct sockaddr *)&test_ctx->server_addr, 0,
-				proposed_version, sni, alpn);
+				proposed_version, sni, alpn, 1);
 
 			if (test_ctx->cnx_client == NULL)
 			{
@@ -915,6 +915,7 @@ static int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t * test_ctx,
 
                 next_time = server_arrival;
                 *simulated_time = next_time;
+
                 ret = picoquic_incoming_packet(test_ctx->qserver, packet->bytes, (uint32_t)packet->length,
                     (struct sockaddr *)&test_ctx->client_addr,
                     (struct sockaddr *)&test_ctx->server_addr, 0,
@@ -1129,7 +1130,7 @@ int tls_api_silence_test()
     {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
     }
-    
+
     /* simulate 5 seconds of silence */
     next_time = simulated_time + 5000000;
     while (ret == 0 && simulated_time < next_time &&
@@ -1538,7 +1539,7 @@ int tls_api_two_connections_test()
         /* Create a new connection in the client context */
 
         test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient, 0,
-            (struct sockaddr *)&test_ctx->server_addr, simulated_time, 0, NULL, "test-alpn");
+            (struct sockaddr *)&test_ctx->server_addr, simulated_time, 0, NULL, "test-alpn", 1);
 
         if (test_ctx->cnx_client == NULL)
         {
@@ -2093,7 +2094,7 @@ int mtu_discovery_test()
 
     if (ret == 0)
     {
-        if (test_ctx->cnx_client->send_mtu != 
+        if (test_ctx->cnx_client->send_mtu !=
             test_ctx->cnx_server->local_parameters.max_packet_size)
         {
             ret = -1;
@@ -2115,7 +2116,7 @@ int mtu_discovery_test()
 }
 
 /*
- * Trying to reproduce the scenario that resulted in 
+ * Trying to reproduce the scenario that resulted in
  * spurious retransmissions,and checking that it is fixed.
  */
 
@@ -2279,7 +2280,7 @@ int wrong_keyshare_test()
 
         cnx = picoquic_create_cnx(qserver, cnx_id, 
             (struct sockaddr *) &addr_from, simulated_time, 
-            PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, NULL);
+            PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, NULL, 0);
 
         if (cnx == NULL)
         {

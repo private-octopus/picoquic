@@ -115,7 +115,7 @@ int picoquic_find_or_create_stream(picoquic_cnx_t * cnx, uint64_t stream_id,
         /* Verify the stream ID control conditions */
 
         /* Check parity */
-        int parity = ((cnx->quic->flags&picoquic_context_server) == 0) ?
+        int parity = cnx->client_mode ?
             is_remote : is_remote ^ 1;
         if ((stream_id & 1) != parity)
         {
@@ -760,7 +760,7 @@ picoquic_stream_head * picoquic_find_ready_stream(picoquic_cnx_t * cnx, int rest
 				else
 				{
 					/* Check parity */
-					int parity = ((cnx->quic->flags&picoquic_context_server) == 0) ? 0 : 1;
+					int parity = cnx->client_mode ? 0 : 1;
 
 					if (((stream->stream_id & 1) ^ parity) == 1)
 					{
@@ -1430,8 +1430,7 @@ void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t * cnx, picoquic_p
     picoquic_cnx_t * pcnx = cnx;
 
     /* Get the packet type */
-    ret = picoquic_parse_packet_header(cnx->quic, p->bytes, (uint32_t)p->length, NULL,
-        ((cnx->quic->flags&picoquic_context_server) == 0) ? 1 : 0, &ph, &pcnx);
+    ret = picoquic_parse_packet_header(cnx->quic, p->bytes, (uint32_t)p->length, NULL, &ph, &pcnx);
 
     if (ret == 0 && ph.ptype == picoquic_packet_0rtt_protected)
     {
@@ -2180,7 +2179,7 @@ int picoquic_decode_max_stream_id_frame(picoquic_cnx_t * cnx, uint8_t * bytes,
 
     if (ret == 0)
     {
-        if ((cnx->quic->flags&picoquic_context_server) == 0)
+        if (cnx->client_mode)
         {
             /* Should only accept client stream ID */
             if ((max_stream_id & 1) != 0)

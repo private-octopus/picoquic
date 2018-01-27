@@ -67,6 +67,7 @@ extern "C" {
 #define PICOQUIC_ERROR_SEND_BUFFER_TOO_SMALL (PICOQUIC_ERROR_CLASS  + 25)
 #define PICOQUIC_ERROR_UNEXPECTED_STATE (PICOQUIC_ERROR_CLASS  + 26)
 #define PICOQUIC_ERROR_UNEXPECTED_ERROR (PICOQUIC_ERROR_CLASS  + 27)
+#define PICOQUIC_ERROR_TLS_SERVER_CON_WITHOUT_CERT (PICOQUIC_ERROR_CLASS  + 28)
 
 /*
  * Protocol errors defined in the QUIC spec
@@ -191,11 +192,11 @@ extern "C" {
 	/* Connection context creation and registration */
 	picoquic_cnx_t * picoquic_create_cnx(picoquic_quic_t * quic,
 		uint64_t cnx_id, struct sockaddr * addr, uint64_t start_time, uint32_t preferred_version,
-		char const * sni, char const * alpn);
+		char const * sni, char const * alpn, char client_mode);
 
-	picoquic_cnx_t * picoquic_create_client_cnx(picoquic_quic_t * quic, 
+	picoquic_cnx_t * picoquic_create_client_cnx(picoquic_quic_t * quic,
 		struct sockaddr * addr, uint64_t start_time, uint32_t preferred_version,
-		char const * sni, char const * alpn, 
+		char const * sni, char const * alpn,
 		picoquic_stream_data_cb_fn callback_fn, void * callback_ctx);
 
 	void picoquic_delete_cnx(picoquic_cnx_t * cnx);

@@ -170,9 +170,8 @@ extern "C" {
 	 * Quic context flags
 	 */
 	typedef enum {
-		picoquic_context_server = 1,
-		picoquic_context_check_cookie = 2,
-		picoquic_context_unconditional_cnx_id = 4
+		picoquic_context_check_cookie = 1,
+		picoquic_context_unconditional_cnx_id = 2
 	} picoquic_context_flags;
 
 	/*
@@ -436,6 +435,8 @@ extern "C" {
 		/* Management of streams */
 		picoquic_stream_head first_stream;
 
+    /* Is this connection the client side? */
+    char client_mode;
 	} picoquic_cnx_t;
 
     /* Init of transport parameters */
@@ -511,7 +512,6 @@ extern "C" {
         uint8_t * bytes,
         uint32_t length,
         struct sockaddr * addr_from,
-        int to_server,
         picoquic_packet_header * ph,
         picoquic_cnx_t ** pcnx);
 

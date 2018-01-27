@@ -209,7 +209,7 @@ int parseheadertest()
     else
     {
         cnx_08 = picoquic_create_cnx(quic, TEST_CNXID_08_VAL, (struct sockaddr *) &addr_08,
-            0, PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, NULL);
+            0, PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, NULL, 1);
 
         if (cnx_08 == NULL)
         {
@@ -222,8 +222,7 @@ int parseheadertest()
         pcnx = NULL;
 
         if (picoquic_parse_packet_header(quic, test_entries[i].packet, (uint32_t)test_entries[i].length,
-            (struct sockaddr *)&addr_08,
-            0, &ph, &pcnx) != 0)
+            (struct sockaddr *)&addr_08, &ph, &pcnx) != 0)
         {
             ret = -1;
         }

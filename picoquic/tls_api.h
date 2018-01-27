@@ -64,7 +64,7 @@ size_t picoquic_aead_0rtt_encrypt(picoquic_cnx_t *cnx, uint8_t * output, uint8_t
 size_t picoquic_aead_0rtt_decrypt(picoquic_cnx_t *cnx, uint8_t * output, uint8_t * input, size_t input_length,
     uint64_t seq_num, uint8_t * auth_data, size_t auth_data_length);
 
-int picoquic_setup_cleartext_aead_contexts(picoquic_cnx_t * cnx, int is_server);
+int picoquic_setup_cleartext_aead_contexts(picoquic_cnx_t * cnx);
 
 size_t picoquic_aead_cleartext_decrypt(picoquic_cnx_t *cnx, uint8_t * output, uint8_t * input, 
     size_t input_length, uint64_t seq_num, uint8_t * auth_data, size_t auth_data_length);
