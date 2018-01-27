@@ -150,7 +150,7 @@ picoquic_quic_t * picoquic_create(uint32_t nb_connections,
 			quic->flags |= picoquic_context_unconditional_cnx_id;
 		}
 
-        if (ticket_file_name != NULL && cert_file_name == NULL)
+        if (ticket_file_name != NULL)
         {
             quic->ticket_file_name = ticket_file_name;
             ret = picoquic_load_tickets(&quic->p_first_ticket, current_time, ticket_file_name);

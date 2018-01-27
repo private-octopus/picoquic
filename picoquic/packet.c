@@ -94,6 +94,8 @@ int picoquic_parse_packet_header(
                 {
                     /* Is the context found by using the `addr_from`? */
                     char context_by_addr = 0;
+                    char is_client = 0;
+
                     /* Retrieve the connection context */
                     if (*pcnx == NULL)
                     {
@@ -107,7 +109,7 @@ int picoquic_parse_packet_header(
                         }
                     }
 
-                    char is_client = *pcnx && (*pcnx)->client_mode;
+                    is_client = *pcnx && (*pcnx)->client_mode;
 
                     /* If the version is supported now, the format field in the version table
                      * describes the encoding. */
