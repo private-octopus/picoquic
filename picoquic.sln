@@ -16,7 +16,6 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "picoquicdemo", "picoquicfirst\picoquicfirst.vcxproj", "{995745F2-E8BA-48C1-AF6D-BA554B869D47}"
 	ProjectSection(ProjectDependencies) = postProject
 		{63E1E6B7-DB5F-4EDC-8AC8-7E9F5990D11F} = {63E1E6B7-DB5F-4EDC-8AC8-7E9F5990D11F}
-		{B04168BD-4D56-4DE9-B1E3-CF4C16FE21C7} = {B04168BD-4D56-4DE9-B1E3-CF4C16FE21C7}
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "picoquic_t", "picoquic_t\picoquic_t.vcxproj", "{4898D6E0-6FC5-4375-99F5-4C69BB20CE94}"

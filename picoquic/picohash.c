@@ -52,7 +52,7 @@ picohash_table* picohash_create(size_t nb_bin,
 picohash_item* picohash_retrieve(picohash_table* hash_table, void* key)
 {
     uint64_t hash = hash_table->picohash_hash(key);
-    uint32_t bin = hash % hash_table->nb_bin;
+    uint32_t bin = (uint32_t)(hash % hash_table->nb_bin);
     picohash_item* item = hash_table->hash_bin[bin];
 
     while (item != NULL) {
@@ -69,7 +69,7 @@ picohash_item* picohash_retrieve(picohash_table* hash_table, void* key)
 int picohash_insert(picohash_table* hash_table, void* key)
 {
     uint64_t hash = hash_table->picohash_hash(key);
-    uint32_t bin = hash % hash_table->nb_bin;
+    uint32_t bin = (uint32_t)(hash % hash_table->nb_bin);
     int ret = 0;
     picohash_item* item = (picohash_item*)malloc(sizeof(picohash_item));
 
@@ -88,7 +88,7 @@ int picohash_insert(picohash_table* hash_table, void* key)
 
 void picohash_item_delete(picohash_table* hash_table, picohash_item* item, int delete_key_too)
 {
-    uint32_t bin = item->hash % hash_table->nb_bin;
+    uint32_t bin = (uint32_t)(item->hash % hash_table->nb_bin);
     picohash_item* previous = hash_table->hash_bin[bin];
 
     if (previous == item) {

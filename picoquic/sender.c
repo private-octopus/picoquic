@@ -523,7 +523,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx, uint64_t current_time,
                 if ((p->length + p->checksum_overhead) > cnx->send_mtu) {
                     /* MTU probe was lost, presumably because of packet too big */
                     cnx->mtu_probe_sent = 0;
-                    cnx->send_mtu_max_tried = p->length + p->checksum_overhead;
+                    cnx->send_mtu_max_tried = (uint32_t)(p->length + p->checksum_overhead);
                     /* MTU probes should not be retransmitted */
                     packet_is_pure_ack = 1;
                     do_not_detect_spurious = 0;

@@ -804,7 +804,7 @@ void picoquic_check_spurious_retransmission(picoquic_cnx_t* cnx,
             uint64_t max_reorder_gap = cnx->highest_acknowledged - p->sequence_number;
 
             if (p->length + p->checksum_overhead > cnx->send_mtu) {
-                cnx->send_mtu = p->length + p->checksum_overhead;
+                cnx->send_mtu = (uint32_t)(p->length + p->checksum_overhead);
                 if (cnx->send_mtu > cnx->send_mtu_max_tried) {
                     cnx->send_mtu_max_tried = cnx->send_mtu;
                 }
@@ -1196,7 +1196,7 @@ static picoquic_packet* picoquic_process_ack_range(
 
                 /* If packet is larger than the current MTU, update the MTU */
                 if ((p->length + p->checksum_overhead) > cnx->send_mtu) {
-                    cnx->send_mtu = p->length + p->checksum_overhead;
+                    cnx->send_mtu = (uint32_t)(p->length + p->checksum_overhead);
                     cnx->mtu_probe_sent = 0;
                 }
 
