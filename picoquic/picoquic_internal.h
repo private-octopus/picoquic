@@ -59,14 +59,14 @@ extern "C" {
      */
 typedef enum {
     picoquic_packet_error = 0,
-    picoquic_packet_version_negotiation = 1,
-    picoquic_packet_client_initial = 2,
-    picoquic_packet_server_stateless = 3,
+    picoquic_packet_version_negotiation,
+    picoquic_packet_client_initial,
+    picoquic_packet_server_stateless,
     picoquic_packet_handshake,
-    picoquic_packet_0rtt_protected = 6,
-    picoquic_packet_1rtt_protected_phi0 = 7,
-    picoquic_packet_1rtt_protected_phi1 = 8,
-    picoquic_packet_type_max = 9
+    picoquic_packet_0rtt_protected,
+    picoquic_packet_1rtt_protected_phi0,
+    picoquic_packet_1rtt_protected_phi1,
+    picoquic_packet_type_max
 } picoquic_packet_type_enum;
 
 /*
