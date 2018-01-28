@@ -24,12 +24,11 @@
 
 #include "../picoquic/picoquic_internal.h"
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
-
-	/*
+/*
 	 * Really basic network simulator, only simulates a simple link using a
 	 * packet structure.
 	 * Init: link creation. Returns a link structure with defined bandwidth,
@@ -39,42 +38,42 @@ extern "C" {
 	 * Get packet out of link at time T + L + Queue.
 	 */
 
-	typedef struct st_picoquictest_sim_packet_t {
-		struct st_picoquictest_sim_packet_t * next_packet;
-		uint64_t sent_time;
-		uint64_t arrival_time;
-		size_t length;
-		uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE];
-	} picoquictest_sim_packet_t;
+typedef struct st_picoquictest_sim_packet_t {
+    struct st_picoquictest_sim_packet_t* next_packet;
+    uint64_t sent_time;
+    uint64_t arrival_time;
+    size_t length;
+    uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE];
+} picoquictest_sim_packet_t;
 
-	typedef struct st_picoquictest_sim_link_t {
-		uint64_t next_send_time;
-		uint64_t queue_time;
-		uint64_t queue_delay_max;
-		uint64_t picosec_per_byte;
-		uint64_t microsec_latency;
-		uint64_t *loss_mask;
-		uint64_t packets_dropped;
-		uint64_t packets_sent;
-		picoquictest_sim_packet_t * first_packet;
-		picoquictest_sim_packet_t * last_packet;
-	} picoquictest_sim_link_t;
+typedef struct st_picoquictest_sim_link_t {
+    uint64_t next_send_time;
+    uint64_t queue_time;
+    uint64_t queue_delay_max;
+    uint64_t picosec_per_byte;
+    uint64_t microsec_latency;
+    uint64_t* loss_mask;
+    uint64_t packets_dropped;
+    uint64_t packets_sent;
+    picoquictest_sim_packet_t* first_packet;
+    picoquictest_sim_packet_t* last_packet;
+} picoquictest_sim_link_t;
 
-	picoquictest_sim_link_t * picoquictest_sim_link_create(double data_rate_in_gps,
-		uint64_t microsec_latency, uint64_t * loss_mask, uint64_t queue_delay_max, uint64_t current_time);
+picoquictest_sim_link_t* picoquictest_sim_link_create(double data_rate_in_gps,
+    uint64_t microsec_latency, uint64_t* loss_mask, uint64_t queue_delay_max, uint64_t current_time);
 
-	void picoquictest_sim_link_delete(picoquictest_sim_link_t * link);
+void picoquictest_sim_link_delete(picoquictest_sim_link_t* link);
 
-	picoquictest_sim_packet_t * picoquictest_sim_link_create_packet();
+picoquictest_sim_packet_t* picoquictest_sim_link_create_packet();
 
-	uint64_t picoquictest_sim_link_next_arrival(picoquictest_sim_link_t * link, uint64_t current_time);
+uint64_t picoquictest_sim_link_next_arrival(picoquictest_sim_link_t* link, uint64_t current_time);
 
-	picoquictest_sim_packet_t * picoquictest_sim_link_dequeue(picoquictest_sim_link_t * link,
-		uint64_t current_time);
+picoquictest_sim_packet_t* picoquictest_sim_link_dequeue(picoquictest_sim_link_t* link,
+    uint64_t current_time);
 
-	void picoquictest_sim_link_submit(picoquictest_sim_link_t * link, picoquictest_sim_packet_t * packet,
-		uint64_t current_time);
-#ifdef  __cplusplus
+void picoquictest_sim_link_submit(picoquictest_sim_link_t* link, picoquictest_sim_packet_t* packet,
+    uint64_t current_time);
+#ifdef __cplusplus
 }
 #endif
 

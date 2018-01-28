@@ -19,24 +19,24 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include "../picoquic/picoquic_internal.h"
 #include <stdlib.h>
 #include <string.h>
-#include "../picoquic/picoquic_internal.h"
 
 /* test vectors and corresponding structure */
 
-#define TEST_CNXID_INI_BYTES  0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 
-#define TEST_CNXID_INI_VAL    0x0001020304050607ull
+#define TEST_CNXID_INI_BYTES 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07
+#define TEST_CNXID_INI_VAL 0x0001020304050607ull
 
-#define TEST_CNXID_07_BYTES  0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08
-#define TEST_CNXID_07_VAL    0x0102030405060708ull
+#define TEST_CNXID_07_BYTES 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08
+#define TEST_CNXID_07_VAL 0x0102030405060708ull
 
 /*
  * New definitions
  */
 
-#define TEST_CNXID_08_BYTES  0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09
-#define TEST_CNXID_08_VAL    0x0203040506070809ull
+#define TEST_CNXID_08_BYTES 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09
+#define TEST_CNXID_08_VAL 0x0203040506070809ull
 
 static uint8_t pinitial08[] = {
     0xFF,
@@ -129,7 +129,6 @@ static picoquic_packet_header hphi1_c_8_08 = {
     0, 0
 };
 
-
 static uint8_t packet_short_phi0_noc_16_08[] = {
     0x5E,
     0xBE, 0xEF,
@@ -161,17 +160,17 @@ static picoquic_packet_header hphi0_noc_8_08 = {
 };
 
 struct _test_entry {
-    uint8_t * packet;
+    uint8_t* packet;
     size_t length;
-    picoquic_packet_header * ph;
+    picoquic_packet_header* ph;
 };
 
 static struct _test_entry test_entries[] = {
-    { pinitial08 , sizeof(pinitial08), &hinitial08 },
-    { pvnego08, sizeof(pvnego08), &hvnego08},
+    { pinitial08, sizeof(pinitial08), &hinitial08 },
+    { pvnego08, sizeof(pvnego08), &hvnego08 },
     { pvnegobis08, sizeof(pvnegobis08), &hvnego08 },
     { packet_short_phi0_c_32_08, sizeof(packet_short_phi0_c_32_08), &hphi0_c_32_08 },
-    { packet_short_phi1_c_16_08 , sizeof(packet_short_phi1_c_16_08), &hphi1_c_16_08 },
+    { packet_short_phi1_c_16_08, sizeof(packet_short_phi1_c_16_08), &hphi1_c_16_08 },
     { packet_short_phi1_c_8_08, sizeof(packet_short_phi1_c_8_08), &hphi1_c_8_08 },
     { packet_short_phi0_noc_16_08, sizeof(packet_short_phi0_noc_16_08), &hphi0_noc_16_08 },
     { packet_short_phi0_noc_8_08, sizeof(packet_short_phi0_noc_8_08), &hphi0_noc_8_08 }
@@ -183,11 +182,10 @@ int parseheadertest()
 {
     int ret = 0;
     picoquic_packet_header ph;
-    picoquic_quic_t * quic = NULL;
-    picoquic_cnx_t * cnx_08 = NULL;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx_08 = NULL;
     struct sockaddr_in addr_08;
-    picoquic_cnx_t * pcnx;
-
+    picoquic_cnx_t* pcnx;
 
     /* Initialize the quic context and the connection contexts */
     memset(&addr_08, 0, sizeof(struct sockaddr_in));
@@ -202,38 +200,27 @@ int parseheadertest()
 
     quic = picoquic_create(8, NULL, NULL, NULL, NULL,
         NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, 0);
-    if (quic == NULL)
-    {
+    if (quic == NULL) {
         ret = -1;
-    }
-    else
-    {
-        cnx_08 = picoquic_create_cnx(quic, TEST_CNXID_08_VAL, (struct sockaddr *) &addr_08,
+    } else {
+        cnx_08 = picoquic_create_cnx(quic, TEST_CNXID_08_VAL, (struct sockaddr*)&addr_08,
             0, PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, NULL, 1);
 
-        if (cnx_08 == NULL)
-        {
+        if (cnx_08 == NULL) {
             ret = -1;
         }
     }
 
-    for (size_t i = 0; ret == 0 && i < nb_test_entries; i++)
-    {
+    for (size_t i = 0; ret == 0 && i < nb_test_entries; i++) {
         pcnx = NULL;
 
         if (picoquic_parse_packet_header(quic, test_entries[i].packet, (uint32_t)test_entries[i].length,
-            (struct sockaddr *)&addr_08, &ph, &pcnx) != 0)
-        {
+                (struct sockaddr*)&addr_08, &ph, &pcnx)
+            != 0) {
             ret = -1;
         }
 
-        if (ph.cnx_id != test_entries[i].ph->cnx_id ||
-            ph.pn != test_entries[i].ph->pn ||
-            ph.vn != test_entries[i].ph->vn ||
-            ph.offset != test_entries[i].ph->offset ||
-            ph.ptype != test_entries[i].ph->ptype ||
-            ph.pnmask != test_entries[i].ph->pnmask)
-        {
+        if (ph.cnx_id != test_entries[i].ph->cnx_id || ph.pn != test_entries[i].ph->pn || ph.vn != test_entries[i].ph->vn || ph.offset != test_entries[i].ph->offset || ph.ptype != test_entries[i].ph->ptype || ph.pnmask != test_entries[i].ph->pnmask) {
             ret = -1;
         }
     }

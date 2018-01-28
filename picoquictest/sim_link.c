@@ -29,244 +29,208 @@
  * Get packet out of link at time T + L + Queue.
  */
 
-#include <stdlib.h>
 #include "../picoquic/picoquic_internal.h"
 #include "picoquictest_internal.h"
+#include <stdlib.h>
 
-picoquictest_sim_link_t * picoquictest_sim_link_create(double data_rate_in_gps,
-	uint64_t microsec_latency, uint64_t * loss_mask, uint64_t queue_delay_max, uint64_t current_time)
+picoquictest_sim_link_t* picoquictest_sim_link_create(double data_rate_in_gps,
+    uint64_t microsec_latency, uint64_t* loss_mask, uint64_t queue_delay_max, uint64_t current_time)
 {
-	picoquictest_sim_link_t * link = 
-		(picoquictest_sim_link_t*)malloc(sizeof(picoquictest_sim_link_t));
-	if (link != 0)
-	{
-		double pico_d = (data_rate_in_gps <= 0) ? 0 : (8000.0 / data_rate_in_gps);
-		pico_d *= (1.024*1.024); /* account for binary units */
-		link->next_send_time = current_time;
-		link->queue_time = current_time;
-		link->queue_delay_max = queue_delay_max;
-		link->picosec_per_byte = (uint64_t)((data_rate_in_gps <= 0) ? 0 : (8000.0 / data_rate_in_gps));
-		link->microsec_latency = microsec_latency;
-		link->packets_dropped = 0;
-		link->packets_sent = 0;
-		link->first_packet = NULL;
-		link->last_packet = NULL;
-		link->loss_mask = loss_mask;
-	}
+    picoquictest_sim_link_t* link = (picoquictest_sim_link_t*)malloc(sizeof(picoquictest_sim_link_t));
+    if (link != 0) {
+        double pico_d = (data_rate_in_gps <= 0) ? 0 : (8000.0 / data_rate_in_gps);
+        pico_d *= (1.024 * 1.024); /* account for binary units */
+        link->next_send_time = current_time;
+        link->queue_time = current_time;
+        link->queue_delay_max = queue_delay_max;
+        link->picosec_per_byte = (uint64_t)((data_rate_in_gps <= 0) ? 0 : (8000.0 / data_rate_in_gps));
+        link->microsec_latency = microsec_latency;
+        link->packets_dropped = 0;
+        link->packets_sent = 0;
+        link->first_packet = NULL;
+        link->last_packet = NULL;
+        link->loss_mask = loss_mask;
+    }
 
-	return link;
+    return link;
 }
 
-void picoquictest_sim_link_delete(picoquictest_sim_link_t * link)
+void picoquictest_sim_link_delete(picoquictest_sim_link_t* link)
 {
-	picoquictest_sim_packet_t * packet;
+    picoquictest_sim_packet_t* packet;
 
-	while ((packet = link->first_packet) != NULL)
-	{
-		link->first_packet = packet->next_packet;
-		free(packet);
-	}
+    while ((packet = link->first_packet) != NULL) {
+        link->first_packet = packet->next_packet;
+        free(packet);
+    }
 
-	free(link);
+    free(link);
 }
 
-picoquictest_sim_packet_t * picoquictest_sim_link_create_packet()
+picoquictest_sim_packet_t* picoquictest_sim_link_create_packet()
 {
-	picoquictest_sim_packet_t * packet = (picoquictest_sim_packet_t *)malloc(sizeof(picoquictest_sim_packet_t));
-	if (packet != NULL)
-	{
-		packet->next_packet = NULL;
-		packet->sent_time = 0;
-		packet->arrival_time = 0;
-		packet->length = 0;
-	}
+    picoquictest_sim_packet_t* packet = (picoquictest_sim_packet_t*)malloc(sizeof(picoquictest_sim_packet_t));
+    if (packet != NULL) {
+        packet->next_packet = NULL;
+        packet->sent_time = 0;
+        packet->arrival_time = 0;
+        packet->length = 0;
+    }
 
-	return packet;
+    return packet;
 }
 
-uint64_t picoquictest_sim_link_next_arrival(picoquictest_sim_link_t * link, uint64_t current_time)
+uint64_t picoquictest_sim_link_next_arrival(picoquictest_sim_link_t* link, uint64_t current_time)
 {
-	picoquictest_sim_packet_t * packet = link->first_packet;
+    picoquictest_sim_packet_t* packet = link->first_packet;
 
-	if (packet != NULL  && packet->arrival_time < current_time)
-	{
-		current_time = packet->arrival_time;
-	}
+    if (packet != NULL && packet->arrival_time < current_time) {
+        current_time = packet->arrival_time;
+    }
 
-	return current_time;
+    return current_time;
 }
 
-picoquictest_sim_packet_t * picoquictest_sim_link_dequeue(picoquictest_sim_link_t * link,
-	uint64_t current_time)
+picoquictest_sim_packet_t* picoquictest_sim_link_dequeue(picoquictest_sim_link_t* link,
+    uint64_t current_time)
 {
-	picoquictest_sim_packet_t * packet = link->first_packet;
+    picoquictest_sim_packet_t* packet = link->first_packet;
 
-	if (packet != NULL && packet->arrival_time <= current_time)
-	{
-		link->first_packet = packet->next_packet;
-		if (link->first_packet == NULL)
-		{
-			link->last_packet = NULL;
-		}
-	}
-	else
-	{
-		packet = NULL;
-	}
+    if (packet != NULL && packet->arrival_time <= current_time) {
+        link->first_packet = packet->next_packet;
+        if (link->first_packet == NULL) {
+            link->last_packet = NULL;
+        }
+    } else {
+        packet = NULL;
+    }
 
-	return packet;
+    return packet;
 }
 
-static int picoquictest_sim_link_testloss(uint64_t * loss_mask)
+static int picoquictest_sim_link_testloss(uint64_t* loss_mask)
 {
-	uint64_t loss_bit = 0;
-	
-	if (loss_mask != NULL)
-	{
-		/* Last bit indicates loss or not */
-		loss_bit = (uint64_t)((*loss_mask) & 1ull);
-		
-		/* Rotate loss mask by 1 to prepare next round */
-		*loss_mask >>= 1;
-		*loss_mask ^= (loss_bit << 63);
-	}
+    uint64_t loss_bit = 0;
 
-	return (int)loss_bit;
+    if (loss_mask != NULL) {
+        /* Last bit indicates loss or not */
+        loss_bit = (uint64_t)((*loss_mask) & 1ull);
+
+        /* Rotate loss mask by 1 to prepare next round */
+        *loss_mask >>= 1;
+        *loss_mask ^= (loss_bit << 63);
+    }
+
+    return (int)loss_bit;
 }
 
-void picoquictest_sim_link_submit(picoquictest_sim_link_t * link, picoquictest_sim_packet_t * packet,
-	uint64_t current_time)
+void picoquictest_sim_link_submit(picoquictest_sim_link_t* link, picoquictest_sim_packet_t* packet,
+    uint64_t current_time)
 {
-	uint64_t queue_delay = (current_time > link->queue_time) ? 0 : 
-		link->queue_time - current_time;
-	uint64_t transmit_time = ((link->picosec_per_byte * packet->length) >> 20);
-	if (transmit_time <= 0)
-		transmit_time = 1;
+    uint64_t queue_delay = (current_time > link->queue_time) ? 0 : link->queue_time - current_time;
+    uint64_t transmit_time = ((link->picosec_per_byte * packet->length) >> 20);
+    if (transmit_time <= 0)
+        transmit_time = 1;
 
-	if (link->queue_delay_max == 0 || queue_delay < link->queue_delay_max)
-	{
+    if (link->queue_delay_max == 0 || queue_delay < link->queue_delay_max) {
 
-		link->queue_time = current_time + queue_delay + transmit_time;
+        link->queue_time = current_time + queue_delay + transmit_time;
 
-		if (picoquictest_sim_link_testloss(link->loss_mask) != 0)
-		{
-			link->packets_dropped++;
-			free(packet);
-		}
-		else
-		{
-			link->packets_sent++;
-			if (link->last_packet == NULL)
-			{
-				link->first_packet = packet;
-			}
-			else
-			{
-				link->last_packet->next_packet = packet;
-			}
-			link->last_packet = packet;
-			packet->next_packet = NULL;
-			packet->arrival_time = link->queue_time + link->microsec_latency;
-		}
-	}
-	else
-	{
-		/* simulate congestion loss on queue full */
-		link->packets_dropped++;
-		free(packet);
-	}
+        if (picoquictest_sim_link_testloss(link->loss_mask) != 0) {
+            link->packets_dropped++;
+            free(packet);
+        } else {
+            link->packets_sent++;
+            if (link->last_packet == NULL) {
+                link->first_packet = packet;
+            } else {
+                link->last_packet->next_packet = packet;
+            }
+            link->last_packet = packet;
+            packet->next_packet = NULL;
+            packet->arrival_time = link->queue_time + link->microsec_latency;
+        }
+    } else {
+        /* simulate congestion loss on queue full */
+        link->packets_dropped++;
+        free(packet);
+    }
 }
 
-
-int sim_link_one_test(uint64_t * loss_mask, uint64_t queue_delay_max,  uint64_t nb_losses)
+int sim_link_one_test(uint64_t* loss_mask, uint64_t queue_delay_max, uint64_t nb_losses)
 {
-	int ret = 0;
-	uint64_t current_time = 0;
-	uint64_t departure_time = 0;
-	picoquictest_sim_link_t * link = picoquictest_sim_link_create(0.01, 10000, loss_mask, queue_delay_max, current_time);
-	uint64_t dequeued = 0;
-	uint64_t queued = 0;
-	const uint64_t nb_packets = 16;
+    int ret = 0;
+    uint64_t current_time = 0;
+    uint64_t departure_time = 0;
+    picoquictest_sim_link_t* link = picoquictest_sim_link_create(0.01, 10000, loss_mask, queue_delay_max, current_time);
+    uint64_t dequeued = 0;
+    uint64_t queued = 0;
+    const uint64_t nb_packets = 16;
 
-	if (link == NULL)
-	{
-		ret = -1;
-	}
+    if (link == NULL) {
+        ret = -1;
+    }
 
+    while (ret == 0) {
+        if (queued >= nb_packets) {
+            departure_time = (uint64_t)((int64_t)-1);
+        }
 
-	while (ret == 0)
-	{
-		if (queued >= nb_packets)
-		{
-			departure_time = (uint64_t)((int64_t)-1);
-		}
+        current_time = picoquictest_sim_link_next_arrival(link, departure_time);
 
-		current_time = picoquictest_sim_link_next_arrival(link, departure_time);
+        picoquictest_sim_packet_t* packet = picoquictest_sim_link_dequeue(link, current_time);
 
-		picoquictest_sim_packet_t * packet = picoquictest_sim_link_dequeue(link, current_time);
+        if (packet != NULL) {
+            dequeued++;
+            free(packet);
+        } else if (queued < nb_packets) {
+            packet = picoquictest_sim_link_create_packet();
 
-		if (packet != NULL)
-		{
-			dequeued++;
-			free(packet);
-		}
-		else if (queued < nb_packets)
-		{
-			packet = picoquictest_sim_link_create_packet();
+            if (packet == NULL) {
+                ret = -1;
+            }
 
-			if (packet == NULL)
-			{
-				ret = -1;
-			}
+            packet->length = sizeof(packet->bytes);
 
-			packet->length = sizeof(packet->bytes);
+            picoquictest_sim_link_submit(link, packet, departure_time);
 
-			picoquictest_sim_link_submit(link, packet, departure_time);
+            departure_time += 250;
 
-			departure_time += 250;
+            queued++;
+        } else {
+            break;
+        }
+    }
 
-			queued++;
-		}
-		else
-		{
-			break;
-		}
-	}
+    if ((dequeued + nb_losses) != nb_packets) {
+        ret = -1;
+    }
 
-	if ((dequeued + nb_losses) != nb_packets)
-	{
-		ret = -1;
-	}
+    if (link != NULL) {
+        picoquictest_sim_link_delete(link);
+    }
 
-	if (link != NULL)
-	{
-		picoquictest_sim_link_delete(link);
-	}
-
-	return ret;
+    return ret;
 }
 
 int sim_link_test()
 {
-	int ret = 0;
-	uint64_t loss_mask = 0;
+    int ret = 0;
+    uint64_t loss_mask = 0;
 
-	if (ret == 0)
-	{
-		ret = sim_link_one_test(&loss_mask, 0, 0);
-	}
+    if (ret == 0) {
+        ret = sim_link_one_test(&loss_mask, 0, 0);
+    }
 
-	if (ret == 0)
-	{
-		loss_mask = 8;
-		ret = sim_link_one_test(&loss_mask, 0, 1);
-	}
+    if (ret == 0) {
+        loss_mask = 8;
+        ret = sim_link_one_test(&loss_mask, 0, 1);
+    }
 
-	if (ret == 0)
-	{
-		loss_mask = 0x18;
-		ret = sim_link_one_test(&loss_mask, 0, 2);
-	}
+    if (ret == 0) {
+        loss_mask = 0x18;
+        ret = sim_link_one_test(&loss_mask, 0, 2);
+    }
 
-	return ret;
+    return ret;
 }

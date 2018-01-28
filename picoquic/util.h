@@ -25,35 +25,38 @@
 #include <stdio.h>
 
 #ifdef WIN32
-# define PRIst "Iu"
+#define PRIst "Iu"
 #ifndef PRIu64
-# define PRIu64 "I64u"
+#define PRIu64 "I64u"
 #endif
 #ifndef PRIx64
-# define PRIx64 "I64x"
+#define PRIx64 "I64x"
 #endif
 #else
-# include <inttypes.h>
-# define PRIst "zu"
+#include <inttypes.h>
+#define PRIst "zu"
 #endif
 
-void debug_printf(const char *fmt, ...);
-void debug_printf_push_stream(FILE *f);
+void debug_printf(const char* fmt, ...);
+void debug_printf_push_stream(FILE* f);
 void debug_printf_pop_stream(void);
 void debug_printf_suspend(void);
 void debug_printf_resume(void);
 
 #ifndef MIN
-# define MAX(a, b) ((a) > (b) ? (a) : (b))
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
 #endif
 
 #define DBG_PRINTF_FILENAME_MAX 24
-#define DBG_PRINTF(fmt, ...) \
-    debug_printf("%s:%u [%s]: " fmt "\n", \
+#define DBG_PRINTF(fmt, ...)                                                                 \
+    debug_printf("%s:%u [%s]: " fmt "\n",                                                    \
         __FILE__ + MAX(DBG_PRINTF_FILENAME_MAX, sizeof(__FILE__)) - DBG_PRINTF_FILENAME_MAX, \
         __LINE__, __FUNCTION__, __VA_ARGS__)
 
-#define DBG_FATAL_PRINTF(fmt, ...) \
-  do { DBG_PRINTF("(FATAL) " fmt "\n", __VA_ARGS__); exit(1); } while(0)
+#define DBG_FATAL_PRINTF(fmt, ...)                    \
+    do {                                              \
+        DBG_PRINTF("(FATAL) " fmt "\n", __VA_ARGS__); \
+        exit(1);                                      \
+    } while (0)
 
 #endif

@@ -47,34 +47,32 @@
 int cnxcreation_test()
 {
     int ret = 0;
-    picoquic_quic_t * quic = NULL;
-    picoquic_cnx_t * test_cnx[5] = { NULL,  NULL, NULL, NULL, NULL };
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* test_cnx[5] = { NULL, NULL, NULL, NULL, NULL };
     struct sockaddr_in test4[4];
     struct sockaddr_in6 test6[2];
     const uint8_t test_ipv4[4] = { 192, 0, 2, 0 };
-    const uint8_t test_ipv6[16] = { 0x20, 0x01,0x0D, 0xB8, 0, 0, 0, 0,  0, 0, 0, 0, 0, 0, 0, 0x01 };
+    const uint8_t test_ipv6[16] = { 0x20, 0x01, 0x0D, 0xB8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01 };
     const uint64_t test_cnx_id[5] = { 0, 1, 2, 3, 4 };
-    struct sockaddr * test_cnx_addr[5] = { 
-        (struct sockaddr *) &test4[0],
-        (struct sockaddr *) &test4[1], 
-        (struct sockaddr *) &test4[2], 
-        (struct sockaddr *) &test6[0], 
-        (struct sockaddr *) &test6[1] };
-
+    struct sockaddr* test_cnx_addr[5] = {
+        (struct sockaddr*)&test4[0],
+        (struct sockaddr*)&test4[1],
+        (struct sockaddr*)&test4[2],
+        (struct sockaddr*)&test6[0],
+        (struct sockaddr*)&test6[1]
+    };
 
     /* Create QUIC context */
     quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, 0);
-    if (quic == NULL)
-    {
+    if (quic == NULL) {
         ret = -1;
     }
 
     /*
      * Initialize the sockaddr values
      */
-    for (int i = 0; i < 4; i++)
-    {
-        uint8_t * addr = (uint8_t*)&test4[i].sin_addr;
+    for (int i = 0; i < 4; i++) {
+        uint8_t* addr = (uint8_t*)&test4[i].sin_addr;
         memset(&test4[i], 0, sizeof(test4[i]));
         test4[i].sin_family = AF_INET;
         addr[0] = test_ipv4[0];
@@ -84,13 +82,11 @@ int cnxcreation_test()
         test4[i].sin_port = 1000 + i;
     }
 
-    for (int i = 0; i < 2; i++)
-    {
-        uint8_t * addr = (uint8_t*)&test6[i].sin6_addr;
+    for (int i = 0; i < 2; i++) {
+        uint8_t* addr = (uint8_t*)&test6[i].sin6_addr;
         memset(&test6[i], 0, sizeof(test6[i]));
         test6[i].sin6_family = AF_INET6;
-        for (int j = 0; j < 15; j++)
-        {
+        for (int j = 0; j < 15; j++) {
             addr[j] = test_ipv6[j];
         }
         addr[15] = i + 1;
@@ -104,31 +100,26 @@ int cnxcreation_test()
     * -either no connection ID or a connection ID.
     */
 
-    for (int i = 0; ret == 0 && i < 5; i++)
-    {
+    for (int i = 0; ret == 0 && i < 5; i++) {
         test_cnx[i] = picoquic_create_cnx(quic, test_cnx_id[i], test_cnx_addr[i], 0, 0, NULL, NULL, 1);
-        if (test_cnx[i] == NULL)
-        {
+        if (test_cnx[i] == NULL) {
             ret = -1;
         }
     }
-
 
     /*
      *  -Verify that all these connections can be retrieved using their
      *    registered attributes.
      */
-    for (int i = 0; ret == 0 && i < 5; i++)
-    {
-        picoquic_cnx_t * cnx = picoquic_cnx_by_net(quic, test_cnx_addr[i]);
+    for (int i = 0; ret == 0 && i < 5; i++) {
+        picoquic_cnx_t* cnx = picoquic_cnx_by_net(quic, test_cnx_addr[i]);
 
-        if (cnx == NULL)
-        {
+        if (cnx == NULL) {
             ret = -1;
         }
     }
 
-    /* TODO: cannot retrieve connections by initial ID yet, should work on it */
+/* TODO: cannot retrieve connections by initial ID yet, should work on it */
 
 #if 0
     for (int i = 0; ret == 0 && i < 5; i++)
@@ -145,36 +136,31 @@ int cnxcreation_test()
         }
     }
 #endif
-     /*
+    /*
       *  -Verify that a non registered connection cannot be retrieved.
       */
 
-    if (ret == 0)
-    {
-        picoquic_cnx_t * cnx = picoquic_cnx_by_id(quic, 123456789);
-        if (cnx != NULL)
-        {
+    if (ret == 0) {
+        picoquic_cnx_t* cnx = picoquic_cnx_by_id(quic, 123456789);
+        if (cnx != NULL) {
             ret = -1;
         }
     }
 
-    if (ret == 0)
-    {
-        picoquic_cnx_t * cnx = picoquic_cnx_by_net(quic, (struct sockaddr*) &test4[3]);
-        if (cnx != NULL)
-        {
+    if (ret == 0) {
+        picoquic_cnx_t* cnx = picoquic_cnx_by_net(quic, (struct sockaddr*)&test4[3]);
+        if (cnx != NULL) {
             ret = -1;
         }
     }
 
     /* Delete connections first - middle - last. */
-    for (int i = 0; ret == 0 && i < 5; i += 2)
-    {
+    for (int i = 0; ret == 0 && i < 5; i += 2) {
         picoquic_delete_cnx(test_cnx[i]);
         test_cnx[i] = NULL;
     }
 
-    /* Verify that deleted connections cannot be retrieved, and the others can. */
+/* Verify that deleted connections cannot be retrieved, and the others can. */
 #if 0
     for (int i = 0; ret == 0 && i < 5; i++)
     {
@@ -194,23 +180,18 @@ int cnxcreation_test()
     }
 #endif
 
-    for (int i = 0; ret == 0 && i < 5; i++)
-    {
-        picoquic_cnx_t * cnx = picoquic_cnx_by_net(quic, test_cnx_addr[i]);
+    for (int i = 0; ret == 0 && i < 5; i++) {
+        picoquic_cnx_t* cnx = picoquic_cnx_by_net(quic, test_cnx_addr[i]);
 
-        if (cnx != NULL && (i & 1) == 0)
-        {
+        if (cnx != NULL && (i & 1) == 0) {
             ret = -1;
-        }
-        else if (cnx == NULL && (i & 1) != 0)
-        {
+        } else if (cnx == NULL && (i & 1) != 0) {
             ret = -1;
         }
     }
 
     /* delete QUIC context. */
-    if (ret == 0)
-    {
+    if (ret == 0) {
         picoquic_free(quic);
     }
 

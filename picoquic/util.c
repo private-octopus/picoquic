@@ -21,52 +21,46 @@
 
 /* Simple set of utilities */
 
+#include "picoquic_internal.h"
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdarg.h>
-#include "picoquic_internal.h"
 
-char * picoquic_string_create(const char * original, size_t len)
+char* picoquic_string_create(const char* original, size_t len)
 {
-	char * str = (char *)malloc(len + 1);
+    char* str = (char*)malloc(len + 1);
 
-	if (str != NULL)
-	{
-		if (original == NULL || len == 0)
-		{
-			str[0] = 0;
-		}
-		else
-		{
-			memcpy(str, original, len);
-			str[len] = 0;
-		}
-	}
+    if (str != NULL) {
+        if (original == NULL || len == 0) {
+            str[0] = 0;
+        } else {
+            memcpy(str, original, len);
+            str[len] = 0;
+        }
+    }
 
-	return str;
+    return str;
 }
 
-char * picoquic_string_duplicate(const char * original)
+char* picoquic_string_duplicate(const char* original)
 {
-	char * str = NULL;
+    char* str = NULL;
 
-	if (original != NULL)
-	{
-		size_t len = strlen(original);
+    if (original != NULL) {
+        size_t len = strlen(original);
 
-		str = picoquic_string_create(original, len);
-	}
+        str = picoquic_string_create(original, len);
+    }
 
-	return str;
+    return str;
 }
 
-static FILE *debug_out;
+static FILE* debug_out;
 static int debug_suspended = 0;
 
-void debug_printf(const char *fmt, ...)
+void debug_printf(const char* fmt, ...)
 {
-    if (debug_suspended == 0)
-    {
+    if (debug_suspended == 0) {
         va_list args;
         va_start(args, fmt);
         vfprintf(debug_out ? debug_out : stderr, fmt, args);
@@ -74,24 +68,22 @@ void debug_printf(const char *fmt, ...)
     }
 }
 
-void debug_printf_push_stream(FILE *f)
+void debug_printf_push_stream(FILE* f)
 {
-	if (debug_out)
-	{
-		fprintf(stderr, "Nested err out not supported\n");
-		exit(1);
-	}
-	debug_out = f;
+    if (debug_out) {
+        fprintf(stderr, "Nested err out not supported\n");
+        exit(1);
+    }
+    debug_out = f;
 }
 
 void debug_printf_pop_stream(void)
 {
-	if (debug_out == NULL)
-	{
-		fprintf(stderr, "No current err out\n");
-		exit(1);
-	}
-	debug_out = NULL;
+    if (debug_out == NULL) {
+        fprintf(stderr, "No current err out\n");
+        exit(1);
+    }
+    debug_out = NULL;
 }
 
 void debug_printf_suspend(void)

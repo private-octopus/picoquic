@@ -19,14 +19,14 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <string.h>
 #include "../picoquic/picoquic_internal.h"
 #include "../picoquic/tls_api.h"
+#include <string.h>
 
 static uint8_t const addr1[4] = { 10, 0, 0, 1 };
 static uint8_t const addr2[4] = { 10, 0, 0, 2 };
 
-void cleartext_aead_packet_init_header(picoquic_packet_header *ph,
+void cleartext_aead_packet_init_header(picoquic_packet_header* ph,
     uint64_t cnx_id, uint32_t pn, uint32_t vn, picoquic_packet_type_enum ptype)
 {
     ph->cnx_id = cnx_id;
@@ -38,8 +38,8 @@ void cleartext_aead_packet_init_header(picoquic_packet_header *ph,
     ph->pnmask = 0xFFFFFFFF;
 }
 
-void cleartext_aead_init_packet(picoquic_packet_header *ph,
-    uint8_t * cleartext, size_t target)
+void cleartext_aead_init_packet(picoquic_packet_header* ph,
+    uint8_t* cleartext, size_t target)
 {
     size_t byte_index = 0;
     uint64_t seed = ph->cnx_id;
@@ -55,8 +55,7 @@ void cleartext_aead_init_packet(picoquic_packet_header *ph,
     picoformat_32(&cleartext[byte_index], ph->vn);
     byte_index += 4;
     /* Add some silly content */
-    while (byte_index < target)
-    {
+    while (byte_index < target) {
         seed *= 101;
         cleartext[byte_index++] = (uint8_t)seed & 255;
     }
@@ -73,11 +72,11 @@ int cleartext_aead_test()
     size_t decoded_length;
     picoquic_packet_header ph_init;
     struct sockaddr_in test_addr_c, test_addr_s;
-    picoquic_cnx_t * cnx_client = NULL;
-    picoquic_cnx_t * cnx_server = NULL;
-    picoquic_quic_t * qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL, 
+    picoquic_cnx_t* cnx_client = NULL;
+    picoquic_cnx_t* cnx_server = NULL;
+    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
         NULL, NULL, NULL, 0, NULL, NULL, NULL, 0);
-    picoquic_quic_t * qserver = picoquic_create(8,
+    picoquic_quic_t* qserver = picoquic_create(8,
 #ifdef _WINDOWS
 #ifdef _WINDOWS64
         "..\\..\\certs\\cert.pem", "..\\..\\certs\\key.pem",
@@ -88,47 +87,41 @@ int cleartext_aead_test()
         "certs/cert.pem", "certs/key.pem",
 #endif
         "test", NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, 0);
-    if (qclient == NULL || qserver == NULL)
-    {
+    if (qclient == NULL || qserver == NULL) {
         ret = -1;
     }
 
-    if (ret == 0)
-    {
+    if (ret == 0) {
         memset(&test_addr_c, 0, sizeof(struct sockaddr_in));
         test_addr_c.sin_family = AF_INET;
         memcpy(&test_addr_c.sin_addr, addr1, 4);
         test_addr_c.sin_port = 12345;
 
         cnx_client = picoquic_create_cnx(qclient, 0,
-            (struct sockaddr *)&test_addr_c, 0, 0, NULL, NULL, 1);
-        if (cnx_client == NULL)
-        {
+            (struct sockaddr*)&test_addr_c, 0, 0, NULL, NULL, 1);
+        if (cnx_client == NULL) {
             ret = -1;
         }
     }
 
-    if (ret == 0)
-    {
+    if (ret == 0) {
 
         memset(&test_addr_s, 0, sizeof(struct sockaddr_in));
         test_addr_s.sin_family = AF_INET;
         memcpy(&test_addr_s.sin_addr, addr2, 4);
         test_addr_s.sin_port = 4433;
 
-        cnx_server = picoquic_create_cnx(qserver, cnx_client->initial_cnxid, 
-            (struct sockaddr *)&test_addr_s, 0,
+        cnx_server = picoquic_create_cnx(qserver, cnx_client->initial_cnxid,
+            (struct sockaddr*)&test_addr_s, 0,
             cnx_client->proposed_version, NULL, NULL, 0);
 
-        if (cnx_server == NULL)
-        {
+        if (cnx_server == NULL) {
             ret = -1;
         }
     }
 
     /* Create a packet from client to server, encrypt, decrypt */
-    if (ret == 0)
-    {
+    if (ret == 0) {
         cleartext_aead_packet_init_header(&ph_init,
             cnx_client->initial_cnxid, seqnum, cnx_client->proposed_version,
             picoquic_packet_client_initial);
@@ -138,7 +131,7 @@ int cleartext_aead_test()
         memcpy(incoming, clear_text, ph_init.offset);
         encoded_length = picoquic_aead_cleartext_encrypt(
             cnx_client, incoming + ph_init.offset,
-             clear_text + ph_init.offset, clear_length - ph_init.offset,
+            clear_text + ph_init.offset, clear_length - ph_init.offset,
             seqnum, incoming, ph_init.offset);
         encoded_length += ph_init.offset;
 
@@ -146,36 +139,28 @@ int cleartext_aead_test()
         decoded_length = picoquic_decrypt_cleartext(cnx_server,
             incoming, encoded_length, &ph_init);
 
-        if (decoded_length != clear_length)
-        {
+        if (decoded_length != clear_length) {
             ret = -1;
-        }
-        else if (memcmp(incoming, clear_text, clear_length) != 0)
-        {
+        } else if (memcmp(incoming, clear_text, clear_length) != 0) {
             ret = 1;
         }
     }
 
-    if (cnx_client != NULL)
-    {
+    if (cnx_client != NULL) {
         picoquic_delete_cnx(cnx_client);
     }
 
-    if (cnx_server != NULL)
-    {
+    if (cnx_server != NULL) {
         picoquic_delete_cnx(cnx_server);
     }
 
-    if (qclient != NULL)
-    {
+    if (qclient != NULL) {
         picoquic_free(qclient);
     }
 
-    if (qserver != NULL)
-    {
+    if (qserver != NULL) {
         picoquic_free(qserver);
     }
 
     return ret;
 }
-
