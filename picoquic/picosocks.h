@@ -23,6 +23,7 @@
 #define PICOSOCKS_H
 
 #ifdef _WINDOWS
+/* clang-format off */
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 #include <WinSock2.h>
@@ -53,7 +54,7 @@
 #ifndef socklen_t
 #define socklen_t int
 #endif
-
+/* clang-format on */
 #else /* Linux */
 
 #include "getopt.h"
