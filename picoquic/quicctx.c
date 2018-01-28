@@ -340,11 +340,11 @@ int picoquic_register_net_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, struct 
     return ret;
 }
 
-void picoquic_init_transport_parameters(picoquic_transport_parameters* tp, int is_server)
+void picoquic_init_transport_parameters(picoquic_transport_parameters* tp, int client_mode)
 {
     tp->initial_max_stream_data = 65535;
     tp->initial_max_data = 0x100000;
-    if (is_server == 0) {
+    if (client_mode) {
         tp->initial_max_stream_id_bidir = 65533;
         tp->initial_max_stream_id_unidir = 65535;
     } else {
@@ -435,13 +435,13 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         cnx->peer_addr_len = (int)((addr->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
         memcpy(&cnx->peer_addr, addr, cnx->peer_addr_len);
 
-        picoquic_init_transport_parameters(&cnx->local_parameters, !cnx->client_mode);
+        picoquic_init_transport_parameters(&cnx->local_parameters, cnx->client_mode);
         /* Special provision for test -- create a deliberate transport parameters error */
         if (sni != NULL && cnx->client_mode && strcmp(sni, PICOQUIC_ERRONEOUS_SNI) == 0) {
             /* Illegal value: server limits should be odd */
             cnx->local_parameters.initial_max_stream_id_bidir = 0x202;
         }
-        // picoquic_init_transport_parameters(&cnx->remote_parameters);
+
         /* Initialize local flow control variables to advertised values */
 
         cnx->maxdata_local = ((uint64_t)cnx->local_parameters.initial_max_data);
