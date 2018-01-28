@@ -283,8 +283,7 @@ size_t picoquic_create_packet_header_08(
         case picoquic_packet_server_stateless:
             bytes[0] = 0xFE;
             break;
-        case picoquic_packet_server_cleartext:
-        case picoquic_packet_client_cleartext:
+        case picoquic_packet_handshake:
             bytes[0] = 0xFD;
             break;
         case picoquic_packet_0rtt_protected:
@@ -885,15 +884,15 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_packet* pa
         cnx_id = cnx->initial_cnxid;
         break;
     case picoquic_state_client_handshake_start:
-        packet_type = picoquic_packet_client_cleartext;
+        packet_type = picoquic_packet_handshake;
         retransmit_possible = 1;
         break;
     case picoquic_state_client_handshake_progress:
-        packet_type = picoquic_packet_client_cleartext;
+        packet_type = picoquic_packet_handshake;
         retransmit_possible = 1;
         break;
     case picoquic_state_client_almost_ready:
-        packet_type = picoquic_packet_client_cleartext;
+        packet_type = picoquic_packet_handshake;
         break;
     default:
         ret = -1;
@@ -1029,7 +1028,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_packet* pa
     /* TODO: manage multiple streams. */
     picoquic_stream_head* stream = NULL;
     int stream_restricted = 1;
-    picoquic_packet_type_enum packet_type = picoquic_packet_server_cleartext;
+    picoquic_packet_type_enum packet_type = picoquic_packet_handshake;
     size_t checksum_overhead = 8;
     int is_cleartext_mode = 1;
     size_t data_bytes = 0;
@@ -1153,7 +1152,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_packet* packet
     /* TODO: 0-RTT work. */
     switch (cnx->cnx_state) {
     case picoquic_state_handshake_failure:
-        packet_type = cnx->client_mode ? picoquic_packet_client_cleartext : picoquic_packet_server_cleartext;
+        packet_type = picoquic_packet_handshake;
         break;
     case picoquic_state_disconnecting:
         packet_type = picoquic_packet_1rtt_protected_phi0;

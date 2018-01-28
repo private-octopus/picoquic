@@ -28,21 +28,6 @@
 #include <stdio.h>
 #include <string.h>
 
-static char const* picoquic_ptype_names[] = {
-    "error",
-    "version negotiation",
-    "client initial",
-    "server stateless",
-    "server cleartext",
-    "client cleartext",
-    "0rtt protected",
-    "1rtt protected phi0",
-    "1rtt protected phi1",
-    "public reset"
-};
-
-static const size_t picoquic_nb_ptype_names = sizeof(picoquic_ptype_names) / sizeof(char const*);
-
 static char const* picoquic_log_state_name[] = {
     "client_init",
     "client_init_sent",
@@ -158,11 +143,38 @@ void picoquic_log_packet_address(FILE* F, picoquic_cnx_t* cnx,
 
 char const* picoquic_log_ptype_name(picoquic_packet_type_enum ptype)
 {
-    if (((size_t)ptype) < picoquic_nb_ptype_names) {
-        return picoquic_ptype_names[ptype];
-    } else {
-        return "unknown";
+    char const* ptype_name = "unknown";
+
+    switch (ptype) {
+    case picoquic_packet_error:
+        ptype_name = "error";
+        break;
+    case picoquic_packet_version_negotiation:
+        ptype_name = "version negotiation";
+        break;
+    case picoquic_packet_client_initial:
+        ptype_name = "client initial";
+        break;
+    case picoquic_packet_server_stateless:
+        ptype_name = "server stateless";
+        break;
+    case picoquic_packet_handshake:
+        ptype_name = "handshake";
+        break;
+    case picoquic_packet_0rtt_protected:
+        ptype_name = "0rtt protected";
+        break;
+    case picoquic_packet_1rtt_protected_phi0:
+        ptype_name = "1rtt protected phi0";
+        break;
+    case picoquic_packet_1rtt_protected_phi1:
+        ptype_name = "1rtt protected phi1";
+        break;
+    default:
+        break;
     }
+
+    return ptype_name;
 }
 
 void picoquic_log_packet_header(FILE* F, picoquic_cnx_t* cnx, picoquic_packet_header* ph)
@@ -858,8 +870,7 @@ void picoquic_log_packet(FILE* F, picoquic_quic_t* quic, picoquic_cnx_t* cnx,
             break;
         case picoquic_packet_server_stateless:
         case picoquic_packet_client_initial:
-        case picoquic_packet_server_cleartext:
-        case picoquic_packet_client_cleartext:
+        case picoquic_packet_handshake:
             if (cnx != NULL) {
                 picoquic_log_decrypt_encrypted_cleartext(F, cnx, receiving, bytes, length, &ph);
             }
@@ -1277,7 +1288,7 @@ void picoquic_log_picotls_ticket(FILE* F, uint64_t cnx_id,
             ret = -1;
         } else {
             tls_ticket_ptr = &ticket[byte_index];
-            byte_index += tls_ticket_length;
+            byte_index += (uint16_t) tls_ticket_length;
 
             secret_length = PICOPARSE_16(ticket + byte_index);
             byte_index += 2;
@@ -1304,7 +1315,7 @@ void picoquic_log_picotls_ticket(FILE* F, uint64_t cnx_id,
             (unsigned long long)cnx_id, ticket_length, min_length);
     } else {
         if (tls_ticket_length > 0 && tls_ticket_ptr != NULL) {
-            picoquic_log_tls_ticket(F, cnx_id, tls_ticket_ptr, tls_ticket_length);
+            picoquic_log_tls_ticket(F, cnx_id, tls_ticket_ptr, (uint16_t) tls_ticket_length);
         }
     }
 

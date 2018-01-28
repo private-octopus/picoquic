@@ -82,7 +82,6 @@ int picoquic_parse_packet_header(
                 } else {
                     /* Is the context found by using the `addr_from`? */
                     char context_by_addr = 0;
-                    char is_client = 0;
 
                     /* Retrieve the connection context */
                     if (*pcnx == NULL) {
@@ -94,8 +93,6 @@ int picoquic_parse_packet_header(
                             context_by_addr = 1;
                         }
                     }
-
-                    is_client = *pcnx && (*pcnx)->client_mode;
 
                     /* If the version is supported now, the format field in the version table
                      * describes the encoding. */
@@ -111,7 +108,7 @@ int picoquic_parse_packet_header(
                             ph->ptype = picoquic_packet_server_stateless;
                             break;
                         case 0xFD:
-                            ph->ptype = is_client ? picoquic_packet_server_cleartext : picoquic_packet_client_cleartext;
+                            ph->ptype = picoquic_packet_handshake;
                             break;
                         case 0xFC:
                             ph->ptype = picoquic_packet_0rtt_protected;
@@ -124,7 +121,7 @@ int picoquic_parse_packet_header(
 
                     /* If the context was found by using `addr_from`, but the packet type
                      * does not allow that, reset the context to NULL. */
-                    if (context_by_addr && !(ph->ptype == picoquic_packet_server_cleartext || ph->ptype == picoquic_packet_server_stateless || ph->ptype == picoquic_packet_0rtt_protected)) {
+                    if (context_by_addr && !(ph->ptype == picoquic_packet_handshake || ph->ptype == picoquic_packet_server_stateless || ph->ptype == picoquic_packet_0rtt_protected)) {
                         *pcnx = NULL;
                     }
                 }
@@ -238,7 +235,7 @@ int picoquic_is_packet_encrypted(
             }
         }
     } else {
-        /* If this is a short header, weknow that the packet is encrypted  */
+        /* If this is a short header, we know that the packet is encrypted  */
         ret = 1;
     }
 
@@ -950,11 +947,15 @@ int picoquic_incoming_packet(
                 case picoquic_packet_server_stateless:
                     ret = picoquic_incoming_server_stateless(cnx, bytes, length, &ph, current_time);
                     break;
-                case picoquic_packet_server_cleartext:
-                    ret = picoquic_incoming_server_cleartext(cnx, bytes, length, addr_to, if_index_to, &ph, current_time);
-                    break;
-                case picoquic_packet_client_cleartext:
-                    ret = picoquic_incoming_client_cleartext(cnx, bytes, length, &ph, current_time);
+                case picoquic_packet_handshake:
+                    if (cnx->client_mode)
+                    {
+                        ret = picoquic_incoming_server_cleartext(cnx, bytes, length, addr_to, if_index_to, &ph, current_time);
+                    }
+                    else
+                    {
+                        ret = picoquic_incoming_client_cleartext(cnx, bytes, length, &ph, current_time);
+                    }
                     break;
                 case picoquic_packet_0rtt_protected:
                     /* TODO : decrypt with 0RTT key */
