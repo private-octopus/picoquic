@@ -82,7 +82,8 @@ static picoquic_test_def_t test_table[] = {
     { "unidir", unidir_test },
     { "mtu_discovery", mtu_discovery_test },
     { "spurious_retransmit", spurious_retransmit_test },
-    { "wrong_keyshare", wrong_keyshare_test }
+    { "wrong_keyshare", wrong_keyshare_test },
+    { "pn_ctr", pn_ctr_test}
 };
 
 static size_t nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);

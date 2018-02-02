@@ -393,5 +393,12 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(test_pn_ctr)
+        {
+            int ret = pn_ctr_test();
+
+            Assert::AreEqual(ret, 0);
+        }
 	};
 }

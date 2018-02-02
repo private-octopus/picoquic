@@ -19,8 +19,13 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#ifdef _WINDOWS
+#include "../picoquic/wincompat.h"
+#endif
 #include "../picoquic/picoquic_internal.h"
 #include "../picoquic/tls_api.h"
+#include "picotls.h"
+#include "picotls/openssl.h"
 #include <string.h>
 
 static uint8_t const addr1[4] = { 10, 0, 0, 1 };
@@ -160,6 +165,107 @@ int cleartext_aead_test()
 
     if (qserver != NULL) {
         picoquic_free(qserver);
+    }
+
+    return ret;
+}
+
+/*
+ * Test the CTR primitives used for PN encryption
+ */
+
+int pn_ctr_test()
+{
+    int ret = 0;
+
+    static const uint8_t key[] = {
+        0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6,
+        0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c };
+    static const uint8_t iv[] = {
+        0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96,
+        0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a };
+    static const uint8_t expected[] = { 
+        0x3a, 0xd7, 0x7b, 0xb4, 0x0d, 0x7a, 0x36, 0x60,
+        0xa8, 0x9e, 0xca, 0xf3, 0x24, 0x66, 0xef, 0x97 };
+    static const uint8_t packet_clear_pn[] = {
+        0x5D,
+        0xba, 0xba, 0xc0, 0x01,
+        0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96,
+        0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a,
+        0x20, 0x3f, 0xbe, 0x2e, 0x32, 0x17, 0xfc, 0x5b, 
+        0x88, 0x55
+    };
+    static const uint8_t packet_encrypted_pn[] = {
+        0x5d,
+        0x80, 0x6d, 0xbb, 0xb5,
+        0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96,
+        0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a,
+        0x20, 0x3f, 0xbe, 0x2e, 0x32, 0x17, 0xfc, 0x5b,
+        0x88, 0x55
+    };
+
+    uint8_t in_bytes[16];
+    uint8_t out_bytes[16];
+    uint8_t decoded[16];
+    ptls_aead_algorithm_t* aead = &ptls_openssl_aes128gcm;
+    ptls_cipher_context_t *pn_enc = ptls_cipher_new(aead->ctr_cipher, 1, key);
+
+    /* test against expected value, from PTLS test */
+    ptls_cipher_init(pn_enc, iv);
+    memset(in_bytes, 0, 16);
+    ptls_cipher_encrypt(pn_enc, out_bytes, in_bytes, sizeof(in_bytes));
+    if (memcmp(out_bytes, expected, 16) != 0)
+    {
+        ret = -1;
+    }
+
+    /* test for various values of the PN length */
+
+    for (size_t i = 1; ret == 0 && i <= 16; i *= 2)
+    {
+        memset(in_bytes, i, i);
+        ptls_cipher_init(pn_enc, iv);
+        ptls_cipher_encrypt(pn_enc, out_bytes, in_bytes, i);
+        for (int j = 0; j < i; j++)
+        {
+            if (in_bytes[j] != (out_bytes[j] ^ expected[j]))
+            {
+                ret = -1;
+                break;
+            }
+        }
+        ptls_cipher_init(pn_enc, iv);
+        ptls_cipher_encrypt(pn_enc, decoded, out_bytes, i);
+        if (memcmp(in_bytes, decoded, i) != 0)
+        {
+            ret = -1;
+        }
+    }
+
+    /* Test with the encrypted value from the packet */
+    if (ret == 0)
+    {
+        ptls_cipher_init(pn_enc, packet_clear_pn + 5);
+        ptls_cipher_encrypt(pn_enc, out_bytes, packet_clear_pn + 1, 4);
+        if (memcmp(out_bytes, packet_encrypted_pn + 1, 4) != 0)
+        {
+            ret = -1;
+        }
+        else
+        {
+            ptls_cipher_init(pn_enc, packet_encrypted_pn + 5);
+            ptls_cipher_encrypt(pn_enc, out_bytes, packet_encrypted_pn + 1, 4);
+            if (memcmp(out_bytes, packet_clear_pn + 1, 4) != 0)
+            {
+                ret = -1;
+            }
+        }
+    }
+
+    // cleanup
+    if (pn_enc != NULL)
+    {
+        ptls_cipher_free(pn_enc);
     }
 
     return ret;
