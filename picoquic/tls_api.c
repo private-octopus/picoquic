@@ -637,10 +637,11 @@ int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint6
             /* Enable server side HRR if cookie mode is required */
             else if ((quic->flags & picoquic_context_check_cookie) != 0) {
                 /* if the server should enforce the client to do a stateless retry */
-                ctx->handshake_properties.server.cookie.send_mode = PTLS_COOKIE_SEND_ALWAYS;
+                ctx->handshake_properties.server.enforce_retry = 1;
+                ctx->handshake_properties.server.retry_uses_cookie = 1;
             } else {
                 /* send cookie and do a stateless retry if cannot find suitable key share */
-                ctx->handshake_properties.server.cookie.send_mode = PTLS_COOKIE_SEND_ON_HRR;
+                ctx->handshake_properties.server.retry_uses_cookie = 1;
             }
             /* secret used for signing / verifying the cookie(internally uses HMAC) */
             ctx->handshake_properties.server.cookie.key = cnx->quic->retry_seed;
@@ -798,7 +799,7 @@ int picoquic_setup_0RTT_aead_contexts(picoquic_cnx_t* cnx, int is_server)
 
         if (ret == 0 && is_server == 0) {
             cnx->aead_0rtt_encrypt_ctx = (void*)
-                ptls_aead_new(cipher->aead, cipher->hash, 1, secret);
+                ptls_aead_new(cipher->aead, cipher->hash, 1, secret, NULL);
 
             if (cnx->aead_0rtt_encrypt_ctx == NULL) {
                 ret = PICOQUIC_ERROR_MEMORY;
@@ -807,7 +808,7 @@ int picoquic_setup_0RTT_aead_contexts(picoquic_cnx_t* cnx, int is_server)
 
         if (ret == 0) {
             cnx->aead_0rtt_decrypt_ctx = (void*)
-                ptls_aead_new(cipher->aead, cipher->hash, 0, secret);
+                ptls_aead_new(cipher->aead, cipher->hash, 0, secret, NULL);
         }
     }
 
@@ -834,14 +835,14 @@ int picoquic_setup_1RTT_aead_contexts(picoquic_cnx_t* cnx, int is_server)
 
         if (ret == 0) {
             cnx->aead_encrypt_ctx = (void*)
-                ptls_aead_new(cipher->aead, cipher->hash, 1, secret);
+                ptls_aead_new(cipher->aead, cipher->hash, 1, secret, NULL);
 
             if (cnx->aead_encrypt_ctx == NULL) {
                 ret = PICOQUIC_ERROR_MEMORY;
             }
 
             cnx->aead_de_encrypt_ctx = (void*)
-                ptls_aead_new(cipher->aead, cipher->hash, 0, secret);
+                ptls_aead_new(cipher->aead, cipher->hash, 0, secret, NULL);
         }
 
         /* Now set up the corresponding decryption */
@@ -852,7 +853,7 @@ int picoquic_setup_1RTT_aead_contexts(picoquic_cnx_t* cnx, int is_server)
         }
 
         if (ret == 0) {
-            cnx->aead_decrypt_ctx = (void*)ptls_aead_new(cipher->aead, cipher->hash, 0, secret);
+            cnx->aead_decrypt_ctx = (void*)ptls_aead_new(cipher->aead, cipher->hash, 0, secret, NULL);
 
             if (cnx->aead_decrypt_ctx == NULL) {
                 ret = -1;
@@ -883,8 +884,8 @@ int picoquic_server_setup_ticket_aead_contexts(picoquic_quic_t* quic,
         }
 
         /* Create the AEAD contexts */
-        quic->aead_encrypt_ticket_ctx = (void*)ptls_aead_new(aead, algo, 1, temp_secret);
-        quic->aead_decrypt_ticket_ctx = (void*)ptls_aead_new(aead, algo, 0, temp_secret);
+        quic->aead_encrypt_ticket_ctx = (void*)ptls_aead_new(aead, algo, 1, temp_secret, NULL);
+        quic->aead_decrypt_ticket_ctx = (void*)ptls_aead_new(aead, algo, 0, temp_secret, NULL);
 
         if (quic->aead_encrypt_ticket_ctx == NULL || quic->aead_decrypt_ticket_ctx == NULL) {
             ret = PICOQUIC_ERROR_MEMORY;
@@ -1111,11 +1112,11 @@ int picoquic_setup_cleartext_aead_contexts(picoquic_cnx_t* cnx)
         if (ret == 0) {
             /* Create the AEAD contexts */
             cnx->aead_encrypt_cleartext_ctx = (void*)
-                ptls_aead_new(aead, algo, 1, secret1);
+                ptls_aead_new(aead, algo, 1, secret1, NULL);
             cnx->aead_decrypt_cleartext_ctx = (void*)
-                ptls_aead_new(aead, algo, 0, secret2);
+                ptls_aead_new(aead, algo, 0, secret2, NULL);
             cnx->aead_de_encrypt_cleartext_ctx = (void*)
-                ptls_aead_new(aead, algo, 0, secret1);
+                ptls_aead_new(aead, algo, 0, secret1, NULL);
         }
     }
 
