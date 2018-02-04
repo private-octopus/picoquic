@@ -23,7 +23,10 @@ at https://github.com/quicwg/base-drafts/wiki/Implementations. The current
 interoperability matrix is listed at
 https://docs.google.com/spreadsheets/d/1D0tW89vOoaScs3IY9RGC0UesWGAwE6xyLk0l4JtvTVg/edit#gid=273618597.
 
-You may want to check the binding of the picoquic library to RUST: {#rust-bindings}.
+Bastian Köcher has developed bindings of the picoquic library to RUST (https://www.rust-lang.org/en-US/). 
+His repository can be found here: https://github.com/bkchr/picoquic-rs.
+You may want to check it.
+
 
 # Development
 
@@ -114,9 +117,7 @@ Sorry, not all that much documentation yet. This will come as we populate the wi
 best bet is to look at the demonstration program "picoquicdemo" that is included in the
 release. The sources are in "picoquicfirst/picoquicdemo.c".
 
-## RUST Bindings
 
-Bastian Köcher has developed RUST bindings for Picoquic. His repository can be found here: https://github.com/bkchr/picoquic-rs
 
 
 
