@@ -611,7 +611,8 @@ int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint6
 
             picoquic_tls_set_extensions(cnx, ctx);
 
-            if (cnx->sni != NULL && cnx->alpn != NULL) {
+            if (cnx->sni != NULL && cnx->alpn != NULL &&
+                (cnx->quic->flags&picoquic_context_client_zero_share) == 0) {
                 uint8_t* ticket = NULL;
                 uint16_t ticket_length = 0;
 
@@ -733,6 +734,16 @@ int picoquic_initialize_stream_zero(picoquic_cnx_t* cnx)
     int ret = 0;
     struct st_ptls_buffer_t sendbuf;
     picoquic_tls_ctx_t* ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
+
+    if ((cnx->quic->flags&picoquic_context_client_zero_share) != 0 &&
+        cnx->cnx_state == picoquic_state_client_init)
+    {
+        ctx->handshake_properties.client.negotiate_before_key_exchange = 1;
+    }
+    else
+    {
+        ctx->handshake_properties.client.negotiate_before_key_exchange = 0;
+    }
 
     ptls_buffer_init(&sendbuf, "", 0);
     ret = ptls_handshake(ctx->tls, &sendbuf, NULL, NULL, &ctx->handshake_properties);

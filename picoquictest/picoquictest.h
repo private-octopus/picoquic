@@ -83,6 +83,7 @@ int wrong_keyshare_test();
 int pn_ctr_test();
 int cleartext_pn_enc_test();
 int pn_enc_1rtt_test();
+int tls_zero_share_test();
 
 #ifdef __cplusplus
 }

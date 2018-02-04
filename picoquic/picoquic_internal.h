@@ -110,7 +110,8 @@ typedef enum {
      */
 
 typedef enum {
-    picoquic_version_no_flag = 0
+    picoquic_version_no_flag = 0,
+    picoquic_version_use_pn_encryption = 1
 } picoquic_version_feature_flags;
 
 /*
@@ -161,14 +162,6 @@ int picoquic_save_tickets(picoquic_stored_ticket_t* first_ticket,
 int picoquic_load_tickets(picoquic_stored_ticket_t** pp_first_ticket,
     uint64_t current_time, char const* ticket_file_name);
 void picoquic_free_tickets(picoquic_stored_ticket_t** pp_first_ticket);
-
-/*
-	 * Quic context flags
-	 */
-typedef enum {
-    picoquic_context_check_cookie = 1,
-    picoquic_context_unconditional_cnx_id = 2
-} picoquic_context_flags;
 
 /*
 	 * QUIC context, defining the tables of connections,
@@ -306,17 +299,23 @@ typedef struct st_picoquic_cnx_t {
     uint32_t proposed_version;
     int version_index;
 
+    /* Series of flags showing the state or choices of the connection */
+    unsigned int use_pn_encryption : 1;
+    unsigned int is_0RTT_accepted:1; /* whether 0-RTT is accepted */
+    unsigned int remote_parameters_received:1; /* whether remote parameters where received */
+    unsigned int mtu_probe_sent:1;
+    unsigned int ack_needed:1;
+
+
     /* Local and remote parameters */
     picoquic_transport_parameters local_parameters;
     picoquic_transport_parameters remote_parameters;
-    int remote_parameters_received;
     /* On clients, document the SNI and ALPN expected from the server */
     /* TODO: there may be a need to propose multiple ALPN */
     char const* sni;
     char const* alpn;
-    /* On clients, receives the maximum 0RTT size accepted by server, and whether 0-RTT is accepted */
+    /* On clients, receives the maximum 0RTT size accepted by server */
     size_t max_early_data_size;
-    int is_0RTT_accepted;
     /* Call back function and context */
     picoquic_stream_data_cb_fn callback_fn;
     void* callback_ctx;
@@ -349,7 +348,6 @@ typedef struct st_picoquic_cnx_t {
     uint32_t send_mtu;
     uint32_t send_mtu_max_tried;
     uint16_t psk_cipher_suite_id;
-    int mtu_probe_sent;
 
     /* Liveness detection */
     uint64_t latest_progress_time; /* last local time at which the connection progressed */
@@ -375,7 +373,6 @@ typedef struct st_picoquic_cnx_t {
     uint64_t sack_block_size_max;
     uint64_t highest_ack_sent;
     uint64_t highest_ack_time;
-    int ack_needed;
 
     /* Time measurement */
     uint64_t max_ack_delay;
@@ -419,8 +416,6 @@ typedef struct st_picoquic_cnx_t {
     uint64_t data_received;
     uint64_t maxdata_local;
     uint64_t maxdata_remote;
-    //uint64_t highest_stream_id_local;
-    //uint64_t highest_stream_id_remote;
     uint64_t max_stream_id_bidir_local;
     uint64_t max_stream_id_unidir_local;
     uint64_t max_stream_id_bidir_remote;

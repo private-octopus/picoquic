@@ -88,8 +88,8 @@ extern "C" {
 #define PICOQUIC_RESET_SECRET_SIZE 16
 
 /*
-	 * Connection states, useful to expose the state to the application.
-	 */
+* Connection states, useful to expose the state to the application.
+*/
 typedef enum {
     picoquic_state_client_init,
     picoquic_state_client_init_sent,
@@ -112,10 +112,20 @@ typedef enum {
     picoquic_state_server_send_hrr
 } picoquic_state_enum;
 
+
 /*
-	 * The stateless packet structure is used to temporarily store
-	 * stateless packets before they can be sent by servers.
-	 */
+* Quic context flags
+*/
+typedef enum {
+    picoquic_context_check_cookie = 1,
+    picoquic_context_unconditional_cnx_id = 2,
+    picoquic_context_client_zero_share = 4
+} picoquic_context_flags;
+
+/*
+* The stateless packet structure is used to temporarily store
+* stateless packets before they can be sent by servers.
+*/
 
 typedef struct st_picoquic_stateless_packet_t {
     struct st_picoquic_stateless_packet_t* next_packet;

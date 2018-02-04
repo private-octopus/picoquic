@@ -414,5 +414,14 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(test_tls_zero_share)
+        {
+            int ret = tls_zero_share_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        
 	};
 }
