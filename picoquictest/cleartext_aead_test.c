@@ -270,3 +270,124 @@ int pn_ctr_test()
 
     return ret;
 }
+
+/*
+* Test that the generated encryption and decryption produce
+* the same results.
+*/
+
+int test_one_pn_enc_pair(uint8_t * seqnum, size_t seqnum_len, void * pn_enc, void * pn_dec, uint8_t * sample)
+{
+    int ret = 0;
+    uint8_t encoded[32];
+    uint8_t decoded[32];
+
+    ptls_cipher_init((ptls_cipher_context_t *)pn_enc, sample);
+    ptls_cipher_encrypt((ptls_cipher_context_t *)pn_enc, encoded, seqnum, seqnum_len);
+
+    ptls_cipher_init((ptls_cipher_context_t *)pn_dec, sample);
+    ptls_cipher_encrypt((ptls_cipher_context_t *)pn_dec, decoded, encoded, seqnum_len);
+
+    if (memcmp(seqnum, decoded, seqnum_len) != 0)
+    {
+        ret = -1;
+    }
+
+    return ret;
+}
+
+/*
+ * Test that the key generated for cleartext PN encryption on
+ * client and server produce the correct results.
+ */
+
+int cleartext_pn_enc_test()
+{
+    int ret = 0;
+    struct sockaddr_in test_addr_c, test_addr_s;
+    picoquic_cnx_t* cnx_client = NULL;
+    picoquic_cnx_t* cnx_server = NULL;
+    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, 0, NULL, NULL, NULL, 0);
+    picoquic_quic_t* qserver = picoquic_create(8,
+#ifdef _WINDOWS
+#ifdef _WINDOWS64
+        "..\\..\\certs\\cert.pem", "..\\..\\certs\\key.pem",
+#else
+        "..\\certs\\cert.pem", "..\\certs\\key.pem",
+#endif
+#else
+        "certs/cert.pem", "certs/key.pem",
+#endif
+        "test", NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, 0);
+    if (qclient == NULL || qserver == NULL) {
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        memset(&test_addr_c, 0, sizeof(struct sockaddr_in));
+        test_addr_c.sin_family = AF_INET;
+        memcpy(&test_addr_c.sin_addr, addr1, 4);
+        test_addr_c.sin_port = 12345;
+
+        cnx_client = picoquic_create_cnx(qclient, 0,
+            (struct sockaddr*)&test_addr_c, 0, 0, NULL, NULL, 1);
+        if (cnx_client == NULL) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+
+        memset(&test_addr_s, 0, sizeof(struct sockaddr_in));
+        test_addr_s.sin_family = AF_INET;
+        memcpy(&test_addr_s.sin_addr, addr2, 4);
+        test_addr_s.sin_port = 4433;
+
+        cnx_server = picoquic_create_cnx(qserver, cnx_client->initial_cnxid,
+            (struct sockaddr*)&test_addr_s, 0,
+            cnx_client->proposed_version, NULL, NULL, 0);
+
+        if (cnx_server == NULL) {
+            ret = -1;
+        }
+    }
+
+    /* Try to encrypt a sequence number */
+    if (ret == 0) {
+        uint8_t seq_num_1[4] = { 0xde, 0xad, 0xbe, 0xef };
+        uint8_t sample_1[16] = {
+            0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96,
+            0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a };
+        uint8_t seq_num_2[4] = { 0xba, 0xba, 0xc0, 0x0l };
+        uint8_t sample_2[16] = {
+            0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a,
+            0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96};
+
+        ret = test_one_pn_enc_pair(seq_num_1, 4, cnx_client->pn_enc_cleartext, cnx_server->pn_dec_cleartext, sample_1);
+
+        if (ret == 0)
+        {
+            ret = test_one_pn_enc_pair(seq_num_2, 4, cnx_server->pn_enc_cleartext, cnx_client->pn_dec_cleartext, sample_2);
+        }
+    }
+
+    if (cnx_client != NULL) {
+        picoquic_delete_cnx(cnx_client);
+    }
+
+    if (cnx_server != NULL) {
+        picoquic_delete_cnx(cnx_server);
+    }
+
+    if (qclient != NULL) {
+        picoquic_free(qclient);
+    }
+
+    if (qserver != NULL) {
+        picoquic_free(qserver);
+    }
+
+    return ret;
+}
+

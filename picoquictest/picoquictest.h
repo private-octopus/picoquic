@@ -81,6 +81,8 @@ int mtu_discovery_test();
 int spurious_retransmit_test();
 int wrong_keyshare_test();
 int pn_ctr_test();
+int cleartext_pn_enc_test();
+int pn_enc_1rtt_test();
 
 #ifdef __cplusplus
 }

@@ -358,11 +358,16 @@ typedef struct st_picoquic_cnx_t {
     void* aead_encrypt_cleartext_ctx;
     void* aead_decrypt_cleartext_ctx;
     void* aead_de_encrypt_cleartext_ctx; /* used by logging functions to see what is sent. */
+    void* pn_enc_cleartext; /* Used for PN encryption of clear text packets */
+    void* pn_dec_cleartext; /* Used for PN decryption of clear text packets */
     void* aead_encrypt_ctx;
     void* aead_decrypt_ctx;
     void* aead_de_encrypt_ctx; /* used by logging functions to see what is sent. */
+    void* pn_enc; /* Used for PN encryption of 1 RTT packets */
+    void* pn_dec; /* Used for PN decryption of 1 RTT packets */
     void* aead_0rtt_encrypt_ctx; /* setup on client if 0-RTT is possible */
     void* aead_0rtt_decrypt_ctx; /* setup on server if 0-RTT is possible, also used on client for logging */
+    void* pn_enc_0rtt; /* Used for PN encryption or decryption of 0-RTT packets */
 
     /* Receive state */
     picoquic_sack_item_t first_sack_item;

@@ -400,5 +400,19 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(test_cleartext_pn_enc)
+        {
+            int ret = cleartext_pn_enc_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(test_pn_enc_1rtt)
+        {
+            int ret = pn_enc_1rtt_test();
+
+            Assert::AreEqual(ret, 0);
+        }
 	};
 }

@@ -754,6 +754,39 @@ int picoquic_initialize_stream_zero(picoquic_cnx_t* cnx)
 }
 
 /*
+ * Packet number encryption and decryption utilities
+ */
+
+void picoquic_pn_enc_free(void * pn_enc)
+{
+    ptls_cipher_free((ptls_cipher_context_t*) pn_enc);
+}
+
+void * picoquic_pn_enc_create(
+    ptls_aead_algorithm_t* aead, ptls_hash_algorithm_t* hash, uint8_t * secret, const char* base_label)
+{
+    int ret = 0;
+    uint8_t key[256]; 
+    ptls_cipher_context_t *pn_enc = ptls_cipher_new(aead->ctr_cipher, 1, key);
+
+    /*
+     * Derive the key by extending the secret for PN encryption 
+     */
+    ret = ptls_hkdf_expand_label(
+        hash, key, aead->key_size, ptls_iovec_init(secret, hash->digest_size), "pn", ptls_iovec_init(NULL, 0), base_label);
+
+    /*
+     * Create the context. This is always an encryptng context, because of the stream cipher mode.
+     */
+    if (ret == 0)
+    {
+        pn_enc = ptls_cipher_new(aead->ctr_cipher, 1, key);
+    }
+
+    return (void *)pn_enc;
+}
+
+/*
 
 Using function ptls_aead_new(cipher->aead, cipher->hash, is_enc, pp->secret);
 is_enc == 0 => decryption key;
@@ -809,6 +842,7 @@ int picoquic_setup_0RTT_aead_contexts(picoquic_cnx_t* cnx, int is_server)
         if (ret == 0) {
             cnx->aead_0rtt_decrypt_ctx = (void*)
                 ptls_aead_new(cipher->aead, cipher->hash, 0, secret, NULL);
+            cnx->pn_enc_0rtt = picoquic_pn_enc_create(cipher->aead, cipher->hash, secret, NULL);
         }
     }
 
@@ -836,6 +870,7 @@ int picoquic_setup_1RTT_aead_contexts(picoquic_cnx_t* cnx, int is_server)
         if (ret == 0) {
             cnx->aead_encrypt_ctx = (void*)
                 ptls_aead_new(cipher->aead, cipher->hash, 1, secret, NULL);
+            cnx->pn_enc = picoquic_pn_enc_create(cipher->aead, cipher->hash, secret, NULL);
 
             if (cnx->aead_encrypt_ctx == NULL) {
                 ret = PICOQUIC_ERROR_MEMORY;
@@ -854,6 +889,7 @@ int picoquic_setup_1RTT_aead_contexts(picoquic_cnx_t* cnx, int is_server)
 
         if (ret == 0) {
             cnx->aead_decrypt_ctx = (void*)ptls_aead_new(cipher->aead, cipher->hash, 0, secret, NULL);
+            cnx->pn_dec = picoquic_pn_enc_create(cipher->aead, cipher->hash, secret, NULL);
 
             if (cnx->aead_decrypt_ctx == NULL) {
                 ret = -1;
@@ -1117,6 +1153,9 @@ int picoquic_setup_cleartext_aead_contexts(picoquic_cnx_t* cnx)
                 ptls_aead_new(aead, algo, 0, secret2, NULL);
             cnx->aead_de_encrypt_cleartext_ctx = (void*)
                 ptls_aead_new(aead, algo, 0, secret1, NULL);
+
+            cnx->pn_enc_cleartext = picoquic_pn_enc_create(aead, algo, secret1, NULL);
+            cnx->pn_dec_cleartext = picoquic_pn_enc_create(aead, algo, secret2, NULL);
         }
     }
 

@@ -1942,3 +1942,53 @@ int wrong_keyshare_test()
 
     return ret;
 }
+
+/*
+* Set up a connection, and verify
+* that the key generated for PN encryption on
+* client and server produce the correct results.
+*/
+
+int pn_enc_1rtt_test()
+{
+    uint64_t loss_mask = 0;
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, 0, NULL, NULL, &simulated_time, NULL);
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    if (ret == 0)
+    {
+        /* Try to encrypt a sequence number */
+        if (ret == 0) {
+            uint8_t seq_num_1[4] = { 0xde, 0xad, 0xbe, 0xef };
+            uint8_t sample_1[16] = {
+                0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96,
+                0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a };
+            uint8_t seq_num_2[4] = { 0xba, 0xba, 0xc0, 0x0l };
+            uint8_t sample_2[16] = {
+                0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a,
+                0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96 };
+
+            for (int i = 1; i < 4; i *= 2)
+            {
+                ret = test_one_pn_enc_pair(seq_num_1, 4, test_ctx->cnx_client->pn_enc, test_ctx->cnx_server->pn_dec, sample_1);
+
+                if (ret == 0)
+                {
+                    ret = test_one_pn_enc_pair(seq_num_2, 4, test_ctx->cnx_server->pn_enc, test_ctx->cnx_client->pn_dec, sample_2);
+                }
+            }
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}

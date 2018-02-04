@@ -916,6 +916,24 @@ int picoquic_reset_cnx_version(picoquic_cnx_t* cnx, uint8_t* bytes, size_t lengt
                         cnx->aead_0rtt_encrypt_ctx = NULL;
                     }
 
+                    if (cnx->pn_enc_cleartext != NULL)
+                    {
+                        picoquic_pn_enc_free(cnx->pn_enc_cleartext);
+                        cnx->pn_enc_cleartext = NULL;
+                    }
+
+                    if (cnx->pn_dec_cleartext != NULL)
+                    {
+                        picoquic_pn_enc_free(cnx->pn_dec_cleartext);
+                        cnx->pn_dec_cleartext = NULL;
+                    }
+
+                    if (cnx->pn_enc_0rtt != NULL)
+                    {
+                        picoquic_pn_enc_free(cnx->pn_enc_0rtt);
+                        cnx->pn_enc_0rtt = NULL;
+                    }
+
                     if (ret == 0) {
                         ret = picoquic_setup_cleartext_aead_contexts(cnx);
                     }
@@ -1026,6 +1044,48 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
             picoquic_aead_free(cnx->aead_de_encrypt_ctx);
             cnx->aead_encrypt_ctx = NULL;
         }
+
+        if (cnx->aead_0rtt_decrypt_ctx != NULL) {
+            picoquic_aead_free(cnx->aead_0rtt_decrypt_ctx);
+            cnx->aead_0rtt_decrypt_ctx = NULL;
+        }
+
+        if (cnx->aead_0rtt_encrypt_ctx != NULL) {
+            picoquic_aead_free(cnx->aead_0rtt_encrypt_ctx);
+            cnx->aead_0rtt_encrypt_ctx = NULL;
+        }
+
+        if (cnx->pn_enc != NULL)
+        {
+            picoquic_pn_enc_free(cnx->pn_enc);
+            cnx->pn_enc = NULL;
+        }
+
+        if (cnx->pn_dec != NULL)
+        {
+            picoquic_pn_enc_free(cnx->pn_dec);
+            cnx->pn_dec = NULL;
+        }
+
+        if (cnx->pn_enc_cleartext != NULL)
+        {
+            picoquic_pn_enc_free(cnx->pn_enc_cleartext);
+            cnx->pn_enc_cleartext = NULL;
+        }
+
+        if (cnx->pn_dec_cleartext != NULL)
+        {
+            picoquic_pn_enc_free(cnx->pn_dec_cleartext);
+            cnx->pn_dec_cleartext = NULL;
+        }
+
+        if (cnx->pn_enc_0rtt != NULL)
+        {
+            picoquic_pn_enc_free(cnx->pn_enc_0rtt);
+            cnx->pn_enc_0rtt = NULL;
+        }
+
+
 
         while (cnx->retransmit_newest != NULL) {
             picoquic_dequeue_retransmit_packet(cnx, cnx->retransmit_newest, 1);

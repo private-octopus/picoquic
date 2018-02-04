@@ -77,6 +77,8 @@ size_t picoquic_aead_cleartext_de_encrypt(picoquic_cnx_t* cnx, uint8_t* output, 
 
 void picoquic_aead_free(void* aead_context);
 
+void picoquic_pn_enc_free(void * pn_enc);
+
 int picoquic_create_cnxid_reset_secret(picoquic_quic_t* quic, uint64_t cnx_id,
     uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE]);
 
