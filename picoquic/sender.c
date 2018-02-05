@@ -1406,13 +1406,12 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_packet* packet,
                     ret = picoquic_prepare_stream_frame(cnx, stream, &bytes[length],
                         cnx->send_mtu - checksum_overhead - length, &data_bytes);
 
-                    if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
+                    if (ret == 0) {
+                        length += data_bytes;
+                    } else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
                         ret = 0;
                     }
                 }
-            }
-            if (ret == 0) {
-                length += data_bytes;
             }
         }
     }

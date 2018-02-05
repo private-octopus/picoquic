@@ -551,14 +551,19 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             cnx->aead_encrypt_ctx = NULL;
             cnx->aead_de_encrypt_ctx = NULL;
 
-            /* Set the initial sequence randomly between 1 and 2^31 - 1 
-             * The spec does not require avoiding the value 0, but doing
-             * so minimizes risks of triggering bugs in other implementations.
-             */
-            do {
-                random_sequence = (uint32_t)(0x7FFFFFFF & picoquic_public_random_64());
-            } while (random_sequence == 0);
-            cnx->send_sequence = random_sequence;
+            if ((picoquic_supported_versions[cnx->version_index].version_flags&picoquic_version_use_pn_encryption) != 0) {
+                /* If we use PN encryption, initial sequence number will be 1 */
+                cnx->send_sequence = 1;
+            } else {
+                /* Set the initial sequence randomly between 1 and 2^31 - 1
+                 * The spec does not require avoiding the value 0, but doing
+                 * so minimizes risks of triggering bugs in other implementations.
+                 */
+                do {
+                    random_sequence = (uint32_t)(0x7FFFFFFF & picoquic_public_random_64());
+                } while (random_sequence == 0);
+                cnx->send_sequence = random_sequence;
+            }
 
             cnx->send_mtu = (addr == NULL || addr->sa_family == AF_INET) ? PICOQUIC_INITIAL_MTU_IPV4 : PICOQUIC_INITIAL_MTU_IPV6;
 

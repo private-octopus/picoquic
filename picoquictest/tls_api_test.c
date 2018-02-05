@@ -733,10 +733,21 @@ static int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
             if (client_arrival < server_arrival && client_arrival < next_time && (packet = picoquictest_sim_link_dequeue(test_ctx->s_to_c_link, client_arrival)) != NULL) {
                 next_time = client_arrival;
                 *simulated_time = next_time;
+
+                if (next_time == 0x14bb7)
+                {
+                    ret = 0;
+                }
+
                 ret = picoquic_incoming_packet(test_ctx->qclient, packet->bytes, (uint32_t)packet->length,
                     (struct sockaddr*)&test_ctx->server_addr,
                     (struct sockaddr*)&test_ctx->client_addr, 0,
                     *simulated_time);
+
+                if (ret < 0)
+                {
+                    ret = -1;
+                }
                 *was_active |= 1;
             } else if (server_arrival < next_time && (packet = picoquictest_sim_link_dequeue(test_ctx->c_to_s_link, server_arrival)) != NULL) {
 
@@ -747,6 +758,11 @@ static int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                     (struct sockaddr*)&test_ctx->client_addr,
                     (struct sockaddr*)&test_ctx->server_addr, 0,
                     *simulated_time);
+
+                if (ret < 0)
+                {
+                    ret = -1;
+                }
 
                 if (test_ctx->cnx_server == NULL) {
                     uint64_t target_cnxid = test_ctx->cnx_client->initial_cnxid;
@@ -809,7 +825,7 @@ static int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
     test_ctx->s_to_c_link->loss_mask = loss_mask;
 
     if (max_trials <= 0) {
-        max_trials = 10000;
+        max_trials = 100000;
     }
 
     while (ret == 0 && nb_trials < max_trials && nb_inactive < 256 && test_ctx->cnx_client->cnx_state == picoquic_state_client_ready && test_ctx->cnx_server->cnx_state == picoquic_state_server_ready) {
@@ -818,6 +834,11 @@ static int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
         nb_trials++;
 
         ret = tls_api_one_sim_round(test_ctx, simulated_time, &was_active);
+
+        if (ret < 0)
+        {
+            break;
+        }
 
         if (was_active) {
             nb_inactive = 0;

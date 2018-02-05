@@ -1337,6 +1337,11 @@ int picoquic_prepare_ack_frame(picoquic_cnx_t* cnx, uint64_t current_time,
     uint64_t lowest_acknowledged = 0;
     size_t num_block_index = 0;
 
+    if (cnx->first_sack_item.end_of_sack_range == 0x0F)
+    {
+        *consumed = 0;
+    }
+
     /* Check that there is enough room in the packet, and something to acknowledge */
     if (cnx->first_sack_item.start_of_sack_range == 0 && cnx->first_sack_item.end_of_sack_range == 0) {
         *consumed = 0;
