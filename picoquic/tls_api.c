@@ -55,7 +55,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
 int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mode,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
 
-static size_t picoquic_aead_decrypt_generic(uint8_t* output, uint8_t* input, size_t input_length,
+size_t picoquic_aead_decrypt_generic(uint8_t* output, uint8_t* input, size_t input_length,
     uint64_t seq_num, uint8_t* auth_data, size_t auth_data_length, void* aead_ctx);
 
 int picoquic_server_setup_ticket_aead_contexts(picoquic_quic_t* quic,
@@ -797,6 +797,12 @@ void * picoquic_pn_enc_create(
     return (void *)pn_enc;
 }
 
+void picoquic_pn_encrypt(void *pn_enc, void * iv, void *output, const void *input, size_t len)
+{
+    ptls_cipher_init((ptls_cipher_context_t *) pn_enc, iv);
+    ptls_cipher_encrypt((ptls_cipher_context_t *) pn_enc, output, input, len);
+}
+
 /*
 
 Using function ptls_aead_new(cipher->aead, cipher->hash, is_enc, pp->secret);
@@ -946,7 +952,7 @@ int picoquic_server_setup_ticket_aead_contexts(picoquic_quic_t* quic,
 }
 
 /* AEAD encrypt/decrypt routines */
-static size_t picoquic_aead_decrypt_generic(uint8_t* output, uint8_t* input, size_t input_length,
+size_t picoquic_aead_decrypt_generic(uint8_t* output, uint8_t* input, size_t input_length,
     uint64_t seq_num, uint8_t* auth_data, size_t auth_data_length, void* aead_ctx)
 {
     size_t decrypted = 0;
@@ -962,72 +968,16 @@ static size_t picoquic_aead_decrypt_generic(uint8_t* output, uint8_t* input, siz
     return decrypted;
 }
 
-size_t picoquic_aead_decrypt(picoquic_cnx_t* cnx, uint8_t* output, uint8_t* input, size_t input_length,
-    uint64_t seq_num, uint8_t* auth_data, size_t auth_data_length)
-{
-    return picoquic_aead_decrypt_generic(output, input, input_length, seq_num,
-        auth_data, auth_data_length, cnx->aead_decrypt_ctx);
-}
-
-size_t picoquic_aead_de_encrypt(picoquic_cnx_t* cnx, uint8_t* output, uint8_t* input, size_t input_length,
-    uint64_t seq_num, uint8_t* auth_data, size_t auth_data_length)
-{
-    return picoquic_aead_decrypt_generic(output, input, input_length, seq_num,
-        auth_data, auth_data_length, cnx->aead_de_encrypt_ctx);
-}
-
-size_t picoquic_aead_0rtt_decrypt(picoquic_cnx_t* cnx, uint8_t* output, uint8_t* input, size_t input_length,
-    uint64_t seq_num, uint8_t* auth_data, size_t auth_data_length)
-{
-    return picoquic_aead_decrypt_generic(output, input, input_length, seq_num,
-        auth_data, auth_data_length, cnx->aead_0rtt_decrypt_ctx);
-}
-
-size_t picoquic_aead_cleartext_decrypt(picoquic_cnx_t* cnx, uint8_t* output, uint8_t* input, size_t input_length,
-    uint64_t seq_num, uint8_t* auth_data, size_t auth_data_length)
-{
-    return picoquic_aead_decrypt_generic(output, input, input_length, seq_num,
-        auth_data, auth_data_length, cnx->aead_decrypt_cleartext_ctx);
-}
-
-size_t picoquic_aead_cleartext_de_encrypt(picoquic_cnx_t* cnx, uint8_t* output, uint8_t* input, size_t input_length,
-    uint64_t seq_num, uint8_t* auth_data, size_t auth_data_length)
-{
-    return picoquic_aead_decrypt_generic(output, input, input_length, seq_num,
-        auth_data, auth_data_length, cnx->aead_de_encrypt_cleartext_ctx);
-}
-
 size_t picoquic_aead_encrypt_generic(uint8_t* output, uint8_t* input, size_t input_length,
-    uint64_t seq_num, uint8_t* auth_data, size_t auth_data_length, void* aead_ctx)
+    uint64_t seq_num, uint8_t* auth_data, size_t auth_data_length, void* aead_context)
 {
     size_t encrypted = 0;
 
-    encrypted = ptls_aead_encrypt((ptls_aead_context_t*)aead_ctx,
+    encrypted = ptls_aead_encrypt((ptls_aead_context_t*)aead_context,
         (void*)output, (const void*)input, input_length, seq_num,
         (void*)auth_data, auth_data_length);
 
     return encrypted;
-}
-
-size_t picoquic_aead_encrypt(picoquic_cnx_t* cnx, uint8_t* output, uint8_t* input, size_t input_length,
-    uint64_t seq_num, uint8_t* auth_data, size_t auth_data_length)
-{
-    return picoquic_aead_encrypt_generic(output, input, input_length, seq_num,
-        auth_data, auth_data_length, cnx->aead_encrypt_ctx);
-}
-
-size_t picoquic_aead_0rtt_encrypt(picoquic_cnx_t* cnx, uint8_t* output, uint8_t* input, size_t input_length,
-    uint64_t seq_num, uint8_t* auth_data, size_t auth_data_length)
-{
-    return picoquic_aead_encrypt_generic(output, input, input_length, seq_num,
-        auth_data, auth_data_length, cnx->aead_0rtt_encrypt_ctx);
-}
-
-size_t picoquic_aead_cleartext_encrypt(picoquic_cnx_t* cnx, uint8_t* output, uint8_t* input, size_t input_length,
-    uint64_t seq_num, uint8_t* auth_data, size_t auth_data_length)
-{
-    return picoquic_aead_encrypt_generic(output, input, input_length, seq_num,
-        auth_data, auth_data_length, cnx->aead_encrypt_cleartext_ctx);
 }
 
 /* Computation of the clear text AEAD encryption based on per version secret */

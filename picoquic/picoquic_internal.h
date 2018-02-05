@@ -102,6 +102,7 @@ typedef enum {
 #define PICOQUIC_FIRST_INTEROP_VERSION 0xFF000005
 #define PICOQUIC_SECOND_INTEROP_VERSION 0xFF000007
 #define PICOQUIC_THIRD_INTEROP_VERSION 0xFF000008
+#define PICOQUIC_FOURTH_INTEROP_VERSION 0xFF000009
 #define PICOQUIC_INTERNAL_TEST_VERSION_1 0x50435130
 
 /* 
@@ -493,6 +494,7 @@ typedef struct _picoquic_packet_header {
     uint32_t pn;
     uint32_t vn;
     uint32_t offset;
+    uint32_t pn_offset;
     picoquic_packet_type_enum ptype;
     uint64_t pnmask;
     uint64_t pn64;
@@ -524,8 +526,19 @@ int picoquic_parse_ack_header(
 
 uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t pn);
 
+size_t  picoquic_decrypt_packet(picoquic_cnx_t* cnx,
+    uint8_t* bytes, size_t length, picoquic_packet_header* ph,
+    void * pn_enc, void* aead_context, int * already_received);
+
 size_t picoquic_decrypt_cleartext(picoquic_cnx_t* cnx,
-    uint8_t* bytes, size_t length, picoquic_packet_header* ph);
+    uint8_t* bytes, size_t length, picoquic_packet_header* ph,
+    int * already_received);
+
+size_t picoquic_protect_packet(picoquic_cnx_t* cnx,
+    uint8_t * bytes, uint64_t sequence_number,
+    size_t length, size_t header_length, size_t pn_offset,
+    uint8_t* send_buffer,
+    void * aead_context, void* pn_enc);
 
 /* handling of ACK logic */
 int picoquic_is_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time);

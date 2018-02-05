@@ -50,6 +50,7 @@ static picoquic_packet_header hinitial08 = {
     0xDEADBEEF,
     0x50435130,
     17,
+    13,
     picoquic_packet_client_initial,
     0xFFFFFFFF00000000ull,
     0, 0
@@ -76,6 +77,7 @@ static picoquic_packet_header hvnego08 = {
     0,
     0,
     13,
+    0,
     picoquic_packet_version_negotiation,
     0,
     0, 0
@@ -92,6 +94,7 @@ static picoquic_packet_header hphi0_c_32_08 = {
     0xDEADBEEF,
     0,
     13,
+    9,
     picoquic_packet_1rtt_protected_phi0,
     0xFFFFFFFF00000000ull,
     0, 0
@@ -108,6 +111,7 @@ static picoquic_packet_header hphi1_c_16_08 = {
     0xBEEF,
     0,
     11,
+    9,
     picoquic_packet_1rtt_protected_phi1,
     0xFFFFFFFFFFFF0000ull,
     0, 0
@@ -124,6 +128,7 @@ static picoquic_packet_header hphi1_c_8_08 = {
     0xEF,
     0,
     10,
+    9,
     picoquic_packet_1rtt_protected_phi1,
     0xFFFFFFFFFFFFFF00ull,
     0, 0
@@ -139,6 +144,7 @@ static picoquic_packet_header hphi0_noc_16_08 = {
     0xBEEF,
     0,
     3,
+    1,
     picoquic_packet_1rtt_protected_phi0,
     0xFFFFFFFFFFFF0000ull,
     0, 0
@@ -154,6 +160,7 @@ static picoquic_packet_header hphi0_noc_8_08 = {
     0xEF,
     0,
     2,
+    1,
     picoquic_packet_1rtt_protected_phi0,
     0xFFFFFFFFFFFFFF00ull,
     0, 0
@@ -220,7 +227,9 @@ int parseheadertest()
             ret = -1;
         }
 
-        if (ph.cnx_id != test_entries[i].ph->cnx_id || ph.pn != test_entries[i].ph->pn || ph.vn != test_entries[i].ph->vn || ph.offset != test_entries[i].ph->offset || ph.ptype != test_entries[i].ph->ptype || ph.pnmask != test_entries[i].ph->pnmask) {
+        if (ph.cnx_id != test_entries[i].ph->cnx_id || ph.pn != test_entries[i].ph->pn || 
+            ph.vn != test_entries[i].ph->vn || ph.offset != test_entries[i].ph->offset || 
+            ph.ptype != test_entries[i].ph->ptype || ph.pnmask != test_entries[i].ph->pnmask) {
             ret = -1;
         }
     }

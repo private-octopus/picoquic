@@ -127,6 +127,8 @@ int cleartext_aead_test()
 
     /* Create a packet from client to server, encrypt, decrypt */
     if (ret == 0) {
+        int already_received = 0;
+
         cleartext_aead_packet_init_header(&ph_init,
             cnx_client->initial_cnxid, seqnum, cnx_client->proposed_version,
             picoquic_packet_client_initial);
@@ -134,15 +136,14 @@ int cleartext_aead_test()
 
         /* AEAD Encrypt, to the send buffer */
         memcpy(incoming, clear_text, ph_init.offset);
-        encoded_length = picoquic_aead_cleartext_encrypt(
-            cnx_client, incoming + ph_init.offset,
+        encoded_length = picoquic_aead_encrypt_generic(incoming + ph_init.offset,
             clear_text + ph_init.offset, clear_length - ph_init.offset,
-            seqnum, incoming, ph_init.offset);
+            seqnum, incoming, ph_init.offset, cnx_client->aead_encrypt_cleartext_ctx);
         encoded_length += ph_init.offset;
 
         /* AEAD Decrypt */
         decoded_length = picoquic_decrypt_cleartext(cnx_server,
-            incoming, encoded_length, &ph_init);
+            incoming, encoded_length, &ph_init, &already_received);
 
         if (decoded_length != clear_length) {
             ret = -1;
@@ -237,6 +238,13 @@ int pn_ctr_test()
         ptls_cipher_init(pn_enc, iv);
         ptls_cipher_encrypt(pn_enc, decoded, out_bytes, i);
         if (memcmp(in_bytes, decoded, i) != 0)
+        {
+            ret = -1;
+        }
+
+        ptls_cipher_init(pn_enc, iv);
+        ptls_cipher_encrypt(pn_enc, out_bytes, out_bytes, i);
+        if (memcmp(in_bytes, out_bytes, i) != 0)
         {
             ret = -1;
         }

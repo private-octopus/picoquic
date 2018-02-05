@@ -769,11 +769,11 @@ void picoquic_log_decrypt_encrypted(FILE* F,
             (int)length);
     } else {
         if (receiving) {
-            decrypted_length = picoquic_aead_decrypt(cnx, decrypted,
-                bytes + ph->offset, length - ph->offset, ph->pn64, bytes, ph->offset);
+            decrypted_length = picoquic_aead_decrypt_generic(decrypted,
+                bytes + ph->offset, length - ph->offset, ph->pn64, bytes, ph->offset, cnx->aead_decrypt_ctx);
         } else {
-            decrypted_length = picoquic_aead_de_encrypt(cnx, decrypted,
-                bytes + ph->offset, length - ph->offset, ph->pn64, bytes, ph->offset);
+            decrypted_length = picoquic_aead_decrypt_generic(decrypted,
+                bytes + ph->offset, length - ph->offset, ph->pn64, bytes, ph->offset, cnx->aead_de_encrypt_ctx);
         }
 
         if (decrypted_length > length) {
@@ -792,8 +792,8 @@ void picoquic_log_decrypt_0rtt(FILE* F,
     uint8_t decrypted[PICOQUIC_MAX_PACKET_SIZE];
     size_t decrypted_length = 0;
 
-    decrypted_length = picoquic_aead_0rtt_decrypt(cnx, decrypted,
-        bytes + ph->offset, length - ph->offset, ph->pn64, bytes, ph->offset);
+    decrypted_length = picoquic_aead_decrypt_generic(decrypted,
+        bytes + ph->offset, length - ph->offset, ph->pn64, bytes, ph->offset, cnx->aead_0rtt_decrypt_ctx);
 
     if (decrypted_length > length) {
         fprintf(F, "    Decryption failed!\n");
@@ -812,11 +812,11 @@ void picoquic_log_decrypt_encrypted_cleartext(FILE* F,
     size_t decrypted_length = 0;
 
     if (receiving) {
-        decrypted_length = picoquic_aead_cleartext_decrypt(cnx, decrypted,
-            bytes + ph->offset, length - ph->offset, ph->pn64, bytes, ph->offset);
+        decrypted_length = picoquic_aead_decrypt_generic(decrypted,
+            bytes + ph->offset, length - ph->offset, ph->pn64, bytes, ph->offset, cnx->aead_decrypt_cleartext_ctx);
     } else {
-        decrypted_length = picoquic_aead_cleartext_de_encrypt(cnx, decrypted,
-            bytes + ph->offset, length - ph->offset, ph->pn64, bytes, ph->offset);
+        decrypted_length = picoquic_aead_decrypt_generic(decrypted,
+            bytes + ph->offset, length - ph->offset, ph->pn64, bytes, ph->offset, cnx->aead_de_encrypt_cleartext_ctx);
     }
 
     if (decrypted_length > length) {

@@ -49,33 +49,17 @@ int picoquic_setup_1RTT_aead_contexts(picoquic_cnx_t* cnx, int is_server);
 
 size_t picoquic_aead_get_checksum_length(void* aead_context);
 
-size_t picoquic_aead_decrypt(picoquic_cnx_t* cnx, uint8_t* output, uint8_t* input, size_t input_length,
-    uint64_t seq_num, uint8_t* auth_data, size_t auth_data_length);
-
-size_t picoquic_aead_encrypt(picoquic_cnx_t* cnx, uint8_t* output, uint8_t* input, size_t input_length,
-    uint64_t seq_num, uint8_t* auth_data, size_t auth_data_length);
-
-size_t picoquic_aead_de_encrypt(picoquic_cnx_t* cnx, uint8_t* output, uint8_t* input, size_t input_length,
-    uint64_t seq_num, uint8_t* auth_data, size_t auth_data_length);
-
-size_t picoquic_aead_0rtt_encrypt(picoquic_cnx_t* cnx, uint8_t* output, uint8_t* input, size_t input_length,
-    uint64_t seq_num, uint8_t* auth_data, size_t auth_data_length);
-
-size_t picoquic_aead_0rtt_decrypt(picoquic_cnx_t* cnx, uint8_t* output, uint8_t* input, size_t input_length,
-    uint64_t seq_num, uint8_t* auth_data, size_t auth_data_length);
+size_t picoquic_aead_encrypt_generic(uint8_t* output, uint8_t* input, size_t input_length,
+    uint64_t seq_num, uint8_t* auth_data, size_t auth_data_length, void* aead_context);
 
 int picoquic_setup_cleartext_aead_contexts(picoquic_cnx_t* cnx);
 
-size_t picoquic_aead_cleartext_decrypt(picoquic_cnx_t* cnx, uint8_t* output, uint8_t* input,
-    size_t input_length, uint64_t seq_num, uint8_t* auth_data, size_t auth_data_length);
-
-size_t picoquic_aead_cleartext_encrypt(picoquic_cnx_t* cnx, uint8_t* output, uint8_t* input,
-    size_t input_length, uint64_t seq_num, uint8_t* auth_data, size_t auth_data_length);
-
-size_t picoquic_aead_cleartext_de_encrypt(picoquic_cnx_t* cnx, uint8_t* output, uint8_t* input,
-    size_t input_length, uint64_t seq_num, uint8_t* auth_data, size_t auth_data_length);
+size_t picoquic_aead_decrypt_generic(uint8_t* output, uint8_t* input, size_t input_length,
+    uint64_t seq_num, uint8_t* auth_data, size_t auth_data_length, void* aead_ctx);
 
 void picoquic_aead_free(void* aead_context);
+
+void picoquic_pn_encrypt(void *pn_enc, void * iv, void *output, const void *input, size_t len);
 
 void picoquic_pn_enc_free(void * pn_enc);
 
