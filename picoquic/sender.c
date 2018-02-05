@@ -490,11 +490,11 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx, uint64_t current_time,
                     should_retransmit = 0;
                 } else {
                     length = picoquic_create_packet_header(cnx, picoquic_packet_1rtt_protected_phi0,
-                        cnx->server_cnxid, cnx->send_sequence, bytes, &pn_offset);
+                        cnx->server_cnxid, cnx->send_sequence, bytes, pn_offset);
                 }
             } else {
                 length = picoquic_create_packet_header(cnx, ph.ptype,
-                    ph.cnx_id, cnx->send_sequence, bytes, &pn_offset);
+                    ph.cnx_id, cnx->send_sequence, bytes, pn_offset);
             }
 
             if (should_retransmit != 0) {
