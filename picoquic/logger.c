@@ -724,19 +724,87 @@ void picoquic_log_frames(FILE* F, uint8_t* bytes, size_t length)
     }
 }
 
-uint32_t picoquic_log_decrypt_clear_text(FILE* F,
-    uint8_t* bytes, size_t length)
+
+/*
+* Apply packet number decryption. Note that the logic 
+* is slightly different from the "decrypt packet" procedure used 
+* in real time.
+*/
+size_t  picoquic_decrypt_log_packet(FILE* F, picoquic_cnx_t* cnx,
+    uint8_t * out_bytes, uint8_t* bytes, size_t length, picoquic_packet_header* ph,
+    uint64_t seq_ref, void * pn_enc, void* aead_context)
 {
-    /* Verify the checksum */
-    uint32_t decoded_length = (uint32_t)fnv1a_check(bytes, length);
-    if (decoded_length == 0) {
-        /* Incorrect checksum, drop and log. */
-        fprintf(F, "    Error: cannot verify the FNV1A checksum.\n");
-    } else {
-        fprintf(F, "    FNV1A checksum is correct (%d bytes).\n", decoded_length);
+    /*
+    * If needed, decrypt the packet number, in place.
+    */
+    size_t decoded = length + 32;
+    uint8_t header_buffer[32];
+
+    if (aead_context == NULL)
+    {
+        fprintf(F, "    No decryption key available.\n");
+        return decoded;
     }
 
-    return decoded_length;
+    if (picoquic_supported_versions[cnx->version_index].version_flags&picoquic_version_use_pn_encryption)
+    {
+        if (pn_enc == NULL)
+        {
+            fprintf(F, "    No packet number decryption key available.\n");
+        }
+        else
+        {
+            /* The sample is located at the offset */
+            size_t sample_offset = ph->offset;
+            size_t aead_checksum_length = picoquic_aead_get_checksum_length(aead_context);
+
+            memcpy(header_buffer, bytes, ph->offset);
+
+            if (sample_offset + aead_checksum_length > length)
+            {
+                sample_offset = length - aead_checksum_length;
+            }
+            if (ph->pn_offset < sample_offset)
+            {
+                /* Decode */
+                picoquic_pn_encrypt(pn_enc, bytes + sample_offset, header_buffer + ph->pn_offset, header_buffer + ph->pn_offset, sample_offset - ph->pn_offset);
+                /* TODO: what if varint? */
+                /* Update the packet number in the PH structure */
+                switch (sample_offset - ph->pn_offset)
+                {
+                case 1:
+                    ph->pn = header_buffer[ph->pn_offset];
+                    ph->pnmask = 0xFFFFFFFFFFFFFF00ull;
+                    break;
+                case 2:
+                    ph->pn = PICOPARSE_16(header_buffer + ph->pn_offset);
+                    ph->pnmask = 0xFFFFFFFFFFFF0000ull;
+                    break;
+                case 4:
+                    ph->pn = PICOPARSE_32(header_buffer + ph->pn_offset);
+                    ph->pnmask = 0xFFFFFFFF00000000ull;
+                    break;
+                default:
+                    /* Unexpected value -- keep ph as is. */
+                    break;
+                }
+            }
+        }
+    }
+
+    /* Build a packet number to 64 bits */
+    ph->pn64 = picoquic_get_packet_number64(seq_ref, ph->pnmask, ph->pn);
+
+    if (picoquic_supported_versions[cnx->version_index].version_flags&picoquic_version_use_pn_encryption)
+    {
+        fprintf(F, "    Decrypted PN = %llu (%x)\n",
+            (unsigned long long)ph->pn64, ph->pn);
+    }
+    /* Attempt to decrypt the packet */
+    decoded = picoquic_aead_decrypt_generic(out_bytes,
+        bytes + ph->offset, length - ph->offset, ph->pn64, header_buffer, ph->offset, aead_context);
+
+    return decoded;
 }
 
 void picoquic_log_decrypt_encrypted(FILE* F,
@@ -769,11 +837,11 @@ void picoquic_log_decrypt_encrypted(FILE* F,
             (int)length);
     } else {
         if (receiving) {
-            decrypted_length = picoquic_aead_decrypt_generic(decrypted,
-                bytes + ph->offset, length - ph->offset, ph->pn64, bytes, ph->offset, cnx->aead_decrypt_ctx);
+            decrypted_length = picoquic_decrypt_log_packet(F, cnx, decrypted, bytes, length, ph,
+                cnx->first_sack_item.end_of_sack_range, cnx->pn_dec, cnx->aead_decrypt_ctx);
         } else {
-            decrypted_length = picoquic_aead_decrypt_generic(decrypted,
-                bytes + ph->offset, length - ph->offset, ph->pn64, bytes, ph->offset, cnx->aead_de_encrypt_ctx);
+            decrypted_length = picoquic_decrypt_log_packet(F, cnx, decrypted, bytes, length, ph,
+                cnx->send_sequence, cnx->pn_enc, cnx->aead_de_encrypt_ctx);
         }
 
         if (decrypted_length > length) {
@@ -792,8 +860,8 @@ void picoquic_log_decrypt_0rtt(FILE* F,
     uint8_t decrypted[PICOQUIC_MAX_PACKET_SIZE];
     size_t decrypted_length = 0;
 
-    decrypted_length = picoquic_aead_decrypt_generic(decrypted,
-        bytes + ph->offset, length - ph->offset, ph->pn64, bytes, ph->offset, cnx->aead_0rtt_decrypt_ctx);
+    decrypted_length = picoquic_decrypt_log_packet(F, cnx, decrypted, bytes, length, ph,
+        1, cnx->pn_enc_0rtt, cnx->aead_0rtt_decrypt_ctx);
 
     if (decrypted_length > length) {
         fprintf(F, "    Decryption failed!\n");
@@ -812,11 +880,11 @@ void picoquic_log_decrypt_encrypted_cleartext(FILE* F,
     size_t decrypted_length = 0;
 
     if (receiving) {
-        decrypted_length = picoquic_aead_decrypt_generic(decrypted,
-            bytes + ph->offset, length - ph->offset, ph->pn64, bytes, ph->offset, cnx->aead_decrypt_cleartext_ctx);
+        decrypted_length = picoquic_decrypt_log_packet(F, cnx, decrypted, bytes, length, ph,
+            cnx->first_sack_item.end_of_sack_range, cnx->pn_dec_cleartext, cnx->aead_decrypt_cleartext_ctx);
     } else {
-        decrypted_length = picoquic_aead_decrypt_generic(decrypted,
-            bytes + ph->offset, length - ph->offset, ph->pn64, bytes, ph->offset, cnx->aead_de_encrypt_cleartext_ctx);
+        decrypted_length = picoquic_decrypt_log_packet(F, cnx, decrypted, bytes, length, ph,
+            cnx->send_sequence, cnx->pn_enc_cleartext, cnx->aead_de_encrypt_cleartext_ctx);
     }
 
     if (decrypted_length > length) {
