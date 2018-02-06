@@ -32,7 +32,7 @@ static uint8_t const addr1[4] = { 10, 0, 0, 1 };
 static uint8_t const addr2[4] = { 10, 0, 0, 2 };
 
 void cleartext_aead_packet_init_header(picoquic_packet_header* ph,
-    uint64_t cnx_id, uint32_t pn, uint32_t vn, picoquic_packet_type_enum ptype)
+    picoquic_connection_id_t cnx_id, uint32_t pn, uint32_t vn, picoquic_packet_type_enum ptype)
 {
     ph->cnx_id = cnx_id;
     ph->pn = pn;
@@ -47,14 +47,13 @@ void cleartext_aead_init_packet(picoquic_packet_header* ph,
     uint8_t* cleartext, size_t target)
 {
     size_t byte_index = 0;
-    uint64_t seed = ph->cnx_id;
+    uint64_t seed = ph->cnx_id.val64;
 
     seed ^= ph->pn;
 
     /* Serialize the header */
     cleartext[byte_index++] = 0x80 | ((uint8_t)ph->ptype);
-    picoformat_64(&cleartext[byte_index], ph->cnx_id);
-    byte_index += 8;
+    byte_index += picoquic_format_cnxid(&cleartext[byte_index], ph->cnx_id);
     picoformat_32(&cleartext[byte_index], ph->pn);
     byte_index += 4;
     picoformat_32(&cleartext[byte_index], ph->vn);
@@ -102,7 +101,7 @@ int cleartext_aead_test()
         memcpy(&test_addr_c.sin_addr, addr1, 4);
         test_addr_c.sin_port = 12345;
 
-        cnx_client = picoquic_create_cnx(qclient, 0,
+        cnx_client = picoquic_create_cnx(qclient, picoquic_null_cnxid,
             (struct sockaddr*)&test_addr_c, 0, 0, NULL, NULL, 1);
         if (cnx_client == NULL) {
             ret = -1;
@@ -338,7 +337,7 @@ int cleartext_pn_enc_test()
         memcpy(&test_addr_c.sin_addr, addr1, 4);
         test_addr_c.sin_port = 12345;
 
-        cnx_client = picoquic_create_cnx(qclient, 0,
+        cnx_client = picoquic_create_cnx(qclient, picoquic_null_cnxid,
             (struct sockaddr*)&test_addr_c, 0, 0, NULL, NULL, 1);
         if (cnx_client == NULL) {
             ret = -1;

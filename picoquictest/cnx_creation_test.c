@@ -53,7 +53,7 @@ int cnxcreation_test()
     struct sockaddr_in6 test6[2];
     const uint8_t test_ipv4[4] = { 192, 0, 2, 0 };
     const uint8_t test_ipv6[16] = { 0x20, 0x01, 0x0D, 0xB8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01 };
-    const uint64_t test_cnx_id[5] = { 0, 1, 2, 3, 4 };
+    const picoquic_connection_id_t test_cnx_id[5] = { { 1 }, { 2 }, { 3 }, { 4 }, { 5 } };
     struct sockaddr* test_cnx_addr[5] = {
         (struct sockaddr*)&test4[0],
         (struct sockaddr*)&test4[1],
@@ -141,7 +141,8 @@ int cnxcreation_test()
       */
 
     if (ret == 0) {
-        picoquic_cnx_t* cnx = picoquic_cnx_by_id(quic, 123456789);
+        picoquic_connection_id_t bad_target = { 123456789 };
+        picoquic_cnx_t* cnx = picoquic_cnx_by_id(quic, bad_target);
         if (cnx != NULL) {
             ret = -1;
         }

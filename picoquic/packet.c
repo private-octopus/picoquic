@@ -55,14 +55,14 @@ int picoquic_parse_packet_header(
         }
         else {
             /* If this is a long header, the bytes at position 9--12 describe the version */
-            ph->cnx_id = PICOPARSE_64(bytes + 1);
-            ph->vn = PICOPARSE_32(bytes + 9);
+            ph->offset = 1 + picoquic_parse_cnxid(bytes + 1, &ph->cnx_id);
+            ph->vn = PICOPARSE_32(bytes + ph->offset);
+            ph->offset += 4;
 
             if (ph->vn == 0) {
                 /* VN = zero identifies a version negotiation packet */
                 ph->ptype = picoquic_packet_version_negotiation;
                 ph->pn = 0;
-                ph->offset = 1 + 8 + 4;
                 ph->pnmask = 0;
                 ph->pn_offset = 0;
                 ph->version_index = -1;
@@ -76,8 +76,11 @@ int picoquic_parse_packet_header(
                 }
             }
             else {
-                ph->pn = PICOPARSE_32(bytes + 13);
+                ph->pn_offset = ph->offset;
+                ph->pn = PICOPARSE_32(bytes + ph->offset);
                 ph->version_index = picoquic_get_version_index(ph->vn);
+                ph->offset += 4;
+                ph->pnmask = 0xFFFFFFFF00000000ull;
 
                 if (ph->version_index < 0) {
                     ph->offset = 17;
@@ -102,9 +105,6 @@ int picoquic_parse_packet_header(
                      * describes the encoding. */
                     switch (picoquic_supported_versions[ph->version_index].version_header_encoding) {
                     case picoquic_version_header_08:
-                        ph->offset = 17;
-                        ph->pn_offset = 13;
-                        ph->pnmask = 0xFFFFFFFF00000000ull;
                         switch (bytes[0]) {
                         case 0xFF:
                             ph->ptype = picoquic_packet_client_initial;
@@ -141,15 +141,14 @@ int picoquic_parse_packet_header(
          * Note that bit 0x40 of the first byte is classified as part of the QUIC invariants.
          */
 
-        ph->cnx_id = 0;
+        ph->cnx_id = picoquic_null_cnxid;
         ph->vn = 0;
         ph->pn = 0;
 
         if ((bytes[0] & 0x40) == 0) {
-            if (length >= 9) {
+            if (length >= 1 + sizeof(picoquic_connection_id_t)) {
                 /* We can identify the connection by its ID */
-                ph->cnx_id = PICOPARSE_64(bytes + 1);
-                ph->offset = 9;
+                ph->offset = 1 + picoquic_parse_cnxid(bytes + 1, &ph->cnx_id);
                 /* TODO: should consider using combination of CNX ID and ADDR_FROM */
                 if (*pcnx == NULL)
                 {
@@ -381,7 +380,7 @@ int picoquic_incoming_version_negotiation(
     /* Parse the content */
     int ret = -1;
 
-    if (ph->cnx_id != cnx->initial_cnxid || ph->vn != 0) {
+    if (picoquic_compare_connection_id(&ph->cnx_id, &cnx->initial_cnxid) != 0 || ph->vn != 0) {
         /* Packet that do not match the "echo" checks should be logged and ignored */
         ret = 0;
     }
@@ -416,8 +415,7 @@ int picoquic_prepare_version_negotiation(
 
         bytes[byte_index++] = 0xFF; /* TODO: Should be randomized */
         /* Copy the incoming connection ID */
-        picoformat_64(bytes + byte_index, ph->cnx_id);
-        byte_index += 8;
+        byte_index += picoquic_format_cnxid(bytes + byte_index, ph->cnx_id);
         /* Set the version number to zero */
         picoformat_32(bytes + byte_index, 0);
         byte_index += 4;
@@ -465,8 +463,7 @@ void picoquic_process_unexpected_cnxid(
             /* Packet type set to short header, with cnxid, key phase 0, 1 byte seq */
             bytes[byte_index++] = 0x41;
             /* Copy the connection ID */
-            picoformat_64(bytes + byte_index, ph->cnx_id);
-            byte_index += 8;
+            byte_index += picoquic_format_cnxid(bytes + byte_index, ph->cnx_id);
             /* Add some random bytes to look good. */
             picoquic_public_random(bytes + byte_index, pad_size);
             byte_index += pad_size;
@@ -509,8 +506,7 @@ void picoquic_queue_stateless_reset(picoquic_cnx_t* cnx,
         /* Packet type set to long header, with cnxid */
         bytes[byte_index++] = 0x80 | 0x7E;
         /* Copy the connection ID */
-        picoformat_64(bytes + byte_index, ph->cnx_id);
-        byte_index += 8;
+        byte_index += picoquic_format_cnxid(bytes + byte_index, ph->cnx_id);
         /* Copy the version number */
         picoformat_32(bytes + byte_index, ph->vn);
         byte_index += 4;
@@ -658,7 +654,7 @@ int picoquic_incoming_server_stateless(
             ret = (already_received)? PICOQUIC_ERROR_DUPLICATE:PICOQUIC_ERROR_FNV1A_CHECK;
         } else {
             /* Verify that the header is a proper echo of what was sent */
-            if (ph->cnx_id != cnx->initial_cnxid || ph->vn != picoquic_supported_versions[cnx->version_index].version || (cnx->retransmit_newest == NULL || ph->pn64 > cnx->retransmit_newest->sequence_number) || (cnx->retransmit_oldest == NULL || ph->pn64 < cnx->retransmit_oldest->sequence_number)) {
+            if (picoquic_compare_connection_id(&ph->cnx_id, &cnx->initial_cnxid) != 0 || ph->vn != picoquic_supported_versions[cnx->version_index].version || (cnx->retransmit_newest == NULL || ph->pn64 > cnx->retransmit_newest->sequence_number) || (cnx->retransmit_oldest == NULL || ph->pn64 < cnx->retransmit_oldest->sequence_number)) {
                 /* Packet that do not match the "echo" checks should be logged and ignored */
                 ret = PICOQUIC_ERROR_UNEXPECTED_PACKET;
             }
@@ -715,14 +711,14 @@ int picoquic_incoming_server_cleartext(
             ret = (already_received)? PICOQUIC_ERROR_DUPLICATE:PICOQUIC_ERROR_FNV1A_CHECK;
         } else {
             /* Check the server cnx id */
-            if (cnx->server_cnxid == 0) {
+            if (picoquic_is_cnxid_null(cnx->server_cnxid)) {
                 /* On first response from the server, copy the cnx ID and the incoming address */
                 cnx->server_cnxid = ph->cnx_id;
                 cnx->dest_addr_len = (addr_to->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
                 memcpy(&cnx->dest_addr, addr_to, cnx->dest_addr_len);
 
                 (void)picoquic_register_cnx_id(cnx->quic, cnx, cnx->server_cnxid);
-            } else if (cnx->server_cnxid != ph->cnx_id) {
+            } else if (picoquic_compare_connection_id(&cnx->server_cnxid, &ph->cnx_id) != 0) {
                 ret = PICOQUIC_ERROR_CNXID_CHECK; /* protocol error */
             }
 
@@ -771,7 +767,7 @@ int picoquic_incoming_client_cleartext(
         if (decoded_length == 0) {
             /* Incorrect checksum, drop and log. */
             ret = (already_received)?PICOQUIC_ERROR_DUPLICATE:PICOQUIC_ERROR_FNV1A_CHECK;
-        } else if (ph->cnx_id != cnx->server_cnxid) {
+        } else if (picoquic_compare_connection_id(&ph->cnx_id, &cnx->server_cnxid) != 0) {
             ret = PICOQUIC_ERROR_CNXID_CHECK;
         } else {
             /* Accept the incoming frames */
@@ -828,7 +824,7 @@ int picoquic_incoming_0rtt(
     size_t decoded_length = 0;
     int already_received = 0;
 
-    if (ph->cnx_id != cnx->initial_cnxid) {
+    if (picoquic_compare_connection_id(&ph->cnx_id , &cnx->initial_cnxid)!=0) {
         ret = PICOQUIC_ERROR_CNXID_CHECK;
     } else if (cnx->cnx_state == picoquic_state_server_almost_ready || cnx->cnx_state == picoquic_state_server_ready) {
         /* AEAD Decrypt, in place */
@@ -877,7 +873,7 @@ int picoquic_incoming_encrypted(
     size_t decoded_length = 0;
     int already_received = 0;
 
-    if (ph->cnx_id != cnx->server_cnxid && (ph->cnx_id != 0 || cnx->local_parameters.omit_connection_id == 0)) {
+    if (picoquic_compare_connection_id(&ph->cnx_id, &cnx->server_cnxid) != 0 && (!picoquic_is_cnxid_null(ph->cnx_id) || cnx->local_parameters.omit_connection_id == 0)) {
         ret = PICOQUIC_ERROR_CNXID_CHECK;
     } else if (
         cnx->cnx_state >= picoquic_state_client_almost_ready && cnx->cnx_state <= picoquic_state_closing) {
@@ -974,7 +970,7 @@ int picoquic_incoming_packet(
                 picoquic_prepare_version_negotiation(quic, addr_from, addr_to, if_index_to, &ph);
             } else {
                 /* Unexpected packet. Reject, drop and log. */
-                if (ph.cnx_id != 0) {
+                if (!picoquic_is_cnxid_null(ph.cnx_id)) {
                     picoquic_process_unexpected_cnxid(quic, length, addr_from, addr_to, if_index_to, &ph);
                 }
                 ret = PICOQUIC_ERROR_DETECTED;
@@ -1016,7 +1012,7 @@ int picoquic_incoming_packet(
                     break;
                 case picoquic_packet_client_initial:
                     /* Not expected here. Treat as a duplicate. */
-                    if (ph.cnx_id == cnx->initial_cnxid)
+                    if (picoquic_compare_connection_id(&ph.cnx_id, &cnx->initial_cnxid) == 0)
                         ret = PICOQUIC_ERROR_SPURIOUS_REPEAT;
                     else
                         ret = PICOQUIC_ERROR_DETECTED;

@@ -116,10 +116,10 @@ void picoquic_log_packet(FILE* F, picoquic_quic_t* quic, picoquic_cnx_t* cnx,
 void picoquic_log_processing(FILE* F, picoquic_cnx_t* cnx, size_t length, int ret);
 void picoquic_log_transport_extension(FILE* F, picoquic_cnx_t* cnx, int log_cnxid);
 void picoquic_log_congestion_state(FILE* F, picoquic_cnx_t* cnx, uint64_t current_time);
-void picoquic_log_picotls_ticket(FILE* F, uint64_t cnx_id,
+void picoquic_log_picotls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
     uint8_t* ticket, uint16_t ticket_length);
 
-void print_address(struct sockaddr* address, char* label, uint64_t cnx_id)
+void print_address(struct sockaddr* address, char* label, picoquic_connection_id_t cnx_id)
 {
     char hostname[256];
 
@@ -397,7 +397,7 @@ int quic_server(const char* server_name, int server_port,
             if (bytes_recv != 0) {
                 printf("Select returns %d, from length %d after %d us (wait for %d us)\n",
                     bytes_recv, from_length, (int)(current_time - time_before), (int)delta_t);
-                print_address((struct sockaddr*)&addr_from, "recv from:", 0);
+                print_address((struct sockaddr*)&addr_from, "recv from:", picoquic_null_cnxid);
             } else {
                 printf("Select return %d, after %d us (wait for %d us)\n", bytes_recv,
                     (int)(current_time - time_before), (int)delta_t);
@@ -836,7 +836,7 @@ int quic_client(const char* ip_address_text, int server_port, uint32_t proposed_
     if (ret == 0) {
         /* Create a client connection */
 
-        cnx_client = picoquic_create_cnx(qclient, 0,
+        cnx_client = picoquic_create_cnx(qclient, picoquic_null_cnxid,
             (struct sockaddr*)&server_address, current_time,
             proposed_version, sni, alpn, 1);
 
@@ -996,7 +996,7 @@ int quic_client(const char* ip_address_text, int server_port, uint32_t proposed_
 
         if (sni != NULL && 0 == picoquic_get_ticket(qclient->p_first_ticket, current_time, sni, (uint16_t)strlen(sni), alpn, (uint16_t)strlen(alpn), &ticket, &ticket_length)) {
             fprintf(F_log, "Received ticket from %s:\n", sni);
-            picoquic_log_picotls_ticket(F_log, 0, ticket, ticket_length);
+            picoquic_log_picotls_ticket(F_log, picoquic_null_cnxid, ticket, ticket_length);
         }
 
         if (picoquic_save_tickets(qclient->p_first_ticket, current_time, ticket_store_filename) != 0) {
@@ -1073,18 +1073,19 @@ enum picoquic_cnx_id_select {
 
 typedef struct {
     enum picoquic_cnx_id_select cnx_id_select;
-    uint64_t cnx_id_mask;
-    uint64_t cnx_id_val;
+    picoquic_connection_id_t cnx_id_mask;
+    picoquic_connection_id_t cnx_id_val;
 } cnx_id_callback_ctx_t;
 
-static uint64_t cnx_id_callback(uint64_t cnx_id_local, uint64_t cnx_id_remote, void* cnx_id_callback_ctx)
+static void cnx_id_callback(picoquic_connection_id_t cnx_id_local, picoquic_connection_id_t cnx_id_remote, void* cnx_id_callback_ctx, 
+    picoquic_connection_id_t * cnx_id_returned)
 {
     cnx_id_callback_ctx_t* ctx = (cnx_id_callback_ctx_t*)cnx_id_callback_ctx;
 
     if (ctx->cnx_id_select == picoquic_cnx_id_remote)
         cnx_id_local = cnx_id_remote;
 
-    return (cnx_id_local & ctx->cnx_id_mask) | ctx->cnx_id_val;
+    cnx_id_returned->val64 = (cnx_id_local.val64 & ctx->cnx_id_mask.val64) | ctx->cnx_id_val.val64;
 }
 
 int main(int argc, char** argv)
@@ -1163,8 +1164,8 @@ int main(int argc, char** argv)
             }
 
             cnx_id_cbdata.cnx_id_select = atoi(optarg);
-            cnx_id_cbdata.cnx_id_mask = ~strtoul(argv[optind++], NULL, 0);
-            cnx_id_cbdata.cnx_id_val = strtoul(argv[optind++], NULL, 0);
+            cnx_id_cbdata.cnx_id_mask.val64 = ~strtoul(argv[optind++], NULL, 0);
+            cnx_id_cbdata.cnx_id_val.val64 = strtoul(argv[optind++], NULL, 0);
             break;
         case 'l':
             if (optind + 1 > argc) {
@@ -1211,8 +1212,8 @@ int main(int argc, char** argv)
             server_port, server_name, just_once, do_hrr);
         ret = quic_server(server_name, server_port,
             server_cert_file, server_key_file, just_once, do_hrr,
-            (cnx_id_cbdata.cnx_id_mask == UINT64_MAX) ? NULL : cnx_id_callback,
-            (cnx_id_cbdata.cnx_id_mask == UINT64_MAX) ? NULL : (void*)&cnx_id_cbdata,
+            (cnx_id_cbdata.cnx_id_mask.val64 == UINT64_MAX) ? NULL : cnx_id_callback,
+            (cnx_id_cbdata.cnx_id_mask.val64 == UINT64_MAX) ? NULL : (void*)&cnx_id_cbdata,
             (uint8_t*)reset_seed);
         printf("Server exit with code = %d\n", ret);
     } else {

@@ -63,7 +63,7 @@ void picoquic_pn_encrypt(void *pn_enc, void * iv, void *output, const void *inpu
 
 void picoquic_pn_enc_free(void * pn_enc);
 
-int picoquic_create_cnxid_reset_secret(picoquic_quic_t* quic, uint64_t cnx_id,
+int picoquic_create_cnxid_reset_secret(picoquic_quic_t* quic, picoquic_connection_id_t cnx_id,
     uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE]);
 
 void picoquic_provide_received_transport_extensions(picoquic_cnx_t* cnx,

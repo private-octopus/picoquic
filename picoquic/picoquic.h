@@ -123,6 +123,13 @@ typedef enum {
 } picoquic_context_flags;
 
 /*
+ * Provisional definition of the connection ID.
+ */
+typedef struct st_picoquic_connection_id_t {
+    uint64_t val64;
+} picoquic_connection_id_t;
+
+/*
 * The stateless packet structure is used to temporarily store
 * stateless packets before they can be sent by servers.
 */
@@ -175,8 +182,8 @@ typedef void (*picoquic_stream_data_cb_fn)(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx);
 
-typedef uint64_t (*cnx_id_cb_fn)(uint64_t cnx_id_local,
-    uint64_t cnx_id_remote, void* cnx_id_cb_data);
+typedef void (*cnx_id_cb_fn)(picoquic_connection_id_t cnx_id_local,
+    picoquic_connection_id_t cnx_id_remote, void* cnx_id_cb_data, picoquic_connection_id_t * cnx_id_returned);
 
 /* QUIC context create and dispose */
 picoquic_quic_t* picoquic_create(uint32_t nb_connections,
@@ -200,7 +207,7 @@ void picoquic_set_cookie_mode(picoquic_quic_t* quic, int cookie_mode);
 
 /* Connection context creation and registration */
 picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
-    uint64_t cnx_id, struct sockaddr* addr, uint64_t start_time, uint32_t preferred_version,
+    picoquic_connection_id_t cnx_id, struct sockaddr* addr, uint64_t start_time, uint32_t preferred_version,
     char const* sni, char const* alpn, char client_mode);
 
 picoquic_cnx_t* picoquic_create_client_cnx(picoquic_quic_t* quic,
@@ -226,8 +233,8 @@ void picoquic_get_peer_addr(picoquic_cnx_t* cnx, struct sockaddr** addr, int* ad
 void picoquic_get_local_addr(picoquic_cnx_t* cnx, struct sockaddr** addr, int* addr_len);
 unsigned long picoquic_get_local_if_index(picoquic_cnx_t* cnx);
 
-uint64_t picoquic_get_cnxid(picoquic_cnx_t* cnx);
-uint64_t picoquic_get_initial_cnxid(picoquic_cnx_t* cnx);
+picoquic_connection_id_t picoquic_get_cnxid(picoquic_cnx_t* cnx);
+picoquic_connection_id_t picoquic_get_initial_cnxid(picoquic_cnx_t* cnx);
 uint64_t picoquic_get_cnx_start_time(picoquic_cnx_t* cnx);
 uint64_t picoquic_is_0rtt_available(picoquic_cnx_t* cnx);
 

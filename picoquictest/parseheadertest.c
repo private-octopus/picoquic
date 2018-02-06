@@ -38,6 +38,8 @@
 #define TEST_CNXID_08_BYTES 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09
 #define TEST_CNXID_08_VAL 0x0203040506070809ull
 
+static picoquic_connection_id_t test_cnxid_08 = { TEST_CNXID_08_VAL };
+
 static uint8_t pinitial08[] = {
     0xFF,
     TEST_CNXID_INI_BYTES,
@@ -73,7 +75,7 @@ static uint8_t pvnegobis08[] = {
 };
 
 static picoquic_packet_header hvnego08 = {
-    TEST_CNXID_08_VAL,
+    { TEST_CNXID_08_VAL },
     0,
     0,
     13,
@@ -90,7 +92,7 @@ static uint8_t packet_short_phi0_c_32_08[] = {
 };
 
 static picoquic_packet_header hphi0_c_32_08 = {
-    TEST_CNXID_08_VAL,
+    { TEST_CNXID_08_VAL },
     0xDEADBEEF,
     0,
     13,
@@ -107,7 +109,7 @@ static uint8_t packet_short_phi1_c_16_08[] = {
 };
 
 static picoquic_packet_header hphi1_c_16_08 = {
-    TEST_CNXID_08_VAL,
+    { TEST_CNXID_08_VAL },
     0xBEEF,
     0,
     11,
@@ -124,7 +126,7 @@ static uint8_t packet_short_phi1_c_8_08[] = {
 };
 
 static picoquic_packet_header hphi1_c_8_08 = {
-    TEST_CNXID_08_VAL,
+    { TEST_CNXID_08_VAL },
     0xEF,
     0,
     10,
@@ -210,7 +212,7 @@ int parseheadertest()
     if (quic == NULL) {
         ret = -1;
     } else {
-        cnx_08 = picoquic_create_cnx(quic, TEST_CNXID_08_VAL, (struct sockaddr*)&addr_08,
+        cnx_08 = picoquic_create_cnx(quic, test_cnxid_08, (struct sockaddr*)&addr_08,
             0, PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, NULL, 1);
 
         if (cnx_08 == NULL) {
@@ -227,7 +229,7 @@ int parseheadertest()
             ret = -1;
         }
 
-        if (ph.cnx_id != test_entries[i].ph->cnx_id || ph.pn != test_entries[i].ph->pn || 
+        if (picoquic_compare_connection_id(&ph.cnx_id, &test_entries[i].ph->cnx_id) != 0 || ph.pn != test_entries[i].ph->pn || 
             ph.vn != test_entries[i].ph->vn || ph.offset != test_entries[i].ph->offset || 
             ph.ptype != test_entries[i].ph->ptype || ph.pnmask != test_entries[i].ph->pnmask) {
             ret = -1;

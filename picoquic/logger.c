@@ -181,7 +181,7 @@ void picoquic_log_packet_header(FILE* F, picoquic_cnx_t* cnx, picoquic_packet_he
 {
     fprintf(F, "    Type: %d (%s), CnxID: %llx%s, Seq: %x (%llx), Version %x\n",
         ph->ptype, picoquic_log_ptype_name(ph->ptype),
-        (unsigned long long)ph->cnx_id,
+        (unsigned long long)ph->cnx_id.val64,
         (cnx == NULL) ? " (unknown)" : "",
         ph->pn, (unsigned long long)ph->pn64, ph->vn);
 }
@@ -917,7 +917,7 @@ void picoquic_log_packet(FILE* F, picoquic_quic_t* quic, picoquic_cnx_t* cnx,
             cnx = picoquic_cnx_by_net(quic, addr_peer);
         }
 
-        if (cnx == NULL && ph.cnx_id != 0) {
+        if (cnx == NULL && !picoquic_is_cnxid_null(ph.cnx_id)) {
             cnx = picoquic_cnx_by_id(quic, ph.cnx_id);
         }
 
@@ -1219,7 +1219,7 @@ void picoquic_log_congestion_state(FILE* F, picoquic_cnx_t* cnx, uint64_t curren
        opaque extension_data<0..2^16-1>;
    } Extension;
 */
-void picoquic_log_tls_ticket(FILE* F, uint64_t cnx_id,
+void picoquic_log_tls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
     uint8_t* ticket, uint16_t ticket_length)
 {
     uint32_t lifetime = 0;
@@ -1275,15 +1275,15 @@ void picoquic_log_tls_ticket(FILE* F, uint64_t cnx_id,
 
     if (ret == -1) {
         fprintf(F, "%llu: Malformed ticket, length = %d, at least %d required.\n",
-            (unsigned long long)cnx_id, ticket_length, min_length);
+            (unsigned long long)cnx_id.val64, ticket_length, min_length);
     }
     fprintf(F, "%llu: lifetime = %d, age_add = %x, %d nonce, %d ticket, %d extensions.\n",
-        (unsigned long long)cnx_id, lifetime, age_add, nonce_length, ticket_val_length, extension_length);
+        (unsigned long long)cnx_id.val64, lifetime, age_add, nonce_length, ticket_val_length, extension_length);
 
     if (extension_ptr != NULL) {
         uint16_t x_index = 0;
 
-        fprintf(F, "%llu: ticket extensions: ", (unsigned long long)cnx_id);
+        fprintf(F, "%llu: ticket extensions: ", (unsigned long long)cnx_id.val64);
 
         while (x_index + 4 < extension_length) {
             uint16_t x_type = PICOPARSE_16(extension_ptr + x_index);
@@ -1299,7 +1299,7 @@ void picoquic_log_tls_ticket(FILE* F, uint64_t cnx_id,
 
             if (x_index > extension_length) {
                 fprintf(F, "\n%llu: malformed extensions, require %d bytes, not just %d",
-                    (unsigned long long)cnx_id, x_index, extension_length);
+                    (unsigned long long)cnx_id.val64, x_index, extension_length);
             }
         }
 
@@ -1307,13 +1307,13 @@ void picoquic_log_tls_ticket(FILE* F, uint64_t cnx_id,
 
         if (x_index < extension_length) {
             fprintf(F, "\n%llu: %d extra bytes at the end of the extensions\n",
-                (unsigned long long)cnx_id, extension_length - x_index);
+                (unsigned long long)cnx_id.val64, extension_length - x_index);
         }
     }
 
     if (ret == -2) {
         fprintf(F, "%llu: Malformed TLS ticket, %d extra bytes.\n",
-            (unsigned long long)cnx_id, ticket_length - min_length);
+            (unsigned long long)cnx_id.val64, ticket_length - min_length);
     }
 }
 
@@ -1329,7 +1329,7 @@ uint16_t cipher_suite;
 
  */
 
-void picoquic_log_picotls_ticket(FILE* F, uint64_t cnx_id,
+void picoquic_log_picotls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
     uint8_t* ticket, uint16_t ticket_length)
 {
     uint64_t ticket_time = 0;
@@ -1375,12 +1375,12 @@ void picoquic_log_picotls_ticket(FILE* F, uint64_t cnx_id,
     }
 
     fprintf(F, "%llu: ticket time = %llu, suite = %x, %d ticket, %d secret.\n",
-        (unsigned long long)cnx_id, (unsigned long long)ticket_time,
+        (unsigned long long)cnx_id.val64, (unsigned long long)ticket_time,
         suite_id, tls_ticket_length, secret_length);
 
     if (ret == -1) {
         fprintf(F, "%llu: Malformed PTLS ticket, length = %d, at least %d required.\n",
-            (unsigned long long)cnx_id, ticket_length, min_length);
+            (unsigned long long)cnx_id.val64, ticket_length, min_length);
     } else {
         if (tls_ticket_length > 0 && tls_ticket_ptr != NULL) {
             picoquic_log_tls_ticket(F, cnx_id, tls_ticket_ptr, (uint16_t) tls_ticket_length);
@@ -1389,6 +1389,6 @@ void picoquic_log_picotls_ticket(FILE* F, uint64_t cnx_id,
 
     if (ret == -2) {
         fprintf(F, "%llu: Malformed PTLS ticket, %d extra bytes.\n",
-            (unsigned long long)cnx_id, ticket_length - min_length);
+            (unsigned long long)cnx_id.val64, ticket_length - min_length);
     }
 }

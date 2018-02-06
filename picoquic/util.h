@@ -23,6 +23,7 @@
 #define PICOQUIC_UTILS_H
 
 #include <stdio.h>
+#include "picoquic.h"
 
 #ifdef WIN32
 #define PRIst "Iu"
@@ -42,6 +43,12 @@ void debug_printf_push_stream(FILE* f);
 void debug_printf_pop_stream(void);
 void debug_printf_suspend(void);
 void debug_printf_resume(void);
+
+extern const picoquic_connection_id_t picoquic_null_cnxid;
+size_t picoquic_format_cnxid(uint8_t* bytes, picoquic_connection_id_t cnx_id);
+size_t picoquic_parse_cnxid(uint8_t* bytes, picoquic_connection_id_t *cnx_id);
+int picoquic_is_cnxid_null(picoquic_connection_id_t cnx_id);
+int picoquic_compare_connection_id(picoquic_connection_id_t * cnx_id1, picoquic_connection_id_t * cnx_id2);
 
 #ifndef MIN
 #define MAX(a, b) ((a) > (b) ? (a) : (b))

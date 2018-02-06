@@ -1058,7 +1058,7 @@ int picoquic_setup_cleartext_aead_contexts(picoquic_cnx_t* cnx)
 {
     int ret = 0;
     uint8_t master_secret[256]; /* secret_max */
-    uint8_t cnx_id[8]; /* serialized cnx_id */
+    uint8_t cnx_id_serialized[sizeof(picoquic_connection_id_t)]; /* serialized cnx_id */
     ptls_hash_algorithm_t* algo = &ptls_openssl_sha256;
     ptls_aead_algorithm_t* aead = &ptls_openssl_aes128gcm;
     ptls_iovec_t salt;
@@ -1070,10 +1070,10 @@ int picoquic_setup_cleartext_aead_contexts(picoquic_cnx_t* cnx)
     ptls_iovec_t prk;
     ptls_iovec_t info;
 
-    picoformat_64(cnx_id, cnx->initial_cnxid);
+    (void)picoquic_format_cnxid(cnx_id_serialized, cnx->initial_cnxid);
     picoquic_setup_cleartext_aead_salt(cnx->version_index, &salt);
-    ikm.base = cnx_id;
-    ikm.len = sizeof(cnx_id);
+    ikm.base = cnx_id_serialized;
+    ikm.len = sizeof(cnx_id_serialized);
 
     /* Extract the master key -- key length will be 32 per SHA256 */
     ret = ptls_hkdf_extract(algo, master_secret, salt, ikm);
@@ -1245,7 +1245,7 @@ int picoquic_tlsinput_stream_zero(picoquic_cnx_t* cnx)
  * decide to use the minicrypto API.
  */
 
-int picoquic_create_cnxid_reset_secret(picoquic_quic_t* quic, uint64_t cnx_id,
+int picoquic_create_cnxid_reset_secret(picoquic_quic_t* quic, picoquic_connection_id_t cnx_id,
     uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE])
 {
     /* Using OpenSSL for now: ptls_hash_algorithm_t ptls_openssl_sha256 */

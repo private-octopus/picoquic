@@ -197,7 +197,7 @@ picoquic_packet* picoquic_create_packet()
 size_t picoquic_create_packet_header_08(
     picoquic_cnx_t* cnx,
     picoquic_packet_type_enum packet_type,
-    uint64_t cnx_id,
+    picoquic_connection_id_t cnx_id,
     uint64_t sequence_number,
     uint8_t* bytes,
     size_t * pn_offset)
@@ -214,14 +214,16 @@ size_t picoquic_create_packet_header_08(
         length = 0;
         bytes[length++] = (C | K | PT);
         if (C == 0) {
-            picoformat_64(&bytes[length], cnx_id);
-            length += 8;
+            length += picoquic_format_cnxid(&bytes[length], cnx_id);
         }
+
         *pn_offset = length;
         picoformat_32(&bytes[length], (uint32_t)sequence_number);
         length += 4;
     } else {
         /* Create a long packet */
+        length = 1;
+
         switch (packet_type) {
         case picoquic_packet_client_initial:
             bytes[0] = 0xFF;
@@ -240,17 +242,17 @@ size_t picoquic_create_packet_header_08(
             break;
         }
 
-        picoformat_64(&bytes[1], cnx_id);
+        length += picoquic_format_cnxid(&bytes[length], cnx_id);
         if ((cnx->cnx_state == picoquic_state_client_init || cnx->cnx_state == picoquic_state_client_init_sent) && packet_type == picoquic_packet_client_initial) {
-            picoformat_32(&bytes[9], cnx->proposed_version);
+            picoformat_32(&bytes[length], cnx->proposed_version);
         } else {
-            picoformat_32(&bytes[9],
+            picoformat_32(&bytes[length],
                 picoquic_supported_versions[cnx->version_index].version);
         }
-        *pn_offset = 13;
-        picoformat_32(&bytes[13], (uint32_t)sequence_number);
+        *pn_offset = length;
+        picoformat_32(&bytes[length], (uint32_t)sequence_number);
 
-        length = 17;
+        length += 4;
     }
 
     return length;
@@ -259,7 +261,7 @@ size_t picoquic_create_packet_header_08(
 size_t picoquic_create_packet_header(
     picoquic_cnx_t* cnx,
     picoquic_packet_type_enum packet_type,
-    uint64_t cnx_id,
+    picoquic_connection_id_t cnx_id,
     uint64_t sequence_number,
     uint8_t* bytes,
     size_t * pn_offset)
@@ -771,7 +773,7 @@ int picoquic_prepare_packet_0rtt(picoquic_cnx_t* cnx, picoquic_packet* packet,
     int stream_restricted = 0;
     picoquic_packet_type_enum packet_type = picoquic_packet_0rtt_protected;
     size_t data_bytes = 0;
-    uint64_t cnx_id = cnx->initial_cnxid;
+    picoquic_connection_id_t cnx_id = cnx->initial_cnxid;
     size_t header_length = 0;
     uint8_t* bytes = packet->bytes;
     size_t length = 0;
@@ -846,7 +848,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_packet* pa
     size_t checksum_overhead = 8;
     int is_cleartext_mode = 1;
     size_t data_bytes = 0;
-    uint64_t cnx_id = cnx->server_cnxid;
+    picoquic_connection_id_t cnx_id = cnx->server_cnxid;
     int retransmit_possible = 0;
     size_t header_length = 0;
     uint8_t* bytes = packet->bytes;
@@ -1017,7 +1019,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_packet* pa
     size_t checksum_overhead = 8;
     int is_cleartext_mode = 1;
     size_t data_bytes = 0;
-    uint64_t cnx_id = cnx->server_cnxid;
+    picoquic_connection_id_t cnx_id = cnx->server_cnxid;
     int retransmit_possible = 0;
     size_t header_length = 0;
     uint8_t* bytes = packet->bytes;
@@ -1125,7 +1127,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_packet* packet
     picoquic_packet_type_enum packet_type = 0;
     size_t checksum_overhead = 8;
     int is_cleartext_mode = 1;
-    uint64_t cnx_id = cnx->server_cnxid;
+    picoquic_connection_id_t cnx_id = cnx->server_cnxid;
     size_t header_length = 0;
     uint8_t* bytes = packet->bytes;
     size_t length = 0;
@@ -1321,7 +1323,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_packet* packet,
     picoquic_packet_type_enum packet_type = picoquic_packet_1rtt_protected_phi0;
     int is_cleartext_mode = 0;
     size_t data_bytes = 0;
-    uint64_t cnx_id = cnx->server_cnxid;
+    picoquic_connection_id_t cnx_id = cnx->server_cnxid;
     int retransmit_possible = 1;
     size_t header_length = 0;
     uint8_t* bytes = packet->bytes;

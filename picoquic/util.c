@@ -95,3 +95,33 @@ void debug_printf_resume(void)
 {
     debug_suspended = 0;
 }
+
+size_t picoquic_format_cnxid(uint8_t* bytes, picoquic_connection_id_t cnx_id)
+{
+    size_t len = sizeof(picoquic_connection_id_t);
+    
+    picoformat_64(bytes, cnx_id.val64);
+
+    return len;
+}
+
+size_t picoquic_parse_cnxid(uint8_t * bytes, picoquic_connection_id_t * cnx_id)
+{
+    size_t len = sizeof(picoquic_connection_id_t);
+
+    cnx_id->val64 = PICOPARSE_64(bytes);
+
+    return len;
+}
+
+const picoquic_connection_id_t picoquic_null_cnxid = { 0 };
+
+int picoquic_is_cnxid_null(picoquic_connection_id_t cnx_id)
+{
+    return (cnx_id.val64 == 0) ? 1 : 0;
+}
+
+int picoquic_compare_connection_id(picoquic_connection_id_t * cnx_id1, picoquic_connection_id_t * cnx_id2)
+{
+    return(cnx_id1->val64 == cnx_id2->val64) ? 0 : -1;
+}

@@ -626,7 +626,7 @@ static int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t propose
             }
 
             /* Create a client connection */
-            test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient, 0,
+            test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient, picoquic_null_cnxid,
                 (struct sockaddr*)&test_ctx->server_addr, 0,
                 proposed_version, sni, alpn, 1);
 
@@ -756,10 +756,10 @@ static int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                 }
 
                 if (test_ctx->cnx_server == NULL) {
-                    uint64_t target_cnxid = test_ctx->cnx_client->initial_cnxid;
+                    picoquic_connection_id_t target_cnxid = test_ctx->cnx_client->initial_cnxid;
                     picoquic_cnx_t* next = test_ctx->qserver->cnx_list;
 
-                    while (next != NULL && next->initial_cnxid != target_cnxid) {
+                    while (next != NULL && picoquic_compare_connection_id(&next->initial_cnxid, &target_cnxid)!=0) {
                         next = next->next_in_table;
                     }
 
@@ -1191,8 +1191,7 @@ int tls_api_bad_server_reset_test()
     if (ret == 0) {
         size_t byte_index = 0;
         buffer[byte_index++] = 0x41;
-        picoformat_64(&buffer[byte_index], test_ctx->cnx_client->server_cnxid);
-        byte_index += 8;
+        byte_index += picoquic_format_cnxid(&buffer[byte_index], test_ctx->cnx_client->server_cnxid);
         memset(buffer + byte_index, 0xcc, sizeof(buffer) - byte_index);
     }
 
@@ -1311,7 +1310,7 @@ int tls_api_two_connections_test()
 
         /* Create a new connection in the client context */
 
-        test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient, 0,
+        test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient, picoquic_null_cnxid,
             (struct sockaddr*)&test_ctx->server_addr, simulated_time, 0, NULL, "test-alpn", 1);
 
         if (test_ctx->cnx_client == NULL) {
@@ -1898,9 +1897,11 @@ int wrong_keyshare_test()
     picoquic_cnx_t* cnx;
     test_api_callback_t server_callback;
     uint64_t simulated_time = 0;
-    uint64_t cnx_id = 0x0102030405060708ull;
+    picoquic_connection_id_t cnx_id; 
     struct sockaddr_in addr_from;
     int ret = 0;
+
+    cnx_id.val64 = 0x0102030405060708ull;
 
     qserver = picoquic_create(8,
 #ifdef _WINDOWS

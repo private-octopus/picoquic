@@ -330,8 +330,8 @@ typedef struct st_picoquic_cnx_t {
 
     /* connection state, ID, etc. Todo: allow for multiple cnxid */
     picoquic_state_enum cnx_state;
-    uint64_t initial_cnxid;
-    uint64_t server_cnxid;
+    picoquic_connection_id_t initial_cnxid;
+    picoquic_connection_id_t server_cnxid;
     uint64_t start_time;
     uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE];
     uint32_t application_error;
@@ -440,7 +440,7 @@ picoquic_stateless_packet_t* picoquic_create_stateless_packet(picoquic_quic_t* q
 void picoquic_queue_stateless_packet(picoquic_quic_t* quic, picoquic_stateless_packet_t* sp);
 
 /* Registration of connection ID in server context */
-int picoquic_register_cnx_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint64_t cnx_id);
+int picoquic_register_cnx_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, picoquic_connection_id_t cnx_id);
 
 /* handling of retransmission queue */
 void picoquic_enqueue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet* p);
@@ -453,7 +453,7 @@ int picoquic_reset_cnx_version(picoquic_cnx_t* cnx, uint8_t* bytes, size_t lengt
 int picoquic_connection_error(picoquic_cnx_t* cnx, uint32_t local_error);
 
 /* Connection context retrieval functions */
-picoquic_cnx_t* picoquic_cnx_by_id(picoquic_quic_t* quic, uint64_t cnx_id);
+picoquic_cnx_t* picoquic_cnx_by_id(picoquic_quic_t* quic, picoquic_connection_id_t cnx_id);
 picoquic_cnx_t* picoquic_cnx_by_net(picoquic_quic_t* quic, struct sockaddr* addr);
 
 /*
@@ -490,7 +490,7 @@ char* picoquic_string_duplicate(const char* original);
 /* Packet parsing */
 
 typedef struct _picoquic_packet_header {
-    uint64_t cnx_id;
+    picoquic_connection_id_t cnx_id;
     uint32_t pn;
     uint32_t vn;
     uint32_t offset;
