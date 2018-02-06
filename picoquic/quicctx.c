@@ -52,8 +52,7 @@ static uint64_t picoquic_cnx_id_hash(void* key)
     picoquic_cnx_id* cid = (picoquic_cnx_id*)key;
 
     /* TODO: should scramble the value for security and DOS protection */
-    /* TODO: change when new length is defined */
-    return cid->cnx_id.val64;
+    return picoquic_val64_connection_id(cid->cnx_id);
 }
 
 static int picoquic_cnx_id_compare(void* key1, void* key2)
@@ -489,16 +488,16 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             cnx->local_parameters.omit_connection_id = 1;
 
             cnx->cnx_state = picoquic_state_client_init;
-            if (picoquic_is_cnxid_null(cnx_id)) {
+            if (picoquic_is_connection_id_null(cnx_id)) {
                 picoquic_crypto_random(quic, &cnx_id, sizeof(uint64_t));
             }
 
             if (quic->cnx_id_callback_fn) {
-                quic->cnx_id_callback_fn(cnx_id, picoquic_null_cnxid, quic->cnx_id_callback_ctx, &cnx_id);
+                quic->cnx_id_callback_fn(cnx_id, picoquic_null_connection_id, quic->cnx_id_callback_ctx, &cnx_id);
             }
 
             cnx->initial_cnxid = cnx_id;
-            cnx->server_cnxid = picoquic_null_cnxid;
+            cnx->server_cnxid = picoquic_null_connection_id;
             /* Initialize the reset secret to a random value. This
 			 * will prevent spurious matches to an all zero value, for example.
 			 * The real value will be set when receiving the transport parameters. 
@@ -633,7 +632,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
     }
 
     if (cnx != NULL) {
-        if (!picoquic_is_cnxid_null(cnx->server_cnxid)) {
+        if (!picoquic_is_connection_id_null(cnx->server_cnxid)) {
             (void)picoquic_register_cnx_id(quic, cnx, cnx->server_cnxid);
         }
 
@@ -649,7 +648,7 @@ picoquic_cnx_t* picoquic_create_client_cnx(picoquic_quic_t* quic,
     struct sockaddr* addr, uint64_t start_time, uint32_t preferred_version,
     char const* sni, char const* alpn, picoquic_stream_data_cb_fn callback_fn, void* callback_ctx)
 {
-    picoquic_cnx_t* cnx = picoquic_create_cnx(quic, picoquic_null_cnxid, addr, start_time, preferred_version, sni, alpn, 1);
+    picoquic_cnx_t* cnx = picoquic_create_cnx(quic, picoquic_null_connection_id, addr, start_time, preferred_version, sni, alpn, 1);
 
     if (cnx != NULL) {
         if (callback_fn != NULL)

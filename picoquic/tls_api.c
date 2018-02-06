@@ -1070,7 +1070,7 @@ int picoquic_setup_cleartext_aead_contexts(picoquic_cnx_t* cnx)
     ptls_iovec_t prk;
     ptls_iovec_t info;
 
-    (void)picoquic_format_cnxid(cnx_id_serialized, cnx->initial_cnxid);
+    (void)picoquic_format_connection_id(cnx_id_serialized, cnx->initial_cnxid);
     picoquic_setup_cleartext_aead_salt(cnx->version_index, &salt);
     ikm.base = cnx_id_serialized;
     ikm.len = sizeof(cnx_id_serialized);

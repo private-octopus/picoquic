@@ -47,13 +47,13 @@ void cleartext_aead_init_packet(picoquic_packet_header* ph,
     uint8_t* cleartext, size_t target)
 {
     size_t byte_index = 0;
-    uint64_t seed = ph->cnx_id.val64;
+    uint64_t seed = picoquic_val64_connection_id(ph->cnx_id);
 
     seed ^= ph->pn;
 
     /* Serialize the header */
     cleartext[byte_index++] = 0x80 | ((uint8_t)ph->ptype);
-    byte_index += picoquic_format_cnxid(&cleartext[byte_index], ph->cnx_id);
+    byte_index += picoquic_format_connection_id(&cleartext[byte_index], ph->cnx_id);
     picoformat_32(&cleartext[byte_index], ph->pn);
     byte_index += 4;
     picoformat_32(&cleartext[byte_index], ph->vn);
@@ -101,7 +101,7 @@ int cleartext_aead_test()
         memcpy(&test_addr_c.sin_addr, addr1, 4);
         test_addr_c.sin_port = 12345;
 
-        cnx_client = picoquic_create_cnx(qclient, picoquic_null_cnxid,
+        cnx_client = picoquic_create_cnx(qclient, picoquic_null_connection_id,
             (struct sockaddr*)&test_addr_c, 0, 0, NULL, NULL, 1);
         if (cnx_client == NULL) {
             ret = -1;
@@ -226,7 +226,7 @@ int pn_ctr_test()
         memset(in_bytes, i, i);
         ptls_cipher_init(pn_enc, iv);
         ptls_cipher_encrypt(pn_enc, out_bytes, in_bytes, i);
-        for (int j = 0; j < i; j++)
+        for (size_t j = 0; j < i; j++)
         {
             if (in_bytes[j] != (out_bytes[j] ^ expected[j]))
             {
@@ -337,7 +337,7 @@ int cleartext_pn_enc_test()
         memcpy(&test_addr_c.sin_addr, addr1, 4);
         test_addr_c.sin_port = 12345;
 
-        cnx_client = picoquic_create_cnx(qclient, picoquic_null_cnxid,
+        cnx_client = picoquic_create_cnx(qclient, picoquic_null_connection_id,
             (struct sockaddr*)&test_addr_c, 0, 0, NULL, NULL, 1);
         if (cnx_client == NULL) {
             ret = -1;

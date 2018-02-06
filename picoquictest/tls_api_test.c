@@ -626,7 +626,7 @@ static int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t propose
             }
 
             /* Create a client connection */
-            test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient, picoquic_null_cnxid,
+            test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient, picoquic_null_connection_id,
                 (struct sockaddr*)&test_ctx->server_addr, 0,
                 proposed_version, sni, alpn, 1);
 
@@ -1191,7 +1191,7 @@ int tls_api_bad_server_reset_test()
     if (ret == 0) {
         size_t byte_index = 0;
         buffer[byte_index++] = 0x41;
-        byte_index += picoquic_format_cnxid(&buffer[byte_index], test_ctx->cnx_client->server_cnxid);
+        byte_index += picoquic_format_connection_id(&buffer[byte_index], test_ctx->cnx_client->server_cnxid);
         memset(buffer + byte_index, 0xcc, sizeof(buffer) - byte_index);
     }
 
@@ -1310,7 +1310,7 @@ int tls_api_two_connections_test()
 
         /* Create a new connection in the client context */
 
-        test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient, picoquic_null_cnxid,
+        test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient, picoquic_null_connection_id,
             (struct sockaddr*)&test_ctx->server_addr, simulated_time, 0, NULL, "test-alpn", 1);
 
         if (test_ctx->cnx_client == NULL) {
@@ -1901,7 +1901,8 @@ int wrong_keyshare_test()
     struct sockaddr_in addr_from;
     int ret = 0;
 
-    cnx_id.val64 = 0x0102030405060708ull;
+    /* TODO: find a better way to initialize CID from value */
+    cnx_id.opaque64 = 0x0102030405060708ull;
 
     qserver = picoquic_create(8,
 #ifdef _WINDOWS
