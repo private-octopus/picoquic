@@ -401,7 +401,6 @@ int picoquic_parse_stream_header(const uint8_t* bytes, size_t bytes_max,
     if (bytes_max < byte_index || l_stream == 0 || (off != 0 && l_off == 0)) {
         DBG_PRINTF("stream frame header too large: first_byte=0x%02x, bytes_max=%" PRIst,
             bytes[0], bytes_max);
-        ret = -1;
         *data_length = 0;
         byte_index = bytes_max;
         ret = -1;
@@ -478,13 +477,13 @@ int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id,
     if (ret == 0) {
         if ((stream->stream_flags & picoquic_stream_flag_fin_received) != 0) {
             if (new_fin_offset > stream->fin_offset) {
-                ret = -1;
+                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FINAL_OFFSET_ERROR);
             } else if (fin != 0 && stream->fin_offset != new_fin_offset) {
-                ret = -1;
+                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FINAL_OFFSET_ERROR);
             }
         } else if (fin) {
             if (stream_id == 0) {
-                ret = -1;
+                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION);
             } else {
                 stream->stream_flags |= picoquic_stream_flag_fin_received;
                 should_notify = stream_id;
@@ -534,12 +533,12 @@ int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id,
                 picoquic_stream_data* data = (picoquic_stream_data*)malloc(sizeof(picoquic_stream_data));
 
                 if (data == NULL) {
-                    ret = -1;
+                    ret = PICOQUIC_ERROR_MEMORY;
                 } else {
                     data->length = data_length;
                     data->bytes = (uint8_t*)malloc(data_length);
                     if (data->bytes == NULL) {
-                        ret = -1;
+                        ret = PICOQUIC_ERROR_MEMORY;
                         free(data);
                     } else {
                         data->offset = offset + start;
@@ -1336,11 +1335,6 @@ int picoquic_prepare_ack_frame(picoquic_cnx_t* cnx, uint64_t current_time,
     uint64_t ack_gap = 0;
     uint64_t lowest_acknowledged = 0;
     size_t num_block_index = 0;
-
-    if (cnx->first_sack_item.end_of_sack_range == 0x0F)
-    {
-        *consumed = 0;
-    }
 
     /* Check that there is enough room in the packet, and something to acknowledge */
     if (cnx->first_sack_item.start_of_sack_range == 0 && cnx->first_sack_item.end_of_sack_range == 0) {

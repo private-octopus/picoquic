@@ -734,20 +734,11 @@ static int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                 next_time = client_arrival;
                 *simulated_time = next_time;
 
-                if (next_time == 0x14bb7)
-                {
-                    ret = 0;
-                }
-
                 ret = picoquic_incoming_packet(test_ctx->qclient, packet->bytes, (uint32_t)packet->length,
                     (struct sockaddr*)&test_ctx->server_addr,
                     (struct sockaddr*)&test_ctx->client_addr, 0,
                     *simulated_time);
 
-                if (ret < 0)
-                {
-                    ret = -1;
-                }
                 *was_active |= 1;
             } else if (server_arrival < next_time && (packet = picoquictest_sim_link_dequeue(test_ctx->c_to_s_link, server_arrival)) != NULL) {
 
