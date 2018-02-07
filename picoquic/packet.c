@@ -976,10 +976,10 @@ int picoquic_incoming_packet(
                 ret = PICOQUIC_ERROR_DETECTED;
             }
         } else {
-#if 0
             /* Build a packet number to 64 bits */
             ph.pn64 = picoquic_get_packet_number64(
                 cnx->first_sack_item.end_of_sack_range, ph.pnmask, ph.pn);
+#if 0
 
             /* verify that the packet is new */
             if (picoquic_is_pn_already_received(cnx, ph.pn64) != 0) {

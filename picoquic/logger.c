@@ -746,6 +746,8 @@ size_t  picoquic_decrypt_log_packet(FILE* F, picoquic_cnx_t* cnx,
         return decoded;
     }
 
+    memcpy(header_buffer, bytes, ph->offset);
+
     if (picoquic_supported_versions[cnx->version_index].version_flags&picoquic_version_use_pn_encryption)
     {
         if (pn_enc == NULL)
@@ -757,8 +759,6 @@ size_t  picoquic_decrypt_log_packet(FILE* F, picoquic_cnx_t* cnx,
             /* The sample is located at the offset */
             size_t sample_offset = ph->offset;
             size_t aead_checksum_length = picoquic_aead_get_checksum_length(aead_context);
-
-            memcpy(header_buffer, bytes, ph->offset);
 
             if (sample_offset + aead_checksum_length > length)
             {
