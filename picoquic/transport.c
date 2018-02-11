@@ -391,7 +391,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                             if (extension_length != 1) {
                                 ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_TRANSPORT_PARAMETER_ERROR);
                             } else {
-                                cnx->local_parameters.ack_delay_exponent = bytes[byte_index];
+                                cnx->remote_parameters.ack_delay_exponent = bytes[byte_index];
                             }
                             break;
                         case picoquic_transport_parameter_initial_max_stream_id_unidir:

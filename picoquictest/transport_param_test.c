@@ -54,7 +54,7 @@ static picoquic_transport_parameters transport_param_test6 = {
 };
 
 static picoquic_transport_parameters transport_param_test7 = {
-    8192, 16384, 5, 0, 10, 1, 1472, 3
+    8192, 16384, 5, 0, 10, 1, 1472, 17
 };
 
 static uint8_t transport_param_reset_secret[PICOQUIC_RESET_SECRET_SIZE] = {
@@ -111,7 +111,7 @@ uint8_t client_param5[] = {
     0, 0x00, 0, 0x04, 0, 0, 0x20, 0,
     0, 0x01, 0, 0x04, 0, 0, 0x40, 0,
     0, 0x05, 0, 0x02, 0x05, 0xC0,
-    0, 0x07, 0, 0x01, 0x03
+    0, 0x07, 0, 0x01, 0x11
 };
 
 uint8_t server_param1[] = {
@@ -321,18 +321,21 @@ int transport_param_test()
             &transport_param_test7, client_param5, sizeof(client_param5));
     }
 
-    DBG_PRINTF("%s", "Starting transport parameters fuzz test.\n");
+    if (ret == 0)
+    {
+        DBG_PRINTF("%s", "Starting transport parameters fuzz test.\n");
 
-    if (ret == 0) {
-        ret = transport_param_fuzz_test(0, version_default, 0x0A1A0A1A,
-            &transport_param_test2, client_param2, sizeof(client_param2), &proof);
+        if (ret == 0) {
+            ret = transport_param_fuzz_test(0, version_default, 0x0A1A0A1A,
+                &transport_param_test2, client_param2, sizeof(client_param2), &proof);
+        }
+
+        if (ret == 0) {
+            ret = transport_param_fuzz_test(1, version_default, 0x0A1A0A1A,
+                &transport_param_test2, server_param2, sizeof(server_param2), &proof);
+        }
+
+        DBG_PRINTF("%s", "End of transport parameters fuzz test.\n");
     }
-
-    if (ret == 0) {
-        ret = transport_param_fuzz_test(1, version_default, 0x0A1A0A1A,
-            &transport_param_test2, server_param2, sizeof(server_param2), &proof);
-    }
-
-    DBG_PRINTF("%s", "End of transport parameters fuzz test.\n");
     return ret;
 }
