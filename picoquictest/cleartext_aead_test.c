@@ -92,6 +92,7 @@ int cleartext_aead_test()
 #endif
         "test", NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, 0);
     if (qclient == NULL || qserver == NULL) {
+        DBG_PRINTF("%s", "Could not create Quic contexts.\n");
         ret = -1;
     }
 
@@ -104,6 +105,7 @@ int cleartext_aead_test()
         cnx_client = picoquic_create_cnx(qclient, picoquic_null_connection_id,
             (struct sockaddr*)&test_addr_c, 0, 0, NULL, NULL, 1);
         if (cnx_client == NULL) {
+            DBG_PRINTF("%s", "Could not create client connection context.\n");
             ret = -1;
         }
     }
@@ -120,7 +122,12 @@ int cleartext_aead_test()
             cnx_client->proposed_version, NULL, NULL, 0);
 
         if (cnx_server == NULL) {
+            DBG_PRINTF("%s", "Could not create server connection context.\n");
             ret = -1;
+        } else {
+            DBG_PRINTF("Server Cnx-ID= %llx, Client Cnx-ID = %llx\n",
+                (unsigned long long) cnx_client->initial_cnxid.opaque64,
+                (unsigned long long) cnx_server->initial_cnxid.opaque64);
         }
     }
 
@@ -145,8 +152,10 @@ int cleartext_aead_test()
             incoming, encoded_length, &ph_init, &already_received);
 
         if (decoded_length != clear_length) {
+            DBG_PRINTF("Decoded length (%d) does not match clear lenth (%d).\n", (int)decoded_length, (int)clear_length);
             ret = -1;
         } else if (memcmp(incoming, clear_text, clear_length) != 0) {
+            DBG_PRINTF("%s", "Decoded message not match clear length.\n");
             ret = 1;
         }
     }
@@ -328,6 +337,7 @@ int cleartext_pn_enc_test()
 #endif
         "test", NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, 0);
     if (qclient == NULL || qserver == NULL) {
+        DBG_PRINTF("%s", "Could not create Quic contexts.\n");
         ret = -1;
     }
 
@@ -340,6 +350,7 @@ int cleartext_pn_enc_test()
         cnx_client = picoquic_create_cnx(qclient, picoquic_null_connection_id,
             (struct sockaddr*)&test_addr_c, 0, 0, NULL, NULL, 1);
         if (cnx_client == NULL) {
+            DBG_PRINTF("%s", "Could not create client connection context.\n");
             ret = -1;
         }
     }
@@ -356,6 +367,7 @@ int cleartext_pn_enc_test()
             cnx_client->proposed_version, NULL, NULL, 0);
 
         if (cnx_server == NULL) {
+            DBG_PRINTF("%s", "Could not create server connection context.\n");
             ret = -1;
         }
     }
@@ -373,9 +385,13 @@ int cleartext_pn_enc_test()
 
         ret = test_one_pn_enc_pair(seq_num_1, 4, cnx_client->pn_enc_cleartext, cnx_server->pn_dec_cleartext, sample_1);
 
-        if (ret == 0)
-        {
+        if (ret != 0) {
+            DBG_PRINTF("%s", "Test of encoding PN sample 1 failed.\n");
+        } else {
             ret = test_one_pn_enc_pair(seq_num_2, 4, cnx_server->pn_enc_cleartext, cnx_client->pn_dec_cleartext, sample_2);
+            if (ret != 0) {
+                DBG_PRINTF("%s", "Test of encoding PN sample 2 failed.\n");
+            }
         }
     }
 
