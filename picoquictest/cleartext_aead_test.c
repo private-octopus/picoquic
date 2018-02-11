@@ -130,6 +130,11 @@ int cleartext_aead_test()
                 (unsigned long long) cnx_server->initial_cnxid.opaque64);
             ret = -1;
         }
+        else if (picoquic_compare_cleartext_aead_contexts(cnx_client, cnx_server) != 0 ||
+            picoquic_compare_cleartext_aead_contexts(cnx_server, cnx_client) != 0) {
+            DBG_PRINTF("%s", "Cleartext encryption contexts no not match.\n");
+            ret = -1;
+        }
     }
 
     /* Create a packet from client to server, encrypt, decrypt */

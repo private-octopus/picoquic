@@ -1133,7 +1133,9 @@ picoquic_cnx_t* picoquic_cnx_by_id(picoquic_quic_t* quic, picoquic_connection_id
 {
     picoquic_cnx_t* ret = NULL;
     picohash_item* item;
-    picoquic_cnx_id key = { 0 };
+    picoquic_cnx_id key;
+
+    memset(&key, 0, sizeof(key));
     key.cnx_id = cnx_id;
 
     item = picohash_retrieve(quic->table_cnx_by_id, &key);

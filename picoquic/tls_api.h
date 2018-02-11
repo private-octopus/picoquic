@@ -63,6 +63,8 @@ void picoquic_pn_encrypt(void *pn_enc, void * iv, void *output, const void *inpu
 
 void picoquic_pn_enc_free(void * pn_enc);
 
+int picoquic_compare_cleartext_aead_contexts(picoquic_cnx_t* cnx1, picoquic_cnx_t* cnx2);
+
 int picoquic_create_cnxid_reset_secret(picoquic_quic_t* quic, picoquic_connection_id_t cnx_id,
     uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE]);
 

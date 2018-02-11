@@ -1054,6 +1054,32 @@ static void picoquic_setup_cleartext_aead_salt(size_t version_index, ptls_iovec_
     }
 }
 
+/* Compare AEAD context parameters. This is done just by comparing the IV,
+ * which is accessible in the context */
+int picoquic_compare_cleartext_aead_contexts(picoquic_cnx_t* cnx1, picoquic_cnx_t* cnx2)
+{
+    int ret = 0;
+    ptls_aead_context_t * aead_enc = (ptls_aead_context_t *)cnx1->aead_encrypt_cleartext_ctx;
+    ptls_aead_context_t * aead_dec = (ptls_aead_context_t *)cnx2->aead_decrypt_cleartext_ctx;
+
+    if (aead_enc == NULL )
+    {
+        DBG_PRINTF("%s", "Missing aead encoding context\n");
+        ret = -1;
+    }
+    else if (aead_dec == NULL)
+    {
+        DBG_PRINTF("%s", "Missing aead decoding context\n");
+        ret = -1;
+    }
+    else if (memcmp(aead_enc->static_iv, aead_dec->static_iv, 16) != 0){
+        DBG_PRINTF("%s", "Encoding IV does not match decoding IV\n");
+        ret = -1;
+    }
+
+    return ret;
+}
+
 int picoquic_setup_cleartext_aead_contexts(picoquic_cnx_t* cnx)
 {
     int ret = 0;
