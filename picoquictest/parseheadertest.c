@@ -142,7 +142,7 @@ static uint8_t packet_short_phi0_noc_16_08[] = {
 };
 
 static picoquic_packet_header hphi0_noc_16_08 = {
-    0,
+    { 0 },
     0xBEEF,
     0,
     3,
@@ -158,7 +158,7 @@ static uint8_t packet_short_phi0_noc_8_08[] = {
 };
 
 static picoquic_packet_header hphi0_noc_8_08 = {
-    0,
+    { 0 },
     0xEF,
     0,
     2,
