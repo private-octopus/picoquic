@@ -1058,7 +1058,7 @@ int picoquic_setup_cleartext_aead_contexts(picoquic_cnx_t* cnx)
 {
     int ret = 0;
     uint8_t master_secret[256]; /* secret_max */
-    uint8_t cnx_id_serialized[sizeof(picoquic_connection_id_t)]; /* serialized cnx_id */
+    uint8_t cnx_id_serialized[PICOQUIC_CONNECTION_ID_SIZE]; /* serialized cnx_id */
     ptls_hash_algorithm_t* algo = &ptls_openssl_sha256;
     ptls_aead_algorithm_t* aead = &ptls_openssl_aes128gcm;
     ptls_iovec_t salt;
@@ -1073,7 +1073,7 @@ int picoquic_setup_cleartext_aead_contexts(picoquic_cnx_t* cnx)
     (void)picoquic_format_connection_id(cnx_id_serialized, cnx->initial_cnxid);
     picoquic_setup_cleartext_aead_salt(cnx->version_index, &salt);
     ikm.base = cnx_id_serialized;
-    ikm.len = sizeof(cnx_id_serialized);
+    ikm.len = sizeof(PICOQUIC_CONNECTION_ID_SIZE);
 
     /* Extract the master key -- key length will be 32 per SHA256 */
     ret = ptls_hkdf_extract(algo, master_secret, salt, ikm);

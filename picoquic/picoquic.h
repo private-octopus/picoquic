@@ -125,6 +125,8 @@ typedef enum {
 /*
  * Provisional definition of the connection ID.
  */
+#define PICOQUIC_CONNECTION_ID_SIZE 8
+
 typedef struct st_picoquic_connection_id_t {
     uint64_t opaque64;
 } picoquic_connection_id_t;

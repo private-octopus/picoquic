@@ -124,10 +124,11 @@ int cleartext_aead_test()
         if (cnx_server == NULL) {
             DBG_PRINTF("%s", "Could not create server connection context.\n");
             ret = -1;
-        } else {
-            DBG_PRINTF("Server Cnx-ID= %llx, Client Cnx-ID = %llx\n",
+        } else if (picoquic_compare_connection_id(&cnx_client->initial_cnxid, &cnx_server->initial_cnxid) != 0) {
+            DBG_PRINTF("Server Cnx-ID= %llx, differs from Client Cnx-ID = %llx\n",
                 (unsigned long long) cnx_client->initial_cnxid.opaque64,
                 (unsigned long long) cnx_server->initial_cnxid.opaque64);
+            ret = -1;
         }
     }
 

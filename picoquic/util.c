@@ -98,11 +98,9 @@ void debug_printf_resume(void)
 
 size_t picoquic_format_connection_id(uint8_t* bytes, picoquic_connection_id_t cnx_id)
 {
-    size_t len = sizeof(picoquic_connection_id_t);
-    
     picoformat_64(bytes, cnx_id.opaque64);
 
-    return len;
+    return PICOQUIC_CONNECTION_ID_SIZE;
 }
 
 size_t picoquic_parse_connection_id(uint8_t * bytes, picoquic_connection_id_t * cnx_id)
