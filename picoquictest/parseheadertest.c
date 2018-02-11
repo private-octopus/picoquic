@@ -48,7 +48,7 @@ static uint8_t pinitial08[] = {
 };
 
 static picoquic_packet_header hinitial08 = {
-    TEST_CNXID_INI_VAL,
+    { TEST_CNXID_INI_VAL },
     0xDEADBEEF,
     0x50435130,
     17,

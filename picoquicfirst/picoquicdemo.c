@@ -1104,7 +1104,7 @@ int main(int argc, char** argv)
     int cnx_id_mask_is_set = 0;
     cnx_id_callback_ctx_t cnx_id_cbdata = {
         .cnx_id_select = 0,
-        .cnx_id_mask = UINT64_MAX,
+        .cnx_id_mask.opaque64 = UINT64_MAX,
         .cnx_id_val = 0
     };
 
