@@ -40,7 +40,7 @@ void cleartext_aead_packet_init_header(picoquic_packet_header* ph,
     ph->vn = vn;
     ph->ptype = ptype;
     ph->offset = 17;
-    ph->pnmask = 0xFFFFFFFF;
+    ph->pnmask = 0xFFFFFFFF00000000ull;
 }
 
 void cleartext_aead_init_packet(picoquic_packet_header* ph,
@@ -54,6 +54,7 @@ void cleartext_aead_init_packet(picoquic_packet_header* ph,
     /* Serialize the header */
     cleartext[byte_index++] = 0x80 | ((uint8_t)ph->ptype);
     byte_index += picoquic_format_connection_id(&cleartext[byte_index], ph->cnx_id);
+    ph->pn_offset = byte_index;
     picoformat_32(&cleartext[byte_index], ph->pn);
     byte_index += 4;
     picoformat_32(&cleartext[byte_index], ph->vn);
@@ -139,8 +140,6 @@ int cleartext_aead_test()
 
     /* Create a packet from client to server, encrypt, decrypt */
     if (ret == 0) {
-        int already_received = 0;
-
         cleartext_aead_packet_init_header(&ph_init,
             cnx_client->initial_cnxid, seqnum, cnx_client->proposed_version,
             picoquic_packet_client_initial);
@@ -154,8 +153,10 @@ int cleartext_aead_test()
         encoded_length += ph_init.offset;
 
         /* AEAD Decrypt */
-        decoded_length = picoquic_decrypt_cleartext(cnx_server,
-            incoming, encoded_length, &ph_init, &already_received);
+        decoded_length = picoquic_aead_decrypt_generic(incoming + ph_init.offset,
+            incoming + ph_init.offset, encoded_length - ph_init.offset, seqnum,
+            incoming, ph_init.offset, cnx_server->aead_decrypt_cleartext_ctx);
+        decoded_length += ph_init.offset;
 
         if (decoded_length != clear_length) {
             DBG_PRINTF("Decoded length (%d) does not match clear lenth (%d).\n", (int)decoded_length, (int)clear_length);
