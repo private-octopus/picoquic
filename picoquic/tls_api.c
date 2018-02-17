@@ -1241,12 +1241,15 @@ int picoquic_tlsinput_stream_zero(picoquic_cnx_t* cnx)
         cnx->first_stream.sent_offset = 0;
     } else if (ret == PTLS_ERROR_STATELESS_RETRY) {
         cnx->cnx_state = picoquic_state_server_send_hrr;
-    } /*
+    }
     else if (ret == PTLS_ERROR_IN_PROGRESS &&
         cnx->cnx_state == picoquic_state_server_init)
     {
-        cnx->cnx_state = picoquic_state_server_send_hrr;
-    }*/
+        /* Special case on session resume ??? */
+        picoquic_setup_0RTT_aead_contexts(cnx, 1);
+        cnx->cnx_state = picoquic_state_server_almost_ready;
+        ret = picoquic_setup_1RTT_aead_contexts(cnx, 1);
+    }
 
     if ((ret == 0 || ret == PTLS_ERROR_IN_PROGRESS || ret == PTLS_ERROR_STATELESS_RETRY)) {
         if (sendbuf.off > 0) {

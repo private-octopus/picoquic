@@ -683,6 +683,11 @@ static int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                 if (test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
                     ret = picoquic_prepare_packet(test_ctx->cnx_client, p, *simulated_time,
                         packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length);
+                    if (ret != 0)
+                    {
+                        /* useless test, but makes it easier to add a breakpoint under debugger */
+                        ret = -1;
+                    }
                 } else {
                     p->length = 0;
                     packet->length = 0;
@@ -698,6 +703,11 @@ static int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                         if (ret == 0 && p->length > 0) {
                             /* copy and queue in s to c */
                             target_link = test_ctx->s_to_c_link;
+                        }
+                        if (ret != 0)
+                        {
+                            /* useless test, but makes it easier to add a breakpoint under debugger */
+                            ret = -1;
                         }
                     }
                 }
@@ -738,8 +748,13 @@ static int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                     (struct sockaddr*)&test_ctx->server_addr,
                     (struct sockaddr*)&test_ctx->client_addr, 0,
                     *simulated_time);
-
                 *was_active |= 1;
+
+                if (ret != 0)
+                {
+                    /* useless test, but makes it easier to add a breakpoint under debugger */
+                    ret = -1;
+                }
             } else if (server_arrival < next_time && (packet = picoquictest_sim_link_dequeue(test_ctx->c_to_s_link, server_arrival)) != NULL) {
 
                 next_time = server_arrival;
@@ -750,8 +765,10 @@ static int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                     (struct sockaddr*)&test_ctx->server_addr, 0,
                     *simulated_time);
 
-                if (ret < 0)
+
+                if (ret != 0)
                 {
+                    /* useless test, but makes it easier to add a breakpoint under debugger */
                     ret = -1;
                 }
 
@@ -1837,25 +1854,39 @@ int spurious_retransmit_test()
 
 static uint8_t clientHello25519[] = {
     /* Stream 0 header, including length */
-    0x12, 0x00, 0x41, 0x09,
+    0x12, 0x00, 0x41, 0x29,
     /* TLS Record Header, end with 2 bytes length*/
-    0x16, 0x03, 0x01, 0x01, 0x04,
+    0x16, 0x03, 0x03, 0x01, 0x24,
     /* Handshake protocol header for CH, end with 3 bytes length */
-    0x01, 0x00, 0x01, 0x00,
-    /* Fixed part of CH, end with 2 byte length of extenstions */
-    0x03, 0x03, 0xc4, 0xe2, 0xea, 0xb7, 0xcc, 0x4b, 0xbb, 0x43,
-    0x7d, 0xfa, 0xb4, 0x7c, 0xa5, 0x6a, 0xf8, 0xa0, 0xdb, 0x07,
-    0x2b, 0x90, 0xe5, 0x36, 0xf9, 0xc4, 0xa4, 0x9f, 0xac, 0x89,
-    0x84, 0x9c, 0x10, 0xb2, 0x00, 0x00, 0x06, 0x13, 0x01, 0x13,
-    0x03, 0x13, 0x02, 0x01, 0x00, 0x00, 0xd1,
+    0x01, 0x00, 0x01, 0x20,
+    /* CH length 73 + extensions 209 = 282, 0x0120
+    /* Legacy version ID*/
+    0x03, 0x03,
+    /* Client random, 32 bytes*/
+    0xc4, 0xe2, 0xea, 0xb7, 0xcc, 0x4b, 0xbb, 0x43, 0x7d, 0xfa, 
+    0xb4, 0x7c, 0xa5, 0x6a, 0xf8, 0xa0, 0xdb, 0x07, 0x2b, 0x90,
+    0xa4, 0x9f, 0xac, 0x89, 0x84, 0x9c, 0x10, 0xb2, 0xa5, 0x6a,
+    0x7d, 0xfa,
+    /* Legacy session ID l=32 + 32 bytes */
+    0x20, 
+    0xf8, 0xa0, 0xdb, 0x07, 0x2b, 0x90, 0xe5, 0x36, 0xf9, 0xc4, 
+    0xa4, 0x9f, 0xac, 0x89, 0x84, 0x9c, 0x10, 0xb2, 0xa5, 0x6a,
+    0xb4, 0x7c, 0xa5, 0x6a, 0xf8, 0xa0, 0xdb, 0x07, 0x2b, 0x90,
+    0x7d, 0xfa,
+    /* Cipher suites */ 
+    0x00, 0x06, 0x13, 0x01, 0x13, 0x03, 0x13, 0x02,
+    /* Legacy compression methods */
+    0x01, 0x00,
+    /* End of CH after extension length */
+    0x00, 0xd1,
     /* Series of extenstion, 2 bytes type + 2 bytes length, total = 209 */
     /* Extension type 0, SNI, 15 bytes */
     0x00, 0x00, 0x00, 0x0b,
     0x00, 0x09, 0x00, 0x00, 0x06, 0x73, 0x65, 0x72, 0x76, 0x65, 0x72,
     /* Extension type 16, ALPN, 12 bytes */
-    /* TODO: update hq-08 to supported version */
+    /* TODO: update hq-09 to supported version */
     0x00, 0x10, 0x00, 0x08,
-    0x00, 0x06, 0x05, 0x68, 0x71, 0x2d, 0x30, 0x38,
+    0x00, 0x06, 0x05, 0x68, 0x71, 0x2d, 0x30, 0x39,
     /* Some extended value, 5 bytes */
     0xff, 0x01, 0x00, 0x01, 0x00,
     /* Extension type 10, Supported groups, 24 bytes */
@@ -1864,17 +1895,16 @@ static uint8_t clientHello25519[] = {
     0x01, 0x02, 0x01, 0x03, 0x01, 0x04,
     /* Extension type 35, 4 bytes. */
     0x00, 0x23, 0x00, 0x00,
-    /* Extension type 40, key share, 42 bytes for X25519 */
-    /* (TODO: renumber after switch to draft 23) */
-    0x00, 0x28, 0x00, 0x26, 0x00, 0x24,
+    /* Extension type 51, key share, 42 bytes for X25519 */
+    0x00, 0x33, 0x00, 0x26, 0x00, 0x24,
     0x00, 0x1d,
     0x00, 0x20,
     0x78, 0xe5, 0x89, 0x74, 0x13, 0xf1, 0x71, 0x53, 0xc7, 0x0c, 0xf3, 0x3f,
     0xa3, 0x4c, 0x84, 0x97, 0x72, 0x4b, 0xda, 0xb4, 0xf5, 0x7f, 0x9d, 0x01,
     0xc9, 0x53, 0xf5, 0x88, 0xf0, 0x30, 0x46, 0x61,
     /* Extension type 43, supported_versions, 7 bytes */
-    /* (TODO: update from 0x7F-0x16 to next supported draft) */
-    0x00, 0x2b, 0x00, 0x03, 0x02, 0x7f, 0x16,
+    /* (TODO: update from 0x7F-0x17 to next supported draft) */
+    0x00, 0x2b, 0x00, 0x03, 0x02, 0x7f, 0x17,
     /* Extension type 13, signature_algorithms, 36 bytes */
     0x00, 0x0d, 0x00, 0x20, 0x00, 0x1e,
     0x04, 0x03, 0x05, 0x03, 0x06, 0x03, 0x02, 0x03, 0x08, 0x04, 0x08, 0x05,
