@@ -826,7 +826,8 @@ int picoquic_incoming_0rtt(
 
     if (picoquic_compare_connection_id(&ph->cnx_id , &cnx->initial_cnxid)!=0) {
         ret = PICOQUIC_ERROR_CNXID_CHECK;
-    } else if (cnx->cnx_state == picoquic_state_server_almost_ready || cnx->cnx_state == picoquic_state_server_ready) {
+    } else if ((cnx->cnx_state == picoquic_state_server_almost_ready || cnx->cnx_state == picoquic_state_server_ready) &&
+        cnx->aead_0rtt_decrypt_ctx != NULL) {
         /* AEAD Decrypt, in place */
         decoded_length = picoquic_decrypt_packet(cnx, bytes, length, ph, cnx->pn_enc_0rtt,
             cnx->aead_0rtt_decrypt_ctx, &already_received);
