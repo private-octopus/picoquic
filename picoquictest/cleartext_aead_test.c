@@ -186,6 +186,89 @@ int cleartext_aead_test()
     return ret;
 }
 
+static picoquic_connection_id_t clear_test_vector_cnx_id = { 0x8394c8f03e515708ull };
+static uint32_t clear_test_vector_vn = 0xff000009;
+static uint8_t clear_test_vector_client_iv[12] = {
+    0xb1, 0xf9, 0xa7, 0xe2, 0x7c, 0xc2, 0x33, 0xbb,
+    0x99, 0xe2, 0x03, 0x71 };
+static uint8_t clear_test_vector_server_iv[12] = {
+    0xd5, 0xee, 0xe8, 0xb5, 0x7c, 0x9e, 0xc7, 0xc4,
+    0xbe, 0x98, 0x4a, 0xa5 };
+
+static int cleartext_iv_cmp(void * void_aead, uint8_t * ref_iv, size_t iv_length)
+{
+    ptls_aead_context_t* aead = (ptls_aead_context_t*)void_aead;
+
+    return memcmp(aead->static_iv, ref_iv, iv_length);
+}
+
+int cleartext_aead_vector_test()
+{
+    int ret = 0;
+    uint8_t clear_text[1536];
+    uint8_t incoming[1536];
+    uint32_t seqnum = 0xdeadbeef;
+    size_t clear_length = 1200;
+    size_t encoded_length;
+    size_t decoded_length;
+    picoquic_packet_header ph_init;
+    struct sockaddr_in test_addr_c, test_addr_s;
+    picoquic_cnx_t* cnx_client = NULL;
+    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, 0, NULL, NULL, NULL, 0);
+    if (qclient == NULL) {
+        DBG_PRINTF("%s", "Could not create Quic context.\n");
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        memset(&test_addr_c, 0, sizeof(struct sockaddr_in));
+        test_addr_c.sin_family = AF_INET;
+        memcpy(&test_addr_c.sin_addr, addr1, 4);
+        test_addr_c.sin_port = 12345;
+
+        cnx_client = picoquic_create_cnx(qclient, clear_test_vector_cnx_id,
+            (struct sockaddr*)&test_addr_c, 0, clear_test_vector_vn, NULL, NULL, 1);
+
+        if (cnx_client == NULL) {
+            DBG_PRINTF("%s", "Could not create client connection context.\n");
+            ret = -1;
+        } 
+    }
+
+    if (ret == 0) {
+        /* Compare client key to expected value */
+        if (cnx_client->aead_encrypt_cleartext_ctx == NULL)
+        {
+            DBG_PRINTF("%s", "Could not create clear text AEAD encryption context.\n");
+            ret = -1;
+        } else if (0 != cleartext_iv_cmp(cnx_client->aead_encrypt_cleartext_ctx, 
+            clear_test_vector_client_iv, sizeof(clear_test_vector_client_iv))) {
+            DBG_PRINTF("%s", "Clear text AEAD encryption IV does not match expected value.\n");
+            ret = -1;
+        } else if (cnx_client->aead_decrypt_cleartext_ctx == NULL) {
+            DBG_PRINTF("%s", "Could not create clear text AEAD decryption context.\n");
+            ret = -1;
+        } else if (0 != cleartext_iv_cmp(cnx_client->aead_decrypt_cleartext_ctx,
+            clear_test_vector_server_iv, sizeof(clear_test_vector_server_iv))) {
+            DBG_PRINTF("%s", "Clear text AEAD decryption IV does not match expected value.\n");
+            ret = -1;
+        }
+    }
+
+    if (cnx_client != NULL) {
+        picoquic_delete_cnx(cnx_client);
+    }
+
+    if (qclient != NULL) {
+        picoquic_free(qclient);
+    }
+
+    return ret;
+}
+
+
+
 /*
  * Test the CTR primitives used for PN encryption
  */

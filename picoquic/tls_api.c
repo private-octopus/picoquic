@@ -32,9 +32,13 @@
 #define PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION 26
 #define PICOQUIC_TRANSPORT_PARAMETERS_MAX_SIZE 512
 
-#define PICOQUIC_LABEL_0RTT "EXPORTER-QUIC 0-RTT Secret"
-#define PICOQUIC_LABEL_1RTT_CLIENT "EXPORTER-QUIC client 1-RTT Secret"
-#define PICOQUIC_LABEL_1RTT_SERVER "EXPORTER-QUIC server 1-RTT Secret"
+#define PICOQUIC_LABEL_0RTT "EXPORTER-QUIC 0rtt"
+#define PICOQUIC_LABEL_1RTT_CLIENT "EXPORTER-QUIC client 1rtt"
+#define PICOQUIC_LABEL_1RTT_SERVER "EXPORTER-QUIC server 1rtt"
+
+#define PICOQUIC_LABEL_HANDSHAKE_CLIENT "QUIC client hs"
+#define PICOQUIC_LABEL_HANDSHAKE_SERVER "QUIC server hs"
+#define PICOQUIC_QUIC_BASE_LABEL "QUIC "
 
 typedef struct st_picoquic_tls_ctx_t {
     ptls_t* tls;
@@ -859,7 +863,7 @@ int picoquic_setup_0RTT_aead_contexts(picoquic_cnx_t* cnx, int is_server)
         if (ret == 0) {
             cnx->aead_0rtt_decrypt_ctx = (void*)
                 ptls_aead_new(cipher->aead, cipher->hash, 0, secret, NULL);
-            cnx->pn_enc_0rtt = picoquic_pn_enc_create(cipher->aead, cipher->hash, secret, NULL);
+            cnx->pn_enc_0rtt = picoquic_pn_enc_create(cipher->aead, cipher->hash, secret, PICOQUIC_QUIC_BASE_LABEL);
         }
     }
 
@@ -937,8 +941,8 @@ int picoquic_server_setup_ticket_aead_contexts(picoquic_quic_t* quic,
         }
 
         /* Create the AEAD contexts */
-        quic->aead_encrypt_ticket_ctx = (void*)ptls_aead_new(aead, algo, 1, temp_secret, NULL);
-        quic->aead_decrypt_ticket_ctx = (void*)ptls_aead_new(aead, algo, 0, temp_secret, NULL);
+        quic->aead_encrypt_ticket_ctx = (void*)ptls_aead_new(aead, algo, 1, temp_secret, PICOQUIC_QUIC_BASE_LABEL);
+        quic->aead_decrypt_ticket_ctx = (void*)ptls_aead_new(aead, algo, 0, temp_secret, PICOQUIC_QUIC_BASE_LABEL);
 
         if (quic->aead_encrypt_ticket_ctx == NULL || quic->aead_decrypt_ticket_ctx == NULL) {
             ret = PICOQUIC_ERROR_MEMORY;
@@ -980,48 +984,11 @@ size_t picoquic_aead_encrypt_generic(uint8_t* output, uint8_t* input, size_t inp
     return encrypted;
 }
 
-/* Computation of the clear text AEAD encryption based on per version secret */
-#define PICOQUIC_LABEL_HANDSHAKE_CLIENT "tls13 QUIC client handshake secret"
-#define PICOQUIC_LABEL_HANDSHAKE_SERVER "tls13 QUIC server handshake secret"
-#define PICOQUIC_LABEL_CLEAR_TEXT_KEY "tls13 key"
-#define PICOQUIC_LABEL_CLEAR_TEXT_IV "tls13 iv"
-
 uint8_t picoquic_cleartext_null_salt[] = {
     0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0
 };
-
-/*
-    cleartext_secret = HKDF-Extract(quic_version_1_salt,
-    client_connection_id):
-    Set hash algorithm to SHA-256, salt to the chosen value, ikm to the cnxid encoded on 8 bytes.
-    int ptls_hkdf_extract(ptls_hash_algorithm_t *algo, void *output, ptls_iovec_t salt, ptls_iovec_t ikm)
-
-    client_cleartext_secret =
-    HKDF-Expand-Label(cleartext_secret,
-        "QUIC client cleartext Secret",
-        "", Hash.length)
-    server_cleartext_secret =
-    HKDF-Expand-Label(cleartext_secret,
-        "QUIC server cleartext Secret",
-        "", Hash.length)
-
-        HKDF-Expand-Label uses HKDF-Expand [RFC5869] with a specially
-        formatted info parameter, as shown:
-
-        HKDF-Expand-Label(Secret, Label, HashValue, Length) =
-        HKDF-Expand(Secret, HkdfLabel, Length)
-
-        Where HkdfLabel is specified as:
-
-        struct {
-        uint16 length = Length;
-        opaque label<10..255> = "tls13 " + Label;
-        uint8 hashLength;     // Always 0
-        } HkdfLabel;
-
-*/
 
 static size_t picoquic_setup_clear_text_aead_label(
     size_t out_len, uint8_t label[256], char const* label_text)
@@ -1099,7 +1066,7 @@ int picoquic_setup_cleartext_aead_contexts(picoquic_cnx_t* cnx)
     (void)picoquic_format_connection_id(cnx_id_serialized, cnx->initial_cnxid);
     picoquic_setup_cleartext_aead_salt(cnx->version_index, &salt);
     ikm.base = cnx_id_serialized;
-    ikm.len = sizeof(PICOQUIC_CONNECTION_ID_SIZE);
+    ikm.len = PICOQUIC_CONNECTION_ID_SIZE;
 
     /* Extract the master key -- key length will be 32 per SHA256 */
     ret = ptls_hkdf_extract(algo, master_secret, salt, ikm);
@@ -1135,11 +1102,11 @@ int picoquic_setup_cleartext_aead_contexts(picoquic_cnx_t* cnx)
         if (ret == 0) {
             /* Create the AEAD contexts */
             cnx->aead_encrypt_cleartext_ctx = (void*)
-                ptls_aead_new(aead, algo, 1, secret1, NULL);
+                ptls_aead_new(aead, algo, 1, secret1, PICOQUIC_QUIC_BASE_LABEL);
             cnx->aead_decrypt_cleartext_ctx = (void*)
-                ptls_aead_new(aead, algo, 0, secret2, NULL);
+                ptls_aead_new(aead, algo, 0, secret2, PICOQUIC_QUIC_BASE_LABEL);
             cnx->aead_de_encrypt_cleartext_ctx = (void*)
-                ptls_aead_new(aead, algo, 0, secret1, NULL);
+                ptls_aead_new(aead, algo, 0, secret1, PICOQUIC_QUIC_BASE_LABEL);
 
             cnx->pn_enc_cleartext = picoquic_pn_enc_create(aead, algo, secret1, NULL);
             cnx->pn_dec_cleartext = picoquic_pn_enc_create(aead, algo, secret2, NULL);
