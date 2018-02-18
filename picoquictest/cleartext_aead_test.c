@@ -205,14 +205,7 @@ static int cleartext_iv_cmp(void * void_aead, uint8_t * ref_iv, size_t iv_length
 int cleartext_aead_vector_test()
 {
     int ret = 0;
-    uint8_t clear_text[1536];
-    uint8_t incoming[1536];
-    uint32_t seqnum = 0xdeadbeef;
-    size_t clear_length = 1200;
-    size_t encoded_length;
-    size_t decoded_length;
-    picoquic_packet_header ph_init;
-    struct sockaddr_in test_addr_c, test_addr_s;
+    struct sockaddr_in test_addr_c;
     picoquic_cnx_t* cnx_client = NULL;
     picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
         NULL, NULL, NULL, 0, NULL, NULL, NULL, 0);
