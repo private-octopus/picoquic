@@ -891,7 +891,7 @@ int picoquic_setup_1RTT_aead_contexts(picoquic_cnx_t* cnx, int is_server)
         if (ret == 0) {
             cnx->aead_encrypt_ctx = (void*)
                 ptls_aead_new(cipher->aead, cipher->hash, 1, secret, PICOQUIC_QUIC_BASE_LABEL);
-            cnx->pn_enc = picoquic_pn_enc_create(cipher->aead, cipher->hash, secret, PICOQUIC_QUIC_BASE_LABEL);
+            cnx->pn_enc = picoquic_pn_enc_create(cipher->aead, cipher->hash, secret, NULL);
 
             if (cnx->aead_encrypt_ctx == NULL) {
                 ret = PICOQUIC_ERROR_MEMORY;
