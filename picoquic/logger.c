@@ -1157,7 +1157,7 @@ void picoquic_log_transport_extension_content(FILE* F, int log_cnxid, uint64_t c
     {
         while (byte_index < bytes_max && byte_index < 128) {
             if (log_cnxid != 0) {
-                printf("%" PRIx64 ": ", cnx_id_64);
+                fprintf(F, "%" PRIx64 ": ", cnx_id_64);
             }
             fprintf(F, "        ");
             for (int i = 0; i < 32 && byte_index < bytes_max && byte_index < 128; i++) {
