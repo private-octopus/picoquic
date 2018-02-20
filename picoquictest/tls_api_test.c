@@ -900,27 +900,61 @@ static int tls_api_test_with_loss(uint64_t* loss_mask, uint32_t proposed_version
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, proposed_version, sni, alpn, &simulated_time, NULL, 0);
 
+    if (ret != 0)
+    {
+        DBG_PRINTF("Could not create the QUIC test contexts for V=%x\n", proposed_version);
+    }
+
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, loss_mask, 0, &simulated_time);
+
+        if (ret != 0)
+        {
+            DBG_PRINTF("Connection loop returns %d\n", ret);
+        }
     }
 
     if (ret == 0) {
         ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
 
+        if (ret != 0)
+        {
+            DBG_PRINTF("Connection close returns %d\n", ret);
+        }
+
         if (ret == 0) {
             ret = verify_transport_extension(test_ctx->cnx_client, test_ctx->cnx_server);
+            if (ret != 0)
+            {
+                DBG_PRINTF("%s", "Transport extensions do no match\n");
+            }
         }
 
         if (ret == 0) {
             ret = verify_sni(test_ctx->cnx_client, test_ctx->cnx_server, sni);
+
+            if (ret != 0)
+            {
+                DBG_PRINTF("%s", "SNI do not match\n");
+            }
         }
 
         if (ret == 0) {
             ret = verify_alpn(test_ctx->cnx_client, test_ctx->cnx_server, alpn);
+
+            if (ret != 0)
+            {
+                DBG_PRINTF("%s", "ALPN do not match\n");
+            }
         }
 
         if (ret == 0) {
             ret = verify_version(test_ctx->cnx_client, test_ctx->cnx_server);
+
+            if (ret != 0)
+            {
+                DBG_PRINTF("%s", "Negotiated versions do not match\n");
+            }
         }
     }
 
@@ -1036,8 +1070,18 @@ int tls_api_one_scenario_test(test_api_stream_desc_t* scenario,
         (proposed_version == 0) ? PICOQUIC_INTERNAL_TEST_VERSION_1 : proposed_version,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0);
 
+    if (ret != 0)
+    {
+        DBG_PRINTF("Could not create the QUIC test contexts for V=%x\n", proposed_version);
+    }
+
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, queue_delay_max, &simulated_time);
+
+        if (ret != 0)
+        {
+            DBG_PRINTF("Connection loop returns error %d\n", ret);
+        }
     }
 
     if (ret == 0 && max_data != 0) {
@@ -1051,11 +1095,21 @@ int tls_api_one_scenario_test(test_api_stream_desc_t* scenario,
     if (ret == 0) {
         loss_mask = init_loss_mask;
         ret = test_api_init_send_recv_scenario(test_ctx, scenario, sizeof_scenario);
+
+        if (ret != 0)
+        {
+            DBG_PRINTF("Init send receive scenario returns %d\n", ret);
+        }
     }
 
     /* Perform a data sending loop */
     if (ret == 0) {
         ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 0);
+
+        if (ret != 0)
+        {
+            DBG_PRINTF("Data sending loop returns %d\n", ret);
+        }
     }
 
     if (ret == 0) {
@@ -1074,10 +1128,18 @@ int tls_api_one_scenario_test(test_api_stream_desc_t* scenario,
                 }
             }
         }
+        if (ret != 0)
+        {
+            DBG_PRINTF("Test scenario verification returns %d\n", ret);
+        }
     }
 
     if (ret == 0) {
         ret = picoquic_close(test_ctx->cnx_client, 0);
+        if (ret != 0)
+        {
+            DBG_PRINTF("Picoquic close returns %d\n", ret);
+        }
     }
 
     if (test_ctx != NULL) {

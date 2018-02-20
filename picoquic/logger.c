@@ -1174,8 +1174,6 @@ void picoquic_log_transport_extension(FILE* F, picoquic_cnx_t* cnx, int log_cnxi
     size_t bytes_max = 0;
     int ext_received_return = 0;
     int client_mode = 1;
-    int ret = 0;
-    size_t byte_index = 0;
     char const* sni = picoquic_tls_get_sni(cnx);
     char const* alpn = picoquic_tls_get_negotiated_alpn(cnx);
 
