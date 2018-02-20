@@ -21,6 +21,7 @@
 
 #include "../picoquic/picoquic_internal.h"
 #include "../picoquic/util.h"
+#include "picoquictest_internal.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -375,7 +376,6 @@ static void transport_param_log_test_one(FILE * F, uint8_t * bytes, size_t bytes
 static int transport_param_log_fuzz_test(int client_mode, uint8_t* target, size_t target_length)
 {
     int ret = 0;
-    int fuzz_ret = 0;
     uint8_t buffer[256];
     uint8_t fuzz_byte = 1;
 
@@ -442,7 +442,7 @@ int transport_param_log_test()
         ret = -1;
     }
 #else
-    F = fopen(log_test_file, "w");
+    F = fopen(log_tp_test_file, "w");
     if (F == NULL) {
         ret = -1;
     }
