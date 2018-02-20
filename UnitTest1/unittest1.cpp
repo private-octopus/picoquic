@@ -428,5 +428,12 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(test_transport_param_log)
+        {
+            int ret = transport_param_log_test();
+
+            Assert::AreEqual(ret, 0);
+        }
 	};
 }

@@ -259,17 +259,22 @@ int transport_param_fuzz_test(int mode, uint32_t version, uint32_t proposed_vers
                 fuzz_byte++;
             }
 
-            /* decode */
-            fuzz_ret = picoquic_receive_transport_extensions(&test_cnx, mode, buffer,
-                target_length, &decoded);
+            /* Try various bad lengths */
+            for (size_t dl = 0; dl < target_length; dl += l + 7)
+            {
+                /* decode */
+                fuzz_ret = picoquic_receive_transport_extensions(&test_cnx, mode, buffer,
+                    target_length - dl, &decoded);
 
-            if (fuzz_ret != 0) {
-                *proof += (uint64_t)fuzz_ret;
-            } else {
-                *proof += test_cnx.remote_parameters.initial_max_stream_data;
+                if (fuzz_ret != 0) {
+                    *proof += (uint64_t)fuzz_ret;
+                }
+                else {
+                    *proof += test_cnx.remote_parameters.initial_max_stream_data;
 
-                if (decoded > target_length) {
-                    ret = -1;
+                    if (decoded > target_length - dl) {
+                        ret = -1;
+                    }
                 }
             }
         }
@@ -337,5 +342,147 @@ int transport_param_test()
 
         DBG_PRINTF("%s", "End of transport parameters fuzz test.\n");
     }
+    return ret;
+}
+
+/*
+ * Verify that we can properly log all the transport parameters.
+ */
+static char const* log_tp_test_file = "log_tp_test.txt";
+static char const* log_tp_fuzz_file = "log_tp_fuzz_test.txt";
+
+#ifdef _WINDOWS
+#ifndef _WINDOWS64
+static char const* log_tp_test_ref = "..\\picoquictest\\log_tp_test_ref.txt";
+#else
+static char const* log_tp_test_ref = "..\\..\\picoquictest\\log_tp_test_ref.txt";
+#endif
+#else
+static char const* log_tp_test_ref = "picoquictest/log_tp_test_ref.txt";
+#endif
+
+void picoquic_log_transport_extension_content(FILE* F, int log_cnxid, uint64_t cnx_id_64,
+    uint8_t * bytes, size_t bytes_max, int client_mode,
+    uint32_t initial_version, uint32_t final_version);
+
+static void transport_param_log_test_one(FILE * F, uint8_t * bytes, size_t bytes_max, int client_mode)
+{
+    picoquic_log_transport_extension_content(F, 1, 0x0102030405060708ull, bytes, bytes_max, client_mode,
+        0x0A1A0A1A, picoquic_supported_versions[0].version);
+    fprintf(F, "\n");
+}
+
+static int transport_param_log_fuzz_test(int client_mode, uint8_t* target, size_t target_length)
+{
+    int ret = 0;
+    int fuzz_ret = 0;
+    uint8_t buffer[256];
+    uint8_t fuzz_byte = 1;
+
+
+    /* test for valid arguments */
+    if (target_length < 8 || target_length > sizeof(buffer)) {
+        return -1;
+    }
+
+    debug_printf_suspend();
+
+    /* repeat multiple times */
+    for (size_t l = 0; l < 8; l++) {
+        for (size_t i = 0; i < target_length - l; i++) {
+            FILE *F;
+#ifdef _WINDOWS
+            if (fopen_s(&F, log_tp_fuzz_file, "w") != 0) {
+                ret = -1;
+            }
+#else
+            F = fopen(log_tp_fuzz_file, "w");
+            if (F == NULL) {
+                ret = -1;
+            }
+#endif
+            if (ret == 0)
+            {
+                /* copy message to buffer */
+                memcpy(buffer, target, target_length);
+
+                /* fuzz */
+                for (size_t j = 0; j < l; j++) {
+                    buffer[i + j] ^= fuzz_byte;
+                    fuzz_byte++;
+                }
+
+                /* Try various bad lengths */
+                for (size_t dl = 0; dl < target_length; dl += l + 7)
+                {
+                    /* log */
+                    transport_param_log_test_one(F, buffer, target_length - dl, client_mode);
+                }
+            }
+
+            if (F != NULL)
+            {
+                fclose(F);
+            }
+        }
+    }
+
+    debug_printf_resume();
+
+    return ret;
+}
+
+int transport_param_log_test()
+{
+    FILE* F = NULL;
+    int ret = 0;
+
+#ifdef _WINDOWS
+    if (fopen_s(&F, log_tp_test_file, "w") != 0) {
+        ret = -1;
+    }
+#else
+    F = fopen(log_test_file, "w");
+    if (F == NULL) {
+        ret = -1;
+    }
+#endif
+
+    if (ret == 0) {
+        transport_param_log_test_one(F, client_param1, sizeof(client_param1), 0);
+        transport_param_log_test_one(F, client_param2, sizeof(client_param2), 0);
+        transport_param_log_test_one(F, client_param3, sizeof(client_param3), 0);
+        transport_param_log_test_one(F, server_param1, sizeof(server_param1), 1);
+        transport_param_log_test_one(F, server_param2, sizeof(server_param2), 1);
+        transport_param_log_test_one(F, client_param4, sizeof(client_param4), 0);
+        transport_param_log_test_one(F, client_param5, sizeof(client_param5), 0);
+    }
+
+    if (F != NULL)
+    {
+        fclose(F);
+    }
+
+    if (ret == 0)
+    {
+        ret = picoquic_test_compare_files(log_tp_test_file, log_tp_test_ref);
+    }
+
+    if (ret == 0)
+    {
+        DBG_PRINTF("Doing fuzz test of transport parameter logging into %s\n", log_tp_fuzz_file);
+
+
+        if (ret == 0) {
+            ret = transport_param_log_fuzz_test(0, client_param2, sizeof(client_param2));
+        }
+
+        if (ret == 0) {
+            ret = transport_param_log_fuzz_test(1, server_param2, sizeof(server_param2));
+        }
+
+        DBG_PRINTF("Fuzz test of transport parameter was successful.\n", log_tp_fuzz_file);
+    }
+
     return ret;
 }

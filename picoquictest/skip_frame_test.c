@@ -231,19 +231,22 @@ static int compare_lines(char const* b1, char const* b2)
     return (*b1 == 0 && *b2 == 0) ? 0 : -1;
 }
 
-static int compare_files(char const* fname1, char const* fname2)
+int picoquic_test_compare_files(char const* fname1, char const* fname2)
 {
     FILE* F1 = NULL;
     FILE* F2 = NULL;
     int ret = 0;
+    int nb_line = 0;
 
 #ifdef _WINDOWS
     errno_t err = fopen_s(&F1, fname1, "r");
     if (err != 0) {
+        DBG_PRINTF("Cannot open file %s\n", fname1);
         ret = -1;
     } else {
         err = fopen_s(&F2, fname2, "r");
         if (err != 0) {
+            DBG_PRINTF("Cannot open file %s\n", fname2);
             ret = -1;
         }
     }
@@ -263,16 +266,27 @@ static int compare_files(char const* fname1, char const* fname2)
         char buffer2[256];
 
         while (ret == 0 && fgets(buffer1, sizeof(buffer1), F1) != NULL) {
+            nb_line++;
             if (fgets(buffer2, sizeof(buffer2), F2) == NULL) {
                 /* F2 is too short */
+                DBG_PRINTF("File %s is shorter than %s\n", fname2, fname1);
+                DBG_PRINTF("    Missing line %d: %s", nb_line, buffer1);
                 ret = -1;
             } else {
                 ret = compare_lines(buffer1, buffer2);
+                if (ret != 0)
+                {
+                    DBG_PRINTF("File %s differs %s at line %d\n", fname2, fname1, nb_line);
+                    DBG_PRINTF("    Got: %s", buffer1);
+                    DBG_PRINTF("    Vs:  %s", buffer2);
+                }
             }
         }
 
         if (ret == 0 && fgets(buffer2, sizeof(buffer2), F2) != NULL) {
             /* F2 is too long */
+            DBG_PRINTF("File %s is longer than %s\n", fname2, fname1);
+            DBG_PRINTF("    Extra line %d: %s", nb_line+1, buffer2);
             ret = -1;
         }
     }
@@ -311,7 +325,7 @@ int logger_test()
     fclose(F);
 
     if (ret == 0) {
-        ret = compare_files(log_test_file, log_test_ref);
+        ret = picoquic_test_compare_files(log_test_file, log_test_ref);
     }
 
     return ret;

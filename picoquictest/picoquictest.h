@@ -85,6 +85,7 @@ int cleartext_pn_enc_test();
 int pn_enc_1rtt_test();
 int tls_zero_share_test();
 int cleartext_aead_vector_test();
+int transport_param_log_test();
 
 #ifdef __cplusplus
 }

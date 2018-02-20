@@ -76,6 +76,8 @@ void picoquictest_sim_link_submit(picoquictest_sim_link_t* link, picoquictest_si
 
 int test_one_pn_enc_pair(uint8_t * seqnum, size_t seqnum_len, void * pn_enc, void * pn_dec, uint8_t * sample);
 
+int picoquic_test_compare_files(char const* fname1, char const* fname2);
+
 #ifdef __cplusplus
 }
 #endif

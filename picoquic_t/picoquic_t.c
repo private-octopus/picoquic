@@ -87,7 +87,8 @@ static picoquic_test_def_t test_table[] = {
     { "cleartext_pn_enc", cleartext_pn_enc_test},
     { "pn_enc_1rtt", pn_enc_1rtt_test },
     { "tls_zero_share", tls_zero_share_test },
-    { "cleartext_aead_vector", cleartext_aead_vector_test }
+    { "cleartext_aead_vector", cleartext_aead_vector_test },
+    { "transport_param_log", transport_param_log_test }
 };
 
 static size_t nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);
