@@ -1224,7 +1224,7 @@ int picoquic_tlsinput_stream_zero(picoquic_cnx_t* cnx)
         }
         ret = 0;
     } else {
-        ret = -1;
+        ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR);
     }
 
     ptls_buffer_dispose(&sendbuf);

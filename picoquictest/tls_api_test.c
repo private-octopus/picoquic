@@ -1568,7 +1568,6 @@ int ping_pong_test()
  */
 int transport_parameter_client_error_test()
 {
-
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -2140,3 +2139,63 @@ int pn_enc_1rtt_test()
     return ret;
 }
 
+int bad_certificate_test()
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, 0, "test-sni", "test-alpn", &simulated_time, NULL, 0);
+
+    /* Delete the server context, and recreate it with the bad certificate */
+
+    if (ret == 0)
+    {
+        if (test_ctx->qserver != NULL) {
+            picoquic_free(test_ctx->qserver);
+        }
+
+        test_ctx->qserver = picoquic_create(8,
+#ifdef _WINDOWS
+#ifdef _WINDOWS64
+            "..\\..\\certs\\badcert.pem", "..\\..\\certs\\key.pem",
+#else
+            "..\\certs\\badcert.pem", "..\\certs\\key.pem",
+#endif
+#else
+            "certs/badcert.pem", "certs/key.pem",
+#endif
+            PICOQUIC_TEST_ALPN, test_api_callback, (void*)&test_ctx->server_callback, NULL, NULL, NULL,
+            simulated_time, &simulated_time, NULL,
+            test_ticket_encrypt_key, sizeof(test_ticket_encrypt_key));
+
+        if (test_ctx->qserver == NULL) {
+            ret = -1;
+        }
+    }
+
+    /* Proceed with the connection loop. It should fail */
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+
+        if (test_ctx->cnx_client == NULL) {
+            ret = -1;
+        }
+        else if (test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
+            ret = -1;
+        }
+        else if (
+            test_ctx->cnx_client->local_error != PICOQUIC_TRANSPORT_INTERNAL_ERROR) {
+            ret = -1;
+        }
+        else {
+            ret = 0;
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
