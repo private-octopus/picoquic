@@ -2184,7 +2184,7 @@ int bad_certificate_test()
             ret = -1;
         }
         else if (
-            test_ctx->cnx_client->local_error != PICOQUIC_TRANSPORT_INTERNAL_ERROR) {
+            test_ctx->cnx_client->local_error != PICOQUIC_TLS_HANDSHAKE_FAILED) {
             ret = -1;
         }
         else {
