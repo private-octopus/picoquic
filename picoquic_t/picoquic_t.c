@@ -52,6 +52,7 @@ static picoquic_test_def_t test_table[] = {
     { "tls_api_version_negotiation", tls_api_version_negotiation_test },
     { "first_loss", tls_api_client_first_loss_test },
     { "second_loss", tls_api_client_second_loss_test },
+    { "SH_loss", tls_api_server_first_loss_test },
     { "client_losses", tls_api_client_losses_test },
     { "server_losses", tls_api_server_losses_test },
     { "transport_param", transport_param_test },

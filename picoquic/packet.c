@@ -52,8 +52,7 @@ int picoquic_parse_packet_header(
     if ((bytes[0] & 0x80) == 0x80) {
         if (length < 17) {
             ret = -1;
-        }
-        else {
+        } else {
             /* If this is a long header, the bytes at position 9--12 describe the version */
             ph->offset = 1 + picoquic_parse_connection_id(bytes + 1, &ph->cnx_id);
             ph->vn = PICOPARSE_32(bytes + ph->offset);
@@ -72,10 +71,18 @@ int picoquic_parse_packet_header(
 
                     if (*pcnx == NULL) {
                         *pcnx = picoquic_cnx_by_net(quic, addr_from);
+
+                        if (*pcnx != NULL &&
+                            picoquic_compare_connection_id(&(*pcnx)->initial_cnxid, &ph->cnx_id) != 0)
+                        {
+                            *pcnx = NULL;
+                        }
                     }
                 }
             }
             else {
+                char context_by_addr = 0;
+
                 ph->pn_offset = ph->offset;
                 ph->pn = PICOPARSE_32(bytes + ph->offset);
                 ph->version_index = picoquic_get_version_index(ph->vn);
@@ -88,7 +95,6 @@ int picoquic_parse_packet_header(
                 }
                 else {
                     /* Is the context found by using the `addr_from`? */
-                    char context_by_addr = 0;
 
                     /* Retrieve the connection context */
                     if (*pcnx == NULL) {
@@ -97,7 +103,11 @@ int picoquic_parse_packet_header(
                         /* TODO: something for the case of client initial, e.g. source IP + initial CNX_ID */
                         if (*pcnx == NULL) {
                             *pcnx = picoquic_cnx_by_net(quic, addr_from);
-                            context_by_addr = 1;
+
+                            if (*pcnx != NULL)
+                            {
+                                context_by_addr = 1;
+                            }
                         }
                     }
 
@@ -126,8 +136,17 @@ int picoquic_parse_packet_header(
 
                     /* If the context was found by using `addr_from`, but the packet type
                      * does not allow that, reset the context to NULL. */
-                    if (context_by_addr && !(ph->ptype == picoquic_packet_handshake || ph->ptype == picoquic_packet_server_stateless || ph->ptype == picoquic_packet_0rtt_protected)) {
-                        *pcnx = NULL;
+                    if (context_by_addr)
+                    {
+                        if (ph->ptype == picoquic_packet_client_initial || ph->ptype == picoquic_packet_0rtt_protected)
+                        {
+                            if (picoquic_compare_connection_id(&(*pcnx)->initial_cnxid, &ph->cnx_id) != 0) {
+                                *pcnx = NULL;
+                            }
+                        } else if (ph->ptype != picoquic_packet_handshake &&
+                            ph->ptype != picoquic_packet_server_stateless ) {
+                            *pcnx = NULL;
+                        }
                     }
                 }
             }
@@ -548,7 +567,7 @@ void picoquic_queue_stateless_reset(picoquic_cnx_t* cnx,
  * on an unknown connection context.
  */
 
-picoquic_cnx_t* picoquic_incoming_initial(
+int picoquic_incoming_initial(
     picoquic_quic_t* quic,
     uint8_t* bytes,
     uint32_t length,
@@ -556,14 +575,19 @@ picoquic_cnx_t* picoquic_incoming_initial(
     struct sockaddr* addr_to,
     unsigned long if_index_to,
     picoquic_packet_header* ph,
-    uint64_t current_time)
+    uint64_t current_time,
+    picoquic_cnx_t** p_cnx)
 {
     picoquic_cnx_t* cnx = NULL;
     size_t decoded_length = 0;
     int already_received = 0;
+    int ret = 0;
+
+    *p_cnx = NULL;
 
     if (length < PICOQUIC_ENFORCED_INITIAL_MTU) {
         /* Unexpected packet. Reject, drop and log. */
+        ret = PICOQUIC_ERROR_INITIAL_TOO_SHORT;
     } else {
         /* if listening is OK, listen */
         cnx = picoquic_create_cnx(quic, ph->cnx_id, addr_from, current_time, ph->vn, NULL, NULL, 0);
@@ -575,8 +599,8 @@ picoquic_cnx_t* picoquic_incoming_initial(
                 /* Incorrect checksum, drop and log. */
                 picoquic_delete_cnx(cnx);
                 cnx = NULL;
+                ret = PICOQUIC_ERROR_FNV1A_CHECK;
             } else {
-                int ret = 0;
 
                 ret = picoquic_decode_frames(cnx,
                     bytes + ph->offset, decoded_length - ph->offset, 1, current_time);
@@ -603,12 +627,13 @@ picoquic_cnx_t* picoquic_incoming_initial(
                     cnx->if_index_dest = if_index_to;
                     cnx->dest_addr_len = (addr_to->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
                     memcpy(&cnx->dest_addr, addr_to, cnx->dest_addr_len);
+                    *p_cnx = cnx;
                 }
             }
         }
     }
 
-    return cnx;
+    return ret;
 }
 
 /*
@@ -965,7 +990,7 @@ int picoquic_incoming_packet(
         if (cnx == NULL) {
             if (ph.ptype == picoquic_packet_client_initial) {
                 ph.pn64 = ph.pn;
-                cnx = picoquic_incoming_initial(quic, bytes, length, addr_from, addr_to, if_index_to, &ph, current_time);
+                ret = picoquic_incoming_initial(quic, bytes, length, addr_from, addr_to, if_index_to, &ph, current_time, &cnx);
             } else if (ph.version_index < 0 && ph.vn != 0) {
                 /* use the result of parsing to consider version negotiation */
                 picoquic_prepare_version_negotiation(quic, addr_from, addr_to, if_index_to, &ph);
@@ -1063,7 +1088,7 @@ int picoquic_incoming_packet(
             cnx->ack_needed = 1;
         }
         ret = 0;
-    } else if (ret == PICOQUIC_ERROR_AEAD_CHECK ||
+    } else if (ret == PICOQUIC_ERROR_AEAD_CHECK || ret == PICOQUIC_ERROR_INITIAL_TOO_SHORT ||
         ret == PICOQUIC_ERROR_UNEXPECTED_PACKET || ret == PICOQUIC_ERROR_FNV1A_CHECK || 
         ret == PICOQUIC_ERROR_CNXID_CHECK || ret == PICOQUIC_ERROR_HRR || ret == PICOQUIC_ERROR_DETECTED) {
         /* Bad packets are dropped silently */

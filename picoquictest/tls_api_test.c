@@ -1424,6 +1424,11 @@ int tls_api_client_second_loss_test()
     return tls_api_loss_test(2ull);
 }
 
+int tls_api_server_first_loss_test()
+{
+    return tls_api_loss_test(14ull);
+}
+
 int tls_api_client_losses_test()
 {
     return tls_api_loss_test(3ull);
@@ -2134,3 +2139,4 @@ int pn_enc_1rtt_test()
 
     return ret;
 }
+
