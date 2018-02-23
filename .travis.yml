@@ -5,7 +5,7 @@ os:
 compiler:
   - clang
   - gcc
-sudo: false
+sudo: required
 addons:
   apt:
     sources:
