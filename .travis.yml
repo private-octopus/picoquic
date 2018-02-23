@@ -1,0 +1,32 @@
+dist: trusty
+language: cpp
+os:
+  - linux
+compiler:
+  - clang
+  - gcc
+sudo: false
+addons:
+  apt:
+    sources:
+    - ubuntu-toolchain-r-test
+    - llvm-toolchain-trusty-5.0
+    packages:
+    - g++-7
+    - clang-5.0
+    - cmake
+    - cmake-data
+    - libssl-dev 
+before_install:
+  - $CC --version 
+  - if [ "$TRAVIS_OS_NAME" == "linux" ]; then  if [ "$CXX" = "g++" ]; then export CXX="g++-7" CC="gcc-7" EXTRA_LDFLAGS="-fuse-ld=gold"; else export CXX="clang++-5.0" CC="clang-5.0"; fi; fi
+  - $CC --version
+  - cmake --version
+before_script:
+  # First build external lib
+  - ./ci/build_picotls.sh
+script:
+  # Now build picotls examples and test
+  - cmake .
+  - make
+  - ./picoquic_ct
