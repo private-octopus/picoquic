@@ -456,6 +456,8 @@ int picoquic_master_tlscontext(picoquic_quic_t* quic,
         ctx->key_exchanges = ptls_openssl_key_exchanges;
         ctx->cipher_suites = ptls_openssl_cipher_suites;
 
+        ctx->send_change_cipher_spec = 0;
+
         if (quic->p_simulated_time == NULL) {
             ctx->get_time = &ptls_get_time;
         } else {

@@ -701,6 +701,85 @@ size_t picoquic_prepare_mtu_probe(picoquic_cnx_t* cnx, size_t header_length, siz
     return probe_length - checksum_length;
 }
 
+/* Special wake up decision logic in initial state */
+static void picoquic_cnx_set_next_wake_time_init(picoquic_cnx_t* cnx, uint64_t current_time)
+{
+    uint64_t next_time = cnx->latest_progress_time + PICOQUIC_MICROSEC_SILENCE_MAX;
+    picoquic_packet* p = cnx->retransmit_oldest;
+    picoquic_stream_head* stream = NULL;
+    int timer_based = 0;
+    int blocked = 1;
+    int pacing = 0;
+
+    while (p != NULL)
+    {
+        picoquic_packet_header ph;
+        int ret = 0;
+        picoquic_cnx_t* pcnx = cnx;
+
+        /* Get the packet type */
+        ret = picoquic_parse_packet_header(cnx->quic, p->bytes, (uint32_t)p->length, NULL, &ph, &pcnx);
+
+        if (ret == 0 && ph.ptype < picoquic_packet_0rtt_protected)
+        {
+            if (picoquic_retransmit_needed_by_packet(cnx, p, current_time, &timer_based)) {
+                blocked = 0;
+            }
+            break;
+        }
+        p = p->next_packet;
+    }
+
+    if (blocked != 0)
+    {
+        if (picoquic_is_ack_needed(cnx, current_time)) {
+            blocked = 0;
+        } else if (cnx->cwin > cnx->bytes_in_transit) {
+            if (picoquic_should_send_max_data(cnx) || 
+                (stream = picoquic_find_ready_stream(cnx, (cnx->aead_0rtt_encrypt_ctx != NULL)?0:1)) != NULL) {
+                if (cnx->next_pacing_time < current_time + cnx->pacing_margin_micros) {
+                    blocked = 0;
+                }
+                else {
+                    pacing = 1;
+                }
+            }
+        }
+    }
+
+    if (blocked == 0) {
+        next_time = current_time;
+    } else if (pacing != 0) {
+        next_time = cnx->next_pacing_time;
+    } else {
+        /* Consider delayed ACK */
+        if (cnx->ack_needed) {
+            next_time = cnx->highest_ack_time + cnx->ack_delay_local;
+        }
+
+        /* Consider delayed RACK */
+        if (p != NULL) {
+            if (cnx->latest_time_acknowledged > p->send_time && p->send_time + cnx->max_ack_delay < next_time) {
+                next_time = p->send_time + cnx->max_ack_delay;
+            }
+            if (cnx->nb_retransmit == 0) {
+                if (p->send_time + cnx->retransmit_timer < next_time) {
+                    next_time = p->send_time + cnx->retransmit_timer;
+                }
+            } else {
+                if (p->send_time + (1000000ull << (cnx->nb_retransmit - 1)) < next_time) {
+                    next_time = p->send_time + (1000000ull << (cnx->nb_retransmit - 1));
+                }
+            }
+        }
+    }
+
+    cnx->next_wake_time = next_time;
+
+    /* reset the connection at its new logical position */
+    picoquic_reinsert_by_wake_time(cnx->quic, cnx);
+}
+
 /* Decide the next time at which the connection should send data */
 void picoquic_cnx_set_next_wake_time(picoquic_cnx_t* cnx, uint64_t current_time)
 {
@@ -711,6 +790,12 @@ void picoquic_cnx_set_next_wake_time(picoquic_cnx_t* cnx, uint64_t current_time)
     int blocked = 1;
     int pacing = 0;
 
+    if (cnx->cnx_state < picoquic_state_client_ready)
+    {
+        picoquic_cnx_set_next_wake_time_init(cnx, current_time);
+        return;
+    }
+    
     if (cnx->cnx_state == picoquic_state_disconnecting || cnx->cnx_state == picoquic_state_handshake_failure) {
         blocked = 0;
     } else if (p != NULL && picoquic_retransmit_needed_by_packet(cnx, p, current_time, &timer_based)) {
