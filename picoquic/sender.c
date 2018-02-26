@@ -1541,6 +1541,7 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx, picoquic_packet* packet,
     if (cnx->cnx_state < picoquic_state_disconnecting && (current_time - cnx->latest_progress_time) > PICOQUIC_MICROSEC_SILENCE_MAX) {
         /* Too long silence, break it. */
         cnx->cnx_state = picoquic_state_disconnected;
+        ret = PICOQUIC_ERROR_DISCONNECTED;
         if (cnx->callback_fn) {
             (cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx);
         }

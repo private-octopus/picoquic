@@ -967,7 +967,7 @@ int quic_client(const char* ip_address_text, int server_port, uint32_t proposed_
                     if (p == NULL) {
                         ret = -1;
                     } else {
-                        send_length = 1000000;
+                        send_length = PICOQUIC_MAX_PACKET_SIZE;
 
                         ret = picoquic_prepare_packet(cnx_client, p, current_time,
                             send_buffer, sizeof(send_buffer), &send_length);
