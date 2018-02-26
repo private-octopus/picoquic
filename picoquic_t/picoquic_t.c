@@ -18,7 +18,9 @@
 * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
-
+#ifdef _WINDOWS
+#include "../picoquicfirst/getopt.h"
+#endif
 #include "../picoquic/picoquic.h"
 #include "../picoquic/util.h"
 #include "../picoquictest/picoquictest.h"
@@ -27,10 +29,10 @@
 
 typedef struct st_picoquic_test_def_t {
     char const* test_name;
-    int (*test_fn)();
+    const int (*test_fn)();
 } picoquic_test_def_t;
 
-static picoquic_test_def_t test_table[] = {
+static const picoquic_test_def_t test_table[] = {
     { "picohash", picohash_test },
     { "cnxcreation", cnxcreation_test },
     { "parseheader", parseheadertest },
@@ -93,7 +95,7 @@ static picoquic_test_def_t test_table[] = {
     { "bad_certificate", bad_certificate_test }
 };
 
-static size_t nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);
+static size_t const nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);
 
 static int do_one_test(size_t i, FILE* F)
 {
@@ -120,63 +122,120 @@ static int do_one_test(size_t i, FILE* F)
     return ret;
 }
 
+int usage(char const * argv0)
+{
+    fprintf(stderr, "PicoQUIC test exexution\n");
+    fprintf(stderr, "Usage: picoquic_ct [-x <excluded>] [<list of tests]\n");
+    fprintf(stderr, "\nUsage: %s [test1 [test2 ..[testN]]]\n\n", argv0);
+    fprintf(stderr, "   Or: %s [-x test]*", argv0);
+    fprintf(stderr, "Valid test names are: \n");
+    for (size_t x = 0; x < nb_tests; x++) {
+        fprintf(stderr, "    ");
+
+        for (int j = 0; j < 4 && x < nb_tests; j++, x++) {
+            fprintf(stderr, "%s, ", test_table[x].test_name);
+        }
+        fprintf(stderr, "\n");
+    }
+    fprintf(stderr, "Options: \n");
+    fprintf(stderr, "  -x test        Do not run the specified test.\n");
+    fprintf(stderr, "  -h             Print this help message\n");
+
+    return -1;
+}
+
+int get_test_number(char const * test_name)
+{
+    int test_number = -1;
+
+    for (size_t i = 0; i < nb_tests; i++) {
+        if (strcmp(test_name, test_table[i].test_name) == 0) {
+            test_number = i;
+        }
+    }
+
+    return test_number;
+}
+
 int main(int argc, char** argv)
 {
     int ret = 0;
     int arg_err = 0;
     int nb_test_tried = 0;
     int nb_test_failed = 0;
+    int * is_excluded = malloc(sizeof(int)*nb_tests);
+    int opt;
 
-    if (argc <= 1) {
-        for (size_t i = 0; i < nb_tests; i++) {
-            nb_test_tried++;
-            if (do_one_test(i, stdout) != 0) {
-                nb_test_failed++;
-                ret = -1;
-            }
-        }
-    } else {
-        for (int arg_num = 1; arg_num < argc; arg_num++) {
-            int tried = 0;
+    if (is_excluded == NULL)
+    {
+        fprintf(stderr, "Could not allocate memory.\n");
+        ret = -1;
+    }
+    else
+    {
+        memset(is_excluded, 0, sizeof(int)*nb_tests);
 
-            for (size_t i = 0; i < nb_tests; i++) {
-                if (strcmp(argv[arg_num], test_table[i].test_name) == 0) {
-                    tried = 1;
-                    nb_test_tried++;
-                    if (do_one_test(i, stdout) != 0) {
-                        nb_test_failed++;
-                        ret = -1;
-                    }
-                    break;
+        while (ret == 0 && (opt = getopt(argc, argv, "x:h")) != -1) {
+            switch (opt) {
+            case 'x': {
+                int test_number = get_test_number(optarg);
+
+                if (test_number < 0) {
+                    fprintf(stderr, "Incorrect test name: %s\n", optarg);
+                    usage(argv[0]);
                 }
+                else {
+                    is_excluded[test_number] = 1;
+                }
+                break;
             }
-
-            if (tried == 0) {
-                fprintf(stderr, "Incorrect test name: %s\n", argv[arg_num]);
-                arg_err++;
-                ret = -1;
+            case 'h':
+                usage(argv[0]);
                 break;
             }
         }
-    }
 
-    if (nb_test_tried > 1) {
-        fprintf(stdout, "Tried %d tests, %d fail%s.\n", nb_test_tried,
-            nb_test_failed, (nb_test_failed > 1) ? "" : "s");
-    }
+        if (ret == 0)
+        {
+            if (optind >= argc) {
+                for (size_t i = 0; i < nb_tests; i++) {
+                    if (is_excluded[i] == 0) {
+                        nb_test_tried++;
+                        if (do_one_test(i, stdout) != 0) {
+                            nb_test_failed++;
+                            ret = -1;
+                        }
+                    }
+                    else {
+                        fprintf(stderr, "test number %d (%s) is bypassed.\n", i, test_table[i].test_name);
+                    }
+                }
+            } else {
+                for (int arg_num = optind; arg_num < argc; arg_num++) {
+                    int test_number = get_test_number(argv[arg_num]);
 
-    if (arg_err != 0) {
-        fprintf(stderr, "\nUsage: %s [test1 [test2 ..[testN]]]\n\n", argv[0]);
-        fprintf(stderr, "Valid test names are: \n");
-        for (size_t x = 0; x < nb_tests; x++) {
-            fprintf(stderr, "    ");
-
-            for (int j = 0; j < 4 && x < nb_tests; j++, x++) {
-                fprintf(stderr, "%s, ", test_table[x].test_name);
+                    if (test_number < 0) {
+                        fprintf(stderr, "Incorrect test name: %s\n", argv[arg_num]);
+                        usage(argv[0]);
+                    }
+                    else {
+                        nb_test_tried++;
+                        if (do_one_test(test_number, stdout) != 0) {
+                            nb_test_failed++;
+                            ret = -1;
+                        }
+                        break;
+                    }
+                }
             }
-            fprintf(stderr, "\n");
         }
-    }
 
+        if (nb_test_tried > 1) {
+            fprintf(stdout, "Tried %d tests, %d fail%s.\n", nb_test_tried,
+                nb_test_failed, (nb_test_failed > 1) ? "" : "s");
+        }
+
+        free(is_excluded);
+    }
     return (ret);
 }
