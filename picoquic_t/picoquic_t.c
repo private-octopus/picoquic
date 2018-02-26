@@ -29,7 +29,7 @@
 
 typedef struct st_picoquic_test_def_t {
     char const* test_name;
-    const int (*test_fn)();
+    int (*test_fn)();
 } picoquic_test_def_t;
 
 static const picoquic_test_def_t test_table[] = {
