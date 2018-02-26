@@ -29,4 +29,4 @@ script:
   # Now build picotls examples and test
   - cmake .
   - make
-  - ./picoquic_ct
+  - ./picoquic_ct -x sockets
