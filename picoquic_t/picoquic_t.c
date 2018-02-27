@@ -76,6 +76,7 @@ static const picoquic_test_def_t test_table[] = {
     { "clear_text_aead", cleartext_aead_test },
     { "multiple_versions", tls_api_multiple_versions_test },
     { "ping_pong", ping_pong_test },
+    { "keep_alive", keep_alive_test },
     { "transport_parameter_client_error", transport_parameter_client_error_test },
     { "sockets", socket_test },
     { "ticket_store", ticket_store_test },

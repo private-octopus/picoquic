@@ -1205,7 +1205,7 @@ void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_
 int picoquic_enable_keep_alive(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t interval)
 {
     if (cnx->keep_alive == NULL) {
-        uint8_t keep_alive_frame[2] = { picoquic_frame_type_ping, 0 };
+        uint8_t keep_alive_frame[11] = { picoquic_frame_type_ping, 9, 'k', 'e', 'e', 'p', 'a', 'l', 'i', 'v', 'e' };
 
         cnx->keep_alive = malloc(sizeof(picoquic_keep_alive_context_t));
         cnx->keep_alive->frame = picoquic_create_misc_frame(keep_alive_frame, sizeof(keep_alive_frame));
