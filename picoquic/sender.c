@@ -570,6 +570,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx, uint64_t current_time,
                             /*
                              * Max retransmission count was exceeded. Disconnect.
                              */
+                            DBG_PRINTF("%s\n", "Too many retransmits, disconnect");
                             cnx->cnx_state = picoquic_state_disconnected;
                             if (cnx->callback_fn) {
                                 (cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx);

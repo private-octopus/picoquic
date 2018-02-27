@@ -235,6 +235,7 @@ static void first_server_callback(picoquic_cnx_t* cnx,
         picoquic_first_server_callback_ctx_t* new_ctx = first_server_callback_create_context();
         if (new_ctx == NULL) {
             /* cannot handle the connection */
+            DBG_PRINTF("%s\n", "Memory error, cannot allocate application context");
             picoquic_close(cnx, PICOQUIC_ERROR_MEMORY);
             return;
         } else {
@@ -918,6 +919,9 @@ int quic_client(const char* ip_address_text, int server_port, uint32_t proposed_
                 if (picoquic_get_cnx_state(cnx_client) == picoquic_state_client_almost_ready && notified_ready == 0) {
                     if (picoquic_tls_is_psk_handshake(cnx_client)) {
                         fprintf(stdout, "The session was properly resumed!\n");
+                        if (F_log != stdout && F_log != stderr) {
+                            fprintf(F_log, "The session was properly resumed!\n");
+                        }
                     }
                     fprintf(stdout, "Almost ready!\n\n");
                     notified_ready = 1;
@@ -950,12 +954,26 @@ int quic_client(const char* ip_address_text, int server_port, uint32_t proposed_
                             if (cnx_client->nb_zero_rtt_sent != 0) {
                                 fprintf(stdout, "Out of %d zero RTT packets, %d were acked by the server.\n",
                                     cnx_client->nb_zero_rtt_sent, cnx_client->nb_zero_rtt_acked);
+                                if (F_log != stdout && F_log != stderr)
+                                {
+                                    fprintf(stdout, "Out of %d zero RTT packets, %d were acked by the server.\n",
+                                        cnx_client->nb_zero_rtt_sent, cnx_client->nb_zero_rtt_acked);
+                                }
                             }
                             fprintf(stdout, "All done, Closing the connection.\n");
+                            if (F_log != stdout && F_log != stderr)
+                            {
+                                fprintf(F_log, "All done, Closing the connection.\n");
+                            }
+
                             ret = picoquic_close(cnx_client, 0);
                         } else if (
                             current_time > callback_ctx.last_interaction_time && current_time - callback_ctx.last_interaction_time > 10000000ull) {
                             fprintf(stdout, "No progress for 10 seconds. Closing. \n");
+                            if (F_log != stdout && F_log != stderr)
+                            {
+                                fprintf(F_log, "No progress for 10 seconds. Closing. \n");
+                            }
                             ret = picoquic_close(cnx_client, 0);
                         }
                     }
