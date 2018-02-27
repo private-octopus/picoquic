@@ -956,7 +956,7 @@ int quic_client(const char* ip_address_text, int server_port, uint32_t proposed_
                                     cnx_client->nb_zero_rtt_sent, cnx_client->nb_zero_rtt_acked);
                                 if (F_log != stdout && F_log != stderr)
                                 {
-                                    fprintf(stdout, "Out of %d zero RTT packets, %d were acked by the server.\n",
+                                    fprintf(F_log, "Out of %d zero RTT packets, %d were acked by the server.\n",
                                         cnx_client->nb_zero_rtt_sent, cnx_client->nb_zero_rtt_acked);
                                 }
                             }
