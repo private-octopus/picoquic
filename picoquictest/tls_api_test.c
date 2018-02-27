@@ -1458,52 +1458,14 @@ int tls_api_multiple_versions_test()
  * Keep alive test.
  */
 
-typedef struct st_keep_alive_pong_test_callback_ctx_t {
-    picoquic_stream_data_cb_fn master_fn;
-    void* master_ctx;
-    int pong_received;
-    int error_received;
-} keep_alive_test_callback_ctx_t;
-
-static void keep_alive_callback(picoquic_cnx_t* cnx,
-    uint64_t stream_id, uint8_t* bytes, size_t length,
-    picoquic_call_back_event_t fin_or_event, void* callback_ctx)
+int keep_alive_test_impl(int keep_alive)
 {
-    keep_alive_test_callback_ctx_t* keep_alive_ctx = (keep_alive_test_callback_ctx_t*)callback_ctx;
-    if (stream_id == 0 && fin_or_event == 0) {
-        uint8_t* frame_ptr = ((uint8_t*)cnx->keep_alive->frame) + sizeof(picoquic_misc_frame_header_t);
-        /* This is a special frame call back. */
-        if (length == cnx->keep_alive->frame->length && bytes[0] == picoquic_frame_type_pong && memcmp(bytes + 1, frame_ptr + 1, length - 1) == 0) {
-            keep_alive_ctx->pong_received++;
-        } else {
-            keep_alive_ctx->error_received++;
-        }
-    } else if (keep_alive_ctx->master_fn != NULL) {
-        keep_alive_ctx->master_fn(cnx, stream_id, bytes, length, fin_or_event, keep_alive_ctx->master_ctx);
-    }
-}
-
-int keep_alive_test()
-{
-    keep_alive_test_callback_ctx_t keep_alive_ctx;
     uint64_t simulated_time = 0;
     const uint64_t keep_alive_interval = 10000;
-    const uint64_t expected_pong_count = 3;
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0);
     int was_active = 0;
-
-    /*
-     * Before initializing the context, set up a filter to intercept the call backs.
-     */
-    if (ret == 0) {
-        memset(&keep_alive_ctx, 0, sizeof(keep_alive_test_callback_ctx_t));
-        keep_alive_ctx.master_ctx = test_ctx->cnx_client->callback_ctx;
-        keep_alive_ctx.master_fn = test_ctx->cnx_client->callback_fn;
-        test_ctx->cnx_client->callback_ctx = &keep_alive_ctx;
-        test_ctx->cnx_client->callback_fn = keep_alive_callback;
-    }
 
     /*
      * setup the connections.
@@ -1516,40 +1478,47 @@ int keep_alive_test()
     /*
      * Enable keep alive
      */
-    if (ret == 0) {
-        ret = picoquic_enable_keep_alive(test_ctx->cnx_client, keep_alive_interval);
+    if (ret == 0 && keep_alive) {
+        picoquic_enable_keep_alive(test_ctx->cnx_client, keep_alive_interval);
     }
 
     /* Perform a couple rounds of sending data */
-    for (int i = 0; ret == 0 && i < 32 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected; i++) {
+    for (int i = 0; ret == 0 && i < 512 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected; i++) {
         was_active = 0;
 
         ret = tls_api_one_sim_round(test_ctx, &simulated_time, &was_active);
-
-        if (keep_alive_ctx.pong_received != 0 && picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) && picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)) {
-            break;
-        }
     }
 
-    /* Check that there was exactly one matching pong received */
-    if (ret == 0 && (keep_alive_ctx.error_received != 0 || keep_alive_ctx.pong_received != expected_pong_count)) {
+    /* Check that the status matched the expected value */
+    if ((test_ctx->cnx_client->cnx_state == picoquic_state_disconnected) == keep_alive) {
         ret = -1;
+    } else if (keep_alive == 0) {
+        /* If keep alive was not activated, reset ret to `0`, as `tls_api_one_sim_round` returns -1
+         * when the connection was disconnected.
+         */
+        ret = test_ctx->cnx_client->cnx_state != picoquic_state_disconnected;
     }
 
     /* Close the connection */
-    if (ret == 0) {
+    if (ret == 0 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
         ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
-    }
-
-    /* Verify that no error was received during closing */
-    if (ret == 0 && (keep_alive_ctx.error_received != 0 || keep_alive_ctx.pong_received != expected_pong_count)) {
-        ret = -1;
     }
 
     /* Clean up */
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+int keep_alive_test()
+{
+    int ret = keep_alive_test_impl(1);
+
+    if (ret == 0) {
+        ret = keep_alive_test_impl(0);
     }
 
     return ret;

@@ -316,7 +316,7 @@ int http0dot9_get(uint8_t* command, size_t command_length,
 /* Enables keep alive for a connection.
  * If `interval` is `0`, it is set to `idle_timeout / 2`.
  */
-int picoquic_enable_keep_alive(picoquic_cnx_t* cnx, uint64_t interval);
+void picoquic_enable_keep_alive(picoquic_cnx_t* cnx, uint64_t interval);
 /* Disables keep alive for a connection. */
 void picoquic_disable_keep_alive(picoquic_cnx_t* cnx);
 

@@ -1136,8 +1136,6 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
             cnx->congestion_alg->alg_delete(cnx);
         }
 
-        picoquic_disable_keep_alive(cnx);
-
         free(cnx);
     }
 }
@@ -1202,37 +1200,16 @@ void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_
     }
 }
 
-int picoquic_enable_keep_alive(picoquic_cnx_t* cnx, uint64_t interval)
+void picoquic_enable_keep_alive(picoquic_cnx_t* cnx, uint64_t interval)
 {
-    if (cnx->keep_alive == NULL) {
-        uint8_t keep_alive_frame[11] = { picoquic_frame_type_ping, 9, 'k', 'e', 'e', 'p', 'a', 'l', 'i', 'v', 'e' };
-
-        cnx->keep_alive = malloc(sizeof(picoquic_keep_alive_context_t));
-        cnx->keep_alive->frame = picoquic_create_misc_frame(keep_alive_frame, sizeof(keep_alive_frame));
-
-        if (cnx->keep_alive->frame == NULL) {
-            free(cnx->keep_alive);
-            cnx->keep_alive = NULL;
-            return PICOQUIC_ERROR_MEMORY;
-        }
-    }
-
     if (interval == 0) {
-        cnx->keep_alive->interval = PICOQUIC_MICROSEC_SILENCE_MAX / 2;
+        cnx->keep_alive_interval = PICOQUIC_MICROSEC_SILENCE_MAX / 2;
     } else {
-        cnx->keep_alive->interval = interval;
+        cnx->keep_alive_interval = interval;
     }
-
-    cnx->keep_alive->next_frame_time = cnx->keep_alive->interval;
-
-    return 0;
 }
 
 void picoquic_disable_keep_alive(picoquic_cnx_t* cnx)
 {
-    if (cnx->keep_alive != NULL) {
-      free(cnx->keep_alive->frame);
-      free(cnx->keep_alive);
-      cnx->keep_alive = NULL;
-    }
+    cnx->keep_alive_interval = 0;
 }

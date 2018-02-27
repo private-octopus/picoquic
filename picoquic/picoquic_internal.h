@@ -288,18 +288,6 @@ typedef struct st_picoquic_misc_frame_header_t {
 } picoquic_misc_frame_header_t;
 
 /*
- * Keep alive context.
- */
-typedef struct st_picoquic_keep_alive_context_t {
-    /* The next time, a ping frame needs to be send. */
-    uint64_t next_frame_time;
-    /* The interval that is used to send ping frames. */
-    uint64_t interval;
-    /* The keep alive frame. */
-    picoquic_misc_frame_header_t* frame;
-} picoquic_keep_alive_context_t;
-
-/*
 	 * Per connection context.
 	 */
 typedef struct st_picoquic_cnx_t {
@@ -446,8 +434,8 @@ typedef struct st_picoquic_cnx_t {
     /* Is this connection the client side? */
     char client_mode;
 
-    /* If not NULL, this connections sends keep alive messages */
-    picoquic_keep_alive_context_t* keep_alive;
+    /* If not `0`, the connection will send keep alive messages in the given interval. */
+    uint64_t keep_alive_interval;
 } picoquic_cnx_t;
 
 /* Init of transport parameters */
