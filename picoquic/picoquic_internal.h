@@ -106,6 +106,8 @@ typedef enum {
 #define PICOQUIC_FOURTH_INTEROP_VERSION 0xFF000009
 #define PICOQUIC_INTERNAL_TEST_VERSION_1 0x50435130
 
+#define PICOQUIC_INTEROP_VERSION_INDEX 1
+
 /* 
      * Flags used to describe the capbilities of different
      * versions.

@@ -474,12 +474,13 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             } else {
                 cnx->version_index = picoquic_get_version_index(preferred_version);
                 if (cnx->version_index < 0) {
-                    cnx->version_index = 0;
+                    cnx->version_index = PICOQUIC_INTEROP_VERSION_INDEX;
                     if ((preferred_version & 0x0A0A0A0A) == 0x0A0A0A0A) {
                         /* This is a hack, to allow greasing the cnx ID */
                         cnx->proposed_version = preferred_version;
+
                     } else {
-                        cnx->proposed_version = picoquic_supported_versions[0].version;
+                        cnx->proposed_version = picoquic_supported_versions[PICOQUIC_INTEROP_VERSION_INDEX].version;
                     }
                 } else {
                     cnx->proposed_version = preferred_version;
