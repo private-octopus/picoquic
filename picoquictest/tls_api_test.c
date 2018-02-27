@@ -1517,7 +1517,7 @@ int keep_alive_test()
      * Enable keep alive
      */
     if (ret == 0) {
-        ret = picoquic_enable_keep_alive(test_ctx->cnx_client, simulated_time, keep_alive_interval);
+        ret = picoquic_enable_keep_alive(test_ctx->cnx_client, keep_alive_interval);
     }
 
     /* Perform a couple rounds of sending data */

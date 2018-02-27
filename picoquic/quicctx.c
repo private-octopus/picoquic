@@ -1202,7 +1202,7 @@ void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_
     }
 }
 
-int picoquic_enable_keep_alive(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t interval)
+int picoquic_enable_keep_alive(picoquic_cnx_t* cnx, uint64_t interval)
 {
     if (cnx->keep_alive == NULL) {
         uint8_t keep_alive_frame[11] = { picoquic_frame_type_ping, 9, 'k', 'e', 'e', 'p', 'a', 'l', 'i', 'v', 'e' };
@@ -1217,13 +1217,13 @@ int picoquic_enable_keep_alive(picoquic_cnx_t* cnx, uint64_t current_time, uint6
         }
     }
 
-    cnx->keep_alive->next_frame_time = current_time + interval;
-
     if (interval == 0) {
         cnx->keep_alive->interval = PICOQUIC_MICROSEC_SILENCE_MAX / 2;
     } else {
         cnx->keep_alive->interval = interval;
     }
+
+    cnx->keep_alive->next_frame_time = cnx->keep_alive->interval;
 
     return 0;
 }
