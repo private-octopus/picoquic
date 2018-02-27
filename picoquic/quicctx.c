@@ -742,19 +742,30 @@ void picoquic_set_callback(picoquic_cnx_t* cnx,
     cnx->callback_ctx = callback_ctx;
 }
 
-int picoquic_queue_misc_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t length)
-{
-    int ret = 0;
+picoquic_misc_frame_header_t* picoquic_create_misc_frame(const uint8_t* bytes, size_t length) {
     uint8_t* misc_frame = (uint8_t*)malloc(sizeof(picoquic_misc_frame_header_t) + length);
 
     if (misc_frame == NULL) {
-        ret = PICOQUIC_ERROR_MEMORY;
+        return NULL;
     } else {
         picoquic_misc_frame_header_t* head = (picoquic_misc_frame_header_t*)misc_frame;
         head->length = length;
         memcpy(misc_frame + sizeof(picoquic_misc_frame_header_t), bytes, length);
-        head->next_misc_frame = cnx->first_misc_frame;
-        cnx->first_misc_frame = head;
+
+        return head;
+    }
+}
+
+int picoquic_queue_misc_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t length)
+{
+    int ret = 0;
+    picoquic_misc_frame_header_t* misc_frame = picoquic_create_misc_frame(bytes, length);
+
+    if (misc_frame == NULL) {
+        ret = PICOQUIC_ERROR_MEMORY;
+    } else {
+        misc_frame->next_misc_frame = cnx->first_misc_frame;
+        cnx->first_misc_frame = misc_frame;
     }
 
     return ret;
@@ -1125,6 +1136,8 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
             cnx->congestion_alg->alg_delete(cnx);
         }
 
+        picoquic_disable_keep_alive(cnx);
+
         free(cnx);
     }
 }
@@ -1186,5 +1199,40 @@ void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_
 
     if (cnx->congestion_alg != NULL) {
         cnx->congestion_alg->alg_init(cnx);
+    }
+}
+
+int picoquic_enable_keep_alive(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t interval)
+{
+    if (cnx->keep_alive == NULL) {
+        uint8_t keep_alive_frame[2] = { picoquic_frame_type_ping, 0 };
+
+        cnx->keep_alive = malloc(sizeof(picoquic_keep_alive_context_t));
+        cnx->keep_alive->frame = picoquic_create_misc_frame(keep_alive_frame, sizeof(keep_alive_frame));
+
+        if (cnx->keep_alive->frame == NULL) {
+            free(cnx->keep_alive);
+            cnx->keep_alive = NULL;
+            return PICOQUIC_ERROR_MEMORY;
+        }
+    }
+
+    cnx->keep_alive->next_frame_time = current_time + interval;
+
+    if (interval == 0) {
+        cnx->keep_alive->interval = PICOQUIC_MICROSEC_SILENCE_MAX / 2;
+    } else {
+        cnx->keep_alive->interval = interval;
+    }
+
+    return 0;
+}
+
+void picoquic_disable_keep_alive(picoquic_cnx_t* cnx)
+{
+    if (cnx->keep_alive != NULL) {
+      free(cnx->keep_alive->frame);
+      free(cnx->keep_alive);
+      cnx->keep_alive = NULL;
     }
 }

@@ -808,7 +808,7 @@ void picoquic_cnx_set_next_wake_time(picoquic_cnx_t* cnx, uint64_t current_time)
         picoquic_cnx_set_next_wake_time_init(cnx, current_time);
         return;
     }
-    
+
     if (cnx->cnx_state == picoquic_state_disconnecting || cnx->cnx_state == picoquic_state_handshake_failure) {
         blocked = 0;
     } else if (p != NULL && picoquic_retransmit_needed_by_packet(cnx, p, current_time, &timer_based)) {
@@ -853,6 +853,11 @@ void picoquic_cnx_set_next_wake_time(picoquic_cnx_t* cnx, uint64_t current_time)
                 }
             }
         }
+
+        /* Consider keep alive packet */
+        if (cnx->keep_alive != NULL) {
+            next_time = next_time < cnx->keep_alive->next_frame_time ? next_time : cnx->keep_alive->next_frame_time;
+        }
     }
 
     cnx->next_wake_time = next_time;
@@ -892,7 +897,7 @@ int picoquic_prepare_packet_0rtt(picoquic_cnx_t* cnx, picoquic_packet* packet,
     } else {
         /* If present, send misc frame */
         while (cnx->first_misc_frame != NULL) {
-            ret = picoquic_prepare_misc_frame(cnx, &bytes[length],
+            ret = picoquic_prepare_first_misc_frame(cnx, &bytes[length],
                 cnx->send_mtu - checksum_overhead - length, &data_bytes);
 
             if (ret == 0) {
@@ -1469,9 +1474,23 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_packet* packet,
             }
 
             if (cnx->cwin > cnx->bytes_in_transit) {
+                /* If keep alive is enabled and it is time to send the next frame, send it! */
+                if (cnx->keep_alive != NULL && cnx->keep_alive->next_frame_time <= current_time) {
+                    ret = picoquic_prepare_misc_frame(cnx->keep_alive->frame, &bytes[length],
+                                                      cnx->send_mtu - checksum_overhead - length, &data_bytes);
+                    if (ret == 0) {
+                        length += data_bytes;
+                        cnx->keep_alive->next_frame_time = current_time + cnx->keep_alive->interval;
+                    } else {
+                        if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
+                            ret = 0;
+                        }
+                    }
+                }
+
                 /* If present, send misc frame */
                 while (cnx->first_misc_frame != NULL) {
-                    ret = picoquic_prepare_misc_frame(cnx, &bytes[length],
+                    ret = picoquic_prepare_first_misc_frame(cnx, &bytes[length],
                         cnx->send_mtu - checksum_overhead - length, &data_bytes);
                     if (ret == 0) {
                         length += data_bytes;

@@ -288,6 +288,18 @@ typedef struct st_picoquic_misc_frame_header_t {
 } picoquic_misc_frame_header_t;
 
 /*
+ * Keep alive context.
+ */
+typedef struct st_picoquic_keep_alive_context_t {
+    /* The next time, a ping frame needs to be send. */
+    uint64_t next_frame_time;
+    /* The interval that is used to send ping frames. */
+    uint64_t interval;
+    /* The keep alive frame. */
+    picoquic_misc_frame_header_t* frame;
+} picoquic_keep_alive_context_t;
+
+/*
 	 * Per connection context.
 	 */
 typedef struct st_picoquic_cnx_t {
@@ -433,6 +445,9 @@ typedef struct st_picoquic_cnx_t {
 
     /* Is this connection the client side? */
     char client_mode;
+
+    /* If not NULL, this connections sends keep alive messages */
+    picoquic_keep_alive_context_t* keep_alive;
 } picoquic_cnx_t;
 
 /* Init of transport parameters */
@@ -590,8 +605,10 @@ int picoquic_prepare_max_data_frame(picoquic_cnx_t* cnx, uint64_t maxdata_increa
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
 void picoquic_clear_stream(picoquic_stream_head* stream);
 
-int picoquic_prepare_misc_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
-    size_t bytes_max, size_t* consumed);
+int picoquic_prepare_first_misc_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
+                                      size_t bytes_max, size_t* consumed);
+int picoquic_prepare_misc_frame(picoquic_misc_frame_header_t* misc_frame, uint8_t* bytes,
+                                size_t bytes_max, size_t* consumed);
 
 /* send/receive */
 
@@ -618,6 +635,8 @@ void picoquic_queue_stateless_reset(picoquic_cnx_t* cnx,
     picoquic_packet_header* ph, struct sockaddr* addr_from,
     struct sockaddr* addr_to,
     unsigned long if_index_to);
+
+picoquic_misc_frame_header_t* picoquic_create_misc_frame(const uint8_t* bytes, size_t length);
 
 #ifdef __cplusplus
 }
