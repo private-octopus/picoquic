@@ -1241,6 +1241,10 @@ int main(int argc, char** argv)
             F_log = stdout;
         }
 
+        if (F_log != NULL) {
+            debug_printf_push_stream(F_log);
+        }
+
         /* Run as client */
         printf("Starting PicoQUIC connection to server IP = %s, port = %d\n", server_name, server_port);
         ret = quic_client(server_name, server_port, proposed_version, force_zero_share, F_log);

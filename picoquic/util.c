@@ -55,7 +55,7 @@ char* picoquic_string_duplicate(const char* original)
     return str;
 }
 
-static FILE* debug_out;
+static FILE* debug_out = NULL;
 static int debug_suspended = 0;
 
 void debug_printf(const char* fmt, ...)

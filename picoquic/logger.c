@@ -211,11 +211,10 @@ size_t picoquic_log_stream_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
     int fin;
     int ret = 0;
 
-    debug_printf_push_stream(F);
+    debug_printf_suspend();
     ret = picoquic_parse_stream_header(bytes, bytes_max,
         &stream_id, &offset, &data_length, &fin, &byte_index);
-
-    debug_printf_pop_stream();
+    debug_printf_resume();
 
     if (ret != 0)
         return bytes_max;
@@ -239,12 +238,12 @@ size_t picoquic_log_ack_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
     uint64_t largest;
     uint64_t ack_delay;
 
-    debug_printf_push_stream(F);
+    debug_printf_suspend();
 
     int ret = picoquic_parse_ack_header(bytes, bytes_max,
         &num_block, &largest, &ack_delay, &byte_index, 0);
 
-    debug_printf_pop_stream();
+    debug_printf_resume();
 
     if (ret != 0)
         return bytes_max;
