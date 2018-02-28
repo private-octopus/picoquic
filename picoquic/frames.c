@@ -1919,7 +1919,8 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
             if (restricted && first_byte != picoquic_frame_type_padding && first_byte != picoquic_frame_type_connection_close) {
                 ret = picoquic_connection_error(cnx,
                     PICOQUIC_TRANSPORT_FRAME_ERROR(first_byte));
-            } else
+            } else {
+                int ack_needed = 0;
                 switch (first_byte) {
                 case picoquic_frame_type_padding:
                     do {
@@ -1929,7 +1930,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
                 case picoquic_frame_type_reset_stream:
                     ret = picoquic_decode_stream_reset_frame(cnx, bytes + byte_index, bytes_max - byte_index, &consumed);
                     byte_index += consumed;
-                    cnx->ack_needed = 1;
+                    ack_needed = 1;
                     break;
                 case picoquic_frame_type_connection_close:
                     ret = picoquic_decode_connection_close_frame(cnx, bytes + byte_index, bytes_max - byte_index, &consumed);
@@ -1942,43 +1943,40 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
                 case picoquic_frame_type_max_data:
                     ret = picoquic_decode_max_data_frame(cnx, bytes + byte_index, bytes_max - byte_index, &consumed);
                     byte_index += consumed;
-                    cnx->ack_needed = 1;
+                    ack_needed = 1;
                     break;
                 case picoquic_frame_type_max_stream_data:
                     ret = picoquic_decode_max_stream_data_frame(cnx, bytes + byte_index, bytes_max - byte_index, &consumed);
                     byte_index += consumed;
-                    cnx->ack_needed = 1;
+                    ack_needed = 1;
                     break;
                 case picoquic_frame_type_max_stream_id: /* MAX_STREAM_ID */
                     ret = picoquic_decode_max_stream_id_frame(cnx, bytes + byte_index, bytes_max - byte_index, &consumed);
                     byte_index += consumed;
-                    cnx->ack_needed = 1;
+                    ack_needed = 1;
                     break;
                 case picoquic_frame_type_ping: /* PING */
                     ret = picoquic_decode_ping_frame(cnx, bytes + byte_index, bytes_max - byte_index, &consumed);
                     byte_index += consumed;
-                    cnx->ack_needed = 1;
-                    if (ret == 0) {
-                        cnx->latest_progress_time = current_time;
-                    }
+                    ack_needed = 1;
                     break;
                 case picoquic_frame_type_blocked: /* BLOCKED */
                     byte_index++;
                     /* Skip the max data offset */
                     byte_index += picoquic_varint_skip(&bytes[byte_index]);
-                    cnx->ack_needed = 1;
+                    ack_needed = 1;
                     break;
                 case picoquic_frame_type_stream_blocked: /* STREAM_BLOCKED */
                     byte_index += 1 + picoquic_varint_skip(bytes + byte_index + 1);
                     /* Skip the max data offset */
                     byte_index += picoquic_varint_skip(&bytes[byte_index]);
-                    cnx->ack_needed = 1;
+                    ack_needed = 1;
                     break;
                 case picoquic_frame_type_stream_id_needed: /* STREAM_ID_NEEDED */
                     byte_index++;
                     /* Skip the stream ID */
                     byte_index += picoquic_varint_skip(&bytes[byte_index]);
-                    cnx->ack_needed = 1;
+                    ack_needed = 1;
                     break;
                 case picoquic_frame_type_new_connection_id: /* NEW_CONNECTION_ID */
                     byte_index += 1;
@@ -1986,17 +1984,17 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
                     byte_index += picoquic_varint_skip(&bytes[byte_index]);
                     /* Cnx ID & reset secret */
                     byte_index += 8 + 16;
-                    cnx->ack_needed = 1;
+                    ack_needed = 1;
                     break;
                 case picoquic_frame_type_stop_sending:
                     ret = picoquic_decode_stop_sending_frame(cnx, bytes + byte_index, bytes_max - byte_index, &consumed);
                     byte_index += consumed;
-                    cnx->ack_needed = 1;
+                    ack_needed = 1;
                     break;
                 case picoquic_frame_type_pong:
                     ret = picoquic_decode_pong_frame(cnx, bytes + byte_index, bytes_max - byte_index, &consumed);
                     byte_index += consumed;
-                    cnx->ack_needed = 1;
+                    ack_needed = 1;
                     break;
                 default:
                     /* Not implemented yet! */
@@ -2004,6 +2002,12 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
                         PICOQUIC_TRANSPORT_FRAME_ERROR(first_byte));
                     break;
                 }
+
+                if (ret == 0 && ack_needed != 0) {
+                    cnx->latest_progress_time = current_time;
+                    cnx->ack_needed = 1;
+                }
+            }
         }
     }
     return ret;
