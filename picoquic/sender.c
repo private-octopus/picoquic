@@ -855,8 +855,8 @@ void picoquic_cnx_set_next_wake_time(picoquic_cnx_t* cnx, uint64_t current_time)
         }
 
         /* Consider keep alive */
-        if (cnx->keep_alive_interval) {
-            next_time = next_time < cnx->keep_alive_interval ? next_time : cnx->keep_alive_interval;
+        if (cnx->keep_alive_interval != 0 && next_time > (current_time + cnx->keep_alive_interval)) {
+            next_time = current_time + cnx->keep_alive_interval;
         }
     }
 
