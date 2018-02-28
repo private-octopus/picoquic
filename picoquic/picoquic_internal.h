@@ -433,6 +433,9 @@ typedef struct st_picoquic_cnx_t {
 
     /* Is this connection the client side? */
     char client_mode;
+
+    /* If not `0`, the connection will send keep alive messages in the given interval. */
+    uint64_t keep_alive_interval;
 } picoquic_cnx_t;
 
 /* Init of transport parameters */
@@ -590,8 +593,10 @@ int picoquic_prepare_max_data_frame(picoquic_cnx_t* cnx, uint64_t maxdata_increa
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
 void picoquic_clear_stream(picoquic_stream_head* stream);
 
-int picoquic_prepare_misc_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
-    size_t bytes_max, size_t* consumed);
+int picoquic_prepare_first_misc_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
+                                      size_t bytes_max, size_t* consumed);
+int picoquic_prepare_misc_frame(picoquic_misc_frame_header_t* misc_frame, uint8_t* bytes,
+                                size_t bytes_max, size_t* consumed);
 
 /* send/receive */
 
@@ -618,6 +623,8 @@ void picoquic_queue_stateless_reset(picoquic_cnx_t* cnx,
     picoquic_packet_header* ph, struct sockaddr* addr_from,
     struct sockaddr* addr_to,
     unsigned long if_index_to);
+
+picoquic_misc_frame_header_t* picoquic_create_misc_frame(const uint8_t* bytes, size_t length);
 
 #ifdef __cplusplus
 }

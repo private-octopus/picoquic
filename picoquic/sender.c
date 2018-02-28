@@ -808,7 +808,7 @@ void picoquic_cnx_set_next_wake_time(picoquic_cnx_t* cnx, uint64_t current_time)
         picoquic_cnx_set_next_wake_time_init(cnx, current_time);
         return;
     }
-    
+
     if (cnx->cnx_state == picoquic_state_disconnecting || cnx->cnx_state == picoquic_state_handshake_failure) {
         blocked = 0;
     } else if (p != NULL && picoquic_retransmit_needed_by_packet(cnx, p, current_time, &timer_based)) {
@@ -853,6 +853,11 @@ void picoquic_cnx_set_next_wake_time(picoquic_cnx_t* cnx, uint64_t current_time)
                 }
             }
         }
+
+        /* Consider keep alive */
+        if (cnx->keep_alive_interval != 0 && next_time > (current_time + cnx->keep_alive_interval)) {
+            next_time = current_time + cnx->keep_alive_interval;
+        }
     }
 
     cnx->next_wake_time = next_time;
@@ -892,7 +897,7 @@ int picoquic_prepare_packet_0rtt(picoquic_cnx_t* cnx, picoquic_packet* packet,
     } else {
         /* If present, send misc frame */
         while (cnx->first_misc_frame != NULL) {
-            ret = picoquic_prepare_misc_frame(cnx, &bytes[length],
+            ret = picoquic_prepare_first_misc_frame(cnx, &bytes[length],
                 cnx->send_mtu - checksum_overhead - length, &data_bytes);
 
             if (ret == 0) {
@@ -1471,7 +1476,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_packet* packet,
             if (cnx->cwin > cnx->bytes_in_transit) {
                 /* If present, send misc frame */
                 while (cnx->first_misc_frame != NULL) {
-                    ret = picoquic_prepare_misc_frame(cnx, &bytes[length],
+                    ret = picoquic_prepare_first_misc_frame(cnx, &bytes[length],
                         cnx->send_mtu - checksum_overhead - length, &data_bytes);
                     if (ret == 0) {
                         length += data_bytes;
@@ -1510,6 +1515,16 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_packet* packet,
                     } else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
                         ret = 0;
                     }
+                }
+
+                /* If necessary, encode and send the keep alive packet!
+                 * We only send keep alive packages, when no other data is send!
+                 */
+                if (cnx->keep_alive_interval != 0
+                    && cnx->latest_progress_time + cnx->keep_alive_interval <= current_time
+                    && length == 0) {
+                    bytes[length++] = picoquic_frame_type_ping;
+                    bytes[length++] = 0;
                 }
             }
         }

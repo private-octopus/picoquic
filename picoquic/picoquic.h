@@ -313,6 +313,13 @@ void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_
 int http0dot9_get(uint8_t* command, size_t command_length,
     uint8_t* response, size_t response_max, size_t* response_length);
 
+/* Enables keep alive for a connection.
+ * If `interval` is `0`, it is set to `idle_timeout / 2`.
+ */
+void picoquic_enable_keep_alive(picoquic_cnx_t* cnx, uint64_t interval);
+/* Disables keep alive for a connection. */
+void picoquic_disable_keep_alive(picoquic_cnx_t* cnx);
+
 #ifdef __cplusplus
 }
 #endif

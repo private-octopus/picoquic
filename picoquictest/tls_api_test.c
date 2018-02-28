@@ -1455,6 +1455,76 @@ int tls_api_multiple_versions_test()
 }
 
 /*
+ * Keep alive test.
+ */
+
+int keep_alive_test_impl(int keep_alive)
+{
+    uint64_t simulated_time = 0;
+    const uint64_t keep_alive_interval = 10000;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0);
+    int was_active = 0;
+
+    /*
+     * setup the connections.
+     */
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    /*
+     * Enable keep alive
+     */
+    if (ret == 0 && keep_alive) {
+        picoquic_enable_keep_alive(test_ctx->cnx_client, keep_alive_interval);
+    }
+
+    /* Perform a couple rounds of sending data */
+    for (int i = 0; ret == 0 && i < 512 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected; i++) {
+        was_active = 0;
+
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, &was_active);
+    }
+
+    /* Check that the status matched the expected value */
+    if ((test_ctx->cnx_client->cnx_state == picoquic_state_disconnected) == keep_alive) {
+        ret = -1;
+    } else if (keep_alive == 0) {
+        /* If keep alive was not activated, reset ret to `0`, as `tls_api_one_sim_round` returns -1
+         * when the connection was disconnected.
+         */
+        ret = test_ctx->cnx_client->cnx_state != picoquic_state_disconnected;
+    }
+
+    /* Close the connection */
+    if (ret == 0 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
+        ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
+    }
+
+    /* Clean up */
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+int keep_alive_test()
+{
+    int ret = keep_alive_test_impl(1);
+
+    if (ret == 0) {
+        ret = keep_alive_test_impl(0);
+    }
+
+    return ret;
+}
+
+/*
  * Ping pong test.
  */
 

@@ -1795,11 +1795,24 @@ int picoquic_decode_max_stream_id_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
  * Sending of miscellaneous frames
  */
 
-int picoquic_prepare_misc_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
-    size_t bytes_max, size_t* consumed)
+int picoquic_prepare_first_misc_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
+                                      size_t bytes_max, size_t* consumed)
+{
+    int ret = picoquic_prepare_misc_frame(cnx->first_misc_frame, bytes, bytes_max, consumed);
+
+    if (ret == 0) {
+        picoquic_misc_frame_header_t* misc_frame = cnx->first_misc_frame;
+        cnx->first_misc_frame = misc_frame->next_misc_frame;
+        free(misc_frame);
+    }
+
+    return ret;
+}
+
+int picoquic_prepare_misc_frame(picoquic_misc_frame_header_t* misc_frame, uint8_t* bytes,
+                                size_t bytes_max, size_t* consumed)
 {
     int ret = 0;
-    picoquic_misc_frame_header_t* misc_frame = cnx->first_misc_frame;
 
     if (misc_frame->length > bytes_max) {
         ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
@@ -1808,8 +1821,6 @@ int picoquic_prepare_misc_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
         uint8_t* frame = ((uint8_t*)misc_frame) + sizeof(picoquic_misc_frame_header_t);
         memcpy(bytes, frame, misc_frame->length);
         *consumed = misc_frame->length;
-        cnx->first_misc_frame = misc_frame->next_misc_frame;
-        free(misc_frame);
     }
 
     return ret;
