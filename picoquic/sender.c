@@ -855,8 +855,8 @@ void picoquic_cnx_set_next_wake_time(picoquic_cnx_t* cnx, uint64_t current_time)
         }
 
         /* Consider keep alive */
-        if (cnx->keep_alive_interval != 0 && next_time > (current_time + cnx->keep_alive_interval)) {
-            next_time = current_time + cnx->keep_alive_interval;
+        if (cnx->keep_alive_interval != 0 && next_time > (cnx->latest_progress_time + cnx->keep_alive_interval)) {
+            next_time = cnx->latest_progress_time + cnx->keep_alive_interval;
         }
     }
 
@@ -1424,6 +1424,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_packet* packet,
     picoquic_stream_head* stream = NULL;
     picoquic_packet_type_enum packet_type = picoquic_packet_1rtt_protected_phi0;
     int is_cleartext_mode = 0;
+    int is_pure_ack = 1;
     size_t data_bytes = 0;
     picoquic_connection_id_t cnx_id = cnx->server_cnxid;
     int retransmit_possible = 1;
@@ -1449,6 +1450,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_packet* packet,
             }
         }
         /* document the send time & overhead */
+        is_pure_ack = 0;
         packet->send_time = current_time;
         packet->checksum_overhead = checksum_overhead;
     } else if (ret == 0) {
@@ -1463,6 +1465,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_packet* packet,
                 length = picoquic_prepare_mtu_probe(cnx, header_length, checksum_overhead, bytes);
                 packet->length = length;
                 cnx->mtu_probe_sent = 1;
+                is_pure_ack = 0;
             } else {
                 length = 0;
             }
@@ -1494,6 +1497,10 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_packet* packet,
 
                     if (ret == 0) {
                         length += data_bytes;
+                        if (data_bytes > 0)
+                        {
+                            is_pure_ack = 0;
+                        }
                     } else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
                         ret = 0;
                     }
@@ -1504,6 +1511,10 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_packet* packet,
 
                 if (ret == 0) {
                     length += data_bytes;
+                    if (data_bytes > 0)
+                    {
+                        is_pure_ack = 0;
+                    }
                 }
                 /* Encode the stream frame */
                 if (stream != NULL) {
@@ -1512,22 +1523,36 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_packet* packet,
 
                     if (ret == 0) {
                         length += data_bytes;
+                        if (data_bytes > 0)
+                        {
+                            is_pure_ack = 0;
+                        }
                     } else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
                         ret = 0;
                     }
                 }
-
-                /* If necessary, encode and send the keep alive packet!
-                 * We only send keep alive packages, when no other data is send!
-                 */
-                if (cnx->keep_alive_interval != 0
-                    && cnx->latest_progress_time + cnx->keep_alive_interval <= current_time
-                    && length == 0) {
-                    bytes[length++] = picoquic_frame_type_ping;
-                    bytes[length++] = 0;
-                }
             }
         }
+
+        /* If necessary, encode and send the keep alive packet!
+        * We only send keep alive packages, when no other data is send!
+        */
+        if (is_pure_ack == 0)
+        {
+            cnx->latest_progress_time = current_time;
+        } else if (
+            cnx->keep_alive_interval != 0
+            && cnx->latest_progress_time + cnx->keep_alive_interval <= current_time && length == 0) {
+            length = picoquic_create_packet_header(
+                cnx, packet_type, cnx_id, cnx->send_sequence, bytes, &pn_offset);
+            header_length = length;
+            packet->sequence_number = cnx->send_sequence;
+            packet->send_time = current_time;
+            bytes[length++] = picoquic_frame_type_ping;
+            bytes[length++] = 0;
+            cnx->latest_progress_time = current_time;
+        }
+
     }
 
     if (ret == 0 && length > 0) {

@@ -1461,7 +1461,7 @@ int tls_api_multiple_versions_test()
 int keep_alive_test_impl(int keep_alive)
 {
     uint64_t simulated_time = 0;
-    const uint64_t keep_alive_interval = 10000;
+    const uint64_t keep_alive_interval = PICOQUIC_MICROSEC_SILENCE_MAX/4;
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0);
@@ -1483,10 +1483,13 @@ int keep_alive_test_impl(int keep_alive)
     }
 
     /* Perform a couple rounds of sending data */
-    for (int i = 0; ret == 0 && i < 512 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected; i++) {
+    for (int i = 0; ret == 0 && i < 0x10000 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected ; i++) {
         was_active = 0;
 
         ret = tls_api_one_sim_round(test_ctx, &simulated_time, &was_active);
+        if (simulated_time > 2 * PICOQUIC_MICROSEC_SILENCE_MAX) {
+            break;
+        }
     }
 
     /* Check that the status matched the expected value */

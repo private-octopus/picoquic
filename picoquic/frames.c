@@ -1958,6 +1958,9 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
                     ret = picoquic_decode_ping_frame(cnx, bytes + byte_index, bytes_max - byte_index, &consumed);
                     byte_index += consumed;
                     cnx->ack_needed = 1;
+                    if (ret == 0) {
+                        cnx->latest_progress_time = current_time;
+                    }
                     break;
                 case picoquic_frame_type_blocked: /* BLOCKED */
                     byte_index++;
