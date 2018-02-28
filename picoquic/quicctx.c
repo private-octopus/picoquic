@@ -350,7 +350,7 @@ void picoquic_init_transport_parameters(picoquic_transport_parameters* tp, int c
         tp->initial_max_stream_id_bidir = 65532;
         tp->initial_max_stream_id_unidir = 65534;
     }
-    tp->idle_timeout = 30;
+    tp->idle_timeout = PICOQUIC_MICROSEC_HANDSHAKE_MAX/1000000;
     tp->omit_connection_id = 0;
     tp->max_packet_size = PICOQUIC_MAX_PACKET_SIZE - 16 - 40;
     tp->ack_delay_exponent = 3;
@@ -1203,7 +1203,16 @@ void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_
 void picoquic_enable_keep_alive(picoquic_cnx_t* cnx, uint64_t interval)
 {
     if (interval == 0) {
-        cnx->keep_alive_interval = PICOQUIC_MICROSEC_SILENCE_MAX / 2;
+        /* Examine the transport parameters */
+        uint64_t idle_timeout = cnx->local_parameters.idle_timeout;
+
+        if (cnx->cnx_state >= picoquic_state_client_ready && idle_timeout > cnx->remote_parameters.idle_timeout) {
+            idle_timeout = cnx->remote_parameters.idle_timeout;
+        }
+        /* convert to microseconds */
+        idle_timeout *= 1000000; 
+        /* set interval to half that value */
+        cnx->keep_alive_interval = idle_timeout / 2;
     } else {
         cnx->keep_alive_interval = interval;
     }
