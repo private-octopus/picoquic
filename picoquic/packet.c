@@ -679,7 +679,7 @@ int picoquic_incoming_server_stateless(
             ret = (already_received)? PICOQUIC_ERROR_DUPLICATE:PICOQUIC_ERROR_FNV1A_CHECK;
         } else {
             /* Verify that the header is a proper echo of what was sent */
-            if (picoquic_compare_connection_id(&ph->cnx_id, &cnx->initial_cnxid) != 0 || ph->vn != picoquic_supported_versions[cnx->version_index].version || (cnx->retransmit_newest == NULL || ph->pn64 > cnx->retransmit_newest->sequence_number) || (cnx->retransmit_oldest == NULL || ph->pn64 < cnx->retransmit_oldest->sequence_number)) {
+            if (ph->vn != picoquic_supported_versions[cnx->version_index].version || (cnx->retransmit_newest == NULL || ph->pn64 > cnx->retransmit_newest->sequence_number) || (cnx->retransmit_oldest == NULL || ph->pn64 < cnx->retransmit_oldest->sequence_number)) {
                 /* Packet that do not match the "echo" checks should be logged and ignored */
                 ret = PICOQUIC_ERROR_UNEXPECTED_PACKET;
             }
@@ -697,6 +697,28 @@ int picoquic_incoming_server_stateless(
             cnx->cnx_state = picoquic_state_client_hrr_received;
             /* submit the embedded message (presumably HRR) to stream zero */
             ret = picoquic_tlsinput_stream_zero(cnx);
+            if (ret == 0)
+            {
+                /* reset the initial CNX_ID to the version sent by the server */
+                cnx->initial_cnxid = ph->cnx_id;
+                /* reset the clear text AEAD */
+                if (cnx->aead_encrypt_cleartext_ctx != NULL) {
+                    picoquic_aead_free(cnx->aead_encrypt_cleartext_ctx);
+                    cnx->aead_encrypt_cleartext_ctx = NULL;
+                }
+
+                if (cnx->aead_decrypt_cleartext_ctx != NULL) {
+                    picoquic_aead_free(cnx->aead_decrypt_cleartext_ctx);
+                    cnx->aead_decrypt_cleartext_ctx = NULL;
+                }
+
+                if (cnx->aead_de_encrypt_cleartext_ctx != NULL) {
+                    picoquic_aead_free(cnx->aead_de_encrypt_cleartext_ctx);
+                    cnx->aead_de_encrypt_cleartext_ctx = NULL;
+                }
+                /* Reinit the clear text AEAD */
+                ret = picoquic_setup_cleartext_aead_contexts(cnx);
+            }
         }
         if (ret == 0) {
             /* Mark the packet as not required for ack */
