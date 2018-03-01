@@ -26,6 +26,7 @@
 #include "../picoquictest/picoquictest.h"
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 typedef struct st_picoquic_test_def_t {
     char const* test_name;
@@ -161,7 +162,6 @@ int get_test_number(char const * test_name)
 int main(int argc, char** argv)
 {
     int ret = 0;
-    int arg_err = 0;
     int nb_test_tried = 0;
     int nb_test_failed = 0;
     int * is_excluded = malloc(sizeof(int)*nb_tests);
@@ -208,7 +208,7 @@ int main(int argc, char** argv)
                         }
                     }
                     else {
-                        fprintf(stderr, "test number %d (%s) is bypassed.\n", i, test_table[i].test_name);
+                        fprintf(stderr, "test number %d (%s) is bypassed.\n", (int)i, test_table[i].test_name);
                     }
                 }
             } else {

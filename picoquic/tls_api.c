@@ -732,7 +732,7 @@ int picoquic_tlsinput_segment(picoquic_cnx_t* cnx,
 
     if ((ret != 0 && ret != PTLS_ERROR_IN_PROGRESS && ret != PTLS_ERROR_STATELESS_RETRY) || length != roff)
     {
-        DBG_PRINTF("Handshake packet causes error %d (%x), %d bytes remaining\n", ret, (int)(length - roff));
+        DBG_PRINTF("Handshake packet causes error %d (%x), %d bytes remaining\n", ret, ret, (int)(length - roff));
     }
 
     *consumed = roff;
