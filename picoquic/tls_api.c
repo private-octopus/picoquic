@@ -672,8 +672,6 @@ int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint6
 */
 void picoquic_tlscontext_remove_ticket(picoquic_cnx_t* cnx)
 {
-
-    int ret = 0;
     /* allocate a context structure */
     picoquic_tls_ctx_t* ctx = (picoquic_tls_ctx_t*)(cnx->tls_ctx);
 
