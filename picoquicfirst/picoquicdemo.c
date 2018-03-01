@@ -103,6 +103,9 @@ static const int default_server_port = 4443;
 static const char* default_server_name = "::";
 static const char* ticket_store_filename = "demo_ticket_store.bin";
 
+static const char* bad_request_message = "<html><head><title>Bad Request</title></head><body>Bad request. Why don't you try \"GET /doc-456789.html\"?</body></html>";
+
+
 #include "../picoquic/picoquic.h"
 #include "../picoquic/picoquic_internal.h"
 #include "../picoquic/picosocks.h"
@@ -308,9 +311,13 @@ static void first_server_callback(picoquic_cnx_t* cnx,
                     ctx->buffer, ctx->buffer_max, &stream_ctx->response_length)
                 != 0) {
                 printf("%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_initial_cnxid(cnx)));
-                printf("Server CB, Stream: %" PRIu64 ", Resetting after command: %s\n",
+                printf("Server CB, Stream: %" PRIu64 ", Reply with bad request message after command: %s\n",
                     stream_id, strip_endofline(buf, sizeof(buf), (char*)&stream_ctx->command));
-                picoquic_reset_stream(cnx, stream_id, 404);
+                
+                // picoquic_reset_stream(cnx, stream_id, 404);
+
+                (void)picoquic_add_to_stream(cnx, stream_ctx->stream_id, (const uint8_t *) bad_request_message,
+                    strlen(bad_request_message), 1);
             } else {
                 printf("%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_initial_cnxid(cnx)));
                 printf("Server CB, Stream: %" PRIu64 ", Processing command: %s\n",
