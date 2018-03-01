@@ -18,9 +18,9 @@ addons:
     - cmake-data
     - libssl-dev 
 before_install:
-  - $CC --version 
+# - $CC --version 
   - if [ "$TRAVIS_OS_NAME" == "linux" ]; then  if [ "$CXX" = "g++" ]; then export CXX="g++" CC="gcc-7" EXTRA_LDFLAGS="-fuse-ld=gold"; else export CXX="clang++-5.0" CC="clang-5.0"; fi; fi
-  - $CC --version
+# - $CC --version
   - cmake --version
 before_script:
   # First build external lib
