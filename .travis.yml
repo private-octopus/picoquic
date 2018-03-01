@@ -12,14 +12,14 @@ addons:
     - ubuntu-toolchain-r-test
     - llvm-toolchain-trusty-5.0
     packages:
-    - g++-7
+    - g++
     - clang-5.0
     - cmake
     - cmake-data
     - libssl-dev 
 before_install:
   - $CC --version 
-  - if [ "$TRAVIS_OS_NAME" == "linux" ]; then  if [ "$CXX" = "g++" ]; then export CXX="g++-7" CC="gcc-7" EXTRA_LDFLAGS="-fuse-ld=gold"; else export CXX="clang++-5.0" CC="clang-5.0"; fi; fi
+  - if [ "$TRAVIS_OS_NAME" == "linux" ]; then  if [ "$CXX" = "g++" ]; then export CXX="g++" CC="gcc-7" EXTRA_LDFLAGS="-fuse-ld=gold"; else export CXX="clang++-5.0" CC="clang-5.0"; fi; fi
   - $CC --version
   - cmake --version
 before_script:

@@ -256,7 +256,7 @@ static void first_server_callback(picoquic_cnx_t* cnx,
             malloc(sizeof(picoquic_first_server_stream_ctx_t));
         if (stream_ctx == NULL) {
             /* Could not handle this stream */
-            picoquic_reset_stream(cnx, stream_id, 0);
+            picoquic_reset_stream(cnx, stream_id, 500);
             return;
         } else {
             memset(stream_ctx, 0, sizeof(picoquic_first_server_stream_ctx_t));
@@ -310,7 +310,7 @@ static void first_server_callback(picoquic_cnx_t* cnx,
                 printf("%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_initial_cnxid(cnx)));
                 printf("Server CB, Stream: %" PRIu64 ", Resetting after command: %s\n",
                     stream_id, strip_endofline(buf, sizeof(buf), (char*)&stream_ctx->command));
-                picoquic_reset_stream(cnx, stream_id, 0);
+                picoquic_reset_stream(cnx, stream_id, 404);
             } else {
                 printf("%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_initial_cnxid(cnx)));
                 printf("Server CB, Stream: %" PRIu64 ", Processing command: %s\n",
