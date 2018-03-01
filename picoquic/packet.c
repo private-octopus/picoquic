@@ -695,12 +695,15 @@ int picoquic_incoming_server_stateless(
         if (ret == 0) {
             /* set the state to HRR received, will trigger behavior when processing stream zero */
             cnx->cnx_state = picoquic_state_client_hrr_received;
+            /* Remove the resume ticket if any */
+            picoquic_tlscontext_remove_ticket(cnx);
             /* submit the embedded message (presumably HRR) to stream zero */
             ret = picoquic_tlsinput_stream_zero(cnx);
             if (ret == 0)
             {
                 /* reset the initial CNX_ID to the version sent by the server */
                 cnx->initial_cnxid = ph->cnx_id;
+
                 /* reset the clear text AEAD */
                 if (cnx->aead_encrypt_cleartext_ctx != NULL) {
                     picoquic_aead_free(cnx->aead_encrypt_cleartext_ctx);
@@ -716,6 +719,35 @@ int picoquic_incoming_server_stateless(
                     picoquic_aead_free(cnx->aead_de_encrypt_cleartext_ctx);
                     cnx->aead_de_encrypt_cleartext_ctx = NULL;
                 }
+
+                if (cnx->pn_enc_cleartext != NULL)
+                {
+                    picoquic_pn_enc_free(cnx->pn_enc_cleartext);
+                    cnx->pn_enc_cleartext = NULL;
+                }
+
+                if (cnx->pn_dec_cleartext != NULL)
+                {
+                    picoquic_pn_enc_free(cnx->pn_dec_cleartext);
+                    cnx->pn_dec_cleartext = NULL;
+                }
+
+                if (cnx->aead_0rtt_decrypt_ctx != NULL) {
+                    picoquic_aead_free(cnx->aead_0rtt_decrypt_ctx);
+                    cnx->aead_0rtt_decrypt_ctx = NULL;
+                }
+
+                if (cnx->aead_0rtt_encrypt_ctx != NULL) {
+                    picoquic_aead_free(cnx->aead_0rtt_encrypt_ctx);
+                    cnx->aead_0rtt_encrypt_ctx = NULL;
+                }
+
+                if (cnx->pn_enc_0rtt != NULL)
+                {
+                    picoquic_pn_enc_free(cnx->pn_enc_0rtt);
+                    cnx->pn_enc_0rtt = NULL;
+                }
+
                 /* Reinit the clear text AEAD */
                 ret = picoquic_setup_cleartext_aead_contexts(cnx);
             }

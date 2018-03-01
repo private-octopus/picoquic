@@ -665,6 +665,22 @@ int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint6
     return ret;
 }
 
+/*
+* Creation of a TLS context.
+* This includes setting the handshake properties that will later be
+* used during the TLS handshake.
+*/
+void picoquic_tlscontext_remove_ticket(picoquic_cnx_t* cnx)
+{
+
+    int ret = 0;
+    /* allocate a context structure */
+    picoquic_tls_ctx_t* ctx = (picoquic_tls_ctx_t*)(cnx->tls_ctx);
+
+    ctx->handshake_properties.client.session_ticket.base = NULL;
+    ctx->handshake_properties.client.session_ticket.len = 0;
+}
+
 void picoquic_tlscontext_free(void* vctx)
 {
     picoquic_tls_ctx_t* ctx = (picoquic_tls_ctx_t*)vctx;

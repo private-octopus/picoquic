@@ -32,6 +32,8 @@ int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint6
 
 void picoquic_tlscontext_free(void* ctx);
 
+void picoquic_tlscontext_remove_ticket(picoquic_cnx_t* cnx);
+
 int picoquic_tlsinput_stream_zero(picoquic_cnx_t* cnx);
 
 int picoquic_initialize_stream_zero(picoquic_cnx_t* cnx);
