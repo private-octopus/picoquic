@@ -77,6 +77,10 @@ int picoquic_open_server_sockets(picoquic_server_sockets_t* sockets, int port)
                     val = 1;
                     ret = setsockopt(sockets->s_socket[i], IPPROTO_IPV6, IPV6_RECVPKTINFO, (char*)&val, sizeof(int));
                 }
+                if (ret == 0) {
+                    val = 1;
+                    ret = setsockopt(sockets->s_socket[i], IPV6_DONTFRAG, IPV6_RECVPKTINFO, (char*)&val, sizeof(int));
+                }
             } else {
                 int val = 1;
                 ret = setsockopt(sockets->s_socket[i], IPPROTO_IP, IP_PKTINFO, (char*)&val, sizeof(int));
