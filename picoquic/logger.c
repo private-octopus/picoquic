@@ -28,6 +28,7 @@
 #include "picoquic_internal.h"
 #include "tls_api.h"
 
+#if 0
 static char const* picoquic_log_state_name[] = {
     "client_init",
     "client_init_sent",
@@ -51,6 +52,7 @@ static char const* picoquic_log_state_name[] = {
 };
 
 static const size_t picoquic_nb_log_state_name = sizeof(picoquic_log_state_name) / sizeof(char const*);
+#endif
 
 static char const* picoquic_log_frame_names[] = {
     "Padding",
@@ -139,6 +141,74 @@ void picoquic_log_packet_address(FILE* F, picoquic_cnx_t* cnx,
     fprintf(F, "\n at T=%llu.%06d (%llx)\n",
         (unsigned long long)time_sec, time_usec,
         (unsigned long long)current_time);
+}
+
+char const* picoquic_log_state_name(picoquic_state_enum state)
+{
+    char const* state_name = "unknown";
+
+    switch (state) {
+    case picoquic_state_client_init: 
+        state_name = "client_init"; 
+        break;
+    case picoquic_state_client_init_sent: 
+        state_name = "client_init_sent"; 
+        break;
+    case picoquic_state_client_renegotiate: 
+        state_name = "client_renegotiate"; 
+        break;
+    case picoquic_state_client_hrr_received: 
+        state_name = "client_hrr_received"; 
+        break;
+    case picoquic_state_client_init_resent: 
+        state_name = "client_init_resent"; 
+        break;
+    case picoquic_state_server_init: 
+        state_name = "server_init"; 
+        break;
+    case picoquic_state_client_handshake_start: 
+        state_name = "client_handshake_start"; 
+        break;
+    case picoquic_state_client_handshake_progress: 
+        state_name = "client_handshake_progress"; 
+        break;
+    case picoquic_state_client_almost_ready: 
+        state_name = "client_almost_ready";
+        break;
+    case picoquic_state_handshake_failure:
+        state_name = "handshake_failure";
+        break;
+    case picoquic_state_server_almost_ready:
+        state_name = "server_almost_ready";
+        break;
+    case picoquic_state_client_ready:
+        state_name = "client_ready";
+        break;
+    case picoquic_state_server_ready:
+        state_name = "server_ready";
+        break;
+    case picoquic_state_disconnecting:
+        state_name = "disconnecting";
+        break;
+    case picoquic_state_closing_received:
+        state_name = "closing_received";
+        break;
+    case picoquic_state_closing:
+        state_name = "closing"; 
+        break;
+    case picoquic_state_draining:
+        state_name = "draining"; 
+        break;
+    case picoquic_state_disconnected:
+        state_name = "disconnected"; 
+        break;
+    case picoquic_state_server_send_hrr: 
+        state_name = "server_send_hrr"; 
+        break;
+    default:
+        break;
+    }
+    return state_name;
 }
 
 char const* picoquic_log_ptype_name(picoquic_packet_type_enum ptype)
@@ -962,7 +1032,7 @@ void picoquic_log_processing(FILE* F, picoquic_cnx_t* cnx, size_t length, int re
 {
     fprintf(F, "Processed %d bytes, state = %d (%s), return %d\n\n",
         (int)length, cnx->cnx_state,
-        (((size_t)cnx->cnx_state) < picoquic_nb_log_state_name) ? picoquic_log_state_name[(size_t)cnx->cnx_state] : "unknown",
+        picoquic_log_state_name(cnx->cnx_state),
         ret);
 }
 
