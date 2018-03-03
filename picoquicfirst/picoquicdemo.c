@@ -779,6 +779,8 @@ void quic_client_launch_scenario(picoquic_cnx_t* cnx_client,
     demo_client_start_streams(cnx_client, callback_ctx, 0);
 }
 
+#define PICOQUIC_DEMO_CLIENT_MAX_RECEIVE_BATCH 4
+
 int quic_client(const char* ip_address_text, int server_port, uint32_t proposed_version, int force_zero_share, FILE* F_log)
 {
     /* Start: start the QUIC process with cert and key files */
@@ -802,6 +804,7 @@ int quic_client(const char* ip_address_text, int server_port, uint32_t proposed_
     picoquic_packet* p = NULL;
     uint64_t current_time = 0;
     int client_ready_loop = 0;
+    int client_receive_loop = 0;
     int established = 0;
     int is_name = 0;
     const char* sni = NULL;
@@ -920,6 +923,7 @@ int quic_client(const char* ip_address_text, int server_port, uint32_t proposed_
                     (size_t)bytes_recv, (struct sockaddr*)&packet_from,
                     (struct sockaddr*)&packet_to, if_index_to,
                     current_time);
+                client_receive_loop++;
 
                 picoquic_log_processing(F_log, cnx_client, bytes_recv, ret);
 
@@ -939,7 +943,18 @@ int quic_client(const char* ip_address_text, int server_port, uint32_t proposed_
                 }
 
                 delta_t = 0;
-            } else {
+            }
+
+            /* In normal circumstances, the code waits until all packets in the receive
+             * queue have been processed before sending new packets. However, if the server
+             * is sending lots and lots of data this can lead to the client not getting
+             * the occasion to send acknowledgements. The server will start retransmissions,
+             * and may eventually drop the connection for lack of acks. So we limit
+             * the number of packets that can be received before sending responses. */
+
+            if (bytes_recv == 0 || (ret == 0 && client_receive_loop > PICOQUIC_DEMO_CLIENT_MAX_RECEIVE_BATCH)) {
+                client_receive_loop = 0;
+
                 if (ret == 0 && picoquic_get_cnx_state(cnx_client) == picoquic_state_client_ready) {
                     if (established == 0) {
                         picoquic_log_transport_extension(F_log, cnx_client, 0);
