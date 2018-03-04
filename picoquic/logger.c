@@ -1185,10 +1185,10 @@ void picoquic_log_transport_extension_content(FILE* F, int log_cnxid, uint64_t c
                             fprintf(F, "        Extension type: %d, length %d (0x%04x / 0x%04x), ",
                                 extension_type, extension_length, extension_type, extension_length);
 
-                            if (log_cnxid != 0) {
-                                fprintf(F, "%" PRIx64 ": ", cnx_id_64);
-                            }
                             if (byte_index + extension_length > extensions_end) {
+                                if (log_cnxid != 0) {
+                                    fprintf(F, "\n%" PRIx64 ": ", cnx_id_64);
+                                }
                                 fprintf(F, "Malformed extension, only %d bytes available.\n", (int)(extensions_end - byte_index));
                                 ret = -1;
                             }
