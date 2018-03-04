@@ -341,7 +341,8 @@ static void first_server_callback(picoquic_cnx_t* cnx,
 int quic_server(const char* server_name, int server_port,
     const char* pem_cert, const char* pem_key,
     int just_once, int do_hrr, cnx_id_cb_fn cnx_id_callback,
-    void* cnx_id_callback_ctx, uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE])
+    void* cnx_id_callback_ctx, uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE],
+    int mtu_max)
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
@@ -380,6 +381,7 @@ int quic_server(const char* server_name, int server_port,
             ret = -1;
         } else if (do_hrr != 0) {
             picoquic_set_cookie_mode(qserver, 1);
+            qserver->mtu_max = mtu_max;
         }
     }
 
@@ -781,7 +783,7 @@ void quic_client_launch_scenario(picoquic_cnx_t* cnx_client,
 
 #define PICOQUIC_DEMO_CLIENT_MAX_RECEIVE_BATCH 4
 
-int quic_client(const char* ip_address_text, int server_port, uint32_t proposed_version, int force_zero_share, FILE* F_log)
+int quic_client(const char* ip_address_text, int server_port, uint32_t proposed_version, int force_zero_share, int mtu_max, FILE* F_log)
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
@@ -838,8 +840,11 @@ int quic_client(const char* ip_address_text, int server_port, uint32_t proposed_
 
         if (qclient == NULL) {
             ret = -1;
-        } else if (force_zero_share) {
-            qclient->flags |= picoquic_context_client_zero_share;
+        } else {
+            if (force_zero_share) {
+                qclient->flags |= picoquic_context_client_zero_share;
+            }
+            qclient->mtu_max = mtu_max;
         }
     }
 
@@ -1102,6 +1107,7 @@ void usage()
     fprintf(stderr, "  -v version            Version proposed by client, e.g. -v ff000009\n");
     fprintf(stderr, "  -z                    Set TLS zero share behavior on client, to force HRR.\n");
     fprintf(stderr, "  -l file               Log file\n");
+    fprintf(stderr, "  -m mtu_max            Largest mtu value that can be tried for discovery\n");
     fprintf(stderr, "  -h                    This help message\n");
     exit(1);
 }
@@ -1147,9 +1153,9 @@ int main(int argc, char** argv)
         .cnx_id_mask.opaque64 = UINT64_MAX,
         .cnx_id_val.opaque64 = 0
     };
-
     uint64_t* reset_seed = NULL;
     uint64_t reset_seed_x[2];
+    int mtu_max = 0;
 
 #ifdef _WINDOWS
     WSADATA wsaData;
@@ -1160,7 +1166,7 @@ int main(int argc, char** argv)
 
     /* Get the parameters */
     int opt;
-    while ((opt = getopt(argc, argv, "c:k:p:v:1rhzi:s:l:")) != -1) {
+    while ((opt = getopt(argc, argv, "c:k:p:v:1rhzi:s:l:m:")) != -1) {
         switch (opt) {
         case 'c':
             server_cert_file = optarg;
@@ -1218,6 +1224,13 @@ int main(int argc, char** argv)
             }
             log_file = optarg;
             break;
+        case 'm':
+            mtu_max = atoi(optarg);
+            if (mtu_max <= 0 || mtu_max > PICOQUIC_MAX_PACKET_SIZE) {
+                fprintf(stderr, "Invalid max mtu: %s\n", optarg);
+                usage();
+            }
+            break;
         case 'z':
             force_zero_share = 1;
             break;
@@ -1259,7 +1272,7 @@ int main(int argc, char** argv)
             /* TODO: find an alternative to using 64 bit mask. */
             (cnx_id_mask_is_set == 0) ? NULL : cnx_id_callback,
             (cnx_id_mask_is_set == 0) ? NULL : (void*)&cnx_id_cbdata,
-            (uint8_t*)reset_seed);
+            (uint8_t*)reset_seed, mtu_max);
         printf("Server exit with code = %d\n", ret);
     } else {
         FILE* F_log = NULL;
@@ -1287,7 +1300,7 @@ int main(int argc, char** argv)
 
         /* Run as client */
         printf("Starting PicoQUIC connection to server IP = %s, port = %d\n", server_name, server_port);
-        ret = quic_client(server_name, server_port, proposed_version, force_zero_share, F_log);
+        ret = quic_client(server_name, server_port, proposed_version, force_zero_share, mtu_max, F_log);
 
         printf("Client exit with code = %d\n", ret);
 

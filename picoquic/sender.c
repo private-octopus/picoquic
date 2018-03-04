@@ -685,10 +685,17 @@ size_t picoquic_prepare_mtu_probe(picoquic_cnx_t* cnx, size_t header_length, siz
     size_t length = header_length;
 
     if (cnx->send_mtu_max_tried == 0) {
-        probe_length = cnx->remote_parameters.max_packet_size;
-        if (probe_length == 0) {
-            probe_length = PICOQUIC_PRACTICAL_MAX_MTU;
-        } else if (probe_length > PICOQUIC_PRACTICAL_MAX_MTU) {
+        if (cnx->remote_parameters.max_packet_size > 0) {
+            probe_length = cnx->remote_parameters.max_packet_size;
+            
+            if (cnx->quic->mtu_max > 0 && probe_length > cnx->quic->mtu_max) {
+                probe_length = cnx->quic->mtu_max;
+            } else if (probe_length > PICOQUIC_MAX_PACKET_SIZE) {
+                probe_length = PICOQUIC_MAX_PACKET_SIZE;
+            }
+        } else if (cnx->quic->mtu_max > 0) {
+            probe_length = cnx->quic->mtu_max;
+        } else {
             probe_length = PICOQUIC_PRACTICAL_MAX_MTU;
         }
     } else {

@@ -182,6 +182,7 @@ typedef struct st_picoquic_quic_t {
     uint64_t* p_simulated_time;
     char const* ticket_file_name;
     picoquic_stored_ticket_t* p_first_ticket;
+    int mtu_max;
 
     uint32_t flags;
 

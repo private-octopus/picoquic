@@ -435,6 +435,10 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         memcpy(&cnx->peer_addr, addr, cnx->peer_addr_len);
 
         picoquic_init_transport_parameters(&cnx->local_parameters, cnx->client_mode);
+        if (cnx->quic->mtu_max > 0)
+        {
+            cnx->local_parameters.max_packet_size = cnx->quic->mtu_max;
+        }
         /* Special provision for test -- create a deliberate transport parameters error */
         if (sni != NULL && cnx->client_mode && strcmp(sni, PICOQUIC_ERRONEOUS_SNI) == 0) {
             /* Illegal value: server limits should be odd */
