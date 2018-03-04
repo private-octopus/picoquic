@@ -846,7 +846,7 @@ int quic_client(const char* ip_address_text, int server_port, uint32_t proposed_
             if (force_zero_share) {
                 qclient->flags |= picoquic_context_client_zero_share;
             }
-            qclient->mtu_max = 5000;
+            qclient->mtu_max = mtu_max;
         }
     }
 
