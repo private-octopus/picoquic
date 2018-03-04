@@ -379,8 +379,10 @@ int quic_server(const char* server_name, int server_port,
         if (qserver == NULL) {
             printf("Could not create server context\n");
             ret = -1;
-        } else if (do_hrr != 0) {
-            picoquic_set_cookie_mode(qserver, 1);
+        } else {
+            if (do_hrr != 0) {
+                picoquic_set_cookie_mode(qserver, 1);
+            }
             qserver->mtu_max = mtu_max;
         }
     }
