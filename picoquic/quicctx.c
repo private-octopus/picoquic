@@ -356,46 +356,100 @@ void picoquic_init_transport_parameters(picoquic_transport_parameters* tp, int c
     tp->ack_delay_exponent = 3;
 }
 
-static void picoquic_insert_cnx_by_wake_time(picoquic_quic_t* quic, picoquic_cnx_t* cnx)
+static void picoquic_insert_cnx_in_list(picoquic_quic_t* quic, picoquic_cnx_t* cnx)
 {
     picoquic_cnx_t* cnx_next = quic->cnx_list;
     picoquic_cnx_t* previous = NULL;
-    while (cnx_next != NULL && cnx_next->next_wake_time <= cnx->next_wake_time) {
-        previous = cnx_next;
-        cnx_next = cnx_next->next_in_table;
-    }
 
-    cnx->previous_in_table = previous;
-    if (previous == NULL) {
-        quic->cnx_list = cnx;
+    if (quic->cnx_list != NULL) {
+        quic->cnx_list->previous_in_table = cnx;
     } else {
-        previous->next_in_table = cnx;
-    }
-
-    cnx->next_in_table = cnx_next;
-
-    if (cnx_next == NULL) {
         quic->cnx_last = cnx;
-    } else {
-        cnx_next->previous_in_table = cnx;
     }
+    quic->cnx_list = cnx;
+    cnx->previous_in_table = NULL;
 }
 
-void picoquic_reinsert_by_wake_time(picoquic_quic_t* quic, picoquic_cnx_t* cnx)
+static void picoquic_remove_cnx_from_list(picoquic_cnx_t* cnx)
 {
     if (cnx->next_in_table == NULL) {
-        quic->cnx_last = cnx->previous_in_table;
+        cnx->quic->cnx_last = cnx->previous_in_table;
     } else {
         cnx->next_in_table->previous_in_table = cnx->previous_in_table;
     }
 
     if (cnx->previous_in_table == NULL) {
-        quic->cnx_list = cnx->next_in_table;
-    } else {
+        cnx->quic->cnx_list = cnx->next_in_table;
+    }
+    else {
         cnx->previous_in_table->next_in_table = cnx->next_in_table;
     }
+}
 
+static void picoquic_remove_cnx_from_wake_list(picoquic_cnx_t* cnx)
+{
+    if (cnx->next_by_wake_time == NULL) {
+        cnx->quic->cnx_wake_last = cnx->previous_by_wake_time;
+    } else {
+        cnx->next_by_wake_time->previous_by_wake_time = cnx->previous_by_wake_time;
+    }
+
+    if (cnx->previous_by_wake_time == NULL) {
+        cnx->quic->cnx_wake_first = cnx->next_by_wake_time;
+    } else {
+        cnx->previous_by_wake_time->next_by_wake_time = cnx->next_by_wake_time;
+    }
+}
+
+static void picoquic_insert_cnx_by_wake_time(picoquic_quic_t* quic, picoquic_cnx_t* cnx)
+{
+    picoquic_cnx_t* cnx_next = quic->cnx_wake_first;
+    picoquic_cnx_t* previous = NULL;
+    while (cnx_next != NULL && cnx_next->next_wake_time <= cnx->next_wake_time) {
+        previous = cnx_next;
+        cnx_next = cnx_next->next_by_wake_time;
+    }
+
+    cnx->previous_by_wake_time = previous;
+    if (previous == NULL) {
+        quic->cnx_wake_first = cnx;
+    } else {
+        previous->next_by_wake_time = cnx;
+    }
+
+    cnx->next_by_wake_time = cnx_next;
+    if (cnx_next == NULL) {
+        quic->cnx_wake_last = cnx;
+    } else {
+        cnx_next->previous_by_wake_time = cnx;
+    }
+}
+
+void picoquic_reinsert_by_wake_time(picoquic_quic_t* quic, picoquic_cnx_t* cnx)
+{
+    picoquic_remove_cnx_from_wake_list(cnx);
     picoquic_insert_cnx_by_wake_time(quic, cnx);
+}
+
+picoquic_cnx_t* picoquic_get_first_cnx(picoquic_quic_t* quic)
+{
+    return quic->cnx_list;
+}
+
+picoquic_cnx_t* picoquic_get_next_cnx(picoquic_cnx_t* cnx)
+{
+    return cnx->next_in_table;
+}
+
+picoquic_cnx_t* picoquic_get_earliest_cnx_to_wake(picoquic_quic_t* quic, uint64_t max_wake_time)
+{
+    picoquic_cnx_t* cnx = quic->cnx_wake_first;
+    if (cnx != NULL && max_wake_time != 0 && cnx->next_wake_time > max_wake_time)
+    {
+        cnx = NULL;
+    }
+
+    return cnx;
 }
 
 int picoquic_get_version_index(uint32_t proposed_version)
@@ -427,6 +481,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         cnx->client_mode = client_mode;
 
         cnx->quic = quic;
+        picoquic_insert_cnx_in_list(quic, cnx);
         picoquic_insert_cnx_by_wake_time(quic, cnx);
     }
 
@@ -702,16 +757,6 @@ picoquic_state_enum picoquic_get_cnx_state(picoquic_cnx_t* cnx)
     return cnx->cnx_state;
 }
 
-picoquic_cnx_t* picoquic_get_first_cnx(picoquic_quic_t* quic)
-{
-    return quic->cnx_list;
-}
-
-picoquic_cnx_t* picoquic_get_next_cnx(picoquic_cnx_t* cnx)
-{
-    return cnx->next_in_table;
-}
-
 uint64_t picoquic_is_0rtt_available(picoquic_cnx_t* cnx)
 {
     return (cnx->aead_0rtt_encrypt_ctx == NULL) ? 0 : 1;
@@ -722,9 +767,9 @@ int64_t picoquic_get_next_wake_delay(picoquic_quic_t* quic,
 {
     int64_t wake_delay;
 
-    if (quic->cnx_list != NULL) {
-        if (quic->cnx_list->next_wake_time > current_time) {
-            wake_delay = quic->cnx_list->next_wake_time - current_time;
+    if (quic->cnx_wake_first != NULL) {
+        if (quic->cnx_wake_first->next_wake_time > current_time) {
+            wake_delay = quic->cnx_wake_first->next_wake_time - current_time;
 
             if (wake_delay > delay_max) {
                 wake_delay = delay_max;
@@ -1023,18 +1068,9 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
                 picohash_item_delete(cnx->quic->table_cnx_by_net, item, 1);
             }
         }
-
-        if (cnx->next_in_table == NULL) {
-            cnx->quic->cnx_last = cnx->previous_in_table;
-        } else {
-            cnx->next_in_table->previous_in_table = cnx->previous_in_table;
-        }
-
-        if (cnx->previous_in_table == NULL) {
-            cnx->quic->cnx_list = cnx->next_in_table;
-        } else {
-            cnx->previous_in_table->next_in_table = cnx->next_in_table;
-        }
+        
+        picoquic_remove_cnx_from_list(cnx);
+        picoquic_remove_cnx_from_wake_list(cnx);
 
         if (cnx->aead_encrypt_cleartext_ctx != NULL) {
             picoquic_aead_free(cnx->aead_encrypt_cleartext_ctx);
