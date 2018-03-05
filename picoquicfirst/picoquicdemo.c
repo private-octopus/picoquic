@@ -450,6 +450,8 @@ int quic_server(const char* server_name, int server_port,
                 }
             }
             if (ret == 0) {
+                uint64_t loop_time = current_time;
+
                 while ((sp = picoquic_dequeue_stateless_packet(qserver)) != NULL) {
                     int sent = picoquic_send_through_server_sockets(&server_sockets,
                         (struct sockaddr*)&sp->addr_to,
@@ -463,9 +465,7 @@ int quic_server(const char* server_name, int server_port,
                     picoquic_delete_stateless_packet(sp);
                 }
 
-                cnx_next = picoquic_get_first_cnx(qserver);
-
-                while (ret == 0 && cnx_next != NULL) {
+                while (ret == 0 && (cnx_next = picoquic_get_earliest_cnx_to_wake(qserver, loop_time)) != NULL) {
                     p = picoquic_create_packet();
 
                     if (p == NULL) {
@@ -521,18 +521,16 @@ int quic_server(const char* server_name, int server_port,
                                 free(p);
                                 p = NULL;
                             }
-                        }
-
-                        else {
+                        } else {
                             break;
                         }
-
-                        cnx_next = picoquic_get_next_cnx(cnx_next);
                     }
                 }
             }
         }
     }
+
+    printf("Server exit, ret = %d\n", ret);
 
     /* Clean up */
     if (qserver != NULL) {

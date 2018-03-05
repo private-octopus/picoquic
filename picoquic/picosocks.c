@@ -362,7 +362,8 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
                 pktinfo->ipi_ifindex = dest_if;
 
                 control_length += WSA_CMSG_SPACE(sizeof(struct in_pktinfo));
-            } else {
+            }
+            else {
                 memset(cmsg, 0, WSA_CMSG_SPACE(sizeof(struct in6_pktinfo)));
                 cmsg->cmsg_level = IPPROTO_IPV6;
                 cmsg->cmsg_type = IPV6_PKTINFO;
@@ -374,20 +375,20 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
                 control_length += WSA_CMSG_SPACE(sizeof(struct in6_pktinfo));
             }
 
-        if (addr_from->sa_family == AF_INET6) {
-            struct cmsghdr * cmsg_2 = WSA_CMSG_NXTHDR(&msg, cmsg);
-            if (cmsg_2 == NULL) {
-                DBG_PRINTF("Cannot obtain second CMSG (control_length: %d)\n", control_length);
+            if (addr_from->sa_family == AF_INET6) {
+                struct cmsghdr * cmsg_2 = WSA_CMSG_NXTHDR(&msg, cmsg);
+                if (cmsg_2 == NULL) {
+                    DBG_PRINTF("Cannot obtain second CMSG (control_length: %d)\n", control_length);
+                }
+                else {
+                    int val = 1;
+                    cmsg_2->cmsg_level = IPPROTO_IPV6;
+                    cmsg_2->cmsg_type = IPV6_DONTFRAG;
+                    cmsg_2->cmsg_len = WSA_CMSG_LEN(sizeof(int));
+                    *((int *)WSA_CMSG_DATA(cmsg_2)) = val;
+                    control_length += WSA_CMSG_SPACE(sizeof(int));
+                }
             }
-            else {
-                int val = 1;
-                cmsg_2->cmsg_level = IPPROTO_IPV6;
-                cmsg_2->cmsg_type = IPV6_DONTFRAG;
-                cmsg_2->cmsg_len = WSA_CMSG_LEN(sizeof(int));
-                *((int *)WSA_CMSG_DATA(cmsg_2)) = val;
-                control_length += WSA_CMSG_SPACE(sizeof(int));
-            }
-        }
         }
 
         msg.Control.len = control_length;
@@ -458,21 +459,8 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
             DBG_PRINTF("Unexpected address family: %d\n", addr_from->sa_family);
         }
 #ifdef IPV6_DONTFRAG
-    if (addr_from->sa_family == AF_INET6) {
-#if 1
-        struct cmsghdr * cmsg_2 = (struct cmsghdr *)((unsigned char *) cmsg + CMSG_ALIGN (cmsg->cmsg_len));
-#else
-        struct cmsghdr * cmsg_2 = CMSG_NXTHDR(&msg, cmsg);
-#endif
-        if (cmsg_2 == NULL) {
-            DBG_PRINTF("Cannot obtain second CMSG (control_length: %d, size %d)\n", control_length, msg.msg_controllen);
-            DBG_PRINTF("msg: %x, buf: %x, cmsg: %x\n", &msg, msg.msg_control, cmsg);
-            DBG_PRINTF("msg size: %d, cmsg size: %d, len: %d\n", (int)sizeof(msg), (int)sizeof(*cmsg), cmsg->cmsg_len);
-            DBG_PRINTF("v1: %x, v2: %x\n",
-              (unsigned char *) cmsg + CMSG_ALIGN (cmsg->cmsg_len),
-              (unsigned char *) msg.msg_control + msg.msg_controllen);
-
-       } else {
+        if (addr_from->sa_family == AF_INET6) {
+            struct cmsghdr * cmsg_2 = (struct cmsghdr *)((unsigned char *)cmsg + CMSG_ALIGN(cmsg->cmsg_len));
             int val = 1;
             cmsg_2->cmsg_level = IPPROTO_IPV6;
             cmsg_2->cmsg_type = IPV6_DONTFRAG;
@@ -480,7 +468,6 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
             *((int *)CMSG_DATA(cmsg_2)) = val;
             control_length += CMSG_SPACE(sizeof(int));
         }
-    }
 #endif
     }
 
