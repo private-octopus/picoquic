@@ -201,6 +201,10 @@ typedef struct st_picoquic_quic_t {
 
     void* aead_encrypt_ticket_ctx;
     void* aead_decrypt_ticket_ctx;
+
+    picoquic_verify_certificate_cb_fn verify_certificate_callback_fn;
+    picoquic_free_verify_certificate_ctx free_verify_certificate_callback_fn;
+    void* verify_certificate_ctx;
 } picoquic_quic_t;
 
 /*

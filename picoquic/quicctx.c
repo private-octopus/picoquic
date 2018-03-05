@@ -161,9 +161,9 @@ picoquic_quic_t* picoquic_create(uint32_t nb_connections,
             picoquic_free(quic);
             quic = NULL;
         } else {
-            /* the random generator was initialized as part of the TLS context. 
-			 * Use it to create the seed for generating the per context stateless
-			 * resets. */
+            /* the random generator was initialized as part of the TLS context.
+             * Use it to create the seed for generating the per context stateless
+             * resets. */
 
             if (!reset_seed)
                 picoquic_crypto_random(quic, quic->reset_seed, sizeof(quic->reset_seed));
@@ -214,6 +214,12 @@ void picoquic_free(picoquic_quic_t* quic)
 
         if (quic->table_cnx_by_net != NULL) {
             picohash_delete(quic->table_cnx_by_net, 1);
+        }
+
+        if (quic->verify_certificate_ctx != NULL &&
+            quic->free_verify_certificate_callback_fn != NULL) {
+            (quic->free_verify_certificate_callback_fn)(quic->verify_certificate_ctx);
+            quic->verify_certificate_ctx = NULL;
         }
 
         /* Delete the picotls context */
@@ -1214,7 +1220,7 @@ void picoquic_enable_keep_alive(picoquic_cnx_t* cnx, uint64_t interval)
             idle_timeout = cnx->remote_parameters.idle_timeout;
         }
         /* convert to microseconds */
-        idle_timeout *= 1000000; 
+        idle_timeout *= 1000000;
         /* set interval to half that value */
         cnx->keep_alive_interval = idle_timeout / 2;
     } else {
@@ -1225,4 +1231,13 @@ void picoquic_enable_keep_alive(picoquic_cnx_t* cnx, uint64_t interval)
 void picoquic_disable_keep_alive(picoquic_cnx_t* cnx)
 {
     cnx->keep_alive_interval = 0;
+}
+
+int picoquic_set_verify_certificate_callback(picoquic_quic_t* quic, picoquic_verify_certificate_cb_fn cb, void* ctx,
+                                             picoquic_free_verify_certificate_ctx free_fn) {
+    quic->verify_certificate_callback_fn = cb;
+    quic->free_verify_certificate_callback_fn = free_fn;
+    quic->verify_certificate_ctx = ctx;
+
+    return picoquic_enable_custom_verify_certificate_callback(quic);
 }

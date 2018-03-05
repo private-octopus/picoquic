@@ -79,4 +79,6 @@ void picoquic_provide_received_transport_extensions(picoquic_cnx_t* cnx,
 char const* picoquic_tls_get_negotiated_alpn(picoquic_cnx_t* cnx);
 char const* picoquic_tls_get_sni(picoquic_cnx_t* cnx);
 
+int picoquic_enable_custom_verify_certificate_callback(picoquic_quic_t* quic);
+
 #endif /* TLS_API_H */
