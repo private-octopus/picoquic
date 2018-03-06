@@ -1499,3 +1499,7 @@ int picoquic_get_remote_error(picoquic_cnx_t* cnx)
 {
     return cnx->remote_error;
 }
+
+void picoquic_set_client_authentication(picoquic_quic_t* quic, int client_authentication) {
+    picoquic_tls_set_client_authentication(quic, client_authentication);
+}

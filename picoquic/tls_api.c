@@ -1488,3 +1488,7 @@ int picoquic_set_tls_key(picoquic_quic_t* quic, const uint8_t* data, size_t len)
 
     return set_sign_certificate_from_key(d2i_AutoPrivateKey(NULL, &data, len), ctx);
 }
+
+void picoquic_tls_set_client_authentication(picoquic_quic_t* quic, int client_authentication) {
+    ((ptls_context_t*)quic->tls_master_ctx)->require_client_authentication = client_authentication;
+}

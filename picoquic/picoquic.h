@@ -283,6 +283,9 @@ int picoquic_set_tls_key(picoquic_quic_t* quic, const uint8_t* data, size_t len)
 int picoquic_set_verify_certificate_callback(picoquic_quic_t* quic, picoquic_verify_certificate_cb_fn cb, void* ctx,
                                              picoquic_free_verify_certificate_ctx free_fn);
 
+/* Set client authentication in TLS (if enabled, client is required to send certificates). */
+void picoquic_set_client_authentication(picoquic_quic_t* quic, int client_authentication);
+
 /* Connection context creation and registration */
 picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
     picoquic_connection_id_t initial_cnx_id, picoquic_connection_id_t remote_cnx_id,
