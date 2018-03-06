@@ -358,9 +358,6 @@ void picoquic_init_transport_parameters(picoquic_transport_parameters* tp, int c
 
 static void picoquic_insert_cnx_in_list(picoquic_quic_t* quic, picoquic_cnx_t* cnx)
 {
-    picoquic_cnx_t* cnx_next = quic->cnx_list;
-    picoquic_cnx_t* previous = NULL;
-
     if (quic->cnx_list != NULL) {
         quic->cnx_list->previous_in_table = cnx;
     } else {
