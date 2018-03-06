@@ -460,13 +460,22 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
         }
 #ifdef IPV6_DONTFRAG
         if (addr_from->sa_family == AF_INET6) {
+#ifdef CMSG_ALIGN
             struct cmsghdr * cmsg_2 = (struct cmsghdr *)((unsigned char *)cmsg + CMSG_ALIGN(cmsg->cmsg_len));
-            int val = 1;
-            cmsg_2->cmsg_level = IPPROTO_IPV6;
-            cmsg_2->cmsg_type = IPV6_DONTFRAG;
-            cmsg_2->cmsg_len = CMSG_LEN(sizeof(int));
-            *((int *)CMSG_DATA(cmsg_2)) = val;
-            control_length += CMSG_SPACE(sizeof(int));
+            {
+#else
+            struct cmsghdr * cmsg_2 = CMSG_NXTHDR((&msg), cmsg);
+            if (cmsg_2 == NULL) {
+                DBG_PRINTF("Cannot obtain second CMSG (control_length: %d)\n", control_length);
+            } else {
+#endif
+                int val = 1;
+                cmsg_2->cmsg_level = IPPROTO_IPV6;
+                cmsg_2->cmsg_type = IPV6_DONTFRAG;
+                cmsg_2->cmsg_len = CMSG_LEN(sizeof(int));
+                *((int *)CMSG_DATA(cmsg_2)) = val;
+                control_length += CMSG_SPACE(sizeof(int));
+            }
         }
 #endif
     }
