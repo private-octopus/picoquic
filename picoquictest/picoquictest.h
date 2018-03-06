@@ -89,6 +89,7 @@ int tls_zero_share_test();
 int cleartext_aead_vector_test();
 int transport_param_log_test();
 int bad_certificate_test();
+int set_verify_certificate_callback_test();
 
 #ifdef __cplusplus
 }
