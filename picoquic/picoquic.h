@@ -281,6 +281,39 @@ int picoquic_reset_stream(picoquic_cnx_t* cnx,
 int picoquic_stop_sending(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint16_t local_stream_error);
 
+
+/*
+* Per path context
+*/
+typedef struct st_picoquic_path_t {
+    /* Time measurement */
+    uint64_t max_ack_delay;
+    uint64_t smoothed_rtt;
+    uint64_t rtt_variant;
+    uint64_t retransmit_timer;
+    uint64_t rtt_min;
+    uint64_t max_spurious_rtt;
+    uint64_t max_reorder_delay;
+    uint64_t max_reorder_gap;
+
+    /* MTU */
+    unsigned int mtu_probe_sent : 1;
+    uint32_t send_mtu;
+    uint32_t send_mtu_max_tried;
+
+    /* Congestion control state */
+    uint64_t cwin;
+    uint64_t bytes_in_transit;
+    void* congestion_alg_state;
+
+    /* Pacing */
+    uint64_t packet_time_nano_sec;
+    uint64_t pacing_reminder_nano_sec;
+    uint64_t pacing_margin_micros;
+    uint64_t next_pacing_time;
+
+} picoquic_path_t;
+
 /* Congestion algorithm definition */
 typedef enum {
     picoquic_congestion_notification_acknowledgement,
@@ -290,14 +323,14 @@ typedef enum {
     picoquic_congestion_notification_rtt_measurement
 } picoquic_congestion_notification_t;
 
-typedef void (*picoquic_congestion_algorithm_init)(picoquic_cnx_t* cnx);
-typedef void (*picoquic_congestion_algorithm_notify)(picoquic_cnx_t* cnx,
+typedef void (*picoquic_congestion_algorithm_init)(picoquic_path_t* path_x);
+typedef void (*picoquic_congestion_algorithm_notify)(picoquic_path_t* path_x,
     picoquic_congestion_notification_t notification,
     uint64_t rtt_measurement,
     uint64_t nb_bytes_acknowledged,
     uint64_t lost_packet_number,
     uint64_t current_time);
-typedef void (*picoquic_congestion_algorithm_delete)(picoquic_cnx_t* cnx);
+typedef void (*picoquic_congestion_algorithm_delete)(picoquic_path_t* cnx);
 
 typedef struct st_picoquic_congestion_algorithm_t {
     uint32_t congestion_algorithm_id;

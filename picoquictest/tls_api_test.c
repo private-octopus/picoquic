@@ -1926,9 +1926,9 @@ int mtu_discovery_test()
     }
 
     if (ret == 0) {
-        if (test_ctx->cnx_client->send_mtu != test_ctx->cnx_server->local_parameters.max_packet_size) {
+        if (test_ctx->cnx_client->path[0]->send_mtu != test_ctx->cnx_server->local_parameters.max_packet_size) {
             ret = -1;
-        } else if (test_ctx->cnx_server->send_mtu != test_ctx->cnx_client->local_parameters.max_packet_size) {
+        } else if (test_ctx->cnx_server->path[0]->send_mtu != test_ctx->cnx_client->local_parameters.max_packet_size) {
             ret = -1;
         }
     }

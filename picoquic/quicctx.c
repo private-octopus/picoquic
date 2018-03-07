@@ -238,6 +238,9 @@ void picoquic_set_cookie_mode(picoquic_quic_t* quic, int cookie_mode)
 
 picoquic_stateless_packet_t* picoquic_create_stateless_packet(picoquic_quic_t* quic)
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(quic);
+#endif
     return (picoquic_stateless_packet_t*)malloc(sizeof(picoquic_stateless_packet_t));
 }
 
@@ -463,6 +466,70 @@ int picoquic_get_version_index(uint32_t proposed_version)
     return ret;
 }
 
+int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, struct sockaddr* addr)
+{
+    int ret = -1;
+
+    if (cnx->nb_paths >= cnx->nb_path_alloc)
+    {
+        int new_alloc = (cnx->nb_path_alloc == 0) ? 1 : 2 * cnx->nb_path_alloc;
+        picoquic_path_t ** new_path = (picoquic_path_t **)malloc(new_alloc * sizeof(picoquic_path_t *));
+
+        if (new_path != NULL)
+        {
+            if (cnx->path != NULL)
+            {
+                if (cnx->nb_paths > 0)
+                {
+                    memcpy(new_path, cnx->path, cnx->nb_paths * sizeof(picoquic_path_t *));
+                }
+                free(cnx->path);
+            }
+            cnx->path = new_path;
+            cnx->nb_path_alloc = new_alloc;
+        }
+    }
+
+    if (cnx->nb_paths < cnx->nb_path_alloc)
+    {
+        picoquic_path_t * path_x = (picoquic_path_t *)malloc(sizeof(picoquic_path_t));
+
+        if (path_x != NULL)
+        {
+            memset(path_x, 0, sizeof(picoquic_path_t));
+
+            /* Initialize per path time measurement */
+            path_x->smoothed_rtt = PICOQUIC_INITIAL_RTT;
+            path_x->rtt_variant = 0;
+            path_x->retransmit_timer = PICOQUIC_INITIAL_RETRANSMIT_TIMER;
+            path_x->rtt_min = 0;
+
+            /* Initialize per path congestion control state */
+            path_x->cwin = PICOQUIC_CWIN_INITIAL;
+            path_x->bytes_in_transit = 0;
+            path_x->congestion_alg_state = NULL;
+
+            /* Initialize per path pacing state */
+            path_x->packet_time_nano_sec = 0;
+            path_x->pacing_reminder_nano_sec = 0;
+            path_x->pacing_margin_micros = 1000;
+            path_x->next_pacing_time = start_time;
+
+            /* Initialize the MTU */
+            path_x->send_mtu = (addr == NULL || addr->sa_family == AF_INET) ? PICOQUIC_INITIAL_MTU_IPV4 : PICOQUIC_INITIAL_MTU_IPV6;
+
+
+            /* Record the path */
+            cnx->path[cnx->nb_paths] = path_x;
+            ret = cnx->nb_paths++;
+        }
+    }
+
+    return ret;
+}
+
+
+
 picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
     picoquic_connection_id_t cnx_id, struct sockaddr* addr, uint64_t start_time, uint32_t preferred_version,
     char const* sni, char const* alpn, char client_mode)
@@ -471,15 +538,24 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
     uint32_t random_sequence;
 
     if (cnx != NULL) {
+        int ret;
+
         memset(cnx, 0, sizeof(picoquic_cnx_t));
+        /* Should return 0, since this is the first path */
+        ret = picoquic_create_path(cnx, start_time, addr);
 
-        cnx->next_wake_time = start_time;
-        cnx->start_time = start_time;
-        cnx->client_mode = client_mode;
+        if (ret != 0) {
+            free(cnx);
+            cnx = NULL;
+        } else {
+            cnx->next_wake_time = start_time;
+            cnx->start_time = start_time;
+            cnx->client_mode = client_mode;
 
-        cnx->quic = quic;
-        picoquic_insert_cnx_in_list(quic, cnx);
-        picoquic_insert_cnx_by_wake_time(quic, cnx);
+            cnx->quic = quic;
+            picoquic_insert_cnx_in_list(quic, cnx);
+            picoquic_insert_cnx_by_wake_time(quic, cnx);
+        }
     }
 
     if (cnx != NULL) {
@@ -622,8 +698,6 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
                 cnx->send_sequence = random_sequence;
             }
 
-            cnx->send_mtu = (addr == NULL || addr->sa_family == AF_INET) ? PICOQUIC_INITIAL_MTU_IPV4 : PICOQUIC_INITIAL_MTU_IPV6;
-
             cnx->nb_retransmit = 0;
             cnx->latest_retransmit_time = 0;
 
@@ -634,28 +708,12 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             cnx->latest_time_acknowledged = start_time;
             cnx->latest_progress_time = start_time;
             cnx->ack_needed = 0;
-
-            /* Time measurement */
-            cnx->smoothed_rtt = PICOQUIC_INITIAL_RTT;
-            cnx->rtt_variant = 0;
-            cnx->retransmit_timer = PICOQUIC_INITIAL_RETRANSMIT_TIMER;
-            cnx->rtt_min = 0;
-
             cnx->ack_delay_local = 10000;
 
-            /* Congestion control state */
-            cnx->cwin = PICOQUIC_CWIN_INITIAL;
-            cnx->bytes_in_transit = 0;
-            cnx->congestion_alg_state = NULL;
             cnx->congestion_alg = cnx->quic->default_congestion_alg;
             if (cnx->congestion_alg != NULL) {
-                cnx->congestion_alg->alg_init(cnx);
+                cnx->congestion_alg->alg_init(cnx->path[0]);
             }
-            /* Pacing state */
-            cnx->packet_time_nano_sec = 0;
-            cnx->pacing_reminder_nano_sec = 0;
-            cnx->pacing_margin_micros = 1000;
-            cnx->next_pacing_time = start_time;
         }
     }
 
@@ -850,7 +908,7 @@ void picoquic_enqueue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet* p)
     cnx->retransmit_oldest = p;
 
     /* Account for bytes in transit, for congestion control */
-    cnx->bytes_in_transit += p->length;
+    cnx->path[0]->bytes_in_transit += p->length;
 }
 
 void picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet* p, int should_free)
@@ -869,14 +927,14 @@ void picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet* p,
 
     /* Account for bytes in transit, for congestion control */
     if (cnx->retransmit_newest == NULL) {
-        cnx->bytes_in_transit = 0;
+        cnx->path[0]->bytes_in_transit = 0;
     } else {
         size_t dequeued_length = p->length + p->checksum_overhead;
 
-        if (cnx->bytes_in_transit > dequeued_length) {
-            cnx->bytes_in_transit -= dequeued_length;
+        if (cnx->path[0]->bytes_in_transit > dequeued_length) {
+            cnx->path[0]->bytes_in_transit -= dequeued_length;
         } else {
-            cnx->bytes_in_transit = 0;
+            cnx->path[0]->bytes_in_transit = 0;
         }
     }
 
@@ -1139,8 +1197,6 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
             cnx->pn_enc_0rtt = NULL;
         }
 
-
-
         while (cnx->retransmit_newest != NULL) {
             picoquic_dequeue_retransmit_packet(cnx, cnx->retransmit_newest, 1);
         }
@@ -1169,8 +1225,20 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
             cnx->tls_ctx = NULL;
         }
 
-        if (cnx->congestion_alg != NULL) {
-            cnx->congestion_alg->alg_delete(cnx);
+        if (cnx->path != NULL)
+        {
+            for (int i = 0; i < cnx->nb_paths; i++) {
+
+                if (cnx->congestion_alg != NULL) {
+                    cnx->congestion_alg->alg_delete(cnx->path[i]);
+                }
+
+                free(cnx->path[i]);
+                cnx->path[i] = NULL;
+            }
+
+            free(cnx->path);
+            cnx->path = NULL;
         }
 
         free(cnx);
@@ -1227,13 +1295,21 @@ void picoquic_set_default_congestion_algorithm(picoquic_quic_t* quic, picoquic_c
 void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_algorithm_t const* alg)
 {
     if (cnx->congestion_alg != NULL) {
-        cnx->congestion_alg->alg_delete(cnx);
+        if (cnx->path != NULL) {
+            for (int i = 0; i < cnx->nb_paths; i++) {
+                cnx->congestion_alg->alg_delete(cnx->path[i]);
+            }
+        }
     }
 
     cnx->congestion_alg = alg;
 
     if (cnx->congestion_alg != NULL) {
-        cnx->congestion_alg->alg_init(cnx);
+        if (cnx->path != NULL) {
+            for (int i = 0; i < cnx->nb_paths; i++) {
+                cnx->congestion_alg->alg_init(cnx->path[i]);
+            }
+        }
     }
 }
 

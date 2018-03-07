@@ -182,7 +182,7 @@ typedef struct st_picoquic_quic_t {
     uint64_t* p_simulated_time;
     char const* ticket_file_name;
     picoquic_stored_ticket_t* p_first_ticket;
-    int mtu_max;
+    uint32_t mtu_max;
 
     uint32_t flags;
 
@@ -292,9 +292,9 @@ typedef struct st_picoquic_misc_frame_header_t {
     size_t length;
 } picoquic_misc_frame_header_t;
 
-/*
-	 * Per connection context.
-	 */
+/* 
+ * Per connection context.
+ */
 typedef struct st_picoquic_cnx_t {
     picoquic_quic_t* quic;
 
@@ -314,7 +314,6 @@ typedef struct st_picoquic_cnx_t {
     unsigned int use_pn_encryption : 1;
     unsigned int is_0RTT_accepted:1; /* whether 0-RTT is accepted */
     unsigned int remote_parameters_received:1; /* whether remote parameters where received */
-    unsigned int mtu_probe_sent:1;
     unsigned int ack_needed:1;
 
 
@@ -356,8 +355,6 @@ typedef struct st_picoquic_cnx_t {
     void* tls_ctx;
     struct st_ptls_buffer_t* tls_sendbuf;
     uint64_t send_sequence;
-    uint32_t send_mtu;
-    uint32_t send_mtu_max_tried;
     uint16_t psk_cipher_suite_id;
 
     /* Liveness detection */
@@ -384,13 +381,14 @@ typedef struct st_picoquic_cnx_t {
     uint64_t sack_block_size_max;
     uint64_t highest_ack_sent;
     uint64_t highest_ack_time;
-
+#if 0
     /* Time measurement */
     uint64_t max_ack_delay;
     uint64_t smoothed_rtt;
     uint64_t rtt_variant;
     uint64_t retransmit_timer;
     uint64_t rtt_min;
+#endif
     uint64_t ack_delay_local;
 
     /* Retransmission state */
@@ -399,9 +397,11 @@ typedef struct st_picoquic_cnx_t {
     uint64_t nb_retransmission_total;
     uint64_t nb_retransmit;
     uint64_t nb_spurious;
+#if 0
     uint64_t max_spurious_rtt;
     uint64_t max_reorder_delay;
     uint64_t max_reorder_gap;
+#endif
     uint64_t latest_retransmit_time;
     uint64_t highest_acknowledged;
     uint64_t latest_time_acknowledged; /* time at which the highest acknowledged was sent */
@@ -409,18 +409,21 @@ typedef struct st_picoquic_cnx_t {
     picoquic_packet* retransmit_oldest;
     picoquic_packet* retransmitted_newest;
     picoquic_packet* retransmitted_oldest;
-
+#if 0
     /* Congestion control state */
     uint64_t cwin;
     uint64_t bytes_in_transit;
     void* congestion_alg_state;
+#endif
     picoquic_congestion_algorithm_t const* congestion_alg;
 
+#if 0
     /* Pacing */
     uint64_t packet_time_nano_sec;
     uint64_t pacing_reminder_nano_sec;
     uint64_t pacing_margin_micros;
     uint64_t next_pacing_time;
+#endif
 
     /* Flow control information */
     uint64_t data_sent;
@@ -443,6 +446,11 @@ typedef struct st_picoquic_cnx_t {
 
     /* If not `0`, the connection will send keep alive messages in the given interval. */
     uint64_t keep_alive_interval;
+
+    /* Management of paths */
+    picoquic_path_t ** path;
+    int nb_paths;
+    int nb_path_alloc;
 } picoquic_cnx_t;
 
 /* Init of transport parameters */
@@ -469,11 +477,8 @@ int picoquic_connection_error(picoquic_cnx_t* cnx, uint32_t local_error);
 picoquic_cnx_t* picoquic_cnx_by_id(picoquic_quic_t* quic, picoquic_connection_id_t cnx_id);
 picoquic_cnx_t* picoquic_cnx_by_net(picoquic_quic_t* quic, struct sockaddr* addr);
 
-/*
-     * Reset the pacing data after CWIN is updated
-     */
-
-void picoquic_update_pacing_data(picoquic_cnx_t* cnx);
+/* Reset the pacing data after CWIN is updated */
+void picoquic_update_pacing_data(picoquic_path_t * path_x);
 
 /* Next time is used to order the list of available connections,
      * so ready connections are polled first */

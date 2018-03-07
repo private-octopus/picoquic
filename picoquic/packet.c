@@ -396,6 +396,9 @@ int picoquic_incoming_version_negotiation(
     picoquic_packet_header* ph,
     uint64_t current_time)
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(addr_from);
+#endif
     /* Parse the content */
     int ret = -1;
 
@@ -774,6 +777,9 @@ int picoquic_incoming_server_cleartext(
     picoquic_packet_header* ph,
     uint64_t current_time)
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(if_index_to);
+#endif
     int ret = 0;
     size_t decoded_length = 0;
     int already_received = 0;
