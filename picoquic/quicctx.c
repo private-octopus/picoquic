@@ -927,14 +927,14 @@ void picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet* p,
 
     /* Account for bytes in transit, for congestion control */
     if (cnx->retransmit_newest == NULL) {
-        cnx->path[0]->bytes_in_transit = 0;
+        p->send_path->bytes_in_transit = 0;
     } else {
         size_t dequeued_length = p->length + p->checksum_overhead;
 
-        if (cnx->path[0]->bytes_in_transit > dequeued_length) {
-            cnx->path[0]->bytes_in_transit -= dequeued_length;
+        if (p->send_path->bytes_in_transit > dequeued_length) {
+            p->send_path->bytes_in_transit -= dequeued_length;
         } else {
-            cnx->path[0]->bytes_in_transit = 0;
+            p->send_path->bytes_in_transit = 0;
         }
     }
 

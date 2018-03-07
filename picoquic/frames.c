@@ -801,26 +801,26 @@ void picoquic_check_spurious_retransmission(picoquic_cnx_t* cnx,
             uint64_t max_spurious_rtt = current_time - p->send_time;
             uint64_t max_reorder_delay = cnx->latest_time_acknowledged - p->send_time;
             uint64_t max_reorder_gap = cnx->highest_acknowledged - p->sequence_number;
-            picoquic_path_t * path_x = cnx->path[0];
+            picoquic_path_t * old_path = p->send_path;
 
-            if (p->length + p->checksum_overhead > path_x->send_mtu) {
-                path_x->send_mtu = (uint32_t)(p->length + p->checksum_overhead);
-                if (path_x->send_mtu > path_x->send_mtu_max_tried) {
-                    path_x->send_mtu_max_tried = path_x->send_mtu;
+            if (p->length + p->checksum_overhead > old_path->send_mtu) {
+                old_path->send_mtu = (uint32_t)(p->length + p->checksum_overhead);
+                if (old_path->send_mtu > old_path->send_mtu_max_tried) {
+                    old_path->send_mtu_max_tried = old_path->send_mtu;
                 }
-                path_x->mtu_probe_sent = 0;
+                old_path->mtu_probe_sent = 0;
             }
 
-            if (max_spurious_rtt > path_x->max_spurious_rtt) {
-                path_x->max_spurious_rtt = max_spurious_rtt;
+            if (max_spurious_rtt > old_path->max_spurious_rtt) {
+                old_path->max_spurious_rtt = max_spurious_rtt;
             }
 
-            if (max_reorder_delay > path_x->max_reorder_delay) {
-                path_x->max_reorder_delay = max_reorder_delay;
+            if (max_reorder_delay > old_path->max_reorder_delay) {
+                old_path->max_reorder_delay = max_reorder_delay;
             }
 
-            if (max_reorder_gap > path_x->max_reorder_gap) {
-                path_x->max_reorder_gap = max_reorder_gap;
+            if (max_reorder_gap > old_path->max_reorder_gap) {
+                old_path->max_reorder_gap = max_reorder_gap;
             }
 
             cnx->nb_spurious++;
@@ -880,38 +880,38 @@ static picoquic_packet* picoquic_update_rtt(picoquic_cnx_t* cnx, uint64_t larges
                 cnx->latest_progress_time = current_time;
 
                 if (rtt_estimate > 0) {
-                    picoquic_path_t * path_x = cnx->path[0];
+                    picoquic_path_t * old_path = packet->send_path;
 
-                    if (ack_delay > path_x->max_ack_delay) {
-                        path_x->max_ack_delay = ack_delay;
+                    if (ack_delay > old_path->max_ack_delay) {
+                        old_path->max_ack_delay = ack_delay;
                     }
 
-                    if (path_x->smoothed_rtt == PICOQUIC_INITIAL_RTT && path_x->rtt_variant == 0) {
-                        path_x->smoothed_rtt = rtt_estimate;
-                        path_x->rtt_variant = rtt_estimate / 2;
-                        path_x->rtt_min = rtt_estimate;
-                        path_x->retransmit_timer = 3 * rtt_estimate + path_x->max_ack_delay;
-                        cnx->ack_delay_local = path_x->rtt_min / 4;
+                    if (old_path->smoothed_rtt == PICOQUIC_INITIAL_RTT && old_path->rtt_variant == 0) {
+                        old_path->smoothed_rtt = rtt_estimate;
+                        old_path->rtt_variant = rtt_estimate / 2;
+                        old_path->rtt_min = rtt_estimate;
+                        old_path->retransmit_timer = 3 * rtt_estimate + old_path->max_ack_delay;
+                        cnx->ack_delay_local = old_path->rtt_min / 4;
                         if (cnx->ack_delay_local < 1000) {
                             cnx->ack_delay_local = 1000;
                         }
                     } else {
                         /* Computation per RFC 6298 */
-                        int64_t delta_rtt = rtt_estimate - path_x->smoothed_rtt;
+                        int64_t delta_rtt = rtt_estimate - old_path->smoothed_rtt;
                         int64_t delta_rtt_average = 0;
-                        path_x->smoothed_rtt += delta_rtt / 8;
+                        old_path->smoothed_rtt += delta_rtt / 8;
 
                         if (delta_rtt < 0) {
-                            delta_rtt_average = (-delta_rtt) - path_x->rtt_variant;
+                            delta_rtt_average = (-delta_rtt) - old_path->rtt_variant;
                         } else {
-                            delta_rtt_average = delta_rtt - path_x->rtt_variant;
+                            delta_rtt_average = delta_rtt - old_path->rtt_variant;
                         }
-                        path_x->rtt_variant += delta_rtt_average / 4;
+                        old_path->rtt_variant += delta_rtt_average / 4;
 
-                        if (rtt_estimate < (int64_t)path_x->rtt_min) {
-                            path_x->rtt_min = rtt_estimate;
+                        if (rtt_estimate < (int64_t)old_path->rtt_min) {
+                            old_path->rtt_min = rtt_estimate;
 
-                            cnx->ack_delay_local = path_x->rtt_min / 4;
+                            cnx->ack_delay_local = old_path->rtt_min / 4;
                             if (cnx->ack_delay_local < 1000) {
                                 cnx->ack_delay_local = 1000;
                             } else if (cnx->ack_delay_local > 10000) {
@@ -919,19 +919,19 @@ static picoquic_packet* picoquic_update_rtt(picoquic_cnx_t* cnx, uint64_t larges
                             }
                         }
 
-                        if (4 * path_x->rtt_variant < path_x->rtt_min) {
-                            path_x->rtt_variant = path_x->rtt_min / 4;
+                        if (4 * old_path->rtt_variant < old_path->rtt_min) {
+                            old_path->rtt_variant = old_path->rtt_min / 4;
                         }
 
-                        path_x->retransmit_timer = path_x->smoothed_rtt + 4 * path_x->rtt_variant + path_x->max_ack_delay;
+                        old_path->retransmit_timer = old_path->smoothed_rtt + 4 * old_path->rtt_variant + old_path->max_ack_delay;
                     }
 
-                    if (PICOQUIC_MIN_RETRANSMIT_TIMER > path_x->retransmit_timer) {
-                        path_x->retransmit_timer = PICOQUIC_MIN_RETRANSMIT_TIMER;
+                    if (PICOQUIC_MIN_RETRANSMIT_TIMER > old_path->retransmit_timer) {
+                        old_path->retransmit_timer = PICOQUIC_MIN_RETRANSMIT_TIMER;
                     }
 
                     if (cnx->congestion_alg != NULL) {
-                        cnx->congestion_alg->alg_notify(path_x,
+                        cnx->congestion_alg->alg_notify(old_path,
                             picoquic_congestion_notification_rtt_measurement,
                             rtt_estimate, 0, 0, current_time);
                     }
@@ -1187,10 +1187,10 @@ static picoquic_packet* picoquic_process_ack_range(
             if (p->sequence_number == highest) {
                 /* TODO: RTT Estimate */
                 picoquic_packet* next = p->next_packet;
-                picoquic_path_t * path_x = cnx->path[0];
+                picoquic_path_t * old_path = p->send_path;
 
                 if (cnx->congestion_alg != NULL) {
-                    cnx->congestion_alg->alg_notify(path_x,
+                    cnx->congestion_alg->alg_notify(old_path,
                         picoquic_congestion_notification_acknowledgement,
                         0, p->length, 0, current_time);
                 }
@@ -1199,9 +1199,9 @@ static picoquic_packet* picoquic_process_ack_range(
                 picoquic_process_possible_ack_of_ack_frame(cnx, p);
 
                 /* If packet is larger than the current MTU, update the MTU */
-                if ((p->length + p->checksum_overhead) > path_x->send_mtu) {
-                    path_x->send_mtu = (uint32_t)(p->length + p->checksum_overhead);
-                    path_x->mtu_probe_sent = 0;
+                if ((p->length + p->checksum_overhead) > old_path->send_mtu) {
+                    old_path->send_mtu = (uint32_t)(p->length + p->checksum_overhead);
+                    old_path->mtu_probe_sent = 0;
                 }
 
                 picoquic_dequeue_retransmit_packet(cnx, p, 1);

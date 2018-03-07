@@ -292,6 +292,38 @@ typedef struct st_picoquic_misc_frame_header_t {
     size_t length;
 } picoquic_misc_frame_header_t;
 
+/*
+* Per path context
+*/
+typedef struct st_picoquic_path_t {
+    /* Time measurement */
+    uint64_t max_ack_delay;
+    uint64_t smoothed_rtt;
+    uint64_t rtt_variant;
+    uint64_t retransmit_timer;
+    uint64_t rtt_min;
+    uint64_t max_spurious_rtt;
+    uint64_t max_reorder_delay;
+    uint64_t max_reorder_gap;
+
+    /* MTU */
+    unsigned int mtu_probe_sent : 1;
+    uint32_t send_mtu;
+    uint32_t send_mtu_max_tried;
+
+    /* Congestion control state */
+    uint64_t cwin;
+    uint64_t bytes_in_transit;
+    void* congestion_alg_state;
+
+    /* Pacing */
+    uint64_t packet_time_nano_sec;
+    uint64_t pacing_reminder_nano_sec;
+    uint64_t pacing_margin_micros;
+    uint64_t next_pacing_time;
+
+} picoquic_path_t;
+
 /* 
  * Per connection context.
  */
