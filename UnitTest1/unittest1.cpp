@@ -456,5 +456,12 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(test_certificate_callback)
+        {
+            int ret = set_verify_certificate_callback_test();
+
+            Assert::AreEqual(ret, 0);
+        }
 	};
 }

@@ -736,7 +736,7 @@ void picoquic_log_frames(FILE* F, uint8_t* bytes, size_t length)
 
                 fprintf(F, "    Padding, %d bytes\n", nb_pad);
             } else {
-                uint32_t frame_id = bytes[byte_index];
+                uint8_t frame_id = bytes[byte_index];
 
                 switch (frame_id) {
                 case picoquic_frame_type_reset_stream: /* RST_STREAM */
