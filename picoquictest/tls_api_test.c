@@ -1553,7 +1553,7 @@ static void ping_pong_callback(picoquic_cnx_t* cnx,
     ping_pong_test_callback_ctx_t* ping_pong_ctx = (ping_pong_test_callback_ctx_t*)callback_ctx;
     if (stream_id == 0 && fin_or_event == 0) {
         /* This is a special frame call back. */
-        if (length == ping_pong_ctx->ping_length && bytes[0] == picoquic_frame_type_pong && memcmp(bytes + 1, &ping_pong_ctx->ping_frame[1], length - 1) == 0) {
+        if (length == ping_pong_ctx->ping_length && bytes[0] == picoquic_frame_type_path_response && memcmp(bytes + 1, &ping_pong_ctx->ping_frame[1], length - 1) == 0) {
             ping_pong_ctx->pong_received++;
         } else {
             ping_pong_ctx->error_received++;
@@ -1593,12 +1593,12 @@ int ping_pong_test()
 
     /*
      * Format and queue the ping frame
+     * TODO: change these names to path challenge
      */
     if (ret == 0) {
-        ping_pong_ctx.ping_length = 18;
-        ping_pong_ctx.ping_frame[0] = picoquic_frame_type_ping;
-        ping_pong_ctx.ping_frame[1] = 16;
-        for (uint8_t i = 2; i < 18; i++) {
+        ping_pong_ctx.ping_length = 9;
+        ping_pong_ctx.ping_frame[0] = picoquic_frame_type_path_challenge;
+        for (uint8_t i = 1; i < 9; i++) {
             ping_pong_ctx.ping_frame[i] = 'a' + i - 2;
         }
 

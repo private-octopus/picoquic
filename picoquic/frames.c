@@ -1832,31 +1832,32 @@ int picoquic_prepare_misc_frame(picoquic_misc_frame_header_t* misc_frame, uint8_
 }
 
 /*
- * Ping and Pong frames
+ * Path Challenge and Response frames
  */
 
-int picoquic_decode_ping_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
+int picoquic_decode_path_challenge_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
     size_t bytes_max, size_t* consumed)
 {
     int ret = 0;
     size_t byte_index = 1;
-    size_t ping_length = bytes[byte_index++];
+    size_t challenge_length = 8;
 
-    if (byte_index + ping_length > bytes_max) {
+    if (byte_index + challenge_length > bytes_max) {
         byte_index = bytes_max;
 
         ret = picoquic_connection_error(cnx,
-            PICOQUIC_TRANSPORT_FRAME_ERROR(picoquic_frame_type_ping));
-    } else if (ping_length > 0) {
+            PICOQUIC_TRANSPORT_FRAME_ERROR(picoquic_frame_type_path_challenge));
+    } else {
         /*
-         * Queue a Pong frame as response to Ping.
+         * Queue a response frame as response to path challenge.
+         * TODO: ensure it goes out on the same path as the incoming challenge.
          */
         uint8_t frame_buffer[258];
 
-        byte_index += ping_length;
+        byte_index += challenge_length;
 
         memcpy(frame_buffer, bytes, byte_index);
-        frame_buffer[0] = picoquic_frame_type_pong;
+        frame_buffer[0] = picoquic_frame_type_path_response;
 
         ret = picoquic_queue_misc_frame(cnx, frame_buffer, byte_index);
     }
@@ -1866,24 +1867,25 @@ int picoquic_decode_ping_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
     return ret;
 }
 
-int picoquic_decode_pong_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
+int picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
     size_t bytes_max, size_t* consumed)
 {
     int ret = 0;
     size_t byte_index = 1;
-    size_t ping_length = bytes[byte_index++];
+    size_t challenge_length = 8;
 
-    if (byte_index + ping_length > bytes_max) {
+    if (byte_index + challenge_length > bytes_max) {
         byte_index = bytes_max;
 
         ret = picoquic_connection_error(cnx,
-            PICOQUIC_TRANSPORT_FRAME_ERROR(picoquic_frame_type_pong));
-    } else if (ping_length > 0) {
+            PICOQUIC_TRANSPORT_FRAME_ERROR(picoquic_frame_type_path_response));
+    } else {
         /*
-         * Submit the pong frame to the call back if there is one.
+         * Submit the path response frame to the call back if there is one.
+         * TODO: plug validation there!
          */
 
-        byte_index += ping_length;
+        byte_index += challenge_length;
 
         if (cnx->callback_fn != NULL) {
             cnx->callback_fn(cnx, 0, bytes, byte_index, 0, cnx->callback_ctx);
@@ -1961,8 +1963,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
                     ack_needed = 1;
                     break;
                 case picoquic_frame_type_ping: /* PING */
-                    ret = picoquic_decode_ping_frame(cnx, bytes + byte_index, bytes_max - byte_index, &consumed);
-                    byte_index += consumed;
+                    byte_index++;
                     ack_needed = 1;
                     break;
                 case picoquic_frame_type_blocked: /* BLOCKED */
@@ -1972,6 +1973,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
                     ack_needed = 1;
                     break;
                 case picoquic_frame_type_stream_blocked: /* STREAM_BLOCKED */
+                    /* TODO: check that the stream number is valid */
                     byte_index += 1 + picoquic_varint_skip(bytes + byte_index + 1);
                     /* Skip the max data offset */
                     byte_index += picoquic_varint_skip(&bytes[byte_index]);
@@ -1984,6 +1986,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
                     ack_needed = 1;
                     break;
                 case picoquic_frame_type_new_connection_id: /* NEW_CONNECTION_ID */
+                    /* TODO: new format */
                     byte_index += 1;
                     /* Skip the sequence index */
                     byte_index += picoquic_varint_skip(&bytes[byte_index]);
@@ -1996,10 +1999,15 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
                     byte_index += consumed;
                     ack_needed = 1;
                     break;
-                case picoquic_frame_type_pong:
-                    ret = picoquic_decode_pong_frame(cnx, bytes + byte_index, bytes_max - byte_index, &consumed);
+                case picoquic_frame_type_path_challenge:
+                    ret = picoquic_decode_path_challenge_frame(cnx, bytes + byte_index, bytes_max - byte_index, &consumed);
                     byte_index += consumed;
-                    ack_needed = 1;
+                    ack_needed = 0;
+                    break;
+                case picoquic_frame_type_path_response:
+                    ret = picoquic_decode_path_response_frame(cnx, bytes + byte_index, bytes_max - byte_index, &consumed);
+                    byte_index += consumed;
+                    ack_needed = 0;
                     break;
                 default:
                     /* Not implemented yet! */
@@ -2202,10 +2210,6 @@ int picoquic_skip_frame(uint8_t* bytes, size_t bytes_max, size_t* consumed,
             break;
         case picoquic_frame_type_ping:
             *pure_ack = 0;
-            {
-                size_t ping_length = bytes[byte_index++];
-                byte_index += ping_length;
-            }
             break;
         case picoquic_frame_type_blocked:
             *pure_ack = 0;
@@ -2233,12 +2237,11 @@ int picoquic_skip_frame(uint8_t* bytes, size_t bytes_max, size_t* consumed,
             byte_index += picoquic_varint_skip(bytes + byte_index) + 2;
             *pure_ack = 0;
             break;
-        case picoquic_frame_type_pong:
-            *pure_ack = 0;
-            {
-                size_t ping_length = bytes[byte_index++];
-                byte_index += ping_length;
-            }
+        case picoquic_frame_type_path_challenge:
+            byte_index += 8;
+            break;
+        case picoquic_frame_type_path_response:
+            byte_index += 8;
             break;
         default:
             /* Not implemented yet! */
