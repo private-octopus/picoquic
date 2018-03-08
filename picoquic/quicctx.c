@@ -238,6 +238,9 @@ void picoquic_set_cookie_mode(picoquic_quic_t* quic, int cookie_mode)
 
 picoquic_stateless_packet_t* picoquic_create_stateless_packet(picoquic_quic_t* quic)
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(quic);
+#endif
     return (picoquic_stateless_packet_t*)malloc(sizeof(picoquic_stateless_packet_t));
 }
 

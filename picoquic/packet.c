@@ -398,6 +398,9 @@ int picoquic_incoming_version_negotiation(
 {
     /* Parse the content */
     int ret = -1;
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(addr_from);
+#endif
 
     if (picoquic_compare_connection_id(&ph->cnx_id, &cnx->initial_cnxid) != 0 || ph->vn != 0) {
         /* Packet that do not match the "echo" checks should be logged and ignored */
@@ -777,6 +780,9 @@ int picoquic_incoming_server_cleartext(
     int ret = 0;
     size_t decoded_length = 0;
     int already_received = 0;
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(if_index_to);
+#endif
 
     if (cnx->cnx_state == picoquic_state_client_init_sent || cnx->cnx_state == picoquic_state_client_init_resent) {
         cnx->cnx_state = picoquic_state_client_handshake_start;
