@@ -669,9 +669,9 @@ int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint6
             ctx->handshake_properties.server.cookie.key = cnx->quic->retry_seed;
             /* additional data to be used for signing / verification */
             ctx->handshake_properties.server.cookie.additional_data.base
-                = (uint8_t*)&cnx->peer_addr;
+                = (uint8_t*)&cnx->path[0]->peer_addr;
             ctx->handshake_properties.server.cookie.additional_data.len
-                = cnx->peer_addr_len;
+                = cnx->path[0]->peer_addr_len;
         }
     }
 

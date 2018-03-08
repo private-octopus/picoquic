@@ -627,9 +627,9 @@ int picoquic_incoming_initial(
                     ret = 0;
                 } else {
                     /* remember the local address on which the initial packet arrived. */
-                    cnx->if_index_dest = if_index_to;
-                    cnx->dest_addr_len = (addr_to->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
-                    memcpy(&cnx->dest_addr, addr_to, cnx->dest_addr_len);
+                    cnx->path[0]->if_index_dest = if_index_to;
+                    cnx->path[0]->dest_addr_len = (addr_to->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
+                    memcpy(&cnx->path[0]->dest_addr, addr_to, cnx->path[0]->dest_addr_len);
                     *p_cnx = cnx;
                 }
             }
@@ -799,8 +799,8 @@ int picoquic_incoming_server_cleartext(
             if (picoquic_is_connection_id_null(cnx->server_cnxid)) {
                 /* On first response from the server, copy the cnx ID and the incoming address */
                 cnx->server_cnxid = ph->cnx_id;
-                cnx->dest_addr_len = (addr_to->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
-                memcpy(&cnx->dest_addr, addr_to, cnx->dest_addr_len);
+                cnx->path[0]->dest_addr_len = (addr_to->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
+                memcpy(&cnx->path[0]->dest_addr, addr_to, cnx->path[0]->dest_addr_len);
 
                 (void)picoquic_register_cnx_id(cnx->quic, cnx, cnx->server_cnxid);
             } else if (picoquic_compare_connection_id(&cnx->server_cnxid, &ph->cnx_id) != 0) {

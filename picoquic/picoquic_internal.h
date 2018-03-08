@@ -298,6 +298,13 @@ typedef struct st_picoquic_misc_frame_header_t {
 * Per path context
 */
 typedef struct st_picoquic_path_t {
+    /* Peer address. To do: allow for multiple addresses */
+    struct sockaddr_storage peer_addr;
+    int peer_addr_len;
+    struct sockaddr_storage dest_addr;
+    int dest_addr_len;
+    unsigned long if_index_dest;
+
     /* Time measurement */
     uint64_t max_ack_delay;
     uint64_t smoothed_rtt;
@@ -363,13 +370,6 @@ typedef struct st_picoquic_cnx_t {
     /* Call back function and context */
     picoquic_stream_data_cb_fn callback_fn;
     void* callback_ctx;
-
-    /* Peer address. To do: allow for multiple addresses */
-    struct sockaddr_storage peer_addr;
-    int peer_addr_len;
-    struct sockaddr_storage dest_addr;
-    int dest_addr_len;
-    unsigned long if_index_dest;
 
     /* connection state, ID, etc. Todo: allow for multiple cnxid */
     picoquic_state_enum cnx_state;

@@ -498,6 +498,10 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, struct sockad
         {
             memset(path_x, 0, sizeof(picoquic_path_t));
 
+            /* Set the peer address */
+            path_x->peer_addr_len = (int)((addr->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
+            memcpy(&path_x->peer_addr, addr, path_x->peer_addr_len);
+
             /* Initialize per path time measurement */
             path_x->smoothed_rtt = PICOQUIC_INITIAL_RTT;
             path_x->rtt_variant = 0;
@@ -559,9 +563,6 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
     }
 
     if (cnx != NULL) {
-        cnx->peer_addr_len = (int)((addr->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
-        memcpy(&cnx->peer_addr, addr, cnx->peer_addr_len);
-
         picoquic_init_transport_parameters(&cnx->local_parameters, cnx->client_mode);
         if (cnx->quic->mtu_max > 0)
         {
@@ -777,19 +778,19 @@ picoquic_cnx_t* picoquic_create_client_cnx(picoquic_quic_t* quic,
 
 void picoquic_get_peer_addr(picoquic_cnx_t* cnx, struct sockaddr** addr, int* addr_len)
 {
-    *addr = (struct sockaddr*)&cnx->peer_addr;
-    *addr_len = cnx->peer_addr_len;
+    *addr = (struct sockaddr*)&cnx->path[0]->peer_addr;
+    *addr_len = cnx->path[0]->peer_addr_len;
 }
 
 void picoquic_get_local_addr(picoquic_cnx_t* cnx, struct sockaddr** addr, int* addr_len)
 {
-    *addr = (struct sockaddr*)&cnx->dest_addr;
-    *addr_len = cnx->dest_addr_len;
+    *addr = (struct sockaddr*)&cnx->path[0]->dest_addr;
+    *addr_len = cnx->path[0]->dest_addr_len;
 }
 
 unsigned long picoquic_get_local_if_index(picoquic_cnx_t* cnx)
 {
-    return cnx->if_index_dest;
+    return cnx->path[0]->if_index_dest;
 }
 
 picoquic_connection_id_t picoquic_get_cnxid(picoquic_cnx_t* cnx)
