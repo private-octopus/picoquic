@@ -28,32 +28,6 @@
 #include "picoquic_internal.h"
 #include "tls_api.h"
 
-#if 0
-static char const* picoquic_log_state_name[] = {
-    "client_init",
-    "client_init_sent",
-    "client_renegotiate",
-    "picoquic_state_client_hrr_received",
-    "client_init_resent",
-    "server_init",
-    "client_handshake_start",
-    "client_handshake_progress",
-    "client_almost_ready",
-    "handshake_failure",
-    "client_ready",
-    "server_almost_ready",
-    "server_ready",
-    "disconnecting",
-    "closing_received",
-    "closing",
-    "draining",
-    "disconnected",
-    "send_hrr"
-};
-
-static const size_t picoquic_nb_log_state_name = sizeof(picoquic_log_state_name) / sizeof(char const*);
-#endif
-
 void picoquic_log_error_packet(FILE* F, uint8_t* bytes, size_t bytes_max, int ret)
 {
     fprintf(F, "Packet length %d caused error: %d\n", (int)bytes_max, ret);
