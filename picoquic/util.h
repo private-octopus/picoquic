@@ -23,6 +23,7 @@
 #define PICOQUIC_UTILS_H
 
 #include <stdio.h>
+#include <inttypes.h>
 #include "picoquic.h"
 
 #ifdef WIN32
@@ -34,7 +35,6 @@
 #define PRIx64 "I64x"
 #endif
 #else
-#include <inttypes.h>
 #define PRIst "zu"
 #endif
 

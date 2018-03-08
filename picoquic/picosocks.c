@@ -31,8 +31,11 @@ static int bind_to_port(SOCKET_TYPE fd, int af, int port)
 
     if (af == AF_INET) {
         struct sockaddr_in* s4 = (struct sockaddr_in*)&sa;
-
+#ifdef _WINDOWS
+        s4->sin_family = (ADDRESS_FAMILY)af;
+#else
         s4->sin_family = af;
+#endif
         s4->sin_port = htons((u_short)port);
         addr_length = sizeof(struct sockaddr_in);
     } else {
