@@ -83,19 +83,19 @@ static int http09_random_txt(size_t doc_length, uint8_t* response, size_t respon
     return 0;
 }
 
-static char* const http09_head1 = "<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\">\r\n<HTML>\r\n<HEAD>\r\n<TITLE>";
-static char const* http09_head2 = "</TITLE>\r\n</HEAD><BODY>\r\n";
-static char const* http09_final = "</BODY></HTML>\r\n";
+#define http09_head1 "<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\">\r\n<HTML>\r\n<HEAD>\r\n<TITLE>"
+#define http09_head2  "</TITLE>\r\n</HEAD><BODY>\r\n"
+#define http09_final  "</BODY></HTML>\r\n"
 
-static char const* http09_index_title = "PicoQuic HTTP 0.9 service";
+#define http09_index_title  "PicoQuic HTTP 0.9 service"
 
-static char const* http09_index_1 = "<h1>Simple HTTP 0.9 Responder</h1>\r\n";
-static char const* http09_index_2 = "<p>GET /, and GET index.html returns this text</p>\r\n";
-static char const* http09_index_3 = "<p>Get doc-NNNNN.html returns html document of length NNNNN bytes(decimal)</p>\r\n";
-static char const* http09_index_4 = "<p>Get doc-NNNNN also returns html document of length NNNNN bytes(decimal)</p>\r\n";
-static char const* http09_index_5 = "<p>Get doc-NNNNN.txt returns txt document of length NNNNN bytes(decimal)</p>\r\n";
-static char const* http09_index_6 = "<p>Any other command will result in an error, and an empty response.</p>\r\n";
-static char const* http09_index_7 = "<h1>Enjoy!</h1>\r\n";
+#define http09_index_1  "<h1>Simple HTTP 0.9 Responder</h1>\r\n"
+#define http09_index_2  "<p>GET /, and GET index.html returns this text</p>\r\n"
+#define http09_index_3  "<p>Get doc-NNNNN.html returns html document of length NNNNN bytes(decimal)</p>\r\n"
+#define http09_index_4  "<p>Get doc-NNNNN also returns html document of length NNNNN bytes(decimal)</p>\r\n"
+#define http09_index_5  "<p>Get doc-NNNNN.txt returns txt document of length NNNNN bytes(decimal)</p>\r\n"
+#define http09_index_6  "<p>Any other command will result in an error, and an empty response.</p>\r\n"
+#define http09_index_7  "<h1>Enjoy!</h1>\r\n"
 
 static size_t http09_paragraph_min(size_t tag_length)
 {

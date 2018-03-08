@@ -487,7 +487,8 @@ static int verify_certificate_callback(ptls_verify_certificate_t* _self, ptls_t*
     if (ret == 0) {
         *verify_sign = verify_sign_callback;
         *verify_data = malloc(sizeof(picoquic_verify_ctx_t));
-        *((picoquic_verify_ctx_t*)*verify_data) = (picoquic_verify_ctx_t) { verify_ctx, verify_sign_fn };
+        ((picoquic_verify_ctx_t*)*verify_data)->verify_ctx = verify_ctx;
+        ((picoquic_verify_ctx_t*)*verify_data)->verify_sign = verify_sign_fn;
     }
 
     return ret;
