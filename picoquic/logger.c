@@ -710,7 +710,7 @@ size_t picoquic_log_path_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
     return byte_index;
 }
 
-void picoquic_log_frames(FILE* F, uint8_t* bytes, size_t length)
+void picoquic_log_frames(FILE* F, uint8_t* bytes, size_t length, uint32_t version)
 {
     size_t byte_index = 0;
 
@@ -720,7 +720,10 @@ void picoquic_log_frames(FILE* F, uint8_t* bytes, size_t length)
         if (bytes[byte_index] >= picoquic_frame_type_stream_range_min && bytes[byte_index] <= picoquic_frame_type_stream_range_max) {
             ack_or_data = 1;
             byte_index += picoquic_log_stream_frame(F, bytes + byte_index, length - byte_index);
-        } else if (bytes[byte_index] == picoquic_frame_type_ack) {
+        } else if (version == PICOQUIC_FOURTH_INTEROP_VERSION && bytes[byte_index] == 0x0E) {
+            ack_or_data = 1;
+            byte_index += picoquic_log_ack_frame(F, bytes + byte_index, length - byte_index);
+        } else if (version != PICOQUIC_FOURTH_INTEROP_VERSION && bytes[byte_index] == picoquic_frame_type_ack) {
             ack_or_data = 1;
             byte_index += picoquic_log_ack_frame(F, bytes + byte_index, length - byte_index);
         }
@@ -933,7 +936,8 @@ void picoquic_log_decrypt_encrypted(FILE* F,
             fprintf(F, "    Decryption failed!\n");
         } else {
             fprintf(F, "    Decrypted %d bytes\n", (int)decrypted_length);
-            picoquic_log_frames(F, decrypted, decrypted_length);
+            picoquic_log_frames(F, decrypted, decrypted_length,
+                picoquic_supported_versions[cnx->version_index].version);
         }
     }
 }
@@ -952,7 +956,8 @@ void picoquic_log_decrypt_0rtt(FILE* F,
         fprintf(F, "    Decryption failed!\n");
     } else {
         fprintf(F, "    Decrypted %d bytes\n", (int)decrypted_length);
-        picoquic_log_frames(F, decrypted, decrypted_length);
+        picoquic_log_frames(F, decrypted, decrypted_length,
+            picoquic_supported_versions[cnx->version_index].version);
     }
 }
 
@@ -976,7 +981,8 @@ void picoquic_log_decrypt_encrypted_cleartext(FILE* F,
         fprintf(F, "    Decryption failed!\n");
     } else {
         fprintf(F, "    Decrypted %d bytes\n", (int)decrypted_length);
-        picoquic_log_frames(F, decrypted, decrypted_length);
+        picoquic_log_frames(F, decrypted, decrypted_length,
+            picoquic_supported_versions[cnx->version_index].version);
     }
 }
 

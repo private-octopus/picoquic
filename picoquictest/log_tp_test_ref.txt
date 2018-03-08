@@ -24,9 +24,10 @@
 102030405060708:         Extension type: 4, length 0 (0x0004 / 0x0000), 
 
 102030405060708: Version: 50435130
-102030405060708:     Supported version (8 bytes):
+102030405060708:     Supported version (12 bytes):
 102030405060708:         50435130
 102030405060708:         ff00000a
+102030405060708:         ff000009
 102030405060708:     Extension list (56 bytes):
 102030405060708:         Extension type: 0, length 4 (0x0000 / 0x0004), 0000ffff
 102030405060708:         Extension type: 1, length 4 (0x0001 / 0x0004), 00400000
@@ -36,9 +37,10 @@
 102030405060708:         Extension type: 6, length 16 (0x0006 / 0x0010), 0102030405060708090a0b0c0d0e0f10
 
 102030405060708: Version: 50435130
-102030405060708:     Supported version (8 bytes):
+102030405060708:     Supported version (12 bytes):
 102030405060708:         50435130
 102030405060708:         ff00000a
+102030405060708:         ff000009
 102030405060708:     Extension list (60 bytes):
 102030405060708:         Extension type: 0, length 4 (0x0000 / 0x0004), 01000000
 102030405060708:         Extension type: 1, length 4 (0x0001 / 0x0004), 01000000

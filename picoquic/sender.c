@@ -194,6 +194,73 @@ picoquic_packet* picoquic_create_packet()
     return packet;
 }
 
+size_t picoquic_create_packet_header_09(
+    picoquic_cnx_t* cnx,
+    picoquic_packet_type_enum packet_type,
+    picoquic_connection_id_t cnx_id,
+    uint64_t sequence_number,
+    uint8_t* bytes,
+    size_t * pn_offset)
+{
+    size_t length = 0;
+
+    /* Prepare the packet header */
+    if (packet_type == picoquic_packet_1rtt_protected_phi0 || packet_type == picoquic_packet_1rtt_protected_phi1) {
+        /* Create a short packet -- using 32 bit sequence numbers for now */
+        uint8_t C = (cnx->remote_parameters.omit_connection_id != 0) ? 0x40 : 0;
+        uint8_t K = (packet_type == picoquic_packet_1rtt_protected_phi0) ? 0 : 0x20;
+        uint8_t PT = 0x1D;
+
+        length = 0;
+        bytes[length++] = (C | K | PT);
+        if (C == 0) {
+            length += picoquic_format_connection_id(&bytes[length], cnx_id);
+        }
+
+        *pn_offset = length;
+        picoformat_32(&bytes[length], (uint32_t)sequence_number);
+        length += 4;
+    }
+    else {
+        /* Create a long packet */
+        length = 1;
+
+        switch (packet_type) {
+        case picoquic_packet_client_initial:
+            bytes[0] = 0xFF;
+            break;
+        case picoquic_packet_server_stateless:
+            bytes[0] = 0xFE;
+            break;
+        case picoquic_packet_handshake:
+            bytes[0] = 0xFD;
+            break;
+        case picoquic_packet_0rtt_protected:
+            bytes[0] = 0xFC;
+            break;
+        default:
+            bytes[0] = 0x80;
+            break;
+        }
+
+        length += picoquic_format_connection_id(&bytes[length], cnx_id);
+        if ((cnx->cnx_state == picoquic_state_client_init || cnx->cnx_state == picoquic_state_client_init_sent) && packet_type == picoquic_packet_client_initial) {
+            picoformat_32(&bytes[length], cnx->proposed_version);
+        }
+        else {
+            picoformat_32(&bytes[length],
+                picoquic_supported_versions[cnx->version_index].version);
+        }
+        length += 4;
+        *pn_offset = length;
+        picoformat_32(&bytes[length], (uint32_t)sequence_number);
+
+        length += 4;
+    }
+
+    return length;
+}
+
 size_t picoquic_create_packet_header_10(
     picoquic_cnx_t* cnx,
     picoquic_packet_type_enum packet_type,
@@ -269,6 +336,9 @@ size_t picoquic_create_packet_header(
 {
     size_t header_length = 0;
     switch (picoquic_supported_versions[cnx->version_index].version_header_encoding) {
+    case picoquic_version_header_09:
+        header_length = picoquic_create_packet_header_09(cnx, packet_type, cnx_id, sequence_number, bytes, pn_offset);
+        break;
     case picoquic_version_header_10:
         header_length = picoquic_create_packet_header_10(cnx, packet_type, cnx_id, sequence_number, bytes, pn_offset);
         break;
@@ -535,7 +605,8 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx, picoquic_path_t * path_x, ui
 
                     while (ret == 0 && byte_index < p->length) {
                         ret = picoquic_skip_frame(&p->bytes[byte_index],
-                            p->length - byte_index, &frame_length, &frame_is_pure_ack);
+                            p->length - byte_index, &frame_length, &frame_is_pure_ack,
+                            picoquic_supported_versions[cnx->version_index].version);
 
                         /* Check whether the data was already acked, which may happen in 
                          * case of spurious retransmissions */
@@ -646,7 +717,8 @@ int picoquic_is_cnx_backlog_empty(picoquic_cnx_t* cnx)
 
         while (ret == 0 && byte_index < p->length) {
             ret = picoquic_skip_frame(&p->bytes[byte_index],
-                p->length - ph.offset, &frame_length, &frame_is_pure_ack);
+                p->length - ph.offset, &frame_length, &frame_is_pure_ack,
+                picoquic_supported_versions[cnx->version_index].version);
 
             if (!frame_is_pure_ack) {
                 backlog_empty = 0;
