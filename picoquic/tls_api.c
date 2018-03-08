@@ -217,6 +217,10 @@ uint64_t picoquic_public_uniform_random(uint64_t rnd_max)
 
 int picoquic_tls_collect_extensions_cb(ptls_t* tls, struct st_ptls_handshake_properties_t* properties, uint16_t type)
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(tls);
+    UNREFERENCED_PARAMETER(properties);
+#endif
     return type == PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION;
 }
 
@@ -250,6 +254,9 @@ void picoquic_tls_set_extensions(picoquic_cnx_t* cnx, picoquic_tls_ctx_t* tls_ct
 int picoquic_tls_collected_extensions_cb(ptls_t* tls, ptls_handshake_properties_t* properties,
     ptls_raw_extension_t* slots)
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(tls);
+#endif
     int ret = 0;
     size_t consumed = 0;
     /* Find the context from the TLS context */
@@ -292,6 +299,11 @@ int picoquic_client_hello_call_back(ptls_on_client_hello_t* on_hello_cb_ctx,
     ptls_t* tls, ptls_iovec_t server_name, const ptls_iovec_t* negotiated_protocols,
     size_t num_negotiated_protocols, const uint16_t* signature_algorithms, size_t num_signature_algorithms)
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(server_name);
+    UNREFERENCED_PARAMETER(signature_algorithms);
+    UNREFERENCED_PARAMETER(num_signature_algorithms);
+#endif
     int alpn_found = 0;
     picoquic_quic_t** ppquic = (picoquic_quic_t**)(((char*)on_hello_cb_ctx) + sizeof(ptls_on_client_hello_t));
     picoquic_quic_t* quic = *ppquic;
@@ -343,6 +355,9 @@ int picoquic_client_hello_call_back(ptls_on_client_hello_t* on_hello_cb_ctx,
 int picoquic_server_encrypt_ticket_call_back(ptls_encrypt_ticket_t* encrypt_ticket_ctx,
     ptls_t* tls, int is_encrypt, ptls_buffer_t* dst, ptls_iovec_t src)
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(tls);
+#endif
 
     /* Assume that the keys are in the quic context 
      * The tickets are composed of a 64 bit "sequence number" 
@@ -726,9 +741,9 @@ int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint6
             ctx->handshake_properties.server.cookie.key = cnx->quic->retry_seed;
             /* additional data to be used for signing / verification */
             ctx->handshake_properties.server.cookie.additional_data.base
-                = (uint8_t*)&cnx->peer_addr;
+                = (uint8_t*)&cnx->path[0]->peer_addr;
             ctx->handshake_properties.server.cookie.additional_data.len
-                = cnx->peer_addr_len;
+                = cnx->path[0]->peer_addr_len;
         }
     }
 

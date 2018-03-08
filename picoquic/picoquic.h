@@ -75,6 +75,7 @@ extern "C" {
  * Protocol errors defined in the QUIC spec
  */
 #define PICOQUIC_TRANSPORT_INTERNAL_ERROR (0x1)
+#define PICOQUIC_TRANSPORT_SERVER_BUSY (0x2)
 #define PICOQUIC_TRANSPORT_FLOW_CONTROL_ERROR (0x3)
 #define PICOQUIC_TRANSPORT_STREAM_ID_ERROR (0x4)
 #define PICOQUIC_TRANSPORT_STREAM_STATE_ERROR (0x5)
@@ -83,7 +84,7 @@ extern "C" {
 #define PICOQUIC_TRANSPORT_TRANSPORT_PARAMETER_ERROR (0x8)
 #define PICOQUIC_TRANSPORT_VERSION_NEGOTIATION_ERROR (0x9)
 #define PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION (0xA)
-#define PICOQUIC_TRANSPORT_UNSOLICITED_PONG (0xB)
+#define PICOQUIC_TRANSPORT_UNSOLICITED_PATH_RESPONSE (0xB)
 #define PICOQUIC_TRANSPORT_FRAME_ERROR(FrameType) (0x100 | ((int)FrameType))
 #define PICOQUIC_TLS_HANDSHAKE_FAILED (0x201)
 #define PICOQUIC_TLS_FATAL_ALERT_GENERATED (0x202)
@@ -163,14 +164,16 @@ typedef struct _picoquic_packet {
 
     uint64_t sequence_number;
     uint64_t send_time;
-    size_t length;
-    size_t checksum_overhead;
+    uint32_t length;
+    uint32_t checksum_overhead;
+    struct st_picoquic_path_t * send_path;
 
     uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE];
 } picoquic_packet;
 
 typedef struct st_picoquic_quic_t picoquic_quic_t;
 typedef struct st_picoquic_cnx_t picoquic_cnx_t;
+typedef struct st_picoquic_path_t picoquic_path_t;
 
 typedef enum {
     picoquic_callback_no_event = 0,
@@ -312,14 +315,14 @@ typedef enum {
     picoquic_congestion_notification_rtt_measurement
 } picoquic_congestion_notification_t;
 
-typedef void (*picoquic_congestion_algorithm_init)(picoquic_cnx_t* cnx);
-typedef void (*picoquic_congestion_algorithm_notify)(picoquic_cnx_t* cnx,
+typedef void (*picoquic_congestion_algorithm_init)(picoquic_path_t* path_x);
+typedef void (*picoquic_congestion_algorithm_notify)(picoquic_path_t* path_x,
     picoquic_congestion_notification_t notification,
     uint64_t rtt_measurement,
     uint64_t nb_bytes_acknowledged,
     uint64_t lost_packet_number,
     uint64_t current_time);
-typedef void (*picoquic_congestion_algorithm_delete)(picoquic_cnx_t* cnx);
+typedef void (*picoquic_congestion_algorithm_delete)(picoquic_path_t* cnx);
 
 typedef struct st_picoquic_congestion_algorithm_t {
     uint32_t congestion_algorithm_id;

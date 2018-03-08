@@ -64,11 +64,7 @@ static uint8_t test_frame_type_max_stream_id[] = {
     0x41, 0
 };
 static uint8_t test_frame_type_ping[] = {
-    picoquic_frame_type_ping, 0
-};
-static uint8_t test_frame_type_ping_long[] = {
-    picoquic_frame_type_ping, 8,
-    1, 2, 3, 4, 5, 6, 7, 8
+    picoquic_frame_type_ping
 };
 static uint8_t test_frame_type_blocked[] = {
     picoquic_frame_type_blocked,
@@ -95,8 +91,14 @@ static uint8_t test_frame_type_stop_sending[] = {
     17,
     0x40, 0
 };
-static uint8_t test_frame_type_pong[] = {
-    picoquic_frame_type_pong, 8,
+
+static uint8_t test_frame_type_path_challenge[] = {
+    picoquic_frame_type_path_challenge,
+    1, 2, 3, 4, 5, 6, 7, 8
+};
+
+static uint8_t test_frame_type_path_response[] = {
+    picoquic_frame_type_path_response,
     1, 2, 3, 4, 5, 6, 7, 8
 };
 static uint8_t test_frame_type_ack[] = {
@@ -144,13 +146,13 @@ static test_skip_frames_t test_skip_list[] = {
     TEST_SKIP_ITEM("max_stream_data", test_frame_type_max_stream_data, 0, 0),
     TEST_SKIP_ITEM("max_stream_id", test_frame_type_max_stream_id, 0, 0),
     TEST_SKIP_ITEM("ping", test_frame_type_ping, 0, 0),
-    TEST_SKIP_ITEM("ping_long", test_frame_type_ping_long, 0, 0),
     TEST_SKIP_ITEM("blocked", test_frame_type_blocked, 0, 0),
     TEST_SKIP_ITEM("stream_blocked", test_frame_type_stream_blocked, 0, 0),
     TEST_SKIP_ITEM("stream_id_needed", test_frame_type_stream_id_needed, 0, 0),
     TEST_SKIP_ITEM("new_connection_id", test_frame_type_new_connection_id, 0, 0),
     TEST_SKIP_ITEM("stop_sending", test_frame_type_stop_sending, 0, 0),
-    TEST_SKIP_ITEM("pong", test_frame_type_pong, 0, 0),
+    TEST_SKIP_ITEM("challenge", test_frame_type_path_challenge, 1, 0),
+    TEST_SKIP_ITEM("response", test_frame_type_path_response, 1, 0),
     TEST_SKIP_ITEM("ack", test_frame_type_ack, 1, 0),
     TEST_SKIP_ITEM("stream_min", test_frame_type_stream_range_min, 0, 1),
     TEST_SKIP_ITEM("stream_max", test_frame_type_stream_range_max, 0, 0)

@@ -85,13 +85,13 @@ static picoquic_packet_header hvnego08 = {
     0, 0
 };
 
-static uint8_t packet_short_phi0_c_32_08[] = {
-    0x1D,
+static uint8_t packet_short_phi0_c_32[] = {
+    0x02,
     TEST_CNXID_08_BYTES,
     0xDE, 0xAD, 0xBE, 0xEF
 };
 
-static picoquic_packet_header hphi0_c_32_08 = {
+static picoquic_packet_header hphi0_c_32 = {
     { TEST_CNXID_08_VAL },
     0xDEADBEEF,
     0,
@@ -102,13 +102,13 @@ static picoquic_packet_header hphi0_c_32_08 = {
     0, 0
 };
 
-static uint8_t packet_short_phi1_c_16_08[] = {
-    0x3E,
+static uint8_t packet_short_phi1_c_16[] = {
+    0x21,
     TEST_CNXID_08_BYTES,
     0xBE, 0xEF
 };
 
-static picoquic_packet_header hphi1_c_16_08 = {
+static picoquic_packet_header hphi1_c_16 = {
     { TEST_CNXID_08_VAL },
     0xBEEF,
     0,
@@ -119,13 +119,13 @@ static picoquic_packet_header hphi1_c_16_08 = {
     0, 0
 };
 
-static uint8_t packet_short_phi1_c_8_08[] = {
-    0x3F,
+static uint8_t packet_short_phi1_c_8[] = {
+    0x20,
     TEST_CNXID_08_BYTES,
     0xEF
 };
 
-static picoquic_packet_header hphi1_c_8_08 = {
+static picoquic_packet_header hphi1_c_8 = {
     { TEST_CNXID_08_VAL },
     0xEF,
     0,
@@ -136,12 +136,12 @@ static picoquic_packet_header hphi1_c_8_08 = {
     0, 0
 };
 
-static uint8_t packet_short_phi0_noc_16_08[] = {
-    0x5E,
+static uint8_t packet_short_phi0_noc_16[] = {
+    0x41,
     0xBE, 0xEF,
 };
 
-static picoquic_packet_header hphi0_noc_16_08 = {
+static picoquic_packet_header hphi0_noc_16 = {
     { 0 },
     0xBEEF,
     0,
@@ -152,12 +152,12 @@ static picoquic_packet_header hphi0_noc_16_08 = {
     0, 0
 };
 
-static uint8_t packet_short_phi0_noc_8_08[] = {
-    0x5F,
+static uint8_t packet_short_phi0_noc_8[] = {
+    0x40,
     0xEF
 };
 
-static picoquic_packet_header hphi0_noc_8_08 = {
+static picoquic_packet_header hphi0_noc_8 = {
     { 0 },
     0xEF,
     0,
@@ -178,11 +178,11 @@ static struct _test_entry test_entries[] = {
     { pinitial08, sizeof(pinitial08), &hinitial08 },
     { pvnego08, sizeof(pvnego08), &hvnego08 },
     { pvnegobis08, sizeof(pvnegobis08), &hvnego08 },
-    { packet_short_phi0_c_32_08, sizeof(packet_short_phi0_c_32_08), &hphi0_c_32_08 },
-    { packet_short_phi1_c_16_08, sizeof(packet_short_phi1_c_16_08), &hphi1_c_16_08 },
-    { packet_short_phi1_c_8_08, sizeof(packet_short_phi1_c_8_08), &hphi1_c_8_08 },
-    { packet_short_phi0_noc_16_08, sizeof(packet_short_phi0_noc_16_08), &hphi0_noc_16_08 },
-    { packet_short_phi0_noc_8_08, sizeof(packet_short_phi0_noc_8_08), &hphi0_noc_8_08 }
+    { packet_short_phi0_c_32, sizeof(packet_short_phi0_c_32), &hphi0_c_32 },
+    { packet_short_phi1_c_16, sizeof(packet_short_phi1_c_16), &hphi1_c_16 },
+    { packet_short_phi1_c_8, sizeof(packet_short_phi1_c_8), &hphi1_c_8 },
+    { packet_short_phi0_noc_16, sizeof(packet_short_phi0_noc_16), &hphi0_noc_16 },
+    { packet_short_phi0_noc_8, sizeof(packet_short_phi0_noc_8), &hphi0_noc_8 }
 };
 
 static const size_t nb_test_entries = sizeof(test_entries) / sizeof(struct _test_entry);

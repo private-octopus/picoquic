@@ -88,8 +88,9 @@ typedef enum {
     picoquic_frame_type_stream_id_needed = 0x0a,
     picoquic_frame_type_new_connection_id = 0x0b,
     picoquic_frame_type_stop_sending = 0x0c,
-    picoquic_frame_type_pong = 0x0d,
-    picoquic_frame_type_ack = 0x0e,
+    picoquic_frame_type_ack = 0x0d,
+    picoquic_frame_type_path_challenge = 0x0e,
+    picoquic_frame_type_path_response = 0x0f,
     picoquic_frame_type_stream_range_min = 0x10,
     picoquic_frame_type_stream_range_max = 0x1F,
     picoquic_frame_type_ack_range_min_old = 0xa0,
@@ -105,6 +106,7 @@ typedef enum {
 #define PICOQUIC_SECOND_INTEROP_VERSION 0xFF000007
 #define PICOQUIC_THIRD_INTEROP_VERSION 0xFF000008
 #define PICOQUIC_FOURTH_INTEROP_VERSION 0xFF000009
+#define PICOQUIC_FIFTH_INTEROP_VERSION 0xFF00000A
 #define PICOQUIC_INTERNAL_TEST_VERSION_1 0x50435130
 
 #define PICOQUIC_INTEROP_VERSION_INDEX 1
@@ -123,7 +125,7 @@ typedef enum {
      * Codes used for representing the various types of packet encodings
      */
 typedef enum {
-    picoquic_version_header_08
+    picoquic_version_header_10
 } picoquic_version_header_encoding;
 
 typedef struct st_picoquic_version_parameters_t {
@@ -182,7 +184,7 @@ typedef struct st_picoquic_quic_t {
     uint64_t* p_simulated_time;
     char const* ticket_file_name;
     picoquic_stored_ticket_t* p_first_ticket;
-    int mtu_max;
+    uint32_t mtu_max;
 
     uint32_t flags;
 
@@ -297,8 +299,47 @@ typedef struct st_picoquic_misc_frame_header_t {
 } picoquic_misc_frame_header_t;
 
 /*
-	 * Per connection context.
-	 */
+* Per path context
+*/
+typedef struct st_picoquic_path_t {
+    /* Peer address. To do: allow for multiple addresses */
+    struct sockaddr_storage peer_addr;
+    int peer_addr_len;
+    struct sockaddr_storage dest_addr;
+    int dest_addr_len;
+    unsigned long if_index_dest;
+
+    /* Time measurement */
+    uint64_t max_ack_delay;
+    uint64_t smoothed_rtt;
+    uint64_t rtt_variant;
+    uint64_t retransmit_timer;
+    uint64_t rtt_min;
+    uint64_t max_spurious_rtt;
+    uint64_t max_reorder_delay;
+    uint64_t max_reorder_gap;
+
+    /* MTU */
+    unsigned int mtu_probe_sent : 1;
+    uint32_t send_mtu;
+    uint32_t send_mtu_max_tried;
+
+    /* Congestion control state */
+    uint64_t cwin;
+    uint64_t bytes_in_transit;
+    void* congestion_alg_state;
+
+    /* Pacing */
+    uint64_t packet_time_nano_sec;
+    uint64_t pacing_reminder_nano_sec;
+    uint64_t pacing_margin_micros;
+    uint64_t next_pacing_time;
+
+} picoquic_path_t;
+
+/* 
+ * Per connection context.
+ */
 typedef struct st_picoquic_cnx_t {
     picoquic_quic_t* quic;
 
@@ -318,7 +359,6 @@ typedef struct st_picoquic_cnx_t {
     unsigned int use_pn_encryption : 1;
     unsigned int is_0RTT_accepted:1; /* whether 0-RTT is accepted */
     unsigned int remote_parameters_received:1; /* whether remote parameters where received */
-    unsigned int mtu_probe_sent:1;
     unsigned int ack_needed:1;
 
 
@@ -334,13 +374,6 @@ typedef struct st_picoquic_cnx_t {
     /* Call back function and context */
     picoquic_stream_data_cb_fn callback_fn;
     void* callback_ctx;
-
-    /* Peer address. To do: allow for multiple addresses */
-    struct sockaddr_storage peer_addr;
-    int peer_addr_len;
-    struct sockaddr_storage dest_addr;
-    int dest_addr_len;
-    unsigned long if_index_dest;
 
     /* connection state, ID, etc. Todo: allow for multiple cnxid */
     picoquic_state_enum cnx_state;
@@ -360,8 +393,6 @@ typedef struct st_picoquic_cnx_t {
     void* tls_ctx;
     struct st_ptls_buffer_t* tls_sendbuf;
     uint64_t send_sequence;
-    uint32_t send_mtu;
-    uint32_t send_mtu_max_tried;
     uint16_t psk_cipher_suite_id;
 
     /* Liveness detection */
@@ -388,13 +419,14 @@ typedef struct st_picoquic_cnx_t {
     uint64_t sack_block_size_max;
     uint64_t highest_ack_sent;
     uint64_t highest_ack_time;
-
+#if 0
     /* Time measurement */
     uint64_t max_ack_delay;
     uint64_t smoothed_rtt;
     uint64_t rtt_variant;
     uint64_t retransmit_timer;
     uint64_t rtt_min;
+#endif
     uint64_t ack_delay_local;
 
     /* Retransmission state */
@@ -403,9 +435,11 @@ typedef struct st_picoquic_cnx_t {
     uint64_t nb_retransmission_total;
     uint64_t nb_retransmit;
     uint64_t nb_spurious;
+#if 0
     uint64_t max_spurious_rtt;
     uint64_t max_reorder_delay;
     uint64_t max_reorder_gap;
+#endif
     uint64_t latest_retransmit_time;
     uint64_t highest_acknowledged;
     uint64_t latest_time_acknowledged; /* time at which the highest acknowledged was sent */
@@ -413,18 +447,21 @@ typedef struct st_picoquic_cnx_t {
     picoquic_packet* retransmit_oldest;
     picoquic_packet* retransmitted_newest;
     picoquic_packet* retransmitted_oldest;
-
+#if 0
     /* Congestion control state */
     uint64_t cwin;
     uint64_t bytes_in_transit;
     void* congestion_alg_state;
+#endif
     picoquic_congestion_algorithm_t const* congestion_alg;
 
+#if 0
     /* Pacing */
     uint64_t packet_time_nano_sec;
     uint64_t pacing_reminder_nano_sec;
     uint64_t pacing_margin_micros;
     uint64_t next_pacing_time;
+#endif
 
     /* Flow control information */
     uint64_t data_sent;
@@ -447,6 +484,11 @@ typedef struct st_picoquic_cnx_t {
 
     /* If not `0`, the connection will send keep alive messages in the given interval. */
     uint64_t keep_alive_interval;
+
+    /* Management of paths */
+    picoquic_path_t ** path;
+    int nb_paths;
+    int nb_path_alloc;
 } picoquic_cnx_t;
 
 /* Init of transport parameters */
@@ -473,11 +515,8 @@ int picoquic_connection_error(picoquic_cnx_t* cnx, uint32_t local_error);
 picoquic_cnx_t* picoquic_cnx_by_id(picoquic_quic_t* quic, picoquic_connection_id_t cnx_id);
 picoquic_cnx_t* picoquic_cnx_by_net(picoquic_quic_t* quic, struct sockaddr* addr);
 
-/*
-     * Reset the pacing data after CWIN is updated
-     */
-
-void picoquic_update_pacing_data(picoquic_cnx_t* cnx);
+/* Reset the pacing data after CWIN is updated */
+void picoquic_update_pacing_data(picoquic_path_t * path_x);
 
 /* Next time is used to order the list of available connections,
      * so ready connections are polled first */
