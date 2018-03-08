@@ -35,8 +35,6 @@
 #include <unistd.h>
 #endif
 
-#include "picotls.h"
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -200,6 +198,7 @@ typedef void (*cnx_id_cb_fn)(picoquic_connection_id_t cnx_id_local,
  * If `data` and `sign` are empty buffers, an error occurred and `verify_ctx` should be freed.
  * Expect `0` as return value, when the data matches the signature.
  */
+typedef struct st_ptls_iovec_t ptls_iovec_t; /* forward definition to avoid full dependency on picotls.h */
 typedef int (*picoquic_verify_sign_cb_fn)(void* verify_ctx, ptls_iovec_t data, ptls_iovec_t sign);
 /* Will be called to verify a certificate of a connection.
  * The arguments `verify_sign` and `verify_sign_ctx` are expected to be set, when the function returns `0`.
