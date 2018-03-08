@@ -462,6 +462,13 @@ namespace UnitTest1
             int ret = set_verify_certificate_callback_test();
 
             Assert::AreEqual(ret, 0);
+	}
+
+        TEST_METHOD(test_request_client_authentication)
+        {
+          int ret = request_client_authentication_test();
+
+          Assert::AreEqual(ret, 0);
         }
 
         TEST_METHOD(test_virtual_time)
