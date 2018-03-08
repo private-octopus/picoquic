@@ -114,7 +114,7 @@ int picoquic_parse_packet_header(
                     /* If the version is supported now, the format field in the version table
                      * describes the encoding. */
                     switch (picoquic_supported_versions[ph->version_index].version_header_encoding) {
-                    case picoquic_version_header_08:
+                    case picoquic_version_header_10:
                         switch (bytes[0]) {
                         case 0xFF:
                             ph->ptype = picoquic_packet_client_initial;
@@ -189,7 +189,7 @@ int picoquic_parse_packet_header(
             ph->version_index = (*pcnx)->version_index;
             /* If the connection is identified, decode the short header per version ID */
             switch (picoquic_supported_versions[ph->version_index].version_header_encoding) {
-            case picoquic_version_header_08:
+            case picoquic_version_header_10:
 
                 if ((bytes[0] & 0x20) == 0) {
                     ph->ptype = picoquic_packet_1rtt_protected_phi0;
@@ -200,17 +200,17 @@ int picoquic_parse_packet_header(
                 ph->pn_offset = ph->offset;
 
                 switch (bytes[0] & 0x1F) {
-                case 0x1F:
+                case 0:
                     ph->pn = bytes[ph->offset];
                     ph->pnmask = 0xFFFFFFFFFFFFFF00ull;
                     ph->offset += 1;
                     break;
-                case 0x1E:
+                case 1:
                     ph->pn = PICOPARSE_16(&bytes[ph->offset]);
                     ph->pnmask = 0xFFFFFFFFFFFF0000ull;
                     ph->offset += 2;
                     break;
-                case 0x1D:
+                case 2:
                     ph->pn = PICOPARSE_32(&bytes[ph->offset]);
                     ph->pnmask = 0xFFFFFFFF00000000ull;
                     ph->offset += 4;
@@ -245,7 +245,7 @@ int picoquic_is_packet_encrypted(
     /* Is this a long header of a short header? */
     if ((byte_zero & 0x80) == 0x80) {
         switch (picoquic_supported_versions[cnx->version_index].version_header_encoding) {
-        case picoquic_version_header_08:
+        case picoquic_version_header_10:
             switch (byte_zero) {
             case 0xFC: /* picoquic_packet_0rtt_protected*/
                 ret = 1;

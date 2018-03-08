@@ -194,7 +194,7 @@ picoquic_packet* picoquic_create_packet()
     return packet;
 }
 
-size_t picoquic_create_packet_header_08(
+size_t picoquic_create_packet_header_10(
     picoquic_cnx_t* cnx,
     picoquic_packet_type_enum packet_type,
     picoquic_connection_id_t cnx_id,
@@ -209,7 +209,7 @@ size_t picoquic_create_packet_header_08(
         /* Create a short packet -- using 32 bit sequence numbers for now */
         uint8_t C = (cnx->remote_parameters.omit_connection_id != 0) ? 0x40 : 0;
         uint8_t K = (packet_type == picoquic_packet_1rtt_protected_phi0) ? 0 : 0x20;
-        uint8_t PT = 0x1D;
+        uint8_t PT = 0x02;
 
         length = 0;
         bytes[length++] = (C | K | PT);
@@ -269,8 +269,8 @@ size_t picoquic_create_packet_header(
 {
     size_t header_length = 0;
     switch (picoquic_supported_versions[cnx->version_index].version_header_encoding) {
-    case picoquic_version_header_08:
-        header_length = picoquic_create_packet_header_08(cnx, packet_type, cnx_id, sequence_number, bytes, pn_offset);
+    case picoquic_version_header_10:
+        header_length = picoquic_create_packet_header_10(cnx, packet_type, cnx_id, sequence_number, bytes, pn_offset);
         break;
     default:
         break;
