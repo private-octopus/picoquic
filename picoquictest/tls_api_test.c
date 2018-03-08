@@ -2278,3 +2278,56 @@ int bad_certificate_test()
 
     return ret;
 }
+
+/*
+* Test setting the verify certificate callback.
+*/
+
+static int verify_sign_test(void* verify_ctx, ptls_iovec_t data, ptls_iovec_t sign) {
+    int* ptr = (int*)verify_ctx;
+    *ptr += 1;
+
+    return 0;
+}
+
+static int verify_certificate_test(void* ctx, picoquic_cnx_t* cnx, ptls_iovec_t* certs, size_t num_certs,
+                                   picoquic_verify_sign_cb_fn* verify_sign, void** verify_sign_ctx) {
+    int* data = (int*)ctx;
+    *data += 1;
+
+    *verify_sign = verify_sign_test;
+    *verify_sign_ctx = ctx;
+
+    return 0;
+}
+
+int set_verify_certificate_callback_test()
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int call_count = 0;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0);
+
+    /* Set the verify callback */
+    if (ret == 0) {
+        ret = picoquic_set_verify_certificate_callback(test_ctx->qclient, verify_certificate_test,
+                                                       &call_count, NULL);
+    }
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    if (ret == 0 && call_count != 2) {
+        ret = -1;
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}

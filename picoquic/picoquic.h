@@ -35,6 +35,8 @@
 #include <unistd.h>
 #endif
 
+#include "picotls.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -190,6 +192,22 @@ typedef void (*picoquic_stream_data_cb_fn)(picoquic_cnx_t* cnx,
 typedef void (*cnx_id_cb_fn)(picoquic_connection_id_t cnx_id_local,
     picoquic_connection_id_t cnx_id_remote, void* cnx_id_cb_data, picoquic_connection_id_t * cnx_id_returned);
 
+/* Will be called to verify that the given data corresponds to the given signature.
+ * This callback and the `verify_ctx` will be set by the `verify_certificate_cb_fn`.
+ * If `data` and `sign` are empty buffers, an error occurred and `verify_ctx` should be freed.
+ * Expect `0` as return value, when the data matches the signature.
+ */
+typedef int (*picoquic_verify_sign_cb_fn)(void* verify_ctx, ptls_iovec_t data, ptls_iovec_t sign);
+/* Will be called to verify a certificate of a connection.
+ * The arguments `verify_sign` and `verify_sign_ctx` are expected to be set, when the function returns `0`.
+ * See `verify_sign_cb_fn` for more information about these arguments.
+ */
+typedef int (*picoquic_verify_certificate_cb_fn)(void* ctx, picoquic_cnx_t* cnx, ptls_iovec_t* certs, size_t num_certs,
+                                                 picoquic_verify_sign_cb_fn* verify_sign, void** verify_sign_ctx);
+
+/* Is called to free the verify certificate ctx */
+typedef void (*picoquic_free_verify_certificate_ctx)(void* ctx);
+
 /* QUIC context create and dispose */
 picoquic_quic_t* picoquic_create(uint32_t nb_connections,
     char const* cert_file_name, char const* key_file_name,
@@ -209,6 +227,10 @@ void picoquic_free(picoquic_quic_t* quic);
 
 /* Set cookie mode on QUIC context when under stress */
 void picoquic_set_cookie_mode(picoquic_quic_t* quic, int cookie_mode);
+
+/* Set the verify certificate callback and context. */
+int picoquic_set_verify_certificate_callback(picoquic_quic_t* quic, picoquic_verify_certificate_cb_fn cb, void* ctx,
+                                             picoquic_free_verify_certificate_ctx free_fn);
 
 /* Connection context creation and registration */
 picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,

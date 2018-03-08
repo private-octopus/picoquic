@@ -144,14 +144,14 @@ uint64_t picoquic_crypto_uniform_random(picoquic_quic_t* quic, uint64_t rnd_max)
  *
  * The following is an implementation of xorshift1024* suggested by Sebastiano Vigna,
  * following the general xorshift design by George Marsaglia.
- * The state must be seeded so that it is not everywhere zero. 
+ * The state must be seeded so that it is not everywhere zero.
  *
  * The seed operation gets 64 bits from the crypto random generator. We then run the
  * generator 16 times to mix that input into the 1024 bits of seed[16].
  *
  * If we were really paranoid, we would want to break possible discovery by passing
- * the seeding bits from the crypto random generator through SHA256 or something 
- * similar, so there would be really no way to get at the state of crypto random 
+ * the seeding bits from the crypto random generator through SHA256 or something
+ * similar, so there would be really no way to get at the state of crypto random
  * generator. The 16 rounds of the xorshift process give a pretty good hash, but
  * that can probably be broken by linear analysis. Or at least we have no proof
  * that it cannot be broken.
@@ -429,6 +429,77 @@ uint64_t picoquic_get_simulated_time_cb(ptls_get_time_t* self)
     return ((**pp_simulated_time) / 1000);
 }
 
+typedef struct {
+    ptls_verify_certificate_t cb;
+    picoquic_quic_t *quic;
+} picoquic_verify_certificate_t;
+
+typedef struct {
+    /* The pointer to the overlying `verify_ctx` */
+    void *verify_ctx;
+    int (*verify_sign)(void *verify_ctx, ptls_iovec_t data, ptls_iovec_t sign);
+} picoquic_verify_ctx_t;
+
+static int verify_sign_callback(void *verify_ctx, ptls_iovec_t data, ptls_iovec_t sign)
+{
+    picoquic_verify_ctx_t* ctx = (picoquic_verify_ctx_t*)verify_ctx;
+    int ret = 0;
+
+    ret = ctx->verify_sign(ctx->verify_ctx, data, sign);
+
+    free(ctx);
+
+    return ret;
+}
+
+#define container_of(ptr, type, member) ((type *)((char *)(ptr) - offsetof(type, member)))
+
+static int verify_certificate_callback(ptls_verify_certificate_t* _self, ptls_t* tls,
+                                       int (**verify_sign)(void *verify_ctx, ptls_iovec_t data, ptls_iovec_t sign),
+                                       void **verify_data,
+                                       ptls_iovec_t *certs,
+                                       size_t num_certs)
+{
+    picoquic_verify_certificate_t *self = container_of(_self, picoquic_verify_certificate_t, cb);
+    picoquic_cnx_t* cnx = (picoquic_cnx_t*)*ptls_get_data_ptr(tls);
+    int ret = 0;
+    void *verify_ctx = NULL;
+    picoquic_verify_sign_cb_fn verify_sign_fn = NULL;
+
+    ret = (self->quic->verify_certificate_callback_fn)(self->quic->verify_certificate_ctx, cnx,
+                                                       certs, num_certs, &verify_sign_fn, &verify_ctx);
+
+    if (ret == 0) {
+        *verify_sign = verify_sign_callback;
+        *verify_data = malloc(sizeof(picoquic_verify_ctx_t));
+        *((picoquic_verify_ctx_t*)*verify_data) = (picoquic_verify_ctx_t) { verify_ctx, verify_sign_fn };
+    }
+
+    return ret;
+}
+
+int picoquic_enable_custom_verify_certificate_callback(picoquic_quic_t* quic) {
+    picoquic_verify_certificate_t* verifier = NULL;
+    ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
+
+    assert(quic->verify_certificate_callback_fn != NULL);
+
+    verifier = (picoquic_verify_certificate_t*)malloc(sizeof(picoquic_verify_certificate_t));
+    if (verifier == NULL) {
+        return PICOQUIC_ERROR_MEMORY;
+    } else {
+        if (ctx->verify_certificate) {
+            free(ctx->verify_certificate);
+        }
+
+        verifier->quic = quic;
+        verifier->cb.cb = verify_certificate_callback;
+        ctx->verify_certificate = &verifier->cb;
+
+        return 0;
+    }
+}
+
 /*
  * Setting the master TLS context.
  * On servers, this implies setting the "on hello" call back
@@ -598,6 +669,7 @@ int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint6
 
         ctx->tls = ptls_new((ptls_context_t*)quic->tls_master_ctx,
             (ctx->client_mode) ? 0 : 1);
+        *ptls_get_data_ptr(ctx->tls) = cnx;
 
         if (ctx->tls == NULL) {
             free(ctx);
