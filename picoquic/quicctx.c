@@ -360,8 +360,10 @@ static void picoquic_insert_cnx_in_list(picoquic_quic_t* quic, picoquic_cnx_t* c
 {
     if (quic->cnx_list != NULL) {
         quic->cnx_list->previous_in_table = cnx;
+        cnx->next_in_table = quic->cnx_list;
     } else {
         quic->cnx_last = cnx;
+        cnx->next_in_table = NULL;
     }
     quic->cnx_list = cnx;
     cnx->previous_in_table = NULL;

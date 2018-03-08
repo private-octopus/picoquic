@@ -44,6 +44,8 @@
  *  - delete QUIC context.
  */
 
+#define TEST_CNX_COUNT 5
+
 int cnxcreation_test()
 {
     int ret = 0;
@@ -54,7 +56,7 @@ int cnxcreation_test()
     const uint8_t test_ipv4[4] = { 192, 0, 2, 0 };
     const uint8_t test_ipv6[16] = { 0x20, 0x01, 0x0D, 0xB8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01 };
     const picoquic_connection_id_t test_cnx_id[5] = { { 1 }, { 2 }, { 3 }, { 4 }, { 5 } };
-    struct sockaddr* test_cnx_addr[5] = {
+    struct sockaddr* test_cnx_addr[TEST_CNX_COUNT] = {
         (struct sockaddr*)&test4[0],
         (struct sockaddr*)&test4[1],
         (struct sockaddr*)&test4[2],
@@ -100,7 +102,7 @@ int cnxcreation_test()
     * -either no connection ID or a connection ID.
     */
 
-    for (int i = 0; ret == 0 && i < 5; i++) {
+    for (int i = 0; ret == 0 && i < TEST_CNX_COUNT; i++) {
         test_cnx[i] = picoquic_create_cnx(quic, test_cnx_id[i], test_cnx_addr[i], 0, 0, NULL, NULL, 1);
         if (test_cnx[i] == NULL) {
             ret = -1;
@@ -111,7 +113,7 @@ int cnxcreation_test()
      *  -Verify that all these connections can be retrieved using their
      *    registered attributes.
      */
-    for (int i = 0; ret == 0 && i < 5; i++) {
+    for (int i = 0; ret == 0 && i < TEST_CNX_COUNT; i++) {
         picoquic_cnx_t* cnx = picoquic_cnx_by_net(quic, test_cnx_addr[i]);
 
         if (cnx == NULL) {
@@ -119,10 +121,24 @@ int cnxcreation_test()
         }
     }
 
+    /*
+     * Verify that the iterator returns all connections.
+     */
+    if (ret == 0) {
+        int counter = 0;
+        for (picoquic_cnx_t* cnx = picoquic_get_first_cnx(quic); cnx != NULL; cnx = picoquic_get_next_cnx(cnx)) {
+            counter += 1;
+        }
+
+        if (counter != TEST_CNX_COUNT) {
+           ret = -1;
+        }
+    }
+
 /* TODO: cannot retrieve connections by initial ID yet, should work on it */
 
 #if 0
-    for (int i = 0; ret == 0 && i < 5; i++)
+    for (int i = 0; ret == 0 && i < TEST_CNX_COUNT; i++)
     {
         picoquic_cnx_t * cnx = picoquic_cnx_by_id(quic, test_cnx_id[i]);
 
@@ -156,14 +172,14 @@ int cnxcreation_test()
     }
 
     /* Delete connections first - middle - last. */
-    for (int i = 0; ret == 0 && i < 5; i += 2) {
+    for (int i = 0; ret == 0 && i < TEST_CNX_COUNT; i += 2) {
         picoquic_delete_cnx(test_cnx[i]);
         test_cnx[i] = NULL;
     }
 
 /* Verify that deleted connections cannot be retrieved, and the others can. */
 #if 0
-    for (int i = 0; ret == 0 && i < 5; i++)
+    for (int i = 0; ret == 0 && i < TEST_CNX_COUNT; i++)
     {
         if (test_cnx_id[i] != 0)
         {
@@ -181,7 +197,7 @@ int cnxcreation_test()
     }
 #endif
 
-    for (int i = 0; ret == 0 && i < 5; i++) {
+    for (int i = 0; ret == 0 && i < TEST_CNX_COUNT; i++) {
         picoquic_cnx_t* cnx = picoquic_cnx_by_net(quic, test_cnx_addr[i]);
 
         if (cnx != NULL && (i & 1) == 0) {
