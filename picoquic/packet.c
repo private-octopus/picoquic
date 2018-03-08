@@ -887,10 +887,12 @@ int picoquic_incoming_client_cleartext(
     uint64_t current_time)
 {
     int ret = 0;
-    size_t decoded_length = 0; 
+    size_t decoded_length = 0;
     int already_received = 0;
 
-    if (cnx->cnx_state == picoquic_state_server_almost_ready || cnx->cnx_state == picoquic_state_server_ready) {
+    if (cnx->cnx_state == picoquic_state_server_init
+        || cnx->cnx_state == picoquic_state_server_almost_ready
+        || cnx->cnx_state == picoquic_state_server_ready) {
         /* Verify the checksum */
         decoded_length = picoquic_decrypt_cleartext(cnx, bytes, length, ph, &already_received);
         if (decoded_length == 0) {
