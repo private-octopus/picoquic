@@ -1363,3 +1363,8 @@ int picoquic_set_verify_certificate_callback(picoquic_quic_t* quic, picoquic_ver
 
     return picoquic_enable_custom_verify_certificate_callback(quic);
 }
+
+int picoquic_is_client(picoquic_cnx_t* cnx)
+{
+    return cnx->client_mode;
+}

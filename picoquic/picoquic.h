@@ -345,6 +345,9 @@ void picoquic_enable_keep_alive(picoquic_cnx_t* cnx, uint64_t interval);
 /* Disables keep alive for a connection. */
 void picoquic_disable_keep_alive(picoquic_cnx_t* cnx);
 
+/* Returns if the given connection is the client. */
+int picoquic_is_client(picoquic_cnx_t* cnx);
+
 #ifdef __cplusplus
 }
 #endif
