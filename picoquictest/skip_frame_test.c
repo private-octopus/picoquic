@@ -179,7 +179,8 @@ int skip_frame_test()
             byte_max += sizeof(extra_bytes);
         }
 
-        t_ret = picoquic_skip_frame(buffer, byte_max, &consumed, &pure_ack);
+        t_ret = picoquic_skip_frame(buffer, byte_max, &consumed, &pure_ack,
+            PICOQUIC_INTERNAL_TEST_VERSION_1);
 
         if (t_ret != 0) {
             DBG_PRINTF("Skip frame <%s> fails, ret = %d\n", test_skip_list[i].name, t_ret);
@@ -198,7 +199,7 @@ int skip_frame_test()
     return ret;
 }
 
-void picoquic_log_frames(FILE* F, uint8_t* bytes, size_t length);
+void picoquic_log_frames(FILE* F, uint8_t* bytes, size_t length, uint32_t version);
 
 static char const* log_test_file = "log_test.txt";
 
@@ -321,7 +322,8 @@ int logger_test()
 #endif
 
     for (size_t i = 0; i < nb_test_skip_list; i++) {
-        picoquic_log_frames(F, test_skip_list[i].val, test_skip_list[i].len);
+        picoquic_log_frames(F, test_skip_list[i].val, test_skip_list[i].len,
+            PICOQUIC_INTERNAL_TEST_VERSION_1);
     }
 
     fclose(F);

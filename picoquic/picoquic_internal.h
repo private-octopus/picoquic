@@ -125,6 +125,7 @@ typedef enum {
      * Codes used for representing the various types of packet encodings
      */
 typedef enum {
+    picoquic_version_header_09,
     picoquic_version_header_10
 } picoquic_version_header_encoding;
 
@@ -654,10 +655,10 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
     size_t bytes_max, int restricted, uint64_t current_time);
 
 int picoquic_skip_frame(uint8_t* bytes, size_t bytes_max, size_t* consumed,
-    int* pure_ack);
+    int* pure_ack, uint32_t version);
 
 int picoquic_decode_closing_frames(uint8_t* bytes,
-    size_t bytes_max, int* closing_received);
+    size_t bytes_max, int* closing_received, uint32_t version);
 
 int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mode,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
