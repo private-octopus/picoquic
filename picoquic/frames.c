@@ -603,7 +603,7 @@ picoquic_stream_head* picoquic_find_ready_stream(picoquic_cnx_t* cnx, int restri
                     /* Check parity */
                     int parity = cnx->client_mode ? 0 : 1;
 
-                    if (((stream->stream_id & 1) ^ parity) == 1) {
+                    if ((stream->stream_id & 1) == parity) {
                         if (stream->stream_id < cnx->max_stream_id_bidir_remote) {
                             break;
                         }
