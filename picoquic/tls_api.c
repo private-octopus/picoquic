@@ -1371,7 +1371,14 @@ int picoquic_tlsinput_stream_zero(picoquic_cnx_t* cnx)
         case picoquic_state_server_init:
             /* Extract and install the server 0-RTT and 1-RTT key */
             picoquic_setup_0RTT_aead_contexts(cnx, 1);
-            cnx->cnx_state = picoquic_state_server_almost_ready;
+            /* If client authentication is activated, the client sends the certificates with its `Finished` packet.
+               The server does not send any further packages, so, we can switch into ready state here.
+            */
+            if (sendbuf.off == 0 && ((ptls_context_t*)cnx->quic->tls_master_ctx)->require_client_authentication == 1) {
+                cnx->cnx_state = picoquic_state_server_ready;
+            } else {
+                cnx->cnx_state = picoquic_state_server_almost_ready;
+            }
             ret = picoquic_setup_1RTT_aead_contexts(cnx, 1);
             break;
         case picoquic_state_client_almost_ready:
