@@ -51,9 +51,11 @@ int picoquic_is_connection_id_null(picoquic_connection_id_t cnx_id);
 int picoquic_compare_connection_id(picoquic_connection_id_t * cnx_id1, picoquic_connection_id_t * cnx_id2);
 uint64_t picoquic_val64_connection_id(picoquic_connection_id_t cnx_id);
 
-#ifndef MIN
+#ifndef MAX
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #endif
+
+#ifdef ENABLE_DEBUG_PRINTF
 
 #define DBG_PRINTF_FILENAME_MAX 24
 #define DBG_PRINTF(fmt, ...)                                                                 \
@@ -66,5 +68,12 @@ uint64_t picoquic_val64_connection_id(picoquic_connection_id_t cnx_id);
         DBG_PRINTF("(FATAL) " fmt "\n", __VA_ARGS__); \
         exit(1);                                      \
     } while (0)
+
+#else
+
+#define DBG_PRINTF(fmt, ...)
+#define DBG_FATAL_PRINTF(fmt, ...)
+
+#endif //#ifdef ENABLE_DEBUG_PRINTF
 
 #endif
