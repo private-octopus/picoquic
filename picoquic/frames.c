@@ -756,7 +756,6 @@ int picoquic_parse_ack_header(uint8_t const* bytes, size_t bytes_max,
 {
     int ret = 0;
     size_t byte_index = 1;
-    uint8_t first_byte = bytes[0];
     size_t l_largest = 0;
     size_t l_delay = 0;
     size_t l_blocks = 0;
@@ -779,7 +778,7 @@ int picoquic_parse_ack_header(uint8_t const* bytes, size_t bytes_max,
 
     if (l_largest == 0 || l_delay == 0 || l_blocks == 0 || bytes_max < byte_index) {
         DBG_PRINTF("ack frame fixed header too large: first_byte=0x%02x, bytes_max=%" PRIst,
-            first_byte, bytes_max);
+            bytes[0], bytes_max);
         byte_index = bytes_max;
         ret = -1;
     }

@@ -55,7 +55,7 @@ uint64_t picoquic_val64_connection_id(picoquic_connection_id_t cnx_id);
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #endif
 
-#ifdef ENABLE_DEBUG_PRINTF
+#ifndef DISABLE_DEBUG_PRINTF
 
 #define DBG_PRINTF_FILENAME_MAX 24
 #define DBG_PRINTF(fmt, ...)                                                                 \
@@ -74,6 +74,6 @@ uint64_t picoquic_val64_connection_id(picoquic_connection_id_t cnx_id);
 #define DBG_PRINTF(fmt, ...)
 #define DBG_FATAL_PRINTF(fmt, ...)
 
-#endif //#ifdef ENABLE_DEBUG_PRINTF
+#endif //#ifdef DISABLE_DEBUG_PRINTF
 
 #endif
