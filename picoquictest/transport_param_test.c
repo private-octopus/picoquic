@@ -58,6 +58,11 @@ static picoquic_transport_parameters transport_param_test7 = {
     8192, 16384, 5, 0, 10, 1, 1472, 17
 };
 
+static picoquic_transport_parameters transport_param_test8 = {
+    65535, 0x400000, 0, 0, 30, 0, 1480, 3
+};
+
+
 static uint8_t transport_param_reset_secret[PICOQUIC_RESET_SECRET_SIZE] = {
     1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
 };
@@ -145,6 +150,16 @@ uint8_t server_param2[] = {
     0, 5, 0, 2, 0x05, 0xC8,
     0, 6, 0, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
 };
+
+uint8_t client_param8[] = {
+    'P', 'C', 'Q', '0',
+    0, 0x1C,
+    0, 0, 0, 4, 0, 0, 0xFF, 0xFF,
+    0, 1, 0, 4, 0, 0x40, 0, 0,
+    0, 3, 0, 2, 0, 0x1E,
+    0, 5, 0, 2, 0x05, 0xC8,
+};
+
 
 int transport_param_one_test(int mode, uint32_t version, uint32_t proposed_version,
     picoquic_transport_parameters* param, uint8_t* target, size_t target_length)
@@ -327,6 +342,11 @@ int transport_param_test()
     if (ret == 0) {
         ret = transport_param_decode_test(0, version_default, 0xBABABABA,
             &transport_param_test7, client_param5, sizeof(client_param5));
+    }
+
+    if (ret == 0) {
+        ret = transport_param_decode_test(0, version_default, 0x0A1A0A1A,
+            &transport_param_test8, client_param8, sizeof(client_param8));
     }
 
     if (ret == 0)
