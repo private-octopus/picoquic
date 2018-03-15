@@ -1164,32 +1164,32 @@ int tls_api_one_scenario_test(test_api_stream_desc_t* scenario,
 
 int tls_api_oneway_stream_test()
 {
-    return tls_api_one_scenario_test(test_scenario_oneway, sizeof(test_scenario_oneway), 0, 0, 0, 0, 0);
+    return tls_api_one_scenario_test(test_scenario_oneway, sizeof(test_scenario_oneway), 0, 0, 0, 0, 65000);
 }
 
 int tls_api_q_and_r_stream_test()
 {
-    return tls_api_one_scenario_test(test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0, 0, 0, 0, 0);
+    return tls_api_one_scenario_test(test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0, 0, 0, 0, 75000);
 }
 
 int tls_api_q2_and_r2_stream_test()
 {
-    return tls_api_one_scenario_test(test_scenario_q2_and_r2, sizeof(test_scenario_q2_and_r2), 0, 0, 0, 0, 0);
+    return tls_api_one_scenario_test(test_scenario_q2_and_r2, sizeof(test_scenario_q2_and_r2), 0, 0, 0, 0, 75000);
 }
 
 int tls_api_very_long_stream_test()
 {
-    return tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0, 0, 0, 0);
+    return tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0, 0, 0, 1000000);
 }
 
 int tls_api_very_long_max_test()
 {
-    return tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0, 128000, 0, 0, 0);
+    return tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0, 128000, 0, 0, 1000000);
 }
 
 int tls_api_very_long_with_err_test()
 {
-    return tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0x30000, 128000, 0, 0, 0);
+    return tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0x30000, 128000, 0, 0, 4100000);
 }
 
 int tls_api_very_long_congestion_test()
@@ -1199,7 +1199,7 @@ int tls_api_very_long_congestion_test()
 
 int unidir_test()
 {
-    return tls_api_one_scenario_test(test_scenario_unidir, sizeof(test_scenario_unidir), 0, 128000, 10000, 0, 0);
+    return tls_api_one_scenario_test(test_scenario_unidir, sizeof(test_scenario_unidir), 0, 128000, 10000, 0, 75000);
 }
 
 /*
