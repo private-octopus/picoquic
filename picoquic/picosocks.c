@@ -585,6 +585,7 @@ int picoquic_send_through_server_sockets(
     int sent = picoquic_sendmsg(sockets->s_socket[socket_index], addr_dest, dest_length,
         addr_from, from_length, from_if, bytes, length);
 
+#ifndef DISABLE_DEBUG_PRINTF
     if (sent <= 0) {
 #ifdef _WINDOWS
         int last_error = WSAGetLastError();
@@ -596,6 +597,7 @@ int picoquic_send_through_server_sockets(
         DBG_PRINTF("Dest address length: %d, family: %d.\n",
             dest_length, addr_dest->sa_family);
     }
+#endif
 
     return sent;
 }
