@@ -70,8 +70,8 @@ typedef enum {
 } picoquic_packet_type_enum;
 
 /*
-     * Types of frames
-     */
+ * Types of frames
+ */
 typedef enum {
     picoquic_frame_type_padding = 0,
     picoquic_frame_type_reset_stream = 1,
@@ -98,8 +98,8 @@ typedef enum {
 } picoquic_frame_type_enum_t;
 
 /*
-	* Supported versions
-	*/
+ * Supported versions
+ */
 #define PICOQUIC_FIRST_INTEROP_VERSION 0xFF000005
 #define PICOQUIC_SECOND_INTEROP_VERSION 0xFF000007
 #define PICOQUIC_THIRD_INTEROP_VERSION 0xFF000008
@@ -109,10 +109,10 @@ typedef enum {
 
 #define PICOQUIC_INTEROP_VERSION_INDEX 1
 
-/* 
-     * Flags used to describe the capbilities of different
-     * versions.
-     */
+/*
+ * Flags used to describe the capbilities of different
+ * versions.
+ */
 
 typedef enum {
     picoquic_version_no_flag = 0,
