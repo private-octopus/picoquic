@@ -100,7 +100,8 @@ static const picoquic_test_def_t test_table[] = {
     { "different_params", tls_different_params_test },
     { "wrong_tls_version", wrong_tls_version_test },
     { "set_certificate_and_key", set_certificate_and_key_test },
-    { "request_client_authentication", request_client_authentication_test }
+    { "request_client_authentication", request_client_authentication_test },
+    { "bad_client_certificate", bad_client_certificate_test }
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);

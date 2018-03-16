@@ -2423,8 +2423,10 @@ int bad_certificate_test()
         else if (test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
             ret = -1;
         }
-        else if (
-            test_ctx->cnx_client->local_error != PICOQUIC_TLS_HANDSHAKE_FAILED) {
+        else if (picoquic_get_local_error(test_ctx->cnx_client) != PICOQUIC_TLS_HANDSHAKE_FAILED) {
+            ret = -1;
+        }
+        else if (picoquic_get_remote_error(test_ctx->cnx_server) != PICOQUIC_TLS_HANDSHAKE_FAILED) {
             ret = -1;
         }
         else {
@@ -2761,6 +2763,86 @@ int request_client_authentication_test()
     if (test_ctx->cnx_client->cnx_state != picoquic_state_client_ready
         || test_ctx->cnx_server->cnx_state != picoquic_state_server_ready) {
         ret = -1;
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+int bad_client_certificate_test()
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, 0, "test-sni", "test-alpn", &simulated_time, NULL, 0, 0);
+
+    /* Delete the client context, and recreate with a certificate */
+    if (ret == 0)
+    {
+        if (test_ctx->qclient != NULL) {
+            picoquic_free(test_ctx->qclient);
+            test_ctx->cnx_client = NULL;
+        }
+
+        test_ctx->qclient = picoquic_create(8,
+#ifdef _WINDOWS
+#ifdef _WINDOWS64
+            "..\\..\\certs\\badcert.pem", "..\\..\\certs\\key.pem",
+#else
+            "..\\certs\\badcert.pem", "..\\certs\\key.pem",
+#endif
+#else
+            "certs/badcert.pem", "certs/key.pem",
+#endif
+            NULL, test_api_callback, (void*)&test_ctx->client_callback, NULL, NULL, NULL,
+            simulated_time, &simulated_time, NULL, NULL, 0);
+
+        if (test_ctx->qclient == NULL) {
+            ret = -1;
+        }
+    }
+
+    /* recreate the client connection */
+    if (ret == 0) {
+        test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient, picoquic_null_connection_id,
+                                                   picoquic_null_connection_id,
+                                                   (struct sockaddr*)&test_ctx->server_addr, 0,
+                                                   0, "test-sni", "test-alpn", 1);
+
+        if (test_ctx->cnx_client == NULL) {
+            ret = -1;
+        } else {
+            ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+        }
+    }
+
+    if (ret == 0) {
+        picoquic_set_client_authentication(test_ctx->qserver, 1);
+    }
+
+    /* Proceed with the connection loop. It should fail */
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+
+        if (test_ctx->cnx_client == NULL) {
+            ret = -1;
+        }
+        else if (test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
+            ret = -1;
+        }
+        else if (picoquic_get_local_error(test_ctx->cnx_server) != PICOQUIC_TLS_HANDSHAKE_FAILED) {
+            ret = -1;
+        }
+        else if (picoquic_get_remote_error(test_ctx->cnx_client) != PICOQUIC_TLS_HANDSHAKE_FAILED) {
+            ret = -1;
+        }
+        else {
+            ret = 0;
+        }
     }
 
     if (test_ctx != NULL) {
