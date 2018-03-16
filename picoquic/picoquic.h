@@ -348,6 +348,12 @@ void picoquic_disable_keep_alive(picoquic_cnx_t* cnx);
 /* Returns if the given connection is the client. */
 int picoquic_is_client(picoquic_cnx_t* cnx);
 
+/* Returns the local error of the given connection context. */
+int picoquic_get_local_error(picoquic_cnx_t* cnx);
+
+/* Returns the remote error of the given connection context. */
+int picoquic_get_remote_error(picoquic_cnx_t* cnx);
+
 #ifdef __cplusplus
 }
 #endif
