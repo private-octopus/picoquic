@@ -338,39 +338,47 @@ size_t  picoquic_decrypt_packet(picoquic_cnx_t* cnx,
 
     *already_received = 0;
 
-    if ((picoquic_supported_versions[cnx->version_index].version_flags&picoquic_version_use_pn_encryption) != 0 && pn_enc != NULL)
+    if ((picoquic_supported_versions[cnx->version_index].version_flags&picoquic_version_use_pn_encryption) != 0)
     {
-        /* The sample is located at the offset */
-        size_t sample_offset = ph->offset;
-        size_t aead_checksum_length = picoquic_aead_get_checksum_length(aead_context);
-        if (sample_offset + aead_checksum_length > length)
+        if (pn_enc != NULL)
         {
-            sample_offset = length - aead_checksum_length;
-        }
-        if (ph->pn_offset < sample_offset)
-        {
-            /* Decode */
-            picoquic_pn_encrypt(pn_enc, bytes + sample_offset, bytes + ph->pn_offset, bytes + ph->pn_offset, sample_offset - ph->pn_offset);
-            /* TODO: what if varint? */
-            /* Update the packet number in the PH structure */
-            switch (sample_offset - ph->pn_offset)
+            /* The sample is located at the offset */
+            size_t sample_offset = ph->offset;
+            size_t aead_checksum_length = picoquic_aead_get_checksum_length(aead_context);
+            if (sample_offset + aead_checksum_length > length)
             {
-            case 1:
-                ph->pn = bytes[ph->pn_offset];
-                ph->pnmask = 0xFFFFFFFFFFFFFF00ull;
-                break;
-            case 2:
-                ph->pn = PICOPARSE_16(&bytes[ph->pn_offset]);
-                ph->pnmask = 0xFFFFFFFFFFFF0000ull;
-                break;
-            case 4:
-                ph->pn = PICOPARSE_32(&bytes[ph->pn_offset]);
-                ph->pnmask = 0xFFFFFFFF00000000ull;
-                break;
-            default:
-                /* Unexpected value -- keep ph as is. */
-                break;
+                sample_offset = length - aead_checksum_length;
             }
+            if (ph->pn_offset < sample_offset)
+            {
+                /* Decode */
+                picoquic_pn_encrypt(pn_enc, bytes + sample_offset, bytes + ph->pn_offset, bytes + ph->pn_offset, sample_offset - ph->pn_offset);
+                /* TODO: what if varint? */
+                /* Update the packet number in the PH structure */
+                switch (sample_offset - ph->pn_offset)
+                {
+                case 1:
+                    ph->pn = bytes[ph->pn_offset];
+                    ph->pnmask = 0xFFFFFFFFFFFFFF00ull;
+                    break;
+                case 2:
+                    ph->pn = PICOPARSE_16(&bytes[ph->pn_offset]);
+                    ph->pnmask = 0xFFFFFFFFFFFF0000ull;
+                    break;
+                case 4:
+                    ph->pn = PICOPARSE_32(&bytes[ph->pn_offset]);
+                    ph->pnmask = 0xFFFFFFFF00000000ull;
+                    break;
+                default:
+                    /* Unexpected value -- keep ph as is. */
+                    break;
+                }
+            }
+        } else {
+            /* The pn_enc algorithm was not initialized. Avoid crash! */
+            ph->pn = 0xFFFFFFFF;
+            ph->pnmask = 0xFFFFFFFF00000000ull;
+
         }
     }
 
