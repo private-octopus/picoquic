@@ -1368,3 +1368,13 @@ int picoquic_is_client(picoquic_cnx_t* cnx)
 {
     return cnx->client_mode;
 }
+
+int picoquic_get_local_error(picoquic_cnx_t* cnx)
+{
+    return cnx->local_error;
+}
+
+int picoquic_get_remote_error(picoquic_cnx_t* cnx)
+{
+    return cnx->remote_error;
+}
