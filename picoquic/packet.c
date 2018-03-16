@@ -338,7 +338,7 @@ size_t  picoquic_decrypt_packet(picoquic_cnx_t* cnx,
 
     *already_received = 0;
 
-    if (picoquic_supported_versions[cnx->version_index].version_flags&picoquic_version_use_pn_encryption)
+    if ((picoquic_supported_versions[cnx->version_index].version_flags&picoquic_version_use_pn_encryption) != 0 && pn_enc != NULL)
     {
         /* The sample is located at the offset */
         size_t sample_offset = ph->offset;
@@ -1004,7 +1004,6 @@ int picoquic_incoming_encrypted(
         ret = PICOQUIC_ERROR_CNXID_CHECK;
     } else if (
         cnx->cnx_state >= picoquic_state_client_almost_ready && cnx->cnx_state <= picoquic_state_closing) {
-        /* TODO: supporting two variants for now. Will need to focus on just one. */
         /* Check the possible reset before performaing in place AEAD decrypt */
         int cmp_reset_secret = memcmp(bytes + length - PICOQUIC_RESET_SECRET_SIZE,
                 cnx->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
@@ -1107,30 +1106,11 @@ int picoquic_incoming_packet(
             /* Build a packet number to 64 bits */
             ph.pn64 = picoquic_get_packet_number64(
                 cnx->first_sack_item.end_of_sack_range, ph.pnmask, ph.pn);
-#if 0
-
-            /* verify that the packet is new */
-            if (picoquic_is_pn_already_received(cnx, ph.pn64) != 0) {
-                /* TODO: supporting two variants for now. Need to clean up later */
-                /* Check the possible reset which may be hiding under the duplicate */
-                if (ph.vn == 0 && (ph.ptype == picoquic_packet_1rtt_protected_phi0 || ph.ptype == picoquic_packet_1rtt_protected_phi1) && length >= (9 + PICOQUIC_RESET_SECRET_SIZE) && ((memcmp(bytes + 9, cnx->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0) || (memcmp(bytes + length - PICOQUIC_RESET_SECRET_SIZE,
-                                                                                                                                                                                                                                                                         cnx->reset_secret, PICOQUIC_RESET_SECRET_SIZE)
-                                                                                                                                                                                                                                                                        == 0))) {
-                    ret = picoquic_incoming_stateless_reset(cnx);
-                } else {
-                    ret = PICOQUIC_ERROR_DUPLICATE;
-                }
-            }
-            /* Verify that the packet decrypts correctly */
-#endif
             if (ret == 0) {
                 switch (ph.ptype) {
                 case picoquic_packet_version_negotiation:
                     if (cnx->cnx_state == picoquic_state_client_init_sent) {
-                        /* Verify the checksum */
                         /* Proceed with version negotiation*/
-                        /* Process version negotiation */
-                        /* Schedule repeat of initial message */
                         ret = picoquic_incoming_version_negotiation(
                             cnx, bytes, length, addr_from, &ph, current_time);
                     } else {
@@ -1160,15 +1140,12 @@ int picoquic_incoming_packet(
                     break;
                 case picoquic_packet_0rtt_protected:
                     /* TODO : decrypt with 0RTT key */
-                    /* Not implemented. Log and ignore */
                     ret = picoquic_incoming_0rtt(cnx, bytes, length, &ph, current_time);
                     break;
                 case picoquic_packet_1rtt_protected_phi0:
                 case picoquic_packet_1rtt_protected_phi1:
                     ret = picoquic_incoming_encrypted(cnx, bytes, length, &ph, current_time);
                     /* TODO : roll key based on PHI */
-                    /* decrypt with 1RTT key of epoch */
-                    /* Not implemented yet. */
                     break;
                 default:
                     /* Packet type error. Log and ignore */
