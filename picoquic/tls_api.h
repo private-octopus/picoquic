@@ -38,6 +38,8 @@ int picoquic_tlsinput_stream_zero(picoquic_cnx_t* cnx);
 
 int picoquic_initialize_stream_zero(picoquic_cnx_t* cnx);
 
+uint64_t picoquic_get_tls_time(picoquic_quic_t* quic);
+
 void picoquic_crypto_random(picoquic_quic_t* quic, void* buf, size_t len);
 uint64_t picoquic_crypto_uniform_random(picoquic_quic_t* quic, uint64_t rnd_max);
 
