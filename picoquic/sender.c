@@ -131,7 +131,7 @@ int picoquic_add_to_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
             }
         }
 
-        picoquic_cnx_set_next_wake_time(cnx, 0);
+        picoquic_cnx_set_next_wake_time(cnx, picoquic_get_tls_time(cnx->quic));
     }
 
     return ret;
@@ -156,6 +156,8 @@ int picoquic_reset_stream(picoquic_cnx_t* cnx,
             stream->local_error = local_stream_error;
             stream->stream_flags |= picoquic_stream_flag_reset_requested;
         }
+
+        picoquic_cnx_set_next_wake_time(cnx, picoquic_get_tls_time(cnx->quic));
     }
 
     return ret;
@@ -180,6 +182,8 @@ int picoquic_stop_sending(picoquic_cnx_t* cnx,
             stream->local_stop_error = local_stream_error;
             stream->stream_flags |= picoquic_stream_flag_stop_sending_requested;
         }
+
+        picoquic_cnx_set_next_wake_time(cnx, picoquic_get_tls_time(cnx->quic));
     }
 
     return ret;
@@ -1768,6 +1772,8 @@ int picoquic_close(picoquic_cnx_t* cnx, uint16_t reason_code)
     } else {
         ret = -1;
     }
+
+    picoquic_cnx_set_next_wake_time(cnx, picoquic_get_tls_time(cnx->quic));
 
     return ret;
 }
