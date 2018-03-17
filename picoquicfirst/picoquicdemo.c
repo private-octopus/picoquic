@@ -406,7 +406,7 @@ int quic_server(const char* server_name, int server_port,
             delta_t, &current_time);
 
         if (just_once != 0) {
-            if (bytes_recv != 0) {
+            if (bytes_recv > 0) {
                 printf("Select returns %d, from length %d after %d us (wait for %d us)\n",
                     bytes_recv, from_length, (int)(current_time - time_before), (int)delta_t);
                 print_address((struct sockaddr*)&addr_from, "recv from:", picoquic_null_connection_id);
