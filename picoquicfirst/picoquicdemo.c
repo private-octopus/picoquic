@@ -912,8 +912,11 @@ int quic_client(const char* ip_address_text, int server_port, uint32_t proposed_
         if (bytes_recv != 0) {
             fprintf(F_log, "Select returns %d, from length %d\n", bytes_recv, from_length);
 
-            picoquic_log_packet(F_log, qclient, cnx_client, (struct sockaddr*)&packet_from,
-                1, buffer, bytes_recv, current_time);
+            if (bytes_recv > 0)
+            {
+                picoquic_log_packet(F_log, qclient, cnx_client, (struct sockaddr*)&packet_from,
+                    1, buffer, bytes_recv, current_time);
+            }
         }
 
         if (bytes_recv < 0) {
