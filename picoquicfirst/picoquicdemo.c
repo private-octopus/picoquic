@@ -873,22 +873,19 @@ int quic_client(const char* ip_address_text, int server_port, uint32_t proposed_
                     bytes_sent = sendto(fd, send_buffer, (int)send_length, 0,
                         (struct sockaddr*)&server_address, server_addr_length);
 
-                    picoquic_log_packet(F_log, qclient, cnx_client, (struct sockaddr*)&server_address,
-                        0, send_buffer, bytes_sent, current_time);
-#if 1
-                    if (picoquic_is_0rtt_available(cnx_client)) {
-                        /* Queue a simple frame to perform 0-RTT test */
-                        picoquic_queue_misc_frame(cnx_client, test_ping, sizeof(test_ping));
-                    }
-#endif
-#if 0
+                    if (bytes_sent > 0)
+                    {
+                        picoquic_log_packet(F_log, qclient, cnx_client, (struct sockaddr*)&server_address,
+                            0, send_buffer, bytes_sent, current_time);
 
-                    /* Start the scenario */
-                    /* Start the download scenario */
-                    callback_ctx.demo_stream = test_scenario;
-                    callback_ctx.nb_demo_streams = test_scenario_nb;
-                    demo_client_start_streams(cnx_client, &callback_ctx, 0);
-#endif
+                        if (picoquic_is_0rtt_available(cnx_client)) {
+                            /* Queue a simple frame to perform 0-RTT test */
+                            picoquic_queue_misc_frame(cnx_client, test_ping, sizeof(test_ping));
+                        }
+                    } else {
+                        fprintf(F_log, "Cannot send first packet to server, returns %d\n", bytes_sent);
+                        ret = -1;
+                    }
                 } else {
                     free(p);
                 }
