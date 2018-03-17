@@ -552,7 +552,7 @@ int picoquic_select(SOCKET_TYPE* sockets,
 #ifdef _WINDOWS
                     int last_error = WSAGetLastError();
 
-                    if (last_error == WSAECONNRESET) {
+                    if (last_error == WSAECONNRESET || last_error == WSAEMSGSIZE) {
                         bytes_recv = 0;
                         continue;
                     }
