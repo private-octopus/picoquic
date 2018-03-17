@@ -2354,6 +2354,7 @@ int virtual_time_test()
     uint64_t test_time = 0;
     uint64_t simulated_time = 0;
     uint64_t current_time = picoquic_current_time();
+    uint64_t ptls_time = 0;
     uint8_t callback_ctx[256];
 
 
@@ -2373,11 +2374,17 @@ int virtual_time_test()
         /* Check that the simulated time follows the simulation */
         for (int i = 0; ret == 0 && i < 5; i++) {
             simulated_time += 12345678;
-            test_time = picoquic_get_tls_time(qsimul);
+            test_time = picoquic_get_virtual_time(qsimul);
+            ptls_time = picoquic_get_tls_time(qsimul);
             if (test_time != simulated_time) {
                 DBG_PRINTF("Test time: %llu != Simulated: %llu",
                     (unsigned long long)test_time,
                     (unsigned long long)simulated_time);
+                ret = -1;
+            } else if (ptls_time < (test_time / 1000) || ptls_time >(test_time / 1000) + 1) {
+                DBG_PRINTF("Test time: %llu does match ptls time: %llu",
+                    (unsigned long long)test_time,
+                    (unsigned long long)ptls_time);
                 ret = -1;
             }
         }
@@ -2389,7 +2396,8 @@ int virtual_time_test()
             sleep(1);
 #endif
             current_time = picoquic_current_time();
-            test_time = picoquic_get_tls_time(qdirect);
+            test_time = picoquic_get_virtual_time(qdirect);
+            ptls_time = picoquic_get_tls_time(qdirect);
 
             if (test_time < current_time) {
                 DBG_PRINTF("Test time: %llu < previous current time: %llu",
@@ -2403,6 +2411,11 @@ int virtual_time_test()
                     DBG_PRINTF("Test time: %llu > next current time: %llu",
                         (unsigned long long)test_time,
                         (unsigned long long)current_time);
+                    ret = -1;
+                } else if (ptls_time < (test_time / 1000) || ptls_time >(test_time / 1000) + 1) {
+                    DBG_PRINTF("Test current time: %llu does match ptls time: %llu",
+                        (unsigned long long)test_time,
+                        (unsigned long long)ptls_time);
                     ret = -1;
                 }
             }

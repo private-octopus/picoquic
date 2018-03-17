@@ -522,7 +522,7 @@ void picoquic_update_pacing_data(picoquic_path_t * path_x);
 /* Time management */
 
 uint64_t picoquic_current_time(); /* wall time */
-uint64_t picoquic_get_tls_time(picoquic_quic_t* quic); /* connection time, compatible with simulations */
+uint64_t picoquic_get_virtual_time(picoquic_quic_t* quic); /* connection time, compatible with simulations */
 
 
 /* Next time is used to order the list of available connections,

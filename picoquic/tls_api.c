@@ -660,6 +660,15 @@ void picoquic_master_tlscontext_free(picoquic_quic_t* quic)
     }
 }
 
+/* Return the virtual time seen by tls */
+uint64_t picoquic_get_tls_time(picoquic_quic_t* quic)
+{
+    ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
+    uint64_t now = ctx->get_time->cb(ctx->get_time);
+
+    return now;
+}
+
 /*
  * Creation of a TLS context.
  * This includes setting the handshake properties that will later be
