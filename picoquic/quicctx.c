@@ -23,7 +23,9 @@
 #include "tls_api.h"
 #include <stdlib.h>
 #include <string.h>
-
+#ifndef _WINDOWS
+#include <sys/time.h>
+#endif
 /*
  * Default congestion algorithm
  */
