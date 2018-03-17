@@ -519,6 +519,12 @@ picoquic_cnx_t* picoquic_cnx_by_net(picoquic_quic_t* quic, struct sockaddr* addr
 /* Reset the pacing data after CWIN is updated */
 void picoquic_update_pacing_data(picoquic_path_t * path_x);
 
+/* Time management */
+
+uint64_t picoquic_current_time(); /* wall time */
+uint64_t picoquic_get_tls_time(picoquic_quic_t* quic); /* connection time, compatible with simulations */
+
+
 /* Next time is used to order the list of available connections,
      * so ready connections are polled first */
 void picoquic_reinsert_by_wake_time(picoquic_quic_t* quic, picoquic_cnx_t* cnx);

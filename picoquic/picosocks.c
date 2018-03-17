@@ -104,41 +104,6 @@ void picoquic_close_server_sockets(picoquic_server_sockets_t* sockets)
     }
 }
 
-uint64_t picoquic_current_time()
-{
-    uint64_t now;
-#ifdef _WINDOWS
-    FILETIME ft;
-    /*
-    * The GetSystemTimeAsFileTime API returns  the number
-    * of 100-nanosecond intervals since January 1, 1601 (UTC),
-    * in FILETIME format.
-    */
-    GetSystemTimeAsFileTime(&ft);
-
-    /*
-    * Convert to plain 64 bit format, without making
-    * assumptions about the FILETIME structure alignment.
-    */
-    now = ft.dwHighDateTime;
-    now <<= 32;
-    now |= ft.dwLowDateTime;
-    /*
-    * Convert units from 100ns to 1us
-    */
-    now /= 10;
-    /*
-    * Account for microseconds elapsed between 1601 and 1970.
-    */
-    now -= 11644473600000000ULL;
-#else
-    struct timeval tv;
-    (void)gettimeofday(&tv, NULL);
-    now = (tv.tv_sec * 1000000ull) + tv.tv_usec;
-#endif
-    return now;
-}
-
 int picoquic_recvmsg(SOCKET_TYPE fd,
     struct sockaddr_storage* addr_from,
     socklen_t* from_length,

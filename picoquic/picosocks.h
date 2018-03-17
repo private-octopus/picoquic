@@ -101,6 +101,8 @@
 #endif
 #endif
 
+#include "picoquic_internal.h"
+
 #define PICOQUIC_NB_SERVER_SOCKETS 2
 
 typedef struct st_picoquic_server_sockets_t {
@@ -110,8 +112,6 @@ typedef struct st_picoquic_server_sockets_t {
 int picoquic_open_server_sockets(picoquic_server_sockets_t* sockets, int port);
 
 void picoquic_close_server_sockets(picoquic_server_sockets_t* sockets);
-
-uint64_t picoquic_current_time();
 
 int picoquic_select(SOCKET_TYPE* sockets, int nb_sockets,
     struct sockaddr_storage* addr_from,

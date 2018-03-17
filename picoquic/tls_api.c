@@ -661,22 +661,6 @@ void picoquic_master_tlscontext_free(picoquic_quic_t* quic)
 }
 
 /*
- * Get the same time simulation as used for TLS 
- */
-
-uint64_t picoquic_get_tls_time(picoquic_quic_t* quic)
-{
-    uint64_t now;
-    if (quic->p_simulated_time == NULL) {
-        now = picoquic_current_time();
-    } else {
-        now = *quic->p_simulated_time;
-    }
-
-    return now;
-}
-
-/*
  * Creation of a TLS context.
  * This includes setting the handshake properties that will later be
  * used during the TLS handshake.

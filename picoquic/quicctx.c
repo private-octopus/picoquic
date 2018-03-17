@@ -858,6 +858,63 @@ int64_t picoquic_get_next_wake_delay(picoquic_quic_t* quic,
     return wake_delay;
 }
 
+/*
+ * Provide clock time
+ */
+uint64_t picoquic_current_time()
+{
+    uint64_t now;
+#ifdef _WINDOWS
+    FILETIME ft;
+    /*
+    * The GetSystemTimeAsFileTime API returns  the number
+    * of 100-nanosecond intervals since January 1, 1601 (UTC),
+    * in FILETIME format.
+    */
+    GetSystemTimeAsFileTime(&ft);
+
+    /*
+    * Convert to plain 64 bit format, without making
+    * assumptions about the FILETIME structure alignment.
+    */
+    now = ft.dwHighDateTime;
+    now <<= 32;
+    now |= ft.dwLowDateTime;
+    /*
+    * Convert units from 100ns to 1us
+    */
+    now /= 10;
+    /*
+    * Account for microseconds elapsed between 1601 and 1970.
+    */
+    now -= 11644473600000000ULL;
+#else
+    struct timeval tv;
+    (void)gettimeofday(&tv, NULL);
+    now = (tv.tv_sec * 1000000ull) + tv.tv_usec;
+#endif
+    return now;
+}
+
+/*
+* Get the same time simulation as used for TLS
+*/
+
+uint64_t picoquic_get_tls_time(picoquic_quic_t* quic)
+{
+    uint64_t now;
+    if (quic->p_simulated_time == NULL) {
+        now = picoquic_current_time();
+    }
+    else {
+        now = *quic->p_simulated_time;
+    }
+
+    return now;
+}
+
+
+
 void picoquic_set_callback(picoquic_cnx_t* cnx,
     picoquic_stream_data_cb_fn callback_fn, void* callback_ctx)
 {
