@@ -660,10 +660,18 @@ void picoquic_master_tlscontext_free(picoquic_quic_t* quic)
     }
 }
 
+/*
+ * Get the same time simulation as used for TLS 
+ */
+
 uint64_t picoquic_get_tls_time(picoquic_quic_t* quic)
 {
-    ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
-    uint64_t now = ctx->get_time->cb(ctx->get_time);
+    uint64_t now;
+    if (quic->p_simulated_time == NULL) {
+        now = picoquic_current_time();
+    } else {
+        now = *quic->p_simulated_time;
+    }
 
     return now;
 }

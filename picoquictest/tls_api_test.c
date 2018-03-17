@@ -2343,3 +2343,83 @@ int set_verify_certificate_callback_test()
 
     return ret;
 }
+
+/*
+ * Verify that the simulated time works as expected
+ */
+
+int virtual_time_test()
+{
+    int ret = 0;
+    uint64_t test_time = 0;
+    uint64_t simulated_time = 0;
+    uint64_t current_time = picoquic_current_time();
+    uint8_t callback_ctx[256];
+
+
+    picoquic_quic_t * qsimul = picoquic_create(8, NULL, NULL, NULL, test_api_callback,
+        (void*)callback_ctx, NULL, NULL, NULL, simulated_time,
+        &simulated_time, ticket_file_name, NULL, 0);
+    picoquic_quic_t * qdirect = picoquic_create(8, NULL, NULL, NULL, test_api_callback,
+        (void*)callback_ctx, NULL, NULL, NULL, current_time,
+        NULL, ticket_file_name, NULL, 0);
+
+    if (qsimul == NULL || qdirect == NULL)
+    {
+        ret = -1;
+    }
+    else
+    {
+        /* Check that the simulated time follows the simulation */
+        for (int i = 0; ret == 0 && i < 5; i++) {
+            simulated_time += 12345678;
+            test_time = picoquic_get_tls_time(qsimul);
+            if (test_time != simulated_time) {
+                DBG_PRINTF("Test time: %llu != Simulated: %llu",
+                    (unsigned long long)test_time,
+                    (unsigned long long)simulated_time);
+                ret = -1;
+            }
+        }
+        /* Check that the non simulated time follows the current time */
+        for (int i = 0; ret == 0 && i < 5; i++) {
+#ifdef _WINDOWS
+            Sleep(1);
+#else
+            sleep(1);
+#endif
+            current_time = picoquic_current_time();
+            test_time = picoquic_get_tls_time(qdirect);
+
+            if (test_time < current_time) {
+                DBG_PRINTF("Test time: %llu < previous current time: %llu",
+                    (unsigned long long)test_time,
+                    (unsigned long long)current_time);
+                ret = -1;
+            }
+            else {
+                current_time = picoquic_current_time();
+                if (test_time > current_time) {
+                    DBG_PRINTF("Test time: %llu > next current time: %llu",
+                        (unsigned long long)test_time,
+                        (unsigned long long)current_time);
+                    ret = -1;
+                }
+            }
+        }
+    }
+
+    if (qsimul != NULL)
+    {
+        picoquic_free(qsimul);
+        qsimul = NULL;
+    }
+
+    if (qdirect != NULL)
+    {
+        picoquic_free(qdirect);
+        qsimul = NULL;
+    }
+
+    return ret;
+}
