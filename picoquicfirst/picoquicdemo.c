@@ -851,7 +851,6 @@ int quic_client(const char* ip_address_text, int server_port, uint32_t proposed_
     /* Create the client connection */
     if (ret == 0) {
         /* Create a client connection */
-
         cnx_client = picoquic_create_cnx(qclient, picoquic_null_connection_id,
             (struct sockaddr*)&server_address, current_time,
             proposed_version, sni, alpn, 1);
@@ -859,35 +858,44 @@ int quic_client(const char* ip_address_text, int server_port, uint32_t proposed_
         if (cnx_client == NULL) {
             ret = -1;
         } else {
-            picoquic_set_callback(cnx_client, first_client_callback, &callback_ctx);
+            ret = picoquic_start_client_cnx(cnx_client);
 
-            p = picoquic_create_packet();
+            if (ret == 0) {
 
-            if (p == NULL) {
-                ret = -1;
-            } else {
-                ret = picoquic_prepare_packet(cnx_client, p, current_time,
-                    send_buffer, sizeof(send_buffer), &send_length);
+                picoquic_set_callback(cnx_client, first_client_callback, &callback_ctx);
 
-                if (ret == 0 && send_length > 0) {
-                    bytes_sent = sendto(fd, send_buffer, (int)send_length, 0,
-                        (struct sockaddr*)&server_address, server_addr_length);
 
-                    if (bytes_sent > 0)
-                    {
-                        picoquic_log_packet(F_log, qclient, cnx_client, (struct sockaddr*)&server_address,
-                            0, send_buffer, bytes_sent, current_time);
+                p = picoquic_create_packet();
 
-                        if (picoquic_is_0rtt_available(cnx_client)) {
-                            /* Queue a simple frame to perform 0-RTT test */
-                            picoquic_queue_misc_frame(cnx_client, test_ping, sizeof(test_ping));
+                if (p == NULL) {
+                    ret = -1;
+                }
+                else {
+                    ret = picoquic_prepare_packet(cnx_client, p, current_time,
+                        send_buffer, sizeof(send_buffer), &send_length);
+
+                    if (ret == 0 && send_length > 0) {
+                        bytes_sent = sendto(fd, send_buffer, (int)send_length, 0,
+                            (struct sockaddr*)&server_address, server_addr_length);
+
+                        if (bytes_sent > 0)
+                        {
+                            picoquic_log_packet(F_log, qclient, cnx_client, (struct sockaddr*)&server_address,
+                                0, send_buffer, bytes_sent, current_time);
+
+                            if (picoquic_is_0rtt_available(cnx_client)) {
+                                /* Queue a simple frame to perform 0-RTT test */
+                                picoquic_queue_misc_frame(cnx_client, test_ping, sizeof(test_ping));
+                            }
                         }
-                    } else {
-                        fprintf(F_log, "Cannot send first packet to server, returns %d\n", bytes_sent);
-                        ret = -1;
+                        else {
+                            fprintf(F_log, "Cannot send first packet to server, returns %d\n", bytes_sent);
+                            ret = -1;
+                        }
                     }
-                } else {
-                    free(p);
+                    else {
+                        free(p);
+                    }
                 }
             }
         }

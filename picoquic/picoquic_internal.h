@@ -512,6 +512,9 @@ int picoquic_reset_cnx_version(picoquic_cnx_t* cnx, uint8_t* bytes, size_t lengt
 /* Notify error on connection */
 int picoquic_connection_error(picoquic_cnx_t* cnx, uint32_t local_error);
 
+/* Set the transport parameters */
+void picoquic_set_transport_parameters(picoquic_cnx_t * cnx, picoquic_transport_parameters * tp);
+
 /* Connection context retrieval functions */
 picoquic_cnx_t* picoquic_cnx_by_id(picoquic_quic_t* quic, picoquic_connection_id_t cnx_id);
 picoquic_cnx_t* picoquic_cnx_by_net(picoquic_quic_t* quic, struct sockaddr* addr);

@@ -744,6 +744,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         /* Cannot just do partial creation! */
         picoquic_delete_cnx(cnx);
         cnx = NULL;
+#if 0
     } else if (cnx->client_mode) {
         /* Initialize the tls connection */
         int ret = picoquic_initialize_stream_zero(cnx);
@@ -753,6 +754,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             picoquic_delete_cnx(cnx);
             cnx = NULL;
         }
+#endif
     }
 
     if (cnx != NULL) {
@@ -787,13 +789,44 @@ picoquic_cnx_t* picoquic_create_client_cnx(picoquic_quic_t* quic,
     picoquic_cnx_t* cnx = picoquic_create_cnx(quic, picoquic_null_connection_id, addr, start_time, preferred_version, sni, alpn, 1);
 
     if (cnx != NULL) {
+        int ret;
+
         if (callback_fn != NULL)
             cnx->callback_fn = callback_fn;
         if (callback_ctx != NULL)
             cnx->callback_ctx = callback_ctx;
+        ret = picoquic_initialize_stream_zero(cnx);
+        if (ret != 0) {
+            /* Cannot just do partial initialization! */
+            picoquic_delete_cnx(cnx);
+            cnx = NULL;
+        }
     }
 
     return cnx;
+}
+
+int picoquic_start_client_cnx(picoquic_cnx_t * cnx)
+{
+    int ret = picoquic_initialize_stream_zero(cnx);
+
+    return ret;
+}
+
+void picoquic_set_transport_parameters(picoquic_cnx_t * cnx, picoquic_transport_parameters * tp)
+{
+    cnx->local_parameters = *tp;
+
+    if (cnx->quic->mtu_max > 0)
+    {
+        cnx->local_parameters.max_packet_size = cnx->quic->mtu_max;
+    }
+
+    /* Initialize local flow control variables to advertised values */
+
+    cnx->maxdata_local = ((uint64_t)cnx->local_parameters.initial_max_data);
+    cnx->max_stream_id_bidir_local = cnx->local_parameters.initial_max_stream_id_bidir;
+    cnx->max_stream_id_unidir_local = cnx->local_parameters.initial_max_stream_id_unidir;
 }
 
 void picoquic_get_peer_addr(picoquic_cnx_t* cnx, struct sockaddr** addr, int* addr_len)

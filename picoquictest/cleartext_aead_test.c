@@ -226,7 +226,9 @@ int cleartext_aead_vector_test()
         if (cnx_client == NULL) {
             DBG_PRINTF("%s", "Could not create client connection context.\n");
             ret = -1;
-        } 
+        } else {
+            ret = picoquic_start_client_cnx(cnx_client);
+        }
     }
 
     if (ret == 0) {
@@ -435,6 +437,8 @@ int cleartext_pn_enc_test()
         if (cnx_client == NULL) {
             DBG_PRINTF("%s", "Could not create client connection context.\n");
             ret = -1;
+        } else {
+            ret = picoquic_start_client_cnx(cnx_client);
         }
     }
 
