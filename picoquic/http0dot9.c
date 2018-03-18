@@ -91,11 +91,12 @@ static int http09_random_txt(size_t doc_length, uint8_t* response, size_t respon
 
 #define http09_index_1  "<h1>Simple HTTP 0.9 Responder</h1>\r\n"
 #define http09_index_2  "<p>GET /, and GET index.html returns this text</p>\r\n"
-#define http09_index_3  "<p>Get doc-NNNNN.html returns html document of length NNNNN bytes(decimal)</p>\r\n"
-#define http09_index_4  "<p>Get doc-NNNNN also returns html document of length NNNNN bytes(decimal)</p>\r\n"
-#define http09_index_5  "<p>Get doc-NNNNN.txt returns txt document of length NNNNN bytes(decimal)</p>\r\n"
-#define http09_index_6  "<p>Any other command will result in an error, and an empty response.</p>\r\n"
-#define http09_index_7  "<h1>Enjoy!</h1>\r\n"
+#define http09_index_3  "<p>Get /doc-NNNNN.html returns html document of length NNNNN bytes(decimal)</p>\r\n"
+#define http09_index_4  "<p>Get /doc-NNNNN also returns html document of length NNNNN bytes(decimal)</p>\r\n"
+#define http09_index_5  "<p>Get /doc-NNNNN.txt returns txt document of length NNNNN bytes(decimal)</p>\r\n"
+#define http09_index_6  "<p>Get /NNNNN returns html document of length NNNNN bytes(decimal)</p>\r\n"
+#define http09_index_7  "<p>Any other command will result in an error, and an empty response.</p>\r\n"
+#define http09_index_8  "<h1>Enjoy!</h1>\r\n"
 
 static size_t http09_paragraph_min(size_t tag_length)
 {
@@ -228,7 +229,7 @@ static int http09_index_html(uint8_t* bytes, size_t bytes_max,
         http09_index_title, http09_head2,
         http09_index_1, http09_index_2, http09_index_3,
         http09_index_4, http09_index_5, http09_index_6,
-        http09_index_7, http09_final };
+        http09_index_7, http09_index_8, http09_final };
     size_t nb_index_blocks = sizeof(index_text) / sizeof(char* const);
     size_t byte_index = 0;
 
@@ -344,7 +345,20 @@ int http0dot9_get(uint8_t* command, size_t command_length,
              * generate the html text, stopping at response_length_max if the number is too long.
              */
             if (command_length < byte_index + 9 || (command[byte_index + 0] != 'D' && command[byte_index + 0] != 'd') || (command[byte_index + 1] != 'O' && command[byte_index + 1] != 'o') || (command[byte_index + 2] != 'C' && command[byte_index + 2] != 'c') || (command[byte_index + 3] != '-')) {
-                ret = -1;
+                /* find whether the name is of form 999999 */
+                while (byte_index < command_length && command[byte_index] >= '0' && command[byte_index] <= '9') {
+                    doc_length *= 10;
+                    doc_length += command[byte_index] - '0';
+                    byte_index++;
+                }
+
+                if (doc_length > 0)
+                {
+                    ret = http09_random_html(doc_length, response, response_max, response_length);
+                } else {
+                    ret = -1;
+                }
+
             } else {
                 byte_index += 4;
 
