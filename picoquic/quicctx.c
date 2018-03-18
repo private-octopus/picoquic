@@ -744,6 +744,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         /* Cannot just do partial creation! */
         picoquic_delete_cnx(cnx);
         cnx = NULL;
+#if 0
     } else if (cnx->client_mode) {
         /* Initialize the tls connection */
         int ret = picoquic_initialize_stream_zero(cnx);
@@ -753,6 +754,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             picoquic_delete_cnx(cnx);
             cnx = NULL;
         }
+#endif
     }
 
     if (cnx != NULL) {
@@ -787,10 +789,18 @@ picoquic_cnx_t* picoquic_create_client_cnx(picoquic_quic_t* quic,
     picoquic_cnx_t* cnx = picoquic_create_cnx(quic, picoquic_null_connection_id, addr, start_time, preferred_version, sni, alpn, 1);
 
     if (cnx != NULL) {
+        int ret;
+
         if (callback_fn != NULL)
             cnx->callback_fn = callback_fn;
         if (callback_ctx != NULL)
             cnx->callback_ctx = callback_ctx;
+        ret = picoquic_initialize_stream_zero(cnx);
+        if (ret != 0) {
+            /* Cannot just do partial initialization! */
+            picoquic_delete_cnx(cnx);
+            cnx = NULL;
+        }
     }
 
     return cnx;
