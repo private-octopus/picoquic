@@ -638,7 +638,7 @@ static int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t propose
                 ret = -1;
             }
             else if (delayed_init == 0) {
-                ret = picoquic_initialize_stream_zero(test_ctx->cnx_client);
+                ret = picoquic_start_client_cnx(test_ctx->cnx_client);
             }
         }
 
@@ -1088,10 +1088,10 @@ int tls_api_one_scenario_test(test_api_stream_desc_t* scenario,
     }
 
     if (ret == 0) {
-        ret = picoquic_initialize_stream_zero(test_ctx->cnx_client);
+        ret = picoquic_start_client_cnx(test_ctx->cnx_client);
         if (ret != 0)
         {
-            DBG_PRINTF("Could not initialize stream zero for the client\n");
+            DBG_PRINTF("%s", "Could not initialize stream zero for the client\n");
         }
 
     }
@@ -1425,7 +1425,7 @@ int tls_api_two_connections_test()
             ret = -1;
         }
         else {
-            ret = picoquic_initialize_stream_zero(test_ctx->cnx_client);
+            ret = picoquic_start_client_cnx(test_ctx->cnx_client);
         }
     }
 

@@ -806,6 +806,13 @@ picoquic_cnx_t* picoquic_create_client_cnx(picoquic_quic_t* quic,
     return cnx;
 }
 
+int picoquic_start_client_cnx(picoquic_cnx_t * cnx)
+{
+    int ret = picoquic_initialize_stream_zero(cnx);
+
+    return ret;
+}
+
 void picoquic_set_transport_parameters(picoquic_cnx_t * cnx, picoquic_transport_parameters * tp)
 {
     cnx->local_parameters = *tp;

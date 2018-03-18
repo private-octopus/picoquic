@@ -851,7 +851,6 @@ int quic_client(const char* ip_address_text, int server_port, uint32_t proposed_
     /* Create the client connection */
     if (ret == 0) {
         /* Create a client connection */
-
         cnx_client = picoquic_create_cnx(qclient, picoquic_null_connection_id,
             (struct sockaddr*)&server_address, current_time,
             proposed_version, sni, alpn, 1);
@@ -859,7 +858,7 @@ int quic_client(const char* ip_address_text, int server_port, uint32_t proposed_
         if (cnx_client == NULL) {
             ret = -1;
         } else {
-            ret = picoquic_initialize_stream_zero(cnx_client);
+            ret = picoquic_start_client_cnx(cnx_client);
 
             if (ret == 0) {
 

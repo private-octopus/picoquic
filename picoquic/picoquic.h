@@ -244,6 +244,8 @@ picoquic_cnx_t* picoquic_create_client_cnx(picoquic_quic_t* quic,
     char const* sni, char const* alpn,
     picoquic_stream_data_cb_fn callback_fn, void* callback_ctx);
 
+int picoquic_start_client_cnx(picoquic_cnx_t* cnx);
+
 void picoquic_delete_cnx(picoquic_cnx_t* cnx);
 
 int picoquic_close(picoquic_cnx_t* cnx, uint16_t reason_code);
