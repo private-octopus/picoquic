@@ -471,6 +471,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(test_different_params)
+        {
+            int ret = tls_different_params_test();
+
+            Assert::AreEqual(ret, 0);
+        }
         
 	};
 }
