@@ -51,7 +51,7 @@ int http0dot9_test_one(char const* command, int expected_ret, size_t expected_le
 int http0dot9_test()
 {
     int ret = 0;
-    const size_t index_html_size = 558;
+    const size_t index_html_size = 633;
 
     if (ret == 0) {
         ret = http0dot9_test_one("get /", 0, index_html_size, "http09_index.html");
@@ -75,6 +75,10 @@ int http0dot9_test()
 
     if (ret == 0) {
         ret = http0dot9_test_one("get doc-12345.html", 0, 12345, "http09_12345.html");
+    }
+
+    if (ret == 0) {
+        ret = http0dot9_test_one("get /12345", 0, 12345, "http09_12345.html");
     }
 
     if (ret == 0) {
