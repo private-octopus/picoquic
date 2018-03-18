@@ -637,6 +637,9 @@ static int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t propose
             if (test_ctx->cnx_client == NULL) {
                 ret = -1;
             }
+            else {
+                ret = picoquic_initialize_stream_zero(test_ctx->cnx_client);
+            }
         }
 
         if (ret != 0) {
@@ -1406,6 +1409,9 @@ int tls_api_two_connections_test()
 
         if (test_ctx->cnx_client == NULL) {
             ret = -1;
+        }
+        else {
+            ret = picoquic_initialize_stream_zero(test_ctx->cnx_client);
         }
     }
 
