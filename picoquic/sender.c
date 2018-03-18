@@ -917,7 +917,7 @@ void picoquic_cnx_set_next_wake_time(picoquic_cnx_t* cnx, uint64_t current_time)
         blocked = 0;
     } else if (picoquic_is_ack_needed(cnx, current_time)) {
         blocked = 0;
-    } else if (picoquic_is_mtu_probe_needed(cnx, path_x)) {
+    } else if (path_x->cwin > path_x->bytes_in_transit && picoquic_is_mtu_probe_needed(cnx, path_x)) {
         blocked = 0;
     } else if (path_x->cwin > path_x->bytes_in_transit) {
         if (picoquic_should_send_max_data(cnx) || (stream = picoquic_find_ready_stream(cnx, (cnx->cnx_state == picoquic_state_client_ready || cnx->cnx_state == picoquic_state_server_ready) ? 0 : 1)) != NULL) {

@@ -91,6 +91,7 @@ int transport_param_log_test();
 int bad_certificate_test();
 int set_verify_certificate_callback_test();
 int virtual_time_test();
+int tls_different_params_test();
 
 #ifdef __cplusplus
 }
