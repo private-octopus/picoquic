@@ -84,24 +84,17 @@ void picoquic_provide_received_transport_extensions(picoquic_cnx_t* cnx,
     *client_mode = ctx->client_mode;
 }
 
-static int SetSignCertificate(char const* keypem, ptls_context_t* ctx)
+static int set_sign_certificate_from_key(EVP_PKEY* pkey, ptls_context_t* ctx)
 {
     int ret = 0;
     ptls_openssl_sign_certificate_t* signer;
-    EVP_PKEY* pkey = EVP_PKEY_new();
 
     signer = (ptls_openssl_sign_certificate_t*)malloc(sizeof(ptls_openssl_sign_certificate_t));
 
     if (signer == NULL || pkey == NULL) {
         ret = -1;
     } else {
-        BIO* bio_key = BIO_new_file(keypem, "rb");
-        EVP_PKEY* ret_pkey = PEM_read_bio_PrivateKey(bio_key, &pkey, NULL, NULL);
-        if (ret_pkey == NULL) {
-            ret = -1;
-        } else {
-            ret = ptls_openssl_init_sign_certificate(signer, pkey);
-        }
+        ret = ptls_openssl_init_sign_certificate(signer, pkey);
         ctx->sign_certificate = &signer->super;
     }
 
@@ -113,6 +106,15 @@ static int SetSignCertificate(char const* keypem, ptls_context_t* ctx)
         free(signer);
     }
 
+    return ret;
+}
+
+static int set_sign_certificate_from_key_file(char const* keypem, ptls_context_t* ctx)
+{
+    BIO* bio_key = BIO_new_file(keypem, "rb");
+    int ret = set_sign_certificate_from_key(PEM_read_bio_PrivateKey(bio_key, NULL, NULL, NULL), ctx);
+
+    BIO_free(bio_key);
     return ret;
 }
 
@@ -565,7 +567,7 @@ int picoquic_master_tlscontext(picoquic_quic_t* quic,
             if (ptls_load_certificates(ctx, (char*)cert_file_name) != 0) {
                 ret = -1;
             } else {
-                ret = SetSignCertificate(key_file_name, ctx);
+                ret = set_sign_certificate_from_key_file(key_file_name, ctx);
             }
 
             if (ret == 0) {
@@ -631,6 +633,17 @@ int picoquic_master_tlscontext(picoquic_quic_t* quic,
     return ret;
 }
 
+static void free_certificates_list(ptls_iovec_t* certs, size_t len) {
+    if (certs == NULL) {
+        return;
+    }
+
+    for (size_t i = 0; i < len; ++i) {
+        free(certs[i].base);
+    }
+    free(certs);
+}
+
 void picoquic_master_tlscontext_free(picoquic_quic_t* quic)
 {
     if (quic->tls_master_ctx != NULL) {
@@ -641,8 +654,10 @@ void picoquic_master_tlscontext_free(picoquic_quic_t* quic)
             ctx->get_time = NULL;
         }
 
-        if (ctx->certificates.list != NULL) {
-            free(ctx->certificates.list);
+        free_certificates_list(ctx->certificates.list, ctx->certificates.count);
+
+        if (ctx->sign_certificate != NULL) {
+            ptls_openssl_dispose_sign_certificate((ptls_openssl_sign_certificate_t*)ctx->sign_certificate);
         }
 
         if (ctx->verify_certificate != NULL) {
@@ -1358,7 +1373,7 @@ int picoquic_tlsinput_stream_zero(picoquic_cnx_t* cnx)
 /*
  * Compute the 16 byte reset secret associated with a connection ID.
  * We implement it as the hash of a secret seed maintained per QUIC context
- * and the 8 bytes connection ID. 
+ * and the 8 bytes connection ID.
  * This is written using PTLS portable hash API, initialized
  * for now with the OpenSSL implementation. Will have to adapt if we
  * decide to use the minicrypto API.
@@ -1384,4 +1399,24 @@ int picoquic_create_cnxid_reset_secret(picoquic_quic_t* quic, picoquic_connectio
     }
 
     return (ret);
+}
+
+void picoquic_set_tls_certificate_chain(picoquic_quic_t* quic, ptls_iovec_t* certs, size_t count)
+{
+    ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
+
+    free_certificates_list(ctx->certificates.list, ctx->certificates.count);
+
+    ctx->certificates.list = certs;
+    ctx->certificates.count = count;
+}
+
+int picoquic_set_tls_key(picoquic_quic_t* quic, const uint8_t* data, size_t len)
+{
+    ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
+    if (ctx->sign_certificate != NULL) {
+        ptls_openssl_dispose_sign_certificate((ptls_openssl_sign_certificate_t*)ctx->sign_certificate);
+    }
+
+    return set_sign_certificate_from_key(d2i_AutoPrivateKey(NULL, &data, len), ctx);
 }

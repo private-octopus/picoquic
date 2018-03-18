@@ -259,6 +259,12 @@ void picoquic_free(picoquic_quic_t* quic);
 /* Set cookie mode on QUIC context when under stress */
 void picoquic_set_cookie_mode(picoquic_quic_t* quic, int cookie_mode);
 
+/* Set the TLS certificate chain(DER format) for the QUIC context. The context will take ownership over the certs pointer. */
+void picoquic_set_tls_certificate_chain(picoquic_quic_t* quic, ptls_iovec_t* certs, size_t count);
+
+/* Set the TLS private key(DER format) for the QUIC context. The caller is responsible for cleaning up the pointer. */
+int picoquic_set_tls_key(picoquic_quic_t* quic, const uint8_t* data, size_t len);
+
 /* Set the verify certificate callback and context. */
 int picoquic_set_verify_certificate_callback(picoquic_quic_t* quic, picoquic_verify_certificate_cb_fn cb, void* ctx,
                                              picoquic_free_verify_certificate_ctx free_fn);
