@@ -182,6 +182,35 @@ typedef enum {
     picoquic_callback_application_close
 } picoquic_call_back_event_t;
 
+
+
+/* 
+* Time management. Internally, picoquic works in "virtual time", updated via the "current time" parameter
+* passed through picoquic_create(), picoquic_create_cnx(), picoquic_incoming_packet(), and picoquic_prepare_packet().
+*
+* There are two supported modes of operation, "wall time" synchronized with the system's current time function,
+* and "simulated time". Production services are expected to use wall time, tests and simulation use the
+* simulated time. The simulated time is held in a 64 bit counter, the address of which is passed as 
+* the "p_simulated_time" parameter to picoquic_create().
+*
+* The time management needs to be consistent with the functions used internally by the TLS package "picotls".
+* If the argument "p_simulated_time" is NULL, picotls will use "wall time", accessed through system API.
+* If the argument is set, the default time function of picotls will be overridden by a function that
+* reads the value of *p_simulated_time.
+*
+* The function "picoquic_current_time()" reads the wall time in microseconds, using the same system calls
+* as picotls. The default socket code in "picosock.[ch]" uses that time function, and returns the time
+* at which messages arrived. 
+*
+* The function "picoquic_get_virtual_time()" returns the "virtual time" used by the specified quic
+* context, which can be either the current wall time or the simulated time, depending on how the
+* quic context was initialized.
+*/
+
+uint64_t picoquic_current_time(); /* wall time */
+uint64_t picoquic_get_virtual_time(picoquic_quic_t* quic); /* connection time, compatible with simulations */
+
+
 /* Callback function for providing stream data to the application.
      * If stream_id is zero, this delivers misc frames or changes in
      * connection state.
