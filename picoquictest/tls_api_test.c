@@ -2394,7 +2394,7 @@ int virtual_time_test()
         /* Check that the simulated time follows the simulation */
         for (int i = 0; ret == 0 && i < 5; i++) {
             simulated_time += 12345678;
-            test_time = picoquic_get_virtual_time(qsimul);
+            test_time = picoquic_get_quic_time(qsimul);
             ptls_time = picoquic_get_tls_time(qsimul);
             if (test_time != simulated_time) {
                 DBG_PRINTF("Test time: %llu != Simulated: %llu",
@@ -2416,7 +2416,7 @@ int virtual_time_test()
             sleep(1);
 #endif
             current_time = picoquic_current_time();
-            test_time = picoquic_get_virtual_time(qdirect);
+            test_time = picoquic_get_quic_time(qdirect);
             ptls_time = picoquic_get_tls_time(qdirect);
 
             if (test_time < current_time) {

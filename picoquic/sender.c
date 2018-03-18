@@ -131,7 +131,7 @@ int picoquic_add_to_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
             }
         }
 
-        picoquic_cnx_set_next_wake_time(cnx, picoquic_get_virtual_time(cnx->quic));
+        picoquic_cnx_set_next_wake_time(cnx, picoquic_get_quic_time(cnx->quic));
     }
 
     return ret;
@@ -157,7 +157,7 @@ int picoquic_reset_stream(picoquic_cnx_t* cnx,
             stream->stream_flags |= picoquic_stream_flag_reset_requested;
         }
 
-        picoquic_cnx_set_next_wake_time(cnx, picoquic_get_virtual_time(cnx->quic));
+        picoquic_cnx_set_next_wake_time(cnx, picoquic_get_quic_time(cnx->quic));
     }
 
     return ret;
@@ -183,7 +183,7 @@ int picoquic_stop_sending(picoquic_cnx_t* cnx,
             stream->stream_flags |= picoquic_stream_flag_stop_sending_requested;
         }
 
-        picoquic_cnx_set_next_wake_time(cnx, picoquic_get_virtual_time(cnx->quic));
+        picoquic_cnx_set_next_wake_time(cnx, picoquic_get_quic_time(cnx->quic));
     }
 
     return ret;
@@ -1773,7 +1773,7 @@ int picoquic_close(picoquic_cnx_t* cnx, uint16_t reason_code)
         ret = -1;
     }
 
-    picoquic_cnx_set_next_wake_time(cnx, picoquic_get_virtual_time(cnx->quic));
+    picoquic_cnx_set_next_wake_time(cnx, picoquic_get_quic_time(cnx->quic));
 
     return ret;
 }

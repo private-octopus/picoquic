@@ -935,7 +935,7 @@ uint64_t picoquic_current_time()
 * Get the same time simulation as used for TLS
 */
 
-uint64_t picoquic_get_virtual_time(picoquic_quic_t* quic)
+uint64_t picoquic_get_quic_time(picoquic_quic_t* quic)
 {
     uint64_t now;
     if (quic->p_simulated_time == NULL) {
@@ -983,7 +983,7 @@ int picoquic_queue_misc_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t 
         cnx->first_misc_frame = misc_frame;
     }
 
-    picoquic_cnx_set_next_wake_time(cnx, picoquic_get_virtual_time(cnx->quic));
+    picoquic_cnx_set_next_wake_time(cnx, picoquic_get_quic_time(cnx->quic));
 
     return ret;
 }
