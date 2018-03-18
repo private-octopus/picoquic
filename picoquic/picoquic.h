@@ -202,13 +202,13 @@ typedef enum {
 * as picotls. The default socket code in "picosock.[ch]" uses that time function, and returns the time
 * at which messages arrived. 
 *
-* The function "picoquic_get_virtual_time()" returns the "virtual time" used by the specified quic
+* The function "picoquic_get_quic_time()" returns the "virtual time" used by the specified quic
 * context, which can be either the current wall time or the simulated time, depending on how the
 * quic context was initialized.
 */
 
 uint64_t picoquic_current_time(); /* wall time */
-uint64_t picoquic_get_virtual_time(picoquic_quic_t* quic); /* connection time, compatible with simulations */
+uint64_t picoquic_get_quic_time(picoquic_quic_t* quic); /* connection time, compatible with simulations */
 
 
 /* Callback function for providing stream data to the application.
