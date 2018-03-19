@@ -202,13 +202,13 @@ typedef enum {
 * as picotls. The default socket code in "picosock.[ch]" uses that time function, and returns the time
 * at which messages arrived. 
 *
-* The function "picoquic_get_virtual_time()" returns the "virtual time" used by the specified quic
+* The function "picoquic_get_quic_time()" returns the "virtual time" used by the specified quic
 * context, which can be either the current wall time or the simulated time, depending on how the
 * quic context was initialized.
 */
 
 uint64_t picoquic_current_time(); /* wall time */
-uint64_t picoquic_get_virtual_time(picoquic_quic_t* quic); /* connection time, compatible with simulations */
+uint64_t picoquic_get_quic_time(picoquic_quic_t* quic); /* connection time, compatible with simulations */
 
 
 /* Callback function for providing stream data to the application.
@@ -258,6 +258,12 @@ void picoquic_free(picoquic_quic_t* quic);
 
 /* Set cookie mode on QUIC context when under stress */
 void picoquic_set_cookie_mode(picoquic_quic_t* quic, int cookie_mode);
+
+/* Set the TLS certificate chain(DER format) for the QUIC context. The context will take ownership over the certs pointer. */
+void picoquic_set_tls_certificate_chain(picoquic_quic_t* quic, ptls_iovec_t* certs, size_t count);
+
+/* Set the TLS private key(DER format) for the QUIC context. The caller is responsible for cleaning up the pointer. */
+int picoquic_set_tls_key(picoquic_quic_t* quic, const uint8_t* data, size_t len);
 
 /* Set the verify certificate callback and context. */
 int picoquic_set_verify_certificate_callback(picoquic_quic_t* quic, picoquic_verify_certificate_cb_fn cb, void* ctx,
