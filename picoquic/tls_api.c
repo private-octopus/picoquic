@@ -1362,7 +1362,8 @@ int picoquic_tlsinput_stream_zero(picoquic_cnx_t* cnx)
         }
         ret = 0;
     } else {
-        ret = picoquic_connection_error(cnx, PICOQUIC_TLS_HANDSHAKE_FAILED);
+        (void)picoquic_connection_error(cnx, PICOQUIC_TLS_HANDSHAKE_FAILED);
+        ret = 0;
     }
 
     ptls_buffer_dispose(&sendbuf);
