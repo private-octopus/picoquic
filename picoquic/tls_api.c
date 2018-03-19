@@ -1417,6 +1417,7 @@ int picoquic_set_tls_key(picoquic_quic_t* quic, const uint8_t* data, size_t len)
     ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
     if (ctx->sign_certificate != NULL) {
         ptls_openssl_dispose_sign_certificate((ptls_openssl_sign_certificate_t*)ctx->sign_certificate);
+        ctx->sign_certificate = NULL;
     }
 
     return set_sign_certificate_from_key(d2i_AutoPrivateKey(NULL, &data, len), ctx);
