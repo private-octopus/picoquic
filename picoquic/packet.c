@@ -479,9 +479,10 @@ int picoquic_prepare_version_negotiation(
     if (sp != NULL) {
         uint8_t* bytes = sp->bytes;
         size_t byte_index = 0;
-        /* Packet type set to version negotiation */
 
-        bytes[byte_index++] = 0xFF; /* TODO: Should be randomized */
+        /* Packet type set to random value for version negotiation */
+        picoquic_public_random(bytes + byte_index, 1);
+        bytes[byte_index++] |= 0x80;
         /* Copy the incoming connection ID */
         byte_index += picoquic_format_connection_id(bytes + byte_index, ph->cnx_id);
         /* Set the version number to zero */
