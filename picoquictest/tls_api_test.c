@@ -2413,7 +2413,7 @@ int virtual_time_test()
 #ifdef _WINDOWS
             Sleep(1);
 #else
-            sleep(1);
+            usleep(1000);
 #endif
             current_time = picoquic_current_time();
             test_time = picoquic_get_quic_time(qdirect);
