@@ -484,5 +484,12 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
-	};
+
+        TEST_METHOD(test_set_certificate_and_key)
+        {
+            int ret = set_certificate_and_key_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+    };
 }

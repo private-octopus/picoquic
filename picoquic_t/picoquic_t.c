@@ -97,8 +97,9 @@ static const picoquic_test_def_t test_table[] = {
     { "bad_certificate", bad_certificate_test },
     { "set_verify_certificate_callback_test", set_verify_certificate_callback_test },
     { "virtual_time" , virtual_time_test },
-    {"different_params", tls_different_params_test },
-    {"wrong_tls_version", wrong_tls_version_test }
+    { "different_params", tls_different_params_test },
+    { "wrong_tls_version", wrong_tls_version_test },
+    { "set_certificate_and_key", set_certificate_and_key_test }
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);

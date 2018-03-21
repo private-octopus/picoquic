@@ -93,6 +93,7 @@ int set_verify_certificate_callback_test();
 int virtual_time_test();
 int tls_different_params_test();
 int wrong_tls_version_test();
+int set_certificate_and_key_test();
 
 #ifdef __cplusplus
 }

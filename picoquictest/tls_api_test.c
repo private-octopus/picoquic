@@ -29,6 +29,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
+#include <openssl/pem.h>
 
 #define PICOQUIC_TEST_SNI "picoquic.test"
 #define PICOQUIC_TEST_ALPN "picoquic-test"
@@ -2625,3 +2626,100 @@ int tls_different_params_test()
     return tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0, 0, 0, 1500000, &test_parameters);
 }
 
+int set_certificate_and_key_test()
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, 0, "test-sni", "test-alpn", &simulated_time, NULL, 0, 0);
+
+    /* Delete the server context, and recreate it. */
+    if (ret == 0)
+    {
+        if (test_ctx->qserver != NULL) {
+            picoquic_free(test_ctx->qserver);
+        }
+
+        test_ctx->qserver = picoquic_create(8,
+            NULL, NULL,
+            PICOQUIC_TEST_ALPN, test_api_callback, (void*)&test_ctx->server_callback, NULL, NULL, NULL,
+            simulated_time, &simulated_time, NULL,
+            test_ticket_encrypt_key, sizeof(test_ticket_encrypt_key));
+
+        if (test_ctx->qserver == NULL) {
+            ret = -1;
+        }
+
+        if (ret == 0) {
+            BIO* bio_key = BIO_new_file(
+#ifdef _WINDOWS
+#ifdef _WINDOWS64
+                "..\\..\\certs\\key.pem",
+#else
+                "..\\certs\\key.pem",
+#endif
+#else
+                "certs/key.pem",
+#endif
+                "rb");
+
+            /* Load key and convert to DER */
+            EVP_PKEY* key = PEM_read_bio_PrivateKey(bio_key, NULL, NULL, NULL);
+            int length = i2d_PrivateKey(key, NULL);
+            unsigned char* key_der = (unsigned char*)malloc(length);
+            unsigned char* tmp = key_der;
+            i2d_PrivateKey(key, &tmp);
+            EVP_PKEY_free(key);
+            BIO_free(bio_key);
+
+            if (picoquic_set_tls_key(test_ctx->qserver, key_der, length) != 0) {
+                ret = -1;
+            }
+        }
+
+        if (ret == 0) {
+            BIO* bio_key = BIO_new_file(
+#ifdef _WINDOWS
+#ifdef _WINDOWS64
+                "..\\..\\certs\\cert.pem",
+#else
+                "..\\certs\\cert.pem",
+#endif
+#else
+                "certs/cert.pem",
+#endif
+                "rb");
+
+            /* Load cert and convert to DER */
+            X509* cert = PEM_read_bio_X509(bio_key, NULL, NULL, NULL);
+            int length = i2d_X509(cert, NULL);
+            unsigned char* cert_der = (unsigned char*)malloc(length);
+            unsigned char* tmp = cert_der;
+            i2d_X509(cert, &tmp);
+            X509_free(cert);
+            BIO_free(bio_key);
+
+            ptls_iovec_t* chain = malloc(sizeof(ptls_iovec_t));
+            chain[0] = ptls_iovec_init(cert_der, length);
+
+            picoquic_set_tls_certificate_chain(test_ctx->qserver, chain, 1);
+        }
+    }
+
+    /* Proceed with the connection loop. */
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    if (ret == 0 && (test_ctx->cnx_client->cnx_state != picoquic_state_client_ready
+                     || test_ctx->cnx_server->cnx_state != picoquic_state_server_ready)) {
+        ret = -1;
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}

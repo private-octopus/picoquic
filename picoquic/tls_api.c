@@ -569,37 +569,37 @@ int picoquic_master_tlscontext(picoquic_quic_t* quic,
             } else {
                 ret = set_sign_certificate_from_key_file(key_file_name, ctx);
             }
+        }
 
-            if (ret == 0) {
-                och = (ptls_on_client_hello_t*)malloc(sizeof(ptls_on_client_hello_t) + sizeof(picoquic_quic_t*));
-                if (och != NULL) {
-                    picoquic_quic_t** ppquic = (picoquic_quic_t**)(((char*)och) + sizeof(ptls_on_client_hello_t));
+        if (ret == 0) {
+            och = (ptls_on_client_hello_t*)malloc(sizeof(ptls_on_client_hello_t) + sizeof(picoquic_quic_t*));
+            if (och != NULL) {
+                picoquic_quic_t** ppquic = (picoquic_quic_t**)(((char*)och) + sizeof(ptls_on_client_hello_t));
 
-                    och->cb = picoquic_client_hello_call_back;
-                    ctx->on_client_hello = och;
-                    *ppquic = quic;
-                }
+                och->cb = picoquic_client_hello_call_back;
+                ctx->on_client_hello = och;
+                *ppquic = quic;
             }
+        }
 
-            if (ret == 0) {
-                ret = picoquic_server_setup_ticket_aead_contexts(quic, ctx, ticket_key, ticket_key_length);
-            }
+        if (ret == 0) {
+            ret = picoquic_server_setup_ticket_aead_contexts(quic, ctx, ticket_key, ticket_key_length);
+        }
 
-            if (ret == 0) {
-                encrypt_ticket = (ptls_encrypt_ticket_t*)malloc(sizeof(ptls_encrypt_ticket_t) + sizeof(picoquic_quic_t*));
-                if (encrypt_ticket == NULL) {
-                    ret = PICOQUIC_ERROR_MEMORY;
-                } else {
-                    picoquic_quic_t** ppquic = (picoquic_quic_t**)(((char*)encrypt_ticket) + sizeof(ptls_encrypt_ticket_t));
+        if (ret == 0) {
+            encrypt_ticket = (ptls_encrypt_ticket_t*)malloc(sizeof(ptls_encrypt_ticket_t) + sizeof(picoquic_quic_t*));
+            if (encrypt_ticket == NULL) {
+                ret = PICOQUIC_ERROR_MEMORY;
+            } else {
+                picoquic_quic_t** ppquic = (picoquic_quic_t**)(((char*)encrypt_ticket) + sizeof(ptls_encrypt_ticket_t));
 
-                    encrypt_ticket->cb = picoquic_server_encrypt_ticket_call_back;
-                    *ppquic = quic;
+                encrypt_ticket->cb = picoquic_server_encrypt_ticket_call_back;
+                *ppquic = quic;
 
-                    ctx->encrypt_ticket = encrypt_ticket;
-                    ctx->ticket_lifetime = 100000; /* 100,000 seconds, a bit more than one day */
-                    ctx->require_dhe_on_psk = 1;
-                    ctx->max_early_data_size = 0xFFFFFFFF;
-                }
+                ctx->encrypt_ticket = encrypt_ticket;
+                ctx->ticket_lifetime = 100000; /* 100,000 seconds, a bit more than one day */
+                ctx->require_dhe_on_psk = 1;
+                ctx->max_early_data_size = 0xFFFFFFFF;
             }
         }
 
@@ -1417,6 +1417,7 @@ int picoquic_set_tls_key(picoquic_quic_t* quic, const uint8_t* data, size_t len)
     ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
     if (ctx->sign_certificate != NULL) {
         ptls_openssl_dispose_sign_certificate((ptls_openssl_sign_certificate_t*)ctx->sign_certificate);
+        ctx->sign_certificate = NULL;
     }
 
     return set_sign_certificate_from_key(d2i_AutoPrivateKey(NULL, &data, len), ctx);
