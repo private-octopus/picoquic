@@ -58,7 +58,6 @@
 #else /* Linux */
 
 #include "getopt.h"
-#include <alloca.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
