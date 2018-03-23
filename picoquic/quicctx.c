@@ -332,7 +332,7 @@ static void picoquic_set_hash_key_by_address(picoquic_net_id * key, struct socka
 #ifdef _WINDOWS
         key4->sin_addr.S_un.S_addr = s4->sin_addr.S_un.S_addr;
 #else
-        key4->sin_addr.sin_addr.s_addr = s4->sin_addr.s_addr;
+        key4->sin_addr.s_addr = s4->sin_addr.s_addr;
 #endif
         key4->sin_family = s4->sin_family;
         key4->sin_port = s4->sin_port;
