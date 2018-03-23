@@ -322,6 +322,31 @@ int picoquic_register_cnx_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, picoqui
     return ret;
 }
 
+static void picoquic_set_hash_key_by_address(picoquic_net_id * key, struct sockaddr* addr)
+{
+    memset(&key->saddr, 0, sizeof(struct sockaddr_storage));
+    if (addr->sa_family == AF_INET) {
+        struct sockaddr_in * key4 = (struct sockaddr_in *) &key->saddr;
+        struct sockaddr_in * s4 = (struct sockaddr_in *) addr;
+
+#ifdef _WINDOWS
+        key4->sin_addr.S_un.S_addr = s4->sin_addr.S_un.S_addr;
+#else
+        key4->sin_addr.s_addr = s4->sin_addr.s_addr;
+#endif
+        key4->sin_family = s4->sin_family;
+        key4->sin_port = s4->sin_port;
+    }
+    else {
+        struct sockaddr_in6 * key6 = (struct sockaddr_in6 *) &key->saddr;
+        struct sockaddr_in6 * s6 = (struct sockaddr_in6 *) addr;
+        memcpy(&key6->sin6_addr, &s6->sin6_addr, sizeof(struct sockaddr_in6));
+        key6->sin6_family = s6->sin6_family;
+        key6->sin6_port = s6->sin6_port;
+        /* TODO: special code for local addresses */
+    }
+}
+
 int picoquic_register_net_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, struct sockaddr* addr)
 {
     int ret = 0;
@@ -331,12 +356,8 @@ int picoquic_register_net_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, struct 
     if (key == NULL) {
         ret = -1;
     } else {
-        memset(&key->saddr, 0, sizeof(key->saddr));
-        if (addr->sa_family == AF_INET) {
-            memcpy(&key->saddr, addr, sizeof(struct sockaddr_in));
-        } else {
-            memcpy(&key->saddr, addr, sizeof(struct sockaddr_in6));
-        }
+        picoquic_set_hash_key_by_address(key, addr);
+
         key->cnx = cnx;
 
         item = picohash_retrieve(quic->table_cnx_by_net, key);
@@ -1380,13 +1401,9 @@ picoquic_cnx_t* picoquic_cnx_by_net(picoquic_quic_t* quic, struct sockaddr* addr
 {
     picoquic_cnx_t* ret = NULL;
     picohash_item* item;
-    picoquic_net_id key = { { 0 } };
+    picoquic_net_id key;
 
-    if (addr->sa_family == AF_INET) {
-        memcpy(&key.saddr, addr, sizeof(struct sockaddr_in));
-    } else {
-        memcpy(&key.saddr, addr, sizeof(struct sockaddr_in6));
-    }
+    picoquic_set_hash_key_by_address(&key, addr);
 
     item = picohash_retrieve(quic->table_cnx_by_net, &key);
 
