@@ -60,7 +60,6 @@ static const char* default_server_key_file = "..\\certs\\key.pem";
 
 #else /* Linux */
 
-#include <alloca.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -1209,7 +1208,7 @@ int main(int argc, char** argv)
                 fprintf(stderr, "option requires more arguments -- s\n");
                 usage();
             }
-            reset_seed = reset_seed_x; /* replacing the original alloca, which is not supported in Windows */
+            reset_seed = reset_seed_x; /* replacing the original alloca, which is not supported in Windows or BSD */
             reset_seed[1] = strtoul(argv[optind], NULL, 0);
             reset_seed[0] = strtoul(argv[optind++], NULL, 0);
             break;
