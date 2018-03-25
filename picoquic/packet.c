@@ -824,9 +824,6 @@ int picoquic_incoming_server_cleartext(
     picoquic_packet_header* ph,
     uint64_t current_time)
 {
-#ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(if_index_to);
-#endif
     int ret = 0;
     size_t decoded_length = 0;
     int already_received = 0;
@@ -872,6 +869,7 @@ int picoquic_incoming_server_cleartext(
 
             if (ret != 0) {
                 /* This is bad. should just delete the context, log the packet, etc */
+
             }
         }
     } else {
