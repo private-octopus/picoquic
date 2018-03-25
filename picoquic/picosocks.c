@@ -442,9 +442,9 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
             /* The IP_PKTINFO structure is not defined on BSD */
             memset(cmsg, 0, CMSG_SPACE(sizeof(struct in_addr)));
             cmsg->cmsg_level = IPPROTO_IP;
-            cmsg->cmsg_type = IP_PKTINFO;
+            cmsg->cmsg_type = IP_SENDSRCADDR;
             cmsg->cmsg_len = CMSG_LEN(sizeof(struct in_addr));
-            struct in_addr* pktinfo = (struct in_pktinfo*)CMSG_DATA(cmsg);
+            struct in_addr* pktinfo = (struct in_addr*)CMSG_DATA(cmsg);
             pktinfo->s_addr = ((struct sockaddr_in*)addr_from)->sin_addr.s_addr;
             control_length += CMSG_SPACE(sizeof(struct in_addr));
 #endif
