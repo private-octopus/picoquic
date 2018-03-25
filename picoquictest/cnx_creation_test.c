@@ -21,7 +21,7 @@
 
 #include "../picoquic/picoquic_internal.h"
 #include <stdlib.h>
-#ifndef __APPLE__
+#ifdef _WINDOWS
 #include <malloc.h>
 #endif
 #include <string.h>

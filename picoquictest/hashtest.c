@@ -20,7 +20,7 @@
 */
 
 #include <stdlib.h>
-#ifndef __APPLE__
+#ifdef _WINDOWS
 #include <malloc.h>
 #endif
 #include "../picoquic/picohash.h"
