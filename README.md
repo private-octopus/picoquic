@@ -111,6 +111,11 @@ To build Picoquic on Linux, you need to:
 Thanks to Frederik Deweerdt for ensuring that Picoquic runs on MacOSX. The build steps
 are the same as for Linux.
 
+## Picoquic on FreeBSD
+
+Same build steps as Linux. Picoquic probably also works on other BSD variants, but only FreeBSD
+has been tested so far.
+
 ## Developing applications
 
 Sorry, not all that much documentation yet. This will come as we populate the wiki. Your
