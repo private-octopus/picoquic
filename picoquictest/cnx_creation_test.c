@@ -44,24 +44,29 @@
  *  - delete QUIC context.
  */
 
-#define TEST_CNX_COUNT 5
+#define TEST_CNX_COUNT 7
 
 int cnxcreation_test()
 {
     int ret = 0;
     picoquic_quic_t* quic = NULL;
-    picoquic_cnx_t* test_cnx[5] = { NULL, NULL, NULL, NULL, NULL };
-    struct sockaddr_in test4[4];
-    struct sockaddr_in6 test6[2];
+    picoquic_cnx_t* test_cnx[TEST_CNX_COUNT] = { NULL, NULL, NULL, NULL, NULL, NULL, NULL };
+    struct sockaddr_in test4[5];
+    struct sockaddr_in6 test6[3];
     const uint8_t test_ipv4[4] = { 192, 0, 2, 0 };
     const uint8_t test_ipv6[16] = { 0x20, 0x01, 0x0D, 0xB8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01 };
-    const picoquic_connection_id_t test_cnx_id[5] = { { 1 }, { 2 }, { 3 }, { 4 }, { 5 } };
+    const uint8_t test_ipv4l[4] = { 127, 0, 0, 1 };
+    const uint8_t test_ipv6l[16] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01 };
+
+    const picoquic_connection_id_t test_cnx_id[TEST_CNX_COUNT] = { { 1 }, { 2 }, { 3 }, { 4 }, { 5 }, { 6 }, { 7 } };
     struct sockaddr* test_cnx_addr[TEST_CNX_COUNT] = {
         (struct sockaddr*)&test4[0],
         (struct sockaddr*)&test4[1],
         (struct sockaddr*)&test4[2],
+        (struct sockaddr*)&test4[4],
         (struct sockaddr*)&test6[0],
-        (struct sockaddr*)&test6[1]
+        (struct sockaddr*)&test6[1],
+        (struct sockaddr*)&test6[2]
     };
 
     /* Create QUIC context */
@@ -73,25 +78,39 @@ int cnxcreation_test()
     /*
      * Initialize the sockaddr values
      */
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 5; i++) {
         uint8_t* addr = (uint8_t*)&test4[i].sin_addr;
         memset(&test4[i], 0, sizeof(test4[i]));
         test4[i].sin_family = AF_INET;
-        addr[0] = test_ipv4[0];
-        addr[1] = test_ipv4[1];
-        addr[2] = test_ipv4[2];
-        addr[3] = (i == 0) ? 1 : 2;
+        if (i < 4) {
+            addr[0] = test_ipv4[0];
+            addr[1] = test_ipv4[1];
+            addr[2] = test_ipv4[2];
+            addr[3] = (i == 0) ? 1 : 2;
+        }
+        else {
+            addr[0] = test_ipv4l[0];
+            addr[1] = test_ipv4l[1];
+            addr[2] = test_ipv4l[2];
+            addr[3] = test_ipv4l[3];
+        }
         test4[i].sin_port = 1000 + i;
     }
 
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < 3; i++) {
         uint8_t* addr = (uint8_t*)&test6[i].sin6_addr;
         memset(&test6[i], 0, sizeof(test6[i]));
         test6[i].sin6_family = AF_INET6;
-        for (int j = 0; j < 15; j++) {
-            addr[j] = test_ipv6[j];
+        for (int j = 0; j < 16; j++) {
+            if (i < 2) {
+                addr[j] = test_ipv6[j];
+            } else {
+                addr[j] = test_ipv6l[j];
+            }
         }
-        addr[15] = i + 1;
+        if (i < 2) {
+            addr[15] = i + 1;
+        }
         test6[i].sin6_port = 1000 + i;
     }
 
