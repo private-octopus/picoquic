@@ -324,7 +324,8 @@ int picoquic_register_cnx_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, picoqui
 
 static void picoquic_set_hash_key_by_address(picoquic_net_id * key, struct sockaddr* addr)
 {
-    memset(&key->saddr, 0, sizeof(struct sockaddr_storage));
+    memset(&key->saddr, 0, sizeof(key->saddr));
+
     if (addr->sa_family == AF_INET) {
         struct sockaddr_in * key4 = (struct sockaddr_in *) &key->saddr;
         struct sockaddr_in * s4 = (struct sockaddr_in *) addr;
