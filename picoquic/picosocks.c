@@ -263,7 +263,7 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
             /* The IP_PKTINFO structure is not defined on BSD */
             if ((cmsg->cmsg_level == IPPROTO_IP) && (cmsg->cmsg_type == IP_RECVDSTADDR)) {
                 if (addr_dest != NULL && dest_length != NULL) {
-                    struct in_addr* pPktInfo = (struct in_pktinfo*)CMSG_DATA(cmsg);
+                    struct in_addr* pPktInfo = (struct in_addr*)CMSG_DATA(cmsg);
                     ((struct sockaddr_in*)addr_dest)->sin_family = AF_INET;
                     ((struct sockaddr_in*)addr_dest)->sin_port = 0;
                     ((struct sockaddr_in*)addr_dest)->sin_addr.s_addr = pPktInfo->s_addr;
