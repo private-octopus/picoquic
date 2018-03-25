@@ -63,12 +63,14 @@ int picoquic_open_server_sockets(picoquic_server_sockets_t* sockets, int port)
 
         if (sockets->s_socket[i] == INVALID_SOCKET) {
             ret = -1;
-        } else {
+        }
+        else {
 #ifdef _WINDOWS
             int option_value = 1;
             if (sock_af[i] == AF_INET6) {
                 ret = setsockopt(sockets->s_socket[i], IPPROTO_IPV6, IPV6_PKTINFO, (char*)&option_value, sizeof(int));
-            } else {
+            }
+            else {
                 ret = setsockopt(sockets->s_socket[i], IPPROTO_IP, IP_PKTINFO, (char*)&option_value, sizeof(int));
             }
 #else
@@ -80,9 +82,15 @@ int picoquic_open_server_sockets(picoquic_server_sockets_t* sockets, int port)
                     val = 1;
                     ret = setsockopt(sockets->s_socket[i], IPPROTO_IPV6, IPV6_RECVPKTINFO, (char*)&val, sizeof(int));
                 }
-            } else {
+            }
+            else {
                 int val = 1;
+#ifdef IP_PKTINFO
                 ret = setsockopt(sockets->s_socket[i], IPPROTO_IP, IP_PKTINFO, (char*)&val, sizeof(int));
+#else
+                /* The IP_PKTINFO structure is not defined on BSD */
+                ret = setsockopt(sockets->s_socket[i], IPPROTO_IP, IP_RECVDSTADDR, (char*)&val, sizeof(int));
+#endif
             }
 #endif
             if (ret == 0) {
@@ -238,6 +246,7 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
         *from_length = msg.msg_namelen;
 
         for (cmsg = CMSG_FIRSTHDR(&msg); cmsg != NULL; cmsg = CMSG_NXTHDR(&msg, cmsg)) {
+#ifdef IP_PKTINFO
             if ((cmsg->cmsg_level == IPPROTO_IP) && (cmsg->cmsg_type == IP_PKTINFO)) {
                 if (addr_dest != NULL && dest_length != NULL) {
                     struct in_pktinfo* pPktInfo = (struct in_pktinfo*)CMSG_DATA(cmsg);
@@ -250,6 +259,22 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
                         *dest_if = pPktInfo->ipi_ifindex;
                     }
                 }
+#else
+            /* The IP_PKTINFO structure is not defined on BSD */
+            if ((cmsg->cmsg_level == IPPROTO_IP) && (cmsg->cmsg_type == IP_RECVDSTADDR)) {
+                if (addr_dest != NULL && dest_length != NULL) {
+                    struct in_addr* pPktInfo = (struct in_pktinfo*)CMSG_DATA(cmsg);
+                    ((struct sockaddr_in*)addr_dest)->sin_family = AF_INET;
+                    ((struct sockaddr_in*)addr_dest)->sin_port = 0;
+                    ((struct sockaddr_in*)addr_dest)->sin_addr.s_addr = pPktInfo->s_addr;
+                    *dest_length = sizeof(struct sockaddr_in);
+
+                    if (dest_if != NULL) {
+                        *dest_if = 0;
+                    }
+                }
+
+#endif
             } else if ((cmsg->cmsg_level == IPPROTO_IPV6) && (cmsg->cmsg_type == IPV6_PKTINFO)) {
                 if (addr_dest != NULL && dest_length != NULL) {
                     struct in6_pktinfo* pPktInfo6 = (struct in6_pktinfo*)CMSG_DATA(cmsg);
@@ -404,6 +429,7 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
 
     if (addr_from != NULL && from_length != 0) {
         if (addr_from->sa_family == AF_INET) {
+#ifdef IP_PKTINFO
             memset(cmsg, 0, CMSG_SPACE(sizeof(struct in_pktinfo)));
             cmsg->cmsg_level = IPPROTO_IP;
             cmsg->cmsg_type = IP_PKTINFO;
@@ -411,8 +437,17 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
             struct in_pktinfo* pktinfo = (struct in_pktinfo*)CMSG_DATA(cmsg);
             pktinfo->ipi_addr.s_addr = ((struct sockaddr_in*)addr_from)->sin_addr.s_addr;
             pktinfo->ipi_ifindex = dest_if;
-
             control_length += CMSG_SPACE(sizeof(struct in_pktinfo));
+#else
+            /* The IP_PKTINFO structure is not defined on BSD */
+            memset(cmsg, 0, CMSG_SPACE(sizeof(struct in_addr)));
+            cmsg->cmsg_level = IPPROTO_IP;
+            cmsg->cmsg_type = IP_PKTINFO;
+            cmsg->cmsg_len = CMSG_LEN(sizeof(struct in_addr));
+            struct in_addr* pktinfo = (struct in_pktinfo*)CMSG_DATA(cmsg);
+            pktinfo->s_addr = ((struct sockaddr_in*)addr_from)->sin_addr.s_addr;
+            control_length += CMSG_SPACE(sizeof(struct in_addr));
+#endif
         } else if (addr_from->sa_family == AF_INET6) {
             memset(cmsg, 0, CMSG_SPACE(sizeof(struct in6_pktinfo)));
             cmsg->cmsg_level = IPPROTO_IPV6;
