@@ -355,7 +355,6 @@ int quic_server(const char* server_name, int server_port,
     struct sockaddr_storage client_from;
     socklen_t from_length;
     socklen_t to_length;
-    int client_addr_length;
     uint8_t buffer[1536];
     uint8_t send_buffer[1536];
     size_t send_length = 0;
@@ -441,7 +440,6 @@ int quic_server(const char* server_name, int server_port,
                         picoquic_get_cnx_state(picoquic_get_first_cnx(qserver)), from_length);
                     memset(&client_from, 0, sizeof(client_from));
                     memcpy(&client_from, &addr_from, from_length);
-                    client_addr_length = from_length;
 
                     print_address((struct sockaddr*)&client_from, "Client address:",
                         picoquic_get_initial_cnxid(cnx_server));

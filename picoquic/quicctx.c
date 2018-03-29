@@ -129,7 +129,6 @@ picoquic_quic_t* picoquic_create(uint32_t nb_connections,
     size_t ticket_encryption_key_length)
 {
     picoquic_quic_t* quic = (picoquic_quic_t*)malloc(sizeof(picoquic_quic_t));
-    int ret = 0;
 
     if (quic != NULL) {
         /* TODO: winsock init */
@@ -150,7 +149,7 @@ picoquic_quic_t* picoquic_create(uint32_t nb_connections,
 
         if (ticket_file_name != NULL) {
             quic->ticket_file_name = ticket_file_name;
-            ret = picoquic_load_tickets(&quic->p_first_ticket, current_time, ticket_file_name);
+            (void) picoquic_load_tickets(&quic->p_first_ticket, current_time, ticket_file_name);
         }
 
         quic->table_cnx_by_id = picohash_create(nb_connections * 4,
