@@ -129,8 +129,11 @@ picoquic_quic_t* picoquic_create(uint32_t nb_connections,
     size_t ticket_encryption_key_length)
 {
     picoquic_quic_t* quic = (picoquic_quic_t*)malloc(sizeof(picoquic_quic_t));
+    int ret = 0;
 
-    if (quic != NULL) {
+    if (quic == NULL) {
+        ret = -1;
+    } else {
         /* TODO: winsock init */
         /* TODO: open UDP sockets - maybe */
         memset(quic, 0, sizeof(picoquic_quic_t));
@@ -149,18 +152,28 @@ picoquic_quic_t* picoquic_create(uint32_t nb_connections,
 
         if (ticket_file_name != NULL) {
             quic->ticket_file_name = ticket_file_name;
-            (void) picoquic_load_tickets(&quic->p_first_ticket, current_time, ticket_file_name);
-        }
+            ret = picoquic_load_tickets(&quic->p_first_ticket, current_time, ticket_file_name);
 
+            if (ret != 0) {
+                DBG_PRINTF("Cannot load tickets from <%s>\n", ticket_file_name);
+            }
+        }
+    }
+
+    if (ret == 0) {
         quic->table_cnx_by_id = picohash_create(nb_connections * 4,
             picoquic_cnx_id_hash, picoquic_cnx_id_compare);
 
         quic->table_cnx_by_net = picohash_create(nb_connections * 4,
             picoquic_net_id_hash, picoquic_net_id_compare);
 
-        if (quic->table_cnx_by_id == NULL || quic->table_cnx_by_net == NULL || picoquic_master_tlscontext(quic, cert_file_name, key_file_name, ticket_encryption_key, ticket_encryption_key_length) != 0) {
-            picoquic_free(quic);
-            quic = NULL;
+        if (quic->table_cnx_by_id == NULL || quic->table_cnx_by_net == NULL) {
+            ret = -1;
+            DBG_PRINTF("%s", "Cannot initialize hash tables\n");
+        }
+        else if (picoquic_master_tlscontext(quic, cert_file_name, key_file_name, ticket_encryption_key, ticket_encryption_key_length) != 0) {
+                ret = -1;
+                DBG_PRINTF("%s", "Cannot create TLS context \n");     
         } else {
             /* the random generator was initialized as part of the TLS context.
              * Use it to create the seed for generating the per context stateless
@@ -171,6 +184,11 @@ picoquic_quic_t* picoquic_create(uint32_t nb_connections,
             else
                 memcpy(quic->reset_seed, reset_seed, sizeof(quic->reset_seed));
         }
+    }
+
+    if (ret != 0 && quic != NULL) {
+        picoquic_free(quic);
+        quic = NULL;
     }
 
     return quic;

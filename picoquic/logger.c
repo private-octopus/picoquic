@@ -1347,9 +1347,7 @@ void picoquic_log_tls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
     uint32_t lifetime = 0;
     uint32_t age_add = 0;
     uint8_t nonce_length = 0;
-    /* uint8_t* nonce_ptr = NULL; */
     uint16_t ticket_val_length = 0;
-    /* uint8_t* ticket_val_ptr = NULL; */
     uint16_t extension_length = 0;
     uint8_t* extension_ptr = NULL;
     uint16_t byte_index = 0;
@@ -1368,7 +1366,6 @@ void picoquic_log_tls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
         if (ticket_length < min_length) {
             ret = -1;
         } else {
-            /* nonce_ptr = &ticket[byte_index]; */
             byte_index += nonce_length;
 
             ticket_val_length = PICOPARSE_16(ticket + byte_index);
@@ -1377,7 +1374,6 @@ void picoquic_log_tls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
             if (ticket_length < min_length) {
                 ret = -1;
             } else {
-                /* ticket_val_ptr = &ticket[byte_index]; */
                 byte_index += ticket_val_length;
 
                 extension_length = PICOPARSE_16(ticket + byte_index);

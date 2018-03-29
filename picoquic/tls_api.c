@@ -22,13 +22,7 @@
 #ifdef _WINDOWS
 #include "wincompat.h"
 #endif
-#ifndef NULL
-#ifdef __cplusplus
-#define NULL 0
-#else
-#define NULL ((void *)0)
-#endif
-#endif
+#include <stddef.h>
 #include "picotls.h"
 #include "picoquic_internal.h"
 #include "picotls/openssl.h"
@@ -962,6 +956,11 @@ size_t ptls_aead_encrypt(aead_context, void* output, void* input, size_t input_l
 Similar for aead_decrypt
 Decrypt returns size_t_max (-1) if decryption fails, number of bytes in output otherwise
 
+NOTE: we need special versions of the function ptls_hkdf_expand_label due to a 
+quirk in the Quic/TLS spec, and thus special function of ptls_aead_new. Not ideal.
+If we can get the Quic spec to change, we will want to remove that code and
+revert to using ptls_aead_new.
+
 */
 
 int picoquic_hkdf_expand_label(ptls_hash_algorithm_t *algo, void *output, size_t outlen, ptls_iovec_t secret, 
@@ -976,14 +975,10 @@ int picoquic_hkdf_expand_label(ptls_hash_algorithm_t *algo, void *output, size_t
     ptls_buffer_push16(&hkdf_label, (uint16_t)outlen);
     ptls_buffer_push_block(&hkdf_label, 1, {
         if (base_label == NULL)
-        base_label = "tls13 ";
-    ptls_buffer_pushv(&hkdf_label, base_label, strlen(base_label));
-    ptls_buffer_pushv(&hkdf_label, label, strlen(label));
+            base_label = "tls13 ";
+        ptls_buffer_pushv(&hkdf_label, base_label, strlen(base_label));
+        ptls_buffer_pushv(&hkdf_label, label, strlen(label));
         });
-    /*
-     * removing the reference to the hash value, as it is not used in QUIC
-     *  ptls_buffer_push_block(&hkdf_label, 1, { ptls_buffer_pushv(&hkdf_label, hash_value.base, hash_value.len); });
-    */
 
     ret = ptls_hkdf_expand(algo, output, outlen, secret, ptls_iovec_init(hkdf_label.base, hkdf_label.off));
 
@@ -1010,10 +1005,12 @@ ptls_aead_context_t *picoquic_aead_new(ptls_aead_algorithm_t *aead, ptls_hash_al
         return NULL;
 
     *ctx = (ptls_aead_context_t) { aead };
-    if ((ret = picoquic_get_traffic_key(hash, key, aead->key_size, 0, secret, base_label)) != 0)
+    if ((ret = picoquic_get_traffic_key(hash, key, aead->key_size, 0, secret, base_label)) != 0) {
         goto Exit;
-    if ((ret = picoquic_get_traffic_key(hash, ctx->static_iv, aead->iv_size, 1, secret, base_label)) != 0)
+    }
+    if ((ret = picoquic_get_traffic_key(hash, ctx->static_iv, aead->iv_size, 1, secret, base_label)) != 0) {
         goto Exit;
+    }
     ret = aead->setup_crypto(ctx, is_enc, key);
 
 Exit:
