@@ -122,10 +122,9 @@ uint8_t client_param5[] = {
 
 uint8_t server_param1[] = {
     'P', 'C', 'Q', '0',
-    0x0C,
+    0x08,
     'P', 'C', 'Q', '0',
     0xFF, 0x00, 0x00, 0x0A,
-    0xFF, 0x00, 0x00, 0x09,
     0, 0x38,
     0, 0, 0, 4, 0, 0, 0xFF, 0xFF,
     0, 1, 0, 4, 0, 0x40, 0, 0,
@@ -137,10 +136,9 @@ uint8_t server_param1[] = {
 
 uint8_t server_param2[] = {
     'P', 'C', 'Q', '0',
-    0x0C,
+    0x08,
     'P', 'C', 'Q', '0',
     0xFF, 0x00, 0x00, 0x0A,
-    0xFF, 0x00, 0x00, 0x09,
     0, 0x3C,
     0, 0, 0, 4, 0x01, 0, 0, 0,
     0, 1, 0, 4, 0x01, 0, 0, 0,
