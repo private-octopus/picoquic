@@ -122,7 +122,16 @@ Sorry, not all that much documentation yet. This will come as we populate the wi
 best bet is to look at the demonstration program "picoquicdemo" that is included in the
 release. The sources are in "picoquicfirst/picoquicdemo.c".
 
+## Testing previous versions
 
+The code is constantly updated to track the latest version of the specification. When we can,
+we maintain compatibility with previous drafts, so as to facilitate interop testing with
+other implementations. But some version changes will change the wire format or the encryption
+code in incompatible ways. That's the reason why we don't support draft-05 or draft-07 anymore,
+and why we will very soon stop supporting draft-09.
+
+Since some implementations are still testing draft-09, we have created a draft-09-support branch.
+Download that if you want to test this old version.
 
 
 

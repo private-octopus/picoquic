@@ -355,7 +355,6 @@ int quic_server(const char* server_name, int server_port,
     struct sockaddr_storage client_from;
     socklen_t from_length;
     socklen_t to_length;
-    int client_addr_length;
     uint8_t buffer[1536];
     uint8_t send_buffer[1536];
     size_t send_length = 0;
@@ -441,7 +440,6 @@ int quic_server(const char* server_name, int server_port,
                         picoquic_get_cnx_state(picoquic_get_first_cnx(qserver)), from_length);
                     memset(&client_from, 0, sizeof(client_from));
                     memcpy(&client_from, &addr_from, from_length);
-                    client_addr_length = from_length;
 
                     print_address((struct sockaddr*)&client_from, "Client address:",
                         picoquic_get_initial_cnxid(cnx_server));
@@ -812,7 +810,7 @@ int quic_client(const char* ip_address_text, int server_port, uint32_t proposed_
     int64_t delay_max = 10000000;
     int64_t delta_t = 0;
     int notified_ready = 0;
-    const char* alpn = "hq-09";
+    const char* alpn = "hq-10";
 
     memset(&callback_ctx, 0, sizeof(picoquic_first_client_callback_ctx_t));
 
@@ -1111,7 +1109,7 @@ void usage()
     fprintf(stderr, "                          where <src> is int:\n");
     fprintf(stderr, "                            0: picoquic_cnx_id_random\n");
     fprintf(stderr, "                            1: picoquic_cnx_id_remote (client)\n");
-    fprintf(stderr, "  -v version            Version proposed by client, e.g. -v ff000009\n");
+    fprintf(stderr, "  -v version            Version proposed by client, e.g. -v ff00000a\n");
     fprintf(stderr, "  -z                    Set TLS zero share behavior on client, to force HRR.\n");
     fprintf(stderr, "  -l file               Log file\n");
     fprintf(stderr, "  -m mtu_max            Largest mtu value that can be tried for discovery\n");
@@ -1149,7 +1147,7 @@ int main(int argc, char** argv)
     const char* server_key_file = default_server_key_file;
     const char* log_file = NULL;
     int server_port = default_server_port;
-    uint32_t proposed_version = 0xFF000009;
+    uint32_t proposed_version = 0xFF00000a;
     int is_client = 0;
     int just_once = 0;
     int do_hrr = 0;

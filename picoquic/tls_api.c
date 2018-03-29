@@ -22,6 +22,8 @@
 #ifdef _WINDOWS
 #include "wincompat.h"
 #endif
+#include <stddef.h>
+#include "picotls.h"
 #include "picoquic_internal.h"
 #include "picotls/openssl.h"
 #include "tls_api.h"
@@ -942,7 +944,7 @@ void picoquic_pn_encrypt(void *pn_enc, void * iv, void *output, const void *inpu
 
 /*
 
-Using function ptls_aead_new(cipher->aead, cipher->hash, is_enc, pp->secret);
+Using function picoquic_aead_new(cipher->aead, cipher->hash, is_enc, pp->secret);
 is_enc == 0 => decryption key;
 is_enc != 0 => encryption key;
 returns * ptls_aead_context
@@ -954,7 +956,73 @@ size_t ptls_aead_encrypt(aead_context, void* output, void* input, size_t input_l
 Similar for aead_decrypt
 Decrypt returns size_t_max (-1) if decryption fails, number of bytes in output otherwise
 
+NOTE: we need special versions of the function ptls_hkdf_expand_label due to a 
+quirk in the Quic/TLS spec, and thus special function of ptls_aead_new. Not ideal.
+If we can get the Quic spec to change, we will want to remove that code and
+revert to using ptls_aead_new.
+
 */
+
+int picoquic_hkdf_expand_label(ptls_hash_algorithm_t *algo, void *output, size_t outlen, ptls_iovec_t secret, 
+    const char *label, const char *base_label)
+{
+    ptls_buffer_t hkdf_label;
+    uint8_t hkdf_label_buf[512];
+    int ret;
+
+    ptls_buffer_init(&hkdf_label, hkdf_label_buf, sizeof(hkdf_label_buf));
+
+    ptls_buffer_push16(&hkdf_label, (uint16_t)outlen);
+    ptls_buffer_push_block(&hkdf_label, 1, {
+        if (base_label == NULL)
+            base_label = "tls13 ";
+        ptls_buffer_pushv(&hkdf_label, base_label, strlen(base_label));
+        ptls_buffer_pushv(&hkdf_label, label, strlen(label));
+        });
+
+    ret = ptls_hkdf_expand(algo, output, outlen, secret, ptls_iovec_init(hkdf_label.base, hkdf_label.off));
+
+Exit:
+    ptls_buffer_dispose(&hkdf_label);
+    return ret;
+}
+
+static int picoquic_get_traffic_key(ptls_hash_algorithm_t *algo, void *key, size_t key_size, int is_iv, const void *secret,
+    const char *base_label)
+{
+    return picoquic_hkdf_expand_label(algo, key, key_size, ptls_iovec_init(secret, algo->digest_size), is_iv ? "iv" : "key",
+        base_label);
+}
+
+ptls_aead_context_t *picoquic_aead_new(ptls_aead_algorithm_t *aead, ptls_hash_algorithm_t *hash, int is_enc, const void *secret,
+    const char *base_label)
+{
+    ptls_aead_context_t *ctx;
+    uint8_t key[PTLS_MAX_SECRET_SIZE];
+    int ret;
+
+    if ((ctx = (ptls_aead_context_t *)malloc(aead->context_size)) == NULL)
+        return NULL;
+
+    *ctx = (ptls_aead_context_t) { aead };
+    if ((ret = picoquic_get_traffic_key(hash, key, aead->key_size, 0, secret, base_label)) != 0) {
+        goto Exit;
+    }
+    if ((ret = picoquic_get_traffic_key(hash, ctx->static_iv, aead->iv_size, 1, secret, base_label)) != 0) {
+        goto Exit;
+    }
+    ret = aead->setup_crypto(ctx, is_enc, key);
+
+Exit:
+    ptls_clear_memory(key, aead->key_size);
+    if (ret != 0) {
+        ptls_clear_memory(ctx->static_iv, aead->iv_size);
+        free(ctx);
+        ctx = NULL;
+    }
+
+    return ctx;
+}
 
 void picoquic_aead_free(void* aead_context)
 {
@@ -986,7 +1054,7 @@ int picoquic_setup_0RTT_aead_contexts(picoquic_cnx_t* cnx, int is_server)
 
         if (ret == 0 && is_server == 0) {
             cnx->aead_0rtt_encrypt_ctx = (void*)
-                ptls_aead_new(cipher->aead, cipher->hash, 1, secret, PICOQUIC_QUIC_BASE_LABEL);
+                picoquic_aead_new(cipher->aead, cipher->hash, 1, secret, PICOQUIC_QUIC_BASE_LABEL);
 
             if (cnx->aead_0rtt_encrypt_ctx == NULL) {
                 ret = PICOQUIC_ERROR_MEMORY;
@@ -995,7 +1063,7 @@ int picoquic_setup_0RTT_aead_contexts(picoquic_cnx_t* cnx, int is_server)
 
         if (ret == 0) {
             cnx->aead_0rtt_decrypt_ctx = (void*)
-                ptls_aead_new(cipher->aead, cipher->hash, 0, secret, PICOQUIC_QUIC_BASE_LABEL);
+                picoquic_aead_new(cipher->aead, cipher->hash, 0, secret, PICOQUIC_QUIC_BASE_LABEL);
             cnx->pn_enc_0rtt = picoquic_pn_enc_create(cipher->aead, cipher->hash, secret, PICOQUIC_QUIC_BASE_LABEL);
         }
     }
@@ -1023,7 +1091,7 @@ int picoquic_setup_1RTT_aead_contexts(picoquic_cnx_t* cnx, int is_server)
 
         if (ret == 0) {
             cnx->aead_encrypt_ctx = (void*)
-                ptls_aead_new(cipher->aead, cipher->hash, 1, secret, PICOQUIC_QUIC_BASE_LABEL);
+                picoquic_aead_new(cipher->aead, cipher->hash, 1, secret, PICOQUIC_QUIC_BASE_LABEL);
             cnx->pn_enc = picoquic_pn_enc_create(cipher->aead, cipher->hash, secret, NULL);
 
             if (cnx->aead_encrypt_ctx == NULL) {
@@ -1031,7 +1099,7 @@ int picoquic_setup_1RTT_aead_contexts(picoquic_cnx_t* cnx, int is_server)
             }
 
             cnx->aead_de_encrypt_ctx = (void*)
-                ptls_aead_new(cipher->aead, cipher->hash, 0, secret, PICOQUIC_QUIC_BASE_LABEL);
+                picoquic_aead_new(cipher->aead, cipher->hash, 0, secret, PICOQUIC_QUIC_BASE_LABEL);
         }
 
         /* Now set up the corresponding decryption */
@@ -1042,7 +1110,7 @@ int picoquic_setup_1RTT_aead_contexts(picoquic_cnx_t* cnx, int is_server)
         }
 
         if (ret == 0) {
-            cnx->aead_decrypt_ctx = (void*)ptls_aead_new(cipher->aead, cipher->hash, 0, secret, PICOQUIC_QUIC_BASE_LABEL);
+            cnx->aead_decrypt_ctx = (void*)picoquic_aead_new(cipher->aead, cipher->hash, 0, secret, PICOQUIC_QUIC_BASE_LABEL);
             cnx->pn_dec = picoquic_pn_enc_create(cipher->aead, cipher->hash, secret, NULL);
 
             if (cnx->aead_decrypt_ctx == NULL) {
@@ -1074,8 +1142,8 @@ int picoquic_server_setup_ticket_aead_contexts(picoquic_quic_t* quic,
         }
 
         /* Create the AEAD contexts */
-        quic->aead_encrypt_ticket_ctx = (void*)ptls_aead_new(aead, algo, 1, temp_secret, PICOQUIC_QUIC_BASE_LABEL);
-        quic->aead_decrypt_ticket_ctx = (void*)ptls_aead_new(aead, algo, 0, temp_secret, PICOQUIC_QUIC_BASE_LABEL);
+        quic->aead_encrypt_ticket_ctx = (void*)picoquic_aead_new(aead, algo, 1, temp_secret, PICOQUIC_QUIC_BASE_LABEL);
+        quic->aead_decrypt_ticket_ctx = (void*)picoquic_aead_new(aead, algo, 0, temp_secret, PICOQUIC_QUIC_BASE_LABEL);
 
         if (quic->aead_encrypt_ticket_ctx == NULL || quic->aead_decrypt_ticket_ctx == NULL) {
             ret = PICOQUIC_ERROR_MEMORY;
@@ -1138,7 +1206,6 @@ static size_t picoquic_setup_clear_text_aead_label(
     label[byte_index++] = (uint8_t)text_length;
     memcpy(&label[byte_index], label_text, text_length);
     byte_index += text_length;
-    label[byte_index++] = 0;
 
     return byte_index;
 }
@@ -1235,11 +1302,11 @@ int picoquic_setup_cleartext_aead_contexts(picoquic_cnx_t* cnx)
         if (ret == 0) {
             /* Create the AEAD contexts */
             cnx->aead_encrypt_cleartext_ctx = (void*)
-                ptls_aead_new(aead, algo, 1, secret1, PICOQUIC_QUIC_BASE_LABEL);
+                picoquic_aead_new(aead, algo, 1, secret1, PICOQUIC_QUIC_BASE_LABEL);
             cnx->aead_decrypt_cleartext_ctx = (void*)
-                ptls_aead_new(aead, algo, 0, secret2, PICOQUIC_QUIC_BASE_LABEL);
+                picoquic_aead_new(aead, algo, 0, secret2, PICOQUIC_QUIC_BASE_LABEL);
             cnx->aead_de_encrypt_cleartext_ctx = (void*)
-                ptls_aead_new(aead, algo, 0, secret1, PICOQUIC_QUIC_BASE_LABEL);
+                picoquic_aead_new(aead, algo, 0, secret1, PICOQUIC_QUIC_BASE_LABEL);
 
             cnx->pn_enc_cleartext = picoquic_pn_enc_create(aead, algo, secret1, NULL);
             cnx->pn_dec_cleartext = picoquic_pn_enc_create(aead, algo, secret2, NULL);

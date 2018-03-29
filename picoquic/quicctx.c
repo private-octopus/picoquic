@@ -99,12 +99,6 @@ static uint8_t picoquic_cleartext_draft_10_salt[] = {
     0xe0, 0x6d, 0x6c, 0x38
 };
 
-static uint8_t picoquic_cleartext_draft_08_salt[] = {
-    0xaf, 0xc8, 0x24, 0xec, 0x5f, 0xc7, 0x7e, 0xca,
-    0x1e, 0x9d, 0x36, 0xf3, 0x7f, 0xb2, 0xd4, 0x65,
-    0x18, 0xc3, 0x66, 0x39
-};
-
 const picoquic_version_parameters_t picoquic_supported_versions[] = {
     { PICOQUIC_INTERNAL_TEST_VERSION_1, picoquic_version_use_pn_encryption,
         picoquic_version_header_10,
@@ -113,11 +107,7 @@ const picoquic_version_parameters_t picoquic_supported_versions[] = {
     { PICOQUIC_FIFTH_INTEROP_VERSION, 0,
         picoquic_version_header_10,
         sizeof(picoquic_cleartext_draft_10_salt),
-        picoquic_cleartext_draft_10_salt },
-    { PICOQUIC_FOURTH_INTEROP_VERSION, 0,
-        picoquic_version_header_09,
-        sizeof(picoquic_cleartext_draft_08_salt),
-        picoquic_cleartext_draft_08_salt }
+        picoquic_cleartext_draft_10_salt }
 };
 
 const size_t picoquic_nb_supported_versions = sizeof(picoquic_supported_versions) / sizeof(picoquic_version_parameters_t);
@@ -141,7 +131,9 @@ picoquic_quic_t* picoquic_create(uint32_t nb_connections,
     picoquic_quic_t* quic = (picoquic_quic_t*)malloc(sizeof(picoquic_quic_t));
     int ret = 0;
 
-    if (quic != NULL) {
+    if (quic == NULL) {
+        ret = -1;
+    } else {
         /* TODO: winsock init */
         /* TODO: open UDP sockets - maybe */
         memset(quic, 0, sizeof(picoquic_quic_t));
@@ -161,17 +153,27 @@ picoquic_quic_t* picoquic_create(uint32_t nb_connections,
         if (ticket_file_name != NULL) {
             quic->ticket_file_name = ticket_file_name;
             ret = picoquic_load_tickets(&quic->p_first_ticket, current_time, ticket_file_name);
-        }
 
+            if (ret != 0) {
+                DBG_PRINTF("Cannot load tickets from <%s>\n", ticket_file_name);
+            }
+        }
+    }
+
+    if (ret == 0) {
         quic->table_cnx_by_id = picohash_create(nb_connections * 4,
             picoquic_cnx_id_hash, picoquic_cnx_id_compare);
 
         quic->table_cnx_by_net = picohash_create(nb_connections * 4,
             picoquic_net_id_hash, picoquic_net_id_compare);
 
-        if (quic->table_cnx_by_id == NULL || quic->table_cnx_by_net == NULL || picoquic_master_tlscontext(quic, cert_file_name, key_file_name, ticket_encryption_key, ticket_encryption_key_length) != 0) {
-            picoquic_free(quic);
-            quic = NULL;
+        if (quic->table_cnx_by_id == NULL || quic->table_cnx_by_net == NULL) {
+            ret = -1;
+            DBG_PRINTF("%s", "Cannot initialize hash tables\n");
+        }
+        else if (picoquic_master_tlscontext(quic, cert_file_name, key_file_name, ticket_encryption_key, ticket_encryption_key_length) != 0) {
+                ret = -1;
+                DBG_PRINTF("%s", "Cannot create TLS context \n");     
         } else {
             /* the random generator was initialized as part of the TLS context.
              * Use it to create the seed for generating the per context stateless
@@ -182,6 +184,11 @@ picoquic_quic_t* picoquic_create(uint32_t nb_connections,
             else
                 memcpy(quic->reset_seed, reset_seed, sizeof(quic->reset_seed));
         }
+    }
+
+    if (ret != 0 && quic != NULL) {
+        picoquic_free(quic);
+        quic = NULL;
     }
 
     return quic;
