@@ -22,6 +22,13 @@
 #ifdef _WINDOWS
 #include "wincompat.h"
 #endif
+#ifndef NULL
+#ifdef __cplusplus
+#define NULL 0
+#else
+#define NULL ((void *)0)
+#endif
+#endif
 #include "picotls.h"
 #include "picoquic_internal.h"
 #include "picotls/openssl.h"
