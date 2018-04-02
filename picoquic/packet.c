@@ -234,17 +234,17 @@ int picoquic_parse_packet_header(
                 ph->pn_offset = ph->offset;
 
                 switch (bytes[0] & 0x1F) {
-                case 0:
+                case 0x10:
                     ph->pn = bytes[ph->offset];
                     ph->pnmask = 0xFFFFFFFFFFFFFF00ull;
                     ph->offset += 1;
                     break;
-                case 1:
+                case 0x11:
                     ph->pn = PICOPARSE_16(&bytes[ph->offset]);
                     ph->pnmask = 0xFFFFFFFFFFFF0000ull;
                     ph->offset += 2;
                     break;
-                case 2:
+                case 0x12:
                     ph->pn = PICOPARSE_32(&bytes[ph->offset]);
                     ph->pnmask = 0xFFFFFFFF00000000ull;
                     ph->offset += 4;
