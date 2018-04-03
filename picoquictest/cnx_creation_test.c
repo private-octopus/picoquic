@@ -176,7 +176,7 @@ int cnxcreation_test()
       */
 
     if (ret == 0) {
-        picoquic_connection_id_t bad_target = { 123456789 };
+        picoquic_connection_id_t bad_target = { { 1,2,3,4,5,6,7,8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 8 };
         picoquic_cnx_t* cnx = picoquic_cnx_by_id(quic, bad_target);
         if (cnx != NULL) {
             ret = -1;

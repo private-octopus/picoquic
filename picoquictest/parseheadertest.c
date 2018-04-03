@@ -26,16 +26,17 @@
 /* test vectors and corresponding structure */
 
 #define TEST_CNXID_INI_BYTES 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07
-#define TEST_CNXID_INI_VAL 0x0001020304050607ull
+#define TEST_CNXID_INI_BYTES_ZERO 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+#define TEST_CNXID_INI_VAL {{TEST_CNXID_INI_BYTES, TEST_CNXID_INI_BYTES_ZERO}, 8}
 
 /*
  * New definitions
  */
 
 #define TEST_CNXID_10_BYTES 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09
-#define TEST_CNXID_10_VAL 0x0203040506070809ull
+#define TEST_CNXID_10_VAL { { TEST_CNXID_10_BYTES }, 8 }
 
-static picoquic_connection_id_t test_cnxid_10 = { TEST_CNXID_10_VAL };
+static picoquic_connection_id_t test_cnxid_10 = TEST_CNXID_10_VAL;
 
 static uint8_t pinitial10[] = {
     0xFF,
@@ -45,7 +46,7 @@ static uint8_t pinitial10[] = {
 };
 
 static picoquic_packet_header hinitial10 = {
-    { TEST_CNXID_INI_VAL },
+    TEST_CNXID_INI_VAL,
     0xDEADBEEF,
     0x50435130,
     17,
@@ -72,7 +73,7 @@ static uint8_t pvnegobis10[] = {
 };
 
 static picoquic_packet_header hvnego10 = {
-    { TEST_CNXID_10_VAL },
+    TEST_CNXID_10_VAL,
     0,
     0,
     13,
@@ -89,7 +90,7 @@ static uint8_t packet_short_phi0_c_32[] = {
 };
 
 static picoquic_packet_header hphi0_c_32 = {
-    { TEST_CNXID_10_VAL },
+    TEST_CNXID_10_VAL,
     0xDEADBEEF,
     0,
     13,
@@ -106,7 +107,7 @@ static uint8_t packet_short_phi1_c_16[] = {
 };
 
 static picoquic_packet_header hphi1_c_16 = {
-    { TEST_CNXID_10_VAL },
+    TEST_CNXID_10_VAL,
     0xBEEF,
     0,
     11,
@@ -123,7 +124,7 @@ static uint8_t packet_short_phi1_c_8[] = {
 };
 
 static picoquic_packet_header hphi1_c_8 = {
-    { TEST_CNXID_10_VAL },
+    TEST_CNXID_10_VAL,
     0xEF,
     0,
     10,

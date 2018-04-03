@@ -54,7 +54,7 @@ int picoquic_parse_packet_header(
             ret = -1;
         } else {
             /* If this is a long header, the bytes at position 9--12 describe the version */
-            ph->offset = 1 + picoquic_parse_connection_id(bytes + 1, &ph->cnx_id);
+            ph->offset = 1 + picoquic_parse_connection_id(bytes + 1, 8, &ph->cnx_id);
             ph->vn = PICOPARSE_32(bytes + ph->offset);
             ph->offset += 4;
 
@@ -166,9 +166,10 @@ int picoquic_parse_packet_header(
         ph->pn = 0;
 
         if ((bytes[0] & 0x40) == 0) {
-            if (length >= 1 + sizeof(picoquic_connection_id_t)) {
+            /* TODO: new packet format, not just assume length = 8 */
+            if (length >= 1 + 8) {
                 /* We can identify the connection by its ID */
-                ph->offset = 1 + picoquic_parse_connection_id(bytes + 1, &ph->cnx_id);
+                ph->offset = 1 + picoquic_parse_connection_id(bytes + 1, 8, &ph->cnx_id);
                 /* TODO: should consider using combination of CNX ID and ADDR_FROM */
                 if (*pcnx == NULL)
                 {
@@ -484,7 +485,7 @@ int picoquic_prepare_version_negotiation(
         picoquic_public_random(bytes + byte_index, 1);
         bytes[byte_index++] |= 0x80;
         /* Copy the incoming connection ID */
-        byte_index += picoquic_format_connection_id(bytes + byte_index, ph->cnx_id);
+        byte_index += picoquic_format_connection_id(bytes + byte_index, PICOQUIC_MAX_PACKET_SIZE - byte_index, ph->cnx_id);
         /* Set the version number to zero */
         picoformat_32(bytes + byte_index, 0);
         byte_index += 4;
@@ -532,7 +533,7 @@ void picoquic_process_unexpected_cnxid(
             /* Packet type set to short header, with cnxid, key phase 0, 1 byte seq */
             bytes[byte_index++] = 0x41;
             /* Copy the connection ID */
-            byte_index += picoquic_format_connection_id(bytes + byte_index, ph->cnx_id);
+            byte_index += picoquic_format_connection_id(bytes + byte_index, PICOQUIC_MAX_PACKET_SIZE - byte_index, ph->cnx_id);
             /* Add some random bytes to look good. */
             picoquic_public_random(bytes + byte_index, pad_size);
             byte_index += pad_size;
@@ -575,7 +576,7 @@ void picoquic_queue_stateless_reset(picoquic_cnx_t* cnx,
         /* Packet type set to long header, with cnxid */
         bytes[byte_index++] = 0x80 | 0x7E;
         /* Copy the connection ID */
-        byte_index += picoquic_format_connection_id(bytes + byte_index, ph->cnx_id);
+        byte_index += picoquic_format_connection_id(bytes + byte_index, PICOQUIC_MAX_PACKET_SIZE - byte_index, ph->cnx_id);
         /* Copy the version number */
         picoformat_32(bytes + byte_index, ph->vn);
         byte_index += 4;

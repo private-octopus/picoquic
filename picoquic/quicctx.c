@@ -99,6 +99,7 @@ static uint8_t picoquic_cleartext_draft_10_salt[] = {
     0xe0, 0x6d, 0x6c, 0x38
 };
 
+/* Support for draft 10! */
 const picoquic_version_parameters_t picoquic_supported_versions[] = {
     { PICOQUIC_INTERNAL_TEST_VERSION_1, picoquic_version_use_pn_encryption,
         picoquic_version_header_10,
@@ -581,6 +582,12 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, struct sockad
     return ret;
 }
 
+static void picoquic_create_random_cnx_id(picoquic_quic_t* quic, picoquic_connection_id_t * cnx_id)
+{
+    picoquic_crypto_random(quic, cnx_id->id, 8);
+    memset(cnx_id->id + 8, 0, sizeof(cnx_id->id) - 8);
+    cnx_id->id_len = 8;
+}
 
 
 picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
@@ -672,7 +679,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
 
             cnx->cnx_state = picoquic_state_client_init;
             if (picoquic_is_connection_id_null(cnx_id)) {
-                picoquic_crypto_random(quic, &cnx_id, sizeof(uint64_t));
+                picoquic_create_random_cnx_id(quic, &cnx_id);
             }
 
             if (quic->cnx_id_callback_fn) {
@@ -690,7 +697,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             cnx->first_stream.send_queue = NULL;
             cnx->cnx_state = picoquic_state_server_init;
             cnx->initial_cnxid = cnx_id;
-            picoquic_crypto_random(quic, &cnx->server_cnxid, sizeof(uint64_t));
+            picoquic_create_random_cnx_id(quic, &cnx->server_cnxid);
 
             if (quic->cnx_id_callback_fn)
                 quic->cnx_id_callback_fn(cnx->server_cnxid, cnx->initial_cnxid,

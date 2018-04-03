@@ -220,7 +220,7 @@ size_t picoquic_create_packet_header_09(
         length = 0;
         bytes[length++] = (C | K | PT);
         if (C == 0) {
-            length += picoquic_format_connection_id(&bytes[length], cnx_id);
+            length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, cnx_id);
         }
 
         *pn_offset = length;
@@ -249,7 +249,7 @@ size_t picoquic_create_packet_header_09(
             break;
         }
 
-        length += picoquic_format_connection_id(&bytes[length], cnx_id);
+        length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, cnx_id);
         if ((cnx->cnx_state == picoquic_state_client_init || cnx->cnx_state == picoquic_state_client_init_sent) && packet_type == picoquic_packet_client_initial) {
             picoformat_32(&bytes[length], cnx->proposed_version);
         }
@@ -287,7 +287,7 @@ size_t picoquic_create_packet_header_10(
         length = 0;
         bytes[length++] = (C | K | PT);
         if (C == 0) {
-            length += picoquic_format_connection_id(&bytes[length], cnx_id);
+            length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, cnx_id);
         }
 
         *pn_offset = length;
@@ -315,7 +315,7 @@ size_t picoquic_create_packet_header_10(
             break;
         }
 
-        length += picoquic_format_connection_id(&bytes[length], cnx_id);
+        length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, cnx_id);
         if ((cnx->cnx_state == picoquic_state_client_init || cnx->cnx_state == picoquic_state_client_init_sent) && packet_type == picoquic_packet_client_initial) {
             picoformat_32(&bytes[length], cnx->proposed_version);
         } else {

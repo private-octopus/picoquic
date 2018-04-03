@@ -53,7 +53,7 @@ void cleartext_aead_init_packet(picoquic_packet_header* ph,
 
     /* Serialize the header */
     cleartext[byte_index++] = 0x80 | ((uint8_t)ph->ptype);
-    byte_index += picoquic_format_connection_id(&cleartext[byte_index], ph->cnx_id);
+    byte_index += picoquic_format_connection_id(&cleartext[byte_index], 1526 - byte_index, ph->cnx_id);
     ph->pn_offset = byte_index;
     picoformat_32(&cleartext[byte_index], ph->pn);
     byte_index += 4;
@@ -127,8 +127,8 @@ int cleartext_aead_test()
             ret = -1;
         } else if (picoquic_compare_connection_id(&cnx_client->initial_cnxid, &cnx_server->initial_cnxid) != 0) {
             DBG_PRINTF("Server Cnx-ID= %llx, differs from Client Cnx-ID = %llx\n",
-                (unsigned long long) cnx_client->initial_cnxid.opaque64,
-                (unsigned long long) cnx_server->initial_cnxid.opaque64);
+                (unsigned long long) picoquic_val64_connection_id(cnx_client->initial_cnxid),
+                (unsigned long long) picoquic_val64_connection_id(cnx_server->initial_cnxid));
             ret = -1;
         }
         else if (picoquic_compare_cleartext_aead_contexts(cnx_client, cnx_server) != 0 ||
@@ -186,7 +186,7 @@ int cleartext_aead_test()
     return ret;
 }
 
-static picoquic_connection_id_t clear_test_vector_cnx_id = { 0x8394c8f03e515708ull };
+static picoquic_connection_id_t clear_test_vector_cnx_id = { { 0x83, 0x94, 0xc8, 0xf0, 0x3e, 0x51, 0x57, 0x08 }, 8 };
 #if 0
 static uint32_t clear_test_vector_vn = 0xff000009;
 static uint8_t clear_test_vector_client_iv[12] = {
