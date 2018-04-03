@@ -96,19 +96,27 @@ void debug_printf_resume(void)
     debug_suspended = 0;
 }
 
-size_t picoquic_format_connection_id(uint8_t* bytes, picoquic_connection_id_t cnx_id)
+size_t picoquic_format_connection_id(uint8_t* bytes, size_t bytes_max, picoquic_connection_id_t cnx_id)
 {
-    picoformat_64(bytes, cnx_id.opaque64);
+    size_t copied = cnx_id.id_len;
+    if (copied > bytes_max) {
+        copied = 0;
+    } else {
+        memcpy(bytes, cnx_id.id, copied);
+    }
 
-    return PICOQUIC_CONNECTION_ID_SIZE;
+    return copied;
 }
 
-size_t picoquic_parse_connection_id(uint8_t * bytes, picoquic_connection_id_t * cnx_id)
+size_t picoquic_parse_connection_id(uint8_t * bytes, uint8_t len, picoquic_connection_id_t * cnx_id)
 {
-    size_t len = sizeof(picoquic_connection_id_t);
-
-    cnx_id->opaque64 = PICOPARSE_64(bytes);
-
+    if (len <= PICOQUIC_CONNECTION_ID_MAX_SIZE) {
+        cnx_id->id_len = len;
+        memcpy(cnx_id->id, bytes, len);
+    } else {
+        len = 0;
+        cnx_id->id_len = 0;
+    }
     return len;
 }
 
@@ -116,15 +124,51 @@ const picoquic_connection_id_t picoquic_null_connection_id = { 0 };
 
 int picoquic_is_connection_id_null(picoquic_connection_id_t cnx_id)
 {
-    return (cnx_id.opaque64 == 0) ? 1 : 0;
+    return (cnx_id.id_len == 0) ? 1 : 0;
 }
 
 int picoquic_compare_connection_id(picoquic_connection_id_t * cnx_id1, picoquic_connection_id_t * cnx_id2)
 {
-    return(cnx_id1->opaque64 == cnx_id2->opaque64) ? 0 : -1;
+    int ret = -1;
+
+    if (cnx_id1->id_len == cnx_id2->id_len) {
+        ret = memcmp(cnx_id1->id, cnx_id2->id, cnx_id1->id_len);
+    }
+
+    return ret;
 }
 
 uint64_t picoquic_val64_connection_id(picoquic_connection_id_t cnx_id)
 {
-    return (cnx_id.opaque64);
+    uint64_t val64 = 0;
+
+    if (cnx_id.id_len < 8)
+    {
+        for (size_t i = 0; i < cnx_id.id_len; i++) {
+            val64 <<= 8;
+            val64 |= cnx_id.id[i];
+        }
+        for (size_t i = cnx_id.id_len; i < 8; i++) {
+            val64 <<= 8;
+        }
+    } else {
+        for (size_t i = 0; i < cnx_id.id_len; i++) {
+            val64 <<= 8;
+            val64 |= cnx_id.id[i];
+        }
+    }
+
+    return val64;
+}
+
+void picoquic_set64_connection_id(picoquic_connection_id_t * cnx_id, uint64_t val64)
+{
+    for (int i = 7; i >= 0; i--) {
+        cnx_id->id[i] = (uint8_t)(val64 & 0xFF);
+        val64 >>= 8;
+    }
+    for (size_t i = 8; i < sizeof(cnx_id->id); i++) {
+        cnx_id->id[i] = 0;
+    }
+    cnx_id->id_len = 8;
 }

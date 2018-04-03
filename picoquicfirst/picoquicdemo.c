@@ -1131,13 +1131,16 @@ typedef struct {
 static void cnx_id_callback(picoquic_connection_id_t cnx_id_local, picoquic_connection_id_t cnx_id_remote, void* cnx_id_callback_ctx, 
     picoquic_connection_id_t * cnx_id_returned)
 {
+    uint64_t val64;
     cnx_id_callback_ctx_t* ctx = (cnx_id_callback_ctx_t*)cnx_id_callback_ctx;
 
     if (ctx->cnx_id_select == picoquic_cnx_id_remote)
         cnx_id_local = cnx_id_remote;
 
     /* TODO: replace with encrypted value when moving to 17 byte CID */
-    cnx_id_returned->opaque64 = (cnx_id_local.opaque64 & ctx->cnx_id_mask.opaque64) | ctx->cnx_id_val.opaque64;
+    val64 = (picoquic_val64_connection_id(cnx_id_local) & picoquic_val64_connection_id(ctx->cnx_id_mask)) |
+        picoquic_val64_connection_id(ctx->cnx_id_val);
+    picoquic_set64_connection_id(&cnx_id_returned, val64);
 }
 
 int main(int argc, char** argv)
@@ -1155,8 +1158,8 @@ int main(int argc, char** argv)
     int cnx_id_mask_is_set = 0;
     cnx_id_callback_ctx_t cnx_id_cbdata = {
         .cnx_id_select = 0,
-        .cnx_id_mask.opaque64 = UINT64_MAX,
-        .cnx_id_val.opaque64 = 0
+        .cnx_id_mask = {{ 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 8 },
+        .cnx_id_val = { { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 0 }
     };
     uint64_t* reset_seed = NULL;
     uint64_t reset_seed_x[2];
@@ -1218,8 +1221,8 @@ int main(int argc, char** argv)
 
             cnx_id_cbdata.cnx_id_select = atoi(optarg);
             /* TODO: find an alternative to parsing a 64 bit integer */
-            cnx_id_cbdata.cnx_id_mask.opaque64 = ~strtoul(argv[optind++], NULL, 0);
-            cnx_id_cbdata.cnx_id_val.opaque64 = strtoul(argv[optind++], NULL, 0);
+            picoquic_set64_connection_id(&cnx_id_cbdata.cnx_id_mask, ~strtoul(argv[optind++], NULL, 0));
+            picoquic_set64_connection_id(&cnx_id_cbdata.cnx_id_val, strtoul(argv[optind++], NULL, 0));
             cnx_id_mask_is_set = 1;
             break;
         case 'l':

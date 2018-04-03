@@ -1290,7 +1290,7 @@ int tls_api_bad_server_reset_test()
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0);
-    uint8_t buffer[128];
+    uint8_t buffer[256];
 
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
@@ -1300,7 +1300,7 @@ int tls_api_bad_server_reset_test()
     if (ret == 0) {
         size_t byte_index = 0;
         buffer[byte_index++] = 0x41;
-        byte_index += picoquic_format_connection_id(&buffer[byte_index], test_ctx->cnx_client->server_cnxid);
+        byte_index += picoquic_format_connection_id(&buffer[byte_index], sizeof(buffer) - byte_index, test_ctx->cnx_client->server_cnxid);
         memset(buffer + byte_index, 0xcc, sizeof(buffer) - byte_index);
     }
 
@@ -2110,7 +2110,7 @@ int wrong_keyshare_test()
     int ret = 0;
 
     /* TODO: find a better way to initialize CID from value */
-    cnx_id.opaque64 = 0x0102030405060708ull;
+    picoquic_set64_connection_id(&cnx_id,0x0102030405060708ull);
 
     qserver = picoquic_create(8,
 #ifdef _WINDOWS
@@ -2286,7 +2286,7 @@ int wrong_tls_version_test()
     int ret = 0;
 
     /* TODO: find a better way to initialize CID from value */
-    cnx_id.opaque64 = 0x0102030405060708ull;
+    picoquic_set64_connection_id(&cnx_id, 0x0102030405060708ull);
 
     qserver = picoquic_create(8,
 #ifdef _WINDOWS
