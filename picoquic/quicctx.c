@@ -99,6 +99,7 @@ static uint8_t picoquic_cleartext_draft_10_salt[] = {
     0xe0, 0x6d, 0x6c, 0x38
 };
 
+/* Support for draft 10! */
 const picoquic_version_parameters_t picoquic_supported_versions[] = {
     { PICOQUIC_INTERNAL_TEST_VERSION_1, picoquic_version_use_pn_encryption,
         picoquic_version_header_10,
