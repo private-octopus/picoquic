@@ -403,7 +403,6 @@ void picoquic_init_transport_parameters(picoquic_transport_parameters* tp, int c
         tp->initial_max_stream_id_unidir = 65534;
     }
     tp->idle_timeout = PICOQUIC_MICROSEC_HANDSHAKE_MAX/1000000;
-    tp->omit_connection_id = 0;
     tp->max_packet_size = PICOQUIC_PRACTICAL_MAX_MTU;
     tp->ack_delay_exponent = 3;
 }
@@ -681,7 +680,6 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
                     cnx->proposed_version = preferred_version;
                 }
             }
-            cnx->local_parameters.omit_connection_id = 1;
 
             cnx->cnx_state = picoquic_state_client_init;
             if (picoquic_is_connection_id_null(initial_cnx_id)) {

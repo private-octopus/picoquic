@@ -225,7 +225,7 @@ typedef struct _picoquic_transport_parameters {
     uint32_t initial_max_stream_id_bidir;
     uint32_t initial_max_stream_id_unidir;
     uint32_t idle_timeout;
-    uint32_t omit_connection_id;
+    /* uint32_t omit_connection_id; */
     uint32_t max_packet_size;
     uint8_t ack_delay_exponent;
 } picoquic_transport_parameters;

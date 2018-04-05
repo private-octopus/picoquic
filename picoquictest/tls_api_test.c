@@ -2624,7 +2624,6 @@ int tls_different_params_test()
     picoquic_init_transport_parameters(&test_parameters, 1);
 
     test_parameters.initial_max_stream_id_bidir = 0;
-    test_parameters.omit_connection_id = 1;
 
     return tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0, 0, 0, 1500000, &test_parameters);
 }
