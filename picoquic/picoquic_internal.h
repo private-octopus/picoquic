@@ -106,7 +106,7 @@ typedef enum {
 #define PICOQUIC_SECOND_INTEROP_VERSION 0xFF000007
 #define PICOQUIC_THIRD_INTEROP_VERSION 0xFF000008
 #define PICOQUIC_FOURTH_INTEROP_VERSION 0xFF000009
-#define PICOQUIC_FIFTH_INTEROP_VERSION 0xFF00000A
+#define PICOQUIC_FIFTH_INTEROP_VERSION 0xFF00000B
 #define PICOQUIC_INTERNAL_TEST_VERSION_1 0x50435130
 
 #define PICOQUIC_INTEROP_VERSION_INDEX 1
@@ -126,7 +126,8 @@ typedef enum {
      */
 typedef enum {
     picoquic_version_header_09,
-    picoquic_version_header_10
+    picoquic_version_header_10,
+    picoquic_version_header_11
 } picoquic_version_header_encoding;
 
 typedef struct st_picoquic_version_parameters_t {
@@ -211,6 +212,7 @@ typedef struct st_picoquic_quic_t {
     picoquic_verify_certificate_cb_fn verify_certificate_callback_fn;
     picoquic_free_verify_certificate_ctx free_verify_certificate_callback_fn;
     void* verify_certificate_ctx;
+    uint8_t local_ctx_length;
 } picoquic_quic_t;
 
 /*
@@ -379,7 +381,8 @@ typedef struct st_picoquic_cnx_t {
     /* connection state, ID, etc. Todo: allow for multiple cnxid */
     picoquic_state_enum cnx_state;
     picoquic_connection_id_t initial_cnxid;
-    picoquic_connection_id_t server_cnxid;
+    picoquic_connection_id_t local_cnxid;
+    picoquic_connection_id_t remote_cnxid;
     uint64_t start_time;
     uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE];
     uint32_t application_error;
@@ -550,7 +553,8 @@ char* picoquic_string_duplicate(const char* original);
 /* Packet parsing */
 
 typedef struct _picoquic_packet_header {
-    picoquic_connection_id_t cnx_id;
+    picoquic_connection_id_t dest_cnx_id;
+    picoquic_connection_id_t srce_cnx_id;
     uint32_t pn;
     uint32_t vn;
     uint32_t offset;

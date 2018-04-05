@@ -102,11 +102,11 @@ static uint8_t picoquic_cleartext_draft_10_salt[] = {
 /* Support for draft 10! */
 const picoquic_version_parameters_t picoquic_supported_versions[] = {
     { PICOQUIC_INTERNAL_TEST_VERSION_1, picoquic_version_use_pn_encryption,
-        picoquic_version_header_10,
+        picoquic_version_header_11,
         sizeof(picoquic_cleartext_internal_test_1_salt),
         picoquic_cleartext_internal_test_1_salt },
     { PICOQUIC_FIFTH_INTEROP_VERSION, 0,
-        picoquic_version_header_10,
+        picoquic_version_header_11,
         sizeof(picoquic_cleartext_draft_10_salt),
         picoquic_cleartext_draft_10_salt }
 };
@@ -146,6 +146,7 @@ picoquic_quic_t* picoquic_create(uint32_t nb_connections,
         quic->cnx_id_callback_fn = cnx_id_callback;
         quic->cnx_id_callback_ctx = cnx_id_callback_ctx;
         quic->p_simulated_time = p_simulated_time;
+        quic->local_ctx_length = 8; /* TODO: should be lower on clients-only implementation */
 
         if (cnx_id_callback != NULL) {
             quic->flags |= picoquic_context_unconditional_cnx_id;
@@ -582,16 +583,21 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, struct sockad
     return ret;
 }
 
-static void picoquic_create_random_cnx_id(picoquic_quic_t* quic, picoquic_connection_id_t * cnx_id)
+static void picoquic_create_random_cnx_id(picoquic_quic_t* quic, picoquic_connection_id_t * cnx_id, uint8_t id_length)
 {
-    picoquic_crypto_random(quic, cnx_id->id, 8);
-    memset(cnx_id->id + 8, 0, sizeof(cnx_id->id) - 8);
-    cnx_id->id_len = 8;
+    if (id_length > 0) {
+        picoquic_crypto_random(quic, cnx_id->id, id_length);
+    }
+    if (id_length < sizeof(cnx_id->id)) {
+        memset(cnx_id->id + 8, 0, sizeof(cnx_id->id) - id_length);
+    }
+    cnx_id->id_len = id_length;
 }
 
 
 picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
-    picoquic_connection_id_t cnx_id, struct sockaddr* addr, uint64_t start_time, uint32_t preferred_version,
+    picoquic_connection_id_t initial_cnx_id, picoquic_connection_id_t remote_cnx_id, 
+    struct sockaddr* addr, uint64_t start_time, uint32_t preferred_version,
     char const* sni, char const* alpn, char client_mode)
 {
     picoquic_cnx_t* cnx = (picoquic_cnx_t*)malloc(sizeof(picoquic_cnx_t));
@@ -678,16 +684,17 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             cnx->local_parameters.omit_connection_id = 1;
 
             cnx->cnx_state = picoquic_state_client_init;
-            if (picoquic_is_connection_id_null(cnx_id)) {
-                picoquic_create_random_cnx_id(quic, &cnx_id);
+            if (picoquic_is_connection_id_null(initial_cnx_id)) {
+                picoquic_create_random_cnx_id(quic, &initial_cnx_id, 8);
             }
+            picoquic_create_random_cnx_id(quic, &cnx->local_cnxid, quic->local_ctx_length);
 
             if (quic->cnx_id_callback_fn) {
-                quic->cnx_id_callback_fn(cnx_id, picoquic_null_connection_id, quic->cnx_id_callback_ctx, &cnx_id);
+                quic->cnx_id_callback_fn(cnx->local_cnxid, picoquic_null_connection_id, quic->cnx_id_callback_ctx, &cnx->local_cnxid);
             }
 
-            cnx->initial_cnxid = cnx_id;
-            cnx->server_cnxid = picoquic_null_connection_id;
+            cnx->initial_cnxid = initial_cnx_id;
+            cnx->remote_cnxid = picoquic_null_connection_id;
             /* Initialize the reset secret to a random value. This
 			 * will prevent spurious matches to an all zero value, for example.
 			 * The real value will be set when receiving the transport parameters. 
@@ -696,14 +703,15 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         } else {
             cnx->first_stream.send_queue = NULL;
             cnx->cnx_state = picoquic_state_server_init;
-            cnx->initial_cnxid = cnx_id;
-            picoquic_create_random_cnx_id(quic, &cnx->server_cnxid);
+            cnx->initial_cnxid = initial_cnx_id;
+            cnx->remote_cnxid = remote_cnx_id;
+            picoquic_create_random_cnx_id(quic, &cnx->local_cnxid, quic->local_ctx_length);
 
             if (quic->cnx_id_callback_fn)
-                quic->cnx_id_callback_fn(cnx->server_cnxid, cnx->initial_cnxid,
-                    quic->cnx_id_callback_ctx, &cnx->server_cnxid);
+                quic->cnx_id_callback_fn(cnx->local_cnxid, cnx->initial_cnxid,
+                    quic->cnx_id_callback_ctx, &cnx->local_cnxid);
 
-            (void)picoquic_create_cnxid_reset_secret(quic, cnx->server_cnxid,
+            (void)picoquic_create_cnxid_reset_secret(quic, cnx->local_cnxid,
                 cnx->reset_secret);
 
             cnx->version_index = picoquic_get_version_index(preferred_version);
@@ -780,17 +788,6 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         /* Cannot just do partial creation! */
         picoquic_delete_cnx(cnx);
         cnx = NULL;
-#if 0
-    } else if (cnx->client_mode) {
-        /* Initialize the tls connection */
-        int ret = picoquic_initialize_stream_zero(cnx);
-
-        if (ret != 0) {
-            /* Cannot just do partial initialization! */
-            picoquic_delete_cnx(cnx);
-            cnx = NULL;
-        }
-#endif
     }
 
     if (cnx != NULL) {
@@ -806,8 +803,8 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
     }
 
     if (cnx != NULL) {
-        if (!picoquic_is_connection_id_null(cnx->server_cnxid)) {
-            (void)picoquic_register_cnx_id(quic, cnx, cnx->server_cnxid);
+        if (!picoquic_is_connection_id_null(cnx->local_cnxid)) {
+            (void)picoquic_register_cnx_id(quic, cnx, cnx->local_cnxid);
         }
 
         if (addr != NULL) {
@@ -822,7 +819,7 @@ picoquic_cnx_t* picoquic_create_client_cnx(picoquic_quic_t* quic,
     struct sockaddr* addr, uint64_t start_time, uint32_t preferred_version,
     char const* sni, char const* alpn, picoquic_stream_data_cb_fn callback_fn, void* callback_ctx)
 {
-    picoquic_cnx_t* cnx = picoquic_create_cnx(quic, picoquic_null_connection_id, addr, start_time, preferred_version, sni, alpn, 1);
+    picoquic_cnx_t* cnx = picoquic_create_cnx(quic, picoquic_null_connection_id, picoquic_null_connection_id, addr, start_time, preferred_version, sni, alpn, 1);
 
     if (cnx != NULL) {
         int ret;
@@ -882,9 +879,14 @@ unsigned long picoquic_get_local_if_index(picoquic_cnx_t* cnx)
     return cnx->path[0]->if_index_dest;
 }
 
-picoquic_connection_id_t picoquic_get_cnxid(picoquic_cnx_t* cnx)
+picoquic_connection_id_t picoquic_get_local_cnxid(picoquic_cnx_t* cnx)
 {
-    return cnx->server_cnxid;
+    return cnx->local_cnxid;
+}
+
+picoquic_connection_id_t picoquic_get_remote_cnxid(picoquic_cnx_t* cnx)
+{
+    return cnx->remote_cnxid;
 }
 
 picoquic_connection_id_t picoquic_get_initial_cnxid(picoquic_cnx_t* cnx)

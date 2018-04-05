@@ -631,7 +631,8 @@ static int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t propose
             }
 
             /* Create a client connection */
-            test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient, picoquic_null_connection_id,
+            test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
+                picoquic_null_connection_id, picoquic_null_connection_id,
                 (struct sockaddr*)&test_ctx->server_addr, 0,
                 proposed_version, sni, alpn, 1);
 
@@ -1300,7 +1301,7 @@ int tls_api_bad_server_reset_test()
     if (ret == 0) {
         size_t byte_index = 0;
         buffer[byte_index++] = 0x41;
-        byte_index += picoquic_format_connection_id(&buffer[byte_index], sizeof(buffer) - byte_index, test_ctx->cnx_client->server_cnxid);
+        byte_index += picoquic_format_connection_id(&buffer[byte_index], sizeof(buffer) - byte_index, test_ctx->cnx_client->local_cnxid);
         memset(buffer + byte_index, 0xcc, sizeof(buffer) - byte_index);
     }
 
@@ -1419,7 +1420,8 @@ int tls_api_two_connections_test()
 
         /* Create a new connection in the client context */
 
-        test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient, picoquic_null_connection_id,
+        test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
+            picoquic_null_connection_id, picoquic_null_connection_id,
             (struct sockaddr*)&test_ctx->server_addr, simulated_time, 0, NULL, "test-alpn", 1);
 
         if (test_ctx->cnx_client == NULL) {
@@ -2139,7 +2141,7 @@ int wrong_keyshare_test()
 #endif
         addr_from.sin_port = 4321;
 
-        cnx = picoquic_create_cnx(qserver, cnx_id,
+        cnx = picoquic_create_cnx(qserver, cnx_id, cnx_id,
             (struct sockaddr*)&addr_from, simulated_time,
             PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, NULL, 0);
 
@@ -2175,7 +2177,8 @@ int wrong_keyshare_test()
             picoquic_stateless_packet_t* sp = NULL;
 
             memset(&ph, 0, sizeof(ph));
-            ph.cnx_id = cnx_id;
+            ph.dest_cnx_id = cnx_id;
+            ph.srce_cnx_id = picoquic_null_connection_id;
             ph.vn = PICOQUIC_INTERNAL_TEST_VERSION_1;
 
             picoquic_queue_stateless_reset(cnx, &ph,
@@ -2316,7 +2319,7 @@ int wrong_tls_version_test()
 #endif
         addr_from.sin_port = 4321;
 
-        cnx = picoquic_create_cnx(qserver, cnx_id,
+        cnx = picoquic_create_cnx(qserver, cnx_id, cnx_id,
             (struct sockaddr*)&addr_from, simulated_time,
             PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, NULL, 0);
 

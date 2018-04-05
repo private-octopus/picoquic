@@ -848,7 +848,7 @@ int quic_client(const char* ip_address_text, int server_port, uint32_t proposed_
     /* Create the client connection */
     if (ret == 0) {
         /* Create a client connection */
-        cnx_client = picoquic_create_cnx(qclient, picoquic_null_connection_id,
+        cnx_client = picoquic_create_cnx(qclient, picoquic_null_connection_id, picoquic_null_connection_id,
             (struct sockaddr*)&server_address, current_time,
             proposed_version, sni, alpn, 1);
 
