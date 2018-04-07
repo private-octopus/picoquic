@@ -45,6 +45,7 @@
  */
 
 #define TEST_CNX_COUNT 7
+#define TEST_CNX_ID(x) {{ x, x, x, x, x, x, x, x, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0} , 8 }
 
 int cnxcreation_test()
 {
@@ -58,7 +59,10 @@ int cnxcreation_test()
     const uint8_t test_ipv4l[4] = { 127, 0, 0, 1 };
     const uint8_t test_ipv6l[16] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01 };
 
-    const picoquic_connection_id_t test_cnx_id[TEST_CNX_COUNT] = { { 1 }, { 2 }, { 3 }, { 4 }, { 5 }, { 6 }, { 7 } };
+    const picoquic_connection_id_t test_cnx_id[TEST_CNX_COUNT] = {
+        TEST_CNX_ID(1), TEST_CNX_ID(2), TEST_CNX_ID(3), TEST_CNX_ID(4),
+        TEST_CNX_ID(5), TEST_CNX_ID(6), TEST_CNX_ID(7) };
+
     struct sockaddr* test_cnx_addr[TEST_CNX_COUNT] = {
         (struct sockaddr*)&test4[0],
         (struct sockaddr*)&test4[1],

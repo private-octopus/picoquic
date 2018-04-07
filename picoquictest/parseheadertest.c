@@ -42,7 +42,6 @@
 
 static picoquic_connection_id_t test_cnxid_ini = TEST_CNXID_INI_VAL;
 static picoquic_connection_id_t test_cnxid_rem = TEST_CNXID_REM_VAL;
-static picoquic_connection_id_t test_cnxid_10 = TEST_CNXID_10_VAL;
 
 static uint8_t pinitial10[] = {
     0xFF,
@@ -235,8 +234,6 @@ int parseheadertest()
         if (cnx_10 == NULL) {
             ret = -1;
         }
-
-
     }
 
     for (size_t i = 0; ret == 0 && i < nb_test_entries; i++) {

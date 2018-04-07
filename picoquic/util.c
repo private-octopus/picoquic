@@ -140,7 +140,8 @@ size_t picoquic_parse_connection_id(uint8_t * bytes, uint8_t len, picoquic_conne
     return len;
 }
 
-const picoquic_connection_id_t picoquic_null_connection_id = { 0 };
+const picoquic_connection_id_t picoquic_null_connection_id = { 
+    { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 0 };
 
 int picoquic_is_connection_id_null(picoquic_connection_id_t cnx_id)
 {
