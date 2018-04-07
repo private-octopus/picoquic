@@ -125,8 +125,6 @@ typedef enum {
      * Codes used for representing the various types of packet encodings
      */
 typedef enum {
-    picoquic_version_header_09,
-    picoquic_version_header_10,
     picoquic_version_header_11
 } picoquic_version_header_encoding;
 

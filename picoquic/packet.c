@@ -58,7 +58,7 @@ int picoquic_parse_packet_header(
             ph->vn = PICOPARSE_32(bytes + 1);
             /* Obtain the connection ID lengths from the byte following the version */
             picoquic_parse_packet_header_cnxid_lengths(bytes[5], &l_dest_id, &l_srce_id);
-            if (6 + l_dest_id + l_srce_id + 4 > length) {
+            if (6 + l_dest_id + l_srce_id + 4 > (int) length) {
                 /* malformed packet */
                 ret = -1;
             }
@@ -165,7 +165,7 @@ int picoquic_parse_packet_header(
          ph->srce_cnx_id = picoquic_null_connection_id;
          ph->vn = 0;
          ph->pn = 0;
-         if (length >= (uint8_t)1 + quic->local_ctx_length) {
+         if ((int)length >= 1 + quic->local_ctx_length) {
              /* We can identify the connection by its ID */
              ph->offset = 1 + picoquic_parse_connection_id(bytes + 1, quic->local_ctx_length, &ph->dest_cnx_id);
              /* TODO: should consider using combination of CNX ID and ADDR_FROM */
@@ -242,8 +242,6 @@ int picoquic_is_packet_encrypted(
     /* Is this a long header of a short header? */
     if ((byte_zero & 0x80) == 0x80) {
         switch (picoquic_supported_versions[cnx->version_index].version_header_encoding) {
-        case picoquic_version_header_09:
-        case picoquic_version_header_10:
         case picoquic_version_header_11:
             switch (byte_zero) {
             case 0xFC: /* picoquic_packet_0rtt_protected*/

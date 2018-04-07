@@ -240,7 +240,7 @@ int parseheadertest()
     }
 
     for (size_t i = 0; ret == 0 && i < nb_test_entries; i++) {
-        pcnx = (i < 3) ? NULL : &cnx_10;
+        pcnx = (i < 3) ? NULL : cnx_10;
         if (i >= 6) {
             quic->local_ctx_length = 0;
         }

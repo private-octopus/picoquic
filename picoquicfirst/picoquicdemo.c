@@ -1140,7 +1140,7 @@ static void cnx_id_callback(picoquic_connection_id_t cnx_id_local, picoquic_conn
     /* TODO: replace with encrypted value when moving to 17 byte CID */
     val64 = (picoquic_val64_connection_id(cnx_id_local) & picoquic_val64_connection_id(ctx->cnx_id_mask)) |
         picoquic_val64_connection_id(ctx->cnx_id_val);
-    picoquic_set64_connection_id(&cnx_id_returned, val64);
+    picoquic_set64_connection_id(cnx_id_returned, val64);
 }
 
 int main(int argc, char** argv)
