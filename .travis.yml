@@ -19,7 +19,7 @@ addons:
     - libssl-dev 
 before_install:
 # - $CC --version 
-  - if [ "$TRAVIS_OS_NAME" == "linux" ]; then  if [ "$CXX" = "g++" ]; then export CXX="g++" CC="gcc" EXTRA_LDFLAGS="-fuse-ld=gold"; else export CXX="clang++-5.0" CC="clang-5.0"; fi; fi
+  - if [ "$TRAVIS_OS_NAME" == "linux" ]; then  if [ "$CXX" = "g++" ]; then export CXX="g++" CC="gcc" EXTRA_LDFLAGS="-fuse-ld=gold"; else export CXX="clang++" CC="clang"; fi; fi
 # - $CC --version
   - cmake --version
 before_script:
