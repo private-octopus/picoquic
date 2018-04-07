@@ -13,7 +13,7 @@ addons:
     - llvm-toolchain-trusty-5.0
     packages:
     - g++
-    - clang-5.0
+    - clang
     - cmake
     - cmake-data
     - libssl-dev 
