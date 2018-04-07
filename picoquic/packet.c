@@ -54,10 +54,14 @@ int picoquic_parse_packet_header(
             ret = -1;
         } else {
             uint8_t l_dest_id, l_srce_id;
-            /* The bytes at position 1..3 describe the version */
+            /* The bytes at position 1..4 describe the version */
             ph->vn = PICOPARSE_32(bytes + 1);
             /* Obtain the connection ID lengths from the byte following the version */
             picoquic_parse_packet_header_cnxid_lengths(bytes[5], &l_dest_id, &l_srce_id);
+            /* Required length: 
+             * (packet type(1) + version number(4) + cid_lengths(1) = 6,
+             * cid lengths,
+             * sequence number (4) */
             if (6 + l_dest_id + l_srce_id + 4 > (int) length) {
                 /* malformed packet */
                 ret = -1;
