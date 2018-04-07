@@ -51,6 +51,8 @@ int picoquic_is_connection_id_null(picoquic_connection_id_t cnx_id);
 int picoquic_compare_connection_id(picoquic_connection_id_t * cnx_id1, picoquic_connection_id_t * cnx_id2);
 uint64_t picoquic_val64_connection_id(picoquic_connection_id_t cnx_id);
 void picoquic_set64_connection_id(picoquic_connection_id_t * cnx_id, uint64_t val64);
+uint8_t picoquic_create_packet_header_cnxid_lengths(uint8_t dest_len, uint8_t srce_len);
+void picoquic_parse_packet_header_cnxid_lengths(uint8_t l_byte, uint8_t *dest_len, uint8_t *srce_len);
 
 #ifndef MAX
 #define MAX(a, b) ((a) > (b) ? (a) : (b))

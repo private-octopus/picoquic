@@ -272,7 +272,7 @@ void picoquic_log_packet_header(FILE* F, picoquic_cnx_t* cnx, picoquic_packet_he
 {
     fprintf(F, "    Type: %d (%s), CnxID: %llx%s, Seq: %x (%llx), Version %x\n",
         ph->ptype, picoquic_log_ptype_name(ph->ptype),
-        (unsigned long long)picoquic_val64_connection_id(ph->cnx_id),
+        (unsigned long long)picoquic_val64_connection_id(cnx->initial_cnxid),
         (cnx == NULL) ? " (unknown)" : "",
         ph->pn, (unsigned long long)ph->pn64, ph->vn);
 }
@@ -653,8 +653,9 @@ size_t picoquic_log_new_connection_id_frame(FILE* F, uint8_t* bytes, size_t byte
 {
     size_t byte_index = 1;
     size_t min_size = 1 + 8 + 16;
-    uint64_t new_cnx_id;
-    size_t l_seq = 2;
+    picoquic_connection_id_t new_cnx_id;
+    size_t l_seq = 0;
+    uint8_t l_cid = 0;
 
     l_seq = picoquic_varint_skip(&bytes[byte_index]);
 
@@ -666,18 +667,27 @@ size_t picoquic_log_new_connection_id_frame(FILE* F, uint8_t* bytes, size_t byte
     }
 
     byte_index += l_seq;
-    /* Now that the size is good, parse and print it */
-    new_cnx_id = PICOPARSE_64(bytes + byte_index);
-    byte_index += 8;
 
-    fprintf(F, "    NEW CONNECTION ID: 0x%016llx, ",
-        (unsigned long long)new_cnx_id);
-
-    for (size_t i = 0; i < 16; i++) {
-        fprintf(F, "%02x", bytes[byte_index++]);
+    if (byte_index < bytes_max) {
+        l_cid = bytes[byte_index++];
     }
 
-    fprintf(F, "\n");
+    if (byte_index + l_cid + 16 > bytes_max) {
+        fprintf(F, "    Malformed NEW CONNECTION ID, requires %d bytes out of %d\n", (int)min_size, (int)bytes_max);
+        byte_index = bytes_max;
+    }
+    else {
+        byte_index += picoquic_parse_connection_id(bytes + byte_index, l_cid, &new_cnx_id);
+        fprintf(F, "    NEW CONNECTION ID: 0x");
+        for (int x = 0; x < new_cnx_id.id_len; x++) {
+            fprintf(F, "%02x", new_cnx_id.id[x]);
+        }
+        fprintf(F, ", ");
+        for (int x = 0; x < 16; x++) {
+            fprintf(F, "%02x", bytes[byte_index++]);
+        }
+        fprintf(F, "\n");
+    }
 
     return byte_index;
 }
@@ -1004,12 +1014,12 @@ void picoquic_log_packet(FILE* F, picoquic_quic_t* quic, picoquic_cnx_t* cnx,
         /* packet does not even parse */
         fprintf(F, "   Cannot parse the packet header.\n");
     } else {
-        if (cnx == NULL) {
-            cnx = picoquic_cnx_by_net(quic, addr_peer);
+        if (cnx == NULL && !picoquic_is_connection_id_null(ph.dest_cnx_id)) {
+            cnx = picoquic_cnx_by_id(quic, ph.dest_cnx_id);
         }
 
-        if (cnx == NULL && !picoquic_is_connection_id_null(ph.cnx_id)) {
-            cnx = picoquic_cnx_by_id(quic, ph.cnx_id);
+        if (cnx == NULL) {
+            cnx = picoquic_cnx_by_net(quic, addr_peer);
         }
 
         if (cnx != NULL) {

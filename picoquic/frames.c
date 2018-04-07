@@ -278,6 +278,46 @@ int picoquic_decode_stream_reset_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
 }
 
 /*
+ * New Connection ID frame
+ */
+
+int picoquic_skip_connection_id_frame(uint8_t* bytes, size_t bytes_max, size_t* consumed) 
+{
+    int ret = 0;
+    int cid_length;
+    size_t byte_index = 1;
+
+    byte_index += picoquic_varint_skip(bytes + byte_index);
+    if (byte_index >= bytes_max) {
+        cid_length = 0;
+    } else {
+        cid_length = bytes[byte_index++];
+    }
+    byte_index += cid_length + 16;
+
+    if (byte_index < bytes_max) {
+        *consumed = byte_index;
+    } else {
+        *consumed = bytes_max;
+        ret = -1;
+    }
+
+    return ret;
+}
+
+int picoquic_decode_connection_id_frame(picoquic_cnx_t* cnx, uint8_t* bytes, size_t bytes_max, size_t* consumed)
+{
+    /* TODO: store the connection ID in order to support migration. */
+    int ret = picoquic_skip_connection_id_frame(bytes, bytes_max, consumed);
+
+    if (ret != 0) {
+        ret = picoquic_connection_error(cnx,
+            PICOQUIC_TRANSPORT_FRAME_ERROR(bytes[0]));
+    }
+    return ret;
+}
+
+/*
  * STOP SENDING Frame
  */
 
@@ -2003,12 +2043,8 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
                     ack_needed = 1;
                     break;
                 case picoquic_frame_type_new_connection_id: /* NEW_CONNECTION_ID */
-                    /* TODO: new format */
-                    byte_index += 1;
-                    /* Skip the sequence index */
-                    byte_index += picoquic_varint_skip(&bytes[byte_index]);
-                    /* Cnx ID & reset secret */
-                    byte_index += 8 + 16;
+                    /* TODO: store the ID! */
+                    ret = picoquic_decode_connection_id_frame(cnx, bytes + byte_index, bytes_max - byte_index, &consumed);
                     ack_needed = 1;
                     break;
                 case picoquic_frame_type_stop_sending:
@@ -2239,7 +2275,6 @@ int picoquic_skip_frame(uint8_t* bytes, size_t bytes_max, size_t* consumed,
             byte_index += picoquic_varint_skip(bytes + byte_index);
             /* Skip the max stream data offset */
             byte_index += picoquic_varint_skip(&bytes[byte_index]);
-            ;
             *pure_ack = 0;
             break;
         case picoquic_frame_type_stream_id_needed:
@@ -2247,9 +2282,10 @@ int picoquic_skip_frame(uint8_t* bytes, size_t bytes_max, size_t* consumed,
             *pure_ack = 0;
             break;
         case picoquic_frame_type_new_connection_id:
-            /* Skip the sequence */
-            byte_index += picoquic_varint_skip(&bytes[byte_index]);
-            byte_index += 8 + 16;
+            /* Skip the new connection ID frame. */
+            ret = picoquic_skip_connection_id_frame(&bytes[byte_index-1], bytes_max, consumed);
+            /* Consumed always includes the type byte, already included in byte index */
+            byte_index += (*consumed) -1;
             *pure_ack = 0;
             break;
         case picoquic_frame_type_stop_sending:

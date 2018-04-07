@@ -34,7 +34,8 @@ static uint8_t const addr2[4] = { 10, 0, 0, 2 };
 void cleartext_aead_packet_init_header(picoquic_packet_header* ph,
     picoquic_connection_id_t cnx_id, uint32_t pn, uint32_t vn, picoquic_packet_type_enum ptype)
 {
-    ph->cnx_id = cnx_id;
+    ph->dest_cnx_id = cnx_id;
+    ph->srce_cnx_id = picoquic_null_connection_id;
     ph->pn = pn;
     ph->pn64 = pn;
     ph->vn = vn;
@@ -47,17 +48,18 @@ void cleartext_aead_init_packet(picoquic_packet_header* ph,
     uint8_t* cleartext, size_t target)
 {
     size_t byte_index = 0;
-    uint64_t seed = picoquic_val64_connection_id(ph->cnx_id);
+    uint64_t seed = picoquic_val64_connection_id(ph->dest_cnx_id);
 
     seed ^= ph->pn;
 
     /* Serialize the header */
     cleartext[byte_index++] = 0x80 | ((uint8_t)ph->ptype);
-    byte_index += picoquic_format_connection_id(&cleartext[byte_index], 1526 - byte_index, ph->cnx_id);
+    picoformat_32(&cleartext[byte_index], ph->vn);
+    byte_index += 4;
+    byte_index += picoquic_format_connection_id(&cleartext[byte_index], 1526 - byte_index, ph->dest_cnx_id);
+    byte_index += picoquic_format_connection_id(&cleartext[byte_index], 1526 - byte_index, ph->srce_cnx_id);
     ph->pn_offset = byte_index;
     picoformat_32(&cleartext[byte_index], ph->pn);
-    byte_index += 4;
-    picoformat_32(&cleartext[byte_index], ph->vn);
     byte_index += 4;
     /* Add some silly content */
     while (byte_index < target) {
@@ -103,7 +105,7 @@ int cleartext_aead_test()
         memcpy(&test_addr_c.sin_addr, addr1, 4);
         test_addr_c.sin_port = 12345;
 
-        cnx_client = picoquic_create_cnx(qclient, picoquic_null_connection_id,
+        cnx_client = picoquic_create_cnx(qclient, picoquic_null_connection_id, picoquic_null_connection_id,
             (struct sockaddr*)&test_addr_c, 0, 0, NULL, NULL, 1);
         if (cnx_client == NULL) {
             DBG_PRINTF("%s", "Could not create client connection context.\n");
@@ -118,7 +120,7 @@ int cleartext_aead_test()
         memcpy(&test_addr_s.sin_addr, addr2, 4);
         test_addr_s.sin_port = 4433;
 
-        cnx_server = picoquic_create_cnx(qserver, cnx_client->initial_cnxid,
+        cnx_server = picoquic_create_cnx(qserver, cnx_client->initial_cnxid, cnx_client->initial_cnxid,
             (struct sockaddr*)&test_addr_s, 0,
             cnx_client->proposed_version, NULL, NULL, 0);
 
@@ -231,7 +233,7 @@ int cleartext_aead_vector_test()
         memcpy(&test_addr_c.sin_addr, addr1, 4);
         test_addr_c.sin_port = 12345;
 
-        cnx_client = picoquic_create_cnx(qclient, clear_test_vector_cnx_id,
+        cnx_client = picoquic_create_cnx(qclient, clear_test_vector_cnx_id, picoquic_null_connection_id,
             (struct sockaddr*)&test_addr_c, 0, clear_test_vector_vn, NULL, NULL, 1);
 
         if (cnx_client == NULL) {
@@ -443,7 +445,7 @@ int cleartext_pn_enc_test()
         memcpy(&test_addr_c.sin_addr, addr1, 4);
         test_addr_c.sin_port = 12345;
 
-        cnx_client = picoquic_create_cnx(qclient, picoquic_null_connection_id,
+        cnx_client = picoquic_create_cnx(qclient, picoquic_null_connection_id, picoquic_null_connection_id,
             (struct sockaddr*)&test_addr_c, 0, 0, NULL, NULL, 1);
         if (cnx_client == NULL) {
             DBG_PRINTF("%s", "Could not create client connection context.\n");
@@ -460,7 +462,7 @@ int cleartext_pn_enc_test()
         memcpy(&test_addr_s.sin_addr, addr2, 4);
         test_addr_s.sin_port = 4433;
 
-        cnx_server = picoquic_create_cnx(qserver, cnx_client->initial_cnxid,
+        cnx_server = picoquic_create_cnx(qserver, cnx_client->initial_cnxid, cnx_client->local_cnxid,
             (struct sockaddr*)&test_addr_s, 0,
             cnx_client->proposed_version, NULL, NULL, 0);
 

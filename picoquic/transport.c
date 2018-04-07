@@ -21,40 +21,6 @@
 
 /*
  * Management of transport parameters for PicoQUIC.
- *
- * The TLS syntax of the transport parameter extension is defined as:
- *
- *     uint32 QuicVersion
- *
- *     enum {
- *      initial_max_stream_data(0), // MUST. 32 bits, octets.
- *      initial_max_data(1),        // MUST. 32 bits, multiples of 1K octets.
- *      initial_max_stream_id_bidir(2),   // MUST. 32 bits, integer.
- *      idle_timeout(3),            // MUST. 16 bits, seconds, max 600 seconds.
- *      omit_connection_id(4),      // zero length, true if present, false if absent
- *      max_packet_size(5),         // 16 bits, up to 65527. Values below 1252 are invalid.
- *      (65535)
- *   } TransportParameterId;
- *
- *   struct {
- *      TransportParameterId parameter;
- *      opaque value<0..2^16-1>;
- *   } TransportParameter;
- *
- *   struct {
- *      select (Handshake.msg_type) {
- *         case client_hello:
- *            QuicVersion negotiated_version;
- *            QuicVersion initial_version;
- *
- *         case encrypted_extensions:
- *            QuicVersion supported_versions<2..2^8-4>;
- *
- *         case new_session_ticket:
- *            struct {};
- *      };
- *      TransportParameter parameters<30..2^16-1>;
- *   } TransportParameters;
  */
 
 #include "picoquic_internal.h"
@@ -65,7 +31,6 @@ typedef enum {
     picoquic_transport_parameter_initial_max_data = 1,
     picoquic_transport_parameter_initial_max_stream_id_bidir = 2,
     picoquic_transport_parameter_idle_timeout = 3,
-    picoquic_transport_parameter_omit_connection_id = 4,
     picoquic_transport_parameter_max_packet_size = 5,
     picoquic_transport_parameter_reset_secret = 6,
     picoquic_transport_parameter_ack_delay_exponent = 7,
@@ -97,9 +62,7 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     if (cnx->local_parameters.initial_max_stream_id_bidir != 0) {
         param_size += (2 + 2 + 4);
     }
-    if (cnx->local_parameters.omit_connection_id) {
-        param_size += 2 + 2;
-    }
+
     if (extension_mode == 1) {
         param_size += 2 + 2 + PICOQUIC_RESET_SECRET_SIZE;
     }
@@ -169,13 +132,6 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         byte_index += 2;
         picoformat_16(bytes + byte_index, (uint16_t)cnx->local_parameters.idle_timeout);
         byte_index += 2;
-
-        if (cnx->local_parameters.omit_connection_id) {
-            picoformat_16(bytes + byte_index, picoquic_transport_parameter_omit_connection_id);
-            byte_index += 2;
-            picoformat_16(bytes + byte_index, 0);
-            byte_index += 2;
-        }
 
         picoformat_16(bytes + byte_index, picoquic_transport_parameter_max_packet_size);
         byte_index += 2;
@@ -361,14 +317,6 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                                 ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_TRANSPORT_PARAMETER_ERROR);
                             } else {
                                 cnx->remote_parameters.idle_timeout = PICOPARSE_16(bytes + byte_index);
-                            }
-                            break;
-                        case picoquic_transport_parameter_omit_connection_id:
-                            if (extension_length != 0) {
-                                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_TRANSPORT_PARAMETER_ERROR);
-                            } else {
-                                if ((cnx->quic->flags & picoquic_context_unconditional_cnx_id) == 0)
-                                    cnx->remote_parameters.omit_connection_id = 1;
                             }
                             break;
                         case picoquic_transport_parameter_max_packet_size:

@@ -96,10 +96,30 @@ void debug_printf_resume(void)
     debug_suspended = 0;
 }
 
+uint8_t picoquic_create_packet_header_cnxid_lengths(uint8_t dest_len, uint8_t srce_len)
+{
+    uint8_t ret;
+
+    ret = (dest_len < 4) ? 0 : (dest_len - 3);
+    ret <<= 4;
+    ret |= (srce_len < 4) ? 0 : (srce_len - 3);
+
+    return ret;
+}
+
+void picoquic_parse_packet_header_cnxid_lengths(uint8_t l_byte, uint8_t *dest_len, uint8_t *srce_len)
+{
+    uint8_t h1 = (l_byte>>4);
+    uint8_t h2 = (l_byte & 0x0F);
+
+    *dest_len = (h1 == 0) ? 0 : h1 + 3;
+    *srce_len = (h2 == 0) ? 0 : h2 + 3;
+}
+
 size_t picoquic_format_connection_id(uint8_t* bytes, size_t bytes_max, picoquic_connection_id_t cnx_id)
 {
     size_t copied = cnx_id.id_len;
-    if (copied > bytes_max) {
+    if (copied > bytes_max || copied == 0) {
         copied = 0;
     } else {
         memcpy(bytes, cnx_id.id, copied);
@@ -120,7 +140,8 @@ size_t picoquic_parse_connection_id(uint8_t * bytes, uint8_t len, picoquic_conne
     return len;
 }
 
-const picoquic_connection_id_t picoquic_null_connection_id = { 0 };
+const picoquic_connection_id_t picoquic_null_connection_id = { 
+    { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 0 };
 
 int picoquic_is_connection_id_null(picoquic_connection_id_t cnx_id)
 {
