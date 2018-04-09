@@ -629,11 +629,6 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         {
             cnx->local_parameters.max_packet_size = cnx->quic->mtu_max;
         }
-        /* Special provision for test -- create a deliberate transport parameters error */
-        if (sni != NULL && cnx->client_mode && strcmp(sni, PICOQUIC_ERRONEOUS_SNI) == 0) {
-            /* Illegal value: server limits should be odd */
-            cnx->local_parameters.initial_max_stream_id_bidir = 0x202;
-        }
 
         /* Initialize local flow control variables to advertised values */
 

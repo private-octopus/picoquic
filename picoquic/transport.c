@@ -37,6 +37,39 @@ typedef enum {
     picoquic_transport_parameter_initial_max_stream_id_unidir = 8,
 } picoquic_transport_parameter_enum;
 
+uint32_t picoquic_decode_transport_param_stream_id(uint16_t rank, int extension_mode, int stream_type) {
+    uint32_t stream_id = 0;
+    
+    if (rank > 0) {
+        stream_type |= (extension_mode == 0) ? PICOQUIC_STREAM_ID_SERVER_INITIATED : PICOQUIC_STREAM_ID_CLIENT_INITIATED;
+
+        if (stream_type == 0) {
+            stream_id = 4 * rank;
+        }
+        else {
+            stream_id = 4 * (rank - 1) + stream_type;
+        }
+    }
+
+    return stream_id;
+}
+
+uint16_t picoquic_prepare_transport_param_stream_id(uint32_t stream_id, int extension_mode, int stream_type) {
+    uint32_t rank = 0;
+
+    if (stream_id > 0) {
+        stream_type |= (extension_mode == 0) ? PICOQUIC_STREAM_ID_SERVER_INITIATED: PICOQUIC_STREAM_ID_CLIENT_INITIATED;
+
+        if (stream_type == 0) {
+            rank = stream_id/4;
+        } else {
+            rank = (stream_id / 4) + 1;
+        }
+    }
+
+    return rank;
+}
+
 int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mode,
     uint8_t* bytes, size_t bytes_max, size_t* consumed)
 {
@@ -60,7 +93,7 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     /* add the mandatory parameters */
     param_size = (2 + 2 + 4) + (2 + 2 + 4) + (2 + 2 + 2) + (2 + 2 + 2);
     if (cnx->local_parameters.initial_max_stream_id_bidir != 0) {
-        param_size += (2 + 2 + 4);
+        param_size += (2 + 2 + 2);
     }
 
     if (extension_mode == 1) {
@@ -70,7 +103,7 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         param_size += (2 + 2 + 1);
     }
     if (cnx->local_parameters.initial_max_stream_id_unidir != 0) {
-        param_size += (2 + 2 + 4);
+        param_size += (2 + 2 + 2);
     }
 
     min_size += param_size + 2;
@@ -118,12 +151,17 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         byte_index += 4;
 
         if (cnx->local_parameters.initial_max_stream_id_bidir > 0) {
+            uint16_t bidir = picoquic_prepare_transport_param_stream_id(
+                cnx->local_parameters.initial_max_stream_id_bidir,
+                extension_mode,
+                PICOQUIC_STREAM_ID_BIDIR);
+
             picoformat_16(bytes + byte_index, picoquic_transport_parameter_initial_max_stream_id_bidir);
             byte_index += 2;
-            picoformat_16(bytes + byte_index, 4);
+            picoformat_16(bytes + byte_index, 2);
             byte_index += 2;
-            picoformat_32(bytes + byte_index, cnx->local_parameters.initial_max_stream_id_bidir);
-            byte_index += 4;
+            picoformat_16(bytes + byte_index, bidir);
+            byte_index += 2;
         }
 
         picoformat_16(bytes + byte_index, picoquic_transport_parameter_idle_timeout);
@@ -158,12 +196,18 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         }
 
         if (cnx->local_parameters.initial_max_stream_id_unidir > 0) {
+
+            uint16_t unidir = picoquic_prepare_transport_param_stream_id(
+                cnx->local_parameters.initial_max_stream_id_unidir,
+                extension_mode,
+                PICOQUIC_STREAM_ID_UNIDIR);
+
             picoformat_16(bytes + byte_index, picoquic_transport_parameter_initial_max_stream_id_unidir);
             byte_index += 2;
-            picoformat_16(bytes + byte_index, 4);
+            picoformat_16(bytes + byte_index, 2);
             byte_index += 2;
-            picoformat_32(bytes + byte_index, cnx->local_parameters.initial_max_stream_id_unidir);
-            byte_index += 4;
+            picoformat_16(bytes + byte_index, unidir);
+            byte_index += 2;
         }
     }
 
@@ -301,15 +345,16 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                             }
                             break;
                         case picoquic_transport_parameter_initial_max_stream_id_bidir:
-                            if (extension_length != 4) {
+                            if (extension_length != 2) {
                                 ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_TRANSPORT_PARAMETER_ERROR);
                             } else {
-                                cnx->remote_parameters.initial_max_stream_id_bidir = PICOPARSE_32(bytes + byte_index);
-                                cnx->max_stream_id_bidir_remote = cnx->remote_parameters.initial_max_stream_id_bidir;
+                                uint32_t bidir = PICOPARSE_16(bytes + byte_index);
 
-                                if (cnx->remote_parameters.initial_max_stream_id_bidir != 0 && (((extension_mode == 0) && (cnx->remote_parameters.initial_max_stream_id_bidir & 1) == 0) || ((extension_mode == 1) && (cnx->remote_parameters.initial_max_stream_id_bidir & 1) != 0) || ((cnx->remote_parameters.initial_max_stream_id_bidir & 2) != 0))) {
-                                    ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_TRANSPORT_PARAMETER_ERROR);
-                                }
+                                cnx->remote_parameters.initial_max_stream_id_bidir =
+                                    picoquic_decode_transport_param_stream_id(bidir, extension_mode,
+                                        PICOQUIC_STREAM_ID_BIDIR);
+
+                                cnx->max_stream_id_bidir_remote = cnx->remote_parameters.initial_max_stream_id_bidir;
                             }
                             break;
                         case picoquic_transport_parameter_idle_timeout:
@@ -343,15 +388,16 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                             }
                             break;
                         case picoquic_transport_parameter_initial_max_stream_id_unidir:
-                            if (extension_length != 4) {
+                            if (extension_length != 2) {
                                 ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_TRANSPORT_PARAMETER_ERROR);
                             } else {
-                                cnx->remote_parameters.initial_max_stream_id_unidir = PICOPARSE_32(bytes + byte_index);
-                                cnx->max_stream_id_unidir_remote = cnx->remote_parameters.initial_max_stream_id_unidir;
+                                uint32_t unidir = PICOPARSE_16(bytes + byte_index);
 
-                                if (cnx->remote_parameters.initial_max_stream_id_unidir != 0 && (((extension_mode == 0) && (cnx->remote_parameters.initial_max_stream_id_unidir & 1) == 0) || ((extension_mode == 1) && (cnx->remote_parameters.initial_max_stream_id_unidir & 1) != 0) || ((cnx->remote_parameters.initial_max_stream_id_unidir & 2) == 0))) {
-                                    ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_TRANSPORT_PARAMETER_ERROR);
-                                }
+                                cnx->remote_parameters.initial_max_stream_id_unidir =
+                                    picoquic_decode_transport_param_stream_id(unidir, extension_mode,
+                                        PICOQUIC_STREAM_ID_UNIDIR);
+
+                                cnx->max_stream_id_unidir_remote = cnx->remote_parameters.initial_max_stream_id_unidir;
                             }
                             break;
                         default:
