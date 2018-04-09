@@ -214,12 +214,12 @@ size_t picoquic_create_packet_header_11(
     /* Prepare the packet header */
     if (packet_type == picoquic_packet_1rtt_protected_phi0 || packet_type == picoquic_packet_1rtt_protected_phi1) {
         /* Create a short packet -- using 32 bit sequence numbers for now */
-        uint8_t C = 0x40;
-        uint8_t K = (packet_type == picoquic_packet_1rtt_protected_phi0) ? 0 : 0x20;
+        uint8_t K = (packet_type == picoquic_packet_1rtt_protected_phi0) ? 0 : 0x40;
+        uint8_t C = 0x20;
         uint8_t PT = 0x12;
 
         length = 0;
-        bytes[length++] = (C | K | PT);
+        bytes[length++] = (K | C | PT);
         length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, dest_cnx_id);
 
         *pn_offset = length;
