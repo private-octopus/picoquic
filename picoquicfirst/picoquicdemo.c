@@ -331,6 +331,7 @@ static void first_server_callback(picoquic_cnx_t* cnx,
             stream_ctx->command[stream_ctx->command_length] = 0;
             printf("Server CB, Stream: %" PRIu64 ", Partial command: %s\n",
                 stream_id, strip_endofline(buf, sizeof(buf), (char*)&stream_ctx->command));
+            fflush(stdout);
         }
     }
 
