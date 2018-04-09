@@ -31,15 +31,15 @@
  */
 
 static picoquic_transport_parameters transport_param_test1 = {
-    65535, 0x400000, 65533, 0, 30, 1480, 3
+    65535, 0x400000, 65533, 65535, 30, 1480, 3
 };
 
 static picoquic_transport_parameters transport_param_test2 = {
-    0x1000000, 0x1000000, 0x1000001, 0, 255, 1480, 3
+    0x1000000, 0x1000000, 1, 0, 255, 1480, 3
 };
 
 static picoquic_transport_parameters transport_param_test3 = {
-    0x1000000, 0x1000000, 0x1000001, 0, 255, 0, 3
+    0x1000000, 0x1000000, 1, 0, 255, 0, 3
 };
 
 static picoquic_transport_parameters transport_param_test4 = {
@@ -47,7 +47,7 @@ static picoquic_transport_parameters transport_param_test4 = {
 };
 
 static picoquic_transport_parameters transport_param_test5 = {
-    0x1000000, 0x1000000, 0x1000000, 0, 255, 1480, 3
+    0x1000000, 0x1000000, 4, 0, 255, 1480, 3
 };
 
 static picoquic_transport_parameters transport_param_test6 = {
@@ -69,30 +69,31 @@ static uint8_t transport_param_reset_secret[PICOQUIC_RESET_SECRET_SIZE] = {
 
 uint8_t client_param1[] = {
     'P', 'C', 'Q', '0',
-    0, 0x24,
+    0, 0x28,
     0, 0, 0, 4, 0, 0, 0xFF, 0xFF,
     0, 1, 0, 4, 0, 0x40, 0, 0,
-    0, 2, 0, 4, 0, 0, 0xFF, 0xFD,
+    0, 2, 0, 2, 0x40, 0x00,
     0, 3, 0, 2, 0, 0x1E,
     0, 5, 0, 2, 0x05, 0xC8,
+    0, 8, 0, 2, 0x40, 0x00
 };
 
 uint8_t client_param2[] = {
     0x0A, 0x1A, 0x0A, 0x1A,
-    0, 0x24,
+    0, 0x22,
     0, 0, 0, 4, 0x01, 0, 0, 0,
     0, 1, 0, 4, 0x01, 0, 0, 0,
-    0, 2, 0, 4, 0x01, 0, 0, 1,
-    0, 3, 0, 2, 0, 0xFF,
+    0, 2, 0, 2, 0, 0x01,
+    0, 3, 0, 2, 0x0, 0xFF,
     0, 5, 0, 2, 0x05, 0xC8
 };
 
 uint8_t client_param3[] = {
     0x0A, 0x1A, 0x0A, 0x1A,
-    0, 0x1E,
+    0, 0x1C,
     0, 0, 0, 4, 0x01, 0, 0, 0,
     0, 1, 0, 4, 0x01, 0, 0, 0,
-    0, 2, 0, 4, 0x01, 0, 0, 1,
+    0, 2, 0, 2, 0, 0x01,
     0, 3, 0, 2, 0, 0xFF
 };
 
@@ -107,9 +108,9 @@ uint8_t client_param4[] = {
 
 uint8_t client_param5[] = {
     0xBA, 0xBA, 0xBA, 0xBA,
-    0, 0x29,
+    0, 0x27,
     0, 0x03, 0, 0x02, 0, 0x0A,
-    0, 0x02, 0, 0x04, 0, 0, 0, 0x05,
+    0, 0x02, 0, 0x02, 0, 0x02,
     0, 0x00, 0, 0x04, 0, 0, 0x20, 0,
     0, 0x01, 0, 0x04, 0, 0, 0x40, 0,
     0, 0x05, 0, 0x02, 0x05, 0xC0,
@@ -121,10 +122,10 @@ uint8_t server_param1[] = {
     0x08,
     'P', 'C', 'Q', '0',
     0xFF, 0x00, 0x00, 0x0B,
-    0, 0x38,
+    0, 0x36,
     0, 0, 0, 4, 0, 0, 0xFF, 0xFF,
     0, 1, 0, 4, 0, 0x40, 0, 0,
-    0, 2, 0, 4, 0, 0, 0xFF, 0xFC,
+    0, 2, 0, 2, 0x3F, 0xFF,
     0, 3, 0, 2, 0, 0x1E,
     0, 5, 0, 2, 0x05, 0xC8,
     0, 6, 0, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
@@ -135,10 +136,10 @@ uint8_t server_param2[] = {
     0x08,
     'P', 'C', 'Q', '0',
     0xFF, 0x00, 0x00, 0x0B,
-    0, 0x38,
+    0, 0x36,
     0, 0, 0, 4, 0x01, 0, 0, 0,
     0, 1, 0, 4, 0x01, 0, 0, 0,
-    0, 2, 0, 4, 0x01, 0, 0, 0,
+    0, 2, 0, 2, 0, 1,
     0, 3, 0, 2, 0, 0xFF,
     0, 5, 0, 2, 0x05, 0xC8,
     0, 6, 0, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
@@ -497,6 +498,70 @@ int transport_param_log_test()
         }
 
         DBG_PRINTF("Fuzz test of transport parameter was successful.\n", log_tp_fuzz_file);
+    }
+
+    return ret;
+}
+
+typedef struct st_transport_param_stream_id_test_t {
+    int extension_mode;
+    int stream_id_type;
+    int rank;
+    int stream_id;
+} transport_param_stream_id_test_t;
+
+transport_param_stream_id_test_t const transport_param_stream_id_test_table[] = {
+    { 0, PICOQUIC_STREAM_ID_BIDIR, 0, 0 },
+    { 1, PICOQUIC_STREAM_ID_BIDIR, 0, 0 },
+    { 0, PICOQUIC_STREAM_ID_UNIDIR, 0, 0 },
+    { 1, PICOQUIC_STREAM_ID_UNIDIR, 0, 0 },
+    { 0, PICOQUIC_STREAM_ID_BIDIR,  1, PICOQUIC_STREAM_ID_SERVER_INITIATED_BIDIR },
+    { 1, PICOQUIC_STREAM_ID_BIDIR, 1, PICOQUIC_STREAM_ID_CLIENT_INITIATED_BIDIR + 4},
+    { 0, PICOQUIC_STREAM_ID_UNIDIR, 1, PICOQUIC_STREAM_ID_SERVER_INITIATED_UNIDIR },
+    { 1, PICOQUIC_STREAM_ID_UNIDIR, 1, PICOQUIC_STREAM_ID_CLIENT_INITIATED_UNIDIR },
+    { 0, PICOQUIC_STREAM_ID_BIDIR, 5, 17},
+    { 1, PICOQUIC_STREAM_ID_BIDIR, 5, 20 }
+};
+
+static size_t const nb_transport_param_stream_id_test_table =
+    sizeof(transport_param_stream_id_test_table) / sizeof(transport_param_stream_id_test_t);
+
+uint32_t picoquic_decode_transport_param_stream_id(uint16_t rank, int extension_mode, int stream_type);
+uint16_t picoquic_prepare_transport_param_stream_id(uint32_t stream_id, int extension_mode, int stream_type);
+
+int transport_param_stream_id_test() {
+    int ret = 0;
+
+    /* Decoding test */
+    for (size_t i = 0; i < nb_transport_param_stream_id_test_table; i++) {
+        uint16_t rank = picoquic_prepare_transport_param_stream_id(
+            transport_param_stream_id_test_table[i].stream_id,
+            transport_param_stream_id_test_table[i].extension_mode,
+            transport_param_stream_id_test_table[i].stream_id_type);
+
+        if (rank != transport_param_stream_id_test_table[i].rank) {
+            DBG_PRINTF("TP Stream prepare ID [%d] fails. Rank= 0x%x, expected 0x%x, got 0x%x\n", i,
+                transport_param_stream_id_test_table[i].stream_id,
+                transport_param_stream_id_test_table[i].rank,
+                rank);
+            ret = -1;
+        }
+    }
+
+    /* Encoding test */
+    for (size_t i = 0; i < nb_transport_param_stream_id_test_table; i++) {
+        uint32_t stream_id = picoquic_decode_transport_param_stream_id(
+            transport_param_stream_id_test_table[i].rank,
+            transport_param_stream_id_test_table[i].extension_mode,
+            transport_param_stream_id_test_table[i].stream_id_type);
+
+        if (stream_id != transport_param_stream_id_test_table[i].stream_id) {
+            DBG_PRINTF("TP Stream decode ID [%d] fails. Rank= 0x%x, expected 0x%x, got 0x%x\n", i,
+                transport_param_stream_id_test_table[i].rank,
+                transport_param_stream_id_test_table[i].stream_id,
+                stream_id);
+            ret = -1;
+        }
     }
 
     return ret;

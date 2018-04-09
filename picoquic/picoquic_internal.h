@@ -53,8 +53,6 @@ extern "C" {
 #define PICOQUIC_CWIN_INITIAL (10 * PICOQUIC_MAX_PACKET_SIZE)
 #define PICOQUIC_CWIN_MINIMUM (2 * PICOQUIC_MAX_PACKET_SIZE)
 
-#define PICOQUIC_ERRONEOUS_SNI "erroneous-sni"
-
 /*
      * Nominal packet types. These are the packet types used internally by the
      * implementation. The wire encoding depends on the version.
@@ -223,7 +221,6 @@ typedef struct _picoquic_transport_parameters {
     uint32_t initial_max_stream_id_bidir;
     uint32_t initial_max_stream_id_unidir;
     uint32_t idle_timeout;
-    /* uint32_t omit_connection_id; */
     uint32_t max_packet_size;
     uint8_t ack_delay_exponent;
 } picoquic_transport_parameters;

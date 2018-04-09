@@ -72,7 +72,6 @@ int skip_frame_test();
 int ping_pong_test();
 int keep_alive_test();
 int logger_test();
-int transport_parameter_client_error_test();
 int socket_test();
 int ticket_store_test();
 int session_resume_test();
@@ -94,6 +93,7 @@ int virtual_time_test();
 int tls_different_params_test();
 int wrong_tls_version_test();
 int set_certificate_and_key_test();
+int transport_param_stream_id_test();
 
 #ifdef __cplusplus
 }
