@@ -192,7 +192,7 @@ int picoquic_parse_packet_header(
              /* If the connection is identified, decode the short header per version ID */
              switch (picoquic_supported_versions[ph->version_index].version_header_encoding) {
              case picoquic_version_header_11:
-                 if ((bytes[0] & 0x20) == 0) {
+                 if ((bytes[0] & 0x40) == 0) {
                      ph->ptype = picoquic_packet_1rtt_protected_phi0;
                  }
                  else {

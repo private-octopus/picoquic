@@ -97,7 +97,7 @@ static picoquic_packet_header hvnego10 = {
 };
 
 static uint8_t packet_short_phi0_c_32[] = {
-    0x52,
+    0x32,
     TEST_CNXID_10_BYTES,
     0xDE, 0xAD, 0xBE, 0xEF
 };
@@ -115,7 +115,7 @@ static picoquic_packet_header hphi0_c_32 = {
 };
 
 static uint8_t packet_short_phi1_c_16[] = {
-    0x31,
+    0x71,
     TEST_CNXID_10_BYTES,
     0xBE, 0xEF
 };
@@ -133,7 +133,7 @@ static picoquic_packet_header hphi1_c_16 = {
 };
 
 static uint8_t packet_short_phi1_c_8[] = {
-    0x30,
+    0x70,
     TEST_CNXID_10_BYTES,
     0xEF
 };
@@ -151,7 +151,7 @@ static picoquic_packet_header hphi1_c_8 = {
 };
 
 static uint8_t packet_short_phi0_noc_16[] = {
-    0x51,
+    0x31,
     0xBE, 0xEF,
 };
 
@@ -168,7 +168,7 @@ static picoquic_packet_header hphi0_noc_16 = {
 };
 
 static uint8_t packet_short_phi0_noc_8[] = {
-    0x50,
+    0x30,
     0xEF
 };
 
