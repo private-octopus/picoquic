@@ -173,7 +173,7 @@ uint64_t picoquic_val64_connection_id(picoquic_connection_id_t cnx_id)
             val64 <<= 8;
         }
     } else {
-        for (size_t i = 0; i < cnx_id.id_len; i++) {
+        for (size_t i = 0; i < 8; i++) {
             val64 <<= 8;
             val64 |= cnx_id.id[i];
         }
