@@ -418,14 +418,6 @@ typedef struct st_picoquic_cnx_t {
     uint64_t sack_block_size_max;
     uint64_t highest_ack_sent;
     uint64_t highest_ack_time;
-#if 0
-    /* Time measurement */
-    uint64_t max_ack_delay;
-    uint64_t smoothed_rtt;
-    uint64_t rtt_variant;
-    uint64_t retransmit_timer;
-    uint64_t rtt_min;
-#endif
     uint64_t ack_delay_local;
 
     /* Retransmission state */
@@ -434,11 +426,6 @@ typedef struct st_picoquic_cnx_t {
     uint64_t nb_retransmission_total;
     uint64_t nb_retransmit;
     uint64_t nb_spurious;
-#if 0
-    uint64_t max_spurious_rtt;
-    uint64_t max_reorder_delay;
-    uint64_t max_reorder_gap;
-#endif
     uint64_t latest_retransmit_time;
     uint64_t highest_acknowledged;
     uint64_t latest_time_acknowledged; /* time at which the highest acknowledged was sent */
@@ -446,21 +433,7 @@ typedef struct st_picoquic_cnx_t {
     picoquic_packet* retransmit_oldest;
     picoquic_packet* retransmitted_newest;
     picoquic_packet* retransmitted_oldest;
-#if 0
-    /* Congestion control state */
-    uint64_t cwin;
-    uint64_t bytes_in_transit;
-    void* congestion_alg_state;
-#endif
     picoquic_congestion_algorithm_t const* congestion_alg;
-
-#if 0
-    /* Pacing */
-    uint64_t packet_time_nano_sec;
-    uint64_t pacing_reminder_nano_sec;
-    uint64_t pacing_margin_micros;
-    uint64_t next_pacing_time;
-#endif
 
     /* Flow control information */
     uint64_t data_sent;
@@ -675,7 +648,8 @@ int picoquic_is_packet_encrypted(picoquic_cnx_t* cnx, uint8_t byte_zero);
 void picoquic_queue_stateless_reset(picoquic_cnx_t* cnx,
     picoquic_packet_header* ph, struct sockaddr* addr_from,
     struct sockaddr* addr_to,
-    unsigned long if_index_to);
+    unsigned long if_index_to,
+    uint64_t current_time);
 
 picoquic_misc_frame_header_t* picoquic_create_misc_frame(const uint8_t* bytes, size_t length);
 

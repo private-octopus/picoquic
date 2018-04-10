@@ -526,7 +526,8 @@ void picoquic_process_unexpected_cnxid(
 void picoquic_queue_stateless_reset(picoquic_cnx_t* cnx,
     picoquic_packet_header* ph, struct sockaddr* addr_from,
     struct sockaddr* addr_to,
-    unsigned long if_index_to)
+    unsigned long if_index_to,
+    uint64_t current_time)
 {
     picoquic_stateless_packet_t* sp = picoquic_create_stateless_packet(cnx->quic);
     size_t checksum_length = 8;
@@ -536,6 +537,7 @@ void picoquic_queue_stateless_reset(picoquic_cnx_t* cnx,
         uint8_t* bytes = cleartext;
         size_t byte_index = 0;
         size_t data_bytes = 0;
+        size_t ack_bytes = 0;
         size_t header_length = 0;
         size_t pn_offset = 0;
 
@@ -554,6 +556,14 @@ void picoquic_queue_stateless_reset(picoquic_cnx_t* cnx,
         byte_index += 4;
 
         header_length = byte_index;
+
+        /* Draft 11 requires adding an ACK frame */
+        if (picoquic_record_pn_received(cnx, ph->pn64, current_time) == 0 &&
+            picoquic_prepare_ack_frame(cnx, current_time, bytes + byte_index,
+            PICOQUIC_MAX_PACKET_SIZE - byte_index - checksum_length, &ack_bytes) == 0)
+        {
+            byte_index += ack_bytes;
+        }
 
         /* Copy the stream zero data */
         if (picoquic_prepare_stream_frame(cnx, &cnx->first_stream, bytes + byte_index,
@@ -631,7 +641,7 @@ int picoquic_incoming_initial(
                     ret = picoquic_tlsinput_stream_zero(cnx);
 
                     if (cnx->cnx_state == picoquic_state_server_send_hrr) {
-                        picoquic_queue_stateless_reset(cnx, ph, addr_from, addr_to, if_index_to);
+                        picoquic_queue_stateless_reset(cnx, ph, addr_from, addr_to, if_index_to, current_time);
                         cnx->cnx_state = picoquic_state_disconnected;
                     }
                 }

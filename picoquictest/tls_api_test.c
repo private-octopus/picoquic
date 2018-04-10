@@ -2148,7 +2148,7 @@ int wrong_keyshare_test()
 
             picoquic_queue_stateless_reset(cnx, &ph,
                 (struct sockaddr*)&addr_from,
-                (struct sockaddr*)&addr_from, 0);
+                (struct sockaddr*)&addr_from, 0, simulated_time);
 
             cnx->cnx_state = picoquic_state_disconnected;
 

@@ -1390,11 +1390,11 @@ int picoquic_prepare_ack_frame(picoquic_cnx_t* cnx, uint64_t current_time,
     uint64_t ack_gap = 0;
     uint64_t lowest_acknowledged = 0;
     size_t num_block_index = 0;
-    uint8_t ack_type_byte = (picoquic_supported_versions[cnx->version_index].version == PICOQUIC_FOURTH_INTEROP_VERSION) ?
-        0x0E : picoquic_frame_type_ack;
+    uint8_t ack_type_byte = picoquic_frame_type_ack;
 
     /* Check that there is enough room in the packet, and something to acknowledge */
-    if (cnx->first_sack_item.start_of_sack_range == 0 && cnx->first_sack_item.end_of_sack_range == 0) {
+    if (cnx->first_sack_item.start_of_sack_range == 0 && cnx->first_sack_item.end_of_sack_range == 0  &&
+        cnx->time_stamp_largest_received == (uint64_t)((int64_t)-1)) {
         *consumed = 0;
     } else if (bytes_max < 13) {
         /* A valid ACK, with our encoding, uses at least 13 bytes.

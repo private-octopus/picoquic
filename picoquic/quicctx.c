@@ -724,7 +724,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             cnx->sack_block_size_max = 0;
             cnx->highest_ack_sent = 0;
             cnx->highest_ack_time = start_time;
-            cnx->time_stamp_largest_received = start_time;
+            cnx->time_stamp_largest_received = (uint64_t)((int64_t)-1);
 
             cnx->first_stream.stream_id = 0;
             cnx->first_stream.consumed_offset = 0;
