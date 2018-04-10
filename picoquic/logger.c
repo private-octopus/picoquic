@@ -54,6 +54,35 @@ void picoquic_log_time(FILE* F, picoquic_cnx_t* cnx, uint64_t current_time,
         (unsigned long long)time_sec, time_usec, label2);
 }
 
+const char * picoquic_log_fin_or_event_name(picoquic_call_back_event_t ev)
+{
+    char const * text = "unknown";
+    switch (ev) {
+    case picoquic_callback_no_event:
+        text = "no event";
+        break;
+    case picoquic_callback_stream_fin:
+        text = "stream fin";
+        break;
+    case picoquic_callback_stream_reset:
+        text = "stream reset";
+        break;
+    case picoquic_callback_stop_sending:
+        text = "stop sending";
+        break;
+    case picoquic_callback_close:
+        text = "connection close";
+        break;
+    case picoquic_callback_application_close:
+        text = "application close";
+        break;
+    default:
+        break;
+    }
+
+    return text;
+}
+
 void picoquic_log_packet_address(FILE* F, picoquic_cnx_t* cnx,
     struct sockaddr* addr_peer, int receiving, size_t length, uint64_t current_time)
 {

@@ -120,6 +120,9 @@ void picoquic_log_transport_extension(FILE* F, picoquic_cnx_t* cnx, int log_cnxi
 void picoquic_log_congestion_state(FILE* F, picoquic_cnx_t* cnx, uint64_t current_time);
 void picoquic_log_picotls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
     uint8_t* ticket, uint16_t ticket_length);
+const char * picoquic_log_fin_or_event_name(picoquic_call_back_event_t ev);
+void picoquic_log_time(FILE* F, picoquic_cnx_t* cnx, uint64_t current_time,
+    const char* label1, const char* label2);
 
 void print_address(struct sockaddr* address, char* label, picoquic_connection_id_t cnx_id)
 {
@@ -219,17 +222,16 @@ static void first_server_callback(picoquic_cnx_t* cnx,
     picoquic_first_server_stream_ctx_t* stream_ctx = NULL;
 
     printf("%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_initial_cnxid(cnx)));
-    printf("Server CB, Stream: %" PRIu64 ", %" PRIst " bytes, fin=%d\n",
-        stream_id, length, fin_or_event);
+    picoquic_log_time(stdout, cnx, picoquic_current_time(), "", " : ");
+    printf("Server CB, Stream: %" PRIu64 ", %" PRIst " bytes, fin=%d (%s)\n",
+        stream_id, length, fin_or_event, picoquic_log_fin_or_event_name(fin_or_event));
 
     if (fin_or_event == picoquic_callback_close || fin_or_event == picoquic_callback_application_close) {
-        printf("%" PRIx64 ": %s\n", picoquic_val64_connection_id(picoquic_get_initial_cnxid(cnx)),
-            (fin_or_event == picoquic_callback_close) ? "Connection closed" : "Application closed");
         if (ctx != NULL) {
             first_server_callback_delete_context(ctx);
             picoquic_set_callback(cnx, first_server_callback, NULL);
         }
-
+        fflush(stdout);
         return;
     }
 
@@ -237,7 +239,9 @@ static void first_server_callback(picoquic_cnx_t* cnx,
         picoquic_first_server_callback_ctx_t* new_ctx = first_server_callback_create_context();
         if (new_ctx == NULL) {
             /* cannot handle the connection */
-            DBG_PRINTF("%s\n", "Memory error, cannot allocate application context");
+            printf("%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_initial_cnxid(cnx)));
+            printf("Memory error, cannot allocate application context\n");
+
             picoquic_close(cnx, PICOQUIC_ERROR_MEMORY);
             return;
         } else {
@@ -272,17 +276,27 @@ static void first_server_callback(picoquic_cnx_t* cnx,
     if (fin_or_event == picoquic_callback_stop_sending) {
         stream_ctx->status = picoquic_first_server_stream_status_finished;
         picoquic_reset_stream(cnx, stream_id, 0);
+        printf("%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_initial_cnxid(cnx)));
+        printf("Server CB, Stop Sending Stream: %" PRIu64 ", resetting the local stream.\n",
+            stream_id);
         return;
     } else if (fin_or_event == picoquic_callback_stream_reset) {
         stream_ctx->status = picoquic_first_server_stream_status_finished;
         picoquic_reset_stream(cnx, stream_id, 0);
+        printf("%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_initial_cnxid(cnx)));
+        printf("Server CB, Reset Stream: %" PRIu64 ", resetting the local stream.\n",
+            stream_id);
         return;
     } else if (stream_ctx->status == picoquic_first_server_stream_status_finished || stream_ctx->command_length + length > (PICOQUIC_FIRST_COMMAND_MAX - 1)) {
-        /* send after fin, or too many bytes => reset! */
-        picoquic_reset_stream(cnx, stream_id, 0);
-        printf("%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_initial_cnxid(cnx)));
-        printf("Server CB, Stream: %" PRIu64 ", RESET, too long or after FIN\n",
-            stream_id);
+        if (fin_or_event == picoquic_callback_stream_fin && length == 0) {
+            /* no problem, this is fine. */
+        } else {
+            /* send after fin, or too many bytes => reset! */
+            picoquic_reset_stream(cnx, stream_id, PICOQUIC_TRANSPORT_STREAM_STATE_ERROR);
+            printf("%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_initial_cnxid(cnx)));
+            printf("Server CB, Stream: %" PRIu64 ", RESET, too long or after FIN\n",
+                stream_id);
+        }
         return;
     } else {
         int crlf_present = 0;
@@ -437,6 +451,7 @@ int quic_server(const char* server_name, int server_port,
                 if (cnx_server != picoquic_get_first_cnx(qserver) && picoquic_get_first_cnx(qserver) != NULL) {
                     cnx_server = picoquic_get_first_cnx(qserver);
                     printf("%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_initial_cnxid(cnx_server)));
+                    picoquic_log_time(stdout, cnx_server, picoquic_current_time(), "", " : ");
                     printf("Connection established, state = %d, from length: %d\n",
                         picoquic_get_cnx_state(picoquic_get_first_cnx(qserver)), from_length);
                     memset(&client_from, 0, sizeof(client_from));
@@ -477,6 +492,7 @@ int quic_server(const char* server_name, int server_port,
                             free(p);
 
                             printf("%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_initial_cnxid(cnx_next)));
+                            picoquic_log_time(stdout, cnx_server, picoquic_current_time(), "", " : ");
                             printf("Closed. Retrans= %d, spurious= %d, max sp gap = %d, max sp delay = %d\n",
                                 (int)cnx_next->nb_retransmission_total, (int)cnx_next->nb_spurious,
                                 (int)cnx_next->path[0]->max_reorder_gap, (int)cnx_next->path[0]->max_spurious_rtt);
