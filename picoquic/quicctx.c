@@ -552,6 +552,9 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, struct sockad
             path_x->peer_addr_len = (int)((addr->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
             memcpy(&path_x->peer_addr, addr, path_x->peer_addr_len);
 
+            /* Set the challenge used for this path */
+            path_x->challenge = picoquic_public_random_64();
+
             /* Initialize per path time measurement */
             path_x->smoothed_rtt = PICOQUIC_INITIAL_RTT;
             path_x->rtt_variant = 0;
@@ -620,6 +623,8 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             cnx->quic = quic;
             picoquic_insert_cnx_in_list(quic, cnx);
             picoquic_insert_cnx_by_wake_time(quic, cnx);
+            /* Do not require verification for default path */
+            cnx->path[0]->challenge_verified = 1;
         }
     }
 

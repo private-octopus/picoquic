@@ -180,7 +180,8 @@ typedef enum {
     picoquic_callback_stream_reset,
     picoquic_callback_stop_sending,
     picoquic_callback_close,
-    picoquic_callback_application_close
+    picoquic_callback_application_close,
+    picoquic_callback_challenge_response
 } picoquic_call_back_event_t;
 
 #define PICOQUIC_STREAM_ID_TYPE_MASK 3

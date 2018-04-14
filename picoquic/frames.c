@@ -1888,6 +1888,22 @@ int picoquic_prepare_misc_frame(picoquic_misc_frame_header_t* misc_frame, uint8_
  * Path Challenge and Response frames
  */
 
+int picoquic_prepare_path_challenge_frame(uint8_t* bytes,
+    size_t bytes_max, size_t* consumed, picoquic_path_t * path)
+{
+    int ret = 0;
+    if (bytes_max < (1 + 8)) {
+        ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
+        *consumed = 0;
+    } else {
+        bytes[0] = picoquic_frame_type_path_challenge;
+        picoformat_64(bytes + 1, path->challenge);
+        *consumed = 1 + 8;
+    }
+
+    return ret;
+}
+
 int picoquic_decode_path_challenge_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
     size_t bytes_max, size_t* consumed)
 {
@@ -1934,14 +1950,24 @@ int picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
             PICOQUIC_TRANSPORT_FRAME_ERROR(picoquic_frame_type_path_response));
     } else {
         /*
-         * Submit the path response frame to the call back if there is one.
-         * TODO: plug validation there!
+         * Check that the challenge corresponds to something that was sent locally
          */
+        uint64_t response = PICOPARSE_64(bytes + byte_index);
+        int found_challenge = 0;
 
         byte_index += challenge_length;
 
-        if (cnx->callback_fn != NULL) {
-            cnx->callback_fn(cnx, 0, bytes, byte_index, 0, cnx->callback_ctx);
+        for (int i = 0; i < cnx->nb_paths; i++) {
+            if (response == cnx->path[i]->challenge) {
+                /* TODO: verify that the network addresses match the path */
+                found_challenge = 1;
+                cnx->path[i]->challenge_verified = 1;
+            }
+        }
+
+        if (found_challenge == 0 && cnx->callback_fn != NULL) {
+            cnx->callback_fn(cnx, 0, bytes, byte_index, 
+                picoquic_callback_challenge_response, cnx->callback_ctx);
         }
     }
 

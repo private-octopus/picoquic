@@ -307,6 +307,13 @@ typedef struct st_picoquic_path_t {
     int dest_addr_len;
     unsigned long if_index_dest;
 
+    /* Challenge used for this path */
+    uint64_t challenge;
+
+    /* flags */
+    unsigned int mtu_probe_sent : 1;
+    unsigned int challenge_verified : 1;
+
     /* Time measurement */
     uint64_t max_ack_delay;
     uint64_t smoothed_rtt;
@@ -318,7 +325,6 @@ typedef struct st_picoquic_path_t {
     uint64_t max_reorder_gap;
 
     /* MTU */
-    unsigned int mtu_probe_sent : 1;
     uint32_t send_mtu;
     uint32_t send_mtu_max_tried;
 
@@ -421,6 +427,8 @@ typedef struct st_picoquic_cnx_t {
     uint64_t ack_delay_local;
 
     /* Retransmission state */
+    uint32_t nb_path_challenge_sent;
+    uint32_t nb_path_response_received;
     uint32_t nb_zero_rtt_sent;
     uint32_t nb_zero_rtt_acked;
     uint64_t nb_retransmission_total;

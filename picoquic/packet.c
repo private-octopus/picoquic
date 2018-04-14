@@ -1116,6 +1116,7 @@ int picoquic_incoming_segment(
             /* Build a packet number to 64 bits */
             ph.pn64 = picoquic_get_packet_number64(
                 cnx->first_sack_item.end_of_sack_range, ph.pnmask, ph.pn);
+            /* Find the incoming path */
             if (ret == 0) {
                 switch (ph.ptype) {
                 case picoquic_packet_version_negotiation:

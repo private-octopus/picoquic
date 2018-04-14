@@ -491,5 +491,12 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(test_nat_rebinding)
+        {
+            int ret = nat_rebinding_test();
+
+            Assert::AreEqual(ret, 0);
+        }
     };
 }

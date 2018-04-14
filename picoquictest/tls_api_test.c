@@ -653,6 +653,37 @@ static int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t propose
     return ret;
 }
 
+static int tls_api_one_sim_check_addr(struct sockaddr * expected, struct sockaddr * actual)
+{
+    int ret = -1;
+
+    if (expected->sa_family == actual->sa_family) {
+        if (expected->sa_family == AF_INET) {
+            struct sockaddr_in * ex = (struct sockaddr_in *)expected;
+            struct sockaddr_in * ac = (struct sockaddr_in *)actual;
+            if (ex->sin_port == ac->sin_port &&
+#ifdef _WINDOWS
+                ex->sin_addr.S_un.S_addr == ac->sin_addr.S_un.S_addr) {
+#else
+                ex->sin_addr.s_addr == ac->sin_addr.s_addr){
+#endif
+                ret = 0;
+            }
+        } else {
+            struct sockaddr_in6 * ex = (struct sockaddr_in6 *)expected;
+            struct sockaddr_in6 * ac = (struct sockaddr_in6 *)actual;
+
+
+            if (ex->sin6_port == ac->sin6_port &&
+                memcmp(&ex->sin6_addr, &ac->sin6_addr, sizeof(struct sockaddr_in6)) == 0){
+                ret = 0;
+            }
+        }
+    }
+
+    return ret;
+}
+
 static int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* simulated_time, int* was_active)
 {
@@ -760,11 +791,16 @@ static int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                 next_time = client_arrival;
                 *simulated_time = next_time;
 
-                ret = picoquic_incoming_packet(test_ctx->qclient, packet->bytes, (uint32_t)packet->length,
-                    (struct sockaddr*)&packet->addr_from,
-                    (struct sockaddr*)&packet->addr_to, 0,
-                    *simulated_time);
-                *was_active |= 1;
+                /* Check the destination address  before submitting the packet */
+                /* TODO: better test when testing more than NAT rebinding. */
+                if (tls_api_one_sim_check_addr((struct sockaddr *)&test_ctx->client_addr,
+                    (struct sockaddr *)&packet->addr_to) == 0) {
+                    ret = picoquic_incoming_packet(test_ctx->qclient, packet->bytes, (uint32_t)packet->length,
+                        (struct sockaddr*)&packet->addr_from,
+                        (struct sockaddr*)&packet->addr_to, 0,
+                        *simulated_time);
+                    *was_active |= 1;
+                }
 
                 if (ret != 0)
                 {
@@ -776,11 +812,15 @@ static int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                 next_time = server_arrival;
                 *simulated_time = next_time;
 
-                ret = picoquic_incoming_packet(test_ctx->qserver, packet->bytes, (uint32_t)packet->length,
-                    (struct sockaddr*)&packet->addr_from,
-                    (struct sockaddr*)&packet->addr_to, 0,
-                    *simulated_time);
-
+                /* Check the destination address  before submitting the packet */
+                /* TODO: better test when testing more than NAT rebinding. */
+                if (tls_api_one_sim_check_addr((struct sockaddr *)&test_ctx->server_addr,
+                    (struct sockaddr *)&packet->addr_to) == 0) {
+                    ret = picoquic_incoming_packet(test_ctx->qserver, packet->bytes, (uint32_t)packet->length,
+                        (struct sockaddr*)&packet->addr_from,
+                        (struct sockaddr*)&packet->addr_to, 0,
+                        *simulated_time);
+                }
 
                 if (ret != 0)
                 {
@@ -1593,7 +1633,7 @@ static void ping_pong_callback(picoquic_cnx_t* cnx,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx)
 {
     ping_pong_test_callback_ctx_t* ping_pong_ctx = (ping_pong_test_callback_ctx_t*)callback_ctx;
-    if (stream_id == 0 && fin_or_event == 0) {
+    if (stream_id == 0 && fin_or_event == picoquic_callback_challenge_response) {
         /* This is a special frame call back. */
         if (length == ping_pong_ctx->ping_length && bytes[0] == picoquic_frame_type_path_response && memcmp(bytes + 1, &ping_pong_ctx->ping_frame[1], length - 1) == 0) {
             ping_pong_ctx->pong_received++;
@@ -2698,6 +2738,47 @@ int set_certificate_and_key_test()
     if (ret == 0 && (test_ctx->cnx_client->cnx_state != picoquic_state_client_ready
                      || test_ctx->cnx_server->cnx_state != picoquic_state_server_ready)) {
         ret = -1;
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+/*
+* NAT Rebinding test. The client is unaware of the migration.
+* Start with one basic transmission, then switch the client
+* to a different port number. Verify that the server issues 
+* a path challenge, that the client responds with a path
+* response, and that the connection completes.
+*/
+
+int nat_rebinding_test()
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0);
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    /* Change the client address */
+    test_ctx->client_addr.sin_port += 17;
+
+    /* Prepare to send data */
+    if (ret == 0) {
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_q_and_r, sizeof(test_scenario_mtu_discovery));
+    }
+
+    /* Perform a data sending loop */
+    if (ret == 0) {
+        ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 0);
     }
 
     if (test_ctx != NULL) {
