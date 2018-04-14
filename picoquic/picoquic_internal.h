@@ -511,6 +511,7 @@ void picoformat_32(uint8_t* bytes, uint32_t n32);
 void picoformat_64(uint8_t* bytes, uint64_t n64);
 
 size_t picoquic_varint_encode(uint8_t* bytes, size_t max_bytes, uint64_t n64);
+void picoquic_varint_encode_16(uint8_t* bytes, uint16_t n16);
 size_t picoquic_varint_decode(const uint8_t* bytes, size_t max_bytes, uint64_t* n64);
 size_t picoquic_varint_skip(uint8_t* bytes);
 
@@ -530,6 +531,7 @@ typedef struct _picoquic_packet_header {
     picoquic_packet_type_enum ptype;
     uint64_t pnmask;
     uint64_t pn64;
+    uint16_t payload_length;
     int version_index;
 } picoquic_packet_header;
 
@@ -540,6 +542,11 @@ int picoquic_parse_packet_header(
     struct sockaddr* addr_from,
     picoquic_packet_header* ph,
     picoquic_cnx_t** pcnx);
+
+void picoquic_update_payload_length(
+    uint8_t* bytes, size_t header_length, size_t packet_length);
+
+size_t picoquic_get_checksum_length(picoquic_cnx_t* cnx, int is_cleartext_mode);
 
 int picoquic_test_stream_frame_unlimited(uint8_t* bytes);
 int picoquic_check_stream_frame_already_acked(picoquic_cnx_t* cnx, uint8_t* bytes,

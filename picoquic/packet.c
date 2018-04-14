@@ -79,6 +79,7 @@ int picoquic_parse_packet_header(
                     ph->pnmask = 0;
                     ph->pn_offset = 0;
                     ph->version_index = -1;
+                    ph->payload_length = (uint16_t) ((length > ph->offset) ? length - ph->offset : 0);
 
                     if (*pcnx == NULL) {
                         /* The version negotiation should always include the cnx-id sent by the client */
@@ -95,15 +96,22 @@ int picoquic_parse_packet_header(
                     }
                 } else {
                     char context_by_addr = 0;
+                    uint64_t payload_length;
+                    size_t var_length;
+
                     ph->pn = PICOPARSE_32(bytes + ph->offset);
                     ph->version_index = picoquic_get_version_index(ph->vn);
                     ph->offset += 4;
                     ph->pnmask = 0xFFFFFFFF00000000ull;
-
-                    if (ph->version_index < 0) {
+                    var_length = picoquic_varint_decode(bytes + ph->offset,
+                        length - ph->offset, &payload_length);
+                    if (ph->offset + var_length + payload_length > length ||
+                        ph->version_index < 0) {
                         ph->ptype = picoquic_packet_error;
+                        ph->payload_length = (uint16_t) ((length > ph->offset) ? length - ph->offset : 0);
                     } else {
-                        /* Is the context found by using the `addr_from`? */
+                        ph->payload_length = (uint16_t) payload_length;
+                        ph->offset += var_length;
 
                         /* Retrieve the connection context */
                         if (*pcnx == NULL) {
@@ -185,6 +193,7 @@ int picoquic_parse_packet_header(
          } else {
              ph->ptype = picoquic_packet_error;
              ph->offset = length;
+             ph->payload_length = 0;
          }
          
          if (*pcnx != NULL) {
@@ -225,11 +234,15 @@ int picoquic_parse_packet_header(
 
              if (length < ph->offset) {
                  ret = -1;
+                 ph->payload_length = 0;
+             } else {
+                 ph->payload_length = (uint16_t)(length - ph->offset);
              }
          } else {
              /* If the connection is not identified, classify the packet as unknown.
               * it may trigger a retry */
              ph->ptype = picoquic_packet_error;
+             ph->payload_length = (uint16_t)((length > ph->offset)?length - ph->offset:0);
          }
     }
 
@@ -340,11 +353,11 @@ size_t  picoquic_decrypt_packet(picoquic_cnx_t* cnx,
                     break;
                 }
             }
+            /* Now parse the payload length */
         } else {
             /* The pn_enc algorithm was not initialized. Avoid crash! */
             ph->pn = 0xFFFFFFFF;
             ph->pnmask = 0xFFFFFFFF00000000ull;
-
         }
     }
 
@@ -530,7 +543,7 @@ void picoquic_queue_stateless_reset(picoquic_cnx_t* cnx,
     uint64_t current_time)
 {
     picoquic_stateless_packet_t* sp = picoquic_create_stateless_packet(cnx->quic);
-    size_t checksum_length = 8;
+    size_t checksum_length = picoquic_get_checksum_length(cnx, 1);
     uint8_t cleartext[PICOQUIC_MAX_PACKET_SIZE];
 
     if (sp != NULL) {
@@ -554,6 +567,9 @@ void picoquic_queue_stateless_reset(picoquic_cnx_t* cnx,
         pn_offset = byte_index;
         picoformat_32(bytes + byte_index, ph->pn);
         byte_index += 4;
+        /* Reserve two bytes for payload length */
+        bytes[byte_index++] = 0;
+        bytes[byte_index++] = 0;
 
         header_length = byte_index;
 
@@ -571,6 +587,8 @@ void picoquic_queue_stateless_reset(picoquic_cnx_t* cnx,
             == 0) {
 
             byte_index += data_bytes;
+
+            picoquic_update_payload_length(bytes, header_length, byte_index + checksum_length);
 
             /* AEAD Encrypt, to the send buffer */
             sp->length = picoquic_protect_packet(cnx, cleartext, ph->pn,
@@ -600,6 +618,7 @@ int picoquic_incoming_initial(
     picoquic_quic_t* quic,
     uint8_t* bytes,
     uint32_t length,
+    uint32_t packet_length,
     struct sockaddr* addr_from,
     struct sockaddr* addr_to,
     unsigned long if_index_to,
@@ -614,7 +633,7 @@ int picoquic_incoming_initial(
 
     *p_cnx = NULL;
 
-    if (length < PICOQUIC_ENFORCED_INITIAL_MTU) {
+    if (packet_length < PICOQUIC_ENFORCED_INITIAL_MTU) {
         /* Unexpected packet. Reject, drop and log. */
         ret = PICOQUIC_ERROR_INITIAL_TOO_SHORT;
     } else {
@@ -1056,10 +1075,12 @@ int picoquic_incoming_encrypted(
 * Processing of the packet that was just received from the network.
 */
 
-int picoquic_incoming_packet(
+int picoquic_incoming_segment(
     picoquic_quic_t* quic,
     uint8_t* bytes,
     uint32_t length,
+    uint32_t packet_length,
+    uint32_t * consumed,
     struct sockaddr* addr_from,
     struct sockaddr* addr_to,
     int if_index_to,
@@ -1073,10 +1094,14 @@ int picoquic_incoming_packet(
     ret = picoquic_parse_packet_header(quic, bytes, length, addr_from, &ph, &cnx);
 
     if (ret == 0) {
+        length = ph.offset + ph.payload_length;
+        *consumed = length;
+
         if (cnx == NULL) {
             if (ph.ptype == picoquic_packet_client_initial) {
                 ph.pn64 = ph.pn;
-                ret = picoquic_incoming_initial(quic, bytes, length, addr_from, addr_to, if_index_to, &ph, current_time, &cnx);
+                ret = picoquic_incoming_initial(quic, bytes, length, packet_length, 
+                    addr_from, addr_to, if_index_to, &ph, current_time, &cnx);
             } else if (ph.version_index < 0 && ph.vn != 0) {
                 /* use the result of parsing to consider version negotiation */
                 picoquic_prepare_version_negotiation(quic, addr_from, addr_to, if_index_to, &ph);
@@ -1166,6 +1191,35 @@ int picoquic_incoming_packet(
 
     if (cnx != NULL) {
         picoquic_cnx_set_next_wake_time(cnx, current_time);
+    }
+
+    return ret;
+}
+
+int picoquic_incoming_packet(
+    picoquic_quic_t* quic,
+    uint8_t* bytes,
+    uint32_t packet_length,
+    struct sockaddr* addr_from,
+    struct sockaddr* addr_to,
+    int if_index_to,
+    uint64_t current_time)
+{
+    uint32_t consumed_index = 0;
+    int ret = 0;
+
+    while (consumed_index < packet_length) {
+        uint32_t consumed = 0;
+
+        ret = picoquic_incoming_segment(quic, bytes + consumed_index, 
+            packet_length - consumed_index, packet_length,
+            &consumed, addr_from, addr_to, if_index_to, current_time);
+
+        if (ret == 0) {
+            consumed_index += consumed;
+        } else {
+            break;
+        }
     }
 
     return ret;
