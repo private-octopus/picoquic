@@ -2759,11 +2759,11 @@ int nat_rebinding_test()
     /* TODO: verify that exactly one challenge was sent */
     if (ret == 0) {
         if (initial_challenge == test_ctx->cnx_server->path[0]->challenge) {
-            DBG_PRINTF("Challenge was not renewed after NAT rebinding");
+            DBG_PRINTF("%s", "Challenge was not renewed after NAT rebinding");
             ret = -1;
         }
         else if (test_ctx->cnx_server->path[0]->challenge_verified != 1) {
-            DBG_PRINTF("Challenge was not verified after NAT rebinding");
+            DBG_PRINTF("%s", "Challenge was not verified after NAT rebinding");
             ret = -1;
         }
     }
