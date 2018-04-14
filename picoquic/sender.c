@@ -1011,7 +1011,6 @@ int picoquic_prepare_packet_0rtt(picoquic_cnx_t* cnx, picoquic_path_t * path_x, 
         }
     }
 
-#if 1
     picoquic_finalize_and_protect_packet(cnx, packet,
         ret, -1, length, pn_offset, header_length, checksum_overhead,
         send_length, send_buffer, path_x, current_time);
@@ -1020,29 +1019,7 @@ int picoquic_prepare_packet_0rtt(picoquic_cnx_t* cnx, picoquic_path_t * path_x, 
         /* Accounting of zero rtt packets sent */
         cnx->nb_zero_rtt_sent++;
     }
-#else
-    if (ret == 0 && length > 0) {
-        packet->length = length;
-        cnx->send_sequence++;
-        /* Make sure that the payload length is encoded in the header */
-        picoquic_update_payload_length(packet->bytes, header_length, length + checksum_overhead);
 
-        /* AEAD Encrypt, to the send buffer */
-        length = picoquic_protect_packet(cnx, packet->bytes, packet->sequence_number,
-            length, header_length, pn_offset,
-            send_buffer, cnx->aead_0rtt_encrypt_ctx, cnx->pn_enc_0rtt);
-
-        packet->checksum_overhead = checksum_overhead;
-        *send_length = length;
-
-        picoquic_queue_for_retransmit(cnx, path_x, packet, length, current_time);
-
-        /* Accounting of zero rtt packets sent */
-        cnx->nb_zero_rtt_sent++;
-    } else {
-        *send_length = 0;
-    }
-#endif
     picoquic_cnx_set_next_wake_time(cnx, current_time);
 
     return ret;
@@ -1187,38 +1164,9 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
         /* Consider sending 0-RTT */
         ret = picoquic_prepare_packet_0rtt(cnx, path_x, packet, current_time, send_buffer, send_length);
     } else {
-#if 1
         picoquic_finalize_and_protect_packet(cnx, packet,
             ret, is_cleartext_mode, length, pn_offset, header_length, checksum_overhead,
             send_length, send_buffer, path_x, current_time);
-#else
-        if (ret == 0 && length > 0) {
-            packet->length = length;
-            cnx->send_sequence++;
-
-            /* Make sure that the payload length is encoded in the header */
-            picoquic_update_payload_length(packet->bytes, header_length, length + checksum_overhead);
-
-            if (is_cleartext_mode) {
-                /* AEAD Encrypt, to the send buffer */
-                length = picoquic_protect_packet(cnx, packet->bytes, packet->sequence_number,
-                    length, header_length, pn_offset,
-                    send_buffer, cnx->aead_encrypt_cleartext_ctx, cnx->pn_enc_cleartext);
-            } else {
-                /* AEAD Encrypt, to the send buffer */
-                length = picoquic_protect_packet(cnx, packet->bytes, packet->sequence_number,
-                    length, header_length, pn_offset,
-                    send_buffer, cnx->aead_encrypt_ctx, cnx->pn_enc);
-            }
-
-            packet->checksum_overhead = checksum_overhead;
-            *send_length = length;
-
-            picoquic_queue_for_retransmit(cnx, path_x, packet, length, current_time);
-        } else {
-            *send_length = 0;
-        }
-#endif
 
         if (cnx->cnx_state != picoquic_state_draining) {
             picoquic_cnx_set_next_wake_time(cnx, current_time);
@@ -1308,38 +1256,9 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
         }
     }
 
-#if 1
     picoquic_finalize_and_protect_packet(cnx, packet,
         ret, is_cleartext_mode, length, pn_offset, header_length, checksum_overhead,
         send_length, send_buffer, path_x, current_time);
-#else
-    if (ret == 0 && length > 0) {
-        packet->length = length;
-        cnx->send_sequence++;
-
-        /* Make sure that the payload length is encoded in the header */
-        picoquic_update_payload_length(packet->bytes, header_length, length + checksum_overhead);
-
-        if (is_cleartext_mode) {
-            /* AEAD Encrypt, to the send buffer */
-            length = picoquic_protect_packet(cnx, packet->bytes, packet->sequence_number,
-                length, header_length, pn_offset,
-                send_buffer, cnx->aead_encrypt_cleartext_ctx, cnx->pn_enc_cleartext);
-        } else {
-            /* AEAD Encrypt, to the send buffer */
-            length = picoquic_protect_packet(cnx, packet->bytes, packet->sequence_number,
-                length, header_length, pn_offset,
-                send_buffer, cnx->aead_encrypt_ctx, cnx->pn_enc);
-        }
-
-        packet->checksum_overhead = checksum_overhead;
-        *send_length = length;
-
-        picoquic_queue_for_retransmit(cnx, path_x, packet, length, current_time);
-    } else {
-        *send_length = 0;
-    }
-#endif
 
     picoquic_cnx_set_next_wake_time(cnx, current_time);
 
@@ -1516,38 +1435,10 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
         length = 0;
     }
 
-#if 1
     picoquic_finalize_and_protect_packet(cnx, packet,
         ret, is_cleartext_mode, length, pn_offset, header_length, checksum_overhead,
         send_length, send_buffer, path_x, current_time);
-#else
-    if (ret == 0 && length > 0) {
-        packet->length = length;
-        cnx->send_sequence++;
 
-        /* Make sure that the payload length is encoded in the header */
-        picoquic_update_payload_length(packet->bytes, header_length, length + checksum_overhead);
-
-        if (is_cleartext_mode) {
-            /* AEAD Encrypt, to the send buffer */
-            length = picoquic_protect_packet(cnx, packet->bytes, packet->sequence_number,
-                length, header_length, pn_offset,
-                send_buffer, cnx->aead_encrypt_cleartext_ctx, cnx->pn_enc_cleartext);
-        } else {
-            /* AEAD Encrypt, to the send buffer */
-            length = picoquic_protect_packet(cnx, packet->bytes, packet->sequence_number,
-                length, header_length, pn_offset,
-                send_buffer, cnx->aead_encrypt_ctx, cnx->pn_enc);
-        }
-
-        packet->checksum_overhead = checksum_overhead;
-        *send_length = length;
-
-        picoquic_queue_for_retransmit(cnx, path_x, packet, length, current_time);
-    } else {
-        *send_length = 0;
-    }
-#endif
     return ret;
 }
 
@@ -1691,39 +1582,9 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
         }
     }
 
-
-#if 1
     picoquic_finalize_and_protect_packet(cnx, packet,
         ret, is_cleartext_mode, length, pn_offset, header_length, checksum_overhead,
         send_length, send_buffer, path_x, current_time);
-#else
-    if (ret == 0 && length > 0) {
-        packet->length = length;
-        cnx->send_sequence++;
-
-        /* Make sure that the payload length is encoded in the header */
-        picoquic_update_payload_length(packet->bytes, header_length, length + checksum_overhead);
-
-        if (is_cleartext_mode) {
-            /* AEAD Encrypt, to the send buffer */
-            length = picoquic_protect_packet(cnx, packet->bytes, packet->sequence_number, 
-                length, header_length, pn_offset,
-                send_buffer, cnx->aead_encrypt_cleartext_ctx, cnx->pn_enc_cleartext);
-        } else {
-            /* AEAD Encrypt, to the send buffer */
-            length = picoquic_protect_packet(cnx, packet->bytes, packet->sequence_number,
-                length, header_length, pn_offset,
-                send_buffer, cnx->aead_encrypt_ctx, cnx->pn_enc);
-        }
-
-        packet->checksum_overhead = checksum_overhead;
-        *send_length = length;
-
-        picoquic_queue_for_retransmit(cnx, path_x, packet, length, current_time);
-    } else {
-        *send_length = 0;
-    }
-#endif
 
     picoquic_cnx_set_next_wake_time(cnx, current_time);
 
