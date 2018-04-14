@@ -1207,7 +1207,6 @@ int picoquic_incoming_packet(
 {
     uint32_t consumed_index = 0;
     int ret = 0;
-    uint32_t length = packet_length;
 
     while (consumed_index < packet_length) {
         uint32_t consumed = 0;

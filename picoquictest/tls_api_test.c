@@ -2094,6 +2094,7 @@ int wrong_keyshare_test()
         test_ticket_encrypt_key, sizeof(test_ticket_encrypt_key));
 
     if (qserver == NULL) {
+        DBG_PRINTF("%s", "Could not create Quic Server context.\n");
         ret = -1;
     } else {
         /* Simulate an incoming client initial packet */
@@ -2111,6 +2112,7 @@ int wrong_keyshare_test()
             PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, NULL, 0);
 
         if (cnx == NULL) {
+            DBG_PRINTF("%s", "Could not create Quic connection context.\n");
             ret = -1;
         }
     }
@@ -2125,15 +2127,22 @@ int wrong_keyshare_test()
             ret = picoquic_tlsinput_stream_zero(cnx);
 
             if (cnx->cnx_state != picoquic_state_server_send_hrr) {
+                DBG_PRINTF("State is %d instead of server_send-hrr\n", cnx->cnx_state);
                 ret = -1;
             } else {
                 /* check that the message queue on stream 0 is proper HRR */
                 if (cnx->first_stream.stream_id != 0 || cnx->first_stream.send_queue == NULL || cnx->first_stream.send_queue->length == 0 || cnx->first_stream.send_queue->bytes == NULL) {
+                    DBG_PRINTF("%s,", "Wrong stream, or empty queue, length or bytes\n");
                     ret = -1;
                 } else if (cnx->first_stream.send_queue->length <= 49 || cnx->first_stream.send_queue->bytes[0] != 0x16 || cnx->first_stream.send_queue->bytes[5] != 0x02) {
+                    DBG_PRINTF("Wrong length (%d <= 49), bytes[0] (0x%02x vs 0x16) or bytes[5] (0x%02x vs 0x02)\n",
+                        cnx->first_stream.send_queue->length, cnx->first_stream.send_queue->bytes[0], cnx->first_stream.send_queue->bytes[5]);
                     ret = -1;
                 }
             }
+        }
+        else {
+            DBG_PRINTF("Could not parse client hello frame, ret = %d\n", ret);
         }
 
         if (ret == 0) {
@@ -2155,6 +2164,7 @@ int wrong_keyshare_test()
             sp = picoquic_dequeue_stateless_packet(qserver);
 
             if (sp == NULL) {
+                DBG_PRINTF("%s", "Stateless packet queue is empty\n");
                 ret = -1;
             } else {
                 picoquic_delete_stateless_packet(sp);

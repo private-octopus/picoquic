@@ -546,6 +546,8 @@ int picoquic_parse_packet_header(
 void picoquic_update_payload_length(
     uint8_t* bytes, size_t header_length, size_t packet_length);
 
+size_t picoquic_get_checksum_length(picoquic_cnx_t* cnx, int is_cleartext_mode);
+
 int picoquic_test_stream_frame_unlimited(uint8_t* bytes);
 int picoquic_check_stream_frame_already_acked(picoquic_cnx_t* cnx, uint8_t* bytes,
     size_t bytes_max, int* no_need_to_repeat);
