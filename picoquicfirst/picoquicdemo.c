@@ -827,7 +827,7 @@ int quic_client(const char* ip_address_text, int server_port, uint32_t proposed_
     int64_t delay_max = 10000000;
     int64_t delta_t = 0;
     int notified_ready = 0;
-    const char* alpn = "hq-10";
+    const char* alpn = "hq-11";
 
     memset(&callback_ctx, 0, sizeof(picoquic_first_client_callback_ctx_t));
 
