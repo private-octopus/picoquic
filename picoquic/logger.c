@@ -1063,13 +1063,14 @@ void picoquic_log_decrypt_encrypted_cleartext(FILE* F,
     }
 }
 
-void picoquic_log_packet(FILE* F, picoquic_quic_t* quic, picoquic_cnx_t* cnx,
+size_t picoquic_log_segment(FILE* F, picoquic_quic_t* quic, picoquic_cnx_t* cnx,
     struct sockaddr* addr_peer, int receiving,
     uint8_t* bytes, size_t length, uint64_t current_time)
 {
     int ret = 0;
     picoquic_packet_header ph;
     picoquic_cnx_t* pcnx = cnx;
+    size_t consumed = length;
 
     /* first log line */
     picoquic_log_packet_address(F, cnx, addr_peer, receiving, length, current_time);
@@ -1081,6 +1082,9 @@ void picoquic_log_packet(FILE* F, picoquic_quic_t* quic, picoquic_cnx_t* cnx,
         /* packet does not even parse */
         fprintf(F, "   Cannot parse the packet header.\n");
     } else {
+        consumed = ph.offset + ph.payload_length;
+        length = consumed;
+
         if (cnx == NULL && !picoquic_is_connection_id_null(ph.dest_cnx_id)) {
             cnx = picoquic_cnx_by_id(quic, ph.dest_cnx_id);
         }
@@ -1125,8 +1129,22 @@ void picoquic_log_packet(FILE* F, picoquic_quic_t* quic, picoquic_cnx_t* cnx,
         }
     }
     fprintf(F, "\n");
+
+    return consumed;
 }
 
+void picoquic_log_packet(FILE* F, picoquic_quic_t* quic, picoquic_cnx_t* cnx,
+    struct sockaddr* addr_peer, int receiving,
+    uint8_t* bytes, size_t length, uint64_t current_time) 
+{
+    size_t consumed = 0;
+
+    while (consumed < length) {
+        consumed += picoquic_log_segment(F, quic, cnx, addr_peer, receiving,
+            bytes + consumed, length - consumed, current_time);
+    }
+
+}
 void picoquic_log_processing(FILE* F, picoquic_cnx_t* cnx, size_t length, int ret)
 {
     fprintf(F, "Processed %d bytes, state = %d (%s), return %d\n\n",
