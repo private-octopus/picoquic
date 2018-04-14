@@ -79,6 +79,7 @@ int picoquic_parse_packet_header(
                     ph->pnmask = 0;
                     ph->pn_offset = 0;
                     ph->version_index = -1;
+                    ph->payload_length = (uint16_t) ((length > ph->offset) ? length - ph->offset : 0);
 
                     if (*pcnx == NULL) {
                         /* The version negotiation should always include the cnx-id sent by the client */
@@ -95,15 +96,22 @@ int picoquic_parse_packet_header(
                     }
                 } else {
                     char context_by_addr = 0;
+                    uint64_t payload_length;
+                    size_t var_length;
+
                     ph->pn = PICOPARSE_32(bytes + ph->offset);
                     ph->version_index = picoquic_get_version_index(ph->vn);
                     ph->offset += 4;
                     ph->pnmask = 0xFFFFFFFF00000000ull;
-
-                    if (ph->version_index < 0) {
+                    var_length = picoquic_varint_decode(bytes + ph->offset,
+                        length - ph->offset, &payload_length);
+                    if (ph->offset + var_length + payload_length > length ||
+                        ph->version_index < 0) {
                         ph->ptype = picoquic_packet_error;
+                        ph->payload_length = (uint16_t) ((length > ph->offset) ? length - ph->offset : 0);
                     } else {
-                        /* Is the context found by using the `addr_from`? */
+                        ph->payload_length = (uint16_t) payload_length;
+                        ph->offset += var_length;
 
                         /* Retrieve the connection context */
                         if (*pcnx == NULL) {
@@ -185,6 +193,7 @@ int picoquic_parse_packet_header(
          } else {
              ph->ptype = picoquic_packet_error;
              ph->offset = length;
+             ph->payload_length = 0;
          }
          
          if (*pcnx != NULL) {
@@ -225,11 +234,15 @@ int picoquic_parse_packet_header(
 
              if (length < ph->offset) {
                  ret = -1;
+                 ph->payload_length = 0;
+             } else {
+                 ph->payload_length = (uint16_t)(length - ph->offset);
              }
          } else {
              /* If the connection is not identified, classify the packet as unknown.
               * it may trigger a retry */
              ph->ptype = picoquic_packet_error;
+             ph->payload_length = (uint16_t)((length > ph->offset)?length - ph->offset:0);
          }
     }
 
@@ -340,11 +353,11 @@ size_t  picoquic_decrypt_packet(picoquic_cnx_t* cnx,
                     break;
                 }
             }
+            /* Now parse the payload length */
         } else {
             /* The pn_enc algorithm was not initialized. Avoid crash! */
             ph->pn = 0xFFFFFFFF;
             ph->pnmask = 0xFFFFFFFF00000000ull;
-
         }
     }
 
@@ -554,6 +567,9 @@ void picoquic_queue_stateless_reset(picoquic_cnx_t* cnx,
         pn_offset = byte_index;
         picoformat_32(bytes + byte_index, ph->pn);
         byte_index += 4;
+        /* Reserve two bytes for payload length */
+        bytes[byte_index++] = 0;
+        bytes[byte_index++] = 0;
 
         header_length = byte_index;
 
@@ -571,6 +587,8 @@ void picoquic_queue_stateless_reset(picoquic_cnx_t* cnx,
             == 0) {
 
             byte_index += data_bytes;
+
+            picoquic_update_payload_length(bytes, header_length, byte_index + checksum_length);
 
             /* AEAD Encrypt, to the send buffer */
             sp->length = picoquic_protect_packet(cnx, cleartext, ph->pn,

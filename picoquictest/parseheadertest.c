@@ -49,7 +49,8 @@ static uint8_t pinitial10[] = {
     TEST_CNXID_LEN_BYTE,
     TEST_CNXID_INI_BYTES,
     TEST_CNXID_REM_BYTES,
-    0xDE, 0xAD, 0xBE, 0xEF
+    0xDE, 0xAD, 0xBE, 0xEF,
+    0x44, 00
 };
 
 static picoquic_packet_header hinitial10 = {
@@ -57,11 +58,13 @@ static picoquic_packet_header hinitial10 = {
     TEST_CNXID_REM_VAL,
     0xDEADBEEF,
     0x50435130,
-    22,
+    24,
     18,
     picoquic_packet_client_initial,
     0xFFFFFFFF00000000ull,
-    0, 0
+    0, 
+    0x400,
+    0
 };
 
 static uint8_t pvnego10[] = {
@@ -93,7 +96,9 @@ static picoquic_packet_header hvnego10 = {
     0,
     picoquic_packet_version_negotiation,
     0,
-    0, 0
+    0,
+    PICOQUIC_MAX_PACKET_SIZE - 18,
+    0
 };
 
 static uint8_t packet_short_phi0_c_32[] = {
@@ -111,7 +116,9 @@ static picoquic_packet_header hphi0_c_32 = {
     9,
     picoquic_packet_1rtt_protected_phi0,
     0xFFFFFFFF00000000ull,
-    0, 0
+    0,
+    PICOQUIC_MAX_PACKET_SIZE - 13, 
+    0
 };
 
 static uint8_t packet_short_phi1_c_16[] = {
@@ -129,7 +136,9 @@ static picoquic_packet_header hphi1_c_16 = {
     9,
     picoquic_packet_1rtt_protected_phi1,
     0xFFFFFFFFFFFF0000ull,
-    0, 0
+    0,
+    PICOQUIC_MAX_PACKET_SIZE - 11,
+    0
 };
 
 static uint8_t packet_short_phi1_c_8[] = {
@@ -147,7 +156,9 @@ static picoquic_packet_header hphi1_c_8 = {
     9,
     picoquic_packet_1rtt_protected_phi1,
     0xFFFFFFFFFFFFFF00ull,
-    0, 0
+    0,
+    PICOQUIC_MAX_PACKET_SIZE - 10,
+    0
 };
 
 static uint8_t packet_short_phi0_noc_16[] = {
@@ -164,7 +175,9 @@ static picoquic_packet_header hphi0_noc_16 = {
     1,
     picoquic_packet_1rtt_protected_phi0,
     0xFFFFFFFFFFFF0000ull,
-    0, 0
+    0,
+    PICOQUIC_MAX_PACKET_SIZE - 3,
+    0
 };
 
 static uint8_t packet_short_phi0_noc_8[] = {
@@ -181,7 +194,9 @@ static picoquic_packet_header hphi0_noc_8 = {
     1,
     picoquic_packet_1rtt_protected_phi0,
     0xFFFFFFFFFFFFFF00ull,
-    0, 0
+    0,
+    PICOQUIC_MAX_PACKET_SIZE - 2,
+    0
 };
 
 struct _test_entry {
@@ -211,6 +226,7 @@ int parseheadertest()
     picoquic_cnx_t* cnx_10 = NULL;
     struct sockaddr_in addr_10;
     picoquic_cnx_t* pcnx;
+    uint8_t packet[PICOQUIC_MAX_PACKET_SIZE];
 
     /* Initialize the quic context and the connection contexts */
     memset(&addr_10, 0, sizeof(struct sockaddr_in));
@@ -241,8 +257,10 @@ int parseheadertest()
         if (i >= 6) {
             quic->local_ctx_length = 0;
         }
+        memset(packet, 0xcc, sizeof(packet));
+        memcpy(packet, test_entries[i].packet, (uint32_t)test_entries[i].length);
 
-        if (picoquic_parse_packet_header(quic, test_entries[i].packet, (uint32_t)test_entries[i].length,
+        if (picoquic_parse_packet_header(quic, packet, sizeof(packet),
                 (struct sockaddr*)&addr_10, &ph, &pcnx)
             != 0) {
             ret = -1;
@@ -251,7 +269,9 @@ int parseheadertest()
         if (picoquic_compare_connection_id(&ph.dest_cnx_id, &test_entries[i].ph->dest_cnx_id) != 0 || 
             picoquic_compare_connection_id(&ph.srce_cnx_id, &test_entries[i].ph->srce_cnx_id) != 0 ||
             ph.pn != test_entries[i].ph->pn || 
-            ph.vn != test_entries[i].ph->vn || ph.offset != test_entries[i].ph->offset || 
+            ph.vn != test_entries[i].ph->vn ||
+            ph.offset != test_entries[i].ph->offset ||
+            ph.payload_length != test_entries[i].ph->payload_length ||
             ph.ptype != test_entries[i].ph->ptype || ph.pnmask != test_entries[i].ph->pnmask) {
             ret = -1;
         }
