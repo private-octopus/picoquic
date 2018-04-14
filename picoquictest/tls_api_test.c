@@ -673,7 +673,10 @@ static int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                 *simulated_time += 100000;
 
                 *was_active |= 1;
-
+                memcpy(&packet->addr_from, &sp->addr_local,
+                    (sp->addr_local.ss_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
+                memcpy(&packet->addr_to, &sp->addr_to,
+                    (sp->addr_to.ss_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
                 memcpy(packet->bytes, sp->bytes, sp->length);
                 packet->length = sp->length;
 
@@ -705,12 +708,16 @@ static int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                 if (ret == 0) {
                     if (p->length > 0) {
                         /* queue in c_to_s */
+                        memcpy(&packet->addr_from, &test_ctx->client_addr, sizeof(struct sockaddr_in));
+                        memcpy(&packet->addr_to, &test_ctx->server_addr, sizeof(struct sockaddr_in));
                         target_link = test_ctx->c_to_s_link;
                     } else if (test_ctx->cnx_server != NULL && test_ctx->cnx_server->cnx_state != picoquic_state_disconnected) {
                         ret = picoquic_prepare_packet(test_ctx->cnx_server, p, *simulated_time,
                             packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length);
                         if (ret == 0 && p->length > 0) {
                             /* copy and queue in s to c */
+                            memcpy(&packet->addr_from, &test_ctx->server_addr, sizeof(struct sockaddr_in));
+                            memcpy(&packet->addr_to, &test_ctx->client_addr, sizeof(struct sockaddr_in));
                             target_link = test_ctx->s_to_c_link;
                         }
                         if (ret != 0)
@@ -754,8 +761,8 @@ static int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                 *simulated_time = next_time;
 
                 ret = picoquic_incoming_packet(test_ctx->qclient, packet->bytes, (uint32_t)packet->length,
-                    (struct sockaddr*)&test_ctx->server_addr,
-                    (struct sockaddr*)&test_ctx->client_addr, 0,
+                    (struct sockaddr*)&packet->addr_from,
+                    (struct sockaddr*)&packet->addr_to, 0,
                     *simulated_time);
                 *was_active |= 1;
 
@@ -770,8 +777,8 @@ static int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                 *simulated_time = next_time;
 
                 ret = picoquic_incoming_packet(test_ctx->qserver, packet->bytes, (uint32_t)packet->length,
-                    (struct sockaddr*)&test_ctx->client_addr,
-                    (struct sockaddr*)&test_ctx->server_addr, 0,
+                    (struct sockaddr*)&packet->addr_from,
+                    (struct sockaddr*)&packet->addr_to, 0,
                     *simulated_time);
 
 
