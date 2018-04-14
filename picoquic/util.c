@@ -20,7 +20,16 @@
 */
 
 /* Simple set of utilities */
-
+#ifdef _WINDOWS
+/* clang-format off */
+#define WIN32_LEAN_AND_MEAN
+#include <Windows.h>
+#include <WinSock2.h>
+#include <Ws2def.h>
+#else
+#include <sys/socket.h>
+#include <netinet/in.h>
+#endif
 #include "picoquic_internal.h"
 #include <stdarg.h>
 #include <stdlib.h>
@@ -192,4 +201,35 @@ void picoquic_set64_connection_id(picoquic_connection_id_t * cnx_id, uint64_t va
         cnx_id->id[i] = 0;
     }
     cnx_id->id_len = 8;
+}
+
+int picoquic_compare_addr(struct sockaddr * expected, struct sockaddr * actual)
+{
+    int ret = -1;
+
+    if (expected->sa_family == actual->sa_family) {
+        if (expected->sa_family == AF_INET) {
+            struct sockaddr_in * ex = (struct sockaddr_in *)expected;
+            struct sockaddr_in * ac = (struct sockaddr_in *)actual;
+            if (ex->sin_port == ac->sin_port &&
+#ifdef _WINDOWS
+                ex->sin_addr.S_un.S_addr == ac->sin_addr.S_un.S_addr) {
+#else
+                ex->sin_addr.s_addr == ac->sin_addr.s_addr){
+#endif
+                ret = 0;
+            }
+        } else {
+            struct sockaddr_in6 * ex = (struct sockaddr_in6 *)expected;
+            struct sockaddr_in6 * ac = (struct sockaddr_in6 *)actual;
+
+
+            if (ex->sin6_port == ac->sin6_port &&
+                memcmp(&ex->sin6_addr, &ac->sin6_addr, sizeof(struct sockaddr_in6)) == 0) {
+                ret = 0;
+            }
+        }
+    }
+
+    return ret;
 }

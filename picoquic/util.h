@@ -54,6 +54,8 @@ void picoquic_set64_connection_id(picoquic_connection_id_t * cnx_id, uint64_t va
 uint8_t picoquic_create_packet_header_cnxid_lengths(uint8_t dest_len, uint8_t srce_len);
 void picoquic_parse_packet_header_cnxid_lengths(uint8_t l_byte, uint8_t *dest_len, uint8_t *srce_len);
 
+int picoquic_compare_addr(struct sockaddr * expected, struct sockaddr * actual);
+
 #ifndef MAX
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #endif

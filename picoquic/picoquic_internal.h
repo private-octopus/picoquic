@@ -633,6 +633,8 @@ int picoquic_prepare_required_max_stream_data_frames(picoquic_cnx_t* cnx,
 int picoquic_prepare_max_data_frame(picoquic_cnx_t* cnx, uint64_t maxdata_increase,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
 void picoquic_clear_stream(picoquic_stream_head* stream);
+int picoquic_prepare_path_challenge_frame(uint8_t* bytes,
+    size_t bytes_max, size_t* consumed, picoquic_path_t * path);
 
 int picoquic_prepare_first_misc_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
                                       size_t bytes_max, size_t* consumed);
