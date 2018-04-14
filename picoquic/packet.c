@@ -543,7 +543,7 @@ void picoquic_queue_stateless_reset(picoquic_cnx_t* cnx,
     uint64_t current_time)
 {
     picoquic_stateless_packet_t* sp = picoquic_create_stateless_packet(cnx->quic);
-    size_t checksum_length = 8;
+    size_t checksum_length = picoquic_get_checksum_length(cnx, 1);
     uint8_t cleartext[PICOQUIC_MAX_PACKET_SIZE];
 
     if (sp != NULL) {
@@ -618,6 +618,7 @@ int picoquic_incoming_initial(
     picoquic_quic_t* quic,
     uint8_t* bytes,
     uint32_t length,
+    uint32_t packet_length,
     struct sockaddr* addr_from,
     struct sockaddr* addr_to,
     unsigned long if_index_to,
@@ -632,7 +633,7 @@ int picoquic_incoming_initial(
 
     *p_cnx = NULL;
 
-    if (length < PICOQUIC_ENFORCED_INITIAL_MTU) {
+    if (packet_length < PICOQUIC_ENFORCED_INITIAL_MTU) {
         /* Unexpected packet. Reject, drop and log. */
         ret = PICOQUIC_ERROR_INITIAL_TOO_SHORT;
     } else {
@@ -1074,10 +1075,12 @@ int picoquic_incoming_encrypted(
 * Processing of the packet that was just received from the network.
 */
 
-int picoquic_incoming_packet(
+int picoquic_incoming_segment(
     picoquic_quic_t* quic,
     uint8_t* bytes,
     uint32_t length,
+    uint32_t packet_length,
+    uint32_t * consumed,
     struct sockaddr* addr_from,
     struct sockaddr* addr_to,
     int if_index_to,
@@ -1091,10 +1094,14 @@ int picoquic_incoming_packet(
     ret = picoquic_parse_packet_header(quic, bytes, length, addr_from, &ph, &cnx);
 
     if (ret == 0) {
+        length = ph.offset + ph.payload_length;
+        *consumed = length;
+
         if (cnx == NULL) {
             if (ph.ptype == picoquic_packet_client_initial) {
                 ph.pn64 = ph.pn;
-                ret = picoquic_incoming_initial(quic, bytes, length, addr_from, addr_to, if_index_to, &ph, current_time, &cnx);
+                ret = picoquic_incoming_initial(quic, bytes, length, packet_length, 
+                    addr_from, addr_to, if_index_to, &ph, current_time, &cnx);
             } else if (ph.version_index < 0 && ph.vn != 0) {
                 /* use the result of parsing to consider version negotiation */
                 picoquic_prepare_version_negotiation(quic, addr_from, addr_to, if_index_to, &ph);
@@ -1184,6 +1191,36 @@ int picoquic_incoming_packet(
 
     if (cnx != NULL) {
         picoquic_cnx_set_next_wake_time(cnx, current_time);
+    }
+
+    return ret;
+}
+
+int picoquic_incoming_packet(
+    picoquic_quic_t* quic,
+    uint8_t* bytes,
+    uint32_t packet_length,
+    struct sockaddr* addr_from,
+    struct sockaddr* addr_to,
+    int if_index_to,
+    uint64_t current_time)
+{
+    uint32_t consumed_index = 0;
+    int ret = 0;
+    uint32_t length = packet_length;
+
+    while (consumed_index < packet_length) {
+        uint32_t consumed = 0;
+
+        ret = picoquic_incoming_segment(quic, bytes + consumed_index, 
+            packet_length - consumed_index, packet_length,
+            &consumed, addr_from, addr_to, if_index_to, current_time);
+
+        if (ret == 0) {
+            consumed_index += consumed;
+        } else {
+            break;
+        }
     }
 
     return ret;
