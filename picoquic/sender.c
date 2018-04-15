@@ -352,7 +352,7 @@ size_t picoquic_protect_packet(picoquic_cnx_t* cnx,
         {
             /* Encode */
             picoquic_pn_encrypt(pn_enc, send_buffer + sample_offset, send_buffer + pn_offset, 
-                send_buffer + pn_offset, sample_offset - pn_offset);
+                send_buffer + pn_offset, 4);
         }
     }
 
