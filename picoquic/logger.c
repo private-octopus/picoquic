@@ -932,26 +932,32 @@ size_t  picoquic_decrypt_log_packet(FILE* F, picoquic_cnx_t* cnx,
             if (ph->pn_offset < sample_offset)
             {
                 /* Decode */
-                picoquic_pn_encrypt(pn_enc, bytes + sample_offset, header_buffer + ph->pn_offset, header_buffer + ph->pn_offset, sample_offset - ph->pn_offset);
+                picoquic_pn_encrypt(pn_enc, bytes + sample_offset, header_buffer + ph->pn_offset, header_buffer + ph->pn_offset, 4);
                 /* TODO: what if varint? */
                 /* Update the packet number in the PH structure */
-                switch (sample_offset - ph->pn_offset)
-                {
-                case 1:
-                    ph->pn = header_buffer[ph->pn_offset];
-                    ph->pnmask = 0xFFFFFFFFFFFFFF00ull;
-                    break;
-                case 2:
-                    ph->pn = PICOPARSE_16(header_buffer + ph->pn_offset);
-                    ph->pnmask = 0xFFFFFFFFFFFF0000ull;
-                    break;
-                case 4:
-                    ph->pn = PICOPARSE_32(header_buffer + ph->pn_offset);
+                if (ph->ptype == picoquic_packet_1rtt_protected_phi0 ||
+                    ph->ptype == picoquic_packet_1rtt_protected_phi0) {
+                    switch (sample_offset - ph->pn_offset)
+                    {
+                    case 1:
+                        ph->pn = header_buffer[ph->pn_offset];
+                        ph->pnmask = 0xFFFFFFFFFFFFFF00ull;
+                        break;
+                    case 2:
+                        ph->pn = PICOPARSE_16(header_buffer + ph->pn_offset);
+                        ph->pnmask = 0xFFFFFFFFFFFF0000ull;
+                        break;
+                    case 4:
+                        ph->pn = PICOPARSE_32(header_buffer + ph->pn_offset);
+                        ph->pnmask = 0xFFFFFFFF00000000ull;
+                        break;
+                    default:
+                        /* Unexpected value -- keep ph as is. */
+                        break;
+                    }
+                } else {
+                    ph->pn = PICOPARSE_32(&bytes[ph->pn_offset]);
                     ph->pnmask = 0xFFFFFFFF00000000ull;
-                    break;
-                default:
-                    /* Unexpected value -- keep ph as is. */
-                    break;
                 }
             }
         }
