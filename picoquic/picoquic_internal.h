@@ -309,7 +309,9 @@ typedef struct st_picoquic_path_t {
 
     /* Challenge used for this path */
     uint64_t challenge;
-
+    uint64_t challenge_time_limit;
+    uint8_t challenge_repeat_count;
+#define PICOQUIC_CHALLENGE_REPEAT_MAX 4
     /* flags */
     unsigned int mtu_probe_sent : 1;
     unsigned int challenge_verified : 1;
