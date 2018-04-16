@@ -69,6 +69,7 @@ static picoquic_packet_header hinitial10 = {
     0xFFFFFFFF00000000ull,
     0, 
     0x400,
+    0,
     0
 };
 
@@ -93,6 +94,7 @@ static picoquic_packet_header hinitial10_l = {
     0xFFFFFFFF00000000ull,
     0,
     0x400,
+    0,
     0
 };
 
@@ -127,6 +129,7 @@ static picoquic_packet_header hvnego10 = {
     0,
     0,
     PICOQUIC_MAX_PACKET_SIZE - 18,
+    0,
     0
 };
 
@@ -146,8 +149,30 @@ static picoquic_packet_header hphi0_c_32 = {
     picoquic_packet_1rtt_protected_phi0,
     0xFFFFFFFF00000000ull,
     0,
-    PICOQUIC_MAX_PACKET_SIZE - 13, 
+    PICOQUIC_MAX_PACKET_SIZE - 13,
+    0,
     0
+};
+
+static uint8_t packet_short_phi0_c_32_spin[] = {
+    0x36, /* Setting the spin bit */
+    TEST_CNXID_10_BYTES,
+    0xDE, 0xAD, 0xBE, 0xEF
+};
+
+static picoquic_packet_header hphi0_c_32_spin = {
+    TEST_CNXID_10_VAL,
+    TEST_CNXID_NULL_VAL,
+    0xDEADBEEF,
+    0,
+    13,
+    9,
+    picoquic_packet_1rtt_protected_phi0,
+    0xFFFFFFFF00000000ull,
+    0,
+    PICOQUIC_MAX_PACKET_SIZE - 13, 
+    0,
+    1
 };
 
 static uint8_t packet_short_phi1_c_16[] = {
@@ -167,6 +192,7 @@ static picoquic_packet_header hphi1_c_16 = {
     0xFFFFFFFFFFFF0000ull,
     0,
     PICOQUIC_MAX_PACKET_SIZE - 11,
+    0,
     0
 };
 
@@ -187,6 +213,7 @@ static picoquic_packet_header hphi1_c_8 = {
     0xFFFFFFFFFFFFFF00ull,
     0,
     PICOQUIC_MAX_PACKET_SIZE - 10,
+    0,
     0
 };
 
@@ -206,6 +233,7 @@ static picoquic_packet_header hphi0_noc_16 = {
     0xFFFFFFFFFFFF0000ull,
     0,
     PICOQUIC_MAX_PACKET_SIZE - 3,
+    0,
     0
 };
 
@@ -225,6 +253,7 @@ static picoquic_packet_header hphi0_noc_8 = {
     0xFFFFFFFFFFFFFF00ull,
     0,
     PICOQUIC_MAX_PACKET_SIZE - 2,
+    0,
     0
 };
 
@@ -242,6 +271,7 @@ static struct _test_entry test_entries[] = {
     { pvnego10, sizeof(pvnego10), &hvnego10, 1, 8 },
     { pvnegobis10, sizeof(pvnegobis10), &hvnego10, 1, 8 },
     { packet_short_phi0_c_32, sizeof(packet_short_phi0_c_32), &hphi0_c_32, 0, 8 },
+    { packet_short_phi0_c_32_spin, sizeof(packet_short_phi0_c_32_spin), &hphi0_c_32_spin, 1, 8 },
     { packet_short_phi1_c_16, sizeof(packet_short_phi1_c_16), &hphi1_c_16, 1, 8 },
     { packet_short_phi1_c_8, sizeof(packet_short_phi1_c_8), &hphi1_c_8, 1, 8 },
     { packet_short_phi0_noc_16, sizeof(packet_short_phi0_noc_16), &hphi0_noc_16, 1, 0 },
@@ -315,6 +345,8 @@ int parseheadertest()
         } else if (ph.payload_length != test_entries[i].ph->payload_length) {
             ret = -1;
         } else if (ph.ptype != test_entries[i].ph->ptype || ph.pnmask != test_entries[i].ph->pnmask) {
+            ret = -1;
+        } else if (ph.spin != test_entries[i].ph->spin) {
             ret = -1;
         }
     }

@@ -180,6 +180,8 @@ int picoquic_parse_packet_header(
          ph->srce_cnx_id = picoquic_null_connection_id;
          ph->vn = 0;
          ph->pn = 0;
+         ph->spin = 0;
+
          if ((int)length >= 1 + quic->local_ctx_length) {
              /* We can identify the connection by its ID */
              ph->offset = 1 + picoquic_parse_connection_id(bytes + 1, quic->local_ctx_length, &ph->dest_cnx_id);
@@ -211,20 +213,22 @@ int picoquic_parse_packet_header(
                      ph->ptype = picoquic_packet_1rtt_protected_phi1;
                  }
 
+                 ph->spin = (bytes[0] >> 2) & 1;
+
                  ph->pn_offset = ph->offset;
 
-                 switch (bytes[0] & 0x1F) {
-                 case 0x10:
+                 switch (bytes[0] & 0x3) {
+                 case 0x0:
                      ph->pn = bytes[ph->offset];
                      ph->pnmask = 0xFFFFFFFFFFFFFF00ull;
                      ph->offset += 1;
                      break;
-                 case 0x11:
+                 case 0x1:
                      ph->pn = PICOPARSE_16(&bytes[ph->offset]);
                      ph->pnmask = 0xFFFFFFFFFFFF0000ull;
                      ph->offset += 2;
                      break;
-                 case 0x12:
+                 case 0x2:
                      ph->pn = PICOPARSE_32(&bytes[ph->offset]);
                      ph->pnmask = 0xFFFFFFFF00000000ull;
                      ph->offset += 4;

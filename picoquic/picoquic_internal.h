@@ -533,6 +533,7 @@ typedef struct _picoquic_packet_header {
     uint64_t pn64;
     uint16_t payload_length;
     int version_index;
+    unsigned int spin : 1;
 } picoquic_packet_header;
 
 int picoquic_parse_packet_header(
