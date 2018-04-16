@@ -543,6 +543,13 @@ int picoquic_parse_packet_header(
     picoquic_packet_header* ph,
     picoquic_cnx_t** pcnx);
 
+size_t picoquic_create_packet_header(
+    picoquic_cnx_t* cnx,
+    picoquic_packet_type_enum packet_type,
+    uint64_t sequence_number,
+    uint8_t* bytes,
+    size_t * pn_offset);
+
 void picoquic_update_payload_length(
     uint8_t* bytes, size_t header_length, size_t packet_length);
 

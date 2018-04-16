@@ -70,7 +70,6 @@ int picoquic_parse_packet_header(
                 ph->offset = 6;
                 ph->offset += picoquic_parse_connection_id(bytes + ph->offset, l_dest_id, &ph->dest_cnx_id);
                 ph->offset += picoquic_parse_connection_id(bytes + ph->offset, l_srce_id, &ph->srce_cnx_id);
-                ph->pn_offset = ph->offset;
 
                 if (ph->vn == 0) {
                     /* VN = zero identifies a version negotiation packet */
@@ -94,24 +93,28 @@ int picoquic_parse_packet_header(
                             }
                         }
                     }
-                } else {
+                }
+                else {
                     char context_by_addr = 0;
                     uint64_t payload_length;
-                    size_t var_length;
-
-                    ph->pn = PICOPARSE_32(bytes + ph->offset);
-                    ph->version_index = picoquic_get_version_index(ph->vn);
-                    ph->offset += 4;
-                    ph->pnmask = 0xFFFFFFFF00000000ull;
-                    var_length = picoquic_varint_decode(bytes + ph->offset,
+                    size_t var_length = picoquic_varint_decode(bytes + ph->offset,
                         length - ph->offset, &payload_length);
-                    if (ph->offset + var_length + payload_length > length ||
+
+                    ph->version_index = picoquic_get_version_index(ph->vn);
+
+                    if (var_length <= 0 || ph->offset + var_length + payload_length + 4 > length ||
                         ph->version_index < 0) {
                         ph->ptype = picoquic_packet_error;
-                        ph->payload_length = (uint16_t) ((length > ph->offset) ? length - ph->offset : 0);
-                    } else {
-                        ph->payload_length = (uint16_t) payload_length;
+                        ph->payload_length = (uint16_t)((length > ph->offset) ? length - ph->offset : 0);
+                    }
+                    else {
+                        ph->payload_length = (uint16_t)payload_length;
                         ph->offset += var_length;
+                        ph->pn_offset = ph->offset;
+
+                        ph->pn = PICOPARSE_32(bytes + ph->offset);
+                        ph->offset += 4;
+                        ph->pnmask = 0xFFFFFFFF00000000ull;
 
                         /* Retrieve the connection context */
                         if (*pcnx == NULL) {
@@ -561,23 +564,9 @@ void picoquic_queue_stateless_reset(picoquic_cnx_t* cnx,
         size_t header_length = 0;
         size_t pn_offset = 0;
 
-        /* Packet type set to long header, with cnxid */
-        bytes[byte_index++] = 0x80 | 0x7E;
-        /* Copy the version number */
-        picoformat_32(bytes + byte_index, ph->vn);
-        byte_index += 4;
-        /* Copy the connection ID */
-        bytes[byte_index++] = picoquic_create_packet_header_cnxid_lengths(ph->srce_cnx_id.id_len, ph->dest_cnx_id.id_len);
-        byte_index += picoquic_format_connection_id(bytes + byte_index, PICOQUIC_MAX_PACKET_SIZE - byte_index, ph->srce_cnx_id);
-        byte_index += picoquic_format_connection_id(bytes + byte_index, PICOQUIC_MAX_PACKET_SIZE - byte_index, ph->dest_cnx_id);
-        /* Copy the sequence number */
-        pn_offset = byte_index;
-        picoformat_32(bytes + byte_index, ph->pn);
-        byte_index += 4;
-        /* Reserve two bytes for payload length */
-        bytes[byte_index++] = 0;
-        bytes[byte_index++] = 0;
-
+        cnx->remote_cnxid = ph->srce_cnx_id;
+        byte_index = picoquic_create_packet_header(cnx, picoquic_packet_server_stateless,
+            ph->pn, bytes, &pn_offset);
         header_length = byte_index;
 
         /* Draft 11 requires adding an ACK frame */

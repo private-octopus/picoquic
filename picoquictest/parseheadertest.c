@@ -32,6 +32,9 @@
 #define TEST_CNXID_REM_BYTES_ZERO 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 #define TEST_CNXID_REM_VAL {{TEST_CNXID_REM_BYTES, TEST_CNXID_REM_BYTES_ZERO}, 4}
 #define TEST_CNXID_NULL_VAL {{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 0}
+#define TEST_CNXID_LOCAL_BYTE 0x55
+#define TEST_CNXID_LOCAL_BYTES 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08
+#define TEST_CNXID_LOCAL_VAL {{TEST_CNXID_LOCAL_BYTES, TEST_CNXID_INI_BYTES_ZERO}, 8}
 
 /*
  * New definitions
@@ -42,6 +45,8 @@
 
 static picoquic_connection_id_t test_cnxid_ini = TEST_CNXID_INI_VAL;
 static picoquic_connection_id_t test_cnxid_rem = TEST_CNXID_REM_VAL;
+static picoquic_connection_id_t test_cnxid_local = TEST_CNXID_LOCAL_VAL;
+static picoquic_connection_id_t test_cnxid_r10 = TEST_CNXID_10_VAL;
 
 static uint8_t pinitial10[] = {
     0xFF,
@@ -49,8 +54,8 @@ static uint8_t pinitial10[] = {
     TEST_CNXID_LEN_BYTE,
     TEST_CNXID_INI_BYTES,
     TEST_CNXID_REM_BYTES,
-    0xDE, 0xAD, 0xBE, 0xEF,
-    0x44, 00
+    0x44, 00,
+    0xDE, 0xAD, 0xBE, 0xEF
 };
 
 static picoquic_packet_header hinitial10 = {
@@ -59,10 +64,34 @@ static picoquic_packet_header hinitial10 = {
     0xDEADBEEF,
     0x50435130,
     24,
-    18,
+    20,
     picoquic_packet_client_initial,
     0xFFFFFFFF00000000ull,
     0, 
+    0x400,
+    0
+};
+
+static uint8_t pinitial10_l[] = {
+    0xFF,
+    0x50, 0x43, 0x51, 0x30,
+    TEST_CNXID_LOCAL_BYTE,
+    TEST_CNXID_INI_BYTES,
+    TEST_CNXID_LOCAL_BYTES,
+    0x44, 00,
+    0xDE, 0xAD, 0xBE, 0xEF
+};
+
+static picoquic_packet_header hinitial10_l = {
+    TEST_CNXID_INI_VAL,
+    TEST_CNXID_LOCAL_VAL,
+    0xDEADBEEF,
+    0x50435130,
+    28,
+    24,
+    picoquic_packet_client_initial,
+    0xFFFFFFFF00000000ull,
+    0,
     0x400,
     0
 };
@@ -203,17 +232,20 @@ struct _test_entry {
     uint8_t* packet;
     size_t length;
     picoquic_packet_header* ph;
+    int decode_test_only;
+    uint8_t local_cid_length;
 };
 
 static struct _test_entry test_entries[] = {
-    { pinitial10, sizeof(pinitial10), &hinitial10 },
-    { pvnego10, sizeof(pvnego10), &hvnego10 },
-    { pvnegobis10, sizeof(pvnegobis10), &hvnego10 },
-    { packet_short_phi0_c_32, sizeof(packet_short_phi0_c_32), &hphi0_c_32 },
-    { packet_short_phi1_c_16, sizeof(packet_short_phi1_c_16), &hphi1_c_16 },
-    { packet_short_phi1_c_8, sizeof(packet_short_phi1_c_8), &hphi1_c_8 },
-    { packet_short_phi0_noc_16, sizeof(packet_short_phi0_noc_16), &hphi0_noc_16 },
-    { packet_short_phi0_noc_8, sizeof(packet_short_phi0_noc_8), &hphi0_noc_8 }
+    { pinitial10, sizeof(pinitial10), &hinitial10, 1, 8 },
+    { pinitial10_l, sizeof(pinitial10_l), &hinitial10_l, 0, 8 },
+    { pvnego10, sizeof(pvnego10), &hvnego10, 1, 8 },
+    { pvnegobis10, sizeof(pvnegobis10), &hvnego10, 1, 8 },
+    { packet_short_phi0_c_32, sizeof(packet_short_phi0_c_32), &hphi0_c_32, 0, 8 },
+    { packet_short_phi1_c_16, sizeof(packet_short_phi1_c_16), &hphi1_c_16, 1, 8 },
+    { packet_short_phi1_c_8, sizeof(packet_short_phi1_c_8), &hphi1_c_8, 1, 8 },
+    { packet_short_phi0_noc_16, sizeof(packet_short_phi0_noc_16), &hphi0_noc_16, 1, 0 },
+    { packet_short_phi0_noc_8, sizeof(packet_short_phi0_noc_8), &hphi0_noc_8, 1, 0 }
 };
 
 static const size_t nb_test_entries = sizeof(test_entries) / sizeof(struct _test_entry);
@@ -250,13 +282,15 @@ int parseheadertest()
         if (cnx_10 == NULL) {
             ret = -1;
         }
+
+        /* Update the local cnx_id so it be predictable in tests */
+        cnx_10->local_cnxid = test_cnxid_local;
+        (void)picoquic_register_cnx_id(quic, cnx_10, cnx_10->local_cnxid);
     }
 
     for (size_t i = 0; ret == 0 && i < nb_test_entries; i++) {
         pcnx = (i < 3) ? NULL : cnx_10;
-        if (i >= 6) {
-            quic->local_ctx_length = 0;
-        }
+        quic->local_ctx_length = test_entries[i].local_cid_length;
         memset(packet, 0xcc, sizeof(packet));
         memcpy(packet, test_entries[i].packet, (uint32_t)test_entries[i].length);
 
@@ -266,13 +300,51 @@ int parseheadertest()
             ret = -1;
         }
 
-        if (picoquic_compare_connection_id(&ph.dest_cnx_id, &test_entries[i].ph->dest_cnx_id) != 0 || 
-            picoquic_compare_connection_id(&ph.srce_cnx_id, &test_entries[i].ph->srce_cnx_id) != 0 ||
-            ph.pn != test_entries[i].ph->pn || 
-            ph.vn != test_entries[i].ph->vn ||
-            ph.offset != test_entries[i].ph->offset ||
-            ph.payload_length != test_entries[i].ph->payload_length ||
-            ph.ptype != test_entries[i].ph->ptype || ph.pnmask != test_entries[i].ph->pnmask) {
+        if (picoquic_compare_connection_id(&ph.dest_cnx_id, &test_entries[i].ph->dest_cnx_id) != 0) {
+            ret = -1;
+        } else if (picoquic_compare_connection_id(&ph.srce_cnx_id, &test_entries[i].ph->srce_cnx_id) != 0) {
+            ret = -1;
+        } else if (ph.pn != test_entries[i].ph->pn) {
+            ret = -1;
+        } else if (ph.vn != test_entries[i].ph->vn) {
+                ret = -1;
+        } else if (ph.offset != test_entries[i].ph->offset) {
+            ret = -1;
+        } else if (ph.pn_offset != test_entries[i].ph->pn_offset) {
+            ret = -1;
+        } else if (ph.payload_length != test_entries[i].ph->payload_length) {
+            ret = -1;
+        } else if (ph.ptype != test_entries[i].ph->ptype || ph.pnmask != test_entries[i].ph->pnmask) {
+            ret = -1;
+        }
+    }
+
+    quic->local_ctx_length = 8;
+    cnx_10->remote_cnxid = test_cnxid_r10;
+
+    for (size_t i = 0; ret == 0 && i < nb_test_entries; i++) {
+        size_t header_length;
+        size_t pn_offset;
+
+        if (test_entries[i].decode_test_only) {
+            continue;
+        }
+
+        pcnx = (i < 3) ? NULL : cnx_10;
+        memset(packet, 0xcc, sizeof(packet));
+        /* Prepare the header inside the packet */
+        header_length = picoquic_create_packet_header(cnx_10, test_entries[i].ph->ptype,
+            test_entries[i].ph->pn, packet, &pn_offset);
+        picoquic_update_payload_length(packet, header_length, header_length +
+            test_entries[i].ph->payload_length);
+
+        if (header_length != test_entries[i].ph->offset) {
+            ret = -1;
+        }
+        else if (pn_offset != test_entries[i].ph->pn_offset) {
+            ret = -1;
+        } else if (memcmp(packet, test_entries[i].packet, header_length) != 0)
+        {
             ret = -1;
         }
     }
