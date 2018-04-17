@@ -2887,6 +2887,10 @@ int nat_rebinding_test()
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0);
 
     if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    if (ret == 0) {
         initial_challenge = test_ctx->cnx_server->path[0]->challenge;
     }
 
