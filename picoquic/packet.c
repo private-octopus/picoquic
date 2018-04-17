@@ -825,52 +825,46 @@ int picoquic_incoming_server_cleartext(
     int ret = 0;
     size_t decoded_length = 0;
     int already_received = 0;
-#ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(if_index_to);
-#endif
 
     if (cnx->cnx_state == picoquic_state_client_init_sent || cnx->cnx_state == picoquic_state_client_init_resent) {
         cnx->cnx_state = picoquic_state_client_handshake_start;
     }
 
-    if (cnx->cnx_state == picoquic_state_client_handshake_start || cnx->cnx_state == picoquic_state_client_handshake_progress) {
-        /* Verify the checksum */
-        decoded_length = picoquic_decrypt_cleartext(cnx, bytes, length, ph, &already_received);
-        if (decoded_length == 0) {
-            /* Incorrect checksum, drop and log. */
-            ret = (already_received)? PICOQUIC_ERROR_DUPLICATE:PICOQUIC_ERROR_FNV1A_CHECK;
-        } else {
-            /* Check the server cnx id */
-            if (picoquic_is_connection_id_null(cnx->remote_cnxid)) {
-                /* On first response from the server, copy the cnx ID and the incoming address */
-                cnx->remote_cnxid = ph->srce_cnx_id;
-                cnx->path[0]->dest_addr_len = (addr_to->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
-                memcpy(&cnx->path[0]->dest_addr, addr_to, cnx->path[0]->dest_addr_len);
-            } else if (picoquic_compare_connection_id(&cnx->remote_cnxid, &ph->srce_cnx_id) != 0) {
-                ret = PICOQUIC_ERROR_CNXID_CHECK; /* protocol error */
-            }
+    int restricted = cnx->cnx_state != picoquic_state_client_handshake_start && cnx->cnx_state != picoquic_state_client_handshake_progress;
 
-            if (ret == 0) {
-                /* Accept the incoming frames */
-                ret = picoquic_decode_frames(cnx,
-                    bytes + ph->offset, decoded_length - ph->offset, 1, current_time);
-            }
-
-            /* processing of client initial packet */
-            if (ret == 0) {
-                /* initialization of context & creation of data */
-                /* TODO: find path to send data produced by TLS. */
-                ret = picoquic_tlsinput_stream_zero(cnx);
-            }
-
-            if (ret != 0) {
-                /* This is bad. should just delete the context, log the packet, etc */
-
-            }
-        }
+    /* Verify the checksum */
+    decoded_length = picoquic_decrypt_cleartext(cnx, bytes, length, ph, &already_received);
+    if (decoded_length == 0) {
+        /* Incorrect checksum, drop and log. */
+        ret = (already_received)? PICOQUIC_ERROR_DUPLICATE : PICOQUIC_ERROR_FNV1A_CHECK;
     } else {
-        /* Not expected. Log and ignore. */
-        ret = PICOQUIC_ERROR_SPURIOUS_REPEAT;
+        /* Check the server cnx id */
+        if (picoquic_is_connection_id_null(cnx->remote_cnxid) && restricted == 0) {
+            /* On first response from the server, copy the cnx ID and the incoming address */
+            cnx->remote_cnxid = ph->srce_cnx_id;
+            cnx->path[0]->dest_addr_len = (addr_to->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
+            memcpy(&cnx->path[0]->dest_addr, addr_to, cnx->path[0]->dest_addr_len);
+        } else if (picoquic_compare_connection_id(&cnx->remote_cnxid, &ph->srce_cnx_id) != 0) {
+            ret = PICOQUIC_ERROR_CNXID_CHECK; /* protocol error */
+        }
+
+
+        if (ret == 0) {
+            /* Accept the incoming frames */
+            ret = picoquic_decode_frames(cnx,
+                bytes + ph->offset, decoded_length - ph->offset, 1, current_time);
+        }
+
+        /* processing of client initial packet */
+        if (ret == 0 && restricted == 0) {
+            /* initialization of context & creation of data */
+            /* TODO: find path to send data produced by TLS. */
+            ret = picoquic_tlsinput_stream_zero(cnx);
+        }
+
+        if (ret != 0) {
+            /* This is bad. should just delete the context, log the packet, etc */
+        }
     }
 
     return ret;
@@ -887,10 +881,12 @@ int picoquic_incoming_client_cleartext(
     uint64_t current_time)
 {
     int ret = 0;
-    size_t decoded_length = 0; 
+    size_t decoded_length = 0;
     int already_received = 0;
 
-    if (cnx->cnx_state == picoquic_state_server_almost_ready || cnx->cnx_state == picoquic_state_server_ready) {
+    if (cnx->cnx_state == picoquic_state_server_init
+        || cnx->cnx_state == picoquic_state_server_almost_ready
+        || cnx->cnx_state == picoquic_state_server_ready) {
         /* Verify the checksum */
         decoded_length = picoquic_decrypt_cleartext(cnx, bytes, length, ph, &already_received);
         if (decoded_length == 0) {

@@ -26,16 +26,16 @@
 using namespace Microsoft::VisualStudio::CppUnitTestFramework;
 
 namespace UnitTest1
-{		
+{
 	TEST_CLASS(UnitTest1)
 	{
 	public:
-		TEST_METHOD(test_picohash)
-		{
+		    TEST_METHOD(test_picohash)
+		    {
             int ret = picohash_test();
 
-            Assert::AreEqual(ret, 0); 
-		}
+            Assert::AreEqual(ret, 0);
+		    }
 
         TEST_METHOD(test_cnxcreation)
         {
@@ -464,6 +464,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(test_request_client_authentication)
+        {
+          int ret = request_client_authentication_test();
+
+          Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(test_virtual_time)
         {
             int ret = virtual_time_test();
@@ -491,5 +498,12 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
-    };
+
+        TEST_METHOD(test_bad_client_certificate)
+        {
+            int ret = bad_client_certificate_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+  };
 }

@@ -861,6 +861,7 @@ int picoquic_tlsinput_segment(picoquic_cnx_t* cnx,
     if ((ret != 0 && ret != PTLS_ERROR_IN_PROGRESS && ret != PTLS_ERROR_STATELESS_RETRY) || length != roff)
     {
         DBG_PRINTF("Handshake packet causes error %d (%x), %d bytes remaining\n", ret, ret, (int)(length - roff));
+        ret = picoquic_connection_error(cnx, PICOQUIC_TLS_HANDSHAKE_FAILED);
     }
 
     *consumed = roff;
@@ -1371,7 +1372,14 @@ int picoquic_tlsinput_stream_zero(picoquic_cnx_t* cnx)
         case picoquic_state_server_init:
             /* Extract and install the server 0-RTT and 1-RTT key */
             picoquic_setup_0RTT_aead_contexts(cnx, 1);
-            cnx->cnx_state = picoquic_state_server_almost_ready;
+            /* If client authentication is activated, the client sends the certificates with its `Finished` packet.
+               The server does not send any further packages, so, we can switch into ready state here.
+            */
+            if (sendbuf.off == 0 && ((ptls_context_t*)cnx->quic->tls_master_ctx)->require_client_authentication == 1) {
+                cnx->cnx_state = picoquic_state_server_ready;
+            } else {
+                cnx->cnx_state = picoquic_state_server_almost_ready;
+            }
             ret = picoquic_setup_1RTT_aead_contexts(cnx, 1);
             break;
         case picoquic_state_client_almost_ready:
@@ -1487,4 +1495,8 @@ int picoquic_set_tls_key(picoquic_quic_t* quic, const uint8_t* data, size_t len)
     }
 
     return set_sign_certificate_from_key(d2i_AutoPrivateKey(NULL, &data, len), ctx);
+}
+
+void picoquic_tls_set_client_authentication(picoquic_quic_t* quic, int client_authentication) {
+    ((ptls_context_t*)quic->tls_master_ctx)->require_client_authentication = client_authentication;
 }
