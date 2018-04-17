@@ -203,11 +203,10 @@ picoquic_packet* picoquic_create_packet()
 void picoquic_update_payload_length(
     uint8_t* bytes, size_t header_length, size_t packet_length)
 {
-    if ((bytes[0] & 0x80) != 0 && header_length > 2 && packet_length > header_length && packet_length < 0x4000)
+    if ((bytes[0] & 0x80) != 0 && header_length > 6 && packet_length > header_length && packet_length < 0x4000)
     {
-        picoquic_varint_encode_16(bytes + header_length - 2, (uint16_t)(packet_length - header_length));
+        picoquic_varint_encode_16(bytes + header_length - 6, (uint16_t)(packet_length - header_length));
     }
-
 }
 
 size_t picoquic_create_packet_header_11(
@@ -271,12 +270,13 @@ size_t picoquic_create_packet_header_11(
         length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, dest_cnx_id);
         length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, srce_cnx_id);
 
-        *pn_offset = length;
-        picoformat_32(&bytes[length], (uint32_t)sequence_number);
-        length += 4;
         /* Reserve two bytes for payload length */
         bytes[length++] = 0;
         bytes[length++] = 0;
+        /* Encode the length */
+        *pn_offset = length;
+        picoformat_32(&bytes[length], (uint32_t)sequence_number);
+        length += 4;
     }
 
     return length;

@@ -543,6 +543,7 @@ typedef struct _picoquic_packet_header {
     uint64_t pn64;
     uint16_t payload_length;
     int version_index;
+    unsigned int spin : 1;
 } picoquic_packet_header;
 
 int picoquic_parse_packet_header(
@@ -552,6 +553,13 @@ int picoquic_parse_packet_header(
     struct sockaddr* addr_from,
     picoquic_packet_header* ph,
     picoquic_cnx_t** pcnx);
+
+size_t picoquic_create_packet_header(
+    picoquic_cnx_t* cnx,
+    picoquic_packet_type_enum packet_type,
+    uint64_t sequence_number,
+    uint8_t* bytes,
+    size_t * pn_offset);
 
 void picoquic_update_payload_length(
     uint8_t* bytes, size_t header_length, size_t packet_length);
