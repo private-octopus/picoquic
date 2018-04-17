@@ -307,6 +307,15 @@ typedef struct st_picoquic_path_t {
     int dest_addr_len;
     unsigned long if_index_dest;
 
+    /* Challenge used for this path */
+    uint64_t challenge;
+    uint64_t challenge_time_limit;
+    uint8_t challenge_repeat_count;
+#define PICOQUIC_CHALLENGE_REPEAT_MAX 4
+    /* flags */
+    unsigned int mtu_probe_sent : 1;
+    unsigned int challenge_verified : 1;
+
     /* Time measurement */
     uint64_t max_ack_delay;
     uint64_t smoothed_rtt;
@@ -318,7 +327,6 @@ typedef struct st_picoquic_path_t {
     uint64_t max_reorder_gap;
 
     /* MTU */
-    unsigned int mtu_probe_sent : 1;
     uint32_t send_mtu;
     uint32_t send_mtu_max_tried;
 
@@ -421,6 +429,8 @@ typedef struct st_picoquic_cnx_t {
     uint64_t ack_delay_local;
 
     /* Retransmission state */
+    uint32_t nb_path_challenge_sent;
+    uint32_t nb_path_response_received;
     uint32_t nb_zero_rtt_sent;
     uint32_t nb_zero_rtt_acked;
     uint64_t nb_retransmission_total;
@@ -633,6 +643,8 @@ int picoquic_prepare_required_max_stream_data_frames(picoquic_cnx_t* cnx,
 int picoquic_prepare_max_data_frame(picoquic_cnx_t* cnx, uint64_t maxdata_increase,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
 void picoquic_clear_stream(picoquic_stream_head* stream);
+int picoquic_prepare_path_challenge_frame(uint8_t* bytes,
+    size_t bytes_max, size_t* consumed, picoquic_path_t * path);
 
 int picoquic_prepare_first_misc_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
                                       size_t bytes_max, size_t* consumed);

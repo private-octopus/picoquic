@@ -498,12 +498,19 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
-
+    
         TEST_METHOD(test_bad_client_certificate)
         {
             int ret = bad_client_certificate_test();
 
             Assert::AreEqual(ret, 0);
         }
-  };
+    
+        TEST_METHOD(test_nat_rebinding)
+        {
+            int ret = nat_rebinding_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+    };
 }

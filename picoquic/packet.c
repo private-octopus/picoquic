@@ -994,6 +994,7 @@ int picoquic_incoming_encrypted(
     uint8_t* bytes,
     uint32_t length,
     picoquic_packet_header* ph,
+    struct sockaddr* addr_from,
     uint64_t current_time)
 {
     int ret = 0;
@@ -1049,6 +1050,29 @@ int picoquic_incoming_encrypted(
             else if (ph->vn != 0) {
                 ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION);
             } else {
+                /* Compare the packet address to the current path value */
+                if (picoquic_compare_addr((struct sockaddr *)&cnx->path[0]->peer_addr, 
+                    (struct sockaddr *)addr_from) != 0)
+                {
+                    uint8_t buffer[16];
+                    size_t challenge_length;
+                    /* Address origin different than expected. Update */
+                    cnx->path[0]->peer_addr_len = (addr_from->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
+                    memcpy(&cnx->path[0]->peer_addr, addr_from, cnx->path[0]->peer_addr_len);
+                    /* Reset the path challenge */
+                    cnx->path[0]->challenge = picoquic_public_random_64();
+                    cnx->path[0]->challenge_verified = 0;
+                    cnx->path[0]->challenge_time_limit = current_time + cnx->path[0]->retransmit_timer;
+                    cnx->path[0]->challenge_repeat_count = 0;
+                    /* Create a path challenge misc frame */
+                    if (picoquic_prepare_path_challenge_frame(buffer, sizeof(buffer),
+                        &challenge_length, cnx->path[0]) == 0) { 
+                        if (picoquic_queue_misc_frame(cnx, buffer, challenge_length)) {
+                            /* if we cannot send the challenge, just accept packets */
+                            cnx->path[0]->challenge_verified = 1;
+                        }
+                    }
+                }
                 /* Accept the incoming frames */
                 ret = picoquic_decode_frames(cnx,
                     bytes + ph->offset, decoded_length, 0, current_time);
@@ -1112,6 +1136,7 @@ int picoquic_incoming_segment(
             /* Build a packet number to 64 bits */
             ph.pn64 = picoquic_get_packet_number64(
                 cnx->first_sack_item.end_of_sack_range, ph.pnmask, ph.pn);
+            /* Find the incoming path */
             if (ret == 0) {
                 switch (ph.ptype) {
                 case picoquic_packet_version_negotiation:
@@ -1150,7 +1175,7 @@ int picoquic_incoming_segment(
                     break;
                 case picoquic_packet_1rtt_protected_phi0:
                 case picoquic_packet_1rtt_protected_phi1:
-                    ret = picoquic_incoming_encrypted(cnx, bytes, length, &ph, current_time);
+                    ret = picoquic_incoming_encrypted(cnx, bytes, length, &ph, addr_from, current_time);
                     /* TODO : roll key based on PHI */
                     break;
                 default:

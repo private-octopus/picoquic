@@ -43,6 +43,8 @@ typedef struct st_picoquictest_sim_packet_t {
     uint64_t sent_time;
     uint64_t arrival_time;
     size_t length;
+    struct sockaddr_storage addr_from;
+    struct sockaddr_storage addr_to;
     uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE];
 } picoquictest_sim_packet_t;
 
