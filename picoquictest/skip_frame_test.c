@@ -106,8 +106,10 @@ static uint8_t test_frame_type_ack[] = {
     picoquic_frame_type_ack,
     0xC0, 0, 0, 1, 2, 3, 4, 5,
     0x44, 0,
-    0,
-    5
+    2,
+    5,
+    0, 0,
+    5, 12
 };
 static uint8_t test_frame_type_stream_range_min[] = {
     picoquic_frame_type_stream_range_min,

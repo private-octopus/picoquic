@@ -183,6 +183,7 @@ static int basic_ack_parse(uint8_t* bytes, size_t bytes_max,
                 if (byte_index < bytes_max) {
                     l_gap = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &gap);
                     byte_index += l_gap;
+                    gap += 1;
                 }
                 /* decode the range */
                 if (byte_index < bytes_max) {
@@ -195,6 +196,7 @@ static int basic_ack_parse(uint8_t* bytes, size_t bytes_max,
                     ret = -1;
                 } else {
                     gap_begin -= gap;
+                    ack_range++;
 
                     if (gap_begin >= ack_range) {
                         /* mark the range as received */
@@ -258,6 +260,10 @@ int sendacktest()
             if (ret == 0) {
                 ret = basic_ack_parse(bytes, consumed, &expected_ack[i], received_mask,
                     picoquic_supported_versions[cnx.version_index].version_flags);
+            }
+
+            if (ret != 0) {
+                ret = -1; /* useless code, but helps with checkpointing */
             }
         }
     }

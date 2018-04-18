@@ -1040,7 +1040,6 @@ int picoquic_process_ack_of_ack_frame(
 
     if (ret == 0) {
         size_t byte_index = *consumed;
-        uint64_t extra_ack = 1;
 
         /* Process each successive range */
 
@@ -1063,7 +1062,7 @@ int picoquic_process_ack_of_ack_frame(
                 byte_index += l_range;
             }
 
-            range += extra_ack;
+            range++;
             if (largest + 1 < range) {
                 DBG_PRINTF("ack range error: largest=%" PRIx64 ", range=%" PRIx64, largest, range);
                 ret = -1;
@@ -1090,6 +1089,7 @@ int picoquic_process_ack_of_ack_frame(
                     break;
                 } else {
                     byte_index += l_gap;
+                    block_to_block += 1; /* Add 1, since there are never 0 gaps -- see spec. */
                     block_to_block += range;
                 }
             }
@@ -1102,7 +1102,6 @@ int picoquic_process_ack_of_ack_frame(
             }
 
             largest -= block_to_block;
-            extra_ack = 0;
         }
 
         *consumed = byte_index;
@@ -1290,7 +1289,6 @@ int picoquic_decode_ack_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
 
         /* Attempt to update the RTT */
         picoquic_packet* top_packet = picoquic_update_rtt(cnx, largest, current_time, ack_delay);
-        unsigned extra_ack = 1;
 
         while (ret == 0) {
             uint64_t range;
@@ -1315,7 +1313,7 @@ int picoquic_decode_ack_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
                 byte_index += l_range;
             }
 
-            range += extra_ack;
+            range ++;
             if (largest + 1 < range) {
                 DBG_PRINTF("ack range error: largest=%" PRIx64 ", range=%" PRIx64, largest, range);
                 ret = picoquic_connection_error(cnx,
@@ -1354,6 +1352,7 @@ int picoquic_decode_ack_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
                         PICOQUIC_TRANSPORT_FRAME_ERROR(bytes[0]));
                     break;
                 } else {
+                    block_to_block += 1; /* add 1, since zero is ruled out by varint, see spec. */
                     block_to_block += range;
                     byte_index += l_gap;
                 }
@@ -1368,7 +1367,6 @@ int picoquic_decode_ack_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
             }
 
             largest -= block_to_block;
-            extra_ack = 0;
         }
 
         *consumed = byte_index;
@@ -1447,13 +1445,13 @@ int picoquic_prepare_ack_frame(picoquic_cnx_t* cnx, uint64_t current_time,
                 size_t l_range = 0;
 
                 if (byte_index < bytes_max) {
-                    ack_gap = lowest_acknowledged - next_sack->end_of_sack_range - 1;
+                    ack_gap = lowest_acknowledged - next_sack->end_of_sack_range - 2; /* per spec */
                     l_gap = picoquic_varint_encode(bytes + byte_index,
                         bytes_max - byte_index, ack_gap);
                 }
 
                 if (byte_index + l_gap < bytes_max) {
-                    ack_range = next_sack->end_of_sack_range - next_sack->start_of_sack_range + 1;
+                    ack_range = next_sack->end_of_sack_range - next_sack->start_of_sack_range;
                     l_range = picoquic_varint_encode(bytes + byte_index + l_gap,
                         bytes_max - byte_index - l_gap, ack_range);
                 }
