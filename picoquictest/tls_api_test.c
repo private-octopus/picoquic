@@ -2877,9 +2877,10 @@ int bad_client_certificate_test()
 * response, and that the connection completes.
 */
 
-int nat_rebinding_test()
+int nat_rebinding_test_one(uint64_t loss_mask_data)
 {
     uint64_t simulated_time = 0;
+    uint64_t next_time = 0;
     uint64_t loss_mask = 0;
     uint64_t initial_challenge = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -2892,6 +2893,7 @@ int nat_rebinding_test()
 
     if (ret == 0) {
         initial_challenge = test_ctx->cnx_server->path[0]->challenge;
+        loss_mask = loss_mask_data;
     }
 
     /* Change the client address */
@@ -2905,6 +2907,17 @@ int nat_rebinding_test()
     /* Perform a data sending loop */
     if (ret == 0) {
         ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 0);
+    }
+
+    /* Add a time loop of 3 seconds to give some time for the challenge to be repeated */
+    next_time = simulated_time + 3000000;
+    loss_mask = 0;
+    while (ret == 0 && simulated_time < next_time && test_ctx->cnx_client->cnx_state == picoquic_state_client_ready 
+        && test_ctx->cnx_server->cnx_state == picoquic_state_server_ready
+        && test_ctx->cnx_server->path[0]->challenge_verified != 1) {
+        int was_active = 0;
+
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, &was_active);
     }
 
     /* Verify that the challenge was updated and done */
@@ -2926,4 +2939,18 @@ int nat_rebinding_test()
     }
 
     return ret;
+}
+
+int nat_rebinding_test()
+{
+    uint64_t loss_mask = 0;
+
+    return nat_rebinding_test_one(loss_mask);
+}
+
+int nat_rebinding_loss_test()
+{
+    uint64_t loss_mask = 0x6666;
+
+    return nat_rebinding_test_one(loss_mask);
 }

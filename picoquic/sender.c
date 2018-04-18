@@ -863,9 +863,10 @@ static void picoquic_cnx_set_next_wake_time_init(picoquic_cnx_t* cnx, uint64_t c
 
             /* Consider path challenges */
             if (path_x->challenge_verified == 0) {
-                if (current_time < path_x->challenge_time_limit) {
-                    if (next_time > path_x->challenge_time_limit) {
-                        next_time = path_x->challenge_time_limit;
+                uint64_t next_challenge_time = path_x->challenge_time + path_x->retransmit_timer;
+                if (current_time < next_challenge_time) {
+                    if (next_time > next_challenge_time) {
+                        next_time = next_challenge_time;
                     }
                 } else {
                     next_time = current_time;
@@ -949,9 +950,10 @@ void picoquic_cnx_set_next_wake_time(picoquic_cnx_t* cnx, uint64_t current_time)
 
         /* Consider path challenges */
         if (path_x->challenge_verified == 0) {
-            if (current_time < path_x->challenge_time_limit) {
-                if (next_time > path_x->challenge_time_limit) {
-                    next_time = path_x->challenge_time_limit;
+            uint64_t next_challenge_time = path_x->challenge_time + path_x->retransmit_timer;
+            if (current_time < next_challenge_time) {
+                if (next_time > next_challenge_time) {
+                    next_time = next_challenge_time;
                 }
                 else {
                     next_time = current_time;
@@ -1231,19 +1233,18 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
     packet->send_time = current_time;
     packet->send_path = path_x;
 
-    if (stream != NULL && path_x->cwin <= path_x->bytes_in_transit && path_x->challenge_time_limit == 0) {
+    if (stream != NULL && path_x->cwin <= path_x->bytes_in_transit && path_x->challenge_time == 0) {
         /* Should send a path challenge and get a reply before sending more data */
-        path_x->challenge_time_limit = current_time;
         path_x->challenge_verified = 0;
     }
 
     if (path_x->challenge_verified == 0) {
-        if (path_x->challenge_time_limit <= current_time) {
+        if (path_x->challenge_time + path_x->retransmit_timer <= current_time || path_x->challenge_time == 0) {
             /* When blocked, repeat the path challenge or wait */
             if (picoquic_prepare_path_challenge_frame(&bytes[length],
                 path_x->send_mtu - checksum_overhead - length, &data_bytes, path_x) == 0) {
                 length += data_bytes;
-                path_x->challenge_time_limit = current_time + path_x->retransmit_timer;
+                path_x->challenge_time = current_time;
                 path_x->challenge_repeat_count++;
             }
             /* add an ACK just to be nice */
@@ -1548,7 +1549,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
 
         if (((stream == NULL && cnx->first_misc_frame == NULL) || path_x->cwin <= path_x->bytes_in_transit)
             && picoquic_is_ack_needed(cnx, current_time) == 0
-            && (path_x->challenge_verified == 1 || current_time < path_x->challenge_time_limit)) {
+            && (path_x->challenge_verified == 1 || current_time < path_x->challenge_time + path_x->retransmit_timer)) {
             if (ret == 0 && path_x->cwin > path_x->bytes_in_transit && picoquic_is_mtu_probe_needed(cnx, path_x)) {
                 length = picoquic_prepare_mtu_probe(cnx, path_x, header_length, checksum_overhead, bytes);
                 packet->length = length;
@@ -1560,11 +1561,11 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
             }
         }
         else {
-            if (path_x->challenge_verified == 0 && current_time >= path_x->challenge_time_limit) {
+            if (path_x->challenge_verified == 0 && current_time >= (path_x->challenge_time + path_x->retransmit_timer)) {
                 if (picoquic_prepare_path_challenge_frame(&bytes[length],
                     path_x->send_mtu - checksum_overhead - length, &data_bytes, path_x) == 0) {
                     length += data_bytes;
-                    path_x->challenge_time_limit += path_x->retransmit_timer;
+                    path_x->challenge_time = current_time;
                     path_x->challenge_repeat_count++;
 
 

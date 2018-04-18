@@ -1062,7 +1062,7 @@ int picoquic_incoming_encrypted(
                     /* Reset the path challenge */
                     cnx->path[0]->challenge = picoquic_public_random_64();
                     cnx->path[0]->challenge_verified = 0;
-                    cnx->path[0]->challenge_time_limit = current_time + cnx->path[0]->retransmit_timer;
+                    cnx->path[0]->challenge_time = current_time + cnx->path[0]->retransmit_timer;
                     cnx->path[0]->challenge_repeat_count = 0;
                     /* Create a path challenge misc frame */
                     if (picoquic_prepare_path_challenge_frame(buffer, sizeof(buffer),

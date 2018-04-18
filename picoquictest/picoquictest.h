@@ -97,6 +97,7 @@ int transport_param_stream_id_test();
 int request_client_authentication_test();
 int bad_client_certificate_test();
 int nat_rebinding_test();
+int nat_rebinding_loss_test();
 
 #ifdef __cplusplus
 }
