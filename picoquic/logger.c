@@ -410,7 +410,6 @@ size_t picoquic_log_ack_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
     fprintf(F, "    ACK (nb=%u)", (int)num_block);
 
     /* decoding the acks */
-    unsigned extra_ack = 1;
 
     while (ret == 0) {
         uint64_t range;
@@ -433,7 +432,8 @@ size_t picoquic_log_ack_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
             byte_index += l_range;
         }
 
-        range += extra_ack;
+        range++;
+
         if (largest + 1 < range) {
             fprintf(F, "ack range error: largest=%" PRIx64 ", range=%" PRIx64, largest, range);
             byte_index = bytes_max;
@@ -441,12 +441,10 @@ size_t picoquic_log_ack_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
             break;
         }
 
-        if (range > 1)
-            fprintf(F, ", %" PRIx64 "-%" PRIx64, largest - (range - 1), largest);
-        else if (range == 1)
+        if (range <= 1)
             fprintf(F, ", %" PRIx64, largest);
         else
-            fprintf(F, ", _");
+            fprintf(F, ", %" PRIx64 "-%" PRIx64, largest - range + 1, largest);
 
         if (num_block-- == 0)
             break;
@@ -468,6 +466,7 @@ size_t picoquic_log_ack_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
                 break;
             } else {
                 byte_index += l_gap;
+                block_to_block += 1;
                 block_to_block += range;
             }
         }
@@ -481,7 +480,6 @@ size_t picoquic_log_ack_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
         }
 
         largest -= block_to_block;
-        extra_ack = 0;
     }
 
     fprintf(F, "\n");

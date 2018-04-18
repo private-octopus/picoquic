@@ -197,9 +197,9 @@ static size_t build_test_ack(test_ack_range_t const* ranges, size_t nb_ranges,
     byte_index += picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index, ack_range);
     /* Encode each of the ack block items */
     for (size_t i = 1; i < nb_ranges && byte_index + 5 < bytes_max; i++) {
-        uint64_t gap = ranges[i - 1].start_of_sack_range - ranges[i].end_of_sack_range - 1;
+        uint64_t gap = ranges[i - 1].start_of_sack_range - ranges[i].end_of_sack_range - 2;
         byte_index += picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index, gap);
-        ack_range = ranges[i].end_of_sack_range - ranges[i].start_of_sack_range + 1;
+        ack_range = ranges[i].end_of_sack_range - ranges[i].start_of_sack_range;
         byte_index += picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index, ack_range);
     }
     return byte_index;
