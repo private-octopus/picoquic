@@ -363,10 +363,11 @@ typedef struct st_picoquic_cnx_t {
 
     /* Series of flags showing the state or choices of the connection */
     unsigned int use_pn_encryption : 1;
-    unsigned int is_0RTT_accepted:1; /* whether 0-RTT is accepted */
-    unsigned int remote_parameters_received:1; /* whether remote parameters where received */
-    unsigned int ack_needed:1;
-
+    unsigned int is_0RTT_accepted : 1; /* whether 0-RTT is accepted */
+    unsigned int remote_parameters_received : 1; /* whether remote parameters where received */
+    unsigned int ack_needed : 1;
+    unsigned int current_spin : 1; /* Current value of the spin bit */             
+    unsigned int client_mode : 1; /* Is this connection the client side? */
 
     /* Local and remote parameters */
     picoquic_transport_parameters local_parameters;
@@ -460,9 +461,6 @@ typedef struct st_picoquic_cnx_t {
 
     /* Management of streams */
     picoquic_stream_head first_stream;
-
-    /* Is this connection the client side? */
-    char client_mode;
 
     /* If not `0`, the connection will send keep alive messages in the given interval. */
     uint64_t keep_alive_interval;

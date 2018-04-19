@@ -319,6 +319,8 @@ void picoquic_log_packet_header(FILE* F, picoquic_cnx_t* cnx, picoquic_packet_he
     fprintf(F, "    Type: %d (%s), ",
         ph->ptype, picoquic_log_ptype_name(ph->ptype));
 
+    fprintf(F, "S%d, ", ph->spin);
+
     switch (ph->ptype) {
     case picoquic_packet_1rtt_protected_phi0:
     case picoquic_packet_1rtt_protected_phi1:
