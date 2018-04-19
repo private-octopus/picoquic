@@ -2954,3 +2954,128 @@ int nat_rebinding_loss_test()
 
     return nat_rebinding_test_one(loss_mask);
 }
+
+/*
+ * Spin bit test. Verify that the bit does spin, and that the number
+ * of rotations is plausible given the duration and the min delay.
+ */
+
+int spin_bit_test()
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    uint64_t spin_duration = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int spin_count = 0;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 1);
+
+    if (ret != 0)
+    {
+        DBG_PRINTF("%s", "Could not create the QUIC test contexts\n");
+    }
+
+    if (ret == 0) {
+        ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+        if (ret != 0)
+        {
+            DBG_PRINTF("%s", "Could not initialize stream zero for the client\n");
+        }
+
+    }
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+
+        if (ret != 0)
+        {
+            DBG_PRINTF("Connection loop returns error %d\n", ret);
+        }
+    }
+
+    /* Prepare to send data */
+    if (ret == 0) {
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_very_long, sizeof(test_scenario_very_long));
+
+        if (ret != 0)
+        {
+            DBG_PRINTF("Init send receive scenario returns %d\n", ret);
+        }
+    }
+
+    /* Explote the data sending loop so we can observe the spin bit  */
+    if (ret == 0) {
+        uint64_t spin_begin_time = simulated_time;
+        int ret = 0;
+        int nb_trials = 0;
+        int nb_inactive = 0;
+        int max_trials = 100000;
+        int current_spin = test_ctx->cnx_client->current_spin;
+
+        test_ctx->c_to_s_link->loss_mask = &loss_mask;
+        test_ctx->s_to_c_link->loss_mask = &loss_mask;
+
+        while (ret == 0 && nb_trials < max_trials && nb_inactive < 256 && test_ctx->cnx_client->cnx_state == picoquic_state_client_ready && test_ctx->cnx_server->cnx_state == picoquic_state_server_ready) {
+            int was_active = 0;
+
+            nb_trials++;
+
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, &was_active);
+
+            if (ret < 0)
+            {
+                break;
+            }
+
+            if (test_ctx->cnx_client->current_spin != current_spin) {
+                spin_count++;
+                current_spin = test_ctx->cnx_client->current_spin;
+            }
+
+            if (was_active) {
+                nb_inactive = 0;
+            }
+            else {
+                nb_inactive++;
+            }
+
+            if (test_ctx->test_finished) {
+                if (picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) && picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)) {
+                    break;
+                }
+            }
+        }
+
+        spin_duration = simulated_time - spin_begin_time;
+
+        if (ret != 0)
+        {
+            DBG_PRINTF("Data sending loop fails with ret = %d\n", ret);
+        }
+    }
+
+    if (ret == 0) {
+        ret = picoquic_close(test_ctx->cnx_client, 0);
+        if (ret != 0)
+        {
+            DBG_PRINTF("Picoquic close returns %d\n", ret);
+        }
+    }
+
+    if (ret == 0) {
+        uint64_t spin_time_prediction = spin_count * test_ctx->cnx_client->path[0]->smoothed_rtt;
+
+        if (4 * spin_time_prediction < spin_duration || 4 * spin_duration < spin_time_prediction) {
+            DBG_PRINTF("Unplausible spin bit: %d rotations, rtt_min = %d, duration = %d\n",
+                spin_count, (int)test_ctx->cnx_client->path[0]->rtt_min, (int)spin_duration);
+            ret = -1;
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}

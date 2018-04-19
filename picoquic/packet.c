@@ -1021,6 +1021,10 @@ int picoquic_incoming_encrypted(
                 ret = (already_received)? PICOQUIC_ERROR_DUPLICATE:PICOQUIC_ERROR_AEAD_CHECK;
             }
         } else {
+            /* Packet is correct */
+            if (ph->pn64 > cnx->first_sack_item.end_of_sack_range) {
+                cnx->current_spin = ph->spin ^ cnx->client_mode;
+            }
             /* only look for closing frames in closing mode */
             if (cnx->cnx_state == picoquic_state_closing) {
                 int closing_received = 0;
