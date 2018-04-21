@@ -1209,7 +1209,7 @@ void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t* cnx, picoquic_pa
             byte_index += frame_length;
         } else {
             ret = picoquic_skip_frame(&p->bytes[byte_index],
-                p->length - ph.offset, &frame_length, &frame_is_pure_ack, version);
+                p->length - byte_index, &frame_length, &frame_is_pure_ack, version);
             byte_index += frame_length;
         }
     }
