@@ -79,6 +79,7 @@ static int socket_ping_pong(SOCKET_TYPE fd, struct sockaddr* server_addr, int se
     if (ret == 0) {
         memset(buffer, 0, sizeof(buffer));
 
+        back_length = (socklen_t)sizeof(addr_back);
         bytes_recv = picoquic_select(&fd, 1,
             &addr_back, &back_length, NULL, NULL, NULL,
             buffer, sizeof(buffer), 1000000, &current_time);
