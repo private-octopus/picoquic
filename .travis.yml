@@ -25,8 +25,9 @@ before_install:
 before_script:
   # First build external lib
   - ./ci/build_picotls.sh
+  - sudo sh -c 'echo 0 > /proc/sys/net/ipv6/conf/all/disable_ipv6'
 script:
   # Now build picotls examples and test
   - cmake .
   - make
-  - ./picoquic_ct -x sockets -x wrong_keyshare
+  - ./picoquic_ct -x wrong_keyshare
