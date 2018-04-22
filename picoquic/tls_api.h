@@ -51,7 +51,7 @@ uint64_t picoquic_public_uniform_random(uint64_t rnd_max);
 int picoquic_setup_0RTT_aead_contexts(picoquic_cnx_t* cnx, int is_server);
 int picoquic_setup_1RTT_aead_contexts(picoquic_cnx_t* cnx, int is_server);
 
-size_t picoquic_aead_get_checksum_length(void* aead_context);
+uint32_t picoquic_aead_get_checksum_length(void* aead_context);
 
 size_t picoquic_aead_encrypt_generic(uint8_t* output, uint8_t* input, size_t input_length,
     uint64_t seq_num, uint8_t* auth_data, size_t auth_data_length, void* aead_context);

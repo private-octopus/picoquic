@@ -478,7 +478,7 @@ int logger_test()
         fclose(F);
 
 #ifdef _WINDOWS
-        if (fopen_s(&F, log_packet_test_file, "w") != 0) {
+        if (fopen_s(&F, log_packet_test_file, "w") != 0 || F == NULL) {
             ret = -1;
             break;
         }

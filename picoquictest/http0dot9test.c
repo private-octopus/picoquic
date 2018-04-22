@@ -26,7 +26,7 @@ int http0dot9_test_one(char const* command, int expected_ret, size_t expected_le
             FILE* F = NULL;
 #ifdef _WINDOWS
             errno_t err = fopen_s(&F, fileName, "w");
-            if (err != 0) {
+            if (err != 0 || F == NULL) {
                 ret = -1;
             }
 #else

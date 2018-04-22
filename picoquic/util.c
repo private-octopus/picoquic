@@ -37,14 +37,20 @@
 
 char* picoquic_string_create(const char* original, size_t len)
 {
-    char* str = (char*)malloc(len + 1);
+    size_t allocated = len + 1;
+    char * str = NULL;
 
-    if (str != NULL) {
-        if (original == NULL || len == 0) {
-            str[0] = 0;
-        } else {
-            memcpy(str, original, len);
-            str[len] = 0;
+    if (allocated > len && allocated >= 1) {
+        str = (char*)malloc(allocated);
+
+        if (str != NULL) {
+            if (original == NULL || len == 0) {
+                str[0] = 0;
+            }
+            else {
+                memcpy(str, original, len);
+                str[len] = 0;
+            }
         }
     }
 
@@ -125,9 +131,9 @@ void picoquic_parse_packet_header_cnxid_lengths(uint8_t l_byte, uint8_t *dest_le
     *srce_len = (h2 == 0) ? 0 : h2 + 3;
 }
 
-size_t picoquic_format_connection_id(uint8_t* bytes, size_t bytes_max, picoquic_connection_id_t cnx_id)
+uint32_t picoquic_format_connection_id(uint8_t* bytes, size_t bytes_max, picoquic_connection_id_t cnx_id)
 {
-    size_t copied = cnx_id.id_len;
+    uint32_t copied = cnx_id.id_len;
     if (copied > bytes_max || copied == 0) {
         copied = 0;
     } else {
@@ -137,7 +143,7 @@ size_t picoquic_format_connection_id(uint8_t* bytes, size_t bytes_max, picoquic_
     return copied;
 }
 
-size_t picoquic_parse_connection_id(uint8_t * bytes, uint8_t len, picoquic_connection_id_t * cnx_id)
+uint32_t picoquic_parse_connection_id(uint8_t * bytes, uint8_t len, picoquic_connection_id_t * cnx_id)
 {
     if (len <= PICOQUIC_CONNECTION_ID_MAX_SIZE) {
         cnx_id->id_len = len;

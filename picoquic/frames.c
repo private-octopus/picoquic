@@ -208,7 +208,9 @@ int picoquic_prepare_stream_reset_frame(picoquic_stream_head* stream,
             /* Free the queued data */
             while (stream->send_queue != NULL) {
                 picoquic_stream_data* next = stream->send_queue->next_stream_data;
-                free(stream->send_queue->bytes);
+                if (stream->send_queue->bytes != NULL) {
+                    free(stream->send_queue->bytes);
+                }
                 free(stream->send_queue);
                 stream->send_queue = next;
             }

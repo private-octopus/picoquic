@@ -162,7 +162,7 @@ int get_test_number(char const * test_name)
 
     for (size_t i = 0; i < nb_tests; i++) {
         if (strcmp(test_name, test_table[i].test_name) == 0) {
-            test_number = i;
+            test_number = (int)i;
         }
     }
 

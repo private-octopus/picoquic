@@ -189,14 +189,12 @@ int sim_link_one_test(uint64_t* loss_mask, uint64_t queue_delay_max, uint64_t nb
             if (packet == NULL) {
                 ret = -1;
             }
-
-            packet->length = sizeof(packet->bytes);
-
-            picoquictest_sim_link_submit(link, packet, departure_time);
-
-            departure_time += 250;
-
-            queued++;
+            else {
+                packet->length = sizeof(packet->bytes);
+                picoquictest_sim_link_submit(link, packet, departure_time);
+                departure_time += 250;
+                queued++;
+            }
         } else {
             break;
         }

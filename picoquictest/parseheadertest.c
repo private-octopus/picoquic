@@ -311,11 +311,11 @@ int parseheadertest()
 
         if (cnx_10 == NULL) {
             ret = -1;
+        } else {
+            /* Update the local cnx_id so it be predictable in tests */
+            cnx_10->local_cnxid = test_cnxid_local;
+            (void)picoquic_register_cnx_id(quic, cnx_10, cnx_10->local_cnxid);
         }
-
-        /* Update the local cnx_id so it be predictable in tests */
-        cnx_10->local_cnxid = test_cnxid_local;
-        (void)picoquic_register_cnx_id(quic, cnx_10, cnx_10->local_cnxid);
     }
 
     for (size_t i = 0; ret == 0 && i < nb_test_entries; i++) {
@@ -349,12 +349,14 @@ int parseheadertest()
         }
     }
 
-    quic->local_ctx_length = 8;
-    cnx_10->remote_cnxid = test_cnxid_r10;
+    if (ret == 0) {
+        quic->local_ctx_length = 8;
+        cnx_10->remote_cnxid = test_cnxid_r10;
+    }
 
     for (size_t i = 0; ret == 0 && i < nb_test_entries; i++) {
-        size_t header_length;
-        size_t pn_offset;
+        uint32_t header_length;
+        uint32_t pn_offset;
 
         if (test_entries[i].decode_test_only) {
             continue;
