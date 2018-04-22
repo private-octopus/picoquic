@@ -19,6 +19,7 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include "../picoquic/tls_api.h"
 #include "../picoquic/picoquic_internal.h"
 #include <stdlib.h>
 #include <string.h>
@@ -163,17 +164,106 @@ static test_skip_frames_t test_skip_list[] = {
 
 static size_t nb_test_skip_list = sizeof(test_skip_list) / sizeof(test_skip_frames_t);
 
+
+/* Pseudo random generation suitable for tests. Guaranties that the
+* same seed will produce the same sequence, allows for specific
+* random sequence for a given test. 
+* Adapted from http://xoroshiro.di.unimi.it/splitmix64.c,
+* Written in 2015 by Sebastiano Vigna (vigna@acm.org)  */
+
+uint64_t picoquic_test_random(uint64_t * random_context)
+{
+    uint64_t z = (*random_context += 0x9e3779b97f4a7c15);
+    z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9;
+    z = (z ^ (z >> 27)) * 0x94d049bb133111eb;
+    return z ^ (z >> 31);
+}
+
+
+uint64_t picoquic_test_uniform_random(uint64_t * random_context, uint64_t rnd_max)
+{
+    uint64_t rnd;
+    uint64_t rnd_min = ((uint64_t)((int64_t)-1)) % rnd_max;
+
+    do {
+        rnd = picoquic_public_random_64();
+    } while (rnd < rnd_min);
+
+    return rnd % rnd_max;
+}
+
+static size_t format_random_packet(uint8_t * bytes, size_t bytes_max, uint64_t * random_context)
+{
+    size_t byte_index = 0;
+
+    while (byte_index < bytes_max) {
+        /* Pick a frame from the test list */
+        uint64_t r = picoquic_test_uniform_random(random_context, nb_test_skip_list);
+        /* stack it in the packet */
+        if (byte_index + test_skip_list[r].len >= bytes_max) {
+            break;
+        }
+        else {
+            memcpy(bytes + byte_index, test_skip_list[r].val, test_skip_list[r].len);
+            byte_index += test_skip_list[r].len;
+            if (test_skip_list[r].must_be_last) {
+                break;
+            }
+        }
+    }
+
+    return byte_index;
+}
+
+static int skip_test_packet(uint8_t * bytes, size_t bytes_max)
+{
+    int pure_ack;
+    int ret = 0;
+    size_t byte_index = 0;
+
+    while (ret == 0 && byte_index < bytes_max) {
+        size_t consumed;
+        ret = picoquic_skip_frame(bytes + byte_index, bytes_max - byte_index, &consumed, &pure_ack,
+            PICOQUIC_INTERNAL_TEST_VERSION_1);
+        if (ret == 0) {
+            byte_index += consumed;
+        }
+    }
+
+    return ret;
+}
+
+static void skip_test_fuzz_packet(uint8_t * target, uint8_t * source, size_t bytes_max, uint64_t * random_context)
+{
+    size_t fuzz_index = (size_t) picoquic_test_uniform_random(random_context, bytes_max);
+    size_t fuzz_length = (size_t) (picoquic_test_uniform_random(random_context, 8) + 1);
+    uint64_t fuzz_data = picoquic_test_random(random_context);
+
+    memcpy(target, source, bytes_max);
+
+    for (size_t i = 0; i < fuzz_length && fuzz_index + i < bytes_max; i++) {
+        target[i] = (uint8_t)(fuzz_data & 0xFF);
+        fuzz_data >>= 8;
+    }
+}
+
 int skip_frame_test()
 {
     int ret = 0;
-    uint8_t buffer[256];
+    uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
+    uint8_t fuzz_buffer[PICOQUIC_MAX_PACKET_SIZE];
     const uint8_t extra_bytes[4] = { 0xFF, 0, 0, 0 };
+    uint64_t random_context = 0xBABED011;
+    int fuzz_count = 0;
+    int fuzz_fail = 0;
 
     for (size_t i = 0; i < nb_test_skip_list; i++) {
         size_t consumed = 0;
         size_t byte_max = 0;
         int pure_ack;
         int t_ret = 0;
+        int nb_fuzzed = 0;
+        int nb_failed = 0;
 
         memcpy(buffer, test_skip_list[i].val, test_skip_list[i].len);
         byte_max = test_skip_list[i].len;
@@ -199,12 +289,40 @@ int skip_frame_test()
         }
     }
 
+    /* Do a minimal fuzz test */
+    for (size_t i = 0; ret == 0 && i < 100; i++) {
+        size_t bytes_max = format_random_packet(buffer, sizeof(buffer), &random_context);
+        size_t byte_index = 0;
+        
+        ret = skip_test_packet(buffer, bytes_max);
+        if (ret != 0) {
+            DBG_PRINTF("Skip packet <%d> fails, ret = %d\n", i, ret);
+        } else {
+            /* do the actual fuzz test */
+            debug_printf_suspend();
+            for (size_t j = 0; j < 100; j++) {
+                skip_test_fuzz_packet(fuzz_buffer, buffer, bytes_max, &random_context);
+                if (skip_test_packet(fuzz_buffer, bytes_max) != 0) {
+                    fuzz_fail++;
+                }
+                fuzz_count++;
+            }
+            debug_printf_resume();
+        }
+    }
+
+    if (ret == 0) {
+        DBG_PRINTF("Fuzz skip test passes after %d trials, %d error detected\n",
+            fuzz_count, fuzz_fail);
+    }
+
     return ret;
 }
 
 void picoquic_log_frames(FILE* F, uint8_t* bytes, size_t length, uint32_t version);
 
 static char const* log_test_file = "log_test.txt";
+static char const* log_fuzz_test_file = "log_fuzz_test.txt";
 
 #ifdef _WINDOWS
 #ifndef _WINDOWS64
@@ -312,6 +430,9 @@ int logger_test()
 {
     FILE* F = NULL;
     int ret = 0;
+    uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
+    uint8_t fuzz_buffer[PICOQUIC_MAX_PACKET_SIZE];
+    uint64_t random_context = 0xF00BAB;
 
 #ifdef _WINDOWS
     if (fopen_s(&F, log_test_file, "w") != 0) {
@@ -330,9 +451,40 @@ int logger_test()
     }
 
     fclose(F);
+    F = NULL;
 
     if (ret == 0) {
         ret = picoquic_test_compare_files(log_test_file, log_test_ref);
+    }
+
+    /* Do a minimal fuzz test */
+    for (size_t i = 0; ret == 0 && i < 100; i++) {
+        size_t bytes_max = format_random_packet(buffer, sizeof(buffer), &random_context);
+        size_t byte_index = 0;
+#ifdef _WINDOWS
+        if (fopen_s(&F, log_fuzz_test_file, "w") != 0) {
+            ret = -1;
+            break;
+        }
+#else
+        F = fopen(log_fuzz_test_file, "w");
+        if (F == NULL) {
+            ret = -1;
+            break;
+        }
+#endif
+        ret &= fprintf(F, "Log fuzz test #%d\n", i);
+        picoquic_log_frames(F, buffer, bytes_max, PICOQUIC_INTERNAL_TEST_VERSION_1);
+
+        /* Attempt to log fuzzed packets, and hope nothing crashes */
+        for (size_t j = 0; j < 100; j++) {
+            ret &= fprintf(F, "Log fuzz test #%d, packet %d\n", (int)i, (int)j);
+            fflush(F);
+            skip_test_fuzz_packet(fuzz_buffer, buffer, bytes_max, &random_context);
+            picoquic_log_frames(F, fuzz_buffer, bytes_max, PICOQUIC_INTERNAL_TEST_VERSION_1);
+        }
+        fclose(F);
+        F = NULL;
     }
 
     return ret;
