@@ -242,7 +242,7 @@ static void skip_test_fuzz_packet(uint8_t * target, uint8_t * source, size_t byt
     memcpy(target, source, bytes_max);
 
     for (size_t i = 0; i < fuzz_length && fuzz_index + i < bytes_max; i++) {
-        target[i] = (uint8_t)(fuzz_data & 0xFF);
+        target[fuzz_index + i] = (uint8_t)(fuzz_data & 0xFF);
         fuzz_data >>= 8;
     }
 }
@@ -323,6 +323,7 @@ void picoquic_log_frames(FILE* F, uint8_t* bytes, size_t length, uint32_t versio
 
 static char const* log_test_file = "log_test.txt";
 static char const* log_fuzz_test_file = "log_fuzz_test.txt";
+static char const* log_packet_test_file = "log_fuzz_test.txt";
 
 #ifdef _WINDOWS
 #ifndef _WINDOWS64
@@ -455,6 +456,61 @@ int logger_test()
 
     if (ret == 0) {
         ret = picoquic_test_compare_files(log_test_file, log_test_ref);
+    }
+
+    /* Create a set of randomized packets. Verify that they can be logged without 
+     * causing the dreaded "Unknown frame" message */
+
+    for (size_t i = 0; ret == 0 && i < 100; i++) {
+        uint8_t log_line[1024];
+        size_t bytes_max = format_random_packet(buffer, sizeof(buffer), &random_context);
+        size_t byte_index = 0;
+#ifdef _WINDOWS
+        if (fopen_s(&F, log_packet_test_file, "w") != 0) {
+            ret = -1;
+            break;
+        }
+#else
+        F = fopen(log_packet_test_file, "w");
+        if (F == NULL) {
+            ret = -1;
+            break;
+        }
+#endif
+        ret &= fprintf(F, "Log packet test #%d\n", i);
+        picoquic_log_frames(F, buffer, bytes_max, PICOQUIC_INTERNAL_TEST_VERSION_1);
+        fclose(F);
+
+#ifdef _WINDOWS
+        if (fopen_s(&F, log_packet_test_file, "w") != 0) {
+            ret = -1;
+            break;
+        }
+#else
+        F = fopen(log_packet_test_file, "w");
+        if (F == NULL) {
+            ret = -1;
+            break;
+        }
+#endif
+        while (fgets(log_line, (int)sizeof(log_line), F) != NULL) {
+            /* skip blanks */
+            size_t byte_index = 0;
+
+            while (byte_index < sizeof(log_line) &&
+                (log_line[byte_index] == ' ' || log_line[byte_index] == '\t')) {
+                byte_index++;
+            }
+
+            if (byte_index + 7u < sizeof(log_line) &&
+                memcmp(&log_line[byte_index], "Unknown", 7) == 0)
+            {
+                DBG_PRINTF("Packet log test #%d failed, unknown frame.\n", (int) i);
+                ret = -1;
+                break;
+            }
+        }
+        fclose(F);
     }
 
     /* Do a minimal fuzz test */
