@@ -225,7 +225,7 @@ size_t picoquic_create_packet_header_11(
         /* Create a short packet -- using 32 bit sequence numbers for now */
         uint8_t K = (packet_type == picoquic_packet_1rtt_protected_phi0) ? 0 : 0x40;
         const uint8_t C = 0x32;
-        uint8_t spin_bit = (cnx->current_spin) << 2;
+        uint8_t spin_bit = (uint8_t)((cnx->current_spin) << 2);
 
         length = 0;
         bytes[length++] = (K | C | spin_bit);
