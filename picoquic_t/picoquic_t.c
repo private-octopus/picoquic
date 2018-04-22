@@ -193,7 +193,7 @@ int main(int argc, char** argv)
 
                 if (test_number < 0) {
                     fprintf(stderr, "Incorrect test name: %s\n", optarg);
-                    usage(argv[0]);
+                    ret = usage(argv[0]);
                 }
                 else {
                     is_excluded[test_number] = 1;
@@ -202,6 +202,10 @@ int main(int argc, char** argv)
             }
             case 'h':
                 usage(argv[0]);
+                exit(0);
+                break;
+            default:
+                ret = usage(argv[0]);
                 break;
             }
         }
@@ -227,7 +231,7 @@ int main(int argc, char** argv)
 
                     if (test_number < 0) {
                         fprintf(stderr, "Incorrect test name: %s\n", argv[arg_num]);
-                        usage(argv[0]);
+                        ret = usage(argv[0]);
                     }
                     else {
                         nb_test_tried++;

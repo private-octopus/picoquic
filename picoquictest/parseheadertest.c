@@ -328,16 +328,14 @@ int parseheadertest()
                 (struct sockaddr*)&addr_10, &ph, &pcnx)
             != 0) {
             ret = -1;
-        }
-
-        if (picoquic_compare_connection_id(&ph.dest_cnx_id, &test_entries[i].ph->dest_cnx_id) != 0) {
+        } else if (picoquic_compare_connection_id(&ph.dest_cnx_id, &test_entries[i].ph->dest_cnx_id) != 0) {
             ret = -1;
         } else if (picoquic_compare_connection_id(&ph.srce_cnx_id, &test_entries[i].ph->srce_cnx_id) != 0) {
             ret = -1;
         } else if (ph.pn != test_entries[i].ph->pn) {
             ret = -1;
         } else if (ph.vn != test_entries[i].ph->vn) {
-                ret = -1;
+            ret = -1;
         } else if (ph.offset != test_entries[i].ph->offset) {
             ret = -1;
         } else if (ph.pn_offset != test_entries[i].ph->pn_offset) {
