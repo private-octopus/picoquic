@@ -687,7 +687,6 @@ size_t picoquic_log_blocked_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
 
     /* Now that the size is good, parse and print it */
     byte_index += picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &blocked_offset);
-    byte_index += picoquic_varint_skip(&bytes[byte_index]);
 
     fprintf(F, "    BLOCKED: offset %" PRIu64 ".\n",
         blocked_offset);
@@ -809,7 +808,7 @@ void picoquic_log_frames(FILE* F, uint8_t* bytes, size_t length, uint32_t versio
             if (bytes[byte_index] == 0) {
                 int nb_pad = 0;
 
-                while (bytes[byte_index] == 0 && byte_index < length) {
+                while (byte_index < length && bytes[byte_index] == 0) {
                     byte_index++;
                     nb_pad++;
                 }
