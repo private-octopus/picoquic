@@ -1065,7 +1065,6 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
     size_t checksum_overhead = 8;
     int is_cleartext_mode = 1;
     size_t data_bytes = 0;
-    picoquic_connection_id_t cnx_id = cnx->remote_cnxid;
     int retransmit_possible = 0;
     size_t header_length = 0;
     uint8_t* bytes = packet->bytes;
@@ -1077,18 +1076,14 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
     switch (cnx->cnx_state) {
     case picoquic_state_client_init:
         packet_type = picoquic_packet_client_initial;
-        cnx_id = cnx->initial_cnxid;
-        /* In the initial state, need to actually create the first bytes */
         break;
     case picoquic_state_client_init_sent:
     case picoquic_state_client_init_resent:
         packet_type = picoquic_packet_client_initial;
-        cnx_id = cnx->initial_cnxid;
         retransmit_possible = 1;
         break;
     case picoquic_state_client_renegotiate:
         packet_type = picoquic_packet_client_initial;
-        cnx_id = cnx->initial_cnxid;
         break;
     case picoquic_state_client_handshake_start:
         packet_type = picoquic_packet_handshake;
