@@ -58,7 +58,7 @@ void cleartext_aead_init_packet(picoquic_packet_header* ph,
     byte_index += 4;
     byte_index += picoquic_format_connection_id(&cleartext[byte_index], 1526 - byte_index, ph->dest_cnx_id);
     byte_index += picoquic_format_connection_id(&cleartext[byte_index], 1526 - byte_index, ph->srce_cnx_id);
-    ph->pn_offset = byte_index;
+    ph->pn_offset = (uint32_t)byte_index;
     picoformat_32(&cleartext[byte_index], ph->pn);
     byte_index += 4;
     /* Add some silly content */
@@ -330,7 +330,7 @@ int pn_ctr_test()
 
     for (size_t i = 1; ret == 0 && i <= 16; i *= 2)
     {
-        memset(in_bytes, i, i);
+        memset(in_bytes, (int)i, i);
         ptls_cipher_init(pn_enc, iv);
         ptls_cipher_encrypt(pn_enc, out_bytes, in_bytes, i);
         for (size_t j = 0; j < i; j++)

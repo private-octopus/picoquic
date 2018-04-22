@@ -309,6 +309,9 @@ void picoquic_log_connection_id(FILE* F, picoquic_connection_id_t * cid)
 
 void picoquic_log_packet_header(FILE* F, picoquic_cnx_t* cnx, picoquic_packet_header* ph)
 {
+#ifdef WINDOWS
+    UNREFERENCED_PARAMETER(cnx);
+#endif
 #if 0
     fprintf(F, "    Type: %d (%s), CnxID: %llx%s, Seq: %x (%llx), Version %x\n",
         ph->ptype, picoquic_log_ptype_name(ph->ptype),
@@ -935,7 +938,7 @@ size_t  picoquic_decrypt_log_packet(FILE* F, picoquic_cnx_t* cnx,
                 /* TODO: what if varint? */
                 /* Update the packet number in the PH structure */
                 if (ph->ptype == picoquic_packet_1rtt_protected_phi0 ||
-                    ph->ptype == picoquic_packet_1rtt_protected_phi0) {
+                    ph->ptype == picoquic_packet_1rtt_protected_phi1) {
                     switch (sample_offset - ph->pn_offset)
                     {
                     case 1:

@@ -100,7 +100,7 @@ int picoquic_parse_packet_header(
                 else {
                     char context_by_addr = 0;
                     uint64_t payload_length;
-                    size_t var_length = picoquic_varint_decode(bytes + ph->offset,
+                    uint32_t var_length = (uint32_t)picoquic_varint_decode(bytes + ph->offset,
                         length - ph->offset, &payload_length);
 
                     ph->version_index = picoquic_get_version_index(ph->vn);
@@ -187,7 +187,7 @@ int picoquic_parse_packet_header(
 
          if ((int)length >= 1 + quic->local_ctx_length) {
              /* We can identify the connection by its ID */
-             ph->offset = 1 + picoquic_parse_connection_id(bytes + 1, quic->local_ctx_length, &ph->dest_cnx_id);
+             ph->offset = (uint32_t)( 1 + picoquic_parse_connection_id(bytes + 1, quic->local_ctx_length, &ph->dest_cnx_id));
              /* TODO: should consider using combination of CNX ID and ADDR_FROM */
              if (*pcnx == NULL)
              {
@@ -344,7 +344,7 @@ size_t  picoquic_decrypt_packet(picoquic_cnx_t* cnx,
                 picoquic_pn_encrypt(pn_enc, bytes + sample_offset, bytes + ph->pn_offset, bytes + ph->pn_offset, 4);
                 /* TODO: what if varint? */
                 if (ph->ptype == picoquic_packet_1rtt_protected_phi0 ||
-                    ph->ptype == picoquic_packet_1rtt_protected_phi0) {
+                    ph->ptype == picoquic_packet_1rtt_protected_phi1) {
                     /* Update the packet number in the PH structure */
                     switch (sample_offset - ph->pn_offset)
                     {
@@ -435,9 +435,6 @@ int picoquic_incoming_version_negotiation(
     picoquic_packet_header* ph,
     uint64_t current_time)
 {
-#ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(addr_from);
-#endif
     /* Parse the content */
     int ret = -1;
 #ifdef _WINDOWS
@@ -565,11 +562,11 @@ void picoquic_queue_stateless_reset(picoquic_cnx_t* cnx,
 
     if (sp != NULL) {
         uint8_t* bytes = cleartext;
-        size_t byte_index = 0;
+        uint32_t byte_index = 0;
         size_t data_bytes = 0;
         size_t ack_bytes = 0;
-        size_t header_length = 0;
-        size_t pn_offset = 0;
+        uint32_t header_length = 0;
+        uint32_t pn_offset = 0;
 
         cnx->remote_cnxid = ph->srce_cnx_id;
         byte_index = picoquic_create_packet_header(cnx, picoquic_packet_server_stateless,
@@ -581,7 +578,7 @@ void picoquic_queue_stateless_reset(picoquic_cnx_t* cnx,
             picoquic_prepare_ack_frame(cnx, current_time, bytes + byte_index,
             PICOQUIC_MAX_PACKET_SIZE - byte_index - checksum_length, &ack_bytes) == 0)
         {
-            byte_index += ack_bytes;
+            byte_index += (uint32_t)ack_bytes;
         }
 
         /* Copy the stream zero data */
@@ -589,7 +586,7 @@ void picoquic_queue_stateless_reset(picoquic_cnx_t* cnx,
                 PICOQUIC_MAX_PACKET_SIZE - byte_index - checksum_length, &data_bytes)
             == 0) {
 
-            byte_index += data_bytes;
+            byte_index += (uint32_t)data_bytes;
 
             picoquic_update_payload_length(bytes, header_length, byte_index + checksum_length);
 
@@ -828,6 +825,10 @@ int picoquic_incoming_server_cleartext(
     int ret = 0;
     size_t decoded_length = 0;
     int already_received = 0;
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(addr_to);
+    UNREFERENCED_PARAMETER(if_index_to);
+#endif
 
     if (cnx->cnx_state == picoquic_state_client_init_sent || cnx->cnx_state == picoquic_state_client_init_resent) {
         cnx->cnx_state = picoquic_state_client_handshake_start;

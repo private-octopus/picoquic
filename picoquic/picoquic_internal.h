@@ -551,17 +551,17 @@ int picoquic_parse_packet_header(
     picoquic_packet_header* ph,
     picoquic_cnx_t** pcnx);
 
-size_t picoquic_create_packet_header(
+uint32_t picoquic_create_packet_header(
     picoquic_cnx_t* cnx,
     picoquic_packet_type_enum packet_type,
     uint64_t sequence_number,
     uint8_t* bytes,
-    size_t * pn_offset);
+    uint32_t * pn_offset);
 
 void picoquic_update_payload_length(
     uint8_t* bytes, size_t header_length, size_t packet_length);
 
-size_t picoquic_get_checksum_length(picoquic_cnx_t* cnx, int is_cleartext_mode);
+uint32_t picoquic_get_checksum_length(picoquic_cnx_t* cnx, int is_cleartext_mode);
 
 int picoquic_test_stream_frame_unlimited(uint8_t* bytes);
 int picoquic_check_stream_frame_already_acked(picoquic_cnx_t* cnx, uint8_t* bytes,
@@ -588,9 +588,9 @@ size_t picoquic_decrypt_cleartext(picoquic_cnx_t* cnx,
     uint8_t* bytes, size_t length, picoquic_packet_header* ph,
     int * already_received);
 
-size_t picoquic_protect_packet(picoquic_cnx_t* cnx,
+uint32_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     uint8_t * bytes, uint64_t sequence_number,
-    size_t length, size_t header_length, size_t pn_offset,
+    uint32_t length, uint32_t header_length, uint32_t pn_offset,
     uint8_t* send_buffer,
     void * aead_context, void* pn_enc);
 

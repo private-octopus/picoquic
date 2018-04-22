@@ -663,7 +663,7 @@ static int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
 
     picoquictest_sim_packet_t* packet = picoquictest_sim_link_create_packet();
 
-    if (packet == NULL) {
+    if (packet == NULL || test_ctx->cnx_client == NULL) {
         ret = -1;
     } else {
         picoquic_stateless_packet_t* sp = picoquic_dequeue_stateless_packet(test_ctx->qserver);
@@ -1051,7 +1051,7 @@ int tls_api_many_losses()
 
     for (uint64_t i = 0; ret == 0 && i < 6; i++) {
         for (uint64_t j = 1; ret == 0 && j < 4; j++) {
-            loss_mask = ((1 << j) - 1) << i;
+            loss_mask = ((((uint64_t)1) << j) - ((uint64_t)1)) << i;
             ret = tls_api_test_with_loss(&loss_mask, 0, NULL, NULL);
         }
     }
@@ -2695,9 +2695,13 @@ int set_certificate_and_key_test()
             BIO_free(bio_key);
 
             ptls_iovec_t* chain = malloc(sizeof(ptls_iovec_t));
-            chain[0] = ptls_iovec_init(cert_der, length);
+            if (chain == NULL) {
+                ret = -1;
+            } else {
+                chain[0] = ptls_iovec_init(cert_der, length);
 
-            picoquic_set_tls_certificate_chain(test_ctx->qserver, chain, 1);
+                picoquic_set_tls_certificate_chain(test_ctx->qserver, chain, 1);
+            }
         }
     }
 
@@ -2776,7 +2780,9 @@ int request_client_authentication_test()
     }
   
     /* Check that both the client and server are ready. */
-    if (test_ctx->cnx_client->cnx_state != picoquic_state_client_ready
+    if (test_ctx->cnx_client == NULL 
+        || test_ctx->cnx_server == NULL
+        || test_ctx->cnx_client->cnx_state != picoquic_state_client_ready
         || test_ctx->cnx_server->cnx_state != picoquic_state_server_ready) {
         ret = -1;
     }

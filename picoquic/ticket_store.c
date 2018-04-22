@@ -183,7 +183,7 @@ int picoquic_load_tickets(picoquic_stored_ticket_t** pp_first_ticket,
 
 #ifdef _WINDOWS
     errno_t err = fopen_s(&F, ticket_file_name, "rb");
-    if (err != 0) {
+    if (err != 0 || F == NULL) {
         ret = -1;
     }
 #else

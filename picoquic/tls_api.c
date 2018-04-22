@@ -491,8 +491,10 @@ static int verify_certificate_callback(ptls_verify_certificate_t* _self, ptls_t*
     if (ret == 0) {
         *verify_sign = verify_sign_callback;
         *verify_data = malloc(sizeof(picoquic_verify_ctx_t));
-        ((picoquic_verify_ctx_t*)*verify_data)->verify_ctx = verify_ctx;
-        ((picoquic_verify_ctx_t*)*verify_data)->verify_sign = verify_sign_fn;
+        if (*verify_data != NULL) {
+            ((picoquic_verify_ctx_t*)*verify_data)->verify_ctx = verify_ctx;
+            ((picoquic_verify_ctx_t*)*verify_data)->verify_sign = verify_sign_fn;
+        }
     }
 
     return ret;
@@ -755,22 +757,26 @@ int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint6
                 picoquic_tlscontext_free(ctx);
                 ctx = NULL;
             }
-            /* Enable server side HRR if cookie mode is required */
-            else if ((quic->flags & picoquic_context_check_cookie) != 0) {
-                /* if the server should enforce the client to do a stateless retry */
-                ctx->handshake_properties.server.enforce_retry = 1;
-                ctx->handshake_properties.server.retry_uses_cookie = 1;
-            } else {
-                /* send cookie and do a stateless retry if cannot find suitable key share */
-                ctx->handshake_properties.server.retry_uses_cookie = 1;
+
+            if (ctx != NULL) {
+                /* Enable server side HRR if cookie mode is required */
+                if ((quic->flags & picoquic_context_check_cookie) != 0) {
+                    /* if the server should enforce the client to do a stateless retry */
+                    ctx->handshake_properties.server.enforce_retry = 1;
+                    ctx->handshake_properties.server.retry_uses_cookie = 1;
+                }
+                else {
+                    /* send cookie and do a stateless retry if cannot find suitable key share */
+                    ctx->handshake_properties.server.retry_uses_cookie = 1;
+                }
+                /* secret used for signing / verifying the cookie(internally uses HMAC) */
+                ctx->handshake_properties.server.cookie.key = cnx->quic->retry_seed;
+                /* additional data to be used for signing / verification */
+                ctx->handshake_properties.server.cookie.additional_data.base
+                    = (uint8_t*)&cnx->path[0]->peer_addr;
+                ctx->handshake_properties.server.cookie.additional_data.len
+                    = cnx->path[0]->peer_addr_len;
             }
-            /* secret used for signing / verifying the cookie(internally uses HMAC) */
-            ctx->handshake_properties.server.cookie.key = cnx->quic->retry_seed;
-            /* additional data to be used for signing / verification */
-            ctx->handshake_properties.server.cookie.additional_data.base
-                = (uint8_t*)&cnx->path[0]->peer_addr;
-            ctx->handshake_properties.server.cookie.additional_data.len
-                = cnx->path[0]->peer_addr_len;
         }
     }
 
@@ -1031,9 +1037,9 @@ void picoquic_aead_free(void* aead_context)
     ptls_aead_free((ptls_aead_context_t*)aead_context);
 }
 
-size_t picoquic_aead_get_checksum_length(void* aead_context)
+uint32_t picoquic_aead_get_checksum_length(void* aead_context)
 {
-    return ((ptls_aead_context_t*)aead_context)->algo->tag_size;
+    return ((uint32_t)((ptls_aead_context_t*)aead_context)->algo->tag_size);
 }
 
 /* Computation of the encryption and decryption methods for 0-RTT data */
@@ -1495,7 +1501,7 @@ int picoquic_set_tls_key(picoquic_quic_t* quic, const uint8_t* data, size_t len)
         ctx->sign_certificate = NULL;
     }
 
-    return set_sign_certificate_from_key(d2i_AutoPrivateKey(NULL, &data, len), ctx);
+    return set_sign_certificate_from_key(d2i_AutoPrivateKey(NULL, &data, (long)len), ctx);
 }
 
 void picoquic_tls_set_client_authentication(picoquic_quic_t* quic, int client_authentication) {
