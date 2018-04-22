@@ -424,7 +424,6 @@ typedef struct st_picoquic_cnx_t {
     /* Receive state */
     picoquic_sack_item_t first_sack_item;
     uint64_t time_stamp_largest_received;
-    uint64_t sack_block_size_max;
     uint64_t highest_ack_sent;
     uint64_t highest_ack_time;
     uint64_t ack_delay_local;
@@ -604,8 +603,7 @@ uint16_t picoquic_deltat_to_float16(uint64_t delta_t);
 uint64_t picoquic_float16_to_deltat(uint16_t float16);
 
 int picoquic_update_sack_list(picoquic_sack_item_t* sack,
-    uint64_t pn64_min, uint64_t pn64_max,
-    uint64_t* sack_block_size_max);
+    uint64_t pn64_min, uint64_t pn64_max);
 /*
      * Check whether the data fills a hole. returns 0 if it does, -1 otherwise.
      */

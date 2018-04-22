@@ -138,7 +138,7 @@ int picoquic_save_tickets(picoquic_stored_ticket_t* first_ticket,
     picoquic_stored_ticket_t* next = first_ticket;
 #ifdef _WINDOWS
     errno_t err = fopen_s(&F, ticket_file_name, "wb");
-    if (err != 0) {
+    if (err != 0 || F == NULL) {
         ret = -1;
     }
 #else

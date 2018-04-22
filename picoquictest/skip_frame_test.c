@@ -262,8 +262,6 @@ int skip_frame_test()
         size_t byte_max = 0;
         int pure_ack;
         int t_ret = 0;
-        int nb_fuzzed = 0;
-        int nb_failed = 0;
 
         memcpy(buffer, test_skip_list[i].val, test_skip_list[i].len);
         byte_max = test_skip_list[i].len;
@@ -292,7 +290,6 @@ int skip_frame_test()
     /* Do a minimal fuzz test */
     for (size_t i = 0; ret == 0 && i < 100; i++) {
         size_t bytes_max = format_random_packet(buffer, sizeof(buffer), &random_context);
-        size_t byte_index = 0;
         
         ret = skip_test_packet(buffer, bytes_max);
         if (ret != 0) {
@@ -462,9 +459,8 @@ int logger_test()
      * causing the dreaded "Unknown frame" message */
 
     for (size_t i = 0; ret == 0 && i < 100; i++) {
-        uint8_t log_line[1024];
+        char log_line[1024];
         size_t bytes_max = format_random_packet(buffer, sizeof(buffer), &random_context);
-        size_t byte_index = 0;
 #ifdef _WINDOWS
         if (fopen_s(&F, log_packet_test_file, "w") != 0) {
             ret = -1;
@@ -477,7 +473,7 @@ int logger_test()
             break;
         }
 #endif
-        ret &= fprintf(F, "Log packet test #%d\n", i);
+        ret &= fprintf(F, "Log packet test #%d\n", (int)i);
         picoquic_log_frames(F, buffer, bytes_max, PICOQUIC_INTERNAL_TEST_VERSION_1);
         fclose(F);
 
@@ -516,7 +512,6 @@ int logger_test()
     /* Do a minimal fuzz test */
     for (size_t i = 0; ret == 0 && i < 100; i++) {
         size_t bytes_max = format_random_packet(buffer, sizeof(buffer), &random_context);
-        size_t byte_index = 0;
 #ifdef _WINDOWS
         if (fopen_s(&F, log_fuzz_test_file, "w") != 0) {
             ret = -1;
@@ -529,7 +524,7 @@ int logger_test()
             break;
         }
 #endif
-        ret &= fprintf(F, "Log fuzz test #%d\n", i);
+        ret &= fprintf(F, "Log fuzz test #%d\n", (int)i);
         picoquic_log_frames(F, buffer, bytes_max, PICOQUIC_INTERNAL_TEST_VERSION_1);
 
         /* Attempt to log fuzzed packets, and hope nothing crashes */

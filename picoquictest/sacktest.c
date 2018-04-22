@@ -293,7 +293,6 @@ int ackrange_test()
 {
     int ret = 0;
     picoquic_sack_item_t sack0;
-    uint64_t blockmax = 0;
 
     memset(&sack0, 0, sizeof(picoquic_sack_item_t));
 
@@ -303,7 +302,7 @@ int ackrange_test()
 
         if (ret == 0) {
             ret = picoquic_update_sack_list(&sack0,
-                ack_range[i].range_min, ack_range[i].range_max, &blockmax);
+                ack_range[i].range_min, ack_range[i].range_max);
         }
 
         for (size_t j = 0; j < i; j++) {
@@ -318,10 +317,6 @@ int ackrange_test()
         if (ret != 0) {
             break;
         }
-    }
-
-    if (ret == 0 && blockmax != 7500) {
-        ret = -1;
     }
 
     if (ret == 0 && sack0.start_of_sack_range != 0) {

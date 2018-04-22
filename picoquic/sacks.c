@@ -62,18 +62,15 @@ int picoquic_is_pn_already_received(picoquic_cnx_t* cnx, uint64_t pn64)
  */
 
 int picoquic_update_sack_list(picoquic_sack_item_t* sack,
-    uint64_t pn64_min, uint64_t pn64_max,
-    uint64_t* sack_block_size_max)
+    uint64_t pn64_min, uint64_t pn64_max)
 {
     int ret = 1; /* duplicate by default, reset to 0 if update found */
     picoquic_sack_item_t* previous = NULL;
-    uint64_t block_size;
 
     if (sack->start_of_sack_range == 0 && sack->end_of_sack_range == 0) {
         /* This is the first packet ever received.. */
         sack->start_of_sack_range = pn64_min;
         sack->end_of_sack_range = pn64_max;
-        *sack_block_size_max = 1;
         ret = 0;
     } else {
         do {
@@ -92,11 +89,6 @@ int picoquic_update_sack_list(picoquic_sack_item_t* sack,
                         sack->end_of_sack_range = pn64_max;
                     }
 
-                    block_size = sack->end_of_sack_range - sack->start_of_sack_range;
-                    if (block_size > *sack_block_size_max) {
-                        *sack_block_size_max = block_size;
-                    }
-
                     /* Check whether there is a need to continue */
                     if (pn64_min >= sack->start_of_sack_range) {
                         break;
@@ -113,10 +105,6 @@ int picoquic_update_sack_list(picoquic_sack_item_t* sack,
                 } else if (previous != NULL && pn64_max + 1 >= previous->start_of_sack_range) {
                     /* Extend the previous range */
                     previous->start_of_sack_range = pn64_min;
-                    block_size = previous->end_of_sack_range - previous->start_of_sack_range;
-                    if (block_size > *sack_block_size_max) {
-                        *sack_block_size_max = block_size;
-                    }
                     break;
                 } else {
                     /* Found a new hole */
@@ -132,11 +120,6 @@ int picoquic_update_sack_list(picoquic_sack_item_t* sack,
                         sack->start_of_sack_range = pn64_min;
                         sack->end_of_sack_range = pn64_max;
                         sack->next_sack = new_hole;
-
-                        block_size = sack->end_of_sack_range - sack->start_of_sack_range;
-                        if (block_size > *sack_block_size_max) {
-                            *sack_block_size_max = block_size;
-                        }
                     }
                     /* No need to continue, everything is consumed. */
                     break;
@@ -148,12 +131,6 @@ int picoquic_update_sack_list(picoquic_sack_item_t* sack,
                     if (sack->next_sack == NULL) {
                         /* Just extend the last range */
                         sack->start_of_sack_range = pn64_min;
-
-                        block_size = sack->end_of_sack_range - pn64_min;
-                        if (block_size > *sack_block_size_max) {
-                            *sack_block_size_max = block_size;
-                        }
-
                         break;
                     } else {
                         /* continue with reminder. */
@@ -169,10 +146,6 @@ int picoquic_update_sack_list(picoquic_sack_item_t* sack,
                 ret = 0;
                 if (pn64_max + 1 == sack->start_of_sack_range) {
                     sack->start_of_sack_range = pn64_min;
-                    block_size = sack->end_of_sack_range - sack->start_of_sack_range;
-                    if (block_size > *sack_block_size_max) {
-                        *sack_block_size_max = block_size;
-                    }
                 } else {
                     /* this is an old packet, beyond the current range of SACK */
                     /* Found a new hole */
@@ -186,10 +159,6 @@ int picoquic_update_sack_list(picoquic_sack_item_t* sack,
                         new_hole->end_of_sack_range = pn64_max;
                         new_hole->next_sack = NULL;
                         sack->next_sack = new_hole;
-                        block_size = pn64_max - pn64_min;
-                        if (block_size > *sack_block_size_max) {
-                            *sack_block_size_max = block_size;
-                        }
                     }
                 }
                 break;
@@ -212,7 +181,7 @@ int picoquic_record_pn_received(picoquic_cnx_t* cnx, uint64_t pn64, uint64_t cur
         cnx->time_stamp_largest_received = current_microsec;
     }
 
-    return picoquic_update_sack_list(sack, pn64, pn64, &cnx->sack_block_size_max);
+    return picoquic_update_sack_list(sack, pn64, pn64);
 }
 
 /*
