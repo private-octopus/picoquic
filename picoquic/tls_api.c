@@ -1002,12 +1002,11 @@ ptls_aead_context_t *picoquic_aead_new(ptls_aead_algorithm_t *aead, ptls_hash_al
     uint8_t key[PTLS_MAX_SECRET_SIZE];
     int ret;
 
-    if ((ctx = (ptls_aead_context_t *)malloc(aead->context_size)) == NULL)
+    if ((ctx = (ptls_aead_context_t *)malloc(aead->context_size)) == NULL) {
         return NULL;
+    }
 
-    memset(ctx, 0, sizeof(ctx));
-    ctx->algo = aead;
-
+    *ctx = (ptls_aead_context_t) { aead };
     if ((ret = picoquic_get_traffic_key(hash, key, aead->key_size, 0, secret, base_label)) != 0) {
         goto Exit;
     }
