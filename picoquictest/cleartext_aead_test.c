@@ -34,6 +34,7 @@ static uint8_t const addr2[4] = { 10, 0, 0, 2 };
 void cleartext_aead_packet_init_header(picoquic_packet_header* ph,
     picoquic_connection_id_t cnx_id, uint32_t pn, uint32_t vn, picoquic_packet_type_enum ptype)
 {
+    memset(ph, 0, sizeof(picoquic_packet_header));
     ph->dest_cnx_id = cnx_id;
     ph->srce_cnx_id = picoquic_null_connection_id;
     ph->pn = pn;
@@ -42,6 +43,7 @@ void cleartext_aead_packet_init_header(picoquic_packet_header* ph,
     ph->ptype = ptype;
     ph->offset = 17;
     ph->pnmask = 0xFFFFFFFF00000000ull;
+    ph->version_index = picoquic_get_version_index(ph->vn);
 }
 
 void cleartext_aead_init_packet(picoquic_packet_header* ph,

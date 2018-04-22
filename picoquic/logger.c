@@ -309,7 +309,7 @@ void picoquic_log_connection_id(FILE* F, picoquic_connection_id_t * cid)
 
 void picoquic_log_packet_header(FILE* F, picoquic_cnx_t* cnx, picoquic_packet_header* ph)
 {
-#ifdef WINDOWS
+#ifdef _WINDOWS
     UNREFERENCED_PARAMETER(cnx);
 #endif
 #if 0

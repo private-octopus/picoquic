@@ -48,6 +48,10 @@ int picoquic_parse_packet_header(
 {
     int ret = 0;
 
+    /* Initialize the PH structure to zero, but version index to -1 (error) */
+    memset(ph, 0, sizeof(picoquic_packet_header));
+    ph->version_index = -1;
+
     /* Is this a long header of a short header? -- in any case, we need at least 17 bytes */
     if ((bytes[0] & 0x80) == 0x80) {
         if (length < 6) {
@@ -77,10 +81,6 @@ int picoquic_parse_packet_header(
                 if (ph->vn == 0) {
                     /* VN = zero identifies a version negotiation packet */
                     ph->ptype = picoquic_packet_version_negotiation;
-                    ph->pn = 0;
-                    ph->pnmask = 0;
-                    ph->pn_offset = 0;
-                    ph->version_index = -1;
                     ph->payload_length = (uint16_t) ((length > ph->offset) ? length - ph->offset : 0);
 
                     if (*pcnx == NULL) {
@@ -179,11 +179,6 @@ int picoquic_parse_packet_header(
         /* If this is a short header, it should be possible to retrieve the connection
          * context. This depends on whether the quic context requires cnx_id or not.
          */
-         ph->dest_cnx_id = picoquic_null_connection_id;
-         ph->srce_cnx_id = picoquic_null_connection_id;
-         ph->vn = 0;
-         ph->pn = 0;
-         ph->spin = 0;
 
          if ((int)length >= 1 + quic->local_ctx_length) {
              /* We can identify the connection by its ID */
