@@ -1166,9 +1166,8 @@ static int picoquic_process_ack_of_stream_frame(picoquic_cnx_t* cnx, uint8_t* by
         /* record the ack range for the stream */
         stream = picoquic_find_stream(cnx, stream_id, 0);
         if (stream != NULL) {
-            uint64_t blocksize;
             (void)picoquic_update_sack_list(&stream->first_sack_item,
-                offset, offset + data_length - 1, &blocksize);
+                offset, offset + data_length - 1);
         }
     }
 
