@@ -83,6 +83,7 @@ int ticket_store_test()
     picoquic_stored_ticket_t* p_first_ticket = NULL;
     picoquic_stored_ticket_t* p_first_ticket_bis = NULL;
     picoquic_stored_ticket_t* p_first_ticket_ter = NULL;
+    picoquic_stored_ticket_t* p_first_ticket_empty = NULL;
 
     uint64_t ticket_time = 40000000000ull;
     uint64_t current_time = 50000000000ull;
@@ -90,6 +91,23 @@ int ticket_store_test()
     uint64_t too_late_time = 150000000000ull;
     uint32_t ttl = 100000;
     uint8_t ticket[128];
+
+    /* Test reading and writing an empty file */
+    if (ret == 0) {
+        ret = picoquic_save_tickets(p_first_ticket, current_time, test_file_name);
+    }
+    /* Load the empty file again */
+    if (ret == 0) {
+        ret = picoquic_load_tickets(&p_first_ticket_empty, retrieve_time, test_file_name);
+
+        /* Verify that the two contents are empty */
+        if (p_first_ticket_empty != NULL) {
+            if (ret == 0) {
+                ret = -1;
+            }
+            picoquic_free_tickets(&p_first_ticket_empty);
+        }
+    }
 
     /* Generate a set of tickets */
     for (size_t i = 0; ret == 0 && i < nb_test_sni; i++) {

@@ -156,7 +156,10 @@ picoquic_quic_t* picoquic_create(uint32_t nb_connections,
             quic->ticket_file_name = ticket_file_name;
             ret = picoquic_load_tickets(&quic->p_first_ticket, current_time, ticket_file_name);
 
-            if (ret != 0) {
+            if (ret == PICOQUIC_ERROR_NO_SUCH_FILE) {
+                DBG_PRINTF("Ticket file <%s> not created yet.\n", ticket_file_name);
+                ret = 0;
+            } else if (ret != 0) {
                 DBG_PRINTF("Cannot load tickets from <%s>\n", ticket_file_name);
             }
         }
