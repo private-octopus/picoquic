@@ -23,6 +23,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 
 picoquic_stored_ticket_t* picoquic_format_ticket(uint64_t time_valid_until,
     char const* sni, uint16_t sni_length, char const* alpn, uint16_t alpn_length,
