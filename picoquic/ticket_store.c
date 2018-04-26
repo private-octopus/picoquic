@@ -139,7 +139,7 @@ int picoquic_deserialize_ticket(picoquic_stored_ticket_t ** ticket, uint8_t * by
         *ticket = NULL;
     } else {
         *ticket = picoquic_format_ticket(time_valid_until, (const char *)(bytes + sni_index), sni_length,
-            (const char *)(bytes + alpn_index), alpn_length, (const char *)(bytes + ticket_index), ticket_length);
+            (const char *)(bytes + alpn_index), alpn_length, bytes + ticket_index, ticket_length);
         if (*ticket == NULL) {
             ret = PICOQUIC_ERROR_MEMORY;
         }
