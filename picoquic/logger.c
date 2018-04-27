@@ -1554,6 +1554,7 @@ void picoquic_log_picotls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
     uint8_t* ticket, uint16_t ticket_length)
 {
     uint64_t ticket_time = 0;
+    uint16_t kx_id = 0;
     uint16_t suite_id = 0;
     uint32_t tls_ticket_length = 0;
     uint8_t* tls_ticket_ptr = NULL;
@@ -1568,6 +1569,8 @@ void picoquic_log_picotls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
     } else {
         ticket_time = PICOPARSE_64(ticket);
         byte_index += 8;
+        kx_id = PICOPARSE_16(ticket + byte_index);
+        byte_index += 2;
         suite_id = PICOPARSE_16(ticket + byte_index);
         byte_index += 2;
         tls_ticket_length = PICOPARSE_24(ticket + byte_index);
@@ -1595,9 +1598,9 @@ void picoquic_log_picotls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
         }
     }
 
-    fprintf(F, "%llu: ticket time = %llu, suite = %x, %d ticket, %d secret.\n",
+    fprintf(F, "%llu: ticket time = %llu, kx = %x, suite = %x, %d ticket, %d secret.\n",
         (unsigned long long)picoquic_val64_connection_id(cnx_id), (unsigned long long)ticket_time,
-        suite_id, tls_ticket_length, secret_length);
+        kx_id, suite_id, tls_ticket_length, secret_length);
 
     if (ret == -1) {
         fprintf(F, "%llu: Malformed PTLS ticket, length = %d, at least %d required.\n",

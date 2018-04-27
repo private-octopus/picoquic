@@ -929,8 +929,8 @@ void * picoquic_pn_enc_create(
     /*
      * Derive the key by extending the secret for PN encryption 
      */
-    ret = ptls_hkdf_expand_label(
-        hash, key, aead->key_size, ptls_iovec_init(secret, hash->digest_size), "pn", ptls_iovec_init(NULL, 0), base_label);
+    ret = ptls_hkdf_expand(
+        hash, key, aead->key_size, ptls_iovec_init(secret, hash->digest_size), ptls_iovec_init("pn", 2));
 
     /*
      * Create the context. This is always an encryptng context, because of the stream cipher mode.

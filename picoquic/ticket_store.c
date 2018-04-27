@@ -23,6 +23,133 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
+
+picoquic_stored_ticket_t* picoquic_format_ticket(uint64_t time_valid_until,
+    char const* sni, uint16_t sni_length, char const* alpn, uint16_t alpn_length,
+    uint8_t* ticket, uint16_t ticket_length)
+{
+    size_t ticket_size = sizeof(picoquic_stored_ticket_t) + sni_length + 1 + alpn_length + 1 + ticket_length;
+    picoquic_stored_ticket_t* stored = (picoquic_stored_ticket_t*)malloc(ticket_size);
+    char* next_p = ((char*)stored) + sizeof(picoquic_stored_ticket_t);
+
+    if (stored != NULL) {
+        memset(stored, 0, sizeof(picoquic_stored_ticket_t));
+        stored->time_valid_until = time_valid_until;
+        stored->sni = next_p;
+        stored->sni_length = sni_length;
+        memcpy(next_p, sni, sni_length);
+        next_p += sni_length;
+        *next_p++ = 0;
+
+        stored->alpn = next_p;
+        stored->alpn_length = alpn_length;
+        memcpy(next_p, alpn, alpn_length);
+        next_p += alpn_length;
+        *next_p++ = 0;
+
+        stored->ticket = (uint8_t*)next_p;
+        stored->ticket_length = ticket_length;
+        memcpy(next_p, ticket, ticket_length);
+    }
+
+    return stored;
+}
+
+int picoquic_serialize_ticket(picoquic_stored_ticket_t * ticket, uint8_t * bytes, size_t bytes_max, size_t * consumed)
+{
+    int ret = 0;
+    size_t byte_index = 0;
+    size_t required_length;
+
+    /* Compute serialized length */
+    required_length = 8 + 2 + 2 + 2 + ticket->sni_length + ticket->alpn_length + ticket->ticket_length;
+    /* Serialize */
+    if (required_length > bytes_max) {
+        ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
+        *consumed = 0;
+    } else {
+        picoformat_64(bytes + byte_index, ticket->time_valid_until);
+        byte_index += 8;
+
+        picoformat_16(bytes + byte_index, ticket->sni_length);
+        byte_index += 2;
+        memcpy(bytes + byte_index, ticket->sni, ticket->sni_length);
+        byte_index += ticket->sni_length;
+
+        picoformat_16(bytes + byte_index, ticket->alpn_length);
+        byte_index += 2;
+        memcpy(bytes + byte_index, ticket->alpn, ticket->alpn_length);
+        byte_index += ticket->alpn_length;
+
+        picoformat_16(bytes + byte_index, ticket->ticket_length);
+        byte_index += 2;
+        memcpy(bytes + byte_index, ticket->ticket, ticket->ticket_length);
+        byte_index += ticket->ticket_length;
+
+        *consumed = byte_index;
+    }
+
+    return ret;
+}
+
+int picoquic_deserialize_ticket(picoquic_stored_ticket_t ** ticket, uint8_t * bytes, size_t bytes_max, size_t * consumed)
+{
+    int ret = 0;
+    uint64_t time_valid_until = 0;
+    size_t required_length = 8 + 2 + 2 + 2;
+    size_t byte_index = 0;
+    size_t sni_index = 0;
+    size_t alpn_index = 0;
+    size_t ticket_index = 0;
+    uint16_t sni_length = 0;
+    uint16_t alpn_length = 0;
+    uint16_t ticket_length = 0;
+
+
+    *consumed = 0;
+    *ticket = NULL;
+
+    if (required_length < bytes_max) {
+        time_valid_until = PICOPARSE_64(bytes);
+        byte_index = 8;
+        sni_length = PICOPARSE_16(bytes + byte_index);
+        byte_index += 2;
+        sni_index = byte_index;
+        required_length += sni_length;
+        byte_index += sni_length;
+    }
+    
+    if (required_length < bytes_max) {
+        alpn_length = PICOPARSE_16(bytes + byte_index);
+        byte_index += 2;
+        alpn_index = byte_index;
+        required_length += alpn_length;
+        byte_index += alpn_length;
+    }
+
+    if (required_length < bytes_max) {
+        ticket_length = PICOPARSE_16(bytes + byte_index);
+        byte_index += 2;
+        ticket_index = byte_index;
+        required_length += ticket_length;
+    }
+
+    if (required_length > bytes_max) {
+        *ticket = NULL;
+    } else {
+        *ticket = picoquic_format_ticket(time_valid_until, (const char *)(bytes + sni_index), sni_length,
+            (const char *)(bytes + alpn_index), alpn_length, bytes + ticket_index, ticket_length);
+        if (*ticket == NULL) {
+            ret = PICOQUIC_ERROR_MEMORY;
+        }
+        else {
+            *consumed = required_length;
+        }
+    }
+
+    return ret;
+}
 
 int picoquic_store_ticket(picoquic_stored_ticket_t** pp_first_ticket,
     uint64_t current_time,
@@ -50,32 +177,15 @@ int picoquic_store_ticket(picoquic_stored_ticket_t** pp_first_ticket,
         if (current_time != 0 && time_valid_until < current_time) {
             ret = PICOQUIC_ERROR_INVALID_TICKET;
         } else {
-            size_t ticket_size = sizeof(picoquic_stored_ticket_t) + sni_length + 1 + alpn_length + 1 + ticket_length;
-            picoquic_stored_ticket_t* stored = (picoquic_stored_ticket_t*)malloc(ticket_size);
-            char* next_p = ((char*)stored) + sizeof(picoquic_stored_ticket_t);
-
+            picoquic_stored_ticket_t* stored = picoquic_format_ticket(time_valid_until, sni, sni_length,
+                    alpn, alpn_length, ticket, ticket_length);
             if (stored == NULL) {
                 ret = PICOQUIC_ERROR_MEMORY;
-            } else {
+            }
+            else {
                 picoquic_stored_ticket_t* next;
                 picoquic_stored_ticket_t** pprevious;
 
-                stored->time_valid_until = time_valid_until;
-                stored->sni = next_p;
-                stored->sni_length = sni_length;
-                memcpy(next_p, sni, sni_length);
-                next_p += sni_length;
-                *next_p++ = 0;
-
-                stored->alpn = next_p;
-                stored->alpn_length = alpn_length;
-                memcpy(next_p, alpn, alpn_length);
-                next_p += alpn_length;
-                *next_p++ = 0;
-
-                stored->ticket = (uint8_t*)next_p;
-                stored->ticket_length = ticket_length;
-                memcpy(next_p, ticket, ticket_length);
 
                 stored->next_ticket = next = *pp_first_ticket;
                 *pp_first_ticket = stored;
@@ -152,13 +262,16 @@ int picoquic_save_tickets(picoquic_stored_ticket_t* first_ticket,
         /* Only store the tickets that are valid going forward */
         if (next->time_valid_until > current_time) {
             /* Compute the serialized size */
-            uint32_t record_size = sizeof(picoquic_stored_ticket_t)
-                - offsetof(struct st_picoquic_stored_ticket_t, time_valid_until) + next->sni_length + 1 + next->alpn_length + 1 + next->ticket_length;
-            char* record_start = ((char*)next) + offsetof(struct st_picoquic_stored_ticket_t, time_valid_until);
+            uint8_t buffer[2048];
+            size_t record_size;
 
-            if (fwrite(&record_size, 4, 1, F) != 1 || fwrite(record_start, 1, record_size, F) != record_size) {
-                ret = PICOQUIC_ERROR_INVALID_FILE;
-                break;
+            ret = picoquic_serialize_ticket(next, buffer, sizeof(buffer), &record_size);
+
+            if (ret == 0) {
+                if (fwrite(&record_size, 4, 1, F) != 1 || fwrite(buffer, 1, record_size, F) != record_size) {
+                    ret = PICOQUIC_ERROR_INVALID_FILE;
+                    break;
+                }
             }
         }
         next = next->next_ticket;
@@ -184,45 +297,59 @@ int picoquic_load_tickets(picoquic_stored_ticket_t** pp_first_ticket,
 #ifdef _WINDOWS
     errno_t err = fopen_s(&F, ticket_file_name, "rb");
     if (err != 0 || F == NULL) {
-        ret = -1;
+        ret = (err == ENOENT)? PICOQUIC_ERROR_NO_SUCH_FILE:-1;
     }
 #else
     F = fopen(ticket_file_name, "rb");
     if (F == NULL) {
-        ret = -1;
+        ret = (errno == ENOENT) ? PICOQUIC_ERROR_NO_SUCH_FILE : -1;
     }
 #endif
     while (ret == 0) {
         if (fread(&storage_size, 4, 1, F) != 1) {
             /* end of file */
             break;
-        } else {
+        }
+        else {
             record_size = storage_size + offsetof(struct st_picoquic_stored_ticket_t, time_valid_until);
-            next = (picoquic_stored_ticket_t*)malloc(record_size);
-
-            if (next == NULL) {
-                ret = PICOQUIC_ERROR_MEMORY;
+           
+            if (record_size > 2048) {
+                ret = PICOQUIC_ERROR_INVALID_FILE;
                 break;
-            } else {
-                if (fread(((char*)next) + offsetof(struct st_picoquic_stored_ticket_t, time_valid_until),
-                        1, storage_size, F)
+            }
+            else {
+                uint8_t buffer[2048];
+                if (fread(buffer, 1, storage_size, F)
                     != storage_size) {
                     ret = PICOQUIC_ERROR_INVALID_FILE;
-                    free(next);
-                } else if (next->time_valid_until < current_time) {
-                    free(next);
-                } else {
-                    next->sni = ((char*)next) + sizeof(picoquic_stored_ticket_t);
-                    next->alpn = next->sni + next->sni_length + 1;
-                    next->ticket = (uint8_t*)(next->alpn + next->alpn_length + 1);
-                    next->next_ticket = NULL;
-                    if (previous == NULL) {
-                        *pp_first_ticket = next;
-                    } else {
-                        previous->next_ticket = next;
+                }
+                else {
+                    size_t consumed = 0;
+                    ret = picoquic_deserialize_ticket(&next, buffer, storage_size, &consumed);
+
+                    if (ret == 0 && consumed != storage_size) {
+                        ret = PICOQUIC_ERROR_INVALID_FILE;
                     }
 
-                    previous = next;
+                    if (ret == 0) {
+                        if (next->time_valid_until < current_time) {
+                            free(next);
+                        }
+                        else {
+                            next->sni = ((char*)next) + sizeof(picoquic_stored_ticket_t);
+                            next->alpn = next->sni + next->sni_length + 1;
+                            next->ticket = (uint8_t*)(next->alpn + next->alpn_length + 1);
+                            next->next_ticket = NULL;
+                            if (previous == NULL) {
+                                *pp_first_ticket = next;
+                            }
+                            else {
+                                previous->next_ticket = next;
+                            }
+
+                            previous = next;
+                        }
+                    }
                 }
             }
         }
