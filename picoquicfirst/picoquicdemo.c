@@ -378,6 +378,7 @@ int quic_server(const char* server_name, int server_port,
     uint64_t current_time = 0;
     picoquic_stateless_packet_t* sp;
     int64_t delay_max = 10000000;
+    int nb_zero_delay_wait = 0;
 
     /* Open a UDP socket */
     ret = picoquic_open_server_sockets(&server_sockets, server_port);
@@ -410,6 +411,27 @@ int quic_server(const char* server_name, int server_port,
 
         if (just_once != 0 && delta_t > 10000 && cnx_server != NULL) {
             picoquic_log_congestion_state(stdout, cnx_server, current_time);
+        }
+
+        if (delta_t <= 0) {
+            if (nb_zero_delay_wait > 16) {
+                printf("After %d zero delay waits, reset wait to 1 second.\n",
+                    nb_zero_delay_wait);
+                if (cnx_server != NULL) {
+                    printf("%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_initial_cnxid(cnx_server)));
+                    picoquic_log_time(stdout, cnx_server, picoquic_current_time(), "", " : ");
+                    printf("state = %d\n",
+                        picoquic_get_cnx_state(picoquic_get_first_cnx(qserver)));
+                }
+                fflush(stdout);
+
+                nb_zero_delay_wait = 0;
+                delta_t = 1000000;
+            } else {
+                nb_zero_delay_wait++;
+            }
+        } else {
+            nb_zero_delay_wait = 0;
         }
 
         bytes_recv = picoquic_select(server_sockets.s_socket, PICOQUIC_NB_SERVER_SOCKETS,
