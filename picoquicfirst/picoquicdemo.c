@@ -433,7 +433,9 @@ int quic_server(const char* server_name, int server_port,
             ret = -1;
         } else {
             if (bytes_recv > 0) {
-                if (cnx_server != NULL && just_once != 0) {
+                if (cnx_server != NULL && (just_once != 0 || 
+                    cnx_server->cnx_state < picoquic_state_client_ready ||
+                    cnx_server->cnx_state >= picoquic_state_disconnecting)) {
                     picoquic_log_packet(stdout, qserver, cnx_server, (struct sockaddr*)&addr_from,
                         1, buffer, bytes_recv, current_time);
                 }
@@ -513,7 +515,9 @@ int quic_server(const char* server_name, int server_port,
                             struct sockaddr* local_addr;
 
                             if (p->length > 0) {
-                                if (just_once != 0) {
+                                if (just_once != 0 ||
+                                    cnx_next->cnx_state < picoquic_state_client_ready ||
+                                    cnx_next->cnx_state >= picoquic_state_disconnecting) {
                                     printf("%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_initial_cnxid(cnx_next)));
                                     printf("Connection state = %d\n",
                                         picoquic_get_cnx_state(cnx_next));
@@ -527,7 +531,9 @@ int quic_server(const char* server_name, int server_port,
                                     picoquic_get_local_if_index(cnx_next),
                                     (const char*)send_buffer, (int)send_length);
 
-                                if (cnx_server != NULL && just_once != 0 && cnx_next == cnx_server) {
+                                if (cnx_server != NULL && (just_once != 0 ||
+                                    cnx_next->cnx_state < picoquic_state_client_ready ||
+                                    cnx_next->cnx_state >= picoquic_state_disconnecting) && cnx_next == cnx_server) {
                                     picoquic_log_packet(stdout, qserver, cnx_server, (struct sockaddr*)peer_addr,
                                         0, send_buffer, send_length, current_time);
                                 }

@@ -1002,9 +1002,14 @@ int picoquic_incoming_encrypted(
 
     if (picoquic_compare_connection_id(&ph->dest_cnx_id, &cnx->local_cnxid) != 0) {
         ret = PICOQUIC_ERROR_CNXID_CHECK;
-    } else if (
-        cnx->cnx_state >= picoquic_state_client_almost_ready && cnx->cnx_state <= picoquic_state_closing) {
-        /* Check the possible reset before performaing in place AEAD decrypt */
+    } else if (cnx->cnx_state < picoquic_state_client_almost_ready) {
+        /* handshake is not complete. Just ignore the packet */
+        ret = PICOQUIC_ERROR_UNEXPECTED_PACKET;
+    } else if (cnx->cnx_state == picoquic_state_disconnected) {
+        /* Connection is disconnected. Just ignore the packet */
+        ret = PICOQUIC_ERROR_UNEXPECTED_PACKET;
+    } else {
+        /* Check the possible reset before performing in place AEAD decrypt */
         int cmp_reset_secret = memcmp(bytes + length - PICOQUIC_RESET_SECRET_SIZE,
                 cnx->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
 
@@ -1024,34 +1029,35 @@ int picoquic_incoming_encrypted(
             if (ph->pn64 > cnx->first_sack_item.end_of_sack_range) {
                 cnx->current_spin = ph->spin ^ cnx->client_mode;
             }
-            /* only look for closing frames in closing mode */
-            if (cnx->cnx_state == picoquic_state_closing) {
-                int closing_received = 0;
 
-                ret = picoquic_decode_closing_frames(
-                    bytes + ph->offset, decoded_length, &closing_received,
-                    picoquic_supported_versions[cnx->version_index].version);
+            /* Do not process data in closing or draining modes */
+            if (cnx->cnx_state >= picoquic_state_closing_received) {
+                /* only look for closing frames in closing modes */
+                if (cnx->cnx_state == picoquic_state_closing) {
+                    int closing_received = 0;
 
-                if (ret == 0) {
-                    if (closing_received) {
-                        if (cnx->client_mode) {
-                            cnx->cnx_state = picoquic_state_disconnected;
-                        } else {
-                            cnx->cnx_state = picoquic_state_draining;
+                    ret = picoquic_decode_closing_frames(
+                        bytes + ph->offset, decoded_length, &closing_received,
+                        picoquic_supported_versions[cnx->version_index].version);
+
+                    if (ret == 0) {
+                        if (closing_received) {
+                            if (cnx->client_mode) {
+                                cnx->cnx_state = picoquic_state_disconnected;
+                            }
+                            else {
+                                cnx->cnx_state = picoquic_state_draining;
+                            }
                         }
-                    } else {
-                        cnx->ack_needed = 1;
+                        else {
+                            cnx->ack_needed = 1;
+                        }
                     }
                 }
-            } else
-                /* all frames are ignored in draining mode, or after receiving a closing frame */
-                if (cnx->cnx_state == picoquic_state_draining || cnx->cnx_state == picoquic_state_closing_received) {
-            }
-            /* VN = 0 indicates "long" header encoding, which is now banned.
-             * The error is only generated if the packet can be properly
-             * decrypted. */
-            else if (ph->vn != 0) {
-                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION);
+                else {
+                    /* Just ignore the packets in closing received or draining mode */
+                    ret = PICOQUIC_ERROR_UNEXPECTED_PACKET;
+                }
             } else {
                 /* Compare the packet address to the current path value */
                 if (picoquic_compare_addr((struct sockaddr *)&cnx->path[0]->peer_addr, 
@@ -1086,9 +1092,6 @@ int picoquic_incoming_encrypted(
                 ret = picoquic_tlsinput_stream_zero(cnx);
             }
         }
-    } else {
-        /* Not expected. Log and ignore. */
-        ret = PICOQUIC_ERROR_UNEXPECTED_PACKET;
     }
 
     return ret;
