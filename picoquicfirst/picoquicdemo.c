@@ -378,7 +378,6 @@ int quic_server(const char* server_name, int server_port,
     uint64_t current_time = 0;
     picoquic_stateless_packet_t* sp;
     int64_t delay_max = 10000000;
-    int nb_zero_delay_wait = 0;
 
     /* Open a UDP socket */
     ret = picoquic_open_server_sockets(&server_sockets, server_port);
@@ -411,27 +410,6 @@ int quic_server(const char* server_name, int server_port,
 
         if (just_once != 0 && delta_t > 10000 && cnx_server != NULL) {
             picoquic_log_congestion_state(stdout, cnx_server, current_time);
-        }
-
-        if (delta_t <= 0) {
-            if (nb_zero_delay_wait > 16) {
-                printf("After %d zero delay waits, reset wait to 1 second.\n",
-                    nb_zero_delay_wait);
-                if (cnx_server != NULL) {
-                    printf("%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_initial_cnxid(cnx_server)));
-                    picoquic_log_time(stdout, cnx_server, picoquic_current_time(), "", " : ");
-                    printf("state = %d\n",
-                        picoquic_get_cnx_state(picoquic_get_first_cnx(qserver)));
-                }
-                fflush(stdout);
-
-                nb_zero_delay_wait = 0;
-                delta_t = 1000000;
-            } else {
-                nb_zero_delay_wait++;
-            }
-        } else {
-            nb_zero_delay_wait = 0;
         }
 
         bytes_recv = picoquic_select(server_sockets.s_socket, PICOQUIC_NB_SERVER_SOCKETS,
@@ -611,16 +589,6 @@ static const demo_stream_desc_t test_scenario[] = {
 };
 
 static const size_t test_scenario_nb = sizeof(test_scenario) / sizeof(demo_stream_desc_t);
-
-static const uint8_t test_ping[] = { picoquic_frame_type_ping, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 
 typedef struct st_picoquic_first_client_stream_ctx_t {
     struct st_picoquic_first_client_stream_ctx_t* next_stream;
@@ -856,6 +824,7 @@ int quic_client(const char* ip_address_text, int server_port, uint32_t proposed_
     int64_t delta_t = 0;
     int notified_ready = 0;
     const char* alpn = "hq-11";
+    int zero_rtt_available = 0;
 
     memset(&callback_ctx, 0, sizeof(picoquic_first_client_callback_ctx_t));
 
@@ -917,6 +886,17 @@ int quic_client(const char* ip_address_text, int server_port, uint32_t proposed_
                         send_buffer, sizeof(send_buffer), &send_length);
 
                     if (ret == 0 && send_length > 0) {
+
+                        if (picoquic_is_0rtt_available(cnx_client)) {
+                            /* Queue a simple frame to perform 0-RTT test */
+                            zero_rtt_available = 1;
+                            /* Start the download scenario */
+                            callback_ctx.demo_stream = test_scenario;
+                            callback_ctx.nb_demo_streams = test_scenario_nb;
+
+                            demo_client_start_streams(cnx_client, &callback_ctx, 0);
+                        }
+
                         bytes_sent = sendto(fd, send_buffer, (int)send_length, 0,
                             (struct sockaddr*)&server_address, server_addr_length);
 
@@ -924,11 +904,6 @@ int quic_client(const char* ip_address_text, int server_port, uint32_t proposed_
                         {
                             picoquic_log_packet(F_log, qclient, cnx_client, (struct sockaddr*)&server_address,
                                 0, send_buffer, bytes_sent, current_time);
-
-                            if (picoquic_is_0rtt_available(cnx_client)) {
-                                /* Queue a simple frame to perform 0-RTT test */
-                                picoquic_queue_misc_frame(cnx_client, test_ping, sizeof(test_ping));
-                            }
                         }
                         else {
                             fprintf(F_log, "Cannot send first packet to server, returns %d\n", bytes_sent);
@@ -1015,13 +990,14 @@ int quic_client(const char* ip_address_text, int server_port, uint32_t proposed_
                         picoquic_log_transport_extension(F_log, cnx_client, 0);
                         printf("Connection established.\n");
                         established = 1;
-#if 1
-                        /* Start the download scenario */
-                        callback_ctx.demo_stream = test_scenario;
-                        callback_ctx.nb_demo_streams = test_scenario_nb;
 
-                        demo_client_start_streams(cnx_client, &callback_ctx, 0);
-#endif
+                        if (zero_rtt_available == 0) {
+                            /* Start the download scenario */
+                            callback_ctx.demo_stream = test_scenario;
+                            callback_ctx.nb_demo_streams = test_scenario_nb;
+
+                            demo_client_start_streams(cnx_client, &callback_ctx, 0);
+                        }
                     }
 
                     client_ready_loop++;
