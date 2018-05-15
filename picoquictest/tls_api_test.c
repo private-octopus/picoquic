@@ -2907,7 +2907,7 @@ int nat_rebinding_test_one(uint64_t loss_mask_data)
 
     /* Prepare to send data */
     if (ret == 0) {
-        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_q_and_r, sizeof(test_scenario_mtu_discovery));
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_q_and_r, sizeof(test_scenario_q_and_r));
     }
 
     /* Perform a data sending loop */
@@ -3076,6 +3076,99 @@ int spin_bit_test()
                 spin_count, (int)test_ctx->cnx_client->path[0]->rtt_min, (int)spin_duration);
             ret = -1;
         }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+
+/*
+* Closing on error test. We voluntarily inject an erroneous
+* frame on the client connection. The expected result is that
+* the server connection gets closed, but the server remains
+* responsive.
+*/
+
+int client_error_test()
+{
+    uint64_t simulated_time = 0;
+    uint64_t next_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0);
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    /* Prepare to send data */
+    if (ret == 0) {
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_q_and_r, sizeof(test_scenario_q_and_r));
+    }
+
+    /* Perform a data sending loop */
+    if (ret == 0) {
+        ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 0);
+    }
+
+    /* Inject an erroneous frame */
+    if (ret == 0) {
+        /* Queue a data frame on stream 4, which was already closed */
+        uint8_t stream_error_frame[] = { 0x17, 0x04, 0x41, 0x01, 0x08, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 };
+        picoquic_queue_misc_frame(test_ctx->cnx_client, stream_error_frame, sizeof(stream_error_frame));
+    }
+
+    /* Add a time loop of 3 seconds to give some time for the error to be repeated */
+    next_time = simulated_time + 3000000;
+    loss_mask = 0;
+    while (ret == 0 && simulated_time < next_time
+        && (test_ctx->cnx_client->cnx_state < picoquic_state_disconnected ||
+            test_ctx->cnx_server->cnx_state < picoquic_state_disconnected)) {
+        int was_active = 0;
+
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, &was_active);
+    }
+
+    if (test_ctx->cnx_server->cnx_state != picoquic_state_disconnected) {
+        ret = -1;
+    }
+
+    /* Delete the client connection from the client context,
+     * without sending notification to the server */
+
+    while (test_ctx->qclient->cnx_list != NULL) {
+        picoquic_delete_cnx(test_ctx->qclient->cnx_list);
+    }
+
+    /* Erase the server connection reference */
+    test_ctx->cnx_server = NULL;
+
+    /* Create a new connection in the client context */
+
+    test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
+        picoquic_null_connection_id, picoquic_null_connection_id,
+        (struct sockaddr*)&test_ctx->server_addr, simulated_time, 0, NULL, "test-alpn", 1);
+
+    if (test_ctx->cnx_client == NULL) {
+        ret = -1;
+    }
+    else {
+        ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+    }
+
+    /* Now, restart a connection in the same context */
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    if (ret == 0) {
+        ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
     }
 
     if (test_ctx != NULL) {
