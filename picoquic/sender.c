@@ -1119,7 +1119,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
         /* document the send time & overhead */
         packet->send_time = current_time;
         packet->checksum_overhead = checksum_overhead;
-    } else if (ret == 0 && is_cleartext_mode && stream == NULL) {
+    } else if (ret == 0 && is_cleartext_mode && stream == NULL && cnx->first_misc_frame == NULL) {
         /* when in a clear text mode, only send packets if there is
         * actually something to send, or resend */
 
@@ -1132,7 +1132,8 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
         packet->send_time = current_time;
         packet->send_path = path_x;
 
-        if (((stream == NULL) || path_x->cwin <= path_x->bytes_in_transit) && (cnx->cnx_state == picoquic_state_client_almost_ready || picoquic_is_ack_needed(cnx, current_time) == 0)) {
+        if (((stream == NULL) || path_x->cwin <= path_x->bytes_in_transit) && (cnx->cnx_state == picoquic_state_client_almost_ready || picoquic_is_ack_needed(cnx, current_time) == 0)
+            && cnx->first_misc_frame == NULL) {
             length = 0;
         } else {
             if (cnx->cnx_state != picoquic_state_client_almost_ready) {
@@ -1142,6 +1143,21 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                     length += (uint32_t) data_bytes;
                 } else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
                     ret = 0;
+                }
+            }
+
+            /* If present, send misc frame */
+            while (cnx->first_misc_frame != NULL) {
+                ret = picoquic_prepare_first_misc_frame(cnx, &bytes[length],
+                    path_x->send_mtu - checksum_overhead - length, &data_bytes);
+                if (ret == 0) {
+                    length += (uint32_t)data_bytes;
+                }
+                else {
+                    if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
+                        ret = 0;
+                    }
+                    break;
                 }
             }
 

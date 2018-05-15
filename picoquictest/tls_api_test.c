@@ -1777,9 +1777,10 @@ int zero_rtt_test()
             }
 
             /* Queue an initial frame on the client connection */
-            uint8_t ping_frame[2] = { picoquic_frame_type_ping, 0 };
-
-            picoquic_queue_misc_frame(test_ctx->cnx_client, ping_frame, 2);
+            if (ret == 0) {
+                uint8_t test_data[4] = { 't', 'e', 's', 't' };
+                (void)picoquic_add_to_stream(test_ctx->cnx_client, 4, test_data, sizeof(test_data), 1);
+            }
         }
 
         if (ret == 0) {

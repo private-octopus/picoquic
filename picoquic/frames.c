@@ -2003,7 +2003,10 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
                 bytes_max - byte_index, &consumed, current_time, restricted);
             byte_index += consumed;
         } else {
-            if (restricted && first_byte != picoquic_frame_type_padding && first_byte != picoquic_frame_type_connection_close) {
+            if (restricted && first_byte != picoquic_frame_type_padding 
+                && first_byte != picoquic_frame_type_path_challenge
+                && first_byte != picoquic_frame_type_path_response
+                && first_byte != picoquic_frame_type_connection_close) {
                 ret = picoquic_connection_error(cnx,
                     PICOQUIC_TRANSPORT_FRAME_ERROR(first_byte));
             } else {
