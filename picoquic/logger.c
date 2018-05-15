@@ -905,11 +905,15 @@ size_t  picoquic_decrypt_log_packet(FILE* F, picoquic_cnx_t* cnx,
     * If needed, decrypt the packet number, in place.
     */
     size_t decoded = length + 32;
-    uint8_t header_buffer[32];
+    uint8_t header_buffer[128];
 
     if (aead_context == NULL)
     {
         fprintf(F, "    No decryption key available.\n");
+        return decoded;
+    }
+    else if (ph->offset > sizeof(header_buffer)) {
+        fprintf(F, "    Header too long (%d bytes).\n", (int)ph->offset);
         return decoded;
     }
 
