@@ -887,7 +887,7 @@ int quic_client(const char* ip_address_text, int server_port, uint32_t proposed_
 
                     if (ret == 0 && send_length > 0) {
 
-                        if (picoquic_is_0rtt_available(cnx_client)) {
+                        if (picoquic_is_0rtt_available(cnx_client) && (proposed_version&0x0a0a0a0a) != 0x0a0a0a0a) {
                             /* Queue a simple frame to perform 0-RTT test */
                             zero_rtt_available = 1;
                             /* Start the download scenario */
