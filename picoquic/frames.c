@@ -1188,7 +1188,7 @@ void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t* cnx, picoquic_pa
 
     /* Get the packet type */
     ret = picoquic_parse_packet_header(cnx->quic, p->bytes,
-        (uint32_t)p->length + p->checksum_overhead, NULL, &ph, &pcnx);
+        (uint32_t)p->length + p->checksum_overhead, NULL, &ph, &pcnx, 0);
 
     if (ret == 0 && ph.ptype == picoquic_packet_0rtt_protected) {
         cnx->nb_zero_rtt_acked++;

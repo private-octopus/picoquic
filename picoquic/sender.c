@@ -561,7 +561,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx, picoquic_path_t * path_x, ui
             *header_length = 0;
             /* Get the packet type */
             ret = picoquic_parse_packet_header(cnx->quic, p->bytes, 
-                (uint32_t)p->length + p->checksum_overhead, NULL, &ph, &pcnx);
+                (uint32_t)p->length + p->checksum_overhead, NULL, &ph, &pcnx, 0);
 
             if (ph.ptype == picoquic_packet_0rtt_protected) {
                 if (cnx->cnx_state < picoquic_state_client_ready && cnx->client_mode) {
@@ -710,7 +710,7 @@ int picoquic_is_cnx_backlog_empty(picoquic_cnx_t* cnx)
         picoquic_cnx_t* pcnx = cnx;
 
         /* Get the packet type */
-        ret = picoquic_parse_packet_header(cnx->quic, p->bytes, (uint32_t)p->length, NULL, &ph, &pcnx);
+        ret = picoquic_parse_packet_header(cnx->quic, p->bytes, (uint32_t)p->length, NULL, &ph, &pcnx, 0);
 
         /* Copy the relevant bytes from one packet to the next */
         byte_index = ph.offset;
@@ -820,7 +820,7 @@ static void picoquic_cnx_set_next_wake_time_init(picoquic_cnx_t* cnx, uint64_t c
             picoquic_cnx_t* pcnx = cnx;
 
             /* Get the packet type */
-            ret = picoquic_parse_packet_header(cnx->quic, p->bytes, (uint32_t)p->length, NULL, &ph, &pcnx);
+            ret = picoquic_parse_packet_header(cnx->quic, p->bytes, (uint32_t)p->length, NULL, &ph, &pcnx, 0);
 
             if (ret == 0 && ph.ptype < picoquic_packet_0rtt_protected)
             {

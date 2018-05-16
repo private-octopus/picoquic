@@ -44,7 +44,8 @@ int picoquic_parse_packet_header(
     uint32_t length,
     struct sockaddr* addr_from,
     picoquic_packet_header* ph,
-    picoquic_cnx_t** pcnx)
+    picoquic_cnx_t** pcnx,
+    int receiving)
 {
     int ret = 0;
 
@@ -179,10 +180,11 @@ int picoquic_parse_packet_header(
         /* If this is a short header, it should be possible to retrieve the connection
          * context. This depends on whether the quic context requires cnx_id or not.
          */
+         uint8_t cnxid_length = (receiving == 0 && *pcnx != NULL) ? (*pcnx)->remote_cnxid.id_len : quic->local_ctx_length;
 
-         if ((int)length >= 1 + quic->local_ctx_length) {
+         if ((int)length >= 1 + cnxid_length) {
              /* We can identify the connection by its ID */
-             ph->offset = (uint32_t)( 1 + picoquic_parse_connection_id(bytes + 1, quic->local_ctx_length, &ph->dest_cnx_id));
+             ph->offset = (uint32_t)( 1 + picoquic_parse_connection_id(bytes + 1, cnxid_length, &ph->dest_cnx_id));
              /* TODO: should consider using combination of CNX ID and ADDR_FROM */
              if (*pcnx == NULL)
              {
@@ -1117,7 +1119,7 @@ int picoquic_incoming_segment(
     picoquic_packet_header ph;
 
     /* Parse the clear text header. Ret == 0 means an incorrect packet that could not be parsed */
-    ret = picoquic_parse_packet_header(quic, bytes, length, addr_from, &ph, &cnx);
+    ret = picoquic_parse_packet_header(quic, bytes, length, addr_from, &ph, &cnx, 1);
 
     if (ret == 0) {
         length = ph.offset + ph.payload_length;

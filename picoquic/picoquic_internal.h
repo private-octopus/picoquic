@@ -549,7 +549,8 @@ int picoquic_parse_packet_header(
     uint32_t length,
     struct sockaddr* addr_from,
     picoquic_packet_header* ph,
-    picoquic_cnx_t** pcnx);
+    picoquic_cnx_t** pcnx,
+    int receiving);
 
 uint32_t picoquic_create_packet_header(
     picoquic_cnx_t* cnx,

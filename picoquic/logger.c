@@ -1088,7 +1088,7 @@ size_t picoquic_log_segment(FILE* F, picoquic_quic_t* quic, picoquic_cnx_t* cnx,
     picoquic_log_packet_address(F, cnx, addr_peer, receiving, length, current_time);
 
     /* Parse the clear text header */
-    ret = picoquic_parse_packet_header(quic, bytes, (uint32_t)length, NULL, &ph, &pcnx);
+    ret = picoquic_parse_packet_header(quic, bytes, (uint32_t)length, NULL, &ph, &pcnx, receiving);
 
     if (ret != 0) {
         /* packet does not even parse */

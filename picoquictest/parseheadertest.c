@@ -325,7 +325,7 @@ int parseheadertest()
         memcpy(packet, test_entries[i].packet, (uint32_t)test_entries[i].length);
 
         if (picoquic_parse_packet_header(quic, packet, sizeof(packet),
-                (struct sockaddr*)&addr_10, &ph, &pcnx)
+                (struct sockaddr*)&addr_10, &ph, &pcnx, 1)
             != 0) {
             ret = -1;
         } else if (picoquic_compare_connection_id(&ph.dest_cnx_id, &test_entries[i].ph->dest_cnx_id) != 0) {
