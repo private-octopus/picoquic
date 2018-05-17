@@ -469,7 +469,7 @@ void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet *
  */
 
 static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t* cnx,
-    picoquic_packet* p, uint64_t current_time, int* timer_based)
+    picoquic_packet* p, uint64_t current_time, picoquic_packet_header * ph, int* timer_based)
 {
     int64_t delta_seq = cnx->highest_acknowledged - p->sequence_number;
     int should_retransmit = 0;
@@ -484,7 +484,7 @@ static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t* cnx,
         int64_t delta_t = cnx->latest_time_acknowledged - p->send_time;
 
         /* TODO: out of order delivery time ought to be dynamic */
-        if (delta_t > 10000) {
+        if (delta_t > 10000 && ph->ptype != picoquic_packet_0rtt_protected) {
             /*
              * RACK logic.
              * The latest acknowledged was sent more than X ms after this one.
@@ -533,20 +533,35 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx, picoquic_path_t * path_x, ui
         int timer_based_retransmit = 0;
         uint64_t lost_packet_number = p->sequence_number;
         picoquic_packet* p_next = p->next_packet;
+        picoquic_packet_header ph;
+        int ret = 0;
+        picoquic_cnx_t* pcnx = cnx;
 
         length = 0;
-
-        should_retransmit = picoquic_retransmit_needed_by_packet(cnx, p, current_time, &timer_based_retransmit);
+        /* Get the packet type */
+        ret = picoquic_parse_packet_header(cnx->quic, p->bytes,
+            (uint32_t)p->length + p->checksum_overhead, NULL, &ph, &pcnx, 0);
+        if (ret == 0) {
+            should_retransmit = picoquic_retransmit_needed_by_packet(cnx, p, current_time, &ph, &timer_based_retransmit);
+        }
+        else {
+            /* Invalid packet in retransmit queue! */
+            DBG_PRINTF("Invalid packet in retransmit queue, seq = %d\n", (int)p->sequence_number);
+        }
 
         if (should_retransmit == 0) {
             /*
              * Always retransmit in order. If not this one, then nothing.
+             * But make an exception for 0-RTT packets.
              */
-            break;
+            if (ph.ptype == picoquic_packet_0rtt_protected) {
+                p = p_next;
+                continue;
+            } else {
+                break;
+            }
         } else {
             /* check if this is an ACK only packet */
-            picoquic_packet_header ph;
-            int ret = 0;
             int packet_is_pure_ack = 1;
             int do_not_detect_spurious = 1;
             int frame_is_pure_ack = 0;
@@ -554,14 +569,10 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx, picoquic_path_t * path_x, ui
             size_t frame_length = 0;
             size_t byte_index = 0; /* Used when parsing the old packet */
             size_t checksum_length = 0;
-            picoquic_cnx_t* pcnx = cnx;
             /* TODO: should be the path on which the packet was transmitted */
             picoquic_path_t * old_path = p->send_path;
 
             *header_length = 0;
-            /* Get the packet type */
-            ret = picoquic_parse_packet_header(cnx->quic, p->bytes, 
-                (uint32_t)p->length + p->checksum_overhead, NULL, &ph, &pcnx, 0);
 
             if (ph.ptype == picoquic_packet_0rtt_protected) {
                 if (cnx->cnx_state < picoquic_state_client_ready && cnx->client_mode) {
@@ -824,7 +835,7 @@ static void picoquic_cnx_set_next_wake_time_init(picoquic_cnx_t* cnx, uint64_t c
 
             if (ret == 0 && ph.ptype < picoquic_packet_0rtt_protected)
             {
-                if (picoquic_retransmit_needed_by_packet(cnx, p, current_time, &timer_based)) {
+                if (picoquic_retransmit_needed_by_packet(cnx, p, current_time, &ph, &timer_based)) {
                     blocked = 0;
                 }
                 break;
@@ -909,6 +920,15 @@ void picoquic_cnx_set_next_wake_time(picoquic_cnx_t* cnx, uint64_t current_time)
     int blocked = 1;
     int pacing = 0;
     picoquic_path_t * path_x = cnx->path[0];
+    picoquic_packet_header ph;
+    int ret = 0;
+    picoquic_cnx_t* pcnx = cnx;
+
+    /* Get the packet type */
+    if (p != NULL) {
+        ret = picoquic_parse_packet_header(cnx->quic, p->bytes,
+            (uint32_t)p->length + p->checksum_overhead, NULL, &ph, &pcnx, 0);
+    }
 
     if (cnx->cnx_state < picoquic_state_client_ready)
     {
@@ -918,7 +938,7 @@ void picoquic_cnx_set_next_wake_time(picoquic_cnx_t* cnx, uint64_t current_time)
 
     if (cnx->cnx_state == picoquic_state_disconnecting || cnx->cnx_state == picoquic_state_handshake_failure || cnx->cnx_state == picoquic_state_closing_received) {
         blocked = 0;
-    } else if (p != NULL && picoquic_retransmit_needed_by_packet(cnx, p, current_time, &timer_based)) {
+    } else if (p != NULL && ret == 0 && picoquic_retransmit_needed_by_packet(cnx, p, current_time, &ph, &timer_based)) {
         blocked = 0;
     } else if (picoquic_is_ack_needed(cnx, current_time)) {
         blocked = 0;
