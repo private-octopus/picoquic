@@ -85,4 +85,6 @@ int picoquic_enable_custom_verify_certificate_callback(picoquic_quic_t* quic);
 
 void picoquic_tls_set_client_authentication(picoquic_quic_t* quic, int client_authentication);
 
+int picoquic_does_ticket_allow_early_data(uint8_t* ticket, uint16_t ticket_length);
+
 #endif /* TLS_API_H */

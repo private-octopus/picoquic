@@ -110,6 +110,8 @@ static const char* bad_request_message = "<html><head><title>Bad Request</title>
 #include "../picoquic/picosocks.h"
 #include "../picoquic/util.h"
 
+int picoquic_does_ticket_allow_early_data(uint8_t* ticket, uint16_t ticket_length);
+
 void picoquic_log_error_packet(FILE* F, uint8_t* bytes, size_t bytes_max, int ret);
 
 void picoquic_log_packet(FILE* F, picoquic_quic_t* quic, picoquic_cnx_t* cnx,
@@ -888,13 +890,21 @@ int quic_client(const char* ip_address_text, int server_port, uint32_t proposed_
                     if (ret == 0 && send_length > 0) {
 
                         if (picoquic_is_0rtt_available(cnx_client) && (proposed_version&0x0a0a0a0a) != 0x0a0a0a0a) {
-                            /* Queue a simple frame to perform 0-RTT test */
-                            zero_rtt_available = 1;
-                            /* Start the download scenario */
-                            callback_ctx.demo_stream = test_scenario;
-                            callback_ctx.nb_demo_streams = test_scenario_nb;
+                            uint8_t* ticket;
+                            uint16_t ticket_length;
 
-                            demo_client_start_streams(cnx_client, &callback_ctx, 0);
+                            if (sni != NULL && 0 == picoquic_get_ticket(qclient->p_first_ticket, current_time, sni, (uint16_t)strlen(sni), alpn, (uint16_t)strlen(alpn), &ticket, &ticket_length)) {
+                                zero_rtt_available = picoquic_does_ticket_allow_early_data(ticket, ticket_length);
+                            }
+
+                            if (zero_rtt_available) {
+                                /* Queue a simple frame to perform 0-RTT test */
+                                /* Start the download scenario */
+                                callback_ctx.demo_stream = test_scenario;
+                                callback_ctx.nb_demo_streams = test_scenario_nb;
+
+                                demo_client_start_streams(cnx_client, &callback_ctx, 0);
+                            }
                         }
 
                         bytes_sent = sendto(fd, send_buffer, (int)send_length, 0,
