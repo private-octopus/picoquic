@@ -323,6 +323,10 @@ unsigned long picoquic_get_local_if_index(picoquic_cnx_t* cnx);
 picoquic_connection_id_t picoquic_get_local_cnxid(picoquic_cnx_t* cnx);
 picoquic_connection_id_t picoquic_get_remote_cnxid(picoquic_cnx_t* cnx);
 picoquic_connection_id_t picoquic_get_initial_cnxid(picoquic_cnx_t* cnx);
+picoquic_connection_id_t picoquic_get_client_cnxid(picoquic_cnx_t* cnx);
+picoquic_connection_id_t picoquic_get_server_cnxid(picoquic_cnx_t* cnx);
+picoquic_connection_id_t picoquic_get_logging_cnxid(picoquic_cnx_t* cnx);
+
 uint64_t picoquic_get_cnx_start_time(picoquic_cnx_t* cnx);
 uint64_t picoquic_is_0rtt_available(picoquic_cnx_t* cnx);
 

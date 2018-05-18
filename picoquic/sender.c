@@ -484,7 +484,7 @@ static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t* cnx,
         int64_t delta_t = cnx->latest_time_acknowledged - p->send_time;
 
         /* TODO: out of order delivery time ought to be dynamic */
-        if (delta_t > 10000 && ph->ptype != picoquic_packet_0rtt_protected) {
+        if (delta_t > PICOQUIC_RACK_DELAY && ph->ptype != picoquic_packet_0rtt_protected) {
             /*
              * RACK logic.
              * The latest acknowledged was sent more than X ms after this one.
@@ -884,11 +884,14 @@ static void picoquic_cnx_set_next_wake_time_init(picoquic_cnx_t* cnx, uint64_t c
                     next_time = current_time;
                 }
             }
-            /* Consider delayed RACK */
+
             if (p != NULL) {
-                if (cnx->latest_time_acknowledged > p->send_time && p->send_time + path_x->max_ack_delay < next_time) {
-                    next_time = p->send_time + path_x->max_ack_delay;
+#if 0
+                if (ph.ptype != picoquic_packet_0rtt_protected &&
+                    cnx->latest_time_acknowledged > p->send_time && p->send_time + PICOQUIC_RACK_DELAY < next_time) {
+                    next_time = p->send_time + PICOQUIC_RACK_DELAY;
                 }
+#endif
                 if (cnx->nb_retransmit == 0) {
                     if (p->send_time + path_x->retransmit_timer < next_time) {
                         next_time = p->send_time + path_x->retransmit_timer;
@@ -900,6 +903,7 @@ static void picoquic_cnx_set_next_wake_time_init(picoquic_cnx_t* cnx, uint64_t c
                     }
                 }
             }
+
         }
     }
 
@@ -920,6 +924,7 @@ void picoquic_cnx_set_next_wake_time(picoquic_cnx_t* cnx, uint64_t current_time)
     int blocked = 1;
     int pacing = 0;
     picoquic_path_t * path_x = cnx->path[0];
+    picoquic_packet_type_enum ptype = 0;
     picoquic_packet_header ph;
     int ret = 0;
     picoquic_cnx_t* pcnx = cnx;
@@ -928,6 +933,7 @@ void picoquic_cnx_set_next_wake_time(picoquic_cnx_t* cnx, uint64_t current_time)
     if (p != NULL) {
         ret = picoquic_parse_packet_header(cnx->quic, p->bytes,
             (uint32_t)p->length + p->checksum_overhead, NULL, &ph, &pcnx, 0);
+        ptype = ph.ptype;
     }
 
     if (cnx->cnx_state < picoquic_state_client_ready)
@@ -976,16 +982,14 @@ void picoquic_cnx_set_next_wake_time(picoquic_cnx_t* cnx, uint64_t current_time)
                 if (next_time > next_challenge_time) {
                     next_time = next_challenge_time;
                 }
-                else {
-                    next_time = current_time;
-                }
             }
         }
 
         /* Consider delayed RACK */
         if (p != NULL) {
-            if (cnx->latest_time_acknowledged > p->send_time && p->send_time + path_x->max_ack_delay < next_time) {
-                next_time = p->send_time + path_x->max_ack_delay;
+            if (cnx->latest_time_acknowledged > p->send_time && p->send_time + PICOQUIC_RACK_DELAY < next_time
+                && ptype != picoquic_packet_0rtt_protected) {
+                next_time = p->send_time + PICOQUIC_RACK_DELAY;
             }
 
             if (cnx->nb_retransmit == 0) {

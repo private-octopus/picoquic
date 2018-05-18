@@ -316,7 +316,7 @@ int skip_frame_test()
     return ret;
 }
 
-void picoquic_log_frames(FILE* F, uint8_t* bytes, size_t length, uint32_t version);
+void picoquic_log_frames(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t length);
 
 static char const* log_test_file = "log_test.txt";
 static char const* log_fuzz_test_file = "log_fuzz_test.txt";
@@ -444,8 +444,7 @@ int logger_test()
 #endif
 
     for (size_t i = 0; i < nb_test_skip_list; i++) {
-        picoquic_log_frames(F, test_skip_list[i].val, test_skip_list[i].len,
-            PICOQUIC_INTERNAL_TEST_VERSION_1);
+        picoquic_log_frames(F, 0, test_skip_list[i].val, test_skip_list[i].len);
     }
 
     fclose(F);
@@ -474,7 +473,7 @@ int logger_test()
         }
 #endif
         ret &= fprintf(F, "Log packet test #%d\n", (int)i);
-        picoquic_log_frames(F, buffer, bytes_max, PICOQUIC_INTERNAL_TEST_VERSION_1);
+        picoquic_log_frames(F, 0, buffer, bytes_max);
         fclose(F);
 
 #ifdef _WINDOWS
@@ -525,14 +524,14 @@ int logger_test()
         }
 #endif
         ret &= fprintf(F, "Log fuzz test #%d\n", (int)i);
-        picoquic_log_frames(F, buffer, bytes_max, PICOQUIC_INTERNAL_TEST_VERSION_1);
+        picoquic_log_frames(F, 0, buffer, bytes_max);
 
         /* Attempt to log fuzzed packets, and hope nothing crashes */
         for (size_t j = 0; j < 100; j++) {
             ret &= fprintf(F, "Log fuzz test #%d, packet %d\n", (int)i, (int)j);
             fflush(F);
             skip_test_fuzz_packet(fuzz_buffer, buffer, bytes_max, &random_context);
-            picoquic_log_frames(F, fuzz_buffer, bytes_max, PICOQUIC_INTERNAL_TEST_VERSION_1);
+            picoquic_log_frames(F, 0, fuzz_buffer, bytes_max);
         }
         fclose(F);
         F = NULL;
