@@ -480,7 +480,7 @@ int quic_server(const char* server_name, int server_port,
                 uint64_t loop_time = current_time;
 
                 while ((sp = picoquic_dequeue_stateless_packet(qserver)) != NULL) {
-                    int sent = picoquic_send_through_server_sockets(&server_sockets,
+                    (void) picoquic_send_through_server_sockets(&server_sockets,
                         (struct sockaddr*)&sp->addr_to,
                         (sp->addr_to.ss_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6),
                         (struct sockaddr*)&sp->addr_local,
