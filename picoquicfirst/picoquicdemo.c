@@ -446,6 +446,11 @@ int quic_server(const char* server_name, int server_port,
                     picoquic_log_packet(stdout, 1, qserver, cnx_server, (struct sockaddr*)&addr_from,
                         1, buffer, bytes_recv, current_time);
                 }
+                else if (cnx_server == NULL) {
+                    /* Packet arrives out of connection context, should be logged */
+                    picoquic_log_packet(stdout, 1, qserver, NULL, (struct sockaddr*)&addr_from,
+                        1, buffer, bytes_recv, current_time);
+                }
 
                 /* Submit the packet to the server */
                 ret = picoquic_incoming_packet(qserver, buffer,
@@ -483,7 +488,10 @@ int quic_server(const char* server_name, int server_port,
                         sp->if_index_local,
                         (const char*)sp->bytes, (int)sp->length);
 
-                    printf("Sending stateless packet, %d bytes\n", sent);
+                    picoquic_log_packet(stdout, 1, qserver, NULL, (struct sockaddr*)&addr_to,
+                        0, sp->bytes, (int)sp->length, current_time);
+                    fflush(stdout);
+
                     picoquic_delete_stateless_packet(sp);
                 }
 

@@ -906,21 +906,7 @@ picoquic_connection_id_t picoquic_get_server_cnxid(picoquic_cnx_t* cnx)
 
 picoquic_connection_id_t picoquic_get_logging_cnxid(picoquic_cnx_t* cnx)
 {
-    if (cnx->client_mode) {
-        if (cnx->local_cnxid.id_len == 0) {
-            return cnx->initial_cnxid;
-        }
-        else {
-            return cnx->local_cnxid;
-        }
-    } else {
-        if (cnx->remote_cnxid.id_len == 0) {
-            return cnx->initial_cnxid;
-        }
-        else {
-            return cnx->remote_cnxid;
-        }
-    }
+    return cnx->initial_cnxid;
 }
 
 uint64_t picoquic_get_cnx_start_time(picoquic_cnx_t* cnx)

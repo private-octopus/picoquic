@@ -86,15 +86,15 @@ const char * picoquic_log_fin_or_event_name(picoquic_call_back_event_t ev)
     return text;
 }
 
-void picoquic_log_packet_address(FILE* F, int log_cnxid, picoquic_cnx_t* cnx,
+void picoquic_log_packet_address(FILE* F, uint64_t log_cnxid64, picoquic_cnx_t* cnx,
     struct sockaddr* addr_peer, int receiving, size_t length, uint64_t current_time)
 {
     uint64_t delta_t = 0;
     uint64_t time_sec = 0;
     uint32_t time_usec = 0;
 
-    if (log_cnxid != 0) {
-        fprintf(F, "%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
+    if (log_cnxid64 != 0) {
+        fprintf(F, "%" PRIx64 ": ", log_cnxid64);
     }
 
     fprintf(F, (receiving) ? "Receiving %d bytes from " : "Sending %d bytes to ",
@@ -314,13 +314,10 @@ void picoquic_log_connection_id(FILE* F, picoquic_connection_id_t * cid)
     fprintf(F, ">");
 }
 
-void picoquic_log_packet_header(FILE* F, int log_cnxid, picoquic_cnx_t* cnx, picoquic_packet_header* ph)
+void picoquic_log_packet_header(FILE* F, uint64_t log_cnxid64, picoquic_packet_header* ph)
 {
-#ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(cnx);
-#endif
-    if (log_cnxid != 0) {
-        fprintf(F, "%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
+    if (log_cnxid64 != 0) {
+        fprintf(F, "%" PRIx64 ": ", log_cnxid64);
     }
 
     fprintf(F, "    Type: %d (%s), ",
@@ -341,6 +338,7 @@ void picoquic_log_packet_header(FILE* F, int log_cnxid, picoquic_cnx_t* cnx, pic
         fprintf(F, ", ");
         picoquic_log_connection_id(F, &ph->srce_cnx_id);
         fprintf(F, "\n");
+        break;
     default:
         /* Long packets. Log Vnum, both CID, Seq num, Paylod length */
         fprintf(F, "Version %x, ", ph->vn);
@@ -352,15 +350,14 @@ void picoquic_log_packet_header(FILE* F, int log_cnxid, picoquic_cnx_t* cnx, pic
     }
 }
 
-void picoquic_log_negotiation_packet(FILE* F, int log_cnxid,
+void picoquic_log_negotiation_packet(FILE* F, uint64_t log_cnxid64,
     uint8_t* bytes, size_t length, picoquic_packet_header* ph)
 {
     size_t byte_index = ph->offset;
     uint32_t vn = 0;
 
-    if (log_cnxid != 0) {
-        fprintf(F, "%" PRIx64 ": ", picoquic_val64_connection_id(
-            (ph->dest_cnx_id.id_len == 0)?ph->srce_cnx_id:ph->dest_cnx_id));
+    if (log_cnxid64 != 0) {
+        fprintf(F, "%" PRIx64 ": ", log_cnxid64);
     }
 
     fprintf(F, "    versions: ");
@@ -1137,23 +1134,45 @@ size_t picoquic_log_segment(FILE* F, int log_cnxid, picoquic_quic_t* quic, picoq
     picoquic_packet_header ph;
     picoquic_cnx_t* pcnx = cnx;
     size_t consumed = length;
+    uint64_t log_cnxid64 = 0;
 
-    /* first log line */
-    picoquic_log_packet_address(F, log_cnxid, cnx, addr_peer, receiving, length, current_time);
 
     /* Parse the clear text header */
-    ret = picoquic_parse_packet_header(quic, bytes, (uint32_t)length, NULL, &ph, &pcnx, receiving);
+    ret = picoquic_parse_packet_header(quic, bytes, (uint32_t)length, addr_peer, &ph, &pcnx, receiving);
+
+    if (log_cnxid != 0) {
+        if (pcnx == NULL) {
+            ph.pn64 = ph.pn;
+            if (ret == 0) {
+                if (ph.ptype == picoquic_packet_version_negotiation) {
+                    log_cnxid64 = picoquic_val64_connection_id(ph.srce_cnx_id);
+                } else {
+                    log_cnxid64 = picoquic_val64_connection_id(ph.dest_cnx_id);
+                }
+            }
+        } else {
+            log_cnxid64 = picoquic_val64_connection_id(picoquic_get_logging_cnxid(pcnx));
+
+            ph.pn64 = picoquic_get_packet_number64(
+                (receiving == 0) ? pcnx->send_sequence : pcnx->first_sack_item.end_of_sack_range,
+                ph.pnmask, ph.pn);
+        }
+    }
+
+    /* first log line */
+    picoquic_log_packet_address(F, log_cnxid64, pcnx, addr_peer, receiving, length, current_time);
 
     if (ret != 0) {
         /* packet does not even parse */
-        if (log_cnxid != 0) {
-            fprintf(F, "%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
+        if (log_cnxid64 != 0) {
+            fprintf(F, "%" PRIx64 ": ", log_cnxid64);
         }
         fprintf(F, "   Cannot parse the packet header.\n");
-    } else {
+    }
+    else {
         consumed = ph.offset + ph.payload_length;
         length = consumed;
-
+#if 0
         if (cnx == NULL && !picoquic_is_connection_id_null(ph.dest_cnx_id)) {
             cnx = picoquic_cnx_by_id(quic, ph.dest_cnx_id);
         }
@@ -1162,39 +1181,48 @@ size_t picoquic_log_segment(FILE* F, int log_cnxid, picoquic_quic_t* quic, picoq
             cnx = picoquic_cnx_by_net(quic, addr_peer);
         }
 
-        if (cnx != NULL) {
+        if (pcnx != NULL) {
             ph.pn64 = picoquic_get_packet_number64(
-                (receiving == 0) ? cnx->send_sequence : cnx->first_sack_item.end_of_sack_range,
+                (receiving == 0) ? pcnx->send_sequence : pcnx->first_sack_item.end_of_sack_range,
                 ph.pnmask, ph.pn);
-        } else {
+        }
+        else {
             ph.pn64 = ph.pn;
         }
+#endif
+        picoquic_log_packet_header(F, log_cnxid64, &ph);
 
-        picoquic_log_packet_header(F, log_cnxid, cnx, &ph);
-
-        switch (ph.ptype) {
-        case picoquic_packet_version_negotiation:
-            /* log version negotiation */
-            picoquic_log_negotiation_packet(F, log_cnxid, bytes, length, &ph);
-            break;
-        case picoquic_packet_server_stateless:
-        case picoquic_packet_client_initial:
-        case picoquic_packet_handshake:
-            if (cnx != NULL) {
-                picoquic_log_decrypt_encrypted_cleartext(F, log_cnxid, cnx, receiving, bytes, length, &ph);
+        if (pcnx == NULL) {
+            /* Limited logging */
+            if (ph.ptype == picoquic_packet_version_negotiation) {
+                picoquic_log_negotiation_packet(F, log_cnxid64, bytes, length, &ph);
             }
-            break;
-        case picoquic_packet_0rtt_protected:
-            /* log 0-rtt packet */
-            picoquic_log_decrypt_0rtt(F, log_cnxid, cnx, bytes, length, &ph);
-            break;
-        case picoquic_packet_1rtt_protected_phi0:
-        case picoquic_packet_1rtt_protected_phi1:
-            picoquic_log_decrypt_encrypted(F, log_cnxid, cnx, receiving, bytes, length, &ph);
-            break;
-        default:
-            /* Packet type error. Log and ignore */
-            break;
+        }
+        else {
+            switch (ph.ptype) {
+            case picoquic_packet_version_negotiation:
+                /* log version negotiation */
+                picoquic_log_negotiation_packet(F, log_cnxid64, bytes, length, &ph);
+                break;
+            case picoquic_packet_server_stateless:
+            case picoquic_packet_client_initial:
+            case picoquic_packet_handshake:
+                if (cnx != NULL) {
+                    picoquic_log_decrypt_encrypted_cleartext(F, log_cnxid, pcnx, receiving, bytes, length, &ph);
+                }
+                break;
+            case picoquic_packet_0rtt_protected:
+                /* log 0-rtt packet */
+                picoquic_log_decrypt_0rtt(F, log_cnxid, pcnx, bytes, length, &ph);
+                break;
+            case picoquic_packet_1rtt_protected_phi0:
+            case picoquic_packet_1rtt_protected_phi1:
+                picoquic_log_decrypt_encrypted(F, log_cnxid, pcnx, receiving, bytes, length, &ph);
+                break;
+            default:
+                /* Packet type error. Log and ignore */
+                break;
+            }
         }
     }
     fprintf(F, "\n");
@@ -1212,8 +1240,8 @@ void picoquic_log_packet(FILE* F, int log_cnxid, picoquic_quic_t* quic, picoquic
         consumed += picoquic_log_segment(F, log_cnxid, quic, cnx, addr_peer, receiving,
             bytes + consumed, length - consumed, current_time);
     }
-
 }
+
 void picoquic_log_processing(FILE* F, picoquic_cnx_t* cnx, size_t length, int ret)
 {
     fprintf(F, "Processed %d bytes, state = %d (%s), return %d\n\n",
