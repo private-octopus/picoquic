@@ -231,7 +231,7 @@ int picoquic_compare_addr(struct sockaddr * expected, struct sockaddr * actual)
 
 
             if (ex->sin6_port == ac->sin6_port &&
-                memcmp(&ex->sin6_addr, &ac->sin6_addr, sizeof(struct sockaddr_in6)) == 0) {
+                memcmp(&ex->sin6_addr, &ac->sin6_addr, 16) == 0) {
                 ret = 0;
             }
         }
