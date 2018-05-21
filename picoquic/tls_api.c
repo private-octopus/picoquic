@@ -870,7 +870,6 @@ int picoquic_does_ticket_allow_early_data(uint8_t* ticket, uint16_t ticket_lengt
 {
     uint32_t tls_ticket_length = 0;
     uint8_t* tls_ticket_ptr = NULL;
-    uint16_t secret_length = 0;
     uint16_t byte_index = 0;
     uint32_t min_length = 8 + 2 + 3 + 2;
     int ret = 0;
