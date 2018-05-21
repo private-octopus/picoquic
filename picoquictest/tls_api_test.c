@@ -2014,7 +2014,7 @@ int spurious_retransmit_test()
  * Client Hello proposing an unsupported key share.
  */
 
-static uint8_t clientHello25519[] = {
+static uint8_t clientHelloWrongKeyShare[] = {
     /* Stream 0 header, including length */
     0x12, 0x00, 0x41, 0x29,
     /* TLS Record Header, end with 2 bytes length*/
@@ -2036,7 +2036,7 @@ static uint8_t clientHello25519[] = {
     0xb4, 0x7c, 0xa5, 0x6a, 0xf8, 0xa0, 0xdb, 0x07, 0x2b, 0x90,
     0x7d, 0xfa,
     /* Cipher suites */ 
-    0x00, 0x06, 0x13, 0x01, 0x13, 0x03, 0x13, 0x02,
+    0x00, 0x06, 0x13, 0x01, 0x13, 0x04, 0x13, 0x02,
     /* Legacy compression methods */
     0x01, 0x00,
     /* End of CH after extension length */
@@ -2057,9 +2057,9 @@ static uint8_t clientHello25519[] = {
     0x01, 0x02, 0x01, 0x03, 0x01, 0x04,
     /* Extension type 35, 4 bytes. */
     0x00, 0x23, 0x00, 0x00,
-    /* Extension type 51, key share, 42 bytes for X25519 */
+    /* Extension type 51, key share, 42 bytes of random data -- use unspecified code 01FC */
     0x00, 0x33, 0x00, 0x26, 0x00, 0x24,
-    0x00, 0x1d,
+    0x01, 0xfc, 
     0x00, 0x20,
     0x78, 0xe5, 0x89, 0x74, 0x13, 0xf1, 0x71, 0x53, 0xc7, 0x0c, 0xf3, 0x3f,
     0xa3, 0x4c, 0x84, 0x97, 0x72, 0x4b, 0xda, 0xb4, 0xf5, 0x7f, 0x9d, 0x01,
@@ -2136,7 +2136,7 @@ int wrong_keyshare_test()
 
     if (ret == 0) {
         ret = picoquic_decode_frames(cnx,
-            clientHello25519, sizeof(clientHello25519), 1, simulated_time);
+            clientHelloWrongKeyShare, sizeof(clientHelloWrongKeyShare), 1, simulated_time);
 
         /* processing of client initial packet */
         if (ret == 0) {

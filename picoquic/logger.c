@@ -1533,7 +1533,7 @@ void picoquic_log_congestion_state(FILE* F, picoquic_cnx_t* cnx, uint64_t curren
        opaque extension_data<0..2^16-1>;
    } Extension;
 */
-void picoquic_log_tls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
+static void picoquic_log_tls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
     uint8_t* ticket, uint16_t ticket_length)
 {
     uint32_t lifetime = 0;

@@ -26,6 +26,7 @@
 #include "picotls.h"
 #include "picoquic_internal.h"
 #include "picotls/openssl.h"
+#include "picotls/minicrypto.h"
 #include "tls_api.h"
 #include <openssl/pem.h>
 #include <stdio.h>
@@ -522,6 +523,13 @@ int picoquic_enable_custom_verify_certificate_callback(picoquic_quic_t* quic) {
     }
 }
 
+/* Definition of supported key exchange algorithms */
+
+ptls_key_exchange_algorithm_t *picoquic_key_exchanges[] = { &ptls_minicrypto_x25519, &ptls_openssl_secp256r1, NULL };
+ptls_cipher_suite_t *picoquic_cipher_suites[] = { 
+    &ptls_minicrypto_chacha20poly1305sha256, 
+    &ptls_openssl_aes256gcmsha384, &ptls_openssl_aes128gcmsha256, NULL };
+
 /*
  * Setting the master TLS context.
  * On servers, this implies setting the "on hello" call back
@@ -546,8 +554,8 @@ int picoquic_master_tlscontext(picoquic_quic_t* quic,
     } else {
         memset(ctx, 0, sizeof(ptls_context_t));
         ctx->random_bytes = ptls_openssl_random_bytes;
-        ctx->key_exchanges = ptls_openssl_key_exchanges;
-        ctx->cipher_suites = ptls_openssl_cipher_suites;
+        ctx->key_exchanges = picoquic_key_exchanges; /* was:  ptls_openssl_key_exchanges; */
+        ctx->cipher_suites = picoquic_cipher_suites; /* was: ptls_openssl_cipher_suites; */
 
         ctx->send_change_cipher_spec = 0;
 

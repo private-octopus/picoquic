@@ -70,6 +70,24 @@ char* picoquic_string_duplicate(const char* original)
     return str;
 }
 
+char* picoquic_strip_endofline(char* buf, size_t bufmax, char const* line)
+{
+    for (size_t i = 0; i < bufmax; i++) {
+        int c = line[i];
+
+        if (c == 0 || c == '\r' || c == '\n') {
+            buf[i] = 0;
+            break;
+        }
+        else {
+            buf[i] = (char) c;
+        }
+    }
+
+    buf[bufmax - 1] = 0;
+    return buf;
+}
+
 static FILE* debug_out = NULL;
 static int debug_suspended = 0;
 
