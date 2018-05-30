@@ -1222,7 +1222,7 @@ static picoquic_packet* picoquic_process_ack_range(
         } else {
             if (restricted) {
                 /* check that the packet was sent in clear text */
-                if (picoquic_is_packet_encrypted(cnx, p->bytes[0])) {
+                if (picoquic_is_packet_encrypted(p->ptype)) {
                     /* Protocol error! */
                     *ret = picoquic_connection_error(cnx,
                         PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION);

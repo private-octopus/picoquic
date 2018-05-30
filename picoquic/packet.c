@@ -257,27 +257,18 @@ int picoquic_parse_packet_header(
 }
 
 /* Check whether a packet was sent in clear text */
-int picoquic_is_packet_encrypted(
-    picoquic_cnx_t* cnx,
-    uint8_t byte_zero)
+int picoquic_is_packet_encrypted(picoquic_packet_type_enum ptype)
 {
     int ret = 0;
-
-    /* Is this a long header of a short header? */
-    if ((byte_zero & 0x80) == 0x80) {
-        switch (picoquic_supported_versions[cnx->version_index].version_header_encoding) {
-        case picoquic_version_header_11:
-            switch (byte_zero) {
-            case 0xFC: /* picoquic_packet_0rtt_protected*/
-                ret = 1;
-                break;
-            default:
-                break;
-            }
-        }
-    } else {
-        /* If this is a short header, we know that the packet is encrypted  */
+    switch (ptype) {
+    case picoquic_packet_0rtt_protected:
+    case picoquic_packet_1rtt_protected_phi0:
+    case picoquic_packet_1rtt_protected_phi1:
         ret = 1;
+        break;
+    default:
+        ret = 0;
+        break;
     }
 
     return ret;
@@ -563,12 +554,10 @@ void picoquic_queue_stateless_reset(picoquic_cnx_t* cnx,
         size_t data_bytes = 0;
         size_t ack_bytes = 0;
         uint32_t header_length = 0;
-        uint32_t pn_offset = 0;
 
         cnx->remote_cnxid = ph->srce_cnx_id;
-        byte_index = picoquic_create_packet_header(cnx, picoquic_packet_server_stateless,
-            ph->pn, bytes, &pn_offset);
-        header_length = byte_index;
+
+        byte_index = header_length = picoquic_predict_packet_header_length(cnx, picoquic_packet_server_stateless);
 
         /* Draft 11 requires adding an ACK frame */
         if (picoquic_record_pn_received(cnx, ph->pn64, current_time) == 0 &&
@@ -588,8 +577,8 @@ void picoquic_queue_stateless_reset(picoquic_cnx_t* cnx,
             picoquic_update_payload_length(bytes, header_length, byte_index + checksum_length);
 
             /* AEAD Encrypt, to the send buffer */
-            sp->length = picoquic_protect_packet(cnx, cleartext, ph->pn,
-                byte_index, header_length, pn_offset,
+            sp->length = picoquic_protect_packet(cnx, picoquic_packet_server_stateless, cleartext, ph->pn,
+                byte_index, header_length,
                 sp->bytes, cnx->aead_encrypt_cleartext_ctx, cnx->pn_enc_cleartext);
 
             memset(&sp->addr_to, 0, sizeof(sp->addr_to));

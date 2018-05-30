@@ -544,6 +544,10 @@ uint32_t picoquic_create_packet_header(
     uint8_t* bytes,
     uint32_t * pn_offset);
 
+uint32_t  picoquic_predict_packet_header_length(
+    picoquic_cnx_t* cnx,
+    picoquic_packet_type_enum packet_type);
+
 void picoquic_update_payload_length(
     uint8_t* bytes, size_t header_length, size_t packet_length);
 
@@ -575,8 +579,9 @@ size_t picoquic_decrypt_cleartext(picoquic_cnx_t* cnx,
     int * already_received);
 
 uint32_t picoquic_protect_packet(picoquic_cnx_t* cnx,
+    picoquic_packet_type_enum ptype,
     uint8_t * bytes, uint64_t sequence_number,
-    uint32_t length, uint32_t header_length, uint32_t pn_offset,
+    uint32_t length, uint32_t header_length,
     uint8_t* send_buffer,
     void * aead_context, void* pn_enc);
 
@@ -651,7 +656,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
 
 /* Check whether a packet was sent in clear text */
-int picoquic_is_packet_encrypted(picoquic_cnx_t* cnx, uint8_t byte_zero);
+int picoquic_is_packet_encrypted(picoquic_packet_type_enum ptype);
 
 /* Queue stateless reset */
 void picoquic_queue_stateless_reset(picoquic_cnx_t* cnx,

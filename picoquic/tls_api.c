@@ -883,7 +883,7 @@ int picoquic_does_ticket_allow_early_data(uint8_t* ticket, uint16_t ticket_lengt
         min_length += tls_ticket_length;
         if (ticket_length >= min_length) {
             tls_ticket_ptr = &ticket[byte_index];
-            ret = picoquic_does_tls_ticket_allow_early_data(tls_ticket_ptr, tls_ticket_length);
+            ret = picoquic_does_tls_ticket_allow_early_data(tls_ticket_ptr, (uint16_t) tls_ticket_length);
         }
     }
 
