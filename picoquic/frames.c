@@ -1180,21 +1180,16 @@ void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t* cnx, picoquic_pa
 {
     int ret = 0;
     size_t byte_index;
-    picoquic_packet_header ph;
     int frame_is_pure_ack = 0;
     size_t frame_length = 0;
-    picoquic_cnx_t* pcnx = cnx;
     uint32_t version = picoquic_supported_versions[cnx->version_index].version;
 
-    /* Get the packet type */
-    ret = picoquic_parse_packet_header(cnx->quic, p->bytes,
-        (uint32_t)p->length + p->checksum_overhead, NULL, &ph, &pcnx, 0);
 
-    if (ret == 0 && ph.ptype == picoquic_packet_0rtt_protected) {
+    if (ret == 0 && p->ptype == picoquic_packet_0rtt_protected) {
         cnx->nb_zero_rtt_acked++;
     }
 
-    byte_index = ph.offset;
+    byte_index = p->offset;
 
     while (ret == 0 && byte_index < p->length) {
         if (version == PICOQUIC_FOURTH_INTEROP_VERSION && p->bytes[byte_index] == 0x0E) {

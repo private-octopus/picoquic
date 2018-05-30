@@ -55,22 +55,6 @@ extern "C" {
 #define PICOQUIC_CWIN_MINIMUM (2 * PICOQUIC_MAX_PACKET_SIZE)
 
 /*
-     * Nominal packet types. These are the packet types used internally by the
-     * implementation. The wire encoding depends on the version.
-     */
-typedef enum {
-    picoquic_packet_error = 0,
-    picoquic_packet_version_negotiation,
-    picoquic_packet_client_initial,
-    picoquic_packet_server_stateless,
-    picoquic_packet_handshake,
-    picoquic_packet_0rtt_protected,
-    picoquic_packet_1rtt_protected_phi0,
-    picoquic_packet_1rtt_protected_phi1,
-    picoquic_packet_type_max
-} picoquic_packet_type_enum;
-
-/*
  * Types of frames
  */
 typedef enum {
