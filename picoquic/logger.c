@@ -916,7 +916,7 @@ size_t picoquic_log_segment(FILE* F, int log_cnxid, picoquic_quic_t* quic, picoq
     int ret = 0;
     picoquic_packet_header ph;
     picoquic_cnx_t* pcnx = cnx;
-    size_t consumed = length;
+    uint32_t consumed = length;
     uint64_t log_cnxid64 = 0;
     uint8_t decrypted[PICOQUIC_MAX_PACKET_SIZE];
 
