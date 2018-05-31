@@ -55,22 +55,6 @@ extern "C" {
 #define PICOQUIC_CWIN_MINIMUM (2 * PICOQUIC_MAX_PACKET_SIZE)
 
 /*
-     * Nominal packet types. These are the packet types used internally by the
-     * implementation. The wire encoding depends on the version.
-     */
-typedef enum {
-    picoquic_packet_error = 0,
-    picoquic_packet_version_negotiation,
-    picoquic_packet_client_initial,
-    picoquic_packet_server_stateless,
-    picoquic_packet_handshake,
-    picoquic_packet_0rtt_protected,
-    picoquic_packet_1rtt_protected_phi0,
-    picoquic_packet_1rtt_protected_phi1,
-    picoquic_packet_type_max
-} picoquic_packet_type_enum;
-
-/*
  * Types of frames
  */
 typedef enum {
@@ -560,6 +544,10 @@ uint32_t picoquic_create_packet_header(
     uint8_t* bytes,
     uint32_t * pn_offset);
 
+uint32_t  picoquic_predict_packet_header_length(
+    picoquic_cnx_t* cnx,
+    picoquic_packet_type_enum packet_type);
+
 void picoquic_update_payload_length(
     uint8_t* bytes, size_t header_length, size_t packet_length);
 
@@ -591,10 +579,28 @@ size_t picoquic_decrypt_cleartext(picoquic_cnx_t* cnx,
     int * already_received);
 
 uint32_t picoquic_protect_packet(picoquic_cnx_t* cnx,
+    picoquic_packet_type_enum ptype,
     uint8_t * bytes, uint64_t sequence_number,
-    uint32_t length, uint32_t header_length, uint32_t pn_offset,
+    uint32_t length, uint32_t header_length,
     uint8_t* send_buffer,
     void * aead_context, void* pn_enc);
+
+void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet * packet, int ret,
+    uint32_t length, uint32_t header_length, uint32_t checksum_overhead,
+    size_t * send_length, uint8_t * send_buffer, picoquic_path_t * path_x,
+    uint64_t current_time);
+
+int picoquic_parse_header_and_decrypt(
+    picoquic_quic_t* quic,
+    uint8_t* bytes,
+    uint32_t length,
+    uint32_t packet_length,
+    struct sockaddr* addr_from,
+    uint64_t current_time,
+    picoquic_packet_header* ph,
+    picoquic_cnx_t** pcnx,
+    uint32_t * consumed,
+    int receiving);
 
 /* handling of ACK logic */
 int picoquic_is_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time);
@@ -667,7 +673,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
 
 /* Check whether a packet was sent in clear text */
-int picoquic_is_packet_encrypted(picoquic_cnx_t* cnx, uint8_t byte_zero);
+int picoquic_is_packet_encrypted(picoquic_packet_type_enum ptype);
 
 /* Queue stateless reset */
 void picoquic_queue_stateless_reset(picoquic_cnx_t* cnx,

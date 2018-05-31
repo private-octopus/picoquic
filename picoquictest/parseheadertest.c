@@ -19,9 +19,10 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "../picoquic/picoquic_internal.h"
 #include <stdlib.h>
 #include <string.h>
+#include "../picoquic/tls_api.h"
+#include "../picoquic/picoquic_internal.h"
 
 /* test vectors and corresponding structure */
 #define TEST_CNXID_LEN_BYTE 0x51
@@ -379,6 +380,267 @@ int parseheadertest()
         {
             ret = -1;
         }
+    }
+
+    return ret;
+}
+
+
+/* Test a range of variations of packet encryption and decryption */
+int test_packet_decrypt_one(
+    picoquic_quic_t* q_server,
+    uint8_t * send_buffer,
+    size_t send_length,
+    size_t packet_length,
+    struct sockaddr * addr_from,
+    picoquic_cnx_t* cnx_target,
+    picoquic_packet_header * expected_ph,
+    int expected_return
+)
+{
+    int ret = 0;
+    int decoding_return;
+    uint64_t current_time = 0;
+    picoquic_packet_header received_ph;
+    picoquic_cnx_t* server_cnx = NULL;
+    uint32_t consumed = 0;
+
+    /* Decrypt the packet */
+    decoding_return = picoquic_parse_header_and_decrypt(q_server,
+        send_buffer, send_length, packet_length,
+        addr_from,
+        current_time, &received_ph, &server_cnx,
+        &consumed, 1);
+
+    /* verify that decryption matches original value */
+    if (decoding_return != expected_return) {
+        DBG_PRINTF("Return %x instead of %x.\n", decoding_return, expected_return);
+        ret = -1;
+    } else if (cnx_target != NULL && server_cnx != cnx_target) {
+        DBG_PRINTF("%s", "Could not retrieve the connection\n");
+        ret = -1;
+    }
+    else if (received_ph.ptype != expected_ph->ptype) {
+        DBG_PRINTF("PTYPE %x instead of %x.\n", received_ph.ptype, expected_ph->ptype);
+        ret = -1;
+    }
+    else if (received_ph.offset != expected_ph->offset) {
+        DBG_PRINTF("Offset %x instead of %x.\n", received_ph.offset, expected_ph->offset);
+        ret = -1;
+    }
+    else if (received_ph.vn != expected_ph->vn) {
+        DBG_PRINTF("Version %x instead of %x.\n", received_ph.vn, expected_ph->vn);
+        ret = -1;
+    }
+    else if (received_ph.pn64 != expected_ph->pn64) {
+        DBG_PRINTF("PN64 %llx instead of %llx.\n", (unsigned long long)received_ph.pn64, (unsigned long long)expected_ph->pn64);
+        ret = -1;
+    }
+    else if (received_ph.payload_length != expected_ph->payload_length) {
+        DBG_PRINTF("Payload length %x instead of %x.\n", received_ph.payload_length, expected_ph->payload_length);
+        ret = -1;
+    }
+    else if (picoquic_compare_connection_id(&received_ph.dest_cnx_id, &expected_ph->dest_cnx_id) != 0) {
+        DBG_PRINTF("%s", "Dest CNXID does not match.\n");
+        ret = -1;
+    }
+    else if (picoquic_compare_connection_id(&received_ph.srce_cnx_id, &expected_ph->srce_cnx_id) != 0) {
+        DBG_PRINTF("%s", "Srce CNXID does not match.\n");
+        ret = -1;
+    }
+
+    return ret;
+}
+
+int test_packet_encrypt_one(
+    struct sockaddr * addr_from,
+    picoquic_cnx_t* cnx_client,
+    picoquic_quic_t* q_server,
+    picoquic_cnx_t* server_cnx,
+    picoquic_packet_type_enum ptype,
+    uint32_t length
+)
+{
+    int ret = 0;
+    uint32_t header_length = 0;
+    uint32_t checksum_overhead = 0;
+    size_t send_length = 0;
+    uint8_t send_buffer[PICOQUIC_MAX_PACKET_SIZE];
+    picoquic_path_t * path_x = cnx_client->path[0];
+    uint64_t current_time = 0;
+    uint32_t consumed = 0;
+    picoquic_packet_header expected_header;
+    picoquic_packet * packet = (picoquic_packet *) malloc(sizeof(picoquic_packet));
+
+    if (packet == NULL) {
+        DBG_PRINTF("%s", "Out of memory\n");
+        ret = -1;
+    }
+    else {
+        memset(packet, 0, sizeof(picoquic_packet));
+        memset(packet->bytes, 0xbb, length);
+        header_length = picoquic_predict_packet_header_length(cnx_client, ptype);
+        packet->ptype = ptype;
+        packet->offset = header_length;
+        packet->length = length;
+        packet->sequence_number = cnx_client->send_sequence;
+        packet->send_path = cnx_client->path[0];
+
+        /* Create a packet with specified parameters */
+        picoquic_finalize_and_protect_packet(cnx_client, packet,
+            ret, length, header_length, checksum_overhead,
+            &send_length, send_buffer, path_x, current_time);
+
+        expected_header.ptype = packet->ptype;
+        expected_header.offset = packet->offset;
+        expected_header.pn64 = packet->sequence_number;
+        expected_header.vn = picoquic_supported_versions[cnx_client->version_index].version;
+        expected_header.payload_length = packet->length - packet->offset;
+
+        if (packet->ptype == picoquic_packet_0rtt_protected ||
+            packet->ptype == picoquic_packet_client_initial) {
+            expected_header.dest_cnx_id = cnx_client->initial_cnxid;
+        }
+        else {
+            expected_header.dest_cnx_id = cnx_client->remote_cnxid;
+        }
+
+        if (packet->ptype == picoquic_packet_1rtt_protected_phi0 ||
+            packet->ptype == picoquic_packet_1rtt_protected_phi0) {
+            expected_header.vn = 0;
+            expected_header.srce_cnx_id = picoquic_null_connection_id;
+        }
+        else {
+            expected_header.vn = picoquic_supported_versions[cnx_client->version_index].version;
+            expected_header.srce_cnx_id = cnx_client->local_cnxid;
+        }
+
+        /* Decrypt the packet */
+        ret = test_packet_decrypt_one(q_server,
+            send_buffer, send_length, send_length,
+            addr_from, server_cnx, &expected_header, 0);
+    }
+    return ret;
+}
+
+static const uint8_t test_0rtt_secret[] = {
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+    0, 1
+};
+
+static const uint8_t test_1rtt_secret[] = {
+    0, 1,
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+};
+
+static uint8_t const addr1[4] = { 10, 0, 0, 1 };
+static uint8_t const addr2[4] = { 10, 0, 0, 2 };
+
+int packet_enc_dec_test()
+{
+    int ret = 0;
+    struct sockaddr_in test_addr_c;
+    picoquic_cnx_t* cnx_client = NULL;
+    picoquic_cnx_t* cnx_server = NULL;
+    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, 0, NULL, NULL, NULL, 0);
+    picoquic_quic_t* qserver = picoquic_create(8,
+#ifdef _WINDOWS
+#ifdef _WINDOWS64
+        "..\\..\\certs\\cert.pem", "..\\..\\certs\\key.pem",
+#else
+        "..\\certs\\cert.pem", "..\\certs\\key.pem",
+#endif
+#else
+        "certs/cert.pem", "certs/key.pem",
+#endif
+        "test", NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, 0);
+    if (qclient == NULL || qserver == NULL) {
+        DBG_PRINTF("%s", "Could not create Quic contexts.\n");
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        memset(&test_addr_c, 0, sizeof(struct sockaddr_in));
+        test_addr_c.sin_family = AF_INET;
+        memcpy(&test_addr_c.sin_addr, addr1, 4);
+        test_addr_c.sin_port = 12345;
+
+        cnx_client = picoquic_create_cnx(qclient, picoquic_null_connection_id, picoquic_null_connection_id,
+            (struct sockaddr*)&test_addr_c, 0, 0, NULL, NULL, 1);
+        if (cnx_client == NULL) {
+            DBG_PRINTF("%s", "Could not create client connection context.\n");
+            ret = -1;
+        }
+        else {
+            ret = picoquic_start_client_cnx(cnx_client);
+        }
+    }
+
+    /* Test with a series of packets */
+    /* First, client initial */
+    if (ret == 0) {
+        ret = test_packet_encrypt_one(
+            (struct sockaddr *) &test_addr_c,
+            cnx_client, qserver, NULL, picoquic_packet_client_initial, 1256);
+    }
+    /* If that work, update the connection context */
+    if (ret == 0) {
+        cnx_server = qserver->cnx_list;
+        if (cnx_server == NULL) {
+            DBG_PRINTF("%s", "Did not create the server connection context.\n");
+            ret = -1;
+        } else {
+            /* Set the remote context ID for the client */
+            cnx_client->remote_cnxid = cnx_server->local_cnxid;
+        }
+    }
+
+    /* Try handshake packet from client */
+    if (ret == 0) {
+        ret = test_packet_encrypt_one(
+            (struct sockaddr *) &test_addr_c,
+            cnx_client, qserver, cnx_server, picoquic_packet_handshake, 1256);
+    }
+
+    /* Now try a zero RTT packet */
+    if (ret == 0) {
+        cnx_client->aead_0rtt_encrypt_ctx = picoquic_setup_test_aead_context(1, test_0rtt_secret);
+        cnx_server->aead_0rtt_decrypt_ctx = picoquic_setup_test_aead_context(0, test_0rtt_secret);
+        cnx_client->pn_enc_0rtt = picoquic_pn_enc_create_for_test(test_0rtt_secret);
+        cnx_server->pn_enc_0rtt = picoquic_pn_enc_create_for_test(test_0rtt_secret);
+
+        ret = test_packet_encrypt_one(
+            (struct sockaddr *) &test_addr_c,
+            cnx_client, qserver, cnx_server, picoquic_packet_0rtt_protected, 256);
+    }
+
+    /* And try a 1 RTT packet */
+    if (ret == 0) {
+        cnx_client->aead_encrypt_ctx = picoquic_setup_test_aead_context(1, test_1rtt_secret);
+        cnx_server->aead_decrypt_ctx = picoquic_setup_test_aead_context(0, test_1rtt_secret);
+        cnx_client->pn_enc = picoquic_pn_enc_create_for_test(test_1rtt_secret);
+        cnx_server->pn_dec = picoquic_pn_enc_create_for_test(test_1rtt_secret);
+
+        ret = test_packet_encrypt_one(
+            (struct sockaddr *) &test_addr_c,
+            cnx_client, qserver, cnx_server, picoquic_packet_1rtt_protected_phi0, 1024);
+    }
+
+    if (cnx_client != NULL) {
+        picoquic_delete_cnx(cnx_client);
+    }
+
+    if (qclient != NULL) {
+        picoquic_free(qclient);
+    }
+
+    if (qserver != NULL) {
+        picoquic_free(qserver);
     }
 
     return ret;
