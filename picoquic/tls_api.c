@@ -1048,6 +1048,17 @@ void * picoquic_pn_enc_create(
     return (void *)pn_enc;
 }
 
+void * picoquic_pn_enc_create_for_test(const uint8_t * secret)
+{
+    void * ret = NULL;
+    ptls_hash_algorithm_t* algo = &ptls_openssl_sha256;
+    ptls_aead_algorithm_t* aead = &ptls_openssl_aes128gcm;
+    
+    ret = picoquic_pn_enc_create(aead, algo, (uint8_t *) secret, PICOQUIC_QUIC_BASE_LABEL);
+
+    return ret;
+}
+
 void picoquic_pn_encrypt(void *pn_enc, void * iv, void *output, const void *input, size_t len)
 {
     ptls_cipher_init((ptls_cipher_context_t *) pn_enc, iv);
@@ -1145,6 +1156,17 @@ void picoquic_aead_free(void* aead_context)
 uint32_t picoquic_aead_get_checksum_length(void* aead_context)
 {
     return ((uint32_t)((ptls_aead_context_t*)aead_context)->algo->tag_size);
+}
+
+/* Setting of encryption contexts for test */
+void * picoquic_setup_test_aead_context(int is_encrypt, const uint8_t * secret)
+{
+    void * ret = NULL;
+    ptls_hash_algorithm_t* algo = &ptls_openssl_sha256;
+    ptls_aead_algorithm_t* aead = &ptls_openssl_aes128gcm;
+
+    ret = (void *)picoquic_aead_new(aead, algo, is_encrypt, secret, PICOQUIC_QUIC_BASE_LABEL);
+    return ret;
 }
 
 /* Computation of the encryption and decryption methods for 0-RTT data */

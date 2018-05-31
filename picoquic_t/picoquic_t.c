@@ -105,7 +105,8 @@ static const picoquic_test_def_t test_table[] = {
     { "nat_rebinding", nat_rebinding_test },
     { "nat_rebinding_loss", nat_rebinding_loss_test },
     { "spin_bit", spin_bit_test},
-    { "client_error", client_error_test }
+    { "client_error", client_error_test },
+    { "packet_enc_dec", packet_enc_dec_test}
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);

@@ -100,6 +100,7 @@ int nat_rebinding_test();
 int nat_rebinding_loss_test();
 int spin_bit_test();
 int client_error_test();
+int packet_enc_dec_test();
 
 #ifdef __cplusplus
 }

@@ -404,6 +404,95 @@ size_t picoquic_decrypt_cleartext(picoquic_cnx_t* cnx,
     return decoded_length;
 }
 
+int picoquic_parse_header_and_decrypt(
+    picoquic_quic_t* quic,
+    uint8_t* bytes,
+    uint32_t length,
+    uint32_t packet_length,
+    struct sockaddr* addr_from,
+    uint64_t current_time,
+    picoquic_packet_header* ph,
+    picoquic_cnx_t** pcnx,
+    uint32_t * consumed,
+    int receiving)
+{
+    /* Parse the clear text header. Ret == 0 means an incorrect packet that could not be parsed */
+    int already_received = 0;
+    size_t decoded_length = 0;
+    int ret = picoquic_parse_packet_header(quic, bytes, length, addr_from, ph, pcnx, receiving);
+    int cmp_reset_secret = 0;
+
+    if (ret == 0) {
+        length = ph->offset + ph->payload_length;
+        *consumed = length;
+
+        if (*pcnx == NULL && ph->ptype == picoquic_packet_client_initial) {
+            /* Create a connection context if the CI is acceptable */
+            if (packet_length < PICOQUIC_ENFORCED_INITIAL_MTU) {
+                /* Unexpected packet. Reject, drop and log. */
+                ret = PICOQUIC_ERROR_INITIAL_TOO_SHORT;
+            }
+            else {
+                /* if listening is OK, listen */
+                *pcnx = picoquic_create_cnx(quic, ph->dest_cnx_id, ph->srce_cnx_id, addr_from, current_time, ph->vn, NULL, NULL, 0);
+            }
+        }
+
+        if (*pcnx != NULL) {
+            /* Decrypt the sequence number if needed, and then decrypt the packet */
+            switch (ph->ptype) {
+            case picoquic_packet_version_negotiation:
+                /* Packet is not encrypted */
+                break;
+            case picoquic_packet_client_initial:
+                decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph,
+                    (*pcnx)->pn_dec_cleartext, (*pcnx)->aead_decrypt_cleartext_ctx, &already_received);
+                break;
+            case picoquic_packet_server_stateless:
+                decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph,
+                    (*pcnx)->pn_dec_cleartext, (*pcnx)->aead_decrypt_cleartext_ctx, &already_received);
+                break;
+            case picoquic_packet_handshake:
+                decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph,
+                    (*pcnx)->pn_dec_cleartext, (*pcnx)->aead_decrypt_cleartext_ctx, &already_received);
+                break;
+            case picoquic_packet_0rtt_protected:
+                decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph, (*pcnx)->pn_enc_0rtt,
+                    (*pcnx)->aead_0rtt_decrypt_ctx, &already_received);
+                break;
+            case picoquic_packet_1rtt_protected_phi0:
+            case picoquic_packet_1rtt_protected_phi1:
+                /* TODO : roll key based on PHI */
+                /* Check the possible reset before performing in place AEAD decrypt */
+                cmp_reset_secret = memcmp(bytes + length - PICOQUIC_RESET_SECRET_SIZE,
+                    (*pcnx)->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
+                /* AEAD Decrypt, in place */
+                decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph, (*pcnx)->pn_dec,
+                    (*pcnx)->aead_decrypt_ctx, &already_received);
+                break;
+            default:
+                /* Packet type error. Log and ignore */
+                ret = PICOQUIC_ERROR_DETECTED;
+                break;
+            }
+
+            /* TODO: consider the error "too soon" */
+            if (decoded_length > (length - ph->offset)) {
+                if (cmp_reset_secret == 0) {
+                    ret = PICOQUIC_ERROR_STATELESS_RESET;
+                } else {
+                    ret = PICOQUIC_ERROR_AEAD_CHECK;
+                }
+            } else if (already_received != 0) {
+                ret = PICOQUIC_ERROR_DUPLICATE;
+            } else {
+                ph->payload_length = (uint16_t)decoded_length;
+            }
+        }
+    }
+
+    return ret;
+}
 /*
  * Processing of a version renegotiation packet.
  *

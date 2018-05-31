@@ -585,6 +585,23 @@ uint32_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     uint8_t* send_buffer,
     void * aead_context, void* pn_enc);
 
+void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet * packet, int ret,
+    uint32_t length, uint32_t header_length, uint32_t checksum_overhead,
+    size_t * send_length, uint8_t * send_buffer, picoquic_path_t * path_x,
+    uint64_t current_time);
+
+int picoquic_parse_header_and_decrypt(
+    picoquic_quic_t* quic,
+    uint8_t* bytes,
+    uint32_t length,
+    uint32_t packet_length,
+    struct sockaddr* addr_from,
+    uint64_t current_time,
+    picoquic_packet_header* ph,
+    picoquic_cnx_t** pcnx,
+    uint32_t * consumed,
+    int receiving);
+
 /* handling of ACK logic */
 int picoquic_is_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time);
 
