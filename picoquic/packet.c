@@ -441,41 +441,78 @@ int picoquic_parse_header_and_decrypt(
         }
 
         if (*pcnx != NULL) {
-            /* Decrypt the sequence number if needed, and then decrypt the packet */
-            switch (ph->ptype) {
-            case picoquic_packet_version_negotiation:
-                /* Packet is not encrypted */
-                break;
-            case picoquic_packet_client_initial:
-                decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph,
-                    (*pcnx)->pn_dec_cleartext, (*pcnx)->aead_decrypt_cleartext_ctx, &already_received);
-                break;
-            case picoquic_packet_server_stateless:
-                decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph,
-                    (*pcnx)->pn_dec_cleartext, (*pcnx)->aead_decrypt_cleartext_ctx, &already_received);
-                break;
-            case picoquic_packet_handshake:
-                decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph,
-                    (*pcnx)->pn_dec_cleartext, (*pcnx)->aead_decrypt_cleartext_ctx, &already_received);
-                break;
-            case picoquic_packet_0rtt_protected:
-                decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph, (*pcnx)->pn_enc_0rtt,
-                    (*pcnx)->aead_0rtt_decrypt_ctx, &already_received);
-                break;
-            case picoquic_packet_1rtt_protected_phi0:
-            case picoquic_packet_1rtt_protected_phi1:
-                /* TODO : roll key based on PHI */
-                /* Check the possible reset before performing in place AEAD decrypt */
-                cmp_reset_secret = memcmp(bytes + length - PICOQUIC_RESET_SECRET_SIZE,
-                    (*pcnx)->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
-                /* AEAD Decrypt, in place */
-                decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph, (*pcnx)->pn_dec,
-                    (*pcnx)->aead_decrypt_ctx, &already_received);
-                break;
-            default:
-                /* Packet type error. Log and ignore */
-                ret = PICOQUIC_ERROR_DETECTED;
-                break;
+            if (receiving) {
+                switch (ph->ptype) {
+                case picoquic_packet_version_negotiation:
+                    /* Packet is not encrypted */
+                    break;
+                case picoquic_packet_client_initial:
+                    decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph,
+                        (*pcnx)->pn_dec_cleartext, (*pcnx)->aead_decrypt_cleartext_ctx, &already_received);
+                    break;
+                case picoquic_packet_server_stateless:
+                    decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph,
+                        (*pcnx)->pn_dec_cleartext, (*pcnx)->aead_decrypt_cleartext_ctx, &already_received);
+                    break;
+                case picoquic_packet_handshake:
+                    decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph,
+                        (*pcnx)->pn_dec_cleartext, (*pcnx)->aead_decrypt_cleartext_ctx, &already_received);
+                    break;
+                case picoquic_packet_0rtt_protected:
+                    decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph, (*pcnx)->pn_enc_0rtt,
+                        (*pcnx)->aead_0rtt_decrypt_ctx, &already_received);
+                    break;
+                case picoquic_packet_1rtt_protected_phi0:
+                case picoquic_packet_1rtt_protected_phi1:
+                    /* TODO : roll key based on PHI */
+                    /* Check the possible reset before performing in place AEAD decrypt */
+                    cmp_reset_secret = memcmp(bytes + length - PICOQUIC_RESET_SECRET_SIZE,
+                        (*pcnx)->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
+                    /* AEAD Decrypt, in place */
+                    decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph, (*pcnx)->pn_dec,
+                        (*pcnx)->aead_decrypt_ctx, &already_received);
+                    break;
+                default:
+                    /* Packet type error. Log and ignore */
+                    ret = PICOQUIC_ERROR_DETECTED;
+                    break;
+                }
+            } else {
+                switch (ph->ptype) {
+                case picoquic_packet_version_negotiation:
+                    /* Packet is not encrypted */
+                    break;
+                case picoquic_packet_client_initial:
+                    decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph,
+                        (*pcnx)->pn_enc_cleartext, (*pcnx)->aead_de_encrypt_cleartext_ctx, &already_received);
+                    break;
+                case picoquic_packet_server_stateless:
+                    decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph,
+                        (*pcnx)->pn_enc_cleartext, (*pcnx)->aead_de_encrypt_cleartext_ctx, &already_received);
+                    break;
+                case picoquic_packet_handshake:
+                    decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph,
+                        (*pcnx)->pn_enc_cleartext, (*pcnx)->aead_de_encrypt_cleartext_ctx, &already_received);
+                    break;
+                case picoquic_packet_0rtt_protected:
+                    decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph, (*pcnx)->pn_enc_0rtt,
+                        (*pcnx)->aead_0rtt_decrypt_ctx, &already_received);
+                    break;
+                case picoquic_packet_1rtt_protected_phi0:
+                case picoquic_packet_1rtt_protected_phi1:
+                    /* TODO : roll key based on PHI */
+                    /* Check the possible reset before performing in place AEAD decrypt */
+                    cmp_reset_secret = memcmp(bytes + length - PICOQUIC_RESET_SECRET_SIZE,
+                        (*pcnx)->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
+                    /* AEAD Decrypt, in place */
+                    decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph, (*pcnx)->pn_enc,
+                        (*pcnx)->aead_de_encrypt_ctx, &already_received);
+                    break;
+                default:
+                    /* Packet type error. Log and ignore */
+                    ret = PICOQUIC_ERROR_DETECTED;
+                    break;
+                }
             }
 
             /* TODO: consider the error "too soon" */
