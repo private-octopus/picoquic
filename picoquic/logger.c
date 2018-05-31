@@ -909,223 +909,6 @@ void picoquic_log_frames(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t leng
     }
 }
 
-
-/*
-* Apply packet number decryption. Note that the logic 
-* is slightly different from the "decrypt packet" procedure used 
-* in real time.
-*/
-size_t  picoquic_decrypt_log_packet(FILE* F, picoquic_cnx_t* cnx,
-    uint8_t * out_bytes, uint8_t* bytes, size_t length, picoquic_packet_header* ph,
-    uint64_t seq_ref, void * pn_enc, void* aead_context)
-{
-    /*
-    * If needed, decrypt the packet number, in place.
-    */
-    size_t decoded = length + 32;
-    uint8_t header_buffer[128];
-
-    if (aead_context == NULL)
-    {
-        fprintf(F, "    No decryption key available.\n");
-        return decoded;
-    }
-    else if (ph->offset > sizeof(header_buffer)) {
-        fprintf(F, "    Header too long (%d bytes).\n", (int)ph->offset);
-        return decoded;
-    }
-
-    memcpy(header_buffer, bytes, ph->offset);
-
-    if (picoquic_supported_versions[cnx->version_index].version_flags&picoquic_version_use_pn_encryption)
-    {
-        if (pn_enc == NULL)
-        {
-            fprintf(F, "    No packet number decryption key available.\n");
-        }
-        else
-        {
-            /* The sample is located at the offset */
-            size_t sample_offset = ph->offset;
-            size_t aead_checksum_length = picoquic_aead_get_checksum_length(aead_context);
-
-            if (sample_offset + aead_checksum_length > length)
-            {
-                sample_offset = length - aead_checksum_length;
-            }
-            if (ph->pn_offset < sample_offset)
-            {
-                /* Decode */
-                picoquic_pn_encrypt(pn_enc, bytes + sample_offset, header_buffer + ph->pn_offset, header_buffer + ph->pn_offset, 4);
-                /* TODO: what if varint? */
-                /* Update the packet number in the PH structure */
-                if (ph->ptype == picoquic_packet_1rtt_protected_phi0 ||
-                    ph->ptype == picoquic_packet_1rtt_protected_phi1) {
-                    switch (sample_offset - ph->pn_offset)
-                    {
-                    case 1:
-                        ph->pn = header_buffer[ph->pn_offset];
-                        ph->pnmask = 0xFFFFFFFFFFFFFF00ull;
-                        break;
-                    case 2:
-                        ph->pn = PICOPARSE_16(header_buffer + ph->pn_offset);
-                        ph->pnmask = 0xFFFFFFFFFFFF0000ull;
-                        break;
-                    case 4:
-                        ph->pn = PICOPARSE_32(header_buffer + ph->pn_offset);
-                        ph->pnmask = 0xFFFFFFFF00000000ull;
-                        break;
-                    default:
-                        /* Unexpected value -- keep ph as is. */
-                        break;
-                    }
-                } else {
-                    ph->pn = PICOPARSE_32(&bytes[ph->pn_offset]);
-                    ph->pnmask = 0xFFFFFFFF00000000ull;
-                }
-            }
-        }
-    }
-
-    /* Build a packet number to 64 bits */
-    ph->pn64 = picoquic_get_packet_number64(seq_ref, ph->pnmask, ph->pn);
-
-    if (picoquic_supported_versions[cnx->version_index].version_flags&picoquic_version_use_pn_encryption)
-    {
-        fprintf(F, "    Decrypted PN = %llu (%x)\n",
-            (unsigned long long)ph->pn64, ph->pn);
-    }
-    /* Attempt to decrypt the packet */
-    decoded = picoquic_aead_decrypt_generic(out_bytes,
-        bytes + ph->offset, length - ph->offset, ph->pn64, header_buffer, ph->offset, aead_context);
-
-    return decoded;
-}
-
-void picoquic_log_decrypt_encrypted(FILE* F, int log_cnxid,
-    picoquic_cnx_t* cnx, int receiving,
-    uint8_t* bytes, size_t length, picoquic_packet_header* ph)
-{
-    /* decrypt in a separate copy */
-    uint8_t decrypted[PICOQUIC_MAX_PACKET_SIZE];
-    size_t decrypted_length = 0;
-    int cmp_reset_secret = 0;
-    int cmp_reset_secret_old = 0;
-    uint64_t cnx_id64 = 0;
-
-    if (log_cnxid != 0) {
-        cnx_id64 = picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx));
-    }
-
-    /* Check first whether this could be a reset packet */
-    if (length > PICOQUIC_RESET_SECRET_SIZE + 10) {
-        cmp_reset_secret = (memcmp(bytes + length - PICOQUIC_RESET_SECRET_SIZE,
-                                cnx->reset_secret, PICOQUIC_RESET_SECRET_SIZE)
-            == 0);
-
-        if (cmp_reset_secret == 0) {
-            cmp_reset_secret = (memcmp(bytes + 9, cnx->reset_secret,
-                                    PICOQUIC_RESET_SECRET_SIZE)
-                == 0);
-            cmp_reset_secret_old = cmp_reset_secret;
-        }
-    }
-
-    if (cmp_reset_secret != 0) {
-        if (cnx_id64 != 0) {
-            fprintf(F, "%" PRIx64 ": ", cnx_id64);
-        }
-        fprintf(F, "    Stateless reset packet%s, %d bytes\n",
-            (cmp_reset_secret_old == 0) ? "" : " (old format)",
-            (int)length);
-    } else {
-        if (receiving) {
-            decrypted_length = picoquic_decrypt_log_packet(F, cnx, decrypted, bytes, length, ph,
-                cnx->first_sack_item.end_of_sack_range, cnx->pn_dec, cnx->aead_decrypt_ctx);
-        } else {
-            decrypted_length = picoquic_decrypt_log_packet(F, cnx, decrypted, bytes, length, ph,
-                cnx->send_sequence, cnx->pn_enc, cnx->aead_de_encrypt_ctx);
-        }
-
-        if (decrypted_length > length) {
-            if (cnx_id64 != 0) {
-                fprintf(F, "%" PRIx64 ": ", cnx_id64);
-            }
-            fprintf(F, "    Decryption failed!\n");
-        } else {
-            if (cnx_id64 != 0) {
-                fprintf(F, "%" PRIx64 ": ", cnx_id64);
-            }
-            fprintf(F, "    Decrypted %d bytes\n", (int)decrypted_length);
-            picoquic_log_frames(F, cnx_id64, decrypted, decrypted_length);
-        }
-    }
-}
-
-void picoquic_log_decrypt_0rtt(FILE* F, int log_cnxid,
-    picoquic_cnx_t* cnx, uint8_t* bytes, size_t length, picoquic_packet_header* ph)
-{
-    /* decrypt in a separate copy */
-    uint8_t decrypted[PICOQUIC_MAX_PACKET_SIZE];
-    size_t decrypted_length = 0;
-    uint64_t cnx_id64 = 0;
-
-    if (log_cnxid != 0) {
-        cnx_id64 = picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx));
-    }
-
-    decrypted_length = picoquic_decrypt_log_packet(F, cnx, decrypted, bytes, length, ph,
-        1, cnx->pn_enc_0rtt, cnx->aead_0rtt_decrypt_ctx);
-
-    if (decrypted_length > length) {
-        if (cnx_id64 != 0) {
-            fprintf(F, "%" PRIx64 ": ", cnx_id64);
-        }
-        fprintf(F, "    Decryption failed!\n");
-    } else {
-        if (cnx_id64 != 0) {
-            fprintf(F, "%" PRIx64 ": ", cnx_id64);
-        }
-        fprintf(F, "    Decrypted %d bytes\n", (int)decrypted_length);
-        picoquic_log_frames(F, cnx_id64, decrypted, decrypted_length);
-    }
-}
-
-void picoquic_log_decrypt_encrypted_cleartext(FILE* F, int log_cnxid,
-    picoquic_cnx_t* cnx, int receiving,
-    uint8_t* bytes, size_t length, picoquic_packet_header* ph)
-{
-    /* decrypt in a separate copy */
-    uint8_t decrypted[PICOQUIC_MAX_PACKET_SIZE];
-    size_t decrypted_length = 0;
-    uint64_t cnx_id64 = 0;
-
-    if (log_cnxid != 0) {
-        cnx_id64 = picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx));
-    }
-
-    if (receiving) {
-        decrypted_length = picoquic_decrypt_log_packet(F, cnx, decrypted, bytes, length, ph,
-            cnx->first_sack_item.end_of_sack_range, cnx->pn_dec_cleartext, cnx->aead_decrypt_cleartext_ctx);
-    } else {
-        decrypted_length = picoquic_decrypt_log_packet(F, cnx, decrypted, bytes, length, ph,
-            cnx->send_sequence, cnx->pn_enc_cleartext, cnx->aead_de_encrypt_cleartext_ctx);
-    }
-
-    if (decrypted_length > length) {
-        if (cnx_id64 != 0) {
-            fprintf(F, "%" PRIx64 ": ", cnx_id64);
-        }
-        fprintf(F, "    Decryption failed!\n");
-    } else {
-        if (cnx_id64 != 0) {
-            fprintf(F, "%" PRIx64 ": ", cnx_id64);
-        }
-        fprintf(F, "    Decrypted %d bytes\n", (int)decrypted_length);
-        picoquic_log_frames(F, cnx_id64, decrypted, decrypted_length);
-    }
-}
-
 size_t picoquic_log_segment(FILE* F, int log_cnxid, picoquic_quic_t* quic, picoquic_cnx_t* cnx,
     struct sockaddr* addr_peer, int receiving,
     uint8_t* bytes, size_t length, uint64_t current_time)
@@ -1133,12 +916,14 @@ size_t picoquic_log_segment(FILE* F, int log_cnxid, picoquic_quic_t* quic, picoq
     int ret = 0;
     picoquic_packet_header ph;
     picoquic_cnx_t* pcnx = cnx;
-    size_t consumed = length;
+    uint32_t consumed = length;
     uint64_t log_cnxid64 = 0;
+    uint8_t decrypted[PICOQUIC_MAX_PACKET_SIZE];
 
-
-    /* Parse the clear text header */
-    ret = picoquic_parse_packet_header(quic, bytes, (uint32_t)length, addr_peer, &ph, &pcnx, receiving);
+    /* Parse the header and decrypt the packet */
+    memcpy(decrypted, bytes, length);
+    ret = picoquic_parse_header_and_decrypt(quic, decrypted, length, length, addr_peer,
+        current_time, &ph, &cnx, &consumed, receiving);
 
     if (log_cnxid != 0) {
         if (pcnx == NULL) {
@@ -1146,84 +931,44 @@ size_t picoquic_log_segment(FILE* F, int log_cnxid, picoquic_quic_t* quic, picoq
             if (ret == 0) {
                 if (ph.ptype == picoquic_packet_version_negotiation) {
                     log_cnxid64 = picoquic_val64_connection_id(ph.srce_cnx_id);
-                } else {
+                }
+                else {
                     log_cnxid64 = picoquic_val64_connection_id(ph.dest_cnx_id);
                 }
             }
-        } else {
+        }
+        else {
             log_cnxid64 = picoquic_val64_connection_id(picoquic_get_logging_cnxid(pcnx));
-
-            ph.pn64 = picoquic_get_packet_number64(
-                (receiving == 0) ? pcnx->send_sequence : pcnx->first_sack_item.end_of_sack_range,
-                ph.pnmask, ph.pn);
         }
     }
 
     /* first log line */
     picoquic_log_packet_address(F, log_cnxid64, pcnx, addr_peer, receiving, length, current_time);
 
+    /* Header */
+    picoquic_log_packet_header(F, log_cnxid64, &ph);
+
     if (ret != 0) {
-        /* packet does not even parse */
+        /* packet does parse or decrypt */
         if (log_cnxid64 != 0) {
             fprintf(F, "%" PRIx64 ": ", log_cnxid64);
         }
-        fprintf(F, "   Cannot parse the packet header.\n");
-    }
-    else {
-        consumed = ph.offset + ph.payload_length;
-        length = consumed;
-#if 0
-        if (cnx == NULL && !picoquic_is_connection_id_null(ph.dest_cnx_id)) {
-            cnx = picoquic_cnx_by_id(quic, ph.dest_cnx_id);
-        }
-
-        if (cnx == NULL) {
-            cnx = picoquic_cnx_by_net(quic, addr_peer);
-        }
-
-        if (pcnx != NULL) {
-            ph.pn64 = picoquic_get_packet_number64(
-                (receiving == 0) ? pcnx->send_sequence : pcnx->first_sack_item.end_of_sack_range,
-                ph.pnmask, ph.pn);
+        if (ret == PICOQUIC_ERROR_STATELESS_RESET) {
+            fprintf(F, "   Stateless reset.\n");
         }
         else {
-            ph.pn64 = ph.pn;
+            fprintf(F, "   Header or encryption error: %x.\n", ret);
         }
-#endif
-        picoquic_log_packet_header(F, log_cnxid64, &ph);
-
-        if (pcnx == NULL) {
-            /* Limited logging */
-            if (ph.ptype == picoquic_packet_version_negotiation) {
-                picoquic_log_negotiation_packet(F, log_cnxid64, bytes, length, &ph);
-            }
+    } else if (ph.ptype == picoquic_packet_version_negotiation) {
+        /* log version negotiation */
+        picoquic_log_negotiation_packet(F, log_cnxid64, bytes, length, &ph);
+    } else {
+        /* log frames inside packet */
+        if (log_cnxid64 != 0) {
+            fprintf(F, "%" PRIx64 ": ", log_cnxid64);
         }
-        else {
-            switch (ph.ptype) {
-            case picoquic_packet_version_negotiation:
-                /* log version negotiation */
-                picoquic_log_negotiation_packet(F, log_cnxid64, bytes, length, &ph);
-                break;
-            case picoquic_packet_server_stateless:
-            case picoquic_packet_client_initial:
-            case picoquic_packet_handshake:
-                if (cnx != NULL) {
-                    picoquic_log_decrypt_encrypted_cleartext(F, log_cnxid, pcnx, receiving, bytes, length, &ph);
-                }
-                break;
-            case picoquic_packet_0rtt_protected:
-                /* log 0-rtt packet */
-                picoquic_log_decrypt_0rtt(F, log_cnxid, pcnx, bytes, length, &ph);
-                break;
-            case picoquic_packet_1rtt_protected_phi0:
-            case picoquic_packet_1rtt_protected_phi1:
-                picoquic_log_decrypt_encrypted(F, log_cnxid, pcnx, receiving, bytes, length, &ph);
-                break;
-            default:
-                /* Packet type error. Log and ignore */
-                break;
-            }
-        }
+        fprintf(F, "    Decrypted %d bytes\n", (int)ph.payload_length);
+        picoquic_log_frames(F, log_cnxid64, decrypted + ph.offset, ph.payload_length);
     }
     fprintf(F, "\n");
 

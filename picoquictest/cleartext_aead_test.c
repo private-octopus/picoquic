@@ -515,4 +515,3 @@ int cleartext_pn_enc_test()
 
     return ret;
 }
-
