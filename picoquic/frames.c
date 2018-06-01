@@ -903,7 +903,7 @@ static picoquic_packet* picoquic_update_rtt(picoquic_cnx_t* cnx, uint64_t larges
     picoquic_packet* packet = cnx->retransmit_newest;
 
     /* Check whether this is a new acknowledgement */
-    if (largest > cnx->highest_acknowledged) {
+    if (largest > cnx->highest_acknowledged || cnx->first_sack_item.start_of_sack_range == (uint64_t)((int64_t)-1)) {
         cnx->highest_acknowledged = largest;
 
         if (ack_delay < PICOQUIC_ACK_DELAY_MAX) {
@@ -1192,11 +1192,7 @@ void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t* cnx, picoquic_pa
     byte_index = p->offset;
 
     while (ret == 0 && byte_index < p->length) {
-        if (version == PICOQUIC_FOURTH_INTEROP_VERSION && p->bytes[byte_index] == 0x0E) {
-            ret = picoquic_process_ack_of_ack_frame(&cnx->first_sack_item, &p->bytes[byte_index],
-                p->length - byte_index, &frame_length);
-            byte_index += frame_length;
-        } else if (version != PICOQUIC_FOURTH_INTEROP_VERSION && p->bytes[byte_index] == picoquic_frame_type_ack) {
+        if (p->bytes[byte_index] == picoquic_frame_type_ack) {
             ret = picoquic_process_ack_of_ack_frame(&cnx->first_sack_item, &p->bytes[byte_index],
                 p->length - byte_index, &frame_length);
             byte_index += frame_length;
@@ -1389,8 +1385,7 @@ int picoquic_prepare_ack_frame(picoquic_cnx_t* cnx, uint64_t current_time,
     uint8_t ack_type_byte = picoquic_frame_type_ack;
 
     /* Check that there is enough room in the packet, and something to acknowledge */
-    if (cnx->first_sack_item.start_of_sack_range == 0 && cnx->first_sack_item.end_of_sack_range == 0  &&
-        cnx->time_stamp_largest_received == (uint64_t)((int64_t)-1)) {
+    if (cnx->first_sack_item.start_of_sack_range == (uint64_t)((int64_t)-1)) {
         *consumed = 0;
     } else if (bytes_max < 13) {
         /* A valid ACK, with our encoding, uses at least 13 bytes.
@@ -1989,11 +1984,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
                 bytes_max - byte_index, restricted, &consumed, current_time);
             cnx->ack_needed = 1;
             byte_index += consumed;
-        } else if (version == PICOQUIC_FOURTH_INTEROP_VERSION && first_byte == 0x0E) {
-            ret = picoquic_decode_ack_frame(cnx, bytes + byte_index,
-                bytes_max - byte_index, &consumed, current_time, restricted);
-            byte_index += consumed;
-        } else if (version != PICOQUIC_FOURTH_INTEROP_VERSION && first_byte == picoquic_frame_type_ack) {
+        } else if (first_byte == picoquic_frame_type_ack) {
             ret = picoquic_decode_ack_frame(cnx, bytes + byte_index,
                 bytes_max - byte_index, &consumed, current_time, restricted);
             byte_index += consumed;
@@ -2227,9 +2218,7 @@ int picoquic_skip_frame(uint8_t* bytes, size_t bytes_max, size_t* consumed,
     if (first_byte >= picoquic_frame_type_stream_range_min && first_byte <= picoquic_frame_type_stream_range_max) {
         *pure_ack = 0;
         ret = picoquic_skip_stream_frame(bytes, bytes_max, consumed);
-    } else if (version == PICOQUIC_FOURTH_INTEROP_VERSION && first_byte == 0x0E) {
-        ret = picoquic_skip_ack_frame(bytes, bytes_max, consumed);
-    } else if (version != PICOQUIC_FOURTH_INTEROP_VERSION && first_byte == picoquic_frame_type_ack) {
+    } else if (first_byte == picoquic_frame_type_ack) {
         ret = picoquic_skip_ack_frame(bytes, bytes_max, consumed);
     } else {
         switch (first_byte) {

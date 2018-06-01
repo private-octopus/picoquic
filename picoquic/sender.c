@@ -1862,8 +1862,9 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx, picoquic_packet* packet,
     int ret = 0;
     picoquic_path_t * path_x = cnx->path[0];
 
-    /* Check that the connection is still alive */
-    if ((cnx->cnx_state < picoquic_state_disconnecting && (current_time - cnx->latest_progress_time) > PICOQUIC_MICROSEC_SILENCE_MAX) ||
+    /* Check that the connection is still alive -- the timer is asymmetric, so client will drop faster */
+    if ((cnx->cnx_state < picoquic_state_disconnecting && 
+        (current_time - cnx->latest_progress_time) > (PICOQUIC_MICROSEC_SILENCE_MAX*(2 - cnx->client_mode))) ||
         (cnx->cnx_state < picoquic_state_client_ready &&
             current_time > cnx->start_time + PICOQUIC_MICROSEC_HANDSHAKE_MAX))
     {

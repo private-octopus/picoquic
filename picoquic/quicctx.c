@@ -726,7 +726,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         }
 
         if (cnx != NULL) {
-            cnx->first_sack_item.start_of_sack_range = 0;
+            cnx->first_sack_item.start_of_sack_range = (uint64_t)((int64_t)-1);
             cnx->first_sack_item.end_of_sack_range = 0;
             cnx->first_sack_item.next_sack = NULL;
             cnx->highest_ack_sent = 0;
@@ -748,21 +748,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             cnx->aead_decrypt_ctx = NULL;
             cnx->aead_encrypt_ctx = NULL;
             cnx->aead_de_encrypt_ctx = NULL;
-
-            if ((picoquic_supported_versions[cnx->version_index].version_flags&picoquic_version_use_pn_encryption) != 0) {
-                /* If we use PN encryption, initial sequence number will be 1 */
-                cnx->send_sequence = 1;
-            } else {
-                /* Set the initial sequence randomly between 1 and 2^31 - 1
-                 * The spec does not require avoiding the value 0, but doing
-                 * so minimizes risks of triggering bugs in other implementations.
-                 */
-                do {
-                    random_sequence = (uint32_t)(0x7FFFFFFF & picoquic_public_random_64());
-                } while (random_sequence == 0);
-                cnx->send_sequence = random_sequence;
-            }
-
+            cnx->send_sequence = 0;
             cnx->nb_retransmit = 0;
             cnx->latest_retransmit_time = 0;
 
@@ -1161,6 +1147,14 @@ int picoquic_reset_cnx_version(picoquic_cnx_t* cnx, uint8_t* bytes, size_t lengt
                     while (cnx->retransmit_newest != NULL) {
                         picoquic_dequeue_retransmit_packet(cnx, cnx->retransmit_newest, 1);
                     }
+                    /* Reset the sack lists*/
+                    while (cnx->first_sack_item.next_sack != NULL) {
+                        picoquic_sack_item_t * next = cnx->first_sack_item.next_sack;
+                        cnx->first_sack_item.next_sack = next->next_sack;
+                        free(next);
+                    }
+                    cnx->first_sack_item.start_of_sack_range = (uint64_t)((int64_t)-1);
+                    cnx->first_sack_item.end_of_sack_range = 0;
 
                     /* Reset the streams */
                     picoquic_clear_stream(&cnx->first_stream);

@@ -39,19 +39,19 @@ int picoquic_is_pn_already_received(picoquic_cnx_t* cnx, uint64_t pn64)
     int is_received = 0;
     picoquic_sack_item_t* sack = &cnx->first_sack_item;
 
-    do {
-        if (pn64 > sack->end_of_sack_range)
-            break;
-        else if (pn64 >= sack->start_of_sack_range) {
-            if (sack->start_of_sack_range == 0 && sack->end_of_sack_range == 0)
-                is_received = 0;
-            else
+    if (sack->start_of_sack_range != (uint64_t)((int64_t)-1)) {
+        do {
+            if (pn64 > sack->end_of_sack_range)
+                break;
+            else if (pn64 >= sack->start_of_sack_range) {
                 is_received = 1;
-            break;
-        } else {
-            sack = sack->next_sack;
-        }
-    } while (sack != NULL);
+                break;
+            }
+            else {
+                sack = sack->next_sack;
+            }
+        } while (sack != NULL);
+    }
 
     return is_received;
 }
@@ -67,7 +67,7 @@ int picoquic_update_sack_list(picoquic_sack_item_t* sack,
     int ret = 1; /* duplicate by default, reset to 0 if update found */
     picoquic_sack_item_t* previous = NULL;
 
-    if (sack->start_of_sack_range == 0 && sack->end_of_sack_range == 0) {
+    if (sack->start_of_sack_range == (uint64_t)((int64_t)-1)) {
         /* This is the first packet ever received.. */
         sack->start_of_sack_range = pn64_min;
         sack->end_of_sack_range = pn64_max;
@@ -174,14 +174,24 @@ int picoquic_update_sack_list(picoquic_sack_item_t* sack,
 
 int picoquic_record_pn_received(picoquic_cnx_t* cnx, uint64_t pn64, uint64_t current_microsec)
 {
+    int ret = 0;
     picoquic_sack_item_t* sack = &cnx->first_sack_item;
 
-    if ((sack->start_of_sack_range == 0 && sack->end_of_sack_range == 0) || pn64 > sack->end_of_sack_range) {
+    if (sack->start_of_sack_range == (uint64_t)((int64_t)-1)) {
         /* This is the first packet ever received.. */
+        sack->start_of_sack_range = pn64;
+        sack->end_of_sack_range = pn64;
         cnx->time_stamp_largest_received = current_microsec;
+    } 
+    else {
+        if (pn64 > sack->end_of_sack_range) {
+            cnx->time_stamp_largest_received = current_microsec;
+        }
+
+        ret = picoquic_update_sack_list(sack, pn64, pn64);
     }
 
-    return picoquic_update_sack_list(sack, pn64, pn64);
+    return ret;
 }
 
 /*
@@ -192,7 +202,7 @@ int picoquic_check_sack_list(picoquic_sack_item_t* sack,
 {
     int ret = -1; /* duplicate by default, reset to 0 if update found */
 
-    if (sack->start_of_sack_range == 0 && sack->end_of_sack_range == 0) {
+    if (sack->start_of_sack_range == (uint64_t)((int64_t)-1)) {
         ret = 0;
     } else {
         do {
