@@ -508,6 +508,9 @@ void picoquic_varint_encode_16(uint8_t* bytes, uint16_t n16);
 size_t picoquic_varint_decode(const uint8_t* bytes, size_t max_bytes, uint64_t* n64);
 size_t picoquic_varint_skip(uint8_t* bytes);
 
+void picoquic_headint_encode_32(uint8_t* bytes, uint64_t sequence_number);
+size_t picoquic_headint_decode(const uint8_t* bytes, size_t max_bytes, uint64_t* n64);
+
 /* utilities */
 char* picoquic_string_create(const char* original, size_t len);
 char* picoquic_string_duplicate(const char* original);
