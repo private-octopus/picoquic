@@ -606,7 +606,6 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
     char const* sni, char const* alpn, char client_mode)
 {
     picoquic_cnx_t* cnx = (picoquic_cnx_t*)malloc(sizeof(picoquic_cnx_t));
-    uint32_t random_sequence;
 
     if (cnx != NULL) {
         int ret;

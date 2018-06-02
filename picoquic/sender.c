@@ -753,8 +753,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx, picoquic_path_t * path_x, ui
 
                     while (ret == 0 && byte_index < p->length) {
                         ret = picoquic_skip_frame(&p->bytes[byte_index],
-                            p->length - byte_index, &frame_length, &frame_is_pure_ack,
-                            picoquic_supported_versions[cnx->version_index].version);
+                            p->length - byte_index, &frame_length, &frame_is_pure_ack);
 
                         /* Check whether the data was already acked, which may happen in 
                          * case of spurious retransmissions */
@@ -862,8 +861,7 @@ int picoquic_is_cnx_backlog_empty(picoquic_cnx_t* cnx)
 
         while (ret == 0 && byte_index < p->length) {
             ret = picoquic_skip_frame(&p->bytes[byte_index],
-                p->length - p->offset, &frame_length, &frame_is_pure_ack,
-                picoquic_supported_versions[cnx->version_index].version);
+                p->length - p->offset, &frame_length, &frame_is_pure_ack);
 
             if (!frame_is_pure_ack) {
                 backlog_empty = 0;

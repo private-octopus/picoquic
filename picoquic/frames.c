@@ -1182,8 +1182,6 @@ void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t* cnx, picoquic_pa
     size_t byte_index;
     int frame_is_pure_ack = 0;
     size_t frame_length = 0;
-    uint32_t version = picoquic_supported_versions[cnx->version_index].version;
-
 
     if (ret == 0 && p->ptype == picoquic_packet_0rtt_protected) {
         cnx->nb_zero_rtt_acked++;
@@ -1201,7 +1199,7 @@ void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t* cnx, picoquic_pa
             byte_index += frame_length;
         } else {
             ret = picoquic_skip_frame(&p->bytes[byte_index],
-                p->length - byte_index, &frame_length, &frame_is_pure_ack, version);
+                p->length - byte_index, &frame_length, &frame_is_pure_ack);
             byte_index += frame_length;
         }
     }
@@ -1973,7 +1971,6 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
 {
     int ret = 0;
     size_t byte_index = 0;
-    uint32_t version = picoquic_supported_versions[cnx->version_index].version;
 
     while (byte_index < bytes_max && ret == 0) {
         uint8_t first_byte = bytes[byte_index];
@@ -2206,7 +2203,7 @@ static int picoquic_skip_ack_frame(uint8_t* bytes, size_t bytes_max, size_t* con
 }
 
 int picoquic_skip_frame(uint8_t* bytes, size_t bytes_max, size_t* consumed,
-    int* pure_ack, uint32_t version)
+    int* pure_ack)
 {
     int ret = 0;
     size_t byte_index = 0;
@@ -2319,8 +2316,7 @@ int picoquic_skip_frame(uint8_t* bytes, size_t bytes_max, size_t* consumed,
     return ret;
 }
 
-int picoquic_decode_closing_frames(uint8_t* bytes,
-    size_t bytes_max, int* closing_received, uint32_t version)
+int picoquic_decode_closing_frames(uint8_t* bytes, size_t bytes_max, int* closing_received)
 {
     int ret = 0;
     size_t byte_index = 0;
@@ -2337,7 +2333,7 @@ int picoquic_decode_closing_frames(uint8_t* bytes,
             int pure_ack = 0;
 
             ret = picoquic_skip_frame(bytes + byte_index,
-                bytes_max - byte_index, &consumed, &pure_ack, version);
+                bytes_max - byte_index, &consumed, &pure_ack);
             byte_index += consumed;
         }
     }

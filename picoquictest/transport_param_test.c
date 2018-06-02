@@ -62,6 +62,13 @@ static picoquic_transport_parameters transport_param_test8 = {
     65535, 0x400000, 0, 0, 30, 1480, 3
 };
 
+static picoquic_transport_parameters transport_param_test9 = {
+    0x1000000, 0x1000000, 4, 0, 255, 1480, 3,
+    { 4, { 10, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 4433,
+    {{1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },4},
+        { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 }}
+};
+
 
 static uint8_t transport_param_reset_secret[PICOQUIC_RESET_SECRET_SIZE] = {
     1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
@@ -154,6 +161,21 @@ uint8_t client_param8[] = {
     0, 5, 0, 2, 0x05, 0xC8,
 };
 
+uint8_t server_param3[] = {
+    'P', 'C', 'Q', '0',
+    0x08,
+    'P', 'C', 'Q', '0',
+    0xFF, 0x00, 0x00, 0x0B,
+    0, 87,
+    0, 0, 0, 4, 0x01, 0, 0, 0,
+    0, 1, 0, 4, 0x01, 0, 0, 0,
+    0, 2, 0, 2, 0, 1,
+    0, 3, 0, 2, 0, 0xFF,
+    0, 5, 0, 2, 0x05, 0xC8,
+    0, 6, 0, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+    0, 4, 0, 29,
+    4, 4, 10, 0, 0, 1, 0x11, 0x51, 4, 1, 2, 3, 4, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
+};
 
 int transport_param_one_test(int mode, uint32_t version, uint32_t proposed_version,
     picoquic_transport_parameters* param, uint8_t* target, size_t target_length)
@@ -342,6 +364,12 @@ int transport_param_test()
         ret = transport_param_decode_test(0, version_default, 0x0A1A0A1A,
             &transport_param_test8, client_param8, sizeof(client_param8));
     }
+
+    if (ret == 0) {
+        ret = transport_param_decode_test(1, version_default, 0x0A1A0A1A,
+            &transport_param_test9, server_param3, sizeof(server_param3));
+    }
+
 
     if (ret == 0)
     {
