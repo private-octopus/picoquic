@@ -64,7 +64,7 @@ static picoquic_packet_header hinitial10 = {
     TEST_CNXID_REM_VAL,
     0xDEADBEEF,
     0x50435130,
-    24,
+    20,
     20,
     picoquic_packet_client_initial,
     0xFFFFFFFF00000000ull,
@@ -89,7 +89,7 @@ static picoquic_packet_header hinitial10_l = {
     TEST_CNXID_LOCAL_VAL,
     0xDEADBEEF,
     0x50435130,
-    28,
+    24,
     24,
     picoquic_packet_client_initial,
     0xFFFFFFFF00000000ull,
@@ -145,12 +145,12 @@ static picoquic_packet_header hphi0_c_32 = {
     TEST_CNXID_NULL_VAL,
     0xDEADBEEF,
     0,
-    13,
+    9,
     9,
     picoquic_packet_1rtt_protected_phi0,
     0xFFFFFFFF00000000ull,
     0,
-    PICOQUIC_MAX_PACKET_SIZE - 13,
+    PICOQUIC_MAX_PACKET_SIZE - 9,
     0,
     0
 };
@@ -166,12 +166,12 @@ static picoquic_packet_header hphi0_c_32_spin = {
     TEST_CNXID_NULL_VAL,
     0xDEADBEEF,
     0,
-    13,
+    9,
     9,
     picoquic_packet_1rtt_protected_phi0,
     0xFFFFFFFF00000000ull,
     0,
-    PICOQUIC_MAX_PACKET_SIZE - 13, 
+    PICOQUIC_MAX_PACKET_SIZE - 9, 
     0,
     1
 };
@@ -186,12 +186,12 @@ static picoquic_packet_header hphi0_noc_32 = {
     TEST_CNXID_NULL_VAL,
     0xDEADBEEF,
     0,
-    5,
+    1,
     1,
     picoquic_packet_1rtt_protected_phi0,
     0xFFFFFFFF00000000ull,
     0,
-    PICOQUIC_MAX_PACKET_SIZE - 5,
+    PICOQUIC_MAX_PACKET_SIZE - 1,
     0,
     0
 };
@@ -301,15 +301,14 @@ int parseheadertest()
         /* Prepare the header inside the packet */
         header_length = picoquic_create_packet_header(cnx_10, test_entries[i].ph->ptype,
             test_entries[i].ph->pn, packet, &pn_offset);
-        picoquic_update_payload_length(packet, header_length, header_length +
+        picoquic_update_payload_length(packet, pn_offset, pn_offset, pn_offset +
             test_entries[i].ph->payload_length);
-
-        if (header_length != test_entries[i].ph->offset) {
-            ret = -1;
+        
+        if ( pn_offset != test_entries[i].ph->pn_offset) {
+           ret = -1;
         }
-        else if (pn_offset != test_entries[i].ph->pn_offset) {
-            ret = -1;
-        } else if (memcmp(packet, test_entries[i].packet, header_length) != 0)
+        
+        if (memcmp(packet, test_entries[i].packet, header_length) != 0)
         {
             ret = -1;
         }

@@ -201,11 +201,11 @@ picoquic_packet* picoquic_create_packet()
 }
 
 void picoquic_update_payload_length(
-    uint8_t* bytes, size_t header_length, size_t packet_length)
+    uint8_t* bytes, size_t pnum_index, size_t header_length, size_t packet_length)
 {
     if ((bytes[0] & 0x80) != 0 && header_length > 6 && packet_length > header_length && packet_length < 0x4000)
     {
-        picoquic_varint_encode_16(bytes + header_length - 6, (uint16_t)(packet_length - header_length));
+        picoquic_varint_encode_16(bytes + pnum_index - 2, (uint16_t)(packet_length - header_length));
     }
 }
 
@@ -459,7 +459,13 @@ uint32_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     h_length = picoquic_create_packet_header(cnx, ptype,
         sequence_number, send_buffer, &pnum_offset);
     /* Make sure that the payload length is encoded in the header */
-    picoquic_update_payload_length(send_buffer, h_length, length + aead_checksum_length);
+    if (picoquic_supported_versions[cnx->version_index].version_flags&picoquic_version_use_pn_encryption)
+    {
+        /* If using encryption, the "payload" length also includes the encrypted packet length */
+        picoquic_update_payload_length(send_buffer, pnum_offset, pnum_offset, length + aead_checksum_length);
+    } else {
+        picoquic_update_payload_length(send_buffer, pnum_offset, h_length, length + aead_checksum_length);
+    }
 
     send_length = (uint32_t)picoquic_aead_encrypt_generic(send_buffer + /* header_length */ h_length,
         bytes + header_length, length - header_length,
@@ -473,6 +479,8 @@ uint32_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     {
         /* The sample is located at the offset */
         size_t sample_offset = /* header_length */ h_length;
+        size_t pn_length = h_length - pnum_offset;
+
         if (sample_offset + aead_checksum_length > send_length)
         {
             sample_offset = length - aead_checksum_length;
@@ -481,7 +489,7 @@ uint32_t picoquic_protect_packet(picoquic_cnx_t* cnx,
         {
             /* Encode */
             picoquic_pn_encrypt(pn_enc, send_buffer + sample_offset, send_buffer + /* pn_offset */ pnum_offset, 
-                send_buffer + /* pn_offset */ pnum_offset, 4);
+                send_buffer + /* pn_offset */ pnum_offset, pn_length);
         }
     }
 

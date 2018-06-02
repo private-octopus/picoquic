@@ -574,7 +574,7 @@ uint32_t  picoquic_predict_packet_header_length(
     picoquic_packet_type_enum packet_type);
 
 void picoquic_update_payload_length(
-    uint8_t* bytes, size_t header_length, size_t packet_length);
+    uint8_t* bytes, size_t pnum_index, size_t header_length, size_t packet_length);
 
 uint32_t picoquic_get_checksum_length(picoquic_cnx_t* cnx, int is_cleartext_mode);
 
