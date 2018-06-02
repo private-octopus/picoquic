@@ -1011,7 +1011,9 @@ int quic_client(const char* ip_address_text, int server_port, uint32_t proposed_
                 if (ret == 0 && picoquic_get_cnx_state(cnx_client) == picoquic_state_client_ready) {
                     if (established == 0) {
                         picoquic_log_transport_extension(F_log, cnx_client, 0);
-                        printf("Connection established.\n");
+                        printf("Connection established. Version = %x, I-CID: %llx\n",
+                            picoquic_supported_versions[cnx_client->version_index].version,
+                            (unsigned long long)picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx_client)));
                         established = 1;
 
                         if (zero_rtt_available == 0) {
@@ -1194,7 +1196,7 @@ int main(int argc, char** argv)
     const char* server_key_file = default_server_key_file;
     const char* log_file = NULL;
     int server_port = default_server_port;
-    uint32_t proposed_version = 0xFF00000a;
+    uint32_t proposed_version = 0xff00000b;
     int is_client = 0;
     int just_once = 0;
     int do_hrr = 0;
