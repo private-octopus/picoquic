@@ -400,7 +400,6 @@ int test_packet_encrypt_one(
     uint8_t send_buffer[PICOQUIC_MAX_PACKET_SIZE];
     picoquic_path_t * path_x = cnx_client->path[0];
     uint64_t current_time = 0;
-    uint32_t consumed = 0;
     picoquic_packet_header expected_header;
     picoquic_packet * packet = (picoquic_packet *) malloc(sizeof(picoquic_packet));
 
@@ -470,7 +469,6 @@ static const uint8_t test_1rtt_secret[] = {
 };
 
 static uint8_t const addr1[4] = { 10, 0, 0, 1 };
-static uint8_t const addr2[4] = { 10, 0, 0, 2 };
 
 int packet_enc_dec_test()
 {
