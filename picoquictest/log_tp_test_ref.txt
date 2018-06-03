@@ -23,8 +23,9 @@
 102030405060708:         Extension type: 3, length 2 (0x0003 / 0x0002), 00ff
 
 102030405060708: Version: 50435130
-102030405060708:     Supported version (8 bytes):
+102030405060708:     Supported version (12 bytes):
 102030405060708:         50435130
+102030405060708:         ff00000c
 102030405060708:         ff00000b
 102030405060708:     Extension list (54 bytes):
 102030405060708:         Extension type: 0, length 4 (0x0000 / 0x0004), 0000ffff
@@ -35,8 +36,9 @@
 102030405060708:         Extension type: 6, length 16 (0x0006 / 0x0010), 0102030405060708090a0b0c0d0e0f10
 
 102030405060708: Version: 50435130
-102030405060708:     Supported version (8 bytes):
+102030405060708:     Supported version (12 bytes):
 102030405060708:         50435130
+102030405060708:         ff00000c
 102030405060708:         ff00000b
 102030405060708:     Extension list (54 bytes):
 102030405060708:         Extension type: 0, length 4 (0x0000 / 0x0004), 01000000
@@ -61,4 +63,18 @@
 102030405060708:         Extension type: 1, length 4 (0x0001 / 0x0004), 00004000
 102030405060708:         Extension type: 5, length 2 (0x0005 / 0x0002), 05c0
 102030405060708:         Extension type: 7, length 1 (0x0007 / 0x0001), 11
+
+102030405060708: Version: 50435130
+102030405060708:     Supported version (12 bytes):
+102030405060708:         50435130
+102030405060708:         ff00000c
+102030405060708:         ff00000b
+102030405060708:     Extension list (87 bytes):
+102030405060708:         Extension type: 0, length 4 (0x0000 / 0x0004), 01000000
+102030405060708:         Extension type: 1, length 4 (0x0001 / 0x0004), 01000000
+102030405060708:         Extension type: 2, length 2 (0x0002 / 0x0002), 0001
+102030405060708:         Extension type: 3, length 2 (0x0003 / 0x0002), 00ff
+102030405060708:         Extension type: 5, length 2 (0x0005 / 0x0002), 05c8
+102030405060708:         Extension type: 6, length 16 (0x0006 / 0x0010), 0102030405060708090a0b0c0d0e0f10
+102030405060708:         Extension type: 4, length 29 (0x0004 / 0x001d), 04040a000001115104010203040102030405060708090a0b0c0d0e0f10
 
