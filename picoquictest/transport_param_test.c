@@ -30,36 +30,48 @@
  * Then, add fuzz testing.
  */
 
+#define TRANSPORT_PREFERED_ADDRESS_NULL \
+    { 0, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 0, \
+    { { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },0 }, \
+    { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }} 
+
 static picoquic_transport_parameters transport_param_test1 = {
-    65535, 0x400000, 65533, 65535, 30, 1480, 3
+    65535, 0x400000, 65533, 65535, 30, 1480, 3, TRANSPORT_PREFERED_ADDRESS_NULL
 };
 
 static picoquic_transport_parameters transport_param_test2 = {
-    0x1000000, 0x1000000, 1, 0, 255, 1480, 3
+    0x1000000, 0x1000000, 1, 0, 255, 1480, 3, TRANSPORT_PREFERED_ADDRESS_NULL
 };
 
 static picoquic_transport_parameters transport_param_test3 = {
-    0x1000000, 0x1000000, 1, 0, 255, 0, 3
+    0x1000000, 0x1000000, 1, 0, 255, 0, 3, TRANSPORT_PREFERED_ADDRESS_NULL
 };
 
 static picoquic_transport_parameters transport_param_test4 = {
-    65535, 0x400000, 65532, 0, 30, 1480, 3
+    65535, 0x400000, 65532, 0, 30, 1480, 3, TRANSPORT_PREFERED_ADDRESS_NULL
 };
 
 static picoquic_transport_parameters transport_param_test5 = {
-    0x1000000, 0x1000000, 4, 0, 255, 1480, 3
+    0x1000000, 0x1000000, 4, 0, 255, 1480, 3, TRANSPORT_PREFERED_ADDRESS_NULL
 };
 
 static picoquic_transport_parameters transport_param_test6 = {
-    0x10000, 0xffffffff, 0, 0, 30, 1480, 3
+    0x10000, 0xffffffff, 0, 0, 30, 1480, 3, TRANSPORT_PREFERED_ADDRESS_NULL
 };
 
 static picoquic_transport_parameters transport_param_test7 = {
-    8192, 16384, 5, 0, 10, 1472, 17
+    8192, 16384, 5, 0, 10, 1472, 17, TRANSPORT_PREFERED_ADDRESS_NULL
 };
 
 static picoquic_transport_parameters transport_param_test8 = {
-    65535, 0x400000, 0, 0, 30, 1480, 3
+    65535, 0x400000, 0, 0, 30, 1480, 3, TRANSPORT_PREFERED_ADDRESS_NULL
+};
+
+static picoquic_transport_parameters transport_param_test9 = {
+    0x1000000, 0x1000000, 4, 0, 255, 1480, 3,
+    { 4, { 10, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 4433,
+    {{1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },4},
+        { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 }}
 };
 
 
@@ -119,8 +131,9 @@ uint8_t client_param5[] = {
 
 uint8_t server_param1[] = {
     'P', 'C', 'Q', '0',
-    0x08,
+    0x0C,
     'P', 'C', 'Q', '0',
+    0xFF, 0x00, 0x00, 0x0C,
     0xFF, 0x00, 0x00, 0x0B,
     0, 0x36,
     0, 0, 0, 4, 0, 0, 0xFF, 0xFF,
@@ -133,8 +146,9 @@ uint8_t server_param1[] = {
 
 uint8_t server_param2[] = {
     'P', 'C', 'Q', '0',
-    0x08,
+    0x0C,
     'P', 'C', 'Q', '0',
+    0xFF, 0x00, 0x00, 0x0C,
     0xFF, 0x00, 0x00, 0x0B,
     0, 0x36,
     0, 0, 0, 4, 0x01, 0, 0, 0,
@@ -154,6 +168,62 @@ uint8_t client_param8[] = {
     0, 5, 0, 2, 0x05, 0xC8,
 };
 
+uint8_t server_param3[] = {
+    'P', 'C', 'Q', '0',
+    0x0C,
+    'P', 'C', 'Q', '0',
+    0xFF, 0x00, 0x00, 0x0C,
+    0xFF, 0x00, 0x00, 0x0B,
+    0, 87,
+    0, 0, 0, 4, 0x01, 0, 0, 0,
+    0, 1, 0, 4, 0x01, 0, 0, 0,
+    0, 2, 0, 2, 0, 1,
+    0, 3, 0, 2, 0, 0xFF,
+    0, 5, 0, 2, 0x05, 0xC8,
+    0, 6, 0, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+    0, 4, 0, 29,
+    4, 4, 10, 0, 0, 1, 0x11, 0x51, 4, 1, 2, 3, 4, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
+};
+
+static int transport_param_compare(picoquic_transport_parameters* param, picoquic_transport_parameters* ref) {
+    int ret = 0;
+
+    if (param->initial_max_stream_data != ref->initial_max_stream_data) {
+        ret = -1;
+    }
+    else if (param->initial_max_data != ref->initial_max_data) {
+        ret = -1;
+    }
+    else if (param->initial_max_stream_id_bidir != ref->initial_max_stream_id_bidir) {
+        ret = -1;
+    }
+    else if (param->initial_max_stream_id_unidir != ref->initial_max_stream_id_unidir) {
+        ret = -1;
+    }
+    else if (param->idle_timeout != ref->idle_timeout) {
+        ret = -1;
+    }
+    else if (param->prefered_address.ipVersion != ref->prefered_address.ipVersion) {
+        ret = -1;
+    }
+    else if (param->prefered_address.ipVersion != 0) {
+        int ip_len = (param->prefered_address.ipVersion == 4) ? 4 : 16;
+        if (memcmp(param->prefered_address.ipAddress, ref->prefered_address.ipAddress, ip_len) != 0) {
+            ret = -1;
+        }
+        else if (param->prefered_address.port != ref->prefered_address.port) {
+            ret = -1;
+        }
+        else if (picoquic_compare_connection_id(&param->prefered_address.connection_id, &ref->prefered_address.connection_id) != 0) {
+            ret = -1;
+        }
+        else if (memcmp(param->prefered_address.statelessResetToken, ref->prefered_address.statelessResetToken, 16) != 0) {
+            ret = -1;
+        }
+    }
+
+    return ret;
+}
 
 int transport_param_one_test(int mode, uint32_t version, uint32_t proposed_version,
     picoquic_transport_parameters* param, uint8_t* target, size_t target_length)
@@ -193,7 +263,7 @@ int transport_param_one_test(int mode, uint32_t version, uint32_t proposed_versi
     if (ret == 0) {
         ret = picoquic_receive_transport_extensions(&test_cnx, mode, buffer, encoded, &decoded);
 
-        if (ret == 0 && memcmp(&test_cnx.remote_parameters, param, sizeof(picoquic_transport_parameters)) != 0) {
+        if (ret == 0 && transport_param_compare(&test_cnx.remote_parameters, param) != 0) {
             ret = -1;
         }
     }
@@ -220,7 +290,7 @@ int transport_param_decode_test(int mode, uint32_t version, uint32_t proposed_ve
         ret = -1;
     }
 
-    if (ret == 0 && memcmp(&test_cnx.remote_parameters, param, sizeof(picoquic_transport_parameters)) != 0) {
+    if (ret == 0 && transport_param_compare(&test_cnx.remote_parameters, param) != 0) {
         ret = -1;
     }
 
@@ -342,6 +412,12 @@ int transport_param_test()
         ret = transport_param_decode_test(0, version_default, 0x0A1A0A1A,
             &transport_param_test8, client_param8, sizeof(client_param8));
     }
+
+    if (ret == 0) {
+        ret = transport_param_decode_test(1, version_default, 0x0A1A0A1A,
+            &transport_param_test9, server_param3, sizeof(server_param3));
+    }
+
 
     if (ret == 0)
     {
@@ -472,6 +548,7 @@ int transport_param_log_test()
         transport_param_log_test_one(F, server_param2, sizeof(server_param2), 1);
         transport_param_log_test_one(F, client_param4, sizeof(client_param4), 0);
         transport_param_log_test_one(F, client_param5, sizeof(client_param5), 0);
+        transport_param_log_test_one(F, server_param3, sizeof(server_param3), 1);
     }
 
     if (F != NULL)

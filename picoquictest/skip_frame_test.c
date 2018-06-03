@@ -223,8 +223,7 @@ static int skip_test_packet(uint8_t * bytes, size_t bytes_max)
 
     while (ret == 0 && byte_index < bytes_max) {
         size_t consumed;
-        ret = picoquic_skip_frame(bytes + byte_index, bytes_max - byte_index, &consumed, &pure_ack,
-            PICOQUIC_INTERNAL_TEST_VERSION_1);
+        ret = picoquic_skip_frame(bytes + byte_index, bytes_max - byte_index, &consumed, &pure_ack);
         if (ret == 0) {
             byte_index += consumed;
         }
@@ -270,8 +269,7 @@ int skip_frame_test()
             byte_max += sizeof(extra_bytes);
         }
 
-        t_ret = picoquic_skip_frame(buffer, byte_max, &consumed, &pure_ack,
-            PICOQUIC_INTERNAL_TEST_VERSION_1);
+        t_ret = picoquic_skip_frame(buffer, byte_max, &consumed, &pure_ack);
 
         if (t_ret != 0) {
             DBG_PRINTF("Skip frame <%s> fails, ret = %d\n", test_skip_list[i].name, t_ret);

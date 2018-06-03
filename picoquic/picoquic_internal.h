@@ -90,6 +90,7 @@ typedef enum {
 #define PICOQUIC_THIRD_INTEROP_VERSION 0xFF000008
 #define PICOQUIC_FOURTH_INTEROP_VERSION 0xFF000009
 #define PICOQUIC_FIFTH_INTEROP_VERSION 0xFF00000B
+#define PICOQUIC_SIXTH_INTEROP_VERSION 0xFF00000C
 #define PICOQUIC_INTERNAL_TEST_VERSION_1 0x50435130
 
 #define PICOQUIC_INTEROP_VERSION_INDEX 1
@@ -108,7 +109,8 @@ typedef enum {
      * Codes used for representing the various types of packet encodings
      */
 typedef enum {
-    picoquic_version_header_11
+    picoquic_version_header_11,
+    picoquic_version_header_12
 } picoquic_version_header_encoding;
 
 typedef struct st_picoquic_version_parameters_t {
@@ -197,8 +199,28 @@ typedef struct st_picoquic_quic_t {
 } picoquic_quic_t;
 
 /*
-	* Transport parameters, as defined by the QUIC transport specification
-	*/
+ * Transport parameters, as defined by the QUIC transport specification
+ */
+
+typedef enum {
+    picoquic_transport_parameter_initial_max_stream_data = 0,
+    picoquic_transport_parameter_initial_max_data = 1,
+    picoquic_transport_parameter_initial_max_stream_id_bidir = 2,
+    picoquic_transport_parameter_idle_timeout = 3,
+    picoquic_transport_parameter_server_prefered_address = 4,
+    picoquic_transport_parameter_max_packet_size = 5,
+    picoquic_transport_parameter_reset_secret = 6,
+    picoquic_transport_parameter_ack_delay_exponent = 7,
+    picoquic_transport_parameter_initial_max_stream_id_unidir = 8,
+} picoquic_transport_parameter_enum;
+
+typedef struct st_picoquic_transport_parameters_prefered_address_t {
+    uint8_t ipVersion; /* enum { IPv4(4), IPv6(6), (15) } -- 0 if no parameter specified */
+    uint8_t ipAddress[16]; /* opaque ipAddress<4..2 ^ 8 - 1> */
+    uint16_t port;
+    picoquic_connection_id_t connection_id; /*  opaque connectionId<0..18>; */
+    uint8_t statelessResetToken[16];
+} picoquic_transport_parameters_prefered_address_t;
 
 typedef struct _picoquic_transport_parameters {
     uint32_t initial_max_stream_data;
@@ -208,11 +230,12 @@ typedef struct _picoquic_transport_parameters {
     uint32_t idle_timeout;
     uint32_t max_packet_size;
     uint8_t ack_delay_exponent;
+    picoquic_transport_parameters_prefered_address_t prefered_address;
 } picoquic_transport_parameters;
 
 /*
-	 * SACK dashboard item, part of connection context.
-	 */
+ * SACK dashboard item, part of connection context.
+ */
 
 typedef struct st_picoquic_sack_item_t {
     struct st_picoquic_sack_item_t* next_sack;
@@ -507,6 +530,9 @@ void picoquic_varint_encode_16(uint8_t* bytes, uint16_t n16);
 size_t picoquic_varint_decode(const uint8_t* bytes, size_t max_bytes, uint64_t* n64);
 size_t picoquic_varint_skip(uint8_t* bytes);
 
+void picoquic_headint_encode_32(uint8_t* bytes, uint64_t sequence_number);
+size_t picoquic_headint_decode(const uint8_t* bytes, size_t max_bytes, uint64_t* n64);
+
 /* utilities */
 char* picoquic_string_create(const char* original, size_t len);
 char* picoquic_string_duplicate(const char* original);
@@ -549,7 +575,7 @@ uint32_t  picoquic_predict_packet_header_length(
     picoquic_packet_type_enum packet_type);
 
 void picoquic_update_payload_length(
-    uint8_t* bytes, size_t header_length, size_t packet_length);
+    uint8_t* bytes, size_t pnum_index, size_t header_length, size_t packet_length);
 
 uint32_t picoquic_get_checksum_length(picoquic_cnx_t* cnx, int is_cleartext_mode);
 
@@ -660,11 +686,10 @@ int picoquic_prepare_misc_frame(picoquic_misc_frame_header_t* misc_frame, uint8_
 int picoquic_decode_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
     size_t bytes_max, int restricted, uint64_t current_time);
 
-int picoquic_skip_frame(uint8_t* bytes, size_t bytes_max, size_t* consumed,
-    int* pure_ack, uint32_t version);
+int picoquic_skip_frame(uint8_t* bytes, size_t bytes_max, size_t* consumed, int* pure_ack);
 
 int picoquic_decode_closing_frames(uint8_t* bytes,
-    size_t bytes_max, int* closing_received, uint32_t version);
+    size_t bytes_max, int* closing_received);
 
 int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mode,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
