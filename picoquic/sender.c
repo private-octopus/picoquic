@@ -1801,8 +1801,8 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                             is_pure_ack = 0;
                         }
                     }
-                    /* Encode the stream frame */
-                    if (stream != NULL) {
+                    /* Encode the stream frame, or frames */
+                    while (stream != NULL) {
                         ret = picoquic_prepare_stream_frame(cnx, stream, &bytes[length],
                             path_x->send_mtu - checksum_overhead - length, &data_bytes);
 
@@ -1812,9 +1812,17 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                             {
                                 is_pure_ack = 0;
                             }
+
+                            if (path_x->send_mtu > checksum_overhead + length + 8) {
+                                stream = picoquic_find_ready_stream(cnx, 0);
+                            }
+                            else {
+                                break;
+                            }
                         }
                         else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
                             ret = 0;
+                            break;
                         }
                     }
                 }
