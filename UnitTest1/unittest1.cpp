@@ -541,5 +541,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(test_pn_vector)
+        {
+            int ret = cleartext_pn_vector_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
     };
 }

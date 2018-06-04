@@ -24,6 +24,7 @@
 #endif
 #include "../picoquic/picoquic_internal.h"
 #include "../picoquic/tls_api.h"
+#include "../picoquic/util.h"
 #include "picotls.h"
 #include "picotls/openssl.h"
 #include <string.h>
@@ -507,6 +508,82 @@ int cleartext_pn_enc_test()
 
     if (qclient != NULL) {
         picoquic_free(qclient);
+    }
+
+    if (qserver != NULL) {
+        picoquic_free(qserver);
+    }
+
+    return ret;
+}
+
+/* Test vector copied from Kazuho Ohu's test code in quicly */
+
+int cleartext_pn_vector_test()
+{
+    int ret = 0;
+    static const uint8_t cid[] = { 0x77, 0x0d, 0xc2, 0x6c, 0x17, 0x50, 0x9b, 0x35 };
+    static const uint8_t sample[] = { 0x05, 0x80, 0x24, 0xa9, 0x72, 0x75, 0xf0, 0x1d, 0x2a, 0x1e, 0xc9, 0x1f, 0xd1, 0xc2, 0x65, 0xbb };
+    static const uint8_t encrypted_pn[] = { 0x3b, 0xb4, 0xb1, 0x74 };
+    static const uint8_t expected_pn[] = { 0xc0, 0x00, 0x00, 0x00 };
+
+    struct sockaddr_in test_addr_s;
+    picoquic_connection_id_t initial_cnxid;
+    picoquic_cnx_t* cnx_server = NULL;
+    picoquic_quic_t* qserver = picoquic_create(8,
+#ifdef _WINDOWS
+#ifdef _WINDOWS64
+        "..\\..\\certs\\cert.pem", "..\\..\\certs\\key.pem",
+#else
+        "..\\certs\\cert.pem", "..\\certs\\key.pem",
+#endif
+#else
+        "certs/cert.pem", "certs/key.pem",
+#endif
+        "test", NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, 0);
+    if (qserver == NULL) {
+        DBG_PRINTF("%s", "Could not create Quic contexts.\n");
+        ret = -1;
+    }
+
+    if (ret == 0 && picoquic_parse_connection_id(cid, sizeof(cid), &initial_cnxid) != sizeof(cid)) {
+        ret = -1;
+    }
+
+
+    if (ret == 0) {
+
+        memset(&test_addr_s, 0, sizeof(struct sockaddr_in));
+        test_addr_s.sin_family = AF_INET;
+        memcpy(&test_addr_s.sin_addr, addr2, 4);
+        test_addr_s.sin_port = 4433;
+
+        cnx_server = picoquic_create_cnx(qserver, initial_cnxid, initial_cnxid,
+            (struct sockaddr*)&test_addr_s, 0, PICOQUIC_SIXTH_INTEROP_VERSION, NULL, NULL, 0);
+
+        if (cnx_server == NULL) {
+            DBG_PRINTF("%s", "Could not create server connection context.\n");
+            ret = -1;
+        }
+    }
+
+    /* Try to decrypt the test vector */
+    if (ret == 0) {
+        uint8_t decrypted[8];
+
+        memset(decrypted, 0, sizeof(decrypted));
+
+        picoquic_pn_encrypt(cnx_server->pn_dec_cleartext, sample, decrypted, encrypted_pn, sizeof(encrypted_pn));
+
+        if (memcmp(decrypted, expected_pn, sizeof(expected_pn)) != 0)
+        {
+            DBG_PRINTF("%s", "Test of encoding PN vector failed.\n");
+            ret = -1;
+        }
+    }
+
+    if (cnx_server != NULL) {
+        picoquic_delete_cnx(cnx_server);
     }
 
     if (qserver != NULL) {

@@ -161,7 +161,7 @@ uint32_t picoquic_format_connection_id(uint8_t* bytes, size_t bytes_max, picoqui
     return copied;
 }
 
-uint32_t picoquic_parse_connection_id(uint8_t * bytes, uint8_t len, picoquic_connection_id_t * cnx_id)
+uint32_t picoquic_parse_connection_id(const uint8_t * bytes, uint8_t len, picoquic_connection_id_t * cnx_id)
 {
     if (len <= PICOQUIC_CONNECTION_ID_MAX_SIZE) {
         cnx_id->id_len = len;
