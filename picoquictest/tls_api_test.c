@@ -1838,6 +1838,110 @@ int zero_rtt_test()
 }
 
 /*
+* Zero Spurious RTT test.
+* Check what happens if the client attempts to resume a connection using a bogus ticket.
+* This will cause a connection retry of some kind, the 0rtt packet will be lost.
+* This requires building a test ticket, using knowledge of the
+* internal structure of tickets in Picotls, and also in TLS 1.3.
+*/
+
+static const uint8_t spurious_tls_ticket[] = {
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x16, 0x00, 0x1d,
+    0x13, 0x03, 0x00, 0x00, 0x7d, 0x00, 0x01, 0x86, 0xa0, 0x91,
+    0x6a, 0x52, 0x00, 0x00, 0x00, 0x68, 0xa8, 0x00, 0x16, 0x29,
+    0x6c, 0xba, 0xdb, 0xc5, 0x26, 0x70, 0x92, 0x39, 0xff, 0x5b,
+    0x63, 0xa4, 0xc0, 0x8f, 0xc8, 0xe0, 0x6e, 0x7e, 0x61, 0x12,
+    0xe8, 0xe9, 0xfe, 0xb1, 0x97, 0x18, 0x56, 0x83, 0x3a, 0x63,
+    0xec, 0x3f, 0x4f, 0xc5, 0x28, 0x56, 0x86, 0xe2, 0xc5, 0x93,
+    0xb9, 0xa0, 0x01, 0x3f, 0x45, 0x42, 0xca, 0xdf, 0x4a, 0xaa,
+    0x08, 0x0f, 0x8e, 0xc3, 0x90, 0x8a, 0x55, 0x18, 0xef, 0xdf,
+    0xd2, 0x46, 0xd4, 0x52, 0x8a, 0x55, 0xb3, 0x69, 0x5b, 0x5f,
+    0x8f, 0xa3, 0x6c, 0x88, 0xc7, 0xd2, 0xa4, 0xfb, 0xf2, 0x40,
+    0x26, 0x40, 0x3e, 0x5d, 0x77, 0xdf, 0x5a, 0x2f, 0x5b, 0xd4,
+    0x95, 0x00, 0xec, 0x62, 0x6b, 0xe6, 0xd7, 0x42, 0xb8, 0xcb,
+    0x00, 0x08, 0x00, 0x2a, 0x00, 0x04, 0xff, 0xff, 0xff, 0xff,
+    0x00, 0x20, 0x74, 0xc2, 0x99, 0x5e, 0xbe, 0x77, 0xae, 0xb5,
+    0xf6, 0x34, 0xad, 0xe9, 0xdc, 0xdb, 0x2a, 0xeb, 0xa0, 0x15,
+    0xa7, 0xf0, 0xd1, 0xdb, 0xf0, 0x17, 0x92, 0xc6, 0x35, 0x4d,
+    0xc3, 0x20, 0xdd, 0x56,
+};
+
+static const picoquic_stored_ticket_t spurious_ticket = {
+    NULL, (char *) "test-sni", (char *) "test-alpn", 
+    (uint8_t *) spurious_tls_ticket,
+    0x0000008cd0e3f5f0ull, 0x0008, 0x0009,
+    (uint16_t) sizeof(spurious_tls_ticket) 
+};
+
+int zero_rtt_spurious_test()
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    char const* sni = "test-sni";
+    char const* alpn = "test-alpn";
+    uint64_t loss_mask = 0;
+    int ret = 0;
+
+    /* Initialize ticket store with bogus ticket */
+    ret = picoquic_save_tickets(&spurious_ticket, simulated_time, ticket_file_name);
+
+    /* Set up the context, while setting the ticket store parameter for the client */
+    if (ret == 0) {
+        ret = tls_api_init_ctx(&test_ctx, 0, sni, alpn, &simulated_time, ticket_file_name, 0, 0);
+    }
+    
+    /* set the link delays to 100 ms, for realistic testing */
+    if (ret == 0) {
+        test_ctx->c_to_s_link->microsec_latency = 100000;
+        test_ctx->s_to_c_link->microsec_latency = 100000;
+    }
+
+    /* Queue an initial frame on the client connection */
+    if (ret == 0) {
+        uint8_t test_data[4] = { 't', 'e', 's', 't' };
+        (void)picoquic_add_to_stream(test_ctx->cnx_client, 4, test_data, sizeof(test_data), 1);
+    }
+    
+    ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+
+    /* run a receive loop until no outstanding data */
+    for (int i = 0; ret == 0 && i < 32 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected; i++) {
+        int was_active = 0;
+
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, &was_active);
+
+        if (picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) && picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)) {
+            break;
+        }
+    }
+    
+    if (ret == 0) {
+        ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
+    }
+    
+    /* Verify that the 0RTT data was correctly sent, but never acked */
+    if (ret == 0) {
+        if (test_ctx->cnx_client->nb_zero_rtt_sent == 0) {
+            ret = -1;
+        }
+        else if (test_ctx->cnx_client->nb_zero_rtt_acked != 0) {
+            ret = -1;
+        }
+    }
+
+    /* Verify that the stream 4 data frame was received. */
+
+    /* Tear down and free everything */
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+
+/*
  * Stop sending test. Start a long transmission, but after receiving some bytes,
  * send a stop sending request. Then ask for another transmission. The
  * test succeeds if only few bytes of the first are received, and all bytes

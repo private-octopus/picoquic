@@ -56,7 +56,7 @@ picoquic_stored_ticket_t* picoquic_format_ticket(uint64_t time_valid_until,
     return stored;
 }
 
-int picoquic_serialize_ticket(picoquic_stored_ticket_t * ticket, uint8_t * bytes, size_t bytes_max, size_t * consumed)
+int picoquic_serialize_ticket(const picoquic_stored_ticket_t * ticket, uint8_t * bytes, size_t bytes_max, size_t * consumed)
 {
     int ret = 0;
     size_t byte_index = 0;
@@ -239,13 +239,13 @@ int picoquic_get_ticket(picoquic_stored_ticket_t* p_first_ticket,
     return ret;
 }
 
-int picoquic_save_tickets(picoquic_stored_ticket_t* first_ticket,
+int picoquic_save_tickets(const picoquic_stored_ticket_t* first_ticket,
     uint64_t current_time,
     char const* ticket_file_name)
 {
     int ret = 0;
     FILE* F = NULL;
-    picoquic_stored_ticket_t* next = first_ticket;
+    const picoquic_stored_ticket_t* next = first_ticket;
 #ifdef _WINDOWS
     errno_t err = fopen_s(&F, ticket_file_name, "wb");
     if (err != 0 || F == NULL) {
