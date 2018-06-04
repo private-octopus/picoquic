@@ -1214,18 +1214,17 @@ static picoquic_packet* picoquic_process_ack_range(
         if (p->sequence_number > highest) {
             p = p->next_packet;
         } else {
-            if (restricted) {
-                /* check that the packet was sent in clear text */
-                if (picoquic_is_packet_encrypted(p->ptype)) {
-                    /* Protocol error! */
-                    *ret = picoquic_connection_error(cnx,
-                        PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION);
-                    p = NULL;
-                    break;
-                }
-            }
-
             if (p->sequence_number == highest) {
+                if (restricted) {
+                    /* check that the packet was sent in clear text */
+                    if (picoquic_is_packet_encrypted(p->ptype)) {
+                        /* Protocol error! */
+                        *ret = picoquic_connection_error(cnx,
+                            PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION);
+                        p = NULL;
+                        break;
+                    }
+                }
                 /* TODO: RTT Estimate */
                 picoquic_packet* next = p->next_packet;
                 picoquic_path_t * old_path = p->send_path;
