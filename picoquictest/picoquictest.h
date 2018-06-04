@@ -102,6 +102,8 @@ int spin_bit_test();
 int client_error_test();
 int packet_enc_dec_test();
 int cleartext_pn_vector_test();
+int zero_rtt_spurious_test();
+int zero_rtt_retry_test();
 
 #ifdef __cplusplus
 }

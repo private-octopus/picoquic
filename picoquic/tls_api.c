@@ -1538,11 +1538,16 @@ int picoquic_tlsinput_stream_zero(picoquic_cnx_t* cnx)
     } else if (ret == PTLS_ERROR_IN_PROGRESS && (cnx->cnx_state == picoquic_state_client_init || cnx->cnx_state == picoquic_state_client_init_sent || cnx->cnx_state == picoquic_state_client_init_resent)) {
         /* Extract and install the client 0-RTT key */
     } else if (ret == PTLS_ERROR_IN_PROGRESS && (cnx->cnx_state == picoquic_state_client_hrr_received)) {
+        picoquic_packet * next_retrans = cnx->retransmit_newest;
         /* Need to reset the transport state of the connection */
         cnx->cnx_state = picoquic_state_client_init;
-        /* Delete the packets queued for retransmission */
-        while (cnx->retransmit_newest != NULL) {
-            picoquic_dequeue_retransmit_packet(cnx, cnx->retransmit_newest, 1);
+        /* Delete the packets queued for retransmission, but keep the 0-RTT packets */
+        while (next_retrans != NULL) {
+            picoquic_packet * next_next = next_retrans->next_packet;
+            if (next_retrans->ptype != picoquic_packet_0rtt_protected) {
+                picoquic_dequeue_retransmit_packet(cnx, next_retrans, 1);
+            }
+            next_retrans = next_next;
         }
 
         /* Reset the streams */

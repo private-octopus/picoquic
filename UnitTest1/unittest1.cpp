@@ -547,6 +547,19 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+        
+        TEST_METHOD(zero_rtt_spurious)
+        {
+            int ret = zero_rtt_spurious_test();
 
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(zero_rtt_retry)
+        {
+            int ret = zero_rtt_retry_test();
+
+            Assert::AreEqual(ret, 0);
+        }
     };
 }

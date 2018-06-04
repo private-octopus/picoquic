@@ -149,7 +149,7 @@ int picoquic_get_ticket(picoquic_stored_ticket_t* p_first_ticket,
     char const* sni, uint16_t sni_length, char const* alpn, uint16_t alpn_length,
     uint8_t** ticket, uint16_t* ticket_length);
 
-int picoquic_save_tickets(picoquic_stored_ticket_t* first_ticket,
+int picoquic_save_tickets(const picoquic_stored_ticket_t* first_ticket,
     uint64_t current_time, char const* ticket_file_name);
 int picoquic_load_tickets(picoquic_stored_ticket_t** pp_first_ticket,
     uint64_t current_time, char const* ticket_file_name);

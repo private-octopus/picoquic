@@ -41,6 +41,10 @@ static const uint8_t test_ticket_encrypt_key[32] = {
     16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
 };
 
+static const uint8_t test_ticket_badcrypt_key[32] = {
+    255, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+    16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
+};
 /*
  * Generic call back function.
  */
@@ -98,6 +102,8 @@ typedef struct st_picoquic_test_tls_api_ctx_t {
     test_api_stream_t test_stream[PICOQUIC_TEST_MAX_TEST_STREAMS];
     picoquictest_sim_link_t* c_to_s_link;
     picoquictest_sim_link_t* s_to_c_link;
+    int sum_data_received_at_server;
+    int sum_data_received_at_client;
     int test_finished;
 } picoquic_test_tls_api_ctx_t;
 
@@ -292,6 +298,14 @@ static void test_api_callback(picoquic_cnx_t* cnx,
         ctx = (picoquic_test_tls_api_ctx_t*)(((char*)callback_ctx) - offsetof(struct st_picoquic_test_tls_api_ctx_t, client_callback));
     } else {
         ctx = (picoquic_test_tls_api_ctx_t*)(((char*)callback_ctx) - offsetof(struct st_picoquic_test_tls_api_ctx_t, server_callback));
+    }
+
+    if (stream_id > 0) {
+        if (cb_ctx->client_mode) {
+            ctx->sum_data_received_at_client += length;
+        } else {
+            ctx->sum_data_received_at_server += length;
+        }
     }
 
     while (stream_index < ctx->nb_test_streams) {
@@ -558,7 +572,7 @@ static void tls_api_delete_ctx(picoquic_test_tls_api_ctx_t* test_ctx)
 
 static int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_version,
     char const* sni, char const* alpn, uint64_t* p_simulated_time, 
-    char const* ticket_file_name, int force_zero_share, int delayed_init)
+    char const* ticket_file_name, int force_zero_share, int delayed_init, int use_bad_crypt)
 {
     int ret = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = (picoquic_test_tls_api_ctx_t*)
@@ -607,7 +621,8 @@ static int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t propose
 #endif
             PICOQUIC_TEST_ALPN, test_api_callback, (void*)&test_ctx->server_callback, NULL, NULL, NULL,
             *p_simulated_time, p_simulated_time, NULL,
-            test_ticket_encrypt_key, sizeof(test_ticket_encrypt_key));
+            (use_bad_crypt == 0) ? test_ticket_encrypt_key : test_ticket_badcrypt_key,
+            (use_bad_crypt == 0) ? sizeof(test_ticket_encrypt_key) : sizeof(test_ticket_badcrypt_key));
 
         if (test_ctx->qclient == NULL || test_ctx->qserver == NULL) {
             ret = -1;
@@ -923,7 +938,7 @@ static int tls_api_test_with_loss(uint64_t* loss_mask, uint32_t proposed_version
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, proposed_version, sni, alpn, &simulated_time, NULL, 0, 0);
+    int ret = tls_api_init_ctx(&test_ctx, proposed_version, sni, alpn, &simulated_time, NULL, 0, 0, 0);
 
     if (ret != 0)
     {
@@ -1002,7 +1017,7 @@ int tls_api_silence_test()
     uint64_t simulated_time = 0;
     uint64_t next_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, 0, NULL, NULL, &simulated_time, NULL, 0, 0);
+    int ret = tls_api_init_ctx(&test_ctx, 0, NULL, NULL, &simulated_time, NULL, 0, 0, 0);
 
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
@@ -1094,7 +1109,7 @@ int tls_api_one_scenario_test(test_api_stream_desc_t* scenario,
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx,
         (proposed_version == 0) ? PICOQUIC_INTERNAL_TEST_VERSION_1 : proposed_version,
-        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 1);
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 1, 0);
 
     if (ret != 0)
     {
@@ -1251,7 +1266,7 @@ int tls_api_server_reset_test()
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0);
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
     uint8_t buffer[128];
     int was_active = 0;
 
@@ -1306,7 +1321,7 @@ int tls_api_bad_server_reset_test()
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0);
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
     uint8_t buffer[256];
 
     if (ret == 0) {
@@ -1351,7 +1366,7 @@ int tls_api_hrr_test()
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0);
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
 
     if (ret == 0) {
         /* Set the server in HRR/Cookies mode */
@@ -1382,7 +1397,7 @@ int tls_zero_share_test()
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 1, 0);
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 1, 0, 0);
 
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
@@ -1410,7 +1425,7 @@ int tls_api_two_connections_test()
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, 0, NULL, "test-alpn", &simulated_time, NULL, 0, 0);
+    int ret = tls_api_init_ctx(&test_ctx, 0, NULL, "test-alpn", &simulated_time, NULL, 0, 0, 0);
 
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
@@ -1515,7 +1530,7 @@ int keep_alive_test_impl(int keep_alive)
     const uint64_t keep_alive_interval = 0; /* Will use the default value */
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0);
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
     int was_active = 0;
 
     /*
@@ -1620,7 +1635,7 @@ int ping_pong_test()
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0);
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
     int was_active = 0;
 
     /*
@@ -1711,7 +1726,7 @@ int session_resume_test()
     for (int i = 0; i < 2; i++) {
         /* Set up the context, while setting the ticket store parameter for the client */
         if (ret == 0) {
-            ret = tls_api_init_ctx(&test_ctx, 0, sni, alpn, &simulated_time, ticket_file_name, 0, 0);
+            ret = tls_api_init_ctx(&test_ctx, 0, sni, alpn, &simulated_time, ticket_file_name, 0, 0, 0);
         }
 
         if (ret == 0) {
@@ -1751,7 +1766,7 @@ int session_resume_test()
 /*
  * Zero RTT test. Like the session resume test, but with a twist...
  */
-int zero_rtt_test()
+int zero_rtt_test_one(int use_badcrypt, int hardreset)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -1766,7 +1781,12 @@ int zero_rtt_test()
     for (int i = 0; i < 2; i++) {
         /* Set up the context, while setting the ticket store parameter for the client */
         if (ret == 0) {
-            ret = tls_api_init_ctx(&test_ctx, 0, sni, alpn, &simulated_time, ticket_file_name, 0, 0);
+            ret = tls_api_init_ctx(&test_ctx, 0, sni, alpn, &simulated_time, ticket_file_name, 0, 0, 
+                (i == 0)?0:use_badcrypt);
+
+            if (ret == 0 && hardreset != 0) {
+                picoquic_set_cookie_mode(test_ctx->qserver, 1);
+            }
         }
 
         if (ret == 0 && i == 1) {
@@ -1789,7 +1809,9 @@ int zero_rtt_test()
 
         if (ret == 0 && i == 1) {
             /* If resume succeeded, the second connection will have a type "PSK" */
-            if (picoquic_tls_is_psk_handshake(test_ctx->cnx_server) == 0 || picoquic_tls_is_psk_handshake(test_ctx->cnx_client) == 0) {
+            if (use_badcrypt == 0 && hardreset == 0 && (
+                picoquic_tls_is_psk_handshake(test_ctx->cnx_server) == 0 || 
+                picoquic_tls_is_psk_handshake(test_ctx->cnx_client) == 0)) {
                 ret = -1;
             } else {
                 /* run a receive loop until no outstanding data */
@@ -1811,10 +1833,23 @@ int zero_rtt_test()
 
         /* Verify that the 0RTT data was sent and acknowledged */
         if (ret == 0 && i == 1) {
-            if (test_ctx->cnx_client->nb_zero_rtt_sent == 0) {
-                ret = -1;
-            } else if (test_ctx->cnx_client->nb_zero_rtt_acked != test_ctx->cnx_client->nb_zero_rtt_sent) {
-                ret = -1;
+            if (use_badcrypt == 0 && hardreset == 0) {
+                if (test_ctx->cnx_client->nb_zero_rtt_sent == 0) {
+                    ret = -1;
+                }
+                else if (test_ctx->cnx_client->nb_zero_rtt_acked != test_ctx->cnx_client->nb_zero_rtt_sent) {
+                    ret = -1;
+                }
+            } else {
+                if (test_ctx->cnx_client->nb_zero_rtt_sent == 0) {
+                    ret = -1;
+                }
+                else if (test_ctx->cnx_client->nb_zero_rtt_acked != 0) {
+                    ret = -1;
+                }
+                else if (test_ctx->sum_data_received_at_server == 0) {
+                    ret = -1;
+                }
             }
         }
 
@@ -1837,6 +1872,29 @@ int zero_rtt_test()
     return ret;
 }
 
+int zero_rtt_test()
+{
+    return zero_rtt_test_one(0, 0);
+}
+
+/*
+* Zero Spurious RTT test.
+* Check what happens if the client attempts to resume a connection using a bogus ticket.
+* This will cause a connection retry of some kind, the 0rtt packet will be lost.
+* This is simulated by runnig the zero-rtt code, but using a different
+* ticket key for the second server instance.
+*/
+
+int zero_rtt_spurious_test()
+{
+    return zero_rtt_test_one(1, 0);
+}
+
+int zero_rtt_retry_test()
+{
+    return zero_rtt_test_one(0, 1);
+}
+
 /*
  * Stop sending test. Start a long transmission, but after receiving some bytes,
  * send a stop sending request. Then ask for another transmission. The
@@ -1850,7 +1908,7 @@ int stop_sending_test()
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
-        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0);
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
     int nb_initial_loop = 0;
 
     if (ret == 0) {
@@ -1926,7 +1984,7 @@ int mtu_discovery_test()
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
-        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0);
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
 
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
@@ -1969,7 +2027,7 @@ int spurious_retransmit_test()
     uint64_t simulated_time = 0;
     uint64_t next_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, 0, NULL, NULL, &simulated_time, NULL, 0, 0);
+    int ret = tls_api_init_ctx(&test_ctx, 0, NULL, NULL, &simulated_time, NULL, 0, 0, 0);
 
     if (ret == 0) {
         test_ctx->c_to_s_link->microsec_latency = 50000;
@@ -2357,7 +2415,7 @@ int pn_enc_1rtt_test()
     uint64_t loss_mask = 0;
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, 0, NULL, NULL, &simulated_time, NULL, 0, 0);
+    int ret = tls_api_init_ctx(&test_ctx, 0, NULL, NULL, &simulated_time, NULL, 0, 0, 0);
 
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
@@ -2401,7 +2459,7 @@ int bad_certificate_test()
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, 0, "test-sni", "test-alpn", &simulated_time, NULL, 0, 0);
+    int ret = tls_api_init_ctx(&test_ctx, 0, "test-sni", "test-alpn", &simulated_time, NULL, 0, 0, 0);
 
     /* Delete the server context, and recreate it with the bad certificate */
 
@@ -2488,7 +2546,7 @@ int set_verify_certificate_callback_test()
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int call_count = 0;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
-        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0);
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
 
     /* Set the verify callback */
     if (ret == 0) {
@@ -2627,7 +2685,7 @@ int set_certificate_and_key_test()
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, 0, "test-sni", "test-alpn", &simulated_time, NULL, 0, 0);
+    int ret = tls_api_init_ctx(&test_ctx, 0, "test-sni", "test-alpn", &simulated_time, NULL, 0, 0, 0);
 
     /* Delete the server context, and recreate it. */
     if (ret == 0)
@@ -2729,7 +2787,7 @@ int request_client_authentication_test()
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, 0, "test-sni", "test-alpn", &simulated_time, NULL, 0, 0);
+    int ret = tls_api_init_ctx(&test_ctx, 0, "test-sni", "test-alpn", &simulated_time, NULL, 0, 0, 0);
 
     /* Delete the client context, and recreate with a certificate */
     if (ret == 0)
@@ -2801,7 +2859,7 @@ int bad_client_certificate_test()
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, 0, "test-sni", "test-alpn", &simulated_time, NULL, 0, 0);
+    int ret = tls_api_init_ctx(&test_ctx, 0, "test-sni", "test-alpn", &simulated_time, NULL, 0, 0, 0);
 
     /* Delete the client context, and recreate with a certificate */
     if (ret == 0)
@@ -2892,7 +2950,7 @@ int nat_rebinding_test_one(uint64_t loss_mask_data)
     uint64_t initial_challenge = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
-        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0);
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
 
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
@@ -2975,7 +3033,7 @@ int spin_bit_test()
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int spin_count = 0;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
-        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 1);
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 1, 0);
 
     if (ret != 0)
     {
@@ -3102,7 +3160,7 @@ int client_error_test()
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
-        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0);
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
 
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);

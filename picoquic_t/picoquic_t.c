@@ -107,7 +107,9 @@ static const picoquic_test_def_t test_table[] = {
     { "spin_bit", spin_bit_test},
     { "client_error", client_error_test },
     { "packet_enc_dec", packet_enc_dec_test},
-    { "pn_vector", cleartext_pn_vector_test }
+    { "pn_vector", cleartext_pn_vector_test },
+    { "zero_rtt_spurious", zero_rtt_spurious_test },
+    { "zero_rtt_retry", zero_rtt_retry_test }
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);
