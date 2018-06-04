@@ -345,6 +345,8 @@ size_t  picoquic_decrypt_packet(picoquic_cnx_t* cnx,
             size_t encrypted_length = 4;
             size_t sample_offset = ph->pn_offset + encrypted_length;
             size_t aead_checksum_length = picoquic_aead_get_checksum_length(aead_context);
+            uint8_t decoded_pn_bytes[4];
+
             if (sample_offset + aead_checksum_length > length)
             {
                 sample_offset = length - aead_checksum_length;
@@ -359,23 +361,23 @@ size_t  picoquic_decrypt_packet(picoquic_cnx_t* cnx,
             {
                 if (picoquic_supported_versions[ph->version_index].version_header_encoding == picoquic_version_header_11) {
                     /* Decode */
-                    picoquic_pn_encrypt(pn_enc, bytes + sample_offset, bytes + ph->pn_offset, bytes + ph->pn_offset, encrypted_length);
+                    picoquic_pn_encrypt(pn_enc, bytes + sample_offset, decoded_pn_bytes, bytes + ph->pn_offset, encrypted_length);
                     /* Packet encoding is varint, specialized for sequence number */
                     switch (bytes[0] & 0x03) {
                     case 0x00:/* single byte encoding */
-                        ph->pn = bytes[ph->pn_offset];
+                        ph->pn = decoded_pn_bytes[0];
                         ph->pnmask = 0xFFFFFFFFFFFFFF00ull;
                         ph->offset = ph->pn_offset + 1;
                         ph->payload_length -= 1;
                         break;
                     case 0x01: /* two byte encoding */
-                        ph->pn = PICOPARSE_16(bytes + ph->pn_offset);
+                        ph->pn = PICOPARSE_16(decoded_pn_bytes);
                         ph->pnmask = 0xFFFFFFFFFFFF0000ull;
                         ph->offset = ph->pn_offset + 2;
                         ph->payload_length -= 2;
                         break;
                     case 0x02:
-                        ph->pn = PICOPARSE_32(bytes + ph->pn_offset);
+                        ph->pn = PICOPARSE_32(decoded_pn_bytes);
                         ph->pnmask = 0xFFFFFFFF00000000ull;
                         ph->offset = ph->pn_offset + 4;
                         ph->payload_length -= 4;
@@ -390,29 +392,32 @@ size_t  picoquic_decrypt_packet(picoquic_cnx_t* cnx,
                 }
                 else {
                     /* Decode */
-                    picoquic_pn_encrypt(pn_enc, bytes + sample_offset, bytes + ph->pn_offset, bytes + ph->pn_offset, encrypted_length);
+                    picoquic_pn_encrypt(pn_enc, bytes + sample_offset, decoded_pn_bytes, bytes + ph->pn_offset, encrypted_length);
                     /* Packet encoding is varint, specialized for sequence number */
-                    switch (bytes[ph->pn_offset] & 0xC0) {
+                    switch (decoded_pn_bytes[0] & 0xC0) {
                     case 0x00:
                     case 0x40: /* single byte encoding */
-                        ph->pn = bytes[ph->pn_offset] & 0x7F;
+                        ph->pn = decoded_pn_bytes[0] & 0x7F;
                         ph->pnmask = 0xFFFFFFFFFFFFFF80ull;
                         ph->offset = ph->pn_offset + 1;
                         ph->payload_length -= 1;
                         break;
                     case 0x80: /* two byte encoding */
-                        ph->pn = (PICOPARSE_16(bytes + ph->pn_offset)) & 0x3FFF;
+                        ph->pn = (PICOPARSE_16(decoded_pn_bytes)) & 0x3FFF;
                         ph->pnmask = 0xFFFFFFFFFFFFC000ull;
                         ph->offset = ph->pn_offset + 2;
                         ph->payload_length -= 2;
                         break;
                     case 0xC0:
-                        ph->pn = (PICOPARSE_32(bytes + ph->pn_offset)) & 0x3FFFFFFF;
+                        ph->pn = (PICOPARSE_32(decoded_pn_bytes)) & 0x3FFFFFFF;
                         ph->pnmask = 0xFFFFFFFFC0000000ull;
                         ph->offset = ph->pn_offset + 4;
                         ph->payload_length -= 4;
                         break;
                     }
+                }
+                if (ph->offset > ph->pn_offset) {
+                    memcpy(bytes + ph->pn_offset, decoded_pn_bytes, ph->offset - ph->pn_offset);
                 }
             } else {
                 /* Invalid packet format. Avoid crash! */
@@ -482,7 +487,7 @@ int picoquic_parse_header_and_decrypt(
     int already_received = 0;
     size_t decoded_length = 0;
     int ret = picoquic_parse_packet_header(quic, bytes, length, addr_from, ph, pcnx, receiving);
-    int cmp_reset_secret = 0;
+    int cmp_reset_secret = -1;
     int new_ctx_created = 0;
 
     if (ret == 0) {
