@@ -1766,7 +1766,7 @@ int session_resume_test()
 /*
  * Zero RTT test. Like the session resume test, but with a twist...
  */
-int zero_rtt_test_one(int use_badcrypt)
+int zero_rtt_test_one(int use_badcrypt, int hardreset)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -1783,6 +1783,10 @@ int zero_rtt_test_one(int use_badcrypt)
         if (ret == 0) {
             ret = tls_api_init_ctx(&test_ctx, 0, sni, alpn, &simulated_time, ticket_file_name, 0, 0, 
                 (i == 0)?0:use_badcrypt);
+
+            if (ret == 0 && hardreset != 0) {
+                picoquic_set_cookie_mode(test_ctx->qserver, 1);
+            }
         }
 
         if (ret == 0 && i == 1) {
@@ -1805,7 +1809,7 @@ int zero_rtt_test_one(int use_badcrypt)
 
         if (ret == 0 && i == 1) {
             /* If resume succeeded, the second connection will have a type "PSK" */
-            if (use_badcrypt == 0 && (
+            if (use_badcrypt == 0 && hardreset == 0 && (
                 picoquic_tls_is_psk_handshake(test_ctx->cnx_server) == 0 || 
                 picoquic_tls_is_psk_handshake(test_ctx->cnx_client) == 0)) {
                 ret = -1;
@@ -1829,7 +1833,7 @@ int zero_rtt_test_one(int use_badcrypt)
 
         /* Verify that the 0RTT data was sent and acknowledged */
         if (ret == 0 && i == 1) {
-            if (use_badcrypt == 0) {
+            if (use_badcrypt == 0 && hardreset == 0) {
                 if (test_ctx->cnx_client->nb_zero_rtt_sent == 0) {
                     ret = -1;
                 }
@@ -1870,7 +1874,7 @@ int zero_rtt_test_one(int use_badcrypt)
 
 int zero_rtt_test()
 {
-    return zero_rtt_test_one(0);
+    return zero_rtt_test_one(0, 0);
 }
 
 /*
@@ -1883,9 +1887,13 @@ int zero_rtt_test()
 
 int zero_rtt_spurious_test()
 {
-    return zero_rtt_test_one(1);
+    return zero_rtt_test_one(1, 0);
 }
 
+int zero_rtt_retry_test()
+{
+    return zero_rtt_test_one(0, 1);
+}
 
 /*
  * Stop sending test. Start a long transmission, but after receiving some bytes,
