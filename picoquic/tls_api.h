@@ -63,7 +63,7 @@ size_t picoquic_aead_decrypt_generic(uint8_t* output, uint8_t* input, size_t inp
 
 void picoquic_aead_free(void* aead_context);
 
-void picoquic_pn_encrypt(void *pn_enc, void * iv, void *output, const void *input, size_t len);
+void picoquic_pn_encrypt(void *pn_enc, const void * iv, void *output, const void *input, size_t len);
 
 void picoquic_pn_enc_free(void * pn_enc);
 
