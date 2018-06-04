@@ -335,7 +335,9 @@ size_t  picoquic_decrypt_packet(picoquic_cnx_t* cnx,
      */
     size_t decoded = length + 32;
 
-    *already_received = 0;
+    if (already_received != NULL) {
+        *already_received = 0;
+    }
 
     if ((picoquic_supported_versions[cnx->version_index].version_flags&picoquic_version_use_pn_encryption) != 0)
     {
@@ -438,7 +440,7 @@ size_t  picoquic_decrypt_packet(picoquic_cnx_t* cnx,
         cnx->first_sack_item.end_of_sack_range, ph->pnmask, ph->pn);
 
     /* verify that the packet is new */
-    if (picoquic_is_pn_already_received(cnx, ph->pn64) != 0) {
+    if (already_received != NULL && picoquic_is_pn_already_received(cnx, ph->pn64) != 0) {
         /* Set error type: already received */
         *already_received = 1;
     } else {
@@ -545,25 +547,27 @@ int picoquic_parse_header_and_decrypt(
                     break;
                 }
             } else {
+                /* This code branch is used when logging packets locally sent.
+                 * We should not check whether the packet was "already received" */
                 switch (ph->ptype) {
                 case picoquic_packet_version_negotiation:
                     /* Packet is not encrypted */
                     break;
                 case picoquic_packet_client_initial:
                     decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph,
-                        (*pcnx)->pn_enc_cleartext, (*pcnx)->aead_de_encrypt_cleartext_ctx, &already_received);
+                        (*pcnx)->pn_enc_cleartext, (*pcnx)->aead_de_encrypt_cleartext_ctx, NULL);
                     break;
                 case picoquic_packet_server_stateless:
                     decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph,
-                        (*pcnx)->pn_enc_cleartext, (*pcnx)->aead_de_encrypt_cleartext_ctx, &already_received);
+                        (*pcnx)->pn_enc_cleartext, (*pcnx)->aead_de_encrypt_cleartext_ctx, NULL);
                     break;
                 case picoquic_packet_handshake:
                     decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph,
-                        (*pcnx)->pn_enc_cleartext, (*pcnx)->aead_de_encrypt_cleartext_ctx, &already_received);
+                        (*pcnx)->pn_enc_cleartext, (*pcnx)->aead_de_encrypt_cleartext_ctx, NULL);
                     break;
                 case picoquic_packet_0rtt_protected:
                     decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph, (*pcnx)->pn_enc_0rtt,
-                        (*pcnx)->aead_0rtt_decrypt_ctx, &already_received);
+                        (*pcnx)->aead_0rtt_decrypt_ctx, NULL);
                     break;
                 case picoquic_packet_1rtt_protected_phi0:
                 case picoquic_packet_1rtt_protected_phi1:
@@ -573,7 +577,7 @@ int picoquic_parse_header_and_decrypt(
                         (*pcnx)->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
                     /* AEAD Decrypt, in place */
                     decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph, (*pcnx)->pn_enc,
-                        (*pcnx)->aead_de_encrypt_ctx, &already_received);
+                        (*pcnx)->aead_de_encrypt_ctx, NULL);
                     break;
                 default:
                     /* Packet type error. Log and ignore */
