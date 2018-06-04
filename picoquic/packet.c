@@ -437,7 +437,7 @@ size_t  picoquic_decrypt_packet(picoquic_cnx_t* cnx,
 
     /* Build a packet number to 64 bits */
     ph->pn64 = picoquic_get_packet_number64(
-        cnx->first_sack_item.end_of_sack_range, ph->pnmask, ph->pn);
+        (already_received==NULL)?cnx->send_sequence:cnx->first_sack_item.end_of_sack_range, ph->pnmask, ph->pn);
 
     /* verify that the packet is new */
     if (already_received != NULL && picoquic_is_pn_already_received(cnx, ph->pn64) != 0) {
