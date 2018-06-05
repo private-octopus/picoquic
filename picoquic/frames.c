@@ -1611,7 +1611,7 @@ int picoquic_decode_application_close_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
     if (ret == 0) {
         cnx->cnx_state = picoquic_state_closing_received;
         cnx->remote_application_error = error_code;
-        *consumed = (size_t)(string_length + byte_index);
+        *consumed = byte_index;
         if (cnx->callback_fn) {
             (cnx->callback_fn)(cnx, 0, NULL, 0,
                 picoquic_callback_application_close, cnx->callback_ctx);
@@ -2087,6 +2087,10 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
                 }
             }
         }
+    }
+
+    if (ret == 0 && byte_index != bytes_max) {
+        ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR);
     }
     return ret;
 }
