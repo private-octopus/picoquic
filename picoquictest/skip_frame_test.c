@@ -257,31 +257,35 @@ int skip_frame_test()
     int fuzz_fail = 0;
 
     for (size_t i = 0; i < nb_test_skip_list; i++) {
-        size_t consumed = 0;
-        size_t byte_max = 0;
-        int pure_ack;
-        int t_ret = 0;
+        for (int sharp_end = 0; sharp_end < 2; sharp_end++) {
+            size_t consumed = 0;
+            size_t byte_max = 0;
+            int pure_ack;
+            int t_ret = 0;
 
-        memcpy(buffer, test_skip_list[i].val, test_skip_list[i].len);
-        byte_max = test_skip_list[i].len;
-        if (test_skip_list[i].must_be_last == 0) {
-            memcpy(buffer + byte_max, extra_bytes, sizeof(extra_bytes));
-            byte_max += sizeof(extra_bytes);
-        }
+            memcpy(buffer, test_skip_list[i].val, test_skip_list[i].len);
+            byte_max = test_skip_list[i].len;
+            if (test_skip_list[i].must_be_last == 0 && sharp_end == 0) {
+                memcpy(buffer + byte_max, extra_bytes, sizeof(extra_bytes));
+                byte_max += sizeof(extra_bytes);
+            }
 
-        t_ret = picoquic_skip_frame(buffer, byte_max, &consumed, &pure_ack);
+            t_ret = picoquic_skip_frame(buffer, byte_max, &consumed, &pure_ack);
 
-        if (t_ret != 0) {
-            DBG_PRINTF("Skip frame <%s> fails, ret = %d\n", test_skip_list[i].name, t_ret);
-            ret = t_ret;
-        } else if (consumed != test_skip_list[i].len) {
-            DBG_PRINTF("Skip frame <%s> fails, wrong length, %d instead of %d\n",
-                test_skip_list[i].name, (int)consumed, (int)test_skip_list[i].len);
-            ret = -1;
-        } else if (pure_ack != test_skip_list[i].is_pure_ack) {
-            DBG_PRINTF("Skip frame <%s> fails, wrong pure ack, %d instead of %d\n",
-                test_skip_list[i].name, (int)pure_ack, (int)test_skip_list[i].is_pure_ack);
-            ret = -1;
+            if (t_ret != 0) {
+                DBG_PRINTF("Skip frame <%s> fails, ret = %d\n", test_skip_list[i].name, t_ret);
+                ret = t_ret;
+            }
+            else if (consumed != test_skip_list[i].len) {
+                DBG_PRINTF("Skip frame <%s> fails, wrong length, %d instead of %d\n",
+                    test_skip_list[i].name, (int)consumed, (int)test_skip_list[i].len);
+                ret = -1;
+            }
+            else if (pure_ack != test_skip_list[i].is_pure_ack) {
+                DBG_PRINTF("Skip frame <%s> fails, wrong pure ack, %d instead of %d\n",
+                    test_skip_list[i].name, (int)pure_ack, (int)test_skip_list[i].is_pure_ack);
+                ret = -1;
+            }
         }
     }
 
