@@ -62,6 +62,7 @@ typedef struct st_picoquic_stress_client_t {
 
 typedef struct st_picoquic_stress_ctx_t {
     picoquic_quic_t* qserver;
+    uint64_t simulated_time;
     size_t nb_stress_client;
     int sum_data_received_at_server;
     int sum_data_sent_at_server;
@@ -73,16 +74,17 @@ typedef struct st_picoquic_stress_ctx_t {
  * Message loop
  */
 
-int stress_submit_sp_packet(picoquic_stress_ctx_t * ctx, picoquic_stateless_packet_t* sp, int c_index)
+int stress_submit_sp_packets(picoquic_stress_ctx_t * ctx, picoquic_quic_t * q, int c_index)
 {
     int ret = 0;
+    picoquic_stateless_packet_t* sp = NULL;
     picoquictest_sim_link_t* target_link = NULL;
     picoquictest_sim_packet_t* packet = picoquictest_sim_link_create_packet();
 
     if (packet == NULL) {
         ret = -1;
     }
-    else {
+    else while ((sp = picoquic_dequeue_stateless_packet(q)) != NULL) {
         if (sp->length > 0) {
             memcpy(&packet->addr_from, &sp->addr_local,
                 (sp->addr_local.ss_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
@@ -98,6 +100,8 @@ int stress_submit_sp_packet(picoquic_stress_ctx_t * ctx, picoquic_stateless_pack
             else {
                 /* TODO: find target list from address */
             }
+
+            picoquictest_sim_link_submit(target_link, packet, ctx->simulated_time);
         }
         picoquic_delete_stateless_packet(sp);
     }
@@ -105,22 +109,81 @@ int stress_submit_sp_packet(picoquic_stress_ctx_t * ctx, picoquic_stateless_pack
     return ret;
 }
 
-int stress_loop_poll_context(picoquic_stress_ctx_t * ctx, uint64_t next_time, uint64_t current_time) {
+int stress_handle_packet_arrival(picoquic_stress_ctx_t * ctx, picoquic_quic_t * q, picoquictest_sim_link_t* link)
+{
+    int ret = 0;
+    /* dequeue packet from server to client and submit */
+    picoquictest_sim_packet_t* packet = picoquictest_sim_link_dequeue(link, ctx->simulated_time);
+
+    if (packet != NULL) {
+        ret = picoquic_incoming_packet(q, packet->bytes, (uint32_t)packet->length,
+            (struct sockaddr*)&packet->addr_from,
+            (struct sockaddr*)&packet->addr_to, 0,
+            ctx->simulated_time);
+    }
+
+    return ret;
+}
+
+int stress_handle_packet_prepare(picoquic_stress_ctx_t * ctx, picoquic_quic_t * q, int c_index)
+{
+    /* prepare packet and submit */
+    int ret = 0;
+    picoquictest_sim_packet_t* packet = picoquictest_sim_link_create_packet();
+    picoquic_packet* p = picoquic_create_packet();
+    picoquic_cnx_t* cnx = q->cnx_wake_first;
+    picoquictest_sim_link_t* target_link = NULL;
+
+    if (packet != NULL && p != NULL && cnx != NULL) {
+        ret = picoquic_prepare_packet(cnx, p, ctx->simulated_time,
+            packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length);
+        if (ret == 0 && p->length > 0) {
+            memcpy(&packet->addr_from, &cnx->path[0]->dest_addr, sizeof(struct sockaddr_in));
+            memcpy(&packet->addr_to, &cnx->path[0]->peer_addr, sizeof(struct sockaddr_in));
+
+            if (c_index > 0)
+            {
+                target_link = ctx->c_ctx[c_index]->s_to_c_link;
+            }
+            else {
+                /* TODO: find target list from address */
+            }
+
+            picoquictest_sim_link_submit(target_link, packet, ctx->simulated_time);
+        }
+        else {
+            free(p);
+        }
+        free(packet);
+    }
+    else
+    {
+        ret = -1;
+        if (packet != NULL) {
+            free(packet);
+        }
+
+        if (p != NULL) {
+            free(p);
+        }
+    }
+
+    return ret;
+}
+
+int stress_loop_poll_context(picoquic_stress_ctx_t * ctx, uint64_t next_time) {
+    int ret = 0;
     int best_index = -1;
     int last_index = -1;
     int64_t delay_max = 100000000;
     picoquic_stateless_packet_t* sp;
-    uint64_t worst_wake_time = current_time + delay_max;
-    uint64_t best_wake_time = current_time + picoquic_get_next_wake_delay(
-        ctx->qserver, current_time, delay_max);
+    uint64_t worst_wake_time = ctx->simulated_time + delay_max;
+    uint64_t best_wake_time = ctx->simulated_time + picoquic_get_next_wake_delay(
+        ctx->qserver, ctx->simulated_time, delay_max);
 
+    ret = stress_submit_sp_packets(ctx, ctx->qserver, -1);
 
-    while ((sp = picoquic_dequeue_stateless_packet(ctx->qserver)) != NULL)
-    {
-        /* send all the queued packets -- need to find out to which client. */
-    }
-
-    for (int x = 0; x < ctx->nb_clients; x++) {
+    for (int x = 0; ret == 0 && x < ctx->nb_clients; x++) {
         /* Find the arrival time of the next packet, by looking at
          * the various links. remember the winner */
 
@@ -130,9 +193,9 @@ int stress_loop_poll_context(picoquic_stress_ctx_t * ctx, uint64_t next_time, ui
             best_index = x;
         }
 
-        if (ctx->c_ctx[x]->s_to_c_link->first_packet != NULL &&
-            ctx->c_ctx[x]->s_to_c_link->first_packet->arrival_time < best_wake_time) {
-            best_wake_time = ctx->c_ctx[x]->s_to_c_link->first_packet->arrival_time;
+        if (ctx->c_ctx[x]->c_to_s_link->first_packet != NULL &&
+            ctx->c_ctx[x]->c_to_s_link->first_packet->arrival_time < best_wake_time) {
+            best_wake_time = ctx->c_ctx[x]->c_to_s_link->first_packet->arrival_time;
             best_index = x;
         }
 
@@ -142,34 +205,37 @@ int stress_loop_poll_context(picoquic_stress_ctx_t * ctx, uint64_t next_time, ui
             best_index = x;
         }
 
-        while ((sp = picoquic_dequeue_stateless_packet(ctx->c_ctx[x]->qclient)) != NULL)
-        {
-            /* send all the queued packets -- need to find out to which client. */
+        ret = stress_submit_sp_packets(ctx, ctx->c_ctx[x]->qclient, x);
+    }
+
+    if (ret == 0) {
+        /* Progress the current time */
+        ctx->simulated_time = best_wake_time;
+
+        if (best_index < 0) {
+            /* The server is ready first */
+            ret = stress_handle_packet_prepare(ctx, ctx->qserver, -1);
+        }
+        else {
+            if (ret == 0 && ctx->c_ctx[best_index]->s_to_c_link->first_packet != NULL &&
+                ctx->c_ctx[best_index]->s_to_c_link->first_packet->arrival_time <= ctx->simulated_time) {
+                /* dequeue packet from server to client and submit */
+                ret = stress_handle_packet_arrival(ctx, ctx->c_ctx[best_index]->qclient, ctx->c_ctx[best_index]->s_to_c_link);
+            }
+
+            if (ret == 0 && ctx->c_ctx[best_index]->c_to_s_link->first_packet != NULL &&
+                ctx->c_ctx[best_index]->c_to_s_link->first_packet->arrival_time <= ctx->simulated_time) {
+                /* dequeue packet from client to server and submit */
+                ret = stress_handle_packet_arrival(ctx, ctx->qserver, ctx->c_ctx[best_index]->c_to_s_link);
+            }
+
+            if (ctx->c_ctx[best_index]->qclient->cnx_wake_first != NULL &&
+                ctx->c_ctx[best_index]->qclient->cnx_wake_first->next_wake_time <= ctx->simulated_time) {
+
+                ret = stress_handle_packet_prepare(ctx, ctx->c_ctx[best_index]->qclient, best_index);
+            }
         }
     }
 
-    /* Progress the current time */
-    current_time = best_wake_time;
-
-    if (best_index < 0) {
-        /* The server is ready first */
-    }
-    else {
-        if (ctx->c_ctx[best_index]->s_to_c_link->first_packet != NULL &&
-            ctx->c_ctx[best_index]->s_to_c_link->first_packet->arrival_time <= current_time) {
-            /* dequeue packet and submit */
-        }
-
-        if (ctx->c_ctx[best_index]->s_to_c_link->first_packet != NULL &&
-            ctx->c_ctx[best_index]->s_to_c_link->first_packet->arrival_time <= current_time) {
-            /* dequeue packet and submit */
-        }
-
-        if (ctx->c_ctx[best_index]->qclient->cnx_wake_first != NULL &&
-            ctx->c_ctx[best_index]->qclient->cnx_wake_first->next_wake_time <= current_time) {
-            /* prepare packet and submit */
-        }
-    }
-
-    return -1;
+    return ret;
 }
