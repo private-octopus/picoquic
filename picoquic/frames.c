@@ -297,7 +297,7 @@ int picoquic_skip_connection_id_frame(uint8_t* bytes, size_t bytes_max, size_t* 
     }
     byte_index += cid_length + 16;
 
-    if (byte_index < bytes_max) {
+    if (byte_index <= bytes_max) {
         *consumed = byte_index;
     } else {
         *consumed = bytes_max;
