@@ -911,6 +911,8 @@ int quic_client(const char* ip_address_text, int server_port, uint32_t proposed_
                             if (sni != NULL && 0 == picoquic_get_ticket(qclient->p_first_ticket, current_time, sni, (uint16_t)strlen(sni), alpn, (uint16_t)strlen(alpn), &ticket, &ticket_length)) {
                                 zero_rtt_available = picoquic_does_ticket_allow_early_data(ticket, ticket_length);
                             }
+#else
+                            zero_rtt_available = 1;
 #endif
 
                             if (zero_rtt_available) {
