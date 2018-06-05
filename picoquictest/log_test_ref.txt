@@ -2,6 +2,7 @@
     RESET STREAM 17, Error 0x00000001, Offset 0x1.
     CONNECTION CLOSE, Error 0xcfff, Reason length 9
     APPLICATION CLOSE, Error 0x0000, Reason length 0 (0x0000):
+    APPLICATION CLOSE, Error 0x0404, Reason length 4 (0x0004):
     MAX DATA: 0x10000000000.
     MAX STREAM DATA, Stream: 1, max data: 0x10000.
     MAX STREAM ID: 256.

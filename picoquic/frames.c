@@ -2008,10 +2008,12 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
                 case picoquic_frame_type_connection_close:
                     ret = picoquic_decode_connection_close_frame(cnx, bytes + byte_index, bytes_max - byte_index, &consumed);
                     byte_index += consumed;
+                    ack_needed = 1;
                     break;
                 case picoquic_frame_type_application_close:
                     ret = picoquic_decode_application_close_frame(cnx, bytes + byte_index, bytes_max - byte_index, &consumed);
                     byte_index += consumed;
+                    ack_needed = 1;
                     break;
                 case picoquic_frame_type_max_data:
                     ret = picoquic_decode_max_data_frame(cnx, bytes + byte_index, bytes_max - byte_index, &consumed);
