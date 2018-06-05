@@ -319,10 +319,21 @@ uint32_t picoquic_create_packet_header_12(
         /* Create a short packet -- using 32 bit sequence numbers for now */
         uint8_t K = (packet_type == picoquic_packet_1rtt_protected_phi0) ? 0 : 0x40;
         const uint8_t C = 0x30;
+	uint8_t VEC = (cnx->VEC );
         uint8_t spin_bit = (uint8_t)((cnx->current_spin) << 2);
 
-        length = 0;
-        bytes[length++] = (K | C | spin_bit);
+	if (!cnx->Edge) VEC = 0;
+	else {
+		cnx->Edge = 0;
+		uint64_t dt = picoquic_get_quic_time(cnx->quic) - cnx->lastTrigger;
+		if (dt > PICOQUIC_VEC_LATE) { // DELAYED
+			VEC = 1;
+			fprintf(stderr, "Delayed Outgoing Spin=%d DT=%ld\n", cnx->current_spin, dt);
+		}
+	}
+
+	length = 0;
+        bytes[length++] = (K | C | spin_bit | VEC);
         length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, dest_cnx_id);
 
         *pn_offset = length;

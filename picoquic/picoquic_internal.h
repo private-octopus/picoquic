@@ -54,6 +54,8 @@ extern "C" {
 #define PICOQUIC_CWIN_INITIAL (10 * PICOQUIC_MAX_PACKET_SIZE)
 #define PICOQUIC_CWIN_MINIMUM (2 * PICOQUIC_MAX_PACKET_SIZE)
 
+#define PICOQUIC_VEC_LATE 1000 /* microseconds */
+
 /*
  * Types of frames
  */
@@ -376,6 +378,11 @@ typedef struct st_picoquic_cnx_t {
     unsigned int ack_needed : 1;
     unsigned int current_spin : 1; /* Current value of the spin bit */             
     unsigned int client_mode : 1; /* Is this connection the client side? */
+    unsigned int prev_spin : 1;  /* previous Spin bit */
+    unsigned int VEC : 2; 
+    unsigned int Edge : 1;
+    uint64_t lastTrigger;
+
 
     /* Local and remote parameters */
     picoquic_transport_parameters local_parameters;
@@ -552,6 +559,8 @@ typedef struct _picoquic_packet_header {
     uint16_t payload_length;
     int version_index;
     unsigned int spin : 1;
+    unsigned int VEC : 2;
+    unsigned int hasspinbit : 1;
 } picoquic_packet_header;
 
 int picoquic_parse_packet_header(
