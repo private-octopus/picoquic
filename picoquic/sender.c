@@ -573,8 +573,15 @@ void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet *
             /* Packet is not encrypted */
             break;
         case picoquic_packet_client_initial:
-        case picoquic_packet_server_stateless:
         case picoquic_packet_handshake:
+            length = picoquic_protect_packet(cnx, packet->ptype, packet->bytes, packet->sequence_number,
+                length, header_length,
+                send_buffer, cnx->aead_encrypt_cleartext_ctx, cnx->pn_enc_cleartext);
+            break;
+        case picoquic_packet_server_stateless:
+            if (picoquic_supported_versions[cnx->version_index].version_flags&picoquic_version_use_pn_encryption) {
+                packet->sequence_number = 0;
+            }
             length = picoquic_protect_packet(cnx, packet->ptype, packet->bytes, packet->sequence_number,
                 length, header_length,
                 send_buffer, cnx->aead_encrypt_cleartext_ctx, cnx->pn_enc_cleartext);

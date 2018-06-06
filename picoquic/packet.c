@@ -884,6 +884,12 @@ int picoquic_incoming_server_stateless(
             /* Packet that do not match the "echo" checks should be logged and ignored */
             ret = PICOQUIC_ERROR_UNEXPECTED_PACKET;
         }
+
+        if ((picoquic_supported_versions[cnx->version_index].version_flags&picoquic_version_use_pn_encryption) != 0 &&
+            ph->pn64 != 0) {
+            /* after draft-12, PN is required to be 0 */
+            ret = PICOQUIC_ERROR_UNEXPECTED_PACKET;
+        }
     }
 
     if (ret == 0) {
