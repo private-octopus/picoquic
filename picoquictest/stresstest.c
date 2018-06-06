@@ -71,8 +71,34 @@ typedef struct st_picoquic_stress_ctx_t {
 } picoquic_stress_ctx_t;
 
 /*
- * Message loop
+ * Message loop and related functions
  */
+
+void stress_set_ip_address_from_index(struct sockaddr_in * addr, int c_index)
+{
+    int ret = 0;
+
+    memset(&addr, 0, sizeof(struct sockaddr_in));
+    addr->sin_family = AF_INET;
+#ifdef _WINDOWS
+    addr->sin_addr.S_un.S_addr = (ULONG) c_index;
+#else
+    addr->sin_addr.s_addr = (uint32_t)c_index;;
+#endif
+    addr->sin_port = 4321;
+}
+
+int stress_get_index_from_ip_address(struct sockaddr_in * addr)
+{
+    uint32_t c_index = -1;
+#ifdef _WINDOWS
+    c_index = (int)addr->sin_addr.S_un.S_addr;
+#else
+    c_index = (int)addr->sin_addr.s_addr;
+#endif
+    return c_index;
+}
+
 
 int stress_submit_sp_packets(picoquic_stress_ctx_t * ctx, picoquic_quic_t * q, int c_index)
 {
@@ -95,13 +121,23 @@ int stress_submit_sp_packets(picoquic_stress_ctx_t * ctx, picoquic_quic_t * q, i
 
             if (c_index > 0)
             {
-                target_link = ctx->c_ctx[c_index]->s_to_c_link;
+                target_link = ctx->c_ctx[c_index]->c_to_s_link;
             }
             else {
-                /* TODO: find target list from address */
+                /* find target from address */
+                int d_index = stress_get_index_from_ip_address((struct sockaddr_in *) &sp->addr_to);
+
+                if (d_index < 0 || d_index >= ctx->nb_clients) {
+                    ret = -1;
+                }
+                else {
+                    target_link = ctx->c_ctx[c_index]->s_to_c_link;
+                }
             }
 
-            picoquictest_sim_link_submit(target_link, packet, ctx->simulated_time);
+            if (target_link != NULL) {
+                picoquictest_sim_link_submit(target_link, packet, ctx->simulated_time);
+            }
         }
         picoquic_delete_stateless_packet(sp);
     }
@@ -143,10 +179,18 @@ int stress_handle_packet_prepare(picoquic_stress_ctx_t * ctx, picoquic_quic_t * 
 
             if (c_index > 0)
             {
-                target_link = ctx->c_ctx[c_index]->s_to_c_link;
+                target_link = ctx->c_ctx[c_index]->c_to_s_link;
             }
             else {
-                /* TODO: find target list from address */
+                /* find target from address */
+                int d_index = stress_get_index_from_ip_address((struct sockaddr_in *) &packet->addr_to);
+
+                if (d_index < 0 || d_index >= ctx->nb_clients) {
+                    ret = -1;
+                }
+                else {
+                    target_link = ctx->c_ctx[c_index]->s_to_c_link;
+                }
             }
 
             picoquictest_sim_link_submit(target_link, packet, ctx->simulated_time);
