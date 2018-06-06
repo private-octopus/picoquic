@@ -1619,7 +1619,7 @@ static void ping_pong_callback(picoquic_cnx_t* cnx,
     ping_pong_test_callback_ctx_t* ping_pong_ctx = (ping_pong_test_callback_ctx_t*)callback_ctx;
     if (stream_id == 0 && fin_or_event == picoquic_callback_challenge_response) {
         /* This is a special frame call back. */
-        if (length == ping_pong_ctx->ping_length && bytes[0] == picoquic_frame_type_path_response && memcmp(bytes + 1, &ping_pong_ctx->ping_frame[1], length - 1) == 0) {
+        if (length == ping_pong_ctx->ping_length-1 && memcmp(bytes, &ping_pong_ctx->ping_frame[1], length) == 0) {
             ping_pong_ctx->pong_received++;
         } else {
             ping_pong_ctx->error_received++;

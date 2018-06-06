@@ -132,12 +132,12 @@ static int StreamZeroFrameOneTest(struct test_case_st* test)
     int ret = 0;
 
     picoquic_cnx_t cnx = { 0 };
-    size_t consumed = 0;
     uint64_t current_time = 0;
 
     for (size_t i = 0; ret == 0 && i < test->list_size; i++) {
-        if (0 != picoquic_decode_stream_frame(&cnx, test->list[i].packet,
-                     test->list[i].packet_length, 1, &consumed, current_time)) {
+        const uint8_t* bytes = test->list[i].packet + 1;
+        if (0 != picoquic_decode_stream_frame(&cnx, &bytes, test->list[i].packet + test->list[i].packet_length,
+                                              1, current_time)) {
             FAIL(test, "packet %" PRIst, i);
             ret = -1;
         }

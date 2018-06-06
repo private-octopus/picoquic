@@ -1354,11 +1354,11 @@ int picoquic_incoming_packet(
             packet_length - consumed_index, packet_length,
             &consumed, addr_from, addr_to, if_index_to, current_time);
 
-        if (ret == 0) {
-            consumed_index += consumed;
-        } else {
+        if (ret != 0) {
             break;
         }
+
+        consumed_index += consumed;
     }
 
     return ret;
