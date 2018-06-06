@@ -269,7 +269,7 @@ int picoquic_prepare_stream_reset_frame(picoquic_stream_head* stream,
 }
 
 
-static int picoquic_decode_padding_or_padding_frame(picoquic_cnx_t* cnx, const uint8_t** pbytes, const uint8_t* bytes_max,
+static int picoquic_decode_padding_or_ping_frame(picoquic_cnx_t* cnx, const uint8_t** pbytes, const uint8_t* bytes_max,
                                                     picoquic_frame_type_enum_t frame_type)
 {
     /* As an optimization, consume multiple subsequent padding in one go */
@@ -282,12 +282,12 @@ static int picoquic_decode_padding_or_padding_frame(picoquic_cnx_t* cnx, const u
 
 int picoquic_decode_padding_frame(picoquic_cnx_t* cnx, const uint8_t** pbytes, const uint8_t* bytes_max, int restricted, uint64_t current_time)
 {
-    return picoquic_decode_padding_or_padding_frame(cnx, pbytes, bytes_max, picoquic_frame_type_padding);
+    return picoquic_decode_padding_or_ping_frame(cnx, pbytes, bytes_max, picoquic_frame_type_padding);
 }
 
 int picoquic_decode_ping_frame(picoquic_cnx_t* cnx, const uint8_t** pbytes, const uint8_t* bytes_max, int restricted, uint64_t current_time)
 {
-    return picoquic_decode_padding_or_padding_frame(cnx, pbytes, bytes_max, picoquic_frame_type_ping);
+    return picoquic_decode_padding_or_ping_frame(cnx, pbytes, bytes_max, picoquic_frame_type_ping);
 }
 
 int picoquic_decode_blocked_frame(picoquic_cnx_t* cnx, const uint8_t** pbytes, const uint8_t* bytes_max, int restricted, uint64_t current_time)
