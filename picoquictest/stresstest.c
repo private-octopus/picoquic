@@ -31,8 +31,153 @@
 #include <string.h>
 #include <openssl/pem.h>
 
-/* Stress server callback: the same call back as the demo server.
+/*
+ * Portable abort call, should work on Linux and Windows.
+ * We deliberately do not call the ASSERT macros, becuse these
+ * macros can be made no-op if compiled with NDEBUG
  */
+
+static void stress_debug_break()
+{
+#ifdef _WINDOWS
+    DebugBreak();
+#else
+    raise(SIGTRAP);
+#endif
+}
+
+
+/*
+* Call back function, server side.
+*
+* Try to provide some code coverage on the server side while maintaining as
+* little state as possible.
+* TODO: add debug_break on error condition.
+*/
+
+#define STRESS_MAX_NUMBER_TRACKED_STREAMS 16
+#define STRESS_MINIMAL_QUERY_SIZE 127
+#define STRESS_DEFAULT_RESPONSE_SIZE 257
+#define STRESS_RESPONSE_LENGTH_MAX 1000000
+#define STRESS_MESSAGE_BUFFER_SIZE 0x10000
+
+typedef struct st_picoquic_stress_server_callback_ctx_t {
+    // picoquic_first_server_stream_ctx_t* first_stream;
+    uint8_t buffer[STRESS_MESSAGE_BUFFER_SIZE];
+    size_t data_received_on_stream[STRESS_MAX_NUMBER_TRACKED_STREAMS];
+    uint32_t data_sum_of_stream[STRESS_MAX_NUMBER_TRACKED_STREAMS];
+} picoquic_stress_server_callback_ctx_t;
+
+static void stress_server_callback(picoquic_cnx_t* cnx,
+    uint64_t stream_id, uint8_t* bytes, size_t length,
+    picoquic_call_back_event_t fin_or_event, void* callback_ctx)
+{
+    int ret = 0;
+    picoquic_stress_server_callback_ctx_t* ctx = (picoquic_stress_server_callback_ctx_t*)callback_ctx;
+
+    if (fin_or_event == picoquic_callback_close || fin_or_event == picoquic_callback_application_close) {
+        if (ctx != NULL) {
+            free(ctx);
+            picoquic_set_callback(cnx, stress_server_callback, NULL);
+        }
+    }
+    else if (fin_or_event == picoquic_callback_challenge_response) {
+        /* Do nothing */
+    }
+    else {
+        if (ctx == NULL) {
+            picoquic_stress_server_callback_ctx_t* new_ctx = (picoquic_stress_server_callback_ctx_t*)
+                malloc(sizeof(picoquic_stress_server_callback_ctx_t));
+            if (new_ctx == NULL) {
+                /* Should really be a debug-break error */
+                picoquic_close(cnx, PICOQUIC_ERROR_MEMORY);
+                stress_debug_break();
+            }
+            else {
+                memset(new_ctx, 0, sizeof(picoquic_stress_server_callback_ctx_t));
+                picoquic_set_callback(cnx, stress_server_callback, new_ctx);
+                ctx = new_ctx;
+            }
+        }
+
+        if (ctx != NULL) {
+            /* verify state and copy data to the stream buffer */
+            if (fin_or_event == picoquic_callback_stop_sending) {
+                if ((ret = picoquic_reset_stream(cnx, stream_id, 0)) != 0) {
+                    stress_debug_break();
+                }
+            }
+            else if (fin_or_event == picoquic_callback_stream_reset) {
+                if ((ret = picoquic_reset_stream(cnx, stream_id, 0)) != 0) {
+                    stress_debug_break();
+                }
+            }
+            else {
+                /* Write a response, which should somehow depend on the stream data and
+                * the stream status and the data bytes */
+                if ((stream_id & 3) != 0) {
+                    /* This is not a client-initiated bidir stream. Just ignore the data */
+                }
+                else {
+                    uint64_t bidir_id = stream_id / 4;
+                    size_t response_length = 0;
+
+
+                    if (bidir_id < STRESS_MAX_NUMBER_TRACKED_STREAMS) {
+                        size_t received = ctx->data_received_on_stream[bidir_id] + length;
+                        if (ctx->data_received_on_stream[bidir_id] < STRESS_MINIMAL_QUERY_SIZE) {
+                            int processed = length;
+                            if (received >= STRESS_MINIMAL_QUERY_SIZE) {
+                                processed = received - STRESS_MINIMAL_QUERY_SIZE;
+                            }
+
+                            for (int i = 0; i < processed; i++) {
+                                ctx->data_sum_of_stream[bidir_id] =
+                                    ctx->data_sum_of_stream[bidir_id] * 101 + bytes[i];
+                            }
+
+                            if (received >= STRESS_MINIMAL_QUERY_SIZE) {
+                                response_length = ctx->data_sum_of_stream[bidir_id] % STRESS_RESPONSE_LENGTH_MAX;
+                            }
+                        }
+                    }
+
+                    /* for all streams above the limit, or all streams with short queries,just send a fixed size answer,
+                    * after receiving all the client data */
+                    if (fin_or_event == picoquic_callback_stream_fin &&
+                        (bidir_id >= STRESS_MAX_NUMBER_TRACKED_STREAMS ||
+                            ctx->data_received_on_stream[bidir_id] < STRESS_MINIMAL_QUERY_SIZE)) {
+
+                        response_length = STRESS_DEFAULT_RESPONSE_SIZE;
+                    }
+
+                    if (response_length > 0) {
+                        /* Push data on the stream */
+
+                        while (response_length > STRESS_MESSAGE_BUFFER_SIZE) {
+                            if ( (ret = picoquic_add_to_stream(cnx, stream_id, ctx->buffer,
+                                STRESS_MESSAGE_BUFFER_SIZE, 0)) != 0) {
+                                stress_debug_break();
+                            }
+
+                            response_length -= STRESS_MESSAGE_BUFFER_SIZE;
+                        }
+                        if ((ret = picoquic_add_to_stream(cnx, stream_id, ctx->buffer,
+                                response_length, 1)) != 0) {
+                            stress_debug_break();
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /* that's it */
+}
+
+/* Callback function, client side.
+* Implement simple scenarios for query generations, such as
+* number of queries and interval between queries */
 
 /* Stress client callback: same as the demo client callback, 
  * based on scenarios. But we need to account for failures,
@@ -43,6 +188,131 @@
  * including silent departure, version negotiation, or
  * zero share start.
  */
+
+#define STRESS_MAX_CLIENT_STREAMS 16
+
+typedef struct st_picoquic_stress_client_callback_ctx_t {
+    uint64_t test_id;
+    uint64_t max_bidir;
+    uint64_t next_bidir;
+    size_t max_open_streams;
+    size_t nb_open_streams;
+    uint64_t stream_id[STRESS_MAX_CLIENT_STREAMS];
+    uint32_t nb_client_streams;
+    uint64_t last_interaction_time;
+    int progress_observed;
+} picoquic_stress_client_callback_ctx_t;
+
+static void stress_client_start_streams(picoquic_cnx_t* cnx,
+    picoquic_stress_client_callback_ctx_t* ctx) 
+{
+    int ret = 0;
+    uint8_t buf[32];
+
+    while (ctx->nb_open_streams < ctx->max_open_streams &&
+        ctx->next_bidir <= ctx->max_bidir) {
+        int stream_index = -1;
+        for (size_t i = 0; i < ctx->max_open_streams; i++) {
+            if (ctx->stream_id[i] == (uint64_t)((int64_t) -1)) {
+                stream_index = i;
+                break;
+            }
+        }
+
+        if (stream_index < 0) {
+            stress_debug_break();
+        }
+        else {
+            memset(buf, 0, sizeof(buf));
+            picoformat_64(buf, ctx->test_id);
+            picoformat_64(&buf[8], ctx->next_bidir);
+
+            ctx->stream_id[stream_index] = ctx->next_bidir;
+            ctx->next_bidir += 4;
+            ctx->nb_open_streams++;
+
+            if ((ret = picoquic_add_to_stream(cnx, ctx->stream_id[stream_index], buf, sizeof(buf), 1)) != 0){
+                stress_debug_break();
+            }
+        }
+    }
+}
+
+static void stress_client_callback(picoquic_cnx_t* cnx,
+    uint64_t stream_id, uint8_t* bytes, size_t length,
+    picoquic_call_back_event_t fin_or_event, void* callback_ctx)
+{
+    int ret = 0;
+    picoquic_stress_client_callback_ctx_t* ctx = (picoquic_stress_client_callback_ctx_t*)callback_ctx;
+
+    ctx->last_interaction_time = picoquic_current_time();
+    ctx->progress_observed = 1;
+
+    if (fin_or_event == picoquic_callback_close || fin_or_event == picoquic_callback_application_close) {
+        /* Free per connection resource */
+        if (ctx != NULL) {
+            free(ctx);
+            picoquic_set_callback(cnx, stress_client_callback, NULL);
+        }
+    }
+    else if (ctx != NULL) {
+        /* if stream is already present, check its state. New bytes? */
+        int stream_index = -1;
+        int is_finished = 0;
+
+        for (size_t i = 0; i < ctx->max_open_streams; i++) {
+            if (ctx->stream_id[i] == stream_id) {
+                stream_index = i;
+                break;
+            }
+        }
+
+        if (stream_index >= 0) {
+            /* if stream is finished, maybe start new ones */
+            if (fin_or_event == picoquic_callback_stream_reset) {
+                if ((ret = picoquic_reset_stream(cnx, stream_id, 0)) != 0) {
+                    stress_debug_break();
+                }
+                is_finished = 1;
+            }
+            else if (fin_or_event == picoquic_callback_stop_sending) {
+                if ((ret = picoquic_reset_stream(cnx, stream_id, 0)) != 0) {
+                    stress_debug_break();
+                }
+                is_finished = 1;
+            }
+            else if (fin_or_event == picoquic_callback_stream_fin) {
+                is_finished = 1;
+            }
+
+            if (is_finished != 0) {
+                if (ctx->nb_open_streams > 0) {
+                    ctx->nb_open_streams--;
+                }
+                else {
+                    stress_debug_break();
+                }
+
+                ctx->stream_id[stream_index] =(uint64_t)((int64_t)-1);
+
+                if (ctx->next_bidir >= ctx->max_bidir) {
+                    /* This was the last stream */
+                    if (ctx->nb_open_streams == 0) {
+                        if ((ret = picoquic_close(cnx, 0)) != 0) {
+                            stress_debug_break();
+                        }
+                    }
+                }
+                else {
+                    /* Initialize the next bidir stream  */
+                    stress_client_start_streams(ctx, cnx);
+                }
+            }
+        }
+    }
+
+    /* that's it */
+}
 
 /* Orchestration of the simulation: one server, N simulation
  * links. On each link, there may be a new client added in
@@ -220,7 +490,6 @@ int stress_loop_poll_context(picoquic_stress_ctx_t * ctx, uint64_t next_time) {
     int best_index = -1;
     int last_index = -1;
     int64_t delay_max = 100000000;
-    picoquic_stateless_packet_t* sp;
     uint64_t worst_wake_time = ctx->simulated_time + delay_max;
     uint64_t best_wake_time = ctx->simulated_time + picoquic_get_next_wake_delay(
         ctx->qserver, ctx->simulated_time, delay_max);
@@ -283,3 +552,4 @@ int stress_loop_poll_context(picoquic_stress_ctx_t * ctx, uint64_t next_time) {
 
     return ret;
 }
+
