@@ -1146,8 +1146,7 @@ int picoquic_incoming_encrypted(
 	      // got an edge 
 	      cnx->prev_spin = cnx->current_spin;
 	      cnx->Edge = 1;
-	      cnx->VEC = ph->VEC + 1;
-	      if (cnx->VEC > 3) cnx->VEC = 3;
+	      cnx->VEC = (ph->VEC==3) ? 3 : (ph->VEC + 1);
 	      cnx->lastTrigger =  picoquic_get_quic_time(cnx->quic);
 	    }
         }
