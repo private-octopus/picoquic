@@ -51,6 +51,14 @@ static uint8_t test_type_application_close[] = {
     0, 0,
     0
 };
+
+static uint8_t test_type_application_close_reason[] = {
+    picoquic_frame_type_application_close,
+    4, 4,
+    4,
+    't', 'e', 's', 't'
+};
+
 static uint8_t test_frame_type_max_data[] = {
     picoquic_frame_type_max_data,
     0xC0, 0, 0x01, 0, 0, 0, 0, 0
@@ -146,6 +154,7 @@ static test_skip_frames_t test_skip_list[] = {
     TEST_SKIP_ITEM("reset_stream", test_frame_type_reset_stream, 0, 0),
     TEST_SKIP_ITEM("connection_close", test_type_connection_close, 0, 0),
     TEST_SKIP_ITEM("application_close", test_type_application_close, 0, 0),
+    TEST_SKIP_ITEM("application_close", test_type_application_close_reason, 0, 0),
     TEST_SKIP_ITEM("max_data", test_frame_type_max_data, 0, 0),
     TEST_SKIP_ITEM("max_stream_data", test_frame_type_max_stream_data, 0, 0),
     TEST_SKIP_ITEM("max_stream_id", test_frame_type_max_stream_id, 0, 0),
@@ -313,6 +322,76 @@ int skip_frame_test()
     if (ret == 0) {
         DBG_PRINTF("Fuzz skip test passes after %d trials, %d error detected\n",
             fuzz_count, fuzz_fail);
+    }
+
+    return ret;
+}
+
+
+int parse_frame_test()
+{
+    int ret = 0;
+    uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
+    uint8_t fuzz_buffer[PICOQUIC_MAX_PACKET_SIZE];
+    const uint8_t extra_bytes[4] = { 0, 0, 0, 0 };
+    uint64_t random_context = 0xBABED011;
+    int fuzz_count = 0;
+    int fuzz_fail = 0;
+    uint64_t simulated_time = 0;
+    struct sockaddr_in saddr;
+    picoquic_quic_t * qclient = picoquic_create(8, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
+
+
+    memset(&saddr, 0, sizeof(struct sockaddr_in));
+    if (qclient == NULL) {
+        DBG_PRINTF("%s", "Cannot create QUIC context\n");
+        ret = -1;
+    }
+
+    for (size_t i = 0; ret == 0 && i < nb_test_skip_list; i++) {
+        for (int sharp_end = 0; ret == 0 && sharp_end < 2; sharp_end++) {
+            size_t byte_max = 0;
+            int t_ret = 0;
+            picoquic_cnx_t * cnx = picoquic_create_cnx(qclient, 
+                picoquic_null_connection_id, picoquic_null_connection_id, (struct sockaddr *) &saddr,
+                simulated_time, 0, "test-sni", "test-alpn", 1);
+
+            if (cnx == NULL) {
+                DBG_PRINTF("%s", "Cannot create QUIC CNX context\n");
+                ret = -1;
+            }
+            else {
+
+                memcpy(buffer, test_skip_list[i].val, test_skip_list[i].len);
+                byte_max = test_skip_list[i].len;
+                if (test_skip_list[i].must_be_last == 0 && sharp_end == 0) {
+                    /* add some padding to check that the end of frame is detected properly */
+                    memcpy(buffer + byte_max, extra_bytes, sizeof(extra_bytes));
+                    byte_max += sizeof(extra_bytes);
+                }
+
+                t_ret = picoquic_decode_frames(cnx, buffer, byte_max, 0, simulated_time);
+
+                if (t_ret != 0) {
+                    DBG_PRINTF("Parse frame <%s> fails, ret = %d\n", test_skip_list[i].name, t_ret);
+                    ret = t_ret;
+                }
+                else if ((cnx->ack_needed != 0 && test_skip_list[i].is_pure_ack != 0) ||
+                    (cnx->ack_needed == 0 && test_skip_list[i].is_pure_ack == 0)) {
+                    DBG_PRINTF("Parse frame <%s> fails, wrong pure ack, %d instead of %d\n",
+                        test_skip_list[i].name, (int)cnx->ack_needed, (int)test_skip_list[i].is_pure_ack);
+                    ret = -1;
+                }
+
+                picoquic_delete_cnx(cnx);
+            }
+        }
+    }
+
+    if (qclient != NULL) {
+        picoquic_free(qclient);
     }
 
     return ret;
