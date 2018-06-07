@@ -54,7 +54,7 @@ extern "C" {
 #define PICOQUIC_CWIN_INITIAL (10 * PICOQUIC_MAX_PACKET_SIZE)
 #define PICOQUIC_CWIN_MINIMUM (2 * PICOQUIC_MAX_PACKET_SIZE)
 
-#define PICOQUIC_SPIN_VEC_LATE 1000 /* microseconds */
+#define PICOQUIC_SPIN_VEC_LATE 1000 /* in microseconds : reaction time beyond which to mark a spin bit edge as 'late' */
 
 /*
  * Types of frames
@@ -379,9 +379,9 @@ typedef struct st_picoquic_cnx_t {
     unsigned int current_spin : 1; /* Current value of the spin bit */             
     unsigned int client_mode : 1; /* Is this connection the client side? */
     unsigned int prev_spin : 1;  /* previous Spin bit */
-    unsigned int spin_vec : 2; 
-    unsigned int spin_edge : 1;
-    uint64_t spin_last_trigger;
+    unsigned int spin_vec : 2;   /* Valid Edge Counter, makes spin bit RTT measurements more reliable */
+    unsigned int spin_edge : 1;  /* internal signalling from incoming to outgoing: we just spinned it */
+    uint64_t spin_last_trigger;  /* timestamp of the incoming packet that triggered the spinning */
 
 
     /* Local and remote parameters */
