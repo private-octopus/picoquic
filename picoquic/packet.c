@@ -77,7 +77,7 @@ int picoquic_parse_packet_header(
                 ph->offset += picoquic_parse_connection_id(bytes + ph->offset, l_srce_id, &ph->srce_cnx_id);
 
                 /* Not applicable for long packets. */
-		ph->hasspinbit = 0;
+		ph->has_spin_bit = 0;
                 ph->spin = 0;
 
                 if (ph->vn == 0) {
@@ -254,9 +254,9 @@ int picoquic_parse_packet_header(
                      ph->ptype = picoquic_packet_1rtt_protected_phi1;
                  }
 
-		 ph->hasspinbit = 1;
+		 ph->has_spin_bit = 1;
                  ph->spin = (bytes[0] >> 2) & 1;
-		 ph->VEC = bytes[0] & 0x03 ;
+		 ph->spin_vec = bytes[0] & 0x03 ;
 
                  ph->pn_offset = ph->offset;
                  ph->pn = 0;
@@ -1148,11 +1148,11 @@ int picoquic_incoming_encrypted(
         /* Packet is correct */
         if (ph->pn64 > cnx->first_sack_item.end_of_sack_range) {
             cnx->current_spin = ph->spin ^ cnx->client_mode;
-	    if (ph->hasspinbit && cnx->current_spin != cnx->prev_spin) {
+	    if (ph->has_spin_bit && cnx->current_spin != cnx->prev_spin) {
 	      // got an edge 
 	      cnx->prev_spin = cnx->current_spin;
-	      cnx->Edge = 1;
-	      cnx->VEC = (ph->VEC==3) ? 3 : (ph->VEC + 1);
+	      cnx->spin_edge = 1;
+	      cnx->spin_vec = (ph->spin_vec==3) ? 3 : (ph->spin_vec + 1);
 	      cnx->lastTrigger =  picoquic_get_quic_time(cnx->quic);
 	    }
         }
