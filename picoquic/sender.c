@@ -325,7 +325,7 @@ uint32_t picoquic_create_packet_header_12(
 	if (!cnx->spin_edge) spin_vec = 0;
 	else {
 		cnx->spin_edge = 0;
-		uint64_t dt = picoquic_get_quic_time(cnx->quic) - cnx->lastTrigger;
+		uint64_t dt = picoquic_get_quic_time(cnx->quic) - cnx->spin_last_trigger;
 		if (dt > PICOQUIC_SPIN_VEC_LATE) { // DELAYED
 			spin_vec = 1;
 			// fprintf(stderr, "Delayed Outgoing Spin=%d DT=%ld\n", cnx->current_spin, dt);

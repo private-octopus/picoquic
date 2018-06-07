@@ -1153,7 +1153,7 @@ int picoquic_incoming_encrypted(
 	      cnx->prev_spin = cnx->current_spin;
 	      cnx->spin_edge = 1;
 	      cnx->spin_vec = (ph->spin_vec==3) ? 3 : (ph->spin_vec + 1);
-	      cnx->lastTrigger =  picoquic_get_quic_time(cnx->quic);
+	      cnx->spin_last_trigger =  picoquic_get_quic_time(cnx->quic);
 	    }
         }
 

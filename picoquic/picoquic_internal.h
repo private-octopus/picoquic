@@ -381,7 +381,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int prev_spin : 1;  /* previous Spin bit */
     unsigned int spin_vec : 2; 
     unsigned int spin_edge : 1;
-    uint64_t lastTrigger;
+    uint64_t spin_last_trigger;
 
 
     /* Local and remote parameters */
