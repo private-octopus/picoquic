@@ -319,10 +319,21 @@ uint32_t picoquic_create_packet_header_12(
         /* Create a short packet -- using 32 bit sequence numbers for now */
         uint8_t K = (packet_type == picoquic_packet_1rtt_protected_phi0) ? 0 : 0x40;
         const uint8_t C = 0x30;
+	uint8_t spin_vec = (cnx->spin_vec );
         uint8_t spin_bit = (uint8_t)((cnx->current_spin) << 2);
 
-        length = 0;
-        bytes[length++] = (K | C | spin_bit);
+	if (!cnx->spin_edge) spin_vec = 0;
+	else {
+		cnx->spin_edge = 0;
+		uint64_t dt = picoquic_get_quic_time(cnx->quic) - cnx->spin_last_trigger;
+		if (dt > PICOQUIC_SPIN_VEC_LATE) { // DELAYED
+			spin_vec = 1;
+			// fprintf(stderr, "Delayed Outgoing Spin=%d DT=%ld\n", cnx->current_spin, dt);
+		}
+	}
+
+	length = 0;
+        bytes[length++] = (K | C | spin_bit | spin_vec);
         length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, dest_cnx_id);
 
         *pn_offset = length;
@@ -573,8 +584,15 @@ void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet *
             /* Packet is not encrypted */
             break;
         case picoquic_packet_client_initial:
-        case picoquic_packet_server_stateless:
         case picoquic_packet_handshake:
+            length = picoquic_protect_packet(cnx, packet->ptype, packet->bytes, packet->sequence_number,
+                length, header_length,
+                send_buffer, cnx->aead_encrypt_cleartext_ctx, cnx->pn_enc_cleartext);
+            break;
+        case picoquic_packet_server_stateless:
+            if (picoquic_supported_versions[cnx->version_index].version_flags&picoquic_version_use_pn_encryption) {
+                packet->sequence_number = 0;
+            }
             length = picoquic_protect_packet(cnx, packet->ptype, packet->bytes, packet->sequence_number,
                 length, header_length,
                 send_buffer, cnx->aead_encrypt_cleartext_ctx, cnx->pn_enc_cleartext);
