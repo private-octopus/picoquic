@@ -333,7 +333,6 @@ int parse_frame_test()
     int ret = 0;
     uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
     const uint8_t extra_bytes[4] = { 0, 0, 0, 0 };
-    uint64_t random_context = 0xBABED011;
     uint64_t simulated_time = 0;
     struct sockaddr_in saddr;
     picoquic_quic_t * qclient = picoquic_create(8, NULL, NULL, NULL, NULL,

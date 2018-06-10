@@ -916,13 +916,13 @@ size_t picoquic_log_segment(FILE* F, int log_cnxid, picoquic_quic_t* quic, picoq
     int ret = 0;
     picoquic_packet_header ph;
     picoquic_cnx_t* pcnx = cnx;
-    uint32_t consumed = length;
+    uint32_t consumed = (uint32_t) length;
     uint64_t log_cnxid64 = 0;
     uint8_t decrypted[PICOQUIC_MAX_PACKET_SIZE];
 
     /* Parse the header and decrypt the packet */
     memcpy(decrypted, bytes, length);
-    ret = picoquic_parse_header_and_decrypt(quic, decrypted, length, length, addr_peer,
+    ret = picoquic_parse_header_and_decrypt(quic, decrypted, (uint32_t)length, (uint32_t)length, addr_peer,
         current_time, &ph, &cnx, &consumed, receiving);
 
     if (log_cnxid != 0) {

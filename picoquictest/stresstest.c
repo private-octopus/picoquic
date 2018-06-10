@@ -24,6 +24,8 @@
 #include "picoquictest_internal.h"
 #ifdef _WINDOWS
 #include "..\picoquic\wincompat.h"
+#else
+#include <signal.h>
 #endif
 #include <picotls.h>
 #include <stddef.h>
@@ -167,9 +169,9 @@ static void stress_server_callback(picoquic_cnx_t* cnx,
                     if (bidir_id < PICOQUIC_STRESS_MAX_NUMBER_TRACKED_STREAMS) {
                         size_t received = ctx->data_received_on_stream[bidir_id] + length;
                         if (ctx->data_received_on_stream[bidir_id] < PICOQUIC_STRESS_MINIMAL_QUERY_SIZE) {
-                            int processed = length;
+                            int processed = (int) length;
                             if (received >= PICOQUIC_STRESS_MINIMAL_QUERY_SIZE) {
-                                processed = received - PICOQUIC_STRESS_MINIMAL_QUERY_SIZE;
+                                processed = (int) received - PICOQUIC_STRESS_MINIMAL_QUERY_SIZE;
                             }
 
                             for (int i = 0; i < processed; i++) {
@@ -243,7 +245,7 @@ static void stress_client_start_streams(picoquic_cnx_t* cnx,
         int stream_index = -1;
         for (size_t i = 0; i < ctx->max_open_streams; i++) {
             if (ctx->stream_id[i] == (uint64_t)((int64_t) -1)) {
-                stream_index = i;
+                stream_index = (int) i;
                 break;
             }
         }
@@ -291,7 +293,7 @@ static void stress_client_callback(picoquic_cnx_t* cnx,
 
         for (size_t i = 0; i < ctx->max_open_streams; i++) {
             if (ctx->stream_id[i] == stream_id) {
-                stream_index = i;
+                stream_index = (int) i;
                 break;
             }
         }
@@ -612,9 +614,7 @@ static int stress_loop_poll_context(picoquic_stress_ctx_t * ctx)
 {
     int ret = 0;
     int best_index = -1;
-    int last_index = -1;
     int64_t delay_max = 100000000;
-    uint64_t worst_wake_time = ctx->simulated_time + delay_max;
     uint64_t best_wake_time = ctx->simulated_time + picoquic_get_next_wake_delay(
         ctx->qserver, ctx->simulated_time, delay_max);
 
@@ -814,7 +814,7 @@ int stress_test()
             stress_ctx.nb_clients, PICOQUIC_MAX_STRESS_CLIENTS);
         ret = -1;
     } else {
-        stress_ctx.nb_clients = picoquic_stress_nb_clients;
+        stress_ctx.nb_clients = (int) picoquic_stress_nb_clients;
         stress_ctx.qserver = picoquic_create(PICOQUIC_MAX_STRESS_CLIENTS,
 #ifdef _WINDOWS
 #ifdef _WINDOWS64

@@ -302,9 +302,9 @@ static void test_api_callback(picoquic_cnx_t* cnx,
 
     if (stream_id > 0) {
         if (cb_ctx->client_mode) {
-            ctx->sum_data_received_at_client += length;
+            ctx->sum_data_received_at_client += (int) length;
         } else {
-            ctx->sum_data_received_at_server += length;
+            ctx->sum_data_received_at_server += (int) length;
         }
     }
 
