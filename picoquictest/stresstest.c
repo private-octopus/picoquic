@@ -43,15 +43,15 @@
 #define PICOQUIC_TEST_ALPN "picoquic-test"
 
 uint64_t picoquic_stress_test_duration = 120000000; /* Default to 2 minutes */
-size_t picoquic_stress_nb_clients = 1; /* Default to 4 clients */
-uint64_t picoquic_stress_max_bidir = 1 * 4; /* Default to 8 streams max per connection */
-size_t picoquic_stress_max_open_streams = 1; /* Default to 4 simultaneous streams max per connection */
+size_t picoquic_stress_nb_clients = 4; /* Default to 4 clients */
+uint64_t picoquic_stress_max_bidir = 8 * 4; /* Default to 8 streams max per connection */
+size_t picoquic_stress_max_open_streams = 4; /* Default to 4 simultaneous streams max per connection */
 
 typedef struct st_picoquic_stress_server_callback_ctx_t {
     // picoquic_first_server_stream_ctx_t* first_stream;
-    uint8_t buffer[PICOQUIC_STRESS_MESSAGE_BUFFER_SIZE];
     size_t data_received_on_stream[PICOQUIC_STRESS_MAX_NUMBER_TRACKED_STREAMS];
     uint32_t data_sum_of_stream[PICOQUIC_STRESS_MAX_NUMBER_TRACKED_STREAMS];
+    uint8_t buffer[PICOQUIC_STRESS_MESSAGE_BUFFER_SIZE];
 } picoquic_stress_server_callback_ctx_t;
 
 typedef struct st_picoquic_stress_client_callback_ctx_t {
@@ -181,6 +181,7 @@ static void stress_server_callback(picoquic_cnx_t* cnx,
                                 response_length = ctx->data_sum_of_stream[bidir_id] % PICOQUIC_STRESS_RESPONSE_LENGTH_MAX;
                             }
                         }
+                        ctx->data_received_on_stream[bidir_id] += length;
                     }
 
                     /* for all streams above the limit, or all streams with short queries,just send a fixed size answer,
