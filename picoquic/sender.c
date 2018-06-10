@@ -64,6 +64,7 @@ int picoquic_add_to_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
             if ((stream_id & 1) != parity) {
                 ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
             } else {
+#if 0
                 if ((stream_id & 2) == 0) {
                     if (stream_id > cnx->max_stream_id_bidir_remote) {
                         ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
@@ -75,6 +76,7 @@ int picoquic_add_to_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
                         ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
                     }
                 }
+#endif
             }
 
             if (ret == 0) {
@@ -319,8 +321,8 @@ uint32_t picoquic_create_packet_header_12(
         /* Create a short packet -- using 32 bit sequence numbers for now */
         uint8_t K = (packet_type == picoquic_packet_1rtt_protected_phi0) ? 0 : 0x40;
         const uint8_t C = 0x30;
-	uint8_t spin_vec = (cnx->spin_vec );
-        uint8_t spin_bit = (uint8_t)((cnx->current_spin) << 2);
+	uint8_t spin_vec = (uint8_t) (cnx->spin_vec );
+    uint8_t spin_bit = (uint8_t)((cnx->current_spin) << 2);
 
 	if (!cnx->spin_edge) spin_vec = 0;
 	else {
@@ -676,7 +678,7 @@ static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t* cnx,
             uint64_t retransmit_timer = (cnx->nb_retransmit == 0) ? 
                 cnx->path[0]->retransmit_timer : (1000000ull << (cnx->nb_retransmit - 1));
 
-            if ((uint64_t)time_out <= retransmit_timer) {
+            if ((uint64_t)time_out < retransmit_timer) {
                 /* Do not retransmit if the timer has not yet elapsed */
                 should_retransmit = 0;
             } else {
@@ -1277,7 +1279,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
         /* document the send time & overhead */
         packet->send_time = current_time;
         packet->checksum_overhead = checksum_overhead;
-    } else if (ret == 0 && is_cleartext_mode && stream == NULL && cnx->first_misc_frame == NULL) {
+    } else if (ret == 0 && is_cleartext_mode && stream == NULL && cnx->first_misc_frame == NULL && cnx->ack_needed == 0) {
         /* when in a clear text mode, only send packets if there is
         * actually something to send, or resend */
 
@@ -1567,7 +1569,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
 
         if (current_time >= exit_time) {
             cnx->cnx_state = picoquic_state_disconnected;
-        } else if (current_time > cnx->next_wake_time) {
+        } else if (current_time >= cnx->next_wake_time) {
             uint64_t delta_t = path_x->rtt_min;
             if (delta_t * 2 < path_x->retransmit_timer) {
                 delta_t = path_x->retransmit_timer / 2;

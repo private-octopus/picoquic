@@ -31,6 +31,60 @@
 #include <string.h>
 #include <openssl/pem.h>
 
+#define PICOQUIC_MAX_STRESS_CLIENTS 256
+#define PICOQUIC_STRESS_MAX_NUMBER_TRACKED_STREAMS 16
+#define PICOQUIC_STRESS_MINIMAL_QUERY_SIZE 127
+#define PICOQUIC_STRESS_DEFAULT_RESPONSE_SIZE 257
+#define PICOQUIC_STRESS_RESPONSE_LENGTH_MAX 1000000
+#define PICOQUIC_STRESS_MESSAGE_BUFFER_SIZE 0x10000
+#define PICOQUIC_STRESS_MAX_CLIENT_STREAMS 16
+
+#define PICOQUIC_TEST_SNI "picoquic.test"
+#define PICOQUIC_TEST_ALPN "picoquic-test"
+
+uint64_t picoquic_stress_test_duration = 120000000; /* Default to 2 minutes */
+size_t picoquic_stress_nb_clients = 1; /* Default to 4 clients */
+uint64_t picoquic_stress_max_bidir = 1 * 4; /* Default to 8 streams max per connection */
+size_t picoquic_stress_max_open_streams = 1; /* Default to 4 simultaneous streams max per connection */
+
+typedef struct st_picoquic_stress_server_callback_ctx_t {
+    // picoquic_first_server_stream_ctx_t* first_stream;
+    uint8_t buffer[PICOQUIC_STRESS_MESSAGE_BUFFER_SIZE];
+    size_t data_received_on_stream[PICOQUIC_STRESS_MAX_NUMBER_TRACKED_STREAMS];
+    uint32_t data_sum_of_stream[PICOQUIC_STRESS_MAX_NUMBER_TRACKED_STREAMS];
+} picoquic_stress_server_callback_ctx_t;
+
+typedef struct st_picoquic_stress_client_callback_ctx_t {
+    uint64_t test_id;
+    uint64_t max_bidir;
+    uint64_t next_bidir;
+    size_t max_open_streams;
+    size_t nb_open_streams;
+    uint64_t stream_id[PICOQUIC_STRESS_MAX_CLIENT_STREAMS];
+    uint32_t nb_client_streams;
+    uint64_t last_interaction_time;
+    int progress_observed;
+} picoquic_stress_client_callback_ctx_t;
+
+typedef struct st_picoquic_stress_client_t {
+    picoquic_quic_t* qclient;
+    struct sockaddr_in client_addr;
+    char ticket_file_name[32];
+    picoquictest_sim_link_t* c_to_s_link;
+    picoquictest_sim_link_t* s_to_c_link;
+} picoquic_stress_client_t;
+
+typedef struct st_picoquic_stress_ctx_t {
+    picoquic_quic_t* qserver;
+    struct sockaddr_in server_addr;
+    uint64_t simulated_time;
+    int sum_data_received_at_server;
+    int sum_data_sent_at_server;
+    int sum_connections;
+    int nb_clients;
+    picoquic_stress_client_t * c_ctx[PICOQUIC_MAX_STRESS_CLIENTS];
+} picoquic_stress_ctx_t;
+
 /*
  * Portable abort call, should work on Linux and Windows.
  * We deliberately do not call the ASSERT macros, becuse these
@@ -54,19 +108,6 @@ static void stress_debug_break()
 * little state as possible.
 * TODO: add debug_break on error condition.
 */
-
-#define STRESS_MAX_NUMBER_TRACKED_STREAMS 16
-#define STRESS_MINIMAL_QUERY_SIZE 127
-#define STRESS_DEFAULT_RESPONSE_SIZE 257
-#define STRESS_RESPONSE_LENGTH_MAX 1000000
-#define STRESS_MESSAGE_BUFFER_SIZE 0x10000
-
-typedef struct st_picoquic_stress_server_callback_ctx_t {
-    // picoquic_first_server_stream_ctx_t* first_stream;
-    uint8_t buffer[STRESS_MESSAGE_BUFFER_SIZE];
-    size_t data_received_on_stream[STRESS_MAX_NUMBER_TRACKED_STREAMS];
-    uint32_t data_sum_of_stream[STRESS_MAX_NUMBER_TRACKED_STREAMS];
-} picoquic_stress_server_callback_ctx_t;
 
 static void stress_server_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
@@ -123,12 +164,12 @@ static void stress_server_callback(picoquic_cnx_t* cnx,
                     size_t response_length = 0;
 
 
-                    if (bidir_id < STRESS_MAX_NUMBER_TRACKED_STREAMS) {
+                    if (bidir_id < PICOQUIC_STRESS_MAX_NUMBER_TRACKED_STREAMS) {
                         size_t received = ctx->data_received_on_stream[bidir_id] + length;
-                        if (ctx->data_received_on_stream[bidir_id] < STRESS_MINIMAL_QUERY_SIZE) {
+                        if (ctx->data_received_on_stream[bidir_id] < PICOQUIC_STRESS_MINIMAL_QUERY_SIZE) {
                             int processed = length;
-                            if (received >= STRESS_MINIMAL_QUERY_SIZE) {
-                                processed = received - STRESS_MINIMAL_QUERY_SIZE;
+                            if (received >= PICOQUIC_STRESS_MINIMAL_QUERY_SIZE) {
+                                processed = received - PICOQUIC_STRESS_MINIMAL_QUERY_SIZE;
                             }
 
                             for (int i = 0; i < processed; i++) {
@@ -136,8 +177,8 @@ static void stress_server_callback(picoquic_cnx_t* cnx,
                                     ctx->data_sum_of_stream[bidir_id] * 101 + bytes[i];
                             }
 
-                            if (received >= STRESS_MINIMAL_QUERY_SIZE) {
-                                response_length = ctx->data_sum_of_stream[bidir_id] % STRESS_RESPONSE_LENGTH_MAX;
+                            if (received >= PICOQUIC_STRESS_MINIMAL_QUERY_SIZE) {
+                                response_length = ctx->data_sum_of_stream[bidir_id] % PICOQUIC_STRESS_RESPONSE_LENGTH_MAX;
                             }
                         }
                     }
@@ -145,22 +186,22 @@ static void stress_server_callback(picoquic_cnx_t* cnx,
                     /* for all streams above the limit, or all streams with short queries,just send a fixed size answer,
                     * after receiving all the client data */
                     if (fin_or_event == picoquic_callback_stream_fin &&
-                        (bidir_id >= STRESS_MAX_NUMBER_TRACKED_STREAMS ||
-                            ctx->data_received_on_stream[bidir_id] < STRESS_MINIMAL_QUERY_SIZE)) {
+                        (bidir_id >= PICOQUIC_STRESS_MAX_NUMBER_TRACKED_STREAMS ||
+                            ctx->data_received_on_stream[bidir_id] < PICOQUIC_STRESS_MINIMAL_QUERY_SIZE)) {
 
-                        response_length = STRESS_DEFAULT_RESPONSE_SIZE;
+                        response_length = PICOQUIC_STRESS_DEFAULT_RESPONSE_SIZE;
                     }
 
                     if (response_length > 0) {
                         /* Push data on the stream */
 
-                        while (response_length > STRESS_MESSAGE_BUFFER_SIZE) {
+                        while (response_length > PICOQUIC_STRESS_MESSAGE_BUFFER_SIZE) {
                             if ( (ret = picoquic_add_to_stream(cnx, stream_id, ctx->buffer,
-                                STRESS_MESSAGE_BUFFER_SIZE, 0)) != 0) {
+                                PICOQUIC_STRESS_MESSAGE_BUFFER_SIZE, 0)) != 0) {
                                 stress_debug_break();
                             }
 
-                            response_length -= STRESS_MESSAGE_BUFFER_SIZE;
+                            response_length -= PICOQUIC_STRESS_MESSAGE_BUFFER_SIZE;
                         }
                         if ((ret = picoquic_add_to_stream(cnx, stream_id, ctx->buffer,
                                 response_length, 1)) != 0) {
@@ -189,19 +230,6 @@ static void stress_server_callback(picoquic_cnx_t* cnx,
  * zero share start.
  */
 
-#define STRESS_MAX_CLIENT_STREAMS 16
-
-typedef struct st_picoquic_stress_client_callback_ctx_t {
-    uint64_t test_id;
-    uint64_t max_bidir;
-    uint64_t next_bidir;
-    size_t max_open_streams;
-    size_t nb_open_streams;
-    uint64_t stream_id[STRESS_MAX_CLIENT_STREAMS];
-    uint32_t nb_client_streams;
-    uint64_t last_interaction_time;
-    int progress_observed;
-} picoquic_stress_client_callback_ctx_t;
 
 static void stress_client_start_streams(picoquic_cnx_t* cnx,
     picoquic_stress_client_callback_ctx_t* ctx) 
@@ -305,7 +333,7 @@ static void stress_client_callback(picoquic_cnx_t* cnx,
                 }
                 else {
                     /* Initialize the next bidir stream  */
-                    stress_client_start_streams(ctx, cnx);
+                    stress_client_start_streams(cnx, ctx);
                 }
             }
         }
@@ -314,41 +342,54 @@ static void stress_client_callback(picoquic_cnx_t* cnx,
     /* that's it */
 }
 
+int stress_client_set_callback(picoquic_cnx_t* cnx) 
+{
+    static uint64_t test_id = 0;
+    int ret = 0;
+
+    if (picoquic_get_callback_context(cnx) != NULL) {
+        /* Duplicate init call. This is a bug */
+        stress_debug_break();
+        ret = -1;
+    }
+    else {
+        picoquic_stress_client_callback_ctx_t* ctx = 
+            (picoquic_stress_client_callback_ctx_t*)malloc(sizeof(picoquic_stress_client_callback_ctx_t));
+        if (ctx == NULL) {
+            stress_debug_break();
+            ret = -1;
+        }
+        else {
+            memset(ctx, 0, sizeof(picoquic_stress_client_callback_ctx_t));
+            ctx->test_id = test_id++;
+            ctx->max_bidir = picoquic_stress_max_bidir;
+            ctx->max_open_streams = picoquic_stress_max_open_streams;
+            ctx->next_bidir = 4; /* TODO: change to zero when cream/crack gets done */
+            for (size_t i = 0; i < ctx->max_open_streams; i++) {
+                ctx->stream_id[i] = (uint64_t)((int64_t)-1);
+            }
+            picoquic_set_callback(cnx, stress_client_callback, ctx);
+
+            stress_client_start_streams(cnx, ctx);
+        }
+    }
+
+    return ret;
+}
+
 /* Orchestration of the simulation: one server, N simulation
  * links. On each link, there may be a new client added in
  * the future. Links have different delays, capacity, and
  * different client arrival rates.
  */
 
-#define PICOQUIC_MAX_STRESS_CLIENTS 256
-
-typedef struct st_picoquic_stress_client_t {
-    picoquic_quic_t* qclient;
-    struct sockaddr_in client_addr;
-    picoquictest_sim_link_t* c_to_s_link;
-    picoquictest_sim_link_t* s_to_c_link;
-    int sum_data_received_at_client;
-} picoquic_stress_client_t;
-
-typedef struct st_picoquic_stress_ctx_t {
-    picoquic_quic_t* qserver;
-    uint64_t simulated_time;
-    size_t nb_stress_client;
-    int sum_data_received_at_server;
-    int sum_data_sent_at_server;
-    int nb_clients;
-    picoquic_stress_client_t * c_ctx[PICOQUIC_MAX_STRESS_CLIENTS];
-} picoquic_stress_ctx_t;
-
 /*
  * Message loop and related functions
  */
 
-void stress_set_ip_address_from_index(struct sockaddr_in * addr, int c_index)
+static void stress_set_ip_address_from_index(struct sockaddr_in * addr, int c_index)
 {
-    int ret = 0;
-
-    memset(&addr, 0, sizeof(struct sockaddr_in));
+    memset(addr, 0, sizeof(struct sockaddr_in));
     addr->sin_family = AF_INET;
 #ifdef _WINDOWS
     addr->sin_addr.S_un.S_addr = (ULONG) c_index;
@@ -358,9 +399,9 @@ void stress_set_ip_address_from_index(struct sockaddr_in * addr, int c_index)
     addr->sin_port = 4321;
 }
 
-int stress_get_index_from_ip_address(struct sockaddr_in * addr)
+static int stress_get_index_from_ip_address(struct sockaddr_in * addr)
 {
-    uint32_t c_index = -1;
+    uint32_t c_index;
 #ifdef _WINDOWS
     c_index = (int)addr->sin_addr.S_un.S_addr;
 #else
@@ -370,43 +411,55 @@ int stress_get_index_from_ip_address(struct sockaddr_in * addr)
 }
 
 
-int stress_submit_sp_packets(picoquic_stress_ctx_t * ctx, picoquic_quic_t * q, int c_index)
+static int stress_submit_sp_packets(picoquic_stress_ctx_t * ctx, picoquic_quic_t * q, int c_index)
 {
     int ret = 0;
     picoquic_stateless_packet_t* sp = NULL;
     picoquictest_sim_link_t* target_link = NULL;
-    picoquictest_sim_packet_t* packet = picoquictest_sim_link_create_packet();
 
-    if (packet == NULL) {
-        ret = -1;
-    }
-    else while ((sp = picoquic_dequeue_stateless_packet(q)) != NULL) {
+    while ((sp = picoquic_dequeue_stateless_packet(q)) != NULL) {
         if (sp->length > 0) {
-            memcpy(&packet->addr_from, &sp->addr_local,
-                (sp->addr_local.ss_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
-            memcpy(&packet->addr_to, &sp->addr_to,
-                (sp->addr_to.ss_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
-            memcpy(packet->bytes, sp->bytes, sp->length);
-            packet->length = sp->length;
+            picoquictest_sim_packet_t* packet = picoquictest_sim_link_create_packet();
 
-            if (c_index > 0)
-            {
-                target_link = ctx->c_ctx[c_index]->c_to_s_link;
+            if (packet == NULL) {
+                stress_debug_break();
+                ret = -1;
+                break;
             }
             else {
-                /* find target from address */
-                int d_index = stress_get_index_from_ip_address((struct sockaddr_in *) &sp->addr_to);
+                memcpy(&packet->addr_from, &sp->addr_local,
+                    (sp->addr_local.ss_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
+                memcpy(&packet->addr_to, &sp->addr_to,
+                    (sp->addr_to.ss_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
+                memcpy(packet->bytes, sp->bytes, sp->length);
+                packet->length = sp->length;
 
-                if (d_index < 0 || d_index >= ctx->nb_clients) {
-                    ret = -1;
+                if (c_index >= 0)
+                {
+                    target_link = ctx->c_ctx[c_index]->c_to_s_link;
                 }
                 else {
-                    target_link = ctx->c_ctx[c_index]->s_to_c_link;
-                }
-            }
+                    /* find target from address */
+                    int d_index = stress_get_index_from_ip_address((struct sockaddr_in *) &sp->addr_to);
 
-            if (target_link != NULL) {
-                picoquictest_sim_link_submit(target_link, packet, ctx->simulated_time);
+                    if (d_index < 0 || d_index >= ctx->nb_clients) {
+                        stress_debug_break();
+                        ret = -1;
+                    }
+                    else {
+                        target_link = ctx->c_ctx[d_index]->s_to_c_link;
+                    }
+                }
+
+                if (target_link != NULL) {
+                    picoquictest_sim_link_submit(target_link, packet, ctx->simulated_time);
+                }
+                else {
+                    free(packet);
+                    stress_debug_break();
+                    ret = -1;
+                    break;
+                }
             }
         }
         picoquic_delete_stateless_packet(sp);
@@ -415,7 +468,7 @@ int stress_submit_sp_packets(picoquic_stress_ctx_t * ctx, picoquic_quic_t * q, i
     return ret;
 }
 
-int stress_handle_packet_arrival(picoquic_stress_ctx_t * ctx, picoquic_quic_t * q, picoquictest_sim_link_t* link)
+static int stress_handle_packet_arrival(picoquic_stress_ctx_t * ctx, picoquic_quic_t * q, picoquictest_sim_link_t* link)
 {
     int ret = 0;
     /* dequeue packet from server to client and submit */
@@ -426,12 +479,15 @@ int stress_handle_packet_arrival(picoquic_stress_ctx_t * ctx, picoquic_quic_t * 
             (struct sockaddr*)&packet->addr_from,
             (struct sockaddr*)&packet->addr_to, 0,
             ctx->simulated_time);
+        if (ret != 0){
+            stress_debug_break();
+        }
     }
 
     return ret;
 }
 
-int stress_handle_packet_prepare(picoquic_stress_ctx_t * ctx, picoquic_quic_t * q, int c_index)
+static int stress_handle_packet_prepare(picoquic_stress_ctx_t * ctx, picoquic_quic_t * q, int c_index)
 {
     /* prepare packet and submit */
     int ret = 0;
@@ -447,7 +503,7 @@ int stress_handle_packet_prepare(picoquic_stress_ctx_t * ctx, picoquic_quic_t * 
             memcpy(&packet->addr_from, &cnx->path[0]->dest_addr, sizeof(struct sockaddr_in));
             memcpy(&packet->addr_to, &cnx->path[0]->peer_addr, sizeof(struct sockaddr_in));
 
-            if (c_index > 0)
+            if (c_index >= 0)
             {
                 target_link = ctx->c_ctx[c_index]->c_to_s_link;
             }
@@ -456,23 +512,59 @@ int stress_handle_packet_prepare(picoquic_stress_ctx_t * ctx, picoquic_quic_t * 
                 int d_index = stress_get_index_from_ip_address((struct sockaddr_in *) &packet->addr_to);
 
                 if (d_index < 0 || d_index >= ctx->nb_clients) {
+                    stress_debug_break();
                     ret = -1;
                 }
                 else {
-                    target_link = ctx->c_ctx[c_index]->s_to_c_link;
+                    target_link = ctx->c_ctx[d_index]->s_to_c_link;
                 }
             }
-
-            picoquictest_sim_link_submit(target_link, packet, ctx->simulated_time);
+            if (target_link != NULL) {
+                picoquictest_sim_link_submit(target_link, packet, ctx->simulated_time);
+            }
         }
         else {
             free(p);
+            p = NULL;
+            free(packet);
+            packet = NULL;
+
+            if (ret == PICOQUIC_ERROR_DISCONNECTED) {
+                if (c_index >= 0) {
+                    /* Check that the client connection was properly terminated */
+                    picoquic_stress_client_callback_ctx_t* c_ctx = 
+                        (picoquic_stress_client_callback_ctx_t*)picoquic_get_callback_context(cnx);
+                    ret = 0;
+                    if (c_ctx != NULL) {
+                        if (c_ctx->next_bidir <= c_ctx->max_bidir ||
+                            c_ctx->nb_open_streams != 0) {
+                            stress_debug_break();
+                            ret = -1;
+                        }
+                        free(c_ctx);
+                        picoquic_set_callback(cnx, NULL, NULL);
+                    }
+                }
+                else {
+                    ret = 0;
+                }
+                picoquic_delete_cnx(cnx);
+                if (c_index >= 0 && q->cnx_wake_first != NULL) {
+                    stress_debug_break();
+                    ret = -1;
+                }
+            }
+            else if (ret != 0) {
+                stress_debug_break();
+            }
         }
-        free(packet);
     }
     else
     {
-        ret = -1;
+        if (cnx != NULL) {
+            stress_debug_break();
+            ret = -1;
+        }
         if (packet != NULL) {
             free(packet);
         }
@@ -485,7 +577,38 @@ int stress_handle_packet_prepare(picoquic_stress_ctx_t * ctx, picoquic_quic_t * 
     return ret;
 }
 
-int stress_loop_poll_context(picoquic_stress_ctx_t * ctx, uint64_t next_time) {
+static int stress_start_client_connection(picoquic_quic_t * qclient, picoquic_stress_ctx_t * ctx)
+{
+    int ret = 0;
+
+    picoquic_cnx_t * cnx = picoquic_create_cnx(qclient,
+        picoquic_null_connection_id, picoquic_null_connection_id,
+        (struct sockaddr*)&ctx->server_addr, ctx->simulated_time,
+        0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
+
+    if (cnx == NULL) {
+        stress_debug_break();
+        ret = -1;
+    }
+    else {
+        ret = stress_client_set_callback(cnx);
+
+        if (ret == 0) {
+            ret = picoquic_start_client_cnx(cnx);
+            if (ret != 0) {
+                stress_debug_break();
+            }
+        }
+        else {
+            stress_debug_break();
+        }
+    }
+
+    return ret;
+}
+
+static int stress_loop_poll_context(picoquic_stress_ctx_t * ctx) 
+{
     int ret = 0;
     int best_index = -1;
     int last_index = -1;
@@ -519,6 +642,10 @@ int stress_loop_poll_context(picoquic_stress_ctx_t * ctx, uint64_t next_time) {
         }
 
         ret = stress_submit_sp_packets(ctx, ctx->c_ctx[x]->qclient, x);
+
+        if (ret != 0) {
+            stress_debug_break();
+        }
     }
 
     if (ret == 0) {
@@ -528,24 +655,38 @@ int stress_loop_poll_context(picoquic_stress_ctx_t * ctx, uint64_t next_time) {
         if (best_index < 0) {
             /* The server is ready first */
             ret = stress_handle_packet_prepare(ctx, ctx->qserver, -1);
+
+            if (ret != 0) {
+                stress_debug_break();
+            }
         }
         else {
             if (ret == 0 && ctx->c_ctx[best_index]->s_to_c_link->first_packet != NULL &&
                 ctx->c_ctx[best_index]->s_to_c_link->first_packet->arrival_time <= ctx->simulated_time) {
                 /* dequeue packet from server to client and submit */
                 ret = stress_handle_packet_arrival(ctx, ctx->c_ctx[best_index]->qclient, ctx->c_ctx[best_index]->s_to_c_link);
+                if (ret != 0) {
+                    stress_debug_break();
+                }
             }
 
             if (ret == 0 && ctx->c_ctx[best_index]->c_to_s_link->first_packet != NULL &&
                 ctx->c_ctx[best_index]->c_to_s_link->first_packet->arrival_time <= ctx->simulated_time) {
                 /* dequeue packet from client to server and submit */
                 ret = stress_handle_packet_arrival(ctx, ctx->qserver, ctx->c_ctx[best_index]->c_to_s_link);
+                if (ret != 0) {
+                    stress_debug_break();
+                }
             }
 
-            if (ctx->c_ctx[best_index]->qclient->cnx_wake_first != NULL &&
-                ctx->c_ctx[best_index]->qclient->cnx_wake_first->next_wake_time <= ctx->simulated_time) {
-
-                ret = stress_handle_packet_prepare(ctx, ctx->c_ctx[best_index]->qclient, best_index);
+            if (ctx->c_ctx[best_index]->qclient->cnx_wake_first != NULL) {
+                /* If the connection is valid, check whether it is ready */
+                if (ctx->c_ctx[best_index]->qclient->cnx_wake_first->next_wake_time <= ctx->simulated_time) {
+                    ret = stress_handle_packet_prepare(ctx, ctx->c_ctx[best_index]->qclient, best_index);
+                    if (ret != 0) {
+                        stress_debug_break();
+                    }
+                }
             }
         }
     }
@@ -553,3 +694,181 @@ int stress_loop_poll_context(picoquic_stress_ctx_t * ctx, uint64_t next_time) {
     return ret;
 }
 
+/* Stress test management
+ * Parameters:
+ *    Number of clients
+ *    Simulated duration of stress test
+ *    Profile of client run, i.e. max number of queries/client.
+ *
+ * Operation:
+ *    Initialize the context:
+ *    Loop:
+ *        Clean terminated connections (part of simulation loop)
+ *        Create connection for empty client contexts (part of simulation loop?)
+ *        Run the loop, sending packets, etc.
+ *    Clean up:
+ *        Set termination flag for all contexts: close existing connections, do not create new ones.
+ *        Run the loop until all contexts are freed.
+ *        Fail if cannot clean up on a timeout.
+ *    Report:
+ *        Statistics on duration, volume, connections.
+ *
+ * Stress succeeds if it comes to a successful end.
+ */
+
+static const uint8_t stress_ticket_encrypt_key[32] = {
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+    16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
+};
+
+static int stress_create_client_context(int client_index, picoquic_stress_ctx_t * stress_ctx)
+{
+    int ret = 0;
+    picoquic_stress_client_t * ctx = (picoquic_stress_client_t *)malloc(sizeof(picoquic_stress_client_t));
+    stress_ctx->c_ctx[client_index] = ctx;
+
+    if (ctx == NULL) {
+        DBG_PRINTF("Cannot create the client context #%d.\n", (int)client_index);
+        ret = -1;
+    }
+    if (ret == 0) {
+        memset(ctx, 0, sizeof(picoquic_stress_client_t));
+        /* Initialize client specific address */
+        stress_set_ip_address_from_index(&ctx->client_addr, (int)client_index);
+        /* set stream ID to default value */
+
+        /* initialize client specific ticket file */
+        memcpy(ctx->ticket_file_name, "stress_ticket_000.bin", 19);
+        ctx->ticket_file_name[14] = (uint8_t)('0' + client_index / 100);
+        ctx->ticket_file_name[15] = (uint8_t)('0' + (client_index / 10) % 10);
+        ctx->ticket_file_name[16] = (uint8_t)('0' + client_index % 10);
+        ctx->ticket_file_name[21] = 0;
+        if (ret == 0) {
+            ret = picoquic_save_tickets(NULL, stress_ctx->simulated_time, ctx->ticket_file_name);
+            if (ret != 0) {
+                DBG_PRINTF("Cannot create ticket file <%s>.\n", ctx->ticket_file_name);
+            }
+        }
+    }
+    if (ret == 0) {
+        /* initialize the simulation links from client to server and back. */
+        ctx->c_to_s_link = picoquictest_sim_link_create(0.01, 10000, 0, 0, 0);
+        ctx->s_to_c_link = picoquictest_sim_link_create(0.01, 10000, 0, 0, 0);
+        if (ctx->c_to_s_link == NULL ||
+            ctx->s_to_c_link == NULL) {
+            DBG_PRINTF("Cannot create the sim links for client #%d.\n", (int)client_index);
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        /* Create the quic context for this client*/
+        ctx->qclient = picoquic_create(8, NULL, NULL, NULL, NULL,
+            NULL, NULL, NULL, NULL, stress_ctx->simulated_time, &stress_ctx->simulated_time,
+            ctx->ticket_file_name, NULL, 0);
+        if (ctx->qclient == NULL) {
+            DBG_PRINTF("Cannot create the quic client #%d.\n", (int)client_index);
+            ret = -1;
+        }
+    }
+
+    return ret;
+}
+
+static void stress_delete_client_context(int client_index, picoquic_stress_ctx_t * stress_ctx)
+{
+    picoquic_stress_client_t * ctx = stress_ctx->c_ctx[client_index];
+
+    if (ctx != NULL) {
+        if (ctx->qclient != NULL) {
+            picoquic_free(ctx->qclient);
+            ctx->qclient = NULL;
+        }
+
+        if (ctx->c_to_s_link != NULL) {
+            picoquictest_sim_link_delete(ctx->c_to_s_link);
+            ctx->c_to_s_link = NULL;
+        }
+
+        if (ctx->s_to_c_link != NULL) {
+            picoquictest_sim_link_delete(ctx->s_to_c_link);
+            ctx->s_to_c_link = NULL;
+        }
+        free(ctx);
+
+        stress_ctx->c_ctx[client_index] = NULL;
+    }
+}
+
+int stress_test()
+{
+    int ret = 0;
+    picoquic_stress_ctx_t stress_ctx;
+
+    /* Initialization */
+    memset(&stress_ctx, 0, sizeof(picoquic_stress_ctx_t));
+    stress_set_ip_address_from_index(&stress_ctx.server_addr, -1);
+    if (stress_ctx.nb_clients > PICOQUIC_MAX_STRESS_CLIENTS) {
+        DBG_PRINTF("Number of stress clients too high (%d). Should be lower than %d\n",
+            stress_ctx.nb_clients, PICOQUIC_MAX_STRESS_CLIENTS);
+        ret = -1;
+    } else {
+        stress_ctx.nb_clients = picoquic_stress_nb_clients;
+        stress_ctx.qserver = picoquic_create(PICOQUIC_MAX_STRESS_CLIENTS,
+#ifdef _WINDOWS
+#ifdef _WINDOWS64
+            "..\\..\\certs\\cert.pem", "..\\..\\certs\\key.pem",
+#else
+            "..\\certs\\cert.pem", "..\\certs\\key.pem",
+#endif
+#else
+            "certs/cert.pem", "certs/key.pem",
+#endif
+            PICOQUIC_TEST_ALPN, stress_server_callback, (void*)&stress_ctx, NULL, NULL, NULL,
+            stress_ctx.simulated_time, &stress_ctx.simulated_time, NULL,
+            stress_ticket_encrypt_key, sizeof(stress_ticket_encrypt_key));
+
+        if (stress_ctx.qserver == NULL) {
+            DBG_PRINTF("%s", "Cannot create the test server.\n");
+            ret = -1;
+        }
+        else {
+            for (int i = 0; ret == 0 && i < stress_ctx.nb_clients; i++) {
+                ret = stress_create_client_context(i, &stress_ctx);
+            }
+        }
+    }
+
+    /* Run the simulation until the specified time */
+    while (ret == 0 && stress_ctx.simulated_time < picoquic_stress_test_duration) {
+        /* Poll for new packet transmission */
+        ret = stress_loop_poll_context(&stress_ctx);
+
+        if (ret == 0) {
+            /* Check whether there is a need for new connections */
+            for (int i = 0; ret == 0 && i < stress_ctx.nb_clients; i++) {
+                if (stress_ctx.c_ctx[i]->qclient->cnx_list == NULL) {
+                    ret = stress_start_client_connection(stress_ctx.c_ctx[i]->qclient, &stress_ctx);
+                    if (ret != 0) {
+                        stress_debug_break();
+                    }
+                }
+            }
+        }
+        else {
+            stress_debug_break();
+        }
+    }
+
+    /* Shut down everything */
+    for (int i = 0; i < stress_ctx.nb_clients; i++) {
+        stress_delete_client_context((int)i, &stress_ctx);
+    }
+
+    if (stress_ctx.qserver != NULL) {
+        picoquic_free(stress_ctx.qserver);
+        stress_ctx.qserver = NULL;
+    }
+
+    return ret;
+}

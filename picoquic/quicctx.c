@@ -832,6 +832,8 @@ int picoquic_start_client_cnx(picoquic_cnx_t * cnx)
 {
     int ret = picoquic_initialize_stream_zero(cnx);
 
+    picoquic_cnx_set_next_wake_time(cnx, picoquic_get_quic_time(cnx->quic));
+
     return ret;
 }
 
@@ -997,6 +999,11 @@ void picoquic_set_callback(picoquic_cnx_t* cnx,
 {
     cnx->callback_fn = callback_fn;
     cnx->callback_ctx = callback_ctx;
+}
+
+void * picoquic_get_callback_context(picoquic_cnx_t * cnx)
+{
+    return cnx->callback_ctx;
 }
 
 picoquic_misc_frame_header_t* picoquic_create_misc_frame(const uint8_t* bytes, size_t length) {
