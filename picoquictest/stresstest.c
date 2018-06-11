@@ -169,6 +169,20 @@ static void stress_server_callback(picoquic_cnx_t* cnx,
                     if (bidir_id < PICOQUIC_STRESS_MAX_NUMBER_TRACKED_STREAMS) {
                         size_t received = ctx->data_received_on_stream[bidir_id] + length;
                         if (ctx->data_received_on_stream[bidir_id] < PICOQUIC_STRESS_MINIMAL_QUERY_SIZE) {
+                            /* Computing the size of the response as a pseudo random function of the
+                             * content of the query. The response size will be between 0 and 
+                             * PICOQUIC_STRESS_RESPONSE_LENGTH_MAX.
+                             *
+                             * The query size is arbitrary, thus the code only computes the
+                             * pseudo random number on the the first bytes of the query,
+                             * up to PICOQUIC_STRESS_MINIMAL_QUERY_SIZE.
+                             *
+                             * The random function is: hash[n] = hash[n-1]*101 + x[n]
+                             *
+                             * TODO: This may be too clever by half, and we could make the case for encoding the
+                             * desired response size in the first four bytes of the query, and computing the
+                             * random function at the client.
+                             */
                             int processed = (int) length;
                             if (received >= PICOQUIC_STRESS_MINIMAL_QUERY_SIZE) {
                                 processed = (int) received - PICOQUIC_STRESS_MINIMAL_QUERY_SIZE;
@@ -809,12 +823,12 @@ int stress_test()
     /* Initialization */
     memset(&stress_ctx, 0, sizeof(picoquic_stress_ctx_t));
     stress_set_ip_address_from_index(&stress_ctx.server_addr, -1);
+    stress_ctx.nb_clients = (int)picoquic_stress_nb_clients;
     if (stress_ctx.nb_clients > PICOQUIC_MAX_STRESS_CLIENTS) {
         DBG_PRINTF("Number of stress clients too high (%d). Should be lower than %d\n",
             stress_ctx.nb_clients, PICOQUIC_MAX_STRESS_CLIENTS);
         ret = -1;
     } else {
-        stress_ctx.nb_clients = (int) picoquic_stress_nb_clients;
         stress_ctx.qserver = picoquic_create(PICOQUIC_MAX_STRESS_CLIENTS,
 #ifdef _WINDOWS
 #ifdef _WINDOWS64

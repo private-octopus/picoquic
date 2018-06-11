@@ -63,21 +63,7 @@ int picoquic_add_to_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
             int parity = cnx->client_mode ? 0 : 1;
             if ((stream_id & 1) != parity) {
                 ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
-            } else {
-#if 0
-                if ((stream_id & 2) == 0) {
-                    if (stream_id > cnx->max_stream_id_bidir_remote) {
-                        ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
-                    }
-                } else {
-                    is_unidir = 1;
-
-                    if (stream_id > cnx->max_stream_id_unidir_remote) {
-                        ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
-                    }
-                }
-#endif
-            }
+            } 
 
             if (ret == 0) {
                 stream = picoquic_create_stream(cnx, stream_id);
