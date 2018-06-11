@@ -825,7 +825,7 @@ int stress_test()
 #else
             "certs/cert.pem", "certs/key.pem",
 #endif
-            PICOQUIC_TEST_ALPN, stress_server_callback, (void*)&stress_ctx, NULL, NULL, NULL,
+            PICOQUIC_TEST_ALPN, stress_server_callback, NULL, NULL, NULL, NULL,
             stress_ctx.simulated_time, &stress_ctx.simulated_time, NULL,
             stress_ticket_encrypt_key, sizeof(stress_ticket_encrypt_key));
 
