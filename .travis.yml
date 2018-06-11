@@ -30,4 +30,4 @@ script:
   # Now build picotls examples and test
   - cmake .
   - make
-  - ./picoquic_ct -x stress
+  - ./picoquic_ct
