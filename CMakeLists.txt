@@ -51,6 +51,7 @@ SET(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/sim_link.c
     picoquictest/socket_test.c
     picoquictest/stream0_frame_test.c
+    picoquictest/stresstest.c
     picoquictest/ticket_store_test.c
     picoquictest/tls_api_test.c
     picoquictest/transport_param_test.c

@@ -354,6 +354,8 @@ int picoquic_is_cnx_backlog_empty(picoquic_cnx_t* cnx);
 void picoquic_set_callback(picoquic_cnx_t* cnx,
     picoquic_stream_data_cb_fn callback_fn, void* callback_ctx);
 
+void * picoquic_get_callback_context(picoquic_cnx_t* cnx);
+
 /* Send extra frames */
 int picoquic_queue_misc_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t length);
 

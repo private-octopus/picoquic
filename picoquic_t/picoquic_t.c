@@ -110,7 +110,8 @@ static const picoquic_test_def_t test_table[] = {
     { "pn_vector", cleartext_pn_vector_test },
     { "zero_rtt_spurious", zero_rtt_spurious_test },
     { "zero_rtt_retry", zero_rtt_retry_test },
-    { "parse_frames", parse_frame_test }
+    { "parse_frames", parse_frame_test },
+    { "stress", stress_test }
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);

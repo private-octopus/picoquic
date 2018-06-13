@@ -302,9 +302,9 @@ static void test_api_callback(picoquic_cnx_t* cnx,
 
     if (stream_id > 0) {
         if (cb_ctx->client_mode) {
-            ctx->sum_data_received_at_client += length;
+            ctx->sum_data_received_at_client += (int) length;
         } else {
-            ctx->sum_data_received_at_server += length;
+            ctx->sum_data_received_at_server += (int) length;
         }
     }
 
@@ -1239,7 +1239,7 @@ int tls_api_very_long_max_test()
 
 int tls_api_very_long_with_err_test()
 {
-    return tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0x30000, 128000, 0, 0, 10000000, NULL);
+    return tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0x30000, 128000, 0, 0, 11000000, NULL);
 }
 
 int tls_api_very_long_congestion_test()

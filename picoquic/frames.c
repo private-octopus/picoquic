@@ -1478,8 +1478,6 @@ int picoquic_is_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time)
 
     if (cnx->highest_ack_sent + 2 <= cnx->first_sack_item.end_of_sack_range || cnx->highest_ack_time + cnx->ack_delay_local <= current_time) {
         ret = cnx->ack_needed;
-    } else if (cnx->ack_needed) {
-        ret = 0;
     }
 
     return ret;

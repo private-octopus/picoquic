@@ -476,7 +476,7 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
                 cmsg_2->cmsg_level = IPPROTO_IPV6;
                 cmsg_2->cmsg_type = IPV6_DONTFRAG;
                 cmsg_2->cmsg_len = CMSG_LEN(sizeof(int));
-                *((int *)CMSG_DATA(cmsg_2)) = val;
+                memcpy(CMSG_DATA(cmsg_2), &val, sizeof(int));
                 control_length += CMSG_SPACE(sizeof(int));
             }
         }
