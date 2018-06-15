@@ -578,9 +578,6 @@ void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet *
                 send_buffer, cnx->aead_encrypt_cleartext_ctx, cnx->pn_enc_cleartext);
             break;
         case picoquic_packet_server_stateless:
-            if (picoquic_supported_versions[cnx->version_index].version_flags&picoquic_version_use_pn_encryption) {
-                packet->sequence_number = 0;
-            }
             length = picoquic_protect_packet(cnx, packet->ptype, packet->bytes, packet->sequence_number,
                 length, header_length,
                 send_buffer, cnx->aead_encrypt_cleartext_ctx, cnx->pn_enc_cleartext);
@@ -1563,13 +1560,8 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
             /* if more than N packet received, repeat and erase */
             if (cnx->ack_needed) {
                 size_t consumed = 0;
-#if 0
-                length = picoquic_create_packet_header(
-                    cnx, packet_type, cnx->send_sequence, bytes, &pn_offset);
-#else
                 length = picoquic_predict_packet_header_length(
                     cnx, packet_type);
-#endif
                 packet->ptype = packet_type;
                 packet->offset = length;
                 header_length = length;
@@ -1607,13 +1599,8 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
         }
         length = 0;
     } else if (ret == 0 && (cnx->cnx_state == picoquic_state_disconnecting || cnx->cnx_state == picoquic_state_handshake_failure)) {
-#if 0
-        length = picoquic_create_packet_header(
-            cnx, packet_type, cnx->send_sequence, bytes, &pn_offset);
-#else
         length = picoquic_predict_packet_header_length(
             cnx, packet_type);
-#endif
         packet->ptype = packet_type;
         packet->offset = length;
         header_length = length;
@@ -1711,13 +1698,8 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
         packet->checksum_overhead = checksum_overhead;
     }
     else if (ret == 0) {
-#if 0
-        length = picoquic_create_packet_header(
-            cnx, packet_type, cnx->send_sequence, bytes, &pn_offset);
-#else
         length = picoquic_predict_packet_header_length(
             cnx, packet_type);
-#endif
         packet->ptype = packet_type;
         packet->offset = length;
         header_length = length;
@@ -1847,13 +1829,8 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
         else if (
             cnx->keep_alive_interval != 0
             && cnx->latest_progress_time + cnx->keep_alive_interval <= current_time && length == 0) {
-#if 0
-            length = picoquic_create_packet_header(
-                cnx, packet_type, cnx->send_sequence, bytes, &pn_offset);
-#else
             length = picoquic_predict_packet_header_length(
                 cnx, packet_type);
-#endif
             packet->ptype = packet_type;
             packet->offset = length;
             header_length = length;

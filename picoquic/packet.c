@@ -777,13 +777,13 @@ void picoquic_queue_stateless_reset(picoquic_cnx_t* cnx,
         if (picoquic_prepare_stream_frame(cnx, &cnx->first_stream, bytes + byte_index,
                 PICOQUIC_MAX_PACKET_SIZE - byte_index - checksum_length, &data_bytes)
             == 0) {
+            uint64_t sequence_number =
+                ((picoquic_supported_versions[cnx->version_index].version_flags&picoquic_version_use_pn_encryption) != 0)
+                ? 0 : ph->pn;
 
             byte_index += (uint32_t)data_bytes;
-#if 0
-            picoquic_update_payload_length(bytes, header_length, byte_index + checksum_length);
-#endif
             /* AEAD Encrypt, to the send buffer */
-            sp->length = picoquic_protect_packet(cnx, picoquic_packet_server_stateless, cleartext, ph->pn,
+            sp->length = picoquic_protect_packet(cnx, picoquic_packet_server_stateless, cleartext, sequence_number,
                 byte_index, header_length,
                 sp->bytes, cnx->aead_encrypt_cleartext_ctx, cnx->pn_enc_cleartext);
 
@@ -883,7 +883,10 @@ int picoquic_incoming_server_stateless(
     }
     else {
         /* Verify that the header is a proper echo of what was sent */
-        if (ph->vn != picoquic_supported_versions[cnx->version_index].version || (cnx->retransmit_newest == NULL || ph->pn64 > cnx->retransmit_newest->sequence_number) || (cnx->retransmit_oldest == NULL || ph->pn64 < cnx->retransmit_oldest->sequence_number)) {
+        if (ph->vn != picoquic_supported_versions[cnx->version_index].version || 
+            (picoquic_supported_versions[cnx->version_index].version_flags&picoquic_version_use_pn_encryption)  == 0 && (
+            (cnx->retransmit_newest == NULL || ph->pn64 > cnx->retransmit_newest->sequence_number) || 
+            (cnx->retransmit_oldest == NULL || ph->pn64 < cnx->retransmit_oldest->sequence_number))) {
             /* Packet that do not match the "echo" checks should be logged and ignored */
             ret = PICOQUIC_ERROR_UNEXPECTED_PACKET;
         }
