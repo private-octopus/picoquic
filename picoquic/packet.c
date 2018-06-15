@@ -884,9 +884,9 @@ int picoquic_incoming_server_stateless(
     else {
         /* Verify that the header is a proper echo of what was sent */
         if (ph->vn != picoquic_supported_versions[cnx->version_index].version || 
-            (picoquic_supported_versions[cnx->version_index].version_flags&picoquic_version_use_pn_encryption)  == 0 && (
+            ((picoquic_supported_versions[cnx->version_index].version_flags&picoquic_version_use_pn_encryption)  == 0 && (
             (cnx->retransmit_newest == NULL || ph->pn64 > cnx->retransmit_newest->sequence_number) || 
-            (cnx->retransmit_oldest == NULL || ph->pn64 < cnx->retransmit_oldest->sequence_number))) {
+            (cnx->retransmit_oldest == NULL || ph->pn64 < cnx->retransmit_oldest->sequence_number)))) {
             /* Packet that do not match the "echo" checks should be logged and ignored */
             ret = PICOQUIC_ERROR_UNEXPECTED_PACKET;
         }
