@@ -26,6 +26,11 @@
 extern "C" {
 #endif
 
+/* Control variables for the duration of the stress test */
+
+extern uint64_t picoquic_stress_test_duration; /* In microseconds; defaults to 2 minutes */
+
+/* List of test functions */
 int picohash_test();
 int cnxcreation_test();
 int parseheadertest();
