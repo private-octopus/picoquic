@@ -36,9 +36,9 @@ static picosplay_node* rightmost(picosplay_node *node);
 
 
 /* The meat: splay the node x. */
-static void zig(picosplay_node *x, picosplay_node *p);
+static void zig(picosplay_node *x);
 static void zigzig(picosplay_node *x, picosplay_node *p);
-static void zigzag(picosplay_node *x, picosplay_node *p);
+static void zigzag(picosplay_node *x);
 static void splay(picosplay_tree *tree, picosplay_node *x) {
     while(1) {
         picosplay_node *p = x->parent;
@@ -48,18 +48,18 @@ static void splay(picosplay_tree *tree, picosplay_node *x) {
         }
         picosplay_node *g = p->parent;
         if(p->parent == NULL)
-            zig(x, p);
+            zig(x);
         else
             if((x == p->left && p == g->left) ||
                     (x == p->right && p == g->right))
                 zigzig(x, p);
             else
-                zigzag(x, p);
+                zigzag(x);
     }
 }
 
 /* When p is root, rotate on the edge between x and p.*/
-static void zig(picosplay_node *x, picosplay_node *p) {
+static void zig(picosplay_node *x) {
     rotate(x);
 }
 
@@ -74,7 +74,7 @@ static void zigzig(picosplay_node *x, picosplay_node *p) {
 /* When one of x and p is a left child and the other a right child,
  * rotate on the edge between x and p, then on the new edge between x and g.
  */
-static void zigzag(picosplay_node *x, picosplay_node *p) {
+static void zigzag(picosplay_node *x) {
     rotate(x);
     rotate(x);
 }
@@ -101,8 +101,8 @@ picosplay_node* picosplay_insert(picosplay_tree *tree, void *value) {
         new->parent = NULL;
     } else {
         picosplay_node *curr = tree->root;
-        picosplay_node *parent;
-        int left;
+        picosplay_node *parent = NULL;
+        int left = NULL;
         while(curr != NULL) {
             parent = curr;
             if(tree->comp(new->value, curr->value) < 0) {
