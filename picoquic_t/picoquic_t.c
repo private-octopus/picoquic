@@ -143,7 +143,7 @@ static int do_one_test(size_t i, FILE* F)
 
 int usage(char const * argv0)
 {
-    fprintf(stderr, "PicoQUIC test exexution\n");
+    fprintf(stderr, "PicoQUIC test execution\n");
     fprintf(stderr, "Usage: picoquic_ct [-x <excluded>] [<list of tests]\n");
     fprintf(stderr, "\nUsage: %s [test1 [test2 ..[testN]]]\n\n", argv0);
     fprintf(stderr, "   Or: %s [-x test]*", argv0);
@@ -158,6 +158,7 @@ int usage(char const * argv0)
     }
     fprintf(stderr, "Options: \n");
     fprintf(stderr, "  -x test        Do not run the specified test.\n");
+    fprintf(stderr, "  -s nnn         Run stress for nnn minutes.\n");
     fprintf(stderr, "  -h             Print this help message\n");
 
     return -1;
@@ -181,6 +182,8 @@ int main(int argc, char** argv)
     int ret = 0;
     int nb_test_tried = 0;
     int nb_test_failed = 0;
+    int stress_minutes = 0;
+    int found_exclusion = 0;
     int * is_excluded = malloc(sizeof(int)*nb_tests);
     int opt;
 
@@ -193,7 +196,7 @@ int main(int argc, char** argv)
     {
         memset(is_excluded, 0, sizeof(int)*nb_tests);
 
-        while (ret == 0 && (opt = getopt(argc, argv, "x:h")) != -1) {
+        while (ret == 0 && (opt = getopt(argc, argv, "s:x:h")) != -1) {
             switch (opt) {
             case 'x': {
                 int test_number = get_test_number(optarg);
@@ -204,9 +207,17 @@ int main(int argc, char** argv)
                 }
                 else {
                     is_excluded[test_number] = 1;
+                    found_exclusion = 1;
                 }
                 break;
             }
+            case 's':
+                stress_minutes = atoi(optarg);
+                if (stress_minutes <= 0) {
+                    fprintf(stderr, "Incorrect stress minutes: %s\n", optarg);
+                    ret = usage(argv[0]);
+                }
+                break;
             case 'h':
                 usage(argv[0]);
                 exit(0);
@@ -214,6 +225,18 @@ int main(int argc, char** argv)
             default:
                 ret = usage(argv[0]);
                 break;
+            }
+        }
+
+        if (ret == 0 && stress_minutes > 0) {
+            if (optind >= argc && found_exclusion == 0) {
+                for (size_t i = 0; i < nb_tests; i++) {
+                    if (strcmp(test_table[i].test_name, "stress") != 0) {
+                        is_excluded[i] = 1;
+                    }
+                }
+                picoquic_stress_test_duration = stress_minutes;
+                picoquic_stress_test_duration *= 60000000;
             }
         }
 
@@ -228,7 +251,7 @@ int main(int argc, char** argv)
                             ret = -1;
                         }
                     }
-                    else {
+                    else if (stress_minutes == 0) {
                         fprintf(stderr, "test number %d (%s) is bypassed.\n", (int)i, test_table[i].test_name);
                     }
                 }
