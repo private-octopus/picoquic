@@ -66,6 +66,9 @@
     <ClCompile Include="ticket_store.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="picosplay.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquic.h">
@@ -90,6 +93,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="picosocks.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="picosplay.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

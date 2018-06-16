@@ -111,7 +111,8 @@ static const picoquic_test_def_t test_table[] = {
     { "zero_rtt_spurious", zero_rtt_spurious_test },
     { "zero_rtt_retry", zero_rtt_retry_test },
     { "parse_frames", parse_frame_test },
-    { "stress", stress_test }
+    { "stress", stress_test },
+    { "splay", splay_test }
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);

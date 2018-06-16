@@ -111,6 +111,7 @@ int zero_rtt_spurious_test();
 int zero_rtt_retry_test();
 int parse_frame_test();
 int stress_test();
+int splay_test();
 
 #ifdef __cplusplus
 }
