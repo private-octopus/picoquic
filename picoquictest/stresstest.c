@@ -48,6 +48,8 @@ uint64_t picoquic_stress_test_duration = 120000000; /* Default to 2 minutes */
 size_t picoquic_stress_nb_clients = 4; /* Default to 4 clients */
 uint64_t picoquic_stress_max_bidir = 8 * 4; /* Default to 8 streams max per connection */
 size_t picoquic_stress_max_open_streams = 4; /* Default to 4 simultaneous streams max per connection */
+uint64_t stress_random_ctx = 0xBabaC001BaddBab1ull;
+uint32_t picoquic_stress_max_message_before_drop = 25;
 
 typedef struct st_picoquic_stress_server_callback_ctx_t {
     // picoquic_first_server_stream_ctx_t* first_stream;
@@ -63,8 +65,9 @@ typedef struct st_picoquic_stress_client_callback_ctx_t {
     size_t max_open_streams;
     size_t nb_open_streams;
     uint64_t stream_id[PICOQUIC_STRESS_MAX_CLIENT_STREAMS];
-    uint32_t nb_client_streams;
     uint64_t last_interaction_time;
+    uint32_t nb_client_streams;
+    uint32_t message_disconnect_trigger;
     int progress_observed;
 } picoquic_stress_client_callback_ctx_t;
 
@@ -387,6 +390,13 @@ int stress_client_set_callback(picoquic_cnx_t* cnx)
             }
             picoquic_set_callback(cnx, stress_client_callback, ctx);
 
+            if ((ctx->message_disconnect_trigger = (uint32_t) picoquic_test_uniform_random(&stress_random_ctx, 2* picoquic_stress_max_message_before_drop)) >= picoquic_stress_max_message_before_drop){
+                ctx->message_disconnect_trigger = 0;
+            }
+            else {
+                ctx->message_disconnect_trigger++;
+            }
+
             stress_client_start_streams(cnx, ctx);
         }
     }
@@ -512,10 +522,27 @@ static int stress_handle_packet_prepare(picoquic_stress_ctx_t * ctx, picoquic_qu
     picoquic_packet* p = picoquic_create_packet();
     picoquic_cnx_t* cnx = q->cnx_wake_first;
     picoquictest_sim_link_t* target_link = NULL;
+    int simulate_disconnect = 0;
+    int was_null = 0;
 
     if (packet != NULL && p != NULL && cnx != NULL) {
-        ret = picoquic_prepare_packet(cnx, p, ctx->simulated_time,
-            packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length);
+        /* Check that the client connection was properly terminated */
+        picoquic_stress_client_callback_ctx_t* c_ctx = (c_index >= 0) ?
+            (picoquic_stress_client_callback_ctx_t*)picoquic_get_callback_context(cnx) : NULL;
+
+        was_null = (c_ctx != 0);
+
+        if (c_ctx == NULL || cnx->cnx_state == picoquic_state_disconnected || c_ctx->message_disconnect_trigger == 0 ||
+            cnx->send_sequence <= c_ctx->message_disconnect_trigger) {
+            ret = picoquic_prepare_packet(cnx, p, ctx->simulated_time,
+                packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length);
+        }
+        else if (c_ctx != NULL) {
+            /* simulate an abrupt */
+            ret = PICOQUIC_ERROR_DISCONNECTED;
+            simulate_disconnect = 1;
+        }
+
         if (ret == 0 && p->length > 0) {
             memcpy(&packet->addr_from, &cnx->path[0]->dest_addr, sizeof(struct sockaddr_in));
             memcpy(&packet->addr_to, &cnx->path[0]->peer_addr, sizeof(struct sockaddr_in));
@@ -547,14 +574,16 @@ static int stress_handle_packet_prepare(picoquic_stress_ctx_t * ctx, picoquic_qu
             packet = NULL;
 
             if (ret == PICOQUIC_ERROR_DISCONNECTED) {
+                /* Check the context again, it may have been freed in a callback */
+                c_ctx = (c_index >= 0) ?
+                    (picoquic_stress_client_callback_ctx_t*)picoquic_get_callback_context(cnx) : NULL;
+
                 if (c_index >= 0) {
-                    /* Check that the client connection was properly terminated */
-                    picoquic_stress_client_callback_ctx_t* c_ctx = 
-                        (picoquic_stress_client_callback_ctx_t*)picoquic_get_callback_context(cnx);
                     ret = 0;
                     if (c_ctx != NULL) {
-                        if (c_ctx->next_bidir <= c_ctx->max_bidir ||
-                            c_ctx->nb_open_streams != 0) {
+                        if (simulate_disconnect == 0 && (
+                            c_ctx->next_bidir <= c_ctx->max_bidir ||
+                            c_ctx->nb_open_streams != 0)) {
                             stress_debug_break();
                             ret = -1;
                         }
