@@ -414,6 +414,19 @@ void picoquic_init_transport_parameters(picoquic_transport_parameters* tp, int c
     tp->ack_delay_exponent = 3;
 }
 
+
+/* management of the list of connections in context */
+
+picoquic_cnx_t* picoquic_get_first_cnx(picoquic_quic_t* quic)
+{
+    return quic->cnx_list;
+}
+
+picoquic_cnx_t* picoquic_get_next_cnx(picoquic_cnx_t* cnx)
+{
+    return cnx->next_in_table;
+}
+
 static void picoquic_insert_cnx_in_list(picoquic_quic_t* quic, picoquic_cnx_t* cnx)
 {
     if (quic->cnx_list != NULL) {
@@ -442,6 +455,8 @@ static void picoquic_remove_cnx_from_list(picoquic_cnx_t* cnx)
         cnx->previous_in_table->next_in_table = cnx->next_in_table;
     }
 }
+
+/* Management of the list of connections, sorted by wake time */
 
 static void picoquic_remove_cnx_from_wake_list(picoquic_cnx_t* cnx)
 {
@@ -486,16 +501,6 @@ void picoquic_reinsert_by_wake_time(picoquic_quic_t* quic, picoquic_cnx_t* cnx)
 {
     picoquic_remove_cnx_from_wake_list(cnx);
     picoquic_insert_cnx_by_wake_time(quic, cnx);
-}
-
-picoquic_cnx_t* picoquic_get_first_cnx(picoquic_quic_t* quic)
-{
-    return quic->cnx_list;
-}
-
-picoquic_cnx_t* picoquic_get_next_cnx(picoquic_cnx_t* cnx)
-{
-    return cnx->next_in_table;
 }
 
 picoquic_cnx_t* picoquic_get_earliest_cnx_to_wake(picoquic_quic_t* quic, uint64_t max_wake_time)
