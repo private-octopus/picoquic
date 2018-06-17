@@ -259,9 +259,6 @@ void picoquic_free(picoquic_quic_t* quic)
             free(to_delete);
         }
 
-        /* Delete the wake tree */
-        picosplay_empty_tree(&quic->cnx_wake_tree);
-
         /* delete all the connection contexts */
         while (quic->cnx_list != NULL) {
             picoquic_delete_cnx(quic->cnx_list);
@@ -274,6 +271,9 @@ void picoquic_free(picoquic_quic_t* quic)
         if (quic->table_cnx_by_net != NULL) {
             picohash_delete(quic->table_cnx_by_net, 1);
         }
+
+        /* Delete the wake tree */
+        picosplay_empty_tree(&quic->cnx_wake_tree);
 
         if (quic->verify_certificate_ctx != NULL &&
             quic->free_verify_certificate_callback_fn != NULL) {
@@ -499,9 +499,10 @@ static void picoquic_insert_cnx_by_wake_time(picoquic_quic_t* quic, picoquic_cnx
     picosplay_insert(&quic->cnx_wake_tree, cnx);
 }
 
-void picoquic_reinsert_by_wake_time(picoquic_quic_t* quic, picoquic_cnx_t* cnx)
+void picoquic_reinsert_by_wake_time(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint64_t next_time)
 {
     picoquic_remove_cnx_from_wake_list(cnx);
+    cnx->next_wake_time = next_time;
     picoquic_insert_cnx_by_wake_time(quic, cnx);
 }
 

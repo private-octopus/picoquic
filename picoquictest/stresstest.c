@@ -523,14 +523,11 @@ static int stress_handle_packet_prepare(picoquic_stress_ctx_t * ctx, picoquic_qu
     picoquic_cnx_t* cnx = picoquic_get_earliest_cnx_to_wake(q, 0);
     picoquictest_sim_link_t* target_link = NULL;
     int simulate_disconnect = 0;
-    int was_null = 0;
 
     if (packet != NULL && p != NULL && cnx != NULL) {
         /* Check that the client connection was properly terminated */
         picoquic_stress_client_callback_ctx_t* c_ctx = (c_index >= 0) ?
             (picoquic_stress_client_callback_ctx_t*)picoquic_get_callback_context(cnx) : NULL;
-
-        was_null = (c_ctx != 0);
 
         if (c_ctx == NULL || cnx->cnx_state == picoquic_state_disconnected || c_ctx->message_disconnect_trigger == 0 ||
             cnx->send_sequence <= c_ctx->message_disconnect_trigger) {
