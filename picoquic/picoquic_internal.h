@@ -23,6 +23,7 @@
 #define PICOQUIC_INTERNAL_H
 
 #include "picohash.h"
+#include "picosplay.h"
 #include "picoquic.h"
 #include "picotlsapi.h"
 #include "util.h"
@@ -182,9 +183,7 @@ typedef struct st_picoquic_quic_t {
     struct st_picoquic_cnx_t* cnx_list;
     struct st_picoquic_cnx_t* cnx_last;
 
-    struct st_picoquic_cnx_t* cnx_wake_first;
-    struct st_picoquic_cnx_t* cnx_wake_last;
-
+    picosplay_tree cnx_wake_tree;
     picohash_table* table_cnx_by_id;
     picohash_table* table_cnx_by_net;
 
@@ -362,8 +361,6 @@ typedef struct st_picoquic_cnx_t {
     /* Management of context retrieval tables */
     struct st_picoquic_cnx_t* next_in_table;
     struct st_picoquic_cnx_t* previous_in_table;
-    struct st_picoquic_cnx_t* next_by_wake_time;
-    struct st_picoquic_cnx_t* previous_by_wake_time;
     struct st_picoquic_cnx_id_t* first_cnx_id;
     struct st_picoquic_net_id_t* first_net_id;
 

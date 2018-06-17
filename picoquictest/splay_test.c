@@ -143,7 +143,8 @@ int splay_test() {
             DBG_PRINTF("%s", "Final tree root should be NULL, is not.\n");
             ret = -1;
         }
-        picosplay_delete_tree(tree);
+        picosplay_empty_tree(tree);
+        free(tree);
         tree = NULL;
     }
 

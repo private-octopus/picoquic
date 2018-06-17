@@ -38,6 +38,7 @@ typedef struct picosplay_tree {
     int size;
 } picosplay_tree;
 
+void picosplay_init_tree(picosplay_tree* tree, picosplay_comparator comp);
 picosplay_tree* picosplay_new_tree(picosplay_comparator comp);
 picosplay_node* picosplay_insert(picosplay_tree *tree, void *value);
 picosplay_node* picosplay_find(picosplay_tree *tree, void *value);
@@ -47,6 +48,6 @@ picosplay_node* picosplay_last(picosplay_tree *tree);
 void* picosplay_contents(picosplay_tree *tree);
 void picosplay_delete(picosplay_tree *tree, void *value);
 void picosplay_delete_hint(picosplay_tree *tree, picosplay_node *node);
-void picosplay_delete_tree(picosplay_tree *tree);
+void picosplay_empty_tree(picosplay_tree *tree);
 
 #endif /* PICOSPLAY_H */

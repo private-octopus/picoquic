@@ -79,6 +79,13 @@ static void zigzag(picosplay_node *x) {
     rotate(x);
 }
 
+/* Initialize an empty tree, storing the picosplay_comparator. */
+void picosplay_init_tree(picosplay_tree* tree, picosplay_comparator comp) {
+    tree->comp = comp;
+    tree->root = NULL;
+    tree->size = 0;
+}
+
 /* Return an empty tree, storing the picosplay_comparator. */
 picosplay_tree* picosplay_new_tree(picosplay_comparator comp) {
     picosplay_tree *new = malloc(sizeof(picosplay_tree));
@@ -179,13 +186,12 @@ void picosplay_delete_hint(picosplay_tree *tree, picosplay_node *node) {
     tree->size--;
 }
 
-void picosplay_delete_tree(picosplay_tree * tree)
+void picosplay_empty_tree(picosplay_tree * tree)
 {
     if (tree != NULL) {
         while (tree->root != NULL) {
             picosplay_delete_hint(tree, tree->root);
         }
-        free(tree);
     }
 }
 
