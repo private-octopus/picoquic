@@ -109,7 +109,7 @@ picosplay_node* picosplay_insert(picosplay_tree *tree, void *value) {
     } else {
         picosplay_node *curr = tree->root;
         picosplay_node *parent = NULL;
-        int left = NULL;
+        int left = 0;
         while(curr != NULL) {
             parent = curr;
             if(tree->comp(new->value, curr->value) < 0) {

@@ -23,6 +23,7 @@
 */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include "../picoquic/util.h"
 #include "../picoquic/picosplay.h"
 
