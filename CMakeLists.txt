@@ -26,6 +26,7 @@ SET(PICOQUIC_LIBRARY_FILES
     picoquic/packet.c
     picoquic/picohash.c
     picoquic/picosocks.c
+    picoquic/picosplay.c
     picoquic/quicctx.c
     picoquic/sacks.c
     picoquic/sender.c
@@ -50,6 +51,7 @@ SET(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/skip_frame_test.c
     picoquictest/sim_link.c
     picoquictest/socket_test.c
+    picoquictest/splay_test.c
     picoquictest/stream0_frame_test.c
     picoquictest/stresstest.c
     picoquictest/ticket_store_test.c
