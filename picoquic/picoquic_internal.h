@@ -23,7 +23,6 @@
 #define PICOQUIC_INTERNAL_H
 
 #include "picohash.h"
-#include "picosplay.h"
 #include "picoquic.h"
 #include "picotlsapi.h"
 #include "util.h"
@@ -183,7 +182,9 @@ typedef struct st_picoquic_quic_t {
     struct st_picoquic_cnx_t* cnx_list;
     struct st_picoquic_cnx_t* cnx_last;
 
-    picosplay_tree cnx_wake_tree;
+    struct st_picoquic_cnx_t* cnx_wake_first;
+    struct st_picoquic_cnx_t* cnx_wake_last;
+
     picohash_table* table_cnx_by_id;
     picohash_table* table_cnx_by_net;
 
@@ -242,7 +243,6 @@ typedef struct st_picoquic_sack_item_t {
     struct st_picoquic_sack_item_t* next_sack;
     uint64_t start_of_sack_range;
     uint64_t end_of_sack_range;
-    // uint64_t time_stamp_last_in_range;
 } picoquic_sack_item_t;
 
 /*
@@ -408,6 +408,8 @@ typedef struct st_picoquic_cnx_t {
 
     /* Next time sending data is expected */
     uint64_t next_wake_time;
+    struct st_picoquic_cnx_t* next_by_wake_time;
+    struct st_picoquic_cnx_t* previous_by_wake_time;
 
     /* TLS context, TLS Send Buffer, chain of receive buffers (todo) */
     void* tls_ctx;

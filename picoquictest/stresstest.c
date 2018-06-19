@@ -852,8 +852,8 @@ int stress_test()
 {
     int ret = 0;
     picoquic_stress_ctx_t stress_ctx;
-    int run_time_seconds = 0;
-    int wall_time_seconds = 0;
+    double run_time_seconds = 0;
+    double wall_time_seconds = 0;
     uint64_t wall_time_start = picoquic_current_time();
 
 
@@ -923,9 +923,9 @@ int stress_test()
     }
 
     /* Report */
-    run_time_seconds = (int)(stress_ctx.simulated_time / 1000000ull);
-    wall_time_seconds = (int)((picoquic_current_time() - wall_time_start) / 1000000ull);
-    DBG_PRINTF("Stress complete after simulating %d s. in %d s., returns %d\n",
+    run_time_seconds = ((double)stress_ctx.simulated_time) / 1000000.0;
+    wall_time_seconds = ((double)(picoquic_current_time() - wall_time_start)) / 1000000.0;
+    DBG_PRINTF("Stress complete after simulating %3f s. in %3f s., returns %d\n",
         run_time_seconds, wall_time_seconds, ret);
 
     return ret;

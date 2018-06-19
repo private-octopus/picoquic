@@ -178,7 +178,6 @@ picoquic_quic_t* picoquic_create(uint32_t nb_connections,
         quic->cnx_id_callback_ctx = cnx_id_callback_ctx;
         quic->p_simulated_time = p_simulated_time;
         quic->local_ctx_length = 8; /* TODO: should be lower on clients-only implementation */
-        picosplay_init_tree(&quic->cnx_wake_tree, picoquic_compare_cnx_waketime);
 
         if (cnx_id_callback != NULL) {
             quic->flags |= picoquic_context_unconditional_cnx_id;
@@ -271,9 +270,6 @@ void picoquic_free(picoquic_quic_t* quic)
         if (quic->table_cnx_by_net != NULL) {
             picohash_delete(quic->table_cnx_by_net, 1);
         }
-
-        /* Delete the wake tree */
-        picosplay_empty_tree(&quic->cnx_wake_tree);
 
         if (quic->verify_certificate_ctx != NULL &&
             quic->free_verify_certificate_callback_fn != NULL) {
@@ -491,12 +487,43 @@ static void picoquic_remove_cnx_from_list(picoquic_cnx_t* cnx)
 
 static void picoquic_remove_cnx_from_wake_list(picoquic_cnx_t* cnx)
 {
-    picosplay_delete(&cnx->quic->cnx_wake_tree, cnx);
+    if (cnx->next_by_wake_time == NULL) {
+        cnx->quic->cnx_wake_last = cnx->previous_by_wake_time;
+    } else {
+        cnx->next_by_wake_time->previous_by_wake_time = cnx->previous_by_wake_time;
+    }
+    
+    if (cnx->previous_by_wake_time == NULL) {
+        cnx->quic->cnx_wake_first = cnx->next_by_wake_time;
+    } else {
+        cnx->previous_by_wake_time->next_by_wake_time = cnx->next_by_wake_time;
+    }
 }
 
 static void picoquic_insert_cnx_by_wake_time(picoquic_quic_t* quic, picoquic_cnx_t* cnx)
 {
-    picosplay_insert(&quic->cnx_wake_tree, cnx);
+    picoquic_cnx_t * cnx_next = quic->cnx_wake_first;
+    picoquic_cnx_t * previous = NULL;
+    while (cnx_next != NULL && cnx_next->next_wake_time <= cnx->next_wake_time) {
+        previous = cnx_next;
+        cnx_next = cnx_next->next_by_wake_time;
+    }
+    
+    cnx->previous_by_wake_time = previous;
+    if (previous == NULL) {
+        quic->cnx_wake_first = cnx;
+
+    } else {
+        previous->next_by_wake_time = cnx;
+    }
+    
+    cnx->next_by_wake_time = cnx_next;
+
+    if (cnx_next == NULL) {
+        quic->cnx_wake_last = cnx;
+    } else { 
+        cnx_next->previous_by_wake_time = cnx;
+    }
 }
 
 void picoquic_reinsert_by_wake_time(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint64_t next_time)
@@ -508,9 +535,13 @@ void picoquic_reinsert_by_wake_time(picoquic_quic_t* quic, picoquic_cnx_t* cnx, 
 
 picoquic_cnx_t* picoquic_get_earliest_cnx_to_wake(picoquic_quic_t* quic, uint64_t max_wake_time)
 {
-    picosplay_node * n = picosplay_first(&quic->cnx_wake_tree);
+    picoquic_cnx_t * cnx = quic->cnx_wake_first;
+    if (cnx != NULL && max_wake_time != 0 && cnx->next_wake_time > max_wake_time)
+    {
+        cnx = NULL;
+    }
 
-    return (n == NULL) ? NULL : (max_wake_time != 0 && ((picoquic_cnx_t*)n->value)->next_wake_time > max_wake_time) ? NULL : (picoquic_cnx_t*)n->value;
+    return cnx;
 }
 
 
@@ -518,18 +549,20 @@ int64_t picoquic_get_next_wake_delay(picoquic_quic_t* quic,
     uint64_t current_time, int64_t delay_max)
 {
     int64_t wake_delay = delay_max;
-    picosplay_node * n = picosplay_first(&quic->cnx_wake_tree);
 
-    if (n != NULL && n->value != NULL) {
-        if (((picoquic_cnx_t*)n->value)->next_wake_time < current_time) {
-            wake_delay = 0;
-        }
-        else {
-            wake_delay = ((picoquic_cnx_t*)n->value)->next_wake_time - current_time;
+    if (quic->cnx_wake_first != NULL) {
+        if (quic->cnx_wake_first->next_wake_time > current_time) {
+            wake_delay = quic->cnx_wake_first->next_wake_time - current_time;
+            
             if (wake_delay > delay_max) {
                 wake_delay = delay_max;
             }
         }
+        else {
+            wake_delay = 0;
+        }
+    } else {
+        wake_delay = delay_max;
     }
 
     return wake_delay;
