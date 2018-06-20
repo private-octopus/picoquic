@@ -242,64 +242,61 @@ char const* picoquic_log_ptype_name(picoquic_packet_type_enum ptype)
 char const* picoquic_log_frame_names(uint8_t frame_type)
 {
     char const * frame_name = "unknown";
-
-    if (frame_type >= picoquic_frame_type_stream_range_min &&
-        frame_type <= picoquic_frame_type_stream_range_max_old)
-    {
-        frame_name = "stream";
-    } else {
-        switch ((picoquic_frame_type_enum_t)frame_type) {
-        case picoquic_frame_type_padding:
-            frame_name = "padding";
-            break;
-        case picoquic_frame_type_reset_stream:
-            frame_name = "reset_stream";
-            break;
-        case picoquic_frame_type_connection_close:
-            frame_name = "connection_close";
-            break;
-        case picoquic_frame_type_application_close:
-            frame_name = "application_close";
-            break;
-        case picoquic_frame_type_max_data:
-            frame_name = "max_data";
-            break;
-        case picoquic_frame_type_max_stream_data:
-            frame_name = "max_stream_data";
-            break;
-        case picoquic_frame_type_max_stream_id:
-            frame_name = "max_stream_id";
-            break;
-        case picoquic_frame_type_ping:
-            frame_name = "ping";
-            break;
-        case picoquic_frame_type_blocked:
-            frame_name = "blocked";
-            break;
-        case picoquic_frame_type_stream_blocked:
-            frame_name = "stream_blocked";
-            break;
-        case picoquic_frame_type_stream_id_needed:
-            frame_name = "stream_id_needed";
-            break;
-        case picoquic_frame_type_new_connection_id:
-            frame_name = "new_connection_id";
-            break;
-        case picoquic_frame_type_stop_sending:
-            frame_name = "stop_sending";
-            break;
-        case picoquic_frame_type_ack:
-            frame_name = "ack";
-            break;
-        case picoquic_frame_type_path_challenge:
-            frame_name = "path_challenge";
-            break;
-        case picoquic_frame_type_path_response:
-            frame_name = "path_response";
-            break;
-        default: 
-            break;
-        }
+    
+    switch ((picoquic_frame_type_enum_t)frame_type) {
+    case picoquic_frame_type_padding:
+        frame_name = "padding";
+        break;
+    case picoquic_frame_type_reset_stream:
+        frame_name = "reset_stream";
+        break;
+    case picoquic_frame_type_connection_close:
+        frame_name = "connection_close";
+        break;
+    case picoquic_frame_type_application_close:
+        frame_name = "application_close";
+        break;
+    case picoquic_frame_type_max_data:
+        frame_name = "max_data";
+        break;
+    case picoquic_frame_type_max_stream_data:
+        frame_name = "max_stream_data";
+        break;
+    case picoquic_frame_type_max_stream_id:
+        frame_name = "max_stream_id";
+        break;
+    case picoquic_frame_type_ping:
+        frame_name = "ping";
+        break;
+    case picoquic_frame_type_blocked:
+        frame_name = "blocked";
+        break;
+    case picoquic_frame_type_stream_blocked:
+        frame_name = "stream_blocked";
+        break;
+    case picoquic_frame_type_stream_id_needed:
+        frame_name = "stream_id_needed";
+        break;
+    case picoquic_frame_type_new_connection_id:
+        frame_name = "new_connection_id";
+        break;
+    case picoquic_frame_type_stop_sending:
+        frame_name = "stop_sending";
+        break;
+    case picoquic_frame_type_ack:
+        frame_name = "ack";
+        break;
+    case picoquic_frame_type_path_challenge:
+        frame_name = "path_challenge";
+        break;
+    case picoquic_frame_type_path_response:
+        frame_name = "path_response";
+        break;
+    case picoquic_frame_type_crypto_hs:
+        frame_name = "crypto_hs";
+        break;
+    default:
+        break;
     }
 
     return frame_name;
@@ -806,6 +803,44 @@ size_t picoquic_log_path_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
     return byte_index;
 }
 
+size_t picoquic_log_crypto_hs_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
+{
+    uint64_t offset=0;
+    uint64_t data_length = 0;
+    size_t byte_index = 1;
+    size_t l_off = 0;
+    size_t l_len = 0;
+
+    if (bytes_max > byte_index) {
+        l_off = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &offset);
+        byte_index += l_off;
+    }
+
+    if (bytes_max > byte_index) {
+        l_len = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &data_length);
+        byte_index += l_len;
+    }
+
+    if (l_off == 0 || l_len == 0 || byte_index + data_length > bytes_max) {
+        fprintf(F, "    Malformed Crypto HS frame.\n");
+        byte_index = bytes_max;
+    } else {
+
+        fprintf(F, "    Crypto HS frame, offset %" PRIu64 ", length %d", offset, (int)data_length);
+
+        fprintf(F, ": ");
+        for (size_t i = 0; i < 8 && i < data_length; i++) {
+            fprintf(F, "%02x", bytes[byte_index + i]);
+        }
+        fprintf(F, "%s\n", (data_length > 8) ? "..." : "");
+
+        byte_index += (size_t)data_length;
+    }
+
+    return byte_index;
+}
+
+
 void picoquic_log_frames(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t length)
 {
     size_t byte_index = 0;
@@ -896,6 +931,10 @@ void picoquic_log_frames(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t leng
                     break;
                 case picoquic_frame_type_path_response:
                     byte_index += picoquic_log_path_frame(F, bytes + byte_index,
+                        length - byte_index);
+                    break;
+                case picoquic_frame_type_crypto_hs:
+                    byte_index += picoquic_log_crypto_hs_frame(F, bytes + byte_index,
                         length - byte_index);
                     break;
                 default:

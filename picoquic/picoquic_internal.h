@@ -77,11 +77,10 @@ typedef enum {
     picoquic_frame_type_path_challenge = 0x0e,
     picoquic_frame_type_path_response = 0x0f,
     picoquic_frame_type_stream_range_min = 0x10,
-    picoquic_frame_type_stream_range_max = 0x1F,
-    picoquic_frame_type_ack_range_min_old = 0xa0,
-    picoquic_frame_type_ack_range_max_old = 0xbf,
-    picoquic_frame_type_stream_range_min_old = 0xc0,
-    picoquic_frame_type_stream_range_max_old = 0xcf
+    picoquic_frame_type_stream_range_max = 0x17,
+    picoquic_frame_type_crypto_hs = 0x18,
+    picoquic_frame_type_crypto_close = 0x20,
+    picoquic_frame_type_new_token = 0x21
 } picoquic_frame_type_enum_t;
 
 /*
@@ -416,6 +415,7 @@ typedef struct st_picoquic_cnx_t {
     struct st_ptls_buffer_t* tls_sendbuf;
     uint64_t send_sequence;
     uint16_t psk_cipher_suite_id;
+    picoquic_stream_head tls_stream;
 
     /* Liveness detection */
     uint64_t latest_progress_time; /* last local time at which the connection progressed */

@@ -505,6 +505,70 @@ void picoquic_stream_data_callback(picoquic_cnx_t* cnx, picoquic_stream_head* st
     }
 }
 
+/* Common code to data stream and crypto hs stream */
+int picoquic_queue_network_input(picoquic_stream_head* stream, size_t offset, uint8_t* bytes, size_t length, int * new_data_available)
+{
+    int ret = 0;
+    picoquic_stream_data** pprevious = &stream->stream_data;
+    picoquic_stream_data* next = stream->stream_data;
+    size_t start = 0;
+
+    if (offset <= stream->consumed_offset) {
+        if (offset + length <= stream->consumed_offset) {
+            /* already received */
+            start = length;
+        }
+        else {
+            start = (size_t)(stream->consumed_offset - offset);
+        }
+    }
+
+    /* Queue of a block in the stream */
+
+    while (next != NULL && start < length && next->offset <= offset + start) {
+        if (offset + length <= next->offset + next->length) {
+            start = length;
+        } else if (offset < next->offset + next->length) {
+            start = (size_t)(next->offset + next->length - offset);
+        }
+        pprevious = &next->next_stream_data;
+        next = next->next_stream_data;
+    }
+
+    if (start < length) {
+        size_t data_length = length - start;
+
+        if (next != NULL && next->offset < offset + length) {
+            data_length -= (size_t)(offset + length - next->offset);
+        }
+
+        if (data_length > 0) {
+            picoquic_stream_data* data = (picoquic_stream_data*)malloc(sizeof(picoquic_stream_data));
+
+            if (data == NULL) {
+                ret = PICOQUIC_ERROR_MEMORY;
+            }
+            else {
+                data->length = data_length;
+                data->bytes = (uint8_t*)malloc(data_length);
+                if (data->bytes == NULL) {
+                    ret = PICOQUIC_ERROR_MEMORY;
+                    free(data);
+                }
+                else {
+                    data->offset = offset + start;
+                    memcpy(data->bytes, bytes + start, data_length);
+                    data->next_stream_data = next;
+                    *pprevious = data;
+                    *new_data_available = 1;
+                }
+            }
+        }
+    }
+
+    return ret;
+}
+
 int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id,
     uint64_t offset, int fin, uint8_t* bytes, size_t length, uint64_t current_time)
 {
@@ -539,59 +603,13 @@ int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id,
     }
 
     if (ret == 0) {
-        picoquic_stream_data** pprevious = &stream->stream_data;
-        picoquic_stream_data* next = stream->stream_data;
-        size_t start = 0;
+        int new_data_available = 0;
 
-        if (offset <= stream->consumed_offset) {
-            if (offset + length <= stream->consumed_offset) {
-                /* already received */
-                start = length;
-            } else {
-                start = (size_t)(stream->consumed_offset - offset);
-            }
-        }
+        ret = picoquic_queue_network_input(stream, (size_t)offset, bytes, length, &new_data_available);
 
-        /* Queue of a block in the stream */
-
-        while (next != NULL && start < length && next->offset <= offset + start) {
-            if (offset + length <= next->offset + next->length) {
-                start = length;
-            } else if (offset < next->offset + next->length) {
-                start = (size_t)(next->offset + next->length - offset);
-            }
-            pprevious = &next->next_stream_data;
-            next = next->next_stream_data;
-        }
-
-        if (start < length) {
-            size_t data_length = length - start;
-
-            if (next != NULL && next->offset < offset + length) {
-                data_length -= (size_t)(offset + length - next->offset);
-            }
-
-            if (data_length > 0) {
-                picoquic_stream_data* data = (picoquic_stream_data*)malloc(sizeof(picoquic_stream_data));
-
-                if (data == NULL) {
-                    ret = PICOQUIC_ERROR_MEMORY;
-                } else {
-                    data->length = data_length;
-                    data->bytes = (uint8_t*)malloc(data_length);
-                    if (data->bytes == NULL) {
-                        ret = PICOQUIC_ERROR_MEMORY;
-                        free(data);
-                    } else {
-                        data->offset = offset + start;
-                        memcpy(data->bytes, bytes + start, data_length);
-                        data->next_stream_data = next;
-                        *pprevious = data;
-                        should_notify = stream_id; /* this way, do not notify stream 0 */
-                        cnx->latest_progress_time = current_time;
-                    }
-                }
-            }
+        if (new_data_available) {
+            should_notify = stream_id; /* this way, do not notify stream 0 */
+            cnx->latest_progress_time = current_time;
         }
     }
 
@@ -783,6 +801,141 @@ int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head* str
                 /* Set the fin bit */
                 stream->stream_flags |= picoquic_stream_flag_fin_sent;
                 bytes[0] |= 1;
+            } else if (ret == 0 && length == 0) {
+                /* No point in sending a silly packet */
+                *consumed = 0;
+                ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
+            }
+        }
+    }
+
+    return ret;
+}
+
+/*
+ * Crypto HS frames
+ */
+
+int picoquic_decode_crypto_hs_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
+    size_t bytes_max, size_t* consumed)
+{
+    int ret = 0;
+    uint64_t data_length = 0;
+    uint64_t offset = 0;
+    size_t byte_index = 1;
+    size_t l_off = 0;
+    size_t l_len = 0;
+    
+    if (bytes_max > byte_index) {
+        l_off = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &offset);
+        byte_index += l_off;
+    }
+
+    if (bytes_max > byte_index) {
+        l_len = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &data_length);
+        byte_index += l_len;
+    }
+
+    if (bytes_max < byte_index || l_off == 0 || l_len == 0) {
+        DBG_PRINTF("crypto hs frame header too large: first_byte=0x%02x, bytes_max=%" PRIst,
+            bytes[0], bytes_max);
+        byte_index = bytes_max;
+        ret = -1;
+    } else if (byte_index + data_length > bytes_max) {
+        DBG_PRINTF("stream data past the end of the packet: first_byte=0x%02x, data_length=%" PRIst ", max_bytes=%" PRIst,
+            bytes[0], data_length, bytes_max);
+        ret = -1;
+    }
+
+    *consumed = byte_index;
+
+    if (ret == 0) {
+        int new_data_available = 0;
+        ret = picoquic_queue_network_input(&cnx->tls_stream, (size_t)offset,
+            bytes + *consumed, (size_t)data_length, &new_data_available);
+        *consumed += (size_t)data_length;
+    }
+
+    return ret;
+}
+
+int picoquic_prepare_crypto_hs_frame(picoquic_cnx_t* cnx, 
+    uint8_t* bytes, size_t bytes_max, size_t* consumed)
+{
+    int ret = 0;
+    picoquic_stream_head* stream = &cnx->tls_stream;
+
+    if ((stream->send_queue == NULL || stream->send_queue->length <= stream->send_queue->offset) && ((stream->stream_flags & picoquic_stream_flag_fin_notified) == 0 || (stream->stream_flags & picoquic_stream_flag_fin_sent) != 0)) {
+        *consumed = 0;
+    } else {
+        size_t byte_index = 0;
+        size_t l_stream = 0;
+        size_t l_off = 0;
+        size_t length = 0;
+
+        bytes[byte_index++] = picoquic_frame_type_crypto_hs;
+
+        if (bytes_max > byte_index) {
+            l_off = picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index, stream->sent_offset);
+            byte_index += l_off;
+        }
+
+        if (byte_index > bytes_max || l_stream == 0 || (stream->sent_offset > 0 && l_off == 0)) {
+            *consumed = 0;
+            ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
+        }
+        else {
+            /* Compute the length */
+            size_t space = bytes_max - byte_index;
+
+            if (space < 2 || stream->send_queue == NULL) {
+                length = 0;
+            }
+            else {
+                size_t available = (size_t)(stream->send_queue->length - stream->send_queue->offset);
+
+                length = available;
+
+                if (length >= space) {
+                    length = space;
+                }
+                else {
+                    /* This is going to be a trial and error process */
+                    size_t l_len = 0;
+
+                    l_len = picoquic_varint_encode(bytes + byte_index, space,
+                        (uint64_t)length);
+                    if (l_len == 0 || (l_len == space && length > 0)) {
+                        /* Will not try a silly encoding */
+                        *consumed = 0;
+                        ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
+                    } else if (length + l_len > space) {
+                        /* try a shorter packet */
+                        length = space - l_len;
+                        l_len = picoquic_varint_encode(bytes + byte_index, space,
+                            (uint64_t)length);
+                        byte_index += l_len;
+                    } else {
+                        /* This is good */
+                        byte_index += l_len;
+                    }
+                }
+            }
+
+            if (ret == 0 && length > 0) {
+                memcpy(&bytes[byte_index], stream->send_queue->bytes + stream->send_queue->offset, length);
+                byte_index += length;
+
+                stream->send_queue->offset += length;
+                if (stream->send_queue->offset >= stream->send_queue->length) {
+                    picoquic_stream_data* next = stream->send_queue->next_stream_data;
+                    free(stream->send_queue->bytes);
+                    free(stream->send_queue);
+                    stream->send_queue = next;
+                }
+
+                stream->sent_offset += length;
+                *consumed = byte_index;
             } else if (ret == 0 && length == 0) {
                 /* No point in sending a silly packet */
                 *consumed = 0;
@@ -2072,6 +2225,11 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
                     byte_index += consumed;
                     ack_needed = 0;
                     break;
+                case picoquic_frame_type_crypto_hs:
+                    ret = picoquic_decode_crypto_hs_frame(cnx, bytes + byte_index, bytes_max - byte_index, &consumed);
+                    byte_index += consumed;
+                    ack_needed = 1;
+                    break;
                 default:
                     /* Not implemented yet! */
                     ret = picoquic_connection_error(cnx,
@@ -2123,6 +2281,46 @@ static int picoquic_skip_stream_frame(uint8_t* bytes, size_t bytes_max, size_t* 
         ret = -1;
     } else if (len == 0) {
         byte_index = bytes_max;
+    } else {
+        if (bytes_max > byte_index) {
+            l_len = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &length);
+            byte_index += l_len;
+        }
+
+        if (l_len == 0 || bytes_max < byte_index + length) {
+            byte_index = bytes_max;
+            ret = -1;
+        } else {
+            byte_index += (size_t)length;
+        }
+    }
+
+    *consumed = byte_index;
+
+    return ret;
+}
+
+/*
+ * Crypto HS skipping, very similar to stream frame
+ */
+
+static int picoquic_skip_crypto_hs_frame(uint8_t* bytes, size_t bytes_max, size_t* consumed)
+{
+    int ret = 0;
+    uint64_t length = 0;
+    size_t l_len = 0;
+    size_t l_off = 0;
+    size_t byte_index = 0;
+
+
+    if (bytes_max > byte_index) {
+        l_off = picoquic_varint_skip(bytes + byte_index);
+        byte_index += l_off;
+    }
+
+    if (bytes_max < byte_index || l_off == 0) {
+        byte_index = bytes_max;
+        ret = -1;
     } else {
         if (bytes_max > byte_index) {
             l_len = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &length);
@@ -2309,6 +2507,11 @@ int picoquic_skip_frame(uint8_t* bytes, size_t bytes_max, size_t* consumed,
             break;
         case picoquic_frame_type_path_response:
             byte_index += 8;
+            break;
+        case picoquic_frame_type_crypto_hs:
+            *pure_ack = 0;
+            ret = picoquic_skip_crypto_hs_frame(bytes + byte_index, bytes_max, consumed);
+            byte_index += *consumed;
             break;
         default:
             /* Not implemented yet! */
