@@ -520,17 +520,14 @@ static int stress_handle_packet_prepare(picoquic_stress_ctx_t * ctx, picoquic_qu
     int ret = 0;
     picoquictest_sim_packet_t* packet = picoquictest_sim_link_create_packet();
     picoquic_packet* p = picoquic_create_packet();
-    picoquic_cnx_t* cnx = q->cnx_wake_first;
+    picoquic_cnx_t* cnx = picoquic_get_earliest_cnx_to_wake(q, 0);
     picoquictest_sim_link_t* target_link = NULL;
     int simulate_disconnect = 0;
-    int was_null = 0;
 
     if (packet != NULL && p != NULL && cnx != NULL) {
         /* Check that the client connection was properly terminated */
         picoquic_stress_client_callback_ctx_t* c_ctx = (c_index >= 0) ?
             (picoquic_stress_client_callback_ctx_t*)picoquic_get_callback_context(cnx) : NULL;
-
-        was_null = (c_ctx != 0);
 
         if (c_ctx == NULL || cnx->cnx_state == picoquic_state_disconnected || c_ctx->message_disconnect_trigger == 0 ||
             cnx->send_sequence <= c_ctx->message_disconnect_trigger) {
@@ -595,7 +592,7 @@ static int stress_handle_packet_prepare(picoquic_stress_ctx_t * ctx, picoquic_qu
                     ret = 0;
                 }
                 picoquic_delete_cnx(cnx);
-                if (c_index >= 0 && q->cnx_wake_first != NULL) {
+                if (c_index >= 0 && picoquic_get_earliest_cnx_to_wake(q, 0) != NULL) {
                     stress_debug_break();
                     ret = -1;
                 }
@@ -666,6 +663,7 @@ static int stress_loop_poll_context(picoquic_stress_ctx_t * ctx)
     for (int x = 0; ret == 0 && x < ctx->nb_clients; x++) {
         /* Find the arrival time of the next packet, by looking at
          * the various links. remember the winner */
+        picoquic_cnx_t * cnx;
 
         if (ctx->c_ctx[x]->s_to_c_link->first_packet != NULL && 
             ctx->c_ctx[x]->s_to_c_link->first_packet->arrival_time < best_wake_time) {
@@ -679,9 +677,11 @@ static int stress_loop_poll_context(picoquic_stress_ctx_t * ctx)
             best_index = x;
         }
 
-        if (ctx->c_ctx[x]->qclient->cnx_wake_first != NULL &&
-            ctx->c_ctx[x]->qclient->cnx_wake_first->next_wake_time < best_wake_time) {
-            best_wake_time = ctx->c_ctx[x]->qclient->cnx_wake_first->next_wake_time;
+        cnx = picoquic_get_earliest_cnx_to_wake(ctx->c_ctx[x]->qclient, 0);
+
+        if (cnx != NULL &&
+            cnx->next_wake_time < best_wake_time) {
+            best_wake_time = cnx->next_wake_time;
             best_index = x;
         }
 
@@ -705,6 +705,8 @@ static int stress_loop_poll_context(picoquic_stress_ctx_t * ctx)
             }
         }
         else {
+            picoquic_cnx_t * cnx;
+
             if (ret == 0 && ctx->c_ctx[best_index]->s_to_c_link->first_packet != NULL &&
                 ctx->c_ctx[best_index]->s_to_c_link->first_packet->arrival_time <= ctx->simulated_time) {
                 /* dequeue packet from server to client and submit */
@@ -723,9 +725,11 @@ static int stress_loop_poll_context(picoquic_stress_ctx_t * ctx)
                 }
             }
 
-            if (ctx->c_ctx[best_index]->qclient->cnx_wake_first != NULL) {
+            cnx = picoquic_get_earliest_cnx_to_wake(ctx->c_ctx[best_index]->qclient, 0);
+
+            if (cnx != NULL) {
                 /* If the connection is valid, check whether it is ready */
-                if (ctx->c_ctx[best_index]->qclient->cnx_wake_first->next_wake_time <= ctx->simulated_time) {
+                if (cnx->next_wake_time <= ctx->simulated_time) {
                     ret = stress_handle_packet_prepare(ctx, ctx->c_ctx[best_index]->qclient, best_index);
                     if (ret != 0) {
                         stress_debug_break();
@@ -848,8 +852,8 @@ int stress_test()
 {
     int ret = 0;
     picoquic_stress_ctx_t stress_ctx;
-    int run_time_seconds = 0;
-    int wall_time_seconds = 0;
+    double run_time_seconds = 0;
+    double wall_time_seconds = 0;
     uint64_t wall_time_start = picoquic_current_time();
 
 
@@ -919,9 +923,9 @@ int stress_test()
     }
 
     /* Report */
-    run_time_seconds = (int)(stress_ctx.simulated_time / 1000000ull);
-    wall_time_seconds = (int)((picoquic_current_time() - wall_time_start) / 1000000ull);
-    DBG_PRINTF("Stress complete after simulating %d s. in %d s., returns %d\n",
+    run_time_seconds = ((double)stress_ctx.simulated_time) / 1000000.0;
+    wall_time_seconds = ((double)(picoquic_current_time() - wall_time_start)) / 1000000.0;
+    DBG_PRINTF("Stress complete after simulating %3f s. in %3f s., returns %d\n",
         run_time_seconds, wall_time_seconds, ret);
 
     return ret;

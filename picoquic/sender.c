@@ -1037,10 +1037,8 @@ static void picoquic_cnx_set_next_wake_time_init(picoquic_cnx_t* cnx, uint64_t c
         }
     }
 
-    cnx->next_wake_time = next_time;
-
     /* reset the connection at its new logical position */
-    picoquic_reinsert_by_wake_time(cnx->quic, cnx);
+    picoquic_reinsert_by_wake_time(cnx->quic, cnx, next_time);
 }
 
 /* Decide the next time at which the connection should send data */
@@ -1130,10 +1128,8 @@ void picoquic_cnx_set_next_wake_time(picoquic_cnx_t* cnx, uint64_t current_time)
         }
     }
 
-    cnx->next_wake_time = next_time;
-
     /* reset the connection at its new logical position */
-    picoquic_reinsert_by_wake_time(cnx->quic, cnx);
+    picoquic_reinsert_by_wake_time(cnx->quic, cnx, next_time);
 }
 
 /* Prepare the next packet to 0-RTT packet to send in the client initial
@@ -1545,7 +1541,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
             length += (uint32_t)consumed;
         }
         cnx->cnx_state = picoquic_state_draining;
-        cnx->next_wake_time = exit_time;
+        picoquic_reinsert_by_wake_time(cnx->quic, cnx, exit_time);
     } else if (ret == 0 && cnx->cnx_state == picoquic_state_closing) {
         /* if more than 3*RTO is elapsed, move to disconnected */
         uint64_t exit_time = cnx->latest_progress_time + 3 * path_x->retransmit_timer;
@@ -1554,6 +1550,8 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
             cnx->cnx_state = picoquic_state_disconnected;
         } else if (current_time >= cnx->next_wake_time) {
             uint64_t delta_t = path_x->rtt_min;
+            uint64_t next_time = 0;
+
             if (delta_t * 2 < path_x->retransmit_timer) {
                 delta_t = path_x->retransmit_timer / 2;
             }
@@ -1582,10 +1580,11 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
                 }
                 cnx->ack_needed = 0;
             }
-            cnx->next_wake_time = current_time + delta_t;
-            if (cnx->next_wake_time > exit_time) {
-                cnx->next_wake_time = exit_time;
+            next_time = current_time + delta_t;
+            if (next_time > exit_time) {
+                next_time = exit_time;
             }
+            picoquic_reinsert_by_wake_time(cnx->quic, cnx, next_time);
         }
     } else if (ret == 0 && cnx->cnx_state == picoquic_state_draining) {
         /* Nothing is ever sent in the draining state */
@@ -1595,7 +1594,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
         if (current_time >= exit_time) {
             cnx->cnx_state = picoquic_state_disconnected;
         } else {
-            cnx->next_wake_time = exit_time;
+            picoquic_reinsert_by_wake_time(cnx->quic, cnx, exit_time);
         }
         length = 0;
     } else if (ret == 0 && (cnx->cnx_state == picoquic_state_disconnecting || cnx->cnx_state == picoquic_state_handshake_failure)) {
@@ -1643,7 +1642,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
             cnx->cnx_state = picoquic_state_closing;
         }
         cnx->latest_progress_time = current_time;
-        cnx->next_wake_time = current_time + delta_t;
+        picoquic_reinsert_by_wake_time(cnx->quic, cnx, current_time + delta_t);
         cnx->ack_needed = 0;
 
         if (cnx->callback_fn) {

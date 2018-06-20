@@ -243,7 +243,6 @@ typedef struct st_picoquic_sack_item_t {
     struct st_picoquic_sack_item_t* next_sack;
     uint64_t start_of_sack_range;
     uint64_t end_of_sack_range;
-    // uint64_t time_stamp_last_in_range;
 } picoquic_sack_item_t;
 
 /*
@@ -362,8 +361,6 @@ typedef struct st_picoquic_cnx_t {
     /* Management of context retrieval tables */
     struct st_picoquic_cnx_t* next_in_table;
     struct st_picoquic_cnx_t* previous_in_table;
-    struct st_picoquic_cnx_t* next_by_wake_time;
-    struct st_picoquic_cnx_t* previous_by_wake_time;
     struct st_picoquic_cnx_id_t* first_cnx_id;
     struct st_picoquic_net_id_t* first_net_id;
 
@@ -411,6 +408,8 @@ typedef struct st_picoquic_cnx_t {
 
     /* Next time sending data is expected */
     uint64_t next_wake_time;
+    struct st_picoquic_cnx_t* next_by_wake_time;
+    struct st_picoquic_cnx_t* previous_by_wake_time;
 
     /* TLS context, TLS Send Buffer, chain of receive buffers (todo) */
     void* tls_ctx;
@@ -517,7 +516,7 @@ void picoquic_update_pacing_data(picoquic_path_t * path_x);
 
 /* Next time is used to order the list of available connections,
      * so ready connections are polled first */
-void picoquic_reinsert_by_wake_time(picoquic_quic_t* quic, picoquic_cnx_t* cnx);
+void picoquic_reinsert_by_wake_time(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint64_t next_time);
 
 void picoquic_cnx_set_next_wake_time(picoquic_cnx_t* cnx, uint64_t current_time);
 

@@ -574,6 +574,15 @@ namespace UnitTest1
             int ret = stress_test();
 
             Assert::AreEqual(ret, 0);
-        }     
+        }
+
+
+        TEST_METHOD(splay)
+        {
+            int ret = splay_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+        
     };
 }

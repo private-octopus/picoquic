@@ -80,6 +80,32 @@ static int picoquic_net_id_compare(void* key1, void* key2)
     return memcmp(&net1->saddr, &net2->saddr, sizeof(net1->saddr));
 }
 
+
+static int picoquic_compare_cnx_waketime(void * v_cnxleft, void * v_cnxright) {
+    /* Example:  return *((int*)l) - *((int*)r); */
+    int ret = 0;
+    if (v_cnxleft != v_cnxright) {
+        picoquic_cnx_t * cnx_l = (picoquic_cnx_t *)v_cnxleft;
+        picoquic_cnx_t * cnx_r = (picoquic_cnx_t *)v_cnxright;
+
+        if (cnx_l->next_wake_time > cnx_r->next_wake_time) {
+            ret = 1;
+        }
+        else if (cnx_l->next_wake_time < cnx_r->next_wake_time) {
+            ret = -1;
+        }
+        else {
+            if (((intptr_t)v_cnxleft) > ((intptr_t)v_cnxright)) {
+                ret = 1;
+            }
+            else {
+                ret = -1;
+            }
+        }
+    }
+    return ret;
+}
+
 /*
  * Supported versions. Specific versions may mandate different processing of different
  * formats.
@@ -116,6 +142,7 @@ const picoquic_version_parameters_t picoquic_supported_versions[] = {
 };
 
 const size_t picoquic_nb_supported_versions = sizeof(picoquic_supported_versions) / sizeof(picoquic_version_parameters_t);
+
 
 /* QUIC context create and dispose */
 picoquic_quic_t* picoquic_create(uint32_t nb_connections,
@@ -414,6 +441,19 @@ void picoquic_init_transport_parameters(picoquic_transport_parameters* tp, int c
     tp->ack_delay_exponent = 3;
 }
 
+
+/* management of the list of connections in context */
+
+picoquic_cnx_t* picoquic_get_first_cnx(picoquic_quic_t* quic)
+{
+    return quic->cnx_list;
+}
+
+picoquic_cnx_t* picoquic_get_next_cnx(picoquic_cnx_t* cnx)
+{
+    return cnx->next_in_table;
+}
+
 static void picoquic_insert_cnx_in_list(picoquic_quic_t* quic, picoquic_cnx_t* cnx)
 {
     if (quic->cnx_list != NULL) {
@@ -443,6 +483,8 @@ static void picoquic_remove_cnx_from_list(picoquic_cnx_t* cnx)
     }
 }
 
+/* Management of the list of connections, sorted by wake time */
+
 static void picoquic_remove_cnx_from_wake_list(picoquic_cnx_t* cnx)
 {
     if (cnx->next_by_wake_time == NULL) {
@@ -450,7 +492,7 @@ static void picoquic_remove_cnx_from_wake_list(picoquic_cnx_t* cnx)
     } else {
         cnx->next_by_wake_time->previous_by_wake_time = cnx->previous_by_wake_time;
     }
-
+    
     if (cnx->previous_by_wake_time == NULL) {
         cnx->quic->cnx_wake_first = cnx->next_by_wake_time;
     } else {
@@ -460,47 +502,40 @@ static void picoquic_remove_cnx_from_wake_list(picoquic_cnx_t* cnx)
 
 static void picoquic_insert_cnx_by_wake_time(picoquic_quic_t* quic, picoquic_cnx_t* cnx)
 {
-    picoquic_cnx_t* cnx_next = quic->cnx_wake_first;
-    picoquic_cnx_t* previous = NULL;
+    picoquic_cnx_t * cnx_next = quic->cnx_wake_first;
+    picoquic_cnx_t * previous = NULL;
     while (cnx_next != NULL && cnx_next->next_wake_time <= cnx->next_wake_time) {
         previous = cnx_next;
         cnx_next = cnx_next->next_by_wake_time;
     }
-
+    
     cnx->previous_by_wake_time = previous;
     if (previous == NULL) {
         quic->cnx_wake_first = cnx;
+
     } else {
         previous->next_by_wake_time = cnx;
     }
-
+    
     cnx->next_by_wake_time = cnx_next;
+
     if (cnx_next == NULL) {
         quic->cnx_wake_last = cnx;
-    } else {
+    } else { 
         cnx_next->previous_by_wake_time = cnx;
     }
 }
 
-void picoquic_reinsert_by_wake_time(picoquic_quic_t* quic, picoquic_cnx_t* cnx)
+void picoquic_reinsert_by_wake_time(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint64_t next_time)
 {
     picoquic_remove_cnx_from_wake_list(cnx);
+    cnx->next_wake_time = next_time;
     picoquic_insert_cnx_by_wake_time(quic, cnx);
-}
-
-picoquic_cnx_t* picoquic_get_first_cnx(picoquic_quic_t* quic)
-{
-    return quic->cnx_list;
-}
-
-picoquic_cnx_t* picoquic_get_next_cnx(picoquic_cnx_t* cnx)
-{
-    return cnx->next_in_table;
 }
 
 picoquic_cnx_t* picoquic_get_earliest_cnx_to_wake(picoquic_quic_t* quic, uint64_t max_wake_time)
 {
-    picoquic_cnx_t* cnx = quic->cnx_wake_first;
+    picoquic_cnx_t * cnx = quic->cnx_wake_first;
     if (cnx != NULL && max_wake_time != 0 && cnx->next_wake_time > max_wake_time)
     {
         cnx = NULL;
@@ -508,6 +543,32 @@ picoquic_cnx_t* picoquic_get_earliest_cnx_to_wake(picoquic_quic_t* quic, uint64_
 
     return cnx;
 }
+
+
+int64_t picoquic_get_next_wake_delay(picoquic_quic_t* quic,
+    uint64_t current_time, int64_t delay_max)
+{
+    int64_t wake_delay = delay_max;
+
+    if (quic->cnx_wake_first != NULL) {
+        if (quic->cnx_wake_first->next_wake_time > current_time) {
+            wake_delay = quic->cnx_wake_first->next_wake_time - current_time;
+            
+            if (wake_delay > delay_max) {
+                wake_delay = delay_max;
+            }
+        }
+        else {
+            wake_delay = 0;
+        }
+    } else {
+        wake_delay = delay_max;
+    }
+
+    return wake_delay;
+}
+
+/* Other context management functions */
 
 int picoquic_get_version_index(uint32_t proposed_version)
 {
@@ -913,28 +974,6 @@ picoquic_state_enum picoquic_get_cnx_state(picoquic_cnx_t* cnx)
 uint64_t picoquic_is_0rtt_available(picoquic_cnx_t* cnx)
 {
     return (cnx->aead_0rtt_encrypt_ctx == NULL) ? 0 : 1;
-}
-
-int64_t picoquic_get_next_wake_delay(picoquic_quic_t* quic,
-    uint64_t current_time, int64_t delay_max)
-{
-    int64_t wake_delay;
-
-    if (quic->cnx_wake_first != NULL) {
-        if (quic->cnx_wake_first->next_wake_time > current_time) {
-            wake_delay = quic->cnx_wake_first->next_wake_time - current_time;
-
-            if (wake_delay > delay_max) {
-                wake_delay = delay_max;
-            }
-        } else {
-            wake_delay = 0;
-        }
-    } else {
-        wake_delay = delay_max;
-    }
-
-    return wake_delay;
 }
 
 /*

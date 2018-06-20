@@ -142,6 +142,7 @@
     <ClCompile Include="logger.c" />
     <ClCompile Include="newreno.c" />
     <ClCompile Include="picosocks.c" />
+    <ClCompile Include="picosplay.c" />
     <ClCompile Include="quicctx.c" />
     <ClCompile Include="packet.c" />
     <ClCompile Include="picohash.c" />
@@ -157,6 +158,7 @@
     <ClInclude Include="picohash.h" />
     <ClInclude Include="picoquic_internal.h" />
     <ClInclude Include="picosocks.h" />
+    <ClInclude Include="picosplay.h" />
     <ClInclude Include="picotlsapi.h" />
     <ClInclude Include="picoquic.h" />
     <ClInclude Include="tls_api.h" />
