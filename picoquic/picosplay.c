@@ -100,34 +100,40 @@ picosplay_tree* picosplay_new_tree(picosplay_comparator comp) {
  */
 picosplay_node* picosplay_insert(picosplay_tree *tree, void *value) {
     picosplay_node *new = malloc(sizeof(picosplay_node));
-    new->value = value;
-    new->left = NULL;
-    new->right = NULL;
-    if(tree->root == NULL) {
-        tree->root = new;
-        new->parent = NULL;
-    } else {
-        picosplay_node *curr = tree->root;
-        picosplay_node *parent = NULL;
-        int left = 0;
-        while(curr != NULL) {
-            parent = curr;
-            if(tree->comp(new->value, curr->value) < 0) {
-                left = 1;
-                curr = curr->left;
-            } else {
-                left = 0;
-                curr = curr->right;
-            }
+
+    if (new != NULL) {
+        new->value = value;
+        new->left = NULL;
+        new->right = NULL;
+        if (tree->root == NULL) {
+            tree->root = new;
+            new->parent = NULL;
         }
-        new->parent = parent;
-        if(left)
-            parent->left = new;
-        else
-            parent->right = new;
+        else {
+            picosplay_node *curr = tree->root;
+            picosplay_node *parent = NULL;
+            int left = 0;
+            while (curr != NULL) {
+                parent = curr;
+                if (tree->comp(new->value, curr->value) < 0) {
+                    left = 1;
+                    curr = curr->left;
+                }
+                else {
+                    left = 0;
+                    curr = curr->right;
+                }
+            }
+            new->parent = parent;
+            if (left)
+                parent->left = new;
+            else
+                parent->right = new;
+        }
+        splay(tree, new);
+        tree->size++;
     }
-    splay(tree, new);
-    tree->size++;
+
     return new;
 }
 
@@ -145,6 +151,10 @@ picosplay_node* picosplay_find(picosplay_tree *tree, void *value) {
             curr = curr->right;
         }
     }
+
+    /* TODO: there may or may not be a need to perform a splay on a find operation.
+     * The Wikipedia example omits it, but this code keeps it. We should
+     * perform measurements with and without it and keep the best alternative. */
     if(curr != NULL)
         splay(tree, curr);
     return curr;
