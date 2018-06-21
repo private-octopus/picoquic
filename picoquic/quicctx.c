@@ -1276,7 +1276,7 @@ int picoquic_reset_cnx_version(picoquic_cnx_t* cnx, uint8_t* bytes, size_t lengt
     return ret;
 }
 
-int picoquic_connection_error(picoquic_cnx_t* cnx, uint32_t local_error)
+int picoquic_connection_error(picoquic_cnx_t* cnx, uint16_t local_error)
 {
     if (cnx->cnx_state == picoquic_state_client_ready || cnx->cnx_state == picoquic_state_server_ready) {
         cnx->local_error = local_error;

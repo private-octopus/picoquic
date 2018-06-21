@@ -200,6 +200,7 @@ typedef enum {
     picoquic_callback_stop_sending,
     picoquic_callback_close,
     picoquic_callback_application_close,
+    picoquic_callback_crypto_close,
     picoquic_callback_challenge_response
 } picoquic_call_back_event_t;
 

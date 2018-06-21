@@ -400,10 +400,12 @@ typedef struct st_picoquic_cnx_t {
     picoquic_connection_id_t remote_cnxid;
     uint64_t start_time;
     uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE];
-    uint32_t application_error;
-    uint32_t local_error;
-    uint32_t remote_application_error;
-    uint32_t remote_error;
+    uint16_t application_error;
+    uint16_t local_error;
+    uint16_t crypto_error;
+    uint16_t remote_application_error;
+    uint16_t remote_error;
+    uint16_t remote_crypto_error;
 
     /* Next time sending data is expected */
     uint64_t next_wake_time;
@@ -502,7 +504,7 @@ void picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet* p,
 int picoquic_reset_cnx_version(picoquic_cnx_t* cnx, uint8_t* bytes, size_t length, uint64_t current_time);
 
 /* Notify error on connection */
-int picoquic_connection_error(picoquic_cnx_t* cnx, uint32_t local_error);
+int picoquic_connection_error(picoquic_cnx_t* cnx, uint16_t local_error);
 
 /* Set the transport parameters */
 void picoquic_set_transport_parameters(picoquic_cnx_t * cnx, picoquic_transport_parameters * tp);

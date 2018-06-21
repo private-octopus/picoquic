@@ -295,6 +295,9 @@ char const* picoquic_log_frame_names(uint8_t frame_type)
     case picoquic_frame_type_crypto_hs:
         frame_name = "crypto_hs";
         break;
+    case picoquic_frame_type_crypto_close:
+        frame_name = "crypto_close";
+        break;
     default:
         break;
     }
@@ -560,7 +563,7 @@ size_t picoquic_log_stop_sending_frame(FILE* F, uint8_t* bytes, size_t bytes_max
     return byte_index;
 }
 
-size_t picoquic_log_connection_close_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
+size_t picoquic_log_generic_close_frame(FILE* F, uint8_t* bytes, size_t bytes_max, uint8_t ftype)
 {
     size_t byte_index = 1;
     uint32_t error_code = 0;
@@ -574,60 +577,44 @@ size_t picoquic_log_connection_close_frame(FILE* F, uint8_t* bytes, size_t bytes
     }
 
     if (l1 == 0) {
-        fprintf(F, "    Malformed CONNECTION CLOSE, requires %d bytes out of %d\n",
+        fprintf(F, "    Malformed %s, requires %d bytes out of %d\n",
+            picoquic_log_frame_names(ftype), 
             (int)(byte_index + picoquic_varint_skip(bytes + 3)), (int)bytes_max);
-        return bytes_max;
-    } else {
-        byte_index += l1;
-    }
-
-    fprintf(F, "    CONNECTION CLOSE, Error 0x%04x, Reason length %llu\n",
-        error_code, (unsigned long long)string_length);
-    if (byte_index + string_length > bytes_max) {
-        fprintf(F, "    Malformed CONNECTION CLOSE, requires %llu bytes out of %llu\n",
-            (unsigned long long)(byte_index + string_length), (unsigned long long)bytes_max);
         byte_index = bytes_max;
-    } else {
-        /* TODO: print the UTF8 string */
-        byte_index += (size_t)string_length;
+    }
+    else {
+        byte_index += l1;
+
+        fprintf(F, "    %s, Error 0x%04x, Reason length %llu\n",
+            picoquic_log_frame_names(ftype),
+            error_code, (unsigned long long)string_length);
+        if (byte_index + string_length > bytes_max) {
+            fprintf(F, "    Malformed %s, requires %llu bytes out of %llu\n",
+                picoquic_log_frame_names(ftype),
+                (unsigned long long)(byte_index + string_length), (unsigned long long)bytes_max);
+            byte_index = bytes_max;
+        } else {
+            /* TODO: print the UTF8 string */
+            byte_index += (size_t)string_length;
+        }
     }
 
     return byte_index;
 }
 
+size_t picoquic_log_connection_close_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
+{
+    return picoquic_log_generic_close_frame(F, bytes, bytes_max, picoquic_frame_type_connection_close);
+}
+
 size_t picoquic_log_application_close_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
 {
-    size_t byte_index = 1;
-    uint32_t error_code = 0;
-    uint64_t string_length = 0;
+    return picoquic_log_generic_close_frame(F, bytes, bytes_max, picoquic_frame_type_application_close);
+}
 
-    size_t l1 = 0;
-    if (bytes_max >= 4) {
-        error_code = PICOPARSE_16(bytes + byte_index);
-        byte_index += 2;
-        l1 = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &string_length);
-    }
-
-    if (l1 == 0) {
-        fprintf(F, "    Malformed APPLICATION CLOSE, requires %d bytes out of %d\n",
-            (int)(byte_index + picoquic_varint_skip(bytes + 3)), (int)bytes_max);
-        return bytes_max;
-    } else {
-        byte_index += l1;
-    }
-
-    fprintf(F, "    APPLICATION CLOSE, Error 0x%04x, Reason length %d (0x%04x):\n",
-        error_code, (uint16_t)string_length, (uint16_t)string_length);
-    if (byte_index + string_length > bytes_max) {
-        fprintf(F, "    Malformed APPLICATION CLOSE, requires %d bytes out of %d\n",
-            (int)(byte_index + string_length), (int)bytes_max);
-        byte_index = bytes_max;
-    } else {
-        /* TODO: print the UTF8 string */
-        byte_index += (size_t)string_length;
-    }
-
-    return byte_index;
+size_t picoquic_log_crypto_close_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
+{
+    return picoquic_log_generic_close_frame(F, bytes, bytes_max, picoquic_frame_type_crypto_close);
 }
 
 size_t picoquic_log_max_data_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
@@ -935,6 +922,10 @@ void picoquic_log_frames(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t leng
                     break;
                 case picoquic_frame_type_crypto_hs:
                     byte_index += picoquic_log_crypto_hs_frame(F, bytes + byte_index,
+                        length - byte_index);
+                    break;
+                case picoquic_frame_type_crypto_close:
+                    byte_index += picoquic_log_crypto_close_frame(F, bytes + byte_index,
                         length - byte_index);
                     break;
                 default:
