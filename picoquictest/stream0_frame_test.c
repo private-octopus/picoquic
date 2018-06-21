@@ -134,18 +134,32 @@ static int StreamZeroFrameOneTest(struct test_case_st* test)
     picoquic_cnx_t cnx = { 0 };
     size_t consumed = 0;
     uint64_t current_time = 0;
+    
+    cnx.local_parameters.initial_max_stream_data = 0x10000;
+    cnx.remote_parameters.initial_max_stream_data = 0x10000;
+    cnx.maxdata_local = 0x10000;
 
     for (size_t i = 0; ret == 0 && i < test->list_size; i++) {
         if (0 != picoquic_decode_stream_frame(&cnx, test->list[i].packet,
-                     test->list[i].packet_length, 1, &consumed, current_time)) {
+                     test->list[i].packet_length, &consumed, current_time)) {
             FAIL(test, "packet %" PRIst, i);
             ret = -1;
         }
     }
 
+    if (ret == 0 && cnx.first_stream == NULL) {
+        FAIL(test, "%s", "No stream created");
+        ret = -1;
+    }
+
+    if (ret == 0 && cnx.first_stream->stream_id != 0) {
+        FAIL(test, "%s", "Other stream than 0");
+        ret = -1;
+    }
+
     if (ret == 0) {
         /* Check the content of all the data in the context */
-        picoquic_stream_data* data = cnx.first_stream.stream_data;
+        picoquic_stream_data* data = cnx.first_stream->stream_data;
         size_t data_rank = 0;
 
         while (data != NULL) {
@@ -180,6 +194,148 @@ int StreamZeroFrameTest()
 
     for (size_t i = 0; ret == 0 && i < nb_test_cases; i++) {
         ret = StreamZeroFrameOneTest(&test_case[i]);
+    }
+
+    return ret;
+}
+
+
+/*
+* Testing Arrival of Frame for TLS Stream
+*/
+
+static uint8_t tlsv0_1[] = {
+    0x18, 
+    0, /* One byte offset */
+    0x0A, /* One byte length */
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10 /* Some random data */
+};
+
+static uint8_t tlsv0_2[] = {
+    0x18, 
+    10, /* One byte offset */
+    0x0A, /* One byte length */
+    11, 12, 13, 14, 15, 16, 17, 18, 19, 20 /* Some random data */
+};
+
+static uint8_t tlsv0_3[] = {
+    0x18, 
+    0x40, 20, /* Two byte offset */
+    0x40, 0x0A, /* Two byte length */
+    21, 22, 23, 24, 25, 26, 27, 28, 29, 30 /* Some random data */
+};
+
+static uint8_t tlsv0_4[] = {
+    0x18,
+    0x80, 0, 0, 30, /* Four byte offset */
+    0x40, 10, /* two byte length */
+    31, 32, 33, 34, 35, 36, 37, 38, 39, 40 /* Some random data */
+};
+
+static uint8_t tlsv0_5[] = {
+    0x18,
+    0xC0, 0, 0, 0, 0, 0, 0, 40, /* Eight byte offset */
+    0x40, 10, /* Two byte length */
+    41, 42, 43, 44, 45, 46, 47, 48, 49, 50, /* Some random data */
+    0, 0, 0, 0, 0 /* Some random padding */
+};
+
+static uint8_t tlsv0_45_overlap[] = {
+    0x18,
+    0x40, 35, /* Two byte offset */
+    0x40, 10, /* Two byte length */
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF /* Some random data */
+};
+
+static struct packet tlslist_v1[] = {
+    { tlsv0_1, sizeof(tlsv0_1), 0, 10, 0 },
+    { tlsv0_2, sizeof(tlsv0_2), 10, 10, 0 },
+    { tlsv0_3, sizeof(tlsv0_3), 20, 10, 0 },
+    { tlsv0_4, sizeof(tlsv0_4), 30, 10, 0 },
+    { tlsv0_5, sizeof(tlsv0_5), 40, 10, 0 }
+};
+
+static struct packet tlslist_v2[] = {
+    { tlsv0_2, sizeof(tlsv0_2), 10, 10, 0 },
+    { tlsv0_3, sizeof(tlsv0_3), 20, 10, 0 },
+    { tlsv0_1, sizeof(tlsv0_1), 0, 10, 0 },
+    { tlsv0_5, sizeof(tlsv0_5), 40, 10, 0 },
+    { tlsv0_4, sizeof(tlsv0_4), 30, 10, 0 },
+};
+
+static struct packet tlslist_v3[] = {
+    { tlsv0_1, sizeof(tlsv0_1), 0, 10, 0 },
+    { tlsv0_2, sizeof(tlsv0_2), 10, 10, 0 },
+    { tlsv0_3, sizeof(tlsv0_3), 20, 10, 0 },
+    { tlsv0_2, sizeof(tlsv0_2), 10, 10, 0 },
+    { tlsv0_3, sizeof(tlsv0_3), 20, 10, 0 },
+    { tlsv0_4, sizeof(tlsv0_4), 30, 10, 0 },
+    { tlsv0_4, sizeof(tlsv0_4), 30, 10, 0 },
+    { tlsv0_5, sizeof(tlsv0_5), 40, 10, 0 },
+    { tlsv0_45_overlap, sizeof(tlsv0_45_overlap), 35, 10, 0 }
+};
+
+static struct test_case_st tls_test_case[] = {
+    { "tlstest_v1", tlslist_v1, sizeof(tlslist_v1) / sizeof(struct packet), 50 },
+    { "tlstest_v2", tlslist_v2, sizeof(tlslist_v2) / sizeof(struct packet), 50 },
+    { "tlstest_v3", tlslist_v3, sizeof(tlslist_v3) / sizeof(struct packet), 50 }
+};
+
+static size_t const nb_tls_test_cases = sizeof(tls_test_case) / sizeof(struct test_case_st);
+
+static int TlsStreamFrameOneTest(struct test_case_st* test)
+{
+    int ret = 0;
+
+    picoquic_cnx_t cnx = { 0 };
+    size_t consumed = 0;
+    uint64_t current_time = 0;
+
+    for (size_t i = 0; ret == 0 && i < test->list_size; i++) {
+        if (0 != picoquic_decode_crypto_hs_frame(&cnx, test->list[i].packet,
+            test->list[i].packet_length, &consumed)) {
+            FAIL(test, "packet %" PRIst, i);
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        /* Check the content of all the data in the context */
+        picoquic_stream_data* data = cnx.tls_stream.stream_data;
+        size_t data_rank = 0;
+
+        while (data != NULL) {
+            if (data->bytes == NULL) {
+                FAIL(test, "%s", "No data bytes");
+                ret = -1;
+            }
+
+            for (size_t i = 0; ret == 0 && i < data->length; i++) {
+                data_rank++;
+                if (data->bytes[i] != data_rank) {
+                    FAIL(test, "byte %" PRIst " is %u instead of %" PRIst, i, data->bytes[i], data_rank);
+                    ret = -1;
+                }
+            }
+
+            data = data->next_stream_data;
+        }
+
+        if (ret == 0 && data_rank != test->expected_length) {
+            FAIL(test, "total byte %" PRIst " bytes instead of %" PRIst, data_rank, test->expected_length);
+            ret = -1;
+        }
+    }
+
+    return ret;
+}
+
+int TlsStreamFrameTest()
+{
+    int ret = 0;
+
+    for (size_t i = 0; ret == 0 && i < nb_tls_test_cases; i++) {
+        ret = TlsStreamFrameOneTest(&tls_test_case[i]);
     }
 
     return ret;

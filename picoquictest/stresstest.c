@@ -855,6 +855,7 @@ int stress_test()
     double run_time_seconds = 0;
     double wall_time_seconds = 0;
     uint64_t wall_time_start = picoquic_current_time();
+    uint64_t wall_time_max = wall_time_start + picoquic_stress_test_duration;
 
 
     /* Initialization */
@@ -892,7 +893,12 @@ int stress_test()
     }
 
     /* Run the simulation until the specified time */
-    while (ret == 0 && stress_ctx.simulated_time < picoquic_stress_test_duration) {
+    while (ret == 0 && stress_ctx.simulated_time < picoquic_stress_test_duration ) {
+        if (picoquic_current_time() > wall_time_max) {
+            DBG_PRINTF("%s", "Stress time takes too long!\n");
+            ret = -1;
+            break;
+        }
         /* Poll for new packet transmission */
         ret = stress_loop_poll_context(&stress_ctx);
 

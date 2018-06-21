@@ -935,6 +935,54 @@ int picoquic_tls_is_psk_handshake(picoquic_cnx_t* cnx)
     return ret;
 }
 
+
+/*
+* Sending data on the crypto stream.
+*/
+
+static int picoquic_add_to_tls_stream(picoquic_cnx_t* cnx, const uint8_t* data, size_t length)
+{
+    int ret = 0;
+    picoquic_stream_head* stream = &cnx->tls_stream;
+
+    if (ret == 0 && length > 0) {
+        picoquic_stream_data* stream_data = (picoquic_stream_data*)malloc(sizeof(picoquic_stream_data));
+
+        if (stream_data == 0) {
+            ret = -1;
+        }
+        else {
+            stream_data->bytes = (uint8_t*)malloc(length);
+
+            if (stream_data->bytes == NULL) {
+                free(stream_data);
+                stream_data = NULL;
+                ret = -1;
+            }
+            else {
+                picoquic_stream_data** pprevious = &stream->send_queue;
+                picoquic_stream_data* next = stream->send_queue;
+
+                memcpy(stream_data->bytes, data, length);
+                stream_data->length = length;
+                stream_data->offset = 0;
+                stream_data->next_stream_data = NULL;
+
+                while (next != NULL) {
+                    pprevious = &next->next_stream_data;
+                    next = next->next_stream_data;
+                }
+
+                *pprevious = stream_data;
+            }
+        }
+
+        picoquic_cnx_set_next_wake_time(cnx, picoquic_get_quic_time(cnx->quic));
+    }
+
+    return ret;
+}
+
 /*
  * Arrival of a handshake item (frame 0) in a packet of type T.
  * This triggers an optional progress of the connection.
@@ -980,7 +1028,7 @@ int picoquic_tlsinput_segment(picoquic_cnx_t* cnx,
     return ret;
 }
 
-int picoquic_initialize_stream_zero(picoquic_cnx_t* cnx)
+int picoquic_initialize_tls_stream(picoquic_cnx_t* cnx)
 {
     int ret = 0;
     struct st_ptls_buffer_t sendbuf;
@@ -1001,7 +1049,7 @@ int picoquic_initialize_stream_zero(picoquic_cnx_t* cnx)
 
     if ((ret == 0 || ret == PTLS_ERROR_IN_PROGRESS)) {
         if (sendbuf.off > 0) {
-            ret = picoquic_add_to_stream(cnx, 0, sendbuf.base, sendbuf.off, 0);
+            ret = picoquic_add_to_tls_stream(cnx, sendbuf.base, sendbuf.off);
         }
         ret = 0;
 
@@ -1457,33 +1505,33 @@ int picoquic_setup_cleartext_aead_contexts(picoquic_cnx_t* cnx)
 /* Input stream zero data to TLS context
  */
 
-int picoquic_tlsinput_stream_zero(picoquic_cnx_t* cnx)
+int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
 {
     int ret = 0;
-    picoquic_stream_data* data = cnx->first_stream.stream_data;
+    picoquic_stream_data* data = cnx->tls_stream.stream_data;
     struct st_ptls_buffer_t sendbuf;
 
-    if (data == NULL || data->offset > cnx->first_stream.consumed_offset) {
+    if (data == NULL || data->offset > cnx->tls_stream.consumed_offset) {
         return 0;
     }
 
     ptls_buffer_init(&sendbuf, "", 0);
 
     while (
-        (ret == 0 || ret == PTLS_ERROR_IN_PROGRESS) && data != NULL && data->offset <= cnx->first_stream.consumed_offset) {
-        size_t start = (size_t)(cnx->first_stream.consumed_offset - data->offset);
+        (ret == 0 || ret == PTLS_ERROR_IN_PROGRESS) && data != NULL && data->offset <= cnx->tls_stream.consumed_offset) {
+        size_t start = (size_t)(cnx->tls_stream.consumed_offset - data->offset);
         size_t consumed = 0;
 
         ret = picoquic_tlsinput_segment(cnx, data->bytes + start,
             data->length - start, &consumed, &sendbuf);
 
-        cnx->first_stream.consumed_offset += consumed;
+        cnx->tls_stream.consumed_offset += consumed;
 
         if (start + consumed >= data->length) {
             free(data->bytes);
-            cnx->first_stream.stream_data = data->next_stream_data;
+            cnx->tls_stream.stream_data = data->next_stream_data;
             free(data);
-            data = cnx->first_stream.stream_data;
+            data = cnx->tls_stream.stream_data;
         }
     }
 
@@ -1551,11 +1599,11 @@ int picoquic_tlsinput_stream_zero(picoquic_cnx_t* cnx)
         }
 
         /* Reset the streams */
-        picoquic_clear_stream(&cnx->first_stream);
-        cnx->first_stream.consumed_offset = 0;
-        cnx->first_stream.stream_flags = 0;
-        cnx->first_stream.fin_offset = 0;
-        cnx->first_stream.sent_offset = 0;
+        picoquic_clear_stream(&cnx->tls_stream);
+        cnx->tls_stream.consumed_offset = 0;
+        cnx->tls_stream.stream_flags = 0;
+        cnx->tls_stream.fin_offset = 0;
+        cnx->tls_stream.sent_offset = 0;
     } else if (ret == PTLS_ERROR_STATELESS_RETRY) {
         cnx->cnx_state = picoquic_state_server_send_hrr;
     }
@@ -1575,9 +1623,10 @@ int picoquic_tlsinput_stream_zero(picoquic_cnx_t* cnx)
 
     if ((ret == 0 || ret == PTLS_ERROR_IN_PROGRESS || ret == PTLS_ERROR_STATELESS_RETRY)) {
         if (sendbuf.off > 0) {
-            ret = picoquic_add_to_stream(cnx, 0, sendbuf.base, sendbuf.off, 0);
+            ret = picoquic_add_to_tls_stream(cnx, sendbuf.base, sendbuf.off);
+        } else {
+            ret = 0;
         }
-        ret = 0;
     } else {
         (void)picoquic_connection_error(cnx, PICOQUIC_TLS_HANDSHAKE_FAILED);
         ret = 0;

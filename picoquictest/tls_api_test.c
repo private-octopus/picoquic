@@ -1244,7 +1244,7 @@ int tls_api_very_long_with_err_test()
 
 int tls_api_very_long_congestion_test()
 {
-    return tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0, 128000, 20000, 0, 5000000, NULL);
+    return tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0, 128000, 20000, 0, 7000000, NULL);
 }
 
 int unidir_test()
@@ -2073,8 +2073,8 @@ int spurious_retransmit_test()
  */
 
 static uint8_t clientHelloWrongKeyShare[] = {
-    /* Stream 0 header, including length */
-    0x12, 0x00, 0x41, 0x29,
+    /* TLs Stream header, including offset and length */
+    0x18, 0x00, 0x41, 0x29,
     /* TLS Record Header, end with 2 bytes length*/
     0x16, 0x03, 0x03, 0x01, 0x24,
     /* Handshake protocol header for CH, end with 3 bytes length */
@@ -2199,19 +2199,20 @@ int wrong_keyshare_test()
         /* processing of client initial packet */
         if (ret == 0) {
             /* We do expect that the server will be ready to send an HRR */
-            ret = picoquic_tlsinput_stream_zero(cnx);
+            ret = picoquic_tls_stream_process(cnx);
 
             if (cnx->cnx_state != picoquic_state_server_send_hrr) {
                 DBG_PRINTF("State is %d instead of server_send-hrr\n", cnx->cnx_state);
                 ret = -1;
             } else {
                 /* check that the message queue on stream 0 is proper HRR */
-                if (cnx->first_stream.stream_id != 0 || cnx->first_stream.send_queue == NULL || cnx->first_stream.send_queue->length == 0 || cnx->first_stream.send_queue->bytes == NULL) {
-                    DBG_PRINTF("%s,", "Wrong stream, or empty queue, length or bytes\n");
+                if (cnx->tls_stream.send_queue == NULL || cnx->tls_stream.send_queue->length == 0 || cnx->tls_stream.send_queue->bytes == NULL) {
+                    DBG_PRINTF("%s,", "Empty TLS queue, length or bytes\n");
                     ret = -1;
-                } else if (cnx->first_stream.send_queue->length <= 49 || cnx->first_stream.send_queue->bytes[0] != 0x16 || cnx->first_stream.send_queue->bytes[5] != 0x02) {
+                } else if (cnx->tls_stream.send_queue->length <= 49 || cnx->tls_stream.send_queue->bytes[0] != 0x16 ||
+                    cnx->tls_stream.send_queue->bytes[5] != 0x02) {
                     DBG_PRINTF("Wrong length (%d <= 49), bytes[0] (0x%02x vs 0x16) or bytes[5] (0x%02x vs 0x02)\n",
-                        cnx->first_stream.send_queue->length, cnx->first_stream.send_queue->bytes[0], cnx->first_stream.send_queue->bytes[5]);
+                        cnx->tls_stream.send_queue->length, cnx->tls_stream.send_queue->bytes[0], cnx->tls_stream.send_queue->bytes[5]);
                     ret = -1;
                 }
             }
@@ -2260,8 +2261,8 @@ int wrong_keyshare_test()
 */
 
 static uint8_t clientHelloWrongTls[] = {
-    /* Stream 0 header, including length */
-    0x12, 0x00, 0x41, 0x29,
+    /* TLS Stream header, including length */
+    0x18, 0x00, 0x41, 0x29,
     /* TLS Record Header, end with 2 bytes length*/
     0x16, 0x03, 0x03, 0x01, 0x24,
     /* Handshake protocol header for CH, end with 3 bytes length */
@@ -2385,7 +2386,7 @@ int wrong_tls_version_test()
         /* processing of client initial packet */
         if (ret == 0) {
             /* We do expect that the server will be ready to send an HRR */
-            ret = picoquic_tlsinput_stream_zero(cnx);
+            ret = picoquic_tls_stream_process(cnx);
 
             if (ret != 0) {
                 DBG_PRINTF("Wrong TLS Hello process return code %x\n", ret);

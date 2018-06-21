@@ -773,8 +773,8 @@ void picoquic_queue_stateless_reset(picoquic_cnx_t* cnx,
             byte_index += (uint32_t)ack_bytes;
         }
 
-        /* Copy the stream zero data */
-        if (picoquic_prepare_stream_frame(cnx, &cnx->first_stream, bytes + byte_index,
+        /* Copy the tls stream data */
+        if (picoquic_prepare_crypto_hs_frame(cnx, bytes + byte_index,
                 PICOQUIC_MAX_PACKET_SIZE - byte_index - checksum_length, &data_bytes)
             == 0) {
             uint64_t sequence_number =
@@ -824,7 +824,7 @@ int picoquic_incoming_initial(
     if (ret == 0) {
         /* initialization of context & creation of data */
         /* TODO: find path to send data produced by TLS. */
-        ret = picoquic_tlsinput_stream_zero(cnx);
+        ret = picoquic_tls_stream_process(cnx);
 
         if (cnx->cnx_state == picoquic_state_server_send_hrr) {
             picoquic_queue_stateless_reset(cnx, ph, addr_from, addr_to, if_index_to, current_time);
@@ -911,7 +911,7 @@ int picoquic_incoming_server_stateless(
         /* Remove the resume ticket if any */
         picoquic_tlscontext_remove_ticket(cnx);
         /* submit the embedded message (presumably HRR) to stream zero */
-        ret = picoquic_tlsinput_stream_zero(cnx);
+        ret = picoquic_tls_stream_process(cnx);
         if (ret == 0)
         {
             /* reset the initial CNX_ID to the version sent by the server */
@@ -1019,7 +1019,7 @@ int picoquic_incoming_server_cleartext(
     if (ret == 0 && restricted == 0) {
         /* initialization of context & creation of data */
         /* TODO: find path to send data produced by TLS. */
-        ret = picoquic_tlsinput_stream_zero(cnx);
+        ret = picoquic_tls_stream_process(cnx);
     }
 
     if (ret != 0) {
@@ -1055,7 +1055,7 @@ int picoquic_incoming_client_cleartext(
             if (ret == 0) {
                 /* initialization of context & creation of data */
                 /* TODO: find path to send data produced by TLS. */
-                ret = picoquic_tlsinput_stream_zero(cnx);
+                ret = picoquic_tls_stream_process(cnx);
             }
 
             if (ret != 0) {
@@ -1109,11 +1109,11 @@ int picoquic_incoming_0rtt(
             ret = picoquic_decode_frames(cnx,
                 bytes + ph->offset, ph->payload_length, 0, current_time);
 
-            /* Yell if there is data coming on stream zero */
+            /* Yell if there is data coming on tls stream */
             if (ret == 0) {
-                picoquic_stream_data* data = cnx->first_stream.stream_data;
+                picoquic_stream_data* data = cnx->tls_stream.stream_data;
 
-                if (data != NULL && data->offset < cnx->first_stream.consumed_offset) {
+                if (data != NULL && data->offset < cnx->tls_stream.consumed_offset) {
                     ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION);
                 }
             }
@@ -1219,7 +1219,7 @@ int picoquic_incoming_encrypted(
 
         if (ret == 0) {
             /* Processing of TLS messages  */
-            ret = picoquic_tlsinput_stream_zero(cnx);
+            ret = picoquic_tls_stream_process(cnx);
         }
     }
 

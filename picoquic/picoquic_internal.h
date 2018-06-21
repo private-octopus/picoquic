@@ -473,7 +473,7 @@ typedef struct st_picoquic_cnx_t {
     picoquic_misc_frame_header_t* first_misc_frame;
 
     /* Management of streams */
-    picoquic_stream_head first_stream;
+    picoquic_stream_head * first_stream;
 
     /* If not `0`, the connection will send keep alive messages in the given interval. */
     uint64_t keep_alive_interval;
@@ -663,12 +663,17 @@ int picoquic_process_ack_of_ack_frame(
 picoquic_stream_head* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t stream_id);
 void picoquic_update_stream_initial_remote(picoquic_cnx_t* cnx);
 picoquic_stream_head* picoquic_find_stream(picoquic_cnx_t* cnx, uint64_t stream_id, int create);
-picoquic_stream_head* picoquic_find_ready_stream(picoquic_cnx_t* cnx, int restricted);
+picoquic_stream_head* picoquic_find_ready_stream(picoquic_cnx_t* cnx);
+int picoquic_is_tls_stream_ready(picoquic_cnx_t* cnx);
 int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id,
     uint64_t offset, int fin, uint8_t* bytes, size_t length, uint64_t current_time);
 int picoquic_decode_stream_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
-    size_t bytes_max, int restricted, size_t* consumed, uint64_t current_time);
+    size_t bytes_max, size_t* consumed, uint64_t current_time);
 int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head* stream,
+    uint8_t* bytes, size_t bytes_max, size_t* consumed);
+int picoquic_decode_crypto_hs_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
+    size_t bytes_max, size_t* consumed);
+int picoquic_prepare_crypto_hs_frame(picoquic_cnx_t* cnx,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
 int picoquic_prepare_ack_frame(picoquic_cnx_t* cnx, uint64_t current_time,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
