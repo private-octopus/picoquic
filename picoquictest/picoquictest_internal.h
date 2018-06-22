@@ -28,15 +28,39 @@
 extern "C" {
 #endif
 
-/*
-	 * Really basic network simulator, only simulates a simple link using a
-	 * packet structure.
-	 * Init: link creation. Returns a link structure with defined bandwidth,
-	 * latency, loss pattern and initial time. The link is empty. The loss
-	 * pattern is a 64 bit bit mask.
-	 * Submit packet of length L at time t. The packet is queued to the link.
-	 * Get packet out of link at time T + L + Queue.
-	 */
+/* SNI, ALPN, Stores and Certificates used for test
+ */
+
+#define PICOQUIC_TEST_SNI "test.example.com"
+#define PICOQUIC_TEST_ALPN "picoquic-test"
+
+#ifdef _WINDOWS
+#ifdef _WINDOWS64
+#define PICOQUIC_TEST_SERVER_CERT "..\\..\\certs\\cert.pem"
+#define PICOQUIC_TEST_SERVER_BAD_CERT "..\\..\\certs\\badcert.pem"
+#define PICOQUIC_TEST_SERVER_KEY "..\\..\\certs\\key.pem"
+#define PICOQUIC_TEST_CERT_STORE "..\\..\\certs\\test-ca.crt"
+#else
+#define PICOQUIC_TEST_SERVER_CERT "..\\certs\\cert.pem"
+#define PICOQUIC_TEST_SERVER_BAD_CERT "..\\certs\\badcert.pem"
+#define PICOQUIC_TEST_SERVER_KEY "..\\certs\\key.pem"
+#define PICOQUIC_TEST_CERT_STORE "..\\certs\\test-ca.crt"
+#endif
+#else
+#define PICOQUIC_TEST_SERVER_CERT "certs/cert.pem"
+#define PICOQUIC_TEST_SERVER_BAD_CERT "certs/badcert.pem"
+#define PICOQUIC_TEST_SERVER_KEY "certs/key.pem"
+#define PICOQUIC_TEST_CERT_STORE "certs/test-ca.crt"
+#endif
+
+/* Really basic network simulator, only simulates a simple link using a
+ * packet structure.
+ * Init: link creation. Returns a link structure with defined bandwidth,
+ * latency, loss pattern and initial time. The link is empty. The loss
+ * pattern is a 64 bit bit mask.
+ * Submit packet of length L at time t. The packet is queued to the link.
+ * Get packet out of link at time T + L + Queue.
+ */
 
 typedef struct st_picoquictest_sim_packet_t {
     struct st_picoquictest_sim_packet_t* next_packet;

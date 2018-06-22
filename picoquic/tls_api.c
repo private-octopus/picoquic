@@ -32,6 +32,8 @@
 #include <stdio.h>
 #include <string.h>
 
+
+
 #define PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION 26
 #define PICOQUIC_TRANSPORT_PARAMETERS_MAX_SIZE 512
 
@@ -114,10 +116,17 @@ static int set_sign_certificate_from_key(EVP_PKEY* pkey, ptls_context_t* ctx)
 
 static int set_sign_certificate_from_key_file(char const* keypem, ptls_context_t* ctx)
 {
-    BIO* bio_key = BIO_new_file(keypem, "rb");
-    int ret = set_sign_certificate_from_key(PEM_read_bio_PrivateKey(bio_key, NULL, NULL, NULL), ctx);
-
-    BIO_free(bio_key);
+    int ret = 0;
+    BIO* bio = BIO_new_file(keypem, "rb");
+    EVP_PKEY *pkey = PEM_read_bio_PrivateKey(bio, NULL, NULL, NULL);
+    if (pkey == NULL) {
+        DBG_PRINTF("%s", "failed to load private key");
+        ret = -1;
+    }
+    else {
+        ret = set_sign_certificate_from_key(pkey, ctx);
+    }
+    BIO_free(bio);
     return ret;
 }
 
@@ -536,7 +545,7 @@ ptls_cipher_suite_t *picoquic_cipher_suites[] = {
  */
 
 int picoquic_master_tlscontext(picoquic_quic_t* quic,
-    char const* cert_file_name, char const* key_file_name,
+    char const* cert_file_name, char const* key_file_name, const char * cert_root_file_name,
     const uint8_t* ticket_key, size_t ticket_key_length)
 {
     /* Create a client context or a server context */
@@ -619,7 +628,23 @@ int picoquic_master_tlscontext(picoquic_quic_t* quic,
         if (verifier == NULL) {
             ctx->verify_certificate = NULL;
         } else {
-            ptls_openssl_init_verify_certificate(verifier, NULL);
+            X509_STORE *store = NULL;
+            
+            if (cert_root_file_name != NULL)
+            {
+                store = X509_STORE_new();
+
+                if (store != NULL) {
+                    int file_ret = 0;
+                    X509_LOOKUP *lookup = X509_STORE_add_lookup(store, X509_LOOKUP_file());
+                    if ((file_ret = X509_LOOKUP_load_file(lookup, cert_root_file_name, X509_FILETYPE_PEM)) != 1) {
+                        DBG_PRINTF("Cannot load X509 store (%s), ret = %d\n",
+                            cert_root_file_name, ret);
+                    }
+                }
+            }
+
+            ptls_openssl_init_verify_certificate(verifier, store);
             ctx->verify_certificate = &verifier->super;
         }
 

@@ -74,7 +74,7 @@ int cnxcreation_test()
     };
 
     /* Create QUIC context */
-    quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, 0);
+    quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, 0);
     if (quic == NULL) {
         ret = -1;
     }
