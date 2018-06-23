@@ -858,6 +858,8 @@ int stress_test()
     memset(&stress_ctx, 0, sizeof(picoquic_stress_ctx_t));
     stress_set_ip_address_from_index(&stress_ctx.server_addr, -1);
     stress_ctx.nb_clients = (int)picoquic_stress_nb_clients;
+    stress_ctx.simulated_time = PICOQUIC_TEST_START_TIME;
+
     if (stress_ctx.nb_clients > PICOQUIC_MAX_STRESS_CLIENTS) {
         DBG_PRINTF("Number of stress clients too high (%d). Should be lower than %d\n",
             stress_ctx.nb_clients, PICOQUIC_MAX_STRESS_CLIENTS);
@@ -881,7 +883,7 @@ int stress_test()
     }
 
     /* Run the simulation until the specified time */
-    while (ret == 0 && stress_ctx.simulated_time < picoquic_stress_test_duration) {
+    while (ret == 0 && stress_ctx.simulated_time - PICOQUIC_TEST_START_TIME < picoquic_stress_test_duration) {
         /* Poll for new packet transmission */
         ret = stress_loop_poll_context(&stress_ctx);
 
@@ -912,7 +914,7 @@ int stress_test()
     }
 
     /* Report */
-    run_time_seconds = ((double)stress_ctx.simulated_time) / 1000000.0;
+    run_time_seconds = ((double)(stress_ctx.simulated_time - PICOQUIC_TEST_START_TIME)) / 1000000.0;
     wall_time_seconds = ((double)(picoquic_current_time() - wall_time_start)) / 1000000.0;
     DBG_PRINTF("Stress complete after simulating %3f s. in %3f s., returns %d\n",
         run_time_seconds, wall_time_seconds, ret);
