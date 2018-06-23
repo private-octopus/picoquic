@@ -33,7 +33,6 @@ extern "C" {
 
 #define PICOQUIC_TEST_SNI "test.example.com"
 #define PICOQUIC_TEST_ALPN "picoquic-test"
-#define PICOQUIC_TEST_START_TIME 1519430400000000ull /* Microseconds from 1/1/1970 to 2/24/2018 */
 
 #ifdef _WINDOWS
 #ifdef _WINDOWS64
