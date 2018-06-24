@@ -29,8 +29,12 @@
 #include "picotls/minicrypto.h"
 #include "tls_api.h"
 #include <openssl/pem.h>
+#include <openssl/err.h>
+#include <openssl/engine.h>
 #include <stdio.h>
 #include <string.h>
+
+
 
 #define PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION 26
 #define PICOQUIC_TRANSPORT_PARAMETERS_MAX_SIZE 512
@@ -68,6 +72,26 @@ size_t picoquic_aead_decrypt_generic(uint8_t* output, uint8_t* input, size_t inp
 int picoquic_server_setup_ticket_aead_contexts(picoquic_quic_t* quic,
     ptls_context_t* tls_ctx,
     const uint8_t* secret, size_t secret_length);
+
+/*
+ * Make sure that openssl is properly initialized
+ */
+static void picoquic_init_openssl()
+{
+    static int openssl_is_init = 0;
+
+    if (openssl_is_init == 0) {
+        openssl_is_init = 1;
+        ERR_load_crypto_strings();
+        OpenSSL_add_all_algorithms();
+#if !defined(OPENSSL_NO_ENGINE)
+        /* Load all compiled-in ENGINEs */
+        ENGINE_load_builtin_engines();
+        ENGINE_register_all_ciphers();
+        ENGINE_register_all_digests();
+#endif
+    }
+}
 
 /*
  * Provide access to transport received transport extension for
@@ -114,10 +138,17 @@ static int set_sign_certificate_from_key(EVP_PKEY* pkey, ptls_context_t* ctx)
 
 static int set_sign_certificate_from_key_file(char const* keypem, ptls_context_t* ctx)
 {
-    BIO* bio_key = BIO_new_file(keypem, "rb");
-    int ret = set_sign_certificate_from_key(PEM_read_bio_PrivateKey(bio_key, NULL, NULL, NULL), ctx);
-
-    BIO_free(bio_key);
+    int ret = 0;
+    BIO* bio = BIO_new_file(keypem, "rb");
+    EVP_PKEY *pkey = PEM_read_bio_PrivateKey(bio, NULL, NULL, NULL);
+    if (pkey == NULL) {
+        DBG_PRINTF("%s", "failed to load private key");
+        ret = -1;
+    }
+    else {
+        ret = set_sign_certificate_from_key(pkey, ctx);
+    }
+    BIO_free(bio);
     return ret;
 }
 
@@ -536,7 +567,7 @@ ptls_cipher_suite_t *picoquic_cipher_suites[] = {
  */
 
 int picoquic_master_tlscontext(picoquic_quic_t* quic,
-    char const* cert_file_name, char const* key_file_name,
+    char const* cert_file_name, char const* key_file_name, const char * cert_root_file_name,
     const uint8_t* ticket_key, size_t ticket_key_length)
 {
     /* Create a client context or a server context */
@@ -546,6 +577,8 @@ int picoquic_master_tlscontext(picoquic_quic_t* quic,
     ptls_on_client_hello_t* och = NULL;
     ptls_encrypt_ticket_t* encrypt_ticket = NULL;
     ptls_save_ticket_t* save_ticket = NULL;
+
+    picoquic_init_openssl(); /* OpenSSL init, just in case */
 
     ctx = (ptls_context_t*)malloc(sizeof(ptls_context_t));
 
@@ -619,7 +652,23 @@ int picoquic_master_tlscontext(picoquic_quic_t* quic,
         if (verifier == NULL) {
             ctx->verify_certificate = NULL;
         } else {
-            ptls_openssl_init_verify_certificate(verifier, NULL);
+            X509_STORE *store = NULL;
+            
+            if (cert_root_file_name != NULL)
+            {
+                store = X509_STORE_new();
+
+                if (store != NULL) {
+                    int file_ret = 0;
+                    X509_LOOKUP *lookup = X509_STORE_add_lookup(store, X509_LOOKUP_file());
+                    if ((file_ret = X509_LOOKUP_load_file(lookup, cert_root_file_name, X509_FILETYPE_PEM)) != 1) {
+                        DBG_PRINTF("Cannot load X509 store (%s), ret = %d\n",
+                            cert_root_file_name, ret);
+                    }
+                }
+            }
+
+            ptls_openssl_init_verify_certificate(verifier, store);
             ctx->verify_certificate = &verifier->super;
         }
 

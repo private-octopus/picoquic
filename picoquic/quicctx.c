@@ -147,7 +147,8 @@ const size_t picoquic_nb_supported_versions = sizeof(picoquic_supported_versions
 /* QUIC context create and dispose */
 picoquic_quic_t* picoquic_create(uint32_t nb_connections,
     char const* cert_file_name,
-    char const* key_file_name,
+    char const* key_file_name, 
+    char const * cert_root_file_name,
     char const* default_alpn,
     picoquic_stream_data_cb_fn default_callback_fn,
     void* default_callback_ctx,
@@ -207,7 +208,7 @@ picoquic_quic_t* picoquic_create(uint32_t nb_connections,
             ret = -1;
             DBG_PRINTF("%s", "Cannot initialize hash tables\n");
         }
-        else if (picoquic_master_tlscontext(quic, cert_file_name, key_file_name, ticket_encryption_key, ticket_encryption_key_length) != 0) {
+        else if (picoquic_master_tlscontext(quic, cert_file_name, key_file_name, cert_root_file_name, ticket_encryption_key, ticket_encryption_key_length) != 0) {
                 ret = -1;
                 DBG_PRINTF("%s", "Cannot create TLS context \n");     
         } else {

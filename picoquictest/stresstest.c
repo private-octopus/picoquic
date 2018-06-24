@@ -41,9 +41,6 @@
 #define PICOQUIC_STRESS_MESSAGE_BUFFER_SIZE 0x10000
 #define PICOQUIC_STRESS_MAX_CLIENT_STREAMS 16
 
-#define PICOQUIC_TEST_SNI "picoquic.test"
-#define PICOQUIC_TEST_ALPN "picoquic-test"
-
 uint64_t picoquic_stress_test_duration = 120000000; /* Default to 2 minutes */
 size_t picoquic_stress_nb_clients = 4; /* Default to 4 clients */
 uint64_t picoquic_stress_max_bidir = 8 * 4; /* Default to 8 streams max per connection */
@@ -811,7 +808,7 @@ static int stress_create_client_context(int client_index, picoquic_stress_ctx_t 
 
     if (ret == 0) {
         /* Create the quic context for this client*/
-        ctx->qclient = picoquic_create(8, NULL, NULL, NULL, NULL,
+        ctx->qclient = picoquic_create(8, NULL, NULL, PICOQUIC_TEST_CERT_STORE, NULL, NULL,
             NULL, NULL, NULL, NULL, stress_ctx->simulated_time, &stress_ctx->simulated_time,
             ctx->ticket_file_name, NULL, 0);
         if (ctx->qclient == NULL) {
@@ -868,15 +865,7 @@ int stress_test()
         ret = -1;
     } else {
         stress_ctx.qserver = picoquic_create(PICOQUIC_MAX_STRESS_CLIENTS,
-#ifdef _WINDOWS
-#ifdef _WINDOWS64
-            "..\\..\\certs\\cert.pem", "..\\..\\certs\\key.pem",
-#else
-            "..\\certs\\cert.pem", "..\\certs\\key.pem",
-#endif
-#else
-            "certs/cert.pem", "certs/key.pem",
-#endif
+            PICOQUIC_TEST_SERVER_CERT, PICOQUIC_TEST_SERVER_KEY, PICOQUIC_TEST_CERT_STORE,
             PICOQUIC_TEST_ALPN, stress_server_callback, NULL, NULL, NULL, NULL,
             stress_ctx.simulated_time, &stress_ctx.simulated_time, NULL,
             stress_ticket_encrypt_key, sizeof(stress_ticket_encrypt_key));

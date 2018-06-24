@@ -359,7 +359,7 @@ int parse_frame_test()
     const uint8_t extra_bytes[4] = { 0, 0, 0, 0 };
     uint64_t simulated_time = 0;
     struct sockaddr_in saddr;
-    picoquic_quic_t * qclient = picoquic_create(8, NULL, NULL, NULL, NULL,
+    picoquic_quic_t * qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
         NULL, NULL, NULL, NULL, simulated_time,
         &simulated_time, NULL, NULL, 0);
 

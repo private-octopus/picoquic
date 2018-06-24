@@ -23,6 +23,7 @@
 #include <string.h>
 #include "../picoquic/tls_api.h"
 #include "../picoquic/picoquic_internal.h"
+#include "picoquictest_internal.h"
 
 /* test vectors and corresponding structure */
 #define TEST_CNXID_LEN_BYTE 0x51
@@ -237,7 +238,7 @@ int parseheadertest()
     // addr_07.sin_port = 4433;
     addr_10.sin_port = 4434;
 
-    quic = picoquic_create(8, NULL, NULL, NULL, NULL,
+    quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
         NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, 0);
     if (quic == NULL) {
         ret = -1;
@@ -476,18 +477,10 @@ int packet_enc_dec_test()
     struct sockaddr_in test_addr_c;
     picoquic_cnx_t* cnx_client = NULL;
     picoquic_cnx_t* cnx_server = NULL;
-    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL, NULL,
         NULL, NULL, NULL, 0, NULL, NULL, NULL, 0);
     picoquic_quic_t* qserver = picoquic_create(8,
-#ifdef _WINDOWS
-#ifdef _WINDOWS64
-        "..\\..\\certs\\cert.pem", "..\\..\\certs\\key.pem",
-#else
-        "..\\certs\\cert.pem", "..\\certs\\key.pem",
-#endif
-#else
-        "certs/cert.pem", "certs/key.pem",
-#endif
+        PICOQUIC_TEST_SERVER_CERT, PICOQUIC_TEST_SERVER_KEY, PICOQUIC_TEST_CERT_STORE, 
         "test", NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, 0);
     if (qclient == NULL || qserver == NULL) {
         DBG_PRINTF("%s", "Could not create Quic contexts.\n");
