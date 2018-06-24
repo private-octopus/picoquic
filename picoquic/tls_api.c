@@ -29,6 +29,7 @@
 #include "picotls/minicrypto.h"
 #include "tls_api.h"
 #include <openssl/pem.h>
+#include <openssl/err.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -70,6 +71,26 @@ size_t picoquic_aead_decrypt_generic(uint8_t* output, uint8_t* input, size_t inp
 int picoquic_server_setup_ticket_aead_contexts(picoquic_quic_t* quic,
     ptls_context_t* tls_ctx,
     const uint8_t* secret, size_t secret_length);
+
+/*
+ * Make sure that openssl is properly initialized
+ */
+static void picoquic_init_openssl()
+{
+    static int openssl_is_init = 0;
+
+    if (openssl_is_init == 0) {
+        openssl_is_init = 1;
+        ERR_load_crypto_strings();
+        OpenSSL_add_all_algorithms();
+#if !defined(OPENSSL_NO_ENGINE)
+        /* Load all compiled-in ENGINEs */
+        ENGINE_load_builtin_engines();
+        ENGINE_register_all_ciphers();
+        ENGINE_register_all_digests();
+#endif
+    }
+}
 
 /*
  * Provide access to transport received transport extension for
@@ -555,6 +576,8 @@ int picoquic_master_tlscontext(picoquic_quic_t* quic,
     ptls_on_client_hello_t* och = NULL;
     ptls_encrypt_ticket_t* encrypt_ticket = NULL;
     ptls_save_ticket_t* save_ticket = NULL;
+
+    picoquic_init_openssl(); /* OpenSSL init, just in case */
 
     ctx = (ptls_context_t*)malloc(sizeof(ptls_context_t));
 
