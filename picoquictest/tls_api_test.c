@@ -1798,6 +1798,11 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset)
 
         if (ret == 0) {
             ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+
+            if (ret != 0) {
+                DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), connection %d fails (0x%x)\n",
+                    use_badcrypt, hardreset, i, ret);
+            }
         }
 
         if (ret == 0 && i == 1) {
@@ -1805,6 +1810,8 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset)
             if (use_badcrypt == 0 && hardreset == 0 && (
                 picoquic_tls_is_psk_handshake(test_ctx->cnx_server) == 0 || 
                 picoquic_tls_is_psk_handshake(test_ctx->cnx_client) == 0)) {
+                DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), connection %d not PSK.\n",
+                    use_badcrypt, hardreset, i);
                 ret = -1;
             } else {
                 /* run a receive loop until no outstanding data */
@@ -1828,19 +1835,29 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset)
         if (ret == 0 && i == 1) {
             if (use_badcrypt == 0 && hardreset == 0) {
                 if (test_ctx->cnx_client->nb_zero_rtt_sent == 0) {
+                    DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), no zero RTT sent.\n",
+                        use_badcrypt, hardreset);
                     ret = -1;
                 }
                 else if (test_ctx->cnx_client->nb_zero_rtt_acked != test_ctx->cnx_client->nb_zero_rtt_sent) {
+                    DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), no zero RTT acked.\n",
+                        use_badcrypt, hardreset);
                     ret = -1;
                 }
             } else {
                 if (test_ctx->cnx_client->nb_zero_rtt_sent == 0) {
+                    DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), no zero RTT sent.\n",
+                        use_badcrypt, hardreset);
                     ret = -1;
                 }
                 else if (test_ctx->cnx_client->nb_zero_rtt_acked != 0) {
+                    DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), zero acked, not expected.\n",
+                        use_badcrypt, hardreset);
                     ret = -1;
                 }
                 else if (test_ctx->sum_data_received_at_server == 0) {
+                    DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), no data received.\n",
+                        use_badcrypt, hardreset);
                     ret = -1;
                 }
             }
@@ -1849,6 +1866,8 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset)
         /* Verify that the session ticket has been received correctly */
         if (ret == 0) {
             if (test_ctx->qclient->p_first_ticket == NULL) {
+                DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), cnx %d, no ticket received.\n",
+                    use_badcrypt, hardreset, i);
                 ret = -1;
             } else {
                 ret = picoquic_save_tickets(test_ctx->qclient->p_first_ticket, simulated_time, ticket_file_name);
