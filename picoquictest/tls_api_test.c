@@ -1820,6 +1820,9 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset)
 
                     ret = tls_api_one_sim_round(test_ctx, &simulated_time, &was_active);
 
+                    DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), connection %d draining error (0x%x).\n",
+                        use_badcrypt, hardreset, i, ret);
+
                     if (picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) && picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)) {
                         break;
                     }
@@ -1829,6 +1832,11 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset)
 
         if (ret == 0) {
             ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
+
+            if (ret != 0) {
+                DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), connection %d close error (0x%x).\n",
+                    use_badcrypt, hardreset, i, ret);
+            }
         }
 
         /* Verify that the 0RTT data was sent and acknowledged */
@@ -1871,6 +1879,8 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset)
                 ret = -1;
             } else {
                 ret = picoquic_save_tickets(test_ctx->qclient->p_first_ticket, simulated_time, ticket_file_name);
+                DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), cnx %d, ticket save error (0x%x).\n",
+                    use_badcrypt, hardreset, i, ret);
             }
         }
 
