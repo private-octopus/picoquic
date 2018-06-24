@@ -30,6 +30,7 @@
 #include "tls_api.h"
 #include <openssl/pem.h>
 #include <openssl/err.h>
+#include <openssl/engine.h>
 #include <stdio.h>
 #include <string.h>
 
