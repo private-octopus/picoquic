@@ -1107,7 +1107,7 @@ void * picoquic_pn_enc_create(
 {
     int ret = 0;
     uint8_t key[256]; 
-    ptls_cipher_context_t *pn_enc = ptls_cipher_new(aead->ctr_cipher, 1, key);
+    ptls_cipher_context_t *pn_enc = NULL;
 
     /*
      * Derive the key by extending the secret for PN encryption 
