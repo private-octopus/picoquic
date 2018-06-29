@@ -81,7 +81,8 @@ typedef enum {
     picoquic_frame_type_ack_range_min_old = 0xa0,
     picoquic_frame_type_ack_range_max_old = 0xbf,
     picoquic_frame_type_stream_range_min_old = 0xc0,
-    picoquic_frame_type_stream_range_max_old = 0xcf
+    picoquic_frame_type_stream_range_max_old = 0xcf,
+    picoquic_frame_type_expired_stream_data = 0xf0
 } picoquic_frame_type_enum_t;
 
 /*
@@ -534,7 +535,7 @@ void picoformat_64(uint8_t* bytes, uint64_t n64);
 size_t picoquic_varint_encode(uint8_t* bytes, size_t max_bytes, uint64_t n64);
 void picoquic_varint_encode_16(uint8_t* bytes, uint16_t n16);
 size_t picoquic_varint_decode(const uint8_t* bytes, size_t max_bytes, uint64_t* n64);
-size_t picoquic_varint_skip(uint8_t* bytes);
+size_t picoquic_varint_skip(const uint8_t* bytes);
 
 void picoquic_headint_encode_32(uint8_t* bytes, uint64_t sequence_number);
 size_t picoquic_headint_decode(const uint8_t* bytes, size_t max_bytes, uint64_t* n64);
@@ -665,9 +666,9 @@ void picoquic_update_stream_initial_remote(picoquic_cnx_t* cnx);
 picoquic_stream_head* picoquic_find_stream(picoquic_cnx_t* cnx, uint64_t stream_id, int create);
 picoquic_stream_head* picoquic_find_ready_stream(picoquic_cnx_t* cnx, int restricted);
 int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id,
-    uint64_t offset, int fin, uint8_t* bytes, size_t length, uint64_t current_time);
-int picoquic_decode_stream_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
-    size_t bytes_max, int restricted, size_t* consumed, uint64_t current_time);
+    uint64_t offset, int fin, const uint8_t* bytes, size_t length, uint64_t current_time);
+int picoquic_decode_stream_frame(picoquic_cnx_t* cnx, const uint8_t** pbytes, const uint8_t* bytes_max,
+                                 int restricted, uint64_t current_time);
 int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head* stream,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
 int picoquic_prepare_ack_frame(picoquic_cnx_t* cnx, uint64_t current_time,
@@ -691,7 +692,7 @@ int picoquic_prepare_misc_frame(picoquic_misc_frame_header_t* misc_frame, uint8_
 
 /* send/receive */
 
-int picoquic_decode_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
+int picoquic_decode_frames(picoquic_cnx_t* cnx, const uint8_t* bytes,
     size_t bytes_max, int restricted, uint64_t current_time);
 
 int picoquic_skip_frame(uint8_t* bytes, size_t bytes_max, size_t* consumed, int* pure_ack);

@@ -251,10 +251,9 @@ static void first_server_callback(picoquic_cnx_t* cnx,
 
             picoquic_close(cnx, PICOQUIC_ERROR_MEMORY);
             return;
-        } else {
-            picoquic_set_callback(cnx, first_server_callback, new_ctx);
-            ctx = new_ctx;
         }
+        picoquic_set_callback(cnx, first_server_callback, new_ctx);
+        ctx = new_ctx;
     }
 
     stream_ctx = ctx->first_stream;
@@ -271,12 +270,11 @@ static void first_server_callback(picoquic_cnx_t* cnx,
             /* Could not handle this stream */
             picoquic_reset_stream(cnx, stream_id, 500);
             return;
-        } else {
-            memset(stream_ctx, 0, sizeof(picoquic_first_server_stream_ctx_t));
-            stream_ctx->next_stream = ctx->first_stream;
-            ctx->first_stream = stream_ctx;
-            stream_ctx->stream_id = stream_id;
         }
+        memset(stream_ctx, 0, sizeof(picoquic_first_server_stream_ctx_t));
+        stream_ctx->next_stream = ctx->first_stream;
+        ctx->first_stream = stream_ctx;
+        stream_ctx->stream_id = stream_id;
     }
 
     /* verify state and copy data to the stream buffer */
@@ -287,14 +285,18 @@ static void first_server_callback(picoquic_cnx_t* cnx,
         printf("Server CB, Stop Sending Stream: %" PRIu64 ", resetting the local stream.\n",
             stream_id);
         return;
-    } else if (fin_or_event == picoquic_callback_stream_reset) {
+    }
+
+    if (fin_or_event == picoquic_callback_stream_reset) {
         stream_ctx->status = picoquic_first_server_stream_status_finished;
         picoquic_reset_stream(cnx, stream_id, 0);
         printf("%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
         printf("Server CB, Reset Stream: %" PRIu64 ", resetting the local stream.\n",
             stream_id);
         return;
-    } else if (stream_ctx->status == picoquic_first_server_stream_status_finished || stream_ctx->command_length + length > (PICOQUIC_FIRST_COMMAND_MAX - 1)) {
+    }
+
+    if (stream_ctx->status == picoquic_first_server_stream_status_finished || stream_ctx->command_length + length > (PICOQUIC_FIRST_COMMAND_MAX - 1)) {
         if (fin_or_event == picoquic_callback_stream_fin && length == 0) {
             /* no problem, this is fine. */
         } else {
@@ -305,7 +307,9 @@ static void first_server_callback(picoquic_cnx_t* cnx,
                 stream_id);
         }
         return;
-    } else {
+    }
+
+    {
         int crlf_present = 0;
 
         if (length > 0) {
@@ -743,7 +747,9 @@ static void first_client_callback(picoquic_cnx_t* cnx,
         /* Unexpected stream. */
         picoquic_reset_stream(cnx, stream_id, 0);
         return;
-    } else if (fin_or_event == picoquic_callback_stream_reset) {
+    }
+
+    if (fin_or_event == picoquic_callback_stream_reset) {
         picoquic_reset_stream(cnx, stream_id, 0);
 
         if (stream_ctx->F != NULL) {
@@ -760,7 +766,9 @@ static void first_client_callback(picoquic_cnx_t* cnx,
                 (int)stream_ctx->received_length);
         }
         return;
-    } else if (fin_or_event == picoquic_callback_stop_sending) {
+    }
+
+    if (fin_or_event == picoquic_callback_stop_sending) {
         char buf[256];
         picoquic_reset_stream(cnx, stream_id, 0);
 
@@ -768,25 +776,25 @@ static void first_client_callback(picoquic_cnx_t* cnx,
             stream_ctx->stream_id,
             strip_endofline(buf, sizeof(buf), (char*)&stream_ctx->command));
         return;
-    } else {
-        if (length > 0) {
-            (void)fwrite(bytes, 1, length, stream_ctx->F);
-            stream_ctx->received_length += length;
-        }
+    }
+    
+    if (length > 0) {
+        (void)fwrite(bytes, 1, length, stream_ctx->F);
+        stream_ctx->received_length += length;
+    }
 
-        /* if FIN present, process request through http 0.9 */
-        if (fin_or_event == picoquic_callback_stream_fin) {
-            char buf[256];
-            /* if data generated, just send it. Otherwise, just FIN the stream. */
-            fclose(stream_ctx->F);
-            stream_ctx->F = NULL;
-            ctx->nb_open_streams--;
-            fin_stream_id = stream_id;
+    /* if FIN present, process request through http 0.9 */
+    if (fin_or_event == picoquic_callback_stream_fin) {
+        char buf[256];
+        /* if data generated, just send it. Otherwise, just FIN the stream. */
+        fclose(stream_ctx->F);
+        stream_ctx->F = NULL;
+        ctx->nb_open_streams--;
+        fin_stream_id = stream_id;
 
-            fprintf(stdout, "Received file %s, after %d bytes, closing stream %d\n",
+        fprintf(stdout, "Received file %s, after %d bytes, closing stream %d\n",
                 strip_endofline(buf, sizeof(buf), (char*)&stream_ctx->command[4]),
                 (int)stream_ctx->received_length, stream_ctx->stream_id);
-        }
     }
 
     if (fin_stream_id != 0) {
