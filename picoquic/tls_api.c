@@ -34,6 +34,11 @@
 #include <stdio.h>
 #include <string.h>
 
+#define container_of(ptr, type, member) ((type *)((char *)(ptr) - offsetof(type, member)))
+
+#ifndef UNREFERENCED_PARAMETER
+#define UNREFERENCED_PARAMETER(x) (void)(x)
+#endif
 
 
 #define PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION 26
@@ -480,6 +485,9 @@ uint64_t picoquic_get_simulated_time_cb(ptls_get_time_t* self)
     return ((**pp_simulated_time) / 1000);
 }
 
+/*
+ * Verify certificate
+ */
 typedef struct {
     ptls_verify_certificate_t cb;
     picoquic_quic_t *quic;
@@ -502,8 +510,6 @@ static int verify_sign_callback(void *verify_ctx, ptls_iovec_t data, ptls_iovec_
 
     return ret;
 }
-
-#define container_of(ptr, type, member) ((type *)((char *)(ptr) - offsetof(type, member)))
 
 static int verify_certificate_callback(ptls_verify_certificate_t* _self, ptls_t* tls,
                                        int (**verify_sign)(void *verify_ctx, ptls_iovec_t data, ptls_iovec_t sign),
@@ -554,6 +560,63 @@ int picoquic_enable_custom_verify_certificate_callback(picoquic_quic_t* quic) {
     }
 }
 
+/* Key update callback: this is called by TLS whenever the session key has changed,
+ * from the function "setup_traffic_protection" in picotls.c.
+ *
+ * The macro generated callback struct is:
+ *     typedef struct st_ptls_update_traffic_key_t {
+ *      ret (*cb)(struct st_ptls_update_traffic_key_t * self, ptls_t *tls, int is_enc, size_t epoch, const void *secret);
+ *  } ptls_update_traffic_key_t;
+ *
+ * The parameters are defined as:
+ *  - self    -- classic callback structure in picotls, can be remapped to hold additional arguments.
+ *  - tls     -- the tls context of the connection
+ *  - is_enc  -- 0: decryption key, 1: decryption key
+ *  - epoch   -- 1: "c e traffic"
+ *            -- 2: "s hs traffic"
+ *            -- 2: "c hs traffic"
+ *            -- 3: "s ap traffic"
+ *            -- 3: "c ap traffic"
+ *  - secret  -- the expansion of the master secret with the label specific to the key epoch
+ *               and client or server mode.
+ */
+
+typedef struct st_picoquic_update_traffic_key_t {
+    int(*cb)(struct st_ptls_update_traffic_key_t * self, ptls_t *tls, int is_enc, size_t epoch, const void *secret);
+    picoquic_cnx_t *cnx;
+} picoquic_update_traffic_key_t;
+
+static int picoquic_update_traffic_key_callback(ptls_update_traffic_key_t * self, ptls_t *tls, int is_enc, size_t epoch, const void *secret)
+{
+    picoquic_cnx_t* cnx = (picoquic_cnx_t*)*ptls_get_data_ptr(tls);
+    UNREFERENCED_PARAMETER(self);
+    UNREFERENCED_PARAMETER(secret);
+
+    DBG_PRINTF("state:%d, is_client: %d, epoch: %d, is_enc: %d\n",
+        cnx->cnx_state, cnx->client_mode,  (int)epoch, is_enc);
+
+    /* For now, a simple hack to make sure the ptls_handle_message() API works */
+    if (cnx->current_receive_epoch != epoch && is_enc == 0 && (epoch == 2 || epoch == 3)){
+        cnx->current_receive_epoch = epoch;
+    }
+
+    return 0;
+}
+
+ptls_update_traffic_key_t * picoquic_set_update_traffic_key_callback() {
+    ptls_update_traffic_key_t * cb_st = (ptls_update_traffic_key_t *)malloc(sizeof(ptls_update_traffic_key_t));
+
+    if (cb_st != NULL) {
+        memset(cb_st, 0, sizeof(cb_st));
+        cb_st->cb = picoquic_update_traffic_key_callback;
+    }
+
+    return cb_st;
+}
+
+
+
+
 /* Definition of supported key exchange algorithms */
 
 ptls_key_exchange_algorithm_t *picoquic_key_exchanges[] = { &ptls_minicrypto_x25519, &ptls_openssl_secp256r1, NULL };
@@ -591,6 +654,8 @@ int picoquic_master_tlscontext(picoquic_quic_t* quic,
         ctx->cipher_suites = picoquic_cipher_suites; /* was: ptls_openssl_cipher_suites; */
 
         ctx->send_change_cipher_spec = 0;
+
+        ctx->update_traffic_key = picoquic_set_update_traffic_key_callback();
 
         if (quic->p_simulated_time == NULL) {
             ctx->get_time = &ptls_get_time;
@@ -1051,11 +1116,14 @@ int picoquic_tlsinput_segment(picoquic_cnx_t* cnx,
 {
     picoquic_tls_ctx_t* ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
     size_t inlen = 0, roff = 0;
+    size_t epoch = cnx->current_receive_epoch;
     int ret = 0;
 
     ptls_buffer_init(sendbuf, "", 0);
 
     /* Provide the data */
+
+#if 0
     while (roff < length && (ret == 0 || ret == PTLS_ERROR_IN_PROGRESS)) {
         inlen = length - roff;
         if (ptls_handshake_is_complete(ctx->tls)) {
@@ -1072,6 +1140,24 @@ int picoquic_tlsinput_segment(picoquic_cnx_t* cnx,
         ret = picoquic_connection_error(cnx, PICOQUIC_TLS_HANDSHAKE_FAILED);
     }
 
+#else
+    while (epoch == 0 && cnx->client_mode != 0 && roff < length && (ret == 0 || ret == PTLS_ERROR_IN_PROGRESS) ) {
+        /* Silly hack, to be removed when the new packet format is implemented */
+        size_t mess_len = 4 + (bytes[roff + 1] << 16) + (bytes[roff + 2] << 8) + bytes[roff + 3];
+        if (mess_len + roff <= length) {
+            ret = ptls_handle_message(ctx->tls, sendbuf, cnx->epoch_offsets, epoch, bytes + roff, mess_len, &ctx->handshake_properties);
+            DBG_PRINTF("State: %d, epoch: %d, inlen: %d, buf.len = %d, ret: %x\n", cnx->cnx_state, (int)epoch, mess_len, sendbuf->off, ret);
+            roff += mess_len;
+            epoch = cnx->current_receive_epoch;
+        }
+    }
+    if ((ret == 0 || ret == PTLS_ERROR_IN_PROGRESS) && roff < length) {
+        inlen = length - roff;
+        ret = ptls_handle_message(ctx->tls, sendbuf, cnx->epoch_offsets, epoch, bytes + roff, inlen, &ctx->handshake_properties);
+        DBG_PRINTF("State: %d, epoch: %d, inlen: %d, buf.len = %d, ret: %x\n", cnx->cnx_state, (int)epoch, inlen, sendbuf->off, ret);
+        roff += inlen;
+    }
+#endif
     *consumed = roff;
 
     return ret;
@@ -1094,7 +1180,11 @@ int picoquic_initialize_tls_stream(picoquic_cnx_t* cnx)
     }
 
     ptls_buffer_init(&sendbuf, "", 0);
+#if 0
     ret = ptls_handshake(ctx->tls, &sendbuf, NULL, NULL, &ctx->handshake_properties);
+#else
+    ret = ptls_handle_message(ctx->tls, &sendbuf, cnx->epoch_offsets, 0, NULL, 0, &ctx->handshake_properties);
+#endif
 
     if ((ret == 0 || ret == PTLS_ERROR_IN_PROGRESS)) {
         if (sendbuf.off > 0) {
@@ -1551,7 +1641,12 @@ int picoquic_setup_cleartext_aead_contexts(picoquic_cnx_t* cnx)
     return ret;
 }
 
-/* Input stream zero data to TLS context
+/* Input stream zero data to TLS context.
+ *
+ * TODO: processing now depends on the "epoch" in which packets have been received. That
+ * epoch should be passed through the ptls_handle_message() API that replaces ptls_handshake().
+ * The API has an "epoch offset" parameter that documents how many bytes of the
+ * should be sent at each epoch.
  */
 
 int picoquic_tls_stream_process(picoquic_cnx_t* cnx)

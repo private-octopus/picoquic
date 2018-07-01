@@ -418,6 +418,8 @@ typedef struct st_picoquic_cnx_t {
     uint64_t send_sequence;
     uint16_t psk_cipher_suite_id;
     picoquic_stream_head tls_stream;
+    size_t epoch_offsets[5]; /* documents the offset for the sending side of the tls_stream */
+    size_t current_receive_epoch; /* TODO: replace this by packet type once new API is tested */
 
     /* Liveness detection */
     uint64_t latest_progress_time; /* last local time at which the connection progressed */
