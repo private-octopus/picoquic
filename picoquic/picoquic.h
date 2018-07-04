@@ -103,6 +103,7 @@ typedef enum {
     picoquic_state_client_hrr_received,
     picoquic_state_client_init_resent,
     picoquic_state_server_init,
+    picoquic_state_server_handshake,
     picoquic_state_client_handshake_start,
     picoquic_state_client_handshake_progress,
     picoquic_state_handshake_failure,
@@ -160,8 +161,8 @@ typedef struct st_picoquic_stateless_packet_t {
 typedef enum {
     picoquic_packet_error = 0,
     picoquic_packet_version_negotiation,
-    picoquic_packet_client_initial,
-    picoquic_packet_server_stateless,
+    picoquic_packet_initial,
+    picoquic_packet_retry,
     picoquic_packet_handshake,
     picoquic_packet_0rtt_protected,
     picoquic_packet_1rtt_protected_phi0,

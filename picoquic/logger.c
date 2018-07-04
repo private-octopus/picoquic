@@ -158,6 +158,9 @@ char const* picoquic_log_state_name(picoquic_state_enum state)
     case picoquic_state_server_init: 
         state_name = "server_init"; 
         break;
+    case picoquic_state_server_handshake:
+        state_name = "server_handshake";
+        break;
     case picoquic_state_client_handshake_start: 
         state_name = "client_handshake_start"; 
         break;
@@ -214,11 +217,11 @@ char const* picoquic_log_ptype_name(picoquic_packet_type_enum ptype)
     case picoquic_packet_version_negotiation:
         ptype_name = "version negotiation";
         break;
-    case picoquic_packet_client_initial:
-        ptype_name = "client initial";
+    case picoquic_packet_initial:
+        ptype_name = "initial";
         break;
-    case picoquic_packet_server_stateless:
-        ptype_name = "server stateless";
+    case picoquic_packet_retry:
+        ptype_name = "retry";
         break;
     case picoquic_packet_handshake:
         ptype_name = "handshake";

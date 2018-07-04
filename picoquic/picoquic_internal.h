@@ -419,6 +419,7 @@ typedef struct st_picoquic_cnx_t {
     uint16_t psk_cipher_suite_id;
     picoquic_stream_head tls_stream;
     size_t epoch_offsets[5]; /* documents the offset for the sending side of the tls_stream */
+    size_t epoch_received[5]; /* documents the offset for the sending side of the tls_stream */
     size_t current_receive_epoch; /* TODO: replace this by packet type once new API is tested */
 
     /* Liveness detection */
@@ -561,6 +562,7 @@ typedef struct _picoquic_packet_header {
     uint64_t pn64;
     uint16_t payload_length;
     int version_index;
+    int epoch;
     unsigned int spin : 1;
     unsigned int spin_vec : 2;
     unsigned int has_spin_bit : 1;
@@ -676,8 +678,8 @@ int picoquic_decode_stream_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
 int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head* stream,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
 int picoquic_decode_crypto_hs_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
-    size_t bytes_max, size_t* consumed);
-int picoquic_prepare_crypto_hs_frame(picoquic_cnx_t* cnx,
+    size_t bytes_max, size_t* consumed, int epoch);
+int picoquic_prepare_crypto_hs_frame(picoquic_cnx_t* cnx, int epoch,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
 int picoquic_prepare_ack_frame(picoquic_cnx_t* cnx, uint64_t current_time,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
@@ -701,7 +703,7 @@ int picoquic_prepare_misc_frame(picoquic_misc_frame_header_t* misc_frame, uint8_
 /* send/receive */
 
 int picoquic_decode_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
-    size_t bytes_max, int restricted, uint64_t current_time);
+    size_t bytes_max, int epoch, uint64_t current_time);
 
 int picoquic_skip_frame(uint8_t* bytes, size_t bytes_max, size_t* consumed, int* pure_ack);
 

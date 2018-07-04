@@ -1704,6 +1704,37 @@ int ping_pong_test()
  */
 static char const* ticket_file_name = "resume_tests_tickets.bin";
 
+int session_resume_wait_for_ticket(picoquic_test_tls_api_ctx_t* test_ctx,
+    uint64_t * simulated_time) 
+{
+    int ret = 0;
+    uint64_t time_out = *simulated_time + 4000000;
+    int nb_trials = 0;
+    int nb_inactive = 0;
+
+    while (*simulated_time <time_out &&
+        test_ctx->cnx_client->cnx_state == picoquic_state_client_ready &&
+        test_ctx->cnx_server->cnx_state == picoquic_state_server_ready &&
+        test_ctx->qclient->p_first_ticket == NULL &&
+        nb_trials < 1024 &&
+        nb_inactive < 64 &&
+        ret == 0){
+        int was_active = 0;
+        nb_trials++;
+
+        ret = tls_api_one_sim_round(test_ctx, simulated_time, &was_active);
+
+        if (was_active) {
+            nb_inactive = 0;
+        }
+        else {
+            nb_inactive++;
+        }
+    }
+    
+    return ret;
+}
+
 int session_resume_test()
 {
     uint64_t simulated_time = 0;
@@ -1723,6 +1754,10 @@ int session_resume_test()
         }
 
         if (ret == 0) {
+            test_ctx->cnx_client->max_early_data_size = 0;
+        }
+
+        if (ret == 0) {
             ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
         }
 
@@ -1731,6 +1766,11 @@ int session_resume_test()
             if (picoquic_tls_is_psk_handshake(test_ctx->cnx_server) == 0 || picoquic_tls_is_psk_handshake(test_ctx->cnx_client) == 0) {
                 ret = -1;
             }
+        }
+
+        if (ret == 0 && i == 0) {
+            /* Before closing, wait for the session ticket to arrive */
+            ret = session_resume_wait_for_ticket(test_ctx, &simulated_time);
         }
 
         if (ret == 0) {
@@ -1819,15 +1859,21 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset)
                     int was_active = 0;
 
                     ret = tls_api_one_sim_round(test_ctx, &simulated_time, &was_active);
-
+#if 0
                     DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), connection %d draining error (0x%x).\n",
                         use_badcrypt, hardreset, i, ret);
+#endif
 
                     if (picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) && picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)) {
                         break;
                     }
                 }
             }
+        }
+
+        if (ret == 0 && i == 0) {
+            /* Before closing, wait for the session ticket to arrive */
+            ret = session_resume_wait_for_ticket(test_ctx, &simulated_time);
         }
 
         if (ret == 0) {
@@ -2095,10 +2141,15 @@ int spurious_retransmit_test()
  */
 
 static uint8_t clientHelloWrongKeyShare[] = {
+#if 0
     /* TLs Stream header, including offset and length */
     0x18, 0x00, 0x41, 0x29,
     /* TLS Record Header, end with 2 bytes length*/
     0x16, 0x03, 0x03, 0x01, 0x24,
+#else
+    /* TLs Stream header, including offset and length */
+    0x18, 0x00, 0x41, 0x24,
+#endif
     /* Handshake protocol header for CH, end with 3 bytes length */
     0x01, 0x00, 0x01, 0x20,
     /* CH length 73 + extensions 209 = 282, 0x0120 */
@@ -2208,7 +2259,8 @@ int wrong_keyshare_test()
 
     if (ret == 0) {
         ret = picoquic_decode_frames(cnx,
-            clientHelloWrongKeyShare, sizeof(clientHelloWrongKeyShare), 1, simulated_time);
+            clientHelloWrongKeyShare, sizeof(clientHelloWrongKeyShare), 
+            0 /* epoch = 0 for CI */, simulated_time);
 
         /* processing of client initial packet */
         if (ret == 0) {
@@ -2223,9 +2275,8 @@ int wrong_keyshare_test()
                 if (cnx->tls_stream.send_queue == NULL || cnx->tls_stream.send_queue->length == 0 || cnx->tls_stream.send_queue->bytes == NULL) {
                     DBG_PRINTF("%s,", "Empty TLS queue, length or bytes\n");
                     ret = -1;
-                } else if (cnx->tls_stream.send_queue->length <= 49 || cnx->tls_stream.send_queue->bytes[0] != 0x16 ||
-                    cnx->tls_stream.send_queue->bytes[5] != 0x02) {
-                    DBG_PRINTF("Wrong length (%d <= 49), bytes[0] (0x%02x vs 0x16) or bytes[5] (0x%02x vs 0x02)\n",
+                } else if (cnx->tls_stream.send_queue->length <= 49 || cnx->tls_stream.send_queue->bytes[0] != 0x02 ) {
+                    DBG_PRINTF("Wrong length (%d <= 49), bytes[0] (0x%02x vs 0x02)\n",
                         cnx->tls_stream.send_queue->length, cnx->tls_stream.send_queue->bytes[0], cnx->tls_stream.send_queue->bytes[5]);
                     ret = -1;
                 }
@@ -2275,10 +2326,15 @@ int wrong_keyshare_test()
 */
 
 static uint8_t clientHelloWrongTls[] = {
+#if 0
     /* TLS Stream header, including length */
     0x18, 0x00, 0x41, 0x29,
     /* TLS Record Header, end with 2 bytes length*/
     0x16, 0x03, 0x03, 0x01, 0x24,
+#else
+    /* TLS Stream header, including length */
+    0x18, 0x00, 0x41, 0x24,
+#endif
     /* Handshake protocol header for CH, end with 3 bytes length */
     0x01, 0x00, 0x01, 0x20,
     /* CH length 73 + extensions 209 = 282, 0x0120 */
@@ -2387,7 +2443,7 @@ int wrong_tls_version_test()
 
     if (ret == 0) {
         ret = picoquic_decode_frames(cnx,
-            clientHelloWrongTls, sizeof(clientHelloWrongTls), 1, simulated_time);
+            clientHelloWrongTls, sizeof(clientHelloWrongTls), 0 /* epoch = 0 for CI */, simulated_time);
 
         /* processing of client initial packet */
         if (ret == 0) {

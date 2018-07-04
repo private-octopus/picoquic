@@ -293,7 +293,7 @@ static int TlsStreamFrameOneTest(struct test_case_st* test)
 
     for (size_t i = 0; ret == 0 && i < test->list_size; i++) {
         if (0 != picoquic_decode_crypto_hs_frame(&cnx, test->list[i].packet,
-            test->list[i].packet_length, &consumed)) {
+            test->list[i].packet_length, &consumed, 2 /* epoch = 2 for handshake */)) {
             FAIL(test, "packet %" PRIst, i);
             ret = -1;
         }

@@ -1111,12 +1111,12 @@ static int picoquic_add_to_tls_stream(picoquic_cnx_t* cnx, const uint8_t* data, 
  *   May provide 1-RTT init
  */
 
-int picoquic_tlsinput_segment(picoquic_cnx_t* cnx,
+int picoquic_tlsinput_segment(picoquic_cnx_t* cnx, int epoch,
     uint8_t* bytes, size_t length, size_t* consumed, struct st_ptls_buffer_t* sendbuf)
 {
     picoquic_tls_ctx_t* ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
     size_t inlen = 0, roff = 0;
-    size_t epoch = cnx->current_receive_epoch;
+    size_t send_offset[5] = { 0, 0, 0, 0, 0 };
     int ret = 0;
 
     ptls_buffer_init(sendbuf, "", 0);
@@ -1141,21 +1141,30 @@ int picoquic_tlsinput_segment(picoquic_cnx_t* cnx,
     }
 
 #else
+#if 0
+    if (epoch == 2 && cnx->client_mode != 0 && cnx->cnx_state <= picoquic_state_client_handshake_start) {
+        epoch = 0;
+    }
     while (epoch == 0 && cnx->client_mode != 0 && roff < length && (ret == 0 || ret == PTLS_ERROR_IN_PROGRESS) ) {
         /* Silly hack, to be removed when the new packet format is implemented */
         size_t mess_len = 4 + (bytes[roff + 1] << 16) + (bytes[roff + 2] << 8) + bytes[roff + 3];
         if (mess_len + roff <= length) {
-            ret = ptls_handle_message(ctx->tls, sendbuf, cnx->epoch_offsets, epoch, bytes + roff, mess_len, &ctx->handshake_properties);
-            DBG_PRINTF("State: %d, epoch: %d, inlen: %d, buf.len = %d, ret: %x\n", cnx->cnx_state, (int)epoch, mess_len, sendbuf->off, ret);
+            ret = ptls_handle_message(ctx->tls, sendbuf, cnx->epoch_offsets, (size_t)epoch, bytes + roff, mess_len, &ctx->handshake_properties);
+            DBG_PRINTF("State: %d, epoch: %d, inlen: %d, buf.len = %d, ret: %x\n", cnx->cnx_state, epoch, mess_len, sendbuf->off, ret);
             roff += mess_len;
             epoch = cnx->current_receive_epoch;
         }
     }
+#endif
     if ((ret == 0 || ret == PTLS_ERROR_IN_PROGRESS) && roff < length) {
         inlen = length - roff;
-        ret = ptls_handle_message(ctx->tls, sendbuf, cnx->epoch_offsets, epoch, bytes + roff, inlen, &ctx->handshake_properties);
-        DBG_PRINTF("State: %d, epoch: %d, inlen: %d, buf.len = %d, ret: %x\n", cnx->cnx_state, (int)epoch, inlen, sendbuf->off, ret);
+        ret = ptls_handle_message(ctx->tls, sendbuf, send_offset, epoch, bytes + roff, inlen, &ctx->handshake_properties);
+        DBG_PRINTF("State: %d, is_client: %d, epoch: %d, inlen: %d, buf.len = %d, ret: %x\n", 
+            cnx->cnx_state, cnx->client_mode, (int)epoch, inlen, sendbuf->off, ret);
         roff += inlen;
+        for (int i = 0; i < 5; i++) {
+            cnx->epoch_offsets[i] += send_offset[i];
+        }
     }
 #endif
     *consumed = roff;
@@ -1665,9 +1674,24 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
         (ret == 0 || ret == PTLS_ERROR_IN_PROGRESS) && data != NULL && data->offset <= cnx->tls_stream.consumed_offset) {
         size_t start = (size_t)(cnx->tls_stream.consumed_offset - data->offset);
         size_t consumed = 0;
+        size_t epoch_data = 0;
+        int epoch = 0;
 
-        ret = picoquic_tlsinput_segment(cnx, data->bytes + start,
-            data->length - start, &consumed, &sendbuf);
+        /* Update the current epoch */
+        while (cnx->epoch_received[epoch] <= cnx->tls_stream.consumed_offset && epoch < 3) {
+            DBG_PRINTF("received[%d] = %d <= consumed = %d\n",
+                epoch, (int)cnx->epoch_received[epoch], (int)cnx->tls_stream.consumed_offset);
+            epoch++;
+        }
+
+        if (data->length + data->offset > cnx->epoch_received[epoch]) {
+            epoch_data = cnx->epoch_received[epoch] - (size_t)cnx->tls_stream.consumed_offset;
+        } else {
+            epoch_data = data->length - start;
+        }
+
+        ret = picoquic_tlsinput_segment(cnx, epoch, data->bytes + start,
+            epoch_data, &consumed, &sendbuf);
 
         cnx->tls_stream.consumed_offset += consumed;
 
@@ -1700,6 +1724,7 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
             }
             break;
         case picoquic_state_server_init:
+        case picoquic_state_server_handshake:
             /* Extract and install the server 0-RTT and 1-RTT key */
             picoquic_setup_0RTT_aead_contexts(cnx, 1);
             /* If client authentication is activated, the client sends the certificates with its `Finished` packet.
@@ -1752,7 +1777,8 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
         cnx->cnx_state = picoquic_state_server_send_hrr;
     }
     else if (ret == PTLS_ERROR_IN_PROGRESS &&
-        cnx->cnx_state == picoquic_state_server_init)
+        (cnx->cnx_state == picoquic_state_server_init ||
+            cnx->cnx_state == picoquic_state_server_handshake))
     {
         picoquic_tls_ctx_t* ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
 

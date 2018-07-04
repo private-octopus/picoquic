@@ -810,7 +810,7 @@ int picoquic_is_tls_stream_ready(picoquic_cnx_t* cnx)
 
 
 int picoquic_decode_crypto_hs_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
-    size_t bytes_max, size_t* consumed)
+    size_t bytes_max, size_t* consumed, int epoch)
 {
     int ret = 0;
     uint64_t data_length = 0;
@@ -847,12 +847,17 @@ int picoquic_decode_crypto_hs_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
         ret = picoquic_queue_network_input(&cnx->tls_stream, (size_t)offset,
             bytes + *consumed, (size_t)data_length, &new_data_available);
         *consumed += (size_t)data_length;
+        if (epoch < 5) {
+            if (cnx->epoch_received[epoch] < (size_t)(offset + data_length)) {
+                cnx->epoch_received[epoch] = (size_t)(offset + data_length);
+            }
+        }
     }
 
     return ret;
 }
 
-int picoquic_prepare_crypto_hs_frame(picoquic_cnx_t* cnx, 
+int picoquic_prepare_crypto_hs_frame(picoquic_cnx_t* cnx, int epoch,
     uint8_t* bytes, size_t bytes_max, size_t* consumed)
 {
     int ret = 0;
@@ -864,6 +869,8 @@ int picoquic_prepare_crypto_hs_frame(picoquic_cnx_t* cnx,
         size_t byte_index = 0;
         size_t l_off = 0;
         size_t length = 0;
+        int next_epoch = (epoch < 4) ? epoch + 1 : epoch;
+        size_t next_epoch_offset = cnx->epoch_offsets[next_epoch];
 
         bytes[byte_index++] = picoquic_frame_type_crypto_hs;
 
@@ -880,17 +887,23 @@ int picoquic_prepare_crypto_hs_frame(picoquic_cnx_t* cnx,
             /* Compute the length */
             size_t space = bytes_max - byte_index;
 
-            if (space < 2 || stream->send_queue == NULL) {
+            /* TODO: check logic here -- I was tired when I wrote that */
+
+            if (space < 2 || stream->send_queue == NULL || stream->sent_offset >= next_epoch_offset) {
                 length = 0;
-            }
-            else {
+            } else {
                 /* This is going to be a trial and error process */
                 size_t l_len = 0;
-                size_t available = (size_t)(stream->send_queue->length - stream->send_queue->offset);
+                size_t available = stream->send_queue->length - stream->send_queue->offset;
+     
+                /* Adjust to limit content to epoch */
+                if (stream->sent_offset + available > next_epoch_offset) {
+                    available = next_epoch_offset - stream->sent_offset;
+                }
 
                 length = available;
                 /* Trial encoding */
-                l_len = picoquic_varint_encode(bytes + byte_index, available,
+                l_len = picoquic_varint_encode(bytes + byte_index, space,
                     (uint64_t)length);
 
                 if (length + l_len >= space) {
@@ -902,7 +915,7 @@ int picoquic_prepare_crypto_hs_frame(picoquic_cnx_t* cnx,
                     else {
                         /* New encoding with appropriate length */
                         length = space - l_len;
-                        l_len = picoquic_varint_encode(bytes + byte_index, available,
+                        l_len = picoquic_varint_encode(bytes + byte_index, space,
                             (uint64_t)length);
                     }
                 }
@@ -1348,7 +1361,7 @@ void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t* cnx, picoquic_pa
 
 static picoquic_packet* picoquic_process_ack_range(
     picoquic_cnx_t* cnx, uint64_t highest, uint64_t range, picoquic_packet* p,
-    uint64_t current_time, int restricted, int* ret)
+    uint64_t current_time, int epoch, int* ret)
 {
     /* Compare the range to the retransmit queue */
     while (p != NULL && range > 0) {
@@ -1356,6 +1369,8 @@ static picoquic_packet* picoquic_process_ack_range(
             p = p->next_packet;
         } else {
             if (p->sequence_number == highest) {
+#if 0
+                /* TODO: check ack range per epoch */
                 if (restricted) {
                     /* check that the packet was sent in clear text */
                     if (picoquic_is_packet_encrypted(p->ptype)) {
@@ -1366,6 +1381,7 @@ static picoquic_packet* picoquic_process_ack_range(
                         break;
                     }
                 }
+#endif
                 /* TODO: RTT Estimate */
                 picoquic_packet* next = p->next_packet;
                 picoquic_path_t * old_path = p->send_path;
@@ -1400,7 +1416,7 @@ static picoquic_packet* picoquic_process_ack_range(
 }
 
 int picoquic_decode_ack_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
-    size_t bytes_max, size_t* consumed, uint64_t current_time, int restricted)
+    size_t bytes_max, size_t* consumed, uint64_t current_time, int epoch)
 {
     int ret;
     uint64_t num_block;
@@ -1417,7 +1433,7 @@ int picoquic_decode_ack_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
     } else {
         size_t byte_index = *consumed;
 
-        /* Attempt to update the RTT */
+        /* Attempt to update the RTT */ /* TODO: different ack spaces for different epochs */
         picoquic_packet* top_packet = picoquic_update_rtt(cnx, largest, current_time, ack_delay);
 
         while (ret == 0) {
@@ -1452,7 +1468,7 @@ int picoquic_decode_ack_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
             }
 
             top_packet = picoquic_process_ack_range(cnx, largest, range,
-                top_packet, current_time, restricted, &ret);
+                top_packet, current_time, epoch, &ret);
 
             if (ret != 0) {
                 break;
@@ -2102,7 +2118,7 @@ int picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
  */
 
 int picoquic_decode_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
-    size_t bytes_max, int restricted, uint64_t current_time)
+    size_t bytes_max, int epoch, uint64_t current_time)
 {
     int ret = 0;
     size_t byte_index = 0;
@@ -2112,7 +2128,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
         size_t consumed = 0;
 
         if (first_byte >= picoquic_frame_type_stream_range_min && first_byte <= picoquic_frame_type_stream_range_max) {
-            if (restricted != 0) {
+            if (epoch != 1 && epoch != 3) {
                 DBG_PRINTF("Data frame (0x%x), when only TLS stream is expected", first_byte);
                 ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION);
             } else {
@@ -2123,10 +2139,10 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
             }
         } else if (first_byte == picoquic_frame_type_ack) {
             ret = picoquic_decode_ack_frame(cnx, bytes + byte_index,
-                bytes_max - byte_index, &consumed, current_time, restricted);
+                bytes_max - byte_index, &consumed, current_time, epoch);
             byte_index += consumed;
         } else {
-            if (restricted && first_byte != picoquic_frame_type_padding 
+            if (epoch != 1 && epoch != 3 && first_byte != picoquic_frame_type_padding 
                 && first_byte != picoquic_frame_type_path_challenge
                 && first_byte != picoquic_frame_type_path_response
                 && first_byte != picoquic_frame_type_connection_close
@@ -2217,7 +2233,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
                     ack_needed = 0;
                     break;
                 case picoquic_frame_type_crypto_hs:
-                    ret = picoquic_decode_crypto_hs_frame(cnx, bytes + byte_index, bytes_max - byte_index, &consumed);
+                    ret = picoquic_decode_crypto_hs_frame(cnx, bytes + byte_index, bytes_max - byte_index, &consumed, epoch);
                     byte_index += consumed;
                     ack_needed = 1;
                     break;

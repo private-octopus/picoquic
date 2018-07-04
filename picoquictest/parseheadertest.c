@@ -67,10 +67,13 @@ static picoquic_packet_header hinitial10 = {
     0x50435130,
     20,
     20,
-    picoquic_packet_client_initial,
+    picoquic_packet_initial,
     0xFFFFFFFF00000000ull,
     0, 
     0x400,
+    0,
+    0,
+    0,
     0,
     0
 };
@@ -92,10 +95,13 @@ static picoquic_packet_header hinitial10_l = {
     0x50435130,
     24,
     24,
-    picoquic_packet_client_initial,
+    picoquic_packet_initial,
     0xFFFFFFFF00000000ull,
     0,
     0x400,
+    0,
+    0,
+    0,
     0,
     0
 };
@@ -132,6 +138,9 @@ static picoquic_packet_header hvnego10 = {
     0,
     PICOQUIC_MAX_PACKET_SIZE - 18,
     0,
+    0,
+    0,
+    0,
     0
 };
 
@@ -153,7 +162,10 @@ static picoquic_packet_header hphi0_c_32 = {
     0,
     PICOQUIC_MAX_PACKET_SIZE - 9,
     0,
-    0
+    3,
+    0,
+    0,
+    1
 };
 
 static uint8_t packet_short_phi0_c_32_spin[] = {
@@ -174,6 +186,9 @@ static picoquic_packet_header hphi0_c_32_spin = {
     0,
     PICOQUIC_MAX_PACKET_SIZE - 9, 
     0,
+    3,
+    1,
+    0,
     1
 };
 
@@ -193,6 +208,9 @@ static picoquic_packet_header hphi0_noc_32 = {
     0xFFFFFFFF00000000ull,
     0,
     PICOQUIC_MAX_PACKET_SIZE - 1,
+    0,
+    3,
+    0,
     0,
     0
 };
@@ -280,6 +298,8 @@ int parseheadertest()
         } else if (ph.ptype != test_entries[i].ph->ptype) {
             ret = -1;
         } else if (ph.spin != test_entries[i].ph->spin) {
+            ret = -1;
+        } else if (ph.epoch != test_entries[i].ph->epoch) {
             ret = -1;
         }
     }
@@ -430,7 +450,7 @@ int test_packet_encrypt_one(
         expected_header.payload_length = packet->length - packet->offset;
 
         if (packet->ptype == picoquic_packet_0rtt_protected ||
-            packet->ptype == picoquic_packet_client_initial) {
+            packet->ptype == picoquic_packet_initial) {
             expected_header.dest_cnx_id = cnx_client->initial_cnxid;
         }
         else {
@@ -509,7 +529,7 @@ int packet_enc_dec_test()
     if (ret == 0) {
         ret = test_packet_encrypt_one(
             (struct sockaddr *) &test_addr_c,
-            cnx_client, qserver, NULL, picoquic_packet_client_initial, 1256);
+            cnx_client, qserver, NULL, picoquic_packet_initial, 1256);
     }
     /* If that work, update the connection context */
     if (ret == 0) {

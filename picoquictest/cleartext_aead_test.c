@@ -140,7 +140,7 @@ int cleartext_aead_test()
     if (ret == 0) {
         cleartext_aead_packet_init_header(&ph_init,
             cnx_client->initial_cnxid, seqnum, cnx_client->proposed_version,
-            picoquic_packet_client_initial);
+            picoquic_packet_initial);
         cleartext_aead_init_packet(&ph_init, clear_text, clear_length);
 
         /* AEAD Encrypt, to the send buffer */
