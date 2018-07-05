@@ -676,7 +676,7 @@ ptls_update_traffic_key_t * picoquic_set_update_traffic_key_callback() {
     ptls_update_traffic_key_t * cb_st = (ptls_update_traffic_key_t *)malloc(sizeof(ptls_update_traffic_key_t));
 
     if (cb_st != NULL) {
-        memset(cb_st, 0, sizeof(cb_st));
+        memset(cb_st, 0, sizeof(ptls_update_traffic_key_t));
         cb_st->cb = picoquic_update_traffic_key_callback;
     }
 
