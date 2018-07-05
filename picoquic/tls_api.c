@@ -34,6 +34,11 @@
 #include <stdio.h>
 #include <string.h>
 
+#define container_of(ptr, type, member) ((type *)((char *)(ptr) - offsetof(type, member)))
+
+#ifndef UNREFERENCED_PARAMETER
+#define UNREFERENCED_PARAMETER(x) (void)(x)
+#endif
 
 
 #define PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION 26
@@ -45,7 +50,11 @@
 
 #define PICOQUIC_LABEL_HANDSHAKE_CLIENT "QUIC client hs"
 #define PICOQUIC_LABEL_HANDSHAKE_SERVER "QUIC server hs"
-#define PICOQUIC_QUIC_BASE_LABEL "QUIC "
+
+#define PICOQUIC_LABEL_INITIAL_CLIENT "client in"
+#define PICOQUIC_LABEL_INITIAL_SERVER "server in"
+
+#define PICOQUIC_QUIC_BASE_LABEL "quic "
 
 typedef struct st_picoquic_tls_ctx_t {
     ptls_t* tls;
@@ -72,6 +81,8 @@ size_t picoquic_aead_decrypt_generic(uint8_t* output, uint8_t* input, size_t inp
 int picoquic_server_setup_ticket_aead_contexts(picoquic_quic_t* quic,
     ptls_context_t* tls_ctx,
     const uint8_t* secret, size_t secret_length);
+
+static void picoquic_setup_cleartext_aead_salt(size_t version_index, ptls_iovec_t* salt);
 
 /*
  * Make sure that openssl is properly initialized
@@ -480,6 +491,9 @@ uint64_t picoquic_get_simulated_time_cb(ptls_get_time_t* self)
     return ((**pp_simulated_time) / 1000);
 }
 
+/*
+ * Verify certificate
+ */
 typedef struct {
     ptls_verify_certificate_t cb;
     picoquic_quic_t *quic;
@@ -502,8 +516,6 @@ static int verify_sign_callback(void *verify_ctx, ptls_iovec_t data, ptls_iovec_
 
     return ret;
 }
-
-#define container_of(ptr, type, member) ((type *)((char *)(ptr) - offsetof(type, member)))
 
 static int verify_certificate_callback(ptls_verify_certificate_t* _self, ptls_t* tls,
                                        int (**verify_sign)(void *verify_ctx, ptls_iovec_t data, ptls_iovec_t sign),
@@ -554,6 +566,211 @@ int picoquic_enable_custom_verify_certificate_callback(picoquic_quic_t* quic) {
     }
 }
 
+/* set key from secret: this is used to create AEAD contexts and PN encoding contexts
+ * after a key update callback, and also to create the initial keys from a locally
+ * computed secret
+ */
+static int picoquic_set_aead_from_secret(void ** v_aead,ptls_cipher_suite_t * cipher, int is_enc, const void *secret)
+{
+    int ret = 0;
+
+    if (*v_aead != NULL) {
+        ptls_aead_free((ptls_aead_context_t*)v_aead);
+    }
+
+    if ((*v_aead = ptls_aead_new(cipher->aead, cipher->hash, is_enc, secret, PICOQUIC_QUIC_BASE_LABEL)) == NULL) {
+        ret = PTLS_ERROR_NO_MEMORY;
+    }
+
+    return ret;
+}
+
+static int picoquic_set_pn_enc_from_secret(void ** v_pn_enc, ptls_cipher_suite_t * cipher, int is_enc, const void *secret)
+{
+    uint8_t pnekey[PTLS_MAX_SECRET_SIZE];
+    int ret;
+
+    if (*v_pn_enc != NULL) {
+        ptls_cipher_free((ptls_cipher_context_t *)*v_pn_enc);
+        *v_pn_enc = NULL;
+    }
+
+    if ((ret = ptls_hkdf_expand_label(cipher->hash, pnekey, 
+        cipher->aead->ctr_cipher->key_size, ptls_iovec_init(secret, cipher->hash->digest_size), 
+        "pn", ptls_iovec_init(NULL, 0), PICOQUIC_QUIC_BASE_LABEL)) == 0) {
+        if ((*v_pn_enc = ptls_cipher_new(cipher->aead->ctr_cipher, is_enc, pnekey)) == NULL) {
+            ret = PTLS_ERROR_NO_MEMORY;
+        }
+    }
+    
+    return ret;
+}
+
+
+static int picoquic_set_key_from_secret(picoquic_cnx_t* cnx, ptls_cipher_suite_t * cipher, int is_enc, size_t epoch, const void *secret)
+{
+    int ret = 0;
+    picoquic_crypto_context_t * ctx = &cnx->crypto_context[epoch];
+
+    if (is_enc != 0) {
+        ret = picoquic_set_aead_from_secret(&ctx->aead_encrypt, cipher, is_enc, secret);
+        if (ret == 0) {
+            ret = picoquic_set_aead_from_secret(&ctx->aead_de_encrypt, cipher, 0, secret);
+        }
+        if (ret == 0) {
+            ret = picoquic_set_pn_enc_from_secret(&ctx->pn_enc, cipher, is_enc, secret);
+        }
+    } else {
+        ret = picoquic_set_aead_from_secret(&ctx->aead_decrypt, cipher, is_enc, secret);
+        
+        if (ret == 0) {
+            ret = picoquic_set_pn_enc_from_secret(&ctx->pn_dec, cipher, is_enc, secret);
+        }
+    }
+
+    return ret;
+}
+
+
+/* Key update callback: this is called by TLS whenever the session key has changed,
+ * from the function "setup_traffic_protection" in picotls.c.
+ *
+ * The macro generated callback struct is:
+ *     typedef struct st_ptls_update_traffic_key_t {
+ *      ret (*cb)(struct st_ptls_update_traffic_key_t * self, ptls_t *tls, int is_enc, size_t epoch, const void *secret);
+ *  } ptls_update_traffic_key_t;
+ *
+ * The parameters are defined as:
+ *  - self    -- classic callback structure in picotls, can be remapped to hold additional arguments.
+ *  - tls     -- the tls context of the connection
+ *  - is_enc  -- 0: decryption key, 1: decryption key
+ *  - epoch   -- 1: "c e traffic"
+ *            -- 2: "s hs traffic"
+ *            -- 2: "c hs traffic"
+ *            -- 3: "s ap traffic"
+ *            -- 3: "c ap traffic"
+ *  - secret  -- the expansion of the master secret with the label specific to the key epoch
+ *               and client or server mode.
+ */
+
+typedef struct st_picoquic_update_traffic_key_t {
+    int(*cb)(struct st_ptls_update_traffic_key_t * self, ptls_t *tls, int is_enc, size_t epoch, const void *secret);
+    picoquic_cnx_t *cnx;
+} picoquic_update_traffic_key_t;
+
+static int picoquic_update_traffic_key_callback(ptls_update_traffic_key_t * self, ptls_t *tls, int is_enc, size_t epoch, const void *secret)
+{
+    picoquic_cnx_t* cnx = (picoquic_cnx_t*)*ptls_get_data_ptr(tls);
+    ptls_cipher_suite_t * cipher = ptls_get_cipher(tls);
+    UNREFERENCED_PARAMETER(self);
+
+    int ret = picoquic_set_key_from_secret(cnx, cipher, is_enc, epoch, secret);
+
+    DBG_PRINTF("state:%d, is_client: %d, epoch: %d, is_enc: %d, ret:0x%x\n",
+        cnx->cnx_state, cnx->client_mode,  (int)epoch, is_enc, ret);
+
+    return ret;
+}
+
+ptls_update_traffic_key_t * picoquic_set_update_traffic_key_callback() {
+    ptls_update_traffic_key_t * cb_st = (ptls_update_traffic_key_t *)malloc(sizeof(ptls_update_traffic_key_t));
+
+    if (cb_st != NULL) {
+        memset(cb_st, 0, sizeof(cb_st));
+        cb_st->cb = picoquic_update_traffic_key_callback;
+    }
+
+    return cb_st;
+}
+
+int picoquic_setup_initial_traffic_keys(picoquic_cnx_t* cnx)
+{
+    int ret = 0;
+    uint8_t master_secret[256]; /* secret_max */
+    uint8_t cnx_id_serialized[PICOQUIC_CONNECTION_ID_MAX_SIZE]; /* serialized cnx_id */
+    ptls_cipher_suite_t cipher = { 0, &ptls_openssl_aes128gcm, &ptls_openssl_sha256 };
+    ptls_iovec_t salt;
+    ptls_iovec_t ikm;
+    uint8_t client_secret[256];
+    uint8_t server_secret[256];
+    uint8_t *secret1, *secret2;
+    ptls_iovec_t prk;
+
+
+    ikm.len = picoquic_format_connection_id(cnx_id_serialized, PICOQUIC_CONNECTION_ID_MAX_SIZE, 
+        cnx->initial_cnxid);
+    ikm.base = cnx_id_serialized;
+    picoquic_setup_cleartext_aead_salt(cnx->version_index, &salt);
+
+    /* Extract the master key -- key length will be 32 per SHA256 */
+    ret = ptls_hkdf_extract(cipher.hash, master_secret, salt, ikm);
+    if (ret == 0) {
+        prk.base = master_secret;
+        prk.len = cipher.hash->digest_size;
+
+        /* Get the client secret */
+        ret = ptls_hkdf_expand_label(cipher.hash, client_secret, cipher.hash->digest_size,
+            prk, PICOQUIC_LABEL_INITIAL_CLIENT, ptls_iovec_init(NULL, 0), 
+            PICOQUIC_QUIC_BASE_LABEL);
+
+        if (ret == 0) {
+            /* Get the server secret */
+            ret = ptls_hkdf_expand_label(cipher.hash, server_secret, cipher.hash->digest_size,
+                prk, PICOQUIC_LABEL_INITIAL_SERVER, ptls_iovec_init(NULL, 0), 
+                PICOQUIC_QUIC_BASE_LABEL);
+        }
+    }
+
+    if (ret == 0) {
+        if (!cnx->client_mode) {
+            secret1 = server_secret;
+            secret2 = client_secret;
+        }
+        else {
+            secret1 = client_secret;
+            secret2 = server_secret;
+        }
+
+        if (ret == 0) {
+            ret = picoquic_set_key_from_secret(cnx, &cipher, 1, 0, secret1);
+        }
+
+        if (ret == 0) {
+            ret = picoquic_set_key_from_secret(cnx, &cipher, 0, 0, secret2);
+        }
+    }
+
+    return ret;
+}
+
+void picoquic_crypto_context_free(picoquic_crypto_context_t * ctx)
+{
+    if (ctx->aead_encrypt != NULL) {
+        ptls_aead_free((ptls_aead_context_t *)ctx->aead_encrypt);
+        ctx->aead_encrypt = NULL;
+    }
+
+    if (ctx->aead_decrypt != NULL) {
+        ptls_aead_free((ptls_aead_context_t *)ctx->aead_decrypt);
+        ctx->aead_decrypt = NULL;
+    }
+
+    if (ctx->aead_de_encrypt != NULL) {
+        ptls_aead_free((ptls_aead_context_t *)ctx->aead_de_encrypt);
+        ctx->aead_de_encrypt = NULL;
+    }
+
+    if (ctx->pn_enc != NULL) {
+        ptls_cipher_free((ptls_cipher_context_t *)ctx->pn_enc);
+        ctx->pn_enc = NULL;
+    }
+
+    if (ctx->pn_dec != NULL) {
+        ptls_cipher_free((ptls_cipher_context_t *)ctx->pn_dec);
+        ctx->pn_dec = NULL;
+    }
+}
+
 /* Definition of supported key exchange algorithms */
 
 ptls_key_exchange_algorithm_t *picoquic_key_exchanges[] = { &ptls_minicrypto_x25519, &ptls_openssl_secp256r1, NULL };
@@ -591,6 +808,8 @@ int picoquic_master_tlscontext(picoquic_quic_t* quic,
         ctx->cipher_suites = picoquic_cipher_suites; /* was: ptls_openssl_cipher_suites; */
 
         ctx->send_change_cipher_spec = 0;
+
+        ctx->update_traffic_key = picoquic_set_update_traffic_key_callback();
 
         if (quic->p_simulated_time == NULL) {
             ctx->get_time = &ptls_get_time;
@@ -984,6 +1203,54 @@ int picoquic_tls_is_psk_handshake(picoquic_cnx_t* cnx)
     return ret;
 }
 
+
+/*
+* Sending data on the crypto stream.
+*/
+
+static int picoquic_add_to_tls_stream(picoquic_cnx_t* cnx, const uint8_t* data, size_t length)
+{
+    int ret = 0;
+    picoquic_stream_head* stream = &cnx->tls_stream;
+
+    if (ret == 0 && length > 0) {
+        picoquic_stream_data* stream_data = (picoquic_stream_data*)malloc(sizeof(picoquic_stream_data));
+
+        if (stream_data == 0) {
+            ret = -1;
+        }
+        else {
+            stream_data->bytes = (uint8_t*)malloc(length);
+
+            if (stream_data->bytes == NULL) {
+                free(stream_data);
+                stream_data = NULL;
+                ret = -1;
+            }
+            else {
+                picoquic_stream_data** pprevious = &stream->send_queue;
+                picoquic_stream_data* next = stream->send_queue;
+
+                memcpy(stream_data->bytes, data, length);
+                stream_data->length = length;
+                stream_data->offset = 0;
+                stream_data->next_stream_data = NULL;
+
+                while (next != NULL) {
+                    pprevious = &next->next_stream_data;
+                    next = next->next_stream_data;
+                }
+
+                *pprevious = stream_data;
+            }
+        }
+
+        picoquic_cnx_set_next_wake_time(cnx, picoquic_get_quic_time(cnx->quic));
+    }
+
+    return ret;
+}
+
 /*
  * Arrival of a handshake item (frame 0) in a packet of type T.
  * This triggers an optional progress of the connection.
@@ -998,30 +1265,27 @@ int picoquic_tls_is_psk_handshake(picoquic_cnx_t* cnx)
  *   May provide 1-RTT init
  */
 
-int picoquic_tlsinput_segment(picoquic_cnx_t* cnx,
+int picoquic_tlsinput_segment(picoquic_cnx_t* cnx, int epoch,
     uint8_t* bytes, size_t length, size_t* consumed, struct st_ptls_buffer_t* sendbuf)
 {
     picoquic_tls_ctx_t* ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
     size_t inlen = 0, roff = 0;
+    size_t send_offset[5] = { 0, 0, 0, 0, 0 };
     int ret = 0;
 
     ptls_buffer_init(sendbuf, "", 0);
 
     /* Provide the data */
-    while (roff < length && (ret == 0 || ret == PTLS_ERROR_IN_PROGRESS)) {
-        inlen = length - roff;
-        if (ptls_handshake_is_complete(ctx->tls)) {
-            ret = ptls_receive(ctx->tls, sendbuf, bytes + roff, &inlen);
-        } else {
-            ret = ptls_handshake(ctx->tls, sendbuf, bytes + roff, &inlen, &ctx->handshake_properties);
-        }
-        roff += inlen;
-    }
 
-    if ((ret != 0 && ret != PTLS_ERROR_IN_PROGRESS && ret != PTLS_ERROR_STATELESS_RETRY) || length != roff)
-    {
-        DBG_PRINTF("Handshake packet causes error %d (%x), %d bytes remaining\n", ret, ret, (int)(length - roff));
-        ret = picoquic_connection_error(cnx, PICOQUIC_TLS_HANDSHAKE_FAILED);
+    if ((ret == 0 || ret == PTLS_ERROR_IN_PROGRESS) && roff < length) {
+        inlen = length - roff;
+        ret = ptls_handle_message(ctx->tls, sendbuf, send_offset, epoch, bytes + roff, inlen, &ctx->handshake_properties);
+        DBG_PRINTF("State: %d, is_client: %d, epoch: %d, inlen: %d, buf.len = %d, ret: %x\n", 
+            cnx->cnx_state, cnx->client_mode, (int)epoch, inlen, sendbuf->off, ret);
+        roff += inlen;
+        for (int i = 0; i < 5; i++) {
+            cnx->epoch_offsets[i] += send_offset[i];
+        }
     }
 
     *consumed = roff;
@@ -1029,7 +1293,7 @@ int picoquic_tlsinput_segment(picoquic_cnx_t* cnx,
     return ret;
 }
 
-int picoquic_initialize_stream_zero(picoquic_cnx_t* cnx)
+int picoquic_initialize_tls_stream(picoquic_cnx_t* cnx)
 {
     int ret = 0;
     struct st_ptls_buffer_t sendbuf;
@@ -1046,15 +1310,14 @@ int picoquic_initialize_stream_zero(picoquic_cnx_t* cnx)
     }
 
     ptls_buffer_init(&sendbuf, "", 0);
-    ret = ptls_handshake(ctx->tls, &sendbuf, NULL, NULL, &ctx->handshake_properties);
+
+    ret = ptls_handle_message(ctx->tls, &sendbuf, cnx->epoch_offsets, 0, NULL, 0, &ctx->handshake_properties);
 
     if ((ret == 0 || ret == PTLS_ERROR_IN_PROGRESS)) {
         if (sendbuf.off > 0) {
-            ret = picoquic_add_to_stream(cnx, 0, sendbuf.base, sendbuf.off, 0);
+            ret = picoquic_add_to_tls_stream(cnx, sendbuf.base, sendbuf.off);
         }
         ret = 0;
-
-        picoquic_setup_0RTT_aead_contexts(cnx, 0);
     } else {
         ret = -1;
     }
@@ -1222,94 +1485,6 @@ void * picoquic_setup_test_aead_context(int is_encrypt, const uint8_t * secret)
     return ret;
 }
 
-/* Computation of the encryption and decryption methods for 0-RTT data */
-
-int picoquic_setup_0RTT_aead_contexts(picoquic_cnx_t* cnx, int is_server)
-{
-    int ret = 0;
-    uint8_t secret[256]; /* secret_max */
-    picoquic_tls_ctx_t* ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
-    ptls_cipher_suite_t* cipher = ptls_get_cipher(ctx->tls);
-
-    if (cipher == NULL) {
-        ret = -1;
-    } else if (cipher->hash->digest_size > sizeof(secret)) {
-        ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
-    } else {
-        /* Set up the encryption AEAD */
-        ret = ptls_export_secret(ctx->tls, secret, cipher->hash->digest_size,
-            PICOQUIC_LABEL_0RTT, ptls_iovec_init(NULL, 0), 1);
-
-        if (ret == 0 && is_server == 0) {
-            cnx->aead_0rtt_encrypt_ctx = (void*)
-                picoquic_aead_new(cipher->aead, cipher->hash, 1, secret, PICOQUIC_QUIC_BASE_LABEL);
-
-            if (cnx->aead_0rtt_encrypt_ctx == NULL) {
-                ret = PICOQUIC_ERROR_MEMORY;
-            }
-        }
-
-        if (ret == 0) {
-            cnx->aead_0rtt_decrypt_ctx = (void*)
-                picoquic_aead_new(cipher->aead, cipher->hash, 0, secret, PICOQUIC_QUIC_BASE_LABEL);
-            cnx->pn_enc_0rtt = picoquic_pn_enc_create(cipher->aead, cipher->hash, secret, PICOQUIC_QUIC_BASE_LABEL);
-        }
-    }
-
-    return ret;
-}
-
-/* Computation of the encryption and decryption methods for 1-RTT data */
-int picoquic_setup_1RTT_aead_contexts(picoquic_cnx_t* cnx, int is_server)
-{
-    int ret = 0;
-    uint8_t secret[256]; /* secret_max */
-    picoquic_tls_ctx_t* ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
-    ptls_cipher_suite_t* cipher = ptls_get_cipher(ctx->tls);
-
-    if (cipher == NULL) {
-        ret = -1;
-    } else if (cipher->hash->digest_size > sizeof(secret)) {
-        ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
-    } else {
-        /* Set up the encryption AEAD */
-        ret = ptls_export_secret(ctx->tls, secret, cipher->hash->digest_size,
-            (is_server == 0) ? PICOQUIC_LABEL_1RTT_CLIENT : PICOQUIC_LABEL_1RTT_SERVER,
-            ptls_iovec_init(NULL, 0), 0);
-
-        if (ret == 0) {
-            cnx->aead_encrypt_ctx = (void*)
-                picoquic_aead_new(cipher->aead, cipher->hash, 1, secret, PICOQUIC_QUIC_BASE_LABEL);
-            cnx->pn_enc = picoquic_pn_enc_create(cipher->aead, cipher->hash, secret, PICOQUIC_QUIC_BASE_LABEL);
-
-            if (cnx->aead_encrypt_ctx == NULL) {
-                ret = PICOQUIC_ERROR_MEMORY;
-            }
-
-            cnx->aead_de_encrypt_ctx = (void*)
-                picoquic_aead_new(cipher->aead, cipher->hash, 0, secret, PICOQUIC_QUIC_BASE_LABEL);
-        }
-
-        /* Now set up the corresponding decryption */
-        if (ret == 0) {
-            ret = ptls_export_secret(ctx->tls, secret, cipher->hash->digest_size,
-                (is_server != 0) ? PICOQUIC_LABEL_1RTT_CLIENT : PICOQUIC_LABEL_1RTT_SERVER,
-                ptls_iovec_init(NULL, 0), 0);
-        }
-
-        if (ret == 0) {
-            cnx->aead_decrypt_ctx = (void*)picoquic_aead_new(cipher->aead, cipher->hash, 0, secret, PICOQUIC_QUIC_BASE_LABEL);
-            cnx->pn_dec = picoquic_pn_enc_create(cipher->aead, cipher->hash, secret, PICOQUIC_QUIC_BASE_LABEL);
-
-            if (cnx->aead_decrypt_ctx == NULL) {
-                ret = -1;
-            }
-        }
-    }
-
-    return ret;
-}
-
 int picoquic_server_setup_ticket_aead_contexts(picoquic_quic_t* quic,
     ptls_context_t* tls_ctx,
     const uint8_t* secret, size_t secret_length)
@@ -1414,8 +1589,8 @@ static void picoquic_setup_cleartext_aead_salt(size_t version_index, ptls_iovec_
 int picoquic_compare_cleartext_aead_contexts(picoquic_cnx_t* cnx1, picoquic_cnx_t* cnx2)
 {
     int ret = 0;
-    ptls_aead_context_t * aead_enc = (ptls_aead_context_t *)cnx1->aead_encrypt_cleartext_ctx;
-    ptls_aead_context_t * aead_dec = (ptls_aead_context_t *)cnx2->aead_decrypt_cleartext_ctx;
+    ptls_aead_context_t * aead_enc = (ptls_aead_context_t *)cnx1->crypto_context[0].aead_encrypt;
+    ptls_aead_context_t * aead_dec = (ptls_aead_context_t *)cnx2->crypto_context[0].aead_decrypt;
 
     if (aead_enc == NULL )
     {
@@ -1435,104 +1610,56 @@ int picoquic_compare_cleartext_aead_contexts(picoquic_cnx_t* cnx1, picoquic_cnx_
     return ret;
 }
 
-int picoquic_setup_cleartext_aead_contexts(picoquic_cnx_t* cnx)
-{
-    int ret = 0;
-    uint8_t master_secret[256]; /* secret_max */
-    uint8_t cnx_id_serialized[PICOQUIC_CONNECTION_ID_MAX_SIZE]; /* serialized cnx_id */
-    ptls_hash_algorithm_t* algo = &ptls_openssl_sha256;
-    ptls_aead_algorithm_t* aead = &ptls_openssl_aes128gcm;
-    ptls_iovec_t salt;
-    ptls_iovec_t ikm;
-    uint8_t label[256];
-    uint8_t client_secret[256];
-    uint8_t server_secret[256];
-    uint8_t *secret1, *secret2;
-    ptls_iovec_t prk;
-    ptls_iovec_t info;
-
-    ikm.len = picoquic_format_connection_id(cnx_id_serialized, PICOQUIC_CONNECTION_ID_MAX_SIZE, cnx->initial_cnxid);
-    picoquic_setup_cleartext_aead_salt(cnx->version_index, &salt);
-    ikm.base = cnx_id_serialized;
-
-    /* Extract the master key -- key length will be 32 per SHA256 */
-    ret = ptls_hkdf_extract(algo, master_secret, salt, ikm);
-    if (ret == 0) {
-        prk.base = master_secret;
-        prk.len = algo->digest_size;
-        /* Compose the client label */
-        info.base = label;
-        info.len = picoquic_setup_clear_text_aead_label(algo->digest_size,
-            label, PICOQUIC_LABEL_HANDSHAKE_CLIENT);
-        /* extract the client key */
-        ret = ptls_hkdf_expand(algo, client_secret, algo->digest_size, prk, info);
-
-        if (ret == 0) {
-            /* Compose the server label */
-            info.base = label;
-            info.len = picoquic_setup_clear_text_aead_label(algo->digest_size,
-                label, PICOQUIC_LABEL_HANDSHAKE_SERVER);
-            /* extract the server key */
-            ret = ptls_hkdf_expand(algo, server_secret, algo->digest_size, prk, info);
-        }
-    }
-
-    if (ret == 0) {
-        if (!cnx->client_mode) {
-            secret1 = server_secret;
-            secret2 = client_secret;
-        } else {
-            secret1 = client_secret;
-            secret2 = server_secret;
-        }
-
-        if (ret == 0) {
-            /* Create the AEAD contexts */
-            cnx->aead_encrypt_cleartext_ctx = (void*)
-                picoquic_aead_new(aead, algo, 1, secret1, PICOQUIC_QUIC_BASE_LABEL);
-            cnx->aead_decrypt_cleartext_ctx = (void*)
-                picoquic_aead_new(aead, algo, 0, secret2, PICOQUIC_QUIC_BASE_LABEL);
-            cnx->aead_de_encrypt_cleartext_ctx = (void*)
-                picoquic_aead_new(aead, algo, 0, secret1, PICOQUIC_QUIC_BASE_LABEL);
-
-            cnx->pn_enc_cleartext = picoquic_pn_enc_create(aead, algo, secret1, PICOQUIC_QUIC_BASE_LABEL);
-            cnx->pn_dec_cleartext = picoquic_pn_enc_create(aead, algo, secret2, PICOQUIC_QUIC_BASE_LABEL);
-        }
-    }
-
-    return ret;
-}
-
-/* Input stream zero data to TLS context
+/* Input stream zero data to TLS context.
+ *
+ * TODO: processing now depends on the "epoch" in which packets have been received. That
+ * epoch should be passed through the ptls_handle_message() API that replaces ptls_handshake().
+ * The API has an "epoch offset" parameter that documents how many bytes of the
+ * should be sent at each epoch.
  */
 
-int picoquic_tlsinput_stream_zero(picoquic_cnx_t* cnx)
+int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
 {
     int ret = 0;
-    picoquic_stream_data* data = cnx->first_stream.stream_data;
+    picoquic_stream_data* data = cnx->tls_stream.stream_data;
     struct st_ptls_buffer_t sendbuf;
 
-    if (data == NULL || data->offset > cnx->first_stream.consumed_offset) {
+    if (data == NULL || data->offset > cnx->tls_stream.consumed_offset) {
         return 0;
     }
 
     ptls_buffer_init(&sendbuf, "", 0);
 
     while (
-        (ret == 0 || ret == PTLS_ERROR_IN_PROGRESS) && data != NULL && data->offset <= cnx->first_stream.consumed_offset) {
-        size_t start = (size_t)(cnx->first_stream.consumed_offset - data->offset);
+        (ret == 0 || ret == PTLS_ERROR_IN_PROGRESS) && data != NULL && data->offset <= cnx->tls_stream.consumed_offset) {
+        size_t start = (size_t)(cnx->tls_stream.consumed_offset - data->offset);
         size_t consumed = 0;
+        size_t epoch_data = 0;
+        int epoch = 0;
 
-        ret = picoquic_tlsinput_segment(cnx, data->bytes + start,
-            data->length - start, &consumed, &sendbuf);
+        /* Update the current epoch */
+        while (cnx->epoch_received[epoch] <= cnx->tls_stream.consumed_offset && epoch < 3) {
+            DBG_PRINTF("received[%d] = %d <= consumed = %d\n",
+                epoch, (int)cnx->epoch_received[epoch], (int)cnx->tls_stream.consumed_offset);
+            epoch++;
+        }
 
-        cnx->first_stream.consumed_offset += consumed;
+        if (data->length + data->offset > cnx->epoch_received[epoch]) {
+            epoch_data = cnx->epoch_received[epoch] - (size_t)cnx->tls_stream.consumed_offset;
+        } else {
+            epoch_data = data->length - start;
+        }
+
+        ret = picoquic_tlsinput_segment(cnx, epoch, data->bytes + start,
+            epoch_data, &consumed, &sendbuf);
+
+        cnx->tls_stream.consumed_offset += consumed;
 
         if (start + consumed >= data->length) {
             free(data->bytes);
-            cnx->first_stream.stream_data = data->next_stream_data;
+            cnx->tls_stream.stream_data = data->next_stream_data;
             free(data);
-            data = cnx->first_stream.stream_data;
+            data = cnx->tls_stream.stream_data;
         }
     }
 
@@ -1551,23 +1678,19 @@ int picoquic_tlsinput_stream_zero(picoquic_cnx_t* cnx)
                 ret = picoquic_connection_error(cnx,
                     PICOQUIC_TRANSPORT_TRANSPORT_PARAMETER_ERROR);
             } else {
-                /* Extract and install the client 1-RTT key */
                 cnx->cnx_state = picoquic_state_client_almost_ready;
-                ret = picoquic_setup_1RTT_aead_contexts(cnx, 0);
             }
             break;
         case picoquic_state_server_init:
-            /* Extract and install the server 0-RTT and 1-RTT key */
-            picoquic_setup_0RTT_aead_contexts(cnx, 1);
+        case picoquic_state_server_handshake:
             /* If client authentication is activated, the client sends the certificates with its `Finished` packet.
-               The server does not send any further packages, so, we can switch into ready state here.
+               The server does not send any further packets, so, we can switch into ready state here.
             */
             if (sendbuf.off == 0 && ((ptls_context_t*)cnx->quic->tls_master_ctx)->require_client_authentication == 1) {
                 cnx->cnx_state = picoquic_state_server_ready;
             } else {
                 cnx->cnx_state = picoquic_state_server_almost_ready;
             }
-            ret = picoquic_setup_1RTT_aead_contexts(cnx, 1);
             break;
         case picoquic_state_client_almost_ready:
         case picoquic_state_handshake_failure:
@@ -1600,33 +1723,32 @@ int picoquic_tlsinput_stream_zero(picoquic_cnx_t* cnx)
         }
 
         /* Reset the streams */
-        picoquic_clear_stream(&cnx->first_stream);
-        cnx->first_stream.consumed_offset = 0;
-        cnx->first_stream.stream_flags = 0;
-        cnx->first_stream.fin_offset = 0;
-        cnx->first_stream.sent_offset = 0;
+        picoquic_clear_stream(&cnx->tls_stream);
+        cnx->tls_stream.consumed_offset = 0;
+        cnx->tls_stream.stream_flags = 0;
+        cnx->tls_stream.fin_offset = 0;
+        cnx->tls_stream.sent_offset = 0;
     } else if (ret == PTLS_ERROR_STATELESS_RETRY) {
         cnx->cnx_state = picoquic_state_server_send_hrr;
     }
     else if (ret == PTLS_ERROR_IN_PROGRESS &&
-        cnx->cnx_state == picoquic_state_server_init)
+        (cnx->cnx_state == picoquic_state_server_init ||
+            cnx->cnx_state == picoquic_state_server_handshake))
     {
         picoquic_tls_ctx_t* ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
 
         if (ptls_handshake_is_complete(ctx->tls))
         {
-            /* Special case on session resume ??? */
-            picoquic_setup_0RTT_aead_contexts(cnx, 1);
             cnx->cnx_state = picoquic_state_server_almost_ready;
-            ret = picoquic_setup_1RTT_aead_contexts(cnx, 1);
         }
     }
 
     if ((ret == 0 || ret == PTLS_ERROR_IN_PROGRESS || ret == PTLS_ERROR_STATELESS_RETRY)) {
         if (sendbuf.off > 0) {
-            ret = picoquic_add_to_stream(cnx, 0, sendbuf.base, sendbuf.off, 0);
+            ret = picoquic_add_to_tls_stream(cnx, sendbuf.base, sendbuf.off);
+        } else {
+            ret = 0;
         }
-        ret = 0;
     } else {
         (void)picoquic_connection_error(cnx, PICOQUIC_TLS_HANDSHAKE_FAILED);
         ret = 0;

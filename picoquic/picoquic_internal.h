@@ -77,11 +77,10 @@ typedef enum {
     picoquic_frame_type_path_challenge = 0x0e,
     picoquic_frame_type_path_response = 0x0f,
     picoquic_frame_type_stream_range_min = 0x10,
-    picoquic_frame_type_stream_range_max = 0x1F,
-    picoquic_frame_type_ack_range_min_old = 0xa0,
-    picoquic_frame_type_ack_range_max_old = 0xbf,
-    picoquic_frame_type_stream_range_min_old = 0xc0,
-    picoquic_frame_type_stream_range_max_old = 0xcf
+    picoquic_frame_type_stream_range_max = 0x17,
+    picoquic_frame_type_crypto_hs = 0x18,
+    picoquic_frame_type_crypto_close = 0x20,
+    picoquic_frame_type_new_token = 0x21
 } picoquic_frame_type_enum_t;
 
 /*
@@ -93,6 +92,7 @@ typedef enum {
 #define PICOQUIC_FOURTH_INTEROP_VERSION 0xFF000009
 #define PICOQUIC_FIFTH_INTEROP_VERSION 0xFF00000B
 #define PICOQUIC_SIXTH_INTEROP_VERSION 0xFF00000C
+#define PICOQUIC_SEVENTH_INTEROP_VERSION 0xFF00000D
 #define PICOQUIC_INTERNAL_TEST_VERSION_1 0x50435130
 
 #define PICOQUIC_INTEROP_VERSION_INDEX 1
@@ -352,6 +352,20 @@ typedef struct st_picoquic_path_t {
 
 } picoquic_path_t;
 
+/* Per sequence context. There are four such contexts:
+ * 0: Initial context, with encryption based on a version dependent key,
+ * 1: 0-RTT context
+ * 2: Handshake context
+ * 3: Application data
+ */
+typedef struct st_picoquic_crypto_context_t {
+    void* aead_encrypt;
+    void* aead_decrypt;
+    void* aead_de_encrypt; /* used by logging functions to see what is sent. */
+    void* pn_enc; /* Used for PN encryption */
+    void* pn_dec; /* Used for PN decryption */
+} picoquic_crypto_context_t;
+
 /* 
  * Per connection context.
  */
@@ -401,10 +415,12 @@ typedef struct st_picoquic_cnx_t {
     picoquic_connection_id_t remote_cnxid;
     uint64_t start_time;
     uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE];
-    uint32_t application_error;
-    uint32_t local_error;
-    uint32_t remote_application_error;
-    uint32_t remote_error;
+    uint16_t application_error;
+    uint16_t local_error;
+    uint16_t crypto_error;
+    uint16_t remote_application_error;
+    uint16_t remote_error;
+    uint16_t remote_crypto_error;
 
     /* Next time sending data is expected */
     uint64_t next_wake_time;
@@ -416,24 +432,15 @@ typedef struct st_picoquic_cnx_t {
     struct st_ptls_buffer_t* tls_sendbuf;
     uint64_t send_sequence;
     uint16_t psk_cipher_suite_id;
-
+    picoquic_stream_head tls_stream;
+    size_t epoch_offsets[5]; /* documents the offset for the sending side of the tls_stream */
+    size_t epoch_received[5]; /* documents the offset for the sending side of the tls_stream */
+    
     /* Liveness detection */
     uint64_t latest_progress_time; /* last local time at which the connection progressed */
 
     /* Encryption and decryption objects */
-    void* aead_encrypt_cleartext_ctx;
-    void* aead_decrypt_cleartext_ctx;
-    void* aead_de_encrypt_cleartext_ctx; /* used by logging functions to see what is sent. */
-    void* pn_enc_cleartext; /* Used for PN encryption of clear text packets */
-    void* pn_dec_cleartext; /* Used for PN decryption of clear text packets */
-    void* aead_encrypt_ctx;
-    void* aead_decrypt_ctx;
-    void* aead_de_encrypt_ctx; /* used by logging functions to see what is sent. */
-    void* pn_enc; /* Used for PN encryption of 1 RTT packets */
-    void* pn_dec; /* Used for PN decryption of 1 RTT packets */
-    void* aead_0rtt_encrypt_ctx; /* setup on client if 0-RTT is possible */
-    void* aead_0rtt_decrypt_ctx; /* setup on server if 0-RTT is possible, also used on client for logging */
-    void* pn_enc_0rtt; /* Used for PN encryption or decryption of 0-RTT packets */
+    picoquic_crypto_context_t crypto_context[4];
 
     /* Receive state */
     picoquic_sack_item_t first_sack_item;
@@ -473,7 +480,7 @@ typedef struct st_picoquic_cnx_t {
     picoquic_misc_frame_header_t* first_misc_frame;
 
     /* Management of streams */
-    picoquic_stream_head first_stream;
+    picoquic_stream_head * first_stream;
 
     /* If not `0`, the connection will send keep alive messages in the given interval. */
     uint64_t keep_alive_interval;
@@ -502,7 +509,7 @@ void picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet* p,
 int picoquic_reset_cnx_version(picoquic_cnx_t* cnx, uint8_t* bytes, size_t length, uint64_t current_time);
 
 /* Notify error on connection */
-int picoquic_connection_error(picoquic_cnx_t* cnx, uint32_t local_error);
+int picoquic_connection_error(picoquic_cnx_t* cnx, uint16_t local_error);
 
 /* Set the transport parameters */
 void picoquic_set_transport_parameters(picoquic_cnx_t * cnx, picoquic_transport_parameters * tp);
@@ -557,6 +564,7 @@ typedef struct _picoquic_packet_header {
     uint64_t pn64;
     uint16_t payload_length;
     int version_index;
+    int epoch;
     unsigned int spin : 1;
     unsigned int spin_vec : 2;
     unsigned int has_spin_bit : 1;
@@ -607,10 +615,6 @@ uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t 
 size_t  picoquic_decrypt_packet(picoquic_cnx_t* cnx,
     uint8_t* bytes, size_t length, picoquic_packet_header* ph,
     void * pn_enc, void* aead_context, int * already_received);
-
-size_t picoquic_decrypt_cleartext(picoquic_cnx_t* cnx,
-    uint8_t* bytes, size_t length, picoquic_packet_header* ph,
-    int * already_received);
 
 uint32_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     picoquic_packet_type_enum ptype,
@@ -663,12 +667,17 @@ int picoquic_process_ack_of_ack_frame(
 picoquic_stream_head* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t stream_id);
 void picoquic_update_stream_initial_remote(picoquic_cnx_t* cnx);
 picoquic_stream_head* picoquic_find_stream(picoquic_cnx_t* cnx, uint64_t stream_id, int create);
-picoquic_stream_head* picoquic_find_ready_stream(picoquic_cnx_t* cnx, int restricted);
+picoquic_stream_head* picoquic_find_ready_stream(picoquic_cnx_t* cnx);
+int picoquic_is_tls_stream_ready(picoquic_cnx_t* cnx);
 int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id,
     uint64_t offset, int fin, uint8_t* bytes, size_t length, uint64_t current_time);
 int picoquic_decode_stream_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
-    size_t bytes_max, int restricted, size_t* consumed, uint64_t current_time);
+    size_t bytes_max, size_t* consumed, uint64_t current_time);
 int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head* stream,
+    uint8_t* bytes, size_t bytes_max, size_t* consumed);
+int picoquic_decode_crypto_hs_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
+    size_t bytes_max, size_t* consumed, int epoch);
+int picoquic_prepare_crypto_hs_frame(picoquic_cnx_t* cnx, int epoch,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
 int picoquic_prepare_ack_frame(picoquic_cnx_t* cnx, uint64_t current_time,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
@@ -692,7 +701,7 @@ int picoquic_prepare_misc_frame(picoquic_misc_frame_header_t* misc_frame, uint8_
 /* send/receive */
 
 int picoquic_decode_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
-    size_t bytes_max, int restricted, uint64_t current_time);
+    size_t bytes_max, int epoch, uint64_t current_time);
 
 int picoquic_skip_frame(uint8_t* bytes, size_t bytes_max, size_t* consumed, int* pure_ack);
 

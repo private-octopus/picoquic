@@ -43,6 +43,7 @@ static const picoquic_test_def_t test_table[] = {
     { "float16", float16test },
     { "varint", varint_test },
     { "skip_frames", skip_frame_test },
+    { "TlsStreamFrame", TlsStreamFrameTest },
     { "StreamZeroFrame", StreamZeroFrameTest },
     { "sack", sacktest },
     { "sendack", sendacktest },

@@ -159,22 +159,6 @@ int cnxcreation_test()
     }
 
 /* TODO: cannot retrieve connections by initial ID yet, should work on it */
-
-#if 0
-    for (int i = 0; ret == 0 && i < TEST_CNX_COUNT; i++)
-    {
-        picoquic_cnx_t * cnx = picoquic_cnx_by_id(quic, test_cnx_id[i]);
-
-        if (test_cnx_id[i] == 0 && cnx != NULL)
-        {
-            ret = -1;
-        }
-        else if (test_cnx_id[i] != 0 && cnx == NULL)
-        {
-            ret = -1;
-        }
-    }
-#endif
     /*
       *  -Verify that a non registered connection cannot be retrieved.
       */
@@ -201,24 +185,6 @@ int cnxcreation_test()
     }
 
 /* Verify that deleted connections cannot be retrieved, and the others can. */
-#if 0
-    for (int i = 0; ret == 0 && i < TEST_CNX_COUNT; i++)
-    {
-        if (test_cnx_id[i] != 0)
-        {
-            picoquic_cnx_t * cnx = picoquic_cnx_by_id(quic, test_cnx_id[i]);
-
-            if (cnx != NULL && (i & 1) == 0)
-            {
-                ret = -1;
-            }
-            else if (cnx == NULL && (i & 1) != 0)
-            {
-                ret = -1;
-            }
-        }
-    }
-#endif
 
     for (int i = 0; ret == 0 && i < TEST_CNX_COUNT; i++) {
         picoquic_cnx_t* cnx = picoquic_cnx_by_net(quic, test_cnx_addr[i]);

@@ -61,7 +61,6 @@ extern "C" {
 #define PICOQUIC_ERROR_HRR (PICOQUIC_ERROR_CLASS + 19)
 #define PICOQUIC_ERROR_DISCONNECTED (PICOQUIC_ERROR_CLASS + 20)
 #define PICOQUIC_ERROR_DETECTED (PICOQUIC_ERROR_CLASS + 21)
-#define PICOQUIC_ERROR_CANNOT_STOP_STREAM_ZERO (PICOQUIC_ERROR_CLASS + 22)
 #define PICOQUIC_ERROR_INVALID_TICKET (PICOQUIC_ERROR_CLASS + 23)
 #define PICOQUIC_ERROR_INVALID_FILE (PICOQUIC_ERROR_CLASS + 24)
 #define PICOQUIC_ERROR_SEND_BUFFER_TOO_SMALL (PICOQUIC_ERROR_CLASS + 25)
@@ -104,6 +103,7 @@ typedef enum {
     picoquic_state_client_hrr_received,
     picoquic_state_client_init_resent,
     picoquic_state_server_init,
+    picoquic_state_server_handshake,
     picoquic_state_client_handshake_start,
     picoquic_state_client_handshake_progress,
     picoquic_state_handshake_failure,
@@ -161,8 +161,8 @@ typedef struct st_picoquic_stateless_packet_t {
 typedef enum {
     picoquic_packet_error = 0,
     picoquic_packet_version_negotiation,
-    picoquic_packet_client_initial,
-    picoquic_packet_server_stateless,
+    picoquic_packet_initial,
+    picoquic_packet_retry,
     picoquic_packet_handshake,
     picoquic_packet_0rtt_protected,
     picoquic_packet_1rtt_protected_phi0,
@@ -201,6 +201,7 @@ typedef enum {
     picoquic_callback_stop_sending,
     picoquic_callback_close,
     picoquic_callback_application_close,
+    picoquic_callback_crypto_close,
     picoquic_callback_challenge_response
 } picoquic_call_back_event_t;
 

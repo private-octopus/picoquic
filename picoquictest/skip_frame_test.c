@@ -122,7 +122,7 @@ static uint8_t test_frame_type_ack[] = {
 };
 static uint8_t test_frame_type_stream_range_min[] = {
     picoquic_frame_type_stream_range_min,
-    0,
+    1,
     0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7,
     0xA8, 0xA9, 0xAA, 0xAB, 0xAC, 0xAD, 0xAE, 0xAF
 };
@@ -136,39 +136,64 @@ static uint8_t test_frame_type_stream_range_max[] = {
     0xA8, 0xA9, 0xAA, 0xAB, 0xAC, 0xAD, 0xAE, 0xAF
 };
 
+static uint8_t test_frame_type_crypto_hs[] = {
+    picoquic_frame_type_crypto_hs,
+    0,
+    0x10,
+    0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7,
+    0xA8, 0xA9, 0xAA, 0xAB, 0xAC, 0xAD, 0xAE, 0xAF
+};
+
+static uint8_t test_type_crypto_close[] = {
+    picoquic_frame_type_crypto_close,
+    0, 0x11,
+    0
+};
+
+static uint8_t test_type_crypto_close_reason[] = {
+    picoquic_frame_type_crypto_close,
+    0, 4,
+    6,
+    'c', 'r', 'y', 'p', 't', 'o'
+};
+
 typedef struct st_test_skip_frames_t {
     char const* name;
     uint8_t* val;
     size_t len;
     int is_pure_ack;
     int must_be_last;
+    int epoch;
 } test_skip_frames_t;
 
-#define TEST_SKIP_ITEM(n, x, a, l) \
+#define TEST_SKIP_ITEM(n, x, a, l, e) \
     {                              \
-        n, x, sizeof(x), a, l      \
+        n, x, sizeof(x), a, l, e     \
     }
 
 static test_skip_frames_t test_skip_list[] = {
-    TEST_SKIP_ITEM("padding", test_frame_type_padding, 1, 0),
-    TEST_SKIP_ITEM("reset_stream", test_frame_type_reset_stream, 0, 0),
-    TEST_SKIP_ITEM("connection_close", test_type_connection_close, 0, 0),
-    TEST_SKIP_ITEM("application_close", test_type_application_close, 0, 0),
-    TEST_SKIP_ITEM("application_close", test_type_application_close_reason, 0, 0),
-    TEST_SKIP_ITEM("max_data", test_frame_type_max_data, 0, 0),
-    TEST_SKIP_ITEM("max_stream_data", test_frame_type_max_stream_data, 0, 0),
-    TEST_SKIP_ITEM("max_stream_id", test_frame_type_max_stream_id, 0, 0),
-    TEST_SKIP_ITEM("ping", test_frame_type_ping, 0, 0),
-    TEST_SKIP_ITEM("blocked", test_frame_type_blocked, 0, 0),
-    TEST_SKIP_ITEM("stream_blocked", test_frame_type_stream_blocked, 0, 0),
-    TEST_SKIP_ITEM("stream_id_needed", test_frame_type_stream_id_needed, 0, 0),
-    TEST_SKIP_ITEM("new_connection_id", test_frame_type_new_connection_id, 0, 0),
-    TEST_SKIP_ITEM("stop_sending", test_frame_type_stop_sending, 0, 0),
-    TEST_SKIP_ITEM("challenge", test_frame_type_path_challenge, 1, 0),
-    TEST_SKIP_ITEM("response", test_frame_type_path_response, 1, 0),
-    TEST_SKIP_ITEM("ack", test_frame_type_ack, 1, 0),
-    TEST_SKIP_ITEM("stream_min", test_frame_type_stream_range_min, 0, 1),
-    TEST_SKIP_ITEM("stream_max", test_frame_type_stream_range_max, 0, 0)
+    TEST_SKIP_ITEM("padding", test_frame_type_padding, 1, 0, 0),
+    TEST_SKIP_ITEM("reset_stream", test_frame_type_reset_stream, 0, 0, 3),
+    TEST_SKIP_ITEM("connection_close", test_type_connection_close, 0, 0, 3),
+    TEST_SKIP_ITEM("application_close", test_type_application_close, 0, 0, 3),
+    TEST_SKIP_ITEM("application_close", test_type_application_close_reason, 0, 0, 3),
+    TEST_SKIP_ITEM("crypto_close", test_type_crypto_close, 0, 0, 2),
+    TEST_SKIP_ITEM("crypto_close", test_type_crypto_close_reason, 0, 0, 2),
+    TEST_SKIP_ITEM("max_data", test_frame_type_max_data, 0, 0, 3),
+    TEST_SKIP_ITEM("max_stream_data", test_frame_type_max_stream_data, 0, 0, 3),
+    TEST_SKIP_ITEM("max_stream_id", test_frame_type_max_stream_id, 0, 0, 3),
+    TEST_SKIP_ITEM("ping", test_frame_type_ping, 0, 0, 3),
+    TEST_SKIP_ITEM("blocked", test_frame_type_blocked, 0, 0, 3),
+    TEST_SKIP_ITEM("stream_blocked", test_frame_type_stream_blocked, 0, 0, 3),
+    TEST_SKIP_ITEM("stream_id_needed", test_frame_type_stream_id_needed, 0, 0, 3),
+    TEST_SKIP_ITEM("new_connection_id", test_frame_type_new_connection_id, 0, 0, 3),
+    TEST_SKIP_ITEM("stop_sending", test_frame_type_stop_sending, 0, 0, 3),
+    TEST_SKIP_ITEM("challenge", test_frame_type_path_challenge, 1, 0, 3),
+    TEST_SKIP_ITEM("response", test_frame_type_path_response, 1, 0, 3),
+    TEST_SKIP_ITEM("ack", test_frame_type_ack, 1, 0, 3),
+    TEST_SKIP_ITEM("stream_min", test_frame_type_stream_range_min, 0, 1, 3),
+    TEST_SKIP_ITEM("stream_max", test_frame_type_stream_range_max, 0, 0, 3),
+    TEST_SKIP_ITEM("crypto_hs", test_frame_type_crypto_hs, 0, 0, 2)
 };
 
 static size_t nb_test_skip_list = sizeof(test_skip_list) / sizeof(test_skip_frames_t);
@@ -368,7 +393,7 @@ int parse_frame_test()
                     byte_max += sizeof(extra_bytes);
                 }
 
-                t_ret = picoquic_decode_frames(cnx, buffer, byte_max, 0, simulated_time);
+                t_ret = picoquic_decode_frames(cnx, buffer, byte_max, test_skip_list[i].epoch, simulated_time);
 
                 if (t_ret != 0) {
                     DBG_PRINTF("Parse frame <%s> fails, ret = %d\n", test_skip_list[i].name, t_ret);

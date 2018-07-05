@@ -67,10 +67,13 @@ static picoquic_packet_header hinitial10 = {
     0x50435130,
     20,
     20,
-    picoquic_packet_client_initial,
+    picoquic_packet_initial,
     0xFFFFFFFF00000000ull,
     0, 
     0x400,
+    0,
+    0,
+    0,
     0,
     0
 };
@@ -92,10 +95,13 @@ static picoquic_packet_header hinitial10_l = {
     0x50435130,
     24,
     24,
-    picoquic_packet_client_initial,
+    picoquic_packet_initial,
     0xFFFFFFFF00000000ull,
     0,
     0x400,
+    0,
+    0,
+    0,
     0,
     0
 };
@@ -132,6 +138,9 @@ static picoquic_packet_header hvnego10 = {
     0,
     PICOQUIC_MAX_PACKET_SIZE - 18,
     0,
+    0,
+    0,
+    0,
     0
 };
 
@@ -153,7 +162,10 @@ static picoquic_packet_header hphi0_c_32 = {
     0,
     PICOQUIC_MAX_PACKET_SIZE - 9,
     0,
-    0
+    3,
+    0,
+    0,
+    1
 };
 
 static uint8_t packet_short_phi0_c_32_spin[] = {
@@ -174,6 +186,9 @@ static picoquic_packet_header hphi0_c_32_spin = {
     0,
     PICOQUIC_MAX_PACKET_SIZE - 9, 
     0,
+    3,
+    1,
+    0,
     1
 };
 
@@ -193,6 +208,9 @@ static picoquic_packet_header hphi0_noc_32 = {
     0xFFFFFFFF00000000ull,
     0,
     PICOQUIC_MAX_PACKET_SIZE - 1,
+    0,
+    3,
+    0,
     0,
     0
 };
@@ -280,6 +298,8 @@ int parseheadertest()
         } else if (ph.ptype != test_entries[i].ph->ptype) {
             ret = -1;
         } else if (ph.spin != test_entries[i].ph->spin) {
+            ret = -1;
+        } else if (ph.epoch != test_entries[i].ph->epoch) {
             ret = -1;
         }
     }
@@ -430,7 +450,7 @@ int test_packet_encrypt_one(
         expected_header.payload_length = packet->length - packet->offset;
 
         if (packet->ptype == picoquic_packet_0rtt_protected ||
-            packet->ptype == picoquic_packet_client_initial) {
+            packet->ptype == picoquic_packet_initial) {
             expected_header.dest_cnx_id = cnx_client->initial_cnxid;
         }
         else {
@@ -460,6 +480,13 @@ static const uint8_t test_0rtt_secret[] = {
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
     0, 1
+};
+
+static const uint8_t test_handshake_secret[] = {
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+    0, 1,
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
 };
 
 static const uint8_t test_1rtt_secret[] = {
@@ -509,7 +536,7 @@ int packet_enc_dec_test()
     if (ret == 0) {
         ret = test_packet_encrypt_one(
             (struct sockaddr *) &test_addr_c,
-            cnx_client, qserver, NULL, picoquic_packet_client_initial, 1256);
+            cnx_client, qserver, NULL, picoquic_packet_initial, 1256);
     }
     /* If that work, update the connection context */
     if (ret == 0) {
@@ -525,6 +552,10 @@ int packet_enc_dec_test()
 
     /* Try handshake packet from client */
     if (ret == 0) {
+        cnx_client->crypto_context[2].aead_encrypt = picoquic_setup_test_aead_context(1, test_handshake_secret);
+        cnx_server->crypto_context[2].aead_decrypt = picoquic_setup_test_aead_context(0, test_handshake_secret);
+        cnx_client->crypto_context[2].pn_enc = picoquic_pn_enc_create_for_test(test_handshake_secret);
+        cnx_server->crypto_context[2].pn_dec = picoquic_pn_enc_create_for_test(test_handshake_secret);
         ret = test_packet_encrypt_one(
             (struct sockaddr *) &test_addr_c,
             cnx_client, qserver, cnx_server, picoquic_packet_handshake, 1256);
@@ -532,10 +563,10 @@ int packet_enc_dec_test()
 
     /* Now try a zero RTT packet */
     if (ret == 0) {
-        cnx_client->aead_0rtt_encrypt_ctx = picoquic_setup_test_aead_context(1, test_0rtt_secret);
-        cnx_server->aead_0rtt_decrypt_ctx = picoquic_setup_test_aead_context(0, test_0rtt_secret);
-        cnx_client->pn_enc_0rtt = picoquic_pn_enc_create_for_test(test_0rtt_secret);
-        cnx_server->pn_enc_0rtt = picoquic_pn_enc_create_for_test(test_0rtt_secret);
+        cnx_client->crypto_context[1].aead_encrypt = picoquic_setup_test_aead_context(1, test_0rtt_secret);
+        cnx_server->crypto_context[1].aead_decrypt = picoquic_setup_test_aead_context(0, test_0rtt_secret);
+        cnx_client->crypto_context[1].pn_enc = picoquic_pn_enc_create_for_test(test_0rtt_secret);
+        cnx_server->crypto_context[1].pn_dec = picoquic_pn_enc_create_for_test(test_0rtt_secret);
 
         ret = test_packet_encrypt_one(
             (struct sockaddr *) &test_addr_c,
@@ -544,10 +575,10 @@ int packet_enc_dec_test()
 
     /* And try a 1 RTT packet */
     if (ret == 0) {
-        cnx_client->aead_encrypt_ctx = picoquic_setup_test_aead_context(1, test_1rtt_secret);
-        cnx_server->aead_decrypt_ctx = picoquic_setup_test_aead_context(0, test_1rtt_secret);
-        cnx_client->pn_enc = picoquic_pn_enc_create_for_test(test_1rtt_secret);
-        cnx_server->pn_dec = picoquic_pn_enc_create_for_test(test_1rtt_secret);
+        cnx_client->crypto_context[3].aead_encrypt = picoquic_setup_test_aead_context(1, test_1rtt_secret);
+        cnx_server->crypto_context[3].aead_decrypt = picoquic_setup_test_aead_context(0, test_1rtt_secret);
+        cnx_client->crypto_context[3].pn_enc = picoquic_pn_enc_create_for_test(test_1rtt_secret);
+        cnx_server->crypto_context[3].pn_dec = picoquic_pn_enc_create_for_test(test_1rtt_secret);
 
         ret = test_packet_encrypt_one(
             (struct sockaddr *) &test_addr_c,

@@ -107,6 +107,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
         
+        TEST_METHOD(test_TlsStreamFrame)
+        {
+            int ret = TlsStreamFrameTest();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(test_StreamZeroFrame)
         {
             int ret = StreamZeroFrameTest();

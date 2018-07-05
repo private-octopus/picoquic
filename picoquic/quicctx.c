@@ -131,12 +131,8 @@ const picoquic_version_parameters_t picoquic_supported_versions[] = {
         picoquic_version_header_12,
         sizeof(picoquic_cleartext_internal_test_1_salt),
         picoquic_cleartext_internal_test_1_salt },
-    { PICOQUIC_SIXTH_INTEROP_VERSION, picoquic_version_use_pn_encryption,
+    { PICOQUIC_SEVENTH_INTEROP_VERSION, picoquic_version_use_pn_encryption,
         picoquic_version_header_12,
-        sizeof(picoquic_cleartext_draft_10_salt),
-        picoquic_cleartext_draft_10_salt },
-    { PICOQUIC_FIFTH_INTEROP_VERSION, 0,
-        picoquic_version_header_11,
         sizeof(picoquic_cleartext_draft_10_salt),
         picoquic_cleartext_draft_10_salt }
 };
@@ -767,7 +763,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
 			 */
             picoquic_public_random(cnx->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
         } else {
-            cnx->first_stream.send_queue = NULL;
+            cnx->tls_stream.send_queue = NULL;
             cnx->cnx_state = picoquic_state_server_init;
             cnx->initial_cnxid = initial_cnx_id;
             cnx->remote_cnxid = remote_cnx_id;
@@ -798,21 +794,18 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             cnx->highest_ack_time = start_time;
             cnx->time_stamp_largest_received = (uint64_t)((int64_t)-1);
 
-            cnx->first_stream.stream_id = 0;
-            cnx->first_stream.consumed_offset = 0;
-            cnx->first_stream.stream_flags = 0;
-            cnx->first_stream.fin_offset = 0;
-            cnx->first_stream.next_stream = NULL;
-            cnx->first_stream.stream_data = NULL;
-            cnx->first_stream.sent_offset = 0;
-            cnx->first_stream.local_error = 0;
-            cnx->first_stream.remote_error = 0;
-            cnx->first_stream.maxdata_local = (uint64_t)((int64_t)-1);
-            cnx->first_stream.maxdata_remote = (uint64_t)((int64_t)-1);
+            cnx->tls_stream.stream_id = 0;
+            cnx->tls_stream.consumed_offset = 0;
+            cnx->tls_stream.stream_flags = 0;
+            cnx->tls_stream.fin_offset = 0;
+            cnx->tls_stream.next_stream = NULL;
+            cnx->tls_stream.stream_data = NULL;
+            cnx->tls_stream.sent_offset = 0;
+            cnx->tls_stream.local_error = 0;
+            cnx->tls_stream.remote_error = 0;
+            cnx->tls_stream.maxdata_local = (uint64_t)((int64_t)-1);
+            cnx->tls_stream.maxdata_remote = (uint64_t)((int64_t)-1);
 
-            cnx->aead_decrypt_ctx = NULL;
-            cnx->aead_encrypt_ctx = NULL;
-            cnx->aead_de_encrypt_ctx = NULL;
             cnx->send_sequence = 0;
             cnx->nb_retransmit = 0;
             cnx->latest_retransmit_time = 0;
@@ -842,12 +835,8 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
     }
 
     if (cnx != NULL) {
-        cnx->aead_encrypt_cleartext_ctx = NULL;
-        cnx->aead_decrypt_cleartext_ctx = NULL;
-        cnx->aead_de_encrypt_cleartext_ctx = NULL;
-
-        if (picoquic_setup_cleartext_aead_contexts(cnx)) {
-            /* Cannot initialize clear text aead */
+        if (picoquic_setup_initial_traffic_keys(cnx)) {
+            /* Cannot initialize aead for initial packets */
             picoquic_delete_cnx(cnx);
             cnx = NULL;
         }
@@ -879,7 +868,7 @@ picoquic_cnx_t* picoquic_create_client_cnx(picoquic_quic_t* quic,
             cnx->callback_fn = callback_fn;
         if (callback_ctx != NULL)
             cnx->callback_ctx = callback_ctx;
-        ret = picoquic_initialize_stream_zero(cnx);
+        ret = picoquic_initialize_tls_stream(cnx);
         if (ret != 0) {
             /* Cannot just do partial initialization! */
             picoquic_delete_cnx(cnx);
@@ -892,7 +881,7 @@ picoquic_cnx_t* picoquic_create_client_cnx(picoquic_quic_t* quic,
 
 int picoquic_start_client_cnx(picoquic_cnx_t * cnx)
 {
-    int ret = picoquic_initialize_stream_zero(cnx);
+    int ret = picoquic_initialize_tls_stream(cnx);
 
     picoquic_cnx_set_next_wake_time(cnx, picoquic_get_quic_time(cnx->quic));
 
@@ -974,7 +963,7 @@ picoquic_state_enum picoquic_get_cnx_state(picoquic_cnx_t* cnx)
 
 uint64_t picoquic_is_0rtt_available(picoquic_cnx_t* cnx)
 {
-    return (cnx->aead_0rtt_encrypt_ctx == NULL) ? 0 : 1;
+    return (cnx->crypto_context[0].aead_encrypt == NULL) ? 0 : 1;
 }
 
 /*
@@ -1207,11 +1196,11 @@ int picoquic_reset_cnx_version(picoquic_cnx_t* cnx, uint8_t* bytes, size_t lengt
                     cnx->first_sack_item.end_of_sack_range = 0;
 
                     /* Reset the streams */
-                    picoquic_clear_stream(&cnx->first_stream);
-                    cnx->first_stream.consumed_offset = 0;
-                    cnx->first_stream.stream_flags = 0;
-                    cnx->first_stream.fin_offset = 0;
-                    cnx->first_stream.sent_offset = 0;
+                    picoquic_clear_stream(&cnx->tls_stream);
+                    cnx->tls_stream.consumed_offset = 0;
+                    cnx->tls_stream.stream_flags = 0;
+                    cnx->tls_stream.fin_offset = 0;
+                    cnx->tls_stream.sent_offset = 0;
                     /* TODO: reset clear text AEAD */
 
                     /* Reset the TLS context, Re-initialize the tls connection */
@@ -1219,54 +1208,15 @@ int picoquic_reset_cnx_version(picoquic_cnx_t* cnx, uint8_t* bytes, size_t lengt
                     cnx->tls_ctx = NULL;
                     ret = picoquic_tlscontext_create(cnx->quic, cnx, current_time);
                     if (ret == 0) {
-                        ret = picoquic_initialize_stream_zero(cnx);
+                        ret = picoquic_initialize_tls_stream(cnx);
                     }
 
-                    if (cnx->aead_encrypt_cleartext_ctx != NULL) {
-                        picoquic_aead_free(cnx->aead_encrypt_cleartext_ctx);
-                        cnx->aead_encrypt_cleartext_ctx = NULL;
-                    }
-
-                    if (cnx->aead_decrypt_cleartext_ctx != NULL) {
-                        picoquic_aead_free(cnx->aead_decrypt_cleartext_ctx);
-                        cnx->aead_decrypt_cleartext_ctx = NULL;
-                    }
-
-                    if (cnx->aead_de_encrypt_cleartext_ctx != NULL) {
-                        picoquic_aead_free(cnx->aead_de_encrypt_cleartext_ctx);
-                        cnx->aead_de_encrypt_cleartext_ctx = NULL;
-                    }
-
-                    if (cnx->aead_0rtt_decrypt_ctx != NULL) {
-                        picoquic_aead_free(cnx->aead_0rtt_decrypt_ctx);
-                        cnx->aead_0rtt_decrypt_ctx = NULL;
-                    }
-
-                    if (cnx->aead_0rtt_encrypt_ctx != NULL) {
-                        picoquic_aead_free(cnx->aead_0rtt_encrypt_ctx);
-                        cnx->aead_0rtt_encrypt_ctx = NULL;
-                    }
-
-                    if (cnx->pn_enc_cleartext != NULL)
-                    {
-                        picoquic_pn_enc_free(cnx->pn_enc_cleartext);
-                        cnx->pn_enc_cleartext = NULL;
-                    }
-
-                    if (cnx->pn_dec_cleartext != NULL)
-                    {
-                        picoquic_pn_enc_free(cnx->pn_dec_cleartext);
-                        cnx->pn_dec_cleartext = NULL;
-                    }
-
-                    if (cnx->pn_enc_0rtt != NULL)
-                    {
-                        picoquic_pn_enc_free(cnx->pn_enc_0rtt);
-                        cnx->pn_enc_0rtt = NULL;
+                    for (int k = 0; k < 4; k++) {
+                        picoquic_crypto_context_free(&cnx->crypto_context[k]);
                     }
 
                     if (ret == 0) {
-                        ret = picoquic_setup_cleartext_aead_contexts(cnx);
+                        ret = picoquic_setup_initial_traffic_keys(cnx);
                     }
                     break;
                 }
@@ -1277,7 +1227,7 @@ int picoquic_reset_cnx_version(picoquic_cnx_t* cnx, uint8_t* bytes, size_t lengt
     return ret;
 }
 
-int picoquic_connection_error(picoquic_cnx_t* cnx, uint32_t local_error)
+int picoquic_connection_error(picoquic_cnx_t* cnx, uint16_t local_error)
 {
     if (cnx->cnx_state == picoquic_state_client_ready || cnx->cnx_state == picoquic_state_server_ready) {
         cnx->local_error = local_error;
@@ -1337,74 +1287,8 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
         picoquic_remove_cnx_from_list(cnx);
         picoquic_remove_cnx_from_wake_list(cnx);
 
-        if (cnx->aead_encrypt_cleartext_ctx != NULL) {
-            picoquic_aead_free(cnx->aead_encrypt_cleartext_ctx);
-            cnx->aead_encrypt_cleartext_ctx = NULL;
-        }
-
-        if (cnx->aead_decrypt_cleartext_ctx != NULL) {
-            picoquic_aead_free(cnx->aead_decrypt_cleartext_ctx);
-            cnx->aead_decrypt_cleartext_ctx = NULL;
-        }
-
-        if (cnx->aead_de_encrypt_cleartext_ctx != NULL) {
-            picoquic_aead_free(cnx->aead_de_encrypt_cleartext_ctx);
-            cnx->aead_de_encrypt_cleartext_ctx = NULL;
-        }
-
-        if (cnx->aead_decrypt_ctx != NULL) {
-            picoquic_aead_free(cnx->aead_decrypt_ctx);
-            cnx->aead_decrypt_ctx = NULL;
-        }
-
-        if (cnx->aead_encrypt_ctx != NULL) {
-            picoquic_aead_free(cnx->aead_encrypt_ctx);
-            cnx->aead_encrypt_ctx = NULL;
-        }
-
-        if (cnx->aead_de_encrypt_ctx != NULL) {
-            picoquic_aead_free(cnx->aead_de_encrypt_ctx);
-            cnx->aead_encrypt_ctx = NULL;
-        }
-
-        if (cnx->aead_0rtt_decrypt_ctx != NULL) {
-            picoquic_aead_free(cnx->aead_0rtt_decrypt_ctx);
-            cnx->aead_0rtt_decrypt_ctx = NULL;
-        }
-
-        if (cnx->aead_0rtt_encrypt_ctx != NULL) {
-            picoquic_aead_free(cnx->aead_0rtt_encrypt_ctx);
-            cnx->aead_0rtt_encrypt_ctx = NULL;
-        }
-
-        if (cnx->pn_enc != NULL)
-        {
-            picoquic_pn_enc_free(cnx->pn_enc);
-            cnx->pn_enc = NULL;
-        }
-
-        if (cnx->pn_dec != NULL)
-        {
-            picoquic_pn_enc_free(cnx->pn_dec);
-            cnx->pn_dec = NULL;
-        }
-
-        if (cnx->pn_enc_cleartext != NULL)
-        {
-            picoquic_pn_enc_free(cnx->pn_enc_cleartext);
-            cnx->pn_enc_cleartext = NULL;
-        }
-
-        if (cnx->pn_dec_cleartext != NULL)
-        {
-            picoquic_pn_enc_free(cnx->pn_dec_cleartext);
-            cnx->pn_dec_cleartext = NULL;
-        }
-
-        if (cnx->pn_enc_0rtt != NULL)
-        {
-            picoquic_pn_enc_free(cnx->pn_enc_0rtt);
-            cnx->pn_enc_0rtt = NULL;
+        for (int i = 0; i < 4; i++) {
+            picoquic_crypto_context_free(&cnx->crypto_context[i]);
         }
 
         while (cnx->retransmit_newest != NULL) {
@@ -1423,12 +1307,13 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
             free(misc_frame);
         }
 
-        while ((stream = cnx->first_stream.next_stream) != NULL) {
-            cnx->first_stream.next_stream = stream->next_stream;
+        picoquic_clear_stream(&cnx->tls_stream);
+
+        while ((stream = cnx->first_stream) != NULL) {
+            cnx->first_stream = stream->next_stream;
             picoquic_clear_stream(stream);
             free(stream);
         }
-        picoquic_clear_stream(&cnx->first_stream);
 
         if (cnx->tls_ctx != NULL) {
             picoquic_tlscontext_free(cnx->tls_ctx);
