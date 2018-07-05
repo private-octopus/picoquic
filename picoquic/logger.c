@@ -302,8 +302,7 @@ char const* picoquic_log_frame_names(uint8_t frame_type)
         frame_name = "crypto_close";
         break;
     default:
-        if (frame_type >= picoquic_frame_type_stream_range_min &&
-            frame_type <= picoquic_frame_type_stream_range_max) {
+        if (PICOQUIC_IN_RANGE(frame_type, picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
             frame_name = "stream";
         }
         break;
@@ -846,7 +845,7 @@ void picoquic_log_frames(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t leng
             fprintf(F, "%" PRIx64 ": ", cnx_id64);
         }
 
-        if (bytes[byte_index] >= picoquic_frame_type_stream_range_min && bytes[byte_index] <= picoquic_frame_type_stream_range_max) {
+        if (PICOQUIC_IN_RANGE(bytes[byte_index], picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
             ack_or_data = 1;
             byte_index += picoquic_log_stream_frame(F, bytes + byte_index, length - byte_index);
         } else if (bytes[byte_index] == picoquic_frame_type_ack) {

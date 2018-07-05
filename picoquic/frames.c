@@ -389,16 +389,9 @@ int picoquic_decode_stop_sending_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
  * STREAM frames implicitly create a stream and carry stream data. 
  */
 
-int picoquic_test_stream_frame_unlimited(uint8_t* bytes)
+int picoquic_is_stream_frame_unlimited(const uint8_t* bytes)
 {
-    int ret = 0;
-    int first_byte = bytes[0];
-
-    if (first_byte >= picoquic_frame_type_stream_range_min && first_byte <= picoquic_frame_type_stream_range_max && (first_byte & 0x02) == 0) {
-        ret = 1;
-    }
-
-    return ret;
+    return PICOQUIC_BITS_CLEAR_IN_RANGE(bytes[0], picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max, 0x02);
 }
 
 int picoquic_parse_stream_header(const uint8_t* bytes, size_t bytes_max,
@@ -1286,7 +1279,7 @@ int picoquic_check_stream_frame_already_acked(picoquic_cnx_t* cnx, uint8_t* byte
 
     *no_need_to_repeat = 0;
 
-    if (bytes[0] >= picoquic_frame_type_stream_range_min && bytes[0] <= picoquic_frame_type_stream_range_max) {
+    if (PICOQUIC_IN_RANGE(bytes[0], picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
         ret = picoquic_parse_stream_header(bytes, bytes_max,
             &stream_id, &offset, &data_length, &fin, &consumed);
 
@@ -1355,7 +1348,7 @@ void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t* cnx, picoquic_pa
             ret = picoquic_process_ack_of_ack_frame(&cnx->first_sack_item, &p->bytes[byte_index],
                 p->length - byte_index, &frame_length);
             byte_index += frame_length;
-        } else if (p->bytes[byte_index] >= picoquic_frame_type_stream_range_min && p->bytes[byte_index] <= picoquic_frame_type_stream_range_max) {
+        } else if (PICOQUIC_IN_RANGE(p->bytes[byte_index], picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
             ret = picoquic_process_ack_of_stream_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);
             byte_index += frame_length;
         } else {
@@ -2134,7 +2127,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
         uint8_t first_byte = bytes[byte_index];
         size_t consumed = 0;
 
-        if (first_byte >= picoquic_frame_type_stream_range_min && first_byte <= picoquic_frame_type_stream_range_max) {
+        if (PICOQUIC_IN_RANGE(first_byte, picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
             if (epoch != 1 && epoch != 3) {
                 DBG_PRINTF("Data frame (0x%x), when only TLS stream is expected", first_byte);
                 ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION);
@@ -2468,7 +2461,7 @@ int picoquic_skip_frame(uint8_t* bytes, size_t bytes_max, size_t* consumed,
     *pure_ack = 1;
     *consumed = 0;
 
-    if (first_byte >= picoquic_frame_type_stream_range_min && first_byte <= picoquic_frame_type_stream_range_max) {
+    if (PICOQUIC_IN_RANGE(first_byte, picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
         *pure_ack = 0;
         ret = picoquic_skip_stream_frame(bytes, bytes_max, consumed);
     } else if (first_byte == picoquic_frame_type_ack) {

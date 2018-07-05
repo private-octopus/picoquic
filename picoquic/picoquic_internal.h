@@ -84,6 +84,16 @@ typedef enum {
 } picoquic_frame_type_enum_t;
 
 /*
+ * Efficient range operations that assume range containing bitfields.
+ * Namely, it assumes max&min==min, min&bits==0, max&bits==bits.
+ */
+#define PICOQUIC_IN_RANGE(v, min, max)                  (((v) & ~((min)^(max))) == (min))
+// Is v between min and max and has all given bits set/clear?
+#define PICOQUIC_BITS_SET_IN_RANGE(  v, min, max, bits) (((v) & ~((min)^(max)^(bits))) == ((min)^(bits)))
+#define PICOQUIC_BITS_CLEAR_IN_RANGE(v, min, max, bits) (((v) & ~((min)^(max)^(bits))) == (min))
+
+
+/*
  * Supported versions
  */
 #define PICOQUIC_FIRST_INTEROP_VERSION 0xFF000005
@@ -595,7 +605,7 @@ void picoquic_update_payload_length(
 
 uint32_t picoquic_get_checksum_length(picoquic_cnx_t* cnx, int is_cleartext_mode);
 
-int picoquic_test_stream_frame_unlimited(uint8_t* bytes);
+int picoquic_is_stream_frame_unlimited(const uint8_t* bytes);
 int picoquic_check_stream_frame_already_acked(picoquic_cnx_t* cnx, uint8_t* bytes,
     size_t bytes_max, int* no_need_to_repeat);
 
