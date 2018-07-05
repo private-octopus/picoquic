@@ -302,6 +302,10 @@ char const* picoquic_log_frame_names(uint8_t frame_type)
         frame_name = "crypto_close";
         break;
     default:
+        if (frame_type >= picoquic_frame_type_stream_range_min &&
+            frame_type <= picoquic_frame_type_stream_range_max) {
+            frame_name = "stream";
+        }
         break;
     }
 
