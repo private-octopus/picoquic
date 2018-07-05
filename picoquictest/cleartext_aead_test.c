@@ -147,13 +147,13 @@ int cleartext_aead_test()
         memcpy(incoming, clear_text, ph_init.offset);
         encoded_length = picoquic_aead_encrypt_generic(incoming + ph_init.offset,
             clear_text + ph_init.offset, clear_length - ph_init.offset,
-            seqnum, incoming, ph_init.offset, cnx_client->aead_encrypt_cleartext_ctx);
+            seqnum, incoming, ph_init.offset, cnx_client->crypto_context[0].aead_encrypt);
         encoded_length += ph_init.offset;
 
         /* AEAD Decrypt */
         decoded_length = picoquic_aead_decrypt_generic(incoming + ph_init.offset,
             incoming + ph_init.offset, encoded_length - ph_init.offset, seqnum,
-            incoming, ph_init.offset, cnx_server->aead_decrypt_cleartext_ctx);
+            incoming, ph_init.offset, cnx_server->crypto_context[0].aead_decrypt);
         decoded_length += ph_init.offset;
 
         if (decoded_length != clear_length) {
@@ -186,14 +186,6 @@ int cleartext_aead_test()
 
 static picoquic_connection_id_t clear_test_vector_cnx_id = { { 0x83, 0x94, 0xc8, 0xf0, 0x3e, 0x51, 0x57, 0x08 }, 8 };
 #if 0
-static uint32_t clear_test_vector_vn = 0xff000009;
-static uint8_t clear_test_vector_client_iv[12] = {
-    0xb1, 0xf9, 0xa7, 0xe2, 0x7c, 0xc2, 0x33, 0xbb,
-    0x99, 0xe2, 0x03, 0x71 };
-static uint8_t clear_test_vector_server_iv[12] = {
-    0xd5, 0xee, 0xe8, 0xb5, 0x7c, 0x9e, 0xc7, 0xc4,
-    0xbe, 0x98, 0x4a, 0xa5 };
-#else
 static uint32_t clear_test_vector_vn = 0xff00000a;
 static uint8_t clear_test_vector_client_iv[12] = {
     0xd1, 0xfd, 0x26, 0x05, 0x42, 0x75, 0x3a, 0xba,
@@ -201,6 +193,15 @@ static uint8_t clear_test_vector_client_iv[12] = {
 static uint8_t clear_test_vector_server_iv[12] = {
     0x25, 0xb5, 0x8e, 0x24, 0x6d, 0x9e, 0x7d, 0x5f,
     0xfe, 0x43, 0x23, 0xfe };
+#else
+static uint32_t clear_test_vector_vn = 0xff00000d;
+static uint8_t clear_test_vector_client_iv[12] = {
+    0xab, 0x95, 0x0b, 0x01, 0x98, 0x63, 0x79, 0x78,
+    0xcf, 0x44, 0xaa, 0xb9 };
+static uint8_t clear_test_vector_server_iv[12] = {
+    0x32, 0x05, 0x03, 0x5a, 0x3c, 0x93, 0x7c, 0x90,
+    0x2e, 0xe4, 0xf4, 0xd6 };
+
 #endif
 
 
@@ -242,18 +243,18 @@ int cleartext_aead_vector_test()
 
     if (ret == 0) {
         /* Compare client key to expected value */
-        if (cnx_client->aead_encrypt_cleartext_ctx == NULL)
+        if (cnx_client->crypto_context[0].aead_encrypt == NULL)
         {
             DBG_PRINTF("%s", "Could not create clear text AEAD encryption context.\n");
             ret = -1;
-        } else if (0 != cleartext_iv_cmp(cnx_client->aead_encrypt_cleartext_ctx, 
+        } else if (0 != cleartext_iv_cmp(cnx_client->crypto_context[0].aead_encrypt, 
             clear_test_vector_client_iv, sizeof(clear_test_vector_client_iv))) {
             DBG_PRINTF("%s", "Clear text AEAD encryption IV does not match expected value.\n");
             ret = -1;
-        } else if (cnx_client->aead_decrypt_cleartext_ctx == NULL) {
+        } else if (cnx_client->crypto_context[0].aead_decrypt == NULL) {
             DBG_PRINTF("%s", "Could not create clear text AEAD decryption context.\n");
             ret = -1;
-        } else if (0 != cleartext_iv_cmp(cnx_client->aead_decrypt_cleartext_ctx,
+        } else if (0 != cleartext_iv_cmp(cnx_client->crypto_context[0].aead_decrypt,
             clear_test_vector_server_iv, sizeof(clear_test_vector_server_iv))) {
             DBG_PRINTF("%s", "Clear text AEAD decryption IV does not match expected value.\n");
             ret = -1;
@@ -479,12 +480,14 @@ int cleartext_pn_enc_test()
             0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a,
             0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96};
 
-        ret = test_one_pn_enc_pair(seq_num_1, 4, cnx_client->pn_enc_cleartext, cnx_server->pn_dec_cleartext, sample_1);
+        ret = test_one_pn_enc_pair(seq_num_1, 4, 
+            cnx_client->crypto_context[0].pn_enc, cnx_server->crypto_context[0].pn_dec, sample_1);
 
         if (ret != 0) {
             DBG_PRINTF("%s", "Test of encoding PN sample 1 failed.\n");
         } else {
-            ret = test_one_pn_enc_pair(seq_num_2, 4, cnx_server->pn_enc_cleartext, cnx_client->pn_dec_cleartext, sample_2);
+            ret = test_one_pn_enc_pair(seq_num_2, 4, cnx_server->crypto_context[0].pn_enc, 
+                cnx_client->crypto_context[0].pn_dec, sample_2);
             if (ret != 0) {
                 DBG_PRINTF("%s", "Test of encoding PN sample 2 failed.\n");
             }
@@ -510,14 +513,14 @@ int cleartext_pn_enc_test()
     return ret;
 }
 
-/* Test vector copied from Kazuho Ohu's test code in quicly */
+/* Test vector copied from Kazuho Ohu's test code in quicly -- then changed */
 
 int cleartext_pn_vector_test()
 {
     int ret = 0;
     static const uint8_t cid[] = { 0x77, 0x0d, 0xc2, 0x6c, 0x17, 0x50, 0x9b, 0x35 };
     static const uint8_t sample[] = { 0x05, 0x80, 0x24, 0xa9, 0x72, 0x75, 0xf0, 0x1d, 0x2a, 0x1e, 0xc9, 0x1f, 0xd1, 0xc2, 0x65, 0xbb };
-    static const uint8_t encrypted_pn[] = { 0x3b, 0xb4, 0xb1, 0x74 };
+    static const uint8_t encrypted_pn[] = { 0x02, 0x6c, 0xe6, 0xde };
     static const uint8_t expected_pn[] = { 0xc0, 0x00, 0x00, 0x00 };
 
     struct sockaddr_in test_addr_s;
@@ -552,7 +555,7 @@ int cleartext_pn_vector_test()
         test_addr_s.sin_port = 4433;
 
         cnx_server = picoquic_create_cnx(qserver, initial_cnxid, initial_cnxid,
-            (struct sockaddr*)&test_addr_s, 0, PICOQUIC_SIXTH_INTEROP_VERSION, NULL, NULL, 0);
+            (struct sockaddr*)&test_addr_s, 0, PICOQUIC_SEVENTH_INTEROP_VERSION, NULL, NULL, 0);
 
         if (cnx_server == NULL) {
             DBG_PRINTF("%s", "Could not create server connection context.\n");
@@ -566,7 +569,7 @@ int cleartext_pn_vector_test()
 
         memset(decrypted, 0, sizeof(decrypted));
 
-        picoquic_pn_encrypt(cnx_server->pn_dec_cleartext, sample, decrypted, encrypted_pn, sizeof(encrypted_pn));
+        picoquic_pn_encrypt(cnx_server->crypto_context[0].pn_dec, sample, decrypted, encrypted_pn, sizeof(encrypted_pn));
 
         if (memcmp(decrypted, expected_pn, sizeof(expected_pn)) != 0)
         {

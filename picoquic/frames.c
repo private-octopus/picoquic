@@ -802,7 +802,14 @@ int picoquic_is_tls_stream_ready(picoquic_cnx_t* cnx)
 
     if (stream->send_queue != NULL &&
         stream->send_queue->length > stream->send_queue->offset) {
-        ret = 1;
+        /* Need to consider whether the epoch allows for transmission */
+        for (int i = 0; i < 4; i++) {
+            if (stream->sent_offset < cnx->epoch_offsets[i + 1] &&
+                cnx->crypto_context[i].aead_encrypt != NULL) {
+                ret = 1;
+                break;
+            }
+        }
     }
 
     return ret;
@@ -894,11 +901,11 @@ int picoquic_prepare_crypto_hs_frame(picoquic_cnx_t* cnx, int epoch,
             } else {
                 /* This is going to be a trial and error process */
                 size_t l_len = 0;
-                size_t available = stream->send_queue->length - stream->send_queue->offset;
+                size_t available = stream->send_queue->length - (size_t)stream->send_queue->offset;
      
                 /* Adjust to limit content to epoch */
                 if (stream->sent_offset + available > next_epoch_offset) {
-                    available = next_epoch_offset - stream->sent_offset;
+                    available = next_epoch_offset - (size_t)stream->sent_offset;
                 }
 
                 length = available;

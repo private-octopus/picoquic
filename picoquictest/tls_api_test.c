@@ -2484,6 +2484,38 @@ int pn_enc_1rtt_test()
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
     }
 
+    if (ret == 0) {
+        uint64_t time_out = simulated_time + 4000000;
+        int nb_trials = 0;
+        int nb_inactive = 0;
+
+        while (simulated_time <time_out &&
+            test_ctx->cnx_client->cnx_state == picoquic_state_client_ready &&
+            test_ctx->cnx_server->cnx_state == picoquic_state_server_ready &&
+            test_ctx->cnx_server->crypto_context[3].aead_decrypt == NULL &&
+            nb_trials < 1024 &&
+            nb_inactive < 64 &&
+            ret == 0) {
+            int was_active = 0;
+            nb_trials++;
+
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, &was_active);
+
+            if (was_active) {
+                nb_inactive = 0;
+            }
+            else {
+                nb_inactive++;
+            }
+        }
+
+        if (test_ctx->cnx_server->crypto_context[3].aead_decrypt == NULL) {
+            DBG_PRINTF("Could not obtain the 1-RTT decryption key, state = %d\n",
+                test_ctx->cnx_server->cnx_state);
+            ret = -1;
+        }
+    }
+
     if (ret == 0)
     {
         /* Try to encrypt a sequence number */
@@ -2499,11 +2531,11 @@ int pn_enc_1rtt_test()
 
             for (int i = 1; i < 4; i *= 2)
             {
-                ret = test_one_pn_enc_pair(seq_num_1, 4, test_ctx->cnx_client->pn_enc, test_ctx->cnx_server->pn_dec, sample_1);
+                ret = test_one_pn_enc_pair(seq_num_1, 4, test_ctx->cnx_client->crypto_context[3].pn_enc, test_ctx->cnx_server->crypto_context[3].pn_dec, sample_1);
 
                 if (ret == 0)
                 {
-                    ret = test_one_pn_enc_pair(seq_num_2, 4, test_ctx->cnx_server->pn_enc, test_ctx->cnx_client->pn_dec, sample_2);
+                    ret = test_one_pn_enc_pair(seq_num_2, 4, test_ctx->cnx_server->crypto_context[3].pn_enc, test_ctx->cnx_client->crypto_context[3].pn_dec, sample_2);
                 }
             }
         }

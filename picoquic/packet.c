@@ -460,6 +460,7 @@ size_t  picoquic_decrypt_packet(picoquic_cnx_t* cnx,
     return decoded;
 }
 
+#if 0
 /*
  * Decode an incoming clear text packet.
  * This is done "in place"
@@ -469,7 +470,8 @@ size_t picoquic_decrypt_cleartext(picoquic_cnx_t* cnx,
     int * already_received)
 {
     size_t decoded_length = picoquic_decrypt_packet(cnx, bytes, length, ph,
-        cnx->pn_dec_cleartext, cnx->aead_decrypt_cleartext_ctx, already_received);
+        cnx->crypto_context[0].pn_dec, cnx->crypto_context[0].aead_decrypt, 
+        already_received);
 
     if (decoded_length > (length - ph->offset)) {
         /* detect an error */
@@ -480,6 +482,7 @@ size_t picoquic_decrypt_cleartext(picoquic_cnx_t* cnx,
 
     return decoded_length;
 }
+#endif
 
 int picoquic_parse_header_and_decrypt(
     picoquic_quic_t* quic,
@@ -525,19 +528,23 @@ int picoquic_parse_header_and_decrypt(
                     break;
                 case picoquic_packet_initial:
                     decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph,
-                        (*pcnx)->pn_dec_cleartext, (*pcnx)->aead_decrypt_cleartext_ctx, &already_received);
+                        (*pcnx)->crypto_context[0].pn_dec, 
+                        (*pcnx)->crypto_context[0].aead_decrypt, &already_received);
                     break;
                 case picoquic_packet_retry:
                     decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph,
-                        (*pcnx)->pn_dec_cleartext, (*pcnx)->aead_decrypt_cleartext_ctx, &already_received);
+                        (*pcnx)->crypto_context[0].pn_dec,
+                        (*pcnx)->crypto_context[0].aead_decrypt, &already_received);
                     break;
                 case picoquic_packet_handshake:
                     decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph,
-                        (*pcnx)->pn_dec_cleartext, (*pcnx)->aead_decrypt_cleartext_ctx, &already_received);
+                        (*pcnx)->crypto_context[2].pn_dec,
+                        (*pcnx)->crypto_context[2].aead_decrypt, &already_received);
                     break;
                 case picoquic_packet_0rtt_protected:
-                    decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph, (*pcnx)->pn_enc_0rtt,
-                        (*pcnx)->aead_0rtt_decrypt_ctx, &already_received);
+                    decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph,
+                        (*pcnx)->crypto_context[1].pn_dec,
+                        (*pcnx)->crypto_context[1].aead_decrypt, &already_received);
                     break;
                 case picoquic_packet_1rtt_protected_phi0:
                 case picoquic_packet_1rtt_protected_phi1:
@@ -546,8 +553,9 @@ int picoquic_parse_header_and_decrypt(
                     cmp_reset_secret = memcmp(bytes + length - PICOQUIC_RESET_SECRET_SIZE,
                         (*pcnx)->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
                     /* AEAD Decrypt, in place */
-                    decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph, (*pcnx)->pn_dec,
-                        (*pcnx)->aead_decrypt_ctx, &already_received);
+                    decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph,
+                        (*pcnx)->crypto_context[3].pn_dec,
+                        (*pcnx)->crypto_context[3].aead_decrypt, &already_received);
                     break;
                 default:
                     /* Packet type error. Log and ignore */
@@ -563,19 +571,19 @@ int picoquic_parse_header_and_decrypt(
                     break;
                 case picoquic_packet_initial:
                     decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph,
-                        (*pcnx)->pn_enc_cleartext, (*pcnx)->aead_de_encrypt_cleartext_ctx, NULL);
+                        (*pcnx)->crypto_context[0].pn_enc, (*pcnx)->crypto_context[0].aead_de_encrypt, NULL);
                     break;
                 case picoquic_packet_retry:
                     decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph,
-                        (*pcnx)->pn_enc_cleartext, (*pcnx)->aead_de_encrypt_cleartext_ctx, NULL);
+                        (*pcnx)->crypto_context[0].pn_enc, (*pcnx)->crypto_context[0].aead_de_encrypt, NULL);
                     break;
                 case picoquic_packet_handshake:
                     decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph,
-                        (*pcnx)->pn_enc_cleartext, (*pcnx)->aead_de_encrypt_cleartext_ctx, NULL);
+                        (*pcnx)->crypto_context[2].pn_enc, (*pcnx)->crypto_context[2].aead_de_encrypt, NULL);
                     break;
                 case picoquic_packet_0rtt_protected:
-                    decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph, (*pcnx)->pn_enc_0rtt,
-                        (*pcnx)->aead_0rtt_decrypt_ctx, NULL);
+                    decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph,
+                        (*pcnx)->crypto_context[1].pn_enc, (*pcnx)->crypto_context[1].aead_de_encrypt, NULL);
                     break;
                 case picoquic_packet_1rtt_protected_phi0:
                 case picoquic_packet_1rtt_protected_phi1:
@@ -584,8 +592,8 @@ int picoquic_parse_header_and_decrypt(
                     cmp_reset_secret = memcmp(bytes + length - PICOQUIC_RESET_SECRET_SIZE,
                         (*pcnx)->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
                     /* AEAD Decrypt, in place */
-                    decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph, (*pcnx)->pn_enc,
-                        (*pcnx)->aead_de_encrypt_ctx, NULL);
+                    decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph,
+                        (*pcnx)->crypto_context[3].pn_enc, (*pcnx)->crypto_context[3].aead_de_encrypt, NULL);
                     break;
                 default:
                     /* Packet type error. Log and ignore */
@@ -790,7 +798,7 @@ void picoquic_queue_stateless_reset(picoquic_cnx_t* cnx,
             /* AEAD Encrypt, to the send buffer */
             sp->length = picoquic_protect_packet(cnx, picoquic_packet_retry, cleartext, sequence_number,
                 byte_index, header_length,
-                sp->bytes, cnx->aead_encrypt_cleartext_ctx, cnx->pn_enc_cleartext);
+                sp->bytes, cnx->crypto_context[0].aead_encrypt, cnx->crypto_context[0].pn_enc);
 
             memset(&sp->addr_to, 0, sizeof(sp->addr_to));
             memcpy(&sp->addr_to, addr_from,
@@ -922,52 +930,13 @@ int picoquic_incoming_server_stateless(
             /* reset the initial CNX_ID to the version sent by the server */
             cnx->initial_cnxid = ph->srce_cnx_id;
 
-            /* reset the clear text AEAD */
-            if (cnx->aead_encrypt_cleartext_ctx != NULL) {
-                picoquic_aead_free(cnx->aead_encrypt_cleartext_ctx);
-                cnx->aead_encrypt_cleartext_ctx = NULL;
-            }
-
-            if (cnx->aead_decrypt_cleartext_ctx != NULL) {
-                picoquic_aead_free(cnx->aead_decrypt_cleartext_ctx);
-                cnx->aead_decrypt_cleartext_ctx = NULL;
-            }
-
-            if (cnx->aead_de_encrypt_cleartext_ctx != NULL) {
-                picoquic_aead_free(cnx->aead_de_encrypt_cleartext_ctx);
-                cnx->aead_de_encrypt_cleartext_ctx = NULL;
-            }
-
-            if (cnx->pn_enc_cleartext != NULL)
-            {
-                picoquic_pn_enc_free(cnx->pn_enc_cleartext);
-                cnx->pn_enc_cleartext = NULL;
-            }
-
-            if (cnx->pn_dec_cleartext != NULL)
-            {
-                picoquic_pn_enc_free(cnx->pn_dec_cleartext);
-                cnx->pn_dec_cleartext = NULL;
-            }
-
-            if (cnx->aead_0rtt_decrypt_ctx != NULL) {
-                picoquic_aead_free(cnx->aead_0rtt_decrypt_ctx);
-                cnx->aead_0rtt_decrypt_ctx = NULL;
-            }
-
-            if (cnx->aead_0rtt_encrypt_ctx != NULL) {
-                picoquic_aead_free(cnx->aead_0rtt_encrypt_ctx);
-                cnx->aead_0rtt_encrypt_ctx = NULL;
-            }
-
-            if (cnx->pn_enc_0rtt != NULL)
-            {
-                picoquic_pn_enc_free(cnx->pn_enc_0rtt);
-                cnx->pn_enc_0rtt = NULL;
+            /* reset the encryption contexts */
+            for (int i = 0; i < 4; i++) {
+                picoquic_crypto_context_free(&cnx->crypto_context[i]);
             }
 
             /* Reinit the clear text AEAD */
-            ret = picoquic_setup_cleartext_aead_contexts(cnx);
+            ret = picoquic_setup_initial_traffic_keys(cnx);
         }
     }
     if (ret == 0) {

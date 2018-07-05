@@ -92,6 +92,7 @@ typedef enum {
 #define PICOQUIC_FOURTH_INTEROP_VERSION 0xFF000009
 #define PICOQUIC_FIFTH_INTEROP_VERSION 0xFF00000B
 #define PICOQUIC_SIXTH_INTEROP_VERSION 0xFF00000C
+#define PICOQUIC_SEVENTH_INTEROP_VERSION 0xFF00000D
 #define PICOQUIC_INTERNAL_TEST_VERSION_1 0x50435130
 
 #define PICOQUIC_INTEROP_VERSION_INDEX 1
@@ -351,6 +352,20 @@ typedef struct st_picoquic_path_t {
 
 } picoquic_path_t;
 
+/* Per sequence context. There are four such contexts:
+ * 0: Initial context, with encryption based on a version dependent key,
+ * 1: 0-RTT context
+ * 2: Handshake context
+ * 3: Application data
+ */
+typedef struct st_picoquic_crypto_context_t {
+    void* aead_encrypt;
+    void* aead_decrypt;
+    void* aead_de_encrypt; /* used by logging functions to see what is sent. */
+    void* pn_enc; /* Used for PN encryption */
+    void* pn_dec; /* Used for PN decryption */
+} picoquic_crypto_context_t;
+
 /* 
  * Per connection context.
  */
@@ -420,12 +435,13 @@ typedef struct st_picoquic_cnx_t {
     picoquic_stream_head tls_stream;
     size_t epoch_offsets[5]; /* documents the offset for the sending side of the tls_stream */
     size_t epoch_received[5]; /* documents the offset for the sending side of the tls_stream */
-    size_t current_receive_epoch; /* TODO: replace this by packet type once new API is tested */
-
+    
     /* Liveness detection */
     uint64_t latest_progress_time; /* last local time at which the connection progressed */
 
     /* Encryption and decryption objects */
+    picoquic_crypto_context_t crypto_context[4];
+#if 0
     void* aead_encrypt_cleartext_ctx;
     void* aead_decrypt_cleartext_ctx;
     void* aead_de_encrypt_cleartext_ctx; /* used by logging functions to see what is sent. */
@@ -439,6 +455,7 @@ typedef struct st_picoquic_cnx_t {
     void* aead_0rtt_encrypt_ctx; /* setup on client if 0-RTT is possible */
     void* aead_0rtt_decrypt_ctx; /* setup on server if 0-RTT is possible, also used on client for logging */
     void* pn_enc_0rtt; /* Used for PN encryption or decryption of 0-RTT packets */
+#endif
 
     /* Receive state */
     picoquic_sack_item_t first_sack_item;
@@ -613,11 +630,11 @@ uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t 
 size_t  picoquic_decrypt_packet(picoquic_cnx_t* cnx,
     uint8_t* bytes, size_t length, picoquic_packet_header* ph,
     void * pn_enc, void* aead_context, int * already_received);
-
+#if 0
 size_t picoquic_decrypt_cleartext(picoquic_cnx_t* cnx,
     uint8_t* bytes, size_t length, picoquic_packet_header* ph,
     int * already_received);
-
+#endif
 uint32_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     picoquic_packet_type_enum ptype,
     uint8_t * bytes, uint64_t sequence_number,
