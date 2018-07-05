@@ -2326,15 +2326,8 @@ int wrong_keyshare_test()
 */
 
 static uint8_t clientHelloWrongTls[] = {
-#if 0
-    /* TLS Stream header, including length */
-    0x18, 0x00, 0x41, 0x29,
-    /* TLS Record Header, end with 2 bytes length*/
-    0x16, 0x03, 0x03, 0x01, 0x24,
-#else
     /* TLS Stream header, including length */
     0x18, 0x00, 0x41, 0x24,
-#endif
     /* Handshake protocol header for CH, end with 3 bytes length */
     0x01, 0x00, 0x01, 0x20,
     /* CH length 73 + extensions 209 = 282, 0x0120 */

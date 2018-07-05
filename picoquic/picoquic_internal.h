@@ -441,21 +441,6 @@ typedef struct st_picoquic_cnx_t {
 
     /* Encryption and decryption objects */
     picoquic_crypto_context_t crypto_context[4];
-#if 0
-    void* aead_encrypt_cleartext_ctx;
-    void* aead_decrypt_cleartext_ctx;
-    void* aead_de_encrypt_cleartext_ctx; /* used by logging functions to see what is sent. */
-    void* pn_enc_cleartext; /* Used for PN encryption of clear text packets */
-    void* pn_dec_cleartext; /* Used for PN decryption of clear text packets */
-    void* aead_encrypt_ctx;
-    void* aead_decrypt_ctx;
-    void* aead_de_encrypt_ctx; /* used by logging functions to see what is sent. */
-    void* pn_enc; /* Used for PN encryption of 1 RTT packets */
-    void* pn_dec; /* Used for PN decryption of 1 RTT packets */
-    void* aead_0rtt_encrypt_ctx; /* setup on client if 0-RTT is possible */
-    void* aead_0rtt_decrypt_ctx; /* setup on server if 0-RTT is possible, also used on client for logging */
-    void* pn_enc_0rtt; /* Used for PN encryption or decryption of 0-RTT packets */
-#endif
 
     /* Receive state */
     picoquic_sack_item_t first_sack_item;
@@ -630,11 +615,7 @@ uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t 
 size_t  picoquic_decrypt_packet(picoquic_cnx_t* cnx,
     uint8_t* bytes, size_t length, picoquic_packet_header* ph,
     void * pn_enc, void* aead_context, int * already_received);
-#if 0
-size_t picoquic_decrypt_cleartext(picoquic_cnx_t* cnx,
-    uint8_t* bytes, size_t length, picoquic_packet_header* ph,
-    int * already_received);
-#endif
+
 uint32_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     picoquic_packet_type_enum ptype,
     uint8_t * bytes, uint64_t sequence_number,

@@ -460,30 +460,6 @@ size_t  picoquic_decrypt_packet(picoquic_cnx_t* cnx,
     return decoded;
 }
 
-#if 0
-/*
- * Decode an incoming clear text packet.
- * This is done "in place"
- */
-size_t picoquic_decrypt_cleartext(picoquic_cnx_t* cnx,
-    uint8_t* bytes, size_t length, picoquic_packet_header* ph,
-    int * already_received)
-{
-    size_t decoded_length = picoquic_decrypt_packet(cnx, bytes, length, ph,
-        cnx->crypto_context[0].pn_dec, cnx->crypto_context[0].aead_decrypt, 
-        already_received);
-
-    if (decoded_length > (length - ph->offset)) {
-        /* detect an error */
-        decoded_length = 0;
-    } else {
-        decoded_length += ph->offset;
-    }
-
-    return decoded_length;
-}
-#endif
-
 int picoquic_parse_header_and_decrypt(
     picoquic_quic_t* quic,
     uint8_t* bytes,
