@@ -569,13 +569,9 @@ int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id,
                 ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FINAL_OFFSET_ERROR);
             }
         } else if (fin) {
-            if (stream_id == 0) {
-                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION);
-            } else {
-                stream->stream_flags |= picoquic_stream_flag_fin_received;
-                should_notify = stream_id;
-                cnx->latest_progress_time = current_time;
-            }
+            stream->stream_flags |= picoquic_stream_flag_fin_received;
+            should_notify = 1;
+            cnx->latest_progress_time = current_time;
         }
     }
 
@@ -589,7 +585,7 @@ int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id,
         ret = picoquic_queue_network_input(stream, (size_t)offset, bytes, length, &new_data_available);
 
         if (new_data_available) {
-            should_notify = stream_id; /* this way, do not notify stream 0 */
+            should_notify = 1;
             cnx->latest_progress_time = current_time;
         }
     }
