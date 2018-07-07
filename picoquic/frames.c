@@ -1099,7 +1099,7 @@ void picoquic_check_spurious_retransmission(picoquic_cnx_t* cnx,
 static picoquic_packet* picoquic_update_rtt(picoquic_cnx_t* cnx, uint64_t largest,
     uint64_t current_time, uint64_t ack_delay, picoquic_packet_context_enum pc)
 {
-    picoquic_packet* packet = cnx->retransmit_newest;
+    picoquic_packet* packet = cnx->pkt_ctx[pc].retransmit_newest;
 
     /* Check whether this is a new acknowledgement */
     if (largest > cnx->pkt_ctx[pc].highest_acknowledged || cnx->pkt_ctx[pc].first_sack_item.start_of_sack_range == (uint64_t)((int64_t)-1)) {
@@ -1488,7 +1488,7 @@ uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
                 break;
             }
 
-            if (picoquic_process_ack_range(cnx, pc, largest, range, &top_packet, current_time, epoch) != 0) {
+            if (picoquic_process_ack_range(cnx, pc, largest, range, &top_packet, current_time) != 0) {
                 bytes = NULL;
                 break;
             }
@@ -1635,7 +1635,7 @@ int picoquic_prepare_ack_frame(picoquic_cnx_t* cnx, uint64_t current_time,
     return ret;
 }
 
-int picoquic_is_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time)
+int picoquic_is_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, picoquic_packet_context_enum pc)
 {
     int ret = 0;
 
@@ -1967,7 +1967,7 @@ int picoquic_prepare_path_challenge_frame(uint8_t* bytes,
 
 uint8_t* picoquic_decode_path_challenge_frame(picoquic_cnx_t* cnx, uint8_t* bytes, const uint8_t* bytes_max)
 {
-    if (bytes_max - bytes <= challenge_length) {
+    if (bytes_max - bytes <= (int) challenge_length) {
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR);
         bytes = NULL;
 
