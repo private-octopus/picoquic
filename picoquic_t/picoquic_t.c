@@ -33,6 +33,13 @@ typedef struct st_picoquic_test_def_t {
     int (*test_fn)();
 } picoquic_test_def_t;
 
+typedef enum {
+    test_not_run = 0,
+    test_excluded,
+    test_success,
+    test_failed
+} test_status_t;
+
 static const picoquic_test_def_t test_table[] = {
     { "picohash", picohash_test },
     { "cnxcreation", cnxcreation_test },
@@ -186,18 +193,16 @@ int main(int argc, char** argv)
     int nb_test_failed = 0;
     int stress_minutes = 0;
     int found_exclusion = 0;
-    int * is_excluded = malloc(sizeof(int)*nb_tests);
+    test_status_t * test_status = (test_status_t *) calloc(nb_tests, sizeof(test_status_t));
     int opt;
 
-    if (is_excluded == NULL)
+    if (test_status == NULL)
     {
         fprintf(stderr, "Could not allocate memory.\n");
         ret = -1;
     }
     else
     {
-        memset(is_excluded, 0, sizeof(int)*nb_tests);
-
         while (ret == 0 && (opt = getopt(argc, argv, "s:x:h")) != -1) {
             switch (opt) {
             case 'x': {
@@ -208,7 +213,7 @@ int main(int argc, char** argv)
                     ret = usage(argv[0]);
                 }
                 else {
-                    is_excluded[test_number] = 1;
+                    test_status[test_number] = test_excluded;
                     found_exclusion = 1;
                 }
                 break;
@@ -234,7 +239,7 @@ int main(int argc, char** argv)
             if (optind >= argc && found_exclusion == 0) {
                 for (size_t i = 0; i < nb_tests; i++) {
                     if (strcmp(test_table[i].test_name, "stress") != 0) {
-                        is_excluded[i] = 1;
+                        test_status[i] = test_excluded;
                     }
                 }
                 picoquic_stress_test_duration = stress_minutes;
@@ -246,11 +251,14 @@ int main(int argc, char** argv)
         {
             if (optind >= argc) {
                 for (size_t i = 0; i < nb_tests; i++) {
-                    if (is_excluded[i] == 0) {
+                    if (test_status[i] == test_not_run) {
                         nb_test_tried++;
                         if (do_one_test(i, stdout) != 0) {
+                            test_status[i] = test_failed;
                             nb_test_failed++;
                             ret = -1;
+                        } else {
+                            test_status[i] = test_success;
                         }
                     }
                     else if (stress_minutes == 0) {
@@ -268,8 +276,11 @@ int main(int argc, char** argv)
                     else {
                         nb_test_tried++;
                         if (do_one_test(test_number, stdout) != 0) {
+                            test_status[test_number] = test_failed;
                             nb_test_failed++;
                             ret = -1;
+                        } else if (test_status[test_number] == test_not_run) {
+                            test_status[test_number] = test_success;
                         }
                         break;
                     }
@@ -282,7 +293,17 @@ int main(int argc, char** argv)
                 nb_test_failed, (nb_test_failed > 1) ? "" : "s");
         }
 
-        free(is_excluded);
+        if (nb_test_failed > 0) {
+            fprintf(stderr, "Failed test(s): ");
+            for (size_t i = 0; i < nb_tests; i++) {
+                if (test_status[i] == test_failed) {
+                    fprintf(stderr, "%s ", test_table[i].test_name);
+                }
+            }
+            fprintf(stderr, "\n");
+        }
+
+        free(test_status);
     }
     return (ret);
 }
