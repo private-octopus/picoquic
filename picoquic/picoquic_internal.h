@@ -679,14 +679,12 @@ void picoquic_update_stream_initial_remote(picoquic_cnx_t* cnx);
 picoquic_stream_head* picoquic_find_stream(picoquic_cnx_t* cnx, uint64_t stream_id, int create);
 picoquic_stream_head* picoquic_find_ready_stream(picoquic_cnx_t* cnx);
 int picoquic_is_tls_stream_ready(picoquic_cnx_t* cnx);
-int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id,
-    uint64_t offset, int fin, uint8_t* bytes, size_t length, uint64_t current_time);
-int picoquic_decode_stream_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
-    size_t bytes_max, size_t* consumed, uint64_t current_time);
+uint8_t* picoquic_decode_stream_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
+    const uint8_t* bytes_max, uint64_t current_time);
 int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head* stream,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
-int picoquic_decode_crypto_hs_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
-    size_t bytes_max, size_t* consumed, int epoch);
+uint8_t* picoquic_decode_crypto_hs_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
+    const uint8_t* bytes_max, int epoch);
 int picoquic_prepare_crypto_hs_frame(picoquic_cnx_t* cnx, int epoch,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
 int picoquic_prepare_ack_frame(picoquic_cnx_t* cnx, uint64_t current_time,
