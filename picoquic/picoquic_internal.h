@@ -200,6 +200,8 @@ typedef struct st_picoquic_quic_t {
     uint8_t local_ctx_length;
 } picoquic_quic_t;
 
+picoquic_packet_context_enum picoquic_context_from_epoch(int epoch);
+
 /*
  * Transport parameters, as defined by the QUIC transport specification
  */
@@ -352,7 +354,7 @@ typedef struct st_picoquic_path_t {
 
 } picoquic_path_t;
 
-/* Per sequence context. There are four such contexts:
+/* Per epoch crypto context. There are four such contexts:
  * 0: Initial context, with encryption based on a version dependent key,
  * 1: 0-RTT context
  * 2: Handshake context
@@ -365,6 +367,35 @@ typedef struct st_picoquic_crypto_context_t {
     void* pn_enc; /* Used for PN encryption */
     void* pn_dec; /* Used for PN decryption */
 } picoquic_crypto_context_t;
+
+/* Per epoch sequence/packet context.
+ * There are three such contexts:
+ * 0: Application (0-RTT and 1-RTT)
+ * 1: Handshake
+ * 2: Initial
+ */
+
+typedef struct st_picoquic_packet_context_t {
+    uint64_t send_sequence;
+
+    picoquic_sack_item_t first_sack_item;
+    uint64_t time_stamp_largest_received;
+    uint64_t highest_ack_sent;
+    uint64_t highest_ack_time;
+    uint64_t ack_delay_local;
+
+    uint64_t nb_retransmit;
+    uint64_t latest_retransmit_time;
+    uint64_t highest_acknowledged;
+    uint64_t latest_time_acknowledged; /* time at which the highest acknowledged was sent */
+    picoquic_packet* retransmit_newest;
+    picoquic_packet* retransmit_oldest;
+    picoquic_packet* retransmitted_newest;
+    picoquic_packet* retransmitted_oldest;
+
+    unsigned int ack_needed : 1;
+} picoquic_packet_context_t;
+
 
 /* 
  * Per connection context.
@@ -386,7 +417,9 @@ typedef struct st_picoquic_cnx_t {
     unsigned int use_pn_encryption : 1;
     unsigned int is_0RTT_accepted : 1; /* whether 0-RTT is accepted */
     unsigned int remote_parameters_received : 1; /* whether remote parameters where received */
+#if 0
     unsigned int ack_needed : 1;
+#endif
     unsigned int current_spin : 1; /* Current value of the spin bit */             
     unsigned int client_mode : 1; /* Is this connection the client side? */
     unsigned int prev_spin : 1;  /* previous Spin bit */
@@ -430,7 +463,9 @@ typedef struct st_picoquic_cnx_t {
     /* TLS context, TLS Send Buffer, chain of receive buffers (todo) */
     void* tls_ctx;
     struct st_ptls_buffer_t* tls_sendbuf;
+#if 0
     uint64_t send_sequence;
+#endif
     uint16_t psk_cipher_suite_id;
     picoquic_stream_head tls_stream;
     size_t epoch_offsets[5]; /* documents the offset for the sending side of the tls_stream */
@@ -442,12 +477,17 @@ typedef struct st_picoquic_cnx_t {
     /* Encryption and decryption objects */
     picoquic_crypto_context_t crypto_context[4];
 
+    /* Sequence and retransmission state */
+    picoquic_packet_context_t pkt_ctx[picoquic_nb_packet_context];
+
     /* Receive state */
+#if 0
     picoquic_sack_item_t first_sack_item;
     uint64_t time_stamp_largest_received;
     uint64_t highest_ack_sent;
     uint64_t highest_ack_time;
     uint64_t ack_delay_local;
+#endif
 
     /* Retransmission state */
     uint32_t nb_path_challenge_sent;
@@ -455,6 +495,8 @@ typedef struct st_picoquic_cnx_t {
     uint32_t nb_zero_rtt_sent;
     uint32_t nb_zero_rtt_acked;
     uint64_t nb_retransmission_total;
+    uint64_t nb_spurious;
+#if 0
     uint64_t nb_retransmit;
     uint64_t nb_spurious;
     uint64_t latest_retransmit_time;
@@ -464,6 +506,7 @@ typedef struct st_picoquic_cnx_t {
     picoquic_packet* retransmit_oldest;
     picoquic_packet* retransmitted_newest;
     picoquic_packet* retransmitted_oldest;
+#endif
     picoquic_congestion_algorithm_t const* congestion_alg;
 
     /* Flow control information */
@@ -565,6 +608,7 @@ typedef struct _picoquic_packet_header {
     uint16_t payload_length;
     int version_index;
     int epoch;
+    picoquic_packet_context_enum pc;
     unsigned int spin : 1;
     unsigned int spin_vec : 2;
     unsigned int has_spin_bit : 1;
@@ -641,10 +685,12 @@ int picoquic_parse_header_and_decrypt(
     int receiving);
 
 /* handling of ACK logic */
-int picoquic_is_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time);
+int picoquic_is_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, picoquic_packet_context_enum pc);
 
-int picoquic_is_pn_already_received(picoquic_cnx_t* cnx, uint64_t pn64);
-int picoquic_record_pn_received(picoquic_cnx_t* cnx, uint64_t pn64, uint64_t current_microsec);
+int picoquic_is_pn_already_received(picoquic_cnx_t* cnx, 
+    picoquic_packet_context_enum pc, uint64_t pn64);
+int picoquic_record_pn_received(picoquic_cnx_t* cnx,
+    picoquic_packet_context_enum pc, uint64_t pn64, uint64_t current_microsec);
 uint16_t picoquic_deltat_to_float16(uint64_t delta_t);
 uint64_t picoquic_float16_to_deltat(uint16_t float16);
 
@@ -680,6 +726,7 @@ int picoquic_decode_crypto_hs_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
 int picoquic_prepare_crypto_hs_frame(picoquic_cnx_t* cnx, int epoch,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
 int picoquic_prepare_ack_frame(picoquic_cnx_t* cnx, uint64_t current_time,
+    picoquic_packet_context_enum pc,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
 int picoquic_prepare_connection_close_frame(picoquic_cnx_t* cnx,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);

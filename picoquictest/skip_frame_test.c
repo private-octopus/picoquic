@@ -360,6 +360,7 @@ int parse_frame_test()
     const uint8_t extra_bytes[4] = { 0, 0, 0, 0 };
     uint64_t simulated_time = 0;
     struct sockaddr_in saddr;
+    picoquic_packet_context_enum pc = 0;
     picoquic_quic_t * qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
         NULL, NULL, NULL, NULL, simulated_time,
         &simulated_time, NULL, NULL, 0);
@@ -393,16 +394,18 @@ int parse_frame_test()
                     byte_max += sizeof(extra_bytes);
                 }
 
+                pc = picoquic_context_from_epoch(test_skip_list[i].epoch);
+
                 t_ret = picoquic_decode_frames(cnx, buffer, byte_max, test_skip_list[i].epoch, simulated_time);
 
                 if (t_ret != 0) {
                     DBG_PRINTF("Parse frame <%s> fails, ret = %d\n", test_skip_list[i].name, t_ret);
                     ret = t_ret;
                 }
-                else if ((cnx->ack_needed != 0 && test_skip_list[i].is_pure_ack != 0) ||
-                    (cnx->ack_needed == 0 && test_skip_list[i].is_pure_ack == 0)) {
-                    DBG_PRINTF("Parse frame <%s> fails, wrong pure ack, %d instead of %d\n",
-                        test_skip_list[i].name, (int)cnx->ack_needed, (int)test_skip_list[i].is_pure_ack);
+                else if ((cnx->pkt_ctx[pc].ack_needed != 0 && test_skip_list[i].is_pure_ack != 0) ||
+                    (cnx->pkt_ctx[pc].ack_needed == 0 && test_skip_list[i].is_pure_ack == 0)) {
+                    DBG_PRINTF("Parse frame <%s> fails, ack needed: %d, expected pure ack: %d\n",
+                        test_skip_list[i].name, (int)cnx->pkt_ctx[pc].ack_needed, (int)test_skip_list[i].is_pure_ack);
                     ret = -1;
                 }
 

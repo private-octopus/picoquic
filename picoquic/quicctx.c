@@ -106,6 +106,18 @@ static int picoquic_compare_cnx_waketime(void * v_cnxleft, void * v_cnxright) {
     return ret;
 }
 
+picoquic_packet_context_enum picoquic_context_from_epoch(int epoch)
+{
+    static picoquic_packet_context_enum const pc[4] = {
+        picoquic_packet_context_initial,
+        picoquic_packet_context_application,
+        picoquic_packet_context_handshake,
+        picoquic_packet_context_application
+    };
+
+    return (epoch >= 0 && epoch < 5) ? pc[epoch] : 0;
+}
+
 /*
  * Supported versions. Specific versions may mandate different processing of different
  * formats.
@@ -125,7 +137,7 @@ static uint8_t picoquic_cleartext_draft_10_salt[] = {
     0xe0, 0x6d, 0x6c, 0x38
 };
 
-/* Support for draft 10! */
+/* Support for draft 13! */
 const picoquic_version_parameters_t picoquic_supported_versions[] = {
     { PICOQUIC_INTERNAL_TEST_VERSION_1, picoquic_version_use_pn_encryption,
         picoquic_version_header_12,
@@ -787,12 +799,26 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         }
 
         if (cnx != NULL) {
-            cnx->first_sack_item.start_of_sack_range = (uint64_t)((int64_t)-1);
-            cnx->first_sack_item.end_of_sack_range = 0;
-            cnx->first_sack_item.next_sack = NULL;
-            cnx->highest_ack_sent = 0;
-            cnx->highest_ack_time = start_time;
-            cnx->time_stamp_largest_received = (uint64_t)((int64_t)-1);
+            for (picoquic_packet_context_enum pc = 0;
+                pc < picoquic_nb_packet_context; pc++) {
+                cnx->pkt_ctx[pc].first_sack_item.start_of_sack_range = (uint64_t)((int64_t)-1);
+                cnx->pkt_ctx[pc].first_sack_item.end_of_sack_range = 0;
+                cnx->pkt_ctx[pc].first_sack_item.next_sack = NULL;
+                cnx->pkt_ctx[pc].highest_ack_sent = 0;
+                cnx->pkt_ctx[pc].highest_ack_time = start_time;
+                cnx->pkt_ctx[pc].time_stamp_largest_received = (uint64_t)((int64_t)-1);
+                cnx->pkt_ctx[pc].send_sequence = 0;
+                cnx->pkt_ctx[pc].nb_retransmit = 0;
+                cnx->pkt_ctx[pc].latest_retransmit_time = 0;
+                cnx->pkt_ctx[pc].retransmit_newest = NULL;
+                cnx->pkt_ctx[pc].retransmit_oldest = NULL;
+                cnx->pkt_ctx[pc].highest_acknowledged = cnx->pkt_ctx[pc].send_sequence - 1;
+                cnx->pkt_ctx[pc].latest_time_acknowledged = start_time;
+                cnx->pkt_ctx[pc].ack_needed = 0;
+                cnx->pkt_ctx[pc].ack_delay_local = 10000;
+            }
+
+            cnx->latest_progress_time = start_time;
 
             cnx->tls_stream.stream_id = 0;
             cnx->tls_stream.consumed_offset = 0;
@@ -805,19 +831,6 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             cnx->tls_stream.remote_error = 0;
             cnx->tls_stream.maxdata_local = (uint64_t)((int64_t)-1);
             cnx->tls_stream.maxdata_remote = (uint64_t)((int64_t)-1);
-
-            cnx->send_sequence = 0;
-            cnx->nb_retransmit = 0;
-            cnx->latest_retransmit_time = 0;
-
-            cnx->retransmit_newest = NULL;
-            cnx->retransmit_oldest = NULL;
-            cnx->highest_acknowledged = cnx->send_sequence - 1;
-
-            cnx->latest_time_acknowledged = start_time;
-            cnx->latest_progress_time = start_time;
-            cnx->ack_needed = 0;
-            cnx->ack_delay_local = 10000;
 
             cnx->congestion_alg = cnx->quic->default_congestion_alg;
             if (cnx->congestion_alg != NULL) {
@@ -1088,15 +1101,16 @@ void picoquic_clear_stream(picoquic_stream_head* stream)
 
 void picoquic_enqueue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet* p)
 {
-    if (cnx->retransmit_oldest == NULL) {
+    picoquic_packet_context_enum pc = p->pc;
+    if (cnx->pkt_ctx[pc].retransmit_oldest == NULL) {
         p->previous_packet = NULL;
-        cnx->retransmit_newest = p;
+        cnx->pkt_ctx[pc].retransmit_newest = p;
     } else {
-        cnx->retransmit_oldest->next_packet = p;
-        p->previous_packet = cnx->retransmit_oldest;
+        cnx->pkt_ctx[pc].retransmit_oldest->next_packet = p;
+        p->previous_packet = cnx->pkt_ctx[pc].retransmit_oldest;
     }
     p->next_packet = NULL;
-    cnx->retransmit_oldest = p;
+    cnx->pkt_ctx[pc].retransmit_oldest = p;
 
     /* Account for bytes in transit, for congestion control */
     cnx->path[0]->bytes_in_transit += p->length;
@@ -1104,22 +1118,26 @@ void picoquic_enqueue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet* p)
 
 void picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet* p, int should_free)
 {
+    picoquic_packet_context_enum pc = p->pc;
     if (p->previous_packet == NULL) {
-        cnx->retransmit_newest = p->next_packet;
+        cnx->pkt_ctx[pc].retransmit_newest = p->next_packet;
     } else {
         p->previous_packet->next_packet = p->next_packet;
     }
 
     if (p->next_packet == NULL) {
-        cnx->retransmit_oldest = p->previous_packet;
+        cnx->pkt_ctx[pc].retransmit_oldest = p->previous_packet;
     } else {
         p->next_packet->previous_packet = p->previous_packet;
     }
 
     /* Account for bytes in transit, for congestion control */
-    if (cnx->retransmit_newest == NULL) {
+#if 0
+    /* TODO: check whether we need this safety code still */
+    if (cnx->pkt_ctx[pc].retransmit_newest == NULL) {
         p->send_path->bytes_in_transit = 0;
     } else {
+#endif
         size_t dequeued_length = p->length + p->checksum_overhead;
 
         if (p->send_path->bytes_in_transit > dequeued_length) {
@@ -1127,7 +1145,9 @@ void picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet* p,
         } else {
             p->send_path->bytes_in_transit = 0;
         }
+#if 0
     }
+#endif
 
     if (should_free) {
         free(p);
@@ -1135,13 +1155,13 @@ void picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet* p,
         p->next_packet = NULL;
 
         /* add this packet to the retransmitted list */
-        if (cnx->retransmitted_oldest == NULL) {
-            cnx->retransmitted_newest = p;
+        if (cnx->pkt_ctx[pc].retransmitted_oldest == NULL) {
+            cnx->pkt_ctx[pc].retransmitted_newest = p;
             p->previous_packet = NULL;
         } else {
-            cnx->retransmitted_oldest->next_packet = p;
-            p->previous_packet = cnx->retransmitted_oldest;
-            cnx->retransmitted_oldest = p;
+            cnx->pkt_ctx[pc].retransmitted_oldest->next_packet = p;
+            p->previous_packet = cnx->pkt_ctx[pc].retransmitted_oldest;
+            cnx->pkt_ctx[pc].retransmitted_oldest = p;
         }
     }
 }
@@ -1183,17 +1203,20 @@ int picoquic_reset_cnx_version(picoquic_cnx_t* cnx, uint8_t* bytes, size_t lengt
                     /* TODO: Reset the clear text context */
 
                     /* Delete the packets queued for retransmission */
-                    while (cnx->retransmit_newest != NULL) {
-                        picoquic_dequeue_retransmit_packet(cnx, cnx->retransmit_newest, 1);
+                    for (picoquic_packet_context_enum pc = 0;
+                        pc, picoquic_nb_packet_context; pc++) {
+                        while (cnx->pkt_ctx[pc].retransmit_newest != NULL) {
+                            picoquic_dequeue_retransmit_packet(cnx, cnx->pkt_ctx[pc].retransmit_newest, 1);
+                        }
+                        /* Reset the sack lists*/
+                        while (cnx->pkt_ctx[pc].first_sack_item.next_sack != NULL) {
+                            picoquic_sack_item_t * next = cnx->pkt_ctx[pc].first_sack_item.next_sack;
+                            cnx->pkt_ctx[pc].first_sack_item.next_sack = next->next_sack;
+                            free(next);
+                        }
+                        cnx->pkt_ctx[pc].first_sack_item.start_of_sack_range = (uint64_t)((int64_t)-1);
+                        cnx->pkt_ctx[pc].first_sack_item.end_of_sack_range = 0;
                     }
-                    /* Reset the sack lists*/
-                    while (cnx->first_sack_item.next_sack != NULL) {
-                        picoquic_sack_item_t * next = cnx->first_sack_item.next_sack;
-                        cnx->first_sack_item.next_sack = next->next_sack;
-                        free(next);
-                    }
-                    cnx->first_sack_item.start_of_sack_range = (uint64_t)((int64_t)-1);
-                    cnx->first_sack_item.end_of_sack_range = 0;
 
                     /* Reset the streams */
                     picoquic_clear_stream(&cnx->tls_stream);
@@ -1290,17 +1313,19 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
         for (int i = 0; i < 4; i++) {
             picoquic_crypto_context_free(&cnx->crypto_context[i]);
         }
+        for (picoquic_packet_context_enum pc = 0;
+            pc < picoquic_nb_packet_context; pc++) {
+            while (cnx->pkt_ctx[pc].retransmit_newest != NULL) {
+                picoquic_dequeue_retransmit_packet(cnx, cnx->pkt_ctx[pc].retransmit_newest, 1);
+            }
 
-        while (cnx->retransmit_newest != NULL) {
-            picoquic_dequeue_retransmit_packet(cnx, cnx->retransmit_newest, 1);
+            while (cnx->pkt_ctx[pc].retransmitted_newest != NULL) {
+                picoquic_packet* p = cnx->pkt_ctx[pc].retransmitted_newest;
+                cnx->pkt_ctx[pc].retransmitted_newest = p->next_packet;
+                free(p);
+            }
+            cnx->pkt_ctx[pc].retransmitted_oldest = NULL;
         }
-
-        while (cnx->retransmitted_newest != NULL) {
-            picoquic_packet* p = cnx->retransmitted_newest;
-            cnx->retransmitted_newest = p->next_packet;
-            free(p);
-        }
-        cnx->retransmitted_oldest = NULL;
 
         while ((misc_frame = cnx->first_misc_frame) != NULL) {
             cnx->first_misc_frame = misc_frame->next_misc_frame;

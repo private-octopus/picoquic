@@ -170,12 +170,20 @@ typedef enum {
     picoquic_packet_type_max
 } picoquic_packet_type_enum;
 
+typedef enum {
+    picoquic_packet_context_application = 0,
+    picoquic_packet_context_handshake = 1,
+    picoquic_packet_context_initial = 2,
+    picoquic_nb_packet_context = 3
+} picoquic_packet_context_enum;
+
 /*
-	 * The simple packet structure is used to store packets that
-	 * have been sent but are not yet acknowledged.
-	 * Packets are stored in unencrypted format.
-	 * The checksum length is the difference between encrypted and unencrypted.
-	 */
+ * The simple packet structure is used to store packets that
+ * have been sent but are not yet acknowledged.
+ * Packets are stored in unencrypted format.
+ * The checksum length is the difference between encrypted and unencrypted.
+ */
+
 typedef struct _picoquic_packet {
     struct _picoquic_packet* previous_packet;
     struct _picoquic_packet* next_packet;
@@ -186,6 +194,7 @@ typedef struct _picoquic_packet {
     uint32_t checksum_overhead;
     uint32_t offset;
     picoquic_packet_type_enum ptype;
+    picoquic_packet_context_enum pc;
 
     uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE];
 } picoquic_packet;

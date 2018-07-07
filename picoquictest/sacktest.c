@@ -71,33 +71,34 @@ int sacktest()
     uint64_t current_time = 0;
     uint64_t highest_seen = 0;
     uint64_t highest_seen_time = 0;
+    picoquic_packet_context_enum pc = 0;
 
     memset(&cnx, 0, sizeof(cnx));
-    cnx.first_sack_item.start_of_sack_range = (uint64_t)((int64_t)-1);
+    cnx.pkt_ctx[pc].first_sack_item.start_of_sack_range = (uint64_t)((int64_t)-1);
 
     /* Do a basic test with packet zero */
 
-    if (picoquic_is_pn_already_received(&cnx, 0) != 0) {
+    if (picoquic_is_pn_already_received(&cnx, pc, 0) != 0) {
         ret = -1;
     }
 
-    if (picoquic_record_pn_received(&cnx, 0, current_time) != 0) {
+    if (picoquic_record_pn_received(&cnx, pc, 0, current_time) != 0) {
         ret = -1;
     }
 
-    if (picoquic_is_pn_already_received(&cnx, 0) == 0) {
+    if (picoquic_is_pn_already_received(&cnx, pc, 0) == 0) {
         ret = -1;
     }
 
-    if (cnx.first_sack_item.start_of_sack_range != 0 ||
-        cnx.first_sack_item.end_of_sack_range != 0 ||
-        cnx.first_sack_item.next_sack != NULL) {
+    if (cnx.pkt_ctx[pc].first_sack_item.start_of_sack_range != 0 ||
+        cnx.pkt_ctx[pc].first_sack_item.end_of_sack_range != 0 ||
+        cnx.pkt_ctx[pc].first_sack_item.next_sack != NULL) {
         ret = -1;
     }
     else {
         /* reset for the next test */
         memset(&cnx, 0, sizeof(cnx));
-        cnx.first_sack_item.start_of_sack_range = (uint64_t)((int64_t)-1);
+        cnx.pkt_ctx[pc].first_sack_item.start_of_sack_range = (uint64_t)((int64_t)-1);
     }
 
     for (size_t i = 0; ret == 0 && i < nb_test_pn64; i++) {
@@ -108,29 +109,32 @@ int sacktest()
             highest_seen_time = current_time;
         }
 
-        if (picoquic_record_pn_received(&cnx, test_pn64[i], current_time) != 0) {
+        if (picoquic_record_pn_received(&cnx, pc, test_pn64[i], current_time) != 0) {
             ret = -1;
         }
 
         for (size_t j = 0; ret == 0 && j <= i; j++) {
-            if (picoquic_is_pn_already_received(&cnx, test_pn64[j]) == 0) {
+            if (picoquic_is_pn_already_received(&cnx, pc, test_pn64[j]) == 0) {
                 ret = -1;
             }
 
-            if (picoquic_record_pn_received(&cnx, test_pn64[j], current_time) != 1) {
+            if (picoquic_record_pn_received(&cnx, pc, test_pn64[j], current_time) != 1) {
                 ret = -1;
             }
         }
 
         for (size_t j = i + 1; ret == 0 && j < nb_test_pn64; j++) {
-            if (picoquic_is_pn_already_received(&cnx, test_pn64[j]) != 0) {
+            if (picoquic_is_pn_already_received(&cnx, pc, test_pn64[j]) != 0) {
                 ret = -1;
             }
         }
     }
 
     if (ret == 0) {
-        if (cnx.first_sack_item.end_of_sack_range != 21 || cnx.first_sack_item.start_of_sack_range != 0 || cnx.time_stamp_largest_received != highest_seen_time || cnx.first_sack_item.next_sack != NULL) {
+        if (cnx.pkt_ctx[pc].first_sack_item.end_of_sack_range != 21 || 
+            cnx.pkt_ctx[pc].first_sack_item.start_of_sack_range != 0 || 
+            cnx.pkt_ctx[pc].time_stamp_largest_received != highest_seen_time ||
+            cnx.pkt_ctx[pc].first_sack_item.next_sack != NULL) {
             ret = -1;
         }
     }
@@ -267,20 +271,21 @@ int sendacktest()
     uint64_t received_mask = 0;
     uint8_t bytes[256];
     size_t consumed;
+    picoquic_packet_context_enum pc = 0;
 
     memset(&cnx, 0, sizeof(cnx));
-    cnx.first_sack_item.start_of_sack_range = (uint64_t)((int64_t)-1);
+    cnx.pkt_ctx[pc].first_sack_item.start_of_sack_range = (uint64_t)((int64_t)-1);
 
     for (size_t i = 0; ret == 0 && i < nb_test_pn64; i++) {
         current_time = i * 100;
 
-        if (picoquic_record_pn_received(&cnx, test_pn64[i], current_time) != 0) {
+        if (picoquic_record_pn_received(&cnx, pc, test_pn64[i], current_time) != 0) {
             ret = -1;
         }
 
         if (ret == 0) {
             consumed = 0;
-            ret = picoquic_prepare_ack_frame(&cnx, 0, bytes, sizeof(bytes), &consumed);
+            ret = picoquic_prepare_ack_frame(&cnx, 0, pc, bytes, sizeof(bytes), &consumed);
 
             received_mask |= 1ull << (test_pn64[i] & 63);
 
