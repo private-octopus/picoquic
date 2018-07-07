@@ -666,9 +666,6 @@ static int picoquic_update_traffic_key_callback(ptls_update_traffic_key_t * self
 
     int ret = picoquic_set_key_from_secret(cnx, cipher, is_enc, epoch, secret);
 
-    DBG_PRINTF("state:%d, is_client: %d, epoch: %d, is_enc: %d, ret:0x%x\n",
-        cnx->cnx_state, cnx->client_mode,  (int)epoch, is_enc, ret);
-
     return ret;
 }
 
@@ -1638,8 +1635,6 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
 
         /* Update the current epoch */
         while (cnx->epoch_received[epoch] <= cnx->tls_stream.consumed_offset && epoch < 3) {
-            DBG_PRINTF("received[%d] = %d <= consumed = %d\n",
-                epoch, (int)cnx->epoch_received[epoch], (int)cnx->tls_stream.consumed_offset);
             epoch++;
         }
 

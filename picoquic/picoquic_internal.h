@@ -417,9 +417,6 @@ typedef struct st_picoquic_cnx_t {
     unsigned int use_pn_encryption : 1;
     unsigned int is_0RTT_accepted : 1; /* whether 0-RTT is accepted */
     unsigned int remote_parameters_received : 1; /* whether remote parameters where received */
-#if 0
-    unsigned int ack_needed : 1;
-#endif
     unsigned int current_spin : 1; /* Current value of the spin bit */             
     unsigned int client_mode : 1; /* Is this connection the client side? */
     unsigned int prev_spin : 1;  /* previous Spin bit */
@@ -460,12 +457,9 @@ typedef struct st_picoquic_cnx_t {
     struct st_picoquic_cnx_t* next_by_wake_time;
     struct st_picoquic_cnx_t* previous_by_wake_time;
 
-    /* TLS context, TLS Send Buffer, chain of receive buffers (todo) */
+    /* TLS context, TLS Send Buffer, streams, epochs */
     void* tls_ctx;
     struct st_ptls_buffer_t* tls_sendbuf;
-#if 0
-    uint64_t send_sequence;
-#endif
     uint16_t psk_cipher_suite_id;
     picoquic_stream_head tls_stream;
     size_t epoch_offsets[5]; /* documents the offset for the sending side of the tls_stream */
@@ -480,33 +474,15 @@ typedef struct st_picoquic_cnx_t {
     /* Sequence and retransmission state */
     picoquic_packet_context_t pkt_ctx[picoquic_nb_packet_context];
 
-    /* Receive state */
-#if 0
-    picoquic_sack_item_t first_sack_item;
-    uint64_t time_stamp_largest_received;
-    uint64_t highest_ack_sent;
-    uint64_t highest_ack_time;
-    uint64_t ack_delay_local;
-#endif
-
-    /* Retransmission state */
+    /* Statistics */
     uint32_t nb_path_challenge_sent;
     uint32_t nb_path_response_received;
     uint32_t nb_zero_rtt_sent;
     uint32_t nb_zero_rtt_acked;
     uint64_t nb_retransmission_total;
     uint64_t nb_spurious;
-#if 0
-    uint64_t nb_retransmit;
-    uint64_t nb_spurious;
-    uint64_t latest_retransmit_time;
-    uint64_t highest_acknowledged;
-    uint64_t latest_time_acknowledged; /* time at which the highest acknowledged was sent */
-    picoquic_packet* retransmit_newest;
-    picoquic_packet* retransmit_oldest;
-    picoquic_packet* retransmitted_newest;
-    picoquic_packet* retransmitted_oldest;
-#endif
+
+    /* Congestion algorithm */
     picoquic_congestion_algorithm_t const* congestion_alg;
 
     /* Flow control information */

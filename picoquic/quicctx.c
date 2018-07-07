@@ -1118,37 +1118,32 @@ void picoquic_enqueue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet* p)
 
 void picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet* p, int should_free)
 {
+    size_t dequeued_length = p->length + p->checksum_overhead;
     picoquic_packet_context_enum pc = p->pc;
+
     if (p->previous_packet == NULL) {
         cnx->pkt_ctx[pc].retransmit_newest = p->next_packet;
-    } else {
+    }
+    else {
         p->previous_packet->next_packet = p->next_packet;
     }
 
     if (p->next_packet == NULL) {
         cnx->pkt_ctx[pc].retransmit_oldest = p->previous_packet;
-    } else {
+    }
+    else {
         p->next_packet->previous_packet = p->previous_packet;
     }
 
     /* Account for bytes in transit, for congestion control */
-#if 0
-    /* TODO: check whether we need this safety code still */
-    if (cnx->pkt_ctx[pc].retransmit_newest == NULL) {
-        p->send_path->bytes_in_transit = 0;
-    } else {
-#endif
-        size_t dequeued_length = p->length + p->checksum_overhead;
 
-        if (p->send_path->bytes_in_transit > dequeued_length) {
-            p->send_path->bytes_in_transit -= dequeued_length;
-        } else {
-            p->send_path->bytes_in_transit = 0;
-        }
-#if 0
+    if (p->send_path->bytes_in_transit > dequeued_length) {
+        p->send_path->bytes_in_transit -= dequeued_length;
     }
-#endif
-
+    else {
+        p->send_path->bytes_in_transit = 0;
+    }
+        
     if (should_free) {
         free(p);
     } else {
@@ -1204,7 +1199,7 @@ int picoquic_reset_cnx_version(picoquic_cnx_t* cnx, uint8_t* bytes, size_t lengt
 
                     /* Delete the packets queued for retransmission */
                     for (picoquic_packet_context_enum pc = 0;
-                        pc, picoquic_nb_packet_context; pc++) {
+                        pc < picoquic_nb_packet_context; pc++) {
                         while (cnx->pkt_ctx[pc].retransmit_newest != NULL) {
                             picoquic_dequeue_retransmit_packet(cnx, cnx->pkt_ctx[pc].retransmit_newest, 1);
                         }

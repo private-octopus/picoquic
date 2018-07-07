@@ -501,8 +501,8 @@ void picoquic_update_pacing_data(picoquic_path_t * path_x)
     path_x->packet_time_nano_sec /= path_x->cwin;
 
     path_x->pacing_margin_micros = 16 * path_x->packet_time_nano_sec;
-    if (path_x->pacing_margin_micros > (path_x->rtt_min / 4)) {
-        path_x->pacing_margin_micros = (path_x->rtt_min / 4);
+    if (path_x->pacing_margin_micros > (path_x->rtt_min / 8)) {
+        path_x->pacing_margin_micros = (path_x->rtt_min / 8);
     }
     if (path_x->pacing_margin_micros < 1000) {
         path_x->pacing_margin_micros = 1000;
@@ -562,9 +562,6 @@ void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet *
 {
 
     if (ret == 0 && length > 0) {
-        DBG_PRINTF("Sending packet (%d), type: %d, pc: %d, pn: %d, l: %d\n",
-            cnx->client_mode, packet->ptype, packet->pc, (int)packet->sequence_number, length);
-
         packet->length = length;
         cnx->pkt_ctx[packet->pc].send_sequence++;
 
@@ -984,7 +981,7 @@ static void picoquic_cnx_set_next_wake_time_init(picoquic_cnx_t* cnx, uint64_t c
     }
     else
     {
-        for (picoquic_packet_context_enum pc = 0; pc < picoquic_nb_packet_context; pc++) {
+        for (picoquic_packet_context_enum pc = 0; blocked == 0 && pc < picoquic_nb_packet_context; pc++) {
             picoquic_packet* p = cnx->pkt_ctx[pc].retransmit_oldest;
 
             while (p != NULL)
@@ -1003,16 +1000,20 @@ static void picoquic_cnx_set_next_wake_time_init(picoquic_cnx_t* cnx, uint64_t c
                 if (picoquic_is_ack_needed(cnx, current_time, pc)) {
                     blocked = 0;
                 }
-                else if (path_x->cwin > path_x->bytes_in_transit && path_x->challenge_verified == 1) {
-                    if (picoquic_should_send_max_data(cnx) ||
-                        picoquic_is_tls_stream_ready(cnx) ||
-                        (cnx->crypto_context[1].aead_encrypt != NULL && (stream = picoquic_find_ready_stream(cnx)) != NULL)) {
-                        if (path_x->next_pacing_time < current_time + path_x->pacing_margin_micros) {
-                            blocked = 0;
-                        }
-                        else {
-                            pacing = 1;
-                        }
+            }
+        }
+
+        if (blocked != 0)
+        {
+            if (path_x->cwin > path_x->bytes_in_transit && path_x->challenge_verified == 1) {
+                if (picoquic_should_send_max_data(cnx) ||
+                    picoquic_is_tls_stream_ready(cnx) ||
+                    (cnx->crypto_context[1].aead_encrypt != NULL && (stream = picoquic_find_ready_stream(cnx)) != NULL)) {
+                    if (path_x->next_pacing_time < current_time + path_x->pacing_margin_micros) {
+                        blocked = 0;
+                    }
+                    else {
+                        pacing = 1;
                     }
                 }
             }
@@ -1200,6 +1201,7 @@ int picoquic_prepare_packet_0rtt(picoquic_cnx_t* cnx, picoquic_path_t * path_x, 
     packet->sequence_number = cnx->pkt_ctx[picoquic_packet_context_application].send_sequence;
     packet->send_time = current_time;
     packet->send_path = path_x;
+    packet->checksum_overhead = checksum_overhead;
 
     if ((stream == NULL && cnx->first_misc_frame == NULL) || (PICOQUIC_DEFAULT_0RTT_WINDOW <= path_x->bytes_in_transit + path_x->send_mtu)) {
         length = 0;
@@ -1334,6 +1336,8 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
     }
 
     packet_type = picoquic_packet_type_from_epoch(epoch);
+    pc = (epoch == 0) ? picoquic_packet_context_initial :
+        ((epoch == 1) ? picoquic_packet_context_application : picoquic_packet_context_handshake);
 
     /* Prepare header -- depend on connection state */
     /* TODO: 0-RTT work. */
@@ -1348,15 +1352,12 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
         packet_type = picoquic_packet_initial;
         break;
     case picoquic_state_client_handshake_start:
-        pc = picoquic_packet_context_handshake;
         retransmit_possible = 1;
         break;
     case picoquic_state_client_handshake_progress:
-        pc = picoquic_packet_context_handshake;
         retransmit_possible = 1;
         break;
     case picoquic_state_client_almost_ready:
-        pc = picoquic_packet_context_handshake;
         break;
     default:
         ret = -1;
