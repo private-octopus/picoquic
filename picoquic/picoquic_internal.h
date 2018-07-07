@@ -84,6 +84,16 @@ typedef enum {
 } picoquic_frame_type_enum_t;
 
 /*
+ * Efficient range operations that assume range containing bitfields.
+ * Namely, it assumes max&min==min, min&bits==0, max&bits==bits.
+ */
+#define PICOQUIC_IN_RANGE(v, min, max)                  (((v) & ~((min)^(max))) == (min))
+// Is v between min and max and has all given bits set/clear?
+#define PICOQUIC_BITS_SET_IN_RANGE(  v, min, max, bits) (((v) & ~((min)^(max)^(bits))) == ((min)^(bits)))
+#define PICOQUIC_BITS_CLEAR_IN_RANGE(v, min, max, bits) (((v) & ~((min)^(max)^(bits))) == (min))
+
+
+/*
  * Supported versions
  */
 #define PICOQUIC_FIRST_INTEROP_VERSION 0xFF000005
@@ -615,7 +625,7 @@ void picoquic_update_payload_length(
 
 uint32_t picoquic_get_checksum_length(picoquic_cnx_t* cnx, int is_cleartext_mode);
 
-int picoquic_test_stream_frame_unlimited(uint8_t* bytes);
+int picoquic_is_stream_frame_unlimited(const uint8_t* bytes);
 int picoquic_check_stream_frame_already_acked(picoquic_cnx_t* cnx, uint8_t* bytes,
     size_t bytes_max, int* no_need_to_repeat);
 
@@ -691,14 +701,12 @@ void picoquic_update_stream_initial_remote(picoquic_cnx_t* cnx);
 picoquic_stream_head* picoquic_find_stream(picoquic_cnx_t* cnx, uint64_t stream_id, int create);
 picoquic_stream_head* picoquic_find_ready_stream(picoquic_cnx_t* cnx);
 int picoquic_is_tls_stream_ready(picoquic_cnx_t* cnx);
-int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id,
-    uint64_t offset, int fin, uint8_t* bytes, size_t length, uint64_t current_time);
-int picoquic_decode_stream_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
-    size_t bytes_max, size_t* consumed, uint64_t current_time);
+uint8_t* picoquic_decode_stream_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
+    const uint8_t* bytes_max, uint64_t current_time);
 int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head* stream,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
-int picoquic_decode_crypto_hs_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
-    size_t bytes_max, size_t* consumed, int epoch);
+uint8_t* picoquic_decode_crypto_hs_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
+    const uint8_t* bytes_max, int epoch);
 int picoquic_prepare_crypto_hs_frame(picoquic_cnx_t* cnx, int epoch,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
 int picoquic_prepare_ack_frame(picoquic_cnx_t* cnx, uint64_t current_time,

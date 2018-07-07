@@ -785,7 +785,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
 
                         /* Prepare retransmission if needed */
                         if (ret == 0 && !frame_is_pure_ack) {
-                            if (picoquic_test_stream_frame_unlimited(&p->bytes[byte_index]) != 0) {
+                            if (picoquic_is_stream_frame_unlimited(&p->bytes[byte_index])) {
                                 /* Need to PAD to the end of the frame to avoid sending extra bytes */
                                 while (checksum_length + length + frame_length < path_x->send_mtu) {
                                     bytes[length] = picoquic_frame_type_padding;
