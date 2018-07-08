@@ -1052,13 +1052,10 @@ static void picoquic_cnx_set_next_wake_time_init(picoquic_cnx_t* cnx, uint64_t c
     /* Consider path challenges */
     if (path_x->challenge_verified == 0) {
         uint64_t next_challenge_time = path_x->challenge_time + path_x->retransmit_timer;
-        if (current_time < next_challenge_time) {
-            if (next_time > next_challenge_time) {
-                next_time = next_challenge_time;
-            }
-        }
-        else {
+        if (next_challenge_time <= current_time) {
             next_time = current_time;
+        } else if (next_challenge_time < next_time) {
+            next_time = next_challenge_time;
         }
     }
 
@@ -1284,8 +1281,8 @@ uint32_t picoquic_prepare_packet_old_context(picoquic_cnx_t* cnx, picoquic_packe
     if (length == 0 && cnx->pkt_ctx[pc].ack_needed != 0) {
         packet->ptype =
             (pc == picoquic_packet_context_initial) ? picoquic_packet_initial :
-            ((pc == picoquic_packet_context_handshake) ? picoquic_packet_handshake :
-                picoquic_packet_0rtt_protected);
+            (pc == picoquic_packet_context_handshake) ? picoquic_packet_handshake :
+                picoquic_packet_0rtt_protected;
         length = picoquic_predict_packet_header_length(cnx, packet->ptype);
         packet->offset = length;
         *header_length = length;
