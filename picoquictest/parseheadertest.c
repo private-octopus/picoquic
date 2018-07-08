@@ -73,6 +73,7 @@ static picoquic_packet_header hinitial10 = {
     0x400,
     0,
     0,
+    picoquic_packet_context_initial,
     0,
     0,
     0
@@ -101,6 +102,7 @@ static picoquic_packet_header hinitial10_l = {
     0x400,
     0,
     0,
+    picoquic_packet_context_initial,
     0,
     0,
     0
@@ -139,6 +141,36 @@ static picoquic_packet_header hvnego10 = {
     PICOQUIC_MAX_PACKET_SIZE - 18,
     0,
     0,
+    picoquic_packet_context_initial,
+    0,
+    0,
+    0
+};
+
+static uint8_t phandshake[] = {
+    0xFD,
+    0x50, 0x43, 0x51, 0x30,
+    TEST_CNXID_LEN_BYTE,
+    TEST_CNXID_LOCAL_BYTES,
+    TEST_CNXID_REM_BYTES,
+    0x44, 00,
+    0xDE, 0xAD, 0xBE, 0xEF
+};
+
+static picoquic_packet_header hhandshake = {
+    TEST_CNXID_LOCAL_VAL,
+    TEST_CNXID_REM_VAL,
+    0xDEADBEEF,
+    0x50435130,
+    20,
+    20,
+    picoquic_packet_handshake,
+    0xFFFFFFFF00000000ull,
+    0,
+    0x400,
+    0,
+    2,
+    picoquic_packet_context_handshake,
     0,
     0,
     0
@@ -163,6 +195,7 @@ static picoquic_packet_header hphi0_c_32 = {
     PICOQUIC_MAX_PACKET_SIZE - 9,
     0,
     3,
+    picoquic_packet_context_application,
     0,
     0,
     1
@@ -187,6 +220,7 @@ static picoquic_packet_header hphi0_c_32_spin = {
     PICOQUIC_MAX_PACKET_SIZE - 9, 
     0,
     3,
+    picoquic_packet_context_application,
     1,
     0,
     1
@@ -210,6 +244,7 @@ static picoquic_packet_header hphi0_noc_32 = {
     PICOQUIC_MAX_PACKET_SIZE - 1,
     0,
     3,
+    picoquic_packet_context_application,
     0,
     0,
     0
@@ -228,6 +263,7 @@ static struct _test_entry test_entries[] = {
     { pinitial10_l, sizeof(pinitial10_l), &hinitial10_l, 0, 8 },
     { pvnego10, sizeof(pvnego10), &hvnego10, 1, 8 },
     { pvnegobis10, sizeof(pvnegobis10), &hvnego10, 1, 8 },
+    { phandshake, sizeof(phandshake), &hhandshake, 1, 8 },
     { packet_short_phi0_c_32, sizeof(packet_short_phi0_c_32), &hphi0_c_32, 0, 8 },
     { packet_short_phi0_c_32_spin, sizeof(packet_short_phi0_c_32_spin), &hphi0_c_32_spin, 1, 8 },
     { packet_short_phi0_noc_32, sizeof(packet_short_phi0_noc_32), &hphi0_noc_32, 1, 0 }
@@ -300,6 +336,8 @@ int parseheadertest()
         } else if (ph.spin != test_entries[i].ph->spin) {
             ret = -1;
         } else if (ph.epoch != test_entries[i].ph->epoch) {
+            ret = -1;
+        } else if (ph.pc != test_entries[i].ph->pc) {
             ret = -1;
         }
     }
@@ -423,6 +461,7 @@ int test_packet_encrypt_one(
     uint64_t current_time = 0;
     picoquic_packet_header expected_header;
     picoquic_packet * packet = (picoquic_packet *) malloc(sizeof(picoquic_packet));
+    picoquic_packet_context_enum pc = 0;
 
     if (packet == NULL) {
         DBG_PRINTF("%s", "Out of memory\n");
@@ -435,7 +474,7 @@ int test_packet_encrypt_one(
         packet->ptype = ptype;
         packet->offset = header_length;
         packet->length = length;
-        packet->sequence_number = cnx_client->send_sequence;
+        packet->sequence_number = cnx_client->pkt_ctx[pc].send_sequence;
         packet->send_path = cnx_client->path[0];
 
         /* Create a packet with specified parameters */

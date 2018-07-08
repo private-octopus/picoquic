@@ -666,9 +666,6 @@ static int picoquic_update_traffic_key_callback(ptls_update_traffic_key_t * self
 
     int ret = picoquic_set_key_from_secret(cnx, cipher, is_enc, epoch, secret);
 
-    DBG_PRINTF("state:%d, is_client: %d, epoch: %d, is_enc: %d, ret:0x%x\n",
-        cnx->cnx_state, cnx->client_mode,  (int)epoch, is_enc, ret);
-
     return ret;
 }
 
@@ -1279,9 +1276,8 @@ int picoquic_tlsinput_segment(picoquic_cnx_t* cnx, int epoch,
 
     if ((ret == 0 || ret == PTLS_ERROR_IN_PROGRESS) && roff < length) {
         inlen = length - roff;
-        ret = ptls_handle_message(ctx->tls, sendbuf, send_offset, epoch, bytes + roff, inlen, &ctx->handshake_properties);
-        DBG_PRINTF("State: %d, is_client: %d, epoch: %d, inlen: %d, buf.len = %d, ret: %x\n", 
-            cnx->cnx_state, cnx->client_mode, (int)epoch, inlen, sendbuf->off, ret);
+        ret = ptls_handle_message(ctx->tls, sendbuf, send_offset, epoch, bytes + roff, inlen,
+            &ctx->handshake_properties);
         roff += inlen;
         for (int i = 0; i < 5; i++) {
             cnx->epoch_offsets[i] += send_offset[i];
@@ -1639,8 +1635,6 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
 
         /* Update the current epoch */
         while (cnx->epoch_received[epoch] <= cnx->tls_stream.consumed_offset && epoch < 3) {
-            DBG_PRINTF("received[%d] = %d <= consumed = %d\n",
-                epoch, (int)cnx->epoch_received[epoch], (int)cnx->tls_stream.consumed_offset);
             epoch++;
         }
 
@@ -1710,17 +1704,22 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
     } else if (ret == PTLS_ERROR_IN_PROGRESS && (cnx->cnx_state == picoquic_state_client_init || cnx->cnx_state == picoquic_state_client_init_sent || cnx->cnx_state == picoquic_state_client_init_resent)) {
         /* Extract and install the client 0-RTT key */
     } else if (ret == PTLS_ERROR_IN_PROGRESS && (cnx->cnx_state == picoquic_state_client_hrr_received)) {
-        picoquic_packet * next_retrans = cnx->retransmit_newest;
+
+        for (picoquic_packet_context_enum pc = 0;
+            pc < picoquic_nb_packet_context; pc++) {
+            picoquic_packet * next_retrans = cnx->pkt_ctx[pc].retransmit_newest;
+            /* Delete the packets queued for retransmission, but keep the 0-RTT packets */
+            while (next_retrans != NULL) {
+                picoquic_packet * next_next = next_retrans->next_packet;
+                /* TODO: special treatment for EOED packet */
+                if (next_retrans->ptype != picoquic_packet_0rtt_protected) {
+                    picoquic_dequeue_retransmit_packet(cnx, next_retrans, 1);
+                }
+                next_retrans = next_next;
+            }
+        }
         /* Need to reset the transport state of the connection */
         cnx->cnx_state = picoquic_state_client_init;
-        /* Delete the packets queued for retransmission, but keep the 0-RTT packets */
-        while (next_retrans != NULL) {
-            picoquic_packet * next_next = next_retrans->next_packet;
-            if (next_retrans->ptype != picoquic_packet_0rtt_protected) {
-                picoquic_dequeue_retransmit_packet(cnx, next_retrans, 1);
-            }
-            next_retrans = next_next;
-        }
 
         /* Reset the streams */
         picoquic_clear_stream(&cnx->tls_stream);

@@ -526,15 +526,23 @@ static int stress_handle_packet_prepare(picoquic_stress_ctx_t * ctx, picoquic_qu
         picoquic_stress_client_callback_ctx_t* c_ctx = (c_index >= 0) ?
             (picoquic_stress_client_callback_ctx_t*)picoquic_get_callback_context(cnx) : NULL;
 
-        if (c_ctx == NULL || cnx->cnx_state == picoquic_state_disconnected || c_ctx->message_disconnect_trigger == 0 ||
-            cnx->send_sequence <= c_ctx->message_disconnect_trigger) {
+        /* Check whether immediate abrubt disconnection is required */
+        if (c_ctx == NULL && cnx->cnx_state == picoquic_state_disconnected && c_ctx->message_disconnect_trigger == 0) {
+            uint64_t nb_sent = 0;
+            for (picoquic_packet_context_enum pc = 0; pc < picoquic_nb_packet_context; pc++) {
+                nb_sent += cnx->pkt_ctx[pc].send_sequence;
+            }
+            if (nb_sent > c_ctx->message_disconnect_trigger) {
+                /* simulate an abrupt disconnect */
+                ret = PICOQUIC_ERROR_DISCONNECTED;
+                simulate_disconnect = 1;
+            }
+        }
+
+        if (c_ctx == NULL || cnx->cnx_state == picoquic_state_disconnected 
+            || simulate_disconnect == 0) { 
             ret = picoquic_prepare_packet(cnx, p, ctx->simulated_time,
                 packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length);
-        }
-        else if (c_ctx != NULL) {
-            /* simulate an abrupt */
-            ret = PICOQUIC_ERROR_DISCONNECTED;
-            simulate_disconnect = 1;
         }
 
         if (ret == 0 && p->length > 0) {

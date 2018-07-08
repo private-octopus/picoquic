@@ -1222,12 +1222,12 @@ int tls_api_q2_and_r2_stream_test()
 
 int tls_api_very_long_stream_test()
 {
-    return tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0, 0, 0, 1510000, NULL);
+    return tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0, 0, 0, 3510000, NULL);
 }
 
 int tls_api_very_long_max_test()
 {
-    return tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0, 128000, 0, 0, 1510000, NULL);
+    return tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0, 128000, 0, 0, 3510000, NULL);
 }
 
 int tls_api_very_long_with_err_test()
@@ -1859,10 +1859,6 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset)
                     int was_active = 0;
 
                     ret = tls_api_one_sim_round(test_ctx, &simulated_time, &was_active);
-#if 0
-                    DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), connection %d draining error (0x%x).\n",
-                        use_badcrypt, hardreset, i, ret);
-#endif
 
                     if (picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) && picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)) {
                         break;
@@ -2759,7 +2755,7 @@ int tls_different_params_test()
 
     test_parameters.initial_max_stream_id_bidir = 0;
 
-    return tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0, 0, 0, 1510000, &test_parameters);
+    return tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0, 0, 0, 3510000, &test_parameters);
 }
 
 int set_certificate_and_key_test()
