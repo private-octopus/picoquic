@@ -225,6 +225,7 @@ typedef enum {
     picoquic_transport_parameter_reset_secret = 6,
     picoquic_transport_parameter_ack_delay_exponent = 7,
     picoquic_transport_parameter_initial_max_stream_id_unidir = 8,
+    picoquic_transport_parameter_disable_migration = 9,
 } picoquic_transport_parameter_enum;
 
 typedef struct st_picoquic_transport_parameters_prefered_address_t {
@@ -243,6 +244,7 @@ typedef struct _picoquic_transport_parameters {
     uint32_t idle_timeout;
     uint32_t max_packet_size;
     uint8_t ack_delay_exponent;
+    unsigned int migration_disabled; 
     picoquic_transport_parameters_prefered_address_t prefered_address;
 } picoquic_transport_parameters;
 
