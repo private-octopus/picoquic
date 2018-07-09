@@ -111,6 +111,12 @@ static uint8_t test_frame_type_path_response[] = {
     picoquic_frame_type_path_response,
     1, 2, 3, 4, 5, 6, 7, 8
 };
+
+static uint8_t test_frame_type_new_token[] = {
+    picoquic_frame_type_new_token,
+    17, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17
+};
+
 static uint8_t test_frame_type_ack[] = {
     picoquic_frame_type_ack,
     0xC0, 0, 0, 1, 2, 3, 4, 5,
@@ -185,6 +191,7 @@ static test_skip_frames_t test_skip_list[] = {
     TEST_SKIP_ITEM("stop_sending", test_frame_type_stop_sending, 0, 0, 3),
     TEST_SKIP_ITEM("challenge", test_frame_type_path_challenge, 1, 0, 3),
     TEST_SKIP_ITEM("response", test_frame_type_path_response, 1, 0, 3),
+    TEST_SKIP_ITEM("new_token", test_frame_type_new_token, 0, 0, 3),
     TEST_SKIP_ITEM("ack", test_frame_type_ack, 1, 0, 3),
     TEST_SKIP_ITEM("ack_ecn", test_frame_type_ack_ecn, 1, 0, 3),
     TEST_SKIP_ITEM("stream_min", test_frame_type_stream_range_min, 0, 1, 3),

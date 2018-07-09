@@ -384,6 +384,25 @@ uint8_t* picoquic_decode_connection_id_frame(picoquic_cnx_t* cnx, uint8_t* bytes
 }
 
 /*
+ * New Retry Token frame 
+ */
+uint8_t* picoquic_skip_new_token_frame(uint8_t* bytes, const uint8_t* bytes_max)
+{
+    return picoquic_frames_length_data_skip(bytes+1, bytes_max);
+}
+
+
+uint8_t* picoquic_decode_new_token_frame(picoquic_cnx_t* cnx, uint8_t* bytes, const uint8_t* bytes_max)
+{
+    /* TODO: store the new token in order to support immediate connection on some servers. */
+    if ((bytes = picoquic_skip_new_token_frame(bytes, bytes_max)) == NULL) {
+        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR);
+    }
+
+    return bytes;
+}
+
+/*
  * STOP SENDING Frame
  */
 
@@ -2233,6 +2252,10 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
                 bytes = picoquic_decode_crypto_hs_frame(cnx, bytes, bytes_max, epoch);
                 ack_needed = 1;
                 break;
+            case picoquic_frame_type_new_token:
+                bytes = picoquic_decode_new_token_frame(cnx, bytes, bytes_max, epoch);
+                ack_needed = 1;
+                break;
             default:
                 /* Not implemented yet! */
                 picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR);
@@ -2339,6 +2362,9 @@ static uint8_t* picoquic_skip_ack_ecn_frame(uint8_t* bytes, const uint8_t* bytes
     return picoquic_skip_ack_frame_maybe_ecn(bytes, bytes_max, 1);
 }
 
+/* Lots of simple frames...
+ */
+
 static uint8_t* picoquic_skip_stream_reset_frame(uint8_t* bytes, const uint8_t* bytes_max)
 {
     if ((bytes = picoquic_frames_varint_skip(bytes+1, bytes_max))                   != NULL &&
@@ -2444,6 +2470,10 @@ int picoquic_skip_frame(uint8_t* bytes, size_t bytes_maxsize, size_t* consumed,
             break;
         case picoquic_frame_type_crypto_hs:
             bytes = picoquic_skip_crypto_hs_frame(bytes, bytes_max);
+            *pure_ack = 0;
+            break;
+        case picoquic_frame_type_new_token:
+            bytes = picoquic_skip_new_token_frame(bytes, bytes_max);
             *pure_ack = 0;
             break;
         default:
