@@ -925,17 +925,9 @@ int picoquic_incoming_retry(
         cnx->retry_token = token;
         cnx->retry_token_length = token_length;
 
-        /* reset the initial stream, keep a copy of the 0-RTT packets sent. */
-        picoquic_reset_packet_context(cnx, picoquic_packet_context_initial);
-
-        /* reset the encryption contexts */
-        for (int i = 0; i < 4; i++) {
-            picoquic_crypto_context_free(&cnx->crypto_context[i]);
-        }
-
-        /* Reinit the clear text AEAD */
-        ret = picoquic_setup_initial_traffic_keys(cnx);
+        picoquic_reset_packet_context(cnx, current_time);
     }
+
     if (ret == 0) {
         /* Mark the packet as not required for ack */
         ret = PICOQUIC_ERROR_HRR;

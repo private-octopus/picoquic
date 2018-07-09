@@ -1211,6 +1211,51 @@ void picoquic_reset_packet_context(picoquic_cnx_t* cnx,
 * - State changes.
 */
 
+int picoquic_reset_cnx(picoquic_cnx_t* cnx, uint64_t current_time)
+{
+    int ret = 0;
+
+    /* Delete the packets queued for retransmission */
+    for (picoquic_packet_context_enum pc = 0;
+        pc < picoquic_nb_packet_context; pc++) {
+        picoquic_reset_packet_context(cnx, pc);
+    }
+
+    /* Reset the crypto stream */
+    picoquic_clear_stream(&cnx->tls_stream);
+    cnx->tls_stream.consumed_offset = 0;
+    cnx->tls_stream.stream_flags = 0;
+    cnx->tls_stream.fin_offset = 0;
+    cnx->tls_stream.sent_offset = 0;
+    /* TODO: reset clear text AEAD */
+
+    /* Reset the TLS context, Re-initialize the tls connection */
+    picoquic_tlscontext_free(cnx->tls_ctx);
+    cnx->tls_ctx = NULL;
+    ret = picoquic_tlscontext_create(cnx->quic, cnx, current_time);
+    if (ret == 0) {
+        ret = picoquic_initialize_tls_stream(cnx);
+    }
+
+    /* Reset the ECN data */
+    cnx->ecn_ect0_total_local = 0;
+    cnx->ecn_ect1_total_local = 0;
+    cnx->ecn_ce_total_local = 0;
+    cnx->ecn_ect0_total_remote = 0;
+    cnx->ecn_ect1_total_remote = 0;
+    cnx->ecn_ce_total_remote = 0;
+
+    for (int k = 0; k < 4; k++) {
+        picoquic_crypto_context_free(&cnx->crypto_context[k]);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_setup_initial_traffic_keys(cnx);
+    }
+
+    return ret;
+}
+
 int picoquic_reset_cnx_version(picoquic_cnx_t* cnx, uint8_t* bytes, size_t length, uint64_t current_time)
 {
     /* First parse the incoming connection negotiation to choose the
@@ -1230,39 +1275,21 @@ int picoquic_reset_cnx_version(picoquic_cnx_t* cnx, uint8_t* bytes, size_t lengt
                     cnx->version_index = (int)i;
                     cnx->cnx_state = picoquic_state_client_renegotiate;
 
-                    /* Delete the packets queued for retransmission */
-                    for (picoquic_packet_context_enum pc = 0;
-                        pc < picoquic_nb_packet_context; pc++) {
-                        picoquic_reset_packet_context(cnx, pc);
-                    }
-
-                    /* Reset the crypto stream */
-                    picoquic_clear_stream(&cnx->tls_stream);
-                    cnx->tls_stream.consumed_offset = 0;
-                    cnx->tls_stream.stream_flags = 0;
-                    cnx->tls_stream.fin_offset = 0;
-                    cnx->tls_stream.sent_offset = 0;
-                    /* TODO: reset clear text AEAD */
-
-                    /* Reset the TLS context, Re-initialize the tls connection */
-                    picoquic_tlscontext_free(cnx->tls_ctx);
-                    cnx->tls_ctx = NULL;
-                    ret = picoquic_tlscontext_create(cnx->quic, cnx, current_time);
-                    if (ret == 0) {
-                        ret = picoquic_initialize_tls_stream(cnx);
-                    }
-
-                    for (int k = 0; k < 4; k++) {
-                        picoquic_crypto_context_free(&cnx->crypto_context[k]);
-                    }
-
-                    if (ret == 0) {
-                        ret = picoquic_setup_initial_traffic_keys(cnx);
-                    }
                     break;
                 }
             }
         }
+
+        if (cnx->cnx_state != picoquic_state_client_renegotiate) {
+            /* No acceptable version */
+            ret = PICOQUIC_ERROR_UNEXPECTED_PACKET;
+        } else {
+            ret = picoquic_reset_cnx(cnx, current_time);
+        }
+    }
+    else {
+        /* Not in a state for negotiation */
+        ret = PICOQUIC_ERROR_UNEXPECTED_PACKET;
     }
 
     return ret;

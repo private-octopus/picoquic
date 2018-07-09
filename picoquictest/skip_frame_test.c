@@ -144,19 +144,6 @@ static uint8_t test_frame_type_crypto_hs[] = {
     0xA8, 0xA9, 0xAA, 0xAB, 0xAC, 0xAD, 0xAE, 0xAF
 };
 
-static uint8_t test_type_crypto_close[] = {
-    picoquic_frame_type_crypto_close,
-    0, 0x11,
-    0
-};
-
-static uint8_t test_type_crypto_close_reason[] = {
-    picoquic_frame_type_crypto_close,
-    0, 4,
-    6,
-    'c', 'r', 'y', 'p', 't', 'o'
-};
-
 typedef struct st_test_skip_frames_t {
     char const* name;
     uint8_t* val;
@@ -177,8 +164,6 @@ static test_skip_frames_t test_skip_list[] = {
     TEST_SKIP_ITEM("connection_close", test_type_connection_close, 0, 0, 3),
     TEST_SKIP_ITEM("application_close", test_type_application_close, 0, 0, 3),
     TEST_SKIP_ITEM("application_close", test_type_application_close_reason, 0, 0, 3),
-    TEST_SKIP_ITEM("crypto_close", test_type_crypto_close, 0, 0, 2),
-    TEST_SKIP_ITEM("crypto_close", test_type_crypto_close_reason, 0, 0, 2),
     TEST_SKIP_ITEM("max_data", test_frame_type_max_data, 0, 0, 3),
     TEST_SKIP_ITEM("max_stream_data", test_frame_type_max_stream_data, 0, 0, 3),
     TEST_SKIP_ITEM("max_stream_id", test_frame_type_max_stream_id, 0, 0, 3),

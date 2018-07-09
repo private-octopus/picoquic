@@ -1729,21 +1729,6 @@ uint8_t* picoquic_decode_application_close_frame(picoquic_cnx_t* cnx, uint8_t* b
 }
 
 /*
- * Crypto close frame
- */
-
-int picoquic_prepare_crypto_close_frame(picoquic_cnx_t* cnx,
-    uint8_t* bytes, size_t bytes_max, size_t* consumed)
-{
-    return picoquic_prepare_generic_close_frame(bytes, bytes_max, consumed, picoquic_frame_type_crypto_close, (uint16_t)cnx->application_error);
-}
-
-uint8_t* picoquic_decode_crypto_close_frame(picoquic_cnx_t* cnx, uint8_t* bytes, const uint8_t* bytes_max)
-{
-    return picoquic_decode_generic_close_frame(cnx, bytes, bytes_max, picoquic_callback_crypto_close, &cnx->remote_crypto_error);
-}
-
-/*
  * Max data frame
  */
 
@@ -2099,8 +2084,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
                                             && first_byte != picoquic_frame_type_path_challenge
                                             && first_byte != picoquic_frame_type_path_response
                                             && first_byte != picoquic_frame_type_connection_close
-                                            && first_byte != picoquic_frame_type_crypto_hs
-                                            && first_byte != picoquic_frame_type_crypto_close) {
+                                            && first_byte != picoquic_frame_type_crypto_hs) {
             picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION);
             bytes = NULL;
             break;
@@ -2168,11 +2152,6 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
                 bytes = picoquic_decode_crypto_hs_frame(cnx, bytes, bytes_max, epoch);
                 ack_needed = 1;
                 break;
-            case picoquic_frame_type_crypto_close:
-                bytes = picoquic_decode_crypto_close_frame(cnx, bytes, bytes_max);
-                ack_needed = 1;
-                break;
-
             default:
                 /* Not implemented yet! */
                 picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR);
@@ -2317,11 +2296,6 @@ int picoquic_skip_frame(uint8_t* bytes, size_t bytes_maxsize, size_t* consumed,
             break;
         }
         case picoquic_frame_type_application_close: {
-            bytes = picoquic_skip_generic_closing_frame(bytes, bytes_max);
-            *pure_ack = 0;
-            break;
-        }
-        case picoquic_frame_type_crypto_close: {
             bytes = picoquic_skip_generic_closing_frame(bytes, bytes_max);
             *pure_ack = 0;
             break;

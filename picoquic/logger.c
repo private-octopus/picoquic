@@ -298,9 +298,6 @@ char const* picoquic_log_frame_names(uint8_t frame_type)
     case picoquic_frame_type_crypto_hs:
         frame_name = "crypto_hs";
         break;
-    case picoquic_frame_type_crypto_close:
-        frame_name = "crypto_close";
-        break;
     default:
         if (PICOQUIC_IN_RANGE(frame_type, picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
             frame_name = "stream";
@@ -618,11 +615,6 @@ size_t picoquic_log_application_close_frame(FILE* F, uint8_t* bytes, size_t byte
     return picoquic_log_generic_close_frame(F, bytes, bytes_max, picoquic_frame_type_application_close);
 }
 
-size_t picoquic_log_crypto_close_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
-{
-    return picoquic_log_generic_close_frame(F, bytes, bytes_max, picoquic_frame_type_crypto_close);
-}
-
 size_t picoquic_log_max_data_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
 {
     size_t byte_index = 1;
@@ -928,10 +920,6 @@ void picoquic_log_frames(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t leng
                     break;
                 case picoquic_frame_type_crypto_hs:
                     byte_index += picoquic_log_crypto_hs_frame(F, bytes + byte_index,
-                        length - byte_index);
-                    break;
-                case picoquic_frame_type_crypto_close:
-                    byte_index += picoquic_log_crypto_close_frame(F, bytes + byte_index,
                         length - byte_index);
                     break;
                 default:
