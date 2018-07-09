@@ -653,7 +653,7 @@ int picoquic_parse_stream_header(
 
 int picoquic_parse_ack_header(
     uint8_t const* bytes, size_t bytes_max,
-    uint64_t* num_block, uint64_t* largest,
+    uint64_t* num_block, uint64_t* nb_ecnx3, uint64_t* largest,
     uint64_t* ack_delay, size_t* consumed,
     uint8_t ack_delay_exponent);
 
@@ -710,7 +710,7 @@ int picoquic_check_sack_list(picoquic_sack_item_t* sack,
      */
 int picoquic_process_ack_of_ack_frame(
     picoquic_sack_item_t* first_sack,
-    uint8_t* bytes, size_t bytes_max, size_t* consumed);
+    uint8_t* bytes, size_t bytes_max, size_t* consumed, int is_ecn);
 
 /* stream management */
 picoquic_stream_head* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t stream_id);

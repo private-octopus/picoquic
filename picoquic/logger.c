@@ -402,17 +402,18 @@ size_t picoquic_log_stream_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
     return byte_index + data_length;
 }
 
-size_t picoquic_log_ack_frame(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t bytes_max)
+size_t picoquic_log_ack_frame(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t bytes_max, int is_ecn)
 {
     size_t byte_index;
     uint64_t num_block;
     uint64_t largest;
     uint64_t ack_delay;
+    uint64_t ecnx3[3];
 
     debug_printf_suspend();
 
-    int ret = picoquic_parse_ack_header(bytes, bytes_max,
-        &num_block, &largest, &ack_delay, &byte_index, 0);
+    int ret = picoquic_parse_ack_header(bytes, bytes_max, &num_block, (is_ecn)? ecnx3:NULL,
+        &largest, &ack_delay, &byte_index, 0);
 
     debug_printf_resume();
 
@@ -420,7 +421,13 @@ size_t picoquic_log_ack_frame(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t
         return bytes_max;
 
     /* Now that the size is good, print it */
-    fprintf(F, "    ACK (nb=%u)", (int)num_block);
+    if (is_ecn) {
+        fprintf(F, "    ACK_ECN (nb=%u, ect0=%llu, ect1=%llu, ce=%llu)", (int)num_block,
+            (unsigned long long)ecnx3[0], (unsigned long long)ecnx3[1], (unsigned long long)ecnx3[2]);
+    }
+    else {
+        fprintf(F, "    ACK (nb=%u)", (int)num_block);
+    }
 
     /* decoding the acks */
 
@@ -825,7 +832,6 @@ size_t picoquic_log_crypto_hs_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
     return byte_index;
 }
 
-
 void picoquic_log_frames(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t length)
 {
     size_t byte_index = 0;
@@ -842,7 +848,10 @@ void picoquic_log_frames(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t leng
             byte_index += picoquic_log_stream_frame(F, bytes + byte_index, length - byte_index);
         } else if (bytes[byte_index] == picoquic_frame_type_ack) {
             ack_or_data = 1;
-            byte_index += picoquic_log_ack_frame(F, cnx_id64, bytes + byte_index, length - byte_index);
+            byte_index += picoquic_log_ack_frame(F, cnx_id64, bytes + byte_index, length - byte_index, 0);
+        } else if (bytes[byte_index] == picoquic_frame_type_ack_ecn) {
+            ack_or_data = 1;
+            byte_index += picoquic_log_ack_frame(F, cnx_id64, bytes + byte_index, length - byte_index, 1);
         }
 
         if (ack_or_data == 0) {

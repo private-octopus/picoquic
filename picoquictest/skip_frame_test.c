@@ -120,6 +120,16 @@ static uint8_t test_frame_type_ack[] = {
     0, 0,
     5, 12
 };
+static uint8_t test_frame_type_ack_ecn[] = {
+    picoquic_frame_type_ack_ecn,
+    0xC0, 0, 0, 1, 2, 3, 4, 5,
+    0x44, 0,
+    3, 0, 1,
+    2,
+    5,
+    0, 0,
+    5, 12
+};
 static uint8_t test_frame_type_stream_range_min[] = {
     picoquic_frame_type_stream_range_min,
     1,
@@ -176,6 +186,7 @@ static test_skip_frames_t test_skip_list[] = {
     TEST_SKIP_ITEM("challenge", test_frame_type_path_challenge, 1, 0, 3),
     TEST_SKIP_ITEM("response", test_frame_type_path_response, 1, 0, 3),
     TEST_SKIP_ITEM("ack", test_frame_type_ack, 1, 0, 3),
+    TEST_SKIP_ITEM("ack_ecn", test_frame_type_ack_ecn, 1, 0, 3),
     TEST_SKIP_ITEM("stream_min", test_frame_type_stream_range_min, 0, 1, 3),
     TEST_SKIP_ITEM("stream_max", test_frame_type_stream_range_max, 0, 0, 3),
     TEST_SKIP_ITEM("crypto_hs", test_frame_type_crypto_hs, 0, 0, 2)
