@@ -782,7 +782,7 @@ size_t picoquic_log_new_token_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
 
     l_toklen = picoquic_varint_decode(&bytes[byte_index], bytes_max, &toklen);
 
-    min_size += l_toklen + toklen;
+    min_size += l_toklen + (size_t)toklen;
 
     if (l_toklen == 0 || min_size > bytes_max) {
         fprintf(F, "    Malformed NEW CONNECTION ID, requires %d bytes out of %d\n", (int)min_size, (int)bytes_max);
@@ -793,7 +793,7 @@ size_t picoquic_log_new_token_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
         for (int x = 0; x < toklen && x < 16; x++) {
             fprintf(F, "%02x", bytes[byte_index + x]);
         }
-        byte_index += toklen;
+        byte_index += (size_t)toklen;
 
         if (toklen > 16) {
             fprintf(F, "...");

@@ -168,6 +168,9 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     if (cnx->local_parameters.initial_max_stream_id_unidir != 0) {
         param_size += (2 + 2 + 2);
     }
+    if (cnx->local_parameters.migration_disabled != 0) {
+        param_size += (2 + 2);
+    }
     if (cnx->local_parameters.prefered_address.ipVersion != 0) {
         param_size += picoquic_length_transport_param_prefered_address(&cnx->local_parameters.prefered_address);
     }
@@ -288,6 +291,13 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                 byte_index += 2;
                 byte_index += param_length;
             }
+        }
+
+        if (cnx->local_parameters.migration_disabled != 0) {
+            picoformat_16(bytes + byte_index, picoquic_transport_parameter_disable_migration);
+            byte_index += 2;
+            picoformat_16(bytes + byte_index, 0);
+            byte_index += 2;
         }
     }
 
@@ -490,6 +500,14 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                             }
                             break;
                         }
+                        case picoquic_transport_parameter_disable_migration:
+                            if (extension_length != 0) {
+                                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_TRANSPORT_PARAMETER_ERROR);
+                            }
+                            else {
+                                cnx->remote_parameters.migration_disabled = 1;
+                            }
+                            break;
                         default:
                             /* ignore unknown extensions */
                             break;
