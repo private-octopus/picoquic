@@ -42,6 +42,7 @@ typedef enum {
 
 static const picoquic_test_def_t test_table[] = {
     { "picohash", picohash_test },
+    { "splay", splay_test },
     { "cnxcreation", cnxcreation_test },
     { "parseheader", parseheadertest },
     { "pn2pn64", pn2pn64test },
@@ -49,15 +50,16 @@ static const picoquic_test_def_t test_table[] = {
     { "fnv1a", fnv1atest },
     { "float16", float16test },
     { "varint", varint_test },
+    { "sack", sacktest },
     { "skip_frames", skip_frame_test },
+    { "parse_frames", parse_frame_test },
+    { "logger", logger_test },
     { "TlsStreamFrame", TlsStreamFrameTest },
     { "StreamZeroFrame", StreamZeroFrameTest },
-    { "sack", sacktest },
     { "sendack", sendacktest },
     { "ackrange", ackrange_test },
     { "ack_of_ack", ack_of_ack_test },
     { "sim_link", sim_link_test },
-    { "logger", logger_test },
     { "tls_api", tls_api_test },
     { "silence_test", tls_api_silence_test },
     { "tls_api_version_negotiation", tls_api_version_negotiation_test },
@@ -118,9 +120,7 @@ static const picoquic_test_def_t test_table[] = {
     { "pn_vector", cleartext_pn_vector_test },
     { "zero_rtt_spurious", zero_rtt_spurious_test },
     { "zero_rtt_retry", zero_rtt_retry_test },
-    { "parse_frames", parse_frame_test },
-    { "stress", stress_test },
-    { "splay", splay_test }
+    { "stress", stress_test }
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);

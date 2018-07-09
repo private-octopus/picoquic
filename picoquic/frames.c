@@ -2090,7 +2090,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
             }
 
             bytes = picoquic_decode_stream_frame(cnx, bytes, bytes_max, current_time);
-            pkt_ctx->ack_needed = 1;
+            ack_needed = 1;
 
         } else if (first_byte == picoquic_frame_type_ack) {
             bytes = picoquic_decode_ack_frame(cnx, bytes, bytes_max, current_time, epoch);
@@ -2187,7 +2187,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
         pkt_ctx->ack_needed = 1;
     }
 
-    return bytes != NULL ? 0 : 1;
+    return bytes != NULL ? 0 : PICOQUIC_ERROR_DETECTED;
 }
 
 /*

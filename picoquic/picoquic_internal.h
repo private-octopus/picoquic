@@ -113,8 +113,7 @@ typedef enum {
  */
 
 typedef enum {
-    picoquic_version_no_flag = 0,
-    picoquic_version_use_pn_encryption = 1
+    picoquic_version_no_flag = 0
 } picoquic_version_feature_flags;
 
 /*
@@ -424,7 +423,6 @@ typedef struct st_picoquic_cnx_t {
     int version_index;
 
     /* Series of flags showing the state or choices of the connection */
-    unsigned int use_pn_encryption : 1;
     unsigned int is_0RTT_accepted : 1; /* whether 0-RTT is accepted */
     unsigned int remote_parameters_received : 1; /* whether remote parameters where received */
     unsigned int current_spin : 1; /* Current value of the spin bit */             
@@ -461,6 +459,9 @@ typedef struct st_picoquic_cnx_t {
     uint16_t remote_application_error;
     uint16_t remote_error;
     uint16_t remote_crypto_error;
+    uint32_t retry_token_length;
+    uint8_t * retry_token;
+
 
     /* Next time sending data is expected */
     uint64_t next_wake_time;
@@ -537,6 +538,10 @@ void picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet* p,
 /* Reset connection after receiving version negotiation */
 int picoquic_reset_cnx_version(picoquic_cnx_t* cnx, uint8_t* bytes, size_t length, uint64_t current_time);
 
+/* Reset packet context */
+void picoquic_reset_packet_context(picoquic_cnx_t* cnx,
+    picoquic_packet_context_enum pc);
+
 /* Notify error on connection */
 int picoquic_connection_error(picoquic_cnx_t* cnx, uint16_t local_error);
 
@@ -598,6 +603,8 @@ typedef struct _picoquic_packet_header {
     unsigned int spin : 1;
     unsigned int spin_vec : 2;
     unsigned int has_spin_bit : 1;
+    uint32_t token_length;
+    uint32_t token_offset;
 } picoquic_packet_header;
 
 int picoquic_parse_packet_header(
@@ -614,7 +621,8 @@ uint32_t picoquic_create_packet_header(
     picoquic_packet_type_enum packet_type,
     uint64_t sequence_number,
     uint8_t* bytes,
-    uint32_t * pn_offset);
+    uint32_t * pn_offset,
+    uint32_t * pn_length);
 
 uint32_t  picoquic_predict_packet_header_length(
     picoquic_cnx_t* cnx,
@@ -744,9 +752,6 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
 
 int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mode,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
-
-/* Check whether a packet was sent in clear text */
-int picoquic_is_packet_encrypted(picoquic_packet_type_enum ptype);
 
 /* Queue stateless reset */
 void picoquic_queue_stateless_reset(picoquic_cnx_t* cnx,

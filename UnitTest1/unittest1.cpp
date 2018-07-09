@@ -30,12 +30,19 @@ namespace UnitTest1
 	TEST_CLASS(UnitTest1)
 	{
 	public:
-		    TEST_METHOD(test_picohash)
-		    {
+	    TEST_METHOD(test_picohash)
+	    {
             int ret = picohash_test();
 
             Assert::AreEqual(ret, 0);
-		    }
+	    }
+
+        TEST_METHOD(splay)
+        {
+            int ret = splay_test();
+
+            Assert::AreEqual(ret, 0);
+        }
 
         TEST_METHOD(test_cnxcreation)
         {
@@ -72,13 +79,6 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(test_sack)
-        {
-            int ret = sacktest();
-
-            Assert::AreEqual(ret, 0);
-        }
-
         TEST_METHOD(test_float16)
         {
             int ret = float16test();
@@ -93,6 +93,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(test_sack)
+        {
+            int ret = sacktest();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(test_skip_frames)
         {
             int ret = skip_frame_test();
@@ -103,6 +110,13 @@ namespace UnitTest1
         TEST_METHOD(test_parse_frames)
         {
             int ret = parse_frame_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(test_logger)
+        {
+            int ret = logger_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -145,6 +159,20 @@ namespace UnitTest1
         TEST_METHOD(test_sim_link)
         {
             int ret = sim_link_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(test_cleartext_pn_enc)
+        {
+            int ret = cleartext_pn_enc_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(test_pn_enc_1rtt)
+        {
+            int ret = pn_enc_1rtt_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -352,13 +380,6 @@ namespace UnitTest1
           Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(test_logger)
-        {
-            int ret = logger_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
         TEST_METHOD(test_sockets)
         {
             int ret = socket_test();
@@ -425,20 +446,6 @@ namespace UnitTest1
         TEST_METHOD(test_pn_ctr)
         {
             int ret = pn_ctr_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(test_cleartext_pn_enc)
-        {
-            int ret = cleartext_pn_enc_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(test_pn_enc_1rtt)
-        {
-            int ret = pn_enc_1rtt_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -582,14 +589,5 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
-
-
-        TEST_METHOD(splay)
-        {
-            int ret = splay_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-        
     };
 }
