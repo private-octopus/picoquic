@@ -3,8 +3,6 @@
     connection_close, Error 0xcfff, Reason length 9
     application_close, Error 0x0000, Reason length 0
     application_close, Error 0x0404, Reason length 4
-    crypto_close, Error 0x0011, Reason length 0
-    crypto_close, Error 0x0004, Reason length 6
     MAX DATA: 0x10000000000.
     MAX STREAM DATA, Stream: 1, max data: 0x10000.
     MAX STREAM ID: 256.
@@ -16,7 +14,9 @@
     STOP SENDING 17 (0x00000011), Error 0x4000.
     path_challenge: 0102030405060708
     path_response: 0102030405060708
+    NEW TOKEN[17]: 0x0102030405060708090a0b0c0d0e0f10...
     ACK (nb=2), 102030400-102030405, 1020303fe, 1020303eb-1020303f7
+    ACK_ECN (nb=2, ect0=3, ect1=0, ce=1), 102030400-102030405, 1020303fe, 1020303eb-1020303f7
     Stream 1, offset 0, length 16, fin = 0: a0a1a2a3a4a5a6a7...
     Stream 1, offset 1024, length 16, fin = 0: a0a1a2a3a4a5a6a7...
     Crypto HS frame, offset 0, length 16: a0a1a2a3a4a5a6a7...

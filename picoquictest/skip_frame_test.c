@@ -111,10 +111,26 @@ static uint8_t test_frame_type_path_response[] = {
     picoquic_frame_type_path_response,
     1, 2, 3, 4, 5, 6, 7, 8
 };
+
+static uint8_t test_frame_type_new_token[] = {
+    picoquic_frame_type_new_token,
+    17, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17
+};
+
 static uint8_t test_frame_type_ack[] = {
     picoquic_frame_type_ack,
     0xC0, 0, 0, 1, 2, 3, 4, 5,
     0x44, 0,
+    2,
+    5,
+    0, 0,
+    5, 12
+};
+static uint8_t test_frame_type_ack_ecn[] = {
+    picoquic_frame_type_ack_ecn,
+    0xC0, 0, 0, 1, 2, 3, 4, 5,
+    0x44, 0,
+    3, 0, 1,
     2,
     5,
     0, 0,
@@ -144,19 +160,6 @@ static uint8_t test_frame_type_crypto_hs[] = {
     0xA8, 0xA9, 0xAA, 0xAB, 0xAC, 0xAD, 0xAE, 0xAF
 };
 
-static uint8_t test_type_crypto_close[] = {
-    picoquic_frame_type_crypto_close,
-    0, 0x11,
-    0
-};
-
-static uint8_t test_type_crypto_close_reason[] = {
-    picoquic_frame_type_crypto_close,
-    0, 4,
-    6,
-    'c', 'r', 'y', 'p', 't', 'o'
-};
-
 typedef struct st_test_skip_frames_t {
     char const* name;
     uint8_t* val;
@@ -177,8 +180,6 @@ static test_skip_frames_t test_skip_list[] = {
     TEST_SKIP_ITEM("connection_close", test_type_connection_close, 0, 0, 3),
     TEST_SKIP_ITEM("application_close", test_type_application_close, 0, 0, 3),
     TEST_SKIP_ITEM("application_close", test_type_application_close_reason, 0, 0, 3),
-    TEST_SKIP_ITEM("crypto_close", test_type_crypto_close, 0, 0, 2),
-    TEST_SKIP_ITEM("crypto_close", test_type_crypto_close_reason, 0, 0, 2),
     TEST_SKIP_ITEM("max_data", test_frame_type_max_data, 0, 0, 3),
     TEST_SKIP_ITEM("max_stream_data", test_frame_type_max_stream_data, 0, 0, 3),
     TEST_SKIP_ITEM("max_stream_id", test_frame_type_max_stream_id, 0, 0, 3),
@@ -190,7 +191,9 @@ static test_skip_frames_t test_skip_list[] = {
     TEST_SKIP_ITEM("stop_sending", test_frame_type_stop_sending, 0, 0, 3),
     TEST_SKIP_ITEM("challenge", test_frame_type_path_challenge, 1, 0, 3),
     TEST_SKIP_ITEM("response", test_frame_type_path_response, 1, 0, 3),
+    TEST_SKIP_ITEM("new_token", test_frame_type_new_token, 0, 0, 3),
     TEST_SKIP_ITEM("ack", test_frame_type_ack, 1, 0, 3),
+    TEST_SKIP_ITEM("ack_ecn", test_frame_type_ack_ecn, 1, 0, 3),
     TEST_SKIP_ITEM("stream_min", test_frame_type_stream_range_min, 0, 1, 3),
     TEST_SKIP_ITEM("stream_max", test_frame_type_stream_range_max, 0, 0, 3),
     TEST_SKIP_ITEM("crypto_hs", test_frame_type_crypto_hs, 0, 0, 2)

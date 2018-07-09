@@ -298,8 +298,11 @@ char const* picoquic_log_frame_names(uint8_t frame_type)
     case picoquic_frame_type_crypto_hs:
         frame_name = "crypto_hs";
         break;
-    case picoquic_frame_type_crypto_close:
-        frame_name = "crypto_close";
+    case picoquic_frame_type_new_token:
+        frame_name = "new_token";
+        break;
+    case picoquic_frame_type_ack_ecn:
+        frame_name = "ack_ecn";
         break;
     default:
         if (PICOQUIC_IN_RANGE(frame_type, picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
@@ -405,17 +408,18 @@ size_t picoquic_log_stream_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
     return byte_index + data_length;
 }
 
-size_t picoquic_log_ack_frame(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t bytes_max)
+size_t picoquic_log_ack_frame(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t bytes_max, int is_ecn)
 {
     size_t byte_index;
     uint64_t num_block;
     uint64_t largest;
     uint64_t ack_delay;
+    uint64_t ecnx3[3];
 
     debug_printf_suspend();
 
-    int ret = picoquic_parse_ack_header(bytes, bytes_max,
-        &num_block, &largest, &ack_delay, &byte_index, 0);
+    int ret = picoquic_parse_ack_header(bytes, bytes_max, &num_block, (is_ecn)? ecnx3:NULL,
+        &largest, &ack_delay, &byte_index, 0);
 
     debug_printf_resume();
 
@@ -423,7 +427,13 @@ size_t picoquic_log_ack_frame(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t
         return bytes_max;
 
     /* Now that the size is good, print it */
-    fprintf(F, "    ACK (nb=%u)", (int)num_block);
+    if (is_ecn) {
+        fprintf(F, "    ACK_ECN (nb=%u, ect0=%llu, ect1=%llu, ce=%llu)", (int)num_block,
+            (unsigned long long)ecnx3[0], (unsigned long long)ecnx3[1], (unsigned long long)ecnx3[2]);
+    }
+    else {
+        fprintf(F, "    ACK (nb=%u)", (int)num_block);
+    }
 
     /* decoding the acks */
 
@@ -618,11 +628,6 @@ size_t picoquic_log_application_close_frame(FILE* F, uint8_t* bytes, size_t byte
     return picoquic_log_generic_close_frame(F, bytes, bytes_max, picoquic_frame_type_application_close);
 }
 
-size_t picoquic_log_crypto_close_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
-{
-    return picoquic_log_generic_close_frame(F, bytes, bytes_max, picoquic_frame_type_crypto_close);
-}
-
 size_t picoquic_log_max_data_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
 {
     size_t byte_index = 1;
@@ -768,6 +773,37 @@ size_t picoquic_log_new_connection_id_frame(FILE* F, uint8_t* bytes, size_t byte
     return byte_index;
 }
 
+size_t picoquic_log_new_token_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
+{
+    size_t byte_index = 1;
+    size_t min_size = 1;
+    size_t l_toklen = 0;
+    uint64_t toklen = 0;
+
+    l_toklen = picoquic_varint_decode(&bytes[byte_index], bytes_max, &toklen);
+
+    min_size += l_toklen + toklen;
+
+    if (l_toklen == 0 || min_size > bytes_max) {
+        fprintf(F, "    Malformed NEW CONNECTION ID, requires %d bytes out of %d\n", (int)min_size, (int)bytes_max);
+        return bytes_max;
+    } else {
+        byte_index += l_toklen;
+        fprintf(F, "    NEW TOKEN[%d]: 0x", (int)toklen);
+        for (int x = 0; x < toklen && x < 16; x++) {
+            fprintf(F, "%02x", bytes[byte_index + x]);
+        }
+        byte_index += toklen;
+
+        if (toklen > 16) {
+            fprintf(F, "...");
+        }
+        fprintf(F, "\n");
+    }
+
+    return byte_index;
+}
+
 size_t picoquic_log_path_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
 {
     size_t byte_index = 1;
@@ -833,7 +869,6 @@ size_t picoquic_log_crypto_hs_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
     return byte_index;
 }
 
-
 void picoquic_log_frames(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t length)
 {
     size_t byte_index = 0;
@@ -850,7 +885,10 @@ void picoquic_log_frames(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t leng
             byte_index += picoquic_log_stream_frame(F, bytes + byte_index, length - byte_index);
         } else if (bytes[byte_index] == picoquic_frame_type_ack) {
             ack_or_data = 1;
-            byte_index += picoquic_log_ack_frame(F, cnx_id64, bytes + byte_index, length - byte_index);
+            byte_index += picoquic_log_ack_frame(F, cnx_id64, bytes + byte_index, length - byte_index, 0);
+        } else if (bytes[byte_index] == picoquic_frame_type_ack_ecn) {
+            ack_or_data = 1;
+            byte_index += picoquic_log_ack_frame(F, cnx_id64, bytes + byte_index, length - byte_index, 1);
         }
 
         if (ack_or_data == 0) {
@@ -930,8 +968,8 @@ void picoquic_log_frames(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t leng
                     byte_index += picoquic_log_crypto_hs_frame(F, bytes + byte_index,
                         length - byte_index);
                     break;
-                case picoquic_frame_type_crypto_close:
-                    byte_index += picoquic_log_crypto_close_frame(F, bytes + byte_index,
+                case picoquic_frame_type_new_token:
+                    byte_index += picoquic_log_new_token_frame(F, bytes + byte_index,
                         length - byte_index);
                     break;
                 default:

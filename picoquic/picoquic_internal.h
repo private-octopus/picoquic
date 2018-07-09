@@ -79,8 +79,8 @@ typedef enum {
     picoquic_frame_type_stream_range_min = 0x10,
     picoquic_frame_type_stream_range_max = 0x17,
     picoquic_frame_type_crypto_hs = 0x18,
-    picoquic_frame_type_crypto_close = 0x20,
-    picoquic_frame_type_new_token = 0x21
+    picoquic_frame_type_new_token = 0x19,
+    picoquic_frame_type_ack_ecn = 0x20
 } picoquic_frame_type_enum_t;
 
 /*
@@ -458,7 +458,6 @@ typedef struct st_picoquic_cnx_t {
     uint16_t crypto_error;
     uint16_t remote_application_error;
     uint16_t remote_error;
-    uint16_t remote_crypto_error;
     uint32_t retry_token_length;
     uint8_t * retry_token;
 
@@ -492,6 +491,13 @@ typedef struct st_picoquic_cnx_t {
     uint32_t nb_zero_rtt_acked;
     uint64_t nb_retransmission_total;
     uint64_t nb_spurious;
+    /* ECN Counters */
+    uint64_t ecn_ect0_total_local;
+    uint64_t ecn_ect1_total_local;
+    uint64_t ecn_ce_total_local;
+    uint64_t ecn_ect0_total_remote;
+    uint64_t ecn_ect1_total_remote;
+    uint64_t ecn_ce_total_remote;
 
     /* Congestion algorithm */
     picoquic_congestion_algorithm_t const* congestion_alg;
@@ -537,6 +543,9 @@ void picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet* p,
 
 /* Reset connection after receiving version negotiation */
 int picoquic_reset_cnx_version(picoquic_cnx_t* cnx, uint8_t* bytes, size_t length, uint64_t current_time);
+
+/* Reset the connection context, e.g. after retry */
+int picoquic_reset_cnx(picoquic_cnx_t* cnx, uint64_t current_time);
 
 /* Reset packet context */
 void picoquic_reset_packet_context(picoquic_cnx_t* cnx,
@@ -644,7 +653,7 @@ int picoquic_parse_stream_header(
 
 int picoquic_parse_ack_header(
     uint8_t const* bytes, size_t bytes_max,
-    uint64_t* num_block, uint64_t* largest,
+    uint64_t* num_block, uint64_t* nb_ecnx3, uint64_t* largest,
     uint64_t* ack_delay, size_t* consumed,
     uint8_t ack_delay_exponent);
 
@@ -701,7 +710,7 @@ int picoquic_check_sack_list(picoquic_sack_item_t* sack,
      */
 int picoquic_process_ack_of_ack_frame(
     picoquic_sack_item_t* first_sack,
-    uint8_t* bytes, size_t bytes_max, size_t* consumed);
+    uint8_t* bytes, size_t bytes_max, size_t* consumed, int is_ecn);
 
 /* stream management */
 picoquic_stream_head* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t stream_id);
