@@ -897,13 +897,53 @@ static int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
     return ret; /* end of sending loop */
 }
 
+
+static int wait_application_pn_enc_ready(picoquic_test_tls_api_ctx_t* test_ctx,
+    uint64_t * simulated_time)
+{
+    int ret = 0;
+    uint64_t time_out = *simulated_time + 4000000;
+    int nb_trials = 0;
+    int nb_inactive = 0;
+
+    while (*simulated_time < time_out &&
+        test_ctx->cnx_client->cnx_state == picoquic_state_client_ready &&
+        test_ctx->cnx_server->cnx_state == picoquic_state_server_ready &&
+        test_ctx->cnx_server->crypto_context[3].aead_decrypt == NULL &&
+        nb_trials < 1024 &&
+        nb_inactive < 64 &&
+        ret == 0) {
+        int was_active = 0;
+        nb_trials++;
+
+        ret = tls_api_one_sim_round(test_ctx, simulated_time, &was_active);
+
+        if (was_active) {
+            nb_inactive = 0;
+        }
+        else {
+            nb_inactive++;
+        }
+    }
+
+    if (test_ctx->cnx_server->crypto_context[3].aead_decrypt == NULL) {
+        DBG_PRINTF("Could not obtain the 1-RTT decryption key, state = %d\n",
+            test_ctx->cnx_server->cnx_state);
+        ret = -1;
+    }
+
+    return ret;
+}
+
 static int tls_api_attempt_to_close(
     picoquic_test_tls_api_ctx_t* test_ctx, uint64_t* simulated_time)
 {
     int ret = 0;
     int nb_rounds = 0;
 
-    ret = picoquic_close(test_ctx->cnx_client, 0);
+    if (ret == 0) {
+        ret = picoquic_close(test_ctx->cnx_client, 0);
+    }
 
     if (ret == 0) {
         /* packet from client to server */
@@ -1265,6 +1305,10 @@ int tls_api_server_reset_test()
 
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    if (ret == 0) {
+        ret = wait_application_pn_enc_ready(test_ctx, &simulated_time);
     }
 
     /* verify that client and server have the same reset secret */
@@ -2474,35 +2518,7 @@ int pn_enc_1rtt_test()
     }
 
     if (ret == 0) {
-        uint64_t time_out = simulated_time + 4000000;
-        int nb_trials = 0;
-        int nb_inactive = 0;
-
-        while (simulated_time <time_out &&
-            test_ctx->cnx_client->cnx_state == picoquic_state_client_ready &&
-            test_ctx->cnx_server->cnx_state == picoquic_state_server_ready &&
-            test_ctx->cnx_server->crypto_context[3].aead_decrypt == NULL &&
-            nb_trials < 1024 &&
-            nb_inactive < 64 &&
-            ret == 0) {
-            int was_active = 0;
-            nb_trials++;
-
-            ret = tls_api_one_sim_round(test_ctx, &simulated_time, &was_active);
-
-            if (was_active) {
-                nb_inactive = 0;
-            }
-            else {
-                nb_inactive++;
-            }
-        }
-
-        if (test_ctx->cnx_server->crypto_context[3].aead_decrypt == NULL) {
-            DBG_PRINTF("Could not obtain the 1-RTT decryption key, state = %d\n",
-                test_ctx->cnx_server->cnx_state);
-            ret = -1;
-        }
+        ret = wait_application_pn_enc_ready(test_ctx, &simulated_time);
     }
 
     if (ret == 0)
@@ -3286,6 +3302,10 @@ int client_error_test()
     /* Now, restart a connection in the same context */
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    if (ret == 0){
+        ret = wait_application_pn_enc_ready(test_ctx, &simulated_time);
     }
 
     if (ret == 0) {

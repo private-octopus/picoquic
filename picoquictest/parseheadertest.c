@@ -76,6 +76,8 @@ static picoquic_packet_header hinitial10 = {
     picoquic_packet_context_initial,
     0,
     0,
+    0,
+    0,
     0
 };
 
@@ -103,6 +105,8 @@ static picoquic_packet_header hinitial10_l = {
     0,
     0,
     picoquic_packet_context_initial,
+    0,
+    0,
     0,
     0,
     0
@@ -144,6 +148,8 @@ static picoquic_packet_header hvnego10 = {
     picoquic_packet_context_initial,
     0,
     0,
+    0,
+    0,
     0
 };
 
@@ -173,6 +179,8 @@ static picoquic_packet_header hhandshake = {
     picoquic_packet_context_handshake,
     0,
     0,
+    0,
+    0,
     0
 };
 
@@ -198,7 +206,9 @@ static picoquic_packet_header hphi0_c_32 = {
     picoquic_packet_context_application,
     0,
     0,
-    1
+    1,
+    0,
+    0
 };
 
 static uint8_t packet_short_phi0_c_32_spin[] = {
@@ -223,7 +233,9 @@ static picoquic_packet_header hphi0_c_32_spin = {
     picoquic_packet_context_application,
     1,
     0,
-    1
+    1,
+    0,
+    0
 };
 
 static uint8_t packet_short_phi0_noc_32[] = {
@@ -245,6 +257,8 @@ static picoquic_packet_header hphi0_noc_32 = {
     0,
     3,
     picoquic_packet_context_application,
+    0,
+    0,
     0,
     0,
     0
@@ -350,6 +364,7 @@ int parseheadertest()
     for (size_t i = 0; ret == 0 && i < nb_test_entries; i++) {
         uint32_t header_length;
         uint32_t pn_offset;
+        uint32_t pn_length;
 
         if (test_entries[i].decode_test_only) {
             continue;
@@ -359,7 +374,7 @@ int parseheadertest()
         memset(packet, 0xcc, sizeof(packet));
         /* Prepare the header inside the packet */
         header_length = picoquic_create_packet_header(cnx_10, test_entries[i].ph->ptype,
-            test_entries[i].ph->pn, packet, &pn_offset);
+            test_entries[i].ph->pn, packet, &pn_offset, &pn_length);
         picoquic_update_payload_length(packet, pn_offset, pn_offset, pn_offset +
             test_entries[i].ph->payload_length);
         

@@ -193,79 +193,6 @@ void picoquic_update_payload_length(
     }
 }
 
-uint32_t picoquic_create_packet_header_11(
-    picoquic_cnx_t* cnx,
-    picoquic_packet_type_enum packet_type,
-    picoquic_connection_id_t dest_cnx_id,
-    picoquic_connection_id_t srce_cnx_id,
-    uint64_t sequence_number,
-    uint8_t* bytes,
-    uint32_t * pn_offset)
-{
-    uint32_t length = 0;
-
-    /* Prepare the packet header */
-    if (packet_type == picoquic_packet_1rtt_protected_phi0 || packet_type == picoquic_packet_1rtt_protected_phi1) {
-        /* Create a short packet -- using 32 bit sequence numbers for now */
-        uint8_t K = (packet_type == picoquic_packet_1rtt_protected_phi0) ? 0 : 0x40;
-        const uint8_t C = 0x32;
-        uint8_t spin_bit = (uint8_t)((cnx->current_spin) << 2);
-
-        length = 0;
-        bytes[length++] = (K | C | spin_bit);
-        length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, dest_cnx_id);
-
-        *pn_offset = length;
-        picoformat_32(&bytes[length], (uint32_t)sequence_number);
-        length += 4;
-    }
-    else {
-        /* Create a long packet */
-
-        switch (packet_type) {
-        case picoquic_packet_initial:
-            bytes[0] = 0xFF;
-            break;
-        case picoquic_packet_retry:
-            bytes[0] = 0xFE;
-            break;
-        case picoquic_packet_handshake:
-            bytes[0] = 0xFD;
-            break;
-        case picoquic_packet_0rtt_protected:
-            bytes[0] = 0xFC;
-            break;
-        default:
-            bytes[0] = 0x80;
-            break;
-        }
-        length = 1;
-        if ((cnx->cnx_state == picoquic_state_client_init || cnx->cnx_state == picoquic_state_client_init_sent) && packet_type == picoquic_packet_initial) {
-            picoformat_32(&bytes[length], cnx->proposed_version);
-        }
-        else {
-            picoformat_32(&bytes[length],
-                picoquic_supported_versions[cnx->version_index].version);
-        }
-        length += 4;
-
-        bytes[length++] = picoquic_create_packet_header_cnxid_lengths(dest_cnx_id.id_len, srce_cnx_id.id_len);
-
-        length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, dest_cnx_id);
-        length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, srce_cnx_id);
-
-        /* Reserve two bytes for payload length */
-        bytes[length++] = 0;
-        bytes[length++] = 0;
-        /* Encode the length */
-        *pn_offset = length;
-        picoformat_32(&bytes[length], (uint32_t)sequence_number);
-        length += 4;
-    }
-
-    return length;
-}
-
 uint32_t picoquic_predict_packet_header_length_11(
     picoquic_packet_type_enum packet_type,
     picoquic_connection_id_t dest_cnx_id,
@@ -286,45 +213,47 @@ uint32_t picoquic_predict_packet_header_length_11(
     return length;
 }
 
-
-uint32_t picoquic_create_packet_header_12(
+uint32_t picoquic_create_packet_header(
     picoquic_cnx_t* cnx,
     picoquic_packet_type_enum packet_type,
-    picoquic_connection_id_t dest_cnx_id,
-    picoquic_connection_id_t srce_cnx_id,
     uint64_t sequence_number,
     uint8_t* bytes,
-    uint32_t * pn_offset)
+    uint32_t * pn_offset,
+    uint32_t * pn_length)
 {
     uint32_t length = 0;
+    picoquic_connection_id_t dest_cnx_id =
+        ((packet_type == picoquic_packet_initial && cnx->client_mode) ||
+            packet_type == picoquic_packet_0rtt_protected) ?
+        cnx->initial_cnxid : cnx->remote_cnxid;
 
     /* Prepare the packet header */
     if (packet_type == picoquic_packet_1rtt_protected_phi0 || packet_type == picoquic_packet_1rtt_protected_phi1) {
         /* Create a short packet -- using 32 bit sequence numbers for now */
         uint8_t K = (packet_type == picoquic_packet_1rtt_protected_phi0) ? 0 : 0x40;
         const uint8_t C = 0x30;
-	uint8_t spin_vec = (uint8_t) (cnx->spin_vec );
-    uint8_t spin_bit = (uint8_t)((cnx->current_spin) << 2);
+        uint8_t spin_vec = (uint8_t)(cnx->spin_vec);
+        uint8_t spin_bit = (uint8_t)((cnx->current_spin) << 2);
 
-	if (!cnx->spin_edge) spin_vec = 0;
-	else {
-		cnx->spin_edge = 0;
-		uint64_t dt = picoquic_get_quic_time(cnx->quic) - cnx->spin_last_trigger;
-		if (dt > PICOQUIC_SPIN_VEC_LATE) { // DELAYED
-			spin_vec = 1;
-			// fprintf(stderr, "Delayed Outgoing Spin=%d DT=%ld\n", cnx->current_spin, dt);
-		}
-	}
+        if (!cnx->spin_edge) spin_vec = 0;
+        else {
+            cnx->spin_edge = 0;
+            uint64_t dt = picoquic_get_quic_time(cnx->quic) - cnx->spin_last_trigger;
+            if (dt > PICOQUIC_SPIN_VEC_LATE) { // DELAYED
+                spin_vec = 1;
+                // fprintf(stderr, "Delayed Outgoing Spin=%d DT=%ld\n", cnx->current_spin, dt);
+            }
+        }
 
-	length = 0;
+        length = 0;
         bytes[length++] = (K | C | spin_bit | spin_vec);
         length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, dest_cnx_id);
 
         *pn_offset = length;
+        *pn_length = 4;
         picoquic_headint_encode_32(&bytes[length], sequence_number);
         length += 4;
-    }
-    else {
+    } else {
         /* Create a long packet */
 
         switch (packet_type) {
@@ -354,70 +283,70 @@ uint32_t picoquic_create_packet_header_12(
         }
         length += 4;
 
-        bytes[length++] = picoquic_create_packet_header_cnxid_lengths(dest_cnx_id.id_len, srce_cnx_id.id_len);
+        bytes[length++] = picoquic_create_packet_header_cnxid_lengths(dest_cnx_id.id_len, cnx->local_cnxid.id_len);
 
         length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, dest_cnx_id);
-        length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, srce_cnx_id);
+        length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, cnx->local_cnxid);
 
         /* Reserve two bytes for payload length */
         bytes[length++] = 0;
         bytes[length++] = 0;
-        /* Encode the length */
+        /* Encode the sequence number */
         *pn_offset = length;
+        *pn_length = 4;
         picoquic_headint_encode_32(&bytes[length], sequence_number);
         length += 4;
+        /* Special case of packet initial */
+        if (packet_type == picoquic_packet_initial) {
+            length += picoquic_varint_encode(&bytes[length], 16, cnx->retry_token_length);
+            if (cnx->retry_token_length > 0) {
+                memcpy(&bytes[length], cnx->retry_token, cnx->retry_token_length);
+            }
+        }
     }
 
     return length;
 }
-
 
 uint32_t picoquic_predict_packet_header_length(
     picoquic_cnx_t* cnx,
     picoquic_packet_type_enum packet_type)
 {
     uint32_t header_length = 0;
-    switch (picoquic_supported_versions[cnx->version_index].version_header_encoding) {
-    case picoquic_version_header_11:
-    case picoquic_version_header_12:
-        header_length = picoquic_predict_packet_header_length_11(packet_type,
-            (packet_type == picoquic_packet_initial ||
-                packet_type == picoquic_packet_0rtt_protected) ?
-            cnx->initial_cnxid : cnx->remote_cnxid,
-            cnx->local_cnxid);
-        break;
-    default:
-        break;
-    }
-    return header_length;
-}
 
-uint32_t picoquic_create_packet_header(
-    picoquic_cnx_t* cnx,
-    picoquic_packet_type_enum packet_type,
-    uint64_t sequence_number,
-    uint8_t* bytes,
-    uint32_t * pn_offset)
-{
-    uint32_t header_length = 0;
-    switch (picoquic_supported_versions[cnx->version_index].version_header_encoding) {
-    case picoquic_version_header_11:
-        header_length = picoquic_create_packet_header_11(cnx, packet_type, 
-            (packet_type==picoquic_packet_initial ||
-                packet_type == picoquic_packet_0rtt_protected)?
-            cnx->initial_cnxid:cnx->remote_cnxid,
-            cnx->local_cnxid, sequence_number, bytes, pn_offset);
-        break;
-    case picoquic_version_header_12:
-        header_length = picoquic_create_packet_header_12(cnx, packet_type,
-            (packet_type == picoquic_packet_initial ||
-                packet_type == picoquic_packet_0rtt_protected) ?
-            cnx->initial_cnxid : cnx->remote_cnxid,
-            cnx->local_cnxid, sequence_number, bytes, pn_offset);
-        break;
-    default:
-        break;
+    if (packet_type == picoquic_packet_1rtt_protected_phi0 || 
+        packet_type == picoquic_packet_1rtt_protected_phi1) {
+        /* Compute length of a short packet header */
+
+        header_length = 1 + cnx->remote_cnxid.id_len + 4;
     }
+    else {
+        /* Compute length of a long packet header */
+        header_length = 1 + /* version */ 4 + /* cnx_id prefix */ 1;
+
+        /* add dest-id length */
+        if ((packet_type == picoquic_packet_initial && cnx->client_mode) ||
+            packet_type == picoquic_packet_0rtt_protected) {
+            header_length += cnx->initial_cnxid.id_len;
+        }
+        else {
+            header_length += cnx->remote_cnxid.id_len;
+        }
+
+        /* add srce-id length */
+        header_length += cnx->local_cnxid.id_len;
+
+        /* add length of payload length and packet number */
+        header_length += 2 + 4;
+
+        /* add length of tokens for initial packets */
+        if (packet_type == picoquic_packet_initial) {
+            uint8_t useless[16];
+            header_length += picoquic_varint_encode(useless, 16, cnx->retry_token_length);
+            header_length += cnx->retry_token_length;
+        }
+    }
+
     return header_length;
 }
 
@@ -447,20 +376,17 @@ uint32_t picoquic_protect_packet(picoquic_cnx_t* cnx,
 {
     uint32_t send_length;
     uint32_t h_length;
-    uint32_t pnum_offset = 0;
+    uint32_t pn_offset = 0;
+    size_t sample_offset = 0;
+    size_t pn_length = 0;
     size_t aead_checksum_length = picoquic_aead_get_checksum_length(aead_context);
 
     /* Create the packet header just before encrypting the content */
     h_length = picoquic_create_packet_header(cnx, ptype,
-        sequence_number, send_buffer, &pnum_offset);
+        sequence_number, send_buffer, &pn_offset, &pn_length);
     /* Make sure that the payload length is encoded in the header */
-    if (picoquic_supported_versions[cnx->version_index].version_flags&picoquic_version_use_pn_encryption)
-    {
-        /* If using encryption, the "payload" length also includes the encrypted packet length */
-        picoquic_update_payload_length(send_buffer, pnum_offset, pnum_offset, length + aead_checksum_length);
-    } else {
-        picoquic_update_payload_length(send_buffer, pnum_offset, h_length, length + aead_checksum_length);
-    }
+    /* Using encryption, the "payload" length also includes the encrypted packet length */
+    picoquic_update_payload_length(send_buffer, pn_offset, h_length - pn_length, length + aead_checksum_length);
 
     send_length = (uint32_t)picoquic_aead_encrypt_generic(send_buffer + /* header_length */ h_length,
         bytes + header_length, length - header_length,
@@ -468,24 +394,18 @@ uint32_t picoquic_protect_packet(picoquic_cnx_t* cnx,
 
     send_length += /* header_length */ h_length;
 
-    /* Next, encrypt the PN, if needed */
+    /* Next, encrypt the PN -- The sample is located after the pn_offset */
+    sample_offset = /* header_length */ pn_offset + 4;
 
-    if (picoquic_supported_versions[cnx->version_index].version_flags&picoquic_version_use_pn_encryption)
+    if (sample_offset + aead_checksum_length > send_length)
     {
-        /* The sample is located at the offset */
-        size_t sample_offset = /* header_length */ h_length;
-        size_t pn_length = h_length - pnum_offset;
-
-        if (sample_offset + aead_checksum_length > send_length)
-        {
-            sample_offset = length - aead_checksum_length;
-        }
-        if (pnum_offset < sample_offset)
-        {
-            /* Encode */
-            picoquic_pn_encrypt(pn_enc, send_buffer + sample_offset, send_buffer + /* pn_offset */ pnum_offset, 
-                send_buffer + /* pn_offset */ pnum_offset, pn_length);
-        }
+        sample_offset = length - aead_checksum_length;
+    }
+    if (pn_offset < sample_offset)
+    {
+        /* Encode */
+        picoquic_pn_encrypt(pn_enc, send_buffer + sample_offset, send_buffer + /* pn_offset */ pn_offset, 
+            send_buffer + /* pn_offset */ pn_offset, pn_length);
     }
 
     return send_length;
@@ -747,12 +667,6 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
 
                 *header_length = length;
 
-                if (p->ptype < picoquic_packet_1rtt_protected_phi0) {
-                    DBG_PRINTF("Retransmit packet type %d, pc=%d, seq = %llx, is_client = %d\n",
-                        p->ptype, p->pc,
-                        (unsigned long long)p->sequence_number, cnx->client_mode);
-                }
-
                 if (p->ptype == picoquic_packet_1rtt_protected_phi0 || p->ptype == picoquic_packet_1rtt_protected_phi1 || p->ptype == picoquic_packet_0rtt_protected) {
                     *is_cleartext_mode = 0;
                 } else {
@@ -830,6 +744,12 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                     }
 
                     if (should_retransmit != 0) {
+                        if (p->ptype < picoquic_packet_1rtt_protected_phi0) {
+                            DBG_PRINTF("Retransmit packet type %d, pc=%d, seq = %llx, is_client = %d\n",
+                                p->ptype, p->pc,
+                                (unsigned long long)p->sequence_number, cnx->client_mode);
+                        }
+
                         /* special case for the client initial */
                         if (p->ptype == picoquic_packet_initial && cnx->client_mode != 0) {
                             while (length < (path_x->send_mtu - checksum_length)) {
@@ -1632,7 +1552,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             packet->checksum_overhead = checksum_overhead;
         }
         else {
-            /* when in a clear text mode, only send packets if there is
+            /* when in a handshake mode, only send packets if there is
             * actually something to send, or resend */
             length = 0;
             packet->length = 0;
