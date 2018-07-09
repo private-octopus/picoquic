@@ -358,7 +358,6 @@ int parseheadertest()
 
     if (ret == 0) {
         quic->local_ctx_length = 8;
-        cnx_10->remote_cnxid = test_cnxid_r10;
     }
 
     for (size_t i = 0; ret == 0 && i < nb_test_entries; i++) {
@@ -373,6 +372,12 @@ int parseheadertest()
         pcnx = (i < 3) ? NULL : cnx_10;
         memset(packet, 0xcc, sizeof(packet));
         /* Prepare the header inside the packet */
+        if (i < 2) {
+            cnx_10->remote_cnxid = picoquic_null_connection_id;
+        }
+        else {
+            cnx_10->remote_cnxid = test_cnxid_r10;
+        }
         header_length = picoquic_create_packet_header(cnx_10, test_entries[i].ph->ptype,
             test_entries[i].ph->pn, packet, &pn_offset, &pn_length);
         picoquic_update_payload_length(packet, pn_offset, pn_offset, pn_offset +
@@ -622,9 +627,16 @@ int packet_enc_dec_test()
         cnx_client->crypto_context[1].pn_enc = picoquic_pn_enc_create_for_test(test_0rtt_secret);
         cnx_server->crypto_context[1].pn_dec = picoquic_pn_enc_create_for_test(test_0rtt_secret);
 
+        /* Use a null connection ID to trigger use of initial ID */
+        cnx_client->remote_cnxid = picoquic_null_connection_id;
+
         ret = test_packet_encrypt_one(
             (struct sockaddr *) &test_addr_c,
             cnx_client, qserver, cnx_server, picoquic_packet_0rtt_protected, 256);
+
+
+        /* Set the remote context ID for the next test  */
+        cnx_client->remote_cnxid = cnx_server->local_cnxid;
     }
 
     /* And try a 1 RTT packet */

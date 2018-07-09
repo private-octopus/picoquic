@@ -176,8 +176,7 @@ int picoquic_parse_packet_header(
                                 if (picoquic_compare_connection_id(&(*pcnx)->initial_cnxid, &ph->dest_cnx_id) != 0) {
                                     *pcnx = NULL;
                                 }
-                            } else if (ph->ptype != picoquic_packet_handshake &&
-                                ph->ptype != picoquic_packet_retry) {
+                            } else {
                                 *pcnx = NULL;
                             }
                         }
@@ -814,8 +813,6 @@ int picoquic_incoming_initial(
     uint64_t current_time)
 {
     int ret = 0;
-    size_t l_tok_len = 0;
-    uint64_t tok_len = 0;
     size_t extra_offset = 0;
 
     /* TODO: if there is a problem with the retry token, schedule a retry packet */
@@ -1071,7 +1068,8 @@ int picoquic_incoming_0rtt(
 {
     int ret = 0;
 
-    if (picoquic_compare_connection_id(&ph->dest_cnx_id , &cnx->initial_cnxid)!=0 ||
+    if (!(picoquic_compare_connection_id(&ph->dest_cnx_id , &cnx->initial_cnxid)==0 ||
+        picoquic_compare_connection_id(&ph->dest_cnx_id, &cnx->local_cnxid) == 0) ||
         picoquic_compare_connection_id(&ph->srce_cnx_id, &cnx->remote_cnxid) != 0 ) {
         ret = PICOQUIC_ERROR_CNXID_CHECK;
     } else if (cnx->cnx_state == picoquic_state_server_almost_ready || cnx->cnx_state == picoquic_state_server_ready) {
@@ -1258,13 +1256,24 @@ int picoquic_incoming_segment(
                 /* Initial packet: either crypto handshakes or acks. */
                 if (picoquic_compare_connection_id(&ph.dest_cnx_id, &cnx->initial_cnxid) == 0 ||
                     picoquic_compare_connection_id(&ph.dest_cnx_id, &cnx->local_cnxid) == 0) {
-                    if (cnx->client_mode == 0) {
-                        /* TODO: finish processing initial connection packet */
-                        ret = picoquic_incoming_initial(cnx, bytes,
-                            addr_from, addr_to, if_index_to, &ph, current_time);
-                    } else {
-                        /* TODO: this really depends on the current receive epoch */
-                        ret = picoquic_incoming_server_cleartext(cnx, bytes, addr_to, if_index_to, &ph, current_time);
+                    /* Verify that the source CID matches expectation */
+                    if (picoquic_is_connection_id_null(cnx->remote_cnxid)) {
+                        cnx->remote_cnxid = ph.srce_cnx_id;
+                    } else if (picoquic_compare_connection_id(&cnx->remote_cnxid, &ph.srce_cnx_id) != 0) {
+                        DBG_PRINTF("Error wrong srce cnxid (%d), type: %d, epoch: %d, pc: %d, pn: %d\n",
+                            cnx->client_mode, ph.ptype, ph.epoch, ph.pc, (int)ph.pn);
+                        ret = PICOQUIC_ERROR_UNEXPECTED_PACKET;
+                    }
+                    if (ret == 0) {
+                        if (cnx->client_mode == 0) {
+                            /* TODO: finish processing initial connection packet */
+                            ret = picoquic_incoming_initial(cnx, bytes,
+                                addr_from, addr_to, if_index_to, &ph, current_time);
+                        }
+                        else {
+                            /* TODO: this really depends on the current receive epoch */
+                            ret = picoquic_incoming_server_cleartext(cnx, bytes, addr_to, if_index_to, &ph, current_time);
+                        }
                     }
                 } else {
                     DBG_PRINTF("Error detected (%d), type: %d, epoch: %d, pc: %d, pn: %d\n",
