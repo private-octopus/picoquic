@@ -2253,7 +2253,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
                 ack_needed = 1;
                 break;
             case picoquic_frame_type_new_token:
-                bytes = picoquic_decode_new_token_frame(cnx, bytes, bytes_max, epoch);
+                bytes = picoquic_decode_new_token_frame(cnx, bytes, bytes_max);
                 ack_needed = 1;
                 break;
             default:
