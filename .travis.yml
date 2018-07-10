@@ -30,4 +30,4 @@ script:
   # Now build picotls examples and test
   - cmake .
   - make
-  - ./picoquic_ct -x zero_rtt_retry -x request_client_authentication -x bad_client_certificate -x stress
+  - ./picoquic_ct -x zero_rtt_retry -x request_client_authentication -x bad_client_certificate

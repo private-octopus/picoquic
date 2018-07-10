@@ -527,7 +527,8 @@ static int stress_handle_packet_prepare(picoquic_stress_ctx_t * ctx, picoquic_qu
             (picoquic_stress_client_callback_ctx_t*)picoquic_get_callback_context(cnx) : NULL;
 
         /* Check whether immediate abrubt disconnection is required */
-        if (c_ctx == NULL && cnx->cnx_state == picoquic_state_disconnected && c_ctx->message_disconnect_trigger == 0) {
+        if (c_ctx != NULL && cnx->cnx_state == picoquic_state_disconnected &&
+            c_ctx->message_disconnect_trigger == 0) {
             uint64_t nb_sent = 0;
             for (picoquic_packet_context_enum pc = 0; pc < picoquic_nb_packet_context; pc++) {
                 nb_sent += cnx->pkt_ctx[pc].send_sequence;
