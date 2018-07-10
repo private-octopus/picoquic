@@ -1843,7 +1843,7 @@ int session_resume_test()
 /*
  * Zero RTT test. Like the session resume test, but with a twist...
  */
-int zero_rtt_test_one(int use_badcrypt, int hardreset)
+int zero_rtt_test_one(int use_badcrypt, int hardreset, unsigned int early_loss)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -1877,6 +1877,10 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset)
             if (ret == 0) {
                 uint8_t test_data[4] = { 't', 'e', 's', 't' };
                 (void)picoquic_add_to_stream(test_ctx->cnx_client, 4, test_data, sizeof(test_data), 1);
+            }
+
+            if (early_loss > 0) {
+                loss_mask = 1ull << (early_loss - 1);
             }
         }
 
@@ -1933,7 +1937,8 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset)
                         use_badcrypt, hardreset);
                     ret = -1;
                 }
-                else if (test_ctx->cnx_client->nb_zero_rtt_acked != test_ctx->cnx_client->nb_zero_rtt_sent) {
+                else if (early_loss == 0 &&
+                    test_ctx->cnx_client->nb_zero_rtt_acked != test_ctx->cnx_client->nb_zero_rtt_sent) {
                     DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), no zero RTT acked.\n",
                         use_badcrypt, hardreset);
                     ret = -1;
@@ -1944,14 +1949,14 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset)
                         use_badcrypt, hardreset);
                     ret = -1;
                 }
-                else if (test_ctx->cnx_client->nb_zero_rtt_acked != 0) {
+                else if (early_loss == 0 && test_ctx->cnx_client->nb_zero_rtt_acked != 0) {
                     DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), zero acked, not expected.\n",
                         use_badcrypt, hardreset);
                     ret = -1;
                 }
                 else if (test_ctx->sum_data_received_at_server == 0) {
-                    DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), no data received.\n",
-                        use_badcrypt, hardreset);
+                    DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d, loss: %d), no data received.\n",
+                        use_badcrypt, hardreset, early_loss);
                     ret = -1;
                 }
             }
@@ -1980,11 +1985,38 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset)
     return ret;
 }
 
+/* 
+* Basic 0-RTT test. Verify that things work in the absence of loss 
+*/
+
 int zero_rtt_test()
 {
-    return zero_rtt_test_one(0, 0);
+    return zero_rtt_test_one(0, 0, 0);
 }
 
+/*
+* zero rtt test with losses. Verify that the connection setup works even 
+* if packets are lost. The "loss test" indicates which packet will be lost
+* during the exchange. As the code stands for draft-13, the EOED is sent in
+* a zero RTT packet, the 9th packet on the connection. This order is
+* however very dependent on the details of the implementation. To be on the safe
+* side, we should repeat the test while emulating the loss of any packet
+* between 1 and 16.
+*/
+
+int zero_rtt_loss_test()
+{
+    int ret = 0;
+
+    for (unsigned int i = 2; ret == 0 && i < 16; i++) {
+        ret = zero_rtt_test_one(0, 0, i);
+        if (ret != 0) {
+            DBG_PRINTF("Zero RTT test fails when packet #%d is lost.\n", i);
+        }
+    }
+
+    return ret;
+}
 /*
 * Zero Spurious RTT test.
 * Check what happens if the client attempts to resume a connection using a bogus ticket.
@@ -1995,12 +2027,19 @@ int zero_rtt_test()
 
 int zero_rtt_spurious_test()
 {
-    return zero_rtt_test_one(1, 0);
+    return zero_rtt_test_one(1, 0, 0);
 }
+
+/*
+* Zero RTT Retry test.
+* Check what happens if the client attempts to resume a connection but the
+* server responds with a retry. This is simulated by activating the retry
+* mode on the server between the 2 client connections.
+*/
 
 int zero_rtt_retry_test()
 {
-    return zero_rtt_test_one(0, 1);
+    return zero_rtt_test_one(0, 1, 0);
 }
 
 /*

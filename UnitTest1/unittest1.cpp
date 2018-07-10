@@ -401,9 +401,16 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(test_zero_rtt)
+        TEST_METHOD(zero_rtt)
         {
             int ret = zero_rtt_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(zero_rtt_loss)
+        {
+            int ret = zero_rtt_loss_test();
 
             Assert::AreEqual(ret, 0);
         }

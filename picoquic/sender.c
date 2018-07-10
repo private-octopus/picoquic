@@ -649,7 +649,27 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
             *header_length = 0;
 
             if (p->ptype == picoquic_packet_0rtt_protected) {
-                if (cnx->cnx_state < picoquic_state_client_ready && cnx->client_mode) {
+                /* Only retransmit as 0-RTT if contains crypto data */
+                int contains_crypto = 0;
+                byte_index = p->offset;
+
+                while (ret == 0 && byte_index < p->length) {
+                    if (bytes[byte_index] == picoquic_frame_type_crypto_hs) {
+                        contains_crypto = 1;
+                        packet_is_pure_ack = 0;
+                        break;
+                    }
+                    ret = picoquic_skip_frame(&p->bytes[byte_index],
+                        p->length - byte_index, &frame_length, &frame_is_pure_ack);
+                    byte_index += frame_length;
+                }
+                byte_index = 0;
+
+                if (contains_crypto) {
+                    length = picoquic_predict_packet_header_length(cnx, picoquic_packet_0rtt_protected);
+                    packet->ptype = picoquic_packet_0rtt_protected;
+                    packet->offset = length;
+                } else if (cnx->cnx_state < picoquic_state_client_ready) {
                     should_retransmit = 0;
                 } else {
                     length = picoquic_predict_packet_header_length(cnx, picoquic_packet_1rtt_protected_phi0);
@@ -1200,7 +1220,8 @@ uint32_t picoquic_prepare_packet_old_context(picoquic_cnx_t* cnx, picoquic_packe
     length = picoquic_retransmit_needed(cnx, pc, path_x, current_time, packet, 
         &is_cleartext_mode, header_length);
     
-    if (length == 0 && cnx->pkt_ctx[pc].ack_needed != 0) {
+    if (length == 0 && cnx->pkt_ctx[pc].ack_needed != 0 &&
+        pc != picoquic_packet_context_application) {
         packet->ptype =
             (pc == picoquic_packet_context_initial) ? picoquic_packet_initial :
             (pc == picoquic_packet_context_handshake) ? picoquic_packet_handshake :
@@ -1214,11 +1235,13 @@ uint32_t picoquic_prepare_packet_old_context(picoquic_cnx_t* cnx, picoquic_packe
     }
 
     if (length > 0) {
-        /* Check whether it makes sens to add an ACK at the end of the retransmission */
-        if (picoquic_prepare_ack_frame(cnx, current_time, pc, &packet->bytes[length],
-            path_x->send_mtu - checksum_overhead - length, &data_bytes)
-            == 0) {
-            length += (uint32_t)data_bytes;
+        if (pc != picoquic_packet_context_application) {
+            /* Check whether it makes sens to add an ACK at the end of the retransmission */
+            if (picoquic_prepare_ack_frame(cnx, current_time, pc, &packet->bytes[length],
+                path_x->send_mtu - checksum_overhead - length, &data_bytes)
+                == 0) {
+                length += (uint32_t)data_bytes;
+            }
         }
         packet->length = length;
         /* document the send time & overhead */
@@ -1288,6 +1311,10 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
     if (ret == 0 && pc == picoquic_packet_context_handshake) {
         length = picoquic_prepare_packet_old_context(cnx, picoquic_packet_context_initial,
             path_x, packet, current_time, &header_length);
+        if (length == 0) {
+            length = picoquic_prepare_packet_old_context(cnx, picoquic_packet_context_application,
+                path_x, packet, current_time, &header_length);
+        }
     }
 
     /* If there is nothing to send in previous context, check this one too */
