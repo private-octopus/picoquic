@@ -1395,10 +1395,10 @@ int tls_api_bad_server_reset_test()
 }
 
 /*
- * verify that a connection is correctly established after a stateless redirect
+ * verify that a connection is correctly established after a stateless retry
  */
 
-int tls_api_hrr_test()
+int tls_api_retry_test()
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -2175,6 +2175,8 @@ int spurious_retransmit_test()
     return ret;
 }
 
+#if 0
+
 /*
  * Test whether the server correctly sends an HRR in response to a 
  * Client Hello proposing an unsupported key share.
@@ -2359,7 +2361,9 @@ int wrong_keyshare_test()
 
     return ret;
 }
+#endif
 
+#if 0
 /*
 * Test whether the server correctly sends an HRR in response to a
 * Client Hello proposing an unsupported key share.
@@ -2499,6 +2503,7 @@ int wrong_tls_version_test()
 
     return ret;
 }
+#endif
 
 /*
 * Set up a connection, and verify

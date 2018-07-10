@@ -58,7 +58,7 @@ extern "C" {
 #define PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL (PICOQUIC_ERROR_CLASS + 16)
 #define PICOQUIC_ERROR_INVALID_FRAME (PICOQUIC_ERROR_CLASS + 17)
 #define PICOQUIC_ERROR_CANNOT_CONTROL_STREAM_ZERO (PICOQUIC_ERROR_CLASS + 18)
-#define PICOQUIC_ERROR_HRR (PICOQUIC_ERROR_CLASS + 19)
+#define PICOQUIC_ERROR_RETRY (PICOQUIC_ERROR_CLASS + 19)
 #define PICOQUIC_ERROR_DISCONNECTED (PICOQUIC_ERROR_CLASS + 20)
 #define PICOQUIC_ERROR_DETECTED (PICOQUIC_ERROR_CLASS + 21)
 #define PICOQUIC_ERROR_INVALID_TICKET (PICOQUIC_ERROR_CLASS + 23)
@@ -100,7 +100,7 @@ typedef enum {
     picoquic_state_client_init,
     picoquic_state_client_init_sent,
     picoquic_state_client_renegotiate,
-    picoquic_state_client_hrr_received,
+    picoquic_state_client_retry_received,
     picoquic_state_client_init_resent,
     picoquic_state_server_init,
     picoquic_state_server_handshake,
@@ -115,8 +115,7 @@ typedef enum {
     picoquic_state_closing_received,
     picoquic_state_closing,
     picoquic_state_draining,
-    picoquic_state_disconnected,
-    picoquic_state_server_send_hrr
+    picoquic_state_disconnected
 } picoquic_state_enum;
 
 
@@ -124,7 +123,7 @@ typedef enum {
 * Quic context flags
 */
 typedef enum {
-    picoquic_context_check_cookie = 1,
+    picoquic_context_check_token = 1,
     picoquic_context_unconditional_cnx_id = 2,
     picoquic_context_client_zero_share = 4
 } picoquic_context_flags;

@@ -83,7 +83,7 @@ static const picoquic_test_def_t test_table[] = {
     { "tls_api_very_long_with_err", tls_api_very_long_with_err_test },
     { "tls_api_very_long_congestion", tls_api_very_long_congestion_test },
     { "http0dot9", http0dot9_test },
-    { "hrr", tls_api_hrr_test },
+    { "retry", tls_api_retry_test },
     { "two_connections", tls_api_two_connections_test },
     { "clear_text_aead", cleartext_aead_test },
     { "multiple_versions", tls_api_multiple_versions_test },
@@ -97,7 +97,9 @@ static const picoquic_test_def_t test_table[] = {
     { "unidir", unidir_test },
     { "mtu_discovery", mtu_discovery_test },
     { "spurious_retransmit", spurious_retransmit_test },
+#if 0
     { "wrong_keyshare", wrong_keyshare_test },
+#endif
     { "pn_ctr", pn_ctr_test},
     { "cleartext_pn_enc", cleartext_pn_enc_test},
     { "pn_enc_1rtt", pn_enc_1rtt_test },
@@ -108,7 +110,9 @@ static const picoquic_test_def_t test_table[] = {
     { "set_verify_certificate_callback_test", set_verify_certificate_callback_test },
     { "virtual_time" , virtual_time_test },
     { "different_params", tls_different_params_test },
+#if 0
     { "wrong_tls_version", wrong_tls_version_test },
+#endif
     { "set_certificate_and_key", set_certificate_and_key_test },
     { "request_client_authentication", request_client_authentication_test },
     { "bad_client_certificate", bad_client_certificate_test },

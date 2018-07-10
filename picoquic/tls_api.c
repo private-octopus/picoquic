@@ -1032,23 +1032,12 @@ int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint6
             }
 
             if (ctx != NULL) {
-                /* Enable server side HRR if cookie mode is required */
-                if ((quic->flags & picoquic_context_check_cookie) != 0) {
-                    /* if the server should enforce the client to do a stateless retry */
-                    ctx->handshake_properties.server.enforce_retry = 1;
-                    ctx->handshake_properties.server.retry_uses_cookie = 1;
-                }
-                else {
-                    /* send cookie and do a stateless retry if cannot find suitable key share */
-                    ctx->handshake_properties.server.retry_uses_cookie = 1;
-                }
-                /* secret used for signing / verifying the cookie(internally uses HMAC) */
-                ctx->handshake_properties.server.cookie.key = cnx->quic->retry_seed;
-                /* additional data to be used for signing / verification */
-                ctx->handshake_properties.server.cookie.additional_data.base
-                    = (uint8_t*)&cnx->path[0]->peer_addr;
-                ctx->handshake_properties.server.cookie.additional_data.len
-                    = cnx->path[0]->peer_addr_len;
+                /* The server should never attempt a stateless retry */
+                ctx->handshake_properties.server.enforce_retry = 0;
+                ctx->handshake_properties.server.retry_uses_cookie = 0;
+                ctx->handshake_properties.server.cookie.key = NULL;
+                ctx->handshake_properties.server.cookie.additional_data.base = NULL;
+                ctx->handshake_properties.server.cookie.additional_data.len = 0;
             }
         }
     }
@@ -1659,7 +1648,7 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
 
     if (ret == 0) {
         switch (cnx->cnx_state) {
-        case picoquic_state_client_hrr_received:
+        case picoquic_state_client_retry_received:
             /* This is not supposed to happen -- HRR should generate "error in progress" */
             break;
         case picoquic_state_client_init:
@@ -1703,34 +1692,7 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
         }
     } else if (ret == PTLS_ERROR_IN_PROGRESS && (cnx->cnx_state == picoquic_state_client_init || cnx->cnx_state == picoquic_state_client_init_sent || cnx->cnx_state == picoquic_state_client_init_resent)) {
         /* Extract and install the client 0-RTT key */
-    } else if (ret == PTLS_ERROR_IN_PROGRESS && (cnx->cnx_state == picoquic_state_client_hrr_received)) {
-
-        for (picoquic_packet_context_enum pc = 0;
-            pc < picoquic_nb_packet_context; pc++) {
-            picoquic_packet * next_retrans = cnx->pkt_ctx[pc].retransmit_newest;
-            /* Delete the packets queued for retransmission, but keep the 0-RTT packets */
-            while (next_retrans != NULL) {
-                picoquic_packet * next_next = next_retrans->next_packet;
-                /* TODO: special treatment for EOED packet */
-                if (next_retrans->ptype != picoquic_packet_0rtt_protected) {
-                    picoquic_dequeue_retransmit_packet(cnx, next_retrans, 1);
-                }
-                next_retrans = next_next;
-            }
-        }
-        /* Need to reset the transport state of the connection */
-        cnx->cnx_state = picoquic_state_client_init;
-
-        /* Reset the streams */
-        picoquic_clear_stream(&cnx->tls_stream);
-        cnx->tls_stream.consumed_offset = 0;
-        cnx->tls_stream.stream_flags = 0;
-        cnx->tls_stream.fin_offset = 0;
-        cnx->tls_stream.sent_offset = 0;
-    } else if (ret == PTLS_ERROR_STATELESS_RETRY) {
-        cnx->cnx_state = picoquic_state_server_send_hrr;
-    }
-    else if (ret == PTLS_ERROR_IN_PROGRESS &&
+    } else if (ret == PTLS_ERROR_IN_PROGRESS &&
         (cnx->cnx_state == picoquic_state_server_init ||
             cnx->cnx_state == picoquic_state_server_handshake))
     {
@@ -1812,4 +1774,31 @@ int picoquic_set_tls_key(picoquic_quic_t* quic, const uint8_t* data, size_t len)
 
 void picoquic_tls_set_client_authentication(picoquic_quic_t* quic, int client_authentication) {
     ((ptls_context_t*)quic->tls_master_ctx)->require_client_authentication = client_authentication;
+}
+
+/*
+ * Check the incoming retry token, or produce a token (place holder)
+ */
+
+int picoquic_get_retry_token(picoquic_quic_t* quic, uint8_t * base, size_t len, 
+    uint8_t * token, uint8_t token_length) {
+    /*Using OpenSSL for now: ptls_hash_algorithm_t ptls_openssl_sha256 */
+    int ret = 0;
+    ptls_hash_algorithm_t* algo = &ptls_openssl_sha256;
+    ptls_hash_context_t* hash_ctx = algo->create();
+    uint8_t final_hash[PTLS_MAX_DIGEST_SIZE];
+
+    if (hash_ctx == NULL || token_length > algo->digest_size ) {
+        ret = -1;
+    } else {
+        hash_ctx->update(hash_ctx, quic->retry_seed, sizeof(quic->retry_seed));
+        if (len > 0) {
+            hash_ctx->update(hash_ctx, base, len);
+        }
+        hash_ctx->update(hash_ctx, &len, sizeof(len));
+        hash_ctx->final(hash_ctx, final_hash, PTLS_HASH_FINAL_MODE_FREE);
+        memcpy(token, final_hash, token_length);
+    }
+
+    return ret;
 }

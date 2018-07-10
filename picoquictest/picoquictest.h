@@ -64,7 +64,7 @@ int tls_api_very_long_max_test();
 int tls_api_very_long_with_err_test();
 int tls_api_very_long_congestion_test();
 int http0dot9_test();
-int tls_api_hrr_test();
+int tls_api_retry_test();
 int ackrange_test();
 int ack_of_ack_test();
 int tls_api_two_connections_test();
@@ -85,7 +85,9 @@ int stop_sending_test();
 int unidir_test();
 int mtu_discovery_test();
 int spurious_retransmit_test();
+#if 0
 int wrong_keyshare_test();
+#endif
 int pn_ctr_test();
 int cleartext_pn_enc_test();
 int pn_enc_1rtt_test();
@@ -96,7 +98,9 @@ int bad_certificate_test();
 int set_verify_certificate_callback_test();
 int virtual_time_test();
 int tls_different_params_test();
+#if 0
 int wrong_tls_version_test();
+#endif
 int set_certificate_and_key_test();
 int transport_param_stream_id_test();
 int request_client_authentication_test();

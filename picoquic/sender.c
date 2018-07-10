@@ -302,6 +302,7 @@ uint32_t picoquic_create_packet_header(
             length += picoquic_varint_encode(&bytes[length], 16, cnx->retry_token_length);
             if (cnx->retry_token_length > 0) {
                 memcpy(&bytes[length], cnx->retry_token, cnx->retry_token_length);
+                length += cnx->retry_token_length;
             }
         }
     }
@@ -2059,8 +2060,7 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx, picoquic_packet* packet,
         case picoquic_state_disconnected:
             ret = PICOQUIC_ERROR_DISCONNECTED;
             break;
-        case picoquic_state_client_hrr_received:
-        case picoquic_state_server_send_hrr:
+        case picoquic_state_client_retry_received:
             break;
         default:
             DBG_PRINTF("Unexpected connection state: %d\n", cnx->cnx_state);

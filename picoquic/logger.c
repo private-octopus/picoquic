@@ -149,8 +149,8 @@ char const* picoquic_log_state_name(picoquic_state_enum state)
     case picoquic_state_client_renegotiate: 
         state_name = "client_renegotiate"; 
         break;
-    case picoquic_state_client_hrr_received: 
-        state_name = "client_hrr_received"; 
+    case picoquic_state_client_retry_received: 
+        state_name = "client_retry_received"; 
         break;
     case picoquic_state_client_init_resent: 
         state_name = "client_init_resent"; 
@@ -196,9 +196,6 @@ char const* picoquic_log_state_name(picoquic_state_enum state)
         break;
     case picoquic_state_disconnected:
         state_name = "disconnected"; 
-        break;
-    case picoquic_state_server_send_hrr: 
-        state_name = "server_send_hrr"; 
         break;
     default:
         break;

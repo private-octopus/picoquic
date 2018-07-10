@@ -338,9 +338,9 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(test_hrr)
+        TEST_METHOD(test_retry)
         {
-            int ret = tls_api_hrr_test();
+            int ret = tls_api_retry_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -435,14 +435,14 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
-
+#if 0
         TEST_METHOD(test_wrong_keyshare)
         {
             int ret = wrong_keyshare_test();
 
             Assert::AreEqual(ret, 0);
         }
-
+#endif
         TEST_METHOD(test_pn_ctr)
         {
             int ret = pn_ctr_test();
@@ -505,13 +505,14 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
-
+#if 0
         TEST_METHOD(test_wrong_tls_version_test)
         {
             int ret = wrong_tls_version_test();
 
             Assert::AreEqual(ret, 0);
         }
+#endif
 
         TEST_METHOD(test_set_certificate_and_key)
         {
