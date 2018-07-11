@@ -2035,11 +2035,10 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
 }
 
 /* Prepare next packet to send, or nothing.. */
-int picoquic_prepare_packet(picoquic_cnx_t* cnx, picoquic_packet* packet,
+int picoquic_prepare_segment(picoquic_cnx_t* cnx, picoquic_path_t * path_x, picoquic_packet* packet,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length)
 {
     int ret = 0;
-    picoquic_path_t * path_x = cnx->path[0];
 
     /* Check that the connection is still alive -- the timer is asymmetric, so client will drop faster */
     if ((cnx->cnx_state < picoquic_state_disconnecting && 
@@ -2093,6 +2092,31 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx, picoquic_packet* packet,
             DBG_PRINTF("Unexpected connection state: %d\n", cnx->cnx_state);
             ret = PICOQUIC_ERROR_UNEXPECTED_STATE;
             break;
+        }
+    }
+
+    return ret;
+}
+
+
+/* Prepare next packet to send, or nothing.. */
+int picoquic_prepare_packet(picoquic_cnx_t* cnx,
+    uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length)
+{
+    int ret = 0;
+    picoquic_path_t * path_x = cnx->path[0];
+    picoquic_packet * packet = NULL;
+
+    packet = picoquic_create_packet();
+
+    if (packet == NULL) {
+        ret = PICOQUIC_ERROR_MEMORY;
+    } else {
+        ret = picoquic_prepare_segment(cnx, path_x, packet, current_time, send_buffer,
+            send_buffer_max, send_length);
+
+        if (ret != 0 || packet->length == 0) {
+            free(packet);
         }
     }
 

@@ -870,7 +870,7 @@ int picoquic_incoming_initial(
         else {
             struct sockaddr_in6 * a6 = (struct sockaddr_in6 *)addr_from;
             len = 16;
-            base = &a6->sin6_addr;
+            base = (uint8_t *)&a6->sin6_addr;
         }
 
         if (picoquic_get_retry_token(cnx->quic, base, len,

@@ -516,12 +516,11 @@ static int stress_handle_packet_prepare(picoquic_stress_ctx_t * ctx, picoquic_qu
     /* prepare packet and submit */
     int ret = 0;
     picoquictest_sim_packet_t* packet = picoquictest_sim_link_create_packet();
-    picoquic_packet* p = picoquic_create_packet();
     picoquic_cnx_t* cnx = picoquic_get_earliest_cnx_to_wake(q, 0);
     picoquictest_sim_link_t* target_link = NULL;
     int simulate_disconnect = 0;
 
-    if (packet != NULL && p != NULL && cnx != NULL) {
+    if (packet != NULL && cnx != NULL) {
         /* Check that the client connection was properly terminated */
         picoquic_stress_client_callback_ctx_t* c_ctx = (c_index >= 0) ?
             (picoquic_stress_client_callback_ctx_t*)picoquic_get_callback_context(cnx) : NULL;
@@ -542,11 +541,11 @@ static int stress_handle_packet_prepare(picoquic_stress_ctx_t * ctx, picoquic_qu
 
         if (c_ctx == NULL || cnx->cnx_state == picoquic_state_disconnected 
             || simulate_disconnect == 0) { 
-            ret = picoquic_prepare_packet(cnx, p, ctx->simulated_time,
+            ret = picoquic_prepare_packet(cnx, ctx->simulated_time,
                 packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length);
         }
 
-        if (ret == 0 && p->length > 0) {
+        if (ret == 0 && packet->length > 0) {
             memcpy(&packet->addr_from, &cnx->path[0]->dest_addr, sizeof(struct sockaddr_in));
             memcpy(&packet->addr_to, &cnx->path[0]->peer_addr, sizeof(struct sockaddr_in));
 
@@ -571,8 +570,6 @@ static int stress_handle_packet_prepare(picoquic_stress_ctx_t * ctx, picoquic_qu
             }
         }
         else {
-            free(p);
-            p = NULL;
             free(packet);
             packet = NULL;
 
@@ -616,10 +613,6 @@ static int stress_handle_packet_prepare(picoquic_stress_ctx_t * ctx, picoquic_qu
         }
         if (packet != NULL) {
             free(packet);
-        }
-
-        if (p != NULL) {
-            free(p);
         }
     }
 
