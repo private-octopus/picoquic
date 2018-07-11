@@ -1218,7 +1218,12 @@ int picoquic_reset_cnx(picoquic_cnx_t* cnx, uint64_t current_time)
     /* Delete the packets queued for retransmission */
     for (picoquic_packet_context_enum pc = 0;
         pc < picoquic_nb_packet_context; pc++) {
-        picoquic_reset_packet_context(cnx, pc);
+        /* Do not reset the application context, in order to keep the 0-RTT
+         * packets, and to keep using the same sequence number space in
+         * the new connection */
+        if (pc != picoquic_packet_context_application) {
+            picoquic_reset_packet_context(cnx, pc);
+        }
     }
 
     /* Reset the crypto stream */
@@ -1227,15 +1232,6 @@ int picoquic_reset_cnx(picoquic_cnx_t* cnx, uint64_t current_time)
     cnx->tls_stream.stream_flags = 0;
     cnx->tls_stream.fin_offset = 0;
     cnx->tls_stream.sent_offset = 0;
-    /* TODO: reset clear text AEAD */
-
-    /* Reset the TLS context, Re-initialize the tls connection */
-    picoquic_tlscontext_free(cnx->tls_ctx);
-    cnx->tls_ctx = NULL;
-    ret = picoquic_tlscontext_create(cnx->quic, cnx, current_time);
-    if (ret == 0) {
-        ret = picoquic_initialize_tls_stream(cnx);
-    }
 
     /* Reset the ECN data */
     cnx->ecn_ect0_total_local = 0;
@@ -1251,6 +1247,14 @@ int picoquic_reset_cnx(picoquic_cnx_t* cnx, uint64_t current_time)
 
     if (ret == 0) {
         ret = picoquic_setup_initial_traffic_keys(cnx);
+    }
+
+    /* Reset the TLS context, Re-initialize the tls connection */
+    picoquic_tlscontext_free(cnx->tls_ctx);
+    cnx->tls_ctx = NULL;
+    ret = picoquic_tlscontext_create(cnx->quic, cnx, current_time);
+    if (ret == 0) {
+        ret = picoquic_initialize_tls_stream(cnx);
     }
 
     return ret;

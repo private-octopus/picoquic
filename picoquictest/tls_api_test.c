@@ -1861,7 +1861,7 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, unsigned int early_loss)
             ret = tls_api_init_ctx(&test_ctx, 0, sni, alpn, &simulated_time, ticket_file_name, 0, 0, 
                 (i == 0)?0:use_badcrypt);
 
-            if (ret == 0 && hardreset != 0) {
+            if (ret == 0 && hardreset != 0 && i == 1) {
                 picoquic_set_cookie_mode(test_ctx->qserver, 1);
             }
         }
@@ -1949,7 +1949,7 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, unsigned int early_loss)
                         use_badcrypt, hardreset);
                     ret = -1;
                 }
-                else if (early_loss == 0 && test_ctx->cnx_client->nb_zero_rtt_acked != 0) {
+                else if (early_loss == 0 && hardreset == 0 && test_ctx->cnx_client->nb_zero_rtt_acked != 0) {
                     DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), zero acked, not expected.\n",
                         use_badcrypt, hardreset);
                     ret = -1;
