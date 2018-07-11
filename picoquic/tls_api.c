@@ -347,13 +347,15 @@ int picoquic_client_hello_call_back(ptls_on_client_hello_t* on_hello_cb_ctx,
     size_t num_negotiated_protocols, const uint16_t* signature_algorithms, size_t num_signature_algorithms)
 {
 #ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(server_name);
     UNREFERENCED_PARAMETER(signature_algorithms);
     UNREFERENCED_PARAMETER(num_signature_algorithms);
 #endif
     int alpn_found = 0;
     picoquic_quic_t** ppquic = (picoquic_quic_t**)(((char*)on_hello_cb_ctx) + sizeof(ptls_on_client_hello_t));
     picoquic_quic_t* quic = *ppquic;
+
+    /* Save the server name */
+    ptls_set_server_name(tls, (const char *)server_name.base, server_name.len);
 
     /* Check if the client is proposing the expected ALPN */
     if (quic->default_alpn != NULL) {
