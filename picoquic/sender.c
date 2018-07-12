@@ -1555,7 +1555,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             /* progress the state if the epoch data is all sent */
 
             if (ret == 0 && tls_ready != 0 && data_bytes > 0 && cnx->tls_stream.sent_offset >= next_offset) {
-                if (epoch == 2) {
+                if (epoch == 2 && picoquic_tls_client_authentication_activated(cnx->quic) == 0) {
                     cnx->cnx_state = picoquic_state_server_ready;
                 }
                 else {

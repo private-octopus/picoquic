@@ -87,6 +87,8 @@ int picoquic_enable_custom_verify_certificate_callback(picoquic_quic_t* quic);
 
 void picoquic_tls_set_client_authentication(picoquic_quic_t* quic, int client_authentication);
 
+int picoquic_tls_client_authentication_activated(picoquic_quic_t* quic);
+
 int picoquic_does_ticket_allow_early_data(uint8_t* ticket, uint16_t ticket_length);
 
 int picoquic_get_retry_token(picoquic_quic_t* quic, uint8_t * base, size_t len,
