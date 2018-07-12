@@ -659,6 +659,10 @@ static int stress_loop_poll_context(picoquic_stress_ctx_t * ctx)
 
     ret = stress_submit_sp_packets(ctx, ctx->qserver, -1);
 
+    if (ret != 0) {
+        stress_debug_break();
+    }
+
     for (int x = 0; ret == 0 && x < ctx->nb_clients; x++) {
         /* Find the arrival time of the next packet, by looking at
          * the various links. remember the winner */
@@ -855,6 +859,8 @@ int stress_test()
     double wall_time_seconds = 0;
     uint64_t wall_time_start = picoquic_current_time();
     uint64_t wall_time_max = wall_time_start + picoquic_stress_test_duration;
+    uint64_t nb_connections = 0;
+    uint64_t sim_time_next_log = 1000000;
 
 
     /* Initialization */
@@ -884,12 +890,21 @@ int stress_test()
     }
 
     /* Run the simulation until the specified time */
+    sim_time_next_log = stress_ctx.simulated_time + 1000000;
     while (ret == 0 && stress_ctx.simulated_time < picoquic_stress_test_duration ) {
         if (picoquic_current_time() > wall_time_max) {
             DBG_PRINTF("%s", "Stress time takes too long!\n");
             ret = -1;
             break;
         }
+
+        if (stress_ctx.simulated_time > sim_time_next_log) {
+            double log_time = ((double)stress_ctx.simulated_time) / 1000000.0;
+            DBG_PRINTF("T:%f. Nb cnx: %ull\n", log_time, 
+                (unsigned long long)nb_connections);
+            sim_time_next_log = stress_ctx.simulated_time + 1000000;
+        }
+
         /* Poll for new packet transmission */
         ret = stress_loop_poll_context(&stress_ctx);
 
