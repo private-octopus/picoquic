@@ -1778,6 +1778,10 @@ void picoquic_tls_set_client_authentication(picoquic_quic_t* quic, int client_au
     ((ptls_context_t*)quic->tls_master_ctx)->require_client_authentication = client_authentication;
 }
 
+int picoquic_tls_client_authentication_activated(picoquic_quic_t* quic) {
+    return ((ptls_context_t*)quic->tls_master_ctx)->require_client_authentication;
+}
+
 /*
  * Check the incoming retry token, or produce a token (place holder)
  */

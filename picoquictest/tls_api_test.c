@@ -2679,17 +2679,59 @@ int set_verify_certificate_callback_test()
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
 
-    /* Set the verify callback */
+    /* Delete the client context, and recreate with a certificate */
+    if (ret == 0) {
+        if (test_ctx->qclient != NULL) {
+            picoquic_free(test_ctx->qclient);
+            test_ctx->cnx_client = NULL;
+        }
+
+        test_ctx->qclient = picoquic_create(8,
+            PICOQUIC_TEST_SERVER_CERT, PICOQUIC_TEST_SERVER_KEY, PICOQUIC_TEST_CERT_STORE,
+            NULL, test_api_callback, (void*)&test_ctx->client_callback, NULL, NULL, NULL,
+            simulated_time, &simulated_time, NULL, NULL, 0);
+
+        if (test_ctx->qclient == NULL) {
+            ret = -1;
+        }
+    }
+
+    /* recreate the client connection */
+    if (ret == 0) {
+        test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient, picoquic_null_connection_id,
+                                                   picoquic_null_connection_id,
+                                                   (struct sockaddr*)&test_ctx->server_addr, 0,
+                                                   0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
+
+        if (test_ctx->cnx_client == NULL) {
+            ret = -1;
+        } else {
+            ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+        }
+    }
+
+    /* Set the verify callback for the client */
     if (ret == 0) {
         ret = picoquic_set_verify_certificate_callback(test_ctx->qclient, verify_certificate_test,
                                                        &call_count, NULL);
+    }
+
+    /* Set the verify callback for the server */
+    if (ret == 0) {
+        ret = picoquic_set_verify_certificate_callback(test_ctx->qserver, verify_certificate_test,
+                                                       &call_count, NULL);
+    }
+
+    /* Activate client authentication */
+    if (ret == 0) {
+        picoquic_set_client_authentication(test_ctx->qserver, 1);
     }
 
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
     }
 
-    if (ret == 0 && call_count != 2) {
+    if (ret == 0 && call_count != 4) {
         ret = -1;
     }
 
