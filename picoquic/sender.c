@@ -2117,16 +2117,47 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     picoquic_path_t * path_x = cnx->path[0];
     picoquic_packet * packet = NULL;
 
-    packet = picoquic_create_packet();
+    *send_length = 0;
 
-    if (packet == NULL) {
-        ret = PICOQUIC_ERROR_MEMORY;
-    } else {
-        ret = picoquic_prepare_segment(cnx, path_x, packet, current_time, send_buffer,
-            send_buffer_max, send_length);
+    while (ret == 0)
+    {
+        size_t available = send_buffer_max;
+        size_t segment_length = 0;
 
-        if (ret != 0 || packet->length == 0) {
-            free(packet);
+        if (*send_length > 0) {
+            send_buffer_max = path_x->send_mtu;
+
+            if (send_buffer_max < *send_length + PICOQUIC_MIN_SEGMENT_SIZE) {
+                break;
+            }
+            else {
+                available = send_buffer_max - *send_length;
+            }
+        }
+
+        packet = picoquic_create_packet();
+
+        if (packet == NULL) {
+            ret = PICOQUIC_ERROR_MEMORY;
+            break;
+        }
+        else {
+            ret = picoquic_prepare_segment(cnx, path_x, packet, current_time, 
+                send_buffer + *send_length, available, &segment_length);
+
+            if (ret == 0) {
+                *send_length += segment_length;
+                if (packet->length == 0 ||
+                    packet->ptype == picoquic_packet_1rtt_protected_phi0 ||
+                    packet->ptype == picoquic_packet_1rtt_protected_phi1) {
+                    break;
+                }
+            } else {
+                if (*send_length != 0){
+                    ret = 0;
+                }
+                break;
+            }
         }
     }
 
