@@ -808,7 +808,7 @@ void quic_client_launch_scenario(picoquic_cnx_t* cnx_client,
 
 #define PICOQUIC_DEMO_CLIENT_MAX_RECEIVE_BATCH 4
 
-int quic_client(const char* ip_address_text, int server_port, uint32_t proposed_version, int force_zero_share, int mtu_max, FILE* F_log)
+int quic_client(const char* ip_address_text, int server_port, const char * sni, uint32_t proposed_version, int force_zero_share, int mtu_max, FILE* F_log)
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
@@ -834,7 +834,6 @@ int quic_client(const char* ip_address_text, int server_port, uint32_t proposed_
     int client_receive_loop = 0;
     int established = 0;
     int is_name = 0;
-    const char* sni = NULL;
     int64_t delay_max = 10000000;
     int64_t delta_t = 0;
     int notified_ready = 0;
@@ -844,7 +843,7 @@ int quic_client(const char* ip_address_text, int server_port, uint32_t proposed_
     memset(&callback_ctx, 0, sizeof(picoquic_first_client_callback_ctx_t));
 
     ret = picoquic_get_server_address(ip_address_text, server_port, &server_address, &server_addr_length, &is_name);
-    if (is_name != 0) {
+    if (sni == NULL && is_name != 0) {
         sni = ip_address_text;
     }
 
@@ -1152,6 +1151,7 @@ void usage()
     fprintf(stderr, "  -c file               cert file (default: %s)\n", default_server_cert_file);
     fprintf(stderr, "  -k file               key file (default: %s)\n", default_server_key_file);
     fprintf(stderr, "  -p port               server port (default: %d)\n", default_server_port);
+    fprintf(stderr, "  -n sni                sni (default: server name)\n");
     fprintf(stderr, "  -1                    Once\n");
     fprintf(stderr, "  -r                    Do Reset Request\n");
     fprintf(stderr, "  -s <64b 64b>          Reset seed\n");
@@ -1200,6 +1200,7 @@ int main(int argc, char** argv)
     const char* server_cert_file = default_server_cert_file;
     const char* server_key_file = default_server_key_file;
     const char* log_file = NULL;
+    const char * sni = NULL;
     int server_port = default_server_port;
     uint32_t proposed_version = 0xff00000b;
     int is_client = 0;
@@ -1225,7 +1226,7 @@ int main(int argc, char** argv)
 
     /* Get the parameters */
     int opt;
-    while ((opt = getopt(argc, argv, "c:k:p:v:1rhzi:s:l:m:")) != -1) {
+    while ((opt = getopt(argc, argv, "c:k:p:v:1rhzi:s:l:m:n:")) != -1) {
         switch (opt) {
         case 'c':
             server_cert_file = optarg;
@@ -1289,6 +1290,9 @@ int main(int argc, char** argv)
                 fprintf(stderr, "Invalid max mtu: %s\n", optarg);
                 usage();
             }
+            break;
+        case 'n':
+            sni = optarg;
             break;
         case 'z':
             force_zero_share = 1;
@@ -1359,7 +1363,7 @@ int main(int argc, char** argv)
 
         /* Run as client */
         printf("Starting PicoQUIC connection to server IP = %s, port = %d\n", server_name, server_port);
-        ret = quic_client(server_name, server_port, proposed_version, force_zero_share, mtu_max, F_log);
+        ret = quic_client(server_name, server_port, sni, proposed_version, force_zero_share, mtu_max, F_log);
 
         printf("Client exit with code = %d\n", ret);
 
