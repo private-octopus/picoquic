@@ -1747,6 +1747,29 @@ void picoquic_set_tls_certificate_chain(picoquic_quic_t* quic, ptls_iovec_t* cer
     ctx->certificates.count = count;
 }
 
+int picoquic_set_tls_root_certificates(picoquic_quic_t* quic, ptls_iovec_t* certs, size_t count)
+{
+    ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
+    ptls_openssl_verify_certificate_t* verify_ctx = (ptls_openssl_verify_certificate_t*)ctx->verify_certificate;
+
+    for (int i = 0; i < count; ++i) {
+        X509* cert = d2i_X509(NULL, (const uint8_t**)&certs[i].base, certs[i].len);
+
+        if (cert == NULL) {
+            return -1;
+        }
+
+        if (X509_STORE_add_cert(verify_ctx->cert_store, cert) == 0) {
+            X509_free(cert);
+            return -2;
+        }
+
+        X509_free(cert);
+    }
+
+    return 0;
+}
+
 int picoquic_set_tls_key(picoquic_quic_t* quic, const uint8_t* data, size_t len)
 {
     ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
