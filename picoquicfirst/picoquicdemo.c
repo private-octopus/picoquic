@@ -53,9 +53,11 @@
 #ifdef _WINDOWS64
 static const char* default_server_cert_file = "..\\..\\certs\\cert.pem";
 static const char* default_server_key_file = "..\\..\\certs\\key.pem";
+static const char* default_root_trust_file = "..\\..\\certs\\test-ca.crt";
 #else
 static const char* default_server_cert_file = "..\\certs\\cert.pem";
 static const char* default_server_key_file = "..\\certs\\key.pem";
+static const char* default_root_trust_file = "..\\certs\\test-ca.crt";
 #endif
 
 #else /* Linux */
@@ -95,6 +97,7 @@ static const char* default_server_key_file = "..\\certs\\key.pem";
 
 static const char* default_server_cert_file = "certs/cert.pem";
 static const char* default_server_key_file = "certs/key.pem";
+static const char* default_root_trust_file = "certs/test-ca.crt";
 
 #endif
 
@@ -797,7 +800,9 @@ void quic_client_launch_scenario(picoquic_cnx_t* cnx_client,
 
 #define PICOQUIC_DEMO_CLIENT_MAX_RECEIVE_BATCH 4
 
-int quic_client(const char* ip_address_text, int server_port, const char * sni, uint32_t proposed_version, int force_zero_share, int mtu_max, FILE* F_log)
+int quic_client(const char* ip_address_text, int server_port, const char * sni, 
+    const char * root_crt,
+    uint32_t proposed_version, int force_zero_share, int mtu_max, FILE* F_log)
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
@@ -849,7 +854,7 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni, 
     callback_ctx.last_interaction_time = current_time;
 
     if (ret == 0) {
-        qclient = picoquic_create(8, NULL, NULL, NULL, alpn, NULL, NULL, NULL, NULL, NULL, current_time, NULL, ticket_store_filename, NULL, 0);
+        qclient = picoquic_create(8, NULL, NULL, root_crt, alpn, NULL, NULL, NULL, NULL, NULL, current_time, NULL, ticket_store_filename, NULL, 0);
 
         if (qclient == NULL) {
             ret = -1;
@@ -1122,6 +1127,7 @@ void usage()
     fprintf(stderr, "  -k file               key file (default: %s)\n", default_server_key_file);
     fprintf(stderr, "  -p port               server port (default: %d)\n", default_server_port);
     fprintf(stderr, "  -n sni                sni (default: server name)\n");
+    fprintf(stderr, "  -t file               root trust file");
     fprintf(stderr, "  -1                    Once\n");
     fprintf(stderr, "  -r                    Do Reset Request\n");
     fprintf(stderr, "  -s <64b 64b>          Reset seed\n");
@@ -1172,6 +1178,7 @@ int main(int argc, char** argv)
     const char* log_file = NULL;
     const char * sni = NULL;
     int server_port = default_server_port;
+    const char* root_trust_file = default_root_trust_file;
     uint32_t proposed_version = 0xff00000b;
     int is_client = 0;
     int just_once = 0;
@@ -1196,7 +1203,7 @@ int main(int argc, char** argv)
 
     /* Get the parameters */
     int opt;
-    while ((opt = getopt(argc, argv, "c:k:p:v:1rhzi:s:l:m:n:")) != -1) {
+    while ((opt = getopt(argc, argv, "c:k:p:v:1rhzi:s:l:m:n:t:")) != -1) {
         switch (opt) {
         case 'c':
             server_cert_file = optarg;
@@ -1263,6 +1270,9 @@ int main(int argc, char** argv)
             break;
         case 'n':
             sni = optarg;
+            break;
+        case 't':
+            root_trust_file = optarg;
             break;
         case 'z':
             force_zero_share = 1;
@@ -1333,7 +1343,7 @@ int main(int argc, char** argv)
 
         /* Run as client */
         printf("Starting PicoQUIC connection to server IP = %s, port = %d\n", server_name, server_port);
-        ret = quic_client(server_name, server_port, sni, proposed_version, force_zero_share, mtu_max, F_log);
+        ret = quic_client(server_name, server_port, sni, root_trust_file, proposed_version, force_zero_share, mtu_max, F_log);
 
         printf("Client exit with code = %d\n", ret);
 
