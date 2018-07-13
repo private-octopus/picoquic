@@ -516,12 +516,11 @@ static int stress_handle_packet_prepare(picoquic_stress_ctx_t * ctx, picoquic_qu
     /* prepare packet and submit */
     int ret = 0;
     picoquictest_sim_packet_t* packet = picoquictest_sim_link_create_packet();
-    picoquic_packet* p = picoquic_create_packet();
     picoquic_cnx_t* cnx = picoquic_get_earliest_cnx_to_wake(q, 0);
     picoquictest_sim_link_t* target_link = NULL;
     int simulate_disconnect = 0;
 
-    if (packet != NULL && p != NULL && cnx != NULL) {
+    if (packet != NULL && cnx != NULL) {
         /* Check that the client connection was properly terminated */
         picoquic_stress_client_callback_ctx_t* c_ctx = (c_index >= 0) ?
             (picoquic_stress_client_callback_ctx_t*)picoquic_get_callback_context(cnx) : NULL;
@@ -542,11 +541,11 @@ static int stress_handle_packet_prepare(picoquic_stress_ctx_t * ctx, picoquic_qu
 
         if (c_ctx == NULL || cnx->cnx_state == picoquic_state_disconnected 
             || simulate_disconnect == 0) { 
-            ret = picoquic_prepare_packet(cnx, p, ctx->simulated_time,
+            ret = picoquic_prepare_packet(cnx, ctx->simulated_time,
                 packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length);
         }
 
-        if (ret == 0 && p->length > 0) {
+        if (ret == 0 && packet->length > 0) {
             memcpy(&packet->addr_from, &cnx->path[0]->dest_addr, sizeof(struct sockaddr_in));
             memcpy(&packet->addr_to, &cnx->path[0]->peer_addr, sizeof(struct sockaddr_in));
 
@@ -571,8 +570,6 @@ static int stress_handle_packet_prepare(picoquic_stress_ctx_t * ctx, picoquic_qu
             }
         }
         else {
-            free(p);
-            p = NULL;
             free(packet);
             packet = NULL;
 
@@ -616,10 +613,6 @@ static int stress_handle_packet_prepare(picoquic_stress_ctx_t * ctx, picoquic_qu
         }
         if (packet != NULL) {
             free(packet);
-        }
-
-        if (p != NULL) {
-            free(p);
         }
     }
 
@@ -665,6 +658,10 @@ static int stress_loop_poll_context(picoquic_stress_ctx_t * ctx)
         ctx->qserver, ctx->simulated_time, delay_max);
 
     ret = stress_submit_sp_packets(ctx, ctx->qserver, -1);
+
+    if (ret != 0) {
+        stress_debug_break();
+    }
 
     for (int x = 0; ret == 0 && x < ctx->nb_clients; x++) {
         /* Find the arrival time of the next packet, by looking at
@@ -862,6 +859,8 @@ int stress_test()
     double wall_time_seconds = 0;
     uint64_t wall_time_start = picoquic_current_time();
     uint64_t wall_time_max = wall_time_start + picoquic_stress_test_duration;
+    uint64_t nb_connections = 0;
+    uint64_t sim_time_next_log = 1000000;
 
 
     /* Initialization */
@@ -891,12 +890,21 @@ int stress_test()
     }
 
     /* Run the simulation until the specified time */
+    sim_time_next_log = stress_ctx.simulated_time + 1000000;
     while (ret == 0 && stress_ctx.simulated_time < picoquic_stress_test_duration ) {
         if (picoquic_current_time() > wall_time_max) {
             DBG_PRINTF("%s", "Stress time takes too long!\n");
             ret = -1;
             break;
         }
+
+        if (stress_ctx.simulated_time > sim_time_next_log) {
+            double log_time = ((double)stress_ctx.simulated_time) / 1000000.0;
+            DBG_PRINTF("T:%f. Nb cnx: %ull\n", log_time, 
+                (unsigned long long)nb_connections);
+            sim_time_next_log = stress_ctx.simulated_time + 1000000;
+        }
+
         /* Poll for new packet transmission */
         ret = stress_loop_poll_context(&stress_ctx);
 
