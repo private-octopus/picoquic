@@ -80,7 +80,8 @@ static int picoquic_net_id_compare(void* key1, void* key2)
     return memcmp(&net1->saddr, &net2->saddr, sizeof(net1->saddr));
 }
 
-
+#if 0
+/* Not used yet, should be used in ordering connections by wake time. */
 static int picoquic_compare_cnx_waketime(void * v_cnxleft, void * v_cnxright) {
     /* Example:  return *((int*)l) - *((int*)r); */
     int ret = 0;
@@ -105,6 +106,7 @@ static int picoquic_compare_cnx_waketime(void * v_cnxleft, void * v_cnxright) {
     }
     return ret;
 }
+#endif
 
 picoquic_packet_context_enum picoquic_context_from_epoch(int epoch)
 {
