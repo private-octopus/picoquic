@@ -380,7 +380,7 @@ uint32_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     uint32_t h_length;
     uint32_t pn_offset = 0;
     size_t sample_offset = 0;
-    size_t pn_length = 0;
+    uint32_t pn_length = 0;
     size_t aead_checksum_length = picoquic_aead_get_checksum_length(aead_context);
 
     /* Create the packet header just before encrypting the content */

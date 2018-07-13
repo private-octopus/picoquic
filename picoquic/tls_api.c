@@ -1541,25 +1541,6 @@ uint8_t picoquic_cleartext_null_salt[] = {
     0, 0, 0, 0
 };
 
-static size_t picoquic_setup_clear_text_aead_label(
-    size_t out_len, uint8_t label[256], char const* label_text)
-{
-    size_t text_length = strlen(label_text);
-    size_t byte_index = 0;
-
-    if (text_length > 252) {
-        /* There are practical limits to what we want to do */
-        return 0;
-    }
-    picoformat_16(label, (uint16_t)out_len);
-    byte_index += 2;
-    label[byte_index++] = (uint8_t)text_length;
-    memcpy(&label[byte_index], label_text, text_length);
-    byte_index += text_length;
-
-    return byte_index;
-}
-
 static void picoquic_setup_cleartext_aead_salt(size_t version_index, ptls_iovec_t* salt)
 {
     if (picoquic_supported_versions[version_index].version_aead_key != NULL && picoquic_supported_versions[version_index].version_aead_key_length > 0) {

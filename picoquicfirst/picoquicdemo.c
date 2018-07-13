@@ -381,7 +381,6 @@ int quic_server(const char* server_name, int server_port,
     uint8_t send_buffer[1536];
     size_t send_length = 0;
     int bytes_recv;
-    picoquic_packet* p = NULL;
     uint64_t current_time = 0;
     picoquic_stateless_packet_t* sp;
     int64_t delay_max = 10000000;
