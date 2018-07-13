@@ -978,7 +978,7 @@ picoquic_state_enum picoquic_get_cnx_state(picoquic_cnx_t* cnx)
 
 uint64_t picoquic_is_0rtt_available(picoquic_cnx_t* cnx)
 {
-    return (cnx->crypto_context[0].aead_encrypt == NULL) ? 0 : 1;
+    return (cnx->crypto_context[1].aead_encrypt == NULL) ? 0 : 1;
 }
 
 /*
