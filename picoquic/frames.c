@@ -79,7 +79,7 @@ static uint8_t* picoquic_frames_varint_skip(uint8_t* bytes, const uint8_t* bytes
 
 
 /* Parse a varint. In case of an error, *n64 is unchanged, and NULL is returned */
-static uint8_t* picoquic_frames_varint_decode(uint8_t* bytes, const uint8_t* bytes_max, uint64_t* n64)
+uint8_t* picoquic_frames_varint_decode(uint8_t* bytes, const uint8_t* bytes_max, uint64_t* n64)
 {
     uint8_t length;
 

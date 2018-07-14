@@ -232,29 +232,47 @@ int varint_test()
 {
     int ret = 0;
 
-    for (size_t i = 0; i < nb_varint_test_cases; i++) {
-        uint64_t n64;
-        size_t length = picoquic_varint_decode(
-            varint_test_cases[i].encoding, 8, &n64);
+    for (int is_new_decode = 0 ; is_new_decode <= 1 ; is_new_decode++) {
+        const picoquic_varintformat_test_t *max_test = varint_test_cases + nb_varint_test_cases;
+        for (picoquic_varintformat_test_t *test = varint_test_cases ; test < max_test; test++) {
+            for (size_t buf_size = 0 ; buf_size <= test->length+2 ; buf_size++) {
+                int test_ret = 0;
+                uint64_t n64;
+                size_t length;
 
-        if (length != varint_test_cases[i].length) {
-            ret = -1;
-        } else if (n64 != varint_test_cases[i].decoded) {
-            ret = -1;
-        } else if (varint_test_cases[i].is_canonical != 0) {
-            uint8_t encoding[8];
-            size_t coded_length = picoquic_varint_encode(
-                encoding,
-                varint_test_cases[i].length,
-                n64);
+                if (is_new_decode) {
+                    const uint8_t *bytes = picoquic_frames_varint_decode(test->encoding, test->encoding + buf_size, &n64);
+                    length = bytes != NULL ? bytes - test->encoding : 0;
+                } else {
+                    length = picoquic_varint_decode(test->encoding, buf_size, &n64);
+                }
 
-            if (coded_length != varint_test_cases[i].length) {
-                ret = -1;
-            } else if (memcmp(encoding,
-                           varint_test_cases[i].encoding,
-                           coded_length)
-                != 0) {
-                ret = -1;
+                if (length != (buf_size < test->length ? 0 : test->length)) {
+                    fprintf(stderr, "Varint: unexpected length %u", (unsigned)length);
+                    test_ret = -1;
+                } else if (length == 0) {
+                    continue;
+                } else if (n64 != test->decoded) {
+                    fprintf(stderr, "Varint: unexpected value %"PRIst" [expected %"PRIst"]", n64, test->decoded);
+                    test_ret = -1;
+                } else if (test->is_canonical != 0) {
+                    uint8_t encoding[8];
+                    size_t coded_length = picoquic_varint_encode(encoding, test->length, n64);
+
+                    if (coded_length != test->length) {
+                        fprintf(stderr, "Varint: unexpected coded_length=%"PRIst, coded_length);
+                        test_ret = -1;
+                    } else if (memcmp(encoding, test->encoding, coded_length) != 0) {
+                        fprintf(stderr, "Varint: unexpected coded value");
+                        test_ret = -1;
+                    }
+                }
+
+                if (test_ret != 0) {
+                    fprintf(stderr, " (is_new=%d, test=%u, buf_size=%u/%u)\n",
+                            is_new_decode, (unsigned)(max_test-test), (unsigned)buf_size, (unsigned)test->length);
+                    ret = -1;
+                }
             }
         }
     }
