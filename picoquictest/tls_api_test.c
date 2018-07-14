@@ -2870,7 +2870,7 @@ int set_certificate_and_key_test()
         }
 
         test_ctx->qserver = picoquic_create(8,
-            NULL, NULL, PICOQUIC_TEST_CERT_STORE,
+            NULL, NULL, NULL,
             PICOQUIC_TEST_ALPN, test_api_callback, (void*)&test_ctx->server_callback, NULL, NULL, NULL,
             simulated_time, &simulated_time, NULL,
             test_ticket_encrypt_key, sizeof(test_ticket_encrypt_key));
@@ -2880,18 +2880,7 @@ int set_certificate_and_key_test()
         }
 
         if (ret == 0) {
-            BIO* bio_key = BIO_new_file(
-#ifdef _WINDOWS
-#ifdef _WINDOWS64
-                "..\\..\\certs\\key.pem",
-#else
-                "..\\certs\\key.pem",
-#endif
-#else
-                "certs/key.pem",
-#endif
-                "rb");
-
+            BIO* bio_key = BIO_new_file(PICOQUIC_TEST_SERVER_KEY, "rb");
             /* Load key and convert to DER */
             EVP_PKEY* key = PEM_read_bio_PrivateKey(bio_key, NULL, NULL, NULL);
             int length = i2d_PrivateKey(key, NULL);
@@ -2907,18 +2896,7 @@ int set_certificate_and_key_test()
         }
 
         if (ret == 0) {
-            BIO* bio_key = BIO_new_file(
-#ifdef _WINDOWS
-#ifdef _WINDOWS64
-                "..\\..\\certs\\cert.pem",
-#else
-                "..\\certs\\cert.pem",
-#endif
-#else
-                "certs/cert.pem",
-#endif
-                "rb");
-
+            BIO* bio_key = BIO_new_file(PICOQUIC_TEST_SERVER_CERT, "rb");
             /* Load cert and convert to DER */
             X509* cert = PEM_read_bio_X509(bio_key, NULL, NULL, NULL);
             int length = i2d_X509(cert, NULL);
@@ -2935,6 +2913,27 @@ int set_certificate_and_key_test()
                 chain[0] = ptls_iovec_init(cert_der, length);
 
                 picoquic_set_tls_certificate_chain(test_ctx->qserver, chain, 1);
+            }
+        }
+
+        if (ret == 0) {
+            BIO* bio_key = BIO_new_file(PICOQUIC_TEST_CERT_STORE, "rb");
+            /* Load cert and convert to DER */
+            X509* cert = PEM_read_bio_X509(bio_key, NULL, NULL, NULL);
+            int length = i2d_X509(cert, NULL);
+            unsigned char* cert_der = (unsigned char*)malloc(length);
+            unsigned char* tmp = cert_der;
+            i2d_X509(cert, &tmp);
+            X509_free(cert);
+            BIO_free(bio_key);
+
+            ptls_iovec_t* chain = malloc(sizeof(ptls_iovec_t));
+            if (chain == NULL) {
+                ret = -1;
+            } else {
+                chain[0] = ptls_iovec_init(cert_der, length);
+
+                picoquic_set_tls_root_certificates(test_ctx->qserver, chain, 1);
             }
         }
     }
