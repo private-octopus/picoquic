@@ -2256,11 +2256,15 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
                 bytes = picoquic_decode_new_token_frame(cnx, bytes, bytes_max);
                 ack_needed = 1;
                 break;
-            default:
-                /* Not implemented yet! */
-                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR);
-                bytes = NULL;
+            default: {
+                uint64_t frame_id64;
+                if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &frame_id64)) != NULL) {
+                    /* Not implemented yet! */
+                    picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR);
+                    bytes = NULL;
+                }
                 break;
+            }
             }
         }
     }
@@ -2476,10 +2480,14 @@ int picoquic_skip_frame(uint8_t* bytes, size_t bytes_maxsize, size_t* consumed,
             bytes = picoquic_skip_new_token_frame(bytes, bytes_max);
             *pure_ack = 0;
             break;
-        default:
-            /* Not implemented yet! */
-            bytes = NULL;
+        default: {
+            uint64_t frame_id64;
+            if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &frame_id64)) != NULL) {
+                /* Not implemented yet! */
+                bytes = NULL;
+            }
             break;
+        }
         }
     }
 
