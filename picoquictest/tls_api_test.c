@@ -56,7 +56,8 @@ typedef enum {
     test_api_fail_fin_received_twice = 4,
     test_api_fail_cannot_send_response = 8,
     test_api_fail_cannot_send_query = 16,
-    test_api_fail_data_does_not_match = 32
+    test_api_fail_data_does_not_match = 32,
+    test_api_fail_unexpected_frame = 64
 } test_api_fail_mode;
 
 typedef struct st_test_api_stream_desc_t {
@@ -321,80 +322,84 @@ static void test_api_callback(picoquic_cnx_t* cnx,
     } else if (fin_or_event == picoquic_callback_stop_sending) {
         /* Respond with a reset, no matter what. Should be smarter later */
         picoquic_reset_stream(cnx, stream_id, 0);
-    } else if (is_client_stream) {
-        if (cb_ctx->client_mode) {
-            /* this is a response from the server to a client stream */
-            test_api_receive_stream_data(bytes, length, fin_or_event,
-                ctx->test_stream[stream_index].r_rcv,
-                ctx->test_stream[stream_index].r_len,
-                ctx->test_stream[stream_index].r_src,
-                &ctx->test_stream[stream_index].r_recv_nb,
-                &ctx->test_stream[stream_index].r_received,
-                &cb_ctx->error_detected);
+    } else if (fin_or_event == picoquic_callback_no_event || fin_or_event == picoquic_callback_stream_fin || fin_or_event == picoquic_callback_stream_reset) {
+        if (is_client_stream) {
+            if (cb_ctx->client_mode) {
+                /* this is a response from the server to a client stream */
+                test_api_receive_stream_data(bytes, length, fin_or_event,
+                    ctx->test_stream[stream_index].r_rcv,
+                    ctx->test_stream[stream_index].r_len,
+                    ctx->test_stream[stream_index].r_src,
+                    &ctx->test_stream[stream_index].r_recv_nb,
+                    &ctx->test_stream[stream_index].r_received,
+                    &cb_ctx->error_detected);
 
-            stream_finished = fin_or_event;
-        } else {
-            /* this is a query to a server */
-            test_api_receive_stream_data(bytes, length, fin_or_event,
-                ctx->test_stream[stream_index].q_rcv,
-                ctx->test_stream[stream_index].q_len,
-                ctx->test_stream[stream_index].q_src,
-                &ctx->test_stream[stream_index].q_recv_nb,
-                &ctx->test_stream[stream_index].q_received,
-                &cb_ctx->error_detected);
+                stream_finished = fin_or_event;
+            } else {
+                /* this is a query to a server */
+                test_api_receive_stream_data(bytes, length, fin_or_event,
+                    ctx->test_stream[stream_index].q_rcv,
+                    ctx->test_stream[stream_index].q_len,
+                    ctx->test_stream[stream_index].q_src,
+                    &ctx->test_stream[stream_index].q_recv_nb,
+                    &ctx->test_stream[stream_index].q_received,
+                    &cb_ctx->error_detected);
 
-            if (fin_or_event != 0) {
-                if (ctx->test_stream[stream_index].r_len == 0 || fin_or_event == picoquic_callback_stream_reset) {
-                    ctx->test_stream[stream_index].r_received = 1;
-                    stream_finished = fin_or_event;
-                } else if (cb_ctx->error_detected == 0) {
-                    /* send a response */
-                    if (picoquic_add_to_stream(ctx->cnx_server, stream_id,
-                            ctx->test_stream[stream_index].r_src,
-                            ctx->test_stream[stream_index].r_len, 1)
-                        != 0) {
-                        cb_ctx->error_detected |= test_api_fail_cannot_send_response;
+                if (fin_or_event != 0) {
+                    if (ctx->test_stream[stream_index].r_len == 0 || fin_or_event == picoquic_callback_stream_reset) {
+                        ctx->test_stream[stream_index].r_received = 1;
+                        stream_finished = fin_or_event;
+                    } else if (cb_ctx->error_detected == 0) {
+                        /* send a response */
+                        if (picoquic_add_to_stream(ctx->cnx_server, stream_id,
+                                ctx->test_stream[stream_index].r_src,
+                                ctx->test_stream[stream_index].r_len, 1)
+                            != 0) {
+                            cb_ctx->error_detected |= test_api_fail_cannot_send_response;
+                        }
                     }
                 }
+            }
+        } else {
+            if (cb_ctx->client_mode) {
+                /* this is a query from the server to the client */
+                test_api_receive_stream_data(bytes, length, fin_or_event,
+                    ctx->test_stream[stream_index].q_rcv,
+                    ctx->test_stream[stream_index].q_len,
+                    ctx->test_stream[stream_index].q_src,
+                    &ctx->test_stream[stream_index].q_recv_nb,
+                    &ctx->test_stream[stream_index].q_received,
+                    &cb_ctx->error_detected);
+
+                if (fin_or_event != 0) {
+                    if (ctx->test_stream[stream_index].r_len == 0 || fin_or_event == picoquic_callback_stream_reset) {
+                        ctx->test_stream[stream_index].r_received = 1;
+                        stream_finished = fin_or_event;
+                    } else if (cb_ctx->error_detected == 0) {
+                        /* send a response */
+                        if (picoquic_add_to_stream(ctx->cnx_client, stream_id,
+                                ctx->test_stream[stream_index].r_src,
+                                ctx->test_stream[stream_index].r_len, 1)
+                            != 0) {
+                            cb_ctx->error_detected |= test_api_fail_cannot_send_response;
+                        }
+                    }
+                }
+            } else {
+                /* this is a response to the server */
+                test_api_receive_stream_data(bytes, length, fin_or_event,
+                    ctx->test_stream[stream_index].r_rcv,
+                    ctx->test_stream[stream_index].r_len,
+                    ctx->test_stream[stream_index].r_src,
+                    &ctx->test_stream[stream_index].r_recv_nb,
+                    &ctx->test_stream[stream_index].r_received,
+                    &cb_ctx->error_detected);
+
+                stream_finished = fin_or_event;
             }
         }
     } else {
-        if (cb_ctx->client_mode) {
-            /* this is a query from the server to the client */
-            test_api_receive_stream_data(bytes, length, fin_or_event,
-                ctx->test_stream[stream_index].q_rcv,
-                ctx->test_stream[stream_index].q_len,
-                ctx->test_stream[stream_index].q_src,
-                &ctx->test_stream[stream_index].q_recv_nb,
-                &ctx->test_stream[stream_index].q_received,
-                &cb_ctx->error_detected);
-
-            if (fin_or_event != 0) {
-                if (ctx->test_stream[stream_index].r_len == 0 || fin_or_event == picoquic_callback_stream_reset) {
-                    ctx->test_stream[stream_index].r_received = 1;
-                    stream_finished = fin_or_event;
-                } else if (cb_ctx->error_detected == 0) {
-                    /* send a response */
-                    if (picoquic_add_to_stream(ctx->cnx_client, stream_id,
-                            ctx->test_stream[stream_index].r_src,
-                            ctx->test_stream[stream_index].r_len, 1)
-                        != 0) {
-                        cb_ctx->error_detected |= test_api_fail_cannot_send_response;
-                    }
-                }
-            }
-        } else {
-            /* this is a response to the server */
-            test_api_receive_stream_data(bytes, length, fin_or_event,
-                ctx->test_stream[stream_index].r_rcv,
-                ctx->test_stream[stream_index].r_len,
-                ctx->test_stream[stream_index].r_src,
-                &ctx->test_stream[stream_index].r_recv_nb,
-                &ctx->test_stream[stream_index].r_received,
-                &cb_ctx->error_detected);
-
-            stream_finished = fin_or_event;
-        }
+        cb_ctx->error_detected |= test_api_fail_unexpected_frame;
     }
 
     if (stream_finished != 0
