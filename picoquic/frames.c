@@ -709,13 +709,13 @@ picoquic_stream_head* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
 
     if (cnx->maxdata_remote > cnx->data_sent) {
         while (stream) {
-            if ((stream->send_queue != NULL &&
+            if ((stream->stream_flags & picoquic_stream_flag_reset_sent) == 0 && ((stream->send_queue != NULL &&
                 stream->send_queue->length > stream->send_queue->offset &&
                 stream->sent_offset < stream->maxdata_remote) ||
                 ((stream->stream_flags & picoquic_stream_flag_fin_notified) != 0 &&
                 (stream->stream_flags & picoquic_stream_flag_fin_sent) == 0 &&
                     (stream->sent_offset < stream->maxdata_remote)) ||
-                    ((stream->stream_flags & picoquic_stream_flag_reset_requested) != 0 && (stream->stream_flags & picoquic_stream_flag_reset_sent) == 0) || ((stream->stream_flags & picoquic_stream_flag_stop_sending_requested) != 0 && (stream->stream_flags & picoquic_stream_flag_stop_sending_sent) == 0)) {
+                    (stream->stream_flags & picoquic_stream_flag_reset_requested) != 0 || ((stream->stream_flags & picoquic_stream_flag_stop_sending_requested) != 0 && (stream->stream_flags & picoquic_stream_flag_stop_sending_sent) == 0))) {
                 /* if the stream is not active yet, verify that it fits under
                  * the max stream id limit */
                  /* Check parity */
