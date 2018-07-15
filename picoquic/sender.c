@@ -1433,7 +1433,9 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                             cnx->cnx_state = picoquic_state_client_init_resent;
                             break;
                         case picoquic_state_client_almost_ready:
-                            cnx->cnx_state = picoquic_state_client_ready;
+                            if (picoquic_tls_client_authentication_activated(cnx->quic) == 0) {
+                                cnx->cnx_state = picoquic_state_client_ready;
+                            }
                             break;
                         default:
                             break;

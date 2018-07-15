@@ -1655,13 +1655,17 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
             /* If client authentication is activated, the client sends the certificates with its `Finished` packet.
                The server does not send any further packets, so, we can switch into ready state here.
             */
-            if (sendbuf.off == 0 && ((ptls_context_t*)cnx->quic->tls_master_ctx)->require_client_authentication == 1) {
+            if (sendbuf.off == 0 && picoquic_tls_client_authentication_activated(cnx->quic) == 1) {
                 cnx->cnx_state = picoquic_state_server_ready;
             } else {
                 cnx->cnx_state = picoquic_state_server_almost_ready;
             }
             break;
         case picoquic_state_client_almost_ready:
+            if (picoquic_tls_client_authentication_activated(cnx->quic) == 1) {
+                cnx->cnx_state = picoquic_state_client_ready;
+            }
+            break;
         case picoquic_state_handshake_failure:
         case picoquic_state_client_ready:
         case picoquic_state_server_almost_ready:
