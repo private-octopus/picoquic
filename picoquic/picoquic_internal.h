@@ -109,8 +109,7 @@ typedef enum {
 #define PICOQUIC_INTEROP_VERSION_INDEX 1
 
 /*
- * Flags used to describe the capbilities of different
- * versions.
+ * Flags used to describe the capabilities of different versions.
  */
 
 typedef enum {
@@ -305,6 +304,9 @@ typedef struct _picoquic_stream_head {
     picoquic_stream_data* send_queue;
     picoquic_sack_item_t first_sack_item;
 } picoquic_stream_head;
+
+#define IS_CLIENT_STREAM_ID(id) (((id) & 1) == 0)
+#define IS_BIDIR_STREAM_ID(id)  (((id) & 2) == 0)
 
 /*
      * Frame queue. This is used for miscellaneous packets, such as the PONG

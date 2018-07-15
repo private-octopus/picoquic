@@ -254,7 +254,7 @@ static int test_api_queue_initial_queries(picoquic_test_tls_api_ctx_t* test_ctx,
         if (test_ctx->test_stream[i].previous_stream_id == stream_id) {
             picoquic_cnx_t* cnx = NULL;
 
-            cnx = (test_ctx->test_stream[i].stream_id & 1) ? test_ctx->cnx_server : test_ctx->cnx_client;
+            cnx = IS_CLIENT_STREAM_ID(test_ctx->test_stream[i].stream_id) ? test_ctx->cnx_client : test_ctx->cnx_server;
 
             ret = picoquic_add_to_stream(cnx, test_ctx->test_stream[i].stream_id,
                 test_ctx->test_stream[i].q_src,
@@ -284,11 +284,8 @@ static void test_api_callback(picoquic_cnx_t* cnx,
     /* Need to implement the server sending strategy */
     test_api_callback_t* cb_ctx = (test_api_callback_t*)callback_ctx;
     picoquic_test_tls_api_ctx_t* ctx = NULL;
-    size_t stream_index = 0;
-    int is_client_stream = 0;
+    size_t stream_index;
     picoquic_call_back_event_t stream_finished = picoquic_callback_no_event;
-
-    is_client_stream = ((stream_id & 1) == 0) ? 1 : 0;
 
     if (fin_or_event == picoquic_callback_close || fin_or_event == picoquic_callback_application_close) {
         /* do nothing in our tests */
@@ -309,11 +306,10 @@ static void test_api_callback(picoquic_cnx_t* cnx,
         }
     }
 
-    while (stream_index < ctx->nb_test_streams) {
+    for (stream_index = 0; stream_index < ctx->nb_test_streams; stream_index++) {
         if (ctx->test_stream[stream_index].stream_id == stream_id) {
             break;
         }
-        stream_index++;
     }
 
     if (stream_index >= ctx->nb_test_streams) {
@@ -321,7 +317,7 @@ static void test_api_callback(picoquic_cnx_t* cnx,
     } else if (fin_or_event == picoquic_callback_stop_sending) {
         /* Respond with a reset, no matter what. Should be smarter later */
         picoquic_reset_stream(cnx, stream_id, 0);
-    } else if (is_client_stream) {
+    } else if (IS_CLIENT_STREAM_ID(stream_id)) {
         if (cb_ctx->client_mode) {
             /* this is a response from the server to a client stream */
             test_api_receive_stream_data(bytes, length, fin_or_event,
