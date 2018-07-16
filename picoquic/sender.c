@@ -2142,7 +2142,7 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
             break;
         }
         else {
-            ret = picoquic_prepare_segment(cnx, path_x, packet, current_time, 
+            ret = picoquic_prepare_segment(cnx, path_x, packet, current_time,
                 send_buffer + *send_length, available, &segment_length);
 
             if (ret == 0) {
@@ -2150,6 +2150,9 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
                 if (packet->length == 0 ||
                     packet->ptype == picoquic_packet_1rtt_protected_phi0 ||
                     packet->ptype == picoquic_packet_1rtt_protected_phi1) {
+                    if (packet->length == 0) {
+                        free(packet);
+                    }
                     break;
                 }
             } else {
