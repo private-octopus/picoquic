@@ -569,6 +569,8 @@ static void tls_api_delete_ctx(picoquic_test_tls_api_ctx_t* test_ctx)
     if (test_ctx->s_to_c_link != NULL) {
         picoquictest_sim_link_delete(test_ctx->s_to_c_link);
     }
+
+    free(test_ctx);
 }
 
 static int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_version,

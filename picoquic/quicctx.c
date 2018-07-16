@@ -295,6 +295,8 @@ void picoquic_free(picoquic_quic_t* quic)
             free(quic->tls_master_ctx);
             quic->tls_master_ctx = NULL;
         }
+
+        free(quic);
     }
 }
 
