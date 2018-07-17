@@ -569,6 +569,8 @@ static void tls_api_delete_ctx(picoquic_test_tls_api_ctx_t* test_ctx)
     if (test_ctx->s_to_c_link != NULL) {
         picoquictest_sim_link_delete(test_ctx->s_to_c_link);
     }
+
+    free(test_ctx);
 }
 
 static int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_version,
@@ -779,6 +781,8 @@ static int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                     /* useless test, but makes it easier to add a breakpoint under debugger */
                     ret = -1;
                 }
+
+                free(packet);
             } else if (server_arrival < next_time && (packet = picoquictest_sim_link_dequeue(test_ctx->c_to_s_link, server_arrival)) != NULL) {
 
                 next_time = server_arrival;
@@ -812,6 +816,7 @@ static int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                 }
 
                 *was_active |= 1;
+                free(packet);
             } else {
                 *simulated_time = next_time;
             }

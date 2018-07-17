@@ -85,6 +85,8 @@ char const* picoquic_tls_get_sni(picoquic_cnx_t* cnx);
 
 int picoquic_enable_custom_verify_certificate_callback(picoquic_quic_t* quic);
 
+void picoquic_dispose_verify_certificate_callback(picoquic_quic_t* quic, int custom);
+
 void picoquic_tls_set_client_authentication(picoquic_quic_t* quic, int client_authentication);
 
 int picoquic_tls_client_authentication_activated(picoquic_quic_t* quic);

@@ -506,6 +506,7 @@ static int stress_handle_packet_arrival(picoquic_stress_ctx_t * ctx, picoquic_qu
         if (ret != 0){
             stress_debug_break();
         }
+        free(packet);
     }
 
     return ret;

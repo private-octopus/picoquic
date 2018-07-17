@@ -17,6 +17,7 @@ addons:
     - cmake
     - cmake-data
     - libssl-dev 
+    - gdb
 before_install:
 # - $CC --version 
   - if [ "$TRAVIS_OS_NAME" == "linux" ]; then  if [ "$CXX" = "g++" ]; then export CXX="g++" CC="gcc" EXTRA_LDFLAGS="-fuse-ld=gold"; else export CXX="clang++" CC="clang"; fi; fi
@@ -30,4 +31,8 @@ script:
   # Now build picotls examples and test
   - cmake .
   - make
-  - ./picoquic_ct
+  - ulimit -c unlimited -S
+  - ./picoquic_ct && RESULT=$?
+  # Early out if the program exited successfully
+  - if [[ ${RESULT} == 0 ]]; then exit 0; fi;
+  - for i in $(find ./ -maxdepth 1 -name 'core*' -print); do gdb $(pwd)/picoquic_ct core* -ex "thread apply all bt" -ex "set pagination 0" -batch; done;
