@@ -79,6 +79,9 @@ const char * picoquic_log_fin_or_event_name(picoquic_call_back_event_t ev)
     case picoquic_callback_challenge_response:
         text = "challenge response";
         break;
+    case picoquic_callback_stream_gap:
+        text = "stream gap";
+        break;
     default:
         break;
     }
