@@ -556,16 +556,28 @@ int picoquic_enable_custom_verify_certificate_callback(picoquic_quic_t* quic) {
     if (verifier == NULL) {
         return PICOQUIC_ERROR_MEMORY;
     } else {
-        if (ctx->verify_certificate) {
-            free(ctx->verify_certificate);
-        }
-
         verifier->quic = quic;
         verifier->cb.cb = verify_certificate_callback;
         ctx->verify_certificate = &verifier->cb;
 
         return 0;
     }
+}
+
+void picoquic_dispose_verify_certificate_callback(picoquic_quic_t* quic, int custom) {
+    ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
+
+    if (ctx->verify_certificate == NULL) {
+        return;
+    }
+
+    if (custom == 1) {
+        free(ctx->verify_certificate);
+    } else {
+        ptls_openssl_dispose_verify_certificate((ptls_openssl_verify_certificate_t*)ctx->verify_certificate);
+    }
+
+    ctx->verify_certificate = NULL;
 }
 
 /* set key from secret: this is used to create AEAD contexts and PN encoding contexts
@@ -891,12 +903,13 @@ int picoquic_master_tlscontext(picoquic_quic_t* quic,
 
             ptls_openssl_init_verify_certificate(verifier, store);
             ctx->verify_certificate = &verifier->super;
-            quic->free_verify_certificate_callback_fn = (picoquic_free_verify_certificate_ctx)ptls_openssl_dispose_verify_certificate;
 
             // If we created an instance of the store, release our reference after giving it to the verify_certificate callback.
             // The callback internally increased the reference counter by one.
             if (store != NULL) {
+#if OPENSSL_VERSION_NUMBER > 0x10100000L
                 X509_STORE_free(store);
+#endif
             }
         }
 
@@ -950,6 +963,8 @@ void picoquic_master_tlscontext_free(picoquic_quic_t* quic)
             free((ptls_openssl_sign_certificate_t*)ctx->sign_certificate);
             ctx->sign_certificate = NULL;
         }
+
+        picoquic_dispose_verify_certificate_callback(quic, 0);
 
         if (ctx->on_client_hello != NULL) {
             free(ctx->on_client_hello);
