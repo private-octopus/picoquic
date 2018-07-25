@@ -57,8 +57,7 @@ int picoquic_add_to_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
         /* Need to check that the ID is authorized */
 
         /* Check parity */
-        int parity = cnx->client_mode ? 0 : 1;
-        if ((stream_id & 1) != parity) {
+        if (IS_CLIENT_STREAM_ID(stream_id) != cnx->client_mode) {
             ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
         } 
 

@@ -220,16 +220,16 @@ picoquic_stream_head* picoquic_find_or_create_stream(picoquic_cnx_t* cnx, uint64
 
     if (stream == NULL) {
         /* Verify the stream ID control conditions */
-        int      parity     = cnx->client_mode     ? is_remote                      : is_remote ^ 1;
-        uint64_t max_stream = (stream_id & 2) == 0 ? cnx->max_stream_id_bidir_local : cnx->max_stream_id_unidir_local;
+        int      expect_client_stream = cnx->client_mode ^ is_remote;
+        uint64_t max_stream = IS_BIDIR_STREAM_ID(stream_id) ? cnx->max_stream_id_bidir_local : cnx->max_stream_id_unidir_local;
 
-        if ((stream_id & 1) != parity || stream_id > max_stream) {
+        if (IS_CLIENT_STREAM_ID(stream_id) != expect_client_stream || stream_id > max_stream) {
             picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_STREAM_ID_ERROR);
 
         } else if ((stream = picoquic_create_stream(cnx, stream_id)) == NULL) {
             picoquic_connection_error(cnx, PICOQUIC_ERROR_MEMORY);
 
-        } else if ((stream_id & 2) != 0) {
+        } else if (!IS_BIDIR_STREAM_ID(stream_id)) {
             /* Mark the stream as already finished in our direction */
             stream->stream_flags |= picoquic_stream_flag_fin_notified | picoquic_stream_flag_fin_sent;
         }
@@ -719,9 +719,7 @@ picoquic_stream_head* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
                 /* if the stream is not active yet, verify that it fits under
                  * the max stream id limit */
                  /* Check parity */
-                int parity = cnx->client_mode ? 0 : 1;
-
-                if ((stream->stream_id & 1) == parity) {
+                if (IS_CLIENT_STREAM_ID(stream->stream_id) == cnx->client_mode) {
                     if (stream->stream_id <= cnx->max_stream_id_bidir_remote) {
                         break;
                     }
@@ -1984,12 +1982,12 @@ uint8_t* picoquic_decode_max_stream_id_frame(picoquic_cnx_t* cnx, uint8_t* bytes
     if ((bytes = picoquic_frames_varint_decode(bytes+1, bytes_max, &max_stream_id)) == NULL) {
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR);
 
-    } else if (cnx->client_mode == (max_stream_id & 1)) {    // Only accept my stream IDs
+    } else if (cnx->client_mode != IS_CLIENT_STREAM_ID(max_stream_id)) {    // Only accept my stream IDs
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_STREAM_ID_ERROR);
         bytes = NULL;
 
     } else {
-        uint64_t *max_id = ((max_stream_id & 2) == 0) ? &cnx->max_stream_id_bidir_remote : &cnx->max_stream_id_unidir_remote;
+        uint64_t *max_id = IS_BIDIR_STREAM_ID(max_stream_id) ? &cnx->max_stream_id_bidir_remote : &cnx->max_stream_id_unidir_remote;
         if (max_stream_id > *max_id) {
             *max_id = max_stream_id;
         }
