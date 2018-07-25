@@ -253,7 +253,8 @@ int varint_test()
                 } else if (length == 0) {
                     continue;
                 } else if (n64 != test->decoded) {
-                    fprintf(stderr, "Varint: unexpected value %"PRIst" [expected %"PRIst"]", n64, test->decoded);
+                    fprintf(stderr, "Varint: unexpected value %llu [expected %llu]", 
+                        (unsigned long long)n64, (unsigned long long)test->decoded);
                     test_ret = -1;
                 } else if (test->is_canonical != 0) {
                     uint8_t encoding[8];

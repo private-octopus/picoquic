@@ -220,7 +220,7 @@ picoquic_stream_head* picoquic_find_or_create_stream(picoquic_cnx_t* cnx, uint64
 
     if (stream == NULL) {
         /* Verify the stream ID control conditions */
-        int      expect_client_stream = cnx->client_mode ^ is_remote;
+        unsigned int expect_client_stream = cnx->client_mode ^ is_remote;
         uint64_t max_stream = IS_BIDIR_STREAM_ID(stream_id) ? cnx->max_stream_id_bidir_local : cnx->max_stream_id_unidir_local;
 
         if (IS_CLIENT_STREAM_ID(stream_id) != expect_client_stream || stream_id > max_stream) {

@@ -305,8 +305,8 @@ typedef struct _picoquic_stream_head {
     picoquic_sack_item_t first_sack_item;
 } picoquic_stream_head;
 
-#define IS_CLIENT_STREAM_ID(id) (((id) & 1) == 0)
-#define IS_BIDIR_STREAM_ID(id)  (((id) & 2) == 0)
+#define IS_CLIENT_STREAM_ID(id) (unsigned int)(((id) & 1) == 0)
+#define IS_BIDIR_STREAM_ID(id)  (unsigned int)(((id) & 2) == 0)
 
 /*
      * Frame queue. This is used for miscellaneous packets, such as the PONG

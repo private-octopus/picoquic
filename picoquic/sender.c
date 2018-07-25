@@ -253,7 +253,8 @@ uint32_t picoquic_create_packet_header(
         *pn_length = 4;
         picoquic_headint_encode_32(&bytes[length], sequence_number);
         length += 4;
-    } else {
+    }
+    else {
         /* Create a long packet */
 
         switch (packet_type) {
@@ -288,21 +289,28 @@ uint32_t picoquic_create_packet_header(
         length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, dest_cnx_id);
         length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, cnx->local_cnxid);
 
-        /* Reserve two bytes for payload length */
-        bytes[length++] = 0;
-        bytes[length++] = 0;
-        /* Encode the sequence number */
-        *pn_offset = length;
-        *pn_length = 4;
-        picoquic_headint_encode_32(&bytes[length], sequence_number);
-        length += 4;
-        /* Special case of packet initial */
+        /* Special case of packet initial -- encode token as part of header */
         if (packet_type == picoquic_packet_initial) {
-            length += picoquic_varint_encode(&bytes[length], 16, cnx->retry_token_length);
+            length += picoquic_varint_encode(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, cnx->retry_token_length);
             if (cnx->retry_token_length > 0) {
                 memcpy(&bytes[length], cnx->retry_token, cnx->retry_token_length);
                 length += cnx->retry_token_length;
             }
+        }
+
+        if (packet_type == picoquic_packet_retry) {
+            /* No payload length and no sequence number for Retry */
+            *pn_offset = 0;
+            *pn_length = 0;
+        } else {
+            /* Reserve two bytes for payload length */
+            bytes[length++] = 0;
+            bytes[length++] = 0;
+            /* Encode the sequence number */
+            *pn_offset = length;
+            *pn_length = 4;
+            picoquic_headint_encode_32(&bytes[length], sequence_number);
+            length += 4;
         }
     }
 

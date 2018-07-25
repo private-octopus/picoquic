@@ -971,7 +971,7 @@ void picoquic_log_frames(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t leng
             /* Not implemented yet! */
             uint64_t frame_id64;
             if (picoquic_varint_decode(bytes, length - byte_index, &frame_id64) > 0) {
-                fprintf(F, "    Unknown frame, type: %"PRIst"\n", frame_id64);
+                fprintf(F, "    Unknown frame, type: %llu\n", (unsigned long long)frame_id64);
             } else {
                 fprintf(F, "    Truncated frame type\n");
             }

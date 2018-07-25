@@ -56,6 +56,7 @@ static uint8_t pinitial10[] = {
     TEST_CNXID_LEN_BYTE,
     TEST_CNXID_INI_BYTES,
     TEST_CNXID_REM_BYTES,
+    0x00,
     0x44, 00,
     0xDE, 0xAD, 0xBE, 0xEF
 };
@@ -65,8 +66,8 @@ static picoquic_packet_header hinitial10 = {
     TEST_CNXID_REM_VAL,
     0xDEADBEEF,
     0x50435130,
-    20,
-    20,
+    21,
+    21,
     picoquic_packet_initial,
     0xFFFFFFFF00000000ull,
     0, 
@@ -87,6 +88,7 @@ static uint8_t pinitial10_l[] = {
     TEST_CNXID_LOCAL_BYTE,
     TEST_CNXID_INI_BYTES,
     TEST_CNXID_LOCAL_BYTES,
+    0,
     0x44, 00,
     0xDE, 0xAD, 0xBE, 0xEF
 };
@@ -96,8 +98,8 @@ static picoquic_packet_header hinitial10_l = {
     TEST_CNXID_LOCAL_VAL,
     0xDEADBEEF,
     0x50435130,
-    24,
-    24,
+    25,
+    25,
     picoquic_packet_initial,
     0xFFFFFFFF00000000ull,
     0,
