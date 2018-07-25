@@ -709,13 +709,13 @@ picoquic_stream_head* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
 
     if (cnx->maxdata_remote > cnx->data_sent) {
         while (stream) {
-            if ((stream->send_queue != NULL &&
+            if ((stream->stream_flags & picoquic_stream_flag_reset_sent) == 0 && ((stream->send_queue != NULL &&
                 stream->send_queue->length > stream->send_queue->offset &&
                 stream->sent_offset < stream->maxdata_remote) ||
                 ((stream->stream_flags & picoquic_stream_flag_fin_notified) != 0 &&
                 (stream->stream_flags & picoquic_stream_flag_fin_sent) == 0 &&
                     (stream->sent_offset < stream->maxdata_remote)) ||
-                    ((stream->stream_flags & picoquic_stream_flag_reset_requested) != 0 && (stream->stream_flags & picoquic_stream_flag_reset_sent) == 0) || ((stream->stream_flags & picoquic_stream_flag_stop_sending_requested) != 0 && (stream->stream_flags & picoquic_stream_flag_stop_sending_sent) == 0)) {
+                    (stream->stream_flags & picoquic_stream_flag_reset_requested) != 0 || ((stream->stream_flags & picoquic_stream_flag_stop_sending_requested) != 0 && (stream->stream_flags & picoquic_stream_flag_stop_sending_sent) == 0))) {
                 /* if the stream is not active yet, verify that it fits under
                  * the max stream id limit */
                  /* Check parity */
@@ -2254,11 +2254,15 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
                 bytes = picoquic_decode_new_token_frame(cnx, bytes, bytes_max);
                 ack_needed = 1;
                 break;
-            default:
-                /* Not implemented yet! */
-                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR);
-                bytes = NULL;
+            default: {
+                uint64_t frame_id64;
+                if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &frame_id64)) != NULL) {
+                    /* Not implemented yet! */
+                    picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR);
+                    bytes = NULL;
+                }
                 break;
+            }
             }
         }
     }
@@ -2474,10 +2478,14 @@ int picoquic_skip_frame(uint8_t* bytes, size_t bytes_maxsize, size_t* consumed,
             bytes = picoquic_skip_new_token_frame(bytes, bytes_max);
             *pure_ack = 0;
             break;
-        default:
-            /* Not implemented yet! */
-            bytes = NULL;
+        default: {
+            uint64_t frame_id64;
+            if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &frame_id64)) != NULL) {
+                /* Not implemented yet! */
+                bytes = NULL;
+            }
             break;
+        }
         }
     }
 

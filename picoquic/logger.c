@@ -79,6 +79,9 @@ const char * picoquic_log_fin_or_event_name(picoquic_call_back_event_t ev)
     case picoquic_callback_challenge_response:
         text = "challenge response";
         break;
+    case picoquic_callback_stream_gap:
+        text = "stream gap";
+        break;
     default:
         break;
     }
@@ -871,111 +874,110 @@ void picoquic_log_frames(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t leng
     size_t byte_index = 0;
 
     while (byte_index < length) {
-        int ack_or_data = 0;
+        uint8_t frame_id = bytes[byte_index];
 
         if (cnx_id64 != 0) {
             fprintf(F, "%" PRIx64 ": ", cnx_id64);
         }
 
-        if (PICOQUIC_IN_RANGE(bytes[byte_index], picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
-            ack_or_data = 1;
+        if (PICOQUIC_IN_RANGE(frame_id, picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
             byte_index += picoquic_log_stream_frame(F, bytes + byte_index, length - byte_index);
-        } else if (bytes[byte_index] == picoquic_frame_type_ack) {
-            ack_or_data = 1;
-            byte_index += picoquic_log_ack_frame(F, cnx_id64, bytes + byte_index, length - byte_index, 0);
-        } else if (bytes[byte_index] == picoquic_frame_type_ack_ecn) {
-            ack_or_data = 1;
-            byte_index += picoquic_log_ack_frame(F, cnx_id64, bytes + byte_index, length - byte_index, 1);
+            continue;
         }
 
-        if (ack_or_data == 0) {
-            if (bytes[byte_index] == 0) {
-                int nb_pad = 0;
+        switch (frame_id) {
+        case picoquic_frame_type_ack:
+            byte_index += picoquic_log_ack_frame(F, cnx_id64, bytes + byte_index, length - byte_index, 0);
+            break;
+        case picoquic_frame_type_ack_ecn:
+            byte_index += picoquic_log_ack_frame(F, cnx_id64, bytes + byte_index, length - byte_index, 1);
+            break;
+        case picoquic_frame_type_padding:
+        case picoquic_frame_type_ping: {
+            int nb = 0;
 
-                while (byte_index < length && bytes[byte_index] == 0) {
-                    byte_index++;
-                    nb_pad++;
-                }
-
-                fprintf(F, "    Padding, %d bytes\n", nb_pad);
-            } else {
-                uint8_t frame_id = bytes[byte_index];
-
-                switch (frame_id) {
-                case picoquic_frame_type_reset_stream: /* RST_STREAM */
-                    byte_index += picoquic_log_reset_stream_frame(F, bytes + byte_index,
-                        length - byte_index);
-                    break;
-                case picoquic_frame_type_connection_close: /* CONNECTION_CLOSE */
-                    byte_index += picoquic_log_connection_close_frame(F, bytes + byte_index,
-                        length - byte_index);
-                    break;
-                case picoquic_frame_type_application_close:
-                    byte_index += picoquic_log_application_close_frame(F, bytes + byte_index,
-                        length - byte_index);
-                    break;
-                case picoquic_frame_type_max_data: /* MAX_DATA */
-                    byte_index += picoquic_log_max_data_frame(F, bytes + byte_index,
-                        length - byte_index);
-                    break;
-                case picoquic_frame_type_max_stream_data: /* MAX_STREAM_DATA */
-                    byte_index += picoquic_log_max_stream_data_frame(F, bytes + byte_index,
-                        length - byte_index);
-                    break;
-                case picoquic_frame_type_max_stream_id: /* MAX_STREAM_ID */
-                    byte_index += picoquic_log_max_stream_id_frame(F, bytes + byte_index,
-                        length - byte_index);
-                    break;
-                case picoquic_frame_type_ping:
-                    fprintf(F, "    %s frame\n", picoquic_log_frame_names(frame_id));
-                    byte_index++;
-                    break;
-                case picoquic_frame_type_blocked: /* BLOCKED */
-                    /* No payload */
-                    byte_index += picoquic_log_blocked_frame(F, bytes + byte_index,
-                        length - byte_index);
-                    break;
-                case picoquic_frame_type_stream_blocked: /* STREAM_BLOCKED */
-                    byte_index += picoquic_log_stream_blocked_frame(F, bytes + byte_index,
-                        length - byte_index);
-                    break;
-                case picoquic_frame_type_stream_id_needed: /* STREAM_ID_NEEDED */
-                    /* No payload */
-                    fprintf(F, "    %s frame\n", picoquic_log_frame_names(frame_id));
-                    byte_index++;
-                    byte_index += picoquic_varint_skip(&bytes[byte_index]);
-                    break;
-                case picoquic_frame_type_new_connection_id: /* NEW_CONNECTION_ID */
-                    byte_index += picoquic_log_new_connection_id_frame(F, bytes + byte_index,
-                        length - byte_index);
-                    break;
-                case picoquic_frame_type_stop_sending: /* STOP_SENDING */
-                    byte_index += picoquic_log_stop_sending_frame(F, bytes + byte_index,
-                        length - byte_index);
-                    break;
-                case picoquic_frame_type_path_challenge:
-                    byte_index += picoquic_log_path_frame(F, bytes + byte_index,
-                        length - byte_index);
-                    break;
-                case picoquic_frame_type_path_response:
-                    byte_index += picoquic_log_path_frame(F, bytes + byte_index,
-                        length - byte_index);
-                    break;
-                case picoquic_frame_type_crypto_hs:
-                    byte_index += picoquic_log_crypto_hs_frame(F, bytes + byte_index,
-                        length - byte_index);
-                    break;
-                case picoquic_frame_type_new_token:
-                    byte_index += picoquic_log_new_token_frame(F, bytes + byte_index,
-                        length - byte_index);
-                    break;
-                default:
-                    /* Not implemented yet! */
-                    fprintf(F, "    Unknown frame, type: %x\n", frame_id);
-                    byte_index = length;
-                    break;
-                }
+            while (byte_index < length && bytes[byte_index] == frame_id) {
+                byte_index++;
+                nb++;
             }
+
+            fprintf(F, "    %s, %d bytes\n", picoquic_log_frame_names(frame_id), nb);
+            break;
+        }
+        case picoquic_frame_type_reset_stream: /* RST_STREAM */
+            byte_index += picoquic_log_reset_stream_frame(F, bytes + byte_index,
+                length - byte_index);
+            break;
+        case picoquic_frame_type_connection_close: /* CONNECTION_CLOSE */
+            byte_index += picoquic_log_connection_close_frame(F, bytes + byte_index,
+                length - byte_index);
+            break;
+        case picoquic_frame_type_application_close:
+            byte_index += picoquic_log_application_close_frame(F, bytes + byte_index,
+                length - byte_index);
+            break;
+        case picoquic_frame_type_max_data: /* MAX_DATA */
+            byte_index += picoquic_log_max_data_frame(F, bytes + byte_index,
+                length - byte_index);
+            break;
+        case picoquic_frame_type_max_stream_data: /* MAX_STREAM_DATA */
+            byte_index += picoquic_log_max_stream_data_frame(F, bytes + byte_index,
+                length - byte_index);
+            break;
+        case picoquic_frame_type_max_stream_id: /* MAX_STREAM_ID */
+            byte_index += picoquic_log_max_stream_id_frame(F, bytes + byte_index,
+                length - byte_index);
+            break;
+        case picoquic_frame_type_blocked: /* BLOCKED */
+            /* No payload */
+            byte_index += picoquic_log_blocked_frame(F, bytes + byte_index,
+                length - byte_index);
+            break;
+        case picoquic_frame_type_stream_blocked: /* STREAM_BLOCKED */
+            byte_index += picoquic_log_stream_blocked_frame(F, bytes + byte_index,
+                length - byte_index);
+            break;
+        case picoquic_frame_type_stream_id_needed: /* STREAM_ID_NEEDED */
+            /* No payload */
+            fprintf(F, "    %s frame\n", picoquic_log_frame_names(frame_id));
+            byte_index++;
+            byte_index += picoquic_varint_skip(&bytes[byte_index]);
+            break;
+        case picoquic_frame_type_new_connection_id: /* NEW_CONNECTION_ID */
+            byte_index += picoquic_log_new_connection_id_frame(F, bytes + byte_index,
+                length - byte_index);
+            break;
+        case picoquic_frame_type_stop_sending: /* STOP_SENDING */
+            byte_index += picoquic_log_stop_sending_frame(F, bytes + byte_index,
+                length - byte_index);
+            break;
+        case picoquic_frame_type_path_challenge:
+            byte_index += picoquic_log_path_frame(F, bytes + byte_index,
+                length - byte_index);
+            break;
+        case picoquic_frame_type_path_response:
+            byte_index += picoquic_log_path_frame(F, bytes + byte_index,
+                length - byte_index);
+            break;
+        case picoquic_frame_type_crypto_hs:
+            byte_index += picoquic_log_crypto_hs_frame(F, bytes + byte_index,
+                length - byte_index);
+            break;
+        case picoquic_frame_type_new_token:
+            byte_index += picoquic_log_new_token_frame(F, bytes + byte_index,
+                length - byte_index);
+            break;
+        default: {
+            /* Not implemented yet! */
+            uint64_t frame_id64;
+            if (picoquic_varint_decode(bytes, length - byte_index, &frame_id64) > 0) {
+                fprintf(F, "    Unknown frame, type: %"PRIst"\n", frame_id64);
+            } else {
+                fprintf(F, "    Truncated frame type\n");
+            }
+            byte_index = length;
+            break;
+        }
         }
     }
 }

@@ -288,6 +288,10 @@ void picoquic_free(picoquic_quic_t* quic)
             quic->verify_certificate_ctx = NULL;
         }
 
+        if (quic->verify_certificate_callback_fn != NULL) {
+            picoquic_dispose_verify_certificate_callback(quic, 1);
+        }
+
         /* Delete the picotls context */
         if (quic->tls_master_ctx != NULL) {
             picoquic_master_tlscontext_free(quic);
@@ -295,6 +299,8 @@ void picoquic_free(picoquic_quic_t* quic)
             free(quic->tls_master_ctx);
             quic->tls_master_ctx = NULL;
         }
+
+        free(quic);
     }
 }
 
@@ -1497,6 +1503,8 @@ void picoquic_disable_keep_alive(picoquic_cnx_t* cnx)
 
 int picoquic_set_verify_certificate_callback(picoquic_quic_t* quic, picoquic_verify_certificate_cb_fn cb, void* ctx,
                                              picoquic_free_verify_certificate_ctx free_fn) {
+    picoquic_dispose_verify_certificate_callback(quic, quic->verify_certificate_callback_fn != NULL);
+
     quic->verify_certificate_callback_fn = cb;
     quic->free_verify_certificate_callback_fn = free_fn;
     quic->verify_certificate_ctx = ctx;

@@ -308,7 +308,14 @@ static void first_server_callback(picoquic_cnx_t* cnx,
                 stream_id);
         }
         return;
-    } else {
+    } else if (fin_or_event == picoquic_callback_stream_gap) {
+        /* We do not support this, yet */
+        stream_ctx->status = picoquic_first_server_stream_status_finished;
+        picoquic_reset_stream(cnx, stream_id, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION);
+        printf("%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
+        printf("Server CB, Stream: %" PRIu64 ", RESET, stream gaps not supported\n", stream_id);
+        return;
+    } else if (fin_or_event == picoquic_callback_no_event || fin_or_event == picoquic_callback_stream_fin) {
         int crlf_present = 0;
 
         if (length > 0) {
@@ -357,6 +364,13 @@ static void first_server_callback(picoquic_cnx_t* cnx,
                 stream_id, strip_endofline(buf, sizeof(buf), (char*)&stream_ctx->command));
             fflush(stdout);
         }
+    } else {
+        /* Unknown event */
+        stream_ctx->status = picoquic_first_server_stream_status_finished;
+        picoquic_reset_stream(cnx, stream_id, PICOQUIC_TRANSPORT_INTERNAL_ERROR);
+        printf("%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
+        printf("Server CB, Stream: %" PRIu64 ", unexpected event\n", stream_id);
+        return;
     }
 
     /* that's it */
@@ -760,7 +774,11 @@ static void first_client_callback(picoquic_cnx_t* cnx,
             stream_ctx->stream_id,
             strip_endofline(buf, sizeof(buf), (char*)&stream_ctx->command));
         return;
-    } else {
+    } else if (fin_or_event == picoquic_callback_stream_gap) {
+        /* We do not support this, yet */
+        picoquic_reset_stream(cnx, stream_id, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION);
+        return;
+    } else if (fin_or_event == picoquic_callback_no_event || fin_or_event == picoquic_callback_stream_fin) {
         if (length > 0) {
             (void)fwrite(bytes, 1, length, stream_ctx->F);
             stream_ctx->received_length += length;

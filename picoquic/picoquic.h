@@ -209,8 +209,8 @@ typedef enum {
     picoquic_callback_stop_sending,
     picoquic_callback_close,
     picoquic_callback_application_close,
-    picoquic_callback_crypto_close,
-    picoquic_callback_challenge_response
+    picoquic_callback_challenge_response,
+    picoquic_callback_stream_gap  /* bytes=NULL, len = length-of-gap or 0 (if unknown) */
 } picoquic_call_back_event_t;
 
 #define PICOQUIC_STREAM_ID_TYPE_MASK 3
@@ -305,6 +305,12 @@ void picoquic_set_cookie_mode(picoquic_quic_t* quic, int cookie_mode);
 
 /* Set the TLS certificate chain(DER format) for the QUIC context. The context will take ownership over the certs pointer. */
 void picoquic_set_tls_certificate_chain(picoquic_quic_t* quic, ptls_iovec_t* certs, size_t count);
+
+/* Set the TLS root certificates (DER format) for the QUIC context. The context will take ownership over the certs pointer.
+ * The root certificates will be used to verify the certificate chain of the server and client (with client authentication activated).
+ * Returns `0` on success, `-1` on error while loading X509 certificate or `-2` on error while adding a cert to the certificate store.
+ */
+int picoquic_set_tls_root_certificates(picoquic_quic_t* quic, ptls_iovec_t* certs, size_t count);
 
 /* Set the TLS private key(DER format) for the QUIC context. The caller is responsible for cleaning up the pointer. */
 int picoquic_set_tls_key(picoquic_quic_t* quic, const uint8_t* data, size_t len);

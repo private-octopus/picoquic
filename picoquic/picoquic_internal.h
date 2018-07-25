@@ -267,8 +267,8 @@ typedef struct st_picoquic_sack_item_t {
 
 typedef struct _picoquic_stream_data {
     struct _picoquic_stream_data* next_stream_data;
-    uint64_t offset;
-    size_t length;
+    uint64_t offset;  /* Stream offset of the first octet in "bytes" */
+    size_t length;    /* Number of octets in "bytes" */
     uint8_t* bytes;
 } picoquic_stream_data;
 

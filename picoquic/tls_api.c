@@ -556,16 +556,28 @@ int picoquic_enable_custom_verify_certificate_callback(picoquic_quic_t* quic) {
     if (verifier == NULL) {
         return PICOQUIC_ERROR_MEMORY;
     } else {
-        if (ctx->verify_certificate) {
-            free(ctx->verify_certificate);
-        }
-
         verifier->quic = quic;
         verifier->cb.cb = verify_certificate_callback;
         ctx->verify_certificate = &verifier->cb;
 
         return 0;
     }
+}
+
+void picoquic_dispose_verify_certificate_callback(picoquic_quic_t* quic, int custom) {
+    ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
+
+    if (ctx->verify_certificate == NULL) {
+        return;
+    }
+
+    if (custom == 1) {
+        free(ctx->verify_certificate);
+    } else {
+        ptls_openssl_dispose_verify_certificate((ptls_openssl_verify_certificate_t*)ctx->verify_certificate);
+    }
+
+    ctx->verify_certificate = NULL;
 }
 
 /* set key from secret: this is used to create AEAD contexts and PN encoding contexts
@@ -874,7 +886,7 @@ int picoquic_master_tlscontext(picoquic_quic_t* quic,
             ctx->verify_certificate = NULL;
         } else {
             X509_STORE *store = NULL;
-            
+
             if (cert_root_file_name != NULL)
             {
                 store = X509_STORE_new();
@@ -891,6 +903,14 @@ int picoquic_master_tlscontext(picoquic_quic_t* quic,
 
             ptls_openssl_init_verify_certificate(verifier, store);
             ctx->verify_certificate = &verifier->super;
+
+            // If we created an instance of the store, release our reference after giving it to the verify_certificate callback.
+            // The callback internally increased the reference counter by one.
+            if (store != NULL) {
+#if OPENSSL_VERSION_NUMBER > 0x10100000L
+                X509_STORE_free(store);
+#endif
+            }
         }
 
         if (quic->ticket_file_name != NULL) {
@@ -940,12 +960,11 @@ void picoquic_master_tlscontext_free(picoquic_quic_t* quic)
 
         if (ctx->sign_certificate != NULL) {
             ptls_openssl_dispose_sign_certificate((ptls_openssl_sign_certificate_t*)ctx->sign_certificate);
+            free((ptls_openssl_sign_certificate_t*)ctx->sign_certificate);
+            ctx->sign_certificate = NULL;
         }
 
-        if (ctx->verify_certificate != NULL) {
-            free(ctx->verify_certificate);
-            ctx->verify_certificate = NULL;
-        }
+        picoquic_dispose_verify_certificate_callback(quic, 0);
 
         if (ctx->on_client_hello != NULL) {
             free(ctx->on_client_hello);
@@ -953,6 +972,10 @@ void picoquic_master_tlscontext_free(picoquic_quic_t* quic)
 
         if (ctx->encrypt_ticket != NULL) {
             free(ctx->encrypt_ticket);
+        }
+
+        if (ctx->update_traffic_key != NULL) {
+            free(ctx->update_traffic_key);
         }
     }
 }
@@ -1745,6 +1768,29 @@ void picoquic_set_tls_certificate_chain(picoquic_quic_t* quic, ptls_iovec_t* cer
 
     ctx->certificates.list = certs;
     ctx->certificates.count = count;
+}
+
+int picoquic_set_tls_root_certificates(picoquic_quic_t* quic, ptls_iovec_t* certs, size_t count)
+{
+    ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
+    ptls_openssl_verify_certificate_t* verify_ctx = (ptls_openssl_verify_certificate_t*)ctx->verify_certificate;
+
+    for (int i = 0; i < count; ++i) {
+        X509* cert = d2i_X509(NULL, (const uint8_t**)&certs[i].base, certs[i].len);
+
+        if (cert == NULL) {
+            return -1;
+        }
+
+        if (X509_STORE_add_cert(verify_ctx->cert_store, cert) == 0) {
+            X509_free(cert);
+            return -2;
+        }
+
+        X509_free(cert);
+    }
+
+    return 0;
 }
 
 int picoquic_set_tls_key(picoquic_quic_t* quic, const uint8_t* data, size_t len)

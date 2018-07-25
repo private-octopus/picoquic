@@ -1,4 +1,4 @@
-    Padding, 3 bytes
+    padding, 3 bytes
     RESET STREAM 17, Error 0x00000001, Offset 0x1.
     CONNECTION CLOSE, Error 0xcfff, Reason length 9
     APPLICATION CLOSE, Error 0x0000, Reason length 0 (0x0000):
