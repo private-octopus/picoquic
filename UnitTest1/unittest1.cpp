@@ -471,6 +471,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(draft13_vector)
+        {
+            int ret = draft13_vector_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+        
         TEST_METHOD(test_transport_param_log)
         {
             int ret = transport_param_log_test();
