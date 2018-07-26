@@ -721,11 +721,8 @@ static uint8_t draft13_test_input_packet[] = {
 
 static uint32_t draft13_test_vn = 0xff00000d;
 
-static uint8_t draft13_test_cid[] = {
-    0x06, 0xb8, 0x58, 0xec, 0x6f, 0x80, 0x45, 0x2b
-};
-
-static picoquic_connection_id_t draft13_test_cnx_id = { { 0x06, 0xb8, 0x58, 0xec, 0x6f, 0x80, 0x45, 0x2b }, 8 };
+static picoquic_connection_id_t draft13_test_cnx_id = { 
+    { 0x06, 0xb8, 0x58, 0xec, 0x6f, 0x80, 0x45, 0x2b }, 8 };
 
 static uint8_t draft13_test_salt[] = {
     0x9c, 0x10, 0x8f, 0x98, 0x52, 0x0a, 0x5c, 0x5c, 0x32, 0x96,
@@ -776,20 +773,7 @@ static uint8_t draft13_test_client_pn[] = {
     0xc1, 0xf1, 0x54, 0x78, 0xdc, 0xf4
 };
 
-static int draft13_test_pne_sample_offset = 21;
-
-static uint8_t draft13_test_pne_sample[] = {
-    0xc2, 0x97, 0x3f, 0xa0, 0xd6, 0x3f, 0xd9, 0xb0, 0x3a, 0x4e,
-    0x16, 0x3b, 0x99, 0x0d, 0xd7, 0x78
-};
-
-static uint8_t draft13_test_decoded_pn_block[] = {
-    0xc0, 0x00, 0x00, 0x00
-};
-
 static uint64_t draft13_test_decoded_pn = 0;
-
-static int draft13_test_decoded_pn_length = 4;
 
 static int draft13_label_expansion_test(ptls_cipher_suite_t * cipher, char const * label, uint8_t * secret, size_t secret_length, uint8_t const * key_ref, size_t key_ref_len)
 {
@@ -829,7 +813,6 @@ static int draft31_incoming_initial_test()
         uint64_t current_time = 0;
         uint32_t consumed = 0;
         struct sockaddr_in test_addr_c;
-        picoquic_cnx_t* cnx_client = NULL;
 
         memset(&test_addr_c, 0, sizeof(struct sockaddr_in));
         test_addr_c.sin_family = AF_INET;
