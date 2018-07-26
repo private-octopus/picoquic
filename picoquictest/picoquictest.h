@@ -118,6 +118,7 @@ int parse_frame_test();
 int stress_test();
 int splay_test();
 int TlsStreamFrameTest();
+int draft13_vector_test();
 
 #ifdef __cplusplus
 }

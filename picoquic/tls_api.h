@@ -23,6 +23,18 @@
 #define TLS_API_H
 #include "picoquic_internal.h"
 
+#define PICOQUIC_LABEL_HANDSHAKE_CLIENT "QUIC client hs"
+#define PICOQUIC_LABEL_HANDSHAKE_SERVER "QUIC server hs"
+
+#define PICOQUIC_LABEL_INITIAL_CLIENT "client in"
+#define PICOQUIC_LABEL_INITIAL_SERVER "server in"
+
+#define PICOQUIC_LABEL_KEY "key"
+#define PICOQUIC_LABEL_IV "iv"
+#define PICOQUIC_LABEL_PN "pn"
+
+#define PICOQUIC_LABEL_QUIC_BASE "quic "
+
 int picoquic_master_tlscontext(picoquic_quic_t* quic, char const* cert_file_name, char const* key_file_name,
     char const * cert_root_file_name, const uint8_t* ticket_key, size_t ticket_key_length);
 
@@ -61,6 +73,20 @@ void picoquic_aead_free(void* aead_context);
 void picoquic_pn_encrypt(void *pn_enc, const void * iv, void *output, const void *input, size_t len);
 
 void picoquic_pn_enc_free(void * pn_enc);
+
+typedef const struct st_ptls_cipher_suite_t ptls_cipher_suite_t;
+
+int picoquic_setup_initial_master_secret(
+    ptls_cipher_suite_t * cipher,
+    ptls_iovec_t salt,
+    picoquic_connection_id_t initial_cnxid,
+    uint8_t * master_secret);
+
+int picoquic_setup_initial_secrets(
+    ptls_cipher_suite_t * cipher,
+    uint8_t * master_secret,
+    uint8_t * client_secret,
+    uint8_t * server_secret);
 
 int picoquic_setup_initial_traffic_keys(picoquic_cnx_t* cnx);
 
