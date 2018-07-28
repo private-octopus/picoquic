@@ -417,6 +417,13 @@ uint32_t picoquic_protect_packet(picoquic_cnx_t* cnx,
             send_buffer + /* pn_offset */ pn_offset, pn_length);
     }
 
+    /* if needed, log the segment */
+    if (cnx->quic->F_log != NULL) {
+        picoquic_log_outgoing_segment(cnx->quic->F_log, 1, cnx,
+            bytes, sequence_number, length, header_length,
+            send_buffer, send_length);
+    }
+
     return send_length;
 }
 
@@ -495,7 +502,6 @@ void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet *
         cnx->pkt_ctx[packet->pc].send_sequence++;
 
         switch (packet->ptype) {
-
         case picoquic_packet_version_negotiation:
             /* Packet is not encrypted */
             break;

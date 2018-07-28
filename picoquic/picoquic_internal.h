@@ -171,6 +171,7 @@ void picoquic_free_tickets(picoquic_stored_ticket_t** pp_first_ticket);
 	 * open sockets, etc.
 	 */
 typedef struct st_picoquic_quic_t {
+    void * F_log;
     void* tls_master_ctx;
     picoquic_stream_data_cb_fn default_callback_fn;
     void* default_callback_ctx;
@@ -377,7 +378,6 @@ typedef struct st_picoquic_path_t {
 typedef struct st_picoquic_crypto_context_t {
     void* aead_encrypt;
     void* aead_decrypt;
-    void* aead_de_encrypt; /* used by logging functions to see what is sent. */
     void* pn_enc; /* Used for PN encryption */
     void* pn_dec; /* Used for PN decryption */
 } picoquic_crypto_context_t;
@@ -690,8 +690,34 @@ int picoquic_parse_header_and_decrypt(
     uint64_t current_time,
     picoquic_packet_header* ph,
     picoquic_cnx_t** pcnx,
-    uint32_t * consumed,
-    int receiving);
+    uint32_t * consumed);
+
+/* Handling of packet logging */
+void picoquic_log_decrypted_segment(void* F_log, int log_cnxid, picoquic_cnx_t* cnx,
+    int receiving, picoquic_packet_header * ph, uint8_t* bytes, size_t length, int ret);
+
+void picoquic_log_outgoing_segment(void* F_log, int log_cnxid, picoquic_cnx_t* cnx,
+    uint8_t * bytes,
+    uint64_t sequence_number,
+    uint32_t length, uint32_t header_length,
+    uint8_t* send_buffer, uint32_t send_length);
+
+void picoquic_log_packet_address(FILE* F, uint64_t log_cnxid64, picoquic_cnx_t* cnx,
+    struct sockaddr* addr_peer, int receiving, size_t length, uint64_t current_time);
+
+void picoquic_log_transport_extension(FILE* F, picoquic_cnx_t* cnx, int log_cnxid);
+
+void picoquic_log_error_packet(FILE* F, uint8_t* bytes, size_t bytes_max, int ret);
+void picoquic_log_processing(FILE* F, picoquic_cnx_t* cnx, size_t length, int ret);
+void picoquic_log_transport_extension(FILE* F, picoquic_cnx_t* cnx, int log_cnxid);
+void picoquic_log_congestion_state(FILE* F, picoquic_cnx_t* cnx, uint64_t current_time);
+void picoquic_log_picotls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
+    uint8_t* ticket, uint16_t ticket_length);
+const char * picoquic_log_fin_or_event_name(picoquic_call_back_event_t ev);
+void picoquic_log_time(FILE* F, picoquic_cnx_t* cnx, uint64_t current_time,
+    const char* label1, const char* label2);
+
+#define PICOQUIC_SET_LOG(quic, F) (quic)->F_log = (void*)(F)
 
 /* handling of ACK logic */
 int picoquic_is_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, picoquic_packet_context_enum pc);

@@ -423,7 +423,7 @@ int test_packet_decrypt_one(
         send_buffer, send_length, packet_length,
         addr_from,
         current_time, &received_ph, &server_cnx,
-        &consumed, 1);
+        &consumed);
 
     /* verify that decryption matches original value */
     if (decoding_return != expected_return) {

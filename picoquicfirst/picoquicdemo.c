@@ -107,27 +107,12 @@ static const char* ticket_store_filename = "demo_ticket_store.bin";
 
 static const char* bad_request_message = "<html><head><title>Bad Request</title></head><body>Bad request. Why don't you try \"GET /doc-456789.html\"?</body></html>";
 
-
 #include "../picoquic/picoquic.h"
 #include "../picoquic/picoquic_internal.h"
 #include "../picoquic/picosocks.h"
 #include "../picoquic/util.h"
 
 int picoquic_does_ticket_allow_early_data(uint8_t* ticket, uint16_t ticket_length);
-
-void picoquic_log_error_packet(FILE* F, uint8_t* bytes, size_t bytes_max, int ret);
-
-void picoquic_log_packet(FILE* F, int log_cnxid, picoquic_quic_t* quic, picoquic_cnx_t* cnx,
-    struct sockaddr* addr_peer, int receiving,
-    uint8_t* bytes, size_t length, uint64_t current_time);
-void picoquic_log_processing(FILE* F, picoquic_cnx_t* cnx, size_t length, int ret);
-void picoquic_log_transport_extension(FILE* F, picoquic_cnx_t* cnx, int log_cnxid);
-void picoquic_log_congestion_state(FILE* F, picoquic_cnx_t* cnx, uint64_t current_time);
-void picoquic_log_picotls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
-    uint8_t* ticket, uint16_t ticket_length);
-const char * picoquic_log_fin_or_event_name(picoquic_call_back_event_t ev);
-void picoquic_log_time(FILE* F, picoquic_cnx_t* cnx, uint64_t current_time,
-    const char* label1, const char* label2);
 
 void print_address(struct sockaddr* address, char* label, picoquic_connection_id_t cnx_id)
 {
@@ -421,6 +406,9 @@ int quic_server(const char* server_name, int server_port,
             }
             qserver->mtu_max = mtu_max;
         }
+
+        /* TODO: add log level, to reduce size in "normal" cases */
+        PICOQUIC_SET_LOG(qserver, stdout);
     }
 
     /* Wait for packets */
@@ -456,18 +444,6 @@ int quic_server(const char* server_name, int server_port,
             ret = -1;
         } else {
             if (bytes_recv > 0) {
-                if (cnx_server != NULL && (just_once != 0 || 
-                    cnx_server->cnx_state < picoquic_state_client_ready ||
-                    cnx_server->cnx_state >= picoquic_state_disconnecting)) {
-                    picoquic_log_packet(stdout, 1, qserver, cnx_server, (struct sockaddr*)&addr_from,
-                        1, buffer, bytes_recv, current_time);
-                }
-                else if (cnx_server == NULL) {
-                    /* Packet arrives out of connection context, should be logged */
-                    picoquic_log_packet(stdout, 1, qserver, NULL, (struct sockaddr*)&addr_from,
-                        1, buffer, bytes_recv, current_time);
-                }
-
                 /* Submit the packet to the server */
                 ret = picoquic_incoming_packet(qserver, buffer,
                     (size_t)bytes_recv, (struct sockaddr*)&addr_from,
@@ -504,8 +480,8 @@ int quic_server(const char* server_name, int server_port,
                         sp->if_index_local,
                         (const char*)sp->bytes, (int)sp->length);
 
-                    picoquic_log_packet(stdout, 1, qserver, NULL, (struct sockaddr*)&addr_to,
-                        0, sp->bytes, (int)sp->length, current_time);
+                    /* TODO: log stateless packet */
+
                     fflush(stdout);
 
                     picoquic_delete_stateless_packet(sp);
@@ -556,12 +532,7 @@ int quic_server(const char* server_name, int server_port,
                                 picoquic_get_local_if_index(cnx_next),
                                 (const char*)send_buffer, (int)send_length);
 
-                            if (cnx_server != NULL && (just_once != 0 ||
-                                cnx_next->cnx_state < picoquic_state_client_ready ||
-                                cnx_next->cnx_state >= picoquic_state_disconnecting) && cnx_next == cnx_server) {
-                                picoquic_log_packet(stdout, 1, qserver, cnx_server, (struct sockaddr*)peer_addr,
-                                    0, send_buffer, send_length, current_time);
-                            }
+                            /* TODO: log sending packet. */
                         }
                     } else {
                         break;
@@ -882,6 +853,7 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
             }
             qclient->mtu_max = mtu_max;
         }
+        PICOQUIC_SET_LOG(qclient, F_log);
     }
 
     /* Create the client connection */
@@ -932,14 +904,17 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
                     bytes_sent = sendto(fd, send_buffer, (int)send_length, 0,
                         (struct sockaddr*)&server_address, server_addr_length);
 
-                    if (bytes_sent > 0)
-                    {
-                        picoquic_log_packet(F_log, 0, qclient, cnx_client, (struct sockaddr*)&server_address,
-                            0, send_buffer, bytes_sent, current_time);
-                    }
-                    else {
-                        fprintf(F_log, "Cannot send first packet to server, returns %d\n", bytes_sent);
-                        ret = -1;
+                    if (F_log != NULL) {
+                        if (bytes_sent > 0)
+                        {
+                            picoquic_log_packet_address(F_log, 
+                                picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx_client)),
+                                cnx_client, (struct sockaddr*)&server_address, 0, bytes_sent, current_time);
+                        }
+                        else {
+                            fprintf(F_log, "Cannot send first packet to server, returns %d\n", bytes_sent);
+                            ret = -1;
+                        }
                     }
                 }
             }
@@ -965,10 +940,11 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
         if (bytes_recv != 0) {
             fprintf(F_log, "Select returns %d, from length %d\n", bytes_recv, from_length);
 
-            if (bytes_recv > 0)
+            if (bytes_recv > 0 && F_log != NULL)
             {
-                picoquic_log_packet(F_log, 0, qclient, cnx_client, (struct sockaddr*)&packet_from,
-                    1, buffer, bytes_recv, current_time);
+                picoquic_log_packet_address(F_log,
+                    picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx_client)),
+                    cnx_client, (struct sockaddr*)&server_address, 1, bytes_recv, current_time);
             }
         }
 
@@ -1071,9 +1047,10 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
                     if (ret == 0 && send_length > 0) {
                         bytes_sent = sendto(fd, send_buffer, (int)send_length, 0,
                             (struct sockaddr*)&server_address, server_addr_length);
-                        picoquic_log_packet(F_log, 0, qclient, cnx_client, (struct sockaddr*)&server_address,
-                            0, send_buffer, send_length, current_time);
 
+                        picoquic_log_packet_address(F_log,
+                            picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx_client)),
+                            cnx_client, (struct sockaddr*)&server_address, 0, bytes_sent, current_time);
                     }
                 }
 

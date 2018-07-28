@@ -821,7 +821,7 @@ static int draft31_incoming_initial_test()
 
         /* Parse the header and decrypt the packet */
         ret = picoquic_parse_header_and_decrypt(qserver, draft13_test_input_packet, length, length,
-            (struct sockaddr *)&test_addr_c, current_time, &ph, &cnx, &consumed, 1);
+            (struct sockaddr *)&test_addr_c, current_time, &ph, &cnx, &consumed);
 
         if (ret != 0) {
             DBG_PRINTF("Cannot parse or decrypt incoming packet, ret = %x\n", ret);
