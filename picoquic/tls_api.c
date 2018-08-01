@@ -616,9 +616,7 @@ static int picoquic_set_key_from_secret(picoquic_cnx_t* cnx, ptls_cipher_suite_t
 
     if (is_enc != 0) {
         ret = picoquic_set_aead_from_secret(&ctx->aead_encrypt, cipher, is_enc, secret);
-        if (ret == 0) {
-            ret = picoquic_set_aead_from_secret(&ctx->aead_de_encrypt, cipher, 0, secret);
-        }
+        
         if (ret == 0) {
             ret = picoquic_set_pn_enc_from_secret(&ctx->pn_enc, cipher, is_enc, secret);
         }
@@ -783,11 +781,6 @@ void picoquic_crypto_context_free(picoquic_crypto_context_t * ctx)
     if (ctx->aead_decrypt != NULL) {
         ptls_aead_free((ptls_aead_context_t *)ctx->aead_decrypt);
         ctx->aead_decrypt = NULL;
-    }
-
-    if (ctx->aead_de_encrypt != NULL) {
-        ptls_aead_free((ptls_aead_context_t *)ctx->aead_de_encrypt);
-        ctx->aead_de_encrypt = NULL;
     }
 
     if (ctx->pn_enc != NULL) {
