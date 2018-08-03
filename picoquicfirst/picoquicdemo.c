@@ -852,8 +852,19 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
                 qclient->flags |= picoquic_context_client_zero_share;
             }
             qclient->mtu_max = mtu_max;
+
+            PICOQUIC_SET_LOG(qclient, F_log);
+
+            if (sni == NULL) {
+                /* Standard verifier would crash */
+                fprintf(stdout, "No server name specified, certificate will not be verified.\n");
+                if (F_log != stdout && F_log != stderr)
+                {
+                    fprintf(F_log, "No server name specified, certificate will not be verified.\n");
+                }
+                picoquic_dispose_verify_certificate_callback(qclient, 1);
+            }
         }
-        PICOQUIC_SET_LOG(qclient, F_log);
     }
 
     /* Create the client connection */
