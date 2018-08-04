@@ -709,13 +709,10 @@ picoquic_stream_head* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
 
     if (cnx->maxdata_remote > cnx->data_sent) {
         while (stream) {
-            if ((stream->stream_flags & picoquic_stream_flag_reset_sent) == 0 && ((stream->send_queue != NULL &&
-                stream->send_queue->length > stream->send_queue->offset &&
-                stream->sent_offset < stream->maxdata_remote) ||
-                ((stream->stream_flags & picoquic_stream_flag_fin_notified) != 0 &&
-                (stream->stream_flags & picoquic_stream_flag_fin_sent) == 0 &&
-                    (stream->sent_offset < stream->maxdata_remote)) ||
-                    (stream->stream_flags & picoquic_stream_flag_reset_requested) != 0 || ((stream->stream_flags & picoquic_stream_flag_stop_sending_requested) != 0 && (stream->stream_flags & picoquic_stream_flag_stop_sending_sent) == 0))) {
+            if ((stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset &&
+                  stream->sent_offset < stream->maxdata_remote) ||
+                 (STREAM_SEND_FIN(stream) && (stream->sent_offset < stream->maxdata_remote)) ||
+                STREAM_SEND_RESET(stream) || STREAM_SEND_STOP_SENDING(stream)) {
                 /* if the stream is not active yet, verify that it fits under
                  * the max stream id limit */
                  /* Check parity */
@@ -733,7 +730,11 @@ picoquic_stream_head* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
 
         } ;
     } else {
-        if ((stream->send_queue == NULL || stream->send_queue->length <= stream->send_queue->offset) && ((stream->stream_flags & picoquic_stream_flag_fin_notified) == 0 || (stream->stream_flags & picoquic_stream_flag_fin_sent) != 0) && ((stream->stream_flags & picoquic_stream_flag_reset_requested) == 0 || (stream->stream_flags & picoquic_stream_flag_reset_sent) != 0) && ((stream->stream_flags & picoquic_stream_flag_stop_sending_requested) == 0 || (stream->stream_flags & picoquic_stream_flag_stop_sending_sent) != 0)) {
+        if ((stream->send_queue == NULL ||
+             stream->send_queue->length <= stream->send_queue->offset) &&
+            (!STREAM_FIN_NOTIFIED(stream) || STREAM_FIN_SENT(stream)) &&
+            (!STREAM_RESET_REQUESTED(stream) || STREAM_RESET_SENT(stream)) &&
+            (!STREAM_STOP_SENDING_REQUESTED(stream) || STREAM_STOP_SENDING_SENT(stream))) {
             stream = NULL;
         }
     }
@@ -746,15 +747,16 @@ int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head* str
 {
     int ret = 0;
 
-    if ((stream->stream_flags & picoquic_stream_flag_reset_requested) != 0) {
+    if (STREAM_SEND_RESET(stream)) {
         return picoquic_prepare_stream_reset_frame(stream, bytes, bytes_max, consumed);
     }
 
-    if ((stream->stream_flags & picoquic_stream_flag_stop_sending_requested) != 0 && (stream->stream_flags & picoquic_stream_flag_stop_sending_sent) == 0) {
+    if (STREAM_SEND_STOP_SENDING(stream)) {
         return picoquic_prepare_stop_sending_frame(stream, bytes, bytes_max, consumed);
     }
 
-    if ((stream->send_queue == NULL || stream->send_queue->length <= stream->send_queue->offset) && ((stream->stream_flags & picoquic_stream_flag_fin_notified) == 0 || (stream->stream_flags & picoquic_stream_flag_fin_sent) != 0)) {
+    if ((stream->send_queue == NULL || stream->send_queue->length <= stream->send_queue->offset) &&
+        (!STREAM_FIN_NOTIFIED(stream) || STREAM_FIN_SENT(stream))) {
         *consumed = 0;
     } else {
         size_t byte_index = 0;
@@ -847,7 +849,7 @@ int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head* str
                 *consumed = byte_index;
             }
 
-            if (ret == 0 && (stream->stream_flags & picoquic_stream_flag_fin_notified) != 0 && stream->send_queue == 0) {
+            if (ret == 0 && STREAM_FIN_NOTIFIED(stream) && stream->send_queue == 0) {
                 /* Set the fin bit */
                 stream->stream_flags |= picoquic_stream_flag_fin_sent;
                 bytes[0] |= 1;

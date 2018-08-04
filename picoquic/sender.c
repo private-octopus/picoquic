@@ -59,7 +59,7 @@ int picoquic_add_to_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
         /* Check parity */
         if (IS_CLIENT_STREAM_ID(stream_id) != cnx->client_mode) {
             ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
-        } 
+        }
 
         if (ret == 0) {
             stream = picoquic_create_stream(cnx, stream_id);
@@ -82,6 +82,11 @@ int picoquic_add_to_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
         } else {
             stream->stream_flags |= picoquic_stream_flag_fin_notified;
         }
+    }
+
+    /* If our side has sent RST_STREAM or received STOP_SENDING, we should not send anymore data. */
+    if (STREAM_RESET_SENT(stream) || STREAM_STOP_SENDING_RECEIVED(stream)) {
+        ret = -1;
     }
 
     if (ret == 0 && length > 0) {
