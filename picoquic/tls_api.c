@@ -1157,30 +1157,6 @@ int picoquic_does_tls_ticket_allow_early_data(uint8_t* ticket, uint16_t ticket_l
     return ret;
 }
 
-int picoquic_does_ticket_allow_early_data(uint8_t* ticket, uint16_t ticket_length)
-{
-    uint32_t tls_ticket_length = 0;
-    uint8_t* tls_ticket_ptr = NULL;
-    uint16_t byte_index = 0;
-    uint32_t min_length = 8 + 2 + 3 + 2;
-    int ret = 0;
-
-    if (ticket_length > min_length) {
-        byte_index += 8; /* skip ticket time */
-        byte_index += 2; /* skip kx_id */
-        byte_index += 2; /* skip suite ID */
-        tls_ticket_length = PICOPARSE_24(ticket + byte_index);
-        byte_index += 3;
-        min_length += tls_ticket_length;
-        if (ticket_length >= min_length) {
-            tls_ticket_ptr = &ticket[byte_index];
-            ret = picoquic_does_tls_ticket_allow_early_data(tls_ticket_ptr, (uint16_t) tls_ticket_length);
-        }
-    }
-
-    return ret;
-}
-
 /*
 * Creation of a TLS context.
 * This includes setting the handshake properties that will later be
