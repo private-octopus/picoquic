@@ -496,6 +496,7 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
         }
 #endif
 
+#if defined(IP_PMTUDISC_PROBE) || defined(IP_DONTFRAG)
         if (addr_from->sa_family == AF_INET && length > PICOQUIC_INITIAL_MTU_IPV4) {
 #ifdef CMSG_ALIGN
             struct cmsghdr * cmsg_2 = (struct cmsghdr *)((unsigned char *)cmsg + CMSG_ALIGN(cmsg->cmsg_len));
@@ -507,14 +508,22 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
             }
             else {
 #endif
+#ifdef IP_DONTFRAG
+                int val = 1;
+                cmsg_2->cmsg_level = IPPROTO_IP;
+                cmsg_2->cmsg_type = IP_DONTFRAG;
+#else
                 int val = IP_PMTUDISC_PROBE;
                 cmsg_2->cmsg_level = IPPROTO_IP;
                 cmsg_2->cmsg_type = IP_MTU_DISCOVER;
+#endif
                 cmsg_2->cmsg_len = CMSG_LEN(sizeof(int));
                 memcpy(CMSG_DATA(cmsg_2), &val, sizeof(int));
                 control_length += CMSG_SPACE(sizeof(int));
             }
         }
+#endif
+
     }
 
     msg.msg_controllen = control_length;
