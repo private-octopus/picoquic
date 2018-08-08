@@ -507,9 +507,9 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
             }
             else {
 #endif
-                int val = 1;
+                int val = IP_PMTUDISC_PROBE;
                 cmsg_2->cmsg_level = IPPROTO_IP;
-                cmsg_2->cmsg_type = IP_DONTFRAGMENT;
+                cmsg_2->cmsg_type = IP_MTU_DISCOVER;
                 cmsg_2->cmsg_len = CMSG_LEN(sizeof(int));
                 memcpy(CMSG_DATA(cmsg_2), &val, sizeof(int));
                 control_length += CMSG_SPACE(sizeof(int));
