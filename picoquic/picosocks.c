@@ -382,6 +382,20 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
                     control_length += WSA_CMSG_SPACE(sizeof(int));
                 }
             }
+            else if (length > PICOQUIC_INITIAL_MTU_IPV4) {
+                struct cmsghdr * cmsg_2 = WSA_CMSG_NXTHDR(&msg, cmsg);
+                if (cmsg_2 == NULL) {
+                    DBG_PRINTF("Cannot obtain second CMSG (control_length: %d)\n", control_length);
+                }
+                else {
+                    int val = 1;
+                    cmsg_2->cmsg_level = IPPROTO_IP;
+                    cmsg_2->cmsg_type = IP_DONTFRAGMENT;
+                    cmsg_2->cmsg_len = WSA_CMSG_LEN(sizeof(int));
+                    *((int *)WSA_CMSG_DATA(cmsg_2)) = val;
+                    control_length += WSA_CMSG_SPACE(sizeof(int));
+                }
+            }
         }
 
         msg.Control.len = control_length;
@@ -481,6 +495,26 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
             }
         }
 #endif
+
+        if (addr_from->sa_family == AF_INET && length > PICOQUIC_INITIAL_MTU_IPV4) {
+#ifdef CMSG_ALIGN
+            struct cmsghdr * cmsg_2 = (struct cmsghdr *)((unsigned char *)cmsg + CMSG_ALIGN(cmsg->cmsg_len));
+            {
+#else
+            struct cmsghdr * cmsg_2 = CMSG_NXTHDR((&msg), cmsg);
+            if (cmsg_2 == NULL) {
+                DBG_PRINTF("Cannot obtain second CMSG (control_length: %d)\n", control_length);
+            }
+            else {
+#endif
+                int val = 1;
+                cmsg_2->cmsg_level = IPPROTO_IP;
+                cmsg_2->cmsg_type = IP_DONTFRAGMENT;
+                cmsg_2->cmsg_len = CMSG_LEN(sizeof(int));
+                memcpy(CMSG_DATA(cmsg_2), &val, sizeof(int));
+                control_length += CMSG_SPACE(sizeof(int));
+            }
+        }
     }
 
     msg.msg_controllen = control_length;
