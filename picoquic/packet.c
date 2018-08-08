@@ -133,8 +133,8 @@ int picoquic_parse_packet_header(
                                 }
                                 else {
                                     ph->token_length = (uint32_t)tok_len;
-                                    ph->token_offset = ph->offset + l_tok_len;
-                                    ph->offset += l_tok_len + (size_t)tok_len;
+                                    ph->token_offset = ph->offset + (uint32_t)l_tok_len;
+                                    ph->offset += (uint32_t)(l_tok_len + (size_t)tok_len);
                                 }
 
                                 break;
@@ -764,7 +764,7 @@ void picoquic_queue_stateless_retry(picoquic_cnx_t* cnx,
             PICOQUIC_MAX_PACKET_SIZE - byte_index - checksum_length, cnx->initial_cnxid);
         byte_index += (uint32_t)data_bytes;
         memcpy(&bytes[byte_index], token, token_length);
-        byte_index += token_length;
+        byte_index += (uint32_t)token_length;
 
         sp->length = byte_index;
 
@@ -931,7 +931,7 @@ int picoquic_incoming_retry(
             free(cnx->retry_token);
         }
         cnx->retry_token = token;
-        cnx->retry_token_length = token_length;
+        cnx->retry_token_length = (uint32_t)token_length;
 
         picoquic_reset_cnx(cnx, current_time);
     }

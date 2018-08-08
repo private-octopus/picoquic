@@ -862,7 +862,7 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
                 {
                     fprintf(F_log, "No server name specified, certificate will not be verified.\n");
                 }
-                picoquic_dispose_verify_certificate_callback(qclient, 1);
+                picoquic_set_null_verifier(qclient);
             }
         }
     }

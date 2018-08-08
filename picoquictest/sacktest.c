@@ -139,6 +139,13 @@ int sacktest()
         }
     }
 
+    /* Reset the sack lists*/
+    while (cnx.pkt_ctx[pc].first_sack_item.next_sack != NULL) {
+        picoquic_sack_item_t * next = cnx.pkt_ctx[pc].first_sack_item.next_sack;
+        cnx.pkt_ctx[pc].first_sack_item.next_sack = next->next_sack;
+        free(next);
+    }
+
     return ret;
 }
 

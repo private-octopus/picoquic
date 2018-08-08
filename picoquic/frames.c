@@ -74,7 +74,7 @@ static uint8_t* picoquic_frames_fixed_skip(uint8_t* bytes, const uint8_t* bytes_
 
 static uint8_t* picoquic_frames_varint_skip(uint8_t* bytes, const uint8_t* bytes_max)
 {
-    return bytes < bytes_max ? picoquic_frames_fixed_skip(bytes, bytes_max, VARINT_LEN(bytes)) : NULL;
+    return bytes < bytes_max ? picoquic_frames_fixed_skip(bytes, bytes_max, (uint64_t)VARINT_LEN(bytes)) : NULL;
 }
 
 
@@ -900,7 +900,7 @@ uint8_t* picoquic_decode_crypto_hs_frame(picoquic_cnx_t* cnx, uint8_t* bytes, co
     {
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR);
 
-    } else if (bytes_max - bytes < data_length) {
+    } else if ((uint64_t)(bytes_max - bytes) < data_length) {
         DBG_PRINTF("crypto hs data past the end of the packet: data_length=%" PRIst ", remaining_space=%" PRIst, data_length, bytes_max - bytes);
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR);
         bytes = NULL;
@@ -1039,7 +1039,7 @@ int picoquic_parse_ack_header(uint8_t const* bytes, size_t bytes_max,
 
     if (nb_ecnx3 != NULL) {
         for (int ecnx = 0; ecnx < 3; ecnx++) {
-            int l_ecnx = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &nb_ecnx3[ecnx]);
+            size_t l_ecnx = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &nb_ecnx3[ecnx]);
 
             if (l_ecnx == 0) {
                 byte_index = bytes_max;
@@ -1638,9 +1638,9 @@ int picoquic_prepare_ack_frame_maybe_ecn(picoquic_cnx_t* cnx, uint64_t current_t
         }
 
         if (is_ecn) {
-            int l_ect0 = 0;
-            int l_ect1 = 0;
-            int l_ce = 0;
+            size_t l_ect0 = 0;
+            size_t l_ect1 = 0;
+            size_t l_ce = 0;
 
             l_ect0 = picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index,
                 cnx->ecn_ect0_total_local);

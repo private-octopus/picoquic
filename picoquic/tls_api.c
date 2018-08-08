@@ -1788,7 +1788,7 @@ int picoquic_set_tls_root_certificates(picoquic_quic_t* quic, ptls_iovec_t* cert
     ptls_openssl_verify_certificate_t* verify_ctx = (ptls_openssl_verify_certificate_t*)ctx->verify_certificate;
 
     for (size_t i = 0; i < count; ++i) {
-        X509* cert = d2i_X509(NULL, (const uint8_t**)&certs[i].base, certs[i].len);
+        X509* cert = d2i_X509(NULL, (const uint8_t**)&certs[i].base, (long)certs[i].len);
 
         if (cert == NULL) {
             return -1;

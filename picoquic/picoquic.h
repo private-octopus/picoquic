@@ -312,6 +312,9 @@ void picoquic_set_tls_certificate_chain(picoquic_quic_t* quic, ptls_iovec_t* cer
  */
 int picoquic_set_tls_root_certificates(picoquic_quic_t* quic, ptls_iovec_t* certs, size_t count);
 
+/* Tell the TLS stack to not attempt verifying certificates */
+void picoquic_set_null_verifier(picoquic_quic_t* quic);
+
 /* Set the TLS private key(DER format) for the QUIC context. The caller is responsible for cleaning up the pointer. */
 int picoquic_set_tls_key(picoquic_quic_t* quic, const uint8_t* data, size_t len);
 

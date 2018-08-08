@@ -296,7 +296,7 @@ uint32_t picoquic_create_packet_header(
 
         /* Special case of packet initial -- encode token as part of header */
         if (packet_type == picoquic_packet_initial) {
-            length += picoquic_varint_encode(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, cnx->retry_token_length);
+            length += (uint32_t)picoquic_varint_encode(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, cnx->retry_token_length);
             if (cnx->retry_token_length > 0) {
                 memcpy(&bytes[length], cnx->retry_token, cnx->retry_token_length);
                 length += cnx->retry_token_length;
@@ -356,8 +356,8 @@ uint32_t picoquic_predict_packet_header_length(
         /* add length of tokens for initial packets */
         if (packet_type == picoquic_packet_initial) {
             uint8_t useless[16];
-            header_length += picoquic_varint_encode(useless, 16, cnx->retry_token_length);
-            header_length += cnx->retry_token_length;
+            header_length += (uint32_t)picoquic_varint_encode(useless, 16, cnx->retry_token_length);
+            header_length += (uint32_t)cnx->retry_token_length;
         }
     }
 
@@ -1290,7 +1290,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
     uint8_t* bytes = packet->bytes;
     uint32_t length = 0;
     int epoch = 0;
-    int next_offset = cnx->epoch_offsets[1];
+    size_t next_offset = cnx->epoch_offsets[1];
     picoquic_packet_context_enum pc = picoquic_packet_context_initial;
 
     send_buffer_max = (send_buffer_max > path_x->send_mtu) ? path_x->send_mtu : send_buffer_max;
@@ -1493,7 +1493,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
     uint32_t header_length = 0;
     uint8_t* bytes = packet->bytes;
     uint32_t length = 0;
-    int next_offset = cnx->epoch_offsets[1];
+    size_t next_offset = cnx->epoch_offsets[1];
 
     send_buffer_max = (send_buffer_max > path_x->send_mtu) ? path_x->send_mtu : send_buffer_max;
 
@@ -1854,7 +1854,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
     uint8_t* bytes = packet->bytes;
     uint32_t length = 0;
     uint32_t checksum_overhead = picoquic_get_checksum_length(cnx, is_cleartext_mode);
-    uint32_t send_buffer_min_max = (send_buffer_max > path_x->send_mtu) ? path_x->send_mtu : send_buffer_max;
+    uint32_t send_buffer_min_max = (send_buffer_max > path_x->send_mtu) ? path_x->send_mtu : (uint32_t)send_buffer_max;
 
 
     /* Verify first that there is no need for retransmit or ack
