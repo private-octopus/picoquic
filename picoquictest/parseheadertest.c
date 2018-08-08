@@ -420,7 +420,7 @@ int test_packet_decrypt_one(
 
     /* Decrypt the packet */
     decoding_return = picoquic_parse_header_and_decrypt(q_server,
-        send_buffer, send_length, packet_length,
+        send_buffer, (uint32_t)send_length, (uint32_t)packet_length,
         addr_from,
         current_time, &received_ph, &server_cnx,
         &consumed);

@@ -304,6 +304,10 @@ void picoquic_free(picoquic_quic_t* quic)
     }
 }
 
+void picoquic_set_null_verifier(picoquic_quic_t* quic) {
+    picoquic_dispose_verify_certificate_callback(quic, 1);
+}
+
 void picoquic_set_cookie_mode(picoquic_quic_t* quic, int cookie_mode)
 {
     if (cookie_mode) {
@@ -1187,12 +1191,12 @@ void picoquic_reset_packet_context(picoquic_cnx_t* cnx,
 
     pkt_ctx->retransmitted_oldest = NULL;
 
-#if 0
+#if 1
     /* BUG #225: this crashes in some tests not related to this PR. */
     /* Reset the sack lists*/
     while (pkt_ctx->first_sack_item.next_sack != NULL) {
         picoquic_sack_item_t * next = pkt_ctx->first_sack_item.next_sack;
-        cnx->pkt_ctx->first_sack_item.next_sack = next->next_sack;
+        pkt_ctx->first_sack_item.next_sack = next->next_sack;
         free(next);
     }
 #else
