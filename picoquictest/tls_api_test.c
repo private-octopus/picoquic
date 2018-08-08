@@ -2009,7 +2009,7 @@ int zero_rtt_loss_test()
 {
     int ret = 0;
 
-    for (unsigned int i = 0; ret == 0 && i < 16; i++) {
+    for (unsigned int i = 1; ret == 0 && i < 16; i++) {
         ret = zero_rtt_test_one(0, 0, i);
         if (ret != 0) {
             DBG_PRINTF("Zero RTT test fails when packet #%d is lost.\n", i);
