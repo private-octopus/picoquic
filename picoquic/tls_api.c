@@ -798,10 +798,7 @@ void picoquic_crypto_context_free(picoquic_crypto_context_t * ctx)
 
 ptls_key_exchange_algorithm_t *picoquic_key_exchanges[] = { &ptls_minicrypto_x25519, &ptls_openssl_secp256r1, NULL };
 ptls_cipher_suite_t *picoquic_cipher_suites[] = { 
-#if 0
-    /* Temporary disable pending fix of bug #243 */
-    &ptls_minicrypto_chacha20poly1305sha256, 
-#endif
+    &ptls_minicrypto_chacha20poly1305sha256,
     &ptls_openssl_aes256gcmsha384, &ptls_openssl_aes128gcmsha256, NULL };
 
 /*
