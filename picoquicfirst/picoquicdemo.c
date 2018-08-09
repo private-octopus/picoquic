@@ -112,8 +112,6 @@ static const char* bad_request_message = "<html><head><title>Bad Request</title>
 #include "../picoquic/picosocks.h"
 #include "../picoquic/util.h"
 
-int picoquic_does_ticket_allow_early_data(uint8_t* ticket, uint16_t ticket_length);
-
 void print_address(struct sockaddr* address, char* label, picoquic_connection_id_t cnx_id)
 {
     char hostname[256];

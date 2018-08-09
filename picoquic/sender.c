@@ -425,7 +425,7 @@ uint32_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     /* if needed, log the segment */
     if (cnx->quic->F_log != NULL) {
         picoquic_log_outgoing_segment(cnx->quic->F_log, 1, cnx,
-            bytes, sequence_number, length, header_length,
+            bytes, sequence_number, length,
             send_buffer, send_length);
     }
 

@@ -699,7 +699,7 @@ void picoquic_log_decrypted_segment(void* F_log, int log_cnxid, picoquic_cnx_t* 
 void picoquic_log_outgoing_segment(void* F_log, int log_cnxid, picoquic_cnx_t* cnx,
     uint8_t * bytes,
     uint64_t sequence_number,
-    uint32_t length, uint32_t header_length,
+    uint32_t length,
     uint8_t* send_buffer, uint32_t send_length);
 
 void picoquic_log_packet_address(FILE* F, uint64_t log_cnxid64, picoquic_cnx_t* cnx,

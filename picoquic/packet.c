@@ -394,63 +394,31 @@ size_t  picoquic_decrypt_packet(picoquic_cnx_t* cnx,
         }
         if (encrypted_length > 0)
         {
-            if (picoquic_supported_versions[ph->version_index].version_header_encoding == picoquic_version_header_11) {
-                /* Decode */
-                picoquic_pn_encrypt(pn_enc, bytes + sample_offset, decoded_pn_bytes, bytes + ph->pn_offset, encrypted_length);
-                /* Packet encoding is varint, specialized for sequence number */
-                switch (bytes[0] & 0x03) {
-                case 0x00:/* single byte encoding */
-                    ph->pn = decoded_pn_bytes[0];
-                    ph->pnmask = 0xFFFFFFFFFFFFFF00ull;
-                    ph->offset = ph->pn_offset + 1;
-                    ph->payload_length -= 1;
-                    break;
-                case 0x01: /* two byte encoding */
-                    ph->pn = PICOPARSE_16(decoded_pn_bytes);
-                    ph->pnmask = 0xFFFFFFFFFFFF0000ull;
-                    ph->offset = ph->pn_offset + 2;
-                    ph->payload_length -= 2;
-                    break;
-                case 0x02:
-                    ph->pn = PICOPARSE_32(decoded_pn_bytes);
-                    ph->pnmask = 0xFFFFFFFF00000000ull;
-                    ph->offset = ph->pn_offset + 4;
-                    ph->payload_length -= 4;
-                    break;
-                default:
-                    /* Invalid packet format. Avoid crash! */
-                    ph->pn = 0xFFFFFFFF;
-                    ph->pnmask = 0xFFFFFFFF00000000ull;
-                    ph->offset = ph->pn_offset;
-                    break;
-                }
+            /* Decode */
+            picoquic_pn_encrypt(pn_enc, bytes + sample_offset, decoded_pn_bytes, bytes + ph->pn_offset, encrypted_length);
+            /* Packet encoding is varint, specialized for sequence number */
+            switch (decoded_pn_bytes[0] & 0xC0) {
+            case 0x00:
+            case 0x40: /* single byte encoding */
+                ph->pn = decoded_pn_bytes[0] & 0x7F;
+                ph->pnmask = 0xFFFFFFFFFFFFFF80ull;
+                ph->offset = ph->pn_offset + 1;
+                ph->payload_length -= 1;
+                break;
+            case 0x80: /* two byte encoding */
+                ph->pn = (PICOPARSE_16(decoded_pn_bytes)) & 0x3FFF;
+                ph->pnmask = 0xFFFFFFFFFFFFC000ull;
+                ph->offset = ph->pn_offset + 2;
+                ph->payload_length -= 2;
+                break;
+            case 0xC0:
+                ph->pn = (PICOPARSE_32(decoded_pn_bytes)) & 0x3FFFFFFF;
+                ph->pnmask = 0xFFFFFFFFC0000000ull;
+                ph->offset = ph->pn_offset + 4;
+                ph->payload_length -= 4;
+                break;
             }
-            else {
-                /* Decode */
-                picoquic_pn_encrypt(pn_enc, bytes + sample_offset, decoded_pn_bytes, bytes + ph->pn_offset, encrypted_length);
-                /* Packet encoding is varint, specialized for sequence number */
-                switch (decoded_pn_bytes[0] & 0xC0) {
-                case 0x00:
-                case 0x40: /* single byte encoding */
-                    ph->pn = decoded_pn_bytes[0] & 0x7F;
-                    ph->pnmask = 0xFFFFFFFFFFFFFF80ull;
-                    ph->offset = ph->pn_offset + 1;
-                    ph->payload_length -= 1;
-                    break;
-                case 0x80: /* two byte encoding */
-                    ph->pn = (PICOPARSE_16(decoded_pn_bytes)) & 0x3FFF;
-                    ph->pnmask = 0xFFFFFFFFFFFFC000ull;
-                    ph->offset = ph->pn_offset + 2;
-                    ph->payload_length -= 2;
-                    break;
-                case 0xC0:
-                    ph->pn = (PICOPARSE_32(decoded_pn_bytes)) & 0x3FFFFFFF;
-                    ph->pnmask = 0xFFFFFFFFC0000000ull;
-                    ph->offset = ph->pn_offset + 4;
-                    ph->payload_length -= 4;
-                    break;
-                }
-            }
+
             if (ph->offset > ph->pn_offset) {
                 memcpy(bytes + ph->pn_offset, decoded_pn_bytes, ph->offset - ph->pn_offset);
             }

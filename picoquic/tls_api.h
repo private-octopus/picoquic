@@ -72,8 +72,6 @@ void picoquic_aead_free(void* aead_context);
 
 void picoquic_pn_encrypt(void *pn_enc, const void * iv, void *output, const void *input, size_t len);
 
-void picoquic_pn_enc_free(void * pn_enc);
-
 typedef const struct st_ptls_cipher_suite_t ptls_cipher_suite_t;
 
 int picoquic_setup_initial_master_secret(

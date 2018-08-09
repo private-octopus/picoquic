@@ -796,7 +796,7 @@ void picoquic_crypto_context_free(picoquic_crypto_context_t * ctx)
 
 /* Definition of supported key exchange algorithms */
 
-ptls_key_exchange_algorithm_t *picoquic_key_exchanges[] = { &ptls_minicrypto_x25519, &ptls_openssl_secp256r1, NULL };
+ptls_key_exchange_algorithm_t *picoquic_key_exchanges[] = { &ptls_openssl_secp256r1, &ptls_minicrypto_x25519, NULL };
 ptls_cipher_suite_t *picoquic_cipher_suites[] = { 
     &ptls_minicrypto_chacha20poly1305sha256,
     &ptls_openssl_aes256gcmsha384, &ptls_openssl_aes128gcmsha256, NULL };
@@ -1326,75 +1326,17 @@ int picoquic_initialize_tls_stream(picoquic_cnx_t* cnx)
 }
 
 /*
- * QUIC Specific HKDF Function
- */
-
-int picoquic_hkdf_expand_label(ptls_hash_algorithm_t *algo, void *output, size_t outlen, ptls_iovec_t secret,
-    const char *label, const char *base_label)
-{
-    ptls_buffer_t hkdf_label;
-    uint8_t hkdf_label_buf[512];
-    int ret;
-
-    ptls_buffer_init(&hkdf_label, hkdf_label_buf, sizeof(hkdf_label_buf));
-
-    ptls_buffer_push16(&hkdf_label, (uint16_t)outlen);
-    ptls_buffer_push_block(&hkdf_label, 1, {
-        if (base_label == NULL)
-        base_label = "tls13 ";
-    ptls_buffer_pushv(&hkdf_label, base_label, strlen(base_label));
-    ptls_buffer_pushv(&hkdf_label, label, strlen(label));
-        });
-
-    ret = ptls_hkdf_expand(algo, output, outlen, secret, ptls_iovec_init(hkdf_label.base, hkdf_label.off));
-
-Exit:
-    ptls_buffer_dispose(&hkdf_label);
-    return ret;
-}
-
-
-/*
  * Packet number encryption and decryption utilities
  */
 
-void picoquic_pn_enc_free(void * pn_enc)
-{
-    ptls_cipher_free((ptls_cipher_context_t*) pn_enc);
-}
-
-void * picoquic_pn_enc_create(
-    ptls_aead_algorithm_t* aead, ptls_hash_algorithm_t* hash, uint8_t * secret, const char* base_label)
-{
-    int ret = 0;
-    uint8_t key[256]; 
-    ptls_cipher_context_t *pn_enc = NULL;
-
-    /*
-     * Derive the key by extending the secret for PN encryption 
-     */
-    ret = picoquic_hkdf_expand_label(hash, key, aead->key_size, ptls_iovec_init(secret, hash->digest_size), "pn", base_label);
-
-    /*
-     * Create the context. This is always an encryptng context, because of the stream cipher mode.
-     */
-    if (ret == 0)
-    {
-        pn_enc = ptls_cipher_new(aead->ctr_cipher, 1, key);
-    }
-
-    return (void *)pn_enc;
-}
-
 void * picoquic_pn_enc_create_for_test(const uint8_t * secret)
 {
-    void * ret = NULL;
-    ptls_hash_algorithm_t* algo = &ptls_openssl_sha256;
-    ptls_aead_algorithm_t* aead = &ptls_openssl_aes128gcm;
+    ptls_cipher_suite_t cipher = { 0, &ptls_openssl_aes128gcm, &ptls_openssl_sha256 };
+    void *v_pn_enc = NULL;
     
-    ret = picoquic_pn_enc_create(aead, algo, (uint8_t *) secret, PICOQUIC_LABEL_QUIC_BASE);
+    (void)picoquic_set_pn_enc_from_secret(&v_pn_enc, &cipher, 1, secret);
 
-    return ret;
+    return v_pn_enc;
 }
 
 void picoquic_pn_encrypt(void *pn_enc, const void * iv, void *output, const void *input, size_t len)
@@ -1403,64 +1345,7 @@ void picoquic_pn_encrypt(void *pn_enc, const void * iv, void *output, const void
     ptls_cipher_encrypt((ptls_cipher_context_t *) pn_enc, output, input, len);
 }
 
-/*
-
-Using function picoquic_aead_new(cipher->aead, cipher->hash, is_enc, pp->secret);
-is_enc == 0 => decryption key;
-is_enc != 0 => encryption key;
-returns * ptls_aead_context
-
-To use:
-size_t ptls_aead_encrypt(aead_context, void* output, void* input, size_t input_len,
-64bit seq, auth_data, auth_data_length);
-
-Similar for aead_decrypt
-Decrypt returns size_t_max (-1) if decryption fails, number of bytes in output otherwise
-
-NOTE: we need special versions of the function ptls_hkdf_expand_label due to a 
-quirk in the Quic/TLS spec, and thus special function of ptls_aead_new. Not ideal.
-If we can get the Quic spec to change, we will want to remove that code and
-revert to using ptls_aead_new.
-
-*/
-
-static int picoquic_get_traffic_key(ptls_hash_algorithm_t *algo, void *key, size_t key_size, int is_iv, const void *secret,
-    const char *base_label)
-{
-    return picoquic_hkdf_expand_label(algo, key, key_size, ptls_iovec_init(secret, algo->digest_size), is_iv ? "iv" : "key",
-        base_label);
-}
-
-ptls_aead_context_t *picoquic_aead_new(ptls_aead_algorithm_t *aead, ptls_hash_algorithm_t *hash, int is_enc, const void *secret,
-    const char *base_label)
-{
-    ptls_aead_context_t *ctx;
-    uint8_t key[PTLS_MAX_SECRET_SIZE];
-    int ret;
-
-    if ((ctx = (ptls_aead_context_t *)malloc(aead->context_size)) == NULL) {
-        return NULL;
-    }
-
-    *ctx = (ptls_aead_context_t) { aead };
-    if ((ret = picoquic_get_traffic_key(hash, key, aead->key_size, 0, secret, base_label)) != 0) {
-        goto Exit;
-    }
-    if ((ret = picoquic_get_traffic_key(hash, ctx->static_iv, aead->iv_size, 1, secret, base_label)) != 0) {
-        goto Exit;
-    }
-    ret = aead->setup_crypto(ctx, is_enc, key);
-
-Exit:
-    ptls_clear_memory(key, aead->key_size);
-    if (ret != 0) {
-        ptls_clear_memory(ctx->static_iv, aead->iv_size);
-        free(ctx);
-        ctx = NULL;
-    }
-
-    return ctx;
-}
+/* Utility functions, so applications do not have to load picotls.h */
 
 void picoquic_aead_free(void* aead_context)
 {
@@ -1475,12 +1360,12 @@ uint32_t picoquic_aead_get_checksum_length(void* aead_context)
 /* Setting of encryption contexts for test */
 void * picoquic_setup_test_aead_context(int is_encrypt, const uint8_t * secret)
 {
-    void * ret = NULL;
-    ptls_hash_algorithm_t* algo = &ptls_openssl_sha256;
-    ptls_aead_algorithm_t* aead = &ptls_openssl_aes128gcm;
+    void * v_aead = NULL;
+    ptls_cipher_suite_t cipher = { 0, &ptls_openssl_aes128gcm, &ptls_openssl_sha256 };
 
-    ret = (void *)picoquic_aead_new(aead, algo, is_encrypt, secret, PICOQUIC_LABEL_QUIC_BASE);
-    return ret;
+    (void)picoquic_set_aead_from_secret(&v_aead, &cipher, is_encrypt, secret);
+
+    return v_aead;
 }
 
 int picoquic_server_setup_ticket_aead_contexts(picoquic_quic_t* quic,
@@ -1489,31 +1374,27 @@ int picoquic_server_setup_ticket_aead_contexts(picoquic_quic_t* quic,
 {
     int ret = 0;
     uint8_t temp_secret[256]; /* secret_max */
-    ptls_hash_algorithm_t* algo = &ptls_openssl_sha256;
-    ptls_aead_algorithm_t* aead = &ptls_openssl_aes128gcm;
+    ptls_cipher_suite_t cipher = { 0, &ptls_openssl_aes128gcm, &ptls_openssl_sha256 };
 
-    if (algo->digest_size > sizeof(temp_secret)) {
+    if (cipher.hash->digest_size > sizeof(temp_secret)) {
         ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
     } else {
         if (secret != NULL && secret_length > 0) {
-            memset(temp_secret, 0, algo->digest_size);
-            memcpy(temp_secret, secret, (secret_length > algo->digest_size) ? algo->digest_size : secret_length);
+            memset(temp_secret, 0, cipher.hash->digest_size);
+            memcpy(temp_secret, secret, (secret_length > cipher.hash->digest_size) ? cipher.hash->digest_size : secret_length);
         } else {
-            tls_ctx->random_bytes(temp_secret, algo->digest_size);
+            tls_ctx->random_bytes(temp_secret, cipher.hash->digest_size);
         }
 
         /* Create the AEAD contexts */
-        quic->aead_encrypt_ticket_ctx = (void*)picoquic_aead_new(aead, algo, 1, temp_secret, PICOQUIC_LABEL_QUIC_BASE);
-        quic->aead_decrypt_ticket_ctx = (void*)picoquic_aead_new(aead, algo, 0, temp_secret, PICOQUIC_LABEL_QUIC_BASE);
-
-        if (quic->aead_encrypt_ticket_ctx == NULL || quic->aead_decrypt_ticket_ctx == NULL) {
-            ret = PICOQUIC_ERROR_MEMORY;
+        ret = picoquic_set_aead_from_secret(&quic->aead_encrypt_ticket_ctx, &cipher, 1, temp_secret);
+        if (ret == 0) {
+            ret = picoquic_set_aead_from_secret(&quic->aead_decrypt_ticket_ctx, &cipher, 0, temp_secret);
         }
 
         /* erase the temporary secret */
-        ptls_clear_memory(temp_secret, algo->digest_size);
+        ptls_clear_memory(temp_secret, cipher.hash->digest_size);
     }
-
     return ret;
 }
 
@@ -1545,6 +1426,9 @@ size_t picoquic_aead_encrypt_generic(uint8_t* output, uint8_t* input, size_t inp
 
     return encrypted;
 }
+
+/* management of version specific salt, for initial packet encryption.
+ */
 
 uint8_t picoquic_cleartext_null_salt[] = {
     0, 0, 0, 0, 0, 0, 0, 0,
