@@ -28,10 +28,8 @@
 #include "picoquic_internal.h"
 #include "tls_api.h"
 
-void picoquic_log_error_packet(FILE* F, uint8_t* bytes, size_t bytes_max, int ret)
+void picoquic_log_bytes(FILE* F, uint8_t* bytes, size_t bytes_max)
 {
-    fprintf(F, "Packet length %d caused error: %d\n", (int)bytes_max, ret);
-
     for (size_t i = 0; i < bytes_max;) {
         fprintf(F, "%04x:  ", (int)i);
 
@@ -40,6 +38,14 @@ void picoquic_log_error_packet(FILE* F, uint8_t* bytes, size_t bytes_max, int re
         }
         fprintf(F, "\n");
     }
+}
+
+void picoquic_log_error_packet(FILE* F, uint8_t* bytes, size_t bytes_max, int ret)
+{
+    fprintf(F, "Packet length %d caused error: %d\n", (int)bytes_max, ret);
+
+    picoquic_log_bytes(F, bytes, bytes_max);
+
     fprintf(F, "\n");
 }
 

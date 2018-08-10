@@ -101,6 +101,23 @@ void debug_printf(const char* fmt, ...)
     }
 }
 
+void debug_dump(void * x, int len)
+{
+    if (debug_suspended == 0) {
+        FILE * F = debug_out ? debug_out : stderr;
+        uint8_t * bytes = (uint8_t *)x;
+
+        for (int i = 0; i < len;) {
+            fprintf(F, "%04x:  ", (int)i);
+
+            for (int j = 0; j < 16 && i < len; j++, i++) {
+                fprintf(F, "%02x ", bytes[i]);
+            }
+            fprintf(F, "\n");
+        }
+    }
+}
+
 void debug_printf_push_stream(FILE* f)
 {
     if (debug_out) {

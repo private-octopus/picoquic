@@ -392,6 +392,7 @@ uint32_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     uint32_t h_length;
     uint32_t pn_offset = 0;
     size_t sample_offset = 0;
+    size_t sample_size = picoquic_pn_iv_size(pn_enc);
     uint32_t pn_length = 0;
     size_t aead_checksum_length = picoquic_aead_get_checksum_length(aead_context);
 
@@ -411,10 +412,11 @@ uint32_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     /* Next, encrypt the PN -- The sample is located after the pn_offset */
     sample_offset = /* header_length */ pn_offset + 4;
 
-    if (sample_offset + aead_checksum_length > send_length)
+    if (sample_offset + sample_size > send_length)
     {
-        sample_offset = length - aead_checksum_length;
+        sample_offset = send_length - sample_size;
     }
+
     if (pn_offset < sample_offset)
     {
         /* Encode */

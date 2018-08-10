@@ -70,6 +70,8 @@ size_t picoquic_aead_decrypt_generic(uint8_t* output, uint8_t* input, size_t inp
 
 void picoquic_aead_free(void* aead_context);
 
+size_t picoquic_pn_iv_size(void *pn_enc);
+
 void picoquic_pn_encrypt(void *pn_enc, const void * iv, void *output, const void *input, size_t len);
 
 typedef const struct st_ptls_cipher_suite_t ptls_cipher_suite_t;

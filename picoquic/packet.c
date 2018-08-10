@@ -379,12 +379,12 @@ size_t  picoquic_decrypt_packet(picoquic_cnx_t* cnx,
         /* The header length is not yet known, will only be known after the sequence number is decrypted */
         size_t encrypted_length = 4;
         size_t sample_offset = ph->pn_offset + encrypted_length;
-        size_t aead_checksum_length = picoquic_aead_get_checksum_length(aead_context);
+        size_t sample_size = picoquic_pn_iv_size(pn_enc);
         uint8_t decoded_pn_bytes[4];
 
-        if (sample_offset + aead_checksum_length > length)
+        if (sample_offset + sample_size > length)
         {
-            sample_offset = length - aead_checksum_length;
+            sample_offset = length - sample_size;
             if (ph->pn_offset < sample_offset) {
                 encrypted_length = sample_offset - ph->pn_offset;
             }

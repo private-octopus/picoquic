@@ -600,6 +600,10 @@ static int picoquic_set_pn_enc_from_secret(void ** v_pn_enc, ptls_cipher_suite_t
     if ((ret = ptls_hkdf_expand_label(cipher->hash, pnekey, 
         cipher->aead->ctr_cipher->key_size, ptls_iovec_init(secret, cipher->hash->digest_size), 
         PICOQUIC_LABEL_PN, ptls_iovec_init(NULL, 0), PICOQUIC_LABEL_QUIC_BASE)) == 0) {
+#ifdef _DEBUG
+        DBG_PRINTF("PN Encryption key (%d):\n", (int)cipher->aead->ctr_cipher->key_size);
+        debug_dump(pnekey, (int)cipher->aead->ctr_cipher->key_size);
+#endif
         if ((*v_pn_enc = ptls_cipher_new(cipher->aead->ctr_cipher, is_enc, pnekey)) == NULL) {
             ret = PTLS_ERROR_NO_MEMORY;
         }
@@ -663,6 +667,10 @@ static int picoquic_update_traffic_key_callback(ptls_update_traffic_key_t * self
     picoquic_cnx_t* cnx = (picoquic_cnx_t*)*ptls_get_data_ptr(tls);
     ptls_cipher_suite_t * cipher = ptls_get_cipher(tls);
     UNREFERENCED_PARAMETER(self);
+#ifdef _DEBUG
+    DBG_PRINTF("Update traffic key epoch:%d, enc:%d\n", (int)epoch, is_enc);
+    debug_dump(secret, (int)cipher->hash->digest_size);
+#endif
 
     int ret = picoquic_set_key_from_secret(cnx, cipher, is_enc, epoch, secret);
 
@@ -798,8 +806,8 @@ void picoquic_crypto_context_free(picoquic_crypto_context_t * ctx)
 
 ptls_key_exchange_algorithm_t *picoquic_key_exchanges[] = { &ptls_openssl_secp256r1, &ptls_minicrypto_x25519, NULL };
 ptls_cipher_suite_t *picoquic_cipher_suites[] = { 
-    &ptls_minicrypto_chacha20poly1305sha256,
-    &ptls_openssl_aes256gcmsha384, &ptls_openssl_aes128gcmsha256, NULL };
+    &ptls_openssl_aes256gcmsha384, &ptls_openssl_aes128gcmsha256,
+    &ptls_minicrypto_chacha20poly1305sha256, NULL };
 
 /*
  * Setting the master TLS context.
@@ -832,6 +840,7 @@ int picoquic_master_tlscontext(picoquic_quic_t* quic,
 
         ctx->send_change_cipher_spec = 0;
 
+        ctx->hkdf_label_prefix = PICOQUIC_LABEL_QUIC_BASE;
         ctx->update_traffic_key = picoquic_set_update_traffic_key_callback();
 
         if (quic->p_simulated_time == NULL) {
@@ -1337,6 +1346,11 @@ void * picoquic_pn_enc_create_for_test(const uint8_t * secret)
     (void)picoquic_set_pn_enc_from_secret(&v_pn_enc, &cipher, 1, secret);
 
     return v_pn_enc;
+}
+
+size_t picoquic_pn_iv_size(void *pn_enc)
+{
+    return ((ptls_cipher_context_t *)pn_enc)->algo->iv_size;
 }
 
 void picoquic_pn_encrypt(void *pn_enc, const void * iv, void *output, const void *input, size_t len)
