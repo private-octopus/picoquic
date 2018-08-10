@@ -570,23 +570,9 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
             }
     }
 
-    /* check that all required parameters are present, and
-     * that server parameters are not sent by clients */
-
-    if (ret == 0 && (present_flag & (
-        (1 << picoquic_tp_initial_max_stream_data_bidi_local) | 
-        (1 << picoquic_tp_initial_max_data) | 
-        (1 << picoquic_tp_idle_timeout))) != 
-        ((1 << picoquic_tp_initial_max_stream_data_bidi_local) | 
-        (1 << picoquic_tp_initial_max_data) | 
-            (1 << picoquic_tp_idle_timeout))) {
-        ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR);
-    }
-
-    if (ret == 0 && extension_mode == 1 && 
-        (present_flag & (1 << picoquic_tp_reset_secret)) == 0) {
-        ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR);
-    }
+    /* All parameters are optional, so we do not need to check
+     * that they are all present. But it is an error for a client to include
+     * a reset token or a preferred address */
 
     if (ret == 0 && extension_mode == 0 &&
         ((present_flag & (1 << picoquic_tp_reset_secret)) != 0 ||
