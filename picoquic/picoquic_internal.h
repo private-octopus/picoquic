@@ -81,7 +81,7 @@ typedef enum {
     picoquic_frame_type_stream_range_max = 0x17,
     picoquic_frame_type_crypto_hs = 0x18,
     picoquic_frame_type_new_token = 0x19,
-    picoquic_frame_type_ack_ecn = 0x20
+    picoquic_frame_type_ack_ecn = 0x1a
 } picoquic_frame_type_enum_t;
 
 /*
@@ -221,7 +221,7 @@ typedef enum {
     picoquic_tp_initial_max_data = 1,
     picoquic_tp_initial_max_bidi_streams = 2,
     picoquic_tp_idle_timeout = 3,
-    picoquic_tp_server_prefered_address = 4,
+    picoquic_tp_server_preferred_address = 4,
     picoquic_tp_max_packet_size = 5,
     picoquic_tp_reset_secret = 6,
     picoquic_tp_ack_delay_exponent = 7,

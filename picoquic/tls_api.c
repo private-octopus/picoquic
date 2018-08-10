@@ -1301,10 +1301,17 @@ int picoquic_tlsinput_segment(picoquic_cnx_t* cnx, int epoch,
         inlen = length - roff;
         ret = ptls_handle_message(ctx->tls, sendbuf, send_offset, epoch, bytes + roff, inlen,
             &ctx->handshake_properties);
+#ifdef _DEBUG
+        if (cnx->cnx_state < picoquic_state_client_ready) {
+            DBG_PRINTF("State: %d, tls input: %d, ret %x\n",
+                cnx->cnx_state, inlen, ret);
+        }
+#endif
         roff += inlen;
         for (int i = 0; i < 5; i++) {
             cnx->epoch_offsets[i] += send_offset[i];
         }
+
     }
 
     *consumed = roff;
@@ -1561,6 +1568,9 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
         case picoquic_state_client_init_resent:
         case picoquic_state_client_handshake_start:
         case picoquic_state_client_handshake_progress:
+#ifdef _DEBUG
+            DBG_PRINTF("%s", "Connection error - no transport parameter received.\n");
+#endif
             if (cnx->remote_parameters_received == 0) {
                 ret = picoquic_connection_error(cnx,
                     PICOQUIC_TRANSPORT_PARAMETER_ERROR);
@@ -1596,6 +1606,9 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
         }
     } else if (ret == PTLS_ERROR_IN_PROGRESS && (cnx->cnx_state == picoquic_state_client_init || cnx->cnx_state == picoquic_state_client_init_sent || cnx->cnx_state == picoquic_state_client_init_resent)) {
         /* Extract and install the client 0-RTT key */
+#ifdef _DEBUG
+        DBG_PRINTF("%s", "Handshake not yet complete.\n");
+#endif
     } else if (ret == PTLS_ERROR_IN_PROGRESS &&
         (cnx->cnx_state == picoquic_state_server_init ||
             cnx->cnx_state == picoquic_state_server_handshake))
@@ -1615,6 +1628,9 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
             ret = 0;
         }
     } else {
+#ifdef _DEBUG
+        DBG_PRINTF("Handshake failed, ret = %x.\n", ret);
+#endif
         (void)picoquic_connection_error(cnx, PICOQUIC_TLS_HANDSHAKE_FAILED);
         ret = 0;
     }

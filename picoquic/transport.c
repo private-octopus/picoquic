@@ -292,7 +292,7 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                 bytes + byte_index + 4, bytes_max - byte_index - 4, &cnx->local_parameters.prefered_address);
             
             if (param_length > 0) {
-                picoformat_16(bytes + byte_index, picoquic_tp_server_prefered_address);
+                picoformat_16(bytes + byte_index, picoquic_tp_server_preferred_address);
                 byte_index += 2;
                 picoformat_16(bytes + byte_index, param_length);
                 byte_index += 2;
@@ -539,7 +539,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                                 cnx->max_stream_id_unidir_remote = cnx->remote_parameters.initial_max_stream_id_unidir;
                             }
                             break;
-                        case picoquic_tp_server_prefered_address:
+                        case picoquic_tp_server_preferred_address:
                         {
                             size_t coded_length = picoquic_decode_transport_param_prefered_address(
                                 bytes + byte_index, extension_length, &cnx->remote_parameters.prefered_address);
@@ -570,13 +570,18 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
             }
     }
 
-    /* All parameters are optional, so we do not need to check
-     * that they are all present. But it is an error for a client to include
-     * a reset token or a preferred address */
+    /* Only the idle timeout parameters is mandatory for both client and server. */
+
+    if (ret == 0 && (present_flag & (1 << picoquic_tp_idle_timeout)) != 
+        (1 << picoquic_tp_idle_timeout)) {
+        ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR);
+    }
+
+    /* Clients must not include reset token or server address */
 
     if (ret == 0 && extension_mode == 0 &&
         ((present_flag & (1 << picoquic_tp_reset_secret)) != 0 ||
-        (present_flag & (1 << picoquic_tp_server_prefered_address)) != 0)) {
+        (present_flag & (1 << picoquic_tp_server_preferred_address)) != 0)) {
         ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR);
     }
 
