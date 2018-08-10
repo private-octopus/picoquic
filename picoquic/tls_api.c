@@ -41,7 +41,7 @@
 #endif
 
 
-#define PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION 26
+#define PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION 0xFFA5
 #define PICOQUIC_TRANSPORT_PARAMETERS_MAX_SIZE 512
 
 typedef struct st_picoquic_tls_ctx_t {
@@ -256,6 +256,10 @@ int picoquic_tls_collect_extensions_cb(ptls_t* tls, struct st_ptls_handshake_pro
     UNREFERENCED_PARAMETER(tls);
     UNREFERENCED_PARAMETER(properties);
 #endif
+#ifdef _DEBUG
+    DBG_PRINTF("Collect extension callback, ext: %x, ret=%d\n",
+        type, type == PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION);
+#endif
     return type == PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION;
 }
 
@@ -264,6 +268,10 @@ void picoquic_tls_set_extensions(picoquic_cnx_t* cnx, picoquic_tls_ctx_t* tls_ct
     size_t consumed;
     int ret = picoquic_prepare_transport_extensions(cnx, (tls_ctx->client_mode) ? 0 : 1,
         tls_ctx->ext_data, sizeof(tls_ctx->ext_data), &consumed);
+#ifdef _DEBUG
+    DBG_PRINTF("Prepare extension, ext: %x, ret=%d\n",
+        PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION, ret);
+#endif
 
     if (ret == 0) {
         tls_ctx->ext[0].type = PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION;
@@ -318,6 +326,10 @@ int picoquic_tls_collected_extensions_cb(ptls_t* tls, ptls_handshake_properties_
             picoquic_tls_set_extensions(ctx->cnx, ctx);
         }
     }
+#ifdef _DEBUG
+    DBG_PRINTF("Receive extension, slot[0]: %x, slot[1]: %x\n",
+        slots[0].type, slots[1].type);
+#endif
 
     return ret;
 }
@@ -1551,7 +1563,7 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
         case picoquic_state_client_handshake_progress:
             if (cnx->remote_parameters_received == 0) {
                 ret = picoquic_connection_error(cnx,
-                    PICOQUIC_TRANSPORT_TRANSPORT_PARAMETER_ERROR);
+                    PICOQUIC_TRANSPORT_PARAMETER_ERROR);
             } else {
                 cnx->cnx_state = picoquic_state_client_almost_ready;
             }

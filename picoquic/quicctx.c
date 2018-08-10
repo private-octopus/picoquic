@@ -446,9 +446,11 @@ int picoquic_register_net_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, struct 
     return ret;
 }
 
-void picoquic_init_transport_parameters(picoquic_transport_parameters* tp, int client_mode)
+void picoquic_init_transport_parameters(picoquic_tp_t* tp, int client_mode)
 {
-    tp->initial_max_stream_data = 65535;
+    tp->initial_max_stream_data_bidi_local = 65535;
+    tp->initial_max_stream_data_bidi_remote = 65535;
+    tp->initial_max_stream_data_uni = 65535;
     tp->initial_max_data = 0x100000;
     if (client_mode) {
         tp->initial_max_stream_id_bidir = 65533;
@@ -733,7 +735,8 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
 		 * Hopefully, this will be overwritten by the parameters received in
 		 * the TLS transport parameter extension */
         cnx->maxdata_remote = PICOQUIC_DEFAULT_0RTT_WINDOW;
-        cnx->remote_parameters.initial_max_stream_data = PICOQUIC_DEFAULT_0RTT_WINDOW;
+        cnx->remote_parameters.initial_max_stream_data_bidi_remote = PICOQUIC_DEFAULT_0RTT_WINDOW;
+        cnx->remote_parameters.initial_max_stream_data_uni = PICOQUIC_DEFAULT_0RTT_WINDOW;
         cnx->max_stream_id_bidir_remote = (cnx->client_mode)?4:0;
         cnx->max_stream_id_unidir_remote = 0;
 
@@ -913,7 +916,7 @@ int picoquic_start_client_cnx(picoquic_cnx_t * cnx)
     return ret;
 }
 
-void picoquic_set_transport_parameters(picoquic_cnx_t * cnx, picoquic_transport_parameters * tp)
+void picoquic_set_transport_parameters(picoquic_cnx_t * cnx, picoquic_tp_t * tp)
 {
     cnx->local_parameters = *tp;
 

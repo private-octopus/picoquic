@@ -156,8 +156,27 @@ picoquic_stream_head* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t strea
 
         memset(stream, 0, sizeof(picoquic_stream_head));
         stream->stream_id = stream_id;
-        stream->maxdata_local = cnx->local_parameters.initial_max_stream_data;
-        stream->maxdata_remote = cnx->remote_parameters.initial_max_stream_data;
+
+        if (IS_LOCAL_STREAM_ID(stream_id, cnx->client_mode)) {
+            if (IS_BIDIR_STREAM_ID(stream_id)) {
+                stream->maxdata_local = cnx->local_parameters.initial_max_stream_data_bidi_local;
+                stream->maxdata_remote = cnx->remote_parameters.initial_max_stream_data_bidi_remote;
+            }
+            else {
+                stream->maxdata_local = 0;
+                stream->maxdata_remote = cnx->remote_parameters.initial_max_stream_data_uni;
+            }
+        }
+        else {
+            if (IS_BIDIR_STREAM_ID(stream_id)) {
+                stream->maxdata_local = cnx->local_parameters.initial_max_stream_data_bidi_remote;
+                stream->maxdata_remote = cnx->remote_parameters.initial_max_stream_data_bidi_local;
+            }
+            else {
+                stream->maxdata_local = cnx->local_parameters.initial_max_stream_data_uni;
+                stream->maxdata_remote = 0;
+            }
+        }
 
         /*
          * Make sure that the streams are open in order.
@@ -180,7 +199,8 @@ picoquic_stream_head* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t strea
     return stream;
 }
 
-/* if the initial remote has changed, update the existing streams
+/* if the initial remote has changed, update the existing streams.
+ * By definition, this is only needed for streams locally created for 0-RTT traffic.
  */
 
 void picoquic_update_stream_initial_remote(picoquic_cnx_t* cnx)
@@ -188,8 +208,17 @@ void picoquic_update_stream_initial_remote(picoquic_cnx_t* cnx)
     picoquic_stream_head* stream = cnx->first_stream;
 
     while (stream) {
-        if (stream->maxdata_remote < cnx->remote_parameters.initial_max_stream_data) {
-            stream->maxdata_remote = cnx->remote_parameters.initial_max_stream_data;
+        if (IS_LOCAL_STREAM_ID(stream->stream_id, cnx->client_mode)) {
+            if (IS_BIDIR_STREAM_ID(stream->stream_id)) {
+                if (stream->maxdata_remote < cnx->remote_parameters.initial_max_stream_data_bidi_remote) {
+                    stream->maxdata_remote = cnx->remote_parameters.initial_max_stream_data_bidi_remote;
+                }
+            }
+            else {
+                if (stream->maxdata_remote < cnx->remote_parameters.initial_max_stream_data_uni) {
+                    stream->maxdata_remote = cnx->remote_parameters.initial_max_stream_data_uni;
+                }
+            }
         }
         stream = stream->next_stream;
     };

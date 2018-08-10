@@ -134,8 +134,10 @@ static int StreamZeroFrameOneTest(struct test_case_st* test)
     picoquic_cnx_t cnx = { 0 };
     uint64_t current_time = 0;
     
-    cnx.local_parameters.initial_max_stream_data = 0x10000;
-    cnx.remote_parameters.initial_max_stream_data = 0x10000;
+    cnx.local_parameters.initial_max_stream_data_bidi_local = 0x10000;
+    cnx.local_parameters.initial_max_stream_data_bidi_remote = 0x10000;
+    cnx.remote_parameters.initial_max_stream_data_bidi_local = 0x10000;
+    cnx.remote_parameters.initial_max_stream_data_bidi_remote = 0x10000;
     cnx.maxdata_local = 0x10000;
 
     for (size_t i = 0; ret == 0 && i < test->list_size; i++) {

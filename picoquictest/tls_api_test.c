@@ -438,18 +438,18 @@ static int verify_transport_extension(picoquic_cnx_t* cnx_client, picoquic_cnx_t
     int ret = 0;
 
     /* verify that local parameters have a sensible value */
-    if (cnx_client->local_parameters.idle_timeout == 0 || cnx_client->local_parameters.initial_max_data == 0 || cnx_client->local_parameters.initial_max_stream_data == 0 || cnx_client->local_parameters.max_packet_size == 0) {
+    if (cnx_client->local_parameters.idle_timeout == 0 || cnx_client->local_parameters.initial_max_data == 0 || cnx_client->local_parameters.initial_max_stream_data_bidi_local == 0 || cnx_client->local_parameters.max_packet_size == 0) {
         ret = -1;
-    } else if (cnx_server->local_parameters.idle_timeout == 0 || cnx_server->local_parameters.initial_max_data == 0 || cnx_server->local_parameters.initial_max_stream_data == 0 || cnx_server->local_parameters.max_packet_size == 0) {
+    } else if (cnx_server->local_parameters.idle_timeout == 0 || cnx_server->local_parameters.initial_max_data == 0 || cnx_server->local_parameters.initial_max_stream_data_bidi_remote == 0 || cnx_server->local_parameters.max_packet_size == 0) {
         ret = -1;
     }
     /* Verify that the negotiation completed */
     else if (memcmp(&cnx_client->local_parameters, &cnx_server->remote_parameters,
-                 sizeof(picoquic_transport_parameters))
+                 sizeof(picoquic_tp_t))
         != 0) {
         ret = -1;
     } else if (memcmp(&cnx_server->local_parameters, &cnx_client->remote_parameters,
-                   sizeof(picoquic_transport_parameters))
+                   sizeof(picoquic_tp_t))
         != 0) {
         ret = -1;
     }
@@ -1136,7 +1136,7 @@ int tls_api_wrong_alpn_test()
 int tls_api_one_scenario_test(test_api_stream_desc_t* scenario,
     size_t sizeof_scenario, uint64_t init_loss_mask, uint64_t max_data, uint64_t queue_delay_max,
     uint32_t proposed_version, uint64_t max_completion_microsec,
-    picoquic_transport_parameters * client_params)
+    picoquic_tp_t * client_params)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -2850,9 +2850,9 @@ int virtual_time_test()
 
 int tls_different_params_test()
 {
-    picoquic_transport_parameters test_parameters;
+    picoquic_tp_t test_parameters;
 
-    memset(&test_parameters, 0, sizeof(picoquic_transport_parameters));
+    memset(&test_parameters, 0, sizeof(picoquic_tp_t));
 
     picoquic_init_transport_parameters(&test_parameters, 1);
 
