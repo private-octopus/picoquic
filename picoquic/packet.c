@@ -813,10 +813,10 @@ int picoquic_incoming_initial(
     }
 
     if (ret != 0 || cnx->cnx_state == picoquic_state_disconnected) {
-        /* This is bad. should just delete the context, log the packet, etc */
-        picoquic_delete_cnx(cnx);
-        cnx = NULL;
-        ret = PICOQUIC_ERROR_CONNECTION_DELETED;
+        /* This is bad. If this is an initial attempt, delete the connection */
+            picoquic_delete_cnx(cnx);
+            cnx = NULL;
+            ret = PICOQUIC_ERROR_CONNECTION_DELETED;
     }
     else {
         /* remember the local address on which the initial packet arrived. */
@@ -1048,13 +1048,9 @@ int picoquic_incoming_0rtt(
             ret = picoquic_decode_frames(cnx,
                 bytes + ph->offset, ph->payload_length, ph->epoch, current_time);
 
-            /* Yell if there is data coming on tls stream */
             if (ret == 0) {
-                picoquic_stream_data* data = cnx->tls_stream.stream_data;
-
-                if (data != NULL && data->offset < cnx->tls_stream.consumed_offset) {
-                    ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION);
-                }
+                /* Processing of TLS messages -- EOED */
+                ret = picoquic_tls_stream_process(cnx);
             }
         }
     } else {
@@ -1288,7 +1284,8 @@ int picoquic_incoming_segment(
     }
 
     if (ret == 0 || ret == PICOQUIC_ERROR_SPURIOUS_REPEAT) {
-        if (cnx != NULL && ph.ptype != picoquic_packet_version_negotiation) {
+        if (cnx != NULL && cnx->cnx_state != picoquic_state_disconnected &&
+            ph.ptype != picoquic_packet_version_negotiation) {
             /* Mark the sequence number as received */
             ret = picoquic_record_pn_received(cnx, ph.pc, ph.pn64, current_time);
         }
@@ -1303,7 +1300,8 @@ int picoquic_incoming_segment(
         ret = -1;
     } else if (ret == PICOQUIC_ERROR_AEAD_CHECK || ret == PICOQUIC_ERROR_INITIAL_TOO_SHORT ||
         ret == PICOQUIC_ERROR_UNEXPECTED_PACKET || ret == PICOQUIC_ERROR_FNV1A_CHECK || 
-        ret == PICOQUIC_ERROR_CNXID_CHECK || ret == PICOQUIC_ERROR_RETRY || ret == PICOQUIC_ERROR_DETECTED ||
+        ret == PICOQUIC_ERROR_CNXID_CHECK || 
+        ret == PICOQUIC_ERROR_RETRY || ret == PICOQUIC_ERROR_DETECTED ||
         ret == PICOQUIC_ERROR_CONNECTION_DELETED) {
         /* Bad packets are dropped silently */
 

@@ -900,17 +900,15 @@ int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head* str
 int picoquic_is_tls_stream_ready(picoquic_cnx_t* cnx)
 {
     int ret = 0;
-    picoquic_stream_head* stream = &cnx->tls_stream;
 
-    if (stream->send_queue != NULL &&
-        stream->send_queue->length > stream->send_queue->offset) {
-        /* Need to consider whether the epoch allows for transmission */
-        for (int i = 0; i < 4; i++) {
-            if (stream->sent_offset < cnx->epoch_offsets[i + 1] &&
-                cnx->crypto_context[i].aead_encrypt != NULL) {
-                ret = 1;
-                break;
-            }
+    for (int epoch = 0; epoch < 4; epoch++) {
+        picoquic_stream_head* stream = &cnx->tls_stream[epoch];
+
+        if (stream->send_queue != NULL &&
+            stream->send_queue->length > stream->send_queue->offset &&
+            cnx->crypto_context[epoch].aead_encrypt != NULL) {
+            ret = 1;
+            break;
         }
     }
 
@@ -934,16 +932,11 @@ uint8_t* picoquic_decode_crypto_hs_frame(picoquic_cnx_t* cnx, uint8_t* bytes, co
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR);
         bytes = NULL;
 
-    } else if (picoquic_queue_network_input(cnx, &cnx->tls_stream, (size_t)offset, bytes, (size_t)data_length, &new_data_available) != 0) {
+    } else if (picoquic_queue_network_input(cnx, &cnx->tls_stream[epoch], (size_t)offset, bytes, (size_t)data_length, &new_data_available) != 0) {
         bytes = NULL;  // Error signaled
 
     } else {
         bytes += data_length;
-        if (epoch < 5) {
-            if (cnx->epoch_received[epoch] < (size_t)(offset + data_length)) {
-                cnx->epoch_received[epoch] = (size_t)(offset + data_length);
-            }
-        }
     }
 
     return bytes;
@@ -953,7 +946,7 @@ int picoquic_prepare_crypto_hs_frame(picoquic_cnx_t* cnx, int epoch,
     uint8_t* bytes, size_t bytes_max, size_t* consumed)
 {
     int ret = 0;
-    picoquic_stream_head* stream = &cnx->tls_stream;
+    picoquic_stream_head* stream = &cnx->tls_stream[epoch];
 
     if ((stream->send_queue == NULL || stream->send_queue->length <= stream->send_queue->offset) && ((stream->stream_flags & picoquic_stream_flag_fin_notified) == 0 || (stream->stream_flags & picoquic_stream_flag_fin_sent) != 0)) {
         *consumed = 0;
@@ -961,8 +954,6 @@ int picoquic_prepare_crypto_hs_frame(picoquic_cnx_t* cnx, int epoch,
         size_t byte_index = 0;
         size_t l_off = 0;
         size_t length = 0;
-        int next_epoch = (epoch < 4) ? epoch + 1 : epoch;
-        size_t next_epoch_offset = cnx->epoch_offsets[next_epoch];
 
         bytes[byte_index++] = picoquic_frame_type_crypto_hs;
 
@@ -981,17 +972,12 @@ int picoquic_prepare_crypto_hs_frame(picoquic_cnx_t* cnx, int epoch,
 
             /* TODO: check logic here -- I was tired when I wrote that */
 
-            if (space < 2 || stream->send_queue == NULL || stream->sent_offset >= next_epoch_offset) {
+            if (space < 2 || stream->send_queue == NULL) {
                 length = 0;
             } else {
                 /* This is going to be a trial and error process */
                 size_t l_len = 0;
                 size_t available = stream->send_queue->length - (size_t)stream->send_queue->offset;
-
-                /* Adjust to limit content to epoch */
-                if (stream->sent_offset + available > next_epoch_offset) {
-                    available = next_epoch_offset - (size_t)stream->sent_offset;
-                }
 
                 length = available;
                 /* Trial encoding */

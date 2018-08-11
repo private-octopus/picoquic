@@ -790,7 +790,9 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
 			 */
             picoquic_public_random(cnx->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
         } else {
-            cnx->tls_stream.send_queue = NULL;
+            for (int epoch = 0; epoch < PICOQUIC_NUMBER_OF_EPOCHS; epoch++) {
+                cnx->tls_stream[epoch].send_queue = NULL;
+            }
             cnx->cnx_state = picoquic_state_server_init;
             cnx->initial_cnxid = initial_cnx_id;
             cnx->remote_cnxid = remote_cnx_id;
@@ -835,17 +837,19 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
 
             cnx->latest_progress_time = start_time;
 
-            cnx->tls_stream.stream_id = 0;
-            cnx->tls_stream.consumed_offset = 0;
-            cnx->tls_stream.stream_flags = 0;
-            cnx->tls_stream.fin_offset = 0;
-            cnx->tls_stream.next_stream = NULL;
-            cnx->tls_stream.stream_data = NULL;
-            cnx->tls_stream.sent_offset = 0;
-            cnx->tls_stream.local_error = 0;
-            cnx->tls_stream.remote_error = 0;
-            cnx->tls_stream.maxdata_local = (uint64_t)((int64_t)-1);
-            cnx->tls_stream.maxdata_remote = (uint64_t)((int64_t)-1);
+            for (int epoch = 0; epoch < PICOQUIC_NUMBER_OF_EPOCHS; epoch++) {
+                cnx->tls_stream[epoch].stream_id = 0;
+                cnx->tls_stream[epoch].consumed_offset = 0;
+                cnx->tls_stream[epoch].stream_flags = 0;
+                cnx->tls_stream[epoch].fin_offset = 0;
+                cnx->tls_stream[epoch].next_stream = NULL;
+                cnx->tls_stream[epoch].stream_data = NULL;
+                cnx->tls_stream[epoch].sent_offset = 0;
+                cnx->tls_stream[epoch].local_error = 0;
+                cnx->tls_stream[epoch].remote_error = 0;
+                cnx->tls_stream[epoch].maxdata_local = (uint64_t)((int64_t)-1);
+                cnx->tls_stream[epoch].maxdata_remote = (uint64_t)((int64_t)-1);
+            }
 
             cnx->congestion_alg = cnx->quic->default_congestion_alg;
             if (cnx->congestion_alg != NULL) {
@@ -1242,11 +1246,13 @@ int picoquic_reset_cnx(picoquic_cnx_t* cnx, uint64_t current_time)
     }
 
     /* Reset the crypto stream */
-    picoquic_clear_stream(&cnx->tls_stream);
-    cnx->tls_stream.consumed_offset = 0;
-    cnx->tls_stream.stream_flags = 0;
-    cnx->tls_stream.fin_offset = 0;
-    cnx->tls_stream.sent_offset = 0;
+    for (int epoch = 0; epoch < PICOQUIC_NUMBER_OF_EPOCHS; epoch++) {
+        picoquic_clear_stream(&cnx->tls_stream[epoch]);
+        cnx->tls_stream[epoch].consumed_offset = 0;
+        cnx->tls_stream[epoch].stream_flags = 0;
+        cnx->tls_stream[epoch].fin_offset = 0;
+        cnx->tls_stream[epoch].sent_offset = 0;
+    }
 
     /* Reset the ECN data */
     cnx->ecn_ect0_total_local = 0;
@@ -1387,8 +1393,9 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
             cnx->first_misc_frame = misc_frame->next_misc_frame;
             free(misc_frame);
         }
-
-        picoquic_clear_stream(&cnx->tls_stream);
+        for (int epoch = 0; epoch < PICOQUIC_NUMBER_OF_EPOCHS; epoch++) {
+            picoquic_clear_stream(&cnx->tls_stream[epoch]);
+        }
 
         while ((stream = cnx->first_stream) != NULL) {
             cnx->first_stream = stream->next_stream;
@@ -1419,6 +1426,12 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
 
         free(cnx);
     }
+}
+
+int picoquic_is_handshake_error(uint16_t error_code)
+{
+    return ((error_code & 0xFF00) == PICOQUIC_TRANSPORT_CRYPTO_ERROR(0) ||
+        error_code == PICOQUIC_TLS_HANDSHAKE_FAILED);
 }
 
 /* Context retrieval functions */
