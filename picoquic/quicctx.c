@@ -142,11 +142,11 @@ static uint8_t picoquic_cleartext_draft_10_salt[] = {
 /* Support for draft 13! */
 const picoquic_version_parameters_t picoquic_supported_versions[] = {
     { PICOQUIC_INTERNAL_TEST_VERSION_1, 0,
-        picoquic_version_header_12,
+        picoquic_version_header_13,
         sizeof(picoquic_cleartext_internal_test_1_salt),
         picoquic_cleartext_internal_test_1_salt },
     { PICOQUIC_SEVENTH_INTEROP_VERSION, 0,
-        picoquic_version_header_12,
+        picoquic_version_header_13,
         sizeof(picoquic_cleartext_draft_10_salt),
         picoquic_cleartext_draft_10_salt }
 };

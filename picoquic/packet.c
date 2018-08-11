@@ -112,8 +112,7 @@ int picoquic_parse_packet_header(
                         /* If the version is supported now, the format field in the version table
                         * describes the encoding. */
                         switch (picoquic_supported_versions[ph->version_index].version_header_encoding) {
-                        case picoquic_version_header_12:
-                        case picoquic_version_header_11:
+                        case picoquic_version_header_13:
                             switch (bytes[0]) {
                             case 0xFF: 
                             {
@@ -265,40 +264,7 @@ int picoquic_parse_packet_header(
              ph->version_index = (*pcnx)->version_index;
              /* If the connection is identified, decode the short header per version ID */
              switch (picoquic_supported_versions[ph->version_index].version_header_encoding) {
-             case picoquic_version_header_11:
-                 if ((bytes[0] & 0x40) == 0) {
-                     ph->ptype = picoquic_packet_1rtt_protected_phi0;
-                 }
-                 else {
-                     ph->ptype = picoquic_packet_1rtt_protected_phi1;
-                 }
-
-                 ph->spin = (bytes[0] >> 2) & 1;
-
-                 ph->pn_offset = ph->offset;
-
-                 switch (bytes[0] & 0x3) {
-                 case 0x0:
-                     ph->pn = bytes[ph->offset];
-                     ph->pnmask = 0xFFFFFFFFFFFFFF00ull;
-                     ph->offset += 1;
-                     break;
-                 case 0x1:
-                     ph->pn = PICOPARSE_16(&bytes[ph->offset]);
-                     ph->pnmask = 0xFFFFFFFFFFFF0000ull;
-                     ph->offset += 2;
-                     break;
-                 case 0x2:
-                     ph->pn = PICOPARSE_32(&bytes[ph->offset]);
-                     ph->pnmask = 0xFFFFFFFF00000000ull;
-                     ph->offset += 4;
-                     break;
-                 default:
-                     ph->ptype = picoquic_packet_error;
-                     break;
-                 }
-                 break;
-             case picoquic_version_header_12:
+             case picoquic_version_header_13:
                  if ((bytes[0] & 0x40) == 0) {
                      ph->ptype = picoquic_packet_1rtt_protected_phi0;
                  }
