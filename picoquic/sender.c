@@ -1356,13 +1356,15 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
         if (ret == 0 && retransmit_possible &&
             (length = picoquic_retransmit_needed(cnx, pc, path_x, current_time, packet, send_buffer_max, &is_cleartext_mode, &header_length)) > 0) {
             /* Check whether it makes sens to add an ACK at the end of the retransmission */
-            if (picoquic_prepare_ack_frame(cnx, current_time, pc, &bytes[length],
-                send_buffer_max - checksum_overhead - length, &data_bytes)
-                == 0) {
-                length += (uint32_t)data_bytes;
-                packet->length = length;
-            }
+            if (epoch != 1) {
+                if (picoquic_prepare_ack_frame(cnx, current_time, pc, &bytes[length],
+                    send_buffer_max - checksum_overhead - length, &data_bytes)
+                    == 0) {
+                    length += (uint32_t)data_bytes;
+                }
+            } 
             /* document the send time & overhead */
+            packet->length = length;
             packet->send_time = current_time;
             packet->checksum_overhead = checksum_overhead;
         }
@@ -1393,15 +1395,17 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                     length = 0;
                 }
                 else {
-                    ret = picoquic_prepare_ack_frame(cnx, current_time, pc, &bytes[length],
-                        send_buffer_max - checksum_overhead - length, &data_bytes);
-                    if (ret == 0) {
-                        length += (uint32_t)data_bytes;
-                        data_bytes = 0;
-                    } else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
-                        ret = 0;
+                    if (epoch != 1) {
+                        ret = picoquic_prepare_ack_frame(cnx, current_time, pc, &bytes[length],
+                            send_buffer_max - checksum_overhead - length, &data_bytes);
+                        if (ret == 0) {
+                            length += (uint32_t)data_bytes;
+                            data_bytes = 0;
+                        }
+                        else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
+                            ret = 0;
+                        }
                     }
-                
                     /* If present, send misc frame */
                     while (cnx->first_misc_frame != NULL) {
                         ret = picoquic_prepare_first_misc_frame(cnx, &bytes[length],
