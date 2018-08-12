@@ -417,13 +417,14 @@ int test_packet_decrypt_one(
     picoquic_packet_header received_ph;
     picoquic_cnx_t* server_cnx = NULL;
     uint32_t consumed = 0;
+    int new_context_created = 0;
 
     /* Decrypt the packet */
     decoding_return = picoquic_parse_header_and_decrypt(q_server,
         send_buffer, (uint32_t)send_length, (uint32_t)packet_length,
         addr_from,
         current_time, &received_ph, &server_cnx,
-        &consumed);
+        &consumed, &new_context_created);
 
     /* verify that decryption matches original value */
     if (decoding_return != expected_return) {

@@ -28,10 +28,8 @@
 #include "picoquic_internal.h"
 #include "tls_api.h"
 
-void picoquic_log_error_packet(FILE* F, uint8_t* bytes, size_t bytes_max, int ret)
+void picoquic_log_bytes(FILE* F, uint8_t* bytes, size_t bytes_max)
 {
-    fprintf(F, "Packet length %d caused error: %d\n", (int)bytes_max, ret);
-
     for (size_t i = 0; i < bytes_max;) {
         fprintf(F, "%04x:  ", (int)i);
 
@@ -40,6 +38,14 @@ void picoquic_log_error_packet(FILE* F, uint8_t* bytes, size_t bytes_max, int re
         }
         fprintf(F, "\n");
     }
+}
+
+void picoquic_log_error_packet(FILE* F, uint8_t* bytes, size_t bytes_max, int ret)
+{
+    fprintf(F, "Packet length %d caused error: %d\n", (int)bytes_max, ret);
+
+    picoquic_log_bytes(F, bytes, bytes_max);
+
     fprintf(F, "\n");
 }
 
@@ -1041,7 +1047,7 @@ void picoquic_log_decrypted_segment(void* F_log, int log_cnxid, picoquic_cnx_t* 
         if (log_cnxid64 != 0) {
             fprintf(F, "%" PRIx64 ": ", log_cnxid64);
         }
-        fprintf(F, "    %s %d bytes\n", (receiving)?"Prepared":"Decrypted",
+        fprintf(F, "    %s %d bytes\n", (receiving)?"Decrypted": "Prepared",
             (int)ph->payload_length);
         picoquic_log_frames(F, log_cnxid64, bytes + ph->offset, ph->payload_length);
     }
@@ -1051,7 +1057,7 @@ void picoquic_log_decrypted_segment(void* F_log, int log_cnxid, picoquic_cnx_t* 
 void picoquic_log_outgoing_segment(void* F_log, int log_cnxid, picoquic_cnx_t* cnx,
     uint8_t * bytes,
     uint64_t sequence_number,
-    uint32_t length, uint32_t header_length,
+    uint32_t length,
     uint8_t* send_buffer, uint32_t send_length)
 {
     picoquic_cnx_t* pcnx = cnx;
@@ -1065,7 +1071,7 @@ void picoquic_log_outgoing_segment(void* F_log, int log_cnxid, picoquic_cnx_t* c
 
     /* log the segment. */
     picoquic_log_decrypted_segment(F_log, log_cnxid, cnx, 0,
-        &ph, bytes + header_length, length, ret);
+        &ph, bytes, length, ret);
 }
 
 void picoquic_log_processing(FILE* F, picoquic_cnx_t* cnx, size_t length, int ret)

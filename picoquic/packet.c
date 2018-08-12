@@ -112,8 +112,7 @@ int picoquic_parse_packet_header(
                         /* If the version is supported now, the format field in the version table
                         * describes the encoding. */
                         switch (picoquic_supported_versions[ph->version_index].version_header_encoding) {
-                        case picoquic_version_header_12:
-                        case picoquic_version_header_11:
+                        case picoquic_version_header_13:
                             switch (bytes[0]) {
                             case 0xFF: 
                             {
@@ -265,40 +264,7 @@ int picoquic_parse_packet_header(
              ph->version_index = (*pcnx)->version_index;
              /* If the connection is identified, decode the short header per version ID */
              switch (picoquic_supported_versions[ph->version_index].version_header_encoding) {
-             case picoquic_version_header_11:
-                 if ((bytes[0] & 0x40) == 0) {
-                     ph->ptype = picoquic_packet_1rtt_protected_phi0;
-                 }
-                 else {
-                     ph->ptype = picoquic_packet_1rtt_protected_phi1;
-                 }
-
-                 ph->spin = (bytes[0] >> 2) & 1;
-
-                 ph->pn_offset = ph->offset;
-
-                 switch (bytes[0] & 0x3) {
-                 case 0x0:
-                     ph->pn = bytes[ph->offset];
-                     ph->pnmask = 0xFFFFFFFFFFFFFF00ull;
-                     ph->offset += 1;
-                     break;
-                 case 0x1:
-                     ph->pn = PICOPARSE_16(&bytes[ph->offset]);
-                     ph->pnmask = 0xFFFFFFFFFFFF0000ull;
-                     ph->offset += 2;
-                     break;
-                 case 0x2:
-                     ph->pn = PICOPARSE_32(&bytes[ph->offset]);
-                     ph->pnmask = 0xFFFFFFFF00000000ull;
-                     ph->offset += 4;
-                     break;
-                 default:
-                     ph->ptype = picoquic_packet_error;
-                     break;
-                 }
-                 break;
-             case picoquic_version_header_12:
+             case picoquic_version_header_13:
                  if ((bytes[0] & 0x40) == 0) {
                      ph->ptype = picoquic_packet_1rtt_protected_phi0;
                  }
@@ -379,12 +345,12 @@ size_t  picoquic_decrypt_packet(picoquic_cnx_t* cnx,
         /* The header length is not yet known, will only be known after the sequence number is decrypted */
         size_t encrypted_length = 4;
         size_t sample_offset = ph->pn_offset + encrypted_length;
-        size_t aead_checksum_length = picoquic_aead_get_checksum_length(aead_context);
+        size_t sample_size = picoquic_pn_iv_size(pn_enc);
         uint8_t decoded_pn_bytes[4];
 
-        if (sample_offset + aead_checksum_length > length)
+        if (sample_offset + sample_size > length)
         {
-            sample_offset = length - aead_checksum_length;
+            sample_offset = length - sample_size;
             if (ph->pn_offset < sample_offset) {
                 encrypted_length = sample_offset - ph->pn_offset;
             }
@@ -394,63 +360,31 @@ size_t  picoquic_decrypt_packet(picoquic_cnx_t* cnx,
         }
         if (encrypted_length > 0)
         {
-            if (picoquic_supported_versions[ph->version_index].version_header_encoding == picoquic_version_header_11) {
-                /* Decode */
-                picoquic_pn_encrypt(pn_enc, bytes + sample_offset, decoded_pn_bytes, bytes + ph->pn_offset, encrypted_length);
-                /* Packet encoding is varint, specialized for sequence number */
-                switch (bytes[0] & 0x03) {
-                case 0x00:/* single byte encoding */
-                    ph->pn = decoded_pn_bytes[0];
-                    ph->pnmask = 0xFFFFFFFFFFFFFF00ull;
-                    ph->offset = ph->pn_offset + 1;
-                    ph->payload_length -= 1;
-                    break;
-                case 0x01: /* two byte encoding */
-                    ph->pn = PICOPARSE_16(decoded_pn_bytes);
-                    ph->pnmask = 0xFFFFFFFFFFFF0000ull;
-                    ph->offset = ph->pn_offset + 2;
-                    ph->payload_length -= 2;
-                    break;
-                case 0x02:
-                    ph->pn = PICOPARSE_32(decoded_pn_bytes);
-                    ph->pnmask = 0xFFFFFFFF00000000ull;
-                    ph->offset = ph->pn_offset + 4;
-                    ph->payload_length -= 4;
-                    break;
-                default:
-                    /* Invalid packet format. Avoid crash! */
-                    ph->pn = 0xFFFFFFFF;
-                    ph->pnmask = 0xFFFFFFFF00000000ull;
-                    ph->offset = ph->pn_offset;
-                    break;
-                }
+            /* Decode */
+            picoquic_pn_encrypt(pn_enc, bytes + sample_offset, decoded_pn_bytes, bytes + ph->pn_offset, encrypted_length);
+            /* Packet encoding is varint, specialized for sequence number */
+            switch (decoded_pn_bytes[0] & 0xC0) {
+            case 0x00:
+            case 0x40: /* single byte encoding */
+                ph->pn = decoded_pn_bytes[0] & 0x7F;
+                ph->pnmask = 0xFFFFFFFFFFFFFF80ull;
+                ph->offset = ph->pn_offset + 1;
+                ph->payload_length -= 1;
+                break;
+            case 0x80: /* two byte encoding */
+                ph->pn = (PICOPARSE_16(decoded_pn_bytes)) & 0x3FFF;
+                ph->pnmask = 0xFFFFFFFFFFFFC000ull;
+                ph->offset = ph->pn_offset + 2;
+                ph->payload_length -= 2;
+                break;
+            case 0xC0:
+                ph->pn = (PICOPARSE_32(decoded_pn_bytes)) & 0x3FFFFFFF;
+                ph->pnmask = 0xFFFFFFFFC0000000ull;
+                ph->offset = ph->pn_offset + 4;
+                ph->payload_length -= 4;
+                break;
             }
-            else {
-                /* Decode */
-                picoquic_pn_encrypt(pn_enc, bytes + sample_offset, decoded_pn_bytes, bytes + ph->pn_offset, encrypted_length);
-                /* Packet encoding is varint, specialized for sequence number */
-                switch (decoded_pn_bytes[0] & 0xC0) {
-                case 0x00:
-                case 0x40: /* single byte encoding */
-                    ph->pn = decoded_pn_bytes[0] & 0x7F;
-                    ph->pnmask = 0xFFFFFFFFFFFFFF80ull;
-                    ph->offset = ph->pn_offset + 1;
-                    ph->payload_length -= 1;
-                    break;
-                case 0x80: /* two byte encoding */
-                    ph->pn = (PICOPARSE_16(decoded_pn_bytes)) & 0x3FFF;
-                    ph->pnmask = 0xFFFFFFFFFFFFC000ull;
-                    ph->offset = ph->pn_offset + 2;
-                    ph->payload_length -= 2;
-                    break;
-                case 0xC0:
-                    ph->pn = (PICOPARSE_32(decoded_pn_bytes)) & 0x3FFFFFFF;
-                    ph->pnmask = 0xFFFFFFFFC0000000ull;
-                    ph->offset = ph->pn_offset + 4;
-                    ph->payload_length -= 4;
-                    break;
-                }
-            }
+
             if (ph->offset > ph->pn_offset) {
                 memcpy(bytes + ph->pn_offset, decoded_pn_bytes, ph->offset - ph->pn_offset);
             }
@@ -501,14 +435,14 @@ int picoquic_parse_header_and_decrypt(
     uint64_t current_time,
     picoquic_packet_header* ph,
     picoquic_cnx_t** pcnx,
-    uint32_t * consumed)
+    uint32_t * consumed,
+    int * new_ctx_created)
 {
     /* Parse the clear text header. Ret == 0 means an incorrect packet that could not be parsed */
     int already_received = 0;
     size_t decoded_length = 0;
     int ret = picoquic_parse_packet_header(quic, bytes, length, addr_from, ph, pcnx, 1);
     int cmp_reset_secret = -1;
-    int new_ctx_created = 0;
 
     if (ret == 0) {
         /* TODO: clarify length, payload length, packet length -- special case of initial packet */
@@ -524,7 +458,7 @@ int picoquic_parse_header_and_decrypt(
             else {
                 /* if listening is OK, listen */
                 *pcnx = picoquic_create_cnx(quic, ph->dest_cnx_id, ph->srce_cnx_id, addr_from, current_time, ph->vn, NULL, NULL, 0);
-                new_ctx_created = (*pcnx == NULL) ? 0 : 1;
+                *new_ctx_created = (*pcnx == NULL) ? 0 : 1;
             }
         }
 
@@ -583,9 +517,10 @@ int picoquic_parse_header_and_decrypt(
                 }
                 else {
                     ret = PICOQUIC_ERROR_AEAD_CHECK;
-                    if (new_ctx_created) {
+                    if (*new_ctx_created) {
                         picoquic_delete_cnx(*pcnx);
                         *pcnx = NULL;
+                        *new_ctx_created = 0;
                     }
                 }
             }
@@ -792,7 +727,8 @@ int picoquic_incoming_initial(
     struct sockaddr* addr_to,
     unsigned long if_index_to,
     picoquic_packet_header* ph,
-    uint64_t current_time)
+    uint64_t current_time,
+    int new_context_created)
 {
     int ret = 0;
     size_t extra_offset = 0;
@@ -845,10 +781,12 @@ int picoquic_incoming_initial(
     }
 
     if (ret != 0 || cnx->cnx_state == picoquic_state_disconnected) {
-        /* This is bad. should just delete the context, log the packet, etc */
-        picoquic_delete_cnx(cnx);
-        cnx = NULL;
-        ret = PICOQUIC_ERROR_CONNECTION_DELETED;
+        /* This is bad. If this is an initial attempt, delete the connection */
+        if (new_context_created) {
+            picoquic_delete_cnx(cnx);
+            cnx = NULL;
+            ret = PICOQUIC_ERROR_CONNECTION_DELETED;
+        }
     }
     else {
         /* remember the local address on which the initial packet arrived. */
@@ -1080,13 +1018,9 @@ int picoquic_incoming_0rtt(
             ret = picoquic_decode_frames(cnx,
                 bytes + ph->offset, ph->payload_length, ph->epoch, current_time);
 
-            /* Yell if there is data coming on tls stream */
             if (ret == 0) {
-                picoquic_stream_data* data = cnx->tls_stream.stream_data;
-
-                if (data != NULL && data->offset < cnx->tls_stream.consumed_offset) {
-                    ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION);
-                }
+                /* Processing of TLS messages -- EOED */
+                ret = picoquic_tls_stream_process(cnx);
             }
         }
     } else {
@@ -1216,10 +1150,11 @@ int picoquic_incoming_segment(
     int ret = 0;
     picoquic_cnx_t* cnx = NULL;
     picoquic_packet_header ph;
+    int new_context_created = 0;
 
     /* Parse the header and decrypt the packet */
     ret = picoquic_parse_header_and_decrypt(quic, bytes, length, packet_length, addr_from,
-        current_time, &ph, &cnx, consumed);
+        current_time, &ph, &cnx, consumed, &new_context_created);
 
     /* Log the incoming packet */
     picoquic_log_decrypted_segment(quic->F_log, 1, cnx, 1, &ph, bytes, (uint32_t)*consumed, ret);
@@ -1271,7 +1206,7 @@ int picoquic_incoming_segment(
                         if (cnx->client_mode == 0) {
                             /* TODO: finish processing initial connection packet */
                             ret = picoquic_incoming_initial(cnx, bytes,
-                                addr_from, addr_to, if_index_to, &ph, current_time);
+                                addr_from, addr_to, if_index_to, &ph, current_time, new_context_created);
                         }
                         else {
                             /* TODO: this really depends on the current receive epoch */
@@ -1320,7 +1255,8 @@ int picoquic_incoming_segment(
     }
 
     if (ret == 0 || ret == PICOQUIC_ERROR_SPURIOUS_REPEAT) {
-        if (cnx != NULL && ph.ptype != picoquic_packet_version_negotiation) {
+        if (cnx != NULL && cnx->cnx_state != picoquic_state_disconnected &&
+            ph.ptype != picoquic_packet_version_negotiation) {
             /* Mark the sequence number as received */
             ret = picoquic_record_pn_received(cnx, ph.pc, ph.pn64, current_time);
         }
@@ -1335,7 +1271,8 @@ int picoquic_incoming_segment(
         ret = -1;
     } else if (ret == PICOQUIC_ERROR_AEAD_CHECK || ret == PICOQUIC_ERROR_INITIAL_TOO_SHORT ||
         ret == PICOQUIC_ERROR_UNEXPECTED_PACKET || ret == PICOQUIC_ERROR_FNV1A_CHECK || 
-        ret == PICOQUIC_ERROR_CNXID_CHECK || ret == PICOQUIC_ERROR_RETRY || ret == PICOQUIC_ERROR_DETECTED ||
+        ret == PICOQUIC_ERROR_CNXID_CHECK || 
+        ret == PICOQUIC_ERROR_RETRY || ret == PICOQUIC_ERROR_DETECTED ||
         ret == PICOQUIC_ERROR_CONNECTION_DELETED) {
         /* Bad packets are dropped silently */
 

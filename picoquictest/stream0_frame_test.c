@@ -134,8 +134,10 @@ static int StreamZeroFrameOneTest(struct test_case_st* test)
     picoquic_cnx_t cnx = { 0 };
     uint64_t current_time = 0;
     
-    cnx.local_parameters.initial_max_stream_data = 0x10000;
-    cnx.remote_parameters.initial_max_stream_data = 0x10000;
+    cnx.local_parameters.initial_max_stream_data_bidi_local = 0x10000;
+    cnx.local_parameters.initial_max_stream_data_bidi_remote = 0x10000;
+    cnx.remote_parameters.initial_max_stream_data_bidi_local = 0x10000;
+    cnx.remote_parameters.initial_max_stream_data_bidi_remote = 0x10000;
     cnx.maxdata_local = 0x10000;
 
     for (size_t i = 0; ret == 0 && i < test->list_size; i++) {
@@ -285,12 +287,13 @@ static size_t const nb_tls_test_cases = sizeof(tls_test_case) / sizeof(struct te
 static int TlsStreamFrameOneTest(struct test_case_st* test)
 {
     int ret = 0;
+    int test_epoch = 2; /* epoch = 2 for handshake */
 
     picoquic_cnx_t cnx = { 0 };
 
     for (size_t i = 0; ret == 0 && i < test->list_size; i++) {
         if (NULL == picoquic_decode_crypto_hs_frame(&cnx, test->list[i].packet,
-                test->list[i].packet + test->list[i].packet_length, 2 /* epoch = 2 for handshake */)) {
+                test->list[i].packet + test->list[i].packet_length, test_epoch )) {
             FAIL(test, "packet %" PRIst, i);
             ret = -1;
         }
@@ -298,7 +301,7 @@ static int TlsStreamFrameOneTest(struct test_case_st* test)
 
     if (ret == 0) {
         /* Check the content of all the data in the context */
-        picoquic_stream_data* data = cnx.tls_stream.stream_data;
+        picoquic_stream_data* data = cnx.tls_stream[test_epoch].stream_data;
         size_t data_rank = 0;
 
         while (data != NULL) {

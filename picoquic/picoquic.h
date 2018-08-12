@@ -81,11 +81,11 @@ extern "C" {
 #define PICOQUIC_TRANSPORT_STREAM_STATE_ERROR (0x5)
 #define PICOQUIC_TRANSPORT_FINAL_OFFSET_ERROR (0x6)
 #define PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR (0x7)
-#define PICOQUIC_TRANSPORT_TRANSPORT_PARAMETER_ERROR (0x8)
+#define PICOQUIC_TRANSPORT_PARAMETER_ERROR (0x8)
 #define PICOQUIC_TRANSPORT_VERSION_NEGOTIATION_ERROR (0x9)
 #define PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION (0xA)
 #define PICOQUIC_TRANSPORT_UNSOLICITED_PATH_RESPONSE (0xB)
-#define PICOQUIC_TRANSPORT_CRYPTO_ERROR(Alert) (0x100 | ((int)((Alert)&0xFF))
+#define PICOQUIC_TRANSPORT_CRYPTO_ERROR(Alert) (((uint16_t)0x100) | ((uint16_t)((Alert)&0xFF)))
 #define PICOQUIC_TLS_HANDSHAKE_FAILED (0x201)
 #define PICOQUIC_TLS_FATAL_ALERT_GENERATED (0x202)
 #define PICOQUIC_TLS_FATAL_ALERT_RECEIVED (0x203)
@@ -138,6 +138,9 @@ typedef struct st_picoquic_connection_id_t {
     uint8_t id_len;
 } picoquic_connection_id_t;
 
+/* Detect whether error occured in TLS
+ */
+int picoquic_is_handshake_error(uint16_t error_code);
 /*
 * The stateless packet structure is used to temporarily store
 * stateless packets before they can be sent by servers.

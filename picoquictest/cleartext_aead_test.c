@@ -813,6 +813,7 @@ static int draft31_incoming_initial_test()
         uint64_t current_time = 0;
         uint32_t consumed = 0;
         struct sockaddr_in test_addr_c;
+        int new_context_created = 0;
 
         memset(&test_addr_c, 0, sizeof(struct sockaddr_in));
         test_addr_c.sin_family = AF_INET;
@@ -821,7 +822,7 @@ static int draft31_incoming_initial_test()
 
         /* Parse the header and decrypt the packet */
         ret = picoquic_parse_header_and_decrypt(qserver, draft13_test_input_packet, length, length,
-            (struct sockaddr *)&test_addr_c, current_time, &ph, &cnx, &consumed);
+            (struct sockaddr *)&test_addr_c, current_time, &ph, &cnx, &consumed, &new_context_created);
 
         if (ret != 0) {
             DBG_PRINTF("Cannot parse or decrypt incoming packet, ret = %x\n", ret);
