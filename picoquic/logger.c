@@ -1049,7 +1049,8 @@ void picoquic_log_decrypted_segment(void* F_log, int log_cnxid, picoquic_cnx_t* 
         }
         fprintf(F, "    %s %d bytes\n", (receiving)?"Decrypted": "Prepared",
             (int)ph->payload_length);
-        picoquic_log_frames(F, log_cnxid64, bytes + ph->offset, ph->payload_length);
+        picoquic_log_frames(F, log_cnxid64, bytes + ph->offset, 
+            ph->payload_length);
     }
     fprintf(F, "\n");
 }
@@ -1062,12 +1063,23 @@ void picoquic_log_outgoing_segment(void* F_log, int log_cnxid, picoquic_cnx_t* c
 {
     picoquic_cnx_t* pcnx = cnx;
     picoquic_packet_header ph;
+    uint32_t checksum_length = (cnx != NULL)? picoquic_get_checksum_length(cnx, 0):16;
     int ret = picoquic_parse_packet_header(cnx->quic, send_buffer, send_length,
         (struct sockaddr *)&cnx->path[0]->dest_addr, &ph, &pcnx, 0);
+
+    if (F_log == NULL) {
+        return;
+    }
 
     ph.pn64 = sequence_number;
     ph.pn = (uint32_t)ph.pn64;
     ph.offset = ph.pn_offset + 4; /* todo: should provide the actual length */
+    if (ph.payload_length > checksum_length) {
+        ph.payload_length -= checksum_length;
+    }
+    else {
+        ph.payload_length = 0;
+    }
 
     /* log the segment. */
     picoquic_log_decrypted_segment(F_log, log_cnxid, cnx, 0,
