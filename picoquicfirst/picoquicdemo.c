@@ -53,11 +53,9 @@
 #ifdef _WINDOWS64
 static const char* default_server_cert_file = "..\\..\\certs\\cert.pem";
 static const char* default_server_key_file = "..\\..\\certs\\key.pem";
-static const char* default_root_trust_file = "..\\..\\certs\\test-ca.crt";
 #else
 static const char* default_server_cert_file = "..\\certs\\cert.pem";
 static const char* default_server_key_file = "..\\certs\\key.pem";
-static const char* default_root_trust_file = "..\\certs\\test-ca.crt";
 #endif
 
 #else /* Linux */
@@ -97,7 +95,6 @@ static const char* default_root_trust_file = "..\\certs\\test-ca.crt";
 
 static const char* default_server_cert_file = "certs/cert.pem";
 static const char* default_server_key_file = "certs/key.pem";
-static const char* default_root_trust_file = "certs/test-ca.crt";
 
 #endif
 
