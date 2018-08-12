@@ -435,14 +435,14 @@ int picoquic_parse_header_and_decrypt(
     uint64_t current_time,
     picoquic_packet_header* ph,
     picoquic_cnx_t** pcnx,
-    uint32_t * consumed)
+    uint32_t * consumed,
+    int * new_ctx_created)
 {
     /* Parse the clear text header. Ret == 0 means an incorrect packet that could not be parsed */
     int already_received = 0;
     size_t decoded_length = 0;
     int ret = picoquic_parse_packet_header(quic, bytes, length, addr_from, ph, pcnx, 1);
     int cmp_reset_secret = -1;
-    int new_ctx_created = 0;
 
     if (ret == 0) {
         /* TODO: clarify length, payload length, packet length -- special case of initial packet */
@@ -458,7 +458,7 @@ int picoquic_parse_header_and_decrypt(
             else {
                 /* if listening is OK, listen */
                 *pcnx = picoquic_create_cnx(quic, ph->dest_cnx_id, ph->srce_cnx_id, addr_from, current_time, ph->vn, NULL, NULL, 0);
-                new_ctx_created = (*pcnx == NULL) ? 0 : 1;
+                *new_ctx_created = (*pcnx == NULL) ? 0 : 1;
             }
         }
 
@@ -517,9 +517,10 @@ int picoquic_parse_header_and_decrypt(
                 }
                 else {
                     ret = PICOQUIC_ERROR_AEAD_CHECK;
-                    if (new_ctx_created) {
+                    if (*new_ctx_created) {
                         picoquic_delete_cnx(*pcnx);
                         *pcnx = NULL;
+                        *new_ctx_created = 0;
                     }
                 }
             }
@@ -726,7 +727,8 @@ int picoquic_incoming_initial(
     struct sockaddr* addr_to,
     unsigned long if_index_to,
     picoquic_packet_header* ph,
-    uint64_t current_time)
+    uint64_t current_time,
+    int new_context_created)
 {
     int ret = 0;
     size_t extra_offset = 0;
@@ -780,9 +782,11 @@ int picoquic_incoming_initial(
 
     if (ret != 0 || cnx->cnx_state == picoquic_state_disconnected) {
         /* This is bad. If this is an initial attempt, delete the connection */
+        if (new_context_created) {
             picoquic_delete_cnx(cnx);
             cnx = NULL;
             ret = PICOQUIC_ERROR_CONNECTION_DELETED;
+        }
     }
     else {
         /* remember the local address on which the initial packet arrived. */
@@ -1146,10 +1150,11 @@ int picoquic_incoming_segment(
     int ret = 0;
     picoquic_cnx_t* cnx = NULL;
     picoquic_packet_header ph;
+    int new_context_created = 0;
 
     /* Parse the header and decrypt the packet */
     ret = picoquic_parse_header_and_decrypt(quic, bytes, length, packet_length, addr_from,
-        current_time, &ph, &cnx, consumed);
+        current_time, &ph, &cnx, consumed, &new_context_created);
 
     /* Log the incoming packet */
     picoquic_log_decrypted_segment(quic->F_log, 1, cnx, 1, &ph, bytes, (uint32_t)*consumed, ret);
@@ -1201,7 +1206,7 @@ int picoquic_incoming_segment(
                         if (cnx->client_mode == 0) {
                             /* TODO: finish processing initial connection packet */
                             ret = picoquic_incoming_initial(cnx, bytes,
-                                addr_from, addr_to, if_index_to, &ph, current_time);
+                                addr_from, addr_to, if_index_to, &ph, current_time, new_context_created);
                         }
                         else {
                             /* TODO: this really depends on the current receive epoch */

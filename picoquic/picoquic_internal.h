@@ -699,7 +699,8 @@ int picoquic_parse_header_and_decrypt(
     uint64_t current_time,
     picoquic_packet_header* ph,
     picoquic_cnx_t** pcnx,
-    uint32_t * consumed);
+    uint32_t * consumed,
+    int * new_context_created);
 
 /* Handling of packet logging */
 void picoquic_log_decrypted_segment(void* F_log, int log_cnxid, picoquic_cnx_t* cnx,

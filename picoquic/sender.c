@@ -1661,10 +1661,8 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
             packet_type = picoquic_packet_handshake;
         }
         else {
-            /* TO DO: This is a temporary kludge. Should really send a disconnect request
-             * as an Initial Packet */
-            cnx->cnx_state = picoquic_state_disconnected;
-            ret = PICOQUIC_ERROR_DISCONNECTED;
+            pc = picoquic_packet_context_initial;
+            packet_type = picoquic_packet_initial;
         }
         break;
     case picoquic_state_disconnecting:
@@ -1878,11 +1876,11 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
 
 
     /* Verify first that there is no need for retransmit or ack
-     * on initial or handshake context */
+     * on initial or handshake context. This does not deal with EOED packets,
+     * as they are handled from within the general retransmission path */
     if (ret == 0) {
         length = picoquic_prepare_packet_old_context(cnx, picoquic_packet_context_initial,
             path_x, packet, send_buffer_min_max, current_time, &header_length);
-        /* TODO: consider special case of EOED on 0-RTT stream */
 
         if (length == 0) {
             length = picoquic_prepare_packet_old_context(cnx, picoquic_packet_context_handshake,
