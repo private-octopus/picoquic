@@ -1145,6 +1145,7 @@ int picoquic_prepare_packet_0rtt(picoquic_cnx_t* cnx, picoquic_path_t * path_x, 
     picoquic_stream_head* stream = NULL;
     picoquic_packet_type_enum packet_type = picoquic_packet_0rtt_protected;
     size_t data_bytes = 0;
+    int padding_required = 0;
     uint32_t header_length = 0;
     uint8_t* bytes = packet->bytes;
     uint32_t length = 0;
@@ -1163,7 +1164,13 @@ int picoquic_prepare_packet_0rtt(picoquic_cnx_t* cnx, picoquic_path_t * path_x, 
     packet->send_path = path_x;
     packet->checksum_overhead = checksum_overhead;
 
-    if ((stream == NULL && cnx->first_misc_frame == NULL) || (PICOQUIC_DEFAULT_0RTT_WINDOW <= path_x->bytes_in_transit + send_buffer_max)) {
+    if (packet->sequence_number == 0 && send_buffer_max < PICOQUIC_ENFORCED_INITIAL_MTU) {
+        /* Special case in which the 0-RTT packet is coalesced with initial packet */
+        padding_required = 1;
+    }
+
+    if ((stream == NULL && cnx->first_misc_frame == NULL && padding_required == 0) || 
+        (PICOQUIC_DEFAULT_0RTT_WINDOW <= path_x->bytes_in_transit + send_buffer_max)) {
         length = 0;
     } else {
         /* If present, send misc frame */
@@ -1183,6 +1190,12 @@ int picoquic_prepare_packet_0rtt(picoquic_cnx_t* cnx, picoquic_path_t * path_x, 
                 send_buffer_max - checksum_overhead - length, &data_bytes);
             if (ret == 0) {
                 length += (uint32_t) data_bytes;
+            }
+        }
+        /* Add padding if required */
+        if (padding_required) {
+            while (length < send_buffer_max - checksum_overhead) {
+                bytes[length++] = 0;
             }
         }
     }
@@ -1437,7 +1450,10 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                             }
                         }
 
-                        if (packet_type == picoquic_packet_initial) {
+                        if (packet_type == picoquic_packet_initial && 
+                            cnx->crypto_context[1].aead_encrypt == NULL) {
+                            /* Pad to minimum packet length. But don't do that if the
+                             * initial packet will be coalesced with 0-RTT packet */
                             while (length < send_buffer_max - checksum_overhead) {
                                 bytes[length++] = 0;
                             }
