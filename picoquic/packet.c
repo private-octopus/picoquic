@@ -721,7 +721,7 @@ void picoquic_queue_stateless_retry(picoquic_cnx_t* cnx,
  */
 
 int picoquic_incoming_initial(
-    picoquic_cnx_t* cnx,
+    picoquic_cnx_t** pcnx,
     uint8_t* bytes,
     struct sockaddr* addr_from,
     struct sockaddr* addr_to,
@@ -735,7 +735,7 @@ int picoquic_incoming_initial(
 
     /* Logic to test the retry token.
      * TODO: this should probably be implemented as a callback */
-    if (cnx->quic->flags&picoquic_context_check_token) {
+    if ((*pcnx)->quic->flags&picoquic_context_check_token) {
         uint8_t * base;
         size_t len;
         uint8_t token[16];
@@ -751,7 +751,7 @@ int picoquic_incoming_initial(
             base = (uint8_t *)&a6->sin6_addr;
         }
 
-        if (picoquic_get_retry_token(cnx->quic, base, len,
+        if (picoquic_get_retry_token((*pcnx)->quic, base, len,
             token, sizeof(token)) != 0)
         {
             ret = PICOQUIC_ERROR_MEMORY;
@@ -760,7 +760,7 @@ int picoquic_incoming_initial(
             if (ph->token_length != sizeof(token) ||
                 memcmp(token, bytes + ph->token_offset, sizeof(token)) != 0)
             {
-                picoquic_queue_stateless_retry(cnx, ph,
+                picoquic_queue_stateless_retry(*pcnx, ph,
                     addr_from, addr_to, if_index_to, token, sizeof(token));
                 ret = PICOQUIC_ERROR_RETRY;
             }
@@ -769,7 +769,7 @@ int picoquic_incoming_initial(
 
     /* decode the incoming frames */
     if (ret == 0) {
-        ret = picoquic_decode_frames(cnx,
+        ret = picoquic_decode_frames(*pcnx,
             bytes + ph->offset + extra_offset, ph->payload_length - extra_offset, ph->epoch, current_time);
     }
 
@@ -777,22 +777,22 @@ int picoquic_incoming_initial(
     if (ret == 0) {
         /* initialization of context & creation of data */
         /* TODO: find path to send data produced by TLS. */
-        ret = picoquic_tls_stream_process(cnx);
+        ret = picoquic_tls_stream_process(*pcnx);
     }
 
-    if (ret != 0 || cnx->cnx_state == picoquic_state_disconnected) {
+    if (ret != 0 || (*pcnx)->cnx_state == picoquic_state_disconnected) {
         /* This is bad. If this is an initial attempt, delete the connection */
         if (new_context_created) {
-            picoquic_delete_cnx(cnx);
-            cnx = NULL;
+            picoquic_delete_cnx(*pcnx);
+            *pcnx = NULL;
             ret = PICOQUIC_ERROR_CONNECTION_DELETED;
         }
     }
     else {
         /* remember the local address on which the initial packet arrived. */
-        cnx->path[0]->if_index_dest = if_index_to;
-        cnx->path[0]->dest_addr_len = (addr_to->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
-        memcpy(&cnx->path[0]->dest_addr, addr_to, cnx->path[0]->dest_addr_len);
+        (*pcnx)->path[0]->if_index_dest = if_index_to;
+        (*pcnx)->path[0]->dest_addr_len = (addr_to->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
+        memcpy(&(*pcnx)->path[0]->dest_addr, addr_to, (*pcnx)->path[0]->dest_addr_len);
     }
 
     return ret;
@@ -1145,7 +1145,8 @@ int picoquic_incoming_segment(
     struct sockaddr* addr_from,
     struct sockaddr* addr_to,
     int if_index_to,
-    uint64_t current_time)
+    uint64_t current_time,
+    picoquic_connection_id_t * previous_dest_id)
 {
     int ret = 0;
     picoquic_cnx_t* cnx = NULL;
@@ -1155,6 +1156,17 @@ int picoquic_incoming_segment(
     /* Parse the header and decrypt the packet */
     ret = picoquic_parse_header_and_decrypt(quic, bytes, length, packet_length, addr_from,
         current_time, &ph, &cnx, consumed, &new_context_created);
+
+    /* Verify that the segment coalescing is for the same destination ID */
+    if (ret == 0) {
+        if (picoquic_is_connection_id_null(*previous_dest_id)) {
+            *previous_dest_id = ph.dest_cnx_id;
+        }
+        else if (picoquic_compare_connection_id(previous_dest_id, &ph.dest_cnx_id) != 0) {
+            ret = PICOQUIC_ERROR_CNXID_SEGMENT;
+
+        }
+    }
 
     /* Log the incoming packet */
     picoquic_log_decrypted_segment(quic->F_log, 1, cnx, 1, &ph, bytes, (uint32_t)*consumed, ret);
@@ -1205,7 +1217,7 @@ int picoquic_incoming_segment(
                     if (ret == 0) {
                         if (cnx->client_mode == 0) {
                             /* TODO: finish processing initial connection packet */
-                            ret = picoquic_incoming_initial(cnx, bytes,
+                            ret = picoquic_incoming_initial(&cnx, bytes,
                                 addr_from, addr_to, if_index_to, &ph, current_time, new_context_created);
                         }
                         else {
@@ -1273,7 +1285,8 @@ int picoquic_incoming_segment(
         ret == PICOQUIC_ERROR_UNEXPECTED_PACKET || ret == PICOQUIC_ERROR_FNV1A_CHECK || 
         ret == PICOQUIC_ERROR_CNXID_CHECK || 
         ret == PICOQUIC_ERROR_RETRY || ret == PICOQUIC_ERROR_DETECTED ||
-        ret == PICOQUIC_ERROR_CONNECTION_DELETED) {
+        ret == PICOQUIC_ERROR_CONNECTION_DELETED ||
+        ret == PICOQUIC_ERROR_CNXID_SEGMENT) {
         /* Bad packets are dropped silently */
 
         DBG_PRINTF("Packet (%d) dropped, t: %d, e: %d, pc: %d, pn: %d, l: %d, ret : %x\n",
@@ -1306,13 +1319,15 @@ int picoquic_incoming_packet(
 {
     uint32_t consumed_index = 0;
     int ret = 0;
+    picoquic_connection_id_t previous_destid = picoquic_null_connection_id;
+
 
     while (consumed_index < packet_length) {
         uint32_t consumed = 0;
 
         ret = picoquic_incoming_segment(quic, bytes + consumed_index, 
             packet_length - consumed_index, packet_length,
-            &consumed, addr_from, addr_to, if_index_to, current_time);
+            &consumed, addr_from, addr_to, if_index_to, current_time, &previous_destid);
 
         if (ret == 0) {
             consumed_index += consumed;
