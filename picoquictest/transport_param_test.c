@@ -203,7 +203,10 @@ static int transport_param_compare(picoquic_tp_t* param, picoquic_tp_t* ref) {
     if (param->initial_max_stream_data_bidi_local != ref->initial_max_stream_data_bidi_local) {
         ret = -1;
     }
-    else if (param->initial_max_stream_data_bidi_remote != ref->initial_max_stream_data_bidi_remote) {
+    else if (param->initial_max_stream_data_bidi_remote != ref->initial_max_stream_data_bidi_remote &&
+        (ref->initial_max_stream_data_bidi_remote != 0 ||
+            param->initial_max_stream_data_bidi_remote != ref->initial_max_stream_data_bidi_local)) {
+        /* TODO: remove the horrific kludge above when we align on draft 14 */
         ret = -1;
     }
     else if (param->initial_max_stream_data_uni != ref->initial_max_stream_data_uni) {
