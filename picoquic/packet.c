@@ -1145,7 +1145,8 @@ int picoquic_incoming_segment(
     struct sockaddr* addr_from,
     struct sockaddr* addr_to,
     int if_index_to,
-    uint64_t current_time)
+    uint64_t current_time,
+    picoquic_connection_id_t * previous_dest_id)
 {
     int ret = 0;
     picoquic_cnx_t* cnx = NULL;
@@ -1155,6 +1156,17 @@ int picoquic_incoming_segment(
     /* Parse the header and decrypt the packet */
     ret = picoquic_parse_header_and_decrypt(quic, bytes, length, packet_length, addr_from,
         current_time, &ph, &cnx, consumed, &new_context_created);
+
+    /* Verify that the segment coalescing is for the same destination ID */
+    if (ret == 0) {
+        if (picoquic_is_connection_id_null(*previous_dest_id)) {
+            *previous_dest_id = ph.dest_cnx_id;
+        }
+        else if (picoquic_compare_connection_id(previous_dest_id, &ph.dest_cnx_id) != 0) {
+            ret = PICOQUIC_ERROR_CNXID_SEGMENT;
+
+        }
+    }
 
     /* Log the incoming packet */
     picoquic_log_decrypted_segment(quic->F_log, 1, cnx, 1, &ph, bytes, (uint32_t)*consumed, ret);
@@ -1273,7 +1285,8 @@ int picoquic_incoming_segment(
         ret == PICOQUIC_ERROR_UNEXPECTED_PACKET || ret == PICOQUIC_ERROR_FNV1A_CHECK || 
         ret == PICOQUIC_ERROR_CNXID_CHECK || 
         ret == PICOQUIC_ERROR_RETRY || ret == PICOQUIC_ERROR_DETECTED ||
-        ret == PICOQUIC_ERROR_CONNECTION_DELETED) {
+        ret == PICOQUIC_ERROR_CONNECTION_DELETED ||
+        ret == PICOQUIC_ERROR_CNXID_SEGMENT) {
         /* Bad packets are dropped silently */
 
         DBG_PRINTF("Packet (%d) dropped, t: %d, e: %d, pc: %d, pn: %d, l: %d, ret : %x\n",
@@ -1306,13 +1319,15 @@ int picoquic_incoming_packet(
 {
     uint32_t consumed_index = 0;
     int ret = 0;
+    picoquic_connection_id_t previous_destid = picoquic_null_connection_id;
+
 
     while (consumed_index < packet_length) {
         uint32_t consumed = 0;
 
         ret = picoquic_incoming_segment(quic, bytes + consumed_index, 
             packet_length - consumed_index, packet_length,
-            &consumed, addr_from, addr_to, if_index_to, current_time);
+            &consumed, addr_from, addr_to, if_index_to, current_time, &previous_destid);
 
         if (ret == 0) {
             consumed_index += consumed;
