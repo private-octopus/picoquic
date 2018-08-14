@@ -483,13 +483,9 @@ typedef struct st_picoquic_cnx_t {
     void* tls_ctx;
     struct st_ptls_buffer_t* tls_sendbuf;
     uint16_t psk_cipher_suite_id;
-    int tls_stream_closed[PICOQUIC_NUMBER_OF_EPOCHS];
+
     picoquic_stream_head tls_stream[PICOQUIC_NUMBER_OF_EPOCHS]; /* Separate input/output from each epoch */
     picoquic_crypto_context_t crypto_context[PICOQUIC_NUMBER_OF_EPOCHS]; /* Encryption and decryption objects */
-#if 0
-    size_t epoch_offsets[PICOQUIC_NUMBER_OF_EPOCH_OFFSETS]; /* documents the offset for the sending side of the tls_stream */
-    size_t epoch_received[PICOQUIC_NUMBER_OF_EPOCH_OFFSETS]; /* documents the offset for the sending side of the tls_stream */
-#endif
 
     /* Liveness detection */
     uint64_t latest_progress_time; /* last local time at which the connection progressed */

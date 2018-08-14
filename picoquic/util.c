@@ -101,7 +101,7 @@ void debug_printf(const char* fmt, ...)
     }
 }
 
-void debug_dump(void * x, int len)
+void debug_dump(const void * x, int len)
 {
     if (debug_suspended == 0) {
         FILE * F = debug_out ? debug_out : stderr;
