@@ -1474,53 +1474,45 @@ int picoquic_compare_cleartext_aead_contexts(picoquic_cnx_t* cnx1, picoquic_cnx_
 int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
 {
     int ret = 0;
-    struct st_ptls_buffer_t sendbuf;
     picoquic_tls_ctx_t* ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
+    size_t next_epoch = 0;
 
-    ptls_buffer_init(&sendbuf, "", 0);
-
-    for (int epoch = 0; epoch < PICOQUIC_NUMBER_OF_EPOCHS && ret == 0; epoch++) {
+    for (size_t epoch = 0; epoch < PICOQUIC_NUMBER_OF_EPOCHS && ret == 0; epoch++) {
         picoquic_stream_head* stream = &cnx->tls_stream[epoch];
         picoquic_stream_data* data = stream->stream_data;
         size_t processed = 0;
+        int data_pushed = 0;
 
-        if (cnx->tls_stream_closed[epoch] || 
-            (epoch > 0 && !cnx->tls_stream_closed[epoch-1])) {
-            continue;
+        next_epoch = ptls_get_read_epoch(ctx->tls);
+
+        if (epoch != next_epoch) {
+            if (epoch > next_epoch) {
+                break;
+            } else {
+                if (data != NULL && data->offset > stream->consumed_offset) {
+                    /* Protocol error: data received that could not be read */
+#ifdef _DEBUG
+                    DBG_PRINTF("Connection error - TLS data at epoch %d, expected %d.\n",
+                        epoch, next_epoch);
+#endif
+                    ret = picoquic_connection_error(cnx,
+                        PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION);
+                }
+                continue;
+            }
         }
 
         while ((ret == 0 || ret == PTLS_ERROR_IN_PROGRESS) &&
             data != NULL && data->offset <= stream->consumed_offset) {
-
+            struct st_ptls_buffer_t sendbuf;
             size_t start = (size_t)(stream->consumed_offset - data->offset);
             size_t epoch_data = data->length - start;
             size_t send_offset[PICOQUIC_NUMBER_OF_EPOCH_OFFSETS] = { 0, 0, 0, 0, 0 };
 
             ptls_buffer_init(&sendbuf, "", 0);
+
             ret = ptls_handle_message(ctx->tls, &sendbuf, send_offset, epoch,
                 data->bytes + start, epoch_data, &ctx->handshake_properties);
-
-            switch (epoch) {
-            case 0:
-                if (cnx->crypto_context[2].aead_decrypt != NULL) {
-                    cnx->tls_stream_closed[0] = 1;
-                }
-                if (cnx->client_mode == 1 ||
-                    cnx->crypto_context[1].aead_decrypt == NULL) {
-                    cnx->tls_stream_closed[1] = 1;
-                }
-                break;
-            case 1:
-                cnx->tls_stream_closed[1] = 1;
-                break;
-            case 2:
-                if (ptls_handshake_is_complete(ctx->tls)) {
-                    cnx->tls_stream_closed[2] = 1;
-                }
-                break;
-            default:
-                break;
-            }
 
 #ifdef _DEBUG
             if (cnx->cnx_state < picoquic_state_client_ready) {
@@ -1532,6 +1524,7 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
                 ret == PTLS_ERROR_STATELESS_RETRY)) {
                 for (int i = 0; i < PICOQUIC_NUMBER_OF_EPOCHS; i++) {
                     if (send_offset[i] < send_offset[i + 1]) {
+                        data_pushed = 1;
                         ret = picoquic_add_to_tls_stream(cnx,
                             sendbuf.base + send_offset[i], send_offset[i + 1] - send_offset[i], i);
                     }
@@ -1547,6 +1540,8 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
                 free(data);
                 data = cnx->tls_stream[epoch].stream_data;
             }
+
+            ptls_buffer_dispose(&sendbuf);
         }
 
         if (processed > 0) {
@@ -1582,7 +1577,7 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
                     /* If client authentication is activated, the client sends the certificates with its `Finished` packet.
                        The server does not send any further packets, so, we can switch into ready state here.
                     */
-                    if (sendbuf.off == 0 && ((ptls_context_t*)cnx->quic->tls_master_ctx)->require_client_authentication == 1) {
+                    if (data_pushed == 0 && ((ptls_context_t*)cnx->quic->tls_master_ctx)->require_client_authentication == 1) {
                         cnx->cnx_state = picoquic_state_server_ready;
                     }
                     else {
@@ -1638,8 +1633,6 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
                 (void)picoquic_connection_error(cnx, error_code);
                 ret = 0;
             }
-
-            ptls_buffer_dispose(&sendbuf);
         }
     }
 
