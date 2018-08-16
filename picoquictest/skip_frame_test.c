@@ -41,7 +41,7 @@ static uint8_t test_frame_type_reset_stream[] = {
 
 static uint8_t test_type_connection_close[] = {
     picoquic_frame_type_connection_close,
-    0xcf, 0xff,
+    0xcf, 0xff, 0x00,
     9,
     '1', '2', '3', '4', '5', '6', '7', '8', '9'
 };

@@ -2233,6 +2233,7 @@ int picoquic_close(picoquic_cnx_t* cnx, uint16_t reason_code)
     } else {
         ret = -1;
     }
+    cnx->offending_frame_type = 0;
 
     picoquic_cnx_set_next_wake_time(cnx, picoquic_get_quic_time(cnx->quic));
 

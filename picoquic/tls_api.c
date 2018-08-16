@@ -1496,7 +1496,7 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
                         epoch, next_epoch);
 #endif
                     ret = picoquic_connection_error(cnx,
-                        PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION);
+                        PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0);
                 }
                 continue;
             }
@@ -1563,7 +1563,7 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
                             DBG_PRINTF("%s", "Connection error - no transport parameter received.\n");
 #endif
                             ret = picoquic_connection_error(cnx,
-                                PICOQUIC_TRANSPORT_PARAMETER_ERROR);
+                                PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
                         }
                         else {
                             if (cnx->crypto_context[3].aead_encrypt != NULL) {
@@ -1630,7 +1630,7 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
 #ifdef _DEBUG
                 DBG_PRINTF("Handshake failed, ret = %x.\n", ret);
 #endif
-                (void)picoquic_connection_error(cnx, error_code);
+                (void)picoquic_connection_error(cnx, error_code, 0);
                 ret = 0;
             }
         }
