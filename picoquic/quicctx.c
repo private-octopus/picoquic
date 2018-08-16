@@ -1320,7 +1320,7 @@ int picoquic_reset_cnx_version(picoquic_cnx_t* cnx, uint8_t* bytes, size_t lengt
     return ret;
 }
 
-int picoquic_connection_error(picoquic_cnx_t* cnx, uint16_t local_error)
+int picoquic_connection_error(picoquic_cnx_t* cnx, uint16_t local_error, uint64_t frame_type)
 {
     if (cnx->cnx_state == picoquic_state_client_ready || cnx->cnx_state == picoquic_state_server_ready) {
         cnx->local_error = local_error;
@@ -1333,6 +1333,8 @@ int picoquic_connection_error(picoquic_cnx_t* cnx, uint16_t local_error)
 
         DBG_PRINTF("Protocol error %x", local_error);
     }
+
+    cnx->offending_frame_type = frame_type;
 
     return PICOQUIC_ERROR_DETECTED;
 }

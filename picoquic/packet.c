@@ -1012,7 +1012,7 @@ int picoquic_incoming_0rtt(
         ret = PICOQUIC_ERROR_CNXID_CHECK;
     } else if (cnx->cnx_state == picoquic_state_server_almost_ready || cnx->cnx_state == picoquic_state_server_ready) {
         if (ph->vn != picoquic_supported_versions[cnx->version_index].version) {
-            ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION);
+            ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0);
         } else {
             /* Accept the incoming frames */
             ret = picoquic_decode_frames(cnx,

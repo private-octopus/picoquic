@@ -599,12 +599,30 @@ size_t picoquic_log_generic_close_frame(FILE* F, uint8_t* bytes, size_t bytes_ma
     size_t byte_index = 1;
     uint32_t error_code = 0;
     uint64_t string_length = 0;
-
+    uint64_t offending_frame_type = 0;
+    size_t lf = 0;
     size_t l1 = 0;
+    size_t required = 4;
+
     if (bytes_max >= 4) {
         error_code = PICOPARSE_16(bytes + byte_index);
         byte_index += 2;
-        l1 = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &string_length);
+        if (ftype == picoquic_frame_type_connection_close) {
+            lf = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &offending_frame_type);
+            if (lf == 0) {
+                required += picoquic_varint_skip(bytes + byte_index);
+                byte_index = bytes_max;
+            }
+            else {
+                byte_index += lf;
+            }
+        }
+        if (ftype != picoquic_frame_type_connection_close || lf != 0) {
+            l1 = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &string_length);
+            if (l1 == 0) {
+                required = byte_index + picoquic_varint_skip(bytes + byte_index);
+            }
+        }
     }
 
     if (l1 == 0) {
@@ -616,9 +634,13 @@ size_t picoquic_log_generic_close_frame(FILE* F, uint8_t* bytes, size_t bytes_ma
     else {
         byte_index += l1;
 
-        fprintf(F, "    %s, Error 0x%04x, Reason length %llu\n",
-            picoquic_log_frame_names(ftype),
-            error_code, (unsigned long long)string_length);
+        fprintf(F, "    %s, Error 0x%04x, ", picoquic_log_frame_names(ftype), error_code);
+        if (ftype == picoquic_frame_type_connection_close && 
+            offending_frame_type != 0) {
+            fprintf(F, "Offending frame %llx\n",
+                (unsigned long long)offending_frame_type);
+        }
+        fprintf(F, "Reason length %llu\n", (unsigned long long)string_length);
         if (byte_index + string_length > bytes_max) {
             fprintf(F, "    Malformed %s, requires %llu bytes out of %llu\n",
                 picoquic_log_frame_names(ftype),

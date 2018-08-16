@@ -467,9 +467,9 @@ typedef struct st_picoquic_cnx_t {
     uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE];
     uint16_t application_error;
     uint16_t local_error;
-    uint16_t crypto_error;
     uint16_t remote_application_error;
     uint16_t remote_error;
+    uint64_t offending_frame_type;
     uint32_t retry_token_length;
     uint8_t * retry_token;
 
@@ -562,7 +562,7 @@ void picoquic_reset_packet_context(picoquic_cnx_t* cnx,
     picoquic_packet_context_enum pc);
 
 /* Notify error on connection */
-int picoquic_connection_error(picoquic_cnx_t* cnx, uint16_t local_error);
+int picoquic_connection_error(picoquic_cnx_t* cnx, uint16_t local_error, uint64_t frame_type);
 
 /* Set the transport parameters */
 void picoquic_set_transport_parameters(picoquic_cnx_t * cnx, picoquic_tp_t * tp);
