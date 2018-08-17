@@ -569,11 +569,21 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                 }
             }
     }
-    /* TODO: remove this horrific kludge */
-    if (cnx->remote_parameters.initial_max_stream_data_bidi_remote == 0)
-    {
-        cnx->remote_parameters.initial_max_stream_data_bidi_remote =
-            cnx->remote_parameters.initial_max_stream_data_bidi_local;
+
+    /* TODO: remove this kludge once we remove support for draft 13 */
+    if (picoquic_supported_versions[cnx->version_index].version ==
+        PICOQUIC_SEVENTH_INTEROP_VERSION) {
+        if ((present_flag & (1 << picoquic_tp_initial_max_stream_data_bidi_remote)) == 0)
+        {
+            cnx->remote_parameters.initial_max_stream_data_bidi_remote =
+                cnx->remote_parameters.initial_max_stream_data_bidi_local;
+        }
+
+        if ((present_flag & (1 << picoquic_tp_initial_max_stream_data_uni)) == 0)
+        {
+            cnx->remote_parameters.initial_max_stream_data_uni =
+                cnx->remote_parameters.initial_max_stream_data_bidi_local;
+        }
     }
 
     /* Only the idle timeout parameters is mandatory for both client and server. */
