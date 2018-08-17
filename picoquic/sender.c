@@ -2058,6 +2058,13 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                                 break;
                             }
                         }
+
+                        if (length + checksum_overhead <= PICOQUIC_RESET_PACKET_MIN_SIZE) {
+                            uint32_t pad_size = PICOQUIC_RESET_PACKET_MIN_SIZE - checksum_overhead - length + 1;
+                            for (uint32_t i = 0; i < pad_size; i++) {
+                                bytes[length++] = 0;
+                            }
+                        }
                     }
                 }
             }

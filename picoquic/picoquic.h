@@ -92,6 +92,8 @@ extern "C" {
 
 #define PICOQUIC_MAX_PACKET_SIZE 1536
 #define PICOQUIC_RESET_SECRET_SIZE 16
+#define PICOQUIC_RESET_PACKET_MIN_SIZE (1 + 20 + 16)
+
 
 /*
 * Connection states, useful to expose the state to the application.
@@ -210,6 +212,7 @@ typedef enum {
     picoquic_callback_stream_fin,
     picoquic_callback_stream_reset,
     picoquic_callback_stop_sending,
+    picoquic_callback_stateless_reset,
     picoquic_callback_close,
     picoquic_callback_application_close,
     picoquic_callback_challenge_response,

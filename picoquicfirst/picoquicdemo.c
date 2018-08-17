@@ -211,7 +211,9 @@ static void first_server_callback(picoquic_cnx_t* cnx,
     printf("Server CB, Stream: %" PRIu64 ", %" PRIst " bytes, fin=%d (%s)\n",
         stream_id, length, fin_or_event, picoquic_log_fin_or_event_name(fin_or_event));
 
-    if (fin_or_event == picoquic_callback_close || fin_or_event == picoquic_callback_application_close) {
+    if (fin_or_event == picoquic_callback_close || 
+        fin_or_event == picoquic_callback_application_close ||
+        fin_or_event == picoquic_callback_stateless_reset) {
         if (ctx != NULL) {
             first_server_callback_delete_context(ctx);
             picoquic_set_callback(cnx, first_server_callback, NULL);
@@ -684,9 +686,13 @@ static void first_client_callback(picoquic_cnx_t* cnx,
     ctx->last_interaction_time = picoquic_current_time();
     ctx->progress_observed = 1;
 
-    if (fin_or_event == picoquic_callback_close || fin_or_event == picoquic_callback_application_close) {
+    if (fin_or_event == picoquic_callback_close || 
+        fin_or_event == picoquic_callback_application_close ||
+        fin_or_event == picoquic_callback_stateless_reset) {
         if (fin_or_event == picoquic_callback_application_close) {
             fprintf(stdout, "Received a request to close the application.\n");
+        } else if (fin_or_event == picoquic_callback_stateless_reset) {
+            fprintf(stdout, "Received a stateless reset.\n");
         } else {
             fprintf(stdout, "Received a request to close the connection.\n");
         }

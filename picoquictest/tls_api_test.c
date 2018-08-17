@@ -107,6 +107,7 @@ typedef struct st_picoquic_test_tls_api_ctx_t {
     int sum_data_received_at_server;
     int sum_data_received_at_client;
     int test_finished;
+    int reset_received;
 } picoquic_test_tls_api_ctx_t;
 
 static test_api_stream_desc_t test_scenario_oneway[] = {
@@ -288,7 +289,8 @@ static void test_api_callback(picoquic_cnx_t* cnx,
     size_t stream_index;
     picoquic_call_back_event_t stream_finished = picoquic_callback_no_event;
 
-    if (fin_or_event == picoquic_callback_close || fin_or_event == picoquic_callback_application_close) {
+    if (fin_or_event == picoquic_callback_close || 
+        fin_or_event == picoquic_callback_application_close) {
         /* do nothing in our tests */
         return;
     }
@@ -297,6 +299,12 @@ static void test_api_callback(picoquic_cnx_t* cnx,
         ctx = (picoquic_test_tls_api_ctx_t*)(((char*)callback_ctx) - offsetof(struct st_picoquic_test_tls_api_ctx_t, client_callback));
     } else {
         ctx = (picoquic_test_tls_api_ctx_t*)(((char*)callback_ctx) - offsetof(struct st_picoquic_test_tls_api_ctx_t, server_callback));
+    }
+
+    if (fin_or_event == picoquic_callback_stateless_reset) {
+        /* take note to validate test */
+        ctx->reset_received = 1;
+        return;
     }
 
     if (bytes != NULL) {
@@ -1339,6 +1347,9 @@ int tls_api_server_reset_test()
         ret = -1;
     }
 
+    if (ret == 0 && test_ctx->reset_received == 0) {
+        ret = -1;
+    }
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;
