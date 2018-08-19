@@ -272,6 +272,13 @@ typedef void (*picoquic_stream_data_cb_fn)(picoquic_cnx_t* cnx,
 typedef void (*cnx_id_cb_fn)(picoquic_connection_id_t cnx_id_local,
     picoquic_connection_id_t cnx_id_remote, void* cnx_id_cb_data, picoquic_connection_id_t * cnx_id_returned);
 
+/* The fuzzer function is used to inject error in packets randomly.
+ * It is called just prior to sending a packet, and can randomly
+ * change the content or length of the packet.
+ */
+typedef uint32_t(*picoquic_fuzz_fn)(void * fuzz_ctx, picoquic_cnx_t* cnx, uint8_t * bytes, size_t bytes_max, size_t length);
+void picoquic_set_fuzz(picoquic_quic_t* quic, picoquic_fuzz_fn fuzz_fn, void * fuzz_ctx);
+
 /* Will be called to verify that the given data corresponds to the given signature.
  * This callback and the `verify_ctx` will be set by the `verify_certificate_cb_fn`.
  * If `data` and `sign` are empty buffers, an error occurred and `verify_ctx` should be freed.

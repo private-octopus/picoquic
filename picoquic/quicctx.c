@@ -1057,6 +1057,12 @@ uint64_t picoquic_get_quic_time(picoquic_quic_t* quic)
     return now;
 }
 
+void picoquic_set_fuzz(picoquic_quic_t * quic, picoquic_fuzz_fn fuzz_fn, void * fuzz_ctx)
+{
+    quic->fuzz_fn = fuzz_fn;
+    quic->fuzz_ctx = fuzz_ctx;
+}
+
 
 
 void picoquic_set_callback(picoquic_cnx_t* cnx,
