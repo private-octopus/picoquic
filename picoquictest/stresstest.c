@@ -976,6 +976,9 @@ int stress_test()
  */
 
 typedef struct st_basic_fuzzer_ctx_t {
+    uint32_t nb_packets;
+    uint32_t nb_fuzzed;
+    uint32_t nb_fuzzed_length;
     uint64_t random_context;
     picoquic_state_enum highest_state_fuzzed;
 } basic_fuzzer_ctx_t;
@@ -987,6 +990,8 @@ static uint32_t basic_fuzzer(void * fuzz_ctx, picoquic_cnx_t* cnx, uint8_t * byt
     int should_fuzz = 0;
     uint32_t fuzz_index = 0;
 
+    ctx->nb_packets++;
+
     if (cnx->cnx_state > ctx->highest_state_fuzzed) {
         should_fuzz = 1;
         ctx->highest_state_fuzzed = cnx->cnx_state;
@@ -997,11 +1002,16 @@ static uint32_t basic_fuzzer(void * fuzz_ctx, picoquic_cnx_t* cnx, uint8_t * byt
     }
 
     if (should_fuzz) {
-        /* Once in 64, fuzz by changing the length */
-        if (bytes_max > length + 16  && (fuzz_pilot & 0x3F) == 0x2B) {
-            fuzz_pilot >>= 6;
+        /* Once in 16, fuzz by changing the length */
+        if ((fuzz_pilot & 0xF) == 0xD) {
+            uint32_t fuzz_length_max = length + 16;
+            if (fuzz_length_max > bytes_max) {
+                fuzz_length_max = bytes_max;
+            }
+            fuzz_pilot >>= 4;
             length = 16 + (uint32_t)((fuzz_pilot&0xFFFF) % length);
             fuzz_pilot >>= 16;
+            ctx->nb_fuzzed_length++;
         }
         /* Find the position that shall be fuzzed */
         fuzz_index = (uint32_t)((fuzz_pilot & 0xFFFF) % length);
@@ -1010,6 +1020,7 @@ static uint32_t basic_fuzzer(void * fuzz_ctx, picoquic_cnx_t* cnx, uint8_t * byt
             /* flip one byte */
             bytes[fuzz_index++] = (uint8_t)(fuzz_pilot & 0xFF);
             fuzz_pilot >>= 8;
+            ctx->nb_fuzzed++;
         }
     }
 
@@ -1021,10 +1032,16 @@ int fuzz_test()
     basic_fuzzer_ctx_t fuzz_ctx;
     int ret = 0;
 
+    fuzz_ctx.nb_packets = 0;
+    fuzz_ctx.nb_fuzzed = 0;
+    fuzz_ctx.nb_fuzzed_length = 0;
     fuzz_ctx.highest_state_fuzzed = 0;
     fuzz_ctx.random_context = 0xDEADBEEFBABACAFEull;
 
     ret = stress_or_fuzz_test(basic_fuzzer, &fuzz_ctx);
+
+    DBG_PRINTF("Fuzzed %d packets out of %d, changed %d lengths, ret = %d\n",
+        fuzz_ctx.nb_fuzzed, fuzz_ctx.nb_packets, fuzz_ctx.nb_fuzzed_length, ret);
 
     return ret;
 }

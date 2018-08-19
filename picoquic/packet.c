@@ -180,8 +180,10 @@ int picoquic_parse_packet_header(
                             ph->ptype = picoquic_packet_error;
                         }
                     } else {
-                        var_length = (uint32_t)picoquic_varint_decode(bytes + ph->offset,
-                            length - ph->offset, &payload_length);
+                        if (ph->offset < length) {
+                            var_length = (uint32_t)picoquic_varint_decode(bytes + ph->offset,
+                                length - ph->offset, &payload_length);
+                        }
 
                         if (var_length <= 0 || ph->offset + var_length + pn_length_clear + payload_length > length ||
                             ph->version_index < 0) {

@@ -685,16 +685,25 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                 int contains_crypto = 0;
                 byte_index = p->offset;
 
-                while (ret == 0 && byte_index < p->length) {
-                    if (old_bytes[byte_index] == picoquic_frame_type_crypto_hs) {
-                        contains_crypto = 1;
-                        packet_is_pure_ack = 0;
-                        break;
+                if (p->is_evaluated == 0) {
+                    while (ret == 0 && byte_index < p->length) {
+                        if (old_bytes[byte_index] == picoquic_frame_type_crypto_hs) {
+                            contains_crypto = 1;
+                            packet_is_pure_ack = 0;
+                            break;
+                        }
+                        ret = picoquic_skip_frame(&p->bytes[byte_index],
+                            p->length - byte_index, &frame_length, &frame_is_pure_ack);
+                        byte_index += frame_length;
                     }
-                    ret = picoquic_skip_frame(&p->bytes[byte_index],
-                        p->length - byte_index, &frame_length, &frame_is_pure_ack);
-                    byte_index += frame_length;
+                    p->contains_crypto = contains_crypto;
+                    p->is_pure_ack = packet_is_pure_ack;
+                    p->is_evaluated = 1;
+                } else {
+                    contains_crypto = p->contains_crypto;
+                    packet_is_pure_ack = p->is_pure_ack;
                 }
+
                 byte_index = 0;
 
                 if (contains_crypto) {
@@ -947,6 +956,18 @@ static void picoquic_cnx_set_next_wake_time_init(picoquic_cnx_t* cnx, uint64_t c
     int blocked = 1;
     int pacing = 0;
     picoquic_path_t * path_x = cnx->path[0];
+    int pc_ready_flag = 1 << picoquic_packet_context_initial;
+
+    if (cnx->tls_stream[0].send_queue == NULL) {
+        if (cnx->crypto_context[1].aead_encrypt != NULL &&
+            cnx->tls_stream[1].send_queue != NULL) {
+            pc_ready_flag |= 1 << picoquic_packet_context_application;
+        }
+        else if (cnx->crypto_context[2].aead_encrypt != NULL &&
+            cnx->tls_stream[1].send_queue == NULL) {
+            pc_ready_flag |= 1 << picoquic_packet_context_handshake;
+        }
+    }
 
     if (next_time < current_time)
     {
@@ -955,8 +976,13 @@ static void picoquic_cnx_set_next_wake_time_init(picoquic_cnx_t* cnx, uint64_t c
     }
     else
     {
+
         for (picoquic_packet_context_enum pc = 0; blocked == 0 && pc < picoquic_nb_packet_context; pc++) {
             picoquic_packet* p = cnx->pkt_ctx[pc].retransmit_oldest;
+
+            if ((pc_ready_flag & (1 << pc)) == 0) {
+                continue;
+            }
 
             while (p != NULL)
             {
@@ -1002,9 +1028,21 @@ static void picoquic_cnx_set_next_wake_time_init(picoquic_cnx_t* cnx, uint64_t c
         else {
             for (picoquic_packet_context_enum pc = 0; pc < picoquic_nb_packet_context; pc++) {
                 picoquic_packet* p = cnx->pkt_ctx[pc].retransmit_oldest;
+
+                if ((pc_ready_flag & (1 << pc)) == 0) {
+                    continue;
+                }
+
                 /* Consider delayed ACK */
                 if (cnx->pkt_ctx[pc].ack_needed) {
                     next_time = cnx->pkt_ctx[pc].highest_ack_time + cnx->pkt_ctx[pc].ack_delay_local;
+                }
+
+                while (p != NULL &&
+                    p->ptype == picoquic_packet_0rtt_protected &&
+                    p->is_evaluated == 1 &&
+                    p->contains_crypto == 0) {
+                    p = p->next_packet;
                 }
 
                 if (p != NULL) {
@@ -1718,17 +1756,8 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
         break;
     }
 
-    /* Verify first that there is no need for retransmit or ack
-    * on initial or handshake context */
-    if (ret == 0) {
-        length = picoquic_prepare_packet_old_context(cnx, picoquic_packet_context_initial,
-            path_x, packet, send_buffer_max, current_time, &header_length);
-        /* TODO: consider special case of EOED on 0-RTT stream */
-        if (length == 0) {
-            length = picoquic_prepare_packet_old_context(cnx, picoquic_packet_context_handshake,
-                path_x, packet, send_buffer_max, current_time, &header_length);
-        }
-    }
+    /* At this stage, we don't try to retransmit any old packet, whether in
+     * the current context or in previous contexts. */
 
     if (length == 0) {
         checksum_overhead = picoquic_get_checksum_length(cnx, is_cleartext_mode);
