@@ -1839,7 +1839,11 @@ int picoquic_prepare_application_close_frame(picoquic_cnx_t* cnx,
         bytes[byte_index++] = picoquic_frame_type_application_close;
         picoformat_16(bytes + byte_index, (uint16_t)cnx->application_error);
         byte_index += 2;
-        /* TODO, maybe: add null frame type for compatibility with draft-13 */
+        /* TODO, remove this when we stop supporting draft 13 */
+        if (picoquic_supported_versions[cnx->version_index].version ==
+            PICOQUIC_SEVENTH_INTEROP_VERSION && byte_index < bytes_max) {
+            bytes[byte_index++] = 0; /* null frame type */
+        }
         l1 = picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index, 0);
         byte_index += l1;
         *consumed = byte_index;

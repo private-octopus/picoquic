@@ -288,9 +288,13 @@ int picoquic_parse_packet_header(
                  ph->payload_length = (uint16_t)(length - ph->offset);
              }
          } else {
-             /* If the connection is not identified, classify the packet as unknown.
-              * it may trigger a retry */
-             ph->ptype = picoquic_packet_error;
+             /* This may be a packet to a forgotten connection */
+             if ((bytes[0] & 0x40) == 0) {
+                 ph->ptype = picoquic_packet_1rtt_protected_phi0;
+             }
+             else {
+                 ph->ptype = picoquic_packet_1rtt_protected_phi1;
+             }
              ph->payload_length = (uint16_t)((length > ph->offset)?length - ph->offset:0);
          }
     }
@@ -442,7 +446,6 @@ int picoquic_parse_header_and_decrypt(
     int already_received = 0;
     size_t decoded_length = 0;
     int ret = picoquic_parse_packet_header(quic, bytes, length, addr_from, ph, pcnx, 1);
-    int cmp_reset_secret = -1;
 
     if (ret == 0) {
         /* TODO: clarify length, payload length, packet length -- special case of initial packet */
@@ -496,9 +499,6 @@ int picoquic_parse_header_and_decrypt(
             case picoquic_packet_1rtt_protected_phi0:
             case picoquic_packet_1rtt_protected_phi1:
                 /* TODO : roll key based on PHI */
-                /* Check the possible reset before performing in place AEAD decrypt */
-                cmp_reset_secret = memcmp(bytes + length - PICOQUIC_RESET_SECRET_SIZE,
-                    (*pcnx)->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
                 /* AEAD Decrypt, in place */
                 decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph,
                     (*pcnx)->crypto_context[3].pn_dec,
@@ -512,16 +512,11 @@ int picoquic_parse_header_and_decrypt(
 
             /* TODO: consider the error "too soon" */
             if (decoded_length > (length - ph->offset)) {
-                if (cmp_reset_secret == 0) {
-                    ret = PICOQUIC_ERROR_STATELESS_RESET;
-                }
-                else {
-                    ret = PICOQUIC_ERROR_AEAD_CHECK;
-                    if (*new_ctx_created) {
-                        picoquic_delete_cnx(*pcnx);
-                        *pcnx = NULL;
-                        *new_ctx_created = 0;
-                    }
+                ret = PICOQUIC_ERROR_AEAD_CHECK;
+                if (*new_ctx_created) {
+                    picoquic_delete_cnx(*pcnx);
+                    *pcnx = NULL;
+                    *new_ctx_created = 0;
                 }
             }
             else if (already_received != 0) {
@@ -529,6 +524,21 @@ int picoquic_parse_header_and_decrypt(
             }
             else {
                 ph->payload_length = (uint16_t)decoded_length;
+            }
+        }
+        else if (ph->ptype == picoquic_packet_1rtt_protected_phi0 ||
+            ph->ptype == picoquic_packet_1rtt_protected_phi1)
+        {
+            /* This may be a stateles reset */
+            *pcnx = picoquic_cnx_by_net(quic, addr_from);
+
+            if (*pcnx != NULL && length >= PICOQUIC_RESET_PACKET_MIN_SIZE &&
+                memcmp(bytes + length - PICOQUIC_RESET_SECRET_SIZE,
+                (*pcnx)->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0) {
+                ret = PICOQUIC_ERROR_STATELESS_RESET;
+            }
+            else {
+                *pcnx = NULL;
             }
         }
     }
@@ -626,7 +636,11 @@ int picoquic_prepare_version_negotiation(
 /*
  * Process an unexpected connection ID. This could be an old packet from a 
  * previous connection. If the packet type correspond to an encrypted value,
- * the server can respond with a public reset
+ * the server can respond with a public reset.
+ *
+ * Per draft 14, the stateless reset starts with the packet code 0K110000.
+ * The packet has after the first byte at least 20 random bytes, and then
+ * the 16 bytes reset token.
  */
 void picoquic_process_unexpected_cnxid(
     picoquic_quic_t* quic,
@@ -636,18 +650,25 @@ void picoquic_process_unexpected_cnxid(
     unsigned long if_index_to,
     picoquic_packet_header* ph)
 {
-    if ((ph->ptype == picoquic_packet_1rtt_protected_phi0 || ph->ptype == picoquic_packet_1rtt_protected_phi1) && length > 26) {
+    if (length > PICOQUIC_RESET_PACKET_MIN_SIZE && 
+        (ph->ptype == picoquic_packet_1rtt_protected_phi0 || 
+            ph->ptype == picoquic_packet_1rtt_protected_phi1)) {
         picoquic_stateless_packet_t* sp = picoquic_create_stateless_packet(quic);
-
         if (sp != NULL) {
+            uint32_t pad_size = length - 17;
             uint8_t* bytes = sp->bytes;
             size_t byte_index = 0;
-            size_t pad_size = (size_t)(picoquic_public_uniform_random(length - 26) + 26 - 17);
-            /* Packet type set to short header, with cnxid, key phase 0, 1 byte seq */
-            bytes[byte_index++] = 0x41;
-            /* Copy the connection ID */
-            byte_index += picoquic_format_connection_id(bytes + byte_index, PICOQUIC_MAX_PACKET_SIZE - byte_index, ph->dest_cnx_id);
-            /* Add some random bytes to look good. */
+
+            if (pad_size > 20) {
+                pad_size = (uint32_t)picoquic_public_uniform_random(pad_size - 20) + 20;
+            }
+            else {
+                pad_size = 20;
+            }
+
+            /* Packet type set to short header */
+            bytes[byte_index++] = (ph->ptype == picoquic_packet_1rtt_protected_phi0) ? 0x30 : 0x70;
+            /* Add the random bytes */
             picoquic_public_random(bytes + byte_index, pad_size);
             byte_index += pad_size;
             /* Add the public reset secret */
@@ -988,7 +1009,7 @@ int picoquic_incoming_stateless_reset(
     cnx->cnx_state = picoquic_state_disconnected;
 
     if (cnx->callback_fn) {
-        (cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx);
+        (cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_stateless_reset, cnx->callback_ctx);
     }
 
     return PICOQUIC_ERROR_AEAD_CHECK;

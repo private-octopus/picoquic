@@ -85,7 +85,6 @@ extern "C" {
 #define PICOQUIC_TRANSPORT_PARAMETER_ERROR (0x8)
 #define PICOQUIC_TRANSPORT_VERSION_NEGOTIATION_ERROR (0x9)
 #define PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION (0xA)
-#define PICOQUIC_TRANSPORT_UNSOLICITED_PATH_RESPONSE (0xB)
 #define PICOQUIC_TRANSPORT_CRYPTO_ERROR(Alert) (((uint16_t)0x100) | ((uint16_t)((Alert)&0xFF)))
 #define PICOQUIC_TLS_HANDSHAKE_FAILED (0x201)
 #define PICOQUIC_TLS_FATAL_ALERT_GENERATED (0x202)
@@ -93,6 +92,8 @@ extern "C" {
 
 #define PICOQUIC_MAX_PACKET_SIZE 1536
 #define PICOQUIC_RESET_SECRET_SIZE 16
+#define PICOQUIC_RESET_PACKET_MIN_SIZE (1 + 20 + 16)
+
 
 /*
 * Connection states, useful to expose the state to the application.
@@ -211,6 +212,7 @@ typedef enum {
     picoquic_callback_stream_fin,
     picoquic_callback_stream_reset,
     picoquic_callback_stop_sending,
+    picoquic_callback_stateless_reset,
     picoquic_callback_close,
     picoquic_callback_application_close,
     picoquic_callback_challenge_response,
