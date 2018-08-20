@@ -589,7 +589,7 @@ static int picoquic_set_aead_from_secret(void ** v_aead,ptls_cipher_suite_t * ci
     int ret = 0;
 
     if (*v_aead != NULL) {
-        ptls_aead_free((ptls_aead_context_t*)v_aead);
+        ptls_aead_free((ptls_aead_context_t*)*v_aead);
     }
 
     if ((*v_aead = ptls_aead_new(cipher->aead, cipher->hash, is_enc, secret, PICOQUIC_LABEL_QUIC_BASE)) == NULL) {
