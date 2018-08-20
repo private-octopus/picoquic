@@ -861,11 +861,12 @@ static void stress_delete_client_context(int client_index, picoquic_stress_ctx_t
     }
 }
 
-int stress_test()
+static int stress_or_fuzz_test(picoquic_fuzz_fn fuzz_fn, void * fuzz_ctx)
 {
     int ret = 0;
     picoquic_stress_ctx_t stress_ctx;
     double run_time_seconds = 0;
+    double target_seconds = 0;
     double wall_time_seconds = 0;
     uint64_t wall_time_start = picoquic_current_time();
     uint64_t wall_time_max = wall_time_start + picoquic_stress_test_duration;
@@ -895,6 +896,9 @@ int stress_test()
         else {
             for (int i = 0; ret == 0 && i < stress_ctx.nb_clients; i++) {
                 ret = stress_create_client_context(i, &stress_ctx);
+                if (ret == 0 && fuzz_fn != NULL) {
+                    picoquic_set_fuzz(stress_ctx.c_ctx[i]->qclient, fuzz_fn, fuzz_ctx);
+                }
             }
         }
     }
@@ -946,9 +950,105 @@ int stress_test()
 
     /* Report */
     run_time_seconds = ((double)stress_ctx.simulated_time) / 1000000.0;
+    target_seconds = ((double)picoquic_stress_test_duration) / 1000000.0;
     wall_time_seconds = ((double)(picoquic_current_time() - wall_time_start)) / 1000000.0;
-    DBG_PRINTF("Stress complete after simulating %3f s. in %3f s., returns %d\n",
-        run_time_seconds, wall_time_seconds, ret);
+
+    if (stress_ctx.simulated_time < picoquic_stress_test_duration) {
+        DBG_PRINTF("Stress incomplete after simulating %3fs instead of %3fs in %3f s., returns %d\n",
+            run_time_seconds, target_seconds, wall_time_seconds, ret);
+        ret = -1;
+    }
+    else {
+        DBG_PRINTF("Stress complete after simulating %3f s. in %3f s., returns %d\n",
+            run_time_seconds, wall_time_seconds, ret);
+    }
+
+    return ret;
+}
+
+int stress_test()
+{
+    return stress_or_fuzz_test(NULL, NULL);
+}
+
+/*
+ * Basic fuzz test just tries to flip some bits in random packets
+ */
+
+typedef struct st_basic_fuzzer_ctx_t {
+    uint32_t nb_packets;
+    uint32_t nb_fuzzed;
+    uint32_t nb_fuzzed_length;
+    uint64_t random_context;
+    picoquic_state_enum highest_state_fuzzed;
+} basic_fuzzer_ctx_t;
+
+static uint32_t basic_fuzzer(void * fuzz_ctx, picoquic_cnx_t* cnx, 
+    uint8_t * bytes, size_t bytes_max, size_t length, uint32_t header_length)
+{
+    basic_fuzzer_ctx_t * ctx = (basic_fuzzer_ctx_t *)fuzz_ctx;
+    uint64_t fuzz_pilot = picoquic_test_random(&ctx->random_context);
+    int should_fuzz = 0;
+    uint32_t fuzz_index = 0;
+
+    ctx->nb_packets++;
+
+    if (cnx->cnx_state > ctx->highest_state_fuzzed) {
+        should_fuzz = 1;
+        ctx->highest_state_fuzzed = cnx->cnx_state;
+    } else {
+        /* if already fuzzed this state, fuzz one packet in 16 */
+        should_fuzz = ((fuzz_pilot & 0xF) == 0xD);
+        fuzz_pilot >>= 4;
+    }
+
+    if (should_fuzz) {
+        /* Once in 16, fuzz by changing the length */
+        if ((fuzz_pilot & 0xF) == 0xD) {
+            uint32_t fuzz_length_max = length + 16;
+            if (fuzz_length_max > bytes_max) {
+                fuzz_length_max = bytes_max;
+            }
+            fuzz_pilot >>= 4;
+            length = 16 + (uint32_t)((fuzz_pilot&0xFFFF) % length);
+            fuzz_pilot >>= 16;
+            if (length < header_length) {
+                length = header_length;
+            }
+            ctx->nb_fuzzed_length++;
+        }
+        /* Find the position that shall be fuzzed */
+        fuzz_index = (uint32_t)((fuzz_pilot & 0xFFFF) % length);
+        fuzz_pilot >>= 16;
+        while (fuzz_pilot != 0 && fuzz_index < length) {
+            /* flip one byte */
+            bytes[fuzz_index++] = (uint8_t)(fuzz_pilot & 0xFF);
+            fuzz_pilot >>= 8;
+            ctx->nb_fuzzed++;
+        }
+    }
+
+    return length;
+}
+
+int fuzz_test()
+{
+    basic_fuzzer_ctx_t fuzz_ctx;
+    int ret = 0;
+
+    fuzz_ctx.nb_packets = 0;
+    fuzz_ctx.nb_fuzzed = 0;
+    fuzz_ctx.nb_fuzzed_length = 0;
+    fuzz_ctx.highest_state_fuzzed = 0;
+    /* Random seed depends on duration, so different durations do not all start 
+     * with exactly the same message sequences. */
+    fuzz_ctx.random_context = 0xDEADBEEFBABACAFEull;
+    fuzz_ctx.random_context ^= picoquic_stress_test_duration;
+
+    ret = stress_or_fuzz_test(basic_fuzzer, &fuzz_ctx);
+
+    DBG_PRINTF("Fuzzed %d packets out of %d, changed %d lengths, ret = %d\n",
+        fuzz_ctx.nb_fuzzed, fuzz_ctx.nb_packets, fuzz_ctx.nb_fuzzed_length, ret);
 
     return ret;
 }

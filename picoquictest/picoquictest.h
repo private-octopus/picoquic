@@ -119,6 +119,7 @@ int stress_test();
 int splay_test();
 int TlsStreamFrameTest();
 int draft13_vector_test();
+int fuzz_test();
 
 #ifdef __cplusplus
 }

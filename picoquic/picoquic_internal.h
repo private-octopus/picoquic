@@ -211,6 +211,9 @@ typedef struct st_picoquic_quic_t {
     picoquic_free_verify_certificate_ctx free_verify_certificate_callback_fn;
     void* verify_certificate_ctx;
     uint8_t local_ctx_length;
+
+    picoquic_fuzz_fn fuzz_fn;
+    void* fuzz_ctx;
 } picoquic_quic_t;
 
 picoquic_packet_context_enum picoquic_context_from_epoch(int epoch);
@@ -679,13 +682,13 @@ uint32_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     picoquic_packet_type_enum ptype,
     uint8_t * bytes, uint64_t sequence_number,
     uint32_t length, uint32_t header_length,
-    uint8_t* send_buffer,
+    uint8_t* send_buffer, uint32_t send_buffer_max,
     void * aead_context, void* pn_enc);
 
 void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet * packet, int ret,
     uint32_t length, uint32_t header_length, uint32_t checksum_overhead,
-    size_t * send_length, uint8_t * send_buffer, picoquic_path_t * path_x,
-    uint64_t current_time);
+    size_t * send_length, uint8_t * send_buffer, uint32_t send_buffer_max,
+    picoquic_path_t * path_x, uint64_t current_time);
 
 int picoquic_parse_header_and_decrypt(
     picoquic_quic_t* quic,
