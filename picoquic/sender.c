@@ -516,6 +516,9 @@ void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet *
     size_t * send_length, uint8_t * send_buffer, uint32_t send_buffer_max, 
     picoquic_path_t * path_x, uint64_t current_time)
 {
+    if (length != 0 && length < header_length) {
+        length = 0;
+    }
 
     if (ret == 0 && length > 0) {
         packet->length = length;
@@ -1459,7 +1462,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                     length = 0;
                 }
                 else {
-                    if (epoch != 1) {
+                    if (epoch != 1 || cnx->pkt_ctx[pc].ack_needed) {
                         ret = picoquic_prepare_ack_frame(cnx, current_time, pc, &bytes[length],
                             send_buffer_max - checksum_overhead - length, &data_bytes);
                         if (ret == 0) {
@@ -1639,11 +1642,13 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                 packet->length = length;
             }
         }
-        else if (tls_ready != 0 && path_x->cwin > path_x->bytes_in_transit) {
+        else if ((tls_ready != 0 && path_x->cwin > path_x->bytes_in_transit) 
+            || cnx->pkt_ctx[pc].ack_needed) {
             if (picoquic_prepare_ack_frame(cnx, current_time, pc, &bytes[length],
                 send_buffer_max - checksum_overhead - length, &data_bytes)
                 == 0) {
                 length += (uint32_t)data_bytes;
+                data_bytes = 0;
             }
 
             /* Encode the stream frame */
@@ -1685,9 +1690,17 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             packet->send_time = current_time;
             packet->checksum_overhead = checksum_overhead;
         }
-        else {
-            /* when in a handshake mode, only send packets if there is
-            * actually something to send, or resend */
+        else if (cnx->pkt_ctx[pc].ack_needed) {
+            /* when in a handshake mode, send acks asap. */
+            length = picoquic_predict_packet_header_length(cnx, packet_type);
+
+            if (picoquic_prepare_ack_frame(cnx, current_time, pc, &bytes[length],
+                send_buffer_max - checksum_overhead - length, &data_bytes)
+                == 0) {
+                length += (uint32_t)data_bytes;
+                packet->length = length;
+            }
+        } else {
             length = 0;
             packet->length = 0;
         }

@@ -1040,7 +1040,10 @@ int fuzz_test()
     fuzz_ctx.nb_fuzzed = 0;
     fuzz_ctx.nb_fuzzed_length = 0;
     fuzz_ctx.highest_state_fuzzed = 0;
+    /* Random seed depends on duration, so different durations do not all start 
+     * with exactly the same message sequences. */
     fuzz_ctx.random_context = 0xDEADBEEFBABACAFEull;
+    fuzz_ctx.random_context ^= picoquic_stress_test_duration;
 
     ret = stress_or_fuzz_test(basic_fuzzer, &fuzz_ctx);
 
