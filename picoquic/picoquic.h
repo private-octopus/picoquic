@@ -279,7 +279,8 @@ typedef void (*cnx_id_cb_fn)(picoquic_connection_id_t cnx_id_local,
  * It is called just prior to sending a packet, and can randomly
  * change the content or length of the packet.
  */
-typedef uint32_t(*picoquic_fuzz_fn)(void * fuzz_ctx, picoquic_cnx_t* cnx, uint8_t * bytes, size_t bytes_max, size_t length);
+typedef uint32_t(*picoquic_fuzz_fn)(void * fuzz_ctx, picoquic_cnx_t* cnx, uint8_t * bytes, 
+    size_t bytes_max, size_t length, uint32_t header_length);
 void picoquic_set_fuzz(picoquic_quic_t* quic, picoquic_fuzz_fn fuzz_fn, void * fuzz_ctx);
 
 /* Will be called to verify that the given data corresponds to the given signature.

@@ -983,7 +983,8 @@ typedef struct st_basic_fuzzer_ctx_t {
     picoquic_state_enum highest_state_fuzzed;
 } basic_fuzzer_ctx_t;
 
-static uint32_t basic_fuzzer(void * fuzz_ctx, picoquic_cnx_t* cnx, uint8_t * bytes, size_t bytes_max, size_t length)
+static uint32_t basic_fuzzer(void * fuzz_ctx, picoquic_cnx_t* cnx, 
+    uint8_t * bytes, size_t bytes_max, size_t length, uint32_t header_length)
 {
     basic_fuzzer_ctx_t * ctx = (basic_fuzzer_ctx_t *)fuzz_ctx;
     uint64_t fuzz_pilot = picoquic_test_random(&ctx->random_context);
@@ -1011,6 +1012,9 @@ static uint32_t basic_fuzzer(void * fuzz_ctx, picoquic_cnx_t* cnx, uint8_t * byt
             fuzz_pilot >>= 4;
             length = 16 + (uint32_t)((fuzz_pilot&0xFFFF) % length);
             fuzz_pilot >>= 16;
+            if (length < header_length) {
+                length = header_length;
+            }
             ctx->nb_fuzzed_length++;
         }
         /* Find the position that shall be fuzzed */

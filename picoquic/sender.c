@@ -409,7 +409,7 @@ uint32_t picoquic_protect_packet(picoquic_cnx_t* cnx,
             memcpy(bytes, send_buffer, header_length);
         }
         length = cnx->quic->fuzz_fn(cnx->quic->fuzz_ctx, cnx, bytes,
-            send_buffer_max - aead_checksum_length, length);
+            send_buffer_max - aead_checksum_length, length, header_length);
         if (h_length == header_length) {
             memcpy(send_buffer, bytes, header_length);
         }
