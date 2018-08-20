@@ -99,6 +99,10 @@ static void picoquic_release_openssl()
     if (openssl_is_init > 0) {
         openssl_is_init--;
         if (openssl_is_init == 0) {
+#if !defined(OPENSSL_NO_ENGINE)
+            /* Release all compiled-in ENGINEs */
+            ENGINE_cleanup();
+#endif
             EVP_cleanup();
         }
     }
