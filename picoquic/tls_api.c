@@ -75,10 +75,10 @@ static void picoquic_setup_cleartext_aead_salt(size_t version_index, ptls_iovec_
 /*
  * Make sure that openssl is properly initialized
  */
+static int openssl_is_init = 0;
+
 static void picoquic_init_openssl()
 {
-    static int openssl_is_init = 0;
-
     if (openssl_is_init == 0) {
         openssl_is_init = 1;
         ERR_load_crypto_strings();
@@ -89,6 +89,21 @@ static void picoquic_init_openssl()
         ENGINE_register_all_ciphers();
         ENGINE_register_all_digests();
 #endif
+    } else {
+        openssl_is_init++;
+    }
+}
+
+static void picoquic_release_openssl()
+{
+    if (openssl_is_init > 0) {
+        openssl_is_init--;
+        if (openssl_is_init == 0) {
+            EVP_cleanup();
+        }
+    }
+    else {
+        DBG_PRINTF("Extraneous open ssl release, ref count: %d", openssl_is_init);
     }
 }
 
@@ -1007,6 +1022,8 @@ void picoquic_master_tlscontext_free(picoquic_quic_t* quic)
         if (ctx->update_traffic_key != NULL) {
             free(ctx->update_traffic_key);
         }
+
+        picoquic_release_openssl();
     }
 }
 
