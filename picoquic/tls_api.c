@@ -96,6 +96,10 @@ static void picoquic_init_openssl()
 
 static void picoquic_release_openssl()
 {
+
+#if 0
+    /* Invalidating the openssl release code for now, as trying multiple open/close in
+     * the same process causes a crash */
     if (openssl_is_init > 0) {
         openssl_is_init--;
         if (openssl_is_init == 0) {
@@ -103,12 +107,17 @@ static void picoquic_release_openssl()
             /* Release all compiled-in ENGINEs */
             ENGINE_cleanup();
 #endif
+            ERR_free_strings();
+            RAND_cleanup();
             EVP_cleanup();
+            CONF_modules_free();
+            OPENSSL_cleanup();
         }
     }
     else {
         DBG_PRINTF("Extraneous open ssl release, ref count: %d", openssl_is_init);
     }
+#endif
 }
 
 /*
@@ -1025,6 +1034,11 @@ void picoquic_master_tlscontext_free(picoquic_quic_t* quic)
 
         if (ctx->update_traffic_key != NULL) {
             free(ctx->update_traffic_key);
+        }
+
+        /* Need to be tested */
+        if (ctx->save_ticket != NULL) {
+            free(ctx->save_ticket);
         }
 
         picoquic_release_openssl();

@@ -197,7 +197,7 @@ int cnxcreation_test()
     }
 
     /* delete QUIC context. */
-    if (ret == 0) {
+    if (quic != NULL) {
         picoquic_free(quic);
     }
 

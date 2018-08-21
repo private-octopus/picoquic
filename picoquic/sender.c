@@ -507,6 +507,93 @@ void picoquic_queue_for_retransmit(picoquic_cnx_t* cnx, picoquic_path_t * path_x
     picoquic_update_pacing_after_send(path_x, current_time);
 }
 
+void picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet* p, int should_free)
+{
+    size_t dequeued_length = p->length + p->checksum_overhead;
+    picoquic_packet_context_enum pc = p->pc;
+
+    if (p->previous_packet == NULL) {
+        cnx->pkt_ctx[pc].retransmit_newest = p->next_packet;
+    }
+    else {
+        p->previous_packet->next_packet = p->next_packet;
+    }
+
+    if (p->next_packet == NULL) {
+        cnx->pkt_ctx[pc].retransmit_oldest = p->previous_packet;
+    }
+    else {
+#ifdef _DEBUG
+        if (p->next_packet->pc != pc) {
+            DBG_PRINTF("Inconsistent PC in queue, %d vs %d\n", p->next_packet->pc, pc);
+        }
+
+        if (p->next_packet->previous_packet != p) {
+            DBG_PRINTF("Inconsistent chain of packets, pc = %d\n", pc);
+        }
+#endif
+        p->next_packet->previous_packet = p->previous_packet;
+    }
+
+    /* Account for bytes in transit, for congestion control */
+
+    if (p->send_path->bytes_in_transit > dequeued_length) {
+        p->send_path->bytes_in_transit -= dequeued_length;
+    }
+    else {
+        p->send_path->bytes_in_transit = 0;
+    }
+
+    if (should_free) {
+        free(p);
+    }
+    else {
+        p->next_packet = NULL;
+
+        /* add this packet to the retransmitted list */
+        if (cnx->pkt_ctx[pc].retransmitted_oldest == NULL) {
+            cnx->pkt_ctx[pc].retransmitted_newest = p;
+            p->previous_packet = NULL;
+        }
+        else {
+            cnx->pkt_ctx[pc].retransmitted_oldest->next_packet = p;
+            p->previous_packet = cnx->pkt_ctx[pc].retransmitted_oldest;
+            cnx->pkt_ctx[pc].retransmitted_oldest = p;
+        }
+    }
+}
+
+void picoquic_dequeue_retransmitted_packet(picoquic_cnx_t* cnx, picoquic_packet* p)
+{
+    picoquic_packet_context_enum pc = p->pc;
+
+    if (p->previous_packet == NULL) {
+        cnx->pkt_ctx[pc].retransmitted_newest = p->next_packet;
+    }
+    else {
+#ifdef _DEBUG
+        if (p->next_packet->pc != pc) {
+            DBG_PRINTF("Inconsistent PC in queue, %d vs %d\n", p->next_packet->pc, pc);
+        }
+
+        if (p->next_packet->previous_packet != p) {
+            DBG_PRINTF("Inconsistent chain of packets, pc = %d\n", pc);
+        }
+#endif
+        p->previous_packet->next_packet = p->next_packet;
+    }
+
+    if (p->next_packet == NULL) {
+        cnx->pkt_ctx[pc].retransmitted_oldest = p->previous_packet;
+    }
+    else {
+        p->next_packet->previous_packet = p->previous_packet;
+    }
+
+    free(p);
+}
+
+
 /*
  * Final steps of encoding and protecting the packet before sending
  */
@@ -2212,6 +2299,8 @@ int picoquic_prepare_segment(picoquic_cnx_t* cnx, picoquic_path_t * path_x, pico
             ret = PICOQUIC_ERROR_DISCONNECTED;
             break;
         case picoquic_state_client_retry_received:
+            DBG_PRINTF("Unexpected connection state: %d\n", cnx->cnx_state);
+            ret = PICOQUIC_ERROR_UNEXPECTED_STATE;
             break;
         default:
             DBG_PRINTF("Unexpected connection state: %d\n", cnx->cnx_state);
@@ -2267,10 +2356,14 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
                     packet->ptype == picoquic_packet_1rtt_protected_phi1) {
                     if (packet->length == 0) {
                         free(packet);
+                        packet = NULL;
                     }
                     break;
                 }
             } else {
+                free(packet);
+                packet = NULL;
+
                 if (*send_length != 0){
                     ret = 0;
                 }

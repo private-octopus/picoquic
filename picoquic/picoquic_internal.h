@@ -552,8 +552,8 @@ void picoquic_queue_stateless_packet(picoquic_quic_t* quic, picoquic_stateless_p
 int picoquic_register_cnx_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, picoquic_connection_id_t cnx_id);
 
 /* handling of retransmission queue */
-void picoquic_enqueue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet* p);
 void picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet* p, int should_free);
+void picoquic_dequeue_retransmitted_packet(picoquic_cnx_t* cnx, picoquic_packet* p);
 
 /* Reset connection after receiving version negotiation */
 int picoquic_reset_cnx_version(picoquic_cnx_t* cnx, uint8_t* bytes, size_t length, uint64_t current_time);
