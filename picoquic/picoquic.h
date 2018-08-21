@@ -472,6 +472,16 @@ int picoquic_get_local_error(picoquic_cnx_t* cnx);
 /* Returns the remote error of the given connection context. */
 int picoquic_get_remote_error(picoquic_cnx_t* cnx);
 
+/*
+ * The OpenSSL resources are allocated on first use, and not released until the end of the
+ * process.The only problem is when use memory leak tracers such as valgrind.The OpenSSL
+ * allocations will create a large number of issues, which may hide the actual leaks that
+ * should be fixed.To alleviate that, the application may use the global SSL destructor
+ * just prior to exiting.However, once the destructor is called, trying to reinitialize
+ * OpenSSL will likely cause the program to crash.
+ */
+void picoquic_openssl_final_destructor();
+
 #ifdef __cplusplus
 }
 #endif

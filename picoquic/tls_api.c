@@ -31,6 +31,7 @@
 #include <openssl/pem.h>
 #include <openssl/err.h>
 #include <openssl/engine.h>
+#include <openssl/conf.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -73,7 +74,14 @@ int picoquic_server_setup_ticket_aead_contexts(picoquic_quic_t* quic,
 static void picoquic_setup_cleartext_aead_salt(size_t version_index, ptls_iovec_t* salt);
 
 /*
- * Make sure that openssl is properly initialized
+ * Make sure that openssl is properly initialized.
+ * 
+ * The OpenSSL resources are allocated on first use, and not released until the end of the
+ * process. The only problem is when use memory leak tracers such as valgrind. The OpenSSL
+ * allocations will create a large number of issues, which may hide the actual leaks that
+ * should be fixed. To alleviate that, the application may use the global SSL destructor
+ * just prior to exiting. However, once the destructor is called, trying to reinitialize
+ * OpenSSL will likely cause the program to crash.
  */
 static int openssl_is_init = 0;
 
@@ -89,35 +97,24 @@ static void picoquic_init_openssl()
         ENGINE_register_all_ciphers();
         ENGINE_register_all_digests();
 #endif
-    } else {
-        openssl_is_init++;
     }
 }
 
-static void picoquic_release_openssl()
+void picoquic_openssl_final_destructor()
 {
-
-#if 0
     /* Invalidating the openssl release code for now, as trying multiple open/close in
      * the same process causes a crash */
     if (openssl_is_init > 0) {
-        openssl_is_init--;
-        if (openssl_is_init == 0) {
 #if !defined(OPENSSL_NO_ENGINE)
-            /* Release all compiled-in ENGINEs */
-            ENGINE_cleanup();
+        /* Release all compiled-in ENGINEs */
+        ENGINE_cleanup();
 #endif
-            ERR_free_strings();
-            RAND_cleanup();
-            EVP_cleanup();
-            CONF_modules_free();
-            OPENSSL_cleanup();
-        }
+        ERR_free_strings();
+        RAND_cleanup();
+        EVP_cleanup();
+        CONF_modules_free();
+        OPENSSL_cleanup();
     }
-    else {
-        DBG_PRINTF("Extraneous open ssl release, ref count: %d", openssl_is_init);
-    }
-#endif
 }
 
 /*
@@ -1040,8 +1037,6 @@ void picoquic_master_tlscontext_free(picoquic_quic_t* quic)
         if (ctx->save_ticket != NULL) {
             free(ctx->save_ticket);
         }
-
-        picoquic_release_openssl();
     }
 }
 
