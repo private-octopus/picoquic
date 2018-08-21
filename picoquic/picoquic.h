@@ -188,9 +188,9 @@ typedef enum {
  * The checksum length is the difference between encrypted and unencrypted.
  */
 
-typedef struct _picoquic_packet {
-    struct _picoquic_packet* previous_packet;
-    struct _picoquic_packet* next_packet;
+typedef struct st_picoquic_packet_t {
+    struct st_picoquic_packet_t* previous_packet;
+    struct st_picoquic_packet_t* next_packet;
     struct st_picoquic_path_t * send_path;
     uint64_t sequence_number;
     uint64_t send_time;
@@ -204,7 +204,7 @@ typedef struct _picoquic_packet {
     unsigned int contains_crypto : 1;
 
     uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE];
-} picoquic_packet;
+} picoquic_packet_t;
 
 typedef struct st_picoquic_quic_t picoquic_quic_t;
 typedef struct st_picoquic_cnx_t picoquic_cnx_t;
@@ -408,7 +408,7 @@ int picoquic_incoming_packet(
     int if_index_to,
     uint64_t current_time);
 
-picoquic_packet* picoquic_create_packet();
+picoquic_packet_t* picoquic_create_packet();
 
 int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length);

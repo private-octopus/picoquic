@@ -31,6 +31,7 @@
 #include <openssl/pem.h>
 #include <openssl/err.h>
 #include <openssl/engine.h>
+#include <openssl/conf.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -73,12 +74,19 @@ int picoquic_server_setup_ticket_aead_contexts(picoquic_quic_t* quic,
 static void picoquic_setup_cleartext_aead_salt(size_t version_index, ptls_iovec_t* salt);
 
 /*
- * Make sure that openssl is properly initialized
+ * Make sure that openssl is properly initialized.
+ * 
+ * The OpenSSL resources are allocated on first use, and not released until the end of the
+ * process. The only problem is when use memory leak tracers such as valgrind. The OpenSSL
+ * allocations will create a large number of issues, which may hide the actual leaks that
+ * should be fixed. To alleviate that, the application may use an explicit call to
+ * a global destructor like OPENSSL_cleanup(), but normally the OpenSSL stack does it
+ * during the process exit.
  */
+static int openssl_is_init = 0;
+
 static void picoquic_init_openssl()
 {
-    static int openssl_is_init = 0;
-
     if (openssl_is_init == 0) {
         openssl_is_init = 1;
         ERR_load_crypto_strings();
@@ -1006,6 +1014,11 @@ void picoquic_master_tlscontext_free(picoquic_quic_t* quic)
 
         if (ctx->update_traffic_key != NULL) {
             free(ctx->update_traffic_key);
+        }
+
+        /* Need to be tested */
+        if (ctx->save_ticket != NULL) {
+            free(ctx->save_ticket);
         }
     }
 }

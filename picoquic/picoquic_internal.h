@@ -413,10 +413,10 @@ typedef struct st_picoquic_packet_context_t {
     uint64_t latest_retransmit_time;
     uint64_t highest_acknowledged;
     uint64_t latest_time_acknowledged; /* time at which the highest acknowledged was sent */
-    picoquic_packet* retransmit_newest;
-    picoquic_packet* retransmit_oldest;
-    picoquic_packet* retransmitted_newest;
-    picoquic_packet* retransmitted_oldest;
+    picoquic_packet_t* retransmit_newest;
+    picoquic_packet_t* retransmit_oldest;
+    picoquic_packet_t* retransmitted_newest;
+    picoquic_packet_t* retransmitted_oldest;
 
     unsigned int ack_needed : 1;
 } picoquic_packet_context_t;
@@ -552,8 +552,8 @@ void picoquic_queue_stateless_packet(picoquic_quic_t* quic, picoquic_stateless_p
 int picoquic_register_cnx_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, picoquic_connection_id_t cnx_id);
 
 /* handling of retransmission queue */
-void picoquic_enqueue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet* p);
-void picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet* p, int should_free);
+void picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet_t* p, int should_free);
+void picoquic_dequeue_retransmitted_packet(picoquic_cnx_t* cnx, picoquic_packet_t* p);
 
 /* Reset connection after receiving version negotiation */
 int picoquic_reset_cnx_version(picoquic_cnx_t* cnx, uint8_t* bytes, size_t length, uint64_t current_time);
@@ -685,7 +685,7 @@ uint32_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     uint8_t* send_buffer, uint32_t send_buffer_max,
     void * aead_context, void* pn_enc);
 
-void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet * packet, int ret,
+void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet_t * packet, int ret,
     uint32_t length, uint32_t header_length, uint32_t checksum_overhead,
     size_t * send_length, uint8_t * send_buffer, uint32_t send_buffer_max,
     picoquic_path_t * path_x, uint64_t current_time);

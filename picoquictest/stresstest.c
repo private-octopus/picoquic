@@ -578,6 +578,10 @@ static int stress_handle_packet_prepare(picoquic_stress_ctx_t * ctx, picoquic_qu
             if (target_link != NULL) {
                 picoquictest_sim_link_submit(target_link, packet, ctx->simulated_time);
             }
+            else {
+                stress_debug_break();
+                ret = -1;
+            }
         }
         else {
             free(packet);
@@ -839,8 +843,17 @@ static int stress_create_client_context(int client_index, picoquic_stress_ctx_t 
 static void stress_delete_client_context(int client_index, picoquic_stress_ctx_t * stress_ctx)
 {
     picoquic_stress_client_t * ctx = stress_ctx->c_ctx[client_index];
+    picoquic_stress_client_callback_ctx_t* cb_ctx;
 
     if (ctx != NULL) {
+        while (ctx->qclient->cnx_list != NULL) {
+            cb_ctx = (picoquic_stress_client_callback_ctx_t*)
+                picoquic_get_callback_context(ctx->qclient->cnx_list);
+            free(cb_ctx);
+            picoquic_set_callback(ctx->qclient->cnx_list, NULL, NULL);
+            picoquic_delete_cnx(ctx->qclient->cnx_list);
+        }
+
         if (ctx->qclient != NULL) {
             picoquic_free(ctx->qclient);
             ctx->qclient = NULL;

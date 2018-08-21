@@ -1128,68 +1128,6 @@ void picoquic_clear_stream(picoquic_stream_head* stream)
     }
 }
 
-void picoquic_enqueue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet* p)
-{
-    picoquic_packet_context_enum pc = p->pc;
-    if (cnx->pkt_ctx[pc].retransmit_oldest == NULL) {
-        p->previous_packet = NULL;
-        cnx->pkt_ctx[pc].retransmit_newest = p;
-    } else {
-        cnx->pkt_ctx[pc].retransmit_oldest->next_packet = p;
-        p->previous_packet = cnx->pkt_ctx[pc].retransmit_oldest;
-    }
-    p->next_packet = NULL;
-    cnx->pkt_ctx[pc].retransmit_oldest = p;
-
-    /* Account for bytes in transit, for congestion control */
-    cnx->path[0]->bytes_in_transit += p->length;
-}
-
-void picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet* p, int should_free)
-{
-    size_t dequeued_length = p->length + p->checksum_overhead;
-    picoquic_packet_context_enum pc = p->pc;
-
-    if (p->previous_packet == NULL) {
-        cnx->pkt_ctx[pc].retransmit_newest = p->next_packet;
-    }
-    else {
-        p->previous_packet->next_packet = p->next_packet;
-    }
-
-    if (p->next_packet == NULL) {
-        cnx->pkt_ctx[pc].retransmit_oldest = p->previous_packet;
-    }
-    else {
-        p->next_packet->previous_packet = p->previous_packet;
-    }
-
-    /* Account for bytes in transit, for congestion control */
-
-    if (p->send_path->bytes_in_transit > dequeued_length) {
-        p->send_path->bytes_in_transit -= dequeued_length;
-    }
-    else {
-        p->send_path->bytes_in_transit = 0;
-    }
-        
-    if (should_free) {
-        free(p);
-    } else {
-        p->next_packet = NULL;
-
-        /* add this packet to the retransmitted list */
-        if (cnx->pkt_ctx[pc].retransmitted_oldest == NULL) {
-            cnx->pkt_ctx[pc].retransmitted_newest = p;
-            p->previous_packet = NULL;
-        } else {
-            cnx->pkt_ctx[pc].retransmitted_oldest->next_packet = p;
-            p->previous_packet = cnx->pkt_ctx[pc].retransmitted_oldest;
-            cnx->pkt_ctx[pc].retransmitted_oldest = p;
-        }
-    }
-}
-
 void picoquic_reset_packet_context(picoquic_cnx_t* cnx,
     picoquic_packet_context_enum pc)
 {
@@ -1201,25 +1139,16 @@ void picoquic_reset_packet_context(picoquic_cnx_t* cnx,
     }
     
     while (pkt_ctx->retransmitted_newest != NULL) {
-        picoquic_packet* p = pkt_ctx->retransmitted_newest;
-        pkt_ctx->retransmitted_newest = p->next_packet;
-        free(p);
+        picoquic_dequeue_retransmitted_packet(cnx, pkt_ctx->retransmitted_newest);
     }
 
     pkt_ctx->retransmitted_oldest = NULL;
 
-#if 1
-    /* BUG #225: this crashes in some tests not related to this PR. */
-    /* Reset the sack lists*/
     while (pkt_ctx->first_sack_item.next_sack != NULL) {
         picoquic_sack_item_t * next = pkt_ctx->first_sack_item.next_sack;
         pkt_ctx->first_sack_item.next_sack = next->next_sack;
         free(next);
     }
-#else
-    /* BUG: see above */
-    pkt_ctx->first_sack_item.next_sack = NULL;
-#endif
 
     pkt_ctx->first_sack_item.start_of_sack_range = (uint64_t)((int64_t)-1);
     pkt_ctx->first_sack_item.end_of_sack_range = 0;
@@ -1355,6 +1284,14 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
     picoquic_misc_frame_header_t* misc_frame;
 
     if (cnx != NULL) {
+        if (cnx->cnx_state < picoquic_state_disconnected) {
+            /* Give the application a chance to clean up its state */
+            cnx->cnx_state = picoquic_state_disconnected;
+            if (cnx->callback_fn) {
+                (cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx);
+            }
+        }
+
         if (cnx->alpn != NULL) {
             free((void*)cnx->alpn);
             cnx->alpn = NULL;

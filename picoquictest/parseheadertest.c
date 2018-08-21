@@ -483,7 +483,7 @@ int test_packet_encrypt_one(
     picoquic_path_t * path_x = cnx_client->path[0];
     uint64_t current_time = 0;
     picoquic_packet_header expected_header;
-    picoquic_packet * packet = (picoquic_packet *) malloc(sizeof(picoquic_packet));
+    picoquic_packet_t * packet = (picoquic_packet_t *) malloc(sizeof(picoquic_packet_t));
     picoquic_packet_context_enum pc = 0;
 
     if (packet == NULL) {
@@ -491,7 +491,7 @@ int test_packet_encrypt_one(
         ret = -1;
     }
     else {
-        memset(packet, 0, sizeof(picoquic_packet));
+        memset(packet, 0, sizeof(picoquic_packet_t));
         memset(packet->bytes, 0xbb, length);
         header_length = picoquic_predict_packet_header_length(cnx_client, ptype);
         packet->ptype = ptype;
