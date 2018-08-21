@@ -1284,6 +1284,14 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
     picoquic_misc_frame_header_t* misc_frame;
 
     if (cnx != NULL) {
+        if (cnx->cnx_state < picoquic_state_disconnected) {
+            /* Give the application a chance to clean up its state */
+            cnx->cnx_state = picoquic_state_disconnected;
+            if (cnx->callback_fn) {
+                (cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx);
+            }
+        }
+
         if (cnx->alpn != NULL) {
             free((void*)cnx->alpn);
             cnx->alpn = NULL;
