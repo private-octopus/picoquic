@@ -333,8 +333,6 @@ int main(int argc, char** argv)
         }
 
         free(test_status);
-
-        picoquic_openssl_final_destructor();
     }
     return (ret);
 }

@@ -79,9 +79,9 @@ static void picoquic_setup_cleartext_aead_salt(size_t version_index, ptls_iovec_
  * The OpenSSL resources are allocated on first use, and not released until the end of the
  * process. The only problem is when use memory leak tracers such as valgrind. The OpenSSL
  * allocations will create a large number of issues, which may hide the actual leaks that
- * should be fixed. To alleviate that, the application may use the global SSL destructor
- * just prior to exiting. However, once the destructor is called, trying to reinitialize
- * OpenSSL will likely cause the program to crash.
+ * should be fixed. To alleviate that, the application may use an explicit call to
+ * a global destructor like OPENSSL_cleanup(), but normally the OpenSSL stack does it
+ * during the process exit.
  */
 static int openssl_is_init = 0;
 
@@ -97,23 +97,6 @@ static void picoquic_init_openssl()
         ENGINE_register_all_ciphers();
         ENGINE_register_all_digests();
 #endif
-    }
-}
-
-void picoquic_openssl_final_destructor()
-{
-    /* Invalidating the openssl release code for now, as trying multiple open/close in
-     * the same process causes a crash */
-    if (openssl_is_init > 0) {
-#if !defined(OPENSSL_NO_ENGINE)
-        /* Release all compiled-in ENGINEs */
-        ENGINE_cleanup();
-#endif
-        ERR_free_strings();
-        RAND_cleanup();
-        EVP_cleanup();
-        CONF_modules_free();
-        OPENSSL_cleanup();
     }
 }
 
