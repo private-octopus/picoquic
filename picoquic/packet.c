@@ -102,7 +102,7 @@ int picoquic_parse_packet_header(
                 }
                 else {
                     char context_by_addr = 0;
-                    uint64_t payload_length;
+                    uint64_t payload_length = 0;
                     uint64_t pn_length_clear = 0;  
                     uint32_t var_length = 0; 
 

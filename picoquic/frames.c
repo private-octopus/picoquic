@@ -1092,10 +1092,10 @@ void picoquic_check_spurious_retransmission(picoquic_cnx_t* cnx,
     picoquic_packet_context_enum pc)
 {
     picoquic_packet_context_t * pkt_ctx = &cnx->pkt_ctx[pc];
-    picoquic_packet* p = pkt_ctx->retransmitted_newest;
+    picoquic_packet_t* p = pkt_ctx->retransmitted_newest;
 
     while (p != NULL) {
-        picoquic_packet* should_delete = NULL;
+        picoquic_packet_t* should_delete = NULL;
 
         if (p->sequence_number >= start_of_range && p->sequence_number <= end_of_range) {
 
@@ -1133,28 +1133,16 @@ void picoquic_check_spurious_retransmission(picoquic_cnx_t* cnx,
         p = p->next_packet;
 
         if (should_delete != NULL) {
-            if (should_delete->previous_packet == NULL) {
-                pkt_ctx->retransmitted_newest = should_delete->next_packet;
-            } else {
-                should_delete->previous_packet->next_packet = should_delete->next_packet;
-            }
-
-            if (should_delete->next_packet == NULL) {
-                pkt_ctx->retransmitted_oldest = should_delete->previous_packet;
-            } else {
-                should_delete->next_packet->previous_packet = should_delete->previous_packet;
-            }
-
-            free(should_delete);
+            picoquic_dequeue_retransmitted_packet(cnx, should_delete);
         }
     }
 }
 
-static picoquic_packet* picoquic_update_rtt(picoquic_cnx_t* cnx, uint64_t largest,
+static picoquic_packet_t* picoquic_update_rtt(picoquic_cnx_t* cnx, uint64_t largest,
     uint64_t current_time, uint64_t ack_delay, picoquic_packet_context_enum pc)
 {
     picoquic_packet_context_t * pkt_ctx = &cnx->pkt_ctx[pc];
-    picoquic_packet* packet = pkt_ctx->retransmit_newest;
+    picoquic_packet_t* packet = pkt_ctx->retransmit_newest;
 
     /* Check whether this is a new acknowledgement */
     if (largest > pkt_ctx->highest_acknowledged || pkt_ctx->first_sack_item.start_of_sack_range == (uint64_t)((int64_t)-1)) {
@@ -1432,7 +1420,7 @@ static int picoquic_process_ack_of_stream_frame(picoquic_cnx_t* cnx, uint8_t* by
     return ret;
 }
 
-void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t* cnx, picoquic_packet* p)
+void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t* cnx, picoquic_packet_t* p)
 {
     int ret = 0;
     size_t byte_index;
@@ -1466,10 +1454,10 @@ void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t* cnx, picoquic_pa
 }
 
 static int picoquic_process_ack_range(
-    picoquic_cnx_t* cnx, picoquic_packet_context_enum pc, uint64_t highest, uint64_t range, picoquic_packet** ppacket,
+    picoquic_cnx_t* cnx, picoquic_packet_context_enum pc, uint64_t highest, uint64_t range, picoquic_packet_t** ppacket,
     uint64_t current_time)
 {
-    picoquic_packet* p = *ppacket;
+    picoquic_packet_t* p = *ppacket;
     int ret = 0;
     /* Compare the range to the retransmit queue */
     while (p != NULL && range > 0) {
@@ -1478,7 +1466,7 @@ static int picoquic_process_ack_range(
         } else {
             if (p->sequence_number == highest) {
                 /* TODO: RTT Estimate */
-                picoquic_packet* next = p->next_packet;
+                picoquic_packet_t* next = p->next_packet;
                 picoquic_path_t * old_path = p->send_path;
 
                 if (cnx->congestion_alg != NULL) {
@@ -1538,7 +1526,7 @@ uint8_t* picoquic_decode_ack_frame_maybe_ecn(picoquic_cnx_t* cnx, uint8_t* bytes
         }
 
         /* Attempt to update the RTT */
-        picoquic_packet* top_packet = picoquic_update_rtt(cnx, largest, current_time, ack_delay, pc);
+        picoquic_packet_t* top_packet = picoquic_update_rtt(cnx, largest, current_time, ack_delay, pc);
 
         while (bytes != NULL) {
             uint64_t range;
