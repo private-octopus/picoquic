@@ -32,7 +32,7 @@ script:
   - cmake .
   - make
   - ulimit -c unlimited -S
-  - ./picoquic_ct && RESULT=$?
+  - ./picoquic_ct -x fuzz && RESULT=$?
   # Early out if the program exited successfully
   - if [[ ${RESULT} == 0 ]]; then exit 0; fi;
   - for i in $(find ./ -maxdepth 1 -name 'core*' -print); do gdb $(pwd)/picoquic_ct core* -ex "thread apply all bt" -ex "set pagination 0" -batch; done;

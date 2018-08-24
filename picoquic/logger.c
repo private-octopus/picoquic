@@ -403,13 +403,7 @@ void picoquic_log_retry_packet(FILE* F, uint64_t log_cnxid64,
     uint8_t unused_cil;
     int payload_length = (int)(length - ph->offset);
 
-    if (ph->vn == PICOQUIC_SEVENTH_INTEROP_VERSION) {
-        odcil = bytes[byte_index++];
-        unused_cil = 0;
-    }
-    else {
-        picoquic_parse_packet_header_cnxid_lengths(bytes[byte_index++], &unused_cil, &odcil);
-    }
+    picoquic_parse_packet_header_cnxid_lengths(bytes[byte_index++], &unused_cil, &odcil);
 
     if (unused_cil != 0) {
         /* malformed ODCIL, or does not match initial cid; ignore */
