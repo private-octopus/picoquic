@@ -1491,13 +1491,14 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
 
     /* If context is handshake, verify first that there is no need for retransmit or ack
      * on initial context */
-    if (ret == 0 && pc == picoquic_packet_context_handshake) {
+    if (ret == 0 && epoch > 0) {
         length = picoquic_prepare_packet_old_context(cnx, picoquic_packet_context_initial,
             path_x, packet, send_buffer_max, current_time, &header_length);
-        if (length == 0) {
-            length = picoquic_prepare_packet_old_context(cnx, picoquic_packet_context_application,
-                path_x, packet, send_buffer_max, current_time, &header_length);
-        }
+    }
+
+    if (ret == 0 && epoch > 1 && length == 0) {
+        length = picoquic_prepare_packet_old_context(cnx, picoquic_packet_context_application,
+            path_x, packet, send_buffer_max, current_time, &header_length);
     }
 
     /* If there is nothing to send in previous context, check this one too */
