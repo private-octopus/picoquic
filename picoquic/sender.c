@@ -1413,7 +1413,7 @@ uint32_t picoquic_prepare_packet_old_context(picoquic_cnx_t* cnx, picoquic_packe
     }
 
     if (length > 0) {
-        if (pc != picoquic_packet_context_application) {
+        if (packet->ptype != picoquic_packet_0rtt_protected) {
             /* Check whether it makes sens to add an ACK at the end of the retransmission */
             if (picoquic_prepare_ack_frame(cnx, current_time, pc, &packet->bytes[length],
                 send_buffer_max - checksum_overhead - length, &data_bytes)
@@ -1491,13 +1491,14 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
 
     /* If context is handshake, verify first that there is no need for retransmit or ack
      * on initial context */
-    if (ret == 0 && pc == picoquic_packet_context_handshake) {
+    if (ret == 0 && epoch > 0) {
         length = picoquic_prepare_packet_old_context(cnx, picoquic_packet_context_initial,
             path_x, packet, send_buffer_max, current_time, &header_length);
-        if (length == 0) {
-            length = picoquic_prepare_packet_old_context(cnx, picoquic_packet_context_application,
-                path_x, packet, send_buffer_max, current_time, &header_length);
-        }
+    }
+
+    if (ret == 0 && epoch > 1 && length == 0) {
+        length = picoquic_prepare_packet_old_context(cnx, picoquic_packet_context_application,
+            path_x, packet, send_buffer_max, current_time, &header_length);
     }
 
     /* If there is nothing to send in previous context, check this one too */
@@ -1550,7 +1551,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                     length = 0;
                 }
                 else {
-                    if (epoch != 1 || cnx->pkt_ctx[pc].ack_needed) {
+                    if (epoch != 1 && cnx->pkt_ctx[pc].ack_needed) {
                         ret = picoquic_prepare_ack_frame(cnx, current_time, pc, &bytes[length],
                             send_buffer_max - checksum_overhead - length, &data_bytes);
                         if (ret == 0) {

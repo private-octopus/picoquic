@@ -717,7 +717,14 @@ void picoquic_queue_stateless_retry(picoquic_cnx_t* cnx,
             0, bytes, &pn_offset, &pn_length);
 
         /* Draft 13 requires adding the ODCID, no frames  */
-        bytes[byte_index++] = cnx->initial_cnxid.id_len;
+        if (picoquic_supported_versions[cnx->version_index].version ==
+            PICOQUIC_SEVENTH_INTEROP_VERSION) {
+            /* Old: encode ocdil as single byte */
+            bytes[byte_index++] = cnx->initial_cnxid.id_len;
+        } else {
+            /* new: use same encoding as packet header */
+            bytes[byte_index++] = picoquic_create_packet_header_cnxid_lengths(0, cnx->initial_cnxid.id_len);
+        }
         byte_index += picoquic_format_connection_id(bytes + byte_index,
             PICOQUIC_MAX_PACKET_SIZE - byte_index - checksum_length, cnx->initial_cnxid);
         byte_index += (uint32_t)data_bytes;
@@ -861,10 +868,18 @@ int picoquic_incoming_retry(
     if (ret == 0) {
         /* Parse the retry frame */
         size_t byte_index = ph->offset;
+        uint8_t odcil;
+        uint8_t unused_cil;
 
-        uint8_t odcil = bytes[byte_index++];
+        if (ph->vn == PICOQUIC_SEVENTH_INTEROP_VERSION) {
+            odcil = bytes[byte_index++];
+            unused_cil = 0;
+        }
+        else {
+            picoquic_parse_packet_header_cnxid_lengths(bytes[byte_index++], &unused_cil, &odcil);
+        }
 
-        if (odcil < 8 || odcil != cnx->initial_cnxid.id_len || odcil + 1 > ph->payload_length ||
+        if (unused_cil != 0 || odcil != cnx->initial_cnxid.id_len || odcil + 1 > ph->payload_length ||
             memcmp(cnx->initial_cnxid.id, &bytes[byte_index], odcil) != 0) {
             /* malformed ODCIL, or does not match initial cid; ignore */
             ret = PICOQUIC_ERROR_UNEXPECTED_PACKET;
