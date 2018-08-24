@@ -49,7 +49,7 @@ builds, the tests are run through a command line program.
 As explained in the Wiki, Picoquic is actively tested against other implementations
 during the QUIC Interop days. See https://github.com/private-octopus/picoquic/wiki/QUIC-milestones-and-interop-testing.
 
-The current version is aligned with draft 13. Most big features are now tested, including
+The current version is aligned with draft 14. Most big features are now tested, including
 the revised interface between QUIC and TLS, but we still have to fully develop and 
 test connection migration. At this stage we only support NAT rebinding.
 
@@ -65,8 +65,9 @@ applications. Suggestions are wellcome.
 
 Picoquic is developed in C, and can be built under Windows or Linux. Building the
 project requires first managing the dependencies, Picotls (https://github.com/h2o/picotls)
-and OpenSSL. Please note that you will need a recent version of Picotls -- the TLS API
-depends on commits from Aug 14, 2018.
+and OpenSSL. Please note that you will need a recent version of Picotls --
+the TLS API depends on commits from Aug 14, 2018, and the support for the
+final version of TLS 1.3 (RFC 8446) depends on commits from Augst 22, 2018.
 
 ## Picoquic on Windows
 
