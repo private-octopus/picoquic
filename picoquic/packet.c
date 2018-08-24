@@ -861,10 +861,18 @@ int picoquic_incoming_retry(
     if (ret == 0) {
         /* Parse the retry frame */
         size_t byte_index = ph->offset;
+        uint8_t odcil;
+        uint8_t unused_cil;
 
-        uint8_t odcil = bytes[byte_index++];
+        if (ph->vn == PICOQUIC_SEVENTH_INTEROP_VERSION) {
+            odcil = bytes[byte_index++];
+            unused_cil = 0;
+        }
+        else {
+            picoquic_parse_packet_header_cnxid_lengths(bytes[byte_index++], &unused_cil, &odcil);
+        }
 
-        if (odcil < 8 || odcil != cnx->initial_cnxid.id_len || odcil + 1 > ph->payload_length ||
+        if (unused_cil != 0 || odcil != cnx->initial_cnxid.id_len || odcil + 1 > ph->payload_length ||
             memcmp(cnx->initial_cnxid.id, &bytes[byte_index], odcil) != 0) {
             /* malformed ODCIL, or does not match initial cid; ignore */
             ret = PICOQUIC_ERROR_UNEXPECTED_PACKET;

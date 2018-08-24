@@ -394,6 +394,55 @@ void picoquic_log_negotiation_packet(FILE* F, uint64_t log_cnxid64,
     fprintf(F, "\n");
 }
 
+void picoquic_log_retry_packet(FILE* F, uint64_t log_cnxid64,
+    uint8_t* bytes, size_t length, picoquic_packet_header* ph)
+{
+    size_t byte_index = ph->offset;
+    int token_length = 0;
+    uint8_t odcil;
+    uint8_t unused_cil;
+    int payload_length = (int)(length - ph->offset);
+
+    if (ph->vn == PICOQUIC_SEVENTH_INTEROP_VERSION) {
+        odcil = bytes[byte_index++];
+        unused_cil = 0;
+    }
+    else {
+        picoquic_parse_packet_header_cnxid_lengths(bytes[byte_index++], &unused_cil, &odcil);
+    }
+
+    if (unused_cil != 0) {
+        /* malformed ODCIL, or does not match initial cid; ignore */
+        fprintf(F, "%" PRIx64 ": malformed ODCIL: %x\n", log_cnxid64, bytes[byte_index - 1]);
+    }
+    else if ((int)odcil > payload_length) {
+        fprintf(F, "%" PRIx64 ": packet too short, ODCIL: %x (%d), only %d bytes available.\n", 
+            log_cnxid64, bytes[byte_index - 1], odcil, payload_length);
+    } else {
+        /* Dump the old connection ID */
+        fprintf(F, "%" PRIx64 ":     ODCIL: <", log_cnxid64);
+        for (uint8_t i = 0; i < odcil; i++) {
+            fprintf(F, "%02x", bytes[byte_index++]);
+        }
+
+        token_length = ((int)ph->offset) + payload_length - ((int)byte_index);
+        fprintf(F, ">, Token length: %d\n", token_length);
+        /* Print the token or an error */
+        if (token_length > 0) {
+            int printed_length = (token_length > 16) ? 16 : token_length;
+            fprintf(F, "%" PRIx64 ":     Token: ", log_cnxid64);
+            for (uint8_t i = 0; i < printed_length; i++) {
+                fprintf(F, "%02x", bytes[byte_index++]);
+            }
+            if (printed_length < token_length) {
+                fprintf(F, "...");
+            }
+            fprintf(F, "\n");
+        }
+    }
+    fprintf(F, "\n");
+}
+
 size_t picoquic_log_stream_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
 {
     size_t byte_index;
@@ -1063,6 +1112,10 @@ void picoquic_log_decrypted_segment(void* F_log, int log_cnxid, picoquic_cnx_t* 
     else if (ph->ptype == picoquic_packet_version_negotiation) {
         /* log version negotiation */
         picoquic_log_negotiation_packet(F, log_cnxid64, bytes, length, ph);
+    }
+    else if (ph->ptype == picoquic_packet_retry) {
+        /* log version negotiation */
+        picoquic_log_retry_packet(F, log_cnxid64, bytes, length, ph);
     }
     else if (ph->ptype != picoquic_packet_error) {
         /* log frames inside packet */
