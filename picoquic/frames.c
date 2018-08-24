@@ -2226,8 +2226,20 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
             ack_needed = 1;
 
         } else if (first_byte == picoquic_frame_type_ack) {
+            if (epoch == 1) {
+                DBG_PRINTF("Ack frame (0x%x) not expected in 0-RTT packet", first_byte);
+                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, first_byte);
+                bytes = NULL;
+                break;
+            }
             bytes = picoquic_decode_ack_frame(cnx, bytes, bytes_max, current_time, epoch);
         } else if (first_byte == picoquic_frame_type_ack_ecn) {
+            if (epoch == 1) {
+                DBG_PRINTF("Ack-ECN frame (0x%x) not expected in 0-RTT packet", first_byte);
+                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, first_byte);
+                bytes = NULL;
+                break;
+            }
             bytes = picoquic_decode_ack_ecn_frame(cnx, bytes, bytes_max, current_time, epoch);
         } else if (epoch != 1 && epoch != 3 && first_byte != picoquic_frame_type_padding
                                             && first_byte != picoquic_frame_type_path_challenge
