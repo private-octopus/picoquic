@@ -879,28 +879,26 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
             ret = -1;
         }
         else {
+            picoquic_set_callback(cnx_client, first_client_callback, &callback_ctx);
+
             ret = picoquic_start_client_cnx(cnx_client);
 
             if (ret == 0) {
+                if (picoquic_is_0rtt_available(cnx_client) && (proposed_version & 0x0a0a0a0a) != 0x0a0a0a0a) {
+                    zero_rtt_available = 1;
 
-                picoquic_set_callback(cnx_client, first_client_callback, &callback_ctx);
+                    /* Queue a simple frame to perform 0-RTT test */
+                    /* Start the download scenario */
+                    callback_ctx.demo_stream = test_scenario;
+                    callback_ctx.nb_demo_streams = test_scenario_nb;
+
+                    demo_client_start_streams(cnx_client, &callback_ctx, 0xFFFFFFFF);
+                }
 
                 ret = picoquic_prepare_packet(cnx_client, current_time,
                     send_buffer, sizeof(send_buffer), &send_length);
 
                 if (ret == 0 && send_length > 0) {
-
-                    if (picoquic_is_0rtt_available(cnx_client) && (proposed_version & 0x0a0a0a0a) != 0x0a0a0a0a) {
-                        zero_rtt_available = 1;
-
-                        /* Queue a simple frame to perform 0-RTT test */
-                        /* Start the download scenario */
-                        callback_ctx.demo_stream = test_scenario;
-                        callback_ctx.nb_demo_streams = test_scenario_nb;
-
-                        demo_client_start_streams(cnx_client, &callback_ctx, 0xFFFFFFFF);
-                    }
-
                     bytes_sent = sendto(fd, send_buffer, (int)send_length, 0,
                         (struct sockaddr*)&server_address, server_addr_length);
 
