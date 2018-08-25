@@ -146,6 +146,13 @@ void debug_printf_resume(void)
     debug_suspended = 0;
 }
 
+int debug_printf_reset(int suspended)
+{
+    int ret = debug_suspended;
+    debug_suspended = suspended;
+    return ret;
+}
+
 uint8_t picoquic_create_packet_header_cnxid_lengths(uint8_t dest_len, uint8_t srce_len)
 {
     uint8_t ret;

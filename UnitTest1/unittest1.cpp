@@ -37,6 +37,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
 	    }
 
+        TEST_METHOD(random_tester)
+        {
+            int ret = random_tester_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(splay)
         {
             int ret = splay_test();

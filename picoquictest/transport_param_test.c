@@ -331,6 +331,7 @@ int transport_param_fuzz_test(int mode, uint32_t version, uint32_t proposed_vers
     uint8_t buffer[256];
     size_t decoded;
     uint8_t fuzz_byte = 1;
+    int suspended = debug_printf_reset(1);
 
     memset(&quic_ctx, 0, sizeof(quic_ctx));
     memset(&test_cnx, 0, sizeof(picoquic_cnx_t));
@@ -340,8 +341,6 @@ int transport_param_fuzz_test(int mode, uint32_t version, uint32_t proposed_vers
     if (target_length < 8 || target_length > sizeof(buffer)) {
         return -1;
     }
-
-    debug_printf_suspend();
 
     /* initialize the connection object to the test parameters */
     memcpy(&test_cnx.local_parameters, param, sizeof(picoquic_tp_t));
@@ -386,7 +385,7 @@ int transport_param_fuzz_test(int mode, uint32_t version, uint32_t proposed_vers
         }
     }
 
-    debug_printf_resume();
+    (void)debug_printf_reset(suspended);
 
     return ret;
 }
@@ -498,6 +497,7 @@ static int transport_param_log_fuzz_test(int client_mode, uint8_t* target, size_
     int ret = 0;
     uint8_t buffer[256];
     uint8_t fuzz_byte = 1;
+    int suspended = debug_printf_reset(1);
 
 
     /* test for valid arguments */
@@ -505,7 +505,6 @@ static int transport_param_log_fuzz_test(int client_mode, uint8_t* target, size_
         return -1;
     }
 
-    debug_printf_suspend();
 
     /* repeat multiple times */
     for (size_t l = 0; l < 8; l++) {
@@ -547,7 +546,7 @@ static int transport_param_log_fuzz_test(int client_mode, uint8_t* target, size_
         }
     }
 
-    debug_printf_resume();
+    (void) debug_printf_reset(suspended);
 
     return ret;
 }

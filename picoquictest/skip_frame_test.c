@@ -223,7 +223,7 @@ uint64_t picoquic_test_uniform_random(uint64_t * random_context, uint64_t rnd_ma
     uint64_t rnd_min = ((uint64_t)((int64_t)-1)) % rnd_max;
 
     do {
-        rnd = picoquic_public_random_64();
+        rnd = picoquic_test_random(random_context);
     } while (rnd < rnd_min);
 
     return rnd % rnd_max;
@@ -335,7 +335,7 @@ int skip_frame_test()
             DBG_PRINTF("Skip packet <%d> fails, ret = %d\n", i, ret);
         } else {
             /* do the actual fuzz test */
-            debug_printf_suspend();
+            int suspended = debug_printf_reset(1);
             for (size_t j = 0; j < 100; j++) {
                 skip_test_fuzz_packet(fuzz_buffer, buffer, bytes_max, &random_context);
                 if (skip_test_packet(fuzz_buffer, bytes_max) != 0) {
@@ -343,7 +343,7 @@ int skip_frame_test()
                 }
                 fuzz_count++;
             }
-            debug_printf_resume();
+            (void)debug_printf_reset(suspended);
         }
     }
 

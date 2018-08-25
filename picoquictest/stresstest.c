@@ -1018,9 +1018,9 @@ static uint32_t basic_fuzzer(void * fuzz_ctx, picoquic_cnx_t* cnx,
     if (should_fuzz) {
         /* Once in 16, fuzz by changing the length */
         if ((fuzz_pilot & 0xF) == 0xD) {
-            uint32_t fuzz_length_max = length + 16;
+            uint32_t fuzz_length_max = (uint32_t)(length + 16);
             if (fuzz_length_max > bytes_max) {
-                fuzz_length_max = bytes_max;
+                fuzz_length_max = (uint32_t)bytes_max;
             }
             fuzz_pilot >>= 4;
             length = 16 + (uint32_t)((fuzz_pilot&0xFFFF) % length);
@@ -1041,7 +1041,7 @@ static uint32_t basic_fuzzer(void * fuzz_ctx, picoquic_cnx_t* cnx,
         }
     }
 
-    return length;
+    return (uint32_t)length;
 }
 
 int fuzz_test()
@@ -1062,6 +1062,117 @@ int fuzz_test()
 
     DBG_PRINTF("Fuzzed %d packets out of %d, changed %d lengths, ret = %d\n",
         fuzz_ctx.nb_fuzzed, fuzz_ctx.nb_packets, fuzz_ctx.nb_fuzzed_length, ret);
+
+    return ret;
+}
+
+/*
+* Test that the random generation works the same on every platform. This is meant to
+* give us assurance that the stress and fuzz tests behave identically on all platforms.
+*
+* A test sequence is defined by:
+*   - A test seed value;
+*   - The result to three successive calls to "picoquic_test_random"
+*   - The result of 4 tests to "picoquic_test_uniform_random" with ranges 31, 32, 100, 1000.
+* We run several such sequences, and check that the results match expectation
+*/
+
+typedef struct st_test_random_tester_t {
+    uint64_t seed;
+    uint64_t trials[3];
+    int uniform[4];
+} test_random_tester_t;
+
+static int uniform_test[4] = { 31, 32, 100, 1000 };
+
+static test_random_tester_t random_cases[] = {
+#if 1
+    { 0xdeadbeefbabac001ull,
+        { 0x5e15223d01b20defull, 0x9ede0d895c9bd2a6ull, 0xe3a0ed91f612c17full },
+        { 0, 0, 70, 197 } },
+    { 0x56df77dd5d6000efull,
+        { 0xdfccc8d428187e18ull, 0x7d7552fd225a16d7ull, 0x32dabe642e7390cull },
+        { 30, 5, 34, 751 } },
+    { 0x6fbbeeaeb00077abull,
+        { 0x43131e190d5c97full, 0x42fb1ccc58b906dull, 0x610a3b5abef97be4ull },
+        { 26, 16, 12, 939 } },
+    { 0xddf75758003bd5b7ull,
+        { 0x3a8d9a1a727aba2dull, 0xe9279c9bb67c725cull, 0x1acf0953978b79e8ull },
+        { 3, 11, 41, 82 } },
+    { 0xfbabac001deadbeeull,
+        { 0x5112b0a7de31f1b7ull, 0xd691b591d3598619ull, 0xf1b42dc66cf4f215ull },
+        { 17, 10, 44, 527 } },
+    { 0xd5d6000ef56df77dull,
+        { 0xb699f9cadcb2a474ull, 0xc2213dfa4ec1c973ull, 0x843f0e6573dda32eull },
+        { 9, 30, 52, 680 } },
+    { 0xeb00077ab6fbbeeaull,
+        { 0x6dd0c0b399bae357ull, 0xa5a6b1ec22fa894bull, 0x85f25e84ba0843a0ull },
+        { 16, 5, 5, 899 } },
+    { 0x8003bd5b7ddf7575ull,
+        { 0xf7745169aa75f266ull, 0x551964d08e2c25e0ull, 0x17b86c9be72f96bbull },
+        { 4, 24, 48, 21 } },
+    { 0x1deadbeefbabac0ull,
+        { 0xc51696cc9c124ff9ull, 0x1b9d1372c2f72058ull, 0xe539681abb702c48ull },
+        { 20, 21, 96, 865 } },
+    { 0xef56df77dd5d6000ull,
+        { 0xf40b816f8efc0ec8ull, 0xd8a949c49d03c01cull, 0x170902fde977c269ull },
+        { 2, 30, 55, 720 } }
+#else
+    /* Dummy value used when computing the table */
+    { 0, { 0, 0, 0}, { 0, 0, 0, 0}}
+#endif
+};
+
+static size_t nb_random_cases = sizeof(random_cases) / sizeof(test_random_tester_t);
+
+int random_tester_test()
+{
+    /* This is the initial run, so we merely write the expected value */
+    uint64_t t_seed = 0xDEADBEEFBABAC001ull;
+    int ret = 0;
+
+    if (nb_random_cases < 2) {
+        /* This code was used to generate the table of random cases */
+        for (int i = 0; i < 10; i++)
+        {
+            /* Rotate the seed */
+            uint64_t ctx = t_seed;
+            /* Generate the values */
+            printf("{ 0x%llxull, \n{ ", t_seed);
+            for (int j = 0; j < 3; j++) {
+                printf("0x%llxull%s", picoquic_test_random(&ctx), (j < 2) ? ", " : "},\n{ ");
+            }
+            for (int j = 0; j < 4; j++) {
+                printf("%d%s", (int)picoquic_test_uniform_random(&ctx, uniform_test[j]),
+                    (j < 3) ? ", " : "}},\n");
+            }
+            t_seed = (t_seed << 7) | (t_seed >> 57);
+        }
+    }
+    else {
+        for (int i = 0; ret == 0 && i < (int)nb_random_cases; i++)
+        {
+            uint64_t ctx = random_cases[i].seed;
+            for (int j = 0; ret == 0 && j < 3; j++) {
+                uint64_t r = picoquic_test_random(&ctx);
+                if (r != random_cases[i].trials[j]) {
+                    DBG_PRINTF("Case %d, seed %llx, trial[%d] = %llx, expected %llx\n",
+                        i, (unsigned long long)random_cases[i].seed, j,
+                        (unsigned long long)r, (unsigned long long)random_cases[i].trials[j]);
+                    ret = -1;
+                }
+            }
+            for (int j = 0; ret == 0 && j < 4; j++) {
+                int r = (int)picoquic_test_uniform_random(&ctx, uniform_test[j]);
+                if (r != random_cases[i].uniform[j]) {
+                    DBG_PRINTF("Case %d, seed %llx, uniform(%d) = %d, expected %d\n",
+                        i, (unsigned long long)random_cases[i].seed, uniform_test[j],
+                        (unsigned long long)r, (unsigned long long)random_cases[i].uniform[j]);
+                    ret = -1;
+                }
+            }
+        }
+    }
 
     return ret;
 }

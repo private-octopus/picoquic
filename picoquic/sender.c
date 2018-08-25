@@ -1344,7 +1344,7 @@ int picoquic_prepare_packet_0rtt(picoquic_cnx_t* cnx, picoquic_path_t * path_x, 
 
     picoquic_finalize_and_protect_packet(cnx, packet,
         ret, length, header_length, checksum_overhead,
-        send_length, send_buffer, send_buffer_max, path_x, current_time);
+        send_length, send_buffer, (uint32_t)send_buffer_max, path_x, current_time);
 
     if (length > 0) {
         /* Accounting of zero rtt packets sent */
@@ -1640,7 +1640,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
     } else {
         picoquic_finalize_and_protect_packet(cnx, packet,
             ret, length, header_length, checksum_overhead,
-            send_length, send_buffer, send_buffer_max, path_x, current_time);
+            send_length, send_buffer, (uint32_t)send_buffer_max, path_x, current_time);
 
         if (cnx->cnx_state != picoquic_state_draining) {
             picoquic_cnx_set_next_wake_time(cnx, current_time);
@@ -1797,7 +1797,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
 
     picoquic_finalize_and_protect_packet(cnx, packet,
         ret, length, header_length, checksum_overhead,
-        send_length, send_buffer, send_buffer_max, path_x, current_time);
+        send_length, send_buffer, (uint32_t)send_buffer_max, path_x, current_time);
 
     picoquic_cnx_set_next_wake_time(cnx, current_time);
 
@@ -2009,7 +2009,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
 
     picoquic_finalize_and_protect_packet(cnx, packet,
         ret, length, header_length, checksum_overhead,
-        send_length, send_buffer, send_buffer_max, path_x, current_time);
+        send_length, send_buffer, (uint32_t)send_buffer_max, path_x, current_time);
 
     return ret;
 }
