@@ -223,7 +223,7 @@ uint64_t picoquic_test_uniform_random(uint64_t * random_context, uint64_t rnd_ma
     uint64_t rnd_min = ((uint64_t)((int64_t)-1)) % rnd_max;
 
     do {
-        rnd = picoquic_public_random_64();
+        rnd = picoquic_test_random(random_context);
     } while (rnd < rnd_min);
 
     return rnd % rnd_max;
