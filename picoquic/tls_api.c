@@ -202,6 +202,7 @@ uint64_t picoquic_crypto_uniform_random(picoquic_quic_t* quic, uint64_t rnd_max)
 
 static uint64_t public_random_seed[16] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
 static int public_random_index = 0;
+static const uint64_t public_random_multiplier = 1181783497276652981ull;
 
 uint64_t picoquic_public_random_64(void)
 {
@@ -211,7 +212,7 @@ uint64_t picoquic_public_random_64(void)
     s1 ^= s1 >> 11; // b
     s1 ^= s0 ^ (s0 >> 30); // c
     public_random_seed[public_random_index] = s1;
-    return s1 * (uint64_t)1181783497276652981;
+    return s1 * public_random_multiplier;
 }
 
 void picoquic_public_random_seed(picoquic_quic_t* quic)
