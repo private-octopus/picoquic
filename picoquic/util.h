@@ -43,6 +43,7 @@ void debug_printf_push_stream(FILE* f);
 void debug_printf_pop_stream(void);
 void debug_printf_suspend(void);
 void debug_printf_resume(void);
+int debug_printf_reset(int suspended);
 void debug_dump(const void * x, int len);
 
 extern const picoquic_connection_id_t picoquic_null_connection_id;

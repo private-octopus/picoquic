@@ -177,6 +177,7 @@ int usage(char const * argv0)
     fprintf(stderr, "  -x test        Do not run the specified test.\n");
     fprintf(stderr, "  -s nnn         Run stress for nnn minutes.\n");
     fprintf(stderr, "  -f nnn         Run fuzz for nnn minutes.\n");
+    fprintf(stderr, "  -n             Disable debug prints.\n");
     fprintf(stderr, "  -h             Print this help message\n");
 
     return -1;
@@ -206,6 +207,7 @@ int main(int argc, char** argv)
     int opt;
     int do_fuzz = 0;
     int do_stress = 0;
+    int disable_debug = 0;
 
     if (test_status == NULL)
     {
@@ -214,7 +216,7 @@ int main(int argc, char** argv)
     }
     else
     {
-        while (ret == 0 && (opt = getopt(argc, argv, "f:s:x:h")) != -1) {
+        while (ret == 0 && (opt = getopt(argc, argv, "f:s:x:nh")) != -1) {
             switch (opt) {
             case 'x': {
                 int test_number = get_test_number(optarg);
@@ -245,6 +247,9 @@ int main(int argc, char** argv)
                     ret = usage(argv[0]);
                 }
                 break;
+            case 'n':
+                disable_debug = 1;
+                break;
             case 'h':
                 usage(argv[0]);
                 exit(0);
@@ -253,6 +258,10 @@ int main(int argc, char** argv)
                 ret = usage(argv[0]);
                 break;
             }
+        }
+
+        if (disable_debug) {
+            debug_printf_suspend();
         }
 
         if (ret == 0 && stress_minutes > 0) {
