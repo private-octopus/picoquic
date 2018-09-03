@@ -810,7 +810,7 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
     int64_t delay_max = 10000000;
     int64_t delta_t = 0;
     int notified_ready = 0;
-    const char* alpn = "hq-13";
+    const char* alpn = (proposed_version == 0xFF00000D)?"hq-13":"hq-14";
     int zero_rtt_available = 0;
 
     memset(&callback_ctx, 0, sizeof(picoquic_first_client_callback_ctx_t));
