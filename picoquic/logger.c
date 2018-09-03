@@ -405,11 +405,7 @@ void picoquic_log_retry_packet(FILE* F, uint64_t log_cnxid64,
 
     picoquic_parse_packet_header_cnxid_lengths(bytes[byte_index++], &unused_cil, &odcil);
 
-    if (unused_cil != 0) {
-        /* malformed ODCIL, or does not match initial cid; ignore */
-        fprintf(F, "%" PRIx64 ": malformed ODCIL: %x\n", log_cnxid64, bytes[byte_index - 1]);
-    }
-    else if ((int)odcil > payload_length) {
+    if ((int)odcil > payload_length) {
         fprintf(F, "%" PRIx64 ": packet too short, ODCIL: %x (%d), only %d bytes available.\n", 
             log_cnxid64, bytes[byte_index - 1], odcil, payload_length);
     } else {
