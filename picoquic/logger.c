@@ -1578,8 +1578,6 @@ void picoquic_log_picotls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
                 ret = -1;
             } else {
                 /* secret_ptr = &ticket[byte_index]; */
-                byte_index += secret_length;
-
                 if (min_length > ticket_length) {
                     ret = -2;
                 }
