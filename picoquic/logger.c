@@ -497,14 +497,12 @@ size_t picoquic_log_ack_frame(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t
 
         if (byte_index >= bytes_max) {
             fprintf(F, "    Malformed ACK RANGE, %d blocks remain.\n", (int)num_block);
-            ret = -1;
             break;
         }
 
         size_t l_range = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &range);
         if (l_range == 0) {
             byte_index = bytes_max;
-            ret = -1;
             fprintf(F, "    Malformed ACK RANGE, requires %d bytes out of %d", (int)picoquic_varint_skip(bytes),
                 (int)(bytes_max - byte_index));
             break;
@@ -517,7 +515,6 @@ size_t picoquic_log_ack_frame(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t
         if (largest + 1 < range) {
             fprintf(F, "ack range error: largest=%" PRIx64 ", range=%" PRIx64, largest, range);
             byte_index = bytes_max;
-            ret = -1;
             break;
         }
 
@@ -538,13 +535,11 @@ size_t picoquic_log_ack_frame(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t
             }
             fprintf(F, "    Malformed ACK GAP, %d blocks remain.", (int)num_block);
             byte_index = bytes_max;
-            ret = -1;
             break;
         } else {
             size_t l_gap = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &block_to_block);
             if (l_gap == 0) {
                 byte_index = bytes_max;
-                ret = -1;
                 fprintf(F, "\n");
                 if (cnx_id64 != 0) {
                     fprintf(F, "%" PRIx64 ": ", cnx_id64);
@@ -567,7 +562,6 @@ size_t picoquic_log_ack_frame(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t
             fprintf(F, "    ack gap error: largest=%" PRIx64 ", range=%" PRIx64 ", gap=%" PRIu64,
                 largest, range, block_to_block - range);
             byte_index = bytes_max;
-            ret = -1;
             break;
         }
 
