@@ -643,7 +643,6 @@ size_t picoquic_log_generic_close_frame(FILE* F, uint8_t* bytes, size_t bytes_ma
         if (ftype == picoquic_frame_type_connection_close) {
             lf = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &offending_frame_type);
             if (lf == 0) {
-                required += picoquic_varint_skip(bytes + byte_index);
                 byte_index = bytes_max;
             }
             else {
@@ -652,9 +651,6 @@ size_t picoquic_log_generic_close_frame(FILE* F, uint8_t* bytes, size_t bytes_ma
         }
         if (ftype != picoquic_frame_type_connection_close || lf != 0) {
             l1 = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &string_length);
-            if (l1 == 0) {
-                required = byte_index + picoquic_varint_skip(bytes + byte_index);
-            }
         }
     }
 
