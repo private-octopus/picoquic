@@ -1206,7 +1206,7 @@ int picoquic_reset_cnx(picoquic_cnx_t* cnx, uint64_t current_time)
     }
 
     if (ret == 0) {
-        ret = picoquic_setup_initial_traffic_keys(cnx);
+        picoquic_setup_initial_traffic_keys(cnx);
     }
 
     /* Reset the TLS context, Re-initialize the tls connection */
