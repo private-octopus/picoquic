@@ -339,7 +339,7 @@ size_t  picoquic_decrypt_packet(picoquic_cnx_t* cnx,
     uint8_t* bytes, size_t packet_length, picoquic_packet_header* ph, 
     void * pn_enc, void* aead_context, int * already_received)
 {
-    size_t decoded = packet_length + 32; /* by conventions, values larger than input indicate error */
+    size_t decoded; /* by conventions, values larger than input indicate error */
     size_t length = ph->offset + ph->payload_length; /* this may change after decrypting the PN */
 
     if (already_received != NULL) {
