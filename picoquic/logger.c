@@ -1118,14 +1118,19 @@ void picoquic_log_outgoing_segment(void* F_log, int log_cnxid, picoquic_cnx_t* c
     picoquic_cnx_t* pcnx = cnx;
     picoquic_packet_header ph;
     uint32_t checksum_length = (cnx != NULL)? picoquic_get_checksum_length(cnx, 0):16;
+    struct sockaddr_in default_addr;
     int ret;  
 
     if (F_log == NULL) {
         return;
     }
 
+    memset(&default_addr, 0, sizeof(struct sockaddr_in));
+    default_addr.sin_family = AF_INET;
+
     ret = picoquic_parse_packet_header((cnx == NULL) ? NULL : cnx->quic, send_buffer, send_length,
-        (struct sockaddr *)&cnx->path[0]->dest_addr, &ph, &pcnx, 0);
+        (struct sockaddr *)((cnx==NULL || cnx->path[0] == NULL)?
+            &default_addr: &cnx->path[0]->dest_addr), &ph, &pcnx, 0);
 
     ph.pn64 = sequence_number;
     ph.pn = (uint32_t)ph.pn64;
