@@ -1586,7 +1586,7 @@ int keep_alive_test_impl(int keep_alive)
     int was_active = 0;
 
     if (ret == 0 && test_ctx == NULL) {
-        ret = PICOQUIC_ERROR_MEMORY;
+        return PICOQUIC_ERROR_MEMORY;
     }
 
     /*
