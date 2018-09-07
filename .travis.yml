@@ -18,6 +18,14 @@ addons:
     - cmake-data
     - libssl-dev 
     - gdb
+matrix:
+  include:
+    - os: linux
+      compiler: gcc
+      env: ANALYSIS=false
+    - os: linux
+      compiler: clang
+      env: ANALYSIS=true 
 before_install:
 # - $CC --version 
   - if [ "$TRAVIS_OS_NAME" == "linux" ]; then  if [ "$CXX" = "g++" ]; then export CXX="g++" CC="gcc" EXTRA_LDFLAGS="-fuse-ld=gold"; else export CXX="clang++" CC="clang"; fi; fi
@@ -28,10 +36,15 @@ before_script:
   - ./ci/build_picotls.sh
   - sudo sh -c 'echo 0 > /proc/sys/net/ipv6/conf/all/disable_ipv6'
 script:
-  - ls -l /usr/share/clang/scan-build
   # Now build picotls examples and test
+  - if $ANALYSIS ; then
+  - ls -l /usr/share/clang/scan-build
   - scan-build cmake -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=/usr/share/clang/scan-build/ccc-analyzer .
   - scan-build make
+  - else
+  - cmake .
+  - make
+  - fi
   - ulimit -c unlimited -S
   - ./picoquic_ct -n && RESULT=$?
   # Early out if the program exited successfully
