@@ -1615,7 +1615,9 @@ int keep_alive_test_impl(int keep_alive)
     }
 
     /* Check that the status matched the expected value */
-    if (keep_alive != 0) {
+    if (test_ctx->cnx_client == NULL) {
+        ret = -1;
+    } else if (keep_alive != 0) {
         if (test_ctx->cnx_client->cnx_state != picoquic_state_client_ready) {
             ret = -1;
         } else if (simulated_time < 2 * PICOQUIC_MICROSEC_SILENCE_MAX) {
