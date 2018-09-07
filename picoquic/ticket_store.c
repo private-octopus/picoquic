@@ -137,6 +137,7 @@ int picoquic_deserialize_ticket(picoquic_stored_ticket_t ** ticket, uint8_t * by
 
     if (required_length > bytes_max) {
         *ticket = NULL;
+        ret = PICOQUIC_ERROR_INVALID_TICKET;
     } else {
         *ticket = picoquic_format_ticket(time_valid_until, (const char *)(bytes + sni_index), sni_length,
             (const char *)(bytes + alpn_index), alpn_length, bytes + ticket_index, ticket_length);
@@ -327,7 +328,7 @@ int picoquic_load_tickets(picoquic_stored_ticket_t** pp_first_ticket,
                     size_t consumed = 0;
                     ret = picoquic_deserialize_ticket(&next, buffer, storage_size, &consumed);
 
-                    if (ret == 0 && consumed != storage_size) {
+                    if (ret == 0 && (consumed != storage_size || next == NULL)) {
                         ret = PICOQUIC_ERROR_INVALID_FILE;
                     }
 

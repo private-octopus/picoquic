@@ -806,7 +806,6 @@ static int draft31_incoming_initial_test()
 
     if (ret == 0) {
         /* Simulate arrival of an initial packet in the server context */
-        int ret = 0;
         picoquic_cnx_t* cnx = NULL;
         picoquic_packet_header ph;
         uint32_t length = (uint32_t) sizeof(draft13_test_input_packet);

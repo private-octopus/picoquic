@@ -219,14 +219,19 @@ uint64_t picoquic_test_random(uint64_t * random_context)
 
 uint64_t picoquic_test_uniform_random(uint64_t * random_context, uint64_t rnd_max)
 {
-    uint64_t rnd;
-    uint64_t rnd_min = ((uint64_t)((int64_t)-1)) % rnd_max;
 
-    do {
-        rnd = picoquic_test_random(random_context);
-    } while (rnd < rnd_min);
+    uint64_t rnd = 0;
 
-    return rnd % rnd_max;
+    if (rnd_max > 0) {
+        uint64_t rnd_min = ((uint64_t)((int64_t)-1)) % rnd_max;
+
+        do {
+            rnd = picoquic_test_random(random_context);
+        } while (rnd < rnd_min);
+        rnd %= rnd_max;
+    }
+
+    return rnd;
 }
 
 static size_t format_random_packet(uint8_t * bytes, size_t bytes_max, uint64_t * random_context)

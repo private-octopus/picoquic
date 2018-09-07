@@ -81,6 +81,7 @@ int splay_test() {
 
     if (tree == NULL) {
         DBG_PRINTF("%s", "Cannot create tree.\n");
+        ret = -1;
     }
 
     for(int i = 0; ret == 0 && i < 7; i++) {

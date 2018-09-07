@@ -635,7 +635,6 @@ size_t picoquic_log_generic_close_frame(FILE* F, uint8_t* bytes, size_t bytes_ma
     uint64_t offending_frame_type = 0;
     size_t lf = 0;
     size_t l1 = 0;
-    size_t required = 4;
 
     if (bytes_max >= 4) {
         error_code = PICOPARSE_16(bytes + byte_index);
@@ -1119,12 +1118,14 @@ void picoquic_log_outgoing_segment(void* F_log, int log_cnxid, picoquic_cnx_t* c
     picoquic_cnx_t* pcnx = cnx;
     picoquic_packet_header ph;
     uint32_t checksum_length = (cnx != NULL)? picoquic_get_checksum_length(cnx, 0):16;
-    int ret = picoquic_parse_packet_header(cnx->quic, send_buffer, send_length,
-        (struct sockaddr *)&cnx->path[0]->dest_addr, &ph, &pcnx, 0);
+    int ret;  
 
     if (F_log == NULL) {
         return;
     }
+
+    ret = picoquic_parse_packet_header((cnx == NULL) ? NULL : cnx->quic, send_buffer, send_length,
+        (struct sockaddr *)&cnx->path[0]->dest_addr, &ph, &pcnx, 0);
 
     ph.pn64 = sequence_number;
     ph.pn = (uint32_t)ph.pn64;
@@ -1572,7 +1573,6 @@ void picoquic_log_picotls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
             byte_index += (uint16_t) tls_ticket_length;
 
             secret_length = PICOPARSE_16(ticket + byte_index);
-            byte_index += 2;
             min_length += secret_length;
             if (ticket_length < min_length) {
                 ret = -1;

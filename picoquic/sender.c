@@ -795,8 +795,6 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                     packet_is_pure_ack = p->is_pure_ack;
                 }
 
-                byte_index = 0;
-
                 if (contains_crypto) {
                     length = picoquic_predict_packet_header_length(cnx, picoquic_packet_0rtt_protected);
                     packet->ptype = picoquic_packet_0rtt_protected;
@@ -876,7 +874,6 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                 /* If we have a good packet, return it */
                 if (packet_is_pure_ack) {
                     length = 0;
-                    should_retransmit = 0;
                 } else {
                     if (timer_based_retransmit != 0) {
                         if (cnx->pkt_ctx[pc].nb_retransmit > 4) {
@@ -889,7 +886,6 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                                 (cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx);
                             }
                             length = 0;
-                            should_retransmit = 0;
                             break;
                         } else {
                             cnx->pkt_ctx[pc].nb_retransmit++;
@@ -1153,7 +1149,7 @@ static void picoquic_cnx_set_next_wake_time_init(picoquic_cnx_t* cnx, uint64_t c
     }
 
     /* Consider path challenges */
-    if (path_x->challenge_verified == 0) {
+    if (blocked != 0 && path_x->challenge_verified == 0) {
         uint64_t next_challenge_time = path_x->challenge_time + path_x->retransmit_timer;
         if (next_challenge_time <= current_time) {
             next_time = current_time;
@@ -2168,8 +2164,10 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                             }
                         }
                         /* If necessary, encode the max stream data frames */
-                        ret = picoquic_prepare_required_max_stream_data_frames(cnx, &bytes[length],
-                            send_buffer_min_max - checksum_overhead - length, &data_bytes);
+                        if (ret == 0) {
+                            ret = picoquic_prepare_required_max_stream_data_frames(cnx, &bytes[length],
+                                send_buffer_min_max - checksum_overhead - length, &data_bytes);
+                        }
 
                         if (ret == 0) {
                             length += (uint32_t)data_bytes;

@@ -48,6 +48,7 @@ int picoquic_parse_packet_header(
     int receiving)
 {
     int ret = 0;
+    uint8_t local_ctx_length = (quic == NULL) ? 0 : quic->local_ctx_length;
 
     /* Initialize the PH structure to zero, but version index to -1 (error) */
     memset(ph, 0, sizeof(picoquic_packet_header));
@@ -86,7 +87,7 @@ int picoquic_parse_packet_header(
                     ph->pc = picoquic_packet_context_initial;
                     ph->payload_length = (uint16_t) ((length > ph->offset) ? length - ph->offset : 0);
 
-                    if (*pcnx == NULL) {
+                    if (*pcnx == NULL && quic != NULL) {
                         /* The version negotiation should always include the cnx-id sent by the client */
                         if (ph->dest_cnx_id.id_len > 0) {
                             *pcnx = picoquic_cnx_by_id(quic, ph->dest_cnx_id);
@@ -204,7 +205,7 @@ int picoquic_parse_packet_header(
                         ph->pn_offset = ph->offset;
 
                         /* Retrieve the connection context */
-                        if (*pcnx == NULL) {
+                        if (*pcnx == NULL && quic != NULL) {
                             *pcnx = picoquic_cnx_by_id(quic, ph->dest_cnx_id);
 
                             /* TODO: something for the case of client initial, e.g. source IP + initial CNX_ID */
@@ -239,16 +240,16 @@ int picoquic_parse_packet_header(
         /* If this is a short header, it should be possible to retrieve the connection
          * context. This depends on whether the quic context requires cnx_id or not.
          */
-         uint8_t cnxid_length = (receiving == 0 && *pcnx != NULL) ? (*pcnx)->remote_cnxid.id_len : quic->local_ctx_length;
+         uint8_t cnxid_length = (receiving == 0 && *pcnx != NULL) ? (*pcnx)->remote_cnxid.id_len : local_ctx_length;
          ph->pc = picoquic_packet_context_application;
 
          if ((int)length >= 1 + cnxid_length) {
              /* We can identify the connection by its ID */
              ph->offset = (uint32_t)( 1 + picoquic_parse_connection_id(bytes + 1, cnxid_length, &ph->dest_cnx_id));
              /* TODO: should consider using combination of CNX ID and ADDR_FROM */
-             if (*pcnx == NULL)
+             if (*pcnx == NULL && quic != NULL)
              {
-                 if (quic->local_ctx_length > 0) {
+                 if (local_ctx_length > 0) {
                      *pcnx = picoquic_cnx_by_id(quic, ph->dest_cnx_id);
                  }
                  else {

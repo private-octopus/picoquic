@@ -1019,12 +1019,21 @@ static uint32_t basic_fuzzer(void * fuzz_ctx, picoquic_cnx_t* cnx,
         /* Once in 16, fuzz by changing the length */
         if ((fuzz_pilot & 0xF) == 0xD) {
             uint32_t fuzz_length_max = (uint32_t)(length + 16);
+            uint32_t fuzzed_length;
+
             if (fuzz_length_max > bytes_max) {
                 fuzz_length_max = (uint32_t)bytes_max;
             }
             fuzz_pilot >>= 4;
-            length = 16 + (uint32_t)((fuzz_pilot&0xFFFF) % length);
+            fuzzed_length = 16 + (uint32_t)((fuzz_pilot&0xFFFF) % fuzz_length_max);
             fuzz_pilot >>= 16;
+            if (fuzzed_length > length) {
+                for (uint32_t i = length; i < fuzzed_length; i++) {
+                    bytes[i] = (uint8_t)fuzz_pilot;
+                }
+            } 
+            length = fuzzed_length;
+
             if (length < header_length) {
                 length = header_length;
             }
@@ -1138,9 +1147,9 @@ int random_tester_test()
             /* Rotate the seed */
             uint64_t ctx = t_seed;
             /* Generate the values */
-            printf("{ 0x%llxull, \n{ ", t_seed);
+            printf("{ 0x%llxull, \n{ ", (unsigned long long)t_seed);
             for (int j = 0; j < 3; j++) {
-                printf("0x%llxull%s", picoquic_test_random(&ctx), (j < 2) ? ", " : "},\n{ ");
+                printf("0x%llxull%s", (unsigned long long)picoquic_test_random(&ctx), (j < 2) ? ", " : "},\n{ ");
             }
             for (int j = 0; j < 4; j++) {
                 printf("%d%s", (int)picoquic_test_uniform_random(&ctx, uniform_test[j]),
