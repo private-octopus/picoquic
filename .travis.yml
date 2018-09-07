@@ -29,8 +29,7 @@ before_script:
   - sudo sh -c 'echo 0 > /proc/sys/net/ipv6/conf/all/disable_ipv6'
 script:
   # Now build picotls examples and test
-  - if [ "$CC" == "clang" ]; then 
-  - ls -l /usr/share/clang/scan-build;
+  - if [ "$CC" == "clang" ] then ls -l /usr/share/clang/scan-build fi;
   - scan-build cmake -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=/usr/share/clang/scan-build/ccc-analyzer .;
   - scan-build make;
   - else
