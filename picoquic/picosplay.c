@@ -239,7 +239,6 @@ void* picosplay_contents(picosplay_tree *tree) {
     store(tree->root, tmp);
     return out - tree->size;
 }
-#endif
 
 static void store(picosplay_node *node, void ***out) {
     if(node->left != NULL)
@@ -249,6 +248,7 @@ static void store(picosplay_node *node, void ***out) {
     if(node->right != NULL)
         store(node->right, out);
 }
+#endif
 /* This mutates the parental relationships, copy pointer to old parent. */
 static void mark_gp(picosplay_node *child);
 
