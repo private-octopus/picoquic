@@ -1210,9 +1210,13 @@ int picoquic_reset_cnx(picoquic_cnx_t* cnx, uint64_t current_time)
     }
 
     /* Reset the TLS context, Re-initialize the tls connection */
-    picoquic_tlscontext_free(cnx->tls_ctx);
-    cnx->tls_ctx = NULL;
-    ret = picoquic_tlscontext_create(cnx->quic, cnx, current_time);
+    if (cnx->tls_ctx != NULL) {
+        picoquic_tlscontext_free(cnx->tls_ctx);
+        cnx->tls_ctx = NULL;
+    }
+    if (ret == 0) {
+        ret = picoquic_tlscontext_create(cnx->quic, cnx, current_time);
+    }
     if (ret == 0) {
         ret = picoquic_initialize_tls_stream(cnx);
     }
