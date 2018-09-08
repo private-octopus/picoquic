@@ -337,6 +337,10 @@ typedef struct st_picoquic_misc_frame_header_t {
 * Per path context
 */
 typedef struct st_picoquic_path_t {
+    /* Connection ID identifies a path */
+    picoquic_connection_id_t local_cnxid;
+    picoquic_connection_id_t remote_cnxid;
+
     /* Peer address. To do: allow for multiple addresses */
     struct sockaddr_storage peer_addr;
     int peer_addr_len;
@@ -475,8 +479,8 @@ typedef struct st_picoquic_cnx_t {
     /* connection state, ID, etc. Todo: allow for multiple cnxid */
     picoquic_state_enum cnx_state;
     picoquic_connection_id_t initial_cnxid;
-    picoquic_connection_id_t local_cnxid;
-    picoquic_connection_id_t remote_cnxid;
+    // picoquic_connection_id_t local_cnxid;
+    // picoquic_connection_id_t remote_cnxid;
     uint64_t start_time;
     uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE];
     uint16_t application_error;

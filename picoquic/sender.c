@@ -229,8 +229,8 @@ uint32_t picoquic_create_packet_header(
     picoquic_connection_id_t dest_cnx_id =
         ((packet_type == picoquic_packet_initial ||
             packet_type == picoquic_packet_0rtt_protected)
-            && picoquic_is_connection_id_null(cnx->remote_cnxid)) ?
-        cnx->initial_cnxid : cnx->remote_cnxid;
+            && picoquic_is_connection_id_null(cnx->path[0]->remote_cnxid)) ?
+        cnx->initial_cnxid : cnx->path[0]->remote_cnxid;
 
     /* Prepare the packet header */
     if (packet_type == picoquic_packet_1rtt_protected_phi0 || packet_type == picoquic_packet_1rtt_protected_phi1) {
@@ -289,10 +289,10 @@ uint32_t picoquic_create_packet_header(
         }
         length += 4;
 
-        bytes[length++] = picoquic_create_packet_header_cnxid_lengths(dest_cnx_id.id_len, cnx->local_cnxid.id_len);
+        bytes[length++] = picoquic_create_packet_header_cnxid_lengths(dest_cnx_id.id_len, cnx->path[0]->local_cnxid.id_len);
 
         length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, dest_cnx_id);
-        length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, cnx->local_cnxid);
+        length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, cnx->path[0]->local_cnxid);
 
         /* Special case of packet initial -- encode token as part of header */
         if (packet_type == picoquic_packet_initial) {
@@ -331,7 +331,7 @@ uint32_t picoquic_predict_packet_header_length(
     if (packet_type == picoquic_packet_1rtt_protected_phi0 || 
         packet_type == picoquic_packet_1rtt_protected_phi1) {
         /* Compute length of a short packet header */
-        header_length = 1 + cnx->remote_cnxid.id_len + 4;
+        header_length = 1 + cnx->path[0]->remote_cnxid.id_len + 4;
     }
     else {
         /* Compute length of a long packet header */
@@ -340,15 +340,15 @@ uint32_t picoquic_predict_packet_header_length(
         /* add dest-id length */
         if ((packet_type == picoquic_packet_initial ||
             packet_type == picoquic_packet_0rtt_protected)
-            && picoquic_is_connection_id_null(cnx->remote_cnxid)) {
+            && picoquic_is_connection_id_null(cnx->path[0]->remote_cnxid)) {
             header_length += cnx->initial_cnxid.id_len;
         }
         else {
-            header_length += cnx->remote_cnxid.id_len;
+            header_length += cnx->path[0]->remote_cnxid.id_len;
         }
 
         /* add srce-id length */
-        header_length += cnx->local_cnxid.id_len;
+        header_length += cnx->path[0]->local_cnxid.id_len;
 
         /* add length of payload length and packet number */
         header_length += 2 + 4;
