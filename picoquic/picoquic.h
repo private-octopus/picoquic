@@ -133,6 +133,7 @@ typedef enum {
 /*
  * Provisional definition of the connection ID.
  */
+#define PICOQUIC_CONNECTION_ID_MIN_SIZE 4
 #define PICOQUIC_CONNECTION_ID_MAX_SIZE 18
 
 typedef struct st_picoquic_connection_id_t {

@@ -421,6 +421,16 @@ typedef struct st_picoquic_packet_context_t {
     unsigned int ack_needed : 1;
 } picoquic_packet_context_t;
 
+/*
+ * New CNX-ID description, used for storage waiting for the CNX-ID to be validated
+ */
+typedef struct st_picoquic_cnxid_stash_t {
+    struct st_picoquic_cnxid_stash_t * next_in_stash;
+    uint64_t sequence;
+    picoquic_connection_id_t cnx_id;
+    uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE];
+} picoquic_cnxid_stash_t;
+
 
 /* 
  * Per connection context.
@@ -539,6 +549,10 @@ typedef struct st_picoquic_cnx_t {
     picoquic_path_t ** path;
     int nb_paths;
     int nb_path_alloc;
+    /* Management of the CNX-ID stash */
+    picoquic_cnxid_stash_t * cnxid_stash_first;
+    picoquic_cnxid_stash_t * cnxid_stash_last;
+
 } picoquic_cnx_t;
 
 /* Init of transport parameters */
@@ -550,6 +564,13 @@ void picoquic_queue_stateless_packet(picoquic_quic_t* quic, picoquic_stateless_p
 
 /* Registration of connection ID in server context */
 int picoquic_register_cnx_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, picoquic_connection_id_t cnx_id);
+
+/* Management of CNXID STASH */
+
+/* Management of the CNX-ID stash */
+picoquic_cnxid_stash_t * picoquic_dequeue_cnxid_stash(picoquic_cnx_t* cnx);
+
+picoquic_cnxid_stash_t * picoquic_enqueue_cnxid_stash(picoquic_cnx_t * cnx, uint64_t sequence, uint8_t cid_length, uint8_t * cnxid_bytes, uint8_t * secret_bytes);
 
 /* handling of retransmission queue */
 void picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet_t* p, int should_free);

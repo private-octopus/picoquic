@@ -48,6 +48,7 @@ void debug_dump(const void * x, int len);
 
 extern const picoquic_connection_id_t picoquic_null_connection_id;
 uint32_t picoquic_format_connection_id(uint8_t* bytes, size_t bytes_max, picoquic_connection_id_t cnx_id);
+int picoquic_is_connection_id_length_valid(uint8_t len);
 uint32_t picoquic_parse_connection_id(const uint8_t* bytes, uint8_t len, picoquic_connection_id_t *cnx_id);
 int picoquic_is_connection_id_null(picoquic_connection_id_t cnx_id);
 int picoquic_compare_connection_id(picoquic_connection_id_t * cnx_id1, picoquic_connection_id_t * cnx_id2);

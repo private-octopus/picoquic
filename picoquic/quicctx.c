@@ -692,6 +692,43 @@ static void picoquic_create_random_cnx_id(picoquic_quic_t* quic, picoquic_connec
 }
 
 
+picoquic_cnxid_stash_t * picoquic_dequeue_cnxid_stash(picoquic_cnx_t * cnx)
+{
+    picoquic_cnxid_stash_t * stashed = NULL;
+
+    if (cnx != NULL && cnx->cnxid_stash_first != NULL) {
+        stashed = cnx->cnxid_stash_first;
+        cnx->cnxid_stash_first = stashed->next_in_stash;
+        if (stashed->next_in_stash == NULL) {
+            cnx->cnxid_stash_last = NULL;
+        }
+        else {
+            stashed->next_in_stash = NULL;
+        }
+    }
+
+    return stashed;
+}
+
+picoquic_cnxid_stash_t * picoquic_enqueue_cnxid_stash(picoquic_cnx_t * cnx,
+    uint64_t sequence, uint8_t cid_length, uint8_t * cnxid_bytes, uint8_t * secret_bytes)
+{
+    picoquic_cnxid_stash_t * stashed = (picoquic_cnxid_stash_t *)malloc(sizeof(picoquic_cnxid_stash_t));
+
+    if (stashed != NULL) {
+        (void)picoquic_parse_connection_id(cnxid_bytes, cid_length, &stashed->cnx_id);
+        stashed->sequence = sequence;
+        memcpy(stashed->reset_secret, secret_bytes, PICOQUIC_RESET_SECRET_SIZE);
+        stashed->next_in_stash = cnx->cnxid_stash_last;
+        cnx->cnxid_stash_last = stashed;
+
+        if (cnx->cnxid_stash_first == NULL) {
+            cnx->cnxid_stash_last = stashed;
+        }
+    }
+    return stashed;
+}
+
 picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
     picoquic_connection_id_t initial_cnx_id, picoquic_connection_id_t remote_cnx_id, 
     struct sockaddr* addr, uint64_t start_time, uint32_t preferred_version,
@@ -1286,6 +1323,7 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
 {
     picoquic_stream_head* stream;
     picoquic_misc_frame_header_t* misc_frame;
+    picoquic_cnxid_stash_t* stashed_cnxid;
 
     if (cnx != NULL) {
         if (cnx->cnx_state < picoquic_state_disconnected) {
@@ -1375,6 +1413,10 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
 
             free(cnx->path);
             cnx->path = NULL;
+        }
+
+        while ((stashed_cnxid = picoquic_dequeue_cnxid_stash(cnx)) != NULL) {
+            free(stashed_cnxid);
         }
 
         free(cnx);
