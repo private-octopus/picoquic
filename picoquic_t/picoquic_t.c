@@ -65,6 +65,7 @@ static const picoquic_test_def_t test_table[] = {
     { "cleartext_pn_enc", cleartext_pn_enc_test },
     { "draft13_vector", draft13_vector_test },
     { "pn_enc_1rtt", pn_enc_1rtt_test },
+    { "cnxid_stash", cnxid_stash_test },
     { "tls_api", tls_api_test },
     { "silence_test", tls_api_silence_test },
     { "tls_api_version_negotiation", tls_api_version_negotiation_test },

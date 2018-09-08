@@ -719,12 +719,16 @@ picoquic_cnxid_stash_t * picoquic_enqueue_cnxid_stash(picoquic_cnx_t * cnx,
         (void)picoquic_parse_connection_id(cnxid_bytes, cid_length, &stashed->cnx_id);
         stashed->sequence = sequence;
         memcpy(stashed->reset_secret, secret_bytes, PICOQUIC_RESET_SECRET_SIZE);
-        stashed->next_in_stash = cnx->cnxid_stash_last;
-        cnx->cnxid_stash_last = stashed;
+        stashed->next_in_stash = NULL;
 
-        if (cnx->cnxid_stash_first == NULL) {
-            cnx->cnxid_stash_last = stashed;
+        if (cnx->cnxid_stash_last == NULL) {
+            cnx->cnxid_stash_first = stashed;
         }
+        else {
+            cnx->cnxid_stash_last->next_in_stash = stashed;
+        }
+
+        cnx->cnxid_stash_last = stashed;
     }
     return stashed;
 }

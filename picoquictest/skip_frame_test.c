@@ -649,3 +649,112 @@ int logger_test()
 
     return ret;
 }
+
+
+/* Basic test of connection ID stash, part of migration support  */
+static const picoquic_cnxid_stash_t stash_test_case[] = {
+    { NULL,  1,{ { 0, 1, 2, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 4 },
+{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 } },
+{ NULL,  2,{ { 1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 4 },
+{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 } },
+{ NULL,  3,{ { 2, 3, 4, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 4 },
+{ 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17 } }
+};
+
+static const size_t nb_stash_test_case = sizeof(stash_test_case) / sizeof(picoquic_cnxid_stash_t);
+
+static int cnxid_stash_compare(int test_mode, picoquic_cnxid_stash_t * stashed, size_t i)
+{
+    int ret = 0;
+
+    if (stashed == NULL) {
+        DBG_PRINTF("Test %d, cannot dequeue cnxid %d.\n", test_mode, i);
+        ret = -1;
+    }
+    else if (stashed->sequence != stash_test_case[i].sequence) {
+        DBG_PRINTF("Test %d, cnxid %d, sequence %d instead of %d.\n", test_mode, i,
+            stashed->sequence, stash_test_case[i].sequence);
+        ret = -1;
+    }
+    else if (picoquic_compare_connection_id(&stashed->cnx_id, &stash_test_case[i].cnx_id) != 0) {
+        DBG_PRINTF("Test %d, cnxid %d, CNXID values do not match.\n", test_mode, i);
+        ret = -1;
+    }
+    else if (memcmp(&stashed->reset_secret, &stash_test_case[i].reset_secret, PICOQUIC_RESET_SECRET_SIZE) != 0) {
+        DBG_PRINTF("Test %d, cnxid %d, secrets do not match.\n", test_mode, i);
+        ret = -1;
+    }
+
+    return ret;
+}
+
+int cnxid_stash_test()
+{
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    struct sockaddr_in saddr;
+    picoquic_quic_t * qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
+
+
+    memset(&saddr, 0, sizeof(struct sockaddr_in));
+    if (qclient == NULL) {
+        DBG_PRINTF("%s", "Cannot create QUIC context\n");
+        ret = -1;
+    }
+
+    /* First test: enqueue and dequeue immediately */
+    /* Second test: enqueue all and then dequeue - verify order */
+    /* Third test: enqueue all and then delete the connection */
+    for (int test_mode = 0; ret == 0 && test_mode < 3; test_mode++) {
+        picoquic_cnx_t * cnx = picoquic_create_cnx(qclient,
+            picoquic_null_connection_id, picoquic_null_connection_id, (struct sockaddr *) &saddr,
+            simulated_time, 0, "test-sni", "test-alpn", 1);
+        picoquic_cnxid_stash_t * stashed = NULL;
+
+        if (cnx == NULL) {
+            DBG_PRINTF("%s", "Cannot create QUIC CNX context\n");
+            ret = -1;
+        }
+
+        for (size_t i = 0; ret == 0 && i < nb_stash_test_case; i++) {
+            stashed = picoquic_enqueue_cnxid_stash(cnx,
+                stash_test_case[i].sequence, stash_test_case[i].cnx_id.id_len,
+                stash_test_case[i].cnx_id.id, stash_test_case[i].reset_secret);
+            if (stashed == NULL) {
+                DBG_PRINTF("Test %d, cannot stash cnxid %d.\n", test_mode, i);
+                ret = -1;
+            } else if (test_mode == 0) {
+                stashed = picoquic_dequeue_cnxid_stash(cnx);
+                ret = cnxid_stash_compare(test_mode, stashed, i);
+            }
+        }
+
+        /* Dequeue all in mode 1, verify order */
+        if (test_mode == 1) {
+            for (size_t i = 0; ret == 0 && i < nb_stash_test_case; i++) {
+                stashed = picoquic_dequeue_cnxid_stash(cnx);
+                ret = cnxid_stash_compare(test_mode, stashed, i);
+            }
+        }
+
+        /* Verify nothing left in queue in mode 0, 1 */
+        if (test_mode < 2) {
+            stashed = picoquic_dequeue_cnxid_stash(cnx);
+            if (stashed != NULL) {
+                DBG_PRINTF("Test %d, unexpected cnxid left, #%d.\n", test_mode, (int)stashed->sequence);
+                ret = -1;
+            }
+        }
+
+        /* Delete the connecton and free the stash */
+        picoquic_delete_cnx(cnx);
+    }
+
+    if (qclient != NULL) {
+        picoquic_free(qclient);
+    }
+
+    return ret;
+}
