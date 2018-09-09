@@ -43,7 +43,7 @@ picoquictest_sim_link_t* picoquictest_sim_link_create(double data_rate_in_gps,
         link->next_send_time = current_time;
         link->queue_time = current_time;
         link->queue_delay_max = queue_delay_max;
-        link->picosec_per_byte = (uint64_t)((data_rate_in_gps <= 0) ? 0 : (8000.0 / data_rate_in_gps));
+        link->picosec_per_byte = pico_d; 
         link->microsec_latency = microsec_latency;
         link->packets_dropped = 0;
         link->packets_sent = 0;

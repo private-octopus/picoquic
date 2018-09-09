@@ -275,11 +275,6 @@ int transport_param_one_test(int mode, uint32_t version, uint32_t proposed_versi
         if (encoded != target_length) {
             ret = -1;
         } else if (memcmp(buffer, target, target_length) != 0) {
-            for (size_t i = 0; i < target_length; i++) {
-                if (buffer[i] != target[i]) {
-                    ret = -1;
-                }
-            }
             ret = -1;
         }
     }
