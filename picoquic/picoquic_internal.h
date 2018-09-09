@@ -170,9 +170,9 @@ int picoquic_load_tickets(picoquic_stored_ticket_t** pp_first_ticket,
 void picoquic_free_tickets(picoquic_stored_ticket_t** pp_first_ticket);
 
 /*
-	 * QUIC context, defining the tables of connections,
-	 * open sockets, etc.
-	 */
+ * QUIC context, defining the tables of connections,
+ * open sockets, etc.
+ */
 typedef struct st_picoquic_quic_t {
     void * F_log;
     void* tls_master_ctx;
@@ -334,8 +334,36 @@ typedef struct st_picoquic_misc_frame_header_t {
 } picoquic_misc_frame_header_t;
 
 /*
-* Per path context
-*/
+ * Per path context.
+ * Path contexts are created:
+ * - At the beginning of the connection for path[0]
+ * - When advertising a new connection ID to the peer.
+ * When a path is created, the corresponding connection ID is added to the hash table
+ * of connection ID in the master QUIC context, so incoming packets can be routed to
+ * that path. When a path is deleted, the corresponding ID is removed from the table.
+ *
+ * On the server side, paths are activated after receiving the first packet on that path.
+ * The server will then schedule allocate a non-zero challenge value for the path, 
+ * consume a connection ID advertised by the client, and allocate it as remote
+ * connection ID for the path. (TODO: what if no new connection ID is available?).
+ *
+ * On the client side, challenges are initially sent without creating a path context,
+ * by "half-consuming" a connection ID sent by the peer. Challenges can be repeated
+ * up to 3 times before the probe is declared lost. The first response from the
+ * peer will arrive on an unitialized path. The client will check whether the 
+ * challenge value correspond to a probe, and allocate the corresponding connection
+ * ID to the path.
+ *
+ * As soon as a path is validated, it moves to position 0. The old path[0] moves to the
+ * last position, and is marked as deprecated. After about 1 RTT, the path resource
+ * are freed. (TODO: once we actually support multipath, change that behavior.)
+ * (TODO: servers should only validate the path after receiving non-probing frames from
+ * the client.)
+ *
+ * Congestion control and spin bit management are path specific.
+ * Packet numbering is global.
+ */
+
 typedef struct st_picoquic_path_t {
     /* Local connection ID identifies a path */
     picoquic_connection_id_t local_cnxid;
@@ -599,6 +627,9 @@ void picoquic_set_transport_parameters(picoquic_cnx_t * cnx, picoquic_tp_t * tp)
 /* Connection context retrieval functions */
 picoquic_cnx_t* picoquic_cnx_by_id(picoquic_quic_t* quic, picoquic_connection_id_t cnx_id);
 picoquic_cnx_t* picoquic_cnx_by_net(picoquic_quic_t* quic, struct sockaddr* addr);
+
+int picoquic_retrieve_by_cnx_id_or_net_id(picoquic_quic_t* quic, picoquic_connection_id_t* cnx_id,
+    struct sockaddr* addr, picoquic_cnx_t ** pcnx, picoquic_path_t * path);
 
 /* Reset the pacing data after CWIN is updated */
 void picoquic_update_pacing_data(picoquic_path_t * path_x);
