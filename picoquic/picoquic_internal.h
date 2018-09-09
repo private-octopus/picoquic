@@ -337,9 +337,12 @@ typedef struct st_picoquic_misc_frame_header_t {
 * Per path context
 */
 typedef struct st_picoquic_path_t {
-    /* Connection ID identifies a path */
+    /* Local connection ID identifies a path */
     picoquic_connection_id_t local_cnxid;
     picoquic_connection_id_t remote_cnxid;
+
+    struct st_picoquic_cnx_id_key_t* first_cnx_id;
+    struct st_picoquic_net_id_key_t* first_net_id;
 
     /* Peer address. To do: allow for multiple addresses */
     struct sockaddr_storage peer_addr;
@@ -443,10 +446,9 @@ typedef struct st_picoquic_cnx_t {
     picoquic_quic_t* quic;
 
     /* Management of context retrieval tables */
+
     struct st_picoquic_cnx_t* next_in_table;
     struct st_picoquic_cnx_t* previous_in_table;
-    struct st_picoquic_cnx_id_t* first_cnx_id;
-    struct st_picoquic_net_id_t* first_net_id;
 
     /* Proposed and negotiated version. Feature flags denote version dependent features */
     uint32_t proposed_version;
@@ -479,8 +481,6 @@ typedef struct st_picoquic_cnx_t {
     /* connection state, ID, etc. Todo: allow for multiple cnxid */
     picoquic_state_enum cnx_state;
     picoquic_connection_id_t initial_cnxid;
-    // picoquic_connection_id_t local_cnxid;
-    // picoquic_connection_id_t remote_cnxid;
     uint64_t start_time;
     uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE];
     uint16_t application_error;
@@ -566,8 +566,8 @@ void picoquic_init_transport_parameters(picoquic_tp_t* tp, int client_mode);
 picoquic_stateless_packet_t* picoquic_create_stateless_packet(picoquic_quic_t* quic);
 void picoquic_queue_stateless_packet(picoquic_quic_t* quic, picoquic_stateless_packet_t* sp);
 
-/* Registration of connection ID in server context */
-int picoquic_register_cnx_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, picoquic_connection_id_t cnx_id);
+/* Registration of per path connection ID in server context */
+int picoquic_register_cnx_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, picoquic_path_t* path, picoquic_connection_id_t cnx_id);
 
 /* Management of CNXID STASH */
 

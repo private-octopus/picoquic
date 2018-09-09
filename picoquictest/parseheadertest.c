@@ -319,9 +319,10 @@ int parseheadertest()
         if (cnx_10 == NULL) {
             ret = -1;
         } else {
+            /* TODO: Remove old path ID from table and avoid leak. */
             /* Update the local cnx_id so it be predictable in tests */
             cnx_10->path[0]->local_cnxid = test_cnxid_local;
-            (void)picoquic_register_cnx_id(quic, cnx_10, cnx_10->path[0]->local_cnxid);
+            (void)picoquic_register_cnx_id(quic, cnx_10, cnx_10->path[0], cnx_10->path[0]->local_cnxid);
         }
     }
 
