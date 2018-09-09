@@ -28,10 +28,14 @@ before_script:
   - ./ci/build_picotls.sh
   - sudo sh -c 'echo 0 > /proc/sys/net/ipv6/conf/all/disable_ipv6'
 script:
-  - ls -l /usr/share/clang/scan-build
   # Now build picotls examples and test
-  - scan-build cmake -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=/usr/share/clang/scan-build/ccc-analyzer .
-  - scan-build make
+  - echo $CC
+  - echo $CXX
+  - if [ "$CC" == "clang" ]; then scan-build cmake -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=/usr/share/clang/scan-build/ccc-analyzer .; fi
+  - if [ "$CC" == "clang" ]; then scan-build make; fi
+  - cmake .
+  - if [ "$CC" == "gcc" ]; then make clean; fi
+  - make
   - ulimit -c unlimited -S
   - ./picoquic_ct -n && RESULT=$?
   # Early out if the program exited successfully

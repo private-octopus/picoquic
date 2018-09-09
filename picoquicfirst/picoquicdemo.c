@@ -730,7 +730,6 @@ static void first_client_callback(picoquic_cnx_t* cnx,
             fclose(stream_ctx->F);
             stream_ctx->F = NULL;
             ctx->nb_open_streams--;
-            fin_stream_id = stream_id;
 
             fprintf(stdout, "Reset received on stream %d, command: %s, after %d bytes\n",
                 stream_ctx->stream_id,

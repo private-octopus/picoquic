@@ -180,7 +180,7 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     if (cnx->local_parameters.initial_max_stream_data_uni > 0) {
         param_size += (2 + 2 + 4);
     }
-    
+    /* TODO: add more tests here if adding new parameters */
 
     min_size += param_size + 2;
 
@@ -322,7 +322,7 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
             picoformat_16(bytes + byte_index, 4);
             byte_index += 2;
             picoformat_32(bytes + byte_index, cnx->local_parameters.initial_max_stream_data_uni);
-            byte_index += 4;
+            /* TODO: restore this line if adding new parameters: byte_index += 4; */
         }
     }
 

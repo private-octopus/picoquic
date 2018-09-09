@@ -226,6 +226,9 @@ picosplay_node* picosplay_last(picosplay_tree *tree) {
     return rightmost(tree->root);
 }
 
+#if 0
+/* analyzer flags a memory leak in this code. We do not use it yet. */
+/* TODO: fix memory leak before restoring this. */
 /* An in-order traversal of the tree. */
 static void store(picosplay_node *node, void ***out);
 void* picosplay_contents(picosplay_tree *tree) {
@@ -245,6 +248,7 @@ static void store(picosplay_node *node, void ***out) {
     if(node->right != NULL)
         store(node->right, out);
 }
+#endif
 /* This mutates the parental relationships, copy pointer to old parent. */
 static void mark_gp(picosplay_node *child);
 

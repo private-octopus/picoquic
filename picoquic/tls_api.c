@@ -1314,7 +1314,9 @@ int picoquic_initialize_tls_stream(picoquic_cnx_t* cnx)
         if (sendbuf.off > 0) {
             ret = picoquic_add_to_tls_stream(cnx, sendbuf.base, sendbuf.off, 0);
         }
-        ret = 0;
+        else {
+            ret = 0;
+        }
     } else {
         ret = -1;
     }

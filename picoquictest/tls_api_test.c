@@ -226,13 +226,16 @@ static void test_api_receive_stream_data(
     uint8_t* buffer, size_t max_len, const uint8_t* reference, size_t* nb_received,
     picoquic_call_back_event_t* received, int* error_detected)
 {
-    if (*nb_received + length > max_len) {
-        *error_detected |= test_api_fail_recv_larger_than_sent;
-    } else {
-        memcpy(buffer + *nb_received, bytes, length);
+    if (bytes != NULL) {
+        if (*nb_received + length > max_len) {
+            *error_detected |= test_api_fail_recv_larger_than_sent;
+        }
+        else {
+            memcpy(buffer + *nb_received, bytes, length);
 
-        if (memcmp(reference + *nb_received, bytes, length) != 0) {
-            *error_detected |= test_api_fail_data_does_not_match;
+            if (memcmp(reference + *nb_received, bytes, length) != 0) {
+                *error_detected |= test_api_fail_data_does_not_match;
+            }
         }
     }
 
@@ -1582,6 +1585,10 @@ int keep_alive_test_impl(int keep_alive)
     int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
     int was_active = 0;
 
+    if (ret == 0 && test_ctx == NULL) {
+        return PICOQUIC_ERROR_MEMORY;
+    }
+
     /*
      * setup the connections.
      */
@@ -1608,7 +1615,9 @@ int keep_alive_test_impl(int keep_alive)
     }
 
     /* Check that the status matched the expected value */
-    if (keep_alive != 0) {
+    if (test_ctx == NULL || test_ctx->cnx_client == NULL) {
+        ret = -1;
+    } else if (keep_alive != 0) {
         if (test_ctx->cnx_client->cnx_state != picoquic_state_client_ready) {
             ret = -1;
         } else if (simulated_time < 2 * PICOQUIC_MICROSEC_SILENCE_MAX) {
@@ -2648,9 +2657,9 @@ int bad_certificate_test()
         }
     }
 
-    /* Proceed with the connection loop. It should fail */
+    /* Proceed with the connection loop. It should fail, and thus we don't test the return code */
     if (ret == 0) {
-        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+        (void)tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
 
         if (test_ctx->cnx_client == NULL) {
             ret = -1;
@@ -2992,6 +3001,10 @@ int request_client_authentication_test()
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
 
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+
     /* Delete the client context, and recreate with a certificate */
     if (ret == 0)
     {
@@ -3034,11 +3047,13 @@ int request_client_authentication_test()
     }
   
     /* Check that both the client and server are ready. */
-    if (test_ctx->cnx_client == NULL 
-        || test_ctx->cnx_server == NULL
-        || test_ctx->cnx_client->cnx_state != picoquic_state_client_ready
-        || test_ctx->cnx_server->cnx_state != picoquic_state_server_ready) {
-        ret = -1;
+    if (ret == 0) {
+        if (test_ctx->cnx_client == NULL
+            || test_ctx->cnx_server == NULL
+            || test_ctx->cnx_client->cnx_state != picoquic_state_client_ready
+            || test_ctx->cnx_server->cnx_state != picoquic_state_server_ready) {
+            ret = -1;
+        }
     }
 
     if (test_ctx != NULL) {
@@ -3095,7 +3110,9 @@ int bad_client_certificate_test()
     /* Proceed with the connection loop. It should fail */
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
 
+    if (ret == 0) {
         if (test_ctx->cnx_client == NULL) {
             ret = -1;
         }
@@ -3107,9 +3124,6 @@ int bad_client_certificate_test()
         }
         else if (!picoquic_is_handshake_error(picoquic_get_remote_error(test_ctx->cnx_client))) {
             ret = -1;
-        }
-        else {
-            ret = 0;
         }
     }
 
@@ -3139,6 +3153,10 @@ int nat_rebinding_test_one(uint64_t loss_mask_data)
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
 
+    if (ret == 0 && test_ctx == NULL) {
+        ret = PICOQUIC_ERROR_MEMORY;
+    }
+
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
     }
@@ -3149,7 +3167,9 @@ int nat_rebinding_test_one(uint64_t loss_mask_data)
     }
 
     /* Change the client address */
-    test_ctx->client_addr.sin_port += 17;
+    if (ret == 0) {
+        test_ctx->client_addr.sin_port += 17;
+    }
 
     /* Prepare to send data */
     if (ret == 0) {
@@ -3404,7 +3424,7 @@ int client_error_test()
     if (test_ctx->cnx_client == NULL) {
         ret = -1;
     }
-    else {
+    else if (ret == 0) {
         ret = picoquic_start_client_cnx(test_ctx->cnx_client);
     }
 
