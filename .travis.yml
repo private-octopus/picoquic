@@ -31,12 +31,11 @@ script:
   # Now build picotls examples and test
   - echo $CC
   - echo $CXX
-  - if [ "$CC" == "clang" ]; then ls -l /usr/share/clang/scan-build; fi
   - if [ "$CC" == "clang" ]; then scan-build cmake -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=/usr/share/clang/scan-build/ccc-analyzer .; fi
   - if [ "$CC" == "clang" ]; then scan-build make; fi
-  - cmake .;
+  - cmake .
   - if [ "$CC" == "gcc" ]; then make clean; fi
-  - make;
+  - make
   - ulimit -c unlimited -S
   - ./picoquic_ct -n && RESULT=$?
   # Early out if the program exited successfully
