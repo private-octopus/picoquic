@@ -668,6 +668,12 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, struct sockad
             /* Set the challenge used for this path */
             path_x->challenge = picoquic_public_random_64();
 
+            /* Initialize the reset secret to a random value. This
+            * will prevent spurious matches to an all zero value, for example.
+            * The real value will be set when receiving the transport parameters.
+            */
+            picoquic_public_random(path_x->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
+
             /* Initialize per path time measurement */
             path_x->smoothed_rtt = PICOQUIC_INITIAL_RTT;
             path_x->rtt_variant = 0;
@@ -898,12 +904,6 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             }
 
             cnx->initial_cnxid = initial_cnx_id;
-            cnx->path[0]->remote_cnxid = picoquic_null_connection_id;
-            /* Initialize the reset secret to a random value. This
-			 * will prevent spurious matches to an all zero value, for example.
-			 * The real value will be set when receiving the transport parameters. 
-			 */
-            picoquic_public_random(cnx->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
         } else {
             for (int epoch = 0; epoch < PICOQUIC_NUMBER_OF_EPOCHS; epoch++) {
                 cnx->tls_stream[epoch].send_queue = NULL;
@@ -983,11 +983,6 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
 
     if (cnx != NULL) {
         picoquic_register_path(cnx, cnx->path[0]);
-
-        if (!client_mode) {
-            (void)picoquic_create_cnxid_reset_secret(quic, cnx->path[0]->local_cnxid,
-                cnx->reset_secret);
-        }
     }
 
     return cnx;

@@ -384,6 +384,8 @@ typedef struct st_picoquic_path_t {
     uint64_t challenge_time;
     uint8_t challenge_repeat_count;
 #define PICOQUIC_CHALLENGE_REPEAT_MAX 4
+    /* Public reset secret, provisioned by the peer */
+    uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE];
     /* flags */
     unsigned int mtu_probe_sent : 1;
     unsigned int challenge_verified : 1;
@@ -510,7 +512,6 @@ typedef struct st_picoquic_cnx_t {
     picoquic_state_enum cnx_state;
     picoquic_connection_id_t initial_cnxid;
     uint64_t start_time;
-    uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE];
     uint16_t application_error;
     uint16_t local_error;
     uint16_t remote_application_error;

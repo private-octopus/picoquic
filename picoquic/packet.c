@@ -532,12 +532,12 @@ int picoquic_parse_header_and_decrypt(
         else if (ph->ptype == picoquic_packet_1rtt_protected_phi0 ||
             ph->ptype == picoquic_packet_1rtt_protected_phi1)
         {
-            /* This may be a stateles reset */
+            /* This may be a stateless reset */
             *pcnx = picoquic_cnx_by_net(quic, addr_from);
 
             if (*pcnx != NULL && length >= PICOQUIC_RESET_PACKET_MIN_SIZE &&
                 memcmp(bytes + length - PICOQUIC_RESET_SECRET_SIZE,
-                (*pcnx)->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0) {
+                (*pcnx)->path[0]->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0) {
                 ret = PICOQUIC_ERROR_STATELESS_RESET;
             }
             else {

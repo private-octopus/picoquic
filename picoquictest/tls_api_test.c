@@ -1314,6 +1314,7 @@ int tls_api_server_reset_test()
     int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
     uint8_t buffer[128];
     int was_active = 0;
+    uint8_t ref_secret[PICOQUIC_RESET_SECRET_SIZE];
 
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
@@ -1324,8 +1325,15 @@ int tls_api_server_reset_test()
     }
 
     /* verify that client and server have the same reset secret */
-    if (ret == 0 && memcmp(test_ctx->cnx_client->reset_secret, test_ctx->cnx_server->reset_secret, PICOQUIC_RESET_SECRET_SIZE) != 0) {
-        ret = -1;
+    if (ret == 0) {
+        uint8_t ref_secret[PICOQUIC_RESET_SECRET_SIZE];
+
+        (void)picoquic_create_cnxid_reset_secret(test_ctx->qserver,
+            test_ctx->cnx_client->path[0]->remote_cnxid, ref_secret);
+        if (memcmp(test_ctx->cnx_client->path[0]->reset_secret, ref_secret,
+            PICOQUIC_RESET_SECRET_SIZE) != 0) {
+            ret = -1;
+        }
     }
 
     /* Prepare to reset */
