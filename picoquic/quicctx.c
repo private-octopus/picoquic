@@ -615,7 +615,21 @@ int picoquic_get_version_index(uint32_t proposed_version)
     return ret;
 }
 
-int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, struct sockaddr* addr)
+
+static void picoquic_create_random_cnx_id(picoquic_quic_t* quic, picoquic_connection_id_t * cnx_id, uint8_t id_length)
+{
+    if (id_length > 0) {
+        picoquic_crypto_random(quic, cnx_id->id, id_length);
+    }
+    if (id_length < sizeof(cnx_id->id)) {
+        memset(cnx_id->id + 8, 0, sizeof(cnx_id->id) - id_length);
+    }
+    cnx_id->id_len = id_length;
+}
+
+/* Path management */
+
+int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, struct sockaddr* local_addr, struct sockaddr* peer_addr)
 {
     int ret = -1;
 
@@ -647,9 +661,9 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, struct sockad
         {
             memset(path_x, 0, sizeof(picoquic_path_t));
 
-            /* Set the peer address */
-            path_x->peer_addr_len = (int)((addr->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
-            memcpy(&path_x->peer_addr, addr, path_x->peer_addr_len);
+            /* Set the addresses */
+            path_x->peer_addr_len = picoquic_store_address(&path_x->peer_addr, peer_addr);
+            path_x->local_addr_len = picoquic_store_address(&path_x->local_addr, local_addr);
 
             /* Set the challenge used for this path */
             path_x->challenge = picoquic_public_random_64();
@@ -672,8 +686,7 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, struct sockad
             path_x->next_pacing_time = start_time;
 
             /* Initialize the MTU */
-            path_x->send_mtu = (addr == NULL || addr->sa_family == AF_INET) ? PICOQUIC_INITIAL_MTU_IPV4 : PICOQUIC_INITIAL_MTU_IPV6;
-
+            path_x->send_mtu = (peer_addr == NULL || peer_addr->sa_family == AF_INET) ? PICOQUIC_INITIAL_MTU_IPV4 : PICOQUIC_INITIAL_MTU_IPV6;
 
             /* Record the path */
             cnx->path[cnx->nb_paths] = path_x;
@@ -682,6 +695,28 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, struct sockad
     }
 
     return ret;
+}
+
+/*
+ * Register the path in the hash tables
+ */
+void picoquic_register_path(picoquic_cnx_t* cnx, picoquic_path_t * path_x)
+{
+    if (picoquic_is_connection_id_null(path_x->local_cnxid)) {
+        picoquic_create_random_cnx_id(cnx->quic, &path_x->local_cnxid, cnx->quic->local_ctx_length);
+
+        if (cnx->quic->cnx_id_callback_fn)
+            cnx->quic->cnx_id_callback_fn(path_x->local_cnxid, cnx->initial_cnxid,
+                cnx->quic->cnx_id_callback_ctx, &path_x->local_cnxid);
+    }
+
+    if (!picoquic_is_connection_id_null(path_x->local_cnxid)) {
+        (void)picoquic_register_cnx_id(cnx->quic, cnx, path_x, path_x->local_cnxid);
+    }
+
+    if (path_x->peer_addr_len != 0) {
+        (void)picoquic_register_net_id(cnx->quic, cnx, cnx->path[0], (struct sockaddr *)&path_x->peer_addr);
+    }
 }
 
 /* To delete a path, we need to delete the data allocated to the path: search items in
@@ -731,18 +766,6 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
     cnx->nb_paths--;
     cnx->path[cnx->nb_paths] = NULL;
 }
-
-static void picoquic_create_random_cnx_id(picoquic_quic_t* quic, picoquic_connection_id_t * cnx_id, uint8_t id_length)
-{
-    if (id_length > 0) {
-        picoquic_crypto_random(quic, cnx_id->id, id_length);
-    }
-    if (id_length < sizeof(cnx_id->id)) {
-        memset(cnx_id->id + 8, 0, sizeof(cnx_id->id) - id_length);
-    }
-    cnx_id->id_len = id_length;
-}
-
 
 picoquic_cnxid_stash_t * picoquic_dequeue_cnxid_stash(picoquic_cnx_t * cnx)
 {
@@ -797,7 +820,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
 
         memset(cnx, 0, sizeof(picoquic_cnx_t));
         /* Should return 0, since this is the first path */
-        ret = picoquic_create_path(cnx, start_time, addr);
+        ret = picoquic_create_path(cnx, start_time, NULL, addr);
 
         if (ret != 0) {
             free(cnx);
@@ -873,11 +896,6 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             if (picoquic_is_connection_id_null(initial_cnx_id)) {
                 picoquic_create_random_cnx_id(quic, &initial_cnx_id, 8);
             }
-            picoquic_create_random_cnx_id(quic, &cnx->path[0]->local_cnxid, quic->local_ctx_length);
-
-            if (quic->cnx_id_callback_fn) {
-                quic->cnx_id_callback_fn(cnx->path[0]->local_cnxid, picoquic_null_connection_id, quic->cnx_id_callback_ctx, &cnx->path[0]->local_cnxid);
-            }
 
             cnx->initial_cnxid = initial_cnx_id;
             cnx->path[0]->remote_cnxid = picoquic_null_connection_id;
@@ -893,14 +911,6 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             cnx->cnx_state = picoquic_state_server_init;
             cnx->initial_cnxid = initial_cnx_id;
             cnx->path[0]->remote_cnxid = remote_cnx_id;
-            picoquic_create_random_cnx_id(quic, &cnx->path[0]->local_cnxid, quic->local_ctx_length);
-
-            if (quic->cnx_id_callback_fn)
-                quic->cnx_id_callback_fn(cnx->path[0]->local_cnxid, cnx->initial_cnxid,
-                    quic->cnx_id_callback_ctx, &cnx->path[0]->local_cnxid);
-
-            (void)picoquic_create_cnxid_reset_secret(quic, cnx->path[0]->local_cnxid,
-                cnx->reset_secret);
 
             cnx->version_index = picoquic_get_version_index(preferred_version);
             if (cnx->version_index < 0) {
@@ -972,12 +982,11 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
     }
 
     if (cnx != NULL) {
-        if (!picoquic_is_connection_id_null(cnx->path[0]->local_cnxid)) {
-            (void)picoquic_register_cnx_id(quic, cnx, cnx->path[0], cnx->path[0]->local_cnxid);
-        }
+        picoquic_register_path(cnx, cnx->path[0]);
 
-        if (addr != NULL) {
-            (void)picoquic_register_net_id(quic, cnx, cnx->path[0], addr);
+        if (!client_mode) {
+            (void)picoquic_create_cnxid_reset_secret(quic, cnx->path[0]->local_cnxid,
+                cnx->reset_secret);
         }
     }
 
@@ -1041,8 +1050,8 @@ void picoquic_get_peer_addr(picoquic_cnx_t* cnx, struct sockaddr** addr, int* ad
 
 void picoquic_get_local_addr(picoquic_cnx_t* cnx, struct sockaddr** addr, int* addr_len)
 {
-    *addr = (struct sockaddr*)&cnx->path[0]->dest_addr;
-    *addr_len = cnx->path[0]->dest_addr_len;
+    *addr = (struct sockaddr*)&cnx->path[0]->local_addr;
+    *addr_len = cnx->path[0]->local_addr_len;
 }
 
 unsigned long picoquic_get_local_if_index(picoquic_cnx_t* cnx)

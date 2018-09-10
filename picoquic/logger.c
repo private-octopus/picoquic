@@ -1130,7 +1130,7 @@ void picoquic_log_outgoing_segment(void* F_log, int log_cnxid, picoquic_cnx_t* c
 
     ret = picoquic_parse_packet_header((cnx == NULL) ? NULL : cnx->quic, send_buffer, send_length,
         ((cnx==NULL || cnx->path[0] == NULL)?(struct sockaddr *)&default_addr: 
-        (struct sockaddr *)&cnx->path[0]->dest_addr), &ph, &pcnx, 0);
+        (struct sockaddr *)&cnx->path[0]->local_addr), &ph, &pcnx, 0);
 
     ph.pn64 = sequence_number;
     ph.pn = (uint32_t)ph.pn64;

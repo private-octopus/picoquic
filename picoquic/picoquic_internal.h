@@ -375,8 +375,8 @@ typedef struct st_picoquic_path_t {
     /* Peer address. To do: allow for multiple addresses */
     struct sockaddr_storage peer_addr;
     int peer_addr_len;
-    struct sockaddr_storage dest_addr;
-    int dest_addr_len;
+    struct sockaddr_storage local_addr;
+    int local_addr_len;
     unsigned long if_index_dest;
 
     /* Challenge used for this path */
@@ -597,7 +597,9 @@ void picoquic_queue_stateless_packet(picoquic_quic_t* quic, picoquic_stateless_p
 /* Registration of per path connection ID in server context */
 int picoquic_register_cnx_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, picoquic_path_t* path, picoquic_connection_id_t cnx_id);
 
-/* Management of CNXID STASH */
+/* Management of path */
+int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time,
+    struct sockaddr* local_addr, struct sockaddr* peer_addr);
 
 /* Management of the CNX-ID stash */
 picoquic_cnxid_stash_t * picoquic_dequeue_cnxid_stash(picoquic_cnx_t* cnx);

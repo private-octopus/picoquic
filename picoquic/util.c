@@ -289,3 +289,17 @@ int picoquic_compare_addr(struct sockaddr * expected, struct sockaddr * actual)
 
     return ret;
 }
+
+/* Copy a sockaddr to a storage value, and return the copied address length */
+int picoquic_store_address(struct sockaddr_storage * stored_addr, struct sockaddr * addr)
+{
+    int len = 0;
+    
+    if (addr != NULL) {
+        len = (int)((addr->sa_family == AF_INET) ? sizeof(struct sockaddr_in) :
+            sizeof(struct sockaddr_in6));
+        memcpy(stored_addr, addr, len);
+    }
+
+    return len;
+}
