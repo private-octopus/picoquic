@@ -25,6 +25,7 @@
 
 #include "picoquic_internal.h"
 #include "util.h"
+#include "tls_api.h"
 #include <string.h>
 
 uint32_t picoquic_decode_transport_param_stream_id(uint16_t rank, int extension_mode, int stream_type) {

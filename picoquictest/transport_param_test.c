@@ -19,11 +19,13 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "../picoquic/picoquic_internal.h"
-#include "../picoquic/util.h"
-#include "picoquictest_internal.h"
 #include <stdlib.h>
 #include <string.h>
+
+#include "../picoquic/picoquic_internal.h"
+#include "../picoquic/util.h"
+#include "../picoquic/tls_api.h"
+#include "picoquictest_internal.h"
 
 /* Start with a series of test vectors to test that 
  * encoding and decoding are OK. 

@@ -372,6 +372,10 @@ typedef struct st_picoquic_path_t {
     struct st_picoquic_cnx_id_key_t* first_cnx_id;
     struct st_picoquic_net_id_key_t* first_net_id;
 
+    /* Todo: remove path_sequence when sequence removed from new Connection ID*/
+    int path_sequence;
+    unsigned int path_is_published : 1;
+
     /* Peer address. To do: allow for multiple addresses */
     struct sockaddr_storage peer_addr;
     int peer_addr_len;
@@ -582,6 +586,7 @@ typedef struct st_picoquic_cnx_t {
     picoquic_path_t ** path;
     int nb_paths;
     int nb_path_alloc;
+    int path_sequence_next;
     /* Management of the CNX-ID stash */
     picoquic_cnxid_stash_t * cnxid_stash_first;
     picoquic_cnxid_stash_t * cnxid_stash_last;
@@ -601,11 +606,15 @@ int picoquic_register_cnx_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, picoqui
 /* Management of path */
 int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time,
     struct sockaddr* local_addr, struct sockaddr* peer_addr);
+void picoquic_register_path(picoquic_cnx_t* cnx, picoquic_path_t * path_x);
+void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index);
 
 /* Management of the CNX-ID stash */
 picoquic_cnxid_stash_t * picoquic_dequeue_cnxid_stash(picoquic_cnx_t* cnx);
 
-picoquic_cnxid_stash_t * picoquic_enqueue_cnxid_stash(picoquic_cnx_t * cnx, uint64_t sequence, uint8_t cid_length, uint8_t * cnxid_bytes, uint8_t * secret_bytes);
+picoquic_cnxid_stash_t * picoquic_enqueue_cnxid_stash(picoquic_cnx_t * cnx,
+    const uint64_t sequence, const uint8_t cid_length, const uint8_t * cnxid_bytes, const uint8_t * secret_bytes);
+
 
 /* handling of retransmission queue */
 void picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet_t* p, int should_free);
@@ -841,6 +850,8 @@ int picoquic_prepare_max_data_frame(picoquic_cnx_t* cnx, uint64_t maxdata_increa
 void picoquic_clear_stream(picoquic_stream_head* stream);
 int picoquic_prepare_path_challenge_frame(uint8_t* bytes,
     size_t bytes_max, size_t* consumed, picoquic_path_t * path);
+int picoquic_prepare_connection_id_frame(picoquic_cnx_t * cnx, picoquic_path_t * path_x,
+    uint8_t* bytes, size_t bytes_max, size_t* consumed);
 
 int picoquic_prepare_first_misc_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
                                       size_t bytes_max, size_t* consumed);

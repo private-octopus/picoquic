@@ -763,3 +763,96 @@ int cnxid_stash_test()
 
     return ret;
 }
+
+int new_cnxid_test()
+{
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    struct sockaddr_in saddr;
+    picoquic_quic_t * qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
+    picoquic_cnx_t * cnx = NULL;
+    uint8_t frame_buffer[256];
+    size_t consumed = 0;
+
+    memset(&saddr, 0, sizeof(struct sockaddr_in));
+    saddr.sin_family = AF_INET;
+    saddr.sin_port = 1000;
+
+    if (qclient == NULL) {
+        DBG_PRINTF("%s", "Cannot create QUIC context\n");
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        cnx = picoquic_create_cnx(qclient,
+            picoquic_null_connection_id, picoquic_null_connection_id, (struct sockaddr *) &saddr,
+            simulated_time, 0, "test-sni", "test-alpn", 1);
+
+        if (cnx == NULL) {
+            DBG_PRINTF("%s", "Cannot create QUIC CNX context\n");
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        /* Create a new path */
+        int path_index;
+        saddr.sin_port = 1000;
+        path_index = picoquic_create_path(cnx, simulated_time, (struct sockaddr *)&saddr, NULL);
+
+        if (path_index != 1) {
+            DBG_PRINTF("Cannot create new path, index = %d\n", path_index);
+            ret = -1;
+        }
+        else if (cnx->nb_paths != 2) {
+            DBG_PRINTF("Expected 2 paths, got %d\n", cnx->nb_paths);
+            ret = -1;
+        }
+        else {
+            picoquic_register_path(cnx, cnx->path[path_index]);
+        }
+    }
+
+    if (ret == 0) {
+        ret = picoquic_prepare_connection_id_frame(cnx, cnx->path[1],
+            frame_buffer, sizeof(frame_buffer), &consumed);
+
+        if (ret != 0) {
+            DBG_PRINTF("Cannot encode new connection ID frame, ret = %x\n", ret);
+        }
+    }
+
+    if (ret == 0) {
+        size_t skipped = 0;
+        int pure_ack = 0;
+
+        ret = picoquic_skip_frame(frame_buffer, sizeof(frame_buffer), &skipped, &pure_ack);
+
+        if (ret != 0) {
+            DBG_PRINTF("Cannot skip connection ID frame, ret = %x\n", ret);
+        }
+        else if (skipped != consumed) {
+            DBG_PRINTF("Skipped %d bytes instead of %d\n", (int)skipped, (int)consumed);
+            ret = -1;
+        }
+        else if (pure_ack != 0) {
+            DBG_PRINTF("Pure ACK = %d instead of 0\n", (int)pure_ack);
+            ret = -1;
+        }
+    }
+
+
+    if (cnx != NULL)
+    {
+        /* Delete the connecton and free the stash */
+        picoquic_delete_cnx(cnx);
+    }
+
+    if (qclient != NULL) {
+        picoquic_free(qclient);
+    }
+
+    return ret;
+}

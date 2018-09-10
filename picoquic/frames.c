@@ -20,9 +20,10 @@
 */
 
 /* Decoding of the various frames, and application to context */
-#include "picoquic_internal.h"
 #include <stdlib.h>
 #include <string.h>
+#include "picoquic_internal.h"
+#include "tls_api.h"
 
 /* ****************************************************
  * Frames private declarations
@@ -390,6 +391,47 @@ uint8_t* picoquic_decode_stream_reset_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
  * New Connection ID frame
  */
 
+int picoquic_prepare_connection_id_frame(picoquic_cnx_t * cnx, picoquic_path_t * path_x,
+    uint8_t* bytes, size_t bytes_max, size_t* consumed)
+{
+    int ret = 0;
+    size_t byte_index = 0;
+
+    *consumed = 0;
+
+    if (path_x->path_sequence > 0 && path_x->local_cnxid.id_len > 0) {
+        size_t min_length = 1 + 1 + 1 + path_x->local_cnxid.id_len + PICOQUIC_RESET_SECRET_SIZE;
+
+        if (bytes_max < 2) {
+            ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
+        } else {
+            size_t ls;
+            size_t min_length = 1 + path_x->local_cnxid.id_len + PICOQUIC_RESET_SECRET_SIZE;
+
+            bytes[byte_index++] = picoquic_frame_type_new_connection_id;
+
+            ls = picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index, 
+                path_x->path_sequence - 1);
+            byte_index += ls;
+
+            if (ls == 0 || byte_index + min_length > bytes_max) {
+                ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
+            }
+            else {
+                bytes[byte_index++] = path_x->local_cnxid.id_len;
+                memcpy(bytes + byte_index, path_x->local_cnxid.id, path_x->local_cnxid.id_len);
+                byte_index += path_x->local_cnxid.id_len;
+                (void)picoquic_create_cnxid_reset_secret(cnx->quic, path_x->local_cnxid,
+                    bytes + byte_index);
+                byte_index += PICOQUIC_RESET_SECRET_SIZE;
+                *consumed = byte_index;
+            }
+        }
+    }
+
+    return ret;
+}
+
 uint8_t* picoquic_skip_connection_id_frame(uint8_t* bytes, const uint8_t* bytes_max)
 {
     uint8_t cid_length;
@@ -421,8 +463,7 @@ uint8_t* picoquic_decode_connection_id_frame(picoquic_cnx_t* cnx, uint8_t* bytes
     if (bytes == NULL || picoquic_is_connection_id_length_valid(cid_length) == 0) {
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
             picoquic_frame_type_new_connection_id);
-    }
-    else if (picoquic_enqueue_cnxid_stash(cnx, sequence, cid_length, cnxid_bytes, secret_bytes) == NULL) {
+    } else if (picoquic_enqueue_cnxid_stash(cnx, sequence, cid_length, cnxid_bytes, secret_bytes) == NULL) {
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR,
             picoquic_frame_type_new_connection_id);
         bytes = 0;

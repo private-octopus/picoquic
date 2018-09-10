@@ -122,6 +122,7 @@ int draft13_vector_test();
 int fuzz_test();
 int random_tester_test();
 int cnxid_stash_test();
+int new_cnxid_test();
 
 #ifdef __cplusplus
 }

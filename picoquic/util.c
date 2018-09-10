@@ -34,6 +34,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
+#include "util.h"
 
 char* picoquic_string_create(const char* original, size_t len)
 {
@@ -213,7 +214,7 @@ int picoquic_is_connection_id_null(picoquic_connection_id_t cnx_id)
     return (cnx_id.id_len == 0) ? 1 : 0;
 }
 
-int picoquic_compare_connection_id(picoquic_connection_id_t * cnx_id1, picoquic_connection_id_t * cnx_id2)
+int picoquic_compare_connection_id(const picoquic_connection_id_t * cnx_id1, const picoquic_connection_id_t * cnx_id2)
 {
     int ret = -1;
 
@@ -259,7 +260,7 @@ void picoquic_set64_connection_id(picoquic_connection_id_t * cnx_id, uint64_t va
     cnx_id->id_len = 8;
 }
 
-int picoquic_compare_addr(struct sockaddr * expected, struct sockaddr * actual)
+int picoquic_compare_addr(const struct sockaddr * expected, const struct sockaddr * actual)
 {
     int ret = -1;
 
@@ -291,7 +292,7 @@ int picoquic_compare_addr(struct sockaddr * expected, struct sockaddr * actual)
 }
 
 /* Copy a sockaddr to a storage value, and return the copied address length */
-int picoquic_store_address(struct sockaddr_storage * stored_addr, struct sockaddr * addr)
+int picoquic_store_addr(struct sockaddr_storage * stored_addr, const struct sockaddr * addr)
 {
     int len = 0;
     

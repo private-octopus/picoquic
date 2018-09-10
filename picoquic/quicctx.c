@@ -627,7 +627,7 @@ static void picoquic_create_random_cnx_id(picoquic_quic_t* quic, picoquic_connec
     cnx_id->id_len = id_length;
 }
 
-/* Path management */
+/* Path management -- returns the index of the path that was created. */
 
 int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, struct sockaddr* local_addr, struct sockaddr* peer_addr)
 {
@@ -660,10 +660,14 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, struct sockad
         if (path_x != NULL)
         {
             memset(path_x, 0, sizeof(picoquic_path_t));
+            /* TODO: remove this code once sequence removed from New Connection ID */
+            /* Register the sequence number */
+            path_x->path_sequence = cnx->path_sequence_next;
+            cnx->path_sequence_next++;
 
             /* Set the addresses */
-            path_x->peer_addr_len = picoquic_store_address(&path_x->peer_addr, peer_addr);
-            path_x->local_addr_len = picoquic_store_address(&path_x->local_addr, local_addr);
+            path_x->peer_addr_len = picoquic_store_addr(&path_x->peer_addr, peer_addr);
+            path_x->local_addr_len = picoquic_store_addr(&path_x->local_addr, local_addr);
 
             /* Set the challenge used for this path */
             path_x->challenge = picoquic_public_random_64();
@@ -792,7 +796,7 @@ picoquic_cnxid_stash_t * picoquic_dequeue_cnxid_stash(picoquic_cnx_t * cnx)
 }
 
 picoquic_cnxid_stash_t * picoquic_enqueue_cnxid_stash(picoquic_cnx_t * cnx,
-    uint64_t sequence, uint8_t cid_length, uint8_t * cnxid_bytes, uint8_t * secret_bytes)
+    const uint64_t sequence, const uint8_t cid_length, const uint8_t * cnxid_bytes, const uint8_t * secret_bytes)
 {
     picoquic_cnxid_stash_t * stashed = (picoquic_cnxid_stash_t *)malloc(sizeof(picoquic_cnxid_stash_t));
 
