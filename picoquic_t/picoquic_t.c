@@ -130,7 +130,8 @@ static const picoquic_test_def_t test_table[] = {
     { "zero_rtt_retry", zero_rtt_retry_test },
     { "random_tester", random_tester_test},
     { "stress", stress_test },
-    { "fuzz", fuzz_test }
+    { "fuzz", fuzz_test },
+    { "transmit_cnxid", transmit_cnxid_test }
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);

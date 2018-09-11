@@ -1259,7 +1259,7 @@ int tls_api_one_scenario_test(test_api_stream_desc_t* scenario,
 
 int tls_api_oneway_stream_test()
 {
-    return tls_api_one_scenario_test(test_scenario_oneway, sizeof(test_scenario_oneway), 0, 0, 0, 0, 65000, NULL);
+    return tls_api_one_scenario_test(test_scenario_oneway, sizeof(test_scenario_oneway), 0, 0, 0, 0, 70000, NULL);
 }
 
 int tls_api_q_and_r_stream_test()
@@ -1269,7 +1269,7 @@ int tls_api_q_and_r_stream_test()
 
 int tls_api_q2_and_r2_stream_test()
 {
-    return tls_api_one_scenario_test(test_scenario_q2_and_r2, sizeof(test_scenario_q2_and_r2), 0, 0, 0, 0, 75000, NULL);
+    return tls_api_one_scenario_test(test_scenario_q2_and_r2, sizeof(test_scenario_q2_and_r2), 0, 0, 0, 0, 80000, NULL);
 }
 
 int tls_api_very_long_stream_test()
@@ -3446,6 +3446,111 @@ int client_error_test()
 
     if (ret == 0) {
         ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+/*
+ * Set a connection, then verify that the "new connection id" frames have been exchanged properly.
+ * Use the "check stash" function to verify that new connection ID were properly
+ * stashed on each side.
+ *
+ * TODO: also test that no New Connection Id frames are sent if migration is disabled 
+ */
+
+int transmit_cnxid_test_stash(picoquic_cnx_t * cnx1, picoquic_cnx_t * cnx2, char const * cnx_text)
+{
+    int ret = 0;
+    picoquic_cnxid_stash_t * stash = cnx1->cnxid_stash_first;
+    int path_id = 1;
+
+    while (stash != NULL && path_id < cnx2->nb_paths) {
+        if (picoquic_compare_connection_id(&stash->cnx_id, &cnx2->path[path_id]->local_cnxid) != 0) {
+            DBG_PRINTF("On %s, cnx ID of stash #%d does not match path[%d] of peer.\n",
+                cnx_text, path_id - 1, path_id);
+            ret = -1;
+            break;
+        }
+        stash = stash->next_in_stash;
+        path_id++;
+    }
+
+    if (ret == 0 && path_id < cnx2->nb_paths) {
+        DBG_PRINTF("On %s, %d items in stash instead instead of %d.\n", cnx_text, path_id - 1, cnx2->nb_paths);
+        ret = -1;
+    }
+
+    if (ret == 0 && stash != NULL) {
+        DBG_PRINTF("On %s, more than %d items in stash.\n", cnx_text, path_id - 1);
+        ret = -1;
+    }
+
+    return ret;
+
+}
+
+int transmit_cnxid_test()
+{
+    uint64_t simulated_time = 0;
+    uint64_t next_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    /* run a receive loop until no outstanding data */
+    if (ret == 0) {
+        uint64_t time_out = simulated_time + 4000000;
+        int nb_rounds = 0;
+        int success = 0;
+
+        while (ret == 0 && simulated_time < time_out &&
+            nb_rounds < 2048 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
+            int was_active = 0;
+
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, &was_active);
+            nb_rounds++;
+
+            if (test_ctx->cnx_client->nb_paths >= PICOQUIC_NB_PATH_TARGET &&
+                test_ctx->cnx_server->nb_paths >= PICOQUIC_NB_PATH_TARGET &&
+                picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) &&
+                picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)) {
+                success = 1;
+                break;
+            }
+        }
+
+        if (ret == 0 && success == 0) {
+            DBG_PRINTF("Exit synch loop after %d rounds, backlog or not enough paths (%d & %d).\n",
+                nb_rounds, test_ctx->cnx_client->nb_paths, test_ctx->cnx_server->nb_paths);
+        }
+    }
+
+    if (ret == 0) {
+        if (test_ctx->cnx_client->nb_paths < PICOQUIC_NB_PATH_TARGET) {
+            DBG_PRINTF("Only %d paths created on client.\n", test_ctx->cnx_client->nb_paths);
+            ret = -1;
+        } else if (test_ctx->cnx_server->nb_paths < PICOQUIC_NB_PATH_TARGET) {
+            DBG_PRINTF("Only %d paths created on server.\n", test_ctx->cnx_server->nb_paths);
+        }
+    }
+
+    if (ret == 0) {
+        ret = transmit_cnxid_test_stash(test_ctx->cnx_client, test_ctx->cnx_server, "client");
+    }
+
+    if (ret == 0) {
+        ret = transmit_cnxid_test_stash(test_ctx->cnx_server, test_ctx->cnx_client, "server");
     }
 
     if (test_ctx != NULL) {

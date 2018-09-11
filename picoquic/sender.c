@@ -1187,6 +1187,13 @@ void picoquic_cnx_set_next_wake_time(picoquic_cnx_t* cnx, uint64_t current_time)
     else if (path_x->cwin > path_x->bytes_in_transit && picoquic_is_mtu_probe_needed(cnx, path_x)) {
         blocked = 0;
     }
+    else if ((cnx->cnx_state == picoquic_state_client_ready ||
+        cnx->cnx_state == picoquic_state_server_ready) &&
+        cnx->remote_parameters.migration_disabled == 0 &&
+        cnx->local_parameters.migration_disabled == 0 &&
+        cnx->nb_paths < PICOQUIC_NB_PATH_TARGET) {
+        blocked = 0;
+    }
     else {
         for (picoquic_packet_context_enum pc = 0; pc < picoquic_nb_packet_context; pc++) {
             picoquic_packet_t* p = cnx->pkt_ctx[pc].retransmit_oldest;
@@ -2010,6 +2017,28 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
     return ret;
 }
 
+/* Create a new path, register it, and file the corresponding connection ID frame */
+int picoquic_prepare_new_path_and_id(picoquic_cnx_t* cnx, uint8_t* bytes, size_t bytes_max, int64_t current_time, size_t* consumed)
+{
+    int ret = 0;
+    int path_index;
+
+    path_index = picoquic_create_path(cnx, current_time, NULL, NULL);
+
+    picoquic_register_path(cnx, cnx->path[path_index]);
+
+    ret = picoquic_prepare_connection_id_frame(cnx, cnx->path[path_index], bytes, bytes_max, consumed);
+
+    if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
+        /* Oops. Try again next time. */
+        picoquic_delete_path(cnx, path_index);
+        *consumed = 0;
+    }
+
+    return ret;
+}
+
+
 /*  Prepare the next packet to send when in one the ready states */
 int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x, picoquic_packet_t* packet,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length)
@@ -2147,6 +2176,25 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                                 break;
                             }
                         }
+
+                        /* If there are not enough paths, create and advertise */
+                        while (ret == 0 && cnx->remote_parameters.migration_disabled == 0 &&
+                            cnx->local_parameters.migration_disabled == 0 &&
+                            cnx->nb_paths < PICOQUIC_NB_PATH_TARGET) {
+                            ret = picoquic_prepare_new_path_and_id(cnx, &bytes[length],
+                                send_buffer_min_max - checksum_overhead - length,
+                                current_time, &data_bytes);
+                            if (ret == 0) {
+                                length += (uint32_t)data_bytes;
+                            }
+                            else {
+                                if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
+                                    ret = 0;
+                                }
+                                break;
+                            }
+                        }
+
                         /* If necessary, encode the max data frame */
                         if (ret == 0 && 2 * cnx->data_received > cnx->maxdata_local) {
                             ret = picoquic_prepare_max_data_frame(cnx, 2 * cnx->data_received, &bytes[length],
