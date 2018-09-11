@@ -590,8 +590,6 @@ typedef struct st_picoquic_cnx_t {
     int path_sequence_next;
     /* Management of the CNX-ID stash */
     picoquic_cnxid_stash_t * cnxid_stash_first;
-    picoquic_cnxid_stash_t * cnxid_stash_last;
-
 } picoquic_cnx_t;
 
 /* Init of transport parameters */
@@ -613,8 +611,9 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index);
 /* Management of the CNX-ID stash */
 picoquic_cnxid_stash_t * picoquic_dequeue_cnxid_stash(picoquic_cnx_t* cnx);
 
-picoquic_cnxid_stash_t * picoquic_enqueue_cnxid_stash(picoquic_cnx_t * cnx,
-    const uint64_t sequence, const uint8_t cid_length, const uint8_t * cnxid_bytes, const uint8_t * secret_bytes);
+int picoquic_enqueue_cnxid_stash(picoquic_cnx_t * cnx,
+    const uint64_t sequence, const uint8_t cid_length, const uint8_t * cnxid_bytes,
+    const uint8_t * secret_bytes, picoquic_cnxid_stash_t ** pstashed);
 
 
 /* handling of retransmission queue */

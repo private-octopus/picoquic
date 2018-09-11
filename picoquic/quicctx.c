@@ -784,38 +784,92 @@ picoquic_cnxid_stash_t * picoquic_dequeue_cnxid_stash(picoquic_cnx_t * cnx)
     if (cnx != NULL && cnx->cnxid_stash_first != NULL) {
         stashed = cnx->cnxid_stash_first;
         cnx->cnxid_stash_first = stashed->next_in_stash;
-        if (stashed->next_in_stash == NULL) {
-            cnx->cnxid_stash_last = NULL;
-        }
-        else {
-            stashed->next_in_stash = NULL;
-        }
     }
 
     return stashed;
 }
 
-picoquic_cnxid_stash_t * picoquic_enqueue_cnxid_stash(picoquic_cnx_t * cnx,
-    const uint64_t sequence, const uint8_t cid_length, const uint8_t * cnxid_bytes, const uint8_t * secret_bytes)
+int picoquic_enqueue_cnxid_stash(picoquic_cnx_t * cnx,
+    const uint64_t sequence, const uint8_t cid_length, const uint8_t * cnxid_bytes, 
+    const uint8_t * secret_bytes, picoquic_cnxid_stash_t ** pstashed)
 {
-    picoquic_cnxid_stash_t * stashed = (picoquic_cnxid_stash_t *)malloc(sizeof(picoquic_cnxid_stash_t));
+    int ret = 0;
+    int is_duplicate = 0;
+    picoquic_connection_id_t cnx_id;
+    picoquic_cnxid_stash_t * next_stash = NULL;
+    picoquic_cnxid_stash_t * last_stash = NULL;
+    picoquic_cnxid_stash_t * stashed = NULL;
 
-    if (stashed != NULL) {
-        (void)picoquic_parse_connection_id(cnxid_bytes, cid_length, &stashed->cnx_id);
-        stashed->sequence = sequence;
-        memcpy(stashed->reset_secret, secret_bytes, PICOQUIC_RESET_SECRET_SIZE);
-        stashed->next_in_stash = NULL;
-
-        if (cnx->cnxid_stash_last == NULL) {
-            cnx->cnxid_stash_first = stashed;
-        }
-        else {
-            cnx->cnxid_stash_last->next_in_stash = stashed;
-        }
-
-        cnx->cnxid_stash_last = stashed;
+    /* verify the format */
+    if (picoquic_parse_connection_id(cnxid_bytes, cid_length, &cnx_id) == 0) {
+        ret = PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR;
     }
-    return stashed;
+
+    if (ret == 0 && cnx->path[0]->remote_cnxid.id_len == 0) {
+        /* Protocol error. The peer is using null length cnx_id */
+        ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
+    }
+    /* Verify that the proposed CID is not already in use */
+    for (int i = 0; ret = 0 && i < cnx->nb_paths; i++) {
+        if (picoquic_compare_connection_id(&cnx_id, &cnx->path[i]->remote_cnxid) == 0)
+        {
+            if (memcmp(secret_bytes, cnx->path[i]->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0) {
+                is_duplicate = 1;
+            }
+            else {
+                ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
+            }
+            break;
+        }
+    }
+    
+    if (ret == 0 && is_duplicate == 0) {
+        next_stash = cnx->cnxid_stash_first;
+
+        while (next_stash != NULL) {
+            if (picoquic_compare_connection_id(&cnx_id, &next_stash->cnx_id) == 0)
+            {
+                if (next_stash->sequence == sequence &&
+                    memcmp(secret_bytes, next_stash->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0) {
+                    is_duplicate = 1;
+                }
+                else {
+                    ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
+                }
+                break;
+            }
+            last_stash = next_stash;
+            next_stash = next_stash->next_in_stash;
+        }
+    }
+
+    if (ret == 0 && is_duplicate == 0) {
+        stashed = (picoquic_cnxid_stash_t *)malloc(sizeof(picoquic_cnxid_stash_t));
+
+        if (stashed == NULL) {
+            ret = PICOQUIC_TRANSPORT_INTERNAL_ERROR;
+        } else {
+            (void)picoquic_parse_connection_id(cnxid_bytes, cid_length, &stashed->cnx_id);
+            stashed->sequence = sequence;
+            memcpy(stashed->reset_secret, secret_bytes, PICOQUIC_RESET_SECRET_SIZE);
+            stashed->next_in_stash = NULL;
+
+            if (last_stash == NULL) {
+                cnx->cnxid_stash_first = stashed;
+            }
+            else {
+                last_stash->next_in_stash = stashed;
+            }
+        }
+    }
+
+    /* the return argument is only used in tests */
+
+    if (pstashed != NULL) {
+        *pstashed = stashed;
+    }
+
+    return ret;
 }
 
 picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,

@@ -463,10 +463,12 @@ uint8_t* picoquic_decode_connection_id_frame(picoquic_cnx_t* cnx, uint8_t* bytes
     if (bytes == NULL || picoquic_is_connection_id_length_valid(cid_length) == 0) {
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
             picoquic_frame_type_new_connection_id);
-    } else if (picoquic_enqueue_cnxid_stash(cnx, sequence, cid_length, cnxid_bytes, secret_bytes) == NULL) {
-        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR,
-            picoquic_frame_type_new_connection_id);
-        bytes = 0;
+    } else {
+        int ret = picoquic_enqueue_cnxid_stash(cnx, sequence, cid_length, cnxid_bytes, secret_bytes, NULL);
+        if (ret != 0) {
+            picoquic_connection_error(cnx, ret, picoquic_frame_type_new_connection_id);
+            bytes = 0;
+        }
     }
 
     return bytes;

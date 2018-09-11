@@ -724,15 +724,20 @@ int cnxid_stash_test()
         }
 
         for (size_t i = 0; ret == 0 && i < nb_stash_test_case; i++) {
-            stashed = picoquic_enqueue_cnxid_stash(cnx,
+            ret = picoquic_enqueue_cnxid_stash(cnx,
                 stash_test_case[i].sequence, stash_test_case[i].cnx_id.id_len,
-                stash_test_case[i].cnx_id.id, stash_test_case[i].reset_secret);
-            if (stashed == NULL) {
-                DBG_PRINTF("Test %d, cannot stash cnxid %d.\n", test_mode, i);
-                ret = -1;
-            } else if (test_mode == 0) {
-                stashed = picoquic_dequeue_cnxid_stash(cnx);
-                ret = cnxid_stash_compare(test_mode, stashed, i);
+                stash_test_case[i].cnx_id.id, stash_test_case[i].reset_secret, &stashed);
+            if (ret != 0) {
+                DBG_PRINTF("Test %d, cannot stash cnxid %d, err %x.\n", test_mode, i, ret);
+            } else {
+                if (stashed == NULL) {
+                    DBG_PRINTF("Test %d, cannot stash cnxid %d (duplicate).\n", test_mode, i);
+                    ret = -1;
+                }
+                else if (test_mode == 0) {
+                    stashed = picoquic_dequeue_cnxid_stash(cnx);
+                    ret = cnxid_stash_compare(test_mode, stashed, i);
+                }
             }
         }
 
