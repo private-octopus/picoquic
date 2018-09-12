@@ -375,7 +375,6 @@ typedef struct st_picoquic_path_t {
 
     /* Todo: remove path_sequence when sequence removed from new Connection ID*/
     int path_sequence;
-    unsigned int path_is_published : 1;
 
     /* Peer address. To do: allow for multiple addresses */
     struct sockaddr_storage peer_addr;
@@ -383,17 +382,20 @@ typedef struct st_picoquic_path_t {
     struct sockaddr_storage local_addr;
     int local_addr_len;
     unsigned long if_index_dest;
-
+    /* Public reset secret, provisioned by the peer */
+    uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE];
     /* Challenge used for this path */
     uint64_t challenge;
     uint64_t challenge_time;
     uint8_t challenge_repeat_count;
 #define PICOQUIC_CHALLENGE_REPEAT_MAX 4
-    /* Public reset secret, provisioned by the peer */
-    uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE];
     /* flags */
     unsigned int mtu_probe_sent : 1;
+    unsigned int path_is_published : 1;
+    unsigned int path_is_activated : 1;
+    unsigned int challenge_required : 1;
     unsigned int challenge_verified : 1;
+    unsigned int challenge_failed : 1;
 
     /* Time measurement */
     uint64_t max_ack_delay;
@@ -607,6 +609,7 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time,
     struct sockaddr* local_addr, struct sockaddr* peer_addr);
 void picoquic_register_path(picoquic_cnx_t* cnx, picoquic_path_t * path_x);
 void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index);
+void picoquic_promote_path_to_default(picoquic_cnx_t* cnx, int path_index);
 
 /* Management of the CNX-ID stash */
 picoquic_cnxid_stash_t * picoquic_dequeue_cnxid_stash(picoquic_cnx_t* cnx);

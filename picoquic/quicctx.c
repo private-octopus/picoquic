@@ -735,14 +735,9 @@ void picoquic_register_path(picoquic_cnx_t* cnx, picoquic_path_t * path_x)
  * context.
  */
 
-void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
+static void picoquic_clear_path_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x) 
 {
-    picoquic_path_t * path_x = cnx->path[path_index];
-
-    if (cnx->congestion_alg != NULL) {
-        cnx->congestion_alg->alg_delete(path_x);
-    }
-
+    /* Remove the registration in hash tables */
     while (path_x->first_cnx_id != NULL) {
         picohash_item* item;
         picoquic_cnx_id_key_t* cnx_id_key = path_x->first_cnx_id;
@@ -766,9 +761,26 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
             picohash_item_delete(cnx->quic->table_cnx_by_net, item, 1);
         }
     }
+    /* Remove the congestion data */
+    if (cnx->congestion_alg != NULL) {
+        cnx->congestion_alg->alg_delete(path_x);
+    }
 
+    /* Free the record */
     free(path_x);
+}
 
+void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
+{
+    picoquic_path_t * path_x = cnx->path[path_index];
+
+    /*TODO: if connection_id_finished frame defined, queue the remote ID */
+
+    /* Free the data */
+    picoquic_clear_path_data(cnx, path_x);
+
+
+    /* Compact the path table  */
     for (int i = path_index + 1; i < cnx->nb_paths; i++) {
         cnx->path[i-1] = cnx->path[i];
     }
@@ -776,6 +788,67 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
     cnx->nb_paths--;
     cnx->path[cnx->nb_paths] = NULL;
 }
+
+/*
+ * Path challenges may be abandoned if they are tried too many times, or if 
+ */
+
+void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx)
+{
+    int path_index_good = 1;
+    int path_index_current = 1;
+
+    while (path_index_current < cnx->nb_paths) {
+        if (cnx->path[path_index_current]->challenge_failed) {
+            /* Only increment the current index */
+            path_index_current++;
+        } else {
+            if (path_index_current > path_index_good) {
+                /* swap the path indexed good with current */
+                picoquic_path_t * path_x = cnx->path[path_index_current];
+                cnx->path[path_index_current] = cnx->path[path_index_good];
+                cnx->path[path_index_good] = path_x;
+            }
+            /* increment both indices */
+            path_index_current++;
+            path_index_good++;
+        }
+    }
+
+    for (int i = path_index_good ; i < cnx->nb_paths; i++) {
+        picoquic_delete_path(cnx, i);
+        cnx->path[i] = NULL;
+    }
+
+    cnx->nb_paths = path_index_good;
+}
+
+/* Promote path to default. This happens when a new path is verified, at the end
+ * of a migration, and becomes the new default path.
+ */
+
+void picoquic_promote_path_to_default(picoquic_cnx_t* cnx, int path_index)
+{
+
+    if (path_index > 0 && path_index < cnx->nb_paths) {
+        picoquic_path_t * path_x = cnx->path[path_index];
+
+        /* Set the congestion algorithm for the new path */
+        if (cnx->congestion_alg != NULL) {
+            cnx->congestion_alg->alg_init(path_x);
+        }
+
+        /* Swap */
+        cnx->path[path_index] = cnx->path[0];
+        cnx->path[0] = path_x;
+        /* Delete the old instance */
+        picoquic_delete_path(cnx, path_index);
+    }
+}
+
+/*
+ * Manage the stash of connection IDs sent by the peer 
+ */
 
 picoquic_cnxid_stash_t * picoquic_dequeue_cnxid_stash(picoquic_cnx_t * cnx)
 {
@@ -871,6 +944,9 @@ int picoquic_enqueue_cnxid_stash(picoquic_cnx_t * cnx,
 
     return ret;
 }
+
+/* Connection management
+ */
 
 picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
     picoquic_connection_id_t initial_cnx_id, picoquic_connection_id_t remote_cnx_id, 

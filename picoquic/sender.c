@@ -1149,12 +1149,12 @@ static void picoquic_cnx_set_next_wake_time_init(picoquic_cnx_t* cnx, uint64_t c
     }
 
     /* Consider path challenges */
-    if (blocked != 0 && path_x->challenge_verified == 0) {
+    if (path_x->challenge_verified == 0 && path_x->path_is_activated) {
         uint64_t next_challenge_time = path_x->challenge_time + path_x->retransmit_timer;
-        if (next_challenge_time <= current_time) {
-            next_time = current_time;
-        } else if (next_challenge_time < next_time) {
-            next_time = next_challenge_time;
+        if (current_time < next_challenge_time) {
+            if (next_time > next_challenge_time) {
+                next_time = next_challenge_time;
+            }
         }
     }
 
@@ -1261,11 +1261,18 @@ void picoquic_cnx_set_next_wake_time(picoquic_cnx_t* cnx, uint64_t current_time)
         }
 
         /* Consider path challenges */
-        if (path_x->challenge_verified == 0) {
-            uint64_t next_challenge_time = path_x->challenge_time + path_x->retransmit_timer;
-            if (current_time < next_challenge_time) {
-                if (next_time > next_challenge_time) {
-                    next_time = next_challenge_time;
+        if (next_time > current_time) {
+            for (int i = 0; i < cnx->nb_paths; i++) {
+                if (blocked != 0 && cnx->path[i]->challenge_verified == 0 && cnx->path[i]->path_is_activated) {
+                    uint64_t next_challenge_time = cnx->path[i]->challenge_time + cnx->path[i]->retransmit_timer;
+
+                    if (next_challenge_time <= current_time) {
+                        next_time = current_time;
+                        break;
+                    }
+                    else if (next_challenge_time < next_time) {
+                        next_time = next_challenge_time;
+                    }
                 }
             }
         }
@@ -1707,7 +1714,8 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
         }
 
         if (path_x->challenge_verified == 0) {
-            if (path_x->challenge_time + path_x->retransmit_timer <= current_time || path_x->challenge_time == 0) {
+            if (path_x->challenge_failed == 0 && (
+                path_x->challenge_time + path_x->retransmit_timer <= current_time || path_x->challenge_time == 0)) {
                 /* When blocked, repeat the path challenge or wait */
                 if (picoquic_prepare_path_challenge_frame(&bytes[length],
                     send_buffer_max - checksum_overhead - length, &data_bytes, path_x) == 0) {
@@ -1723,10 +1731,16 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                 }
 
                 if (path_x->challenge_repeat_count > PICOQUIC_CHALLENGE_REPEAT_MAX) {
-                    DBG_PRINTF("%s\n", "Too many challenge retransmits, disconnect");
-                    cnx->cnx_state = picoquic_state_disconnected;
-                    if (cnx->callback_fn) {
-                        (cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx);
+                    if (path_x == cnx->path[0]) {
+                        DBG_PRINTF("%s\n", "Too many challenge retransmits, disconnect");
+                        cnx->cnx_state = picoquic_state_disconnected;
+                        if (cnx->callback_fn) {
+                            (cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx);
+                        }
+                    }
+                    else {
+                        DBG_PRINTF("%s\n", "Too many challenge retransmits, abandon path");
+                        path_x->challenge_failed = 1;
                     }
                     length = 0;
                 }
@@ -2122,19 +2136,34 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                 }
             }
             else {
-                if (path_x->challenge_verified == 0 && current_time >= (path_x->challenge_time + path_x->retransmit_timer)) {
-                    if (picoquic_prepare_path_challenge_frame(&bytes[length],
-                        send_buffer_min_max - checksum_overhead - length, &data_bytes, path_x) == 0) {
-                        length += (uint32_t)data_bytes;
-                        path_x->challenge_time = current_time;
-                        path_x->challenge_repeat_count++;
-
+                if (path_x->challenge_verified == 0) {
+                    if (path_x->challenge_failed == 0 && (
+                        path_x->challenge_time + path_x->retransmit_timer <= current_time || path_x->challenge_time == 0)) {
+                        /* When blocked, repeat the path challenge or wait */
+                        if (picoquic_prepare_path_challenge_frame(&bytes[length],
+                            send_buffer_max - checksum_overhead - length, &data_bytes, path_x) == 0) {
+                            length += (uint32_t)data_bytes;
+                            path_x->challenge_time = current_time;
+                            path_x->challenge_repeat_count++;
+                        }
+                        /* add an ACK just to be nice */
+                        if (picoquic_prepare_ack_frame(cnx, current_time, pc, &bytes[length],
+                            send_buffer_max - checksum_overhead - length, &data_bytes)
+                            == 0) {
+                            length += (uint32_t)data_bytes;
+                        }
 
                         if (path_x->challenge_repeat_count > PICOQUIC_CHALLENGE_REPEAT_MAX) {
-                            DBG_PRINTF("%s\n", "Too many challenge retransmits, disconnect");
-                            cnx->cnx_state = picoquic_state_disconnected;
-                            if (cnx->callback_fn) {
-                                (cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx);
+                            if (path_x == cnx->path[0]) {
+                                DBG_PRINTF("%s\n", "Too many challenge retransmits, disconnect");
+                                cnx->cnx_state = picoquic_state_disconnected;
+                                if (cnx->callback_fn) {
+                                    (cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx);
+                                }
+                            }
+                            else {
+                                DBG_PRINTF("%s\n", "Too many challenge retransmits, abandon path");
+                                path_x->challenge_failed = 1;
                             }
                             length = 0;
                         }
@@ -2366,11 +2395,36 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length)
 {
     int ret = 0;
-    picoquic_path_t * path_x = cnx->path[0];
+    picoquic_path_t * path_x = NULL;
     picoquic_packet_t * packet = NULL;
 
     *send_length = 0;
 
+    /* Remove delete paths */
+    picoquic_delete_abandoned_paths(cnx);
+
+    /* Select the path */
+    for (int i = 1; i < cnx->nb_paths; i++) {
+        if (cnx->path[i]->challenge_verified) {
+            /* TODO: selection logic if multiple paths are available! */
+            /* This path becomes the new default */
+            picoquic_promote_path_to_default(cnx, i);
+            path_x = cnx->path[0];
+            break;
+        }
+        else if (path_x == NULL && cnx->path[i]->path_is_activated &&
+            (cnx->path[i]->challenge_required ||
+                current_time >= (cnx->path[i]->challenge_time + cnx->path[i]->retransmit_timer))) {
+            /* will try this path, unless a validated path came in */
+            path_x = cnx->path[i];
+        }
+    }
+    
+    if (path_x == NULL) {
+        path_x = cnx->path[0];
+    }
+
+    /* Send the available segments */
     while (ret == 0)
     {
         size_t available = send_buffer_max;
