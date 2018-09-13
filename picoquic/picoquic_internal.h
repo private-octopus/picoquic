@@ -610,6 +610,7 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time,
 void picoquic_register_path(picoquic_cnx_t* cnx, picoquic_path_t * path_x);
 void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index);
 void picoquic_promote_path_to_default(picoquic_cnx_t* cnx, int path_index);
+void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx);
 
 /* Management of the CNX-ID stash */
 picoquic_cnxid_stash_t * picoquic_dequeue_cnxid_stash(picoquic_cnx_t* cnx);

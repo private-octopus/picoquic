@@ -2392,7 +2392,8 @@ int picoquic_prepare_segment(picoquic_cnx_t* cnx, picoquic_path_t * path_x, pico
 
 /* Prepare next packet to send, or nothing.. */
 int picoquic_prepare_packet(picoquic_cnx_t* cnx,
-    uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length)
+    uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
+    struct sockaddr ** p_addr_to, int * to_len, struct sockaddr ** p_addr_from, int * from_len)
 {
     int ret = 0;
     picoquic_path_t * path_x = NULL;
@@ -2422,6 +2423,18 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     
     if (path_x == NULL) {
         path_x = cnx->path[0];
+    }
+
+    if (path_x != NULL) {
+        if (p_addr_to != NULL) {
+            *p_addr_to = (struct sockaddr *)&path_x->peer_addr;
+            *to_len = path_x->peer_addr_len;
+        }
+
+        if (p_addr_from != NULL) {
+            *p_addr_from = (struct sockaddr *)&path_x->local_addr;
+            *from_len = path_x->local_addr_len;
+        }
     }
 
     /* Send the available segments */

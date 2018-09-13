@@ -296,10 +296,13 @@ int picoquic_store_addr(struct sockaddr_storage * stored_addr, const struct sock
 {
     int len = 0;
     
-    if (addr != NULL) {
+    if (addr != NULL && addr->sa_family != 0) {
         len = (int)((addr->sa_family == AF_INET) ? sizeof(struct sockaddr_in) :
             sizeof(struct sockaddr_in6));
         memcpy(stored_addr, addr, len);
+    }
+    else {
+        memset(stored_addr, 0, sizeof(struct sockaddr_storage));
     }
 
     return len;

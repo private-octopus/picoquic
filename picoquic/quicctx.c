@@ -950,7 +950,7 @@ int picoquic_enqueue_cnxid_stash(picoquic_cnx_t * cnx,
 
 picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
     picoquic_connection_id_t initial_cnx_id, picoquic_connection_id_t remote_cnx_id, 
-    struct sockaddr* addr, uint64_t start_time, uint32_t preferred_version,
+    struct sockaddr* addr_to, uint64_t start_time, uint32_t preferred_version,
     char const* sni, char const* alpn, char client_mode)
 {
     picoquic_cnx_t* cnx = (picoquic_cnx_t*)malloc(sizeof(picoquic_cnx_t));
@@ -960,7 +960,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
 
         memset(cnx, 0, sizeof(picoquic_cnx_t));
         /* Should return 0, since this is the first path */
-        ret = picoquic_create_path(cnx, start_time, NULL, addr);
+        ret = picoquic_create_path(cnx, start_time, NULL, addr_to);
 
         if (ret != 0) {
             free(cnx);

@@ -485,8 +485,14 @@ int quic_server(const char* server_name, int server_port,
                 }
 
                 while (ret == 0 && (cnx_next = picoquic_get_earliest_cnx_to_wake(qserver, loop_time)) != NULL) {
+                    int peer_addr_len = 0;
+                    struct sockaddr* peer_addr = NULL;
+                    int local_addr_len = 0;
+                    struct sockaddr* local_addr = NULL;
+
                     ret = picoquic_prepare_packet(cnx_next, current_time,
-                        send_buffer, sizeof(send_buffer), &send_length);
+                        send_buffer, sizeof(send_buffer), &send_length, 
+                        &peer_addr, &peer_addr_len, &local_addr, &local_addr_len);
 
                     if (ret == PICOQUIC_ERROR_DISCONNECTED) {
                         ret = 0;
@@ -507,10 +513,6 @@ int quic_server(const char* server_name, int server_port,
 
                         break;
                     } else if (ret == 0) {
-                        int peer_addr_len = 0;
-                        struct sockaddr* peer_addr;
-                        int local_addr_len = 0;
-                        struct sockaddr* local_addr;
 
                         if (send_length > 0) {
                             if (just_once != 0 ||
@@ -521,15 +523,10 @@ int quic_server(const char* server_name, int server_port,
                                     picoquic_get_cnx_state(cnx_next));
                             }
 
-                            picoquic_get_peer_addr(cnx_next, &peer_addr, &peer_addr_len);
-                            picoquic_get_local_addr(cnx_next, &local_addr, &local_addr_len);
-
                             (void)picoquic_send_through_server_sockets(&server_sockets,
                                 peer_addr, peer_addr_len, local_addr, local_addr_len,
                                 picoquic_get_local_if_index(cnx_next),
                                 (const char*)send_buffer, (int)send_length);
-
-                            /* TODO: log sending packet. */
                         }
                     } else {
                         break;
@@ -894,8 +891,9 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
                     demo_client_start_streams(cnx_client, &callback_ctx, 0xFFFFFFFF);
                 }
 
+                /* TODO: once migration is supported, manage addresses */
                 ret = picoquic_prepare_packet(cnx_client, current_time,
-                    send_buffer, sizeof(send_buffer), &send_length);
+                    send_buffer, sizeof(send_buffer), &send_length, NULL, NULL, NULL, NULL);
 
                 if (ret == 0 && send_length > 0) {
                     bytes_sent = sendto(fd, send_buffer, (int)send_length, 0,
@@ -1036,10 +1034,11 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
                 }
 
                 if (ret == 0) {
+                    /* TODO: once migration is supported, manage addresses */
                     send_length = PICOQUIC_MAX_PACKET_SIZE;
 
                     ret = picoquic_prepare_packet(cnx_client, current_time,
-                        send_buffer, sizeof(send_buffer), &send_length);
+                        send_buffer, sizeof(send_buffer), &send_length, NULL, NULL, NULL, NULL);
 
                     if (ret == 0 && send_length > 0) {
                         bytes_sent = sendto(fd, send_buffer, (int)send_length, 0,

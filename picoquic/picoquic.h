@@ -346,7 +346,7 @@ void picoquic_set_client_authentication(picoquic_quic_t* quic, int client_authen
 /* Connection context creation and registration */
 picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
     picoquic_connection_id_t initial_cnx_id, picoquic_connection_id_t remote_cnx_id,
-    struct sockaddr* addr, uint64_t start_time, uint32_t preferred_version,
+    struct sockaddr* addr_to, uint64_t start_time, uint32_t preferred_version,
     char const* sni, char const* alpn, char client_mode);
 
 picoquic_cnx_t* picoquic_create_client_cnx(picoquic_quic_t* quic,
@@ -412,7 +412,8 @@ int picoquic_incoming_packet(
 picoquic_packet_t* picoquic_create_packet();
 
 int picoquic_prepare_packet(picoquic_cnx_t* cnx,
-    uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length);
+    uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
+    struct sockaddr ** p_addr_to, int * to_len, struct sockaddr ** p_addr_from, int * from_len);
 
 /* send and receive data on streams */
 int picoquic_add_to_stream(picoquic_cnx_t* cnx,

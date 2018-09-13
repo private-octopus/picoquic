@@ -818,8 +818,8 @@ int picoquic_incoming_initial(
     else {
         /* remember the local address on which the initial packet arrived. */
         (*pcnx)->path[0]->if_index_dest = if_index_to;
-        (*pcnx)->path[0]->local_addr_len = (addr_to->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
-        memcpy(&(*pcnx)->path[0]->local_addr, addr_to, (*pcnx)->path[0]->local_addr_len);
+        (*pcnx)->path[0]->local_addr_len = picoquic_store_addr(&(*pcnx)->path[0]->local_addr, addr_to);
+        (*pcnx)->path[0]->peer_addr_len = picoquic_store_addr(&(*pcnx)->path[0]->peer_addr, addr_from);
     }
 
     return ret;
@@ -1206,6 +1206,7 @@ int picoquic_incoming_segment(
     picoquic_cnx_t* cnx = NULL;
     picoquic_packet_header ph;
     int new_context_created = 0;
+    picoquic_path_t * path_x = NULL;
 
     /* Parse the header and decrypt the packet */
     ret = picoquic_parse_header_and_decrypt(quic, bytes, length, packet_length, addr_from,
@@ -1239,8 +1240,6 @@ int picoquic_incoming_segment(
             }
         }
         else {
-            /* TO DO: Find the incoming path */
-            /* TO DO: update each of the incoming functions, since the packet is already decrypted. */
             switch (ph.ptype) {
             case picoquic_packet_version_negotiation:
                 if (cnx->cnx_state == picoquic_state_client_init_sent) {

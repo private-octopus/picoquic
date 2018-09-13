@@ -709,9 +709,15 @@ static int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
 
         if (packet->length == 0) {
             /* check whether the client has something to send */
+            int peer_addr_len = 0;
+            struct sockaddr* peer_addr = NULL;
+            int local_addr_len = 0;
+            struct sockaddr* local_addr = NULL;
+
             if (test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
                 ret = picoquic_prepare_packet(test_ctx->cnx_client, *simulated_time,
-                    packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length);
+                    packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length,
+                    &peer_addr, &peer_addr_len, &local_addr, &local_addr_len);
                 if (ret != 0)
                 {
                     /* useless test, but makes it easier to add a breakpoint under debugger */
@@ -725,17 +731,32 @@ static int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
             if (ret == 0) {
                 if (packet->length > 0) {
                     /* queue in c_to_s */
-                    memcpy(&packet->addr_from, &test_ctx->client_addr, sizeof(struct sockaddr_in));
-                    memcpy(&packet->addr_to, &test_ctx->server_addr, sizeof(struct sockaddr_in));
+                    if (local_addr_len == 0) {
+                        memcpy(&packet->addr_from, &test_ctx->client_addr, sizeof(struct sockaddr_in));
+                    }
+                    else {
+                        memcpy(&packet->addr_from, local_addr, local_addr_len);
+                    }
+                    memcpy(&packet->addr_to, peer_addr, peer_addr_len);
                     target_link = test_ctx->c_to_s_link;
                 }
                 else if (test_ctx->cnx_server != NULL && test_ctx->cnx_server->cnx_state != picoquic_state_disconnected) {
+                    int peer_addr_len = 0;
+                    struct sockaddr* peer_addr = NULL;
+                    int local_addr_len = 0;
+                    struct sockaddr* local_addr = NULL;
+
                     ret = picoquic_prepare_packet(test_ctx->cnx_server, *simulated_time,
-                        packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length);
+                        packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length,
+                        &peer_addr, &peer_addr_len, &local_addr, &local_addr_len);
                     if (ret == 0 && packet->length > 0) {
                         /* copy and queue in s to c */
-                        memcpy(&packet->addr_from, &test_ctx->server_addr, sizeof(struct sockaddr_in));
-                        memcpy(&packet->addr_to, &test_ctx->client_addr, sizeof(struct sockaddr_in));
+                        if (local_addr_len == 0) {
+                            memcpy(&packet->addr_from, &test_ctx->server_addr, sizeof(struct sockaddr_in));
+                        } else {
+                            memcpy(&packet->addr_from, local_addr, local_addr_len);
+                        }
+                        memcpy(&packet->addr_to, peer_addr, peer_addr_len);
                         target_link = test_ctx->s_to_c_link;
                     }
                     if (ret != 0)
