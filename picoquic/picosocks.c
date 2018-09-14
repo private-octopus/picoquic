@@ -496,6 +496,7 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
         }
 #endif
 
+#if 0
 #if defined(IP_PMTUDISC_DO) || defined(IP_DONTFRAG)
         if (addr_from->sa_family == AF_INET && length > PICOQUIC_INITIAL_MTU_IPV4) {
 #ifdef CMSG_ALIGN
@@ -524,6 +525,32 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
                 control_length += CMSG_SPACE(sizeof(int));
             }
         }
+#endif
+#else
+#if defined(IP_DONTFRAG)
+        if (addr_from->sa_family == AF_INET && length > PICOQUIC_INITIAL_MTU_IP$
+#ifdef CMSG_ALIGN
+            struct cmsghdr * cmsg_2 = (struct cmsghdr *)((unsigned char *)cmsg $
+            {
+#else
+            struct cmsghdr * cmsg_2 = CMSG_NXTHDR((&msg), cmsg);
+            if (cmsg_2 == NULL) {
+                DBG_PRINTF("Cannot obtain second CMSG (control_length: %d)\n", $
+            }
+            else {
+#endif
+                /* On BSD systems, just use IP_DONTFRAG */
+                int val = 1;
+                cmsg_2->cmsg_level = IPPROTO_IP;
+                cmsg_2->cmsg_type = IP_DONTFRAG;
+                cmsg_2->cmsg_len = CMSG_LEN(sizeof(int));
+                memcpy(CMSG_DATA(cmsg_2), &val, sizeof(int));
+                control_length += CMSG_SPACE(sizeof(int));
+            }
+        }
+#endif
+
+
 #endif
 
     }
