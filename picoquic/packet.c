@@ -631,6 +631,13 @@ int picoquic_prepare_version_negotiation(
         memcpy(&sp->addr_local, addr_to,
             (addr_to->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
         sp->if_index_local = if_index_to;
+
+        if (quic->F_log != NULL) {
+            picoquic_log_outgoing_segment(quic->F_log, 1, NULL,
+                bytes, 0, (uint32_t)sp->length,
+                bytes, (uint32_t)sp->length);
+        }
+
         picoquic_queue_stateless_packet(quic, sp);
     }
 
@@ -739,6 +746,13 @@ void picoquic_queue_stateless_retry(picoquic_cnx_t* cnx,
         memcpy(&sp->addr_local, addr_to,
             (addr_to->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
         sp->if_index_local = if_index_to;
+
+        if (cnx->quic->F_log != NULL) {
+            picoquic_log_outgoing_segment(cnx->quic->F_log, 1, cnx,
+                bytes, 0, (uint32_t)sp->length,
+                bytes, (uint32_t)sp->length);
+        }
+
         picoquic_queue_stateless_packet(cnx->quic, sp);
     }
 }

@@ -528,8 +528,6 @@ int quic_server(const char* server_name, int server_port,
                                 peer_addr, peer_addr_len, local_addr, local_addr_len,
                                 picoquic_get_local_if_index(cnx_next),
                                 (const char*)send_buffer, (int)send_length);
-
-                            /* TODO: log sending packet. */
                         }
                     } else {
                         break;
@@ -1210,10 +1208,6 @@ int main(int argc, char** argv)
             }
             break;
         case 'v':
-            if (optind + 1 > argc) {
-                fprintf(stderr, "option requires more arguments -- s\n");
-                usage();
-            }
             if ((proposed_version = parse_target_version(optarg)) <= 0) {
                 fprintf(stderr, "Invalid version: %s\n", optarg);
                 usage();
@@ -1231,26 +1225,22 @@ int main(int argc, char** argv)
                 usage();
             }
             reset_seed = reset_seed_x; /* replacing the original alloca, which is not supported in Windows or BSD */
-            reset_seed[1] = strtoul(argv[optind], NULL, 0);
+            reset_seed[1] = strtoul(optarg, NULL, 0);
             reset_seed[0] = strtoul(argv[optind++], NULL, 0);
             break;
         case 'i':
-            if (optind + 2 > argc) {
+            if (optind + 1 > argc) {
                 fprintf(stderr, "option requires more arguments -- i\n");
                 usage();
             }
 
             cnx_id_cbdata.cnx_id_select = atoi(optarg);
             /* TODO: find an alternative to parsing a 64 bit integer */
-            picoquic_set64_connection_id(&cnx_id_cbdata.cnx_id_mask, ~strtoul(argv[optind++], NULL, 0));
+            picoquic_set64_connection_id(&cnx_id_cbdata.cnx_id_mask, ~strtoul(optarg, NULL, 0));
             picoquic_set64_connection_id(&cnx_id_cbdata.cnx_id_val, strtoul(argv[optind++], NULL, 0));
             cnx_id_mask_is_set = 1;
             break;
         case 'l':
-            if (optind + 1 > argc) {
-                fprintf(stderr, "option requires more arguments -- s\n");
-                usage();
-            }
             log_file = optarg;
             break;
         case 'm':
