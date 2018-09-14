@@ -2210,12 +2210,6 @@ uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, uint8_t* bytes
                 probe->challenge_verified = 1;
             }
         }
-
-        /* TODO: is this a leftover of the old ping pong test -- disable the test and remove the callback */
-        if (found_challenge == 0 && cnx->callback_fn != NULL) {
-            cnx->callback_fn(cnx, 0, bytes-(challenge_length+1), challenge_length+1,
-                             picoquic_callback_challenge_response, cnx->callback_ctx);
-        }
     }
 
     return bytes;

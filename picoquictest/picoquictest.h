@@ -74,7 +74,6 @@ int varint_test();
 int tls_api_client_losses_test();
 int tls_api_server_losses_test();
 int skip_frame_test();
-int ping_pong_test();
 int keep_alive_test();
 int logger_test();
 int socket_test();

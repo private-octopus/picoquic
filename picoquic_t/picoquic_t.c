@@ -93,7 +93,6 @@ static const picoquic_test_def_t test_table[] = {
     { "retry", tls_api_retry_test },
     { "two_connections", tls_api_two_connections_test },
     { "multiple_versions", tls_api_multiple_versions_test },
-    { "ping_pong", ping_pong_test },
     { "keep_alive", keep_alive_test },
     { "sockets", socket_test },
     { "ticket_store", ticket_store_test },
