@@ -1147,20 +1147,36 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header * ph
         if (path_id != 0 &&
             !picoquic_is_connection_id_null(cnx->path[0]->remote_cnxid) &&
             picoquic_is_connection_id_null(cnx->path[path_id]->remote_cnxid)) {
-            /* TODO: if there is a probe in progress, find it. */
-            /* If there is no matching probe, find a stashed ID */
-            picoquic_cnxid_stash_t * available_cnxid = picoquic_dequeue_cnxid_stash(cnx);
-            if (available_cnxid != NULL) {
-                cnx->path[path_id]->remote_cnxid = available_cnxid->cnx_id;
-                memcpy(cnx->path[path_id]->reset_secret, available_cnxid->reset_secret,
-                    PICOQUIC_RESET_SECRET_SIZE);
+            /* if there is a probe in progress, find it. */
+            picoquic_probe_t * probe = picoquic_find_probe_by_addr(cnx, addr_from, addr_to);
+            if (probe != NULL) {
                 cnx->path[path_id]->path_is_activated = 1;
-                cnx->path[path_id]->challenge_required = 1;
-                free(available_cnxid);
+                cnx->path[path_id]->remote_cnxid = probe->peer_cnx_id;
+                cnx->path[path_id]->challenge = probe->challenge;
+                cnx->path[path_id]->challenge_time = probe->challenge_time;
+                cnx->path[path_id]->challenge_repeat_count = probe->challenge_repeat_count;
+                cnx->path[path_id]->challenge_required = probe->challenge_required;
+                cnx->path[path_id]->challenge_verified = probe->challenge_verified;
+                cnx->path[path_id]->challenge_failed = probe->challenge_verified;
+
+                picoquic_delete_probe(cnx, probe);
             }
             else {
-                /* Do not activate the path if no connection ID is available */
-                cnx->path[path_id]->challenge_required = 0;
+                /* If there is no matching probe, try find a stashed ID */
+                picoquic_cnxid_stash_t * available_cnxid = picoquic_dequeue_cnxid_stash(cnx);
+                if (available_cnxid != NULL) {
+                    cnx->path[path_id]->remote_cnxid = available_cnxid->cnx_id;
+                    memcpy(cnx->path[path_id]->reset_secret, available_cnxid->reset_secret,
+                        PICOQUIC_RESET_SECRET_SIZE);
+                    cnx->path[path_id]->path_is_activated = 1;
+                    cnx->path[path_id]->challenge_required = 1;
+                    free(available_cnxid);
+                }
+                else {
+                    /* Do not activate the path if no connection ID is available */
+                    cnx->path[path_id]->path_is_activated = 0;
+                    cnx->path[path_id]->challenge_required = 0;
+                }
             }
         }
         else {

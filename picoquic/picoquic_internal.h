@@ -496,9 +496,9 @@ typedef struct st_picoquic_probe_t {
     uint64_t challenge_time;
     uint8_t challenge_repeat_count;
     /* Flags */
-    unsigned int probe_required : 1;
-    unsigned int confirmed : 1;
-    unsigned int abandoned : 1;
+    unsigned int challenge_required : 1;
+    unsigned int challenge_verified : 1;
+    unsigned int challenge_failed : 1;
 } picoquic_probe_t;
 
 /* 

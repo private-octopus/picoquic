@@ -1039,7 +1039,7 @@ int picoquic_create_probe(picoquic_cnx_t* cnx, const struct sockaddr* addr_to, c
             probe->peer_addr_len = picoquic_store_addr(&probe->peer_addr, addr_to);
             probe->local_addr_len = picoquic_store_addr(&probe->local_addr, addr_from);
 
-            probe->probe_required = 1;
+            probe->challenge_required = 1;
 
             probe->next_probe = cnx->probe_first;
             cnx->probe_first = probe;

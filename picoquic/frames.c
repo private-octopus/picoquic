@@ -2197,12 +2197,21 @@ uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, uint8_t* bytes
          */
         for (int i = 0; i < cnx->nb_paths; i++) {
             if (response == cnx->path[i]->challenge) {
-                /* TODO: verify that the network addresses match the path */
                 found_challenge = 1;
                 cnx->path[i]->challenge_verified = 1;
             }
         }
 
+        if (found_challenge == 0) {
+            picoquic_probe_t * probe = picoquic_find_probe_by_challenge(cnx, response);
+
+            if (probe != NULL) {
+                found_challenge = 1;
+                probe->challenge_verified = 1;
+            }
+        }
+
+        /* TODO: is this a leftover of the old ping pong test -- disable the test and remove the callback */
         if (found_challenge == 0 && cnx->callback_fn != NULL) {
             cnx->callback_fn(cnx, 0, bytes-(challenge_length+1), challenge_length+1,
                              picoquic_callback_challenge_response, cnx->callback_ctx);
