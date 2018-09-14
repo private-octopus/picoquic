@@ -27,8 +27,8 @@ static int socket_ping_pong(SOCKET_TYPE fd, struct sockaddr* server_addr, int se
 {
     int ret = 0;
     uint64_t current_time = picoquic_current_time();
-    uint64_t message = current_time;
-    uint8_t buffer[256];
+    uint8_t message[1440];
+    uint8_t buffer[1536];
     int bytes_sent = 0;
     int bytes_recv = 0;
     struct sockaddr_storage addr_from;
@@ -38,6 +38,12 @@ static int socket_ping_pong(SOCKET_TYPE fd, struct sockaddr* server_addr, int se
     unsigned long dest_if;
     struct sockaddr_storage addr_back;
     socklen_t back_length;
+
+    for (size_t i = 0; i < sizeof(message);) {
+        for (int j = 0; j < 64 && i < sizeof(message); j += 8, i++) {
+            message[i++] = (uint8_t)(current_time >> j);
+        }
+    }
 
     /* send from client to sever address */
     bytes_sent = sendto(fd, (const char*)&message, sizeof(message), 0, server_addr, server_address_length);
@@ -88,10 +94,9 @@ static int socket_ping_pong(SOCKET_TYPE fd, struct sockaddr* server_addr, int se
             ret = -1;
         } else {
             /* Check that the message matches what was sent initially */
-            uint8_t* x = (uint8_t*)&message;
 
             for (int i = 0; ret == 0 && i < bytes_recv; i++) {
-                if (x[i] != (buffer[i] ^ 0xFF)) {
+                if (message[i] != (buffer[i] ^ 0xFF)) {
                     ret = -1;
                 }
             }
