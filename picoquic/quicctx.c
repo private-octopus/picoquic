@@ -945,6 +945,110 @@ int picoquic_enqueue_cnxid_stash(picoquic_cnx_t * cnx,
     return ret;
 }
 
+/*
+ * Manage the list of ongoing probes.
+ */
+
+picoquic_probe_t * picoquic_find_probe_by_challenge(const picoquic_cnx_t* cnx, uint64_t challenge)
+{
+    picoquic_probe_t * next = cnx->probe_first;
+
+    if (challenge != 0) {
+        while (next != NULL) {
+            if (next->challenge == challenge) {
+                break;
+            }
+            next = next->next_probe;
+        }
+    }
+
+    return next;
+}
+
+picoquic_probe_t * picoquic_find_probe_by_addr(const picoquic_cnx_t* cnx,
+    const struct sockaddr * peer_addr, const struct sockaddr * local_addr) 
+{
+    picoquic_probe_t * next = cnx->probe_first;
+
+    while (next != NULL) {
+        if (picoquic_compare_addr((struct sockaddr *)&next->peer_addr, peer_addr) == 0 &&
+            picoquic_compare_addr((struct sockaddr *)&next->local_addr, local_addr) == 0) {
+            break;
+        }
+        next = next->next_probe;
+    }
+
+    return next;
+}
+
+
+void picoquic_delete_probe(picoquic_cnx_t* cnx, picoquic_probe_t * probe)
+{
+    picoquic_probe_t * previous = NULL;
+    picoquic_probe_t * next = cnx->probe_first;
+
+    while (next != NULL) {
+        if (next == probe) {
+            if (previous == NULL) {
+                cnx->probe_first = probe->next_probe;
+            }
+            else {
+                previous->next_probe = probe->next_probe;
+            }
+            break;
+        }
+        else {
+            previous = next;
+            next = next->next_probe;
+        }
+    }
+
+    free(probe);
+}
+
+int picoquic_create_probe(picoquic_cnx_t* cnx, const struct sockaddr* addr_to, const struct sockaddr* addr_from)
+{
+    int ret = 0;
+    picoquic_probe_t * probe = NULL;
+    picoquic_cnxid_stash_t * stashed = NULL;
+
+    /* TODO: Check for duplicates: is there a similar outgoing probe? */
+
+    /* Create the probe */
+    probe = (picoquic_probe_t *)malloc(sizeof(picoquic_probe_t));
+
+    if (probe == NULL) {
+        ret = PICOQUIC_ERROR_MEMORY;
+    }
+    else {
+        stashed = picoquic_dequeue_cnxid_stash(cnx);
+
+        if (stashed == NULL) {
+            ret = PICOQUIC_ERROR_CNXID_NOT_AVAILABLE;
+            free(probe);
+            probe = NULL;
+        }
+        else {
+            memset(probe, 0, sizeof(picoquic_probe_t));
+
+            probe->sequence = stashed->sequence;
+            probe->peer_cnx_id = stashed->cnx_id;
+            memcpy(probe->reset_secret, stashed->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
+            free(stashed);
+
+            probe->peer_addr_len = picoquic_store_addr(&probe->peer_addr, addr_to);
+            probe->local_addr_len = picoquic_store_addr(&probe->local_addr, addr_from);
+
+            probe->probe_required = 1;
+
+            probe->next_probe = cnx->probe_first;
+            cnx->probe_first = probe;
+        }
+    }
+
+    return ret;
+}
+
 /* Connection management
  */
 
@@ -1581,6 +1685,10 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
 
         while ((stashed_cnxid = picoquic_dequeue_cnxid_stash(cnx)) != NULL) {
             free(stashed_cnxid);
+        }
+
+        while (cnx->probe_first != NULL) {
+            picoquic_delete_probe(cnx, cnx->probe_first);
         }
 
         free(cnx);

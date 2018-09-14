@@ -3581,3 +3581,204 @@ int transmit_cnxid_test()
 
     return ret;
 }
+
+/*
+ * Unit test for the probe management functions.
+ *
+ * Set up a connection, exchange new cnxid frames, then create a number of probes.
+ * When the number exceeds the number of connections, the probing should fail.
+ */
+
+int probe_api_test()
+{
+    uint64_t simulated_time = 0;
+    uint64_t next_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    struct sockaddr_in t4[PICOQUIC_NB_PATH_TARGET];
+    struct sockaddr_in6 t6[PICOQUIC_NB_PATH_TARGET];
+    int nb_trials;
+
+    /* Initialize the test addresses to synthetic values */
+    for (int i = 0; i < PICOQUIC_NB_PATH_TARGET; i++) {
+        memset(&t4[i], 0, sizeof(struct sockaddr_in));
+        t4[i].sin_family = AF_INET;
+        t4[i].sin_port = 1000+i;
+        memset(&t4[i].sin_addr, i, 4);
+        memset(&t6[i], 0, sizeof(struct sockaddr_in6));
+        t6[i].sin6_family = AF_INET6;
+        t6[i].sin6_port = 2000 + i;
+        memset(&t6[i].sin6_addr, i, 20);
+    }
+
+    /* Set a test conection between client and server */
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    /* run a receive loop until no outstanding data */
+    if (ret == 0) {
+        uint64_t time_out = simulated_time + 4000000;
+        int nb_rounds = 0;
+        int success = 0;
+
+        while (ret == 0 && simulated_time < time_out &&
+            nb_rounds < 2048 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
+            int was_active = 0;
+
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, &was_active);
+            nb_rounds++;
+
+            if (test_ctx->cnx_client->nb_paths >= PICOQUIC_NB_PATH_TARGET &&
+                test_ctx->cnx_server->nb_paths >= PICOQUIC_NB_PATH_TARGET &&
+                picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) &&
+                picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)) {
+                success = 1;
+                break;
+            }
+        }
+
+        if (ret == 0 && success == 0) {
+            DBG_PRINTF("Exit synch loop after %d rounds, backlog or not enough paths (%d & %d).\n",
+                nb_rounds, test_ctx->cnx_client->nb_paths, test_ctx->cnx_server->nb_paths);
+        }
+    }
+
+    if (ret == 0) {
+        if (test_ctx->cnx_client->nb_paths < PICOQUIC_NB_PATH_TARGET) {
+            DBG_PRINTF("Only %d paths created on client.\n", test_ctx->cnx_client->nb_paths);
+            ret = -1;
+        }
+        else if (test_ctx->cnx_server->nb_paths < PICOQUIC_NB_PATH_TARGET) {
+            DBG_PRINTF("Only %d paths created on server.\n", test_ctx->cnx_server->nb_paths);
+        }
+    }
+
+    /* Now, create a series of probes.
+     * There are only PICOQUIC_NB_PATH_TARGET - 1 paths available. 
+     * The last trial should fail.
+     */
+    nb_trials = 0;
+
+    for (int i = 1; ret == 0 && i < PICOQUIC_NB_PATH_TARGET; i++) {
+        for (int j = 0; ret == 0 && j < 2; j++) {
+            int ret_probe;
+            if (j == 0) {
+                ret_probe = picoquic_create_probe(test_ctx->cnx_client, (struct sockaddr *) &t4[0], (struct sockaddr *) &t4[i]);
+            } else {
+                ret_probe = picoquic_create_probe(test_ctx->cnx_client, (struct sockaddr *) &t6[0], (struct sockaddr *) &t6[i]);
+            }
+
+            nb_trials++;
+
+            if (nb_trials <= PICOQUIC_NB_PATH_TARGET - 1) {
+                if (ret_probe != 0) {
+                    DBG_PRINTF("Trial %d (%d, %d) fails with ret = %x\n", nb_trials, i, j, ret_probe);
+                    ret = -1;
+                }
+            }
+            else if (ret_probe == 0) {
+                DBG_PRINTF("Trial %d (%d, %d) succeeds (unexpected)\n", nb_trials, i, j);
+                ret = -1;
+            }
+
+            if (ret == 0 && ret_probe == 0) {
+                test_ctx->cnx_client->probe_first->challenge = 10000 + 10*i + j;
+            }
+        }
+    }
+
+    /* Now, test retrieval functions */
+    /* First test retrieval by address */
+    nb_trials = 0;
+    for (int i = 1; ret == 0 && i < PICOQUIC_NB_PATH_TARGET; i++) {
+        for (int j = 0; ret == 0 && j < 2; j++) {
+            picoquic_probe_t * probe;
+            uint64_t challenge = 10000 + 10 * i + j;
+            if (j == 0) {
+                probe = picoquic_find_probe_by_addr(test_ctx->cnx_client, (struct sockaddr *) &t4[0], (struct sockaddr *) &t4[i]);
+            }
+            else {
+                probe = picoquic_find_probe_by_addr(test_ctx->cnx_client, (struct sockaddr *) &t6[0], (struct sockaddr *) &t6[i]);
+            }
+
+            nb_trials++;
+
+            if (nb_trials <= PICOQUIC_NB_PATH_TARGET - 1) {
+                if (probe == NULL) {
+                    DBG_PRINTF("Retrieve by addr %d (%d, %d) fails\n", nb_trials, i, j);
+                    ret = -1;
+                }
+                else if (probe->challenge != challenge){
+                    DBG_PRINTF("Retrieve by addr %d (%d, %d) finds %d instead of %d\n", 
+                        nb_trials, i, j, (int)probe->challenge, (int)challenge);
+                    ret = -1;
+                }
+            }
+            else if (probe != 0) {
+                DBG_PRINTF("Retrieve by addr %d (%d, %d) succeeds (unexpected)\n", nb_trials, i, j);
+                ret = -1;
+            }
+        }
+    }
+
+    /* Then test retrieval by challenge */
+    nb_trials = 0;
+    for (int i = 1; ret == 0 && i < PICOQUIC_NB_PATH_TARGET; i++) {
+        for (int j = 0; ret == 0 && j < 2; j++) {
+            picoquic_probe_t * probe;
+            uint64_t challenge = 10000 + 10 * i + j;
+            
+            probe = picoquic_find_probe_by_challenge(test_ctx->cnx_client, challenge);
+
+            nb_trials++;
+
+            if (nb_trials <= PICOQUIC_NB_PATH_TARGET - 1) {
+                if (probe == NULL) {
+                    DBG_PRINTF("Retrieve by challenge %d (%d, %d) fails\n", nb_trials, i, j);
+                    ret = -1;
+                }
+            }
+            else if (probe != NULL) {
+                DBG_PRINTF("Retrieve by challenge %d (%d, %d) succeeds (unexpected)\n", nb_trials, i, j);
+                ret = -1;
+            }
+        }
+    }
+
+    /* Remove exactly one probe, then try to retrieve it */
+    if (ret == 0) {
+        picoquic_probe_t * probe;
+        int i = 1;
+        int j = 1;
+        uint64_t challenge = 10000 + 10 * i + j;
+
+        probe = picoquic_find_probe_by_challenge(test_ctx->cnx_client, challenge);
+
+        if (probe == NULL) {
+            DBG_PRINTF("Retrieve by challenge=%d (%d, %d) fails\n", (int)challenge, i, j);
+            ret = -1;
+        }
+        else {
+            picoquic_delete_probe(test_ctx->cnx_client, probe);
+
+            probe = picoquic_find_probe_by_challenge(test_ctx->cnx_client, challenge);
+            if (probe != NULL) {
+                DBG_PRINTF("Retrieve by challenge %d succeeds after delete\n", (int)challenge);
+                ret = -1;
+            }
+        }
+    }
+
+
+    /* Releasing the context will test the delete functions. */
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}

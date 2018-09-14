@@ -124,6 +124,7 @@ int random_tester_test();
 int cnxid_stash_test();
 int new_cnxid_test();
 int transmit_cnxid_test();
+int probe_api_test();
 
 #ifdef __cplusplus
 }

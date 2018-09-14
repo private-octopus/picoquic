@@ -475,6 +475,31 @@ typedef struct st_picoquic_cnxid_stash_t {
     uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE];
 } picoquic_cnxid_stash_t;
 
+/*
+ * Probe in progress, waiting for validation in path.
+ * or upon reception of the first data packet from the peer otherwise.
+ * TODO: re-think that logic if using null CID.
+ */
+typedef struct st_picoquic_probe_t {
+    struct st_picoquic_probe_t * next_probe;
+    uint64_t sequence;
+    picoquic_connection_id_t peer_cnx_id; 
+    uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE];
+    /* Addresses with which the probe was sent */
+    struct sockaddr_storage peer_addr;
+    int peer_addr_len;
+    struct sockaddr_storage local_addr;
+    int local_addr_len;
+    unsigned long if_index_dest;
+    /* Challenge used by this probe */
+    uint64_t challenge;
+    uint64_t challenge_time;
+    uint8_t challenge_repeat_count;
+    /* Flags */
+    unsigned int probe_required : 1;
+    unsigned int confirmed : 1;
+    unsigned int abandoned : 1;
+} picoquic_probe_t;
 
 /* 
  * Per connection context.
@@ -592,6 +617,8 @@ typedef struct st_picoquic_cnx_t {
     int path_sequence_next;
     /* Management of the CNX-ID stash */
     picoquic_cnxid_stash_t * cnxid_stash_first;
+    /* Management of ongoing probes */
+    picoquic_probe_t * probe_first;
 } picoquic_cnx_t;
 
 /* Init of transport parameters */
@@ -619,6 +646,13 @@ int picoquic_enqueue_cnxid_stash(picoquic_cnx_t * cnx,
     const uint64_t sequence, const uint8_t cid_length, const uint8_t * cnxid_bytes,
     const uint8_t * secret_bytes, picoquic_cnxid_stash_t ** pstashed);
 
+/* Management of probes */
+picoquic_probe_t * picoquic_find_probe_by_challenge(const picoquic_cnx_t* cnx, uint64_t challenge);
+
+picoquic_probe_t * picoquic_find_probe_by_addr(const picoquic_cnx_t* cnx,
+    const struct sockaddr * peer_addr, const struct sockaddr * local_addr);
+
+void picoquic_delete_probe(picoquic_cnx_t* cnx, picoquic_probe_t * probe);
 
 /* handling of retransmission queue */
 void picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet_t* p, int should_free);
