@@ -1028,7 +1028,7 @@ static uint32_t basic_fuzzer(void * fuzz_ctx, picoquic_cnx_t* cnx,
             fuzzed_length = 16 + (uint32_t)((fuzz_pilot&0xFFFF) % fuzz_length_max);
             fuzz_pilot >>= 16;
             if (fuzzed_length > length) {
-                for (uint32_t i = length; i < fuzzed_length; i++) {
+                for (uint32_t i = (uint32_t)length; i < fuzzed_length; i++) {
                     bytes[i] = (uint8_t)fuzz_pilot;
                 }
             } 
