@@ -330,6 +330,13 @@ uint32_t picoquic_predict_packet_header_length(
 {
     uint32_t header_length = 0;
 
+    /* The only purpose of the test below is to appease the static analyzer, so it
+     * wont complain of possible NULL deref. On windows we could use "__assume(cnx != NULL)
+     * but the documentation does not say anything about that for GCC and CLANG */
+    if (cnx == NULL) {
+        return 0;
+    }
+
     if (packet_type == picoquic_packet_1rtt_protected_phi0 || 
         packet_type == picoquic_packet_1rtt_protected_phi1) {
         /* Compute length of a short packet header */
@@ -1716,7 +1723,11 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
         packet_type = picoquic_packet_handshake;
     }
 
-    send_buffer_max = (path_x != NULL && send_buffer_max > path_x->send_mtu) ? path_x->send_mtu : send_buffer_max;
+    if (path_x == NULL) {
+        path_x = cnx->path[0];
+    }
+
+    send_buffer_max = (send_buffer_max > path_x->send_mtu) ? path_x->send_mtu : send_buffer_max;
 
 
     /* If context is handshake, verify first that there is no need for retransmit or ack
@@ -1878,7 +1889,11 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
     uint32_t length = 0;
     picoquic_packet_context_enum pc = picoquic_packet_context_application;
 
-    send_buffer_max = (path_x != NULL && send_buffer_max > path_x->send_mtu) ? path_x->send_mtu : send_buffer_max;
+    if (path_x == NULL) {
+        path_x = cnx->path[0];
+    }
+
+    send_buffer_max = (send_buffer_max > path_x->send_mtu) ? path_x->send_mtu : send_buffer_max;
 
     /* Prepare header -- depend on connection state */
     /* TODO: 0-RTT work. */
