@@ -31,7 +31,9 @@
 extern "C" {
 #endif
 
+#ifndef PICOQUIC_MAX_PACKET_SIZE
 #define PICOQUIC_MAX_PACKET_SIZE 1536
+#endif
 #define PICOQUIC_MIN_SEGMENT_SIZE 256
 #define PICOQUIC_INITIAL_MTU_IPV4 1252
 #define PICOQUIC_INITIAL_MTU_IPV6 1232
@@ -887,7 +889,7 @@ int picoquic_prepare_max_data_frame(picoquic_cnx_t* cnx, uint64_t maxdata_increa
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
 void picoquic_clear_stream(picoquic_stream_head* stream);
 int picoquic_prepare_path_challenge_frame(uint8_t* bytes,
-    size_t bytes_max, size_t* consumed, picoquic_path_t * path);
+    size_t bytes_max, size_t* consumed, uint64_t challenge);
 int picoquic_prepare_connection_id_frame(picoquic_cnx_t * cnx, picoquic_path_t * path_x,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
 

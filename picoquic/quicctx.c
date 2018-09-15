@@ -790,7 +790,7 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
 }
 
 /*
- * Path challenges may be abandoned if they are tried too many times, or if 
+ * Path challenges may be abandoned if they are tried too many times without success. 
  */
 
 void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx)
@@ -1006,6 +1006,35 @@ void picoquic_delete_probe(picoquic_cnx_t* cnx, picoquic_probe_t * probe)
     free(probe);
 }
 
+/*
+ * Probes may be abandoned if they are tried too many times without success. 
+ */
+
+void picoquic_delete_failed_probes(picoquic_cnx_t* cnx)
+{
+    picoquic_probe_t * probe = cnx->probe_first;
+    picoquic_probe_t * previous = NULL;
+
+    while (probe != NULL) {
+        if (probe->challenge_failed) {
+            picoquic_probe_t * abandoned = probe;
+            probe = probe->next_probe;
+
+            if (previous == NULL) {
+                cnx->probe_first = probe;
+            }
+            else {
+                previous->next_probe = probe;
+            }
+            free(abandoned);
+        }
+        else {
+            previous = probe;
+            probe = probe->next_probe;
+        }
+    }
+}
+
 int picoquic_create_probe(picoquic_cnx_t* cnx, const struct sockaddr* addr_to, const struct sockaddr* addr_from)
 {
     int ret = 0;
@@ -1014,35 +1043,43 @@ int picoquic_create_probe(picoquic_cnx_t* cnx, const struct sockaddr* addr_to, c
 
     /* TODO: Check for duplicates: is there a similar outgoing probe? */
 
-    /* Create the probe */
-    probe = (picoquic_probe_t *)malloc(sizeof(picoquic_probe_t));
-
-    if (probe == NULL) {
-        ret = PICOQUIC_ERROR_MEMORY;
+    if (cnx->remote_parameters.migration_disabled != 0 ||
+        cnx->local_parameters.migration_disabled != 0) {
+        /* Do not send probes if migration is disabled */
+        ret = PICOQUIC_ERROR_MIGRATION_DISABLED;
     }
     else {
-        stashed = picoquic_dequeue_cnxid_stash(cnx);
+        /* Create the probe */
+        probe = (picoquic_probe_t *)malloc(sizeof(picoquic_probe_t));
 
-        if (stashed == NULL) {
-            ret = PICOQUIC_ERROR_CNXID_NOT_AVAILABLE;
-            free(probe);
-            probe = NULL;
+        if (probe == NULL) {
+            ret = PICOQUIC_ERROR_MEMORY;
         }
         else {
-            memset(probe, 0, sizeof(picoquic_probe_t));
+            stashed = picoquic_dequeue_cnxid_stash(cnx);
 
-            probe->sequence = stashed->sequence;
-            probe->peer_cnx_id = stashed->cnx_id;
-            memcpy(probe->reset_secret, stashed->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
-            free(stashed);
+            if (stashed == NULL) {
+                ret = PICOQUIC_ERROR_CNXID_NOT_AVAILABLE;
+                free(probe);
+                probe = NULL;
+            }
+            else {
+                memset(probe, 0, sizeof(picoquic_probe_t));
 
-            probe->peer_addr_len = picoquic_store_addr(&probe->peer_addr, addr_to);
-            probe->local_addr_len = picoquic_store_addr(&probe->local_addr, addr_from);
+                probe->sequence = stashed->sequence;
+                probe->peer_cnx_id = stashed->cnx_id;
+                memcpy(probe->reset_secret, stashed->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
+                free(stashed);
 
-            probe->challenge_required = 1;
+                probe->peer_addr_len = picoquic_store_addr(&probe->peer_addr, addr_to);
+                probe->local_addr_len = picoquic_store_addr(&probe->local_addr, addr_from);
 
-            probe->next_probe = cnx->probe_first;
-            cnx->probe_first = probe;
+                probe->challenge_required = 1;
+                probe->challenge = picoquic_public_random_64();
+
+                probe->next_probe = cnx->probe_first;
+                cnx->probe_first = probe;
+            }
         }
     }
 

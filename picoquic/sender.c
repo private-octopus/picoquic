@@ -1718,7 +1718,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                 path_x->challenge_time + path_x->retransmit_timer <= current_time || path_x->challenge_time == 0)) {
                 /* When blocked, repeat the path challenge or wait */
                 if (picoquic_prepare_path_challenge_frame(&bytes[length],
-                    send_buffer_max - checksum_overhead - length, &data_bytes, path_x) == 0) {
+                    send_buffer_max - checksum_overhead - length, &data_bytes, path_x->challenge) == 0) {
                     length += (uint32_t)data_bytes;
                     path_x->challenge_time = current_time;
                     path_x->challenge_repeat_count++;
@@ -2141,7 +2141,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                         path_x->challenge_time + path_x->retransmit_timer <= current_time || path_x->challenge_time == 0)) {
                         /* When blocked, repeat the path challenge or wait */
                         if (picoquic_prepare_path_challenge_frame(&bytes[length],
-                            send_buffer_max - checksum_overhead - length, &data_bytes, path_x) == 0) {
+                            send_buffer_max - checksum_overhead - length, &data_bytes, path_x->challenge) == 0) {
                             length += (uint32_t)data_bytes;
                             path_x->challenge_time = current_time;
                             path_x->challenge_repeat_count++;
@@ -2388,7 +2388,110 @@ int picoquic_prepare_segment(picoquic_cnx_t* cnx, picoquic_path_t * path_x, pico
 
     return ret;
 }
+/* Prepare next probe if one is needed, returns send_length == 0 if none necessary */
+int picoquic_prepare_probe(picoquic_cnx_t* cnx,
+    uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
+    struct sockaddr ** p_addr_to, int * to_len, struct sockaddr ** p_addr_from, int * from_len)
+{
+    int ret = 0;
 
+    *send_length = 0;
+
+    if (send_buffer_max < PICOQUIC_INITIAL_MTU_IPV6) {
+        ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
+    } else if (cnx->cnx_state == picoquic_state_client_ready &&
+        cnx->cnx_state == picoquic_state_server_ready) 
+    {
+        picoquic_probe_t * probe = cnx->probe_first;
+        picoquic_packet_t * packet = NULL;
+
+        while (probe != NULL) {
+            if (!probe->challenge_failed && !probe->challenge_verified &&
+                (probe->challenge_required ||
+                    current_time <= probe->challenge_time + cnx->path[0]->retransmit_timer)) {
+                if (probe->challenge_repeat_count >= PICOQUIC_CHALLENGE_REPEAT_MAX) {
+                    probe->challenge_failed = 1;
+                } else {
+                    break;
+                }
+            }
+            probe = probe->next_probe;
+        }
+
+        if (probe != NULL)
+        {
+            uint8_t * bytes = packet->bytes;
+            uint32_t length = 0;
+            uint32_t header_length = 0;
+            picoquic_packet_type_enum packet_type = picoquic_packet_1rtt_protected_phi0;
+            picoquic_packet_context_enum pc = picoquic_packet_context_application;
+            uint32_t checksum_overhead = picoquic_get_checksum_length(cnx, 0);
+            size_t data_bytes = 0;
+            int last_path_id = 0;
+            
+            packet = picoquic_create_packet();
+
+            if (packet == NULL) {
+                ret = PICOQUIC_ERROR_MEMORY;
+            }
+            else {
+                length = picoquic_predict_packet_header_length(
+                    cnx, packet_type);
+                packet->ptype = packet_type;
+                packet->offset = length;
+                header_length = length;
+                packet->sequence_number = cnx->pkt_ctx[pc].send_sequence;
+                packet->send_time = current_time;
+                packet->send_path = cnx->path[0]; /* TODO: check that this can work */
+
+                /* If there are not enough paths, create one and advertise it */
+                if (cnx->nb_paths < 2 || cnx->path[cnx->nb_paths - 1]->path_is_activated)
+                {
+                    ret = picoquic_prepare_new_path_and_id(cnx, &bytes[length],
+                        send_buffer_max - checksum_overhead - length,
+                        current_time, &data_bytes);
+                    if (ret == 0) {
+                        length += (uint32_t)data_bytes;
+                    }
+                }
+
+                if (ret == 0) {
+                    /* Format the challenge frame */
+                    ret = picoquic_prepare_path_challenge_frame(&bytes[length],
+                        send_buffer_max - checksum_overhead - length, &data_bytes, probe->challenge);
+                    if (ret == 0) {
+                        length += (uint32_t)data_bytes;
+                        probe->challenge_required = 0;
+                        probe->challenge_time = current_time;
+                        probe->challenge_repeat_count++;
+                    }
+                }
+
+                /* Pack to min length, to verify that the path can carry a min length packet */
+                if (length + checksum_overhead < PICOQUIC_INITIAL_MTU_IPV6) {
+                    uint32_t pad_size = PICOQUIC_INITIAL_MTU_IPV6 - checksum_overhead - length;
+                    memset(&bytes[length], 0, pad_size);
+                    length += pad_size;
+                }
+
+                /* set the return addresses */
+                *p_addr_to = (struct sockaddr*)&probe->peer_addr;
+                *to_len = probe->peer_addr_len;
+                *p_addr_from = (struct sockaddr*)&probe->local_addr;
+                *from_len = probe->local_addr_len;
+
+                /* final protection */
+                picoquic_finalize_and_protect_packet(cnx, packet,
+                    ret, length, header_length, checksum_overhead,
+                    send_length, send_buffer, (uint32_t)send_buffer_max, cnx->path[0], current_time);
+
+                picoquic_cnx_set_next_wake_time(cnx, current_time);
+            }
+        }
+    }
+
+    return ret;
+}
 
 /* Prepare next packet to send, or nothing.. */
 int picoquic_prepare_packet(picoquic_cnx_t* cnx,
@@ -2403,86 +2506,96 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
 
     /* Remove delete paths */
     picoquic_delete_abandoned_paths(cnx);
+    /* Remove failed probes */
+    picoquic_delete_failed_probes(cnx);
 
-    /* Select the path */
-    for (int i = 1; i < cnx->nb_paths; i++) {
-        if (cnx->path[i]->challenge_verified) {
-            /* TODO: selection logic if multiple paths are available! */
-            /* This path becomes the new default */
-            picoquic_promote_path_to_default(cnx, i);
+    /* If probes are in waiting, send the first one */
+    ret = picoquic_prepare_probe(cnx, current_time, send_buffer, send_buffer_max, send_length,
+        p_addr_to, to_len, p_addr_from, from_len);
+
+    if (ret == 0 && *send_length == 0) {
+        /* Select the path */
+        for (int i = 1; i < cnx->nb_paths; i++) {
+            if (cnx->path[i]->challenge_verified) {
+                /* TODO: selection logic if multiple paths are available! */
+                /* This path becomes the new default */
+                picoquic_promote_path_to_default(cnx, i);
+                path_x = cnx->path[0];
+                break;
+            }
+            else if (path_x == NULL && cnx->path[i]->path_is_activated &&
+                (cnx->path[i]->challenge_required ||
+                    current_time >= (cnx->path[i]->challenge_time + cnx->path[i]->retransmit_timer))) {
+                /* will try this path, unless a validated path came in */
+                path_x = cnx->path[i];
+            }
+        }
+
+        if (path_x == NULL) {
             path_x = cnx->path[0];
-            break;
-        }
-        else if (path_x == NULL && cnx->path[i]->path_is_activated &&
-            (cnx->path[i]->challenge_required ||
-                current_time >= (cnx->path[i]->challenge_time + cnx->path[i]->retransmit_timer))) {
-            /* will try this path, unless a validated path came in */
-            path_x = cnx->path[i];
-        }
-    }
-    
-    if (path_x == NULL) {
-        path_x = cnx->path[0];
-    }
-
-    if (path_x != NULL) {
-        if (p_addr_to != NULL) {
-            *p_addr_to = (struct sockaddr *)&path_x->peer_addr;
-            *to_len = path_x->peer_addr_len;
         }
 
-        if (p_addr_from != NULL) {
-            *p_addr_from = (struct sockaddr *)&path_x->local_addr;
-            *from_len = path_x->local_addr_len;
+        if (path_x != NULL) {
+            if (p_addr_to != NULL) {
+                *p_addr_to = (struct sockaddr *)&path_x->peer_addr;
+                *to_len = path_x->peer_addr_len;
+            }
+
+            if (p_addr_from != NULL) {
+                *p_addr_from = (struct sockaddr *)&path_x->local_addr;
+                *from_len = path_x->local_addr_len;
+            }
         }
-    }
 
-    /* Send the available segments */
-    while (ret == 0)
-    {
-        size_t available = send_buffer_max;
-        size_t segment_length = 0;
 
-        if (*send_length > 0) {
-            send_buffer_max = path_x->send_mtu;
+        /* Send the available segments */
+        while (ret == 0)
+        {
+            size_t available = send_buffer_max;
+            size_t segment_length = 0;
 
-            if (send_buffer_max < *send_length + PICOQUIC_MIN_SEGMENT_SIZE) {
+            if (*send_length > 0) {
+                send_buffer_max = path_x->send_mtu;
+
+                if (send_buffer_max < *send_length + PICOQUIC_MIN_SEGMENT_SIZE) {
+                    break;
+                }
+                else {
+                    available = send_buffer_max - *send_length;
+                }
+            }
+
+            packet = picoquic_create_packet();
+
+            if (packet == NULL) {
+                ret = PICOQUIC_ERROR_MEMORY;
                 break;
             }
             else {
-                available = send_buffer_max - *send_length;
-            }
-        }
+                ret = picoquic_prepare_segment(cnx, path_x, packet, current_time,
+                    send_buffer + *send_length, available, &segment_length);
 
-        packet = picoquic_create_packet();
+                if (ret == 0) {
+                    *send_length += segment_length;
+                    if (packet->length == 0 ||
+                        packet->ptype == picoquic_packet_1rtt_protected_phi0 ||
+                        packet->ptype == picoquic_packet_1rtt_protected_phi1) {
+                        if (packet->length == 0) {
+                            free(packet);
+                            packet = NULL;
+                        }
+                        break;
+                    }
+                }
+                else {
+                    free(packet);
+                    packet = NULL;
 
-        if (packet == NULL) {
-            ret = PICOQUIC_ERROR_MEMORY;
-            break;
-        }
-        else {
-            ret = picoquic_prepare_segment(cnx, path_x, packet, current_time,
-                send_buffer + *send_length, available, &segment_length);
-
-            if (ret == 0) {
-                *send_length += segment_length;
-                if (packet->length == 0 ||
-                    packet->ptype == picoquic_packet_1rtt_protected_phi0 ||
-                    packet->ptype == picoquic_packet_1rtt_protected_phi1) {
-                    if (packet->length == 0) {
-                        free(packet);
-                        packet = NULL;
+                    if (*send_length != 0) {
+                        ret = 0;
                     }
                     break;
                 }
-            } else {
-                free(packet);
-                packet = NULL;
-
-                if (*send_length != 0){
-                    ret = 0;
-                }
-                break;
             }
         }
     }

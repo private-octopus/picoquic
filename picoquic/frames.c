@@ -2143,7 +2143,7 @@ int picoquic_prepare_misc_frame(picoquic_misc_frame_header_t* misc_frame, uint8_
  */
 
 int picoquic_prepare_path_challenge_frame(uint8_t* bytes,
-    size_t bytes_max, size_t* consumed, picoquic_path_t * path)
+    size_t bytes_max, size_t* consumed, uint64_t challenge)
 {
     int ret = 0;
     if (bytes_max < (1 + 8)) {
@@ -2151,7 +2151,7 @@ int picoquic_prepare_path_challenge_frame(uint8_t* bytes,
         *consumed = 0;
     } else {
         bytes[0] = picoquic_frame_type_path_challenge;
-        picoformat_64(bytes + 1, path->challenge);
+        picoformat_64(bytes + 1, challenge);
         *consumed = 1 + 8;
     }
 
