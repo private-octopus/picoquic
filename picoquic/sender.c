@@ -1716,15 +1716,18 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
     uint8_t* bytes = packet->bytes;
     uint32_t length = 0;
 
+    /* The only purpose of the test below is to appease the static analyzer, so it
+     * wont complain of possible NULL deref. On windows we could use "__assume(path_x != NULL)"
+     * but the documentation does not say anything about that for GCC and CLANG */
+    if (path_x == NULL) {
+        return PICOQUIC_ERROR_UNEXPECTED_ERROR;
+    }
+
     if (cnx->crypto_context[2].aead_encrypt != NULL &&
         cnx->tls_stream[0].send_queue == NULL) {
         epoch = 2;
         pc = picoquic_packet_context_handshake;
         packet_type = picoquic_packet_handshake;
-    }
-
-    if (path_x == NULL) {
-        path_x = cnx->path[0];
     }
 
     send_buffer_max = (send_buffer_max > path_x->send_mtu) ? path_x->send_mtu : send_buffer_max;
@@ -1889,8 +1892,11 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
     uint32_t length = 0;
     picoquic_packet_context_enum pc = picoquic_packet_context_application;
 
+    /* The only purpose of the test below is to appease the static analyzer, so it
+     * wont complain of possible NULL deref. On windows we could use "__assume(path_x != NULL)"
+     * but the documentation does not say anything about that for GCC and CLANG */
     if (path_x == NULL) {
-        path_x = cnx->path[0];
+        return PICOQUIC_ERROR_UNEXPECTED_ERROR;
     }
 
     send_buffer_max = (send_buffer_max > path_x->send_mtu) ? path_x->send_mtu : send_buffer_max;
