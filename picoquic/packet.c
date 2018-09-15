@@ -1327,7 +1327,6 @@ int picoquic_incoming_segment(
     picoquic_cnx_t* cnx = NULL;
     picoquic_packet_header ph;
     int new_context_created = 0;
-    picoquic_path_t * path_x = NULL;
 
     /* Parse the header and decrypt the packet */
     ret = picoquic_parse_header_and_decrypt(quic, bytes, length, packet_length, addr_from,

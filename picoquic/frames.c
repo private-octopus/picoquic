@@ -400,8 +400,6 @@ int picoquic_prepare_connection_id_frame(picoquic_cnx_t * cnx, picoquic_path_t *
     *consumed = 0;
 
     if (path_x->path_sequence > 0 && path_x->local_cnxid.id_len > 0) {
-        size_t min_length = 1 + 1 + 1 + path_x->local_cnxid.id_len + PICOQUIC_RESET_SECRET_SIZE;
-
         if (bytes_max < 2) {
             ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
         } else {
@@ -1552,7 +1550,7 @@ static int picoquic_process_ack_range(
                 /* If the packet contained an ACK frame, perform the ACK of ACK pruning logic */
                 picoquic_process_possible_ack_of_ack_frame(cnx, p);
 
-                picoquic_dequeue_retransmit_packet(cnx, p, 1);
+                (void)picoquic_dequeue_retransmit_packet(cnx, p, 1);
                 p = next;
                 /* Any acknowledgement shows progress */
                 cnx->pkt_ctx[pc].nb_retransmit = 0;
@@ -2230,7 +2228,6 @@ uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, uint8_t* bytes
             picoquic_probe_t * probe = picoquic_find_probe_by_challenge(cnx, response);
 
             if (probe != NULL) {
-                found_challenge = 1;
                 probe->challenge_verified = 1;
             }
         }

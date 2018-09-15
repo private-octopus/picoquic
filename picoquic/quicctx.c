@@ -897,8 +897,9 @@ int picoquic_enqueue_cnxid_stash(picoquic_cnx_t * cnx,
         /* Protocol error. The peer is using null length cnx_id */
         ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
     }
+
     /* Verify that the proposed CID is not already in use */
-    for (int i = 0; ret = 0 && i < cnx->nb_paths; i++) {
+    for (int i = 0; ret == 0 && i < cnx->nb_paths; i++) {
         if (picoquic_compare_connection_id(&cnx_id, &cnx->path[i]->remote_cnxid) == 0)
         {
             if (memcmp(secret_bytes, cnx->path[i]->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0) {
@@ -1522,7 +1523,7 @@ void picoquic_reset_packet_context(picoquic_cnx_t* cnx,
     picoquic_packet_context_t * pkt_ctx = &cnx->pkt_ctx[pc];
 
     while (pkt_ctx->retransmit_newest != NULL) {
-        picoquic_dequeue_retransmit_packet(cnx, pkt_ctx->retransmit_newest, 1);
+        (void)picoquic_dequeue_retransmit_packet(cnx, pkt_ctx->retransmit_newest, 1);
     }
     
     while (pkt_ctx->retransmitted_newest != NULL) {

@@ -80,10 +80,6 @@ static picoquic_tp_t transport_param_test10 = {
     65535, 0, 0, 0x400000, 65533, 65535, 30, 1480, 3, 1, TRANSPORT_PREFERED_ADDRESS_NULL
 };
 
-static uint8_t transport_param_reset_secret[PICOQUIC_RESET_SECRET_SIZE] = {
-    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
-};
-
 uint8_t client_param1[] = {
     'P', 'C', 'Q', '0',
     0, 0x28,
@@ -258,7 +254,7 @@ int transport_param_set_contexts(picoquic_quic_t ** quic_ctx, picoquic_cnx_t ** 
     picoquic_connection_id_t remote_cnx_id = { { 0, 1, 2, 3, 4, 5, 6, 7,  0, 0, 0, 0, 0, 0, 0, 0 }, 8 };
     struct sockaddr_in addr;
 
-    memset(&addr, 0, sizeof(&addr));
+    memset(&addr, 0, sizeof(struct sockaddr_in));
     addr.sin_family = AF_INET;
 
     *test_cnx = NULL;

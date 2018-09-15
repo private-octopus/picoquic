@@ -660,7 +660,7 @@ void picoquic_delete_probe(picoquic_cnx_t* cnx, picoquic_probe_t * probe);
 void picoquic_delete_failed_probes(picoquic_cnx_t* cnx);
 
 /* handling of retransmission queue */
-void picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet_t* p, int should_free);
+picoquic_packet_t* picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet_t* p, int should_free);
 void picoquic_dequeue_retransmitted_packet(picoquic_cnx_t* cnx, picoquic_packet_t* p);
 
 /* Reset connection after receiving version negotiation */
@@ -898,6 +898,8 @@ int picoquic_prepare_max_data_frame(picoquic_cnx_t* cnx, uint64_t maxdata_increa
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
 void picoquic_clear_stream(picoquic_stream_head* stream);
 int picoquic_prepare_path_challenge_frame(uint8_t* bytes,
+    size_t bytes_max, size_t* consumed, uint64_t challenge);
+int picoquic_prepare_path_response_frame(uint8_t* bytes,
     size_t bytes_max, size_t* consumed, uint64_t challenge);
 int picoquic_prepare_connection_id_frame(picoquic_cnx_t * cnx, picoquic_path_t * path_x,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);

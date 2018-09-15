@@ -85,7 +85,7 @@ int picoquic_add_to_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
     }
 
     /* If our side has sent RST_STREAM or received STOP_SENDING, we should not send anymore data. */
-    if (STREAM_RESET_SENT(stream) || STREAM_STOP_SENDING_RECEIVED(stream)) {
+    if (ret == 0 && (STREAM_RESET_SENT(stream) || STREAM_STOP_SENDING_RECEIVED(stream))) {
         ret = -1;
     }
 
@@ -511,7 +511,7 @@ void picoquic_queue_for_retransmit(picoquic_cnx_t* cnx, picoquic_path_t * path_x
     picoquic_update_pacing_after_send(path_x, current_time);
 }
 
-void picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet_t* p, int should_free)
+picoquic_packet_t* picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet_t* p, int should_free)
 {
     size_t dequeued_length = p->length + p->checksum_overhead;
     picoquic_packet_context_enum pc = p->pc;
@@ -552,6 +552,7 @@ void picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet_t* 
 
     if (should_free) {
         free(p);
+        p = NULL;
     }
     else {
         p->next_packet = NULL;
@@ -568,6 +569,8 @@ void picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet_t* 
             cnx->pkt_ctx[pc].retransmitted_oldest = p;
         }
     }
+
+    return p;
 }
 
 void picoquic_dequeue_retransmitted_packet(picoquic_cnx_t* cnx, picoquic_packet_t* p)
@@ -882,10 +885,10 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                 /* Update the number of bytes in transit and remove old packet from queue */
                 /* If not pure ack, the packet will be placed in the "retransmitted" queue,
                  * in order to enable detection of spurious restransmissions */
-                picoquic_dequeue_retransmit_packet(cnx, p, packet_is_pure_ack & do_not_detect_spurious);
+                p = picoquic_dequeue_retransmit_packet(cnx, p, packet_is_pure_ack & do_not_detect_spurious);
 
                 /* If we have a good packet, return it */
-                if (packet_is_pure_ack) {
+                if (p == NULL || packet_is_pure_ack) {
                     length = 0;
                 } else {
                     if (timer_based_retransmit != 0) {
@@ -1072,7 +1075,6 @@ static void picoquic_cnx_set_next_wake_time_init(picoquic_cnx_t* cnx, uint64_t c
     if (next_time < current_time)
     {
         next_time = current_time;
-        blocked = 0;
     }
     else
     {
@@ -1276,6 +1278,11 @@ void picoquic_cnx_set_next_wake_time(picoquic_cnx_t* cnx, uint64_t current_time)
         /* Consider path challenges */
         if (next_time > current_time) {
             for (int i = 0; i < cnx->nb_paths; i++) {
+                if (cnx->path[i]->response_required) {
+                    next_time = current_time;
+                    break;
+                }
+
                 if (blocked != 0 && cnx->path[i]->challenge_verified == 0 && cnx->path[i]->path_is_activated) {
                     uint64_t next_challenge_time = cnx->path[i]->challenge_time + cnx->path[i]->retransmit_timer;
 
@@ -1709,7 +1716,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
         packet_type = picoquic_packet_handshake;
     }
 
-    send_buffer_max = (send_buffer_max > path_x->send_mtu) ? path_x->send_mtu : send_buffer_max;
+    send_buffer_max = (path_x != NULL && send_buffer_max > path_x->send_mtu) ? path_x->send_mtu : send_buffer_max;
 
 
     /* If context is handshake, verify first that there is no need for retransmit or ack
@@ -1871,7 +1878,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
     uint32_t length = 0;
     picoquic_packet_context_enum pc = picoquic_packet_context_application;
 
-    send_buffer_max = (send_buffer_max > path_x->send_mtu) ? path_x->send_mtu : send_buffer_max;
+    send_buffer_max = (path_x != NULL && send_buffer_max > path_x->send_mtu) ? path_x->send_mtu : send_buffer_max;
 
     /* Prepare header -- depend on connection state */
     /* TODO: 0-RTT work. */
@@ -2480,7 +2487,6 @@ int picoquic_prepare_probe(picoquic_cnx_t* cnx,
                 picoquic_packet_context_enum pc = picoquic_packet_context_application;
                 uint32_t checksum_overhead = picoquic_get_checksum_length(cnx, 0);
                 size_t data_bytes = 0;
-                int last_path_id = 0;
 
                 length = picoquic_predict_packet_header_length(
                     cnx, packet_type);
@@ -2603,7 +2609,7 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
             size_t segment_length = 0;
 
             if (*send_length > 0) {
-                send_buffer_max = path_x->send_mtu;
+                send_buffer_max = (path_x == NULL)? PICOQUIC_INITIAL_MTU_IPV6:path_x->send_mtu;
 
                 if (send_buffer_max < *send_length + PICOQUIC_MIN_SEGMENT_SIZE) {
                     break;

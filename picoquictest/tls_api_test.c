@@ -3433,7 +3433,6 @@ int transmit_cnxid_test_stash(picoquic_cnx_t * cnx1, picoquic_cnx_t * cnx2, char
 int transmit_cnxid_test()
 {
     uint64_t simulated_time = 0;
-    uint64_t next_time = 0;
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
@@ -3506,7 +3505,6 @@ int transmit_cnxid_test()
 int probe_api_test()
 {
     uint64_t simulated_time = 0;
-    uint64_t next_time = 0;
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     struct sockaddr_in t4[PICOQUIC_NB_PATH_TARGET];
