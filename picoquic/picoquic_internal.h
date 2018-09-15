@@ -387,6 +387,7 @@ typedef struct st_picoquic_path_t {
     /* Public reset secret, provisioned by the peer */
     uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE];
     /* Challenge used for this path */
+    uint64_t challenge_response;
     uint64_t challenge;
     uint64_t challenge_time;
     uint8_t challenge_repeat_count;
@@ -398,6 +399,7 @@ typedef struct st_picoquic_path_t {
     unsigned int challenge_required : 1;
     unsigned int challenge_verified : 1;
     unsigned int challenge_failed : 1;
+    unsigned int response_required : 1;
 
     /* Time measurement */
     uint64_t max_ack_delay;
@@ -485,7 +487,7 @@ typedef struct st_picoquic_cnxid_stash_t {
 typedef struct st_picoquic_probe_t {
     struct st_picoquic_probe_t * next_probe;
     uint64_t sequence;
-    picoquic_connection_id_t peer_cnx_id; 
+    picoquic_connection_id_t remote_cnxid; 
     uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE];
     /* Addresses with which the probe was sent */
     struct sockaddr_storage peer_addr;
@@ -655,6 +657,7 @@ picoquic_probe_t * picoquic_find_probe_by_addr(const picoquic_cnx_t* cnx,
     const struct sockaddr * peer_addr, const struct sockaddr * local_addr);
 
 void picoquic_delete_probe(picoquic_cnx_t* cnx, picoquic_probe_t * probe);
+void picoquic_delete_failed_probes(picoquic_cnx_t* cnx);
 
 /* handling of retransmission queue */
 void picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet_t* p, int should_free);
@@ -752,6 +755,8 @@ uint32_t picoquic_create_packet_header(
     picoquic_cnx_t* cnx,
     picoquic_packet_type_enum packet_type,
     uint64_t sequence_number,
+    picoquic_connection_id_t * dest_cnxid,
+    picoquic_connection_id_t * srce_cnxid,
     uint8_t* bytes,
     uint32_t * pn_offset,
     uint32_t * pn_length);
@@ -789,6 +794,8 @@ size_t  picoquic_decrypt_packet(picoquic_cnx_t* cnx,
 uint32_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     picoquic_packet_type_enum ptype,
     uint8_t * bytes, uint64_t sequence_number,
+    picoquic_connection_id_t * remote_cnxid,
+    picoquic_connection_id_t * local_cnxid,
     uint32_t length, uint32_t header_length,
     uint8_t* send_buffer, uint32_t send_buffer_max,
     void * aead_context, void* pn_enc);
@@ -796,6 +803,8 @@ uint32_t picoquic_protect_packet(picoquic_cnx_t* cnx,
 void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet_t * packet, int ret,
     uint32_t length, uint32_t header_length, uint32_t checksum_overhead,
     size_t * send_length, uint8_t * send_buffer, uint32_t send_buffer_max,
+    picoquic_connection_id_t * remote_cnxid,
+    picoquic_connection_id_t * local_cnxid,
     picoquic_path_t * path_x, uint64_t current_time);
 
 int picoquic_parse_header_and_decrypt(
@@ -900,7 +909,7 @@ int picoquic_prepare_misc_frame(picoquic_misc_frame_header_t* misc_frame, uint8_
 
 /* send/receive */
 
-int picoquic_decode_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
+int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_t* bytes,
     size_t bytes_max, int epoch, uint64_t current_time);
 
 int picoquic_skip_frame(uint8_t* bytes, size_t bytes_max, size_t* consumed, int* pure_ack);

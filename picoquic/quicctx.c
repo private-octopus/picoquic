@@ -773,8 +773,23 @@ static void picoquic_clear_path_data(picoquic_cnx_t* cnx, picoquic_path_t * path
 void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
 {
     picoquic_path_t * path_x = cnx->path[path_index];
+    picoquic_packet_t* p = cnx->pkt_ctx[picoquic_packet_context_application].retransmit_oldest;
 
-    /*TODO: if connection_id_finished frame defined, queue the remote ID */
+    /* Remove old path data from retransmit queue */
+    while (p != NULL) {
+        if (p->send_path == path_x) {
+            p->send_path = NULL;
+        }
+        p = p->next_packet;
+    }
+
+    p = cnx->pkt_ctx[picoquic_packet_context_application].retransmitted_newest;
+    while (p != NULL) {
+        if (p->send_path == path_x) {
+            p->send_path = NULL;
+        }
+        p = p->next_packet;
+    }
 
     /* Free the data */
     picoquic_clear_path_data(cnx, path_x);
@@ -1067,7 +1082,7 @@ int picoquic_create_probe(picoquic_cnx_t* cnx, const struct sockaddr* addr_to, c
                 memset(probe, 0, sizeof(picoquic_probe_t));
 
                 probe->sequence = stashed->sequence;
-                probe->peer_cnx_id = stashed->cnx_id;
+                probe->remote_cnxid = stashed->cnx_id;
                 memcpy(probe->reset_secret, stashed->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
                 free(stashed);
 

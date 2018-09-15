@@ -723,7 +723,8 @@ void picoquic_queue_stateless_retry(picoquic_cnx_t* cnx,
         cnx->path[0]->remote_cnxid = ph->srce_cnx_id;
 
         byte_index = header_length = picoquic_create_packet_header(cnx, picoquic_packet_retry,
-            0, bytes, &pn_offset, &pn_length);
+            0, &cnx->path[0]->remote_cnxid, &cnx->path[0]->local_cnxid,
+            bytes, &pn_offset, &pn_length);
 
         
         /* use same encoding as packet header */
@@ -810,7 +811,7 @@ int picoquic_incoming_initial(
 
     /* decode the incoming frames */
     if (ret == 0) {
-        ret = picoquic_decode_frames(*pcnx,
+        ret = picoquic_decode_frames(*pcnx, (*pcnx)->path[0],
             bytes + ph->offset + extra_offset, ph->payload_length - extra_offset, ph->epoch, current_time);
     }
 
@@ -964,7 +965,7 @@ int picoquic_incoming_server_cleartext(
 
     if (ret == 0) {
         /* Accept the incoming frames */
-        ret = picoquic_decode_frames(cnx,
+        ret = picoquic_decode_frames(cnx, cnx->path[0],
             bytes + ph->offset, ph->payload_length, ph->epoch, current_time);
     }
 
@@ -1001,7 +1002,7 @@ if (cnx->cnx_state == picoquic_state_server_init
     }
     else {
         /* Accept the incoming frames */
-        ret = picoquic_decode_frames(cnx,
+        ret = picoquic_decode_frames(cnx, cnx->path[0],
             bytes + ph->offset, ph->payload_length, ph->epoch, current_time);
 
         /* processing of client clear text packet */
@@ -1061,7 +1062,7 @@ int picoquic_incoming_0rtt(
             ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0);
         } else {
             /* Accept the incoming frames */
-            ret = picoquic_decode_frames(cnx,
+            ret = picoquic_decode_frames(cnx, cnx->path[0], 
                 bytes + ph->offset, ph->payload_length, ph->epoch, current_time);
 
             if (ret == 0) {
@@ -1165,7 +1166,7 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header * ph
             picoquic_probe_t * probe = picoquic_find_probe_by_addr(cnx, addr_from, addr_to);
             if (probe != NULL) {
                 cnx->path[path_id]->path_is_activated = 1;
-                cnx->path[path_id]->remote_cnxid = probe->peer_cnx_id;
+                cnx->path[path_id]->remote_cnxid = probe->remote_cnxid;
                 cnx->path[path_id]->challenge = probe->challenge;
                 cnx->path[path_id]->challenge_time = probe->challenge_time;
                 cnx->path[path_id]->challenge_repeat_count = probe->challenge_repeat_count;
@@ -1211,6 +1212,8 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header * ph
             cnx->path[path_id]->challenge_repeat_count = 0;
         }
     }
+
+    *p_path_id = path_id;
 
     return ret;
 }
@@ -1290,7 +1293,7 @@ int picoquic_incoming_encrypted(
 
             if (ret == 0) {
                 /* Accept the incoming frames */
-                ret = picoquic_decode_frames(cnx,
+                ret = picoquic_decode_frames(cnx, cnx->path[path_id], 
                     bytes + ph->offset, ph->payload_length, ph->epoch, current_time);
             }
 
