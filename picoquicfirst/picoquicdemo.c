@@ -402,10 +402,10 @@ int quic_server(const char* server_name, int server_port,
                 picoquic_set_cookie_mode(qserver, 1);
             }
             qserver->mtu_max = mtu_max;
-        }
 
-        /* TODO: add log level, to reduce size in "normal" cases */
-        PICOQUIC_SET_LOG(qserver, stdout);
+            /* TODO: add log level, to reduce size in "normal" cases */
+            PICOQUIC_SET_LOG(qserver, stdout);
+        }
     }
 
     /* Wait for packets */
