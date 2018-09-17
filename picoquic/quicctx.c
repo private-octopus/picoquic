@@ -773,24 +773,28 @@ static void picoquic_clear_path_data(picoquic_cnx_t* cnx, picoquic_path_t * path
 void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
 {
     picoquic_path_t * path_x = cnx->path[path_index];
-    picoquic_packet_t* p = cnx->pkt_ctx[picoquic_packet_context_application].retransmit_oldest;
-
+    picoquic_packet_t* p = NULL;
+        
     /* Remove old path data from retransmit queue */
-    while (p != NULL) {
-        if (p->send_path == path_x) {
-            p->send_path = NULL;
-        }
-        p = p->next_packet;
-    }
+    for (picoquic_packet_context_enum pc = 0; pc < picoquic_nb_packet_context; pc++)
+    {
+        p = cnx->pkt_ctx[pc].retransmit_oldest;
 
-    p = cnx->pkt_ctx[picoquic_packet_context_application].retransmitted_newest;
-    while (p != NULL) {
-        if (p->send_path == path_x) {
-            p->send_path = NULL;
+        while (p != NULL) {
+            if (p->send_path == path_x) {
+                p->send_path = NULL;
+            }
+            p = p->next_packet;
         }
-        p = p->next_packet;
-    }
 
+        p = cnx->pkt_ctx[pc].retransmitted_newest;
+        while (p != NULL) {
+            if (p->send_path == path_x) {
+                p->send_path = NULL;
+            }
+            p = p->next_packet;
+        }
+    }
     /* Free the data */
     picoquic_clear_path_data(cnx, path_x);
 
@@ -985,13 +989,22 @@ picoquic_probe_t * picoquic_find_probe_by_addr(const picoquic_cnx_t* cnx,
     const struct sockaddr * peer_addr, const struct sockaddr * local_addr) 
 {
     picoquic_probe_t * next = cnx->probe_first;
+    picoquic_probe_t * partial_match = NULL;
 
     while (next != NULL) {
-        if (picoquic_compare_addr((struct sockaddr *)&next->peer_addr, peer_addr) == 0 &&
-            picoquic_compare_addr((struct sockaddr *)&next->local_addr, local_addr) == 0) {
-            break;
+        if (picoquic_compare_addr((struct sockaddr *)&next->peer_addr, peer_addr) == 0) {
+            if (next->local_addr_len == 0) {
+                partial_match = next;
+            }
+            else if (picoquic_compare_addr((struct sockaddr *)&next->local_addr, local_addr) == 0) {
+                break;
+            }
         }
         next = next->next_probe;
+    }
+
+    if (next == NULL && partial_match != NULL) {
+        next = partial_match;
     }
 
     return next;

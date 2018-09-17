@@ -2549,10 +2549,15 @@ int picoquic_prepare_probe(picoquic_cnx_t* cnx,
                 }
 
                 /* set the return addresses */
-                *p_addr_to = (struct sockaddr*)&probe->peer_addr;
-                *to_len = probe->peer_addr_len;
-                *p_addr_from = (struct sockaddr*)&probe->local_addr;
-                *from_len = probe->local_addr_len;
+                if (p_addr_to != NULL) {
+                    *p_addr_to = (struct sockaddr*)&probe->peer_addr;
+                    *to_len = probe->peer_addr_len;
+                }
+
+                if (p_addr_from != NULL) {
+                    *p_addr_from = (struct sockaddr*)&probe->local_addr;
+                    *from_len = probe->local_addr_len;
+                }
 
                 /* final protection */
                 picoquic_finalize_and_protect_packet(cnx, packet,
@@ -2573,6 +2578,7 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
     struct sockaddr ** p_addr_to, int * to_len, struct sockaddr ** p_addr_from, int * from_len)
 {
+
     int ret = 0;
     picoquic_path_t * path_x = NULL;
     picoquic_packet_t * packet = NULL;

@@ -776,9 +776,66 @@ static void first_client_callback(picoquic_cnx_t* cnx,
 
 #define PICOQUIC_DEMO_CLIENT_MAX_RECEIVE_BATCH 4
 
+/* Client client migration to a new port number: 
+ *  - close the current socket.
+ *  - open another socket at a randomly picked port number.
+ *  - call the create probe API.
+ * This is a bit tricky because the probe API requires passing the new address,
+ * but in many cases the client will be behind a NAT, so it will not know its
+ * actual IP address.
+ */
+int quic_client_migrate(picoquic_cnx_t * cnx, SOCKET_TYPE * fd, struct sockaddr * server_address, FILE * F_log) 
+{
+    int ret = 0;
+    SOCKET_TYPE fd_m;
+
+    fd_m = socket(server_address->sa_family, SOCK_DGRAM, IPPROTO_UDP);
+    if (fd_m == INVALID_SOCKET) {
+        fprintf(stdout, "Could not open new socket.\n");
+        if (F_log != stdout && F_log != stderr)
+        {
+            fprintf(stdout, "Could not open new socket.\n");
+        }
+        ret = -1;
+    } else {
+        SOCKET_CLOSE(*fd);
+        *fd = fd_m;
+
+        ret = picoquic_create_probe(cnx, server_address, NULL);
+        if (ret != 0) {
+
+            if (ret == PICOQUIC_ERROR_MIGRATION_DISABLED) {
+                fprintf(stdout, "Migration disabled, will test NAT rebinding support.\n");
+                if (F_log != stdout && F_log != stderr)
+                {
+                    fprintf(F_log, "Will test NAT rebinding support.\n");
+                }
+
+                ret = 0;
+            } else {
+                fprintf(stdout, "Create Probe failed, error: %x.\n", ret);
+                if (F_log != stdout && F_log != stderr)
+                {
+                    fprintf(F_log, "Create Probe failed, error: %x.\n", ret);
+                }
+            }
+        }
+        else {
+            fprintf(stdout, "Switch to new port, sending probe.\n");
+            if (F_log != stdout && F_log != stderr)
+            {
+                fprintf(F_log, "Switch to new port, sending probe.\n");
+            }
+        }
+    }
+
+    return ret;
+}
+
+/* Quic Client */
 int quic_client(const char* ip_address_text, int server_port, const char * sni, 
     const char * root_crt,
-    uint32_t proposed_version, int force_zero_share, int mtu_max, FILE* F_log)
+    uint32_t proposed_version, int force_zero_share, int force_migration, int mtu_max, FILE* F_log)
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
@@ -999,6 +1056,11 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
 
                             demo_client_start_streams(cnx_client, &callback_ctx, 0xFFFFFFFF);
                         }
+
+                        if (force_migration) {
+                            int mig_ret = quic_client_migrate(cnx_client, &fd,
+                                (struct sockaddr *)&server_address, F_log);
+                        }
                     }
 
                     client_ready_loop++;
@@ -1129,6 +1191,7 @@ void usage()
     fprintf(stderr, "                            1: picoquic_cnx_id_remote (client)\n");
     fprintf(stderr, "  -v version            Version proposed by client, e.g. -v ff00000a\n");
     fprintf(stderr, "  -z                    Set TLS zero share behavior on client, to force HRR.\n");
+    fprintf(stderr, "  -f                    Force client to migrate to new port after opening connection\n");
     fprintf(stderr, "  -l file               Log file\n");
     fprintf(stderr, "  -m mtu_max            Largest mtu value that can be tried for discovery\n");
     fprintf(stderr, "  -h                    This help message\n");
@@ -1175,6 +1238,7 @@ int main(int argc, char** argv)
     int just_once = 0;
     int do_hrr = 0;
     int force_zero_share = 0;
+    int force_migration = 0;
     int cnx_id_mask_is_set = 0;
     cnx_id_callback_ctx_t cnx_id_cbdata = {
         .cnx_id_select = 0,
@@ -1194,7 +1258,7 @@ int main(int argc, char** argv)
 
     /* Get the parameters */
     int opt;
-    while ((opt = getopt(argc, argv, "c:k:p:v:1rhzi:s:l:m:n:t:")) != -1) {
+    while ((opt = getopt(argc, argv, "c:k:p:v:1rhzfi:s:l:m:n:t:")) != -1) {
         switch (opt) {
         case 'c':
             server_cert_file = optarg;
@@ -1259,6 +1323,9 @@ int main(int argc, char** argv)
             break;
         case 'z':
             force_zero_share = 1;
+            break;
+        case 'f':
+            force_migration = 1;
             break;
         case 'h':
             usage();
@@ -1326,7 +1393,8 @@ int main(int argc, char** argv)
 
         /* Run as client */
         printf("Starting PicoQUIC connection to server IP = %s, port = %d\n", server_name, server_port);
-        ret = quic_client(server_name, server_port, sni, root_trust_file, proposed_version, force_zero_share, mtu_max, F_log);
+        ret = quic_client(server_name, server_port, sni, root_trust_file, proposed_version, force_zero_share, 
+            force_migration, mtu_max, F_log);
 
         printf("Client exit with code = %d\n", ret);
 
