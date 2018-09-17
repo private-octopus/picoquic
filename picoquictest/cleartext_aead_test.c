@@ -454,7 +454,7 @@ int cleartext_pn_enc_test()
         memcpy(&test_addr_s.sin_addr, addr2, 4);
         test_addr_s.sin_port = 4433;
 
-        cnx_server = picoquic_create_cnx(qserver, cnx_client->initial_cnxid, cnx_client->local_cnxid,
+        cnx_server = picoquic_create_cnx(qserver, cnx_client->initial_cnxid, cnx_client->path[0]->local_cnxid,
             (struct sockaddr*)&test_addr_s, 0,
             cnx_client->proposed_version, NULL, NULL, 0);
 

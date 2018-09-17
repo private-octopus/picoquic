@@ -20,9 +20,10 @@
 */
 
 /* Decoding of the various frames, and application to context */
-#include "picoquic_internal.h"
 #include <stdlib.h>
 #include <string.h>
+#include "picoquic_internal.h"
+#include "tls_api.h"
 
 /* ****************************************************
  * Frames private declarations
@@ -390,6 +391,45 @@ uint8_t* picoquic_decode_stream_reset_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
  * New Connection ID frame
  */
 
+int picoquic_prepare_connection_id_frame(picoquic_cnx_t * cnx, picoquic_path_t * path_x,
+    uint8_t* bytes, size_t bytes_max, size_t* consumed)
+{
+    int ret = 0;
+    size_t byte_index = 0;
+
+    *consumed = 0;
+
+    if (path_x->path_sequence > 0 && path_x->local_cnxid.id_len > 0) {
+        if (bytes_max < 2) {
+            ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
+        } else {
+            size_t ls;
+            size_t min_length = 1 + path_x->local_cnxid.id_len + PICOQUIC_RESET_SECRET_SIZE;
+
+            bytes[byte_index++] = picoquic_frame_type_new_connection_id;
+
+            ls = picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index, 
+                path_x->path_sequence - 1);
+            byte_index += ls;
+
+            if (ls == 0 || byte_index + min_length > bytes_max) {
+                ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
+            }
+            else {
+                bytes[byte_index++] = path_x->local_cnxid.id_len;
+                memcpy(bytes + byte_index, path_x->local_cnxid.id, path_x->local_cnxid.id_len);
+                byte_index += path_x->local_cnxid.id_len;
+                (void)picoquic_create_cnxid_reset_secret(cnx->quic, path_x->local_cnxid,
+                    bytes + byte_index);
+                byte_index += PICOQUIC_RESET_SECRET_SIZE;
+                *consumed = byte_index;
+            }
+        }
+    }
+
+    return ret;
+}
+
 uint8_t* picoquic_skip_connection_id_frame(uint8_t* bytes, const uint8_t* bytes_max)
 {
     uint8_t cid_length;
@@ -397,19 +437,36 @@ uint8_t* picoquic_skip_connection_id_frame(uint8_t* bytes, const uint8_t* bytes_
     if ((bytes = picoquic_frames_varint_skip(bytes+1, bytes_max))              != NULL &&
         (bytes = picoquic_frames_uint8_decode(bytes,  bytes_max, &cid_length)) != NULL)
     {
-        bytes = picoquic_frames_fixed_skip(bytes, bytes_max, cid_length + 16);
+        bytes = picoquic_frames_fixed_skip(bytes, bytes_max, cid_length + PICOQUIC_RESET_SECRET_SIZE);
     }
 
     return bytes;
 }
 
-
 uint8_t* picoquic_decode_connection_id_frame(picoquic_cnx_t* cnx, uint8_t* bytes, const uint8_t* bytes_max)
 {
-    /* TODO: store the connection ID in order to support migration. */
-    if ((bytes = picoquic_skip_connection_id_frame(bytes, bytes_max)) == NULL) {
+    /* store the connection ID in order to support migration. */
+    uint64_t sequence = 0;
+    uint8_t cid_length = 0;
+    uint8_t * cnxid_bytes = NULL;
+    uint8_t * secret_bytes = NULL;
+
+    if ((bytes = picoquic_frames_varint_decode(bytes + 1, bytes_max, &sequence)) != NULL &&
+        (bytes = picoquic_frames_uint8_decode(bytes, bytes_max, &cid_length)) != NULL) {
+        cnxid_bytes = bytes;
+        secret_bytes = bytes + cid_length;
+        bytes = picoquic_frames_fixed_skip(bytes, bytes_max, cid_length + PICOQUIC_RESET_SECRET_SIZE);
+    }
+
+    if (bytes == NULL || picoquic_is_connection_id_length_valid(cid_length) == 0) {
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
             picoquic_frame_type_new_connection_id);
+    } else {
+        int ret = picoquic_enqueue_cnxid_stash(cnx, sequence, cid_length, cnxid_bytes, secret_bytes, NULL);
+        if (ret != 0) {
+            picoquic_connection_error(cnx, ret, picoquic_frame_type_new_connection_id);
+            bytes = 0;
+        }
     }
 
     return bytes;
@@ -1104,24 +1161,26 @@ void picoquic_check_spurious_retransmission(picoquic_cnx_t* cnx,
             uint64_t max_reorder_gap = pkt_ctx->highest_acknowledged - p->sequence_number;
             picoquic_path_t * old_path = p->send_path;
 
-            if (p->length + p->checksum_overhead > old_path->send_mtu) {
-                old_path->send_mtu = (uint32_t)(p->length + p->checksum_overhead);
-                if (old_path->send_mtu > old_path->send_mtu_max_tried) {
-                    old_path->send_mtu_max_tried = old_path->send_mtu;
+            if (old_path != NULL) {
+                if (p->length + p->checksum_overhead > old_path->send_mtu) {
+                    old_path->send_mtu = (uint32_t)(p->length + p->checksum_overhead);
+                    if (old_path->send_mtu > old_path->send_mtu_max_tried) {
+                        old_path->send_mtu_max_tried = old_path->send_mtu;
+                    }
+                    old_path->mtu_probe_sent = 0;
                 }
-                old_path->mtu_probe_sent = 0;
-            }
 
-            if (max_spurious_rtt > old_path->max_spurious_rtt) {
-                old_path->max_spurious_rtt = max_spurious_rtt;
-            }
+                if (max_spurious_rtt > old_path->max_spurious_rtt) {
+                    old_path->max_spurious_rtt = max_spurious_rtt;
+                }
 
-            if (max_reorder_delay > old_path->max_reorder_delay) {
-                old_path->max_reorder_delay = max_reorder_delay;
-            }
+                if (max_reorder_delay > old_path->max_reorder_delay) {
+                    old_path->max_reorder_delay = max_reorder_delay;
+                }
 
-            if (max_reorder_gap > old_path->max_reorder_gap) {
-                old_path->max_reorder_gap = max_reorder_gap;
+                if (max_reorder_gap > old_path->max_reorder_gap) {
+                    old_path->max_reorder_gap = max_reorder_gap;
+                }
             }
 
             cnx->nb_spurious++;
@@ -1172,58 +1231,63 @@ static picoquic_packet_t* picoquic_update_rtt(picoquic_cnx_t* cnx, uint64_t larg
                 if (rtt_estimate > 0) {
                     picoquic_path_t * old_path = packet->send_path;
 
-                    if (ack_delay > old_path->max_ack_delay) {
-                        old_path->max_ack_delay = ack_delay;
-                    }
-
-                    if (old_path->smoothed_rtt == PICOQUIC_INITIAL_RTT && old_path->rtt_variant == 0) {
-                        old_path->smoothed_rtt = rtt_estimate;
-                        old_path->rtt_variant = rtt_estimate / 2;
-                        old_path->rtt_min = rtt_estimate;
-                        old_path->retransmit_timer = 3 * rtt_estimate + old_path->max_ack_delay;
-                        pkt_ctx->ack_delay_local = old_path->rtt_min / 4;
-                        if (pkt_ctx->ack_delay_local < 1000) {
-                            pkt_ctx->ack_delay_local = 1000;
+                    if (old_path != NULL) {
+                        if (ack_delay > old_path->max_ack_delay) {
+                            old_path->max_ack_delay = ack_delay;
                         }
-                    } else {
-                        /* Computation per RFC 6298 */
-                        int64_t delta_rtt = rtt_estimate - old_path->smoothed_rtt;
-                        int64_t delta_rtt_average = 0;
-                        old_path->smoothed_rtt += delta_rtt / 8;
 
-                        if (delta_rtt < 0) {
-                            delta_rtt_average = (-delta_rtt) - old_path->rtt_variant;
-                        } else {
-                            delta_rtt_average = delta_rtt - old_path->rtt_variant;
-                        }
-                        old_path->rtt_variant += delta_rtt_average / 4;
-
-                        if (rtt_estimate < (int64_t)old_path->rtt_min) {
+                        if (old_path->smoothed_rtt == PICOQUIC_INITIAL_RTT && old_path->rtt_variant == 0) {
+                            old_path->smoothed_rtt = rtt_estimate;
+                            old_path->rtt_variant = rtt_estimate / 2;
                             old_path->rtt_min = rtt_estimate;
-
+                            old_path->retransmit_timer = 3 * rtt_estimate + old_path->max_ack_delay;
                             pkt_ctx->ack_delay_local = old_path->rtt_min / 4;
                             if (pkt_ctx->ack_delay_local < 1000) {
                                 pkt_ctx->ack_delay_local = 1000;
-                            } else if (pkt_ctx->ack_delay_local > 10000) {
-                                pkt_ctx->ack_delay_local = 10000;
                             }
                         }
+                        else {
+                            /* Computation per RFC 6298 */
+                            int64_t delta_rtt = rtt_estimate - old_path->smoothed_rtt;
+                            int64_t delta_rtt_average = 0;
+                            old_path->smoothed_rtt += delta_rtt / 8;
 
-                        if (4 * old_path->rtt_variant < old_path->rtt_min) {
-                            old_path->rtt_variant = old_path->rtt_min / 4;
+                            if (delta_rtt < 0) {
+                                delta_rtt_average = (-delta_rtt) - old_path->rtt_variant;
+                            }
+                            else {
+                                delta_rtt_average = delta_rtt - old_path->rtt_variant;
+                            }
+                            old_path->rtt_variant += delta_rtt_average / 4;
+
+                            if (rtt_estimate < (int64_t)old_path->rtt_min) {
+                                old_path->rtt_min = rtt_estimate;
+
+                                pkt_ctx->ack_delay_local = old_path->rtt_min / 4;
+                                if (pkt_ctx->ack_delay_local < 1000) {
+                                    pkt_ctx->ack_delay_local = 1000;
+                                }
+                                else if (pkt_ctx->ack_delay_local > 10000) {
+                                    pkt_ctx->ack_delay_local = 10000;
+                                }
+                            }
+
+                            if (4 * old_path->rtt_variant < old_path->rtt_min) {
+                                old_path->rtt_variant = old_path->rtt_min / 4;
+                            }
+
+                            old_path->retransmit_timer = old_path->smoothed_rtt + 4 * old_path->rtt_variant + old_path->max_ack_delay;
                         }
 
-                        old_path->retransmit_timer = old_path->smoothed_rtt + 4 * old_path->rtt_variant + old_path->max_ack_delay;
-                    }
+                        if (PICOQUIC_MIN_RETRANSMIT_TIMER > old_path->retransmit_timer) {
+                            old_path->retransmit_timer = PICOQUIC_MIN_RETRANSMIT_TIMER;
+                        }
 
-                    if (PICOQUIC_MIN_RETRANSMIT_TIMER > old_path->retransmit_timer) {
-                        old_path->retransmit_timer = PICOQUIC_MIN_RETRANSMIT_TIMER;
-                    }
-
-                    if (cnx->congestion_alg != NULL) {
-                        cnx->congestion_alg->alg_notify(old_path,
-                            picoquic_congestion_notification_rtt_measurement,
-                            rtt_estimate, 0, 0, current_time);
+                        if (cnx->congestion_alg != NULL) {
+                            cnx->congestion_alg->alg_notify(old_path,
+                                picoquic_congestion_notification_rtt_measurement,
+                                rtt_estimate, 0, 0, current_time);
+                        }
                     }
                 }
             }
@@ -1469,22 +1533,24 @@ static int picoquic_process_ack_range(
                 picoquic_packet_t* next = p->next_packet;
                 picoquic_path_t * old_path = p->send_path;
 
-                if (cnx->congestion_alg != NULL) {
-                    cnx->congestion_alg->alg_notify(old_path,
-                        picoquic_congestion_notification_acknowledgement,
-                        0, p->length, 0, current_time);
-                }
+                if (old_path != NULL) {
+                    if (cnx->congestion_alg != NULL) {
+                        cnx->congestion_alg->alg_notify(old_path,
+                            picoquic_congestion_notification_acknowledgement,
+                            0, p->length, 0, current_time);
+                    }
 
+
+                    /* If packet is larger than the current MTU, update the MTU */
+                    if ((p->length + p->checksum_overhead) > old_path->send_mtu) {
+                        old_path->send_mtu = (uint32_t)(p->length + p->checksum_overhead);
+                        old_path->mtu_probe_sent = 0;
+                    }
+                }
                 /* If the packet contained an ACK frame, perform the ACK of ACK pruning logic */
                 picoquic_process_possible_ack_of_ack_frame(cnx, p);
 
-                /* If packet is larger than the current MTU, update the MTU */
-                if ((p->length + p->checksum_overhead) > old_path->send_mtu) {
-                    old_path->send_mtu = (uint32_t)(p->length + p->checksum_overhead);
-                    old_path->mtu_probe_sent = 0;
-                }
-
-                picoquic_dequeue_retransmit_packet(cnx, p, 1);
+                (void)picoquic_dequeue_retransmit_packet(cnx, p, 1);
                 p = next;
                 /* Any acknowledgement shows progress */
                 cnx->pkt_ctx[pc].nb_retransmit = 0;
@@ -2084,7 +2150,7 @@ int picoquic_prepare_misc_frame(picoquic_misc_frame_header_t* misc_frame, uint8_
  */
 
 int picoquic_prepare_path_challenge_frame(uint8_t* bytes,
-    size_t bytes_max, size_t* consumed, picoquic_path_t * path)
+    size_t bytes_max, size_t* consumed, uint64_t challenge)
 {
     int ret = 0;
     if (bytes_max < (1 + 8)) {
@@ -2092,36 +2158,50 @@ int picoquic_prepare_path_challenge_frame(uint8_t* bytes,
         *consumed = 0;
     } else {
         bytes[0] = picoquic_frame_type_path_challenge;
-        picoformat_64(bytes + 1, path->challenge);
+        picoformat_64(bytes + 1, challenge);
         *consumed = 1 + 8;
     }
 
     return ret;
 }
 
-uint8_t* picoquic_decode_path_challenge_frame(picoquic_cnx_t* cnx, uint8_t* bytes, const uint8_t* bytes_max)
+uint8_t* picoquic_decode_path_challenge_frame(picoquic_cnx_t* cnx, uint8_t* bytes, const uint8_t* bytes_max,
+    picoquic_path_t * path_x)
 {
     if (bytes_max - bytes <= (int) challenge_length) {
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, picoquic_frame_type_path_challenge);
         bytes = NULL;
 
-    } else {
+    } else if (path_x != NULL) {
         /*
          * Queue a response frame as response to path challenge.
          * TODO: ensure it goes out on the same path as the incoming challenge.
          */
-        uint8_t frame_buffer[258];
-
-        frame_buffer[0] = picoquic_frame_type_path_response;
-        memcpy(frame_buffer+1, bytes+1, challenge_length);
-
-        // Ignore return code. If cannot send the response, consider it "lost"
-        picoquic_queue_misc_frame(cnx, frame_buffer, challenge_length+1);
-
-        bytes += challenge_length+1;
+        bytes++;
+        path_x->challenge_response = PICOPARSE_64(bytes);
+        bytes += challenge_length;
+        path_x->response_required = 1;
     }
 
     return bytes;
+}
+
+
+int picoquic_prepare_path_response_frame(uint8_t* bytes,
+    size_t bytes_max, size_t* consumed, uint64_t challenge)
+{
+    int ret = 0;
+    if (bytes_max < (1 + 8)) {
+        ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
+        *consumed = 0;
+    }
+    else {
+        bytes[0] = picoquic_frame_type_path_response;
+        picoformat_64(bytes + 1, challenge);
+        *consumed = 1 + 8;
+    }
+
+    return ret;
 }
 
 uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, uint8_t* bytes, const uint8_t* bytes_max)
@@ -2138,15 +2218,18 @@ uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, uint8_t* bytes
          */
         for (int i = 0; i < cnx->nb_paths; i++) {
             if (response == cnx->path[i]->challenge) {
-                /* TODO: verify that the network addresses match the path */
                 found_challenge = 1;
                 cnx->path[i]->challenge_verified = 1;
+                break;
             }
         }
 
-        if (found_challenge == 0 && cnx->callback_fn != NULL) {
-            cnx->callback_fn(cnx, 0, bytes-(challenge_length+1), challenge_length+1,
-                             picoquic_callback_challenge_response, cnx->callback_ctx);
+        if (found_challenge == 0) {
+            picoquic_probe_t * probe = picoquic_find_probe_by_challenge(cnx, response);
+
+            if (probe != NULL) {
+                probe->challenge_verified = 1;
+            }
         }
     }
 
@@ -2203,7 +2286,7 @@ static uint8_t* picoquic_skip_0len_frame(uint8_t* bytes, const uint8_t* bytes_ma
  * In some cases, the expected frames are "restricted" to only ACK, STREAM 0 and PADDING.
  */
 
-int picoquic_decode_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
+int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_t* bytes,
     size_t bytes_maxsize, int epoch, uint64_t current_time)
 {
     const uint8_t *bytes_max = bytes + bytes_maxsize;
@@ -2304,7 +2387,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
                 ack_needed = 1;
                 break;
             case picoquic_frame_type_path_challenge:
-                bytes = picoquic_decode_path_challenge_frame(cnx, bytes, bytes_max);
+                bytes = picoquic_decode_path_challenge_frame(cnx, bytes, bytes_max, path_x);
                 break;
             case picoquic_frame_type_path_response:
                 bytes = picoquic_decode_path_response_frame(cnx, bytes, bytes_max);

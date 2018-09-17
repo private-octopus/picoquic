@@ -19,11 +19,13 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "../picoquic/picoquic_internal.h"
-#include "../picoquic/util.h"
-#include "picoquictest_internal.h"
 #include <stdlib.h>
 #include <string.h>
+
+#include "../picoquic/picoquic_internal.h"
+#include "../picoquic/util.h"
+#include "../picoquic/tls_api.h"
+#include "picoquictest_internal.h"
 
 /* Start with a series of test vectors to test that 
  * encoding and decoding are OK. 
@@ -76,10 +78,6 @@ static picoquic_tp_t transport_param_test9 = {
 
 static picoquic_tp_t transport_param_test10 = {
     65535, 0, 0, 0x400000, 65533, 65535, 30, 1480, 3, 1, TRANSPORT_PREFERED_ADDRESS_NULL
-};
-
-static uint8_t transport_param_reset_secret[PICOQUIC_RESET_SECRET_SIZE] = {
-    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
 };
 
 uint8_t client_param1[] = {
@@ -249,42 +247,95 @@ static int transport_param_compare(picoquic_tp_t* param, picoquic_tp_t* ref) {
     return ret;
 }
 
+int transport_param_set_contexts(picoquic_quic_t ** quic_ctx, picoquic_cnx_t ** test_cnx, uint64_t * p_simulated_time, int mode)
+{
+    int ret = 0;
+    picoquic_connection_id_t initial_cnx_id = { { 1, 2, 3, 4, 5, 6, 7, 8, 0, 0, 0, 0, 0, 0, 0, 0 }, 8 };
+    picoquic_connection_id_t remote_cnx_id = { { 0, 1, 2, 3, 4, 5, 6, 7,  0, 0, 0, 0, 0, 0, 0, 0 }, 8 };
+    struct sockaddr_in addr;
+
+    memset(&addr, 0, sizeof(struct sockaddr_in));
+    addr.sin_family = AF_INET;
+
+    *test_cnx = NULL;
+    *quic_ctx = picoquic_create(8,
+        PICOQUIC_TEST_SERVER_CERT, PICOQUIC_TEST_SERVER_KEY, PICOQUIC_TEST_CERT_STORE,
+        PICOQUIC_TEST_ALPN, NULL, NULL, NULL, NULL, NULL,
+        *p_simulated_time, p_simulated_time, NULL, NULL, 1);
+
+    if (*quic_ctx != NULL) {
+        *test_cnx = picoquic_create_cnx(*quic_ctx, initial_cnx_id, remote_cnx_id,
+            (struct sockaddr*) &addr, 0, 0, "sni", "alpn", (mode==0)?1:0);
+    }
+
+    if (*quic_ctx == NULL || *test_cnx == NULL) {
+        ret = -1;
+    }
+
+    return ret;
+}
+
 int transport_param_one_test(int mode, uint32_t version, uint32_t proposed_version,
     picoquic_tp_t* param, uint8_t* target, size_t target_length)
 {
-    int ret = 0;
-    picoquic_quic_t quic_ctx;
-    picoquic_cnx_t test_cnx;
+    int ret;
+    picoquic_quic_t * quic_ctx;
+    picoquic_cnx_t * test_cnx;
     uint8_t buffer[256];
-    size_t encoded, decoded;
+    size_t encoded, decoded; 
+    uint64_t simulated_time = 0;
 
-    memset(&quic_ctx, 0, sizeof(quic_ctx));
-    memset(&test_cnx, 0, sizeof(picoquic_cnx_t));
-    test_cnx.quic = &quic_ctx;
+    ret = transport_param_set_contexts(&quic_ctx, &test_cnx, &simulated_time, mode);
 
-    /* initialize the connection object to the test parameters */
-    memcpy(&test_cnx.local_parameters, param, sizeof(picoquic_tp_t));
-    // test_cnx.version = version;
-    test_cnx.version_index = picoquic_get_version_index(version);
-    test_cnx.proposed_version = proposed_version;
-    memcpy(test_cnx.reset_secret, transport_param_reset_secret, PICOQUIC_RESET_SECRET_SIZE);
+    if (ret == 0) {
+        /* initialize the connection object to the test parameters */
+        memcpy(&test_cnx->local_parameters, param, sizeof(picoquic_tp_t));
+        // test_cnx.version = version;
+        test_cnx->version_index = picoquic_get_version_index(version);
+        test_cnx->proposed_version = proposed_version;
 
-    ret = picoquic_prepare_transport_extensions(&test_cnx, mode, buffer, sizeof(buffer), &encoded);
+        ret = picoquic_prepare_transport_extensions(test_cnx, mode, buffer, sizeof(buffer), &encoded);
+    }
 
     if (ret == 0) {
         if (encoded != target_length) {
             ret = -1;
-        } else if (memcmp(buffer, target, target_length) != 0) {
-            ret = -1;
+        } else {
+            if (mode == 0) {
+                if (memcmp(buffer, target, target_length) != 0) {
+                    ret = -1;
+                }
+            }
+            else {
+                uint8_t target_secret[PICOQUIC_RESET_SECRET_SIZE];
+
+                (void)picoquic_create_cnxid_reset_secret(quic_ctx, test_cnx->path[0]->local_cnxid,
+                    target_secret);
+
+                if (memcmp(buffer, target, target_length - PICOQUIC_RESET_SECRET_SIZE) != 0) {
+                    ret = -1;
+                } else if (memcmp(buffer + target_length - PICOQUIC_RESET_SECRET_SIZE, target_secret,
+                    PICOQUIC_RESET_SECRET_SIZE) != 0) {
+                    ret = -1;
+                }
+            }
         }
     }
 
     if (ret == 0) {
-        ret = picoquic_receive_transport_extensions(&test_cnx, mode, buffer, encoded, &decoded);
+        ret = picoquic_receive_transport_extensions(test_cnx, mode, buffer, encoded, &decoded);
 
-        if (ret == 0 && transport_param_compare(&test_cnx.remote_parameters, param) != 0) {
+        if (ret == 0 && transport_param_compare(&test_cnx->remote_parameters, param) != 0) {
             ret = -1;
         }
+    }
+
+    if (test_cnx != NULL) {
+        picoquic_delete_cnx(test_cnx);
+    }
+
+    if (quic_ctx != NULL) {
+        picoquic_free(quic_ctx);
     }
 
     return ret;
@@ -294,23 +345,32 @@ int transport_param_decode_test(int mode, uint32_t version, uint32_t proposed_ve
     picoquic_tp_t* param, uint8_t* target, size_t target_length)
 {
     int ret = 0;
-    picoquic_quic_t quic_ctx;
-    picoquic_cnx_t test_cnx;
+    picoquic_quic_t * quic_ctx = NULL;
+    picoquic_cnx_t * test_cnx = NULL;
+    uint64_t simulated_time = 0;
     size_t decoded;
 
-    memset(&quic_ctx, 0, sizeof(quic_ctx));
-    memset(&test_cnx, 0, sizeof(picoquic_cnx_t));
-    test_cnx.quic = &quic_ctx;
+    ret = transport_param_set_contexts(&quic_ctx, &test_cnx, &simulated_time, mode);
 
-    ret = picoquic_receive_transport_extensions(&test_cnx, mode,
-        target, target_length, &decoded);
+    if (ret == 0) {
+        ret = picoquic_receive_transport_extensions(test_cnx, mode,
+            target, target_length, &decoded);
+    }
 
     if (ret == 0 && decoded != target_length) {
         ret = -1;
     }
 
-    if (ret == 0 && transport_param_compare(&test_cnx.remote_parameters, param) != 0) {
+    if (ret == 0 && transport_param_compare(&test_cnx->remote_parameters, param) != 0) {
         ret = -1;
+    }
+
+    if (test_cnx != NULL) {
+        picoquic_delete_cnx(test_cnx);
+    }
+
+    if (quic_ctx != NULL) {
+        picoquic_free(quic_ctx);
     }
 
     return ret;
@@ -321,26 +381,28 @@ int transport_param_fuzz_test(int mode, uint32_t version, uint32_t proposed_vers
 {
     int ret = 0;
     int fuzz_ret = 0;
-    picoquic_quic_t quic_ctx;
-    picoquic_cnx_t test_cnx;
+    picoquic_quic_t * quic_ctx = NULL;
+    picoquic_cnx_t * test_cnx = NULL;
+    uint64_t simulated_time = 0;
     uint8_t buffer[256];
     size_t decoded;
     uint8_t fuzz_byte = 1;
     int suspended = debug_printf_reset(1);
-
-    memset(&quic_ctx, 0, sizeof(quic_ctx));
-    memset(&test_cnx, 0, sizeof(picoquic_cnx_t));
-    test_cnx.quic = &quic_ctx;
 
     /* test for valid arguments */
     if (target_length < 8 || target_length > sizeof(buffer)) {
         return -1;
     }
 
-    /* initialize the connection object to the test parameters */
-    memcpy(&test_cnx.local_parameters, param, sizeof(picoquic_tp_t));
-    test_cnx.version_index = picoquic_get_version_index(version);
-    test_cnx.proposed_version = proposed_version;
+
+    ret = transport_param_set_contexts(&quic_ctx, &test_cnx, &simulated_time, mode);
+
+    if (ret == 0) {
+        /* initialize the connection object to the test parameters */
+        memcpy(&test_cnx->local_parameters, param, sizeof(picoquic_tp_t));
+        test_cnx->version_index = picoquic_get_version_index(version);
+        test_cnx->proposed_version = proposed_version;
+    }
 
     /* add computation of the proof argument to make sure the compiler 
 	 * will not optimize the loop to nothing */
@@ -348,7 +410,7 @@ int transport_param_fuzz_test(int mode, uint32_t version, uint32_t proposed_vers
     *proof = 0;
 
     /* repeat multiple times */
-    for (size_t l = 0; l < 8; l++) {
+    for (size_t l = 0; ret == 0 && l < 8; l++) {
         for (size_t i = 0; i < target_length - l; i++) {
             /* copy message to buffer */
             memcpy(buffer, target, target_length);
@@ -363,14 +425,14 @@ int transport_param_fuzz_test(int mode, uint32_t version, uint32_t proposed_vers
             for (size_t dl = 0; dl < target_length; dl += l + 7)
             {
                 /* decode */
-                fuzz_ret = picoquic_receive_transport_extensions(&test_cnx, mode, buffer,
+                fuzz_ret = picoquic_receive_transport_extensions(test_cnx, mode, buffer,
                     target_length - dl, &decoded);
 
                 if (fuzz_ret != 0) {
                     *proof += (uint64_t)fuzz_ret;
                 }
                 else {
-                    *proof += test_cnx.remote_parameters.initial_max_stream_data_bidi_local;
+                    *proof += test_cnx->remote_parameters.initial_max_stream_data_bidi_local;
 
                     if (decoded > target_length - dl) {
                         ret = -1;
@@ -381,6 +443,14 @@ int transport_param_fuzz_test(int mode, uint32_t version, uint32_t proposed_vers
     }
 
     (void)debug_printf_reset(suspended);
+
+    if (test_cnx != NULL) {
+        picoquic_delete_cnx(test_cnx);
+    }
+
+    if (quic_ctx != NULL) {
+        picoquic_free(quic_ctx);
+    }
 
     return ret;
 }

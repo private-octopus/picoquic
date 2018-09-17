@@ -36,22 +36,24 @@ extern picoquic_congestion_algorithm_t* picoquic_newreno_algorithm;
 /*
 * Structures used in the hash table of connections
 */
-typedef struct st_picoquic_cnx_id_t {
+typedef struct st_picoquic_cnx_id_key_t {
     picoquic_connection_id_t cnx_id;
     picoquic_cnx_t* cnx;
-    struct st_picoquic_cnx_id_t* next_cnx_id;
-} picoquic_cnx_id;
+    picoquic_path_t* path;
+    struct st_picoquic_cnx_id_key_t* next_cnx_id;
+} picoquic_cnx_id_key_t;
 
-typedef struct st_picoquic_net_id_t {
+typedef struct st_picoquic_net_id_key_t {
     struct sockaddr_storage saddr;
     picoquic_cnx_t* cnx;
-    struct st_picoquic_net_id_t* next_net_id;
-} picoquic_net_id;
+    picoquic_path_t* path;
+    struct st_picoquic_net_id_key_t* next_net_id;
+} picoquic_net_id_key_t;
 
 /* Hash and compare for CNX hash tables */
 static uint64_t picoquic_cnx_id_hash(void* key)
 {
-    picoquic_cnx_id* cid = (picoquic_cnx_id*)key;
+    picoquic_cnx_id_key_t* cid = (picoquic_cnx_id_key_t*)key;
 
     /* TODO: should scramble the value for security and DOS protection */
     return picoquic_val64_connection_id(cid->cnx_id);
@@ -59,23 +61,23 @@ static uint64_t picoquic_cnx_id_hash(void* key)
 
 static int picoquic_cnx_id_compare(void* key1, void* key2)
 {
-    picoquic_cnx_id* cid1 = (picoquic_cnx_id*)key1;
-    picoquic_cnx_id* cid2 = (picoquic_cnx_id*)key2;
+    picoquic_cnx_id_key_t* cid1 = (picoquic_cnx_id_key_t*)key1;
+    picoquic_cnx_id_key_t* cid2 = (picoquic_cnx_id_key_t*)key2;
 
     return picoquic_compare_connection_id(&cid1->cnx_id, &cid2->cnx_id);
 }
 
 static uint64_t picoquic_net_id_hash(void* key)
 {
-    picoquic_net_id* net = (picoquic_net_id*)key;
+    picoquic_net_id_key_t* net = (picoquic_net_id_key_t*)key;
 
     return picohash_bytes((uint8_t*)&net->saddr, sizeof(net->saddr));
 }
 
 static int picoquic_net_id_compare(void* key1, void* key2)
 {
-    picoquic_net_id* net1 = (picoquic_net_id*)key1;
-    picoquic_net_id* net2 = (picoquic_net_id*)key2;
+    picoquic_net_id_key_t* net1 = (picoquic_net_id_key_t*)key1;
+    picoquic_net_id_key_t* net2 = (picoquic_net_id_key_t*)key2;
 
     return memcmp(&net1->saddr, &net2->saddr, sizeof(net1->saddr));
 }
@@ -360,17 +362,18 @@ picoquic_stateless_packet_t* picoquic_dequeue_stateless_packet(picoquic_quic_t* 
 }
 
 /* Connection context creation and registration */
-int picoquic_register_cnx_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, picoquic_connection_id_t cnx_id)
+int picoquic_register_cnx_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, picoquic_path_t * path_x, picoquic_connection_id_t cnx_id)
 {
     int ret = 0;
     picohash_item* item;
-    picoquic_cnx_id* key = (picoquic_cnx_id*)malloc(sizeof(picoquic_cnx_id));
+    picoquic_cnx_id_key_t* key = (picoquic_cnx_id_key_t*)malloc(sizeof(picoquic_cnx_id_key_t));
 
     if (key == NULL) {
         ret = -1;
     } else {
         key->cnx_id = cnx_id;
         key->cnx = cnx;
+        key->path = path_x;
         key->next_cnx_id = NULL;
 
         item = picohash_retrieve(quic->table_cnx_by_id, key);
@@ -381,8 +384,8 @@ int picoquic_register_cnx_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, picoqui
             ret = picohash_insert(quic->table_cnx_by_id, key);
 
             if (ret == 0) {
-                key->next_cnx_id = cnx->first_cnx_id;
-                cnx->first_cnx_id = key;
+                key->next_cnx_id = path_x->first_cnx_id;
+                path_x->first_cnx_id = key;
             }
         }
     }
@@ -390,7 +393,7 @@ int picoquic_register_cnx_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, picoqui
     return ret;
 }
 
-static void picoquic_set_hash_key_by_address(picoquic_net_id * key, struct sockaddr* addr)
+static void picoquic_set_hash_key_by_address(picoquic_net_id_key_t * key, struct sockaddr* addr)
 {
     memset(&key->saddr, 0, sizeof(struct sockaddr_storage));
 
@@ -416,11 +419,11 @@ static void picoquic_set_hash_key_by_address(picoquic_net_id * key, struct socka
     }
 }
 
-int picoquic_register_net_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, struct sockaddr* addr)
+int picoquic_register_net_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, picoquic_path_t * path_x, struct sockaddr* addr)
 {
     int ret = 0;
     picohash_item* item;
-    picoquic_net_id* key = (picoquic_net_id*)malloc(sizeof(picoquic_net_id));
+    picoquic_net_id_key_t* key = (picoquic_net_id_key_t*)malloc(sizeof(picoquic_net_id_key_t));
 
     if (key == NULL) {
         ret = -1;
@@ -428,6 +431,7 @@ int picoquic_register_net_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, struct 
         picoquic_set_hash_key_by_address(key, addr);
 
         key->cnx = cnx;
+        key->path = path_x;
 
         item = picohash_retrieve(quic->table_cnx_by_net, key);
 
@@ -437,8 +441,8 @@ int picoquic_register_net_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, struct 
             ret = picohash_insert(quic->table_cnx_by_net, key);
 
             if (ret == 0) {
-                key->next_net_id = cnx->first_net_id;
-                cnx->first_net_id = key;
+                key->next_net_id = path_x->first_net_id;
+                path_x->first_net_id = key;
             }
         }
     }
@@ -611,7 +615,21 @@ int picoquic_get_version_index(uint32_t proposed_version)
     return ret;
 }
 
-int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, struct sockaddr* addr)
+
+static void picoquic_create_random_cnx_id(picoquic_quic_t* quic, picoquic_connection_id_t * cnx_id, uint8_t id_length)
+{
+    if (id_length > 0) {
+        picoquic_crypto_random(quic, cnx_id->id, id_length);
+    }
+    if (id_length < sizeof(cnx_id->id)) {
+        memset(cnx_id->id + 8, 0, sizeof(cnx_id->id) - id_length);
+    }
+    cnx_id->id_len = id_length;
+}
+
+/* Path management -- returns the index of the path that was created. */
+
+int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, struct sockaddr* local_addr, struct sockaddr* peer_addr)
 {
     int ret = -1;
 
@@ -642,13 +660,23 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, struct sockad
         if (path_x != NULL)
         {
             memset(path_x, 0, sizeof(picoquic_path_t));
+            /* TODO: remove this code once sequence removed from New Connection ID */
+            /* Register the sequence number */
+            path_x->path_sequence = cnx->path_sequence_next;
+            cnx->path_sequence_next++;
 
-            /* Set the peer address */
-            path_x->peer_addr_len = (int)((addr->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
-            memcpy(&path_x->peer_addr, addr, path_x->peer_addr_len);
+            /* Set the addresses */
+            path_x->peer_addr_len = picoquic_store_addr(&path_x->peer_addr, peer_addr);
+            path_x->local_addr_len = picoquic_store_addr(&path_x->local_addr, local_addr);
 
             /* Set the challenge used for this path */
             path_x->challenge = picoquic_public_random_64();
+
+            /* Initialize the reset secret to a random value. This
+            * will prevent spurious matches to an all zero value, for example.
+            * The real value will be set when receiving the transport parameters.
+            */
+            picoquic_public_random(path_x->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
 
             /* Initialize per path time measurement */
             path_x->smoothed_rtt = PICOQUIC_INITIAL_RTT;
@@ -668,8 +696,7 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, struct sockad
             path_x->next_pacing_time = start_time;
 
             /* Initialize the MTU */
-            path_x->send_mtu = (addr == NULL || addr->sa_family == AF_INET) ? PICOQUIC_INITIAL_MTU_IPV4 : PICOQUIC_INITIAL_MTU_IPV6;
-
+            path_x->send_mtu = (peer_addr == NULL || peer_addr->sa_family == AF_INET) ? PICOQUIC_INITIAL_MTU_IPV4 : PICOQUIC_INITIAL_MTU_IPV6;
 
             /* Record the path */
             cnx->path[cnx->nb_paths] = path_x;
@@ -680,21 +707,424 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, struct sockad
     return ret;
 }
 
-static void picoquic_create_random_cnx_id(picoquic_quic_t* quic, picoquic_connection_id_t * cnx_id, uint8_t id_length)
+/*
+ * Register the path in the hash tables
+ */
+void picoquic_register_path(picoquic_cnx_t* cnx, picoquic_path_t * path_x)
 {
-    if (id_length > 0) {
-        picoquic_crypto_random(quic, cnx_id->id, id_length);
+    if (picoquic_is_connection_id_null(path_x->local_cnxid)) {
+        picoquic_create_random_cnx_id(cnx->quic, &path_x->local_cnxid, cnx->quic->local_ctx_length);
+
+        if (cnx->quic->cnx_id_callback_fn)
+            cnx->quic->cnx_id_callback_fn(path_x->local_cnxid, cnx->initial_cnxid,
+                cnx->quic->cnx_id_callback_ctx, &path_x->local_cnxid);
     }
-    if (id_length < sizeof(cnx_id->id)) {
-        memset(cnx_id->id + 8, 0, sizeof(cnx_id->id) - id_length);
+
+    if (!picoquic_is_connection_id_null(path_x->local_cnxid)) {
+        (void)picoquic_register_cnx_id(cnx->quic, cnx, path_x, path_x->local_cnxid);
     }
-    cnx_id->id_len = id_length;
+
+    if (path_x->peer_addr_len != 0) {
+        (void)picoquic_register_net_id(cnx->quic, cnx, cnx->path[0], (struct sockaddr *)&path_x->peer_addr);
+    }
+}
+
+/* To delete a path, we need to delete the data allocated to the path: search items in
+ * the hash tables, and congestion algorithm context. Then delete the path data itself,
+ * and finally remove the path reference from the table of paths in the connection
+ * context.
+ */
+
+static void picoquic_clear_path_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x) 
+{
+    /* Remove the registration in hash tables */
+    while (path_x->first_cnx_id != NULL) {
+        picohash_item* item;
+        picoquic_cnx_id_key_t* cnx_id_key = path_x->first_cnx_id;
+        path_x->first_cnx_id = cnx_id_key->next_cnx_id;
+        cnx_id_key->next_cnx_id = NULL;
+
+        item = picohash_retrieve(cnx->quic->table_cnx_by_id, cnx_id_key);
+        if (item != NULL) {
+            picohash_item_delete(cnx->quic->table_cnx_by_id, item, 1);
+        }
+    }
+
+    while (path_x->first_net_id != NULL) {
+        picohash_item* item;
+        picoquic_net_id_key_t* net_id_key = path_x->first_net_id;
+        path_x->first_net_id = net_id_key->next_net_id;
+        net_id_key->next_net_id = NULL;
+
+        item = picohash_retrieve(cnx->quic->table_cnx_by_net, net_id_key);
+        if (item != NULL) {
+            picohash_item_delete(cnx->quic->table_cnx_by_net, item, 1);
+        }
+    }
+    /* Remove the congestion data */
+    if (cnx->congestion_alg != NULL) {
+        cnx->congestion_alg->alg_delete(path_x);
+    }
+
+    /* Free the record */
+    free(path_x);
+}
+
+void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
+{
+    picoquic_path_t * path_x = cnx->path[path_index];
+    picoquic_packet_t* p = NULL;
+        
+    /* Remove old path data from retransmit queue */
+    for (picoquic_packet_context_enum pc = 0; pc < picoquic_nb_packet_context; pc++)
+    {
+        p = cnx->pkt_ctx[pc].retransmit_oldest;
+
+        while (p != NULL) {
+            if (p->send_path == path_x) {
+                p->send_path = NULL;
+            }
+            p = p->next_packet;
+        }
+
+        p = cnx->pkt_ctx[pc].retransmitted_newest;
+        while (p != NULL) {
+            if (p->send_path == path_x) {
+                p->send_path = NULL;
+            }
+            p = p->next_packet;
+        }
+    }
+    /* Free the data */
+    picoquic_clear_path_data(cnx, path_x);
+
+
+    /* Compact the path table  */
+    for (int i = path_index + 1; i < cnx->nb_paths; i++) {
+        cnx->path[i-1] = cnx->path[i];
+    }
+
+    cnx->nb_paths--;
+    cnx->path[cnx->nb_paths] = NULL;
+}
+
+/*
+ * Path challenges may be abandoned if they are tried too many times without success. 
+ */
+
+void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx)
+{
+    int path_index_good = 1;
+    int path_index_current = 1;
+
+    while (path_index_current < cnx->nb_paths) {
+        if (cnx->path[path_index_current]->challenge_failed) {
+            /* Only increment the current index */
+            path_index_current++;
+        } else {
+            if (path_index_current > path_index_good) {
+                /* swap the path indexed good with current */
+                picoquic_path_t * path_x = cnx->path[path_index_current];
+                cnx->path[path_index_current] = cnx->path[path_index_good];
+                cnx->path[path_index_good] = path_x;
+            }
+            /* increment both indices */
+            path_index_current++;
+            path_index_good++;
+        }
+    }
+
+    for (int i = path_index_good ; i < cnx->nb_paths; i++) {
+        picoquic_delete_path(cnx, i);
+        cnx->path[i] = NULL;
+    }
+
+    cnx->nb_paths = path_index_good;
+}
+
+/* Promote path to default. This happens when a new path is verified, at the end
+ * of a migration, and becomes the new default path.
+ */
+
+void picoquic_promote_path_to_default(picoquic_cnx_t* cnx, int path_index)
+{
+
+    if (path_index > 0 && path_index < cnx->nb_paths) {
+        picoquic_path_t * path_x = cnx->path[path_index];
+
+        /* Set the congestion algorithm for the new path */
+        if (cnx->congestion_alg != NULL) {
+            cnx->congestion_alg->alg_init(path_x);
+        }
+        /* Mark old path as demoted */
+        cnx->path[0]->path_is_demoted = 1;
+        /* Swap */
+        cnx->path[path_index] = cnx->path[0];
+        cnx->path[0] = path_x;
+
+        if (cnx->client_mode) {
+            /* Delete the old instance */
+            picoquic_delete_path(cnx, path_index);
+        }
+    }
+}
+
+/*
+ * Manage the stash of connection IDs sent by the peer 
+ */
+
+picoquic_cnxid_stash_t * picoquic_dequeue_cnxid_stash(picoquic_cnx_t * cnx)
+{
+    picoquic_cnxid_stash_t * stashed = NULL;
+
+    if (cnx != NULL && cnx->cnxid_stash_first != NULL) {
+        stashed = cnx->cnxid_stash_first;
+        cnx->cnxid_stash_first = stashed->next_in_stash;
+    }
+
+    return stashed;
+}
+
+int picoquic_enqueue_cnxid_stash(picoquic_cnx_t * cnx,
+    const uint64_t sequence, const uint8_t cid_length, const uint8_t * cnxid_bytes, 
+    const uint8_t * secret_bytes, picoquic_cnxid_stash_t ** pstashed)
+{
+    int ret = 0;
+    int is_duplicate = 0;
+    picoquic_connection_id_t cnx_id;
+    picoquic_cnxid_stash_t * next_stash = NULL;
+    picoquic_cnxid_stash_t * last_stash = NULL;
+    picoquic_cnxid_stash_t * stashed = NULL;
+
+    /* verify the format */
+    if (picoquic_parse_connection_id(cnxid_bytes, cid_length, &cnx_id) == 0) {
+        ret = PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR;
+    }
+
+    if (ret == 0 && cnx->path[0]->remote_cnxid.id_len == 0) {
+        /* Protocol error. The peer is using null length cnx_id */
+        ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
+    }
+
+    /* Verify that the proposed CID is not already in use */
+    for (int i = 0; ret == 0 && i < cnx->nb_paths; i++) {
+        if (picoquic_compare_connection_id(&cnx_id, &cnx->path[i]->remote_cnxid) == 0)
+        {
+            if (memcmp(secret_bytes, cnx->path[i]->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0) {
+                is_duplicate = 1;
+            }
+            else {
+                ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
+            }
+            break;
+        }
+    }
+    
+    if (ret == 0 && is_duplicate == 0) {
+        next_stash = cnx->cnxid_stash_first;
+
+        while (next_stash != NULL) {
+            if (picoquic_compare_connection_id(&cnx_id, &next_stash->cnx_id) == 0)
+            {
+                if (next_stash->sequence == sequence &&
+                    memcmp(secret_bytes, next_stash->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0) {
+                    is_duplicate = 1;
+                }
+                else {
+                    ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
+                }
+                break;
+            }
+            last_stash = next_stash;
+            next_stash = next_stash->next_in_stash;
+        }
+    }
+
+    if (ret == 0 && is_duplicate == 0) {
+        stashed = (picoquic_cnxid_stash_t *)malloc(sizeof(picoquic_cnxid_stash_t));
+
+        if (stashed == NULL) {
+            ret = PICOQUIC_TRANSPORT_INTERNAL_ERROR;
+        } else {
+            (void)picoquic_parse_connection_id(cnxid_bytes, cid_length, &stashed->cnx_id);
+            stashed->sequence = sequence;
+            memcpy(stashed->reset_secret, secret_bytes, PICOQUIC_RESET_SECRET_SIZE);
+            stashed->next_in_stash = NULL;
+
+            if (last_stash == NULL) {
+                cnx->cnxid_stash_first = stashed;
+            }
+            else {
+                last_stash->next_in_stash = stashed;
+            }
+        }
+    }
+
+    /* the return argument is only used in tests */
+
+    if (pstashed != NULL) {
+        *pstashed = stashed;
+    }
+
+    return ret;
+}
+
+/*
+ * Manage the list of ongoing probes.
+ */
+
+picoquic_probe_t * picoquic_find_probe_by_challenge(const picoquic_cnx_t* cnx, uint64_t challenge)
+{
+    picoquic_probe_t * next = cnx->probe_first;
+
+    if (challenge != 0) {
+        while (next != NULL) {
+            if (next->challenge == challenge) {
+                break;
+            }
+            next = next->next_probe;
+        }
+    }
+
+    return next;
+}
+
+picoquic_probe_t * picoquic_find_probe_by_addr(const picoquic_cnx_t* cnx,
+    const struct sockaddr * peer_addr, const struct sockaddr * local_addr) 
+{
+    picoquic_probe_t * next = cnx->probe_first;
+    picoquic_probe_t * partial_match = NULL;
+
+    while (next != NULL) {
+        if (picoquic_compare_addr((struct sockaddr *)&next->peer_addr, peer_addr) == 0) {
+            if (next->local_addr_len == 0) {
+                partial_match = next;
+            }
+            else if (picoquic_compare_addr((struct sockaddr *)&next->local_addr, local_addr) == 0) {
+                break;
+            }
+        }
+        next = next->next_probe;
+    }
+
+    if (next == NULL && partial_match != NULL) {
+        next = partial_match;
+    }
+
+    return next;
 }
 
 
+void picoquic_delete_probe(picoquic_cnx_t* cnx, picoquic_probe_t * probe)
+{
+    picoquic_probe_t * previous = NULL;
+    picoquic_probe_t * next = cnx->probe_first;
+
+    while (next != NULL) {
+        if (next == probe) {
+            if (previous == NULL) {
+                cnx->probe_first = probe->next_probe;
+            }
+            else {
+                previous->next_probe = probe->next_probe;
+            }
+            break;
+        }
+        else {
+            previous = next;
+            next = next->next_probe;
+        }
+    }
+
+    free(probe);
+}
+
+/*
+ * Probes may be abandoned if they are tried too many times without success. 
+ */
+
+void picoquic_delete_failed_probes(picoquic_cnx_t* cnx)
+{
+    picoquic_probe_t * probe = cnx->probe_first;
+    picoquic_probe_t * previous = NULL;
+
+    while (probe != NULL) {
+        if (probe->challenge_failed) {
+            picoquic_probe_t * abandoned = probe;
+            probe = probe->next_probe;
+
+            if (previous == NULL) {
+                cnx->probe_first = probe;
+            }
+            else {
+                previous->next_probe = probe;
+            }
+            free(abandoned);
+        }
+        else {
+            previous = probe;
+            probe = probe->next_probe;
+        }
+    }
+}
+
+int picoquic_create_probe(picoquic_cnx_t* cnx, const struct sockaddr* addr_to, const struct sockaddr* addr_from)
+{
+    int ret = 0;
+    picoquic_probe_t * probe = NULL;
+    picoquic_cnxid_stash_t * stashed = NULL;
+
+    /* TODO: Check for duplicates: is there a similar outgoing probe? */
+
+    if (cnx->remote_parameters.migration_disabled != 0 ||
+        cnx->local_parameters.migration_disabled != 0) {
+        /* Do not send probes if migration is disabled */
+        ret = PICOQUIC_ERROR_MIGRATION_DISABLED;
+    }
+    else {
+        /* Create the probe */
+        probe = (picoquic_probe_t *)malloc(sizeof(picoquic_probe_t));
+
+        if (probe == NULL) {
+            ret = PICOQUIC_ERROR_MEMORY;
+        }
+        else {
+            stashed = picoquic_dequeue_cnxid_stash(cnx);
+
+            if (stashed == NULL) {
+                ret = PICOQUIC_ERROR_CNXID_NOT_AVAILABLE;
+                free(probe);
+                probe = NULL;
+            }
+            else {
+                memset(probe, 0, sizeof(picoquic_probe_t));
+
+                probe->sequence = stashed->sequence;
+                probe->remote_cnxid = stashed->cnx_id;
+                memcpy(probe->reset_secret, stashed->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
+                free(stashed);
+
+                probe->peer_addr_len = picoquic_store_addr(&probe->peer_addr, addr_to);
+                probe->local_addr_len = picoquic_store_addr(&probe->local_addr, addr_from);
+
+                probe->challenge_required = 1;
+                probe->challenge = picoquic_public_random_64();
+
+                probe->next_probe = cnx->probe_first;
+                cnx->probe_first = probe;
+            }
+        }
+    }
+
+    return ret;
+}
+
+/* Connection management
+ */
+
 picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
     picoquic_connection_id_t initial_cnx_id, picoquic_connection_id_t remote_cnx_id, 
-    struct sockaddr* addr, uint64_t start_time, uint32_t preferred_version,
+    struct sockaddr* addr_to, uint64_t start_time, uint32_t preferred_version,
     char const* sni, char const* alpn, char client_mode)
 {
     picoquic_cnx_t* cnx = (picoquic_cnx_t*)malloc(sizeof(picoquic_cnx_t));
@@ -704,7 +1134,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
 
         memset(cnx, 0, sizeof(picoquic_cnx_t));
         /* Should return 0, since this is the first path */
-        ret = picoquic_create_path(cnx, start_time, addr);
+        ret = picoquic_create_path(cnx, start_time, NULL, addr_to);
 
         if (ret != 0) {
             free(cnx);
@@ -780,34 +1210,15 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             if (picoquic_is_connection_id_null(initial_cnx_id)) {
                 picoquic_create_random_cnx_id(quic, &initial_cnx_id, 8);
             }
-            picoquic_create_random_cnx_id(quic, &cnx->local_cnxid, quic->local_ctx_length);
-
-            if (quic->cnx_id_callback_fn) {
-                quic->cnx_id_callback_fn(cnx->local_cnxid, picoquic_null_connection_id, quic->cnx_id_callback_ctx, &cnx->local_cnxid);
-            }
 
             cnx->initial_cnxid = initial_cnx_id;
-            cnx->remote_cnxid = picoquic_null_connection_id;
-            /* Initialize the reset secret to a random value. This
-			 * will prevent spurious matches to an all zero value, for example.
-			 * The real value will be set when receiving the transport parameters. 
-			 */
-            picoquic_public_random(cnx->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
         } else {
             for (int epoch = 0; epoch < PICOQUIC_NUMBER_OF_EPOCHS; epoch++) {
                 cnx->tls_stream[epoch].send_queue = NULL;
             }
             cnx->cnx_state = picoquic_state_server_init;
             cnx->initial_cnxid = initial_cnx_id;
-            cnx->remote_cnxid = remote_cnx_id;
-            picoquic_create_random_cnx_id(quic, &cnx->local_cnxid, quic->local_ctx_length);
-
-            if (quic->cnx_id_callback_fn)
-                quic->cnx_id_callback_fn(cnx->local_cnxid, cnx->initial_cnxid,
-                    quic->cnx_id_callback_ctx, &cnx->local_cnxid);
-
-            (void)picoquic_create_cnxid_reset_secret(quic, cnx->local_cnxid,
-                cnx->reset_secret);
+            cnx->path[0]->remote_cnxid = remote_cnx_id;
 
             cnx->version_index = picoquic_get_version_index(preferred_version);
             if (cnx->version_index < 0) {
@@ -879,13 +1290,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
     }
 
     if (cnx != NULL) {
-        if (!picoquic_is_connection_id_null(cnx->local_cnxid)) {
-            (void)picoquic_register_cnx_id(quic, cnx, cnx->local_cnxid);
-        }
-
-        if (addr != NULL) {
-            (void)picoquic_register_net_id(quic, cnx, addr);
-        }
+        picoquic_register_path(cnx, cnx->path[0]);
     }
 
     return cnx;
@@ -948,8 +1353,8 @@ void picoquic_get_peer_addr(picoquic_cnx_t* cnx, struct sockaddr** addr, int* ad
 
 void picoquic_get_local_addr(picoquic_cnx_t* cnx, struct sockaddr** addr, int* addr_len)
 {
-    *addr = (struct sockaddr*)&cnx->path[0]->dest_addr;
-    *addr_len = cnx->path[0]->dest_addr_len;
+    *addr = (struct sockaddr*)&cnx->path[0]->local_addr;
+    *addr_len = cnx->path[0]->local_addr_len;
 }
 
 unsigned long picoquic_get_local_if_index(picoquic_cnx_t* cnx)
@@ -959,12 +1364,12 @@ unsigned long picoquic_get_local_if_index(picoquic_cnx_t* cnx)
 
 picoquic_connection_id_t picoquic_get_local_cnxid(picoquic_cnx_t* cnx)
 {
-    return cnx->local_cnxid;
+    return cnx->path[0]->local_cnxid;
 }
 
 picoquic_connection_id_t picoquic_get_remote_cnxid(picoquic_cnx_t* cnx)
 {
-    return cnx->remote_cnxid;
+    return cnx->path[0]->remote_cnxid;
 }
 
 picoquic_connection_id_t picoquic_get_initial_cnxid(picoquic_cnx_t* cnx)
@@ -974,12 +1379,12 @@ picoquic_connection_id_t picoquic_get_initial_cnxid(picoquic_cnx_t* cnx)
 
 picoquic_connection_id_t picoquic_get_client_cnxid(picoquic_cnx_t* cnx)
 {
-    return (cnx->client_mode)?cnx->local_cnxid: cnx->remote_cnxid;
+    return (cnx->client_mode)?cnx->path[0]->local_cnxid: cnx->path[0]->remote_cnxid;
 }
 
 picoquic_connection_id_t picoquic_get_server_cnxid(picoquic_cnx_t* cnx)
 {
-    return (cnx->client_mode) ? cnx->remote_cnxid : cnx->local_cnxid;
+    return (cnx->client_mode) ? cnx->path[0]->remote_cnxid : cnx->path[0]->local_cnxid;
 }
 
 picoquic_connection_id_t picoquic_get_logging_cnxid(picoquic_cnx_t* cnx)
@@ -1135,7 +1540,7 @@ void picoquic_reset_packet_context(picoquic_cnx_t* cnx,
     picoquic_packet_context_t * pkt_ctx = &cnx->pkt_ctx[pc];
 
     while (pkt_ctx->retransmit_newest != NULL) {
-        picoquic_dequeue_retransmit_packet(cnx, pkt_ctx->retransmit_newest, 1);
+        (void)picoquic_dequeue_retransmit_packet(cnx, pkt_ctx->retransmit_newest, 1);
     }
     
     while (pkt_ctx->retransmitted_newest != NULL) {
@@ -1286,6 +1691,7 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
 {
     picoquic_stream_head* stream;
     picoquic_misc_frame_header_t* misc_frame;
+    picoquic_cnxid_stash_t* stashed_cnxid;
 
     if (cnx != NULL) {
         if (cnx->cnx_state < picoquic_state_disconnected) {
@@ -1304,30 +1710,6 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
         if (cnx->sni != NULL) {
             free((void*)cnx->sni);
             cnx->sni = NULL;
-        }
-
-        while (cnx->first_cnx_id != NULL) {
-            picohash_item* item;
-            picoquic_cnx_id* cnx_id_key = cnx->first_cnx_id;
-            cnx->first_cnx_id = cnx_id_key->next_cnx_id;
-            cnx_id_key->next_cnx_id = NULL;
-
-            item = picohash_retrieve(cnx->quic->table_cnx_by_id, cnx_id_key);
-            if (item != NULL) {
-                picohash_item_delete(cnx->quic->table_cnx_by_id, item, 1);
-            }
-        }
-
-        while (cnx->first_net_id != NULL) {
-            picohash_item* item;
-            picoquic_net_id* net_id_key = cnx->first_net_id;
-            cnx->first_net_id = net_id_key->next_net_id;
-            net_id_key->next_net_id = NULL;
-
-            item = picohash_retrieve(cnx->quic->table_cnx_by_net, net_id_key);
-            if (item != NULL) {
-                picohash_item_delete(cnx->quic->table_cnx_by_net, item, 1);
-            }
         }
         
         picoquic_remove_cnx_from_list(cnx);
@@ -1363,18 +1745,20 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
 
         if (cnx->path != NULL)
         {
-            for (int i = 0; i < cnx->nb_paths; i++) {
-
-                if (cnx->congestion_alg != NULL) {
-                    cnx->congestion_alg->alg_delete(cnx->path[i]);
-                }
-
-                free(cnx->path[i]);
-                cnx->path[i] = NULL;
+            while (cnx->nb_paths > 0) {
+                picoquic_delete_path(cnx, cnx->nb_paths - 1);
             }
 
             free(cnx->path);
             cnx->path = NULL;
+        }
+
+        while ((stashed_cnxid = picoquic_dequeue_cnxid_stash(cnx)) != NULL) {
+            free(stashed_cnxid);
+        }
+
+        while (cnx->probe_first != NULL) {
+            picoquic_delete_probe(cnx, cnx->probe_first);
         }
 
         free(cnx);
@@ -1392,7 +1776,7 @@ picoquic_cnx_t* picoquic_cnx_by_id(picoquic_quic_t* quic, picoquic_connection_id
 {
     picoquic_cnx_t* ret = NULL;
     picohash_item* item;
-    picoquic_cnx_id key;
+    picoquic_cnx_id_key_t key;
 
     memset(&key, 0, sizeof(key));
     key.cnx_id = cnx_id;
@@ -1400,7 +1784,7 @@ picoquic_cnx_t* picoquic_cnx_by_id(picoquic_quic_t* quic, picoquic_connection_id
     item = picohash_retrieve(quic->table_cnx_by_id, &key);
 
     if (item != NULL) {
-        ret = ((picoquic_cnx_id*)item->key)->cnx;
+        ret = ((picoquic_cnx_id_key_t*)item->key)->cnx;
     }
     return ret;
 }
@@ -1409,16 +1793,32 @@ picoquic_cnx_t* picoquic_cnx_by_net(picoquic_quic_t* quic, struct sockaddr* addr
 {
     picoquic_cnx_t* ret = NULL;
     picohash_item* item;
-    picoquic_net_id key;
+    picoquic_net_id_key_t key;
 
     picoquic_set_hash_key_by_address(&key, addr);
 
     item = picohash_retrieve(quic->table_cnx_by_net, &key);
 
     if (item != NULL) {
-        ret = ((picoquic_net_id*)item->key)->cnx;
+        ret = ((picoquic_net_id_key_t*)item->key)->cnx;
     }
     return ret;
+}
+
+int picoquic_retrieve_by_cnx_id_or_net_id(picoquic_quic_t * quic, picoquic_connection_id_t * cnx_id, 
+    struct sockaddr * addr, picoquic_cnx_t ** pcnx, picoquic_path_t * path)
+{
+    if (cnx_id->id_len > 0) {
+        *pcnx = picoquic_cnx_by_id(quic, *cnx_id);
+    }
+    else {
+        *pcnx = picoquic_cnx_by_net(quic, addr);
+
+        if (*pcnx != NULL && (*pcnx)->path[0]->local_cnxid.id_len != 0) {
+            *pcnx = NULL;
+        }
+    }
+    return 0;
 }
 
 /*

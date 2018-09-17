@@ -31,7 +31,9 @@
 extern "C" {
 #endif
 
+#ifndef PICOQUIC_MAX_PACKET_SIZE
 #define PICOQUIC_MAX_PACKET_SIZE 1536
+#endif
 #define PICOQUIC_MIN_SEGMENT_SIZE 256
 #define PICOQUIC_INITIAL_MTU_IPV4 1252
 #define PICOQUIC_INITIAL_MTU_IPV6 1232
@@ -39,6 +41,7 @@ extern "C" {
 #define PICOQUIC_PRACTICAL_MAX_MTU 1440
 #define PICOQUIC_RETRY_SECRET_SIZE 64
 #define PICOQUIC_DEFAULT_0RTT_WINDOW 4096
+#define PICOQUIC_NB_PATH_TARGET 4
 
 #define PICOQUIC_NUMBER_OF_EPOCHS 4
 #define PICOQUIC_NUMBER_OF_EPOCH_OFFSETS (PICOQUIC_NUMBER_OF_EPOCHS+1)
@@ -170,9 +173,9 @@ int picoquic_load_tickets(picoquic_stored_ticket_t** pp_first_ticket,
 void picoquic_free_tickets(picoquic_stored_ticket_t** pp_first_ticket);
 
 /*
-	 * QUIC context, defining the tables of connections,
-	 * open sockets, etc.
-	 */
+ * QUIC context, defining the tables of connections,
+ * open sockets, etc.
+ */
 typedef struct st_picoquic_quic_t {
     void * F_log;
     void* tls_master_ctx;
@@ -334,24 +337,70 @@ typedef struct st_picoquic_misc_frame_header_t {
 } picoquic_misc_frame_header_t;
 
 /*
-* Per path context
-*/
+ * Per path context.
+ * Path contexts are created:
+ * - At the beginning of the connection for path[0]
+ * - When advertising a new connection ID to the peer.
+ * When a path is created, the corresponding connection ID is added to the hash table
+ * of connection ID in the master QUIC context, so incoming packets can be routed to
+ * that path. When a path is deleted, the corresponding ID is removed from the table.
+ *
+ * On the server side, paths are activated after receiving the first packet on that path.
+ * The server will then schedule allocate a non-zero challenge value for the path, 
+ * consume a connection ID advertised by the client, and allocate it as remote
+ * connection ID for the path. (TODO: what if no new connection ID is available?).
+ *
+ * On the client side, challenges are initially sent without creating a path context,
+ * by "half-consuming" a connection ID sent by the peer. Challenges can be repeated
+ * up to 3 times before the probe is declared lost. The first response from the
+ * peer will arrive on an unitialized path. The client will check whether the 
+ * challenge value correspond to a probe, and allocate the corresponding connection
+ * ID to the path.
+ *
+ * As soon as a path is validated, it moves to position 0. The old path[0] moves to the
+ * last position, and is marked as deprecated. After about 1 RTT, the path resource
+ * are freed. (TODO: once we actually support multipath, change that behavior.)
+ * (TODO: servers should only validate the path after receiving non-probing frames from
+ * the client.)
+ *
+ * Congestion control and spin bit management are path specific.
+ * Packet numbering is global.
+ */
+
 typedef struct st_picoquic_path_t {
+    /* Local connection ID identifies a path */
+    picoquic_connection_id_t local_cnxid;
+    picoquic_connection_id_t remote_cnxid;
+
+    struct st_picoquic_cnx_id_key_t* first_cnx_id;
+    struct st_picoquic_net_id_key_t* first_net_id;
+
+    /* Todo: remove path_sequence when sequence removed from new Connection ID*/
+    int path_sequence;
+
     /* Peer address. To do: allow for multiple addresses */
     struct sockaddr_storage peer_addr;
     int peer_addr_len;
-    struct sockaddr_storage dest_addr;
-    int dest_addr_len;
+    struct sockaddr_storage local_addr;
+    int local_addr_len;
     unsigned long if_index_dest;
-
+    /* Public reset secret, provisioned by the peer */
+    uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE];
     /* Challenge used for this path */
+    uint64_t challenge_response;
     uint64_t challenge;
     uint64_t challenge_time;
     uint8_t challenge_repeat_count;
 #define PICOQUIC_CHALLENGE_REPEAT_MAX 4
     /* flags */
     unsigned int mtu_probe_sent : 1;
+    unsigned int path_is_published : 1;
+    unsigned int path_is_activated : 1;
+    unsigned int challenge_required : 1;
     unsigned int challenge_verified : 1;
+    unsigned int challenge_failed : 1;
+    unsigned int response_required : 1;
+    unsigned int path_is_demoted : 1;
 
     /* Time measurement */
     uint64_t max_ack_delay;
@@ -421,6 +470,41 @@ typedef struct st_picoquic_packet_context_t {
     unsigned int ack_needed : 1;
 } picoquic_packet_context_t;
 
+/*
+ * New CNX-ID description, used for storage waiting for the CNX-ID to be validated
+ */
+typedef struct st_picoquic_cnxid_stash_t {
+    struct st_picoquic_cnxid_stash_t * next_in_stash;
+    uint64_t sequence;
+    picoquic_connection_id_t cnx_id;
+    uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE];
+} picoquic_cnxid_stash_t;
+
+/*
+ * Probe in progress, waiting for validation in path.
+ * or upon reception of the first data packet from the peer otherwise.
+ * TODO: re-think that logic if using null CID.
+ */
+typedef struct st_picoquic_probe_t {
+    struct st_picoquic_probe_t * next_probe;
+    uint64_t sequence;
+    picoquic_connection_id_t remote_cnxid; 
+    uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE];
+    /* Addresses with which the probe was sent */
+    struct sockaddr_storage peer_addr;
+    int peer_addr_len;
+    struct sockaddr_storage local_addr;
+    int local_addr_len;
+    unsigned long if_index_dest;
+    /* Challenge used by this probe */
+    uint64_t challenge;
+    uint64_t challenge_time;
+    uint8_t challenge_repeat_count;
+    /* Flags */
+    unsigned int challenge_required : 1;
+    unsigned int challenge_verified : 1;
+    unsigned int challenge_failed : 1;
+} picoquic_probe_t;
 
 /* 
  * Per connection context.
@@ -429,10 +513,9 @@ typedef struct st_picoquic_cnx_t {
     picoquic_quic_t* quic;
 
     /* Management of context retrieval tables */
+
     struct st_picoquic_cnx_t* next_in_table;
     struct st_picoquic_cnx_t* previous_in_table;
-    struct st_picoquic_cnx_id_t* first_cnx_id;
-    struct st_picoquic_net_id_t* first_net_id;
 
     /* Proposed and negotiated version. Feature flags denote version dependent features */
     uint32_t proposed_version;
@@ -465,10 +548,7 @@ typedef struct st_picoquic_cnx_t {
     /* connection state, ID, etc. Todo: allow for multiple cnxid */
     picoquic_state_enum cnx_state;
     picoquic_connection_id_t initial_cnxid;
-    picoquic_connection_id_t local_cnxid;
-    picoquic_connection_id_t remote_cnxid;
     uint64_t start_time;
-    uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE];
     uint16_t application_error;
     uint16_t local_error;
     uint16_t remote_application_error;
@@ -539,6 +619,11 @@ typedef struct st_picoquic_cnx_t {
     picoquic_path_t ** path;
     int nb_paths;
     int nb_path_alloc;
+    int path_sequence_next;
+    /* Management of the CNX-ID stash */
+    picoquic_cnxid_stash_t * cnxid_stash_first;
+    /* Management of ongoing probes */
+    picoquic_probe_t * probe_first;
 } picoquic_cnx_t;
 
 /* Init of transport parameters */
@@ -548,11 +633,35 @@ void picoquic_init_transport_parameters(picoquic_tp_t* tp, int client_mode);
 picoquic_stateless_packet_t* picoquic_create_stateless_packet(picoquic_quic_t* quic);
 void picoquic_queue_stateless_packet(picoquic_quic_t* quic, picoquic_stateless_packet_t* sp);
 
-/* Registration of connection ID in server context */
-int picoquic_register_cnx_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, picoquic_connection_id_t cnx_id);
+/* Registration of per path connection ID in server context */
+int picoquic_register_cnx_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, picoquic_path_t* path, picoquic_connection_id_t cnx_id);
+
+/* Management of path */
+int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time,
+    struct sockaddr* local_addr, struct sockaddr* peer_addr);
+void picoquic_register_path(picoquic_cnx_t* cnx, picoquic_path_t * path_x);
+void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index);
+void picoquic_promote_path_to_default(picoquic_cnx_t* cnx, int path_index);
+void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx);
+
+/* Management of the CNX-ID stash */
+picoquic_cnxid_stash_t * picoquic_dequeue_cnxid_stash(picoquic_cnx_t* cnx);
+
+int picoquic_enqueue_cnxid_stash(picoquic_cnx_t * cnx,
+    const uint64_t sequence, const uint8_t cid_length, const uint8_t * cnxid_bytes,
+    const uint8_t * secret_bytes, picoquic_cnxid_stash_t ** pstashed);
+
+/* Management of probes */
+picoquic_probe_t * picoquic_find_probe_by_challenge(const picoquic_cnx_t* cnx, uint64_t challenge);
+
+picoquic_probe_t * picoquic_find_probe_by_addr(const picoquic_cnx_t* cnx,
+    const struct sockaddr * peer_addr, const struct sockaddr * local_addr);
+
+void picoquic_delete_probe(picoquic_cnx_t* cnx, picoquic_probe_t * probe);
+void picoquic_delete_failed_probes(picoquic_cnx_t* cnx);
 
 /* handling of retransmission queue */
-void picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet_t* p, int should_free);
+picoquic_packet_t* picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet_t* p, int should_free);
 void picoquic_dequeue_retransmitted_packet(picoquic_cnx_t* cnx, picoquic_packet_t* p);
 
 /* Reset connection after receiving version negotiation */
@@ -574,6 +683,9 @@ void picoquic_set_transport_parameters(picoquic_cnx_t * cnx, picoquic_tp_t * tp)
 /* Connection context retrieval functions */
 picoquic_cnx_t* picoquic_cnx_by_id(picoquic_quic_t* quic, picoquic_connection_id_t cnx_id);
 picoquic_cnx_t* picoquic_cnx_by_net(picoquic_quic_t* quic, struct sockaddr* addr);
+
+int picoquic_retrieve_by_cnx_id_or_net_id(picoquic_quic_t* quic, picoquic_connection_id_t* cnx_id,
+    struct sockaddr* addr, picoquic_cnx_t ** pcnx, picoquic_path_t * path);
 
 /* Reset the pacing data after CWIN is updated */
 void picoquic_update_pacing_data(picoquic_path_t * path_x);
@@ -644,6 +756,8 @@ uint32_t picoquic_create_packet_header(
     picoquic_cnx_t* cnx,
     picoquic_packet_type_enum packet_type,
     uint64_t sequence_number,
+    picoquic_connection_id_t * dest_cnxid,
+    picoquic_connection_id_t * srce_cnxid,
     uint8_t* bytes,
     uint32_t * pn_offset,
     uint32_t * pn_length);
@@ -681,6 +795,8 @@ size_t  picoquic_decrypt_packet(picoquic_cnx_t* cnx,
 uint32_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     picoquic_packet_type_enum ptype,
     uint8_t * bytes, uint64_t sequence_number,
+    picoquic_connection_id_t * remote_cnxid,
+    picoquic_connection_id_t * local_cnxid,
     uint32_t length, uint32_t header_length,
     uint8_t* send_buffer, uint32_t send_buffer_max,
     void * aead_context, void* pn_enc);
@@ -688,6 +804,8 @@ uint32_t picoquic_protect_packet(picoquic_cnx_t* cnx,
 void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet_t * packet, int ret,
     uint32_t length, uint32_t header_length, uint32_t checksum_overhead,
     size_t * send_length, uint8_t * send_buffer, uint32_t send_buffer_max,
+    picoquic_connection_id_t * remote_cnxid,
+    picoquic_connection_id_t * local_cnxid,
     picoquic_path_t * path_x, uint64_t current_time);
 
 int picoquic_parse_header_and_decrypt(
@@ -781,7 +899,11 @@ int picoquic_prepare_max_data_frame(picoquic_cnx_t* cnx, uint64_t maxdata_increa
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
 void picoquic_clear_stream(picoquic_stream_head* stream);
 int picoquic_prepare_path_challenge_frame(uint8_t* bytes,
-    size_t bytes_max, size_t* consumed, picoquic_path_t * path);
+    size_t bytes_max, size_t* consumed, uint64_t challenge);
+int picoquic_prepare_path_response_frame(uint8_t* bytes,
+    size_t bytes_max, size_t* consumed, uint64_t challenge);
+int picoquic_prepare_connection_id_frame(picoquic_cnx_t * cnx, picoquic_path_t * path_x,
+    uint8_t* bytes, size_t bytes_max, size_t* consumed);
 
 int picoquic_prepare_first_misc_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
                                       size_t bytes_max, size_t* consumed);
@@ -790,7 +912,7 @@ int picoquic_prepare_misc_frame(picoquic_misc_frame_header_t* misc_frame, uint8_
 
 /* send/receive */
 
-int picoquic_decode_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
+int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_t* bytes,
     size_t bytes_max, int epoch, uint64_t current_time);
 
 int picoquic_skip_frame(uint8_t* bytes, size_t bytes_max, size_t* consumed, int* pure_ack);

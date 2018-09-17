@@ -74,7 +74,6 @@ int varint_test();
 int tls_api_client_losses_test();
 int tls_api_server_losses_test();
 int skip_frame_test();
-int ping_pong_test();
 int keep_alive_test();
 int logger_test();
 int socket_test();
@@ -121,6 +120,11 @@ int TlsStreamFrameTest();
 int draft13_vector_test();
 int fuzz_test();
 int random_tester_test();
+int cnxid_stash_test();
+int new_cnxid_test();
+int transmit_cnxid_test();
+int probe_api_test();
+int migration_test();
 
 #ifdef __cplusplus
 }

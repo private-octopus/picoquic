@@ -534,6 +534,10 @@ static int stress_handle_packet_prepare(picoquic_stress_ctx_t * ctx, picoquic_qu
         /* Check that the client connection was properly terminated */
         picoquic_stress_client_callback_ctx_t* c_ctx = (c_index >= 0) ?
             (picoquic_stress_client_callback_ctx_t*)picoquic_get_callback_context(cnx) : NULL;
+        int peer_addr_len = 0;
+        struct sockaddr* peer_addr = NULL;
+        int local_addr_len = 0;
+        struct sockaddr* local_addr = NULL;
 
         /* Check whether immediate abrubt disconnection is required */
         if (c_ctx != NULL && cnx->cnx_state == picoquic_state_disconnected &&
@@ -552,12 +556,24 @@ static int stress_handle_packet_prepare(picoquic_stress_ctx_t * ctx, picoquic_qu
         if (c_ctx == NULL || cnx->cnx_state == picoquic_state_disconnected 
             || simulate_disconnect == 0) { 
             ret = picoquic_prepare_packet(cnx, ctx->simulated_time,
-                packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length);
+                packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length,
+                &peer_addr, &peer_addr_len, &local_addr, &local_addr_len);
         }
 
         if (ret == 0 && packet->length > 0) {
-            memcpy(&packet->addr_from, &cnx->path[0]->dest_addr, sizeof(struct sockaddr_in));
-            memcpy(&packet->addr_to, &cnx->path[0]->peer_addr, sizeof(struct sockaddr_in));
+            if (local_addr_len == 0) {
+                if (c_index >= 0) {
+                    memcpy(&packet->addr_from, (struct sockaddr *)&ctx->c_ctx[c_index]->client_addr, 
+                        sizeof(ctx->c_ctx[c_index]->client_addr));
+                }
+                else {
+                    memcpy(&packet->addr_from, (struct sockaddr *)&ctx->server_addr,
+                        sizeof(ctx->server_addr));
+                }
+            } else {
+                memcpy(&packet->addr_from, local_addr, local_addr_len);
+            }
+            memcpy(&packet->addr_to, peer_addr, peer_addr_len); 
 
             if (c_index >= 0)
             {

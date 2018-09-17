@@ -380,13 +380,16 @@ int parse_frame_test()
         ret = -1;
     }
 
-    for (size_t i = 0; ret == 0 && i < nb_test_skip_list; i++) {
+    for (size_t i = 0x0C; ret == 0 && i < nb_test_skip_list; i++) {
         for (int sharp_end = 0; ret == 0 && sharp_end < 2; sharp_end++) {
             size_t byte_max = 0;
             int t_ret = 0;
             picoquic_cnx_t * cnx = picoquic_create_cnx(qclient, 
                 picoquic_null_connection_id, picoquic_null_connection_id, (struct sockaddr *) &saddr,
                 simulated_time, 0, "test-sni", "test-alpn", 1);
+
+            /* Stupid fix to ensure that the NCID decoding test will not protest */
+            cnx->path[0]->remote_cnxid.id_len = 8;
 
             if (cnx == NULL) {
                 DBG_PRINTF("%s", "Cannot create QUIC CNX context\n");
@@ -406,7 +409,7 @@ int parse_frame_test()
 
                 cnx->pkt_ctx[0].send_sequence = 0x0102030406;
 
-                t_ret = picoquic_decode_frames(cnx, buffer, byte_max, test_skip_list[i].epoch, simulated_time);
+                t_ret = picoquic_decode_frames(cnx, cnx->path[0], buffer, byte_max, test_skip_list[i].epoch, simulated_time);
 
                 if (t_ret != 0) {
                     DBG_PRINTF("Parse frame <%s> fails, ret = %d\n", test_skip_list[i].name, t_ret);
@@ -650,6 +653,224 @@ int logger_test()
         }
         fclose(F);
         F = NULL;
+    }
+
+    return ret;
+}
+
+
+/* Basic test of connection ID stash, part of migration support  */
+static const picoquic_cnxid_stash_t stash_test_case[] = {
+    { NULL,  1,{ { 0, 1, 2, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 4 },
+{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 } },
+{ NULL,  2,{ { 1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 4 },
+{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 } },
+{ NULL,  3,{ { 2, 3, 4, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 4 },
+{ 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17 } }
+};
+
+static const picoquic_connection_id_t stash_test_init_local =
+    { { 11, 11, 11, 11, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 4 };
+
+static const picoquic_connection_id_t stash_test_init_remote =
+{ { 99, 99, 99, 99, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 4 };
+
+static const size_t nb_stash_test_case = sizeof(stash_test_case) / sizeof(picoquic_cnxid_stash_t);
+
+static int cnxid_stash_compare(int test_mode, picoquic_cnxid_stash_t * stashed, size_t i)
+{
+    int ret = 0;
+
+    if (stashed == NULL) {
+        DBG_PRINTF("Test %d, cannot dequeue cnxid %d.\n", test_mode, i);
+        ret = -1;
+    }
+    else if (stashed->sequence != stash_test_case[i].sequence) {
+        DBG_PRINTF("Test %d, cnxid %d, sequence %d instead of %d.\n", test_mode, i,
+            stashed->sequence, stash_test_case[i].sequence);
+        ret = -1;
+    }
+    else if (picoquic_compare_connection_id(&stashed->cnx_id, &stash_test_case[i].cnx_id) != 0) {
+        DBG_PRINTF("Test %d, cnxid %d, CNXID values do not match.\n", test_mode, i);
+        ret = -1;
+    }
+    else if (memcmp(&stashed->reset_secret, &stash_test_case[i].reset_secret, PICOQUIC_RESET_SECRET_SIZE) != 0) {
+        DBG_PRINTF("Test %d, cnxid %d, secrets do not match.\n", test_mode, i);
+        ret = -1;
+    }
+
+    return ret;
+}
+
+int cnxid_stash_test()
+{
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    struct sockaddr_in saddr;
+    picoquic_quic_t * qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
+
+
+    memset(&saddr, 0, sizeof(struct sockaddr_in));
+    if (qclient == NULL) {
+        DBG_PRINTF("%s", "Cannot create QUIC context\n");
+        ret = -1;
+    }
+
+    /* First test: enqueue and dequeue immediately */
+    /* Second test: enqueue all and then dequeue - verify order */
+    /* Third test: enqueue all and then delete the connection */
+    for (int test_mode = 0; ret == 0 && test_mode < 3; test_mode++) {
+        picoquic_cnx_t * cnx = picoquic_create_cnx(qclient,
+            picoquic_null_connection_id, picoquic_null_connection_id, (struct sockaddr *) &saddr,
+            simulated_time, 0, "test-sni", "test-alpn", 1);
+
+        picoquic_cnxid_stash_t * stashed = NULL;
+
+        if (cnx == NULL) {
+            DBG_PRINTF("%s", "Cannot create QUIC CNX context\n");
+            ret = -1;
+        } else {
+            /* init the various connection id to a length compatible with test */
+            cnx->path[0]->local_cnxid = stash_test_init_local;
+            cnx->path[0]->remote_cnxid = stash_test_init_remote;
+        }
+
+        for (size_t i = 0; ret == 0 && i < nb_stash_test_case; i++) {
+            ret = picoquic_enqueue_cnxid_stash(cnx,
+                stash_test_case[i].sequence, stash_test_case[i].cnx_id.id_len,
+                stash_test_case[i].cnx_id.id, stash_test_case[i].reset_secret, &stashed);
+            if (ret != 0) {
+                DBG_PRINTF("Test %d, cannot stash cnxid %d, err %x.\n", test_mode, i, ret);
+            } else {
+                if (stashed == NULL) {
+                    DBG_PRINTF("Test %d, cannot stash cnxid %d (duplicate).\n", test_mode, i);
+                    ret = -1;
+                }
+                else if (test_mode == 0) {
+                    stashed = picoquic_dequeue_cnxid_stash(cnx);
+                    ret = cnxid_stash_compare(test_mode, stashed, i);
+                }
+            }
+        }
+
+        /* Dequeue all in mode 1, verify order */
+        if (test_mode == 1) {
+            for (size_t i = 0; ret == 0 && i < nb_stash_test_case; i++) {
+                stashed = picoquic_dequeue_cnxid_stash(cnx);
+                ret = cnxid_stash_compare(test_mode, stashed, i);
+            }
+        }
+
+        /* Verify nothing left in queue in mode 0, 1 */
+        if (test_mode < 2) {
+            stashed = picoquic_dequeue_cnxid_stash(cnx);
+            if (stashed != NULL) {
+                DBG_PRINTF("Test %d, unexpected cnxid left, #%d.\n", test_mode, (int)stashed->sequence);
+                ret = -1;
+            }
+        }
+
+        /* Delete the connecton and free the stash */
+        picoquic_delete_cnx(cnx);
+    }
+
+    if (qclient != NULL) {
+        picoquic_free(qclient);
+    }
+
+    return ret;
+}
+
+int new_cnxid_test()
+{
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    struct sockaddr_in saddr;
+    picoquic_quic_t * qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
+    picoquic_cnx_t * cnx = NULL;
+    uint8_t frame_buffer[256];
+    size_t consumed = 0;
+
+    memset(&saddr, 0, sizeof(struct sockaddr_in));
+    saddr.sin_family = AF_INET;
+    saddr.sin_port = 1000;
+
+    if (qclient == NULL) {
+        DBG_PRINTF("%s", "Cannot create QUIC context\n");
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        cnx = picoquic_create_cnx(qclient,
+            picoquic_null_connection_id, picoquic_null_connection_id, (struct sockaddr *) &saddr,
+            simulated_time, 0, "test-sni", "test-alpn", 1);
+
+        if (cnx == NULL) {
+            DBG_PRINTF("%s", "Cannot create QUIC CNX context\n");
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        /* Create a new path */
+        int path_index;
+        saddr.sin_port = 1000;
+        path_index = picoquic_create_path(cnx, simulated_time, (struct sockaddr *)&saddr, NULL);
+
+        if (path_index != 1) {
+            DBG_PRINTF("Cannot create new path, index = %d\n", path_index);
+            ret = -1;
+        }
+        else if (cnx->nb_paths != 2) {
+            DBG_PRINTF("Expected 2 paths, got %d\n", cnx->nb_paths);
+            ret = -1;
+        }
+        else {
+            picoquic_register_path(cnx, cnx->path[path_index]);
+        }
+    }
+
+    if (ret == 0) {
+        ret = picoquic_prepare_connection_id_frame(cnx, cnx->path[1],
+            frame_buffer, sizeof(frame_buffer), &consumed);
+
+        if (ret != 0) {
+            DBG_PRINTF("Cannot encode new connection ID frame, ret = %x\n", ret);
+        }
+    }
+
+    if (ret == 0) {
+        size_t skipped = 0;
+        int pure_ack = 0;
+
+        ret = picoquic_skip_frame(frame_buffer, sizeof(frame_buffer), &skipped, &pure_ack);
+
+        if (ret != 0) {
+            DBG_PRINTF("Cannot skip connection ID frame, ret = %x\n", ret);
+        }
+        else if (skipped != consumed) {
+            DBG_PRINTF("Skipped %d bytes instead of %d\n", (int)skipped, (int)consumed);
+            ret = -1;
+        }
+        else if (pure_ack != 0) {
+            DBG_PRINTF("Pure ACK = %d instead of 0\n", (int)pure_ack);
+            ret = -1;
+        }
+    }
+
+
+    if (cnx != NULL)
+    {
+        /* Delete the connecton and free the stash */
+        picoquic_delete_cnx(cnx);
+    }
+
+    if (qclient != NULL) {
+        picoquic_free(qclient);
     }
 
     return ret;

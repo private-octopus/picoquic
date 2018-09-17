@@ -25,9 +25,6 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "picoquic_t", "picoquic_t\pi
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{A71B5718-FDFC-4047-A76C-15EA7A78ED6B}"
-	ProjectSection(SolutionItems) = preProject
-		picoquic\picosocks.c = picoquic\picosocks.c
-	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -80,5 +77,8 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {9046935D-F459-4ADB-850E-C60A378EB224}
 	EndGlobalSection
 EndGlobal

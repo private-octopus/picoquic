@@ -25,6 +25,7 @@
 
 #include "picoquic_internal.h"
 #include "util.h"
+#include "tls_api.h"
 #include <string.h>
 
 uint32_t picoquic_decode_transport_param_stream_id(uint16_t rank, int extension_mode, int stream_type) {
@@ -259,7 +260,8 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
             byte_index += 2;
             picoformat_16(bytes + byte_index, PICOQUIC_RESET_SECRET_SIZE);
             byte_index += 2;
-            memcpy(bytes + byte_index, cnx->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
+            (void)picoquic_create_cnxid_reset_secret(cnx->quic, cnx->path[0]->local_cnxid,
+                bytes + byte_index);
             byte_index += PICOQUIC_RESET_SECRET_SIZE;
         }
 
@@ -516,7 +518,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                             } else if (extension_length != PICOQUIC_RESET_SECRET_SIZE) {
                                 ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
                             } else {
-                                memcpy(cnx->reset_secret, bytes + byte_index, PICOQUIC_RESET_SECRET_SIZE);
+                                memcpy(cnx->path[0]->reset_secret, bytes + byte_index, PICOQUIC_RESET_SECRET_SIZE);
                             }
                             break;
                         case picoquic_tp_ack_delay_exponent:

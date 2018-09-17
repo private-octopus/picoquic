@@ -34,6 +34,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
+#include "util.h"
 
 char* picoquic_string_create(const char* original, size_t len)
 {
@@ -185,9 +186,17 @@ uint32_t picoquic_format_connection_id(uint8_t* bytes, size_t bytes_max, picoqui
     return copied;
 }
 
+int picoquic_is_connection_id_length_valid(uint8_t len) {
+    int ret = 0;
+    if (len >= PICOQUIC_CONNECTION_ID_MIN_SIZE && len <= PICOQUIC_CONNECTION_ID_MAX_SIZE) {
+        ret = len;
+    }
+    return ret;
+}
+
 uint32_t picoquic_parse_connection_id(const uint8_t * bytes, uint8_t len, picoquic_connection_id_t * cnx_id)
 {
-    if (len <= PICOQUIC_CONNECTION_ID_MAX_SIZE) {
+    if (picoquic_is_connection_id_length_valid(len)) {
         cnx_id->id_len = len;
         memcpy(cnx_id->id, bytes, len);
     } else {
@@ -205,7 +214,7 @@ int picoquic_is_connection_id_null(picoquic_connection_id_t cnx_id)
     return (cnx_id.id_len == 0) ? 1 : 0;
 }
 
-int picoquic_compare_connection_id(picoquic_connection_id_t * cnx_id1, picoquic_connection_id_t * cnx_id2)
+int picoquic_compare_connection_id(const picoquic_connection_id_t * cnx_id1, const picoquic_connection_id_t * cnx_id2)
 {
     int ret = -1;
 
@@ -251,7 +260,7 @@ void picoquic_set64_connection_id(picoquic_connection_id_t * cnx_id, uint64_t va
     cnx_id->id_len = 8;
 }
 
-int picoquic_compare_addr(struct sockaddr * expected, struct sockaddr * actual)
+int picoquic_compare_addr(const struct sockaddr * expected, const struct sockaddr * actual)
 {
     int ret = -1;
 
@@ -280,4 +289,21 @@ int picoquic_compare_addr(struct sockaddr * expected, struct sockaddr * actual)
     }
 
     return ret;
+}
+
+/* Copy a sockaddr to a storage value, and return the copied address length */
+int picoquic_store_addr(struct sockaddr_storage * stored_addr, const struct sockaddr * addr)
+{
+    int len = 0;
+    
+    if (addr != NULL && addr->sa_family != 0) {
+        len = (int)((addr->sa_family == AF_INET) ? sizeof(struct sockaddr_in) :
+            sizeof(struct sockaddr_in6));
+        memcpy(stored_addr, addr, len);
+    }
+    else {
+        memset(stored_addr, 0, sizeof(struct sockaddr_storage));
+    }
+
+    return len;
 }

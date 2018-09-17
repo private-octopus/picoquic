@@ -65,6 +65,8 @@ static const picoquic_test_def_t test_table[] = {
     { "cleartext_pn_enc", cleartext_pn_enc_test },
     { "draft13_vector", draft13_vector_test },
     { "pn_enc_1rtt", pn_enc_1rtt_test },
+    { "cnxid_stash", cnxid_stash_test },
+    { "new_cnxid", new_cnxid_test },
     { "tls_api", tls_api_test },
     { "silence_test", tls_api_silence_test },
     { "tls_api_version_negotiation", tls_api_version_negotiation_test },
@@ -91,7 +93,6 @@ static const picoquic_test_def_t test_table[] = {
     { "retry", tls_api_retry_test },
     { "two_connections", tls_api_two_connections_test },
     { "multiple_versions", tls_api_multiple_versions_test },
-    { "ping_pong", ping_pong_test },
     { "keep_alive", keep_alive_test },
     { "sockets", socket_test },
     { "ticket_store", ticket_store_test },
@@ -127,8 +128,11 @@ static const picoquic_test_def_t test_table[] = {
     { "zero_rtt_spurious", zero_rtt_spurious_test },
     { "zero_rtt_retry", zero_rtt_retry_test },
     { "random_tester", random_tester_test},
+    { "transmit_cnxid", transmit_cnxid_test },
+    { "probe_api", probe_api_test },
+    { "migration" , migration_test },
     { "stress", stress_test },
-    { "fuzz", fuzz_test }
+    { "fuzz", fuzz_test },
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);
