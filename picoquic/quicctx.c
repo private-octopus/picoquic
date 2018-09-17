@@ -856,12 +856,16 @@ void picoquic_promote_path_to_default(picoquic_cnx_t* cnx, int path_index)
         if (cnx->congestion_alg != NULL) {
             cnx->congestion_alg->alg_init(path_x);
         }
-
+        /* Mark old path as demoted */
+        cnx->path[0]->path_is_demoted = 1;
         /* Swap */
         cnx->path[path_index] = cnx->path[0];
         cnx->path[0] = path_x;
-        /* Delete the old instance */
-        picoquic_delete_path(cnx, path_index);
+
+        if (cnx->client_mode) {
+            /* Delete the old instance */
+            picoquic_delete_path(cnx, path_index);
+        }
     }
 }
 

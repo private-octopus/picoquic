@@ -400,6 +400,7 @@ typedef struct st_picoquic_path_t {
     unsigned int challenge_verified : 1;
     unsigned int challenge_failed : 1;
     unsigned int response_required : 1;
+    unsigned int path_is_demoted : 1;
 
     /* Time measurement */
     uint64_t max_ack_delay;

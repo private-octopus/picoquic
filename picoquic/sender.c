@@ -1011,7 +1011,9 @@ int picoquic_is_mtu_probe_needed(picoquic_cnx_t* cnx, picoquic_path_t * path_x)
 {
     int ret = 0;
 
-    if ((cnx->cnx_state == picoquic_state_client_ready || cnx->cnx_state == picoquic_state_server_ready) && path_x->mtu_probe_sent == 0 && (path_x->send_mtu_max_tried == 0 || (path_x->send_mtu + 10) < path_x->send_mtu_max_tried)) {
+    if ((cnx->cnx_state == picoquic_state_client_ready || cnx->cnx_state == picoquic_state_server_ready)
+        && path_x->mtu_probe_sent == 0 
+        && (path_x->send_mtu_max_tried == 0 || (path_x->send_mtu + 10) < path_x->send_mtu_max_tried)) {
         ret = 1;
     }
 
@@ -1206,7 +1208,10 @@ void picoquic_cnx_set_next_wake_time(picoquic_cnx_t* cnx, uint64_t current_time)
     if (cnx->cnx_state == picoquic_state_disconnecting || cnx->cnx_state == picoquic_state_handshake_failure || cnx->cnx_state == picoquic_state_closing_received) {
         blocked = 0;
     }
-    else if (path_x->cwin > path_x->bytes_in_transit && picoquic_is_mtu_probe_needed(cnx, path_x)) {
+    else if (path_x->cwin > path_x->bytes_in_transit 
+        && (path_x->challenge_required == 0 || path_x->challenge_verified == 1)
+        && path_x->response_required == 0   
+        && picoquic_is_mtu_probe_needed(cnx, path_x)) {
         blocked = 0;
     }
     else if ((cnx->cnx_state == picoquic_state_client_ready ||
@@ -1285,6 +1290,10 @@ void picoquic_cnx_set_next_wake_time(picoquic_cnx_t* cnx, uint64_t current_time)
         /* Consider path challenges */
         if (next_time > current_time) {
             for (int i = 0; i < cnx->nb_paths; i++) {
+                if (cnx->path[i]->path_is_demoted) {
+                    continue;
+                }
+
                 if (cnx->path[i]->response_required) {
                     next_time = current_time;
                     break;
@@ -2188,7 +2197,8 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
 
             if (((stream == NULL && tls_ready == 0 && cnx->first_misc_frame == NULL) || path_x->cwin <= path_x->bytes_in_transit)
                 && picoquic_is_ack_needed(cnx, current_time, pc) == 0
-                && (path_x->challenge_verified == 1 || current_time < path_x->challenge_time + path_x->retransmit_timer)) {
+                && (path_x->challenge_verified == 1 || current_time < path_x->challenge_time + path_x->retransmit_timer || path_x->challenge_repeat_count != 0)
+                && path_x->response_required == 0) {
                 if (ret == 0 && send_buffer_max > path_x->send_mtu
                     && path_x->cwin > path_x->bytes_in_transit && picoquic_is_mtu_probe_needed(cnx, path_x)) {
                     length = picoquic_prepare_mtu_probe(cnx, path_x, header_length, checksum_overhead, bytes);
@@ -2203,7 +2213,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
             else {
                 if (path_x->challenge_verified == 0) {
                     if (path_x->challenge_failed == 0 && (
-                        path_x->challenge_time + path_x->retransmit_timer <= current_time || path_x->challenge_time == 0)) {
+                        path_x->challenge_time + path_x->retransmit_timer <= current_time || path_x->challenge_repeat_count == 0)) {
                         /* When blocked, repeat the path challenge or wait */
                         if (picoquic_prepare_path_challenge_frame(&bytes[length],
                             send_buffer_max - checksum_overhead - length, &data_bytes, path_x->challenge) == 0) {
@@ -2508,6 +2518,7 @@ int picoquic_prepare_probe(picoquic_cnx_t* cnx,
                 picoquic_packet_context_enum pc = picoquic_packet_context_application;
                 uint32_t checksum_overhead = picoquic_get_checksum_length(cnx, 0);
                 size_t data_bytes = 0;
+                int inactive_path_index = -1;
 
                 length = picoquic_predict_packet_header_length(
                     cnx, packet_type);
@@ -2519,11 +2530,25 @@ int picoquic_prepare_probe(picoquic_cnx_t* cnx,
                 packet->send_path = cnx->path[0]; /* TODO: check that this can work */
 
                 /* If there are not enough paths, create one and advertise it */
-                if (cnx->nb_paths < 2 || cnx->path[cnx->nb_paths - 1]->path_is_activated)
+                for (int i = 1; i < cnx->nb_paths; i++)
                 {
+                    if (!cnx->path[i]->path_is_activated) {
+                        inactive_path_index = i;
+                    }
+                }
+
+                if( inactive_path_index < 0) {
                     ret = picoquic_prepare_new_path_and_id(cnx, &bytes[length],
                         send_buffer_max - checksum_overhead - length,
                         current_time, &data_bytes);
+                    if (ret == 0) {
+                        length += (uint32_t)data_bytes;
+                    }
+                }
+                else {
+                    /* Add a copy of the last created connection ID */
+                    ret = picoquic_prepare_connection_id_frame(cnx, cnx->path[inactive_path_index], &bytes[length],
+                        send_buffer_max - checksum_overhead - length, &data_bytes);
                     if (ret == 0) {
                         length += (uint32_t)data_bytes;
                     }
@@ -2585,8 +2610,10 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
 
     *send_length = 0;
 
-    /* Remove delete paths */
-    picoquic_delete_abandoned_paths(cnx);
+    if (cnx->client_mode) {
+        /* Remove delete paths */
+        picoquic_delete_abandoned_paths(cnx);
+    }
     /* Remove failed probes */
     picoquic_delete_failed_probes(cnx);
 
@@ -2597,7 +2624,9 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     if (ret == 0 && *send_length == 0) {
         /* Select the path */
         for (int i = 1; i < cnx->nb_paths; i++) {
-            if (cnx->path[i]->challenge_verified) {
+            if (cnx->path[i]->path_is_demoted) {
+                continue;
+            } else if (cnx->path[i]->challenge_verified) {
                 /* TODO: selection logic if multiple paths are available! */
                 /* This path becomes the new default */
                 picoquic_promote_path_to_default(cnx, i);
