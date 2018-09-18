@@ -26,6 +26,9 @@
 extern "C" {
 #endif
 
+/* From picoquic/util.h */
+void debug_printf_suspend();
+
 /* Control variables for the duration of the stress test */
 
 extern uint64_t picoquic_stress_test_duration; /* In microseconds; defaults to 2 minutes */
