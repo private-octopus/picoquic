@@ -861,11 +861,13 @@ void picoquic_promote_path_to_default(picoquic_cnx_t* cnx, int path_index)
         /* Swap */
         cnx->path[path_index] = cnx->path[0];
         cnx->path[0] = path_x;
-
+#if 0
+        /* TODO: actually remove old instances after some time */
         if (cnx->client_mode) {
             /* Delete the old instance */
             picoquic_delete_path(cnx, path_index);
         }
+#endif
     }
 }
 

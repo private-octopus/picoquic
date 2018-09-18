@@ -826,6 +826,7 @@ int quic_client_migrate(picoquic_cnx_t * cnx, SOCKET_TYPE * fd, struct sockaddr 
             {
                 fprintf(F_log, "Switch to new port, sending probe.\n");
             }
+            cnx->path[0]->path_is_demoted = 1;
         }
     }
 
@@ -860,6 +861,7 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
     int client_receive_loop = 0;
     int established = 0;
     int is_name = 0;
+    int migration_started = 0;
     int64_t delay_max = 10000000;
     int64_t delta_t = 0;
     int notified_ready = 0;
@@ -1056,14 +1058,21 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
 
                             demo_client_start_streams(cnx_client, &callback_ctx, 0xFFFFFFFF);
                         }
-
-                        if (force_migration) {
-                            int mig_ret = quic_client_migrate(cnx_client, &fd,
-                                (struct sockaddr *)&server_address, F_log);
-                        }
                     }
 
                     client_ready_loop++;
+
+                    if (force_migration && migration_started == 0 && cnx_client->cnxid_stash_first!= NULL) {
+                        int mig_ret = quic_client_migrate(cnx_client, &fd,
+                            (struct sockaddr *)&server_address, F_log);
+
+                        migration_started = 1;
+
+                        if (mig_ret != 0) {
+                            fprintf(stdout, "will not test migration.\n");
+                            migration_started = -1;
+                        }
+                    }
 
                     if ((bytes_recv == 0 || client_ready_loop > 4) && picoquic_is_cnx_backlog_empty(cnx_client)) {
                         if (callback_ctx.nb_open_streams == 0) {
