@@ -239,13 +239,14 @@ uint32_t picoquic_create_packet_header(
         /* Create a short packet -- using 32 bit sequence numbers for now */
         uint8_t K = (packet_type == picoquic_packet_1rtt_protected_phi0) ? 0 : 0x40;
         const uint8_t C = 0x30;
-        uint8_t spin_vec = (uint8_t)(cnx->spin_vec);
-        uint8_t spin_bit = (uint8_t)((cnx->current_spin) << 2);
+        uint8_t spin_vec = (uint8_t)(cnx->path[0]->spin_vec);
+        uint8_t spin_bit = (uint8_t)((cnx->path[0]->current_spin) << 2);
 
-        if (!cnx->spin_edge) spin_vec = 0;
-        else {
-            cnx->spin_edge = 0;
-            uint64_t dt = picoquic_get_quic_time(cnx->quic) - cnx->spin_last_trigger;
+        if (!cnx->path[0]->spin_edge) {
+            spin_vec = 0;
+        } else {
+            cnx->path[0]->spin_edge = 0;
+            uint64_t dt = picoquic_get_quic_time(cnx->quic) - cnx->path[0]->spin_last_trigger;
             if (dt > PICOQUIC_SPIN_VEC_LATE) { // DELAYED
                 spin_vec = 1;
                 // fprintf(stderr, "Delayed Outgoing Spin=%d DT=%ld\n", cnx->current_spin, dt);
@@ -410,6 +411,14 @@ uint32_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     /* Create the packet header just before encrypting the content */
     h_length = picoquic_create_packet_header(cnx, ptype,
         sequence_number, remote_cnxid, local_cnxid, send_buffer, &pn_offset, &pn_length);
+    /* If the destination ID does not match the local context, reset the spin bit */
+    if ((ptype == picoquic_packet_1rtt_protected_phi0 ||
+        ptype == picoquic_packet_1rtt_protected_phi1) &&
+        remote_cnxid != &cnx->path[0]->remote_cnxid) {
+        /* Packet is sent to a different CID: reset the spin bits to 0 */
+        send_buffer[0] &= 0xF8;
+    }
+
     /* Make sure that the payload length is encoded in the header */
     /* Using encryption, the "payload" length also includes the encrypted packet length */
     picoquic_update_payload_length(send_buffer, pn_offset, h_length - pn_length, length + aead_checksum_length);

@@ -3224,7 +3224,7 @@ int spin_bit_test()
         int nb_trials = 0;
         int nb_inactive = 0;
         int max_trials = 100000;
-        int current_spin = test_ctx->cnx_client->current_spin;
+        int current_spin = test_ctx->cnx_client->path[0]->current_spin;
 
         test_ctx->c_to_s_link->loss_mask = &loss_mask;
         test_ctx->s_to_c_link->loss_mask = &loss_mask;
@@ -3241,9 +3241,9 @@ int spin_bit_test()
                 break;
             }
 
-            if (test_ctx->cnx_client->current_spin != current_spin) {
+            if (test_ctx->cnx_client->path[0]->current_spin != current_spin) {
                 spin_count++;
-                current_spin = test_ctx->cnx_client->current_spin;
+                current_spin = test_ctx->cnx_client->path[0]->current_spin;
             }
 
             if (was_active) {
