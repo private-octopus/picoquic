@@ -847,6 +847,8 @@ void picoquic_log_time(FILE* F, picoquic_cnx_t* cnx, uint64_t current_time,
 
 #define PICOQUIC_SET_LOG(quic, F) (quic)->F_log = (void*)(F)
 
+void picoquic_set_key_log_file(picoquic_quic_t *quic, FILE* F_keylog);
+
 /* handling of ACK logic */
 int picoquic_is_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, picoquic_packet_context_enum pc);
 

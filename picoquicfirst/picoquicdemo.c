@@ -144,6 +144,30 @@ static char* strip_endofline(char* buf, size_t bufmax, char const* line)
     return buf;
 }
 
+static void picoquic_set_key_log_file_from_env(picoquic_quic_t* quic)
+{
+    const char* keylog_filename;
+    FILE* F = NULL;
+
+    keylog_filename = getenv("SSLKEYLOGFILE");
+    if (keylog_filename == NULL) {
+        return;
+    }
+#ifdef _WINDOWS
+    errno_t err = fopen_s(&F, keylog_filename, "a");
+    if (err != 0 || F == NULL) {
+        return;
+    }
+#else
+    F = fopen(keylog_filename, "a");
+    if (F == NULL) {
+        return;
+    }
+#endif
+
+    picoquic_set_key_log_file(quic, F);
+}
+
 #define PICOQUIC_FIRST_COMMAND_MAX 128
 #define PICOQUIC_FIRST_RESPONSE_MAX (1 << 20)
 
@@ -405,6 +429,8 @@ int quic_server(const char* server_name, int server_port,
 
             /* TODO: add log level, to reduce size in "normal" cases */
             PICOQUIC_SET_LOG(qserver, stdout);
+
+            picoquic_set_key_log_file_from_env(qserver);
         }
     }
 
@@ -898,6 +924,8 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
             qclient->mtu_max = mtu_max;
 
             PICOQUIC_SET_LOG(qclient, F_log);
+
+            picoquic_set_key_log_file_from_env(qclient);
 
             if (sni == NULL) {
                 /* Standard verifier would crash */

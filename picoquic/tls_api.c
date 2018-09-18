@@ -686,6 +686,7 @@ typedef struct st_picoquic_update_traffic_key_t {
 static int picoquic_update_traffic_key_callback(ptls_update_traffic_key_t * self, ptls_t *tls, int is_enc, size_t epoch, const void *secret)
 {
     picoquic_cnx_t* cnx = (picoquic_cnx_t*)*ptls_get_data_ptr(tls);
+    ptls_context_t* ctx = (ptls_context_t*)cnx->quic->tls_master_ctx;
     ptls_cipher_suite_t * cipher = ptls_get_cipher(tls);
     UNREFERENCED_PARAMETER(self);
 #ifdef _DEBUG
@@ -694,6 +695,14 @@ static int picoquic_update_traffic_key_callback(ptls_update_traffic_key_t * self
 #endif
 
     int ret = picoquic_set_key_from_secret(cnx, cipher, is_enc, epoch, secret);
+
+    if (ctx->log_secret) {
+        static const char *log_labels[2][4] = {
+            {NULL, "QUIC_CLIENT_EARLY_TRAFFIC_SECRET", "QUIC_CLIENT_HANDSHAKE_TRAFFIC_SECRET", "QUIC_CLIENT_TRAFFIC_SECRET_0"},
+            {NULL, NULL, "QUIC_SERVER_HANDSHAKE_TRAFFIC_SECRET", "QUIC_SERVER_TRAFFIC_SECRET_0"}};
+        const char *secret_label = log_labels[ptls_is_server(tls) == is_enc][epoch];
+        ctx->log_secret->cb(ctx->log_secret, tls, secret_label, ptls_iovec_init(secret, cipher->hash->digest_size));
+    }
 
     return ret;
 }
@@ -1021,6 +1030,10 @@ void picoquic_master_tlscontext_free(picoquic_quic_t* quic)
         if (ctx->save_ticket != NULL) {
             free(ctx->save_ticket);
         }
+
+        if (ctx->log_secret != NULL) {
+            free(ctx->log_secret);
+        }
     }
 }
 
@@ -1117,6 +1130,46 @@ int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint6
     cnx->tls_ctx = (void*)ctx;
 
     return ret;
+}
+
+static void picoquic_log_secret_call_back(ptls_log_secret_t* _self,
+    ptls_t *tls, const char* label, ptls_iovec_t secret)
+{
+    FILE* keylog_file = *(FILE**)(((char*)_self) + sizeof(ptls_log_secret_t));
+
+    /* Assume one concurrent writer for now, need locking otherwise. */
+    ptls_iovec_t crandom = ptls_get_client_random(tls);
+    fprintf(keylog_file, "%s ", label);
+    for (int i = 0; i < crandom.len; i++) {
+        fprintf(keylog_file, "%02x", crandom.base[i]);
+    }
+    fputc(' ', keylog_file);
+    for (int i = 0; i < secret.len; i++) {
+        fprintf(keylog_file, "%02x", secret.base[i]);
+    }
+    fputc('\n', keylog_file);
+    fflush(keylog_file);
+}
+
+/**
+ * Sets the output file handle for writing traffic secrets in a format that can
+ * be recognized by Wireshark.
+ */
+void picoquic_set_key_log_file(picoquic_quic_t *quic, FILE* F_keylog)
+{
+    ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
+
+    if (F_keylog != NULL) {
+        ptls_log_secret_t *log_secret;
+        log_secret = (ptls_log_secret_t*)malloc(sizeof(ptls_log_secret_t) + sizeof(FILE*));
+        if (log_secret != NULL) {
+            FILE** ppfile = (FILE**)(((char*)log_secret) + sizeof(ptls_log_secret_t));
+
+            ctx->log_secret = log_secret;
+            log_secret->cb = picoquic_log_secret_call_back;
+            *ppfile = F_keylog;
+        }
+    }
 }
 
 /*
