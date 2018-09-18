@@ -861,11 +861,13 @@ void picoquic_promote_path_to_default(picoquic_cnx_t* cnx, int path_index)
         /* Swap */
         cnx->path[path_index] = cnx->path[0];
         cnx->path[0] = path_x;
-
+#if 0
+        /* TODO: actually remove old instances after some time */
         if (cnx->client_mode) {
             /* Delete the old instance */
             picoquic_delete_path(cnx, path_index);
         }
+#endif
     }
 }
 
@@ -914,6 +916,13 @@ int picoquic_enqueue_cnxid_stash(picoquic_cnx_t * cnx,
                 is_duplicate = 1;
             }
             else {
+                DBG_PRINTF("Path %d, Cnx_id: %02x%02x%02x%02x..., Reset = %02x%02x%02x%02x... vs %02x%02x%02x%02x...",
+                    i,
+                    cnx->path[i]->remote_cnxid.id[0], cnx->path[i]->remote_cnxid.id[1], 
+                    cnx->path[i]->remote_cnxid.id[2], cnx->path[i]->remote_cnxid.id[3],
+                    secret_bytes[0], secret_bytes[1], secret_bytes[2], secret_bytes[3],
+                    cnx->path[i]->reset_secret[0], cnx->path[i]->reset_secret[1],
+                    cnx->path[i]->reset_secret[2], cnx->path[i]->reset_secret[3]);
                 ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
             }
             break;

@@ -1196,8 +1196,8 @@ void picoquic_cnx_set_next_wake_time(picoquic_cnx_t* cnx, uint64_t current_time)
     int blocked = 1;
     int pacing = 0;
     picoquic_path_t * path_x = cnx->path[0];
+    picoquic_probe_t * probe = cnx->probe_first;
     int ret = 0;
-
 
     if (cnx->cnx_state < picoquic_state_client_ready)
     {
@@ -1208,42 +1208,45 @@ void picoquic_cnx_set_next_wake_time(picoquic_cnx_t* cnx, uint64_t current_time)
     if (cnx->cnx_state == picoquic_state_disconnecting || cnx->cnx_state == picoquic_state_handshake_failure || cnx->cnx_state == picoquic_state_closing_received) {
         blocked = 0;
     }
-    else if (path_x->cwin > path_x->bytes_in_transit 
-        && (path_x->challenge_required == 0 || path_x->challenge_verified == 1)
-        && path_x->response_required == 0   
-        && picoquic_is_mtu_probe_needed(cnx, path_x)) {
-        blocked = 0;
-    }
-    else if ((cnx->cnx_state == picoquic_state_client_ready ||
-        cnx->cnx_state == picoquic_state_server_ready) &&
-        cnx->remote_parameters.migration_disabled == 0 &&
-        cnx->local_parameters.migration_disabled == 0 &&
-        cnx->nb_paths < PICOQUIC_NB_PATH_TARGET) {
-        blocked = 0;
-    }
-    else {
-        for (picoquic_packet_context_enum pc = 0; pc < picoquic_nb_packet_context; pc++) {
-            picoquic_packet_t* p = cnx->pkt_ctx[pc].retransmit_oldest;
+    else if (!path_x->path_is_demoted) {
 
-            if (p != NULL && ret == 0 && picoquic_retransmit_needed_by_packet(cnx, p, current_time, /* &ph,*/ &timer_based)) {
-                blocked = 0;
-            }
-            else if (picoquic_is_ack_needed(cnx, current_time, pc)) {
-                blocked = 0;
-            }
+        if (path_x->cwin > path_x->bytes_in_transit
+            && (path_x->challenge_required == 0 || path_x->challenge_verified == 1)
+            && path_x->response_required == 0
+            && picoquic_is_mtu_probe_needed(cnx, path_x)) {
+            blocked = 0;
         }
+        else if ((cnx->cnx_state == picoquic_state_client_ready ||
+            cnx->cnx_state == picoquic_state_server_ready) &&
+            cnx->remote_parameters.migration_disabled == 0 &&
+            cnx->local_parameters.migration_disabled == 0 &&
+            cnx->nb_paths < PICOQUIC_NB_PATH_TARGET) {
+            blocked = 0;
+        }
+        else {
+            for (picoquic_packet_context_enum pc = 0; pc < picoquic_nb_packet_context; pc++) {
+                picoquic_packet_t* p = cnx->pkt_ctx[pc].retransmit_oldest;
 
-        if (blocked != 0) {
-            if (path_x->cwin > path_x->bytes_in_transit) {
-                if (picoquic_should_send_max_data(cnx) ||
-                    picoquic_is_tls_stream_ready(cnx) ||
-                    ((cnx->cnx_state == picoquic_state_client_ready || cnx->cnx_state == picoquic_state_server_ready) &&
-                    (stream = picoquic_find_ready_stream(cnx)) != NULL)) {
-                    if (path_x->next_pacing_time < current_time + path_x->pacing_margin_micros) {
-                        blocked = 0;
-                    }
-                    else {
-                        pacing = 1;
+                if (p != NULL && ret == 0 && picoquic_retransmit_needed_by_packet(cnx, p, current_time, /* &ph,*/ &timer_based)) {
+                    blocked = 0;
+                }
+                else if (picoquic_is_ack_needed(cnx, current_time, pc)) {
+                    blocked = 0;
+                }
+            }
+
+            if (blocked != 0) {
+                if (path_x->cwin > path_x->bytes_in_transit) {
+                    if (picoquic_should_send_max_data(cnx) ||
+                        picoquic_is_tls_stream_ready(cnx) ||
+                        ((cnx->cnx_state == picoquic_state_client_ready || cnx->cnx_state == picoquic_state_server_ready) &&
+                        (stream = picoquic_find_ready_stream(cnx)) != NULL)) {
+                        if (path_x->next_pacing_time < current_time + path_x->pacing_margin_micros) {
+                            blocked = 0;
+                        }
+                        else {
+                            pacing = 1;
+                        }
                     }
                 }
             }
@@ -1252,37 +1255,48 @@ void picoquic_cnx_set_next_wake_time(picoquic_cnx_t* cnx, uint64_t current_time)
 
     if (blocked == 0) {
         next_time = current_time;
-    } else if (pacing != 0) {
+    } else if (path_x->path_is_demoted == 0) {
+        
+        if (pacing != 0) {
         next_time = path_x->next_pacing_time;
-    } else {
-        for (picoquic_packet_context_enum pc = 0; pc < picoquic_nb_packet_context; pc++) {
-            picoquic_packet_t* p = cnx->pkt_ctx[pc].retransmit_oldest;
-            /* Consider delayed ACK */
-            if (cnx->pkt_ctx[pc].ack_needed) {
-                uint64_t ack_time = cnx->pkt_ctx[pc].highest_ack_time + cnx->pkt_ctx[pc].ack_delay_local;
+        }
+        else {
+            for (picoquic_packet_context_enum pc = 0; pc < picoquic_nb_packet_context; pc++) {
+                picoquic_packet_t* p = cnx->pkt_ctx[pc].retransmit_oldest;
+                /* Consider delayed ACK */
+                if (cnx->pkt_ctx[pc].ack_needed) {
+                    uint64_t ack_time = cnx->pkt_ctx[pc].highest_ack_time + cnx->pkt_ctx[pc].ack_delay_local;
 
-                if (ack_time < next_time) {
-                    next_time = ack_time;
+                    if (ack_time < next_time) {
+                        next_time = ack_time;
+                    }
+                }
+
+                /* Consider delayed RACK */
+                if (p != NULL) {
+                    if (cnx->pkt_ctx[pc].latest_time_acknowledged > p->send_time
+                        && p->send_time + PICOQUIC_RACK_DELAY < next_time
+                        && p->ptype != picoquic_packet_0rtt_protected) {
+                        next_time = p->send_time + PICOQUIC_RACK_DELAY;
+                    }
+
+                    if (cnx->pkt_ctx[pc].nb_retransmit == 0) {
+                        if (p->send_time + path_x->retransmit_timer < next_time) {
+                            next_time = p->send_time + path_x->retransmit_timer;
+                        }
+                    }
+                    else {
+                        if (p->send_time + (1000000ull << (cnx->pkt_ctx[pc].nb_retransmit - 1)) < next_time) {
+                            next_time = p->send_time + (1000000ull << (cnx->pkt_ctx[pc].nb_retransmit - 1));
+                        }
+                    }
                 }
             }
 
-            /* Consider delayed RACK */
-            if (p != NULL) {
-                if (cnx->pkt_ctx[pc].latest_time_acknowledged > p->send_time
-                    && p->send_time + PICOQUIC_RACK_DELAY < next_time
-                    && p->ptype != picoquic_packet_0rtt_protected) {
-                    next_time = p->send_time + PICOQUIC_RACK_DELAY;
-                }
-
-                if (cnx->pkt_ctx[pc].nb_retransmit == 0) {
-                    if (p->send_time + path_x->retransmit_timer < next_time) {
-                        next_time = p->send_time + path_x->retransmit_timer;
-                    }
-                }
-                else {
-                    if (p->send_time + (1000000ull << (cnx->pkt_ctx[pc].nb_retransmit - 1)) < next_time) {
-                        next_time = p->send_time + (1000000ull << (cnx->pkt_ctx[pc].nb_retransmit - 1));
-                    }
+            if (next_time > current_time) {
+                /* Consider keep alive */
+                if (cnx->keep_alive_interval != 0 && next_time > (cnx->latest_progress_time + cnx->keep_alive_interval)) {
+                    next_time = cnx->latest_progress_time + cnx->keep_alive_interval;
                 }
             }
         }
@@ -1313,10 +1327,22 @@ void picoquic_cnx_set_next_wake_time(picoquic_cnx_t* cnx, uint64_t current_time)
             }
         }
 
-        /* Consider keep alive */
-        if (cnx->keep_alive_interval != 0 && next_time > (cnx->latest_progress_time + cnx->keep_alive_interval)) {
-            next_time = cnx->latest_progress_time + cnx->keep_alive_interval;
+        /* Consider probe timers */
+        while (probe != NULL && next_time > current_time) {
+            if (probe->challenge_verified == 0) {
+                uint64_t next_challenge_time = probe->challenge_time + cnx->path[0]->retransmit_timer;
+
+                if (next_challenge_time <= current_time) {
+                    next_time = current_time;
+                    break;
+                }
+                else if (next_challenge_time < next_time) {
+                    next_time = next_challenge_time;
+                }
+            }
+            probe = probe->next_probe;
         }
+
     }
 
     /* reset the connection at its new logical position */
