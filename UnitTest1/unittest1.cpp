@@ -30,6 +30,11 @@ namespace UnitTest1
 	TEST_CLASS(UnitTest1)
 	{
 	public:
+        TEST_CLASS_INITIALIZE(setup) {
+            // avoid large debug spew that slows down the console.
+            debug_printf_suspend();
+        }
+
 	    TEST_METHOD(test_picohash)
 	    {
             int ret = picohash_test();
