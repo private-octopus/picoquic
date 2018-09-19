@@ -86,7 +86,7 @@ int picoquic_parse_packet_header(
                     ph->pc = picoquic_packet_context_initial;
                     ph->payload_length = (uint16_t) ((length > ph->offset) ? length - ph->offset : 0);
 
-                    if (*pcnx == NULL) {
+                    if (*pcnx == NULL && quic != NULL) {
                         /* The version negotiation should always include the cnx-id sent by the client */
                         if (ph->dest_cnx_id.id_len > 0) {
                             *pcnx = picoquic_cnx_by_id(quic, ph->dest_cnx_id);
