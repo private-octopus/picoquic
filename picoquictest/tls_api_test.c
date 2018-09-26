@@ -128,6 +128,10 @@ static test_api_stream_desc_t test_scenario_very_long[] = {
     { 4, 0, 257, 1000000 }
 };
 
+static test_api_stream_desc_t test_scenario_quant[] = {
+    { 4, 0, 257, 10000 }
+};
+
 static test_api_stream_desc_t test_scenario_stop_sending[] = {
     { 4, 0, 257, 1000000 },
     { 8, 4, 531, 11000 }
@@ -2833,6 +2837,26 @@ int tls_different_params_test()
     return tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0, 0, 0, 3510000, &test_parameters);
 }
 
+int tls_quant_params_test()
+{
+    picoquic_tp_t test_parameters;
+
+    memset(&test_parameters, 0, sizeof(picoquic_tp_t));
+
+    picoquic_init_transport_parameters(&test_parameters, 1);
+
+    test_parameters.initial_max_stream_id_bidir = 0;
+
+    test_parameters.initial_max_data = 0x4000;
+    test_parameters.initial_max_stream_id_bidir = 1;
+    test_parameters.initial_max_stream_id_unidir = 65535;
+    test_parameters.initial_max_stream_data_bidi_local = 0x2000;
+    test_parameters.initial_max_stream_data_bidi_remote = 0x2000;
+    test_parameters.initial_max_stream_data_uni = 0x2000;
+
+    return tls_api_one_scenario_test(test_scenario_quant, sizeof(test_scenario_quant), 0, 0, 0, 0, 3510000, &test_parameters);
+}
+
 int set_certificate_and_key_test()
 {
     uint64_t simulated_time = 0;
@@ -3811,6 +3835,108 @@ int migration_test()
         }
         else if (picoquic_compare_connection_id(&test_ctx->cnx_client->path[0]->local_cnxid, &previous_local_id) == 0) {
             DBG_PRINTF("%s", "The local CNX ID did not change to a new value");
+            ret = -1;
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+/* Connection ID renewal test.
+ */
+
+int cnxid_renewal_test()
+{
+    uint64_t loss_mask_data = 0;
+    uint64_t simulated_time = 0;
+    uint64_t next_time = 0;
+    uint64_t loss_mask = 0;
+    uint64_t initial_challenge = 0;
+    picoquic_connection_id_t target_id = picoquic_null_connection_id;
+    picoquic_connection_id_t previous_local_id = picoquic_null_connection_id;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = PICOQUIC_ERROR_MEMORY;
+    }
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    /* run a receive loop until no outstanding data */
+    if (ret == 0) {
+        uint64_t time_out = simulated_time + 4000000;
+        int nb_rounds = 0;
+        int success = 0;
+
+        while (ret == 0 && simulated_time < time_out &&
+            nb_rounds < 2048 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
+            int was_active = 0;
+
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, &was_active);
+            nb_rounds++;
+
+            if (test_ctx->cnx_client->nb_paths >= PICOQUIC_NB_PATH_TARGET &&
+                test_ctx->cnx_server->nb_paths >= PICOQUIC_NB_PATH_TARGET &&
+                picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) &&
+                picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)) {
+                success = 1;
+                break;
+            }
+        }
+
+        if (ret == 0 && success == 0) {
+            DBG_PRINTF("Exit synch loop after %d rounds, backlog or not enough paths (%d & %d).\n",
+                nb_rounds, test_ctx->cnx_client->nb_paths, test_ctx->cnx_server->nb_paths);
+        }
+    }
+
+    /* Renew the connection ID */
+    if (ret == 0) {
+        ret = picoquic_renew_connection_id(test_ctx->cnx_client);
+        if (ret == 0) {
+            target_id = test_ctx->cnx_client->path[0]->remote_cnxid;
+            previous_local_id = test_ctx->cnx_client->path[0]->local_cnxid;
+        }
+    }
+
+    /* Prepare to send data */
+    if (ret == 0) {
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_q_and_r, sizeof(test_scenario_q_and_r));
+    }
+
+    /* Perform a data sending loop */
+    if (ret == 0) {
+        ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 0);
+    }
+
+    /* Add a time loop of 3 seconds to give some time for the probes to be repeated */
+    next_time = simulated_time + 3000000;
+    loss_mask = 0;
+    while (ret == 0 && simulated_time < next_time && test_ctx->cnx_client->cnx_state == picoquic_state_client_ready
+        && test_ctx->cnx_server->cnx_state == picoquic_state_server_ready
+        && test_ctx->cnx_server->path[0]->challenge_verified != 1) {
+        int was_active = 0;
+
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, &was_active);
+    }
+
+    /* Verify that the connection ID are what we expect */
+    if (ret == 0) {
+        if (picoquic_compare_connection_id(&test_ctx->cnx_client->path[0]->remote_cnxid, &target_id) != 0) {
+            DBG_PRINTF("%s", "The remote CNX ID migrated from the selected value");
+            ret = -1;
+        }
+        else if (picoquic_compare_connection_id(&test_ctx->cnx_client->path[0]->local_cnxid, &previous_local_id) != 0) {
+            DBG_PRINTF("%s", "The local CNX ID changed to a new value");
             ret = -1;
         }
     }

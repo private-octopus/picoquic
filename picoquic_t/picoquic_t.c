@@ -113,6 +113,7 @@ static const picoquic_test_def_t test_table[] = {
     { "set_verify_certificate_callback_test", set_verify_certificate_callback_test },
     { "virtual_time" , virtual_time_test },
     { "different_params", tls_different_params_test },
+    { "quant_params", tls_quant_params_test },
 #if 0
     { "wrong_tls_version", wrong_tls_version_test },
 #endif
@@ -131,8 +132,9 @@ static const picoquic_test_def_t test_table[] = {
     { "transmit_cnxid", transmit_cnxid_test },
     { "probe_api", probe_api_test },
     { "migration" , migration_test },
+    { "cnxid_renewal",  cnxid_renewal_test},
     { "stress", stress_test },
-    { "fuzz", fuzz_test },
+    { "fuzz", fuzz_test }
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);

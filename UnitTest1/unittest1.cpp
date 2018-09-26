@@ -538,6 +538,13 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(test_quant_params)
+        {
+            int ret = tls_quant_params_test();
+
+            Assert::AreEqual(ret, 0);
+        }
 #if 0
         TEST_METHOD(test_wrong_tls_version_test)
         {
@@ -634,6 +641,13 @@ namespace UnitTest1
         TEST_METHOD(test_migration)
         {
             int ret = migration_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(test_cnxid_renewal)
+        {
+            int ret = cnxid_renewal_test();
 
             Assert::AreEqual(ret, 0);
         }

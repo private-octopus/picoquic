@@ -101,6 +101,7 @@ int bad_certificate_test();
 int set_verify_certificate_callback_test();
 int virtual_time_test();
 int tls_different_params_test();
+int tls_quant_params_test();
 #if 0
 int wrong_tls_version_test();
 #endif
@@ -128,6 +129,7 @@ int new_cnxid_test();
 int transmit_cnxid_test();
 int probe_api_test();
 int migration_test();
+int cnxid_renewal_test();
 
 #ifdef __cplusplus
 }
