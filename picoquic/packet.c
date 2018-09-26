@@ -1194,6 +1194,8 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header * ph
                 cnx->path[path_id]->challenge_verified = cnx->path[0]->challenge_verified;
                 cnx->path[path_id]->challenge_failed = cnx->path[0]->challenge_failed;
                 cnx->path[0]->path_is_demoted = 1;
+                picoquic_promote_path_to_default(cnx, path_id);
+                path_id = 0;
             } else {
                 /* The peer is probing for a new path */
                 /* If there is no matching probe, try find a stashed ID */

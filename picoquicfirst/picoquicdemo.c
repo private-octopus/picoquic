@@ -592,7 +592,7 @@ static const demo_stream_desc_t test_scenario[] = {
 #else
     { 0, 0xFFFFFFFF, "index.html", "index.html", 0 },
     { 4, 0, "test.html", "test.html", 0 },
-    { 8, 0, "doc-123456.html", "doc-123456.html", 0 },
+    { 8, 0, "123456", "doc-123456.html", 0 },
     { 12, 0, "main.jpg", "main.jpg", 1 },
     { 16, 0, "war-and-peace.txt", "war-and-peace.txt", 0 },
     { 20, 0, "en/latest/", "slash_en_slash_latest.html", 0 }
@@ -810,49 +810,90 @@ static void first_client_callback(picoquic_cnx_t* cnx,
  * but in many cases the client will be behind a NAT, so it will not know its
  * actual IP address.
  */
-int quic_client_migrate(picoquic_cnx_t * cnx, SOCKET_TYPE * fd, struct sockaddr * server_address, FILE * F_log) 
+int quic_client_migrate(picoquic_cnx_t * cnx, SOCKET_TYPE * fd, struct sockaddr * server_address, int force_migration, FILE * F_log) 
 {
     int ret = 0;
-    SOCKET_TYPE fd_m;
 
-    fd_m = socket(server_address->sa_family, SOCK_DGRAM, IPPROTO_UDP);
-    if (fd_m == INVALID_SOCKET) {
-        fprintf(stdout, "Could not open new socket.\n");
-        if (F_log != stdout && F_log != stderr)
-        {
+    if (force_migration != 2) {
+        SOCKET_TYPE fd_m;
+
+        fd_m = socket(server_address->sa_family, SOCK_DGRAM, IPPROTO_UDP);
+        if (fd_m == INVALID_SOCKET) {
             fprintf(stdout, "Could not open new socket.\n");
+            if (F_log != stdout && F_log != stderr)
+            {
+                fprintf(stdout, "Could not open new socket.\n");
+            }
+            ret = -1;
         }
-        ret = -1;
-    } else {
-        SOCKET_CLOSE(*fd);
-        *fd = fd_m;
+        else {
+            SOCKET_CLOSE(*fd);
+            *fd = fd_m;
+        }
+    }
 
-        ret = picoquic_create_probe(cnx, server_address, NULL);
-        if (ret != 0) {
-
-            if (ret == PICOQUIC_ERROR_MIGRATION_DISABLED) {
-                fprintf(stdout, "Migration disabled, will test NAT rebinding support.\n");
-                if (F_log != stdout && F_log != stderr)
-                {
-                    fprintf(F_log, "Will test NAT rebinding support.\n");
+    if (ret == 0){
+        if (force_migration == 1) {
+            fprintf(stdout, "Switch to new port. Will test NAT rebinding support.\n");
+            if (F_log != stdout && F_log != stderr)
+            {
+                fprintf(F_log, "Switch to new port. Will test NAT rebinding support.\n");
+            }
+        }
+        else if (force_migration == 2) {
+            ret = picoquic_renew_connection_id(cnx);
+            if (ret != 0) {
+                if (ret == PICOQUIC_ERROR_MIGRATION_DISABLED) {
+                    fprintf(stdout, "Migration disabled, cannot test CNXID renewal.\n");
+                    if (F_log != stdout && F_log != stderr)
+                    {
+                        fprintf(stdout, "Migration disabled, cannot test CNXID renewal.\n");
+                    }
                 }
-
-                ret = 0;
-            } else {
-                fprintf(stdout, "Create Probe failed, error: %x.\n", ret);
+                else {
+                    fprintf(stdout, "Renew CNXID failed, error: %x.\n", ret);
+                    if (F_log != stdout && F_log != stderr)
+                    {
+                        fprintf(F_log, "Create Probe failed, error: %x.\n", ret);
+                    }
+                }
+            }
+            else {
+                fprintf(stdout, "Switching to new CNXID.\n");
                 if (F_log != stdout && F_log != stderr)
                 {
-                    fprintf(F_log, "Create Probe failed, error: %x.\n", ret);
+                    fprintf(F_log, "Switching to new CNXID.\n");
                 }
             }
         }
         else {
-            fprintf(stdout, "Switch to new port, sending probe.\n");
-            if (F_log != stdout && F_log != stderr)
-            {
-                fprintf(F_log, "Switch to new port, sending probe.\n");
+            ret = picoquic_create_probe(cnx, server_address, NULL);
+            if (ret != 0) {
+                if (ret == PICOQUIC_ERROR_MIGRATION_DISABLED) {
+                    fprintf(stdout, "Migration disabled, will test NAT rebinding support.\n");
+                    if (F_log != stdout && F_log != stderr)
+                    {
+                        fprintf(F_log, "Will test NAT rebinding support.\n");
+                    }
+
+                    ret = 0;
+                }
+                else {
+                    fprintf(stdout, "Create Probe failed, error: %x.\n", ret);
+                    if (F_log != stdout && F_log != stderr)
+                    {
+                        fprintf(F_log, "Create Probe failed, error: %x.\n", ret);
+                    }
+                }
             }
-            cnx->path[0]->path_is_demoted = 1;
+            else {
+                fprintf(stdout, "Switch to new port, sending probe.\n");
+                if (F_log != stdout && F_log != stderr)
+                {
+                    fprintf(F_log, "Switch to new port, sending probe.\n");
+                }
+                cnx->path[0]->path_is_demoted = 1;
+            }
         }
     }
 
@@ -1090,9 +1131,11 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
 
                     client_ready_loop++;
 
-                    if (force_migration && migration_started == 0 && cnx_client->cnxid_stash_first!= NULL) {
+                    if (force_migration && migration_started == 0 && cnx_client->cnxid_stash_first!= NULL /* &&
+                        cnx_client->pkt_ctx[1].retransmit_newest == NULL &&
+                        cnx_client->pkt_ctx[2].retransmit_newest == NULL */) {
                         int mig_ret = quic_client_migrate(cnx_client, &fd,
-                            (struct sockaddr *)&server_address, F_log);
+                            (struct sockaddr *)&server_address, force_migration, F_log);
 
                         migration_started = 1;
 
@@ -1228,7 +1271,10 @@ void usage()
     fprintf(stderr, "                            1: picoquic_cnx_id_remote (client)\n");
     fprintf(stderr, "  -v version            Version proposed by client, e.g. -v ff00000a\n");
     fprintf(stderr, "  -z                    Set TLS zero share behavior on client, to force HRR.\n");
-    fprintf(stderr, "  -f                    Force client to migrate to new port after opening connection\n");
+    fprintf(stderr, "  -f migration_mode     Force client to migrate to start migration:\n");
+    fprintf(stderr, "                        -f 1  test NAT rebinding,\n");
+    fprintf(stderr, "                        -f 2  test CNXID renewal,\n");
+    fprintf(stderr, "                        -f 3  test migration to new address.\n");
     fprintf(stderr, "  -l file               Log file\n");
     fprintf(stderr, "  -m mtu_max            Largest mtu value that can be tried for discovery\n");
     fprintf(stderr, "  -h                    This help message\n");
@@ -1295,7 +1341,7 @@ int main(int argc, char** argv)
 
     /* Get the parameters */
     int opt;
-    while ((opt = getopt(argc, argv, "c:k:p:v:1rhzfi:s:l:m:n:t:")) != -1) {
+    while ((opt = getopt(argc, argv, "c:k:p:v:1rhzf:i:s:l:m:n:t:")) != -1) {
         switch (opt) {
         case 'c':
             server_cert_file = optarg;
@@ -1362,7 +1408,12 @@ int main(int argc, char** argv)
             force_zero_share = 1;
             break;
         case 'f':
-            force_migration = 1;
+            force_migration = atoi(optarg);
+            if (force_migration <= 0 || force_migration > 3) {
+                fprintf(stderr, "Invalid migration mode: %s\n", optarg);
+                usage();
+            }
+            break;
             break;
         case 'h':
             usage();

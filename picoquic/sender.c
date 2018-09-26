@@ -2369,15 +2369,16 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                         if (ret == 0) {
                             ret = picoquic_prepare_required_max_stream_data_frames(cnx, &bytes[length],
                                 send_buffer_min_max - checksum_overhead - length, &data_bytes);
-                        }
 
-                        if (ret == 0) {
-                            length += (uint32_t)data_bytes;
-                            if (data_bytes > 0)
-                            {
-                                is_pure_ack = 0;
+                            if (ret == 0) {
+                                length += (uint32_t)data_bytes;
+                                if (data_bytes > 0)
+                                {
+                                    is_pure_ack = 0;
+                                }
                             }
                         }
+
                         /* Encode the stream frame, or frames */
                         while (stream != NULL) {
                             ret = picoquic_prepare_stream_frame(cnx, stream, &bytes[length],
