@@ -979,6 +979,36 @@ int picoquic_enqueue_cnxid_stash(picoquic_cnx_t * cnx,
 }
 
 /*
+ * Start using a new connection ID for the existing connection
+ */
+int picoquic_renew_connection_id(picoquic_cnx_t* cnx)
+{
+    int ret = 0;
+    picoquic_cnxid_stash_t * stashed = NULL;
+
+    if (cnx->remote_parameters.migration_disabled != 0 ||
+        cnx->local_parameters.migration_disabled != 0) {
+        /* Do not switch cnx_id if migration is disabled */
+        ret = PICOQUIC_ERROR_MIGRATION_DISABLED;
+    }
+    else {
+        stashed = picoquic_dequeue_cnxid_stash(cnx);
+
+        if (stashed == NULL) {
+            ret = PICOQUIC_ERROR_CNXID_NOT_AVAILABLE;
+        } else {
+            /* TODO: disposal of old CNXID */
+            cnx->path[0]->remote_cnxid = stashed->cnx_id;
+            memcpy(cnx->path[0]->reset_secret, stashed->reset_secret,
+                PICOQUIC_RESET_SECRET_SIZE);
+            free(stashed);
+        }
+    }
+
+    return ret;
+}
+
+/*
  * Manage the list of ongoing probes.
  */
 

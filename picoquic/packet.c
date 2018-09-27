@@ -1172,11 +1172,32 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header * ph
                 cnx->path[path_id]->challenge_repeat_count = probe->challenge_repeat_count;
                 cnx->path[path_id]->challenge_required = probe->challenge_required;
                 cnx->path[path_id]->challenge_verified = probe->challenge_verified;
-                cnx->path[path_id]->challenge_failed = probe->challenge_verified;
+                cnx->path[path_id]->challenge_failed = probe->challenge_failed;
 
                 picoquic_delete_probe(cnx, probe);
             }
-            else {
+            else if (picoquic_compare_addr((struct sockaddr *)&cnx->path[0]->peer_addr,
+                (struct sockaddr *)addr_from) == 0 &&
+                picoquic_compare_addr((struct sockaddr *)&cnx->path[0]->local_addr,
+                    addr_to) == 0) {
+                /* Only the connection ID changed from path 0. Use the path[0] remote
+                 * ID, validate this path, invalidate path[0]. */
+                cnx->path[path_id]->remote_cnxid = cnx->path[0]->remote_cnxid;
+                memcpy(cnx->path[path_id]->reset_secret, cnx->path[0]->reset_secret,
+                    PICOQUIC_RESET_SECRET_SIZE);
+                cnx->path[path_id]->path_is_activated = 1;
+                cnx->path[path_id]->challenge_required = cnx->path[0]->challenge_required;
+                cnx->path[path_id]->challenge = cnx->path[0]->challenge;
+                cnx->path[path_id]->challenge_time = cnx->path[0]->challenge_time;
+                cnx->path[path_id]->challenge_repeat_count = cnx->path[0]->challenge_repeat_count;
+                cnx->path[path_id]->challenge_required = cnx->path[0]->challenge_required;
+                cnx->path[path_id]->challenge_verified = cnx->path[0]->challenge_verified;
+                cnx->path[path_id]->challenge_failed = cnx->path[0]->challenge_failed;
+                cnx->path[0]->path_is_demoted = 1;
+                picoquic_promote_path_to_default(cnx, path_id);
+                path_id = 0;
+            } else {
+                /* The peer is probing for a new path */
                 /* If there is no matching probe, try find a stashed ID */
                 picoquic_cnxid_stash_t * available_cnxid = picoquic_dequeue_cnxid_stash(cnx);
                 if (available_cnxid != NULL) {
