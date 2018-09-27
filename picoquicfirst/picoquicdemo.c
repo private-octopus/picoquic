@@ -1395,14 +1395,14 @@ int main(int argc, char** argv)
             reset_seed[0] = strtoul(argv[optind++], NULL, 0);
             break;
         case 'i':
-            if (optind + 1 > argc) {
+            if (optind + 2 > argc) {
                 fprintf(stderr, "option requires more arguments -- i\n");
                 usage();
             }
 
             cnx_id_cbdata.cnx_id_select = atoi(optarg);
             /* TODO: find an alternative to parsing a 64 bit integer */
-            picoquic_set64_connection_id(&cnx_id_cbdata.cnx_id_mask, ~strtoul(optarg, NULL, 0));
+            picoquic_set64_connection_id(&cnx_id_cbdata.cnx_id_mask, ~strtoul(argv[optind++], NULL, 0));
             picoquic_set64_connection_id(&cnx_id_cbdata.cnx_id_val, strtoul(argv[optind++], NULL, 0));
             cnx_id_mask_is_set = 1;
             break;
