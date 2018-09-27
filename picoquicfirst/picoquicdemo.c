@@ -198,6 +198,7 @@ static picoquic_first_server_callback_ctx_t* first_server_callback_create_contex
         malloc(sizeof(picoquic_first_server_callback_ctx_t));
 
     if (ctx != NULL) {
+        memset(ctx, 0, sizeof(picoquic_first_server_callback_ctx_t));
         ctx->first_stream = NULL;
         ctx->buffer = (uint8_t*)malloc(PICOQUIC_FIRST_RESPONSE_MAX);
         if (ctx->buffer == NULL) {
@@ -218,6 +219,11 @@ static void first_server_callback_delete_context(picoquic_first_server_callback_
     while ((stream_ctx = ctx->first_stream) != NULL) {
         ctx->first_stream = stream_ctx->next_stream;
         free(stream_ctx);
+    }
+
+    if (ctx->buffer != NULL) {
+        free(ctx->buffer);
+        ctx->buffer = NULL;
     }
 
     free(ctx);
@@ -592,7 +598,7 @@ static const demo_stream_desc_t test_scenario[] = {
 #else
     { 0, 0xFFFFFFFF, "index.html", "index.html", 0 },
     { 4, 0, "test.html", "test.html", 0 },
-    { 8, 0, "123456", "doc-123456.html", 0 },
+    { 8, 0, "1234567", "doc-1234567.html", 0 },
     { 12, 0, "main.jpg", "main.jpg", 1 },
     { 16, 0, "war-and-peace.txt", "war-and-peace.txt", 0 },
     { 20, 0, "en/latest/", "slash_en_slash_latest.html", 0 }
@@ -1131,16 +1137,14 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
 
                     client_ready_loop++;
 
-                    if (force_migration && migration_started == 0 && cnx_client->cnxid_stash_first!= NULL /* &&
-                        cnx_client->pkt_ctx[1].retransmit_newest == NULL &&
-                        cnx_client->pkt_ctx[2].retransmit_newest == NULL */) {
+                    if (force_migration && migration_started == 0 && cnx_client->cnxid_stash_first != NULL) {
                         int mig_ret = quic_client_migrate(cnx_client, &fd,
                             (struct sockaddr *)&server_address, force_migration, F_log);
 
                         migration_started = 1;
 
                         if (mig_ret != 0) {
-                            fprintf(stdout, "will not test migration.\n");
+                            fprintf(stdout, "Will not test migration.\n");
                             migration_started = -1;
                         }
                     }
