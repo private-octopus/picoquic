@@ -3406,31 +3406,32 @@ int client_error_test()
         ret = tls_api_one_sim_round(test_ctx, &simulated_time, next_time, &was_active);
     }
 
-    if (test_ctx->cnx_server->cnx_state != picoquic_state_disconnected) {
+    if (ret == 0 && test_ctx->cnx_server->cnx_state != picoquic_state_disconnected) {
         ret = -1;
     }
 
-    /* Delete the client connection from the client context,
-     * without sending notification to the server */
+    if (ret == 0) {
+        /* Delete the client connection from the client context,
+         * without sending notification to the server */
+        while (test_ctx->qclient->cnx_list != NULL) {
+            picoquic_delete_cnx(test_ctx->qclient->cnx_list);
+        }
 
-    while (test_ctx->qclient->cnx_list != NULL) {
-        picoquic_delete_cnx(test_ctx->qclient->cnx_list);
-    }
+        /* Erase the server connection reference */
+        test_ctx->cnx_server = NULL;
 
-    /* Erase the server connection reference */
-    test_ctx->cnx_server = NULL;
+        /* Create a new connection in the client context */
 
-    /* Create a new connection in the client context */
+        test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
+            picoquic_null_connection_id, picoquic_null_connection_id,
+            (struct sockaddr*)&test_ctx->server_addr, simulated_time, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
 
-    test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
-        picoquic_null_connection_id, picoquic_null_connection_id,
-        (struct sockaddr*)&test_ctx->server_addr, simulated_time, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
-
-    if (test_ctx->cnx_client == NULL) {
-        ret = -1;
-    }
-    else if (ret == 0) {
-        ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+        if (test_ctx->cnx_client == NULL) {
+            ret = -1;
+        }
+        else if (ret == 0) {
+            ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+        }
     }
 
     /* Now, restart a connection in the same context */
@@ -3891,11 +3892,9 @@ int migration_test()
 
 int cnxid_renewal_test()
 {
-    uint64_t loss_mask_data = 0;
     uint64_t simulated_time = 0;
     uint64_t next_time = 0;
     uint64_t loss_mask = 0;
-    uint64_t initial_challenge = 0;
     picoquic_connection_id_t target_id = picoquic_null_connection_id;
     picoquic_connection_id_t previous_local_id = picoquic_null_connection_id;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
