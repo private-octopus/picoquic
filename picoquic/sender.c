@@ -2236,8 +2236,12 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
 
             if (((stream == NULL && tls_ready == 0 && cnx->first_misc_frame == NULL) || path_x->cwin <= path_x->bytes_in_transit)
                 && picoquic_is_ack_needed(cnx, current_time, pc) == 0
-                && (path_x->challenge_verified == 1 || current_time < path_x->challenge_time + path_x->retransmit_timer || path_x->challenge_repeat_count != 0)
-                && path_x->response_required == 0) {
+                && (path_x->challenge_verified == 1 || (current_time < path_x->challenge_time + path_x->retransmit_timer && path_x->challenge_repeat_count != 0))
+                && path_x->response_required == 0 &&
+                !picoquic_should_send_max_data(cnx) &&
+                !(cnx->remote_parameters.migration_disabled == 0 &&
+                cnx->local_parameters.migration_disabled == 0 &&
+                cnx->nb_paths < PICOQUIC_NB_PATH_TARGET)) {
                 if (ret == 0 && send_buffer_max > path_x->send_mtu
                     && path_x->cwin > path_x->bytes_in_transit && picoquic_is_mtu_probe_needed(cnx, path_x)) {
                     length = picoquic_prepare_mtu_probe(cnx, path_x, header_length, checksum_overhead, bytes);

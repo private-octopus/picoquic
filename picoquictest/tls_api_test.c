@@ -681,45 +681,90 @@ static int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t propose
 }
 
 static int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
-    uint64_t* simulated_time, int* was_active)
+    uint64_t* simulated_time, uint64_t time_out, int* was_active)
 {
     int ret = 0;
     picoquictest_sim_link_t* target_link = NULL;
+    int next_action = 0;
 
-    /* If one of the sources can send a packet, send it, keep time as it */
+    if (test_ctx->qserver->pending_stateless_packet != NULL) {
+        next_action = 1;
+    }
+    else {
+        uint64_t next_time = *simulated_time + 120000000;
+        uint64_t client_arrival, server_arrival;
 
-    picoquictest_sim_packet_t* packet = picoquictest_sim_link_create_packet();
-
-    if (packet == NULL || test_ctx->cnx_client == NULL) {
-        ret = -1;
-    } else {
-        picoquic_stateless_packet_t* sp = picoquic_dequeue_stateless_packet(test_ctx->qserver);
-
-        if (sp != NULL) {
-            if (sp->length > 0) {
-                *simulated_time += 100000;
-
-                *was_active |= 1;
-                memcpy(&packet->addr_from, &sp->addr_local,
-                    (sp->addr_local.ss_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
-                memcpy(&packet->addr_to, &sp->addr_to,
-                    (sp->addr_to.ss_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
-                memcpy(packet->bytes, sp->bytes, sp->length);
-                packet->length = sp->length;
-
-                target_link = test_ctx->s_to_c_link;
+        if (test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
+            uint64_t client_departure = test_ctx->cnx_client->next_wake_time;
+            if (client_departure < next_time) {
+                next_time = client_departure;
+                next_action = 2;
             }
-            picoquic_delete_stateless_packet(sp);
         }
 
-        if (packet->length == 0) {
-            /* check whether the client has something to send */
-            int peer_addr_len = 0;
-            struct sockaddr* peer_addr = NULL;
-            int local_addr_len = 0;
-            struct sockaddr* local_addr = NULL;
+        if (test_ctx->cnx_server != NULL && test_ctx->cnx_server->cnx_state != picoquic_state_disconnected) {
+            uint64_t server_departure = test_ctx->cnx_server->next_wake_time;
+            if (server_departure < next_time) {
+                next_time = server_departure;
+                next_action = 3;
+            }
+        }
 
-            if (test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
+        client_arrival = picoquictest_sim_link_next_arrival(test_ctx->s_to_c_link, next_time);
+        if (client_arrival < next_time) {
+            next_time = client_arrival;
+            next_action = 4;
+        }
+
+        server_arrival = picoquictest_sim_link_next_arrival(test_ctx->c_to_s_link, next_time);
+        if (server_arrival < next_time) {
+            next_time = server_arrival;
+            next_action = 5;
+        }
+
+
+        if (time_out > 0 && next_time > time_out) {
+            next_action = 0;
+            *simulated_time = next_time;
+        } else if (next_time > *simulated_time) {
+            *simulated_time = next_time;
+        }
+    }
+
+    if (next_action >= 1 && next_action <= 3) {
+        /* If there is something to send, do it now */
+        picoquictest_sim_packet_t* packet = picoquictest_sim_link_create_packet();
+
+        if (packet == NULL || test_ctx->cnx_client == NULL) {
+            ret = -1;
+        }
+        else {
+            if (next_action == 1) {
+                picoquic_stateless_packet_t* sp = picoquic_dequeue_stateless_packet(test_ctx->qserver);
+
+                if (sp != NULL) {
+                    if (sp->length > 0) {
+
+                        *was_active |= 1;
+                        memcpy(&packet->addr_from, &sp->addr_local,
+                            (sp->addr_local.ss_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
+                        memcpy(&packet->addr_to, &sp->addr_to,
+                            (sp->addr_to.ss_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
+                        memcpy(packet->bytes, sp->bytes, sp->length);
+                        packet->length = sp->length;
+
+                        target_link = test_ctx->s_to_c_link;
+                    }
+                    picoquic_delete_stateless_packet(sp);
+                }
+            }
+            else if (next_action == 2) {
+                /* check whether the client has something to send */
+                int peer_addr_len = 0;
+                struct sockaddr* peer_addr = NULL;
+                int local_addr_len = 0;
+                struct sockaddr* local_addr = NULL;
+
                 ret = picoquic_prepare_packet(test_ctx->cnx_client, *simulated_time,
                     packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length,
                     &peer_addr, &peer_addr_len, &local_addr, &local_addr_len);
@@ -728,13 +773,7 @@ static int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                     /* useless test, but makes it easier to add a breakpoint under debugger */
                     ret = -1;
                 }
-            }
-            else {
-                packet->length = 0;
-            }
-
-            if (ret == 0) {
-                if (packet->length > 0) {
+                else if (packet->length > 0) {
                     /* queue in c_to_s */
                     if (local_addr_len == 0) {
                         memcpy(&packet->addr_from, &test_ctx->client_addr, sizeof(struct sockaddr_in));
@@ -745,137 +784,121 @@ static int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                     memcpy(&packet->addr_to, peer_addr, peer_addr_len);
                     target_link = test_ctx->c_to_s_link;
                 }
-                else if (test_ctx->cnx_server != NULL && test_ctx->cnx_server->cnx_state != picoquic_state_disconnected) {
-                    int peer_addr_len = 0;
-                    struct sockaddr* peer_addr = NULL;
-                    int local_addr_len = 0;
-                    struct sockaddr* local_addr = NULL;
-
-                    ret = picoquic_prepare_packet(test_ctx->cnx_server, *simulated_time,
-                        packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length,
-                        &peer_addr, &peer_addr_len, &local_addr, &local_addr_len);
-                    if (ret == 0 && packet->length > 0) {
-                        /* copy and queue in s to c */
-                        if (local_addr_len == 0) {
-                            memcpy(&packet->addr_from, &test_ctx->server_addr, sizeof(struct sockaddr_in));
-                        } else {
-                            memcpy(&packet->addr_from, local_addr, local_addr_len);
-                        }
-                        memcpy(&packet->addr_to, peer_addr, peer_addr_len);
-                        target_link = test_ctx->s_to_c_link;
-                    }
-                    if (ret != 0)
-                    {
-                        /* useless test, but makes it easier to add a breakpoint under debugger */
-                        ret = -1;
-                    }
-                }
             }
-        }
+            else if (next_action == 3) {
+                int peer_addr_len = 0;
+                struct sockaddr* peer_addr = NULL;
+                int local_addr_len = 0;
+                struct sockaddr* local_addr = NULL;
 
-        if (packet->length > 0) {
-            int simulate_loss = 0;
-            if (target_link == test_ctx->c_to_s_link) {
-                if (picoquic_compare_addr((struct sockaddr *)&test_ctx->client_addr,
-                    (struct sockaddr *)&packet->addr_from) != 0) {
-                    if (test_ctx->client_use_nat) {
-                        /* Rewrite the address */
-                        picoquic_store_addr(&packet->addr_from, (struct sockaddr *)&test_ctx->client_addr);
+                ret = picoquic_prepare_packet(test_ctx->cnx_server, *simulated_time,
+                    packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length,
+                    &peer_addr, &peer_addr_len, &local_addr, &local_addr_len);
+                if (ret != 0)
+                {
+                    /* useless test, but makes it easier to add a breakpoint under debugger */
+                    ret = -1;
+                }
+                else if (packet->length > 0) {
+                    /* copy and queue in s to c */
+                    if (local_addr_len == 0) {
+                        memcpy(&packet->addr_from, &test_ctx->server_addr, sizeof(struct sockaddr_in));
                     }
                     else {
-                        /* Using wrong address: simulate loss */
-                        simulate_loss = 1;
+                        memcpy(&packet->addr_from, local_addr, local_addr_len);
                     }
+                    memcpy(&packet->addr_to, peer_addr, peer_addr_len);
+                    target_link = test_ctx->s_to_c_link;
                 }
             }
-            if (simulate_loss == 0) {
-                picoquictest_sim_link_submit(target_link, packet, *simulated_time);
+
+            if (packet->length > 0) {
+                int simulate_loss = 0;
+                if (target_link == test_ctx->c_to_s_link) {
+                    if (picoquic_compare_addr((struct sockaddr *)&test_ctx->client_addr,
+                        (struct sockaddr *)&packet->addr_from) != 0) {
+                        if (test_ctx->client_use_nat) {
+                            /* Rewrite the address */
+                            picoquic_store_addr(&packet->addr_from, (struct sockaddr *)&test_ctx->client_addr);
+                        }
+                        else {
+                            /* Using wrong address: simulate loss */
+                            simulate_loss = 1;
+                        }
+                    }
+                }
+                if (simulate_loss == 0) {
+                    picoquictest_sim_link_submit(target_link, packet, *simulated_time);
+                }
+                else {
+                    free(packet);
+                }
+                *was_active |= 1;
             }
             else {
                 free(packet);
             }
-            *was_active |= 1;
-        } else {
-            uint64_t next_time = *simulated_time += 5000;
-            uint64_t client_arrival, server_arrival;
+        }
+    }
+    else if (next_action == 4) {
+        /* If there is something to receive, do it now */
+        picoquictest_sim_packet_t* packet = picoquictest_sim_link_dequeue(test_ctx->s_to_c_link, *simulated_time);
+
+        if (packet != NULL) {
+
+            /* Check the destination address  before submitting the packet */
+            if (picoquic_compare_addr((struct sockaddr *)&test_ctx->client_addr,
+                (struct sockaddr *)&packet->addr_to) == 0) {
+                ret = picoquic_incoming_packet(test_ctx->qclient, packet->bytes, (uint32_t)packet->length,
+                    (struct sockaddr*)&packet->addr_from,
+                    (struct sockaddr*)&packet->addr_to, 0,
+                    *simulated_time);
+                *was_active |= 1;
+            }
+
+            if (ret != 0)
+            {
+                /* useless test, but makes it easier to add a breakpoint under debugger */
+                ret = -1;
+            }
 
             free(packet);
+        }
+    }
+    else if (next_action == 5) {
+        picoquictest_sim_packet_t* packet = picoquictest_sim_link_dequeue(test_ctx->c_to_s_link, *simulated_time);
 
-            if (test_ctx->cnx_client != NULL && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
-                if (test_ctx->cnx_server != NULL && test_ctx->cnx_server->cnx_state != picoquic_state_disconnected && test_ctx->cnx_server->next_wake_time < test_ctx->cnx_client->next_wake_time) {
-                    next_time = test_ctx->cnx_server->next_wake_time;
-                } else {
-                    next_time = test_ctx->cnx_client->next_wake_time;
-                }
-            } else if (test_ctx->cnx_server != NULL && test_ctx->cnx_server->cnx_state != picoquic_state_disconnected) {
-                next_time = test_ctx->cnx_server->next_wake_time;
+        if (packet != NULL) {
+
+            /* Check the destination address  before submitting the packet */
+            /* TODO: better test when testing more than NAT rebinding. */
+            if (picoquic_compare_addr((struct sockaddr *)&test_ctx->server_addr,
+                (struct sockaddr *)&packet->addr_to) == 0) {
+                ret = picoquic_incoming_packet(test_ctx->qserver, packet->bytes, (uint32_t)packet->length,
+                    (struct sockaddr*)&packet->addr_from,
+                    (struct sockaddr*)&packet->addr_to, 0,
+                    *simulated_time);
             }
 
-            if (next_time < *simulated_time + 5000) {
-                next_time = *simulated_time + 5000;
+            if (ret != 0)
+            {
+                /* useless test, but makes it easier to add a breakpoint under debugger */
+                ret = -1;
             }
 
-            client_arrival = picoquictest_sim_link_next_arrival(test_ctx->s_to_c_link, next_time);
-            server_arrival = picoquictest_sim_link_next_arrival(test_ctx->c_to_s_link, next_time);
+            if (test_ctx->cnx_server == NULL) {
+                picoquic_connection_id_t target_cnxid = test_ctx->cnx_client->initial_cnxid;
+                picoquic_cnx_t* next = test_ctx->qserver->cnx_list;
 
-            if (client_arrival < server_arrival && client_arrival < next_time && (packet = picoquictest_sim_link_dequeue(test_ctx->s_to_c_link, client_arrival)) != NULL) {
-                next_time = client_arrival;
-                *simulated_time = next_time;
-
-                /* Check the destination address  before submitting the packet */
-                if (picoquic_compare_addr((struct sockaddr *)&test_ctx->client_addr,
-                    (struct sockaddr *)&packet->addr_to) == 0) {
-                    ret = picoquic_incoming_packet(test_ctx->qclient, packet->bytes, (uint32_t)packet->length,
-                        (struct sockaddr*)&packet->addr_from,
-                        (struct sockaddr*)&packet->addr_to, 0,
-                        *simulated_time);
-                    *was_active |= 1;
+                while (next != NULL && picoquic_compare_connection_id(&next->initial_cnxid, &target_cnxid) != 0) {
+                    next = next->next_in_table;
                 }
 
-                if (ret != 0)
-                {
-                    /* useless test, but makes it easier to add a breakpoint under debugger */
-                    ret = -1;
-                }
-
-                free(packet);
-            } else if (server_arrival < next_time && (packet = picoquictest_sim_link_dequeue(test_ctx->c_to_s_link, server_arrival)) != NULL) {
-
-                next_time = server_arrival;
-                *simulated_time = next_time;
-
-                /* Check the destination address  before submitting the packet */
-                /* TODO: better test when testing more than NAT rebinding. */
-                if (picoquic_compare_addr((struct sockaddr *)&test_ctx->server_addr,
-                    (struct sockaddr *)&packet->addr_to) == 0) {
-                    ret = picoquic_incoming_packet(test_ctx->qserver, packet->bytes, (uint32_t)packet->length,
-                        (struct sockaddr*)&packet->addr_from,
-                        (struct sockaddr*)&packet->addr_to, 0,
-                        *simulated_time);
-                }
-
-                if (ret != 0)
-                {
-                    /* useless test, but makes it easier to add a breakpoint under debugger */
-                    ret = -1;
-                }
-
-                if (test_ctx->cnx_server == NULL) {
-                    picoquic_connection_id_t target_cnxid = test_ctx->cnx_client->initial_cnxid;
-                    picoquic_cnx_t* next = test_ctx->qserver->cnx_list;
-
-                    while (next != NULL && picoquic_compare_connection_id(&next->initial_cnxid, &target_cnxid)!=0) {
-                        next = next->next_in_table;
-                    }
-
-                    test_ctx->cnx_server = next;
-                }
-
-                *was_active |= 1;
-                free(packet);
-            } else {
-                *simulated_time = next_time;
+                test_ctx->cnx_server = next;
             }
+
+            *was_active |= 1;
+            free(packet);
         }
     }
 
@@ -899,7 +922,7 @@ static int tls_api_connection_loop(picoquic_test_tls_api_ctx_t* test_ctx,
         int was_active = 0;
         nb_trials++;
 
-        ret = tls_api_one_sim_round(test_ctx, simulated_time, &was_active);
+        ret = tls_api_one_sim_round(test_ctx, simulated_time, 0, &was_active);
 
         if (was_active) {
             nb_inactive = 0;
@@ -930,7 +953,7 @@ static int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
 
         nb_trials++;
 
-        ret = tls_api_one_sim_round(test_ctx, simulated_time, &was_active);
+        ret = tls_api_one_sim_round(test_ctx, simulated_time, 0, &was_active);
 
         if (ret < 0)
         {
@@ -972,7 +995,7 @@ static int wait_application_pn_enc_ready(picoquic_test_tls_api_ctx_t* test_ctx,
         int was_active = 0;
         nb_trials++;
 
-        ret = tls_api_one_sim_round(test_ctx, simulated_time, &was_active);
+        ret = tls_api_one_sim_round(test_ctx, simulated_time, time_out, &was_active);
 
         if (was_active) {
             nb_inactive = 0;
@@ -1010,7 +1033,7 @@ static int tls_api_attempt_to_close(
 
         while (ret == 0 && (test_ctx->cnx_client->cnx_state != picoquic_state_disconnected || test_ctx->cnx_server->cnx_state != picoquic_state_disconnected) && nb_rounds < 256) {
             int was_active = 0;
-            ret = tls_api_one_sim_round(test_ctx, simulated_time, &was_active);
+            ret = tls_api_one_sim_round(test_ctx, simulated_time, 0, &was_active);
             nb_rounds++;
         }
     }
@@ -1117,7 +1140,7 @@ int tls_api_silence_test()
     while (ret == 0 && simulated_time < next_time && test_ctx->cnx_client->cnx_state == picoquic_state_client_ready && test_ctx->cnx_server->cnx_state == picoquic_state_server_ready) {
         int was_active = 0;
 
-        ret = tls_api_one_sim_round(test_ctx, &simulated_time, &was_active);
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, next_time, &was_active);
     }
 
     if (ret == 0) {
@@ -1393,7 +1416,7 @@ int tls_api_server_reset_test()
     for (int i = 0; ret == 0 && i < 64 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected; i++) {
         was_active = 0;
 
-        ret = tls_api_one_sim_round(test_ctx, &simulated_time, &was_active);
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
     }
 
     /* Client should now be in state disconnected */
@@ -1540,7 +1563,7 @@ int tls_api_two_connections_test()
 
         while (ret == 0 && test_ctx->cnx_client->cnx_state == picoquic_state_client_ready && test_ctx->cnx_server->cnx_state == picoquic_state_server_ready && simulated_time < target_time) {
             int was_active = 0;
-            ret = tls_api_one_sim_round(test_ctx, &simulated_time, &was_active);
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, target_time, &was_active);
         }
 
         /* Delete the client connection from the client context,
@@ -1659,7 +1682,7 @@ int keep_alive_test_impl(int keep_alive)
     for (int i = 0; ret == 0 && i < 0x10000 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected ; i++) {
         was_active = 0;
 
-        ret = tls_api_one_sim_round(test_ctx, &simulated_time, &was_active);
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
         if (simulated_time > 2 * PICOQUIC_MICROSEC_SILENCE_MAX) {
             break;
         }
@@ -1731,7 +1754,7 @@ int session_resume_wait_for_ticket(picoquic_test_tls_api_ctx_t* test_ctx,
         int was_active = 0;
         nb_trials++;
 
-        ret = tls_api_one_sim_round(test_ctx, simulated_time, &was_active);
+        ret = tls_api_one_sim_round(test_ctx, simulated_time, time_out, &was_active);
 
         if (was_active) {
             nb_inactive = 0;
@@ -1876,7 +1899,7 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, unsigned int early_loss)
                     nb_rounds < 2048 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
                     int was_active = 0;
 
-                    ret = tls_api_one_sim_round(test_ctx, &simulated_time, &was_active);
+                    ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
                     nb_rounds++;
 
                     if (picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) && picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)) {
@@ -2167,7 +2190,7 @@ int spurious_retransmit_test()
     while (ret == 0 && simulated_time < next_time && test_ctx->cnx_client->cnx_state == picoquic_state_client_ready && test_ctx->cnx_server->cnx_state == picoquic_state_server_ready) {
         int was_active = 0;
 
-        ret = tls_api_one_sim_round(test_ctx, &simulated_time, &was_active);
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, next_time, &was_active);
     }
 
     if (ret == 0) {
@@ -3113,6 +3136,7 @@ int nat_rebinding_test_one(uint64_t loss_mask_data)
     uint64_t next_time = 0;
     uint64_t loss_mask = 0;
     uint64_t initial_challenge = 0;
+    int nb_inactive = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
@@ -3133,6 +3157,7 @@ int nat_rebinding_test_one(uint64_t loss_mask_data)
     /* Change the client address */
     if (ret == 0) {
         test_ctx->client_addr.sin_port += 17;
+        test_ctx->client_use_nat = 1;
     }
 
     /* Prepare to send data */
@@ -3153,7 +3178,20 @@ int nat_rebinding_test_one(uint64_t loss_mask_data)
         && test_ctx->cnx_server->path[0]->challenge_verified != 1) {
         int was_active = 0;
 
-        ret = tls_api_one_sim_round(test_ctx, &simulated_time, &was_active);
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, next_time, &was_active);
+
+        if (was_active) {
+            nb_inactive = 0;
+        }
+        else {
+            nb_inactive++;
+            if (nb_inactive > 128) {
+                ret = 0;
+                if (nb_inactive > 256) {
+                    break;
+                }
+            }
+        }
     }
 
     /* Verify that the challenge was updated and done */
@@ -3186,7 +3224,7 @@ int nat_rebinding_test()
 
 int nat_rebinding_loss_test()
 {
-    uint64_t loss_mask = 0x6666;
+    uint64_t loss_mask = 0x2412;
 
     return nat_rebinding_test_one(loss_mask);
 }
@@ -3244,6 +3282,7 @@ int spin_bit_test()
     /* Explote the data sending loop so we can observe the spin bit  */
     if (ret == 0) {
         uint64_t spin_begin_time = simulated_time;
+        uint64_t next_time = simulated_time + 10000000;
         int ret = 0;
         int nb_trials = 0;
         int nb_inactive = 0;
@@ -3253,12 +3292,12 @@ int spin_bit_test()
         test_ctx->c_to_s_link->loss_mask = &loss_mask;
         test_ctx->s_to_c_link->loss_mask = &loss_mask;
 
-        while (ret == 0 && nb_trials < max_trials && nb_inactive < 256 && test_ctx->cnx_client->cnx_state == picoquic_state_client_ready && test_ctx->cnx_server->cnx_state == picoquic_state_server_ready) {
+        while (ret == 0 && nb_trials < max_trials && simulated_time < next_time && nb_inactive < 256 && test_ctx->cnx_client->cnx_state == picoquic_state_client_ready && test_ctx->cnx_server->cnx_state == picoquic_state_server_ready) {
             int was_active = 0;
 
             nb_trials++;
 
-            ret = tls_api_one_sim_round(test_ctx, &simulated_time, &was_active);
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, next_time, &was_active);
 
             if (ret < 0)
             {
@@ -3303,7 +3342,7 @@ int spin_bit_test()
     if (ret == 0) {
         uint64_t spin_time_prediction = spin_count * test_ctx->cnx_client->path[0]->smoothed_rtt;
 
-        if (4 * spin_time_prediction < spin_duration || 4 * spin_duration < spin_time_prediction) {
+        if (5 * spin_time_prediction < spin_duration || 5 * spin_duration < spin_time_prediction) {
             DBG_PRINTF("Unplausible spin bit: %d rotations, rtt_min = %d, duration = %d\n",
                 spin_count, (int)test_ctx->cnx_client->path[0]->rtt_min, (int)spin_duration);
             ret = -1;
@@ -3364,7 +3403,7 @@ int client_error_test()
             test_ctx->cnx_server->cnx_state < picoquic_state_disconnected)) {
         int was_active = 0;
 
-        ret = tls_api_one_sim_round(test_ctx, &simulated_time, &was_active);
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, next_time, &was_active);
     }
 
     if (test_ctx->cnx_server->cnx_state != picoquic_state_disconnected) {
@@ -3476,7 +3515,7 @@ int transmit_cnxid_test()
             nb_rounds < 2048 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
             int was_active = 0;
 
-            ret = tls_api_one_sim_round(test_ctx, &simulated_time, &was_active);
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
             nb_rounds++;
 
             if (test_ctx->cnx_client->nb_paths >= PICOQUIC_NB_PATH_TARGET &&
@@ -3565,7 +3604,7 @@ int probe_api_test()
             nb_rounds < 2048 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
             int was_active = 0;
 
-            ret = tls_api_one_sim_round(test_ctx, &simulated_time, &was_active);
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
             nb_rounds++;
 
             if (test_ctx->cnx_client->nb_paths >= PICOQUIC_NB_PATH_TARGET &&
@@ -3760,7 +3799,7 @@ int migration_test()
             nb_rounds < 2048 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
             int was_active = 0;
 
-            ret = tls_api_one_sim_round(test_ctx, &simulated_time, &was_active);
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
             nb_rounds++;
 
             if (test_ctx->cnx_client->nb_paths >= PICOQUIC_NB_PATH_TARGET &&
@@ -3811,7 +3850,7 @@ int migration_test()
         && test_ctx->cnx_server->path[0]->challenge_verified != 1) {
         int was_active = 0;
 
-        ret = tls_api_one_sim_round(test_ctx, &simulated_time, &was_active);
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, next_time, &was_active);
     }
 
     /* Verify that the challenge was updated and done */
@@ -3881,7 +3920,7 @@ int cnxid_renewal_test()
             nb_rounds < 2048 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
             int was_active = 0;
 
-            ret = tls_api_one_sim_round(test_ctx, &simulated_time, &was_active);
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
             nb_rounds++;
 
             if (test_ctx->cnx_client->nb_paths >= PICOQUIC_NB_PATH_TARGET &&
@@ -3926,7 +3965,7 @@ int cnxid_renewal_test()
         && test_ctx->cnx_server->path[0]->challenge_verified != 1) {
         int was_active = 0;
 
-        ret = tls_api_one_sim_round(test_ctx, &simulated_time, &was_active);
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, next_time, &was_active);
     }
 
     /* Verify that the connection ID are what we expect */
