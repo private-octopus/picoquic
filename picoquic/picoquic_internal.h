@@ -549,6 +549,7 @@ typedef struct st_picoquic_cnx_t {
     /* connection state, ID, etc. Todo: allow for multiple cnxid */
     picoquic_state_enum cnx_state;
     picoquic_connection_id_t initial_cnxid;
+    picoquic_connection_id_t original_cnxid;
     uint64_t start_time;
     uint16_t application_error;
     uint16_t local_error;

@@ -1795,15 +1795,16 @@ int picoquic_tls_client_authentication_activated(picoquic_quic_t* quic) {
  * Check the incoming retry token, or produce a token (place holder)
  */
 
-int picoquic_get_retry_token(picoquic_quic_t* quic, uint8_t * base, size_t len, 
+int picoquic_get_retry_token(picoquic_quic_t* quic, uint8_t * base, size_t len, uint8_t * cid, uint8_t cid_len,
     uint8_t * token, uint8_t token_length) {
     /*Using OpenSSL for now: ptls_hash_algorithm_t ptls_openssl_sha256 */
     int ret = 0;
     ptls_hash_algorithm_t* algo = &ptls_openssl_sha256;
     ptls_hash_context_t* hash_ctx = algo->create();
     uint8_t final_hash[PTLS_MAX_DIGEST_SIZE];
+    size_t offset;
 
-    if (hash_ctx == NULL || token_length > algo->digest_size ) {
+    if (hash_ctx == NULL || token_length > cid_len + algo->digest_size || token_length <= 1 + cid_len) {
         ret = -1;
     } else {
         hash_ctx->update(hash_ctx, quic->retry_seed, sizeof(quic->retry_seed));
@@ -1811,8 +1812,17 @@ int picoquic_get_retry_token(picoquic_quic_t* quic, uint8_t * base, size_t len,
             hash_ctx->update(hash_ctx, base, len);
         }
         hash_ctx->update(hash_ctx, &len, sizeof(len));
+        if (cid_len > 0) {
+            hash_ctx->update(hash_ctx, cid, cid_len);
+        }
+        hash_ctx->update(hash_ctx, &cid_len, sizeof(cid_len));
         hash_ctx->final(hash_ctx, final_hash, PTLS_HASH_FINAL_MODE_FREE);
-        memcpy(token, final_hash, token_length);
+        token[0] = cid_len;
+        if (cid_len > 0) {
+            memcpy(token + 1, cid, cid_len);
+        }
+        offset = 1 + cid_len;
+        memcpy(token + offset, final_hash, token_length - offset);
     }
 
     return ret;
