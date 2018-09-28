@@ -181,6 +181,17 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     if (cnx->local_parameters.initial_max_stream_data_uni > 0) {
         param_size += (2 + 2 + 4);
     }
+    /* New parameters in versions larger than 14 */
+    if (picoquic_supported_versions[cnx->version_index].version != PICOQUIC_SEVENTH_INTEROP_VERSION &&
+        picoquic_supported_versions[cnx->version_index].version != PICOQUIC_EIGHT_INTEROP_VERSION) {
+
+        if (cnx->local_parameters.max_ack_delay != PICOQUIC_ACK_DELAY_MAX_DEFAULT) {
+            param_size += 2 + 2 + 1;
+        }
+        if (extension_mode == 1 && cnx->original_cnxid.id_len > 0) {
+            param_size += 2 + 2 + cnx->original_cnxid.id_len;
+        }
+    }
     /* TODO: add more tests here if adding new parameters */
 
     min_size += param_size + 2;
@@ -241,6 +252,7 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
             byte_index += 2;
         }
 
+        /* TODO: when removing support of draft 14, make idle timeout optional */
         picoformat_16(bytes + byte_index, picoquic_tp_idle_timeout);
         byte_index += 2;
         picoformat_16(bytes + byte_index, 2);
@@ -324,7 +336,29 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
             picoformat_16(bytes + byte_index, 4);
             byte_index += 2;
             picoformat_32(bytes + byte_index, cnx->local_parameters.initial_max_stream_data_uni);
-            /* TODO: restore this line if adding new parameters: byte_index += 4; */
+            byte_index += 4;
+        }
+
+        /* New parameters in versions larger than 14 */
+        if (picoquic_supported_versions[cnx->version_index].version != PICOQUIC_SEVENTH_INTEROP_VERSION &&
+            picoquic_supported_versions[cnx->version_index].version != PICOQUIC_EIGHT_INTEROP_VERSION) {
+            if (cnx->local_parameters.max_ack_delay != PICOQUIC_ACK_DELAY_MAX_DEFAULT) {
+                picoformat_16(bytes + byte_index, picoquic_tp_max_ack_delay);
+                byte_index += 2;
+                picoformat_16(bytes + byte_index, 1);
+                byte_index += 2;
+                bytes[byte_index++] = (uint8_t)((cnx->local_parameters.max_ack_delay + 999) / 1000); /* Max ACK delay in milliseconds */
+            }
+
+            if (extension_mode == 1 && cnx->original_cnxid.id_len > 0) {
+                picoformat_16(bytes + byte_index, picoquic_tp_original_connection_id);
+                byte_index += 2;
+                picoformat_16(bytes + byte_index, cnx->original_cnxid.id_len);
+                byte_index += 2;
+                memcpy(bytes + byte_index, cnx->original_cnxid.id, cnx->original_cnxid.id_len);
+
+                /* TODO: restore this line if adding new parameters: byte_index += cnx->original_cnxid.id_len; */
+            }
         }
     }
 
@@ -337,6 +371,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     int ret = 0;
     size_t byte_index = 0;
     uint32_t present_flag = 0;
+    picoquic_connection_id_t original_connection_id = picoquic_null_connection_id;
 
     cnx->remote_parameters_received = 1;
 
@@ -559,6 +594,21 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                                 cnx->remote_parameters.migration_disabled = 1;
                             }
                             break;
+                        case picoquic_tp_max_ack_delay:
+                            if (extension_length != 1) {
+                                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+                            }
+                            else {
+                                cnx->remote_parameters.max_ack_delay = (*(bytes + byte_index)) * 1000;
+                            }
+                            break;
+                        case picoquic_tp_original_connection_id:
+                            original_connection_id.id_len = (uint8_t) picoquic_parse_connection_id(bytes + byte_index, extension_length, &original_connection_id);
+                            if (original_connection_id.id_len == 0) {
+                                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+                            }
+                            break;
+
                         default:
                             /* ignore unknown extensions */
                             break;
@@ -588,19 +638,41 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         }
     }
 
-    /* Only the idle timeout parameters is mandatory for both client and server. */
+    /* Only the idle timeout parameters was mandatory for both client and server.
+     * But this stopped being required with draft 15.
+     * TODO: change the code to accept "0 as infinity" for idle time out.
+     */
+    if (ret == 0 && cnx->remote_parameters.idle_timeout == 0) {
+        cnx->remote_parameters.idle_timeout = (uint32_t)((int32_t)-1);
+    }
 
     if (ret == 0 && (present_flag & (1 << picoquic_tp_idle_timeout)) != 
         (1 << picoquic_tp_idle_timeout)) {
         ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
     }
 
-    /* Clients must not include reset token or server address */
+    if (ret == 0 && (present_flag & (1 << picoquic_tp_max_ack_delay)) == 0) {
+        cnx->remote_parameters.max_ack_delay = PICOQUIC_ACK_DELAY_MAX_DEFAULT;
+    }
+
+    /* Clients must not include reset token, server address, or original cid  */
 
     if (ret == 0 && extension_mode == 0 &&
         ((present_flag & (1 << picoquic_tp_reset_secret)) != 0 ||
-        (present_flag & (1 << picoquic_tp_server_preferred_address)) != 0)) {
+        (present_flag & (1 << picoquic_tp_server_preferred_address)) != 0 ||
+        (present_flag & (1 << picoquic_tp_original_connection_id)) != 0)) {
         ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+    }
+
+    /* Original connection ID should be NULL at the client and at the server if
+     * there was no retry, should exactly match otherwise. Mismatch is trated
+     * as a trasport parameter error */
+    if (ret == 0 && extension_mode == 1 &&
+        picoquic_supported_versions[cnx->version_index].version != PICOQUIC_SEVENTH_INTEROP_VERSION &&
+        picoquic_supported_versions[cnx->version_index].version != PICOQUIC_EIGHT_INTEROP_VERSION) {
+        if (picoquic_compare_connection_id(&cnx->original_cnxid, &original_connection_id) != 0) {
+            ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+        }
     }
 
     *consumed = byte_index;

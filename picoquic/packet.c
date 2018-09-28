@@ -714,46 +714,46 @@ void picoquic_queue_stateless_retry(picoquic_cnx_t* cnx,
     if (sp != NULL) {
         uint8_t* bytes = sp->bytes;
         uint32_t byte_index = 0;
-        size_t data_bytes = 0;
-        uint32_t header_length = 0;
-        uint32_t pn_offset;
-        uint32_t pn_length;
-        uint8_t odcil_random = ((uint8_t)picoquic_public_uniform_random(256))&0xF0;
+size_t data_bytes = 0;
+uint32_t header_length = 0;
+uint32_t pn_offset;
+uint32_t pn_length;
+uint8_t odcil_random = ((uint8_t)picoquic_public_uniform_random(256)) & 0xF0;
 
-        cnx->path[0]->remote_cnxid = ph->srce_cnx_id;
+cnx->path[0]->remote_cnxid = ph->srce_cnx_id;
 
-        byte_index = header_length = picoquic_create_packet_header(cnx, picoquic_packet_retry,
-            0, &cnx->path[0]->remote_cnxid, &cnx->path[0]->local_cnxid,
-            bytes, &pn_offset, &pn_length);
-
-        
-        /* use same encoding as packet header */
-        bytes[byte_index++] = odcil_random|picoquic_create_packet_header_cnxid_lengths(0, cnx->initial_cnxid.id_len);
-
-        byte_index += picoquic_format_connection_id(bytes + byte_index,
-            PICOQUIC_MAX_PACKET_SIZE - byte_index - checksum_length, cnx->initial_cnxid);
-        byte_index += (uint32_t)data_bytes;
-        memcpy(&bytes[byte_index], token, token_length);
-        byte_index += (uint32_t)token_length;
-
-        sp->length = byte_index;
+byte_index = header_length = picoquic_create_packet_header(cnx, picoquic_packet_retry,
+    0, &cnx->path[0]->remote_cnxid, &cnx->path[0]->local_cnxid,
+    bytes, &pn_offset, &pn_length);
 
 
-        memset(&sp->addr_to, 0, sizeof(sp->addr_to));
-        memcpy(&sp->addr_to, addr_from,
-            (addr_from->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
-        memset(&sp->addr_local, 0, sizeof(sp->addr_local));
-        memcpy(&sp->addr_local, addr_to,
-            (addr_to->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
-        sp->if_index_local = if_index_to;
+/* use same encoding as packet header */
+bytes[byte_index++] = odcil_random | picoquic_create_packet_header_cnxid_lengths(0, cnx->initial_cnxid.id_len);
 
-        if (cnx->quic->F_log != NULL) {
-            picoquic_log_outgoing_segment(cnx->quic->F_log, 1, cnx,
-                bytes, 0, (uint32_t)sp->length,
-                bytes, (uint32_t)sp->length);
-        }
+byte_index += picoquic_format_connection_id(bytes + byte_index,
+    PICOQUIC_MAX_PACKET_SIZE - byte_index - checksum_length, cnx->initial_cnxid);
+byte_index += (uint32_t)data_bytes;
+memcpy(&bytes[byte_index], token, token_length);
+byte_index += (uint32_t)token_length;
 
-        picoquic_queue_stateless_packet(cnx->quic, sp);
+sp->length = byte_index;
+
+
+memset(&sp->addr_to, 0, sizeof(sp->addr_to));
+memcpy(&sp->addr_to, addr_from,
+(addr_from->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
+memset(&sp->addr_local, 0, sizeof(sp->addr_local));
+memcpy(&sp->addr_local, addr_to,
+(addr_to->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
+sp->if_index_local = if_index_to;
+
+if (cnx->quic->F_log != NULL) {
+    picoquic_log_outgoing_segment(cnx->quic->F_log, 1, cnx,
+        bytes, 0, (uint32_t)sp->length,
+        bytes, (uint32_t)sp->length);
+}
+
+picoquic_queue_stateless_packet(cnx->quic, sp);
     }
 }
 
@@ -774,13 +774,26 @@ int picoquic_incoming_initial(
 {
     int ret = 0;
     size_t extra_offset = 0;
+    int is_token_ok = 0;
 
     /* Logic to test the retry token.
      * TODO: this should probably be implemented as a callback */
     if ((*pcnx)->quic->flags&picoquic_context_check_token) {
         uint8_t * base;
         size_t len;
-        uint8_t token[16];
+        uint8_t cid_len = 0;
+        uint8_t token[1 + PICOQUIC_CONNECTION_ID_MAX_SIZE + 16];
+
+        /* Does the token contain a valid CID? */
+        if (ph->token_length > 1 + 8) {
+            cid_len = *(bytes + ph->token_offset);
+            if (cid_len < 8 && cid_len > PICOQUIC_CONNECTION_ID_MAX_SIZE) {
+                cid_len = 0;
+            }
+            else if (cid_len + 1 + 16 != ph->token_length) {
+                cid_len = 0;
+            }
+        }
 
         if (addr_from->sa_family == AF_INET) {
             struct sockaddr_in * a4 = (struct sockaddr_in *)addr_from;
@@ -793,17 +806,29 @@ int picoquic_incoming_initial(
             base = (uint8_t *)&a6->sin6_addr;
         }
 
-        if (picoquic_get_retry_token((*pcnx)->quic, base, len,
-            token, sizeof(token)) != 0)
-        {
-            ret = PICOQUIC_ERROR_MEMORY;
-        }
-        else {
-            if (ph->token_length != sizeof(token) ||
-                memcmp(token, bytes + ph->token_offset, sizeof(token)) != 0)
+        if (cid_len != 0) {
+            if (picoquic_get_retry_token((*pcnx)->quic, base, len, bytes + ph->token_offset + 1, cid_len,
+                token, ph->token_length) != 0)
             {
+                ret = PICOQUIC_ERROR_MEMORY;
+            }
+            else if (memcmp(token, bytes + ph->token_offset, ph->token_length) == 0) {
+                is_token_ok = 1;
+                (void)picoquic_parse_connection_id(bytes + ph->token_offset + 1, cid_len, &(*pcnx)->original_cnxid);
+            }
+        }
+
+        if (!is_token_ok) {
+            size_t token_length = 1 + ph->dest_cnx_id.id_len + 16;
+
+            if (picoquic_get_retry_token((*pcnx)->quic, base, len, ph->dest_cnx_id.id, ph->dest_cnx_id.id_len,
+                token, token_length) != 0)
+            {
+                ret = PICOQUIC_ERROR_MEMORY;
+            }
+            else {
                 picoquic_queue_stateless_retry(*pcnx, ph,
-                    addr_from, addr_to, if_index_to, token, sizeof(token));
+                    addr_from, addr_to, if_index_to, token, token_length);
                 ret = PICOQUIC_ERROR_RETRY;
             }
         }
@@ -906,6 +931,10 @@ int picoquic_incoming_retry(
     }
 
     if (ret == 0) {
+        /* if this is the first reset, reset the original cid */
+        if (cnx->original_cnxid.id_len == 0) {
+            cnx->original_cnxid = cnx->initial_cnxid;
+        }
         /* reset the initial CNX_ID to the version sent by the server */
         cnx->initial_cnxid = ph->srce_cnx_id;
 

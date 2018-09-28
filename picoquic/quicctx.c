@@ -1286,7 +1286,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
                 cnx->pkt_ctx[pc].highest_acknowledged = cnx->pkt_ctx[pc].send_sequence - 1;
                 cnx->pkt_ctx[pc].latest_time_acknowledged = start_time;
                 cnx->pkt_ctx[pc].ack_needed = 0;
-                cnx->pkt_ctx[pc].ack_delay_local = 10000;
+                cnx->pkt_ctx[pc].ack_delay_local = PICOQUIC_ACK_DELAY_MAX;
             }
 
             cnx->latest_progress_time = start_time;
