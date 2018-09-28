@@ -38,46 +38,46 @@
     { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }} 
 
 static picoquic_tp_t transport_param_test1 = {
-    65535, 0, 0, 0x400000, 65533, 65535, 30, 1480, 3, 0, TRANSPORT_PREFERED_ADDRESS_NULL
+    65535, 0, 0, 0x400000, 65533, 65535, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 3, 0,  TRANSPORT_PREFERED_ADDRESS_NULL
 };
 
 static picoquic_tp_t transport_param_test2 = {
-    0x1000000, 0, 0, 0x1000000, 1, 0, 255, 1480, 3, 0, TRANSPORT_PREFERED_ADDRESS_NULL
+    0x1000000, 0, 0, 0x1000000, 1, 0, 255, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 3, 0, TRANSPORT_PREFERED_ADDRESS_NULL
 };
 
 static picoquic_tp_t transport_param_test3 = {
-    0x1000000, 0, 0, 0x1000000, 1, 0, 255, 0, 3, 0, TRANSPORT_PREFERED_ADDRESS_NULL
+    0x1000000, 0, 0, 0x1000000, 1, 0, 255, 0, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 3, 0, TRANSPORT_PREFERED_ADDRESS_NULL
 };
 
 static picoquic_tp_t transport_param_test4 = {
-    65535, 0, 0, 0x400000, 65532, 0, 30, 1480, 3, 0, TRANSPORT_PREFERED_ADDRESS_NULL
+    65535, 0, 0, 0x400000, 65532, 0, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 3, 0, TRANSPORT_PREFERED_ADDRESS_NULL
 };
 
 static picoquic_tp_t transport_param_test5 = {
-    0x1000000, 0, 0, 0x1000000, 4, 0, 255, 1480, 3, 0, TRANSPORT_PREFERED_ADDRESS_NULL
+    0x1000000, 0, 0, 0x1000000, 4, 0, 255, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 3, 0, TRANSPORT_PREFERED_ADDRESS_NULL
 };
 
 static picoquic_tp_t transport_param_test6 = {
-    0x10000, 0, 0, 0xffffffff, 0, 0, 30, 1480, 3, 0, TRANSPORT_PREFERED_ADDRESS_NULL
+    0x10000, 0, 0, 0xffffffff, 0, 0, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 3, 0, TRANSPORT_PREFERED_ADDRESS_NULL
 };
 
 static picoquic_tp_t transport_param_test7 = {
-    8192, 0, 0, 16384, 5, 0, 10, 1472, 17, 0, TRANSPORT_PREFERED_ADDRESS_NULL
+    8192, 0, 0, 16384, 5, 0, 10, 1472, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 17, 0, TRANSPORT_PREFERED_ADDRESS_NULL
 };
 
 static picoquic_tp_t transport_param_test8 = {
-    65535, 0, 0, 0x400000, 0, 0, 30, 1480, 3, 0, TRANSPORT_PREFERED_ADDRESS_NULL
+    65535, 0, 0, 0x400000, 0, 0, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 3, 0, TRANSPORT_PREFERED_ADDRESS_NULL
 };
 
 static picoquic_tp_t transport_param_test9 = {
-    0x1000000, 0, 0, 0x1000000, 4, 0, 255, 1480, 3, 0,
+    0x1000000, 0, 0, 0x1000000, 4, 0, 255, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 3, 0,
     { 4, { 10, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 4433,
     {{1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },4},
         { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 }}
 };
 
 static picoquic_tp_t transport_param_test10 = {
-    65535, 0, 0, 0x400000, 65533, 65535, 30, 1480, 3, 1, TRANSPORT_PREFERED_ADDRESS_NULL
+    65535, 0, 0, 0x400000, 65533, 65535, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 3, 1, TRANSPORT_PREFERED_ADDRESS_NULL
 };
 
 uint8_t client_param1[] = {

@@ -49,7 +49,9 @@ extern "C" {
 #define PICOQUIC_INITIAL_RTT 250000 /* 250 ms */
 #define PICOQUIC_INITIAL_RETRANSMIT_TIMER 1000000 /* one second */
 #define PICOQUIC_MIN_RETRANSMIT_TIMER 50000 /* 50 ms */
-#define PICOQUIC_ACK_DELAY_MAX 20000 /* 20 ms */
+#define PICOQUIC_ACK_DELAY_MAX 10000 /* 10 ms */
+#define PICOQUIC_ACK_DELAY_MAX_DEFAULT 25000 /* 25 ms, per protocol spec */
+#define PICOQUIC_ACK_DELAY_MIN 1000 /* 10 ms */
 #define PICOQUIC_RACK_DELAY 10000 /* 10 ms */
 
 #define PICOQUIC_SPURIOUS_RETRANSMIT_DELAY_MAX 1000000 /* one second */
@@ -237,7 +239,9 @@ typedef enum {
     picoquic_tp_initial_max_uni_streams = 8,
     picoquic_tp_disable_migration = 9,
     picoquic_tp_initial_max_stream_data_bidi_remote = 10,
-    picoquic_tp_initial_max_stream_data_uni = 11
+    picoquic_tp_initial_max_stream_data_uni = 11,
+    picoquic_tp_max_ack_delay = 12,
+    picoquic_tp_original_connection_id = 13
 } picoquic_tp_enum;
 
 typedef struct st_picoquic_tp_prefered_address_t {
@@ -257,6 +261,7 @@ typedef struct st_picoquic_tp_t {
     uint32_t initial_max_stream_id_unidir;
     uint32_t idle_timeout;
     uint32_t max_packet_size;
+    uint32_t max_ack_delay; /* stored in in microseconds for convenience */
     uint8_t ack_delay_exponent;
     unsigned int migration_disabled; 
     picoquic_tp_prefered_address_t prefered_address;

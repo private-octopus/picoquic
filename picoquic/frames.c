@@ -1242,8 +1242,8 @@ static picoquic_packet_t* picoquic_update_rtt(picoquic_cnx_t* cnx, uint64_t larg
                             old_path->rtt_min = rtt_estimate;
                             old_path->retransmit_timer = 3 * rtt_estimate + old_path->max_ack_delay;
                             pkt_ctx->ack_delay_local = old_path->rtt_min / 4;
-                            if (pkt_ctx->ack_delay_local < 1000) {
-                                pkt_ctx->ack_delay_local = 1000;
+                            if (pkt_ctx->ack_delay_local < PICOQUIC_ACK_DELAY_MIN) {
+                                pkt_ctx->ack_delay_local = PICOQUIC_ACK_DELAY_MIN;
                             }
                         }
                         else {
@@ -1264,11 +1264,11 @@ static picoquic_packet_t* picoquic_update_rtt(picoquic_cnx_t* cnx, uint64_t larg
                                 old_path->rtt_min = rtt_estimate;
 
                                 pkt_ctx->ack_delay_local = old_path->rtt_min / 4;
-                                if (pkt_ctx->ack_delay_local < 1000) {
-                                    pkt_ctx->ack_delay_local = 1000;
+                                if (pkt_ctx->ack_delay_local < PICOQUIC_ACK_DELAY_MIN) {
+                                    pkt_ctx->ack_delay_local = PICOQUIC_ACK_DELAY_MIN;
                                 }
-                                else if (pkt_ctx->ack_delay_local > 10000) {
-                                    pkt_ctx->ack_delay_local = 10000;
+                                else if (pkt_ctx->ack_delay_local > PICOQUIC_ACK_DELAY_MAX) {
+                                    pkt_ctx->ack_delay_local = PICOQUIC_ACK_DELAY_MAX;
                                 }
                             }
 
