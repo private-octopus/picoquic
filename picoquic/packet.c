@@ -931,6 +931,10 @@ int picoquic_incoming_retry(
     }
 
     if (ret == 0) {
+        /* if this is the first reset, reset the original cid */
+        if (cnx->original_cnxid.id_len == 0) {
+            cnx->original_cnxid = cnx->initial_cnxid;
+        }
         /* reset the initial CNX_ID to the version sent by the server */
         cnx->initial_cnxid = ph->srce_cnx_id;
 
