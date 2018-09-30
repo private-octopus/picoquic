@@ -572,7 +572,7 @@ size_t picoquic_log_ack_frame(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t
 
     if (ret == 0 && (is_ecn && !is_draft_14)) {
         /* Decode the ecn counts */
-        for (int ecnx = 0; ret == 0, ecnx < 3; ecnx++) {
+        for (int ecnx = 0; ret == 0 && ecnx < 3; ecnx++) {
             size_t l_ecnx = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &ecnx3[ecnx]);
 
             if (l_ecnx == 0) {

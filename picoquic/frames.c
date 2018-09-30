@@ -1575,7 +1575,7 @@ uint8_t* picoquic_decode_ack_frame_maybe_ecn(picoquic_cnx_t* cnx, uint8_t* bytes
     uint64_t ack_delay;
     size_t   consumed;
     picoquic_packet_context_enum pc = picoquic_context_from_epoch(epoch);
-    uint64_t ecnx3[3];
+    uint64_t ecnx3[3] = { 0, 0, 0 };
     uint8_t first_byte = bytes[0];
 
     if (picoquic_parse_ack_header(bytes, bytes_max-bytes, &num_block, 
@@ -1589,12 +1589,6 @@ uint8_t* picoquic_decode_ack_frame_maybe_ecn(picoquic_cnx_t* cnx, uint8_t* bytes
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, first_byte);
     } else {
         bytes += consumed;
-
-        if (is_ecn) {
-            cnx->ecn_ect0_total_remote = ecnx3[0];
-            cnx->ecn_ect1_total_remote = ecnx3[1];
-            cnx->ecn_ce_total_remote = ecnx3[2];
-        }
 
         /* Attempt to update the RTT */
         picoquic_packet_t* top_packet = picoquic_update_rtt(cnx, largest, current_time, ack_delay, pc);
@@ -1659,6 +1653,12 @@ uint8_t* picoquic_decode_ack_frame_maybe_ecn(picoquic_cnx_t* cnx, uint8_t* bytes
         }
     }
 
+    if (bytes != 0 && is_ecn) {
+        cnx->ecn_ect0_total_remote = ecnx3[0];
+        cnx->ecn_ect1_total_remote = ecnx3[1];
+        cnx->ecn_ce_total_remote = ecnx3[2];
+    }
+
     return bytes;
 }
 
@@ -1689,11 +1689,11 @@ static int encode_ecn_block(picoquic_cnx_t* cnx, uint8_t* bytes, size_t bytes_ma
 
     l_ect1 = picoquic_varint_encode(bytes + *byte_index, bytes_max - *byte_index,
         cnx->ecn_ect1_total_local);
-    byte_index += l_ect0;
+    *byte_index += l_ect0;
 
     l_ce = picoquic_varint_encode(bytes + *byte_index, bytes_max - *byte_index,
         cnx->ecn_ce_total_local);
-    byte_index += l_ce;
+    *byte_index += l_ce;
 
     if (l_ect0 == 0 || l_ect1 == 0 || l_ce == 0) {
         ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
