@@ -819,7 +819,7 @@ int picoquic_incoming_initial(
         }
 
         if (!is_token_ok) {
-            size_t token_length = 1 + ph->dest_cnx_id.id_len + 16;
+            uint8_t token_length = 1 + ph->dest_cnx_id.id_len + 16;
 
             if (picoquic_get_retry_token((*pcnx)->quic, base, len, ph->dest_cnx_id.id, ph->dest_cnx_id.id_len,
                 token, token_length) != 0)
@@ -1305,7 +1305,9 @@ int picoquic_incoming_encrypted(
                 int closing_received = 0;
 
                 ret = picoquic_decode_closing_frames(
-                    bytes + ph->offset, ph->payload_length, &closing_received);
+                    bytes + ph->offset, ph->payload_length, &closing_received, 
+                    picoquic_supported_versions[cnx->version_index].version == PICOQUIC_SEVENTH_INTEROP_VERSION ||
+                    picoquic_supported_versions[cnx->version_index].version == PICOQUIC_EIGHT_INTEROP_VERSION);
 
                 if (ret == 0) {
                     if (closing_received) {
