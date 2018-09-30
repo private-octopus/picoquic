@@ -82,14 +82,17 @@ typedef enum {
     picoquic_frame_type_stream_id_needed = 0x0a,
     picoquic_frame_type_new_connection_id = 0x0b,
     picoquic_frame_type_stop_sending = 0x0c,
-    picoquic_frame_type_ack = 0x0d,
+    picoquic_frame_type_ack_old = 0x0d,
+    picoquic_frame_type_retire_connection_id = 0x0d,
     picoquic_frame_type_path_challenge = 0x0e,
     picoquic_frame_type_path_response = 0x0f,
     picoquic_frame_type_stream_range_min = 0x10,
     picoquic_frame_type_stream_range_max = 0x17,
     picoquic_frame_type_crypto_hs = 0x18,
     picoquic_frame_type_new_token = 0x19,
-    picoquic_frame_type_ack_ecn = 0x1a
+    picoquic_frame_type_ack_ecn_old = 0x1a,
+    picoquic_frame_type_ack = 0x1a,
+    picoquic_frame_type_ack_ecn = 0x1b
 } picoquic_frame_type_enum_t;
 
 /*
@@ -879,7 +882,7 @@ int picoquic_check_sack_list(picoquic_sack_item_t* sack,
      */
 int picoquic_process_ack_of_ack_frame(
     picoquic_sack_item_t* first_sack,
-    uint8_t* bytes, size_t bytes_max, size_t* consumed, int is_ecn, int is_draft14);
+    uint8_t* bytes, size_t bytes_max, size_t* consumed, int is_ecn_14);
 
 /* stream management */
 picoquic_stream_head* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t stream_id);
