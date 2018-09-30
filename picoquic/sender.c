@@ -816,7 +816,10 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                             break;
                         }
                         ret = picoquic_skip_frame(&p->bytes[byte_index],
-                            p->length - byte_index, &frame_length, &frame_is_pure_ack);
+                            p->length - byte_index, &frame_length, &frame_is_pure_ack,
+                            picoquic_supported_versions[cnx->version_index].version == PICOQUIC_SEVENTH_INTEROP_VERSION ||
+                            picoquic_supported_versions[cnx->version_index].version == PICOQUIC_EIGHT_INTEROP_VERSION
+                        );
                         byte_index += frame_length;
                     }
                     p->contains_crypto = contains_crypto;
@@ -872,7 +875,9 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
 
                     while (ret == 0 && byte_index < p->length) {
                         ret = picoquic_skip_frame(&p->bytes[byte_index],
-                            p->length - byte_index, &frame_length, &frame_is_pure_ack);
+                            p->length - byte_index, &frame_length, &frame_is_pure_ack,
+                            picoquic_supported_versions[cnx->version_index].version == PICOQUIC_SEVENTH_INTEROP_VERSION ||
+                            picoquic_supported_versions[cnx->version_index].version == PICOQUIC_EIGHT_INTEROP_VERSION);
 
                         /* Check whether the data was already acked, which may happen in 
                          * case of spurious retransmissions */
@@ -988,7 +993,9 @@ int picoquic_is_cnx_backlog_empty(picoquic_cnx_t* cnx)
 
             while (ret == 0 && byte_index < p->length) {
                 ret = picoquic_skip_frame(&p->bytes[byte_index],
-                    p->length - p->offset, &frame_length, &frame_is_pure_ack);
+                    p->length - p->offset, &frame_length, &frame_is_pure_ack,
+                    picoquic_supported_versions[cnx->version_index].version == PICOQUIC_SEVENTH_INTEROP_VERSION ||
+                    picoquic_supported_versions[cnx->version_index].version == PICOQUIC_EIGHT_INTEROP_VERSION);
 
                 if (!frame_is_pure_ack) {
                     backlog_empty = 0;

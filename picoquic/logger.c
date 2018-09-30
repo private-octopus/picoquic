@@ -462,7 +462,7 @@ size_t picoquic_log_stream_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
     return byte_index + data_length;
 }
 
-size_t picoquic_log_ack_frame(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t bytes_max, int is_ecn)
+size_t picoquic_log_ack_frame(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t bytes_max, int is_ecn, int is_draft_14)
 {
     size_t byte_index;
     uint64_t num_block;
@@ -472,7 +472,7 @@ size_t picoquic_log_ack_frame(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t
 
     int suspended = debug_printf_reset(1);
 
-    int ret = picoquic_parse_ack_header(bytes, bytes_max, &num_block, (is_ecn)? ecnx3:NULL,
+    int ret = picoquic_parse_ack_header(bytes, bytes_max, &num_block, (is_ecn && is_draft_14)? ecnx3:NULL,
         &largest, &ack_delay, &byte_index, 0);
 
     (void)debug_printf_reset(suspended);
@@ -482,8 +482,7 @@ size_t picoquic_log_ack_frame(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t
 
     /* Now that the size is good, print it */
     if (is_ecn) {
-        fprintf(F, "    ACK_ECN (nb=%u, ect0=%llu, ect1=%llu, ce=%llu)", (int)num_block,
-            (unsigned long long)ecnx3[0], (unsigned long long)ecnx3[1], (unsigned long long)ecnx3[2]);
+        fprintf(F, "    ACK_ECN (nb=%u)", (int)num_block);
     }
     else {
         fprintf(F, "    ACK (nb=%u)", (int)num_block);
@@ -568,7 +567,28 @@ size_t picoquic_log_ack_frame(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t
         largest -= block_to_block;
     }
 
-    fprintf(F, "\n");
+    if (ret == 0 && (is_ecn && !is_draft_14)) {
+        /* Decode the ecn counts */
+        for (int ecnx = 0; ret == 0, ecnx < 3; ecnx++) {
+            size_t l_ecnx = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &ecnx3[ecnx]);
+
+            if (l_ecnx == 0) {
+                fprintf(F, ", incorrect ECN encoding");
+                byte_index = bytes_max;
+                ret = -1;
+            }
+            else {
+                byte_index += l_ecnx;
+            }
+        }
+    }
+
+    if (ret == 0 && is_ecn) {
+        fprintf(F, ", ect0=%llu, ect1=%llu, ce=%llu\n",
+            (unsigned long long)ecnx3[0], (unsigned long long)ecnx3[1], (unsigned long long)ecnx3[2]);
+    } else {
+        fprintf(F, "\n");
+    }
 
     return byte_index;
 }
@@ -934,7 +954,7 @@ size_t picoquic_log_crypto_hs_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
     return byte_index;
 }
 
-void picoquic_log_frames(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t length)
+void picoquic_log_frames(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t length, int is_draft_14)
 {
     size_t byte_index = 0;
 
@@ -952,10 +972,10 @@ void picoquic_log_frames(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t leng
 
         switch (frame_id) {
         case picoquic_frame_type_ack:
-            byte_index += picoquic_log_ack_frame(F, cnx_id64, bytes + byte_index, length - byte_index, 0);
+            byte_index += picoquic_log_ack_frame(F, cnx_id64, bytes + byte_index, length - byte_index, 0, 0);
             break;
         case picoquic_frame_type_ack_ecn:
-            byte_index += picoquic_log_ack_frame(F, cnx_id64, bytes + byte_index, length - byte_index, 1);
+            byte_index += picoquic_log_ack_frame(F, cnx_id64, bytes + byte_index, length - byte_index, 1, is_draft_14);
             break;
         case picoquic_frame_type_padding:
         case picoquic_frame_type_ping: {
@@ -1104,7 +1124,9 @@ void picoquic_log_decrypted_segment(void* F_log, int log_cnxid, picoquic_cnx_t* 
         fprintf(F, "    %s %d bytes\n", (receiving)?"Decrypted": "Prepared",
             (int)ph->payload_length);
         picoquic_log_frames(F, log_cnxid64, bytes + ph->offset, 
-            ph->payload_length);
+            ph->payload_length, (cnx != NULL &&
+                (picoquic_supported_versions[cnx->version_index].version == PICOQUIC_SEVENTH_INTEROP_VERSION ||
+                    picoquic_supported_versions[cnx->version_index].version == PICOQUIC_EIGHT_INTEROP_VERSION)));
     }
     fprintf(F, "\n");
 }

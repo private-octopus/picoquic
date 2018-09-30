@@ -603,9 +603,14 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                             }
                             break;
                         case picoquic_tp_original_connection_id:
-                            original_connection_id.id_len = (uint8_t) picoquic_parse_connection_id(bytes + byte_index, extension_length, &original_connection_id);
-                            if (original_connection_id.id_len == 0) {
+                            if (extension_length >= 256) {
                                 ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+                            }
+                            else {
+                                original_connection_id.id_len = (uint8_t)picoquic_parse_connection_id(bytes + byte_index, (uint8_t) extension_length, &original_connection_id);
+                                if (original_connection_id.id_len == 0) {
+                                    ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+                                }
                             }
                             break;
 

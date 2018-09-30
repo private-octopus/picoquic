@@ -220,7 +220,7 @@ static int ack_of_ack_do_one_test(test_ack_of_ack_t const* sample)
     ack_length = build_test_ack(sample->ack, sample->nb_ack, ack, sizeof(ack),
         sample->version_flags);
 
-    ret = picoquic_process_ack_of_ack_frame(&sack_head, ack, ack_length, &consumed, 0);
+    ret = picoquic_process_ack_of_ack_frame(&sack_head, ack, ack_length, &consumed, 0, 0);
 
     if (ret == 0) {
         ret = cmp_test_sack_list(&sack_head, sample->result, sample->nb_result);

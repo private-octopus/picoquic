@@ -879,7 +879,7 @@ int picoquic_check_sack_list(picoquic_sack_item_t* sack,
      */
 int picoquic_process_ack_of_ack_frame(
     picoquic_sack_item_t* first_sack,
-    uint8_t* bytes, size_t bytes_max, size_t* consumed, int is_ecn);
+    uint8_t* bytes, size_t bytes_max, size_t* consumed, int is_ecn, int is_draft14);
 
 /* stream management */
 picoquic_stream_head* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t stream_id);
@@ -924,10 +924,10 @@ int picoquic_prepare_misc_frame(picoquic_misc_frame_header_t* misc_frame, uint8_
 int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_t* bytes,
     size_t bytes_max, int epoch, uint64_t current_time);
 
-int picoquic_skip_frame(uint8_t* bytes, size_t bytes_max, size_t* consumed, int* pure_ack);
+int picoquic_skip_frame(uint8_t* bytes, size_t bytes_max, size_t* consumed, int* pure_ack, int is_draft_14);
 
 int picoquic_decode_closing_frames(uint8_t* bytes,
-    size_t bytes_max, int* closing_received);
+    size_t bytes_max, int* closing_received, int is_draft_14);
 
 int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mode,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
