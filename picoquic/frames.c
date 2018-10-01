@@ -472,6 +472,10 @@ uint8_t* picoquic_decode_connection_id_frame(picoquic_cnx_t* cnx, uint8_t* bytes
     return bytes;
 }
 
+/*
+ * Format a retire connection ID frame.
+ */
+
 int picoquic_prepare_retire_connection_id_frame(picoquic_cnx_t * cnx, picoquic_connection_id_t * cnxid, 
     uint8_t* bytes, size_t bytes_max, size_t* consumed)
 {
@@ -496,6 +500,29 @@ int picoquic_prepare_retire_connection_id_frame(picoquic_cnx_t * cnx, picoquic_c
     return ret;
 }
 
+
+
+/*
+ * Queue a retire connection id frame when a probe or a path is abandoned.
+ */
+
+int picoquic_queue_retire_connection_id_frame(picoquic_cnx_t * cnx, picoquic_connection_id_t * cnxid)
+{
+    size_t consumed = 0;
+    uint8_t frame_buffer[258];
+    int ret = picoquic_prepare_retire_connection_id_frame(cnx, cnxid, frame_buffer, sizeof(frame_buffer), &consumed);
+
+    if (ret == 0 && consumed > 0) {
+        ret = picoquic_queue_misc_frame(cnx, frame_buffer, consumed);
+    }
+
+    return ret;
+}
+
+/*
+ * Skip retire connection ID frame.
+ */
+
 uint8_t* picoquic_skip_retire_connection_id_frame(uint8_t* bytes, const uint8_t* bytes_max)
 {
     uint8_t cid_length;
@@ -507,6 +534,13 @@ uint8_t* picoquic_skip_retire_connection_id_frame(uint8_t* bytes, const uint8_t*
 
     return bytes;
 }
+
+/*
+ * Decode retire connection ID frame.
+ * Mark the corresponding paths as retired. This should trigger resending a new connection ID.
+ * Applications MAY note an error if the connection ID does not exist, but then they
+ * MUST be damn sure that this not just a repeat of a previous retire connection ID message...
+ */
 
 uint8_t* picoquic_decode_retire_connection_id_frame(picoquic_cnx_t* cnx, uint8_t* bytes, const uint8_t* bytes_max)
 {
