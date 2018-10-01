@@ -542,23 +542,34 @@ uint8_t* picoquic_skip_retire_connection_id_frame(uint8_t* bytes, const uint8_t*
  * MUST be damn sure that this not just a repeat of a previous retire connection ID message...
  */
 
-uint8_t* picoquic_decode_retire_connection_id_frame(picoquic_cnx_t* cnx, uint8_t* bytes, const uint8_t* bytes_max)
+uint8_t* picoquic_decode_retire_connection_id_frame(picoquic_cnx_t* cnx, uint8_t* bytes, const uint8_t* bytes_max, uint64_t current_time)
 {
     /* store the connection ID in order to support migration. */
     uint8_t cid_length = 0;
     uint8_t * cnxid_bytes = NULL;
+    picoquic_connection_id_t cnxid = picoquic_null_connection_id;
 
     if ((bytes = picoquic_frames_uint8_decode(bytes+1, bytes_max, &cid_length)) != NULL) {
         cnxid_bytes = bytes;
         bytes = picoquic_frames_fixed_skip(bytes, bytes_max, cid_length);
     }
 
-    if (bytes == NULL || picoquic_is_connection_id_length_valid(cid_length) == 0) {
+    if (bytes == NULL || picoquic_parse_connection_id(cnxid_bytes, cid_length, &cnxid) == 0) {
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
             picoquic_frame_type_retire_connection_id);
     }
     else {
-        /* TODO: actually retire the connection ID */
+        /* Go through the list of paths to find the connection ID */
+
+        for (int i = 0; i < cnx->nb_paths; i++) {
+            if (picoquic_compare_connection_id(&cnx->path[i]->local_cnxid, &cnxid) == 0) {
+                /* Mark the corresponding path as demoted */
+                picoquic_demote_path(cnx, i, current_time);
+                break;
+            }
+        }
+
+        /* TODO: if there is no matching path, consider triggering an error */
     }
 
     return bytes;
@@ -2537,7 +2548,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_
                 break;
             case picoquic_frame_type_retire_connection_id:
                 /* the old code point for ACK frames, but this is taken care of in the ACK tests above */
-                bytes = picoquic_decode_retire_connection_id_frame(cnx, bytes, bytes_max);
+                bytes = picoquic_decode_retire_connection_id_frame(cnx, bytes, bytes_max, current_time);
                 ack_needed = 1;
                 break;
             default: {

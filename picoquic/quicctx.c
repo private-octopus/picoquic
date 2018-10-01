@@ -812,13 +812,15 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
  * Path challenges may be abandoned if they are tried too many times without success. 
  */
 
-void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx)
+void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time)
 {
     int path_index_good = 1;
     int path_index_current = 1;
 
     while (path_index_current < cnx->nb_paths) {
-        if (cnx->path[path_index_current]->challenge_failed) {
+        if (cnx->path[path_index_current]->challenge_failed ||
+            (cnx->path[path_index_current]->path_is_demoted &&
+                current_time > cnx->path[path_index_current]->demotion_time)) {
             /* Only increment the current index */
             path_index_current++;
         } else {
@@ -834,7 +836,6 @@ void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx)
         }
     }
 
-
     while (cnx->nb_paths > path_index_good) {
         int d_path = cnx->nb_paths - 1;
         if (!picoquic_is_connection_id_null(cnx->path[d_path]->remote_cnxid)) {
@@ -846,13 +847,29 @@ void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx)
     /* TODO: what if there are no paths left? */
 }
 
+/* 
+ * Demote path, compute the effective time for demotion.
+ */
+void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_time)
+{
+    if (!cnx->path[path_index]->path_is_demoted) {
+        uint64_t demote_timer = cnx->path[path_index]->retransmit_timer;
+
+        if (demote_timer < PICOQUIC_INITIAL_RETRANSMIT_TIMER) {
+            demote_timer = PICOQUIC_INITIAL_RETRANSMIT_TIMER;
+        }
+
+        cnx->path[path_index]->path_is_demoted = 1;
+        cnx->path[path_index]->demotion_time = current_time + 3* demote_timer;
+    }
+}
+
 /* Promote path to default. This happens when a new path is verified, at the end
  * of a migration, and becomes the new default path.
  */
 
-void picoquic_promote_path_to_default(picoquic_cnx_t* cnx, int path_index)
+void picoquic_promote_path_to_default(picoquic_cnx_t* cnx, int path_index, uint64_t current_time)
 {
-
     if (path_index > 0 && path_index < cnx->nb_paths) {
         picoquic_path_t * path_x = cnx->path[path_index];
 
@@ -860,18 +877,14 @@ void picoquic_promote_path_to_default(picoquic_cnx_t* cnx, int path_index)
         if (cnx->congestion_alg != NULL) {
             cnx->congestion_alg->alg_init(path_x);
         }
-        /* Mark old path as demoted */
-        cnx->path[0]->path_is_demoted = 1;
-        /* Swap */
-        cnx->path[path_index] = cnx->path[0];
-        cnx->path[0] = path_x;
-#if 0
-        /* TODO: actually remove old instances after some time */
-        if (cnx->client_mode) {
-            /* Delete the old instance */
-            picoquic_delete_path(cnx, path_index);
+        if (path_index != 0) {
+            /* Mark old path as demoted */
+            picoquic_demote_path(cnx, 0, current_time);
+
+            /* Swap */
+            cnx->path[path_index] = cnx->path[0];
+            cnx->path[0] = path_x;
         }
-#endif
     }
 }
 
@@ -1166,32 +1179,6 @@ int picoquic_create_probe(picoquic_cnx_t* cnx, const struct sockaddr* addr_to, c
 
     return ret;
 }
-
-/*
- * Retire a connection ID
- */
-
-int picoquic_retire_connection_id(picoquic_cnx_t* cnx, picoquic_connection_id_t * cnxid)
-{
-    /* Go through the list of paths to find the connection ID */
-    int path_id = -1;
-
-    for (int i = 0; i < cnx->nb_paths; i++) {
-        if (picoquic_compare_connection_id(&cnx->path[i]->local_cnxid, cnxid) == 0) {
-            path_id = i;
-            break;
-        }
-    }
-
-    if (path_id != -1) {
-        cnx->path[path_id]->path_is_retired = 1;
-    }
-
-    /* TODO: if there is no matching path, consider triggering an error */
-
-    return 0;
-}
-
 
 /* Connection management
  */

@@ -398,6 +398,7 @@ typedef struct st_picoquic_path_t {
     uint64_t challenge_response;
     uint64_t challenge;
     uint64_t challenge_time;
+    uint64_t demotion_time;
     uint8_t challenge_repeat_count;
 #define PICOQUIC_CHALLENGE_REPEAT_MAX 4
     /* flags */
@@ -409,7 +410,6 @@ typedef struct st_picoquic_path_t {
     unsigned int challenge_failed : 1;
     unsigned int response_required : 1;
     unsigned int path_is_demoted : 1;
-    unsigned int path_is_retired: 1;
     unsigned int current_spin : 1; /* Current value of the spin bit */             
     unsigned int client_mode : 1; /* Is this connection the client side? */
     unsigned int prev_spin : 1;  /* previous Spin bit */
@@ -652,8 +652,9 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time,
     struct sockaddr* local_addr, struct sockaddr* peer_addr);
 void picoquic_register_path(picoquic_cnx_t* cnx, picoquic_path_t * path_x);
 void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index);
-void picoquic_promote_path_to_default(picoquic_cnx_t* cnx, int path_index);
-void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx);
+void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_time);
+void picoquic_promote_path_to_default(picoquic_cnx_t* cnx, int path_index, uint64_t current_time);
+void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time);
 
 /* Management of the CNX-ID stash */
 picoquic_cnxid_stash_t * picoquic_dequeue_cnxid_stash(picoquic_cnx_t* cnx);
@@ -917,6 +918,7 @@ int picoquic_prepare_path_response_frame(uint8_t* bytes,
     size_t bytes_max, size_t* consumed, uint64_t challenge);
 int picoquic_prepare_connection_id_frame(picoquic_cnx_t * cnx, picoquic_path_t * path_x,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
+int picoquic_queue_retire_connection_id_frame(picoquic_cnx_t * cnx, picoquic_connection_id_t * cnxid);
 
 int picoquic_prepare_first_misc_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
                                       size_t bytes_max, size_t* consumed);

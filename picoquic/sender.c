@@ -2667,7 +2667,7 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
 
     if (cnx->client_mode) {
         /* Remove delete paths */
-        picoquic_delete_abandoned_paths(cnx);
+        picoquic_delete_abandoned_paths(cnx, current_time);
     }
     /* Remove failed probes */
     picoquic_delete_failed_probes(cnx);
@@ -2684,7 +2684,7 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
             } else if (cnx->path[i]->challenge_verified) {
                 /* TODO: selection logic if multiple paths are available! */
                 /* This path becomes the new default */
-                picoquic_promote_path_to_default(cnx, i);
+                picoquic_promote_path_to_default(cnx, i, current_time);
                 path_x = cnx->path[0];
                 break;
             }
