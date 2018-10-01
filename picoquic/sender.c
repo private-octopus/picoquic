@@ -2161,7 +2161,7 @@ int picoquic_prepare_new_path_and_id(picoquic_cnx_t* cnx, uint8_t* bytes, size_t
 
     picoquic_register_path(cnx, cnx->path[path_index]);
 
-    ret = picoquic_prepare_connection_id_frame(cnx, cnx->path[path_index], bytes, bytes_max, consumed);
+    ret = picoquic_prepare_new_connection_id_frame(cnx, cnx->path[path_index], bytes, bytes_max, consumed);
 
     if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
         /* Oops. Try again next time. */
@@ -2602,7 +2602,7 @@ int picoquic_prepare_probe(picoquic_cnx_t* cnx,
                 }
                 else {
                     /* Add a copy of the last created connection ID */
-                    ret = picoquic_prepare_connection_id_frame(cnx, cnx->path[inactive_path_index], &bytes[length],
+                    ret = picoquic_prepare_new_connection_id_frame(cnx, cnx->path[inactive_path_index], &bytes[length],
                         send_buffer_max - checksum_overhead - length, &data_bytes);
                     if (ret == 0) {
                         length += (uint32_t)data_bytes;
