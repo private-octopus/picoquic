@@ -332,12 +332,12 @@ typedef struct _picoquic_stream_head {
 #define IS_LOCAL_STREAM_ID(id, client_mode)  (unsigned int)(((id)^(client_mode)) & 1)
 
 /*
-     * Frame queue. This is used for miscellaneous packets, such as the PONG
-     * response to a PING.
-     *
-     * The misc frame are allocated in meory as blobs, starting with the
-     * misc_frame_header, followed by the misc frame content.
-     */
+ * Frame queue. This is used for miscellaneous packets, such as the PONG
+ * response to a PING.
+ *
+ * The misc frame are allocated in meory as blobs, starting with the
+ * misc_frame_header, followed by the misc frame content.
+ */
 
 typedef struct st_picoquic_misc_frame_header_t {
     struct st_picoquic_misc_frame_header_t* next_misc_frame;
@@ -409,6 +409,7 @@ typedef struct st_picoquic_path_t {
     unsigned int challenge_failed : 1;
     unsigned int response_required : 1;
     unsigned int path_is_demoted : 1;
+    unsigned int path_is_retired: 1;
     unsigned int current_spin : 1; /* Current value of the spin bit */             
     unsigned int client_mode : 1; /* Is this connection the client side? */
     unsigned int prev_spin : 1;  /* previous Spin bit */

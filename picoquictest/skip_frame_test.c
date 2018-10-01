@@ -160,6 +160,13 @@ static uint8_t test_frame_type_crypto_hs[] = {
     0xA8, 0xA9, 0xAA, 0xAB, 0xAC, 0xAD, 0xAE, 0xAF
 };
 
+
+static uint8_t test_frame_type_retire_connection_id[] = {
+    picoquic_frame_type_retire_connection_id,
+    8,
+    0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7
+};
+
 typedef struct st_test_skip_frames_t {
     char const* name;
     uint8_t* val;
@@ -196,7 +203,8 @@ static test_skip_frames_t test_skip_list[] = {
     TEST_SKIP_ITEM("ack_ecn", test_frame_type_ack_ecn, 1, 0, 3),
     TEST_SKIP_ITEM("stream_min", test_frame_type_stream_range_min, 0, 1, 3),
     TEST_SKIP_ITEM("stream_max", test_frame_type_stream_range_max, 0, 0, 3),
-    TEST_SKIP_ITEM("crypto_hs", test_frame_type_crypto_hs, 0, 0, 2)
+    TEST_SKIP_ITEM("crypto_hs", test_frame_type_crypto_hs, 0, 0, 2),
+    TEST_SKIP_ITEM("retire_connection_id", test_frame_type_retire_connection_id, 0, 0, 3)
 };
 
 static size_t nb_test_skip_list = sizeof(test_skip_list) / sizeof(test_skip_frames_t);

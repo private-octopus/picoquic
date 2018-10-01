@@ -472,6 +472,69 @@ uint8_t* picoquic_decode_connection_id_frame(picoquic_cnx_t* cnx, uint8_t* bytes
     return bytes;
 }
 
+int picoquic_prepare_retire_connection_id_frame(picoquic_cnx_t * cnx, picoquic_connection_id_t * cnxid, 
+    uint8_t* bytes, size_t bytes_max, size_t* consumed)
+{
+    int ret = 0;
+    size_t byte_index = 0;
+
+    *consumed = 0;
+
+    if (cnxid->id_len > 0) {
+        if (bytes_max < 2 + cnxid->id_len) {
+            ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
+        }
+        else {
+            bytes[byte_index++] = picoquic_frame_type_retire_connection_id;
+            bytes[byte_index++] = cnxid->id_len;
+            memcpy(bytes + byte_index, cnxid->id, cnxid->id_len);
+            byte_index += cnxid->id_len;
+            *consumed = byte_index;
+        }
+    }
+
+    return ret;
+}
+
+uint8_t* picoquic_skip_retire_connection_id_frame(uint8_t* bytes, const uint8_t* bytes_max)
+{
+    uint8_t cid_length;
+
+    if ((bytes = picoquic_frames_uint8_decode(bytes+1, bytes_max, &cid_length)) != NULL)
+    {
+        bytes = picoquic_frames_fixed_skip(bytes, bytes_max, cid_length);
+    }
+
+    return bytes;
+}
+
+uint8_t* picoquic_decode_retire_connection_id_frame(picoquic_cnx_t* cnx, uint8_t* bytes, const uint8_t* bytes_max)
+{
+    /* store the connection ID in order to support migration. */
+    uint8_t cid_length = 0;
+    uint8_t * cnxid_bytes = NULL;
+
+    if ((bytes = picoquic_frames_uint8_decode(bytes+1, bytes_max, &cid_length)) != NULL) {
+        cnxid_bytes = bytes;
+        bytes = picoquic_frames_fixed_skip(bytes, bytes_max, cid_length);
+    }
+
+    if (bytes == NULL || picoquic_is_connection_id_length_valid(cid_length) == 0) {
+        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
+            picoquic_frame_type_retire_connection_id);
+    }
+    else {
+        /* TODO: actually retire the connection ID */
+    }
+
+    return bytes;
+}
+
+
+
+
+
+
 /*
  * New Retry Token frame 
  */
@@ -2430,6 +2493,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_
                 bytes = picoquic_decode_path_response_frame(cnx, bytes, bytes_max);
                 break;
             case picoquic_frame_type_crypto_hs:
+
                 bytes = picoquic_decode_crypto_hs_frame(cnx, bytes, bytes_max, epoch);
                 ack_needed = 1;
                 break;
@@ -2439,9 +2503,8 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_
                 break;
             case picoquic_frame_type_retire_connection_id:
                 /* the old code point for ACK frames, but this is taken care of in the ACK tests above */
-                /* Not implemented yet! */
-                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, picoquic_frame_type_retire_connection_id);
-                bytes = NULL;
+                bytes = picoquic_decode_retire_connection_id_frame(cnx, bytes, bytes_max);
+                ack_needed = 1;
                 break;
             default: {
                 uint64_t frame_id64;
@@ -2680,6 +2743,11 @@ int picoquic_skip_frame(uint8_t* bytes, size_t bytes_maxsize, size_t* consumed,
             break;
         case picoquic_frame_type_new_token:
             bytes = picoquic_skip_new_token_frame(bytes, bytes_max);
+            *pure_ack = 0;
+            break;
+        case picoquic_frame_type_retire_connection_id:
+            /* the old code point for ACK frames, but this is taken care of in the ACK tests above */
+            bytes = picoquic_skip_retire_connection_id_frame(bytes, bytes_max);
             *pure_ack = 0;
             break;
         default: {

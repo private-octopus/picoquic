@@ -840,6 +840,8 @@ void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx)
     }
 
     cnx->nb_paths = path_index_good;
+
+    /* TODO: what if there are no paths left? */
 }
 
 /* Promote path to default. This happens when a new path is verified, at the end
@@ -981,6 +983,7 @@ int picoquic_enqueue_cnxid_stash(picoquic_cnx_t * cnx,
 /*
  * Start using a new connection ID for the existing connection
  */
+
 int picoquic_renew_connection_id(picoquic_cnx_t* cnx)
 {
     int ret = 0;
@@ -1157,6 +1160,32 @@ int picoquic_create_probe(picoquic_cnx_t* cnx, const struct sockaddr* addr_to, c
 
     return ret;
 }
+
+/*
+ * Retire a connection ID
+ */
+
+int picoquic_retire_connection_id(picoquic_cnx_t* cnx, picoquic_connection_id_t * cnxid)
+{
+    /* Go through the list of paths to find the connection ID */
+    int path_id = -1;
+
+    for (int i = 0; i < cnx->nb_paths; i++) {
+        if (picoquic_compare_connection_id(&cnx->path[i]->local_cnxid, cnxid) == 0) {
+            path_id = i;
+            break;
+        }
+    }
+
+    if (path_id != -1) {
+        cnx->path[path_id]->path_is_retired = 1;
+    }
+
+    /* TODO: if there is no matching path, consider triggering an error */
+
+    return 0;
+}
+
 
 /* Connection management
  */

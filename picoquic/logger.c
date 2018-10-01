@@ -861,6 +861,35 @@ size_t picoquic_log_new_connection_id_frame(FILE* F, uint8_t* bytes, size_t byte
     return byte_index;
 }
 
+size_t picoquic_log_retire_connection_id_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
+{
+    size_t byte_index = 1;
+    size_t min_size = 2;
+    picoquic_connection_id_t new_cnx_id;
+    size_t l_seq = 0;
+    uint8_t l_cid = 0;
+
+    if (byte_index < bytes_max) {
+        l_cid = bytes[byte_index++];
+        min_size = byte_index + l_cid;
+    }
+
+    if (min_size > bytes_max) {
+        fprintf(F, "    Malformed RETIRE CONNECTION ID, requires %d bytes out of %d\n", (int)min_size, (int)bytes_max);
+        byte_index = bytes_max;
+    }
+    else {
+        byte_index += picoquic_parse_connection_id(bytes + byte_index, l_cid, &new_cnx_id);
+        fprintf(F, "    RETIRE CONNECTION ID: 0x");
+        for (int x = 0; x < new_cnx_id.id_len; x++) {
+            fprintf(F, "%02x", new_cnx_id.id[x]);
+        }
+        fprintf(F, "\n");
+    }
+
+    return byte_index;
+}
+
 size_t picoquic_log_new_token_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
 {
     size_t byte_index = 1;
@@ -999,8 +1028,7 @@ void picoquic_log_frames(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t leng
                 byte_index += picoquic_log_ack_frame(F, cnx_id64, bytes + byte_index, length - byte_index, 0, is_draft_14);
             }
             else {
-                fprintf(F, "    Retire connection id frame not supported yet!\n");
-                byte_index = length;
+                byte_index += picoquic_log_retire_connection_id_frame(F, bytes + byte_index, length - byte_index);
             }
             break;
         case picoquic_frame_type_padding:
