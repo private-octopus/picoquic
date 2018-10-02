@@ -645,9 +645,30 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(test_migration_long)
+        {
+            int ret = migration_test_long();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(test_migration_loss)
+        {
+            int ret = migration_test_loss();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(test_cnxid_renewal)
         {
             int ret = cnxid_renewal_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(test_retire_cnxid)
+        {
+            int ret = retire_cnxid_test();
 
             Assert::AreEqual(ret, 0);
         }

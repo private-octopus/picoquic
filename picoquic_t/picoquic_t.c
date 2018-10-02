@@ -132,7 +132,10 @@ static const picoquic_test_def_t test_table[] = {
     { "transmit_cnxid", transmit_cnxid_test },
     { "probe_api", probe_api_test },
     { "migration" , migration_test },
-    { "cnxid_renewal",  cnxid_renewal_test},
+    { "migration_long", migration_test_long },
+    { "migration_with_loss", migration_test_loss },
+    { "cnxid_renewal",  cnxid_renewal_test },
+    { "retire_cnxid", retire_cnxid_test },
     { "stress", stress_test },
     { "fuzz", fuzz_test }
 };

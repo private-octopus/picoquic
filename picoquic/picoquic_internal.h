@@ -41,7 +41,7 @@ extern "C" {
 #define PICOQUIC_PRACTICAL_MAX_MTU 1440
 #define PICOQUIC_RETRY_SECRET_SIZE 64
 #define PICOQUIC_DEFAULT_0RTT_WINDOW 4096
-#define PICOQUIC_NB_PATH_TARGET 4
+#define PICOQUIC_NB_PATH_TARGET 9
 
 #define PICOQUIC_NUMBER_OF_EPOCHS 4
 #define PICOQUIC_NUMBER_OF_EPOCH_OFFSETS (PICOQUIC_NUMBER_OF_EPOCHS+1)
@@ -332,12 +332,12 @@ typedef struct _picoquic_stream_head {
 #define IS_LOCAL_STREAM_ID(id, client_mode)  (unsigned int)(((id)^(client_mode)) & 1)
 
 /*
-     * Frame queue. This is used for miscellaneous packets, such as the PONG
-     * response to a PING.
-     *
-     * The misc frame are allocated in meory as blobs, starting with the
-     * misc_frame_header, followed by the misc frame content.
-     */
+ * Frame queue. This is used for miscellaneous packets, such as the PONG
+ * response to a PING.
+ *
+ * The misc frame are allocated in meory as blobs, starting with the
+ * misc_frame_header, followed by the misc frame content.
+ */
 
 typedef struct st_picoquic_misc_frame_header_t {
     struct st_picoquic_misc_frame_header_t* next_misc_frame;
@@ -398,6 +398,7 @@ typedef struct st_picoquic_path_t {
     uint64_t challenge_response;
     uint64_t challenge;
     uint64_t challenge_time;
+    uint64_t demotion_time;
     uint8_t challenge_repeat_count;
 #define PICOQUIC_CHALLENGE_REPEAT_MAX 4
     /* flags */
@@ -651,8 +652,9 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time,
     struct sockaddr* local_addr, struct sockaddr* peer_addr);
 void picoquic_register_path(picoquic_cnx_t* cnx, picoquic_path_t * path_x);
 void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index);
-void picoquic_promote_path_to_default(picoquic_cnx_t* cnx, int path_index);
-void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx);
+void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_time);
+void picoquic_promote_path_to_default(picoquic_cnx_t* cnx, int path_index, uint64_t current_time);
+void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time);
 
 /* Management of the CNX-ID stash */
 picoquic_cnxid_stash_t * picoquic_dequeue_cnxid_stash(picoquic_cnx_t* cnx);
@@ -914,8 +916,9 @@ int picoquic_prepare_path_challenge_frame(uint8_t* bytes,
     size_t bytes_max, size_t* consumed, uint64_t challenge);
 int picoquic_prepare_path_response_frame(uint8_t* bytes,
     size_t bytes_max, size_t* consumed, uint64_t challenge);
-int picoquic_prepare_connection_id_frame(picoquic_cnx_t * cnx, picoquic_path_t * path_x,
+int picoquic_prepare_new_connection_id_frame(picoquic_cnx_t * cnx, picoquic_path_t * path_x,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
+int picoquic_queue_retire_connection_id_frame(picoquic_cnx_t * cnx, picoquic_connection_id_t * cnxid);
 
 int picoquic_prepare_first_misc_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
                                       size_t bytes_max, size_t* consumed);

@@ -812,13 +812,15 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
  * Path challenges may be abandoned if they are tried too many times without success. 
  */
 
-void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx)
+void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time)
 {
     int path_index_good = 1;
     int path_index_current = 1;
 
     while (path_index_current < cnx->nb_paths) {
-        if (cnx->path[path_index_current]->challenge_failed) {
+        if (cnx->path[path_index_current]->challenge_failed ||
+            (cnx->path[path_index_current]->path_is_demoted &&
+                current_time >= cnx->path[path_index_current]->demotion_time)) {
             /* Only increment the current index */
             path_index_current++;
         } else {
@@ -834,21 +836,40 @@ void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx)
         }
     }
 
-    for (int i = path_index_good ; i < cnx->nb_paths; i++) {
-        picoquic_delete_path(cnx, i);
-        cnx->path[i] = NULL;
+    while (cnx->nb_paths > path_index_good) {
+        int d_path = cnx->nb_paths - 1;
+        if (!picoquic_is_connection_id_null(cnx->path[d_path]->remote_cnxid)) {
+            (void)picoquic_queue_retire_connection_id_frame(cnx, &cnx->path[d_path]->remote_cnxid);
+        }
+        picoquic_delete_path(cnx, d_path);
     }
 
-    cnx->nb_paths = path_index_good;
+    /* TODO: what if there are no paths left? */
+}
+
+/* 
+ * Demote path, compute the effective time for demotion.
+ */
+void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_time)
+{
+    if (!cnx->path[path_index]->path_is_demoted) {
+        uint64_t demote_timer = cnx->path[path_index]->retransmit_timer;
+
+        if (demote_timer < PICOQUIC_INITIAL_RETRANSMIT_TIMER) {
+            demote_timer = PICOQUIC_INITIAL_RETRANSMIT_TIMER;
+        }
+
+        cnx->path[path_index]->path_is_demoted = 1;
+        cnx->path[path_index]->demotion_time = current_time + 3* demote_timer;
+    }
 }
 
 /* Promote path to default. This happens when a new path is verified, at the end
  * of a migration, and becomes the new default path.
  */
 
-void picoquic_promote_path_to_default(picoquic_cnx_t* cnx, int path_index)
+void picoquic_promote_path_to_default(picoquic_cnx_t* cnx, int path_index, uint64_t current_time)
 {
-
     if (path_index > 0 && path_index < cnx->nb_paths) {
         picoquic_path_t * path_x = cnx->path[path_index];
 
@@ -856,18 +877,14 @@ void picoquic_promote_path_to_default(picoquic_cnx_t* cnx, int path_index)
         if (cnx->congestion_alg != NULL) {
             cnx->congestion_alg->alg_init(path_x);
         }
-        /* Mark old path as demoted */
-        cnx->path[0]->path_is_demoted = 1;
-        /* Swap */
-        cnx->path[path_index] = cnx->path[0];
-        cnx->path[0] = path_x;
-#if 0
-        /* TODO: actually remove old instances after some time */
-        if (cnx->client_mode) {
-            /* Delete the old instance */
-            picoquic_delete_path(cnx, path_index);
+        if (path_index != 0) {
+            /* Mark old path as demoted */
+            picoquic_demote_path(cnx, 0, current_time);
+
+            /* Swap */
+            cnx->path[path_index] = cnx->path[0];
+            cnx->path[0] = path_x;
         }
-#endif
     }
 }
 
@@ -981,6 +998,7 @@ int picoquic_enqueue_cnxid_stash(picoquic_cnx_t * cnx,
 /*
  * Start using a new connection ID for the existing connection
  */
+
 int picoquic_renew_connection_id(picoquic_cnx_t* cnx)
 {
     int ret = 0;
@@ -997,7 +1015,7 @@ int picoquic_renew_connection_id(picoquic_cnx_t* cnx)
         if (stashed == NULL) {
             ret = PICOQUIC_ERROR_CNXID_NOT_AVAILABLE;
         } else {
-            /* TODO: disposal of old CNXID */
+            ret = picoquic_queue_retire_connection_id_frame(cnx, &cnx->path[0]->remote_cnxid);
             cnx->path[0]->remote_cnxid = stashed->cnx_id;
             memcpy(cnx->path[0]->reset_secret, stashed->reset_secret,
                 PICOQUIC_RESET_SECRET_SIZE);
@@ -1098,6 +1116,10 @@ void picoquic_delete_failed_probes(picoquic_cnx_t* cnx)
             else {
                 previous->next_probe = probe;
             }
+
+            /* Before deleting, post a notification to the peer */
+            (void)picoquic_queue_retire_connection_id_frame(cnx, &abandoned->remote_cnxid);
+
             free(abandoned);
         }
         else {
