@@ -1325,6 +1325,13 @@ void picoquic_cnx_set_next_wake_time(picoquic_cnx_t* cnx, uint64_t current_time)
         if (next_time > current_time) {
             for (int i = 0; i < cnx->nb_paths; i++) {
                 if (cnx->path[i]->path_is_demoted) {
+                    if (cnx->path[i]->demotion_time <= current_time) {
+                        next_time = current_time;
+                        break;
+                    }
+                    else if (cnx->path[i]->demotion_time < next_time) {
+                        next_time = cnx->path[i]->demotion_time;
+                    }
                     continue;
                 }
 
@@ -2665,10 +2672,9 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
 
     *send_length = 0;
 
-    if (cnx->client_mode) {
-        /* Remove delete paths */
-        picoquic_delete_abandoned_paths(cnx, current_time);
-    }
+    /* Remove delete paths */
+    picoquic_delete_abandoned_paths(cnx, current_time);
+
     /* Remove failed probes */
     picoquic_delete_failed_probes(cnx);
 
@@ -2689,8 +2695,9 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
                 break;
             }
             else if (path_x == NULL && cnx->path[i]->path_is_activated &&
-                (cnx->path[i]->challenge_required ||
-                    current_time >= (cnx->path[i]->challenge_time + cnx->path[i]->retransmit_timer))) {
+                (cnx->path[i]->challenge_required &&
+                    (cnx->path[i]->challenge_repeat_count == 0 ||
+                    current_time >= (cnx->path[i]->challenge_time + cnx->path[i]->retransmit_timer)))) {
                 /* will try this path, unless a validated path came in */
                 path_x = cnx->path[i];
             }

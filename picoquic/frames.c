@@ -482,7 +482,7 @@ uint8_t* picoquic_decode_new_connection_id_frame(picoquic_cnx_t* cnx, uint8_t* b
     }
 
     if (bytes == NULL || picoquic_is_connection_id_length_valid(cid_length) == 0) {
-        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
+        picoquic_connection_error(cnx, (bytes == NULL) ? PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR : PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
             picoquic_frame_type_new_connection_id);
     } else {
         int ret = picoquic_enqueue_cnxid_stash(cnx, sequence, cid_length, cnxid_bytes, secret_bytes, NULL);
@@ -533,6 +533,12 @@ int picoquic_queue_retire_connection_id_frame(picoquic_cnx_t * cnx, picoquic_con
 {
     size_t consumed = 0;
     uint8_t frame_buffer[258];
+
+    if (picoquic_supported_versions[cnx->version_index].version == PICOQUIC_SEVENTH_INTEROP_VERSION ||
+        picoquic_supported_versions[cnx->version_index].version == PICOQUIC_EIGHT_INTEROP_VERSION) {
+        return 0;
+    }
+
     int ret = picoquic_prepare_retire_connection_id_frame(cnx, cnxid, frame_buffer, sizeof(frame_buffer), &consumed);
 
     if (ret == 0 && consumed > 0) {

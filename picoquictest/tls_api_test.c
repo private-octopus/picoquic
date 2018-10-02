@@ -3463,6 +3463,18 @@ int client_error_test()
  * TODO: also test that no New Connection Id frames are sent if migration is disabled 
  */
 
+int test_cnxid_count_stash(picoquic_cnx_t * cnx) {
+    picoquic_cnxid_stash_t * stash = cnx->cnxid_stash_first;
+    int nb = 0;
+
+    while (stash != NULL) {
+        nb++;
+        stash = stash->next_in_stash;
+    }
+
+    return nb;
+}
+
 int transmit_cnxid_test_stash(picoquic_cnx_t * cnx1, picoquic_cnx_t * cnx2, char const * cnx_text)
 {
     int ret = 0;
@@ -3764,7 +3776,7 @@ int probe_api_test()
  * starts the migration by explicitly probing a new path.
  */
 
-int migration_test()
+int migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_scenario, uint64_t loss_target)
 {
     uint64_t loss_mask_data = 0;
     uint64_t simulated_time = 0;
@@ -3835,20 +3847,23 @@ int migration_test()
 
     /* Prepare to send data */
     if (ret == 0) {
-        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_q_and_r, sizeof(test_scenario_q_and_r));
+        ret = test_api_init_send_recv_scenario(test_ctx, scenario, size_of_scenario);
     }
 
     /* Perform a data sending loop */
+    loss_mask = loss_target;
+
     if (ret == 0) {
         ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 0);
     }
 
     /* Add a time loop of 3 seconds to give some time for the probes to be repeated */
-    next_time = simulated_time + 3000000;
+    next_time = simulated_time + 4000000;
     loss_mask = 0;
     while (ret == 0 && simulated_time < next_time && test_ctx->cnx_client->cnx_state == picoquic_state_client_ready
         && test_ctx->cnx_server->cnx_state == picoquic_state_server_ready
-        && test_ctx->cnx_server->path[0]->challenge_verified != 1) {
+        && (test_ctx->cnx_server->path[0]->challenge_verified != 1 || test_ctx->cnx_client->path[0]->path_is_demoted == 1 ||
+            initial_challenge == test_ctx->cnx_server->path[0]->challenge)) {
         int was_active = 0;
 
         ret = tls_api_one_sim_round(test_ctx, &simulated_time, next_time, &was_active);
@@ -3858,11 +3873,11 @@ int migration_test()
     /* TODO: verify that exactly one challenge was sent */
     if (ret == 0) {
         if (initial_challenge == test_ctx->cnx_server->path[0]->challenge) {
-            DBG_PRINTF("%s", "Challenge was not renewed after NAT rebinding");
+            DBG_PRINTF("%s", "Challenge was not renewed after migration");
             ret = -1;
         }
         else if (test_ctx->cnx_server->path[0]->challenge_verified != 1) {
-            DBG_PRINTF("%s", "Challenge was not verified after NAT rebinding");
+            DBG_PRINTF("%s", "Challenge was not verified after migration");
             ret = -1;
         }
     }
@@ -3885,6 +3900,23 @@ int migration_test()
     }
 
     return ret;
+}
+
+int migration_test()
+{
+    return migration_test_scenario(test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0);
+}
+
+int migration_test_long()
+{
+    return migration_test_scenario(test_scenario_very_long, sizeof(test_scenario_very_long), 0);
+}
+
+int migration_test_loss()
+{
+    uint64_t loss_mask = 0x09;
+
+    return migration_test_scenario(test_scenario_q_and_r, sizeof(test_scenario_q_and_r), loss_mask);
 }
 
 /* Connection ID renewal test.
@@ -3977,6 +4009,130 @@ int cnxid_renewal_test()
             DBG_PRINTF("%s", "The local CNX ID changed to a new value");
             ret = -1;
         }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+
+/*
+ * Perform a test of the "retire connection id" function.
+ * The test will artificially retire connection ID on the client,
+ * and verify that the server will refill the stash of 
+ * connection ID.
+ */
+int retire_cnxid_test()
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    /* run a receive loop until no outstanding data */
+    if (ret == 0) {
+        uint64_t time_out = simulated_time + 4000000;
+        int nb_rounds = 0;
+        int success = 0;
+
+        while (ret == 0 && simulated_time < time_out &&
+            nb_rounds < 2048 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
+            int was_active = 0;
+
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
+            nb_rounds++;
+
+            if (test_ctx->cnx_client->nb_paths >= PICOQUIC_NB_PATH_TARGET &&
+                test_ctx->cnx_server->nb_paths >= PICOQUIC_NB_PATH_TARGET &&
+                picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) &&
+                picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)) {
+                success = 1;
+                break;
+            }
+        }
+
+        if (ret == 0 && success == 0) {
+            DBG_PRINTF("Exit synch loop after %d rounds, backlog or not enough paths (%d & %d).\n",
+                nb_rounds, test_ctx->cnx_client->nb_paths, test_ctx->cnx_server->nb_paths);
+        }
+    }
+
+    if (ret == 0) {
+        if (test_ctx->cnx_client->nb_paths < PICOQUIC_NB_PATH_TARGET) {
+            DBG_PRINTF("Only %d paths created on client.\n", test_ctx->cnx_client->nb_paths);
+            ret = -1;
+        }
+        else if (test_ctx->cnx_server->nb_paths < PICOQUIC_NB_PATH_TARGET) {
+            DBG_PRINTF("Only %d paths created on server.\n", test_ctx->cnx_server->nb_paths);
+        }
+    }
+
+    /* Delete several connection ID */
+    for (int i = 2; ret == 0 && i < PICOQUIC_NB_PATH_TARGET; i++) {
+        picoquic_cnxid_stash_t * stashed = picoquic_dequeue_cnxid_stash(test_ctx->cnx_client);
+
+        if (stashed == NULL) {
+            DBG_PRINTF("Could not retrieve cnx ID #%d.\n", i-1);
+        } else {
+            ret = picoquic_queue_retire_connection_id_frame(test_ctx->cnx_client, &stashed->cnx_id);
+            free(stashed);
+        }
+    }
+
+    /* run the loop again until no outstanding data */
+    if (ret == 0) {
+        uint64_t time_out = simulated_time + 8000000;
+        int nb_rounds = 0;
+        int success = 0;
+
+        while (ret == 0 && simulated_time < time_out &&
+            nb_rounds < 2048 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
+            int was_active = 0; 
+
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
+            nb_rounds++;
+
+            if (test_ctx->cnx_client->nb_paths >= PICOQUIC_NB_PATH_TARGET &&
+                test_ctx->cnx_server->nb_paths == PICOQUIC_NB_PATH_TARGET &&
+                test_ctx->cnx_client->first_misc_frame == NULL &&
+                test_cnxid_count_stash(test_ctx->cnx_client) >= (PICOQUIC_NB_PATH_TARGET - 1) &&
+                picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) &&
+                picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)) {
+                success = 1;
+                break;
+            }
+        }
+
+        if (ret == 0 && success == 0) {
+            DBG_PRINTF("Exit synch loop after %d rounds, backlog or not enough paths (%d & %d).\n",
+                nb_rounds, test_ctx->cnx_client->nb_paths, test_ctx->cnx_server->nb_paths);
+        }
+    }
+
+    /* Check */
+
+    if (ret == 0) {
+        if (test_ctx->cnx_server->nb_paths!= PICOQUIC_NB_PATH_TARGET) {
+            DBG_PRINTF("Found %d paths active on server instead of %d.\n", test_ctx->cnx_server->nb_paths, PICOQUIC_NB_PATH_TARGET);
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        ret = transmit_cnxid_test_stash(test_ctx->cnx_client, test_ctx->cnx_server, "client");
+    }
+
+    if (ret == 0) {
+        ret = transmit_cnxid_test_stash(test_ctx->cnx_server, test_ctx->cnx_client, "server");
     }
 
     if (test_ctx != NULL) {
