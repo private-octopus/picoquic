@@ -38,6 +38,9 @@
 int picoquic_master_tlscontext(picoquic_quic_t* quic, char const* cert_file_name, char const* key_file_name,
     char const * cert_root_file_name, const uint8_t* ticket_key, size_t ticket_key_length);
 
+/* TODO: remove this declaration once we drop support for draft 14 */
+int picoquic_tls_context_is_draft_14(picoquic_quic_t * quic);
+
 void picoquic_master_tlscontext_free(picoquic_quic_t* quic);
 
 int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint64_t current_time);

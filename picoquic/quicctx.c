@@ -1697,6 +1697,7 @@ int picoquic_reset_cnx_version(picoquic_cnx_t* cnx, uint8_t* bytes, size_t lengt
     size_t byte_index = 0;
     uint32_t proposed_version = 0;
     int ret = -1;
+    int is_draft_14 = picoquic_tls_context_is_draft_14(cnx->quic);
 
     if (cnx->cnx_state == picoquic_state_client_init || cnx->cnx_state == picoquic_state_client_init_sent) {
         while (cnx->cnx_state != picoquic_state_client_renegotiate && byte_index + 4 <= length) {
@@ -1706,9 +1707,15 @@ int picoquic_reset_cnx_version(picoquic_cnx_t* cnx, uint8_t* bytes, size_t lengt
 
             for (size_t i = 0; i < picoquic_nb_supported_versions; i++) {
                 if (proposed_version == picoquic_supported_versions[i].version) {
-                    cnx->version_index = (int)i;
-                    cnx->cnx_state = picoquic_state_client_renegotiate;
-
+                    if ((is_draft_14 &&
+                        (proposed_version == PICOQUIC_SEVENTH_INTEROP_VERSION ||
+                            proposed_version == PICOQUIC_EIGHT_INTEROP_VERSION)) ||
+                            (!is_draft_14 &&
+                        (proposed_version != PICOQUIC_SEVENTH_INTEROP_VERSION &&
+                            proposed_version != PICOQUIC_EIGHT_INTEROP_VERSION))) {
+                        cnx->version_index = (int)i;
+                        cnx->cnx_state = picoquic_state_client_renegotiate;
+                    }
                     break;
                 }
             }
