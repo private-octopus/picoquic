@@ -590,6 +590,9 @@ static void tls_api_delete_ctx(picoquic_test_tls_api_ctx_t* test_ctx)
     free(test_ctx);
 }
 
+/* TODO: remove this declaration when removing support for draft 14 */
+void picoquic_set_tls_context_for_draft_14(picoquic_quic_t * quic);
+
 static int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_version,
     char const* sni, char const* alpn, uint64_t* p_simulated_time, 
     char const* ticket_file_name, int force_zero_share, int delayed_init, int use_bad_crypt)
@@ -638,6 +641,14 @@ static int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t propose
 
         if (test_ctx->qclient == NULL || test_ctx->qserver == NULL) {
             ret = -1;
+        }
+        
+        if (ret == 0) {
+            if (proposed_version == PICOQUIC_SEVENTH_INTEROP_VERSION ||
+                proposed_version == PICOQUIC_EIGHT_INTEROP_VERSION) {
+                picoquic_set_tls_context_for_draft_14(test_ctx->qclient);
+                picoquic_set_tls_context_for_draft_14(test_ctx->qserver);
+            }
         }
 
         /* register the links */
