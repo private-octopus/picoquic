@@ -1,7 +1,7 @@
 # Build at a known-good commit
 # Must select a commit date (can copy-paste from git log)
-$COMMIT_ID="62c7d6c43d68bc411cd3edf41d537ccae9178999"
-$COMMIT_DATE="Wed Aug 22 11:16:13 2018 +0900"
+$COMMIT_ID="ed9b9fee4ce8484ab86280e017bb5aafbd60adc3"
+$COMMIT_DATE="Wed Oct 3 11:06:54 2018 +0900"
 
 # Match expectations of picotlsvs project.
 foreach ($dir in "$Env:OPENSSLDIR","$Env:OPENSSL64DIR") {
