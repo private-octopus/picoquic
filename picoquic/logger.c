@@ -866,7 +866,6 @@ size_t picoquic_log_retire_connection_id_frame(FILE* F, uint8_t* bytes, size_t b
     size_t byte_index = 1;
     size_t min_size = 2;
     picoquic_connection_id_t new_cnx_id;
-    size_t l_seq = 0;
     uint8_t l_cid = 0;
 
     if (byte_index < bytes_max) {
