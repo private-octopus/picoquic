@@ -3,7 +3,7 @@
 
 # Build at a known-good commit
 # Must select a commit date (can copy-paste from git log)
-COMMIT_ID=a760bd5812441d3ef44fd34ae3c5aaab2016712d
+COMMIT_ID=ed9b9fee4ce8484ab86280e017bb5aafbd60adc3
 COMMIT_DATE="Wed Oct 3 11:06:54 2018 +0900"
 
 cd ..
