@@ -196,8 +196,6 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
 
     min_size += param_size + 2;
 
-    *consumed = min_size;
-
     if (min_size > bytes_max) {
         ret = PICOQUIC_ERROR_EXTENSION_BUFFER_TOO_SMALL;
     } else {
@@ -207,16 +205,32 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
             byte_index += 4;
             break;
         case 1: // Server encrypted extension
+        {
+            size_t head_index;
+
+            int is_draft_14 = (picoquic_supported_versions[cnx->version_index].version == PICOQUIC_SEVENTH_INTEROP_VERSION ||
+                picoquic_supported_versions[cnx->version_index].version == PICOQUIC_EIGHT_INTEROP_VERSION);
             picoformat_32(bytes + byte_index,
                 picoquic_supported_versions[cnx->version_index].version);
             byte_index += 4;
+            head_index = byte_index;
+            byte_index++;
+            /* TODO: restore this when getting rid of draft_14: bytes[byte_index++] = (uint8_t)(4 * picoquic_nb_supported_versions); */
 
-            bytes[byte_index++] = (uint8_t)(4 * picoquic_nb_supported_versions);
             for (size_t i = 0; i < picoquic_nb_supported_versions; i++) {
+                if ((is_draft_14 && !(picoquic_supported_versions[i].version == PICOQUIC_SEVENTH_INTEROP_VERSION ||
+                    picoquic_supported_versions[i].version == PICOQUIC_EIGHT_INTEROP_VERSION)) ||
+                    (!is_draft_14 && (picoquic_supported_versions[i].version == PICOQUIC_SEVENTH_INTEROP_VERSION ||
+                        picoquic_supported_versions[i].version == PICOQUIC_EIGHT_INTEROP_VERSION))) {
+                    continue;
+                }
                 picoformat_32(bytes + byte_index, picoquic_supported_versions[i].version);
                 byte_index += 4;
             }
+            /* TODO: remove when removing draft_14 support */
+            bytes[head_index] = (uint8_t)(byte_index - head_index -1);
             break;
+        }
         default: // New session ticket
             break;
         }
@@ -356,11 +370,12 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                 picoformat_16(bytes + byte_index, cnx->original_cnxid.id_len);
                 byte_index += 2;
                 memcpy(bytes + byte_index, cnx->original_cnxid.id, cnx->original_cnxid.id_len);
-
-                /* TODO: restore this line if adding new parameters: byte_index += cnx->original_cnxid.id_len; */
+                byte_index += cnx->original_cnxid.id_len;
             }
         }
     }
+    
+    *consumed = (ret == 0)?byte_index:0;
 
     return ret;
 }
@@ -381,12 +396,20 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
             ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
         } else {
             uint32_t proposed_version;
+            int is_draft_14 = (picoquic_supported_versions[cnx->version_index].version == PICOQUIC_SEVENTH_INTEROP_VERSION ||
+                picoquic_supported_versions[cnx->version_index].version == PICOQUIC_EIGHT_INTEROP_VERSION);
 
             proposed_version = PICOPARSE_32(bytes + byte_index);
             byte_index += 4;
 
             if (picoquic_supported_versions[cnx->version_index].version != proposed_version) {
                 for (size_t i = 0; ret == 0 && i < picoquic_nb_supported_versions; i++) {
+                    if ((is_draft_14 && !(picoquic_supported_versions[i].version == PICOQUIC_SEVENTH_INTEROP_VERSION ||
+                        picoquic_supported_versions[i].version == PICOQUIC_EIGHT_INTEROP_VERSION)) ||
+                        (!is_draft_14 && (picoquic_supported_versions[i].version == PICOQUIC_SEVENTH_INTEROP_VERSION ||
+                            picoquic_supported_versions[i].version == PICOQUIC_EIGHT_INTEROP_VERSION))) {
+                        continue;
+                    }
                     if (proposed_version == picoquic_supported_versions[i].version) {
                         ret = PICOQUIC_ERROR_VERSION_NEGOTIATION_SPOOFED;
                         break;

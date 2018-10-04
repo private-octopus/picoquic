@@ -109,6 +109,9 @@ static const char* bad_request_message = "<html><head><title>Bad Request</title>
 #include "../picoquic/picosocks.h"
 #include "../picoquic/util.h"
 
+/* TODO: remove this declaration when removing support for draft 14 */
+void picoquic_set_tls_context_for_draft_14(picoquic_quic_t * quic);
+
 void print_address(struct sockaddr* address, char* label, picoquic_connection_id_t cnx_id)
 {
     char hostname[256];
@@ -392,7 +395,7 @@ int quic_server(const char* server_name, int server_port,
     const char* pem_cert, const char* pem_key,
     int just_once, int do_hrr, cnx_id_cb_fn cnx_id_callback,
     void* cnx_id_callback_ctx, uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE],
-    int mtu_max)
+    int mtu_max, uint32_t proposed_version)
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
@@ -437,6 +440,11 @@ int quic_server(const char* server_name, int server_port,
             PICOQUIC_SET_LOG(qserver, stdout);
 
             picoquic_set_key_log_file_from_env(qserver);
+
+            if (proposed_version == PICOQUIC_SEVENTH_INTEROP_VERSION ||
+                proposed_version == PICOQUIC_EIGHT_INTEROP_VERSION) {
+                picoquic_set_tls_context_for_draft_14(qserver);
+            }
         }
     }
 
@@ -938,7 +946,7 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
     int64_t delay_max = 10000000;
     int64_t delta_t = 0;
     int notified_ready = 0;
-    const char* alpn = (proposed_version == 0xFF00000D)?"hq-13":"hq-14";
+    const char* alpn = (proposed_version == 0xFF00000D)?"hq-13": ((proposed_version == 0xFF00000D) ? "hq-14":"hq-15");
     int zero_rtt_available = 0;
 
     memset(&callback_ctx, 0, sizeof(picoquic_first_client_callback_ctx_t));
@@ -994,6 +1002,11 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
                     fprintf(F_log, "No root crt list specified, certificate will not be verified.\n");
                 }
                 picoquic_set_null_verifier(qclient);
+            }
+
+            if (proposed_version == PICOQUIC_SEVENTH_INTEROP_VERSION ||
+                proposed_version == PICOQUIC_EIGHT_INTEROP_VERSION) {
+                picoquic_set_tls_context_for_draft_14(qclient);
             }
         }
     }
@@ -1273,7 +1286,8 @@ void usage()
     fprintf(stderr, "                          where <src> is int:\n");
     fprintf(stderr, "                            0: picoquic_cnx_id_random\n");
     fprintf(stderr, "                            1: picoquic_cnx_id_remote (client)\n");
-    fprintf(stderr, "  -v version            Version proposed by client, e.g. -v ff00000a\n");
+    fprintf(stderr, "  -v version            Version proposed by client, e.g. -v ff00000e\n");
+    fprintf(stderr, "                        or restrict the server to draft-14 mode.\n");
     fprintf(stderr, "  -z                    Set TLS zero share behavior on client, to force HRR.\n");
     fprintf(stderr, "  -f migration_mode     Force client to migrate to start migration:\n");
     fprintf(stderr, "                        -f 1  test NAT rebinding,\n");
@@ -1457,7 +1471,7 @@ int main(int argc, char** argv)
             /* TODO: find an alternative to using 64 bit mask. */
             (cnx_id_mask_is_set == 0) ? NULL : cnx_id_callback,
             (cnx_id_mask_is_set == 0) ? NULL : (void*)&cnx_id_cbdata,
-            (uint8_t*)reset_seed, mtu_max);
+            (uint8_t*)reset_seed, mtu_max, proposed_version);
         printf("Server exit with code = %d\n", ret);
     } else {
         FILE* F_log = NULL;

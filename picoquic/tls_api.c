@@ -973,11 +973,39 @@ int picoquic_master_tlscontext(picoquic_quic_t* quic,
         }
 
         if (ret == 0) {
+            /* Tell Picotls to not require EOED messages during handshake */
+            ctx->omit_end_of_early_data = 1;
+        }
+
+        if (ret == 0) {
             quic->tls_master_ctx = ctx;
             picoquic_public_random_seed(quic);
         } else {
             free(ctx);
         }
+    }
+
+    return ret;
+}
+
+void picoquic_set_tls_context_for_draft_14(picoquic_quic_t * quic)
+{
+    ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
+
+    if (ctx != NULL) {
+        /* Tell Picotls to require EOED messages during handshake */
+        ctx->omit_end_of_early_data = 0;
+    }
+}
+
+int picoquic_tls_context_is_draft_14(picoquic_quic_t * quic)
+{
+    int ret = 0;
+    ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
+
+    if (ctx != NULL) {
+        /* Tell Picotls to require EOED messages during handshake */
+        ret = (ctx->omit_end_of_early_data == 0);
     }
 
     return ret;
