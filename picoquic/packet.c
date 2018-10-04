@@ -724,46 +724,46 @@ void picoquic_queue_stateless_retry(picoquic_cnx_t* cnx,
     if (sp != NULL) {
         uint8_t* bytes = sp->bytes;
         uint32_t byte_index = 0;
-size_t data_bytes = 0;
-uint32_t header_length = 0;
-uint32_t pn_offset;
-uint32_t pn_length;
-uint8_t odcil_random = ((uint8_t)picoquic_public_uniform_random(256)) & 0xF0;
+        size_t data_bytes = 0;
+        uint32_t header_length = 0;
+        uint32_t pn_offset;
+        uint32_t pn_length;
+        uint8_t odcil_random = ((uint8_t)picoquic_public_uniform_random(256)) & 0xF0;
 
-cnx->path[0]->remote_cnxid = ph->srce_cnx_id;
+        cnx->path[0]->remote_cnxid = ph->srce_cnx_id;
 
-byte_index = header_length = picoquic_create_packet_header(cnx, picoquic_packet_retry,
-    0, &cnx->path[0]->remote_cnxid, &cnx->path[0]->local_cnxid,
-    bytes, &pn_offset, &pn_length);
-
-
-/* use same encoding as packet header */
-bytes[byte_index++] = odcil_random | picoquic_create_packet_header_cnxid_lengths(0, cnx->initial_cnxid.id_len);
-
-byte_index += picoquic_format_connection_id(bytes + byte_index,
-    PICOQUIC_MAX_PACKET_SIZE - byte_index - checksum_length, cnx->initial_cnxid);
-byte_index += (uint32_t)data_bytes;
-memcpy(&bytes[byte_index], token, token_length);
-byte_index += (uint32_t)token_length;
-
-sp->length = byte_index;
+        byte_index = header_length = picoquic_create_packet_header(cnx, picoquic_packet_retry,
+            0, &cnx->path[0]->remote_cnxid, &cnx->path[0]->local_cnxid,
+            bytes, &pn_offset, &pn_length);
 
 
-memset(&sp->addr_to, 0, sizeof(sp->addr_to));
-memcpy(&sp->addr_to, addr_from,
-(addr_from->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
-memset(&sp->addr_local, 0, sizeof(sp->addr_local));
-memcpy(&sp->addr_local, addr_to,
-(addr_to->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
-sp->if_index_local = if_index_to;
+        /* use same encoding as packet header */
+        bytes[byte_index++] = odcil_random | picoquic_create_packet_header_cnxid_lengths(0, cnx->initial_cnxid.id_len);
 
-if (cnx->quic->F_log != NULL) {
-    picoquic_log_outgoing_segment(cnx->quic->F_log, 1, cnx,
-        bytes, 0, (uint32_t)sp->length,
-        bytes, (uint32_t)sp->length);
-}
+        byte_index += picoquic_format_connection_id(bytes + byte_index,
+            PICOQUIC_MAX_PACKET_SIZE - byte_index - checksum_length, cnx->initial_cnxid);
+        byte_index += (uint32_t)data_bytes;
+        memcpy(&bytes[byte_index], token, token_length);
+        byte_index += (uint32_t)token_length;
 
-picoquic_queue_stateless_packet(cnx->quic, sp);
+        sp->length = byte_index;
+
+
+        memset(&sp->addr_to, 0, sizeof(sp->addr_to));
+        memcpy(&sp->addr_to, addr_from,
+            (addr_from->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
+        memset(&sp->addr_local, 0, sizeof(sp->addr_local));
+        memcpy(&sp->addr_local, addr_to,
+            (addr_to->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
+        sp->if_index_local = if_index_to;
+
+        if (cnx->quic->F_log != NULL) {
+            picoquic_log_outgoing_segment(cnx->quic->F_log, 1, cnx,
+                bytes, 0, (uint32_t)sp->length,
+                bytes, (uint32_t)sp->length);
+        }
+
+        picoquic_queue_stateless_packet(cnx->quic, sp);
     }
 }
 
@@ -1206,6 +1206,7 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header * ph
             if (probe != NULL) {
                 cnx->path[path_id]->path_is_activated = 1;
                 cnx->path[path_id]->remote_cnxid = probe->remote_cnxid;
+                cnx->path[path_id]->remote_cnxid_sequence = probe->sequence;
                 cnx->path[path_id]->challenge = probe->challenge;
                 cnx->path[path_id]->challenge_time = probe->challenge_time;
                 cnx->path[path_id]->challenge_repeat_count = probe->challenge_repeat_count;
@@ -1222,6 +1223,7 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header * ph
                 /* Only the connection ID changed from path 0. Use the path[0] remote
                  * ID, validate this path, invalidate path[0]. */
                 cnx->path[path_id]->remote_cnxid = cnx->path[0]->remote_cnxid;
+                cnx->path[path_id]->remote_cnxid_sequence = cnx->path[0]->remote_cnxid_sequence;
                 memcpy(cnx->path[path_id]->reset_secret, cnx->path[0]->reset_secret,
                     PICOQUIC_RESET_SECRET_SIZE);
                 cnx->path[path_id]->path_is_activated = 1;
@@ -1240,6 +1242,7 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header * ph
                 picoquic_cnxid_stash_t * available_cnxid = picoquic_dequeue_cnxid_stash(cnx);
                 if (available_cnxid != NULL) {
                     cnx->path[path_id]->remote_cnxid = available_cnxid->cnx_id;
+                    cnx->path[path_id]->remote_cnxid_sequence = available_cnxid->sequence;
                     memcpy(cnx->path[path_id]->reset_secret, available_cnxid->reset_secret,
                         PICOQUIC_RESET_SECRET_SIZE);
                     cnx->path[path_id]->path_is_activated = 1;

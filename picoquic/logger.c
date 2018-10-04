@@ -822,32 +822,38 @@ size_t picoquic_log_new_connection_id_frame(FILE* F, uint8_t* bytes, size_t byte
 {
     size_t byte_index = 1;
     size_t min_size = 2 + 16;
-    picoquic_connection_id_t new_cnx_id;
+    uint64_t sequence;
+    picoquic_connection_id_t new_cnx_id = picoquic_null_connection_id;
     uint8_t l_cid = 0;
+    size_t l_seq = 0;
 
     if (is_draft_14) {
-        size_t l_seq = 0;
-        l_seq = picoquic_varint_skip(&bytes[byte_index]);
+        l_seq = picoquic_varint_decode(&bytes[byte_index], bytes_max, &sequence);
+        min_size += l_seq;
+        byte_index += l_seq;
+        if (l_seq != 0 && byte_index < bytes_max) {
+            l_cid = bytes[byte_index++];
+            min_size += l_cid;
+        }
+    }
+    else {
+        if (byte_index < bytes_max) {
+            l_cid = bytes[byte_index++];
+        }
+        min_size += l_cid;
+
+        l_seq = picoquic_varint_decode(&bytes[byte_index], bytes_max, &sequence);
         min_size += l_seq;
         byte_index += l_seq;
     }
 
-    if (min_size > bytes_max) {
-        fprintf(F, "    Malformed NEW CONNECTION ID, requires %d bytes out of %d\n", (int)min_size, (int)bytes_max);
-        return bytes_max;
-    }
-
-    if (byte_index < bytes_max) {
-        l_cid = bytes[byte_index++];
-    }
-
-    if (byte_index + l_cid + 16 > bytes_max) {
+    if (l_seq == 0 || min_size > bytes_max) {
         fprintf(F, "    Malformed NEW CONNECTION ID, requires %d bytes out of %d\n", (int)min_size, (int)bytes_max);
         byte_index = bytes_max;
     }
     else {
         byte_index += picoquic_parse_connection_id(bytes + byte_index, l_cid, &new_cnx_id);
-        fprintf(F, "    NEW CONNECTION ID: 0x");
+        fprintf(F, "    NEW CONNECTION ID[%d]: 0x", (int)sequence);
         for (int x = 0; x < new_cnx_id.id_len; x++) {
             fprintf(F, "%02x", new_cnx_id.id[x]);
         }
