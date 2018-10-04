@@ -843,7 +843,7 @@ void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time)
     while (cnx->nb_paths > path_index_good) {
         int d_path = cnx->nb_paths - 1;
         if (!picoquic_is_connection_id_null(cnx->path[d_path]->remote_cnxid)) {
-            (void)picoquic_queue_retire_connection_id_frame(cnx, &cnx->path[d_path]->remote_cnxid);
+            (void)picoquic_queue_retire_connection_id_frame(cnx, cnx->path[d_path]->remote_cnxid_sequence);
         }
         picoquic_delete_path(cnx, d_path);
     }
@@ -1067,7 +1067,7 @@ int picoquic_renew_connection_id(picoquic_cnx_t* cnx)
         if (stashed == NULL) {
             ret = PICOQUIC_ERROR_CNXID_NOT_AVAILABLE;
         } else {
-            ret = picoquic_queue_retire_connection_id_frame(cnx, &cnx->path[0]->remote_cnxid);
+            ret = picoquic_queue_retire_connection_id_frame(cnx, cnx->path[0]->remote_cnxid_sequence);
             cnx->path[0]->remote_cnxid = stashed->cnx_id;
             cnx->path[0]->remote_cnxid_sequence = stashed->sequence;
             memcpy(cnx->path[0]->reset_secret, stashed->reset_secret,
@@ -1171,7 +1171,7 @@ void picoquic_delete_failed_probes(picoquic_cnx_t* cnx)
             }
 
             /* Before deleting, post a notification to the peer */
-            (void)picoquic_queue_retire_connection_id_frame(cnx, &abandoned->remote_cnxid);
+            (void)picoquic_queue_retire_connection_id_frame(cnx, abandoned->sequence);
 
             free(abandoned);
         }

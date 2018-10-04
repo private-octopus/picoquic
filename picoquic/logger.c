@@ -870,26 +870,21 @@ size_t picoquic_log_new_connection_id_frame(FILE* F, uint8_t* bytes, size_t byte
 size_t picoquic_log_retire_connection_id_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
 {
     size_t byte_index = 1;
-    size_t min_size = 2;
-    picoquic_connection_id_t new_cnx_id;
-    uint8_t l_cid = 0;
+    uint64_t sequence;
+    uint8_t l_seq = 0;
 
-    if (byte_index < bytes_max) {
-        l_cid = bytes[byte_index++];
-        min_size = byte_index + l_cid;
+
+    if (bytes_max > byte_index) {
+        l_seq = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &sequence);
+        byte_index += l_seq;
     }
 
-    if (min_size > bytes_max) {
-        fprintf(F, "    Malformed RETIRE CONNECTION ID, requires %d bytes out of %d\n", (int)min_size, (int)bytes_max);
+    if (l_seq == 0 || byte_index > bytes_max) {
+        fprintf(F, "    Malformed RETIRE CONNECTION ID, requires %d bytes out of %d\n", (int)(byte_index + (l_seq == 0)?1:0), (int)bytes_max);
         byte_index = bytes_max;
     }
     else {
-        byte_index += picoquic_parse_connection_id(bytes + byte_index, l_cid, &new_cnx_id);
-        fprintf(F, "    RETIRE CONNECTION ID: 0x");
-        for (int x = 0; x < new_cnx_id.id_len; x++) {
-            fprintf(F, "%02x", new_cnx_id.id[x]);
-        }
-        fprintf(F, "\n");
+        fprintf(F, "    RETIRE CONNECTION ID[%d]\n", (int)sequence);
     }
 
     return byte_index;

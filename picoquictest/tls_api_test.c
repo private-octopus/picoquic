@@ -4094,7 +4094,7 @@ int retire_cnxid_test()
         if (stashed == NULL) {
             DBG_PRINTF("Could not retrieve cnx ID #%d.\n", i-1);
         } else {
-            ret = picoquic_queue_retire_connection_id_frame(test_ctx->cnx_client, &stashed->cnx_id);
+            ret = picoquic_queue_retire_connection_id_frame(test_ctx->cnx_client, stashed->sequence);
             free(stashed);
         }
     }

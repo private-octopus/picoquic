@@ -163,8 +163,7 @@ static uint8_t test_frame_type_crypto_hs[] = {
 
 static uint8_t test_frame_type_retire_connection_id[] = {
     picoquic_frame_type_retire_connection_id,
-    8,
-    0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7
+    1
 };
 
 typedef struct st_test_skip_frames_t {
