@@ -206,7 +206,6 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
             break;
         case 1: // Server encrypted extension
         {
-            int nb_versions = 0;
             size_t head_index;
 
             int is_draft_14 = (picoquic_supported_versions[cnx->version_index].version == PICOQUIC_SEVENTH_INTEROP_VERSION ||
