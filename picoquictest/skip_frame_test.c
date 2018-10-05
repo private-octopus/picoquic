@@ -21,6 +21,7 @@
 
 #include "../picoquic/tls_api.h"
 #include "../picoquic/picoquic_internal.h"
+#include "picoquictest_internal.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -91,6 +92,7 @@ static uint8_t test_frame_type_stream_id_needed[] = {
 static uint8_t test_frame_type_new_connection_id[] = {
     picoquic_frame_type_new_connection_id,
     8,
+    7,
     1, 2, 3, 4, 5, 6, 7, 8,
     0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7,
     0xA8, 0xA9, 0xAA, 0xAB, 0xAC, 0xAD, 0xAE, 0xAF
@@ -162,25 +164,15 @@ static uint8_t test_frame_type_crypto_hs[] = {
 
 static uint8_t test_frame_type_retire_connection_id[] = {
     picoquic_frame_type_retire_connection_id,
-    8,
-    0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7
+    1
 };
-
-typedef struct st_test_skip_frames_t {
-    char const* name;
-    uint8_t* val;
-    size_t len;
-    int is_pure_ack;
-    int must_be_last;
-    int epoch;
-} test_skip_frames_t;
 
 #define TEST_SKIP_ITEM(n, x, a, l, e) \
     {                              \
         n, x, sizeof(x), a, l, e     \
     }
 
-static test_skip_frames_t test_skip_list[] = {
+test_skip_frames_t test_skip_list[] = {
     TEST_SKIP_ITEM("padding", test_frame_type_padding, 1, 0, 0),
     TEST_SKIP_ITEM("reset_stream", test_frame_type_reset_stream, 0, 0, 3),
     TEST_SKIP_ITEM("connection_close", test_type_connection_close, 0, 0, 3),
@@ -206,7 +198,13 @@ static test_skip_frames_t test_skip_list[] = {
     TEST_SKIP_ITEM("retire_connection_id", test_frame_type_retire_connection_id, 0, 0, 3)
 };
 
-static size_t nb_test_skip_list = sizeof(test_skip_list) / sizeof(test_skip_frames_t);
+size_t nb_test_skip_list = sizeof(test_skip_list) / sizeof(test_skip_frames_t);
+
+/*
+ * export a list of test frames, to be used in other test
+ */
+
+
 
 
 /* Pseudo random generation suitable for tests. Guaranties that the

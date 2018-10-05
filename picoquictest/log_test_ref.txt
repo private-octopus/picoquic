@@ -10,7 +10,7 @@
     BLOCKED: offset 65536.
     STREAM BLOCKED: 65536.
     stream_id_needed frame
-    NEW CONNECTION ID: 0x0102030405060708, a0a1a2a3a4a5a6a7a8a9aaabacadaeaf
+    NEW CONNECTION ID[7]: 0x0102030405060708, a0a1a2a3a4a5a6a7a8a9aaabacadaeaf
     STOP SENDING 17 (0x00000011), Error 0x4000.
     path_challenge: 0102030405060708
     path_response: 0102030405060708
@@ -20,4 +20,4 @@
     Stream 1, offset 0, length 16, fin = 0: a0a1a2a3a4a5a6a7...
     Stream 1, offset 1024, length 16, fin = 0: a0a1a2a3a4a5a6a7...
     Crypto HS frame, offset 0, length 16: a0a1a2a3a4a5a6a7...
-    RETIRE CONNECTION ID: 0xa0a1a2a3a4a5a6a7
+    RETIRE CONNECTION ID[1]

@@ -673,6 +673,20 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(test_server_busy)
+        {
+            int ret = server_busy_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(test_initial_close)
+        {
+            int ret = initial_close_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+        
         TEST_METHOD(stress)
         {
             int ret = stress_test();
@@ -683,6 +697,13 @@ namespace UnitTest1
         TEST_METHOD(fuzz)
         {
             int ret = fuzz_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(fuzz_initial)
+        {
+            int ret = fuzz_initial_test();
 
             Assert::AreEqual(ret, 0);
         }

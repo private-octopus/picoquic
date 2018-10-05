@@ -85,6 +85,20 @@ typedef struct st_picoquictest_sim_link_t {
     picoquictest_sim_packet_t* last_packet;
 } picoquictest_sim_link_t;
 
+
+typedef struct st_test_skip_frames_t {
+    char const* name;
+    uint8_t* val;
+    size_t len;
+    int is_pure_ack;
+    int must_be_last;
+    int epoch;
+} test_skip_frames_t;
+
+extern test_skip_frames_t test_skip_list[];
+
+extern size_t nb_test_skip_list;
+
 picoquictest_sim_link_t* picoquictest_sim_link_create(double data_rate_in_gps,
     uint64_t microsec_latency, uint64_t* loss_mask, uint64_t queue_delay_max, uint64_t current_time);
 

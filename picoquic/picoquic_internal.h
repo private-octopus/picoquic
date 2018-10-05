@@ -384,8 +384,8 @@ typedef struct st_picoquic_path_t {
     struct st_picoquic_cnx_id_key_t* first_cnx_id;
     struct st_picoquic_net_id_key_t* first_net_id;
 
-    /* Todo: remove path_sequence when sequence removed from new Connection ID*/
     int path_sequence;
+    uint64_t remote_cnxid_sequence;
 
     /* Peer address. To do: allow for multiple addresses */
     struct sockaddr_storage peer_addr;
@@ -919,7 +919,7 @@ int picoquic_prepare_path_response_frame(uint8_t* bytes,
     size_t bytes_max, size_t* consumed, uint64_t challenge);
 int picoquic_prepare_new_connection_id_frame(picoquic_cnx_t * cnx, picoquic_path_t * path_x,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
-int picoquic_queue_retire_connection_id_frame(picoquic_cnx_t * cnx, picoquic_connection_id_t * cnxid);
+int picoquic_queue_retire_connection_id_frame(picoquic_cnx_t * cnx, uint64_t sequence);
 
 int picoquic_prepare_first_misc_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
                                       size_t bytes_max, size_t* consumed);

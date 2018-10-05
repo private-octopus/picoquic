@@ -1215,14 +1215,13 @@ void picoquic_cnx_set_next_wake_time(picoquic_cnx_t* cnx, uint64_t current_time)
     picoquic_probe_t * probe = cnx->probe_first;
     int ret = 0;
 
-    if (cnx->cnx_state < picoquic_state_client_ready)
+    if (cnx->cnx_state == picoquic_state_disconnecting || cnx->cnx_state == picoquic_state_handshake_failure || cnx->cnx_state == picoquic_state_closing_received) {
+        blocked = 0;
+    }
+    else if (cnx->cnx_state < picoquic_state_client_ready)
     {
         picoquic_cnx_set_next_wake_time_init(cnx, current_time);
         return;
-    }
-
-    if (cnx->cnx_state == picoquic_state_disconnecting || cnx->cnx_state == picoquic_state_handshake_failure || cnx->cnx_state == picoquic_state_closing_received) {
-        blocked = 0;
     }
     else if (!path_x->path_is_demoted) {
         if (cnx->path[0]->challenge_verified != 0) {
@@ -1443,8 +1442,11 @@ int picoquic_prepare_packet_0rtt(picoquic_cnx_t* cnx, picoquic_path_t * path_x, 
 
     picoquic_finalize_and_protect_packet(cnx, packet,
         ret, length, header_length, checksum_overhead,
-        send_length, send_buffer, (uint32_t)send_buffer_max, 
-        &path_x->remote_cnxid, &path_x->local_cnxid,
+        send_length, send_buffer, (uint32_t)send_buffer_max,
+        (picoquic_supported_versions[cnx->version_index].version == PICOQUIC_SEVENTH_INTEROP_VERSION ||
+            picoquic_supported_versions[cnx->version_index].version == PICOQUIC_EIGHT_INTEROP_VERSION) ?
+        &path_x->remote_cnxid : &cnx->initial_cnxid,
+        &path_x->local_cnxid,
         path_x, current_time);
 
     if (length > 0) {
