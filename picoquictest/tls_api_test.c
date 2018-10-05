@@ -4261,20 +4261,24 @@ int initial_close_test()
                 break;
             }
         }
-        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+        if (ret == 0) {
+            ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+        }
 
-        if (test_ctx->cnx_server != NULL &&
-            test_ctx->cnx_server->cnx_state != picoquic_state_disconnected) {
-            DBG_PRINTF("Server state: %d, remote error: %x\n", test_ctx->cnx_server->cnx_state, test_ctx->cnx_server->remote_error);
-            ret = -1;
-        }
-        else if (test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
-            DBG_PRINTF("Client state: %d, local error: %x", test_ctx->cnx_client->cnx_state, test_ctx->cnx_client->local_error);
-            ret = -1;
-        }
-        else if (simulated_time > 50000ull) {
-            DBG_PRINTF("Simulated time: %llu", (unsigned long long)simulated_time);
-            ret = -1;
+        if (ret == 0) {
+            if (test_ctx->cnx_server != NULL &&
+                test_ctx->cnx_server->cnx_state != picoquic_state_disconnected) {
+                DBG_PRINTF("Server state: %d, remote error: %x\n", test_ctx->cnx_server->cnx_state, test_ctx->cnx_server->remote_error);
+                ret = -1;
+            }
+            else if (test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
+                DBG_PRINTF("Client state: %d, local error: %x", test_ctx->cnx_client->cnx_state, test_ctx->cnx_client->local_error);
+                ret = -1;
+            }
+            else if (simulated_time > 50000ull) {
+                DBG_PRINTF("Simulated time: %llu", (unsigned long long)simulated_time);
+                ret = -1;
+            }
         }
     }
 
