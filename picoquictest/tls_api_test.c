@@ -4167,15 +4167,12 @@ int server_busy_test()
 {
     uint64_t loss_mask = 0;
     uint64_t simulated_time = 0;
-    uint64_t next_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
 
     if (ret == 0) {
-        int c_ret;
-
         test_ctx->qserver->flags |= picoquic_context_server_busy;
-        c_ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+        (void) tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
 
         if (test_ctx->cnx_server != NULL &&
             test_ctx->cnx_server->cnx_state != picoquic_state_disconnected) {
@@ -4224,6 +4221,61 @@ int server_busy_test()
 
     if (ret == 0) {
         ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+/*
+ * Initial close test. Check what happens when the client closes a connection without waiting for the full establishment
+ */
+
+int initial_close_test()
+{
+    uint64_t loss_mask = 0;
+    uint64_t simulated_time = 0;
+    int was_active = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+
+    if (ret == 0) {
+        /* Send the initial packet, but no more than that */
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+
+        if (ret == 0) {
+            test_ctx->cnx_client->cnx_state = picoquic_state_handshake_failure;
+            test_ctx->cnx_client->local_error = 0xDEAD;
+            picoquic_cnx_set_next_wake_time(test_ctx->cnx_client, simulated_time);
+        }
+    }
+
+    if (ret == 0) {
+        for (int i = 0; i < 128; i++) {
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+            if (test_ctx->cnx_server != NULL) {
+                break;
+            }
+        }
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+
+        if (test_ctx->cnx_server != NULL &&
+            test_ctx->cnx_server->cnx_state != picoquic_state_disconnected) {
+            DBG_PRINTF("Server state: %d, remote error: %x\n", test_ctx->cnx_server->cnx_state, test_ctx->cnx_server->remote_error);
+            ret = -1;
+        }
+        else if (test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
+            DBG_PRINTF("Client state: %d, local error: %x", test_ctx->cnx_client->cnx_state, test_ctx->cnx_client->local_error);
+            ret = -1;
+        }
+        else if (simulated_time > 50000ull) {
+            DBG_PRINTF("Simulated time: %llu", (unsigned long long)simulated_time);
+            ret = -1;
+        }
     }
 
     if (test_ctx != NULL) {

@@ -134,6 +134,7 @@ int migration_test_loss();
 int cnxid_renewal_test();
 int retire_cnxid_test();
 int server_busy_test();
+int initial_close_test();
 
 #ifdef __cplusplus
 }
