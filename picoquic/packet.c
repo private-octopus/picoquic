@@ -1454,8 +1454,10 @@ int picoquic_incoming_segment(
     if (ret == 0) {
         if (cnx == NULL) {
             if (ph.version_index < 0 && ph.vn != 0) {
-                /* use the result of parsing to consider version negotiation */
-                picoquic_prepare_version_negotiation(quic, addr_from, addr_to, if_index_to, &ph);
+                if (packet_length >= PICOQUIC_ENFORCED_INITIAL_MTU) {
+                    /* use the result of parsing to consider version negotiation */
+                    picoquic_prepare_version_negotiation(quic, addr_from, addr_to, if_index_to, &ph);
+                }
             }
             else {
                 /* Unexpected packet. Reject, drop and log. */
