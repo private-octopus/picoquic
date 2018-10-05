@@ -935,6 +935,11 @@ static int tls_api_connection_loop(picoquic_test_tls_api_ctx_t* test_ctx,
 
         ret = tls_api_one_sim_round(test_ctx, simulated_time, 0, &was_active);
 
+        if (test_ctx->cnx_client->cnx_state == picoquic_state_disconnected &&
+            (test_ctx->cnx_server == NULL || test_ctx->cnx_server->cnx_state == picoquic_state_disconnected)) {
+            break;
+        }
+
         if (was_active) {
             nb_inactive = 0;
         } else {
@@ -4144,6 +4149,81 @@ int retire_cnxid_test()
 
     if (ret == 0) {
         ret = transmit_cnxid_test_stash(test_ctx->cnx_server, test_ctx->cnx_client, "server");
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+/*
+ * Server busy. Verify that the connection fails with the proper error code, and then that once the server is not busy the next connection succeeds.
+ */
+
+int server_busy_test()
+{
+    uint64_t loss_mask = 0;
+    uint64_t simulated_time = 0;
+    uint64_t next_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+
+    if (ret == 0) {
+        int c_ret;
+
+        test_ctx->qserver->flags |= picoquic_context_server_busy;
+        c_ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+
+        if (test_ctx->cnx_server != NULL &&
+            test_ctx->cnx_server->cnx_state != picoquic_state_disconnected) {
+            DBG_PRINTF("Server state: %d, local error: %x\n", test_ctx->cnx_server->cnx_state, test_ctx->cnx_server->local_error);
+            ret = -1;
+        }
+        else if (test_ctx->cnx_client->cnx_state != picoquic_state_disconnected ||
+            test_ctx->cnx_client->remote_error != PICOQUIC_TRANSPORT_SERVER_BUSY) {
+            DBG_PRINTF("Client state: %d, remote error: %x", test_ctx->cnx_client->cnx_state, test_ctx->cnx_client->remote_error);
+            ret = -1;
+        }
+        else if (simulated_time > 50000ull) {
+            DBG_PRINTF("Simulated time: %llu", (unsigned long long)simulated_time);
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        test_ctx->qserver->flags &= ~picoquic_context_server_busy;
+
+        if (test_ctx->cnx_server != NULL) {
+            picoquic_delete_cnx(test_ctx->cnx_server);
+            test_ctx->cnx_server = NULL;
+        }
+        if (test_ctx->cnx_client != NULL) {
+            picoquic_delete_cnx(test_ctx->cnx_client);
+            test_ctx->cnx_client = NULL;
+        }
+
+        /* Create a new client connection */
+        test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
+            picoquic_null_connection_id, picoquic_null_connection_id,
+            (struct sockaddr*)&test_ctx->server_addr, simulated_time,
+            0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
+
+        if (test_ctx->cnx_client == NULL) {
+            ret = -1;
+        } else {
+            ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+        }
+    }
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    if (ret == 0) {
+        ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
     }
 
     if (test_ctx != NULL) {

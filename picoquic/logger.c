@@ -871,7 +871,7 @@ size_t picoquic_log_retire_connection_id_frame(FILE* F, uint8_t* bytes, size_t b
 {
     size_t byte_index = 1;
     uint64_t sequence;
-    uint8_t l_seq = 0;
+    size_t l_seq = 0;
 
 
     if (bytes_max > byte_index) {

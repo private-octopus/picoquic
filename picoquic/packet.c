@@ -786,9 +786,11 @@ int picoquic_incoming_initial(
     size_t extra_offset = 0;
     int is_token_ok = 0;
 
+
     /* Logic to test the retry token.
      * TODO: this should probably be implemented as a callback */
-    if ((*pcnx)->quic->flags&picoquic_context_check_token) {
+    if ((*pcnx)->quic->flags&picoquic_context_check_token &&
+        ((*pcnx)->quic->flags&picoquic_context_server_busy) == 0) {
         uint8_t * base;
         size_t len;
         uint8_t cid_len = 0;
@@ -844,17 +846,23 @@ int picoquic_incoming_initial(
         }
     }
 
-    /* decode the incoming frames */
-    if (ret == 0) {
-        ret = picoquic_decode_frames(*pcnx, (*pcnx)->path[0],
-            bytes + ph->offset + extra_offset, ph->payload_length - extra_offset, ph->epoch, current_time);
+    if ((*pcnx)->quic->flags&picoquic_context_server_busy) {
+        (*pcnx)->local_error = PICOQUIC_TRANSPORT_SERVER_BUSY;
+        (*pcnx)->cnx_state = picoquic_state_handshake_failure;
     }
+    else {
+        /* decode the incoming frames */
+        if (ret == 0) {
+            ret = picoquic_decode_frames(*pcnx, (*pcnx)->path[0],
+                bytes + ph->offset + extra_offset, ph->payload_length - extra_offset, ph->epoch, current_time);
+        }
 
-    /* processing of client initial packet */
-    if (ret == 0) {
-        /* initialization of context & creation of data */
-        /* TODO: find path to send data produced by TLS. */
-        ret = picoquic_tls_stream_process(*pcnx);
+        /* processing of client initial packet */
+        if (ret == 0) {
+            /* initialization of context & creation of data */
+            /* TODO: find path to send data produced by TLS. */
+            ret = picoquic_tls_stream_process(*pcnx);
+        }
     }
 
     if (ret != 0 || (*pcnx)->cnx_state == picoquic_state_disconnected) {

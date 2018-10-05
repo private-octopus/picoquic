@@ -1215,14 +1215,13 @@ void picoquic_cnx_set_next_wake_time(picoquic_cnx_t* cnx, uint64_t current_time)
     picoquic_probe_t * probe = cnx->probe_first;
     int ret = 0;
 
-    if (cnx->cnx_state < picoquic_state_client_ready)
+    if (cnx->cnx_state == picoquic_state_disconnecting || cnx->cnx_state == picoquic_state_handshake_failure || cnx->cnx_state == picoquic_state_closing_received) {
+        blocked = 0;
+    }
+    else if (cnx->cnx_state < picoquic_state_client_ready)
     {
         picoquic_cnx_set_next_wake_time_init(cnx, current_time);
         return;
-    }
-
-    if (cnx->cnx_state == picoquic_state_disconnecting || cnx->cnx_state == picoquic_state_handshake_failure || cnx->cnx_state == picoquic_state_closing_received) {
-        blocked = 0;
     }
     else if (!path_x->path_is_demoted) {
         if (cnx->path[0]->challenge_verified != 0) {

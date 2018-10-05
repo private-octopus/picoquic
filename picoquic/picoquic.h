@@ -129,7 +129,8 @@ typedef enum {
 typedef enum {
     picoquic_context_check_token = 1,
     picoquic_context_unconditional_cnx_id = 2,
-    picoquic_context_client_zero_share = 4
+    picoquic_context_client_zero_share = 4,
+    picoquic_context_server_busy = 8
 } picoquic_context_flags;
 
 /*
