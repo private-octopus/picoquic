@@ -907,7 +907,8 @@ int picoquic_incoming_retry(
     size_t token_length = 0;
     uint8_t * token = NULL;
 
-    if (cnx->cnx_state != picoquic_state_client_init_sent && cnx->cnx_state != picoquic_state_client_init_resent) {
+    if ((cnx->cnx_state != picoquic_state_client_init_sent && cnx->cnx_state != picoquic_state_client_init_resent) ||
+        cnx->original_cnxid.id_len != 0) {
         ret = PICOQUIC_ERROR_UNEXPECTED_PACKET;
     } else {
         /* Verify that the header is a proper echo of what was sent */
