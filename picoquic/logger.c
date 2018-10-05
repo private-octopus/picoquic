@@ -880,7 +880,7 @@ size_t picoquic_log_retire_connection_id_frame(FILE* F, uint8_t* bytes, size_t b
     }
 
     if (l_seq == 0 || byte_index > bytes_max) {
-        fprintf(F, "    Malformed RETIRE CONNECTION ID, requires %d bytes out of %d\n", (int)(byte_index + (l_seq == 0)?1:0), (int)bytes_max);
+        fprintf(F, "    Malformed RETIRE CONNECTION ID, requires %d bytes out of %d\n", (int)(byte_index + ((l_seq == 0)?1:0)), (int)bytes_max);
         byte_index = bytes_max;
     }
     else {
