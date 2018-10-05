@@ -41,7 +41,7 @@
 #define PICOQUIC_STRESS_MESSAGE_BUFFER_SIZE 0x10000
 #define PICOQUIC_STRESS_MAX_CLIENT_STREAMS 16
 
-uint64_t picoquic_stress_test_duration = 120000000; /* Default to 2 minutes */
+uint64_t picoquic_stress_test_duration = 120000000; /* Default to 4 minutes */
 size_t picoquic_stress_nb_clients = 4; /* Default to 4 clients */
 uint64_t picoquic_stress_max_bidir = 8 * 4; /* Default to 8 streams max per connection */
 size_t picoquic_stress_max_open_streams = 4; /* Default to 4 simultaneous streams max per connection */
@@ -890,7 +890,7 @@ static void stress_delete_client_context(int client_index, picoquic_stress_ctx_t
     }
 }
 
-static int stress_or_fuzz_test(picoquic_fuzz_fn fuzz_fn, void * fuzz_ctx)
+static int stress_or_fuzz_test(picoquic_fuzz_fn fuzz_fn, void * fuzz_ctx, uint64_t duration)
 {
     int ret = 0;
     picoquic_stress_ctx_t stress_ctx;
@@ -898,7 +898,7 @@ static int stress_or_fuzz_test(picoquic_fuzz_fn fuzz_fn, void * fuzz_ctx)
     double target_seconds = 0;
     double wall_time_seconds = 0;
     uint64_t wall_time_start = picoquic_current_time();
-    uint64_t wall_time_max = wall_time_start + picoquic_stress_test_duration;
+    uint64_t wall_time_max = wall_time_start + duration;
     uint64_t nb_connections = 0;
     uint64_t sim_time_next_log = 1000000;
 
@@ -934,7 +934,7 @@ static int stress_or_fuzz_test(picoquic_fuzz_fn fuzz_fn, void * fuzz_ctx)
 
     /* Run the simulation until the specified time */
     sim_time_next_log = stress_ctx.simulated_time + 1000000;
-    while (ret == 0 && stress_ctx.simulated_time < picoquic_stress_test_duration ) {
+    while (ret == 0 && stress_ctx.simulated_time < duration) {
         if (picoquic_current_time() > wall_time_max) {
             DBG_PRINTF("%s", "Stress time takes too long!\n");
             ret = -1;
@@ -979,10 +979,10 @@ static int stress_or_fuzz_test(picoquic_fuzz_fn fuzz_fn, void * fuzz_ctx)
 
     /* Report */
     run_time_seconds = ((double)stress_ctx.simulated_time) / 1000000.0;
-    target_seconds = ((double)picoquic_stress_test_duration) / 1000000.0;
+    target_seconds = ((double)duration) / 1000000.0;
     wall_time_seconds = ((double)(picoquic_current_time() - wall_time_start)) / 1000000.0;
 
-    if (stress_ctx.simulated_time < picoquic_stress_test_duration) {
+    if (stress_ctx.simulated_time < duration) {
         DBG_PRINTF("Stress incomplete after simulating %3fs instead of %3fs in %3f s., returns %d\n",
             run_time_seconds, target_seconds, wall_time_seconds, ret);
         ret = -1;
@@ -997,7 +997,7 @@ static int stress_or_fuzz_test(picoquic_fuzz_fn fuzz_fn, void * fuzz_ctx)
 
 int stress_test()
 {
-    return stress_or_fuzz_test(NULL, NULL);
+    return stress_or_fuzz_test(NULL, NULL, picoquic_stress_test_duration);
 }
 
 /*
@@ -1083,7 +1083,7 @@ int fuzz_test()
     fuzz_ctx.random_context = 0xDEADBEEFBABACAFEull;
     fuzz_ctx.random_context ^= picoquic_stress_test_duration;
 
-    ret = stress_or_fuzz_test(basic_fuzzer, &fuzz_ctx);
+    ret = stress_or_fuzz_test(basic_fuzzer, &fuzz_ctx, picoquic_stress_test_duration);
 
     DBG_PRINTF("Fuzzed %d packets out of %d, changed %d lengths, ret = %d\n",
         fuzz_ctx.nb_fuzzed, fuzz_ctx.nb_packets, fuzz_ctx.nb_fuzzed_length, ret);
@@ -1198,6 +1198,114 @@ int random_tester_test()
             }
         }
     }
+
+    return ret;
+}
+
+
+/*
+ * Initial fuzz test.
+ * This test specializes in fuzzing the initial packet, and checking what happens. All the
+ * packets sent there are illegitimate, and should result in broken connections.
+ *
+ * The test reuses the frame definitions of the skip frame test.
+ */
+
+
+typedef struct st_initial_fuzzer_ctx_t {
+    uint32_t current_frame;
+    uint32_t fuzz_position;
+    int initial_fuzzing_done;
+    uint64_t random_context;
+} initial_fuzzer_ctx_t;
+
+static uint32_t initial_fuzzer(void * fuzz_ctx, picoquic_cnx_t* cnx,
+    uint8_t * bytes, size_t bytes_max, size_t length, uint32_t header_length)
+{
+    initial_fuzzer_ctx_t * ctx = (initial_fuzzer_ctx_t *)fuzz_ctx;
+    uint32_t should_fuzz = 0;
+
+    if (cnx->cnx_state == picoquic_state_client_init_sent) {
+        should_fuzz = 1;
+        if (ctx->initial_fuzzing_done == 0) {
+            if (ctx->current_frame >= nb_test_skip_list) {
+                ctx->fuzz_position++;
+                ctx->current_frame = 0;
+
+                if (ctx->fuzz_position > 2) {
+                    ctx->fuzz_position = 0;
+                    ctx->initial_fuzzing_done = 1;
+                }
+            }
+        }
+    }
+
+    if (should_fuzz) {
+        if (!ctx->initial_fuzzing_done) {
+            size_t len = test_skip_list[ctx->current_frame].len;
+            switch (ctx->fuzz_position) {
+            case 0:
+                if (length + len <= bytes_max) {
+                    memcpy(&bytes[length], test_skip_list[ctx->current_frame].val, len);
+                    length += len;
+                    ctx->current_frame++;
+                }
+                break;
+            case 1:
+                if (length + len <= bytes_max) {
+                    /* move bytes len octets to the right */
+                    for (size_t i = header_length; i < length; i++) {
+                        bytes[i + len] = bytes[i];
+                    }
+                    memcpy(&bytes[header_length], test_skip_list[ctx->current_frame].val, len);
+                    length += len;
+                    ctx->current_frame++;
+                }
+                break;
+            case 2:
+                memcpy(&bytes[header_length], test_skip_list[ctx->current_frame].val, len);
+                if (length > header_length + len) {
+                    memset(&bytes[header_length + len], 0, length - (header_length + len));
+                }
+                else {
+                    length = header_length + len;
+                }
+                ctx->current_frame++;
+                break;
+            default:
+                break;
+            }
+        }
+        else {
+            uint64_t fuzz_pilot = picoquic_test_random(&ctx->random_context);
+            uint32_t fuzz_index = (uint32_t)((fuzz_pilot & 0xFFFF) % length);
+            uint8_t fuzz_length;
+            fuzz_pilot >>= 16;
+            fuzz_length = (uint8_t)(((fuzz_pilot & 0xFF) % 5) + 1);
+            fuzz_pilot >>= 8;
+
+            while (fuzz_length != 0 && fuzz_index < length) {
+                /* flip one byte */
+                bytes[fuzz_index++] = (uint8_t)(fuzz_pilot & 0xFF);
+                fuzz_pilot >>= 8;
+                fuzz_length--;
+            }
+        }
+    }
+
+    return (uint32_t)length;
+}
+
+int fuzz_initial_test()
+{
+    initial_fuzzer_ctx_t fuzz_ctx;
+    int ret = 0;
+
+    memset(&fuzz_ctx, 0, sizeof(initial_fuzzer_ctx_t));
+    fuzz_ctx.random_context = 0x01234567DEADBEEFull;
+    fuzz_ctx.random_context ^= picoquic_stress_test_duration;
+
+    ret = stress_or_fuzz_test(initial_fuzzer, &fuzz_ctx, 2*picoquic_stress_test_duration);
 
     return ret;
 }

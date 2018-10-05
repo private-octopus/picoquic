@@ -700,5 +700,12 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(fuzz_initial)
+        {
+            int ret = fuzz_initial_test();
+
+            Assert::AreEqual(ret, 0);
+        }
     };
 }
