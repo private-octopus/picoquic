@@ -853,8 +853,14 @@ int picoquic_incoming_initial(
     else {
         /* decode the incoming frames */
         if (ret == 0) {
-            ret = picoquic_decode_frames(*pcnx, (*pcnx)->path[0],
-                bytes + ph->offset + extra_offset, ph->payload_length - extra_offset, ph->epoch, current_time);
+            if (extra_offset >= ph->payload_length) {
+                /* empty payload! */
+                ret = picoquic_connection_error(*pcnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0);
+            }
+            else {
+                ret = picoquic_decode_frames(*pcnx, (*pcnx)->path[0],
+                    bytes + ph->offset + extra_offset, ph->payload_length - extra_offset, ph->epoch, current_time);
+            }
         }
 
         /* processing of client initial packet */
@@ -1013,8 +1019,15 @@ int picoquic_incoming_server_cleartext(
 
     if (ret == 0) {
         /* Accept the incoming frames */
-        ret = picoquic_decode_frames(cnx, cnx->path[0],
-            bytes + ph->offset, ph->payload_length, ph->epoch, current_time);
+
+        if (ph->payload_length == 0) {
+            /* empty payload! */
+            ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0);
+        }
+        else {
+            ret = picoquic_decode_frames(cnx, cnx->path[0],
+                bytes + ph->offset, ph->payload_length, ph->epoch, current_time);
+        }
     }
 
     /* processing of initial packet */
@@ -1050,9 +1063,14 @@ if (cnx->cnx_state == picoquic_state_server_init
     }
     else {
         /* Accept the incoming frames */
-        ret = picoquic_decode_frames(cnx, cnx->path[0],
-            bytes + ph->offset, ph->payload_length, ph->epoch, current_time);
-
+        if (ph->payload_length == 0) {
+            /* empty payload! */
+            ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0);
+        }
+        else {
+            ret = picoquic_decode_frames(cnx, cnx->path[0],
+                bytes + ph->offset, ph->payload_length, ph->epoch, current_time);
+        }
         /* processing of client clear text packet */
         if (ret == 0) {
             /* initialization of context & creation of data */
@@ -1110,8 +1128,14 @@ int picoquic_incoming_0rtt(
             ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0);
         } else {
             /* Accept the incoming frames */
-            ret = picoquic_decode_frames(cnx, cnx->path[0], 
-                bytes + ph->offset, ph->payload_length, ph->epoch, current_time);
+            if (ph->payload_length == 0) {
+                /* empty payload! */
+                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0);
+            }
+            else {
+                ret = picoquic_decode_frames(cnx, cnx->path[0],
+                    bytes + ph->offset, ph->payload_length, ph->epoch, current_time);
+            }
 
             if (ret == 0) {
                 /* Processing of TLS messages -- EOED */
@@ -1350,8 +1374,14 @@ int picoquic_incoming_encrypted(
             }
         }
         else {
-            /* Find the arrival path and update its state */
-            ret = picoquic_find_incoming_path(cnx, ph, addr_from, addr_to, current_time, &path_id);
+            if (ph->payload_length == 0) {
+                /* empty payload! */
+                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0);
+            }
+            else {
+                /* Find the arrival path and update its state */
+                ret = picoquic_find_incoming_path(cnx, ph, addr_from, addr_to, current_time, &path_id);
+            }
 
             if (ret == 0) {
                 picoquic_path_t * path_x = cnx->path[path_id];
