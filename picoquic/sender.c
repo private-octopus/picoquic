@@ -1442,8 +1442,11 @@ int picoquic_prepare_packet_0rtt(picoquic_cnx_t* cnx, picoquic_path_t * path_x, 
 
     picoquic_finalize_and_protect_packet(cnx, packet,
         ret, length, header_length, checksum_overhead,
-        send_length, send_buffer, (uint32_t)send_buffer_max, 
-        &path_x->remote_cnxid, &path_x->local_cnxid,
+        send_length, send_buffer, (uint32_t)send_buffer_max,
+        (picoquic_supported_versions[cnx->version_index].version == PICOQUIC_SEVENTH_INTEROP_VERSION ||
+            picoquic_supported_versions[cnx->version_index].version == PICOQUIC_EIGHT_INTEROP_VERSION) ?
+        &path_x->remote_cnxid : &cnx->initial_cnxid,
+        &path_x->local_cnxid,
         path_x, current_time);
 
     if (length > 0) {
