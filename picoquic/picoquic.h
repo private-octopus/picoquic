@@ -173,8 +173,7 @@ typedef enum {
     picoquic_packet_retry,
     picoquic_packet_handshake,
     picoquic_packet_0rtt_protected,
-    picoquic_packet_1rtt_protected_phi0,
-    picoquic_packet_1rtt_protected_phi1,
+    picoquic_packet_1rtt_protected,
     picoquic_packet_type_max
 } picoquic_packet_type_enum;
 

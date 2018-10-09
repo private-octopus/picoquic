@@ -267,12 +267,8 @@ int picoquic_parse_packet_header(
              /* If the connection is identified, decode the short header per version ID */
              switch (picoquic_supported_versions[ph->version_index].version_header_encoding) {
              case picoquic_version_header_13:
-                 if ((bytes[0] & 0x40) == 0) {
-                     ph->ptype = picoquic_packet_1rtt_protected_phi0;
-                 }
-                 else {
-                     ph->ptype = picoquic_packet_1rtt_protected_phi1;
-                 }
+                 ph->ptype = picoquic_packet_1rtt_protected;
+                 ph->key_phase = bytes[0] >> 6;
                  ph->has_spin_bit = 1;
                  ph->spin = (bytes[0] >> 2) & 1;
                  ph->spin_vec = bytes[0] & 0x03 ;
@@ -291,12 +287,8 @@ int picoquic_parse_packet_header(
              }
          } else {
              /* This may be a packet to a forgotten connection */
-             if ((bytes[0] & 0x40) == 0) {
-                 ph->ptype = picoquic_packet_1rtt_protected_phi0;
-             }
-             else {
-                 ph->ptype = picoquic_packet_1rtt_protected_phi1;
-             }
+             ph->ptype = picoquic_packet_1rtt_protected;
+             ph->key_phase = bytes[0] >> 6;
              ph->payload_length = (uint16_t)((length > ph->offset)?length - ph->offset:0);
          }
     }
@@ -499,8 +491,7 @@ int picoquic_parse_header_and_decrypt(
                     (*pcnx)->crypto_context[1].pn_dec,
                     (*pcnx)->crypto_context[1].aead_decrypt, &already_received);
                 break;
-            case picoquic_packet_1rtt_protected_phi0:
-            case picoquic_packet_1rtt_protected_phi1:
+            case picoquic_packet_1rtt_protected:
                 /* TODO : roll key based on PHI */
                 /* AEAD Decrypt, in place */
                 decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph,
@@ -529,8 +520,7 @@ int picoquic_parse_header_and_decrypt(
                 ph->payload_length = (uint16_t)decoded_length;
             }
         }
-        else if (ph->ptype == picoquic_packet_1rtt_protected_phi0 ||
-            ph->ptype == picoquic_packet_1rtt_protected_phi1)
+        else if (ph->ptype == picoquic_packet_1rtt_protected)
         {
             /* This may be a stateless reset */
             *pcnx = picoquic_cnx_by_net(quic, addr_from);
@@ -671,8 +661,7 @@ void picoquic_process_unexpected_cnxid(
     picoquic_packet_header* ph)
 {
     if (length > PICOQUIC_RESET_PACKET_MIN_SIZE && 
-        (ph->ptype == picoquic_packet_1rtt_protected_phi0 || 
-            ph->ptype == picoquic_packet_1rtt_protected_phi1)) {
+        ph->ptype == picoquic_packet_1rtt_protected) {
         picoquic_stateless_packet_t* sp = picoquic_create_stateless_packet(quic);
         if (sp != NULL) {
             uint32_t pad_size = length - 17;
@@ -687,7 +676,7 @@ void picoquic_process_unexpected_cnxid(
             }
 
             /* Packet type set to short header */
-            bytes[byte_index++] = (ph->ptype == picoquic_packet_1rtt_protected_phi0) ? 0x30 : 0x70;
+            bytes[byte_index++] = (ph->ptype == picoquic_packet_1rtt_protected) ? 0x30 : 0x70;
             /* Add the random bytes */
             picoquic_public_random(bytes + byte_index, pad_size);
             byte_index += pad_size;
@@ -1529,8 +1518,7 @@ int picoquic_incoming_segment(
                 /* TODO : decrypt with 0RTT key */
                 ret = picoquic_incoming_0rtt(cnx, bytes, &ph, current_time);
                 break;
-            case picoquic_packet_1rtt_protected_phi0:
-            case picoquic_packet_1rtt_protected_phi1:
+            case picoquic_packet_1rtt_protected:
                 ret = picoquic_incoming_encrypted(cnx, bytes, &ph, addr_from, addr_to, current_time);
                 /* TODO : roll key based on PHI */
                 break;

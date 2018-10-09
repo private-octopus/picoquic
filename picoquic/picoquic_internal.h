@@ -751,6 +751,7 @@ typedef struct _picoquic_packet_header {
     int version_index;
     int epoch;
     picoquic_packet_context_enum pc;
+    unsigned int key_phase : 1;
     unsigned int spin : 1;
     unsigned int spin_vec : 2;
     unsigned int has_spin_bit : 1;

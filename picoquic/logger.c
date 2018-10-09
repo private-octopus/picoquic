@@ -235,11 +235,8 @@ char const* picoquic_log_ptype_name(picoquic_packet_type_enum ptype)
     case picoquic_packet_0rtt_protected:
         ptype_name = "0rtt protected";
         break;
-    case picoquic_packet_1rtt_protected_phi0:
-        ptype_name = "1rtt protected phi0";
-        break;
-    case picoquic_packet_1rtt_protected_phi1:
-        ptype_name = "1rtt protected phi1";
+    case picoquic_packet_1rtt_protected:
+        ptype_name = "1rtt protected";
         break;
     default:
         break;
@@ -344,14 +341,13 @@ void picoquic_log_packet_header(FILE* F, uint64_t log_cnxid64, picoquic_packet_h
     fprintf(F, "S%d,", ph->spin);
 
     switch (ph->ptype) {
-    case picoquic_packet_1rtt_protected_phi0:
-    case picoquic_packet_1rtt_protected_phi1:
+    case picoquic_packet_1rtt_protected:
         /* Short packets. Log dest CID and Seq number. */
         if (log_cnxid64 != 0) {
             fprintf(F, "\n%" PRIx64 ":     ", log_cnxid64);
         }
         picoquic_log_connection_id(F, &ph->dest_cnx_id);
-        fprintf(F, ", Seq: %x (%llx)\n", ph->pn, (unsigned long long)ph->pn64);
+        fprintf(F, ", Seq: %x (%llx), Phi: %d,\n", ph->pn, (unsigned long long)ph->pn64, ph->key_phase);
         break;
     case picoquic_packet_version_negotiation:
         /* V nego. log both CID */

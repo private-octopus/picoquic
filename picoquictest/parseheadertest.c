@@ -79,6 +79,7 @@ static picoquic_packet_header hinitial10 = {
     0,
     0,
     0,
+    0,
     0
 };
 
@@ -107,6 +108,7 @@ static picoquic_packet_header hinitial10_l = {
     0,
     0,
     picoquic_packet_context_initial,
+    0,
     0,
     0,
     0,
@@ -152,6 +154,7 @@ static picoquic_packet_header hvnego10 = {
     0,
     0,
     0,
+    0,
     0
 };
 
@@ -183,6 +186,7 @@ static picoquic_packet_header hhandshake = {
     0,
     0,
     0,
+    0,
     0
 };
 
@@ -199,13 +203,14 @@ static picoquic_packet_header hphi0_c_32 = {
     0,
     9,
     9,
-    picoquic_packet_1rtt_protected_phi0,
+    picoquic_packet_1rtt_protected,
     0xFFFFFFFF00000000ull,
     0,
     PICOQUIC_MAX_PACKET_SIZE - 9,
     0,
     3,
     picoquic_packet_context_application,
+    0,
     0,
     0,
     1,
@@ -226,13 +231,14 @@ static picoquic_packet_header hphi0_c_32_spin = {
     0,
     9,
     9,
-    picoquic_packet_1rtt_protected_phi0,
+    picoquic_packet_1rtt_protected,
     0xFFFFFFFF00000000ull,
     0,
     PICOQUIC_MAX_PACKET_SIZE - 9, 
     0,
     3,
     picoquic_packet_context_application,
+    0,
     1,
     0,
     1,
@@ -240,25 +246,26 @@ static picoquic_packet_header hphi0_c_32_spin = {
     0
 };
 
-static uint8_t packet_short_phi0_noc_32[] = {
-    0x31,
+static uint8_t packet_short_phi1_noc_32[] = {
+    0x71,
     0xDE, 0xAD, 0xBE, 0xEF,
 };
 
-static picoquic_packet_header hphi0_noc_32 = { 
+static picoquic_packet_header hphi1_noc_32 = { 
     TEST_CNXID_NULL_VAL,
     TEST_CNXID_NULL_VAL,
     0xDEADBEEF,
     0,
     1,
     1,
-    picoquic_packet_1rtt_protected_phi0,
+    picoquic_packet_1rtt_protected,
     0xFFFFFFFF00000000ull,
     0,
     PICOQUIC_MAX_PACKET_SIZE - 1,
     0,
     3,
     picoquic_packet_context_application,
+    1,
     0,
     0,
     0,
@@ -282,7 +289,7 @@ static struct _test_entry test_entries[] = {
     { phandshake, sizeof(phandshake), &hhandshake, 1, 8 },
     { packet_short_phi0_c_32, sizeof(packet_short_phi0_c_32), &hphi0_c_32, 0, 8 },
     { packet_short_phi0_c_32_spin, sizeof(packet_short_phi0_c_32_spin), &hphi0_c_32_spin, 1, 8 },
-    { packet_short_phi0_noc_32, sizeof(packet_short_phi0_noc_32), &hphi0_noc_32, 1, 0 }
+    { packet_short_phi1_noc_32, sizeof(packet_short_phi1_noc_32), &hphi1_noc_32, 1, 0 }
 };
 
 static const size_t nb_test_entries = sizeof(test_entries) / sizeof(struct _test_entry);
@@ -355,6 +362,8 @@ int parseheadertest()
         } else if (ph.epoch != test_entries[i].ph->epoch) {
             ret = -1;
         } else if (ph.pc != test_entries[i].ph->pc) {
+            ret = -1;
+        } else if (ph.key_phase != test_entries[i].ph->key_phase) {
             ret = -1;
         }
     }
@@ -522,8 +531,8 @@ int test_packet_encrypt_one(
             expected_header.dest_cnx_id = cnx_client->path[0]->remote_cnxid;
         }
 
-        if (packet->ptype == picoquic_packet_1rtt_protected_phi0 ||
-            packet->ptype == picoquic_packet_1rtt_protected_phi0) {
+        if (packet->ptype == picoquic_packet_1rtt_protected ||
+            packet->ptype == picoquic_packet_1rtt_protected) {
             expected_header.vn = 0;
             expected_header.srce_cnx_id = picoquic_null_connection_id;
         }
@@ -654,7 +663,7 @@ int packet_enc_dec_test()
 
         ret = test_packet_encrypt_one(
             (struct sockaddr *) &test_addr_c,
-            cnx_client, qserver, cnx_server, picoquic_packet_1rtt_protected_phi0, 1024);
+            cnx_client, qserver, cnx_server, picoquic_packet_1rtt_protected, 1024);
     }
 
     if (cnx_client != NULL) {

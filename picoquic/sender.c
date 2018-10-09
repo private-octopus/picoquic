@@ -204,7 +204,7 @@ uint32_t picoquic_predict_packet_header_length_11(
 {
     uint32_t length = 0;
 
-    if (packet_type == picoquic_packet_1rtt_protected_phi0 || packet_type == picoquic_packet_1rtt_protected_phi1) {
+    if (packet_type == picoquic_packet_1rtt_protected) {
         /* Compute length of a short packet header */
 
         length = 1 + dest_cnx_id.id_len + 4;
@@ -235,9 +235,9 @@ uint32_t picoquic_create_packet_header(
         cnx->initial_cnxid : *remote_cnxid;
 
     /* Prepare the packet header */
-    if (packet_type == picoquic_packet_1rtt_protected_phi0 || packet_type == picoquic_packet_1rtt_protected_phi1) {
+    if (packet_type == picoquic_packet_1rtt_protected) {
         /* Create a short packet -- using 32 bit sequence numbers for now */
-        uint8_t K = (packet_type == picoquic_packet_1rtt_protected_phi0) ? 0 : 0x40;
+        uint8_t K = (packet_type == picoquic_packet_1rtt_protected) ? 0 : 0x40;
         const uint8_t C = 0x30;
         uint8_t spin_vec = (uint8_t)(cnx->path[0]->spin_vec);
         uint8_t spin_bit = (uint8_t)((cnx->path[0]->current_spin) << 2);
@@ -338,8 +338,7 @@ uint32_t picoquic_predict_packet_header_length(
         return 0;
     }
 
-    if (packet_type == picoquic_packet_1rtt_protected_phi0 || 
-        packet_type == picoquic_packet_1rtt_protected_phi1) {
+    if (packet_type == picoquic_packet_1rtt_protected) {
         /* Compute length of a short packet header */
         header_length = 1 + cnx->path[0]->remote_cnxid.id_len + 4;
     }
@@ -412,8 +411,7 @@ uint32_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     h_length = picoquic_create_packet_header(cnx, ptype,
         sequence_number, remote_cnxid, local_cnxid, send_buffer, &pn_offset, &pn_length);
     /* If the destination ID does not match the local context, reset the spin bit */
-    if ((ptype == picoquic_packet_1rtt_protected_phi0 ||
-        ptype == picoquic_packet_1rtt_protected_phi1) &&
+    if (ptype == picoquic_packet_1rtt_protected &&
         remote_cnxid != &cnx->path[0]->remote_cnxid) {
         /* Packet is sent to a different CID: reset the spin bits to 0 */
         send_buffer[0] &= 0xF8;
@@ -667,8 +665,7 @@ void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet_t
                 length, header_length,
                 send_buffer, send_buffer_max, cnx->crypto_context[1].aead_encrypt, cnx->crypto_context[1].pn_enc);
             break;
-        case picoquic_packet_1rtt_protected_phi0:
-        case picoquic_packet_1rtt_protected_phi1:
+        case picoquic_packet_1rtt_protected:
             length = picoquic_protect_packet(cnx, packet->ptype, packet->bytes, packet->sequence_number,
                 remote_cnxid, local_cnxid,
                 length, header_length,
@@ -837,8 +834,8 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                 } else if (cnx->cnx_state < picoquic_state_client_ready) {
                     should_retransmit = 0;
                 } else {
-                    length = picoquic_predict_packet_header_length(cnx, picoquic_packet_1rtt_protected_phi0);
-                    packet->ptype = picoquic_packet_1rtt_protected_phi0;
+                    length = picoquic_predict_packet_header_length(cnx, picoquic_packet_1rtt_protected);
+                    packet->ptype = picoquic_packet_1rtt_protected;
                     packet->offset = length;
                 }
             } else {
@@ -854,7 +851,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
 
                 *header_length = length;
 
-                if (p->ptype == picoquic_packet_1rtt_protected_phi0 || p->ptype == picoquic_packet_1rtt_protected_phi1 || p->ptype == picoquic_packet_0rtt_protected) {
+                if (p->ptype == picoquic_packet_1rtt_protected || p->ptype == picoquic_packet_0rtt_protected) {
                     *is_cleartext_mode = 0;
                 } else {
                     *is_cleartext_mode = 1;
@@ -931,7 +928,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                     }
 
                     if (should_retransmit != 0) {
-                        if (p->ptype < picoquic_packet_1rtt_protected_phi0) {
+                        if (p->ptype < picoquic_packet_1rtt_protected) {
                             DBG_PRINTF("Retransmit packet type %d, pc=%d, seq = %llx, is_client = %d\n",
                                 p->ptype, p->pc,
                                 (unsigned long long)p->sequence_number, cnx->client_mode);
@@ -1475,7 +1472,7 @@ picoquic_packet_type_enum picoquic_packet_type_from_epoch(int epoch)
         ptype = picoquic_packet_handshake;
         break;
     case 3:
-        ptype = picoquic_packet_1rtt_protected_phi0;
+        ptype = picoquic_packet_1rtt_protected;
         break;
     default:
         ptype = picoquic_packet_error;
@@ -1980,19 +1977,19 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
         }
         break;
     case picoquic_state_disconnecting:
-        packet_type = picoquic_packet_1rtt_protected_phi0;
+        packet_type = picoquic_packet_1rtt_protected;
         is_cleartext_mode = 0;
         break;
     case picoquic_state_closing_received:
-        packet_type = picoquic_packet_1rtt_protected_phi0;
+        packet_type = picoquic_packet_1rtt_protected;
         is_cleartext_mode = 0;
         break;
     case picoquic_state_closing:
-        packet_type = picoquic_packet_1rtt_protected_phi0;
+        packet_type = picoquic_packet_1rtt_protected;
         is_cleartext_mode = 0;
         break;
     case picoquic_state_draining:
-        packet_type = picoquic_packet_1rtt_protected_phi0;
+        packet_type = picoquic_packet_1rtt_protected;
         is_cleartext_mode = 0;
         break;
     case picoquic_state_disconnected:
@@ -2189,7 +2186,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
     int ret = 0;
     /* TODO: manage multiple streams. */
     picoquic_stream_head* stream = NULL;
-    picoquic_packet_type_enum packet_type = picoquic_packet_1rtt_protected_phi0;
+    picoquic_packet_type_enum packet_type = picoquic_packet_1rtt_protected;
     picoquic_packet_context_enum pc = picoquic_packet_context_application;
     int tls_ready = 0;
     int is_cleartext_mode = 0;
@@ -2578,7 +2575,7 @@ int picoquic_prepare_probe(picoquic_cnx_t* cnx,
                 uint8_t * bytes = packet->bytes;
                 uint32_t length = 0;
                 uint32_t header_length = 0;
-                picoquic_packet_type_enum packet_type = picoquic_packet_1rtt_protected_phi0;
+                picoquic_packet_type_enum packet_type = picoquic_packet_1rtt_protected;
                 picoquic_packet_context_enum pc = picoquic_packet_context_application;
                 uint32_t checksum_overhead = picoquic_get_checksum_length(cnx, 0);
                 size_t data_bytes = 0;
@@ -2752,8 +2749,7 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
                 if (ret == 0) {
                     *send_length += segment_length;
                     if (packet->length == 0 ||
-                        packet->ptype == picoquic_packet_1rtt_protected_phi0 ||
-                        packet->ptype == picoquic_packet_1rtt_protected_phi1) {
+                        packet->ptype == picoquic_packet_1rtt_protected) {
                         if (packet->length == 0) {
                             free(packet);
                             packet = NULL;
