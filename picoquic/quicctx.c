@@ -1724,6 +1724,8 @@ int picoquic_reset_cnx(picoquic_cnx_t* cnx, uint64_t current_time)
         picoquic_crypto_context_free(&cnx->crypto_context[k]);
     }
 
+    picoquic_crypto_context_free(&cnx->crypto_context_new);
+
     if (ret == 0) {
         ret = picoquic_setup_initial_traffic_keys(cnx);
     }
@@ -1839,6 +1841,8 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
         for (int i = 0; i < 4; i++) {
             picoquic_crypto_context_free(&cnx->crypto_context[i]);
         }
+
+        picoquic_crypto_context_free(&cnx->crypto_context_new);
 
         for (picoquic_packet_context_enum pc = 0;
             pc < picoquic_nb_packet_context; pc++) {

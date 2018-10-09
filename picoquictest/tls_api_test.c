@@ -4289,3 +4289,73 @@ int initial_close_test()
 
     return ret;
 }
+
+/*
+ * Test that rotated keys are computed in a compatible way on client and server.
+ */
+
+int new_rotated_key_test()
+{
+    uint64_t loss_mask = 0;
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    if (ret == 0) {
+        ret = wait_application_pn_enc_ready(test_ctx, &simulated_time);
+    }
+
+
+    for (int i = 1; ret == 0 && i <= 3; i++) {
+        if (ret == 0)
+        {
+            /* Try to compute rotated keys on server */
+            ret = picoquic_compute_new_rotated_keys(test_ctx->cnx_server);
+            if (ret != 0) {
+                DBG_PRINTF("Could not rotate server key, ret: %x\n", ret);
+            }
+        }
+
+        if (ret == 0)
+        {
+            /* Try to compute rotated keys on client */
+            ret = picoquic_compute_new_rotated_keys(test_ctx->cnx_client);
+            if (ret != 0) {
+                DBG_PRINTF("Could not rotate server key, round %d, ret: %x\n", i, ret);
+            }
+        }
+
+        if (ret == 0)
+        {
+            /* Compare server encryption and client decryption */
+            size_t key_size = picoquic_get_app_secret_size(test_ctx->cnx_client);
+
+            if (key_size != picoquic_get_app_secret_size(test_ctx->cnx_server)) {
+                DBG_PRINTF("Round %d. Key sizes dont match, client: %d, server: %d\n", i, key_size, picoquic_get_app_secret_size(test_ctx->cnx_server));
+                ret = -1;
+            }
+            else if (memcmp(picoquic_get_app_secret(test_ctx->cnx_server, 1), picoquic_get_app_secret(test_ctx->cnx_client, 0), key_size) != 0) {
+                DBG_PRINTF("Round %d. Server encryption secret does not match client decryption secret\n", i);
+                ret = -1;
+            }
+            else if (memcmp(picoquic_get_app_secret(test_ctx->cnx_server, 0), picoquic_get_app_secret(test_ctx->cnx_client, 1), key_size) != 0) {
+                DBG_PRINTF("Round %d. Server decryption secret does not match client encryption secret\n", i);
+                ret = -1;
+            }
+        }
+
+        picoquic_crypto_context_free(&test_ctx->cnx_server->crypto_context_new);
+        picoquic_crypto_context_free(&test_ctx->cnx_client->crypto_context_new);
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}

@@ -582,6 +582,8 @@ typedef struct st_picoquic_cnx_t {
 
     picoquic_stream_head tls_stream[PICOQUIC_NUMBER_OF_EPOCHS]; /* Separate input/output from each epoch */
     picoquic_crypto_context_t crypto_context[PICOQUIC_NUMBER_OF_EPOCHS]; /* Encryption and decryption objects */
+    picoquic_crypto_context_t crypto_context_old; /* Old encryption and decryption context after key rotation */
+    picoquic_crypto_context_t crypto_context_new; /* New encryption and decryption context just before key rotation */
 
     /* Liveness detection */
     uint64_t latest_progress_time; /* last local time at which the connection progressed */
