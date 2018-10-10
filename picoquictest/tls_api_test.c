@@ -4168,7 +4168,9 @@ static int key_rotation_test_one(int inject_bad_packet)
             }
         }
 
-        if (test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence > rotation_sequence) {
+        if (test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence > rotation_sequence &&
+            test_ctx->cnx_server->key_phase_enc == test_ctx->cnx_server->key_phase_dec &&
+            test_ctx->cnx_client->key_phase_enc == test_ctx->cnx_client->key_phase_dec) {
             rotation_sequence = test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence + 100;
             injection_sequence = test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence + 50;
             nb_rotation++;
@@ -4188,6 +4190,10 @@ static int key_rotation_test_one(int inject_bad_packet)
                 break;
             default:
                 break;
+            }
+
+            if (ret != 0) {
+                DBG_PRINTF("Could not start rotation #%d, ret = %x\n", nb_rotation, ret);
             }
         }
 

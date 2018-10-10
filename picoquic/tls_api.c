@@ -871,7 +871,16 @@ int picoquic_compute_new_rotated_keys(picoquic_cnx_t * cnx)
         cnx->crypto_context_new.aead_encrypt != NULL ||
         cnx->crypto_context_new.pn_dec != NULL ||
         cnx->crypto_context_new.pn_enc != NULL) {
-        ret = PICOQUIC_ERROR_CANNOT_COMPUTE_KEY;
+        if (cnx->crypto_context_new.aead_decrypt == NULL ||
+            cnx->crypto_context_new.aead_encrypt == NULL ||
+            cnx->crypto_context_new.pn_dec == NULL ||
+            cnx->crypto_context_new.pn_enc == NULL) {
+            ret = PICOQUIC_ERROR_CANNOT_COMPUTE_KEY;
+        }
+        else {
+            /* already computed */
+            return 0;
+        }
     }
 
     /* Recompute the secrets */
