@@ -4122,9 +4122,7 @@ static int inject_false_rotation(picoquic_test_tls_api_ctx_t* test_ctx, int targ
 
 static int key_rotation_test_one(int inject_bad_packet)
 {
-    uint64_t loss_mask_data = 0;
     uint64_t simulated_time = 0;
-    uint64_t next_time = 0;
     uint64_t loss_mask = 0;
     int nb_trials = 0;
     int nb_inactive = 0;
@@ -4193,7 +4191,9 @@ static int key_rotation_test_one(int inject_bad_packet)
             }
         }
 
-        ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+        if (ret == 0) {
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+        }
 
         if (ret < 0)
         {
