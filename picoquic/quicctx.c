@@ -1810,6 +1810,19 @@ int picoquic_connection_error(picoquic_cnx_t* cnx, uint16_t local_error, uint64_
     return PICOQUIC_ERROR_DETECTED;
 }
 
+int picoquic_start_key_rotation(picoquic_cnx_t* cnx)
+{
+    int ret = picoquic_compute_new_rotated_keys(cnx);
+
+    if (ret == 0) {
+        picoquic_apply_rotated_keys(cnx, 1);
+
+        picoquic_crypto_context_free(&cnx->crypto_context_old);
+    }
+
+    return ret;
+}
+
 void picoquic_delete_cnx(picoquic_cnx_t* cnx)
 {
     picoquic_stream_head* stream;

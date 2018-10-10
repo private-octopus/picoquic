@@ -137,6 +137,7 @@ int server_busy_test();
 int initial_close_test();
 int fuzz_initial_test();
 int new_rotated_key_test();
+int key_rotation_test();
 
 #ifdef __cplusplus
 }

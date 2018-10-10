@@ -237,7 +237,7 @@ uint32_t picoquic_create_packet_header(
     /* Prepare the packet header */
     if (packet_type == picoquic_packet_1rtt_protected) {
         /* Create a short packet -- using 32 bit sequence numbers for now */
-        uint8_t K = (packet_type == picoquic_packet_1rtt_protected) ? 0 : 0x40;
+        uint8_t K = (cnx->key_phase_enc) ? 0x40 : 0;
         const uint8_t C = 0x30;
         uint8_t spin_vec = (uint8_t)(cnx->path[0]->spin_vec);
         uint8_t spin_bit = (uint8_t)((cnx->path[0]->current_spin) << 2);

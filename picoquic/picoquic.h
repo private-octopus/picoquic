@@ -72,7 +72,8 @@ extern "C" {
 #define PICOQUIC_ERROR_CONNECTION_DELETED (PICOQUIC_ERROR_CLASS + 31)
 #define PICOQUIC_ERROR_CNXID_SEGMENT (PICOQUIC_ERROR_CLASS + 32)
 #define PICOQUIC_ERROR_CNXID_NOT_AVAILABLE (PICOQUIC_ERROR_CLASS + 33)
-#define PICOQUIC_ERROR_MIGRATION_DISABLED (PICOQUIC_ERROR_CLASS + 33)
+#define PICOQUIC_ERROR_MIGRATION_DISABLED (PICOQUIC_ERROR_CLASS + 34)
+#define PICOQUIC_ERROR_CANNOT_COMPUTE_KEY (PICOQUIC_ERROR_CLASS + 35)
 
 /*
  * Protocol errors defined in the QUIC spec
@@ -365,6 +366,8 @@ int picoquic_close(picoquic_cnx_t* cnx, uint16_t reason_code);
 int picoquic_create_probe(picoquic_cnx_t* cnx, const struct sockaddr* addr_to, const struct sockaddr* addr_from);
 
 int picoquic_renew_connection_id(picoquic_cnx_t* cnx);
+
+int picoquic_start_key_rotation(picoquic_cnx_t * cnx);
 
 picoquic_cnx_t* picoquic_get_first_cnx(picoquic_quic_t* quic);
 picoquic_cnx_t* picoquic_get_next_cnx(picoquic_cnx_t* cnx);

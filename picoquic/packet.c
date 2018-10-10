@@ -492,11 +492,60 @@ int picoquic_parse_header_and_decrypt(
                     (*pcnx)->crypto_context[1].aead_decrypt, &already_received);
                 break;
             case picoquic_packet_1rtt_protected:
-                /* TODO : roll key based on PHI */
-                /* AEAD Decrypt, in place */
-                decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph,
-                    (*pcnx)->crypto_context[3].pn_dec,
-                    (*pcnx)->crypto_context[3].aead_decrypt, &already_received);
+                if (ph->key_phase == (*pcnx)->key_phase_dec) {
+                    /* AEAD Decrypt, in place */
+                    decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph,
+                        (*pcnx)->crypto_context[3].pn_dec,
+                        (*pcnx)->crypto_context[3].aead_decrypt, &already_received);
+                }
+                else {
+                    if ((*pcnx)->crypto_context_old.aead_decrypt != NULL &&
+                        (*pcnx)->crypto_context_old.pn_dec != NULL &&
+                        current_time < (*pcnx)->crypto_rotation_time_guard)
+                    {
+                        /* If there is an old key available, try decrypt with it */
+                        decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph,
+                            (*pcnx)->crypto_context_old.pn_dec,
+                            (*pcnx)->crypto_context_old.aead_decrypt, &already_received);
+
+                        if (decoded_length <= (length - ph->offset) &&
+                            ph->pn64 > (*pcnx)->crypto_rotation_sequence) {
+                            ret = picoquic_connection_error(*pcnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0);
+                        }
+                    }
+                    else {
+                        /* These could only be a new key */
+                        if ((*pcnx)->crypto_context_new.aead_decrypt == NULL &&
+                            (*pcnx)->crypto_context_new.aead_encrypt == NULL &&
+                            (*pcnx)->crypto_context_new.pn_dec == NULL &&
+                            (*pcnx)->crypto_context_new.pn_enc == NULL) {
+                            /* If the new context was already computed, don't do it again */
+                            ret = picoquic_compute_new_rotated_keys(*pcnx);
+                        }
+
+                        if ((*pcnx)->crypto_context_new.aead_decrypt != NULL &&
+                            (*pcnx)->crypto_context_new.pn_dec != NULL)
+                        {
+                            /* If there is an old key available, try decrypt with it */
+                            decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph,
+                                (*pcnx)->crypto_context_new.pn_dec,
+                                (*pcnx)->crypto_context_new.aead_decrypt, &already_received);
+
+                            if (decoded_length <= (length - ph->offset)) {
+                                /* Rotation only if the packet was correctly decrypted with the new key */
+                                (*pcnx)->crypto_rotation_time_guard = current_time + (*pcnx)->path[0]->retransmit_timer;
+                                (*pcnx)->crypto_rotation_sequence = ph->pn64;
+                                picoquic_apply_rotated_keys(*pcnx, 0);
+
+                                if ((*pcnx)->crypto_context_new.aead_encrypt != NULL &&
+                                    (*pcnx)->crypto_context_new.pn_enc != NULL) {
+                                    /* If that move was not already validated, move to the new encryption keys */
+                                    picoquic_apply_rotated_keys(*pcnx, 1);
+                                }
+                            }
+                        }
+                    }
+                }
                 break;
             default:
                 /* Packet type error. Log and ignore */

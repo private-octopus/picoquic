@@ -541,6 +541,8 @@ typedef struct st_picoquic_cnx_t {
     unsigned int is_0RTT_accepted : 1; /* whether 0-RTT is accepted */
     unsigned int remote_parameters_received : 1; /* whether remote parameters where received */
     unsigned int client_mode : 1; /* Is this connection the client side? */
+    unsigned int key_phase_enc : 1; /* Key phase used in outgoing packets */
+    unsigned int key_phase_dec : 1; /* Key phase expected in incoming packets */
 
 
     /* Local and remote parameters */
@@ -577,6 +579,8 @@ typedef struct st_picoquic_cnx_t {
 
     /* TLS context, TLS Send Buffer, streams, epochs */
     void* tls_ctx;
+    uint64_t crypto_rotation_sequence;
+    uint64_t crypto_rotation_time_guard;
     struct st_ptls_buffer_t* tls_sendbuf;
     uint16_t psk_cipher_suite_id;
 

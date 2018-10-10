@@ -4294,6 +4294,36 @@ int initial_close_test()
  * Test that rotated keys are computed in a compatible way on client and server.
  */
 
+static int aead_iv_check(void * aead1, void * aead2)
+{
+    int ret = 0; 
+    ptls_aead_context_t *ctx1 = (ptls_aead_context_t *)aead1;
+    ptls_aead_context_t *ctx2 = (ptls_aead_context_t *)aead2;
+
+    if (memcmp(ctx1->static_iv, ctx2->static_iv, ctx1->algo->iv_size) != 0) {
+        ret = -1;
+    }
+    return;
+}
+
+
+static int pn_enc_check(void * pn1, void * pn2)
+{
+    int ret = 0;
+    uint8_t seed[16] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
+    uint8_t pn[4] = { 0, 1, 2 ,3 };
+    uint8_t pn_enc[4];
+    uint8_t pn_dec[4];
+
+    picoquic_pn_encrypt(pn1, seed, pn_enc, pn, 4);
+    picoquic_pn_encrypt(pn2, seed, pn_dec, pn_enc, 4);
+
+    if (memcmp(pn_dec, pn, 4) != 0) {
+        ret = -1;
+    }
+    return ret;
+}
+
 int new_rotated_key_test()
 {
     uint64_t loss_mask = 0;
@@ -4346,10 +4376,137 @@ int new_rotated_key_test()
                 DBG_PRINTF("Round %d. Server decryption secret does not match client encryption secret\n", i);
                 ret = -1;
             }
+            else if (aead_iv_check(test_ctx->cnx_server->crypto_context_new.aead_encrypt, test_ctx->cnx_client->crypto_context_new.aead_decrypt) != 0) {
+                DBG_PRINTF("Round %d. Client AEAD decryption does not match server AEAD encryption.\n", i);
+                ret = -1;
+            }
+            else if (aead_iv_check(test_ctx->cnx_client->crypto_context_new.aead_encrypt, test_ctx->cnx_server->crypto_context_new.aead_decrypt) != 0) {
+                DBG_PRINTF("Round %d. Server AEAD decryption does not match cliens AEAD encryption.\n", i);
+                ret = -1;
+            }
+            else if (pn_enc_check(test_ctx->cnx_server->crypto_context_new.pn_enc, test_ctx->cnx_client->crypto_context_new.pn_dec) != 0) {
+                DBG_PRINTF("Round %d. Client PN decryption does not match server PN encryption.\n", i);
+                ret = -1;
+            }
+            else if (pn_enc_check(test_ctx->cnx_client->crypto_context_new.pn_enc, test_ctx->cnx_server->crypto_context_new.pn_dec) != 0) {
+                DBG_PRINTF("Round %d. Server PN decryption does not match client PN encryption.\n", i);
+                ret = -1;
+            }
         }
 
         picoquic_crypto_context_free(&test_ctx->cnx_server->crypto_context_new);
         picoquic_crypto_context_free(&test_ctx->cnx_client->crypto_context_new);
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+
+/*
+ * Key rotation tests
+ */
+
+
+int key_rotation_test()
+{
+    uint64_t loss_mask_data = 0;
+    uint64_t simulated_time = 0;
+    uint64_t next_time = 0;
+    uint64_t loss_mask = 0;
+    int nb_trials = 0;
+    int nb_inactive = 0;
+    int max_trials = 100000;
+    int nb_rotation = 0;
+    uint64_t rotation_sequence = 100;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = PICOQUIC_ERROR_MEMORY;
+    }
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    /* Prepare to send data */
+    if (ret == 0) {
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_very_long, sizeof(test_scenario_very_long));
+    }
+
+    /* Perform a data sending loop, during which various key rotations are tried
+     * every 100 packets or so */
+
+    while (ret == 0 && nb_trials < max_trials && nb_inactive < 256 && test_ctx->cnx_client->cnx_state == picoquic_state_client_ready && test_ctx->cnx_server->cnx_state == picoquic_state_server_ready) {
+        int was_active = 0;
+
+        nb_trials++;
+
+        if (test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence > rotation_sequence &&
+            test_ctx->cnx_server->crypto_context_new.aead_decrypt == NULL &&
+            test_ctx->cnx_server->crypto_context_new.aead_encrypt == NULL && 
+            test_ctx->cnx_server->crypto_context_new.pn_enc == NULL && 
+            test_ctx->cnx_server->crypto_context_new.pn_dec == NULL) {
+            rotation_sequence = test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence + 100;
+            nb_rotation++;
+            switch (nb_rotation) {
+            case 1: /* Key rotation at the client */
+                ret = picoquic_start_key_rotation(test_ctx->cnx_client);
+                break;
+            case 2: /* Key rotation at the server */
+                ret = picoquic_start_key_rotation(test_ctx->cnx_server);
+                break;
+            case 3: /* Simultaneous key rotation at the client */
+                rotation_sequence += 1000000000;
+                ret = picoquic_start_key_rotation(test_ctx->cnx_client);
+                if (ret == 0) {
+                    ret = picoquic_start_key_rotation(test_ctx->cnx_server);
+                }
+                break;
+            default:
+                break;
+            }
+        }
+
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+
+        if (ret < 0)
+        {
+            break;
+        }
+
+        if (was_active) {
+            nb_inactive = 0;
+        }
+        else {
+            nb_inactive++;
+        }
+
+        if (test_ctx->test_finished) {
+            if (picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) && picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)) {
+                break;
+            }
+        }
+    }
+
+    if (ret == 0 && nb_rotation < 3) {
+        DBG_PRINTF("Only %d key rotations completed out of 3\n", nb_rotation);
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
+
+        if (ret != 0)
+        {
+            DBG_PRINTF("Connection close returns %d\n", ret);
+        }
     }
 
     if (test_ctx != NULL) {

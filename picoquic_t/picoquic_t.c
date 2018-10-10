@@ -138,7 +138,8 @@ static const picoquic_test_def_t test_table[] = {
     { "retire_cnxid", retire_cnxid_test },
     { "server_busy", server_busy_test },
     { "initial_close", initial_close_test },
-    { "new_rotated_key", new_rotated_key_test},
+    { "new_rotated_key", new_rotated_key_test },
+    { "key_rotation", key_rotation_test },
     { "stress", stress_test },
     { "fuzz", fuzz_test },
     { "fuzz_initial", fuzz_initial_test}
