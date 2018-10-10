@@ -29,6 +29,8 @@
 #define PICOQUIC_LABEL_INITIAL_CLIENT "client in"
 #define PICOQUIC_LABEL_INITIAL_SERVER "server in"
 
+#define PICOQUIC_LABEL_TRAFFIC_UPDATE "traffic upd"
+
 #define PICOQUIC_LABEL_KEY "key"
 #define PICOQUIC_LABEL_IV "iv"
 #define PICOQUIC_LABEL_PN "pn"
@@ -93,6 +95,11 @@ int picoquic_setup_initial_secrets(
 
 int picoquic_setup_initial_traffic_keys(picoquic_cnx_t* cnx);
 
+uint8_t * picoquic_get_app_secret(picoquic_cnx_t* cnx, int is_enc);
+size_t picoquic_get_app_secret_size(picoquic_cnx_t* cnx);
+int picoquic_compute_new_rotated_keys(picoquic_cnx_t * cnx);
+void picoquic_apply_rotated_keys(picoquic_cnx_t * cnx, int is_enc);
+
 void picoquic_crypto_context_free(picoquic_crypto_context_t * ctx);
 
 void * picoquic_setup_test_aead_context(int is_encrypt, const uint8_t * secret);
@@ -121,6 +128,7 @@ void picoquic_tls_set_client_authentication(picoquic_quic_t* quic, int client_au
 int picoquic_tls_client_authentication_activated(picoquic_quic_t* quic);
 
 int picoquic_get_retry_token(picoquic_quic_t* quic, uint8_t * base, size_t len, uint8_t * cid, uint8_t cid_len,
-    uint8_t * token, uint8_t token_length);
+    uint8_t * token, uint32_t token_length);
+
 
 #endif /* TLS_API_H */

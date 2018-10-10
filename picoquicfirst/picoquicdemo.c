@@ -917,7 +917,8 @@ int quic_client_migrate(picoquic_cnx_t * cnx, SOCKET_TYPE * fd, struct sockaddr 
 /* Quic Client */
 int quic_client(const char* ip_address_text, int server_port, const char * sni, 
     const char * root_crt,
-    uint32_t proposed_version, int force_zero_share, int force_migration, int mtu_max, FILE* F_log)
+    uint32_t proposed_version, int force_zero_share, int force_migration, 
+    int nb_packets_before_key_update, int mtu_max, FILE* F_log)
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
@@ -935,6 +936,7 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
     uint8_t buffer[1536];
     uint8_t send_buffer[1536];
     size_t send_length = 0;
+    uint64_t key_update_done = 0;
     int bytes_recv;
     int bytes_sent;
     uint64_t current_time = 0;
@@ -1162,6 +1164,20 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
                         }
                     }
 
+                    if (nb_packets_before_key_update > 0 &&
+                        !key_update_done &&
+                        cnx_client->pkt_ctx[picoquic_packet_context_application].first_sack_item.end_of_sack_range > (uint64_t)nb_packets_before_key_update) {
+                        int key_rot_ret = picoquic_start_key_rotation(cnx_client);
+                        if (key_rot_ret != 0) {
+                            fprintf(stdout, "Will not test key rotation.\n");
+                            key_update_done = -1;
+                        }
+                        else {
+                            fprintf(stdout, "Key rotation started.\n");
+                            key_update_done = 1;
+                        }
+                    }
+
                     if ((bytes_recv == 0 || client_ready_loop > 4) && picoquic_is_cnx_backlog_empty(cnx_client)) {
                         if (callback_ctx.nb_open_streams == 0) {
                             if (cnx_client->nb_zero_rtt_sent != 0) {
@@ -1274,32 +1290,33 @@ void usage()
     fprintf(stderr, "  For the server mode, use -p to specify the port.\n");
     fprintf(stderr, "Options:\n");
     fprintf(stderr, "  -c file               cert file (default: %s)\n", default_server_cert_file);
-    fprintf(stderr, "  -k file               key file (default: %s)\n", default_server_key_file);
-    fprintf(stderr, "  -p port               server port (default: %d)\n", default_server_port);
-    fprintf(stderr, "  -n sni                sni (default: server name)\n");
-    fprintf(stderr, "  -t file               root trust file");
-    fprintf(stderr, "  -1                    Once\n");
-    fprintf(stderr, "  -r                    Do Reset Request\n");
-    fprintf(stderr, "  -s <64b 64b>          Reset seed\n");
     fprintf(stderr, "  -e if                 Send on interface (default: -1)\n");
     fprintf(stderr, "                           -1: receiving interface\n");
     fprintf(stderr, "                            0: routing lookup\n");
     fprintf(stderr, "                            n: ifindex\n");
+    fprintf(stderr, "  -f migration_mode     Force client to migrate to start migration:\n");
+    fprintf(stderr, "                        -f 1  test NAT rebinding,\n");
+    fprintf(stderr, "                        -f 2  test CNXID renewal,\n");
+    fprintf(stderr, "                        -f 3  test migration to new address.\n");
+    fprintf(stderr, "  -h                    This help message\n");
     fprintf(stderr, "  -i <src mask value>   Connection ID modification: (src & ~mask) || val\n");
     fprintf(stderr, "                        Implies unconditional server cnx_id xmit\n");
     fprintf(stderr, "                          where <src> is int:\n");
     fprintf(stderr, "                            0: picoquic_cnx_id_random\n");
     fprintf(stderr, "                            1: picoquic_cnx_id_remote (client)\n");
+    fprintf(stderr, "  -k file               key file (default: %s)\n", default_server_key_file);
+    fprintf(stderr, "  -l file               Log file\n");
+    fprintf(stderr, "  -p port               server port (default: %d)\n", default_server_port);
+    fprintf(stderr, "  -m mtu_max            Largest mtu value that can be tried for discovery\n");
+    fprintf(stderr, "  -n sni                sni (default: server name)\n");
+    fprintf(stderr, "  -r                    Do Reset Request\n");
+    fprintf(stderr, "  -s <64b 64b>          Reset seed\n");
+    fprintf(stderr, "  -t file               root trust file");
+    fprintf(stderr, "  -u nb                 trigger key update after receiving <nb> packets on client\n");
     fprintf(stderr, "  -v version            Version proposed by client, e.g. -v ff00000e\n");
     fprintf(stderr, "                        or restrict the server to draft-14 mode.\n");
     fprintf(stderr, "  -z                    Set TLS zero share behavior on client, to force HRR.\n");
-    fprintf(stderr, "  -f migration_mode     Force client to migrate to start migration:\n");
-    fprintf(stderr, "                        -f 1  test NAT rebinding,\n");
-    fprintf(stderr, "                        -f 2  test CNXID renewal,\n");
-    fprintf(stderr, "                        -f 3  test migration to new address.\n");
-    fprintf(stderr, "  -l file               Log file\n");
-    fprintf(stderr, "  -m mtu_max            Largest mtu value that can be tried for discovery\n");
-    fprintf(stderr, "  -h                    This help message\n");
+    fprintf(stderr, "  -1                    Once\n");
     exit(1);
 }
 
@@ -1344,6 +1361,7 @@ int main(int argc, char** argv)
     int do_hrr = 0;
     int force_zero_share = 0;
     int force_migration = 0;
+    int nb_packets_before_update = 0;
     int cnx_id_mask_is_set = 0;
     cnx_id_callback_ctx_t cnx_id_cbdata = {
         .cnx_id_select = 0,
@@ -1364,7 +1382,7 @@ int main(int argc, char** argv)
 
     /* Get the parameters */
     int opt;
-    while ((opt = getopt(argc, argv, "c:k:p:v:1rhzf:i:s:e:l:m:n:t:")) != -1) {
+    while ((opt = getopt(argc, argv, "c:k:p:u:v:1rhzf:i:s:e:l:m:n:t:")) != -1) {
         switch (opt) {
         case 'c':
             server_cert_file = optarg;
@@ -1375,6 +1393,12 @@ int main(int argc, char** argv)
         case 'p':
             if ((server_port = atoi(optarg)) <= 0) {
                 fprintf(stderr, "Invalid port: %s\n", optarg);
+                usage();
+            }
+            break;
+        case 'u':
+            if ((nb_packets_before_update = atoi(optarg)) <= 0) {
+                fprintf(stderr, "Invalid number of packets: %s\n", optarg);
                 usage();
             }
             break;
@@ -1508,7 +1532,7 @@ int main(int argc, char** argv)
         /* Run as client */
         printf("Starting PicoQUIC connection to server IP = %s, port = %d\n", server_name, server_port);
         ret = quic_client(server_name, server_port, sni, root_trust_file, proposed_version, force_zero_share, 
-            force_migration, mtu_max, F_log);
+            force_migration, nb_packets_before_update, mtu_max, F_log);
 
         printf("Client exit with code = %d\n", ret);
 

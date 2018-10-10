@@ -686,6 +686,20 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(new_rotated_key)
+        {
+            int ret = new_rotated_key_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(key_rotation)
+        {
+            int ret = key_rotation_test();
+
+            Assert::AreEqual(ret, 0);
+        }
         
         TEST_METHOD(stress)
         {

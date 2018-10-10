@@ -119,6 +119,7 @@ int test_one_pn_enc_pair(uint8_t * seqnum, size_t seqnum_len, void * pn_enc, voi
 int picoquic_test_compare_files(char const* fname1, char const* fname2);
 
 uint64_t picoquic_test_random(uint64_t * random_context);
+void picoquic_test_random_bytes(uint64_t * random_context, uint8_t * bytes, size_t bytes_max);
 uint64_t picoquic_test_uniform_random(uint64_t * random_context, uint64_t rnd_max);
 
 #ifdef __cplusplus

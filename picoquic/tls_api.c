@@ -56,6 +56,8 @@ typedef struct st_picoquic_tls_ctx_t {
     uint8_t ext_received[128];
     size_t ext_received_length;
     int ext_received_return;
+    uint8_t app_secret_enc[PTLS_MAX_DIGEST_SIZE];
+    uint8_t app_secret_dec[PTLS_MAX_DIGEST_SIZE];
 } picoquic_tls_ctx_t;
 
 int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mode,
@@ -110,7 +112,7 @@ void picoquic_provide_received_transport_extensions(picoquic_cnx_t* cnx,
     int* ext_received_return,
     int* client_mode)
 {
-    picoquic_tls_ctx_t* ctx = cnx->tls_ctx;
+    picoquic_tls_ctx_t* ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
 
     *ext_received = ctx->ext_received;
     *ext_received_length = ctx->ext_received_length;
@@ -634,10 +636,9 @@ static int picoquic_set_pn_enc_from_secret(void ** v_pn_enc, ptls_cipher_suite_t
 }
 
 
-static int picoquic_set_key_from_secret(picoquic_cnx_t* cnx, ptls_cipher_suite_t * cipher, int is_enc, size_t epoch, const void *secret)
+static int picoquic_set_key_from_secret(ptls_cipher_suite_t * cipher, int is_enc, picoquic_crypto_context_t * ctx, const void *secret)
 {
     int ret = 0;
-    picoquic_crypto_context_t * ctx = &cnx->crypto_context[epoch];
 
     if (is_enc != 0) {
         ret = picoquic_set_aead_from_secret(&ctx->aead_encrypt, cipher, is_enc, secret);
@@ -686,6 +687,7 @@ typedef struct st_picoquic_update_traffic_key_t {
 static int picoquic_update_traffic_key_callback(ptls_update_traffic_key_t * self, ptls_t *tls, int is_enc, size_t epoch, const void *secret)
 {
     picoquic_cnx_t* cnx = (picoquic_cnx_t*)*ptls_get_data_ptr(tls);
+    picoquic_tls_ctx_t * tls_ctx = (picoquic_tls_ctx_t *)cnx->tls_ctx;
     ptls_context_t* ctx = (ptls_context_t*)cnx->quic->tls_master_ctx;
     ptls_cipher_suite_t * cipher = ptls_get_cipher(tls);
     UNREFERENCED_PARAMETER(self);
@@ -694,7 +696,11 @@ static int picoquic_update_traffic_key_callback(ptls_update_traffic_key_t * self
     debug_dump(secret, (int)cipher->hash->digest_size);
 #endif
 
-    int ret = picoquic_set_key_from_secret(cnx, cipher, is_enc, epoch, secret);
+    int ret = picoquic_set_key_from_secret(cipher, is_enc, &cnx->crypto_context[epoch], secret);
+
+    if (ret == 0 && epoch == 3) {
+        memcpy((is_enc) ? tls_ctx->app_secret_enc : tls_ctx->app_secret_dec, secret, cipher->aead->key_size);
+    }
 
     if (ctx->log_secret) {
         static const char *log_labels[2][4] = {
@@ -798,16 +804,146 @@ int picoquic_setup_initial_traffic_keys(picoquic_cnx_t* cnx)
         }
 
         if (ret == 0) {
-            ret = picoquic_set_key_from_secret(cnx, &cipher, 1, 0, secret1);
+            ret = picoquic_set_key_from_secret(&cipher, 1, &cnx->crypto_context[0], secret1);
         }
 
         if (ret == 0) {
-            ret = picoquic_set_key_from_secret(cnx, &cipher, 0, 0, secret2);
+            ret = picoquic_set_key_from_secret(&cipher, 0, &cnx->crypto_context[0], secret2);
         }
     }
 
     return ret;
 }
+
+/*
+ * Key rotation.
+ *
+ * The old keys get moved to the old crypto context.
+ * The secrets are rotated.
+ * The new context gets informed.
+ *
+ * The key update is defined in RFC 8446 section 7.2 as:
+ * application_traffic_secret_N+1 =
+ *         HKDF-Expand-Label(application_traffic_secret_N,
+ *                            "traffic upd", "", Hash.length)
+  * Label: PICOQUIC_LABEL_TRAFFIC_UPDATE
+ */
+static int picoquic_rotate_app_secret(ptls_cipher_suite_t * cipher, uint8_t * secret)
+{
+    int ret = 0;
+    uint8_t new_secret[PTLS_MAX_DIGEST_SIZE];
+
+    ret = ptls_hkdf_expand_label(cipher->hash, new_secret,
+        cipher->hash->digest_size, ptls_iovec_init(secret, cipher->hash->digest_size),
+        PICOQUIC_LABEL_TRAFFIC_UPDATE, ptls_iovec_init(NULL, 0), PICOQUIC_LABEL_QUIC_BASE);
+    if (ret == 0) {
+        memcpy(secret, new_secret, cipher->aead->ctr_cipher->key_size);
+    }
+
+    return ret;
+}
+
+
+uint8_t * picoquic_get_app_secret(picoquic_cnx_t* cnx, int is_enc)
+{
+    picoquic_tls_ctx_t * tls_ctx = (picoquic_tls_ctx_t *)cnx->tls_ctx;
+
+    return (is_enc) ?tls_ctx->app_secret_enc:tls_ctx->app_secret_dec;
+}
+
+size_t picoquic_get_app_secret_size(picoquic_cnx_t* cnx)
+{
+    picoquic_tls_ctx_t * tls_ctx = (picoquic_tls_ctx_t *)cnx->tls_ctx;
+
+    ptls_cipher_suite_t * cipher = ptls_get_cipher(tls_ctx->tls);
+
+    return (cipher->hash->digest_size);
+}
+
+int picoquic_compute_new_rotated_keys(picoquic_cnx_t * cnx)
+{
+    int ret = 0;
+    picoquic_tls_ctx_t * tls_ctx = (picoquic_tls_ctx_t *)cnx->tls_ctx;
+    ptls_cipher_suite_t * cipher = ptls_get_cipher(tls_ctx->tls);
+
+    /* Verify that the previous transition is complete */
+    if (cnx->crypto_context_new.aead_decrypt != NULL ||
+        cnx->crypto_context_new.aead_encrypt != NULL ||
+        cnx->crypto_context_new.pn_dec != NULL ||
+        cnx->crypto_context_new.pn_enc != NULL) {
+        if (cnx->crypto_context_new.aead_decrypt == NULL ||
+            cnx->crypto_context_new.aead_encrypt == NULL ||
+            cnx->crypto_context_new.pn_dec == NULL ||
+            cnx->crypto_context_new.pn_enc == NULL) {
+            ret = PICOQUIC_ERROR_CANNOT_COMPUTE_KEY;
+        }
+        else {
+            /* already computed */
+            return 0;
+        }
+    }
+
+    /* Recompute the secrets */
+    if (ret == 0) {
+        ret = picoquic_rotate_app_secret(cipher, tls_ctx->app_secret_enc);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_set_key_from_secret(cipher, 1, &cnx->crypto_context_new, tls_ctx->app_secret_enc);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_rotate_app_secret(cipher, tls_ctx->app_secret_dec);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_set_key_from_secret(cipher, 0, &cnx->crypto_context_new, tls_ctx->app_secret_dec);
+    }
+
+    return (ret == 0)?0: PICOQUIC_ERROR_CANNOT_COMPUTE_KEY;
+}
+
+void picoquic_apply_rotated_keys(picoquic_cnx_t * cnx, int is_enc)
+{
+    if (is_enc) {
+        if (cnx->crypto_context[3].aead_encrypt != NULL) {
+            ptls_aead_free((ptls_aead_context_t *)cnx->crypto_context[3].aead_encrypt);
+        }
+
+        if (cnx->crypto_context[3].pn_enc != NULL) {
+            ptls_cipher_free((ptls_cipher_context_t *)cnx->crypto_context[3].pn_enc);
+        }
+
+        cnx->crypto_context[3].aead_encrypt = cnx->crypto_context_new.aead_encrypt;
+        cnx->crypto_context_new.aead_encrypt = NULL;
+        cnx->crypto_context[3].pn_enc = cnx->crypto_context_new.pn_enc;
+        cnx->crypto_context_new.pn_enc = NULL;
+
+        cnx->key_phase_enc ^= 1;
+    }
+    else {
+        if (cnx->crypto_context_old.aead_decrypt != NULL) {
+            ptls_aead_free((ptls_aead_context_t *)cnx->crypto_context_old.aead_decrypt);
+        }
+
+        if (cnx->crypto_context_old.pn_dec != NULL) {
+            ptls_cipher_free((ptls_cipher_context_t *)cnx->crypto_context_old.pn_dec);
+        }
+
+        cnx->crypto_context_old.aead_decrypt = cnx->crypto_context[3].aead_decrypt;
+        cnx->crypto_context[3].aead_decrypt = cnx->crypto_context_new.aead_decrypt;
+        cnx->crypto_context_new.aead_decrypt = NULL;
+        cnx->crypto_context_old.pn_dec = cnx->crypto_context[3].pn_dec;
+        cnx->crypto_context[3].pn_dec = cnx->crypto_context_new.pn_dec;
+        cnx->crypto_context_new.pn_dec = NULL;
+
+        cnx->key_phase_dec ^= 1;
+    }
+}
+
+/*
+ * Release the crypto context, and the associated keys.
+ */
 
 void picoquic_crypto_context_free(picoquic_crypto_context_t * ctx)
 {
@@ -1168,11 +1304,11 @@ static void picoquic_log_secret_call_back(ptls_log_secret_t* _self,
     /* Assume one concurrent writer for now, need locking otherwise. */
     ptls_iovec_t crandom = ptls_get_client_random(tls);
     fprintf(keylog_file, "%s ", label);
-    for (int i = 0; i < crandom.len; i++) {
+    for (size_t i = 0; i < crandom.len; i++) {
         fprintf(keylog_file, "%02x", crandom.base[i]);
     }
     fputc(' ', keylog_file);
-    for (int i = 0; i < secret.len; i++) {
+    for (size_t i = 0; i < secret.len; i++) {
         fprintf(keylog_file, "%02x", secret.base[i]);
     }
     fputc('\n', keylog_file);
@@ -1824,7 +1960,7 @@ int picoquic_tls_client_authentication_activated(picoquic_quic_t* quic) {
  */
 
 int picoquic_get_retry_token(picoquic_quic_t* quic, uint8_t * base, size_t len, uint8_t * cid, uint8_t cid_len,
-    uint8_t * token, uint8_t token_length) {
+    uint8_t * token, uint32_t token_length) {
     /*Using OpenSSL for now: ptls_hash_algorithm_t ptls_openssl_sha256 */
     int ret = 0;
     ptls_hash_algorithm_t* algo = &ptls_openssl_sha256;
@@ -1832,7 +1968,7 @@ int picoquic_get_retry_token(picoquic_quic_t* quic, uint8_t * base, size_t len, 
     uint8_t final_hash[PTLS_MAX_DIGEST_SIZE];
     size_t offset;
 
-    if (hash_ctx == NULL || token_length > cid_len + algo->digest_size || token_length <= 1 + cid_len) {
+    if (hash_ctx == NULL || token_length > cid_len + algo->digest_size || token_length <= 1u + cid_len) {
         ret = -1;
     } else {
         hash_ctx->update(hash_ctx, quic->retry_seed, sizeof(quic->retry_seed));

@@ -452,7 +452,7 @@ int picoquic_prepare_new_connection_id_frame(picoquic_cnx_t * cnx, picoquic_path
 
 uint8_t* picoquic_skip_new_connection_id_frame(uint8_t* bytes, const uint8_t* bytes_max, int is_draft_14)
 {
-    uint8_t cid_length;
+    uint8_t cid_length = 0;
 
     if (is_draft_14) {
         if ((bytes = picoquic_frames_varint_skip(bytes + 1, bytes_max)) != NULL) {
@@ -501,7 +501,7 @@ uint8_t* picoquic_decode_new_connection_id_frame(picoquic_cnx_t* cnx, uint8_t* b
         picoquic_connection_error(cnx, (bytes == NULL) ? PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR : PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
             picoquic_frame_type_new_connection_id);
     } else {
-        int ret = picoquic_enqueue_cnxid_stash(cnx, sequence, cid_length, cnxid_bytes, secret_bytes, NULL);
+        uint16_t ret = (uint16_t)picoquic_enqueue_cnxid_stash(cnx, sequence, cid_length, cnxid_bytes, secret_bytes, NULL);
         if (ret != 0) {
             picoquic_connection_error(cnx, ret, picoquic_frame_type_new_connection_id);
             bytes = NULL;
@@ -515,7 +515,7 @@ uint8_t* picoquic_decode_new_connection_id_frame(picoquic_cnx_t* cnx, uint8_t* b
  * Format a retire connection ID frame.
  */
 
-int picoquic_prepare_retire_connection_id_frame(picoquic_cnx_t * cnx, uint64_t sequence, 
+int picoquic_prepare_retire_connection_id_frame(uint64_t sequence, 
     uint8_t* bytes, size_t bytes_max, size_t* consumed)
 {
     int ret = 0;
@@ -557,7 +557,7 @@ int picoquic_queue_retire_connection_id_frame(picoquic_cnx_t * cnx, uint64_t seq
         return 0;
     }
 
-    int ret = picoquic_prepare_retire_connection_id_frame(cnx, sequence, frame_buffer, sizeof(frame_buffer), &consumed);
+    int ret = picoquic_prepare_retire_connection_id_frame(sequence, frame_buffer, sizeof(frame_buffer), &consumed);
 
     if (ret == 0 && consumed > 0) {
         ret = picoquic_queue_misc_frame(cnx, frame_buffer, consumed);

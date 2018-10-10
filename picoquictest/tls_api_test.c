@@ -2230,336 +2230,6 @@ int spurious_retransmit_test()
     return ret;
 }
 
-#if 0
-
-/*
- * Test whether the server correctly sends an HRR in response to a 
- * Client Hello proposing an unsupported key share.
- */
-
-static uint8_t clientHelloWrongKeyShare[] = {
-#if 0
-    /* TLs Stream header, including offset and length */
-    0x18, 0x00, 0x41, 0x29,
-    /* TLS Record Header, end with 2 bytes length*/
-    0x16, 0x03, 0x03, 0x01, 0x24,
-#else
-    /* TLs Stream header, including offset and length */
-    0x18, 0x00, 0x41, 0x24,
-#endif
-    /* Handshake protocol header for CH, end with 3 bytes length */
-    0x01, 0x00, 0x01, 0x20,
-    /* CH length 73 + extensions 209 = 282, 0x0120 */
-    /* Legacy version ID*/
-    0x03, 0x03,
-    /* Client random, 32 bytes*/
-    0xc4, 0xe2, 0xea, 0xb7, 0xcc, 0x4b, 0xbb, 0x43, 0x7d, 0xfa, 
-    0xb4, 0x7c, 0xa5, 0x6a, 0xf8, 0xa0, 0xdb, 0x07, 0x2b, 0x90,
-    0xa4, 0x9f, 0xac, 0x89, 0x84, 0x9c, 0x10, 0xb2, 0xa5, 0x6a,
-    0x7d, 0xfa,
-    /* Legacy session ID l=32 + 32 bytes */
-    0x20, 
-    0xf8, 0xa0, 0xdb, 0x07, 0x2b, 0x90, 0xe5, 0x36, 0xf9, 0xc4, 
-    0xa4, 0x9f, 0xac, 0x89, 0x84, 0x9c, 0x10, 0xb2, 0xa5, 0x6a,
-    0xb4, 0x7c, 0xa5, 0x6a, 0xf8, 0xa0, 0xdb, 0x07, 0x2b, 0x90,
-    0x7d, 0xfa,
-    /* Cipher suites */ 
-    0x00, 0x06, 0x13, 0x01, 0x13, 0x04, 0x13, 0x02,
-    /* Legacy compression methods */
-    0x01, 0x00,
-    /* End of CH after extension length */
-    0x00, 0xd1,
-    /* Series of extenstion, 2 bytes type + 2 bytes length, total = 209 */
-    /* Extension type 0, SNI, 15 bytes */
-    0x00, 0x00, 0x00, 0x0b,
-    0x00, 0x09, 0x00, 0x00, 0x06, 0x73, 0x65, 0x72, 0x76, 0x65, 0x72,
-    /* Extension type 16, ALPN, 12 bytes */
-    /* TODO: update hq-09 to supported version */
-    0x00, 0x10, 0x00, 0x08,
-    0x00, 0x06, 0x05, 0x68, 0x71, 0x2d, 0x30, 0x39,
-    /* Some extended value, 5 bytes */
-    0xff, 0x01, 0x00, 0x01, 0x00,
-    /* Extension type 10, Supported groups, 24 bytes */
-    0x00, 0x0a, 0x00, 0x14, 0x00, 0x12,
-    0x00, 0x1d, 0x00, 0x17, 0x00, 0x18, 0x00, 0x19, 0x01, 0x00, 0x01, 0x01,
-    0x01, 0x02, 0x01, 0x03, 0x01, 0x04,
-    /* Extension type 35, 4 bytes. */
-    0x00, 0x23, 0x00, 0x00,
-    /* Extension type 51, key share, 42 bytes of random data -- use unspecified code 01FC */
-    0x00, 0x33, 0x00, 0x26, 0x00, 0x24,
-    0x01, 0xfc, 
-    0x00, 0x20,
-    0x78, 0xe5, 0x89, 0x74, 0x13, 0xf1, 0x71, 0x53, 0xc7, 0x0c, 0xf3, 0x3f,
-    0xa3, 0x4c, 0x84, 0x97, 0x72, 0x4b, 0xda, 0xb4, 0xf5, 0x7f, 0x9d, 0x01,
-    0xc9, 0x53, 0xf5, 0x88, 0xf0, 0x30, 0x46, 0x61,
-    /* Extension type 43, supported_versions, 7 bytes */
-    /* (TODO: update from 0x7F-0x17 to next supported draft) */
-    0x00, 0x2b, 0x00, 0x03, 0x02, 0x7f, 0x1c,
-    /* Extension type 13, signature_algorithms, 36 bytes */
-    0x00, 0x0d, 0x00, 0x20, 0x00, 0x1e,
-    0x04, 0x03, 0x05, 0x03, 0x06, 0x03, 0x02, 0x03, 0x08, 0x04, 0x08, 0x05,
-    0x08, 0x06, 0x04, 0x01, 0x05, 0x01, 0x06, 0x01, 0x02, 0x01, 0x04, 0x02,
-    0x05, 0x02, 0x06, 0x02, 0x02, 0x02,
-    /* Extension type 45, psk_key_exchange_modes, 6 bytes */
-    0x00, 0x2d, 0x00, 0x02, 0x01, 0x01,
-    /* Extension type 26, QUIC transport parameters, 58 bytes */
-    0x00, 0x1a, 0x00, 0x36,
-    0xff, 0x00, 0x00, 0x08, 0x00, 0x30, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00,
-    0xff, 0xff, 0x00, 0x01, 0x00, 0x04, 0x00, 0x10, 0x00, 0x00, 0x00, 0x02,
-    0x00, 0x04, 0x00, 0x00, 0xff, 0xfd, 0x00, 0x03, 0x00, 0x02, 0x00, 0x1e,
-    0x00, 0x04, 0x00, 0x00, 0x00, 0x05, 0x00, 0x02, 0x05, 0xc8, 0x00, 0x08,
-    0x00, 0x04, 0x00, 0x00, 0xff, 0xff
-};
-
-int wrong_keyshare_test()
-{
-    picoquic_quic_t* qserver = NULL;
-    picoquic_cnx_t* cnx;
-    test_api_callback_t server_callback;
-    uint64_t simulated_time = 0;
-    picoquic_connection_id_t cnx_id; 
-    struct sockaddr_in addr_from;
-    int ret = 0;
-
-    /* TODO: find a better way to initialize CID from value */
-    picoquic_set64_connection_id(&cnx_id,0x0102030405060708ull);
-
-    qserver = picoquic_create(8,
-        PICOQUIC_TEST_SERVER_CERT, PICOQUIC_TEST_SERVER_KEY, PICOQUIC_TEST_CERT_STORE,
-        PICOQUIC_TEST_ALPN, test_api_callback, (void*)&server_callback, NULL, NULL, NULL,
-        simulated_time, &simulated_time, NULL,
-        test_ticket_encrypt_key, sizeof(test_ticket_encrypt_key));
-
-    if (qserver == NULL) {
-        DBG_PRINTF("%s", "Could not create Quic Server context.\n");
-        ret = -1;
-    } else {
-        /* Simulate an incoming client initial packet */
-        memset(&addr_from, 0, sizeof(struct sockaddr_in));
-        addr_from.sin_family = AF_INET;
-#ifdef _WINDOWS
-        addr_from.sin_addr.S_un.S_addr = 0x0A000001;
-#else
-        addr_from.sin_addr.s_addr = 0x0A000001;
-#endif
-        addr_from.sin_port = 4321;
-
-        cnx = picoquic_create_cnx(qserver, cnx_id, cnx_id,
-            (struct sockaddr*)&addr_from, simulated_time,
-            PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, NULL, 0);
-
-        if (cnx == NULL) {
-            DBG_PRINTF("%s", "Could not create Quic connection context.\n");
-            ret = -1;
-        }
-    }
-
-    if (ret == 0) {
-        ret = picoquic_decode_frames(cnx,
-            clientHelloWrongKeyShare, sizeof(clientHelloWrongKeyShare), 
-            0 /* epoch = 0 for CI */, simulated_time);
-
-        /* processing of client initial packet */
-        if (ret == 0) {
-            /* We do expect that the server will be ready to send an HRR */
-            ret = picoquic_tls_stream_process(cnx);
-
-            if (cnx->cnx_state != picoquic_state_server_send_hrr) {
-                DBG_PRINTF("State is %d instead of server_send-hrr\n", cnx->cnx_state);
-                ret = -1;
-            } else {
-                /* check that the message queue on stream 0 is proper HRR */
-                if (cnx->tls_stream.send_queue == NULL || cnx->tls_stream.send_queue->length == 0 || cnx->tls_stream.send_queue->bytes == NULL) {
-                    DBG_PRINTF("%s,", "Empty TLS queue, length or bytes\n");
-                    ret = -1;
-                } else if (cnx->tls_stream.send_queue->length <= 49 || cnx->tls_stream.send_queue->bytes[0] != 0x02 ) {
-                    DBG_PRINTF("Wrong length (%d <= 49), bytes[0] (0x%02x vs 0x02)\n",
-                        cnx->tls_stream.send_queue->length, cnx->tls_stream.send_queue->bytes[0], cnx->tls_stream.send_queue->bytes[5]);
-                    ret = -1;
-                }
-            }
-        }
-        else {
-            DBG_PRINTF("Could not parse client hello frame, ret = %d\n", ret);
-        }
-
-        if (ret == 0) {
-            /* Simulate preparing an HRR */
-            picoquic_packet_header ph;
-            picoquic_stateless_packet_t* sp = NULL;
-
-            memset(&ph, 0, sizeof(ph));
-            ph.dest_cnx_id = cnx_id;
-            ph.srce_cnx_id = picoquic_null_connection_id;
-            ph.vn = PICOQUIC_INTERNAL_TEST_VERSION_1;
-
-            picoquic_queue_stateless_reset(cnx, &ph,
-                (struct sockaddr*)&addr_from,
-                (struct sockaddr*)&addr_from, 0, simulated_time);
-
-            cnx->cnx_state = picoquic_state_disconnected;
-
-            sp = picoquic_dequeue_stateless_packet(qserver);
-
-            if (sp == NULL) {
-                DBG_PRINTF("%s", "Stateless packet queue is empty\n");
-                ret = -1;
-            } else {
-                picoquic_delete_stateless_packet(sp);
-            }
-        }
-    }
-
-    if (qserver != NULL) {
-        picoquic_free(qserver);
-    }
-
-    return ret;
-}
-#endif
-
-#if 0
-/*
-* Test whether the server correctly sends an HRR in response to a
-* Client Hello proposing an unsupported key share.
-*/
-
-static uint8_t clientHelloWrongTls[] = {
-    /* TLS Stream header, including length */
-    0x18, 0x00, 0x41, 0x24,
-    /* Handshake protocol header for CH, end with 3 bytes length */
-    0x01, 0x00, 0x01, 0x20,
-    /* CH length 73 + extensions 209 = 282, 0x0120 */
-    /* Legacy version ID*/
-    0x03, 0x03,
-    /* Client random, 32 bytes*/
-    0xc4, 0xe2, 0xea, 0xb7, 0xcc, 0x4b, 0xbb, 0x43, 0x7d, 0xfa,
-    0xb4, 0x7c, 0xa5, 0x6a, 0xf8, 0xa0, 0xdb, 0x07, 0x2b, 0x90,
-    0xa4, 0x9f, 0xac, 0x89, 0x84, 0x9c, 0x10, 0xb2, 0xa5, 0x6a,
-    0x7d, 0xfa,
-    /* Legacy session ID l=32 + 32 bytes */
-    0x20,
-    0xf8, 0xa0, 0xdb, 0x07, 0x2b, 0x90, 0xe5, 0x36, 0xf9, 0xc4,
-    0xa4, 0x9f, 0xac, 0x89, 0x84, 0x9c, 0x10, 0xb2, 0xa5, 0x6a,
-    0xb4, 0x7c, 0xa5, 0x6a, 0xf8, 0xa0, 0xdb, 0x07, 0x2b, 0x90,
-    0x7d, 0xfa,
-    /* Cipher suites */
-    0x00, 0x06, 0x13, 0x01, 0x13, 0x03, 0x13, 0x02,
-    /* Legacy compression methods */
-    0x01, 0x00,
-    /* End of CH after extension length */
-    0x00, 0xd1,
-    /* Series of extenstion, 2 bytes type + 2 bytes length, total = 209 */
-    /* Extension type 0, SNI, 15 bytes */
-    0x00, 0x00, 0x00, 0x0b,
-    0x00, 0x09, 0x00, 0x00, 0x06, 0x73, 0x65, 0x72, 0x76, 0x65, 0x72,
-    /* Extension type 16, ALPN, 12 bytes */
-    /* TODO: update hq-09 to supported version */
-    0x00, 0x10, 0x00, 0x08,
-    0x00, 0x06, 0x05, 0x68, 0x71, 0x2d, 0x30, 0x39,
-    /* Some extended value, 5 bytes */
-    0xff, 0x01, 0x00, 0x01, 0x00,
-    /* Extension type 10, Supported groups, 24 bytes */
-    0x00, 0x0a, 0x00, 0x14, 0x00, 0x12,
-    0x00, 0x1d, 0x00, 0x17, 0x00, 0x18, 0x00, 0x19, 0x01, 0x00, 0x01, 0x01,
-    0x01, 0x02, 0x01, 0x03, 0x01, 0x04,
-    /* Extension type 35, 4 bytes. */
-    0x00, 0x23, 0x00, 0x00,
-    /* Extension type 51, key share, 42 bytes for X25519 */
-    0x00, 0x33, 0x00, 0x26, 0x00, 0x24,
-    0x00, 0x1d,
-    0x00, 0x20,
-    0x78, 0xe5, 0x89, 0x74, 0x13, 0xf1, 0x71, 0x53, 0xc7, 0x0c, 0xf3, 0x3f,
-    0xa3, 0x4c, 0x84, 0x97, 0x72, 0x4b, 0xda, 0xb4, 0xf5, 0x7f, 0x9d, 0x01,
-    0xc9, 0x53, 0xf5, 0x88, 0xf0, 0x30, 0x46, 0x61,
-    /* Extension type 43, supported_versions, 7 bytes */
-    /* (TODO: update from 0x7F-0x17 to next supported draft) */
-    0x00, 0x2b, 0x00, 0x03, 0x02, 0x7f, 0x11,
-    /* Extension type 13, signature_algorithms, 36 bytes */
-    0x00, 0x0d, 0x00, 0x20, 0x00, 0x1e,
-    0x04, 0x03, 0x05, 0x03, 0x06, 0x03, 0x02, 0x03, 0x08, 0x04, 0x08, 0x05,
-    0x08, 0x06, 0x04, 0x01, 0x05, 0x01, 0x06, 0x01, 0x02, 0x01, 0x04, 0x02,
-    0x05, 0x02, 0x06, 0x02, 0x02, 0x02,
-    /* Extension type 45, psk_key_exchange_modes, 6 bytes */
-    0x00, 0x2d, 0x00, 0x02, 0x01, 0x01,
-    /* Extension type 26, QUIC transport parameters, 58 bytes */
-    0x00, 0x1a, 0x00, 0x36,
-    0xff, 0x00, 0x00, 0x08, 0x00, 0x30, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00,
-    0xff, 0xff, 0x00, 0x01, 0x00, 0x04, 0x00, 0x10, 0x00, 0x00, 0x00, 0x02,
-    0x00, 0x04, 0x00, 0x00, 0xff, 0xfd, 0x00, 0x03, 0x00, 0x02, 0x00, 0x1e,
-    0x00, 0x04, 0x00, 0x00, 0x00, 0x05, 0x00, 0x02, 0x05, 0xc8, 0x00, 0x08,
-    0x00, 0x04, 0x00, 0x00, 0xff, 0xff
-};
-
-int wrong_tls_version_test()
-{
-    picoquic_quic_t* qserver = NULL;
-    picoquic_cnx_t* cnx;
-    test_api_callback_t server_callback;
-    uint64_t simulated_time = 0;
-    picoquic_connection_id_t cnx_id;
-    struct sockaddr_in addr_from;
-    int ret = 0;
-
-    /* TODO: find a better way to initialize CID from value */
-    picoquic_set64_connection_id(&cnx_id, 0x0102030405060708ull);
-
-    qserver = picoquic_create(8,
-        PICOQUIC_TEST_SERVER_CERT, PICOQUIC_TEST_SERVER_KEY, PICOQUIC_TEST_CERT_STORE,
-        PICOQUIC_TEST_ALPN, test_api_callback, (void*)&server_callback, NULL, NULL, NULL,
-        simulated_time, &simulated_time, NULL,
-        test_ticket_encrypt_key, sizeof(test_ticket_encrypt_key));
-
-    if (qserver == NULL) {
-        ret = -1;
-    }
-    else {
-        /* Simulate an incoming client initial packet */
-        memset(&addr_from, 0, sizeof(struct sockaddr_in));
-        addr_from.sin_family = AF_INET;
-#ifdef _WINDOWS
-        addr_from.sin_addr.S_un.S_addr = 0x0A000001;
-#else
-        addr_from.sin_addr.s_addr = 0x0A000001;
-#endif
-        addr_from.sin_port = 4321;
-
-        cnx = picoquic_create_cnx(qserver, cnx_id, cnx_id,
-            (struct sockaddr*)&addr_from, simulated_time,
-            PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, NULL, 0);
-
-        if (cnx == NULL) {
-            ret = -1;
-        }
-    }
-
-    if (ret == 0) {
-        ret = picoquic_decode_frames(cnx,
-            clientHelloWrongTls, sizeof(clientHelloWrongTls), 0 /* epoch = 0 for CI */, simulated_time);
-
-        /* processing of client initial packet */
-        if (ret == 0) {
-            /* We do expect that the server will be ready to send an HRR */
-            ret = picoquic_tls_stream_process(cnx);
-
-            if (ret != 0) {
-                DBG_PRINTF("Wrong TLS Hello process return code %x\n", ret);
-                ret = -1;
-            } else if (cnx->cnx_state != picoquic_state_handshake_failure) {
-                DBG_PRINTF("Unexpected state %d after wrong TLS Hello process return code %x\n", cnx->cnx_state);
-                ret = -1;
-            } 
-        }
-    }
-
-    if (qserver != NULL) {
-        picoquic_free(qserver);
-    }
-
-    return ret;
-}
-#endif
-
 /*
 * Set up a connection, and verify
 * that the key generated for PN encryption on
@@ -4285,6 +3955,311 @@ int initial_close_test()
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+/*
+ * Test that rotated keys are computed in a compatible way on client and server.
+ */
+
+static int aead_iv_check(void * aead1, void * aead2)
+{
+    int ret = 0; 
+    ptls_aead_context_t *ctx1 = (ptls_aead_context_t *)aead1;
+    ptls_aead_context_t *ctx2 = (ptls_aead_context_t *)aead2;
+
+    if (memcmp(ctx1->static_iv, ctx2->static_iv, ctx1->algo->iv_size) != 0) {
+        ret = -1;
+    }
+    return ret;
+}
+
+
+static int pn_enc_check(void * pn1, void * pn2)
+{
+    int ret = 0;
+    uint8_t seed[16] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
+    uint8_t pn[4] = { 0, 1, 2 ,3 };
+    uint8_t pn_enc[4];
+    uint8_t pn_dec[4];
+
+    picoquic_pn_encrypt(pn1, seed, pn_enc, pn, 4);
+    picoquic_pn_encrypt(pn2, seed, pn_dec, pn_enc, 4);
+
+    if (memcmp(pn_dec, pn, 4) != 0) {
+        ret = -1;
+    }
+    return ret;
+}
+
+int new_rotated_key_test()
+{
+    uint64_t loss_mask = 0;
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    if (ret == 0) {
+        ret = wait_application_pn_enc_ready(test_ctx, &simulated_time);
+    }
+
+
+    for (int i = 1; ret == 0 && i <= 3; i++) {
+        if (ret == 0)
+        {
+            /* Try to compute rotated keys on server */
+            ret = picoquic_compute_new_rotated_keys(test_ctx->cnx_server);
+            if (ret != 0) {
+                DBG_PRINTF("Could not rotate server key, ret: %x\n", ret);
+            }
+        }
+
+        if (ret == 0)
+        {
+            /* Try to compute rotated keys on client */
+            ret = picoquic_compute_new_rotated_keys(test_ctx->cnx_client);
+            if (ret != 0) {
+                DBG_PRINTF("Could not rotate server key, round %d, ret: %x\n", i, ret);
+            }
+        }
+
+        if (ret == 0)
+        {
+            /* Compare server encryption and client decryption */
+            size_t key_size = picoquic_get_app_secret_size(test_ctx->cnx_client);
+
+            if (key_size != picoquic_get_app_secret_size(test_ctx->cnx_server)) {
+                DBG_PRINTF("Round %d. Key sizes dont match, client: %d, server: %d\n", i, key_size, picoquic_get_app_secret_size(test_ctx->cnx_server));
+                ret = -1;
+            }
+            else if (memcmp(picoquic_get_app_secret(test_ctx->cnx_server, 1), picoquic_get_app_secret(test_ctx->cnx_client, 0), key_size) != 0) {
+                DBG_PRINTF("Round %d. Server encryption secret does not match client decryption secret\n", i);
+                ret = -1;
+            }
+            else if (memcmp(picoquic_get_app_secret(test_ctx->cnx_server, 0), picoquic_get_app_secret(test_ctx->cnx_client, 1), key_size) != 0) {
+                DBG_PRINTF("Round %d. Server decryption secret does not match client encryption secret\n", i);
+                ret = -1;
+            }
+            else if (aead_iv_check(test_ctx->cnx_server->crypto_context_new.aead_encrypt, test_ctx->cnx_client->crypto_context_new.aead_decrypt) != 0) {
+                DBG_PRINTF("Round %d. Client AEAD decryption does not match server AEAD encryption.\n", i);
+                ret = -1;
+            }
+            else if (aead_iv_check(test_ctx->cnx_client->crypto_context_new.aead_encrypt, test_ctx->cnx_server->crypto_context_new.aead_decrypt) != 0) {
+                DBG_PRINTF("Round %d. Server AEAD decryption does not match cliens AEAD encryption.\n", i);
+                ret = -1;
+            }
+            else if (pn_enc_check(test_ctx->cnx_server->crypto_context_new.pn_enc, test_ctx->cnx_client->crypto_context_new.pn_dec) != 0) {
+                DBG_PRINTF("Round %d. Client PN decryption does not match server PN encryption.\n", i);
+                ret = -1;
+            }
+            else if (pn_enc_check(test_ctx->cnx_client->crypto_context_new.pn_enc, test_ctx->cnx_server->crypto_context_new.pn_dec) != 0) {
+                DBG_PRINTF("Round %d. Server PN decryption does not match client PN encryption.\n", i);
+                ret = -1;
+            }
+        }
+
+        picoquic_crypto_context_free(&test_ctx->cnx_server->crypto_context_new);
+        picoquic_crypto_context_free(&test_ctx->cnx_client->crypto_context_new);
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+
+/*
+ * Key rotation tests
+ */
+
+static int inject_false_rotation(picoquic_test_tls_api_ctx_t* test_ctx, int target_client, uint64_t simulated_time)
+{
+    /* In order to test robustness of key rotation against attacks, we inject a
+     * random packet with properly set header indication transition */
+    int ret = 0;
+    picoquic_cnx_t * cnx = (target_client) ? test_ctx->cnx_client : test_ctx->cnx_server;
+    picoquictest_sim_link_t* target_link = (target_client) ? test_ctx->s_to_c_link : test_ctx->c_to_s_link;
+    picoquictest_sim_packet_t* packet = picoquictest_sim_link_create_packet();
+
+    if (packet == NULL || cnx == NULL) {
+        ret = -1;
+    }
+    else {
+        uint64_t random_context = (0x123456789ABCDEF0ull)|cnx->pkt_ctx[picoquic_packet_context_application].send_sequence;
+        size_t byte_index = 1;
+
+        packet->bytes[0] = 0x3F | ((cnx->key_phase_dec) ? 0 : 0x40); /* Set phase to opposite of expected value */
+
+        for (uint8_t i = 0; i < cnx->path[0]->local_cnxid.id_len; i++) {
+            packet->bytes[byte_index++] = cnx->path[0]->local_cnxid.id[i];
+        }
+        picoquic_test_random_bytes(&random_context, packet->bytes + byte_index, 128u - byte_index);
+        packet->length = 128;
+
+        if (target_client) {
+            picoquic_store_addr(&packet->addr_from, (struct sockaddr *)&test_ctx->server_addr);
+            picoquic_store_addr(&packet->addr_to, (struct sockaddr *)&test_ctx->client_addr);
+        }
+        else {
+            picoquic_store_addr(&packet->addr_from, (struct sockaddr *)&test_ctx->client_addr);
+            picoquic_store_addr(&packet->addr_to, (struct sockaddr *)&test_ctx->server_addr);
+        }
+
+        picoquictest_sim_link_submit(target_link, packet, simulated_time);
+    }
+
+    return ret;
+}
+
+static int key_rotation_test_one(int inject_bad_packet)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    int nb_trials = 0;
+    int nb_inactive = 0;
+    int max_trials = 100000;
+    int nb_rotation = 0;
+    uint64_t rotation_sequence = 100;
+    uint64_t injection_sequence = 50;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = PICOQUIC_ERROR_MEMORY;
+    }
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    /* Prepare to send data */
+    if (ret == 0) {
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_very_long, sizeof(test_scenario_very_long));
+    }
+
+    /* Perform a data sending loop, during which various key rotations are tried
+     * every 100 packets or so. To test robustness, inject bogus packets that
+     * mimic a transition trigger */
+
+    while (ret == 0 && nb_trials < max_trials && nb_inactive < 256 && test_ctx->cnx_client->cnx_state == picoquic_state_client_ready && test_ctx->cnx_server->cnx_state == picoquic_state_server_ready) {
+        int was_active = 0;
+
+        nb_trials++;
+
+        if (inject_bad_packet &&
+            test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence > injection_sequence) {
+            ret = inject_false_rotation(test_ctx, inject_bad_packet >> 1, simulated_time);
+            if (ret != 0) {
+                DBG_PRINTF("Could not inject bad packet, ret = %d\n", ret);
+                break;
+            }
+            else {
+                injection_sequence += 50;
+            }
+        }
+
+        if (test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence > rotation_sequence &&
+            test_ctx->cnx_server->key_phase_enc == test_ctx->cnx_server->key_phase_dec &&
+            test_ctx->cnx_client->key_phase_enc == test_ctx->cnx_client->key_phase_dec) {
+            rotation_sequence = test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence + 100;
+            injection_sequence = test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence + 50;
+            nb_rotation++;
+            switch (nb_rotation) {
+            case 1: /* Key rotation at the client */
+                ret = picoquic_start_key_rotation(test_ctx->cnx_client);
+                break;
+            case 2: /* Key rotation at the server */
+                ret = picoquic_start_key_rotation(test_ctx->cnx_server);
+                break;
+            case 3: /* Simultaneous key rotation at the client */
+                rotation_sequence += 1000000000;
+                ret = picoquic_start_key_rotation(test_ctx->cnx_client);
+                if (ret == 0) {
+                    ret = picoquic_start_key_rotation(test_ctx->cnx_server);
+                }
+                break;
+            default:
+                break;
+            }
+
+            if (ret != 0) {
+                DBG_PRINTF("Could not start rotation #%d, ret = %x\n", nb_rotation, ret);
+            }
+        }
+
+        if (ret == 0) {
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+        }
+
+        if (ret < 0)
+        {
+            break;
+        }
+
+        if (was_active) {
+            nb_inactive = 0;
+        }
+        else {
+            nb_inactive++;
+        }
+
+        if (test_ctx->test_finished) {
+            if (picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) && picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)) {
+                break;
+            }
+        }
+    }
+
+    if (ret == 0 && nb_rotation < 3) {
+        DBG_PRINTF("Only %d key rotations completed out of 3\n", nb_rotation);
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
+
+        if (ret != 0)
+        {
+            DBG_PRINTF("Connection close returns %d\n", ret);
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+int key_rotation_test()
+{
+    int ret = key_rotation_test_one(0);
+
+    if (ret == 0) {
+        /* test rotation with injection of bad packets on client */
+        ret = key_rotation_test_one(2);
+        if (ret != 0) {
+            DBG_PRINTF("%s", "Packet injection on client defeats rotation.\n", ret);
+        }
+    }
+
+    if (ret == 0) {
+        /* test rotation with injection of bad packets on server */
+        ret = key_rotation_test_one(1);
+        if (ret != 0) {
+            DBG_PRINTF("%s", "Packet injection on server defeats rotation.\n", ret);
+        }
     }
 
     return ret;

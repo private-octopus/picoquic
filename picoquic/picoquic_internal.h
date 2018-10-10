@@ -541,6 +541,8 @@ typedef struct st_picoquic_cnx_t {
     unsigned int is_0RTT_accepted : 1; /* whether 0-RTT is accepted */
     unsigned int remote_parameters_received : 1; /* whether remote parameters where received */
     unsigned int client_mode : 1; /* Is this connection the client side? */
+    unsigned int key_phase_enc : 1; /* Key phase used in outgoing packets */
+    unsigned int key_phase_dec : 1; /* Key phase expected in incoming packets */
 
 
     /* Local and remote parameters */
@@ -577,11 +579,15 @@ typedef struct st_picoquic_cnx_t {
 
     /* TLS context, TLS Send Buffer, streams, epochs */
     void* tls_ctx;
+    uint64_t crypto_rotation_sequence;
+    uint64_t crypto_rotation_time_guard;
     struct st_ptls_buffer_t* tls_sendbuf;
     uint16_t psk_cipher_suite_id;
 
     picoquic_stream_head tls_stream[PICOQUIC_NUMBER_OF_EPOCHS]; /* Separate input/output from each epoch */
     picoquic_crypto_context_t crypto_context[PICOQUIC_NUMBER_OF_EPOCHS]; /* Encryption and decryption objects */
+    picoquic_crypto_context_t crypto_context_old; /* Old encryption and decryption context after key rotation */
+    picoquic_crypto_context_t crypto_context_new; /* New encryption and decryption context just before key rotation */
 
     /* Liveness detection */
     uint64_t latest_progress_time; /* last local time at which the connection progressed */
@@ -698,7 +704,7 @@ picoquic_cnx_t* picoquic_cnx_by_id(picoquic_quic_t* quic, picoquic_connection_id
 picoquic_cnx_t* picoquic_cnx_by_net(picoquic_quic_t* quic, struct sockaddr* addr);
 
 int picoquic_retrieve_by_cnx_id_or_net_id(picoquic_quic_t* quic, picoquic_connection_id_t* cnx_id,
-    struct sockaddr* addr, picoquic_cnx_t ** pcnx, picoquic_path_t * path);
+    struct sockaddr* addr, picoquic_cnx_t ** pcnx);
 
 /* Reset the pacing data after CWIN is updated */
 void picoquic_update_pacing_data(picoquic_path_t * path_x);
@@ -749,6 +755,7 @@ typedef struct _picoquic_packet_header {
     int version_index;
     int epoch;
     picoquic_packet_context_enum pc;
+    unsigned int key_phase : 1;
     unsigned int spin : 1;
     unsigned int spin_vec : 2;
     unsigned int has_spin_bit : 1;
@@ -802,7 +809,7 @@ int picoquic_parse_ack_header(
 uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t pn);
 
 size_t  picoquic_decrypt_packet(picoquic_cnx_t* cnx,
-    uint8_t* bytes, size_t length, picoquic_packet_header* ph,
+    uint8_t* bytes, picoquic_packet_header* ph,
     void * pn_enc, void* aead_context, int * already_received);
 
 uint32_t picoquic_protect_packet(picoquic_cnx_t* cnx,
@@ -941,13 +948,6 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
 
 int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mode,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
-
-/* Queue stateless reset */
-void picoquic_queue_stateless_reset(picoquic_cnx_t* cnx,
-    picoquic_packet_header* ph, struct sockaddr* addr_from,
-    struct sockaddr* addr_to,
-    unsigned long if_index_to,
-    uint64_t current_time);
 
 picoquic_misc_frame_header_t* picoquic_create_misc_frame(const uint8_t* bytes, size_t length);
 
