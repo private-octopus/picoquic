@@ -866,7 +866,7 @@ size_t picoquic_log_new_connection_id_frame(FILE* F, uint8_t* bytes, size_t byte
 size_t picoquic_log_retire_connection_id_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
 {
     size_t byte_index = 1;
-    uint64_t sequence;
+    uint64_t sequence = 0;
     size_t l_seq = 0;
 
 

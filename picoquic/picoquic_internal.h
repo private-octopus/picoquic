@@ -704,7 +704,7 @@ picoquic_cnx_t* picoquic_cnx_by_id(picoquic_quic_t* quic, picoquic_connection_id
 picoquic_cnx_t* picoquic_cnx_by_net(picoquic_quic_t* quic, struct sockaddr* addr);
 
 int picoquic_retrieve_by_cnx_id_or_net_id(picoquic_quic_t* quic, picoquic_connection_id_t* cnx_id,
-    struct sockaddr* addr, picoquic_cnx_t ** pcnx, picoquic_path_t * path);
+    struct sockaddr* addr, picoquic_cnx_t ** pcnx);
 
 /* Reset the pacing data after CWIN is updated */
 void picoquic_update_pacing_data(picoquic_path_t * path_x);
@@ -809,7 +809,7 @@ int picoquic_parse_ack_header(
 uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t pn);
 
 size_t  picoquic_decrypt_packet(picoquic_cnx_t* cnx,
-    uint8_t* bytes, size_t length, picoquic_packet_header* ph,
+    uint8_t* bytes, picoquic_packet_header* ph,
     void * pn_enc, void* aead_context, int * already_received);
 
 uint32_t picoquic_protect_packet(picoquic_cnx_t* cnx,

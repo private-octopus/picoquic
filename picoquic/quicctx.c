@@ -1944,7 +1944,7 @@ picoquic_cnx_t* picoquic_cnx_by_net(picoquic_quic_t* quic, struct sockaddr* addr
 }
 
 int picoquic_retrieve_by_cnx_id_or_net_id(picoquic_quic_t * quic, picoquic_connection_id_t * cnx_id, 
-    struct sockaddr * addr, picoquic_cnx_t ** pcnx, picoquic_path_t * path)
+    struct sockaddr * addr, picoquic_cnx_t ** pcnx)
 {
     if (cnx_id->id_len > 0) {
         *pcnx = picoquic_cnx_by_id(quic, *cnx_id);

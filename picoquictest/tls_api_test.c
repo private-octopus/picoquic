@@ -3973,7 +3973,7 @@ static int aead_iv_check(void * aead1, void * aead2)
     if (memcmp(ctx1->static_iv, ctx2->static_iv, ctx1->algo->iv_size) != 0) {
         ret = -1;
     }
-    return;
+    return ret;
 }
 
 

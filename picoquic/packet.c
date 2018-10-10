@@ -328,7 +328,7 @@ uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t 
  * sequence number and the offset 
  */
 size_t  picoquic_decrypt_packet(picoquic_cnx_t* cnx,
-    uint8_t* bytes, size_t packet_length, picoquic_packet_header* ph, 
+    uint8_t* bytes, picoquic_packet_header* ph, 
     void * pn_enc, void* aead_context, int * already_received)
 {
     size_t decoded;
@@ -468,7 +468,7 @@ int picoquic_parse_header_and_decrypt(
                 /* Packet is not encrypted */
                 break;
             case picoquic_packet_initial:
-                decoded_length = picoquic_decrypt_packet(*pcnx, bytes, packet_length, ph,
+                decoded_length = picoquic_decrypt_packet(*pcnx, bytes, ph,
                     (*pcnx)->crypto_context[0].pn_dec,
                     (*pcnx)->crypto_context[0].aead_decrypt, &already_received);
                 length = ph->offset + ph->payload_length;
@@ -482,19 +482,19 @@ int picoquic_parse_header_and_decrypt(
                 decoded_length = ph->payload_length;
                 break;
             case picoquic_packet_handshake:
-                decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph,
+                decoded_length = picoquic_decrypt_packet(*pcnx, bytes, ph,
                     (*pcnx)->crypto_context[2].pn_dec,
                     (*pcnx)->crypto_context[2].aead_decrypt, &already_received);
                 break;
             case picoquic_packet_0rtt_protected:
-                decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph,
+                decoded_length = picoquic_decrypt_packet(*pcnx, bytes, ph,
                     (*pcnx)->crypto_context[1].pn_dec,
                     (*pcnx)->crypto_context[1].aead_decrypt, &already_received);
                 break;
             case picoquic_packet_1rtt_protected:
                 if (ph->key_phase == (*pcnx)->key_phase_dec) {
                     /* AEAD Decrypt, in place */
-                    decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph,
+                    decoded_length = picoquic_decrypt_packet(*pcnx, bytes, ph,
                         (*pcnx)->crypto_context[3].pn_dec,
                         (*pcnx)->crypto_context[3].aead_decrypt, &already_received);
                 }
@@ -504,7 +504,7 @@ int picoquic_parse_header_and_decrypt(
                         current_time < (*pcnx)->crypto_rotation_time_guard)
                     {
                         /* If there is an old key available, try decrypt with it */
-                        decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph,
+                        decoded_length = picoquic_decrypt_packet(*pcnx, bytes, ph,
                             (*pcnx)->crypto_context_old.pn_dec,
                             (*pcnx)->crypto_context_old.aead_decrypt, &already_received);
 
@@ -527,7 +527,7 @@ int picoquic_parse_header_and_decrypt(
                             (*pcnx)->crypto_context_new.pn_dec != NULL)
                         {
                             /* If there is an old key available, try decrypt with it */
-                            decoded_length = picoquic_decrypt_packet(*pcnx, bytes, length, ph,
+                            decoded_length = picoquic_decrypt_packet(*pcnx, bytes, ph,
                                 (*pcnx)->crypto_context_new.pn_dec,
                                 (*pcnx)->crypto_context_new.aead_decrypt, &already_received);
 
@@ -835,12 +835,12 @@ int picoquic_incoming_initial(
         uint8_t token[1 + PICOQUIC_CONNECTION_ID_MAX_SIZE + 16];
 
         /* Does the token contain a valid CID? */
-        if (ph->token_length > 1 + 8) {
+        if (ph->token_length > 1u + 8u) {
             cid_len = *(bytes + ph->token_offset);
             if (cid_len < 8 && cid_len > PICOQUIC_CONNECTION_ID_MAX_SIZE) {
                 cid_len = 0;
             }
-            else if (cid_len + 1 + 16 != ph->token_length) {
+            else if (cid_len + 1u + 16u != ph->token_length) {
                 cid_len = 0;
             }
         }
@@ -869,7 +869,7 @@ int picoquic_incoming_initial(
         }
 
         if (!is_token_ok) {
-            uint8_t token_length = 1 + ph->dest_cnx_id.id_len + 16;
+            uint32_t token_length = 1u + ph->dest_cnx_id.id_len + 16u;
 
             if (picoquic_get_retry_token((*pcnx)->quic, base, len, ph->dest_cnx_id.id, ph->dest_cnx_id.id_len,
                 token, token_length) != 0)
