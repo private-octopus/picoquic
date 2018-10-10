@@ -221,6 +221,19 @@ uint64_t picoquic_test_random(uint64_t * random_context)
     return z ^ (z >> 31);
 }
 
+void picoquic_test_random_bytes(uint64_t * random_context, uint8_t * bytes, size_t bytes_max)
+{
+    size_t byte_index = 0;
+
+    while (byte_index < bytes_max) {
+        uint64_t v = picoquic_test_random(random_context);
+
+        for (int i = 0; i < 8 && byte_index < bytes_max; i++) {
+            bytes[byte_index++] = v & 0xFF;
+            v >>= 8;
+        }
+    }
+}
 
 uint64_t picoquic_test_uniform_random(uint64_t * random_context, uint64_t rnd_max)
 {

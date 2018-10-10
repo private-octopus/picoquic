@@ -4081,8 +4081,46 @@ int new_rotated_key_test()
  * Key rotation tests
  */
 
+static int inject_false_rotation(picoquic_test_tls_api_ctx_t* test_ctx, int target_client, uint64_t simulated_time)
+{
+    /* In order to test robustness of key rotation against attacks, we inject a
+     * random packet with properly set header indication transition */
+    int ret = 0;
+    picoquic_cnx_t * cnx = (target_client) ? test_ctx->cnx_client : test_ctx->cnx_server;
+    picoquictest_sim_link_t* target_link = (target_client) ? test_ctx->s_to_c_link : test_ctx->c_to_s_link;
+    picoquictest_sim_packet_t* packet = picoquictest_sim_link_create_packet();
 
-int key_rotation_test()
+    if (packet == NULL || cnx == NULL) {
+        ret = -1;
+    }
+    else {
+        uint64_t random_context = (0x123456789ABCDEF0ull)|cnx->pkt_ctx[picoquic_packet_context_application].send_sequence;
+        size_t byte_index = 1;
+
+        packet->bytes[0] = 0x3F | ((cnx->key_phase_dec) ? 0 : 0x40); /* Set phase to opposite of expected value */
+
+        for (uint8_t i = 0; i < cnx->path[0]->local_cnxid.id_len; i++) {
+            packet->bytes[byte_index++] = cnx->path[0]->local_cnxid.id[i];
+        }
+        picoquic_test_random_bytes(&random_context, packet->bytes + byte_index, 128u - byte_index);
+        packet->length = 128;
+
+        if (target_client) {
+            picoquic_store_addr(&packet->addr_from, (struct sockaddr *)&test_ctx->server_addr);
+            picoquic_store_addr(&packet->addr_to, (struct sockaddr *)&test_ctx->client_addr);
+        }
+        else {
+            picoquic_store_addr(&packet->addr_from, (struct sockaddr *)&test_ctx->client_addr);
+            picoquic_store_addr(&packet->addr_to, (struct sockaddr *)&test_ctx->server_addr);
+        }
+
+        picoquictest_sim_link_submit(target_link, packet, simulated_time);
+    }
+
+    return ret;
+}
+
+static int key_rotation_test_one(int inject_bad_packet)
 {
     uint64_t loss_mask_data = 0;
     uint64_t simulated_time = 0;
@@ -4093,6 +4131,7 @@ int key_rotation_test()
     int max_trials = 100000;
     int nb_rotation = 0;
     uint64_t rotation_sequence = 100;
+    uint64_t injection_sequence = 50;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
@@ -4111,19 +4150,29 @@ int key_rotation_test()
     }
 
     /* Perform a data sending loop, during which various key rotations are tried
-     * every 100 packets or so */
+     * every 100 packets or so. To test robustness, inject bogus packets that
+     * mimic a transition trigger */
 
     while (ret == 0 && nb_trials < max_trials && nb_inactive < 256 && test_ctx->cnx_client->cnx_state == picoquic_state_client_ready && test_ctx->cnx_server->cnx_state == picoquic_state_server_ready) {
         int was_active = 0;
 
         nb_trials++;
 
-        if (test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence > rotation_sequence &&
-            test_ctx->cnx_server->crypto_context_new.aead_decrypt == NULL &&
-            test_ctx->cnx_server->crypto_context_new.aead_encrypt == NULL && 
-            test_ctx->cnx_server->crypto_context_new.pn_enc == NULL && 
-            test_ctx->cnx_server->crypto_context_new.pn_dec == NULL) {
+        if (inject_bad_packet &&
+            test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence > injection_sequence) {
+            ret = inject_false_rotation(test_ctx, inject_bad_packet >> 1, simulated_time);
+            if (ret != 0) {
+                DBG_PRINTF("Could not inject bad packet, ret = %d\n", ret);
+                break;
+            }
+            else {
+                injection_sequence += 50;
+            }
+        }
+
+        if (test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence > rotation_sequence) {
             rotation_sequence = test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence + 100;
+            injection_sequence = test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence + 50;
             nb_rotation++;
             switch (nb_rotation) {
             case 1: /* Key rotation at the client */
@@ -4182,6 +4231,29 @@ int key_rotation_test()
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+int key_rotation_test()
+{
+    int ret = key_rotation_test_one(0);
+
+    if (ret == 0) {
+        /* test rotation with injection of bad packets on client */
+        ret = key_rotation_test_one(2);
+        if (ret != 0) {
+            DBG_PRINTF("%s", "Packet injection on client defeats rotation.\n", ret);
+        }
+    }
+
+    if (ret == 0) {
+        /* test rotation with injection of bad packets on server */
+        ret = key_rotation_test_one(1);
+        if (ret != 0) {
+            DBG_PRINTF("%s", "Packet injection on server defeats rotation.\n", ret);
+        }
     }
 
     return ret;
