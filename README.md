@@ -23,7 +23,7 @@ at https://github.com/quicwg/base-drafts/wiki/Implementations. The current
 interoperability matrix is listed at
 https://docs.google.com/spreadsheets/d/1D0tW89vOoaScs3IY9RGC0UesWGAwE6xyLk0l4JtvTVg/edit#gid=273618597.
 
-Bastian Köcher has developed bindings of the picoquic library to RUST (https://www.rust-lang.org/en-US/). 
+Bastian KÃ¶cher has developed bindings of the picoquic library to RUST (https://www.rust-lang.org/en-US/). 
 His repository can be found here: https://github.com/bkchr/picoquic-rs.
 You may want to check it.
 
@@ -49,9 +49,9 @@ builds, the tests are run through a command line program.
 As explained in the Wiki, Picoquic is actively tested against other implementations
 during the QUIC Interop days. See https://github.com/private-octopus/picoquic/wiki/QUIC-milestones-and-interop-testing.
 
-The current version is aligned with draft 14. Most big features are now tested, including
+The current version is aligned with draft 15. Most big features are now tested, including
 the revised interface between QUIC and TLS, but we still have to fully develop and 
-test connection migration. At this stage we only support NAT rebinding.
+test key rollover.
 
 In parallel, we still plan to do an implementation
 of DNS over QUIC (https://datatracker.ietf.org/doc/draft-huitema-quic-dnsoquic/).
@@ -67,7 +67,7 @@ Picoquic is developed in C, and can be built under Windows or Linux. Building th
 project requires first managing the dependencies, Picotls (https://github.com/h2o/picotls)
 and OpenSSL. Please note that you will need a recent version of Picotls --
 the TLS API depends on commits from Aug 14, 2018, and the support for the
-final version of TLS 1.3 (RFC 8446) depends on commits from Augst 22, 2018.
+EOED removal extension of TLS 1.3 depends on commits from Oct 4, 2018.
 
 ## Picoquic on Windows
 
@@ -124,12 +124,9 @@ release. The sources are in "picoquicfirst/picoquicdemo.c".
 The code is constantly updated to track the latest version of the specification. When we can,
 we maintain compatibility with previous drafts, so as to facilitate interop testing with
 other implementations. But some version changes will change the wire format or the encryption
-code in incompatible ways. That's the reason why we don't support draft-05 or draft-07 anymore,
-and why we will very soon stop supporting draft-09.
-
-Since some implementations are still testing draft-09, we have created a draft-09-support branch.
-Download that if you want to test this old version.
-
+code in incompatible ways. That's the reason why we only support draft-15 at this stage,
+although both the client and server can be launched in draft-14 compatibility mode,
+using the option "-v FF00000E".
 
 
 
