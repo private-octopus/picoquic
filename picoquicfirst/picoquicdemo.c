@@ -395,7 +395,7 @@ int quic_server(const char* server_name, int server_port,
     const char* pem_cert, const char* pem_key,
     int just_once, int do_hrr, cnx_id_cb_fn cnx_id_callback,
     void* cnx_id_callback_ctx, uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE],
-    int mtu_max, uint32_t proposed_version)
+    int dest_if, int mtu_max, uint32_t proposed_version)
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
@@ -514,7 +514,7 @@ int quic_server(const char* server_name, int server_port,
                         (sp->addr_to.ss_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6),
                         (struct sockaddr*)&sp->addr_local,
                         (sp->addr_local.ss_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6),
-                        sp->if_index_local,
+                        dest_if == -1 ? sp->if_index_local : dest_if,
                         (const char*)sp->bytes, (int)sp->length);
 
                     /* TODO: log stateless packet */
@@ -565,7 +565,7 @@ int quic_server(const char* server_name, int server_port,
 
                             (void)picoquic_send_through_server_sockets(&server_sockets,
                                 peer_addr, peer_addr_len, local_addr, local_addr_len,
-                                picoquic_get_local_if_index(cnx_next),
+                                dest_if == -1 ? picoquic_get_local_if_index(cnx_next) : dest_if,
                                 (const char*)send_buffer, (int)send_length);
                         }
                     } else {
@@ -1281,6 +1281,10 @@ void usage()
     fprintf(stderr, "  -1                    Once\n");
     fprintf(stderr, "  -r                    Do Reset Request\n");
     fprintf(stderr, "  -s <64b 64b>          Reset seed\n");
+    fprintf(stderr, "  -e if                 Send on interface (default: -1)\n");
+    fprintf(stderr, "                           -1: receiving interface\n");
+    fprintf(stderr, "                            0: routing lookup\n");
+    fprintf(stderr, "                            n: ifindex\n");
     fprintf(stderr, "  -i <src mask value>   Connection ID modification: (src & ~mask) || val\n");
     fprintf(stderr, "                        Implies unconditional server cnx_id xmit\n");
     fprintf(stderr, "                          where <src> is int:\n");
@@ -1348,6 +1352,7 @@ int main(int argc, char** argv)
     };
     uint64_t* reset_seed = NULL;
     uint64_t reset_seed_x[2];
+    int dest_if = -1;
     int mtu_max = 0;
 
 #ifdef _WINDOWS
@@ -1359,7 +1364,7 @@ int main(int argc, char** argv)
 
     /* Get the parameters */
     int opt;
-    while ((opt = getopt(argc, argv, "c:k:p:v:1rhzf:i:s:l:m:n:t:")) != -1) {
+    while ((opt = getopt(argc, argv, "c:k:p:v:1rhzf:i:s:e:l:m:n:t:")) != -1) {
         switch (opt) {
         case 'c':
             server_cert_file = optarg;
@@ -1394,15 +1399,18 @@ int main(int argc, char** argv)
             reset_seed[1] = strtoul(optarg, NULL, 0);
             reset_seed[0] = strtoul(argv[optind++], NULL, 0);
             break;
+        case 'e':
+            dest_if = atoi(optarg);
+            break;
         case 'i':
-            if (optind + 1 > argc) {
+            if (optind + 2 > argc) {
                 fprintf(stderr, "option requires more arguments -- i\n");
                 usage();
             }
 
             cnx_id_cbdata.cnx_id_select = atoi(optarg);
             /* TODO: find an alternative to parsing a 64 bit integer */
-            picoquic_set64_connection_id(&cnx_id_cbdata.cnx_id_mask, ~strtoul(optarg, NULL, 0));
+            picoquic_set64_connection_id(&cnx_id_cbdata.cnx_id_mask, ~strtoul(argv[optind++], NULL, 0));
             picoquic_set64_connection_id(&cnx_id_cbdata.cnx_id_val, strtoul(argv[optind++], NULL, 0));
             cnx_id_mask_is_set = 1;
             break;
@@ -1471,7 +1479,7 @@ int main(int argc, char** argv)
             /* TODO: find an alternative to using 64 bit mask. */
             (cnx_id_mask_is_set == 0) ? NULL : cnx_id_callback,
             (cnx_id_mask_is_set == 0) ? NULL : (void*)&cnx_id_cbdata,
-            (uint8_t*)reset_seed, mtu_max, proposed_version);
+            (uint8_t*)reset_seed, dest_if, mtu_max, proposed_version);
         printf("Server exit with code = %d\n", ret);
     } else {
         FILE* F_log = NULL;
