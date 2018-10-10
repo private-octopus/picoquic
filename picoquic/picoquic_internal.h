@@ -949,13 +949,6 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
 int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mode,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
 
-/* Queue stateless reset */
-void picoquic_queue_stateless_reset(picoquic_cnx_t* cnx,
-    picoquic_packet_header* ph, struct sockaddr* addr_from,
-    struct sockaddr* addr_to,
-    unsigned long if_index_to,
-    uint64_t current_time);
-
 picoquic_misc_frame_header_t* picoquic_create_misc_frame(const uint8_t* bytes, size_t length);
 
 #define STREAM_RESET_SENT(stream) ((stream->stream_flags & picoquic_stream_flag_reset_sent) != 0)
