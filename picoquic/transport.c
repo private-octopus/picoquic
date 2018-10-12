@@ -698,7 +698,8 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     if (ret == 0 && extension_mode == 1 &&
         picoquic_supported_versions[cnx->version_index].version != PICOQUIC_SEVENTH_INTEROP_VERSION &&
         picoquic_supported_versions[cnx->version_index].version != PICOQUIC_EIGHT_INTEROP_VERSION) {
-        if (picoquic_compare_connection_id(&cnx->original_cnxid, &original_connection_id) != 0) {
+        if (cnx->original_cnxid.id_len != 0 &&
+            picoquic_compare_connection_id(&cnx->original_cnxid, &original_connection_id) != 0) {
             ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
         }
     }
