@@ -135,6 +135,28 @@ typedef enum {
 } picoquic_context_flags;
 
 /*
+* Nominal packet types. These are the packet types used internally by the
+* implementation. The wire encoding depends on the version.
+*/
+typedef enum {
+    picoquic_packet_error = 0,
+    picoquic_packet_version_negotiation,
+    picoquic_packet_initial,
+    picoquic_packet_retry,
+    picoquic_packet_handshake,
+    picoquic_packet_0rtt_protected,
+    picoquic_packet_1rtt_protected,
+    picoquic_packet_type_max
+} picoquic_packet_type_enum;
+
+typedef enum {
+    picoquic_packet_context_application = 0,
+    picoquic_packet_context_handshake = 1,
+    picoquic_packet_context_initial = 2,
+    picoquic_nb_packet_context = 3
+} picoquic_packet_context_enum;
+
+/*
  * Provisional definition of the connection ID.
  */
 #define PICOQUIC_CONNECTION_ID_MIN_SIZE 4
@@ -162,28 +184,6 @@ typedef struct st_picoquic_stateless_packet_t {
 
     uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE];
 } picoquic_stateless_packet_t;
-
-/*
-* Nominal packet types. These are the packet types used internally by the
-* implementation. The wire encoding depends on the version.
-*/
-typedef enum {
-    picoquic_packet_error = 0,
-    picoquic_packet_version_negotiation,
-    picoquic_packet_initial,
-    picoquic_packet_retry,
-    picoquic_packet_handshake,
-    picoquic_packet_0rtt_protected,
-    picoquic_packet_1rtt_protected,
-    picoquic_packet_type_max
-} picoquic_packet_type_enum;
-
-typedef enum {
-    picoquic_packet_context_application = 0,
-    picoquic_packet_context_handshake = 1,
-    picoquic_packet_context_initial = 2,
-    picoquic_nb_packet_context = 3
-} picoquic_packet_context_enum;
 
 /*
  * The simple packet structure is used to store packets that

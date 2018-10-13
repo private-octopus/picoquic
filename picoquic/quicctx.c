@@ -143,20 +143,24 @@ static uint8_t picoquic_cleartext_draft_10_salt[] = {
 
 /* Support for draft 13! */
 const picoquic_version_parameters_t picoquic_supported_versions[] = {
-    { PICOQUIC_INTERNAL_TEST_VERSION_1, 0,
+    { PICOQUIC_INTERNAL_TEST_VERSION_1,
         picoquic_version_header_13,
+        picoquic_spinbit_vec,
         sizeof(picoquic_cleartext_internal_test_1_salt),
         picoquic_cleartext_internal_test_1_salt },
-    { PICOQUIC_NINTH_INTEROP_VERSION, 0,
+    { PICOQUIC_NINTH_INTEROP_VERSION,
         picoquic_version_header_13,
+        picoquic_spinbit_vec,
         sizeof(picoquic_cleartext_draft_10_salt),
         picoquic_cleartext_draft_10_salt },
-    { PICOQUIC_EIGHT_INTEROP_VERSION, 0,
+    { PICOQUIC_EIGHT_INTEROP_VERSION,
         picoquic_version_header_13,
+        picoquic_spinbit_vec,
         sizeof(picoquic_cleartext_draft_10_salt),
         picoquic_cleartext_draft_10_salt },
-    { PICOQUIC_SEVENTH_INTEROP_VERSION, 0,
+    { PICOQUIC_SEVENTH_INTEROP_VERSION, 
         picoquic_version_header_13,
+        picoquic_spinbit_vec,
         sizeof(picoquic_cleartext_draft_10_salt),
         picoquic_cleartext_draft_10_salt }
 };

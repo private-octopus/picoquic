@@ -69,6 +69,9 @@
     <ClCompile Include="picosplay.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="spinbit.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquic.h">

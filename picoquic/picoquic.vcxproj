@@ -148,6 +148,7 @@
     <ClCompile Include="picohash.c" />
     <ClCompile Include="sacks.c" />
     <ClCompile Include="sender.c" />
+    <ClCompile Include="spinbit.c" />
     <ClCompile Include="ticket_store.c" />
     <ClCompile Include="tls_api.c" />
     <ClCompile Include="transport.c" />
