@@ -3026,8 +3026,6 @@ int spin_bit_test()
     }
 
     if (ret == 0) {
-        uint64_t spin_time_prediction = spin_count * test_ctx->cnx_client->path[0]->smoothed_rtt;
-
         if (spin_count < 6) {
             DBG_PRINTF("Unplausible spin bit: %d rotations, rtt_min = %d, duration = %d\n",
                 spin_count, (int)test_ctx->cnx_client->path[0]->rtt_min, (int)spin_duration);

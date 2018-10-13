@@ -1364,7 +1364,6 @@ int picoquic_incoming_encrypted(
     uint64_t current_time)
 {
     int ret = 0;
-    picoquic_packet_context_enum pc = ph->pc;
     int path_id = -1;
 
     /* Check the packet */
