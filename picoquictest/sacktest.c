@@ -158,8 +158,7 @@ static void ack_range_mask(uint64_t* mask, uint64_t highest, uint64_t range)
 }
 
 static int basic_ack_parse(uint8_t* bytes, size_t bytes_max,
-    struct expected_ack_t* expected_ack, uint64_t expected_mask,
-    uint32_t version_flags)
+    struct expected_ack_t* expected_ack, uint64_t expected_mask)
 {
     int ret = 0;
     size_t byte_index = 1;
@@ -297,8 +296,7 @@ int sendacktest()
             received_mask |= 1ull << (test_pn64[i] & 63);
 
             if (ret == 0) {
-                ret = basic_ack_parse(bytes, consumed, &expected_ack[i], received_mask,
-                    picoquic_supported_versions[cnx.version_index].version_flags);
+                ret = basic_ack_parse(bytes, consumed, &expected_ack[i], received_mask);
             }
 
             if (ret != 0) {

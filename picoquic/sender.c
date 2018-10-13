@@ -239,6 +239,7 @@ uint32_t picoquic_create_packet_header(
         /* Create a short packet -- using 32 bit sequence numbers for now */
         uint8_t K = (cnx->key_phase_enc) ? 0x40 : 0;
         const uint8_t C = 0x30;
+#if 0
         uint8_t spin_vec = (uint8_t)(cnx->path[0]->spin_vec);
         uint8_t spin_bit = (uint8_t)((cnx->path[0]->current_spin) << 2);
 
@@ -255,6 +256,10 @@ uint32_t picoquic_create_packet_header(
 
         length = 0;
         bytes[length++] = (K | C | spin_bit | spin_vec);
+#else
+        length = 0;
+        bytes[length++] = (K | C | picoquic_spin_function_table[picoquic_supported_versions[cnx->version_index].spinbit_version].spinbit_outgoing(cnx));
+#endif
         length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, dest_cnx_id);
 
         *pn_offset = length;

@@ -95,6 +95,28 @@ typedef enum {
     picoquic_frame_type_ack_ecn = 0x1b
 } picoquic_frame_type_enum_t;
 
+typedef struct st_picoquic_packet_header_t {
+    picoquic_connection_id_t dest_cnx_id;
+    picoquic_connection_id_t srce_cnx_id;
+    uint32_t pn;
+    uint32_t vn;
+    uint32_t offset;
+    uint32_t pn_offset;
+    picoquic_packet_type_enum ptype;
+    uint64_t pnmask;
+    uint64_t pn64;
+    uint16_t payload_length;
+    int version_index;
+    int epoch;
+    picoquic_packet_context_enum pc;
+    unsigned int key_phase : 1;
+    unsigned int spin : 1;
+    unsigned int spin_vec : 2;
+    unsigned int has_spin_bit : 1;
+    uint32_t token_length;
+    uint32_t token_offset;
+} picoquic_packet_header;
+
 /*
  * Efficient range operations that assume range containing bitfields.
  * Namely, it assumes max&min==min, min&bits==0, max&bits==bits.
@@ -121,6 +143,8 @@ typedef enum {
 
 #define PICOQUIC_INTEROP_VERSION_INDEX 1
 
+
+
 /*
  * Flags used to describe the capabilities of different versions.
  */
@@ -129,8 +153,30 @@ typedef enum {
     picoquic_version_no_flag = 0
 } picoquic_version_feature_flags;
 
+/*
+ * Spin bit management
+ * There is a spinbit version attached to the description of each QUIC version
+ * The table of functions is defined in the module "spinbit.c"
+ */
+
+typedef enum {
+    picoquic_spinbit_basic = 0,
+    picoquic_spinbit_vec = 1,
+    picoquic_spinbit_null = 2
+} picoquic_spinbit_version_enum;
+
+typedef void (*picoquic_spinbit_incoming_fn)(picoquic_cnx_t * cnx, picoquic_path_t * path_x, picoquic_packet_header * ph);
+typedef uint8_t (*picoquic_spinbit_outgoing_fn)(picoquic_cnx_t * cnx);
+
+typedef struct st_picoquic_spinbit_def_t {
+    picoquic_spinbit_incoming_fn spinbit_incoming;
+    picoquic_spinbit_outgoing_fn spinbit_outgoing;
+} picoquic_spinbit_def_t;
+
+extern picoquic_spinbit_def_t picoquic_spin_function_table[];
+
 /* 
- * Codes used for representing the various types of packet encodings
+ * Codes used for representing the various types of packet encodings.
  */
 typedef enum {
     picoquic_version_header_13
@@ -138,14 +184,15 @@ typedef enum {
 
 typedef struct st_picoquic_version_parameters_t {
     uint32_t version;
-    uint32_t version_flags;
     picoquic_version_header_encoding version_header_encoding;
+    picoquic_spinbit_version_enum spinbit_version;
     size_t version_aead_key_length;
     uint8_t* version_aead_key;
 } picoquic_version_parameters_t;
 
 extern const picoquic_version_parameters_t picoquic_supported_versions[];
 extern const size_t picoquic_nb_supported_versions;
+
 int picoquic_get_version_index(uint32_t proposed_version);
 
 /*
@@ -740,28 +787,6 @@ char* picoquic_string_create(const char* original, size_t len);
 char* picoquic_string_duplicate(const char* original);
 
 /* Packet parsing */
-
-typedef struct _picoquic_packet_header {
-    picoquic_connection_id_t dest_cnx_id;
-    picoquic_connection_id_t srce_cnx_id;
-    uint32_t pn;
-    uint32_t vn;
-    uint32_t offset;
-    uint32_t pn_offset;
-    picoquic_packet_type_enum ptype;
-    uint64_t pnmask;
-    uint64_t pn64;
-    uint16_t payload_length;
-    int version_index;
-    int epoch;
-    picoquic_packet_context_enum pc;
-    unsigned int key_phase : 1;
-    unsigned int spin : 1;
-    unsigned int spin_vec : 2;
-    unsigned int has_spin_bit : 1;
-    uint32_t token_length;
-    uint32_t token_offset;
-} picoquic_packet_header;
 
 int picoquic_parse_packet_header(
     picoquic_quic_t* quic,

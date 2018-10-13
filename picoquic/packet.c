@@ -1364,7 +1364,6 @@ int picoquic_incoming_encrypted(
     uint64_t current_time)
 {
     int ret = 0;
-    picoquic_packet_context_enum pc = ph->pc;
     int path_id = -1;
 
     /* Check the packet */
@@ -1424,6 +1423,7 @@ int picoquic_incoming_encrypted(
             if (ret == 0) {
                 picoquic_path_t * path_x = cnx->path[path_id];
 
+#if 0
                 /* Process the spin bit on this path */
                 if (ph->pn64 > cnx->pkt_ctx[pc].first_sack_item.end_of_sack_range) {
                     path_x->current_spin = ph->spin ^ cnx->client_mode;
@@ -1436,6 +1436,9 @@ int picoquic_incoming_encrypted(
                         path_x->spin_last_trigger = picoquic_get_quic_time(cnx->quic);
                     }
                 }
+#else
+                picoquic_spin_function_table[picoquic_supported_versions[cnx->version_index].spinbit_version].spinbit_incoming(cnx, path_x, ph);
+#endif
                 /* Accept the incoming frames */
                 ret = picoquic_decode_frames(cnx, cnx->path[path_id], 
                     bytes + ph->offset, ph->payload_length, ph->epoch, current_time);
