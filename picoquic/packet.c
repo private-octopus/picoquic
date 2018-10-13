@@ -772,7 +772,7 @@ void picoquic_queue_stateless_retry(picoquic_cnx_t* cnx,
 
         byte_index = header_length = picoquic_create_packet_header(cnx, picoquic_packet_retry,
             0, &cnx->path[0]->remote_cnxid, &cnx->path[0]->local_cnxid,
-            bytes, &pn_offset, &pn_length);
+            bytes, &pn_offset, &pn_length, 0);
 
 
         /* use same encoding as packet header */

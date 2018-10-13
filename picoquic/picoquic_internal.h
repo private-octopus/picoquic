@@ -64,6 +64,8 @@ extern "C" {
 #define PICOQUIC_CWIN_MINIMUM (2 * PICOQUIC_MAX_PACKET_SIZE)
 
 #define PICOQUIC_SPIN_VEC_LATE 1000 /* in microseconds : reaction time beyond which to mark a spin bit edge as 'late' */
+#define PICOQUIC_LOSS_Q_PERIOD 64  /* fixed Kazuho sequence half-period */
+#define PICOQUIC_SPINFLAGS_RETRANS (1<<0)
 
 /*
  * Types of frames
@@ -140,6 +142,7 @@ typedef struct st_picoquic_packet_header_t {
 #define PICOQUIC_EIGHT_INTEROP_VERSION 0xFF00000E
 #define PICOQUIC_NINTH_INTEROP_VERSION 0xFF00000F
 #define PICOQUIC_INTERNAL_TEST_VERSION_1 0x50435130
+#define PICOQUIC_INTERNAL_TEST_VERSION_2 0x50435131
 
 #define PICOQUIC_INTEROP_VERSION_INDEX 1
 
@@ -162,11 +165,12 @@ typedef enum {
 typedef enum {
     picoquic_spinbit_basic = 0,
     picoquic_spinbit_vec = 1,
-    picoquic_spinbit_null = 2
+    picoquic_spinbit_null = 2,
+    picoquic_spinbit_sqr = 3
 } picoquic_spinbit_version_enum;
 
 typedef void (*picoquic_spinbit_incoming_fn)(picoquic_cnx_t * cnx, picoquic_path_t * path_x, picoquic_packet_header * ph);
-typedef uint8_t (*picoquic_spinbit_outgoing_fn)(picoquic_cnx_t * cnx);
+typedef uint8_t (*picoquic_spinbit_outgoing_fn)(picoquic_cnx_t * cnx, uint32_t flags);
 
 typedef struct st_picoquic_spinbit_def_t {
     picoquic_spinbit_incoming_fn spinbit_incoming;
@@ -463,7 +467,11 @@ typedef struct st_picoquic_path_t {
     unsigned int prev_spin : 1;  /* previous Spin bit */
     unsigned int spin_vec : 2;   /* Valid Edge Counter, makes spin bit RTT measurements more reliable */
     unsigned int spin_edge : 1;  /* internal signalling from incoming to outgoing: we just spinned it */
+    unsigned int loss_q : 1;   /* current Q bit (square sequence)  */
+
     uint64_t spin_last_trigger;  /* timestamp of the incoming packet that triggered the spinning */
+    unsigned int loss_q_index; /* index into the square sequence   */
+
 
     /* Time measurement */
     uint64_t max_ack_delay;
@@ -805,7 +813,8 @@ uint32_t picoquic_create_packet_header(
     picoquic_connection_id_t * srce_cnxid,
     uint8_t* bytes,
     uint32_t * pn_offset,
-    uint32_t * pn_length);
+    uint32_t * pn_length,
+    int contains_retrans);
 
 uint32_t  picoquic_predict_packet_header_length(
     picoquic_cnx_t* cnx,
@@ -844,7 +853,8 @@ uint32_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     picoquic_connection_id_t * local_cnxid,
     uint32_t length, uint32_t header_length,
     uint8_t* send_buffer, uint32_t send_buffer_max,
-    void * aead_context, void* pn_enc);
+    void * aead_context, void* pn_enc,
+    int contains_retrans);
 
 void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet_t * packet, int ret,
     uint32_t length, uint32_t header_length, uint32_t checksum_overhead,

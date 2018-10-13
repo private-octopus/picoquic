@@ -34,9 +34,10 @@ void picoquic_spinbit_basic_incoming(picoquic_cnx_t * cnx, picoquic_path_t * pat
     path_x->current_spin = ph->spin ^ cnx->client_mode;
 }
 
-uint8_t picoquic_spinbit_basic_outgoing(picoquic_cnx_t * cnx)
+uint8_t picoquic_spinbit_basic_outgoing(picoquic_cnx_t * cnx,uint32_t flags)
 {
     uint8_t spin_bit = (uint8_t)((cnx->path[0]->current_spin) << 2);
+    UNREFERENCED_PARAMETER(flags);
 
     spin_bit |= (uint8_t)(picoquic_public_random_64() & 3);
 
@@ -60,9 +61,10 @@ void picoquic_spinbit_vec_incoming(picoquic_cnx_t * cnx, picoquic_path_t * path_
     }
 }
 
-uint8_t picoquic_spinbit_vec_outgoing(picoquic_cnx_t * cnx)
+uint8_t picoquic_spinbit_vec_outgoing(picoquic_cnx_t * cnx,uint32_t flags)
 {
     uint8_t spin_vec = (uint8_t)(cnx->path[0]->spin_vec);
+    UNREFERENCED_PARAMETER(flags);
 
     if (!cnx->path[0]->spin_edge) {
         spin_vec = 0;
@@ -78,6 +80,26 @@ uint8_t picoquic_spinbit_vec_outgoing(picoquic_cnx_t * cnx)
 }
 
 /*
+ * Two procedures defining the spin bit with QR loss bits
+ */
+
+void picoquic_spinbit_sqr_incoming(picoquic_cnx_t * cnx, picoquic_path_t * path_x, picoquic_packet_header * ph)
+{
+    path_x->current_spin = ph->spin ^ cnx->client_mode;
+}
+
+uint8_t picoquic_spinbit_sqr_outgoing(picoquic_cnx_t * cnx,uint32_t flags)
+{
+  picoquic_path_t *pa = cnx->path[0];
+  pa->loss_q_index++;
+  if (pa->loss_q_index>=PICOQUIC_LOSS_Q_PERIOD) {
+    pa->loss_q_index=0;
+    pa->loss_q=(1-pa->loss_q);
+  }
+  return (uint8_t)((pa->current_spin << 2)|(pa->loss_q << 1)|((flags&PICOQUIC_SPINFLAGS_RETRANS)!=0));
+}
+
+/*
  * Two procedures defining the null spin bit randomized variant
  */
 
@@ -88,9 +110,10 @@ void picoquic_spinbit_null_incoming(picoquic_cnx_t * cnx, picoquic_path_t * path
     UNREFERENCED_PARAMETER(ph);
 }
 
-uint8_t picoquic_spinbit_null_outgoing(picoquic_cnx_t * cnx)
+uint8_t picoquic_spinbit_null_outgoing(picoquic_cnx_t * cnx,uint32_t flags)
 {
     UNREFERENCED_PARAMETER(cnx);
+    UNREFERENCED_PARAMETER(flags);
     return 0;
 }
 
@@ -100,5 +123,6 @@ uint8_t picoquic_spinbit_null_outgoing(picoquic_cnx_t * cnx)
 picoquic_spinbit_def_t picoquic_spin_function_table[] = {
     {picoquic_spinbit_basic_incoming, picoquic_spinbit_basic_outgoing},
 	{picoquic_spinbit_vec_incoming, picoquic_spinbit_vec_outgoing},
-	{picoquic_spinbit_null_incoming, picoquic_spinbit_null_outgoing}
+	{picoquic_spinbit_null_incoming, picoquic_spinbit_null_outgoing},
+	{picoquic_spinbit_sqr_incoming, picoquic_spinbit_sqr_outgoing}
 };
