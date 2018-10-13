@@ -971,6 +971,14 @@ int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head* str
 {
     int ret = 0;
 
+    /* Check parity */
+    if (IS_CLIENT_STREAM_ID(stream->stream_id) == cnx->client_mode) {
+        if (stream->stream_id > cnx->max_stream_id_bidir_remote) {
+            *consumed = 0;
+            return 0;
+        }
+    }
+
     if (STREAM_SEND_RESET(stream)) {
         return picoquic_prepare_stream_reset_frame(stream, bytes, bytes_max, consumed);
     }

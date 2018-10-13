@@ -540,7 +540,6 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                             } else {
                                 cnx->remote_parameters.initial_max_data = PICOPARSE_32(bytes + byte_index);
                                 cnx->maxdata_remote = cnx->remote_parameters.initial_max_data;
-                                cnx->max_stream_id_bidir_remote = cnx->local_parameters.initial_max_stream_id_bidir;
                             }
                             break;
                         case picoquic_tp_initial_max_bidi_streams:
