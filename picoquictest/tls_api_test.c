@@ -4294,7 +4294,6 @@ int false_migration_inject(picoquic_test_tls_api_ctx_t* test_ctx, int target_cli
     }
     else {
         struct sockaddr_in false_address;
-        picoquic_packet_type_enum packet_type = 0;
         uint32_t checksum_overhead = 8;
         uint32_t header_length = 0;
         uint32_t length = 0;
@@ -4373,7 +4372,7 @@ int false_migration_test_scenario(test_api_stream_desc_t * scenario, size_t size
             nb_trials++;
 
             if (nb_injected == 0) {
-                if ((target_client && test_ctx->cnx_client->pkt_ctx[false_pc].send_sequence > false_rank) ||
+                if ((target_client && test_ctx->cnx_client->pkt_ctx[false_pc].send_sequence > false_rank && test_ctx->cnx_client->path[0]->remote_cnxid.id_len != 0) ||
                     (!target_client && test_ctx->cnx_server != NULL && test_ctx->cnx_server->pkt_ctx[false_pc].send_sequence > false_rank)) {
                     /* Inject a spoofed packet in the context */
                     ret = false_migration_inject(test_ctx, target_client, false_pc, simulated_time);
@@ -4510,7 +4509,6 @@ int false_migration_test()
 int nat_handshake_test_one(int test_rank)
 {
     uint64_t simulated_time = 0;
-    uint64_t next_time = 0;
     uint64_t loss_mask = 0;
     int nb_inactive = 0;
     int nb_trials = 0;
