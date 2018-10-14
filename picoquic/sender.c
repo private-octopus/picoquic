@@ -803,6 +803,9 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
             /* should be the path on which the packet was transmitted */
             picoquic_path_t * old_path = p->send_path;
 
+	    /* we'll report it where it got lost */
+	    if (old_path) old_path->retrans_count++;
+
             *header_length = 0;
 
             if (p->ptype == picoquic_packet_0rtt_protected) {

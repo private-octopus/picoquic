@@ -64,6 +64,7 @@ extern "C" {
 #define PICOQUIC_CWIN_MINIMUM (2 * PICOQUIC_MAX_PACKET_SIZE)
 
 #define PICOQUIC_SPIN_VEC_LATE 1000 /* in microseconds : reaction time beyond which to mark a spin bit edge as 'late' */
+#define PICOQUIC_LOSS_Q_PERIOD 64  /* fixed Kazuho sequence half-period */
 
 /*
  * Types of frames
@@ -140,6 +141,7 @@ typedef struct st_picoquic_packet_header_t {
 #define PICOQUIC_EIGHT_INTEROP_VERSION 0xFF00000E
 #define PICOQUIC_NINTH_INTEROP_VERSION 0xFF00000F
 #define PICOQUIC_INTERNAL_TEST_VERSION_1 0x50435130
+#define PICOQUIC_INTERNAL_TEST_VERSION_2 0x50435131
 
 #define PICOQUIC_INTEROP_VERSION_INDEX 1
 
@@ -162,7 +164,8 @@ typedef enum {
 typedef enum {
     picoquic_spinbit_basic = 0,
     picoquic_spinbit_vec = 1,
-    picoquic_spinbit_null = 2
+    picoquic_spinbit_null = 2,
+    picoquic_spinbit_sqr = 3
 } picoquic_spinbit_version_enum;
 
 typedef void (*picoquic_spinbit_incoming_fn)(picoquic_cnx_t * cnx, picoquic_path_t * path_x, picoquic_packet_header * ph);
@@ -463,7 +466,12 @@ typedef struct st_picoquic_path_t {
     unsigned int prev_spin : 1;  /* previous Spin bit */
     unsigned int spin_vec : 2;   /* Valid Edge Counter, makes spin bit RTT measurements more reliable */
     unsigned int spin_edge : 1;  /* internal signalling from incoming to outgoing: we just spinned it */
+    unsigned int loss_q : 1;   /* current Q bit (square sequence)  */
+
     uint64_t spin_last_trigger;  /* timestamp of the incoming packet that triggered the spinning */
+    unsigned int loss_q_index;   /* index into the square sequence   */
+    unsigned int retrans_count;  /* remaining retransmissions to report */
+
 
     /* Time measurement */
     uint64_t max_ack_delay;
