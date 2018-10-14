@@ -81,7 +81,7 @@ static picoquic_tp_t transport_param_test10 = {
 };
 
 uint8_t client_param1[] = {
-    'P', 'C', 'Q', '0',
+    'P', 'C', 'Q', '1',
     0, 0x28,
     0, 0, 0, 4, 0, 0, 0xFF, 0xFF,
     0, 1, 0, 4, 0, 0x40, 0, 0,
@@ -131,8 +131,9 @@ uint8_t client_param5[] = {
 };
 
 uint8_t server_param1[] = {
-    'P', 'C', 'Q', '0',
-    0x08,
+    'P', 'C', 'Q', '1',
+    0x0C,
+    'P', 'C', 'Q', '1',
     'P', 'C', 'Q', '0',
     0xFF, 0x00, 0x00, 0x0F,
     0, 0x36,
@@ -145,8 +146,9 @@ uint8_t server_param1[] = {
 };
 
 uint8_t server_param2[] = {
-    'P', 'C', 'Q', '0',
-    0x08,
+    'P', 'C', 'Q', '1',
+    0x0C,
+    'P', 'C', 'Q', '1',
     'P', 'C', 'Q', '0',
     0xFF, 0x00, 0x00, 0x0F,
     0, 0x36,
@@ -159,7 +161,7 @@ uint8_t server_param2[] = {
 };
 
 uint8_t client_param8[] = {
-    'P', 'C', 'Q', '0',
+    'P', 'C', 'Q', '1',
     0, 0x1C,
     0, 0, 0, 4, 0, 0, 0xFF, 0xFF,
     0, 1, 0, 4, 0, 0x40, 0, 0,
@@ -168,8 +170,9 @@ uint8_t client_param8[] = {
 };
 
 uint8_t server_param3[] = {
-    'P', 'C', 'Q', '0',
-    0x08,
+    'P', 'C', 'Q', '1',
+    0x0C,
+    'P', 'C', 'Q', '1',
     'P', 'C', 'Q', '0',
     0xFF, 0x00, 0x00, 0x0F,
     0, 87,
@@ -184,7 +187,7 @@ uint8_t server_param3[] = {
 };
 
 uint8_t client_param9[] = {
-    'P', 'C', 'Q', '0',
+    'P', 'C', 'Q', '1',
     0, 0x2C,
     0, 0, 0, 4, 0, 0, 0xFF, 0xFF,
     0, 1, 0, 4, 0, 0x40, 0, 0,
