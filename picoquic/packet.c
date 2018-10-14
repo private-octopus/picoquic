@@ -1047,8 +1047,7 @@ int picoquic_incoming_server_cleartext(
     if (picoquic_is_connection_id_null(cnx->path[0]->remote_cnxid) && restricted == 0) {
         /* On first response from the server, copy the cnx ID and the incoming address */
         cnx->path[0]->remote_cnxid = ph->srce_cnx_id;
-        cnx->path[0]->local_addr_len = (addr_to->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
-        memcpy(&cnx->path[0]->local_addr, addr_to, cnx->path[0]->local_addr_len);
+        cnx->path[0]->local_addr_len = picoquic_store_addr(&cnx->path[0]->local_addr, addr_to);
     }
     else if (picoquic_compare_connection_id(&cnx->path[0]->remote_cnxid, &ph->srce_cnx_id) != 0) {
         ret = PICOQUIC_ERROR_CNXID_CHECK; /* protocol error */

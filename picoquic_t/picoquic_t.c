@@ -140,6 +140,8 @@ static const picoquic_test_def_t test_table[] = {
     { "initial_close", initial_close_test },
     { "new_rotated_key", new_rotated_key_test },
     { "key_rotation", key_rotation_test },
+    { "false_migration", false_migration_test },
+    { "nat_handshake", nat_handshake_test },
     { "stress", stress_test },
     { "fuzz", fuzz_test },
     { "fuzz_initial", fuzz_initial_test}
