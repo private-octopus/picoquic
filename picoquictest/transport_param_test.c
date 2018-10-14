@@ -27,10 +27,38 @@
 #include "../picoquic/tls_api.h"
 #include "picoquictest_internal.h"
 
-/* Start with a series of test vectors to test that 
- * encoding and decoding are OK. 
- * Then, add fuzz testing.
+/* The transport parameter tests operate by comparing the decoding of test vectors
+ * to the expected value. Some vectors are also used to verify that the encoding
+ * of the expected value matches the vector. 
+ * 
+ * The test vectors have dependencies on the list of supported protocol versions
+ * "picoquic_supported_versions" defined in "quicctx.c". If that list is updated,
+ * the test vectors also need to be updated. This is done by updating the
+ * definition of two macros.
+ *
+ * The first dependency is on the default protocol version, which by convention
+ * is the first element in the list of supported versions. The four bytes
+ * representing that version number are documented in the macro
+ * TRANSPORT_PARAMETERS_DEFAULT_VERSION_BYTES.
+ *
+ * The second dependency is on the list of supported versions, which is returned
+ * by the server. The encoding of this list of parameters is documented in the
+ * macro TRANSPORT_PARAMETERS_SUPPORTED_VERSIONS_BYTES. The first byte encodes
+ * the length of the list, then there are 4 bytes for each version, in the
+ * expected order.
+ * 
+ * The log test operates on the same test vectors, andproduces a text file 
+ * "log_tp_test.txt" with their text renderings. If the test vectors
+ * are updated to match the new list of versions, the text will change and
+ * will not match the expected value in "picoquictest/log_tp_test_ref.txt".
+ * This can be fixed by running the test once, manually inspecting the
+ * output, verifying that the differences are only in the list of versions,
+ * and then updating the reference version to match the output.
  */
+
+#define TRANSPORT_PARAMETERS_DEFAULT_VERSION_BYTES 'P', 'C', 'Q', '1'
+#define TRANSPORT_PARAMETERS_SUPPORTED_VERSIONS_BYTES \
+     0x0C, 'P', 'C', 'Q', '1', 'P', 'C', 'Q', '0', 0xFF, 0x00, 0x00, 0x0F
 
 #define TRANSPORT_PREFERED_ADDRESS_NULL \
     { 0, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 0, \
@@ -81,7 +109,7 @@ static picoquic_tp_t transport_param_test10 = {
 };
 
 uint8_t client_param1[] = {
-    'P', 'C', 'Q', '1',
+    TRANSPORT_PARAMETERS_DEFAULT_VERSION_BYTES,
     0, 0x28,
     0, 0, 0, 4, 0, 0, 0xFF, 0xFF,
     0, 1, 0, 4, 0, 0x40, 0, 0,
@@ -131,11 +159,8 @@ uint8_t client_param5[] = {
 };
 
 uint8_t server_param1[] = {
-    'P', 'C', 'Q', '1',
-    0x0C,
-    'P', 'C', 'Q', '1',
-    'P', 'C', 'Q', '0',
-    0xFF, 0x00, 0x00, 0x0F,
+    TRANSPORT_PARAMETERS_DEFAULT_VERSION_BYTES,
+    TRANSPORT_PARAMETERS_SUPPORTED_VERSIONS_BYTES,
     0, 0x36,
     0, 0, 0, 4, 0, 0, 0xFF, 0xFF,
     0, 1, 0, 4, 0, 0x40, 0, 0,
@@ -146,11 +171,8 @@ uint8_t server_param1[] = {
 };
 
 uint8_t server_param2[] = {
-    'P', 'C', 'Q', '1',
-    0x0C,
-    'P', 'C', 'Q', '1',
-    'P', 'C', 'Q', '0',
-    0xFF, 0x00, 0x00, 0x0F,
+    TRANSPORT_PARAMETERS_DEFAULT_VERSION_BYTES,
+    TRANSPORT_PARAMETERS_SUPPORTED_VERSIONS_BYTES,
     0, 0x36,
     0, 0, 0, 4, 0x01, 0, 0, 0,
     0, 1, 0, 4, 0x01, 0, 0, 0,
@@ -161,7 +183,7 @@ uint8_t server_param2[] = {
 };
 
 uint8_t client_param8[] = {
-    'P', 'C', 'Q', '1',
+    TRANSPORT_PARAMETERS_DEFAULT_VERSION_BYTES,
     0, 0x1C,
     0, 0, 0, 4, 0, 0, 0xFF, 0xFF,
     0, 1, 0, 4, 0, 0x40, 0, 0,
@@ -170,11 +192,8 @@ uint8_t client_param8[] = {
 };
 
 uint8_t server_param3[] = {
-    'P', 'C', 'Q', '1',
-    0x0C,
-    'P', 'C', 'Q', '1',
-    'P', 'C', 'Q', '0',
-    0xFF, 0x00, 0x00, 0x0F,
+    TRANSPORT_PARAMETERS_DEFAULT_VERSION_BYTES,
+    TRANSPORT_PARAMETERS_SUPPORTED_VERSIONS_BYTES,
     0, 87,
     0, 0, 0, 4, 0x01, 0, 0, 0,
     0, 1, 0, 4, 0x01, 0, 0, 0,
@@ -187,7 +206,7 @@ uint8_t server_param3[] = {
 };
 
 uint8_t client_param9[] = {
-    'P', 'C', 'Q', '1',
+    TRANSPORT_PARAMETERS_DEFAULT_VERSION_BYTES,
     0, 0x2C,
     0, 0, 0, 4, 0, 0, 0xFF, 0xFF,
     0, 1, 0, 4, 0, 0x40, 0, 0,
