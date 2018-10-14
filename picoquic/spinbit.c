@@ -83,7 +83,7 @@ uint8_t picoquic_spinbit_vec_outgoing(picoquic_cnx_t * cnx)
 
 void picoquic_spinbit_sqr_incoming(picoquic_cnx_t * cnx, picoquic_path_t * path_x, picoquic_packet_header * ph)
 {
-    path_x->spin_data.s_sqr.current_spin = ph->spin ^ cnx->client_mode;
+    path_x->spin_data.s_qr.current_spin = ph->spin ^ cnx->client_mode;
 }
 
 uint8_t picoquic_spinbit_sqr_outgoing(picoquic_cnx_t * cnx)
@@ -91,17 +91,17 @@ uint8_t picoquic_spinbit_sqr_outgoing(picoquic_cnx_t * cnx)
     picoquic_path_t *pa = cnx->path[0];
     uint8_t rbit = 0;
 
-    if (pa->retrans_count > pa->spin_data.s_sqr.retrans_signalled) {
-        pa->spin_data.s_sqr.retrans_signalled++;
+    if (pa->retrans_count > pa->spin_data.s_qr.retrans_signalled) {
+        pa->spin_data.s_qr.retrans_signalled++;
         rbit = 1;
     }
-    pa->spin_data.s_sqr.loss_q_index++;
-    if (pa->spin_data.s_sqr.loss_q_index >= PICOQUIC_LOSS_Q_PERIOD) {
-        pa->spin_data.s_sqr.loss_q_index = 0;
-        pa->spin_data.s_sqr.loss_q = (1 - pa->spin_data.s_sqr.loss_q);
+    pa->spin_data.s_qr.loss_q_index++;
+    if (pa->spin_data.s_qr.loss_q_index >= PICOQUIC_LOSS_Q_PERIOD) {
+        pa->spin_data.s_qr.loss_q_index = 0;
+        pa->spin_data.s_qr.loss_q = (1 - pa->spin_data.s_qr.loss_q);
     }
 
-    return (uint8_t)((pa->spin_data.s_sqr.current_spin << 2) | (pa->spin_data.s_sqr.loss_q << 1) | rbit);
+    return (uint8_t)((pa->spin_data.s_qr.current_spin << 2) | (pa->spin_data.s_qr.loss_q << 1) | rbit);
 }
 
 /*

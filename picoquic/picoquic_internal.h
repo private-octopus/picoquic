@@ -187,7 +187,7 @@ typedef union u_picoquit_spinbit_data_t {
         unsigned int loss_q : 1;   /* current Q bit (square sequence)  */
         unsigned int loss_q_index;   /* index into the square sequence   */
         uint64_t retrans_signalled;  /* number of retransmissions already reported */
-    } s_sqr;
+    } s_qr;
 }picoquit_spinbit_data_t;
 
 typedef void (*picoquic_spinbit_incoming_fn)(picoquic_cnx_t * cnx, picoquic_path_t * path_x, picoquic_packet_header * ph);
@@ -485,18 +485,7 @@ typedef struct st_picoquic_path_t {
     unsigned int path_is_demoted : 1;
     /* loss statistics and spin data */
     uint64_t retrans_count;  /* number of retransmissions observed on path */
-#if 0
-    unsigned int current_spin : 1; /* Current value of the spin bit */
-    unsigned int prev_spin : 1;  /* previous Spin bit */
-    unsigned int spin_vec : 2;   /* Valid Edge Counter, makes spin bit RTT measurements more reliable */
-    unsigned int spin_edge : 1;  /* internal signalling from incoming to outgoing: we just spinned it */
-    unsigned int loss_q : 1;   /* current Q bit (square sequence)  */
-
-    uint64_t spin_last_trigger;  /* timestamp of the incoming packet that triggered the spinning */
-    unsigned int loss_q_index;   /* index into the square sequence   */
-#else
     picoquit_spinbit_data_t spin_data;
-#endif
 
     /* Time measurement */
     uint64_t max_ack_delay;
