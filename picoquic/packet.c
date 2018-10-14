@@ -271,7 +271,7 @@ int picoquic_parse_packet_header(
                  ph->key_phase = bytes[0] >> 6;
                  ph->has_spin_bit = 1;
                  ph->spin = (bytes[0] >> 2) & 1;
-                 ph->spin_vec = bytes[0] & 0x03 ;
+                 ph->spin_opt = bytes[0] & 0x03 ;
 
                  ph->pn_offset = ph->offset;
                  ph->pn = 0;
