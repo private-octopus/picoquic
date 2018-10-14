@@ -940,8 +940,6 @@ picoquic_stream_head* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
     picoquic_stream_head* stream = cnx->first_stream;
 
     while (stream) {
-        int ready_to_send = 0;
-
         if ((cnx->maxdata_remote > cnx->data_sent && stream->sent_offset < stream->maxdata_remote &&
             ((stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset) || 
                 (STREAM_SEND_FIN(stream)))) ||

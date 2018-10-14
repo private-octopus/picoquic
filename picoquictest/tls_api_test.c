@@ -4293,33 +4293,25 @@ int false_migration_inject(picoquic_test_tls_api_ctx_t* test_ctx, int target_cli
         ret = -1;
     }
     else {
-        size_t byte_index = 1;
         struct sockaddr_in false_address;
         picoquic_packet_type_enum packet_type = 0;
         uint32_t checksum_overhead = 8;
-        size_t data_bytes = 0;
-        int retransmit_possible = 0;
         uint32_t header_length = 0;
-        uint8_t* bytes = packet->bytes;
         uint32_t length = 0;
-        int epoch = 0;
         int is_cleartext_mode = 0;
         picoquic_path_t * path_x = cnx->path[0];
 
         switch (false_pc) {
         case picoquic_packet_context_application:
-            packet_type = picoquic_packet_1rtt_protected;
-            epoch = 3;
+            packet->ptype = picoquic_packet_1rtt_protected;
             break;
         case picoquic_packet_context_handshake:
-            packet_type = picoquic_packet_handshake;
+            packet->ptype = picoquic_packet_handshake;
             is_cleartext_mode = 1;
-            epoch = 2;
             break;
         case picoquic_packet_context_initial:
         default:
-            packet_type = picoquic_packet_initial;
-            epoch = 0;
+            packet->ptype = picoquic_packet_initial;
             is_cleartext_mode = 1;
             break;
         }
@@ -4361,10 +4353,7 @@ int false_migration_inject(picoquic_test_tls_api_ctx_t* test_ctx, int target_cli
 
 int false_migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_scenario, uint64_t loss_target, int target_client, picoquic_packet_context_enum false_pc, uint64_t false_rank)
 {
-    uint64_t loss_mask_data = 0;
     uint64_t simulated_time = 0;
-    uint64_t next_time = 0;
-    uint64_t loss_mask = 0;
     int nb_injected = 0;
     int nb_trials = 0;
     int nb_inactive = 0;
@@ -4420,7 +4409,6 @@ int false_migration_test_scenario(test_api_stream_desc_t * scenario, size_t size
     }
 
     /* Perform a data sending loop */
-    loss_mask = loss_target;
     nb_trials = 0;
     nb_inactive = 0;
 
