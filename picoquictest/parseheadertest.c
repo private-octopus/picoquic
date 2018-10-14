@@ -391,7 +391,7 @@ int parseheadertest()
             cnx_10->path[0]->remote_cnxid = test_cnxid_r10;
         }
         header_length = picoquic_create_packet_header(cnx_10, test_entries[i].ph->ptype,
-            test_entries[i].ph->pn, &cnx_10->path[0]->remote_cnxid, &cnx_10->path[0]->local_cnxid, packet, &pn_offset, &pn_length,0);
+            test_entries[i].ph->pn, &cnx_10->path[0]->remote_cnxid, &cnx_10->path[0]->local_cnxid, packet, &pn_offset, &pn_length);
         picoquic_update_payload_length(packet, pn_offset, pn_offset, pn_offset +
             test_entries[i].ph->payload_length);
         

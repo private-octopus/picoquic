@@ -225,8 +225,7 @@ uint32_t picoquic_create_packet_header(
     picoquic_connection_id_t * local_cnxid,
     uint8_t* bytes,
     uint32_t * pn_offset,
-    uint32_t * pn_length,
-    int contains_retrans)
+    uint32_t * pn_length)
 {
     uint32_t length = 0;
     picoquic_connection_id_t dest_cnx_id =
@@ -259,7 +258,7 @@ uint32_t picoquic_create_packet_header(
         bytes[length++] = (K | C | spin_bit | spin_vec);
 #else
         length = 0;
-        bytes[length++] = (K | C | picoquic_spin_function_table[picoquic_supported_versions[cnx->version_index].spinbit_version].spinbit_outgoing(cnx,(contains_retrans?PICOQUIC_SPINFLAGS_RETRANS:0)));
+        bytes[length++] = (K | C | picoquic_spin_function_table[picoquic_supported_versions[cnx->version_index].spinbit_version].spinbit_outgoing(cnx));
 #endif
         length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, dest_cnx_id);
 
@@ -403,8 +402,7 @@ uint32_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     picoquic_connection_id_t * local_cnxid,
     uint32_t length, uint32_t header_length,
     uint8_t* send_buffer, uint32_t send_buffer_max,
-    void * aead_context, void* pn_enc,
-    int contains_retrans)
+    void * aead_context, void* pn_enc)
 {
     uint32_t send_length;
     uint32_t h_length;
@@ -416,7 +414,7 @@ uint32_t picoquic_protect_packet(picoquic_cnx_t* cnx,
 
     /* Create the packet header just before encrypting the content */
     h_length = picoquic_create_packet_header(cnx, ptype,
-        sequence_number, remote_cnxid, local_cnxid, send_buffer, &pn_offset, &pn_length, contains_retrans);
+        sequence_number, remote_cnxid, local_cnxid, send_buffer, &pn_offset, &pn_length);
     /* If the destination ID does not match the local context, reset the spin bit */
     if (ptype == picoquic_packet_1rtt_protected &&
         remote_cnxid != &cnx->path[0]->remote_cnxid) {
@@ -652,31 +650,31 @@ void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet_t
             length = picoquic_protect_packet(cnx, packet->ptype, packet->bytes, packet->sequence_number,
                 remote_cnxid, local_cnxid,
                 length, header_length,
-                send_buffer, send_buffer_max, cnx->crypto_context[0].aead_encrypt, cnx->crypto_context[0].pn_enc, packet->contains_retrans);
+                send_buffer, send_buffer_max, cnx->crypto_context[0].aead_encrypt, cnx->crypto_context[0].pn_enc);
             break;
         case picoquic_packet_handshake:
             length = picoquic_protect_packet(cnx, packet->ptype, packet->bytes, packet->sequence_number,
                 remote_cnxid, local_cnxid,
                 length, header_length,
-                send_buffer, send_buffer_max, cnx->crypto_context[2].aead_encrypt, cnx->crypto_context[2].pn_enc, packet->contains_retrans);
+                send_buffer, send_buffer_max, cnx->crypto_context[2].aead_encrypt, cnx->crypto_context[2].pn_enc);
             break;
         case picoquic_packet_retry:
             length = picoquic_protect_packet(cnx, packet->ptype, packet->bytes, packet->sequence_number,
                 remote_cnxid, local_cnxid,
                 length, header_length,
-                send_buffer, send_buffer_max, cnx->crypto_context[0].aead_encrypt, cnx->crypto_context[0].pn_enc, packet->contains_retrans);
+                send_buffer, send_buffer_max, cnx->crypto_context[0].aead_encrypt, cnx->crypto_context[0].pn_enc);
             break;
         case picoquic_packet_0rtt_protected:
             length = picoquic_protect_packet(cnx, packet->ptype, packet->bytes, packet->sequence_number, 
                 remote_cnxid, local_cnxid,
                 length, header_length,
-                send_buffer, send_buffer_max, cnx->crypto_context[1].aead_encrypt, cnx->crypto_context[1].pn_enc, packet->contains_retrans);
+                send_buffer, send_buffer_max, cnx->crypto_context[1].aead_encrypt, cnx->crypto_context[1].pn_enc);
             break;
         case picoquic_packet_1rtt_protected:
             length = picoquic_protect_packet(cnx, packet->ptype, packet->bytes, packet->sequence_number,
                 remote_cnxid, local_cnxid,
                 length, header_length,
-                send_buffer, send_buffer_max, cnx->crypto_context[3].aead_encrypt, cnx->crypto_context[3].pn_enc, packet->contains_retrans);
+                send_buffer, send_buffer_max, cnx->crypto_context[3].aead_encrypt, cnx->crypto_context[3].pn_enc);
             break;
         default:
             /* Packet type error. Do nothing at all. */
@@ -2227,7 +2225,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
 
         if (ret == 0 && retransmit_possible &&
             (length = picoquic_retransmit_needed(cnx, pc, path_x, current_time, packet, send_buffer_min_max, &is_cleartext_mode, &header_length)) > 0) {
-            packet->contains_retrans = 1; 
+            path_x->report_retrans = 1; 
             /* Set the new checksum length */
             checksum_overhead = picoquic_get_checksum_length(cnx, is_cleartext_mode);
             /* Check whether it makes sense to add an ACK at the end of the retransmission */
