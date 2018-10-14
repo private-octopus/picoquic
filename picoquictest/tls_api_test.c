@@ -4262,3 +4262,350 @@ int key_rotation_test()
 
     return ret;
 }
+
+
+/*
+ * False migration. Test that the client server connection resists injection of
+ * some packets sent from a wrong address. The "false migration inject" acts as
+ * a misbehaving NAT. The expectation is that the server will ignore handshake
+ * packets from a wrong origin, and that the connection will recover from
+ * false packet injection during the data phase.
+ */
+
+int false_migration_inject(picoquic_test_tls_api_ctx_t* test_ctx, int target_client, picoquic_packet_context_enum false_pc, uint64_t simulated_time)
+{
+
+    /* In order to test robustness of key rotation against attacks, we inject a
+     * random packet with properly set header indication transition */
+    int ret = 0;
+    picoquic_cnx_t * cnx = (target_client) ? test_ctx->cnx_client : test_ctx->cnx_server;
+    picoquictest_sim_link_t* target_link = (target_client) ? test_ctx->c_to_s_link : test_ctx->s_to_c_link;
+    picoquictest_sim_packet_t* sim_packet = picoquictest_sim_link_create_packet();
+    picoquic_packet_t * packet = picoquic_create_packet();
+
+    if (sim_packet == NULL || packet == NULL || cnx == NULL) {
+        if (sim_packet != NULL) {
+            free(sim_packet);
+        }
+        if (packet != NULL) {
+            free(packet);
+        }
+        ret = -1;
+    }
+    else {
+        struct sockaddr_in false_address;
+        uint32_t checksum_overhead = 8;
+        uint32_t header_length = 0;
+        uint32_t length = 0;
+        int is_cleartext_mode = 0;
+        picoquic_path_t * path_x = cnx->path[0];
+
+        switch (false_pc) {
+        case picoquic_packet_context_application:
+            packet->ptype = picoquic_packet_1rtt_protected;
+            break;
+        case picoquic_packet_context_handshake:
+            packet->ptype = picoquic_packet_handshake;
+            is_cleartext_mode = 1;
+            break;
+        case picoquic_packet_context_initial:
+        default:
+            packet->ptype = picoquic_packet_initial;
+            is_cleartext_mode = 1;
+            break;
+        }
+
+        if (target_client) {
+            memcpy(&false_address, &test_ctx->client_addr, sizeof(false_address));
+        }
+        else {
+            memcpy(&false_address, &test_ctx->server_addr, sizeof(false_address));
+        }
+        false_address.sin_port += 1234;
+
+
+        checksum_overhead = picoquic_get_checksum_length(cnx, is_cleartext_mode);
+        packet->checksum_overhead = checksum_overhead;
+        packet->pc = false_pc;
+        length = checksum_overhead + 32;
+        memset(packet->bytes, 0, length);
+
+        picoquic_finalize_and_protect_packet(cnx, packet,
+            ret, length, header_length, checksum_overhead,
+            &sim_packet->length, sim_packet->bytes, PICOQUIC_MAX_PACKET_SIZE,
+            &path_x->remote_cnxid, &path_x->local_cnxid, path_x, simulated_time);
+
+        picoquic_store_addr(&sim_packet->addr_from, (struct sockaddr *)&false_address);
+
+        if (target_client) {
+            picoquic_store_addr(&sim_packet->addr_to, (struct sockaddr *)&test_ctx->server_addr);
+        }
+        else {
+            picoquic_store_addr(&sim_packet->addr_to, (struct sockaddr *)&test_ctx->client_addr);
+        }
+
+        picoquictest_sim_link_submit(target_link, sim_packet, simulated_time);
+    }
+
+    return ret;
+}
+
+int false_migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_scenario, uint64_t loss_target, int target_client, picoquic_packet_context_enum false_pc, uint64_t false_rank)
+{
+    uint64_t simulated_time = 0;
+    int nb_injected = 0;
+    int nb_trials = 0;
+    int nb_inactive = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = PICOQUIC_ERROR_MEMORY;
+    }
+
+    /* Run a connection loop with injection test */
+    if (ret == 0) {
+
+        while (ret == 0 && nb_trials < 1024 && nb_inactive < 512 && (test_ctx->cnx_client->cnx_state != picoquic_state_client_ready || (test_ctx->cnx_server == NULL || test_ctx->cnx_server->cnx_state != picoquic_state_server_ready))) {
+            int was_active = 0;
+            nb_trials++;
+
+            if (nb_injected == 0) {
+                if ((target_client && test_ctx->cnx_client->pkt_ctx[false_pc].send_sequence > false_rank && test_ctx->cnx_client->path[0]->remote_cnxid.id_len != 0) ||
+                    (!target_client && test_ctx->cnx_server != NULL && test_ctx->cnx_server->pkt_ctx[false_pc].send_sequence > false_rank)) {
+                    /* Inject a spoofed packet in the context */
+                    ret = false_migration_inject(test_ctx, target_client, false_pc, simulated_time);
+                    if (ret == 0) {
+                        nb_injected++;
+                    }
+                    else
+                    {
+                        DBG_PRINTF("Could not inject false packet, ret = %x\n", ret);
+                    }
+                }
+            }
+
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+
+            if (test_ctx->cnx_client->cnx_state == picoquic_state_disconnected &&
+                (test_ctx->cnx_server == NULL || test_ctx->cnx_server->cnx_state == picoquic_state_disconnected)) {
+                break;
+            }
+
+            if (was_active) {
+                nb_inactive = 0;
+            }
+            else {
+                nb_inactive++;
+            }
+        }
+    }
+
+    /* Prepare to send data */
+    if (ret == 0) {
+        ret = test_api_init_send_recv_scenario(test_ctx, scenario, size_of_scenario);
+    }
+
+    /* Perform a data sending loop */
+    nb_trials = 0;
+    nb_inactive = 0;
+
+    /* Perform a data sending loop, during which various key rotations are tried
+     * every 100 packets or so. To test robustness, inject bogus packets that
+     * mimic a transition trigger */
+
+    while (ret == 0 && nb_trials < 1024 && nb_inactive < 256 && test_ctx->cnx_client->cnx_state == picoquic_state_client_ready && test_ctx->cnx_server->cnx_state == picoquic_state_server_ready) {
+        int was_active = 0;
+
+        nb_trials++;
+
+        if (nb_injected == 0) {
+            if ((target_client && test_ctx->cnx_client->pkt_ctx[false_pc].send_sequence > false_rank) ||
+                (!target_client && test_ctx->cnx_server != NULL && test_ctx->cnx_server->pkt_ctx[false_pc].send_sequence > false_rank)) {
+                /* Inject a spoofed packet in the context */
+                ret = false_migration_inject(test_ctx, target_client, false_pc, simulated_time);
+                if (ret == 0) {
+                    nb_injected++;
+                }
+                else
+                {
+                    DBG_PRINTF("Could not inject false packet, ret = %x\n", ret);
+                }
+            }
+        }
+
+        if (ret == 0) {
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+        }
+
+        if (ret < 0)
+        {
+            break;
+        }
+
+        if (was_active) {
+            nb_inactive = 0;
+        }
+        else {
+            nb_inactive++;
+        }
+
+        if (test_ctx->test_finished) {
+            if (picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) && picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)) {
+                break;
+            }
+        }
+    }
+    if (ret == 0 && nb_injected == 0) {
+        DBG_PRINTF("Could not inject after packet #%d in context %d\n", (int)false_rank, (int)false_pc);
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
+
+        if (ret != 0)
+        {
+            DBG_PRINTF("Connection close returns %d\n", ret);
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+int false_migration_test()
+{
+    int ret = 0;
+    int target_client;
+
+    for (target_client = 1; ret == 0 && target_client >= 0; target_client--) {
+        if (ret == 0) {
+            ret = false_migration_test_scenario(test_scenario_q2_and_r2, sizeof(test_scenario_q2_and_r2), 0, target_client, picoquic_packet_context_initial, 0);
+        }
+
+        if (ret == 0) {
+            ret = false_migration_test_scenario(test_scenario_q2_and_r2, sizeof(test_scenario_q2_and_r2), 0, target_client, picoquic_packet_context_handshake, 0);
+        }
+
+        for (uint64_t seq = 0; ret == 0 && seq < 4; seq++) {
+            ret = false_migration_test_scenario(test_scenario_q2_and_r2, sizeof(test_scenario_q2_and_r2), 0, target_client, picoquic_packet_context_application, seq);
+        }
+    }
+
+    return ret;
+}
+
+/*
+* Testing what happens in case of NAT rebinding during handshake.
+* In theory, it should cause the handshake to fail
+*/
+
+int nat_handshake_test_one(int test_rank)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    int nb_inactive = 0;
+    int nb_trials = 0;
+    int natted = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = PICOQUIC_ERROR_MEMORY;
+    }
+
+    /* Run a connection loop with rebinding test */
+    if (ret == 0) {
+
+        while (ret == 0 && nb_trials < 1024 && nb_inactive < 512 && (test_ctx->cnx_client->cnx_state != picoquic_state_client_ready || (test_ctx->cnx_server == NULL || test_ctx->cnx_server->cnx_state != picoquic_state_server_ready))) {
+            int was_active = 0;
+            nb_trials++;
+
+            if (natted == 0) {
+                int should_nat = 0;
+
+                switch (test_rank) {
+                case 0: /* check that at least one packet was received from the server, setting the CNX_ID */
+                    should_nat = (test_ctx->cnx_client->path[0]->remote_cnxid.id_len > 0);
+                    break;
+                case 1: /* Check that the connection is almost complete, but finished has not been sent */
+                    should_nat = (test_ctx->cnx_client->crypto_context[3].aead_decrypt != NULL);
+                    break;
+                default:
+                    break;
+                }
+                if (should_nat) {
+                    /* Simulate a NAT rebinding */
+                    test_ctx->client_addr.sin_port += 17;
+                    test_ctx->client_use_nat = 1;
+                    natted++;
+                }
+            }
+
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+
+            if (test_ctx->cnx_client->cnx_state == picoquic_state_disconnected ||
+                (test_ctx->cnx_server != NULL && test_ctx->cnx_server->cnx_state == picoquic_state_disconnected)) {
+                break;
+            }
+
+            if (was_active) {
+                nb_inactive = 0;
+            }
+            else {
+                nb_inactive++;
+            }
+        }
+    }
+
+    /* Prepare to send data */
+    if (ret == 0) {
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_q2_and_r2, sizeof(test_scenario_q2_and_r2));
+    }
+
+    /* Try send data */
+    if (ret == 0) {
+        ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 0);
+    }
+
+    if (ret == 0) {
+        ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
+
+        if (ret != 0)
+        {
+            DBG_PRINTF("Connection close returns %d\n", ret);
+        }
+    }
+
+    /* verify that the connection did change address */
+    if (ret == 0 && !natted) {
+        DBG_PRINTF("Connection succeeded after %d natting in handshake, rank %d\n", natted, test_rank);
+        ret = -1;
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+
+    return ret;
+}
+
+int nat_handshake_test()
+{
+    int ret = 0;
+
+    for (int test_rank = 0; test_rank < 2; test_rank++) {
+        ret = nat_handshake_test_one(test_rank);
+    }
+
+    return ret;
+}

@@ -2298,14 +2298,12 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
             }
 
             if (cnx->cnx_state != picoquic_state_disconnected && path_x->challenge_verified != 0) {
-                int ack_sent = 0;
 
                 if (picoquic_is_ack_needed(cnx, current_time, pc) &&
                     picoquic_prepare_ack_frame(cnx, current_time, pc, &bytes[length],
                         send_buffer_min_max - checksum_overhead - length, &data_bytes)
                     == 0) {
                     length += (uint32_t)data_bytes;
-                    ack_sent = 1;
                 }
 
                 if (path_x->cwin > path_x->bytes_in_transit) {

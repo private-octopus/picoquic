@@ -700,6 +700,20 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(false_migration)
+        {
+            int ret = false_migration_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+        
+        TEST_METHOD(nat_handshake)
+        {
+            int ret = nat_handshake_test();
+
+            Assert::AreEqual(ret, 0);
+        }
         
         TEST_METHOD(stress)
         {
