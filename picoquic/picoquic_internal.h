@@ -467,10 +467,10 @@ typedef struct st_picoquic_path_t {
     unsigned int spin_vec : 2;   /* Valid Edge Counter, makes spin bit RTT measurements more reliable */
     unsigned int spin_edge : 1;  /* internal signalling from incoming to outgoing: we just spinned it */
     unsigned int loss_q : 1;   /* current Q bit (square sequence)  */
-    unsigned int report_retrans : 1;  /* should next outgoing packet wear R=1 */
 
     uint64_t spin_last_trigger;  /* timestamp of the incoming packet that triggered the spinning */
-    unsigned int loss_q_index; /* index into the square sequence   */
+    unsigned int loss_q_index;   /* index into the square sequence   */
+    unsigned int retrans_count;  /* remaining retransmissions to report */
 
 
     /* Time measurement */

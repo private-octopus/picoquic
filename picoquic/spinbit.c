@@ -89,9 +89,12 @@ void picoquic_spinbit_sqr_incoming(picoquic_cnx_t * cnx, picoquic_path_t * path_
 uint8_t picoquic_spinbit_sqr_outgoing(picoquic_cnx_t * cnx)
 {
   picoquic_path_t *pa = cnx->path[0];
-  uint8_t rbit = pa->report_retrans;
+  uint8_t rbit = 0;
 
-  pa->report_retrans=0;
+  if (pa->retrans_count){
+    pa->retrans_count--;
+    rbit=1;
+  }
   pa->loss_q_index++;
   if (pa->loss_q_index>=PICOQUIC_LOSS_Q_PERIOD) {
     pa->loss_q_index=0;

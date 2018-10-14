@@ -803,6 +803,9 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
             /* should be the path on which the packet was transmitted */
             picoquic_path_t * old_path = p->send_path;
 
+	    /* we'll report it where it got lost */
+	    old_path->retrans_count++;
+
             *header_length = 0;
 
             if (p->ptype == picoquic_packet_0rtt_protected) {
@@ -2225,7 +2228,6 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
 
         if (ret == 0 && retransmit_possible &&
             (length = picoquic_retransmit_needed(cnx, pc, path_x, current_time, packet, send_buffer_min_max, &is_cleartext_mode, &header_length)) > 0) {
-            path_x->report_retrans = 1; 
             /* Set the new checksum length */
             checksum_overhead = picoquic_get_checksum_length(cnx, is_cleartext_mode);
             /* Check whether it makes sense to add an ACK at the end of the retransmission */
