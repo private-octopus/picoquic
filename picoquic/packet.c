@@ -1214,6 +1214,7 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header * ph
 {
     int ret = 0;
     int path_id = -1;
+    int challenge_already_required = 0;
 
     if (cnx->path[0]->local_cnxid.id_len > 0) {
         /* Paths must have been created in advance, when the local connection ID was
@@ -1259,6 +1260,8 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header * ph
     if (ret == 0 && cnx->path[path_id]->local_addr_len == 0) {
         cnx->path[path_id]->local_addr_len = picoquic_store_addr(&cnx->path[path_id]->local_addr, addr_to);
     }
+
+    challenge_already_required = cnx->path[path_id]->challenge_required;
 
     if (ret == 0 &&
         (picoquic_compare_addr((struct sockaddr *)&cnx->path[path_id]->peer_addr,
@@ -1340,7 +1343,12 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header * ph
         if (cnx->path[path_id]->challenge_required) {
             cnx->path[path_id]->challenge = picoquic_public_random_64();
             cnx->path[path_id]->challenge_verified = 0;
-            cnx->path[path_id]->challenge_time = current_time;
+            /* Don't reset the challenge time if a challenge was already pending to
+               avoid indefinite postponement of the path challenge due to frequent 
+               path changes. */
+            if (!challenge_already_required) {
+                cnx->path[path_id]->challenge_time = current_time;
+            }
             cnx->path[path_id]->challenge_repeat_count = 0;
         }
     }
