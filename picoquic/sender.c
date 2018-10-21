@@ -1712,7 +1712,8 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                         }
 
                         if (packet_type == picoquic_packet_initial && 
-                            cnx->crypto_context[1].aead_encrypt == NULL) {
+                            (cnx->crypto_context[1].aead_encrypt == NULL ||
+                                cnx->cnx_state == picoquic_state_client_renegotiate)) {
                             /* Pad to minimum packet length. But don't do that if the
                              * initial packet will be coalesced with 0-RTT packet */
                             while (length < send_buffer_max - checksum_overhead) {
