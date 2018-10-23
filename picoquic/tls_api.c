@@ -606,6 +606,15 @@ static int picoquic_set_aead_from_secret(void ** v_aead,ptls_cipher_suite_t * ci
     if ((*v_aead = ptls_aead_new(cipher->aead, cipher->hash, is_enc, secret, PICOQUIC_LABEL_QUIC_BASE)) == NULL) {
         ret = PTLS_ERROR_NO_MEMORY;
     }
+#ifdef _DEBUG
+    else {
+        DBG_PRINTF("AEAD %s IV (%d):\n", 
+            (is_enc)?"Encryption":"Decryption",
+            (int)cipher->aead->iv_size);
+        debug_dump(((ptls_aead_context_t *)(*v_aead))->static_iv, 
+            (int)cipher->aead->iv_size);
+    }
+#endif
 
     return ret;
 }
@@ -828,7 +837,7 @@ int picoquic_setup_initial_traffic_keys(picoquic_cnx_t* cnx)
  *                            "traffic upd", "", Hash.length)
   * Label: PICOQUIC_LABEL_TRAFFIC_UPDATE
  */
-static int picoquic_rotate_app_secret(ptls_cipher_suite_t * cipher, uint8_t * secret)
+int picoquic_rotate_app_secret(ptls_cipher_suite_t * cipher, uint8_t * secret)
 {
     int ret = 0;
     uint8_t new_secret[PTLS_MAX_DIGEST_SIZE];
@@ -837,7 +846,7 @@ static int picoquic_rotate_app_secret(ptls_cipher_suite_t * cipher, uint8_t * se
         cipher->hash->digest_size, ptls_iovec_init(secret, cipher->hash->digest_size),
         PICOQUIC_LABEL_TRAFFIC_UPDATE, ptls_iovec_init(NULL, 0), PICOQUIC_LABEL_QUIC_BASE);
     if (ret == 0) {
-        memcpy(secret, new_secret, cipher->aead->ctr_cipher->key_size);
+        memcpy(secret, new_secret, cipher->hash->digest_size);
     }
 
     return ret;
@@ -886,6 +895,15 @@ int picoquic_compute_new_rotated_keys(picoquic_cnx_t * cnx)
     /* Recompute the secrets */
     if (ret == 0) {
         ret = picoquic_rotate_app_secret(cipher, tls_ctx->app_secret_enc);
+#ifdef _DEBUG
+        if (ret == 0) {
+            DBG_PRINTF("Rotated Encryption Secret (%d):\n", (int)cipher->hash->digest_size);
+            debug_dump(tls_ctx->app_secret_enc, (int)cipher->hash->digest_size);
+        }
+        else {
+            DBG_PRINTF("Encryption secret rotation fails, ret=%x\n", ret);
+        }
+#endif
     }
 
     if (ret == 0) {
@@ -894,6 +912,16 @@ int picoquic_compute_new_rotated_keys(picoquic_cnx_t * cnx)
 
     if (ret == 0) {
         ret = picoquic_rotate_app_secret(cipher, tls_ctx->app_secret_dec);
+#ifdef _DEBUG
+        if (ret == 0) {
+            DBG_PRINTF("Rotated Decryption Secret (%d):\n", (int)cipher->hash->digest_size);
+            debug_dump(tls_ctx->app_secret_dec, (int)cipher->hash->digest_size);
+        }
+        else {
+            DBG_PRINTF("Decryption secret rotation fails, ret=%x\n", ret);
+        }
+#endif
+
     }
 
     if (ret == 0) {

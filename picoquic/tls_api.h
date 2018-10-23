@@ -99,6 +99,7 @@ uint8_t * picoquic_get_app_secret(picoquic_cnx_t* cnx, int is_enc);
 size_t picoquic_get_app_secret_size(picoquic_cnx_t* cnx);
 int picoquic_compute_new_rotated_keys(picoquic_cnx_t * cnx);
 void picoquic_apply_rotated_keys(picoquic_cnx_t * cnx, int is_enc);
+int picoquic_rotate_app_secret(ptls_cipher_suite_t * cipher, uint8_t * secret);
 
 void picoquic_crypto_context_free(picoquic_crypto_context_t * ctx);
 

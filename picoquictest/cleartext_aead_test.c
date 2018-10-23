@@ -27,6 +27,7 @@
 #include "../picoquic/util.h"
 #include "picotls.h"
 #include "picotls/openssl.h"
+#include "picotls/minicrypto.h"
 #include <string.h>
 #include "picoquictest_internal.h"
 
@@ -956,6 +957,73 @@ int draft13_vector_test()
     /* Final integration test: verify that the incoming packet can be decrypted */
     if (ret == 0) {
         ret = draft31_incoming_initial_test();
+    }
+
+    return ret;
+}
+
+/*
+ * Test key rotation
+ */
+
+static const uint8_t key_rotation_test_init[PTLS_MAX_DIGEST_SIZE] = {
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+    17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32,
+    33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48,
+    49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64};
+
+static const uint8_t key_rotation_test_target_sha384[] = {
+    0x5a, 0x2b, 0xc7, 0x38, 0xe7, 0xb2, 0xbc, 0x63, 0x27, 0x7f, 0xfc,
+    0xe2, 0xea, 0x4a, 0x22, 0xca, 0x6c, 0x8c, 0x34, 0xc7, 0xfa, 0x91,
+    0x5b, 0xd2, 0x70, 0x73, 0x63, 0x31, 0xf5, 0x93, 0xe1, 0xcf, 0x4f,
+    0x68, 0x4b, 0x8b, 0x49, 0x5d, 0x48, 0xe8, 0xb8, 0xba, 0x57, 0x58,
+    0x5c, 0x36, 0x5f, 0xbf};
+
+static const uint8_t key_rotation_test_target_sha256[] = {
+    0x15, 0x1c, 0xa9, 0x01, 0xea, 0xba, 0xc5, 0x0c, 0x39, 0x7d, 0x19,
+    0xcd, 0xee, 0xf6, 0x8a, 0x2f, 0xa4, 0xe1, 0x16, 0x2b, 0x04, 0x49,
+    0xc2, 0xb8, 0x67, 0x47, 0x03, 0x98, 0x8f, 0x37, 0xe4, 0xd2 };
+
+static const uint8_t key_rotation_test_target_poly[] = {
+    0x15, 0x1c, 0xa9, 0x01, 0xea, 0xba, 0xc5, 0x0c, 0x39, 0x7d, 0x19,
+    0xcd, 0xee, 0xf6, 0x8a, 0x2f, 0xa4, 0xe1, 0x16, 0x2b, 0x04, 0x49,
+    0xc2, 0xb8, 0x67, 0x47, 0x03, 0x98, 0x8f, 0x37, 0xe4, 0xd2};
+
+static ptls_cipher_suite_t *key_rotation_test_suites[] = {
+    &ptls_openssl_aes256gcmsha384, &ptls_openssl_aes128gcmsha256,
+    &ptls_minicrypto_chacha20poly1305sha256, NULL };
+
+static const uint8_t * key_rotation_test_target[] = {
+    key_rotation_test_target_sha384, key_rotation_test_target_sha256,
+    key_rotation_test_target_poly, NULL };
+
+static const size_t key_rotation_test_target_size[] = {
+    sizeof(key_rotation_test_target_sha384), sizeof(key_rotation_test_target_sha256),
+    sizeof(key_rotation_test_target_poly), 0 };
+
+int key_rotation_vector_test()
+{
+    int ret = 0;
+    uint8_t new_secret[PTLS_MAX_DIGEST_SIZE];
+
+    memcpy(new_secret, key_rotation_test_init, PTLS_MAX_DIGEST_SIZE);
+
+    for (int i = 0; ret == 0 && key_rotation_test_suites[i] != NULL; i++) {
+        memset(new_secret, 0, sizeof(new_secret));
+        memcpy(new_secret, key_rotation_test_init, key_rotation_test_suites[i]->hash->digest_size);
+        ret = picoquic_rotate_app_secret(key_rotation_test_suites[i], new_secret);
+        if (ret != 0) {
+            DBG_PRINTF("Cannot rotate secret[%d], ret=%x\n", i, ret);
+        }
+        else if (key_rotation_test_suites[i]->hash->digest_size != key_rotation_test_target_size[i]) {
+            DBG_PRINTF("Wrong size for secret[%d], %d vs %d\n", i, (int) key_rotation_test_suites[i]->hash->digest_size, 
+                (int) key_rotation_test_target_size[i]);
+            ret = -1;
+        }
+        else if (memcmp(new_secret, key_rotation_test_target[i], key_rotation_test_target_size[i]) != 0) {
+            DBG_PRINTF("Values don't match for secret[%d]\n", i);
+            ret = -1;
+        }
     }
 
     return ret;
