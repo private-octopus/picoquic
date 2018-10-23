@@ -837,7 +837,7 @@ static int picoquic_rotate_app_secret(ptls_cipher_suite_t * cipher, uint8_t * se
         cipher->hash->digest_size, ptls_iovec_init(secret, cipher->hash->digest_size),
         PICOQUIC_LABEL_TRAFFIC_UPDATE, ptls_iovec_init(NULL, 0), PICOQUIC_LABEL_QUIC_BASE);
     if (ret == 0) {
-        memcpy(secret, new_secret, cipher->aead->ctr_cipher->key_size);
+        memcpy(secret, new_secret, cipher->hash->digest_size);
     }
 
     return ret;
