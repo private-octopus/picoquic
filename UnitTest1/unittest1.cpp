@@ -490,6 +490,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(key_rotation_vector)
+        {
+            int ret = key_rotation_vector_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+        
         TEST_METHOD(draft13_vector)
         {
             int ret = draft13_vector_test();

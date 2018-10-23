@@ -140,6 +140,7 @@ int new_rotated_key_test();
 int key_rotation_test();
 int false_migration_test();
 int nat_handshake_test();
+int key_rotation_vector_test();
 
 #ifdef __cplusplus
 }

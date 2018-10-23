@@ -142,6 +142,7 @@ static const picoquic_test_def_t test_table[] = {
     { "key_rotation", key_rotation_test },
     { "false_migration", false_migration_test },
     { "nat_handshake", nat_handshake_test },
+    { "key_rotation_vector", key_rotation_vector_test },
     { "stress", stress_test },
     { "fuzz", fuzz_test },
     { "fuzz_initial", fuzz_initial_test}
