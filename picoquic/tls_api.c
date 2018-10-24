@@ -708,7 +708,7 @@ static int picoquic_update_traffic_key_callback(ptls_update_traffic_key_t * self
     int ret = picoquic_set_key_from_secret(cipher, is_enc, &cnx->crypto_context[epoch], secret);
 
     if (ret == 0 && epoch == 3) {
-        memcpy((is_enc) ? tls_ctx->app_secret_enc : tls_ctx->app_secret_dec, secret, cipher->aead->key_size);
+        memcpy((is_enc) ? tls_ctx->app_secret_enc : tls_ctx->app_secret_dec, secret, cipher->hash->digest_size);
     }
 
     if (ctx->log_secret) {
