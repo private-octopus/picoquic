@@ -918,10 +918,14 @@ int picoquic_incoming_initial(
         }
     }
     else {
-        /* remember the local address on which the initial packet arrived. */
-        (*pcnx)->path[0]->if_index_dest = if_index_to;
-        (*pcnx)->path[0]->local_addr_len = picoquic_store_addr(&(*pcnx)->path[0]->local_addr, addr_to);
-        (*pcnx)->path[0]->peer_addr_len = picoquic_store_addr(&(*pcnx)->path[0]->peer_addr, addr_from);
+        /* Update the incoming and outgoing addresses, but only if this is a new packet */
+        if ((*pcnx)->crypto_context[2].aead_decrypt == NULL &&
+            ((*pcnx)->pkt_ctx[picoquic_packet_context_initial].first_sack_item.end_of_sack_range == (uint64_t)((int64_t)-1) ||
+                ph->pn64 >= (*pcnx)->pkt_ctx[picoquic_packet_context_initial].first_sack_item.end_of_sack_range)) {
+            (*pcnx)->path[0]->if_index_dest = if_index_to;
+            (*pcnx)->path[0]->local_addr_len = picoquic_store_addr(&(*pcnx)->path[0]->local_addr, addr_to);
+            (*pcnx)->path[0]->peer_addr_len = picoquic_store_addr(&(*pcnx)->path[0]->peer_addr, addr_from);
+        }
     }
 
     return ret;
@@ -1081,9 +1085,9 @@ int picoquic_incoming_server_cleartext(
 }
 
 /*
- * Processing of client clear text packet.
+ * Processing of client handshake packet.
  */
-int picoquic_incoming_client_cleartext(
+int picoquic_incoming_client_handshake(
     picoquic_cnx_t* cnx,
     uint8_t* bytes,
     picoquic_packet_header* ph,
@@ -1335,9 +1339,11 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header * ph
             cnx->path[path_id]->challenge_required = 1;
         }
 
-        /* Address origin different than expected. Update */
-        cnx->path[path_id]->peer_addr_len = picoquic_store_addr(&cnx->path[path_id]->peer_addr, addr_from);
-        cnx->path[path_id]->local_addr_len = picoquic_store_addr(&cnx->path[path_id]->local_addr, addr_to);
+        /* Address origin different than expected. If this is the most recent packet, update */
+        if (ph->pn64 >= cnx->pkt_ctx[picoquic_packet_context_application].first_sack_item.end_of_sack_range) {
+            cnx->path[path_id]->peer_addr_len = picoquic_store_addr(&cnx->path[path_id]->peer_addr, addr_from);
+            cnx->path[path_id]->local_addr_len = picoquic_store_addr(&cnx->path[path_id]->local_addr, addr_to);
+        }
 
         /* Reset the path challenge */
         if (cnx->path[path_id]->challenge_required) {
@@ -1570,7 +1576,7 @@ int picoquic_incoming_segment(
                 }
                 else
                 {
-                    ret = picoquic_incoming_client_cleartext(cnx, bytes, &ph, current_time);
+                    ret = picoquic_incoming_client_handshake(cnx, bytes, &ph, current_time);
                 }
                 break;
             case picoquic_packet_0rtt_protected:
