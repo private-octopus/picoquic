@@ -1345,6 +1345,7 @@ static picoquic_packet_t* picoquic_update_rtt(picoquic_cnx_t* cnx, uint64_t larg
     /* Check whether this is a new acknowledgement */
     if (largest > pkt_ctx->highest_acknowledged || pkt_ctx->first_sack_item.start_of_sack_range == (uint64_t)((int64_t)-1)) {
         pkt_ctx->highest_acknowledged = largest;
+        pkt_ctx[pc].highest_acknowledged_time = current_time;
 
         if (ack_delay < PICOQUIC_ACK_DELAY_MAX) {
             /* if the ACK is reasonably recent, use it to update the RTT */
@@ -1952,7 +1953,7 @@ int picoquic_prepare_ack_frame_maybe_ecn(picoquic_cnx_t* cnx, uint64_t current_t
 
             /* Remember the ACK value and time */
             pkt_ctx->highest_ack_sent = pkt_ctx->first_sack_item.end_of_sack_range;
-            pkt_ctx->highest_ack_time = current_time;
+            pkt_ctx->highest_ack_sent_time = current_time;
 
             *consumed = byte_index;
         }
@@ -1993,7 +1994,7 @@ int picoquic_is_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, picoquic_
     picoquic_packet_context_t * pkt_ctx = &cnx->pkt_ctx[pc];
 
     if (pkt_ctx->highest_ack_sent + 2 <= pkt_ctx->first_sack_item.end_of_sack_range ||
-        pkt_ctx->highest_ack_time + pkt_ctx->ack_delay_local <= current_time) {
+        pkt_ctx->highest_ack_sent_time + pkt_ctx->ack_delay_local <= current_time) {
         ret = pkt_ctx->ack_needed;
     }
 

@@ -540,13 +540,14 @@ typedef struct st_picoquic_packet_context_t {
     picoquic_sack_item_t first_sack_item;
     uint64_t time_stamp_largest_received;
     uint64_t highest_ack_sent;
-    uint64_t highest_ack_time;
+    uint64_t highest_ack_sent_time;
     uint64_t ack_delay_local;
 
     uint64_t nb_retransmit;
     uint64_t latest_retransmit_time;
     uint64_t highest_acknowledged;
     uint64_t latest_time_acknowledged; /* time at which the highest acknowledged was sent */
+    uint64_t highest_acknowledged_time; /* time at which the highest ack was received */
     picoquic_packet_t* retransmit_newest;
     picoquic_packet_t* retransmit_oldest;
     picoquic_packet_t* retransmitted_newest;

@@ -982,6 +982,10 @@ static int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
             nb_inactive++;
         }
 
+        if (nb_inactive == 128) {
+            nb_inactive = 128;
+        }
+
         if (test_ctx->test_finished) {
             if (picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) && picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)) {
                 break;
