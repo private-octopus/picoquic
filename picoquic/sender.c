@@ -189,7 +189,7 @@ picoquic_packet_t* picoquic_create_packet()
 }
 
 void picoquic_update_payload_length(
-    uint8_t* bytes, size_t pnum_index, size_t header_length, size_t packet_length)
+    uint8_t* bytes, size_t pnum_index, size_t header_length, uint32_t packet_length)
 {
     if ((bytes[0] & 0x80) != 0 && header_length > 6 && packet_length > header_length && packet_length < 0x4000)
     {
@@ -407,7 +407,7 @@ uint32_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     uint32_t send_length;
     uint32_t h_length;
     uint32_t pn_offset = 0;
-    size_t sample_offset = 0;
+    uint32_t sample_offset = 0;
     size_t sample_size = picoquic_pn_iv_size(pn_enc);
     uint32_t pn_length = 0;
     uint32_t aead_checksum_length = (uint32_t)picoquic_aead_get_checksum_length(aead_context);
@@ -532,7 +532,7 @@ void picoquic_queue_for_retransmit(picoquic_cnx_t* cnx, picoquic_path_t * path_x
 
 picoquic_packet_t* picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet_t* p, int should_free)
 {
-    size_t dequeued_length = p->length + p->checksum_overhead;
+    uint32_t dequeued_length = p->length + p->checksum_overhead;
     picoquic_packet_context_enum pc = p->pc;
 
     if (p->previous_packet == NULL) {
