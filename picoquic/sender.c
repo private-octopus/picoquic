@@ -1281,12 +1281,14 @@ void picoquic_cnx_set_next_wake_time(picoquic_cnx_t* cnx, uint64_t current_time)
     } else if (path_x->path_is_demoted == 0) {
         
         if (pacing != 0) {
-        next_time = path_x->next_pacing_time;
+            next_time = path_x->next_pacing_time;
         }
         else {
             if (cnx->path[0]->challenge_verified != 0) {
                 for (picoquic_packet_context_enum pc = 0; pc < picoquic_nb_packet_context; pc++) {
+#if 0
                     picoquic_packet_t* p = cnx->pkt_ctx[pc].retransmit_oldest;
+#endif
                     /* Consider delayed ACK */
                     if (cnx->pkt_ctx[pc].ack_needed) {
                         uint64_t ack_time = cnx->pkt_ctx[pc].highest_ack_sent_time + cnx->pkt_ctx[pc].ack_delay_local;
