@@ -918,7 +918,7 @@ void picoquic_log_time(FILE* F, picoquic_cnx_t* cnx, uint64_t current_time,
 void picoquic_set_key_log_file(picoquic_quic_t *quic, FILE* F_keylog);
 
 /* handling of ACK logic */
-int picoquic_is_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, picoquic_packet_context_enum pc);
+int picoquic_is_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t * next_wake_time, picoquic_packet_context_enum pc);
 
 int picoquic_is_pn_already_received(picoquic_cnx_t* cnx, 
     picoquic_packet_context_enum pc, uint64_t pn64);
