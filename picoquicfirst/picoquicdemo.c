@@ -1205,6 +1205,16 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
                     if (ret == 0 && send_length > 0) {
                         bytes_sent = sendto(fd, send_buffer, (int)send_length, 0,
                             (struct sockaddr*)&server_address, server_addr_length);
+
+                        if (bytes_sent <= 0)
+                        {
+                            fprintf(stdout, "Cannot send packet to server, returns %d\n", bytes_sent);
+
+                            if (F_log != stdout && F_log != stderr)
+                            {
+                                fprintf(F_log, "Cannot send packet to server, returns %d\n", bytes_sent);
+                            }
+                        }
                     }
                 }
 
