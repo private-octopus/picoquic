@@ -58,7 +58,7 @@
 
 #define TRANSPORT_PARAMETERS_DEFAULT_VERSION_BYTES 'P', 'C', 'Q', '1'
 #define TRANSPORT_PARAMETERS_SUPPORTED_VERSIONS_BYTES \
-     0x0C, 'P', 'C', 'Q', '1', 'P', 'C', 'Q', '0', 0xFF, 0x00, 0x00, 0x0F
+     0x10, 'P', 'C', 'Q', '1', 'P', 'C', 'Q', '0', 0xFF, 0x00, 0x00, 0x10, 0xFF, 0x00, 0x00, 0x0F
 
 #define TRANSPORT_PREFERED_ADDRESS_NULL \
     { 0, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 0, \
@@ -227,38 +227,57 @@ static int transport_param_compare(picoquic_tp_t* param, picoquic_tp_t* ref) {
         (ref->initial_max_stream_data_bidi_remote != 0 ||
             param->initial_max_stream_data_bidi_remote != ref->initial_max_stream_data_bidi_local)) {
         /* TODO: remove the horrific kludge above when we align on draft 14 */
+        DBG_PRINTF("initial_max_stream_data_bidi_remote: expected %d, got %d\n",
+            param->initial_max_stream_data_bidi_remote, ref->initial_max_stream_data_bidi_remote);
         ret = -1;
     }
     else if (param->initial_max_stream_data_uni != ref->initial_max_stream_data_uni) {
+        DBG_PRINTF("initial_max_stream_data_uni: expected %d, got %d\n",
+            param->initial_max_stream_data_uni, ref->initial_max_stream_data_uni);
         ret = -1;
     }
     else if (param->initial_max_data != ref->initial_max_data) {
+        DBG_PRINTF("initial_max_data: expected %d, got %d\n",
+            param->initial_max_data, ref->initial_max_data);
         ret = -1;
     }
     else if (param->initial_max_stream_id_bidir != ref->initial_max_stream_id_bidir) {
+        DBG_PRINTF("initial_max_stream_id_bidir: expected %d, got %d\n",
+            param->initial_max_stream_id_bidir, ref->initial_max_stream_id_bidir);
         ret = -1;
     }
     else if (param->initial_max_stream_id_unidir != ref->initial_max_stream_id_unidir) {
+        DBG_PRINTF("initial_max_stream_id_unidir: expected %d, got %d\n",
+            param->initial_max_stream_id_unidir, ref->initial_max_stream_id_unidir);
         ret = -1;
     }
     else if (param->idle_timeout != ref->idle_timeout) {
+        DBG_PRINTF("idle_timeout: expected %d, got %d\n",
+            param->idle_timeout, ref->idle_timeout);
         ret = -1;
     }
     else if (param->prefered_address.ipVersion != ref->prefered_address.ipVersion) {
+        DBG_PRINTF("prefered_address.ipVersion: expected %d, got %d\n",
+            param->prefered_address.ipVersion, ref->prefered_address.ipVersion);
         ret = -1;
     }
     else if (param->prefered_address.ipVersion != 0) {
         int ip_len = (param->prefered_address.ipVersion == 4) ? 4 : 16;
         if (memcmp(param->prefered_address.ipAddress, ref->prefered_address.ipAddress, ip_len) != 0) {
+            DBG_PRINTF("%s", "prefered_address.ipAddress: values don't match\n");
             ret = -1;
         }
         else if (param->prefered_address.port != ref->prefered_address.port) {
+            DBG_PRINTF("prefered_address.port: expected %d, got %d\n",
+                param->prefered_address.port, ref->prefered_address.port);
             ret = -1;
         }
         else if (picoquic_compare_connection_id(&param->prefered_address.connection_id, &ref->prefered_address.connection_id) != 0) {
+            DBG_PRINTF("%s", "prefered_address.connection_id: values don't match\n");
             ret = -1;
         }
         else if (memcmp(param->prefered_address.statelessResetToken, ref->prefered_address.statelessResetToken, 16) != 0) {
+            DBG_PRINTF("%s", "prefered_address.statelessResetToken: values don't match\n");
             ret = -1;
         }
     }
@@ -315,13 +334,19 @@ int transport_param_one_test(int mode, uint32_t version, uint32_t proposed_versi
 
         ret = picoquic_prepare_transport_extensions(test_cnx, mode, buffer, sizeof(buffer), &encoded);
     }
+    else {
+        DBG_PRINTF("%s", "Could not create the test context\n");
+    }
 
     if (ret == 0) {
         if (encoded != target_length) {
+            DBG_PRINTF("Encoded length: expected %d, got %d\n",
+                (int)encoded, (int)target_length);
             ret = -1;
         } else {
             if (mode == 0) {
                 if (memcmp(buffer, target, target_length) != 0) {
+                    DBG_PRINTF("%s", "Encoded values don't match\n");
                     ret = -1;
                 }
             }
@@ -332,9 +357,11 @@ int transport_param_one_test(int mode, uint32_t version, uint32_t proposed_versi
                     target_secret);
 
                 if (memcmp(buffer, target, target_length - PICOQUIC_RESET_SECRET_SIZE) != 0) {
+                    DBG_PRINTF("%s", "Encoded values up to reset secret don't match\n");
                     ret = -1;
                 } else if (memcmp(buffer + target_length - PICOQUIC_RESET_SECRET_SIZE, target_secret,
                     PICOQUIC_RESET_SECRET_SIZE) != 0) {
+                    DBG_PRINTF("%s", "Reset secret doesn't match expected value\n");
                     ret = -1;
                 }
             }
@@ -345,6 +372,7 @@ int transport_param_one_test(int mode, uint32_t version, uint32_t proposed_versi
         ret = picoquic_receive_transport_extensions(test_cnx, mode, buffer, encoded, &decoded);
 
         if (ret == 0 && transport_param_compare(&test_cnx->remote_parameters, param) != 0) {
+            DBG_PRINTF("%s", "Parameter values don't match\n");
             ret = -1;
         }
     }
@@ -374,13 +402,19 @@ int transport_param_decode_test(int mode, uint32_t version, uint32_t proposed_ve
     if (ret == 0) {
         ret = picoquic_receive_transport_extensions(test_cnx, mode,
             target, target_length, &decoded);
+        if (ret != 0) {
+            DBG_PRINTF("Decoding returns %x\n", ret);
+        }
     }
 
     if (ret == 0 && decoded != target_length) {
+        DBG_PRINTF("Decoded length: got %d, expected %d\n",
+            (int)decoded, (int)target_length);
         ret = -1;
     }
 
     if (ret == 0 && transport_param_compare(&test_cnx->remote_parameters, param) != 0) {
+        DBG_PRINTF("%s", "Parameter values don't match\n");
         ret = -1;
     }
 
@@ -483,51 +517,81 @@ int transport_param_test()
     if (ret == 0) {
         ret = transport_param_one_test(0, version_default, version_default,
             &transport_param_test1, client_param1, sizeof(client_param1));
+        if (ret != 0) {
+            DBG_PRINTF("Param test TP1, CP1 returns %x\n", ret);
+        }
     }
 
     if (ret == 0) {
         ret = transport_param_one_test(0, version_default, 0x0A1A0A1A,
             &transport_param_test2, client_param2, sizeof(client_param2));
+        if (ret != 0) {
+            DBG_PRINTF("Param test TP2, CP2 returns %x\n", ret);
+        }
     }
 
     if (ret == 0) {
         ret = transport_param_decode_test(0, version_default, 0x0A1A0A1A,
             &transport_param_test3, client_param3, sizeof(client_param3));
+        if (ret != 0) {
+            DBG_PRINTF("Decode test TP3, CP3 returns %x\n", ret);
+        }
     }
 
     if (ret == 0) {
         ret = transport_param_one_test(1, version_default, version_default,
             &transport_param_test4, server_param1, sizeof(server_param1));
+        if (ret != 0) {
+            DBG_PRINTF("Param test TP4, SP1 returns %x\n", ret);
+        }
     }
 
     if (ret == 0) {
         ret = transport_param_one_test(1, version_default, 0x0A1A0A1A,
             &transport_param_test5, server_param2, sizeof(server_param2));
+        if (ret != 0) {
+            DBG_PRINTF("Param test TP5, SP2 returns %x\n", ret);
+        }
     }
 
     if (ret == 0) {
         ret = transport_param_decode_test(0, version_default, 0x0A1A0A1A,
             &transport_param_test6, client_param4, sizeof(client_param4));
+        if (ret != 0) {
+            DBG_PRINTF("Decode test TP6, CP4 returns %x\n", ret);
+        }
     }
 
     if (ret == 0) {
         ret = transport_param_decode_test(0, version_default, 0xBABABABA,
             &transport_param_test7, client_param5, sizeof(client_param5));
+        if (ret != 0) {
+            DBG_PRINTF("Decode test TP7, CP5 returns %x\n", ret);
+        }
     }
 
     if (ret == 0) {
         ret = transport_param_decode_test(0, version_default, 0x0A1A0A1A,
             &transport_param_test8, client_param8, sizeof(client_param8));
+        if (ret != 0) {
+            DBG_PRINTF("Decode test TP8, CP8 returns %x\n", ret);
+        }
     }
 
     if (ret == 0) {
         ret = transport_param_decode_test(1, version_default, 0x0A1A0A1A,
             &transport_param_test9, server_param3, sizeof(server_param3));
+        if (ret != 0) {
+            DBG_PRINTF("Decode test TP9, SP3 returns %x\n", ret);
+        }
     }
 
     if (ret == 0) {
         ret = transport_param_one_test(0, version_default, version_default,
             &transport_param_test10, client_param9, sizeof(client_param9));
+        if (ret != 0) {
+            DBG_PRINTF("Param test TP10, CP9 returns %x\n", ret);
+        }
     }
 
     if (ret == 0)
