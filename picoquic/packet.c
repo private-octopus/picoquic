@@ -684,6 +684,10 @@ int picoquic_prepare_version_negotiation(
             picoquic_log_outgoing_segment(quic->F_log, 1, NULL,
                 bytes, 0, (uint32_t)sp->length,
                 bytes, (uint32_t)sp->length);
+
+            picoquic_log_packet_address(quic->F_log,
+                picoquic_val64_connection_id(ph->dest_cnx_id),
+                NULL, addr_to, 0, sp->length, 0);
         }
 
         picoquic_queue_stateless_packet(quic, sp);
@@ -740,6 +744,18 @@ void picoquic_process_unexpected_cnxid(
             memcpy(&sp->addr_local, addr_to,
                 (addr_to->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
             sp->if_index_local = if_index_to;
+
+            if (quic->F_log != NULL) {
+                uint64_t log_cnxid64 = picoquic_val64_connection_id(ph->dest_cnx_id);
+
+                fprintf(quic->F_log, "%llu: Unexpected connection ID, sending stateless reset.\n",
+                    (unsigned long long)log_cnxid64);
+
+                picoquic_log_packet_address(quic->F_log, log_cnxid64,
+                    NULL, addr_to, 0, sp->length, 0);
+            }
+
+
             picoquic_queue_stateless_packet(quic, sp);
         }
     }
@@ -799,6 +815,10 @@ void picoquic_queue_stateless_retry(picoquic_cnx_t* cnx,
             picoquic_log_outgoing_segment(cnx->quic->F_log, 1, cnx,
                 bytes, 0, (uint32_t)sp->length,
                 bytes, (uint32_t)sp->length);
+
+            picoquic_log_packet_address(cnx->quic->F_log,
+                picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)),
+                cnx, addr_to, 0, sp->length, 0);
         }
 
         picoquic_queue_stateless_packet(cnx->quic, sp);
@@ -1482,21 +1502,29 @@ int picoquic_incoming_segment(
     picoquic_packet_header ph;
     int new_context_created = 0;
 
-    /* Parse the header and decrypt the packet */
+    /* Parse the header and decrypt the segment */
     ret = picoquic_parse_header_and_decrypt(quic, bytes, length, packet_length, addr_from,
         current_time, &ph, &cnx, consumed, &new_context_created);
 
     /* Verify that the segment coalescing is for the same destination ID */
     if (ret == 0) {
         if (picoquic_is_connection_id_null(*previous_dest_id)) {
+            /* This is the first segment in the incoming packet */
             *previous_dest_id = ph.dest_cnx_id;
+
+            /* if needed, log that the packet is received */
+            if (quic->F_log != NULL) {
+                picoquic_log_packet_address(quic->F_log,
+                    picoquic_val64_connection_id((cnx == NULL) ? ph.dest_cnx_id : picoquic_get_logging_cnxid(cnx)),
+                    cnx, addr_from, 1, packet_length, current_time);
+            }
         }
         else if (picoquic_compare_connection_id(previous_dest_id, &ph.dest_cnx_id) != 0) {
             ret = PICOQUIC_ERROR_CNXID_SEGMENT;
         }
     }
 
-    /* Log the incoming packet */
+    /* Log the incoming segment */
     picoquic_log_decrypted_segment(quic->F_log, 1, cnx, 1, &ph, bytes, (uint32_t)*consumed, ret);
 
     if (ret == 0) {
