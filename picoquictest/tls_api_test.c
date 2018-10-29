@@ -3918,7 +3918,7 @@ int initial_close_test()
         if (ret == 0) {
             test_ctx->cnx_client->cnx_state = picoquic_state_handshake_failure;
             test_ctx->cnx_client->local_error = 0xDEAD;
-            picoquic_cnx_set_next_wake_time(test_ctx->cnx_client, simulated_time);
+            picoquic_reinsert_by_wake_time(test_ctx->qclient, test_ctx->cnx_client, simulated_time);
         }
     }
 

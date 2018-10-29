@@ -1600,7 +1600,7 @@ int picoquic_incoming_segment(
             ret = picoquic_record_pn_received(cnx, ph.pc, ph.pn64, current_time);
         }
         if (cnx != NULL) {
-            picoquic_cnx_set_next_wake_time(cnx, current_time);
+            picoquic_reinsert_by_wake_time(cnx->quic, cnx, current_time);
         }
     } else if (ret == PICOQUIC_ERROR_DUPLICATE) {
         /* Bad packets are dropped silently, but duplicates should be acknowledged */
@@ -1621,7 +1621,7 @@ int picoquic_incoming_segment(
             length, ret);
         ret = -1;
         if (cnx != NULL) {
-            picoquic_cnx_set_next_wake_time(cnx, current_time);
+            picoquic_reinsert_by_wake_time(cnx->quic, cnx, current_time);
         }
     } else if (ret == 1) {
         /* wonder what happened ! */

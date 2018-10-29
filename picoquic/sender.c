@@ -119,7 +119,7 @@ int picoquic_add_to_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
             }
         }
 
-        picoquic_cnx_set_next_wake_time(cnx, picoquic_get_quic_time(cnx->quic));
+        picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
     }
 
     return ret;
@@ -144,7 +144,7 @@ int picoquic_reset_stream(picoquic_cnx_t* cnx,
         stream->stream_flags |= picoquic_stream_flag_reset_requested;
     }
 
-    picoquic_cnx_set_next_wake_time(cnx, picoquic_get_quic_time(cnx->quic));
+    picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
 
     return ret;
 }
@@ -168,7 +168,7 @@ int picoquic_stop_sending(picoquic_cnx_t* cnx,
         stream->stream_flags |= picoquic_stream_flag_stop_sending_requested;
     }
 
-    picoquic_cnx_set_next_wake_time(cnx, picoquic_get_quic_time(cnx->quic));
+    picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
 
     return ret;
 }
@@ -2240,11 +2240,9 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                             DBG_PRINTF("%s\n", "Too many challenge retransmits, abandon path");
                             path_x->challenge_failed = 1;
                         }
-                        length = 0;
                     }
                 }
                 else {
-                    length = 0;
                     if (path_x->challenge_time + path_x->retransmit_timer < next_wake_time) {
                         next_wake_time = path_x->challenge_time + path_x->retransmit_timer;
                     }
@@ -2453,12 +2451,39 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
         next_wake_time = current_time;
     }
     else {
+        picoquic_probe_t * probe = cnx->probe_first;
+
         /* Consider demotions */
         for (int i = 0; next_wake_time > current_time && i < cnx->nb_paths; i++) {
+            if (cnx->path[i]->response_required) {
+                next_wake_time = current_time;
+                break;
+            }
+
             if (cnx->path[i]->path_is_demoted &&
                 cnx->path[i]->demotion_time < next_wake_time) {
                 next_wake_time = cnx->path[i]->demotion_time;
             }
+
+            if (cnx->path[i]->challenge_verified == 0 && cnx->path[i]->path_is_activated) {
+                uint64_t next_challenge_time = cnx->path[i]->challenge_time + cnx->path[i]->retransmit_timer;
+
+                if (next_challenge_time < next_wake_time) {
+                    next_wake_time = next_challenge_time;
+                }
+            }
+        }
+
+        /* Consider probe timers */
+        while (probe != NULL && next_wake_time > current_time) {
+            if (probe->challenge_verified == 0) {
+                uint64_t next_challenge_time = probe->challenge_time + cnx->path[0]->retransmit_timer;
+
+                if (next_challenge_time <= next_wake_time) {
+                    next_wake_time = next_challenge_time;
+                }
+            }
+            probe = probe->next_probe;
         }
 
         if (next_wake_time < current_time) {
@@ -2791,7 +2816,7 @@ int picoquic_close(picoquic_cnx_t* cnx, uint16_t reason_code)
     }
     cnx->offending_frame_type = 0;
 
-    picoquic_cnx_set_next_wake_time(cnx, picoquic_get_quic_time(cnx->quic));
+    picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
 
     return ret;
 }
