@@ -1049,13 +1049,8 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
                         (struct sockaddr*)&server_address, server_addr_length);
 
                     if (F_log != NULL) {
-                        if (bytes_sent > 0)
+                        if (bytes_sent <= 0)
                         {
-                            picoquic_log_packet_address(F_log, 
-                                picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx_client)),
-                                cnx_client, (struct sockaddr*)&server_address, 0, bytes_sent, current_time);
-                        }
-                        else {
                             fprintf(F_log, "Cannot send first packet to server, returns %d\n", bytes_sent);
                             ret = -1;
                         }
@@ -1083,13 +1078,6 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
 
         if (bytes_recv != 0) {
             fprintf(F_log, "Select returns %d, from length %d\n", bytes_recv, from_length);
-
-            if (bytes_recv > 0 && F_log != NULL)
-            {
-                picoquic_log_packet_address(F_log,
-                    picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx_client)),
-                    cnx_client, (struct sockaddr*)&server_address, 1, bytes_recv, current_time);
-            }
         }
 
         if (bytes_recv < 0) {
@@ -1209,7 +1197,6 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
                 }
 
                 if (ret == 0) {
-                    /* TODO: once migration is supported, manage addresses */
                     send_length = PICOQUIC_MAX_PACKET_SIZE;
 
                     ret = picoquic_prepare_packet(cnx_client, current_time,
@@ -1218,10 +1205,6 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
                     if (ret == 0 && send_length > 0) {
                         bytes_sent = sendto(fd, send_buffer, (int)send_length, 0,
                             (struct sockaddr*)&server_address, server_addr_length);
-
-                        picoquic_log_packet_address(F_log,
-                            picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx_client)),
-                            cnx_client, (struct sockaddr*)&server_address, 0, bytes_sent, current_time);
                     }
                 }
 

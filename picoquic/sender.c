@@ -389,7 +389,7 @@ uint32_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     uint32_t h_length;
     uint32_t pn_offset = 0;
     uint32_t sample_offset = 0;
-    size_t sample_size = picoquic_pn_iv_size(pn_enc);
+    uint32_t sample_size = (uint32_t) picoquic_pn_iv_size(pn_enc);
     uint32_t pn_length = 0;
     uint32_t aead_checksum_length = (uint32_t)picoquic_aead_get_checksum_length(aead_context);
 
@@ -2473,6 +2473,7 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     int ret = 0;
     picoquic_path_t * path_x = NULL;
     picoquic_packet_t * packet = NULL;
+    struct sockaddr * addr_to_log = NULL;
 
     *send_length = 0;
 
@@ -2512,6 +2513,8 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
         }
 
         if (path_x != NULL) {
+            addr_to_log = (struct sockaddr *)&path_x->peer_addr;
+
             if (p_addr_to != NULL) {
                 *p_addr_to = (struct sockaddr *)&path_x->peer_addr;
                 *to_len = path_x->peer_addr_len;
@@ -2573,6 +2576,13 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
                 }
             }
         }
+    }
+
+    /* if needed, log that the packet is sent */
+    if (*send_length > 0 && cnx->quic->F_log != NULL) {
+        picoquic_log_packet_address(cnx->quic->F_log,
+            picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)),
+            cnx, addr_to_log, 0, *send_length, current_time);
     }
 
     return ret;
