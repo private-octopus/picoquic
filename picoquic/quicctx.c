@@ -1360,7 +1360,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
                 cnx->pkt_ctx[pc].first_sack_item.end_of_sack_range = 0;
                 cnx->pkt_ctx[pc].first_sack_item.next_sack = NULL;
                 cnx->pkt_ctx[pc].highest_ack_sent = 0;
-                cnx->pkt_ctx[pc].highest_ack_time = start_time;
+                cnx->pkt_ctx[pc].highest_ack_sent_time = start_time;
                 cnx->pkt_ctx[pc].time_stamp_largest_received = (uint64_t)((int64_t)-1);
                 cnx->pkt_ctx[pc].send_sequence = 0;
                 cnx->pkt_ctx[pc].nb_retransmit = 0;
@@ -1369,6 +1369,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
                 cnx->pkt_ctx[pc].retransmit_oldest = NULL;
                 cnx->pkt_ctx[pc].highest_acknowledged = cnx->pkt_ctx[pc].send_sequence - 1;
                 cnx->pkt_ctx[pc].latest_time_acknowledged = start_time;
+                cnx->pkt_ctx[pc].highest_acknowledged_time = start_time;
                 cnx->pkt_ctx[pc].ack_needed = 0;
                 cnx->pkt_ctx[pc].ack_delay_local = PICOQUIC_ACK_DELAY_MAX;
             }
@@ -1447,7 +1448,7 @@ int picoquic_start_client_cnx(picoquic_cnx_t * cnx)
 {
     int ret = picoquic_initialize_tls_stream(cnx);
 
-    picoquic_cnx_set_next_wake_time(cnx, picoquic_get_quic_time(cnx->quic));
+    picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
 
     return ret;
 }
@@ -1631,7 +1632,7 @@ int picoquic_queue_misc_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t 
         cnx->first_misc_frame = misc_frame;
     }
 
-    picoquic_cnx_set_next_wake_time(cnx, picoquic_get_quic_time(cnx->quic));
+    picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
 
     return ret;
 }

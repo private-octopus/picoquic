@@ -540,13 +540,14 @@ typedef struct st_picoquic_packet_context_t {
     picoquic_sack_item_t first_sack_item;
     uint64_t time_stamp_largest_received;
     uint64_t highest_ack_sent;
-    uint64_t highest_ack_time;
+    uint64_t highest_ack_sent_time;
     uint64_t ack_delay_local;
 
     uint64_t nb_retransmit;
     uint64_t latest_retransmit_time;
     uint64_t highest_acknowledged;
     uint64_t latest_time_acknowledged; /* time at which the highest acknowledged was sent */
+    uint64_t highest_acknowledged_time; /* time at which the highest ack was received */
     picoquic_packet_t* retransmit_newest;
     picoquic_packet_t* retransmit_oldest;
     picoquic_packet_t* retransmitted_newest;
@@ -782,8 +783,6 @@ void picoquic_update_pacing_data(picoquic_path_t * path_x);
      * so ready connections are polled first */
 void picoquic_reinsert_by_wake_time(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint64_t next_time);
 
-void picoquic_cnx_set_next_wake_time(picoquic_cnx_t* cnx, uint64_t current_time);
-
 /* Integer parsing macros */
 #define PICOPARSE_16(b) ((((uint16_t)(b)[0]) << 8) | (b)[1])
 #define PICOPARSE_24(b) ((((uint32_t)PICOPARSE_16(b)) << 16) | ((b)[2]))
@@ -834,7 +833,7 @@ uint32_t  picoquic_predict_packet_header_length(
     picoquic_packet_type_enum packet_type);
 
 void picoquic_update_payload_length(
-    uint8_t* bytes, size_t pnum_index, size_t header_length, size_t packet_length);
+    uint8_t* bytes, size_t pnum_index, size_t header_length, uint32_t packet_length);
 
 uint32_t picoquic_get_checksum_length(picoquic_cnx_t* cnx, int is_cleartext_mode);
 
@@ -917,7 +916,7 @@ void picoquic_log_time(FILE* F, picoquic_cnx_t* cnx, uint64_t current_time,
 void picoquic_set_key_log_file(picoquic_quic_t *quic, FILE* F_keylog);
 
 /* handling of ACK logic */
-int picoquic_is_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, picoquic_packet_context_enum pc);
+int picoquic_is_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t * next_wake_time, picoquic_packet_context_enum pc);
 
 int picoquic_is_pn_already_received(picoquic_cnx_t* cnx, 
     picoquic_packet_context_enum pc, uint64_t pn64);
