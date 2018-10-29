@@ -34,7 +34,7 @@ picoquic_stored_ticket_t* picoquic_format_ticket(uint64_t time_valid_until,
     char* next_p = ((char*)stored) + sizeof(picoquic_stored_ticket_t);
 
     if (stored != NULL) {
-        memset(stored, 0, sizeof(picoquic_stored_ticket_t));
+        memset(stored, 0, ticket_size);
         stored->time_valid_until = time_valid_until;
         stored->sni = next_p;
         stored->sni_length = sni_length;
@@ -332,7 +332,7 @@ int picoquic_load_tickets(picoquic_stored_ticket_t** pp_first_ticket,
                         ret = PICOQUIC_ERROR_INVALID_FILE;
                     }
 
-                    if (ret == 0) {
+                    if (ret == 0 && next != NULL) {
                         if (next->time_valid_until < current_time) {
                             free(next);
                         }

@@ -89,9 +89,11 @@ void picosplay_init_tree(picosplay_tree* tree, picosplay_comparator comp) {
 /* Return an empty tree, storing the picosplay_comparator. */
 picosplay_tree* picosplay_new_tree(picosplay_comparator comp) {
     picosplay_tree *new = malloc(sizeof(picosplay_tree));
-    new->comp = comp;
-    new->root = NULL;
-    new->size = 0;
+    if (new != NULL) {
+        new->comp = comp;
+        new->root = NULL;
+        new->size = 0;
+    }
     return new;
 }
 
