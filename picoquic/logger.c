@@ -1189,9 +1189,9 @@ void picoquic_log_outgoing_segment(void* F_log, int log_cnxid, picoquic_cnx_t* c
 {
     picoquic_cnx_t* pcnx = cnx;
     picoquic_packet_header ph;
-    uint32_t checksum_length = (cnx != NULL)? picoquic_get_checksum_length(cnx, 0):16;
+    uint32_t checksum_length = (cnx != NULL) ? picoquic_get_checksum_length(cnx, 0) : 16;
     struct sockaddr_in default_addr;
-    int ret;  
+    int ret;
 
     if (F_log == NULL) {
         return;
@@ -1201,20 +1201,23 @@ void picoquic_log_outgoing_segment(void* F_log, int log_cnxid, picoquic_cnx_t* c
     default_addr.sin_family = AF_INET;
 
     ret = picoquic_parse_packet_header((cnx == NULL) ? NULL : cnx->quic, send_buffer, send_length,
-        ((cnx==NULL || cnx->path[0] == NULL)?(struct sockaddr *)&default_addr: 
+        ((cnx == NULL || cnx->path[0] == NULL) ? (struct sockaddr *)&default_addr :
         (struct sockaddr *)&cnx->path[0]->local_addr), &ph, &pcnx, 0);
 
     ph.pn64 = sequence_number;
     ph.pn = (uint32_t)ph.pn64;
-    ph.offset = ph.pn_offset + 4; /* todo: should provide the actual length */
-    ph.payload_length -= 4;
-    if (ph.payload_length > checksum_length) {
-        ph.payload_length -= (uint16_t)checksum_length;
+    if (ph.pn_offset != 0) {
+        ph.offset = ph.pn_offset + 4; /* todo: should provide the actual length */
+        ph.payload_length -= 4;
     }
-    else {
-        ph.payload_length = 0;
+    if (ph.ptype != picoquic_packet_version_negotiation) {
+        if (ph.payload_length > checksum_length) {
+            ph.payload_length -= (uint16_t)checksum_length;
+        }
+        else {
+            ph.payload_length = 0;
+        }
     }
-
     /* log the segment. */
     picoquic_log_decrypted_segment(F_log, log_cnxid, cnx, 0,
         &ph, bytes, length, ret);
