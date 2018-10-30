@@ -679,15 +679,12 @@ int picoquic_prepare_version_negotiation(
         memcpy(&sp->addr_local, addr_to,
             (addr_to->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
         sp->if_index_local = if_index_to;
+        sp->cnxid_log64 = picoquic_val64_connection_id(ph->dest_cnx_id);
 
         if (quic->F_log != NULL) {
             picoquic_log_outgoing_segment(quic->F_log, 1, NULL,
                 bytes, 0, (uint32_t)sp->length,
                 bytes, (uint32_t)sp->length);
-
-            picoquic_log_packet_address(quic->F_log,
-                picoquic_val64_connection_id(ph->dest_cnx_id),
-                NULL, addr_to, 0, sp->length, 0);
         }
 
         picoquic_queue_stateless_packet(quic, sp);
@@ -744,15 +741,11 @@ void picoquic_process_unexpected_cnxid(
             memcpy(&sp->addr_local, addr_to,
                 (addr_to->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
             sp->if_index_local = if_index_to;
+            sp->cnxid_log64 = picoquic_val64_connection_id(ph->dest_cnx_id);
 
             if (quic->F_log != NULL) {
-                uint64_t log_cnxid64 = picoquic_val64_connection_id(ph->dest_cnx_id);
-
                 fprintf(quic->F_log, "%llu: Unexpected connection ID, sending stateless reset.\n",
-                    (unsigned long long)log_cnxid64);
-
-                picoquic_log_packet_address(quic->F_log, log_cnxid64,
-                    NULL, addr_to, 0, sp->length, 0);
+                    (unsigned long long)sp->cnxid_log64);
             }
 
 
@@ -810,15 +803,12 @@ void picoquic_queue_stateless_retry(picoquic_cnx_t* cnx,
         memcpy(&sp->addr_local, addr_to,
             (addr_to->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
         sp->if_index_local = if_index_to;
+        sp->cnxid_log64 = picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx));
 
         if (cnx->quic->F_log != NULL) {
             picoquic_log_outgoing_segment(cnx->quic->F_log, 1, cnx,
                 bytes, 0, (uint32_t)sp->length,
                 bytes, (uint32_t)sp->length);
-
-            picoquic_log_packet_address(cnx->quic->F_log,
-                picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)),
-                cnx, addr_to, 0, sp->length, 0);
         }
 
         picoquic_queue_stateless_packet(cnx->quic, sp);
