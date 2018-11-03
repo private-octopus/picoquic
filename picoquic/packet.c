@@ -265,7 +265,7 @@ int picoquic_parse_packet_header(
              ph->offset = length;
              ph->payload_length = 0;
          }
-         
+      
          if (*pcnx != NULL) {
              ph->epoch = 3;
              ph->version_index = (*pcnx)->version_index;
