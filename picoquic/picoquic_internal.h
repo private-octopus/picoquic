@@ -107,6 +107,7 @@ typedef struct st_picoquic_packet_header_t {
     uint64_t pnmask;
     uint64_t pn64;
     uint16_t payload_length;
+    uint16_t pl_val;
     int version_index;
     int epoch;
     picoquic_packet_context_enum pc;
@@ -117,7 +118,11 @@ typedef struct st_picoquic_packet_header_t {
     unsigned int has_spin_bit : 1;
 
     uint32_t token_length;
+#if 0
     uint32_t token_offset;
+#else
+    uint8_t * token_bytes;
+#endif
 } picoquic_packet_header;
 
 /*
