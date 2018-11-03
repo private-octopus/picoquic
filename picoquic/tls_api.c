@@ -43,7 +43,7 @@
 
 
 #define PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION 0xFFA5
-#define PICOQUIC_TRANSPORT_PARAMETERS_MAX_SIZE 512
+#define PICOQUIC_TRANSPORT_PARAMETERS_MAX_SIZE 256
 
 typedef struct st_picoquic_tls_ctx_t {
     ptls_t* tls;
@@ -52,8 +52,8 @@ typedef struct st_picoquic_tls_ctx_t {
     ptls_raw_extension_t ext[2];
     ptls_handshake_properties_t handshake_properties;
     ptls_iovec_t alpn_vec;
-    uint8_t ext_data[128];
-    uint8_t ext_received[128];
+    uint8_t ext_data[PICOQUIC_TRANSPORT_PARAMETERS_MAX_SIZE];
+    uint8_t ext_received[PICOQUIC_TRANSPORT_PARAMETERS_MAX_SIZE];
     size_t ext_received_length;
     int ext_received_return;
     uint8_t app_secret_enc[PTLS_MAX_DIGEST_SIZE];
