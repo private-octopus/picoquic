@@ -368,7 +368,21 @@ void picoquic_log_packet_header(FILE* F, uint64_t log_cnxid64, picoquic_packet_h
         picoquic_log_connection_id(F, &ph->dest_cnx_id);
         fprintf(F, ", ");
         picoquic_log_connection_id(F, &ph->srce_cnx_id);
-        fprintf(F, ", Seq: %x, pl: %d\n", ph->pn, ph->payload_length);
+        fprintf(F, ", Seq: %x, pl: %d\n", ph->pn, ph->pl_val);
+        if (ph->ptype == picoquic_packet_initial) {
+            fprintf(F, "%" PRIx64 ":     Token length: %d", log_cnxid64, ph->token_length);
+            if (ph->token_length > 0) {
+                uint32_t printed_length = (ph->token_length > 16) ? 16 : ph->token_length;
+                fprintf(F, ", Token: ");
+                for (uint8_t i = 0; i < printed_length; i++) {
+                    fprintf(F, "%02x", ph->token_bytes[i]);
+                }
+                if (printed_length < ph->token_length) {
+                    fprintf(F, "...");
+                }
+            }
+            fprintf(F, "\n");
+        }
         break;
     }
 }

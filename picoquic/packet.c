@@ -85,6 +85,7 @@ int picoquic_parse_packet_header(
                     ph->ptype = picoquic_packet_version_negotiation;
                     ph->pc = picoquic_packet_context_initial;
                     ph->payload_length = (uint16_t) ((length > ph->offset) ? length - ph->offset : 0);
+                    ph->pl_val = ph->payload_length; /* saving the value found in the packet */
 
                     if (*pcnx == NULL && quic != NULL) {
                         /* The version negotiation should always include the cnx-id sent by the client */
@@ -132,7 +133,7 @@ int picoquic_parse_packet_header(
                                 }
                                 else {
                                     ph->token_length = (uint32_t)tok_len;
-                                    ph->token_offset = ph->offset + (uint32_t)l_tok_len;
+                                    ph->token_bytes = bytes + ph->offset + (uint32_t)l_tok_len;
                                     ph->offset += (uint32_t)(l_tok_len + (size_t)tok_len);
                                 }
 
@@ -189,16 +190,19 @@ int picoquic_parse_packet_header(
                             ph->version_index < 0) {
                             ph->ptype = picoquic_packet_error;
                             ph->payload_length = (uint16_t)((length > ph->offset) ? length - ph->offset : 0);
+                            ph->pl_val = ph->payload_length;
                         }
                         if (var_length <= 0 || ph->offset + var_length + pn_length_clear + payload_length > length ||
                             ph->version_index < 0) {
                             ph->ptype = picoquic_packet_error;
                             ph->payload_length = (uint16_t)((length > ph->offset) ? length - ph->offset : 0);
+                            ph->pl_val = ph->payload_length;
                         }
                     }
                     
                     if (ph->ptype != picoquic_packet_error)
                     {
+                        ph->pl_val = (uint16_t)payload_length;
                         ph->payload_length = (uint16_t)payload_length;
                         ph->offset += var_length;
                         ph->pn_offset = ph->offset;
@@ -241,6 +245,7 @@ int picoquic_parse_packet_header(
          */
          uint8_t cnxid_length = (receiving == 0 && *pcnx != NULL) ? (*pcnx)->path[0]->remote_cnxid.id_len : quic->local_ctx_length;
          ph->pc = picoquic_packet_context_application;
+         ph->pl_val = 0; /* No actual payload length in short headers */
 
          if ((int)length >= 1 + cnxid_length) {
              /* We can identify the connection by its ID */
@@ -260,7 +265,7 @@ int picoquic_parse_packet_header(
              ph->offset = length;
              ph->payload_length = 0;
          }
-         
+      
          if (*pcnx != NULL) {
              ph->epoch = 3;
              ph->version_index = (*pcnx)->version_index;
@@ -846,7 +851,7 @@ int picoquic_incoming_initial(
 
         /* Does the token contain a valid CID? */
         if (ph->token_length > 1u + 8u) {
-            cid_len = *(bytes + ph->token_offset);
+            cid_len = ph->token_bytes[0];
             if (cid_len < 8 && cid_len > PICOQUIC_CONNECTION_ID_MAX_SIZE) {
                 cid_len = 0;
             }
@@ -867,14 +872,14 @@ int picoquic_incoming_initial(
         }
 
         if (cid_len != 0) {
-            if (picoquic_get_retry_token((*pcnx)->quic, base, len, bytes + ph->token_offset + 1, cid_len,
+            if (picoquic_get_retry_token((*pcnx)->quic, base, len, ph->token_bytes + 1, cid_len,
                 token, ph->token_length) != 0)
             {
                 ret = PICOQUIC_ERROR_MEMORY;
             }
-            else if (memcmp(token, bytes + ph->token_offset, ph->token_length) == 0) {
+            else if (memcmp(token, ph->token_bytes, ph->token_length) == 0) {
                 is_token_ok = 1;
-                (void)picoquic_parse_connection_id(bytes + ph->token_offset + 1, cid_len, &(*pcnx)->original_cnxid);
+                (void)picoquic_parse_connection_id(ph->token_bytes + 1, cid_len, &(*pcnx)->original_cnxid);
             }
         }
 
@@ -1446,22 +1451,7 @@ int picoquic_incoming_encrypted(
             if (ret == 0) {
                 picoquic_path_t * path_x = cnx->path[path_id];
 
-#if 0
-                /* Process the spin bit on this path */
-                if (ph->pn64 > cnx->pkt_ctx[pc].first_sack_item.end_of_sack_range) {
-                    path_x->current_spin = ph->spin ^ cnx->client_mode;
-                    /* TODO: spin bit should be per path */
-                    if (ph->has_spin_bit && path_x->current_spin != path_x->prev_spin) {
-                        // got an edge 
-                        path_x->prev_spin = path_x->current_spin;
-                        path_x->spin_edge = 1;
-                        path_x->spin_vec = (ph->spin_vec == 3) ? 3 : (ph->spin_vec + 1);
-                        path_x->spin_last_trigger = picoquic_get_quic_time(cnx->quic);
-                    }
-                }
-#else
                 picoquic_spin_function_table[picoquic_supported_versions[cnx->version_index].spinbit_version].spinbit_incoming(cnx, path_x, ph);
-#endif
                 /* Accept the incoming frames */
                 ret = picoquic_decode_frames(cnx, cnx->path[path_id], 
                     bytes + ph->offset, ph->payload_length, ph->epoch, current_time);
