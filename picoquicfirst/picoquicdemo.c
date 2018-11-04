@@ -916,7 +916,7 @@ int quic_client_migrate(picoquic_cnx_t * cnx, SOCKET_TYPE * fd, struct sockaddr 
 
 /* Quic Client */
 int quic_client(const char* ip_address_text, int server_port, const char * sni, 
-    const char * root_crt,
+    const char * alpn, const char * root_crt,
     uint32_t proposed_version, int force_zero_share, int force_migration, 
     int nb_packets_before_key_update, int mtu_max, FILE* F_log)
 {
@@ -947,9 +947,11 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
     int migration_started = 0;
     int64_t delay_max = 10000000;
     int64_t delta_t = 0;
-    int notified_ready = 0;
-    const char* alpn = (proposed_version == 0xFF00000D)?"hq-13": ((proposed_version == 0xFF00000D) ? "hq-14": ((proposed_version == 0xFF00000F) ? "hq-15":"hq-16"));
-    int zero_rtt_available = 0;
+    int notified_ready = 0;int zero_rtt_available = 0;
+
+    if (alpn == NULL) {
+        alpn = (proposed_version == 0xFF00000D) ? "hq-13" : ((proposed_version == 0xFF00000D) ? "hq-14" : ((proposed_version == 0xFF00000F) ? "hq-15" : "hq-16"));
+    }
 
     memset(&callback_ctx, 0, sizeof(picoquic_first_client_callback_ctx_t));
 
@@ -1302,6 +1304,7 @@ void usage()
     fprintf(stderr, "  -p port               server port (default: %d)\n", default_server_port);
     fprintf(stderr, "  -m mtu_max            Largest mtu value that can be tried for discovery\n");
     fprintf(stderr, "  -n sni                sni (default: server name)\n");
+    fprintf(stderr, "  -a alpn               alpn (default function of version)\n");
     fprintf(stderr, "  -r                    Do Reset Request\n");
     fprintf(stderr, "  -s <64b 64b>          Reset seed\n");
     fprintf(stderr, "  -t file               root trust file");
@@ -1346,9 +1349,10 @@ int main(int argc, char** argv)
     const char* server_key_file = default_server_key_file;
     const char* log_file = NULL;
     const char * sni = NULL;
+    const char * alpn = NULL;
     int server_port = default_server_port;
     const char* root_trust_file = NULL;
-    uint32_t proposed_version = 0xff00000b;
+    uint32_t proposed_version = 0;
     int is_client = 0;
     int just_once = 0;
     int do_hrr = 0;
@@ -1375,7 +1379,7 @@ int main(int argc, char** argv)
 
     /* Get the parameters */
     int opt;
-    while ((opt = getopt(argc, argv, "c:k:p:u:v:1rhzf:i:s:e:l:m:n:t:")) != -1) {
+    while ((opt = getopt(argc, argv, "c:k:p:u:v:1rhzf:i:s:e:l:m:n:a:t:")) != -1) {
         switch (opt) {
         case 'c':
             server_cert_file = optarg;
@@ -1443,6 +1447,9 @@ int main(int argc, char** argv)
             break;
         case 'n':
             sni = optarg;
+            break;
+        case 'a':
+            alpn = optarg;
             break;
         case 't':
             root_trust_file = optarg;
@@ -1524,7 +1531,7 @@ int main(int argc, char** argv)
 
         /* Run as client */
         printf("Starting PicoQUIC connection to server IP = %s, port = %d\n", server_name, server_port);
-        ret = quic_client(server_name, server_port, sni, root_trust_file, proposed_version, force_zero_share, 
+        ret = quic_client(server_name, server_port, sni, alpn, root_trust_file, proposed_version, force_zero_share, 
             force_migration, nb_packets_before_update, mtu_max, F_log);
 
         printf("Client exit with code = %d\n", ret);
