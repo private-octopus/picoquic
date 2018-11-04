@@ -660,7 +660,7 @@ size_t picoquic_log_stop_sending_frame(FILE* F, uint8_t* bytes, size_t bytes_max
     return byte_index;
 }
 
-size_t picoquic_log_generic_close_frame(FILE* F, uint8_t* bytes, size_t bytes_max, uint8_t ftype)
+size_t picoquic_log_generic_close_frame(FILE* F, uint8_t* bytes, size_t bytes_max, uint8_t ftype, uint64_t cnx_id64)
 {
     size_t byte_index = 1;
     uint32_t error_code = 0;
@@ -707,8 +707,32 @@ size_t picoquic_log_generic_close_frame(FILE* F, uint8_t* bytes, size_t bytes_ma
                 picoquic_log_frame_names(ftype, 0),
                 (unsigned long long)(byte_index + string_length), (unsigned long long)bytes_max);
             byte_index = bytes_max;
-        } else {
-            /* TODO: print the UTF8 string */
+        }
+        else if (string_length > 0) {
+            /* Print the UTF8 string */
+            char reason_string[49];
+            uint64_t printed_length = (string_length > 48) ? 48 : string_length;
+
+            for (uint32_t i = 0; i < printed_length; i++) {
+                int c = bytes[byte_index + i];
+
+                if (c < 0x20 || c > 0x7E) {
+                    c = '.';
+                }
+                reason_string[i] = (char) c;
+            }
+            reason_string[printed_length] = 0;
+
+            if (cnx_id64 != 0) {
+                fprintf(F, "%" PRIx64 ": ", cnx_id64);
+            }
+
+            fprintf(F, "        Reason: %s", reason_string);
+            if (string_length > printed_length) {
+                fprintf(F, "...");
+            }
+            fprintf(F, "\n");
+
             byte_index += (size_t)string_length;
         }
     }
@@ -716,14 +740,14 @@ size_t picoquic_log_generic_close_frame(FILE* F, uint8_t* bytes, size_t bytes_ma
     return byte_index;
 }
 
-size_t picoquic_log_connection_close_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
+size_t picoquic_log_connection_close_frame(FILE* F, uint8_t* bytes, size_t bytes_max, uint64_t cnx_id64)
 {
-    return picoquic_log_generic_close_frame(F, bytes, bytes_max, picoquic_frame_type_connection_close);
+    return picoquic_log_generic_close_frame(F, bytes, bytes_max, picoquic_frame_type_connection_close, cnx_id64);
 }
 
-size_t picoquic_log_application_close_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
+size_t picoquic_log_application_close_frame(FILE* F, uint8_t* bytes, size_t bytes_max, uint64_t cnx_id64)
 {
-    return picoquic_log_generic_close_frame(F, bytes, bytes_max, picoquic_frame_type_application_close);
+    return picoquic_log_generic_close_frame(F, bytes, bytes_max, picoquic_frame_type_application_close, cnx_id64);
 }
 
 size_t picoquic_log_max_data_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
@@ -1059,11 +1083,11 @@ void picoquic_log_frames(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t leng
             break;
         case picoquic_frame_type_connection_close: /* CONNECTION_CLOSE */
             byte_index += picoquic_log_connection_close_frame(F, bytes + byte_index,
-                length - byte_index);
+                length - byte_index, cnx_id64);
             break;
         case picoquic_frame_type_application_close:
             byte_index += picoquic_log_application_close_frame(F, bytes + byte_index,
-                length - byte_index);
+                length - byte_index, cnx_id64);
             break;
         case picoquic_frame_type_max_data: /* MAX_DATA */
             byte_index += picoquic_log_max_data_frame(F, bytes + byte_index,
