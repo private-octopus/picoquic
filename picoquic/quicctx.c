@@ -1819,7 +1819,9 @@ int picoquic_connection_error(picoquic_cnx_t* cnx, uint16_t local_error, uint64_
 
         DBG_PRINTF("Protocol error (%x)", local_error);
     } else if (cnx->cnx_state < picoquic_state_client_ready) {
-        cnx->local_error = local_error;
+        if (cnx->cnx_state != picoquic_state_handshake_failure) {
+            cnx->local_error = local_error;
+        }
         cnx->cnx_state = picoquic_state_handshake_failure;
 
         DBG_PRINTF("Protocol error %x", local_error);
