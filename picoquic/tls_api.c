@@ -316,31 +316,33 @@ int picoquic_tls_collected_extensions_cb(ptls_t* tls, ptls_handshake_properties_
     /* Find the context from the TLS context */
     picoquic_tls_ctx_t* ctx = (picoquic_tls_ctx_t*)((char*)properties - offsetof(struct st_picoquic_tls_ctx_t, handshake_properties));
 
-    if (slots[0].type == PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION && slots[1].type == 0xFFFF) {
-        size_t copied_length = sizeof(ctx->ext_received);
+    for (int i_slot = 0; slots[i_slot].type != 0xFFFF; i_slot++) {
+#ifdef _DEBUG
+        DBG_PRINTF("Receive extension, slot[%d]: %x\n",
+            i_slot, slots[i_slot].type);
+#endif
+        if (slots[i_slot].type == PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION) {
+            size_t copied_length = sizeof(ctx->ext_received);
 
-        /* Retrieve the transport parameters */
-        ret = picoquic_receive_transport_extensions(ctx->cnx, (ctx->client_mode) ? 1 : 0,
-            slots[0].data.base, slots[0].data.len, &consumed);
+            /* Retrieve the transport parameters */
+            ret = picoquic_receive_transport_extensions(ctx->cnx, (ctx->client_mode) ? 1 : 0,
+                slots[i_slot].data.base, slots[i_slot].data.len, &consumed);
 
-        /* Copy the extensions in the local context for further debugging */
-        ctx->ext_received_length = slots[0].data.len;
-        if (copied_length > ctx->ext_received_length)
-            copied_length = ctx->ext_received_length;
-        memcpy(ctx->ext_received, slots[0].data.base, copied_length);
-        ctx->ext_received_return = ret;
-        /* For now, override the value in case of default */
-        ret = 0;
+            /* Copy the extensions in the local context for further debugging */
+            ctx->ext_received_length = slots[i_slot].data.len;
+            if (copied_length > ctx->ext_received_length)
+                copied_length = ctx->ext_received_length;
+            memcpy(ctx->ext_received, slots[i_slot].data.base, copied_length);
+            ctx->ext_received_return = ret;
+            /* For now, override the value in case of default */
+            ret = 0;
 
-        /* In server mode, only compose the extensions if properly received from client */
-        if (ctx->client_mode == 0) {
-            picoquic_tls_set_extensions(ctx->cnx, ctx);
+            /* In server mode, only compose the extensions if properly received from client */
+            if (ctx->client_mode == 0) {
+                picoquic_tls_set_extensions(ctx->cnx, ctx);
+            }
         }
     }
-#ifdef _DEBUG
-    DBG_PRINTF("Receive extension, slot[0]: %x, slot[1]: %x\n",
-        slots[0].type, slots[1].type);
-#endif
 
     return ret;
 }
