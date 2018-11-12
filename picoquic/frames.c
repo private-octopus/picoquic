@@ -1074,8 +1074,8 @@ int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head* str
                 if (stream->stream_id != 0) {
                     cnx->data_sent += length;
                 }
-                *consumed = byte_index;
             }
+            *consumed = byte_index;
 
             if (ret == 0 && STREAM_FIN_NOTIFIED(stream) && stream->send_queue == 0) {
                 /* Set the fin bit */
