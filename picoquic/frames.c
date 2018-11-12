@@ -1025,11 +1025,8 @@ int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head* str
                 length = (size_t)(stream->maxdata_remote - stream->sent_offset);
             }
 
-            /* Abide by flow control restrictions, stream 0 is exempt */
-            if (stream->stream_id != 0) {
-                if (length > (cnx->maxdata_remote - cnx->data_sent)) {
-                    length = (size_t)(cnx->maxdata_remote - cnx->data_sent);
-                }
+            if (length > (cnx->maxdata_remote - cnx->data_sent)) {
+                length = (size_t)(cnx->maxdata_remote - cnx->data_sent);
             }
 
             if (length >= space) {
