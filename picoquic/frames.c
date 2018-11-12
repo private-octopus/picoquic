@@ -1017,46 +1017,44 @@ int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head* str
             if (space < 2 || stream->send_queue == NULL) {
                 length = 0;
             } else {
-                size_t available = (size_t)(stream->send_queue->length - stream->send_queue->offset);
+                length = (size_t)(stream->send_queue->length - stream->send_queue->offset);
+            }
 
-                length = available;
+            /* Enforce maxdata per stream on all streams, including stream 0 */
+            if (length >(stream->maxdata_remote - stream->sent_offset)) {
+                length = (size_t)(stream->maxdata_remote - stream->sent_offset);
+            }
 
-                /* Enforce maxdata per stream on all streams, including stream 0 */
-                if (length >(stream->maxdata_remote - stream->sent_offset)) {
-                    length = (size_t)(stream->maxdata_remote - stream->sent_offset);
+            /* Abide by flow control restrictions, stream 0 is exempt */
+            if (stream->stream_id != 0) {
+                if (length > (cnx->maxdata_remote - cnx->data_sent)) {
+                    length = (size_t)(cnx->maxdata_remote - cnx->data_sent);
                 }
+            }
 
-                /* Abide by flow control restrictions, stream 0 is exempt */
-                if (stream->stream_id != 0) {
-                    if (length > (cnx->maxdata_remote - cnx->data_sent)) {
-                        length = (size_t)(cnx->maxdata_remote - cnx->data_sent);
-                    }
-                }
+            if (length >= space) {
+                length = space;
+            } else {
+                /* This is going to be a trial and error process */
+                size_t l_len = 0;
 
-                if (length >= space) {
-                    length = space;
-                } else {
-                    /* This is going to be a trial and error process */
-                    size_t l_len = 0;
-
-                    /* Try a simple encoding */
-                    bytes[0] |= 2; /* Indicates presence of length */
+                /* Try a simple encoding */
+                bytes[0] |= 2; /* Indicates presence of length */
+                l_len = picoquic_varint_encode(bytes + byte_index, space,
+                    (uint64_t)length);
+                if (l_len == 0 || (l_len == space && length > 0)) {
+                    /* Will not try a silly encoding */
+                    *consumed = 0;
+                    ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
+                } else if (length + l_len > space) {
+                    /* try a shorter packet */
+                    length = space - l_len;
                     l_len = picoquic_varint_encode(bytes + byte_index, space,
                         (uint64_t)length);
-                    if (l_len == 0 || (l_len == space && length > 0)) {
-                        /* Will not try a silly encoding */
-                        *consumed = 0;
-                        ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
-                    } else if (length + l_len > space) {
-                        /* try a shorter packet */
-                        length = space - l_len;
-                        l_len = picoquic_varint_encode(bytes + byte_index, space,
-                            (uint64_t)length);
-                        byte_index += l_len;
-                    } else {
-                        /* This is good */
-                        byte_index += l_len;
-                    }
+                    byte_index += l_len;
+                } else {
+                    /* This is good */
+                    byte_index += l_len;
                 }
             }
 
