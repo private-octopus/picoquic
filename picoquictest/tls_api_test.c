@@ -4374,7 +4374,7 @@ static int key_rotation_stress_test_one(int nb_packets)
             break;
         }
 
-        ret = tls_api_one_sim_round(test_ctx, simulated_time, 0, &was_active);
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
     }
 
     if (test_ctx != NULL) {
