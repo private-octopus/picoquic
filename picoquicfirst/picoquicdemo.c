@@ -109,9 +109,6 @@ static const char* bad_request_message = "<html><head><title>Bad Request</title>
 #include "../picoquic/picosocks.h"
 #include "../picoquic/util.h"
 
-/* TODO: remove this declaration when removing support for draft 14 */
-void picoquic_set_tls_context_for_draft_14(picoquic_quic_t * quic);
-
 void print_address(struct sockaddr* address, char* label, picoquic_connection_id_t cnx_id)
 {
     char hostname[256];
@@ -440,11 +437,6 @@ int quic_server(const char* server_name, int server_port,
             PICOQUIC_SET_LOG(qserver, stdout);
 
             picoquic_set_key_log_file_from_env(qserver);
-
-            if (proposed_version == PICOQUIC_SEVENTH_INTEROP_VERSION ||
-                proposed_version == PICOQUIC_EIGHT_INTEROP_VERSION) {
-                picoquic_set_tls_context_for_draft_14(qserver);
-            }
         }
     }
 
@@ -1006,11 +998,6 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
                     fprintf(F_log, "No root crt list specified, certificate will not be verified.\n");
                 }
                 picoquic_set_null_verifier(qclient);
-            }
-
-            if (proposed_version == PICOQUIC_SEVENTH_INTEROP_VERSION ||
-                proposed_version == PICOQUIC_EIGHT_INTEROP_VERSION) {
-                picoquic_set_tls_context_for_draft_14(qclient);
             }
         }
     }

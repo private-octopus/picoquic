@@ -803,10 +803,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                             break;
                         }
                         ret = picoquic_skip_frame(&p->bytes[byte_index],
-                            p->length - byte_index, &frame_length, &frame_is_pure_ack,
-                            picoquic_supported_versions[cnx->version_index].version == PICOQUIC_SEVENTH_INTEROP_VERSION ||
-                            picoquic_supported_versions[cnx->version_index].version == PICOQUIC_EIGHT_INTEROP_VERSION
-                        );
+                            p->length - byte_index, &frame_length, &frame_is_pure_ack);
                         byte_index += frame_length;
                     }
                     p->contains_crypto = contains_crypto;
@@ -862,9 +859,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
 
                     while (ret == 0 && byte_index < p->length) {
                         ret = picoquic_skip_frame(&p->bytes[byte_index],
-                            p->length - byte_index, &frame_length, &frame_is_pure_ack,
-                            picoquic_supported_versions[cnx->version_index].version == PICOQUIC_SEVENTH_INTEROP_VERSION ||
-                            picoquic_supported_versions[cnx->version_index].version == PICOQUIC_EIGHT_INTEROP_VERSION);
+                            p->length - byte_index, &frame_length, &frame_is_pure_ack);
 
                         /* Check whether the data was already acked, which may happen in 
                          * case of spurious retransmissions */
@@ -980,9 +975,7 @@ int picoquic_is_cnx_backlog_empty(picoquic_cnx_t* cnx)
 
             while (ret == 0 && byte_index < p->length) {
                 ret = picoquic_skip_frame(&p->bytes[byte_index],
-                    p->length - p->offset, &frame_length, &frame_is_pure_ack,
-                    picoquic_supported_versions[cnx->version_index].version == PICOQUIC_SEVENTH_INTEROP_VERSION ||
-                    picoquic_supported_versions[cnx->version_index].version == PICOQUIC_EIGHT_INTEROP_VERSION);
+                    p->length - p->offset, &frame_length, &frame_is_pure_ack);
 
                 if (!frame_is_pure_ack) {
                     backlog_empty = 0;
@@ -1173,9 +1166,7 @@ int picoquic_prepare_packet_0rtt(picoquic_cnx_t* cnx, picoquic_path_t * path_x, 
     picoquic_finalize_and_protect_packet(cnx, packet,
         ret, length, header_length, checksum_overhead,
         send_length, send_buffer, (uint32_t)send_buffer_max,
-        (picoquic_supported_versions[cnx->version_index].version == PICOQUIC_SEVENTH_INTEROP_VERSION ||
-            picoquic_supported_versions[cnx->version_index].version == PICOQUIC_EIGHT_INTEROP_VERSION) ?
-        &path_x->remote_cnxid : &cnx->initial_cnxid,
+        &cnx->initial_cnxid,
         &path_x->local_cnxid,
         path_x, current_time);
 

@@ -647,7 +647,6 @@ int picoquic_prepare_version_negotiation(
     if (sp != NULL) {
         uint8_t* bytes = sp->bytes;
         size_t byte_index = 0;
-        int is_draft_14 = picoquic_tls_context_is_draft_14(quic);
 
         /* Packet type set to random value for version negotiation */
         picoquic_public_random(bytes + byte_index, 1);
@@ -663,16 +662,8 @@ int picoquic_prepare_version_negotiation(
         
         /* Set the payload to the list of versions */
         for (size_t i = 0; i < picoquic_nb_supported_versions; i++) {
-            uint32_t proposed_version = picoquic_supported_versions[i].version;
-            if ((is_draft_14 &&
-                (proposed_version == PICOQUIC_SEVENTH_INTEROP_VERSION ||
-                    proposed_version == PICOQUIC_EIGHT_INTEROP_VERSION)) ||
-                (!is_draft_14 &&
-                (proposed_version != PICOQUIC_SEVENTH_INTEROP_VERSION &&
-                    proposed_version != PICOQUIC_EIGHT_INTEROP_VERSION))) {
-                picoformat_32(bytes + byte_index, picoquic_supported_versions[i].version);
-                byte_index += 4;
-            }
+            picoformat_32(bytes + byte_index, picoquic_supported_versions[i].version);
+            byte_index += 4;
         }
 
         /* Set length and addresses, and queue. */
@@ -1415,9 +1406,7 @@ int picoquic_incoming_encrypted(
                 int closing_received = 0;
 
                 ret = picoquic_decode_closing_frames(
-                    bytes + ph->offset, ph->payload_length, &closing_received, 
-                    picoquic_supported_versions[cnx->version_index].version == PICOQUIC_SEVENTH_INTEROP_VERSION ||
-                    picoquic_supported_versions[cnx->version_index].version == PICOQUIC_EIGHT_INTEROP_VERSION);
+                    bytes + ph->offset, ph->payload_length, &closing_received);
 
                 if (ret == 0) {
                     if (closing_received) {

@@ -1154,29 +1154,6 @@ int picoquic_master_tlscontext(picoquic_quic_t* quic,
     return ret;
 }
 
-void picoquic_set_tls_context_for_draft_14(picoquic_quic_t * quic)
-{
-    ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
-
-    if (ctx != NULL) {
-        /* Tell Picotls to require EOED messages during handshake */
-        ctx->omit_end_of_early_data = 0;
-    }
-}
-
-int picoquic_tls_context_is_draft_14(picoquic_quic_t * quic)
-{
-    int ret = 0;
-    ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
-
-    if (ctx != NULL) {
-        /* Tell Picotls to require EOED messages during handshake */
-        ret = (ctx->omit_end_of_early_data == 0);
-    }
-
-    return ret;
-}
-
 static void free_certificates_list(ptls_iovec_t* certs, size_t len) {
     if (certs == NULL) {
         return;
