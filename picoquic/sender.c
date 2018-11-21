@@ -2086,7 +2086,13 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                     }
                 }
 
-                if (path_x->cwin > path_x->bytes_in_transit) {
+                if (path_x->cwin < path_x->bytes_in_transit) {
+                    uint64_t cwin_time = current_time + path_x->smoothed_rtt;
+
+                    if (cwin_time < next_wake_time) {
+                        next_wake_time = cwin_time;
+                    }
+                } else {
                     /* if present, send tls data */
                     if (tls_ready) {
                         ret = picoquic_prepare_crypto_hs_frame(cnx, 3, &bytes[length],
