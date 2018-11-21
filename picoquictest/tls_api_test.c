@@ -4286,9 +4286,7 @@ static int key_rotation_stress_test_one(int nb_packets)
     int max_trials = 100000;
     int max_rotations = 100;
     int nb_rotation = 0;
-    int nb_stalled = 0;
     uint64_t rotation_sequence = 100;
-    uint64_t injection_sequence = 50;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
