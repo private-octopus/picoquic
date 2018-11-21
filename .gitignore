@@ -20,3 +20,5 @@ Release
 */*.xbf
 */*.ilk
 *.b
+/picoquic/h3zero.c
+/picoquic/h3zero.h

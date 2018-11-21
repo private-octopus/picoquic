@@ -146,6 +146,13 @@ static test_api_stream_desc_t test_scenario_mtu_discovery[] = {
     { 2, 0, 100000, 0 }
 };
 
+static test_api_stream_desc_t test_scenario_sustained[] = {
+    { 4, 0, 257, 1000000 },
+    { 8, 4, 257, 1000000 },
+    { 12, 8, 257, 1000000 },
+    { 16, 12, 257, 1000000 }
+};
+
 static int test_api_init_stream_buffers(size_t len, uint8_t** src_bytes, uint8_t** rcv_bytes)
 {
     int ret = 0;
@@ -1047,7 +1054,7 @@ static int tls_api_attempt_to_close(
         test_ctx->c_to_s_link->loss_mask = 0;
         test_ctx->s_to_c_link->loss_mask = 0;
 
-        while (ret == 0 && (test_ctx->cnx_client->cnx_state != picoquic_state_disconnected || test_ctx->cnx_server->cnx_state != picoquic_state_disconnected) && nb_rounds < 256) {
+        while (ret == 0 && (test_ctx->cnx_client->cnx_state != picoquic_state_disconnected || test_ctx->cnx_server->cnx_state != picoquic_state_disconnected) && nb_rounds < 100000) {
             int was_active = 0;
             ret = tls_api_one_sim_round(test_ctx, simulated_time, 0, &was_active);
             nb_rounds++;
@@ -4261,6 +4268,126 @@ int key_rotation_test()
     }
 
     return ret;
+}
+
+/*
+ * Key rotation stress: mimic a client that rotates its keys very rapidly.
+ * Expected results: the server should survive. The server connection should be
+ * deleted or closed.
+ */
+
+static int key_rotation_stress_test_one(int nb_packets)
+{
+    uint64_t simulated_time = 0;
+    uint64_t closing_time = 0;
+    uint64_t loss_mask = 0;
+    int nb_trials = 0;
+    int nb_inactive = 0;
+    int max_trials = 100000;
+    int max_rotations = 100;
+    int nb_rotation = 0;
+    int nb_stalled = 0;
+    uint64_t rotation_sequence = 100;
+    uint64_t injection_sequence = 50;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = PICOQUIC_ERROR_MEMORY;
+    }
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    /* Prepare to send data */
+    if (ret == 0) {
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_sustained, sizeof(test_scenario_sustained));
+    }
+
+    /* Perform a data sending loop, during which various key rotations are tried
+     * every "nb_packets". */
+
+    while (ret == 0 && nb_trials < max_trials && nb_inactive < 256 && test_ctx->cnx_client->cnx_state == picoquic_state_client_ready && test_ctx->cnx_server->cnx_state == picoquic_state_server_ready) {
+        int was_active = 0;
+
+        nb_trials++;
+
+        if (test_ctx->cnx_client->pkt_ctx[picoquic_packet_context_application].send_sequence > rotation_sequence &&
+            test_ctx->cnx_client->key_phase_enc == test_ctx->cnx_client->key_phase_dec) {
+            rotation_sequence = test_ctx->cnx_client->pkt_ctx[picoquic_packet_context_application].send_sequence + nb_packets;
+            nb_rotation++;
+            if (nb_rotation > max_rotations) {
+                break;
+            }
+            else {
+                ret = picoquic_start_key_rotation(test_ctx->cnx_client);
+                if (ret != 0) {
+                    DBG_PRINTF("Start key rotation returns %d\n", ret);
+                }
+            }
+        }
+
+        if (ret == 0) {
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+        }
+
+        if (ret != 0)
+        {
+            break;
+        }
+
+        if (was_active) {
+            nb_inactive = 0;
+        }
+        else {
+            nb_inactive++;
+        }
+
+        if (test_ctx->test_finished) {
+            if (picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) && picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)) {
+                break;
+            }
+        }
+    }
+
+    if (ret == 0 && test_ctx->cnx_client->cnx_state == picoquic_state_client_ready) {
+        ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
+
+        if (ret != 0) {
+            DBG_PRINTF("Connection close returns %d\n", ret);
+        }
+    }
+
+    /*
+     * Allow for some time for the server connection to close.
+     */
+    closing_time = simulated_time + 4000000;
+    while (ret == 0 && simulated_time < closing_time) {
+        int was_active = 0; 
+        if (test_ctx->cnx_server == NULL) {
+            ret = -1;
+            break;
+        }
+        if (test_ctx->qserver->cnx_list == NULL || test_ctx->cnx_server->cnx_state == picoquic_state_disconnected) {
+            break;
+        }
+
+        ret = tls_api_one_sim_round(test_ctx, simulated_time, 0, &was_active);
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+int key_rotation_stress_test()
+{
+    return key_rotation_stress_test_one(10);
 }
 
 

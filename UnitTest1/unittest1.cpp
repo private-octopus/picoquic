@@ -708,6 +708,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(key_rotation_stress)
+        {
+            int ret = key_rotation_stress_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(false_migration)
         {
             int ret = false_migration_test();

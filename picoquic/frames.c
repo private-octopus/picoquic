@@ -1068,9 +1068,7 @@ int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head* str
                 }
 
                 stream->sent_offset += length;
-                if (stream->stream_id != 0) {
-                    cnx->data_sent += length;
-                }
+                cnx->data_sent += length;
             }
             *consumed = byte_index;
 
