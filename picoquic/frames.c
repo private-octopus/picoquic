@@ -1055,7 +1055,7 @@ int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head* str
                 }
             }
 
-            if (ret == 0 && length > 0) {
+            if (ret == 0 && length > 0 && stream->send_queue != NULL && stream->send_queue->bytes != NULL) {
                 memcpy(&bytes[byte_index], stream->send_queue->bytes + stream->send_queue->offset, length);
                 byte_index += length;
 
