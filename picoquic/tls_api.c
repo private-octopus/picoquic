@@ -356,26 +356,21 @@ int picoquic_tls_collected_extensions_cb(ptls_t* tls, ptls_handshake_properties_
  */
 
 int picoquic_client_hello_call_back(ptls_on_client_hello_t* on_hello_cb_ctx,
-    ptls_t* tls, ptls_iovec_t server_name, const ptls_iovec_t* negotiated_protocols,
-    size_t num_negotiated_protocols, const uint16_t* signature_algorithms, size_t num_signature_algorithms)
+    ptls_t* tls, ptls_on_client_hello_parameters_t *params)
 {
-#ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(signature_algorithms);
-    UNREFERENCED_PARAMETER(num_signature_algorithms);
-#endif
     int alpn_found = 0;
     picoquic_quic_t** ppquic = (picoquic_quic_t**)(((char*)on_hello_cb_ctx) + sizeof(ptls_on_client_hello_t));
     picoquic_quic_t* quic = *ppquic;
 
     /* Save the server name */
-    ptls_set_server_name(tls, (const char *)server_name.base, server_name.len);
+    ptls_set_server_name(tls, (const char *)params->server_name.base, params->server_name.len);
 
     /* Check if the client is proposing the expected ALPN */
     if (quic->default_alpn != NULL) {
         size_t len = strlen(quic->default_alpn);
 
-        for (size_t i = 0; i < num_negotiated_protocols; i++) {
-            if (negotiated_protocols[i].len == len && memcmp(negotiated_protocols[i].base, quic->default_alpn, len) == 0) {
+        for (size_t i = 0; i < params->negotiated_protocols.count; i++) {
+            if (params->negotiated_protocols.list[i].len == len && memcmp(params->negotiated_protocols.list[i].base, quic->default_alpn, len) == 0) {
                 alpn_found = 1;
                 ptls_set_negotiated_protocol(tls, quic->default_alpn, len);
                 break;
@@ -388,10 +383,10 @@ int picoquic_client_hello_call_back(ptls_on_client_hello_t* on_hello_cb_ctx,
 	 */
 
     if (alpn_found == 0) {
-        for (size_t i = 0; i < num_negotiated_protocols; i++) {
-            if (negotiated_protocols[i].len > 0) {
+        for (size_t i = 0; i < params->negotiated_protocols.count; i++) {
+            if (params->negotiated_protocols.list[i].len > 0) {
                 ptls_set_negotiated_protocol(tls,
-                    (char const*)negotiated_protocols[i].base, negotiated_protocols[i].len);
+                    (char const*)params->negotiated_protocols.list[i].base, params->negotiated_protocols.list[i].len);
                 break;
             }
         }
@@ -1149,29 +1144,6 @@ int picoquic_master_tlscontext(picoquic_quic_t* quic,
         } else {
             free(ctx);
         }
-    }
-
-    return ret;
-}
-
-void picoquic_set_tls_context_for_draft_14(picoquic_quic_t * quic)
-{
-    ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
-
-    if (ctx != NULL) {
-        /* Tell Picotls to require EOED messages during handshake */
-        ctx->omit_end_of_early_data = 0;
-    }
-}
-
-int picoquic_tls_context_is_draft_14(picoquic_quic_t * quic)
-{
-    int ret = 0;
-    ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
-
-    if (ctx != NULL) {
-        /* Tell Picotls to require EOED messages during handshake */
-        ret = (ctx->omit_end_of_early_data == 0);
     }
 
     return ret;
