@@ -728,6 +728,13 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(short_initial_cid)
+        {
+            int ret = short_initial_cid_test();
+
+            Assert::AreEqual(ret, 0);
+        }
         
         TEST_METHOD(stress)
         {

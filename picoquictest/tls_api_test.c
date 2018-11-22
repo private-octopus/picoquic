@@ -4723,3 +4723,84 @@ int nat_handshake_test()
 
     return ret;
 }
+
+/*
+ * Verify that connection attempts with a too-short CID are rejected.
+ */
+static int short_initial_cid_test_one(uint8_t cid_length)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+
+    /* Delete the client context, and recreate with a short CID */
+    if (ret == 0)
+    {
+        picoquic_connection_id_t init_cid;
+
+        for (unsigned int i = 0; i < cid_length; i++) {
+            init_cid.id[i] = (uint8_t)(i + 1);
+        }
+        init_cid.id_len = cid_length;
+
+        if (test_ctx->cnx_client != NULL) {
+            picoquic_delete_cnx(test_ctx->cnx_client);
+            test_ctx->cnx_client = NULL;
+        }
+
+        test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient, init_cid,
+            picoquic_null_connection_id,
+            (struct sockaddr*)&test_ctx->server_addr, 0,
+            0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
+
+        if (test_ctx->cnx_client == NULL) {
+            ret = -1;
+        }
+        else {
+            ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+        }
+    }
+
+    /* Proceed with the connection loop. */
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    /* Check that both the client and server are ready. */
+    if (ret == 0 && test_ctx->cnx_client->cnx_state == picoquic_state_client_ready) {
+        if (cid_length < PICOQUIC_ENFORCED_INITIAL_CID_LENGTH) {
+            DBG_PRINTF("Connection succeeds despites cid_length %d < %d\n",
+                cid_length, PICOQUIC_ENFORCED_INITIAL_CID_LENGTH);
+            ret = -1;
+        }
+    }
+    else if (cid_length > PICOQUIC_ENFORCED_INITIAL_CID_LENGTH) {
+        DBG_PRINTF("Connection fails despites cid_length %d >= %d\n",
+            cid_length, PICOQUIC_ENFORCED_INITIAL_CID_LENGTH);
+        if (ret == 0) {
+            ret = -1;
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+int short_initial_cid_test()
+{
+    int ret = 0;
+    for (uint8_t i = 4; ret == 0 && i < 18; i++) {
+        ret = short_initial_cid_test_one(i);
+    }
+
+    return ret;
+}

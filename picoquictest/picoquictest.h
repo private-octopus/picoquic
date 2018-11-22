@@ -142,6 +142,7 @@ int false_migration_test();
 int nat_handshake_test();
 int key_rotation_vector_test();
 int key_rotation_stress_test();
+int short_initial_cid_test();
 
 #ifdef __cplusplus
 }
