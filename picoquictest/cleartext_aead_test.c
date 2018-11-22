@@ -793,6 +793,8 @@ static int draft13_label_expansion_test(ptls_cipher_suite_t * cipher, char const
     return ret;
 }
 
+#if 0
+/* TODO: restore this test once we have a valid incoming message for draft-17 */
 static int draft31_incoming_initial_test()
 {
     int ret = 0;
@@ -849,6 +851,8 @@ static int draft31_incoming_initial_test()
 
     return ret;
 }
+#endif
+
 
 int draft13_vector_test()
 {
