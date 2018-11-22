@@ -894,7 +894,10 @@ int picoquic_incoming_initial(
         (*pcnx)->local_error = PICOQUIC_TRANSPORT_SERVER_BUSY;
         (*pcnx)->cnx_state = picoquic_state_handshake_failure;
     }
-    else {
+    else if ((*pcnx)->initial_cnxid.id_len < PICOQUIC_ENFORCED_INITIAL_CID_LENGTH) {
+        (*pcnx)->local_error = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
+        (*pcnx)->cnx_state = picoquic_state_handshake_failure;
+    } else {
         /* decode the incoming frames */
         if (ret == 0) {
             if (extra_offset >= ph->payload_length) {
