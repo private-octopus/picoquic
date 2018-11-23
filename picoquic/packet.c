@@ -1107,6 +1107,7 @@ int picoquic_incoming_client_handshake(
 if (cnx->cnx_state == picoquic_state_server_init
     || cnx->cnx_state == picoquic_state_server_handshake
     || cnx->cnx_state == picoquic_state_server_almost_ready
+    || cnx->cnx_state == picoquic_state_server_false_start
     || cnx->cnx_state == picoquic_state_server_ready) {
     if (picoquic_compare_connection_id(&ph->srce_cnx_id, &cnx->path[0]->remote_cnxid) != 0) {
         ret = PICOQUIC_ERROR_CNXID_CHECK;
@@ -1173,7 +1174,9 @@ int picoquic_incoming_0rtt(
         picoquic_compare_connection_id(&ph->dest_cnx_id, &cnx->path[0]->local_cnxid) == 0) ||
         picoquic_compare_connection_id(&ph->srce_cnx_id, &cnx->path[0]->remote_cnxid) != 0) {
         ret = PICOQUIC_ERROR_CNXID_CHECK;
-    } else if (cnx->cnx_state == picoquic_state_server_almost_ready || cnx->cnx_state == picoquic_state_server_ready) {
+    } else if (cnx->cnx_state == picoquic_state_server_almost_ready || 
+        cnx->cnx_state == picoquic_state_server_false_start ||
+        cnx->cnx_state == picoquic_state_server_ready) {
         if (ph->vn != picoquic_supported_versions[cnx->version_index].version) {
             ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0);
         } else {

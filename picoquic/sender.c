@@ -1961,6 +1961,10 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
     uint32_t send_buffer_min_max = (send_buffer_max > path_x->send_mtu) ? path_x->send_mtu : (uint32_t)send_buffer_max;
     uint64_t next_wake_time = cnx->latest_progress_time + PICOQUIC_MICROSEC_SILENCE_MAX * (2 - cnx->client_mode);
 
+    if (cnx->cnx_state == picoquic_state_server_false_start &&
+        cnx->crypto_context[3].aead_decrypt != NULL) {
+        cnx->cnx_state = picoquic_state_server_ready;
+    }
 
     /* Verify first that there is no need for retransmit or ack
      * on initial or handshake context. This does not deal with EOED packets,
@@ -2306,6 +2310,7 @@ int picoquic_prepare_segment(picoquic_cnx_t* cnx, picoquic_path_t * path_x, pico
         case picoquic_state_server_handshake:
             ret = picoquic_prepare_packet_server_init(cnx, path_x, packet, current_time, send_buffer, send_buffer_max, send_length);
             break;
+        case picoquic_state_server_false_start:
         case picoquic_state_client_ready:
         case picoquic_state_server_ready:
             ret = picoquic_prepare_packet_ready(cnx, path_x, packet, current_time, send_buffer, send_buffer_max, send_length);
