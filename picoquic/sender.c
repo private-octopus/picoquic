@@ -690,51 +690,51 @@ static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t* cnx,
     picoquic_packet_t* p, uint64_t current_time, uint64_t * next_retransmit_time, int* timer_based)
 {
     picoquic_packet_context_enum pc = p->pc;
+    uint64_t retransmit_time;
     int64_t delta_seq = cnx->pkt_ctx[pc].highest_acknowledged - p->sequence_number;
     int should_retransmit = 0;
+    int is_timer_based = 0;
 
-    if (delta_seq > 3) {
-        /*
-         * SACK Logic.
-         * more than N packets were seen at the receiver after this one.
-         */
-        should_retransmit = 1;
+    if (delta_seq > 0) {
+        /* By default, we use timer based RACK logic to absorb out of order deliveries */
+        retransmit_time = p->send_time + cnx->path[0]->smoothed_rtt + (cnx->path[0]->smoothed_rtt >> 3);
+
+        /* RACK logic fails when the smoothed RTT is too small, in which case we
+         * rely on dupack logic possible, or on a safe estimate of the RACK delay if it
+         * is not */
+        if (delta_seq < 3) {
+            uint64_t rack_timer_min = cnx->pkt_ctx[pc].latest_time_acknowledged + PICOQUIC_RACK_DELAY;
+            if (retransmit_time < rack_timer_min) {
+                retransmit_time = rack_timer_min;
+            }
+        }
     }
-    else {
-        if (p->ptype != picoquic_packet_0rtt_protected &&
-            delta_seq > 0 &&
-            p->send_time <= cnx->pkt_ctx[pc].latest_time_acknowledged) {
-            uint64_t delta_t = (cnx->pkt_ctx[pc].latest_time_acknowledged - p->send_time) +
-                (current_time - cnx->pkt_ctx[pc].highest_acknowledged_time);
+    else
+    {
+        /* There has not been any higher packet acknowledged, thus we fall back on timer logic. */
+        uint64_t rto = (cnx->pkt_ctx[pc].nb_retransmit == 0) ?
+            cnx->path[0]->retransmit_timer : (1000000ull << (cnx->pkt_ctx[pc].nb_retransmit - 1));
+        retransmit_time = p->send_time + rto;
+        is_timer_based = 1;
+    }
 
-            /* TODO: out of order delivery time ought to be dynamic */
-            if (delta_t >= PICOQUIC_RACK_DELAY) {
-                should_retransmit = 1;
-            } else {
-                uint64_t next_rack_time = current_time + (PICOQUIC_RACK_DELAY - delta_t);
-                if (next_rack_time < *next_retransmit_time) {
-                    *next_retransmit_time = next_rack_time;
-                }
-            }
+    if (p->ptype == picoquic_packet_0rtt_protected) {
+        /* Special case for 0RTT packets */
+        if (cnx->cnx_state != picoquic_state_ready &&
+            cnx->cnx_state != picoquic_state_client_ready_start) {
+            /* Set the retransmit time ahead of current time since the connection is not ready */
+            retransmit_time = current_time + cnx->path[0]->smoothed_rtt + PICOQUIC_RACK_DELAY;
         }
+        /* TODO: if early data was skipped by the server, we should retransmit
+         * immediately. However, there is not good API to do that */
+    }
 
-        if (should_retransmit == 0) {
-            /* Don't fire yet, because of possible out of order delivery */
-            int64_t time_out = current_time - p->send_time;
-            uint64_t retransmit_timer = (cnx->pkt_ctx[pc].nb_retransmit == 0) ?
-                cnx->path[0]->retransmit_timer : (1000000ull << (cnx->pkt_ctx[pc].nb_retransmit - 1));
-
-            if ((uint64_t)time_out < retransmit_timer) {
-                /* Do not retransmit if the timer has not yet elapsed */
-                should_retransmit = 0;
-                if (current_time + retransmit_timer < *next_retransmit_time) {
-                    *next_retransmit_time = current_time + retransmit_timer;
-                }
-            } else {
-                should_retransmit = 1;
-                *timer_based = 1;
-            }
-        }
+    if (current_time >= retransmit_time) {
+        should_retransmit = 1;
+        *timer_based = is_timer_based;
+    } else {
+        *next_retransmit_time = retransmit_time;
+        *timer_based = 0;
     }
 
     return should_retransmit;
