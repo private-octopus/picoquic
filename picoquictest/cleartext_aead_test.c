@@ -585,8 +585,9 @@ int cleartext_pn_vector_test()
     return ret;
 }
 
+#if 0
 /*
- * test copied from EKR test vector
+ * draft-13 test was copied from EKR test vector, but we now need draft-17 vector!
  */
 
 static uint8_t draft15_test_input_packet[] = {
@@ -719,6 +720,7 @@ static uint8_t draft15_test_input_packet[] = {
     0xd8, 0x3c, 0x85, 0x22, 0xf3, 0x0b, 0xeb, 0x4e, 0xaa, 0xf4,
     0xa6, 0xf9, 0x08, 0xfe, 0x2a, 0x6e, 0xe7, 0x54, 0xc8, 0x96
 };
+#endif
 
 static uint32_t draft15_test_vn = 0xff00000f;
 
@@ -774,7 +776,10 @@ static uint8_t draft13_test_client_pn[] = {
     0xc1, 0xf1, 0x54, 0x78, 0xdc, 0xf4
 };
 
+#if 0
+/* TODO: reset this test when draft-17 vector is available */
 static uint64_t draft13_test_decoded_pn = 0;
+#endif
 
 static int draft13_label_expansion_test(ptls_cipher_suite_t * cipher, char const * label, uint8_t * secret, size_t secret_length, uint8_t const * key_ref, size_t key_ref_len)
 {
