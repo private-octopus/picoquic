@@ -1009,7 +1009,7 @@ int picoquic_is_mtu_probe_needed(picoquic_cnx_t* cnx, picoquic_path_t * path_x)
 {
     int ret = 0;
 
-    if (cnx->cnx_state == picoquic_state_ready
+    if ((cnx->cnx_state == picoquic_state_ready || cnx->cnx_state == picoquic_state_client_ready_start || cnx->cnx_state == picoquic_state_server_false_start)
         && path_x->mtu_probe_sent == 0 
         && (path_x->send_mtu_max_tried == 0 || (path_x->send_mtu + 10) < path_x->send_mtu_max_tried)) {
         ret = 1;
@@ -1996,7 +1996,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
     if ((cnx->cnx_state == picoquic_state_server_false_start &&
         cnx->crypto_context[3].aead_decrypt != NULL) || 
         (cnx->cnx_state == picoquic_state_client_ready_start &&
-            cnx->data_acknowledged)) {
+            cnx->one_rtt_data_acknowledged)) {
         /* Transition to server ready state.
          * The handshake is complete, all the handshake packets are implicitly acknowledged */
         cnx->cnx_state = picoquic_state_ready;
