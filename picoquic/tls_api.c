@@ -1754,7 +1754,7 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
                 data->bytes + start, epoch_data, &ctx->handshake_properties);
 
 #ifdef _DEBUG
-            if (cnx->cnx_state < picoquic_state_client_ready) {
+            if (cnx->cnx_state < picoquic_state_ready) {
                 DBG_PRINTF("State: %d, tls input: %d, ret %x\n",
                     cnx->cnx_state, epoch_data, ret);
             }
@@ -1828,10 +1828,9 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
                 case picoquic_state_client_almost_ready:
                 case picoquic_state_handshake_failure:
                 case picoquic_state_client_ready_start:
-                case picoquic_state_client_ready:
                 case picoquic_state_server_almost_ready:
                 case picoquic_state_server_false_start:
-                case picoquic_state_server_ready:
+                case picoquic_state_ready:
                 case picoquic_state_disconnecting:
                 case picoquic_state_closing_received:
                 case picoquic_state_closing:

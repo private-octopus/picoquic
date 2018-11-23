@@ -961,6 +961,10 @@ int picoquic_is_cnx_backlog_empty(picoquic_cnx_t* cnx)
     {
         picoquic_packet_t* p = cnx->pkt_ctx[pc].retransmit_oldest;
 
+        if ((cnx->cnx_state == picoquic_state_ready) && (pc != picoquic_packet_context_application)) {
+            continue;
+        }
+
         while (p != NULL && backlog_empty == 1) {
             /* check if this is an ACK only packet */
             int ret = 0;
@@ -968,8 +972,6 @@ int picoquic_is_cnx_backlog_empty(picoquic_cnx_t* cnx)
             size_t frame_length = 0;
             size_t byte_index = 0; /* Used when parsing the old packet */
 
-
-            /* Copy the relevant bytes from one packet to the next */
             byte_index = p->offset;
 
 
@@ -1007,7 +1009,7 @@ int picoquic_is_mtu_probe_needed(picoquic_cnx_t* cnx, picoquic_path_t * path_x)
 {
     int ret = 0;
 
-    if ((cnx->cnx_state == picoquic_state_client_ready || cnx->cnx_state == picoquic_state_server_ready)
+    if (cnx->cnx_state == picoquic_state_ready
         && path_x->mtu_probe_sent == 0 
         && (path_x->send_mtu_max_tried == 0 || (path_x->send_mtu + 10) < path_x->send_mtu_max_tried)) {
         ret = 1;
@@ -1665,7 +1667,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
 
             if (ret == 0 && tls_ready != 0 && data_bytes > 0 && cnx->tls_stream[epoch].send_queue == NULL) {
                 if (epoch == 2 && picoquic_tls_client_authentication_activated(cnx->quic) == 0) {
-                    cnx->cnx_state = picoquic_state_server_ready;
+                    cnx->cnx_state = picoquic_state_server_false_start;
                 }
                 else {
                     cnx->cnx_state = picoquic_state_server_handshake;
@@ -1991,19 +1993,13 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
      * Manage the end of false start transition.
      */
 
-    if (cnx->cnx_state == picoquic_state_server_false_start &&
-        cnx->crypto_context[3].aead_decrypt != NULL) {
+    if ((cnx->cnx_state == picoquic_state_server_false_start &&
+        cnx->crypto_context[3].aead_decrypt != NULL) || 
+        (cnx->cnx_state == picoquic_state_client_ready_start &&
+            cnx->data_acknowledged)) {
         /* Transition to server ready state.
          * The handshake is complete, all the handshake packets are implicitly acknowledged */
-        cnx->cnx_state = picoquic_state_server_ready;
-        picoquic_implicit_handshake_ack(cnx, picoquic_packet_context_initial, current_time);
-        picoquic_implicit_handshake_ack(cnx, picoquic_packet_context_handshake, current_time);
-    }
-    else if (cnx->cnx_state == picoquic_state_client_ready_start &&
-        cnx->data_acknowledged) {
-        /* Transition to client ready state. 
-         * The handshake is complete, all the handshake packets are implicitly acknowledged */
-        cnx->cnx_state = picoquic_state_client_ready;
+        cnx->cnx_state = picoquic_state_ready;
         picoquic_implicit_handshake_ack(cnx, picoquic_packet_context_initial, current_time);
         picoquic_implicit_handshake_ack(cnx, picoquic_packet_context_handshake, current_time);
     }
@@ -2357,8 +2353,7 @@ int picoquic_prepare_segment(picoquic_cnx_t* cnx, picoquic_path_t * path_x, pico
             break;
         case picoquic_state_server_false_start:
         case picoquic_state_client_ready_start:
-        case picoquic_state_client_ready:
-        case picoquic_state_server_ready:
+        case picoquic_state_ready:
             ret = picoquic_prepare_packet_ready(cnx, path_x, packet, current_time, send_buffer, send_buffer_max, send_length);
             break;
         case picoquic_state_handshake_failure:
@@ -2396,8 +2391,8 @@ int picoquic_prepare_probe(picoquic_cnx_t* cnx,
 
     if (send_buffer_max < PICOQUIC_INITIAL_MTU_IPV6) {
         ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
-    } else if (cnx->cnx_state == picoquic_state_client_ready ||
-        cnx->cnx_state == picoquic_state_server_ready || 
+    } else if (
+        cnx->cnx_state == picoquic_state_ready || 
         cnx->cnx_state == picoquic_state_client_ready_start)
     {
         picoquic_probe_t * probe = cnx->probe_first;
@@ -2641,7 +2636,7 @@ int picoquic_close(picoquic_cnx_t* cnx, uint16_t reason_code)
 {
     int ret = 0;
 
-    if (cnx->cnx_state == picoquic_state_server_ready || cnx->cnx_state == picoquic_state_client_ready ||
+    if (cnx->cnx_state == picoquic_state_ready ||
         cnx->cnx_state == picoquic_state_server_false_start || cnx->cnx_state == picoquic_state_client_ready_start) {
         cnx->cnx_state = picoquic_state_disconnecting;
         cnx->application_error = reason_code;

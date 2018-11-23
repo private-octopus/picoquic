@@ -912,8 +912,8 @@ static int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
     return ret;
 }
 
-#define TEST_CLIENT_READY (test_ctx->cnx_client->cnx_state == picoquic_state_client_ready || test_ctx->cnx_client->cnx_state == picoquic_state_client_ready_start)
-#define TEST_SERVER_READY (test_ctx->cnx_server->cnx_state == picoquic_state_server_ready || test_ctx->cnx_server->cnx_state == picoquic_state_server_false_start)
+#define TEST_CLIENT_READY (test_ctx->cnx_client->cnx_state == picoquic_state_ready || test_ctx->cnx_client->cnx_state == picoquic_state_client_ready_start)
+#define TEST_SERVER_READY (test_ctx->cnx_server->cnx_state == picoquic_state_ready || test_ctx->cnx_server->cnx_state == picoquic_state_server_false_start)
 
 static int tls_api_connection_loop(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* loss_mask, uint64_t queue_delay_max, uint64_t* simulated_time)
@@ -928,7 +928,7 @@ static int tls_api_connection_loop(picoquic_test_tls_api_ctx_t* test_ctx,
     test_ctx->c_to_s_link->queue_delay_max = queue_delay_max;
     test_ctx->s_to_c_link->queue_delay_max = queue_delay_max;
 
-    while (ret == 0 && nb_trials < 1024 && nb_inactive < 512 && (!TEST_CLIENT_READY || (test_ctx->cnx_server == NULL || test_ctx->cnx_server->cnx_state != picoquic_state_server_ready))) {
+    while (ret == 0 && nb_trials < 1024 && nb_inactive < 512 && (!TEST_CLIENT_READY || (test_ctx->cnx_server == NULL || !TEST_SERVER_READY))) {
         int was_active = 0;
         nb_trials++;
 
@@ -1341,7 +1341,7 @@ int tls_api_one_scenario_test(test_api_stream_desc_t* scenario,
 
 int tls_api_oneway_stream_test()
 {
-    return tls_api_one_scenario_test(test_scenario_oneway, sizeof(test_scenario_oneway), 0, 0, 0, 0, 70000, NULL);
+    return tls_api_one_scenario_test(test_scenario_oneway, sizeof(test_scenario_oneway), 0, 0, 0, 0, 100000, NULL);
 }
 
 int tls_api_q_and_r_stream_test()
@@ -1376,7 +1376,7 @@ int tls_api_very_long_congestion_test()
 
 int unidir_test()
 {
-    return tls_api_one_scenario_test(test_scenario_unidir, sizeof(test_scenario_unidir), 0, 128000, 10000, 0, 75000, NULL);
+    return tls_api_one_scenario_test(test_scenario_unidir, sizeof(test_scenario_unidir), 0, 128000, 10000, 0, 100000, NULL);
 }
 
 /*
@@ -2653,8 +2653,7 @@ int set_certificate_and_key_test()
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
     }
 
-    if (ret == 0 && (!TEST_CLIENT_READY
-                     || !TEST_SERVER_READY)) {
+    if (ret == 0 && (!TEST_CLIENT_READY || !TEST_SERVER_READY)) {
         ret = -1;
     }
 
