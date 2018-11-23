@@ -614,6 +614,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int client_mode : 1; /* Is this connection the client side? */
     unsigned int key_phase_enc : 1; /* Key phase used in outgoing packets */
     unsigned int key_phase_dec : 1; /* Key phase expected in incoming packets */
+    unsigned int data_acknowledged : 1; /* 1RTT data acknowledged by peer */
 
 
     /* Local and remote parameters */

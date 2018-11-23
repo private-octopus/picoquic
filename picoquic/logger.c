@@ -188,6 +188,9 @@ char const* picoquic_log_state_name(picoquic_state_enum state)
     case picoquic_state_server_false_start:
         state_name = "server_false_start";
         break;
+    case picoquic_state_client_ready_start:
+        state_name = "client_ready_start";
+        break;
     case picoquic_state_client_ready:
         state_name = "client_ready";
         break;

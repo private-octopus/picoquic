@@ -1795,12 +1795,13 @@ int picoquic_reset_cnx_version(picoquic_cnx_t* cnx, uint8_t* bytes, size_t lengt
 
 int picoquic_connection_error(picoquic_cnx_t* cnx, uint16_t local_error, uint64_t frame_type)
 {
-    if (cnx->cnx_state == picoquic_state_client_ready || cnx->cnx_state == picoquic_state_server_ready) {
+    if (cnx->cnx_state == picoquic_state_client_ready || cnx->cnx_state == picoquic_state_server_ready || 
+        cnx->cnx_state == picoquic_state_client_ready_start || cnx->cnx_state == picoquic_state_server_false_start) {
         cnx->local_error = local_error;
         cnx->cnx_state = picoquic_state_disconnecting;
 
         DBG_PRINTF("Protocol error (%x)", local_error);
-    } else if (cnx->cnx_state < picoquic_state_client_ready) {
+    } else if (cnx->cnx_state < picoquic_state_server_false_start) {
         if (cnx->cnx_state != picoquic_state_handshake_failure) {
             cnx->local_error = local_error;
         }
@@ -1999,7 +2000,7 @@ void picoquic_enable_keep_alive(picoquic_cnx_t* cnx, uint64_t interval)
         /* Examine the transport parameters */
         uint64_t idle_timeout = cnx->local_parameters.idle_timeout;
 
-        if (cnx->cnx_state >= picoquic_state_client_ready && idle_timeout > cnx->remote_parameters.idle_timeout) {
+        if (cnx->cnx_state >= picoquic_state_client_ready_start && idle_timeout > cnx->remote_parameters.idle_timeout) {
             idle_timeout = cnx->remote_parameters.idle_timeout;
         }
         /* convert to microseconds */

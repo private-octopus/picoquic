@@ -818,7 +818,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                     length = picoquic_predict_packet_header_length(cnx, picoquic_packet_0rtt_protected);
                     packet->ptype = picoquic_packet_0rtt_protected;
                     packet->offset = length;
-                } else if (cnx->cnx_state < picoquic_state_client_ready) {
+                } else if (cnx->cnx_state < picoquic_state_client_ready_start) {
                     should_retransmit = 0;
                 } else {
                     length = picoquic_predict_packet_header_length(cnx, picoquic_packet_1rtt_protected);
@@ -1256,6 +1256,32 @@ uint32_t picoquic_prepare_packet_old_context(picoquic_cnx_t* cnx, picoquic_packe
     return length;
 }
 
+/* Empty the handshake repeat queues when transitioning to the completely ready state */
+void picoquic_implicit_handshake_ack(picoquic_cnx_t* cnx, picoquic_packet_context_enum pc, uint64_t current_time)
+{
+    picoquic_packet_t* p = cnx->pkt_ctx[pc].retransmit_oldest;
+
+    /* Remove packets from the retransmit queue */
+    while (p != NULL) {
+        picoquic_packet_t* p_next = p->next_packet;
+        picoquic_path_t * old_path = p->send_path;
+
+        /* Update the congestion control state for the path */
+        if (old_path != NULL) {
+            if (cnx->congestion_alg != NULL) {
+                cnx->congestion_alg->alg_notify(old_path,
+                    picoquic_congestion_notification_acknowledgement,
+                    0, p->length, 0, current_time);
+            }
+        }
+        /* Update the number of bytes in transit and remove old packet from queue */
+        /* The packet will not be placed in the "retransmitted" queue */
+        (void)picoquic_dequeue_retransmit_packet(cnx, p, 1);
+
+        p = p_next;
+    }
+}
+
 /* Prepare the next packet to send when in one of the client initial states */
 int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * path_x, picoquic_packet_t* packet,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length)
@@ -1471,7 +1497,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                             if (cnx->tls_stream[0].send_queue == NULL &&
                                 cnx->tls_stream[1].send_queue == NULL &&
                                 cnx->tls_stream[2].send_queue == NULL) {
-                                cnx->cnx_state = picoquic_state_client_ready;
+                                cnx->cnx_state = picoquic_state_client_ready_start;
                             }
                             break;
                         default:
@@ -1961,14 +1987,33 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
     uint32_t send_buffer_min_max = (send_buffer_max > path_x->send_mtu) ? path_x->send_mtu : (uint32_t)send_buffer_max;
     uint64_t next_wake_time = cnx->latest_progress_time + PICOQUIC_MICROSEC_SILENCE_MAX * (2 - cnx->client_mode);
 
+    /*
+     * Manage the end of false start transition.
+     */
+
     if (cnx->cnx_state == picoquic_state_server_false_start &&
         cnx->crypto_context[3].aead_decrypt != NULL) {
+        /* Transition to server ready state.
+         * The handshake is complete, all the handshake packets are implicitly acknowledged */
         cnx->cnx_state = picoquic_state_server_ready;
+        picoquic_implicit_handshake_ack(cnx, picoquic_packet_context_initial, current_time);
+        picoquic_implicit_handshake_ack(cnx, picoquic_packet_context_handshake, current_time);
+    }
+    else if (cnx->cnx_state == picoquic_state_client_ready_start &&
+        cnx->data_acknowledged) {
+        /* Transition to client ready state. 
+         * The handshake is complete, all the handshake packets are implicitly acknowledged */
+        cnx->cnx_state = picoquic_state_client_ready;
+        picoquic_implicit_handshake_ack(cnx, picoquic_packet_context_initial, current_time);
+        picoquic_implicit_handshake_ack(cnx, picoquic_packet_context_handshake, current_time);
     }
 
     /* Verify first that there is no need for retransmit or ack
      * on initial or handshake context. This does not deal with EOED packets,
-     * as they are handled from within the general retransmission path */
+     * as they are handled from within the general retransmission path.
+     * This is needed even with implicit acks for now, because the peer may
+     * be retransmitting data and thus requires acks. */
+
     if (ret == 0) {
         length = picoquic_prepare_packet_old_context(cnx, picoquic_packet_context_initial,
             path_x, packet, send_buffer_min_max, current_time, &next_wake_time, &header_length);
@@ -2283,7 +2328,7 @@ int picoquic_prepare_segment(picoquic_cnx_t* cnx, picoquic_path_t * path_x, pico
     /* Check that the connection is still alive -- the timer is asymmetric, so client will drop faster */
     if ((cnx->cnx_state < picoquic_state_disconnecting && 
         (current_time - cnx->latest_progress_time) >= (PICOQUIC_MICROSEC_SILENCE_MAX*(2 - cnx->client_mode))) ||
-        (cnx->cnx_state < picoquic_state_client_ready &&
+        (cnx->cnx_state < picoquic_state_server_false_start &&
             current_time >= cnx->start_time + PICOQUIC_MICROSEC_HANDSHAKE_MAX))
     {
         /* Too long silence, break it. */
@@ -2311,6 +2356,7 @@ int picoquic_prepare_segment(picoquic_cnx_t* cnx, picoquic_path_t * path_x, pico
             ret = picoquic_prepare_packet_server_init(cnx, path_x, packet, current_time, send_buffer, send_buffer_max, send_length);
             break;
         case picoquic_state_server_false_start:
+        case picoquic_state_client_ready_start:
         case picoquic_state_client_ready:
         case picoquic_state_server_ready:
             ret = picoquic_prepare_packet_ready(cnx, path_x, packet, current_time, send_buffer, send_buffer_max, send_length);
@@ -2351,7 +2397,8 @@ int picoquic_prepare_probe(picoquic_cnx_t* cnx,
     if (send_buffer_max < PICOQUIC_INITIAL_MTU_IPV6) {
         ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
     } else if (cnx->cnx_state == picoquic_state_client_ready ||
-        cnx->cnx_state == picoquic_state_server_ready) 
+        cnx->cnx_state == picoquic_state_server_ready || 
+        cnx->cnx_state == picoquic_state_client_ready_start)
     {
         picoquic_probe_t * probe = cnx->probe_first;
         picoquic_packet_t * packet = NULL;
@@ -2594,10 +2641,11 @@ int picoquic_close(picoquic_cnx_t* cnx, uint16_t reason_code)
 {
     int ret = 0;
 
-    if (cnx->cnx_state == picoquic_state_server_ready || cnx->cnx_state == picoquic_state_client_ready) {
+    if (cnx->cnx_state == picoquic_state_server_ready || cnx->cnx_state == picoquic_state_client_ready ||
+        cnx->cnx_state == picoquic_state_server_false_start || cnx->cnx_state == picoquic_state_client_ready_start) {
         cnx->cnx_state = picoquic_state_disconnecting;
         cnx->application_error = reason_code;
-    } else if (cnx->cnx_state < picoquic_state_client_ready) {
+    } else if (cnx->cnx_state < picoquic_state_client_ready_start) {
         cnx->cnx_state = picoquic_state_handshake_failure;
         cnx->application_error = reason_code;
     } else {
