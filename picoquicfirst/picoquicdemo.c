@@ -548,7 +548,7 @@ int quic_server(const char* server_name, int server_port,
 
                         if (send_length > 0) {
                             if (just_once != 0 ||
-                                cnx_next->cnx_state < picoquic_state_client_ready ||
+                                cnx_next->cnx_state < picoquic_state_server_false_start ||
                                 cnx_next->cnx_state >= picoquic_state_disconnecting) {
                                 printf("%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx_next)));
                                 printf("Connection state = %d\n",
@@ -1110,7 +1110,8 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
             if (bytes_recv == 0 || (ret == 0 && client_receive_loop > PICOQUIC_DEMO_CLIENT_MAX_RECEIVE_BATCH)) {
                 client_receive_loop = 0;
 
-                if (ret == 0 && picoquic_get_cnx_state(cnx_client) == picoquic_state_client_ready) {
+                if (ret == 0 && (picoquic_get_cnx_state(cnx_client) == picoquic_state_ready || 
+                    picoquic_get_cnx_state(cnx_client) == picoquic_state_client_ready_start)) {
                     if (established == 0) {
                         picoquic_log_transport_extension(F_log, cnx_client, 0);
                         printf("Connection established. Version = %x, I-CID: %llx\n",

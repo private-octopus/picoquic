@@ -1646,6 +1646,9 @@ static int picoquic_process_ack_range(
                 /* If the packet contained an ACK frame, perform the ACK of ACK pruning logic */
                 picoquic_process_possible_ack_of_ack_frame(cnx, p);
 
+                /* Keep track of reception of ACK of 1RTT data */
+                cnx->one_rtt_data_acknowledged |= (p->ptype == picoquic_packet_1rtt_protected);
+
                 (void)picoquic_dequeue_retransmit_packet(cnx, p, 1);
                 p = next;
                 /* Any acknowledgement shows progress */
@@ -1989,7 +1992,7 @@ uint8_t* picoquic_decode_connection_close_frame(picoquic_cnx_t* cnx, uint8_t* by
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, 
             picoquic_frame_type_connection_close);
     } else {
-        cnx->cnx_state = (cnx->cnx_state < picoquic_state_client_ready || cnx->crypto_context[3].aead_decrypt == NULL) ? picoquic_state_disconnected : picoquic_state_closing_received;
+        cnx->cnx_state = (cnx->cnx_state < picoquic_state_client_ready_start || cnx->crypto_context[3].aead_decrypt == NULL) ? picoquic_state_disconnected : picoquic_state_closing_received;
 
         if (cnx->callback_fn) {
             (cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx);
@@ -2046,7 +2049,7 @@ uint8_t* picoquic_decode_application_close_frame(picoquic_cnx_t* cnx, uint8_t* b
             picoquic_frame_type_application_close);
     }
     else {
-        cnx->cnx_state = (cnx->cnx_state < picoquic_state_client_ready) ? picoquic_state_disconnected : picoquic_state_closing_received;
+        cnx->cnx_state = (cnx->cnx_state < picoquic_state_client_ready_start) ? picoquic_state_disconnected : picoquic_state_closing_received;
         if (cnx->callback_fn) {
             (cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_application_close, cnx->callback_ctx);
         }

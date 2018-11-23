@@ -912,6 +912,9 @@ static int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
     return ret;
 }
 
+#define TEST_CLIENT_READY (test_ctx->cnx_client->cnx_state == picoquic_state_ready || test_ctx->cnx_client->cnx_state == picoquic_state_client_ready_start)
+#define TEST_SERVER_READY (test_ctx->cnx_server->cnx_state == picoquic_state_ready || test_ctx->cnx_server->cnx_state == picoquic_state_server_false_start)
+
 static int tls_api_connection_loop(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* loss_mask, uint64_t queue_delay_max, uint64_t* simulated_time)
 {
@@ -925,7 +928,7 @@ static int tls_api_connection_loop(picoquic_test_tls_api_ctx_t* test_ctx,
     test_ctx->c_to_s_link->queue_delay_max = queue_delay_max;
     test_ctx->s_to_c_link->queue_delay_max = queue_delay_max;
 
-    while (ret == 0 && nb_trials < 1024 && nb_inactive < 512 && (test_ctx->cnx_client->cnx_state != picoquic_state_client_ready || (test_ctx->cnx_server == NULL || test_ctx->cnx_server->cnx_state != picoquic_state_server_ready))) {
+    while (ret == 0 && nb_trials < 1024 && nb_inactive < 512 && (!TEST_CLIENT_READY || (test_ctx->cnx_server == NULL || !TEST_SERVER_READY))) {
         int was_active = 0;
         nb_trials++;
 
@@ -960,7 +963,7 @@ static int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
         max_trials = 100000;
     }
 
-    while (ret == 0 && nb_trials < max_trials && nb_inactive < 256 && test_ctx->cnx_client->cnx_state == picoquic_state_client_ready && test_ctx->cnx_server->cnx_state == picoquic_state_server_ready) {
+    while (ret == 0 && nb_trials < max_trials && nb_inactive < 256 && TEST_CLIENT_READY && TEST_SERVER_READY) {
         int was_active = 0;
 
         nb_trials++;
@@ -998,8 +1001,8 @@ static int wait_application_pn_enc_ready(picoquic_test_tls_api_ctx_t* test_ctx,
     int nb_inactive = 0;
 
     while (*simulated_time < time_out &&
-        test_ctx->cnx_client->cnx_state == picoquic_state_client_ready &&
-        test_ctx->cnx_server->cnx_state == picoquic_state_server_ready &&
+        TEST_CLIENT_READY &&
+        TEST_SERVER_READY &&
         test_ctx->cnx_server->crypto_context[3].aead_decrypt == NULL &&
         nb_trials < 1024 &&
         nb_inactive < 64 &&
@@ -1149,7 +1152,7 @@ int tls_api_silence_test()
 
     /* simulate 5 seconds of silence */
     next_time = simulated_time + 5000000;
-    while (ret == 0 && simulated_time < next_time && test_ctx->cnx_client->cnx_state == picoquic_state_client_ready && test_ctx->cnx_server->cnx_state == picoquic_state_server_ready) {
+    while (ret == 0 && simulated_time < next_time && TEST_CLIENT_READY && TEST_SERVER_READY) {
         int was_active = 0;
 
         ret = tls_api_one_sim_round(test_ctx, &simulated_time, next_time, &was_active);
@@ -1373,7 +1376,7 @@ int tls_api_very_long_congestion_test()
 
 int unidir_test()
 {
-    return tls_api_one_scenario_test(test_scenario_unidir, sizeof(test_scenario_unidir), 0, 128000, 10000, 0, 75000, NULL);
+    return tls_api_one_scenario_test(test_scenario_unidir, sizeof(test_scenario_unidir), 0, 128000, 10000, 0, 100000, NULL);
 }
 
 /*
@@ -1483,7 +1486,7 @@ int tls_api_bad_server_reset_test()
     }
 
     /* check that the client is still up */
-    if (ret == 0 && test_ctx->cnx_client->cnx_state != picoquic_state_client_ready) {
+    if (ret == 0 && !TEST_CLIENT_READY) {
         ret = -1;
     }
 
@@ -1573,7 +1576,7 @@ int tls_api_two_connections_test()
         /* Verify that the connection is fully established */
         uint64_t target_time = simulated_time + 2000000;
 
-        while (ret == 0 && test_ctx->cnx_client->cnx_state == picoquic_state_client_ready && test_ctx->cnx_server->cnx_state == picoquic_state_server_ready && simulated_time < target_time) {
+        while (ret == 0 && TEST_CLIENT_READY && TEST_SERVER_READY && simulated_time < target_time) {
             int was_active = 0;
             ret = tls_api_one_sim_round(test_ctx, &simulated_time, target_time, &was_active);
         }
@@ -1704,7 +1707,7 @@ int keep_alive_test_impl(int keep_alive)
     if (test_ctx == NULL || test_ctx->cnx_client == NULL) {
         ret = -1;
     } else if (keep_alive != 0) {
-        if (test_ctx->cnx_client->cnx_state != picoquic_state_client_ready) {
+        if (!TEST_CLIENT_READY) {
             ret = -1;
         } else if (simulated_time < 2 * PICOQUIC_MICROSEC_SILENCE_MAX) {
             DBG_PRINTF("Keep alive test concludes after %llu microsecs instead of %llu, ret = %d\n",
@@ -1757,8 +1760,8 @@ int session_resume_wait_for_ticket(picoquic_test_tls_api_ctx_t* test_ctx,
     int nb_inactive = 0;
 
     while (*simulated_time <time_out &&
-        test_ctx->cnx_client->cnx_state == picoquic_state_client_ready &&
-        test_ctx->cnx_server->cnx_state == picoquic_state_server_ready &&
+        TEST_CLIENT_READY &&
+        TEST_SERVER_READY &&
         test_ctx->qclient->p_first_ticket == NULL &&
         nb_trials < 1024 &&
         nb_inactive < 64 &&
@@ -2199,7 +2202,7 @@ int spurious_retransmit_test()
 
     /* simulate 1 second of silence */
     next_time = simulated_time + 1000000;
-    while (ret == 0 && simulated_time < next_time && test_ctx->cnx_client->cnx_state == picoquic_state_client_ready && test_ctx->cnx_server->cnx_state == picoquic_state_server_ready) {
+    while (ret == 0 && simulated_time < next_time && TEST_CLIENT_READY && TEST_SERVER_READY) {
         int was_active = 0;
 
         ret = tls_api_one_sim_round(test_ctx, &simulated_time, next_time, &was_active);
@@ -2650,8 +2653,7 @@ int set_certificate_and_key_test()
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
     }
 
-    if (ret == 0 && (test_ctx->cnx_client->cnx_state != picoquic_state_client_ready
-                     || test_ctx->cnx_server->cnx_state != picoquic_state_server_ready)) {
+    if (ret == 0 && (!TEST_CLIENT_READY || !TEST_SERVER_READY)) {
         ret = -1;
     }
 
@@ -2719,8 +2721,8 @@ int request_client_authentication_test()
     if (ret == 0) {
         if (test_ctx->cnx_client == NULL
             || test_ctx->cnx_server == NULL
-            || test_ctx->cnx_client->cnx_state != picoquic_state_client_ready
-            || test_ctx->cnx_server->cnx_state != picoquic_state_server_ready) {
+            || !TEST_CLIENT_READY
+            || !TEST_SERVER_READY) {
             ret = -1;
         }
     }
@@ -2855,8 +2857,8 @@ int nat_rebinding_test_one(uint64_t loss_mask_data)
     /* Add a time loop of 3 seconds to give some time for the challenge to be repeated */
     next_time = simulated_time + 3000000;
     loss_mask = 0;
-    while (ret == 0 && simulated_time < next_time && test_ctx->cnx_client->cnx_state == picoquic_state_client_ready 
-        && test_ctx->cnx_server->cnx_state == picoquic_state_server_ready
+    while (ret == 0 && simulated_time < next_time && TEST_CLIENT_READY 
+        && TEST_SERVER_READY
         && test_ctx->cnx_server->path[0]->challenge_verified != 1) {
         int was_active = 0;
 
@@ -2974,7 +2976,7 @@ int spin_bit_test()
         test_ctx->c_to_s_link->loss_mask = &loss_mask;
         test_ctx->s_to_c_link->loss_mask = &loss_mask;
 
-        while (ret == 0 && nb_trials < max_trials && simulated_time < next_time && nb_inactive < 256 && test_ctx->cnx_client->cnx_state == picoquic_state_client_ready && test_ctx->cnx_server->cnx_state == picoquic_state_server_ready) {
+        while (ret == 0 && nb_trials < max_trials && simulated_time < next_time && nb_inactive < 256 && TEST_CLIENT_READY && TEST_SERVER_READY) {
             int was_active = 0;
 
             nb_trials++;
@@ -3540,8 +3542,8 @@ int migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_sc
     /* Add a time loop of 3 seconds to give some time for the probes to be repeated */
     next_time = simulated_time + 4000000;
     loss_mask = 0;
-    while (ret == 0 && simulated_time < next_time && test_ctx->cnx_client->cnx_state == picoquic_state_client_ready
-        && test_ctx->cnx_server->cnx_state == picoquic_state_server_ready
+    while (ret == 0 && simulated_time < next_time && TEST_CLIENT_READY
+        && TEST_SERVER_READY
         && (test_ctx->cnx_server->path[0]->challenge_verified != 1 || test_ctx->cnx_client->path[0]->path_is_demoted == 1 ||
             initial_challenge == test_ctx->cnx_server->path[0]->challenge)) {
         int was_active = 0;
@@ -3671,8 +3673,8 @@ int cnxid_renewal_test()
     /* Add a time loop of 3 seconds to give some time for the probes to be repeated */
     next_time = simulated_time + 3000000;
     loss_mask = 0;
-    while (ret == 0 && simulated_time < next_time && test_ctx->cnx_client->cnx_state == picoquic_state_client_ready
-        && test_ctx->cnx_server->cnx_state == picoquic_state_server_ready
+    while (ret == 0 && simulated_time < next_time && TEST_CLIENT_READY
+        && TEST_SERVER_READY
         && test_ctx->cnx_server->path[0]->challenge_verified != 1) {
         int was_active = 0;
 
@@ -4145,7 +4147,7 @@ static int key_rotation_test_one(int inject_bad_packet)
      * every 100 packets or so. To test robustness, inject bogus packets that
      * mimic a transition trigger */
 
-    while (ret == 0 && nb_trials < max_trials && nb_inactive < 256 && test_ctx->cnx_client->cnx_state == picoquic_state_client_ready && test_ctx->cnx_server->cnx_state == picoquic_state_server_ready) {
+    while (ret == 0 && nb_trials < max_trials && nb_inactive < 256 && TEST_CLIENT_READY && TEST_SERVER_READY) {
         int was_active = 0;
 
         nb_trials++;
@@ -4296,7 +4298,7 @@ static int key_rotation_stress_test_one(int nb_packets)
     /* Perform a data sending loop, during which various key rotations are tried
      * every "nb_packets". */
 
-    while (ret == 0 && nb_trials < max_trials && nb_inactive < 256 && test_ctx->cnx_client->cnx_state == picoquic_state_client_ready && test_ctx->cnx_server->cnx_state == picoquic_state_server_ready) {
+    while (ret == 0 && nb_trials < max_trials && nb_inactive < 256 && TEST_CLIENT_READY && TEST_SERVER_READY) {
         int was_active = 0;
 
         nb_trials++;
@@ -4339,7 +4341,7 @@ static int key_rotation_stress_test_one(int nb_packets)
         }
     }
 
-    if (ret == 0 && test_ctx->cnx_client->cnx_state == picoquic_state_client_ready) {
+    if (ret == 0 && TEST_CLIENT_READY) {
         ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
 
         if (ret != 0) {
@@ -4481,7 +4483,7 @@ int false_migration_test_scenario(test_api_stream_desc_t * scenario, size_t size
     /* Run a connection loop with injection test */
     if (ret == 0) {
 
-        while (ret == 0 && nb_trials < 1024 && nb_inactive < 512 && (test_ctx->cnx_client->cnx_state != picoquic_state_client_ready || (test_ctx->cnx_server == NULL || test_ctx->cnx_server->cnx_state != picoquic_state_server_ready))) {
+        while (ret == 0 && nb_trials < 1024 && nb_inactive < 512 && (!TEST_CLIENT_READY || (test_ctx->cnx_server == NULL || !TEST_SERVER_READY))) {
             int was_active = 0;
             nb_trials++;
 
@@ -4529,7 +4531,7 @@ int false_migration_test_scenario(test_api_stream_desc_t * scenario, size_t size
      * every 100 packets or so. To test robustness, inject bogus packets that
      * mimic a transition trigger */
 
-    while (ret == 0 && nb_trials < 1024 && nb_inactive < 256 && test_ctx->cnx_client->cnx_state == picoquic_state_client_ready && test_ctx->cnx_server->cnx_state == picoquic_state_server_ready) {
+    while (ret == 0 && nb_trials < 1024 && nb_inactive < 256 && TEST_CLIENT_READY && TEST_SERVER_READY) {
         int was_active = 0;
 
         nb_trials++;
@@ -4638,7 +4640,7 @@ int nat_handshake_test_one(int test_rank)
     /* Run a connection loop with rebinding test */
     if (ret == 0) {
 
-        while (ret == 0 && nb_trials < 1024 && nb_inactive < 512 && (test_ctx->cnx_client->cnx_state != picoquic_state_client_ready || (test_ctx->cnx_server == NULL || test_ctx->cnx_server->cnx_state != picoquic_state_server_ready))) {
+        while (ret == 0 && nb_trials < 1024 && nb_inactive < 512 && (!TEST_CLIENT_READY || (test_ctx->cnx_server == NULL || !TEST_SERVER_READY))) {
             int was_active = 0;
             nb_trials++;
 
@@ -4772,7 +4774,7 @@ static int short_initial_cid_test_one(uint8_t cid_length)
     }
 
     /* Check that both the client and server are ready. */
-    if (ret == 0 && test_ctx->cnx_client->cnx_state == picoquic_state_client_ready) {
+    if (ret == 0 && TEST_CLIENT_READY) {
         if (cid_length < PICOQUIC_ENFORCED_INITIAL_CID_LENGTH) {
             DBG_PRINTF("Connection succeeds despites cid_length %d < %d\n",
                 cid_length, PICOQUIC_ENFORCED_INITIAL_CID_LENGTH);
