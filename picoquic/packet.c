@@ -740,8 +740,8 @@ void picoquic_process_unexpected_cnxid(
             sp->cnxid_log64 = picoquic_val64_connection_id(ph->dest_cnx_id);
 
             if (quic->F_log != NULL) {
-                fprintf(quic->F_log, "%llu: Unexpected connection ID, sending stateless reset.\n",
-                    (unsigned long long)sp->cnxid_log64);
+                picoquic_log_prefix_initial_cid64(quic->F_log, sp->cnxid_log64);
+                fprintf(quic->F_log, "Unexpected connection ID, sending stateless reset.\n");
             }
 
 

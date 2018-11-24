@@ -901,7 +901,7 @@ void picoquic_log_outgoing_segment(void* F_log, int log_cnxid, picoquic_cnx_t* c
 void picoquic_log_packet_address(FILE* F, uint64_t log_cnxid64, picoquic_cnx_t* cnx,
     struct sockaddr* addr_peer, int receiving, size_t length, uint64_t current_time);
 
-void picoquic_log_transport_extension(FILE* F, picoquic_cnx_t* cnx, int log_cnxid);
+void picoquic_log_prefix_initial_cid64(FILE* F, uint64_t log_cnxid64);
 
 void picoquic_log_error_packet(FILE* F, uint8_t* bytes, size_t bytes_max, int ret);
 void picoquic_log_processing(FILE* F, picoquic_cnx_t* cnx, size_t length, int ret);
