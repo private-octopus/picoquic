@@ -553,7 +553,8 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                                         picoquic_decode_transport_param_stream_id(bidir, extension_mode,
                                             PICOQUIC_STREAM_ID_BIDIR);
 
-                                    cnx->max_stream_id_bidir_remote = cnx->remote_parameters.initial_max_stream_id_bidir;
+                                    cnx->max_stream_id_bidir_remote =
+                                        (cnx->remote_parameters.initial_max_stream_id_bidir == 0xFFFFFFFF) ? 0 : cnx->remote_parameters.initial_max_stream_id_bidir;
                                 }
                                 break;
                             case picoquic_tp_idle_timeout:
@@ -602,7 +603,8 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                                         picoquic_decode_transport_param_stream_id(unidir, extension_mode,
                                             PICOQUIC_STREAM_ID_UNIDIR);
 
-                                    cnx->max_stream_id_unidir_remote = cnx->remote_parameters.initial_max_stream_id_unidir;
+                                    cnx->max_stream_id_unidir_remote =
+                                        (cnx->remote_parameters.initial_max_stream_id_unidir == 0xFFFFFFFF) ? 0 : cnx->remote_parameters.initial_max_stream_id_unidir;
                                 }
                                 break;
                             case picoquic_tp_server_preferred_address:
