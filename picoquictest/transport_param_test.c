@@ -164,7 +164,7 @@ uint8_t server_param1[] = {
     0, 0x36,
     0, 0, 0, 4, 0, 0, 0xFF, 0xFF,
     0, 1, 0, 4, 0, 0x40, 0, 0,
-    0, 2, 0, 2, 0x3F, 0xFF,
+    0, 2, 0, 2, 0x40, 0x00,
     0, 3, 0, 2, 0, 0x1E,
     0, 5, 0, 2, 0x05, 0xC8,
     0, 6, 0, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
@@ -176,7 +176,7 @@ uint8_t server_param2[] = {
     0, 0x36,
     0, 0, 0, 4, 0x01, 0, 0, 0,
     0, 1, 0, 4, 0x01, 0, 0, 0,
-    0, 2, 0, 2, 0, 1,
+    0, 2, 0, 2, 0, 2,
     0, 3, 0, 2, 0, 0xFF,
     0, 5, 0, 2, 0x05, 0xC8,
     0, 6, 0, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
@@ -197,7 +197,7 @@ uint8_t server_param3[] = {
     0, 87,
     0, 0, 0, 4, 0x01, 0, 0, 0,
     0, 1, 0, 4, 0x01, 0, 0, 0,
-    0, 2, 0, 2, 0, 1,
+    0, 2, 0, 2, 0, 2,
     0, 3, 0, 2, 0, 0xFF,
     0, 5, 0, 2, 0x05, 0xC8,
     0, 6, 0, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
@@ -217,47 +217,72 @@ uint8_t client_param9[] = {
     0, 9, 0, 0
 };
 
+/*
+ * Before testing the transport parameters, test the encoding of stream_id
+ */
+
+int stream_id_to_rank_test()
+{
+    int ret = 0;
+    uint16_t test_rank[5] = { 0, 1, 2, 13833, 65535 };
+
+    for (int stream_type = 0; stream_type < 4; stream_type += 2) {
+        for (int extension_mode = 0; extension_mode < 2; extension_mode ++) {
+            for (int rank_id = 0; rank_id < 5; rank_id++) {
+                uint32_t stream_id = picoquic_decode_transport_param_stream_id(test_rank[rank_id], extension_mode, stream_type);
+                uint16_t decoded_rank = picoquic_prepare_transport_param_stream_id(stream_id, extension_mode, stream_type); 
+                uint32_t decoded_stream_id = picoquic_decode_transport_param_stream_id(decoded_rank, extension_mode, stream_type);
+
+                if (decoded_rank != test_rank[rank_id] || decoded_stream_id != stream_id) {
+                    ret = -1;
+                    DBG_PRINTF("Extension mode %d, stream type %d, rank %d -> stream %d -> rank %d\n",
+                        extension_mode, stream_type, test_rank[rank_id], stream_id, decoded_rank, decoded_stream_id);
+                }
+            }
+        }
+    }
+
+    return ret;
+}
+
 static int transport_param_compare(picoquic_tp_t* param, picoquic_tp_t* ref) {
     int ret = 0;
 
     if (param->initial_max_stream_data_bidi_local != ref->initial_max_stream_data_bidi_local) {
         ret = -1;
     }
-    else if (param->initial_max_stream_data_bidi_remote != ref->initial_max_stream_data_bidi_remote &&
-        (ref->initial_max_stream_data_bidi_remote != 0 ||
-            param->initial_max_stream_data_bidi_remote != ref->initial_max_stream_data_bidi_local)) {
-        /* TODO: remove the horrific kludge above when we align on draft 14 */
-        DBG_PRINTF("initial_max_stream_data_bidi_remote: expected %d, got %d\n",
+    else if (param->initial_max_stream_data_bidi_remote != ref->initial_max_stream_data_bidi_remote) {
+        DBG_PRINTF("initial_max_stream_data_bidi_remote: got %d, expected %d\n",
             param->initial_max_stream_data_bidi_remote, ref->initial_max_stream_data_bidi_remote);
         ret = -1;
     }
     else if (param->initial_max_stream_data_uni != ref->initial_max_stream_data_uni) {
-        DBG_PRINTF("initial_max_stream_data_uni: expected %d, got %d\n",
+        DBG_PRINTF("initial_max_stream_data_uni: got %d, expected %d\n",
             param->initial_max_stream_data_uni, ref->initial_max_stream_data_uni);
         ret = -1;
     }
     else if (param->initial_max_data != ref->initial_max_data) {
-        DBG_PRINTF("initial_max_data: expected %d, got %d\n",
+        DBG_PRINTF("initial_max_data: got %d, expected %d\n",
             param->initial_max_data, ref->initial_max_data);
         ret = -1;
     }
     else if (param->initial_max_stream_id_bidir != ref->initial_max_stream_id_bidir) {
-        DBG_PRINTF("initial_max_stream_id_bidir: expected %d, got %d\n",
+        DBG_PRINTF("initial_max_stream_id_bidir: got %d, expected %d\n",
             param->initial_max_stream_id_bidir, ref->initial_max_stream_id_bidir);
         ret = -1;
     }
     else if (param->initial_max_stream_id_unidir != ref->initial_max_stream_id_unidir) {
-        DBG_PRINTF("initial_max_stream_id_unidir: expected %d, got %d\n",
+        DBG_PRINTF("initial_max_stream_id_unidir: got %d, expected %d\n",
             param->initial_max_stream_id_unidir, ref->initial_max_stream_id_unidir);
         ret = -1;
     }
     else if (param->idle_timeout != ref->idle_timeout) {
-        DBG_PRINTF("idle_timeout: expected %d, got %d\n",
+        DBG_PRINTF("idle_timeout: got %d, expected %d\n",
             param->idle_timeout, ref->idle_timeout);
         ret = -1;
     }
     else if (param->prefered_address.ipVersion != ref->prefered_address.ipVersion) {
-        DBG_PRINTF("prefered_address.ipVersion: expected %d, got %d\n",
+        DBG_PRINTF("prefered_address.ipVersion: got %d, expected %d\n",
             param->prefered_address.ipVersion, ref->prefered_address.ipVersion);
         ret = -1;
     }
@@ -268,7 +293,7 @@ static int transport_param_compare(picoquic_tp_t* param, picoquic_tp_t* ref) {
             ret = -1;
         }
         else if (param->prefered_address.port != ref->prefered_address.port) {
-            DBG_PRINTF("prefered_address.port: expected %d, got %d\n",
+            DBG_PRINTF("prefered_address.port: got %d, expected %d\n",
                 param->prefered_address.port, ref->prefered_address.port);
             ret = -1;
         }
@@ -763,12 +788,12 @@ typedef struct st_transport_param_stream_id_test_t {
 } transport_param_stream_id_test_t;
 
 transport_param_stream_id_test_t const transport_param_stream_id_test_table[] = {
-    { 0, PICOQUIC_STREAM_ID_BIDIR, 0, 0 },
-    { 1, PICOQUIC_STREAM_ID_BIDIR, 0, 0 },
-    { 0, PICOQUIC_STREAM_ID_UNIDIR, 0, 0 },
-    { 1, PICOQUIC_STREAM_ID_UNIDIR, 0, 0 },
+    { 0, PICOQUIC_STREAM_ID_BIDIR, 0, 0xFFFFFFFF },
+    { 1, PICOQUIC_STREAM_ID_BIDIR, 0, 0xFFFFFFFF },
+    { 0, PICOQUIC_STREAM_ID_UNIDIR, 0, 0xFFFFFFFF },
+    { 1, PICOQUIC_STREAM_ID_UNIDIR, 0, 0xFFFFFFFF },
     { 0, PICOQUIC_STREAM_ID_BIDIR,  1, PICOQUIC_STREAM_ID_SERVER_INITIATED_BIDIR },
-    { 1, PICOQUIC_STREAM_ID_BIDIR, 1, PICOQUIC_STREAM_ID_CLIENT_INITIATED_BIDIR + 4},
+    { 1, PICOQUIC_STREAM_ID_BIDIR, 1, PICOQUIC_STREAM_ID_CLIENT_INITIATED_BIDIR },
     { 0, PICOQUIC_STREAM_ID_UNIDIR, 1, PICOQUIC_STREAM_ID_SERVER_INITIATED_UNIDIR },
     { 1, PICOQUIC_STREAM_ID_UNIDIR, 1, PICOQUIC_STREAM_ID_CLIENT_INITIATED_UNIDIR },
     { 0, PICOQUIC_STREAM_ID_BIDIR, 65535, PICOQUIC_STREAM_ID_SERVER_MAX_INITIAL_BIDIR },
@@ -776,7 +801,7 @@ transport_param_stream_id_test_t const transport_param_stream_id_test_table[] = 
     { 0, PICOQUIC_STREAM_ID_UNIDIR, 65535, PICOQUIC_STREAM_ID_SERVER_MAX_INITIAL_UNIDIR },
     { 1, PICOQUIC_STREAM_ID_UNIDIR, 65535, PICOQUIC_STREAM_ID_CLIENT_MAX_INITIAL_UNIDIR },
     { 0, PICOQUIC_STREAM_ID_BIDIR, 5, 17},
-    { 1, PICOQUIC_STREAM_ID_BIDIR, 5, 20 }
+    { 1, PICOQUIC_STREAM_ID_BIDIR, 6, 20 }
 };
 
 static size_t const nb_transport_param_stream_id_test_table =
@@ -796,7 +821,7 @@ int transport_param_stream_id_test() {
             transport_param_stream_id_test_table[i].stream_id_type);
 
         if (rank != transport_param_stream_id_test_table[i].rank) {
-            DBG_PRINTF("TP Stream prepare ID [%d] fails. Rank= 0x%x, expected 0x%x, got 0x%x\n", i,
+            DBG_PRINTF("TP Stream prepare ID [%d] fails. Stream= 0x%x, expected rank 0x%x, got 0x%x\n", i,
                 transport_param_stream_id_test_table[i].stream_id,
                 transport_param_stream_id_test_table[i].rank,
                 rank);
@@ -812,7 +837,7 @@ int transport_param_stream_id_test() {
             transport_param_stream_id_test_table[i].stream_id_type);
 
         if (stream_id != transport_param_stream_id_test_table[i].stream_id) {
-            DBG_PRINTF("TP Stream decode ID [%d] fails. Rank= 0x%x, expected 0x%x, got 0x%x\n", i,
+            DBG_PRINTF("TP Stream decode ID [%d] fails. Rank= 0x%x, expected stream 0x%x, got 0x%x\n", i,
                 transport_param_stream_id_test_table[i].rank,
                 transport_param_stream_id_test_table[i].stream_id,
                 stream_id);

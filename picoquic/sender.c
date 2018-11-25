@@ -724,9 +724,10 @@ static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t* cnx,
             cnx->cnx_state != picoquic_state_client_ready_start) {
             /* Set the retransmit time ahead of current time since the connection is not ready */
             retransmit_time = current_time + cnx->path[0]->smoothed_rtt + PICOQUIC_RACK_DELAY;
+        } else if (!cnx->zero_rtt_data_accepted) {
+            /* Zero RTT data was not accepted by the peer, the packets are considered lost */
+            retransmit_time = current_time;
         }
-        /* TODO: if early data was skipped by the server, we should retransmit
-         * immediately. However, there is not good API to do that */
     }
 
     if (current_time >= retransmit_time) {
@@ -2180,6 +2181,23 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                                 ret = 0;
                             }
                             break;
+                        }
+                    }
+
+                    /* if necessary, prepare the MAX STREAM frames */
+                    if (ret == 0) {
+                        ret =  picoquic_prepare_max_stream_ID_frame_if_needed(cnx,
+                            &bytes[length], send_buffer_min_max - checksum_overhead - length, &data_bytes);
+                        if (ret == 0) {
+                            length += (uint32_t)data_bytes;
+                            if (data_bytes > 0)
+                            {
+                                is_pure_ack = 0;
+                            }
+                        }
+                        else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
+                            next_wake_time = current_time;
+                            ret = 0;
                         }
                     }
 

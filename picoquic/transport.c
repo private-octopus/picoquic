@@ -28,34 +28,26 @@
 #include "tls_api.h"
 #include <string.h>
 
-uint32_t picoquic_decode_transport_param_stream_id(uint16_t rank, int extension_mode, int stream_type) {
-    uint32_t stream_id = 0;
+uint32_t picoquic_decode_transport_param_stream_id(uint16_t rank, int extension_mode, int stream_type) 
+{
+    uint32_t stream_id = 0xFFFFFFFF;
     
     if (rank > 0) {
-        stream_type |= (extension_mode == 0) ? PICOQUIC_STREAM_ID_SERVER_INITIATED : PICOQUIC_STREAM_ID_CLIENT_INITIATED;
+        stream_id = stream_type;
+        stream_id += extension_mode^1;
 
-        if (stream_type == 0) {
-            stream_id = 4 * rank;
-        }
-        else {
-            stream_id = 4 * (rank - 1) + stream_type;
-        }
+        stream_id += 4 * (rank - 1);
     }
 
     return stream_id;
 }
 
-uint16_t picoquic_prepare_transport_param_stream_id(uint32_t stream_id, int extension_mode, int stream_type) {
+uint16_t picoquic_prepare_transport_param_stream_id(uint32_t stream_id, int extension_mode, int stream_type) 
+{
     uint16_t rank = 0;
 
-    if (stream_id > 0) {
-        stream_type |= (extension_mode == 0) ? PICOQUIC_STREAM_ID_SERVER_INITIATED: PICOQUIC_STREAM_ID_CLIENT_INITIATED;
-
-        if (stream_type == 0) {
-            rank = (uint16_t) (stream_id/4);
-        } else {
-            rank = (uint16_t) ((stream_id / 4) + 1);
-        }
+    if (stream_id != 0xFFFFFFFF) {
+        rank = 1 + (uint16_t) (stream_id / 4);
     }
 
     return rank;
