@@ -266,6 +266,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(stream_id_to_rank)
+        {
+            int ret = stream_id_to_rank_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
 		TEST_METHOD(test_transport_param)
 		{
 			int ret = transport_param_test();
@@ -732,6 +739,13 @@ namespace UnitTest1
         TEST_METHOD(short_initial_cid)
         {
             int ret = short_initial_cid_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(stream_id_max)
+        {
+            int ret = stream_id_max_test();
 
             Assert::AreEqual(ret, 0);
         }

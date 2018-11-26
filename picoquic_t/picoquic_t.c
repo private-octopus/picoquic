@@ -76,6 +76,7 @@ static const picoquic_test_def_t test_table[] = {
     { "client_losses", tls_api_client_losses_test },
     { "server_losses", tls_api_server_losses_test },
     { "transport_param_stream_id", transport_param_stream_id_test },
+    { "stream_id_to_rank", stream_id_to_rank_test},
     { "transport_param", transport_param_test },
     { "tls_api_sni", tls_api_sni_test },
     { "tls_api_alpn", tls_api_alpn_test },
@@ -145,6 +146,7 @@ static const picoquic_test_def_t test_table[] = {
     { "key_rotation_vector", key_rotation_vector_test },
     { "key_rotation_stress", key_rotation_stress_test },
     { "short_initial_cid", short_initial_cid_test },
+    { "stream_id_max", stream_id_max_test },
     { "stress", stress_test },
     { "fuzz", fuzz_test },
     { "fuzz_initial", fuzz_initial_test}

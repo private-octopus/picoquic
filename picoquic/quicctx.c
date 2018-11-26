@@ -255,6 +255,24 @@ picoquic_quic_t* picoquic_create(uint32_t nb_connections,
     return quic;
 }
 
+int picoquic_set_default_tp(picoquic_quic_t* quic, picoquic_tp_t * tp)
+{
+    int ret = 0;
+
+    if (quic->default_tp == NULL) {
+        quic->default_tp = (picoquic_tp_t *)malloc(sizeof(picoquic_tp_t));
+    }
+
+    if (quic->default_tp == NULL) {
+        ret = PICOQUIC_ERROR_MEMORY;
+    }
+    else {
+        memcpy(quic->default_tp, tp, sizeof(picoquic_tp_t));
+    }
+
+    return ret;
+}
+
 void picoquic_free(picoquic_quic_t* quic)
 {
     if (quic != NULL) {
@@ -304,6 +322,11 @@ void picoquic_free(picoquic_quic_t* quic)
 
         if (quic->verify_certificate_callback_fn != NULL) {
             picoquic_dispose_verify_certificate_callback(quic, 1);
+        }
+
+        if (quic->default_tp == NULL) {
+            free(quic->default_tp);
+            quic->default_tp = NULL;
         }
 
         /* Delete the picotls context */
@@ -1276,17 +1299,23 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
     }
 
     if (cnx != NULL) {
-        picoquic_init_transport_parameters(&cnx->local_parameters, cnx->client_mode);
+        if (quic->default_tp == NULL) {
+            picoquic_init_transport_parameters(&cnx->local_parameters, cnx->client_mode);
+        } else {
+            memcpy(&cnx->local_parameters, quic->default_tp, sizeof(picoquic_tp_t));
+        }
         if (cnx->quic->mtu_max > 0)
         {
             cnx->local_parameters.max_packet_size = cnx->quic->mtu_max;
         }
 
-        /* Initialize local flow control variables to advertised values */
 
+        /* Initialize local flow control variables to advertised values */
         cnx->maxdata_local = ((uint64_t)cnx->local_parameters.initial_max_data);
         cnx->max_stream_id_bidir_local = cnx->local_parameters.initial_max_stream_id_bidir;
+        cnx->max_stream_id_bidir_local_computed = cnx->max_stream_id_bidir_local;
         cnx->max_stream_id_unidir_local = cnx->local_parameters.initial_max_stream_id_unidir;
+        cnx->max_stream_id_unidir_local_computed = cnx->max_stream_id_unidir_local;
 
         /* Initialize remote variables to some plausible value. 
 		 * Hopefully, this will be overwritten by the parameters received in

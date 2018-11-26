@@ -1089,6 +1089,10 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
                             fprintf(F_log, "The session was properly resumed!\n");
                         }
                     }
+
+                    if (cnx_client->zero_rtt_data_accepted) {
+                        fprintf(stdout, "Zero RTT data is accepted!\n");
+                    }
                     fprintf(stdout, "Almost ready!\n\n");
                     notified_ready = 1;
                 }
