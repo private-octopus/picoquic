@@ -147,7 +147,7 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         break;
     }
     /* All parameters are now optional, but some are sent always */
-    param_size =  (2 + 2 + 4) + (2 + 2 + 4) + (2 + 2 + 2) + (2 + 2 + 2);
+    param_size = (2 + 2 + 4) + (2 + 2 + 4) + (2 + 2 + 2) + (2 + 2 + 2);
     if (cnx->local_parameters.initial_max_stream_id_bidir != 0) {
         param_size += (2 + 2 + 2);
     }
@@ -173,17 +173,13 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     if (cnx->local_parameters.initial_max_stream_data_uni > 0) {
         param_size += (2 + 2 + 4);
     }
-    /* New parameters in versions larger than 14 */
-    if (picoquic_supported_versions[cnx->version_index].version != PICOQUIC_SEVENTH_INTEROP_VERSION &&
-        picoquic_supported_versions[cnx->version_index].version != PICOQUIC_EIGHT_INTEROP_VERSION) {
-
-        if (cnx->local_parameters.max_ack_delay != PICOQUIC_ACK_DELAY_MAX_DEFAULT) {
-            param_size += 2 + 2 + 1;
-        }
-        if (extension_mode == 1 && cnx->original_cnxid.id_len > 0) {
-            param_size += 2 + 2 + cnx->original_cnxid.id_len;
-        }
+    if (cnx->local_parameters.max_ack_delay != PICOQUIC_ACK_DELAY_MAX_DEFAULT) {
+        param_size += 2 + 2 + 1;
     }
+    if (extension_mode == 1 && cnx->original_cnxid.id_len > 0) {
+        param_size += 2 + 2 + cnx->original_cnxid.id_len;
+    }
+
     /* TODO: add more tests here if adding new parameters */
 
     min_size += param_size + 2;
