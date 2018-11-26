@@ -1002,7 +1002,7 @@ int picoquic_decode_closing_frames(uint8_t* bytes,
     size_t bytes_max, int* closing_received);
 
 uint32_t picoquic_decode_transport_param_stream_id(uint16_t rank, int extension_mode, int stream_type);
-uint16_t picoquic_prepare_transport_param_stream_id(uint32_t stream_id, int extension_mode, int stream_type);
+uint16_t picoquic_prepare_transport_param_stream_id(uint32_t stream_id);
 
 int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mode,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
