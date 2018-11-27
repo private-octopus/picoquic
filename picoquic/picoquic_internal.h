@@ -359,11 +359,11 @@ typedef struct st_picoquic_sack_item_t {
 } picoquic_sack_item_t;
 
 /*
-	 * Stream head.
-	 * Stream contains bytes of data, which are not always delivered in order.
-	 * When in order data is available, the application can read it,
-	 * or a callback can be set.
-	 */
+ * Stream head.
+ * Stream contains bytes of data, which are not always delivered in order.
+ * When in order data is available, the application can read it,
+ * or a callback can be set.
+ */
 
 typedef struct _picoquic_stream_data {
     struct _picoquic_stream_data* next_stream_data;
@@ -372,22 +372,6 @@ typedef struct _picoquic_stream_data {
     uint8_t* bytes;
 } picoquic_stream_data;
 
-typedef enum picoquic_stream_flags {
-    picoquic_stream_flag_fin_received = 1,
-    picoquic_stream_flag_fin_signalled = 2,
-    picoquic_stream_flag_fin_notified = 4,
-    picoquic_stream_flag_fin_sent = 8,
-    picoquic_stream_flag_reset_requested = 16,
-    picoquic_stream_flag_reset_sent = 32,
-    picoquic_stream_flag_reset_received = 64,
-    picoquic_stream_flag_reset_signalled = 128,
-    picoquic_stream_flag_stop_sending_requested = 256,
-    picoquic_stream_flag_stop_sending_sent = 512,
-    picoquic_stream_flag_stop_sending_received = 1024,
-    picoquic_stream_flag_stop_sending_signalled = 2048,
-    picoquic_stream_flag_max_stream_updated = 4096
-} picoquic_stream_flags;
-
 typedef struct _picoquic_stream_head {
     struct _picoquic_stream_head* next_stream;
     uint64_t stream_id;
@@ -395,7 +379,6 @@ typedef struct _picoquic_stream_head {
     uint64_t fin_offset;
     uint64_t maxdata_local;
     uint64_t maxdata_remote;
-    uint32_t stream_flags;
     uint32_t local_error;
     uint32_t remote_error;
     uint32_t local_stop_error;
@@ -404,6 +387,20 @@ typedef struct _picoquic_stream_head {
     uint64_t sent_offset;
     picoquic_stream_data* send_queue;
     picoquic_sack_item_t first_sack_item;
+    /* Flags describing the state of the stream */
+    unsigned int fin_requested : 1; /* Application has requested Fin of sending stream */
+    unsigned int fin_sent : 1; /* Fin sent to peer */
+    unsigned int fin_received : 1; /* Fin received from peer */
+    unsigned int fin_signalled : 1; /* After Fin was received from peer, Fin was signalled to the application */
+    unsigned int reset_requested : 1; /* Application has requested to reset the stream */
+    unsigned int reset_sent : 1; /* Reset stream sent to peer */
+    unsigned int reset_received : 1; /* Reset stream received from peer */
+    unsigned int reset_signalled : 1; /* After Reset stream received from peer, application was notified */
+    unsigned int stop_sending_requested : 1; /* Application has requested to stop sending */
+    unsigned int stop_sending_sent : 1; /* Stop sending was sent to peer */
+    unsigned int stop_sending_received : 1; /* Stop sending received from peer */
+    unsigned int stop_sending_signalled : 1; /* After stop sending received from peer, application was notified */
+    unsigned int max_stream_updated : 1; /* After stream was closed in both directions, the max stream id number was updated */
 } picoquic_stream_head;
 
 #define IS_CLIENT_STREAM_ID(id) (unsigned int)(((id) & 1) == 0)
@@ -1014,16 +1011,16 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
 
 picoquic_misc_frame_header_t* picoquic_create_misc_frame(const uint8_t* bytes, size_t length);
 
-#define STREAM_RESET_SENT(stream) ((stream->stream_flags & picoquic_stream_flag_reset_sent) != 0)
-#define STREAM_RESET_REQUESTED(stream) ((stream->stream_flags & picoquic_stream_flag_reset_requested) != 0)
+#define STREAM_RESET_SENT(stream) (stream->reset_sent)
+#define STREAM_RESET_REQUESTED(stream) (stream->reset_requested)
 #define STREAM_SEND_RESET(stream) (STREAM_RESET_REQUESTED(stream) && !STREAM_RESET_SENT(stream))
-#define STREAM_STOP_SENDING_REQUESTED(stream) ((stream->stream_flags & picoquic_stream_flag_stop_sending_requested) != 0)
-#define STREAM_STOP_SENDING_SENT(stream) ((stream->stream_flags & picoquic_stream_flag_stop_sending_sent) != 0)
-#define STREAM_STOP_SENDING_RECEIVED(stream) ((stream->stream_flags & picoquic_stream_flag_stop_sending_received) != 0)
+#define STREAM_STOP_SENDING_REQUESTED(stream) (stream->stop_sending_requested)
+#define STREAM_STOP_SENDING_SENT(stream) (stream->stop_sending_sent)
+#define STREAM_STOP_SENDING_RECEIVED(stream) (stream->stop_sending_received)
 #define STREAM_SEND_STOP_SENDING(stream) (STREAM_STOP_SENDING_REQUESTED(stream) && !STREAM_STOP_SENDING_SENT(stream))
-#define STREAM_FIN_NOTIFIED(stream) ((stream->stream_flags & picoquic_stream_flag_fin_notified) != 0)
-#define STREAM_FIN_SENT(stream) ((stream->stream_flags & picoquic_stream_flag_fin_sent) != 0)
-#define STREAM_SEND_FIN(stream) (STREAM_FIN_NOTIFIED(stream) && !STREAM_FIN_SENT(stream))
+#define STREAM_FIN_REQUESTED(stream) (stream->fin_requested)
+#define STREAM_FIN_SENT(stream) (stream->fin_sent)
+#define STREAM_SEND_FIN(stream) (STREAM_FIN_REQUESTED(stream) && !STREAM_FIN_SENT(stream))
 
 #ifdef __cplusplus
 }

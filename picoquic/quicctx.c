@@ -1408,7 +1408,6 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             for (int epoch = 0; epoch < PICOQUIC_NUMBER_OF_EPOCHS; epoch++) {
                 cnx->tls_stream[epoch].stream_id = 0;
                 cnx->tls_stream[epoch].consumed_offset = 0;
-                cnx->tls_stream[epoch].stream_flags = 0;
                 cnx->tls_stream[epoch].fin_offset = 0;
                 cnx->tls_stream[epoch].next_stream = NULL;
                 cnx->tls_stream[epoch].stream_data = NULL;
@@ -1417,6 +1416,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
                 cnx->tls_stream[epoch].remote_error = 0;
                 cnx->tls_stream[epoch].maxdata_local = (uint64_t)((int64_t)-1);
                 cnx->tls_stream[epoch].maxdata_remote = (uint64_t)((int64_t)-1);
+                /* No need to reset the state flags, as they are not used for the crypto stream */
             }
 
             cnx->congestion_alg = cnx->quic->default_congestion_alg;
@@ -1746,9 +1746,9 @@ int picoquic_reset_cnx(picoquic_cnx_t* cnx, uint64_t current_time)
     for (int epoch = 0; epoch < PICOQUIC_NUMBER_OF_EPOCHS; epoch++) {
         picoquic_clear_stream(&cnx->tls_stream[epoch]);
         cnx->tls_stream[epoch].consumed_offset = 0;
-        cnx->tls_stream[epoch].stream_flags = 0;
         cnx->tls_stream[epoch].fin_offset = 0;
         cnx->tls_stream[epoch].sent_offset = 0;
+        /* No need to reset the state flags, are they are not used for the crypto stream */
     }
 
     /* Reset the ECN data */

@@ -68,19 +68,20 @@ int picoquic_add_to_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
                 ret = PICOQUIC_ERROR_MEMORY;
             } else if (is_unidir) {
                 /* Mark the stream as already finished in remote direction */
-                stream->stream_flags |= picoquic_stream_flag_fin_signalled | picoquic_stream_flag_fin_received;
+                stream->fin_signalled = 1;
+                stream->fin_received = 1;
             }
         }
     }
 
     if (ret == 0 && set_fin) {
-        if ((stream->stream_flags & picoquic_stream_flag_fin_notified) != 0) {
+        if (stream->fin_requested) {
             /* app error, notified the fin twice*/
             if (length > 0) {
                 ret = -1;
             }
         } else {
-            stream->stream_flags |= picoquic_stream_flag_fin_notified;
+            stream->fin_requested = 1;
         }
     }
 
@@ -136,12 +137,12 @@ int picoquic_reset_stream(picoquic_cnx_t* cnx,
     if (stream == NULL) {
         ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
     }
-    else if ((stream->stream_flags & picoquic_stream_flag_fin_sent) != 0) {
+    else if (stream->fin_sent) {
         ret = PICOQUIC_ERROR_STREAM_ALREADY_CLOSED;
     }
-    else if ((stream->stream_flags & picoquic_stream_flag_reset_requested) == 0) {
+    else if (!stream->reset_requested) {
         stream->local_error = local_stream_error;
-        stream->stream_flags |= picoquic_stream_flag_reset_requested;
+        stream->reset_requested = 1;
     }
 
     picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
@@ -160,12 +161,12 @@ int picoquic_stop_sending(picoquic_cnx_t* cnx,
     if (stream == NULL) {
         ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
     }
-    else if ((stream->stream_flags & picoquic_stream_flag_reset_received) != 0) {
+    else if (stream->reset_received) {
         ret = PICOQUIC_ERROR_STREAM_ALREADY_CLOSED;
     }
-    else if ((stream->stream_flags & picoquic_stream_flag_stop_sending_requested) == 0) {
+    else if (!stream->stop_sending_requested) {
         stream->local_stop_error = local_stream_error;
-        stream->stream_flags |= picoquic_stream_flag_stop_sending_requested;
+        stream->stop_sending_requested = 1;
     }
 
     picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
