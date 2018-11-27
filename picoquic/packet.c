@@ -833,7 +833,8 @@ int picoquic_incoming_initial(
 
     /* Logic to test the retry token.
      * TODO: this should probably be implemented as a callback */
-    if ((*pcnx)->quic->flags&picoquic_context_check_token &&
+    if (((*pcnx)->quic->flags&picoquic_context_check_token) &&
+        (*pcnx)->cnx_state == picoquic_state_server_init &&
         ((*pcnx)->quic->flags&picoquic_context_server_busy) == 0) {
         uint8_t * base;
         size_t len;
