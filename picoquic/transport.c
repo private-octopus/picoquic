@@ -42,7 +42,7 @@ uint32_t picoquic_decode_transport_param_stream_id(uint16_t rank, int extension_
     return stream_id;
 }
 
-uint16_t picoquic_prepare_transport_param_stream_id(uint32_t stream_id, int extension_mode, int stream_type) 
+uint16_t picoquic_prepare_transport_param_stream_id(uint32_t stream_id) 
 {
     uint16_t rank = 0;
 
@@ -147,7 +147,7 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         break;
     }
     /* All parameters are now optional, but some are sent always */
-    param_size =  (2 + 2 + 4) + (2 + 2 + 4) + (2 + 2 + 2) + (2 + 2 + 2);
+    param_size = (2 + 2 + 4) + (2 + 2 + 4) + (2 + 2 + 2) + (2 + 2 + 2);
     if (cnx->local_parameters.initial_max_stream_id_bidir != 0) {
         param_size += (2 + 2 + 2);
     }
@@ -173,17 +173,13 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     if (cnx->local_parameters.initial_max_stream_data_uni > 0) {
         param_size += (2 + 2 + 4);
     }
-    /* New parameters in versions larger than 14 */
-    if (picoquic_supported_versions[cnx->version_index].version != PICOQUIC_SEVENTH_INTEROP_VERSION &&
-        picoquic_supported_versions[cnx->version_index].version != PICOQUIC_EIGHT_INTEROP_VERSION) {
-
-        if (cnx->local_parameters.max_ack_delay != PICOQUIC_ACK_DELAY_MAX_DEFAULT) {
-            param_size += 2 + 2 + 1;
-        }
-        if (extension_mode == 1 && cnx->original_cnxid.id_len > 0) {
-            param_size += 2 + 2 + cnx->original_cnxid.id_len;
-        }
+    if (cnx->local_parameters.max_ack_delay != PICOQUIC_ACK_DELAY_MAX_DEFAULT) {
+        param_size += 2 + 2 + 1;
     }
+    if (extension_mode == 1 && cnx->original_cnxid.id_len > 0) {
+        param_size += 2 + 2 + cnx->original_cnxid.id_len;
+    }
+
     /* TODO: add more tests here if adding new parameters */
 
     min_size += param_size + 2;
@@ -200,22 +196,13 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         {
             size_t head_index;
 
-            int is_draft_14 = (picoquic_supported_versions[cnx->version_index].version == PICOQUIC_SEVENTH_INTEROP_VERSION ||
-                picoquic_supported_versions[cnx->version_index].version == PICOQUIC_EIGHT_INTEROP_VERSION);
             picoformat_32(bytes + byte_index,
                 picoquic_supported_versions[cnx->version_index].version);
             byte_index += 4;
             head_index = byte_index;
             byte_index++;
-            /* TODO: restore this when getting rid of draft_14: bytes[byte_index++] = (uint8_t)(4 * picoquic_nb_supported_versions); */
 
             for (size_t i = 0; i < picoquic_nb_supported_versions; i++) {
-                if ((is_draft_14 && !(picoquic_supported_versions[i].version == PICOQUIC_SEVENTH_INTEROP_VERSION ||
-                    picoquic_supported_versions[i].version == PICOQUIC_EIGHT_INTEROP_VERSION)) ||
-                    (!is_draft_14 && (picoquic_supported_versions[i].version == PICOQUIC_SEVENTH_INTEROP_VERSION ||
-                        picoquic_supported_versions[i].version == PICOQUIC_EIGHT_INTEROP_VERSION))) {
-                    continue;
-                }
                 picoformat_32(bytes + byte_index, picoquic_supported_versions[i].version);
                 byte_index += 4;
             }
@@ -246,9 +233,7 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
 
         if (cnx->local_parameters.initial_max_stream_id_bidir > 0) {
             uint16_t bidir = picoquic_prepare_transport_param_stream_id(
-                cnx->local_parameters.initial_max_stream_id_bidir,
-                extension_mode,
-                PICOQUIC_STREAM_ID_BIDIR);
+                cnx->local_parameters.initial_max_stream_id_bidir);
 
             picoformat_16(bytes + byte_index, picoquic_tp_initial_max_bidi_streams);
             byte_index += 2;
@@ -294,9 +279,7 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         if (cnx->local_parameters.initial_max_stream_id_unidir > 0) {
 
             uint16_t unidir = picoquic_prepare_transport_param_stream_id(
-                cnx->local_parameters.initial_max_stream_id_unidir,
-                extension_mode,
-                PICOQUIC_STREAM_ID_UNIDIR);
+                cnx->local_parameters.initial_max_stream_id_unidir);
 
             picoformat_16(bytes + byte_index, picoquic_tp_initial_max_uni_streams);
             byte_index += 2;
@@ -345,27 +328,24 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
             byte_index += 4;
         }
 
-        /* New parameters in versions larger than 14 */
-        if (picoquic_supported_versions[cnx->version_index].version != PICOQUIC_SEVENTH_INTEROP_VERSION &&
-            picoquic_supported_versions[cnx->version_index].version != PICOQUIC_EIGHT_INTEROP_VERSION) {
-            if (cnx->local_parameters.max_ack_delay != PICOQUIC_ACK_DELAY_MAX_DEFAULT) {
-                picoformat_16(bytes + byte_index, picoquic_tp_max_ack_delay);
-                byte_index += 2;
-                picoformat_16(bytes + byte_index, 1);
-                byte_index += 2;
-                bytes[byte_index++] = (uint8_t)((cnx->local_parameters.max_ack_delay + 999) / 1000); /* Max ACK delay in milliseconds */
-            }
+        if (cnx->local_parameters.max_ack_delay != PICOQUIC_ACK_DELAY_MAX_DEFAULT) {
+            picoformat_16(bytes + byte_index, picoquic_tp_max_ack_delay);
+            byte_index += 2;
+            picoformat_16(bytes + byte_index, 1);
+            byte_index += 2;
+            bytes[byte_index++] = (uint8_t)((cnx->local_parameters.max_ack_delay + 999) / 1000); /* Max ACK delay in milliseconds */
+        }
 
-            if (extension_mode == 1 && cnx->original_cnxid.id_len > 0) {
-                picoformat_16(bytes + byte_index, picoquic_tp_original_connection_id);
-                byte_index += 2;
-                picoformat_16(bytes + byte_index, cnx->original_cnxid.id_len);
-                byte_index += 2;
-                memcpy(bytes + byte_index, cnx->original_cnxid.id, cnx->original_cnxid.id_len);
-                byte_index += cnx->original_cnxid.id_len;
-            }
+        if (extension_mode == 1 && cnx->original_cnxid.id_len > 0) {
+            picoformat_16(bytes + byte_index, picoquic_tp_original_connection_id);
+            byte_index += 2;
+            picoformat_16(bytes + byte_index, cnx->original_cnxid.id_len);
+            byte_index += 2;
+            memcpy(bytes + byte_index, cnx->original_cnxid.id, cnx->original_cnxid.id_len);
+            byte_index += cnx->original_cnxid.id_len;
         }
     }
+    
     
     *consumed = (ret == 0)?byte_index:0;
 
@@ -388,20 +368,12 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
             ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
         } else {
             uint32_t proposed_version;
-            int is_draft_14 = (picoquic_supported_versions[cnx->version_index].version == PICOQUIC_SEVENTH_INTEROP_VERSION ||
-                picoquic_supported_versions[cnx->version_index].version == PICOQUIC_EIGHT_INTEROP_VERSION);
 
             proposed_version = PICOPARSE_32(bytes + byte_index);
             byte_index += 4;
 
             if (picoquic_supported_versions[cnx->version_index].version != proposed_version) {
                 for (size_t i = 0; ret == 0 && i < picoquic_nb_supported_versions; i++) {
-                    if ((is_draft_14 && !(picoquic_supported_versions[i].version == PICOQUIC_SEVENTH_INTEROP_VERSION ||
-                        picoquic_supported_versions[i].version == PICOQUIC_EIGHT_INTEROP_VERSION)) ||
-                        (!is_draft_14 && (picoquic_supported_versions[i].version == PICOQUIC_SEVENTH_INTEROP_VERSION ||
-                            picoquic_supported_versions[i].version == PICOQUIC_EIGHT_INTEROP_VERSION))) {
-                        continue;
-                    }
                     if (proposed_version == picoquic_supported_versions[i].version) {
                         ret = PICOQUIC_ERROR_VERSION_NEGOTIATION_SPOOFED;
                         break;
@@ -659,24 +631,6 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         }
     }
 
-    if (ret == 0) {
-        /* TODO: remove this kludge once we remove support for draft 13 */
-        if (picoquic_supported_versions[cnx->version_index].version ==
-            PICOQUIC_SEVENTH_INTEROP_VERSION) {
-            if ((present_flag & (1 << picoquic_tp_initial_max_stream_data_bidi_remote)) == 0)
-            {
-                cnx->remote_parameters.initial_max_stream_data_bidi_remote =
-                    cnx->remote_parameters.initial_max_stream_data_bidi_local;
-            }
-
-            if ((present_flag & (1 << picoquic_tp_initial_max_stream_data_uni)) == 0)
-            {
-                cnx->remote_parameters.initial_max_stream_data_uni =
-                    cnx->remote_parameters.initial_max_stream_data_bidi_local;
-            }
-        }
-    }
-
     /* Only the idle timeout parameters was mandatory for both client and server.
      * But this stopped being required with draft 15.
      * TODO: change the code to accept "0 as infinity" for idle time out.
@@ -706,9 +660,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     /* Original connection ID should be NULL at the client and at the server if
      * there was no retry, should exactly match otherwise. Mismatch is trated
      * as a trasport parameter error */
-    if (ret == 0 && extension_mode == 1 &&
-        picoquic_supported_versions[cnx->version_index].version != PICOQUIC_SEVENTH_INTEROP_VERSION &&
-        picoquic_supported_versions[cnx->version_index].version != PICOQUIC_EIGHT_INTEROP_VERSION) {
+    if (ret == 0 && extension_mode == 1) {
         if (cnx->original_cnxid.id_len != 0 &&
             picoquic_compare_connection_id(&cnx->original_cnxid, &original_connection_id) != 0) {
             ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);

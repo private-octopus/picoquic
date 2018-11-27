@@ -133,6 +133,7 @@ typedef struct st_picoquic_packet_header_t {
 /*
  * Supported versions
  */
+#if 0
 #define PICOQUIC_FIRST_INTEROP_VERSION 0xFF000005
 #define PICOQUIC_SECOND_INTEROP_VERSION 0xFF000007
 #define PICOQUIC_THIRD_INTEROP_VERSION 0xFF000008
@@ -141,6 +142,7 @@ typedef struct st_picoquic_packet_header_t {
 #define PICOQUIC_SIXTH_INTEROP_VERSION 0xFF00000C
 #define PICOQUIC_SEVENTH_INTEROP_VERSION 0xFF00000D
 #define PICOQUIC_EIGHT_INTEROP_VERSION 0xFF00000E
+#endif
 #define PICOQUIC_NINTH_INTEROP_VERSION 0xFF00000F
 #define PICOQUIC_NINTH_BIS_INTEROP_VERSION 0xFF000010
 #define PICOQUIC_INTERNAL_TEST_VERSION_1 0x50435130
@@ -1002,7 +1004,7 @@ int picoquic_decode_closing_frames(uint8_t* bytes,
     size_t bytes_max, int* closing_received);
 
 uint32_t picoquic_decode_transport_param_stream_id(uint16_t rank, int extension_mode, int stream_type);
-uint16_t picoquic_prepare_transport_param_stream_id(uint32_t stream_id, int extension_mode, int stream_type);
+uint16_t picoquic_prepare_transport_param_stream_id(uint32_t stream_id);
 
 int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mode,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
