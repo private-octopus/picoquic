@@ -1520,6 +1520,7 @@ int tls_api_bad_server_reset_test()
 int tls_api_retry_test()
 {
     uint64_t simulated_time = 0;
+    const uint64_t target_time = 210000ull;
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
@@ -1533,6 +1534,11 @@ int tls_api_retry_test()
 
     if (ret == 0) {
         ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
+    }
+
+    if (ret == 0 && simulated_time > target_time) {
+        DBG_PRINTF("Retry test completes in %llu microsec, more than %llu\n", simulated_time, target_time);
+        ret = -1;
     }
 
     if (test_ctx != NULL) {
