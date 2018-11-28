@@ -368,8 +368,10 @@ void picoquic_log_packet_header(FILE* F, uint64_t log_cnxid64, picoquic_packet_h
     default:
         /* Long packets. Log Vnum, both CID, Seq num, Payload length */
         fprintf(F, " Version %x,", ph->vn);
-        picoquic_log_prefix_initial_cid64(F, log_cnxid64);
 
+        fprintf(F, "\n");
+        picoquic_log_prefix_initial_cid64(F, log_cnxid64);
+        fprintf(F, "    ");
         picoquic_log_connection_id(F, &ph->dest_cnx_id);
         fprintf(F, ", ");
         picoquic_log_connection_id(F, &ph->srce_cnx_id);
@@ -440,6 +442,7 @@ void picoquic_log_retry_packet(FILE* F, uint64_t log_cnxid64,
         if (token_length > 0) {
             int printed_length = (token_length > 16) ? 16 : token_length; 
             picoquic_log_prefix_initial_cid64(F, log_cnxid64);
+            fprintf(F, "    Token: ");
             for (uint8_t i = 0; i < printed_length; i++) {
                 fprintf(F, "%02x", bytes[byte_index++]);
             }
@@ -1208,9 +1211,11 @@ void picoquic_log_outgoing_segment(void* F_log, int log_cnxid, picoquic_cnx_t* c
 
     ph.pn64 = sequence_number;
     ph.pn = (uint32_t)ph.pn64;
-    if (ph.pn_offset != 0) {
-        ph.offset = ph.pn_offset + 4; /* todo: should provide the actual length */
-        ph.payload_length -= 4;
+    if (ph.ptype != picoquic_packet_retry) {
+        if (ph.pn_offset != 0) {
+            ph.offset = ph.pn_offset + 4; /* todo: should provide the actual length */
+            ph.payload_length -= 4;
+        }
     }
     if (ph.ptype != picoquic_packet_version_negotiation) {
         if (ph.payload_length > checksum_length) {

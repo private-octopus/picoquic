@@ -1105,13 +1105,13 @@ int picoquic_incoming_client_handshake(
 {
     int ret = 0;
 
-if (cnx->cnx_state == picoquic_state_server_init
-    || cnx->cnx_state == picoquic_state_server_handshake
-    || cnx->cnx_state == picoquic_state_server_almost_ready
-    || cnx->cnx_state == picoquic_state_server_false_start
-    || cnx->cnx_state == picoquic_state_ready) {
-    if (picoquic_compare_connection_id(&ph->srce_cnx_id, &cnx->path[0]->remote_cnxid) != 0) {
-        ret = PICOQUIC_ERROR_CNXID_CHECK;
+    if (cnx->cnx_state == picoquic_state_server_init
+        || cnx->cnx_state == picoquic_state_server_handshake
+        || cnx->cnx_state == picoquic_state_server_almost_ready
+        || cnx->cnx_state == picoquic_state_server_false_start
+        || cnx->cnx_state == picoquic_state_ready) {
+        if (picoquic_compare_connection_id(&ph->srce_cnx_id, &cnx->path[0]->remote_cnxid) != 0) {
+            ret = PICOQUIC_ERROR_CNXID_CHECK;
     }
     else {
         /* Accept the incoming frames */
