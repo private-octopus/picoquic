@@ -349,6 +349,7 @@ int picoquic_set_verify_certificate_callback(picoquic_quic_t* quic, picoquic_ver
 void picoquic_set_client_authentication(picoquic_quic_t* quic, int client_authentication);
 
 /* Set default padding policy for the context */
+void picoquic_set_default_padding(picoquic_quic_t* quic, uint32_t padding_multiple, uint32_t padding_minsize);
 
 /* Connection context creation and registration */
 picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,

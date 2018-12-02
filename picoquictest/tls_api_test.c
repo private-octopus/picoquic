@@ -158,10 +158,10 @@ static test_api_stream_desc_t test_scenario_many_streams[] = {
     { 8, 0, 32, 1000 },
     { 12, 0, 32, 1000 },
     { 16, 0, 32, 1000 },
-    { 20, 0, 32, 1000 },
-    { 24, 0, 32, 1000 },
-    { 28, 0, 32, 1000 },
-    { 32, 0, 32, 1000 }
+    { 20, 0, 32, 350 },
+    { 24, 0, 32, 225 },
+    { 28, 0, 32, 700 },
+    { 32, 0, 32, 1500 }
 };
 
 static int test_api_init_stream_buffers(size_t len, uint8_t** src_bytes, uint8_t** rcv_bytes)
@@ -1237,17 +1237,15 @@ int tls_api_wrong_alpn_test()
  * Scenario based transmission tests.
  */
 
-int tls_api_one_scenario_test(test_api_stream_desc_t* scenario,
-    size_t sizeof_scenario, uint64_t init_loss_mask, uint64_t max_data, uint64_t queue_delay_max,
-    uint32_t proposed_version, uint64_t max_completion_microsec,
+int tls_api_one_scenario_init(
+    picoquic_test_tls_api_ctx_t** p_test_ctx, uint64_t * simulated_time,
+    uint32_t proposed_version,
     picoquic_tp_t * client_params, picoquic_tp_t * server_params)
 {
-    uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
-    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx,
+    int ret = tls_api_init_ctx(p_test_ctx,
         (proposed_version == 0) ? PICOQUIC_INTERNAL_TEST_VERSION_1 : proposed_version,
-        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 1, 0);
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, simulated_time, NULL, 0, 1, 0);
 
     if (ret != 0)
     {
@@ -1255,24 +1253,36 @@ int tls_api_one_scenario_test(test_api_stream_desc_t* scenario,
     }
 
     if (ret == 0 && client_params != NULL) {
-        picoquic_set_transport_parameters(test_ctx->cnx_client, client_params);
+        picoquic_set_transport_parameters((*p_test_ctx)->cnx_client, client_params);
     }
 
     if (ret == 0 && server_params != NULL) {
-        ret = picoquic_set_default_tp(test_ctx->qserver, server_params);
+        ret = picoquic_set_default_tp((*p_test_ctx)->qserver, server_params);
     }
+
+    return ret;
+}
+
+int tls_api_one_scenario_body(picoquic_test_tls_api_ctx_t* test_ctx, 
+    uint64_t * simulated_time, 
+    test_api_stream_desc_t* scenario,
+    size_t sizeof_scenario, uint64_t init_loss_mask, uint64_t max_data, uint64_t queue_delay_max,
+    uint64_t max_completion_microsec)
+{
+    int ret = 0;
+    uint64_t loss_mask = 0;
 
     if (ret == 0) {
         ret = picoquic_start_client_cnx(test_ctx->cnx_client);
         if (ret != 0)
         {
-            DBG_PRINTF("%s", "Could not initialize stream zero for the client\n");
+            DBG_PRINTF("%s", "Could not initialize connection for the client\n");
         }
 
     }
-         
+
     if (ret == 0) {
-        ret = tls_api_connection_loop(test_ctx, &loss_mask, queue_delay_max, &simulated_time);
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, queue_delay_max, simulated_time);
 
         if (ret != 0)
         {
@@ -1300,7 +1310,7 @@ int tls_api_one_scenario_test(test_api_stream_desc_t* scenario,
 
     /* Perform a data sending loop */
     if (ret == 0) {
-        ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 0);
+        ret = tls_api_data_sending_loop(test_ctx, &loss_mask, simulated_time, 0);
 
         if (ret != 0)
         {
@@ -1311,15 +1321,19 @@ int tls_api_one_scenario_test(test_api_stream_desc_t* scenario,
     if (ret == 0) {
         if (test_ctx->server_callback.error_detected) {
             ret = -1;
-        } else if (test_ctx->client_callback.error_detected) {
+        }
+        else if (test_ctx->client_callback.error_detected) {
             ret = -1;
-        } else {
+        }
+        else {
             for (size_t i = 0; ret == 0 && i < test_ctx->nb_test_streams; i++) {
                 if (test_ctx->test_stream[i].q_recv_nb != test_ctx->test_stream[i].q_len) {
                     ret = -1;
-                } else if (test_ctx->test_stream[i].r_recv_nb != test_ctx->test_stream[i].r_len) {
+                }
+                else if (test_ctx->test_stream[i].r_recv_nb != test_ctx->test_stream[i].r_len) {
                     ret = -1;
-                } else if (test_ctx->test_stream[i].q_received == 0 || test_ctx->test_stream[i].r_received == 0) {
+                }
+                else if (test_ctx->test_stream[i].q_received == 0 || test_ctx->test_stream[i].r_received == 0) {
                     ret = -1;
                 }
             }
@@ -1339,11 +1353,32 @@ int tls_api_one_scenario_test(test_api_stream_desc_t* scenario,
     }
 
     if (ret == 0 && max_completion_microsec != 0) {
-        if (simulated_time > max_completion_microsec)
+        if (*simulated_time > max_completion_microsec)
         {
-            DBG_PRINTF("Scenario completes in %llu microsec, more than %llu\n", simulated_time, max_completion_microsec);
+            DBG_PRINTF("Scenario completes in %llu microsec, more than %llu\n", 
+                (unsigned long long)*simulated_time, (unsigned long long)max_completion_microsec);
             ret = -1;
         }
+    }
+
+    return ret;
+}
+
+int tls_api_one_scenario_test(test_api_stream_desc_t* scenario,
+    size_t sizeof_scenario, uint64_t init_loss_mask, uint64_t max_data, uint64_t queue_delay_max,
+    uint32_t proposed_version, uint64_t max_completion_microsec,
+    picoquic_tp_t * client_params, picoquic_tp_t * server_params) 
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+
+    int ret = tls_api_one_scenario_init(&test_ctx, &simulated_time,
+        proposed_version, client_params, server_params);
+
+    if (ret == 0) {
+        ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+            scenario, sizeof_scenario, init_loss_mask, max_data, queue_delay_max,
+            max_completion_microsec);
     }
 
     if (test_ctx != NULL) {
@@ -4842,4 +4877,45 @@ int stream_id_max_test()
     test_parameters.initial_max_stream_id_bidir = 4;
 
     return tls_api_one_scenario_test(test_scenario_many_streams, sizeof(test_scenario_many_streams), 0, 0, 0, 0, 250000, NULL, &test_parameters);
+}
+
+/*
+ * Test whether padding policy is correctly applied, and whether the corresponding
+ * connection succeeds.
+ */
+
+int padding_test()
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 1, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+
+    /* Set the padding policy in the server context and in the client connection
+     */
+    if (ret == 0) {
+        picoquic_set_default_padding(test_ctx->qserver, 128, 64);
+        picoquic_cnx_set_padding_policy(test_ctx->cnx_client, 128, 64);
+    }
+
+    /* Run a basic test scenario
+     */
+    if (ret == 0) {
+        ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+            test_scenario_many_streams, sizeof(test_scenario_many_streams), 0, 0, 0, 250000);
+    }
+
+    /* And then free the resource
+     */
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
 }

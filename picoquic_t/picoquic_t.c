@@ -147,6 +147,7 @@ static const picoquic_test_def_t test_table[] = {
     { "key_rotation_stress", key_rotation_stress_test },
     { "short_initial_cid", short_initial_cid_test },
     { "stream_id_max", stream_id_max_test },
+    { "padding_test", padding_test },
     { "stress", stress_test },
     { "fuzz", fuzz_test },
     { "fuzz_initial", fuzz_initial_test}

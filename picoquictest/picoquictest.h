@@ -145,6 +145,7 @@ int key_rotation_stress_test();
 int short_initial_cid_test();
 int stream_id_max_test();
 int stream_id_to_rank_test();
+int padding_test();
 
 #ifdef __cplusplus
 }

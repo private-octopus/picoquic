@@ -1199,9 +1199,6 @@ int picoquic_prepare_packet_0rtt(picoquic_cnx_t* cnx, picoquic_path_t * path_x, 
         if (padding_required) {
             length = picoquic_pad_to_target_length(bytes, length, (uint32_t)(send_buffer_max - checksum_overhead));
         }
-        else {
-            length = picoquic_pad_to_policy(cnx, bytes, length, (uint32_t)(send_buffer_max - checksum_overhead));
-        }
     }
 
     picoquic_finalize_and_protect_packet(cnx, packet,
@@ -1515,9 +1512,6 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                             /* Pad to minimum packet length. But don't do that if the
                              * initial packet will be coalesced with 0-RTT packet */
                             length = picoquic_pad_to_target_length(bytes, length, (uint32_t)(send_buffer_max - checksum_overhead));
-                        }
-                        else {
-                            length = picoquic_pad_to_policy(cnx, bytes, length, (uint32_t)(send_buffer_max - checksum_overhead));
                         }
 
                         if (packet_type == picoquic_packet_0rtt_protected) {
@@ -2303,7 +2297,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                     }
 
                     if (length > header_length) {
-                        length = picoquic_pad_to_policy(cnx, bytes, length, (uint32_t)(send_buffer_max - checksum_overhead));
+                        length = picoquic_pad_to_policy(cnx, bytes, length, (uint32_t)(send_buffer_min_max - checksum_overhead));
                     }
                     else if (ret == 0 && send_buffer_max > path_x->send_mtu
                         && path_x->cwin > path_x->bytes_in_transit && picoquic_is_mtu_probe_needed(cnx, path_x)) {
