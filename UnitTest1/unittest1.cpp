@@ -468,14 +468,7 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
-#if 0
-        TEST_METHOD(test_wrong_keyshare)
-        {
-            int ret = wrong_keyshare_test();
 
-            Assert::AreEqual(ret, 0);
-        }
-#endif
         TEST_METHOD(test_pn_ctr)
         {
             int ret = pn_ctr_test();
@@ -559,14 +552,6 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
-#if 0
-        TEST_METHOD(test_wrong_tls_version_test)
-        {
-            int ret = wrong_tls_version_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-#endif
 
         TEST_METHOD(test_set_certificate_and_key)
         {
@@ -746,6 +731,13 @@ namespace UnitTest1
         TEST_METHOD(stream_id_max)
         {
             int ret = stream_id_max_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(padding)
+        {
+            int ret = padding_test();
 
             Assert::AreEqual(ret, 0);
         }

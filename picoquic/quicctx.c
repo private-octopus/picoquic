@@ -203,6 +203,8 @@ picoquic_quic_t* picoquic_create(uint32_t nb_connections,
         quic->cnx_id_callback_ctx = cnx_id_callback_ctx;
         quic->p_simulated_time = p_simulated_time;
         quic->local_ctx_length = 8; /* TODO: should be lower on clients-only implementation */
+        quic->padding_multiple_default = 0; /* TODO: consider default = 128 */
+        quic->padding_minsize_default = PICOQUIC_RESET_PACKET_MIN_SIZE; 
 
         if (cnx_id_callback != NULL) {
             quic->flags |= picoquic_context_unconditional_cnx_id;
@@ -271,6 +273,12 @@ int picoquic_set_default_tp(picoquic_quic_t* quic, picoquic_tp_t * tp)
     }
 
     return ret;
+}
+
+void picoquic_set_default_padding(picoquic_quic_t* quic, uint32_t padding_multiple, uint32_t padding_minsize)
+{
+    quic->padding_minsize_default = padding_minsize;
+    quic->padding_multiple_default = padding_multiple;
 }
 
 void picoquic_free(picoquic_quic_t* quic)
@@ -1326,6 +1334,10 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         cnx->max_stream_id_bidir_remote = (cnx->client_mode)?4:0;
         cnx->max_stream_id_unidir_remote = 0;
 
+        /* Initialize padding policy to default for context */
+        cnx->padding_multiple = quic->padding_multiple_default;
+        cnx->padding_minsize = quic->padding_minsize_default;
+
         if (sni != NULL) {
             cnx->sni = picoquic_string_duplicate(sni);
         }
@@ -1558,6 +1570,18 @@ picoquic_state_enum picoquic_get_cnx_state(picoquic_cnx_t* cnx)
 uint64_t picoquic_is_0rtt_available(picoquic_cnx_t* cnx)
 {
     return (cnx->crypto_context[1].aead_encrypt == NULL) ? 0 : 1;
+}
+
+void picoquic_cnx_set_padding_policy(picoquic_cnx_t * cnx, uint32_t padding_multiple, uint32_t padding_minsize)
+{
+    cnx->padding_multiple = padding_multiple;
+    cnx->padding_minsize = padding_minsize;
+}
+
+void picoquic_cnx_get_padding_policy(picoquic_cnx_t * cnx, uint32_t * padding_multiple, uint32_t * padding_minsize)
+{
+    *padding_multiple = cnx->padding_multiple;
+    *padding_minsize = cnx->padding_minsize;
 }
 
 /*

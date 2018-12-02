@@ -348,6 +348,9 @@ int picoquic_set_verify_certificate_callback(picoquic_quic_t* quic, picoquic_ver
 /* Set client authentication in TLS (if enabled, client is required to send certificates). */
 void picoquic_set_client_authentication(picoquic_quic_t* quic, int client_authentication);
 
+/* Set default padding policy for the context */
+void picoquic_set_default_padding(picoquic_quic_t* quic, uint32_t padding_multiple, uint32_t padding_minsize);
+
 /* Connection context creation and registration */
 picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
     picoquic_connection_id_t initial_cnx_id, picoquic_connection_id_t remote_cnx_id,
@@ -380,8 +383,10 @@ picoquic_cnx_t* picoquic_get_earliest_cnx_to_wake(picoquic_quic_t* quic, uint64_
 
 picoquic_state_enum picoquic_get_cnx_state(picoquic_cnx_t* cnx);
 
+void picoquic_cnx_set_padding_policy(picoquic_cnx_t * cnx, uint32_t padding_multiple, uint32_t padding_minsize);
+void picoquic_cnx_get_padding_policy(picoquic_cnx_t * cnx, uint32_t * padding_multiple, uint32_t * padding_minsize);
+
 int picoquic_tls_is_psk_handshake(picoquic_cnx_t* cnx);
-int picoquic_tls_is_early_data_skipped(picoquic_cnx_t* cnx);
 
 void picoquic_get_peer_addr(picoquic_cnx_t* cnx, struct sockaddr** addr, int* addr_len);
 void picoquic_get_local_addr(picoquic_cnx_t* cnx, struct sockaddr** addr, int* addr_len);

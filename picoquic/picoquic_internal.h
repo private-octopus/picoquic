@@ -313,8 +313,9 @@ typedef struct st_picoquic_quic_t {
     char const* ticket_file_name;
     picoquic_stored_ticket_t* p_first_ticket;
     uint32_t mtu_max;
-
     uint32_t flags;
+    uint32_t padding_multiple_default;
+    uint32_t padding_minsize_default;
 
     picoquic_stateless_packet_t* pending_stateless_packet;
 
@@ -623,6 +624,10 @@ typedef struct st_picoquic_cnx_t {
     /* Local and remote parameters */
     picoquic_tp_t local_parameters;
     picoquic_tp_t remote_parameters;
+    /* Padding policy */
+    uint32_t padding_multiple;
+    uint32_t padding_minsize;
+
     /* On clients, document the SNI and ALPN expected from the server */
     /* TODO: there may be a need to propose multiple ALPN */
     char const* sni;

@@ -104,9 +104,6 @@ static const picoquic_test_def_t test_table[] = {
     { "unidir", unidir_test },
     { "mtu_discovery", mtu_discovery_test },
     { "spurious_retransmit", spurious_retransmit_test },
-#if 0
-    { "wrong_keyshare", wrong_keyshare_test },
-#endif
     { "tls_zero_share", tls_zero_share_test },
     { "cleartext_aead_vector", cleartext_aead_vector_test },
     { "transport_param_log", transport_param_log_test },
@@ -115,9 +112,6 @@ static const picoquic_test_def_t test_table[] = {
     { "virtual_time" , virtual_time_test },
     { "different_params", tls_different_params_test },
     { "quant_params", tls_quant_params_test },
-#if 0
-    { "wrong_tls_version", wrong_tls_version_test },
-#endif
     { "set_certificate_and_key", set_certificate_and_key_test },
     { "request_client_authentication", request_client_authentication_test },
     { "bad_client_certificate", bad_client_certificate_test },
@@ -147,6 +141,7 @@ static const picoquic_test_def_t test_table[] = {
     { "key_rotation_stress", key_rotation_stress_test },
     { "short_initial_cid", short_initial_cid_test },
     { "stream_id_max", stream_id_max_test },
+    { "padding_test", padding_test },
     { "stress", stress_test },
     { "fuzz", fuzz_test },
     { "fuzz_initial", fuzz_initial_test}
