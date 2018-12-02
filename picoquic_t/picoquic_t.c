@@ -104,9 +104,6 @@ static const picoquic_test_def_t test_table[] = {
     { "unidir", unidir_test },
     { "mtu_discovery", mtu_discovery_test },
     { "spurious_retransmit", spurious_retransmit_test },
-#if 0
-    { "wrong_keyshare", wrong_keyshare_test },
-#endif
     { "tls_zero_share", tls_zero_share_test },
     { "cleartext_aead_vector", cleartext_aead_vector_test },
     { "transport_param_log", transport_param_log_test },
@@ -115,9 +112,6 @@ static const picoquic_test_def_t test_table[] = {
     { "virtual_time" , virtual_time_test },
     { "different_params", tls_different_params_test },
     { "quant_params", tls_quant_params_test },
-#if 0
-    { "wrong_tls_version", wrong_tls_version_test },
-#endif
     { "set_certificate_and_key", set_certificate_and_key_test },
     { "request_client_authentication", request_client_authentication_test },
     { "bad_client_certificate", bad_client_certificate_test },
