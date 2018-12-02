@@ -175,6 +175,43 @@ int picoquic_stop_sending(picoquic_cnx_t* cnx,
 }
 
 /*
+ * Manage content padding
+ */
+
+uint32_t picoquic_pad_to_target_length(uint8_t * bytes, uint32_t length, uint32_t target)
+{
+    if (length < target) {
+        memset(bytes + length, 0, target - length);
+        length = target;
+    }
+
+    return length;
+}
+
+uint32_t picoquic_pad_to_policy(picoquic_cnx_t * cnx, uint8_t * bytes, uint32_t length, uint32_t max_length)
+{
+    uint32_t target = cnx->padding_minsize;
+
+    if (length > target && cnx->padding_multiple != 0) {
+        uint32_t delta = (length - target) % cnx->padding_multiple;
+
+        if (delta == 0) {
+            target = length;
+        }
+        else {
+            target = length + cnx->padding_multiple - delta;
+        }
+    }
+
+    if (target > max_length) {
+        target = max_length;
+    }
+
+    return picoquic_pad_to_target_length(bytes, length, target);
+}
+
+
+/*
  * Packet management
  */
 
@@ -874,9 +911,8 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                         if (ret == 0 && !frame_is_pure_ack) {
                             if (picoquic_is_stream_frame_unlimited(&p->bytes[byte_index])) {
                                 /* Need to PAD to the end of the frame to avoid sending extra bytes */
-                                while (checksum_length + length + frame_length < send_buffer_max) {
-                                    new_bytes[length] = picoquic_frame_type_padding;
-                                    length++;
+                                if (checksum_length + length + frame_length < send_buffer_max) {
+                                    length = picoquic_pad_to_target_length(new_bytes, length, (uint32_t)(send_buffer_max - checksum_length - frame_length));
                                 }
                             }
                             memcpy(&new_bytes[length], &p->bytes[byte_index], frame_length);
@@ -1161,9 +1197,10 @@ int picoquic_prepare_packet_0rtt(picoquic_cnx_t* cnx, picoquic_path_t * path_x, 
         }
         /* Add padding if required */
         if (padding_required) {
-            while (length < send_buffer_max - checksum_overhead) {
-                bytes[length++] = 0;
-            }
+            length = picoquic_pad_to_target_length(bytes, length, (uint32_t)(send_buffer_max - checksum_overhead));
+        }
+        else {
+            length = picoquic_pad_to_policy(cnx, bytes, length, (uint32_t)(send_buffer_max - checksum_overhead));
         }
     }
 
@@ -1477,10 +1514,11 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                                 cnx->original_cnxid.id_len != 0)) {
                             /* Pad to minimum packet length. But don't do that if the
                              * initial packet will be coalesced with 0-RTT packet */
-                            while (length < send_buffer_max - checksum_overhead) {
-                                bytes[length++] = 0;
-                            }
-                        } 
+                            length = picoquic_pad_to_target_length(bytes, length, (uint32_t)(send_buffer_max - checksum_overhead));
+                        }
+                        else {
+                            length = picoquic_pad_to_policy(cnx, bytes, length, (uint32_t)(send_buffer_max - checksum_overhead));
+                        }
 
                         if (packet_type == picoquic_packet_0rtt_protected) {
                             cnx->nb_zero_rtt_sent++;
@@ -2265,12 +2303,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                     }
 
                     if (length > header_length) {
-                        if ((length + checksum_overhead) <= PICOQUIC_RESET_PACKET_MIN_SIZE) {
-                            uint32_t pad_size = PICOQUIC_RESET_PACKET_MIN_SIZE - checksum_overhead - length + 1;
-                            for (uint32_t i = 0; i < pad_size; i++) {
-                                bytes[length++] = 0;
-                            }
-                        }
+                        length = picoquic_pad_to_policy(cnx, bytes, length, (uint32_t)(send_buffer_max - checksum_overhead));
                     }
                     else if (ret == 0 && send_buffer_max > path_x->send_mtu
                         && path_x->cwin > path_x->bytes_in_transit && picoquic_is_mtu_probe_needed(cnx, path_x)) {
@@ -2497,9 +2530,7 @@ int picoquic_prepare_probe(picoquic_cnx_t* cnx,
 
                 /* Pack to min length, to verify that the path can carry a min length packet */
                 if (length + checksum_overhead < PICOQUIC_INITIAL_MTU_IPV6) {
-                    uint32_t pad_size = PICOQUIC_INITIAL_MTU_IPV6 - checksum_overhead - length;
-                    memset(&bytes[length], 0, pad_size);
-                    length += pad_size;
+                    length = picoquic_pad_to_target_length(bytes, length, PICOQUIC_INITIAL_MTU_IPV6 - checksum_overhead);
                 }
 
                 /* set the return addresses */
