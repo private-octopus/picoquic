@@ -375,7 +375,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
             if (picoquic_supported_versions[cnx->version_index].version != proposed_version) {
                 for (size_t i = 0; ret == 0 && i < picoquic_nb_supported_versions; i++) {
                     if (proposed_version == picoquic_supported_versions[i].version) {
-                        ret = PICOQUIC_ERROR_VERSION_NEGOTIATION_SPOOFED;
+                        ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_VERSION_NEGOTIATION_ERROR, 0);
                         break;
                     }
                 }

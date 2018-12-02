@@ -57,8 +57,15 @@
  */
 
 #define TRANSPORT_PARAMETERS_DEFAULT_VERSION_BYTES 'P', 'C', 'Q', '1'
+#define TRANSPORT_PARAMETERS_FAILED_VERSION_BYTES 'P', 'C', 'Q', '0'
 #define TRANSPORT_PARAMETERS_SUPPORTED_VERSIONS_BYTES \
      0x10, 'P', 'C', 'Q', '1', 'P', 'C', 'Q', '0', 0xFF, 0x00, 0x00, 0x10, 0xFF, 0x00, 0x00, 0x0F
+
+#define TRANSPORT_PARAMETERS_SUPPORTED_VERSIONS_ERROR1 \
+     0x10, 'P', 'C', 'Q', '0', 0xFF, 0x00, 0x00, 0x10, 0xFF, 0x00, 0x00, 0x0F
+
+#define TRANSPORT_PARAMETERS_SUPPORTED_VERSIONS_ERROR2 \
+     0x0F, 'P', 'C', 'Q', '1', 'P', 'C', 'Q', '0', 0xFF, 0x00, 0x00, 0x10, 0xFF, 0x00, 0x00
 
 #define TRANSPORT_PREFERED_ADDRESS_NULL \
     { 0, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 0, \
@@ -216,6 +223,146 @@ uint8_t client_param9[] = {
     0, 8, 0, 2, 0x40, 0x00,
     0, 9, 0, 0
 };
+
+/* Error 1: wrong version, does not match value in the connection context */
+uint8_t client_param_err1[] = {
+    TRANSPORT_PARAMETERS_FAILED_VERSION_BYTES,
+    0, 0x28,
+    0, 0, 0, 4, 0, 0, 0xFF, 0xFF,
+    0, 1, 0, 4, 0, 0x40, 0, 0,
+    0, 2, 0, 2, 0x40, 0x00,
+    0, 3, 0, 2, 0, 0x1E,
+    0, 5, 0, 2, 0x05, 0xC8,
+    0, 8, 0, 2, 0x40, 0x00
+};
+
+/* Error 2: wrong option length, larger than message size */
+uint8_t client_param_err2[] = {
+    TRANSPORT_PARAMETERS_DEFAULT_VERSION_BYTES,
+    0, 0x29,
+    0, 0, 0, 4, 0, 0, 0xFF, 0xFF,
+    0, 1, 0, 4, 0, 0x40, 0, 0,
+    0, 2, 0, 2, 0x40, 0x00,
+    0, 3, 0, 2, 0, 0x1E,
+    0, 5, 0, 2, 0x05, 0xC8,
+    0, 8, 0, 2, 0x40, 0x00
+};
+
+/* Error 3: wrong option length, one byte shorter than last parameter */
+uint8_t client_param_err3[] = {
+    TRANSPORT_PARAMETERS_DEFAULT_VERSION_BYTES,
+    0, 0x27,
+    0, 0, 0, 4, 0, 0, 0xFF, 0xFF,
+    0, 1, 0, 4, 0, 0x40, 0, 0,
+    0, 2, 0, 2, 0x40, 0x00,
+    0, 3, 0, 2, 0, 0x1E,
+    0, 5, 0, 2, 0x05, 0xC8,
+    0, 8, 0, 2, 0x40, 0x00
+};
+
+/* Error 4: parameter 0 not the right size */
+uint8_t client_param_err4[] = {
+    TRANSPORT_PARAMETERS_DEFAULT_VERSION_BYTES,
+    0, 0x26,
+    0, 0, 0, 2, 0xFF, 0xFF,
+    0, 1, 0, 4, 0, 0x40, 0, 0,
+    0, 2, 0, 2, 0x40, 0x00,
+    0, 3, 0, 2, 0, 0x1E,
+    0, 5, 0, 2, 0x05, 0xC8,
+    0, 8, 0, 2, 0x40, 0x00
+};
+
+/* Error 5: parameter 1 not the right size */
+uint8_t client_param_err5[] = {
+    TRANSPORT_PARAMETERS_DEFAULT_VERSION_BYTES,
+    0, 0x26,
+    0, 0, 0, 4, 0, 0x40, 0, 0,
+    0, 1, 0, 2, 0xFF, 0xFF,
+    0, 2, 0, 2, 0x40, 0x00,
+    0, 3, 0, 2, 0, 0x1E,
+    0, 5, 0, 2, 0x05, 0xC8,
+    0, 8, 0, 2, 0x40, 0x00
+};
+
+/* Error 6: parameter 2 not the right size */
+uint8_t client_param_err6[] = {
+    TRANSPORT_PARAMETERS_DEFAULT_VERSION_BYTES,
+    0, 0x2A,
+    0, 0, 0, 4, 0, 0x40, 0, 0,
+    0, 1, 0, 4, 0, 0x40, 0, 0,
+    0, 2, 0, 4, 0, 0x40, 0, 0,
+    0, 3, 0, 2, 0, 0x1E,
+    0, 5, 0, 2, 0x05, 0xC8,
+    0, 8, 0, 2, 0x40, 0x00
+};
+
+/* Error 7: parameter 3 not the right size */
+uint8_t client_param_err7[] = {
+    TRANSPORT_PARAMETERS_DEFAULT_VERSION_BYTES,
+    0, 0x2A,
+    0, 0, 0, 4, 0, 0, 0xFF, 0xFF,
+    0, 1, 0, 4, 0, 0x40, 0, 0,
+    0, 2, 0, 2, 0x40, 0x00,
+    0, 3, 0, 4, 0, 0, 0, 0x1E,
+    0, 5, 0, 2, 0x05, 0xC8,
+    0, 8, 0, 2, 0x40, 0x00
+};
+
+/* Error 8: error in encoding of supported versions (length too short) */
+uint8_t server_param_err8[] = {
+    TRANSPORT_PARAMETERS_DEFAULT_VERSION_BYTES,
+    TRANSPORT_PARAMETERS_SUPPORTED_VERSIONS_ERROR1
+};
+
+/* Error 9: error in encoding of supported versions (not multiple of 4) */
+uint8_t server_param_err9[] = {
+    TRANSPORT_PARAMETERS_DEFAULT_VERSION_BYTES,
+    TRANSPORT_PARAMETERS_SUPPORTED_VERSIONS_ERROR2,
+    0, 0x36,
+    0, 0, 0, 4, 0, 0, 0xFF, 0xFF,
+    0, 1, 0, 4, 0, 0x40, 0, 0,
+    0, 2, 0, 2, 0x40, 0x00,
+    0, 3, 0, 2, 0, 0x1E,
+    0, 5, 0, 2, 0x05, 0xC8,
+    0, 6, 0, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
+};
+
+/* Error 10: wrong version presented by server */
+uint8_t server_param_err10[] = {
+    TRANSPORT_PARAMETERS_FAILED_VERSION_BYTES,
+    TRANSPORT_PARAMETERS_SUPPORTED_VERSIONS_BYTES,
+    0, 87,
+    0, 0, 0, 4, 0x01, 0, 0, 0,
+    0, 1, 0, 4, 0x01, 0, 0, 0,
+    0, 2, 0, 2, 0, 2,
+    0, 3, 0, 2, 0, 0xFF,
+    0, 5, 0, 2, 0x05, 0xC8,
+    0, 6, 0, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+    0, 4, 0, 29,
+    4, 4, 10, 0, 0, 1, 0x11, 0x51, 4, 1, 2, 3, 4, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
+};
+
+typedef struct st_transport_param_error_test_t {
+    int mode;
+    uint8_t * target;
+    size_t target_length;
+    uint16_t local_error;
+} transport_param_error_test_t;
+
+static transport_param_error_test_t transport_param_error_case[] = {
+    { 0, client_param_err1, sizeof(client_param_err1), PICOQUIC_TRANSPORT_VERSION_NEGOTIATION_ERROR},
+    { 0, client_param_err2, sizeof(client_param_err2), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
+    { 0, client_param_err3, sizeof(client_param_err3), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
+    { 0, client_param_err4, sizeof(client_param_err4), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
+    { 0, client_param_err5, sizeof(client_param_err5), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
+    { 0, client_param_err6, sizeof(client_param_err6), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
+    { 0, client_param_err7, sizeof(client_param_err7), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
+    { 1, server_param_err8, sizeof(server_param_err8), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
+    { 1, server_param_err9, sizeof(server_param_err9), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
+    { 1, server_param_err10, sizeof(server_param_err10), PICOQUIC_TRANSPORT_VERSION_NEGOTIATION_ERROR}
+};
+
+static size_t nb_transport_param_error_case = sizeof(transport_param_error_case) / sizeof(transport_param_error_test_t);
 
 /*
  * Before testing the transport parameters, test the encoding of stream_id
@@ -454,6 +601,45 @@ int transport_param_decode_test(int mode, uint32_t version, uint32_t proposed_ve
     return ret;
 }
 
+int transport_param_error_test(int mode, uint8_t* target, size_t target_length, uint16_t local_error)
+{
+    int ret = 0;
+    picoquic_quic_t * quic_ctx = NULL;
+    picoquic_cnx_t * test_cnx = NULL;
+    uint64_t simulated_time = 0;
+    size_t decoded;
+
+    ret = transport_param_set_contexts(&quic_ctx, &test_cnx, &simulated_time, mode);
+
+    if (ret == 0) {
+        int err_ret = picoquic_receive_transport_extensions(test_cnx, mode,
+            target, target_length, &decoded);
+        if (err_ret == 0) {
+            DBG_PRINTF("Decoding returns %x\n", err_ret);
+            ret = -1;
+        }
+        else if (test_cnx->cnx_state != picoquic_state_disconnecting &&
+            test_cnx->cnx_state != picoquic_state_handshake_failure) {
+            DBG_PRINTF("Unexpected connection state %d\n", test_cnx->cnx_state);
+            ret = -1;
+        }
+        else if (test_cnx->local_error != local_error) {
+            DBG_PRINTF("Unexpected local error 0x%x instead of 0x%x\n", test_cnx->local_error, local_error);
+            ret = -1;
+        }
+    }
+
+    if (test_cnx != NULL) {
+        picoquic_delete_cnx(test_cnx);
+    }
+
+    if (quic_ctx != NULL) {
+        picoquic_free(quic_ctx);
+    }
+
+    return ret;
+}
+
 int transport_param_fuzz_test(int mode, uint32_t version, uint32_t proposed_version,
     picoquic_tp_t* param, uint8_t* target, size_t target_length, uint64_t* proof)
 {
@@ -616,6 +802,14 @@ int transport_param_test()
             &transport_param_test10, client_param9, sizeof(client_param9));
         if (ret != 0) {
             DBG_PRINTF("Param test TP10, CP9 returns %x\n", ret);
+        }
+    }
+
+    for (size_t i = 0; ret == 0 && i < nb_transport_param_error_case; i++) {
+        ret = transport_param_error_test(transport_param_error_case[i].mode, transport_param_error_case[i].target, 
+            transport_param_error_case[i].target_length, transport_param_error_case[i].local_error);
+        if (ret != 0) {
+            DBG_PRINTF("Param error test %d fails\n", (int)i);
         }
     }
 
