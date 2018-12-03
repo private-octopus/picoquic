@@ -510,11 +510,19 @@ typedef struct st_picoquic_path_t {
     uint64_t bytes_in_transit;
     void* congestion_alg_state;
 
-    /* Pacing */
-    uint64_t packet_time_nano_sec;
-    uint64_t pacing_reminder_nano_sec;
-    uint64_t pacing_margin_micros;
-    uint64_t next_pacing_time;
+    /* 
+     * Pacing uses a set of per path variables:
+     * - pacing_evaluation_time: last time the path was evaluated.
+     * - pacing_bucket_nanosec: number of nanoseconds of transmission time that are allowed.
+     * - pacing_bucket_max: maximum value (capacity) of the leaky bucket.
+     * - pacing_packet_time_nanosec: number of nanoseconds required to send a full size packet.
+     * - pacing_packet_time_microsec: max of (packet_time_nano_sec/1024, 1) microsec.
+     */
+    uint64_t pacing_evaluation_time;
+    uint64_t pacing_bucket_nanosec;
+    uint64_t pacing_bucket_max;
+    uint64_t pacing_packet_time_nanosec;
+    uint64_t pacing_packet_time_microsec;
 
 } picoquic_path_t;
 

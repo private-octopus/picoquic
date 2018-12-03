@@ -489,36 +489,75 @@ uint32_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     return send_length;
 }
 
+/* Update the leaky bucket used for pacing.
+ */
+static void picoquic_update_pacing_bucket(picoquic_path_t * path_x, uint64_t current_time)
+{
+    if (current_time > path_x->pacing_evaluation_time) {
+        path_x->pacing_bucket_nanosec += (current_time - path_x->pacing_evaluation_time) << 10;
+        path_x->pacing_evaluation_time = current_time;
+        if (path_x->pacing_bucket_nanosec > path_x->pacing_bucket_max) {
+            path_x->pacing_bucket_nanosec = path_x->pacing_bucket_max;
+        }
+    }
+}
+
 /*
- * Reset the pacing data after CWIN is updated
+ * Check pacing to see whether the next transmission is authorized.
+ * If if is not, update the next wait time to reflect pacing.
+ * -
+ */
+int picoquic_is_sending_authorized_by_pacing(picoquic_path_t * path_x, uint64_t current_time, uint64_t * next_time)
+{
+    int ret = 1;
+
+    picoquic_update_pacing_bucket(path_x, current_time);
+
+    if (path_x->pacing_bucket_nanosec <= 0) {
+        uint64_t next_pacing_time = current_time + path_x->pacing_packet_time_microsec;
+        if (next_pacing_time < *next_time) {
+            *next_time = next_pacing_time;
+        }
+        ret = 0;
+    }
+
+    return ret;
+}
+
+/*
+ * Reset the pacing data after CWIN is updated.
+ * The max bucket is set to contain at least 2 packets more than 1/8th of the congestion window.
  */
 
 void picoquic_update_pacing_data(picoquic_path_t * path_x)
 {
-    path_x->packet_time_nano_sec = path_x->smoothed_rtt * 1000ull * path_x->send_mtu;
-    path_x->packet_time_nano_sec /= path_x->cwin;
+    uint64_t bucket_1024 = (((uint64_t)path_x->cwin)<<10)/ (8 * path_x->send_mtu);
+    uint64_t bucket = 2 + ((bucket_1024 + 1023) >> 10);
 
-    path_x->pacing_margin_micros = 16 * path_x->packet_time_nano_sec;
-    if (path_x->pacing_margin_micros > (path_x->rtt_min / 8)) {
-        path_x->pacing_margin_micros = (path_x->rtt_min / 8);
+    path_x->pacing_bucket_max = bucket;
+
+    path_x->pacing_packet_time_nanosec = ((path_x->smoothed_rtt << 10) * path_x->send_mtu) / path_x->cwin;
+
+    if (path_x->pacing_packet_time_nanosec <= 0) {
+        path_x->pacing_packet_time_nanosec = 1;
+        path_x->pacing_packet_time_microsec = 1;
     }
-    if (path_x->pacing_margin_micros < 1000) {
-        path_x->pacing_margin_micros = 1000;
+    else {
+        path_x->pacing_packet_time_microsec = (path_x->pacing_packet_time_nanosec + 1023) >> 10;
     }
 }
 
 /* 
- * Update the pacing data after sending a packet
+ * Update the pacing data after sending a packet.
  */
-void picoquic_update_pacing_after_send(picoquic_path_t * send_path, uint64_t current_time)
+void picoquic_update_pacing_after_send(picoquic_path_t * path_x, uint64_t current_time)
 {
-    if (send_path->next_pacing_time < current_time) {
-        send_path->next_pacing_time = current_time;
-        send_path->pacing_reminder_nano_sec = 0;
+    picoquic_update_pacing_bucket(path_x, current_time);
+
+    if (path_x->pacing_bucket_nanosec < path_x->pacing_packet_time_nanosec) {
+        path_x->pacing_bucket_nanosec = 0;
     } else {
-        send_path->pacing_reminder_nano_sec += send_path->packet_time_nano_sec;
-        send_path->next_pacing_time += (send_path->pacing_reminder_nano_sec >> 10);
-        send_path->pacing_reminder_nano_sec &= 0x3FF;
+        path_x->pacing_bucket_nanosec -= path_x->pacing_packet_time_nanosec;
     }
 }
 
@@ -1525,7 +1564,6 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                         switch (cnx->cnx_state) {
                         case picoquic_state_client_init:
                             cnx->cnx_state = picoquic_state_client_init_sent;
-                            path_x->next_pacing_time = current_time + 10000;
                             break;
                         case picoquic_state_client_renegotiate:
                             cnx->cnx_state = picoquic_state_client_init_resent;
@@ -2163,7 +2201,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                     if (cwin_time < next_wake_time) {
                         next_wake_time = cwin_time;
                     }
-                } else {
+                } else if (picoquic_is_sending_authorized_by_pacing(path_x, current_time, &next_wake_time)) {
                     /* if present, send tls data */
                     if (tls_ready) {
                         ret = picoquic_prepare_crypto_hs_frame(cnx, 3, &bytes[length],
