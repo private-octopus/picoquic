@@ -1287,6 +1287,11 @@ void picoquic_check_spurious_retransmission(picoquic_cnx_t* cnx,
                 if (max_reorder_gap > old_path->max_reorder_gap) {
                     old_path->max_reorder_gap = max_reorder_gap;
                 }
+
+                if (cnx->congestion_alg != NULL ) {
+                    cnx->congestion_alg->alg_notify(old_path, picoquic_congestion_notification_spurious_repeat,
+                        0, 0, p->sequence_number, current_time);
+                }
             }
 
             cnx->nb_spurious++;
