@@ -1391,7 +1391,7 @@ int tls_api_one_scenario_test(test_api_stream_desc_t* scenario,
 
 int tls_api_oneway_stream_test()
 {
-    return tls_api_one_scenario_test(test_scenario_oneway, sizeof(test_scenario_oneway), 0, 0, 0, 0, 75000, NULL, NULL);
+    return tls_api_one_scenario_test(test_scenario_oneway, sizeof(test_scenario_oneway), 0, 0, 0, 0, 70000, NULL, NULL);
 }
 
 int tls_api_q_and_r_stream_test()

@@ -531,19 +531,31 @@ int picoquic_is_sending_authorized_by_pacing(picoquic_path_t * path_x, uint64_t 
 
 void picoquic_update_pacing_data(picoquic_path_t * path_x)
 {
-    uint64_t bucket_1024 = (((uint64_t)path_x->cwin)<<10)/ (8 * path_x->send_mtu);
-    uint64_t bucket = 2 + ((bucket_1024 + 1023) >> 10);
+    uint64_t rtt_nanosec = (path_x->smoothed_rtt << 10);
 
-    path_x->pacing_bucket_max = bucket;
-
-    path_x->pacing_packet_time_nanosec = ((path_x->smoothed_rtt << 10) * path_x->send_mtu) / path_x->cwin;
-
-    if (path_x->pacing_packet_time_nanosec <= 0) {
+    if (path_x->cwin < 8 * path_x->send_mtu) {
+        /* Small windows, should only relie on ACK clocking */
+        path_x->pacing_bucket_max = rtt_nanosec;
         path_x->pacing_packet_time_nanosec = 1;
         path_x->pacing_packet_time_microsec = 1;
+
     }
     else {
-        path_x->pacing_packet_time_microsec = (path_x->pacing_packet_time_nanosec + 1023) >> 10;
+
+        path_x->pacing_packet_time_nanosec = (rtt_nanosec * path_x->send_mtu) / path_x->cwin;
+
+        if (path_x->pacing_packet_time_nanosec <= 0) {
+            path_x->pacing_packet_time_nanosec = 1;
+            path_x->pacing_packet_time_microsec = 1;
+        }
+        else {
+            path_x->pacing_packet_time_microsec = (path_x->pacing_packet_time_nanosec + 1023) >> 10;
+        }
+
+        path_x->pacing_bucket_max = (rtt_nanosec / 4);
+        if (path_x->pacing_bucket_max < 2 * path_x->pacing_packet_time_nanosec) {
+            path_x->pacing_bucket_max = 2 * path_x->pacing_packet_time_nanosec;
+        }
     }
 }
 
