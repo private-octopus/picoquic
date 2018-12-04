@@ -86,7 +86,7 @@ int picoquic_add_to_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
     }
 
     /* If our side has sent RST_STREAM or received STOP_SENDING, we should not send anymore data. */
-    if (ret == 0 && (STREAM_RESET_SENT(stream) || STREAM_STOP_SENDING_RECEIVED(stream))) {
+    if (ret == 0 && (stream->reset_sent || stream->stop_sending_received)) {
         ret = -1;
     }
 

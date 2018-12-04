@@ -1016,17 +1016,6 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
 
 picoquic_misc_frame_header_t* picoquic_create_misc_frame(const uint8_t* bytes, size_t length);
 
-#define STREAM_RESET_SENT(stream) (stream->reset_sent)
-#define STREAM_RESET_REQUESTED(stream) (stream->reset_requested)
-#define STREAM_SEND_RESET(stream) (STREAM_RESET_REQUESTED(stream) && !STREAM_RESET_SENT(stream))
-#define STREAM_STOP_SENDING_REQUESTED(stream) (stream->stop_sending_requested)
-#define STREAM_STOP_SENDING_SENT(stream) (stream->stop_sending_sent)
-#define STREAM_STOP_SENDING_RECEIVED(stream) (stream->stop_sending_received)
-#define STREAM_SEND_STOP_SENDING(stream) (STREAM_STOP_SENDING_REQUESTED(stream) && !STREAM_STOP_SENDING_SENT(stream))
-#define STREAM_FIN_REQUESTED(stream) (stream->fin_requested)
-#define STREAM_FIN_SENT(stream) (stream->fin_sent)
-#define STREAM_SEND_FIN(stream) (STREAM_FIN_REQUESTED(stream) && !STREAM_FIN_SENT(stream))
-
 #ifdef __cplusplus
 }
 #endif
