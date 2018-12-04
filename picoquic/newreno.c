@@ -110,6 +110,11 @@ void picoquic_newreno_notify(picoquic_path_t* path_x,
                 picoquic_newreno_enter_recovery(path_x, notification, nr_state, current_time);
                 break;
             case picoquic_congestion_notification_spurious_repeat:
+                /* Immediately exit the previous recovery */
+                if (path_x->cwin < 2 * nr_state->ssthresh) {
+                    path_x->cwin = 2 * nr_state->ssthresh;
+                    nr_state->alg_state = picoquic_newreno_alg_congestion_avoidance;
+                }
                 break;
             case picoquic_congestion_notification_rtt_measurement:
                 /* TODO: consider using RTT increases as signal to get out of slow start */

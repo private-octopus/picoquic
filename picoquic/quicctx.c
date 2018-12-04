@@ -734,10 +734,11 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, struct sockad
             path_x->congestion_alg_state = NULL;
 
             /* Initialize per path pacing state */
-            path_x->packet_time_nano_sec = 0;
-            path_x->pacing_reminder_nano_sec = 0;
-            path_x->pacing_margin_micros = 1000;
-            path_x->next_pacing_time = start_time;
+            path_x->pacing_evaluation_time = start_time;
+            path_x->pacing_bucket_nanosec = 16;
+            path_x->pacing_bucket_max = 16;
+            path_x->pacing_packet_time_nanosec = 1;
+            path_x->pacing_packet_time_microsec = 1;
 
             /* Initialize the MTU */
             path_x->send_mtu = (peer_addr == NULL || peer_addr->sa_family == AF_INET) ? PICOQUIC_INITIAL_MTU_IPV4 : PICOQUIC_INITIAL_MTU_IPV6;
