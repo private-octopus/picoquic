@@ -912,9 +912,10 @@ picoquic_stream_head* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
 
     while (stream) {
         if ((cnx->maxdata_remote > cnx->data_sent && stream->sent_offset < stream->maxdata_remote &&
-            ((stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset) || 
-                (STREAM_SEND_FIN(stream)))) ||
-            STREAM_SEND_RESET(stream) || STREAM_SEND_STOP_SENDING(stream)) {
+            ((stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset) ||
+             (stream->fin_requested && !stream->fin_sent))) ||
+            (stream->reset_requested && !stream->reset_sent) ||
+            (stream->stop_sending_requested && !stream->stop_sending_sent)) {
             /* Something can be sent */
             /* if the stream is not active yet, verify that it fits under
              * the max stream id limit */
@@ -948,16 +949,16 @@ int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head* str
         }
     }
 
-    if (STREAM_SEND_RESET(stream)) {
+    if (stream->reset_requested && !stream->reset_sent) {
         return picoquic_prepare_stream_reset_frame(cnx, stream, bytes, bytes_max, consumed);
     }
 
-    if (STREAM_SEND_STOP_SENDING(stream)) {
+    if (stream->stop_sending_requested && !stream->stop_sending_sent) {
         return picoquic_prepare_stop_sending_frame(stream, bytes, bytes_max, consumed);
     }
 
     if ((stream->send_queue == NULL || stream->send_queue->length <= stream->send_queue->offset) &&
-        (!STREAM_FIN_REQUESTED(stream) || STREAM_FIN_SENT(stream))) {
+        (!stream->fin_requested || stream->fin_sent)) {
         *consumed = 0;
     } else {
         size_t byte_index = 0;
@@ -1043,7 +1044,7 @@ int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head* str
             }
             *consumed = byte_index;
 
-            if (ret == 0 && STREAM_FIN_REQUESTED(stream) && stream->send_queue == 0) {
+            if (ret == 0 && stream->fin_requested && stream->send_queue == 0) {
                 /* Set the fin bit */
                 stream->fin_sent = 1;
                 bytes[0] |= 1;
