@@ -1247,9 +1247,12 @@ int tls_api_one_scenario_init(
         (proposed_version == 0) ? PICOQUIC_INTERNAL_TEST_VERSION_1 : proposed_version,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, simulated_time, NULL, 0, 1, 0);
 
-    if (ret != 0)
-    {
+    if (ret != 0) {
         DBG_PRINTF("Could not create the QUIC test contexts for V=%x\n", proposed_version);
+    }
+    else if (*p_test_ctx == NULL || (*p_test_ctx)->cnx_client == NULL || (*p_test_ctx)->qserver == NULL) {
+        DBG_PRINTF("%s", "Connections where not properly created!\n");
+        ret = -1;
     }
 
     if (ret == 0 && client_params != NULL) {
@@ -4887,7 +4890,6 @@ int stream_id_max_test()
 int padding_test()
 {
     uint64_t simulated_time = 0;
-    uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 1, 0);
 
@@ -4938,7 +4940,6 @@ static char const* packet_trace_test_ref = "picoquictest/packet_trace_ref.txt";
 int packet_trace_test()
 {
     uint64_t simulated_time = 0;
-    uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 1, 0);
     char trace_file_name[512];
@@ -4973,7 +4974,7 @@ int packet_trace_test()
 #ifdef _WINDOWS
                 ret = sprintf_s(&trace_file_name[2*i], sizeof(trace_file_name) - 2*i, "%02x", test_ctx->cnx_server->initial_cnxid.id[i]) <= 0;
 #else
-                ret = sprintf(&trace_file_name[2*i], "%02x", test_ctx->cnx_server->initial_cnxid.id[i]) > 0;
+                ret = sprintf(&trace_file_name[2*i], "%02x", test_ctx->cnx_server->initial_cnxid.id[i]) <= 0;
 #endif
                 if (ret != 0) {
                     DBG_PRINTF("Cannot format the file name, i=%d, icid len=%d\n", i, test_ctx->cnx_server->initial_cnxid.id_len);
