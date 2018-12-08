@@ -24,8 +24,8 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include "../picoquic/util.h"
-#include "../picoquic/picosplay.h"
+#include "picoquic/util.h"
+#include "picoquic/picosplay.h"
 
 static int compare_int(void *l, void *r) {
     return *((int*)l) - *((int*)r);

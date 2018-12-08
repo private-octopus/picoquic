@@ -104,10 +104,10 @@ static const char* ticket_store_filename = "demo_ticket_store.bin";
 
 static const char* bad_request_message = "<html><head><title>Bad Request</title></head><body>Bad request. Why don't you try \"GET /doc-456789.html\"?</body></html>";
 
-#include "../picoquic/picoquic.h"
-#include "../picoquic/picoquic_internal.h"
-#include "../picoquic/picosocks.h"
-#include "../picoquic/util.h"
+#include "picoquic/picoquic.h"
+#include "picoquic/picoquic_internal.h"
+#include "picoquic/picosocks.h"
+#include "picoquic/util.h"
 
 void print_address(struct sockaddr* address, char* label, picoquic_connection_id_t cnx_id)
 {
@@ -149,16 +149,24 @@ static void picoquic_set_key_log_file_from_env(picoquic_quic_t* quic)
     const char* keylog_filename;
     FILE* F = NULL;
 
+#ifdef _WINDOWS
+    size_t len;
+    errno_t err = _dupenv_s(&keylog_filename, &len, "SSLKEYLOGFILE");
+
+    if (err == 0) {
+        err = fopen_s(&F, keylog_filename, "a");
+
+        free(keylog_filename);
+
+        if (err != 0 || F == NULL) {
+            return;
+        }
+    }
+#else
     keylog_filename = getenv("SSLKEYLOGFILE");
     if (keylog_filename == NULL) {
         return;
     }
-#ifdef _WINDOWS
-    errno_t err = fopen_s(&F, keylog_filename, "a");
-    if (err != 0 || F == NULL) {
-        return;
-    }
-#else
     F = fopen(keylog_filename, "a");
     if (F == NULL) {
         return;

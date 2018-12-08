@@ -29,7 +29,7 @@
  * Get packet out of link at time T + L + Queue.
  */
 
-#include "../picoquic/picoquic_internal.h"
+#include "picoquic/picoquic_internal.h"
 #include "picoquictest_internal.h"
 #include <stdlib.h>
 

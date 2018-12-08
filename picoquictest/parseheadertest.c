@@ -21,8 +21,8 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include "../picoquic/tls_api.h"
-#include "../picoquic/picoquic_internal.h"
+#include "picoquic/tls_api.h"
+#include "picoquic/picoquic_internal.h"
 #include "picoquictest_internal.h"
 
 /* test vectors and corresponding structure */

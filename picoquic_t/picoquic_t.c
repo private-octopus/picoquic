@@ -19,11 +19,11 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 #ifdef _WINDOWS
-#include "../picoquicfirst/getopt.h"
+#include "picoquicfirst/getopt.h"
 #endif
-#include "../picoquic/picoquic.h"
-#include "../picoquic/util.h"
-#include "../picoquictest/picoquictest.h"
+#include "picoquic/picoquic.h"
+#include "picoquic/util.h"
+#include "picoquictest/picoquictest.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>

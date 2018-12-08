@@ -22,7 +22,7 @@
 #ifndef PICOQUICTEST_INTERNAL_H
 #define PICOQUICTEST_INTERNAL_H
 
-#include "../picoquic/picoquic_internal.h"
+#include "picoquic/picoquic_internal.h"
 
 #ifdef __cplusplus
 extern "C" {
