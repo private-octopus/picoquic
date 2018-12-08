@@ -1247,9 +1247,12 @@ int tls_api_one_scenario_init(
         (proposed_version == 0) ? PICOQUIC_INTERNAL_TEST_VERSION_1 : proposed_version,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, simulated_time, NULL, 0, 1, 0);
 
-    if (ret != 0)
-    {
+    if (ret != 0) {
         DBG_PRINTF("Could not create the QUIC test contexts for V=%x\n", proposed_version);
+    }
+    else if (*p_test_ctx == NULL || (*p_test_ctx)->cnx_client == NULL || (*p_test_ctx)->qserver == NULL) {
+        DBG_PRINTF("%s", "Connections where not properly created!\n");
+        ret = -1;
     }
 
     if (ret == 0 && client_params != NULL) {
@@ -4887,7 +4890,6 @@ int stream_id_max_test()
 int padding_test()
 {
     uint64_t simulated_time = 0;
-    uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 1, 0);
 
@@ -4915,6 +4917,89 @@ int padding_test()
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+
+/*
+ * Test whether packet tracing works correctly by setting up a basic connection
+ * and verifying that the log file is what we expect.
+ */
+#ifdef _WINDOWS
+#ifndef _WINDOWS64
+static char const* packet_trace_test_ref = "..\\picoquictest\\packet_trace_ref.txt";
+#else
+static char const* packet_trace_test_ref = "..\\..\\picoquictest\\packet_trace_ref.txt";
+#endif
+#else
+static char const* packet_trace_test_ref = "picoquictest/packet_trace_ref.txt";
+#endif
+
+int packet_trace_test()
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 1, 0);
+    char trace_file_name[512];
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+
+    /* Set the logging policy on the server side, to store data in the
+     * current working directory */
+    if (ret == 0) {
+        picoquic_set_cc_log(test_ctx->qserver, ".");
+    }
+
+    /* Run a basic test scenario
+     */
+    if (ret == 0) {
+        ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+            test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0, 20000, 1000000);
+    }
+
+    /* Derive the test file name from the ICID observed in the server connection,
+     * then compare to expected result.
+     */
+    if (ret == 0) {
+        if (test_ctx->cnx_server == NULL) {
+            DBG_PRINTF("%s", "Cannot access the server connection\n");
+            ret = -1;
+        }
+        else {
+            for (size_t i = 0; ret == 0 && i < test_ctx->cnx_server->initial_cnxid.id_len; i++) {
+#ifdef _WINDOWS
+                ret = sprintf_s(&trace_file_name[2*i], sizeof(trace_file_name) - 2*i, "%02x", test_ctx->cnx_server->initial_cnxid.id[i]) <= 0;
+#else
+                ret = sprintf(&trace_file_name[2*i], "%02x", test_ctx->cnx_server->initial_cnxid.id[i]) <= 0;
+#endif
+                if (ret != 0) {
+                    DBG_PRINTF("Cannot format the file name, i=%d, icid len=%d\n", i, test_ctx->cnx_server->initial_cnxid.id_len);
+                    ret = -1;
+                }
+            }
+            if (ret == 0){
+                memcpy(&trace_file_name[2 * test_ctx->cnx_server->initial_cnxid.id_len], ".csv", 5);
+                DBG_PRINTF("File name: %s\n", trace_file_name);
+            }
+        }
+    }
+
+    /* Free the resource, which will close the log file.
+     */
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    /* compare the log file to the expected value */
+    if (ret == 0)
+    {
+        ret = picoquic_test_compare_files(trace_file_name, packet_trace_test_ref);
     }
 
     return ret;
