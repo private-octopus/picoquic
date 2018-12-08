@@ -289,6 +289,11 @@ typedef uint32_t(*picoquic_fuzz_fn)(void * fuzz_ctx, picoquic_cnx_t* cnx, uint8_
     size_t bytes_max, size_t length, uint32_t header_length);
 void picoquic_set_fuzz(picoquic_quic_t* quic, picoquic_fuzz_fn fuzz_fn, void * fuzz_ctx);
 
+/* Setting a cc log directory in order to create per connection packet traces.
+ * Set to a NULL value to stop traces on new connections.
+ */
+void picoquic_set_cc_log(picoquic_quic_t * quic, char const * cc_log_dir);
+
 /* Will be called to verify that the given data corresponds to the given signature.
  * This callback and the `verify_ctx` will be set by the `verify_certificate_cb_fn`.
  * If `data` and `sign` are empty buffers, an error occurred and `verify_ctx` should be freed.

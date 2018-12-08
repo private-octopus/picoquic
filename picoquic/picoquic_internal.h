@@ -303,6 +303,7 @@ typedef struct st_picoquic_tp_t {
  */
 typedef struct st_picoquic_quic_t {
     void * F_log;
+    char const * cc_log_dir;
     void* tls_master_ctx;
     picoquic_stream_data_cb_fn default_callback_fn;
     void* default_callback_ctx;
@@ -691,6 +692,8 @@ typedef struct st_picoquic_cnx_t {
     uint32_t nb_zero_rtt_acked;
     uint64_t nb_retransmission_total;
     uint64_t nb_spurious;
+    FILE * cc_log; /* File where congestion control data is logged */
+
     /* ECN Counters */
     uint64_t ecn_ect0_total_local;
     uint64_t ecn_ect1_total_local;
@@ -935,6 +938,11 @@ void picoquic_log_time(FILE* F, picoquic_cnx_t* cnx, uint64_t current_time,
 #define PICOQUIC_SET_LOG(quic, F) (quic)->F_log = (void*)(F)
 
 void picoquic_set_key_log_file(picoquic_quic_t *quic, FILE* F_keylog);
+
+/* Handling of cc_log */
+void picoquic_open_cc_dump(picoquic_cnx_t * cnx);
+void picoquic_close_cc_dump(picoquic_cnx_t * cnx);
+void picoquic_cc_dump(picoquic_cnx_t * cnx, uint64_t current_time);
 
 /* handling of ACK logic */
 int picoquic_is_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t * next_wake_time, picoquic_packet_context_enum pc);

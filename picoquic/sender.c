@@ -2401,6 +2401,10 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
 
     if (*send_length > 0) {
         next_wake_time = current_time;
+
+        if (ret == 0 && cnx->cc_log != NULL) {
+            picoquic_cc_dump(cnx, current_time);
+        }
     }
     else {
         next_wake_time = picoquic_get_challenge_wake_time(cnx, current_time, next_wake_time);

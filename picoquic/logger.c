@@ -1691,3 +1691,122 @@ void picoquic_log_picotls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
         fprintf(F, "Malformed PTLS ticket, %d extra bytes.\n", ticket_length - min_length);
     }
 }
+
+/*
+ * Check whether dumping of transmission traces is required. If it is,
+ * the master context specifies the directory where to log the file.
+ */
+
+void picoquic_open_cc_dump(picoquic_cnx_t * cnx)
+{
+    int ret = 0;
+
+    if (cnx->cc_log != NULL) {
+        DBG_PRINTF("%s", "CC LOG File is already open!\n");
+    } else if (cnx->quic->cc_log_dir != NULL) {
+        char cc_log_file_name[512];
+        char const * suffix = ".csv";
+        const size_t suffix_len = strlen(suffix);
+        size_t folder_length = strlen(cnx->quic->cc_log_dir);
+
+        if (folder_length + 1 + 2*cnx->initial_cnxid.id_len + suffix_len + 1 > sizeof(cc_log_file_name)) {
+            ret = -1;
+        }
+        else {
+            size_t byte_index = 0;
+
+            memcpy(cc_log_file_name, cnx->quic->cc_log_dir, folder_length);
+            byte_index += folder_length;
+#ifdef _WINDOWS
+            cc_log_file_name[byte_index++] = '\\';
+#else
+            cc_log_file_name[byte_index++] = '/';
+#endif
+            for (size_t i = 0; ret == 0 && i < cnx->initial_cnxid.id_len; i++) {
+#ifdef _WINDOWS
+                ret = sprintf_s(&cc_log_file_name[byte_index], sizeof(cc_log_file_name) - byte_index, "%02x", cnx->initial_cnxid.id[i]) <= 0;
+#else
+                ret = sprintf(&cc_log_file_name[byte_index], "%02x", cnx->initial_cnxid.id[i]) <= 0;
+#endif
+
+                byte_index += 2;
+            }
+
+            if (ret == 0) {
+                memcpy(&cc_log_file_name[byte_index], suffix, suffix_len);
+                byte_index += suffix_len;
+                cc_log_file_name[byte_index] = 0;
+            }
+
+            if (ret != 0) {
+                DBG_PRINTF("Cannot format file name into folder %s, id_len = %d\n", cnx->quic->cc_log_dir, cnx->initial_cnxid.id_len);
+            }
+        }
+
+        if (ret == 0) {
+
+#ifdef _WINDOWS
+            errno_t err = fopen_s(&cnx->cc_log, cc_log_file_name, "w");
+            if (err != 0 || cnx->cc_log == NULL) {
+                ret = -1;
+            }
+#else
+            cnx->cc_log = fopen(cc_log_file_name, "w");
+            if (cnx->cc_log == NULL) {
+                ret = -1;
+            }
+#endif
+            if (ret != 0) {
+                DBG_PRINTF("Cannot open file %s for write.\n", cc_log_file_name);
+            } else {
+                /* TODO: maintain the list of headers as debugging data is added */
+                ret |= fprintf(cnx->cc_log, "time, ") <= 0;
+                ret |= fprintf(cnx->cc_log, "sequence, ") <= 0;
+                ret |= fprintf(cnx->cc_log, "highest ack, ") <= 0;
+                ret |= fprintf(cnx->cc_log, "high ack time, ") <= 0;
+                ret |= fprintf(cnx->cc_log, "last time ack, ") <= 0;
+                ret |= fprintf(cnx->cc_log, "\n") <= 0;
+
+                if (ret != 0) {
+                    DBG_PRINTF("Cannot write header for file %s.\n", cc_log_file_name);
+                    picoquic_close_cc_dump(cnx);
+                }
+            }
+        }
+    }
+}
+
+void picoquic_close_cc_dump(picoquic_cnx_t * cnx)
+{
+    if (cnx->cc_log != NULL) {
+        (void) fclose(cnx->cc_log);
+        cnx->cc_log = NULL;
+    }
+}
+
+/*
+ * Log the state of the congestion management, retransmission, etc.
+ * Call either just after processing a received packet, or just after
+ * sending a packet.
+ */
+
+void picoquic_cc_dump(picoquic_cnx_t * cnx, uint64_t current_time)
+{
+    int ret = 0;
+
+    if (cnx->cc_log == NULL) {
+        return;
+    }
+
+    /* TODO: complete list of tracked data as needed for debugging */
+    ret |= fprintf(cnx->cc_log, "%llu, ", (unsigned long long)current_time) <= 0;
+    ret |= fprintf(cnx->cc_log, "%llu, ", (unsigned long long)cnx->pkt_ctx[picoquic_packet_context_application].send_sequence) <= 0;
+    ret |= fprintf(cnx->cc_log, "%lld, ", (long long)((int64_t)cnx->pkt_ctx[picoquic_packet_context_application].highest_acknowledged)) <= 0;
+    ret |= fprintf(cnx->cc_log, "%llu, ", (unsigned long long)cnx->pkt_ctx[picoquic_packet_context_application].highest_acknowledged_time) <= 0;
+    ret |= fprintf(cnx->cc_log, "%llu, ", (unsigned long long)cnx->pkt_ctx[picoquic_packet_context_application].latest_time_acknowledged) <= 0;
+    ret |= fprintf(cnx->cc_log, "\n") <= 0;
+
+    if (ret != 0) {
+        picoquic_close_cc_dump(cnx);
+    }
+}
