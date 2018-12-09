@@ -1017,7 +1017,8 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                         packet->length = length;
                         cnx->nb_retransmission_total++;
 
-                        if (cnx->congestion_alg != NULL && old_path != NULL) {
+                        /* TODO: understand why we need to check for exact path value, instead of NULL */
+                        if (cnx->congestion_alg != NULL && old_path == cnx->path[0]) {
                             cnx->congestion_alg->alg_notify(old_path,
                                 (timer_based_retransmit == 0) ? picoquic_congestion_notification_repeat : picoquic_congestion_notification_timeout,
                                 0, 0, lost_packet_number, current_time);
@@ -1151,21 +1152,23 @@ static uint64_t picoquic_get_challenge_wake_time(picoquic_cnx_t* cnx, uint64_t c
 
     /* Consider demotions */
     for (int i = 0; next_wake_time > current_time && i < cnx->nb_paths; i++) {
-        if (cnx->path[i]->response_required) {
-            next_wake_time = current_time;
-            break;
+        if (cnx->path[i]->path_is_demoted) {
+            if (cnx->path[i]->demotion_time < next_wake_time) {
+                next_wake_time = cnx->path[i]->demotion_time;
+            }
         }
+        else {
+            if (cnx->path[i]->response_required) {
+                next_wake_time = current_time;
+                break;
+            }
 
-        if (cnx->path[i]->path_is_demoted &&
-            cnx->path[i]->demotion_time < next_wake_time) {
-            next_wake_time = cnx->path[i]->demotion_time;
-        }
+            if (cnx->path[i]->challenge_verified == 0 && cnx->path[i]->path_is_activated) {
+                uint64_t next_challenge_time = cnx->path[i]->challenge_time + cnx->path[i]->retransmit_timer;
 
-        if (cnx->path[i]->challenge_verified == 0 && cnx->path[i]->path_is_activated) {
-            uint64_t next_challenge_time = cnx->path[i]->challenge_time + cnx->path[i]->retransmit_timer;
-
-            if (next_challenge_time < next_wake_time) {
-                next_wake_time = next_challenge_time;
+                if (next_challenge_time < next_wake_time) {
+                    next_wake_time = next_challenge_time;
+                }
             }
         }
     }
@@ -2353,6 +2356,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                         && path_x->cwin > path_x->bytes_in_transit && picoquic_is_mtu_probe_needed(cnx, path_x)) {
                         length = picoquic_prepare_mtu_probe(cnx, path_x, header_length, checksum_overhead, bytes);
                         packet->length = length;
+                        packet->send_path = path_x;
                         path_x->mtu_probe_sent = 1;
                         is_pure_ack = 0;
                     }
@@ -2484,7 +2488,7 @@ int picoquic_prepare_segment(picoquic_cnx_t* cnx, picoquic_path_t * path_x, pico
 /* Prepare next probe if one is needed, returns send_length == 0 if none necessary */
 int picoquic_prepare_probe(picoquic_cnx_t* cnx,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
-    struct sockaddr ** p_addr_to, int * to_len, struct sockaddr ** p_addr_from, int * from_len)
+    struct sockaddr ** p_addr_to, int * to_len, struct sockaddr ** p_addr_from, int * from_len, struct sockaddr ** addr_to_log)
 {
     int ret = 0;
 
@@ -2544,6 +2548,7 @@ int picoquic_prepare_probe(picoquic_cnx_t* cnx,
                 {
                     if (!cnx->path[i]->path_is_activated) {
                         inactive_path_index = i;
+                        break;
                     }
                 }
 
@@ -2586,7 +2591,9 @@ int picoquic_prepare_probe(picoquic_cnx_t* cnx,
                     *p_addr_to = (struct sockaddr*)&probe->peer_addr;
                     *to_len = probe->peer_addr_len;
                 }
-
+                /* Remember the log address */
+                *addr_to_log = (struct sockaddr*)&probe->peer_addr;
+                /* Set the source address */
                 if (p_addr_from != NULL) {
                     *p_addr_from = (struct sockaddr*)&probe->local_addr;
                     *from_len = probe->local_addr_len;
@@ -2628,7 +2635,7 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
 
     /* If probes are in waiting, send the first one */
     ret = picoquic_prepare_probe(cnx, current_time, send_buffer, send_buffer_max, send_length,
-        p_addr_to, to_len, p_addr_from, from_len);
+        p_addr_to, to_len, p_addr_from, from_len, &addr_to_log);
 
     if (ret == 0 && *send_length == 0) {
         /* Select the path */

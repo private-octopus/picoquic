@@ -1646,7 +1646,8 @@ static int picoquic_process_ack_range(
                 picoquic_packet_t* next = p->next_packet;
                 picoquic_path_t * old_path = p->send_path;
 
-                if (old_path != NULL) {
+                /* TODO: understand why we need this check, instead of just a check for NULL */
+                if (old_path == cnx->path[0]) {
                     if (cnx->congestion_alg != NULL) {
                         cnx->congestion_alg->alg_notify(old_path,
                             picoquic_congestion_notification_acknowledgement,
