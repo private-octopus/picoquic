@@ -88,8 +88,8 @@
 #define WSA_LAST_ERROR(x) ((long)(x))
 #endif
 
-#define SERVER_KEY_FILE = "certs/cert.pem";
-#define SERVER_KEY_FILE = "certs/key.pem";
+#define SERVER_CERT_FILE = "certs/cert.pem"
+#define SERVER_KEY_FILE = "certs/key.pem"
 
 #endif
 
