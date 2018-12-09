@@ -23,7 +23,7 @@
 #ifdef _WINDOWS
 #include <malloc.h>
 #endif
-#include "picoquic/picohash.h"
+#include "picohash.h"
 
 struct hashtestkey {
     uint64_t x;

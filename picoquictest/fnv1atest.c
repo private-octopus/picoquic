@@ -19,7 +19,7 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "picoquic/fnv1a.h"
+#include "fnv1a.h"
 #include <stdint.h>
 #include <stdlib.h>
 

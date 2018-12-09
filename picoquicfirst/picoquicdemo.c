@@ -104,10 +104,10 @@ static const char* ticket_store_filename = "demo_ticket_store.bin";
 
 static const char* bad_request_message = "<html><head><title>Bad Request</title></head><body>Bad request. Why don't you try \"GET /doc-456789.html\"?</body></html>";
 
-#include "picoquic/picoquic.h"
-#include "picoquic/picoquic_internal.h"
-#include "picoquic/picosocks.h"
-#include "picoquic/util.h"
+#include "picoquic.h"
+#include "picoquic_internal.h"
+#include "picosocks.h"
+#include "util.h"
 
 void print_address(struct sockaddr* address, char* label, picoquic_connection_id_t cnx_id)
 {

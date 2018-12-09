@@ -22,9 +22,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "picoquic/picoquic_internal.h"
-#include "picoquic/util.h"
-#include "picoquic/tls_api.h"
+#include "picoquic_internal.h"
+#include "util.h"
+#include "tls_api.h"
 #include "picoquictest_internal.h"
 
 /* The transport parameter tests operate by comparing the decoding of test vectors

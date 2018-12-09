@@ -19,8 +19,8 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "picoquic/tls_api.h"
-#include "picoquic/picoquic_internal.h"
+#include "tls_api.h"
+#include "picoquic_internal.h"
 #include "picoquictest_internal.h"
 #include <stdlib.h>
 #include <string.h>

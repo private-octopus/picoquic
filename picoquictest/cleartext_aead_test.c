@@ -20,11 +20,11 @@
 */
 
 #ifdef _WINDOWS
-#include "picoquic/wincompat.h"
+#include "wincompat.h"
 #endif
-#include "picoquic/picoquic_internal.h"
-#include "picoquic/tls_api.h"
-#include "picoquic/util.h"
+#include "picoquic_internal.h"
+#include "tls_api.h"
+#include "util.h"
 #include "picotls.h"
 #include "picotls/openssl.h"
 #include "picotls/minicrypto.h"
