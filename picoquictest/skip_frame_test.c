@@ -459,13 +459,9 @@ static char const* log_fuzz_test_file = "log_fuzz_test.txt";
 static char const* log_packet_test_file = "log_fuzz_test.txt";
 
 #ifdef _WINDOWS
-#ifndef _WINDOWS64
-static char const* log_test_ref = "..\\picoquictest\\log_test_ref.txt";
+#define LOG_TEST_REF "picoquictest\\log_test_ref.txt"
 #else
-static char const* log_test_ref = "..\\..\\picoquictest\\log_test_ref.txt";
-#endif
-#else
-static char const* log_test_ref = "picoquictest/log_test_ref.txt";
+#define LOG_TEST_REF "picoquictest/log_test_ref.txt"
 #endif
 
 static int compare_lines(char const* b1, char const* b2)
@@ -587,7 +583,16 @@ int logger_test()
     F = NULL;
 
     if (ret == 0) {
-        ret = picoquic_test_compare_files(log_test_file, log_test_ref);
+        char log_test_ref[512];
+
+        ret = picoquic_get_input_path(log_test_ref, sizeof(log_test_ref), picoquic_test_solution_dir, LOG_TEST_REF);
+
+        if (ret != 0) {
+            DBG_PRINTF("%s", "Cannot set the log ref file name.\n");
+        }
+        else {
+            ret = picoquic_test_compare_files(log_test_file, log_test_ref);
+        }
     }
 
     /* Create a set of randomized packets. Verify that they can be logged without 

@@ -50,13 +50,8 @@
 #define socklen_t int
 #endif
 
-#ifdef _WINDOWS64
-static const char* default_server_cert_file = "..\\..\\certs\\cert.pem";
-static const char* default_server_key_file = "..\\..\\certs\\key.pem";
-#else
-static const char* default_server_cert_file = "..\\certs\\cert.pem";
-static const char* default_server_key_file = "..\\certs\\key.pem";
-#endif
+#define SERVER_CERT_FILE "certs\\cert.pem"
+#define SERVER_KEY_FILE  "certs\\key.pem"
 
 #else /* Linux */
 
@@ -93,8 +88,8 @@ static const char* default_server_key_file = "..\\certs\\key.pem";
 #define WSA_LAST_ERROR(x) ((long)(x))
 #endif
 
-static const char* default_server_cert_file = "certs/cert.pem";
-static const char* default_server_key_file = "certs/key.pem";
+#define SERVER_KEY_FILE = "certs/cert.pem";
+#define SERVER_KEY_FILE = "certs/key.pem";
 
 #endif
 
@@ -146,11 +141,11 @@ static char* strip_endofline(char* buf, size_t bufmax, char const* line)
 
 static void picoquic_set_key_log_file_from_env(picoquic_quic_t* quic)
 {
-    const char* keylog_filename;
+    char * keylog_filename = NULL;
     FILE* F = NULL;
 
 #ifdef _WINDOWS
-    size_t len;
+    size_t len; 
     errno_t err = _dupenv_s(&keylog_filename, &len, "SSLKEYLOGFILE");
 
     if (err == 0) {
@@ -1284,7 +1279,7 @@ void usage()
     fprintf(stderr, "  For the client mode, specify sever_name and port.\n");
     fprintf(stderr, "  For the server mode, use -p to specify the port.\n");
     fprintf(stderr, "Options:\n");
-    fprintf(stderr, "  -c file               cert file (default: %s)\n", default_server_cert_file);
+    fprintf(stderr, "  -c file               cert file (default: %s)\n", SERVER_CERT_FILE);
     fprintf(stderr, "  -e if                 Send on interface (default: -1)\n");
     fprintf(stderr, "                           -1: receiving interface\n");
     fprintf(stderr, "                            0: routing lookup\n");
@@ -1299,7 +1294,7 @@ void usage()
     fprintf(stderr, "                          where <src> is int:\n");
     fprintf(stderr, "                            0: picoquic_cnx_id_random\n");
     fprintf(stderr, "                            1: picoquic_cnx_id_remote (client)\n");
-    fprintf(stderr, "  -k file               key file (default: %s)\n", default_server_key_file);
+    fprintf(stderr, "  -k file               key file (default: %s)\n", SERVER_KEY_FILE);
     fprintf(stderr, "  -l file               Log file\n");
     fprintf(stderr, "  -p port               server port (default: %d)\n", default_server_port);
     fprintf(stderr, "  -m mtu_max            Largest mtu value that can be tried for discovery\n");
@@ -1313,6 +1308,7 @@ void usage()
     fprintf(stderr, "                        or restrict the server to draft-14 mode.\n");
     fprintf(stderr, "  -z                    Set TLS zero share behavior on client, to force HRR.\n");
     fprintf(stderr, "  -1                    Once\n");
+    fprintf(stderr, "  -S solution_dir       Set the path to the source files to find the default files\n");
     exit(1);
 }
 
@@ -1344,9 +1340,10 @@ static void cnx_id_callback(picoquic_connection_id_t cnx_id_local, picoquic_conn
 
 int main(int argc, char** argv)
 {
+    const char * solution_dir = NULL;
     const char* server_name = default_server_name;
-    const char* server_cert_file = default_server_cert_file;
-    const char* server_key_file = default_server_key_file;
+    const char* server_cert_file = NULL;
+    const char* server_key_file = NULL;
     const char* log_file = NULL;
     const char * sni = NULL;
     const char * alpn = NULL;
@@ -1379,7 +1376,7 @@ int main(int argc, char** argv)
 
     /* Get the parameters */
     int opt;
-    while ((opt = getopt(argc, argv, "c:k:p:u:v:1rhzf:i:s:e:l:m:n:a:t:")) != -1) {
+    while ((opt = getopt(argc, argv, "c:k:p:u:v:1rhzf:i:s:e:l:m:n:a:t:S:")) != -1) {
         switch (opt) {
         case 'c':
             server_cert_file = optarg;
@@ -1419,6 +1416,9 @@ int main(int argc, char** argv)
             reset_seed = reset_seed_x; /* replacing the original alloca, which is not supported in Windows or BSD */
             reset_seed[1] = strtoul(optarg, NULL, 0);
             reset_seed[0] = strtoul(argv[optind++], NULL, 0);
+            break;
+        case 'S':
+            solution_dir = optarg;
             break;
         case 'e':
             dest_if = atoi(optarg);
@@ -1495,6 +1495,19 @@ int main(int argc, char** argv)
 #endif
 
     if (is_client == 0) {
+        char default_server_cert_file[512];
+        char default_server_key_file[512];
+
+        if (server_cert_file == NULL &&
+            picoquic_get_input_path(default_server_cert_file, sizeof(default_server_cert_file), solution_dir, SERVER_CERT_FILE) == 0) {
+            server_cert_file = default_server_cert_file;
+        }
+
+        if (server_key_file == NULL &&
+            picoquic_get_input_path(default_server_key_file, sizeof(default_server_key_file), solution_dir, SERVER_KEY_FILE) == 0) {
+            server_key_file = default_server_cert_file;
+        }
+
         /* Run as server */
         printf("Starting PicoQUIC server on port %d, server name = %s, just_once = %d, hrr= %d\n",
             server_port, server_name, just_once, do_hrr);

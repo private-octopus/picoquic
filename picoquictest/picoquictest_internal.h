@@ -35,23 +35,19 @@ extern "C" {
 #define PICOQUIC_TEST_ALPN "picoquic-test"
 
 #ifdef _WINDOWS
-#ifdef _WINDOWS64
-#define PICOQUIC_TEST_SERVER_CERT "..\\..\\certs\\cert.pem"
-#define PICOQUIC_TEST_SERVER_BAD_CERT "..\\..\\certs\\badcert.pem"
-#define PICOQUIC_TEST_SERVER_KEY "..\\..\\certs\\key.pem"
-#define PICOQUIC_TEST_CERT_STORE "..\\..\\certs\\test-ca.crt"
+#define PICOQUIC_TEST_FILE_SERVER_CERT "certs\\cert.pem"
+#define PICOQUIC_TEST_FILE_SERVER_BAD_CERT "certs\\badcert.pem"
+#define PICOQUIC_TEST_FILE_SERVER_KEY "certs\\key.pem"
+#define PICOQUIC_TEST_FILE_CERT_STORE "certs\\test-ca.crt"
 #else
-#define PICOQUIC_TEST_SERVER_CERT "..\\certs\\cert.pem"
-#define PICOQUIC_TEST_SERVER_BAD_CERT "..\\certs\\badcert.pem"
-#define PICOQUIC_TEST_SERVER_KEY "..\\certs\\key.pem"
-#define PICOQUIC_TEST_CERT_STORE "..\\certs\\test-ca.crt"
+#define PICOQUIC_TEST_FILE_SERVER_CERT "certs/cert.pem"
+#define PICOQUIC_TEST_FILE_SERVER_BAD_CERT "certs/badcert.pem"
+#define PICOQUIC_TEST_FILE_SERVER_KEY "certs/key.pem"
+#define PICOQUIC_TEST_FILE_CERT_STORE "certs/test-ca.crt"
 #endif
-#else
-#define PICOQUIC_TEST_SERVER_CERT "certs/cert.pem"
-#define PICOQUIC_TEST_SERVER_BAD_CERT "certs/badcert.pem"
-#define PICOQUIC_TEST_SERVER_KEY "certs/key.pem"
-#define PICOQUIC_TEST_CERT_STORE "certs/test-ca.crt"
-#endif
+
+ /* To set the solution directory for tests */
+extern char const * picoquic_test_solution_dir;
 
 /* Really basic network simulator, only simulates a simple link using a
  * packet structure.

@@ -578,14 +578,35 @@ int packet_enc_dec_test()
     struct sockaddr_in test_addr_c;
     picoquic_cnx_t* cnx_client = NULL;
     picoquic_cnx_t* cnx_server = NULL;
-    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL, NULL,
-        NULL, NULL, NULL, 0, NULL, NULL, NULL, 0);
-    picoquic_quic_t* qserver = picoquic_create(8,
-        PICOQUIC_TEST_SERVER_CERT, PICOQUIC_TEST_SERVER_KEY, PICOQUIC_TEST_CERT_STORE, 
-        "test", NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, 0);
-    if (qclient == NULL || qserver == NULL) {
-        DBG_PRINTF("%s", "Could not create Quic contexts.\n");
-        ret = -1;
+    picoquic_quic_t* qclient = NULL;
+    picoquic_quic_t* qserver = NULL;
+    char test_server_cert_file[512];
+    char test_server_key_file[512];
+    char test_server_cert_store_file[512];
+
+    ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_SERVER_CERT);
+
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE);
+    }
+
+    if (ret != 0) {
+        DBG_PRINTF("%s", "Cannot set the cert, key or store file names.\n");
+    }
+    else {
+        qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL, NULL,
+            NULL, NULL, NULL, 0, NULL, NULL, NULL, 0);
+        qserver = picoquic_create(8,
+            test_server_cert_file, test_server_key_file, test_server_cert_store_file,
+            "test", NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, 0);
+        if (qclient == NULL || qserver == NULL) {
+            DBG_PRINTF("%s", "Could not create Quic contexts.\n");
+            ret = -1;
+        }
     }
 
     if (ret == 0) {

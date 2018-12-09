@@ -23,7 +23,7 @@
 #include "tls_api.h"
 #include "picoquictest_internal.h"
 #ifdef _WINDOWS
-#include "..\picoquic\wincompat.h"
+#include "wincompat.h"
 #endif
 #include <picotls.h>
 #include <stddef.h>
@@ -36,6 +36,8 @@
 #define PICOQUIC_TEST_ALPN "picoquic-test"
 #define PICOQUIC_TEST_WRONG_ALPN "picoquic-bla-bla"
 #define PICOQUIC_TEST_MAX_TEST_STREAMS 8
+
+char const * picoquic_test_solution_dir = NULL;
 
 static const uint8_t test_ticket_encrypt_key[32] = {
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
@@ -163,6 +165,11 @@ static test_api_stream_desc_t test_scenario_many_streams[] = {
     { 28, 0, 32, 700 },
     { 32, 0, 32, 1500 }
 };
+
+void picoquic_test_set_solution_dir(char const * solution_dir)
+{
+    picoquic_test_solution_dir = solution_dir;
+}
 
 static int test_api_init_stream_buffers(size_t len, uint8_t** src_bytes, uint8_t** rcv_bytes)
 {
@@ -615,6 +622,23 @@ static int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t propose
     int ret = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = (picoquic_test_tls_api_ctx_t*)
         malloc(sizeof(picoquic_test_tls_api_ctx_t));
+    char test_server_cert_file[512];
+    char test_server_key_file[512];
+    char test_server_cert_store_file[512];
+
+    ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_SERVER_CERT);
+
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE);
+    }
+
+    if (ret != 0) {
+        DBG_PRINTF("%s", "Cannot set the cert, key or store file names.\n");
+    }
 
     *pctx = test_ctx;
 
@@ -643,12 +667,12 @@ static int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t propose
         test_ctx->server_addr.sin_port = 4321;
 
         /* Test the creation of the client and server contexts */
-        test_ctx->qclient = picoquic_create(8, NULL, NULL, PICOQUIC_TEST_CERT_STORE, NULL, test_api_callback,
+        test_ctx->qclient = picoquic_create(8, NULL, NULL, test_server_cert_store_file, NULL, test_api_callback,
             (void*)&test_ctx->client_callback, NULL, NULL, NULL, *p_simulated_time,
             p_simulated_time, ticket_file_name, NULL, 0);
 
         test_ctx->qserver = picoquic_create(8,
-            PICOQUIC_TEST_SERVER_CERT, PICOQUIC_TEST_SERVER_KEY, PICOQUIC_TEST_CERT_STORE,
+            test_server_cert_file, test_server_key_file, test_server_cert_store_file,
             PICOQUIC_TEST_ALPN, test_api_callback, (void*)&test_ctx->server_callback, NULL, NULL, NULL,
             *p_simulated_time, p_simulated_time, NULL,
             (use_bad_crypt == 0) ? test_ticket_encrypt_key : test_ticket_badcrypt_key,
@@ -2347,7 +2371,26 @@ int bad_certificate_test()
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    char test_server_cert_file[512];
+    char test_server_key_file[512];
+    char test_server_cert_store_file[512];
     int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_SERVER_BAD_CERT);
+
+        if (ret == 0) {
+            ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY);
+        }
+
+        if (ret == 0) {
+            ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE);
+        }
+
+        if (ret != 0) {
+            DBG_PRINTF("%s", "Cannot set the cert, key or store file names.\n");
+        }
+    }
 
     /* Delete the server context, and recreate it with the bad certificate */
 
@@ -2358,7 +2401,7 @@ int bad_certificate_test()
         }
 
         test_ctx->qserver = picoquic_create(8,
-            PICOQUIC_TEST_SERVER_BAD_CERT, PICOQUIC_TEST_SERVER_KEY, PICOQUIC_TEST_CERT_STORE,
+            test_server_cert_file, test_server_key_file, test_server_cert_store_file,
             PICOQUIC_TEST_ALPN, test_api_callback, (void*)&test_ctx->server_callback, NULL, NULL, NULL,
             simulated_time, &simulated_time, NULL,
             test_ticket_encrypt_key, sizeof(test_ticket_encrypt_key));
@@ -2425,8 +2468,27 @@ int set_verify_certificate_callback_test()
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int call_count = 0;
+    char test_server_cert_file[512];
+    char test_server_key_file[512];
+    char test_server_cert_store_file[512];
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_SERVER_CERT);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE);
+    }
+
+    if (ret != 0) {
+        DBG_PRINTF("%s", "Cannot set the cert, key or store file names.\n");
+    }
 
     /* Delete the client context, and recreate with a certificate */
     if (ret == 0) {
@@ -2436,7 +2498,7 @@ int set_verify_certificate_callback_test()
         }
 
         test_ctx->qclient = picoquic_create(8,
-            PICOQUIC_TEST_SERVER_CERT, PICOQUIC_TEST_SERVER_KEY, PICOQUIC_TEST_CERT_STORE,
+            test_server_cert_file, test_server_key_file, test_server_cert_store_file,
             NULL, test_api_callback, (void*)&test_ctx->client_callback, NULL, NULL, NULL,
             simulated_time, &simulated_time, NULL, NULL, 0);
 
@@ -2504,40 +2566,52 @@ int virtual_time_test()
     uint64_t current_time = picoquic_current_time();
     uint64_t ptls_time = 0;
     uint8_t callback_ctx[256];
+    char test_server_cert_store_file[512];
+    picoquic_quic_t * qsimul = NULL;
+    picoquic_quic_t * qdirect = NULL;
 
+    ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE);
 
-    picoquic_quic_t * qsimul = picoquic_create(8, NULL, NULL, PICOQUIC_TEST_CERT_STORE, 
-        NULL, test_api_callback,
-        (void*)callback_ctx, NULL, NULL, NULL, simulated_time,
-        &simulated_time, ticket_file_name, NULL, 0);
-    picoquic_quic_t * qdirect = picoquic_create(8, NULL, NULL, PICOQUIC_TEST_CERT_STORE, 
-        NULL, test_api_callback,
-        (void*)callback_ctx, NULL, NULL, NULL, current_time,
-        NULL, ticket_file_name, NULL, 0);
-
-    if (qsimul == NULL || qdirect == NULL)
-    {
-        ret = -1;
+    if (ret != 0) {
+        DBG_PRINTF("%s", "Cannot set the cert, key or store file names.\n");
     }
-    else
-    {
-        /* Check that the simulated time follows the simulation */
-        for (int i = 0; ret == 0 && i < 5; i++) {
-            simulated_time += 12345678;
-            test_time = picoquic_get_quic_time(qsimul);
-            ptls_time = picoquic_get_tls_time(qsimul);
-            if (test_time != simulated_time) {
-                DBG_PRINTF("Test time: %llu != Simulated: %llu",
-                    (unsigned long long)test_time,
-                    (unsigned long long)simulated_time);
-                ret = -1;
-            } else if (ptls_time < (test_time / 1000) || ptls_time >(test_time / 1000) + 1) {
-                DBG_PRINTF("Test time: %llu does match ptls time: %llu",
-                    (unsigned long long)test_time,
-                    (unsigned long long)ptls_time);
-                ret = -1;
+    else {
+
+        qsimul = picoquic_create(8, NULL, NULL, test_server_cert_store_file,
+            NULL, test_api_callback,
+            (void*)callback_ctx, NULL, NULL, NULL, simulated_time,
+            &simulated_time, ticket_file_name, NULL, 0);
+        qdirect = picoquic_create(8, NULL, NULL, PICOQUIC_TEST_FILE_CERT_STORE,
+            NULL, test_api_callback,
+            (void*)callback_ctx, NULL, NULL, NULL, current_time,
+            NULL, ticket_file_name, NULL, 0);
+
+        if (qsimul == NULL || qdirect == NULL)
+        {
+            ret = -1;
+        }
+        else
+        {
+            /* Check that the simulated time follows the simulation */
+            for (int i = 0; ret == 0 && i < 5; i++) {
+                simulated_time += 12345678;
+                test_time = picoquic_get_quic_time(qsimul);
+                ptls_time = picoquic_get_tls_time(qsimul);
+                if (test_time != simulated_time) {
+                    DBG_PRINTF("Test time: %llu != Simulated: %llu",
+                        (unsigned long long)test_time,
+                        (unsigned long long)simulated_time);
+                    ret = -1;
+                }
+                else if (ptls_time < (test_time / 1000) || ptls_time >(test_time / 1000) + 1) {
+                    DBG_PRINTF("Test time: %llu does match ptls time: %llu",
+                        (unsigned long long)test_time,
+                        (unsigned long long)ptls_time);
+                    ret = -1;
+                }
             }
         }
+
         /* Check that the non simulated time follows the current time */
         for (int i = 0; ret == 0 && i < 5; i++) {
 #ifdef _WINDOWS
@@ -2562,7 +2636,8 @@ int virtual_time_test()
                         (unsigned long long)test_time,
                         (unsigned long long)current_time);
                     ret = -1;
-                } else if (ptls_time < (test_time / 1000) || ptls_time >(test_time / 1000) + 1) {
+                }
+                else if (ptls_time < (test_time / 1000) || ptls_time >(test_time / 1000) + 1) {
                     DBG_PRINTF("Test current time: %llu does match ptls time: %llu",
                         (unsigned long long)test_time,
                         (unsigned long long)ptls_time);
@@ -2629,7 +2704,26 @@ int set_certificate_and_key_test()
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    char test_server_cert_file[512];
+    char test_server_key_file[512];
+    char test_server_cert_store_file[512];
     int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_SERVER_CERT);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE);
+    }
+
+    if (ret != 0) {
+        DBG_PRINTF("%s", "Cannot set the cert, key or store file names.\n");
+    }
 
     /* Delete the server context, and recreate it. */
     if (ret == 0)
@@ -2649,7 +2743,7 @@ int set_certificate_and_key_test()
         }
 
         if (ret == 0) {
-            BIO* bio_key = BIO_new_file(PICOQUIC_TEST_SERVER_KEY, "rb");
+            BIO* bio_key = BIO_new_file(test_server_key_file, "rb");
             /* Load key and convert to DER */
             EVP_PKEY* key = PEM_read_bio_PrivateKey(bio_key, NULL, NULL, NULL);
             int length = i2d_PrivateKey(key, NULL);
@@ -2665,7 +2759,7 @@ int set_certificate_and_key_test()
         }
 
         if (ret == 0) {
-            BIO* bio_key = BIO_new_file(PICOQUIC_TEST_SERVER_CERT, "rb");
+            BIO* bio_key = BIO_new_file(test_server_cert_file, "rb");
             /* Load cert and convert to DER */
             X509* cert = PEM_read_bio_X509(bio_key, NULL, NULL, NULL);
             int length = i2d_X509(cert, NULL);
@@ -2686,7 +2780,7 @@ int set_certificate_and_key_test()
         }
 
         if (ret == 0) {
-            BIO* bio_key = BIO_new_file(PICOQUIC_TEST_CERT_STORE, "rb");
+            BIO* bio_key = BIO_new_file(test_server_cert_store_file, "rb");
             /* Load cert and convert to DER */
             X509* cert = PEM_read_bio_X509(bio_key, NULL, NULL, NULL);
             int length = i2d_X509(cert, NULL);
@@ -2729,7 +2823,25 @@ int request_client_authentication_test()
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+    char test_server_cert_file[512];
+    char test_server_key_file[512];
+    char test_server_cert_store_file[512];
+    int ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_SERVER_CERT);
+
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE);
+    }
+
+    if (ret != 0) {
+        DBG_PRINTF("%s", "Cannot set the cert, key or store file names.\n");
+    }
+    else {
+        ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+    }
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
@@ -2744,7 +2856,7 @@ int request_client_authentication_test()
         }
 
         test_ctx->qclient = picoquic_create(8,
-            PICOQUIC_TEST_SERVER_CERT, PICOQUIC_TEST_SERVER_KEY, PICOQUIC_TEST_CERT_STORE,
+            test_server_cert_file, test_server_key_file, test_server_cert_store_file,
             NULL, test_api_callback, (void*)&test_ctx->client_callback, NULL, NULL, NULL,
             simulated_time, &simulated_time, NULL, NULL, 0);
 
@@ -2799,7 +2911,29 @@ int bad_client_certificate_test()
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+    char test_server_cert_file[512];
+    char test_server_key_file[512];
+    char test_server_cert_store_file[512];
+    int ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_SERVER_BAD_CERT);
+
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE);
+    }
+
+    if (ret != 0) {
+        DBG_PRINTF("%s", "Cannot set the cert, key or store file names.\n");
+    }
+    else {
+        ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+    }
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
 
     /* Delete the client context, and recreate with a certificate */
     if (ret == 0)
@@ -2810,7 +2944,7 @@ int bad_client_certificate_test()
         }
 
         test_ctx->qclient = picoquic_create(8,
-            PICOQUIC_TEST_SERVER_BAD_CERT, PICOQUIC_TEST_SERVER_KEY, PICOQUIC_TEST_CERT_STORE,
+            test_server_cert_file, test_server_key_file, test_server_cert_store_file,
             NULL, test_api_callback, (void*)&test_ctx->client_callback, NULL, NULL, NULL,
             simulated_time, &simulated_time, NULL, NULL, 0);
 
@@ -4928,13 +5062,9 @@ int padding_test()
  * and verifying that the log file is what we expect.
  */
 #ifdef _WINDOWS
-#ifndef _WINDOWS64
-static char const* packet_trace_test_ref = "..\\picoquictest\\packet_trace_ref.txt";
+#define PACKET_TRACE_TEST_REF "picoquictest\\packet_trace_ref.txt"
 #else
-static char const* packet_trace_test_ref = "..\\..\\picoquictest\\packet_trace_ref.txt";
-#endif
-#else
-static char const* packet_trace_test_ref = "picoquictest/packet_trace_ref.txt";
+#define PACKET_TRACE_TEST_REF "picoquictest/packet_trace_ref.txt"
 #endif
 
 int packet_trace_test()
@@ -4999,7 +5129,16 @@ int packet_trace_test()
     /* compare the log file to the expected value */
     if (ret == 0)
     {
-        ret = picoquic_test_compare_files(trace_file_name, packet_trace_test_ref);
+        char packet_trace_test_ref[512];
+
+        ret = picoquic_get_input_path(packet_trace_test_ref, sizeof(packet_trace_test_ref), picoquic_test_solution_dir, PACKET_TRACE_TEST_REF);
+
+        if (ret != 0) {
+            DBG_PRINTF("%s", "Cannot set the packet trace test ref file name.\n");
+        }
+        else {
+            ret = picoquic_test_compare_files(trace_file_name, packet_trace_test_ref);
+        }
     }
 
     return ret;

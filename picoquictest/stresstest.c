@@ -23,7 +23,7 @@
 #include "tls_api.h"
 #include "picoquictest_internal.h"
 #ifdef _WINDOWS
-#include "..\picoquic\wincompat.h"
+#include "wincompat.h"
 #else
 #include <signal.h>
 #endif
@@ -844,12 +844,22 @@ static int stress_create_client_context(int client_index, picoquic_stress_ctx_t 
 
     if (ret == 0) {
         /* Create the quic context for this client*/
-        ctx->qclient = picoquic_create(8, NULL, NULL, PICOQUIC_TEST_CERT_STORE, NULL, NULL,
-            NULL, NULL, NULL, NULL, stress_ctx->simulated_time, &stress_ctx->simulated_time,
-            ctx->ticket_file_name, NULL, 0);
-        if (ctx->qclient == NULL) {
-            DBG_PRINTF("Cannot create the quic client #%d.\n", (int)client_index);
-            ret = -1;
+        char test_server_cert_store_file[512];
+        if (ret == 0) {
+            ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE);
+        }
+
+        if (ret != 0) {
+            DBG_PRINTF("%s", "Cannot set the cert store file name.\n");
+        }
+        else {
+            ctx->qclient = picoquic_create(8, NULL, NULL, test_server_cert_store_file, NULL, NULL,
+                NULL, NULL, NULL, NULL, stress_ctx->simulated_time, &stress_ctx->simulated_time,
+                ctx->ticket_file_name, NULL, 0);
+            if (ctx->qclient == NULL) {
+                DBG_PRINTF("Cannot create the quic client #%d.\n", (int)client_index);
+                ret = -1;
+            }
         }
     }
 
@@ -912,21 +922,40 @@ static int stress_or_fuzz_test(picoquic_fuzz_fn fuzz_fn, void * fuzz_ctx, uint64
             stress_ctx.nb_clients, PICOQUIC_MAX_STRESS_CLIENTS);
         ret = -1;
     } else {
-        stress_ctx.qserver = picoquic_create(PICOQUIC_MAX_STRESS_CLIENTS,
-            PICOQUIC_TEST_SERVER_CERT, PICOQUIC_TEST_SERVER_KEY, PICOQUIC_TEST_CERT_STORE,
-            PICOQUIC_TEST_ALPN, stress_server_callback, NULL, NULL, NULL, NULL,
-            stress_ctx.simulated_time, &stress_ctx.simulated_time, NULL,
-            stress_ticket_encrypt_key, sizeof(stress_ticket_encrypt_key));
+        char test_server_cert_file[512];
+        char test_server_key_file[512];
+        char test_server_cert_store_file[512];
 
-        if (stress_ctx.qserver == NULL) {
-            DBG_PRINTF("%s", "Cannot create the test server.\n");
-            ret = -1;
+        ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_SERVER_CERT);
+
+        if (ret == 0) {
+            ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY);
+        }
+
+        if (ret == 0) {
+            ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE);
+        }
+
+        if (ret != 0) {
+            DBG_PRINTF("%s", "Cannot set the cert, key or store file names.\n");
         }
         else {
-            for (int i = 0; ret == 0 && i < stress_ctx.nb_clients; i++) {
-                ret = stress_create_client_context(i, &stress_ctx);
-                if (ret == 0 && fuzz_fn != NULL) {
-                    picoquic_set_fuzz(stress_ctx.c_ctx[i]->qclient, fuzz_fn, fuzz_ctx);
+            stress_ctx.qserver = picoquic_create(PICOQUIC_MAX_STRESS_CLIENTS,
+                test_server_cert_file, test_server_key_file, test_server_cert_store_file,
+                PICOQUIC_TEST_ALPN, stress_server_callback, NULL, NULL, NULL, NULL,
+                stress_ctx.simulated_time, &stress_ctx.simulated_time, NULL,
+                stress_ticket_encrypt_key, sizeof(stress_ticket_encrypt_key));
+
+            if (stress_ctx.qserver == NULL) {
+                DBG_PRINTF("%s", "Cannot create the test server.\n");
+                ret = -1;
+            }
+            else {
+                for (int i = 0; ret == 0 && i < stress_ctx.nb_clients; i++) {
+                    ret = stress_create_client_context(i, &stress_ctx);
+                    if (ret == 0 && fuzz_fn != NULL) {
+                        picoquic_set_fuzz(stress_ctx.c_ctx[i]->qclient, fuzz_fn, fuzz_ctx);
+                    }
                 }
             }
         }
