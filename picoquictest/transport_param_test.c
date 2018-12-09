@@ -22,9 +22,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../picoquic/picoquic_internal.h"
-#include "../picoquic/util.h"
-#include "../picoquic/tls_api.h"
+#include "picoquic_internal.h"
+#include "util.h"
+#include "tls_api.h"
 #include "picoquictest_internal.h"
 
 /* The transport parameter tests operate by comparing the decoding of test vectors
@@ -463,23 +463,45 @@ int transport_param_set_contexts(picoquic_quic_t ** quic_ctx, picoquic_cnx_t ** 
     picoquic_connection_id_t initial_cnx_id = { { 1, 2, 3, 4, 5, 6, 7, 8, 0, 0, 0, 0, 0, 0, 0, 0 }, 8 };
     picoquic_connection_id_t remote_cnx_id = { { 0, 1, 2, 3, 4, 5, 6, 7,  0, 0, 0, 0, 0, 0, 0, 0 }, 8 };
     struct sockaddr_in addr;
+    char test_server_cert_file[512];
+    char test_server_key_file[512];
+    char test_server_cert_store_file[512];
 
-    memset(&addr, 0, sizeof(struct sockaddr_in));
-    addr.sin_family = AF_INET;
-
+    *quic_ctx = NULL;
     *test_cnx = NULL;
-    *quic_ctx = picoquic_create(8,
-        PICOQUIC_TEST_SERVER_CERT, PICOQUIC_TEST_SERVER_KEY, PICOQUIC_TEST_CERT_STORE,
-        PICOQUIC_TEST_ALPN, NULL, NULL, NULL, NULL, NULL,
-        *p_simulated_time, p_simulated_time, NULL, NULL, 1);
 
-    if (*quic_ctx != NULL) {
-        *test_cnx = picoquic_create_cnx(*quic_ctx, initial_cnx_id, remote_cnx_id,
-            (struct sockaddr*) &addr, 0, 0, "sni", "alpn", (mode==0)?1:0);
+    ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_SERVER_CERT);
+
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY);
     }
 
-    if (*quic_ctx == NULL || *test_cnx == NULL) {
-        ret = -1;
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE);
+    }
+
+    if (ret != 0) {
+        DBG_PRINTF("%s", "Cannot set the cert, key or store file names.\n");
+    }
+    else {
+
+        memset(&addr, 0, sizeof(struct sockaddr_in));
+        addr.sin_family = AF_INET;
+
+        *quic_ctx = picoquic_create(8,
+            test_server_cert_file, test_server_key_file, test_server_cert_store_file,
+            PICOQUIC_TEST_ALPN, NULL, NULL, NULL, NULL, NULL,
+            *p_simulated_time, p_simulated_time, NULL, NULL, 1);
+
+
+        if (*quic_ctx != NULL) {
+            *test_cnx = picoquic_create_cnx(*quic_ctx, initial_cnx_id, remote_cnx_id,
+                (struct sockaddr*) &addr, 0, 0, "sni", "alpn", (mode == 0) ? 1 : 0);
+        }
+
+        if (*quic_ctx == NULL || *test_cnx == NULL) {
+            ret = -1;
+        }
     }
 
     return ret;
@@ -839,13 +861,9 @@ static char const* log_tp_test_file = "log_tp_test.txt";
 static char const* log_tp_fuzz_file = "log_tp_fuzz_test.txt";
 
 #ifdef _WINDOWS
-#ifndef _WINDOWS64
-static char const* log_tp_test_ref = "..\\picoquictest\\log_tp_test_ref.txt";
+#define LOG_TP_TEST_REF "picoquictest\\log_tp_test_ref.txt"
 #else
-static char const* log_tp_test_ref = "..\\..\\picoquictest\\log_tp_test_ref.txt";
-#endif
-#else
-static char const* log_tp_test_ref = "picoquictest/log_tp_test_ref.txt";
+#define LOG_TP_TEST_REF "picoquictest/log_tp_test_ref.txt"
 #endif
 
 void picoquic_log_transport_extension_content(FILE* F, int log_cnxid, uint64_t cnx_id_64,
@@ -952,7 +970,15 @@ int transport_param_log_test()
 
     if (ret == 0)
     {
-        ret = picoquic_test_compare_files(log_tp_test_file, log_tp_test_ref);
+        char log_tp_test_ref[512];
+
+        ret = picoquic_get_input_path(log_tp_test_ref, sizeof(log_tp_test_ref), picoquic_test_solution_dir, LOG_TP_TEST_REF);
+
+        if (ret != 0) {
+            DBG_PRINTF("%s", "Cannot set the log TP ref file name.\n");
+        } else {
+            ret = picoquic_test_compare_files(log_tp_test_file, log_tp_test_ref);
+        }
     }
 
     if (ret == 0)

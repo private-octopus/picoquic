@@ -21,7 +21,7 @@
 
 #include "stdafx.h"
 #include "CppUnitTest.h"
-#include "../picoquictest/picoquictest.h"
+#include "picoquictest/picoquictest.h"
 
 using namespace Microsoft::VisualStudio::CppUnitTestFramework;
 

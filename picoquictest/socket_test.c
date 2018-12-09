@@ -19,8 +19,8 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "../picoquic/picosocks.h"
-#include "../picoquic/util.h"
+#include "picosocks.h"
+#include "util.h"
 
 static int socket_ping_pong(SOCKET_TYPE fd, struct sockaddr* server_addr, int server_address_length,
     picoquic_server_sockets_t* server_sockets)

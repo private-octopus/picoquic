@@ -19,11 +19,11 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 #ifdef _WINDOWS
-#include "../picoquicfirst/getopt.h"
+#include "getopt.h"
 #endif
-#include "../picoquic/picoquic.h"
-#include "../picoquic/util.h"
-#include "../picoquictest/picoquictest.h"
+#include "picoquic.h"
+#include "util.h"
+#include "picoquictest.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -191,11 +191,12 @@ int usage(char const * argv0)
         fprintf(stderr, "\n");
     }
     fprintf(stderr, "Options: \n");
-    fprintf(stderr, "  -x test        Do not run the specified test.\n");
-    fprintf(stderr, "  -s nnn         Run stress for nnn minutes.\n");
-    fprintf(stderr, "  -f nnn         Run fuzz for nnn minutes.\n");
-    fprintf(stderr, "  -n             Disable debug prints.\n");
-    fprintf(stderr, "  -h             Print this help message\n");
+    fprintf(stderr, "  -x test           Do not run the specified test.\n");
+    fprintf(stderr, "  -s nnn            Run stress for nnn minutes.\n");
+    fprintf(stderr, "  -f nnn            Run fuzz for nnn minutes.\n");
+    fprintf(stderr, "  -n                Disable debug prints.\n");
+    fprintf(stderr, "  -h                Print this help message\n");
+    fprintf(stderr, "  -S solution_dir   Set the path to the source files to find the default files\n");
 
     return -1;
 }
@@ -233,7 +234,7 @@ int main(int argc, char** argv)
     }
     else
     {
-        while (ret == 0 && (opt = getopt(argc, argv, "f:s:x:nh")) != -1) {
+        while (ret == 0 && (opt = getopt(argc, argv, "f:s:S:x:nh")) != -1) {
             switch (opt) {
             case 'x': {
                 int test_number = get_test_number(optarg);
@@ -263,6 +264,9 @@ int main(int argc, char** argv)
                     fprintf(stderr, "Incorrect stress minutes: %s\n", optarg);
                     ret = usage(argv[0]);
                 }
+                break;
+            case 'S':
+                picoquic_test_set_solution_dir(optarg);
                 break;
             case 'n':
                 disable_debug = 1;
