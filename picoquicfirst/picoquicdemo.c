@@ -148,6 +148,10 @@ static void picoquic_set_key_log_file_from_env(picoquic_quic_t* quic)
     size_t len; 
     errno_t err = _dupenv_s(&keylog_filename, &len, "SSLKEYLOGFILE");
 
+    if (keylog_filename == NULL) {
+        return;
+    }
+
     if (err == 0) {
         err = fopen_s(&F, keylog_filename, "a");
 
@@ -1505,7 +1509,7 @@ int main(int argc, char** argv)
 
         if (server_key_file == NULL &&
             picoquic_get_input_path(default_server_key_file, sizeof(default_server_key_file), solution_dir, SERVER_KEY_FILE) == 0) {
-            server_key_file = default_server_cert_file;
+            server_key_file = default_server_key_file;
         }
 
         /* Run as server */

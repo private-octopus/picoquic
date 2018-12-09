@@ -819,6 +819,11 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
 {
     picoquic_path_t * path_x = cnx->path[path_index];
     picoquic_packet_t* p = NULL;
+
+    DBG_PRINTF("delete path[%d] (%x)\n", path_index, path_x);
+    if (cnx->quic->F_log != NULL) {
+        fflush(cnx->quic->F_log);
+    }
         
     /* Remove old path data from retransmit queue */
     for (picoquic_packet_context_enum pc = 0; pc < picoquic_nb_packet_context; pc++)
@@ -827,6 +832,7 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
 
         while (p != NULL) {
             if (p->send_path == path_x) {
+                DBG_PRINTF("Erase path for packet pc: %d, seq:%d\n", pc, p->sequence_number);
                 p->send_path = NULL;
             }
             p = p->next_packet;
@@ -835,6 +841,7 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
         p = cnx->pkt_ctx[pc].retransmitted_newest;
         while (p != NULL) {
             if (p->send_path == path_x) {
+                DBG_PRINTF("Erase path for old packet pc: %d, seq:%d\n", pc, p->sequence_number);
                 p->send_path = NULL;
             }
             p = p->next_packet;
