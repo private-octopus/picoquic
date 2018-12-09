@@ -1266,7 +1266,6 @@ int tls_api_one_scenario_init(
     uint32_t proposed_version,
     picoquic_tp_t * client_params, picoquic_tp_t * server_params)
 {
-    uint64_t loss_mask = 0;
     int ret = tls_api_init_ctx(p_test_ctx,
         (proposed_version == 0) ? PICOQUIC_INTERNAL_TEST_VERSION_1 : proposed_version,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, simulated_time, NULL, 0, 1, 0);
