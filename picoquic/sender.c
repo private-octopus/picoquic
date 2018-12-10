@@ -2482,7 +2482,8 @@ int picoquic_prepare_segment(picoquic_cnx_t* cnx, picoquic_path_t * path_x, pico
 /* Prepare next probe if one is needed, returns send_length == 0 if none necessary */
 int picoquic_prepare_probe(picoquic_cnx_t* cnx,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
-    struct sockaddr ** p_addr_to, int * to_len, struct sockaddr ** p_addr_from, int * from_len, struct sockaddr ** addr_to_log)
+    struct sockaddr ** p_addr_to, int * to_len, struct sockaddr ** p_addr_from, int * from_len, struct sockaddr ** addr_to_log,
+    uint64_t * next_wake_time)
 {
     int ret = 0;
 
@@ -2498,13 +2499,18 @@ int picoquic_prepare_probe(picoquic_cnx_t* cnx,
         picoquic_packet_t * packet = NULL;
 
         while (probe != NULL) {
-            if (!probe->challenge_failed && !probe->challenge_verified &&
-                (probe->challenge_required ||
-                    current_time >= probe->challenge_time + cnx->path[0]->retransmit_timer)) {
-                if (probe->challenge_repeat_count >= PICOQUIC_CHALLENGE_REPEAT_MAX) {
-                    probe->challenge_failed = 1;
-                } else {
-                    break;
+            if (!probe->challenge_failed && !probe->challenge_verified){
+                uint64_t next_probe_time = probe->challenge_time + cnx->path[0]->retransmit_timer;
+                if (probe->challenge_required || current_time >= next_probe_time) {
+                    if (probe->challenge_repeat_count >= PICOQUIC_CHALLENGE_REPEAT_MAX) {
+                        probe->challenge_failed = 1;
+                    }
+                    else {
+                        break;
+                    }
+                }
+                else if (next_probe_time < *next_wake_time) {
+                    *next_wake_time = next_probe_time;
                 }
             }
             probe = probe->next_probe;
@@ -2598,9 +2604,6 @@ int picoquic_prepare_probe(picoquic_cnx_t* cnx,
                     ret, length, header_length, checksum_overhead,
                     send_length, send_buffer, (uint32_t)send_buffer_max,
                     &probe->remote_cnxid, &cnx->path[0]->local_cnxid, cnx->path[0], current_time);
-
-                /* Keep the connection alive */
-                picoquic_reinsert_by_wake_time(cnx->quic, cnx, current_time);
             }
         }
     }
@@ -2630,7 +2633,7 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
 
     /* If probes are in waiting, send the first one */
     ret = picoquic_prepare_probe(cnx, current_time, send_buffer, send_buffer_max, send_length,
-        p_addr_to, to_len, p_addr_from, from_len, &addr_to_log);
+        p_addr_to, to_len, p_addr_from, from_len, &addr_to_log, &next_wake_time);
 
     if (ret == 0 && *send_length == 0) {
         /* Select the path */
@@ -2645,11 +2648,16 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
                 break;
             }
             else if (path_x == NULL && cnx->path[i]->path_is_activated &&
-                (cnx->path[i]->challenge_required &&
-                    (cnx->path[i]->challenge_repeat_count == 0 ||
-                    current_time >= (cnx->path[i]->challenge_time + cnx->path[i]->retransmit_timer)))) {
-                /* will try this path, unless a validated path came in */
-                path_x = cnx->path[i];
+                cnx->path[i]->challenge_required) {
+                uint64_t next_challenge_time = (cnx->path[i]->challenge_time + cnx->path[i]->retransmit_timer);
+                if (cnx->path[i]->challenge_repeat_count == 0 ||
+                    current_time >= next_challenge_time) {
+                    /* will try this path, unless a validated path came in */
+                    path_x = cnx->path[i];
+                }
+                else if (next_challenge_time < next_wake_time) {
+                    next_wake_time = next_challenge_time;
+                }
             }
         }
 
