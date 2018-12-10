@@ -1906,6 +1906,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
 
             if (current_time >= exit_time) {
                 cnx->cnx_state = picoquic_state_disconnected;
+                *next_wake_time = current_time;
             }
             else if (current_time >= cnx->next_wake_time) {
                 uint64_t delta_t = path_x->rtt_min;
@@ -1955,6 +1956,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
 
             if (current_time >= exit_time) {
                 cnx->cnx_state = picoquic_state_disconnected;
+                *next_wake_time = current_time;
             }
             else {
                 *next_wake_time = exit_time;
@@ -2003,6 +2005,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
 
             if (cnx->cnx_state == picoquic_state_handshake_failure) {
                 cnx->cnx_state = picoquic_state_disconnected;
+                *next_wake_time = current_time;
             }
             else {
                 cnx->cnx_state = picoquic_state_closing;
@@ -2728,7 +2731,7 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     }
 
     /* Update the wake up time for the connection */
-    if (*send_length > 0) {
+    if (*send_length > 0 || cnx->cnx_state == picoquic_state_disconnected ) {
         next_wake_time = current_time;
     }
     
