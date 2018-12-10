@@ -840,10 +840,11 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
 
     /* TODO: while packets are pure ACK, drop them from retransmit queue */
     while (p != NULL) {
+        picoquic_path_t * old_path = p->send_path; /* should be the path on which the packet was transmitted */
         int should_retransmit = 0;
         int timer_based_retransmit = 0;
         uint64_t lost_packet_number = p->sequence_number;
-        picoquic_packet_t* p_next = p->next_packet;
+        picoquic_packet_t* p_next = p->previous_packet;
         uint8_t * new_bytes = packet->bytes;
         int ret = 0;
 
@@ -872,11 +873,11 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
             size_t frame_length = 0;
             size_t byte_index = 0; /* Used when parsing the old packet */
             size_t checksum_length = 0;
-            /* should be the path on which the packet was transmitted */
-            picoquic_path_t * old_path = p->send_path;
 
-	    /* we'll report it where it got lost */
-	    if (old_path) old_path->retrans_count++;
+	        /* we'll report it where it got lost */
+            if (old_path) {
+                old_path->retrans_count++;
+            }
 
             *header_length = 0;
 
@@ -934,10 +935,12 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                     *is_cleartext_mode = 1;
                 }
 
-                if (old_path != NULL && (p->length + p->checksum_overhead) > old_path->send_mtu) {
-                    /* MTU probe was lost, presumably because of packet too big */
-                    old_path->mtu_probe_sent = 0;
-                    old_path->send_mtu_max_tried = (uint32_t)(p->length + p->checksum_overhead);
+                if (packet->is_mtu_probe) {
+                    if (old_path != NULL) {
+                        /* MTU probe was lost, presumably because of packet too big */
+                        old_path->mtu_probe_sent = 0;
+                        old_path->send_mtu_max_tried = (uint32_t)(p->length + p->checksum_overhead);
+                    }
                     /* MTU probes should not be retransmitted */
                     packet_is_pure_ack = 1;
                     do_not_detect_spurious = 0;
@@ -1017,12 +1020,11 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                         packet->length = length;
                         cnx->nb_retransmission_total++;
 
-                        /* TODO: understand why we need to check for exact path value, instead of NULL */
-                        if (cnx->congestion_alg != NULL && old_path == cnx->path[0]) {
+                        if (cnx->congestion_alg != NULL && old_path != NULL) {
                             cnx->congestion_alg->alg_notify(old_path,
                                 (timer_based_retransmit == 0) ? picoquic_congestion_notification_repeat : picoquic_congestion_notification_timeout,
                                 0, 0, lost_packet_number, current_time);
-                        }
+                        } 
 
                         break;
                     }
@@ -2357,6 +2359,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                         length = picoquic_prepare_mtu_probe(cnx, path_x, header_length, checksum_overhead, bytes);
                         packet->length = length;
                         packet->send_path = path_x;
+                        packet->is_mtu_probe = 1;
                         path_x->mtu_probe_sent = 1;
                         is_pure_ack = 0;
                     }

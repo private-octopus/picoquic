@@ -828,7 +828,7 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
     /* Remove old path data from retransmit queue */
     for (picoquic_packet_context_enum pc = 0; pc < picoquic_nb_packet_context; pc++)
     {
-        p = cnx->pkt_ctx[pc].retransmit_oldest;
+        p = cnx->pkt_ctx[pc].retransmit_newest;
 
         while (p != NULL) {
             if (p->send_path == path_x) {

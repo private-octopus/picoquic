@@ -905,7 +905,6 @@ int quic_client_migrate(picoquic_cnx_t * cnx, SOCKET_TYPE * fd, struct sockaddr 
                 {
                     fprintf(F_log, "Switch to new port, sending probe.\n");
                 }
-                cnx->path[0]->path_is_demoted = 1;
             }
         }
     }

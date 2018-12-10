@@ -1646,8 +1646,7 @@ static int picoquic_process_ack_range(
                 picoquic_packet_t* next = p->next_packet;
                 picoquic_path_t * old_path = p->send_path;
 
-                /* TODO: understand why we need this check, instead of just a check for NULL */
-                if (old_path == cnx->path[0]) {
+                if (old_path != NULL) {
                     if (cnx->congestion_alg != NULL) {
                         cnx->congestion_alg->alg_notify(old_path,
                             picoquic_congestion_notification_acknowledgement,
@@ -1661,6 +1660,7 @@ static int picoquic_process_ack_range(
                         old_path->mtu_probe_sent = 0;
                     }
                 }
+
                 /* If the packet contained an ACK frame, perform the ACK of ACK pruning logic */
                 picoquic_process_possible_ack_of_ack_frame(cnx, p);
 
