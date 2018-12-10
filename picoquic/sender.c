@@ -1148,52 +1148,6 @@ uint32_t picoquic_prepare_mtu_probe(picoquic_cnx_t* cnx,
     return probe_length - checksum_length;
 }
 
-static uint64_t picoquic_get_challenge_wake_time(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t next_wake_time)
-{
-    picoquic_probe_t * probe = cnx->probe_first;
-
-    /* Consider demotions */
-    for (int i = 0; next_wake_time > current_time && i < cnx->nb_paths; i++) {
-        if (cnx->path[i]->path_is_demoted) {
-            if (cnx->path[i]->demotion_time < next_wake_time) {
-                next_wake_time = cnx->path[i]->demotion_time;
-            }
-        }
-        else {
-            if (cnx->path[i]->response_required) {
-                next_wake_time = current_time;
-                break;
-            }
-
-            if (cnx->path[i]->challenge_verified == 0 && cnx->path[i]->path_is_activated) {
-                uint64_t next_challenge_time = cnx->path[i]->challenge_time + cnx->path[i]->retransmit_timer;
-
-                if (next_challenge_time < next_wake_time) {
-                    next_wake_time = next_challenge_time;
-                }
-            }
-        }
-    }
-
-    /* Consider probe timers */
-    while (probe != NULL && next_wake_time > current_time) {
-        if (probe->challenge_verified == 0) {
-            uint64_t next_challenge_time = probe->challenge_time + cnx->path[0]->retransmit_timer;
-
-            if (next_challenge_time <= next_wake_time) {
-                next_wake_time = next_challenge_time;
-            }
-        }
-        probe = probe->next_probe;
-    }
-
-    if (next_wake_time < current_time) {
-        next_wake_time = current_time;
-    }
-
-    return next_wake_time;
-}
-
 /* Prepare the next packet to 0-RTT packet to send in the client initial
  * state, when 0-RTT is available
  */
@@ -2406,9 +2360,6 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
             picoquic_cc_dump(cnx, current_time);
         }
     }
-    else {
-        *next_wake_time = picoquic_get_challenge_wake_time(cnx, current_time, *next_wake_time);
-    }
 
     return ret;
 }
@@ -2626,7 +2577,7 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     *send_length = 0;
 
     /* Remove delete paths */
-    picoquic_delete_abandoned_paths(cnx, current_time);
+    picoquic_delete_abandoned_paths(cnx, current_time, &next_wake_time);
 
     /* Remove failed probes */
     picoquic_delete_failed_probes(cnx);
