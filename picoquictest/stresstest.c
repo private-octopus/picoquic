@@ -863,8 +863,12 @@ static int stress_create_client_context(int client_index, picoquic_stress_ctx_t 
     }
     if (ret == 0) {
         /* initialize the simulation links from client to server and back. */
-        ctx->c_to_s_link = picoquictest_sim_link_create(0.01, 10000, 0, 0, 0);
-        ctx->s_to_c_link = picoquictest_sim_link_create(0.01, 10000, 0, 0, 0);
+        const double target_bandwidth[4] = { 0.001, 0.01, 0.03, 0.1 };
+        uint64_t random_latency = 1000 + picoquic_test_uniform_random(&stress_random_ctx, 99000);
+        uint64_t bandwidth_index = picoquic_test_uniform_random(&stress_random_ctx, 4);
+        double bandwidth = target_bandwidth[bandwidth_index];
+        ctx->c_to_s_link = picoquictest_sim_link_create(bandwidth, random_latency, 0, 0, 2 * random_latency);
+        ctx->s_to_c_link = picoquictest_sim_link_create(bandwidth, random_latency, 0, 0, 2 * random_latency);
         if (ctx->c_to_s_link == NULL ||
             ctx->s_to_c_link == NULL) {
             DBG_PRINTF("Cannot create the sim links for client #%d.\n", (int)client_index);

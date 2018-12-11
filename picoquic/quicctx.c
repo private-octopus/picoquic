@@ -864,7 +864,7 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
  * Path challenges may be abandoned if they are tried too many times without success. 
  */
 
-void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time)
+void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t * next_wake_time)
 {
     int path_index_good = 1;
     int path_index_current = 1;
@@ -876,6 +876,12 @@ void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time)
             /* Only increment the current index */
             path_index_current++;
         } else {
+            if (cnx->path[path_index_current]->path_is_demoted &&
+                current_time < cnx->path[path_index_current]->demotion_time &&
+                *next_wake_time > cnx->path[path_index_current]->demotion_time) {
+                *next_wake_time = cnx->path[path_index_current]->demotion_time;
+            }
+
             if (path_index_current > path_index_good) {
                 /* swap the path indexed good with current */
                 picoquic_path_t * path_x = cnx->path[path_index_current];
