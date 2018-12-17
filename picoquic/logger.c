@@ -1765,6 +1765,14 @@ void picoquic_open_cc_dump(picoquic_cnx_t * cnx)
                 ret |= fprintf(cnx->cc_log, "highest ack, ") <= 0;
                 ret |= fprintf(cnx->cc_log, "high ack time, ") <= 0;
                 ret |= fprintf(cnx->cc_log, "last time ack, ") <= 0;
+                ret |= fprintf(cnx->cc_log, "cwin, ") <= 0;
+                ret |= fprintf(cnx->cc_log, "SRTT, ") <= 0;
+                ret |= fprintf(cnx->cc_log, "RTT min, ") <= 0;
+                ret |= fprintf(cnx->cc_log, "Send MTU, ") <= 0;
+                ret |= fprintf(cnx->cc_log, "pacing packet time(us), ") <= 0;
+                ret |= fprintf(cnx->cc_log, "nb retrans, ") <= 0;
+                ret |= fprintf(cnx->cc_log, "nb spurious, ") <= 0;
+
                 ret |= fprintf(cnx->cc_log, "\n") <= 0;
 
                 if (ret != 0) {
@@ -1804,6 +1812,13 @@ void picoquic_cc_dump(picoquic_cnx_t * cnx, uint64_t current_time)
     ret |= fprintf(cnx->cc_log, "%lld, ", (long long)((int64_t)cnx->pkt_ctx[picoquic_packet_context_application].highest_acknowledged)) <= 0;
     ret |= fprintf(cnx->cc_log, "%llu, ", (unsigned long long)cnx->pkt_ctx[picoquic_packet_context_application].highest_acknowledged_time) <= 0;
     ret |= fprintf(cnx->cc_log, "%llu, ", (unsigned long long)cnx->pkt_ctx[picoquic_packet_context_application].latest_time_acknowledged) <= 0;
+    ret |= fprintf(cnx->cc_log, "%llu, ", (unsigned long long)cnx->path[0]->cwin) <= 0;
+    ret |= fprintf(cnx->cc_log, "%llu, ", (unsigned long long)cnx->path[0]->smoothed_rtt) <= 0;
+    ret |= fprintf(cnx->cc_log, "%llu, ", (unsigned long long)cnx->path[0]->rtt_min) <= 0;
+    ret |= fprintf(cnx->cc_log, "%u, ", cnx->path[0]->send_mtu) <= 0;
+    ret |= fprintf(cnx->cc_log, "%llu, ", (unsigned long long)cnx->path[0]->pacing_packet_time_microsec) <= 0;
+    ret |= fprintf(cnx->cc_log, "%llu, ", (unsigned long long)cnx->nb_retransmission_total) <= 0;
+    ret |= fprintf(cnx->cc_log, "%llu, ", (unsigned long long)cnx->nb_spurious) <= 0;
     ret |= fprintf(cnx->cc_log, "\n") <= 0;
 
     if (ret != 0) {
