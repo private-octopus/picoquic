@@ -158,9 +158,9 @@ void picoquic_newreno_notify(picoquic_path_t* path_x,
         case picoquic_newreno_alg_congestion_avoidance:
             switch (notification) {
             case picoquic_congestion_notification_acknowledgement: {
-                uint64_t complete_ack = nb_bytes_acknowledged + nr_state->residual_ack;
-                nr_state->residual_ack = complete_ack % path_x->cwin;
-                path_x->cwin += complete_ack / path_x->cwin;
+                uint64_t complete_delta = nb_bytes_acknowledged * path_x->send_mtu + nr_state->residual_ack;
+                nr_state->residual_ack = complete_delta % path_x->cwin;
+                path_x->cwin += complete_delta / path_x->cwin;
                 break;
             }
             case picoquic_congestion_notification_repeat:
