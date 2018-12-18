@@ -2003,6 +2003,10 @@ int picoquic_prepare_new_path_and_id(picoquic_cnx_t* cnx, uint8_t* bytes, size_t
         *consumed = 0;
     }
 
+    if (ret == 0) {
+        cnx->nb_cnxid_published++;
+    }
+
     return ret;
 }
 
@@ -2204,7 +2208,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                     /* If there are not enough paths, create and advertise */
                     while (ret == 0 && cnx->remote_parameters.migration_disabled == 0 &&
                         cnx->local_parameters.migration_disabled == 0 &&
-                        cnx->nb_paths < PICOQUIC_NB_PATH_TARGET) {
+                        cnx->nb_cnxid_published < PICOQUIC_NB_PATH_TARGET) {
                         ret = picoquic_prepare_new_path_and_id(cnx, &bytes[length],
                             send_buffer_min_max - checksum_overhead - length,
                             current_time, &data_bytes);

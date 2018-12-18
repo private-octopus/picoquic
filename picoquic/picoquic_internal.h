@@ -731,6 +731,7 @@ typedef struct st_picoquic_cnx_t {
     int nb_paths;
     int nb_path_alloc;
     int path_sequence_next;
+    int nb_cnxid_published;
     /* Management of the CNX-ID stash */
     picoquic_cnxid_stash_t * cnxid_stash_first;
     /* Management of ongoing probes */

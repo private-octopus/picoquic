@@ -1493,6 +1493,8 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         picoquic_register_path(cnx, cnx->path[0]);
 
         picoquic_open_cc_dump(cnx);
+
+        cnx->nb_cnxid_published = 1;
     }
 
     return cnx;

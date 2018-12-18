@@ -1206,21 +1206,23 @@ int picoquic_incoming_0rtt(
 
 /*
  * Find path of incoming encrypted packet. (This code is not used during the
- * handshake, or if the conenction is closing.)
+ * handshake, or if the connection is closing.)
  *
  * Check whether this matches a path defined by Local & Remote Addr, Local CNXID:
  *  - if local CID length > 0 and does not match: no match;
  *  - if local addr defined and does not match: no match;
  *  - if peer addr defined and does not match: no match.
+ * Keep the "best match", if local cid match and local addr match.
  *
- * If no path matches: new path. Check whether the addresses match a pending probe.
+ * If no path matches: new path. Check pathological conditions, such as
+ * too many open paths.
+ * Check whether the addresses match a pending probe.
  * If they do, merge probe, retain probe's CID as dest CID. If they don't, get CID
  * from stash or use null CID if peer uses null CID; initiated required probing. If
- * no CID available, accept packet but no not create a path.
+ * no CID available, reuse CID from best match.
+ * Ask verification of new path.
  *
- * If path matched: existing path. If peer address changed: NAT rebinding. If
- * source address changed: if undef, update; else NAT rebinding. If NAT rebinding:
- * change the probe secret; mark probe as required.
+ * If there is a best match: ask verification on best match.
  */
 
 int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header * ph,
