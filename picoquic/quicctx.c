@@ -861,6 +861,26 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
 }
 
 /*
+ * Connection ID may be used on more than one path.
+ * Provide a count of how many such values we see.
+ */
+
+int picoquic_count_remote_connection_id_ref(picoquic_cnx_t* cnx, picoquic_connection_id_t * cid)
+{
+    int count = 0;
+    int path_index_current = 0;
+
+    while (path_index_current < cnx->nb_paths) {
+        if (picoquic_compare_connection_id(cid, &cnx->path[path_index_current]->remote_cnxid) == 0) {
+            count++;
+        }
+        path_index_current++;
+    }
+
+    return count;
+}
+
+/*
  * Path challenges may be abandoned if they are tried too many times without success. 
  */
 
@@ -896,7 +916,8 @@ void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time,
 
     while (cnx->nb_paths > path_index_good) {
         int d_path = cnx->nb_paths - 1;
-        if (!picoquic_is_connection_id_null(cnx->path[d_path]->remote_cnxid)) {
+        if (!picoquic_is_connection_id_null(cnx->path[d_path]->remote_cnxid) &&
+            picoquic_count_remote_connection_id_ref(cnx, &cnx->path[d_path]->remote_cnxid) == 1) {
             (void)picoquic_queue_retire_connection_id_frame(cnx, cnx->path[d_path]->remote_cnxid_sequence);
         }
         picoquic_delete_path(cnx, d_path);
