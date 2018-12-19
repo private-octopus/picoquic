@@ -464,7 +464,7 @@ typedef struct st_picoquic_path_t {
     int path_sequence;
     uint64_t remote_cnxid_sequence;
 
-    /* Peer address. To do: allow for multiple addresses */
+    /* Peer address. */
     struct sockaddr_storage peer_addr;
     int peer_addr_len;
     struct sockaddr_storage local_addr;
@@ -478,6 +478,17 @@ typedef struct st_picoquic_path_t {
     uint64_t challenge_time;
     uint64_t demotion_time;
     uint8_t challenge_repeat_count;
+    /* Alternative address, used when validating NAT rebinding */
+    struct sockaddr_storage alt_peer_addr;
+    int alt_peer_addr_len;
+    struct sockaddr_storage alt_local_addr;
+    int alt_local_addr_len;
+    unsigned long alt_if_index_dest;
+    /* Challenge used for the NAT rebinding tests */
+    uint64_t alt_challenge;
+    uint64_t alt_challenge_timeout;
+    uint64_t alt_challenge_response;
+
 #define PICOQUIC_CHALLENGE_REPEAT_MAX 4
     /* flags */
     unsigned int mtu_probe_sent : 1;
@@ -488,6 +499,9 @@ typedef struct st_picoquic_path_t {
     unsigned int challenge_failed : 1;
     unsigned int response_required : 1;
     unsigned int path_is_demoted : 1;
+    unsigned int alt_challenge_required : 1;
+    unsigned int alt_response_required : 1;
+
     /* loss statistics and spin data */
     uint64_t retrans_count;  /* number of retransmissions observed on path */
     picoquit_spinbit_data_t spin_data;
@@ -1013,8 +1027,8 @@ int picoquic_prepare_misc_frame(picoquic_misc_frame_header_t* misc_frame, uint8_
 
 /* send/receive */
 
-int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_t* bytes,
-    size_t bytes_max, int epoch, uint64_t current_time);
+int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_t* bytes, size_t bytes_max, 
+    int epoch, struct sockaddr* addr_from, struct sockaddr* addr_to, uint64_t current_time);
 
 int picoquic_skip_frame(uint8_t* bytes, size_t bytes_max, size_t* consumed, int* pure_ack);
 

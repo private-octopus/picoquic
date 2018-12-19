@@ -20,6 +20,7 @@
 */
 
 #include "picoquic_internal.h"
+#include "util.h"
 #include "tls_api.h"
 #include "picoquictest_internal.h"
 #ifdef _WINDOWS
@@ -1289,6 +1290,36 @@ int tls_api_one_scenario_init(
     return ret;
 }
 
+int tls_api_one_scenario_verify(picoquic_test_tls_api_ctx_t* test_ctx) {
+    int ret = 0;
+
+    if (test_ctx->server_callback.error_detected) {
+        ret = -1;
+    }
+    else if (test_ctx->client_callback.error_detected) {
+        ret = -1;
+    }
+    else {
+        for (size_t i = 0; ret == 0 && i < test_ctx->nb_test_streams; i++) {
+            if (test_ctx->test_stream[i].q_recv_nb != test_ctx->test_stream[i].q_len) {
+                ret = -1;
+            }
+            else if (test_ctx->test_stream[i].r_recv_nb != test_ctx->test_stream[i].r_len) {
+                ret = -1;
+            }
+            else if (test_ctx->test_stream[i].q_received == 0 || test_ctx->test_stream[i].r_received == 0) {
+                ret = -1;
+            }
+        }
+    }
+    if (ret != 0)
+    {
+        DBG_PRINTF("Test scenario verification returns %d\n", ret);
+    }
+
+    return ret;
+}
+
 int tls_api_one_scenario_body(picoquic_test_tls_api_ctx_t* test_ctx, 
     uint64_t * simulated_time, 
     test_api_stream_desc_t* scenario,
@@ -1345,29 +1376,7 @@ int tls_api_one_scenario_body(picoquic_test_tls_api_ctx_t* test_ctx,
     }
 
     if (ret == 0) {
-        if (test_ctx->server_callback.error_detected) {
-            ret = -1;
-        }
-        else if (test_ctx->client_callback.error_detected) {
-            ret = -1;
-        }
-        else {
-            for (size_t i = 0; ret == 0 && i < test_ctx->nb_test_streams; i++) {
-                if (test_ctx->test_stream[i].q_recv_nb != test_ctx->test_stream[i].q_len) {
-                    ret = -1;
-                }
-                else if (test_ctx->test_stream[i].r_recv_nb != test_ctx->test_stream[i].r_len) {
-                    ret = -1;
-                }
-                else if (test_ctx->test_stream[i].q_received == 0 || test_ctx->test_stream[i].r_received == 0) {
-                    ret = -1;
-                }
-            }
-        }
-        if (ret != 0)
-        {
-            DBG_PRINTF("Test scenario verification returns %d\n", ret);
-        }
+        ret = tls_api_one_scenario_verify(test_ctx);
     }
 
     if (ret == 0) {
@@ -3045,6 +3054,11 @@ int nat_rebinding_test_one(uint64_t loss_mask_data)
     if (ret == 0) {
         ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 0);
     }
+    
+    /* verify that the transmission was complete */
+    if (ret == 0) {
+        ret = tls_api_one_scenario_verify(test_ctx);
+    }
 
     /* Add a time loop of 3 seconds to give some time for the challenge to be repeated */
     next_time = simulated_time + 3000000;
@@ -3071,7 +3085,6 @@ int nat_rebinding_test_one(uint64_t loss_mask_data)
     }
 
     /* Verify that the challenge was updated and done */
-    /* TODO: verify that exactly one challenge was sent */
     if (ret == 0) {
         if (initial_challenge == test_ctx->cnx_server->path[0]->challenge) {
             DBG_PRINTF("%s", "Challenge was not renewed after NAT rebinding");
@@ -3473,7 +3486,7 @@ int probe_api_test()
         memset(&t6[i].sin6_addr, i, 20);
     }
 
-    /* Set a test conection between client and server */
+    /* Set a test connection between client and server */
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
 
@@ -3731,6 +3744,11 @@ int migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_sc
         ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 0);
     }
 
+    /* Check that the data was sent and received */
+    if (ret == 0) {
+        ret = tls_api_one_scenario_verify(test_ctx);
+    }
+
     /* Add a time loop of 3 seconds to give some time for the probes to be repeated */
     next_time = simulated_time + 4000000;
     loss_mask = 0;
@@ -3768,6 +3786,7 @@ int migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_sc
         }
     }
 
+
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;
@@ -3792,6 +3811,162 @@ int migration_test_loss()
 
     return migration_test_scenario(test_scenario_q_and_r, sizeof(test_scenario_q_and_r), loss_mask);
 }
+
+/* Migration stress test. 
+ * This simulates an attack, during which a man on the side injects fake migration
+ * packets from false addresses. One of the addresses is maintained so that packets sent
+ * to it are natted back to the client.
+ *
+ * The goal of the attack is to verify that the connection resists.
+ */
+
+int migration_stress_test()
+{
+    int nb_trials = 0;
+    const int max_trials = 10000;
+    int nb_inactive = 0;
+    int client_rebinding_done = 0;
+    struct sockaddr_in hack_address;
+    struct sockaddr_in hack_address_random;
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    uint64_t last_inject_time = 0;
+    uint64_t random_context = 0xBABAC001;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = PICOQUIC_ERROR_MEMORY;
+    }
+
+    if (ret == 0) {
+        memcpy(&hack_address, &test_ctx->client_addr, sizeof(struct sockaddr_in));
+        memcpy(&hack_address_random, &test_ctx->client_addr, sizeof(struct sockaddr_in));
+
+        hack_address.sin_port += 1023;
+    }
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    /* Prepare to send data */
+    if (ret == 0) {
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_very_long, sizeof(test_scenario_very_long));
+    }
+
+    /* Rewrite the sending loop, so we can add injection of packet copies */
+
+    while (ret == 0 && nb_trials < max_trials && nb_inactive < 256 && TEST_CLIENT_READY && TEST_SERVER_READY) {
+        int was_active = 0;
+
+        nb_trials++;
+
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+
+        if (ret < 0)
+        {
+            break;
+        }
+
+        if (was_active) {
+            nb_inactive = 0;
+        }
+        else {
+            nb_inactive++;
+        }
+
+        if (test_ctx->test_finished) {
+            if (picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) && picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)) {
+                break;
+            }
+        }
+
+        /* Packet injection at the server */
+        if (test_ctx->c_to_s_link->last_packet != NULL) {
+            uint64_t server_arrival = test_ctx->c_to_s_link->last_packet->arrival_time;
+
+            if (server_arrival > last_inject_time) {
+                /* 50% chance of packet injection, 25% chances of reusing test address */
+                uint64_t rand100 = picoquic_test_uniform_random(&random_context, 100);
+                last_inject_time = server_arrival;
+                if (rand100 < 50) {
+                    struct sockaddr * bad_address;
+                    if (rand100 < 25) {
+                        bad_address = (struct sockaddr *)&hack_address;
+                    }
+                    else {
+                        hack_address_random.sin_port = (uint16_t)picoquic_test_uniform_random(&random_context, 0x10000);
+                        bad_address = (struct sockaddr *)&hack_address_random;
+                    }
+                    ret = picoquic_incoming_packet(test_ctx->qserver,
+                        test_ctx->c_to_s_link->last_packet->bytes,
+                        (uint32_t)test_ctx->c_to_s_link->last_packet->length,
+                        bad_address,
+                        (struct sockaddr*)&test_ctx->c_to_s_link->last_packet->addr_to, 0,
+                        simulated_time);
+                }
+            }
+        }
+
+        /* Initially, the attacker relays packets to the client. Then, it gives up */
+        if (test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence < 256) {
+            /* Packet reinjection at the client if using the special address */
+            if (test_ctx->s_to_c_link->last_packet != NULL &&
+                picoquic_compare_addr((struct sockaddr *)&hack_address, (struct sockaddr *)&test_ctx->s_to_c_link->last_packet->addr_to) == 0)
+            {
+                picoquic_store_addr(&test_ctx->s_to_c_link->last_packet->addr_to, (struct sockaddr *)&test_ctx->client_addr);
+            }
+        }
+
+        /* At some point, the client does migrate to a new address */
+        if (!client_rebinding_done && test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence > 128) {
+            test_ctx->client_addr.sin_port += 17;
+            test_ctx->client_use_nat = 1;
+            client_rebinding_done = 1;
+        }
+    }
+
+    if (ret == 0) {
+        ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
+    }
+
+    if (ret == 0) {
+        if (test_ctx->server_callback.error_detected) {
+            ret = -1;
+        }
+        else if (test_ctx->client_callback.error_detected) {
+            ret = -1;
+        }
+        else {
+            for (size_t i = 0; ret == 0 && i < test_ctx->nb_test_streams; i++) {
+                if (test_ctx->test_stream[i].q_recv_nb != test_ctx->test_stream[i].q_len) {
+                    ret = -1;
+                }
+                else if (test_ctx->test_stream[i].r_recv_nb != test_ctx->test_stream[i].r_len) {
+                    ret = -1;
+                }
+                else if (test_ctx->test_stream[i].q_received == 0 || test_ctx->test_stream[i].r_received == 0) {
+                    ret = -1;
+                }
+            }
+        }
+        if (ret != 0)
+        {
+            DBG_PRINTF("Test scenario verification returns %d\n", ret);
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+
 
 /* Connection ID renewal test.
  */

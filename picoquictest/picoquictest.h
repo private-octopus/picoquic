@@ -144,6 +144,7 @@ int stream_id_max_test();
 int stream_id_to_rank_test();
 int padding_test();
 int packet_trace_test();
+int migration_stress_test();
 
 #ifdef __cplusplus
 }
