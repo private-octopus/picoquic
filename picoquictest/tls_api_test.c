@@ -3828,9 +3828,7 @@ int migration_stress_test()
     int client_rebinding_done = 0;
     struct sockaddr_in hack_address;
     struct sockaddr_in hack_address_random;
-    uint64_t loss_mask_data = 0;
     uint64_t simulated_time = 0;
-    uint64_t next_time = 0;
     uint64_t loss_mask = 0;
     uint64_t last_inject_time = 0;
     uint64_t random_context = 0xBABAC001;
@@ -3838,14 +3836,15 @@ int migration_stress_test()
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
 
-    memcpy(&hack_address, &test_ctx->client_addr, sizeof(struct sockaddr_in));
-    memcpy(&hack_address_random, &test_ctx->client_addr, sizeof(struct sockaddr_in));
-
-    hack_address.sin_port += 1023;
-    
-
     if (ret == 0 && test_ctx == NULL) {
         ret = PICOQUIC_ERROR_MEMORY;
+    }
+
+    if (ret == 0) {
+        memcpy(&hack_address, &test_ctx->client_addr, sizeof(struct sockaddr_in));
+        memcpy(&hack_address_random, &test_ctx->client_addr, sizeof(struct sockaddr_in));
+
+        hack_address.sin_port += 1023;
     }
 
     if (ret == 0) {
