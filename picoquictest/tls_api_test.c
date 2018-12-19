@@ -3825,6 +3825,7 @@ int migration_stress_test()
     int nb_trials = 0;
     const int max_trials = 10000;
     int nb_inactive = 0;
+    int client_rebinding_done = 0;
     struct sockaddr_in hack_address;
     struct sockaddr_in hack_address_random;
     uint64_t loss_mask_data = 0;
@@ -3910,11 +3911,21 @@ int migration_stress_test()
             }
         }
 
-        /* Packet reinjection at the client if using the special address */
-        if (test_ctx->s_to_c_link->last_packet != NULL &&
-            picoquic_compare_addr((struct sockaddr *)&hack_address, (struct sockaddr *)&test_ctx->s_to_c_link->last_packet->addr_to) == 0)
-        {
-            picoquic_store_addr(&test_ctx->s_to_c_link->last_packet->addr_to, (struct sockaddr *)&test_ctx->client_addr);
+        /* Initially, the attacker relays packets to the client. Then, it gives up */
+        if (test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence < 256) {
+            /* Packet reinjection at the client if using the special address */
+            if (test_ctx->s_to_c_link->last_packet != NULL &&
+                picoquic_compare_addr((struct sockaddr *)&hack_address, (struct sockaddr *)&test_ctx->s_to_c_link->last_packet->addr_to) == 0)
+            {
+                picoquic_store_addr(&test_ctx->s_to_c_link->last_packet->addr_to, (struct sockaddr *)&test_ctx->client_addr);
+            }
+        }
+
+        /* At some point, the client does migrate to a new address */
+        if (!client_rebinding_done && test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence > 128) {
+            test_ctx->client_addr.sin_port += 17;
+            test_ctx->client_use_nat = 1;
+            client_rebinding_done = 1;
         }
     }
 
