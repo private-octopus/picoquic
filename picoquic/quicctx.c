@@ -704,7 +704,6 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, struct sockad
         if (path_x != NULL)
         {
             memset(path_x, 0, sizeof(picoquic_path_t));
-            /* TODO: remove this code once sequence removed from New Connection ID */
             /* Register the sequence number */
             path_x->path_sequence = cnx->path_sequence_next;
             cnx->path_sequence_next++;

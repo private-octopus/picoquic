@@ -1290,6 +1290,36 @@ int tls_api_one_scenario_init(
     return ret;
 }
 
+int tls_api_one_scenario_verify(picoquic_test_tls_api_ctx_t* test_ctx) {
+    int ret = 0;
+
+    if (test_ctx->server_callback.error_detected) {
+        ret = -1;
+    }
+    else if (test_ctx->client_callback.error_detected) {
+        ret = -1;
+    }
+    else {
+        for (size_t i = 0; ret == 0 && i < test_ctx->nb_test_streams; i++) {
+            if (test_ctx->test_stream[i].q_recv_nb != test_ctx->test_stream[i].q_len) {
+                ret = -1;
+            }
+            else if (test_ctx->test_stream[i].r_recv_nb != test_ctx->test_stream[i].r_len) {
+                ret = -1;
+            }
+            else if (test_ctx->test_stream[i].q_received == 0 || test_ctx->test_stream[i].r_received == 0) {
+                ret = -1;
+            }
+        }
+    }
+    if (ret != 0)
+    {
+        DBG_PRINTF("Test scenario verification returns %d\n", ret);
+    }
+
+    return ret;
+}
+
 int tls_api_one_scenario_body(picoquic_test_tls_api_ctx_t* test_ctx, 
     uint64_t * simulated_time, 
     test_api_stream_desc_t* scenario,
@@ -1346,29 +1376,7 @@ int tls_api_one_scenario_body(picoquic_test_tls_api_ctx_t* test_ctx,
     }
 
     if (ret == 0) {
-        if (test_ctx->server_callback.error_detected) {
-            ret = -1;
-        }
-        else if (test_ctx->client_callback.error_detected) {
-            ret = -1;
-        }
-        else {
-            for (size_t i = 0; ret == 0 && i < test_ctx->nb_test_streams; i++) {
-                if (test_ctx->test_stream[i].q_recv_nb != test_ctx->test_stream[i].q_len) {
-                    ret = -1;
-                }
-                else if (test_ctx->test_stream[i].r_recv_nb != test_ctx->test_stream[i].r_len) {
-                    ret = -1;
-                }
-                else if (test_ctx->test_stream[i].q_received == 0 || test_ctx->test_stream[i].r_received == 0) {
-                    ret = -1;
-                }
-            }
-        }
-        if (ret != 0)
-        {
-            DBG_PRINTF("Test scenario verification returns %d\n", ret);
-        }
+        ret = tls_api_one_scenario_verify(test_ctx);
     }
 
     if (ret == 0) {
@@ -3046,6 +3054,11 @@ int nat_rebinding_test_one(uint64_t loss_mask_data)
     if (ret == 0) {
         ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 0);
     }
+    
+    /* verify that the transmission was complete */
+    if (ret == 0) {
+        ret = tls_api_one_scenario_verify(test_ctx);
+    }
 
     /* Add a time loop of 3 seconds to give some time for the challenge to be repeated */
     next_time = simulated_time + 3000000;
@@ -3072,7 +3085,6 @@ int nat_rebinding_test_one(uint64_t loss_mask_data)
     }
 
     /* Verify that the challenge was updated and done */
-    /* TODO: verify that exactly one challenge was sent */
     if (ret == 0) {
         if (initial_challenge == test_ctx->cnx_server->path[0]->challenge) {
             DBG_PRINTF("%s", "Challenge was not renewed after NAT rebinding");
@@ -3732,6 +3744,11 @@ int migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_sc
         ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 0);
     }
 
+    /* Check that the data was sent and received */
+    if (ret == 0) {
+        ret = tls_api_one_scenario_verify(test_ctx);
+    }
+
     /* Add a time loop of 3 seconds to give some time for the probes to be repeated */
     next_time = simulated_time + 4000000;
     loss_mask = 0;
@@ -3768,6 +3785,7 @@ int migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_sc
             ret = -1;
         }
     }
+
 
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);

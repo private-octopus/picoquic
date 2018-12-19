@@ -2346,7 +2346,7 @@ int picoquic_prepare_path_challenge_frame(uint8_t* bytes,
 }
 
 uint8_t* picoquic_decode_path_challenge_frame(picoquic_cnx_t* cnx, uint8_t* bytes, const uint8_t* bytes_max,
-    picoquic_path_t * path_x)
+    picoquic_path_t * path_x, struct sockaddr* addr_from, struct sockaddr* addr_to)
 {
     if (bytes_max - bytes <= (int) challenge_length) {
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, picoquic_frame_type_path_challenge);
@@ -2357,10 +2357,19 @@ uint8_t* picoquic_decode_path_challenge_frame(picoquic_cnx_t* cnx, uint8_t* byte
          * Queue a response frame as response to path challenge.
          * TODO: ensure it goes out on the same path as the incoming challenge.
          */
+        uint64_t challenge_response;
+
         bytes++;
-        path_x->challenge_response = PICOPARSE_64(bytes);
+        challenge_response = PICOPARSE_64(bytes);
         bytes += challenge_length;
-        path_x->response_required = 1;
+        if (addr_from != NULL && picoquic_compare_addr(addr_from, (struct sockaddr *)&path_x->alt_peer_addr) == 0 &&
+            addr_to != NULL && picoquic_compare_addr(addr_to, (struct sockaddr *)&path_x->alt_local_addr) == 0) {
+            path_x->alt_challenge_response = challenge_response;
+            path_x->alt_response_required = 1;
+        } else {
+            path_x->challenge_response = challenge_response;
+            path_x->response_required = 1;
+        }
     }
 
     return bytes;
@@ -2384,7 +2393,8 @@ int picoquic_prepare_path_response_frame(uint8_t* bytes,
     return ret;
 }
 
-uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, uint8_t* bytes, const uint8_t* bytes_max)
+uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, uint8_t* bytes, const uint8_t* bytes_max, 
+    picoquic_path_t * path_x, struct sockaddr* addr_from, struct sockaddr* addr_to)
 {
     uint64_t response;
 
@@ -2400,6 +2410,27 @@ uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, uint8_t* bytes
             if (response == cnx->path[i]->challenge) {
                 found_challenge = 1;
                 cnx->path[i]->challenge_verified = 1;
+                break;
+            }
+            else if (response == cnx->path[i]->alt_challenge) {
+                found_challenge = 1;
+                if (addr_from != NULL && picoquic_compare_addr(addr_from, (struct sockaddr *)&path_x->alt_peer_addr) == 0 &&
+                    addr_to != NULL && picoquic_compare_addr(addr_to, (struct sockaddr *)&path_x->alt_local_addr) == 0) {
+                    /* Promote the alt address to valid address */
+                    cnx->path[i]->peer_addr_len = picoquic_store_addr(&cnx->path[i]->peer_addr, (struct sockaddr *)&cnx->path[i]->alt_peer_addr);
+                    cnx->path[i]->local_addr_len = picoquic_store_addr(&cnx->path[i]->local_addr, (struct sockaddr *)&cnx->path[i]->alt_local_addr);
+                    memset(&cnx->path[i]->alt_peer_addr, 0, sizeof(cnx->path[i]->alt_peer_addr));
+                    memset(&cnx->path[i]->alt_local_addr, 0, sizeof(cnx->path[i]->alt_local_addr));
+                    cnx->path[i]->challenge_response = cnx->path[i]->alt_challenge_response;
+                    cnx->path[i]->response_required = cnx->path[i]->alt_response_required;
+                    cnx->path[i]->alt_peer_addr_len = 0;
+                    cnx->path[i]->alt_local_addr_len = 0;
+                    cnx->path[i]->alt_challenge_timeout = 0;
+                    cnx->path[i]->challenge_verified = 1;
+                    cnx->path[i]->alt_challenge_required = 0;
+                    cnx->path[i]->alt_response_required = 0;
+                    cnx->path[i]->alt_challenge_response = 0;
+                }
                 break;
             }
         }
@@ -2467,7 +2498,9 @@ static uint8_t* picoquic_skip_0len_frame(uint8_t* bytes, const uint8_t* bytes_ma
  */
 
 int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_t* bytes,
-    size_t bytes_maxsize, int epoch, uint64_t current_time)
+    size_t bytes_maxsize, int epoch,
+    struct sockaddr* addr_from,
+    struct sockaddr* addr_to, uint64_t current_time)
 {
     const uint8_t *bytes_max = bytes + bytes_maxsize;
     int ack_needed = 0;
@@ -2567,10 +2600,10 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_
                 ack_needed = 1;
                 break;
             case picoquic_frame_type_path_challenge:
-                bytes = picoquic_decode_path_challenge_frame(cnx, bytes, bytes_max, path_x);
+                bytes = picoquic_decode_path_challenge_frame(cnx, bytes, bytes_max, path_x, addr_from, addr_to);
                 break;
             case picoquic_frame_type_path_response:
-                bytes = picoquic_decode_path_response_frame(cnx, bytes, bytes_max);
+                bytes = picoquic_decode_path_response_frame(cnx, bytes, bytes_max, path_x, addr_from, addr_to);
                 break;
             case picoquic_frame_type_crypto_hs:
 
