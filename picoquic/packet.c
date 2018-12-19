@@ -1206,7 +1206,7 @@ int picoquic_incoming_0rtt(
 
 /*
  * Find path of incoming encrypted packet. (This code is not used during the
- * handshake, or if the conenction is closing.)
+ * handshake, or if the connection is closing.)
  *
  * Check whether this matches a path defined by Local & Remote Addr, Local CNXID:
  *  - if local CID length > 0 and does not match: no match;
@@ -1217,6 +1217,12 @@ int picoquic_incoming_0rtt(
  * If they do, merge probe, retain probe's CID as dest CID. If they don't, get CID
  * from stash or use null CID if peer uses null CID; initiated required probing. If
  * no CID available, accept packet but no not create a path.
+ *
+ * If CNXID matches but address don't, use NAT rebinding logic. Keep track of
+ * the new addresses without deleting the old ones, and launch challenges on both old
+ * and new addresses. If the challenge on the new address succeeds, it is promoted.
+ * But if traffic comes from the old address after that, there will be new
+ * challenges, and it too will be promoted in turn.
  *
  * If path matched: existing path. If peer address changed: NAT rebinding. If
  * source address changed: if undef, update; else NAT rebinding. If NAT rebinding:
