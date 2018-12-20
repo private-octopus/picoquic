@@ -207,17 +207,18 @@ int cleartext_aead_test()
 
     return ret;
 }
-
+#if 0
 static picoquic_connection_id_t clear_test_vector_cnx_id = { { 0x83, 0x94, 0xc8, 0xf0, 0x3e, 0x51, 0x57, 0x08 }, 8 };
-
+#endif
 static uint32_t clear_test_vector_vn = 0xff000010;
+#if 0
 static uint8_t clear_test_vector_client_iv[12] = {
     0xab, 0x95, 0x0b, 0x01, 0x98, 0x63, 0x79, 0x78,
     0xcf, 0x44, 0xaa, 0xb9 };
 static uint8_t clear_test_vector_server_iv[12] = {
     0x32, 0x05, 0x03, 0x5a, 0x3c, 0x93, 0x7c, 0x90,
     0x2e, 0xe4, 0xf4, 0xd6 };
-
+#endif
 
 static int cleartext_iv_cmp(void * void_aead, uint8_t * ref_iv, size_t iv_length)
 {
@@ -761,7 +762,6 @@ static uint8_t draft15_test_input_packet[] = {
     0xd8, 0x3c, 0x85, 0x22, 0xf3, 0x0b, 0xeb, 0x4e, 0xaa, 0xf4,
     0xa6, 0xf9, 0x08, 0xfe, 0x2a, 0x6e, 0xe7, 0x54, 0xc8, 0x96
 };
-#endif
 
 static uint32_t draft15_test_vn = 0xff00000f;
 
@@ -817,11 +817,13 @@ static uint8_t draft13_test_client_pn[] = {
     0xc1, 0xf1, 0x54, 0x78, 0xdc, 0xf4
 };
 
+#endif
+
 #if 0
 /* TODO: reset this test when draft-17 vector is available */
 static uint64_t draft13_test_decoded_pn = 0;
 #endif
-
+#if 0
 static int draft13_label_expansion_test(ptls_cipher_suite_t * cipher, char const * label, uint8_t * secret, size_t secret_length, uint8_t const * key_ref, size_t key_ref_len)
 {
     int ret = 0;
@@ -838,7 +840,7 @@ static int draft13_label_expansion_test(ptls_cipher_suite_t * cipher, char const
 
     return ret;
 }
-
+#endif
 #if 0
 /* TODO: restore this test once we have a valid incoming message for draft-17 */
 static int draft31_incoming_initial_test()
@@ -1043,7 +1045,7 @@ static const uint8_t key_rotation_test_target_poly[] = {
     0x15, 0x1c, 0xa9, 0x01, 0xea, 0xba, 0xc5, 0x0c, 0x39, 0x7d, 0x19,
     0xcd, 0xee, 0xf6, 0x8a, 0x2f, 0xa4, 0xe1, 0x16, 0x2b, 0x04, 0x49,
     0xc2, 0xb8, 0x67, 0x47, 0x03, 0x98, 0x8f, 0x37, 0xe4, 0xd2};
-
+#if 0
 static ptls_cipher_suite_t *key_rotation_test_suites[] = {
     &ptls_openssl_aes256gcmsha384, &ptls_openssl_aes128gcmsha256,
     &ptls_minicrypto_chacha20poly1305sha256, NULL };
@@ -1051,7 +1053,7 @@ static ptls_cipher_suite_t *key_rotation_test_suites[] = {
 static const uint8_t * key_rotation_test_target[] = {
     key_rotation_test_target_sha384, key_rotation_test_target_sha256,
     key_rotation_test_target_poly, NULL };
-
+#endif
 static const size_t key_rotation_test_target_size[] = {
     sizeof(key_rotation_test_target_sha384), sizeof(key_rotation_test_target_sha256),
     sizeof(key_rotation_test_target_poly), 0 };

@@ -4339,7 +4339,7 @@ static int aead_iv_check(void * aead1, void * aead2)
     return ret;
 }
 
-
+#if 0
 static int pn_enc_check(void * pn1, void * pn2)
 {
     int ret = 0;
@@ -4356,6 +4356,7 @@ static int pn_enc_check(void * pn1, void * pn2)
     }
     return ret;
 }
+#endif
 
 int new_rotated_key_test()
 {
