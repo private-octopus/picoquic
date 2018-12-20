@@ -1028,7 +1028,7 @@ static int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
 }
 
 
-static int wait_application_pn_enc_ready(picoquic_test_tls_api_ctx_t* test_ctx,
+static int wait_application_aead_ready(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t * simulated_time)
 {
     int ret = 0;
@@ -1487,7 +1487,7 @@ int tls_api_server_reset_test()
     }
 
     if (ret == 0) {
-        ret = wait_application_pn_enc_ready(test_ctx, &simulated_time);
+        ret = wait_application_aead_ready(test_ctx, &simulated_time);
     }
 
     /* verify that client and server have the same reset secret */
@@ -2338,7 +2338,7 @@ int pn_enc_1rtt_test()
     }
 
     if (ret == 0) {
-        ret = wait_application_pn_enc_ready(test_ctx, &simulated_time);
+        ret = wait_application_aead_ready(test_ctx, &simulated_time);
     }
 
     if (ret == 0)
@@ -3327,7 +3327,7 @@ int client_error_test()
     }
 
     if (ret == 0){
-        ret = wait_application_pn_enc_ready(test_ctx, &simulated_time);
+        ret = wait_application_aead_ready(test_ctx, &simulated_time);
     }
 
     if (ret == 0) {
@@ -4369,7 +4369,7 @@ int new_rotated_key_test()
     }
 
     if (ret == 0) {
-        ret = wait_application_pn_enc_ready(test_ctx, &simulated_time);
+        ret = wait_application_aead_ready(test_ctx, &simulated_time);
     }
 
 
@@ -4417,6 +4417,7 @@ int new_rotated_key_test()
                 DBG_PRINTF("Round %d. Server AEAD decryption does not match cliens AEAD encryption.\n", i);
                 ret = -1;
             }
+#if 0
             else if (pn_enc_check(test_ctx->cnx_server->crypto_context_new.pn_enc, test_ctx->cnx_client->crypto_context_new.pn_dec) != 0) {
                 DBG_PRINTF("Round %d. Client PN decryption does not match server PN encryption.\n", i);
                 ret = -1;
@@ -4425,6 +4426,7 @@ int new_rotated_key_test()
                 DBG_PRINTF("Round %d. Server PN decryption does not match client PN encryption.\n", i);
                 ret = -1;
             }
+#endif
         }
 
         picoquic_crypto_context_free(&test_ctx->cnx_server->crypto_context_new);

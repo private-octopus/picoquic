@@ -600,7 +600,7 @@ static int picoquic_set_aead_from_secret(void ** v_aead,ptls_cipher_suite_t * ci
         ptls_aead_free((ptls_aead_context_t*)*v_aead);
     }
 
-    if ((*v_aead = ptls_aead_new(cipher->aead, cipher->hash, is_enc, secret, PICOQUIC_LABEL_QUIC_BASE)) == NULL) {
+    if ((*v_aead = ptls_aead_new(cipher->aead, cipher->hash, is_enc, secret, PICOQUIC_LABEL_QUIC_KEY_BASE)) == NULL) {
         ret = PTLS_ERROR_NO_MEMORY;
     }
 #ifdef _DEBUG
@@ -628,7 +628,7 @@ static int picoquic_set_pn_enc_from_secret(void ** v_pn_enc, ptls_cipher_suite_t
 
     if ((ret = ptls_hkdf_expand_label(cipher->hash, pnekey, 
         cipher->aead->ctr_cipher->key_size, ptls_iovec_init(secret, cipher->hash->digest_size), 
-        PICOQUIC_LABEL_PN, ptls_iovec_init(NULL, 0), PICOQUIC_LABEL_QUIC_BASE)) == 0) {
+        PICOQUIC_LABEL_HP, ptls_iovec_init(NULL, 0), PICOQUIC_LABEL_QUIC_KEY_BASE)) == 0) {
 #ifdef _DEBUG
         DBG_PRINTF("PN Encryption key (%d):\n", (int)cipher->aead->ctr_cipher->key_size);
         debug_dump(pnekey, (int)cipher->aead->ctr_cipher->key_size);
@@ -642,20 +642,20 @@ static int picoquic_set_pn_enc_from_secret(void ** v_pn_enc, ptls_cipher_suite_t
 }
 
 
-static int picoquic_set_key_from_secret(ptls_cipher_suite_t * cipher, int is_enc, picoquic_crypto_context_t * ctx, const void *secret)
+static int picoquic_set_key_from_secret(ptls_cipher_suite_t * cipher, int is_enc, int is_rotation, picoquic_crypto_context_t * ctx, const void *secret)
 {
     int ret = 0;
 
     if (is_enc != 0) {
         ret = picoquic_set_aead_from_secret(&ctx->aead_encrypt, cipher, is_enc, secret);
         
-        if (ret == 0) {
+        if (ret == 0 && !is_rotation) {
             ret = picoquic_set_pn_enc_from_secret(&ctx->pn_enc, cipher, is_enc, secret);
         }
     } else {
         ret = picoquic_set_aead_from_secret(&ctx->aead_decrypt, cipher, is_enc, secret);
         
-        if (ret == 0) {
+        if (ret == 0 && !is_rotation) {
             ret = picoquic_set_pn_enc_from_secret(&ctx->pn_dec, cipher, is_enc, secret);
         }
     }
@@ -702,7 +702,7 @@ static int picoquic_update_traffic_key_callback(ptls_update_traffic_key_t * self
     debug_dump(secret, (int)cipher->hash->digest_size);
 #endif
 
-    int ret = picoquic_set_key_from_secret(cipher, is_enc, &cnx->crypto_context[epoch], secret);
+    int ret = picoquic_set_key_from_secret(cipher, is_enc, 0, &cnx->crypto_context[epoch], secret);
 
     if (ret == 0 && cnx->client_mode && is_enc == 1 && epoch == 2) {
         cnx->zero_rtt_data_accepted = tls_ctx->handshake_properties.client.early_data_accepted_by_peer;
@@ -814,11 +814,11 @@ int picoquic_setup_initial_traffic_keys(picoquic_cnx_t* cnx)
         }
 
         if (ret == 0) {
-            ret = picoquic_set_key_from_secret(&cipher, 1, &cnx->crypto_context[0], secret1);
+            ret = picoquic_set_key_from_secret(&cipher, 1, 0, &cnx->crypto_context[0], secret1);
         }
 
         if (ret == 0) {
-            ret = picoquic_set_key_from_secret(&cipher, 0, &cnx->crypto_context[0], secret2);
+            ret = picoquic_set_key_from_secret(&cipher, 0, 0, &cnx->crypto_context[0], secret2);
         }
     }
 
@@ -878,13 +878,9 @@ int picoquic_compute_new_rotated_keys(picoquic_cnx_t * cnx)
 
     /* Verify that the previous transition is complete */
     if (cnx->crypto_context_new.aead_decrypt != NULL ||
-        cnx->crypto_context_new.aead_encrypt != NULL ||
-        cnx->crypto_context_new.pn_dec != NULL ||
-        cnx->crypto_context_new.pn_enc != NULL) {
+        cnx->crypto_context_new.aead_encrypt != NULL) {
         if (cnx->crypto_context_new.aead_decrypt == NULL ||
-            cnx->crypto_context_new.aead_encrypt == NULL ||
-            cnx->crypto_context_new.pn_dec == NULL ||
-            cnx->crypto_context_new.pn_enc == NULL) {
+            cnx->crypto_context_new.aead_encrypt == NULL) {
             ret = PICOQUIC_ERROR_CANNOT_COMPUTE_KEY;
         }
         else {
@@ -908,7 +904,7 @@ int picoquic_compute_new_rotated_keys(picoquic_cnx_t * cnx)
     }
 
     if (ret == 0) {
-        ret = picoquic_set_key_from_secret(cipher, 1, &cnx->crypto_context_new, tls_ctx->app_secret_enc);
+        ret = picoquic_set_key_from_secret(cipher, 1, 1, &cnx->crypto_context_new, tls_ctx->app_secret_enc);
     }
 
     if (ret == 0) {
@@ -926,7 +922,7 @@ int picoquic_compute_new_rotated_keys(picoquic_cnx_t * cnx)
     }
 
     if (ret == 0) {
-        ret = picoquic_set_key_from_secret(cipher, 0, &cnx->crypto_context_new, tls_ctx->app_secret_dec);
+        ret = picoquic_set_key_from_secret(cipher, 0, 1, &cnx->crypto_context_new, tls_ctx->app_secret_dec);
     }
 
     return (ret == 0)?0: PICOQUIC_ERROR_CANNOT_COMPUTE_KEY;
@@ -939,14 +935,8 @@ void picoquic_apply_rotated_keys(picoquic_cnx_t * cnx, int is_enc)
             ptls_aead_free((ptls_aead_context_t *)cnx->crypto_context[3].aead_encrypt);
         }
 
-        if (cnx->crypto_context[3].pn_enc != NULL) {
-            ptls_cipher_free((ptls_cipher_context_t *)cnx->crypto_context[3].pn_enc);
-        }
-
         cnx->crypto_context[3].aead_encrypt = cnx->crypto_context_new.aead_encrypt;
         cnx->crypto_context_new.aead_encrypt = NULL;
-        cnx->crypto_context[3].pn_enc = cnx->crypto_context_new.pn_enc;
-        cnx->crypto_context_new.pn_enc = NULL;
 
         cnx->key_phase_enc ^= 1;
     }
@@ -955,16 +945,9 @@ void picoquic_apply_rotated_keys(picoquic_cnx_t * cnx, int is_enc)
             ptls_aead_free((ptls_aead_context_t *)cnx->crypto_context_old.aead_decrypt);
         }
 
-        if (cnx->crypto_context_old.pn_dec != NULL) {
-            ptls_cipher_free((ptls_cipher_context_t *)cnx->crypto_context_old.pn_dec);
-        }
-
         cnx->crypto_context_old.aead_decrypt = cnx->crypto_context[3].aead_decrypt;
         cnx->crypto_context[3].aead_decrypt = cnx->crypto_context_new.aead_decrypt;
         cnx->crypto_context_new.aead_decrypt = NULL;
-        cnx->crypto_context_old.pn_dec = cnx->crypto_context[3].pn_dec;
-        cnx->crypto_context[3].pn_dec = cnx->crypto_context_new.pn_dec;
-        cnx->crypto_context_new.pn_dec = NULL;
 
         cnx->key_phase_dec ^= 1;
     }
@@ -1035,7 +1018,7 @@ int picoquic_master_tlscontext(picoquic_quic_t* quic,
 
         ctx->send_change_cipher_spec = 0;
 
-        ctx->hkdf_label_prefix__obsolete = PICOQUIC_LABEL_QUIC_BASE;
+        ctx->hkdf_label_prefix__obsolete = NULL;
         ctx->update_traffic_key = picoquic_set_update_traffic_key_callback();
 
         if (quic->p_simulated_time == NULL) {

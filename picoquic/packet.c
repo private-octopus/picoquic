@@ -505,12 +505,11 @@ int picoquic_parse_header_and_decrypt(
                 }
                 else {
                     if ((*pcnx)->crypto_context_old.aead_decrypt != NULL &&
-                        (*pcnx)->crypto_context_old.pn_dec != NULL &&
                         current_time < (*pcnx)->crypto_rotation_time_guard)
                     {
                         /* If there is an old key available, try decrypt with it */
                         decoded_length = picoquic_decrypt_packet(*pcnx, bytes, ph,
-                            (*pcnx)->crypto_context_old.pn_dec,
+                            (*pcnx)->crypto_context[3].pn_dec,
                             (*pcnx)->crypto_context_old.aead_decrypt, &already_received);
 
                         if (decoded_length <= (length - ph->offset) &&
@@ -521,19 +520,16 @@ int picoquic_parse_header_and_decrypt(
                     else {
                         /* These could only be a new key */
                         if ((*pcnx)->crypto_context_new.aead_decrypt == NULL &&
-                            (*pcnx)->crypto_context_new.aead_encrypt == NULL &&
-                            (*pcnx)->crypto_context_new.pn_dec == NULL &&
-                            (*pcnx)->crypto_context_new.pn_enc == NULL) {
+                            (*pcnx)->crypto_context_new.aead_encrypt == NULL) {
                             /* If the new context was already computed, don't do it again */
                             ret = picoquic_compute_new_rotated_keys(*pcnx);
                         }
 
-                        if ((*pcnx)->crypto_context_new.aead_decrypt != NULL &&
-                            (*pcnx)->crypto_context_new.pn_dec != NULL)
+                        if ((*pcnx)->crypto_context_new.aead_decrypt != NULL)
                         {
                             /* If there is an old key available, try decrypt with it */
                             decoded_length = picoquic_decrypt_packet(*pcnx, bytes, ph,
-                                (*pcnx)->crypto_context_new.pn_dec,
+                                (*pcnx)->crypto_context[3].pn_dec,
                                 (*pcnx)->crypto_context_new.aead_decrypt, &already_received);
 
                             if (decoded_length <= (length - ph->offset)) {
@@ -542,8 +538,7 @@ int picoquic_parse_header_and_decrypt(
                                 (*pcnx)->crypto_rotation_sequence = ph->pn64;
                                 picoquic_apply_rotated_keys(*pcnx, 0);
 
-                                if ((*pcnx)->crypto_context_new.aead_encrypt != NULL &&
-                                    (*pcnx)->crypto_context_new.pn_enc != NULL) {
+                                if ((*pcnx)->crypto_context_new.aead_encrypt != NULL) {
                                     /* If that move was not already validated, move to the new encryption keys */
                                     picoquic_apply_rotated_keys(*pcnx, 1);
                                 }
