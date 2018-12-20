@@ -1035,7 +1035,7 @@ int picoquic_master_tlscontext(picoquic_quic_t* quic,
 
         ctx->send_change_cipher_spec = 0;
 
-        ctx->hkdf_label_prefix = PICOQUIC_LABEL_QUIC_BASE;
+        ctx->hkdf_label_prefix__obsolete = PICOQUIC_LABEL_QUIC_BASE;
         ctx->update_traffic_key = picoquic_set_update_traffic_key_callback();
 
         if (quic->p_simulated_time == NULL) {
