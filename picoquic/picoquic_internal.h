@@ -112,7 +112,6 @@ typedef struct st_picoquic_packet_header_t {
 
     unsigned int key_phase : 1;
     unsigned int spin : 1;
-    unsigned int spin_opt : 2;
     unsigned int has_spin_bit : 1;
 
     uint32_t token_length;
@@ -169,29 +168,14 @@ typedef enum {
 
 typedef enum {
     picoquic_spinbit_basic = 0,
-    picoquic_spinbit_vec = 1,
-    picoquic_spinbit_null = 2,
-    picoquic_spinbit_sqr = 3
+    picoquic_spinbit_random = 1,
+    picoquic_spinbit_null = 2
 } picoquic_spinbit_version_enum;
 
 typedef union u_picoquit_spinbit_data_t {
     struct {
         unsigned int current_spin : 1;
     } s_basic;
-    struct {
-        unsigned int current_spin : 1; /* Current value of the spin bit */
-        unsigned int prev_spin : 1;  /* previous Spin bit */
-        unsigned int spin_vec : 2;   /* Valid Edge Counter, makes spin bit RTT measurements more reliable */
-        unsigned int spin_edge : 1;  /* internal signalling from incoming to outgoing: we just spinned it */
-
-        uint64_t spin_last_trigger;  /* timestamp of the incoming packet that triggered the spinning */
-    } s_vec;
-    struct {
-        unsigned int current_spin : 1; /* Current value of the spin bit */
-        unsigned int loss_q : 1;   /* current Q bit (square sequence)  */
-        unsigned int loss_q_index;   /* index into the square sequence   */
-        uint64_t retrans_signalled;  /* number of retransmissions already reported */
-    } s_qr;
 }picoquit_spinbit_data_t;
 
 typedef void (*picoquic_spinbit_incoming_fn)(picoquic_cnx_t * cnx, picoquic_path_t * path_x, picoquic_packet_header * ph);
@@ -208,6 +192,7 @@ extern picoquic_spinbit_def_t picoquic_spin_function_table[];
  * Codes used for representing the various types of packet encodings.
  */
 typedef enum {
+    picoquic_version_header_17,
     picoquic_version_header_13
 } picoquic_version_header_encoding;
 

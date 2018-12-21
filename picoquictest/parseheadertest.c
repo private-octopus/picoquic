@@ -51,7 +51,7 @@ static picoquic_connection_id_t test_cnxid_local = TEST_CNXID_LOCAL_VAL;
 static picoquic_connection_id_t test_cnxid_r10 = TEST_CNXID_10_VAL;
 
 static uint8_t pinitial10[] = {
-    0xFF,
+    0x83,
     0x50, 0x43, 0x51, 0x30,
     TEST_CNXID_LEN_BYTE,
     TEST_CNXID_INI_BYTES,
@@ -84,7 +84,7 @@ static picoquic_packet_header hinitial10 = {
 };
 
 static uint8_t pinitial10_l[] = {
-    0xFF,
+    0x83,
     0x50, 0x43, 0x51, 0x30,
     TEST_CNXID_LOCAL_BYTE,
     TEST_CNXID_INI_BYTES,
@@ -159,7 +159,7 @@ static picoquic_packet_header hvnego10 = {
 };
 
 static uint8_t phandshake[] = {
-    0xFD,
+    0xA3,
     0x50, 0x43, 0x51, 0x30,
     TEST_CNXID_LEN_BYTE,
     TEST_CNXID_LOCAL_BYTES,
@@ -191,7 +191,7 @@ static picoquic_packet_header hhandshake = {
 };
 
 static uint8_t packet_short_phi0_c_32[] = {
-    0x30,
+    0x43,
     TEST_CNXID_10_BYTES,
     0xDE, 0xAD, 0xBE, 0xEF
 };
@@ -219,7 +219,7 @@ static picoquic_packet_header hphi0_c_32 = {
 };
 
 static uint8_t packet_short_phi0_c_32_spin[] = {
-    0x34, /* Setting the spin bit */
+    0x63, /* Setting the spin bit */
     TEST_CNXID_10_BYTES,
     0xDE, 0xAD, 0xBE, 0xEF
 };
@@ -247,7 +247,7 @@ static picoquic_packet_header hphi0_c_32_spin = {
 };
 
 static uint8_t packet_short_phi1_noc_32[] = {
-    0x71,
+    0x07,
     0xDE, 0xAD, 0xBE, 0xEF,
 };
 
