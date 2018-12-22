@@ -241,23 +241,37 @@ void picoquic_free_tickets(picoquic_stored_ticket_t** pp_first_ticket);
 
 /*
  * Transport parameters, as defined by the QUIC transport specification
+          original_connection_id(0),
+         idle_timeout(1),
+         stateless_reset_token(2),
+         max_packet_size(3),
+         initial_max_data(4),
+         initial_max_stream_data_bidi_local(5),
+         initial_max_stream_data_bidi_remote(6),
+         initial_max_stream_data_uni(7),
+         initial_max_streams_bidi(8),
+         initial_max_streams_uni(9),
+         ack_delay_exponent(10),
+         max_ack_delay(11),
+         disable_migration(12),
+         preferred_address(13),
  */
 
 typedef enum {
-    picoquic_tp_initial_max_stream_data_bidi_local = 0,
-    picoquic_tp_initial_max_data = 1,
-    picoquic_tp_initial_max_bidi_streams = 2,
-    picoquic_tp_idle_timeout = 3,
-    picoquic_tp_server_preferred_address = 4,
-    picoquic_tp_max_packet_size = 5,
-    picoquic_tp_reset_secret = 6,
-    picoquic_tp_ack_delay_exponent = 7,
-    picoquic_tp_initial_max_uni_streams = 8,
-    picoquic_tp_disable_migration = 9,
-    picoquic_tp_initial_max_stream_data_bidi_remote = 10,
-    picoquic_tp_initial_max_stream_data_uni = 11,
-    picoquic_tp_max_ack_delay = 12,
-    picoquic_tp_original_connection_id = 13
+    picoquic_tp_original_connection_id = 0,
+    picoquic_tp_idle_timeout = 1,
+    picoquic_tp_stateless_reset_token = 2,
+    picoquic_tp_max_packet_size = 3,
+    picoquic_tp_initial_max_data = 4,
+    picoquic_tp_initial_max_stream_data_bidi_local = 5,
+    picoquic_tp_initial_max_stream_data_bidi_remote = 6,
+    picoquic_tp_initial_max_stream_data_uni = 7,
+    picoquic_tp_initial_max_streams_bidi = 8,
+    picoquic_tp_initial_max_streams_uni = 9,
+    picoquic_tp_ack_delay_exponent = 10,
+    picoquic_tp_max_ack_delay = 11,
+    picoquic_tp_disable_migration = 12,
+    picoquic_tp_server_preferred_address = 13
 } picoquic_tp_enum;
 
 typedef struct st_picoquic_tp_prefered_address_t {
