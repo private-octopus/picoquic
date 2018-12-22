@@ -868,15 +868,14 @@ size_t picoquic_log_new_connection_id_frame(FILE* F, uint8_t* bytes, size_t byte
     uint8_t l_cid = 0;
     size_t l_seq = 0;
 
+    l_seq = picoquic_varint_decode(&bytes[byte_index], bytes_max, &sequence);
+    min_size += l_seq;
+    byte_index += l_seq;
 
     if (byte_index < bytes_max) {
         l_cid = bytes[byte_index++];
     }
     min_size += l_cid;
-
-    l_seq = picoquic_varint_decode(&bytes[byte_index], bytes_max, &sequence);
-    min_size += l_seq;
-    byte_index += l_seq;
 
     if (l_seq == 0 || min_size > bytes_max) {
         fprintf(F, "    Malformed NEW CONNECTION ID, requires %d bytes out of %d\n", (int)min_size, (int)bytes_max);

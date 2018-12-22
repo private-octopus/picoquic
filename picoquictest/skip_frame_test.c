@@ -91,8 +91,8 @@ static uint8_t test_frame_type_stream_id_needed[] = {
 };
 static uint8_t test_frame_type_new_connection_id[] = {
     picoquic_frame_type_new_connection_id,
-    8,
     7,
+    8,
     1, 2, 3, 4, 5, 6, 7, 8,
     0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7,
     0xA8, 0xA9, 0xAA, 0xAB, 0xAC, 0xAD, 0xAE, 0xAF
