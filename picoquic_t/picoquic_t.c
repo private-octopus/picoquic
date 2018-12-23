@@ -143,7 +143,7 @@ static const picoquic_test_def_t test_table[] = {
     { "stream_id_max", stream_id_max_test },
     { "padding_test", padding_test },
     { "packet_trace", packet_trace_test },
-    { "migration_stress", migration_stress_test },
+    { "rebiding_stress", rebinding_stress_test },
     { "stress", stress_test },
     { "fuzz", fuzz_test },
     { "fuzz_initial", fuzz_initial_test}

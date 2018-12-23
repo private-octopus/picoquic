@@ -1370,6 +1370,7 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header * ph
                     if (current_time > cnx->path[path_id]->alt_challenge_timeout) {
                         cnx->path[path_id]->alt_challenge_timeout = 0;
                         cnx->path[path_id]->alt_challenge_required = 1;
+                        cnx->path[path_id]->alt_challenge_repeat_count = 0;
                     }
                 }
                 else if (((cnx->path[path_id]->alt_peer_addr_len == 0 &&
@@ -1384,6 +1385,7 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header * ph
                     cnx->path[path_id]->alt_challenge = picoquic_public_random_64();
                     cnx->path[path_id]->alt_challenge_required = 1;
                     cnx->path[path_id]->alt_challenge_timeout = 0;
+                    cnx->path[path_id]->alt_challenge_repeat_count = 0;
                     /* Require a new challenge on the normal path */
                     new_challenge_required = 1;
                 }
