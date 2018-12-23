@@ -2442,7 +2442,7 @@ uint8_t* picoquic_decode_blocked_frame(picoquic_cnx_t* cnx, uint8_t* bytes, cons
 {
     if ((bytes = picoquic_frames_varint_skip(bytes+1, bytes_max)) == NULL) {
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, 
-            picoquic_frame_type_blocked);
+            picoquic_frame_type_data_blocked);
     }
     return bytes;
 }
@@ -2455,17 +2455,17 @@ uint8_t* picoquic_decode_stream_blocked_frame(picoquic_cnx_t* cnx, uint8_t* byte
         (bytes = picoquic_frames_varint_skip(bytes,   bytes_max)) == NULL)
     {
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, 
-            picoquic_frame_type_stream_blocked);
+            picoquic_frame_type_stream_data_blocked);
     }
     return bytes;
 }
 
 
-uint8_t* picoquic_decode_stream_id_needed_frame(picoquic_cnx_t* cnx, uint8_t* bytes, const uint8_t* bytes_max)
+uint8_t* picoquic_decode_streams_blocked_frame(picoquic_cnx_t* cnx, uint8_t* bytes, const uint8_t* bytes_max)
 {
     if ((bytes = picoquic_frames_varint_skip(bytes+1, bytes_max)) == NULL) {
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, 
-            picoquic_frame_type_stream_id_needed);
+            picoquic_frame_type_streams_blocked);
     }
     return bytes;
 }
@@ -2569,16 +2569,16 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_
                 bytes = picoquic_skip_0len_frame(bytes, bytes_max);
                 ack_needed = 1;
                 break;
-            case picoquic_frame_type_blocked:
+            case picoquic_frame_type_data_blocked:
                 bytes = picoquic_decode_blocked_frame(cnx, bytes, bytes_max);
                 ack_needed = 1;
                 break;
-            case picoquic_frame_type_stream_blocked:
+            case picoquic_frame_type_stream_data_blocked:
                 bytes = picoquic_decode_stream_blocked_frame(cnx, bytes, bytes_max);
                 ack_needed = 1;
                 break;
-            case picoquic_frame_type_stream_id_needed:
-                bytes = picoquic_decode_stream_id_needed_frame(cnx, bytes, bytes_max);
+            case picoquic_frame_type_streams_blocked:
+                bytes = picoquic_decode_streams_blocked_frame(cnx, bytes, bytes_max);
                 ack_needed = 1;
                 break;
             case picoquic_frame_type_new_connection_id:
@@ -2800,15 +2800,15 @@ int picoquic_skip_frame(uint8_t* bytes, size_t bytes_maxsize, size_t* consumed, 
             bytes = picoquic_skip_0len_frame(bytes, bytes_max);
             *pure_ack = 0;
             break;
-        case picoquic_frame_type_blocked:
+        case picoquic_frame_type_data_blocked:
             bytes = picoquic_frames_varint_skip(bytes+1, bytes_max);
             *pure_ack = 0;
             break;
-        case picoquic_frame_type_stream_blocked:
+        case picoquic_frame_type_stream_data_blocked:
             bytes = picoquic_skip_stream_blocked_frame(bytes, bytes_max);
             *pure_ack = 0;
             break;
-        case picoquic_frame_type_stream_id_needed:
+        case picoquic_frame_type_streams_blocked:
             bytes = picoquic_frames_varint_skip(bytes+1, bytes_max);
             *pure_ack = 0;
             break;

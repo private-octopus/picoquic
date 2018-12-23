@@ -772,10 +772,6 @@ static int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
         } else if (next_time > *simulated_time) {
             *simulated_time = next_time;
         }
-
-        if (*simulated_time == 0x1e18b) {
-            ret = 0;
-        }
     }
 
     if (next_action >= 1 && next_action <= 3) {
@@ -995,9 +991,6 @@ static int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
     int ret = 0;
     int nb_trials = 0;
     int nb_inactive = 0;
-    int last_time = *simulated_time;
-    int nb_last_time = 0;
-    int nb_no_time_progress = 0;
 
     test_ctx->c_to_s_link->loss_mask = loss_mask;
     test_ctx->s_to_c_link->loss_mask = loss_mask;
@@ -1016,14 +1009,6 @@ static int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
         if (ret < 0)
         {
             break;
-        }
-
-        if (*simulated_time > last_time) {
-            nb_last_time = 0;
-            last_time = *simulated_time;
-        }
-        else if (++nb_last_time > 16) {
-            nb_no_time_progress++;
         }
 
         if (was_active) {
