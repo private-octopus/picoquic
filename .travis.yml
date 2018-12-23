@@ -31,7 +31,7 @@ script:
   # Now build picotls examples and test
   - echo $CC
   - echo $CXX
-  - if [ "$CC" == "clang" ]; then scan-build cmake -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=/usr/share/clang/scan-build/ccc-analyzer .; fi
+  - if [ "$CC" == "clang" ]; then scan-build cmake -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=/usr/local/clang/libexec/ccc-analyzer .; fi
   - if [ "$CC" == "clang" ]; then scan-build make; fi
   - cmake .
   - if [ "$CC" == "gcc" ]; then make clean; fi
