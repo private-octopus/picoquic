@@ -49,9 +49,9 @@ builds, the tests are run through a command line program.
 As explained in the Wiki, Picoquic is actively tested against other implementations
 during the QUIC Interop days. See https://github.com/private-octopus/picoquic/wiki/QUIC-milestones-and-interop-testing.
 
-The current version is aligned with draft 15. Most big features are now tested, including
-the revised interface between QUIC and TLS, but we still have to fully develop and 
-test key rollover.
+The current version is aligned with draft 17. Most big features are now tested, including
+the interface between QUIC and TLS, 0-RTT, migration and key rollover. The state of
+development is tracked in the list of issues in this repository.
 
 In parallel, we still plan to do an implementation
 of DNS over QUIC (https://datatracker.ietf.org/doc/draft-huitema-quic-dnsoquic/).
@@ -66,8 +66,9 @@ applications. Suggestions are wellcome.
 Picoquic is developed in C, and can be built under Windows or Linux. Building the
 project requires first managing the dependencies, Picotls (https://github.com/h2o/picotls)
 and OpenSSL. Please note that you will need a recent version of Picotls --
-the TLS API depends on commits from Aug 14, 2018, and the support for the
-EOED removal extension of TLS 1.3 depends on commits from Oct 4, 2018.
+the Picotls API has eveolved recently to support the latest version of QUIC. The
+current code is tested against the Picotls version of Thu Dec 20 10:26:18 2018 +0900,
+after commit `9cab5f9fd82040fcbf6a4cb0ac276dec6c6aa48f`.
 
 ## Picoquic on Windows
 
@@ -121,12 +122,10 @@ release. The sources are in "picoquicfirst/picoquicdemo.c".
 
 ## Testing previous versions
 
-The code is constantly updated to track the latest version of the specification. When we can,
-we maintain compatibility with previous drafts, so as to facilitate interop testing with
-other implementations. But some version changes will change the wire format or the encryption
-code in incompatible ways. That's the reason why we only support draft-15 at this stage,
-although both the client and server can be launched in draft-14 compatibility mode,
-using the option "-v FF00000E".
+The code is constantly updated to track the latest version of the specification. It currently
+conforms to draft-17, and will only negotiate support for the corresponding version `0xFF000011`.
+The previous version, draft-16, can be tested by downloading from Github the code at the
+commit `5370eaadbf3e138dc9319a742488edccf40b5a12`, dated `Wed Dec 19 22:07:48 2018 -0800`.
 
 
 
