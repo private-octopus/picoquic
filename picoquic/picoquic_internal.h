@@ -194,8 +194,7 @@ extern picoquic_spinbit_def_t picoquic_spin_function_table[];
  * Codes used for representing the various types of packet encodings.
  */
 typedef enum {
-    picoquic_version_header_17,
-    picoquic_version_header_13
+    picoquic_version_header_17
 } picoquic_version_header_encoding;
 
 typedef struct st_picoquic_version_parameters_t {
