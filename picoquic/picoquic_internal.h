@@ -72,27 +72,29 @@ extern "C" {
  */
 typedef enum {
     picoquic_frame_type_padding = 0,
-    picoquic_frame_type_reset_stream = 1,
-    picoquic_frame_type_connection_close = 2,
-    picoquic_frame_type_application_close = 3,
-    picoquic_frame_type_max_data = 4,
-    picoquic_frame_type_max_stream_data = 5,
-    picoquic_frame_type_max_stream_id = 6,
-    picoquic_frame_type_ping = 7,
-    picoquic_frame_type_blocked = 8,
-    picoquic_frame_type_stream_blocked = 9,
-    picoquic_frame_type_stream_id_needed = 0x0a,
-    picoquic_frame_type_new_connection_id = 0x0b,
-    picoquic_frame_type_stop_sending = 0x0c,
-    picoquic_frame_type_retire_connection_id = 0x0d,
-    picoquic_frame_type_path_challenge = 0x0e,
-    picoquic_frame_type_path_response = 0x0f,
-    picoquic_frame_type_stream_range_min = 0x10,
-    picoquic_frame_type_stream_range_max = 0x17,
-    picoquic_frame_type_crypto_hs = 0x18,
-    picoquic_frame_type_new_token = 0x19,
-    picoquic_frame_type_ack = 0x1a,
-    picoquic_frame_type_ack_ecn = 0x1b
+    picoquic_frame_type_ping = 1,
+    picoquic_frame_type_ack = 0x02,
+    picoquic_frame_type_ack_ecn = 0x03,
+    picoquic_frame_type_reset_stream = 0x04,
+    picoquic_frame_type_stop_sending = 0x05,
+    picoquic_frame_type_crypto_hs = 0x06,
+    picoquic_frame_type_new_token = 0x07,
+    picoquic_frame_type_stream_range_min = 0x08,
+    picoquic_frame_type_stream_range_max = 0x0f,
+    picoquic_frame_type_max_data = 0x10,
+    picoquic_frame_type_max_stream_data = 0x11,
+    picoquic_frame_type_max_streams_bidir = 0x12,
+    picoquic_frame_type_max_streams_unidir = 0x13,
+    picoquic_frame_type_data_blocked = 0x14,
+    picoquic_frame_type_stream_data_blocked = 0x15,
+    picoquic_frame_type_streams_blocked_bidir = 0x16,
+    picoquic_frame_type_streams_blocked_unidir = 0x17,
+    picoquic_frame_type_new_connection_id = 0x18,
+    picoquic_frame_type_retire_connection_id = 0x19,
+    picoquic_frame_type_path_challenge = 0x1a,
+    picoquic_frame_type_path_response = 0x1b,
+    picoquic_frame_type_connection_close = 0x1c,
+    picoquic_frame_type_application_close = 0x1d
 } picoquic_frame_type_enum_t;
 
 typedef struct st_picoquic_packet_header_t {
@@ -112,7 +114,6 @@ typedef struct st_picoquic_packet_header_t {
 
     unsigned int key_phase : 1;
     unsigned int spin : 1;
-    unsigned int spin_opt : 2;
     unsigned int has_spin_bit : 1;
 
     uint32_t token_length;
@@ -142,9 +143,10 @@ typedef struct st_picoquic_packet_header_t {
 #define PICOQUIC_SIXTH_INTEROP_VERSION 0xFF00000C
 #define PICOQUIC_SEVENTH_INTEROP_VERSION 0xFF00000D
 #define PICOQUIC_EIGHT_INTEROP_VERSION 0xFF00000E
-#endif
 #define PICOQUIC_NINTH_INTEROP_VERSION 0xFF00000F
 #define PICOQUIC_NINTH_BIS_INTEROP_VERSION 0xFF000010
+#endif
+#define PICOQUIC_TENTH_INTEROP_VERSION 0xFF000011
 #define PICOQUIC_INTERNAL_TEST_VERSION_1 0x50435130
 #define PICOQUIC_INTERNAL_TEST_VERSION_2 0x50435131
 
@@ -168,29 +170,14 @@ typedef enum {
 
 typedef enum {
     picoquic_spinbit_basic = 0,
-    picoquic_spinbit_vec = 1,
-    picoquic_spinbit_null = 2,
-    picoquic_spinbit_sqr = 3
+    picoquic_spinbit_random = 1,
+    picoquic_spinbit_null = 2
 } picoquic_spinbit_version_enum;
 
 typedef union u_picoquit_spinbit_data_t {
     struct {
         unsigned int current_spin : 1;
     } s_basic;
-    struct {
-        unsigned int current_spin : 1; /* Current value of the spin bit */
-        unsigned int prev_spin : 1;  /* previous Spin bit */
-        unsigned int spin_vec : 2;   /* Valid Edge Counter, makes spin bit RTT measurements more reliable */
-        unsigned int spin_edge : 1;  /* internal signalling from incoming to outgoing: we just spinned it */
-
-        uint64_t spin_last_trigger;  /* timestamp of the incoming packet that triggered the spinning */
-    } s_vec;
-    struct {
-        unsigned int current_spin : 1; /* Current value of the spin bit */
-        unsigned int loss_q : 1;   /* current Q bit (square sequence)  */
-        unsigned int loss_q_index;   /* index into the square sequence   */
-        uint64_t retrans_signalled;  /* number of retransmissions already reported */
-    } s_qr;
 }picoquit_spinbit_data_t;
 
 typedef void (*picoquic_spinbit_incoming_fn)(picoquic_cnx_t * cnx, picoquic_path_t * path_x, picoquic_packet_header * ph);
@@ -207,7 +194,7 @@ extern picoquic_spinbit_def_t picoquic_spin_function_table[];
  * Codes used for representing the various types of packet encodings.
  */
 typedef enum {
-    picoquic_version_header_13
+    picoquic_version_header_17
 } picoquic_version_header_encoding;
 
 typedef struct st_picoquic_version_parameters_t {
@@ -255,23 +242,37 @@ void picoquic_free_tickets(picoquic_stored_ticket_t** pp_first_ticket);
 
 /*
  * Transport parameters, as defined by the QUIC transport specification
+          original_connection_id(0),
+         idle_timeout(1),
+         stateless_reset_token(2),
+         max_packet_size(3),
+         initial_max_data(4),
+         initial_max_stream_data_bidi_local(5),
+         initial_max_stream_data_bidi_remote(6),
+         initial_max_stream_data_uni(7),
+         initial_max_streams_bidi(8),
+         initial_max_streams_uni(9),
+         ack_delay_exponent(10),
+         max_ack_delay(11),
+         disable_migration(12),
+         preferred_address(13),
  */
 
 typedef enum {
-    picoquic_tp_initial_max_stream_data_bidi_local = 0,
-    picoquic_tp_initial_max_data = 1,
-    picoquic_tp_initial_max_bidi_streams = 2,
-    picoquic_tp_idle_timeout = 3,
-    picoquic_tp_server_preferred_address = 4,
-    picoquic_tp_max_packet_size = 5,
-    picoquic_tp_reset_secret = 6,
-    picoquic_tp_ack_delay_exponent = 7,
-    picoquic_tp_initial_max_uni_streams = 8,
-    picoquic_tp_disable_migration = 9,
-    picoquic_tp_initial_max_stream_data_bidi_remote = 10,
-    picoquic_tp_initial_max_stream_data_uni = 11,
-    picoquic_tp_max_ack_delay = 12,
-    picoquic_tp_original_connection_id = 13
+    picoquic_tp_original_connection_id = 0,
+    picoquic_tp_idle_timeout = 1,
+    picoquic_tp_stateless_reset_token = 2,
+    picoquic_tp_max_packet_size = 3,
+    picoquic_tp_initial_max_data = 4,
+    picoquic_tp_initial_max_stream_data_bidi_local = 5,
+    picoquic_tp_initial_max_stream_data_bidi_remote = 6,
+    picoquic_tp_initial_max_stream_data_uni = 7,
+    picoquic_tp_initial_max_streams_bidi = 8,
+    picoquic_tp_initial_max_streams_uni = 9,
+    picoquic_tp_ack_delay_exponent = 10,
+    picoquic_tp_max_ack_delay = 11,
+    picoquic_tp_disable_migration = 12,
+    picoquic_tp_server_preferred_address = 13
 } picoquic_tp_enum;
 
 typedef struct st_picoquic_tp_prefered_address_t {
@@ -408,7 +409,8 @@ typedef struct _picoquic_stream_head {
 #define IS_CLIENT_STREAM_ID(id) (unsigned int)(((id) & 1) == 0)
 #define IS_BIDIR_STREAM_ID(id)  (unsigned int)(((id) & 2) == 0)
 #define IS_LOCAL_STREAM_ID(id, client_mode)  (unsigned int)(((id)^(client_mode)) & 1)
-
+#define STREAM_ID_FROM_RANK(rank, client_mode, is_unidir) (((rank)<<2)|((is_unidir)<<1)|(client_mode))
+#define STREAM_RANK_FROM_ID(id) ((id)>>2)
 /*
  * Frame queue. This is used for miscellaneous packets, such as the PONG
  * response to a PING.
@@ -1009,7 +1011,7 @@ int picoquic_prepare_required_max_stream_data_frames(picoquic_cnx_t* cnx,
 int picoquic_prepare_max_data_frame(picoquic_cnx_t* cnx, uint64_t maxdata_increase,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
 void picoquic_update_max_stream_ID_local(picoquic_cnx_t* cnx, picoquic_stream_head* stream);
-int picoquic_prepare_max_stream_ID_frame_if_needed(picoquic_cnx_t* cnx,
+int picoquic_prepare_max_streams_frame_if_needed(picoquic_cnx_t* cnx,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
 void picoquic_clear_stream(picoquic_stream_head* stream);
 int picoquic_prepare_path_challenge_frame(uint8_t* bytes,
@@ -1035,7 +1037,7 @@ int picoquic_skip_frame(uint8_t* bytes, size_t bytes_max, size_t* consumed, int*
 int picoquic_decode_closing_frames(uint8_t* bytes,
     size_t bytes_max, int* closing_received);
 
-uint32_t picoquic_decode_transport_param_stream_id(uint16_t rank, int extension_mode, int stream_type);
+uint32_t picoquic_decode_transport_param_stream_id(uint32_t rank, int extension_mode, int stream_type);
 uint16_t picoquic_prepare_transport_param_stream_id(uint32_t stream_id);
 
 int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mode,

@@ -1,83 +1,80 @@
 102030405060708: Proposed version: 50435131
-102030405060708:     Extension list (40 bytes):
-102030405060708:         Extension type: 0, length 4 (0x0000 / 0x0004), 0000ffff
-102030405060708:         Extension type: 1, length 4 (0x0001 / 0x0004), 00400000
-102030405060708:         Extension type: 2, length 2 (0x0002 / 0x0002), 4000
-102030405060708:         Extension type: 3, length 2 (0x0003 / 0x0002), 001e
-102030405060708:         Extension type: 5, length 2 (0x0005 / 0x0002), 05c8
-102030405060708:         Extension type: 8, length 2 (0x0008 / 0x0002), 4000
+102030405060708:     Extension list (43 bytes):
+102030405060708:         Extension type: 5, length 4 (0x0005 / 0x0004), 8000ffff
+102030405060708:         Extension type: 4, length 4 (0x0004 / 0x0004), 80400000
+102030405060708:         Extension type: 8, length 4 (0x0008 / 0x0004), 80004000
+102030405060708:         Extension type: 1, length 1 (0x0001 / 0x0001), 1e
+102030405060708:         Extension type: 3, length 2 (0x0003 / 0x0002), 45c8
+102030405060708:         Extension type: 9, length 4 (0x0009 / 0x0004), 80004000
 
 102030405060708: Proposed version: 0a1a0a1a
-102030405060708:     Extension list (34 bytes):
-102030405060708:         Extension type: 0, length 4 (0x0000 / 0x0004), 01000000
-102030405060708:         Extension type: 1, length 4 (0x0001 / 0x0004), 01000000
-102030405060708:         Extension type: 2, length 2 (0x0002 / 0x0002), 0001
-102030405060708:         Extension type: 3, length 2 (0x0003 / 0x0002), 00ff
-102030405060708:         Extension type: 5, length 2 (0x0005 / 0x0002), 05c8
+102030405060708:     Extension list (33 bytes):
+102030405060708:         Extension type: 5, length 4 (0x0005 / 0x0004), 81000000
+102030405060708:         Extension type: 4, length 4 (0x0004 / 0x0004), 81000000
+102030405060708:         Extension type: 8, length 1 (0x0008 / 0x0001), 01
+102030405060708:         Extension type: 1, length 2 (0x0001 / 0x0002), 40ff
+102030405060708:         Extension type: 3, length 2 (0x0003 / 0x0002), 45c8
 
 102030405060708: Proposed version: 0a1a0a1a
-102030405060708:     Extension list (28 bytes):
-102030405060708:         Extension type: 0, length 4 (0x0000 / 0x0004), 01000000
-102030405060708:         Extension type: 1, length 4 (0x0001 / 0x0004), 01000000
-102030405060708:         Extension type: 2, length 2 (0x0002 / 0x0002), 0001
-102030405060708:         Extension type: 3, length 2 (0x0003 / 0x0002), 00ff
+102030405060708:     Extension list (27 bytes):
+102030405060708:         Extension type: 5, length 4 (0x0005 / 0x0004), 81000000
+102030405060708:         Extension type: 4, length 4 (0x0004 / 0x0004), 81000000
+102030405060708:         Extension type: 8, length 1 (0x0008 / 0x0001), 01
+102030405060708:         Extension type: 1, length 2 (0x0001 / 0x0002), 40ff
 
 102030405060708: Version: 50435131
-102030405060708:     Supported version (16 bytes):
+102030405060708:     Supported version (12 bytes):
 102030405060708:         50435131
 102030405060708:         50435130
-102030405060708:         ff000010
-102030405060708:         ff00000f
-102030405060708:     Extension list (54 bytes):
-102030405060708:         Extension type: 0, length 4 (0x0000 / 0x0004), 0000ffff
-102030405060708:         Extension type: 1, length 4 (0x0001 / 0x0004), 00400000
-102030405060708:         Extension type: 2, length 2 (0x0002 / 0x0002), 4000
-102030405060708:         Extension type: 3, length 2 (0x0003 / 0x0002), 001e
-102030405060708:         Extension type: 5, length 2 (0x0005 / 0x0002), 05c8
-102030405060708:         Extension type: 6, length 16 (0x0006 / 0x0010), 0102030405060708090a0b0c0d0e0f10
+102030405060708:         ff000011
+102030405060708:     Extension list (55 bytes):
+102030405060708:         Extension type: 5, length 4 (0x0005 / 0x0004), 8000ffff
+102030405060708:         Extension type: 4, length 4 (0x0004 / 0x0004), 80400000
+102030405060708:         Extension type: 8, length 4 (0x0008 / 0x0004), 80004000
+102030405060708:         Extension type: 1, length 1 (0x0001 / 0x0001), 1e
+102030405060708:         Extension type: 3, length 2 (0x0003 / 0x0002), 45c8
+102030405060708:         Extension type: 2, length 16 (0x0002 / 0x0010), 0102030405060708090a0b0c0d0e0f10
 
 102030405060708: Version: 50435131
-102030405060708:     Supported version (16 bytes):
+102030405060708:     Supported version (12 bytes):
 102030405060708:         50435131
 102030405060708:         50435130
-102030405060708:         ff000010
-102030405060708:         ff00000f
-102030405060708:     Extension list (54 bytes):
-102030405060708:         Extension type: 0, length 4 (0x0000 / 0x0004), 01000000
-102030405060708:         Extension type: 1, length 4 (0x0001 / 0x0004), 01000000
-102030405060708:         Extension type: 2, length 2 (0x0002 / 0x0002), 0002
-102030405060708:         Extension type: 3, length 2 (0x0003 / 0x0002), 00ff
-102030405060708:         Extension type: 5, length 2 (0x0005 / 0x0002), 05c8
-102030405060708:         Extension type: 6, length 16 (0x0006 / 0x0010), 0102030405060708090a0b0c0d0e0f10
+102030405060708:         ff000011
+102030405060708:     Extension list (53 bytes):
+102030405060708:         Extension type: 5, length 4 (0x0005 / 0x0004), 81000000
+102030405060708:         Extension type: 4, length 4 (0x0004 / 0x0004), 81000000
+102030405060708:         Extension type: 8, length 1 (0x0008 / 0x0001), 02
+102030405060708:         Extension type: 1, length 2 (0x0001 / 0x0002), 40ff
+102030405060708:         Extension type: 3, length 2 (0x0003 / 0x0002), 45c8
+102030405060708:         Extension type: 2, length 16 (0x0002 / 0x0010), 0102030405060708090a0b0c0d0e0f10
 
 102030405060708: Proposed version: 0a1a0a1a
-102030405060708:     Extension list (28 bytes):
-102030405060708:         Extension type: 0, length 4 (0x0000 / 0x0004), 00010000
-102030405060708:         Extension type: 1, length 4 (0x0001 / 0x0004), ffffffff
-102030405060708:         Extension type: 3, length 2 (0x0003 / 0x0002), 001e
-102030405060708:         Extension type: 5, length 2 (0x0005 / 0x0002), 05c8
+102030405060708:     Extension list (31 bytes):
+102030405060708:         Extension type: 5, length 4 (0x0005 / 0x0004), 80010000
+102030405060708:         Extension type: 4, length 8 (0x0004 / 0x0008), c0000000ffffffff
+102030405060708:         Extension type: 1, length 1 (0x0001 / 0x0001), 1e
+102030405060708:         Extension type: 3, length 2 (0x0003 / 0x0002), 45c8
 
 102030405060708: Proposed version: babababa
-102030405060708:     Extension list (39 bytes):
-102030405060708:         Extension type: 3, length 2 (0x0003 / 0x0002), 000a
-102030405060708:         Extension type: 2, length 2 (0x0002 / 0x0002), 0002
-102030405060708:         Extension type: 0, length 4 (0x0000 / 0x0004), 00002000
-102030405060708:         Extension type: 1, length 4 (0x0001 / 0x0004), 00004000
-102030405060708:         Extension type: 5, length 2 (0x0005 / 0x0002), 05c0
-102030405060708:         Extension type: 7, length 1 (0x0007 / 0x0001), 11
+102030405060708:     Extension list (38 bytes):
+102030405060708:         Extension type: 1, length 2 (0x0001 / 0x0002), 400a
+102030405060708:         Extension type: 8, length 1 (0x0008 / 0x0001), 02
+102030405060708:         Extension type: 5, length 4 (0x0005 / 0x0004), 80002000
+102030405060708:         Extension type: 4, length 4 (0x0004 / 0x0004), 80004000
+102030405060708:         Extension type: 3, length 2 (0x0003 / 0x0002), 45c0
+102030405060708:         Extension type: 10, length 1 (0x000a / 0x0001), 11
 
 102030405060708: Version: 50435131
-102030405060708:     Supported version (16 bytes):
+102030405060708:     Supported version (12 bytes):
 102030405060708:         50435131
 102030405060708:         50435130
-102030405060708:         ff000010
-102030405060708:         ff00000f
-102030405060708:     Extension list (87 bytes):
-102030405060708:         Extension type: 0, length 4 (0x0000 / 0x0004), 01000000
-102030405060708:         Extension type: 1, length 4 (0x0001 / 0x0004), 01000000
-102030405060708:         Extension type: 2, length 2 (0x0002 / 0x0002), 0002
-102030405060708:         Extension type: 3, length 2 (0x0003 / 0x0002), 00ff
-102030405060708:         Extension type: 5, length 2 (0x0005 / 0x0002), 05c8
-102030405060708:         Extension type: 6, length 16 (0x0006 / 0x0010), 0102030405060708090a0b0c0d0e0f10
-102030405060708:         Extension type: 4, length 29 (0x0004 / 0x001d), 04040a000001115104010203040102030405060708090a0b0c0d0e0f10
+102030405060708:         ff000011
+102030405060708:     Extension list (86 bytes):
+102030405060708:         Extension type: 5, length 4 (0x0005 / 0x0004), 81000000
+102030405060708:         Extension type: 4, length 4 (0x0004 / 0x0004), 81000000
+102030405060708:         Extension type: 8, length 1 (0x0008 / 0x0001), 02
+102030405060708:         Extension type: 1, length 2 (0x0001 / 0x0002), 40ff
+102030405060708:         Extension type: 3, length 2 (0x0003 / 0x0002), 45c8
+102030405060708:         Extension type: 2, length 16 (0x0002 / 0x0010), 0102030405060708090a0b0c0d0e0f10
+102030405060708:         Extension type: 13, length 29 (0x000d / 0x001d), 04040a000001115104010203040102030405060708090a0b0c0d0e0f10
 

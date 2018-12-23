@@ -1028,7 +1028,7 @@ static int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
 }
 
 
-static int wait_application_pn_enc_ready(picoquic_test_tls_api_ctx_t* test_ctx,
+static int wait_application_aead_ready(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t * simulated_time)
 {
     int ret = 0;
@@ -1487,7 +1487,7 @@ int tls_api_server_reset_test()
     }
 
     if (ret == 0) {
-        ret = wait_application_pn_enc_ready(test_ctx, &simulated_time);
+        ret = wait_application_aead_ready(test_ctx, &simulated_time);
     }
 
     /* verify that client and server have the same reset secret */
@@ -2338,7 +2338,7 @@ int pn_enc_1rtt_test()
     }
 
     if (ret == 0) {
-        ret = wait_application_pn_enc_ready(test_ctx, &simulated_time);
+        ret = wait_application_aead_ready(test_ctx, &simulated_time);
     }
 
     if (ret == 0)
@@ -3168,7 +3168,7 @@ int spin_bit_test()
         }
     }
 
-    /* Explote the data sending loop so we can observe the spin bit  */
+    /* Explore the data sending loop so we can observe the spin bit  */
     if (ret == 0) {
         uint64_t spin_begin_time = simulated_time;
         uint64_t next_time = simulated_time + 10000000;
@@ -3176,7 +3176,7 @@ int spin_bit_test()
         int nb_trials = 0;
         int nb_inactive = 0;
         int max_trials = 100000;
-        int current_spin = test_ctx->cnx_client->path[0]->spin_data.s_qr.current_spin;
+        int current_spin = test_ctx->cnx_client->path[0]->spin_data.s_basic.current_spin;
 
         test_ctx->c_to_s_link->loss_mask = &loss_mask;
         test_ctx->s_to_c_link->loss_mask = &loss_mask;
@@ -3193,9 +3193,9 @@ int spin_bit_test()
                 break;
             }
 
-            if (test_ctx->cnx_client->path[0]->spin_data.s_qr.current_spin != current_spin) {
+            if (test_ctx->cnx_client->path[0]->spin_data.s_basic.current_spin != current_spin) {
                 spin_count++;
-                current_spin = test_ctx->cnx_client->path[0]->spin_data.s_qr.current_spin;
+                current_spin = test_ctx->cnx_client->path[0]->spin_data.s_basic.current_spin;
             }
 
             if (was_active) {
@@ -3327,7 +3327,7 @@ int client_error_test()
     }
 
     if (ret == 0){
-        ret = wait_application_pn_enc_ready(test_ctx, &simulated_time);
+        ret = wait_application_aead_ready(test_ctx, &simulated_time);
     }
 
     if (ret == 0) {
@@ -4339,7 +4339,7 @@ static int aead_iv_check(void * aead1, void * aead2)
     return ret;
 }
 
-
+#if 0
 static int pn_enc_check(void * pn1, void * pn2)
 {
     int ret = 0;
@@ -4356,6 +4356,7 @@ static int pn_enc_check(void * pn1, void * pn2)
     }
     return ret;
 }
+#endif
 
 int new_rotated_key_test()
 {
@@ -4369,7 +4370,7 @@ int new_rotated_key_test()
     }
 
     if (ret == 0) {
-        ret = wait_application_pn_enc_ready(test_ctx, &simulated_time);
+        ret = wait_application_aead_ready(test_ctx, &simulated_time);
     }
 
 
@@ -4417,6 +4418,7 @@ int new_rotated_key_test()
                 DBG_PRINTF("Round %d. Server AEAD decryption does not match cliens AEAD encryption.\n", i);
                 ret = -1;
             }
+#if 0
             else if (pn_enc_check(test_ctx->cnx_server->crypto_context_new.pn_enc, test_ctx->cnx_client->crypto_context_new.pn_dec) != 0) {
                 DBG_PRINTF("Round %d. Client PN decryption does not match server PN encryption.\n", i);
                 ret = -1;
@@ -4425,6 +4427,7 @@ int new_rotated_key_test()
                 DBG_PRINTF("Round %d. Server PN decryption does not match client PN encryption.\n", i);
                 ret = -1;
             }
+#endif
         }
 
         picoquic_crypto_context_free(&test_ctx->cnx_server->crypto_context_new);

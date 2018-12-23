@@ -948,7 +948,7 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
     int notified_ready = 0;int zero_rtt_available = 0;
 
     if (alpn == NULL) {
-        alpn = (proposed_version == 0xFF00000D) ? "hq-13" : ((proposed_version == 0xFF00000D) ? "hq-14" : ((proposed_version == 0xFF00000F) ? "hq-15" : "hq-16"));
+        alpn = "hq-17";
     }
 
     memset(&callback_ctx, 0, sizeof(picoquic_first_client_callback_ctx_t));

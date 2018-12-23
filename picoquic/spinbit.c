@@ -36,76 +36,13 @@ void picoquic_spinbit_basic_incoming(picoquic_cnx_t * cnx, picoquic_path_t * pat
 
 uint8_t picoquic_spinbit_basic_outgoing(picoquic_cnx_t * cnx)
 {
-    uint8_t spin_bit = (uint8_t)((cnx->path[0]->spin_data.s_basic.current_spin) << 2);
-
-    spin_bit |= (uint8_t)(picoquic_public_random_64() & 3);
+    uint8_t spin_bit = (uint8_t)((cnx->path[0]->spin_data.s_basic.current_spin) << 5);
 
     return spin_bit;
 }
 
 /*
- * Two procedures defining the spin bit VEC variant
- */
-
-void picoquic_spinbit_vec_incoming(picoquic_cnx_t * cnx, picoquic_path_t * path_x, picoquic_packet_header * ph)
-{
-    path_x->spin_data.s_vec.current_spin = ph->spin ^ cnx->client_mode;
-
-    if (ph->has_spin_bit && path_x->spin_data.s_vec.current_spin != path_x->spin_data.s_vec.prev_spin) {
-        // got an edge 
-        path_x->spin_data.s_vec.prev_spin = path_x->spin_data.s_vec.current_spin;
-        path_x->spin_data.s_vec.spin_edge = 1;
-        path_x->spin_data.s_vec.spin_vec = (ph->spin_opt == 3) ? 3 : (ph->spin_opt + 1);
-        path_x->spin_data.s_vec.spin_last_trigger = picoquic_get_quic_time(cnx->quic);
-    }
-}
-
-uint8_t picoquic_spinbit_vec_outgoing(picoquic_cnx_t * cnx)
-{
-    uint8_t spin_vec = (uint8_t)(cnx->path[0]->spin_data.s_vec.spin_vec);
-
-    if (!cnx->path[0]->spin_data.s_vec.spin_edge) {
-        spin_vec = 0;
-    } else {
-        cnx->path[0]->spin_data.s_vec.spin_edge = 0;
-        uint64_t dt = picoquic_get_quic_time(cnx->quic) - cnx->path[0]->spin_data.s_vec.spin_last_trigger;
-        if (dt > PICOQUIC_SPIN_VEC_LATE) { // DELAYED
-            spin_vec = 1;
-        }
-    }
-	
-	return spin_vec | (uint8_t)((cnx->path[0]->spin_data.s_vec.current_spin) << 2);
-}
-
-/*
- * Two procedures defining the spin bit with QR loss bits
- */
-
-void picoquic_spinbit_sqr_incoming(picoquic_cnx_t * cnx, picoquic_path_t * path_x, picoquic_packet_header * ph)
-{
-    path_x->spin_data.s_qr.current_spin = ph->spin ^ cnx->client_mode;
-}
-
-uint8_t picoquic_spinbit_sqr_outgoing(picoquic_cnx_t * cnx)
-{
-    picoquic_path_t *pa = cnx->path[0];
-    uint8_t rbit = 0;
-
-    if (pa->retrans_count > pa->spin_data.s_qr.retrans_signalled) {
-        pa->spin_data.s_qr.retrans_signalled++;
-        rbit = 1;
-    }
-    pa->spin_data.s_qr.loss_q_index++;
-    if (pa->spin_data.s_qr.loss_q_index >= PICOQUIC_LOSS_Q_PERIOD) {
-        pa->spin_data.s_qr.loss_q_index = 0;
-        pa->spin_data.s_qr.loss_q = (1 - pa->spin_data.s_qr.loss_q);
-    }
-
-    return (uint8_t)((pa->spin_data.s_qr.current_spin << 2) | (pa->spin_data.s_qr.loss_q << 1) | rbit);
-}
-
-/*
- * Two procedures defining the null spin bit randomized variant
+ * Two procedures defining the null spin bit variant
  */
 
 void picoquic_spinbit_null_incoming(picoquic_cnx_t * cnx, picoquic_path_t * path_x, picoquic_packet_header * ph)
@@ -122,11 +59,27 @@ uint8_t picoquic_spinbit_null_outgoing(picoquic_cnx_t * cnx)
 }
 
 /*
+ * Two procedures defining the null spin bit randomized variant
+ */
+
+void picoquic_spinbit_random_incoming(picoquic_cnx_t * cnx, picoquic_path_t * path_x, picoquic_packet_header * ph)
+{
+    UNREFERENCED_PARAMETER(cnx);
+    UNREFERENCED_PARAMETER(path_x);
+    UNREFERENCED_PARAMETER(ph);
+}
+
+uint8_t picoquic_spinbit_random_outgoing(picoquic_cnx_t * cnx)
+{
+    UNREFERENCED_PARAMETER(cnx);
+    return (uint8_t) (picoquic_public_random_64()&0x20);
+}
+
+/*
  * Table of spin bit functions
  */
 picoquic_spinbit_def_t picoquic_spin_function_table[] = {
     {picoquic_spinbit_basic_incoming, picoquic_spinbit_basic_outgoing},
-	{picoquic_spinbit_vec_incoming, picoquic_spinbit_vec_outgoing},
-	{picoquic_spinbit_null_incoming, picoquic_spinbit_null_outgoing},
-	{picoquic_spinbit_sqr_incoming, picoquic_spinbit_sqr_outgoing}
+    {picoquic_spinbit_random_incoming, picoquic_spinbit_random_outgoing},
+	{picoquic_spinbit_null_incoming, picoquic_spinbit_null_outgoing}
 };
