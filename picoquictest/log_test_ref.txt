@@ -7,11 +7,13 @@
         Reason: test
     MAX DATA: 0x10000000000.
     MAX STREAM DATA, Stream: 1, max data: 0x10000.
-    MAX STREAM ID: 256.
+    max_streams_bidir: 256.
+    max_streams_unidir: 263.
     ping, 1 bytes
     BLOCKED: offset 65536.
     STREAM BLOCKED: 65536.
-    streams_blocked frame
+    streams_blocked_bidir: 256
+    streams_blocked_unidir: 16909060
     NEW CONNECTION ID[7]: 0x0102030405060708, a0a1a2a3a4a5a6a7a8a9aaabacadaeaf
     STOP SENDING 17 (0x00000011), Error 0x4000.
     path_challenge: 0102030405060708

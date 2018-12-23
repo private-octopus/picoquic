@@ -83,12 +83,12 @@ typedef enum {
     picoquic_frame_type_stream_range_max = 0x0f,
     picoquic_frame_type_max_data = 0x10,
     picoquic_frame_type_max_stream_data = 0x11,
-    picoquic_frame_type_max_stream_id = 0x12,
-    // picoquic_frame_type_max_stream_id = 0x13,
+    picoquic_frame_type_max_streams_bidir = 0x12,
+    picoquic_frame_type_max_streams_unidir = 0x13,
     picoquic_frame_type_data_blocked = 0x14,
     picoquic_frame_type_stream_data_blocked = 0x15,
-    picoquic_frame_type_streams_blocked = 0x16,
-    //picoquic_frame_type_streams_blocked = 0x17,
+    picoquic_frame_type_streams_blocked_bidir = 0x16,
+    picoquic_frame_type_streams_blocked_unidir = 0x17,
     picoquic_frame_type_new_connection_id = 0x18,
     picoquic_frame_type_retire_connection_id = 0x19,
     picoquic_frame_type_path_challenge = 0x1a,
@@ -410,7 +410,8 @@ typedef struct _picoquic_stream_head {
 #define IS_CLIENT_STREAM_ID(id) (unsigned int)(((id) & 1) == 0)
 #define IS_BIDIR_STREAM_ID(id)  (unsigned int)(((id) & 2) == 0)
 #define IS_LOCAL_STREAM_ID(id, client_mode)  (unsigned int)(((id)^(client_mode)) & 1)
-
+#define STREAM_ID_FROM_RANK(rank, client_mode, is_unidir) (((rank)<<2)|((is_unidir)<<1)|(client_mode))
+#define STREAM_RANK_FROM_ID(id) ((id)>>2)
 /*
  * Frame queue. This is used for miscellaneous packets, such as the PONG
  * response to a PING.
@@ -1011,7 +1012,7 @@ int picoquic_prepare_required_max_stream_data_frames(picoquic_cnx_t* cnx,
 int picoquic_prepare_max_data_frame(picoquic_cnx_t* cnx, uint64_t maxdata_increase,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
 void picoquic_update_max_stream_ID_local(picoquic_cnx_t* cnx, picoquic_stream_head* stream);
-int picoquic_prepare_max_stream_ID_frame_if_needed(picoquic_cnx_t* cnx,
+int picoquic_prepare_max_streams_frame_if_needed(picoquic_cnx_t* cnx,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
 void picoquic_clear_stream(picoquic_stream_head* stream);
 int picoquic_prepare_path_challenge_frame(uint8_t* bytes,

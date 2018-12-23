@@ -2207,7 +2207,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
 
                     /* if necessary, prepare the MAX STREAM frames */
                     if (ret == 0) {
-                        ret =  picoquic_prepare_max_stream_ID_frame_if_needed(cnx,
+                        ret =  picoquic_prepare_max_streams_frame_if_needed(cnx,
                             &bytes[length], send_buffer_min_max - checksum_overhead - length, &data_bytes);
                         if (ret == 0) {
                             length += (uint32_t)data_bytes;

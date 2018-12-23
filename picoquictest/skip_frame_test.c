@@ -64,30 +64,44 @@ static uint8_t test_frame_type_max_data[] = {
     picoquic_frame_type_max_data,
     0xC0, 0, 0x01, 0, 0, 0, 0, 0
 };
+
 static uint8_t test_frame_type_max_stream_data[] = {
     picoquic_frame_type_max_stream_data,
     1,
     0x80, 0x01, 0, 0
 };
-static uint8_t test_frame_type_max_stream_id[] = {
-    picoquic_frame_type_max_stream_id,
+
+static uint8_t test_frame_type_max_streams_bidir[] = {
+    picoquic_frame_type_max_streams_bidir,
     0x41, 0
 };
+
+static uint8_t test_frame_type_max_streams_unidir[] = {
+    picoquic_frame_type_max_streams_unidir,
+    0x41, 7
+};
+
 static uint8_t test_frame_type_ping[] = {
     picoquic_frame_type_ping
 };
+
 static uint8_t test_frame_type_blocked[] = {
     picoquic_frame_type_data_blocked,
     0x80, 0x01, 0, 0
 };
+
 static uint8_t test_frame_type_stream_blocked[] = {
     picoquic_frame_type_stream_data_blocked,
     0x80, 1, 0, 0,
     0x80, 0x01, 0, 0
 };
-static uint8_t test_frame_type_stream_id_needed[] = {
-    picoquic_frame_type_streams_blocked,
+static uint8_t test_frame_type_streams_blocked_bidir[] = {
+    picoquic_frame_type_streams_blocked_bidir,
     0x41, 0
+};
+static uint8_t test_frame_type_streams_blocked_unidir[] = {
+    picoquic_frame_type_streams_blocked_unidir,
+    0x81, 2, 3, 4
 };
 static uint8_t test_frame_type_new_connection_id[] = {
     picoquic_frame_type_new_connection_id,
@@ -180,11 +194,13 @@ test_skip_frames_t test_skip_list[] = {
     TEST_SKIP_ITEM("application_close", test_type_application_close_reason, 0, 0, 3),
     TEST_SKIP_ITEM("max_data", test_frame_type_max_data, 0, 0, 3),
     TEST_SKIP_ITEM("max_stream_data", test_frame_type_max_stream_data, 0, 0, 3),
-    TEST_SKIP_ITEM("max_stream_id", test_frame_type_max_stream_id, 0, 0, 3),
+    TEST_SKIP_ITEM("max_streams_bidir", test_frame_type_max_streams_bidir, 0, 0, 3),
+    TEST_SKIP_ITEM("max_streams_unidir", test_frame_type_max_streams_unidir, 0, 0, 3),
     TEST_SKIP_ITEM("ping", test_frame_type_ping, 0, 0, 3),
     TEST_SKIP_ITEM("blocked", test_frame_type_blocked, 0, 0, 3),
-    TEST_SKIP_ITEM("stream_blocked", test_frame_type_stream_blocked, 0, 0, 3),
-    TEST_SKIP_ITEM("stream_id_needed", test_frame_type_stream_id_needed, 0, 0, 3),
+    TEST_SKIP_ITEM("stream_data_blocked", test_frame_type_stream_blocked, 0, 0, 3),
+    TEST_SKIP_ITEM("streams_blocked_bidir", test_frame_type_streams_blocked_bidir, 0, 0, 3),
+    TEST_SKIP_ITEM("streams_blocked_unidir", test_frame_type_streams_blocked_unidir, 0, 0, 3),
     TEST_SKIP_ITEM("new_connection_id", test_frame_type_new_connection_id, 0, 0, 3),
     TEST_SKIP_ITEM("stop_sending", test_frame_type_stop_sending, 0, 0, 3),
     TEST_SKIP_ITEM("challenge", test_frame_type_path_challenge, 1, 0, 3),
