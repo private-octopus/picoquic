@@ -49,7 +49,7 @@ before_script:
   # First build external lib
   - ./ci/build_picotls.sh
   - if [ "$CHECK" == "cppcheck" ]; then ./ci/build_cppcheck.sh; fi
-  - sudo sh -c 'echo 0 > /proc/sys/net/ipv6/conf/all/disable_ipv6'
+  - if [ "$TRAVIS_OS_NAME" == "linux" ]; then sudo sh -c 'echo 0 > /proc/sys/net/ipv6/conf/all/disable_ipv6'; fi
 script:
   # Now build picotls examples and test
   - echo $CC
