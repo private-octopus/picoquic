@@ -40,9 +40,13 @@ matrix:
               - CHECK="cppcheck"
         - name: macOS (xcode)
           os: osx
+          env:
+              - CMAKE_OPTS=" -DOPENSSL_ROOT_DIR=/usr/local/opt/openssl/"
         - name: macOS (xcode 10.1/clang-10)
           os: osx
           osx_image: xcode10.1
+          env:
+              - CMAKE_OPTS=" -DOPENSSL_ROOT_DIR=/usr/local/opt/openssl/"
 before_install:
   - cmake --version
 before_script:
@@ -54,7 +58,7 @@ script:
   # Now build picotls examples and test
   - echo $CC
   - echo $CXX
-  - ${EXTRA} cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON .
+  - ${EXTRA} cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ${CMAKE_OPTS} .
   - if [ "$CHECK" == "cppcheck" ]; then cppcheck --project=compile_commands.json --quiet; fi
   - ${EXTRA} make
   - ulimit -c unlimited -S
