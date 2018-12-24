@@ -11,6 +11,7 @@ addons:
     - cmake-data
     - libssl-dev 
     - gdb
+    - cppcheck
 matrix:
     include:
         - name: Linux (gcc-8)
@@ -33,6 +34,11 @@ matrix:
               - CC=/usr/local/clang/libexec/ccc-analyzer
               - CXX=/usr/local/clang/libexec/c++-analyzer
               - EXTRA="scan-build"
+        - name: Linux (cppcheck)
+          os: linux
+          dist: xenial
+          env:
+              - CHECK="cppcheck"
 before_install:
   - cmake --version
 before_script:
@@ -43,7 +49,8 @@ script:
   # Now build picotls examples and test
   - echo $CC
   - echo $CXX
-  - ${EXTRA} cmake .
+  - ${EXTRA} cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON .
+  - if [ "$CHECK" == "cppcheck" ]; then cppcheck --project=compile_commands.json; fi
   - ${EXTRA} make
   - ulimit -c unlimited -S
   - ./picoquic_ct -n && RESULT=$?
