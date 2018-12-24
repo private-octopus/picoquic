@@ -768,14 +768,12 @@ int picoquic_setup_initial_secrets(
 
     /* Get the client secret */
     ret = ptls_hkdf_expand_label(cipher->hash, client_secret, cipher->hash->digest_size,
-        prk, PICOQUIC_LABEL_INITIAL_CLIENT, ptls_iovec_init(NULL, 0),
-        PICOQUIC_LABEL_QUIC_BASE);
+        prk, PICOQUIC_LABEL_INITIAL_CLIENT, ptls_iovec_init(NULL, 0), NULL);
 
     if (ret == 0) {
         /* Get the server secret */
         ret = ptls_hkdf_expand_label(cipher->hash, server_secret, cipher->hash->digest_size,
-            prk, PICOQUIC_LABEL_INITIAL_SERVER, ptls_iovec_init(NULL, 0),
-            PICOQUIC_LABEL_QUIC_BASE);
+            prk, PICOQUIC_LABEL_INITIAL_SERVER, ptls_iovec_init(NULL, 0), NULL);
     }
 
     return ret;

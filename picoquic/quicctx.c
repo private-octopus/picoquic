@@ -141,6 +141,12 @@ static uint8_t picoquic_cleartext_draft_10_salt[] = {
     0xe0, 0x6d, 0x6c, 0x38
 };
 
+static uint8_t picoquic_cleartext_draft_17_salt[] = {
+     0xef, 0x4f, 0xb0, 0xab, 0xb4, 0x74, 0x70, 0xc4,
+     0x1b, 0xef, 0xcf, 0x80, 0x31, 0x33, 0x4f, 0xae,
+     0x48, 0x5e, 0x09, 0xa0
+};
+
 /* Support for draft 13! */
 const picoquic_version_parameters_t picoquic_supported_versions[] = {
     { PICOQUIC_INTERNAL_TEST_VERSION_2,
@@ -156,8 +162,8 @@ const picoquic_version_parameters_t picoquic_supported_versions[] = {
     { PICOQUIC_TENTH_INTEROP_VERSION,
         picoquic_version_header_17,
         picoquic_spinbit_basic,
-        sizeof(picoquic_cleartext_draft_10_salt),
-        picoquic_cleartext_draft_10_salt }
+        sizeof(picoquic_cleartext_draft_17_salt),
+        picoquic_cleartext_draft_17_salt }
 };
 
 const size_t picoquic_nb_supported_versions = sizeof(picoquic_supported_versions) / sizeof(picoquic_version_parameters_t);
