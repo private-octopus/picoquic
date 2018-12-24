@@ -38,6 +38,11 @@ matrix:
           dist: xenial
           env:
               - CHECK="cppcheck"
+        - name: macOS (xcode)
+          os: osx
+        - name: macOS (xcode 10.1/clang-10)
+          os: osx
+          osx_image: xcode10.1
 before_install:
   - cmake --version
 before_script:
