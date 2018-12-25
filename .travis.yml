@@ -50,7 +50,7 @@ script:
   - echo $CC
   - echo $CXX
   - ${EXTRA} cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON .
-  - if [ "$CHECK" == "cppcheck" ]; then cppcheck --project=compile_commands.json; fi
+  - if [ "$CHECK" == "cppcheck" ]; then cppcheck --project=compile_commands.json --quiet; fi
   - ${EXTRA} make
   - ulimit -c unlimited -S
   - ./picoquic_ct -n && RESULT=$?
