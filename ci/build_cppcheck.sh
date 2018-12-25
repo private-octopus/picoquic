@@ -1,10 +1,9 @@
 #!/bin/sh
-#build last cppcheck 1.84 (for Travis)
+#build last cppcheck 1.86 (for Travis)
 
 cd ..
-git clone https://github.com/danmar/cppcheck.git
+git clone -b "1.86" --depth 1 https://github.com/danmar/cppcheck.git
 cd cppcheck
-git checkout Cppcheck
 cmake .
 make -j$(nproc) all
 sudo make install
