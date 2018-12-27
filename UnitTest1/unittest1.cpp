@@ -483,13 +483,6 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(test_cleartext_aead_vector)
-        {
-            int ret = cleartext_aead_vector_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
         TEST_METHOD(key_rotation_vector)
         {
             int ret = key_rotation_vector_test();
@@ -497,9 +490,9 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
         
-        TEST_METHOD(draft13_vector)
+        TEST_METHOD(draft17_vector)
         {
-            int ret = draft13_vector_test();
+            int ret = draft17_vector_test();
 
             Assert::AreEqual(ret, 0);
         }

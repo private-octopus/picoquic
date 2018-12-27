@@ -30,7 +30,7 @@
 
 #define PICOQUIC_LABEL_KEY "key"
 #define PICOQUIC_LABEL_IV "iv"
-#define PICOQUIC_LABEL_HP "pn"
+#define PICOQUIC_LABEL_HP "hp"
 
 #define PICOQUIC_LABEL_QUIC_BASE NULL
 #define PICOQUIC_LABEL_QUIC_KEY_BASE "tls13 quic "
