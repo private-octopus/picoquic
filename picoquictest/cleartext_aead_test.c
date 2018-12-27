@@ -207,18 +207,6 @@ int cleartext_aead_test()
 
     return ret;
 }
-#if 0
-static picoquic_connection_id_t clear_test_vector_cnx_id = { { 0x83, 0x94, 0xc8, 0xf0, 0x3e, 0x51, 0x57, 0x08 }, 8 };
-#endif
-static uint32_t clear_test_vector_vn = 0xff000010;
-#if 0
-static uint8_t clear_test_vector_client_iv[12] = {
-    0xab, 0x95, 0x0b, 0x01, 0x98, 0x63, 0x79, 0x78,
-    0xcf, 0x44, 0xaa, 0xb9 };
-static uint8_t clear_test_vector_server_iv[12] = {
-    0x32, 0x05, 0x03, 0x5a, 0x3c, 0x93, 0x7c, 0x90,
-    0x2e, 0xe4, 0xf4, 0xd6 };
-#endif
 
 static int cleartext_iv_cmp(void * void_aead, uint8_t * ref_iv, size_t iv_length)
 {
@@ -227,7 +215,8 @@ static int cleartext_iv_cmp(void * void_aead, uint8_t * ref_iv, size_t iv_length
     return memcmp(aead->static_iv, ref_iv, iv_length);
 }
 
-int cleartext_aead_vector_test_one(picoquic_connection_id_t test_id, uint8_t * client_iv, size_t client_iv_length,
+int cleartext_aead_vector_test_one(picoquic_connection_id_t test_id, uint32_t test_vn,
+    uint8_t * client_iv, size_t client_iv_length,
     uint8_t * server_iv, size_t server_iv_length, char const * test_name)
 {
     int ret = 0;
@@ -247,7 +236,7 @@ int cleartext_aead_vector_test_one(picoquic_connection_id_t test_id, uint8_t * c
         test_addr_c.sin_port = 12345;
 
         cnx_client = picoquic_create_cnx(qclient, test_id, picoquic_null_connection_id,
-            (struct sockaddr*)&test_addr_c, 0, clear_test_vector_vn, NULL, NULL, 1);
+            (struct sockaddr*)&test_addr_c, 0, test_vn, NULL, NULL, 1);
 
         if (cnx_client == NULL) {
             DBG_PRINTF("%s: Could not create client connection context.\n", test_name);
@@ -286,16 +275,6 @@ int cleartext_aead_vector_test_one(picoquic_connection_id_t test_id, uint8_t * c
     }
 
     return ret;
-}
-
-int cleartext_aead_vector_test()
-{
-#if 0
-    return cleartext_aead_vector_test_one(clear_test_vector_cnx_id, clear_test_vector_client_iv, sizeof(clear_test_vector_client_iv),
-        clear_test_vector_server_iv, sizeof(clear_test_vector_server_iv), "aead_vector");
-#else
-    return 0;
-#endif
 }
 
 /*
@@ -627,11 +606,10 @@ int cleartext_pn_vector_test()
     return ret;
 }
 
-#if 0
 /*
- * draft-13 test was copied from EKR test vector, but we now need draft-17 vector!
+ * draft-17 vectors copied from Tatsuhiro's data. We do not have a complete message.
  */
-
+#if 0
 static uint8_t draft15_test_input_packet[] = {
     0xff, 0xff, 0x00, 0x00, 0x0f, 0x50, 0x06, 0xb8, 0x58, 0xec,
     0x6f, 0x80, 0x45, 0x2b, 0x00, 0x40, 0x44, 0xef, 0xa5, 0xd8, 0xd3,
@@ -762,75 +740,93 @@ static uint8_t draft15_test_input_packet[] = {
     0xd8, 0x3c, 0x85, 0x22, 0xf3, 0x0b, 0xeb, 0x4e, 0xaa, 0xf4,
     0xa6, 0xf9, 0x08, 0xfe, 0x2a, 0x6e, 0xe7, 0x54, 0xc8, 0x96
 };
-
-static uint32_t draft15_test_vn = 0xff00000f;
-
-static picoquic_connection_id_t draft13_test_cnx_id = { 
-    { 0x06, 0xb8, 0x58, 0xec, 0x6f, 0x80, 0x45, 0x2b }, 8 };
-
-static uint8_t draft13_test_salt[] = {
-    0x9c, 0x10, 0x8f, 0x98, 0x52, 0x0a, 0x5c, 0x5c, 0x32, 0x96,
-    0x8e, 0x95, 0x0e, 0x8a, 0x2c, 0x5f, 0xe0, 0x6d, 0x6c, 0x38
-};
-
-static uint8_t draft13_test_server_initial_secret[] = {
-    0x7e, 0x0a, 0xba, 0x2c, 0x4b, 0x97, 0x42, 0xd0, 0xd1, 0x30,
-    0xbc, 0x73, 0x18, 0x62, 0x2a, 0xd3, 0xb4, 0x4a, 0xca, 0x1f,
-    0x09, 0xab, 0xb1, 0x9b, 0x3f, 0x39, 0x4c, 0xd7, 0xe2, 0x0f,
-    0x4b, 0xe0
-};
-
-static uint8_t draft13_test_server_key[] = {
-    0x26, 0x08, 0x0e, 0x60, 0xd2, 0x88, 0xdb, 0x7d, 0xf8, 0x16,
-    0xa1, 0xcb, 0x0b, 0xc6, 0xc7, 0xf4
-};
-
-static uint8_t draft13_test_server_iv[] = {
-    0xb9, 0xfd, 0xc5, 0xb4, 0x48, 0xaf, 0x3e, 0x02, 0x34, 0x22,
-    0x44, 0x3b
-};
-
-static uint8_t draft13_test_server_pn[] = {
-    0x00, 0xba, 0xbb, 0xe1, 0xbe, 0x0f, 0x0c, 0x66, 0x18, 0x18,
-    0x8b, 0x4f, 0xcc, 0xa5, 0x7a, 0x96
-};
-
-static uint8_t draft13_test_client_initial_secret[] = {
-    0x82, 0xa7, 0x35, 0x72, 0xe7, 0xcb, 0x89, 0x52, 0x3b, 0x68,
-    0xc3, 0x9e, 0xaa, 0x83, 0x25, 0x40, 0x4f, 0x86, 0x49, 0x8c,
-    0x8e, 0x24, 0x37, 0xdf, 0xdc, 0xe1, 0x0f, 0x9c, 0x34, 0x28,
-    0x1a, 0x3d
-};
-
-static uint8_t draft13_test_client_key[] = {
-    0xa7, 0x99, 0x43, 0x56, 0x6c, 0x41, 0x34, 0x2f, 0x2b, 0xc3,
-    0xde, 0x6b, 0x7c, 0x15, 0x39, 0xdf
-};
-
-static uint8_t draft13_test_client_iv[] = {
-    0x84, 0xeb, 0x95, 0x4f, 0xfe, 0x16, 0x1c, 0x38, 0x75, 0x91,
-    0x9f, 0x5f
-};
-
-static uint8_t draft13_test_client_pn[] = {
-    0x5c, 0x0f, 0x64, 0x72, 0xa1, 0x56, 0x58, 0x04, 0x7a, 0x3c,
-    0xc1, 0xf1, 0x54, 0x78, 0xdc, 0xf4
-};
-
 #endif
+
+static uint32_t draft17_test_vn = 0xff000011;
+
+static picoquic_connection_id_t draft17_test_cnx_id = { 
+    { 0x7d, 0xdc, 0x42, 0x90, 0xc4, 0xe7, 0xd2, 0x04 }, 8 };
+
+static uint8_t draft17_test_salt[] = {
+     0xef, 0x4f, 0xb0, 0xab, 0xb4, 0x74, 0x70, 0xc4,
+     0x1b, 0xef, 0xcf, 0x80, 0x31, 0x33, 0x4f, 0xae,
+     0x48, 0x5e, 0x09, 0xa0
+};
+
+/* initial_secret = e56c751dbc9ab8e79f616142c0c07ab830eb25968faeb7404da69a80f75f1c7c */
+static uint8_t draft17_initial_secret[] = {
+    0xe5, 0x6c, 0x75, 0x1d, 0xbc, 0x9a, 0xb8, 0xe7, 
+    0x9f, 0x61, 0x61, 0x42, 0xc0, 0xc0, 0x7a, 0xb8, 
+    0x30, 0xeb, 0x25, 0x96, 0x8f, 0xae, 0xb7, 0x40, 
+    0x4d, 0xa6, 0x9a, 0x80, 0xf7, 0x5f, 0x1c, 0x7c
+};
+
+/* server_in_secret=5eac7474 7872fe6d 9ecbac75 df87abc4 bb4374c8 e6636549 da718b9f 722f0d6a */
+static uint8_t draft17_test_server_initial_secret[] = {
+    0x5e, 0xac, 0x74, 0x74, 0x78, 0x72, 0xfe, 0x6d,
+    0x9e, 0xcb, 0xac, 0x75, 0xdf, 0x87, 0xab, 0xc4,
+    0xbb, 0x43, 0x74, 0xc8, 0xe6, 0x63, 0x65, 0x49,
+    0xda, 0x71, 0x8b, 0x9f, 0x72, 0x2f, 0x0d, 0x6a
+};
+
+/*  server_pp_key=f367a4c1 2f7726d9 2ccea21b 9339a871 */
+static uint8_t draft17_test_server_key[] = {
+    0xf3, 0x67, 0xa4, 0xc1, 0x2f, 0x77, 0x26, 0xd9,
+    0x2c, 0xce, 0xa2, 0x1b, 0x93, 0x39, 0xa8, 0x71
+};
+
+/* server_pp_iv = 448214c966314d8f540b7b43 */
+static uint8_t draft17_test_server_iv[] = {
+    0x44, 0x82, 0x14, 0xc9, 0x66, 0x31, 0x4d, 0x8f, 0x54, 0x0b, 0x7b, 0x43
+};
+
+/* server_pp_hp = 922b113f1b2a815f084254f981a0b097 */
+static uint8_t draft17_test_server_pn[] = {
+    0x92, 0x2b, 0x11, 0x3f, 0x1b, 0x2a, 0x81, 0x5f,
+    0x08, 0x42, 0x54, 0xf9, 0x81, 0xa0, 0xb0, 0x97
+};
+
+/* client_in_secret = f88616781056a6ac007087d121ce158ea8c770a1e62899616cde507bb6d60e08 */
+static uint8_t draft17_test_client_initial_secret[] = {
+    0xf8, 0x86, 0x16, 0x78, 0x10, 0x56, 0xa6, 0xac, 
+    0x00, 0x70, 0x87, 0xd1, 0x21, 0xce, 0x15, 0x8e,
+    0xa8, 0xc7, 0x70, 0xa1, 0xe6, 0x28, 0x99, 0x61,
+    0x6c, 0xde, 0x50, 0x7b, 0xb6, 0xd6, 0x0e, 0x08
+};
+
+/* client_pp_key = 1b7e2858101833ce989a77254f3faa62 */
+static uint8_t draft17_test_client_key[] = {
+    0x1b, 0x7e, 0x28, 0x58, 0x10, 0x18, 0x33, 0xce,
+    0x98, 0x9a, 0x77, 0x25, 0x4f, 0x3f, 0xaa, 0x62
+};
+
+/* client_pp_iv = 01a41aa73c43298dcb38bcb6 */
+
+static uint8_t draft17_test_client_iv[] = {
+    0x01, 0xa4, 0x1a, 0xa7, 0x3c, 0x43, 0x29, 0x8d, 0xcb, 0x38, 0xbc, 0xb6
+};
+
+/* client_pp_hp = 9a8542ef399038aba66ef1333809fc5b */
+
+static uint8_t draft17_test_client_pn[] = {
+    0x9a, 0x85, 0x42, 0xef, 0x39, 0x90, 0x38, 0xab,
+    0xa6, 0x6e, 0xf1, 0x33, 0x38, 0x09, 0xfc, 0x5b
+};
+
 
 #if 0
 /* TODO: reset this test when draft-17 vector is available */
-static uint64_t draft13_test_decoded_pn = 0;
+static uint64_t draft17_test_decoded_pn = 0;
 #endif
-#if 0
-static int draft13_label_expansion_test(ptls_cipher_suite_t * cipher, char const * label, uint8_t * secret, size_t secret_length, uint8_t const * key_ref, size_t key_ref_len)
+
+static int draft17_label_expansion_test(ptls_cipher_suite_t * cipher, char const * label, char const * base_label,
+    uint8_t * secret, size_t secret_length, uint8_t const * key_ref, size_t key_ref_len)
 {
     int ret = 0;
     uint8_t key_out[256];
 
     if ((ret = ptls_hkdf_expand_label(cipher->hash, key_out, key_ref_len, ptls_iovec_init(secret, secret_length),
-        label, ptls_iovec_init(NULL, 0), PICOQUIC_LABEL_QUIC_BASE)) != 0) {
+        label, ptls_iovec_init(NULL, 0), base_label)) != 0) {
         DBG_PRINTF("Cannot expand label <%s>, ret = %x\n", label, ret);
     }
     else if (memcmp(key_out, key_ref, key_ref_len) != 0) {
@@ -840,7 +836,7 @@ static int draft13_label_expansion_test(ptls_cipher_suite_t * cipher, char const
 
     return ret;
 }
-#endif
+
 #if 0
 /* TODO: restore this test once we have a valid incoming message for draft-17 */
 static int draft31_incoming_initial_test()
@@ -881,8 +877,8 @@ static int draft31_incoming_initial_test()
             DBG_PRINTF("Incoming packet type %d instead of initial\n", ph.ptype);
             ret = -1;
         }
-        else if (ph.pn != draft13_test_decoded_pn) {
-            DBG_PRINTF("Incoming packet sequence %d instead of %d\n", ph.pn, draft13_test_decoded_pn);
+        else if (ph.pn != draft17_test_decoded_pn) {
+            DBG_PRINTF("Incoming packet sequence %d instead of %d\n", ph.pn, draft17_test_decoded_pn);
             ret = -1;
         }
         else if (consumed != length) {
@@ -902,11 +898,9 @@ static int draft31_incoming_initial_test()
 #endif
 
 
-int draft13_vector_test()
+int draft17_vector_test()
 {
     int ret = 0;
-
-#if 0
     int version_index = 0;
     ptls_iovec_t salt;
     uint8_t master_secret[256];
@@ -916,68 +910,68 @@ int draft13_vector_test()
 
     /* Check the label expansions */
     if (ret == 0) {
-        ret = draft13_label_expansion_test(&cipher, PICOQUIC_LABEL_KEY,
-            draft13_test_server_initial_secret, sizeof(draft13_test_server_initial_secret),
-            draft13_test_server_key, sizeof(draft13_test_server_key));
+        ret = draft17_label_expansion_test(&cipher, PICOQUIC_LABEL_KEY, PICOQUIC_LABEL_QUIC_KEY_BASE,
+            draft17_test_server_initial_secret, sizeof(draft17_test_server_initial_secret),
+            draft17_test_server_key, sizeof(draft17_test_server_key));
     }
 
     if (ret == 0) {
-        ret = draft13_label_expansion_test(&cipher, PICOQUIC_LABEL_IV,
-            draft13_test_server_initial_secret, sizeof(draft13_test_server_initial_secret),
-            draft13_test_server_iv, sizeof(draft13_test_server_iv));
+        ret = draft17_label_expansion_test(&cipher, PICOQUIC_LABEL_IV, PICOQUIC_LABEL_QUIC_KEY_BASE,
+            draft17_test_server_initial_secret, sizeof(draft17_test_server_initial_secret),
+            draft17_test_server_iv, sizeof(draft17_test_server_iv));
     }
 
     if (ret == 0) {
-        ret = draft13_label_expansion_test(&cipher, PICOQUIC_LABEL_HP,
-            draft13_test_server_initial_secret, sizeof(draft13_test_server_initial_secret),
-            draft13_test_server_pn, sizeof(draft13_test_server_pn));
+        ret = draft17_label_expansion_test(&cipher, PICOQUIC_LABEL_HP, PICOQUIC_LABEL_QUIC_KEY_BASE,
+            draft17_test_server_initial_secret, sizeof(draft17_test_server_initial_secret),
+            draft17_test_server_pn, sizeof(draft17_test_server_pn));
     }
 
     if (ret == 0) {
-        ret = draft13_label_expansion_test(&cipher, PICOQUIC_LABEL_KEY,
-            draft13_test_client_initial_secret, sizeof(draft13_test_client_initial_secret),
-            draft13_test_client_key, sizeof(draft13_test_client_key));
+        ret = draft17_label_expansion_test(&cipher, PICOQUIC_LABEL_KEY, PICOQUIC_LABEL_QUIC_KEY_BASE,
+            draft17_test_client_initial_secret, sizeof(draft17_test_client_initial_secret),
+            draft17_test_client_key, sizeof(draft17_test_client_key));
     }
 
     if (ret == 0) {
-        ret = draft13_label_expansion_test(&cipher, PICOQUIC_LABEL_IV,
-            draft13_test_client_initial_secret, sizeof(draft13_test_client_initial_secret),
-            draft13_test_client_iv, sizeof(draft13_test_client_iv));
+        ret = draft17_label_expansion_test(&cipher, PICOQUIC_LABEL_IV, PICOQUIC_LABEL_QUIC_KEY_BASE,
+            draft17_test_client_initial_secret, sizeof(draft17_test_client_initial_secret),
+            draft17_test_client_iv, sizeof(draft17_test_client_iv));
     }
 
     if (ret == 0) {
-        ret = draft13_label_expansion_test(&cipher, PICOQUIC_LABEL_HP,
-            draft13_test_client_initial_secret, sizeof(draft13_test_client_initial_secret),
-            draft13_test_client_pn, sizeof(draft13_test_client_pn));
+        ret = draft17_label_expansion_test(&cipher, PICOQUIC_LABEL_HP, PICOQUIC_LABEL_QUIC_KEY_BASE,
+            draft17_test_client_initial_secret, sizeof(draft17_test_client_initial_secret),
+            draft17_test_client_pn, sizeof(draft17_test_client_pn));
     }
 
     /* Check the salt */
-    version_index = picoquic_get_version_index(draft15_test_vn);
+    version_index = picoquic_get_version_index(draft17_test_vn);
     if (version_index < 0) {
-        DBG_PRINTF("Test version (%x) is not supported.\n", draft15_test_vn);
+        DBG_PRINTF("Test version (%x) is not supported.\n", draft17_test_vn);
         ret = -1;
     }
     else if (picoquic_supported_versions[version_index].version_aead_key == NULL) {
-        DBG_PRINTF("Test version (%x) has no salt.\n", draft15_test_vn);
+        DBG_PRINTF("Test version (%x) has no salt.\n", draft17_test_vn);
         ret = -1;
     }
-    else if (picoquic_supported_versions[version_index].version_aead_key_length != sizeof(draft13_test_salt))
+    else if (picoquic_supported_versions[version_index].version_aead_key_length != sizeof(draft17_test_salt))
     {
-        DBG_PRINTF("Test version (%x) has no salt[%d], expected [%d].\n", draft15_test_vn,
-            (int)picoquic_supported_versions[version_index].version_aead_key_length, (int) sizeof(draft13_test_salt));
+        DBG_PRINTF("Test version (%x) has no salt[%d], expected [%d].\n", draft17_test_vn,
+            (int)picoquic_supported_versions[version_index].version_aead_key_length, (int) sizeof(draft17_test_salt));
         ret = -1;
     }
-    else if (memcmp(picoquic_supported_versions[version_index].version_aead_key, draft13_test_salt, sizeof(draft13_test_salt)) != 0) {
-        DBG_PRINTF("Test version (%x) does not have matching salt.\n", draft15_test_vn);
+    else if (memcmp(picoquic_supported_versions[version_index].version_aead_key, draft17_test_salt, sizeof(draft17_test_salt)) != 0) {
+        DBG_PRINTF("Test version (%x) does not have matching salt.\n", draft17_test_vn);
         ret = -1;
     }
 
     /* Check the master secret and then client and server secret */
     if (ret == 0) {
-        salt.base = draft13_test_salt;
-        salt.len = sizeof(draft13_test_salt);
+        salt.base = draft17_test_salt;
+        salt.len = sizeof(draft17_test_salt);
 
-        ret = picoquic_setup_initial_master_secret(&cipher, salt, draft13_test_cnx_id, master_secret);
+        ret = picoquic_setup_initial_master_secret(&cipher, salt, draft17_test_cnx_id, master_secret);
 
         if (ret != 0) {
             DBG_PRINTF("Cannot compute master secret, ret = %x\n", ret);
@@ -989,12 +983,12 @@ int draft13_vector_test()
                 DBG_PRINTF("Cannot derive client and server secrets, ret = %x\n", ret);
             }
             else {
-                if (memcmp(client_secret, draft13_test_client_initial_secret, sizeof(draft13_test_client_initial_secret)) != 0) {
+                if (memcmp(client_secret, draft17_test_client_initial_secret, sizeof(draft17_test_client_initial_secret)) != 0) {
                     DBG_PRINTF("%s", "Initial client secret does not match expected value");
                     ret = -1;
                 }
                 
-                if (memcmp(server_secret, draft13_test_server_initial_secret, sizeof(draft13_test_server_initial_secret)) != 0) {
+                if (memcmp(server_secret, draft17_test_server_initial_secret, sizeof(draft17_test_server_initial_secret)) != 0) {
                     DBG_PRINTF("%s", "Initial server secret does not match expected value");
                     ret = -1;
                 }
@@ -1004,10 +998,10 @@ int draft13_vector_test()
 
     /* First integration test: verify that the aead keys are as expected */
     if (ret == 0) {
-        ret = cleartext_aead_vector_test_one(draft13_test_cnx_id, draft13_test_client_iv, sizeof(draft13_test_client_iv),
-            draft13_test_server_iv, sizeof(draft13_test_server_iv), "draft13_vector");
+        ret = cleartext_aead_vector_test_one(draft17_test_cnx_id, draft17_test_vn,
+            draft17_test_client_iv, sizeof(draft17_test_client_iv),
+            draft17_test_server_iv, sizeof(draft17_test_server_iv), "draft17_vector");
     }
-#endif
 
 #if 0
     /* TODO: reset this test once we have draft-17 samples. */
