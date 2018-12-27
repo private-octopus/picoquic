@@ -487,9 +487,10 @@ typedef struct st_picoquic_path_t {
     int alt_local_addr_len;
     unsigned long alt_if_index_dest;
     /* Challenge used for the NAT rebinding tests */
+    uint64_t alt_challenge_response;
     uint64_t alt_challenge;
     uint64_t alt_challenge_timeout;
-    uint64_t alt_challenge_response;
+    uint8_t alt_challenge_repeat_count;
 
 #define PICOQUIC_CHALLENGE_REPEAT_MAX 4
     /* flags */

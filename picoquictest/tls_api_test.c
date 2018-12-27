@@ -3820,7 +3820,7 @@ int migration_test_loss()
  * The goal of the attack is to verify that the connection resists.
  */
 
-int migration_stress_test()
+int rebinding_stress_test()
 {
     int nb_trials = 0;
     const int max_trials = 10000;

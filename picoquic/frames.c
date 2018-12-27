@@ -2371,13 +2371,17 @@ uint8_t* picoquic_decode_path_challenge_frame(picoquic_cnx_t* cnx, uint8_t* byte
         bytes++;
         challenge_response = PICOPARSE_64(bytes);
         bytes += challenge_length;
-        if (addr_from != NULL && picoquic_compare_addr(addr_from, (struct sockaddr *)&path_x->alt_peer_addr) == 0 &&
+        if ((addr_from == NULL || picoquic_compare_addr(addr_from, (struct sockaddr *)&path_x->peer_addr) == 0) &&
+            (addr_to == NULL || picoquic_compare_addr(addr_to, (struct sockaddr *)&path_x->local_addr) == 0)) {
+            path_x->challenge_response = challenge_response;
+            path_x->response_required = 1;
+        }
+        else if (addr_from != NULL && picoquic_compare_addr(addr_from, (struct sockaddr *)&path_x->alt_peer_addr) == 0 &&
             addr_to != NULL && picoquic_compare_addr(addr_to, (struct sockaddr *)&path_x->alt_local_addr) == 0) {
             path_x->alt_challenge_response = challenge_response;
             path_x->alt_response_required = 1;
         } else {
-            path_x->challenge_response = challenge_response;
-            path_x->response_required = 1;
+            DBG_PRINTF("%s", "Path challenge ignored, wrong addresses\n");
         }
     }
 
@@ -2403,7 +2407,7 @@ int picoquic_prepare_path_response_frame(uint8_t* bytes,
 }
 
 uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, uint8_t* bytes, const uint8_t* bytes_max, 
-    picoquic_path_t * path_x, struct sockaddr* addr_from, struct sockaddr* addr_to)
+    struct sockaddr* addr_from, struct sockaddr* addr_to)
 {
     uint64_t response;
 
@@ -2418,13 +2422,19 @@ uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, uint8_t* bytes
         for (int i = 0; i < cnx->nb_paths; i++) {
             if (response == cnx->path[i]->challenge) {
                 found_challenge = 1;
-                cnx->path[i]->challenge_verified = 1;
+                if ((addr_from == NULL || picoquic_compare_addr(addr_from, (struct sockaddr *)&cnx->path[i]->peer_addr) == 0) &&
+                    (addr_to == NULL || picoquic_compare_addr(addr_to, (struct sockaddr *)&cnx->path[i]->local_addr) == 0)) {
+                    cnx->path[i]->challenge_verified = 1;
+                }
+                else {
+                    DBG_PRINTF("%s", "Challenge response from different address, ignored.\n");
+                }
                 break;
             }
             else if (response == cnx->path[i]->alt_challenge) {
                 found_challenge = 1;
-                if (addr_from != NULL && picoquic_compare_addr(addr_from, (struct sockaddr *)&path_x->alt_peer_addr) == 0 &&
-                    addr_to != NULL && picoquic_compare_addr(addr_to, (struct sockaddr *)&path_x->alt_local_addr) == 0) {
+                if ((addr_from == NULL || picoquic_compare_addr(addr_from, (struct sockaddr *)&cnx->path[i]->alt_peer_addr) == 0) &&
+                    (addr_to == NULL || picoquic_compare_addr(addr_to, (struct sockaddr *)&cnx->path[i]->alt_local_addr) == 0)) {
                     /* Promote the alt address to valid address */
                     cnx->path[i]->peer_addr_len = picoquic_store_addr(&cnx->path[i]->peer_addr, (struct sockaddr *)&cnx->path[i]->alt_peer_addr);
                     cnx->path[i]->local_addr_len = picoquic_store_addr(&cnx->path[i]->local_addr, (struct sockaddr *)&cnx->path[i]->alt_local_addr);
@@ -2440,6 +2450,9 @@ uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, uint8_t* bytes
                     cnx->path[i]->alt_response_required = 0;
                     cnx->path[i]->alt_challenge_response = 0;
                 }
+                else {
+                    DBG_PRINTF("%s", "Rebinding response from different address, ignored.\n");
+                }
                 break;
             }
         }
@@ -2447,8 +2460,14 @@ uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, uint8_t* bytes
         if (found_challenge == 0) {
             picoquic_probe_t * probe = picoquic_find_probe_by_challenge(cnx, response);
 
-            if (probe != NULL) {
-                probe->challenge_verified = 1;
+            if (probe != NULL){
+                if (addr_from != NULL && picoquic_compare_addr(addr_from, (struct sockaddr *)&probe->peer_addr) == 0 &&
+                    addr_to != NULL && picoquic_compare_addr(addr_to, (struct sockaddr *)&probe->local_addr) == 0) {
+                    probe->challenge_verified = 1;
+                }
+                else {
+                    DBG_PRINTF("%s", "Probe response from different address, ignored.\n");
+                }
             }
         }
     }
@@ -2614,7 +2633,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_
                 bytes = picoquic_decode_path_challenge_frame(cnx, bytes, bytes_max, path_x, addr_from, addr_to);
                 break;
             case picoquic_frame_type_path_response:
-                bytes = picoquic_decode_path_response_frame(cnx, bytes, bytes_max, path_x, addr_from, addr_to);
+                bytes = picoquic_decode_path_response_frame(cnx, bytes, bytes_max, addr_from, addr_to);
                 break;
             case picoquic_frame_type_crypto_hs:
 
