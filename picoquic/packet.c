@@ -114,8 +114,8 @@ int picoquic_parse_packet_header(
                         case picoquic_version_header_17:
                             ph->spin = 0;
                             ph->has_spin_bit = 0;
-                            switch ((bytes[0] >> 4) & 3) {
-                            case 0: /* Initial */
+                            switch ((bytes[0] >> 4) & 7) {
+                            case 4: /* Initial */
                             {
                                 /* special case of the initial packets. They contain a retry token between the header
                                 * and the encrypted payload */
@@ -139,20 +139,26 @@ int picoquic_parse_packet_header(
 
                                 break;
                             }
-                            case 1: /* 0-RTT Protected */
+                            case 5: /* 0-RTT Protected */
                                 ph->ptype = picoquic_packet_0rtt_protected;
                                 ph->pc = picoquic_packet_context_application;
                                 ph->epoch = 1;
                                 break;
-                            case 2: /* Handshake */
+                            case 6: /* Handshake */
                                 ph->ptype = picoquic_packet_handshake;
                                 ph->pc = picoquic_packet_context_handshake;
                                 ph->epoch = 2;
                                 break;
-                            case 3: /* Retry */
+                            case 7: /* Retry */
                                 ph->ptype = picoquic_packet_retry;
                                 ph->pc = picoquic_packet_context_initial;
                                 ph->epoch = 0;
+                                break;
+                            default: /* Not a valid packet type */
+                                DBG_PRINTF("Packet type is not recognized: 0x%02x\n", bytes[0]);
+                                ph->ptype = picoquic_packet_error;
+                                ph->version_index = -1;
+                                ph->pc = 0;
                                 break;
                             }
                             break;
@@ -267,7 +273,13 @@ int picoquic_parse_packet_header(
              /* If the connection is identified, decode the short header per version ID */
              switch (picoquic_supported_versions[ph->version_index].version_header_encoding) {
              case picoquic_version_header_17:
-                 ph->ptype = picoquic_packet_1rtt_protected;
+                 if ((bytes[0] & 0x40) != 0x40) {
+                     /* Check for QUIC bit failed! */
+                     ph->ptype = picoquic_packet_error;
+                 }
+                 else {
+                     ph->ptype = picoquic_packet_1rtt_protected;
+                 }
                  ph->has_spin_bit = 1;
                  ph->spin = (bytes[0] >> 5) & 1;
                  ph->pn_offset = ph->offset;
@@ -277,7 +289,7 @@ int picoquic_parse_packet_header(
                  break;
              }
 
-             if (length < ph->offset) {
+             if (length < ph->offset || ph->ptype == picoquic_packet_error) {
                  ret = -1;
                  ph->payload_length = 0;
              } else {

@@ -271,16 +271,16 @@ uint32_t picoquic_create_packet_header(
 
         switch (packet_type) {
         case picoquic_packet_initial:
-            bytes[0] = 0x83;
+            bytes[0] = 0xC3;
             break;
         case picoquic_packet_0rtt_protected:
-            bytes[0] = 0x93;
+            bytes[0] = 0xD3;
             break;
         case picoquic_packet_handshake:
-            bytes[0] = 0xA3;
+            bytes[0] = 0xE3;
             break;
         case picoquic_packet_retry:
-            bytes[0] = 0xB3;
+            bytes[0] = 0xF3;
             break;
         default:
             bytes[0] = 0xFF; /* Will cause an error... */
