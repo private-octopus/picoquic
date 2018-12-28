@@ -528,14 +528,14 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
 #endif
 #else
 #if defined(IP_DONTFRAG)
-        if (addr_from->sa_family == AF_INET && length > PICOQUIC_INITIAL_MTU_IP$
+        if (addr_from->sa_family == AF_INET6 && length > PICOQUIC_INITIAL_MTU_IPV6) {
 #ifdef CMSG_ALIGN
-            struct cmsghdr * cmsg_2 = (struct cmsghdr *)((unsigned char *)cmsg $
+            struct cmsghdr * cmsg_2 = (struct cmsghdr *)((unsigned char *)cmsg + CMSG_ALIGN(cmsg->cmsg_len));
             {
 #else
             struct cmsghdr * cmsg_2 = CMSG_NXTHDR((&msg), cmsg);
             if (cmsg_2 == NULL) {
-                DBG_PRINTF("Cannot obtain second CMSG (control_length: %d)\n", $
+                DBG_PRINTF("Cannot obtain second CMSG (control_length: %d)\n", control_length);
             }
             else {
 #endif
