@@ -51,7 +51,7 @@ static picoquic_connection_id_t test_cnxid_local = TEST_CNXID_LOCAL_VAL;
 static picoquic_connection_id_t test_cnxid_r10 = TEST_CNXID_10_VAL;
 
 static uint8_t pinitial10[] = {
-    0x83,
+    0xC3,
     0x50, 0x43, 0x51, 0x30,
     TEST_CNXID_LEN_BYTE,
     TEST_CNXID_INI_BYTES,
@@ -84,7 +84,7 @@ static picoquic_packet_header hinitial10 = {
 };
 
 static uint8_t pinitial10_l[] = {
-    0x83,
+    0xC3,
     0x50, 0x43, 0x51, 0x30,
     TEST_CNXID_LOCAL_BYTE,
     TEST_CNXID_INI_BYTES,
@@ -159,7 +159,7 @@ static picoquic_packet_header hvnego10 = {
 };
 
 static uint8_t phandshake[] = {
-    0xA3,
+    0xE3,
     0x50, 0x43, 0x51, 0x30,
     TEST_CNXID_LEN_BYTE,
     TEST_CNXID_LOCAL_BYTES,
