@@ -2419,7 +2419,7 @@ int picoquic_prepare_segment(picoquic_cnx_t* cnx, picoquic_path_t * path_x, pico
 /* Prepare next probe if one is needed, returns send_length == 0 if none necessary */
 int picoquic_prepare_probe(picoquic_cnx_t* cnx,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
-    struct sockaddr ** p_addr_to, int * to_len, struct sockaddr ** p_addr_from, int * from_len, struct sockaddr ** addr_to_log,
+    struct sockaddr_storage * p_addr_to, int * to_len, struct sockaddr_storage * p_addr_from, int * from_len, struct sockaddr_storage * addr_to_log,
     uint64_t * next_wake_time)
 {
     int ret = 0;
@@ -2525,15 +2525,13 @@ int picoquic_prepare_probe(picoquic_cnx_t* cnx,
 
                 /* set the return addresses */
                 if (p_addr_to != NULL) {
-                    *p_addr_to = (struct sockaddr*)&probe->peer_addr;
-                    *to_len = probe->peer_addr_len;
+                    *to_len = picoquic_store_addr(p_addr_to, (struct sockaddr*)&probe->peer_addr);
                 }
                 /* Remember the log address */
-                *addr_to_log = (struct sockaddr*)&(probe->peer_addr);
+                (void)picoquic_store_addr(addr_to_log, (struct sockaddr*)&(probe->peer_addr));
                 /* Set the source address */
                 if (p_addr_from != NULL) {
-                    *p_addr_from = (struct sockaddr*)(&probe->local_addr);
-                    *from_len = probe->local_addr_len;
+                    *from_len = picoquic_store_addr(p_addr_from, (struct sockaddr*)(&probe->local_addr));
                 }
 
                 /* final protection */
@@ -2551,8 +2549,8 @@ int picoquic_prepare_probe(picoquic_cnx_t* cnx,
 /* Send alternate address challenge if required */
 static int picoquic_prepare_alt_challenge(picoquic_cnx_t* cnx,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
-    struct sockaddr ** p_addr_to, int * to_len, struct sockaddr ** p_addr_from, int * from_len, 
-    struct sockaddr ** addr_to_log, uint64_t * next_wake_time)
+    struct sockaddr_storage * p_addr_to, int * to_len, struct sockaddr_storage * p_addr_from, int * from_len,
+    struct sockaddr_storage * addr_to_log, uint64_t * next_wake_time)
 {
     int ret = 0;
     picoquic_packet_t * packet = NULL;
@@ -2632,15 +2630,13 @@ static int picoquic_prepare_alt_challenge(picoquic_cnx_t* cnx,
 
                     /* set the return addresses */
                     if (p_addr_to != NULL) {
-                        *p_addr_to = (struct sockaddr*)&cnx->path[i]->alt_peer_addr;
-                        *to_len = cnx->path[i]->alt_peer_addr_len;
+                        *to_len = picoquic_store_addr(p_addr_to, (struct sockaddr*)&cnx->path[i]->alt_peer_addr);
                     }
                     /* Remember the log address */
-                    *addr_to_log = (struct sockaddr*)&cnx->path[i]->alt_peer_addr;
+                    (void) picoquic_store_addr(addr_to_log, (struct sockaddr*)&cnx->path[i]->alt_peer_addr);
                     /* Set the source address */
                     if (p_addr_from != NULL) {
-                        *p_addr_from = (struct sockaddr*)&cnx->path[i]->alt_local_addr;
-                        *from_len = cnx->path[i]->alt_local_addr_len;
+                        *from_len = picoquic_store_addr(p_addr_from, (struct sockaddr*)&cnx->path[i]->alt_local_addr);
                     }
 
                     /* final protection */
@@ -2667,15 +2663,18 @@ static int picoquic_prepare_alt_challenge(picoquic_cnx_t* cnx,
 /* Prepare next packet to send, or nothing.. */
 int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
-    struct sockaddr ** p_addr_to, int * to_len, struct sockaddr ** p_addr_from, int * from_len)
+    struct sockaddr_storage * p_addr_to, int * to_len, struct sockaddr_storage * p_addr_from, int * from_len)
 {
 
     int ret = 0;
     picoquic_packet_t * packet = NULL;
-    struct sockaddr * addr_to_log = NULL;
+    struct sockaddr_storage addr_to_log;
     uint64_t next_wake_time = cnx->latest_progress_time + PICOQUIC_MICROSEC_SILENCE_MAX * (2 - cnx->client_mode);
 
+    memset(&addr_to_log, 0, sizeof(addr_to_log));
     *send_length = 0;
+    *to_len = 0;
+    *from_len = 0;
 
     /* Remove delete paths */
     picoquic_delete_abandoned_paths(cnx, current_time, &next_wake_time);
@@ -2728,16 +2727,14 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
         }
 
         if (path_id >= 0) {
-            addr_to_log = (struct sockaddr *)&cnx->path[path_id]->peer_addr;
+            (void)picoquic_store_addr(&addr_to_log, (struct sockaddr *)&cnx->path[path_id]->peer_addr);
 
             if (p_addr_to != NULL) {
-                *p_addr_to = (struct sockaddr *)&cnx->path[path_id]->peer_addr;
-                *to_len = cnx->path[path_id]->peer_addr_len;
+                *to_len = picoquic_store_addr(p_addr_to, (struct sockaddr *)&cnx->path[path_id]->peer_addr);
             }
 
             if (p_addr_from != NULL) {
-                *p_addr_from = (struct sockaddr *)&cnx->path[path_id]->local_addr;
-                *from_len = cnx->path[path_id]->local_addr_len;
+                *from_len = picoquic_store_addr(p_addr_from, (struct sockaddr *)&cnx->path[path_id]->local_addr);
             }
         }
 
@@ -2797,7 +2794,7 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     if (*send_length > 0 && cnx->quic->F_log != NULL) {
         picoquic_log_packet_address(cnx->quic->F_log,
             picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)),
-            cnx, addr_to_log, 0, *send_length, current_time);
+            cnx, (struct sockaddr *)&addr_to_log, 0, *send_length, current_time);
     }
 
     /* Update the wake up time for the connection */
