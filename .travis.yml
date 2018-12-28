@@ -33,17 +33,24 @@ matrix:
               - CC=/usr/local/clang/libexec/ccc-analyzer
               - CXX=/usr/local/clang/libexec/c++-analyzer
               - EXTRA="scan-build"
+        - name: Linux (cppcheck)
+          os: linux
+          dist: xenial
+          env:
+              - CHECK="cppcheck"
 before_install:
   - cmake --version
 before_script:
   # First build external lib
   - ./ci/build_picotls.sh
+  - if [ "$CHECK" == "cppcheck" ]; then ./ci/build_cppcheck.sh; fi
   - sudo sh -c 'echo 0 > /proc/sys/net/ipv6/conf/all/disable_ipv6'
 script:
   # Now build picotls examples and test
   - echo $CC
   - echo $CXX
-  - ${EXTRA} cmake .
+  - ${EXTRA} cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON .
+  - if [ "$CHECK" == "cppcheck" ]; then cppcheck --project=compile_commands.json --quiet; fi
   - ${EXTRA} make
   - ulimit -c unlimited -S
   - ./picoquic_ct -n && RESULT=$?
