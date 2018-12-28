@@ -247,7 +247,7 @@ static picoquic_packet_header hphi0_c_32_spin = {
 };
 
 static uint8_t packet_short_phi1_noc_32[] = {
-    0x07,
+    0x47,
     0xDE, 0xAD, 0xBE, 0xEF,
 };
 

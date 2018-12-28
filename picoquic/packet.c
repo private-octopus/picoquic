@@ -273,7 +273,13 @@ int picoquic_parse_packet_header(
              /* If the connection is identified, decode the short header per version ID */
              switch (picoquic_supported_versions[ph->version_index].version_header_encoding) {
              case picoquic_version_header_17:
-                 ph->ptype = picoquic_packet_1rtt_protected;
+                 if ((bytes[0] & 0x40) != 0x40) {
+                     /* Check for QUIC bit failed! */
+                     ph->ptype = picoquic_packet_error;
+                 }
+                 else {
+                     ph->ptype = picoquic_packet_1rtt_protected;
+                 }
                  ph->has_spin_bit = 1;
                  ph->spin = (bytes[0] >> 5) & 1;
                  ph->pn_offset = ph->offset;
@@ -283,7 +289,7 @@ int picoquic_parse_packet_header(
                  break;
              }
 
-             if (length < ph->offset) {
+             if (length < ph->offset || ph->ptype == picoquic_packet_error) {
                  ret = -1;
                  ph->payload_length = 0;
              } else {
