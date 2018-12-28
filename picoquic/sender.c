@@ -280,7 +280,8 @@ uint32_t picoquic_create_packet_header(
             bytes[0] = 0xE3;
             break;
         case picoquic_packet_retry:
-            bytes[0] = 0xF3;
+            /* Do not set PP in retry header, the bits are later used for ODCIL */
+            bytes[0] = 0xF0;
             break;
         default:
             bytes[0] = 0xFF; /* Will cause an error... */
