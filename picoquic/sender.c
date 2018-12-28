@@ -2529,10 +2529,10 @@ int picoquic_prepare_probe(picoquic_cnx_t* cnx,
                     *to_len = probe->peer_addr_len;
                 }
                 /* Remember the log address */
-                *addr_to_log = (struct sockaddr*)&probe->peer_addr;
+                *addr_to_log = (struct sockaddr*)&(probe->peer_addr);
                 /* Set the source address */
                 if (p_addr_from != NULL) {
-                    *p_addr_from = (struct sockaddr*)&probe->local_addr;
+                    *p_addr_from = (struct sockaddr*)(&probe->local_addr);
                     *from_len = probe->local_addr_len;
                 }
 
