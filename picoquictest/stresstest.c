@@ -836,7 +836,6 @@ static int stress_create_client_context(int client_index, picoquic_stress_ctx_t 
 {
     int ret = 0;
     picoquic_stress_client_t * ctx = (picoquic_stress_client_t *)malloc(sizeof(picoquic_stress_client_t));
-    stress_ctx->c_ctx[client_index] = ctx;
 
     if (ctx == NULL) {
         DBG_PRINTF("Cannot create the client context #%d.\n", (int)client_index);
@@ -896,6 +895,8 @@ static int stress_create_client_context(int client_index, picoquic_stress_ctx_t 
             }
         }
     }
+
+    stress_ctx->c_ctx[client_index] = ctx;
 
     return ret;
 }
