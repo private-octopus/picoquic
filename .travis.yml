@@ -1,10 +1,5 @@
 dist: xenial
 language: cpp
-os:
-  - linux
-compiler:
-  - clang
-  - gcc
 sudo: required
 addons:
   apt:
@@ -16,10 +11,29 @@ addons:
     - cmake-data
     - libssl-dev 
     - gdb
+matrix:
+    include:
+        - name: Linux (gcc-8)
+          os: linux
+          dist: xenial
+          env:
+              - CC=gcc-8
+              - CXX=g++-8
+              - EXTRA_LDFLAGS="-fuse-ld=gold"
+        - name: Linux (clang)
+          os: linux
+          dist: xenial
+          env:
+              - CC=clang
+              - CXX=clang++
+        - name: Linux (scan-build)
+          os: linux
+          dist: xenial
+          env:
+              - CC=/usr/local/clang/libexec/ccc-analyzer
+              - CXX=/usr/local/clang/libexec/c++-analyzer
+              - EXTRA="scan-build"
 before_install:
-# - $CC --version 
-  - if [ "$TRAVIS_OS_NAME" == "linux" ]; then  if [ "$CXX" = "g++" ]; then export CXX="g++" CC="gcc" EXTRA_LDFLAGS="-fuse-ld=gold"; else export CXX="clang++" CC="clang"; fi; fi
-# - $CC --version
   - cmake --version
 before_script:
   # First build external lib
@@ -29,11 +43,8 @@ script:
   # Now build picotls examples and test
   - echo $CC
   - echo $CXX
-  - if [ "$CC" == "clang" ]; then scan-build cmake -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=/usr/local/clang/libexec/ccc-analyzer .; fi
-  - if [ "$CC" == "clang" ]; then scan-build make; fi
-  - cmake .
-  - if [ "$CC" == "gcc" ]; then make clean; fi
-  - make
+  - ${EXTRA} cmake .
+  - ${EXTRA} make
   - ulimit -c unlimited -S
   - ./picoquic_ct -n && RESULT=$?
   # Early out if the program exited successfully
