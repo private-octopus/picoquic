@@ -777,7 +777,6 @@ void picoquic_queue_stateless_retry(picoquic_cnx_t* cnx,
         uint32_t header_length = 0;
         uint32_t pn_offset;
         uint32_t pn_length;
-        uint8_t odcil_random = ((uint8_t)picoquic_public_uniform_random(256)) & 0xF0;
 
         cnx->path[0]->remote_cnxid = ph->srce_cnx_id;
 
@@ -785,10 +784,10 @@ void picoquic_queue_stateless_retry(picoquic_cnx_t* cnx,
             0, &cnx->path[0]->remote_cnxid, &cnx->path[0]->local_cnxid,
             bytes, &pn_offset, &pn_length);
 
+        /* Encode ODCIL in bottom 4 bits of first byte */
+        bytes[0] |= picoquic_create_packet_header_cnxid_lengths(0, cnx->initial_cnxid.id_len);
 
-        /* use same encoding as packet header */
-        bytes[byte_index++] = odcil_random | picoquic_create_packet_header_cnxid_lengths(0, cnx->initial_cnxid.id_len);
-
+        /* Encode DCIL */
         byte_index += picoquic_format_connection_id(bytes + byte_index,
             PICOQUIC_MAX_PACKET_SIZE - byte_index - checksum_length, cnx->initial_cnxid);
         byte_index += (uint32_t)data_bytes;
@@ -991,7 +990,7 @@ int picoquic_incoming_retry(
         uint8_t odcil;
         uint8_t unused_cil;
 
-        picoquic_parse_packet_header_cnxid_lengths(bytes[byte_index++], &unused_cil, &odcil);
+        picoquic_parse_packet_header_cnxid_lengths(bytes[0], &unused_cil, &odcil);
 
 
         if (odcil != cnx->initial_cnxid.id_len || odcil + 1 > ph->payload_length ||
