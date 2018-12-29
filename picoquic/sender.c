@@ -2673,8 +2673,6 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
 
     memset(&addr_to_log, 0, sizeof(addr_to_log));
     *send_length = 0;
-    *to_len = 0;
-    *from_len = 0;
 
     /* Remove delete paths */
     picoquic_delete_abandoned_paths(cnx, current_time, &next_wake_time);
@@ -2729,12 +2727,20 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
         if (path_id >= 0) {
             (void)picoquic_store_addr(&addr_to_log, (struct sockaddr *)&cnx->path[path_id]->peer_addr);
 
-            if (p_addr_to != NULL) {
+            if (p_addr_to != NULL && to_len != NULL) {
                 *to_len = picoquic_store_addr(p_addr_to, (struct sockaddr *)&cnx->path[path_id]->peer_addr);
             }
 
-            if (p_addr_from != NULL) {
+            if (p_addr_from != NULL && from_len != NULL) {
                 *from_len = picoquic_store_addr(p_addr_from, (struct sockaddr *)&cnx->path[path_id]->local_addr);
+            }
+        }
+        else {
+            if (to_len != NULL) {
+                *to_len = 0;
+            }
+            if (from_len != NULL) {
+                *from_len = 0;
             }
         }
 
