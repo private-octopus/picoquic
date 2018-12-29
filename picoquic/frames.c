@@ -904,30 +904,56 @@ uint8_t* picoquic_decode_stream_frame(picoquic_cnx_t* cnx, uint8_t* bytes, const
 
 picoquic_stream_head* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
 {
-    picoquic_stream_head* stream = cnx->first_stream;
+    picoquic_stream_head* stream = NULL;
 
-    while (stream) {
-        if ((cnx->maxdata_remote > cnx->data_sent && stream->sent_offset < stream->maxdata_remote &&
-            ((stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset) ||
-             (stream->fin_requested && !stream->fin_sent))) ||
-            (stream->reset_requested && !stream->reset_sent) ||
-            (stream->stop_sending_requested && !stream->stop_sending_sent)) {
-            /* Something can be sent */
-            /* if the stream is not active yet, verify that it fits under
-             * the max stream id limit */
-             /* Check parity */
-            if (IS_CLIENT_STREAM_ID(stream->stream_id) == cnx->client_mode) {
-                if (stream->stream_id <= cnx->max_stream_id_bidir_remote) {
-                    break;
-                }
-            }
-            else {
-                break;
+    for (int nb_pass = 0; nb_pass < 2; nb_pass++) {
+        stream = cnx->first_stream;
+
+        if (nb_pass == 0) {
+            /* Skip to the first non visited stream */
+            while (stream && stream->stream_id <= cnx->last_visited_stream_id) {
+                stream = stream->next_stream;
             }
         }
 
-        stream = stream->next_stream;
-    };
+        while (stream) {
+            if ((cnx->maxdata_remote > cnx->data_sent && stream->sent_offset < stream->maxdata_remote &&
+                ((stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset) ||
+                (stream->fin_requested && !stream->fin_sent))) ||
+                    (stream->reset_requested && !stream->reset_sent) ||
+                (stream->stop_sending_requested && !stream->stop_sending_sent)) {
+                /* Something can be sent */
+                /* if the stream is not active yet, verify that it fits under
+                 * the max stream id limit */
+                 /* Check parity */
+                if (IS_CLIENT_STREAM_ID(stream->stream_id) == cnx->client_mode) {
+                    if (stream->stream_id <= cnx->max_stream_id_bidir_remote) {
+                        break;
+                    }
+                }
+                else {
+                    break;
+                }
+            }
+
+            stream = stream->next_stream;
+
+            if (nb_pass > 0) {
+                /* Dont do the loop twice */
+                if (stream && stream->stream_id > cnx->last_visited_stream_id) {
+                    stream = NULL;
+                    break;
+                }
+            }
+        };
+
+        /* Do only one pass if we found a stream, and remember the last visited 
+         * stream so each stream is visited in turn. */
+        if (stream != NULL) {
+            cnx->last_visited_stream_id = stream->stream_id;
+            break;
+        }
+    }
 
     return stream;
 }
