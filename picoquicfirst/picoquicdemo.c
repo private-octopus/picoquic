@@ -525,9 +525,9 @@ int quic_server(const char* server_name, int server_port,
 
                 while (ret == 0 && (cnx_next = picoquic_get_earliest_cnx_to_wake(qserver, loop_time)) != NULL) {
                     int peer_addr_len = 0;
-                    struct sockaddr* peer_addr = NULL;
+                    struct sockaddr_storage peer_addr;
                     int local_addr_len = 0;
-                    struct sockaddr* local_addr = NULL;
+                    struct sockaddr_storage local_addr;
 
                     ret = picoquic_prepare_packet(cnx_next, current_time,
                         send_buffer, sizeof(send_buffer), &send_length, 
@@ -563,7 +563,7 @@ int quic_server(const char* server_name, int server_port,
                             }
 
                             (void)picoquic_send_through_server_sockets(&server_sockets,
-                                peer_addr, peer_addr_len, local_addr, local_addr_len,
+                                (struct sockaddr *)&peer_addr, peer_addr_len, (struct sockaddr *)&local_addr, local_addr_len,
                                 dest_if == -1 ? picoquic_get_local_if_index(cnx_next) : dest_if,
                                 (const char*)send_buffer, (int)send_length);
                         }

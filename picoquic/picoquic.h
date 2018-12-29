@@ -436,7 +436,7 @@ picoquic_packet_t* picoquic_create_packet();
 
 int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
-    struct sockaddr ** p_addr_to, int * to_len, struct sockaddr ** p_addr_from, int * from_len);
+    struct sockaddr_storage * p_addr_to, int * to_len, struct sockaddr_storage * p_addr_from, int * from_len);
 
 /* send and receive data on streams */
 int picoquic_add_to_stream(picoquic_cnx_t* cnx,
