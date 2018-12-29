@@ -6,7 +6,7 @@ addons:
     sources:
     - ubuntu-toolchain-r-test
     packages:
-    - g++
+    - g++-8
     - cmake
     - cmake-data
     - libssl-dev 
