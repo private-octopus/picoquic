@@ -58,6 +58,7 @@ script:
   # Now build picotls examples and test
   - echo $CC
   - echo $CXX
+  - $CC --version
   - ${EXTRA} cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ${CMAKE_OPTS} .
   - if [ "$CHECK" == "cppcheck" ]; then cppcheck --project=compile_commands.json --quiet; fi
   - ${EXTRA} make
