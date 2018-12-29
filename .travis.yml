@@ -1,5 +1,5 @@
 dist: xenial
-language: cpp
+language: minimal
 sudo: required
 addons:
   apt:
