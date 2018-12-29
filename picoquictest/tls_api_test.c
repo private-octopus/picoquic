@@ -36,7 +36,7 @@
 #define PICOQUIC_TEST_SNI "test.example.com"
 #define PICOQUIC_TEST_ALPN "picoquic-test"
 #define PICOQUIC_TEST_WRONG_ALPN "picoquic-bla-bla"
-#define PICOQUIC_TEST_MAX_TEST_STREAMS 8
+#define PICOQUIC_TEST_MAX_TEST_STREAMS 18
 
 char const * picoquic_test_solution_dir = NULL;
 
@@ -165,6 +165,27 @@ static test_api_stream_desc_t test_scenario_many_streams[] = {
     { 24, 0, 32, 225 },
     { 28, 0, 32, 700 },
     { 32, 0, 32, 1500 }
+};
+
+static test_api_stream_desc_t test_scenario_more_streams[] = {
+    { 4, 0, 32, 633 },
+    { 8, 0, 32, 633 },
+    { 12, 0, 32, 633 },
+    { 16, 0, 32, 633 },
+    { 20, 0, 32, 633 },
+    { 24, 0, 32, 633 },
+    { 28, 0, 32, 633 },
+    { 32, 0, 32, 633 },
+    { 36, 0, 32, 633 },
+    { 40, 0, 32, 633 },
+    { 44, 0, 32, 633 },
+    { 48, 0, 32, 633 },
+    { 52, 0, 32, 633 },
+    { 56, 0, 32, 633 },
+    { 60, 0, 32, 633 },
+    { 64, 0, 32, 633 },
+    { 68, 0, 32, 633 },
+    { 72, 0, 32, 633 }
 };
 
 void picoquic_test_set_solution_dir(char const * solution_dir)
@@ -1462,6 +1483,11 @@ int tls_api_very_long_congestion_test()
 int unidir_test()
 {
     return tls_api_one_scenario_test(test_scenario_unidir, sizeof(test_scenario_unidir), 0, 128000, 10000, 0, 100000, NULL, NULL);
+}
+
+int many_short_loss_test()
+{
+    return tls_api_one_scenario_test(test_scenario_more_streams, sizeof(test_scenario_more_streams), 0x88A888A888A888A8ull, 16000, 2000, 0, 0, NULL, NULL);
 }
 
 /*
