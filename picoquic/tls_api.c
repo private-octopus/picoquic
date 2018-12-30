@@ -1240,8 +1240,6 @@ int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint6
                 ctx->handshake_properties.client.negotiated_protocols.list = &ctx->alpn_vec;
             }
 
-            picoquic_tls_set_extensions(cnx, ctx);
-
             if (cnx->sni != NULL && cnx->alpn != NULL &&
                 (cnx->quic->flags&picoquic_context_client_zero_share) == 0) {
                 uint8_t* ticket = NULL;
@@ -1512,6 +1510,8 @@ int picoquic_initialize_tls_stream(picoquic_cnx_t* cnx)
     {
         ctx->handshake_properties.client.negotiate_before_key_exchange = 0;
     }
+
+    picoquic_tls_set_extensions(cnx, ctx);
 
     ptls_buffer_init(&sendbuf, "", 0);
 

@@ -10,6 +10,6 @@ cd picotls
 git checkout "$COMMIT_ID"
 #git submodule init
 #git submodule update
-cmake .
+cmake $CMAKE_OPTS .
 make -j$(nproc) all
 cd ..
