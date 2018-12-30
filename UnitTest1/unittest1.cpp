@@ -748,6 +748,13 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(ready_to_send)
+        {
+            int ret = ready_to_send_test();
+
+            Assert::AreEqual(ret, 0);
+        }
         
         TEST_METHOD(stress)
         {

@@ -82,11 +82,11 @@ const char * picoquic_log_fin_or_event_name(picoquic_call_back_event_t ev)
     case picoquic_callback_application_close:
         text = "application close";
         break;
-    case picoquic_callback_challenge_response:
-        text = "challenge response";
-        break;
     case picoquic_callback_stream_gap:
         text = "stream gap";
+        break;
+    case picoquic_callback_ready_to_send:
+        text = "ready to send";
         break;
     default:
         break;

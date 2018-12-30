@@ -218,15 +218,15 @@ typedef struct st_picoquic_cnx_t picoquic_cnx_t;
 typedef struct st_picoquic_path_t picoquic_path_t;
 
 typedef enum {
-    picoquic_callback_no_event = 0,
-    picoquic_callback_stream_fin,
-    picoquic_callback_stream_reset,
-    picoquic_callback_stop_sending,
-    picoquic_callback_stateless_reset,
-    picoquic_callback_close,
-    picoquic_callback_application_close,
-    picoquic_callback_challenge_response,
-    picoquic_callback_stream_gap  /* bytes=NULL, len = length-of-gap or 0 (if unknown) */
+    picoquic_callback_no_event = 0, /* Data received from peer on stream N */
+    picoquic_callback_stream_fin, /* Fin received from peer on stream N; data is optional */
+    picoquic_callback_stream_reset, /* Reset Stream received from peer on stream N; bytes=NULL, len = 0  */
+    picoquic_callback_stop_sending, /* Stop sending received from peer on stream N; bytes=NULL, len = 0 */
+    picoquic_callback_stateless_reset, /* Stateless reset received from peer. Stream=0, bytes=NULL, len=0 */
+    picoquic_callback_close, /* Connection close. Stream=0, bytes=NULL, len=0 */
+    picoquic_callback_application_close, /* Application closed by peer. Stream=0, bytes=NULL, len=0 */
+    picoquic_callback_stream_gap,  /* bytes=NULL, len = length-of-gap or 0 (if unknown) */
+    picoquic_callback_ready_to_send
 } picoquic_call_back_event_t;
 
 #define PICOQUIC_STREAM_ID_TYPE_MASK 3

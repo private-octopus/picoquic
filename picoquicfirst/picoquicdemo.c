@@ -248,6 +248,11 @@ static void first_server_callback(picoquic_cnx_t* cnx,
     printf("Server CB, Stream: %" PRIu64 ", %" PRIst " bytes, fin=%d (%s)\n",
         stream_id, length, fin_or_event, picoquic_log_fin_or_event_name(fin_or_event));
 
+    if (fin_or_event == picoquic_callback_ready_to_send) {
+        /* Not doing anything there for now. */
+        return;
+    }
+
     if (fin_or_event == picoquic_callback_close || 
         fin_or_event == picoquic_callback_application_close ||
         fin_or_event == picoquic_callback_stateless_reset) {
@@ -255,11 +260,6 @@ static void first_server_callback(picoquic_cnx_t* cnx,
             first_server_callback_delete_context(ctx);
             picoquic_set_callback(cnx, first_server_callback, NULL);
         }
-        fflush(stdout);
-        return;
-    }
-
-    if (fin_or_event == picoquic_callback_challenge_response) {
         fflush(stdout);
         return;
     }

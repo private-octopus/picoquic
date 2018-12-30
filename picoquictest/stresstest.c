@@ -127,11 +127,9 @@ static void stress_server_callback(picoquic_cnx_t* cnx,
             free(ctx);
             picoquic_set_callback(cnx, stress_server_callback, NULL);
         }
-    }
-    else if (fin_or_event == picoquic_callback_challenge_response) {
-        /* Do nothing */
-    }
-    else {
+    } else if (fin_or_event == picoquic_callback_ready_to_send) {
+        /* Not doing anything there for now. */
+    } else {
         if (ctx == NULL) {
             picoquic_stress_server_callback_ctx_t* new_ctx = (picoquic_stress_server_callback_ctx_t*)
                 malloc(sizeof(picoquic_stress_server_callback_ctx_t));
