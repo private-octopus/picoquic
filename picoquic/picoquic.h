@@ -157,6 +157,12 @@ typedef enum {
     picoquic_nb_packet_context = 3
 } picoquic_packet_context_enum;
 
+typedef enum {
+    picoquic_spinbit_basic = 0, /* default spin bit behavior, as specified in spin bit draft */
+    picoquic_spinbit_random = 1, /* alternative spin bit behavior, randomized for each packet */
+    picoquic_spinbit_null = 2 /* null behavior, randomized per path */
+} picoquic_spinbit_version_enum;
+
 /*
  * Provisional definition of the connection ID.
  */
@@ -357,6 +363,9 @@ void picoquic_set_client_authentication(picoquic_quic_t* quic, int client_authen
 /* Set default padding policy for the context */
 void picoquic_set_default_padding(picoquic_quic_t* quic, uint32_t padding_multiple, uint32_t padding_minsize);
 
+/* Set default spin bit policy for the context */
+void picoquic_set_default_spinbit_policy(picoquic_quic_t * quic, picoquic_spinbit_version_enum default_spinbit_policy);
+
 /* Connection context creation and registration */
 picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
     picoquic_connection_id_t initial_cnx_id, picoquic_connection_id_t remote_cnx_id,
@@ -391,6 +400,8 @@ picoquic_state_enum picoquic_get_cnx_state(picoquic_cnx_t* cnx);
 
 void picoquic_cnx_set_padding_policy(picoquic_cnx_t * cnx, uint32_t padding_multiple, uint32_t padding_minsize);
 void picoquic_cnx_get_padding_policy(picoquic_cnx_t * cnx, uint32_t * padding_multiple, uint32_t * padding_minsize);
+/* Set spin bit policy for the connection */
+void picoquic_cnx_set_spinbit_policy(picoquic_cnx_t * cnx, picoquic_spinbit_version_enum spinbit_policy);
 
 int picoquic_tls_is_psk_handshake(picoquic_cnx_t* cnx);
 
