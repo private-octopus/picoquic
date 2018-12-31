@@ -385,7 +385,10 @@ uint8_t* picoquic_decode_stream_reset_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
         picoquic_update_max_stream_ID_local(cnx, stream);
 
         if (cnx->callback_fn != NULL && !stream->reset_signalled) {
-            cnx->callback_fn(cnx, stream->stream_id, NULL, 0, picoquic_callback_stream_reset, cnx->callback_ctx);
+            if (cnx->callback_fn(cnx, stream->stream_id, NULL, 0, picoquic_callback_stream_reset, cnx->callback_ctx) != 0) {
+                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR,
+                    picoquic_frame_type_reset_stream);
+            }
             stream->reset_signalled = 1;
         }
     }
@@ -647,7 +650,10 @@ uint8_t* picoquic_decode_stop_sending_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
         stream->remote_stop_error = error_code;
 
         if (cnx->callback_fn != NULL && !stream->stop_sending_signalled) {
-            cnx->callback_fn(cnx, stream->stream_id, NULL, 0, picoquic_callback_stop_sending, cnx->callback_ctx);
+            if (cnx->callback_fn(cnx, stream->stream_id, NULL, 0, picoquic_callback_stop_sending, cnx->callback_ctx) != 0) {
+                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR,
+                    picoquic_frame_type_stop_sending);
+            }
             stream->stop_sending_signalled = 1;
         }
     }
@@ -751,8 +757,10 @@ void picoquic_stream_data_callback(picoquic_cnx_t* cnx, picoquic_stream_head* st
             stream->fin_signalled = 1;
         }
 
-        cnx->callback_fn(cnx, stream->stream_id, data->bytes + start, data_length, fin_now,
-            cnx->callback_ctx);
+        if (cnx->callback_fn(cnx, stream->stream_id, data->bytes + start, data_length, fin_now,
+            cnx->callback_ctx) != 0) {
+            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
+        }
 
         free(data->bytes);
         stream->stream_data = data->next_stream_data;
@@ -764,8 +772,10 @@ void picoquic_stream_data_callback(picoquic_cnx_t* cnx, picoquic_stream_head* st
 
     if (stream->consumed_offset >= stream->fin_offset && stream->fin_received && !stream->fin_signalled) {
         stream->fin_signalled = 1;
-        cnx->callback_fn(cnx, stream->stream_id, NULL, 0, picoquic_callback_stream_fin,
-            cnx->callback_ctx);
+        if (cnx->callback_fn(cnx, stream->stream_id, NULL, 0, picoquic_callback_stream_fin,
+            cnx->callback_ctx) != 0) {
+            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
+        }
     }
 }
 
@@ -1073,7 +1083,7 @@ int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head* str
                     picoquic_update_max_stream_ID_local(cnx, stream);
                 } else {
                     if (cnx->callback_fn) {
-                        (cnx->callback_fn)(cnx, stream->stream_id, NULL, 0, picoquic_callback_ready_to_send, cnx->callback_ctx);
+                        (void)(cnx->callback_fn)(cnx, stream->stream_id, NULL, 0, picoquic_callback_ready_to_send, cnx->callback_ctx);
                     }
                 }
             } else if (ret == 0 && length == 0) {
@@ -2043,7 +2053,7 @@ uint8_t* picoquic_decode_connection_close_frame(picoquic_cnx_t* cnx, uint8_t* by
         cnx->cnx_state = (cnx->cnx_state < picoquic_state_client_ready_start || cnx->crypto_context[3].aead_decrypt == NULL) ? picoquic_state_disconnected : picoquic_state_closing_received;
 
         if (cnx->callback_fn) {
-            (cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx);
+            (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx);
         }
     }
 
@@ -2094,7 +2104,7 @@ uint8_t* picoquic_decode_application_close_frame(picoquic_cnx_t* cnx, uint8_t* b
     else {
         cnx->cnx_state = (cnx->cnx_state < picoquic_state_client_ready_start) ? picoquic_state_disconnected : picoquic_state_closing_received;
         if (cnx->callback_fn) {
-            (cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_application_close, cnx->callback_ctx);
+            (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_application_close, cnx->callback_ctx);
         }
     }
 

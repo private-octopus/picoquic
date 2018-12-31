@@ -983,7 +983,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                             DBG_PRINTF("%s\n", "Too many retransmits, disconnect");
                             cnx->cnx_state = picoquic_state_disconnected;
                             if (cnx->callback_fn) {
-                                (cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx);
+                                (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx);
                             }
                             length = 0;
                             break;
@@ -1681,7 +1681,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                             DBG_PRINTF("%s\n", "Too many challenge retransmits, disconnect");
                             cnx->cnx_state = picoquic_state_disconnected;
                             if (cnx->callback_fn) {
-                                (cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx);
+                                (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx);
                             }
                         }
                         else {
@@ -1994,7 +1994,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
             cnx->pkt_ctx[pc].ack_needed = 0;
 
             if (cnx->callback_fn) {
-                (cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx);
+                (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx);
             }
         }
         else {
@@ -2145,7 +2145,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                             DBG_PRINTF("%s\n", "Too many challenge retransmits, disconnect");
                             cnx->cnx_state = picoquic_state_disconnected;
                             if (cnx->callback_fn) {
-                                (cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx);
+                                (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx);
                             }
                         }
                         else {
@@ -2416,7 +2416,7 @@ int picoquic_prepare_segment(picoquic_cnx_t* cnx, picoquic_path_t * path_x, pico
         cnx->cnx_state = picoquic_state_disconnected;
         ret = PICOQUIC_ERROR_DISCONNECTED;
         if (cnx->callback_fn) {
-            (cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx);
+            (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx);
         }
     } else {
         /* Prepare header -- depend on connection state */

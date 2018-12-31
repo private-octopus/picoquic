@@ -281,7 +281,7 @@ uint64_t picoquic_get_quic_time(picoquic_quic_t* quic); /* connection time, comp
      * If stream_id is zero, this delivers misc frames or changes in
      * connection state.
      */
-typedef void (*picoquic_stream_data_cb_fn)(picoquic_cnx_t* cnx,
+typedef int (*picoquic_stream_data_cb_fn)(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx);
 

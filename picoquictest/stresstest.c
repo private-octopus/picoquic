@@ -113,7 +113,7 @@ static void stress_debug_break()
 * TODO: add debug_break on error condition.
 */
 
-static void stress_server_callback(picoquic_cnx_t* cnx,
+static int stress_server_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx)
 {
@@ -238,6 +238,7 @@ static void stress_server_callback(picoquic_cnx_t* cnx,
     }
 
     /* that's it */
+    return (ret == 0) ? 0 : -1;
 }
 
 /* Callback function, client side.
@@ -290,7 +291,7 @@ static void stress_client_start_streams(picoquic_cnx_t* cnx,
     }
 }
 
-static void stress_client_callback(picoquic_cnx_t* cnx,
+static int stress_client_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx)
 {
@@ -366,6 +367,7 @@ static void stress_client_callback(picoquic_cnx_t* cnx,
     }
 
     /* that's it */
+    return 0;
 }
 
 int stress_client_set_callback(picoquic_cnx_t* cnx) 

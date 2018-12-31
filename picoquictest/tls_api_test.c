@@ -351,7 +351,7 @@ static int test_api_queue_initial_queries(picoquic_test_tls_api_ctx_t* test_ctx,
     return ret;
 }
 
-static void test_api_callback(picoquic_cnx_t* cnx,
+static int test_api_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx)
 {
@@ -364,7 +364,7 @@ static void test_api_callback(picoquic_cnx_t* cnx,
     if (fin_or_event == picoquic_callback_close || 
         fin_or_event == picoquic_callback_application_close)  {
         /* do nothing in our tests */
-        return;
+        return 0;
     }
 
     if (cb_ctx->client_mode) {
@@ -376,7 +376,7 @@ static void test_api_callback(picoquic_cnx_t* cnx,
     if (fin_or_event == picoquic_callback_stateless_reset) {
         /* take note to validate test */
         ctx->reset_received = 1;
-        return;
+        return 0;
     }
 
     if (fin_or_event == picoquic_callback_ready_to_send) {
@@ -384,7 +384,7 @@ static void test_api_callback(picoquic_cnx_t* cnx,
             test_api_stream0_queue(cnx, ctx);
         }
 
-        return;
+        return 0;
     }
 
     if (bytes != NULL) {
@@ -515,6 +515,8 @@ static void test_api_callback(picoquic_cnx_t* cnx,
             }
         }
     }
+
+    return 0;
 }
 
 static int test_api_init_send_recv_scenario(picoquic_test_tls_api_ctx_t* test_ctx,
