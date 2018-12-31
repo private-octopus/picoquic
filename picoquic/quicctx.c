@@ -145,17 +145,14 @@ static uint8_t picoquic_cleartext_draft_17_salt[] = {
 const picoquic_version_parameters_t picoquic_supported_versions[] = {
     { PICOQUIC_INTERNAL_TEST_VERSION_2,
         picoquic_version_header_17,
-        picoquic_spinbit_null,
         sizeof(picoquic_cleartext_internal_test_1_salt),
         picoquic_cleartext_internal_test_1_salt },
     { PICOQUIC_INTERNAL_TEST_VERSION_1,
         picoquic_version_header_17,
-        picoquic_spinbit_basic,
         sizeof(picoquic_cleartext_internal_test_1_salt),
         picoquic_cleartext_internal_test_1_salt },
     { PICOQUIC_TENTH_INTEROP_VERSION,
         picoquic_version_header_17,
-        picoquic_spinbit_basic,
         sizeof(picoquic_cleartext_draft_17_salt),
         picoquic_cleartext_draft_17_salt }
 };
@@ -274,6 +271,11 @@ void picoquic_set_default_padding(picoquic_quic_t* quic, uint32_t padding_multip
 {
     quic->padding_minsize_default = padding_minsize;
     quic->padding_multiple_default = padding_multiple;
+}
+
+void picoquic_set_default_spinbit_policy(picoquic_quic_t * quic, picoquic_spinbit_version_enum default_spinbit_policy)
+{
+    quic->default_spin_policy = default_spinbit_policy;
 }
 
 void picoquic_free(picoquic_quic_t* quic)
@@ -1346,6 +1348,15 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         cnx->padding_multiple = quic->padding_multiple_default;
         cnx->padding_minsize = quic->padding_minsize_default;
 
+        /* Initialize spin policy, ensure that at least 1/8th of connections do not spin */
+        cnx->spin_policy = quic->default_spin_policy;
+        if (cnx->spin_policy == picoquic_spinbit_basic) {
+            uint8_t rand256 = (uint8_t)picoquic_public_random_64();
+            if (rand256 < PICOQUIC_SPIN_RESERVE_MOD_256) {
+                cnx->spin_policy = picoquic_spinbit_null;
+            }
+        }
+
         if (sni != NULL) {
             cnx->sni = picoquic_string_duplicate(sni);
         }
@@ -1592,6 +1603,11 @@ void picoquic_cnx_get_padding_policy(picoquic_cnx_t * cnx, uint32_t * padding_mu
 {
     *padding_multiple = cnx->padding_multiple;
     *padding_minsize = cnx->padding_minsize;
+}
+
+void picoquic_cnx_set_spinbit_policy(picoquic_cnx_t * cnx, picoquic_spinbit_version_enum spinbit_policy)
+{
+    cnx->spin_policy = spinbit_policy;
 }
 
 /*
