@@ -123,6 +123,10 @@ int picoquic_add_to_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
         picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
     }
 
+    if (ret == 0) {
+        cnx->nb_bytes_queued += length;
+    }
+
     return ret;
 }
 
@@ -1081,15 +1085,73 @@ int picoquic_should_send_max_data(picoquic_cnx_t* cnx)
     return ret;
 }
 
-/* Decide whether to send an MTU probe */
-int picoquic_is_mtu_probe_needed(picoquic_cnx_t* cnx, picoquic_path_t * path_x)
+/* Compute the next logical probe length */
+static uint32_t picoquic_next_mtu_probe_length(picoquic_cnx_t* cnx, picoquic_path_t * path_x)
 {
-    int ret = 0;
+    uint32_t probe_length = path_x->send_mtu;
+
+    if (path_x->send_mtu_max_tried == 0) {
+        if (cnx->remote_parameters.max_packet_size > 0) {
+            probe_length = cnx->remote_parameters.max_packet_size;
+
+            if (cnx->quic->mtu_max > 0 && (int)probe_length > cnx->quic->mtu_max) {
+                probe_length = cnx->quic->mtu_max;
+            }
+            else if (probe_length > PICOQUIC_MAX_PACKET_SIZE) {
+                probe_length = PICOQUIC_MAX_PACKET_SIZE;
+            }
+            if (probe_length < path_x->send_mtu) {
+                probe_length = path_x->send_mtu;
+            }
+        }
+        else if (cnx->quic->mtu_max > 0) {
+            probe_length = cnx->quic->mtu_max;
+        }
+        else {
+            probe_length = PICOQUIC_PRACTICAL_MAX_MTU;
+        }
+    }
+    else {
+        if (path_x->send_mtu_max_tried > 1500) {
+            probe_length = 1500;
+        }
+        else if (path_x->send_mtu_max_tried > 1400) {
+            probe_length = 1400;
+        }
+        else {
+            probe_length = (path_x->send_mtu + path_x->send_mtu_max_tried) / 2;
+        }
+    }
+
+    return probe_length;
+}
+
+/* Decide whether to send an MTU probe */
+picoquic_pmtu_discovery_status_enum picoquic_is_mtu_probe_needed(picoquic_cnx_t* cnx, picoquic_path_t * path_x)
+{
+    int ret = picoquic_pmtu_discovery_not_needed;
 
     if ((cnx->cnx_state == picoquic_state_ready || cnx->cnx_state == picoquic_state_client_ready_start || cnx->cnx_state == picoquic_state_server_false_start)
-        && path_x->mtu_probe_sent == 0 
-        && (path_x->send_mtu_max_tried == 0 || (path_x->send_mtu + 10) < path_x->send_mtu_max_tried)) {
-        ret = 1;
+        && path_x->mtu_probe_sent == 0) {
+        if (path_x->send_mtu_max_tried == 0 || path_x->send_mtu_max_tried > 1400) {
+            /* MTU discovery is required if the chances of success are large enough
+             * and there are enough packets to send to amortize the discovery cost.
+             * Of course we don't know at this stage how much data will be sent 
+             * on the connection; we take the amount of data queued as a proxy
+             * for that. */
+            uint32_t next_probe = picoquic_next_mtu_probe_length(cnx, path_x);
+            if (next_probe > path_x->send_mtu) {
+                uint64_t packets_to_send_before = cnx->nb_bytes_queued / path_x->send_mtu;
+                uint64_t packets_to_send_after = cnx->nb_bytes_queued / next_probe;
+                uint64_t delta = (packets_to_send_before - packets_to_send_after) * 60;
+                if (delta > next_probe) {
+                    ret = picoquic_pmtu_discovery_required;
+                }
+                else {
+                    ret = picoquic_pmtu_discovery_optional;
+                }
+            }
+        }
     }
 
     return ret;
@@ -1101,30 +1163,8 @@ uint32_t picoquic_prepare_mtu_probe(picoquic_cnx_t* cnx,
     uint32_t header_length, uint32_t checksum_length,
     uint8_t* bytes)
 {
-    uint32_t probe_length;
+    uint32_t probe_length = picoquic_next_mtu_probe_length(cnx, path_x);
     uint32_t length = header_length;
-    
-
-    if (path_x->send_mtu_max_tried == 0) {
-        if (cnx->remote_parameters.max_packet_size > 0) {
-            probe_length = cnx->remote_parameters.max_packet_size;
-            
-            if (cnx->quic->mtu_max > 0 && (int)probe_length > cnx->quic->mtu_max) {
-                probe_length = cnx->quic->mtu_max;
-            } else if (probe_length > PICOQUIC_MAX_PACKET_SIZE) {
-                probe_length = PICOQUIC_MAX_PACKET_SIZE;
-            }
-            if (probe_length < path_x->send_mtu) {
-                probe_length = path_x->send_mtu;
-            }
-        } else if (cnx->quic->mtu_max > 0) {
-            probe_length = cnx->quic->mtu_max;
-        } else {
-            probe_length = PICOQUIC_PRACTICAL_MAX_MTU;
-        }
-    } else {
-        probe_length = (path_x->send_mtu + path_x->send_mtu_max_tried) / 2;
-    }
 
     bytes[length++] = picoquic_frame_type_ping;
     bytes[length++] = 0;
@@ -2130,7 +2170,6 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
             }
 
             if (cnx->cnx_state != picoquic_state_disconnected && path_x->challenge_verified != 0) {
-
                 if (picoquic_is_ack_needed(cnx, current_time, next_wake_time, pc)) {
                     ret = picoquic_prepare_ack_frame(cnx, current_time, pc, &bytes[length],
                         send_buffer_min_max - checksum_overhead - length, &data_bytes);
@@ -2145,6 +2184,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                     }
                 }
 
+
                 if (path_x->cwin < path_x->bytes_in_transit) {
                     uint64_t cwin_time = current_time + path_x->smoothed_rtt;
 
@@ -2152,6 +2192,12 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                         *next_wake_time = cwin_time;
                     }
                 } else if (picoquic_is_sending_authorized_by_pacing(path_x, current_time, next_wake_time)) {
+                    /* Check whether PMTU discovery is required. The call will return
+                     * three values: not needed at all, optional, or required.
+                     * If required, PMTU discovery takes priority over sending data.
+                     */
+                    picoquic_pmtu_discovery_status_enum pmtu_discovery_needed = picoquic_is_mtu_probe_needed(cnx, path_x);
+
                     /* if present, send tls data */
                     if (tls_ready) {
                         ret = picoquic_prepare_crypto_hs_frame(cnx, 3, &bytes[length],
@@ -2171,116 +2217,119 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                             }
                         }
                     }
-                    /* If present, send misc frame */
-                    while (cnx->first_misc_frame != NULL) {
-                        ret = picoquic_prepare_first_misc_frame(cnx, &bytes[length],
-                            send_buffer_min_max - checksum_overhead - length, &data_bytes);
-                        if (ret == 0) {
-                            length += (uint32_t)data_bytes;
-                        }
-                        else {
-                            if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
-                                *next_wake_time = current_time;
-                                ret = 0;
-                            }
-                            break;
-                        }
-                    }
 
-                    /* If there are not enough paths, create and advertise */
-                    while (ret == 0 && cnx->remote_parameters.migration_disabled == 0 &&
-                        cnx->local_parameters.migration_disabled == 0 &&
-                        cnx->nb_paths < PICOQUIC_NB_PATH_TARGET) {
-                        ret = picoquic_prepare_new_path_and_id(cnx, &bytes[length],
-                            send_buffer_min_max - checksum_overhead - length,
-                            current_time, &data_bytes);
-                        if (ret == 0) {
-                            length += (uint32_t)data_bytes;
-                        }
-                        else {
-                            if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
-                                *next_wake_time = current_time;
-                                ret = 0;
-                            }
-                            break;
-                        }
-                    }
-
-                    /* if necessary, prepare the MAX STREAM frames */
-                    if (ret == 0) {
-                        ret =  picoquic_prepare_max_streams_frame_if_needed(cnx,
-                            &bytes[length], send_buffer_min_max - checksum_overhead - length, &data_bytes);
-                        if (ret == 0) {
-                            length += (uint32_t)data_bytes;
-                            if (data_bytes > 0)
-                            {
-                                is_pure_ack = 0;
-                            }
-                        }
-                        else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
-                            *next_wake_time = current_time;
-                            ret = 0;
-                        }
-                    }
-
-                    /* If necessary, encode the max data frame */
-                    if (ret == 0 && 2 * cnx->data_received > cnx->maxdata_local) {
-                        ret = picoquic_prepare_max_data_frame(cnx, 2 * cnx->data_received, &bytes[length],
-                            send_buffer_min_max - checksum_overhead - length, &data_bytes);
-
-                        if (ret == 0) {
-                            length += (uint32_t)data_bytes;
-                            if (data_bytes > 0)
-                            {
-                                is_pure_ack = 0;
-                            }
-                        }
-                        else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
-                            *next_wake_time = current_time;
-                            ret = 0;
-                        }
-                    }
-                    /* If necessary, encode the max stream data frames */
-                    if (ret == 0) {
-                        ret = picoquic_prepare_required_max_stream_data_frames(cnx, &bytes[length],
-                            send_buffer_min_max - checksum_overhead - length, &data_bytes);
-
-                        if (ret == 0) {
-                            length += (uint32_t)data_bytes;
-                            if (data_bytes > 0)
-                            {
-                                is_pure_ack = 0;
-                            }
-                        }
-                        else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
-                            *next_wake_time = current_time;
-                            ret = 0;
-                        }
-                    }
-
-                    /* Encode the stream frame, or frames */
-                    while (stream != NULL) {
-                        ret = picoquic_prepare_stream_frame(cnx, stream, &bytes[length],
-                            send_buffer_min_max - checksum_overhead - length, &data_bytes);
-
-                        if (ret == 0) {
-                            length += (uint32_t)data_bytes;
-                            if (data_bytes > 0)
-                            {
-                                is_pure_ack = 0;
-                            }
-
-                            if (send_buffer_max > checksum_overhead + length + 8) {
-                                stream = picoquic_find_ready_stream(cnx);
+                    if (length > header_length || pmtu_discovery_needed != picoquic_pmtu_discovery_required) {
+                        /* If present, send misc frame */
+                        while (cnx->first_misc_frame != NULL) {
+                            ret = picoquic_prepare_first_misc_frame(cnx, &bytes[length],
+                                send_buffer_min_max - checksum_overhead - length, &data_bytes);
+                            if (ret == 0) {
+                                length += (uint32_t)data_bytes;
                             }
                             else {
+                                if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
+                                    *next_wake_time = current_time;
+                                    ret = 0;
+                                }
                                 break;
                             }
                         }
-                        else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
-                            *next_wake_time = current_time;
-                            ret = 0;
-                            break;
+
+                        /* If there are not enough paths, create and advertise */
+                        while (ret == 0 && cnx->remote_parameters.migration_disabled == 0 &&
+                            cnx->local_parameters.migration_disabled == 0 &&
+                            cnx->nb_paths < PICOQUIC_NB_PATH_TARGET) {
+                            ret = picoquic_prepare_new_path_and_id(cnx, &bytes[length],
+                                send_buffer_min_max - checksum_overhead - length,
+                                current_time, &data_bytes);
+                            if (ret == 0) {
+                                length += (uint32_t)data_bytes;
+                            }
+                            else {
+                                if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
+                                    *next_wake_time = current_time;
+                                    ret = 0;
+                                }
+                                break;
+                            }
+                        }
+
+                        /* if necessary, prepare the MAX STREAM frames */
+                        if (ret == 0) {
+                            ret = picoquic_prepare_max_streams_frame_if_needed(cnx,
+                                &bytes[length], send_buffer_min_max - checksum_overhead - length, &data_bytes);
+                            if (ret == 0) {
+                                length += (uint32_t)data_bytes;
+                                if (data_bytes > 0)
+                                {
+                                    is_pure_ack = 0;
+                                }
+                            }
+                            else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
+                                *next_wake_time = current_time;
+                                ret = 0;
+                            }
+                        }
+
+                        /* If necessary, encode the max data frame */
+                        if (ret == 0 && 2 * cnx->data_received > cnx->maxdata_local) {
+                            ret = picoquic_prepare_max_data_frame(cnx, 2 * cnx->data_received, &bytes[length],
+                                send_buffer_min_max - checksum_overhead - length, &data_bytes);
+
+                            if (ret == 0) {
+                                length += (uint32_t)data_bytes;
+                                if (data_bytes > 0)
+                                {
+                                    is_pure_ack = 0;
+                                }
+                            }
+                            else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
+                                *next_wake_time = current_time;
+                                ret = 0;
+                            }
+                        }
+                        /* If necessary, encode the max stream data frames */
+                        if (ret == 0) {
+                            ret = picoquic_prepare_required_max_stream_data_frames(cnx, &bytes[length],
+                                send_buffer_min_max - checksum_overhead - length, &data_bytes);
+
+                            if (ret == 0) {
+                                length += (uint32_t)data_bytes;
+                                if (data_bytes > 0)
+                                {
+                                    is_pure_ack = 0;
+                                }
+                            }
+                            else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
+                                *next_wake_time = current_time;
+                                ret = 0;
+                            }
+                        }
+
+                        /* Encode the stream frame, or frames */
+                        while (stream != NULL) {
+                            ret = picoquic_prepare_stream_frame(cnx, stream, &bytes[length],
+                                send_buffer_min_max - checksum_overhead - length, &data_bytes);
+
+                            if (ret == 0) {
+                                length += (uint32_t)data_bytes;
+                                if (data_bytes > 0)
+                                {
+                                    is_pure_ack = 0;
+                                }
+
+                                if (send_buffer_max > checksum_overhead + length + 8) {
+                                    stream = picoquic_find_ready_stream(cnx);
+                                }
+                                else {
+                                    break;
+                                }
+                            }
+                            else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
+                                *next_wake_time = current_time;
+                                ret = 0;
+                                break;
+                            }
                         }
                     }
 
@@ -2288,7 +2337,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                         length = picoquic_pad_to_policy(cnx, bytes, length, (uint32_t)(send_buffer_min_max - checksum_overhead));
                     }
                     else if (ret == 0 && send_buffer_max > path_x->send_mtu
-                        && path_x->cwin > path_x->bytes_in_transit && picoquic_is_mtu_probe_needed(cnx, path_x)) {
+                        && path_x->cwin > path_x->bytes_in_transit && pmtu_discovery_needed != picoquic_pmtu_discovery_not_needed) {
                         length = picoquic_prepare_mtu_probe(cnx, path_x, header_length, checksum_overhead, bytes);
                         packet->length = length;
                         packet->send_path = path_x;
