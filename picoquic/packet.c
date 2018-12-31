@@ -1494,7 +1494,7 @@ int picoquic_incoming_encrypted(
             if (ret == 0) {
                 picoquic_path_t * path_x = cnx->path[path_id];
 
-                picoquic_spin_function_table[picoquic_supported_versions[cnx->version_index].spinbit_version].spinbit_incoming(cnx, path_x, ph);
+                picoquic_spin_function_table[cnx->spin_policy].spinbit_incoming(cnx, path_x, ph);
                 /* Accept the incoming frames */
                 ret = picoquic_decode_frames(cnx, cnx->path[path_id], 
                     bytes + ph->offset, ph->payload_length, ph->epoch, addr_from, addr_to, current_time);

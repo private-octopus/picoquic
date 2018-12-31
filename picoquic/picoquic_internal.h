@@ -64,8 +64,7 @@ extern "C" {
 #define PICOQUIC_CWIN_INITIAL (10 * PICOQUIC_MAX_PACKET_SIZE)
 #define PICOQUIC_CWIN_MINIMUM (2 * PICOQUIC_MAX_PACKET_SIZE)
 
-#define PICOQUIC_SPIN_VEC_LATE 1000 /* in microseconds : reaction time beyond which to mark a spin bit edge as 'late' */
-#define PICOQUIC_LOSS_Q_PERIOD 64  /* fixed Kazuho sequence half-period */
+#define PICOQUIC_SPIN_RESERVE_MOD_256 17
 
 /*
  * Types of frames
@@ -170,23 +169,6 @@ typedef enum {
     picoquic_version_no_flag = 0
 } picoquic_version_feature_flags;
 
-/*
- * Spin bit management
- * There is a spinbit version attached to the description of each QUIC version
- * The table of functions is defined in the module "spinbit.c"
- */
-
-typedef enum {
-    picoquic_spinbit_basic = 0,
-    picoquic_spinbit_random = 1,
-    picoquic_spinbit_null = 2
-} picoquic_spinbit_version_enum;
-
-typedef union u_picoquit_spinbit_data_t {
-    struct {
-        unsigned int current_spin : 1;
-    } s_basic;
-}picoquit_spinbit_data_t;
 
 typedef void (*picoquic_spinbit_incoming_fn)(picoquic_cnx_t * cnx, picoquic_path_t * path_x, picoquic_packet_header * ph);
 typedef uint8_t (*picoquic_spinbit_outgoing_fn)(picoquic_cnx_t * cnx);
@@ -208,7 +190,6 @@ typedef enum {
 typedef struct st_picoquic_version_parameters_t {
     uint32_t version;
     picoquic_version_header_encoding version_header_encoding;
-    picoquic_spinbit_version_enum spinbit_version;
     size_t version_aead_key_length;
     uint8_t* version_aead_key;
 } picoquic_version_parameters_t;
@@ -326,6 +307,7 @@ typedef struct st_picoquic_quic_t {
     uint32_t flags;
     uint32_t padding_multiple_default;
     uint32_t padding_minsize_default;
+    picoquic_spinbit_version_enum default_spin_policy;
 
     picoquic_stateless_packet_t* pending_stateless_packet;
 
@@ -512,10 +494,10 @@ typedef struct st_picoquic_path_t {
     unsigned int path_is_demoted : 1;
     unsigned int alt_challenge_required : 1;
     unsigned int alt_response_required : 1;
+    unsigned int current_spin : 1;
 
-    /* loss statistics and spin data */
-    uint64_t retrans_count;  /* number of retransmissions observed on path */
-    picoquit_spinbit_data_t spin_data;
+    /* number of retransmissions observed on path */
+    uint64_t retrans_count;  
 
     /* Time measurement */
     uint64_t max_ack_delay;
@@ -654,6 +636,8 @@ typedef struct st_picoquic_cnx_t {
     unsigned int zero_rtt_data_accepted : 1; /* Peer confirmed acceptance of zero rtt data */
     unsigned int one_rtt_data_acknowledged : 1; /* 1RTT data acknowledged by peer */
 
+    /* Spin bit policy */
+    picoquic_spinbit_version_enum spin_policy;
 
     /* Local and remote parameters */
     picoquic_tp_t local_parameters;

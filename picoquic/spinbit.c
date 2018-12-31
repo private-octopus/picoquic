@@ -31,12 +31,12 @@
  */
 void picoquic_spinbit_basic_incoming(picoquic_cnx_t * cnx, picoquic_path_t * path_x, picoquic_packet_header * ph)
 {
-    path_x->spin_data.s_basic.current_spin = ph->spin ^ cnx->client_mode;
+    path_x->current_spin = ph->spin ^ cnx->client_mode;
 }
 
 uint8_t picoquic_spinbit_basic_outgoing(picoquic_cnx_t * cnx)
 {
-    uint8_t spin_bit = (uint8_t)((cnx->path[0]->spin_data.s_basic.current_spin) << 5);
+    uint8_t spin_bit = (uint8_t)((cnx->path[0]->current_spin) << 5);
 
     return spin_bit;
 }
