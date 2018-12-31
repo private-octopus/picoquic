@@ -262,7 +262,7 @@ uint32_t picoquic_create_packet_header(
         uint8_t K = (cnx->key_phase_enc) ? 0x04 : 0;
         const uint8_t C = 0x43; /* default packet length to 4 bytes; set the QUIC bit */
         length = 0;
-        bytes[length++] = (K | C | picoquic_spin_function_table[picoquic_supported_versions[cnx->version_index].spinbit_version].spinbit_outgoing(cnx));
+        bytes[length++] = (K | C | picoquic_spin_function_table[cnx->spin_policy].spinbit_outgoing(cnx));
         length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, dest_cnx_id);
 
         *pn_offset = length;
