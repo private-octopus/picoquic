@@ -121,6 +121,14 @@ typedef struct st_picoquic_packet_header_t {
     uint16_t pl_val;
 } picoquic_packet_header;
 
+/* PMTU discovery requirement status */
+
+typedef enum {
+    picoquic_pmtu_discovery_not_needed = 0,
+    picoquic_pmtu_discovery_optional,
+    picoquic_pmtu_discovery_required
+} picoquic_pmtu_discovery_status_enum;
+
 /*
  * Efficient range operations that assume range containing bitfields.
  * Namely, it assumes max&min==min, min&bits==0, max&bits==bits.
@@ -703,6 +711,7 @@ typedef struct st_picoquic_cnx_t {
     picoquic_packet_context_t pkt_ctx[picoquic_nb_packet_context];
 
     /* Statistics */
+    uint64_t nb_bytes_queued;
     uint32_t nb_path_challenge_sent;
     uint32_t nb_path_response_received;
     uint32_t nb_zero_rtt_sent;
