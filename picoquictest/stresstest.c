@@ -127,8 +127,7 @@ static int stress_server_callback(picoquic_cnx_t* cnx,
             free(ctx);
             picoquic_set_callback(cnx, stress_server_callback, NULL);
         }
-    } else if (fin_or_event == picoquic_callback_prepare_to_send ||
-        fin_or_event == picoquic_callback_provide_data) {
+    } else if (fin_or_event == picoquic_callback_prepare_to_send) {
         /* unexpected call */
         ret = -1;
     } else {

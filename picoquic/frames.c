@@ -967,6 +967,51 @@ picoquic_stream_head* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
     return stream;
 }
 
+typedef struct st_picoquic_stream_data_buffer_argument_t {
+    uint8_t * bytes;
+    size_t byte_index;
+    size_t space;
+    size_t length;
+    int is_fin;
+} picoquic_stream_data_buffer_argument_t;
+
+uint8_t * picoquic_provide_stream_data_buffer(void * context, size_t length, int is_fin)
+{
+    picoquic_stream_data_buffer_argument_t * data_ctx = (picoquic_stream_data_buffer_argument_t*)context;
+    uint8_t * buffer = NULL;
+
+    if (length <= data_ctx->space) {
+        data_ctx->length = length;
+
+        if (is_fin) {
+            data_ctx->is_fin = 1;
+            data_ctx->bytes[0] |= 1;
+        }
+
+        if (length < data_ctx->space) {
+            if (length == data_ctx->space - 1) {
+                /* special case -- shift the header by one byte and insert one byte of padding */
+                for (size_t i = data_ctx->byte_index - 1; i >= 0; i--) {
+                    data_ctx->bytes[i + 1] = data_ctx->bytes[i];
+                }
+                data_ctx->bytes[0] = picoquic_frame_type_padding;
+                data_ctx->byte_index++;
+            }
+            else {
+                /* Short frame, length field is required */
+                /* We checked above that there are enough bytes to encode length */
+                data_ctx->byte_index += picoquic_varint_encode(data_ctx->bytes + data_ctx->byte_index,
+                    data_ctx->space, (uint64_t)length);
+                data_ctx->bytes[0] |= 2; /* Indicates presence of length */
+            }
+        }
+
+        buffer = data_ctx->bytes + data_ctx->byte_index;
+    }
+
+    return buffer;
+}
+
 int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head* stream,
     uint8_t* bytes, size_t bytes_max, size_t* consumed)
 {
@@ -1032,59 +1077,31 @@ int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head* str
                 /* that would be a silly encoding */
                 length = 0;
             }
-            else if (stream->is_active) {
+            else if (stream->is_active && !stream->fin_requested) {
                 /* The application requested active polling for this stream */
-                int ret_length = (cnx->callback_fn)(cnx, stream->stream_id, NULL, space, picoquic_callback_prepare_to_send, cnx->callback_ctx);
+                picoquic_stream_data_buffer_argument_t stream_data_context;
 
-                if (ret_length == 0) {
-                    length = 0;
-                }
-                else if (ret_length < 0) {
-                    /* Application error */
+                stream_data_context.bytes = bytes;
+                stream_data_context.byte_index = byte_index;
+                stream_data_context.space = space;
+                stream_data_context.length = 0;
+                stream_data_context.is_fin = 0;
+
+                if ((cnx->callback_fn)(cnx, stream->stream_id, (uint8_t*)&stream_data_context, space, picoquic_callback_prepare_to_send, cnx->callback_ctx) != 0) {
+                    /* something went wrong */
                     ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
                 }
                 else {
-                    length = (size_t)ret_length;
-                    if (length > space) {
-                        ret_length = 0; /* Should be an error code */
-                    }
-                    else {
-                        if (length < space) {
-                            if (length == space - 1) {
-                                /* special case -- shift the header by one byte and insert one byte of padding */
-                                for (size_t i = byte_index - 1; i >= 0; i--) {
-                                    bytes[i + 1] = bytes[i];
-                                }
-                                bytes[0] = picoquic_frame_type_padding;
-                                byte_index++;
-                            }
-                            else {
-                                /* Short frame, length field is required */
-                                /* We checked above that there are enough bytes to encode length */
-                                byte_index += picoquic_varint_encode(bytes + byte_index, space,
-                                    (uint64_t)length);
-                                bytes[0] |= 2; /* Indicates presence of length */
-                            }
-                        }
+                    byte_index = stream_data_context.byte_index + stream_data_context.length;
+                    stream->sent_offset += stream_data_context.length;
+                    cnx->data_sent += stream_data_context.length;
+                    *consumed = byte_index;
 
-                        if ((cnx->callback_fn)(cnx, stream->stream_id, bytes + byte_index, length, picoquic_callback_provide_data, cnx->callback_ctx) != 0) {
-                            /* error case -- the application promised data but could not deliver  */
-                            ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
-                        }
-                        else {
-                            if (stream->fin_requested) {
-                                /* Set the fin bit */
-                                stream->fin_sent = 1;
-                                bytes[0] |= 1;
-
-                                picoquic_update_max_stream_ID_local(cnx, stream);
-                            }
-
-                            byte_index += length;
-                            stream->sent_offset += length;
-                            cnx->data_sent += length;
-                            *consumed = byte_index;
-                        }
+                    if (stream_data_context.is_fin) {
+                        stream->is_active = 0;
+                        stream->fin_requested = 1;
+                        stream->fin_sent = 1;
+                        picoquic_update_max_stream_ID_local(cnx, stream);
                     }
                 }
             }

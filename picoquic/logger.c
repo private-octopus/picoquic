@@ -88,9 +88,6 @@ const char * picoquic_log_fin_or_event_name(picoquic_call_back_event_t ev)
     case picoquic_callback_prepare_to_send:
         text = "ready to send";
         break;
-    case picoquic_callback_provide_data:
-        text = "provide data";
-        break;
     default:
         break;
     }

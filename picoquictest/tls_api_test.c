@@ -289,39 +289,27 @@ static void test_api_receive_stream_data(
     }
 }
 
-static int test_api_stream0_prepare(picoquic_cnx_t* cnx, picoquic_test_tls_api_ctx_t* ctx, size_t space)
+static int test_api_stream0_prepare(picoquic_cnx_t* cnx, picoquic_test_tls_api_ctx_t* ctx, uint8_t * context, size_t space)
 {
+    int ret = -1;
+
     if (ctx->stream0_sent < ctx->stream0_target) {
+        uint8_t * buffer;
         size_t available = ctx->stream0_target - ctx->stream0_sent;
         if (available > space) {
             available = space;
         }
-        return (int)available;
-    }
-    else {
-        return 0;
-    }
-}
 
-static int test_api_stream0_provide(picoquic_cnx_t* cnx, picoquic_test_tls_api_ctx_t* ctx, uint8_t * bytes, size_t length)
-{
-    if (ctx->stream0_sent + length <= ctx->stream0_target) {
-        memset(bytes, 0xA5, length);
-        ctx->stream0_sent += length;
-        if (ctx->stream0_sent >= ctx->stream0_target) {
-            /* signal the fin of the stream, which will also mark the stream as not active */
-            (void)picoquic_add_to_stream(cnx, 0, NULL, 0, 1);
+        buffer = picoquic_provide_stream_data_buffer(context, available, (available + ctx->stream0_sent >= ctx->stream0_target) ? 1 : 0);
+        if (buffer != NULL) {
+            memset(buffer, 0xA5, available);
+            ctx->stream0_sent += available;
+            ret = 0;
         }
+    }
 
-        return 0;
-    }
-    else {
-        /* Unexpected call back argument */
-        return -1;
-    }
+    return ret;
 }
-
-
 
 static int test_api_queue_initial_queries(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t stream_id)
 {
@@ -396,18 +384,8 @@ static int test_api_callback(picoquic_cnx_t* cnx,
 
     if (fin_or_event == picoquic_callback_prepare_to_send) {
         if (cb_ctx->client_mode && stream_id == 0) {
-            return test_api_stream0_prepare(cnx, ctx, length);
+            return test_api_stream0_prepare(cnx, ctx, bytes, length);
         } else {
-            /* unexpected call */
-            return -1;
-        }
-    }
-
-    if (fin_or_event == picoquic_callback_provide_data) {
-        if (cb_ctx->client_mode && stream_id == 0) {
-            return test_api_stream0_provide(cnx, ctx, bytes, length);
-        }
-        else {
             /* unexpected call */
             return -1;
         }

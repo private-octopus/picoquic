@@ -233,8 +233,7 @@ typedef enum {
     picoquic_callback_close, /* Connection close. Stream=0, bytes=NULL, len=0 */
     picoquic_callback_application_close, /* Application closed by peer. Stream=0, bytes=NULL, len=0 */
     picoquic_callback_stream_gap,  /* bytes=NULL, len = length-of-gap or 0 (if unknown) */
-    picoquic_callback_prepare_to_send, /* asking the application how many bytes are available on the stream */
-    picoquic_callback_provide_data, /* asking the application to fill the send buffer */
+    picoquic_callback_prepare_to_send /* Ask application to send data in frame, see picoquic_provide_stream_data_buffer for details */
 } picoquic_call_back_event_t;
 
 #define PICOQUIC_STREAM_ID_TYPE_MASK 3
@@ -459,6 +458,22 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
  */
 int picoquic_mark_active_stream(picoquic_cnx_t* cnx,
     uint64_t stream_id, int is_active);
+
+/* If a stream is marked active, the application will receive a callback with
+ * event type "picoquic_callback_prepare_to_send" when the transport is ready to
+ * send data on a stream. The "length" argument in the call back indicates the
+ * largest amount of data that can be sent, and the "bytes" argument points
+ * to an opaque context structure. In order to prepare data, the application
+ * needs to call "picoquic_provide_stream_data_buffer" with that context
+ * pointer, with the number of bytes that it wants to write, and with an indication
+ * of whether or not the fin of the stream was reached. The function
+ * returns the pointer to a memory address where to write the byte -- or
+ * a NULL pointer in case of error. The application then copies the specified 
+ * number of bytes at the provided address, and provide a return code 0 from
+ * the callback in case of success, or non zero in case of error.
+ */
+
+uint8_t * picoquic_provide_stream_data_buffer(void * context, size_t nb_bytes, int is_fin);
 
 /* Queue data on a stream, so the transport can send it immediately
  * when ready. The data is copied in an intermediate buffer managed by
