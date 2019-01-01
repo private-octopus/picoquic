@@ -381,6 +381,7 @@ typedef struct _picoquic_stream_head {
     picoquic_stream_data* send_queue;
     picoquic_sack_item_t first_sack_item;
     /* Flags describing the state of the stream */
+    unsigned int is_active : 1; /* The application is actively managing data sending through callbacks */
     unsigned int fin_requested : 1; /* Application has requested Fin of sending stream */
     unsigned int fin_sent : 1; /* Fin sent to peer */
     unsigned int fin_received : 1; /* Fin received from peer */

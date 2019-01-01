@@ -289,24 +289,39 @@ static void test_api_receive_stream_data(
     }
 }
 
-static void test_api_stream0_queue(picoquic_cnx_t* cnx, picoquic_test_tls_api_ctx_t* ctx)
+static int test_api_stream0_prepare(picoquic_cnx_t* cnx, picoquic_test_tls_api_ctx_t* ctx, size_t space)
 {
     if (ctx->stream0_sent < ctx->stream0_target) {
-        uint8_t data_buffer[2048];
-        size_t available = 0;
-        int fin = 1;
-
-        available = ctx->stream0_target - ctx->stream0_sent;
-        if (available > sizeof(data_buffer)) {
-            available = sizeof(data_buffer);
-            fin = 0;
+        size_t available = ctx->stream0_target - ctx->stream0_sent;
+        if (available > space) {
+            available = space;
         }
-        memset(data_buffer, 0xA5, available);
-
-        (void)picoquic_add_to_stream(cnx, 0, data_buffer, available, fin);
-        ctx->stream0_sent += available;
+        return (int)available;
+    }
+    else {
+        return 0;
     }
 }
+
+static int test_api_stream0_provide(picoquic_cnx_t* cnx, picoquic_test_tls_api_ctx_t* ctx, uint8_t * bytes, size_t length)
+{
+    if (ctx->stream0_sent + length <= ctx->stream0_target) {
+        memset(bytes, 0xA5, length);
+        ctx->stream0_sent += length;
+        if (ctx->stream0_sent >= ctx->stream0_target) {
+            /* signal the fin of the stream, which will also mark the stream as not active */
+            (void)picoquic_add_to_stream(cnx, 0, NULL, 0, 1);
+        }
+
+        return 0;
+    }
+    else {
+        /* Unexpected call back argument */
+        return -1;
+    }
+}
+
+
 
 static int test_api_queue_initial_queries(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t stream_id)
 {
@@ -331,7 +346,7 @@ static int test_api_queue_initial_queries(picoquic_test_tls_api_ctx_t* test_ctx,
     }
 
     if (test_ctx->stream0_target > 0) {
-        test_api_stream0_queue(test_ctx->cnx_client, test_ctx);
+        ret = picoquic_mark_active_stream(test_ctx->cnx_client, 0, 1);
     }
 
     if (more_stream == 0) {
@@ -379,12 +394,23 @@ static int test_api_callback(picoquic_cnx_t* cnx,
         return 0;
     }
 
-    if (fin_or_event == picoquic_callback_ready_to_send) {
+    if (fin_or_event == picoquic_callback_prepare_to_send) {
         if (cb_ctx->client_mode && stream_id == 0) {
-            test_api_stream0_queue(cnx, ctx);
+            return test_api_stream0_prepare(cnx, ctx, length);
+        } else {
+            /* unexpected call */
+            return -1;
         }
+    }
 
-        return 0;
+    if (fin_or_event == picoquic_callback_provide_data) {
+        if (cb_ctx->client_mode && stream_id == 0) {
+            return test_api_stream0_provide(cnx, ctx, bytes, length);
+        }
+        else {
+            /* unexpected call */
+            return -1;
+        }
     }
 
     if (bytes != NULL) {

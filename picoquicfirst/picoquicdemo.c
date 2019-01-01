@@ -248,9 +248,10 @@ static int first_server_callback(picoquic_cnx_t* cnx,
     printf("Server CB, Stream: %" PRIu64 ", %" PRIst " bytes, fin=%d (%s)\n",
         stream_id, length, fin_or_event, picoquic_log_fin_or_event_name(fin_or_event));
 
-    if (fin_or_event == picoquic_callback_ready_to_send) {
-        /* Not doing anything there for now. */
-        return 0;
+    if (fin_or_event == picoquic_callback_prepare_to_send ||
+        fin_or_event == picoquic_callback_provide_data) {
+        /* Unexpected call. */
+        return -1;
     }
 
     if (fin_or_event == picoquic_callback_close || 
