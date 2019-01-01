@@ -1121,7 +1121,7 @@ int picoquic_should_send_max_data(picoquic_cnx_t* cnx)
 /* Compute the next logical probe length */
 static uint32_t picoquic_next_mtu_probe_length(picoquic_cnx_t* cnx, picoquic_path_t * path_x)
 {
-    uint32_t probe_length = path_x->send_mtu;
+    uint32_t probe_length;
 
     if (path_x->send_mtu_max_tried == 0) {
         if (cnx->remote_parameters.max_packet_size > 0) {

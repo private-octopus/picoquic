@@ -399,11 +399,15 @@ static int test_api_callback(picoquic_cnx_t* cnx,
         }
     }
 
-    if (stream_id == 0 && cb_ctx->client_mode == 0 &&
+    if (stream_id == 0 && cb_ctx->client_mode == 0 && 
         (fin_or_event == picoquic_callback_no_event || fin_or_event == picoquic_callback_stream_fin)) {
-        for (size_t i = 0; i < length; i++) {
-            if (bytes[i] != 0xA5) {
-                cb_ctx->error_detected = test_api_bad_stream0_data;
+        if (bytes == NULL && length != 0) {
+            cb_ctx->error_detected = test_api_bad_stream0_data;
+        } else {
+            for (size_t i = 0; i < length; i++) {
+                if (bytes[i] != 0xA5) {
+                    cb_ctx->error_detected = test_api_bad_stream0_data;
+                }
             }
         }
         ctx->stream0_received += length;
