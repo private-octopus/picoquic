@@ -452,9 +452,8 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
 
 /* Mark stream as active, or not.
  * If a stream is active, it will be polled for data when the transport
- * is ready to send.
- * Returns an error if data was previously queued on the stream using
- * "picoquic_add_to_stream" and the data has not been sent yet.
+ * is ready to send. The polling will only start after all currently
+ * queued data has been sent.
  */
 int picoquic_mark_active_stream(picoquic_cnx_t* cnx,
     uint64_t stream_id, int is_active);

@@ -914,75 +914,93 @@ uint8_t* picoquic_decode_stream_frame(picoquic_cnx_t* cnx, uint8_t* bytes, const
 
 picoquic_stream_head* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
 {
-    picoquic_stream_head* stream = NULL;
+    picoquic_stream_head* start_stream = cnx->first_stream;
+    picoquic_stream_head* found_stream = NULL;
 
-    for (int nb_pass = 0; nb_pass < 2; nb_pass++) {
-        stream = cnx->first_stream;
 
-        if (nb_pass == 0) {
-            /* Skip to the first non visited stream */
-            while (stream && stream->stream_id <= cnx->last_visited_stream_id) {
-                stream = stream->next_stream;
-            }
-        }
+    /* Skip to the first non visited stream */
+    while (start_stream && start_stream->stream_id <= cnx->last_visited_stream_id) {
+        start_stream = start_stream->next_stream;
+    }
 
-        while (stream) {
-            if ((cnx->maxdata_remote > cnx->data_sent && stream->sent_offset < stream->maxdata_remote &&
-                (stream->is_active ||
-                (stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset) ||
-                (stream->fin_requested && !stream->fin_sent))) ||
-                    (stream->reset_requested && !stream->reset_sent) ||
+    if (start_stream == NULL) {
+        start_stream = cnx->first_stream;
+    }
+
+    /* Look for a ready stream */
+    if (start_stream != NULL) {
+        picoquic_stream_head* stream = start_stream;
+        do {
+            if ((cnx->maxdata_remote > cnx->data_sent && stream->sent_offset < stream->maxdata_remote && (stream->is_active || 
+                    (stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset) ||
+                    (stream->fin_requested && !stream->fin_sent))) ||
+                (stream->reset_requested && !stream->reset_sent) ||
                 (stream->stop_sending_requested && !stream->stop_sending_sent)) {
                 /* Something can be sent */
                 /* if the stream is not active yet, verify that it fits under
                  * the max stream id limit */
                  /* Check parity */
-                if (IS_CLIENT_STREAM_ID(stream->stream_id) == cnx->client_mode) {
-                    if (stream->stream_id <= cnx->max_stream_id_bidir_remote) {
-                        break;
-                    }
-                }
-                else {
+                if (IS_CLIENT_STREAM_ID(stream->stream_id) != cnx->client_mode ||
+                    IS_BIDIR_STREAM_ID(stream->stream_id) && stream->stream_id <= cnx->max_stream_id_bidir_remote ||
+                    !IS_BIDIR_STREAM_ID(stream->stream_id) && stream->stream_id <= cnx->max_stream_id_unidir_remote) {
+                    found_stream = stream;
                     break;
                 }
             }
-
-            stream = stream->next_stream;
-
-            if (nb_pass > 0) {
-                /* Dont do the loop twice */
-                if (stream && stream->stream_id > cnx->last_visited_stream_id) {
-                    stream = NULL;
-                    break;
-                }
-            }
-        };
-
-        /* Do only one pass if we found a stream */
-        if (stream != NULL) {
-            break;
-        }
+            stream = stream->next_stream != NULL ? stream->next_stream : cnx->first_stream;
+        } while (stream != start_stream);
     }
 
-    return stream;
+    return found_stream;
 }
 
 typedef struct st_picoquic_stream_data_buffer_argument_t {
-    uint8_t* bytes;
-    size_t byte_index;
-    size_t byte_space;
-    size_t space;
-    size_t length;
-    int is_fin;
-    int is_still_active;
+    uint8_t* bytes; /* Points to the beginning of the encoding of the stream frame */
+    size_t byte_index; /* Current index position after encoding type, stream-id and offset */
+    size_t byte_space; /* Number of bytes available in the packet after the current index */
+    size_t allowed_space; /* Maximum number of bytes that the application is authorized to write */
+    size_t length; /* number of bytes that the application commits to write */
+    int is_fin; /* Whether this is the end of the stream */
+    int is_still_active; /* whether the stream is still considered active after this call */
 } picoquic_stream_data_buffer_argument_t;
+
+static size_t picoquic_encode_length_of_stream_frame(
+    uint8_t* bytes, size_t byte_index, size_t byte_space, size_t length, size_t *start_index)
+{
+    if (length < byte_space) {
+        if (length == byte_space - 1) {
+            /* Special case: there are N bytes available, the application wants to write N-1 bytes.
+             * We can encode N bytes because then we don't need a length field, just a flag in the
+             * first byte. But if we had to encode "length=N-1", that would typically require 2
+             * bytes, for a total of (2 + N-1)=N+1 bytes, larger than the packet size. We also
+             * don't want to avoid the length field, because the encoding would be shorter than
+             * the packet size, and other parts of the code might add a byte after that, e.g. padding,
+             * which the receiver would mistake as data because of the "implicit length" encoding.
+             * So we work against that issue by inserting a single padding byte in front of the
+             * stream header.*/
+            memmove(bytes + 1, bytes, byte_index);
+            bytes[0] = picoquic_frame_type_padding;
+            *start_index = 1;
+            byte_index++;
+        }
+        else {
+            /* Short frame, length field is required */
+            /* We checked above that there are enough bytes to encode length */
+            byte_index += picoquic_varint_encode(bytes + byte_index, byte_space, (uint64_t)length);
+            bytes[0] |= 2; /* Indicates presence of length */
+        }
+    }
+
+    return byte_index;
+}
 
 uint8_t* picoquic_provide_stream_data_buffer(void* context, size_t length, int is_fin, int is_still_active)
 {
     picoquic_stream_data_buffer_argument_t * data_ctx = (picoquic_stream_data_buffer_argument_t*)context;
-    uint8_t * buffer = NULL;
+    uint8_t* buffer = NULL;
+    size_t start_index = 0;
 
-    if (length <= data_ctx->space) {
+    if (length <= data_ctx->allowed_space) {
         data_ctx->length = length;
 
         if (is_fin) {
@@ -992,32 +1010,8 @@ uint8_t* picoquic_provide_stream_data_buffer(void* context, size_t length, int i
 
         data_ctx->is_still_active = is_still_active;
 
-        if (length < data_ctx->byte_space) {
-            if (length == data_ctx->byte_space - 1) {
-                /* Special case: there are N bytes available, the application wants to write N-1 bytes. 
-                 * We can encode N bytes because then we don't need a length field, just a flag in the 
-                 * first byte. But if we had to encode "length=N-1", that would typically require 2 
-                 * bytes, for a total of (2 + N-1)=N+1 bytes, larger than the packet size. We also
-                 * don't want to avoid the length field, because the encoding would be shorter than
-                 * the packet size, and other parts of the code might add a byte after that, e.g. padding,
-                 * which the receiver would mistake as data because of the "implicit length" encoding.
-                 * So we work against that issue by inserting a single padding byte in front of the 
-                 * text header.*/
-
-                for (int i = (int)data_ctx->byte_index - 1; i >= 0; i--) {
-                    data_ctx->bytes[i + 1] = data_ctx->bytes[i];
-                }
-                data_ctx->bytes[0] = picoquic_frame_type_padding;
-                data_ctx->byte_index++;
-            }
-            else {
-                /* Short frame, length field is required */
-                /* We checked above that there are enough bytes to encode length */
-                data_ctx->byte_index += picoquic_varint_encode(data_ctx->bytes + data_ctx->byte_index,
-                    data_ctx->space, (uint64_t)length);
-                data_ctx->bytes[0] |= 2; /* Indicates presence of length */
-            }
-        }
+        data_ctx->byte_index = picoquic_encode_length_of_stream_frame(data_ctx->bytes,
+            data_ctx->byte_index, data_ctx->byte_space, length, &start_index);
 
         buffer = data_ctx->bytes + data_ctx->byte_index;
     }
@@ -1091,13 +1085,13 @@ int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head* str
                 allowed_space = (size_t)(cnx->maxdata_remote - cnx->data_sent);
             }
 
-            if (stream->is_active && !stream->fin_requested) {
+            if (stream->is_active && stream->send_queue == NULL && !stream->fin_requested) {
                 /* The application requested active polling for this stream */
                 picoquic_stream_data_buffer_argument_t stream_data_context;
 
                 stream_data_context.bytes = bytes;
                 stream_data_context.byte_index = byte_index;
-                stream_data_context.space = allowed_space;
+                stream_data_context.allowed_space = allowed_space;
                 stream_data_context.byte_space = bytes_max - byte_index;
                 stream_data_context.length = 0;
                 stream_data_context.is_fin = 0;
@@ -1124,6 +1118,7 @@ int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head* str
                 }
             }
             else {
+                /* The application queued data for this stream */
                 size_t start_index = 0;
 
                 if (stream->send_queue == NULL) {
@@ -1137,32 +1132,7 @@ int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head* str
                     length = allowed_space;
                 }
 
-                if (length < byte_space) {
-                    if (length == byte_space - 1) {
-                        /* Special case: there are N bytes available, the application wants to write N-1 bytes.
-                         * We can encode N bytes because then we don't need a length field, just a flag in the
-                         * first byte. But if we had to encode "length=N-1", that would typically require 2
-                         * bytes, for a total of (2 + N-1)=N+1 bytes, larger than the packet size. We also
-                         * don't want to avoid the length field, because the encoding would be shorter than
-                         * the packet size, and other parts of the code might add a byte after that, e.g. padding,
-                         * which the receiver would mistake as data because of the "implicit length" encoding.
-                         * So we work against that issue by inserting a single padding byte in front of the
-                         * text header.*/
-
-                        for (int i = (int)byte_index - 1; i >= 0; i--) {
-                            bytes[i + 1] = bytes[i];
-                        }
-                        bytes[0] = picoquic_frame_type_padding;
-                        byte_index++;
-                        start_index++;
-                    }
-                    else {
-                        /* Short frame, length field is required */
-                        /* We checked above that there are enough bytes to encode length */
-                        byte_index += picoquic_varint_encode(bytes + byte_index, byte_space, (uint64_t)length);
-                        bytes[0] |= 2; /* Indicates presence of length */
-                    }
-                }
+                byte_index = picoquic_encode_length_of_stream_frame(bytes, byte_index, byte_space, length, &start_index);
 
                 if (ret == 0 && length > 0 && stream->send_queue != NULL && stream->send_queue->bytes != NULL) {
                     memcpy(&bytes[byte_index], stream->send_queue->bytes + stream->send_queue->offset, length);
