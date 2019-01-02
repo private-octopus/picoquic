@@ -74,6 +74,7 @@ extern "C" {
 #define PICOQUIC_ERROR_CNXID_NOT_AVAILABLE (PICOQUIC_ERROR_CLASS + 33)
 #define PICOQUIC_ERROR_MIGRATION_DISABLED (PICOQUIC_ERROR_CLASS + 34)
 #define PICOQUIC_ERROR_CANNOT_COMPUTE_KEY (PICOQUIC_ERROR_CLASS + 35)
+#define PICOQUIC_ERROR_CANNOT_SET_ACTIVE_STREAM (PICOQUIC_ERROR_CLASS + 36)
 
 /*
  * Protocol errors defined in the QUIC spec
@@ -224,15 +225,15 @@ typedef struct st_picoquic_cnx_t picoquic_cnx_t;
 typedef struct st_picoquic_path_t picoquic_path_t;
 
 typedef enum {
-    picoquic_callback_no_event = 0,
-    picoquic_callback_stream_fin,
-    picoquic_callback_stream_reset,
-    picoquic_callback_stop_sending,
-    picoquic_callback_stateless_reset,
-    picoquic_callback_close,
-    picoquic_callback_application_close,
-    picoquic_callback_challenge_response,
-    picoquic_callback_stream_gap  /* bytes=NULL, len = length-of-gap or 0 (if unknown) */
+    picoquic_callback_no_event = 0, /* Data received from peer on stream N */
+    picoquic_callback_stream_fin, /* Fin received from peer on stream N; data is optional */
+    picoquic_callback_stream_reset, /* Reset Stream received from peer on stream N; bytes=NULL, len = 0  */
+    picoquic_callback_stop_sending, /* Stop sending received from peer on stream N; bytes=NULL, len = 0 */
+    picoquic_callback_stateless_reset, /* Stateless reset received from peer. Stream=0, bytes=NULL, len=0 */
+    picoquic_callback_close, /* Connection close. Stream=0, bytes=NULL, len=0 */
+    picoquic_callback_application_close, /* Application closed by peer. Stream=0, bytes=NULL, len=0 */
+    picoquic_callback_stream_gap,  /* bytes=NULL, len = length-of-gap or 0 (if unknown) */
+    picoquic_callback_prepare_to_send /* Ask application to send data in frame, see picoquic_provide_stream_data_buffer for details */
 } picoquic_call_back_event_t;
 
 #define PICOQUIC_STREAM_ID_TYPE_MASK 3
@@ -281,7 +282,7 @@ uint64_t picoquic_get_quic_time(picoquic_quic_t* quic); /* connection time, comp
      * If stream_id is zero, this delivers misc frames or changes in
      * connection state.
      */
-typedef void (*picoquic_stream_data_cb_fn)(picoquic_cnx_t* cnx,
+typedef int (*picoquic_stream_data_cb_fn)(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx);
 
@@ -449,13 +450,47 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
     struct sockaddr_storage * p_addr_to, int * to_len, struct sockaddr_storage * p_addr_from, int * from_len);
 
-/* send and receive data on streams */
+/* Mark stream as active, or not.
+ * If a stream is active, it will be polled for data when the transport
+ * is ready to send.
+ * Returns an error if data was previously queued on the stream using
+ * "picoquic_add_to_stream" and the data has not been sent yet.
+ */
+int picoquic_mark_active_stream(picoquic_cnx_t* cnx,
+    uint64_t stream_id, int is_active);
+
+/* If a stream is marked active, the application will receive a callback with
+ * event type "picoquic_callback_prepare_to_send" when the transport is ready to
+ * send data on a stream. The "length" argument in the call back indicates the
+ * largest amount of data that can be sent, and the "bytes" argument points
+ * to an opaque context structure. In order to prepare data, the application
+ * needs to call "picoquic_provide_stream_data_buffer" with that context
+ * pointer, with the number of bytes that it wants to write, with an indication
+ * of whether or not the fin of the stream was reached, and also an indication
+ * of whether or not the stream is still active. The function
+ * returns the pointer to a memory address where to write the byte -- or
+ * a NULL pointer in case of error. The application then copies the specified 
+ * number of bytes at the provided address, and provide a return code 0 from
+ * the callback in case of success, or non zero in case of error.
+ */
+
+uint8_t* picoquic_provide_stream_data_buffer(void* context, size_t nb_bytes, int is_fin, int is_still_active);
+
+/* Queue data on a stream, so the transport can send it immediately
+ * when ready. The data is copied in an intermediate buffer managed by
+ * the transport. Calling this API automatically erases the "active
+ * mark" that might have been set by using "picoquic_mark_active_stream".
+ */
 int picoquic_add_to_stream(picoquic_cnx_t* cnx,
     uint64_t stream_id, const uint8_t* data, size_t length, int set_fin);
 
+/* Reset a stream, indicating that no more data will be sent on 
+ * that stream and that any data currently queued can be abandoned. */
 int picoquic_reset_stream(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint16_t local_stream_error);
 
+/* Ask the peer to stop sending on a stream. The peer is expected
+ * to reset that stream when receiving the "stop sending" signal. */
 int picoquic_stop_sending(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint16_t local_stream_error);
 
