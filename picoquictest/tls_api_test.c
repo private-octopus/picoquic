@@ -1577,7 +1577,7 @@ int unidir_test()
 
 int many_short_loss_test()
 {
-    return tls_api_one_scenario_test(test_scenario_more_streams, sizeof(test_scenario_more_streams), 0x88A888A888A888A8ull, 16000, 2000, 0, 0, NULL, NULL);
+    return tls_api_one_scenario_test(test_scenario_more_streams, sizeof(test_scenario_more_streams), 0, 0x88A888A888A888A8ull, 16000, 2000, 0, 0, NULL, NULL);
 }
 
 /*
