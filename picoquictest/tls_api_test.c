@@ -114,6 +114,7 @@ typedef struct st_picoquic_test_tls_api_ctx_t {
     size_t stream0_target;
     size_t stream0_sent;
     size_t stream0_received;
+    int stream0_test_option;
 
     int sum_data_received_at_server;
     int sum_data_received_at_client;
@@ -296,16 +297,32 @@ static int test_api_stream0_prepare(picoquic_cnx_t* cnx, picoquic_test_tls_api_c
     if (ctx->stream0_sent < ctx->stream0_target) {
         uint8_t * buffer;
         size_t available = ctx->stream0_target - ctx->stream0_sent;
+        int is_fin = 1;
+
         if (available > space) {
             available = space;
+            
+            if (ctx->stream0_test_option == 1 && space > 1) {
+                available--;
+            }
+            is_fin = 0;
+        }
+        else {
+            if (ctx->stream0_test_option == 2) {
+                is_fin = 0;
+            }
         }
 
-        buffer = picoquic_provide_stream_data_buffer(context, available, (available + ctx->stream0_sent >= ctx->stream0_target) ? 1 : 0);
+        buffer = picoquic_provide_stream_data_buffer(context, available, is_fin, !is_fin);
         if (buffer != NULL) {
             memset(buffer, 0xA5, available);
             ctx->stream0_sent += available;
             ret = 0;
         }
+    }
+    else if (ctx->stream0_test_option == 2 && ctx->stream0_sent == ctx->stream0_target) {
+        (void)picoquic_provide_stream_data_buffer(context, 0, 1, 0);
+        ret = 0;
     }
 
     return ret;
@@ -5406,5 +5423,31 @@ int packet_trace_test()
 
 int ready_to_send_test()
 {
-    return tls_api_one_scenario_test(test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 1000000, 0, 0, 0, 0, 1100000, NULL, NULL);
+    int ret = 0;
+
+    for (int i = 0; ret == 0 && i < 3; i++) {
+        uint64_t simulated_time = 0;
+        picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+
+        ret = tls_api_one_scenario_init(&test_ctx, &simulated_time,
+            0, NULL, NULL);
+
+        if (ret == 0) {
+            test_ctx->stream0_test_option = i;
+            ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+                test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 1000000, 0, 0, 0,
+                1100000);
+        }
+
+        if (test_ctx != NULL) {
+            tls_api_delete_ctx(test_ctx);
+            test_ctx = NULL;
+        }
+
+        if (ret != 0) {
+            DBG_PRINTF("Ready to send variant %d fails\n", i);
+        }
+    }
+
+    return ret;
 }
