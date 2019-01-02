@@ -90,6 +90,7 @@ static const picoquic_test_def_t test_table[] = {
     { "tls_api_very_long_max", tls_api_very_long_max_test },
     { "tls_api_very_long_with_err", tls_api_very_long_with_err_test },
     { "tls_api_very_long_congestion", tls_api_very_long_congestion_test },
+    { "many_short_loss", many_short_loss_test },
     { "http0dot9", http0dot9_test },
     { "retry", tls_api_retry_test },
     { "two_connections", tls_api_two_connections_test },
