@@ -941,8 +941,8 @@ picoquic_stream_head* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
                  * the max stream id limit */
                  /* Check parity */
                 if (IS_CLIENT_STREAM_ID(stream->stream_id) != cnx->client_mode ||
-                    IS_BIDIR_STREAM_ID(stream->stream_id) && stream->stream_id <= cnx->max_stream_id_bidir_remote ||
-                    !IS_BIDIR_STREAM_ID(stream->stream_id) && stream->stream_id <= cnx->max_stream_id_unidir_remote) {
+                    (IS_BIDIR_STREAM_ID(stream->stream_id) && stream->stream_id <= cnx->max_stream_id_bidir_remote) ||
+                    (!IS_BIDIR_STREAM_ID(stream->stream_id) && stream->stream_id <= cnx->max_stream_id_unidir_remote)) {
                     found_stream = stream;
                     break;
                 }
