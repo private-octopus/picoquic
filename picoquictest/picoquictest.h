@@ -146,6 +146,7 @@ int packet_trace_test();
 int rebinding_stress_test();
 int many_short_loss_test();
 int ready_to_send_test();
+int split_stream_frame_test();
 
 #ifdef __cplusplus
 }

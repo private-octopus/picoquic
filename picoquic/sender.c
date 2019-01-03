@@ -985,14 +985,27 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
 
                         /* Prepare retransmission if needed */
                         if (ret == 0 && !frame_is_pure_ack) {
-                            if (picoquic_is_stream_frame_unlimited(&p->bytes[byte_index])) {
-                                /* Need to PAD to the end of the frame to avoid sending extra bytes */
-                                if (checksum_length + length + frame_length < send_buffer_max) {
-                                    length = picoquic_pad_to_target_length(new_bytes, length, (uint32_t)(send_buffer_max - checksum_length - frame_length));
+                            if (PICOQUIC_IN_RANGE(p->bytes[byte_index], picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
+                                uint8_t overflow[PICOQUIC_MAX_PACKET_SIZE];
+                                size_t copied_length = 0;
+                                size_t overflow_length = 0;
+
+                                /* By default, copy to new frame, but if that does not fit also create overflow frame */
+                                ret = picoquic_split_stream_frame(&p->bytes[byte_index], frame_length,
+                                    &new_bytes[length], path_x->send_mtu - length - checksum_length, &copied_length,
+                                    overflow, sizeof(overflow), &overflow_length);
+
+                                if (ret == 0) {
+                                    length += copied_length;
+                                    if (overflow_length > 0) {
+                                        ret = picoquic_queue_misc_frame(cnx, overflow, overflow_length);
+                                    }
                                 }
                             }
-                            memcpy(&new_bytes[length], &p->bytes[byte_index], frame_length);
-                            length += (uint32_t)frame_length;
+                            else {
+                                memcpy(&new_bytes[length], &p->bytes[byte_index], frame_length);
+                                length += (uint32_t)frame_length;
+                            }
                             packet_is_pure_ack = 0;
                         }
                         byte_index += frame_length;

@@ -147,6 +147,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(split_stream_frame)
+        {
+            int ret = split_stream_frame_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
 		TEST_METHOD(test_sendack)
 		{
 			int ret = sendacktest();
