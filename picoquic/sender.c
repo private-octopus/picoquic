@@ -996,7 +996,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                                     overflow, sizeof(overflow), &overflow_length);
 
                                 if (ret == 0) {
-                                    length += copied_length;
+                                    length += (uint32_t) copied_length;
                                     if (overflow_length > 0) {
                                         ret = picoquic_queue_misc_frame(cnx, overflow, overflow_length);
                                     }
