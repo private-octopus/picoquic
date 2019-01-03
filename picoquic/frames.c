@@ -938,11 +938,9 @@ picoquic_stream_head* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
                 (stream->stop_sending_requested && !stream->stop_sending_sent)) {
                 /* Something can be sent */
                 /* if the stream is not active yet, verify that it fits under
-                 * the max stream id limit */
-                 /* Check parity */
+                 * the max stream id limit, which depends of the type of stream */
                 if (IS_CLIENT_STREAM_ID(stream->stream_id) != cnx->client_mode ||
-                    (IS_BIDIR_STREAM_ID(stream->stream_id) && stream->stream_id <= cnx->max_stream_id_bidir_remote) ||
-                    (!IS_BIDIR_STREAM_ID(stream->stream_id) && stream->stream_id <= cnx->max_stream_id_unidir_remote)) {
+                    stream->stream_id <= ((IS_BIDIR_STREAM_ID(stream->stream_id))? cnx->max_stream_id_bidir_remote : cnx->max_stream_id_unidir_remote)){
                     found_stream = stream;
                     break;
                 }

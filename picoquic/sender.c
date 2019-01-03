@@ -83,7 +83,7 @@ int picoquic_mark_active_stream(picoquic_cnx_t* cnx,
 
     if (ret == 0) {
         if (is_active) {
-            /* Verify that no data is queued on the stream */
+            /* The call only fails if the stream was closed or reset */
             if (!stream->fin_requested && !stream->reset_requested &&
                 cnx->callback_fn != NULL) {
                 stream->is_active = 1;
