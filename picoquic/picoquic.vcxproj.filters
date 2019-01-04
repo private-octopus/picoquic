@@ -72,6 +72,9 @@
     <ClCompile Include="spinbit.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="cubic.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquic.h">
