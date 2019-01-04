@@ -32,26 +32,6 @@ static const uint64_t test_number[] = {
 
 static size_t nb_test_numbers = sizeof(test_number) / sizeof(const uint64_t);
 
-struct test_headint_st {
-    uint64_t val;
-    size_t len;
-    uint8_t bytes[8];
-};
-
-static const struct test_headint_st test_headint[] = {
-    {0, 1, {0, 1, 2, 3, 4, 5, 6, 7}},
-    { 0, 2,{ 0x80, 0, 2, 3, 4, 5, 6, 7 } },
-    { 0, 4,{ 0xc0, 0, 0, 0, 4, 5, 6, 7 } },
-    { 127, 1,{ 127, 1, 2, 3, 4, 5, 6, 7 } },
-    { 127, 2,{ 0x80, 127, 2, 3, 4, 5, 6, 7 } },
-    { 127, 4,{ 0xC0, 0, 0, 127, 4, 5, 6, 7 } },
-    { 0x3001, 2, {0xb0, 1, 2, 3, 4, 5, 6, 7 } },
-    { 0x3001, 4,{ 0xc0, 0, 0x30, 1, 4, 5, 6, 7 } },
-    { 0x30000001, 4,{ 0xf0, 0, 0, 1, 4, 5, 6, 7 } }
-};
-
-static size_t nb_test_headint = sizeof(test_headint) / sizeof(struct test_headint_st);
-
 static uint64_t decode_number(uint8_t* bytes, size_t length)
 {
     uint64_t n = 0;
