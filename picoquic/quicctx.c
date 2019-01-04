@@ -180,10 +180,7 @@ picoquic_quic_t* picoquic_create(uint32_t nb_connections,
     picoquic_quic_t* quic = (picoquic_quic_t*)malloc(sizeof(picoquic_quic_t));
     int ret = 0;
 
-    if (quic == NULL) {
-        ret = -1;
-    }
-    else {
+    if (quic != NULL) {
         /* TODO: winsock init */
         /* TODO: open UDP sockets - maybe */
         memset(quic, 0, sizeof(picoquic_quic_t));

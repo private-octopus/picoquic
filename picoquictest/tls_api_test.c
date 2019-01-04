@@ -733,8 +733,7 @@ static int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t propose
     char const* ticket_file_name, int force_zero_share, int delayed_init, int use_bad_crypt)
 {
     int ret = 0;
-    picoquic_test_tls_api_ctx_t* test_ctx = (picoquic_test_tls_api_ctx_t*)
-        malloc(sizeof(picoquic_test_tls_api_ctx_t));
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     char test_server_cert_file[512];
     char test_server_key_file[512];
     char test_server_cert_store_file[512];
@@ -751,74 +750,81 @@ static int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t propose
 
     if (ret != 0) {
         DBG_PRINTF("%s", "Cannot set the cert, key or store file names.\n");
-    } else if (test_ctx != NULL) {
-        /* Init to NULL */
-        memset(test_ctx, 0, sizeof(picoquic_test_tls_api_ctx_t));
-        test_ctx->client_callback.client_mode = 1;
+    } else {
+        test_ctx = (picoquic_test_tls_api_ctx_t*)
+            malloc(sizeof(picoquic_test_tls_api_ctx_t));
 
-        /* Init of the IP addresses */
-        memset(&test_ctx->client_addr, 0, sizeof(struct sockaddr_in));
-        test_ctx->client_addr.sin_family = AF_INET;
-#ifdef _WINDOWS
-        test_ctx->client_addr.sin_addr.S_un.S_addr = 0x0A000002;
-#else
-        test_ctx->client_addr.sin_addr.s_addr = 0x0A000002;
-#endif
-        test_ctx->client_addr.sin_port = 1234;
-
-        memset(&test_ctx->server_addr, 0, sizeof(struct sockaddr_in));
-        test_ctx->server_addr.sin_family = AF_INET;
-#ifdef _WINDOWS
-        test_ctx->server_addr.sin_addr.S_un.S_addr = 0x0A000001;
-#else
-        test_ctx->server_addr.sin_addr.s_addr = 0x0A000001;
-#endif
-        test_ctx->server_addr.sin_port = 4321;
-
-        /* Test the creation of the client and server contexts */
-        test_ctx->qclient = picoquic_create(8, NULL, NULL, test_server_cert_store_file, NULL, test_api_callback,
-            (void*)&test_ctx->client_callback, NULL, NULL, NULL, *p_simulated_time,
-            p_simulated_time, ticket_file_name, NULL, 0);
-
-        test_ctx->qserver = picoquic_create(8,
-            test_server_cert_file, test_server_key_file, test_server_cert_store_file,
-            PICOQUIC_TEST_ALPN, test_api_callback, (void*)&test_ctx->server_callback, NULL, NULL, NULL,
-            *p_simulated_time, p_simulated_time, NULL,
-            (use_bad_crypt == 0) ? test_ticket_encrypt_key : test_ticket_badcrypt_key,
-            (use_bad_crypt == 0) ? sizeof(test_ticket_encrypt_key) : sizeof(test_ticket_badcrypt_key));
-
-        if (test_ctx->qclient == NULL || test_ctx->qserver == NULL) {
+        if (test_ctx == NULL) {
             ret = -1;
-        }
+        } else {
+            /* Init to NULL */
+            memset(test_ctx, 0, sizeof(picoquic_test_tls_api_ctx_t));
+            test_ctx->client_callback.client_mode = 1;
 
-        /* register the links */
-        if (ret == 0) {
-            test_ctx->c_to_s_link = picoquictest_sim_link_create(0.01, 10000, 0, 0, 0);
-            test_ctx->s_to_c_link = picoquictest_sim_link_create(0.01, 10000, 0, 0, 0);
+            /* Init of the IP addresses */
+            memset(&test_ctx->client_addr, 0, sizeof(struct sockaddr_in));
+            test_ctx->client_addr.sin_family = AF_INET;
+#ifdef _WINDOWS
+            test_ctx->client_addr.sin_addr.S_un.S_addr = 0x0A000002;
+#else
+            test_ctx->client_addr.sin_addr.s_addr = 0x0A000002;
+#endif
+            test_ctx->client_addr.sin_port = 1234;
 
-            if (test_ctx->c_to_s_link == NULL || test_ctx->s_to_c_link == NULL) {
+            memset(&test_ctx->server_addr, 0, sizeof(struct sockaddr_in));
+            test_ctx->server_addr.sin_family = AF_INET;
+#ifdef _WINDOWS
+            test_ctx->server_addr.sin_addr.S_un.S_addr = 0x0A000001;
+#else
+            test_ctx->server_addr.sin_addr.s_addr = 0x0A000001;
+#endif
+            test_ctx->server_addr.sin_port = 4321;
+
+            /* Test the creation of the client and server contexts */
+            test_ctx->qclient = picoquic_create(8, NULL, NULL, test_server_cert_store_file, NULL, test_api_callback,
+                (void*)&test_ctx->client_callback, NULL, NULL, NULL, *p_simulated_time,
+                p_simulated_time, ticket_file_name, NULL, 0);
+
+            test_ctx->qserver = picoquic_create(8,
+                test_server_cert_file, test_server_key_file, test_server_cert_store_file,
+                PICOQUIC_TEST_ALPN, test_api_callback, (void*)&test_ctx->server_callback, NULL, NULL, NULL,
+                *p_simulated_time, p_simulated_time, NULL,
+                (use_bad_crypt == 0) ? test_ticket_encrypt_key : test_ticket_badcrypt_key,
+                (use_bad_crypt == 0) ? sizeof(test_ticket_encrypt_key) : sizeof(test_ticket_badcrypt_key));
+
+            if (test_ctx->qclient == NULL || test_ctx->qserver == NULL) {
                 ret = -1;
             }
-        }
 
-        if (ret == 0) {
-            /* Apply the zero share parameter if required */
-            if (force_zero_share != 0)
-            {
-                test_ctx->qclient->flags |= picoquic_context_client_zero_share;
+            /* register the links */
+            if (ret == 0) {
+                test_ctx->c_to_s_link = picoquictest_sim_link_create(0.01, 10000, 0, 0, 0);
+                test_ctx->s_to_c_link = picoquictest_sim_link_create(0.01, 10000, 0, 0, 0);
+
+                if (test_ctx->c_to_s_link == NULL || test_ctx->s_to_c_link == NULL) {
+                    ret = -1;
+                }
             }
 
-            /* Create a client connection */
-            test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
-                picoquic_null_connection_id, picoquic_null_connection_id,
-                (struct sockaddr*)&test_ctx->server_addr, 0,
-                proposed_version, sni, alpn, 1);
+            if (ret == 0) {
+                /* Apply the zero share parameter if required */
+                if (force_zero_share != 0)
+                {
+                    test_ctx->qclient->flags |= picoquic_context_client_zero_share;
+                }
 
-            if (test_ctx->cnx_client == NULL) {
-                ret = -1;
-            }
-            else if (delayed_init == 0) {
-                ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+                /* Create a client connection */
+                test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
+                    picoquic_null_connection_id, picoquic_null_connection_id,
+                    (struct sockaddr*)&test_ctx->server_addr, 0,
+                    proposed_version, sni, alpn, 1);
+
+                if (test_ctx->cnx_client == NULL) {
+                    ret = -1;
+                }
+                else if (delayed_init == 0) {
+                    ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+                }
             }
         }
     }
