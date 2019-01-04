@@ -39,13 +39,16 @@ void picoquic_newreno_init(picoquic_path_t* path_x)
 {
     /* Initialize the state of the congestion control algorithm */
     picoquic_newreno_state_t* nr_state = (picoquic_newreno_state_t*)malloc(sizeof(picoquic_newreno_state_t));
-    path_x->congestion_alg_state = (void*)nr_state;
 
-    if (path_x->congestion_alg_state != NULL) {
+    if (nr_state != NULL) {
+        path_x->congestion_alg_state = (void*)nr_state;
         nr_state->alg_state = picoquic_newreno_alg_slow_start;
         nr_state->ssthresh = (uint64_t)((int64_t)-1);
         path_x->cwin = PICOQUIC_CWIN_INITIAL;
         nr_state->residual_ack = 0;
+    }
+    else {
+        path_x->congestion_alg_state = NULL;
     }
 }
 

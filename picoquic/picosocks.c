@@ -609,9 +609,7 @@ int picoquic_select(SOCKET_TYPE* sockets,
 
     if (ret_select < 0) {
         bytes_recv = -1;
-        if (bytes_recv <= 0) {
-            DBG_PRINTF("Error: select returns %d\n", ret_select);
-        }
+        DBG_PRINTF("Error: select returns %d\n", ret_select);
     } else if (ret_select > 0) {
         for (int i = 0; i < nb_sockets; i++) {
             if (FD_ISSET(sockets[i], &readfds)) {

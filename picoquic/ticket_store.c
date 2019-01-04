@@ -31,9 +31,10 @@ picoquic_stored_ticket_t* picoquic_format_ticket(uint64_t time_valid_until,
 {
     size_t ticket_size = sizeof(picoquic_stored_ticket_t) + sni_length + 1 + alpn_length + 1 + ticket_length;
     picoquic_stored_ticket_t* stored = (picoquic_stored_ticket_t*)malloc(ticket_size);
-    char* next_p = ((char*)stored) + sizeof(picoquic_stored_ticket_t);
-
+    
     if (stored != NULL) {
+        char* next_p = ((char*)stored) + sizeof(picoquic_stored_ticket_t);
+
         memset(stored, 0, ticket_size);
         stored->time_valid_until = time_valid_until;
         stored->sni = next_p;

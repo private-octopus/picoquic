@@ -518,7 +518,7 @@ size_t picoquic_log_ack_frame(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t
 
     /* decoding the acks */
 
-    while (ret == 0) {
+    for (;;) {
         uint64_t range;
         uint64_t block_to_block;
 
@@ -597,13 +597,13 @@ size_t picoquic_log_ack_frame(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t
 
     if (ret == 0 && is_ecn) {
         /* Decode the ecn counts */
-        for (int ecnx = 0; ret == 0 && ecnx < 3; ecnx++) {
+        for (int ecnx = 0; ecnx < 3; ecnx++) {
             size_t l_ecnx = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &ecnx3[ecnx]);
 
             if (l_ecnx == 0) {
                 fprintf(F, ", incorrect ECN encoding");
                 byte_index = bytes_max;
-                ret = -1;
+                break;
             }
             else {
                 byte_index += l_ecnx;
@@ -990,13 +990,10 @@ size_t picoquic_log_path_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
     } else {
         fprintf(F, "    %s: ", picoquic_log_frame_names(bytes[0]));
 
-        for (size_t i = 0; i < challenge_length && i < 16; i++) {
+        for (size_t i = 0; i < challenge_length; i++) {
             fprintf(F, "%02x", bytes[byte_index + i]);
         }
 
-        if (challenge_length > 16) {
-            fprintf(F, " ...");
-        }
         fprintf(F, "\n");
 
         byte_index += challenge_length;
@@ -1299,8 +1296,7 @@ void picoquic_log_transport_extension_content(FILE* F, int log_cnxid, uint64_t c
             if (bytes_max < byte_index + 5) {
                 fprintf(F, "Malformed server extension, length %d < 5 bytes.\n", (int)(bytes_max - byte_index));
                 ret = -1;
-            }
-            else {
+            } else {
                 uint32_t version;
 
                 version = PICOPARSE_32(bytes + byte_index);
@@ -1308,47 +1304,43 @@ void picoquic_log_transport_extension_content(FILE* F, int log_cnxid, uint64_t c
 
                 fprintf(F, "Version: %08x\n", version);
 
-                if (ret == 0) {
-                    size_t supported_versions_size = bytes[byte_index++];
+                size_t supported_versions_size = bytes[byte_index++];
 
-                    if ((supported_versions_size & 3) != 0) {
-                        if (log_cnxid != 0) {
-                            fprintf(F, "%" PRIx64 ": ", cnx_id_64);
-                        }
-                        fprintf(F,
-                            "Malformed extension, supported version size = %d, not multiple of 4.\n",
-                            (uint32_t)supported_versions_size);
-                        ret = -1;
-
+                if ((supported_versions_size & 3) != 0) {
+                    if (log_cnxid != 0) {
+                        fprintf(F, "%" PRIx64 ": ", cnx_id_64);
                     }
-                    else if (supported_versions_size > 252 || byte_index + supported_versions_size > bytes_max) {
-                        if (log_cnxid != 0) {
-                            fprintf(F, "%" PRIx64 ": ", cnx_id_64);
-                        }
-                        fprintf(F, "    Malformed extension, supported version size = %d, max %d or 252\n",
-                            (uint32_t)supported_versions_size, (int)(bytes_max - byte_index));
-                        ret = -1;
+                    fprintf(F,
+                        "Malformed extension, supported version size = %d, not multiple of 4.\n",
+                        (uint32_t)supported_versions_size);
+                    ret = -1;
+
+                } else if (supported_versions_size > 252 || byte_index + supported_versions_size > bytes_max) {
+                    if (log_cnxid != 0) {
+                        fprintf(F, "%" PRIx64 ": ", cnx_id_64);
                     }
-                    else {
-                        size_t nb_supported_versions = supported_versions_size / 4;
+                    fprintf(F, "    Malformed extension, supported version size = %d, max %d or 252\n",
+                        (uint32_t)supported_versions_size, (int)(bytes_max - byte_index));
+                    ret = -1;
+                } else {
+                    size_t nb_supported_versions = supported_versions_size / 4;
 
+                    if (log_cnxid != 0) {
+                        fprintf(F, "%" PRIx64 ": ", cnx_id_64);
+                    }
+                    fprintf(F, "    Supported version (%d bytes):\n", (int)supported_versions_size);
+
+                    for (size_t i = 0; i < nb_supported_versions; i++) {
+                        uint32_t supported_version = PICOPARSE_32(bytes + byte_index);
+
+                        byte_index += 4;
                         if (log_cnxid != 0) {
                             fprintf(F, "%" PRIx64 ": ", cnx_id_64);
                         }
-                        fprintf(F, "    Supported version (%d bytes):\n", (int)supported_versions_size);
-
-                        for (size_t i = 0; i < nb_supported_versions; i++) {
-                            uint32_t supported_version = PICOPARSE_32(bytes + byte_index);
-
-                            byte_index += 4;
-                            if (log_cnxid != 0) {
-                                fprintf(F, "%" PRIx64 ": ", cnx_id_64);
-                            }
-                            if (supported_version == initial_version && initial_version != final_version) {
-                                fprintf(F, "        %08x (same as proposed!)\n", supported_version);
-                            } else {
-                                fprintf(F, "        %08x\n", supported_version);
-                            }
+                        if (supported_version == initial_version && initial_version != final_version) {
+                            fprintf(F, "        %08x (same as proposed!)\n", supported_version);
+                        } else {
+                            fprintf(F, "        %08x\n", supported_version);
                         }
                     }
                 }
@@ -1583,7 +1575,7 @@ static void picoquic_log_tls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
                     ret = -1;
                 } else {
                     extension_ptr = &ticket[byte_index];
-                    if (min_length > ticket_length) {
+                    if (ticket_length > min_length) {
                         ret = -2;
                     }
                 }
@@ -1689,7 +1681,7 @@ void picoquic_log_picotls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
                 ret = -1;
             } else {
                 /* secret_ptr = &ticket[byte_index]; */
-                if (min_length > ticket_length) {
+                if (ticket_length > min_length) {
                     ret = -2;
                 }
             }

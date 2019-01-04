@@ -480,6 +480,8 @@ int quic_server(const char* server_name, int server_port,
         if (bytes_recv < 0) {
             ret = -1;
         } else {
+            uint64_t loop_time;
+
             if (bytes_recv > 0) {
                 /* Submit the packet to the server */
                 ret = picoquic_incoming_packet(qserver, buffer,
@@ -505,73 +507,74 @@ int quic_server(const char* server_name, int server_port,
                     picoquic_log_transport_extension(stdout, cnx_server, 1);
                 }
             }
-            if (ret == 0) {
-                uint64_t loop_time = current_time;
+            loop_time = current_time;
 
-                while ((sp = picoquic_dequeue_stateless_packet(qserver)) != NULL) {
-                    (void) picoquic_send_through_server_sockets(&server_sockets,
-                        (struct sockaddr*)&sp->addr_to,
-                        (sp->addr_to.ss_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6),
-                        (struct sockaddr*)&sp->addr_local,
-                        (sp->addr_local.ss_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6),
-                        dest_if == -1 ? sp->if_index_local : dest_if,
-                        (const char*)sp->bytes, (int)sp->length);
+            while ((sp = picoquic_dequeue_stateless_packet(qserver)) != NULL) {
+                (void)picoquic_send_through_server_sockets(&server_sockets,
+                    (struct sockaddr*)&sp->addr_to,
+                    (sp->addr_to.ss_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6),
+                    (struct sockaddr*)&sp->addr_local,
+                    (sp->addr_local.ss_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6),
+                    dest_if == -1 ? sp->if_index_local : dest_if,
+                    (const char*)sp->bytes, (int)sp->length);
 
-                    /* TODO: log stateless packet */
+                /* TODO: log stateless packet */
+
+                fflush(stdout);
+
+                picoquic_delete_stateless_packet(sp);
+            }
+
+            while (ret == 0 && (cnx_next = picoquic_get_earliest_cnx_to_wake(qserver, loop_time)) != NULL) {
+                int peer_addr_len = 0;
+                struct sockaddr_storage peer_addr;
+                int local_addr_len = 0;
+                struct sockaddr_storage local_addr;
+
+                ret = picoquic_prepare_packet(cnx_next, current_time,
+                    send_buffer, sizeof(send_buffer), &send_length,
+                    &peer_addr, &peer_addr_len, &local_addr, &local_addr_len);
+
+                if (ret == PICOQUIC_ERROR_DISCONNECTED) {
+                    ret = 0;
+
+                    printf("%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx_next)));
+                    picoquic_log_time(stdout, cnx_server, picoquic_current_time(), "", " : ");
+                    printf("Closed. Retrans= %d, spurious= %d, max sp gap = %d, max sp delay = %d\n",
+                        (int)cnx_next->nb_retransmission_total, (int)cnx_next->nb_spurious,
+                        (int)cnx_next->path[0]->max_reorder_gap, (int)cnx_next->path[0]->max_spurious_rtt);
+
+                    if (cnx_next == cnx_server) {
+                        cnx_server = NULL;
+                    }
+
+                    picoquic_delete_cnx(cnx_next);
 
                     fflush(stdout);
 
-                    picoquic_delete_stateless_packet(sp);
+                    break;
                 }
+                else if (ret == 0) {
 
-                while (ret == 0 && (cnx_next = picoquic_get_earliest_cnx_to_wake(qserver, loop_time)) != NULL) {
-                    int peer_addr_len = 0;
-                    struct sockaddr_storage peer_addr;
-                    int local_addr_len = 0;
-                    struct sockaddr_storage local_addr;
-
-                    ret = picoquic_prepare_packet(cnx_next, current_time,
-                        send_buffer, sizeof(send_buffer), &send_length, 
-                        &peer_addr, &peer_addr_len, &local_addr, &local_addr_len);
-
-                    if (ret == PICOQUIC_ERROR_DISCONNECTED) {
-                        ret = 0;
-
-                        printf("%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx_next)));
-                        picoquic_log_time(stdout, cnx_server, picoquic_current_time(), "", " : ");
-                        printf("Closed. Retrans= %d, spurious= %d, max sp gap = %d, max sp delay = %d\n",
-                            (int)cnx_next->nb_retransmission_total, (int)cnx_next->nb_spurious,
-                            (int)cnx_next->path[0]->max_reorder_gap, (int)cnx_next->path[0]->max_spurious_rtt);
-
-                        if (cnx_next == cnx_server) {
-                            cnx_server = NULL;
+                    if (send_length > 0) {
+                        if (just_once != 0 ||
+                            cnx_next->cnx_state < picoquic_state_server_false_start ||
+                            cnx_next->cnx_state >= picoquic_state_disconnecting) {
+                            printf("%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx_next)));
+                            printf("Connection state = %d\n",
+                                picoquic_get_cnx_state(cnx_next));
                         }
 
-                        picoquic_delete_cnx(cnx_next);
-
-                        fflush(stdout);
-
-                        break;
-                    } else if (ret == 0) {
-
-                        if (send_length > 0) {
-                            if (just_once != 0 ||
-                                cnx_next->cnx_state < picoquic_state_server_false_start ||
-                                cnx_next->cnx_state >= picoquic_state_disconnecting) {
-                                printf("%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx_next)));
-                                printf("Connection state = %d\n",
-                                    picoquic_get_cnx_state(cnx_next));
-                            }
-
-                            (void)picoquic_send_through_server_sockets(&server_sockets,
-                                (struct sockaddr *)&peer_addr, peer_addr_len, (struct sockaddr *)&local_addr, local_addr_len,
-                                dest_if == -1 ? picoquic_get_local_if_index(cnx_next) : dest_if,
-                                (const char*)send_buffer, (int)send_length);
-                        }
-                    } else {
-                        break;
+                        (void)picoquic_send_through_server_sockets(&server_sockets,
+                            (struct sockaddr *)&peer_addr, peer_addr_len, (struct sockaddr *)&local_addr, local_addr_len,
+                            dest_if == -1 ? picoquic_get_local_if_index(cnx_next) : dest_if,
+                            (const char*)send_buffer, (int)send_length);
                     }
                 }
+                else {
+                    break;
+                }
+
             }
         }
     }
@@ -759,20 +762,18 @@ static int first_client_callback(picoquic_cnx_t* cnx,
         picoquic_reset_stream(cnx, stream_id, 0);
         return 0;
     } else if (fin_or_event == picoquic_callback_stream_reset) {
+        char buf[256];
         picoquic_reset_stream(cnx, stream_id, 0);
 
-        if (stream_ctx->F != NULL) {
-            char buf[256];
+        fclose(stream_ctx->F);
+        stream_ctx->F = NULL;
+        ctx->nb_open_streams--;
 
-            fclose(stream_ctx->F);
-            stream_ctx->F = NULL;
-            ctx->nb_open_streams--;
+        fprintf(stdout, "Reset received on stream %d, command: %s, after %d bytes\n",
+            stream_ctx->stream_id,
+            strip_endofline(buf, sizeof(buf), (char*)&stream_ctx->command),
+            (int)stream_ctx->received_length);
 
-            fprintf(stdout, "Reset received on stream %d, command: %s, after %d bytes\n",
-                stream_ctx->stream_id,
-                strip_endofline(buf, sizeof(buf), (char*)&stream_ctx->command),
-                (int)stream_ctx->received_length);
-        }
         return 0;
     } else if (fin_or_event == picoquic_callback_stop_sending) {
         char buf[256];
@@ -1371,6 +1372,8 @@ int main(int argc, char** argv)
     uint64_t reset_seed_x[2];
     int dest_if = -1;
     int mtu_max = 0;
+    char default_server_cert_file[512];
+    char default_server_key_file[512];
 
 #ifdef _WINDOWS
     WSADATA wsaData;
@@ -1500,8 +1503,6 @@ int main(int argc, char** argv)
 #endif
 
     if (is_client == 0) {
-        char default_server_cert_file[512];
-        char default_server_key_file[512];
 
         if (server_cert_file == NULL &&
             picoquic_get_input_path(default_server_cert_file, sizeof(default_server_cert_file), solution_dir, SERVER_CERT_FILE) == 0) {

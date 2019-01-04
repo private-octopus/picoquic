@@ -83,71 +83,72 @@ int splay_test() {
         DBG_PRINTF("%s", "Cannot create tree.\n");
         ret = -1;
     }
-
-    for(int i = 0; ret == 0 && i < 7; i++) {
-        picosplay_insert(tree, &values[i]);
-        /* Verify sanity and count after each insertion */
-        count = check_node_sanity(tree->root, NULL, NULL, &compare_int);
-        if (count != i + 1) {
-            DBG_PRINTF("Insert v[%d] = %d, expected %d nodes, got %d instead\n",
-                i, values[i], i + 1, count);
-            ret = -1;
-        }
-        else if (tree->size != count) {
-            DBG_PRINTF("Insert v[%d] = %d, expected tree size %d, got %d instead\n",
-                i, values[i], count, tree->size);
-            ret = -1;
-        }
-        else if (*(int*)picosplay_first(tree)->value != values_first[i]) {
-            DBG_PRINTF("Insert v[%d] = %d, expected first = %d, got %d instead\n", 
-                i, values[i],
-                values_first[i], *(int*)picosplay_first(tree)->value);
-            ret = -1;
-        }
-        else if (*(int*)picosplay_last(tree)->value != values_last[i]) {
-            DBG_PRINTF("Insert v[%d] = %d, expected first = %d, got %d instead\n",
-                i, values[i],
-                values_last[i], *(int*)picosplay_last(tree)->value);
-            ret = -1;
-        }
-    }
-
-    for(int i = 0; ret == 0 && i < 7; i++) {
-        picosplay_delete(tree, &values[i]);
-        /* Verify sanity and count after each deletion */
-        count = check_node_sanity(tree->root, NULL, NULL, &compare_int);
-        if (count != 6 - i) {
-            DBG_PRINTF("Delete v[%d] = %d, expected %d nodes, got %d instead\n",
-                i, values[i], 6 - i, count);
-            ret = -1;
-        }
-        else if (tree->size != count) {
-            DBG_PRINTF("Insert v[%d] = %d, expected tree size %d, got %d instead\n",
-                i, values[i], count, tree->size);
-            ret = -1;
-        }
-        else if (i < 6) {
-            if (*(int*)picosplay_first(tree)->value != value2_first[i]) {
-                DBG_PRINTF("Delete v[%d] = %d, expected first = %d, got %d instead\n",
-                    i, values[i], value2_first[i], *(int*)picosplay_first(tree)->value);
+    else {
+        for (int i = 0; ret == 0 && i < 7; i++) {
+            picosplay_insert(tree, &values[i]);
+            /* Verify sanity and count after each insertion */
+            count = check_node_sanity(tree->root, NULL, NULL, &compare_int);
+            if (count != i + 1) {
+                DBG_PRINTF("Insert v[%d] = %d, expected %d nodes, got %d instead\n",
+                    i, values[i], i + 1, count);
                 ret = -1;
             }
-            else if (*(int*)picosplay_last(tree)->value != value2_last[i]) {
-                DBG_PRINTF("Delete v[%d] = %d, expected first = %d, got %d instead\n",
-                    i, values[i], value2_last[i], *(int*)picosplay_last(tree)->value);
+            else if (tree->size != count) {
+                DBG_PRINTF("Insert v[%d] = %d, expected tree size %d, got %d instead\n",
+                    i, values[i], count, tree->size);
+                ret = -1;
+            }
+            else if (*(int*)picosplay_first(tree)->value != values_first[i]) {
+                DBG_PRINTF("Insert v[%d] = %d, expected first = %d, got %d instead\n",
+                    i, values[i],
+                    values_first[i], *(int*)picosplay_first(tree)->value);
+                ret = -1;
+            }
+            else if (*(int*)picosplay_last(tree)->value != values_last[i]) {
+                DBG_PRINTF("Insert v[%d] = %d, expected first = %d, got %d instead\n",
+                    i, values[i],
+                    values_last[i], *(int*)picosplay_last(tree)->value);
                 ret = -1;
             }
         }
-    }
 
-    if (tree != NULL) {
-        if (ret == 0 && tree->root != NULL) {
-            DBG_PRINTF("%s", "Final tree root should be NULL, is not.\n");
-            ret = -1;
+        for (int i = 0; ret == 0 && i < 7; i++) {
+            picosplay_delete(tree, &values[i]);
+            /* Verify sanity and count after each deletion */
+            count = check_node_sanity(tree->root, NULL, NULL, &compare_int);
+            if (count != 6 - i) {
+                DBG_PRINTF("Delete v[%d] = %d, expected %d nodes, got %d instead\n",
+                    i, values[i], 6 - i, count);
+                ret = -1;
+            }
+            else if (tree->size != count) {
+                DBG_PRINTF("Insert v[%d] = %d, expected tree size %d, got %d instead\n",
+                    i, values[i], count, tree->size);
+                ret = -1;
+            }
+            else if (i < 6) {
+                if (*(int*)picosplay_first(tree)->value != value2_first[i]) {
+                    DBG_PRINTF("Delete v[%d] = %d, expected first = %d, got %d instead\n",
+                        i, values[i], value2_first[i], *(int*)picosplay_first(tree)->value);
+                    ret = -1;
+                }
+                else if (*(int*)picosplay_last(tree)->value != value2_last[i]) {
+                    DBG_PRINTF("Delete v[%d] = %d, expected first = %d, got %d instead\n",
+                        i, values[i], value2_last[i], *(int*)picosplay_last(tree)->value);
+                    ret = -1;
+                }
+            }
         }
-        picosplay_empty_tree(tree);
-        free(tree);
-        tree = NULL;
+
+        if (tree != NULL) {
+            if (ret == 0 && tree->root != NULL) {
+                DBG_PRINTF("%s", "Final tree root should be NULL, is not.\n");
+                ret = -1;
+            }
+            picosplay_empty_tree(tree);
+            free(tree);
+            tree = NULL;
+        }
     }
 
     return ret;

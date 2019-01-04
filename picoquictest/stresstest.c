@@ -299,9 +299,6 @@ static int stress_client_callback(picoquic_cnx_t* cnx,
     int ret = 0;
     picoquic_stress_client_callback_ctx_t* ctx = (picoquic_stress_client_callback_ctx_t*)callback_ctx;
 
-    ctx->last_interaction_time = picoquic_current_time();
-    ctx->progress_observed = 1;
-
     if (fin_or_event == picoquic_callback_close || 
         fin_or_event == picoquic_callback_application_close ||
         fin_or_event == picoquic_callback_stateless_reset) {
@@ -315,6 +312,9 @@ static int stress_client_callback(picoquic_cnx_t* cnx,
         /* if stream is already present, check its state. New bytes? */
         int stream_index = -1;
         int is_finished = 0;
+
+        ctx->last_interaction_time = picoquic_current_time();
+        ctx->progress_observed = 1;
 
         for (size_t i = 0; i < ctx->max_open_streams; i++) {
             if (ctx->stream_id[i] == stream_id) {
@@ -565,7 +565,7 @@ static int stress_handle_packet_prepare(picoquic_stress_ctx_t * ctx, picoquic_qu
             }
         }
 
-        if (ret == 0 && c_ctx != NULL && cnx->cnx_state == picoquic_state_ready &&
+        if (ret == 0 && c_ctx != NULL && cnx->cnx_state == picoquic_state_ready && c_index >= 0 &&
             cnx->cnxid_stash_first != NULL && c_ctx->message_migration_trigger != 0 &&
             cnx->pkt_ctx[picoquic_packet_context_application].send_sequence > c_ctx->message_migration_trigger){
             /* Simulate a migration */
@@ -764,7 +764,7 @@ static int stress_loop_poll_context(picoquic_stress_ctx_t * ctx)
         else {
             picoquic_cnx_t * cnx;
 
-            if (ret == 0 && ctx->c_ctx[best_index]->s_to_c_link->first_packet != NULL &&
+            if (ctx->c_ctx[best_index]->s_to_c_link->first_packet != NULL &&
                 ctx->c_ctx[best_index]->s_to_c_link->first_packet->arrival_time <= ctx->simulated_time) {
                 /* dequeue packet from server to client and submit */
                 ret = stress_handle_packet_arrival(ctx, ctx->c_ctx[best_index]->qclient, ctx->c_ctx[best_index]->s_to_c_link, 
@@ -836,24 +836,22 @@ static int stress_create_client_context(int client_index, picoquic_stress_ctx_t 
     if (ctx == NULL) {
         DBG_PRINTF("Cannot create the client context #%d.\n", (int)client_index);
         ret = -1;
-    }
-    if (ret == 0) {
+    } else {
         memset(ctx, 0, sizeof(picoquic_stress_client_t));
         /* Initialize client specific address */
         stress_set_ip_address_from_index(&ctx->client_addr, (int)client_index);
         /* set stream ID to default value */
 
         /* initialize client specific ticket file */
-        memcpy(ctx->ticket_file_name, "stress_ticket_000.bin", 19);
+        memcpy(ctx->ticket_file_name, "stress_ticket_000.bin", 21);
         ctx->ticket_file_name[14] = (uint8_t)('0' + client_index / 100);
         ctx->ticket_file_name[15] = (uint8_t)('0' + (client_index / 10) % 10);
         ctx->ticket_file_name[16] = (uint8_t)('0' + client_index % 10);
         ctx->ticket_file_name[21] = 0;
-        if (ret == 0) {
-            ret = picoquic_save_tickets(NULL, stress_ctx->simulated_time, ctx->ticket_file_name);
-            if (ret != 0) {
-                DBG_PRINTF("Cannot create ticket file <%s>.\n", ctx->ticket_file_name);
-            }
+        
+        ret = picoquic_save_tickets(NULL, stress_ctx->simulated_time, ctx->ticket_file_name);
+        if (ret != 0) {
+            DBG_PRINTF("Cannot create ticket file <%s>.\n", ctx->ticket_file_name);
         }
     }
     if (ret == 0) {
@@ -874,10 +872,9 @@ static int stress_create_client_context(int client_index, picoquic_stress_ctx_t 
     if (ret == 0) {
         /* Create the quic context for this client*/
         char test_server_cert_store_file[512];
-        if (ret == 0) {
-            ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE);
-        }
-
+        
+        ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE);
+        
         if (ret != 0) {
             DBG_PRINTF("%s", "Cannot set the cert store file name.\n");
         }

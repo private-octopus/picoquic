@@ -422,14 +422,13 @@ int parse_frame_test()
                 picoquic_null_connection_id, picoquic_null_connection_id, (struct sockaddr *) &saddr,
                 simulated_time, 0, "test-sni", "test-alpn", 1);
 
-            /* Stupid fix to ensure that the NCID decoding test will not protest */
-            cnx->path[0]->remote_cnxid.id_len = 8;
-
             if (cnx == NULL) {
                 DBG_PRINTF("%s", "Cannot create QUIC CNX context\n");
                 ret = -1;
             }
             else {
+                /* Stupid fix to ensure that the NCID decoding test will not protest */
+                cnx->path[0]->remote_cnxid.id_len = 8;
 
                 memcpy(buffer, test_skip_list[i].val, test_skip_list[i].len);
                 byte_max = test_skip_list[i].len;
@@ -582,21 +581,26 @@ int logger_test()
 
 #ifdef _WINDOWS
     if (fopen_s(&F, log_test_file, "w") != 0) {
-        ret = -1;
+        if (F != NULL) {
+            fclose(F);
+            F = NULL;
+        }
     }
 #else
     F = fopen(log_test_file, "w");
+#endif
+
     if (F == NULL) {
         ret = -1;
     }
-#endif
+    else {
+        for (size_t i = 0; i < nb_test_skip_list; i++) {
+            picoquic_log_frames(F, 0, test_skip_list[i].val, test_skip_list[i].len);
+        }
 
-    for (size_t i = 0; i < nb_test_skip_list; i++) {
-        picoquic_log_frames(F, 0, test_skip_list[i].val, test_skip_list[i].len);
+        fclose(F);
+        F = NULL;
     }
-
-    fclose(F);
-    F = NULL;
 
     if (ret == 0) {
         char log_test_ref[512];
@@ -619,50 +623,59 @@ int logger_test()
         size_t bytes_max = format_random_packet(buffer, sizeof(buffer), &random_context);
 #ifdef _WINDOWS
         if (fopen_s(&F, log_packet_test_file, "w") != 0) {
-            ret = -1;
-            break;
+            if (F != NULL) {
+                fclose(F);
+                F = NULL;
+            }
         }
 #else
         F = fopen(log_packet_test_file, "w");
+#endif
         if (F == NULL) {
             ret = -1;
             break;
         }
-#endif
-        ret &= fprintf(F, "Log packet test #%d\n", (int)i);
-        picoquic_log_frames(F, 0, buffer, bytes_max);
-        fclose(F);
+        else {
+            ret &= fprintf(F, "Log packet test #%d\n", (int)i);
+            picoquic_log_frames(F, 0, buffer, bytes_max);
+            fclose(F);
+            F = NULL;
+        }
 
 #ifdef _WINDOWS
-        if (fopen_s(&F, log_packet_test_file, "w") != 0 || F == NULL) {
-            ret = -1;
-            break;
+        if (fopen_s(&F, log_packet_test_file, "w") != 0) {
+            if (F != NULL) {
+                fclose(F);
+                F = NULL;
+            }
         }
 #else
         F = fopen(log_packet_test_file, "w");
+#endif
+
         if (F == NULL) {
             ret = -1;
             break;
-        }
-#endif
-        while (fgets(log_line, (int)sizeof(log_line), F) != NULL) {
-            /* skip blanks */
-            size_t byte_index = 0;
+        } else {
+            while (fgets(log_line, (int)sizeof(log_line), F) != NULL) {
+                /* skip blanks */
+                size_t byte_index = 0;
 
-            while (byte_index < sizeof(log_line) &&
-                (log_line[byte_index] == ' ' || log_line[byte_index] == '\t')) {
-                byte_index++;
-            }
+                while (byte_index < sizeof(log_line) &&
+                    (log_line[byte_index] == ' ' || log_line[byte_index] == '\t')) {
+                    byte_index++;
+                }
 
-            if (byte_index + 7u < sizeof(log_line) &&
-                memcmp(&log_line[byte_index], "Unknown", 7) == 0)
-            {
-                DBG_PRINTF("Packet log test #%d failed, unknown frame.\n", (int) i);
-                ret = -1;
-                break;
+                if (byte_index + 7u < sizeof(log_line) &&
+                    memcmp(&log_line[byte_index], "Unknown", 7) == 0)
+                {
+                    DBG_PRINTF("Packet log test #%d failed, unknown frame.\n", (int)i);
+                    ret = -1;
+                    break;
+                }
             }
+            fclose(F);
         }
-        fclose(F);
     }
 
     /* Do a minimal fuzz test */
