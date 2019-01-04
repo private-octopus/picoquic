@@ -540,15 +540,19 @@ size_t picoquic_log_ack_frame(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t
         range++;
 
         if (largest + 1 < range) {
-            fprintf(F, "ack range error: largest=%" PRIx64 ", range=%" PRIx64, largest, range);
+            fprintf(F, "\n");
+            if (cnx_id64 != 0) {
+                fprintf(F, "%" PRIx64 ": ", cnx_id64);
+            }
+            fprintf(F, "    ack range error: largest=%" PRIu64 ", range=%" PRIu64, largest, range);
             byte_index = bytes_max;
             break;
         }
 
         if (range <= 1)
-            fprintf(F, ", %" PRIx64, largest);
+            fprintf(F, ", %" PRIu64, largest);
         else
-            fprintf(F, ", %" PRIx64 "-%" PRIx64, largest - range + 1, largest);
+            fprintf(F, ", %" PRIu64 "-%" PRIu64, largest - range + 1, largest);
 
         if (num_block-- == 0)
             break;
@@ -586,7 +590,7 @@ size_t picoquic_log_ack_frame(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t
             if (cnx_id64 != 0) {
                 fprintf(F, "%" PRIx64 ": ", cnx_id64);
             }
-            fprintf(F, "    ack gap error: largest=%" PRIx64 ", range=%" PRIx64 ", gap=%" PRIu64,
+            fprintf(F, "    ack gap error: largest=%" PRIu64 ", range=%" PRIu64 ", gap=%" PRIu64,
                 largest, range, block_to_block - range);
             byte_index = bytes_max;
             break;
