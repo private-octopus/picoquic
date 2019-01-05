@@ -241,28 +241,32 @@ int cleartext_aead_vector_test_one(picoquic_connection_id_t test_id, uint32_t te
         if (cnx_client == NULL) {
             DBG_PRINTF("%s: Could not create client connection context.\n", test_name);
             ret = -1;
-        } else {
-            ret = picoquic_start_client_cnx(cnx_client);
         }
-    }
+        else {
+            ret = picoquic_start_client_cnx(cnx_client);
 
-    if (ret == 0) {
-        /* Compare client key to expected value */
-        if (cnx_client->crypto_context[0].aead_encrypt == NULL)
-        {
-            DBG_PRINTF("%s: Could not create clear text AEAD encryption context.\n", test_name);
-            ret = -1;
-        } else if (0 != cleartext_iv_cmp(cnx_client->crypto_context[0].aead_encrypt, 
-            client_iv, client_iv_length)) {
-            DBG_PRINTF("%s: Clear text AEAD encryption IV does not match expected value.\n", test_name);
-            ret = -1;
-        } else if (cnx_client->crypto_context[0].aead_decrypt == NULL) {
-            DBG_PRINTF("%s: Could not create clear text AEAD decryption context.\n", test_name);
-            ret = -1;
-        } else if (0 != cleartext_iv_cmp(cnx_client->crypto_context[0].aead_decrypt,
-            server_iv, server_iv_length)) {
-            DBG_PRINTF("%s: Clear text AEAD decryption IV does not match expected value.\n", test_name);
-            ret = -1;
+            if (ret == 0) {
+                /* Compare client key to expected value */
+                if (cnx_client->crypto_context[0].aead_encrypt == NULL)
+                {
+                    DBG_PRINTF("%s: Could not create clear text AEAD encryption context.\n", test_name);
+                    ret = -1;
+                }
+                else if (0 != cleartext_iv_cmp(cnx_client->crypto_context[0].aead_encrypt,
+                    client_iv, client_iv_length)) {
+                    DBG_PRINTF("%s: Clear text AEAD encryption IV does not match expected value.\n", test_name);
+                    ret = -1;
+                }
+                else if (cnx_client->crypto_context[0].aead_decrypt == NULL) {
+                    DBG_PRINTF("%s: Could not create clear text AEAD decryption context.\n", test_name);
+                    ret = -1;
+                }
+                else if (0 != cleartext_iv_cmp(cnx_client->crypto_context[0].aead_decrypt,
+                    server_iv, server_iv_length)) {
+                    DBG_PRINTF("%s: Clear text AEAD decryption IV does not match expected value.\n", test_name);
+                    ret = -1;
+                }
+            }
         }
     }
 
@@ -317,68 +321,60 @@ int pn_ctr_test()
     ptls_aead_algorithm_t* aead = &ptls_openssl_aes128gcm;
     ptls_cipher_context_t *pn_enc = ptls_cipher_new(aead->ctr_cipher, 1, key);
 
-    /* test against expected value, from PTLS test */
-    ptls_cipher_init(pn_enc, iv);
-    memset(in_bytes, 0, 16);
-    ptls_cipher_encrypt(pn_enc, out_bytes, in_bytes, sizeof(in_bytes));
-    if (memcmp(out_bytes, expected, 16) != 0)
-    {
+    if (pn_enc == NULL) {
         ret = -1;
-    }
-
-    /* test for various values of the PN length */
-
-    for (size_t i = 1; ret == 0 && i <= 16; i *= 2)
-    {
-        memset(in_bytes, (int)i, i);
+    } else {
+        /* test against expected value, from PTLS test */
         ptls_cipher_init(pn_enc, iv);
-        ptls_cipher_encrypt(pn_enc, out_bytes, in_bytes, i);
-        for (size_t j = 0; j < i; j++)
-        {
-            if (in_bytes[j] != (out_bytes[j] ^ expected[j]))
-            {
-                ret = -1;
-                break;
+        memset(in_bytes, 0, 16);
+        ptls_cipher_encrypt(pn_enc, out_bytes, in_bytes, sizeof(in_bytes));
+        if (memcmp(out_bytes, expected, 16) != 0) {
+            ret = -1;
+        }
+
+        /* test for various values of the PN length */
+
+        for (size_t i = 1; ret == 0 && i <= 16; i *= 2) {
+            memset(in_bytes, (int)i, i);
+            ptls_cipher_init(pn_enc, iv);
+            ptls_cipher_encrypt(pn_enc, out_bytes, in_bytes, i);
+            for (size_t j = 0; j < i; j++) {
+                if (in_bytes[j] != (out_bytes[j] ^ expected[j])) {
+                    ret = -1;
+                    break;
+                }
             }
-        }
-        ptls_cipher_init(pn_enc, iv);
-        ptls_cipher_encrypt(pn_enc, decoded, out_bytes, i);
-        if (memcmp(in_bytes, decoded, i) != 0)
-        {
-            ret = -1;
-        }
+            ptls_cipher_init(pn_enc, iv);
+            ptls_cipher_encrypt(pn_enc, decoded, out_bytes, i);
+            if (memcmp(in_bytes, decoded, i) != 0) {
+                ret = -1;
+            }
 
-        ptls_cipher_init(pn_enc, iv);
-        ptls_cipher_encrypt(pn_enc, out_bytes, out_bytes, i);
-        if (memcmp(in_bytes, out_bytes, i) != 0)
-        {
-            ret = -1;
-        }
-    }
-
-    /* Test with the encrypted value from the packet */
-    if (ret == 0)
-    {
-        ptls_cipher_init(pn_enc, packet_clear_pn + 5);
-        ptls_cipher_encrypt(pn_enc, out_bytes, packet_clear_pn + 1, 4);
-        if (memcmp(out_bytes, packet_encrypted_pn + 1, 4) != 0)
-        {
-            ret = -1;
-        }
-        else
-        {
-            ptls_cipher_init(pn_enc, packet_encrypted_pn + 5);
-            ptls_cipher_encrypt(pn_enc, out_bytes, packet_encrypted_pn + 1, 4);
-            if (memcmp(out_bytes, packet_clear_pn + 1, 4) != 0)
-            {
+            ptls_cipher_init(pn_enc, iv);
+            ptls_cipher_encrypt(pn_enc, out_bytes, out_bytes, i);
+            if (memcmp(in_bytes, out_bytes, i) != 0) {
                 ret = -1;
             }
         }
-    }
 
-    // cleanup
-    if (pn_enc != NULL)
-    {
+        /* Test with the encrypted value from the packet */
+        if (ret == 0)
+        {
+            ptls_cipher_init(pn_enc, packet_clear_pn + 5);
+            ptls_cipher_encrypt(pn_enc, out_bytes, packet_clear_pn + 1, 4);
+            if (memcmp(out_bytes, packet_encrypted_pn + 1, 4) != 0)
+            {
+                ret = -1;
+            } else {
+                ptls_cipher_init(pn_enc, packet_encrypted_pn + 5);
+                ptls_cipher_encrypt(pn_enc, out_bytes, packet_encrypted_pn + 1, 4);
+                if (memcmp(out_bytes, packet_clear_pn + 1, 4) != 0)
+                {
+                    ret = -1;
+                }
+            }
+        }
+        // cleanup
         ptls_cipher_free(pn_enc);
     }
 
@@ -909,11 +905,9 @@ int draft17_vector_test()
     ptls_cipher_suite_t cipher = { 0, &ptls_openssl_aes128gcm, &ptls_openssl_sha256 };
 
     /* Check the label expansions */
-    if (ret == 0) {
-        ret = draft17_label_expansion_test(&cipher, PICOQUIC_LABEL_KEY, PICOQUIC_LABEL_QUIC_KEY_BASE,
-            draft17_test_server_initial_secret, sizeof(draft17_test_server_initial_secret),
-            draft17_test_server_key, sizeof(draft17_test_server_key));
-    }
+    ret = draft17_label_expansion_test(&cipher, PICOQUIC_LABEL_KEY, PICOQUIC_LABEL_QUIC_KEY_BASE,
+        draft17_test_server_initial_secret, sizeof(draft17_test_server_initial_secret),
+        draft17_test_server_key, sizeof(draft17_test_server_key));
 
     if (ret == 0) {
         ret = draft17_label_expansion_test(&cipher, PICOQUIC_LABEL_IV, PICOQUIC_LABEL_QUIC_KEY_BASE,

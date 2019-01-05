@@ -1150,7 +1150,7 @@ int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head* str
 
                 byte_index = picoquic_encode_length_of_stream_frame(bytes, byte_index, byte_space, length, &start_index);
 
-                if (ret == 0 && length > 0 && stream->send_queue != NULL && stream->send_queue->bytes != NULL) {
+                if (length > 0 && stream->send_queue != NULL && stream->send_queue->bytes != NULL) {
                     memcpy(&bytes[byte_index], stream->send_queue->bytes + stream->send_queue->offset, length);
                     byte_index += length;
 
@@ -1167,7 +1167,7 @@ int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head* str
                 }
                 *consumed = byte_index;
 
-                if (ret == 0 && stream->send_queue == 0) {
+                if (stream->send_queue == NULL) {
                     if (stream->fin_requested) {
                         /* Set the fin bit */
                         stream->fin_sent = 1;
@@ -1176,7 +1176,7 @@ int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head* str
                         picoquic_update_max_stream_ID_local(cnx, stream);
                     }
                 }
-                else if (ret == 0 && length == 0) {
+                else if (length == 0) {
                     /* No point in sending a silly packet */
                     *consumed = 0;
                     ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
@@ -1351,12 +1351,9 @@ int picoquic_prepare_crypto_hs_frame(picoquic_cnx_t* cnx, int epoch,
             /* Compute the length */
             size_t space = bytes_max - byte_index;
 
-            /* TODO: check logic here -- I was tired when I wrote that */
-
-            if (space < 2 || stream->send_queue == NULL) {
+            if (space < 2) {
                 length = 0;
             } else {
-                /* This is going to be a trial and error process */
                 size_t l_len = 0;
                 size_t available = stream->send_queue->length - (size_t)stream->send_queue->offset;
 
@@ -1816,7 +1813,7 @@ void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t* cnx, picoquic_pa
     int frame_is_pure_ack = 0;
     size_t frame_length = 0;
 
-    if (ret == 0 && p->ptype == picoquic_packet_0rtt_protected) {
+    if (p->ptype == picoquic_packet_0rtt_protected) {
         cnx->nb_zero_rtt_acked++;
     }
 
@@ -2058,11 +2055,9 @@ int picoquic_prepare_ack_frame_maybe_ecn(picoquic_cnx_t* cnx, uint64_t current_t
         /* Encode the first byte */
         bytes[byte_index++] = ack_type_byte;
         /* Encode the largest seen */
-        if (byte_index < bytes_max) {
-            l_largest = picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index,
-                pkt_ctx->first_sack_item.end_of_sack_range);
-            byte_index += l_largest;
-        }
+        l_largest = picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index,
+            pkt_ctx->first_sack_item.end_of_sack_range);
+        byte_index += l_largest;
         /* Encode the ack delay */
         if (byte_index < bytes_max) {
             if (current_time > pkt_ctx->time_stamp_largest_received) {
@@ -2074,24 +2069,22 @@ int picoquic_prepare_ack_frame_maybe_ecn(picoquic_cnx_t* cnx, uint64_t current_t
             byte_index += l_delay;
         }
 
-        if (ret == 0) {
-            /* Reserve one byte for the number of blocks */
-            num_block_index = byte_index;
-            byte_index++;
-            /* Encode the size of the first ack range */
-            if (byte_index < bytes_max) {
-                ack_range = pkt_ctx->first_sack_item.end_of_sack_range - pkt_ctx->first_sack_item.start_of_sack_range;
-                l_first_range = picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index,
-                    ack_range);
-                byte_index += l_first_range;
-            }
+        /* Reserve one byte for the number of blocks */
+        num_block_index = byte_index;
+        byte_index++;
+        /* Encode the size of the first ack range */
+        if (byte_index < bytes_max) {
+            ack_range = pkt_ctx->first_sack_item.end_of_sack_range - pkt_ctx->first_sack_item.start_of_sack_range;
+            l_first_range = picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index,
+                ack_range);
+            byte_index += l_first_range;
         }
 
         if (l_delay == 0 || l_largest == 0 || l_first_range == 0 || byte_index > bytes_max) {
             /* not enough space */
             *consumed = 0;
             ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
-        } else if (ret == 0) {
+        } else {
             /* Set the lowest acknowledged */
             lowest_acknowledged = pkt_ctx->first_sack_item.start_of_sack_range;
             /* Encode the ack blocks that fit in the allocated space */

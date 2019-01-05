@@ -170,41 +170,43 @@ int sim_link_one_test(uint64_t* loss_mask, uint64_t queue_delay_max, uint64_t nb
     if (link == NULL) {
         ret = -1;
     }
+    else {
 
-    while (ret == 0) {
-        if (queued >= nb_packets) {
-            departure_time = (uint64_t)((int64_t)-1);
-        }
+        while (ret == 0) {
+            if (queued >= nb_packets) {
+                departure_time = (uint64_t)((int64_t)-1);
+            }
 
-        current_time = picoquictest_sim_link_next_arrival(link, departure_time);
+            current_time = picoquictest_sim_link_next_arrival(link, departure_time);
 
-        picoquictest_sim_packet_t* packet = picoquictest_sim_link_dequeue(link, current_time);
+            picoquictest_sim_packet_t* packet = picoquictest_sim_link_dequeue(link, current_time);
 
-        if (packet != NULL) {
-            dequeued++;
-            free(packet);
-        } else if (queued < nb_packets) {
-            packet = picoquictest_sim_link_create_packet();
+            if (packet != NULL) {
+                dequeued++;
+                free(packet);
+            }
+            else if (queued < nb_packets) {
+                packet = picoquictest_sim_link_create_packet();
 
-            if (packet == NULL) {
-                ret = -1;
+                if (packet == NULL) {
+                    ret = -1;
+                }
+                else {
+                    packet->length = sizeof(packet->bytes);
+                    picoquictest_sim_link_submit(link, packet, departure_time);
+                    departure_time += 250;
+                    queued++;
+                }
             }
             else {
-                packet->length = sizeof(packet->bytes);
-                picoquictest_sim_link_submit(link, packet, departure_time);
-                departure_time += 250;
-                queued++;
+                break;
             }
-        } else {
-            break;
         }
-    }
 
-    if ((dequeued + nb_losses) != nb_packets) {
-        ret = -1;
-    }
-
-    if (link != NULL) {
+        if ((dequeued + nb_losses) != nb_packets) {
+            ret = -1;
+        }
+        
         picoquictest_sim_link_delete(link);
     }
 
@@ -215,10 +217,8 @@ int sim_link_test()
 {
     int ret = 0;
     uint64_t loss_mask = 0;
-
-    if (ret == 0) {
-        ret = sim_link_one_test(&loss_mask, 0, 0);
-    }
+    
+    ret = sim_link_one_test(&loss_mask, 0, 0);
 
     if (ret == 0) {
         loss_mask = 8;

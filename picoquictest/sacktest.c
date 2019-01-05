@@ -164,11 +164,11 @@ static int basic_ack_parse(uint8_t* bytes, size_t bytes_max,
     size_t byte_index = 1;
     uint8_t first_byte = bytes[0];
     uint64_t num_block = 0;
-    uint64_t largest;
-    uint64_t last_range;
-    uint64_t ack_range;
+    uint64_t largest = 0;
+    uint64_t last_range = 0;
+    uint64_t ack_range = 0;
     uint64_t acked_mask = 0;
-    uint64_t gap_begin;
+    uint64_t gap_begin = 0;
     size_t l_largest = 0;
     size_t l_delay = 0;
     size_t l_num_block = 0;

@@ -92,15 +92,14 @@ int ticket_store_test()
     uint32_t ttl = 100000;
     uint8_t ticket[128];
 
-    /* Test reading and writing an empty file */
-    if (ret == 0) {
-        ret = picoquic_save_tickets(p_first_ticket, current_time, test_file_name);
-    }
+    /* Writing an empty file */
+    ret = picoquic_save_tickets(p_first_ticket, current_time, test_file_name);
+
     /* Load the empty file again */
     if (ret == 0) {
         ret = picoquic_load_tickets(&p_first_ticket_empty, retrieve_time, test_file_name);
 
-        /* Verify that the two contents are empty */
+        /* Verify that the content is empty */
         if (p_first_ticket_empty != NULL) {
             if (ret == 0) {
                 ret = -1;

@@ -531,8 +531,7 @@ int test_packet_encrypt_one(
             expected_header.dest_cnx_id = cnx_client->path[0]->remote_cnxid;
         }
 
-        if (packet->ptype == picoquic_packet_1rtt_protected ||
-            packet->ptype == picoquic_packet_1rtt_protected) {
+        if (packet->ptype == picoquic_packet_1rtt_protected) {
             expected_header.vn = 0;
             expected_header.srce_cnx_id = picoquic_null_connection_id;
         }

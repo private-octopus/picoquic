@@ -208,7 +208,7 @@ int picoquic_check_sack_list(picoquic_sack_item_t* sack,
     if (sack->start_of_sack_range == (uint64_t)((int64_t)-1)) {
         ret = 0;
     } else {
-        do {
+        for(;;) {
             if (pn64_max > sack->end_of_sack_range) {
                 ret = 0;
                 break;
@@ -226,7 +226,7 @@ int picoquic_check_sack_list(picoquic_sack_item_t* sack,
             } else {
                 sack = sack->next_sack;
             }
-        } while (sack != NULL);
+        };
     }
 
     return ret;
