@@ -727,8 +727,9 @@ void picoquic_process_unexpected_cnxid(
                 pad_size = 20;
             }
 
-            /* Packet type set to short header */
-            bytes[byte_index++] = (ph->ptype == picoquic_packet_1rtt_protected) ? 0x30 : 0x70;
+            /* Packet type set to short header, randomize the 5 lower bits */
+            bytes[byte_index++] = 0x30 | (uint8_t)(picoquic_public_random_64() & 0x1F);
+
             /* Add the random bytes */
             picoquic_public_random(bytes + byte_index, pad_size);
             byte_index += pad_size;

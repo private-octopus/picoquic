@@ -250,36 +250,35 @@ int picoquic_save_tickets(const picoquic_stored_ticket_t* first_ticket,
     const picoquic_stored_ticket_t* next = first_ticket;
 #ifdef _WINDOWS
     errno_t err = fopen_s(&F, ticket_file_name, "wb");
-    if (err != 0 || F == NULL) {
-        ret = -1;
+    if (err != 0 && F != NULL) {
+        fclose(F);
+        F = NULL;
     }
 #else
     F = fopen(ticket_file_name, "wb");
-    if (F == NULL) {
-        ret = -1;
-    }
 #endif
 
-    while (ret == 0 && next != NULL) {
-        /* Only store the tickets that are valid going forward */
-        if (next->time_valid_until > current_time) {
-            /* Compute the serialized size */
-            uint8_t buffer[2048];
-            size_t record_size;
+    if (F == NULL) {
+        ret = -1;
+    } else {
+        while (ret == 0 && next != NULL) {
+            /* Only store the tickets that are valid going forward */
+            if (next->time_valid_until > current_time) {
+                /* Compute the serialized size */
+                uint8_t buffer[2048];
+                size_t record_size;
 
-            ret = picoquic_serialize_ticket(next, buffer, sizeof(buffer), &record_size);
+                ret = picoquic_serialize_ticket(next, buffer, sizeof(buffer), &record_size);
 
-            if (ret == 0) {
-                if (fwrite(&record_size, 4, 1, F) != 1 || fwrite(buffer, 1, record_size, F) != record_size) {
-                    ret = PICOQUIC_ERROR_INVALID_FILE;
-                    break;
+                if (ret == 0) {
+                    if (fwrite(&record_size, 4, 1, F) != 1 || fwrite(buffer, 1, record_size, F) != record_size) {
+                        ret = PICOQUIC_ERROR_INVALID_FILE;
+                        break;
+                    }
                 }
             }
+            next = next->next_ticket;
         }
-        next = next->next_ticket;
-    }
-
-    if (F != NULL) {
         fclose(F);
     }
 

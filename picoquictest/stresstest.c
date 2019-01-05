@@ -836,7 +836,8 @@ static int stress_create_client_context(int client_index, picoquic_stress_ctx_t 
     if (ctx == NULL) {
         DBG_PRINTF("Cannot create the client context #%d.\n", (int)client_index);
         ret = -1;
-    } else {
+    }
+    else {
         memset(ctx, 0, sizeof(picoquic_stress_client_t));
         /* Initialize client specific address */
         stress_set_ip_address_from_index(&ctx->client_addr, (int)client_index);
@@ -848,43 +849,43 @@ static int stress_create_client_context(int client_index, picoquic_stress_ctx_t 
         ctx->ticket_file_name[15] = (uint8_t)('0' + (client_index / 10) % 10);
         ctx->ticket_file_name[16] = (uint8_t)('0' + client_index % 10);
         ctx->ticket_file_name[21] = 0;
-        
+
         ret = picoquic_save_tickets(NULL, stress_ctx->simulated_time, ctx->ticket_file_name);
         if (ret != 0) {
             DBG_PRINTF("Cannot create ticket file <%s>.\n", ctx->ticket_file_name);
         }
-    }
-    if (ret == 0) {
-        /* initialize the simulation links from client to server and back. */
-        const double target_bandwidth[4] = { 0.001, 0.01, 0.03, 0.1 };
-        uint64_t random_latency = 1000 + picoquic_test_uniform_random(&stress_random_ctx, 99000);
-        uint64_t bandwidth_index = picoquic_test_uniform_random(&stress_random_ctx, 4);
-        double bandwidth = target_bandwidth[bandwidth_index];
-        ctx->c_to_s_link = picoquictest_sim_link_create(bandwidth, random_latency, 0, 0, 2 * random_latency);
-        ctx->s_to_c_link = picoquictest_sim_link_create(bandwidth, random_latency, 0, 0, 2 * random_latency);
-        if (ctx->c_to_s_link == NULL ||
-            ctx->s_to_c_link == NULL) {
-            DBG_PRINTF("Cannot create the sim links for client #%d.\n", (int)client_index);
-            ret = -1;
-        }
-    }
-
-    if (ret == 0) {
-        /* Create the quic context for this client*/
-        char test_server_cert_store_file[512];
-        
-        ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE);
-        
-        if (ret != 0) {
-            DBG_PRINTF("%s", "Cannot set the cert store file name.\n");
-        }
         else {
-            ctx->qclient = picoquic_create(8, NULL, NULL, test_server_cert_store_file, NULL, NULL,
-                NULL, NULL, NULL, NULL, stress_ctx->simulated_time, &stress_ctx->simulated_time,
-                ctx->ticket_file_name, NULL, 0);
-            if (ctx->qclient == NULL) {
-                DBG_PRINTF("Cannot create the quic client #%d.\n", (int)client_index);
+            /* initialize the simulation links from client to server and back. */
+            const double target_bandwidth[4] = { 0.001, 0.01, 0.03, 0.1 };
+            uint64_t random_latency = 1000 + picoquic_test_uniform_random(&stress_random_ctx, 99000);
+            uint64_t bandwidth_index = picoquic_test_uniform_random(&stress_random_ctx, 4);
+            double bandwidth = target_bandwidth[bandwidth_index];
+            ctx->c_to_s_link = picoquictest_sim_link_create(bandwidth, random_latency, 0, 0, 2 * random_latency);
+            ctx->s_to_c_link = picoquictest_sim_link_create(bandwidth, random_latency, 0, 0, 2 * random_latency);
+            if (ctx->c_to_s_link == NULL ||
+                ctx->s_to_c_link == NULL) {
+                DBG_PRINTF("Cannot create the sim links for client #%d.\n", (int)client_index);
                 ret = -1;
+            }
+        }
+
+        if (ret == 0) {
+            /* Create the quic context for this client*/
+            char test_server_cert_store_file[512];
+
+            ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE);
+
+            if (ret != 0) {
+                DBG_PRINTF("%s", "Cannot set the cert store file name.\n");
+            }
+            else {
+                ctx->qclient = picoquic_create(8, NULL, NULL, test_server_cert_store_file, NULL, NULL,
+                    NULL, NULL, NULL, NULL, stress_ctx->simulated_time, &stress_ctx->simulated_time,
+                    ctx->ticket_file_name, NULL, 0);
+                if (ctx->qclient == NULL) {
+                    DBG_PRINTF("Cannot create the quic client #%d.\n", (int)client_index);
+                    ret = -1;
+                }
             }
         }
     }

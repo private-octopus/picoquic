@@ -703,7 +703,7 @@ int transport_param_fuzz_test(int mode, uint32_t version, uint32_t proposed_vers
 
             /* fuzz */
             for (size_t j = i - l; j < i; j++) {
-                buffer[i] ^= fuzz_byte;
+                buffer[j] ^= fuzz_byte;
                 fuzz_byte++;
             }
 
@@ -891,16 +891,19 @@ static int transport_param_log_fuzz_test(int client_mode, uint8_t* target, size_
             FILE *F;
 #ifdef _WINDOWS
             if (fopen_s(&F, log_tp_fuzz_file, "w") != 0) {
-                ret = -1;
+                if (F != NULL) {
+                    fclose(F);
+                    F = NULL;
+                }
             }
 #else
             F = fopen(log_tp_fuzz_file, "w");
+#endif
+
             if (F == NULL) {
                 ret = -1;
             }
-#endif
-            if (ret == 0)
-            {
+            else {
                 /* copy message to buffer */
                 memcpy(buffer, target, target_length);
 
@@ -917,11 +920,7 @@ static int transport_param_log_fuzz_test(int client_mode, uint8_t* target, size_
                     transport_param_log_test_one(F, buffer, target_length - dl, client_mode);
                 }
             }
-
-            if (F != NULL)
-            {
-                fclose(F);
-            }
+            fclose(F);
         }
     }
 

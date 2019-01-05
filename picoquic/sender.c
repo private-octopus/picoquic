@@ -2022,7 +2022,6 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
 
         if (cnx->cnx_state == picoquic_state_handshake_failure) {
             cnx->cnx_state = picoquic_state_disconnected;
-            *next_wake_time = current_time;
         }
         else {
             cnx->cnx_state = picoquic_state_closing;
@@ -2122,8 +2121,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
         stream = picoquic_find_ready_stream(cnx);
         packet->pc = pc;
 
-        if (ret == 0 && 
-            (length = picoquic_retransmit_needed(cnx, pc, path_x, current_time, next_wake_time, packet, send_buffer_min_max, &is_cleartext_mode, &header_length)) > 0) {
+        if ((length = picoquic_retransmit_needed(cnx, pc, path_x, current_time, next_wake_time, packet, send_buffer_min_max, &is_cleartext_mode, &header_length)) > 0) {
             /* Set the new checksum length */
             checksum_overhead = picoquic_get_checksum_length(cnx, is_cleartext_mode);
             /* Check whether it makes sense to add an ACK at the end of the retransmission */
@@ -2825,7 +2823,7 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
             size_t segment_length = 0;
 
             if (*send_length > 0) {
-                send_buffer_max = (path_id < 0)? PICOQUIC_INITIAL_MTU_IPV6: cnx->path[path_id]->send_mtu;
+                send_buffer_max = cnx->path[path_id]->send_mtu;
 
                 if (send_buffer_max < *send_length + PICOQUIC_MIN_SEGMENT_SIZE) {
                     break;

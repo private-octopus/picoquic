@@ -3806,15 +3806,14 @@ int migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_sc
         }
     }
 
-    /* Change the client address */
     if (ret == 0) {
+        /* Change the client address */
         test_ctx->client_addr.sin_port += 17;
-    }
 
-    /* Probe the new path */
-    if (ret == 0) {
+        /* Probe the new path */
         ret = picoquic_create_probe(
             test_ctx->cnx_client, (struct sockaddr *)&test_ctx->server_addr, (struct sockaddr *)&test_ctx->client_addr);
+
         if (ret == 0) {
             target_id = test_ctx->cnx_client->probe_first->remote_cnxid;
             previous_local_id = test_ctx->cnx_client->path[0]->local_cnxid;

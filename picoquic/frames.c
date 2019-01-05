@@ -1351,12 +1351,9 @@ int picoquic_prepare_crypto_hs_frame(picoquic_cnx_t* cnx, int epoch,
             /* Compute the length */
             size_t space = bytes_max - byte_index;
 
-            /* TODO: check logic here -- I was tired when I wrote that */
-
-            if (space < 2 || stream->send_queue == NULL) {
+            if (space < 2) {
                 length = 0;
             } else {
-                /* This is going to be a trial and error process */
                 size_t l_len = 0;
                 size_t available = stream->send_queue->length - (size_t)stream->send_queue->offset;
 
@@ -2058,11 +2055,9 @@ int picoquic_prepare_ack_frame_maybe_ecn(picoquic_cnx_t* cnx, uint64_t current_t
         /* Encode the first byte */
         bytes[byte_index++] = ack_type_byte;
         /* Encode the largest seen */
-        if (byte_index < bytes_max) {
-            l_largest = picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index,
-                pkt_ctx->first_sack_item.end_of_sack_range);
-            byte_index += l_largest;
-        }
+        l_largest = picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index,
+            pkt_ctx->first_sack_item.end_of_sack_range);
+        byte_index += l_largest;
         /* Encode the ack delay */
         if (byte_index < bytes_max) {
             if (current_time > pkt_ctx->time_stamp_largest_received) {

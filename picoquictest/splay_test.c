@@ -140,15 +140,13 @@ int splay_test() {
             }
         }
 
-        if (tree != NULL) {
-            if (ret == 0 && tree->root != NULL) {
-                DBG_PRINTF("%s", "Final tree root should be NULL, is not.\n");
-                ret = -1;
-            }
-            picosplay_empty_tree(tree);
-            free(tree);
-            tree = NULL;
+        if (ret == 0 && tree->root != NULL) {
+            DBG_PRINTF("%s", "Final tree root should be NULL, is not.\n");
+            ret = -1;
         }
+        picosplay_empty_tree(tree);
+        free(tree);
+        tree = NULL;
     }
 
     return ret;
