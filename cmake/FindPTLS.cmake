@@ -1,29 +1,28 @@
 # - Try to find Picotls
 
 find_path(PICOTLS_INCLUDE_DIR
-    NAMES picotls.h picotls/openssl.h picotls/minicrypto.h
+    NAMES picotls/minicrypto.h
     HINTS ${CMAKE_SOURCE_DIR}/../picotls/include )
 
-MESSAGE (STATUS "found picotls.h at ${PICOTLS_INCLUDE_DIR}" )
+set(PTLS_HINTS ${CMAKE_BINARY_DIR}/../picotls ../picotls)
 
-FIND_LIBRARY(PTLS_CORE picotls-core
-    HINTS $(CMAKE_BINARY_DIR)/../picotls
-           ../picotls
-)
+find_library(PTLS_CORE_LIBRARY picotls-core HINTS ${PTLS_HINTS})
+find_library(PTLS_MINICRYPTO_LIBRARY picotls-minicrypto HINTS ${PTLS_HINTS})
+find_library(PTLS_OPENSSL_LIBRARY picotls-openssl HINTS ${PTLS_HINTS})
 
-MESSAGE(STATUS "Found picotls-core at : ${PTLS_CORE}" )
+include(FindPackageHandleStandardArgs)
+# handle the QUIETLY and REQUIRED arguments and set PTLS_FOUND to TRUE
+# if all listed variables are TRUE
+find_package_handle_standard_args(PTLS REQUIRED_VARS
+    PTLS_CORE_LIBRARY
+    PTLS_MINICRYPTO_LIBRARY
+    PTLS_OPENSSL_LIBRARY
+    PICOTLS_INCLUDE_DIR)
 
-FIND_LIBRARY(PTLS_MINICRYPTO picotls-minicrypto
-    HINTS $(CMAKE_BINARY_DIR)/../picotls
-          ../picotls
-)
+if(PTLS_FOUND)
+    set(PTLS_LIBRARIES
+        ${PTLS_CORE_LIBRARY} ${PTLS_MINICRYPTO_LIBRARY} ${PTLS_OPENSSL_LIBRARY})
+    set(PTLS_INCLUDE_DIRS ${PTLS_INCLUDE_DIR})
+endif()
 
-MESSAGE(STATUS "Found picotls-crypto at : ${PTLS_MINICRYPTO}" )
-
-FIND_LIBRARY(PTLS_OPENSSL picotls-openssl
-    HINTS $(CMAKE_BINARY_DIR)/../picotls
-          ../picotls
-)
-
-MESSAGE(STATUS "Found picotls-openssl at : ${PTLS_OPENSSL}" )
-
+mark_as_advanced(PTLS_LIBRARIES PTLS_INCLUDE_DIRS)
