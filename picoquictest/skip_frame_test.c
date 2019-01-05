@@ -422,14 +422,13 @@ int parse_frame_test()
                 picoquic_null_connection_id, picoquic_null_connection_id, (struct sockaddr *) &saddr,
                 simulated_time, 0, "test-sni", "test-alpn", 1);
 
-            /* Stupid fix to ensure that the NCID decoding test will not protest */
-            cnx->path[0]->remote_cnxid.id_len = 8;
-
             if (cnx == NULL) {
                 DBG_PRINTF("%s", "Cannot create QUIC CNX context\n");
                 ret = -1;
             }
             else {
+                /* Stupid fix to ensure that the NCID decoding test will not protest */
+                cnx->path[0]->remote_cnxid.id_len = 8;
 
                 memcpy(buffer, test_skip_list[i].val, test_skip_list[i].len);
                 byte_max = test_skip_list[i].len;
@@ -582,21 +581,26 @@ int logger_test()
 
 #ifdef _WINDOWS
     if (fopen_s(&F, log_test_file, "w") != 0) {
-        ret = -1;
+        if (F != NULL) {
+            fclose(F);
+            F = NULL;
+        }
     }
 #else
     F = fopen(log_test_file, "w");
+#endif
+
     if (F == NULL) {
         ret = -1;
     }
-#endif
+    else {
+        for (size_t i = 0; i < nb_test_skip_list; i++) {
+            picoquic_log_frames(F, 0, test_skip_list[i].val, test_skip_list[i].len);
+        }
 
-    for (size_t i = 0; i < nb_test_skip_list; i++) {
-        picoquic_log_frames(F, 0, test_skip_list[i].val, test_skip_list[i].len);
+        fclose(F);
+        F = NULL;
     }
-
-    fclose(F);
-    F = NULL;
 
     if (ret == 0) {
         char log_test_ref[512];
@@ -619,50 +623,59 @@ int logger_test()
         size_t bytes_max = format_random_packet(buffer, sizeof(buffer), &random_context);
 #ifdef _WINDOWS
         if (fopen_s(&F, log_packet_test_file, "w") != 0) {
-            ret = -1;
-            break;
+            if (F != NULL) {
+                fclose(F);
+                F = NULL;
+            }
         }
 #else
         F = fopen(log_packet_test_file, "w");
+#endif
         if (F == NULL) {
             ret = -1;
             break;
         }
-#endif
-        ret &= fprintf(F, "Log packet test #%d\n", (int)i);
-        picoquic_log_frames(F, 0, buffer, bytes_max);
-        fclose(F);
+        else {
+            ret &= fprintf(F, "Log packet test #%d\n", (int)i);
+            picoquic_log_frames(F, 0, buffer, bytes_max);
+            fclose(F);
+            F = NULL;
+        }
 
 #ifdef _WINDOWS
-        if (fopen_s(&F, log_packet_test_file, "w") != 0 || F == NULL) {
-            ret = -1;
-            break;
+        if (fopen_s(&F, log_packet_test_file, "w") != 0) {
+            if (F != NULL) {
+                fclose(F);
+                F = NULL;
+            }
         }
 #else
         F = fopen(log_packet_test_file, "w");
+#endif
+
         if (F == NULL) {
             ret = -1;
             break;
-        }
-#endif
-        while (fgets(log_line, (int)sizeof(log_line), F) != NULL) {
-            /* skip blanks */
-            size_t byte_index = 0;
+        } else {
+            while (fgets(log_line, (int)sizeof(log_line), F) != NULL) {
+                /* skip blanks */
+                size_t byte_index = 0;
 
-            while (byte_index < sizeof(log_line) &&
-                (log_line[byte_index] == ' ' || log_line[byte_index] == '\t')) {
-                byte_index++;
-            }
+                while (byte_index < sizeof(log_line) &&
+                    (log_line[byte_index] == ' ' || log_line[byte_index] == '\t')) {
+                    byte_index++;
+                }
 
-            if (byte_index + 7u < sizeof(log_line) &&
-                memcmp(&log_line[byte_index], "Unknown", 7) == 0)
-            {
-                DBG_PRINTF("Packet log test #%d failed, unknown frame.\n", (int) i);
-                ret = -1;
-                break;
+                if (byte_index + 7u < sizeof(log_line) &&
+                    memcmp(&log_line[byte_index], "Unknown", 7) == 0)
+                {
+                    DBG_PRINTF("Packet log test #%d failed, unknown frame.\n", (int)i);
+                    ret = -1;
+                    break;
+                }
             }
+            fclose(F);
         }
-        fclose(F);
     }
 
     /* Do a minimal fuzz test */
@@ -841,9 +854,7 @@ int new_cnxid_test()
     if (qclient == NULL) {
         DBG_PRINTF("%s", "Cannot create QUIC context\n");
         ret = -1;
-    }
-
-    if (ret == 0) {
+    } else {
         cnx = picoquic_create_cnx(qclient,
             picoquic_null_connection_id, picoquic_null_connection_id, (struct sockaddr *) &saddr,
             simulated_time, 0, "test-sni", "test-alpn", 1);
@@ -852,63 +863,55 @@ int new_cnxid_test()
             DBG_PRINTF("%s", "Cannot create QUIC CNX context\n");
             ret = -1;
         }
-    }
-
-    if (ret == 0) {
-        /* Create a new path */
-        int path_index;
-        saddr.sin_port = 1000;
-        path_index = picoquic_create_path(cnx, simulated_time, (struct sockaddr *)&saddr, NULL);
-
-        if (path_index != 1) {
-            DBG_PRINTF("Cannot create new path, index = %d\n", path_index);
-            ret = -1;
-        }
-        else if (cnx->nb_paths != 2) {
-            DBG_PRINTF("Expected 2 paths, got %d\n", cnx->nb_paths);
-            ret = -1;
-        }
         else {
-            picoquic_register_path(cnx, cnx->path[path_index]);
+            /* Create a new path */
+            int path_index;
+            saddr.sin_port = 1000;
+            path_index = picoquic_create_path(cnx, simulated_time, (struct sockaddr *)&saddr, NULL);
+
+            if (path_index != 1) {
+                DBG_PRINTF("Cannot create new path, index = %d\n", path_index);
+                ret = -1;
+            }
+            else if (cnx->nb_paths != 2) {
+                DBG_PRINTF("Expected 2 paths, got %d\n", cnx->nb_paths);
+                ret = -1;
+            }
+            else {
+                picoquic_register_path(cnx, cnx->path[path_index]);
+            }
+
+            if (ret == 0) {
+                ret = picoquic_prepare_new_connection_id_frame(cnx, cnx->path[1],
+                    frame_buffer, sizeof(frame_buffer), &consumed);
+
+                if (ret != 0) {
+                    DBG_PRINTF("Cannot encode new connection ID frame, ret = %x\n", ret);
+                }
+            }
+
+            if (ret == 0) {
+                size_t skipped = 0;
+                int pure_ack = 0;
+
+                ret = picoquic_skip_frame(frame_buffer, sizeof(frame_buffer), &skipped, &pure_ack);
+
+                if (ret != 0) {
+                    DBG_PRINTF("Cannot skip connection ID frame, ret = %x\n", ret);
+                }
+                else if (skipped != consumed) {
+                    DBG_PRINTF("Skipped %d bytes instead of %d\n", (int)skipped, (int)consumed);
+                    ret = -1;
+                }
+                else if (pure_ack != 0) {
+                    DBG_PRINTF("Pure ACK = %d instead of 0\n", (int)pure_ack);
+                    ret = -1;
+                }
+            }
+            /* Delete the connecton and free the stash */
+            picoquic_delete_cnx(cnx);
         }
-    }
 
-    if (ret == 0) {
-        ret = picoquic_prepare_new_connection_id_frame(cnx, cnx->path[1],
-            frame_buffer, sizeof(frame_buffer), &consumed);
-
-        if (ret != 0) {
-            DBG_PRINTF("Cannot encode new connection ID frame, ret = %x\n", ret);
-        }
-    }
-
-    if (ret == 0) {
-        size_t skipped = 0;
-        int pure_ack = 0;
-
-        ret = picoquic_skip_frame(frame_buffer, sizeof(frame_buffer), &skipped, &pure_ack);
-
-        if (ret != 0) {
-            DBG_PRINTF("Cannot skip connection ID frame, ret = %x\n", ret);
-        }
-        else if (skipped != consumed) {
-            DBG_PRINTF("Skipped %d bytes instead of %d\n", (int)skipped, (int)consumed);
-            ret = -1;
-        }
-        else if (pure_ack != 0) {
-            DBG_PRINTF("Pure ACK = %d instead of 0\n", (int)pure_ack);
-            ret = -1;
-        }
-    }
-
-
-    if (cnx != NULL)
-    {
-        /* Delete the connecton and free the stash */
-        picoquic_delete_cnx(cnx);
-    }
-
-    if (qclient != NULL) {
         picoquic_free(qclient);
     }
 

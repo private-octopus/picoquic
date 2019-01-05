@@ -689,17 +689,13 @@ static int verify_version(picoquic_cnx_t* cnx_client, picoquic_cnx_t* cnx_server
 
     if (cnx_client->version_index != cnx_server->version_index) {
         ret = -1;
+    } else if (cnx_client->version_index < 0 || cnx_client->version_index >= (int)picoquic_nb_supported_versions) {
+        ret = -1;
     } else {
         for (size_t i = 0; i < picoquic_nb_supported_versions; i++) {
             if (cnx_client->proposed_version != picoquic_supported_versions[cnx_client->version_index].version && cnx_client->proposed_version == picoquic_supported_versions[i].version) {
                 ret = -1;
                 break;
-            }
-        }
-
-        if (ret == 0) {
-            if (cnx_client->version_index < 0 || cnx_client->version_index >= (int)picoquic_nb_supported_versions) {
-                ret = -1;
             }
         }
     }
@@ -737,8 +733,7 @@ static int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t propose
     char const* ticket_file_name, int force_zero_share, int delayed_init, int use_bad_crypt)
 {
     int ret = 0;
-    picoquic_test_tls_api_ctx_t* test_ctx = (picoquic_test_tls_api_ctx_t*)
-        malloc(sizeof(picoquic_test_tls_api_ctx_t));
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     char test_server_cert_file[512];
     char test_server_key_file[512];
     char test_server_cert_store_file[512];
@@ -755,86 +750,91 @@ static int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t propose
 
     if (ret != 0) {
         DBG_PRINTF("%s", "Cannot set the cert, key or store file names.\n");
+    } else {
+        test_ctx = (picoquic_test_tls_api_ctx_t*)
+            malloc(sizeof(picoquic_test_tls_api_ctx_t));
+
+        if (test_ctx == NULL) {
+            ret = -1;
+        } else {
+            /* Init to NULL */
+            memset(test_ctx, 0, sizeof(picoquic_test_tls_api_ctx_t));
+            test_ctx->client_callback.client_mode = 1;
+
+            /* Init of the IP addresses */
+            memset(&test_ctx->client_addr, 0, sizeof(struct sockaddr_in));
+            test_ctx->client_addr.sin_family = AF_INET;
+#ifdef _WINDOWS
+            test_ctx->client_addr.sin_addr.S_un.S_addr = 0x0A000002;
+#else
+            test_ctx->client_addr.sin_addr.s_addr = 0x0A000002;
+#endif
+            test_ctx->client_addr.sin_port = 1234;
+
+            memset(&test_ctx->server_addr, 0, sizeof(struct sockaddr_in));
+            test_ctx->server_addr.sin_family = AF_INET;
+#ifdef _WINDOWS
+            test_ctx->server_addr.sin_addr.S_un.S_addr = 0x0A000001;
+#else
+            test_ctx->server_addr.sin_addr.s_addr = 0x0A000001;
+#endif
+            test_ctx->server_addr.sin_port = 4321;
+
+            /* Test the creation of the client and server contexts */
+            test_ctx->qclient = picoquic_create(8, NULL, NULL, test_server_cert_store_file, NULL, test_api_callback,
+                (void*)&test_ctx->client_callback, NULL, NULL, NULL, *p_simulated_time,
+                p_simulated_time, ticket_file_name, NULL, 0);
+
+            test_ctx->qserver = picoquic_create(8,
+                test_server_cert_file, test_server_key_file, test_server_cert_store_file,
+                PICOQUIC_TEST_ALPN, test_api_callback, (void*)&test_ctx->server_callback, NULL, NULL, NULL,
+                *p_simulated_time, p_simulated_time, NULL,
+                (use_bad_crypt == 0) ? test_ticket_encrypt_key : test_ticket_badcrypt_key,
+                (use_bad_crypt == 0) ? sizeof(test_ticket_encrypt_key) : sizeof(test_ticket_badcrypt_key));
+
+            if (test_ctx->qclient == NULL || test_ctx->qserver == NULL) {
+                ret = -1;
+            }
+
+            /* register the links */
+            if (ret == 0) {
+                test_ctx->c_to_s_link = picoquictest_sim_link_create(0.01, 10000, 0, 0, 0);
+                test_ctx->s_to_c_link = picoquictest_sim_link_create(0.01, 10000, 0, 0, 0);
+
+                if (test_ctx->c_to_s_link == NULL || test_ctx->s_to_c_link == NULL) {
+                    ret = -1;
+                }
+            }
+
+            if (ret == 0) {
+                /* Apply the zero share parameter if required */
+                if (force_zero_share != 0)
+                {
+                    test_ctx->qclient->flags |= picoquic_context_client_zero_share;
+                }
+
+                /* Create a client connection */
+                test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
+                    picoquic_null_connection_id, picoquic_null_connection_id,
+                    (struct sockaddr*)&test_ctx->server_addr, 0,
+                    proposed_version, sni, alpn, 1);
+
+                if (test_ctx->cnx_client == NULL) {
+                    ret = -1;
+                }
+                else if (delayed_init == 0) {
+                    ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+                }
+            }
+        }
+    }
+
+    if (ret != 0 && test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
     }
 
     *pctx = test_ctx;
-
-    if (test_ctx != NULL) {
-        /* Init to NULL */
-        memset(test_ctx, 0, sizeof(picoquic_test_tls_api_ctx_t));
-        test_ctx->client_callback.client_mode = 1;
-
-        /* Init of the IP addresses */
-        memset(&test_ctx->client_addr, 0, sizeof(struct sockaddr_in));
-        test_ctx->client_addr.sin_family = AF_INET;
-#ifdef _WINDOWS
-        test_ctx->client_addr.sin_addr.S_un.S_addr = 0x0A000002;
-#else
-        test_ctx->client_addr.sin_addr.s_addr = 0x0A000002;
-#endif
-        test_ctx->client_addr.sin_port = 1234;
-
-        memset(&test_ctx->server_addr, 0, sizeof(struct sockaddr_in));
-        test_ctx->server_addr.sin_family = AF_INET;
-#ifdef _WINDOWS
-        test_ctx->server_addr.sin_addr.S_un.S_addr = 0x0A000001;
-#else
-        test_ctx->server_addr.sin_addr.s_addr = 0x0A000001;
-#endif
-        test_ctx->server_addr.sin_port = 4321;
-
-        /* Test the creation of the client and server contexts */
-        test_ctx->qclient = picoquic_create(8, NULL, NULL, test_server_cert_store_file, NULL, test_api_callback,
-            (void*)&test_ctx->client_callback, NULL, NULL, NULL, *p_simulated_time,
-            p_simulated_time, ticket_file_name, NULL, 0);
-
-        test_ctx->qserver = picoquic_create(8,
-            test_server_cert_file, test_server_key_file, test_server_cert_store_file,
-            PICOQUIC_TEST_ALPN, test_api_callback, (void*)&test_ctx->server_callback, NULL, NULL, NULL,
-            *p_simulated_time, p_simulated_time, NULL,
-            (use_bad_crypt == 0) ? test_ticket_encrypt_key : test_ticket_badcrypt_key,
-            (use_bad_crypt == 0) ? sizeof(test_ticket_encrypt_key) : sizeof(test_ticket_badcrypt_key));
-
-        if (test_ctx->qclient == NULL || test_ctx->qserver == NULL) {
-            ret = -1;
-        }
-
-        /* register the links */
-        if (ret == 0) {
-            test_ctx->c_to_s_link = picoquictest_sim_link_create(0.01, 10000, 0, 0, 0);
-            test_ctx->s_to_c_link = picoquictest_sim_link_create(0.01, 10000, 0, 0, 0);
-
-            if (test_ctx->c_to_s_link == NULL || test_ctx->s_to_c_link == NULL) {
-                ret = -1;
-            }
-        }
-
-        if (ret == 0) {
-            /* Apply the zero share parameter if required */
-            if (force_zero_share != 0)
-            {
-                test_ctx->qclient->flags |= picoquic_context_client_zero_share;
-            }
-
-            /* Create a client connection */
-            test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
-                picoquic_null_connection_id, picoquic_null_connection_id,
-                (struct sockaddr*)&test_ctx->server_addr, 0,
-                proposed_version, sni, alpn, 1);
-
-            if (test_ctx->cnx_client == NULL) {
-                ret = -1;
-            }
-            else if (delayed_init == 0) {
-                ret = picoquic_start_client_cnx(test_ctx->cnx_client);
-            }
-        }
-
-        if (ret != 0) {
-            tls_api_delete_ctx(test_ctx);
-            *pctx = NULL;
-        }
-    }
 
     return ret;
 }
@@ -1174,10 +1174,8 @@ static int tls_api_attempt_to_close(
 {
     int ret = 0;
     int nb_rounds = 0;
-
-    if (ret == 0) {
-        ret = picoquic_close(test_ctx->cnx_client, 0);
-    }
+    
+    ret = picoquic_close(test_ctx->cnx_client, 0);
 
     if (ret == 0) {
         /* packet from client to server */
@@ -1429,8 +1427,8 @@ int tls_api_one_scenario_verify(picoquic_test_tls_api_ctx_t* test_ctx) {
     return ret;
 }
 
-int tls_api_one_scenario_body(picoquic_test_tls_api_ctx_t* test_ctx, 
-    uint64_t * simulated_time, 
+int tls_api_one_scenario_body(picoquic_test_tls_api_ctx_t* test_ctx,
+    uint64_t * simulated_time,
     test_api_stream_desc_t* scenario, size_t sizeof_scenario, size_t stream0_target,
     uint64_t init_loss_mask, uint64_t max_data, uint64_t queue_delay_max,
     uint64_t max_completion_microsec)
@@ -1438,16 +1436,11 @@ int tls_api_one_scenario_body(picoquic_test_tls_api_ctx_t* test_ctx,
     int ret = 0;
     uint64_t loss_mask = 0;
 
-    if (ret == 0) {
-        ret = picoquic_start_client_cnx(test_ctx->cnx_client);
-        if (ret != 0)
-        {
-            DBG_PRINTF("%s", "Could not initialize connection for the client\n");
-        }
-
-    }
-
-    if (ret == 0) {
+    ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+    if (ret != 0)
+    {
+        DBG_PRINTF("%s", "Could not initialize connection for the client\n");
+    } else {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, queue_delay_max, simulated_time);
 
         if (ret != 0)
@@ -1676,10 +1669,8 @@ int tls_api_bad_server_reset_test()
         buffer[byte_index++] = 0x41;
         byte_index += picoquic_format_connection_id(&buffer[byte_index], sizeof(buffer) - byte_index, test_ctx->cnx_client->path[0]->local_cnxid);
         memset(buffer + byte_index, 0xcc, sizeof(buffer) - byte_index);
-    }
-
-    /* Submit bogus request to client */
-    if (ret == 0) {
+        
+        /* Submit bogus request to client */
         ret = picoquic_incoming_packet(test_ctx->qclient, buffer, sizeof(buffer),
             (struct sockaddr*)(&test_ctx->server_addr),
             (struct sockaddr*)(&test_ctx->client_addr), 0,
@@ -2009,9 +2000,7 @@ int session_resume_test()
 
         if (ret == 0) {
             test_ctx->cnx_client->max_early_data_size = 0;
-        }
 
-        if (ret == 0) {
             ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
         }
 
@@ -2077,17 +2066,13 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, unsigned int early_loss)
         }
 
         if (ret == 0 && i == 1) {
+            uint8_t test_data[8] = { 't', 'e', 's', 't', '0', 'r', 't', 't' };
             /* set the link delays to 100 ms, for realistic testing */
-            if (ret == 0) {
-                test_ctx->c_to_s_link->microsec_latency = 100000;
-                test_ctx->s_to_c_link->microsec_latency = 100000;
-            }
+            test_ctx->c_to_s_link->microsec_latency = 100000;
+            test_ctx->s_to_c_link->microsec_latency = 100000;
 
             /* Queue an initial frame on the client connection */
-            if (ret == 0) {
-                uint8_t test_data[8] = { 't', 'e', 's', 't', '0', 'r', 't', 't' };
-                (void)picoquic_add_to_stream(test_ctx->cnx_client, 0, test_data, sizeof(test_data), 1);
-            }
+            (void)picoquic_add_to_stream(test_ctx->cnx_client, 0, test_data, sizeof(test_data), 1);
 
             if (early_loss > 0) {
                 loss_mask = 1ull << (early_loss - 1);
@@ -2401,9 +2386,7 @@ int spurious_retransmit_test()
     if (ret == 0) {
         test_ctx->c_to_s_link->microsec_latency = 50000;
         test_ctx->s_to_c_link->microsec_latency = 50000;
-    }
 
-    if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
     }
 
@@ -2460,24 +2443,22 @@ int pn_enc_1rtt_test()
     if (ret == 0)
     {
         /* Try to encrypt a sequence number */
-        if (ret == 0) {
-            uint8_t seq_num_1[4] = { 0xde, 0xad, 0xbe, 0xef };
-            uint8_t sample_1[16] = {
-                0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96,
-                0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a };
-            uint8_t seq_num_2[4] = { 0xba, 0xba, 0xc0, 0x0l };
-            uint8_t sample_2[16] = {
-                0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a,
-                0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96 };
+        uint8_t seq_num_1[4] = { 0xde, 0xad, 0xbe, 0xef };
+        uint8_t sample_1[16] = {
+            0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96,
+            0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a };
+        uint8_t seq_num_2[4] = { 0xba, 0xba, 0xc0, 0x0l };
+        uint8_t sample_2[16] = {
+            0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a,
+            0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96 };
 
-            for (int i = 1; i < 4; i *= 2)
+        for (int i = 1; i < 4; i *= 2)
+        {
+            ret = test_one_pn_enc_pair(seq_num_1, 4, test_ctx->cnx_client->crypto_context[3].pn_enc, test_ctx->cnx_server->crypto_context[3].pn_dec, sample_1);
+
+            if (ret == 0)
             {
-                ret = test_one_pn_enc_pair(seq_num_1, 4, test_ctx->cnx_client->crypto_context[3].pn_enc, test_ctx->cnx_server->crypto_context[3].pn_dec, sample_1);
-
-                if (ret == 0)
-                {
-                    ret = test_one_pn_enc_pair(seq_num_2, 4, test_ctx->cnx_server->crypto_context[3].pn_enc, test_ctx->cnx_client->crypto_context[3].pn_dec, sample_2);
-                }
+                ret = test_one_pn_enc_pair(seq_num_2, 4, test_ctx->cnx_server->crypto_context[3].pn_enc, test_ctx->cnx_client->crypto_context[3].pn_dec, sample_2);
             }
         }
     }
@@ -2660,9 +2641,7 @@ int set_verify_certificate_callback_test()
     /* Activate client authentication */
     if (ret == 0) {
         picoquic_set_client_authentication(test_ctx->qserver, 1);
-    }
 
-    if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
     }
 
@@ -2780,7 +2759,7 @@ int virtual_time_test()
     if (qdirect != NULL)
     {
         picoquic_free(qdirect);
-        qsimul = NULL;
+        qdirect = NULL;
     }
 
     return ret;
@@ -2811,10 +2790,8 @@ int tls_quant_params_test()
 
     picoquic_init_transport_parameters(&test_parameters, 1);
 
-    test_parameters.initial_max_stream_id_bidir = 0;
-
     test_parameters.initial_max_data = 0x4000;
-    test_parameters.initial_max_stream_id_bidir = 1;
+    test_parameters.initial_max_stream_id_bidir = 0;
     test_parameters.initial_max_stream_id_unidir = 65535;
     test_parameters.initial_max_stream_data_bidi_local = 0x2000;
     test_parameters.initial_max_stream_data_bidi_remote = 0x2000;
@@ -3005,10 +2982,8 @@ int request_client_authentication_test()
 
     if (ret == 0) {
         picoquic_set_client_authentication(test_ctx->qserver, 1);
-    }
-
-    /* Proceed with the connection loop. */
-    if (ret == 0) {
+        
+        /* Proceed with the connection loop. */
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
     }
   
@@ -3093,10 +3068,8 @@ int bad_client_certificate_test()
 
     if (ret == 0) {
         picoquic_set_client_authentication(test_ctx->qserver, 1);
-    }
-
-    /* Proceed with the connection loop. It should fail */
-    if (ret == 0) {
+        
+        /* Proceed with the connection loop. It should fail */
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
     }
 
@@ -3152,17 +3125,13 @@ int nat_rebinding_test_one(uint64_t loss_mask_data)
 
     if (ret == 0) {
         initial_challenge = test_ctx->cnx_server->path[0]->challenge;
-        loss_mask = loss_mask_data;
-    }
-
-    /* Change the client address */
-    if (ret == 0) {
+        loss_mask = loss_mask_data; 
+        
+        /* Change the client address */
         test_ctx->client_addr.sin_port += 17;
         test_ctx->client_use_nat = 1;
-    }
-
-    /* Prepare to send data */
-    if (ret == 0) {
+        
+        /* Prepare to send data */
         ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_q_and_r, sizeof(test_scenario_q_and_r));
     }
 
@@ -3605,7 +3574,7 @@ int probe_api_test()
         memset(&t6[i], 0, sizeof(struct sockaddr_in6));
         t6[i].sin6_family = AF_INET6;
         t6[i].sin6_port = 2000 + i;
-        memset(&t6[i].sin6_addr, i, 20);
+        memset(&t6[i].sin6_addr, i, 16);
     }
 
     /* Set a test connection between client and server */
@@ -3806,16 +3775,13 @@ int migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_sc
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
     }
 
-    if (ret == 0) {
-        initial_challenge = test_ctx->cnx_server->path[0]->challenge;
-        loss_mask = loss_mask_data;
-    }
-
     /* run a receive loop until no outstanding data */
     if (ret == 0) {
         uint64_t time_out = simulated_time + 4000000;
         int nb_rounds = 0;
         int success = 0;
+        initial_challenge = test_ctx->cnx_server->path[0]->challenge;
+        loss_mask = loss_mask_data;
 
         while (ret == 0 && simulated_time < time_out &&
             nb_rounds < 2048 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
@@ -3836,18 +3802,18 @@ int migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_sc
         if (ret == 0 && success == 0) {
             DBG_PRINTF("Exit synch loop after %d rounds, backlog or not enough paths (%d & %d).\n",
                 nb_rounds, test_ctx->cnx_client->nb_paths, test_ctx->cnx_server->nb_paths);
+            ret = -1;
         }
     }
 
-    /* Change the client address */
     if (ret == 0) {
+        /* Change the client address */
         test_ctx->client_addr.sin_port += 17;
-    }
 
-    /* Probe the new path */
-    if (ret == 0) {
+        /* Probe the new path */
         ret = picoquic_create_probe(
             test_ctx->cnx_client, (struct sockaddr *)&test_ctx->server_addr, (struct sockaddr *)&test_ctx->client_addr);
+
         if (ret == 0) {
             target_id = test_ctx->cnx_client->probe_first->remote_cnxid;
             previous_local_id = test_ctx->cnx_client->path[0]->local_cnxid;
@@ -3967,9 +3933,7 @@ int rebinding_stress_test()
         memcpy(&hack_address_random, &test_ctx->client_addr, sizeof(struct sockaddr_in));
 
         hack_address.sin_port += 1023;
-    }
 
-    if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
     }
 
@@ -4497,21 +4461,16 @@ int new_rotated_key_test()
 
 
     for (int i = 1; ret == 0 && i <= 3; i++) {
-        if (ret == 0)
-        {
-            /* Try to compute rotated keys on server */
-            ret = picoquic_compute_new_rotated_keys(test_ctx->cnx_server);
-            if (ret != 0) {
-                DBG_PRINTF("Could not rotate server key, ret: %x\n", ret);
-            }
-        }
-
-        if (ret == 0)
-        {
+        
+        /* Try to compute rotated keys on server */
+        ret = picoquic_compute_new_rotated_keys(test_ctx->cnx_server);
+        if (ret != 0) {
+            DBG_PRINTF("Could not rotate server key, ret: %x\n", ret);
+        } else {
             /* Try to compute rotated keys on client */
             ret = picoquic_compute_new_rotated_keys(test_ctx->cnx_client);
             if (ret != 0) {
-                DBG_PRINTF("Could not rotate server key, round %d, ret: %x\n", i, ret);
+                DBG_PRINTF("Could not rotate client key, round %d, ret: %x\n", i, ret);
             }
         }
 
@@ -5093,10 +5052,8 @@ int false_migration_test()
     int target_client;
 
     for (target_client = 1; ret == 0 && target_client >= 0; target_client--) {
-        if (ret == 0) {
-            ret = false_migration_test_scenario(test_scenario_q2_and_r2, sizeof(test_scenario_q2_and_r2), 0, target_client, picoquic_packet_context_initial, 0);
-        }
-
+        ret = false_migration_test_scenario(test_scenario_q2_and_r2, sizeof(test_scenario_q2_and_r2), 0, target_client, picoquic_packet_context_initial, 0);
+        
         if (ret == 0) {
             ret = false_migration_test_scenario(test_scenario_q2_and_r2, sizeof(test_scenario_q2_and_r2), 0, target_client, picoquic_packet_context_handshake, 0);
         }
@@ -5335,11 +5292,10 @@ int padding_test()
     if (ret == 0) {
         picoquic_set_default_padding(test_ctx->qserver, 128, 64);
         picoquic_cnx_set_padding_policy(test_ctx->cnx_client, 128, 64);
-    }
 
-    /* Run a basic test scenario
-     */
-    if (ret == 0) {
+        /* Run a basic test scenario
+         */
+
         ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
             test_scenario_many_streams, sizeof(test_scenario_many_streams), 0, 0, 0, 0, 250000);
     }
@@ -5378,14 +5334,10 @@ int packet_trace_test()
     }
 
     /* Set the logging policy on the server side, to store data in the
-     * current working directory */
+     * current working directory, and run a basic test scenario */
     if (ret == 0) {
         picoquic_set_cc_log(test_ctx->qserver, ".");
-    }
-
-    /* Run a basic test scenario
-     */
-    if (ret == 0) {
+    
         ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
             test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0, 0, 20000, 1000000);
     }

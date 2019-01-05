@@ -52,10 +52,8 @@ int http0dot9_test()
 {
     int ret = 0;
     const size_t index_html_size = 633;
-
-    if (ret == 0) {
-        ret = http0dot9_test_one("get /", 0, index_html_size, "http09_index.html");
-    }
+    
+    ret = http0dot9_test_one("get /", 0, index_html_size, "http09_index.html");
 
     if (ret == 0) {
         ret = http0dot9_test_one("get /\r\n", 0, index_html_size, "http09_index2.html");

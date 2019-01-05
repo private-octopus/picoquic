@@ -41,7 +41,7 @@ char* picoquic_string_create(const char* original, size_t len)
     size_t allocated = len + 1;
     char * str = NULL;
 
-    if (allocated > len && allocated >= 1) {
+    if (allocated > len) {
         str = (char*)malloc(allocated);
 
         if (str != NULL) {

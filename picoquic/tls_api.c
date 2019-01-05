@@ -810,10 +810,8 @@ int picoquic_setup_initial_traffic_keys(picoquic_cnx_t* cnx)
             secret1 = client_secret;
             secret2 = server_secret;
         }
-
-        if (ret == 0) {
-            ret = picoquic_set_key_from_secret(&cipher, 1, 0, &cnx->crypto_context[0], secret1);
-        }
+        
+        ret = picoquic_set_key_from_secret(&cipher, 1, 0, &cnx->crypto_context[0], secret1);
 
         if (ret == 0) {
             ret = picoquic_set_key_from_secret(&cipher, 0, 0, &cnx->crypto_context[0], secret2);
@@ -1051,6 +1049,8 @@ int picoquic_master_tlscontext(picoquic_quic_t* quic,
                 och->cb = picoquic_client_hello_call_back;
                 ctx->on_client_hello = och;
                 *ppquic = quic;
+            } else {
+                ret = PICOQUIC_ERROR_MEMORY;
             }
         }
 
@@ -1449,7 +1449,7 @@ static int picoquic_add_to_tls_stream(picoquic_cnx_t* cnx, const uint8_t* data, 
     int ret = 0;
     picoquic_stream_head* stream = &cnx->tls_stream[epoch];
 
-    if (ret == 0 && length > 0) {
+    if (length > 0) {
         picoquic_stream_data* stream_data = (picoquic_stream_data*)malloc(sizeof(picoquic_stream_data));
 
         if (stream_data == 0) {

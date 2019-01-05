@@ -712,7 +712,7 @@ void picoquic_process_unexpected_cnxid(
     unsigned long if_index_to,
     picoquic_packet_header* ph)
 {
-    if (length > PICOQUIC_RESET_PACKET_MIN_SIZE && 
+    if (length >= PICOQUIC_RESET_PACKET_MIN_SIZE && 
         ph->ptype == picoquic_packet_1rtt_protected) {
         picoquic_stateless_packet_t* sp = picoquic_create_stateless_packet(quic);
         if (sp != NULL) {
@@ -727,8 +727,9 @@ void picoquic_process_unexpected_cnxid(
                 pad_size = 20;
             }
 
-            /* Packet type set to short header */
-            bytes[byte_index++] = (ph->ptype == picoquic_packet_1rtt_protected) ? 0x30 : 0x70;
+            /* Packet type set to short header, randomize the 5 lower bits */
+            bytes[byte_index++] = 0x30 | (uint8_t)(picoquic_public_random_64() & 0x1F);
+
             /* Add the random bytes */
             picoquic_public_random(bytes + byte_index, pad_size);
             byte_index += pad_size;
@@ -849,7 +850,7 @@ int picoquic_incoming_initial(
         /* Does the token contain a valid CID? */
         if (ph->token_length > 1u + 8u) {
             cid_len = ph->token_bytes[0];
-            if (cid_len < 8 && cid_len > PICOQUIC_CONNECTION_ID_MAX_SIZE) {
+            if (cid_len < 8 || cid_len > PICOQUIC_CONNECTION_ID_MAX_SIZE) {
                 cid_len = 0;
             }
             else if (cid_len + 1u + 16u != ph->token_length) {
@@ -1028,9 +1029,7 @@ int picoquic_incoming_retry(
         cnx->retry_token_length = (uint32_t)token_length;
 
         picoquic_reset_cnx(cnx, current_time);
-    }
 
-    if (ret == 0) {
         /* Mark the packet as not required for ack */
         ret = PICOQUIC_ERROR_RETRY;
     }

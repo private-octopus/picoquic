@@ -46,7 +46,6 @@ static picoquic_stream_head* picoquic_find_stream_for_writing(picoquic_cnx_t* cn
     uint64_t stream_id, int * ret)
 {
     picoquic_stream_head* stream = picoquic_find_stream(cnx, stream_id, 0);
-    int is_unidir = 0;
 
     *ret = 0;
 
@@ -64,7 +63,7 @@ static picoquic_stream_head* picoquic_find_stream_for_writing(picoquic_cnx_t* cn
             if (stream == NULL) {
                 *ret = PICOQUIC_ERROR_MEMORY;
             }
-            else if (is_unidir) {
+            else if (!IS_BIDIR_STREAM_ID(stream_id)) {
                 /* Mark the stream as already finished in remote direction */
                 stream->fin_signalled = 1;
                 stream->fin_received = 1;
@@ -1039,30 +1038,28 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                         }
                     }
 
-                    if (should_retransmit != 0) {
-                        if (p->ptype < picoquic_packet_1rtt_protected) {
-                            DBG_PRINTF("Retransmit packet type %d, pc=%d, seq = %llx, is_client = %d\n",
-                                p->ptype, p->pc,
-                                (unsigned long long)p->sequence_number, cnx->client_mode);
-                        }
-
-                        /* special case for the client initial */
-                        if (p->ptype == picoquic_packet_initial && cnx->client_mode != 0) {
-                            while (length < (send_buffer_max - checksum_length)) {
-                                new_bytes[length++] = 0;
-                            }
-                        }
-                        packet->length = length;
-                        cnx->nb_retransmission_total++;
-
-                        if (cnx->congestion_alg != NULL && old_path != NULL) {
-                            cnx->congestion_alg->alg_notify(old_path,
-                                (timer_based_retransmit == 0) ? picoquic_congestion_notification_repeat : picoquic_congestion_notification_timeout,
-                                0, 0, lost_packet_number, current_time);
-                        } 
-
-                        break;
+                    if (p->ptype < picoquic_packet_1rtt_protected) {
+                        DBG_PRINTF("Retransmit packet type %d, pc=%d, seq = %llx, is_client = %d\n",
+                            p->ptype, p->pc,
+                            (unsigned long long)p->sequence_number, cnx->client_mode);
                     }
+
+                    /* special case for the client initial */
+                    if (p->ptype == picoquic_packet_initial && cnx->client_mode != 0) {
+                        while (length < (send_buffer_max - checksum_length)) {
+                            new_bytes[length++] = 0;
+                        }
+                    }
+                    packet->length = length;
+                    cnx->nb_retransmission_total++;
+
+                    if (cnx->congestion_alg != NULL && old_path != NULL) {
+                        cnx->congestion_alg->alg_notify(old_path,
+                            (timer_based_retransmit == 0) ? picoquic_congestion_notification_repeat : picoquic_congestion_notification_timeout,
+                            0, 0, lost_packet_number, current_time);
+                    } 
+
+                    break;
                 }
             }
         }
@@ -1681,7 +1678,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
 
     /* If context is handshake, verify first that there is no need for retransmit or ack
     * on initial context */
-    if (ret == 0 && pc == picoquic_packet_context_handshake) {
+    if (pc == picoquic_packet_context_handshake) {
         length = picoquic_prepare_packet_old_context(cnx, picoquic_packet_context_initial,
             path_x, packet, send_buffer_max, current_time, next_wake_time, &header_length);
     }
@@ -1898,154 +1895,147 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
     /* At this stage, we don't try to retransmit any old packet, whether in
      * the current context or in previous contexts. */
 
-    if (length == 0) {
-        checksum_overhead = picoquic_get_checksum_length(cnx, is_cleartext_mode);
-        packet->pc = pc;
+    checksum_overhead = picoquic_get_checksum_length(cnx, is_cleartext_mode);
+    packet->pc = pc;
 
-        if (ret == 0 && cnx->cnx_state == picoquic_state_closing_received) {
-            /* Send a closing frame, move to closing state */
-            size_t consumed = 0;
-            uint64_t exit_time = cnx->latest_progress_time + 3 * path_x->retransmit_timer;
+    if (ret == 0 && cnx->cnx_state == picoquic_state_closing_received) {
+        /* Send a closing frame, move to closing state */
+        size_t consumed = 0;
+        uint64_t exit_time = cnx->latest_progress_time + 3 * path_x->retransmit_timer;
 
-            length = picoquic_predict_packet_header_length(cnx, packet_type);
-            packet->ptype = packet_type;
-            packet->offset = length;
-            header_length = length;
-            packet->sequence_number = cnx->pkt_ctx[pc].send_sequence;
-            packet->send_time = current_time;
-            packet->send_path = path_x;
+        length = picoquic_predict_packet_header_length(cnx, packet_type);
+        packet->ptype = packet_type;
+        packet->offset = length;
+        header_length = length;
+        packet->sequence_number = cnx->pkt_ctx[pc].send_sequence;
+        packet->send_time = current_time;
+        packet->send_path = path_x;
 
-            /* Send the disconnect frame */
-            ret = picoquic_prepare_connection_close_frame(cnx, bytes + length,
-                send_buffer_max - checksum_overhead - length, &consumed);
+        /* Send the disconnect frame */
+        ret = picoquic_prepare_connection_close_frame(cnx, bytes + length,
+            send_buffer_max - checksum_overhead - length, &consumed);
 
-            if (ret == 0) {
-                length += (uint32_t)consumed;
-            }
-            cnx->cnx_state = picoquic_state_draining;
-            *next_wake_time = exit_time;
+        if (ret == 0) {
+            length += (uint32_t)consumed;
         }
-        else if (ret == 0 && cnx->cnx_state == picoquic_state_closing) {
-            /* if more than 3*RTO is elapsed, move to disconnected */
-            uint64_t exit_time = cnx->latest_progress_time + 3 * path_x->retransmit_timer;
+        cnx->cnx_state = picoquic_state_draining;
+        *next_wake_time = exit_time;
+    } else if (ret == 0 && cnx->cnx_state == picoquic_state_closing) {
+        /* if more than 3*RTO is elapsed, move to disconnected */
+        uint64_t exit_time = cnx->latest_progress_time + 3 * path_x->retransmit_timer;
 
-            if (current_time >= exit_time) {
-                cnx->cnx_state = picoquic_state_disconnected;
-                *next_wake_time = current_time;
-            }
-            else if (current_time >= cnx->next_wake_time) {
-                uint64_t delta_t = path_x->rtt_min;
-                uint64_t next_time = 0;
-
-                if (delta_t * 2 < path_x->retransmit_timer) {
-                    delta_t = path_x->retransmit_timer / 2;
-                }
-                /* if more than N packet received, repeat and erase */
-                if (cnx->pkt_ctx[pc].ack_needed) {
-                    size_t consumed = 0;
-                    length = picoquic_predict_packet_header_length(
-                        cnx, packet_type);
-                    packet->ptype = packet_type;
-                    packet->offset = length;
-                    header_length = length;
-                    packet->sequence_number = cnx->pkt_ctx[pc].send_sequence;
-                    packet->send_time = current_time;
-                    packet->send_path = path_x;
-
-                    /* Resend the disconnect frame */
-                    if (cnx->local_error == 0) {
-                        ret = picoquic_prepare_application_close_frame(cnx, bytes + length,
-                            send_buffer_max - checksum_overhead - length, &consumed);
-                    }
-                    else {
-                        ret = picoquic_prepare_connection_close_frame(cnx, bytes + length,
-                            send_buffer_max - checksum_overhead - length, &consumed);
-                    }
-                    if (ret == 0) {
-                        length += (uint32_t)consumed;
-                    }
-                    cnx->pkt_ctx[pc].ack_needed = 0;
-                }
-                next_time = current_time + delta_t;
-                if (next_time > exit_time) {
-                    next_time = exit_time;
-                }
-                
-                *next_wake_time = next_time;
-            }
+        if (current_time >= exit_time) {
+            cnx->cnx_state = picoquic_state_disconnected;
+            *next_wake_time = current_time;
         }
-        else if (ret == 0 && cnx->cnx_state == picoquic_state_draining) {
-            /* Nothing is ever sent in the draining state */
-            /* if more than 3*RTO is elapsed, move to disconnected */
-            uint64_t exit_time = cnx->latest_progress_time + 3 * path_x->retransmit_timer;
-
-            if (current_time >= exit_time) {
-                cnx->cnx_state = picoquic_state_disconnected;
-                *next_wake_time = current_time;
-            }
-            else {
-                *next_wake_time = exit_time;
-            }
-            length = 0;
-        }
-        else if (ret == 0 && (cnx->cnx_state == picoquic_state_disconnecting || cnx->cnx_state == picoquic_state_handshake_failure)) {
-            length = picoquic_predict_packet_header_length(
-                cnx, packet_type);
-            packet->ptype = packet_type;
-            packet->offset = length;
-            header_length = length;
-            packet->sequence_number = cnx->pkt_ctx[pc].send_sequence;
-            packet->send_time = current_time;
-            packet->send_path = path_x;
-
-            /* send either app close or connection close, depending on error code */
-            size_t consumed = 0;
+        else if (current_time >= cnx->next_wake_time) {
             uint64_t delta_t = path_x->rtt_min;
+            uint64_t next_time = 0;
 
-            if (2 * delta_t < path_x->retransmit_timer) {
+            if (delta_t * 2 < path_x->retransmit_timer) {
                 delta_t = path_x->retransmit_timer / 2;
             }
+            /* if more than N packet received, repeat and erase */
+            if (cnx->pkt_ctx[pc].ack_needed) {
+                size_t consumed = 0;
+                length = picoquic_predict_packet_header_length(
+                    cnx, packet_type);
+                packet->ptype = packet_type;
+                packet->offset = length;
+                header_length = length;
+                packet->sequence_number = cnx->pkt_ctx[pc].send_sequence;
+                packet->send_time = current_time;
+                packet->send_path = path_x;
 
-            /* add a final ack so receiver gets clean state */
-            ret = picoquic_prepare_ack_frame(cnx, current_time, pc, &bytes[length],
-                send_buffer_max - checksum_overhead - length, &consumed);
-            if (ret == 0) {
-                length += (uint32_t)consumed;
+                /* Resend the disconnect frame */
+                if (cnx->local_error == 0) {
+                    ret = picoquic_prepare_application_close_frame(cnx, bytes + length,
+                        send_buffer_max - checksum_overhead - length, &consumed);
+                } else {
+                    ret = picoquic_prepare_connection_close_frame(cnx, bytes + length,
+                        send_buffer_max - checksum_overhead - length, &consumed);
+                }
+                if (ret == 0) {
+                    length += (uint32_t)consumed;
+                }
+                cnx->pkt_ctx[pc].ack_needed = 0;
+            }
+            next_time = current_time + delta_t;
+            if (next_time > exit_time) {
+                next_time = exit_time;
             }
 
-            consumed = 0;
-            /* Send the disconnect frame */
-            if (cnx->local_error == 0) {
-                ret = picoquic_prepare_application_close_frame(cnx, bytes + length,
-                    send_buffer_max - checksum_overhead - length, &consumed);
-            }
-            else {
-                ret = picoquic_prepare_connection_close_frame(cnx, bytes + length,
-                    send_buffer_max - checksum_overhead - length, &consumed);
-            }
+            *next_wake_time = next_time;
+        }
+    } else if (ret == 0 && cnx->cnx_state == picoquic_state_draining) {
+        /* Nothing is ever sent in the draining state */
+        /* if more than 3*RTO is elapsed, move to disconnected */
+        uint64_t exit_time = cnx->latest_progress_time + 3 * path_x->retransmit_timer;
 
-            if (ret == 0) {
-                length += (uint32_t)consumed;
-            }
-
-            if (cnx->cnx_state == picoquic_state_handshake_failure) {
-                cnx->cnx_state = picoquic_state_disconnected;
-                *next_wake_time = current_time;
-            }
-            else {
-                cnx->cnx_state = picoquic_state_closing;
-            }
-            cnx->latest_progress_time = current_time;
-            *next_wake_time = current_time + delta_t;
-            cnx->pkt_ctx[pc].ack_needed = 0;
-
-            if (cnx->callback_fn) {
-                (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx);
-            }
+        if (current_time >= exit_time) {
+            cnx->cnx_state = picoquic_state_disconnected;
+            *next_wake_time = current_time;
         }
         else {
-            length = 0;
+            *next_wake_time = exit_time;
         }
+        length = 0;
+    } else if (ret == 0 && (cnx->cnx_state == picoquic_state_disconnecting || cnx->cnx_state == picoquic_state_handshake_failure)) {
+        length = picoquic_predict_packet_header_length(
+            cnx, packet_type);
+        packet->ptype = packet_type;
+        packet->offset = length;
+        header_length = length;
+        packet->sequence_number = cnx->pkt_ctx[pc].send_sequence;
+        packet->send_time = current_time;
+        packet->send_path = path_x;
+
+        /* send either app close or connection close, depending on error code */
+        size_t consumed = 0;
+        uint64_t delta_t = path_x->rtt_min;
+
+        if (2 * delta_t < path_x->retransmit_timer) {
+            delta_t = path_x->retransmit_timer / 2;
+        }
+
+        /* add a final ack so receiver gets clean state */
+        ret = picoquic_prepare_ack_frame(cnx, current_time, pc, &bytes[length],
+            send_buffer_max - checksum_overhead - length, &consumed);
+        if (ret == 0) {
+            length += (uint32_t)consumed;
+        }
+
+        consumed = 0;
+        /* Send the disconnect frame */
+        if (cnx->local_error == 0) {
+            ret = picoquic_prepare_application_close_frame(cnx, bytes + length,
+                send_buffer_max - checksum_overhead - length, &consumed);
+        }
+        else {
+            ret = picoquic_prepare_connection_close_frame(cnx, bytes + length,
+                send_buffer_max - checksum_overhead - length, &consumed);
+        }
+
+        if (ret == 0) {
+            length += (uint32_t)consumed;
+        }
+
+        if (cnx->cnx_state == picoquic_state_handshake_failure) {
+            cnx->cnx_state = picoquic_state_disconnected;
+        }
+        else {
+            cnx->cnx_state = picoquic_state_closing;
+        }
+        cnx->latest_progress_time = current_time;
+        *next_wake_time = current_time + delta_t;
+        cnx->pkt_ctx[pc].ack_needed = 0;
+
+        if (cnx->callback_fn) {
+            (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx);
+        }
+    }
+    else {
+        length = 0;
     }
 
     picoquic_finalize_and_protect_packet(cnx, packet,
@@ -2102,7 +2092,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
      */
 
     if ((cnx->cnx_state == picoquic_state_server_false_start &&
-        cnx->crypto_context[3].aead_decrypt != NULL) || 
+        cnx->crypto_context[3].aead_decrypt != NULL) ||
         (cnx->cnx_state == picoquic_state_client_ready_start &&
             cnx->one_rtt_data_acknowledged)) {
         /* Transition to server ready state.
@@ -2118,14 +2108,12 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
      * This is needed even with implicit acks for now, because the peer may
      * be retransmitting data and thus requires acks. */
 
-    if (ret == 0) {
-        length = picoquic_prepare_packet_old_context(cnx, picoquic_packet_context_initial,
-            path_x, packet, send_buffer_min_max, current_time, next_wake_time, &header_length);
+    length = picoquic_prepare_packet_old_context(cnx, picoquic_packet_context_initial,
+        path_x, packet, send_buffer_min_max, current_time, next_wake_time, &header_length);
 
-        if (length == 0) {
-            length = picoquic_prepare_packet_old_context(cnx, picoquic_packet_context_handshake,
-                path_x, packet, send_buffer_min_max, current_time, next_wake_time, &header_length);
-        }
+    if (length == 0) {
+        length = picoquic_prepare_packet_old_context(cnx, picoquic_packet_context_handshake,
+            path_x, packet, send_buffer_min_max, current_time, next_wake_time, &header_length);
     }
 
     if (length == 0) {
@@ -2133,8 +2121,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
         stream = picoquic_find_ready_stream(cnx);
         packet->pc = pc;
 
-        if (ret == 0 && 
-            (length = picoquic_retransmit_needed(cnx, pc, path_x, current_time, next_wake_time, packet, send_buffer_min_max, &is_cleartext_mode, &header_length)) > 0) {
+        if ((length = picoquic_retransmit_needed(cnx, pc, path_x, current_time, next_wake_time, packet, send_buffer_min_max, &is_cleartext_mode, &header_length)) > 0) {
             /* Set the new checksum length */
             checksum_overhead = picoquic_get_checksum_length(cnx, is_cleartext_mode);
             /* Check whether it makes sense to add an ACK at the end of the retransmission */
@@ -2819,27 +2806,16 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
             path_id = 0;
         }
 
-        if (path_id >= 0) {
-            (void)picoquic_store_addr(&addr_to_log, (struct sockaddr *)&cnx->path[path_id]->peer_addr);
+        (void)picoquic_store_addr(&addr_to_log, (struct sockaddr *)&cnx->path[path_id]->peer_addr);
 
-            if (p_addr_to != NULL && to_len != NULL) {
-                *to_len = picoquic_store_addr(p_addr_to, (struct sockaddr *)&cnx->path[path_id]->peer_addr);
-            }
-
-            if (p_addr_from != NULL && from_len != NULL) {
-                *from_len = picoquic_store_addr(p_addr_from, (struct sockaddr *)&cnx->path[path_id]->local_addr);
-            }
-        }
-        else {
-            if (to_len != NULL) {
-                *to_len = 0;
-            }
-            if (from_len != NULL) {
-                *from_len = 0;
-            }
+        if (p_addr_to != NULL && to_len != NULL) {
+            *to_len = picoquic_store_addr(p_addr_to, (struct sockaddr *)&cnx->path[path_id]->peer_addr);
         }
 
-
+        if (p_addr_from != NULL && from_len != NULL) {
+            *from_len = picoquic_store_addr(p_addr_from, (struct sockaddr *)&cnx->path[path_id]->local_addr);
+        }
+       
         /* Send the available segments */
         while (ret == 0)
         {
@@ -2847,7 +2823,7 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
             size_t segment_length = 0;
 
             if (*send_length > 0) {
-                send_buffer_max = (path_id < 0)? PICOQUIC_INITIAL_MTU_IPV6: cnx->path[path_id]->send_mtu;
+                send_buffer_max = cnx->path[path_id]->send_mtu;
 
                 if (send_buffer_max < *send_length + PICOQUIC_MIN_SEGMENT_SIZE) {
                     break;

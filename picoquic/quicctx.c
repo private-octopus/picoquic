@@ -119,7 +119,7 @@ picoquic_packet_context_enum picoquic_context_from_epoch(int epoch)
         picoquic_packet_context_application
     };
 
-    return (epoch >= 0 && epoch < 5) ? pc[epoch] : 0;
+    return (epoch >= 0 && epoch < 4) ? pc[epoch] : 0;
 }
 
 /*
@@ -180,9 +180,7 @@ picoquic_quic_t* picoquic_create(uint32_t nb_connections,
     picoquic_quic_t* quic = (picoquic_quic_t*)malloc(sizeof(picoquic_quic_t));
     int ret = 0;
 
-    if (quic == NULL) {
-        ret = -1;
-    } else {
+    if (quic != NULL) {
         /* TODO: winsock init */
         /* TODO: open UDP sockets - maybe */
         memset(quic, 0, sizeof(picoquic_quic_t));
@@ -196,7 +194,7 @@ picoquic_quic_t* picoquic_create(uint32_t nb_connections,
         quic->p_simulated_time = p_simulated_time;
         quic->local_ctx_length = 8; /* TODO: should be lower on clients-only implementation */
         quic->padding_multiple_default = 0; /* TODO: consider default = 128 */
-        quic->padding_minsize_default = PICOQUIC_RESET_PACKET_MIN_SIZE; 
+        quic->padding_minsize_default = PICOQUIC_RESET_PACKET_MIN_SIZE;
 
         if (cnx_id_callback != NULL) {
             quic->flags |= picoquic_context_unconditional_cnx_id;
@@ -209,41 +207,43 @@ picoquic_quic_t* picoquic_create(uint32_t nb_connections,
             if (ret == PICOQUIC_ERROR_NO_SUCH_FILE) {
                 DBG_PRINTF("Ticket file <%s> not created yet.\n", ticket_file_name);
                 ret = 0;
-            } else if (ret != 0) {
+            }
+            else if (ret != 0) {
                 DBG_PRINTF("Cannot load tickets from <%s>\n", ticket_file_name);
             }
         }
-    }
 
-    if (ret == 0) {
-        quic->table_cnx_by_id = picohash_create(nb_connections * 4,
-            picoquic_cnx_id_hash, picoquic_cnx_id_compare);
+        if (ret == 0) {
+            quic->table_cnx_by_id = picohash_create(nb_connections * 4,
+                picoquic_cnx_id_hash, picoquic_cnx_id_compare);
 
-        quic->table_cnx_by_net = picohash_create(nb_connections * 4,
-            picoquic_net_id_hash, picoquic_net_id_compare);
+            quic->table_cnx_by_net = picohash_create(nb_connections * 4,
+                picoquic_net_id_hash, picoquic_net_id_compare);
 
-        if (quic->table_cnx_by_id == NULL || quic->table_cnx_by_net == NULL) {
-            ret = -1;
-            DBG_PRINTF("%s", "Cannot initialize hash tables\n");
-        }
-        else if (picoquic_master_tlscontext(quic, cert_file_name, key_file_name, cert_root_file_name, ticket_encryption_key, ticket_encryption_key_length) != 0) {
+            if (quic->table_cnx_by_id == NULL || quic->table_cnx_by_net == NULL) {
                 ret = -1;
-                DBG_PRINTF("%s", "Cannot create TLS context \n");     
-        } else {
-            /* the random generator was initialized as part of the TLS context.
-             * Use it to create the seed for generating the per context stateless
-             * resets. */
+                DBG_PRINTF("%s", "Cannot initialize hash tables\n");
+            }
+            else if (picoquic_master_tlscontext(quic, cert_file_name, key_file_name, cert_root_file_name, ticket_encryption_key, ticket_encryption_key_length) != 0) {
+                ret = -1;
+                DBG_PRINTF("%s", "Cannot create TLS context \n");
+            }
+            else {
+                /* the random generator was initialized as part of the TLS context.
+                 * Use it to create the seed for generating the per context stateless
+                 * resets. */
 
-            if (!reset_seed)
-                picoquic_crypto_random(quic, quic->reset_seed, sizeof(quic->reset_seed));
-            else
-                memcpy(quic->reset_seed, reset_seed, sizeof(quic->reset_seed));
+                if (!reset_seed)
+                    picoquic_crypto_random(quic, quic->reset_seed, sizeof(quic->reset_seed));
+                else
+                    memcpy(quic->reset_seed, reset_seed, sizeof(quic->reset_seed));
+            }
         }
-    }
-
-    if (ret != 0 && quic != NULL) {
-        picoquic_free(quic);
-        quic = NULL;
+        
+        if (ret != 0) {
+            picoquic_free(quic);
+            quic = NULL;
+        }
     }
 
     return quic;
@@ -329,7 +329,7 @@ void picoquic_free(picoquic_quic_t* quic)
             picoquic_dispose_verify_certificate_callback(quic, 1);
         }
 
-        if (quic->default_tp == NULL) {
+        if (quic->default_tp != NULL) {
             free(quic->default_tp);
             quic->default_tp = NULL;
         }
@@ -931,14 +931,13 @@ void picoquic_promote_path_to_default(picoquic_cnx_t* cnx, int path_index, uint6
         if (cnx->congestion_alg != NULL) {
             cnx->congestion_alg->alg_init(path_x);
         }
-        if (path_index != 0) {
-            /* Mark old path as demoted */
-            picoquic_demote_path(cnx, 0, current_time);
 
-            /* Swap */
-            cnx->path[path_index] = cnx->path[0];
-            cnx->path[0] = path_x;
-        }
+        /* Mark old path as demoted */
+        picoquic_demote_path(cnx, 0, current_time);
+
+        /* Swap */
+        cnx->path[path_index] = cnx->path[0];
+        cnx->path[0] = path_x;
     }
 }
 
@@ -1413,47 +1412,45 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             }
         }
 
-        if (cnx != NULL) {
-            for (picoquic_packet_context_enum pc = 0;
-                pc < picoquic_nb_packet_context; pc++) {
-                cnx->pkt_ctx[pc].first_sack_item.start_of_sack_range = (uint64_t)((int64_t)-1);
-                cnx->pkt_ctx[pc].first_sack_item.end_of_sack_range = 0;
-                cnx->pkt_ctx[pc].first_sack_item.next_sack = NULL;
-                cnx->pkt_ctx[pc].highest_ack_sent = 0;
-                cnx->pkt_ctx[pc].highest_ack_sent_time = start_time;
-                cnx->pkt_ctx[pc].time_stamp_largest_received = (uint64_t)((int64_t)-1);
-                cnx->pkt_ctx[pc].send_sequence = 0;
-                cnx->pkt_ctx[pc].nb_retransmit = 0;
-                cnx->pkt_ctx[pc].latest_retransmit_time = 0;
-                cnx->pkt_ctx[pc].retransmit_newest = NULL;
-                cnx->pkt_ctx[pc].retransmit_oldest = NULL;
-                cnx->pkt_ctx[pc].highest_acknowledged = cnx->pkt_ctx[pc].send_sequence - 1;
-                cnx->pkt_ctx[pc].latest_time_acknowledged = start_time;
-                cnx->pkt_ctx[pc].highest_acknowledged_time = start_time;
-                cnx->pkt_ctx[pc].ack_needed = 0;
-                cnx->pkt_ctx[pc].ack_delay_local = PICOQUIC_ACK_DELAY_MAX;
-            }
+        for (picoquic_packet_context_enum pc = 0;
+            pc < picoquic_nb_packet_context; pc++) {
+            cnx->pkt_ctx[pc].first_sack_item.start_of_sack_range = (uint64_t)((int64_t)-1);
+            cnx->pkt_ctx[pc].first_sack_item.end_of_sack_range = 0;
+            cnx->pkt_ctx[pc].first_sack_item.next_sack = NULL;
+            cnx->pkt_ctx[pc].highest_ack_sent = 0;
+            cnx->pkt_ctx[pc].highest_ack_sent_time = start_time;
+            cnx->pkt_ctx[pc].time_stamp_largest_received = (uint64_t)((int64_t)-1);
+            cnx->pkt_ctx[pc].send_sequence = 0;
+            cnx->pkt_ctx[pc].nb_retransmit = 0;
+            cnx->pkt_ctx[pc].latest_retransmit_time = 0;
+            cnx->pkt_ctx[pc].retransmit_newest = NULL;
+            cnx->pkt_ctx[pc].retransmit_oldest = NULL;
+            cnx->pkt_ctx[pc].highest_acknowledged = cnx->pkt_ctx[pc].send_sequence - 1;
+            cnx->pkt_ctx[pc].latest_time_acknowledged = start_time;
+            cnx->pkt_ctx[pc].highest_acknowledged_time = start_time;
+            cnx->pkt_ctx[pc].ack_needed = 0;
+            cnx->pkt_ctx[pc].ack_delay_local = PICOQUIC_ACK_DELAY_MAX;
+        }
 
-            cnx->latest_progress_time = start_time;
+        cnx->latest_progress_time = start_time;
 
-            for (int epoch = 0; epoch < PICOQUIC_NUMBER_OF_EPOCHS; epoch++) {
-                cnx->tls_stream[epoch].stream_id = 0;
-                cnx->tls_stream[epoch].consumed_offset = 0;
-                cnx->tls_stream[epoch].fin_offset = 0;
-                cnx->tls_stream[epoch].next_stream = NULL;
-                cnx->tls_stream[epoch].stream_data = NULL;
-                cnx->tls_stream[epoch].sent_offset = 0;
-                cnx->tls_stream[epoch].local_error = 0;
-                cnx->tls_stream[epoch].remote_error = 0;
-                cnx->tls_stream[epoch].maxdata_local = (uint64_t)((int64_t)-1);
-                cnx->tls_stream[epoch].maxdata_remote = (uint64_t)((int64_t)-1);
-                /* No need to reset the state flags, as they are not used for the crypto stream */
-            }
+        for (int epoch = 0; epoch < PICOQUIC_NUMBER_OF_EPOCHS; epoch++) {
+            cnx->tls_stream[epoch].stream_id = 0;
+            cnx->tls_stream[epoch].consumed_offset = 0;
+            cnx->tls_stream[epoch].fin_offset = 0;
+            cnx->tls_stream[epoch].next_stream = NULL;
+            cnx->tls_stream[epoch].stream_data = NULL;
+            cnx->tls_stream[epoch].sent_offset = 0;
+            cnx->tls_stream[epoch].local_error = 0;
+            cnx->tls_stream[epoch].remote_error = 0;
+            cnx->tls_stream[epoch].maxdata_local = (uint64_t)((int64_t)-1);
+            cnx->tls_stream[epoch].maxdata_remote = (uint64_t)((int64_t)-1);
+            /* No need to reset the state flags, as they are not used for the crypto stream */
+        }
 
-            cnx->congestion_alg = cnx->quic->default_congestion_alg;
-            if (cnx->congestion_alg != NULL) {
-                cnx->congestion_alg->alg_init(cnx->path[0]);
-            }
+        cnx->congestion_alg = cnx->quic->default_congestion_alg;
+        if (cnx->congestion_alg != NULL) {
+            cnx->congestion_alg->alg_init(cnx->path[0]);
         }
     }
 
@@ -1818,9 +1815,7 @@ int picoquic_reset_cnx(picoquic_cnx_t* cnx, uint64_t current_time)
 
     picoquic_crypto_context_free(&cnx->crypto_context_new);
 
-    if (ret == 0) {
-        ret = picoquic_setup_initial_traffic_keys(cnx);
-    }
+    ret = picoquic_setup_initial_traffic_keys(cnx);
 
     /* Reset the TLS context, Re-initialize the tls connection */
     if (cnx->tls_ctx != NULL) {
