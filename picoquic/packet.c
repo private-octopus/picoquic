@@ -210,7 +210,9 @@ int picoquic_parse_packet_header(
 
                         /* Retrieve the connection context */
                         if (*pcnx == NULL) {
-                            *pcnx = picoquic_cnx_by_id(quic, ph->dest_cnx_id);
+                            if (ph->dest_cnx_id.id_len != 0) {
+                                *pcnx = picoquic_cnx_by_id(quic, ph->dest_cnx_id);
+                            }
 
                             /* TODO: something for the case of client initial, e.g. source IP + initial CNX_ID */
                             if (*pcnx == NULL) {
@@ -227,12 +229,14 @@ int picoquic_parse_packet_header(
                          * does not allow that, reset the context to NULL. */
                         if (context_by_addr)
                         {
-                            if (ph->ptype == picoquic_packet_initial || ph->ptype == picoquic_packet_0rtt_protected)
-                            {
-                                if (picoquic_compare_connection_id(&(*pcnx)->initial_cnxid, &ph->dest_cnx_id) != 0) {
+                            if ((*pcnx)->client_mode) {
+                                if ((*pcnx)->path[0]->local_cnxid.id_len != 0) {
                                     *pcnx = NULL;
                                 }
-                            } else {
+                            } else if (ph->ptype != picoquic_packet_initial && ph->ptype != picoquic_packet_0rtt_protected)
+                            {
+                                *pcnx = NULL;
+                            } else if (picoquic_compare_connection_id(&(*pcnx)->initial_cnxid, &ph->dest_cnx_id) != 0) {
                                 *pcnx = NULL;
                             }
                         }
@@ -1265,10 +1269,10 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header * ph
         /* Paths to the peer are strictly defined by the address pairs, and are not
          * created in advance, because the address pair is unpredictable */
         for (int i = 0; i < cnx->nb_paths; i++) {
-            if (picoquic_compare_addr((struct sockaddr *)&cnx->path[path_id]->peer_addr,
+            if (picoquic_compare_addr((struct sockaddr *)&cnx->path[i]->peer_addr,
                 addr_from) == 0 &&
-                (cnx->path[path_id]->local_addr_len == 0 ||
-                    picoquic_compare_addr((struct sockaddr *)&cnx->path[path_id]->local_addr,
+                (cnx->path[i]->local_addr_len == 0 ||
+                    picoquic_compare_addr((struct sockaddr *)&cnx->path[i]->local_addr,
                         addr_to) == 0)) {
                 path_id = i;
                 break;
@@ -1592,7 +1596,7 @@ int picoquic_incoming_segment(
                 break;
             case picoquic_packet_initial:
                 /* Initial packet: either crypto handshakes or acks. */
-                if (picoquic_compare_connection_id(&ph.dest_cnx_id, &cnx->initial_cnxid) == 0 ||
+                if ((!cnx->client_mode && picoquic_compare_connection_id(&ph.dest_cnx_id, &cnx->initial_cnxid) == 0) ||
                     picoquic_compare_connection_id(&ph.dest_cnx_id, &cnx->path[0]->local_cnxid) == 0) {
                     /* Verify that the source CID matches expectation */
                     if (picoquic_is_connection_id_null(cnx->path[0]->remote_cnxid)) {
