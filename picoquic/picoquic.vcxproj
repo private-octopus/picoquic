@@ -135,6 +135,7 @@
     <Text Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="cubic.c" />
     <ClCompile Include="fnv1a.c" />
     <ClCompile Include="frames.c" />
     <ClCompile Include="http0dot9.c" />

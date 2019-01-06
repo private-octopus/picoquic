@@ -5413,8 +5413,8 @@ int ready_to_send_test()
         if (ret == 0) {
             test_ctx->stream0_test_option = i;
             ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
-                test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 1000000, 0, 0, 0,
-                1100000);
+                test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 1000000, 0, 0, 20000,
+                1200000);
         }
 
         if (test_ctx != NULL) {
@@ -5425,6 +5425,38 @@ int ready_to_send_test()
         if (ret != 0) {
             DBG_PRINTF("Ready to send variant %d fails\n", i);
         }
+    }
+
+    return ret;
+}
+
+int cubic_test()
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 1, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+
+    /* Set the congestion algorithm to cubic. Also, request a packet trace */
+    if (ret == 0) {
+        picoquic_set_default_congestion_algorithm(test_ctx->qserver, picoquic_cubic_algorithm);
+        picoquic_set_congestion_algorithm(test_ctx->cnx_client, picoquic_cubic_algorithm);
+
+        picoquic_set_cc_log(test_ctx->qserver, ".");
+
+        ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+            test_scenario_sustained, sizeof(test_scenario_sustained), 0, 0, 0, 20000, 3600000);
+    }
+
+    /* Free the resource, which will close the log file.
+     */
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
     }
 
     return ret;
