@@ -919,7 +919,8 @@ int quic_client_migrate(picoquic_cnx_t * cnx, SOCKET_TYPE * fd, struct sockaddr 
 int quic_client(const char* ip_address_text, int server_port, const char * sni, 
     const char * alpn, const char * root_crt,
     uint32_t proposed_version, int force_zero_share, int force_migration, 
-    int nb_packets_before_key_update, int mtu_max, FILE* F_log)
+    int nb_packets_before_key_update, int mtu_max, FILE* F_log,
+    int client_cnx_id_length)
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
@@ -984,6 +985,8 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
                 qclient->flags |= picoquic_context_client_zero_share;
             }
             qclient->mtu_max = mtu_max;
+
+            (void)picoquic_set_default_connection_id_length(qclient, (uint8_t)client_cnx_id_length);
 
             PICOQUIC_SET_LOG(qclient, F_log);
 
@@ -1315,6 +1318,7 @@ void usage()
     fprintf(stderr, "  -z                    Set TLS zero share behavior on client, to force HRR.\n");
     fprintf(stderr, "  -1                    Once\n");
     fprintf(stderr, "  -S solution_dir       Set the path to the source files to find the default files\n");
+    fprintf(stderr, "  -I length             Length of CNX_ID used by the client, default=8\n");
     exit(1);
 }
 
@@ -1363,6 +1367,7 @@ int main(int argc, char** argv)
     int force_migration = 0;
     int nb_packets_before_update = 0;
     int cnx_id_mask_is_set = 0;
+    int client_cnx_id_length = 8;
     cnx_id_callback_ctx_t cnx_id_cbdata = {
         .cnx_id_select = 0,
         .cnx_id_mask = {{ 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 8 },
@@ -1384,7 +1389,7 @@ int main(int argc, char** argv)
 
     /* Get the parameters */
     int opt;
-    while ((opt = getopt(argc, argv, "c:k:p:u:v:1rhzf:i:s:e:l:m:n:a:t:S:")) != -1) {
+    while ((opt = getopt(argc, argv, "c:k:p:u:v:1rhzf:i:s:e:l:m:n:a:t:S:I:")) != -1) {
         switch (opt) {
         case 'c':
             server_cert_file = optarg;
@@ -1473,6 +1478,13 @@ int main(int argc, char** argv)
             }
             break;
             break;
+        case 'I':
+            client_cnx_id_length = atoi(optarg);
+            if (client_cnx_id_length != 0 && (client_cnx_id_length < 4 || client_cnx_id_length > 18)){
+                fprintf(stderr, "Invalid connection id length: %s\n", optarg);
+                usage();
+            }
+            break;
         case 'h':
             usage();
             break;
@@ -1551,7 +1563,7 @@ int main(int argc, char** argv)
         /* Run as client */
         printf("Starting PicoQUIC connection to server IP = %s, port = %d\n", server_name, server_port);
         ret = quic_client(server_name, server_port, sni, alpn, root_trust_file, proposed_version, force_zero_share, 
-            force_migration, nb_packets_before_update, mtu_max, F_log);
+            force_migration, nb_packets_before_update, mtu_max, F_log, client_cnx_id_length);
 
         printf("Client exit with code = %d\n", ret);
 

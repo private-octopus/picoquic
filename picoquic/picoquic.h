@@ -75,6 +75,7 @@ extern "C" {
 #define PICOQUIC_ERROR_MIGRATION_DISABLED (PICOQUIC_ERROR_CLASS + 34)
 #define PICOQUIC_ERROR_CANNOT_COMPUTE_KEY (PICOQUIC_ERROR_CLASS + 35)
 #define PICOQUIC_ERROR_CANNOT_SET_ACTIVE_STREAM (PICOQUIC_ERROR_CLASS + 36)
+#define PICOQUIC_ERROR_CANNOT_CHANGE_ACTIVE_CONTEXT (PICOQUIC_ERROR_CLASS + 37)
 
 /*
  * Protocol errors defined in the QUIC spec
@@ -366,6 +367,13 @@ void picoquic_set_default_padding(picoquic_quic_t* quic, uint32_t padding_multip
 
 /* Set default spin bit policy for the context */
 void picoquic_set_default_spinbit_policy(picoquic_quic_t * quic, picoquic_spinbit_version_enum default_spinbit_policy);
+
+/* Set default connection ID length for the context.
+ * All valid values are supported on the client.
+ * Using a null value on the server is not tested, may not work.
+ * Cannot be changed if there are active connections in the context.
+ * Value must be compatible with what the cnx_id_callback() expects on a server */
+int picoquic_set_default_connection_id_length(picoquic_quic_t* quic, uint8_t cid_length);
 
 /* Connection context creation and registration */
 picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
