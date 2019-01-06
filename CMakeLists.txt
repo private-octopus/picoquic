@@ -7,12 +7,10 @@ set(CMAKE_C_STANDARD 11)
 
 # FIND_PACKAGE(PkgConfig REQUIRED)
 
-set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
-
 set(CMAKE_C_FLAGS "-std=c99 -Wall -O2 -g ${CC_WARNING_FLAGS} ${CMAKE_C_FLAGS}")
 
-if(${DISABLE_DEBUG_PRINTF})
-    SET(CMAKE_C_FLAGS "-DDISABLE_DEBUG_PRINTF ${CMAKE_C_FLAGS}")
+if(DISABLE_DEBUG_PRINTF)
+    set(CMAKE_C_FLAGS "-DDISABLE_DEBUG_PRINTF ${CMAKE_C_FLAGS}")
 endif()
 
 set(PICOQUIC_LIBRARY_FILES
@@ -61,14 +59,14 @@ set(PICOQUIC_TEST_LIBRARY_FILES
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 find_package(PTLS REQUIRED)
-message("picotls/include: ${PTLS_INCLUDE_DIRS}" )
-message("picotls libraries: ${PTLS_LIBRARIES}" )
+message(STATUS "picotls/include: ${PTLS_INCLUDE_DIRS}" )
+message(STATUS "picotls libraries: ${PTLS_LIBRARIES}" )
 
 find_package(OpenSSL )
-message("root: ${OPENSSL_ROOT_DIR}")
-message("OpenSSL_VERSION: ${OPENSSL_VERSION}")
-message("OpenSSL_INCLUDE_DIR: ${OPENSSL_INCLUDE_DIR}")
-message("OpenSSL_LIBRARIES: ${OPENSSL_LIBRARIES}")
+message(STATUS "root: ${OPENSSL_ROOT_DIR}")
+message(STATUS "OpenSSL_VERSION: ${OPENSSL_VERSION}")
+message(STATUS "OpenSSL_INCLUDE_DIR: ${OPENSSL_INCLUDE_DIR}")
+message(STATUS "OpenSSL_LIBRARIES: ${OPENSSL_LIBRARIES}")
 
 include_directories(picoquic picoquictest
     ${PTLS_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR})

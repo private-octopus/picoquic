@@ -1,6 +1,6 @@
 # - Try to find Picotls
 
-find_path(PICOTLS_INCLUDE_DIR
+find_path(PTLS_INCLUDE_DIR
     NAMES picotls/minicrypto.h
     HINTS ${CMAKE_SOURCE_DIR}/../picotls/include
           ${CMAKE_BINARY_DIR}/../picotls/include
