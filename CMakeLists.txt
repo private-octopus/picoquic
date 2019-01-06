@@ -1,23 +1,19 @@
-CMAKE_MINIMUM_REQUIRED(VERSION 2.8.11)
-CMAKE_POLICY(SET CMP0003 NEW)
+cmake_minimum_required(VERSION 2.8.11)
+cmake_policy(SET CMP0003 NEW)
 
-PROJECT(picoquic)
+project(picoquic)
 
-SET(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD 11)
 
 # FIND_PACKAGE(PkgConfig REQUIRED)
 
-SET(CMAKE_C_FLAGS "-std=c99 -Wall -O2 -g ${CC_WARNING_FLAGS} ${CMAKE_C_FLAGS}")
+set(CMAKE_C_FLAGS "-std=c99 -Wall -O2 -g ${CC_WARNING_FLAGS} ${CMAKE_C_FLAGS}")
 
-if(${DISABLE_DEBUG_PRINTF})
-    SET(CMAKE_C_FLAGS "-DDISABLE_DEBUG_PRINTF ${CMAKE_C_FLAGS}")
+if(DISABLE_DEBUG_PRINTF)
+    set(CMAKE_C_FLAGS "-DDISABLE_DEBUG_PRINTF ${CMAKE_C_FLAGS}")
 endif()
 
-INCLUDE_DIRECTORIES(picoquic picoquictest ../picotls/include
-    ${PICOTLS_INCLUDE_DIR})
-
-SET(PICOQUIC_LIBRARY_FILES
-    picoquic/cubic.c
+set(PICOQUIC_LIBRARY_FILES
     picoquic/fnv1a.c
     picoquic/frames.c
     picoquic/http0dot9.c
@@ -31,14 +27,14 @@ SET(PICOQUIC_LIBRARY_FILES
     picoquic/quicctx.c
     picoquic/sacks.c
     picoquic/sender.c
-	picoquic/spinbit.c
+    picoquic/spinbit.c
     picoquic/ticket_store.c
     picoquic/tls_api.c
     picoquic/transport.c
     picoquic/util.c
 )
 
-SET(PICOQUIC_TEST_LIBRARY_FILES
+set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/ack_of_ack_test.c
     picoquictest/cleartext_aead_test.c
     picoquictest/cnx_creation_test.c
@@ -61,49 +57,41 @@ SET(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/transport_param_test.c
 )
 
-FIND_LIBRARY(PTLS_CORE picotls-core PATH ../picotls)
-MESSAGE(STATUS "Found picotls-core at : ${PTLS_CORE} " )
+set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+find_package(PTLS REQUIRED)
+message(STATUS "picotls/include: ${PTLS_INCLUDE_DIRS}" )
+message(STATUS "picotls libraries: ${PTLS_LIBRARIES}" )
 
-FIND_LIBRARY(PTLS_MINICRYPTO picotls-minicrypto PATH ../picotls)
-MESSAGE(STATUS "Found picotls-crypto at : ${PTLS_MINICRYPTO} " )
+find_package(OpenSSL )
+message(STATUS "root: ${OPENSSL_ROOT_DIR}")
+message(STATUS "OpenSSL_VERSION: ${OPENSSL_VERSION}")
+message(STATUS "OpenSSL_INCLUDE_DIR: ${OPENSSL_INCLUDE_DIR}")
+message(STATUS "OpenSSL_LIBRARIES: ${OPENSSL_LIBRARIES}")
 
-FIND_LIBRARY(PTLS_OPENSSL picotls-openssl PATH ../picotls)
-MESSAGE(STATUS "Found picotls-openssl at : ${PTLS_OPENSSL} " )
+include_directories(picoquic picoquictest
+    ${PTLS_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR})
 
-FIND_PACKAGE(OpenSSL )
-MESSAGE("root: ${OPENSSL_ROOT_DIR}")
-MESSAGE("OpenSSL_VERSION: ${OPENSSL_VERSION}")
-MESSAGE("OpenSSL_INCLUDE_DIR: ${OPENSSL_INCLUDE_DIR}")
-MESSAGE("OpenSSL_LIBRARIES: ${OPENSSL_LIBRARIES}")
-INCLUDE_DIRECTORIES(${OPENSSL_INCLUDE_DIR})
-
-ADD_LIBRARY(picoquic-core
+add_library(picoquic-core
     ${PICOQUIC_LIBRARY_FILES}
 )
 
-ADD_EXECUTABLE(picoquicdemo picoquicfirst/picoquicdemo.c
+add_executable(picoquicdemo picoquicfirst/picoquicdemo.c
                             picoquicfirst/getopt.c )
-TARGET_LINK_LIBRARIES(picoquicdemo picoquic-core
-    ${PTLS_CORE}
-    ${PTLS_OPENSSL}    
-    ${PTLS_MINICRYPTO}
+target_link_libraries(picoquicdemo picoquic-core
+    ${PTLS_LIBRARIES}
     ${OPENSSL_LIBRARIES}
     ${CMAKE_DL_LIBS}
 )
 
-ADD_EXECUTABLE(picoquic_ct picoquic_t/picoquic_t.c
+add_executable(picoquic_ct picoquic_t/picoquic_t.c
  ${PICOQUIC_TEST_LIBRARY_FILES} )
-TARGET_LINK_LIBRARIES(picoquic_ct picoquic-core
-    ${PTLS_CORE}
-    ${PTLS_OPENSSL}    
-    ${PTLS_MINICRYPTO}
-    ${PTLS_OPENSSL}
-    ${PTLS_CORE}
+target_link_libraries(picoquic_ct picoquic-core
+    ${PTLS_LIBRARIES}
     ${OPENSSL_LIBRARIES}
     ${CMAKE_DL_LIBS}
 )
 
-SET(TEST_EXES picoquic_ct)
+set(TEST_EXES picoquic_ct)
 
 # get all project files for formatting
 file(GLOB_RECURSE CLANG_FORMAT_SOURCE_FILES *.c *.h)
