@@ -5435,7 +5435,6 @@ int cubic_test()
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 1, 0);
-    char trace_file_name[512];
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
