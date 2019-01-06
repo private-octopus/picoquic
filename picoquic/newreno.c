@@ -24,7 +24,6 @@
 
 typedef enum {
     picoquic_newreno_alg_slow_start = 0,
-    picoquic_newreno_alg_recovery,
     picoquic_newreno_alg_congestion_avoidance
 } picoquic_newreno_alg_state_t;
 
@@ -66,15 +65,17 @@ static void picoquic_newreno_enter_recovery(picoquic_path_t* path_x,
 
     if (notification == picoquic_congestion_notification_timeout) {
         path_x->cwin = PICOQUIC_CWIN_MINIMUM;
+        nr_state->alg_state = picoquic_newreno_alg_slow_start;
     } else {
         path_x->cwin = nr_state->ssthresh;
+        nr_state->alg_state = picoquic_newreno_alg_congestion_avoidance;
     }
 
     nr_state->recovery_start = current_time;
 
     nr_state->residual_ack = 0;
 
-    nr_state->alg_state = picoquic_newreno_alg_recovery;
+
 }
 
 /*
@@ -97,94 +98,55 @@ void picoquic_newreno_notify(picoquic_path_t* path_x,
     picoquic_newreno_state_t* nr_state = (picoquic_newreno_state_t*)path_x->congestion_alg_state;
 
     if (nr_state != NULL) {
-        switch (nr_state->alg_state) {
-        case picoquic_newreno_alg_slow_start:
-            switch (notification) {
-            case picoquic_congestion_notification_acknowledgement:
+        switch (notification) {
+        case picoquic_congestion_notification_acknowledgement: {
+            switch (nr_state->alg_state) {
+            case picoquic_newreno_alg_slow_start:
                 path_x->cwin += nb_bytes_acknowledged;
                 /* if cnx->cwin exceeds SSTHRESH, exit and go to CA */
                 if (path_x->cwin >= nr_state->ssthresh) {
                     nr_state->alg_state = picoquic_newreno_alg_congestion_avoidance;
                 }
                 break;
-            case picoquic_congestion_notification_repeat:
-            case picoquic_congestion_notification_timeout:
-                /* enter recovery */
-                picoquic_newreno_enter_recovery(path_x, notification, nr_state, current_time);
-                break;
-            case picoquic_congestion_notification_spurious_repeat:
-                /* Immediately exit the previous recovery */
-                if (path_x->cwin < 2 * nr_state->ssthresh) {
-                    path_x->cwin = 2 * nr_state->ssthresh;
-                    nr_state->alg_state = picoquic_newreno_alg_congestion_avoidance;
-                }
-                break;
-            case picoquic_congestion_notification_rtt_measurement:
-                /* TODO: consider using RTT increases as signal to get out of slow start */
-                break;
-            default:
-                /* ignore */
-                break;
-            }
-            break;
-        case picoquic_newreno_alg_recovery:
-            /* If the notification is coming less than 1RTT after start,
-			 * ignore it. */
-            if (current_time - nr_state->recovery_start > path_x->rtt_min) {
-                switch (notification) {
-                case picoquic_congestion_notification_acknowledgement:
-                    /* exit recovery, move to CA or SS, depending on CWIN */
-                    nr_state->alg_state = picoquic_newreno_alg_slow_start;
-                    path_x->cwin += nb_bytes_acknowledged;
-                    /* if cnx->cwin exceeds SSTHRESH, exit and go to CA */
-                    if (path_x->cwin >= nr_state->ssthresh) {
-                        nr_state->alg_state = picoquic_newreno_alg_congestion_avoidance;
-                    }
-                    break;
-                case picoquic_congestion_notification_repeat:
-                case picoquic_congestion_notification_timeout:
-                    /* re-enter recovery */
-                    picoquic_newreno_enter_recovery(path_x, notification, nr_state, current_time);
-                    break;
-                case picoquic_congestion_notification_spurious_repeat:
-                    /* To do: if spurious repeat of initial loss detected,
-					 * exit recovery and reset threshold to pre-entry cwin.
-					 */
-                    break;
-                case picoquic_congestion_notification_rtt_measurement:
-                default:
-                    /* ignore */
-                    break;
-                }
-            }
-            break;
-        case picoquic_newreno_alg_congestion_avoidance:
-            switch (notification) {
-            case picoquic_congestion_notification_acknowledgement: {
+            case picoquic_newreno_alg_congestion_avoidance:
+            default: {
                 uint64_t complete_delta = nb_bytes_acknowledged * path_x->send_mtu + nr_state->residual_ack;
                 nr_state->residual_ack = complete_delta % path_x->cwin;
                 path_x->cwin += complete_delta / path_x->cwin;
                 break;
             }
-            case picoquic_congestion_notification_repeat:
-            case picoquic_congestion_notification_timeout:
-                /* re-enter recovery */
-                picoquic_newreno_enter_recovery(path_x, notification, nr_state, current_time);
-                break;
-            case picoquic_congestion_notification_spurious_repeat:
-            case picoquic_congestion_notification_rtt_measurement:
-            default:
-                /* ignore */
-                break;
             }
             break;
+        }
+        case picoquic_congestion_notification_repeat:
+        case picoquic_congestion_notification_timeout:
+            /* enter recovery */
+            if (current_time - nr_state->recovery_start > path_x->smoothed_rtt) {
+                picoquic_newreno_enter_recovery(path_x, notification, nr_state, current_time);
+            }
+            break;
+        case picoquic_congestion_notification_spurious_repeat:
+            if (current_time - nr_state->recovery_start < path_x->smoothed_rtt) {
+                /* If spurious repeat of initial loss detected,
+                 * exit recovery and reset threshold to pre-entry cwin.
+                 */
+                if (path_x->cwin < 2 * nr_state->ssthresh) {
+                    path_x->cwin = 2 * nr_state->ssthresh;
+                    nr_state->alg_state = picoquic_newreno_alg_congestion_avoidance;
+                }
+            }
+            break;
+        case picoquic_congestion_notification_rtt_measurement:
+            /* TODO: consider using RTT increases as signal to get out of slow start */
+            break;
         default:
+            /* ignore */
             break;
         }
-
-        /* Compute pacing data */
-        picoquic_update_pacing_data(path_x);
     }
+
+    /* Compute pacing data */
+    picoquic_update_pacing_data(path_x);
 }
 
 /* Release the state of the congestion control algorithm */

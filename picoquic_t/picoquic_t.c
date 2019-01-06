@@ -146,6 +146,7 @@ static const picoquic_test_def_t test_table[] = {
     { "packet_trace", packet_trace_test },
     { "rebiding_stress", rebinding_stress_test },
     { "ready_to_send", ready_to_send_test },
+    { "cubic", cubic_test },
     { "stress", stress_test },
     { "fuzz", fuzz_test },
     { "fuzz_initial", fuzz_initial_test}

@@ -26,12 +26,7 @@
 #ifndef _WINDOWS
 #include <sys/time.h>
 #endif
-/*
- * Default congestion algorithm
- */
-extern picoquic_congestion_algorithm_t* picoquic_newreno_algorithm;
 
-#define PICOQUIC_DEFAULT_CONGESTION_ALGORITHM picoquic_newreno_algorithm;
 
 /*
 * Structures used in the hash table of connections
