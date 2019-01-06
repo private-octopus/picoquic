@@ -21,7 +21,6 @@
 
 #include "picoquic_internal.h"
 #include <stdlib.h>
-#include <math.h>
 
 typedef enum {
     picoquic_cubic_alg_slow_start = 0,
@@ -63,13 +62,37 @@ void picoquic_cubic_init(picoquic_path_t* path_x)
     }
 }
 
+double picoquic_cubic_root(double x)
+{
+    /* First find an approximation */
+    int n = 0;
+    double v = 1;
+    double y = 1.0;
+    double y2;
+    double y3;
+
+    while (v < x) {
+        n++;
+        v *= 8;
+        y *= 2;
+    }
+
+    for (int i = 0; i < 3; i++) {
+        y2 = y * y;
+        y3 = y2 * y;
+        y += (x - y3) / (3.0*y2);
+    }
+
+    return y;
+}
+
 /* On entering congestion avoidance, need to compute the new coefficients
  * of the cubit curve */
 static void picoquic_cubic_enter_avoidance(
     picoquic_cubic_state_t* cubic_state,
     uint64_t current_time)
 {
-    cubic_state->K = pow(cubic_state->W_max*(1.0 - cubic_state->beta) / cubic_state->C, 1.0 / 3.0);
+    cubic_state->K = picoquic_cubic_root(cubic_state->W_max*(1.0 - cubic_state->beta) / cubic_state->C);
     cubic_state->alg_state = picoquic_cubic_alg_tcp_friendly;
     cubic_state->start_of_epoch = current_time;
 }
@@ -119,7 +142,7 @@ static void picoquic_cubic_correct_spurious(picoquic_path_t* path_x,
     uint64_t current_time)
 {
     double w_delta = (double)(cubic_state->W_max - cubic_state->W_last_max);
-    double delta_t_sec = pow(w_delta / cubic_state->C, 1.0 / 3.0);
+    double delta_t_sec = picoquic_cubic_root(w_delta / cubic_state->C);
     cubic_state->start_of_epoch = current_time - (uint64_t)((cubic_state->K + delta_t_sec)*1000000.0);
     path_x->cwin = (uint64_t)(cubic_state->W_max*(double)path_x->send_mtu);
     cubic_state->W_max = cubic_state->W_last_max;
