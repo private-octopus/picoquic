@@ -2,7 +2,9 @@
 
 find_path(PICOTLS_INCLUDE_DIR
     NAMES picotls/minicrypto.h
-    HINTS ${CMAKE_SOURCE_DIR}/../picotls/include )
+    HINTS ${CMAKE_SOURCE_DIR}/../picotls/include
+          ${CMAKE_BINARY_DIR}/../picotls/include
+          ../picotls/include/ )
 
 set(PTLS_HINTS ${CMAKE_BINARY_DIR}/../picotls ../picotls)
 
