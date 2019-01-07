@@ -426,14 +426,14 @@ void picoquic_log_retry_packet(FILE* F, uint64_t log_cnxid64,
     int token_length = 0;
     uint8_t odcil;
     uint8_t unused_cil;
-    int payload_length = (int)(length - ph->offset);
-
-    picoquic_parse_packet_header_cnxid_lengths(bytes[byte_index++], &unused_cil, &odcil);
+    int payload_length = (int)(ph->payload_length);
+    /* Decode ODCIL from bottom 4 bits of first byte */
+    picoquic_parse_packet_header_cnxid_lengths(bytes[0], &unused_cil, &odcil);
 
     if ((int)odcil > payload_length) {
         picoquic_log_prefix_initial_cid64(F, log_cnxid64);
         fprintf(F, "packet too short, ODCIL: %x (%d), only %d bytes available.\n", 
-            bytes[byte_index - 1], odcil, payload_length);
+            bytes[0]&0x0F, odcil, payload_length);
     } else {
         /* Dump the old connection ID */
         picoquic_log_prefix_initial_cid64(F, log_cnxid64);
@@ -442,7 +442,7 @@ void picoquic_log_retry_packet(FILE* F, uint64_t log_cnxid64,
             fprintf(F, "%02x", bytes[byte_index++]);
         }
 
-        token_length = ((int)ph->offset) + payload_length - ((int)byte_index);
+        token_length = payload_length - odcil;
         fprintf(F, ">, Token length: %d\n", token_length);
         /* Print the token or an error */
         if (token_length > 0) {
