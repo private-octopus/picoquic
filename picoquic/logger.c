@@ -420,7 +420,7 @@ void picoquic_log_negotiation_packet(FILE* F, uint64_t log_cnxid64,
 }
 
 void picoquic_log_retry_packet(FILE* F, uint64_t log_cnxid64,
-    uint8_t* bytes, size_t length, picoquic_packet_header* ph)
+    uint8_t* bytes, picoquic_packet_header* ph)
 {
     size_t byte_index = ph->offset;
     int token_length = 0;
@@ -1200,7 +1200,7 @@ void picoquic_log_decrypted_segment(void* F_log, int log_cnxid, picoquic_cnx_t* 
     }
     else if (ph->ptype == picoquic_packet_retry) {
         /* log version negotiation */
-        picoquic_log_retry_packet(F, log_cnxid64, bytes, length, ph);
+        picoquic_log_retry_packet(F, log_cnxid64, bytes, ph);
     }
     else if (ph->ptype != picoquic_packet_error) {
         /* log frames inside packet */
