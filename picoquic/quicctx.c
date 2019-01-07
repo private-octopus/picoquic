@@ -1668,6 +1668,25 @@ void picoquic_set_cc_log(picoquic_quic_t * quic, char const * cc_log_dir)
     quic->cc_log_dir = cc_log_dir;
 }
 
+int picoquic_set_default_connection_id_length(picoquic_quic_t* quic, uint8_t cid_length)
+{
+    int ret = 0;
+
+    if (cid_length != quic->local_ctx_length) {
+        if (cid_length != 0 && (cid_length < 4 || cid_length > 18)) {
+            ret = PICOQUIC_ERROR_CNXID_CHECK;
+        }
+        else if (quic->cnx_list != NULL) {
+            ret = PICOQUIC_ERROR_CANNOT_CHANGE_ACTIVE_CONTEXT;
+        }
+        else {
+            quic->local_ctx_length = cid_length;
+        }
+    }
+
+    return ret;
+}
+
 void picoquic_set_callback(picoquic_cnx_t* cnx,
     picoquic_stream_data_cb_fn callback_fn, void* callback_ctx)
 {

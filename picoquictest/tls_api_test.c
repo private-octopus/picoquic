@@ -5461,3 +5461,69 @@ int cubic_test()
 
     return ret;
 }
+
+/* Test that different CID length are properly supported */
+int cid_length_test_one(uint8_t length)
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 1, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+
+    /* Set the CID length to cubic */
+    if (ret == 0) {
+        /* Delete the old connection */
+        picoquic_delete_cnx(test_ctx->cnx_client);
+        test_ctx->cnx_client = NULL;
+        /* Change the default cnx_id length*/
+        test_ctx->qclient->local_ctx_length = length;
+        /* re-create a client connection */
+        test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
+            picoquic_null_connection_id, picoquic_null_connection_id,
+            (struct sockaddr*)&test_ctx->server_addr, 0,
+            PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
+        if (test_ctx->cnx_client == NULL) {
+            ret = -1;
+        }
+        else {
+            ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+                test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0, 0, 0, 20000, 100000);
+
+            if (ret == 0 &&
+                test_ctx->cnx_client->path[0]->local_cnxid.id_len != length) {
+                ret = -1;
+            }
+
+            if (ret == 0 &&
+                test_ctx->cnx_server->path[0]->remote_cnxid.id_len != length) {
+                ret = -1;
+            }
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+int cid_length_test()
+{
+    int ret = 0;
+    const uint8_t tested_length[] = { 0, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18 };
+
+    for (size_t i = 0; i < sizeof(tested_length); i++) {
+        ret = cid_length_test_one(tested_length[i]);
+        if (ret != 0) {
+            DBG_PRINTF("Test fails for cid_length = %d\n", tested_length[i]);
+            break;
+        }
+    }
+
+    return ret;
+}

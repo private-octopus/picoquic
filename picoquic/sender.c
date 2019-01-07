@@ -283,7 +283,7 @@ uint32_t picoquic_create_packet_header(
 {
     uint32_t length = 0;
     picoquic_connection_id_t dest_cnx_id =
-        ((packet_type == picoquic_packet_initial ||
+        (cnx->client_mode && (packet_type == picoquic_packet_initial ||
             packet_type == picoquic_packet_0rtt_protected)
             && picoquic_is_connection_id_null(*remote_cnxid)) ?
         cnx->initial_cnxid : *remote_cnxid;
@@ -388,7 +388,7 @@ uint32_t picoquic_predict_packet_header_length(
         header_length = 1 + /* version */ 4 + /* cnx_id prefix */ 1;
 
         /* add dest-id length */
-        if ((packet_type == picoquic_packet_initial ||
+        if (cnx->client_mode && (packet_type == picoquic_packet_initial ||
             packet_type == picoquic_packet_0rtt_protected)
             && picoquic_is_connection_id_null(cnx->path[0]->remote_cnxid)) {
             header_length += cnx->initial_cnxid.id_len;
