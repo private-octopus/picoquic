@@ -149,6 +149,7 @@ int ready_to_send_test();
 int split_stream_frame_test();
 int cubic_test();
 int cid_length_test();
+int initial_server_close_test();
 
 #ifdef __cplusplus
 }
