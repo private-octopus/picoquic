@@ -4385,8 +4385,9 @@ int initial_close_test()
         }
 
         if (ret == 0) {
-            if (test_ctx->cnx_server != NULL) {
+            if (test_ctx->cnx_server == NULL) {
                 DBG_PRINTF("%s", "Server connection deleted, cannot verify error code.\n");
+                ret = -1;
             }
             else if (test_ctx->cnx_server->cnx_state != picoquic_state_disconnected ||
                 test_ctx->cnx_server->remote_error != 0xDEAD) {
@@ -4423,7 +4424,6 @@ int initial_server_close_test()
     uint64_t simulated_time = 0;
     int was_active = 0;
     int nb_trials = 0;
-    int nb_inactive = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
 
