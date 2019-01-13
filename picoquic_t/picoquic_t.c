@@ -150,7 +150,8 @@ static const picoquic_test_def_t test_table[] = {
     { "cid_length", cid_length_test },
     { "stress", stress_test },
     { "fuzz", fuzz_test },
-    { "fuzz_initial", fuzz_initial_test}
+    { "fuzz_initial", fuzz_initial_test},
+    { "h3zero_integer", h3zero_integer_test }
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);

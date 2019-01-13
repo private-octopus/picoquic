@@ -75,6 +75,9 @@
     <ClCompile Include="cubic.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="h3zero.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquic.h">
@@ -103,6 +106,9 @@
     </ClInclude>
     <ClInclude Include="picosplay.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="h3zero.h">
+      <Filter>Source Files</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

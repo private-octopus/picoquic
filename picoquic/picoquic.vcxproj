@@ -138,6 +138,7 @@
     <ClCompile Include="cubic.c" />
     <ClCompile Include="fnv1a.c" />
     <ClCompile Include="frames.c" />
+    <ClCompile Include="h3zero.c" />
     <ClCompile Include="http0dot9.c" />
     <ClCompile Include="intformat.c" />
     <ClCompile Include="logger.c" />
@@ -157,6 +158,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="fnv1a.h" />
+    <ClInclude Include="h3zero.h" />
     <ClInclude Include="picohash.h" />
     <ClInclude Include="picoquic_internal.h" />
     <ClInclude Include="picosocks.h" />
