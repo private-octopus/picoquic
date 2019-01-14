@@ -150,6 +150,7 @@ int split_stream_frame_test();
 int cubic_test();
 int cid_length_test();
 int h3zero_integer_test();
+int h3zero_parse_qpack_test();
 
 #ifdef __cplusplus
 }
