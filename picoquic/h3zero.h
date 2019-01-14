@@ -103,6 +103,10 @@ typedef enum {
 	http_header_max
 } http_header_enum_t;
 
+#define H3ZERO_QPACK_CODE_GET 17
+#define H3ZERO_QPACK_CODE_PATH 1
+#define H3ZERO_QPACK_CODE_404 27
+
 typedef struct st_h3zero_qpack_static_t {
     int index;
     http_header_enum_t header;
@@ -165,7 +169,7 @@ typedef enum {
 
 typedef struct st_h3zero_header_parts_t {
     h3zero_method_enum method;
-    uint8_t * path;
+    uint8_t const * path;
     size_t path_length;
     int status;
     h3zero_content_type_enum content_type;

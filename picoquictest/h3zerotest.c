@@ -120,6 +120,7 @@ int h3zero_integer_test()
 /* Test decoding of basic QPACK messages */
 
 #define QPACK_TEST_HEADER_BLOCK_PREFIX 0,0
+#define QPACK_TEST_HEADER_BLOCK_PREFIX2 0,0x7F,0x18
 #define QPACK_TEST_HEADER_INDEX_HTML 'i', 'n', 'd', 'e', 'x', '.', 'h', 't', 'm', 'l'
 #define QPACK_TEST_HEADER_INDEX_HTML_LEN 10
 #define QPACK_TEST_HEADER_PATH ':', 'p', 'a', 't', 'h'
@@ -129,6 +130,8 @@ int h3zero_integer_test()
 
 static uint8_t qpack_test_get_slash[] = {
     QPACK_TEST_HEADER_BLOCK_PREFIX, 0xC0|17, 0xC0 | 1};
+static uint8_t qpack_test_get_slash_prefix[] = {
+    QPACK_TEST_HEADER_BLOCK_PREFIX2, 0xC0 | 17, 0xC0 | 1 };
 static uint8_t qpack_test_get_index_html[] = {
     QPACK_TEST_HEADER_BLOCK_PREFIX, 0xC0 | 17, 0x50 | 1,
     QPACK_TEST_HEADER_INDEX_HTML_LEN, QPACK_TEST_HEADER_INDEX_HTML };
@@ -148,6 +151,7 @@ static uint8_t qpack_test_response_html[] = {
     QPACK_TEST_HEADER_BLOCK_PREFIX, 0xC0 | 25, 0xC0 | 52 };
 
 static uint8_t qpack_test_string_index_html[] = { QPACK_TEST_HEADER_INDEX_HTML };
+static uint8_t qpack_test_string_slash[] = { '/' };
 
 typedef struct st_qpack_test_case_t {
     uint8_t * bytes;
@@ -158,7 +162,11 @@ typedef struct st_qpack_test_case_t {
 static qpack_test_case_t qpack_test_case[] = {
     {
         qpack_test_get_slash, sizeof(qpack_test_get_slash),
-        { h3zero_method_get, "/", 1, 0, 0}
+        { h3zero_method_get, qpack_test_string_slash, 1, 0, 0}
+    },
+    {
+        qpack_test_get_slash_prefix, sizeof(qpack_test_get_slash_prefix),
+        { h3zero_method_get, qpack_test_string_slash, 1, 0, 0}
     },
     {
         qpack_test_get_index_html, sizeof(qpack_test_get_index_html),
@@ -188,7 +196,7 @@ static qpack_test_case_t qpack_test_case[] = {
 
 static size_t nb_qpack_test_case = sizeof(qpack_test_case) / sizeof(qpack_test_case_t);
 
-h3zero_parse_qpack_test()
+int h3zero_parse_qpack_test()
 {
     int ret = 0;
 
@@ -225,7 +233,8 @@ h3zero_parse_qpack_test()
             DBG_PRINTF("Qpack case %d parse null path", i);
             ret = -1;
         }
-        else if (memcmp(parts.path, qpack_test_case[i].parts.path, parts.path_length) != 0) {
+        else if (parts.path != NULL && parts.path_length > 0 &&
+            memcmp(parts.path, qpack_test_case[i].parts.path, parts.path_length) != 0) {
             DBG_PRINTF("Qpack case %d parse wrong path", i);
             ret = -1;
         }

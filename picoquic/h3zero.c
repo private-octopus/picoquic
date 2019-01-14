@@ -86,7 +86,7 @@ uint8_t * h3zero_qpack_int_encode(uint8_t * bytes, uint8_t * bytes_max,
         }
 
         if (bytes < bytes_max) {
-            *bytes++ = val;
+            *bytes++ = (uint8_t) val;
         }
         else {
             bytes = NULL;
@@ -449,7 +449,7 @@ uint8_t * h3zero_parse_qpack_header_frame(uint8_t * bytes, uint8_t * bytes_max,
     }
     else {
         uint64_t delta_base;
-        bytes = h3zero_qpack_int_decode(bytes + 1, bytes_max, 0x80, &delta_base);
+        bytes = h3zero_qpack_int_decode(bytes + 1, bytes_max, 0x7F, &delta_base);
     }
 
     while (bytes != NULL && bytes < bytes_max) {
@@ -498,7 +498,7 @@ uint8_t * h3zero_parse_qpack_header_frame(uint8_t * bytes, uint8_t * bytes_max,
                         bytes = 0;
                     }
                     else {
-                        parts->path = qpack_static[s_index].content;
+                        parts->path = (const uint8_t *) qpack_static[s_index].content;
                         parts->path_length = strlen(qpack_static[s_index].content);
                     }
                     break;
@@ -525,7 +525,6 @@ uint8_t * h3zero_parse_qpack_header_frame(uint8_t * bytes, uint8_t * bytes_max,
         else if ((bytes[0] & 0xE8) == 0x20) {
             /* Literal Header Field Without Name Reference, static, no Hufman */
             uint64_t n_length;
-            uint64_t v_length;
 
             bytes = h3zero_qpack_int_decode(bytes, bytes_max, 0x07, &n_length);
             if (bytes != NULL) {
@@ -548,6 +547,151 @@ uint8_t * h3zero_parse_qpack_header_frame(uint8_t * bytes, uint8_t * bytes_max,
 
     return bytes;
 }
+
+/*
+ * Header frame.
+ * The HEADERS frame (type=0x1) is used to carry a header block,
+ * compressed using QPACK.
+ * It is always the first frame sent on the stream, whether by the client or
+ * by the server.
+ *
+ * On the client side, this will include the minimal required frames for
+ * a request according to
+ * https://developers.google.com/web/fundamentals/performance/http2/:
+ *      :method: GET
+ *        :path: /index.html
+ *     :version: HTTP/3.0
+ *      :scheme: HTTPS
+ *   user-agent: Picoquic-H3zero/0.1
+ * On the server side, this should be:
+ *     :status: 200
+ *    :version: HTTP/3.0
+ *    server: Picoquic-H3zero/0.1
+ * Plus one of:
+ *  http_header_content_type: "text/html; charset=utf-8"
+ *  http_header_content_type: "text/plain;charset=utf-8"
+ *  http_header_content_type: "image/gif"
+ *  http_header_content_type: "image/jpeg"
+ *  http_header_content_type: "image/png"
+ *
+ * Followed by a series of data frames.
+ *
+ * If a request cannot be server, the server will return an error:
+ *   :status: 404
+ * Followed by nothing.
+ */
+
+static uint8_t h3zero_qpack_code_encode(uint8_t * bytes, uint8_t * bytes_max,
+    uint8_t prefix, uint8_t mask, uint64_t code) 
+{
+    if (bytes != NULL) {
+        if (bytes + 1 > bytes_max) {
+            bytes = NULL;
+        }
+        else {
+            *bytes = prefix;
+            bytes = h3zero_qpack_int_encode(bytes, bytes_max, mask, code);
+        }
+    }
+
+    return bytes;
+}
+
+uint8_t * h3zero_create_request_header_frame(uint8_t * bytes, uint8_t * bytes_max,
+    char * doc_name)
+{
+    size_t doc_name_length = strlen(doc_name);
+
+    if (bytes == NULL || bytes + 2 > bytes_max) {
+        return NULL;
+    }
+    /* Push 2 NULL bytes for request header: base, and delta */
+    *bytes++ = 0;
+    *bytes++ = 0;
+    /* Method: GET */
+    bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0xC0, 0x3F, H3ZERO_QPACK_CODE_GET);
+    /* Path: doc_name. Use literal plus reference format */
+    bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0x50, 0x0F, H3ZERO_QPACK_CODE_PATH);
+    bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0x00, 0x7F, doc_name_length);
+    if (bytes != NULL && doc_name_length > 0) {
+        if (bytes + doc_name_length > bytes_max) {
+            bytes = NULL;
+        }
+        else {
+            memcpy(bytes, (uint8_t *)doc_name, doc_name_length);
+            bytes += doc_name_length;
+        }
+    }
+
+    return bytes;
+}
+
+uint8_t * h3zero_create_response_header_frame(uint8_t * bytes, uint8_t * bytes_max,
+    h3zero_content_type_enum doc_type)
+{
+
+    if (bytes == NULL || bytes + 2 > bytes_max) {
+        return NULL;
+    }
+    /* Push 2 NULL bytes for request header: base, and delta */
+    *bytes++ = 0;
+    *bytes++ = 0;
+
+    /* Status = 200 */
+    bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0xC0, 0x3F, H3ZERO_QPACK_CODE_404);
+
+    /* Content type header */
+    if (bytes != NULL) {
+        int code = -1;
+        for (size_t i = 0; i < h3zero_qpack_nb_static; i++) {
+            if (qpack_static[i].header == http_header_content_type &&
+                qpack_static[i].enum_as_int == doc_type) {
+                code = qpack_static[i].index;
+                break;
+            }
+        }
+
+        if (code < 0) {
+            /* Error, no such content */
+            bytes = NULL;
+        }
+        else {
+            bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0xC0, 0x3F, code);
+        }
+    }
+
+    return bytes;
+}
+
+uint8_t * h3zero_create_not_found_header_frame(uint8_t * bytes, uint8_t * bytes_max)
+{
+    if (bytes == NULL || bytes + 2 > bytes_max) {
+        return NULL;
+    }
+    /* Push 2 NULL bytes for request header: base, and delta */
+    *bytes++ = 0;
+    *bytes++ = 0;
+    /* Status = 404 */
+    bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0xC0, 0x3F, H3ZERO_QPACK_CODE_404);
+
+    return bytes;
+}
+
+uint8_t * h3zero_parse_request_header_frame(uint8_t * bytes, uint8_t * bytes_max,
+    char * path, size_t path_length)
+{
+    return NULL;
+}
+
+uint8_t * h3zero_parse_response_header_frame(uint8_t * bytes, uint8_t * bytes_max,
+    int * status, h3zero_content_type_enum * doc_type)
+{
+    while (bytes < bytes_max) {
+
+    }
+    return NULL;
+}
+
 
 /*
  * Setting frame.
@@ -579,70 +723,6 @@ int h3zero_send_initial_settings(picoquic_cnx_t * cnx, uint64_t stream_id) {
     int ret = picoquic_add_to_stream(cnx, stream_id, h3zero_default_setting_frame,
         sizeof(h3zero_default_setting_frame), 0);
     return ret;
-}
-
-/*
- * Header frame.
- * The HEADERS frame (type=0x1) is used to carry a header block,
- * compressed using QPACK.
- * It is always the first frame sent on the stream, whether by the client or
- * by the server.
- *
- * On the client side, this will include the minimal required frames for
- * a request according to 
- * https://developers.google.com/web/fundamentals/performance/http2/:
- *      :method: GET
- *        :path: /index.html
- *     :version: HTTP/3.0
- *      :scheme: HTTPS
- *   user-agent: Picoquic-H3zero/0.1
- * On the server side, this should be:
- *     :status: 200
- *    :version: HTTP/3.0
- *    server: Picoquic-H3zero/0.1
- * Plus one of:
- *  http_header_content_type: "text/html; charset=utf-8"
- *  http_header_content_type: "text/plain;charset=utf-8"
- *  http_header_content_type: "image/gif"
- *  http_header_content_type: "image/jpeg"
- *  http_header_content_type: "image/png"
- *
- * Followed by a series of data frames.
- *
- * If a request cannot be server, the server will return an error:
- *   :status: 404
- * Followed by nothing.
- */
-uint8_t * h3zero_create_request_header_frame(uint8_t * bytes, uint8_t * bytes_max, 
-    char * doc_name)
-{
-    return NULL;
-}
-
-uint8_t * h3zero_create_response_header_frame(uint8_t * bytes, uint8_t * bytes_max,
-    h3zero_content_type_enum doc_type)
-{
-    return NULL;
-}
-
-uint8_t * h3zero_create_not_found_header_frame(uint8_t * bytes, uint8_t * bytes_max)
-{
-    return NULL;
-}
-
-uint8_t * h3zero_parse_request_header_frame(uint8_t * bytes, uint8_t * bytes_max,
-    char * path, size_t path_length)
-{
-    return NULL;
-}
-
-uint8_t * h3zero_parse_response_header_frame(uint8_t * bytes, uint8_t * bytes_max,
-    int * status, h3zero_content_type_enum * doc_type)
-{
-    while (bytes < bytes_max) {
-
-    }
-    return NULL;
 }
 
 /*
