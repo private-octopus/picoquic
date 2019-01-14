@@ -686,9 +686,16 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(test_initial_close)
+        TEST_METHOD(initial_close)
         {
             int ret = initial_close_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(initial_server_close)
+        {
+            int ret = initial_server_close_test();
 
             Assert::AreEqual(ret, 0);
         }
