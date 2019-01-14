@@ -1859,7 +1859,8 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
     switch (cnx->cnx_state) {
     case picoquic_state_handshake_failure:
         /* TODO: check whether closing can be requested in "initial" mode */
-        if (cnx->crypto_context[2].aead_encrypt != NULL) {
+        if (cnx->crypto_context[2].aead_encrypt != NULL &&
+            cnx->pkt_ctx[picoquic_packet_context_handshake].first_sack_item.start_of_sack_range != (uint64_t)((int64_t)-1)) {
             pc = picoquic_packet_context_handshake;
             packet_type = picoquic_packet_handshake;
         }

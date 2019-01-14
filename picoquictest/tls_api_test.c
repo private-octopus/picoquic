@@ -4385,8 +4385,12 @@ int initial_close_test()
         }
 
         if (ret == 0) {
-            if (test_ctx->cnx_server != NULL &&
-                test_ctx->cnx_server->cnx_state != picoquic_state_disconnected) {
+            if (test_ctx->cnx_server == NULL) {
+                DBG_PRINTF("%s", "Server connection deleted, cannot verify error code.\n");
+                ret = -1;
+            }
+            else if (test_ctx->cnx_server->cnx_state != picoquic_state_disconnected ||
+                test_ctx->cnx_server->remote_error != 0xDEAD) {
                 DBG_PRINTF("Server state: %d, remote error: %x\n", test_ctx->cnx_server->cnx_state, test_ctx->cnx_server->remote_error);
                 ret = -1;
             }
@@ -4408,6 +4412,74 @@ int initial_close_test()
 
     return ret;
 }
+
+/*
+ * Check what happens if the server detects an error in the client's initial
+ * message. Verify that the client receives the error code.
+ */
+
+int initial_server_close_test()
+{
+    uint64_t loss_mask = 0;
+    uint64_t simulated_time = 0;
+    int was_active = 0;
+    int nb_trials = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+
+    /* Set the connection on the server side, but not on the client side */
+    while (ret == 0 && nb_trials < 32 ) {
+        nb_trials++;
+
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+
+        if (test_ctx->cnx_server != NULL && test_ctx->cnx_server->cnx_state == picoquic_state_server_almost_ready) {
+            break;
+        }
+    }
+
+    if (test_ctx->cnx_server == NULL || test_ctx->cnx_server->cnx_state != picoquic_state_server_almost_ready) {
+        DBG_PRINTF("Server state: %d\n", (test_ctx->cnx_server == NULL) ?
+            -1 : test_ctx->cnx_server->cnx_state);
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        test_ctx->cnx_server->cnx_state = picoquic_state_handshake_failure;
+        test_ctx->cnx_server->local_error = 0xDEAD;
+        picoquic_reinsert_by_wake_time(test_ctx->qserver, test_ctx->cnx_server, simulated_time);
+    }
+
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    if (ret == 0) {
+        if (test_ctx->cnx_server != NULL &&
+            test_ctx->cnx_server->cnx_state != picoquic_state_disconnected) {
+            DBG_PRINTF("Server state: %d, remote error: %x\n", test_ctx->cnx_server->cnx_state, test_ctx->cnx_server->remote_error);
+            ret = -1;
+        }
+        else if (test_ctx->cnx_client->cnx_state != picoquic_state_disconnected ||
+            test_ctx->cnx_client->remote_error != 0xDEAD) {
+            DBG_PRINTF("Client state: %d, local error: %x", test_ctx->cnx_client->cnx_state, test_ctx->cnx_client->local_error);
+            ret = -1;
+        }
+        else if (simulated_time > 50000ull) {
+            DBG_PRINTF("Simulated time: %llu", (unsigned long long)simulated_time);
+            ret = -1;
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
 
 /*
  * Test that rotated keys are computed in a compatible way on client and server.
