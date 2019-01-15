@@ -196,55 +196,100 @@ static qpack_test_case_t qpack_test_case[] = {
 
 static size_t nb_qpack_test_case = sizeof(qpack_test_case) / sizeof(qpack_test_case_t);
 
+static int h3zero_parse_qpack_test_one(size_t i, uint8_t * data, size_t data_length)
+{
+    int ret = 0;
+    uint8_t * bytes;
+    h3zero_header_parts_t parts;
+
+    bytes = h3zero_parse_qpack_header_frame(data, data + data_length, &parts);
+
+    if (bytes == 0) {
+        DBG_PRINTF("Qpack case %d cannot be parsed", i);
+        ret = -1;
+    }
+    else if ((bytes - data) != data_length) {
+        DBG_PRINTF("Qpack case %d parse wrong length", i);
+        ret = -1;
+    }
+    else if (parts.method != qpack_test_case[i].parts.method) {
+        DBG_PRINTF("Qpack case %d parse wrong method", i);
+        ret = -1;
+    }
+    else if (parts.path_length != qpack_test_case[i].parts.path_length) {
+        DBG_PRINTF("Qpack case %d parse wrong path length", i);
+        ret = -1;
+    }
+    else if (parts.path == NULL && qpack_test_case[i].parts.path != NULL) {
+        DBG_PRINTF("Qpack case %d parse path not null", i);
+        ret = -1;
+    }
+    else if (parts.path != NULL && qpack_test_case[i].parts.path == NULL) {
+        DBG_PRINTF("Qpack case %d parse null path", i);
+        ret = -1;
+    }
+    else if (parts.path != NULL && parts.path_length > 0 &&
+        memcmp(parts.path, qpack_test_case[i].parts.path, parts.path_length) != 0) {
+        DBG_PRINTF("Qpack case %d parse wrong path", i);
+        ret = -1;
+    }
+    else if (parts.status != qpack_test_case[i].parts.status) {
+        DBG_PRINTF("Qpack case %d parse wrong status", i);
+        ret = -1;
+    }
+    else if (parts.content_type != qpack_test_case[i].parts.content_type) {
+        DBG_PRINTF("Qpack case %d parse wrong content_type", i);
+        ret = -1;
+    }
+
+    return ret;
+}
+
 int h3zero_parse_qpack_test()
 {
     int ret = 0;
 
     for (size_t i = 0; ret == 0 && i < nb_qpack_test_case; i++) {
-        uint8_t * bytes;
-        h3zero_header_parts_t parts;
+        ret = h3zero_parse_qpack_test_one(i,
+            qpack_test_case[i].bytes, qpack_test_case[i].bytes_length);
+    }
 
-        bytes = h3zero_parse_qpack_header_frame(
-            qpack_test_case[i].bytes,
-            qpack_test_case[i].bytes + qpack_test_case[i].bytes_length,
-            &parts);
+    return ret;
+}
 
-        if (bytes == 0) {
-            DBG_PRINTF("Qpack case %d cannot be parsed", i);
+/*
+ * Prepare frames of the different supported types, and 
+ * verify that they can be decoded as expected
+ */
+int h3zero_prepare_qpack_test()
+{
+    int ret = 0;
+    int qpack_compare_test[] = { 0, 2, 4, 7, -1 };
+    
+    for (int i = 0; ret == 0 && qpack_compare_test[i] >= 0; i++) {
+        uint8_t buffer[256];
+        uint8_t * bytes_max = &buffer[0] + sizeof(buffer);
+        uint8_t * bytes = NULL;
+        int j = qpack_compare_test[i];
+
+        if (qpack_test_case[j].parts.path != NULL) {
+            /* Create a request header */
+            bytes = h3zero_create_request_header_frame(buffer, bytes_max,
+                qpack_test_case[j].parts.path, qpack_test_case[j].parts.path_length);
+        }
+        else if (qpack_test_case[j].parts.content_type != 0) {
+            bytes = h3zero_create_response_header_frame(buffer, bytes_max,
+                qpack_test_case[j].parts.content_type);
+        } else if (qpack_test_case[j].parts.status == 404) {
+            bytes = h3zero_create_not_found_header_frame(buffer, bytes_max);
+        }
+
+        if (bytes == NULL) {
+            DBG_PRINTF("Prepare qpack test %d failed\n", j);
             ret = -1;
         }
-        else if ((bytes - qpack_test_case[i].bytes) != qpack_test_case[i].bytes_length) {
-            DBG_PRINTF("Qpack case %d parse wrong length", i);
-            ret = -1;
-        }
-        else if (parts.method != qpack_test_case[i].parts.method) {
-            DBG_PRINTF("Qpack case %d parse wrong method", i);
-            ret = -1;
-        }
-        else if (parts.path_length != qpack_test_case[i].parts.path_length) {
-            DBG_PRINTF("Qpack case %d parse wrong path length", i);
-            ret = -1;
-        }
-        else if (parts.path == NULL && qpack_test_case[i].parts.path != NULL) {
-            DBG_PRINTF("Qpack case %d parse path not null", i);
-            ret = -1;
-        }
-        else if (parts.path != NULL && qpack_test_case[i].parts.path == NULL) {
-            DBG_PRINTF("Qpack case %d parse null path", i);
-            ret = -1;
-        }
-        else if (parts.path != NULL && parts.path_length > 0 &&
-            memcmp(parts.path, qpack_test_case[i].parts.path, parts.path_length) != 0) {
-            DBG_PRINTF("Qpack case %d parse wrong path", i);
-            ret = -1;
-        }
-        else if (parts.status != qpack_test_case[i].parts.status) {
-            DBG_PRINTF("Qpack case %d parse wrong status", i);
-            ret = -1;
-        }
-        else if (parts.content_type != qpack_test_case[i].parts.content_type) {
-            DBG_PRINTF("Qpack case %d parse wrong content_type", i);
-            ret = -1;
+        else {
+            ret = h3zero_parse_qpack_test_one((size_t)j, buffer, bytes - buffer);
         }
     }
 

@@ -581,7 +581,7 @@ uint8_t * h3zero_parse_qpack_header_frame(uint8_t * bytes, uint8_t * bytes_max,
  * Followed by nothing.
  */
 
-static uint8_t h3zero_qpack_code_encode(uint8_t * bytes, uint8_t * bytes_max,
+static uint8_t * h3zero_qpack_code_encode(uint8_t * bytes, uint8_t * bytes_max,
     uint8_t prefix, uint8_t mask, uint64_t code) 
 {
     if (bytes != NULL) {
@@ -598,10 +598,8 @@ static uint8_t h3zero_qpack_code_encode(uint8_t * bytes, uint8_t * bytes_max,
 }
 
 uint8_t * h3zero_create_request_header_frame(uint8_t * bytes, uint8_t * bytes_max,
-    char * doc_name)
+    uint8_t const * path, size_t path_length)
 {
-    size_t doc_name_length = strlen(doc_name);
-
     if (bytes == NULL || bytes + 2 > bytes_max) {
         return NULL;
     }
@@ -612,14 +610,14 @@ uint8_t * h3zero_create_request_header_frame(uint8_t * bytes, uint8_t * bytes_ma
     bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0xC0, 0x3F, H3ZERO_QPACK_CODE_GET);
     /* Path: doc_name. Use literal plus reference format */
     bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0x50, 0x0F, H3ZERO_QPACK_CODE_PATH);
-    bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0x00, 0x7F, doc_name_length);
-    if (bytes != NULL && doc_name_length > 0) {
-        if (bytes + doc_name_length > bytes_max) {
+    bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0x00, 0x7F, path_length);
+    if (bytes != NULL && path_length > 0) {
+        if (bytes + path_length > bytes_max) {
             bytes = NULL;
         }
         else {
-            memcpy(bytes, (uint8_t *)doc_name, doc_name_length);
-            bytes += doc_name_length;
+            memcpy(bytes, (uint8_t *)path, path_length);
+            bytes += path_length;
         }
     }
 
@@ -638,7 +636,7 @@ uint8_t * h3zero_create_response_header_frame(uint8_t * bytes, uint8_t * bytes_m
     *bytes++ = 0;
 
     /* Status = 200 */
-    bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0xC0, 0x3F, H3ZERO_QPACK_CODE_404);
+    bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0xC0, 0x3F, H3ZERO_QPACK_CODE_200);
 
     /* Content type header */
     if (bytes != NULL) {
@@ -676,22 +674,6 @@ uint8_t * h3zero_create_not_found_header_frame(uint8_t * bytes, uint8_t * bytes_
 
     return bytes;
 }
-
-uint8_t * h3zero_parse_request_header_frame(uint8_t * bytes, uint8_t * bytes_max,
-    char * path, size_t path_length)
-{
-    return NULL;
-}
-
-uint8_t * h3zero_parse_response_header_frame(uint8_t * bytes, uint8_t * bytes_max,
-    int * status, h3zero_content_type_enum * doc_type)
-{
-    while (bytes < bytes_max) {
-
-    }
-    return NULL;
-}
-
 
 /*
  * Setting frame.
