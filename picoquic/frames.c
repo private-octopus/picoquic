@@ -748,7 +748,7 @@ void picoquic_stream_data_callback(picoquic_cnx_t* cnx, picoquic_stream_head* st
     while (data != NULL && data->offset <= stream->consumed_offset) {
         size_t start = (size_t)(stream->consumed_offset - data->offset);
         size_t data_length = data->length - start;
-        picoquic_call_back_event_t fin_now = picoquic_callback_no_event;
+        picoquic_call_back_event_t fin_now = picoquic_callback_stream_data;
 
         stream->consumed_offset += data_length;
 

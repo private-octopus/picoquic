@@ -23,6 +23,29 @@
 
 #include <stdint.h>
 
+#define H3ZERO_NO_ERROR 0x0000 /* No error */
+#define H3ZERO_WRONG_SETTING_DIRECTION 0x0001 /* Setting sent in wrong direction */
+#define H3ZERO_PUSH_REFUSED 0x0002 /* Client refused pushed content */
+#define H3ZERO_INTERNAL_ERROR 0x0003 /* Internal error */
+#define H3ZERO_PUSH_ALREADY_IN_CACHE 0x0004 /* Pushed content already cached */
+#define H3ZERO_REQUEST_CANCELLED 0x0005 /* Data no longer needed */
+#define H3ZERO_INCOMPLETE_REQUEST 0x0006 /* Stream terminated early */
+#define H3ZERO_CONNECT_ERROR 0x0007 /* TCP reset or error on CONNECT request */
+#define H3ZERO_EXCESSIVE_LOAD 0x0008 /* Peer generating excessive load */
+#define H3ZERO_VERSION_FALLBACK 0x0009 /* Retry over HTTP/1.1 */
+#define H3ZERO_WRONG_STREAM 0x000A /* A frame was sent on the wrong stream */
+#define H3ZERO_LIMIT_EXCEEDED 0x000B /* An identifier limit was exceeded */
+#define H3ZERO_DUPLICATE_PUSH 0x000C /* Push ID was fulfilled multiple times */
+#define H3ZERO_UNKNOWN_STREAM_TYPE 0x000D /* Unknown unidirectional stream type */
+#define H3ZERO_WRONG_STREAM_COUNT 0x000E /* Too many unidirectional streams */
+#define H3ZERO_CLOSED_CRITICAL_STREAM 0x000F /* Critical stream was closed */
+#define H3ZERO_WRONG_STREAM_DIRECTION 0x0010 /* Unidirectional stream in wrong direction */
+#define H3ZERO_EARLY_RESPONSE 0x0011 /* Remainder of request not needed */
+#define H3ZERO_MISSING_SETTINGS 0x0012 /* No SETTINGS frame received */
+#define H3ZERO_UNEXPECTED_FRAME 0x0013 /* Frame not permitted in the current state */
+#define H3ZERO_MALFORMED_FRAME(frame_type) (0x0100|frame_type) /* Error in frame formatting */
+
+
 typedef enum {
 	h3zero_frame_data = 0,
     h3zero_frame_header = 1,
@@ -107,6 +130,7 @@ typedef enum {
 #define H3ZERO_QPACK_CODE_PATH 1
 #define H3ZERO_QPACK_CODE_404 27
 #define H3ZERO_QPACK_CODE_200 25
+#define H3ZERO_QPACK_ALLOW_GET 76
 
 typedef struct st_h3zero_qpack_static_t {
     int index;
@@ -119,27 +143,6 @@ typedef struct st_h3zero_settings_t {
     unsigned int header_size;
     unsigned int blocked_streams;
 } h3zero_settings_t;
-
-/*
- * Server side callback contexts
- */
-
-#define H3ZERO_COMMAND_MAX 256
-
-typedef enum {
-    h3zero_server_stream_status_none = 0,
-    h3zero_server_stream_status_receiving,
-    h3zero_server_stream_status_finished
-} h3zero_server_stream_status_t;
-
-typedef struct st_h3zero_server_stream_ctx_t {
-    struct st_h3zero_server_stream_ctx_t* next_stream;
-    h3zero_server_stream_status_t status;
-    uint64_t stream_id;
-    size_t command_length;
-    size_t response_length;
-    uint8_t command[H3ZERO_COMMAND_MAX];
-} h3zero_server_stream_ctx_t;
 
 typedef enum {
     h3zero_content_type_none = 0,
@@ -175,6 +178,29 @@ typedef struct st_h3zero_header_parts_t {
     int status;
     h3zero_content_type_enum content_type;
 } h3zero_header_parts_t;
+/*
+ * Server side callback contexts
+ */
+
+#define H3ZERO_SERVER_FRAME_MAX 4096
+#define H3ZERO_COMMAND_MAX 256
+#define H3ZERO_RESPONSE_MAX (1 << 20)
+
+typedef enum {
+    h3zero_server_stream_status_none = 0,
+    h3zero_server_stream_status_receiving,
+    h3zero_server_stream_status_finished
+} h3zero_server_stream_status_t;
+
+typedef struct st_h3zero_server_stream_ctx_t {
+    struct st_h3zero_server_stream_ctx_t* next_stream;
+    h3zero_server_stream_status_t status;
+    uint64_t stream_id;
+    size_t received_length;
+    uint32_t echo_length;
+    uint32_t echo_sent;
+    uint8_t frame[H3ZERO_SERVER_FRAME_MAX];
+} h3zero_server_stream_ctx_t;
 
 typedef struct st_picoquic_first_server_callback_ctx_t {
     h3zero_server_stream_ctx_t* first_stream;
@@ -196,7 +222,7 @@ uint8_t * h3zero_create_request_header_frame(uint8_t * bytes, uint8_t * bytes_ma
 uint8_t * h3zero_create_response_header_frame(uint8_t * bytes, uint8_t * bytes_max,
     h3zero_content_type_enum doc_type);
 uint8_t * h3zero_create_not_found_header_frame(uint8_t * bytes, uint8_t * bytes_max);
-
+uint8_t * h3zero_create_bad_method_header_frame(uint8_t * bytes, uint8_t * bytes_max);
 
 
 #endif /* H3ZERO_H */

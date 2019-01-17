@@ -64,8 +64,8 @@ const char * picoquic_log_fin_or_event_name(picoquic_call_back_event_t ev)
 {
     char const * text = "unknown";
     switch (ev) {
-    case picoquic_callback_no_event:
-        text = "no event";
+    case picoquic_callback_stream_data:
+        text = "stream data";
         break;
     case picoquic_callback_stream_fin:
         text = "stream fin";

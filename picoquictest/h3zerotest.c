@@ -149,6 +149,9 @@ static uint8_t qpack_test_status_404_long[] = {
     3, '4', '0', '4' };
 static uint8_t qpack_test_response_html[] = {
     QPACK_TEST_HEADER_BLOCK_PREFIX, 0xC0 | 25, 0xC0 | 52 };
+static uint8_t qpack_test_status_405_code[] = {
+    QPACK_TEST_HEADER_BLOCK_PREFIX, 0x50 | 0x0F, 13, 3, '4', '0', '5', 0xFF, 
+    (uint8_t)(H3ZERO_QPACK_ALLOW_GET - 63)};
 
 static uint8_t qpack_test_string_index_html[] = { QPACK_TEST_HEADER_INDEX_HTML };
 static uint8_t qpack_test_string_slash[] = { '/' };
@@ -191,6 +194,10 @@ static qpack_test_case_t qpack_test_case[] = {
     {
         qpack_test_response_html, sizeof(qpack_test_response_html),
         { 0, NULL, 0, 200, h3zero_content_type_text_html}
+    },
+    {
+        qpack_test_status_405_code, sizeof(qpack_test_status_405_code),
+        { 0, NULL, 0, 405, 0}
     }
 };
 
@@ -264,7 +271,7 @@ int h3zero_parse_qpack_test()
 int h3zero_prepare_qpack_test()
 {
     int ret = 0;
-    int qpack_compare_test[] = { 0, 2, 4, 7, -1 };
+    int qpack_compare_test[] = { 0, 2, 4, 7, 8, -1 };
     
     for (int i = 0; ret == 0 && qpack_compare_test[i] >= 0; i++) {
         uint8_t buffer[256];
@@ -282,6 +289,8 @@ int h3zero_prepare_qpack_test()
                 qpack_test_case[j].parts.content_type);
         } else if (qpack_test_case[j].parts.status == 404) {
             bytes = h3zero_create_not_found_header_frame(buffer, bytes_max);
+        } else if (qpack_test_case[j].parts.status == 405) {
+            bytes = h3zero_create_bad_method_header_frame(buffer, bytes_max);
         }
 
         if (bytes == NULL) {

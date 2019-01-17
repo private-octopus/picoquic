@@ -334,7 +334,7 @@ static int first_server_callback(picoquic_cnx_t* cnx,
         printf("%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
         printf("Server CB, Stream: %" PRIu64 ", RESET, stream gaps not supported\n", stream_id);
         return 0;
-    } else if (fin_or_event == picoquic_callback_no_event || fin_or_event == picoquic_callback_stream_fin) {
+    } else if (fin_or_event == picoquic_callback_stream_data || fin_or_event == picoquic_callback_stream_fin) {
         int crlf_present = 0;
 
         if (length > 0) {
@@ -787,7 +787,7 @@ static int first_client_callback(picoquic_cnx_t* cnx,
         /* We do not support this, yet */
         picoquic_reset_stream(cnx, stream_id, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION);
         return 0;
-    } else if (fin_or_event == picoquic_callback_no_event || fin_or_event == picoquic_callback_stream_fin) {
+    } else if (fin_or_event == picoquic_callback_stream_data || fin_or_event == picoquic_callback_stream_fin) {
         if (length > 0) {
             (void)fwrite(bytes, 1, length, stream_ctx->F);
             stream_ctx->received_length += length;

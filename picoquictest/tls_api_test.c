@@ -302,8 +302,8 @@ static void test_api_receive_stream_data(
 
     *nb_received += length;
 
-    if (fin_or_event != picoquic_callback_no_event) {
-        if (*received != picoquic_callback_no_event) {
+    if (fin_or_event != picoquic_callback_stream_data) {
+        if (*received != picoquic_callback_stream_data) {
             *error_detected |= test_api_fail_fin_received_twice;
         }
 
@@ -400,7 +400,7 @@ static int test_api_callback(picoquic_cnx_t* cnx,
     test_api_callback_t* cb_ctx = (test_api_callback_t*)callback_ctx;
     picoquic_test_tls_api_ctx_t* ctx = NULL;
     size_t stream_index;
-    picoquic_call_back_event_t stream_finished = picoquic_callback_no_event;
+    picoquic_call_back_event_t stream_finished = picoquic_callback_stream_data;
 
     if (fin_or_event == picoquic_callback_close || 
         fin_or_event == picoquic_callback_application_close)  {
@@ -438,7 +438,7 @@ static int test_api_callback(picoquic_cnx_t* cnx,
     }
 
     if (stream_id == 0 && cb_ctx->client_mode == 0 && 
-        (fin_or_event == picoquic_callback_no_event || fin_or_event == picoquic_callback_stream_fin)) {
+        (fin_or_event == picoquic_callback_stream_data || fin_or_event == picoquic_callback_stream_fin)) {
         if (bytes == NULL && length != 0) {
             cb_ctx->error_detected = test_api_bad_stream0_data;
         } else {
@@ -467,7 +467,7 @@ static int test_api_callback(picoquic_cnx_t* cnx,
             /* Respond with a reset, no matter what. Should be smarter later */
             picoquic_reset_stream(cnx, stream_id, 0);
         }
-        else if (fin_or_event == picoquic_callback_no_event || fin_or_event == picoquic_callback_stream_fin || fin_or_event == picoquic_callback_stream_reset) {
+        else if (fin_or_event == picoquic_callback_stream_data || fin_or_event == picoquic_callback_stream_fin || fin_or_event == picoquic_callback_stream_reset) {
             if (IS_CLIENT_STREAM_ID(stream_id)) {
                 if (cb_ctx->client_mode) {
                     /* this is a response from the server to a client stream */

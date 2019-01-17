@@ -158,7 +158,7 @@ static int stress_server_callback(picoquic_cnx_t* cnx,
                     stress_debug_break();
                 }
             }
-            else if (fin_or_event == picoquic_callback_no_event || fin_or_event == picoquic_callback_stream_fin) {
+            else if (fin_or_event == picoquic_callback_stream_data || fin_or_event == picoquic_callback_stream_fin) {
                 /* Write a response, which should somehow depend on the stream data and
                 * the stream status and the data bytes */
                 if ((stream_id & 3) != 0) {

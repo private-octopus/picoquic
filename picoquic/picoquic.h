@@ -226,7 +226,7 @@ typedef struct st_picoquic_cnx_t picoquic_cnx_t;
 typedef struct st_picoquic_path_t picoquic_path_t;
 
 typedef enum {
-    picoquic_callback_no_event = 0, /* Data received from peer on stream N */
+    picoquic_callback_stream_data = 0, /* Data received from peer on stream N */
     picoquic_callback_stream_fin, /* Fin received from peer on stream N; data is optional */
     picoquic_callback_stream_reset, /* Reset Stream received from peer on stream N; bytes=NULL, len = 0  */
     picoquic_callback_stop_sending, /* Stop sending received from peer on stream N; bytes=NULL, len = 0 */
