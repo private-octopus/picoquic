@@ -38,11 +38,11 @@ typedef enum {
 	picoquic_alpn_http_3,
 } picoquic_alpn_enum;
 
-#define PICOQUIC_DEMO_STREAM_ID_INITIAL 0xFFFFFFFFFFFFFFFFull
+#define PICOQUIC_DEMO_STREAM_ID_INITIAL (uint64_t)((int64_t)-1)
 
 typedef struct st_picoquic_demo_stream_desc_t {
-    uint32_t stream_id;
-    uint32_t previous_stream_id;
+    uint64_t stream_id;
+    uint64_t previous_stream_id;
     char const* doc_name;
     char const* f_name;
     int is_binary;
@@ -60,7 +60,7 @@ typedef struct st_picoquic_demo_stream_ctx_t {
 
 typedef struct st_picoquic_demo_client_callback_ctx_t {
     picoquic_demo_client_stream_ctx_t* first_stream;
-    picoquic_demo_stream_desc_t * demo_stream;
+    picoquic_demo_stream_desc_t const * demo_stream;
     size_t nb_demo_streams;
 
     int nb_open_streams;
@@ -74,5 +74,16 @@ typedef struct st_picoquic_demo_client_callback_ctx_t {
 
 picoquic_alpn_enum picoquic_parse_alpn(char const * alpn);
 
+int picoquic_demo_client_start_streams(picoquic_cnx_t* cnx,
+    picoquic_demo_callback_ctx_t* ctx, uint64_t fin_stream_id);
+int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
+    uint64_t stream_id, uint8_t* bytes, size_t length,
+    picoquic_call_back_event_t fin_or_event, void* callback_ctx);
+int picoquic_demo_client_initialize_context(
+    picoquic_demo_callback_ctx_t* ctx,
+    picoquic_demo_stream_desc_t const * demo_stream,
+    size_t nb_demo_streams,
+    char const * alpn);
+void picoquic_demo_client_delete_context(picoquic_demo_callback_ctx_t* ctx);
 
 #endif /* DEMO_CLIENT_H */

@@ -179,6 +179,7 @@ static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
             }
             path = name_buffer;
             path_len++;
+            name_buffer[path_len] = 0;
         }
 
         /* Format the protocol specific request */
@@ -204,7 +205,7 @@ static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
             fprintf(stdout, "Cannot send GET command for stream(%d): %s\n", stream_id, path);
         }
         else {
-            fprintf(stdout, "Opening stream %d to GET /%s\n", stream_id, path);
+            fprintf(stdout, "Opening stream %d to GET %s\n", stream_id, path);
         }
     }
 
@@ -265,6 +266,7 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
         if (stream_ctx != NULL && stream_ctx->F != NULL) {
             if (length > 0) {
                 ret = (fwrite(bytes, 1, length, stream_ctx->F) > 0) ? 0 : -1;
+                stream_ctx->received_length += length;
             }
 
             if (fin_or_event == picoquic_callback_stream_fin) {
@@ -272,6 +274,8 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
                 stream_ctx->F = NULL;
                 ctx->nb_open_streams--;
                 fin_stream_id = stream_id;
+                fprintf(stdout, "Stream %d ended after %d bytes\n",
+                    (int)stream_id, (int)stream_ctx->received_length);
             }
         }
         break;
@@ -293,6 +297,7 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
         break;
     case picoquic_callback_close: /* Received connection close */
         fprintf(stdout, "Received a request to close the connection.\n");
+        break;
     case picoquic_callback_application_close: /* Received application close */
         fprintf(stdout, "Received a request to close the application.\n");
         break;
@@ -317,15 +322,13 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
         break;
     }
 
-    if (fin_stream_id != PICOQUIC_DEMO_STREAM_ID_INITIAL) {
-        /* TODO: import scenario definition, common with HTTP 0.9 -
-         * Or rather, have HTTP 0.9. reuse scenario def from H3! */
-
-         /* TODO: start client streams! */
+    if (ret == 0 && fin_stream_id != PICOQUIC_DEMO_STREAM_ID_INITIAL) {
+         /* start next batch of streams! */
+		 ret = picoquic_demo_client_start_streams(cnx, ctx, fin_stream_id);
     }
 
     /* that's it */
-    return 0;
+    return ret;
 }
 
 typedef struct st_picoquic_alpn_list_t {
@@ -357,11 +360,11 @@ picoquic_alpn_enum picoquic_parse_alpn(char const * alpn)
 
 int picoquic_demo_client_initialize_context(
     picoquic_demo_callback_ctx_t* ctx,
-    picoquic_demo_stream_desc_t * demo_stream,
+    picoquic_demo_stream_desc_t const * demo_stream,
 	size_t nb_demo_streams,
 	char const * alpn)
 {
-    memset(ctx, 0, sizeof(ctx));
+    memset(ctx, 0, sizeof(picoquic_demo_callback_ctx_t));
     ctx->demo_stream = demo_stream;
     ctx->nb_demo_streams = nb_demo_streams;
     ctx->alpn = picoquic_parse_alpn(alpn);
@@ -404,14 +407,12 @@ static void picoquic_demo_client_delete_stream_context(picoquic_demo_callback_ct
     free(stream_ctx);
 }
 
-static void picoquic_demo_client_delete_context(picoquic_demo_callback_ctx_t* ctx)
+void picoquic_demo_client_delete_context(picoquic_demo_callback_ctx_t* ctx)
 {
     picoquic_demo_client_stream_ctx_t * stream_ctx;
 
     while ((stream_ctx = ctx->first_stream) != NULL) {
         picoquic_demo_client_delete_stream_context(ctx, stream_ctx);
     }
-
-    free(ctx);
 }
 
