@@ -32,6 +32,7 @@
  * specify a zero-length dynamic dictionary for QPACK.
  */
 #include <string.h>
+#include <stdlib.h>
 #include "picoquic_internal.h"
 #include "h3zero.h"
 

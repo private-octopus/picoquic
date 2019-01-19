@@ -19,6 +19,7 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include "picoquic.h"
@@ -142,7 +143,7 @@ static int h09_demo_client_prepare_stream_open_command(
 
 static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
     picoquic_demo_callback_ctx_t* ctx,
-    uint32_t stream_id, char const* doc_name, char const* fname, int is_binary)
+    uint64_t stream_id, char const* doc_name, char const* fname, int is_binary)
 {
     int ret = 0;
     uint8_t buffer[1024];
@@ -150,7 +151,7 @@ static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
         malloc(sizeof(picoquic_demo_client_stream_ctx_t));
 
     if (stream_ctx == NULL) {
-		fprintf(stdout, "Memory Error, cannot create stream context %d\n", stream_id);
+		fprintf(stdout, "Memory Error, cannot create stream context %d\n", (int)stream_id);
         ret = -1;
     }
     else {
@@ -215,10 +216,10 @@ static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
         }
 
         if (ret != 0) {
-            fprintf(stdout, "Cannot send GET command for stream(%d): %s\n", stream_id, path);
+            fprintf(stdout, "Cannot send GET command for stream(%d): %s\n", (int)stream_id, path);
         }
         else {
-            fprintf(stdout, "Opening stream %d to GET %s\n", stream_id, path);
+            fprintf(stdout, "Opening stream %d to GET %s\n", (int)stream_id, path);
         }
     }
 

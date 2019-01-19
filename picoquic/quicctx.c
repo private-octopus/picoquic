@@ -1509,7 +1509,7 @@ int picoquic_start_client_cnx(picoquic_cnx_t * cnx)
     return ret;
 }
 
-void picoquic_set_transport_parameters(picoquic_cnx_t * cnx, picoquic_tp_t * tp)
+void picoquic_set_transport_parameters(picoquic_cnx_t * cnx, picoquic_tp_t const * tp)
 {
     cnx->local_parameters = *tp;
 

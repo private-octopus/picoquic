@@ -54,7 +54,7 @@ typedef struct st_picoquic_demo_stream_ctx_t {
     picoquic_demo_client_stream_ctx_t* next_stream;
     size_t received_length;
     size_t scenario_index;
-    uint32_t stream_id;
+    uint64_t stream_id;
     FILE* F; /* NULL if stream is closed. */
 } picoquic_demo_client_stream_ctx_t;
 
