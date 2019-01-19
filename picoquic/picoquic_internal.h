@@ -264,29 +264,6 @@ typedef enum {
     picoquic_tp_server_preferred_address = 13
 } picoquic_tp_enum;
 
-typedef struct st_picoquic_tp_prefered_address_t {
-    uint8_t ipVersion; /* enum { IPv4(4), IPv6(6), (15) } -- 0 if no parameter specified */
-    uint8_t ipAddress[16]; /* opaque ipAddress<4..2 ^ 8 - 1> */
-    uint16_t port;
-    picoquic_connection_id_t connection_id; /*  opaque connectionId<0..18>; */
-    uint8_t statelessResetToken[16];
-} picoquic_tp_prefered_address_t;
-
-typedef struct st_picoquic_tp_t {
-    uint32_t initial_max_stream_data_bidi_local;
-    uint32_t initial_max_stream_data_bidi_remote;
-    uint32_t initial_max_stream_data_uni;
-    uint32_t initial_max_data;
-    uint32_t initial_max_stream_id_bidir;
-    uint32_t initial_max_stream_id_unidir;
-    uint32_t idle_timeout;
-    uint32_t max_packet_size;
-    uint32_t max_ack_delay; /* stored in in microseconds for convenience */
-    uint8_t ack_delay_exponent;
-    unsigned int migration_disabled;
-    picoquic_tp_prefered_address_t prefered_address;
-} picoquic_tp_t;
-
 /*
  * QUIC context, defining the tables of connections,
  * open sockets, etc.
@@ -802,9 +779,6 @@ void picoquic_reset_packet_context(picoquic_cnx_t* cnx,
 
 /* Notify error on connection */
 int picoquic_connection_error(picoquic_cnx_t* cnx, uint16_t local_error, uint64_t frame_type);
-
-/* Set the transport parameters */
-void picoquic_set_transport_parameters(picoquic_cnx_t * cnx, picoquic_tp_t * tp);
 
 /* Connection context retrieval functions */
 picoquic_cnx_t* picoquic_cnx_by_id(picoquic_quic_t* quic, picoquic_connection_id_t cnx_id);

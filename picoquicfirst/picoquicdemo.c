@@ -615,7 +615,8 @@ static const picoquic_demo_stream_desc_t test_scenario[] = {
     { 8, 0, "1234567", "doc-1234567.html", 0 },
     { 12, 0, "main.jpg", "main.jpg", 1 },
     { 16, 0, "war-and-peace.txt", "war-and-peace.txt", 0 },
-    { 20, 0, "en/latest/", "slash_en_slash_latest.html", 0 }
+    { 20, 0, "en/latest/", "slash_en_slash_latest.html", 0 },
+    { 24, 0, "/file-123K", "file-123k.txt", 0 }
 #endif
 #endif
 };
@@ -832,6 +833,11 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
         }
         else {
             picoquic_set_callback(cnx_client, picoquic_demo_client_callback, &callback_ctx);
+
+
+            if (callback_ctx.tp != NULL) {
+                picoquic_set_transport_parameters(cnx_client, callback_ctx.tp);
+            }
 
             ret = picoquic_start_client_cnx(cnx_client);
 
