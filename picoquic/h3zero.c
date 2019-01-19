@@ -706,13 +706,17 @@ uint8_t * h3zero_create_bad_method_header_frame(uint8_t * bytes, uint8_t * bytes
  * a control stream.
  */
 
-const uint8_t h3zero_default_setting_frame[] = {
+static uint8_t const h3zero_default_setting_frame_val[] = {
     'C',
     6, /* Length, excluding the type byte */
     (uint8_t)h3zero_frame_settings, /* frame type */
     0, (uint8_t)h3zero_setting_header_table_size, 0, /* 16 bit type, then value*/
     0, (uint8_t)h3zero_qpack_blocked_streams, 0 /* 16 bit type, then value*/
 };
+
+uint8_t const * h3zero_default_setting_frame = h3zero_default_setting_frame_val;
+
+const size_t h3zero_default_setting_frame_size = sizeof(h3zero_default_setting_frame_val);
 
 /*
  * Server or client initialization.
@@ -906,7 +910,7 @@ static int h3zero_server_parse_request_frame(
             }
 
             if (o_bytes != NULL) {
-                size_t header_length = o_bytes - &buffer[0];
+                size_t header_length = o_bytes - &buffer[3];
                 buffer[0] = (uint8_t)((header_length >> 8) | 0x40);
                 buffer[1] = (uint8_t)(header_length &0xFF);
 
@@ -1080,6 +1084,7 @@ int h3zero_server_callback(picoquic_cnx_t* cnx,
     case picoquic_callback_stream_data:
     case picoquic_callback_stream_fin:
         /* Data arrival on stream #x, maybe with fin mark */
+        ret = h3zero_server_callback_data(cnx, stream_id, bytes, length, fin_or_event, ctx);
         break;
     case picoquic_callback_stream_reset: /* Client reset stream #x */
     case picoquic_callback_stop_sending: /* Client asks server to reset stream #x */
@@ -1102,7 +1107,7 @@ int h3zero_server_callback(picoquic_cnx_t* cnx,
         if (stream_ctx != NULL) {
             stream_ctx->status = h3zero_server_stream_status_finished;
         }
-        picoquic_reset_stream(cnx, stream_id, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION);
+        picoquic_stop_sending(cnx, stream_id, H3ZERO_INTERNAL_ERROR);
         break;
     case picoquic_callback_prepare_to_send:
         /* Used for active streams */
@@ -1115,7 +1120,3 @@ int h3zero_server_callback(picoquic_cnx_t* cnx,
 
     return ret;
 }
-
-/*
- * TODO: client call back. 
- */

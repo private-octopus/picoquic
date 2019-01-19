@@ -1307,6 +1307,8 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             picoquic_insert_cnx_by_wake_time(quic, cnx);
             /* Do not require verification for default path */
             cnx->path[0]->challenge_verified = 1;
+
+            cnx->high_priority_stream_id = (uint64_t)((int64_t)-1);
         }
     }
 

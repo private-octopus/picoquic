@@ -136,6 +136,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="cubic.c" />
+    <ClCompile Include="democlient.c" />
     <ClCompile Include="fnv1a.c" />
     <ClCompile Include="frames.c" />
     <ClCompile Include="h3zero.c" />
@@ -157,6 +158,7 @@
     <ClCompile Include="util.c" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="democlient.h" />
     <ClInclude Include="fnv1a.h" />
     <ClInclude Include="h3zero.h" />
     <ClInclude Include="picohash.h" />

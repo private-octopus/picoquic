@@ -466,6 +466,22 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
 int picoquic_mark_active_stream(picoquic_cnx_t* cnx,
     uint64_t stream_id, int is_active);
 
+/* Mark stream as high priority. This guarantees that the data
+ * queued on this stream will be sent before data from any other
+ * stream. It is used for example in the HTTP3 implementation
+ * to guarantee that the "settings" frame is sent from the
+ * control stream before any other frame. 
+ * Priority is immediately removed when all data from that
+ * stream is sent; it should be reset if new data is added 
+ * for which priority handling is still required. 
+ * Priority is also removed if the "is_high_priority"
+ * parameter is set to 0, or if another stream is set
+ * to high priority.
+ */
+
+int picoquic_mark_high_priority_stream(picoquic_cnx_t* cnx,
+    uint64_t stream_id, int is_high_priority);
+
 /* If a stream is marked active, the application will receive a callback with
  * event type "picoquic_callback_prepare_to_send" when the transport is ready to
  * send data on a stream. The "length" argument in the call back indicates the

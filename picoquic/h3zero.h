@@ -21,8 +21,6 @@
 #ifndef H3ZERO_H
 #define H3ZERO_H
 
-#include <stdint.h>
-
 #define H3ZERO_NO_ERROR 0x0000 /* No error */
 #define H3ZERO_WRONG_SETTING_DIRECTION 0x0001 /* Setting sent in wrong direction */
 #define H3ZERO_PUSH_REFUSED 0x0002 /* Client refused pushed content */
@@ -178,6 +176,11 @@ typedef struct st_h3zero_header_parts_t {
     int status;
     h3zero_content_type_enum content_type;
 } h3zero_header_parts_t;
+
+extern uint8_t const * h3zero_default_setting_frame;
+
+extern const size_t h3zero_default_setting_frame_size;
+
 /*
  * Server side callback contexts
  */
@@ -202,7 +205,7 @@ typedef struct st_h3zero_server_stream_ctx_t {
     uint8_t frame[H3ZERO_SERVER_FRAME_MAX];
 } h3zero_server_stream_ctx_t;
 
-typedef struct st_picoquic_first_server_callback_ctx_t {
+typedef struct st_h3zero_server_callback_ctx_t {
     h3zero_server_stream_ctx_t* first_stream;
     size_t buffer_max;
     uint8_t* buffer;
@@ -223,6 +226,5 @@ uint8_t * h3zero_create_response_header_frame(uint8_t * bytes, uint8_t * bytes_m
     h3zero_content_type_enum doc_type);
 uint8_t * h3zero_create_not_found_header_frame(uint8_t * bytes, uint8_t * bytes_max);
 uint8_t * h3zero_create_bad_method_header_frame(uint8_t * bytes, uint8_t * bytes_max);
-
 
 #endif /* H3ZERO_H */
