@@ -227,4 +227,8 @@ uint8_t * h3zero_create_response_header_frame(uint8_t * bytes, uint8_t * bytes_m
 uint8_t * h3zero_create_not_found_header_frame(uint8_t * bytes, uint8_t * bytes_max);
 uint8_t * h3zero_create_bad_method_header_frame(uint8_t * bytes, uint8_t * bytes_max);
 
+int h3zero_server_callback(picoquic_cnx_t* cnx,
+    uint64_t stream_id, uint8_t* bytes, size_t length,
+    picoquic_call_back_event_t fin_or_event, void* callback_ctx);
+
 #endif /* H3ZERO_H */

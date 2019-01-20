@@ -33,11 +33,6 @@
 #include <openssl/pem.h>
 #include "picoquictest_internal.h"
 
-#define PICOQUIC_TEST_SNI "test.example.com"
-#define PICOQUIC_TEST_ALPN "picoquic-test"
-#define PICOQUIC_TEST_WRONG_ALPN "picoquic-bla-bla"
-#define PICOQUIC_TEST_MAX_TEST_STREAMS 18
-
 char const * picoquic_test_solution_dir = NULL;
 
 static const uint8_t test_ticket_encrypt_key[32] = {
@@ -52,76 +47,6 @@ static const uint8_t test_ticket_badcrypt_key[32] = {
 /*
  * Generic call back function.
  */
-
-typedef enum {
-    test_api_fail_data_on_unknown_stream = 1,
-    test_api_fail_recv_larger_than_sent = 2,
-    test_api_fail_fin_received_twice = 4,
-    test_api_fail_cannot_send_response = 8,
-    test_api_fail_cannot_send_query = 16,
-    test_api_fail_data_does_not_match = 32,
-    test_api_fail_unexpected_frame = 64,
-    test_api_bad_stream0_data = 128
-} test_api_fail_mode;
-
-typedef struct st_test_api_stream_desc_t {
-    uint64_t stream_id;
-    uint64_t previous_stream_id;
-    size_t q_len;
-    size_t r_len;
-} test_api_stream_desc_t;
-
-typedef struct st_test_api_stream_t {
-    uint64_t stream_id;
-    uint64_t previous_stream_id;
-    int q_sent;
-    int r_sent;
-    picoquic_call_back_event_t q_received;
-    picoquic_call_back_event_t r_received;
-    size_t q_len;
-    size_t q_recv_nb;
-    size_t r_len;
-    size_t r_recv_nb;
-    uint8_t* q_src;
-    uint8_t* q_rcv;
-    uint8_t* r_src;
-    uint8_t* r_rcv;
-} test_api_stream_t;
-
-typedef struct st_test_api_callback_t {
-    int client_mode;
-    int fin_received;
-    int error_detected;
-    uint32_t nb_bytes_received;
-} test_api_callback_t;
-
-typedef struct st_picoquic_test_tls_api_ctx_t {
-    picoquic_quic_t* qclient;
-    picoquic_quic_t* qserver;
-    picoquic_cnx_t* cnx_client;
-    picoquic_cnx_t* cnx_server;
-    int client_use_nat;
-    struct sockaddr_in client_addr;
-    struct sockaddr_in server_addr;
-    test_api_callback_t client_callback;
-    test_api_callback_t server_callback;
-    size_t nb_test_streams;
-    test_api_stream_t test_stream[PICOQUIC_TEST_MAX_TEST_STREAMS];
-    picoquictest_sim_link_t* c_to_s_link;
-    picoquictest_sim_link_t* s_to_c_link;
-
-    /* Stream 0 is reserved for the "infinite stream" simulation */
-    size_t stream0_target;
-    size_t stream0_sent;
-    size_t stream0_received;
-    int stream0_test_option;
-
-    int sum_data_received_at_server;
-    int sum_data_received_at_client;
-    int test_finished;
-    int streams_finished;
-    int reset_received;
-} picoquic_test_tls_api_ctx_t;
 
 static test_api_stream_desc_t test_scenario_oneway[] = {
     { 4, 0, 257, 0 }
@@ -703,7 +628,7 @@ static int verify_version(picoquic_cnx_t* cnx_client, picoquic_cnx_t* cnx_server
     return ret;
 }
 
-static void tls_api_delete_ctx(picoquic_test_tls_api_ctx_t* test_ctx)
+void tls_api_delete_ctx(picoquic_test_tls_api_ctx_t* test_ctx)
 {
     if (test_ctx->qclient != NULL) {
         picoquic_free(test_ctx->qclient);
@@ -728,7 +653,7 @@ static void tls_api_delete_ctx(picoquic_test_tls_api_ctx_t* test_ctx)
     free(test_ctx);
 }
 
-static int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_version,
+int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_version,
     char const* sni, char const* alpn, uint64_t* p_simulated_time, 
     char const* ticket_file_name, int force_zero_share, int delayed_init, int use_bad_crypt)
 {
@@ -839,7 +764,7 @@ static int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t propose
     return ret;
 }
 
-static int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
+int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* simulated_time, uint64_t time_out, int* was_active)
 {
     int ret = 0;
@@ -1055,7 +980,7 @@ static int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
 #define TEST_CLIENT_READY (test_ctx->cnx_client->cnx_state == picoquic_state_ready || test_ctx->cnx_client->cnx_state == picoquic_state_client_ready_start)
 #define TEST_SERVER_READY (test_ctx->cnx_server->cnx_state == picoquic_state_ready || test_ctx->cnx_server->cnx_state == picoquic_state_server_false_start)
 
-static int tls_api_connection_loop(picoquic_test_tls_api_ctx_t* test_ctx,
+int tls_api_connection_loop(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* loss_mask, uint64_t queue_delay_max, uint64_t* simulated_time)
 {
     int ret = 0;

@@ -1,3 +1,4 @@
+#include "picoquic.h"
 /*
 * Author: Christian Huitema
 * Copyright (c) 2017, Private Octopus, Inc.
@@ -1687,6 +1688,13 @@ int picoquic_set_default_connection_id_length(picoquic_quic_t* quic, uint8_t cid
     }
 
     return ret;
+}
+
+void picoquic_set_default_callback(picoquic_quic_t* quic,
+    picoquic_stream_data_cb_fn callback_fn, void* callback_ctx)
+{
+    quic->default_callback_fn = callback_fn;
+    quic->default_callback_ctx = callback_ctx;
 }
 
 void picoquic_set_callback(picoquic_cnx_t* cnx,

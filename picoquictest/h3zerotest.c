@@ -19,9 +19,11 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "picoquic_internal.h"
 #include <string.h>
+#include "picoquic_internal.h"
+#include "picoquictest_internal.h"
 #include "h3zero.h"
+#include "democlient.h"
 
 /*
  * Test of the prefixed integer encoding
@@ -302,5 +304,119 @@ int h3zero_prepare_qpack_test()
         }
     }
 
+    return ret;
+}
+
+/*
+ * Set a connection between an H3 client and an H3 server over
+ * network simulation.
+ */
+static const picoquic_demo_stream_desc_t h3zero_test_scenario[] = {
+    { 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "root.html", 0 },
+    { 4, 0, "12345", "doc-12345.txt", 0 } };
+static size_t const nb_h3zero_test_scenario = sizeof(h3zero_test_scenario) / sizeof(picoquic_demo_stream_desc_t);
+
+static const h3zero_test_stream_length[] = {
+    128,
+    12345
+};
+
+int h3zero_server_test()
+{
+    char const * alpn = "h3-17";
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    uint64_t time_out;
+    int nb_trials = 0;
+    int was_active = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_demo_callback_ctx_t callback_ctx;
+    int ret;
+
+    ret = picoquic_demo_client_initialize_context(&callback_ctx, h3zero_test_scenario, nb_h3zero_test_scenario, alpn);
+
+    if (ret == 0) {
+        ret = tls_api_init_ctx(&test_ctx,
+            PICOQUIC_INTERNAL_TEST_VERSION_1,
+            PICOQUIC_TEST_SNI, alpn, &simulated_time, NULL, 0, 1, 0);
+    }
+
+    if (ret != 0) {
+        DBG_PRINTF("Could not create the QUIC test contexts for V=%x\n", PICOQUIC_INTERNAL_TEST_VERSION_1);
+    }
+    else if (test_ctx == NULL || test_ctx->cnx_client == NULL || test_ctx->qserver == NULL) {
+        DBG_PRINTF("%s", "Connections where not properly created!\n");
+        ret = -1;
+    }
+
+    /* The default procedure creates connections using the test callback.
+     * We want to replace that by the H3 callback */
+
+    if (ret == 0) {
+        picoquic_set_default_callback(test_ctx->qserver, h3zero_server_callback, NULL);
+        picoquic_set_callback(test_ctx->cnx_client, picoquic_demo_client_callback, &callback_ctx);
+        ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+    }
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_demo_client_start_streams(test_ctx->cnx_client, &callback_ctx, PICOQUIC_DEMO_STREAM_ID_INITIAL);
+    }
+
+    /* Simulate the connection from the client side. */
+    time_out = simulated_time + 30000000;
+    while (ret == 0 && picoquic_get_cnx_state(test_ctx->cnx_client) != picoquic_state_disconnected) {
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
+
+        if (picoquic_is_cnx_backlog_empty(test_ctx->cnx_client)) {
+            if (callback_ctx.nb_open_streams == 0) {
+                ret = picoquic_close(test_ctx->cnx_client, 0);
+            }
+            else if (simulated_time > callback_ctx.last_interaction_time &&
+                simulated_time - callback_ctx.last_interaction_time > 10000000ull) {
+                (void)picoquic_close(test_ctx->cnx_client, 0);
+                ret = -1;
+            }
+        }
+
+        if (++nb_trials > 100000) {
+            ret = -1;
+            break;
+        }
+    }
+
+    /* Verify that the data was properly received. */
+    for (size_t i = 0; ret == 0 && i < nb_h3zero_test_scenario; i++) {
+        picoquic_demo_client_stream_ctx_t* stream = callback_ctx.first_stream;
+
+        while (stream != NULL && stream->stream_id != h3zero_test_scenario[i].stream_id) {
+            stream = stream->next_stream;
+        }
+
+        if (stream == NULL) {
+            DBG_PRINTF("Scenario stream %d is missing\n", (int)i);
+            ret = -1;
+        }
+        else if (stream->F != NULL) {
+            DBG_PRINTF("Scenario stream %d, file was not closed\n", (int)i);
+            ret = -1;
+        }
+        else if (stream->received_length < h3zero_test_stream_length[i]) {
+            DBG_PRINTF("Scenario stream %d, only %d bytes received\n", 
+                (int)i, (int)stream->received_length);
+            ret = -1;
+        }
+    }
+
+    picoquic_demo_client_delete_context(&callback_ctx);
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+    
     return ret;
 }

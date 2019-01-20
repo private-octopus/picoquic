@@ -401,6 +401,8 @@ void picoquic_set_default_spinbit_policy(picoquic_quic_t * quic, picoquic_spinbi
  * Value must be compatible with what the cnx_id_callback() expects on a server */
 int picoquic_set_default_connection_id_length(picoquic_quic_t* quic, uint8_t cid_length);
 
+void picoquic_set_default_callback(picoquic_quic_t * quic, picoquic_stream_data_cb_fn callback_fn, void * callback_ctx);
+
 /* Connection context creation and registration */
 picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
     picoquic_connection_id_t initial_cnx_id, picoquic_connection_id_t remote_cnx_id,

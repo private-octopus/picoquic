@@ -153,6 +153,7 @@ int initial_server_close_test();
 int h3zero_integer_test();
 int h3zero_parse_qpack_test();
 int h3zero_prepare_qpack_test();
+int h3zero_server_test();
 
 #ifdef __cplusplus
 }

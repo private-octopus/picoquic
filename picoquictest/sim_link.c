@@ -232,3 +232,16 @@ int sim_link_test()
 
     return ret;
 }
+
+void picoquic_set_test_address(struct sockaddr_in * addr, uint32_t addr_val, uint16_t port)
+{
+    /* Init of the IP addresses */
+    memset(addr, 0, sizeof(struct sockaddr_in));
+    addr->sin_family = AF_INET;
+#ifdef _WINDOWS
+    addr->sin_addr.S_un.S_addr = addr_val;
+#else
+    addr->sin_addr.s_addr = addr_val;
+#endif
+    addr->sin_port = port;
+}
