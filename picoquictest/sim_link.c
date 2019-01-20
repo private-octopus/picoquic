@@ -32,6 +32,7 @@
 #include "picoquic_internal.h"
 #include "picoquictest_internal.h"
 #include <stdlib.h>
+#include <string.h>
 
 picoquictest_sim_link_t* picoquictest_sim_link_create(double data_rate_in_gps,
     uint64_t microsec_latency, uint64_t* loss_mask, uint64_t queue_delay_max, uint64_t current_time)

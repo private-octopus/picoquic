@@ -317,7 +317,7 @@ static const picoquic_demo_stream_desc_t demo_test_scenario[] = {
     { 4, 0, "12345", "doc-12345.txt", 0 } };
 static size_t const nb_demo_test_scenario = sizeof(demo_test_scenario) / sizeof(picoquic_demo_stream_desc_t);
 
-static const demo_test_stream_length[] = {
+static size_t const demo_test_stream_length[] = {
     128,
     12345
 };
