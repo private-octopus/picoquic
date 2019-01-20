@@ -921,7 +921,7 @@ picoquic_stream_head* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
         picoquic_stream_head* hi_pri_stream = cnx->first_stream;
 
         while (hi_pri_stream && hi_pri_stream->stream_id != cnx->high_priority_stream_id) {
-            hi_pri_stream = start_stream->next_stream;
+            hi_pri_stream = hi_pri_stream->next_stream;
         }
 
         if (hi_pri_stream == NULL) {

@@ -97,13 +97,12 @@ static const int default_server_port = 4443;
 static const char* default_server_name = "::";
 static const char* ticket_store_filename = "demo_ticket_store.bin";
 
-static const char* bad_request_message = "<html><head><title>Bad Request</title></head><body>Bad request. Why don't you try \"GET /doc-456789.html\"?</body></html>";
-
 #include "picoquic.h"
 #include "picoquic_internal.h"
 #include "picosocks.h"
 #include "util.h"
 #include "democlient.h"
+#include "demoserver.h"
 
 void print_address(struct sockaddr* address, char* label, picoquic_connection_id_t cnx_id)
 {
@@ -121,23 +120,6 @@ void print_address(struct sockaddr* address, char* label, picoquic_connection_id
     } else {
         printf("%s: inet_ntop failed with error # %ld\n", label, WSA_LAST_ERROR(errno));
     }
-}
-
-static char* strip_endofline(char* buf, size_t bufmax, char const* line)
-{
-    for (size_t i = 0; i < bufmax; i++) {
-        int c = line[i];
-
-        if (c == 0 || c == '\r' || c == '\n') {
-            buf[i] = 0;
-            break;
-        } else {
-            buf[i] = c;
-        }
-    }
-
-    buf[bufmax - 1] = 0;
-    return buf;
 }
 
 static void picoquic_set_key_log_file_from_env(picoquic_quic_t* quic)
@@ -176,227 +158,6 @@ static void picoquic_set_key_log_file_from_env(picoquic_quic_t* quic)
     picoquic_set_key_log_file(quic, F);
 }
 
-#define PICOQUIC_FIRST_COMMAND_MAX 128
-#define PICOQUIC_FIRST_RESPONSE_MAX (1 << 20)
-
-typedef enum {
-    picoquic_first_server_stream_status_none = 0,
-    picoquic_first_server_stream_status_receiving,
-    picoquic_first_server_stream_status_finished
-} picoquic_first_server_stream_status_t;
-
-typedef struct st_picoquic_first_server_stream_ctx_t {
-    struct st_picoquic_first_server_stream_ctx_t* next_stream;
-    picoquic_first_server_stream_status_t status;
-    uint64_t stream_id;
-    size_t command_length;
-    size_t response_length;
-    uint8_t command[PICOQUIC_FIRST_COMMAND_MAX];
-} picoquic_first_server_stream_ctx_t;
-
-typedef struct st_picoquic_first_server_callback_ctx_t {
-    picoquic_first_server_stream_ctx_t* first_stream;
-    size_t buffer_max;
-    uint8_t* buffer;
-} picoquic_first_server_callback_ctx_t;
-
-static picoquic_first_server_callback_ctx_t* first_server_callback_create_context()
-{
-    picoquic_first_server_callback_ctx_t* ctx = (picoquic_first_server_callback_ctx_t*)
-        malloc(sizeof(picoquic_first_server_callback_ctx_t));
-
-    if (ctx != NULL) {
-        memset(ctx, 0, sizeof(picoquic_first_server_callback_ctx_t));
-        ctx->first_stream = NULL;
-        ctx->buffer = (uint8_t*)malloc(PICOQUIC_FIRST_RESPONSE_MAX);
-        if (ctx->buffer == NULL) {
-            free(ctx);
-            ctx = NULL;
-        } else {
-            ctx->buffer_max = PICOQUIC_FIRST_RESPONSE_MAX;
-        }
-    }
-
-    return ctx;
-}
-
-static void first_server_callback_delete_context(picoquic_first_server_callback_ctx_t* ctx)
-{
-    picoquic_first_server_stream_ctx_t* stream_ctx;
-
-    while ((stream_ctx = ctx->first_stream) != NULL) {
-        ctx->first_stream = stream_ctx->next_stream;
-        free(stream_ctx);
-    }
-
-    if (ctx->buffer != NULL) {
-        free(ctx->buffer);
-        ctx->buffer = NULL;
-    }
-
-    free(ctx);
-}
-
-static int first_server_callback(picoquic_cnx_t* cnx,
-    uint64_t stream_id, uint8_t* bytes, size_t length,
-    picoquic_call_back_event_t fin_or_event, void* callback_ctx)
-{
-    picoquic_first_server_callback_ctx_t* ctx = (picoquic_first_server_callback_ctx_t*)callback_ctx;
-    picoquic_first_server_stream_ctx_t* stream_ctx = NULL;
-
-    printf("%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
-    picoquic_log_time(stdout, cnx, picoquic_current_time(), "", " : ");
-    printf("Server CB, Stream: %" PRIu64 ", %" PRIst " bytes, fin=%d (%s)\n",
-        stream_id, length, fin_or_event, picoquic_log_fin_or_event_name(fin_or_event));
-
-    if (fin_or_event == picoquic_callback_prepare_to_send) {
-        /* Unexpected call. */
-        return -1;
-    }
-
-    if (fin_or_event == picoquic_callback_close || 
-        fin_or_event == picoquic_callback_application_close ||
-        fin_or_event == picoquic_callback_stateless_reset) {
-        if (ctx != NULL) {
-            first_server_callback_delete_context(ctx);
-            picoquic_set_callback(cnx, first_server_callback, NULL);
-        }
-        fflush(stdout);
-        return 0;
-    }
-
-    if (ctx == NULL) {
-        picoquic_first_server_callback_ctx_t* new_ctx = first_server_callback_create_context();
-        if (new_ctx == NULL) {
-            /* cannot handle the connection */
-            printf("%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
-            printf("Memory error, cannot allocate application context\n");
-
-            picoquic_close(cnx, PICOQUIC_ERROR_MEMORY);
-            return 0;
-        } else {
-            picoquic_set_callback(cnx, first_server_callback, new_ctx);
-            ctx = new_ctx;
-        }
-    }
-
-    stream_ctx = ctx->first_stream;
-
-    /* if stream is already present, check its state. New bytes? */
-    while (stream_ctx != NULL && stream_ctx->stream_id != stream_id) {
-        stream_ctx = stream_ctx->next_stream;
-    }
-
-    if (stream_ctx == NULL) {
-        stream_ctx = (picoquic_first_server_stream_ctx_t*)
-            malloc(sizeof(picoquic_first_server_stream_ctx_t));
-        if (stream_ctx == NULL) {
-            /* Could not handle this stream */
-            picoquic_reset_stream(cnx, stream_id, 500);
-            return 0;
-        } else {
-            memset(stream_ctx, 0, sizeof(picoquic_first_server_stream_ctx_t));
-            stream_ctx->next_stream = ctx->first_stream;
-            ctx->first_stream = stream_ctx;
-            stream_ctx->stream_id = stream_id;
-        }
-    }
-
-    /* verify state and copy data to the stream buffer */
-    if (fin_or_event == picoquic_callback_stop_sending) {
-        stream_ctx->status = picoquic_first_server_stream_status_finished;
-        picoquic_reset_stream(cnx, stream_id, 0);
-        printf("%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
-        printf("Server CB, Stop Sending Stream: %" PRIu64 ", resetting the local stream.\n",
-            stream_id);
-        return 0;
-    } else if (fin_or_event == picoquic_callback_stream_reset) {
-        stream_ctx->status = picoquic_first_server_stream_status_finished;
-        picoquic_reset_stream(cnx, stream_id, 0);
-        printf("%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
-        printf("Server CB, Reset Stream: %" PRIu64 ", resetting the local stream.\n",
-            stream_id);
-        return 0;
-    } else if (stream_ctx->status == picoquic_first_server_stream_status_finished || stream_ctx->command_length + length > (PICOQUIC_FIRST_COMMAND_MAX - 1)) {
-        if (fin_or_event == picoquic_callback_stream_fin && length == 0) {
-            /* no problem, this is fine. */
-        } else {
-            /* send after fin, or too many bytes => reset! */
-            picoquic_reset_stream(cnx, stream_id, PICOQUIC_TRANSPORT_STREAM_STATE_ERROR);
-            printf("%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
-            printf("Server CB, Stream: %" PRIu64 ", RESET, too long or after FIN\n",
-                stream_id);
-        }
-        return 0;
-    } else if (fin_or_event == picoquic_callback_stream_gap) {
-        /* We do not support this, yet */
-        stream_ctx->status = picoquic_first_server_stream_status_finished;
-        picoquic_reset_stream(cnx, stream_id, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION);
-        printf("%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
-        printf("Server CB, Stream: %" PRIu64 ", RESET, stream gaps not supported\n", stream_id);
-        return 0;
-    } else if (fin_or_event == picoquic_callback_stream_data || fin_or_event == picoquic_callback_stream_fin) {
-        int crlf_present = 0;
-
-        if (length > 0) {
-            memcpy(&stream_ctx->command[stream_ctx->command_length],
-                bytes, length);
-            stream_ctx->command_length += length;
-            for (size_t i = 0; i < length; i++) {
-                if (bytes[i] == '\r' || bytes[i] == '\n') {
-                    crlf_present = 1;
-                    break;
-                }
-            }
-        }
-
-        /* if FIN present, process request through http 0.9 */
-        if ((fin_or_event == picoquic_callback_stream_fin || crlf_present != 0) && stream_ctx->response_length == 0) {
-            char buf[256];
-
-            stream_ctx->command[stream_ctx->command_length] = 0;
-            /* if data generated, just send it. Otherwise, just FIN the stream. */
-            stream_ctx->status = picoquic_first_server_stream_status_finished;
-            if (http0dot9_get(stream_ctx->command, stream_ctx->command_length,
-                    ctx->buffer, ctx->buffer_max, &stream_ctx->response_length)
-                != 0) {
-                printf("%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
-                printf("Server CB, Stream: %" PRIu64 ", Reply with bad request message after command: %s\n",
-                    stream_id, strip_endofline(buf, sizeof(buf), (char*)&stream_ctx->command));
-                
-                // picoquic_reset_stream(cnx, stream_id, 404);
-
-                (void)picoquic_add_to_stream(cnx, stream_ctx->stream_id, (const uint8_t *) bad_request_message,
-                    strlen(bad_request_message), 1);
-            } else {
-                printf("%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
-                printf("Server CB, Stream: %" PRIu64 ", Processing command: %s\n",
-                    stream_id, strip_endofline(buf, sizeof(buf), (char*)&stream_ctx->command));
-                picoquic_add_to_stream(cnx, stream_id, ctx->buffer,
-                    stream_ctx->response_length, 1);
-            }
-        } else if (stream_ctx->response_length == 0) {
-            char buf[256];
-
-            printf("%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
-            stream_ctx->command[stream_ctx->command_length] = 0;
-            printf("Server CB, Stream: %" PRIu64 ", Partial command: %s\n",
-                stream_id, strip_endofline(buf, sizeof(buf), (char*)&stream_ctx->command));
-            fflush(stdout);
-        }
-    } else {
-        /* Unknown event */
-        stream_ctx->status = picoquic_first_server_stream_status_finished;
-        picoquic_reset_stream(cnx, stream_id, PICOQUIC_TRANSPORT_INTERNAL_ERROR);
-        printf("%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
-        printf("Server CB, Stream: %" PRIu64 ", unexpected event\n", stream_id);
-        return 0;
-    }
-
-    /* that's it */
-    return 0;
-}
-
 int quic_server(const char* server_name, int server_port,
     const char* pem_cert, const char* pem_key,
     int just_once, int do_hrr, cnx_id_cb_fn cnx_id_callback,
@@ -430,7 +191,7 @@ int quic_server(const char* server_name, int server_port,
     if (ret == 0) {
         current_time = picoquic_current_time();
         /* Create QUIC context */
-        qserver = picoquic_create(8, pem_cert, pem_key, NULL, NULL, first_server_callback, NULL,
+        qserver = picoquic_create(8, pem_cert, pem_key, NULL, NULL, picoquic_demo_server_callback, NULL,
             cnx_id_callback, cnx_id_callback_ctx, reset_seed, current_time, NULL, NULL, NULL, 0);
 
         if (qserver == NULL) {
@@ -591,16 +352,6 @@ int quic_server(const char* server_name, int server_port,
 
     return ret;
 }
-
-#if 0
-typedef struct st_demo_stream_desc_t {
-    uint32_t stream_id;
-    uint32_t previous_stream_id;
-    char const* doc_name;
-    char const* f_name;
-    int is_binary;
-} demo_stream_desc_t;
-#endif
 
 static const picoquic_demo_stream_desc_t test_scenario[] = {
 #ifdef PICOQUIC_TEST_AGAINST_ATS

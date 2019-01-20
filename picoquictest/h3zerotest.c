@@ -24,6 +24,7 @@
 #include "picoquictest_internal.h"
 #include "h3zero.h"
 #include "democlient.h"
+#include "demoserver.h"
 
 /*
  * Test of the prefixed integer encoding
@@ -311,19 +312,18 @@ int h3zero_prepare_qpack_test()
  * Set a connection between an H3 client and an H3 server over
  * network simulation.
  */
-static const picoquic_demo_stream_desc_t h3zero_test_scenario[] = {
+static const picoquic_demo_stream_desc_t demo_test_scenario[] = {
     { 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "root.html", 0 },
     { 4, 0, "12345", "doc-12345.txt", 0 } };
-static size_t const nb_h3zero_test_scenario = sizeof(h3zero_test_scenario) / sizeof(picoquic_demo_stream_desc_t);
+static size_t const nb_demo_test_scenario = sizeof(demo_test_scenario) / sizeof(picoquic_demo_stream_desc_t);
 
-static const h3zero_test_stream_length[] = {
+static const demo_test_stream_length[] = {
     128,
     12345
 };
 
-int h3zero_server_test()
+static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server_callback_fn)
 {
-    char const * alpn = "h3-17";
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
     uint64_t time_out;
@@ -333,7 +333,7 @@ int h3zero_server_test()
     picoquic_demo_callback_ctx_t callback_ctx;
     int ret;
 
-    ret = picoquic_demo_client_initialize_context(&callback_ctx, h3zero_test_scenario, nb_h3zero_test_scenario, alpn);
+    ret = picoquic_demo_client_initialize_context(&callback_ctx, demo_test_scenario, nb_demo_test_scenario, alpn);
 
     if (ret == 0) {
         ret = tls_api_init_ctx(&test_ctx,
@@ -353,7 +353,7 @@ int h3zero_server_test()
      * We want to replace that by the H3 callback */
 
     if (ret == 0) {
-        picoquic_set_default_callback(test_ctx->qserver, h3zero_server_callback, NULL);
+        picoquic_set_default_callback(test_ctx->qserver, server_callback_fn, NULL);
         picoquic_set_callback(test_ctx->cnx_client, picoquic_demo_client_callback, &callback_ctx);
         ret = picoquic_start_client_cnx(test_ctx->cnx_client);
     }
@@ -389,10 +389,10 @@ int h3zero_server_test()
     }
 
     /* Verify that the data was properly received. */
-    for (size_t i = 0; ret == 0 && i < nb_h3zero_test_scenario; i++) {
+    for (size_t i = 0; ret == 0 && i < nb_demo_test_scenario; i++) {
         picoquic_demo_client_stream_ctx_t* stream = callback_ctx.first_stream;
 
-        while (stream != NULL && stream->stream_id != h3zero_test_scenario[i].stream_id) {
+        while (stream != NULL && stream->stream_id != demo_test_scenario[i].stream_id) {
             stream = stream->next_stream;
         }
 
@@ -404,7 +404,7 @@ int h3zero_server_test()
             DBG_PRINTF("Scenario stream %d, file was not closed\n", (int)i);
             ret = -1;
         }
-        else if (stream->received_length < h3zero_test_stream_length[i]) {
+        else if (stream->received_length < demo_test_stream_length[i]) {
             DBG_PRINTF("Scenario stream %d, only %d bytes received\n", 
                 (int)i, (int)stream->received_length);
             ret = -1;
@@ -418,5 +418,35 @@ int h3zero_server_test()
         test_ctx = NULL;
     }
     
+    return ret;
+}
+
+int h3zero_server_test()
+{
+    return demo_server_test("h3-17", h3zero_server_callback);
+}
+
+int h09_server_test()
+{
+    return demo_server_test("hq-17", picoquic_h09_server_callback);
+}
+
+int generic_server_test()
+{
+    char const * alpn_09 = "hq-17";
+    char const * alpn_3 = "h3-17";
+    int ret = demo_server_test(alpn_09, picoquic_demo_server_callback);
+
+    if (ret != 0) {
+        DBG_PRINTF("Generic server test fails for %s\n", alpn_09);
+    }
+    else {
+        ret = demo_server_test(alpn_3, picoquic_demo_server_callback);
+
+        if (ret != 0) {
+            DBG_PRINTF("Generic server test fails for %s\n", alpn_3);
+        }
+    }
+
     return ret;
 }

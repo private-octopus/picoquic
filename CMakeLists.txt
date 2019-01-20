@@ -16,6 +16,7 @@ endif()
 set(PICOQUIC_LIBRARY_FILES
     picoquic/cubic.c
 	picoquic/democlient.c
+	picoquic/demoserver.c
     picoquic/fnv1a.c
     picoquic/frames.c
     picoquic/h3zero.c

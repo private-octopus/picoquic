@@ -81,6 +81,9 @@
     <ClCompile Include="democlient.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="demoserver.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquic.h">
@@ -114,6 +117,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="democlient.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="demoserver.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

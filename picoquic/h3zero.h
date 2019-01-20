@@ -181,37 +181,6 @@ extern uint8_t const * h3zero_default_setting_frame;
 
 extern const size_t h3zero_default_setting_frame_size;
 
-/*
- * Server side callback contexts
- */
-
-#define H3ZERO_SERVER_FRAME_MAX 4096
-#define H3ZERO_COMMAND_MAX 256
-#define H3ZERO_RESPONSE_MAX (1 << 20)
-
-typedef enum {
-    h3zero_server_stream_status_none = 0,
-    h3zero_server_stream_status_receiving,
-    h3zero_server_stream_status_finished
-} h3zero_server_stream_status_t;
-
-typedef struct st_h3zero_server_stream_ctx_t {
-    struct st_h3zero_server_stream_ctx_t* next_stream;
-    h3zero_server_stream_status_t status;
-    uint64_t stream_id;
-    size_t received_length;
-    uint32_t echo_length;
-    uint32_t echo_sent;
-    uint8_t frame[H3ZERO_SERVER_FRAME_MAX];
-} h3zero_server_stream_ctx_t;
-
-typedef struct st_h3zero_server_callback_ctx_t {
-    h3zero_server_stream_ctx_t* first_stream;
-    size_t buffer_max;
-    uint8_t* buffer;
-} h3zero_server_callback_ctx_t;
-
-
 uint8_t * h3zero_qpack_int_encode(uint8_t * bytes, uint8_t * bytes_max,
     uint8_t mask, uint64_t val);
 uint8_t * h3zero_qpack_int_decode(uint8_t * bytes, uint8_t * bytes_max,
@@ -226,9 +195,5 @@ uint8_t * h3zero_create_response_header_frame(uint8_t * bytes, uint8_t * bytes_m
     h3zero_content_type_enum doc_type);
 uint8_t * h3zero_create_not_found_header_frame(uint8_t * bytes, uint8_t * bytes_max);
 uint8_t * h3zero_create_bad_method_header_frame(uint8_t * bytes, uint8_t * bytes_max);
-
-int h3zero_server_callback(picoquic_cnx_t* cnx,
-    uint64_t stream_id, uint8_t* bytes, size_t length,
-    picoquic_call_back_event_t fin_or_event, void* callback_ctx);
 
 #endif /* H3ZERO_H */

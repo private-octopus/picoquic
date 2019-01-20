@@ -835,5 +835,17 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(h09_server) {
+            int ret = h09_server_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+        
+        TEST_METHOD(generic_server) {
+            int ret = generic_server_test();
+
+            Assert::AreEqual(ret, 0);
+        }
     };
 }
