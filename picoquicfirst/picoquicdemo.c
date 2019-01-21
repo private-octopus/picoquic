@@ -516,9 +516,11 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
 
     ret = picoquic_demo_client_initialize_context(&callback_ctx, test_scenario, test_scenario_nb, alpn);
 
-    ret = picoquic_get_server_address(ip_address_text, server_port, &server_address, &server_addr_length, &is_name);
-    if (sni == NULL && is_name != 0) {
-        sni = ip_address_text;
+    if (ret == 0) {
+        ret = picoquic_get_server_address(ip_address_text, server_port, &server_address, &server_addr_length, &is_name);
+        if (sni == NULL && is_name != 0) {
+            sni = ip_address_text;
+        }
     }
 
     /* Open a UDP socket */
@@ -604,7 +606,9 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
 
                     ret = picoquic_demo_client_start_streams(cnx_client, &callback_ctx, PICOQUIC_DEMO_STREAM_ID_INITIAL);
                 }
-
+            }
+            
+            if (ret = 0) {
                 /* TODO: once migration is supported, manage addresses */
                 ret = picoquic_prepare_packet(cnx_client, current_time,
                     send_buffer, sizeof(send_buffer), &send_length, NULL, NULL, NULL, NULL);

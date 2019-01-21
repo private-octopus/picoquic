@@ -20,6 +20,7 @@
 */
 
 #include <string.h>
+#include <stdlib.h>
 #include "picoquic_internal.h"
 #include "picoquictest_internal.h"
 #include "h3zero.h"
@@ -144,7 +145,7 @@ static qpack_huffman_test_case_t qpack_huffman_test_case[] = {
     qpack_huffman_data_3, sizeof(qpack_huffman_data_3)}
 };
 
-static nb_qpack_huffman_test_case = sizeof(qpack_huffman_test_case) / sizeof(qpack_huffman_test_case_t);
+static size_t nb_qpack_huffman_test_case = sizeof(qpack_huffman_test_case) / sizeof(qpack_huffman_test_case_t);
 
 int qpack_huffman_test()
 {
@@ -321,8 +322,8 @@ static int h3zero_parse_qpack_test_one(size_t i, uint8_t * data, size_t data_len
     }
 
     if (parts.path != NULL) {
-        free(parts.path);
-        parts.path = NULL;
+        free((uint8_t *)parts.path);
+        *((uint8_t **)&parts.path) = NULL;
     }
 
     return ret;
