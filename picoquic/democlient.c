@@ -279,8 +279,31 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
         stream_ctx = picoquic_demo_client_find_stream(ctx, stream_id);
         if (stream_ctx != NULL && stream_ctx->F != NULL) {
             if (length > 0) {
-                ret = (fwrite(bytes, 1, length, stream_ctx->F) > 0) ? 0 : -1;
-                stream_ctx->received_length += length;
+                switch (ctx->alpn) {
+                case picoquic_alpn_http_3: {
+                    uint16_t error_found = 0;
+                    size_t available_data = 0;
+                    uint8_t * bytes_max = bytes + length;
+                    while (bytes < bytes_max) {
+                        bytes = h3zero_parse_data_stream(bytes, bytes_max, &stream_ctx->stream_state, &available_data, &error_found);
+                        if (bytes == NULL) {
+                            ret = picoquic_close(cnx, error_found);
+                            break;
+                        }
+                        else if (available_data > 0) {
+                            ret = (fwrite(bytes, 1, available_data, stream_ctx->F) > 0) ? 0 : -1;
+                            stream_ctx->received_length += available_data;
+                            bytes += available_data;
+                        }
+                    }
+                    break;
+                }
+                case picoquic_alpn_http_0_9:
+                default:
+                    ret = (fwrite(bytes, 1, length, stream_ctx->F) > 0) ? 0 : -1;
+                    stream_ctx->received_length += length;
+                    break;
+                }
             }
 
             if (fin_or_event == picoquic_callback_stream_fin) {
@@ -390,6 +413,8 @@ static void picoquic_demo_client_delete_stream_context(picoquic_demo_callback_ct
     picoquic_demo_client_stream_ctx_t * stream_ctx)
 {
     int removed_from_context = 0;
+
+    h3zero_delete_data_stream_state(&stream_ctx->stream_state);
 
     if (stream_ctx->F != NULL) {
         fclose(stream_ctx->F);

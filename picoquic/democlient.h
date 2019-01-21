@@ -52,6 +52,7 @@ typedef struct st_picoquic_demo_stream_ctx_t picoquic_demo_client_stream_ctx_t;
 
 typedef struct st_picoquic_demo_stream_ctx_t {
     picoquic_demo_client_stream_ctx_t* next_stream;
+    h3zero_data_stream_state_t stream_state;
     size_t received_length;
     size_t scenario_index;
     uint64_t stream_id;

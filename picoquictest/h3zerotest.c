@@ -120,6 +120,63 @@ int h3zero_integer_test()
     return ret;
 }
 
+/* Test of QPACK Huffman decoding */
+static uint8_t qpack_huffman_test_1[] = { 0xce, 0x64, 0x97, 0x75, 0x65, 0x2c, 0x9f };
+static uint8_t qpack_huffman_test_2[] = { 0x1d, 0x75, 0xd0, 0x62, 0x0d, 0x26, 0x3d, 0x4c, 0x4e, 0x9a, 0x68 };
+static uint8_t qpack_huffman_test_3[] = { 0x7c, 0x40 };
+static uint8_t qpack_huffman_data_1[] = { 'L', 'i', 't', 'e', 'S', 'p', 'e', 'e', 'd' };
+static uint8_t qpack_huffman_data_2[] = { 'a', 'p', 'p', 'l', 'i', 'c', 'a', 't', 'i', 'o', 'n', '/', 'h', 't', 'm', 'l' };
+static uint8_t qpack_huffman_data_3[] = { '9', '2', '0' };
+
+typedef struct st_qpack_huffman_test_case_t {
+    uint8_t * test;
+    size_t test_size;
+    uint8_t * result;
+    size_t result_size;
+} qpack_huffman_test_case_t;
+
+static qpack_huffman_test_case_t qpack_huffman_test_case[] = {
+    { qpack_huffman_test_1, sizeof(qpack_huffman_test_1),
+    qpack_huffman_data_1, sizeof(qpack_huffman_data_1)},
+    { qpack_huffman_test_2, sizeof(qpack_huffman_test_2),
+    qpack_huffman_data_2, sizeof(qpack_huffman_data_2)},
+    { qpack_huffman_test_3, sizeof(qpack_huffman_test_3),
+    qpack_huffman_data_3, sizeof(qpack_huffman_data_3)}
+};
+
+static nb_qpack_huffman_test_case = sizeof(qpack_huffman_test_case) / sizeof(qpack_huffman_test_case_t);
+
+int qpack_huffman_test()
+{
+    int ret = 0;
+    uint8_t data[256];
+    size_t nb_data;
+
+    for (size_t i = 0; ret == 0 && i < nb_qpack_huffman_test_case; i++) {
+        ret = hzero_qpack_huffman_decode(
+            qpack_huffman_test_case[i].test,
+            qpack_huffman_test_case[i].test + qpack_huffman_test_case[i].test_size,
+            data, sizeof(data), &nb_data);
+        if (ret == 0) {
+            if (nb_data != qpack_huffman_test_case[i].result_size) {
+                DBG_PRINTF("Huffman test %d bad ength (%d vs %d)\n", (int)i,
+                    (int)nb_data, (int)qpack_huffman_test_case[i].result_size);
+                ret = -1;
+            }
+            else if (memcmp(qpack_huffman_test_case[i].result, data, nb_data) != 0) {
+                DBG_PRINTF("Huffman test %d does not match \n", (int)i);
+                ret = -1;
+            }
+        }
+        else {
+            DBG_PRINTF("Huffman cannot decode test %d\n", (int)i);
+        }
+    }
+
+    return ret;
+}
+
+
 /* Test decoding of basic QPACK messages */
 
 #define QPACK_TEST_HEADER_BLOCK_PREFIX 0,0
@@ -130,6 +187,8 @@ int h3zero_integer_test()
 #define QPACK_TEST_HEADER_PATH_LEN 5
 #define QPACK_TEST_HEADER_STATUS ':', 's', 't', 'a', 't', 'u', 's'
 #define QPACK_TEST_HEADER_STATUS_LEN 7
+#define QPACK_TEST_HEADER_QPACK_PATH 0xFD, 0xFD, 0xFD 
+#define QPACK_TEST_HEADER_DEQPACK_PATH 'Z', 'Z', 'Z'
 
 static uint8_t qpack_test_get_slash[] = {
     QPACK_TEST_HEADER_BLOCK_PREFIX, 0xC0|17, 0xC0 | 1};
@@ -156,8 +215,13 @@ static uint8_t qpack_test_status_405_code[] = {
     QPACK_TEST_HEADER_BLOCK_PREFIX, 0x50 | 0x0F, 13, 3, '4', '0', '5', 0xFF, 
     (uint8_t)(H3ZERO_QPACK_ALLOW_GET - 63)};
 
+static uint8_t qpack_test_get_zzz[] = {
+    QPACK_TEST_HEADER_BLOCK_PREFIX, 0xC0 | 17, 0x50 | 1,
+    0x80 | 3, QPACK_TEST_HEADER_QPACK_PATH };
+
 static uint8_t qpack_test_string_index_html[] = { QPACK_TEST_HEADER_INDEX_HTML };
 static uint8_t qpack_test_string_slash[] = { '/' };
+static uint8_t qpack_test_string_zzz[] = { 'Z', 'Z', 'Z' };
 
 typedef struct st_qpack_test_case_t {
     uint8_t * bytes;
@@ -201,6 +265,10 @@ static qpack_test_case_t qpack_test_case[] = {
     {
         qpack_test_status_405_code, sizeof(qpack_test_status_405_code),
         { 0, NULL, 0, 405, 0}
+    },
+    {
+        qpack_test_get_zzz, sizeof(qpack_test_get_zzz),
+        { h3zero_method_get, qpack_test_string_zzz, sizeof(qpack_test_string_zzz), 0, 0}
     }
 };
 
@@ -250,6 +318,11 @@ static int h3zero_parse_qpack_test_one(size_t i, uint8_t * data, size_t data_len
     else if (parts.content_type != qpack_test_case[i].parts.content_type) {
         DBG_PRINTF("Qpack case %d parse wrong content_type", i);
         ret = -1;
+    }
+
+    if (parts.path != NULL) {
+        free(parts.path);
+        parts.path = NULL;
     }
 
     return ret;
@@ -303,6 +376,128 @@ int h3zero_prepare_qpack_test()
         else {
             ret = h3zero_parse_qpack_test_one((size_t)j, buffer, bytes - buffer);
         }
+    }
+
+    return ret;
+}
+
+/*
+ * Test of the stream decoding filter
+ */
+
+static uint8_t h3zero_stream_test1[] = {
+    4, h3zero_frame_header,
+    QPACK_TEST_HEADER_BLOCK_PREFIX, 0xC0 | 17, 0xC0 | 1 };
+
+#define H3ZERO_STREAM_TEST2_DATA 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l'
+
+static uint8_t h3zero_stream_test2_data[] = { H3ZERO_STREAM_TEST2_DATA };
+
+static uint8_t h3zero_stream_test2[] = {
+    4, h3zero_frame_header,
+    QPACK_TEST_HEADER_BLOCK_PREFIX, 0xC0 | 25, 0xC0 | 52,
+    12, h3zero_frame_data,
+    H3ZERO_STREAM_TEST2_DATA };
+
+static uint8_t h3zero_stream_test3[] = {
+    0x40, 4, h3zero_frame_header,
+    QPACK_TEST_HEADER_BLOCK_PREFIX, 0xC0 | 25, 0xC0 | 52,
+    12, h3zero_frame_data,
+    H3ZERO_STREAM_TEST2_DATA,
+    8, h3zero_frame_header,
+    QPACK_TEST_HEADER_BLOCK_PREFIX, 0x50 | 0x0F, 13, 3, '4', '0', '4'
+};
+
+int h3zero_stream_test_one_split(uint8_t * bytes, size_t nb_bytes, size_t split,
+    uint8_t * data_ref, size_t data_len, int has_trailer)
+{
+    int ret = 0;
+    h3zero_data_stream_state_t stream_state;
+    uint8_t * bmax[2] = { bytes + split, bytes + nb_bytes };
+    size_t nb_data = 0;
+    uint8_t data[64];
+    size_t available_data;
+    uint16_t error_found;
+
+    memset(&stream_state, 0, sizeof(h3zero_data_stream_state_t));
+
+    for (int i = 0; ret == 0 && i < 2; i++) {
+        while (bytes != NULL && bytes < bmax[i]) {
+            bytes = h3zero_parse_data_stream(bytes, bmax[i], &stream_state, &available_data, &error_found);
+            if (bytes != NULL && available_data > 0) {
+                if (nb_data + available_data > 64) {
+                    ret = -1;
+                }
+                else {
+                    memcpy(&data[nb_data], bytes, available_data);
+                    bytes += available_data;
+                    nb_data += available_data;
+                }
+            }
+        }
+    }
+
+    if (ret == 0) {
+        if (bytes != bmax[1]) {
+            DBG_PRINTF("%s", "did not parse to the end!\n");
+            ret = -1;
+        }
+        else if (stream_state.frame_header_parsed) {
+            DBG_PRINTF("%s", "stopped with frame not parsed\n");
+            ret = -1;
+        }
+        else if (!stream_state.header_found) {
+            DBG_PRINTF("%s", "did not parse the first header\n");
+            ret = -1;
+        }
+        else if (nb_data != data_len) {
+            DBG_PRINTF("%s", "did not get right amount of data (%d vs %d)\n",
+                (int)nb_data, (int)data_len);
+            ret = -1;
+        }
+        else if (nb_data != 0 && memcmp(data, data_ref, nb_data) != 0) {
+            DBG_PRINTF("%s", "did not get right amount of data (%d vs %d)\n",
+                (int)nb_data, (int)data_len);
+            ret = -1;
+        }
+        else if (has_trailer && !stream_state.trailer_found) {
+            DBG_PRINTF("%s", "did not parse the trailer\n");
+            ret = -1;
+        }
+        else if (!has_trailer && stream_state.trailer_found) {
+            DBG_PRINTF("%s", "found an extra trailer\n");
+            ret = -1;
+        }
+    }
+
+    h3zero_delete_data_stream_state(&stream_state);
+    return ret;
+}
+
+int h3zero_stream_test_one(uint8_t * bytes, size_t nb_bytes,
+    uint8_t * data_ref, size_t data_len, int has_trailer)
+{
+    int ret = 0;
+
+    for (size_t split = 0; ret == 0 && split < data_len; split++) {
+        ret = h3zero_stream_test_one_split(bytes, nb_bytes, split, data_ref, data_len, has_trailer);
+    }
+
+    return ret;
+}
+
+int h3zero_stream_test()
+{
+    int ret = h3zero_stream_test_one(h3zero_stream_test1, sizeof(h3zero_stream_test1), NULL, 0, 0);
+
+    if (ret == 0) {
+        ret = h3zero_stream_test_one(h3zero_stream_test2, sizeof(h3zero_stream_test2), 
+            h3zero_stream_test2_data, sizeof(h3zero_stream_test2_data), 0);
+    }
+
+    if (ret == 0) {
+        ret = h3zero_stream_test_one(h3zero_stream_test3, sizeof(h3zero_stream_test3),
+            h3zero_stream_test2_data, sizeof(h3zero_stream_test2_data), 1);
     }
 
     return ret;

@@ -257,6 +257,11 @@ static int h3zero_server_parse_request_frame(
                 }
             }
         }
+
+        if (parts.path != NULL) {
+            free((void *)parts.path);
+            *(void**)(&parts.path) = NULL;
+        }
     }
 
     return ret;

@@ -175,6 +175,7 @@ typedef struct st_h3zero_header_parts_t {
     size_t path_length;
     int status;
     h3zero_content_type_enum content_type;
+    unsigned int path_is_huffman : 1;
 } h3zero_header_parts_t;
 
 extern uint8_t const * h3zero_default_setting_frame;
@@ -195,5 +196,42 @@ uint8_t * h3zero_create_response_header_frame(uint8_t * bytes, uint8_t * bytes_m
     h3zero_content_type_enum doc_type);
 uint8_t * h3zero_create_not_found_header_frame(uint8_t * bytes, uint8_t * bytes_max);
 uint8_t * h3zero_create_bad_method_header_frame(uint8_t * bytes, uint8_t * bytes_max);
+
+/* Parsing of a data stream. This is implemented as a filter, with a set of states:
+ *
+ * - Reading frame length: obtaining the length and type of the next frame.
+ * - Reading header frame: obtaining the bytes of the data frame.
+ *   When all bytes are obtained, the header is parsed and the header
+ *   structure is documented. State moves back to initial, with header-read
+ *   flag set. Having two frame headers before a data frame is a bug.
+ * - Reading data frame: the frame header indicated a data frame of
+ *   length N. Treat the following N bytes as data.
+ *
+ * There may be several data frames in a stream. The application will pick
+ * the bytes and treat them as data.
+ */
+
+typedef struct st_h3zero_data_stream_state_t {
+    h3zero_header_parts_t header;
+    h3zero_header_parts_t trailer;
+    uint8_t * current_frame;
+    uint64_t current_frame_length;
+    uint64_t current_frame_read;
+    size_t frame_header_read;
+    uint8_t current_frame_type;
+    uint8_t frame_header[9];
+    unsigned int frame_header_parsed : 1;
+    unsigned int header_found : 1;
+    unsigned int data_found : 1;
+    unsigned int trailer_found : 1;
+} h3zero_data_stream_state_t;
+
+uint8_t * h3zero_parse_data_stream(uint8_t * bytes, uint8_t * bytes_max,
+    h3zero_data_stream_state_t * stream_state, size_t * available_data, uint16_t * error_found);
+
+void h3zero_delete_data_stream_state(h3zero_data_stream_state_t * stream_state);
+
+int hzero_qpack_huffman_decode(uint8_t * bytes, uint8_t * bytes_max,
+    uint8_t * decoded, size_t max_decoded, size_t * nb_decoded);
 
 #endif /* H3ZERO_H */

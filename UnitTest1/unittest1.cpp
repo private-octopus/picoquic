@@ -818,6 +818,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(qpack_huffman) {
+            int ret = qpack_huffman_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(h3zero_parse_qpack) {
             int ret = h3zero_parse_qpack_test();
 
@@ -826,6 +832,12 @@ namespace UnitTest1
 
         TEST_METHOD(h3zero_prepare_qpack) {
             int ret = h3zero_prepare_qpack_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(h3zero_stream) {
+            int ret = h3zero_stream_test();
 
             Assert::AreEqual(ret, 0);
         }

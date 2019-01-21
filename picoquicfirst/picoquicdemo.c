@@ -101,6 +101,7 @@ static const char* ticket_store_filename = "demo_ticket_store.bin";
 #include "picoquic_internal.h"
 #include "picosocks.h"
 #include "util.h"
+#include "h3zero.c"
 #include "democlient.h"
 #include "demoserver.h"
 
