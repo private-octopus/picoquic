@@ -608,7 +608,7 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
                 }
             }
             
-            if (ret = 0) {
+            if (ret == 0) {
                 /* TODO: once migration is supported, manage addresses */
                 ret = picoquic_prepare_packet(cnx_client, current_time,
                     send_buffer, sizeof(send_buffer), &send_length, NULL, NULL, NULL, NULL);
