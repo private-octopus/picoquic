@@ -748,7 +748,7 @@ void picoquic_stream_data_callback(picoquic_cnx_t* cnx, picoquic_stream_head* st
     while (data != NULL && data->offset <= stream->consumed_offset) {
         size_t start = (size_t)(stream->consumed_offset - data->offset);
         size_t data_length = data->length - start;
-        picoquic_call_back_event_t fin_now = picoquic_callback_no_event;
+        picoquic_call_back_event_t fin_now = picoquic_callback_stream_data;
 
         stream->consumed_offset += data_length;
 
@@ -917,6 +917,33 @@ picoquic_stream_head* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
     picoquic_stream_head* start_stream = cnx->first_stream;
     picoquic_stream_head* found_stream = NULL;
 
+    if (cnx->high_priority_stream_id != (uint64_t)((int64_t)-1)) {
+        picoquic_stream_head* hi_pri_stream = cnx->first_stream;
+
+        while (hi_pri_stream && hi_pri_stream->stream_id != cnx->high_priority_stream_id) {
+            hi_pri_stream = hi_pri_stream->next_stream;
+        }
+
+        if (hi_pri_stream == NULL) {
+            cnx->high_priority_stream_id = (uint64_t)((int64_t)-1);
+        }
+        else if (hi_pri_stream->sent_offset >= hi_pri_stream->maxdata_remote ||
+            cnx->maxdata_remote <= cnx->data_sent) {
+            /* Hi priority stream is blocked by peer; waiting for unblock
+             * before allowing any activity on other streams. */
+            return NULL;
+        }
+        else if (hi_pri_stream->is_active ||
+            (hi_pri_stream->send_queue != NULL &&
+                hi_pri_stream->send_queue->length > hi_pri_stream->send_queue->offset)) {
+            /* Data ready on the hi-priority stream */
+            return hi_pri_stream;
+        }
+        else {
+            /* No data on high pri stream. Assume not needed anymore */
+            cnx->high_priority_stream_id = (uint64_t)((int64_t)-1);
+        }
+    }
 
     /* Skip to the first non visited stream */
     while (start_stream && start_stream->stream_id <= cnx->last_visited_stream_id) {

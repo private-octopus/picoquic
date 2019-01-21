@@ -1,3 +1,4 @@
+#include "picoquic.h"
 /*
 * Author: Christian Huitema
 * Copyright (c) 2017, Private Octopus, Inc.
@@ -1307,6 +1308,8 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             picoquic_insert_cnx_by_wake_time(quic, cnx);
             /* Do not require verification for default path */
             cnx->path[0]->challenge_verified = 1;
+
+            cnx->high_priority_stream_id = (uint64_t)((int64_t)-1);
         }
     }
 
@@ -1507,7 +1510,7 @@ int picoquic_start_client_cnx(picoquic_cnx_t * cnx)
     return ret;
 }
 
-void picoquic_set_transport_parameters(picoquic_cnx_t * cnx, picoquic_tp_t * tp)
+void picoquic_set_transport_parameters(picoquic_cnx_t * cnx, picoquic_tp_t const * tp)
 {
     cnx->local_parameters = *tp;
 
@@ -1685,6 +1688,13 @@ int picoquic_set_default_connection_id_length(picoquic_quic_t* quic, uint8_t cid
     }
 
     return ret;
+}
+
+void picoquic_set_default_callback(picoquic_quic_t* quic,
+    picoquic_stream_data_cb_fn callback_fn, void* callback_ctx)
+{
+    quic->default_callback_fn = callback_fn;
+    quic->default_callback_ctx = callback_ctx;
 }
 
 void picoquic_set_callback(picoquic_cnx_t* cnx,

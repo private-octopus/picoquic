@@ -32,6 +32,7 @@
 #include "picoquic_internal.h"
 #include "picoquictest_internal.h"
 #include <stdlib.h>
+#include <string.h>
 
 picoquictest_sim_link_t* picoquictest_sim_link_create(double data_rate_in_gps,
     uint64_t microsec_latency, uint64_t* loss_mask, uint64_t queue_delay_max, uint64_t current_time)
@@ -231,4 +232,17 @@ int sim_link_test()
     }
 
     return ret;
+}
+
+void picoquic_set_test_address(struct sockaddr_in * addr, uint32_t addr_val, uint16_t port)
+{
+    /* Init of the IP addresses */
+    memset(addr, 0, sizeof(struct sockaddr_in));
+    addr->sin_family = AF_INET;
+#ifdef _WINDOWS
+    addr->sin_addr.S_un.S_addr = addr_val;
+#else
+    addr->sin_addr.s_addr = addr_val;
+#endif
+    addr->sin_port = port;
 }

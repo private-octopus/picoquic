@@ -15,8 +15,11 @@ endif()
 
 set(PICOQUIC_LIBRARY_FILES
     picoquic/cubic.c
+	picoquic/democlient.c
+	picoquic/demoserver.c
     picoquic/fnv1a.c
     picoquic/frames.c
+    picoquic/h3zero.c
     picoquic/http0dot9.c
     picoquic/intformat.c
     picoquic/logger.c
@@ -41,6 +44,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/cnx_creation_test.c
     picoquictest/float16test.c
     picoquictest/fnv1atest.c
+    picoquictest/h3zerotest.c
     picoquictest/hashtest.c
     picoquictest/http0dot9test.c
     picoquictest/intformattest.c

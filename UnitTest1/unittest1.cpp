@@ -811,5 +811,53 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(h3zero_integer) {
+            int ret = h3zero_integer_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qpack_huffman) {
+            int ret = qpack_huffman_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(h3zero_parse_qpack) {
+            int ret = h3zero_parse_qpack_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(h3zero_prepare_qpack) {
+            int ret = h3zero_prepare_qpack_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(h3zero_stream) {
+            int ret = h3zero_stream_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(h3zero_server) {
+            int ret = h3zero_server_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(h09_server) {
+            int ret = h09_server_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+        
+        TEST_METHOD(generic_server) {
+            int ret = generic_server_test();
+
+            Assert::AreEqual(ret, 0);
+        }
     };
 }

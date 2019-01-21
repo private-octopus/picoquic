@@ -226,7 +226,7 @@ typedef struct st_picoquic_cnx_t picoquic_cnx_t;
 typedef struct st_picoquic_path_t picoquic_path_t;
 
 typedef enum {
-    picoquic_callback_no_event = 0, /* Data received from peer on stream N */
+    picoquic_callback_stream_data = 0, /* Data received from peer on stream N */
     picoquic_callback_stream_fin, /* Fin received from peer on stream N; data is optional */
     picoquic_callback_stream_reset, /* Reset Stream received from peer on stream N; bytes=NULL, len = 0  */
     picoquic_callback_stop_sending, /* Stop sending received from peer on stream N; bytes=NULL, len = 0 */
@@ -236,6 +236,29 @@ typedef enum {
     picoquic_callback_stream_gap,  /* bytes=NULL, len = length-of-gap or 0 (if unknown) */
     picoquic_callback_prepare_to_send /* Ask application to send data in frame, see picoquic_provide_stream_data_buffer for details */
 } picoquic_call_back_event_t;
+
+typedef struct st_picoquic_tp_prefered_address_t {
+    uint8_t ipVersion; /* enum { IPv4(4), IPv6(6), (15) } -- 0 if no parameter specified */
+    uint8_t ipAddress[16]; /* opaque ipAddress<4..2 ^ 8 - 1> */
+    uint16_t port;
+    picoquic_connection_id_t connection_id; /*  opaque connectionId<0..18>; */
+    uint8_t statelessResetToken[16];
+} picoquic_tp_prefered_address_t;
+
+typedef struct st_picoquic_tp_t {
+    uint32_t initial_max_stream_data_bidi_local;
+    uint32_t initial_max_stream_data_bidi_remote;
+    uint32_t initial_max_stream_data_uni;
+    uint32_t initial_max_data;
+    uint32_t initial_max_stream_id_bidir;
+    uint32_t initial_max_stream_id_unidir;
+    uint32_t idle_timeout;
+    uint32_t max_packet_size;
+    uint32_t max_ack_delay; /* stored in in microseconds for convenience */
+    uint8_t ack_delay_exponent;
+    unsigned int migration_disabled;
+    picoquic_tp_prefered_address_t prefered_address;
+} picoquic_tp_t;
 
 #define PICOQUIC_STREAM_ID_TYPE_MASK 3
 #define PICOQUIC_STREAM_ID_CLIENT_INITIATED 0
@@ -340,6 +363,9 @@ void picoquic_free(picoquic_quic_t* quic);
 /* Set cookie mode on QUIC context when under stress */
 void picoquic_set_cookie_mode(picoquic_quic_t* quic, int cookie_mode);
 
+/* Set the transport parameters */
+void picoquic_set_transport_parameters(picoquic_cnx_t * cnx, picoquic_tp_t const * tp);
+
 /* Set the TLS certificate chain(DER format) for the QUIC context. The context will take ownership over the certs pointer. */
 void picoquic_set_tls_certificate_chain(picoquic_quic_t* quic, ptls_iovec_t* certs, size_t count);
 
@@ -374,6 +400,8 @@ void picoquic_set_default_spinbit_policy(picoquic_quic_t * quic, picoquic_spinbi
  * Cannot be changed if there are active connections in the context.
  * Value must be compatible with what the cnx_id_callback() expects on a server */
 int picoquic_set_default_connection_id_length(picoquic_quic_t* quic, uint8_t cid_length);
+
+void picoquic_set_default_callback(picoquic_quic_t * quic, picoquic_stream_data_cb_fn callback_fn, void * callback_ctx);
 
 /* Connection context creation and registration */
 picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
@@ -465,6 +493,22 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
  */
 int picoquic_mark_active_stream(picoquic_cnx_t* cnx,
     uint64_t stream_id, int is_active);
+
+/* Mark stream as high priority. This guarantees that the data
+ * queued on this stream will be sent before data from any other
+ * stream. It is used for example in the HTTP3 implementation
+ * to guarantee that the "settings" frame is sent from the
+ * control stream before any other frame. 
+ * Priority is immediately removed when all data from that
+ * stream is sent; it should be reset if new data is added 
+ * for which priority handling is still required. 
+ * Priority is also removed if the "is_high_priority"
+ * parameter is set to 0, or if another stream is set
+ * to high priority.
+ */
+
+int picoquic_mark_high_priority_stream(picoquic_cnx_t* cnx,
+    uint64_t stream_id, int is_high_priority);
 
 /* If a stream is marked active, the application will receive a callback with
  * event type "picoquic_callback_prepare_to_send" when the transport is ready to

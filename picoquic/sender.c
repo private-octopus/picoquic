@@ -99,6 +99,18 @@ int picoquic_mark_active_stream(picoquic_cnx_t* cnx,
     return ret;
 }
 
+int picoquic_mark_high_priority_stream(picoquic_cnx_t * cnx, uint64_t stream_id, int is_high_priority)
+{
+    if (is_high_priority) {
+        cnx->high_priority_stream_id = stream_id;
+    }
+    else if (cnx->high_priority_stream_id == stream_id) {
+        cnx->high_priority_stream_id = (uint64_t)((int64_t)-1);
+    }
+
+    return 0;
+}
+
 int picoquic_add_to_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
     const uint8_t* data, size_t length, int set_fin)
 {
