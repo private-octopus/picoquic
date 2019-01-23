@@ -680,6 +680,9 @@ typedef struct st_picoquic_cnx_t {
     uint32_t nb_zero_rtt_acked;
     uint64_t nb_retransmission_total;
     uint64_t nb_spurious;
+    unsigned int cwin_blocked:1;
+    unsigned int flow_blocked:1;
+    unsigned int stream_blocked:1;
     FILE * cc_log; /* File where congestion control data is logged */
 
     /* ECN Counters */

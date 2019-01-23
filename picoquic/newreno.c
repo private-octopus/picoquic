@@ -102,7 +102,14 @@ void picoquic_newreno_notify(picoquic_path_t* path_x,
         case picoquic_congestion_notification_acknowledgement: {
             switch (nr_state->alg_state) {
             case picoquic_newreno_alg_slow_start:
-                path_x->cwin += nb_bytes_acknowledged;
+                if (path_x->smoothed_rtt <= PICOQUIC_INITIAL_RTT) {
+                    path_x->cwin += nb_bytes_acknowledged;
+                }
+                else {
+                    double delta = ((double)path_x->smoothed_rtt) / ((double)PICOQUIC_INITIAL_RTT);
+                    delta *= (double)nb_bytes_acknowledged;
+                    path_x->cwin += (uint64_t)delta;
+                }
                 /* if cnx->cwin exceeds SSTHRESH, exit and go to CA */
                 if (path_x->cwin >= nr_state->ssthresh) {
                     nr_state->alg_state = picoquic_newreno_alg_congestion_avoidance;
