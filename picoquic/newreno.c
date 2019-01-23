@@ -27,11 +27,16 @@ typedef enum {
     picoquic_newreno_alg_congestion_avoidance
 } picoquic_newreno_alg_state_t;
 
+#define NB_RTT_RENO 4
+
 typedef struct st_picoquic_newreno_state_t {
     picoquic_newreno_alg_state_t alg_state;
     uint64_t residual_ack;
     uint64_t ssthresh;
     uint64_t recovery_start;
+    uint64_t min_rtt;
+    uint64_t last_rtt[NB_RTT_RENO];
+    int nb_rtt;
 } picoquic_newreno_state_t;
 
 void picoquic_newreno_init(picoquic_path_t* path_x)
@@ -40,11 +45,11 @@ void picoquic_newreno_init(picoquic_path_t* path_x)
     picoquic_newreno_state_t* nr_state = (picoquic_newreno_state_t*)malloc(sizeof(picoquic_newreno_state_t));
 
     if (nr_state != NULL) {
+        memset(nr_state, 0, sizeof(picoquic_newreno_state_t));
         path_x->congestion_alg_state = (void*)nr_state;
         nr_state->alg_state = picoquic_newreno_alg_slow_start;
         nr_state->ssthresh = (uint64_t)((int64_t)-1);
         path_x->cwin = PICOQUIC_CWIN_INITIAL;
-        nr_state->residual_ack = 0;
     }
     else {
         path_x->congestion_alg_state = NULL;
@@ -102,11 +107,11 @@ void picoquic_newreno_notify(picoquic_path_t* path_x,
         case picoquic_congestion_notification_acknowledgement: {
             switch (nr_state->alg_state) {
             case picoquic_newreno_alg_slow_start:
-                if (path_x->smoothed_rtt <= PICOQUIC_INITIAL_RTT) {
+                if (path_x->smoothed_rtt <= PICOQUIC_TARGET_RENO_RTT) {
                     path_x->cwin += nb_bytes_acknowledged;
                 }
                 else {
-                    double delta = ((double)path_x->smoothed_rtt) / ((double)PICOQUIC_INITIAL_RTT);
+                    double delta = ((double)path_x->smoothed_rtt) / ((double)PICOQUIC_TARGET_RENO_RTT);
                     delta *= (double)nb_bytes_acknowledged;
                     path_x->cwin += (uint64_t)delta;
                 }
@@ -144,7 +149,40 @@ void picoquic_newreno_notify(picoquic_path_t* path_x,
             }
             break;
         case picoquic_congestion_notification_rtt_measurement:
-            /* TODO: consider using RTT increases as signal to get out of slow start */
+            /* Using RTT increases as signal to get out of initial slow start */
+            if (nr_state->alg_state == picoquic_newreno_alg_slow_start &&
+                nr_state->ssthresh == (uint64_t)((int64_t)-1)) {
+                uint64_t rolling_min;
+                uint64_t delta_rtt;
+
+                if (rtt_measurement < nr_state->min_rtt || nr_state->min_rtt == 0) {
+                    nr_state->min_rtt = rtt_measurement;
+                }
+
+                if (nr_state->nb_rtt > NB_RTT_RENO) {
+                    nr_state->nb_rtt = 0;
+                }
+
+                nr_state->last_rtt[nr_state->nb_rtt] = rtt_measurement;
+                nr_state->nb_rtt++;
+
+                rolling_min = nr_state->last_rtt[0];
+
+                for (int i = 1; i < NB_RTT_RENO; i++) {
+                    if (nr_state->last_rtt[i] == 0) {
+                        break;
+                    }
+                    else if (nr_state->last_rtt[i] < rolling_min) {
+                        rolling_min = nr_state->last_rtt[i];
+                    }
+                }
+
+                delta_rtt = rolling_min - nr_state->min_rtt;
+                if (delta_rtt * 4 > nr_state->min_rtt) {
+                    /* RTT increased too much, get out of slow start! */
+                    nr_state->alg_state = picoquic_newreno_alg_congestion_avoidance;
+                }
+            }
             break;
         default:
             /* ignore */

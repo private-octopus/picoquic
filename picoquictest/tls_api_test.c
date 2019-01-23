@@ -5550,13 +5550,16 @@ int long_rtt_test()
 
         picoquic_set_cc_log(test_ctx->qserver, ".");
 
-        /* TODO: the transmission delay ought to be about 1 second,
-         * but we observe 5 seconds instead. 
-         * It seems that the behavior here is dominated by the "slow start"
-         * phase common to new reno and cubic. Need to speed that up! */
+        /* The transmission delay cannot be less than 2.6 sec:
+         * 3 handshakes at 1 RTT each = 1.8 sec, plus
+         * 1MB over a 10Mbps link = 0.8 sec. We observe
+         * 3.31 seconds instead, i.e. 1.51 sec for the
+         * data transmission. This is due to the slow start
+         * phase of the congestion control, which we accelerated
+         * but could not completely fix. */
         ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
             test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0, 0, 2*latency,
-            5000000);
+            3400000);
     }
 
     if (test_ctx != NULL) {
