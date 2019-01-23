@@ -5524,3 +5524,45 @@ int cid_length_test()
 
     return ret;
 }
+
+/* Testing transmission behavior over large RTT links
+ */
+
+
+ /*
+  * Testing the flow controlled sending scenario
+  */
+
+int long_rtt_test()
+{
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    uint64_t latency = 300000; /* assume that each direction is 300 ms, e.g. satellite link */
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+
+    ret = tls_api_one_scenario_init(&test_ctx, &simulated_time,
+        0, NULL, NULL);
+
+    if (ret == 0) {
+        /* set the delay estimate, then launch the test */
+        test_ctx->c_to_s_link->microsec_latency = latency;
+        test_ctx->s_to_c_link->microsec_latency = latency;
+
+        picoquic_set_cc_log(test_ctx->qserver, ".");
+
+        /* TODO: the transmission delay ought to be about 1 second,
+         * but we observe 5 seconds instead. 
+         * It seems that the behavior here is dominated by the "slow start"
+         * phase common to new reno and cubic. Need to speed that up! */
+        ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+            test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0, 0, 2*latency,
+            5000000);
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
