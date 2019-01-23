@@ -148,6 +148,7 @@ static const picoquic_test_def_t test_table[] = {
     { "rebiding_stress", rebinding_stress_test },
     { "ready_to_send", ready_to_send_test },
     { "cubic", cubic_test },
+    { "long_rtt", long_rtt_test },
     { "cid_length", cid_length_test },
     { "stress", stress_test },
     { "fuzz", fuzz_test },

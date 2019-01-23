@@ -21,6 +21,7 @@
 
 #include "picoquic_internal.h"
 #include <stdlib.h>
+#include <string.h>
 
 typedef enum {
     picoquic_cubic_alg_slow_start = 0,
@@ -29,6 +30,7 @@ typedef enum {
     picoquic_cubic_alg_congestion_avoidance
 } picoquic_cubic_alg_state_t;
 
+#define NB_RTT_CUBIC 6
 
 typedef struct st_picoquic_cubic_state_t {
     picoquic_cubic_alg_state_t alg_state;
@@ -41,6 +43,9 @@ typedef struct st_picoquic_cubic_state_t {
     uint64_t ssthresh;
 
     uint64_t residual_ack;
+    uint64_t min_rtt;
+    uint64_t last_rtt[NB_RTT_CUBIC];
+    int nb_rtt;
 } picoquic_cubic_state_t;
 
 void picoquic_cubic_init(picoquic_path_t* path_x)
@@ -50,6 +55,7 @@ void picoquic_cubic_init(picoquic_path_t* path_x)
     path_x->congestion_alg_state = (void*)cubic_state;
 
     if (path_x->congestion_alg_state != NULL) {
+        memset(cubic_state, 0, sizeof(picoquic_cubic_state_t));
         cubic_state->alg_state = picoquic_cubic_alg_slow_start;
         cubic_state->ssthresh = (uint64_t)((int64_t)-1);
         cubic_state->W_last_max = (double)cubic_state->ssthresh/(double)path_x->send_mtu;
@@ -198,7 +204,14 @@ void picoquic_cubic_notify(picoquic_path_t* path_x,
         case picoquic_cubic_alg_slow_start:
             switch (notification) {
             case picoquic_congestion_notification_acknowledgement:
-                path_x->cwin += nb_bytes_acknowledged;
+                if (path_x->smoothed_rtt <= PICOQUIC_TARGET_RENO_RTT) {
+                    path_x->cwin += nb_bytes_acknowledged;
+                }
+                else {
+                    double delta = ((double)path_x->smoothed_rtt) / ((double)PICOQUIC_TARGET_RENO_RTT);
+                    delta *= (double)nb_bytes_acknowledged;
+                    path_x->cwin += (uint64_t)delta;
+                }
                 /* if cnx->cwin exceeds SSTHRESH, exit and go to CA */
                 if (path_x->cwin >= cubic_state->ssthresh) {
                     picoquic_cubic_enter_avoidance(cubic_state, current_time);
@@ -214,7 +227,43 @@ void picoquic_cubic_notify(picoquic_path_t* path_x,
             case picoquic_congestion_notification_spurious_repeat:
                 break;
             case picoquic_congestion_notification_rtt_measurement:
-                /* TODO: consider using RTT increases as signal to get out of slow start */
+                /* Using RTT increases as signal to get out of initial slow start */
+                if (cubic_state->ssthresh == (uint64_t)((int64_t)-1)) {
+                    uint64_t rolling_min;
+                    uint64_t delta_rtt;
+
+                    if (rtt_measurement < cubic_state->min_rtt || cubic_state->min_rtt == 0) {
+                        cubic_state->min_rtt = rtt_measurement;
+                    }
+
+                    if (cubic_state->nb_rtt > NB_RTT_CUBIC) {
+                        cubic_state->nb_rtt = 0;
+                    }
+
+                    cubic_state->last_rtt[cubic_state->nb_rtt] = rtt_measurement;
+                    cubic_state->nb_rtt++;
+
+                    rolling_min = cubic_state->last_rtt[0];
+
+                    for (int i = 1; i < NB_RTT_CUBIC; i++) {
+                        if (cubic_state->last_rtt[i] == 0) {
+                            break;
+                        }
+                        else if (cubic_state->last_rtt[i] < rolling_min) {
+                            rolling_min = cubic_state->last_rtt[i];
+                        }
+                    }
+
+                    delta_rtt = rolling_min - cubic_state->min_rtt;
+                    if (delta_rtt * 4 > cubic_state->min_rtt) {
+                        /* RTT increased too much, get out of slow start! */
+                        cubic_state->ssthresh = path_x->cwin;
+                        cubic_state->W_max = path_x->cwin / path_x->send_mtu;
+                        cubic_state->W_last_max = cubic_state->W_max;
+                        picoquic_cubic_enter_avoidance(cubic_state, current_time);
+                    }
+                }
+                break;
                 break;
             default:
                 /* ignore */

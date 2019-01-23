@@ -972,6 +972,15 @@ picoquic_stream_head* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
                     break;
                 }
             }
+            else if (stream->is_active ||
+                (stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset)) {
+                if (stream->sent_offset >= stream->maxdata_remote) {
+                    cnx->stream_blocked = 1;
+                }
+                else if (cnx->maxdata_remote <= cnx->data_sent){
+                    cnx->flow_blocked = 1;
+                }
+            }
             stream = stream->next_stream != NULL ? stream->next_stream : cnx->first_stream;
         } while (stream != start_stream);
     }

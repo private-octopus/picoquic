@@ -5524,3 +5524,48 @@ int cid_length_test()
 
     return ret;
 }
+
+/* Testing transmission behavior over large RTT links
+ */
+
+
+ /*
+  * Testing the flow controlled sending scenario
+  */
+
+int long_rtt_test()
+{
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    uint64_t latency = 300000; /* assume that each direction is 300 ms, e.g. satellite link */
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+
+    ret = tls_api_one_scenario_init(&test_ctx, &simulated_time,
+        0, NULL, NULL);
+
+    if (ret == 0) {
+        /* set the delay estimate, then launch the test */
+        test_ctx->c_to_s_link->microsec_latency = latency;
+        test_ctx->s_to_c_link->microsec_latency = latency;
+
+        picoquic_set_cc_log(test_ctx->qserver, ".");
+
+        /* The transmission delay cannot be less than 2.6 sec:
+         * 3 handshakes at 1 RTT each = 1.8 sec, plus
+         * 1MB over a 10Mbps link = 0.8 sec. We observe
+         * 3.31 seconds instead, i.e. 1.51 sec for the
+         * data transmission. This is due to the slow start
+         * phase of the congestion control, which we accelerated
+         * but could not completely fix. */
+        ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+            test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0, 0, 2*latency,
+            3400000);
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}

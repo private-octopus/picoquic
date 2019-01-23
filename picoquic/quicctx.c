@@ -493,8 +493,8 @@ int picoquic_register_net_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, picoqui
 
 void picoquic_init_transport_parameters(picoquic_tp_t* tp, int client_mode)
 {
-    tp->initial_max_stream_data_bidi_local = 65535;
-    tp->initial_max_stream_data_bidi_remote = 65535;
+    tp->initial_max_stream_data_bidi_local = 0x200000;
+    tp->initial_max_stream_data_bidi_remote = 65635;
     tp->initial_max_stream_data_uni = 65535;
     tp->initial_max_data = 0x100000;
     if (client_mode) {

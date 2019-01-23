@@ -1793,6 +1793,9 @@ void picoquic_open_cc_dump(picoquic_cnx_t * cnx)
                 ret |= fprintf(cnx->cc_log, "pacing packet time(us), ") <= 0;
                 ret |= fprintf(cnx->cc_log, "nb retrans, ") <= 0;
                 ret |= fprintf(cnx->cc_log, "nb spurious, ") <= 0;
+                ret |= fprintf(cnx->cc_log, "cwin blkd, ") <= 0;
+                ret |= fprintf(cnx->cc_log, "flow blkd, ") <= 0;
+                ret |= fprintf(cnx->cc_log, "stream blkd, ") <= 0;
 
                 ret |= fprintf(cnx->cc_log, "\n") <= 0;
 
@@ -1840,7 +1843,13 @@ void picoquic_cc_dump(picoquic_cnx_t * cnx, uint64_t current_time)
     ret |= fprintf(cnx->cc_log, "%llu, ", (unsigned long long)cnx->path[0]->pacing_packet_time_microsec) <= 0;
     ret |= fprintf(cnx->cc_log, "%llu, ", (unsigned long long)cnx->nb_retransmission_total) <= 0;
     ret |= fprintf(cnx->cc_log, "%llu, ", (unsigned long long)cnx->nb_spurious) <= 0;
+    ret |= fprintf(cnx->cc_log, "%d, ", cnx->cwin_blocked) <= 0;
+    ret |= fprintf(cnx->cc_log, "%d, ", cnx->flow_blocked) <= 0;
+    ret |= fprintf(cnx->cc_log, "%d, ", cnx->stream_blocked) <= 0;
     ret |= fprintf(cnx->cc_log, "\n") <= 0;
+    cnx->cwin_blocked = 0;
+    cnx->flow_blocked = 0;
+    cnx->stream_blocked = 0;
 
     if (ret != 0) {
         picoquic_close_cc_dump(cnx);
