@@ -21,6 +21,7 @@
 
 #include "picoquic_internal.h"
 #include <stdlib.h>
+#include <string.h>
 
 typedef enum {
     picoquic_newreno_alg_slow_start = 0,

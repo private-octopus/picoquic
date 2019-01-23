@@ -972,7 +972,8 @@ picoquic_stream_head* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
                     break;
                 }
             }
-            else if (stream->is_active || stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset) {
+            else if (stream->is_active ||
+                (stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset)) {
                 if (stream->sent_offset >= stream->maxdata_remote) {
                     cnx->stream_blocked = 1;
                 }
