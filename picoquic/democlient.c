@@ -457,7 +457,7 @@ void picoquic_demo_client_delete_context(picoquic_demo_callback_ctx_t* ctx)
 
 char * demo_client_parse_stream_spaces(char * text) {
     while (*text == ' ' || *text == '\t' || *text == '\n' || *text == '\r') {
-        *text++;
+        text++;
     }
     return text;
 }
