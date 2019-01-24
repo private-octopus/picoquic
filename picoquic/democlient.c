@@ -455,3 +455,221 @@ void picoquic_demo_client_delete_context(picoquic_demo_callback_ctx_t* ctx)
     }
 }
 
+char * demo_client_parse_stream_spaces(char * text) {
+    while (*text == ' ' || *text == '\t' || *text == '\n' || *text == '\r') {
+        text++;
+    }
+    return text;
+}
+
+char * demo_client_parse_stream_number(char * text, uint64_t default_number, uint64_t * number)
+{
+    if (text[0] < '0' || text[0] > '9') {
+        *number = default_number;
+    }
+    else {
+        *number = 0;
+        do {
+            *number *= 10;
+            *number += *text++ - '0';
+        } while (text[0] >= '0' && text[0] <= '9');
+
+        text = demo_client_parse_stream_spaces(text);
+
+        if (*text == ':') {
+            text++;
+        }
+        else {
+            text = NULL;
+        }
+    }
+
+    return text;
+}
+
+char * demo_client_parse_stream_format(char * text, int default_format, int * is_binary)
+{
+    if (text[0] != 'b' && text[0] != 't') {
+        *is_binary = default_format;
+    }
+    else {
+        *is_binary = (text[0] == 'b') ? 1 : 0;
+
+        text = demo_client_parse_stream_spaces(++text);
+
+        if (*text == ':') {
+            text++;
+        }
+        else {
+            text = NULL;
+        }
+    }
+
+    return text;
+}
+
+char * demo_client_parse_stream_path(char * text, 
+    char ** path, char ** f_name)
+{
+    int l_path = 0;
+    int is_complete = 0;
+    int need_dup = 0;
+
+    while (text != NULL) {
+        char c = text[l_path];
+
+        if (c == 0 || c == ';') {
+            is_complete = 1;
+            break;
+        }
+        
+        if (c == '/') {
+            need_dup = 1;
+        }
+
+        l_path++;
+    }
+
+    if (is_complete) {
+        *path = (char *)malloc(l_path + 1);
+        if (*path == NULL) {
+            is_complete = 0;
+        }
+        else {
+            if (need_dup) {
+                *f_name = (char *)malloc(l_path + 1);
+                if (*f_name == NULL) {
+                    is_complete = 0;
+                    free(*path);
+                    *path = NULL;
+                }
+            }
+        }
+    }
+
+    if (is_complete) {
+        memcpy(*path, text, l_path);
+        (*path)[l_path] = 0;
+        if (need_dup) {
+            for (size_t i = 0; i < l_path; i++) {
+                (*f_name)[i] = (text[i] == '/') ? '_' : text[i];
+            }
+            (*f_name)[l_path] = 0;
+        }
+        else {
+            *f_name = *path;
+        }
+
+        text += l_path;
+        if (*text != 0) {
+            text++;
+        }
+    }
+    else {
+        text = NULL;
+    }
+    
+    return text;
+}
+
+char * demo_client_parse_stream_desc(char * text, uint64_t default_stream, uint64_t default_previous,
+    picoquic_demo_stream_desc_t * desc)
+{
+    text = demo_client_parse_stream_number(text, default_stream, &desc->stream_id);
+
+    if (text != NULL) {
+        text = demo_client_parse_stream_number(
+            demo_client_parse_stream_spaces(text), default_previous, &desc->previous_stream_id);
+    }
+
+    if (text != NULL) {
+        text = demo_client_parse_stream_format(
+            demo_client_parse_stream_spaces(text), 0, &desc->is_binary);
+    }
+    
+    if (text != NULL){
+        text = demo_client_parse_stream_path(
+            demo_client_parse_stream_spaces(text), (char **)&desc->doc_name, (char **)&desc->f_name);
+    }
+
+    return text;
+}
+
+void demo_client_delete_scenario_desc(size_t nb_streams, picoquic_demo_stream_desc_t * desc)
+{
+    for (size_t i = 0; i < nb_streams; i++) {
+        if (desc[i].f_name != desc[i].doc_name && desc[i].f_name != NULL) {
+            free((char*)desc[i].f_name);
+            *(char**)(&desc[i].f_name) = NULL;
+        }
+        if (desc[i].doc_name != NULL) {
+            free((char*)desc[i].doc_name);
+            *(char**)(&desc[i].doc_name) = NULL;
+        }
+    }
+    free(desc);
+}
+
+size_t demo_client_parse_nb_stream(char * text) {
+    size_t n = 0;
+    int after_semi = 1;
+
+    while (*text != 0) {
+        if (*text++ == ';') {
+            n++;
+            after_semi = 0;
+        }
+        else {
+            after_semi = 1;
+        }
+    }
+
+    n += after_semi;
+
+    return n;
+}
+
+int demo_client_parse_scenario_desc(char * text, size_t * nb_streams, picoquic_demo_stream_desc_t ** desc)
+{
+    int ret = 0;
+    /* first count the number of streams and allocate memory */
+    size_t nb_desc = demo_client_parse_nb_stream(text);
+    size_t i = 0;
+    uint64_t previous = PICOQUIC_DEMO_STREAM_ID_INITIAL;
+    uint64_t stream_id = 0;
+
+    *desc = (picoquic_demo_stream_desc_t *)malloc(nb_desc*sizeof(picoquic_demo_stream_desc_t));
+
+    if (*desc == NULL) {
+        *nb_streams = 0;
+        ret = -1;
+    }
+    else {
+        while (text != NULL ) {
+            text = demo_client_parse_stream_spaces(text);
+            if (*text == 0) {
+                break;
+            }
+            if (i >= nb_desc) {
+                /* count was wrong! */
+                break;
+            }
+            else {
+                text = demo_client_parse_stream_desc(text, stream_id, previous, &(*desc)[i]);
+                if (text != NULL) {
+                    stream_id = (*desc)[i].stream_id + 4;
+                    previous = (*desc)[i].stream_id;
+                    i++;
+                }
+            }
+        }
+
+        *nb_streams = i;
+
+        if (text == NULL) {
+            ret = -1;
+        }
+    }
+
+    return ret;
+}

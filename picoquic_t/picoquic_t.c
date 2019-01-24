@@ -158,6 +158,7 @@ static const picoquic_test_def_t test_table[] = {
     { "h3zero_parse_qpack", h3zero_parse_qpack_test },
     { "h3zero_prepare_qpack", h3zero_prepare_qpack_test },
     { "h3zero_stream_test", h3zero_stream_test },
+    { "parse_demo_scenario", parse_demo_scenario_test },
     { "h3zero_server", h3zero_server_test },
     { "h09_server", h09_server_test },
     { "generic_server", generic_server_test}

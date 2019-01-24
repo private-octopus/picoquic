@@ -475,11 +475,11 @@ int quic_client_migrate(picoquic_cnx_t * cnx, SOCKET_TYPE * fd, struct sockaddr 
 }
 
 /* Quic Client */
-int quic_client(const char* ip_address_text, int server_port, const char * sni, 
+int quic_client(const char* ip_address_text, int server_port, const char * sni,
     const char * alpn, const char * root_crt,
-    uint32_t proposed_version, int force_zero_share, int force_migration, 
+    uint32_t proposed_version, int force_zero_share, int force_migration,
     int nb_packets_before_key_update, int mtu_max, FILE* F_log,
-    int client_cnx_id_length)
+    int client_cnx_id_length, char * client_scenario_text)
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
@@ -508,13 +508,28 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
     int migration_started = 0;
     int64_t delay_max = 10000000;
     int64_t delta_t = 0;
-    int notified_ready = 0;int zero_rtt_available = 0;
+    int notified_ready = 0;
+    int zero_rtt_available = 0;
+    size_t client_sc_nb = 0;
+    picoquic_demo_stream_desc_t * client_sc = NULL;
 
     if (alpn == NULL) {
         alpn = "hq-17";
     }
 
-    ret = picoquic_demo_client_initialize_context(&callback_ctx, test_scenario, test_scenario_nb, alpn);
+    if (client_scenario_text != NULL) {
+        fprintf(stdout, "Testing scenario: <%s>\n", client_scenario_text);
+        ret = demo_client_parse_scenario_desc(client_scenario_text, &client_sc_nb, &client_sc);
+        if (ret != 0) {
+            fprintf(stdout, "Cannot parse the specified scenario.\n");
+        }
+        else {
+            ret = picoquic_demo_client_initialize_context(&callback_ctx, client_sc, client_sc_nb, alpn);
+        }
+    }
+    else {
+        ret = picoquic_demo_client_initialize_context(&callback_ctx, test_scenario, test_scenario_nb, alpn);
+    }
 
     if (ret == 0) {
         ret = picoquic_get_server_address(ip_address_text, server_port, &server_address, &server_addr_length, &is_name);
@@ -601,8 +616,6 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
 
                     /* Queue a simple frame to perform 0-RTT test */
                     /* Start the download scenario */
-                    callback_ctx.demo_stream = test_scenario;
-                    callback_ctx.nb_demo_streams = test_scenario_nb;
 
                     ret = picoquic_demo_client_start_streams(cnx_client, &callback_ctx, PICOQUIC_DEMO_STREAM_ID_INITIAL);
                 }
@@ -705,8 +718,6 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
 
                         if (zero_rtt_available == 0) {
                             /* Start the download scenario */
-                            callback_ctx.demo_stream = test_scenario;
-                            callback_ctx.nb_demo_streams = test_scenario_nb;
 
                             picoquic_demo_client_start_streams(cnx_client, &callback_ctx, PICOQUIC_DEMO_STREAM_ID_INITIAL);
                         }
@@ -820,6 +831,11 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
         SOCKET_CLOSE(fd);
     }
 
+
+    if (client_scenario_text != NULL && client_sc != NULL) {
+        demo_client_delete_scenario_desc(client_sc_nb, client_sc);
+        client_sc = NULL;
+    }
     return ret;
 }
 
@@ -855,8 +871,8 @@ uint32_t parse_target_version(char const* v_arg)
 void usage()
 {
     fprintf(stderr, "PicoQUIC demo client and server\n");
-    fprintf(stderr, "Usage: picoquicdemo [server_name [port]] <options>\n");
-    fprintf(stderr, "  For the client mode, specify sever_name and port.\n");
+    fprintf(stderr, "Usage: picoquicdemo <options> [server_name [port [scenario]]] \n");
+    fprintf(stderr, "  For the client mode, specify server_name and port.\n");
     fprintf(stderr, "  For the server mode, use -p to specify the port.\n");
     fprintf(stderr, "Options:\n");
     fprintf(stderr, "  -c file               cert file (default: %s)\n", SERVER_CERT_FILE);
@@ -890,6 +906,20 @@ void usage()
     fprintf(stderr, "  -1                    Once\n");
     fprintf(stderr, "  -S solution_dir       Set the path to the source files to find the default files\n");
     fprintf(stderr, "  -I length             Length of CNX_ID used by the client, default=8\n");
+    fprintf(stderr, "\nThe scenario argument specifies the set of files that should be retrieved,\n");
+    fprintf(stderr, "and their order. The syntax is:\n");
+    fprintf(stderr, "  *{[<stream_id>':'[<previous_stream>':'[<format>:]]]path;}\n");
+    fprintf(stderr, "where:\n");
+    fprintf(stderr, "  <stream_id>:          The numeric ID of the QUIC stream, e.g. 4. By default, the\n");
+    fprintf(stderr, "                        next stream in the logical QUIC order, 0, 4, 8, etc.");
+    fprintf(stderr, "  <previous_stream>:    The numeric ID of the previous stream. The GET command will\n");
+    fprintf(stderr, "                        be issued after that stream's transfer finishes. By default,\n");
+    fprintf(stderr, "                        previous stream in this scenario.\n");
+    fprintf(stderr, "  <format>:             Whether the received file should be written to disc as\n");
+    fprintf(stderr, "                        binary(b) or text(t). Defaults to text.\n");
+    fprintf(stderr, "  <path>:               The name of the document that should be retrieved\n");
+    fprintf(stderr, "If no scenario is specified, the client executes the default scenario.\n");
+
     exit(1);
 }
 
@@ -950,6 +980,7 @@ int main(int argc, char** argv)
     int mtu_max = 0;
     char default_server_cert_file[512];
     char default_server_key_file[512];
+    char * client_scenario = NULL;
 
 #ifdef _WINDOWS
     WSADATA wsaData;
@@ -1075,6 +1106,14 @@ int main(int argc, char** argv)
         }
     }
 
+    if (optind < argc) {
+        client_scenario = argv[optind++];
+    }
+
+    if (optind < argc) {
+        usage();
+    }
+
 #ifdef _WINDOWS
     // Init WSA.
     if (ret == 0) {
@@ -1134,7 +1173,7 @@ int main(int argc, char** argv)
         /* Run as client */
         printf("Starting PicoQUIC connection to server IP = %s, port = %d\n", server_name, server_port);
         ret = quic_client(server_name, server_port, sni, alpn, root_trust_file, proposed_version, force_zero_share, 
-            force_migration, nb_packets_before_update, mtu_max, F_log, client_cnx_id_length);
+            force_migration, nb_packets_before_update, mtu_max, F_log, client_cnx_id_length, client_scenario);
 
         printf("Client exit with code = %d\n", ret);
 
