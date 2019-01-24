@@ -48,6 +48,8 @@ typedef struct st_picoquic_demo_stream_desc_t {
     int is_binary;
 } picoquic_demo_stream_desc_t;
 
+#define PICOQUIC_DEMO_STREAM_LIST_MAX 16
+
 typedef struct st_picoquic_demo_stream_ctx_t picoquic_demo_client_stream_ctx_t;
 
 typedef struct st_picoquic_demo_stream_ctx_t {
@@ -88,5 +90,8 @@ int picoquic_demo_client_initialize_context(
     size_t nb_demo_streams,
     char const * alpn);
 void picoquic_demo_client_delete_context(picoquic_demo_callback_ctx_t* ctx);
+
+int demo_client_parse_scenario_desc(char * text, size_t * nb_streams, picoquic_demo_stream_desc_t ** desc);
+void demo_client_delete_scenario_desc(size_t nb_streams, picoquic_demo_stream_desc_t * desc);
 
 #endif /* DEMO_CLIENT_H */

@@ -505,6 +505,81 @@ int h3zero_stream_test()
 }
 
 /*
+ * Test the scenario parsing function
+ */
+
+char * parse_demo_scenario_text1 = "/;t:test.html;8:0:b:main.jpg;12:0:/bla/bla/";
+char * parse_demo_scenario_text2 = "/;b:main.jpg;t:test.html;";
+
+static const picoquic_demo_stream_desc_t parse_demo_scenario_desc1[] = {
+    { 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0 },
+    { 4, 0, "test.html", "test.html", 0 },
+    { 8, 0, "main.jpg", "main.jpg", 1 },
+    { 12, 0, "/bla/bla/", "_bla_bla_", 0 }
+};
+
+static const picoquic_demo_stream_desc_t parse_demo_scenario_desc2[] = {
+    { 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0 },
+    { 4, 0, "main.jpg", "main.jpg", 1 },
+    { 8, 4, "test.html", "test.html", 0 }
+};
+
+int parse_demo_scenario_test_one(char * text, size_t nb_streams_ref, picoquic_demo_stream_desc_t const * desc_ref)
+{
+    size_t nb_streams = 0;
+    picoquic_demo_stream_desc_t * desc = NULL;
+    int ret = demo_client_parse_scenario_desc(text, &nb_streams, &desc);
+
+    if (ret == 0) {
+        if (nb_streams != nb_streams_ref) {
+            ret = -1;
+        }
+        else {
+            for (size_t i = 0; ret == 0 && i < nb_streams; i++) {
+                if (desc[i].stream_id != desc_ref[i].stream_id) {
+                    ret = -1;
+                } else if (desc[i].previous_stream_id != desc_ref[i].previous_stream_id) {
+                    ret = -1;
+                }
+                else if (desc[i].is_binary != desc_ref[i].is_binary) {
+                    ret = -1;
+                }
+                else if (strcmp(desc[i].doc_name, desc_ref[i].doc_name) != 0) {
+                    ret = -1;
+                }
+                else if (strcmp(desc[i].f_name, desc_ref[i].f_name) != 0) {
+                    ret = -1;
+                }
+            }
+        }
+    }
+    else {
+        ret = -1;
+    }
+
+    if (desc != NULL) {
+        demo_client_delete_scenario_desc(nb_streams, desc);
+    }
+
+    return ret;
+}
+
+int parse_demo_scenario_test()
+{
+    int ret = parse_demo_scenario_test_one(parse_demo_scenario_text1,
+        sizeof(parse_demo_scenario_desc1) / sizeof(picoquic_demo_stream_desc_t),
+        parse_demo_scenario_desc1);
+
+    if (ret == 0){
+        ret = parse_demo_scenario_test_one(parse_demo_scenario_text2,
+            sizeof(parse_demo_scenario_desc2) / sizeof(picoquic_demo_stream_desc_t),
+            parse_demo_scenario_desc2);
+    }
+
+    return ret;
+}
+
+/*
  * Set a connection between an H3 client and an H3 server over
  * network simulation.
  */
