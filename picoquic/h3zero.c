@@ -373,7 +373,7 @@ uint8_t * h3zero_parse_qpack_header_value(uint8_t * bytes, uint8_t * bytes_max,
             }
             else {
                 decoded = bytes;
-                decoded_length = v_length;
+                decoded_length = (size_t) v_length;
             }
 
             switch (header) {
@@ -573,7 +573,7 @@ uint8_t * h3zero_parse_qpack_header_frame(uint8_t * bytes, uint8_t * bytes_max,
                     bytes = NULL;
                 }
                 else {
-                    http_header_enum_t header_type = h3zero_get_interesting_header_type(bytes, n_length, is_huffman);
+                    http_header_enum_t header_type = h3zero_get_interesting_header_type(bytes, (size_t)n_length, is_huffman);
                     bytes += n_length;
                     bytes = h3zero_parse_qpack_header_value(bytes, bytes_max,
                         header_type, parts);
@@ -823,7 +823,7 @@ uint8_t * h3zero_parse_data_stream(uint8_t * bytes, uint8_t * bytes_max,
         return bytes;
     }
     else {
-        size_t available = bytes_max - bytes;
+        uint64_t available = bytes_max - bytes;
 
         if (stream_state->current_frame_read + available > stream_state->current_frame_length) {
             available = stream_state->current_frame_length - stream_state->current_frame_read;
@@ -856,7 +856,7 @@ uint8_t * h3zero_parse_data_stream(uint8_t * bytes, uint8_t * bytes_max,
             }
         }
         else if (stream_state->current_frame_type == h3zero_frame_data) {
-            *available_data = available;
+            *available_data = (size_t) available;
             stream_state->current_frame_read += available; 
             if (stream_state->current_frame_read >= stream_state->current_frame_length) {
                 stream_state->frame_header_parsed = 0;
@@ -1234,7 +1234,7 @@ int hzero_qpack_huffman_decode(uint8_t * bytes, uint8_t * bytes_max, uint8_t * d
     int bits_in = 0;
     uint64_t top_32;
     int consumed_bits = 0;
-    int decoded_index = 0;
+    size_t decoded_index = 0;
     int available_bits = 8 * ((int)(bytes_max - bytes));
     int start_index;
 
