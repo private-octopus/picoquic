@@ -1680,7 +1680,7 @@ void picoquic_log_picotls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
             byte_index += (uint16_t) tls_ticket_length;
 
             secret_length = PICOPARSE_16(ticket + byte_index);
-            min_length += secret_length;
+            min_length += secret_length + 2;
             if (ticket_length < min_length) {
                 ret = -1;
             } else {
