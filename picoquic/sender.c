@@ -31,7 +31,7 @@
  * Data is sent over streams. This is instantiated by the "Post to stream" command, which
  * chains data to the head of stream structure. Data is unchained when it sent for the
  * first time.
- * 
+ *
  * Data is sent in packets, which contain stream frames and possibly other frames.
  * The retransmission logic operates on packets. If a packet is seen as lost, the
  * important frames that it contains will have to be retransmitted.
@@ -86,7 +86,7 @@ int picoquic_mark_active_stream(picoquic_cnx_t* cnx,
             if (!stream->fin_requested && !stream->reset_requested &&
                 cnx->callback_fn != NULL) {
                 stream->is_active = 1;
-                picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
+                picoquic_reinsert_by_wake_time(cnx->quic, cnx, cnx->quic->last_incoming_packet_time);
             }
             else {
                 ret = PICOQUIC_ERROR_CANNOT_SET_ACTIVE_STREAM;
@@ -164,7 +164,7 @@ int picoquic_add_to_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
             }
         }
 
-        picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
+        picoquic_reinsert_by_wake_time(cnx->quic, cnx, cnx->quic->last_incoming_packet_time);
     }
 
     if (ret == 0) {
@@ -443,9 +443,9 @@ uint32_t picoquic_get_checksum_length(picoquic_cnx_t* cnx, int is_cleartext_mode
     return ret;
 }
 
-uint32_t picoquic_protect_packet(picoquic_cnx_t* cnx, 
+uint32_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     picoquic_packet_type_enum ptype,
-    uint8_t * bytes, 
+    uint8_t * bytes,
     uint64_t sequence_number,
     picoquic_connection_id_t * remote_cnxid,
     picoquic_connection_id_t * local_cnxid,
@@ -593,7 +593,7 @@ void picoquic_update_pacing_data(picoquic_path_t * path_x)
     }
 }
 
-/* 
+/*
  * Update the pacing data after sending a packet.
  */
 void picoquic_update_pacing_after_send(picoquic_path_t * path_x, uint64_t current_time)
@@ -731,7 +731,7 @@ void picoquic_dequeue_retransmitted_packet(picoquic_cnx_t* cnx, picoquic_packet_
  * Final steps of encoding and protecting the packet before sending
  */
 
-void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet_t * packet, int ret, 
+void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet_t * packet, int ret,
     uint32_t length, uint32_t header_length, uint32_t checksum_overhead,
     size_t * send_length, uint8_t * send_buffer, uint32_t send_buffer_max,
     picoquic_connection_id_t * remote_cnxid,
@@ -769,7 +769,7 @@ void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet_t
                 send_buffer, send_buffer_max, cnx->crypto_context[0].aead_encrypt, cnx->crypto_context[0].pn_enc);
             break;
         case picoquic_packet_0rtt_protected:
-            length = picoquic_protect_packet(cnx, packet->ptype, packet->bytes, packet->sequence_number, 
+            length = picoquic_protect_packet(cnx, packet->ptype, packet->bytes, packet->sequence_number,
                 remote_cnxid, local_cnxid,
                 length, header_length,
                 send_buffer, send_buffer_max, cnx->crypto_context[1].aead_encrypt, cnx->crypto_context[1].pn_enc);
@@ -805,7 +805,7 @@ void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet_t
  * retransmission. Also, prune the retransmit queue as needed.
  *
  * TODO: consider that the retransmit timer is per path, from the path on
- * which the packet was first sent, but the retransmission may be on 
+ * which the packet was first sent, but the retransmission may be on
  * a different path, with different MTU.
  */
 
@@ -988,7 +988,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                         ret = picoquic_skip_frame(&p->bytes[byte_index],
                             p->length - byte_index, &frame_length, &frame_is_pure_ack);
 
-                        /* Check whether the data was already acked, which may happen in 
+                        /* Check whether the data was already acked, which may happen in
                          * case of spurious retransmissions */
                         if (ret == 0 && frame_is_pure_ack == 0) {
                             ret = picoquic_check_stream_frame_already_acked(cnx, &p->bytes[byte_index],
@@ -1070,7 +1070,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                         cnx->congestion_alg->alg_notify(old_path,
                             (timer_based_retransmit == 0) ? picoquic_congestion_notification_repeat : picoquic_congestion_notification_timeout,
                             0, 0, lost_packet_number, current_time);
-                    } 
+                    }
 
                     break;
                 }
@@ -1192,7 +1192,7 @@ picoquic_pmtu_discovery_status_enum picoquic_is_mtu_probe_needed(picoquic_cnx_t*
         if (path_x->send_mtu_max_tried == 0 || path_x->send_mtu_max_tried > 1400) {
             /* MTU discovery is required if the chances of success are large enough
              * and there are enough packets to send to amortize the discovery cost.
-             * Of course we don't know at this stage how much data will be sent 
+             * Of course we don't know at this stage how much data will be sent
              * on the connection; we take the amount of data queued as a proxy
              * for that. */
             uint32_t next_probe = picoquic_next_mtu_probe_length(cnx, path_x);
@@ -1263,7 +1263,7 @@ int picoquic_prepare_packet_0rtt(picoquic_cnx_t* cnx, picoquic_path_t * path_x, 
         padding_required = 1;
     }
 
-    if ((stream == NULL && cnx->first_misc_frame == NULL && padding_required == 0) || 
+    if ((stream == NULL && cnx->first_misc_frame == NULL && padding_required == 0) ||
         (PICOQUIC_DEFAULT_0RTT_WINDOW <= path_x->bytes_in_transit + send_buffer_max)) {
         length = 0;
     } else {
@@ -1337,7 +1337,7 @@ picoquic_packet_type_enum picoquic_packet_type_from_epoch(int epoch)
 
 /* Prepare a required repetition or ack  in a previous context */
 uint32_t picoquic_prepare_packet_old_context(picoquic_cnx_t* cnx, picoquic_packet_context_enum pc,
-    picoquic_path_t * path_x, picoquic_packet_t* packet, size_t send_buffer_max, uint64_t current_time, 
+    picoquic_path_t * path_x, picoquic_packet_t* packet, size_t send_buffer_max, uint64_t current_time,
     uint64_t * next_retransmit_time, uint32_t * header_length)
 {
     int is_cleartext_mode = (pc == picoquic_packet_context_initial) ? 1 : 0;
@@ -1351,7 +1351,7 @@ uint32_t picoquic_prepare_packet_old_context(picoquic_cnx_t* cnx, picoquic_packe
 
     length = picoquic_retransmit_needed(cnx, pc, path_x, current_time, next_retransmit_time, packet, send_buffer_max,
         &is_cleartext_mode, header_length);
-    
+
     if (length == 0 && cnx->pkt_ctx[pc].ack_needed != 0 &&
         pc != picoquic_packet_context_application) {
         packet->ptype =
@@ -1437,11 +1437,11 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             cnx->tls_stream[1].send_queue != NULL) {
             epoch = 1;
             pc = picoquic_packet_context_application;
-        } else if (cnx->crypto_context[2].aead_encrypt != NULL && 
+        } else if (cnx->crypto_context[2].aead_encrypt != NULL &&
             cnx->tls_stream[1].send_queue == NULL) {
             epoch = 2;
             pc = picoquic_packet_context_handshake;
-        } 
+        }
     }
 
     packet_type = picoquic_packet_type_from_epoch(epoch);
@@ -1506,7 +1506,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                     ret = 0;
                     *next_wake_time = current_time;
                 }
-            } 
+            }
             /* document the send time & overhead */
             packet->length = length;
             packet->send_time = current_time;
@@ -1599,7 +1599,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                             }
                         }
 
-                        if (packet_type == picoquic_packet_initial && 
+                        if (packet_type == picoquic_packet_initial &&
                             (cnx->crypto_context[1].aead_encrypt == NULL ||
                                 cnx->cnx_state == picoquic_state_client_renegotiate ||
                                 cnx->original_cnxid.id_len != 0)) {
@@ -1614,7 +1614,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                     }
 
                     /* If stream zero packets are sent, progress the state */
-                    if (ret == 0 && tls_ready != 0 && data_bytes > 0 && 
+                    if (ret == 0 && tls_ready != 0 && data_bytes > 0 &&
                         cnx->tls_stream[epoch].send_queue == NULL) {
                         switch (cnx->cnx_state) {
                         case picoquic_state_client_init:
@@ -1754,7 +1754,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                 }
             }
         }
-        else if ((tls_ready != 0 && path_x->cwin > path_x->bytes_in_transit) 
+        else if ((tls_ready != 0 && path_x->cwin > path_x->bytes_in_transit)
             || cnx->pkt_ctx[pc].ack_needed) {
             if (picoquic_prepare_ack_frame(cnx, current_time, pc, &bytes[length],
                 send_buffer_max - checksum_overhead - length, &data_bytes)
@@ -2430,7 +2430,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
             }
         }
     }
-    
+
     picoquic_finalize_and_protect_packet(cnx, packet,
         ret, length, header_length, checksum_overhead,
         send_length, send_buffer, send_buffer_min_max,
@@ -2453,9 +2453,9 @@ int picoquic_prepare_segment(picoquic_cnx_t* cnx, picoquic_path_t * path_x, pico
     uint64_t * next_wake_time)
 {
     int ret = 0;
-  
+
     /* Check that the connection is still alive -- the timer is asymmetric, so client will drop faster */
-    if ((cnx->cnx_state < picoquic_state_disconnecting && 
+    if ((cnx->cnx_state < picoquic_state_disconnecting &&
         (current_time - cnx->latest_progress_time) >= (PICOQUIC_MICROSEC_SILENCE_MAX*(2 - cnx->client_mode))) ||
         (cnx->cnx_state < picoquic_state_server_false_start &&
             current_time >= cnx->start_time + PICOQUIC_MICROSEC_HANDSHAKE_MAX))
@@ -2526,7 +2526,7 @@ int picoquic_prepare_probe(picoquic_cnx_t* cnx,
     if (send_buffer_max < PICOQUIC_INITIAL_MTU_IPV6) {
         ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
     } else if (
-        cnx->cnx_state == picoquic_state_ready || 
+        cnx->cnx_state == picoquic_state_ready ||
         cnx->cnx_state == picoquic_state_client_ready_start)
     {
         picoquic_probe_t * probe = cnx->probe_first;
@@ -2552,7 +2552,7 @@ int picoquic_prepare_probe(picoquic_cnx_t* cnx,
 
         if (probe != NULL)
         {
-            
+
             packet = picoquic_create_packet();
 
             if (packet == NULL) {
@@ -2830,7 +2830,7 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
         if (p_addr_from != NULL && from_len != NULL) {
             *from_len = picoquic_store_addr(p_addr_from, (struct sockaddr *)&cnx->path[path_id]->local_addr);
         }
-       
+
         /* Send the available segments */
         while (ret == 0)
         {
@@ -2893,7 +2893,7 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     if (*send_length > 0 || cnx->cnx_state == picoquic_state_disconnected ) {
         next_wake_time = current_time;
     }
-    
+
     picoquic_reinsert_by_wake_time(cnx->quic, cnx, next_wake_time);
 
     return ret;

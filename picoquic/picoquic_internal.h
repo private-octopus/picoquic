@@ -181,7 +181,7 @@ typedef struct st_picoquic_spinbit_def_t {
 
 extern picoquic_spinbit_def_t picoquic_spin_function_table[];
 
-/* 
+/*
  * Codes used for representing the various types of packet encodings.
  */
 typedef enum {
@@ -201,7 +201,7 @@ extern const size_t picoquic_nb_supported_versions;
 int picoquic_get_version_index(uint32_t proposed_version);
 
 /*
-     * Definition of the session ticket store that can be associated with a 
+     * Definition of the session ticket store that can be associated with a
      * client context.
      */
 typedef struct st_picoquic_stored_ticket_t {
@@ -279,6 +279,7 @@ typedef struct st_picoquic_quic_t {
     uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE];
     uint8_t retry_seed[PICOQUIC_RETRY_SECRET_SIZE];
     uint64_t* p_simulated_time;
+    uint64_t last_incoming_packet_time;
     char const* ticket_file_name;
     picoquic_stored_ticket_t* p_first_ticket;
     uint32_t mtu_max;
@@ -403,14 +404,14 @@ typedef struct st_picoquic_misc_frame_header_t {
  * that path. When a path is deleted, the corresponding ID is removed from the table.
  *
  * On the server side, paths are activated after receiving the first packet on that path.
- * The server will then schedule allocate a non-zero challenge value for the path, 
+ * The server will then schedule allocate a non-zero challenge value for the path,
  * consume a connection ID advertised by the client, and allocate it as remote
  * connection ID for the path. (TODO: what if no new connection ID is available?).
  *
  * On the client side, challenges are initially sent without creating a path context,
  * by "half-consuming" a connection ID sent by the peer. Challenges can be repeated
  * up to 3 times before the probe is declared lost. The first response from the
- * peer will arrive on an unitialized path. The client will check whether the 
+ * peer will arrive on an unitialized path. The client will check whether the
  * challenge value correspond to a probe, and allocate the corresponding connection
  * ID to the path.
  *
@@ -476,7 +477,7 @@ typedef struct st_picoquic_path_t {
     unsigned int current_spin : 1;
 
     /* number of retransmissions observed on path */
-    uint64_t retrans_count;  
+    uint64_t retrans_count;
 
     /* Time measurement */
     uint64_t max_ack_delay;
@@ -497,7 +498,7 @@ typedef struct st_picoquic_path_t {
     uint64_t bytes_in_transit;
     void* congestion_alg_state;
 
-    /* 
+    /*
      * Pacing uses a set of per path variables:
      * - pacing_evaluation_time: last time the path was evaluated.
      * - pacing_bucket_nanosec: number of nanoseconds of transmission time that are allowed.
@@ -573,7 +574,7 @@ typedef struct st_picoquic_cnxid_stash_t {
 typedef struct st_picoquic_probe_t {
     struct st_picoquic_probe_t * next_probe;
     uint64_t sequence;
-    picoquic_connection_id_t remote_cnxid; 
+    picoquic_connection_id_t remote_cnxid;
     uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE];
     /* Addresses with which the probe was sent */
     struct sockaddr_storage peer_addr;
@@ -591,7 +592,7 @@ typedef struct st_picoquic_probe_t {
     unsigned int challenge_failed : 1;
 } picoquic_probe_t;
 
-/* 
+/*
  * Per connection context.
  */
 typedef struct st_picoquic_cnx_t {
@@ -935,7 +936,7 @@ void picoquic_cc_dump(picoquic_cnx_t * cnx, uint64_t current_time);
 /* handling of ACK logic */
 int picoquic_is_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t * next_wake_time, picoquic_packet_context_enum pc);
 
-int picoquic_is_pn_already_received(picoquic_cnx_t* cnx, 
+int picoquic_is_pn_already_received(picoquic_cnx_t* cnx,
     picoquic_packet_context_enum pc, uint64_t pn64);
 int picoquic_record_pn_received(picoquic_cnx_t* cnx,
     picoquic_packet_context_enum pc, uint64_t pn64, uint64_t current_microsec);
@@ -1003,7 +1004,7 @@ int picoquic_prepare_misc_frame(picoquic_misc_frame_header_t* misc_frame, uint8_
 
 /* send/receive */
 
-int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_t* bytes, size_t bytes_max, 
+int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_t* bytes, size_t bytes_max,
     int epoch, struct sockaddr* addr_from, struct sockaddr* addr_to, uint64_t current_time);
 
 int picoquic_skip_frame(uint8_t* bytes, size_t bytes_max, size_t* consumed, int* pure_ack);
