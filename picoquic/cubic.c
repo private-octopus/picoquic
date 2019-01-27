@@ -258,7 +258,7 @@ void picoquic_cubic_notify(picoquic_path_t* path_x,
                     if (delta_rtt * 4 > cubic_state->min_rtt) {
                         /* RTT increased too much, get out of slow start! */
                         cubic_state->ssthresh = path_x->cwin;
-                        cubic_state->W_max = path_x->cwin / path_x->send_mtu;
+                        cubic_state->W_max = (double)path_x->cwin / (double)path_x->send_mtu;
                         cubic_state->W_last_max = cubic_state->W_max;
                         picoquic_cubic_enter_avoidance(cubic_state, current_time);
                     }
