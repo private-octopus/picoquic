@@ -1281,7 +1281,7 @@ int picoquic_prepare_packet_0rtt(picoquic_cnx_t* cnx, picoquic_path_t * path_x, 
         /* Encode the stream frame */
         if (stream != NULL) {
             ret = picoquic_prepare_stream_frame(cnx, stream, &bytes[length],
-                send_buffer_max - checksum_overhead - length, &data_bytes);
+                send_buffer_max - checksum_overhead - length, &data_bytes, NULL);
             if (ret == 0) {
                 length += (uint32_t) data_bytes;
             }
@@ -2356,8 +2356,9 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
 
                         /* Encode the stream frame, or frames */
                         while (stream != NULL) {
+                            int is_still_active = 0;
                             ret = picoquic_prepare_stream_frame(cnx, stream, &bytes[length],
-                                send_buffer_min_max - checksum_overhead - length, &data_bytes);
+                                send_buffer_min_max - checksum_overhead - length, &data_bytes, &is_still_active);
 
                             if (ret == 0) {
                                 length += (uint32_t)data_bytes;
@@ -2370,6 +2371,9 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                                     stream = picoquic_find_ready_stream(cnx);
                                 }
                                 else {
+                                    if (is_still_active) {
+                                      *next_wake_time = current_time;
+                                    }
                                     break;
                                 }
                             }

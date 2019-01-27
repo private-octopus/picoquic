@@ -1085,7 +1085,7 @@ static int picoquic_prepare_stream_frame_header(uint8_t* bytes, size_t bytes_max
 }
 
 int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head* stream,
-    uint8_t* bytes, size_t bytes_max, size_t* consumed)
+    uint8_t* bytes, size_t bytes_max, size_t* consumed, int* is_still_active)
 {
     int ret = 0;
 
@@ -1163,9 +1163,16 @@ int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head* str
                         stream->fin_requested = 1;
                         stream->fin_sent = 1;
                         picoquic_update_max_stream_ID_local(cnx, stream);
+
+                        if (is_still_active != NULL) {
+                          *is_still_active = 0;
+                        }
                     }
                     else {
                         stream->is_active = stream_data_context.is_still_active;
+                        if (is_still_active != NULL) {
+                          *is_still_active = stream_data_context.is_still_active;
+                        }
                     }
                 }
             }
