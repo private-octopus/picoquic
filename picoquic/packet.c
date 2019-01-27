@@ -822,6 +822,56 @@ void picoquic_queue_stateless_retry(picoquic_cnx_t* cnx,
 }
 
 /*
+ * Processing of initial or handshake messages when they are not expected
+ * any more. These messages could be used in a DOS attack against the
+ * connection, but they could also be legit messages sent by a peer
+ * that does not implement implicit ACK. They are processed to not
+ * cause any side effect, but to still generate ACK if the client
+ * needs them.
+ */
+
+void picoquic_ignore_incoming_handshake(
+    picoquic_cnx_t* cnx,
+    uint8_t* bytes,
+    picoquic_packet_header* ph)
+{
+    /* The data starts at ph->index, and its length
+     * is ph->payload_length. */
+    int ret = 0;
+    uint32_t byte_index = 0;
+    int ack_needed = 0;
+    picoquic_packet_context_enum pc;
+    
+    if (ph->ptype == picoquic_packet_initial) {
+        pc = picoquic_packet_context_initial;
+    }
+    else if (ph->ptype == picoquic_packet_handshake) {
+        pc = picoquic_packet_context_handshake;
+    }
+    else {
+        /* Not expected! */
+        return;
+    }
+
+    bytes += ph->offset;
+
+    while (ret == 0 && byte_index < ph->payload_length) {
+        size_t frame_length = 0;
+        int frame_is_pure_ack = 0;
+        ret = picoquic_skip_frame(&bytes[byte_index],
+            ph->payload_length - byte_index, &frame_length, &frame_is_pure_ack);
+        byte_index += (uint32_t)frame_length;
+        ack_needed |= frame_is_pure_ack;
+    }
+
+    /* If the packet contains ackable data, mark ack needed
+     * in the relevant packet context */
+    if (ret == 0 && ack_needed) {
+        cnx->pkt_ctx[pc].ack_needed = 1;
+    }
+}
+
+/*
  * Processing of an incoming client initial packet,
  * on an unknown connection context.
  */
@@ -837,8 +887,16 @@ int picoquic_incoming_initial(
     int new_context_created)
 {
     int ret = 0;
-    size_t extra_offset = 0;
     int is_token_ok = 0;
+
+
+
+    if ((*pcnx)->cnx_state == picoquic_state_ready) {
+        /* Ignoring handshake frames in ready state, but sending ACK
+         * if the client mistakenly repeats them */
+        picoquic_ignore_incoming_handshake(*pcnx, bytes, ph);
+        return ret;
+    }
 
 
     /* Logic to test the retry token.
@@ -911,14 +969,8 @@ int picoquic_incoming_initial(
     } else {
         /* decode the incoming frames */
         if (ret == 0) {
-            if (extra_offset >= ph->payload_length) {
-                /* empty payload! */
-                ret = picoquic_connection_error(*pcnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0);
-            }
-            else {
-                ret = picoquic_decode_frames(*pcnx, (*pcnx)->path[0],
-                    bytes + ph->offset + extra_offset, ph->payload_length - extra_offset, ph->epoch, addr_from, addr_to, current_time);
-            }
+            ret = picoquic_decode_frames(*pcnx, (*pcnx)->path[0],
+                bytes + ph->offset, ph->payload_length, ph->epoch, addr_from, addr_to, current_time);
         }
 
         /* processing of client initial packet */
@@ -1077,25 +1129,32 @@ int picoquic_incoming_server_cleartext(
 
 
     if (ret == 0) {
-        /* Accept the incoming frames */
-
-        if (ph->payload_length == 0) {
-            /* empty payload! */
-            ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0);
+        if (cnx->cnx_state == picoquic_state_ready) {
+            /* Ignoring handshake frames in ready state, but sending ACK
+             * if the client mistakenly repeats them */
+            picoquic_ignore_incoming_handshake(cnx, bytes, ph);
         }
         else {
-            ret = picoquic_decode_frames(cnx, cnx->path[0],
-                bytes + ph->offset, ph->payload_length, ph->epoch, NULL, addr_to, current_time);
+            /* Accept the incoming frames */
+
+            if (ph->payload_length == 0) {
+                /* empty payload! */
+                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0);
+            }
+            else {
+                ret = picoquic_decode_frames(cnx, cnx->path[0],
+                    bytes + ph->offset, ph->payload_length, ph->epoch, NULL, addr_to, current_time);
+            }
+
+            /* processing of initial packet */
+            if (ret == 0 && restricted == 0) {
+                ret = picoquic_tls_stream_process(cnx);
+            }
+
+            if (ret != 0) {
+                /* This is bad. should just delete the context, log the packet, etc */
+            }
         }
-    }
-
-    /* processing of initial packet */
-    if (ret == 0 && restricted == 0) {
-        ret = picoquic_tls_stream_process(cnx);
-    }
-
-    if (ret != 0) {
-        /* This is bad. should just delete the context, log the packet, etc */
     }
 
 
@@ -1120,35 +1179,38 @@ int picoquic_incoming_client_handshake(
         || cnx->cnx_state == picoquic_state_ready) {
         if (picoquic_compare_connection_id(&ph->srce_cnx_id, &cnx->path[0]->remote_cnxid) != 0) {
             ret = PICOQUIC_ERROR_CNXID_CHECK;
+        } else if (cnx->cnx_state == picoquic_state_ready) {
+            /* Ignoring handshake frames in ready state, but sending ACK
+             * if the client mistakenly repeats them */
+            picoquic_ignore_incoming_handshake(cnx, bytes, ph);
+        } else {
+            /* Accept the incoming frames */
+            if (ph->payload_length == 0) {
+                /* empty payload! */
+                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0);
+            }
+            else {
+                ret = picoquic_decode_frames(cnx, cnx->path[0],
+                    bytes + ph->offset, ph->payload_length, ph->epoch, NULL, NULL, current_time);
+            }
+            /* processing of client clear text packet */
+            if (ret == 0) {
+                /* initialization of context & creation of data */
+                /* TODO: find path to send data produced by TLS. */
+                ret = picoquic_tls_stream_process(cnx);
+            }
+
+            if (ret != 0) {
+                /* This is bad. should just delete the context, log the packet, etc */
+            }
+        }
     }
     else {
-        /* Accept the incoming frames */
-        if (ph->payload_length == 0) {
-            /* empty payload! */
-            ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0);
-        }
-        else {
-            ret = picoquic_decode_frames(cnx, cnx->path[0],
-                bytes + ph->offset, ph->payload_length, ph->epoch, NULL, NULL, current_time);
-        }
-        /* processing of client clear text packet */
-        if (ret == 0) {
-            /* initialization of context & creation of data */
-            /* TODO: find path to send data produced by TLS. */
-            ret = picoquic_tls_stream_process(cnx);
-        }
-
-        if (ret != 0) {
-            /* This is bad. should just delete the context, log the packet, etc */
-        }
+        /* Not expected. Log and ignore. */
+        ret = PICOQUIC_ERROR_UNEXPECTED_PACKET;
     }
-}
-else {
-    /* Not expected. Log and ignore. */
-    ret = PICOQUIC_ERROR_UNEXPECTED_PACKET;
-}
 
-return ret;
+    return ret;
 }
 
 /*
