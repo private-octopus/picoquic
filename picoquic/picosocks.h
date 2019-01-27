@@ -111,6 +111,10 @@ typedef struct st_picoquic_server_sockets_t {
     SOCKET_TYPE s_socket[PICOQUIC_NB_SERVER_SOCKETS];
 } picoquic_server_sockets_t;
 
+int picoquic_get_local_address(SOCKET_TYPE sd, struct sockaddr_storage * addr);
+
+SOCKET_TYPE picoquic_open_client_socket(int af);
+
 int picoquic_open_server_sockets(picoquic_server_sockets_t* sockets, int port);
 
 void picoquic_close_server_sockets(picoquic_server_sockets_t* sockets);

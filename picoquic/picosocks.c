@@ -49,6 +49,60 @@ static int bind_to_port(SOCKET_TYPE fd, int af, int port)
     return bind(fd, (struct sockaddr*)&sa, addr_length);
 }
 
+int picoquic_get_local_address(SOCKET_TYPE sd, struct sockaddr_storage * addr)
+{
+    socklen_t name_len = sizeof(struct sockaddr_storage);
+    return getsockname(sd, (struct sockaddr *)addr, &name_len);
+}
+
+static int picoquic_socket_set_pkt_info(SOCKET_TYPE sd, int af)
+{
+    int ret;
+#ifdef _WINDOWS
+    int option_value = 1;
+    if (af == AF_INET6) {
+        ret = setsockopt(sd, IPPROTO_IPV6, IPV6_PKTINFO, (char*)&option_value, sizeof(int));
+    }
+    else {
+        ret = setsockopt(sd, IPPROTO_IP, IP_PKTINFO, (char*)&option_value, sizeof(int));
+    }
+#else
+    if (af == AF_INET6) {
+        int val = 1;
+        ret = setsockopt(sd, IPPROTO_IPV6, IPV6_V6ONLY,
+            &val, sizeof(val));
+        if (ret == 0) {
+            val = 1;
+            ret = setsockopt(sd, IPPROTO_IPV6, IPV6_RECVPKTINFO, (char*)&val, sizeof(int));
+        }
+    }
+    else {
+        int val = 1;
+#ifdef IP_PKTINFO
+        ret = setsockopt(sd, IPPROTO_IP, IP_PKTINFO, (char*)&val, sizeof(int));
+#else
+        /* The IP_PKTINFO structure is not defined on BSD */
+        ret = setsockopt(sd, IPPROTO_IP, IP_RECVDSTADDR, (char*)&val, sizeof(int));
+#endif
+    }
+#endif
+
+    return ret;
+}
+
+SOCKET_TYPE picoquic_open_client_socket(int af)
+{
+    SOCKET_TYPE sd = socket(af, SOCK_DGRAM, IPPROTO_UDP);
+
+    if (sd != INVALID_SOCKET) {
+        if (picoquic_socket_set_pkt_info(sd, af) != 0) {
+            DBG_PRINTF("Cannot set PKTINFO option (af=%d)\n", af);
+        }
+    }
+
+    return sd;
+}
+
 int picoquic_open_server_sockets(picoquic_server_sockets_t* sockets, int port)
 {
     int ret = 0;
@@ -65,34 +119,7 @@ int picoquic_open_server_sockets(picoquic_server_sockets_t* sockets, int port)
             ret = -1;
         }
         else {
-#ifdef _WINDOWS
-            int option_value = 1;
-            if (sock_af[i] == AF_INET6) {
-                ret = setsockopt(sockets->s_socket[i], IPPROTO_IPV6, IPV6_PKTINFO, (char*)&option_value, sizeof(int));
-            }
-            else {
-                ret = setsockopt(sockets->s_socket[i], IPPROTO_IP, IP_PKTINFO, (char*)&option_value, sizeof(int));
-            }
-#else
-            if (sock_af[i] == AF_INET6) {
-                int val = 1;
-                ret = setsockopt(sockets->s_socket[i], IPPROTO_IPV6, IPV6_V6ONLY,
-                    &val, sizeof(val));
-                if (ret == 0) {
-                    val = 1;
-                    ret = setsockopt(sockets->s_socket[i], IPPROTO_IPV6, IPV6_RECVPKTINFO, (char*)&val, sizeof(int));
-                }
-            }
-            else {
-                int val = 1;
-#ifdef IP_PKTINFO
-                ret = setsockopt(sockets->s_socket[i], IPPROTO_IP, IP_PKTINFO, (char*)&val, sizeof(int));
-#else
-                /* The IP_PKTINFO structure is not defined on BSD */
-                ret = setsockopt(sockets->s_socket[i], IPPROTO_IP, IP_RECVDSTADDR, (char*)&val, sizeof(int));
-#endif
-            }
-#endif
+            ret = picoquic_socket_set_pkt_info(sockets->s_socket[i], sock_af[i]);
             if (ret == 0) {
                 ret = bind_to_port(sockets->s_socket[i], sock_af[i], port);
             }
