@@ -886,6 +886,8 @@ void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet_t
     picoquic_connection_id_t * local_cnxid,
     picoquic_path_t * path_x, uint64_t current_time);
 
+void picoquic_implicit_handshake_ack(picoquic_cnx_t* cnx, picoquic_packet_context_enum pc, uint64_t current_time);
+
 int picoquic_parse_header_and_decrypt(
     picoquic_quic_t* quic,
     uint8_t* bytes,

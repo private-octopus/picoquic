@@ -120,13 +120,18 @@ static int stress_server_callback(picoquic_cnx_t* cnx,
     int ret = 0;
     picoquic_stress_server_callback_ctx_t* ctx = (picoquic_stress_server_callback_ctx_t*)callback_ctx;
 
-    if (fin_or_event == picoquic_callback_close || 
+    if (fin_or_event == picoquic_callback_close ||
         fin_or_event == picoquic_callback_stateless_reset ||
         fin_or_event == picoquic_callback_application_close) {
         if (ctx != NULL) {
             free(ctx);
             picoquic_set_callback(cnx, stress_server_callback, NULL);
         }
+    }
+    else if (
+        fin_or_event == picoquic_callback_almost_ready ||
+        fin_or_event == picoquic_callback_ready) {
+        /* do nothing */
     } else if (fin_or_event == picoquic_callback_prepare_to_send) {
         /* unexpected call */
         ret = -1;
@@ -307,8 +312,11 @@ static int stress_client_callback(picoquic_cnx_t* cnx,
             free(ctx);
             picoquic_set_callback(cnx, stress_client_callback, NULL);
         }
-    }
-    else if (ctx != NULL) {
+    } else if (
+        fin_or_event == picoquic_callback_almost_ready ||
+        fin_or_event == picoquic_callback_ready) {
+        /* do nothing */
+    } else if (ctx != NULL) {
         /* if stream is already present, check its state. New bytes? */
         int stream_index = -1;
         int is_finished = 0;
