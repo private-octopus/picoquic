@@ -442,6 +442,10 @@ int h3zero_server_callback(picoquic_cnx_t* cnx,
             /* Used for active streams */
             ret = h3zero_server_callback_prepare_to_send(cnx, stream_id, (void*)bytes, length, ctx);
             break;
+        case picoquic_callback_almost_ready:
+        case picoquic_callback_ready:
+            /* do nothing */
+            break;
         default:
             /* unexpected */
             break;
@@ -529,6 +533,11 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
     if (fin_or_event == picoquic_callback_prepare_to_send) {
         /* Unexpected call. */
         return -1;
+    }
+
+    if (fin_or_event == picoquic_callback_almost_ready ||
+        fin_or_event == picoquic_callback_ready) {
+        return 0;
     }
 
     if (fin_or_event == picoquic_callback_close ||

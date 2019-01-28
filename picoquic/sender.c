@@ -1628,6 +1628,11 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                                 cnx->tls_stream[1].send_queue == NULL &&
                                 cnx->tls_stream[2].send_queue == NULL) {
                                 cnx->cnx_state = picoquic_state_client_ready_start;
+                                if (cnx->callback_fn != NULL) {
+                                    if (cnx->callback_fn(cnx, 0, NULL, 0, picoquic_callback_almost_ready, cnx->callback_ctx) != 0) {
+                                        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
+                                    }
+                                }
                             }
                             break;
                         default:
@@ -1789,6 +1794,11 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             if (ret == 0 && tls_ready != 0 && data_bytes > 0 && cnx->tls_stream[epoch].send_queue == NULL) {
                 if (epoch == 2 && picoquic_tls_client_authentication_activated(cnx->quic) == 0) {
                     cnx->cnx_state = picoquic_state_server_false_start;
+                    if (cnx->callback_fn != NULL) {
+                        if (cnx->callback_fn(cnx, 0, NULL, 0, picoquic_callback_almost_ready, cnx->callback_ctx) != 0) {
+                            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
+                        }
+                    }
                 }
                 else {
                     cnx->cnx_state = picoquic_state_server_handshake;
@@ -2114,6 +2124,12 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
         cnx->cnx_state = picoquic_state_ready;
         picoquic_implicit_handshake_ack(cnx, picoquic_packet_context_initial, current_time);
         picoquic_implicit_handshake_ack(cnx, picoquic_packet_context_handshake, current_time);
+
+        if (cnx->callback_fn != NULL) {
+            if (cnx->callback_fn(cnx, 0, NULL, 0, picoquic_callback_ready, cnx->callback_ctx) != 0) {
+                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
+            }
+        }
     }
 
     /* Verify first that there is no need for retransmit or ack

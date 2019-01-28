@@ -22,7 +22,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#include "picoquic.h"
+#include "picoquic_internal.h"
 #include "h3zero.h"
 #include "democlient.h"
 
@@ -267,7 +267,7 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
     picoquic_demo_callback_ctx_t* ctx = (picoquic_demo_callback_ctx_t*)callback_ctx;
     picoquic_demo_client_stream_ctx_t* stream_ctx;
 
-    ctx->last_interaction_time = picoquic_current_time();
+    ctx->last_interaction_time = picoquic_get_quic_time(cnx->quic);
     ctx->progress_observed = 1;
 
     switch (fin_or_event) {
@@ -353,6 +353,9 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
         break;
     case picoquic_callback_prepare_to_send:
         /* Used for active streams -- never used on client */
+        break;
+    case picoquic_callback_almost_ready:
+    case picoquic_callback_ready:
         break;
     default:
         /* unexpected */
