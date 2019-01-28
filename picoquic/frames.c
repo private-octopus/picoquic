@@ -1910,7 +1910,12 @@ static int picoquic_process_ack_range(
                 picoquic_process_possible_ack_of_ack_frame(cnx, p);
 
                 /* Keep track of reception of ACK of 1RTT data */
-                cnx->one_rtt_data_acknowledged |= (p->ptype == picoquic_packet_1rtt_protected);
+                if (p->ptype == picoquic_packet_1rtt_protected &&
+                    cnx->cnx_state == picoquic_state_client_ready_start) {
+                    /* Transition to client ready state.
+                     * The handshake is complete, all the handshake packets are implicitly acknowledged */
+                    picoquic_ready_state_transition(cnx, current_time);
+                }
 
                 (void)picoquic_dequeue_retransmit_packet(cnx, p, 1);
                 p = next;

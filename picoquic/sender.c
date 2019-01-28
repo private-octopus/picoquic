@@ -2091,6 +2091,21 @@ int picoquic_prepare_new_path_and_id(picoquic_cnx_t* cnx, uint8_t* bytes, size_t
     return ret;
 }
 
+void picoquic_ready_state_transition(picoquic_cnx_t* cnx, uint64_t current_time)
+{
+    /* Transition to server ready state.
+     * The handshake is complete, all the handshake packets are implicitly acknowledged */
+    cnx->cnx_state = picoquic_state_ready;
+    picoquic_implicit_handshake_ack(cnx, picoquic_packet_context_initial, current_time);
+    picoquic_implicit_handshake_ack(cnx, picoquic_packet_context_handshake, current_time);
+
+    if (cnx->callback_fn != NULL) {
+        if (cnx->callback_fn(cnx, 0, NULL, 0, picoquic_callback_ready, cnx->callback_ctx) != 0) {
+            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
+        }
+    }
+}
+
 
 /*  Prepare the next packet to send when in one the ready states */
 int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x, picoquic_packet_t* packet,
@@ -2115,21 +2130,9 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
      * Manage the end of false start transition.
      */
 
-    if ((cnx->cnx_state == picoquic_state_server_false_start &&
-        cnx->crypto_context[3].aead_decrypt != NULL) ||
-        (cnx->cnx_state == picoquic_state_client_ready_start &&
-            cnx->one_rtt_data_acknowledged)) {
-        /* Transition to server ready state.
-         * The handshake is complete, all the handshake packets are implicitly acknowledged */
-        cnx->cnx_state = picoquic_state_ready;
-        picoquic_implicit_handshake_ack(cnx, picoquic_packet_context_initial, current_time);
-        picoquic_implicit_handshake_ack(cnx, picoquic_packet_context_handshake, current_time);
-
-        if (cnx->callback_fn != NULL) {
-            if (cnx->callback_fn(cnx, 0, NULL, 0, picoquic_callback_ready, cnx->callback_ctx) != 0) {
-                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
-            }
-        }
+    if (cnx->cnx_state == picoquic_state_server_false_start &&
+        cnx->crypto_context[3].aead_decrypt != NULL) {
+        picoquic_ready_state_transition(cnx, current_time);
     }
 
     /* Verify first that there is no need for retransmit or ack
