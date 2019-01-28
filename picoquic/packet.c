@@ -889,15 +889,12 @@ int picoquic_incoming_initial(
     int ret = 0;
     int is_token_ok = 0;
 
-
-
-    if ((*pcnx)->cnx_state == picoquic_state_ready) {
+    if ((*pcnx)->cnx_state == picoquic_state_ready ) {
         /* Ignoring handshake frames in ready state, but sending ACK
          * if the client mistakenly repeats them */
         picoquic_ignore_incoming_handshake(*pcnx, bytes, ph);
         return ret;
     }
-
 
     /* Logic to test the retry token.
      * TODO: this should probably be implemented as a callback */
@@ -1129,7 +1126,15 @@ int picoquic_incoming_server_cleartext(
 
 
     if (ret == 0) {
-        if (cnx->cnx_state == picoquic_state_ready) {
+        if (cnx->cnx_state == picoquic_state_ready ||
+            (ph->ptype == picoquic_packet_initial && 
+                (cnx->cnx_state == picoquic_state_client_handshake_start ||
+                    cnx->cnx_state == picoquic_state_client_handshake_progress ||
+                    cnx->cnx_state == picoquic_state_client_almost_ready ||
+                    cnx->cnx_state == picoquic_state_client_ready_start)
+                    && 
+                cnx->crypto_context[2].aead_decrypt != NULL &&
+                cnx->crypto_context[2].aead_encrypt != NULL)) {
             /* Ignoring handshake frames in ready state, but sending ACK
              * if the client mistakenly repeats them */
             picoquic_ignore_incoming_handshake(cnx, bytes, ph);
