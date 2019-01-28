@@ -613,7 +613,6 @@ typedef struct st_picoquic_cnx_t {
     unsigned int key_phase_enc : 1; /* Key phase used in outgoing packets */
     unsigned int key_phase_dec : 1; /* Key phase expected in incoming packets */
     unsigned int zero_rtt_data_accepted : 1; /* Peer confirmed acceptance of zero rtt data */
-    unsigned int one_rtt_data_acknowledged : 1; /* 1RTT data acknowledged by peer */
 
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;
@@ -887,6 +886,7 @@ void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet_t
     picoquic_path_t * path_x, uint64_t current_time);
 
 void picoquic_implicit_handshake_ack(picoquic_cnx_t* cnx, picoquic_packet_context_enum pc, uint64_t current_time);
+void picoquic_ready_state_transition(picoquic_cnx_t* cnx, uint64_t current_time);
 
 int picoquic_parse_header_and_decrypt(
     picoquic_quic_t* quic,
