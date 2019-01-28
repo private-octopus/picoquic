@@ -201,9 +201,10 @@ extern const size_t picoquic_nb_supported_versions;
 int picoquic_get_version_index(uint32_t proposed_version);
 
 /*
-     * Definition of the session ticket store that can be associated with a 
-     * client context.
-     */
+ * Definition of the session ticket store and connection token
+ * store that can be associated with a 
+ * client context.
+ */
 typedef struct st_picoquic_stored_ticket_t {
     struct st_picoquic_stored_ticket_t* next_ticket;
     char* sni;
@@ -229,6 +230,35 @@ int picoquic_save_tickets(const picoquic_stored_ticket_t* first_ticket,
 int picoquic_load_tickets(picoquic_stored_ticket_t** pp_first_ticket,
     uint64_t current_time, char const* ticket_file_name);
 void picoquic_free_tickets(picoquic_stored_ticket_t** pp_first_ticket);
+
+typedef struct st_picoquic_stored_token_t {
+    struct st_picoquic_stored_token_t* next_token;
+    char* sni;
+    uint8_t* token;
+    uint8_t* ip_addr;
+    uint64_t time_valid_until;
+    uint16_t sni_length;
+    uint16_t alpn_length;
+    uint16_t token_length;
+    uint8_t ip_addr_length;
+} picoquic_stored_token_t;
+
+int picoquic_store_token(picoquic_stored_token_t** p_first_token,
+    uint64_t current_time,
+    char const* sni, uint16_t sni_length,
+    uint8_t* ip_addr, uint8_t ip_addr_length,
+    uint8_t* token, uint16_t token_length);
+int picoquic_get_token(picoquic_stored_token_t* p_first_token,
+    uint64_t current_time,
+    char const* sni, uint16_t sni_length,
+    uint8_t* ip_addr, uint8_t ip_addr_length,
+    uint8_t** token, uint16_t* token_length);
+
+int picoquic_save_tokens(const picoquic_stored_token_t* first_token,
+    uint64_t current_time, char const* token_file_name);
+int picoquic_load_tokens(picoquic_stored_token_t** pp_first_token,
+    uint64_t current_time, char const* token_file_name);
+void picoquic_free_tokens(picoquic_stored_token_t** pp_first_token);
 
 /*
  * Transport parameters, as defined by the QUIC transport specification
@@ -281,6 +311,7 @@ typedef struct st_picoquic_quic_t {
     uint64_t* p_simulated_time;
     char const* ticket_file_name;
     picoquic_stored_ticket_t* p_first_ticket;
+    picoquic_stored_token_t* p_first_token;
     uint32_t mtu_max;
     uint32_t flags;
     uint32_t padding_multiple_default;

@@ -155,6 +155,7 @@
     <ClCompile Include="spinbit.c" />
     <ClCompile Include="ticket_store.c" />
     <ClCompile Include="tls_api.c" />
+    <ClCompile Include="token_store.c" />
     <ClCompile Include="transport.c" />
     <ClCompile Include="util.c" />
   </ItemGroup>
