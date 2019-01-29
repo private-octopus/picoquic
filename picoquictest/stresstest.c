@@ -48,6 +48,7 @@ size_t picoquic_stress_max_open_streams = 4; /* Default to 4 simultaneous stream
 uint64_t stress_random_ctx = 0xBabaC001BaddBab1ull;
 uint32_t picoquic_stress_max_message_before_drop = 25;
 uint32_t picoquic_stress_max_message_before_migrate = 8;
+static int picoquic_fuzz_in_progress = 0;
 
 typedef struct st_picoquic_stress_server_callback_ctx_t {
     // picoquic_first_server_stream_ctx_t* first_stream;
@@ -97,11 +98,13 @@ typedef struct st_picoquic_stress_ctx_t {
 
 static void stress_debug_break()
 {
+    if (picoquic_fuzz_in_progress == 0) {
 #ifdef _WINDOWS
-    DebugBreak();
+        DebugBreak();
 #else
-    raise(SIGTRAP);
+        raise(SIGTRAP);
 #endif
+    }
 }
 
 
@@ -949,6 +952,7 @@ static int stress_or_fuzz_test(picoquic_fuzz_fn fuzz_fn, void * fuzz_ctx, uint64
     uint64_t nb_connections = 0;
     uint64_t sim_time_next_log = 1000000;
 
+    picoquic_fuzz_in_progress = (fuzz_fn == NULL) ? 0 : 1;
 
     /* Initialization */
     memset(&stress_ctx, 0, sizeof(picoquic_stress_ctx_t));
@@ -1057,6 +1061,8 @@ static int stress_or_fuzz_test(picoquic_fuzz_fn fuzz_fn, void * fuzz_ctx, uint64
         DBG_PRINTF("Stress complete after simulating %3f s. in %3f s., returns %d\n",
             run_time_seconds, wall_time_seconds, ret);
     }
+
+    picoquic_fuzz_in_progress = 0;
 
     return ret;
 }
