@@ -887,7 +887,6 @@ int picoquic_incoming_initial(
     int new_context_created)
 {
     int ret = 0;
-    int is_token_ok = 0;
 
     if ((*pcnx)->cnx_state == picoquic_state_ready ) {
         /* Ignoring handshake frames in ready state, but sending ACK
@@ -902,10 +901,7 @@ int picoquic_incoming_initial(
         (*pcnx)->cnx_state == picoquic_state_server_init &&
         ((*pcnx)->quic->flags&picoquic_context_server_busy) == 0) {
         if (picoquic_verify_retry_token((*pcnx)->quic, addr_from, current_time,
-            &(*pcnx)->original_cnxid, ph->token_bytes, ph->token_length) == 0) {
-            is_token_ok = 1;
-        }
-        else {
+            &(*pcnx)->original_cnxid, ph->token_bytes, ph->token_length) != 0) {
             uint8_t token_buffer[256];
             uint32_t token_size;
 

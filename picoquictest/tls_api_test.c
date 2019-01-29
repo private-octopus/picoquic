@@ -1098,7 +1098,7 @@ static int tls_api_synch_to_empty_loop(picoquic_test_tls_api_ctx_t* test_ctx,
 
     if (ret == 0 && success == 0) {
         DBG_PRINTF("Exit synch loop after %d rounds, backlog or not enough paths (%d & %d).\n",
-            nb_rounds, test_ctx->cnx_client->nb_paths, test_ctx->cnx_server->nb_paths);
+            nb_rounds, test_ctx->cnx_client->nb_paths, (test_ctx->cnx_server == NULL)?0: test_ctx->cnx_server->nb_paths);
     }
 
     return ret;
@@ -1673,7 +1673,6 @@ static char const* token_file_name = "retry_tests_tokens.bin";
 int tls_retry_token_test()
 {
     uint64_t simulated_time = 0;
-    const uint64_t target_time = 210000ull;
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     /* ensure that the token file is empty */
@@ -3745,7 +3744,6 @@ int probe_api_test()
 
 int migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_scenario, uint64_t loss_target)
 {
-    uint64_t loss_mask_data = 0;
     uint64_t simulated_time = 0;
     uint64_t next_time = 0;
     uint64_t loss_mask = 0;
