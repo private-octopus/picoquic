@@ -309,6 +309,7 @@ typedef struct st_picoquic_quic_t {
     uint8_t retry_seed[PICOQUIC_RETRY_SECRET_SIZE];
     uint64_t* p_simulated_time;
     char const* ticket_file_name;
+    char const* token_file_name;
     picoquic_stored_ticket_t* p_first_ticket;
     picoquic_stored_token_t* p_first_token;
     uint32_t mtu_max;
@@ -760,6 +761,9 @@ typedef struct st_picoquic_cnx_t {
     picoquic_probe_t * probe_first;
 } picoquic_cnx_t;
 
+/* Load the stash of retry tokens. */
+int picoquic_load_token_file(picoquic_quic_t* quic, char const * token_file_name);
+
 /* Init of transport parameters */
 int picoquic_set_default_tp(picoquic_quic_t* quic, picoquic_tp_t * tp);
 void picoquic_init_transport_parameters(picoquic_tp_t* tp, int client_mode);
@@ -1027,6 +1031,7 @@ int picoquic_prepare_path_response_frame(uint8_t* bytes,
 int picoquic_prepare_new_connection_id_frame(picoquic_cnx_t * cnx, picoquic_path_t * path_x,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
 int picoquic_queue_retire_connection_id_frame(picoquic_cnx_t * cnx, uint64_t sequence);
+int picoquic_queue_new_token_frame(picoquic_cnx_t * cnx, uint8_t * token, size_t token_length);
 
 int picoquic_prepare_first_misc_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
                                       size_t bytes_max, size_t* consumed);

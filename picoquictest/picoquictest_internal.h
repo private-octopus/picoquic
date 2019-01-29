@@ -186,7 +186,8 @@ void picoquictest_sim_link_submit(picoquictest_sim_link_t* link, picoquictest_si
 
 int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_version,
     char const* sni, char const* alpn, uint64_t* p_simulated_time,
-    char const* ticket_file_name, int force_zero_share, int delayed_init, int use_bad_crypt);
+    char const* ticket_file_name, char const* token_file_name, 
+    int force_zero_share, int delayed_init, int use_bad_crypt);
 
 void tls_api_delete_ctx(picoquic_test_tls_api_ctx_t* test_ctx);
 

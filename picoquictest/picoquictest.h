@@ -161,6 +161,7 @@ int parse_demo_scenario_test();
 int h3zero_server_test();
 int h09_server_test();
 int generic_server_test();
+int tls_retry_token_test();
 
 #ifdef __cplusplus
 }

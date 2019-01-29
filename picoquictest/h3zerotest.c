@@ -609,7 +609,7 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
     if (ret == 0) {
         ret = tls_api_init_ctx(&test_ctx,
             PICOQUIC_INTERNAL_TEST_VERSION_1,
-            PICOQUIC_TEST_SNI, alpn, &simulated_time, NULL, 0, 1, 0);
+            PICOQUIC_TEST_SNI, alpn, &simulated_time, NULL, NULL, 0, 1, 0);
     }
 
     if (ret != 0) {

@@ -94,6 +94,7 @@ static const picoquic_test_def_t test_table[] = {
     { "many_short_loss", many_short_loss_test },
     { "http0dot9", http0dot9_test },
     { "retry", tls_api_retry_test },
+    { "retry_token", tls_retry_token_test },
     { "two_connections", tls_api_two_connections_test },
     { "multiple_versions", tls_api_multiple_versions_test },
     { "keep_alive", keep_alive_test },

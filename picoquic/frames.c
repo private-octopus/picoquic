@@ -632,7 +632,6 @@ uint8_t* picoquic_skip_new_token_frame(uint8_t* bytes, const uint8_t* bytes_max)
     return picoquic_frames_length_data_skip(bytes+1, bytes_max);
 }
 
-
 uint8_t* picoquic_decode_new_token_frame(picoquic_cnx_t* cnx, uint8_t* bytes, const uint8_t* bytes_max,
     uint64_t current_time, struct sockaddr* addr_to)
 {
@@ -650,7 +649,7 @@ uint8_t* picoquic_decode_new_token_frame(picoquic_cnx_t* cnx, uint8_t* bytes, co
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
             picoquic_frame_type_new_token);
     }
-    else if (addr_to != NULL){
+    else if (addr_to != NULL && cnx->client_mode){
         uint8_t * ip_addr;
         uint8_t ip_addr_length;
         picoquic_get_ip_addr(addr_to, &ip_addr, &ip_addr_length);
