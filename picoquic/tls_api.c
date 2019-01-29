@@ -1811,7 +1811,8 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
                             picoquic_connection_id_t n_cid = picoquic_null_connection_id;
 
                             if (picoquic_prepare_retry_token(cnx->quic, (struct sockaddr *)&cnx->path[0]->peer_addr,
-                                picoquic_get_quic_time(cnx->quic), &n_cid, token_buffer, (uint32_t) sizeof(token_buffer), &token_size) == 0) {
+                                picoquic_get_quic_time(cnx->quic) + PICOQUIC_TOKEN_DELAY_LONG, &n_cid, 
+                                token_buffer, (uint32_t) sizeof(token_buffer), &token_size) == 0) {
                                 if (picoquic_queue_new_token_frame(cnx, token_buffer, token_size) != 0) {
                                     picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, picoquic_frame_type_new_token);
                                 }
@@ -2054,9 +2055,7 @@ int picoquic_verify_retry_token(picoquic_quic_t* quic, struct sockaddr * addr_pe
         /* Decode the clear text components */
         uint64_t token_time = PICOPARSE_64(token);
         /* Verify that the token time is not too old */
-#define PICOQUIC_TOKEN_DELAY_MAX (24*60*60*1000000ull)
-        if (token_time > current_time ||
-            current_time - token_time > PICOQUIC_TOKEN_DELAY_MAX) {
+        if (token_time < current_time) {
             ret = -1;
         }
         else {

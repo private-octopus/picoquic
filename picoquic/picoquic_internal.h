@@ -55,6 +55,8 @@ extern "C" {
 #define PICOQUIC_ACK_DELAY_MAX_DEFAULT 25000 /* 25 ms, per protocol spec */
 #define PICOQUIC_ACK_DELAY_MIN 1000 /* 10 ms */
 #define PICOQUIC_RACK_DELAY 10000 /* 10 ms */
+#define PICOQUIC_TOKEN_DELAY_LONG (24*60*60*1000000ull) /* 24 hours */
+#define PICOQUIC_TOKEN_DELAY_SHORT (2*60*1000000ull) /* 2 minutes */
 
 #define PICOQUIC_SPURIOUS_RETRANSMIT_DELAY_MAX 1000000 /* one second */
 

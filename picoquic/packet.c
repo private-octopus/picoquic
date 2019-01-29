@@ -909,7 +909,8 @@ int picoquic_incoming_initial(
             uint8_t token_buffer[256];
             uint32_t token_size;
 
-            if (picoquic_prepare_retry_token((*pcnx)->quic, addr_from, current_time, &ph->dest_cnx_id,
+            if (picoquic_prepare_retry_token((*pcnx)->quic, addr_from, 
+                current_time + PICOQUIC_TOKEN_DELAY_SHORT, &ph->dest_cnx_id,
                 token_buffer, (uint32_t)sizeof(token_buffer), &token_size) != 0){ 
                 ret = PICOQUIC_ERROR_MEMORY;
             }
