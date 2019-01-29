@@ -761,7 +761,8 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
 
                     client_ready_loop++;
 
-                    if (force_migration && migration_started == 0 && cnx_client->cnxid_stash_first != NULL
+                    if (force_migration && migration_started == 0 && 
+                        (cnx_client->cnxid_stash_first != NULL || force_migration == 1)
                         && picoquic_get_cnx_state(cnx_client) == picoquic_state_ready) {
                         int mig_ret = quic_client_migrate(cnx_client, &fd,
                             (struct sockaddr *)&server_address, force_migration, F_log);
