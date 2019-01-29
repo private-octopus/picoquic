@@ -675,7 +675,7 @@ typedef struct st_picoquic_cnx_t {
     uint16_t remote_application_error;
     uint16_t remote_error;
     uint64_t offending_frame_type;
-    uint32_t retry_token_length;
+    uint16_t retry_token_length;
     uint8_t * retry_token;
 
 

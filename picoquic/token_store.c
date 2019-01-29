@@ -221,22 +221,32 @@ int picoquic_get_token(picoquic_stored_token_t* p_first_token,
 {
     int ret = 0;
     picoquic_stored_token_t* next = p_first_token;
+    picoquic_stored_token_t* best_match = NULL;
 
     while (next != NULL) {
-        if (next->time_valid_until > current_time && next->sni_length == sni_length && next->ip_addr_length == ip_addr_length && memcmp(next->sni, sni, sni_length) == 0 && memcmp(next->ip_addr, ip_addr, ip_addr_length) == 0) {
-            break;
-        } else {
-            next = next->next_token;
-        }
+        if (next->time_valid_until > current_time && next->sni_length == sni_length && memcmp(next->sni, sni, sni_length) == 0){
+            if (ip_addr_length > 0) {
+                if (next->ip_addr_length == ip_addr_length && memcmp(next->ip_addr, ip_addr, ip_addr_length) == 0) {
+                    best_match = next;
+                    break;
+                }
+            }
+            else {
+                if (best_match == NULL || next->time_valid_until > best_match->time_valid_until) {
+                    best_match = next;
+                }
+            }
+        } 
+        next = next->next_token;
     }
 
-    if (next == NULL) {
+    if (best_match == NULL) {
         *token = NULL;
         *token_length = 0;
         ret = -1;
     } else {
-        *token = (uint8_t*)next->token;
-        *token_length = next->token_length;
+        *token = (uint8_t*)best_match->token;
+        *token_length = best_match->token_length;
     }
 
     return ret;

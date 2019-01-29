@@ -1044,7 +1044,7 @@ int picoquic_incoming_retry(
             free(cnx->retry_token);
         }
         cnx->retry_token = token;
-        cnx->retry_token_length = (uint32_t)token_length;
+        cnx->retry_token_length = (uint16_t)token_length;
 
         picoquic_reset_cnx(cnx, current_time);
 

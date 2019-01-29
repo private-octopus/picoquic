@@ -1063,6 +1063,47 @@ static int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
     return ret; /* end of sending loop */
 }
 
+static int tls_api_synch_to_empty_loop(picoquic_test_tls_api_ctx_t* test_ctx,
+    uint64_t* simulated_time, int max_trials,
+    int path_target, int wait_for_ready)
+{
+    /* run a receive loop until no outstanding data */
+    int ret = 0;
+    uint64_t time_out = *simulated_time + 4000000;
+    int nb_rounds = 0;
+    int success = 0;
+
+    while (ret == 0 && *simulated_time < time_out &&
+        nb_rounds < max_trials && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
+        int was_active = 0;
+
+        ret = tls_api_one_sim_round(test_ctx, simulated_time, time_out, &was_active);
+        nb_rounds++;
+
+        if (test_ctx->cnx_server == NULL) {
+            break;
+        }
+
+        if (test_ctx->cnx_client->nb_paths >= path_target &&
+            test_ctx->cnx_server->nb_paths >= path_target &&
+            picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) &&
+            picoquic_is_cnx_backlog_empty(test_ctx->cnx_server) &&
+            (!wait_for_ready || (
+                test_ctx->cnx_client->cnx_state == picoquic_state_ready &&
+                test_ctx->cnx_server->cnx_state == picoquic_state_ready))) {
+            success = 1;
+            break;
+        }
+    }
+
+    if (ret == 0 && success == 0) {
+        DBG_PRINTF("Exit synch loop after %d rounds, backlog or not enough paths (%d & %d).\n",
+            nb_rounds, test_ctx->cnx_client->nb_paths, test_ctx->cnx_server->nb_paths);
+    }
+
+    return ret;
+}
+
 
 static int wait_application_aead_ready(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t * simulated_time)
@@ -1651,12 +1692,12 @@ int tls_retry_token_test()
     }
 
     if (ret == 0) {
-        ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
+        /* Wait some time, so the connection can stabilize to ready state */
+        ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, PICOQUIC_NB_PATH_TARGET, 1);
     }
 
-    if (ret == 0 && simulated_time > target_time) {
-        DBG_PRINTF("First retry test completes in %llu microsec, more than %llu\n", simulated_time, target_time);
-        ret = -1;
+    if (ret == 0) {
+        ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
     }
 
     /* Now we remove the client connection and create a new one */
@@ -2112,27 +2153,7 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, unsigned int early_loss)
                 ret = -1;
             } else {
                 /* run a receive loop until no outstanding data */
-                uint64_t time_out = simulated_time + 4000000;
-                int nb_rounds = 0;
-                int success = 0;
-
-                while (ret == 0 && simulated_time < time_out &&
-                    nb_rounds < 2048 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
-                    int was_active = 0;
-
-                    ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
-                    nb_rounds++;
-
-                    if (picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) && picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)) {
-                        success = 1;
-                        break;
-                    }
-                }
-
-                if (ret == 0 && success == 0) {
-                    DBG_PRINTF("Exit synch loop after %d rounds, backlog not empty.\n",
-                        nb_rounds);
-                }
+                ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, 0, 0);
             }
         }
 
@@ -3512,30 +3533,7 @@ int transmit_cnxid_test()
 
     /* run a receive loop until no outstanding data */
     if (ret == 0) {
-        uint64_t time_out = simulated_time + 4000000;
-        int nb_rounds = 0;
-        int success = 0;
-
-        while (ret == 0 && simulated_time < time_out &&
-            nb_rounds < 2048 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
-            int was_active = 0;
-
-            ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
-            nb_rounds++;
-
-            if (test_ctx->cnx_client->nb_paths >= PICOQUIC_NB_PATH_TARGET &&
-                test_ctx->cnx_server->nb_paths >= PICOQUIC_NB_PATH_TARGET &&
-                picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) &&
-                picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)) {
-                success = 1;
-                break;
-            }
-        }
-
-        if (ret == 0 && success == 0) {
-            DBG_PRINTF("Exit synch loop after %d rounds, backlog or not enough paths (%d & %d).\n",
-                nb_rounds, test_ctx->cnx_client->nb_paths, test_ctx->cnx_server->nb_paths);
-        }
+        ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, PICOQUIC_NB_PATH_TARGET, 0);
     }
 
     if (ret == 0) {
@@ -3601,30 +3599,7 @@ int probe_api_test()
 
     /* run a receive loop until no outstanding data */
     if (ret == 0) {
-        uint64_t time_out = simulated_time + 4000000;
-        int nb_rounds = 0;
-        int success = 0;
-
-        while (ret == 0 && simulated_time < time_out &&
-            nb_rounds < 2048 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
-            int was_active = 0;
-
-            ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
-            nb_rounds++;
-
-            if (test_ctx->cnx_client->nb_paths >= PICOQUIC_NB_PATH_TARGET &&
-                test_ctx->cnx_server->nb_paths >= PICOQUIC_NB_PATH_TARGET &&
-                picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) &&
-                picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)) {
-                success = 1;
-                break;
-            }
-        }
-
-        if (ret == 0 && success == 0) {
-            DBG_PRINTF("Exit synch loop after %d rounds, backlog or not enough paths (%d & %d).\n",
-                nb_rounds, test_ctx->cnx_client->nb_paths, test_ctx->cnx_server->nb_paths);
-        }
+        ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, PICOQUIC_NB_PATH_TARGET, 0);
     }
 
     if (ret == 0) {
@@ -3791,33 +3766,8 @@ int migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_sc
 
     /* run a receive loop until no outstanding data */
     if (ret == 0) {
-        uint64_t time_out = simulated_time + 4000000;
-        int nb_rounds = 0;
-        int success = 0;
-        initial_challenge = test_ctx->cnx_server->path[0]->challenge;
-        loss_mask = loss_mask_data;
 
-        while (ret == 0 && simulated_time < time_out &&
-            nb_rounds < 2048 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
-            int was_active = 0;
-
-            ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
-            nb_rounds++;
-
-            if (test_ctx->cnx_client->nb_paths >= PICOQUIC_NB_PATH_TARGET &&
-                test_ctx->cnx_server->nb_paths >= PICOQUIC_NB_PATH_TARGET &&
-                picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) &&
-                picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)) {
-                success = 1;
-                break;
-            }
-        }
-
-        if (ret == 0 && success == 0) {
-            DBG_PRINTF("Exit synch loop after %d rounds, backlog or not enough paths (%d & %d).\n",
-                nb_rounds, test_ctx->cnx_client->nb_paths, test_ctx->cnx_server->nb_paths);
-            ret = -1;
-        }
+        ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, PICOQUIC_NB_PATH_TARGET, 1);
     }
 
     if (ret == 0) {
@@ -4092,30 +4042,7 @@ int cnxid_renewal_test()
 
     /* run a receive loop until no outstanding data */
     if (ret == 0) {
-        uint64_t time_out = simulated_time + 4000000;
-        int nb_rounds = 0;
-        int success = 0;
-
-        while (ret == 0 && simulated_time < time_out &&
-            nb_rounds < 2048 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
-            int was_active = 0;
-
-            ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
-            nb_rounds++;
-
-            if (test_ctx->cnx_client->nb_paths >= PICOQUIC_NB_PATH_TARGET &&
-                test_ctx->cnx_server->nb_paths >= PICOQUIC_NB_PATH_TARGET &&
-                picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) &&
-                picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)) {
-                success = 1;
-                break;
-            }
-        }
-
-        if (ret == 0 && success == 0) {
-            DBG_PRINTF("Exit synch loop after %d rounds, backlog or not enough paths (%d & %d).\n",
-                nb_rounds, test_ctx->cnx_client->nb_paths, test_ctx->cnx_server->nb_paths);
-        }
+        ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, PICOQUIC_NB_PATH_TARGET, 1);
     }
 
     /* Renew the connection ID */
@@ -4189,30 +4116,7 @@ int retire_cnxid_test()
 
     /* run a receive loop until no outstanding data */
     if (ret == 0) {
-        uint64_t time_out = simulated_time + 4000000;
-        int nb_rounds = 0;
-        int success = 0;
-
-        while (ret == 0 && simulated_time < time_out &&
-            nb_rounds < 2048 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
-            int was_active = 0;
-
-            ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
-            nb_rounds++;
-
-            if (test_ctx->cnx_client->nb_paths >= PICOQUIC_NB_PATH_TARGET &&
-                test_ctx->cnx_server->nb_paths >= PICOQUIC_NB_PATH_TARGET &&
-                picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) &&
-                picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)) {
-                success = 1;
-                break;
-            }
-        }
-
-        if (ret == 0 && success == 0) {
-            DBG_PRINTF("Exit synch loop after %d rounds, backlog or not enough paths (%d & %d).\n",
-                nb_rounds, test_ctx->cnx_client->nb_paths, test_ctx->cnx_server->nb_paths);
-        }
+        ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, PICOQUIC_NB_PATH_TARGET, 0);
     }
 
     if (ret == 0) {
