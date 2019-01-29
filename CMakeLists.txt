@@ -33,6 +33,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/sender.c
     picoquic/spinbit.c
     picoquic/ticket_store.c
+    picoquic/token_store.c
     picoquic/tls_api.c
     picoquic/transport.c
     picoquic/util.c

@@ -84,6 +84,7 @@ int keep_alive_test();
 int logger_test();
 int socket_test();
 int ticket_store_test();
+int token_store_test();
 int session_resume_test();
 int zero_rtt_test();
 int zero_rtt_loss_test();
@@ -160,6 +161,7 @@ int parse_demo_scenario_test();
 int h3zero_server_test();
 int h09_server_test();
 int generic_server_test();
+int tls_retry_token_test();
 
 #ifdef __cplusplus
 }

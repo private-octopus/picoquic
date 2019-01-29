@@ -308,6 +308,23 @@ int picoquic_store_addr(struct sockaddr_storage * stored_addr, const struct sock
     return len;
 }
 
+/* Return a pointer to the IP address and IP length in a sockaddr */
+void picoquic_get_ip_addr(struct sockaddr * addr, uint8_t ** ip_addr, uint8_t * ip_addr_len)
+{
+    if (addr->sa_family == AF_INET) {
+        *ip_addr = (uint8_t *)&((struct sockaddr_in *)addr)->sin_addr;
+        *ip_addr_len = 4;
+    }
+    else if(addr->sa_family == AF_INET6) {
+        *ip_addr = (uint8_t *)&((struct sockaddr_in6 *)addr)->sin6_addr;
+        *ip_addr_len = 16;
+    }
+    else {
+        *ip_addr = NULL;
+        *ip_addr_len = 0;
+    }
+}
+
 /* Return a directory path based on solution dir and file name */
 #ifdef _WINDOWS
 #define PICOQUIC_FILE_SEPARATOR '\\'

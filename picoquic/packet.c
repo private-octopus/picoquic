@@ -887,7 +887,6 @@ int picoquic_incoming_initial(
     int new_context_created)
 {
     int ret = 0;
-    int is_token_ok = 0;
 
     if ((*pcnx)->cnx_state == picoquic_state_ready ) {
         /* Ignoring handshake frames in ready state, but sending ACK
@@ -901,56 +900,19 @@ int picoquic_incoming_initial(
     if (((*pcnx)->quic->flags&picoquic_context_check_token) &&
         (*pcnx)->cnx_state == picoquic_state_server_init &&
         ((*pcnx)->quic->flags&picoquic_context_server_busy) == 0) {
-        uint8_t * base;
-        size_t len;
-        uint8_t cid_len = 0;
-        uint8_t token[1 + PICOQUIC_CONNECTION_ID_MAX_SIZE + 16];
+        if (picoquic_verify_retry_token((*pcnx)->quic, addr_from, current_time,
+            &(*pcnx)->original_cnxid, ph->token_bytes, ph->token_length) != 0) {
+            uint8_t token_buffer[256];
+            uint32_t token_size;
 
-        /* Does the token contain a valid CID? */
-        if (ph->token_length > 1u + 8u) {
-            cid_len = ph->token_bytes[0];
-            if (cid_len < 8 || cid_len > PICOQUIC_CONNECTION_ID_MAX_SIZE) {
-                cid_len = 0;
-            }
-            else if (cid_len + 1u + 16u != ph->token_length) {
-                cid_len = 0;
-            }
-        }
-
-        if (addr_from->sa_family == AF_INET) {
-            struct sockaddr_in * a4 = (struct sockaddr_in *)addr_from;
-            len = 4;
-            base = (uint8_t *)&a4->sin_addr;
-        }
-        else {
-            struct sockaddr_in6 * a6 = (struct sockaddr_in6 *)addr_from;
-            len = 16;
-            base = (uint8_t *)&a6->sin6_addr;
-        }
-
-        if (cid_len != 0) {
-            if (picoquic_get_retry_token((*pcnx)->quic, base, len, ph->token_bytes + 1, cid_len,
-                token, ph->token_length) != 0)
-            {
-                ret = PICOQUIC_ERROR_MEMORY;
-            }
-            else if (memcmp(token, ph->token_bytes, ph->token_length) == 0) {
-                is_token_ok = 1;
-                (void)picoquic_parse_connection_id(ph->token_bytes + 1, cid_len, &(*pcnx)->original_cnxid);
-            }
-        }
-
-        if (!is_token_ok) {
-            uint32_t token_length = 1u + ph->dest_cnx_id.id_len + 16u;
-
-            if (picoquic_get_retry_token((*pcnx)->quic, base, len, ph->dest_cnx_id.id, ph->dest_cnx_id.id_len,
-                token, token_length) != 0)
-            {
+            if (picoquic_prepare_retry_token((*pcnx)->quic, addr_from, 
+                current_time + PICOQUIC_TOKEN_DELAY_SHORT, &ph->dest_cnx_id,
+                token_buffer, (uint32_t)sizeof(token_buffer), &token_size) != 0){ 
                 ret = PICOQUIC_ERROR_MEMORY;
             }
             else {
                 picoquic_queue_stateless_retry(*pcnx, ph,
-                    addr_from, addr_to, if_index_to, token, token_length);
+                    addr_from, addr_to, if_index_to, token_buffer, token_size);
                 ret = PICOQUIC_ERROR_RETRY;
             }
         }
@@ -1079,7 +1041,7 @@ int picoquic_incoming_retry(
             free(cnx->retry_token);
         }
         cnx->retry_token = token;
-        cnx->retry_token_length = (uint32_t)token_length;
+        cnx->retry_token_length = (uint16_t)token_length;
 
         picoquic_reset_cnx(cnx, current_time);
 

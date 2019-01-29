@@ -55,6 +55,8 @@ extern "C" {
 #define PICOQUIC_ACK_DELAY_MAX_DEFAULT 25000 /* 25 ms, per protocol spec */
 #define PICOQUIC_ACK_DELAY_MIN 1000 /* 10 ms */
 #define PICOQUIC_RACK_DELAY 10000 /* 10 ms */
+#define PICOQUIC_TOKEN_DELAY_LONG (24*60*60*1000000ull) /* 24 hours */
+#define PICOQUIC_TOKEN_DELAY_SHORT (2*60*1000000ull) /* 2 minutes */
 
 #define PICOQUIC_SPURIOUS_RETRANSMIT_DELAY_MAX 1000000 /* one second */
 
@@ -201,9 +203,10 @@ extern const size_t picoquic_nb_supported_versions;
 int picoquic_get_version_index(uint32_t proposed_version);
 
 /*
-     * Definition of the session ticket store that can be associated with a 
-     * client context.
-     */
+ * Definition of the session ticket store and connection token
+ * store that can be associated with a 
+ * client context.
+ */
 typedef struct st_picoquic_stored_ticket_t {
     struct st_picoquic_stored_ticket_t* next_ticket;
     char* sni;
@@ -229,6 +232,34 @@ int picoquic_save_tickets(const picoquic_stored_ticket_t* first_ticket,
 int picoquic_load_tickets(picoquic_stored_ticket_t** pp_first_ticket,
     uint64_t current_time, char const* ticket_file_name);
 void picoquic_free_tickets(picoquic_stored_ticket_t** pp_first_ticket);
+
+typedef struct st_picoquic_stored_token_t {
+    struct st_picoquic_stored_token_t* next_token;
+    char const* sni;
+    uint8_t const* token;
+    uint8_t const* ip_addr;
+    uint64_t time_valid_until;
+    uint16_t sni_length;
+    uint16_t token_length;
+    uint8_t ip_addr_length;
+} picoquic_stored_token_t;
+
+int picoquic_store_token(picoquic_stored_token_t** p_first_token,
+    uint64_t current_time,
+    char const* sni, uint16_t sni_length,
+    uint8_t const* ip_addr, uint8_t ip_addr_length,
+    uint8_t const* token, uint16_t token_length);
+int picoquic_get_token(picoquic_stored_token_t* p_first_token,
+    uint64_t current_time,
+    char const* sni, uint16_t sni_length,
+    uint8_t const* ip_addr, uint8_t ip_addr_length,
+    uint8_t** token, uint16_t* token_length);
+
+int picoquic_save_tokens(const picoquic_stored_token_t* first_token,
+    uint64_t current_time, char const* token_file_name);
+int picoquic_load_tokens(picoquic_stored_token_t** pp_first_token,
+    uint64_t current_time, char const* token_file_name);
+void picoquic_free_tokens(picoquic_stored_token_t** pp_first_token);
 
 /*
  * Transport parameters, as defined by the QUIC transport specification
@@ -280,7 +311,9 @@ typedef struct st_picoquic_quic_t {
     uint8_t retry_seed[PICOQUIC_RETRY_SECRET_SIZE];
     uint64_t* p_simulated_time;
     char const* ticket_file_name;
+    char const* token_file_name;
     picoquic_stored_ticket_t* p_first_ticket;
+    picoquic_stored_token_t* p_first_token;
     uint32_t mtu_max;
     uint32_t flags;
     uint32_t padding_multiple_default;
@@ -644,7 +677,7 @@ typedef struct st_picoquic_cnx_t {
     uint16_t remote_application_error;
     uint16_t remote_error;
     uint64_t offending_frame_type;
-    uint32_t retry_token_length;
+    uint16_t retry_token_length;
     uint8_t * retry_token;
 
 
@@ -729,6 +762,9 @@ typedef struct st_picoquic_cnx_t {
     /* Management of ongoing probes */
     picoquic_probe_t * probe_first;
 } picoquic_cnx_t;
+
+/* Load the stash of retry tokens. */
+int picoquic_load_token_file(picoquic_quic_t* quic, char const * token_file_name);
 
 /* Init of transport parameters */
 int picoquic_set_default_tp(picoquic_quic_t* quic, picoquic_tp_t * tp);
@@ -997,6 +1033,7 @@ int picoquic_prepare_path_response_frame(uint8_t* bytes,
 int picoquic_prepare_new_connection_id_frame(picoquic_cnx_t * cnx, picoquic_path_t * path_x,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
 int picoquic_queue_retire_connection_id_frame(picoquic_cnx_t * cnx, uint64_t sequence);
+int picoquic_queue_new_token_frame(picoquic_cnx_t * cnx, uint8_t * token, size_t token_length);
 
 int picoquic_prepare_first_misc_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
                                       size_t bytes_max, size_t* consumed);

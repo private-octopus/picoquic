@@ -1449,9 +1449,12 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
     send_buffer_max = (send_buffer_max > path_x->send_mtu) ? path_x->send_mtu : send_buffer_max;
 
     /* Prepare header -- depend on connection state */
-    /* TODO: 0-RTT work. */
     switch (cnx->cnx_state) {
     case picoquic_state_client_init:
+        if (cnx->retry_token_length == 0) {
+            (void)picoquic_get_token(cnx->quic->p_first_token, current_time, cnx->sni, (uint16_t)strlen(cnx->sni),
+                NULL, 0, &cnx->retry_token, &cnx->retry_token_length);
+        }
         break;
     case picoquic_state_client_init_sent:
     case picoquic_state_client_init_resent:
@@ -1794,6 +1797,20 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             if (ret == 0 && tls_ready != 0 && data_bytes > 0 && cnx->tls_stream[epoch].send_queue == NULL) {
                 if (epoch == 2 && picoquic_tls_client_authentication_activated(cnx->quic) == 0) {
                     cnx->cnx_state = picoquic_state_server_false_start;
+                    /* On a server that does address validation, send a NEW TOKEN frame */
+                    if (cnx->client_mode == 0 && (cnx->quic->flags&picoquic_context_check_token) != 0) {
+                        uint8_t token_buffer[256];
+                        uint32_t token_size;
+                        picoquic_connection_id_t n_cid = picoquic_null_connection_id;
+
+                        if (picoquic_prepare_retry_token(cnx->quic, (struct sockaddr *)&cnx->path[0]->peer_addr,
+                            current_time + PICOQUIC_TOKEN_DELAY_LONG, &n_cid, 
+                            token_buffer, (uint32_t) sizeof(token_buffer), &token_size) == 0) {
+                            if (picoquic_queue_new_token_frame(cnx, token_buffer, token_size) != 0) {
+                                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, picoquic_frame_type_new_token);
+                            }
+                        }
+                    }
                     if (cnx->callback_fn != NULL) {
                         if (cnx->callback_fn(cnx, 0, NULL, 0, picoquic_callback_almost_ready, cnx->callback_ctx) != 0) {
                             picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);

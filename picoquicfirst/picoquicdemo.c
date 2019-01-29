@@ -96,6 +96,7 @@
 static const int default_server_port = 4443;
 static const char* default_server_name = "::";
 static const char* ticket_store_filename = "demo_ticket_store.bin";
+static const char* token_store_filename = "demo_token_store.bin";
 
 #include "picoquic.h"
 #include "picoquic_internal.h"
@@ -571,6 +572,7 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
 
             picoquic_set_key_log_file_from_env(qclient);
 
+
             if (sni == NULL) {
                 /* Standard verifier would crash */
                 fprintf(stdout, "No server name specified, certificate will not be verified.\n");
@@ -590,6 +592,7 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
                 }
                 picoquic_set_null_verifier(qclient);
             }
+
         }
     }
 
@@ -876,6 +879,12 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
         if (picoquic_save_tickets(qclient->p_first_ticket, current_time, ticket_store_filename) != 0) {
             fprintf(stderr, "Could not store the saved session tickets.\n");
         }
+
+
+        if (picoquic_save_tokens(qclient->p_first_token, current_time, token_store_filename) != 0) {
+            fprintf(stderr, "Could not save tokens to <%s>.\n", token_store_filename);
+        }
+
         picoquic_free(qclient);
     }
 

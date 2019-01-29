@@ -657,7 +657,8 @@ void tls_api_delete_ctx(picoquic_test_tls_api_ctx_t* test_ctx)
 
 int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_version,
     char const* sni, char const* alpn, uint64_t* p_simulated_time, 
-    char const* ticket_file_name, int force_zero_share, int delayed_init, int use_bad_crypt)
+    char const* ticket_file_name, char const* token_file_name,
+    int force_zero_share, int delayed_init, int use_bad_crypt)
 {
     int ret = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -711,6 +712,10 @@ int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_versi
             test_ctx->qclient = picoquic_create(8, NULL, NULL, test_server_cert_store_file, NULL, test_api_callback,
                 (void*)&test_ctx->client_callback, NULL, NULL, NULL, *p_simulated_time,
                 p_simulated_time, ticket_file_name, NULL, 0);
+
+            if (token_file_name != NULL) {
+                (void)picoquic_load_token_file(test_ctx->qclient, token_file_name);
+            }
 
             test_ctx->qserver = picoquic_create(8,
                 test_server_cert_file, test_server_key_file, test_server_cert_store_file,
@@ -1058,6 +1063,47 @@ static int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
     return ret; /* end of sending loop */
 }
 
+static int tls_api_synch_to_empty_loop(picoquic_test_tls_api_ctx_t* test_ctx,
+    uint64_t* simulated_time, int max_trials,
+    int path_target, int wait_for_ready)
+{
+    /* run a receive loop until no outstanding data */
+    int ret = 0;
+    uint64_t time_out = *simulated_time + 4000000;
+    int nb_rounds = 0;
+    int success = 0;
+
+    while (ret == 0 && *simulated_time < time_out &&
+        nb_rounds < max_trials && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
+        int was_active = 0;
+
+        ret = tls_api_one_sim_round(test_ctx, simulated_time, time_out, &was_active);
+        nb_rounds++;
+
+        if (test_ctx->cnx_server == NULL) {
+            break;
+        }
+
+        if (test_ctx->cnx_client->nb_paths >= path_target &&
+            test_ctx->cnx_server->nb_paths >= path_target &&
+            picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) &&
+            picoquic_is_cnx_backlog_empty(test_ctx->cnx_server) &&
+            (!wait_for_ready || (
+                test_ctx->cnx_client->cnx_state == picoquic_state_ready &&
+                test_ctx->cnx_server->cnx_state == picoquic_state_ready))) {
+            success = 1;
+            break;
+        }
+    }
+
+    if (ret == 0 && success == 0) {
+        DBG_PRINTF("Exit synch loop after %d rounds, backlog or not enough paths (%d & %d).\n",
+            nb_rounds, test_ctx->cnx_client->nb_paths, (test_ctx->cnx_server == NULL)?0: test_ctx->cnx_server->nb_paths);
+    }
+
+    return ret;
+}
+
 
 static int wait_application_aead_ready(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t * simulated_time)
@@ -1130,7 +1176,7 @@ static int tls_api_test_with_loss(uint64_t* loss_mask, uint32_t proposed_version
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, proposed_version, sni, alpn, &simulated_time, NULL, 0, 0, 0);
+    int ret = tls_api_init_ctx(&test_ctx, proposed_version, sni, alpn, &simulated_time, NULL, NULL, 0, 0, 0);
 
     if (ret != 0)
     {
@@ -1209,7 +1255,7 @@ int tls_api_silence_test()
     uint64_t simulated_time = 0;
     uint64_t next_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
 
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
@@ -1298,7 +1344,7 @@ int tls_api_one_scenario_init(
 {
     int ret = tls_api_init_ctx(p_test_ctx,
         (proposed_version == 0) ? PICOQUIC_INTERNAL_TEST_VERSION_1 : proposed_version,
-        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, simulated_time, NULL, 0, 1, 0);
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, simulated_time, NULL, NULL, 0, 1, 0);
 
     if (ret != 0) {
         DBG_PRINTF("Could not create the QUIC test contexts for V=%x\n", proposed_version);
@@ -1514,7 +1560,7 @@ int tls_api_server_reset_test()
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
     uint8_t buffer[128];
     int was_active = 0;
 
@@ -1583,7 +1629,7 @@ int tls_api_bad_server_reset_test()
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
     uint8_t buffer[256];
 
     if (ret == 0) {
@@ -1618,8 +1664,89 @@ int tls_api_bad_server_reset_test()
 }
 
 /*
- * verify that a connection is correctly established after a stateless retry
+ * verify that a connection is correctly established after a stateless retry,
+ * and then verify that retyr is not used if tickets are available.
  */
+
+static char const* token_file_name = "retry_tests_tokens.bin";
+
+int tls_retry_token_test()
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    /* ensure that the token file is empty */
+    int ret = picoquic_save_tokens(NULL, simulated_time, token_file_name);
+    
+    if (ret == 0) {
+        ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN,
+            &simulated_time, NULL, token_file_name, 0, 0, 0);
+    }
+
+    if (ret == 0) {
+        /* Set the server in HRR/Cookies mode */
+        picoquic_set_cookie_mode(test_ctx->qserver, 1);
+        /* Try the connection */
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    if (ret == 0) {
+        /* Wait some time, so the connection can stabilize to ready state */
+        ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, PICOQUIC_NB_PATH_TARGET, 1);
+    }
+
+    if (ret == 0) {
+        ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
+    }
+
+    /* Now we remove the client connection and create a new one */
+    if (ret == 0) {
+        picoquic_delete_cnx(test_ctx->cnx_client);
+        if (test_ctx->cnx_server != NULL) {
+            picoquic_delete_cnx(test_ctx->cnx_server);
+            test_ctx->cnx_server = NULL;
+        }
+
+        test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
+            picoquic_null_connection_id, picoquic_null_connection_id,
+            (struct sockaddr*)&test_ctx->server_addr, 0,
+            0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
+
+        if (test_ctx->cnx_client == NULL) {
+            ret = -1;
+        }
+        else {
+            ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+        }
+    }
+
+    if (ret == 0) {
+        /* Try the new connection */
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    if (ret == 0) {
+        ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
+    }
+
+    if (ret == 0 && test_ctx->cnx_client->original_cnxid.id_len != 0) {
+        DBG_PRINTF("Second retry did not use the stored token, odcil len=%d\n", 
+            test_ctx->cnx_client->original_cnxid.id_len);
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        /* Not strictly needed, but allows for inspection */
+        ret = picoquic_save_tokens(test_ctx->qclient->p_first_token, simulated_time, token_file_name);
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
 
 int tls_api_retry_test()
 {
@@ -1627,7 +1754,7 @@ int tls_api_retry_test()
     const uint64_t target_time = 210000ull;
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
 
     if (ret == 0) {
         /* Set the server in HRR/Cookies mode */
@@ -1663,7 +1790,7 @@ int tls_zero_share_test()
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 1, 0, 0);
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 1, 0, 0);
 
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
@@ -1691,7 +1818,7 @@ int tls_api_two_connections_test()
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
 
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
@@ -1796,7 +1923,7 @@ int keep_alive_test_impl(int keep_alive)
     const uint64_t keep_alive_interval = 0; /* Will use the default value */
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
     int was_active = 0;
 
     if (ret == 0 && test_ctx == NULL) {
@@ -1922,7 +2049,7 @@ int session_resume_test()
     for (int i = 0; i < 2; i++) {
         /* Set up the context, while setting the ticket store parameter for the client */
         if (ret == 0) {
-            ret = tls_api_init_ctx(&test_ctx, 0, sni, alpn, &simulated_time, ticket_file_name, 0, 0, 0);
+            ret = tls_api_init_ctx(&test_ctx, 0, sni, alpn, &simulated_time, ticket_file_name, NULL, 0, 0, 0);
         }
 
         if (ret == 0) {
@@ -1984,7 +2111,7 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, unsigned int early_loss)
     for (int i = 0; i < 2; i++) {
         /* Set up the context, while setting the ticket store parameter for the client */
         if (ret == 0) {
-            ret = tls_api_init_ctx(&test_ctx, 0, sni, alpn, &simulated_time, ticket_file_name, 0, 0, 
+            ret = tls_api_init_ctx(&test_ctx, 0, sni, alpn, &simulated_time, ticket_file_name, NULL, 0, 0,
                 (i == 0)?0:use_badcrypt);
 
             if (ret == 0 && hardreset != 0 && i == 1) {
@@ -2025,27 +2152,7 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, unsigned int early_loss)
                 ret = -1;
             } else {
                 /* run a receive loop until no outstanding data */
-                uint64_t time_out = simulated_time + 4000000;
-                int nb_rounds = 0;
-                int success = 0;
-
-                while (ret == 0 && simulated_time < time_out &&
-                    nb_rounds < 2048 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
-                    int was_active = 0;
-
-                    ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
-                    nb_rounds++;
-
-                    if (picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) && picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)) {
-                        success = 1;
-                        break;
-                    }
-                }
-
-                if (ret == 0 && success == 0) {
-                    DBG_PRINTF("Exit synch loop after %d rounds, backlog not empty.\n",
-                        nb_rounds);
-                }
+                ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, 0, 0);
             }
         }
 
@@ -2189,7 +2296,7 @@ int stop_sending_test()
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
-        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
     int nb_initial_loop = 0;
 
     if (ret == 0) {
@@ -2265,7 +2372,7 @@ int mtu_discovery_test()
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
-        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
 
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
@@ -2308,7 +2415,7 @@ int spurious_retransmit_test()
     uint64_t simulated_time = 0;
     uint64_t next_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
 
     if (ret == 0) {
         test_ctx->c_to_s_link->microsec_latency = 50000;
@@ -2357,7 +2464,7 @@ int pn_enc_1rtt_test()
     uint64_t loss_mask = 0;
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
 
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
@@ -2406,7 +2513,7 @@ int bad_certificate_test()
     char test_server_cert_file[512];
     char test_server_key_file[512];
     char test_server_cert_store_file[512];
-    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
 
     if (ret == 0) {
         ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_SERVER_BAD_CERT);
@@ -2504,7 +2611,7 @@ int set_verify_certificate_callback_test()
     char test_server_key_file[512];
     char test_server_cert_store_file[512];
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
-        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
 
     if (ret == 0) {
         ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_SERVER_CERT);
@@ -2735,7 +2842,7 @@ int set_certificate_and_key_test()
     char test_server_cert_file[512];
     char test_server_key_file[512];
     char test_server_cert_store_file[512];
-    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
 
     if (ret == 0) {
         ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_SERVER_CERT);
@@ -2868,7 +2975,7 @@ int request_client_authentication_test()
         DBG_PRINTF("%s", "Cannot set the cert, key or store file names.\n");
     }
     else {
-        ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+        ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
     }
 
     if (ret == 0 && test_ctx == NULL) {
@@ -2954,7 +3061,7 @@ int bad_client_certificate_test()
         DBG_PRINTF("%s", "Cannot set the cert, key or store file names.\n");
     }
     else {
-        ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+        ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
     }
 
     if (ret == 0 && test_ctx == NULL) {
@@ -3040,7 +3147,7 @@ int nat_rebinding_test_one(uint64_t loss_mask_data)
     int nb_inactive = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
-        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = PICOQUIC_ERROR_MEMORY;
@@ -3143,7 +3250,7 @@ int spin_bit_test()
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int spin_count = 0;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
-        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 1, 0);
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
 
     if (ret != 0)
     {
@@ -3277,7 +3384,7 @@ int client_error_test()
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
-        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
 
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
@@ -3417,7 +3524,7 @@ int transmit_cnxid_test()
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
-        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
 
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
@@ -3425,30 +3532,7 @@ int transmit_cnxid_test()
 
     /* run a receive loop until no outstanding data */
     if (ret == 0) {
-        uint64_t time_out = simulated_time + 4000000;
-        int nb_rounds = 0;
-        int success = 0;
-
-        while (ret == 0 && simulated_time < time_out &&
-            nb_rounds < 2048 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
-            int was_active = 0;
-
-            ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
-            nb_rounds++;
-
-            if (test_ctx->cnx_client->nb_paths >= PICOQUIC_NB_PATH_TARGET &&
-                test_ctx->cnx_server->nb_paths >= PICOQUIC_NB_PATH_TARGET &&
-                picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) &&
-                picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)) {
-                success = 1;
-                break;
-            }
-        }
-
-        if (ret == 0 && success == 0) {
-            DBG_PRINTF("Exit synch loop after %d rounds, backlog or not enough paths (%d & %d).\n",
-                nb_rounds, test_ctx->cnx_client->nb_paths, test_ctx->cnx_server->nb_paths);
-        }
+        ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, PICOQUIC_NB_PATH_TARGET, 0);
     }
 
     if (ret == 0) {
@@ -3506,7 +3590,7 @@ int probe_api_test()
 
     /* Set a test connection between client and server */
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
-        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
 
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
@@ -3514,30 +3598,7 @@ int probe_api_test()
 
     /* run a receive loop until no outstanding data */
     if (ret == 0) {
-        uint64_t time_out = simulated_time + 4000000;
-        int nb_rounds = 0;
-        int success = 0;
-
-        while (ret == 0 && simulated_time < time_out &&
-            nb_rounds < 2048 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
-            int was_active = 0;
-
-            ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
-            nb_rounds++;
-
-            if (test_ctx->cnx_client->nb_paths >= PICOQUIC_NB_PATH_TARGET &&
-                test_ctx->cnx_server->nb_paths >= PICOQUIC_NB_PATH_TARGET &&
-                picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) &&
-                picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)) {
-                success = 1;
-                break;
-            }
-        }
-
-        if (ret == 0 && success == 0) {
-            DBG_PRINTF("Exit synch loop after %d rounds, backlog or not enough paths (%d & %d).\n",
-                nb_rounds, test_ctx->cnx_client->nb_paths, test_ctx->cnx_server->nb_paths);
-        }
+        ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, PICOQUIC_NB_PATH_TARGET, 0);
     }
 
     if (ret == 0) {
@@ -3683,7 +3744,6 @@ int probe_api_test()
 
 int migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_scenario, uint64_t loss_target)
 {
-    uint64_t loss_mask_data = 0;
     uint64_t simulated_time = 0;
     uint64_t next_time = 0;
     uint64_t loss_mask = 0;
@@ -3692,7 +3752,7 @@ int migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_sc
     picoquic_connection_id_t previous_local_id = picoquic_null_connection_id;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
-        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = PICOQUIC_ERROR_MEMORY;
@@ -3704,33 +3764,8 @@ int migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_sc
 
     /* run a receive loop until no outstanding data */
     if (ret == 0) {
-        uint64_t time_out = simulated_time + 4000000;
-        int nb_rounds = 0;
-        int success = 0;
-        initial_challenge = test_ctx->cnx_server->path[0]->challenge;
-        loss_mask = loss_mask_data;
 
-        while (ret == 0 && simulated_time < time_out &&
-            nb_rounds < 2048 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
-            int was_active = 0;
-
-            ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
-            nb_rounds++;
-
-            if (test_ctx->cnx_client->nb_paths >= PICOQUIC_NB_PATH_TARGET &&
-                test_ctx->cnx_server->nb_paths >= PICOQUIC_NB_PATH_TARGET &&
-                picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) &&
-                picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)) {
-                success = 1;
-                break;
-            }
-        }
-
-        if (ret == 0 && success == 0) {
-            DBG_PRINTF("Exit synch loop after %d rounds, backlog or not enough paths (%d & %d).\n",
-                nb_rounds, test_ctx->cnx_client->nb_paths, test_ctx->cnx_server->nb_paths);
-            ret = -1;
-        }
+        ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, PICOQUIC_NB_PATH_TARGET, 1);
     }
 
     if (ret == 0) {
@@ -3849,7 +3884,7 @@ int rebinding_stress_test()
     uint64_t random_context = 0xBABAC001;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
-        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = PICOQUIC_ERROR_MEMORY;
@@ -3993,7 +4028,7 @@ int cnxid_renewal_test()
     picoquic_connection_id_t previous_local_id = picoquic_null_connection_id;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
-        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = PICOQUIC_ERROR_MEMORY;
@@ -4005,30 +4040,7 @@ int cnxid_renewal_test()
 
     /* run a receive loop until no outstanding data */
     if (ret == 0) {
-        uint64_t time_out = simulated_time + 4000000;
-        int nb_rounds = 0;
-        int success = 0;
-
-        while (ret == 0 && simulated_time < time_out &&
-            nb_rounds < 2048 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
-            int was_active = 0;
-
-            ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
-            nb_rounds++;
-
-            if (test_ctx->cnx_client->nb_paths >= PICOQUIC_NB_PATH_TARGET &&
-                test_ctx->cnx_server->nb_paths >= PICOQUIC_NB_PATH_TARGET &&
-                picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) &&
-                picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)) {
-                success = 1;
-                break;
-            }
-        }
-
-        if (ret == 0 && success == 0) {
-            DBG_PRINTF("Exit synch loop after %d rounds, backlog or not enough paths (%d & %d).\n",
-                nb_rounds, test_ctx->cnx_client->nb_paths, test_ctx->cnx_server->nb_paths);
-        }
+        ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, PICOQUIC_NB_PATH_TARGET, 1);
     }
 
     /* Renew the connection ID */
@@ -4094,7 +4106,7 @@ int retire_cnxid_test()
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
-        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
 
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
@@ -4102,30 +4114,7 @@ int retire_cnxid_test()
 
     /* run a receive loop until no outstanding data */
     if (ret == 0) {
-        uint64_t time_out = simulated_time + 4000000;
-        int nb_rounds = 0;
-        int success = 0;
-
-        while (ret == 0 && simulated_time < time_out &&
-            nb_rounds < 2048 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
-            int was_active = 0;
-
-            ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
-            nb_rounds++;
-
-            if (test_ctx->cnx_client->nb_paths >= PICOQUIC_NB_PATH_TARGET &&
-                test_ctx->cnx_server->nb_paths >= PICOQUIC_NB_PATH_TARGET &&
-                picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) &&
-                picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)) {
-                success = 1;
-                break;
-            }
-        }
-
-        if (ret == 0 && success == 0) {
-            DBG_PRINTF("Exit synch loop after %d rounds, backlog or not enough paths (%d & %d).\n",
-                nb_rounds, test_ctx->cnx_client->nb_paths, test_ctx->cnx_server->nb_paths);
-        }
+        ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, PICOQUIC_NB_PATH_TARGET, 0);
     }
 
     if (ret == 0) {
@@ -4214,7 +4203,7 @@ int server_busy_test()
     uint64_t loss_mask = 0;
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
 
     if (ret == 0) {
         test_ctx->qserver->flags |= picoquic_context_server_busy;
@@ -4287,7 +4276,7 @@ int initial_close_test()
     uint64_t simulated_time = 0;
     int was_active = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
 
     if (ret == 0) {
         /* Send the initial packet, but no more than that */
@@ -4352,7 +4341,7 @@ int initial_server_close_test()
     int was_active = 0;
     int nb_trials = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
 
     /* Set the connection on the server side, but not on the client side */
     while (ret == 0 && nb_trials < 32 ) {
@@ -4448,7 +4437,7 @@ int new_rotated_key_test()
     uint64_t loss_mask = 0;
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
 
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
@@ -4578,7 +4567,7 @@ static int key_rotation_test_one(int inject_bad_packet)
     uint64_t injection_sequence = 50;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
-        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = PICOQUIC_ERROR_MEMORY;
@@ -4730,7 +4719,7 @@ static int key_rotation_stress_test_one(int nb_packets)
     uint64_t rotation_sequence = 100;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
-        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = PICOQUIC_ERROR_MEMORY;
@@ -4924,7 +4913,7 @@ int false_migration_test_scenario(test_api_stream_desc_t * scenario, size_t size
     int nb_inactive = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
-        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = PICOQUIC_ERROR_MEMORY;
@@ -5079,7 +5068,7 @@ int nat_handshake_test_one(int test_rank)
     int natted = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
-        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = PICOQUIC_ERROR_MEMORY;
@@ -5182,7 +5171,7 @@ static int short_initial_cid_test_one(uint8_t cid_length)
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 0, 0);
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
@@ -5280,7 +5269,7 @@ int padding_test()
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 1, 0);
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
@@ -5325,7 +5314,7 @@ int packet_trace_test()
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 1, 0);
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
     char trace_file_name[512];
 
     if (ret == 0 && test_ctx == NULL) {
@@ -5433,7 +5422,7 @@ int cubic_test()
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 1, 0);
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
@@ -5466,7 +5455,7 @@ int cid_length_test_one(uint8_t length)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, 0, 1, 0);
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
