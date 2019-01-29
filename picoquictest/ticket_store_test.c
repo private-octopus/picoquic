@@ -23,7 +23,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-static char const* test_file_name = "ticket_store_test.bin";
+static char const* test_ticket_file_name = "ticket_store_test.bin";
+static char const* test_token_file_name = "token_store_test.bin";
 static char const* test_sni[] = { "example.com", "example.net", "test.example.com" };
 static char const* test_alpn[] = { "hq05", "hq07", "hq09" };
 static const size_t nb_test_sni = sizeof(test_sni) / sizeof(char const*);
@@ -93,11 +94,11 @@ int ticket_store_test()
     uint8_t ticket[128];
 
     /* Writing an empty file */
-    ret = picoquic_save_tickets(p_first_ticket, current_time, test_file_name);
+    ret = picoquic_save_tickets(p_first_ticket, current_time, test_ticket_file_name);
 
     /* Load the empty file again */
     if (ret == 0) {
-        ret = picoquic_load_tickets(&p_first_ticket_empty, retrieve_time, test_file_name);
+        ret = picoquic_load_tickets(&p_first_ticket_empty, retrieve_time, test_ticket_file_name);
 
         /* Verify that the content is empty */
         if (p_first_ticket_empty != NULL) {
@@ -147,11 +148,11 @@ int ticket_store_test()
     }
     /* Store them on a file */
     if (ret == 0) {
-        ret = picoquic_save_tickets(p_first_ticket, current_time, test_file_name);
+        ret = picoquic_save_tickets(p_first_ticket, current_time, test_ticket_file_name);
     }
     /* Load the file again */
     if (ret == 0) {
-        ret = picoquic_load_tickets(&p_first_ticket_bis, retrieve_time, test_file_name);
+        ret = picoquic_load_tickets(&p_first_ticket_bis, retrieve_time, test_ticket_file_name);
     }
 
     /* Verify that the two contents match */
@@ -161,7 +162,7 @@ int ticket_store_test()
 
     /* Reload after a long time */
     if (ret == 0) {
-        ret = picoquic_load_tickets(&p_first_ticket_ter, too_late_time, test_file_name);
+        ret = picoquic_load_tickets(&p_first_ticket_ter, too_late_time, test_ticket_file_name);
 
         if (ret == 0 && p_first_ticket_ter != NULL) {
             ret = -1;
@@ -171,6 +172,183 @@ int ticket_store_test()
     picoquic_free_tickets(&p_first_ticket);
     picoquic_free_tickets(&p_first_ticket_bis);
     picoquic_free_tickets(&p_first_ticket_ter);
+
+    return ret;
+}
+
+/*
+ * The token store is extremely similar to the ticket store.
+ */
+
+
+static uint8_t const test_addr1[] = { 127, 0, 0, 1 };
+static uint8_t const test_addr2[] = { 128, 12, 34, 56 };
+static uint8_t const test_addr3[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 };
+static uint8_t const test_addr4[] = { 0x20, 1, 2, 3, 4, 5, 6, 7, 0, 0, 0, 0, 0, 0, 0, 1 };
+
+typedef struct st_test_token_store_addr_t {
+    uint8_t const * ip_addr;
+    uint8_t ip_addr_length;
+} test_token_store_addr_t;
+
+static test_token_store_addr_t test_ip_addr[] = {
+    { test_addr1, (uint8_t)sizeof(test_addr1) },
+    { test_addr2, (uint8_t)sizeof(test_addr2) },
+    { test_addr3, (uint8_t)sizeof(test_addr3) },
+    { test_addr4, (uint8_t)sizeof(test_addr4) },
+};
+
+static size_t nb_test_ip_addr = sizeof(test_ip_addr) / sizeof(test_token_store_addr_t);
+
+static int create_test_token(uint64_t current_time, uint32_t ttl, uint8_t* buf, uint16_t len)
+{
+    int ret = 0;
+    if (len < 35) {
+        ret = -1;
+    }
+    else {
+        uint16_t t_length = len - 31;
+        picoformat_64(buf, current_time);
+        buf[8] = 0;
+        buf[9] = 1;
+        buf[10] = 0;
+        buf[11] = (uint8_t)(t_length >> 8);
+        buf[12] = (uint8_t)(t_length & 0xFF);
+        picoformat_32(buf + 13, ttl);
+        memset(buf + 17, 0xcc, len - 17);
+        buf[len - 18] = 0;
+        buf[len - 17] = 16;
+    }
+
+    return ret;
+}
+
+static int token_store_compare(picoquic_stored_token_t* s1, picoquic_stored_token_t* s2)
+{
+    int ret = 0;
+    picoquic_stored_token_t* c1 = s1;
+    picoquic_stored_token_t* c2 = s2;
+
+    while (ret == 0 && c1 != 0) {
+        if (c2 == 0) {
+            ret = -1;
+        }
+        else {
+            if (c1->time_valid_until != c2->time_valid_until || c1->sni_length != c2->sni_length || 
+                c1->ip_addr_length != c2->ip_addr_length || c1->token_length != c2->token_length ||
+                memcmp(c1->sni, c2->sni, c1->sni_length) != 0 || 
+                memcmp(c1->ip_addr, c2->ip_addr, c1->ip_addr_length) != 0 || 
+                memcmp(c1->token, c2->token, c1->token_length) != 0) {
+                ret = -1;
+            }
+            else {
+                c1 = c1->next_token;
+                c2 = c2->next_token;
+            }
+        }
+    }
+
+    if (ret == 0 && c1 == NULL && c2 != NULL) {
+        ret = -1;
+    }
+
+    return ret;
+}
+
+int token_store_test()
+{
+    int ret = 0;
+    picoquic_stored_token_t* p_first_token = NULL;
+    picoquic_stored_token_t* p_first_token_bis = NULL;
+    picoquic_stored_token_t* p_first_token_ter = NULL;
+    picoquic_stored_token_t* p_first_token_empty = NULL;
+
+    uint64_t token_time = 40000000000ull;
+    uint64_t current_time = 50000000000ull;
+    uint64_t retrieve_time = 60000000000ull;
+    uint64_t too_late_time = 150000000000ull;
+    uint32_t ttl = 100000;
+    uint8_t token[128];
+
+    /* Writing an empty file */
+    ret = picoquic_save_tokens(p_first_token, current_time, test_token_file_name);
+
+    /* Load the empty file again */
+    if (ret == 0) {
+        ret = picoquic_load_tokens(&p_first_token_empty, retrieve_time, test_token_file_name);
+
+        /* Verify that the content is empty */
+        if (p_first_token_empty != NULL) {
+            if (ret == 0) {
+                ret = -1;
+            }
+            picoquic_free_tokens(&p_first_token_empty);
+        }
+    }
+
+    /* Generate a set of tokens */
+    for (size_t i = 0; ret == 0 && i < nb_test_sni; i++) {
+        for (size_t j = 0; ret == 0 && j < nb_test_ip_addr; j++) {
+            uint16_t token_length = (uint16_t)(64 + j * nb_test_sni + i);
+            ret = create_test_token((token_time / 1000) + 1000 * ((i * nb_test_ip_addr) + j), ttl, token, token_length);
+            if (ret != 0) {
+                break;
+            }
+            ret = picoquic_store_token(&p_first_token, current_time,
+                test_sni[i], (uint16_t)strlen(test_sni[i]),
+                test_ip_addr[j].ip_addr, test_ip_addr[j].ip_addr_length,
+                token, token_length);
+            if (ret != 0) {
+                break;
+            }
+        }
+    }
+
+    /* Verify that they can be retrieved */
+    for (size_t i = 0; ret == 0 && i < nb_test_sni; i++) {
+        for (size_t j = 0; ret == 0 && j < nb_test_alpn; j++) {
+            uint16_t token_length = 0;
+            uint16_t expected_length = (uint16_t)(64 + j * nb_test_sni + i);
+            uint8_t* token = NULL;
+            ret = picoquic_get_token(p_first_token, current_time,
+                test_sni[i], (uint16_t)strlen(test_sni[i]),
+                test_ip_addr[j].ip_addr, test_ip_addr[j].ip_addr_length,
+                &token, &token_length);
+            if (ret != 0) {
+                break;
+            }
+            if (token_length != expected_length) {
+                ret = -1;
+                break;
+            }
+        }
+    }
+    /* Store them on a file */
+    if (ret == 0) {
+        ret = picoquic_save_tokens(p_first_token, current_time, test_token_file_name);
+    }
+    /* Load the file again */
+    if (ret == 0) {
+        ret = picoquic_load_tokens(&p_first_token_bis, retrieve_time, test_token_file_name);
+    }
+
+    /* Verify that the two contents match */
+    if (ret == 0) {
+        ret = token_store_compare(p_first_token, p_first_token_bis);
+    }
+
+    /* Reload after a long time */
+    if (ret == 0) {
+        ret = picoquic_load_tokens(&p_first_token_ter, too_late_time, test_token_file_name);
+
+        if (ret == 0 && p_first_token_ter != NULL) {
+            ret = -1;
+        }
+    }
+    /* Free what needs be */
+    picoquic_free_tokens(&p_first_token);
+    picoquic_free_tokens(&p_first_token_bis);
+    picoquic_free_tokens(&p_first_token_ter);
 
     return ret;
 }

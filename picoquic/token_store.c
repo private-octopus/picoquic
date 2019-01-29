@@ -26,18 +26,18 @@
 #include <errno.h>
 
 picoquic_stored_token_t* picoquic_format_token(uint64_t time_valid_until,
-    char const* sni, uint16_t sni_length, char const* ip_addr, uint16_t ip_addr_length,
-    uint8_t* token, uint16_t token_length)
+    char const* sni, uint16_t sni_length, uint8_t const* ip_addr, uint8_t ip_addr_length,
+    uint8_t const* token, uint16_t token_length)
 {
     size_t token_size = sizeof(picoquic_stored_token_t) + sni_length + 1 + ip_addr_length + 1 + token_length;
     picoquic_stored_token_t* stored = (picoquic_stored_token_t*)malloc(token_size);
     
     if (stored != NULL) {
-        char* next_p = ((char*)stored) + sizeof(picoquic_stored_token_t);
+        uint8_t* next_p = ((uint8_t*)stored) + sizeof(picoquic_stored_token_t);
 
         memset(stored, 0, token_size);
         stored->time_valid_until = time_valid_until;
-        stored->sni = next_p;
+        stored->sni = (char const *)next_p;
         stored->sni_length = sni_length;
         memcpy(next_p, sni, sni_length);
         next_p += sni_length;
@@ -49,7 +49,7 @@ picoquic_stored_token_t* picoquic_format_token(uint64_t time_valid_until,
         next_p += ip_addr_length;
         *next_p++ = 0;
 
-        stored->token = (uint8_t*)next_p;
+        stored->token = next_p;
         stored->token_length = token_length;
         memcpy(next_p, token, token_length);
     }
@@ -104,7 +104,7 @@ int picoquic_deserialize_token(picoquic_stored_token_t ** token, uint8_t * bytes
     size_t ip_addr_index = 0;
     size_t token_index = 0;
     uint16_t sni_length = 0;
-    uint16_t ip_addr_length = 0;
+    uint8_t ip_addr_length = 0;
     uint16_t token_length = 0;
 
 
@@ -141,7 +141,7 @@ int picoquic_deserialize_token(picoquic_stored_token_t ** token, uint8_t * bytes
         ret = PICOQUIC_ERROR_INVALID_TOKEN;
     } else {
         *token = picoquic_format_token(time_valid_until, (const char *)(bytes + sni_index), sni_length,
-            (const char *)(bytes + ip_addr_index), ip_addr_length, bytes + token_index, token_length);
+            bytes + ip_addr_index, ip_addr_length, bytes + token_index, token_length);
         if (*token == NULL) {
             ret = PICOQUIC_ERROR_MEMORY;
         }
@@ -155,8 +155,8 @@ int picoquic_deserialize_token(picoquic_stored_token_t ** token, uint8_t * bytes
 int picoquic_store_token(picoquic_stored_token_t** pp_first_token,
     uint64_t current_time,
     char const* sni, uint16_t sni_length,
-    uint8_t* ip_addr, uint8_t ip_addr_length,
-    uint8_t* token, uint16_t token_length)
+    uint8_t const* ip_addr, uint8_t ip_addr_length,
+    uint8_t const* token, uint16_t token_length)
 {
     int ret = 0;
 
@@ -199,7 +199,7 @@ int picoquic_store_token(picoquic_stored_token_t** pp_first_token,
                         picoquic_stored_token_t* deleted = next;
                         next = next->next_token;
                         *pprevious = next;
-                        memset(&deleted->token, 0, deleted->token_length);
+                        memset((uint8_t*)&deleted->token, 0, deleted->token_length);
                         free(deleted);
                     } else {
                         pprevious = &next->next_token;
@@ -216,7 +216,7 @@ int picoquic_store_token(picoquic_stored_token_t** pp_first_token,
 int picoquic_get_token(picoquic_stored_token_t* p_first_token,
     uint64_t current_time,
     char const* sni, uint16_t sni_length,
-    uint8_t* ip_addr, uint8_t ip_addr_length,
+    uint8_t const* ip_addr, uint8_t ip_addr_length,
     uint8_t** token, uint16_t* token_length)
 {
     int ret = 0;
@@ -235,7 +235,7 @@ int picoquic_get_token(picoquic_stored_token_t* p_first_token,
         *token_length = 0;
         ret = -1;
     } else {
-        *token = next->token;
+        *token = (uint8_t*)next->token;
         *token_length = next->token_length;
     }
 
@@ -339,7 +339,7 @@ int picoquic_load_tokens(picoquic_stored_token_t** pp_first_token,
                         }
                         else {
                             next->sni = ((char*)next) + sizeof(picoquic_stored_token_t);
-                            next->ip_addr = next->sni + next->sni_length + 1;
+                            next->ip_addr = ((uint8_t*)next->sni) + next->sni_length + 1;
                             next->token = (uint8_t*)(next->ip_addr + next->ip_addr_length + 1);
                             next->next_token = NULL;
                             if (previous == NULL) {

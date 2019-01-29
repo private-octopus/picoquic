@@ -584,18 +584,78 @@ uint8_t* picoquic_decode_retire_connection_id_frame(picoquic_cnx_t* cnx, uint8_t
 /*
  * New Retry Token frame 
  */
+
+
+int picoquic_prepare_new_token_frame(uint8_t * token, size_t token_length,
+    uint8_t* bytes, size_t bytes_max, size_t* consumed)
+{
+    int ret = 0;
+    size_t byte_index = 0;
+
+    *consumed = 0;
+
+    if (bytes_max < 2) {
+        ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
+    }
+    else {
+        size_t l1;
+        bytes[byte_index++] = picoquic_frame_type_new_token;
+        l1 = picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index, token_length);
+        byte_index += l1;
+        if (l1 > 0 && bytes_max >= byte_index + token_length) {
+            memcpy(bytes + byte_index, token, token_length);
+            *consumed = byte_index + token_length;
+        }
+        else {
+            ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
+        }
+    }
+
+    return ret;
+}
+
+int picoquic_queue_new_token_frame(picoquic_cnx_t * cnx, uint8_t * token, size_t token_length)
+{
+    size_t consumed = 0;
+    uint8_t frame_buffer[258];
+    int ret = picoquic_prepare_new_token_frame(token, token_length, frame_buffer, sizeof(frame_buffer), &consumed);
+
+    if (ret == 0 && consumed > 0) {
+        ret = picoquic_queue_misc_frame(cnx, frame_buffer, consumed);
+    }
+
+    return ret;
+}
+
 uint8_t* picoquic_skip_new_token_frame(uint8_t* bytes, const uint8_t* bytes_max)
 {
     return picoquic_frames_length_data_skip(bytes+1, bytes_max);
 }
 
 
-uint8_t* picoquic_decode_new_token_frame(picoquic_cnx_t* cnx, uint8_t* bytes, const uint8_t* bytes_max)
+uint8_t* picoquic_decode_new_token_frame(picoquic_cnx_t* cnx, uint8_t* bytes, const uint8_t* bytes_max,
+    uint64_t current_time, struct sockaddr* addr_to)
 {
     /* TODO: store the new token in order to support immediate connection on some servers. */
-    if ((bytes = picoquic_skip_new_token_frame(bytes, bytes_max)) == NULL) {
+
+    uint64_t length = 0;
+    uint8_t * token = NULL;
+
+    if ((bytes = picoquic_frames_varint_decode(bytes + 1, bytes_max, &length)) != NULL) {
+        token = bytes;
+        bytes = picoquic_frames_fixed_skip(bytes, bytes_max, (size_t)length);
+    }
+
+    if (bytes == NULL) {
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
             picoquic_frame_type_new_token);
+    }
+    else if (addr_to != NULL){
+        uint8_t * ip_addr;
+        uint8_t ip_addr_length;
+        picoquic_get_ip_addr(addr_to, &ip_addr, &ip_addr_length);
+        (void)picoquic_store_token(&cnx->quic->p_first_token, current_time, cnx->sni, (uint16_t)strlen(cnx->sni),
+            ip_addr, ip_addr_length, token, (uint16_t)length);
     }
 
     return bytes;
@@ -2893,12 +2953,11 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_
                 bytes = picoquic_decode_path_response_frame(cnx, bytes, bytes_max, addr_from, addr_to);
                 break;
             case picoquic_frame_type_crypto_hs:
-
                 bytes = picoquic_decode_crypto_hs_frame(cnx, bytes, bytes_max, epoch);
                 ack_needed = 1;
                 break;
             case picoquic_frame_type_new_token:
-                bytes = picoquic_decode_new_token_frame(cnx, bytes, bytes_max);
+                bytes = picoquic_decode_new_token_frame(cnx, bytes, bytes_max, current_time, addr_to);
                 ack_needed = 1;
                 break;
             case picoquic_frame_type_retire_connection_id:

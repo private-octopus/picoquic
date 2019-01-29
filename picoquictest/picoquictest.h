@@ -84,6 +84,7 @@ int keep_alive_test();
 int logger_test();
 int socket_test();
 int ticket_store_test();
+int token_store_test();
 int session_resume_test();
 int zero_rtt_test();
 int zero_rtt_loss_test();

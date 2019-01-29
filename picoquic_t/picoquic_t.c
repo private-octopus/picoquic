@@ -99,6 +99,7 @@ static const picoquic_test_def_t test_table[] = {
     { "keep_alive", keep_alive_test },
     { "sockets", socket_test },
     { "ticket_store", ticket_store_test },
+    { "token_store", token_store_test },
     { "session_resume", session_resume_test },
     { "zero_rtt", zero_rtt_test },
     { "zero_rtt_loss", zero_rtt_loss_test },

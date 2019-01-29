@@ -420,9 +420,16 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(test_ticket_store)
+        TEST_METHOD(ticket_store)
         {
             int ret = ticket_store_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(token_store)
+        {
+            int ret = token_store_test();
 
             Assert::AreEqual(ret, 0);
         }

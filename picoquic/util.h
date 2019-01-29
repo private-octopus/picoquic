@@ -59,6 +59,7 @@ void picoquic_parse_packet_header_cnxid_lengths(uint8_t l_byte, uint8_t *dest_le
 
 int picoquic_compare_addr(const struct sockaddr * expected, const struct sockaddr * actual);
 int picoquic_store_addr(struct sockaddr_storage * stored_addr, const struct sockaddr * addr);
+void picoquic_get_ip_addr(struct sockaddr * addr, uint8_t ** ip_addr, uint8_t * ip_addr_len);
 
 int picoquic_get_input_path(char * target_file_path, size_t file_path_max, const char * solution_path, const char * file_name);
 

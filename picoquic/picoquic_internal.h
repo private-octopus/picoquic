@@ -233,12 +233,11 @@ void picoquic_free_tickets(picoquic_stored_ticket_t** pp_first_ticket);
 
 typedef struct st_picoquic_stored_token_t {
     struct st_picoquic_stored_token_t* next_token;
-    char* sni;
-    uint8_t* token;
-    uint8_t* ip_addr;
+    char const* sni;
+    uint8_t const* token;
+    uint8_t const* ip_addr;
     uint64_t time_valid_until;
     uint16_t sni_length;
-    uint16_t alpn_length;
     uint16_t token_length;
     uint8_t ip_addr_length;
 } picoquic_stored_token_t;
@@ -246,12 +245,12 @@ typedef struct st_picoquic_stored_token_t {
 int picoquic_store_token(picoquic_stored_token_t** p_first_token,
     uint64_t current_time,
     char const* sni, uint16_t sni_length,
-    uint8_t* ip_addr, uint8_t ip_addr_length,
-    uint8_t* token, uint16_t token_length);
+    uint8_t const* ip_addr, uint8_t ip_addr_length,
+    uint8_t const* token, uint16_t token_length);
 int picoquic_get_token(picoquic_stored_token_t* p_first_token,
     uint64_t current_time,
     char const* sni, uint16_t sni_length,
-    uint8_t* ip_addr, uint8_t ip_addr_length,
+    uint8_t const* ip_addr, uint8_t ip_addr_length,
     uint8_t** token, uint16_t* token_length);
 
 int picoquic_save_tokens(const picoquic_stored_token_t* first_token,

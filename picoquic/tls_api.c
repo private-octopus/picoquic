@@ -1947,38 +1947,128 @@ int picoquic_tls_client_authentication_activated(picoquic_quic_t* quic) {
     return ((ptls_context_t*)quic->tls_master_ctx)->require_client_authentication;
 }
 
-/*
- * Check the incoming retry token, or produce a token (place holder)
+/* 
+ * Create or verify a token. Tokens are tied to an IP address and a time of
+ * issue, and come in two variations:
+ * - specific tokens are tied to an Original DCID.
+ * - generic tokens work with a zero length DCID.
+ * The structure of the token is:
+ * - time of issue: uint64_t
+ * - ODCID length, one byte
+ * - ODCID, length bytes
+ * - Hash value, the digest size of the selected algorithm.
+ * The hash is on (secret | IP_address | <time, odcid length, odcid> | secret)
  */
-
-int picoquic_get_retry_token(picoquic_quic_t* quic, uint8_t * base, size_t len, uint8_t * cid, uint8_t cid_len,
-    uint8_t * token, uint32_t token_length) {
+static int picoquic_get_retry_token_hash(picoquic_quic_t* quic, struct sockaddr * addr_peer,
+    uint8_t * token_header, uint32_t token_header_length, uint8_t * hash, uint32_t hash_max, uint32_t * hash_length)
+{
     /*Using OpenSSL for now: ptls_hash_algorithm_t ptls_openssl_sha256 */
     int ret = 0;
     ptls_hash_algorithm_t* algo = &ptls_openssl_sha256;
     ptls_hash_context_t* hash_ctx = algo->create();
-    uint8_t final_hash[PTLS_MAX_DIGEST_SIZE];
-    size_t offset;
 
-    if (hash_ctx == NULL || token_length > cid_len + algo->digest_size || token_length <= 1u + cid_len) {
+    *hash_length = 0;
+    if (hash_ctx == NULL || hash_max < algo->digest_size) {
         ret = -1;
-    } else {
-        hash_ctx->update(hash_ctx, quic->retry_seed, sizeof(quic->retry_seed));
-        if (len > 0) {
-            hash_ctx->update(hash_ctx, base, len);
+    }
+    else {
+        uint8_t * ip_addr;
+        uint8_t ip_addr_length;
+
+        picoquic_get_ip_addr(addr_peer, &ip_addr, &ip_addr_length);
+        if (ip_addr == NULL || ip_addr_length == 0) {
+            ret = -1;
         }
-        hash_ctx->update(hash_ctx, &len, sizeof(len));
-        if (cid_len > 0) {
-            hash_ctx->update(hash_ctx, cid, cid_len);
+        else {
+            hash_ctx->update(hash_ctx, quic->retry_seed, sizeof(quic->retry_seed));
+            hash_ctx->update(hash_ctx, &ip_addr_length, 1);
+            hash_ctx->update(hash_ctx, ip_addr, ip_addr_length);
+            hash_ctx->update(hash_ctx, &token_header_length, sizeof(token_header_length));
+            hash_ctx->update(hash_ctx, token_header, token_header_length);
+            hash_ctx->update(hash_ctx, quic->retry_seed, sizeof(quic->retry_seed));
+            hash_ctx->final(hash_ctx, hash, PTLS_HASH_FINAL_MODE_FREE);
+            *hash_length = (uint32_t)algo->digest_size;
         }
-        hash_ctx->update(hash_ctx, &cid_len, sizeof(cid_len));
-        hash_ctx->final(hash_ctx, final_hash, PTLS_HASH_FINAL_MODE_FREE);
-        token[0] = cid_len;
-        if (cid_len > 0) {
-            memcpy(token + 1, cid, cid_len);
+    }
+
+    return ret;
+}
+
+int picoquic_prepare_retry_token(picoquic_quic_t* quic, struct sockaddr * addr_peer,
+    uint64_t current_time, picoquic_connection_id_t * odcid,
+    uint8_t * token, uint32_t token_max, uint32_t * token_size)
+{
+    int ret = 0;
+    uint32_t token_index = 0;
+    uint32_t min_size = 9 + odcid->id_len + 16;
+
+    *token_size = 0;
+    if (min_size > token_max) {
+        ret = -1;
+    }
+    else {
+        /* Encode the clear text components */
+        uint32_t hash_size = 0;
+        picoformat_64(token, current_time);
+        token_index += 8;
+        token[token_index++] = odcid->id_len;
+        if (odcid->id_len > 0) {
+            memcpy(token + token_index, odcid->id, odcid->id_len);
+            token_index += odcid->id_len;
         }
-        offset = 1 + cid_len;
-        memcpy(token + offset, final_hash, token_length - offset);
+        ret = picoquic_get_retry_token_hash(quic, addr_peer, token, token_index,
+            token + token_index, token_max - token_index, &hash_size);
+        if (ret == 0) {
+            *token_size = token_index + (uint32_t)hash_size;
+        }
+    }
+
+    return ret;
+}
+
+int picoquic_verify_retry_token(picoquic_quic_t* quic, struct sockaddr * addr_peer,
+    uint64_t current_time, picoquic_connection_id_t * odcid,
+    uint8_t * token, uint32_t token_size)
+{
+    int ret = 0;
+    uint32_t header_size = 9;
+
+    if (header_size > token_size) {
+        ret = -1;
+    }
+    else {
+        /* Decode the clear text components */
+        uint64_t token_time = PICOPARSE_64(token);
+        /* Verify that the token time is not too old */
+#define PICOQUIC_TOKEN_DELAY_MAX (24*60*60*1000000ull)
+        if (token_time > current_time ||
+            current_time - token_time > PICOQUIC_TOKEN_DELAY_MAX) {
+            ret = -1;
+        }
+        else {
+            header_size += token[8];
+            if (header_size >= token_size) {
+                ret = -1;
+            }
+            else {
+                uint32_t hash_size = 0;
+                uint8_t expected_hash[PTLS_MAX_DIGEST_SIZE];
+
+                ret = picoquic_get_retry_token_hash(quic, addr_peer, token, header_size,
+                    expected_hash, (uint32_t)sizeof(expected_hash), &hash_size);
+                if (ret == 0) {
+                    if (header_size + hash_size != token_size) {
+                        ret = -1;
+                    } else if (memcmp(expected_hash, token + header_size, hash_size) != 0) {
+                        ret = -1;
+                    }
+                    else {
+                        /* document the odcid if present */
+                        picoquic_parse_connection_id(token + 9, token[8], odcid);
+                    }
+                }
+            }
+        }
     }
 
     return ret;
