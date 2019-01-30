@@ -90,6 +90,112 @@ static int picoquic_socket_set_pkt_info(SOCKET_TYPE sd, int af)
     return ret;
 }
 
+static int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int * send_set)
+{
+    int ret = -1;
+#ifdef _WINDOWS
+
+    if (af == AF_INET6) {
+
+        /* Request setting ECN_1 in outgoing packets */
+#if defined(IP_TOS) && defined(INET_ECN_ECT_0)
+        {
+            DWORD ecn = INET_ECN_ECT_0;
+            /* Request setting ECN_1 in outgoing packets */
+            ret = setsockopt(sd, IPPROTO_IP, IP_TOS, &ecn, sizeof(ecn));
+            *send_set = (ret == 0);
+        }
+#else
+        *send_set = 0;
+#endif
+#ifdef IPV6_RECVTCLASS
+        {
+            DWORD set = 1;
+            /* Request receiving TOS reports in recvmsg */
+            ret = setsockopt(sd, IPPROTO_IPV6, IPV6_RECVTCLASS, &set, sizeof(set));
+            *recv_set = (ret == 0);
+        }
+#else
+        *recv_set = 0;
+#endif
+    }
+    else {
+#if defined(IP_TOS) && defined(INET_ECN_ECT_0)
+        {
+            DWORD ecn = INET_ECN_ECT_0;
+            /* Request setting ECN_1 in outgoing packets */
+            ret = setsockopt(sd, IPPROTO_IP, IP_TOS, &ecn, sizeof(ecn));
+            *send_set = (ret == 0);
+        }
+#else
+        *send_set = 0;
+#endif
+#ifdef IP_RECVTCLASS
+        {
+            DWORD set = 1;
+            /* Request receiving TOS reports in recvmsg */
+            ret = setsockopt(sd, IPPROTO_IP, IP_RECVTCLASS, &set, sizeof(set));
+            *recv_set = (ret == 0);
+        }
+#else
+        *recv_set = 0;
+#endif 
+    }
+#else
+    if (af == AF_INET6) {
+#if defined(IP_TOS) && defined(INET_ECN_ECT_0)
+        {
+            unsigned int ecn = INET_ECN_ECT_0;
+            /* Request setting ECN_1 in outgoing packets */
+            ret = setsockopt(sd, IPPROTO_IP, IP_TOS, &ecn, sizeof(ecn));
+            *send_set = (ret == 0);
+        }
+#else
+        *send_set = 0;
+#endif
+
+#ifdef IP_RECVTOS
+        {
+            unsigned char set = 1;
+
+            /* Request receiving TOS reports in recvmsg */
+            ret = setsockopt(sd, IPPROTO_IP, IP_RECVTOS, &set, sizeof(set));
+
+            *recv_set = (ret == 0);
+        }
+#else
+        *recv_set = 0;
+#endif 
+    }
+    else {
+
+#if defined(IP_TOS) && defined(INET_ECN_ECT_0)
+        {
+            unsigned int ecn = INET_ECN_ECT_0;
+            /* Request setting ECN_1 in outgoing packets */
+            ret = setsockopt(sd, IPPROTO_IP, IP_TOS, &ecn, sizeof(ecn));
+            *send_set = (ret == 0);
+        }
+#else
+        *send_set = 0;
+#endif
+
+#ifdef IP_RECVTOS
+        {
+            unsigned char set = 1;
+
+            /* Request receiving TOS reports in recvmsg */
+            ret = setsockopt(sd, IPPROTO_IP, IP_RECVTOS, &set, sizeof(set));
+        }
+#else
+        *recv_set = 0;
+#endif
+    }
+#endif
+
+    return ret;
+}
+
 SOCKET_TYPE picoquic_open_client_socket(int af)
 {
     SOCKET_TYPE sd = socket(af, SOCK_DGRAM, IPPROTO_UDP);

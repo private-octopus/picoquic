@@ -26,8 +26,9 @@
 /* clang-format off */
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
-#include <WinSock2.h>
 #include <Ws2def.h>
+#include <WinSock2.h>
+#include <ws2ipdef.h>
 #include <Mswsock.h>
 #include <assert.h>
 #include <iphlpapi.h>
@@ -84,6 +85,7 @@
 #include <errno.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <net/inet_ecn.h>
 #include <sys/select.h>
 
 #ifndef SOCKET_TYPE
