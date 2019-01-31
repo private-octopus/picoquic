@@ -5735,7 +5735,7 @@ static int test_local_address_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx)
 {
-    int ret;
+    int ret = 0;
     int local_addr_len, remote_addr_len;
     struct sockaddr * local_addr;
     struct sockaddr * remote_addr;
