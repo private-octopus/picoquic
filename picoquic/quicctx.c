@@ -1724,6 +1724,16 @@ void picoquic_set_callback(picoquic_cnx_t* cnx,
     cnx->callback_ctx = callback_ctx;
 }
 
+picoquic_stream_data_cb_fn picoquic_get_default_callback_function(picoquic_quic_t* quic)
+{
+    return quic->default_callback_fn;
+}
+
+picoquic_stream_data_cb_fn picoquic_get_default_callback_context(picoquic_quic_t* quic)
+{
+    return quic->default_callback_ctx;
+}
+
 picoquic_stream_data_cb_fn picoquic_get_callback_function(picoquic_cnx_t * cnx)
 {
     return cnx->callback_fn;
