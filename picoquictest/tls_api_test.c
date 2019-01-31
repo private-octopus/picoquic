@@ -985,7 +985,7 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
 }
 
 #define TEST_CLIENT_READY (test_ctx->cnx_client->cnx_state == picoquic_state_ready || test_ctx->cnx_client->cnx_state == picoquic_state_client_ready_start)
-#define TEST_SERVER_READY (test_ctx->cnx_server->cnx_state == picoquic_state_ready || test_ctx->cnx_server->cnx_state == picoquic_state_server_false_start)
+#define TEST_SERVER_READY (test_ctx->cnx_server != NULL &&(test_ctx->cnx_server->cnx_state == picoquic_state_ready || test_ctx->cnx_server->cnx_state == picoquic_state_server_false_start))
 
 int tls_api_connection_loop(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* loss_mask, uint64_t queue_delay_max, uint64_t* simulated_time)
