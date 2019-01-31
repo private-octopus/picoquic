@@ -152,6 +152,7 @@ static const picoquic_test_def_t test_table[] = {
     { "cubic", cubic_test },
     { "long_rtt", long_rtt_test },
     { "cid_length", cid_length_test },
+    { "optimistic_ack", optimistic_ack_test },
     { "stress", stress_test },
     { "fuzz", fuzz_test },
     { "fuzz_initial", fuzz_initial_test},

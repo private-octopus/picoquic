@@ -218,6 +218,7 @@ typedef struct st_picoquic_packet_t {
     unsigned int is_pure_ack : 1;
     unsigned int contains_crypto : 1;
     unsigned int is_mtu_probe : 1;
+    unsigned int is_ack_trap : 1;
 
     uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE];
 } picoquic_packet_t;
@@ -581,6 +582,14 @@ extern picoquic_congestion_algorithm_t* picoquic_cubic_algorithm;
 void picoquic_set_default_congestion_algorithm(picoquic_quic_t* quic, picoquic_congestion_algorithm_t const* algo);
 
 void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_algorithm_t const* algo);
+
+/*
+ * Set the optimistic ack policy. The holes will be inserted at random locations,
+ * which in average will be separated by the pseudo period. By default,
+ * the pseudo perio is 0, which means no hole insertion.
+ */
+
+void picoquic_set_optimistic_ack_policy(picoquic_quic_t* quic, uint32_t sequence_hole_pseudo_period);
 
 /* For building a basic HTTP 0.9 test server */
 int http0dot9_get(uint8_t* command, size_t command_length,
