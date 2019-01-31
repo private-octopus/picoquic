@@ -5586,8 +5586,6 @@ int optimistic_ack_test_one(int shall_spoof_ack)
 {
     int ret = 0;
     uint64_t simulated_time = 0;
-    uint64_t loss_mask = 0;
-    uint64_t latency = 300000; /* assume that each direction is 300 ms, e.g. satellite link */
     int nb_holes = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
 
@@ -5678,7 +5676,7 @@ int optimistic_ack_test_one(int shall_spoof_ack)
 
     if (shall_spoof_ack) {
         if (ret == 0 && test_ctx->test_finished) {
-            DBG_PRINTF("Despite %d holes and spoofs, the transfer completed\n");
+            DBG_PRINTF("Despite %d holes and spoofs, the transfer completed\n", nb_holes);
             ret = -1;
         }
         else {
