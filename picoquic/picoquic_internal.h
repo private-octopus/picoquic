@@ -318,6 +318,7 @@ typedef struct st_picoquic_quic_t {
     uint32_t flags;
     uint32_t padding_multiple_default;
     uint32_t padding_minsize_default;
+    uint32_t sequence_hole_pseudo_period; /* Optimistic ack defense */
     picoquic_spinbit_version_enum default_spin_policy;
 
     picoquic_stateless_packet_t* pending_stateless_packet;

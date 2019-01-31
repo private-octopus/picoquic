@@ -1400,20 +1400,17 @@ int tls_api_one_scenario_verify(picoquic_test_tls_api_ctx_t* test_ctx) {
     return ret;
 }
 
-int tls_api_one_scenario_body(picoquic_test_tls_api_ctx_t* test_ctx,
-    uint64_t * simulated_time,
-    test_api_stream_desc_t* scenario, size_t sizeof_scenario, size_t stream0_target,
-    uint64_t init_loss_mask, uint64_t max_data, uint64_t queue_delay_max,
-    uint64_t max_completion_microsec)
+int tls_api_one_scenario_body_connect(picoquic_test_tls_api_ctx_t* test_ctx,
+    uint64_t * simulated_time, size_t stream0_target, uint64_t max_data, uint64_t queue_delay_max)
 {
-    int ret = 0;
     uint64_t loss_mask = 0;
+    int ret = picoquic_start_client_cnx(test_ctx->cnx_client);
 
-    ret = picoquic_start_client_cnx(test_ctx->cnx_client);
     if (ret != 0)
     {
         DBG_PRINTF("%s", "Could not initialize connection for the client\n");
-    } else {
+    }
+    else {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, queue_delay_max, simulated_time);
 
         if (ret != 0)
@@ -1428,6 +1425,45 @@ int tls_api_one_scenario_body(picoquic_test_tls_api_ctx_t* test_ctx,
         test_ctx->cnx_server->maxdata_local = max_data;
         test_ctx->cnx_server->maxdata_remote = max_data;
     }
+
+    return ret;
+}
+
+int tls_api_one_scenario_body_verify(picoquic_test_tls_api_ctx_t* test_ctx,
+    uint64_t * simulated_time,
+    uint64_t max_completion_microsec)
+{
+    int ret = tls_api_one_scenario_verify(test_ctx);
+
+    if (ret == 0) {
+        ret = picoquic_close(test_ctx->cnx_client, 0);
+        if (ret != 0)
+        {
+            DBG_PRINTF("Picoquic close returns %d\n", ret);
+        }
+    }
+
+    if (ret == 0 && max_completion_microsec != 0) {
+        if (*simulated_time > max_completion_microsec)
+        {
+            DBG_PRINTF("Scenario completes in %llu microsec, more than %llu\n",
+                (unsigned long long)*simulated_time, (unsigned long long)max_completion_microsec);
+            ret = -1;
+        }
+    }
+
+    return ret;
+}
+
+int tls_api_one_scenario_body(picoquic_test_tls_api_ctx_t* test_ctx,
+    uint64_t * simulated_time,
+    test_api_stream_desc_t* scenario, size_t sizeof_scenario, size_t stream0_target,
+    uint64_t init_loss_mask, uint64_t max_data, uint64_t queue_delay_max,
+    uint64_t max_completion_microsec)
+{
+    uint64_t loss_mask = 0;
+    int ret = tls_api_one_scenario_body_connect(test_ctx, simulated_time, stream0_target,
+        max_data, queue_delay_max);
 
     /* Prepare to send data */
     if (ret == 0) {
@@ -1452,24 +1488,7 @@ int tls_api_one_scenario_body(picoquic_test_tls_api_ctx_t* test_ctx,
     }
 
     if (ret == 0) {
-        ret = tls_api_one_scenario_verify(test_ctx);
-    }
-
-    if (ret == 0) {
-        ret = picoquic_close(test_ctx->cnx_client, 0);
-        if (ret != 0)
-        {
-            DBG_PRINTF("Picoquic close returns %d\n", ret);
-        }
-    }
-
-    if (ret == 0 && max_completion_microsec != 0) {
-        if (*simulated_time > max_completion_microsec)
-        {
-            DBG_PRINTF("Scenario completes in %llu microsec, more than %llu\n", 
-                (unsigned long long)*simulated_time, (unsigned long long)max_completion_microsec);
-            ret = -1;
-        }
+        ret = tls_api_one_scenario_body_verify(test_ctx, simulated_time, max_completion_microsec);
     }
 
     return ret;
@@ -5519,11 +5538,6 @@ int cid_length_test()
 /* Testing transmission behavior over large RTT links
  */
 
-
- /*
-  * Testing the flow controlled sending scenario
-  */
-
 int long_rtt_test()
 {
     int ret = 0;
@@ -5556,6 +5570,141 @@ int long_rtt_test()
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+/*
+ * Test the insertion of holes in the ACK sequence. We start a large
+ * download, while setting the policy to insert a hole approximately
+ * every 32 packets. We verify that the transfer completes. Then,
+ * we repeat that test but inject optimistic acks, which should
+ * break the connection.
+ */
+int optimistic_ack_test_one(int shall_spoof_ack)
+{
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    uint64_t latency = 300000; /* assume that each direction is 300 ms, e.g. satellite link */
+    int nb_holes = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+
+    ret = tls_api_one_scenario_init(&test_ctx, &simulated_time,
+        0, NULL, NULL);
+
+    if (ret == 0) {
+        /* set the optimistic ack policy*/
+        picoquic_set_optimistic_ack_policy(test_ctx->qserver, 32);
+        /* add a log request for debugging */
+        picoquic_set_cc_log(test_ctx->qserver, ".");
+
+        ret = tls_api_one_scenario_body_connect(test_ctx, &simulated_time, 0,
+            0, 0);
+    }
+
+    /* Prepare to send data */
+    if (ret == 0) {
+        test_ctx->stream0_target = 0;
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_very_long, sizeof(test_scenario_very_long));
+
+        if (ret != 0)
+        {
+            DBG_PRINTF("Init send receive scenario returns %d\n", ret);
+        }
+    }
+
+    /* Perform a data sending loop */
+    if (ret == 0) {
+        int nb_trials = 0;
+        int nb_inactive = 0;
+        uint64_t hole_number = 0;
+
+        while (ret == 0 && nb_trials < 8096 && nb_inactive < 256 && TEST_CLIENT_READY && TEST_SERVER_READY) {
+            int was_active = 0;
+
+            nb_trials++;
+
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+
+            if (ret < 0) {
+                break;
+            }
+
+            if (was_active) {
+                nb_inactive = 0;
+            }
+            else {
+                nb_inactive++;
+            }
+
+            if (test_ctx->test_finished) {
+                if (picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) && picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)) {
+                    break;
+                }
+            }
+
+            /* find whether there was a new hole inserted */
+            if (test_ctx->cnx_server != NULL) {
+                picoquic_packet_t * packet = test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].retransmit_oldest;
+
+                while (packet != NULL) {
+                    if (packet->is_ack_trap && packet->sequence_number > hole_number) {
+                        hole_number = packet->sequence_number;
+                        if (shall_spoof_ack) {
+                            ret = picoquic_record_pn_received(test_ctx->cnx_client, picoquic_packet_context_application,
+                                hole_number, simulated_time);
+                        }
+                        break;
+                    }
+                    packet = packet->previous_packet;
+                }
+
+                nb_holes++;
+            }
+        }
+
+        if (ret != 0)
+        {
+            DBG_PRINTF("Data sending loop returns %d\n", ret);
+        }
+    }
+
+    if (ret == 0 && nb_holes == 0) {
+        DBG_PRINTF("%s", "No holes inserted\n");
+        ret = -1;
+    }
+
+    if (shall_spoof_ack) {
+        if (ret == 0 && test_ctx->test_finished) {
+            DBG_PRINTF("Despite %d holes and spoofs, the transfer completed\n");
+            ret = -1;
+        }
+        else {
+            ret = 0;
+        }
+    }
+    else {
+        if (ret == 0) {
+            ret = tls_api_one_scenario_body_verify(test_ctx, &simulated_time, 0);
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+int optimistic_ack_test()
+{
+    int ret = optimistic_ack_test_one(0);
+
+    if (ret == 0) {
+        ret = optimistic_ack_test_one(1);
     }
 
     return ret;

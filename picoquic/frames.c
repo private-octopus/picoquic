@@ -703,7 +703,6 @@ uint8_t* picoquic_decode_stop_sending_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
 
     } else if ((stream = picoquic_find_or_create_stream(cnx, stream_id, 1)) == NULL) {
         bytes = NULL;  // Error already signaled
-
     } else if (!stream->stop_sending_received && !stream->reset_requested) {
         stream->stop_sending_received = 1;
         stream->remote_stop_error = error_code;
@@ -1956,6 +1955,11 @@ static int picoquic_process_ack_range(
                 /* TODO: RTT Estimate */
                 picoquic_packet_t* next = p->next_packet;
                 picoquic_path_t * old_path = p->send_path;
+
+                if (p->is_ack_trap) {
+                    ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, picoquic_frame_type_ack);
+                    break;
+                }
 
                 if (old_path != NULL) {
                     if (cnx->congestion_alg != NULL) {
