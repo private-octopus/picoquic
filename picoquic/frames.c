@@ -674,6 +674,8 @@ int picoquic_prepare_stop_sending_frame(picoquic_stream_head* stream,
     if (bytes_max < min_length) {
         ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
     } else if (!stream->stop_sending_requested || stream->stop_sending_sent || stream->fin_received || stream->reset_received) {
+        /* set this, so we don't getting called again */
+        stream->stop_sending_sent = 1;
         /* no need to send a stop sending frame */
         *consumed = 0;
     } else {
