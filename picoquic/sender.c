@@ -616,8 +616,6 @@ void picoquic_queue_for_retransmit(picoquic_cnx_t* cnx, picoquic_path_t * path_x
 {
     picoquic_packet_context_enum pc = packet->pc;
 
-    /* Account for bytes in transit, for congestion control */
-    path_x->bytes_in_transit += length;
 
     /* Manage the double linked packet list for retransmissions */
     packet->previous_packet = NULL;
@@ -630,8 +628,12 @@ void picoquic_queue_for_retransmit(picoquic_cnx_t* cnx, picoquic_path_t * path_x
     }
     cnx->pkt_ctx[pc].retransmit_newest = packet;
 
-    /* Update the pacing data */
-    picoquic_update_pacing_after_send(path_x, current_time);
+    if (!packet->is_ack_trap) {
+        /* Account for bytes in transit, for congestion control */
+        path_x->bytes_in_transit += length;
+        /* Update the pacing data */
+        picoquic_update_pacing_after_send(path_x, current_time);
+    }
 }
 
 picoquic_packet_t* picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet_t* p, int should_free)
@@ -726,6 +728,30 @@ void picoquic_dequeue_retransmitted_packet(picoquic_cnx_t* cnx, picoquic_packet_
     free(p);
 }
 
+/*
+ * Inserting holes in the send sequence to trap optimistic ack.
+ * return 0 if hole was inserted, !0 if packet should be freed.
+ */
+void picoquic_insert_hole_in_send_sequence_if_needed(picoquic_cnx_t* cnx, uint64_t current_time)
+{
+    if (cnx->cnx_state == picoquic_state_ready &&
+        cnx->pkt_ctx[0].retransmit_newest != NULL &&
+        cnx->quic->sequence_hole_pseudo_period > 0 &&
+        !cnx->pkt_ctx[0].retransmit_newest->is_ack_trap &&
+        picoquic_public_uniform_random(cnx->quic->sequence_hole_pseudo_period) == 0) {
+        picoquic_packet_t* packet = picoquic_create_packet();
+
+        if (packet != NULL) {
+            packet->is_ack_trap = 1;
+            packet->pc = picoquic_packet_context_application;
+            packet->ptype = picoquic_packet_1rtt_protected;
+            packet->send_path = cnx->path[0];
+            packet->send_time = current_time;
+            packet->sequence_number = cnx->pkt_ctx[picoquic_packet_context_application].send_sequence++;
+            picoquic_queue_for_retransmit(cnx, cnx->path[0], packet, 0, current_time);
+        }
+    }
+}
 
 /*
  * Final steps of encoding and protecting the packet before sending
@@ -976,6 +1002,10 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                         old_path->send_mtu_max_tried = (uint32_t)(p->length + p->checksum_overhead);
                     }
                     /* MTU probes should not be retransmitted */
+                    packet_is_pure_ack = 1;
+                    do_not_detect_spurious = 0;
+                }
+                else if (packet->is_ack_trap) {
                     packet_is_pure_ack = 1;
                     do_not_detect_spurious = 0;
                 } else {
@@ -2816,6 +2846,10 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
 
     /* Remove failed probes */
     picoquic_delete_failed_probes(cnx);
+
+    /* Check whether to insert a hole in the sequence of packets */
+    picoquic_insert_hole_in_send_sequence_if_needed(cnx, current_time);
+
 
     /* If probes are in waiting, send the first one */
     ret = picoquic_prepare_probe(cnx, current_time, send_buffer, send_buffer_max, send_length,

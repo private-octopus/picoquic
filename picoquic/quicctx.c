@@ -2096,6 +2096,15 @@ void picoquic_set_default_congestion_algorithm(picoquic_quic_t* quic, picoquic_c
     quic->default_congestion_alg = alg;
 }
 
+/*
+ * Set the optimistic ack policy
+ */
+
+void picoquic_set_optimistic_ack_policy(picoquic_quic_t* quic, uint32_t sequence_hole_pseudo_period)
+{
+    quic->sequence_hole_pseudo_period = sequence_hole_pseudo_period;
+}
+
 void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_algorithm_t const* alg)
 {
     if (cnx->congestion_alg != NULL) {

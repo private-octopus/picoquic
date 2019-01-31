@@ -812,6 +812,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(optimistic_ack)
+        {
+            int ret = optimistic_ack_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(stress)
         {
             int ret = stress_test();
