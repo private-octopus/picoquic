@@ -465,6 +465,12 @@ int picoquic_is_cnx_backlog_empty(picoquic_cnx_t* cnx);
 void picoquic_set_callback(picoquic_cnx_t* cnx,
     picoquic_stream_data_cb_fn callback_fn, void* callback_ctx);
 
+picoquic_stream_data_cb_fn picoquic_get_default_callback_function(picoquic_quic_t * quic);
+
+picoquic_stream_data_cb_fn picoquic_get_default_callback_context(picoquic_quic_t * quic);
+
+picoquic_stream_data_cb_fn picoquic_get_callback_function(picoquic_cnx_t * cnx);
+
 void * picoquic_get_callback_context(picoquic_cnx_t* cnx);
 
 /* Send extra frames */
