@@ -90,7 +90,7 @@ static int picoquic_socket_set_pkt_info(SOCKET_TYPE sd, int af)
     return ret;
 }
 
-static int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int * send_set)
+int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int * send_set)
 {
     int ret = -1;
 #ifdef _WINDOWS

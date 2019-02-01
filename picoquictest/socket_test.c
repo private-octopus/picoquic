@@ -167,3 +167,50 @@ int socket_test()
 
     return ret;
 }
+
+/*
+ * Test whether ECN values can be set.
+ */
+
+int socket_ecn_test_one(int af_domain)
+{
+    int ret = 0;
+    SOCKET_TYPE fd = picoquic_open_client_socket(af_domain);
+
+    if (fd == INVALID_SOCKET) {
+        ret = -1;
+    }
+    else {
+        int recv_set = 0;
+        int send_set = 0;
+
+        ret = picoquic_socket_set_ecn_options(fd, af_domain, &recv_set, &send_set);
+
+        if (ret != 0) {
+            DBG_PRINTF("Cannot set ECN options, af = %d, ret = %d\n", af_domain, ret);
+        } else if (!recv_set) {
+            DBG_PRINTF("Cannot receive ECN flags, af = %d\n", af_domain);
+            ret = -1;
+        } else if (!send_set){
+            DBG_PRINTF("Cannot send ECN 0, af = %d\n", af_domain);
+#ifndef _WINDOWS
+            ret = -1;
+#endif
+        }
+
+        SOCKET_CLOSE(fd);
+    }
+
+    return ret;
+}
+
+int socket_ecn_test()
+{
+    int ret = socket_ecn_test_one(AF_INET);
+
+    if (ret == 0) {
+        ret = socket_ecn_test_one(AF_INET6);
+    }
+
+    return ret;
+}

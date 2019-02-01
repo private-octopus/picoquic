@@ -120,6 +120,8 @@ int picoquic_open_server_sockets(picoquic_server_sockets_t* sockets, int port);
 
 void picoquic_close_server_sockets(picoquic_server_sockets_t* sockets);
 
+int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int * send_set);
+
 int picoquic_select(SOCKET_TYPE* sockets, int nb_sockets,
     struct sockaddr_storage* addr_from,
     socklen_t* from_length,
