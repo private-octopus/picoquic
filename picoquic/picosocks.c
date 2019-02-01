@@ -257,6 +257,7 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
         }
 #else
         *send_set = 0;
+        DBG_PRINTF("%s", "IP_TOS is not defined\n");
 #endif
 
 #ifdef IP_RECVTOS
@@ -269,12 +270,14 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
                 ret = -1;
                 *recv_set = 0;
             }
-            else { 
+            else {
                 *recv_set = 1;
                 ret = 0;
             }
+        }
 #else
         *recv_set = 0;
+        DBG_PRINTF("%s", "IP_RECVTOS is not defined\n");
 #endif
     }
 #endif
