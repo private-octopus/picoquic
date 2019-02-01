@@ -207,7 +207,7 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
 
             /* Request receiving TOS reports in recvmsg */
             if (setsockopt(sd, IPPROTO_IP, IP_RECVTOS, &set, sizeof(set)) < 0) {
-                DBG_PRINTF("setsockopt IPv6 IPRECVTOS (0x%x) fails, errno: %d\n", set, errno);
+                DBG_PRINTF("setsockopt IPv6 IP_RECVTOS (0x%x) fails, errno: %d\n", set, errno);
                 ret = -1;
                 *recv_set = 0;
             }
@@ -224,8 +224,7 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
         {
             unsigned int ecn = 2; /* ECN_ECT_0 */
             /* Request setting ECN_1 in outgoing packets */
-            ret = setsockopt(sd, IPPROTO_IP, IP_TOS, &ecn, sizeof(ecn));
-            if (ret < 0) {
+            if (setsockopt(sd, IPPROTO_IP, IP_TOS, &ecn, sizeof(ecn)) < 0){
                 DBG_PRINTF("setsockopt IPv6 IP_TOS (0x%x) fails, errno: %d\n", ecn, errno);
                 ret = -1;
                 *send_set = 0;
@@ -242,13 +241,19 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
 
     }
     else {
-
 #if defined(IP_TOS)
         {
             unsigned int ecn = 2;
             /* Request setting ECN_1 in outgoing packets */
-            ret = setsockopt(sd, IPPROTO_IP, IP_TOS, &ecn, sizeof(ecn));
-            *send_set = (ret == 0);
+            if (setsockopt(sd, IPPROTO_IP, IP_TOS, &ecn, sizeof(ecn)) < 0) {
+                DBG_PRINTF("setsockopt IPv4 IP_TOS (0x%x) fails, errno: %d\n", ecn, errno);
+                ret = -1;
+                *send_set = 0;
+            }
+            else {
+                *send_set = 1;
+                ret = 0;
+            }
         }
 #else
         *send_set = 0;
@@ -259,8 +264,15 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
             unsigned char set = 1;
 
             /* Request receiving TOS reports in recvmsg */
-            ret = setsockopt(sd, IPPROTO_IP, IP_RECVTOS, &set, sizeof(set));
-        }
+            if (setsockopt(sd, IPPROTO_IP, IP_RECVTOS, &set, sizeof(set)) < 0) {
+                DBG_PRINTF("setsockopt IPv6 IP_RECVTOS (0x%x) fails, errno: %d\n", set, errno);
+                ret = -1;
+                *recv_set = 0;
+            }
+            else { 
+                *recv_set = 1;
+                ret = 0;
+            }
 #else
         *recv_set = 0;
 #endif
