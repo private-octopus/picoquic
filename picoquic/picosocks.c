@@ -143,9 +143,9 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
     }
 #else
     if (af == AF_INET6) {
-#if defined(IP_TOS) && defined(INET_ECN_ECT_0)
+#if defined(IP_TOS)
         {
-            unsigned int ecn = INET_ECN_ECT_0;
+            unsigned int ecn = 2; /* ECN_ECT_0 */
             /* Request setting ECN_1 in outgoing packets */
             ret = setsockopt(sd, IPPROTO_IP, IP_TOS, &ecn, sizeof(ecn));
             *send_set = (ret == 0);
@@ -156,12 +156,16 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
 
 #ifdef IP_RECVTOS
         {
-            unsigned char set = 1;
+            unsigned char set = 0x03;
 
             /* Request receiving TOS reports in recvmsg */
-            ret = setsockopt(sd, IPPROTO_IP, IP_RECVTOS, &set, sizeof(set));
-
-            *recv_set = (ret == 0);
+            if (setsockopt(sd, IPPROTO_IP, IP_RECVTOS, &set, sizeof(set)) < 0) {
+                ret = -1;
+                *recv_set = 0;
+            }
+            else {
+                *recv_set = 1;
+            }
         }
 #else
         *recv_set = 0;
