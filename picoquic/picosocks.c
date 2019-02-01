@@ -165,7 +165,7 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
         {
             unsigned int ecn = 2; /* ECN_ECT_0 */
             /* Request setting ECN_1 in outgoing packets */
-            ret = setsockopt(sd, IPPROTO_IP, IP_TOS, &ecn, sizeof(ecn)); 
+            ret = setsockopt(sd, IPPROTO_IP, IP_TOS, &ecn, sizeof(ecn));
             if (ret < 0) {
                 DBG_PRINTF("setsockopt IP_TOS (0x%x) fails, errno: %d\n", ecn, errno);
                 ret = -1;
@@ -175,6 +175,7 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
                 *send_set = 1;
                 ret = 0;
             }
+        }
 #else
         *send_set = 0;
 #endif
