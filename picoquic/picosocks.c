@@ -102,7 +102,7 @@ static int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_se
         {
             DWORD ecn = INET_ECN_ECT_0;
             /* Request setting ECN_1 in outgoing packets */
-            ret = setsockopt(sd, IPPROTO_IP, IP_TOS, &ecn, sizeof(ecn));
+            ret = setsockopt(sd, IPPROTO_IP, IP_TOS, (char *)&ecn, sizeof(ecn));
             *send_set = (ret == 0);
         }
 #else
@@ -112,7 +112,7 @@ static int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_se
         {
             DWORD set = 1;
             /* Request receiving TOS reports in recvmsg */
-            ret = setsockopt(sd, IPPROTO_IPV6, IPV6_RECVTCLASS, &set, sizeof(set));
+            ret = setsockopt(sd, IPPROTO_IPV6, IPV6_RECVTCLASS, (char *)&set, sizeof(set));
             *recv_set = (ret == 0);
         }
 #else
@@ -124,7 +124,7 @@ static int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_se
         {
             DWORD ecn = INET_ECN_ECT_0;
             /* Request setting ECN_1 in outgoing packets */
-            ret = setsockopt(sd, IPPROTO_IP, IP_TOS, &ecn, sizeof(ecn));
+            ret = setsockopt(sd, IPPROTO_IP, IP_TOS, (char *)&ecn, sizeof(ecn));
             *send_set = (ret == 0);
         }
 #else
@@ -134,7 +134,7 @@ static int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_se
         {
             DWORD set = 1;
             /* Request receiving TOS reports in recvmsg */
-            ret = setsockopt(sd, IPPROTO_IP, IP_RECVTCLASS, &set, sizeof(set));
+            ret = setsockopt(sd, IPPROTO_IP, IP_RECVTCLASS, (char *)&set, sizeof(set));
             *recv_set = (ret == 0);
         }
 #else

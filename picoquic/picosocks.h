@@ -85,7 +85,6 @@
 #include <errno.h>
 #include <netdb.h>
 #include <netinet/in.h>
-#include <net/inet_ecn.h>
 #include <sys/select.h>
 
 #ifndef SOCKET_TYPE
