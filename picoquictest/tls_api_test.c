@@ -5707,3 +5707,204 @@ int optimistic_ack_test()
 
     return ret;
 }
+
+/*
+ * test that local and remote addresses are properly documented during the
+ * call setup process.
+ */
+
+typedef struct st_tls_api_address_are_documented_t {
+    /* addresses returned by almost ready callback */
+    int nb_almost_ready;
+    int local_addr_almost_ready_len;
+    int remote_addr_almost_ready_len;
+    struct sockaddr_storage local_addr_almost_ready;
+    struct sockaddr_storage remote_addr_almost_ready;
+    /* addresses returned by ready callback */
+    int nb_ready;
+    int local_addr_ready_len;
+    int remote_addr_ready_len;
+    struct sockaddr_storage local_addr_ready;
+    struct sockaddr_storage remote_addr_ready;
+    /* Pointer to the underlying callback */
+    picoquic_stream_data_cb_fn callback_fn;
+    void * callback_ctx;
+} tls_api_address_are_documented_t;
+
+static int test_local_address_callback(picoquic_cnx_t* cnx,
+    uint64_t stream_id, uint8_t* bytes, size_t length,
+    picoquic_call_back_event_t fin_or_event, void* callback_ctx)
+{
+    int ret = 0;
+    int local_addr_len, remote_addr_len;
+    struct sockaddr * local_addr;
+    struct sockaddr * remote_addr;
+
+    tls_api_address_are_documented_t* cb_ctx = (tls_api_address_are_documented_t*)callback_ctx;
+
+    if (fin_or_event == picoquic_callback_almost_ready) {
+        picoquic_get_peer_addr(cnx, &remote_addr, &remote_addr_len);
+        picoquic_get_local_addr(cnx, &local_addr, &local_addr_len);
+        cb_ctx->nb_almost_ready++;
+        if (cb_ctx->nb_almost_ready == 1) {
+            if (local_addr_len > 0 && local_addr != NULL) {
+                cb_ctx->local_addr_almost_ready_len = picoquic_store_addr(&cb_ctx->local_addr_almost_ready,
+                    local_addr);
+            }
+            if (remote_addr_len > 0 && remote_addr != NULL) {
+                cb_ctx->remote_addr_almost_ready_len = picoquic_store_addr(&cb_ctx->remote_addr_almost_ready,
+                    remote_addr);
+            }
+        }
+    }
+    else if (fin_or_event == picoquic_callback_ready) {
+        picoquic_get_peer_addr(cnx, &remote_addr, &remote_addr_len);
+        picoquic_get_local_addr(cnx, &local_addr, &local_addr_len);
+        cb_ctx->nb_ready++;
+        if (cb_ctx->nb_ready == 1) {
+            if (local_addr_len > 0 && local_addr != NULL) {
+                cb_ctx->local_addr_ready_len = picoquic_store_addr(&cb_ctx->local_addr_ready,
+                    local_addr);
+            }
+            if (remote_addr_len > 0 && remote_addr != NULL) {
+                cb_ctx->remote_addr_ready_len = picoquic_store_addr(&cb_ctx->remote_addr_ready,
+                    remote_addr);
+            }
+        }
+    };
+
+    if (cb_ctx->callback_fn != NULL) {
+        picoquic_stream_data_cb_fn new_fn;
+        void * new_ctx;
+
+        ret = (cb_ctx->callback_fn)(cnx, stream_id, bytes, length, fin_or_event, cb_ctx->callback_ctx);
+
+        /* Check that the callbacks were not reset during the last call */
+        new_fn = picoquic_get_callback_function(cnx);
+        new_ctx = picoquic_get_callback_context(cnx);
+
+        if (new_fn != test_local_address_callback || new_ctx != callback_ctx) {
+            cb_ctx->callback_fn = new_fn;
+            cb_ctx->callback_ctx = new_ctx;
+            picoquic_set_callback(cnx, test_local_address_callback, callback_ctx);
+        }
+    }
+
+    return ret;
+}
+
+int document_addresses_check(tls_api_address_are_documented_t * test_cb_ctx,
+    struct sockaddr * local_addr_ref, struct sockaddr * remote_addr_ref)
+{
+    int ret = 0;
+
+    if (ret == 0 && test_cb_ctx->nb_almost_ready != 1) {
+        DBG_PRINTF("Expected 1 almost ready callback, got %d\n", test_cb_ctx->nb_ready);
+        ret = -1;
+    }
+
+    if (ret == 0 && test_cb_ctx->local_addr_almost_ready_len == 0) {
+        DBG_PRINTF("%s", "Expected almost ready local address, got length = 0\n");
+        ret = -1;
+    }
+
+    if (ret == 0 && picoquic_compare_addr(local_addr_ref,
+        (struct sockaddr*)&test_cb_ctx->local_addr_almost_ready) != 0) {
+        DBG_PRINTF("%s", "Local address from almost ready callback does not match\n");
+        ret = -1;
+    }
+
+    if (ret == 0 && test_cb_ctx->remote_addr_almost_ready_len == 0) {
+        DBG_PRINTF("%s", "Expected almost ready remote address, got length = 0\n");
+        ret = -1;
+    }
+
+    if (ret == 0 && picoquic_compare_addr(remote_addr_ref,
+        (struct sockaddr*)&test_cb_ctx->remote_addr_almost_ready) != 0) {
+        DBG_PRINTF("%s", "Local address from almost ready callback does not match\n");
+        ret = -1;
+    }
+
+    if (ret == 0 && test_cb_ctx->nb_ready != 1) {
+        DBG_PRINTF("Expected 1 ready callback, got %d\n", test_cb_ctx->nb_ready);
+        ret = -1;
+    }
+
+    if (ret == 0 && test_cb_ctx->local_addr_ready_len == 0) {
+        DBG_PRINTF("%s", "Expected ready local address, got length = 0\n");
+        ret = -1;
+    }
+
+    if (ret == 0 && picoquic_compare_addr(local_addr_ref,
+        (struct sockaddr*)&test_cb_ctx->local_addr_ready) != 0) {
+        DBG_PRINTF("%s", "Local address from ready callback does not match\n");
+        ret = -1;
+    }
+
+    if (ret == 0 && test_cb_ctx->remote_addr_ready_len == 0) {
+        DBG_PRINTF("%s", "Expected ready remote address, got length = 0\n");
+        ret = -1;
+    }
+
+    if (ret == 0 && picoquic_compare_addr(remote_addr_ref,
+        (struct sockaddr*)&test_cb_ctx->remote_addr_ready) != 0) {
+        DBG_PRINTF("%s", "Local address from almost ready callback does not match\n");
+        ret = -1;
+    }
+
+    return ret;
+}
+
+int document_addresses_test()
+{
+    uint64_t simulated_time = 0; 
+    tls_api_address_are_documented_t client_address_callback_ctx, server_address_callback_ctx;
+
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+    if (ret == 0) {
+        /* Set the call backs to intercept the almost ready and ready transitions */
+        memset(&client_address_callback_ctx, 0, sizeof(tls_api_address_are_documented_t));
+        client_address_callback_ctx.callback_fn = picoquic_get_callback_function(test_ctx->cnx_client);
+        client_address_callback_ctx.callback_ctx = picoquic_get_callback_context(test_ctx->cnx_client);
+        picoquic_set_callback(test_ctx->cnx_client, test_local_address_callback, &client_address_callback_ctx);
+
+        memset(&server_address_callback_ctx, 0, sizeof(tls_api_address_are_documented_t));
+        server_address_callback_ctx.callback_fn = picoquic_get_default_callback_function(test_ctx->qserver);
+        server_address_callback_ctx.callback_ctx = picoquic_get_default_callback_context(test_ctx->qserver);
+        picoquic_set_default_callback(test_ctx->qserver, test_local_address_callback, &server_address_callback_ctx);
+
+        ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+            test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0, 0, 0, 20000, 3600000);
+    }
+
+    /* Verify that the addresses and calls are what we expect */
+    if (ret == 0) {
+        ret = document_addresses_check(&client_address_callback_ctx,
+            (struct sockaddr*)&test_ctx->client_addr, (struct sockaddr*)&test_ctx->server_addr);
+        if (ret != 0) {
+            DBG_PRINTF("%s", "Client addresses were not properly documented\n");
+        }
+    }
+
+    if (ret == 0) {
+        ret = document_addresses_check(&server_address_callback_ctx,
+            (struct sockaddr*)&test_ctx->server_addr, (struct sockaddr*)&test_ctx->client_addr);
+        if (ret != 0) {
+            DBG_PRINTF("%s", "Server addresses were not properly documented\n");
+        }
+    }
+
+    /* Free the resource */
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}

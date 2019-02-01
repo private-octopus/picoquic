@@ -926,6 +926,13 @@ int picoquic_incoming_initial(
         (*pcnx)->local_error = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
         (*pcnx)->cnx_state = picoquic_state_handshake_failure;
     } else {
+        /* Document the incoming addresses */
+        if ((*pcnx)->path[0]->local_addr_len == 0 && addr_to != NULL) {
+            (*pcnx)->path[0]->local_addr_len = picoquic_store_addr(&(*pcnx)->path[0]->local_addr, addr_to);
+        }
+        if ((*pcnx)->path[0]->peer_addr_len == 0 && addr_from != NULL) {
+            (*pcnx)->path[0]->peer_addr_len = picoquic_store_addr(&(*pcnx)->path[0]->peer_addr, addr_from);
+        }
         /* decode the incoming frames */
         if (ret == 0) {
             ret = picoquic_decode_frames(*pcnx, (*pcnx)->path[0],
@@ -946,16 +953,6 @@ int picoquic_incoming_initial(
             picoquic_delete_cnx(*pcnx);
             *pcnx = NULL;
             ret = PICOQUIC_ERROR_CONNECTION_DELETED;
-        }
-    }
-    else {
-        /* Update the incoming and outgoing addresses, but only if this is a new packet */
-        if ((*pcnx)->crypto_context[2].aead_decrypt == NULL &&
-            ((*pcnx)->pkt_ctx[picoquic_packet_context_initial].first_sack_item.end_of_sack_range == (uint64_t)((int64_t)-1) ||
-                ph->pn64 >= (*pcnx)->pkt_ctx[picoquic_packet_context_initial].first_sack_item.end_of_sack_range)) {
-            (*pcnx)->path[0]->if_index_dest = if_index_to;
-            (*pcnx)->path[0]->local_addr_len = picoquic_store_addr(&(*pcnx)->path[0]->local_addr, addr_to);
-            (*pcnx)->path[0]->peer_addr_len = picoquic_store_addr(&(*pcnx)->path[0]->peer_addr, addr_from);
         }
     }
 
