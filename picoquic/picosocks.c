@@ -98,76 +98,13 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
     if (af == AF_INET6) {
 
         /* Request setting ECN_1 in outgoing packets */
-#if defined(IP_TOS) && defined(INET_ECN_ECT_0)
+#if defined(IPV6_TCLASS)
         {
-            DWORD ecn = INET_ECN_ECT_0;
+            DWORD ecn = 2;
             /* Request setting ECN_1 in outgoing packets */
-            ret = setsockopt(sd, IPPROTO_IP, IP_TOS, (char *)&ecn, sizeof(ecn));
-            *send_set = (ret == 0);
-        }
-#else
-        *send_set = 0;
-#endif
-#ifdef IPV6_RECVTCLASS
-        {
-            DWORD set = 1;
-            /* Request receiving TOS reports in recvmsg */
-            ret = setsockopt(sd, IPPROTO_IPV6, IPV6_RECVTCLASS, (char *)&set, sizeof(set));
-            *recv_set = (ret == 0);
-        }
-#else
-        *recv_set = 0;
-#endif
-    }
-    else {
-#if defined(IP_TOS) && defined(INET_ECN_ECT_0)
-        {
-            DWORD ecn = INET_ECN_ECT_0;
-            /* Request setting ECN_1 in outgoing packets */
-            ret = setsockopt(sd, IPPROTO_IP, IP_TOS, (char *)&ecn, sizeof(ecn));
-            *send_set = (ret == 0);
-        }
-#else
-        *send_set = 0;
-#endif
-#ifdef IP_RECVTCLASS
-        {
-            DWORD set = 1;
-            /* Request receiving TOS reports in recvmsg */
-            ret = setsockopt(sd, IPPROTO_IP, IP_RECVTCLASS, (char *)&set, sizeof(set));
-            *recv_set = (ret == 0);
-        }
-#else
-        *recv_set = 0;
-#endif 
-    }
-#else
-    if (af == AF_INET6) {
-#ifdef IP_RECVTOS
-        {
-            unsigned char set = 0x03;
-
-            /* Request receiving TOS reports in recvmsg */
-            if (setsockopt(sd, IPPROTO_IP, IP_RECVTOS, &set, sizeof(set)) < 0) {
-                DBG_PRINTF("setsockopt IPRECTOS (0x%x) fails, errno: %d\n", set, errno);
-                ret = -1;
-                *recv_set = 0;
-            }
-            else {
-                *recv_set = 1;
-                ret = 0;
-            }
-        }
-#else
-        *recv_set = 0;
-#endif 
-#if defined(IP_TOS)
-        {
-            unsigned int ecn = 2; /* ECN_ECT_0 */
-            /* Request setting ECN_1 in outgoing packets */
-            ret = setsockopt(sd, IPPROTO_IP, IP_TOS, &ecn, sizeof(ecn));
+            ret = setsockopt(sd, IPPROTO_IPV6, IPV6_TCLASS, (char *)&ecn, sizeof(ecn));
             if (ret < 0) {
-                DBG_PRINTF("setsockopt IP_TOS (0x%x) fails, errno: %d\n", ecn, errno);
+                DBG_PRINTF("setsockopt IPV6_TCLASS (0x%x) fails, errno: %d\n", ecn, GetLastError());
                 ret = -1;
                 *send_set = 0;
             }
@@ -179,13 +116,136 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
 #else
         *send_set = 0;
 #endif
+#ifdef IPV6_ECN
+        {
+            DWORD set = 1;
+            /* Request receiving TOS reports in recvmsg */
+            ret = setsockopt(sd, IPPROTO_IPV6, IPV6_ECN, (char *)&set, sizeof(set));
+            if (ret < 0) {
+                DBG_PRINTF("setsockopt IPV6_ECN (0x%x) fails, errno: %d\n", set, GetLastError());
+                ret = -1;
+                *recv_set = 0;
+            }
+            else {
+                *recv_set = 1;
+                ret = 0;
+            }
+        }
+#else
+#ifdef IPV6_RECVTCLASS
+        {
+            DWORD set = 1;
+            /* Request receiving TOS reports in recvmsg */
+            ret = setsockopt(sd, IPPROTO_IPV6, IPV6_RECVTCLASS, (char *)&set, sizeof(set));
+            *recv_set = (ret == 0);
+        }
+#else
+        *recv_set = 0;
+#endif
+#endif
+    }
+    else {
+#if defined(IP_TOS)
+        {
+            DWORD ecn = 2;
+            /* Request setting ECN_1 in outgoing packets */
+            ret = setsockopt(sd, IPPROTO_IP, IP_TOS, (char *)&ecn, sizeof(ecn));
+            if (ret < 0) {
+                DBG_PRINTF("setsockopt IP_TOS (0x%x) fails, errno: %d\n", ecn, GetLastError());
+                ret = -1;
+                *send_set = 0;
+            }
+            else {
+                *send_set = 1;
+                ret = 0;
+            }
+        }
+#else
+        *send_set = 0;
+#endif
+#ifdef IPV6_ECN
+        {
+            DWORD set = 1;
+            /* Request receiving ECN reports in recvmsg */
+            ret = setsockopt(sd, IPPROTO_IPV6, IP_ECN, (char *)&set, sizeof(set));
+            if (ret < 0) {
+                DBG_PRINTF("setsockopt IP_ECN (0x%x) fails, errno: %d\n", set, GetLastError());
+                ret = -1;
+                *recv_set = 0;
+            }
+            else {
+                *recv_set = 1;
+                ret = 0;
+            }
+        }
+#else
+#ifdef IPV6_RECVTCLASS
+        {
+            DWORD set = 1;
+            /* Request receiving TOS reports in recvmsg */
+            ret = setsockopt(sd, IPPROTO_IPV6, IPV6_RECVTCLASS, (char *)&set, sizeof(set));
+            if (ret < 0) {
+                DBG_PRINTF("setsockopt IP_RECVTCLASS (0x%x) fails, errno: %d\n", set, GetLastError());
+                ret = -1;
+                *recv_set = 0;
+            }
+            else {
+                *recv_set = 1;
+                ret = 0;
+            }
+        }
+#else
+        *recv_set = 0;
+#endif
+#endif 
+    }
+#else
+    if (af == AF_INET6) {
+#ifdef IP_RECVTOS
+        {
+            unsigned char set = 0x03;
+
+            /* Request receiving TOS reports in recvmsg */
+            if (setsockopt(sd, IPPROTO_IP, IP_RECVTOS, &set, sizeof(set)) < 0) {
+                DBG_PRINTF("setsockopt IPv6 IPRECVTOS (0x%x) fails, errno: %d\n", set, errno);
+                ret = -1;
+                *recv_set = 0;
+            }
+            else {
+                *recv_set = 1;
+                ret = 0;
+            }
+        }
+#else
+        DBG_PRINTF("%s", "IP_RECVTOS is not defined\n");
+        *recv_set = 0;
+#endif 
+#if defined(IP_TOS)
+        {
+            unsigned int ecn = 2; /* ECN_ECT_0 */
+            /* Request setting ECN_1 in outgoing packets */
+            ret = setsockopt(sd, IPPROTO_IP, IP_TOS, &ecn, sizeof(ecn));
+            if (ret < 0) {
+                DBG_PRINTF("setsockopt IPv6 IP_TOS (0x%x) fails, errno: %d\n", ecn, errno);
+                ret = -1;
+                *send_set = 0;
+            }
+            else {
+                *send_set = 1;
+                ret = 0;
+            }
+        }
+#else
+        DBG_PRINTF("%s", "IP_TOS is not defined\n");
+        *send_set = 0;
+#endif
 
     }
     else {
 
-#if defined(IP_TOS) && defined(INET_ECN_ECT_0)
+#if defined(IP_TOS)
         {
-            unsigned int ecn = INET_ECN_ECT_0;
+            unsigned int ecn = 2;
             /* Request setting ECN_1 in outgoing packets */
             ret = setsockopt(sd, IPPROTO_IP, IP_TOS, &ecn, sizeof(ecn));
             *send_set = (ret == 0);
@@ -218,6 +278,13 @@ SOCKET_TYPE picoquic_open_client_socket(int af)
         if (picoquic_socket_set_pkt_info(sd, af) != 0) {
             DBG_PRINTF("Cannot set PKTINFO option (af=%d)\n", af);
         }
+    }
+    else {
+#ifdef _WINDOWS
+        DBG_PRINTF("Cannot open socket(AF=%d), error: %d\n", af, GetLastError());
+#else
+        DBG_PRINTF("Cannot open socket(AF=%d), error: %d\n", af, errno);
+#endif
     }
 
     return sd;

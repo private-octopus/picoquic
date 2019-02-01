@@ -206,7 +206,16 @@ int socket_ecn_test_one(int af_domain)
 
 int socket_ecn_test()
 {
-    int ret = socket_ecn_test_one(AF_INET);
+    int ret;
+#ifdef _WINDOWS
+    WSADATA wsaData;
+
+    if (WSA_START(MAKEWORD(2, 2), &wsaData)) {
+        DBG_PRINTF("Cannot init WSA\n");
+        return -1;
+    }
+#endif
+    ret = socket_ecn_test_one(AF_INET);
 
     if (ret == 0) {
         ret = socket_ecn_test_one(AF_INET6);
