@@ -216,7 +216,7 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
             }
         }
 #else
-        DBG_PRINTF("%s", "IP_TOS is not defined\n");
+        DBG_PRINTF("%s", "IPV6_TCLASS is not defined\n");
         *send_set = 0;
 #endif
 #ifdef IPV6_RECVTCLASS
@@ -235,7 +235,7 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
             }
         }
 #else
-        DBG_PRINTF("%s", "IP_RECVTOS is not defined\n");
+        DBG_PRINTF("%s", "IPV6_RECVTCLASS is not defined\n");
         *recv_set = 0;
 #endif 
 
