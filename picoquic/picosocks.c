@@ -262,11 +262,11 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
 
 #ifdef IP_RECVTOS
         {
-            unsigned char set = 1;
+            unsigned int set = 1;
 
             /* Request receiving TOS reports in recvmsg */
             if (setsockopt(sd, IPPROTO_IP, IP_RECVTOS, &set, sizeof(set)) < 0) {
-                DBG_PRINTF("setsockopt IPv6 IP_RECVTOS (0x%x) fails, errno: %d\n", set, errno);
+                DBG_PRINTF("setsockopt IPv4 IP_RECVTOS (0x%x) fails, errno: %d\n", set, errno);
                 ret = -1;
                 *recv_set = 0;
             }

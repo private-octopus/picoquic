@@ -335,8 +335,7 @@ int main(int argc, char** argv)
                     if (test_status[i] == test_not_run) {
                         int resume_debug = 0;
                         nb_test_tried++;
-                        if (disable_debug &&
-                            strcmp(test_table[i].test_name, "socket_ecn") == 0) {
+                        if (disable_debug && i == 58) {
                             debug_printf_resume();
                             resume_debug = 1;
                         }
