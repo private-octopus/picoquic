@@ -1462,6 +1462,31 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header * ph
     return ret;
 }
 
+/*
+ * ECN Accounting. This is only called if the packet was processed successfully.
+ */
+void picoquic_ecn_accounting(picoquic_cnx_t* cnx,
+    unsigned char received_ecn, int path_id)
+{
+    if (path_id == 0) {
+        switch (received_ecn & 0x03) {
+        case 0x00:
+            break;
+        case 0x01: /* ECN_ECT_1 */
+            cnx->ecn_ect1_total_local++;
+            cnx->sending_ecn_ack |= 1;
+            break;
+        case 0x02: /* ECN_ECT_0 */
+            cnx->ecn_ect0_total_local++;
+            cnx->sending_ecn_ack |= 1;
+            break;
+        case 0x03: /* ECN_CE */
+            cnx->ecn_ce_total_local++;
+            cnx->sending_ecn_ack |= 1;
+            break;
+        }
+    }
+}
 
 /*
  * Processing of client encrypted packet.
@@ -1472,6 +1497,7 @@ int picoquic_incoming_encrypted(
     picoquic_packet_header* ph,
     struct sockaddr* addr_from,
     struct sockaddr* addr_to,
+    unsigned char received_ecn,
     uint64_t current_time)
 {
     int ret = 0;
@@ -1539,6 +1565,8 @@ int picoquic_incoming_encrypted(
             }
 
             if (ret == 0) {
+                /* Perform ECN accounting */
+                picoquic_ecn_accounting(cnx, received_ecn, path_id);
                 /* Processing of TLS messages  */
                 ret = picoquic_tls_stream_process(cnx);
             }
@@ -1565,6 +1593,7 @@ int picoquic_incoming_segment(
     struct sockaddr* addr_from,
     struct sockaddr* addr_to,
     int if_index_to,
+    unsigned char received_ecn,
     uint64_t current_time,
     picoquic_connection_id_t * previous_dest_id)
 {
@@ -1677,7 +1706,7 @@ int picoquic_incoming_segment(
                 ret = picoquic_incoming_0rtt(cnx, bytes, &ph, current_time);
                 break;
             case picoquic_packet_1rtt_protected:
-                ret = picoquic_incoming_encrypted(cnx, bytes, &ph, addr_from, addr_to, current_time);
+                ret = picoquic_incoming_encrypted(cnx, bytes, &ph, addr_from, addr_to, received_ecn, current_time);
                 /* TODO : roll key based on PHI */
                 break;
             default:
@@ -1744,6 +1773,7 @@ int picoquic_incoming_packet(
     struct sockaddr* addr_from,
     struct sockaddr* addr_to,
     int if_index_to,
+    unsigned char received_ecn,
     uint64_t current_time)
 {
     uint32_t consumed_index = 0;
@@ -1756,7 +1786,9 @@ int picoquic_incoming_packet(
 
         ret = picoquic_incoming_segment(quic, bytes + consumed_index, 
             packet_length - consumed_index, packet_length,
-            &consumed, addr_from, addr_to, if_index_to, current_time, &previous_destid);
+            &consumed, addr_from, addr_to, if_index_to, received_ecn, current_time, &previous_destid);
+
+        received_ecn = 0; /* Avoid doublecounting ECN bits in coalesced packets */
 
         if (ret == 0) {
             consumed_index += consumed;

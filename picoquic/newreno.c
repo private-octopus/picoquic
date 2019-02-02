@@ -131,6 +131,7 @@ void picoquic_newreno_notify(picoquic_path_t* path_x,
             }
             break;
         }
+        case picoquic_congestion_notification_ecn_ec:
         case picoquic_congestion_notification_repeat:
         case picoquic_congestion_notification_timeout:
             /* enter recovery */

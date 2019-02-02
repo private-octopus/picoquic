@@ -26,8 +26,9 @@
 /* clang-format off */
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
-#include <WinSock2.h>
 #include <Ws2def.h>
+#include <WinSock2.h>
+#include <ws2ipdef.h>
 #include <Mswsock.h>
 #include <assert.h>
 #include <iphlpapi.h>
@@ -119,12 +120,15 @@ int picoquic_open_server_sockets(picoquic_server_sockets_t* sockets, int port);
 
 void picoquic_close_server_sockets(picoquic_server_sockets_t* sockets);
 
+int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int * send_set);
+
 int picoquic_select(SOCKET_TYPE* sockets, int nb_sockets,
     struct sockaddr_storage* addr_from,
     socklen_t* from_length,
     struct sockaddr_storage* addr_dest,
     socklen_t* dest_length,
     unsigned long* dest_if,
+    unsigned char * received_ecn,
     uint8_t* buffer, int buffer_max,
     int64_t delta_t,
     uint64_t* current_time);

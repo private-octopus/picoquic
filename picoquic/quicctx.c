@@ -1729,7 +1729,7 @@ picoquic_stream_data_cb_fn picoquic_get_default_callback_function(picoquic_quic_
     return quic->default_callback_fn;
 }
 
-picoquic_stream_data_cb_fn picoquic_get_default_callback_context(picoquic_quic_t* quic)
+void * picoquic_get_default_callback_context(picoquic_quic_t* quic)
 {
     return quic->default_callback_ctx;
 }

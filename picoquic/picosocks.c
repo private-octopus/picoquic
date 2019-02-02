@@ -90,6 +90,201 @@ static int picoquic_socket_set_pkt_info(SOCKET_TYPE sd, int af)
     return ret;
 }
 
+int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int * send_set)
+{
+    int ret = -1;
+#ifdef _WINDOWS
+
+    if (af == AF_INET6) {
+
+        /* Request setting ECN_1 in outgoing packets */
+#if defined(IPV6_TCLASS)
+        {
+            DWORD ecn = 2;
+            /* Request setting ECN_1 in outgoing packets */
+            ret = setsockopt(sd, IPPROTO_IPV6, IPV6_TCLASS, (char *)&ecn, sizeof(ecn));
+            if (ret < 0) {
+                DBG_PRINTF("setsockopt IPV6_TCLASS (0x%x) fails, errno: %d\n", ecn, GetLastError());
+                ret = -1;
+                *send_set = 0;
+            }
+            else {
+                *send_set = 1;
+                ret = 0;
+            }
+        }
+#else
+        *send_set = 0;
+#endif
+#ifdef IPV6_ECN
+        {
+            DWORD set = 1;
+            /* Request receiving TOS reports in recvmsg */
+            ret = setsockopt(sd, IPPROTO_IPV6, IPV6_ECN, (char *)&set, sizeof(set));
+            if (ret < 0) {
+                DBG_PRINTF("setsockopt IPV6_ECN (0x%x) fails, errno: %d\n", set, GetLastError());
+                ret = -1;
+                *recv_set = 0;
+            }
+            else {
+                *recv_set = 1;
+                ret = 0;
+            }
+        }
+#else
+#ifdef IPV6_RECVTCLASS
+        {
+            DWORD set = 1;
+            /* Request receiving TOS reports in recvmsg */
+            ret = setsockopt(sd, IPPROTO_IPV6, IPV6_RECVTCLASS, (char *)&set, sizeof(set));
+            *recv_set = (ret == 0);
+        }
+#else
+        *recv_set = 0;
+#endif
+#endif
+    }
+    else {
+#if defined(IP_TOS)
+        {
+            DWORD ecn = 2;
+            /* Request setting ECN_1 in outgoing packets */
+            ret = setsockopt(sd, IPPROTO_IP, IP_TOS, (char *)&ecn, sizeof(ecn));
+            if (ret < 0) {
+                DBG_PRINTF("setsockopt IP_TOS (0x%x) fails, errno: %d\n", ecn, GetLastError());
+                ret = -1;
+                *send_set = 0;
+            }
+            else {
+                *send_set = 1;
+                ret = 0;
+            }
+        }
+#else
+        *send_set = 0;
+#endif
+#ifdef IPV6_ECN
+        {
+            DWORD set = 1;
+            /* Request receiving ECN reports in recvmsg */
+            ret = setsockopt(sd, IPPROTO_IPV6, IP_ECN, (char *)&set, sizeof(set));
+            if (ret < 0) {
+                DBG_PRINTF("setsockopt IP_ECN (0x%x) fails, errno: %d\n", set, GetLastError());
+                ret = -1;
+                *recv_set = 0;
+            }
+            else {
+                *recv_set = 1;
+                ret = 0;
+            }
+        }
+#else
+#ifdef IPV6_RECVTCLASS
+        {
+            DWORD set = 1;
+            /* Request receiving TOS reports in recvmsg */
+            ret = setsockopt(sd, IPPROTO_IPV6, IPV6_RECVTCLASS, (char *)&set, sizeof(set));
+            if (ret < 0) {
+                DBG_PRINTF("setsockopt IP_RECVTCLASS (0x%x) fails, errno: %d\n", set, GetLastError());
+                ret = -1;
+                *recv_set = 0;
+            }
+            else {
+                *recv_set = 1;
+                ret = 0;
+            }
+        }
+#else
+        *recv_set = 0;
+#endif
+#endif 
+    }
+#else
+    if (af == AF_INET6) {
+#if defined(IPV6_TCLASS)
+        {
+            unsigned int ecn = 2; /* ECN_ECT_0 */
+            /* Request setting ECN_1 in outgoing packets */
+            if (setsockopt(sd, IPPROTO_IPV6, IPV6_TCLASS, &ecn, sizeof(ecn)) < 0) {
+                DBG_PRINTF("setsockopt IPV6_TCLASS (0x%x) fails, errno: %d\n", ecn, errno);
+                ret = -1;
+                *send_set = 0;
+            }
+            else {
+                *send_set = 1;
+                ret = 0;
+            }
+        }
+#else
+        DBG_PRINTF("%s", "IPV6_TCLASS is not defined\n");
+        *send_set = 0;
+#endif
+#ifdef IPV6_RECVTCLASS
+        {
+            unsigned int set = 0x01;
+
+            /* Request receiving TOS reports in recvmsg */
+            if (setsockopt(sd, IPPROTO_IPV6, IPV6_RECVTCLASS, &set, sizeof(set)) < 0) {
+                DBG_PRINTF("setsockopt IPv6 IPV6_RECVTCLASS (0x%x) fails, errno: %d\n", set, errno);
+                ret = -1;
+                *recv_set = 0;
+            }
+            else {
+                *recv_set = 1;
+                ret = 0;
+            }
+        }
+#else
+        DBG_PRINTF("%s", "IPV6_RECVTCLASS is not defined\n");
+        *recv_set = 0;
+#endif 
+
+    }
+    else {
+#if defined(IP_TOS)
+        {
+            unsigned int ecn = 2;
+            /* Request setting ECN_1 in outgoing packets */
+            if (setsockopt(sd, IPPROTO_IP, IP_TOS, &ecn, sizeof(ecn)) < 0) {
+                DBG_PRINTF("setsockopt IPv4 IP_TOS (0x%x) fails, errno: %d\n", ecn, errno);
+                ret = -1;
+                *send_set = 0;
+            }
+            else {
+                *send_set = 1;
+                ret = 0;
+            }
+        }
+#else
+        *send_set = 0;
+        DBG_PRINTF("%s", "IP_TOS is not defined\n");
+#endif
+
+#ifdef IP_RECVTOS
+        {
+            unsigned int set = 1;
+
+            /* Request receiving TOS reports in recvmsg */
+            if (setsockopt(sd, IPPROTO_IP, IP_RECVTOS, &set, sizeof(set)) < 0) {
+                DBG_PRINTF("setsockopt IPv4 IP_RECVTOS (0x%x) fails, errno: %d\n", set, errno);
+                ret = -1;
+                *recv_set = 0;
+            }
+            else {
+                *recv_set = 1;
+                ret = 0;
+            }
+        }
+#else
+        *recv_set = 0;
+        DBG_PRINTF("%s", "IP_RECVTOS is not defined\n");
+#endif
+    }
+#endif
+
+    return ret;
+}
+
 SOCKET_TYPE picoquic_open_client_socket(int af)
 {
     SOCKET_TYPE sd = socket(af, SOCK_DGRAM, IPPROTO_UDP);
@@ -98,6 +293,13 @@ SOCKET_TYPE picoquic_open_client_socket(int af)
         if (picoquic_socket_set_pkt_info(sd, af) != 0) {
             DBG_PRINTF("Cannot set PKTINFO option (af=%d)\n", af);
         }
+    }
+    else {
+#ifdef _WINDOWS
+        DBG_PRINTF("Cannot open socket(AF=%d), error: %d\n", af, GetLastError());
+#else
+        DBG_PRINTF("Cannot open socket(AF=%d), error: %d\n", af, errno);
+#endif
     }
 
     return sd;
@@ -145,6 +347,7 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
     struct sockaddr_storage* addr_dest,
     socklen_t* dest_length,
     unsigned long* dest_if,
+    unsigned char* received_ecn,
     uint8_t* buffer, int buffer_max)
 #ifdef _WINDOWS
 {
@@ -165,6 +368,10 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
 
     if (dest_if != NULL) {
         *dest_if = 0;
+    }
+
+    if (received_ecn != NULL) {
+        *received_ecn = 0;
     }
 
     nResult = WSAIoctl(fd, SIO_GET_EXTENSION_FUNCTION_POINTER,
@@ -206,31 +413,51 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
 
             /* Get the control information */
             for (cmsg = WSA_CMSG_FIRSTHDR(&msg); cmsg != NULL; cmsg = WSA_CMSG_NXTHDR(&msg, cmsg)) {
-                if ((cmsg->cmsg_level == IPPROTO_IP) && (cmsg->cmsg_type == IP_PKTINFO)) {
-                    if (addr_dest != NULL && dest_length != NULL) {
-                        IN_PKTINFO* pPktInfo = (IN_PKTINFO*)WSA_CMSG_DATA(cmsg);
-                        ((struct sockaddr_in*)addr_dest)->sin_family = AF_INET;
-                        ((struct sockaddr_in*)addr_dest)->sin_port = 0;
-                        ((struct sockaddr_in*)addr_dest)->sin_addr.s_addr = pPktInfo->ipi_addr.s_addr;
-                        *dest_length = sizeof(struct sockaddr_in);
+                if (cmsg->cmsg_level == IPPROTO_IP){
+                    if (cmsg->cmsg_type == IP_PKTINFO) {
+                        if (addr_dest != NULL && dest_length != NULL) {
+                            IN_PKTINFO* pPktInfo = (IN_PKTINFO*)WSA_CMSG_DATA(cmsg);
+                            ((struct sockaddr_in*)addr_dest)->sin_family = AF_INET;
+                            ((struct sockaddr_in*)addr_dest)->sin_port = 0;
+                            ((struct sockaddr_in*)addr_dest)->sin_addr.s_addr = pPktInfo->ipi_addr.s_addr;
+                            *dest_length = sizeof(struct sockaddr_in);
 
-                        if (dest_if != NULL) {
-                            *dest_if = pPktInfo->ipi_ifindex;
+                            if (dest_if != NULL) {
+                                *dest_if = pPktInfo->ipi_ifindex;
+                            }
+                        }
+                        else if (cmsg->cmsg_type == IP_TOS && cmsg->cmsg_len > 0) {
+                            if (received_ecn != NULL) {
+                                *received_ecn = *((unsigned char *)WSA_CMSG_DATA(cmsg));
+                            }
                         }
                     }
-                } else if ((cmsg->cmsg_level == IPPROTO_IPV6) && (cmsg->cmsg_type == IPV6_PKTINFO)) {
-                    if (addr_dest != NULL && dest_length != NULL) {
-                        IN6_PKTINFO* pPktInfo6 = (IN6_PKTINFO*)WSA_CMSG_DATA(cmsg);
-                        ((struct sockaddr_in6*)addr_dest)->sin6_family = AF_INET6;
-                        ((struct sockaddr_in6*)addr_dest)->sin6_port = 0;
-                        memcpy(&((struct sockaddr_in6*)addr_dest)->sin6_addr, &pPktInfo6->ipi6_addr, sizeof(IN6_ADDR));
-                        *dest_length = sizeof(struct sockaddr_in6);
+                } else if (cmsg->cmsg_level == IPPROTO_IPV6) {
+                    if (cmsg->cmsg_type == IPV6_PKTINFO) {
+                        if (addr_dest != NULL && dest_length != NULL) {
+                            IN6_PKTINFO* pPktInfo6 = (IN6_PKTINFO*)WSA_CMSG_DATA(cmsg);
+                                ((struct sockaddr_in6*)addr_dest)->sin6_family = AF_INET6;
+                                ((struct sockaddr_in6*)addr_dest)->sin6_port = 0;
+                                memcpy(&((struct sockaddr_in6*)addr_dest)->sin6_addr, &pPktInfo6->ipi6_addr, sizeof(IN6_ADDR));
+                                *dest_length = sizeof(struct sockaddr_in6);
 
-                        if (dest_if != NULL) {
-                            *dest_if = pPktInfo6->ipi6_ifindex;
+                                if (dest_if != NULL) {
+                                    *dest_if = pPktInfo6->ipi6_ifindex;
+                                }
                         }
+                    }
+                    else if (cmsg->cmsg_type == IPV6_TCLASS
+#ifdef IPV6_ECN
+                        || cmsg->cmsg_type == IPV6_ECN
+#endif
+                        ){
+                        if (cmsg->cmsg_len > 0 && received_ecn != NULL) {
+                            *received_ecn = *((unsigned char *)WSA_CMSG_DATA(cmsg));
+                        }
+
                     }
                 }
+
             }
         }
     }
@@ -273,46 +500,61 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
         *from_length = msg.msg_namelen;
 
         for (cmsg = CMSG_FIRSTHDR(&msg); cmsg != NULL; cmsg = CMSG_NXTHDR(&msg, cmsg)) {
+            if (cmsg->cmsg_level == IPPROTO_IP) {
 #ifdef IP_PKTINFO
-            if ((cmsg->cmsg_level == IPPROTO_IP) && (cmsg->cmsg_type == IP_PKTINFO)) {
-                if (addr_dest != NULL && dest_length != NULL) {
-                    struct in_pktinfo* pPktInfo = (struct in_pktinfo*)CMSG_DATA(cmsg);
-                    ((struct sockaddr_in*)addr_dest)->sin_family = AF_INET;
-                    ((struct sockaddr_in*)addr_dest)->sin_port = 0;
-                    ((struct sockaddr_in*)addr_dest)->sin_addr.s_addr = pPktInfo->ipi_addr.s_addr;
-                    *dest_length = sizeof(struct sockaddr_in);
+                if (cmsg->cmsg_type == IP_PKTINFO) {
+                    if (addr_dest != NULL && dest_length != NULL) {
+                        struct in_pktinfo* pPktInfo = (struct in_pktinfo*)CMSG_DATA(cmsg);
+                        ((struct sockaddr_in*)addr_dest)->sin_family = AF_INET;
+                        ((struct sockaddr_in*)addr_dest)->sin_port = 0;
+                        ((struct sockaddr_in*)addr_dest)->sin_addr.s_addr = pPktInfo->ipi_addr.s_addr;
+                        *dest_length = sizeof(struct sockaddr_in);
 
-                    if (dest_if != NULL) {
-                        *dest_if = pPktInfo->ipi_ifindex;
+                        if (dest_if != NULL) {
+                            *dest_if = pPktInfo->ipi_ifindex;
+                        }
                     }
                 }
 #else
-            /* The IP_PKTINFO structure is not defined on BSD */
-            if ((cmsg->cmsg_level == IPPROTO_IP) && (cmsg->cmsg_type == IP_RECVDSTADDR)) {
-                if (addr_dest != NULL && dest_length != NULL) {
-                    struct in_addr* pPktInfo = (struct in_addr*)CMSG_DATA(cmsg);
-                    ((struct sockaddr_in*)addr_dest)->sin_family = AF_INET;
-                    ((struct sockaddr_in*)addr_dest)->sin_port = 0;
-                    ((struct sockaddr_in*)addr_dest)->sin_addr.s_addr = pPktInfo->s_addr;
-                    *dest_length = sizeof(struct sockaddr_in);
+                /* The IP_PKTINFO structure is not defined on BSD */
+                if (cmsg->cmsg_type == IP_RECVDSTADDR) {
+                    if (addr_dest != NULL && dest_length != NULL) {
+                        struct in_addr* pPktInfo = (struct in_addr*)CMSG_DATA(cmsg);
+                        ((struct sockaddr_in*)addr_dest)->sin_family = AF_INET;
+                        ((struct sockaddr_in*)addr_dest)->sin_port = 0;
+                        ((struct sockaddr_in*)addr_dest)->sin_addr.s_addr = pPktInfo->s_addr;
+                        *dest_length = sizeof(struct sockaddr_in);
 
-                    if (dest_if != NULL) {
-                        *dest_if = 0;
+                        if (dest_if != NULL) {
+                            *dest_if = 0;
+                        }
                     }
                 }
-
 #endif
-            } else if ((cmsg->cmsg_level == IPPROTO_IPV6) && (cmsg->cmsg_type == IPV6_PKTINFO)) {
-                if (addr_dest != NULL && dest_length != NULL) {
-                    struct in6_pktinfo* pPktInfo6 = (struct in6_pktinfo*)CMSG_DATA(cmsg);
+                else if (cmsg->cmsg_type == IP_TOS && cmsg->cmsg_len > 0) {
+                    if (received_ecn != NULL) {
+                        *received_ecn = *((unsigned char *)CMSG_DATA(cmsg));
+                    }
+                }
+            }
+            else if (cmsg->cmsg_level == IPPROTO_IPV6) {
+                if (cmsg->cmsg_type == IPV6_PKTINFO) {
+                    if (addr_dest != NULL && dest_length != NULL) {
+                        struct in6_pktinfo* pPktInfo6 = (struct in6_pktinfo*)CMSG_DATA(cmsg);
 
-                    ((struct sockaddr_in6*)addr_dest)->sin6_family = AF_INET6;
-                    ((struct sockaddr_in6*)addr_dest)->sin6_port = 0;
-                    memcpy(&((struct sockaddr_in6*)addr_dest)->sin6_addr, &pPktInfo6->ipi6_addr, sizeof(struct in6_addr));
-                    *dest_length = sizeof(struct sockaddr_in6);
+                        ((struct sockaddr_in6*)addr_dest)->sin6_family = AF_INET6;
+                        ((struct sockaddr_in6*)addr_dest)->sin6_port = 0;
+                        memcpy(&((struct sockaddr_in6*)addr_dest)->sin6_addr, &pPktInfo6->ipi6_addr, sizeof(struct in6_addr));
+                        *dest_length = sizeof(struct sockaddr_in6);
 
-                    if (dest_if != NULL) {
-                        *dest_if = pPktInfo6->ipi6_ifindex;
+                        if (dest_if != NULL) {
+                            *dest_if = pPktInfo6->ipi6_ifindex;
+                        }
+                    }
+                }
+                else if (cmsg->cmsg_type == IPV6_TCLASS) {
+                    if (cmsg->cmsg_len > 0 && received_ecn != NULL) {
+                        *received_ecn = *((unsigned char *)CMSG_DATA(cmsg));
                     }
                 }
             }
@@ -600,6 +842,7 @@ int picoquic_select(SOCKET_TYPE* sockets,
     struct sockaddr_storage* addr_dest,
     socklen_t* dest_length,
     unsigned long* dest_if,
+    unsigned char * received_ecn,
     uint8_t* buffer, int buffer_max,
     int64_t delta_t,
     uint64_t* current_time)
@@ -609,6 +852,10 @@ int picoquic_select(SOCKET_TYPE* sockets,
     int ret_select = 0;
     int bytes_recv = 0;
     int sockmax = 0;
+
+    if (received_ecn != NULL) {
+        *received_ecn = 0;
+    }
 
     FD_ZERO(&readfds);
 
@@ -641,9 +888,8 @@ int picoquic_select(SOCKET_TYPE* sockets,
         for (int i = 0; i < nb_sockets; i++) {
             if (FD_ISSET(sockets[i], &readfds)) {
                 bytes_recv = picoquic_recvmsg(sockets[i], addr_from, from_length,
-                    addr_dest, dest_length, dest_if,
+                    addr_dest, dest_length, dest_if, received_ecn,
                     buffer, buffer_max);
-                // bytes_recv = recvfrom(socket[i], buffer, buffer_max, 0, addr_from, from_length);
 
                 if (bytes_recv <= 0) {
 #ifdef _WINDOWS

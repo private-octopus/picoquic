@@ -2090,9 +2090,19 @@ uint8_t* picoquic_decode_ack_frame_maybe_ecn(picoquic_cnx_t* cnx, uint8_t* bytes
     }
 
     if (bytes != 0 && is_ecn) {
-        cnx->ecn_ect0_total_remote = ecnx3[0];
-        cnx->ecn_ect1_total_remote = ecnx3[1];
-        cnx->ecn_ce_total_remote = ecnx3[2];
+        if (ecnx3[0] > cnx->ecn_ect0_total_remote) {
+            cnx->ecn_ect0_total_remote = ecnx3[0];
+        }
+        if (ecnx3[1] > cnx->ecn_ect1_total_remote) {
+            cnx->ecn_ect1_total_remote = ecnx3[1];
+        }
+        if (ecnx3[2] > cnx->ecn_ce_total_remote) {
+            cnx->ecn_ce_total_remote = ecnx3[2];
+
+            cnx->congestion_alg->alg_notify(cnx->path[0],
+                picoquic_congestion_notification_ecn_ec,
+                0, 0, cnx->pkt_ctx[pc].first_sack_item.end_of_sack_range, current_time);
+        }
     }
 
     return bytes;
@@ -2123,7 +2133,7 @@ static int encode_ecn_block(picoquic_cnx_t* cnx, uint8_t* bytes, size_t bytes_ma
 
     l_ect1 = picoquic_varint_encode(bytes + *byte_index, bytes_max - *byte_index,
         cnx->ecn_ect1_total_local);
-    *byte_index += l_ect0;
+    *byte_index += l_ect1;
 
     l_ce = picoquic_varint_encode(bytes + *byte_index, bytes_max - *byte_index,
         cnx->ecn_ce_total_local);
@@ -2256,6 +2266,13 @@ int picoquic_prepare_ack_frame_maybe_ecn(picoquic_cnx_t* cnx, uint64_t current_t
 }
 
 int picoquic_prepare_ack_frame(picoquic_cnx_t* cnx, uint64_t current_time,
+    picoquic_packet_context_enum pc,
+    uint8_t* bytes, size_t bytes_max, size_t* consumed) {
+    return picoquic_prepare_ack_frame_maybe_ecn(cnx, current_time, pc, bytes, bytes_max, consumed,
+        cnx->sending_ecn_ack);
+}
+
+int picoquic_prepare_ack_frame_basic(picoquic_cnx_t* cnx, uint64_t current_time,
     picoquic_packet_context_enum pc,
     uint8_t* bytes, size_t bytes_max, size_t* consumed) {
     return picoquic_prepare_ack_frame_maybe_ecn(cnx, current_time, pc, bytes, bytes_max, consumed, 0);

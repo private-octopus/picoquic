@@ -467,7 +467,7 @@ void picoquic_set_callback(picoquic_cnx_t* cnx,
 
 picoquic_stream_data_cb_fn picoquic_get_default_callback_function(picoquic_quic_t * quic);
 
-picoquic_stream_data_cb_fn picoquic_get_default_callback_context(picoquic_quic_t * quic);
+void * picoquic_get_default_callback_context(picoquic_quic_t * quic);
 
 picoquic_stream_data_cb_fn picoquic_get_callback_function(picoquic_cnx_t * cnx);
 
@@ -488,6 +488,7 @@ int picoquic_incoming_packet(
     struct sockaddr* addr_from,
     struct sockaddr* addr_to,
     int if_index_to,
+    unsigned char received_ecn,
     uint64_t current_time);
 
 picoquic_packet_t* picoquic_create_packet();
@@ -561,7 +562,8 @@ typedef enum {
     picoquic_congestion_notification_repeat,
     picoquic_congestion_notification_timeout,
     picoquic_congestion_notification_spurious_repeat,
-    picoquic_congestion_notification_rtt_measurement
+    picoquic_congestion_notification_rtt_measurement,
+    picoquic_congestion_notification_ecn_ec
 } picoquic_congestion_notification_t;
 
 typedef void (*picoquic_congestion_algorithm_init)(picoquic_path_t* path_x);
