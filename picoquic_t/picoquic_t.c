@@ -333,13 +333,22 @@ int main(int argc, char** argv)
             if (optind >= argc) {
                 for (size_t i = 0; i < nb_tests; i++) {
                     if (test_status[i] == test_not_run) {
+                        int resume_debug = 0;
                         nb_test_tried++;
+                        if (disable_debug &&
+                            strcmp(test_table[i].test_name, "socket_ecn") == 0) {
+                            debug_printf_resume();
+                            resume_debug = 1;
+                        }
                         if (do_one_test(i, stdout) != 0) {
                             test_status[i] = test_failed;
                             nb_test_failed++;
                             ret = -1;
                         } else {
                             test_status[i] = test_success;
+                        }
+                        if (resume_debug) {
+                            debug_printf_suspend();
                         }
                     }
                     else if (stress_minutes == 0) {
