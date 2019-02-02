@@ -647,6 +647,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int key_phase_enc : 1; /* Key phase used in outgoing packets */
     unsigned int key_phase_dec : 1; /* Key phase expected in incoming packets */
     unsigned int zero_rtt_data_accepted : 1; /* Peer confirmed acceptance of zero rtt data */
+    unsigned int sending_ecn_ack : 1; /* ECN data has been received, should be cpoied in acks */
 
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;
@@ -1013,6 +1014,9 @@ uint8_t* picoquic_decode_crypto_hs_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
 int picoquic_prepare_crypto_hs_frame(picoquic_cnx_t* cnx, int epoch,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
 int picoquic_prepare_ack_frame(picoquic_cnx_t* cnx, uint64_t current_time,
+    picoquic_packet_context_enum pc,
+    uint8_t* bytes, size_t bytes_max, size_t* consumed);
+int picoquic_prepare_ack_frame_basic(picoquic_cnx_t* cnx, uint64_t current_time,
     picoquic_packet_context_enum pc,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
 int picoquic_prepare_connection_close_frame(picoquic_cnx_t* cnx,

@@ -291,7 +291,7 @@ int sendacktest()
 
         if (ret == 0) {
             consumed = 0;
-            ret = picoquic_prepare_ack_frame(&cnx, 0, pc, bytes, sizeof(bytes), &consumed);
+            ret = picoquic_prepare_ack_frame_basic(&cnx, 0, pc, bytes, sizeof(bytes), &consumed);
 
             received_mask |= 1ull << (test_pn64[i] & 63);
 

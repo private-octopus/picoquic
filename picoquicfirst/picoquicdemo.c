@@ -251,7 +251,7 @@ int quic_server(const char* server_name, int server_port,
                 /* Submit the packet to the server */
                 ret = picoquic_incoming_packet(qserver, buffer,
                     (size_t)bytes_recv, (struct sockaddr*)&addr_from,
-                    (struct sockaddr*)&addr_to, if_index_to,
+                    (struct sockaddr*)&addr_to, if_index_to, received_ecn,
                     current_time);
 
                 if (ret != 0) {
@@ -710,7 +710,7 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
                 /* Submit the packet to the client */
                 ret = picoquic_incoming_packet(qclient, buffer,
                     (size_t)bytes_recv, (struct sockaddr*)&packet_from,
-                    (struct sockaddr*)&packet_to, if_index_to,
+                    (struct sockaddr*)&packet_to, if_index_to, received_ecn,
                     current_time);
                 client_receive_loop++;
 

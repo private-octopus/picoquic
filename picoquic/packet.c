@@ -1553,6 +1553,30 @@ int picoquic_incoming_encrypted(
 }
 
 /*
+ * ECN Accounting. This is only called if the packet was processed successfully.
+ */
+void picoquic_ecn_accounting(picoquic_cnx_t* cnx,
+    unsigned char received_ecn)
+{
+    switch (received_ecn & 0x03) {
+    case 0x00:
+        break;
+    case 0x01: /* ECN_ECT_1 */
+        cnx->ecn_ect1_total_local++;
+        cnx->sending_ecn_ack |= 1;
+        break;
+    case 0x02: /* ECN_ECT_0 */
+        cnx->ecn_ect0_total_local++;
+        cnx->sending_ecn_ack |= 1;
+        break;
+    case 0x03: /* ECN_CE */
+        cnx->ecn_ce_total_local++;
+        cnx->sending_ecn_ack |= 1;
+        break;
+    }
+}
+
+/*
 * Processing of the packet that was just received from the network.
 */
 
@@ -1565,6 +1589,7 @@ int picoquic_incoming_segment(
     struct sockaddr* addr_from,
     struct sockaddr* addr_to,
     int if_index_to,
+    unsigned char received_ecn,
     uint64_t current_time,
     picoquic_connection_id_t * previous_dest_id)
 {
@@ -1695,6 +1720,8 @@ int picoquic_incoming_segment(
     if (ret == 0 || ret == PICOQUIC_ERROR_SPURIOUS_REPEAT) {
         if (cnx != NULL && cnx->cnx_state != picoquic_state_disconnected &&
             ph.ptype != picoquic_packet_version_negotiation) {
+            /* Perform ECN accounting */
+            picoquic_ecn_accounting(cnx, received_ecn);
             /* Mark the sequence number as received */
             ret = picoquic_record_pn_received(cnx, ph.pc, ph.pn64, current_time);
         }
@@ -1744,6 +1771,7 @@ int picoquic_incoming_packet(
     struct sockaddr* addr_from,
     struct sockaddr* addr_to,
     int if_index_to,
+    unsigned char received_ecn,
     uint64_t current_time)
 {
     uint32_t consumed_index = 0;
@@ -1756,7 +1784,9 @@ int picoquic_incoming_packet(
 
         ret = picoquic_incoming_segment(quic, bytes + consumed_index, 
             packet_length - consumed_index, packet_length,
-            &consumed, addr_from, addr_to, if_index_to, current_time, &previous_destid);
+            &consumed, addr_from, addr_to, if_index_to, received_ecn, current_time, &previous_destid);
+
+        received_ecn = 0; /* Avoid doublecounting ECN bits in coalesced packets */
 
         if (ret == 0) {
             consumed_index += consumed;

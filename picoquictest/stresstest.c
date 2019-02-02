@@ -533,7 +533,7 @@ static int stress_handle_packet_arrival(picoquic_stress_ctx_t * ctx, picoquic_qu
         if (picoquic_compare_addr(dest_addr, (struct sockaddr*)&packet->addr_to) == 0) {
             ret = picoquic_incoming_packet(q, packet->bytes, (uint32_t)packet->length,
                 (struct sockaddr*)&packet->addr_from,
-                (struct sockaddr*)&packet->addr_to, 0,
+                (struct sockaddr*)&packet->addr_to, 0, 0,
                 ctx->simulated_time);
 
             if (ret != 0) {

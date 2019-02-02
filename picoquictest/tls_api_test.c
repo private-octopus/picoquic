@@ -930,7 +930,7 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                 (struct sockaddr *)&packet->addr_to) == 0) {
                 ret = picoquic_incoming_packet(test_ctx->qclient, packet->bytes, (uint32_t)packet->length,
                     (struct sockaddr*)&packet->addr_from,
-                    (struct sockaddr*)&packet->addr_to, 0,
+                    (struct sockaddr*)&packet->addr_to, 0, 0,
                     *simulated_time);
                 *was_active |= 1;
             }
@@ -955,7 +955,7 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                 (struct sockaddr *)&packet->addr_to) == 0) {
                 ret = picoquic_incoming_packet(test_ctx->qserver, packet->bytes, (uint32_t)packet->length,
                     (struct sockaddr*)&packet->addr_from,
-                    (struct sockaddr*)&packet->addr_to, 0,
+                    (struct sockaddr*)&packet->addr_to, 0, 0,
                     *simulated_time);
             }
 
@@ -1665,7 +1665,7 @@ int tls_api_bad_server_reset_test()
         /* Submit bogus request to client */
         ret = picoquic_incoming_packet(test_ctx->qclient, buffer, sizeof(buffer),
             (struct sockaddr*)(&test_ctx->server_addr),
-            (struct sockaddr*)(&test_ctx->client_addr), 0,
+            (struct sockaddr*)(&test_ctx->client_addr), 0, 0,
             simulated_time);
     }
 
@@ -3971,7 +3971,7 @@ int rebinding_stress_test()
                         test_ctx->c_to_s_link->last_packet->bytes,
                         (uint32_t)test_ctx->c_to_s_link->last_packet->length,
                         bad_address,
-                        (struct sockaddr*)&test_ctx->c_to_s_link->last_packet->addr_to, 0,
+                        (struct sockaddr*)&test_ctx->c_to_s_link->last_packet->addr_to, 0, 0,
                         simulated_time);
                 }
             }

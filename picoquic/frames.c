@@ -2123,7 +2123,7 @@ static int encode_ecn_block(picoquic_cnx_t* cnx, uint8_t* bytes, size_t bytes_ma
 
     l_ect1 = picoquic_varint_encode(bytes + *byte_index, bytes_max - *byte_index,
         cnx->ecn_ect1_total_local);
-    *byte_index += l_ect0;
+    *byte_index += l_ect1;
 
     l_ce = picoquic_varint_encode(bytes + *byte_index, bytes_max - *byte_index,
         cnx->ecn_ce_total_local);
@@ -2256,6 +2256,13 @@ int picoquic_prepare_ack_frame_maybe_ecn(picoquic_cnx_t* cnx, uint64_t current_t
 }
 
 int picoquic_prepare_ack_frame(picoquic_cnx_t* cnx, uint64_t current_time,
+    picoquic_packet_context_enum pc,
+    uint8_t* bytes, size_t bytes_max, size_t* consumed) {
+    return picoquic_prepare_ack_frame_maybe_ecn(cnx, current_time, pc, bytes, bytes_max, consumed,
+        cnx->sending_ecn_ack);
+}
+
+int picoquic_prepare_ack_frame_basic(picoquic_cnx_t* cnx, uint64_t current_time,
     picoquic_packet_context_enum pc,
     uint8_t* bytes, size_t bytes_max, size_t* consumed) {
     return picoquic_prepare_ack_frame_maybe_ecn(cnx, current_time, pc, bytes, bytes_max, consumed, 0);
