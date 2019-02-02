@@ -216,6 +216,7 @@ int quic_server(const char* server_name, int server_port,
     while (ret == 0 && (just_once == 0 || cnx_server == NULL || picoquic_get_cnx_state(cnx_server) != picoquic_state_disconnected)) {
         int64_t delta_t = picoquic_get_next_wake_delay(qserver, current_time, delay_max);
         uint64_t time_before = current_time;
+        unsigned char received_ecn;
 
         from_length = to_length = sizeof(struct sockaddr_storage);
         if_index_to = 0;
@@ -226,7 +227,7 @@ int quic_server(const char* server_name, int server_port,
 
         bytes_recv = picoquic_select(server_sockets.s_socket, PICOQUIC_NB_SERVER_SOCKETS,
             &addr_from, &from_length,
-            &addr_to, &to_length, &if_index_to,
+            &addr_to, &to_length, &if_index_to, &received_ecn,
             buffer, sizeof(buffer),
             delta_t, &current_time);
 
@@ -650,6 +651,7 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
 
     /* Wait for packets */
     while (ret == 0 && picoquic_get_cnx_state(cnx_client) != picoquic_state_disconnected) {
+        unsigned char received_ecn;
         if (picoquic_is_cnx_backlog_empty(cnx_client) && callback_ctx.nb_open_streams == 0) {
             delay_max = 10000;
         } else {
@@ -659,7 +661,7 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
         from_length = to_length = sizeof(struct sockaddr_storage);
 
         bytes_recv = picoquic_select(&fd, 1, &packet_from, &from_length,
-            &packet_to, &to_length, &if_index_to,
+            &packet_to, &to_length, &if_index_to, &received_ecn,
             buffer, sizeof(buffer),
             delta_t,
             &current_time);
