@@ -221,7 +221,7 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
 #endif
 #ifdef IPV6_RECVTCLASS
         {
-            unsigned char set = 0x01;
+            unsigned int set = 0x01;
 
             /* Request receiving TOS reports in recvmsg */
             if (setsockopt(sd, IPPROTO_IPV6, IPV6_RECVTCLASS, &set, sizeof(set)) < 0) {
