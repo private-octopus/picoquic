@@ -1466,7 +1466,7 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header * ph
  * ECN Accounting. This is only called if the packet was processed successfully.
  */
 void picoquic_ecn_accounting(picoquic_cnx_t* cnx,
-    unsigned char received_ecn, int path_id, uint64_t pn64, uint64_t current_time )
+    unsigned char received_ecn, int path_id)
 {
     if (path_id == 0) {
         switch (received_ecn & 0x03) {
@@ -1483,10 +1483,6 @@ void picoquic_ecn_accounting(picoquic_cnx_t* cnx,
         case 0x03: /* ECN_CE */
             cnx->ecn_ce_total_local++;
             cnx->sending_ecn_ack |= 1;
-
-            cnx->congestion_alg->alg_notify(cnx->path[0],
-                picoquic_congestion_notification_ecn_ec,
-                0, 0, pn64, current_time);
             break;
         }
     }
@@ -1569,9 +1565,8 @@ int picoquic_incoming_encrypted(
             }
 
             if (ret == 0) {
-
                 /* Perform ECN accounting */
-                picoquic_ecn_accounting(cnx, received_ecn, path_id, ph->pn64, current_time);
+                picoquic_ecn_accounting(cnx, received_ecn, path_id);
                 /* Processing of TLS messages  */
                 ret = picoquic_tls_stream_process(cnx);
             }

@@ -554,7 +554,7 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
                 }
                 else if (cmsg->cmsg_type == IPV6_TCLASS) {
                     if (cmsg->cmsg_len > 0 && received_ecn != NULL) {
-                        *received_ecn = *((unsigned char *)WSA_CMSG_DATA(cmsg));
+                        *received_ecn = *((unsigned char *)CMSG_DATA(cmsg));
                     }
                 }
             }

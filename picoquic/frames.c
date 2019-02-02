@@ -2090,9 +2090,19 @@ uint8_t* picoquic_decode_ack_frame_maybe_ecn(picoquic_cnx_t* cnx, uint8_t* bytes
     }
 
     if (bytes != 0 && is_ecn) {
-        cnx->ecn_ect0_total_remote = ecnx3[0];
-        cnx->ecn_ect1_total_remote = ecnx3[1];
-        cnx->ecn_ce_total_remote = ecnx3[2];
+        if (ecnx3[0] > cnx->ecn_ect0_total_remote) {
+            cnx->ecn_ect0_total_remote = ecnx3[0];
+        }
+        if (ecnx3[1] > cnx->ecn_ect1_total_remote) {
+            cnx->ecn_ect1_total_remote = ecnx3[1];
+        }
+        if (ecnx3[2] > cnx->ecn_ce_total_remote) {
+            cnx->ecn_ce_total_remote = ecnx3[2];
+
+            cnx->congestion_alg->alg_notify(cnx->path[0],
+                picoquic_congestion_notification_ecn_ec,
+                0, 0, cnx->pkt_ctx[pc].first_sack_item.end_of_sack_range, current_time);
+        }
     }
 
     return bytes;
