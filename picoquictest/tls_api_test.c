@@ -2115,13 +2115,14 @@ int session_resume_test()
 /*
  * Zero RTT test. Like the session resume test, but with a twist...
  */
-int zero_rtt_test_one(int use_badcrypt, int hardreset, unsigned int early_loss)
+int zero_rtt_test_one(int use_badcrypt, int hardreset, unsigned int early_loss, int v_nego)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     char const* sni = PICOQUIC_TEST_SNI;
     char const* alpn = PICOQUIC_TEST_ALPN;
     uint64_t loss_mask = 0;
+    uint32_t proposed_version = (v_nego) ? 0x9a8a7a6a : 0;
     int ret = 0;
 
     /* Initialize an empty ticket store */
@@ -2130,7 +2131,8 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, unsigned int early_loss)
     for (int i = 0; i < 2; i++) {
         /* Set up the context, while setting the ticket store parameter for the client */
         if (ret == 0) {
-            ret = tls_api_init_ctx(&test_ctx, 0, sni, alpn, &simulated_time, ticket_file_name, NULL, 0, 0,
+            ret = tls_api_init_ctx(&test_ctx, 
+                (i==0)?0: proposed_version, sni, alpn, &simulated_time, ticket_file_name, NULL, 0, 0,
                 (i == 0)?0:use_badcrypt);
 
             if (ret == 0 && hardreset != 0 && i == 1) {
@@ -2197,7 +2199,7 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, unsigned int early_loss)
                         use_badcrypt, hardreset);
                     ret = -1;
                 }
-                else if (early_loss == 0 &&
+                else if (early_loss == 0 && v_nego == 0 &&
                     test_ctx->cnx_client->nb_zero_rtt_acked != test_ctx->cnx_client->nb_zero_rtt_sent) {
                     DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), no zero RTT acked.\n",
                         use_badcrypt, hardreset);
@@ -2251,7 +2253,7 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, unsigned int early_loss)
 
 int zero_rtt_test()
 {
-    return zero_rtt_test_one(0, 0, 0);
+    return zero_rtt_test_one(0, 0, 0, 0);
 }
 
 /*
@@ -2269,7 +2271,7 @@ int zero_rtt_loss_test()
     int ret = 0;
 
     for (unsigned int i = 1; ret == 0 && i < 16; i++) {
-        ret = zero_rtt_test_one(0, 0, i);
+        ret = zero_rtt_test_one(0, 0, i, 0);
         if (ret != 0) {
             DBG_PRINTF("Zero RTT test fails when packet #%d is lost.\n", i);
         }
@@ -2287,7 +2289,7 @@ int zero_rtt_loss_test()
 
 int zero_rtt_spurious_test()
 {
-    return zero_rtt_test_one(1, 0, 0);
+    return zero_rtt_test_one(1, 0, 0, 0);
 }
 
 /*
@@ -2299,9 +2301,20 @@ int zero_rtt_spurious_test()
 
 int zero_rtt_retry_test()
 {
-    return zero_rtt_test_one(0, 1, 0);
+    return zero_rtt_test_one(0, 1, 0, 0);
 }
 
+/*
+* Zero RTT Version Negotiation test.
+* Check what happens if the client attempts to resume a connection but the
+* server responds with a version negotiation. This is simulated by setting
+* the proposed version to a test value.
+*/
+
+int zero_rtt_vnego_test()
+{
+    return zero_rtt_test_one(0, 0, 0, 1);
+}
 /*
  * Stop sending test. Start a long transmission, but after receiving some bytes,
  * send a stop sending request. Then ask for another transmission. The
