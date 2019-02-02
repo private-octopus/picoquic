@@ -207,12 +207,10 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
             /* Request setting ECN_1 in outgoing packets */
             if (setsockopt(sd, IPPROTO_IPV6, IPV6_TCLASS, &ecn, sizeof(ecn)) < 0) {
                 DBG_PRINTF("setsockopt IPV6_TCLASS (0x%x) fails, errno: %d\n", ecn, errno);
-                ret = -1;
                 *send_set = 0;
             }
             else {
                 *send_set = 1;
-                ret = 0;
             }
         }
 #else
@@ -247,12 +245,10 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
             /* Request setting ECN_1 in outgoing packets */
             if (setsockopt(sd, IPPROTO_IP, IP_TOS, &ecn, sizeof(ecn)) < 0) {
                 DBG_PRINTF("setsockopt IPv4 IP_TOS (0x%x) fails, errno: %d\n", ecn, errno);
-                ret = -1;
                 *send_set = 0;
             }
             else {
                 *send_set = 1;
-                ret = 0;
             }
         }
 #else

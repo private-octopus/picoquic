@@ -127,6 +127,7 @@ static const picoquic_test_def_t test_table[] = {
     { "pn_vector", cleartext_pn_vector_test },
     { "zero_rtt_spurious", zero_rtt_spurious_test },
     { "zero_rtt_retry", zero_rtt_retry_test },
+    { "zero_rtt_vnego", zero_rtt_vnego_test },
     { "random_tester", random_tester_test},
     { "transmit_cnxid", transmit_cnxid_test },
     { "probe_api", probe_api_test },

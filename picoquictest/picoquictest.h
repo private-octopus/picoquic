@@ -165,6 +165,7 @@ int tls_retry_token_test();
 int optimistic_ack_test();
 int document_addresses_test();
 int socket_ecn_test();
+int zero_rtt_vnego_test();
 
 #ifdef __cplusplus
 }
