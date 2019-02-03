@@ -59,7 +59,7 @@
 #define TRANSPORT_PARAMETERS_DEFAULT_VERSION_BYTES 'P', 'C', 'Q', '1'
 #define TRANSPORT_PARAMETERS_FAILED_VERSION_BYTES 'P', 'C', 'Q', '0'
 #define TRANSPORT_PARAMETERS_SUPPORTED_VERSIONS_BYTES \
-     0x0C, 'P', 'C', 'Q', '1', 'P', 'C', 'Q', '0', 0xFF, 0x00, 0x00, 0x11
+     0x10, 'P', 'C', 'Q', '1', 'P', 'C', 'Q', '0', 0xFF, 0x00, 0x00, 0x12, 0xFF, 0x00, 0x00, 0x11
 
 #define TRANSPORT_PARAMETERS_SUPPORTED_VERSIONS_ERROR1 \
      0x10, 'P', 'C', 'Q', '0', 0xFF, 0x00, 0x00, 0x10, 0xFF, 0x00, 0x00, 0x0F

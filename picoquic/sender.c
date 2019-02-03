@@ -852,7 +852,8 @@ static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t* cnx,
          * rely on dupack logic possible, or on a safe estimate of the RACK delay if it
          * is not */
         if (delta_seq < 3) {
-            uint64_t rack_timer_min = cnx->pkt_ctx[pc].latest_time_acknowledged + PICOQUIC_RACK_DELAY;
+            uint64_t rack_timer_min = cnx->pkt_ctx[pc].latest_time_acknowledged + 
+                cnx->remote_parameters.max_ack_delay;
             if (retransmit_time < rack_timer_min) {
                 retransmit_time = rack_timer_min;
             }

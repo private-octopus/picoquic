@@ -525,6 +525,9 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                             case picoquic_tp_max_ack_delay:
                                 cnx->remote_parameters.max_ack_delay = (uint32_t)
                                     picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret) * 1000;
+                                if (cnx->remote_parameters.max_ack_delay > PICOQUIC_MAX_ACK_DELAY_MAX_MS * 1000) {
+                                    ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+                                }
                                 break;
                             case picoquic_tp_original_connection_id:
                                 if (extension_length >= 256) {

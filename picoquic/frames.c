@@ -1701,7 +1701,8 @@ static picoquic_packet_t* picoquic_update_rtt(picoquic_cnx_t* cnx, uint64_t larg
                                 old_path->rtt_variant = old_path->rtt_min / 4;
                             }
 
-                            old_path->retransmit_timer = old_path->smoothed_rtt + 4 * old_path->rtt_variant + old_path->max_ack_delay;
+                            old_path->retransmit_timer = old_path->smoothed_rtt + 4 * old_path->rtt_variant + 
+                                cnx->remote_parameters.max_ack_delay;
                         }
 
                         if (PICOQUIC_MIN_RETRANSMIT_TIMER > old_path->retransmit_timer) {
