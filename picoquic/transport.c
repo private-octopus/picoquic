@@ -106,9 +106,7 @@ uint8_t * picoquic_encode_transport_param_prefered_address(uint8_t * bytes, uint
     picoquic_tp_prefered_address_t * prefered_address)
 {
     /* first compute the length */
-    uint8_t ip_length = (prefered_address->ipVersion == 4) ? 4 : 16;
-    uint16_t coded_length = 4 + 1 + 1 + ip_length + 2 +
-        1 + prefered_address->connection_id.id_len + 16;
+    uint16_t coded_length = 4 + 2 + 16 + 2 + 1 + prefered_address->connection_id.id_len + 16;
 
     if (bytes == NULL || bytes + coded_length > bytes_max) {
         bytes = NULL;
@@ -117,11 +115,82 @@ uint8_t * picoquic_encode_transport_param_prefered_address(uint8_t * bytes, uint
         bytes += 2;
         picoformat_16(bytes, coded_length);
         bytes += 2;
-        *bytes++ = prefered_address->ipVersion;
+        memcpy(bytes, prefered_address->ipv4Address, 4);
+        bytes += 4;
+        picoformat_16(bytes, prefered_address->ipv4Port);
+        bytes += 2;
+        memcpy(bytes, prefered_address->ipv6Address, 16);
+        bytes += 16;
+        picoformat_16(bytes, prefered_address->ipv4Port);
+        bytes += 2;
+        *bytes++ = prefered_address->connection_id.id_len;
+        bytes += picoquic_format_connection_id(bytes, bytes_max - bytes,
+            prefered_address->connection_id);
+        memcpy(bytes, prefered_address->statelessResetToken, 16);
+        bytes += 16;
+    }
+
+    return bytes;
+}
+
+uint8_t * picoquic_encode_transport_param_prefered_address_old(uint8_t * bytes, uint8_t * bytes_max,
+    picoquic_tp_prefered_address_t * prefered_address)
+{
+    /* first compute the length */
+    uint16_t coded_length;
+    /* First compute which version to send */
+    uint8_t ip_version = 0;
+    int ip_v4_defined = 0;
+    int ip_v6_defined = 0;
+    uint8_t ip_length = 0;
+    uint8_t * ip_address = NULL;
+    uint16_t port = 0;
+
+    for (int i = 0; i < 4; i++) {
+        if (prefered_address->ipv4Address[i] != 0) {
+            ip_v4_defined = 1;
+        }
+    }
+
+    for (int i = 0; i < 16; i++) {
+        if (prefered_address->ipv6Address[i] != 0) {
+            ip_v6_defined = 1;
+        }
+    }
+
+    if (ip_v6_defined) {
+        ip_version = 6;
+        ip_length = 16;
+        ip_address = prefered_address->ipv6Address;
+        port = prefered_address->ipv6Port;
+    }
+    else if (ip_v4_defined) {
+        ip_version = 4;
+        ip_length = 4;
+        ip_address = prefered_address->ipv6Address;
+        port = prefered_address->ipv6Port;
+    }
+    else {
+        /* No version defined */
+        return bytes;
+    }
+
+    coded_length = 4 + 1 + 1 + ip_length + 2 +
+        1 + prefered_address->connection_id.id_len + 16;
+
+    if (bytes == NULL || bytes + coded_length > bytes_max) {
+        bytes = NULL;
+    }
+    else {
+        picoformat_16(bytes, picoquic_tp_server_preferred_address);
+        bytes += 2;
+        picoformat_16(bytes, coded_length);
+        bytes += 2;
+        *bytes++ = ip_version;
         *bytes++ = ip_length;
-        memcpy(bytes, prefered_address->ipAddress, ip_length);
+        memcpy(bytes, ip_address, ip_length);
         bytes += ip_length;
-        picoformat_16(bytes, prefered_address->port);
+        picoformat_16(bytes, port);
         bytes += 2;
         *bytes++ = prefered_address->connection_id.id_len;
         bytes += picoquic_format_connection_id(bytes, bytes_max - bytes,
@@ -138,29 +207,70 @@ size_t picoquic_decode_transport_param_prefered_address(uint8_t * bytes, size_t 
 {
     /* first compute the minimal length */
     size_t byte_index = 0;
+    uint8_t cnx_id_length = 0;
+    size_t minimal_length = 4 + 2 + 16 + 2 + 1 /* + prefered_address->connection_id.id_len */ + 16;
+    size_t ret = 0;
+
+    if (bytes_max >= minimal_length) {
+        memcpy(prefered_address->ipv4Address, bytes + byte_index, 4);
+        byte_index += 4;
+        prefered_address->ipv4Port = PICOPARSE_16(bytes + byte_index);
+        byte_index += 2;
+        memcpy(prefered_address->ipv6Address, bytes + byte_index, 16);
+        byte_index += 16;
+        prefered_address->ipv6Port = PICOPARSE_16(bytes + byte_index);
+        byte_index += 2;
+        cnx_id_length = bytes[byte_index++];
+        if (byte_index + cnx_id_length + 16 <= bytes_max &&
+            cnx_id_length == picoquic_parse_connection_id(bytes + byte_index, cnx_id_length,
+                &prefered_address->connection_id)){
+            byte_index += cnx_id_length;
+            memcpy(prefered_address->statelessResetToken, bytes + byte_index, 16);
+            byte_index += 16;
+            ret = byte_index;
+            prefered_address->is_defined = 1;
+        }
+    }
+
+    return ret;
+}
+
+size_t picoquic_decode_transport_param_prefered_address_old(uint8_t * bytes, size_t bytes_max,
+    picoquic_tp_prefered_address_t * prefered_address)
+{
+    /* first compute the minimal length */
+    size_t byte_index = 0;
     uint8_t ip_length = 0;
     uint8_t cnx_id_length = 0;
     size_t minimal_length = 1 + 1 + ip_length + 2 + 1 + cnx_id_length + 16;
     size_t ret = 0;
+    int ip_version;
+
+    memset(prefered_address, 0, sizeof(picoquic_tp_prefered_address_t));
 
     if (bytes_max >= minimal_length) {
-        prefered_address->ipVersion = bytes[byte_index++];
+        ip_version = bytes[byte_index++];
         ip_length = bytes[byte_index++];
-        if ((ip_length == 4 && prefered_address->ipVersion == 4) ||
-            (ip_length == 16 && prefered_address->ipVersion == 6)) {
-            memcpy(prefered_address->ipAddress, bytes + byte_index, ip_length);
+        if (ip_length == 4 && ip_version == 4) {
+            memcpy(prefered_address->ipv4Address, bytes + byte_index, ip_length);
             byte_index += ip_length;
-            prefered_address->port = PICOPARSE_16(bytes + byte_index);
+            prefered_address->ipv4Port = PICOPARSE_16(bytes + byte_index);
             byte_index += 2;
-            cnx_id_length = bytes[byte_index++];
-            if (byte_index + cnx_id_length + 16 <= bytes_max &&
-                cnx_id_length == picoquic_parse_connection_id(bytes + byte_index, cnx_id_length,
-                    &prefered_address->connection_id)){
-                byte_index += cnx_id_length;
-                memcpy(prefered_address->statelessResetToken, bytes + byte_index, 16);
-                byte_index += 16;
-                ret = byte_index;
-            }
+        }
+        else if (ip_length == 16 && ip_version == 6) {
+            memcpy(prefered_address->ipv6Address, bytes + byte_index, ip_length);
+            byte_index += ip_length;
+            prefered_address->ipv6Port = PICOPARSE_16(bytes + byte_index);
+            byte_index += 2;
+        }
+        cnx_id_length = bytes[byte_index++];
+        if (byte_index + cnx_id_length + 16 <= bytes_max &&
+            cnx_id_length == picoquic_parse_connection_id(bytes + byte_index, cnx_id_length,
+                &prefered_address->connection_id)) {
+            byte_index += cnx_id_length;
+            memcpy(prefered_address->statelessResetToken, bytes + byte_index, 16);
+            byte_index += 16;
+            ret = byte_index;
         }
     }
 
@@ -254,9 +364,16 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
             picoquic_prepare_transport_param_stream_id(cnx->local_parameters.initial_max_stream_id_unidir));
     }
 
-    if (cnx->local_parameters.prefered_address.ipVersion != 0) {
-        bytes = picoquic_encode_transport_param_prefered_address(
-            bytes, bytes_max, &cnx->local_parameters.prefered_address);
+    if (cnx->local_parameters.prefered_address.is_defined) {
+        if (picoquic_supported_versions[cnx->version_index].version ==
+            PICOQUIC_TENTH_INTEROP_VERSION) {
+            bytes = picoquic_encode_transport_param_prefered_address_old(
+                bytes, bytes_max, &cnx->local_parameters.prefered_address);
+        }
+        else {
+            bytes = picoquic_encode_transport_param_prefered_address(
+                bytes, bytes_max, &cnx->local_parameters.prefered_address);
+        }
     }
 
     if (cnx->local_parameters.migration_disabled != 0 && bytes != NULL) {
@@ -506,8 +623,17 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                                 break;
                             case picoquic_tp_server_preferred_address:
                             {
-                                size_t coded_length = picoquic_decode_transport_param_prefered_address(
-                                    bytes + byte_index, extension_length, &cnx->remote_parameters.prefered_address);
+                                size_t coded_length = 0;
+                                
+                                if (picoquic_supported_versions[cnx->version_index].version ==
+                                    PICOQUIC_TENTH_INTEROP_VERSION) {
+                                    coded_length = picoquic_decode_transport_param_prefered_address_old(
+                                        bytes + byte_index, extension_length, &cnx->remote_parameters.prefered_address);
+                                }
+                                else {
+                                    coded_length = picoquic_decode_transport_param_prefered_address(
+                                        bytes + byte_index, extension_length, &cnx->remote_parameters.prefered_address);
+                                }
 
                                 if (coded_length != extension_length) {
                                     ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
@@ -525,6 +651,9 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                             case picoquic_tp_max_ack_delay:
                                 cnx->remote_parameters.max_ack_delay = (uint32_t)
                                     picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret) * 1000;
+                                if (cnx->remote_parameters.max_ack_delay > PICOQUIC_MAX_ACK_DELAY_MAX_MS * 1000) {
+                                    ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+                                }
                                 break;
                             case picoquic_tp_original_connection_id:
                                 if (extension_length >= 256) {

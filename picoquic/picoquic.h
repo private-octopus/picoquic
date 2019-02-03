@@ -241,11 +241,25 @@ typedef enum {
     picoquic_callback_ready, /* Data can be sent and received, connection migration can be initiated */
 } picoquic_call_back_event_t;
 
+
+/* Defined in spec as:
+ *  struct {
+ *    opaque ipv4Address[4];
+ *    uint16 ipv4Port;
+ *    opaque ipv6Address[16];
+ *    uint16 ipv6Port;
+ *    opaque connectionId<0..18>;
+ *    opaque statelessResetToken[16];
+ *  } PreferredAddress;
+ */
+
 typedef struct st_picoquic_tp_prefered_address_t {
-    uint8_t ipVersion; /* enum { IPv4(4), IPv6(6), (15) } -- 0 if no parameter specified */
-    uint8_t ipAddress[16]; /* opaque ipAddress<4..2 ^ 8 - 1> */
-    uint16_t port;
-    picoquic_connection_id_t connection_id; /*  opaque connectionId<0..18>; */
+    int is_defined;
+    uint8_t ipv4Address[4];
+    uint16_t ipv4Port;
+    uint8_t ipv6Address[16];
+    uint16_t ipv6Port;
+    picoquic_connection_id_t connection_id;
     uint8_t statelessResetToken[16];
 } picoquic_tp_prefered_address_t;
 
