@@ -694,18 +694,18 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
 
 int h3zero_server_test()
 {
-    return demo_server_test("h3-17", h3zero_server_callback);
+    return demo_server_test("h3-18", h3zero_server_callback);
 }
 
 int h09_server_test()
 {
-    return demo_server_test("hq-17", picoquic_h09_server_callback);
+    return demo_server_test("hq-18", picoquic_h09_server_callback);
 }
 
 int generic_server_test()
 {
-    char const * alpn_09 = "hq-17";
-    char const * alpn_3 = "h3-17";
+    char const * alpn_09 = "hq-18";
+    char const * alpn_3 = "h3-18";
     int ret = demo_server_test(alpn_09, picoquic_demo_server_callback);
 
     if (ret != 0) {
