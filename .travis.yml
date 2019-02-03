@@ -6,7 +6,6 @@ addons:
     sources:
     - ubuntu-toolchain-r-test
     packages:
-    - g++-8
     - cmake
     - cmake-data
     - libssl-dev 
@@ -16,6 +15,12 @@ matrix:
         - name: Linux (gcc-8)
           os: linux
           dist: xenial
+          addons:
+            apt:
+                sources:
+                   - ubuntu-toolchain-r-test
+                packages:
+                   - g++-8
           env:
               - CC=gcc-8
               - CXX=g++-8
