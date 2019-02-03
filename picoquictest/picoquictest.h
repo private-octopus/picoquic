@@ -166,6 +166,7 @@ int optimistic_ack_test();
 int document_addresses_test();
 int socket_ecn_test();
 int zero_rtt_vnego_test();
+int ffx31_test();
 
 #ifdef __cplusplus
 }

@@ -1083,3 +1083,45 @@ int key_rotation_vector_test()
 
     return ret;
 }
+
+/* Test of the FFX function used for CNX-ID encryption.
+ * Verify that encryption and decryption works for all lengths between 4 and 18
+ */
+
+static uint8_t ffx_test_source[22] = {
+    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j' };
+static uint8_t ffx_test_key[16] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
+
+int ffx31_test()
+{
+    int ret = 0;
+
+    for (size_t len = 4; ret == 0 && len <= 18; len++) {
+        void * ctx = picoquic_ffx31_get_context(ffx_test_key);
+        if (ctx == NULL) {
+            DBG_PRINTF("%s", "Cannot allocate FFX31 context\n");
+            ret = -1;
+        }
+        else {
+            for (size_t offset = 0; ret == 0 && offset < 4; offset++) {
+                uint8_t encrypted[18];
+                uint8_t result[18];
+                if (len + offset > (ffx_test_source)) {
+                    DBG_PRINTF("Cannot test offset %d, length %i, sizeof(test)=%d\n", (int)offset, (int)len, (int)sizeof(ffx_test_source));
+                    ret = -1;
+                }
+                else {
+                    picoquic_ffx31_encrypt(ctx, encrypted, ffx_test_source + offset, len);
+                    picoquic_ffx31_decrypt(ctx, result, encrypted, len);
+                    if (memcmp(result, ffx_test_source + offset, len) != 0) {
+                        DBG_PRINTF("Decrypted differs from offset %d, length %i\n", (int)offset, (int)len);
+                        ret = -1;
+                    }
+                }
+            }
+            picoquic_ffx31_delete_context(ctx);
+        }
+    }
+
+    return ret;
+}

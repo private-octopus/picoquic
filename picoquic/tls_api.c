@@ -779,7 +779,6 @@ int picoquic_setup_initial_secrets(
     return ret;
 }
 
-
 int picoquic_setup_initial_traffic_keys(picoquic_cnx_t* cnx)
 {
     int ret = 0;
@@ -2085,4 +2084,136 @@ int picoquic_verify_retry_token(picoquic_quic_t* quic, struct sockaddr * addr_pe
     }
 
     return ret;
+}
+
+/*
+ * Encryption module for connection ID.
+ *
+ * The connection ID can be defined with sizes 4 to 18.
+ * For size=16, we can use AES, but for the other sizes we need
+ * a variable length construct. The ffx code below will
+ * accomodate any length from 4 to 31.
+ *
+ * We demonstrate here a simple encryption process derived
+ * from the FFX algorithms, which is effectively a specific
+ * mode of running a verified encryption code.
+ *
+ * See "Ciphers with Arbitrary Finite Domains" by
+ * John Black and Phillip Rogaway, 2001 --
+ * http://web.cs.ucdavis.edu/~rogaway/papers/subset.pdf
+ *
+ * The number of passes is set here to 10. This is as
+ * conservative as the FF1 algorithm specified by NIST.
+ * This is based on "Luby-Rackoff: 7 Rounds are Enough
+ * for 2^n(1-epsilon) Security" by Jacques Patarin, 2003 --
+ * https://www.iacr.org/archive/crypto2003/27290510/27290510.pdf
+ * We could argue that 8 passes or even 4 passes would be
+ * enough for our application.
+ */
+
+void * picoquic_ffx31_get_context(void * key) {
+    ptls_aead_algorithm_t* aead = &ptls_openssl_aes128gcm;
+    ptls_cipher_context_t *aes_enc = ptls_cipher_new(aead->ctr_cipher, 1, key);
+    return (void *)aes_enc;
+}
+
+void picoquic_ffx31_delete_context(void * ctx) {
+    ptls_cipher_free((ptls_cipher_context_t *)ctx);
+}
+
+void picoquic_ffx31_encrypt(void * v_enc_ctx, void *output, const void *input, size_t len)
+{
+    ptls_cipher_context_t * enc_ctx = (ptls_cipher_context_t *)v_enc_ctx;
+    uint8_t * x;
+    int nb_left, nb_right;
+    uint8_t left[16], right[16], confusion[32];
+    uint8_t zero16[16] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+
+    /* len must be lower than 31 */
+    len &= 31;
+    nb_left = (int)len / 2;
+    nb_right = (int)len - nb_left;
+    /* Split the input in two halves */
+    memcpy(left, input, nb_left);
+    memcpy(right, ((uint8_t *)input) + nb_left, nb_right);
+    memset(left + nb_left, 0, 16 - nb_left);
+    memset(right + nb_right, 0, 16 - nb_right);
+
+    /* Feistel construct, using the specified algorithm as S-Box */
+
+    for (int i=0; i<10; i+= 2){
+        /* Each pass encrypts a zero field ith a cipher using one
+         * half of the message as IV. This construct lets us use
+         * either AES or chacha 20 */
+        ptls_cipher_init(enc_ctx, right);
+        ptls_cipher_encrypt(enc_ctx, confusion, zero16, 16);
+        /* If we wanted to, we could use a mask to guarantee
+         * that some bits are unchanged */
+        for (int j = 0; j < nb_left; j++) {
+            left[j] ^= confusion[j];
+        }
+
+        memset(confusion, 0, 16);
+        ptls_cipher_init(enc_ctx, left);
+        ptls_cipher_encrypt(enc_ctx, confusion, zero16, 16);
+        for (int j = 0; j < nb_right; j++) {
+            right[j] ^= confusion[j];
+        }
+    }
+
+    /* After enough passes, we have a very strong length preserving
+     * encryption, only that many times slower than the underlying
+     * algorithm. We copy the result to the output */
+    x = (uint8_t *)output;
+    for (int i = 0; i < nb_left; i++) {
+        *x++ = left[i];
+    }
+    for (int i = 0; i < nb_right; i++) {
+        *x++ = right[i];
+    }
+}
+
+void picoquic_ffx31_decrypt(void * v_enc_ctx, void *output, const void *input, size_t len)
+{
+    ptls_cipher_context_t * enc_ctx = (ptls_cipher_context_t *)v_enc_ctx;
+    int nb_left, nb_right;
+    uint8_t left[16], right[16], confusion[16];
+    uint8_t zero16[16] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+
+    /* len must be lower than 31 */
+    len &= 31;
+    nb_left = (int)len / 2;
+    nb_right = (int)len - nb_left;
+
+    /* Split the input in two halves */
+    memcpy(left, input, nb_left);
+    memcpy(right, ((uint8_t *)input) + nb_left, nb_right);
+    memset(left + nb_left, 0, 16 - nb_left);
+    memset(right + nb_right, 0, 16 - nb_right);
+
+
+    /* Feistel construct, using the specified algorithm as S-Box,
+     * in the opposite order of the encryption */
+
+    for (int i = 0; i < 10; i += 2) {
+        /* Each pass encrypts a zero field with a cipher using one
+         * half of the message as IV. This construct lets us use
+         * either AES or chacha 20 */
+        ptls_cipher_init(enc_ctx, left);
+        ptls_cipher_encrypt(enc_ctx, confusion, zero16, 16);
+        for (int j = 0; j < nb_right; j++) {
+            right[j] ^= confusion[j];
+        }
+        ptls_cipher_init(enc_ctx, right);
+        ptls_cipher_encrypt(enc_ctx, confusion, zero16, 16);
+        /* If we wanted to, we could use a mask to guarantee
+         * that some bits are unchanged */
+        for (int j = 0; j < nb_left; j++) {
+            left[j] ^= confusion[j];
+        }
+    }
+
+    /* Copy the decrypted result to the output */
+    memcpy(output, left, nb_left);
+    memcpy(((uint8_t *)output) + nb_left, right, nb_right);
 }

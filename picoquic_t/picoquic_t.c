@@ -68,6 +68,7 @@ static const picoquic_test_def_t test_table[] = {
     { "pn_enc_1rtt", pn_enc_1rtt_test },
     { "cnxid_stash", cnxid_stash_test },
     { "new_cnxid", new_cnxid_test },
+    { "ffx31", ffx31_test },
     { "tls_api", tls_api_test },
     { "silence_test", tls_api_silence_test },
     { "tls_api_version_negotiation", tls_api_version_negotiation_test },
