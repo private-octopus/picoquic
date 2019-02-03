@@ -68,7 +68,7 @@
      0x0F, 'P', 'C', 'Q', '1', 'P', 'C', 'Q', '0', 0xFF, 0x00, 0x00, 0x10, 0xFF, 0x00, 0x00
 
 #define TRANSPORT_PREFERED_ADDRESS_NULL \
-    { 0, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 0, \
+    { 0, { 0, 0, 0, 0}, 0, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 0, \
     { { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },0 }, \
     { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }} 
 
@@ -106,7 +106,7 @@ static picoquic_tp_t transport_param_test8 = {
 
 static picoquic_tp_t transport_param_test9 = {
     0x1000000, 0, 0, 0x1000000, 4, 0, 255, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 3, 0,
-    { 4, { 10, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 4433,
+    { 1, { 10, 0, 0, 1}, 4433, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 0,
     {{1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },4},
         { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 }}
 };
@@ -201,15 +201,16 @@ uint8_t client_param8[] = {
 uint8_t server_param3[] = {
     TRANSPORT_PARAMETERS_DEFAULT_VERSION_BYTES,
     TRANSPORT_PARAMETERS_SUPPORTED_VERSIONS_BYTES,
-    0, 86,
+    0, 102,
     0, picoquic_tp_initial_max_stream_data_bidi_local, 0, 4, 0x81, 0, 0, 0,
     0, picoquic_tp_initial_max_data, 0, 4, 0x81, 0, 0, 0,
     0, picoquic_tp_initial_max_streams_bidi, 0, 1, 2,
     0, picoquic_tp_idle_timeout, 0, 2, 0x40, 0xFF,
     0, picoquic_tp_max_packet_size, 0, 2, 0x45, 0xC8,
     0, picoquic_tp_stateless_reset_token, 0, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
-    0, picoquic_tp_server_preferred_address, 0, 29,
-    4, 4, 10, 0, 0, 1, 0x11, 0x51, 4, 1, 2, 3, 4, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
+    0, picoquic_tp_server_preferred_address, 0, 45,
+    10, 0, 0, 1, 0x11, 0x51, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    4, 1, 2, 3, 4, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
 };
 
 uint8_t client_param9[] = {
@@ -338,8 +339,9 @@ uint8_t server_param_err10[] = {
     0, picoquic_tp_idle_timeout, 0, 2, 0x40, 0xFF,
     0, picoquic_tp_max_packet_size, 0, 2, 0x45, 0xC8,
     0, picoquic_tp_stateless_reset_token, 0, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
-    0, picoquic_tp_server_preferred_address, 0, 29,
-    4, 4, 10, 0, 0, 1, 0x11, 0x51, 4, 1, 2, 3, 4, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
+    0, picoquic_tp_server_preferred_address, 0, 45,
+    10, 0, 0, 1, 0x11, 0x51, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    4, 1, 2, 3, 4, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
 };
 
 typedef struct st_transport_param_error_test_t {
@@ -428,30 +430,36 @@ static int transport_param_compare(picoquic_tp_t* param, picoquic_tp_t* ref) {
             param->idle_timeout, ref->idle_timeout);
         ret = -1;
     }
-    else if (param->prefered_address.ipVersion != ref->prefered_address.ipVersion) {
-        DBG_PRINTF("prefered_address.ipVersion: got %d, expected %d\n",
-            param->prefered_address.ipVersion, ref->prefered_address.ipVersion);
+    else if (param->prefered_address.is_defined != ref->prefered_address.is_defined) {
+        DBG_PRINTF("prefered_address.is_defined: got %d, expected %d\n",
+            param->prefered_address.is_defined, ref->prefered_address.is_defined);
         ret = -1;
     }
-    else if (param->prefered_address.ipVersion != 0) {
-        int ip_len = (param->prefered_address.ipVersion == 4) ? 4 : 16;
-        if (memcmp(param->prefered_address.ipAddress, ref->prefered_address.ipAddress, ip_len) != 0) {
-            DBG_PRINTF("%s", "prefered_address.ipAddress: values don't match\n");
-            ret = -1;
-        }
-        else if (param->prefered_address.port != ref->prefered_address.port) {
-            DBG_PRINTF("prefered_address.port: got %d, expected %d\n",
-                param->prefered_address.port, ref->prefered_address.port);
-            ret = -1;
-        }
-        else if (picoquic_compare_connection_id(&param->prefered_address.connection_id, &ref->prefered_address.connection_id) != 0) {
-            DBG_PRINTF("%s", "prefered_address.connection_id: values don't match\n");
-            ret = -1;
-        }
-        else if (memcmp(param->prefered_address.statelessResetToken, ref->prefered_address.statelessResetToken, 16) != 0) {
-            DBG_PRINTF("%s", "prefered_address.statelessResetToken: values don't match\n");
-            ret = -1;
-        }
+    else if (memcmp(param->prefered_address.ipv4Address, ref->prefered_address.ipv4Address, 4) != 0) {
+        DBG_PRINTF("%s", "prefered_address.ipv4Address: values don't match\n");
+        ret = -1;
+    }
+    else if (param->prefered_address.ipv4Port != ref->prefered_address.ipv4Port) {
+        DBG_PRINTF("prefered_address.ipv4Port: got %d, expected %d\n",
+            param->prefered_address.ipv4Port, ref->prefered_address.ipv4Port);
+        ret = -1;
+    }
+    else if (memcmp(param->prefered_address.ipv6Address, ref->prefered_address.ipv6Address, 16) != 0) {
+        DBG_PRINTF("%s", "prefered_address.ipv6Address: values don't match\n");
+        ret = -1;
+    }
+    else if (param->prefered_address.ipv6Port != ref->prefered_address.ipv6Port) {
+        DBG_PRINTF("prefered_address.ipv6Port: got %d, expected %d\n",
+            param->prefered_address.ipv6Port, ref->prefered_address.ipv6Port);
+        ret = -1;
+    }
+    else if (picoquic_compare_connection_id(&param->prefered_address.connection_id, &ref->prefered_address.connection_id) != 0) {
+        DBG_PRINTF("%s", "prefered_address.connection_id: values don't match\n");
+        ret = -1;
+    }
+    else if (memcmp(param->prefered_address.statelessResetToken, ref->prefered_address.statelessResetToken, 16) != 0) {
+        DBG_PRINTF("%s", "prefered_address.statelessResetToken: values don't match\n");
+        ret = -1;
     }
 
     return ret;
