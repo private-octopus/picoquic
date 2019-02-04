@@ -2111,109 +2111,156 @@ int picoquic_verify_retry_token(picoquic_quic_t* quic, struct sockaddr * addr_pe
  * enough for our application.
  */
 
-void * picoquic_ffx31_get_context(void * key) {
-    ptls_aead_algorithm_t* aead = &ptls_openssl_aes128gcm;
-    ptls_cipher_context_t *aes_enc = ptls_cipher_new(aead->ctr_cipher, 1, key);
-    return (void *)aes_enc;
-}
+typedef struct st_picoquic_ffx31_state_t {
+    ptls_cipher_context_t * enc_ctx;
+    int nb_rounds;
+    size_t len;
+    size_t nb_left;
+    size_t nb_right;
+    uint8_t mask_right[16];
+    uint8_t mask_left[16];
+} picoquic_ffx31_state_t;
 
-void picoquic_ffx31_delete_context(void * ctx) {
-    ptls_cipher_free((ptls_cipher_context_t *)ctx);
-}
-
-void picoquic_ffx31_encrypt(void * v_enc_ctx, void *output, const void *input, size_t len)
+void * picoquic_ffx31_get_context(char const * alg_name, int nb_rounds, const void *mask, size_t len, void * key)
 {
-    ptls_cipher_context_t * enc_ctx = (ptls_cipher_context_t *)v_enc_ctx;
-    uint8_t * x;
-    int nb_left, nb_right;
+    picoquic_ffx31_state_t * ctx = NULL;
+    ptls_cipher_context_t * enc_ctx = NULL;
+
+    if (len <= 31) {
+        /* len must be lower than 31 */
+
+        if (strcmp(alg_name, "CHACHA20") == 0) {
+            enc_ctx = ptls_cipher_new(&ptls_minicrypto_chacha20, 1, key);
+        }
+        else if (strcmp(alg_name, "AES128") == 0 ||
+            strcmp(alg_name, "AES128-CTR") == 0) {
+            ptls_aead_algorithm_t* aead = &ptls_openssl_aes128gcm;
+            enc_ctx = ptls_cipher_new(aead->ctr_cipher, 1, key);
+        }
+    }
+
+    if (enc_ctx != NULL) {
+        ctx = (picoquic_ffx31_state_t *)malloc(sizeof(picoquic_ffx31_state_t));
+        if (ctx == NULL) {
+            ptls_cipher_free(enc_ctx);
+            enc_ctx = NULL;
+        }
+    }
+
+    if (ctx != NULL) {
+        ctx->enc_ctx = enc_ctx;
+        ctx->nb_rounds = nb_rounds;
+        ctx->len = len;
+        ctx->nb_left = (int)len / 2;
+        ctx->nb_right = (int)len - ctx->nb_left;
+        if (mask != NULL) {
+            /* Split the mask in two halves */
+            memcpy(ctx->mask_left, mask, ctx->nb_left);
+            memcpy(ctx->mask_right, ((uint8_t *)mask) + ctx->nb_left, ctx->nb_right);
+            memset(ctx->mask_left + ctx->nb_left, 0, 16 - ctx->nb_left);
+            memset(ctx->mask_right + ctx->nb_right, 0, 16 - ctx->nb_right);
+        }
+        else {
+            memset(ctx->mask_left, 0xFF, 16);
+            memset(ctx->mask_right, 0xFF, 16);
+        }
+    }
+
+    return ctx;
+}
+
+void picoquic_ffx31_delete_context(void * v_ctx) 
+{
+    picoquic_ffx31_state_t * ctx = (picoquic_ffx31_state_t *)v_ctx;
+    ptls_cipher_free(ctx->enc_ctx);
+    free(ctx);
+}
+
+void picoquic_ffx31_encrypt(void * v_ctx, void *output, const void *input, size_t len)
+{
+    picoquic_ffx31_state_t * ctx = (picoquic_ffx31_state_t *)v_ctx;
     uint8_t left[16], right[16], confusion[32];
     uint8_t zero16[16] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 
     /* len must be lower than 31 */
-    len &= 31;
-    nb_left = (int)len / 2;
-    nb_right = (int)len - nb_left;
+    if (len != ctx->len) {
+        return;
+    }
     /* Split the input in two halves */
-    memcpy(left, input, nb_left);
-    memcpy(right, ((uint8_t *)input) + nb_left, nb_right);
-    memset(left + nb_left, 0, 16 - nb_left);
-    memset(right + nb_right, 0, 16 - nb_right);
+    memcpy(left, input, ctx->nb_left);
+    memcpy(right, ((uint8_t *)input) + ctx->nb_left, ctx->nb_right);
+    memset(left + ctx->nb_left, 0, 16 - ctx->nb_left);
+    memset(right + ctx->nb_right, 0, 16 - ctx->nb_right);
 
     /* Feistel construct, using the specified algorithm as S-Box */
 
-    for (int i=0; i<10; i+= 2){
-        /* Each pass encrypts a zero field ith a cipher using one
+    for (int i = 0; i < ctx->nb_rounds; i += 2) {
+        /* Each pass encrypts a zero field with a cipher using one
          * half of the message as IV. This construct lets us use
          * either AES or chacha 20 */
-        ptls_cipher_init(enc_ctx, right);
-        ptls_cipher_encrypt(enc_ctx, confusion, zero16, 16);
-        /* If we wanted to, we could use a mask to guarantee
+        ptls_cipher_init(ctx->enc_ctx, right);
+        ptls_cipher_encrypt(ctx->enc_ctx, confusion, zero16, 16);
+        /* We use a mask to guarantee
          * that some bits are unchanged */
-        for (int j = 0; j < nb_left; j++) {
-            left[j] ^= confusion[j];
+        for (int j = 0; j < ctx->nb_left; j++) {
+            left[j] ^= (confusion[j] & ctx->mask_left[j]);
         }
 
         memset(confusion, 0, 16);
-        ptls_cipher_init(enc_ctx, left);
-        ptls_cipher_encrypt(enc_ctx, confusion, zero16, 16);
-        for (int j = 0; j < nb_right; j++) {
-            right[j] ^= confusion[j];
+        ptls_cipher_init(ctx->enc_ctx, left);
+        ptls_cipher_encrypt(ctx->enc_ctx, confusion, zero16, 16);
+        for (int j = 0; j < ctx->nb_right; j++) {
+            right[j] ^= (confusion[j] & ctx->mask_right[j]);
         }
     }
 
     /* After enough passes, we have a very strong length preserving
      * encryption, only that many times slower than the underlying
      * algorithm. We copy the result to the output */
-    x = (uint8_t *)output;
-    for (int i = 0; i < nb_left; i++) {
-        *x++ = left[i];
-    }
-    for (int i = 0; i < nb_right; i++) {
-        *x++ = right[i];
-    }
+    memcpy(output, left, ctx->nb_left);
+    memcpy(((uint8_t *)output) + ctx->nb_left, right, ctx->nb_right);
 }
 
-void picoquic_ffx31_decrypt(void * v_enc_ctx, void *output, const void *input, size_t len)
+void picoquic_ffx31_decrypt(void * v_ctx, void *output, const void *input, size_t len)
 {
-    ptls_cipher_context_t * enc_ctx = (ptls_cipher_context_t *)v_enc_ctx;
-    int nb_left, nb_right;
+    picoquic_ffx31_state_t * ctx = (picoquic_ffx31_state_t *)v_ctx;
     uint8_t left[16], right[16], confusion[16];
     uint8_t zero16[16] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 
     /* len must be lower than 31 */
-    len &= 31;
-    nb_left = (int)len / 2;
-    nb_right = (int)len - nb_left;
+    if (len != ctx->len) {
+        return;
+    }
 
     /* Split the input in two halves */
-    memcpy(left, input, nb_left);
-    memcpy(right, ((uint8_t *)input) + nb_left, nb_right);
-    memset(left + nb_left, 0, 16 - nb_left);
-    memset(right + nb_right, 0, 16 - nb_right);
+    memcpy(left, input, ctx->nb_left);
+    memcpy(right, ((uint8_t *)input) + ctx->nb_left, ctx->nb_right);
+    memset(left + ctx->nb_left, 0, 16 - ctx->nb_left);
+    memset(right + ctx->nb_right, 0, 16 - ctx->nb_right);
 
 
     /* Feistel construct, using the specified algorithm as S-Box,
      * in the opposite order of the encryption */
 
-    for (int i = 0; i < 10; i += 2) {
+    for (int i = 0; i < ctx->nb_rounds; i += 2) {
         /* Each pass encrypts a zero field with a cipher using one
          * half of the message as IV. This construct lets us use
          * either AES or chacha 20 */
-        ptls_cipher_init(enc_ctx, left);
-        ptls_cipher_encrypt(enc_ctx, confusion, zero16, 16);
-        for (int j = 0; j < nb_right; j++) {
-            right[j] ^= confusion[j];
+        ptls_cipher_init(ctx->enc_ctx, left);
+        ptls_cipher_encrypt(ctx->enc_ctx, confusion, zero16, 16);
+        for (int j = 0; j < ctx->nb_right; j++) {
+            right[j] ^= (confusion[j] & ctx->mask_right[j]);
         }
-        ptls_cipher_init(enc_ctx, right);
-        ptls_cipher_encrypt(enc_ctx, confusion, zero16, 16);
-        /* If we wanted to, we could use a mask to guarantee
+        ptls_cipher_init(ctx->enc_ctx, right);
+        ptls_cipher_encrypt(ctx->enc_ctx, confusion, zero16, 16);
+        /* We could use a mask to guarantee
          * that some bits are unchanged */
-        for (int j = 0; j < nb_left; j++) {
-            left[j] ^= confusion[j];
+        for (int j = 0; j < ctx->nb_left; j++) {
+            left[j] ^= (confusion[j] & ctx->mask_left[j]);
         }
     }
 
     /* Copy the decrypted result to the output */
-    memcpy(output, left, nb_left);
-    memcpy(((uint8_t *)output) + nb_left, right, nb_right);
+    memcpy(output, left, ctx->nb_left);
+    memcpy(((uint8_t *)output) + ctx->nb_left, right, ctx->nb_right);
 }

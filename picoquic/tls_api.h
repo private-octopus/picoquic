@@ -134,7 +134,7 @@ int picoquic_verify_retry_token(picoquic_quic_t* quic, struct sockaddr * addr_pe
     uint64_t current_time, picoquic_connection_id_t * odcid,
     uint8_t * token, uint32_t token_size);
 
-void * picoquic_ffx31_get_context(void * key);
+void * picoquic_ffx31_get_context(char const * alg_name, int nb_rounds, const void *mask, size_t len, void * key);
 void picoquic_ffx31_delete_context(void * ctx);
 void picoquic_ffx31_encrypt(void * v_enc_ctx, void *output, const void *input, size_t len);
 void picoquic_ffx31_decrypt(void * v_enc_ctx, void *output, const void *input, size_t len);
