@@ -1182,6 +1182,9 @@ static int tls_api_test_with_loss(uint64_t* loss_mask, uint32_t proposed_version
     {
         DBG_PRINTF("Could not create the QUIC test contexts for V=%x\n", proposed_version);
     }
+    else if (sni == NULL) {
+        picoquic_set_null_verifier(test_ctx->qclient);
+    }
 
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, loss_mask, 0, &simulated_time);
@@ -5920,4 +5923,13 @@ int document_addresses_test()
     }
 
     return ret;
+}
+
+/*
+ * Test whether a connection succeed when SNI is not specified.
+ */
+
+int null_sni_test()
+{
+    return tls_api_test_with_loss(NULL, PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, NULL);
 }
