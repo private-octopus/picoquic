@@ -224,6 +224,13 @@ namespace UnitTest1
 			Assert::AreEqual(ret, 0);
 		}
 
+        TEST_METHOD(null_sni)
+        {
+            int ret = null_sni_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+        
         TEST_METHOD(test_silence)
         {
             int ret = tls_api_silence_test();

@@ -1,12 +1,11 @@
 dist: xenial
-language: cpp
+language: minimal
 sudo: required
 addons:
   apt:
     sources:
     - ubuntu-toolchain-r-test
     packages:
-    - g++
     - cmake
     - cmake-data
     - libssl-dev 
@@ -16,6 +15,12 @@ matrix:
         - name: Linux (gcc-8)
           os: linux
           dist: xenial
+          addons:
+            apt:
+                sources:
+                   - ubuntu-toolchain-r-test
+                packages:
+                   - g++-8
           env:
               - CC=gcc-8
               - CXX=g++-8
@@ -58,6 +63,7 @@ script:
   # Now build picotls examples and test
   - echo $CC
   - echo $CXX
+  - $CC --version
   - ${EXTRA} cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ${CMAKE_OPTS} .
   - if [ "$CHECK" == "cppcheck" ]; then cppcheck --project=compile_commands.json --quiet; fi
   - ${EXTRA} make

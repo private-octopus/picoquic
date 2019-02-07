@@ -70,6 +70,7 @@ static const picoquic_test_def_t test_table[] = {
     { "new_cnxid", new_cnxid_test },
     { "ffx31", ffx31_test },
     { "tls_api", tls_api_test },
+    { "null_sni", null_sni_test },
     { "silence_test", tls_api_silence_test },
     { "tls_api_version_negotiation", tls_api_version_negotiation_test },
     { "first_loss", tls_api_client_first_loss_test },
