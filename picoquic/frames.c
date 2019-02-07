@@ -649,7 +649,7 @@ uint8_t* picoquic_decode_new_token_frame(picoquic_cnx_t* cnx, uint8_t* bytes, co
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
             picoquic_frame_type_new_token);
     }
-    else if (addr_to != NULL && cnx->client_mode){
+    else if (addr_to != NULL && cnx->client_mode && cnx->sni != NULL){
         uint8_t * ip_addr;
         uint8_t ip_addr_length;
         picoquic_get_ip_addr(addr_to, &ip_addr, &ip_addr_length);
