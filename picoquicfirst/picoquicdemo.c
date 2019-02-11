@@ -988,7 +988,9 @@ void usage()
 
 enum picoquic_cnx_id_select {
     picoquic_cnx_id_random = 0,
-    picoquic_cnx_id_remote = 1
+    picoquic_cnx_id_remote = 1,
+    picoquic_cnx_id_encrypt_basic = 2,
+    picoquic_cnx_id_encrypt_global = 2,
 };
 
 typedef struct {
@@ -997,7 +999,9 @@ typedef struct {
     picoquic_connection_id_t cnx_id_val;
 } cnx_id_callback_ctx_t;
 
-static void cnx_id_callback(picoquic_connection_id_t cnx_id_local, picoquic_connection_id_t cnx_id_remote, void* cnx_id_callback_ctx, 
+static void cnx_id_callback(
+    picoquic_quic_t * quic,
+    picoquic_connection_id_t cnx_id_local, picoquic_connection_id_t cnx_id_remote, void* cnx_id_callback_ctx, 
     picoquic_connection_id_t * cnx_id_returned)
 {
     uint64_t val64;

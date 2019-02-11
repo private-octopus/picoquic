@@ -2264,3 +2264,49 @@ void picoquic_ffx31_decrypt(void * v_ctx, void *output, const void *input, size_
     memcpy(output, left, ctx->nb_left);
     memcpy(((uint8_t *)output) + ctx->nb_left, right, ctx->nb_right);
 }
+
+/*
+ * Encryption functions for CID encryption
+ */
+
+void picoquic_cid_encrypt_under_mask(void *cid_enc, picoquic_connection_id_t * cid, picoquic_connection_id_t * mask)
+{
+    uint8_t unmasked[18];
+    uint8_t val[18];
+
+    memset(unmasked, 0, 18);
+    memset(val, 0, 18);
+
+    for (uint8_t i = 0; i < cid->id_len; i++) {
+        /* retain only the random bits */
+        unmasked[i] = cid->id[i] & mask->id[i];
+    }
+
+    ptls_cipher_init((ptls_cipher_context_t *)cid_enc, unmasked);
+    ptls_cipher_encrypt((ptls_cipher_context_t *)cid_enc, val, val, cid->id_len);
+
+    for (uint8_t i = 0; i < cid->id_len; i++) {
+        /* randomize the unmasked bits */
+        cid->id[i] ^= val[i] & ~mask->id[i];
+    }
+}
+
+void picoquic_cid_decrypt_under_mask(void *cid_enc, picoquic_connection_id_t * cid_in, picoquic_connection_id_t * mask,
+    picoquic_connection_id_t * cid_out)
+{
+    *cid_out = *cid_in;
+    picoquic_cid_encrypt_under_mask(cid_enc, cid_out, mask);
+}
+
+void picoquic_cid_encrypt_global(void *cid_ffx, picoquic_connection_id_t * cid)
+{
+    picoquic_ffx31_encrypt(cid_ffx, cid->id, cid->id, cid->id_len);
+}
+
+void picoquic_cid_decrypt_global(void *cid_ffx, picoquic_connection_id_t * cid_in, picoquic_connection_id_t * cid_out)
+{
+    memset(cid_out, 0, sizeof(picoquic_connection_id_t));
+    cid_out->id_len = cid_in->id_len;
+
+    picoquic_ffx31_encrypt(cid_ffx, cid_out->id, cid_in->id, cid_in->id_len);
+}

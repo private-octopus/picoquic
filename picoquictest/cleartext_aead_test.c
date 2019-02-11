@@ -1114,7 +1114,7 @@ int ffx31_test()
                 for (size_t offset = 0; ret == 0 && offset < 4; offset++) {
                     uint8_t encrypted[18];
                     uint8_t result[18];
-                    if (len + offset > (ffx_test_source)) {
+                    if (len + offset > sizeof(ffx_test_source)) {
                         DBG_PRINTF("Cannot test offset %d, length %i, sizeof(test)=%d\n", (int)offset, (int)len, (int)sizeof(ffx_test_source));
                         ret = -1;
                     }

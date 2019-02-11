@@ -139,4 +139,11 @@ void picoquic_ffx31_delete_context(void * ctx);
 void picoquic_ffx31_encrypt(void * v_enc_ctx, void *output, const void *input, size_t len);
 void picoquic_ffx31_decrypt(void * v_enc_ctx, void *output, const void *input, size_t len);
 
+void picoquic_cid_encrypt_under_mask(void * cid_enc, picoquic_connection_id_t * cid, picoquic_connection_id_t * mask);
+void picoquic_cid_decrypt_under_mask(void * cid_enc, picoquic_connection_id_t * cid_in, picoquic_connection_id_t * mask, picoquic_connection_id_t * cid_out);
+
+
+void picoquic_cid_encrypt_global(void * cid_ffx, picoquic_connection_id_t * cid);
+void picoquic_cid_decrypt_global(void * cid_ffx, picoquic_connection_id_t * cid_in, picoquic_connection_id_t * cid_out);
+
 #endif /* TLS_API_H */

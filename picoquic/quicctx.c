@@ -777,7 +777,7 @@ void picoquic_register_path(picoquic_cnx_t* cnx, picoquic_path_t * path_x)
         picoquic_create_random_cnx_id(cnx->quic, &path_x->local_cnxid, cnx->quic->local_ctx_length);
 
         if (cnx->quic->cnx_id_callback_fn)
-            cnx->quic->cnx_id_callback_fn(path_x->local_cnxid, cnx->initial_cnxid,
+            cnx->quic->cnx_id_callback_fn(cnx->quic, path_x->local_cnxid, cnx->initial_cnxid,
                 cnx->quic->cnx_id_callback_ctx, &path_x->local_cnxid);
     }
 
@@ -1682,6 +1682,69 @@ uint64_t picoquic_get_quic_time(picoquic_quic_t* quic)
     }
 
     return now;
+}
+
+void picoquic_connection_id_production_callback(picoquic_quic_t * quic, picoquic_connection_id_t cnx_id_local, picoquic_connection_id_t cnx_id_remote, void * cnx_id_cb_data, picoquic_connection_id_t * cnx_id_returned)
+{
+    picoquic_connection_id_encrypt_ctx_t* ctx = (picoquic_connection_id_encrypt_ctx_t*)cnx_id_cb_data;
+
+    /* Initialize with either random value or */
+    memset(cnx_id_returned, 0, sizeof(picoquic_connection_id_t));
+    if (ctx->cnx_id_select == picoquic_connection_id_remote) {
+        /* Keeping this for compatibility with old buggy version */
+        cnx_id_local = cnx_id_remote;
+    } else {
+        /* setting value to random data */
+        picoquic_public_random(cnx_id_local.id, quic->local_ctx_length);
+    }
+    cnx_id_local.id_len = quic->local_ctx_length;
+
+    /* Apply substitution under mask */
+    for (uint8_t i = 0; i < cnx_id_local.id_len; i++) {
+        cnx_id_returned->id[i] = (cnx_id_local.id[i] & ctx->cnx_id_mask.id[i]) | ctx->cnx_id_val.id[i];
+    }
+    cnx_id_returned->id_len = quic->local_ctx_length;
+
+    /* Apply encryption if required */
+    switch (ctx->cnx_id_select) {
+    case picoquic_connection_id_encrypt_basic:
+        /* encryption under mask -- not implemented yet */
+        break;
+    case picoquic_connection_id_encrypt_global:
+        /* global encryption -- not implemented yet */
+        break;
+    default:
+        /* Leave it unencrypted */
+        break;
+    }
+}
+
+picoquic_connection_id_encrypt_ctx_t * picoquic_connection_id_production_create_ctx(
+    char const * select_type, char const * default_value_hex, char const * mask_hex)
+{
+    picoquic_connection_id_encrypt_ctx_t* ctx = (picoquic_connection_id_encrypt_ctx_t*)
+        malloc(sizeof(picoquic_connection_id_encrypt_ctx_t));
+
+    if (ctx != NULL) {
+        size_t lv, lm;
+        memset(ctx, 0, sizeof(picoquic_connection_id_encrypt_ctx_t));
+        ctx->cnx_id_select = atoi(select_type);
+        /* TODO: find an alternative to parsing a 64 bit integer */
+        lv = picoquic_parse_connection_id_hexa(default_value_hex, strlen(default_value_hex), &ctx->cnx_id_val);
+        lm = picoquic_parse_connection_id_hexa(mask_hex, strlen(mask_hex), &ctx->cnx_id_val);
+
+        if (lm == 0 || lv == 0 || lm != lv) {
+            free(ctx);
+            ctx = NULL;
+        }
+    }
+
+    return ctx;
+}
+
+void picoquic_connection_id_production_free_ctx(picoquic_quic_t * quic, void * cnx_id_cb_data)
+{
+    free(cnx_id_cb_data);
 }
 
 void picoquic_set_fuzz(picoquic_quic_t * quic, picoquic_fuzz_fn fuzz_fn, void * fuzz_ctx)

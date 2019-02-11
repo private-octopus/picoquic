@@ -278,6 +278,9 @@ typedef struct st_picoquic_tp_t {
     picoquic_tp_prefered_address_t prefered_address;
 } picoquic_tp_t;
 
+/*
+ * Stream types
+ */
 #define PICOQUIC_STREAM_ID_TYPE_MASK 3
 #define PICOQUIC_STREAM_ID_CLIENT_INITIATED 0
 #define PICOQUIC_STREAM_ID_SERVER_INITIATED 1
@@ -320,16 +323,50 @@ uint64_t picoquic_current_time(); /* wall time */
 uint64_t picoquic_get_quic_time(picoquic_quic_t* quic); /* connection time, compatible with simulations */
 
 
-/* Callback function for providing stream data to the application.
-     * If stream_id is zero, this delivers misc frames or changes in
-     * connection state.
-     */
+/* Callback function for providing stream data to the application. 
+ * If stream_id is zero, this delivers misc frames or changes in 
+ * connection state.
+ */
 typedef int (*picoquic_stream_data_cb_fn)(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx);
 
-typedef void (*cnx_id_cb_fn)(picoquic_connection_id_t cnx_id_local,
+/* Callback function for producing a connection ID compatible
+ * with the server environment.
+ */
+
+typedef void (*cnx_id_cb_fn)(picoquic_quic_t * quic, picoquic_connection_id_t cnx_id_local,
     picoquic_connection_id_t cnx_id_remote, void* cnx_id_cb_data, picoquic_connection_id_t * cnx_id_returned);
+
+/* Default connection ID management functions, supporting a set of basic
+ * callback policies:
+ *  - 
+ */
+
+typedef enum {
+    picoquic_connection_id_random = 0,
+    picoquic_connection_id_remote = 1,
+    picoquic_connection_id_encrypt_basic = 2,
+    picoquic_connection_id_encrypt_global = 3
+} picoquic_connection_id_encrypt_enum;
+
+
+typedef struct st_picoquic_connection_id_encrypt_ctx_t {
+    enum picoquic_cnx_id_select cnx_id_select;
+    picoquic_connection_id_t cnx_id_mask;
+    picoquic_connection_id_t cnx_id_val;
+
+} picoquic_connection_id_encrypt_ctx_t;
+
+void picoquic_connection_id_production_callback(picoquic_quic_t * quic, picoquic_connection_id_t cnx_id_local,
+    picoquic_connection_id_t cnx_id_remote, void* cnx_id_cb_data, picoquic_connection_id_t * cnx_id_returned);
+
+picoquic_connection_id_encrypt_ctx_t * picoquic_connection_id_production_create_ctx(
+    char const * select_type, char const * default_value_hex, char const * mask_hex);
+
+void picoquic_connection_id_production_free_ctx(
+    picoquic_quic_t * quic, void* cnx_id_cb_data);
+
 
 /* The fuzzer function is used to inject error in packets randomly.
  * It is called just prior to sending a packet, and can randomly
