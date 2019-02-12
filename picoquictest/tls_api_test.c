@@ -951,7 +951,8 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
 
             /* Check the destination address  before submitting the packet */
             /* TODO: better test when testing more than NAT rebinding. */
-            if (picoquic_compare_addr((struct sockaddr *)&test_ctx->server_addr,
+            if (test_ctx->server_use_multiple_addresses ||
+                picoquic_compare_addr((struct sockaddr *)&test_ctx->server_addr,
                 (struct sockaddr *)&packet->addr_to) == 0) {
                 ret = picoquic_incoming_packet(test_ctx->qserver, packet->bytes, (uint32_t)packet->length,
                     (struct sockaddr*)&packet->addr_from,
@@ -1363,6 +1364,11 @@ int tls_api_one_scenario_init(
 
     if (ret == 0 && server_params != NULL) {
         ret = picoquic_set_default_tp((*p_test_ctx)->qserver, server_params);
+        if (server_params->prefered_address.ipv4Port != 0 ||
+            server_params->prefered_address.ipv6Port != 0) {
+            /* If testing server migration, disable address check */
+            (*p_test_ctx)->server_use_multiple_addresses = 1;
+        }
     }
 
     return ret;
@@ -5932,4 +5938,70 @@ int document_addresses_test()
 int null_sni_test()
 {
     return tls_api_test_with_loss(NULL, PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, NULL);
+}
+
+/*
+ * Test whether server redirection is applied properly
+ */
+
+int preferred_address_test()
+{
+    int ret;
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    struct sockaddr_in server_preferred;
+    picoquic_tp_t server_parameters;
+
+
+    server_preferred.sin_family = AF_INET;
+#ifdef _WINDOWS
+    server_preferred.sin_addr.S_un.S_addr = 0x0A00000B;
+#else
+    server_preferred.sin_addr.s_addr = 0x0A00000B;
+#endif
+    server_preferred.sin_port = 5678;
+
+    memset(&server_parameters, 0, sizeof(picoquic_tp_t));
+
+    picoquic_init_transport_parameters(&server_parameters, 1);
+
+    /* Create an alternate IP address, and use it as preferred address */
+    server_parameters.prefered_address.is_defined = 1;
+    memcpy(server_parameters.prefered_address.ipv4Address, &server_preferred.sin_addr, 4);
+    server_parameters.prefered_address.ipv4Port = server_preferred.sin_port;
+
+    ret = tls_api_one_scenario_init(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        NULL, &server_parameters);
+
+
+    if (ret == 0) {
+        /* Run a basic test scenario */
+
+        ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+            test_scenario_many_streams, sizeof(test_scenario_many_streams), 0, 0, 0, 0, 250000);
+    }
+
+    /* Verify that the client and server have both migrated to using the preferred address */
+    if (ret == 0 && picoquic_compare_addr((struct sockaddr*)&server_preferred,
+        (struct sockaddr*)&test_ctx->cnx_client->path[0]->peer_addr) != 0) {
+        DBG_PRINTF("%s", "Server address at client not updated\n");
+        ret = -1;
+    }
+
+    if (ret == 0 && test_ctx->cnx_server != NULL &&
+        picoquic_compare_addr((struct sockaddr*)&server_preferred,
+        (struct sockaddr*)&test_ctx->cnx_server->path[0]->local_addr) != 0) {
+        DBG_PRINTF("%s", "Server address not promoted\n");
+        ret = -1;
+    }
+
+    /* And then free the resource
+     */
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
 }
