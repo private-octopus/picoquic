@@ -2299,6 +2299,16 @@ int picoquic_is_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t 
             *next_wake_time = pkt_ctx->highest_ack_sent_time + pkt_ctx->ack_delay_local;
         }
     }
+    else if (pkt_ctx->highest_ack_sent + 8 <= pkt_ctx->first_sack_item.end_of_sack_range &&
+        pkt_ctx->highest_ack_sent_time + pkt_ctx->ack_delay_local <= current_time) {
+        /* Force sending an ack-of-ack from time to time, as a low priority action */
+        if (pkt_ctx->first_sack_item.end_of_sack_range == (uint64_t)((int64_t)-1)) {
+            ret = 0;
+        }
+        else {
+            ret = 1;
+        }
+    }
     return ret;
 }
 
