@@ -168,6 +168,7 @@ int socket_ecn_test();
 int zero_rtt_vnego_test();
 int ffx31_test();
 int null_sni_test();
+int preferred_address_test();
 
 #ifdef __cplusplus
 }

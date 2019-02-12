@@ -1442,6 +1442,58 @@ void picoquic_implicit_handshake_ack(picoquic_cnx_t* cnx, picoquic_packet_contex
     }
 }
 
+/* Program a migration to the server preferred address if present */
+int picoquic_prepare_server_address_migration(picoquic_cnx_t* cnx)
+{
+    int ret = 0;
+
+    if (cnx->remote_parameters.prefered_address.is_defined)
+    {
+        int ipv4_received = cnx->remote_parameters.prefered_address.ipv4Port != 0;
+        int ipv6_received = cnx->remote_parameters.prefered_address.ipv6Port != 0;
+
+        /* Add the connection ID to the local stash */
+        ret = picoquic_enqueue_cnxid_stash(cnx, 1,
+            cnx->remote_parameters.prefered_address.connection_id.id_len,
+            cnx->remote_parameters.prefered_address.connection_id.id,
+            cnx->remote_parameters.prefered_address.statelessResetToken,
+            NULL);
+        if (ret != 0) {
+            ret = picoquic_connection_error(cnx, (uint16_t)ret, picoquic_frame_type_new_connection_id);
+        }
+        else if(ipv4_received || ipv6_received) {
+            struct sockaddr_storage dest_addr;
+
+            memset(&dest_addr, 0, sizeof(struct sockaddr_storage));
+
+            /* program a migration. */
+            if (ipv4_received && cnx->path[0]->peer_addr.ss_family == AF_INET) {
+                /* select IPv4 */
+                ipv6_received = 0;
+            }
+
+            if (ipv6_received) {
+                /* configure an IPv6 sockaddr */
+                struct sockaddr_in6 * d6 = (struct sockaddr_in6 *)&dest_addr;
+                d6->sin6_family = AF_INET;
+                d6->sin6_port = cnx->remote_parameters.prefered_address.ipv6Port;
+                memcpy(&d6->sin6_addr, cnx->remote_parameters.prefered_address.ipv6Address, 16);
+            }
+            else {
+                /* configure an IPv4 sockaddr */
+                struct sockaddr_in * d4 = (struct sockaddr_in *)&dest_addr;
+                d4->sin_family = AF_INET;
+                d4->sin_port = cnx->remote_parameters.prefered_address.ipv4Port;
+                memcpy(&d4->sin_addr, cnx->remote_parameters.prefered_address.ipv4Address, 4);
+            }
+
+            ret = picoquic_create_probe(cnx, (struct sockaddr *)&dest_addr, NULL);
+        }
+    }
+
+    return ret;
+}
+
 /* Prepare the next packet to send when in one of the client initial states */
 int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * path_x, picoquic_packet_t* packet,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length, uint64_t * next_wake_time)
@@ -1662,9 +1714,14 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                                 cnx->tls_stream[1].send_queue == NULL &&
                                 cnx->tls_stream[2].send_queue == NULL) {
                                 cnx->cnx_state = picoquic_state_client_ready_start;
-                                if (cnx->callback_fn != NULL) {
-                                    if (cnx->callback_fn(cnx, 0, NULL, 0, picoquic_callback_almost_ready, cnx->callback_ctx) != 0) {
-                                        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
+                                /* Start migration to server preferred address if present */
+                                ret = picoquic_prepare_server_address_migration(cnx);
+                                if (ret == 0) {
+                                    /* Signal the application */
+                                    if (cnx->callback_fn != NULL) {
+                                        if (cnx->callback_fn(cnx, 0, NULL, 0, picoquic_callback_almost_ready, cnx->callback_ctx) != 0) {
+                                            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
+                                        }
                                     }
                                 }
                             }

@@ -707,6 +707,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(preferred_address)
+        {
+            int ret = preferred_address_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+        
         TEST_METHOD(test_cnxid_renewal)
         {
             int ret = cnxid_renewal_test();

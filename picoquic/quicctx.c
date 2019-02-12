@@ -1342,6 +1342,19 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             picoquic_init_transport_parameters(&cnx->local_parameters, cnx->client_mode);
         } else {
             memcpy(&cnx->local_parameters, quic->default_tp, sizeof(picoquic_tp_t));
+            /* If the default parameters include preferred address, document it */
+            if (cnx->local_parameters.prefered_address.is_defined) {
+                /* Create an additional path */
+                if (picoquic_create_path(cnx, start_time, NULL, NULL) == 1) {
+                    /* register it, so the cnx_id is defined */
+                    picoquic_register_path(cnx, cnx->path[1]);
+                    /* copy the connection ID */
+                    cnx->local_parameters.prefered_address.connection_id = cnx->path[1]->local_cnxid;
+                    /* Create the reset secret */
+                    (void)picoquic_create_cnxid_reset_secret(cnx->quic, cnx->path[1]->local_cnxid,
+                        cnx->local_parameters.prefered_address.statelessResetToken);
+                }
+            }
         }
         if (cnx->quic->mtu_max > 0)
         {

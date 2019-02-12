@@ -136,6 +136,7 @@ static const picoquic_test_def_t test_table[] = {
     { "migration" , migration_test },
     { "migration_long", migration_test_long },
     { "migration_with_loss", migration_test_loss },
+    { "preferred_address", preferred_address_test},
     { "cnxid_renewal",  cnxid_renewal_test },
     { "retire_cnxid", retire_cnxid_test },
     { "server_busy", server_busy_test },
