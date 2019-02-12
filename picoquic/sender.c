@@ -2510,6 +2510,18 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                     }
 
                     if (length > header_length) {
+                        if (is_pure_ack &&
+                            cnx->pkt_ctx[pc].highest_acknowledged + 64 < cnx->pkt_ctx[pc].send_sequence &&
+                            !cnx->pkt_ctx[pc].ack_of_ack_requested &&
+                            path_x == cnx->path[0] &&
+                            cnx->pkt_ctx[pc].highest_acknowledged_time + 2*cnx->path[0]->smoothed_rtt < current_time &&
+                            send_buffer_min_max - checksum_overhead > length) {
+                            /* In the case where many acks are not acknowledged, ask one from the server */
+                            bytes[length++] = picoquic_frame_type_ping;
+                            cnx->pkt_ctx[pc].ack_of_ack_requested = 1;
+                            is_pure_ack = 0;
+                        }
+
                         length = picoquic_pad_to_policy(cnx, bytes, length, (uint32_t)(send_buffer_min_max - checksum_overhead));
                     }
                     else if (ret == 0 && send_buffer_max > path_x->send_mtu
