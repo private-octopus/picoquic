@@ -1463,7 +1463,6 @@ int picoquic_prepare_server_address_migration(picoquic_cnx_t* cnx)
         }
         else if(ipv4_received || ipv6_received) {
             struct sockaddr_storage dest_addr;
-            struct sockaddr * srce_addr;
 
             memset(&dest_addr, 0, sizeof(struct sockaddr_storage));
 
@@ -1472,24 +1471,20 @@ int picoquic_prepare_server_address_migration(picoquic_cnx_t* cnx)
                 /* select IPv4 */
                 ipv6_received = 0;
             }
-            else if (ipv6_received && cnx->path[0]->peer_addr.ss_family == AF_INET6) {
-                /* select IPv6 */
-                ipv4_received = 0;
-            }
 
-            if (ipv4_received) {
-                /* configure an IPv4 sockaddr */
-                struct sockaddr_in * d4 = (struct sockaddr_in *)&dest_addr;
-                d4->sin_family = AF_INET;
-                d4->sin_port = cnx->remote_parameters.prefered_address.ipv4Port;
-                memcpy(&d4->sin_addr, cnx->remote_parameters.prefered_address.ipv4Address, 4);
-            }
-            else {
+            if (ipv6_received) {
                 /* configure an IPv6 sockaddr */
                 struct sockaddr_in6 * d6 = (struct sockaddr_in6 *)&dest_addr;
                 d6->sin6_family = AF_INET;
                 d6->sin6_port = cnx->remote_parameters.prefered_address.ipv6Port;
                 memcpy(&d6->sin6_addr, cnx->remote_parameters.prefered_address.ipv6Address, 16);
+            }
+            else {
+                /* configure an IPv4 sockaddr */
+                struct sockaddr_in * d4 = (struct sockaddr_in *)&dest_addr;
+                d4->sin_family = AF_INET;
+                d4->sin_port = cnx->remote_parameters.prefered_address.ipv4Port;
+                memcpy(&d4->sin_addr, cnx->remote_parameters.prefered_address.ipv4Address, 4);
             }
 
             ret = picoquic_create_probe(cnx, (struct sockaddr *)&dest_addr, NULL);
