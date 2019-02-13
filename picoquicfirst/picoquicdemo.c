@@ -652,11 +652,6 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
     /* Wait for packets */
     while (ret == 0 && picoquic_get_cnx_state(cnx_client) != picoquic_state_disconnected) {
         unsigned char received_ecn;
-        if (picoquic_is_cnx_backlog_empty(cnx_client) && callback_ctx.nb_open_streams == 0) {
-            delay_max = 10000;
-        } else {
-            delay_max = 10000000;
-        }
 
         from_length = to_length = sizeof(struct sockaddr_storage);
 
@@ -811,6 +806,22 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
                             {
                                 fprintf(F_log, "All done, Closing the connection.\n");
                             }
+                            if (picoquic_get_data_received(cnx_client) > 0) {
+                                double duration_usec = (double)(current_time - picoquic_get_cnx_start_time(cnx_client));
+
+                                if (duration_usec > 0) {
+                                    double receive_rate_mbps = ((double)picoquic_get_data_received(cnx_client)) / duration_usec;
+                                    fprintf(stdout, "Received %llu bytes in %f seconds, %f Mbps.\n",
+                                        (unsigned long long)picoquic_get_data_received(cnx_client),
+                                        duration_usec/1000000.0, receive_rate_mbps);
+                                    if (F_log != stdout && F_log != stderr)
+                                    {
+                                        fprintf(F_log, "Received %llu bytes in %f seconds, %f Mbps.\n",
+                                            (unsigned long long)picoquic_get_data_received(cnx_client),
+                                            duration_usec / 1000000.0, receive_rate_mbps);
+                                    }
+                                }
+                            }
 
                             ret = picoquic_close(cnx_client, 0);
                         } else if (
@@ -862,6 +873,11 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
                 }
 
                 delta_t = picoquic_get_next_wake_delay(qclient, current_time, delay_max);
+
+                if (delta_t > 10000 && callback_ctx.nb_open_streams == 0 &&
+                    picoquic_is_cnx_backlog_empty(cnx_client)) {
+                    delta_t = 10000;
+                }
             }
         }
     }
