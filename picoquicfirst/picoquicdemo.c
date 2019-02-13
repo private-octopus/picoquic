@@ -810,7 +810,7 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
                                 double duration_usec = (double)(current_time - picoquic_get_cnx_start_time(cnx_client));
 
                                 if (duration_usec > 0) {
-                                    double receive_rate_mbps = ((double)picoquic_get_data_received(cnx_client)) / duration_usec;
+                                    double receive_rate_mbps = 8.0*((double)picoquic_get_data_received(cnx_client)) / duration_usec;
                                     fprintf(stdout, "Received %llu bytes in %f seconds, %f Mbps.\n",
                                         (unsigned long long)picoquic_get_data_received(cnx_client),
                                         duration_usec/1000000.0, receive_rate_mbps);
