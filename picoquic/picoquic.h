@@ -670,6 +670,10 @@ int picoquic_get_local_error(picoquic_cnx_t* cnx);
 /* Returns the remote error of the given connection context. */
 int picoquic_get_remote_error(picoquic_cnx_t* cnx);
 
+uint64_t picoquic_get_data_sent(picoquic_cnx_t * cnx);
+
+uint64_t picoquic_get_data_received(picoquic_cnx_t * cnx);
+
 #ifdef __cplusplus
 }
 #endif

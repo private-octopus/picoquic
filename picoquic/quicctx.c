@@ -2270,6 +2270,16 @@ int picoquic_get_remote_error(picoquic_cnx_t* cnx)
     return cnx->remote_error;
 }
 
+uint64_t picoquic_get_data_sent(picoquic_cnx_t* cnx)
+{
+    return cnx->data_sent;
+}
+
+uint64_t picoquic_get_data_received(picoquic_cnx_t* cnx)
+{
+    return cnx->data_received;
+}
+
 void picoquic_set_client_authentication(picoquic_quic_t* quic, int client_authentication) {
     picoquic_tls_set_client_authentication(quic, client_authentication);
 }

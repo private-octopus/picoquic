@@ -1567,7 +1567,12 @@ void picoquic_aead_free(void* aead_context)
 
 uint32_t picoquic_aead_get_checksum_length(void* aead_context)
 {
-    return ((uint32_t)((ptls_aead_context_t*)aead_context)->algo->tag_size);
+    uint32_t tag_size = (uint32_t)((ptls_aead_context_t*)aead_context)->algo->tag_size;
+    /* TODO: remove this temporary fix to deal with Feb 2019 change in picotls */
+    if (tag_size > 16) {
+        tag_size = 16;
+    }
+    return tag_size;
 }
 
 /* Setting of encryption contexts for test */
