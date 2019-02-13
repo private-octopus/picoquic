@@ -3977,12 +3977,12 @@ int rebinding_stress_test()
             uint64_t server_arrival = test_ctx->c_to_s_link->last_packet->arrival_time;
 
             if (server_arrival > last_inject_time) {
-                /* 50% chance of packet injection, 25% chances of reusing test address */
+                /* 49% chance of packet injection, 24% chances of reusing test address */
                 uint64_t rand100 = picoquic_test_uniform_random(&random_context, 100);
                 last_inject_time = server_arrival;
-                if (rand100 < 50) {
+                if (rand100 < 49) {
                     struct sockaddr * bad_address;
-                    if (rand100 < 25) {
+                    if (rand100 < 24) {
                         bad_address = (struct sockaddr *)&hack_address;
                     }
                     else {
