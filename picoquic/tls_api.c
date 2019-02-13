@@ -2092,185 +2092,6 @@ int picoquic_verify_retry_token(picoquic_quic_t* quic, struct sockaddr * addr_pe
 }
 
 /*
- * Encryption module for connection ID.
- *
- * The connection ID can be defined with sizes 4 to 18.
- * For size=16, we can use AES, but for the other sizes we need
- * a variable length construct. The ffx code below will
- * accomodate any length from 4 to 31.
- *
- * We demonstrate here a simple encryption process derived
- * from the FFX algorithms, which is effectively a specific
- * mode of running a verified encryption code.
- *
- * See "Ciphers with Arbitrary Finite Domains" by
- * John Black and Phillip Rogaway, 2001 --
- * http://web.cs.ucdavis.edu/~rogaway/papers/subset.pdf
- *
- * The number of passes is set here to 10. This is as
- * conservative as the FF1 algorithm specified by NIST.
- * This is based on "Luby-Rackoff: 7 Rounds are Enough
- * for 2^n(1-epsilon) Security" by Jacques Patarin, 2003 --
- * https://www.iacr.org/archive/crypto2003/27290510/27290510.pdf
- * We could argue that 8 passes or even 4 passes would be
- * enough for our application.
- */
-
-typedef struct st_picoquic_ffx31_state_t {
-    ptls_cipher_context_t * enc_ctx;
-    int nb_rounds;
-    size_t len;
-    size_t nb_left;
-    size_t nb_right;
-    uint8_t mask_right[16];
-    uint8_t mask_left[16];
-} picoquic_ffx31_state_t;
-
-void * picoquic_ffx31_get_context(char const * alg_name, int nb_rounds, const void *mask, size_t len, void * key)
-{
-    picoquic_ffx31_state_t * ctx = NULL;
-    ptls_cipher_context_t * enc_ctx = NULL;
-
-    if (len <= 31) {
-        /* len must be lower than 31 */
-
-        if (strcmp(alg_name, "CHACHA20") == 0) {
-            enc_ctx = ptls_cipher_new(&ptls_minicrypto_chacha20, 1, key);
-        }
-        else if (strcmp(alg_name, "AES128") == 0 ||
-            strcmp(alg_name, "AES128-CTR") == 0) {
-            ptls_aead_algorithm_t* aead = &ptls_openssl_aes128gcm;
-            enc_ctx = ptls_cipher_new(aead->ctr_cipher, 1, key);
-        }
-    }
-
-    if (enc_ctx != NULL) {
-        ctx = (picoquic_ffx31_state_t *)malloc(sizeof(picoquic_ffx31_state_t));
-        if (ctx == NULL) {
-            ptls_cipher_free(enc_ctx);
-            enc_ctx = NULL;
-        }
-    }
-
-    if (ctx != NULL) {
-        ctx->enc_ctx = enc_ctx;
-        ctx->nb_rounds = nb_rounds;
-        ctx->len = len;
-        ctx->nb_left = (int)len / 2;
-        ctx->nb_right = (int)len - ctx->nb_left;
-        if (mask != NULL) {
-            /* Split the mask in two halves */
-            memcpy(ctx->mask_left, mask, ctx->nb_left);
-            memcpy(ctx->mask_right, ((uint8_t *)mask) + ctx->nb_left, ctx->nb_right);
-            memset(ctx->mask_left + ctx->nb_left, 0, 16 - ctx->nb_left);
-            memset(ctx->mask_right + ctx->nb_right, 0, 16 - ctx->nb_right);
-        }
-        else {
-            memset(ctx->mask_left, 0xFF, 16);
-            memset(ctx->mask_right, 0xFF, 16);
-        }
-    }
-
-    return ctx;
-}
-
-void picoquic_ffx31_delete_context(void * v_ctx) 
-{
-    picoquic_ffx31_state_t * ctx = (picoquic_ffx31_state_t *)v_ctx;
-    ptls_cipher_free(ctx->enc_ctx);
-    free(ctx);
-}
-
-void picoquic_ffx31_encrypt(void * v_ctx, void *output, const void *input, size_t len)
-{
-    picoquic_ffx31_state_t * ctx = (picoquic_ffx31_state_t *)v_ctx;
-    uint8_t left[16], right[16], confusion[32];
-    uint8_t zero16[16] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-
-    /* len must be lower than 31 */
-    if (len != ctx->len) {
-        return;
-    }
-    /* Split the input in two halves */
-    memcpy(left, input, ctx->nb_left);
-    memcpy(right, ((uint8_t *)input) + ctx->nb_left, ctx->nb_right);
-    memset(left + ctx->nb_left, 0, 16 - ctx->nb_left);
-    memset(right + ctx->nb_right, 0, 16 - ctx->nb_right);
-
-    /* Feistel construct, using the specified algorithm as S-Box */
-
-    for (int i = 0; i < ctx->nb_rounds; i += 2) {
-        /* Each pass encrypts a zero field with a cipher using one
-         * half of the message as IV. This construct lets us use
-         * either AES or chacha 20 */
-        ptls_cipher_init(ctx->enc_ctx, right);
-        ptls_cipher_encrypt(ctx->enc_ctx, confusion, zero16, 16);
-        /* We use a mask to guarantee
-         * that some bits are unchanged */
-        for (int j = 0; j < ctx->nb_left; j++) {
-            left[j] ^= (confusion[j] & ctx->mask_left[j]);
-        }
-
-        memset(confusion, 0, 16);
-        ptls_cipher_init(ctx->enc_ctx, left);
-        ptls_cipher_encrypt(ctx->enc_ctx, confusion, zero16, 16);
-        for (int j = 0; j < ctx->nb_right; j++) {
-            right[j] ^= (confusion[j] & ctx->mask_right[j]);
-        }
-    }
-
-    /* After enough passes, we have a very strong length preserving
-     * encryption, only that many times slower than the underlying
-     * algorithm. We copy the result to the output */
-    memcpy(output, left, ctx->nb_left);
-    memcpy(((uint8_t *)output) + ctx->nb_left, right, ctx->nb_right);
-}
-
-void picoquic_ffx31_decrypt(void * v_ctx, void *output, const void *input, size_t len)
-{
-    picoquic_ffx31_state_t * ctx = (picoquic_ffx31_state_t *)v_ctx;
-    uint8_t left[16], right[16], confusion[16];
-    uint8_t zero16[16] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-
-    /* len must be lower than 31 */
-    if (len != ctx->len) {
-        return;
-    }
-
-    /* Split the input in two halves */
-    memcpy(left, input, ctx->nb_left);
-    memcpy(right, ((uint8_t *)input) + ctx->nb_left, ctx->nb_right);
-    memset(left + ctx->nb_left, 0, 16 - ctx->nb_left);
-    memset(right + ctx->nb_right, 0, 16 - ctx->nb_right);
-
-
-    /* Feistel construct, using the specified algorithm as S-Box,
-     * in the opposite order of the encryption */
-
-    for (int i = 0; i < ctx->nb_rounds; i += 2) {
-        /* Each pass encrypts a zero field with a cipher using one
-         * half of the message as IV. This construct lets us use
-         * either AES or chacha 20 */
-        ptls_cipher_init(ctx->enc_ctx, left);
-        ptls_cipher_encrypt(ctx->enc_ctx, confusion, zero16, 16);
-        for (int j = 0; j < ctx->nb_right; j++) {
-            right[j] ^= (confusion[j] & ctx->mask_right[j]);
-        }
-        ptls_cipher_init(ctx->enc_ctx, right);
-        ptls_cipher_encrypt(ctx->enc_ctx, confusion, zero16, 16);
-        /* We could use a mask to guarantee
-         * that some bits are unchanged */
-        for (int j = 0; j < ctx->nb_left; j++) {
-            left[j] ^= (confusion[j] & ctx->mask_left[j]);
-        }
-    }
-
-    /* Copy the decrypted result to the output */
-    memcpy(output, left, ctx->nb_left);
-    memcpy(((uint8_t *)output) + ctx->nb_left, right, ctx->nb_right);
-}
-
-/*
  * Encryption functions for CID encryption
  */
 
@@ -2305,7 +2126,7 @@ void picoquic_cid_decrypt_under_mask(void *cid_enc, picoquic_connection_id_t * c
 
 void picoquic_cid_encrypt_global(void *cid_ffx, picoquic_connection_id_t * cid)
 {
-    picoquic_ffx31_encrypt(cid_ffx, cid->id, cid->id, cid->id_len);
+    //picoquic_ffx31_encrypt(cid_ffx, cid->id, cid->id, cid->id_len);
 }
 
 void picoquic_cid_decrypt_global(void *cid_ffx, picoquic_connection_id_t * cid_in, picoquic_connection_id_t * cid_out)
@@ -2313,5 +2134,5 @@ void picoquic_cid_decrypt_global(void *cid_ffx, picoquic_connection_id_t * cid_i
     memset(cid_out, 0, sizeof(picoquic_connection_id_t));
     cid_out->id_len = cid_in->id_len;
 
-    picoquic_ffx31_encrypt(cid_ffx, cid_out->id, cid_in->id, cid_in->id_len);
+    //picoquic_ffx31_encrypt(cid_ffx, cid_out->id, cid_in->id, cid_in->id_len);
 }
