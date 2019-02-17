@@ -1088,14 +1088,7 @@ int key_rotation_vector_test()
  * Verify that encryption and decryption works for all lengths between 4 and 18
  */
 
-static uint8_t cid_test_source[22] = {
-    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j' };
 static uint8_t cid_test_secret[16] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
-static uint8_t cid_test_mask[18] = {
-    0x7F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0xFF
-};
 
 static const picoquic_connection_id_t test_cid[] = {
     { {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18}, 18 },
