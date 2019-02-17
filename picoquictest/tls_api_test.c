@@ -5508,7 +5508,7 @@ int cid_length_test_one(uint8_t length)
         picoquic_delete_cnx(test_ctx->cnx_client);
         test_ctx->cnx_client = NULL;
         /* Change the default cnx_id length*/
-        test_ctx->qclient->local_ctx_length = length;
+        test_ctx->qclient->local_cnxid_length = length;
         /* re-create a client connection */
         test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
             picoquic_null_connection_id, picoquic_null_connection_id,

@@ -154,6 +154,57 @@ int debug_printf_reset(int suspended)
     return ret;
 }
 
+int picoquic_parse_hexa_digit(char x) {
+    int ret = -1;
+
+    if (x >= '0' && x <= '9') {
+        ret = x - '0';
+    }
+    else if (x >= 'A' && x <= 'F') {
+        ret = x - 'A' + 10;
+    }
+    else if (x >= 'a' && x <= 'f') {
+        ret = x - 'a' + 10;
+    }
+
+    return ret;
+}
+
+size_t picoquic_parse_hexa(char const * hex_input, size_t input_length, uint8_t * bin_output, size_t output_max)
+{
+    size_t ret = 0;
+    if (input_length > 0 || (input_length & 1) == 0 || 2 * output_max >= input_length) {
+        size_t offset = 0;
+
+        while (offset < input_length) {
+            int a = picoquic_parse_hexa_digit(hex_input[offset++]);
+            int b = picoquic_parse_hexa_digit(hex_input[offset++]);
+
+            if (a < 0 || b < 0) {
+                ret = 0;
+                break;
+            }
+            else {
+                bin_output[ret++] = (uint8_t)((a << 4) | b);
+            }
+        }
+    }
+
+    return ret;
+}
+
+uint8_t picoquic_parse_connection_id_hexa(char const * hex_input, size_t input_length, picoquic_connection_id_t * cnx_id)
+{
+    memset(cnx_id, 0, sizeof(picoquic_connection_id_t));
+    cnx_id->id_len = (uint8_t) picoquic_parse_hexa(hex_input, input_length, cnx_id->id, 18);
+
+    if (cnx_id->id_len == 0) {
+        memset(cnx_id, 0, sizeof(picoquic_connection_id_t));
+    }
+
+    return (cnx_id->id_len);
+}
+
 uint8_t picoquic_create_packet_header_cnxid_lengths(uint8_t dest_len, uint8_t srce_len)
 {
     uint8_t ret;

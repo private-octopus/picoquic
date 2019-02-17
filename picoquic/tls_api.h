@@ -31,15 +31,15 @@
 #define PICOQUIC_LABEL_KEY "key"
 #define PICOQUIC_LABEL_IV "iv"
 #define PICOQUIC_LABEL_HP "hp"
+#define PICOQUIC_LABEL_CID "cid"
+#define PICOQUIC_LABEL_CID_GLOBAL "cid global"
+#define PICOQUIC_LABEL_CID_GLOBAL_ROUNDS 4
 
 #define PICOQUIC_LABEL_QUIC_BASE NULL
 #define PICOQUIC_LABEL_QUIC_KEY_BASE "tls13 quic "
 
 int picoquic_master_tlscontext(picoquic_quic_t* quic, char const* cert_file_name, char const* key_file_name,
     char const * cert_root_file_name, const uint8_t* ticket_key, size_t ticket_key_length);
-
-/* TODO: remove this declaration once we drop support for draft 14 */
-int picoquic_tls_context_is_draft_14(picoquic_quic_t * quic);
 
 void picoquic_master_tlscontext_free(picoquic_quic_t* quic);
 
@@ -133,5 +133,15 @@ int picoquic_prepare_retry_token(picoquic_quic_t* quic, struct sockaddr * addr_p
 int picoquic_verify_retry_token(picoquic_quic_t* quic, struct sockaddr * addr_peer,
     uint64_t current_time, picoquic_connection_id_t * odcid,
     uint8_t * token, uint32_t token_size);
+
+void picoquic_cid_free_under_mask_ctx(void * v_pn_enc);
+int picoquic_cid_get_under_mask_ctx(void ** v_pn_enc, const void * secret);
+void picoquic_cid_encrypt_under_mask(void * cid_enc, const picoquic_connection_id_t * cid_in, const picoquic_connection_id_t * mask, picoquic_connection_id_t * cid_out);
+void picoquic_cid_decrypt_under_mask(void * cid_enc, const picoquic_connection_id_t * cid_in, const picoquic_connection_id_t * mask, picoquic_connection_id_t * cid_out);
+
+void picoquic_cid_free_encrypt_global_ctx(void ** v_cid_enc);
+int picoquic_cid_get_encrypt_global_ctx(void ** v_cid_enc, int is_enc, const void * secret, int cid_length);
+void picoquic_cid_encrypt_global(void * cid_enc, const picoquic_connection_id_t * cid_in, picoquic_connection_id_t * cid_out);
+void picoquic_cid_decrypt_global(void * cid_ffx, const picoquic_connection_id_t * cid_in, picoquic_connection_id_t * cid_out);
 
 #endif /* TLS_API_H */

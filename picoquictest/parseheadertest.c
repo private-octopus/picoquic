@@ -335,7 +335,7 @@ int parseheadertest()
 
     for (size_t i = 0; ret == 0 && i < nb_test_entries; i++) {
         pcnx = (i < 3) ? NULL : cnx_10;
-        quic->local_ctx_length = test_entries[i].local_cid_length;
+        quic->local_cnxid_length = test_entries[i].local_cid_length;
         memset(packet, 0xcc, sizeof(packet));
         memcpy(packet, test_entries[i].packet, (uint32_t)test_entries[i].length);
 
@@ -369,7 +369,7 @@ int parseheadertest()
     }
 
     if (ret == 0) {
-        quic->local_ctx_length = 8;
+        quic->local_cnxid_length = 8;
     }
 
     for (size_t i = 0; ret == 0 && i < nb_test_entries; i++) {

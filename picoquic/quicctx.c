@@ -168,7 +168,7 @@ picoquic_quic_t* picoquic_create(uint32_t nb_connections,
     char const* default_alpn,
     picoquic_stream_data_cb_fn default_callback_fn,
     void* default_callback_ctx,
-    cnx_id_cb_fn cnx_id_callback,
+    picoquic_connection_id_cb_fn cnx_id_callback,
     void* cnx_id_callback_ctx,
     uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE],
     uint64_t current_time,
@@ -192,7 +192,7 @@ picoquic_quic_t* picoquic_create(uint32_t nb_connections,
         quic->cnx_id_callback_fn = cnx_id_callback;
         quic->cnx_id_callback_ctx = cnx_id_callback_ctx;
         quic->p_simulated_time = p_simulated_time;
-        quic->local_ctx_length = 8; /* TODO: should be lower on clients-only implementation */
+        quic->local_cnxid_length = 8; /* TODO: should be lower on clients-only implementation */
         quic->padding_multiple_default = 0; /* TODO: consider default = 128 */
         quic->padding_minsize_default = PICOQUIC_RESET_PACKET_MIN_SIZE;
 
@@ -774,10 +774,10 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, struct sockad
 void picoquic_register_path(picoquic_cnx_t* cnx, picoquic_path_t * path_x)
 {
     if (picoquic_is_connection_id_null(path_x->local_cnxid)) {
-        picoquic_create_random_cnx_id(cnx->quic, &path_x->local_cnxid, cnx->quic->local_ctx_length);
+        picoquic_create_random_cnx_id(cnx->quic, &path_x->local_cnxid, cnx->quic->local_cnxid_length);
 
         if (cnx->quic->cnx_id_callback_fn)
-            cnx->quic->cnx_id_callback_fn(path_x->local_cnxid, cnx->initial_cnxid,
+            cnx->quic->cnx_id_callback_fn(cnx->quic, path_x->local_cnxid, cnx->initial_cnxid,
                 cnx->quic->cnx_id_callback_ctx, &path_x->local_cnxid);
     }
 
@@ -1697,6 +1697,108 @@ uint64_t picoquic_get_quic_time(picoquic_quic_t* quic)
     return now;
 }
 
+void picoquic_connection_id_callback(picoquic_quic_t * quic, picoquic_connection_id_t cnx_id_local, picoquic_connection_id_t cnx_id_remote, void * cnx_id_cb_data, picoquic_connection_id_t * cnx_id_returned)
+{
+    picoquic_connection_id_callback_ctx_t* ctx = (picoquic_connection_id_callback_ctx_t*)cnx_id_cb_data;
+
+    quic->local_cnxid_length = ctx->cnx_id_val.id_len;
+
+    /* Initialize with either random value or */
+    memset(cnx_id_returned, 0, sizeof(picoquic_connection_id_t));
+    if (ctx->cnx_id_select == picoquic_connection_id_remote) {
+        /* Keeping this for compatibility with old buggy version */
+        cnx_id_local = cnx_id_remote;
+    } else {
+        /* setting value to random data */
+        picoquic_public_random(cnx_id_local.id, quic->local_cnxid_length);
+    }
+    cnx_id_local.id_len = quic->local_cnxid_length;
+
+    /* Apply substitution under mask */
+    for (uint8_t i = 0; i < cnx_id_local.id_len; i++) {
+        cnx_id_returned->id[i] = (cnx_id_local.id[i] & ctx->cnx_id_mask.id[i]) | ctx->cnx_id_val.id[i];
+    }
+    cnx_id_returned->id_len = quic->local_cnxid_length;
+
+    /* Apply encryption if required */
+    switch (ctx->cnx_id_select) {
+    case picoquic_connection_id_encrypt_basic:
+        /* encryption under mask */
+        if (ctx->cid_enc == NULL) {
+            int ret = picoquic_cid_get_under_mask_ctx(&ctx->cid_enc, quic->reset_seed);
+            if (ret != 0) {
+                DBG_PRINTF("Cannot create CID encryption context, ret=%d\n", ret);
+            }
+        }
+        if (ctx->cid_enc != NULL) {
+            picoquic_cid_encrypt_under_mask(ctx->cid_enc, cnx_id_returned, &ctx->cnx_id_mask, cnx_id_returned);
+        }
+        break;
+    case picoquic_connection_id_encrypt_global:
+        /* global encryption */
+        if (ctx->cid_enc == NULL) {
+            int ret = picoquic_cid_get_encrypt_global_ctx(&ctx->cid_enc, 1, quic->reset_seed, quic->local_cnxid_length);
+            if (ret != 0) {
+                DBG_PRINTF("Cannot create CID encryption context, ret=%d\n", ret);
+            }
+        }
+        if (ctx->cid_enc != NULL) {
+            picoquic_cid_encrypt_global(ctx->cid_enc, cnx_id_returned, cnx_id_returned);
+        }
+        break;
+    default:
+        /* Leave it unencrypted */
+        break;
+    }
+}
+
+picoquic_connection_id_callback_ctx_t * picoquic_connection_id_callback_create_ctx(
+    char const * select_type, char const * default_value_hex, char const * mask_hex)
+{
+    picoquic_connection_id_callback_ctx_t* ctx = (picoquic_connection_id_callback_ctx_t*)
+        malloc(sizeof(picoquic_connection_id_callback_ctx_t));
+
+    if (ctx != NULL) {
+        size_t lv, lm;
+        memset(ctx, 0, sizeof(picoquic_connection_id_callback_ctx_t));
+        ctx->cnx_id_select = atoi(select_type);
+        /* TODO: find an alternative to parsing a 64 bit integer */
+        lv = picoquic_parse_connection_id_hexa(default_value_hex, strlen(default_value_hex), &ctx->cnx_id_val);
+        lm = picoquic_parse_connection_id_hexa(mask_hex, strlen(mask_hex), &ctx->cnx_id_val);
+
+        if (lm == 0 || lv == 0 || lm != lv) {
+            free(ctx);
+            ctx = NULL;
+        }
+    }
+
+    return ctx;
+}
+
+void picoquic_connection_id_callback_free_ctx(void * cnx_id_cb_data)
+{
+    picoquic_connection_id_callback_ctx_t* ctx = (picoquic_connection_id_callback_ctx_t*)cnx_id_cb_data;
+
+    if (ctx != NULL && ctx->cid_enc != NULL) {
+        switch (ctx->cnx_id_select) {
+        case picoquic_connection_id_encrypt_basic:
+            /* encryption under mask */
+            picoquic_cid_free_under_mask_ctx(ctx->cid_enc);
+            break;
+        case picoquic_connection_id_encrypt_global:
+            /* global encryption */
+            picoquic_cid_free_encrypt_global_ctx(ctx->cid_enc);
+            break;
+        default:
+            /* Guessing for the most common, assuming free will work... */
+            picoquic_cid_free_under_mask_ctx(ctx->cid_enc);
+            break;
+        }
+        ctx->cid_enc = NULL;
+    }
+    free(cnx_id_cb_data);
+}
+
 void picoquic_set_fuzz(picoquic_quic_t * quic, picoquic_fuzz_fn fuzz_fn, void * fuzz_ctx)
 {
     quic->fuzz_fn = fuzz_fn;
@@ -1712,7 +1814,7 @@ int picoquic_set_default_connection_id_length(picoquic_quic_t* quic, uint8_t cid
 {
     int ret = 0;
 
-    if (cid_length != quic->local_ctx_length) {
+    if (cid_length != quic->local_cnxid_length) {
         if (cid_length != 0 && (cid_length < 4 || cid_length > 18)) {
             ret = PICOQUIC_ERROR_CNXID_CHECK;
         }
@@ -1720,7 +1822,7 @@ int picoquic_set_default_connection_id_length(picoquic_quic_t* quic, uint8_t cid
             ret = PICOQUIC_ERROR_CANNOT_CHANGE_ACTIVE_CONTEXT;
         }
         else {
-            quic->local_ctx_length = cid_length;
+            quic->local_cnxid_length = cid_length;
         }
     }
 

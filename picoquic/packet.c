@@ -248,7 +248,7 @@ int picoquic_parse_packet_header(
         /* If this is a short header, it should be possible to retrieve the connection
          * context. This depends on whether the quic context requires cnx_id or not.
          */
-         uint8_t cnxid_length = (receiving == 0 && *pcnx != NULL) ? (*pcnx)->path[0]->remote_cnxid.id_len : quic->local_ctx_length;
+         uint8_t cnxid_length = (receiving == 0 && *pcnx != NULL) ? (*pcnx)->path[0]->remote_cnxid.id_len : quic->local_cnxid_length;
          ph->pc = picoquic_packet_context_application;
          ph->pl_val = 0; /* No actual payload length in short headers */
 
@@ -258,7 +258,7 @@ int picoquic_parse_packet_header(
              /* TODO: should consider using combination of CNX ID and ADDR_FROM */
              if (*pcnx == NULL)
              {
-                 if (quic->local_ctx_length > 0) {
+                 if (quic->local_cnxid_length > 0) {
                      *pcnx = picoquic_cnx_by_id(quic, ph->dest_cnx_id);
                  }
                  else {
