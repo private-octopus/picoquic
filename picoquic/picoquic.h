@@ -352,7 +352,7 @@ typedef enum {
 
 
 typedef struct st_picoquic_connection_id_encrypt_ctx_t {
-    enum picoquic_connection_id_encrypt_enum cnx_id_select;
+    picoquic_connection_id_encrypt_enum cnx_id_select;
     picoquic_connection_id_t cnx_id_mask;
     picoquic_connection_id_t cnx_id_val;
 
