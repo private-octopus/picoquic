@@ -2131,7 +2131,7 @@ int picoquic_cid_get_under_mask_ctx(void ** v_cid_enc, const void *secret)
     return ret;
 }
 
-void picoquic_cid_encrypt_under_mask(void *cid_enc, picoquic_connection_id_t * cid_in, picoquic_connection_id_t * mask,
+void picoquic_cid_encrypt_under_mask(void *cid_enc, const picoquic_connection_id_t * cid_in, const picoquic_connection_id_t * mask,
     picoquic_connection_id_t * cid_out)
 {
     uint8_t unmasked[18];
@@ -2158,7 +2158,7 @@ void picoquic_cid_encrypt_under_mask(void *cid_enc, picoquic_connection_id_t * c
     }
 }
 
-void picoquic_cid_decrypt_under_mask(void *cid_enc, picoquic_connection_id_t * cid_in, picoquic_connection_id_t * mask,
+void picoquic_cid_decrypt_under_mask(void *cid_enc, const picoquic_connection_id_t * cid_in, const picoquic_connection_id_t * mask,
     picoquic_connection_id_t * cid_out)
 {
     picoquic_cid_encrypt_under_mask(cid_enc, cid_in, mask, cid_out);
@@ -2199,7 +2199,7 @@ int picoquic_cid_get_encrypt_global_ctx(void ** v_cid_enc, int is_enc, const voi
     return ret;
 }
 
-void picoquic_cid_encrypt_global(void *cid_enc, picoquic_connection_id_t * cid_in, picoquic_connection_id_t * cid_out)
+void picoquic_cid_encrypt_global(void *cid_enc, const picoquic_connection_id_t * cid_in, picoquic_connection_id_t * cid_out)
 {
     ptls_cipher_encrypt((ptls_cipher_context_t *)cid_enc, cid_out->id, cid_in->id, cid_in->id_len);
     cid_out->id_len = cid_in->id_len;
@@ -2208,7 +2208,7 @@ void picoquic_cid_encrypt_global(void *cid_enc, picoquic_connection_id_t * cid_i
     }
 }
 
-void picoquic_cid_decrypt_global(void *cid_enc, picoquic_connection_id_t * cid_in, picoquic_connection_id_t * cid_out)
+void picoquic_cid_decrypt_global(void *cid_enc, const picoquic_connection_id_t * cid_in, picoquic_connection_id_t * cid_out)
 {
     picoquic_cid_encrypt_global(cid_enc, cid_in, cid_out);
 }

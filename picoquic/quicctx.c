@@ -1721,10 +1721,28 @@ void picoquic_connection_id_production_callback(picoquic_quic_t * quic, picoquic
     /* Apply encryption if required */
     switch (ctx->cnx_id_select) {
     case picoquic_connection_id_encrypt_basic:
-        /* encryption under mask -- not implemented yet */
+        /* encryption under mask */
+        if (ctx->cid_enc == NULL) {
+            int ret = picoquic_cid_get_under_mask_ctx(&ctx->cid_enc, quic->reset_seed);
+            if (ret != 0) {
+                DBG_PRINTF("Cannot create CID encryption context, ret=%d\n", ret);
+            }
+        }
+        if (ctx->cid_enc != NULL) {
+            picoquic_cid_encrypt_under_mask(ctx->cid_enc, cnx_id_returned, &ctx->cnx_id_mask, cnx_id_returned);
+        }
         break;
     case picoquic_connection_id_encrypt_global:
-        /* global encryption -- not implemented yet */
+        /* global encryption */
+        if (ctx->cid_enc == NULL) {
+            int ret = picoquic_cid_get_encrypt_global_ctx(&ctx->cid_enc, 1, quic->reset_seed, quic->local_ctx_length);
+            if (ret != 0) {
+                DBG_PRINTF("Cannot create CID encryption context, ret=%d\n", ret);
+            }
+        }
+        if (ctx->cid_enc != NULL) {
+            picoquic_cid_encrypt_global(ctx->cid_enc, cnx_id_returned, cnx_id_returned);
+        }
         break;
     default:
         /* Leave it unencrypted */
@@ -1755,8 +1773,27 @@ picoquic_connection_id_encrypt_ctx_t * picoquic_connection_id_production_create_
     return ctx;
 }
 
-void picoquic_connection_id_production_free_ctx(picoquic_quic_t * quic, void * cnx_id_cb_data)
+void picoquic_connection_id_production_free_ctx(void * cnx_id_cb_data)
 {
+    picoquic_connection_id_encrypt_ctx_t* ctx = (picoquic_connection_id_encrypt_ctx_t*)cnx_id_cb_data;
+
+    if (ctx != NULL && ctx->cid_enc != NULL) {
+        switch (ctx->cnx_id_select) {
+        case picoquic_connection_id_encrypt_basic:
+            /* encryption under mask */
+            picoquic_cid_free_under_mask_ctx(ctx->cid_enc);
+            break;
+        case picoquic_connection_id_encrypt_global:
+            /* global encryption */
+            picoquic_cid_free_encrypt_global_ctx(ctx->cid_enc);
+            break;
+        default:
+            /* Guessing for the most common, assuming free will work... */
+            picoquic_cid_free_under_mask_ctx(ctx->cid_enc);
+            break;
+        }
+        ctx->cid_enc = NULL;
+    }
     free(cnx_id_cb_data);
 }
 

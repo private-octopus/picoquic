@@ -136,12 +136,12 @@ int picoquic_verify_retry_token(picoquic_quic_t* quic, struct sockaddr * addr_pe
 
 void picoquic_cid_free_under_mask_ctx(void * v_pn_enc);
 int picoquic_cid_get_under_mask_ctx(void ** v_pn_enc, const void * secret);
-void picoquic_cid_encrypt_under_mask(void * cid_enc, picoquic_connection_id_t * cid_in, picoquic_connection_id_t * mask, picoquic_connection_id_t * cid_out);
-void picoquic_cid_decrypt_under_mask(void * cid_enc, picoquic_connection_id_t * cid_in, picoquic_connection_id_t * mask, picoquic_connection_id_t * cid_out);
+void picoquic_cid_encrypt_under_mask(void * cid_enc, const picoquic_connection_id_t * cid_in, const picoquic_connection_id_t * mask, picoquic_connection_id_t * cid_out);
+void picoquic_cid_decrypt_under_mask(void * cid_enc, const picoquic_connection_id_t * cid_in, const picoquic_connection_id_t * mask, picoquic_connection_id_t * cid_out);
 
 void picoquic_cid_free_encrypt_global_ctx(void ** v_cid_enc);
 int picoquic_cid_get_encrypt_global_ctx(void ** v_cid_enc, int is_enc, const void * secret, int cid_length);
-void picoquic_cid_encrypt_global(void * cid_enc, picoquic_connection_id_t * cid_in, picoquic_connection_id_t * cid_out);
-void picoquic_cid_decrypt_global(void * cid_ffx, picoquic_connection_id_t * cid_in, picoquic_connection_id_t * cid_out);
+void picoquic_cid_encrypt_global(void * cid_enc, const picoquic_connection_id_t * cid_in, picoquic_connection_id_t * cid_out);
+void picoquic_cid_decrypt_global(void * cid_ffx, const picoquic_connection_id_t * cid_in, picoquic_connection_id_t * cid_out);
 
 #endif /* TLS_API_H */

@@ -355,7 +355,7 @@ typedef struct st_picoquic_connection_id_encrypt_ctx_t {
     picoquic_connection_id_encrypt_enum cnx_id_select;
     picoquic_connection_id_t cnx_id_mask;
     picoquic_connection_id_t cnx_id_val;
-
+    void * cid_enc;
 } picoquic_connection_id_encrypt_ctx_t;
 
 void picoquic_connection_id_production_callback(picoquic_quic_t * quic, picoquic_connection_id_t cnx_id_local,
@@ -364,9 +364,7 @@ void picoquic_connection_id_production_callback(picoquic_quic_t * quic, picoquic
 picoquic_connection_id_encrypt_ctx_t * picoquic_connection_id_production_create_ctx(
     char const * select_type, char const * default_value_hex, char const * mask_hex);
 
-void picoquic_connection_id_production_free_ctx(
-    picoquic_quic_t * quic, void* cnx_id_cb_data);
-
+void picoquic_connection_id_production_free_ctx(void * cnx_id_cb_data);
 
 /* The fuzzer function is used to inject error in packets randomly.
  * It is called just prior to sending a packet, and can randomly

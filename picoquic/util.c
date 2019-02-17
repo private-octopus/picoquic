@@ -196,7 +196,7 @@ size_t picoquic_parse_hexa(char const * hex_input, size_t input_length, uint8_t 
 uint8_t picoquic_parse_connection_id_hexa(char const * hex_input, size_t input_length, picoquic_connection_id_t * cnx_id)
 {
     memset(cnx_id, 0, sizeof(picoquic_connection_id_t));
-    cnx_id->id_len = picoquic_parse_hexa(hex_input, input_length, cnx_id->id, 18);
+    cnx_id->id_len = (uint8_t) picoquic_parse_hexa(hex_input, input_length, cnx_id->id, 18);
 
     if (cnx_id->id_len == 0) {
         memset(cnx_id, 0, sizeof(picoquic_connection_id_t));
