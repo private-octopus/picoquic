@@ -336,7 +336,7 @@ typedef struct st_picoquic_quic_t {
     picohash_table* table_cnx_by_id;
     picohash_table* table_cnx_by_net;
 
-    cnx_id_cb_fn cnx_id_callback_fn;
+    picoquic_connection_id_cb_fn cnx_id_callback_fn;
     void* cnx_id_callback_ctx;
 
     void* aead_encrypt_ticket_ctx;
@@ -345,7 +345,7 @@ typedef struct st_picoquic_quic_t {
     picoquic_verify_certificate_cb_fn verify_certificate_callback_fn;
     picoquic_free_verify_certificate_ctx free_verify_certificate_callback_fn;
     void* verify_certificate_ctx;
-    uint8_t local_ctx_length;
+    uint8_t local_cnxid_length;
 
     picoquic_tp_t * default_tp;
 

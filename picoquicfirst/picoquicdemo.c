@@ -162,7 +162,7 @@ static void picoquic_set_key_log_file_from_env(picoquic_quic_t* quic)
 
 int quic_server(const char* server_name, int server_port,
     const char* pem_cert, const char* pem_key,
-    int just_once, int do_hrr, cnx_id_cb_fn cnx_id_callback,
+    int just_once, int do_hrr, picoquic_connection_id_cb_fn cnx_id_callback,
     void* cnx_id_callback_ctx, uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE],
     int dest_if, int mtu_max, uint32_t proposed_version)
 {
@@ -969,6 +969,9 @@ void usage()
     fprintf(stderr, "                          where <src> is int:\n");
     fprintf(stderr, "                            0: picoquic_cnx_id_random\n");
     fprintf(stderr, "                            1: picoquic_cnx_id_remote (client)\n");
+    fprintf(stderr, "                            2: same as 0, plus encryption of unmasked data\n");
+    fprintf(stderr, "                            3: same as 0, plus encryption of all data\n");
+    fprintf(stderr, "                        val and mask must be hex strings of same length, 4 to 18\n");
     fprintf(stderr, "  -k file               key file (default: %s)\n", SERVER_KEY_FILE);
     fprintf(stderr, "  -l file               Log file\n");
     fprintf(stderr, "  -p port               server port (default: %d)\n", default_server_port);
@@ -1002,36 +1005,6 @@ void usage()
     exit(1);
 }
 
-enum picoquic_cnx_id_select {
-    picoquic_cnx_id_random = 0,
-    picoquic_cnx_id_remote = 1,
-    picoquic_cnx_id_encrypt_basic = 2,
-    picoquic_cnx_id_encrypt_global = 2,
-};
-
-typedef struct {
-    enum picoquic_cnx_id_select cnx_id_select;
-    picoquic_connection_id_t cnx_id_mask;
-    picoquic_connection_id_t cnx_id_val;
-} cnx_id_callback_ctx_t;
-
-static void cnx_id_callback(
-    picoquic_quic_t * quic,
-    picoquic_connection_id_t cnx_id_local, picoquic_connection_id_t cnx_id_remote, void* cnx_id_callback_ctx, 
-    picoquic_connection_id_t * cnx_id_returned)
-{
-    uint64_t val64;
-    cnx_id_callback_ctx_t* ctx = (cnx_id_callback_ctx_t*)cnx_id_callback_ctx;
-
-    if (ctx->cnx_id_select == picoquic_cnx_id_remote)
-        cnx_id_local = cnx_id_remote;
-
-    /* TODO: replace with encrypted value when moving to 17 byte CID */
-    val64 = (picoquic_val64_connection_id(cnx_id_local) & picoquic_val64_connection_id(ctx->cnx_id_mask)) |
-        picoquic_val64_connection_id(ctx->cnx_id_val);
-    picoquic_set64_connection_id(cnx_id_returned, val64);
-}
-
 int main(int argc, char** argv)
 {
     const char * solution_dir = NULL;
@@ -1050,13 +1023,8 @@ int main(int argc, char** argv)
     int force_zero_share = 0;
     int force_migration = 0;
     int nb_packets_before_update = 0;
-    int cnx_id_mask_is_set = 0;
     int client_cnx_id_length = 8;
-    cnx_id_callback_ctx_t cnx_id_cbdata = {
-        .cnx_id_select = 0,
-        .cnx_id_mask = {{ 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 8 },
-        .cnx_id_val = { { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 0 }
-    };
+    picoquic_connection_id_callback_ctx_t * cnx_id_cbdata = NULL;
     uint64_t* reset_seed = NULL;
     uint64_t reset_seed_x[2];
     int dest_if = -1;
@@ -1126,12 +1094,12 @@ int main(int argc, char** argv)
                 fprintf(stderr, "option requires more arguments -- i\n");
                 usage();
             }
-
-            cnx_id_cbdata.cnx_id_select = atoi(optarg);
-            /* TODO: find an alternative to parsing a 64 bit integer */
-            picoquic_set64_connection_id(&cnx_id_cbdata.cnx_id_mask, ~strtoul(argv[optind++], NULL, 0));
-            picoquic_set64_connection_id(&cnx_id_cbdata.cnx_id_val, strtoul(argv[optind++], NULL, 0));
-            cnx_id_mask_is_set = 1;
+            cnx_id_cbdata = picoquic_connection_id_callback_create_ctx(optarg, argv[optind], argv[optind + 1]);
+            if (cnx_id_cbdata == NULL) {
+                fprintf(stderr, "could not create callback context (%s, %s, %s)\n", optarg, argv[optind], argv[optind + 1]);
+                usage();
+            }
+            optind += 2;
             break;
         case 'l':
             log_file = optarg;
@@ -1224,9 +1192,8 @@ int main(int argc, char** argv)
             server_port, server_name, just_once, do_hrr);
         ret = quic_server(server_name, server_port,
             server_cert_file, server_key_file, just_once, do_hrr,
-            /* TODO: find an alternative to using 64 bit mask. */
-            (cnx_id_mask_is_set == 0) ? NULL : cnx_id_callback,
-            (cnx_id_mask_is_set == 0) ? NULL : (void*)&cnx_id_cbdata,
+            (cnx_id_cbdata == NULL) ? NULL : picoquic_connection_id_callback,
+            (cnx_id_cbdata == NULL) ? NULL : (void*)cnx_id_cbdata,
             (uint8_t*)reset_seed, dest_if, mtu_max, proposed_version);
         printf("Server exit with code = %d\n", ret);
     } else {
@@ -1263,5 +1230,9 @@ int main(int argc, char** argv)
         if (F_log != NULL && F_log != stdout) {
             fclose(F_log);
         }
+    }
+
+    if (cnx_id_cbdata != NULL) {
+        picoquic_connection_id_callback_free_ctx(cnx_id_cbdata);
     }
 }
