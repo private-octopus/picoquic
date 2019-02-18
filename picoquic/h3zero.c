@@ -823,10 +823,10 @@ uint8_t * h3zero_parse_data_stream(uint8_t * bytes, uint8_t * bytes_max,
         return bytes;
     }
     else {
-        uint64_t available = bytes_max - bytes;
+        size_t available = bytes_max - bytes;
 
         if (stream_state->current_frame_read + available > stream_state->current_frame_length) {
-            available = stream_state->current_frame_length - stream_state->current_frame_read;
+            available = (size_t)(stream_state->current_frame_length - stream_state->current_frame_read);
         }
 
         if (stream_state->current_frame_type == h3zero_frame_header) {

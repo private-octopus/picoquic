@@ -1113,7 +1113,7 @@ uint8_t* picoquic_provide_stream_data_buffer(void* context, size_t length, int i
     return buffer;
 }
 
-static int picoquic_prepare_stream_frame_header(uint8_t* bytes, size_t bytes_max, uint64_t stream_id, size_t offset, size_t* consumed)
+static int picoquic_prepare_stream_frame_header(uint8_t* bytes, size_t bytes_max, uint64_t stream_id, uint64_t offset, size_t* consumed)
 {
     int ret = 0;
     size_t byte_index = 0;
