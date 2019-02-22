@@ -1476,18 +1476,21 @@ int picoquic_prepare_server_address_migration(picoquic_cnx_t* cnx)
                 /* configure an IPv6 sockaddr */
                 struct sockaddr_in6 * d6 = (struct sockaddr_in6 *)&dest_addr;
                 d6->sin6_family = AF_INET;
-                d6->sin6_port = cnx->remote_parameters.prefered_address.ipv6Port;
+                d6->sin6_port = htons(cnx->remote_parameters.prefered_address.ipv6Port);
                 memcpy(&d6->sin6_addr, cnx->remote_parameters.prefered_address.ipv6Address, 16);
             }
             else {
                 /* configure an IPv4 sockaddr */
                 struct sockaddr_in * d4 = (struct sockaddr_in *)&dest_addr;
                 d4->sin_family = AF_INET;
-                d4->sin_port = cnx->remote_parameters.prefered_address.ipv4Port;
+                d4->sin_port = htons(cnx->remote_parameters.prefered_address.ipv4Port);
                 memcpy(&d4->sin_addr, cnx->remote_parameters.prefered_address.ipv4Address, 4);
             }
 
-            ret = picoquic_create_probe(cnx, (struct sockaddr *)&dest_addr, NULL);
+            /* Only send a probe if not already using that address */
+            if (picoquic_compare_addr((struct sockaddr *)&dest_addr, (struct sockaddr *)&cnx->path[0]->peer_addr) != 0) {
+                ret = picoquic_create_probe(cnx, (struct sockaddr *)&dest_addr, NULL);
+            }
         }
     }
 
@@ -1714,8 +1717,6 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                                 cnx->tls_stream[1].send_queue == NULL &&
                                 cnx->tls_stream[2].send_queue == NULL) {
                                 cnx->cnx_state = picoquic_state_client_ready_start;
-                                /* Start migration to server preferred address if present */
-                                ret = picoquic_prepare_server_address_migration(cnx);
                                 if (ret == 0) {
                                     /* Signal the application */
                                     if (cnx->callback_fn != NULL) {
@@ -2204,6 +2205,12 @@ void picoquic_ready_state_transition(picoquic_cnx_t* cnx, uint64_t current_time)
     picoquic_implicit_handshake_ack(cnx, picoquic_packet_context_initial, current_time);
     picoquic_implicit_handshake_ack(cnx, picoquic_packet_context_handshake, current_time);
 
+    /* Start migration to server preferred address if present */
+    if (cnx->client_mode) {
+        (void)picoquic_prepare_server_address_migration(cnx);
+    }
+
+    /* Notify the application */
     if (cnx->callback_fn != NULL) {
         if (cnx->callback_fn(cnx, 0, NULL, 0, picoquic_callback_ready, cnx->callback_ctx) != 0) {
             picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
