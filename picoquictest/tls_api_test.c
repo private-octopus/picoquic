@@ -816,7 +816,7 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
 
         if (time_out > 0 && next_time > time_out) {
             next_action = 0;
-            *simulated_time = next_time;
+            *simulated_time = time_out;
         } else if (next_time > *simulated_time) {
             *simulated_time = next_time;
         }
@@ -4103,15 +4103,27 @@ int cnxid_renewal_test()
         ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 0);
     }
 
-    /* Add a time loop of 3 seconds to give some time for the probes to be repeated */
-    next_time = simulated_time + 3000000;
+    /* Add a time loop of 7 seconds to give some time for the probes to be repeated,
+     * and to ensure that the demotion timers expire. */
+    next_time = simulated_time + 7000000;
     loss_mask = 0;
     while (ret == 0 && simulated_time < next_time && TEST_CLIENT_READY
-        && TEST_SERVER_READY
-        && test_ctx->cnx_server->path[0]->challenge_verified != 1) {
+        && TEST_SERVER_READY) {
         int was_active = 0;
 
         ret = tls_api_one_sim_round(test_ctx, &simulated_time, next_time, &was_active);
+    }
+
+    /* verify that path[0] was not demoted */
+    if (ret == 0) {
+        if (test_ctx->cnx_client->path[0]->path_is_demoted) {
+            DBG_PRINTF("%s", "The default client path is demoted");
+            ret = -1;
+        }
+        if (test_ctx->cnx_server->path[0]->path_is_demoted) {
+            DBG_PRINTF("%s", "The default server path is demoted");
+            ret = -1;
+        }
     }
 
     /* Verify that the connection ID are what we expect */
