@@ -1379,6 +1379,7 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header * ph
                     cnx->path[path_id]->challenge_failed = cnx->path[0]->challenge_failed;
                     cnx->path[path_id]->peer_addr_len = picoquic_store_addr(&cnx->path[path_id]->peer_addr, addr_from);
                     cnx->path[path_id]->local_addr_len = picoquic_store_addr(&cnx->path[path_id]->local_addr, addr_to);
+                    cnx->path[0]->remote_cnxid = picoquic_null_connection_id;
                     picoquic_promote_path_to_default(cnx, path_id, current_time);
                     path_id = 0;
                     /* No new challenge required there */
