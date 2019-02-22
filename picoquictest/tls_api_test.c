@@ -5980,7 +5980,7 @@ int preferred_address_test()
     /* Create an alternate IP address, and use it as preferred address */
     server_parameters.prefered_address.is_defined = 1;
     memcpy(server_parameters.prefered_address.ipv4Address, &server_preferred.sin_addr, 4);
-    server_parameters.prefered_address.ipv4Port = server_preferred.sin_port;
+    server_parameters.prefered_address.ipv4Port = ntohs(server_preferred.sin_port);
 
     ret = tls_api_one_scenario_init(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1,
         NULL, &server_parameters);
@@ -5990,7 +5990,7 @@ int preferred_address_test()
         /* Run a basic test scenario */
 
         ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
-            test_scenario_many_streams, sizeof(test_scenario_many_streams), 0, 0, 0, 0, 250000);
+            test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0, 0, 0, 1500000);
     }
 
     /* Verify that the client and server have both migrated to using the preferred address */
