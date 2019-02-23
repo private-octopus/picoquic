@@ -359,7 +359,7 @@ int h3zero_prepare_qpack_test()
         if (qpack_test_case[j].parts.path != NULL) {
             /* Create a request header */
             bytes = h3zero_create_request_header_frame(buffer, bytes_max,
-                qpack_test_case[j].parts.path, qpack_test_case[j].parts.path_length);
+                qpack_test_case[j].parts.path, qpack_test_case[j].parts.path_length, "example.com");
         }
         else if (qpack_test_case[j].parts.content_type != 0) {
             bytes = h3zero_create_response_header_frame(buffer, bytes_max,
