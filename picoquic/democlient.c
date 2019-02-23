@@ -48,7 +48,7 @@ static picoquic_demo_client_stream_ctx_t* picoquic_demo_client_find_stream(
  */
 
 static int h3zero_client_create_stream_request(
-    uint8_t * buffer, size_t max_bytes, uint8_t const * path, size_t path_len, size_t * consumed)
+    uint8_t * buffer, size_t max_bytes, uint8_t const * path, size_t path_len, size_t * consumed, const char * host)
 {
     int ret = 0;
     uint8_t * o_bytes = buffer;
@@ -65,7 +65,7 @@ static int h3zero_client_create_stream_request(
         *o_bytes++ = h3zero_frame_header;
         /* create request header frame */
         o_bytes = h3zero_create_request_header_frame(o_bytes, o_bytes_max,
-            (const uint8_t *)path, path_len);
+            (const uint8_t *)path, path_len, host);
     }
 
     if (o_bytes == NULL) {
@@ -200,7 +200,7 @@ static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
         switch (ctx->alpn) {
         case picoquic_alpn_http_3:
             ret = h3zero_client_create_stream_request(
-                buffer, sizeof(buffer), path, path_len, &request_length);
+                buffer, sizeof(buffer), path, path_len, &request_length, cnx->sni);
             break;
         case picoquic_alpn_http_0_9:
         default:
