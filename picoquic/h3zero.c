@@ -509,7 +509,7 @@ uint8_t * h3zero_parse_qpack_header_frame(uint8_t * bytes, uint8_t * bytes_max,
                 case http_header_content_type:
                     if (parts->content_type != h3zero_content_type_none) {
                         /* Duplicate content type! */
-                        bytes = 0;
+                        bytes = NULL;
                     }
                     else {
                         parts->content_type = (h3zero_content_type_enum)qpack_static[s_index].enum_as_int;
@@ -518,7 +518,7 @@ uint8_t * h3zero_parse_qpack_header_frame(uint8_t * bytes, uint8_t * bytes_max,
                 case http_pseudo_header_status:
                     if (parts->status != 0) {
                         /* Duplicate content type! */
-                        bytes = 0;
+                        bytes = NULL;
                     }
                     else {
                         parts->status = qpack_static[s_index].enum_as_int;
@@ -527,14 +527,14 @@ uint8_t * h3zero_parse_qpack_header_frame(uint8_t * bytes, uint8_t * bytes_max,
                 case http_pseudo_header_path:
                     if (parts->path != NULL) {
                         /* Duplicate path! */
-                        bytes = 0;
+                        bytes = NULL;
                     }
                     else {
                         parts->path_length = strlen(qpack_static[s_index].content);
                         parts->path = malloc(parts->path_length + 1);
                         if (parts->path == NULL) {
                             /* internal error */
-                            bytes = 0;
+                            bytes = NULL;
                         }
                         else {
                             memcpy((uint8_t *)parts->path, qpack_static[s_index].content, parts->path_length);
@@ -562,8 +562,8 @@ uint8_t * h3zero_parse_qpack_header_frame(uint8_t * bytes, uint8_t * bytes_max,
                 }
             }
         }
-        else if ((bytes[0] & 0xE8) == 0x20) {
-            /* Literal Header Field Without Name Reference, static, no Hufman */
+        else if ((bytes[0] & 0xE0) == 0x20) {
+            /* Literal Header Field Without Name Reference */
             uint64_t n_length;
             int is_huffman = (bytes[0] >> 3) & 1;
 
@@ -640,8 +640,28 @@ static uint8_t * h3zero_qpack_code_encode(uint8_t * bytes, uint8_t * bytes_max,
     return bytes;
 }
 
+static uint8_t * h3zero_qpack_literal_plus_ref_encode(uint8_t * bytes, uint8_t * bytes_max,
+    uint64_t code, uint8_t const * val, size_t val_length)
+{
+    bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0x50, 0x0F, code);
+    bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0x00, 0x7F, val_length);
+    if (bytes != NULL && val_length > 0) {
+        if (bytes + val_length > bytes_max) {
+            bytes = NULL;
+        }
+        else {
+            memcpy(bytes, val, val_length);
+            bytes += val_length;
+        }
+    }
+
+    return bytes;
+}
+
+
+
 uint8_t * h3zero_create_request_header_frame(uint8_t * bytes, uint8_t * bytes_max,
-    uint8_t const * path, size_t path_length)
+    uint8_t const * path, size_t path_length, char const * host)
 {
     if (bytes == NULL || bytes + 2 > bytes_max) {
         return NULL;
@@ -652,17 +672,9 @@ uint8_t * h3zero_create_request_header_frame(uint8_t * bytes, uint8_t * bytes_ma
     /* Method: GET */
     bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0xC0, 0x3F, H3ZERO_QPACK_CODE_GET);
     /* Path: doc_name. Use literal plus reference format */
-    bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0x50, 0x0F, H3ZERO_QPACK_CODE_PATH);
-    bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0x00, 0x7F, path_length);
-    if (bytes != NULL && path_length > 0) {
-        if (bytes + path_length > bytes_max) {
-            bytes = NULL;
-        }
-        else {
-            memcpy(bytes, (uint8_t *)path, path_length);
-            bytes += path_length;
-        }
-    }
+    bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_CODE_PATH, path, path_length);
+    /*Authority: host. Use literal plus reference format */
+    bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_AUTHORITY, (uint8_t const *)host, strlen(host));
 
     return bytes;
 }
