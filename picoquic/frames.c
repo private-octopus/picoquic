@@ -1847,7 +1847,7 @@ int picoquic_process_ack_of_ack_frame(
     return ret;
 }
 
-int picoquic_check_stream_frame_already_acked(picoquic_cnx_t* cnx, uint8_t* bytes,
+int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, uint8_t* bytes,
     size_t bytes_max, int* no_need_to_repeat)
 {
     int ret = 0;
@@ -1855,6 +1855,8 @@ int picoquic_check_stream_frame_already_acked(picoquic_cnx_t* cnx, uint8_t* byte
     size_t data_length;
     uint64_t stream_id;
     uint64_t offset;
+    uint64_t maxdata;
+    uint64_t max_stream_rank;
     picoquic_stream_head* stream = NULL;
     size_t consumed = 0;
 
@@ -1877,6 +1879,55 @@ int picoquic_check_stream_frame_already_acked(picoquic_cnx_t* cnx, uint8_t* byte
                     *no_need_to_repeat = picoquic_check_sack_list(&stream->first_sack_item, offset, offset + data_length);
                 }
             }
+        }
+    }
+    else {
+        uint8_t * p_last_byte = bytes + bytes_max;
+        switch (bytes[0]) {
+        case picoquic_frame_type_max_data:
+            if ((bytes = picoquic_frames_varint_decode(bytes + 1, p_last_byte, &maxdata)) != NULL) {
+                if (maxdata < cnx->maxdata_local) {
+                    *no_need_to_repeat = 1;
+                }
+            }
+            break;
+        case picoquic_frame_type_max_stream_data:
+            if ((bytes = picoquic_frames_varint_decode(bytes + 1, p_last_byte, &stream_id)) == NULL ||
+                (bytes = picoquic_frames_varint_decode(bytes, p_last_byte, &maxdata)) == NULL) {
+                /* Malformed frame, do not retransmit */
+                *no_need_to_repeat = 1;
+            }
+            else if ((stream = picoquic_find_stream(cnx, stream_id, 1)) == NULL) {
+                /* No such stream do not retransmit */
+            }
+            else if (stream->fin_received || stream->reset_received || stream->stop_sending_sent) {
+                /* Stream stopped, no need to increase the window */
+                *no_need_to_repeat = 1;
+            }
+            else if (maxdata < stream->maxdata_local) {
+                /* Stream max data already increased */
+                *no_need_to_repeat = 1;
+            }
+            break;
+        case picoquic_frame_type_max_streams_bidir:
+        case picoquic_frame_type_max_streams_unidir:
+            if ((bytes = picoquic_frames_varint_decode(bytes + 1, p_last_byte, &max_stream_rank)) == NULL) {
+                /* Malformed frame, do not retransmit */
+                *no_need_to_repeat = 1;
+            }
+            else if (bytes[0] == picoquic_frame_type_max_streams_bidir &&
+                cnx->max_stream_id_bidir_local > STREAM_ID_FROM_RANK(max_stream_rank, cnx->client_mode, 0)) {
+                /* Streams bidir already increased */
+                *no_need_to_repeat = 1;
+            }
+            else if (cnx->max_stream_id_unidir_local > STREAM_ID_FROM_RANK(max_stream_rank, cnx->client_mode, 1)) {
+                /* Streams unidir already increased */
+                *no_need_to_repeat = 1;
+
+            }
+            break;
+        default:
+            break;
         }
     }
 
@@ -2487,7 +2538,6 @@ int picoquic_prepare_max_stream_data_frame(picoquic_stream_head* stream,
 
     return ret;
 }
-
 
 uint8_t* picoquic_decode_max_stream_data_frame(picoquic_cnx_t* cnx, uint8_t* bytes, const uint8_t* bytes_max)
 {
