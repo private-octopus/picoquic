@@ -1022,7 +1022,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                         /* Check whether the data was already acked, which may happen in 
                          * case of spurious retransmissions */
                         if (ret == 0 && frame_is_pure_ack == 0) {
-                            ret = picoquic_check_stream_frame_already_acked(cnx, &p->bytes[byte_index],
+                            ret = picoquic_check_frame_needs_repeat(cnx, &p->bytes[byte_index],
                                 frame_length, &frame_is_pure_ack);
                         }
 
