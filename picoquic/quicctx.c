@@ -1375,8 +1375,8 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         cnx->maxdata_remote = PICOQUIC_DEFAULT_0RTT_WINDOW;
         cnx->remote_parameters.initial_max_stream_data_bidi_remote = PICOQUIC_DEFAULT_0RTT_WINDOW;
         cnx->remote_parameters.initial_max_stream_data_uni = PICOQUIC_DEFAULT_0RTT_WINDOW;
-        cnx->max_stream_id_bidir_remote = (cnx->client_mode)?4:0;
-        cnx->max_stream_id_unidir_remote = 0;
+        cnx->max_stream_id_bidir_remote = (cnx->client_mode) ? 4 : 0;
+        cnx->max_stream_id_unidir_remote = (cnx->client_mode) ? 10 : 0;
 
         /* Initialize padding policy to default for context */
         cnx->padding_multiple = quic->padding_multiple_default;

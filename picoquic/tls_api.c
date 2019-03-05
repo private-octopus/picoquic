@@ -1249,7 +1249,7 @@ int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint6
 
                 if (picoquic_get_ticket(cnx->quic->p_first_ticket, current_time,
                         cnx->sni, (uint16_t)strlen(cnx->sni), cnx->alpn, (uint16_t)strlen(cnx->alpn),
-                        &ticket, &ticket_length)
+                        &ticket, &ticket_length, 1)
                     == 0) {
                     ctx->handshake_properties.client.session_ticket.base = ticket;
                     ctx->handshake_properties.client.session_ticket.len = ticket_length;

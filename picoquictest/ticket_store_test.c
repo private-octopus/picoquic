@@ -136,7 +136,7 @@ int ticket_store_test()
             ret = picoquic_get_ticket(p_first_ticket, current_time,
                 test_sni[i], (uint16_t)strlen(test_sni[i]),
                 test_alpn[j], (uint16_t)strlen(test_alpn[j]),
-                &ticket, &ticket_length);
+                &ticket, &ticket_length, 0);
             if (ret != 0) {
                 break;
             }
@@ -313,7 +313,7 @@ int token_store_test()
             ret = picoquic_get_token(p_first_token, current_time,
                 test_sni[i], (uint16_t)strlen(test_sni[i]),
                 test_ip_addr[j].ip_addr, test_ip_addr[j].ip_addr_length,
-                &token, &token_length);
+                &token, &token_length, 0);
             if (ret != 0) {
                 break;
             }
