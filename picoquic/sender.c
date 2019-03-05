@@ -1539,7 +1539,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
     case picoquic_state_client_init:
         if (cnx->retry_token_length == 0 && cnx->sni != NULL) {
             (void)picoquic_get_token(cnx->quic->p_first_token, current_time, cnx->sni, (uint16_t)strlen(cnx->sni),
-                NULL, 0, &cnx->retry_token, &cnx->retry_token_length);
+                NULL, 0, &cnx->retry_token, &cnx->retry_token_length, 1);
         }
         break;
     case picoquic_state_client_init_sent:
