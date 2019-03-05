@@ -563,6 +563,10 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
 
         picoquic_set_default_congestion_algorithm(qclient, picoquic_cubic_algorithm);
 
+        if (picoquic_load_tokens(&qclient->p_first_token, current_time, token_store_filename) != 0) {
+            fprintf(stderr, "Could not load tokens from <%s>.\n", token_store_filename);
+        }
+
         if (qclient == NULL) {
             ret = -1;
         } else {

@@ -152,6 +152,7 @@ int picoquic_deserialize_token(picoquic_stored_token_t ** token, uint8_t * bytes
 
     return ret;
 }
+
 int picoquic_store_token(picoquic_stored_token_t** pp_first_token,
     uint64_t current_time,
     char const* sni, uint16_t sni_length,
@@ -160,7 +161,7 @@ int picoquic_store_token(picoquic_stored_token_t** pp_first_token,
 {
     int ret = 0;
 
-    if (token_length < 17 || sni == NULL || sni_length == 0) {
+    if (token_length < 1 || sni == NULL || sni_length == 0) {
         ret = PICOQUIC_ERROR_INVALID_TOKEN;
     } else {
         uint64_t token_issued_time;
