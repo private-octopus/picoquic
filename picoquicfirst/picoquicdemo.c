@@ -563,6 +563,10 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
 
         picoquic_set_default_congestion_algorithm(qclient, picoquic_cubic_algorithm);
 
+        if (picoquic_load_tokens(&qclient->p_first_token, current_time, token_store_filename) != 0) {
+            fprintf(stderr, "Could not load tokens from <%s>.\n", token_store_filename);
+        }
+
         if (qclient == NULL) {
             ret = -1;
         } else {
@@ -893,7 +897,7 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
         uint8_t* ticket;
         uint16_t ticket_length;
 
-        if (sni != NULL && 0 == picoquic_get_ticket(qclient->p_first_ticket, current_time, sni, (uint16_t)strlen(sni), alpn, (uint16_t)strlen(alpn), &ticket, &ticket_length)) {
+        if (sni != NULL && 0 == picoquic_get_ticket(qclient->p_first_ticket, current_time, sni, (uint16_t)strlen(sni), alpn, (uint16_t)strlen(alpn), &ticket, &ticket_length, 0)) {
             fprintf(F_log, "Received ticket from %s:\n", sni);
             picoquic_log_picotls_ticket(F_log, picoquic_null_connection_id, ticket, ticket_length);
         }

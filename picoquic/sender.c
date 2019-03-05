@@ -1309,14 +1309,29 @@ int picoquic_prepare_packet_0rtt(picoquic_cnx_t* cnx, picoquic_path_t * path_x, 
                 break;
             }
         }
-        /* Encode the stream frame */
-        if (stream != NULL) {
+
+        /* Encode the stream frame, or frames */
+        while (stream != NULL) {
+            int is_still_active = 0;
             ret = picoquic_prepare_stream_frame(cnx, stream, &bytes[length],
-                send_buffer_max - checksum_overhead - length, &data_bytes, NULL);
+                send_buffer_max - checksum_overhead - length, &data_bytes, &is_still_active);
+
             if (ret == 0) {
-                length += (uint32_t) data_bytes;
+                length += (uint32_t)data_bytes;
+
+                if (send_buffer_max > checksum_overhead + length + 8) {
+                    stream = picoquic_find_ready_stream(cnx);
+                }
+                else {
+                    break;
+                }
+            }
+            else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
+                ret = 0;
+                break;
             }
         }
+
         /* Add padding if required */
         if (padding_required) {
             length = picoquic_pad_to_target_length(bytes, length, (uint32_t)(send_buffer_max - checksum_overhead));
@@ -1539,7 +1554,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
     case picoquic_state_client_init:
         if (cnx->retry_token_length == 0 && cnx->sni != NULL) {
             (void)picoquic_get_token(cnx->quic->p_first_token, current_time, cnx->sni, (uint16_t)strlen(cnx->sni),
-                NULL, 0, &cnx->retry_token, &cnx->retry_token_length);
+                NULL, 0, &cnx->retry_token, &cnx->retry_token_length, 1);
         }
         break;
     case picoquic_state_client_init_sent:

@@ -216,13 +216,13 @@ int picoquic_store_ticket(picoquic_stored_ticket_t** pp_first_ticket,
 int picoquic_get_ticket(picoquic_stored_ticket_t* p_first_ticket,
     uint64_t current_time,
     char const* sni, uint16_t sni_length, char const* alpn, uint16_t alpn_length,
-    uint8_t** ticket, uint16_t* ticket_length)
+    uint8_t** ticket, uint16_t* ticket_length, int mark_used)
 {
     int ret = 0;
     picoquic_stored_ticket_t* next = p_first_ticket;
 
     while (next != NULL) {
-        if (next->time_valid_until > current_time && next->sni_length == sni_length && next->alpn_length == alpn_length && memcmp(next->sni, sni, sni_length) == 0 && memcmp(next->alpn, alpn, alpn_length) == 0) {
+        if (next->time_valid_until > current_time && next->sni_length == sni_length && next->alpn_length == alpn_length && memcmp(next->sni, sni, sni_length) == 0 && memcmp(next->alpn, alpn, alpn_length) == 0 && next->was_used == 0) {
             break;
         } else {
             next = next->next_ticket;
@@ -236,6 +236,7 @@ int picoquic_get_ticket(picoquic_stored_ticket_t* p_first_ticket,
     } else {
         *ticket = next->ticket;
         *ticket_length = next->ticket_length;
+        next->was_used = mark_used;
     }
 
     return ret;
@@ -263,7 +264,7 @@ int picoquic_save_tickets(const picoquic_stored_ticket_t* first_ticket,
     } else {
         while (ret == 0 && next != NULL) {
             /* Only store the tickets that are valid going forward */
-            if (next->time_valid_until > current_time) {
+            if (next->time_valid_until > current_time && next->was_used == 0) {
                 /* Compute the serialized size */
                 uint8_t buffer[2048];
                 size_t record_size;

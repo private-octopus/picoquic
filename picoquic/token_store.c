@@ -152,6 +152,7 @@ int picoquic_deserialize_token(picoquic_stored_token_t ** token, uint8_t * bytes
 
     return ret;
 }
+
 int picoquic_store_token(picoquic_stored_token_t** pp_first_token,
     uint64_t current_time,
     char const* sni, uint16_t sni_length,
@@ -160,7 +161,7 @@ int picoquic_store_token(picoquic_stored_token_t** pp_first_token,
 {
     int ret = 0;
 
-    if (token_length < 17 || sni == NULL || sni_length == 0) {
+    if (token_length < 1 || sni == NULL || sni_length == 0) {
         ret = PICOQUIC_ERROR_INVALID_TOKEN;
     } else {
         uint64_t token_issued_time;
@@ -217,14 +218,14 @@ int picoquic_get_token(picoquic_stored_token_t* p_first_token,
     uint64_t current_time,
     char const* sni, uint16_t sni_length,
     uint8_t const* ip_addr, uint8_t ip_addr_length,
-    uint8_t** token, uint16_t* token_length)
+    uint8_t** token, uint16_t* token_length, int mark_used)
 {
     int ret = 0;
     picoquic_stored_token_t* next = p_first_token;
     picoquic_stored_token_t* best_match = NULL;
 
     while (next != NULL) {
-        if (next->time_valid_until > current_time && next->sni_length == sni_length && memcmp(next->sni, sni, sni_length) == 0){
+        if (next->time_valid_until > current_time && next->sni_length == sni_length && memcmp(next->sni, sni, sni_length) == 0 && next->was_used == 0){
             if (ip_addr_length > 0) {
                 if (next->ip_addr_length == ip_addr_length && memcmp(next->ip_addr, ip_addr, ip_addr_length) == 0) {
                     best_match = next;
@@ -247,6 +248,7 @@ int picoquic_get_token(picoquic_stored_token_t* p_first_token,
     } else {
         *token = (uint8_t*)best_match->token;
         *token_length = best_match->token_length;
+        best_match->was_used = mark_used;
     }
 
     return ret;
@@ -274,7 +276,7 @@ int picoquic_save_tokens(const picoquic_stored_token_t* first_token,
     } else {
         while (ret == 0 && next != NULL) {
             /* Only store the tokens that are valid going forward */
-            if (next->time_valid_until > current_time) {
+            if (next->time_valid_until > current_time && next->was_used == 0) {
                 /* Compute the serialized size */
                 uint8_t buffer[2048];
                 size_t record_size;

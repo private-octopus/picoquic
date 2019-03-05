@@ -2174,7 +2174,7 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, unsigned int early_loss, 
 
         if (ret == 0 && i == 1) {
             /* If resume succeeded, the second connection will have a type "PSK" */
-            if (use_badcrypt == 0 && hardreset == 0 && (
+            if (use_badcrypt == 0 && hardreset == 0 && v_nego == 0 && (
                 picoquic_tls_is_psk_handshake(test_ctx->cnx_server) == 0 || 
                 picoquic_tls_is_psk_handshake(test_ctx->cnx_client) == 0)) {
                 DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), connection %d not PSK.\n",
