@@ -224,9 +224,18 @@ static uint8_t qpack_test_get_zzz[] = {
     QPACK_TEST_HEADER_BLOCK_PREFIX, 0xC0 | 17, 0x50 | 1,
     0x80 | 3, QPACK_TEST_HEADER_QPACK_PATH };
 
+static uint8_t qpack_test_get_1234[] = {
+    0x00, 0x00, 0xd1, 0xd7, 0x51, 0x84, 0x60, 0x22,
+    0x65, 0xaf, 0x50, 0x94, 0x49, 0x50, 0x95, 0xeb,
+    0xb0, 0xdd, 0xc6, 0x92, 0x9c, 0x89, 0x3d, 0x76,
+    0xa1, 0x72, 0x1e, 0x9b, 0x8d, 0x34, 0xcb, 0x3f
+};
+
 static uint8_t qpack_test_string_index_html[] = { QPACK_TEST_HEADER_INDEX_HTML };
 static uint8_t qpack_test_string_slash[] = { '/' };
 static uint8_t qpack_test_string_zzz[] = { 'Z', 'Z', 'Z' };
+static uint8_t qpack_test_string_1234[] = { '/', '1', '2', '3', '4' };
+
 
 typedef struct st_qpack_test_case_t {
     uint8_t * bytes;
@@ -274,6 +283,10 @@ static qpack_test_case_t qpack_test_case[] = {
     {
         qpack_test_get_zzz, sizeof(qpack_test_get_zzz),
         { h3zero_method_get, qpack_test_string_zzz, sizeof(qpack_test_string_zzz), 0, 0}
+    },
+    {
+        qpack_test_get_1234, sizeof(qpack_test_get_1234),
+        { h3zero_method_get, qpack_test_string_1234, sizeof(qpack_test_string_1234), 0, 0}
     }
 };
 
