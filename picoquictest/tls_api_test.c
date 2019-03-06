@@ -5278,6 +5278,9 @@ static int short_initial_cid_test_one(uint8_t cid_length)
             ret = -1;
         }
     }
+    else if (cid_length < PICOQUIC_ENFORCED_INITIAL_CID_LENGTH) {
+        ret = 0;
+    }
 
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
