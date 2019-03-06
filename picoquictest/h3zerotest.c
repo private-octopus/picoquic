@@ -125,9 +125,11 @@ int h3zero_integer_test()
 static uint8_t qpack_huffman_test_1[] = { 0xce, 0x64, 0x97, 0x75, 0x65, 0x2c, 0x9f };
 static uint8_t qpack_huffman_test_2[] = { 0x1d, 0x75, 0xd0, 0x62, 0x0d, 0x26, 0x3d, 0x4c, 0x4e, 0x9a, 0x68 };
 static uint8_t qpack_huffman_test_3[] = { 0x7c, 0x40 };
+static uint8_t qpack_huffman_test_4[] = { 0x60, 0x22, 0x65, 0xaf };
 static uint8_t qpack_huffman_data_1[] = { 'L', 'i', 't', 'e', 'S', 'p', 'e', 'e', 'd' };
 static uint8_t qpack_huffman_data_2[] = { 'a', 'p', 'p', 'l', 'i', 'c', 'a', 't', 'i', 'o', 'n', '/', 'h', 't', 'm', 'l' };
 static uint8_t qpack_huffman_data_3[] = { '9', '2', '0' };
+static uint8_t qpack_huffman_data_4[] = { '/', '1', '2', '3', '4' };
 
 typedef struct st_qpack_huffman_test_case_t {
     uint8_t * test;
@@ -142,7 +144,9 @@ static qpack_huffman_test_case_t qpack_huffman_test_case[] = {
     { qpack_huffman_test_2, sizeof(qpack_huffman_test_2),
     qpack_huffman_data_2, sizeof(qpack_huffman_data_2)},
     { qpack_huffman_test_3, sizeof(qpack_huffman_test_3),
-    qpack_huffman_data_3, sizeof(qpack_huffman_data_3)}
+    qpack_huffman_data_3, sizeof(qpack_huffman_data_3)},
+    { qpack_huffman_test_4, sizeof(qpack_huffman_test_4),
+    qpack_huffman_data_4, sizeof(qpack_huffman_data_4)}
 };
 
 static size_t nb_qpack_huffman_test_case = sizeof(qpack_huffman_test_case) / sizeof(qpack_huffman_test_case_t);
@@ -160,7 +164,7 @@ int qpack_huffman_test()
             data, sizeof(data), &nb_data);
         if (ret == 0) {
             if (nb_data != qpack_huffman_test_case[i].result_size) {
-                DBG_PRINTF("Huffman test %d bad ength (%d vs %d)\n", (int)i,
+                DBG_PRINTF("Huffman test %d bad length (%d vs %d)\n", (int)i,
                     (int)nb_data, (int)qpack_huffman_test_case[i].result_size);
                 ret = -1;
             }
@@ -220,9 +224,18 @@ static uint8_t qpack_test_get_zzz[] = {
     QPACK_TEST_HEADER_BLOCK_PREFIX, 0xC0 | 17, 0x50 | 1,
     0x80 | 3, QPACK_TEST_HEADER_QPACK_PATH };
 
+static uint8_t qpack_test_get_1234[] = {
+    0x00, 0x00, 0xd1, 0xd7, 0x51, 0x84, 0x60, 0x22,
+    0x65, 0xaf, 0x50, 0x94, 0x49, 0x50, 0x95, 0xeb,
+    0xb0, 0xdd, 0xc6, 0x92, 0x9c, 0x89, 0x3d, 0x76,
+    0xa1, 0x72, 0x1e, 0x9b, 0x8d, 0x34, 0xcb, 0x3f
+};
+
 static uint8_t qpack_test_string_index_html[] = { QPACK_TEST_HEADER_INDEX_HTML };
 static uint8_t qpack_test_string_slash[] = { '/' };
 static uint8_t qpack_test_string_zzz[] = { 'Z', 'Z', 'Z' };
+static uint8_t qpack_test_string_1234[] = { '/', '1', '2', '3', '4' };
+
 
 typedef struct st_qpack_test_case_t {
     uint8_t * bytes;
@@ -270,6 +283,10 @@ static qpack_test_case_t qpack_test_case[] = {
     {
         qpack_test_get_zzz, sizeof(qpack_test_get_zzz),
         { h3zero_method_get, qpack_test_string_zzz, sizeof(qpack_test_string_zzz), 0, 0}
+    },
+    {
+        qpack_test_get_1234, sizeof(qpack_test_get_1234),
+        { h3zero_method_get, qpack_test_string_1234, sizeof(qpack_test_string_1234), 0, 0}
     }
 };
 
