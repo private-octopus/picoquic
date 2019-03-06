@@ -358,14 +358,12 @@ uint8_t * h3zero_parse_qpack_header_value(uint8_t * bytes, uint8_t * bytes_max,
     size_t decoded_length;
     uint8_t deHuff[256];
 
-
+    is_huffman = (bytes[0] >> 7) & 1;
     bytes = h3zero_qpack_int_decode(bytes, bytes_max, 0x7F, &v_length);
     if (bytes != NULL) {
         if (bytes + v_length > bytes_max) {
             bytes = NULL;
         } else {
-            is_huffman = (bytes[0] >> 7) & 1; 
-
             if (is_huffman && hzero_qpack_huffman_decode(
                 bytes, bytes + v_length, deHuff, sizeof(deHuff), &decoded_length) == 0)
             {
