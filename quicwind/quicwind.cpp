@@ -23,6 +23,7 @@
 #include <WinSock2.h>
 #include <Windows.h>
 #include <tchar.h>
+#include <strsafe.h>
 #include "quicwind.h"
 
 #define MAX_LOADSTRING 100
@@ -37,6 +38,9 @@ ATOM                MyRegisterClass(HINSTANCE hInstance);
 BOOL                InitInstance(HINSTANCE, int);
 LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
+INT_PTR CALLBACK    StartConnection(HWND, UINT, WPARAM, LPARAM);
+INT_PTR CALLBACK    LoadFile(HWND, UINT, WPARAM, LPARAM);
+INT_PTR CALLBACK    CloseConnection(HWND, UINT, WPARAM, LPARAM);
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                      _In_opt_ HINSTANCE hPrevInstance,
@@ -152,6 +156,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             // Parse the menu selections:
             switch (wmId)
             {
+            case ID_FILE_CONNECT:
+                DialogBox(hInst, MAKEINTRESOURCE(IDD_CONNECT), hWnd, StartConnection);
+                break;
+            case ID_FILE_LOADFILE:
+                DialogBox(hInst, MAKEINTRESOURCE(IDD_LOAD_DOC), hWnd, LoadFile);
+                break;
+            case ID_FILE_CLOSE:
+                DialogBox(hInst, MAKEINTRESOURCE(IDD_CLOSE_CNX), hWnd, CloseConnection);
+                break;
             case IDM_ABOUT:
                 DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
                 break;
@@ -205,6 +218,138 @@ INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
             EndDialog(hDlg, LOWORD(wParam));
             return (INT_PTR)TRUE;
         }
+        break;
+    }
+    return (INT_PTR)FALSE;
+}
+
+// Message handler for connection start.
+INT_PTR CALLBACK StartConnection(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+    char text[1024];
+    int text_len;
+
+
+    UNREFERENCED_PARAMETER(lParam);
+    switch (message)
+    {
+    case WM_INITDIALOG: {
+        (void)SetDlgItemTextA(hDlg, IDC_PORT_NUMBER, "4433");
+        return (INT_PTR)TRUE;
+    }
+
+    case WM_COMMAND:
+        if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
+        {
+            text_len = GetDlgItemTextA(hDlg, IDC_SERVER_NAME, text, (int)sizeof(text));
+
+            EndDialog(hDlg, LOWORD(wParam));
+            return (INT_PTR)TRUE;
+        }
+        break;
+    }
+    return (INT_PTR)FALSE;
+}
+
+// Message handler for file load.
+INT_PTR CALLBACK LoadFile(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+    UNREFERENCED_PARAMETER(lParam);
+    switch (message)
+    {
+    case WM_INITDIALOG: {
+        // Add items to list. 
+        HWND hwndList = GetDlgItem(hDlg, IDC_CNX_LIST1);
+        TCHAR const * listText[3] = { TEXT("Connection 1"), TEXT("Connection 2"), TEXT("Connection 3") };
+        for (int i = 0; i < 3; i++)
+        {
+            int pos = (int)SendMessage(hwndList, LB_ADDSTRING, 0,
+                (LPARAM)listText[i]);
+            // Set the array index of the player as item data.
+            // This enables us to retrieve the item from the array
+            // even after the items are sorted by the list box.
+            SendMessage(hwndList, LB_SETITEMDATA, pos, (LPARAM)i);
+        }
+        // Set input focus to the list box.
+        SetFocus(hwndList);
+        return (INT_PTR)TRUE;
+    }
+    case WM_COMMAND:
+        if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
+        {
+            EndDialog(hDlg, LOWORD(wParam));
+            return (INT_PTR)TRUE;
+        }
+        break;
+    }
+    return (INT_PTR)FALSE;
+}
+
+// Message handler for connection close.
+INT_PTR CALLBACK CloseConnection(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+    int final_rank = -1;
+
+    UNREFERENCED_PARAMETER(lParam);
+    switch (message)
+    {
+    case WM_INITDIALOG: {
+        // Add items to list. 
+        HWND hwndList = GetDlgItem(hDlg, IDC_CNX_LIST1);
+        TCHAR const * listText[3] = { TEXT("Connection 1"), TEXT("Connection 2"), TEXT("Connection 3") };
+        for (int i = 0; i < 3; i++)
+        {
+            int pos = (int)SendMessage(hwndList, LB_ADDSTRING, 0,
+                (LPARAM)listText[i]);
+            // Set the array index of the player as item data.
+            // This enables us to retrieve the item from the array
+            // even after the items are sorted by the list box.
+            SendMessage(hwndList, LB_SETITEMDATA, pos, (LPARAM)i);
+        }
+        // Set selected index.
+        int lbItem = (int)SendMessage(hwndList, LB_SETCURSEL, 0, 0);
+        // Set input focus to the list box.
+        SetFocus(hwndList);
+        return (INT_PTR)TRUE;
+    }
+
+    case WM_COMMAND: 
+        switch (LOWORD(wParam)) {
+#if 0
+        case IDC_CNX_LIST1:
+            switch (HIWORD(wParam))
+            {
+            case LBN_SELCHANGE:
+            {
+                HWND hwndList = GetDlgItem(hDlg, IDC_CNX_LIST1);
+
+                // Get selected index.
+                int lbItem = (int)SendMessage(hwndList, LB_GETCURSEL, 0, 0);
+
+                // Get item data.
+                cnx_rank = (int)SendMessage(hwndList, LB_GETITEMDATA, lbItem, 0);
+            }
+            }
+            break;
+#endif
+        case IDOK:
+        {
+            HWND hwndList = GetDlgItem(hDlg, IDC_CNX_LIST1);
+
+            // Get selected index.
+            int lbItem = (int)SendMessage(hwndList, LB_GETCURSEL, 0, 0);
+
+            // Get item data.
+            final_rank = (int)SendMessage(hwndList, LB_GETITEMDATA, lbItem, 0);
+
+            EndDialog(hDlg, LOWORD(wParam));
+            return (INT_PTR)TRUE;
+        }
+        case IDCANCEL:
+            EndDialog(hDlg, LOWORD(wParam));
+            return (INT_PTR)TRUE;
+        }
+  
         break;
     }
     return (INT_PTR)FALSE;
