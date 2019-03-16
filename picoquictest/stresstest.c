@@ -661,6 +661,8 @@ static int stress_handle_packet_prepare(picoquic_stress_ctx_t * ctx, picoquic_qu
                 }
                 picoquic_delete_cnx(cnx);
                 if (c_index >= 0 && picoquic_get_earliest_cnx_to_wake(q, 0) != NULL) {
+                    /* error: only one connection at a time per client context,
+                     * connection was just deleted, yet there is a connection in wake list */
                     stress_debug_break();
                     ret = -1;
                 }

@@ -26,10 +26,10 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="quicwind.cpp">
+    <ClCompile Include="quicwind_proc.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="quicwind_proc.c">
+    <ClCompile Include="quicwind.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

@@ -646,13 +646,14 @@ typedef struct st_picoquic_cnx_t {
     int version_index;
 
     /* Series of flags showing the state or choices of the connection */
+    unsigned int context_complete : 1; /* in multi-threaded apps, checks whether context is fully initialized */
     unsigned int is_0RTT_accepted : 1; /* whether 0-RTT is accepted */
     unsigned int remote_parameters_received : 1; /* whether remote parameters where received */
     unsigned int client_mode : 1; /* Is this connection the client side? */
     unsigned int key_phase_enc : 1; /* Key phase used in outgoing packets */
     unsigned int key_phase_dec : 1; /* Key phase expected in incoming packets */
     unsigned int zero_rtt_data_accepted : 1; /* Peer confirmed acceptance of zero rtt data */
-    unsigned int sending_ecn_ack : 1; /* ECN data has been received, should be cpoied in acks */
+    unsigned int sending_ecn_ack : 1; /* ECN data has been received, should be copied in acks */
 
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;

@@ -26,12 +26,19 @@
 #include <strsafe.h>
 #include "quicwind.h"
 
+
 #define MAX_LOADSTRING 100
 
 // Global Variables:
 HINSTANCE hInst;                                // current instance
 WCHAR szTitle[MAX_LOADSTRING];                  // The title bar text
 WCHAR szWindowClass[MAX_LOADSTRING];            // the main window class name
+picoquic_quic_t * qclient = NULL;               // the quic client context.
+HANDLE qclient_thread = NULL;
+DWORD dw_qclient_thread_id = 0;
+WSADATA wsaData;
+HWND hWndEdit = NULL;
+#define IDC_EDITBOX 100
 
 // Forward declarations of functions included in this code module:
 ATOM                MyRegisterClass(HINSTANCE hInstance);
@@ -50,7 +57,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     UNREFERENCED_PARAMETER(hPrevInstance);
     UNREFERENCED_PARAMETER(lpCmdLine);
 
-    // TODO: Place code here.
+    // Init windows sockets
+    (void)WSAStartup(MAKEWORD(2, 2), &wsaData);
 
     // Initialize global strings
     LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
@@ -113,27 +121,39 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
 //
 //   PURPOSE: Saves instance handle and creates main window
 //
-//   COMMENTS:
-//
-//        In this function, we save the instance handle in a global variable and
-//        create and display the main program window.
-//
 BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
-   hInst = hInstance; // Store instance handle in our global variable
+    RECT Rect;
+    HWND hWnd = NULL;
+    hInst = hInstance; // Store instance handle in our global variable
 
-   HWND hWnd = CreateWindowW(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW,
-      CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, nullptr, nullptr, hInstance, nullptr);
+    hWnd = CreateWindowW(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW,
+        CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, nullptr, nullptr, hInstance, nullptr);
 
-   if (!hWnd)
-   {
-      return FALSE;
-   }
+    if (!hWnd)
+    {
+        return FALSE;
+    }
 
-   ShowWindow(hWnd, nCmdShow);
-   UpdateWindow(hWnd);
+    if (!GetClientRect(hWnd, &Rect)) {
+        Rect.left = 50;
+        Rect.top = 100;
+        Rect.right = Rect.left + 200;
+        Rect.bottom = Rect.top + 100;
+    }
 
-   return TRUE;
+    hWndEdit = CreateWindowEx(WS_EX_CLIENTEDGE,
+        L"EDIT", L"",
+        WS_CHILD | WS_VISIBLE | ES_MULTILINE | ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_READONLY,
+        Rect.left, Rect.top, Rect.right - Rect.left, Rect.bottom - Rect.top, hWnd,
+        (HMENU)IDC_EDITBOX,
+        GetModuleHandle(NULL),
+        NULL);
+
+    ShowWindow(hWnd, nCmdShow);
+    UpdateWindow(hWnd);
+
+    return TRUE;
 }
 
 //
@@ -169,6 +189,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
                 break;
             case IDM_EXIT:
+                quicwind_orderly_exit(qclient, qclient_thread, dw_qclient_thread_id);
                 DestroyWindow(hWnd);
                 break;
             default:
@@ -176,6 +197,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             }
         }
         break;
+#if 0
     case WM_PAINT:
         {
             PAINTSTRUCT ps;
@@ -194,6 +216,17 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             EndPaint(hWnd, &ps);
         }
         break;
+#endif
+    case WM_SIZE:
+        // Make the edit control the size of the window's client area. 
+
+        MoveWindow(hWndEdit,
+            0, 0,                  // starting x- and y-coordinates 
+            LOWORD(lParam),        // width of client area 
+            HIWORD(lParam),        // height of client area 
+            TRUE);                 // repaint window 
+        return 0;
+
     case WM_DESTROY:
         PostQuitMessage(0);
         break;
@@ -201,6 +234,27 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         return DefWindowProc(hWnd, message, wParam, lParam);
     }
     return 0;
+}
+
+/* Adding text in the edit control */
+extern "C" void AppendText(TCHAR const *newText)
+{
+    // get edit control from dialog
+    HWND hwndOutput = hWndEdit; /* GetDlgItem(hwnd, IDC_EDITBOX); */
+
+    // get the current selection
+    DWORD StartPos, EndPos;
+    SendMessage(hwndOutput, EM_GETSEL, reinterpret_cast<WPARAM>(&StartPos), reinterpret_cast<WPARAM>(&EndPos));
+
+    // move the caret to the end of the text
+    int outLength = GetWindowTextLength(hwndOutput);
+    SendMessage(hwndOutput, EM_SETSEL, outLength, outLength);
+
+    // insert the text at the new caret position
+    SendMessage(hwndOutput, EM_REPLACESEL, TRUE, reinterpret_cast<LPARAM>(newText));
+
+    // restore the previous selection
+    // SendMessage(hwndOutput, EM_SETSEL, StartPos, EndPos);
 }
 
 // Message handler for about box.
@@ -226,10 +280,6 @@ INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 // Message handler for connection start.
 INT_PTR CALLBACK StartConnection(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
-    char text[1024];
-    int text_len;
-
-
     UNREFERENCED_PARAMETER(lParam);
     switch (message)
     {
@@ -241,7 +291,44 @@ INT_PTR CALLBACK StartConnection(HWND hDlg, UINT message, WPARAM wParam, LPARAM 
     case WM_COMMAND:
         if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
         {
-            text_len = GetDlgItemTextA(hDlg, IDC_SERVER_NAME, text, (int)sizeof(text));
+          
+            if (LOWORD(wParam) == IDOK) {
+                char name[256];
+                char port[16];
+                char doc[256];
+                char alpn[64];
+                char sni[256];
+                int name_len;
+                int port_len;
+                int doc_len;
+                int alpn_len;
+                int sni_len;
+
+                if (qclient == NULL) {
+                    qclient = quicwind_create_context(NULL, 1500, NULL, 8);
+
+                    if (qclient != NULL) {
+                        qclient_thread = CreateThread(NULL, 0, quicwind_background_thread, (void*)qclient, 0, &dw_qclient_thread_id);
+                    }
+                }
+
+                name_len = GetDlgItemTextA(hDlg, IDC_SERVER_NAME, name, (int)sizeof(name));
+                port_len = GetDlgItemTextA(hDlg, IDC_PORT_NUMBER, port, (int)sizeof(port));
+                doc_len = GetDlgItemTextA(hDlg, IDC_DOC1, doc, (int)sizeof(doc));
+                alpn_len = GetDlgItemTextA(hDlg, IDC_ALPN, alpn, (int)sizeof(alpn));
+                sni_len = GetDlgItemTextA(hDlg, IDC_SNI, sni, (int)sizeof(sni));
+
+                if (quicwind_start_connection(qclient,
+                    (name_len > 0) ? name : NULL, (port_len > 0) ? port : NULL,
+                    (doc_len > 0) ? doc : NULL, (alpn_len > 0) ? alpn : NULL,
+                    (sni_len > 0) ? sni : NULL) != 0) {
+                    MessageBox(hDlg, L"Could not create the connection",
+                        L"Create Connection error", MB_OK);
+                }
+                else {
+                    AppendText(_T("Created a connection\r\n"));
+                }
+            }
 
             EndDialog(hDlg, LOWORD(wParam));
             return (INT_PTR)TRUE;
@@ -259,24 +346,37 @@ INT_PTR CALLBACK LoadFile(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
     {
     case WM_INITDIALOG: {
         // Add items to list. 
-        HWND hwndList = GetDlgItem(hDlg, IDC_CNX_LIST1);
-        TCHAR const * listText[3] = { TEXT("Connection 1"), TEXT("Connection 2"), TEXT("Connection 3") };
-        for (int i = 0; i < 3; i++)
-        {
-            int pos = (int)SendMessage(hwndList, LB_ADDSTRING, 0,
-                (LPARAM)listText[i]);
-            // Set the array index of the player as item data.
-            // This enables us to retrieve the item from the array
-            // even after the items are sorted by the list box.
-            SendMessage(hwndList, LB_SETITEMDATA, pos, (LPARAM)i);
+        if (qclient == NULL || quicwind_get_cnx_list(qclient, hDlg, IDC_CNX_LIST2) <= 0) {
+            MessageBox(hDlg, L"No connection available yet",
+                L"Load File error", MB_OK);
+            EndDialog(hDlg, LOWORD(IDCANCEL));
+            return (INT_PTR)TRUE;
         }
-        // Set input focus to the list box.
-        SetFocus(hwndList);
-        return (INT_PTR)TRUE;
+        else {
+            return (INT_PTR)TRUE;
+        }
     }
     case WM_COMMAND:
-        if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
-        {
+        if (LOWORD(wParam) == IDOK) {
+            char doc[256];
+            HWND hwndList = GetDlgItem(hDlg, IDC_CNX_LIST2);
+            // Get selected index.
+            int lbItem = (int)SendMessage(hwndList, LB_GETCURSEL, 0, 0);
+            // Get item data.
+            int sel_cid = (int)SendMessage(hwndList, LB_GETITEMDATA, lbItem, 0);
+            // Get the doc
+            int doc_len = GetDlgItemTextA(hDlg, IDC_DOC1, doc, (int)sizeof(doc));
+
+            if (quicwind_load_file(qclient, sel_cid, doc) != 0) {
+                MessageBox(hDlg, L"Something happened, could not request the document",
+                    L"Close Connection error", MB_OK);
+            }
+            else {
+                EndDialog(hDlg, LOWORD(wParam));
+            }
+            return (INT_PTR)TRUE;
+
+        } else if (LOWORD(wParam) == IDCANCEL){
             EndDialog(hDlg, LOWORD(wParam));
             return (INT_PTR)TRUE;
         }
@@ -288,29 +388,19 @@ INT_PTR CALLBACK LoadFile(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 // Message handler for connection close.
 INT_PTR CALLBACK CloseConnection(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
-    int final_rank = -1;
-
     UNREFERENCED_PARAMETER(lParam);
     switch (message)
     {
     case WM_INITDIALOG: {
-        // Add items to list. 
-        HWND hwndList = GetDlgItem(hDlg, IDC_CNX_LIST1);
-        TCHAR const * listText[3] = { TEXT("Connection 1"), TEXT("Connection 2"), TEXT("Connection 3") };
-        for (int i = 0; i < 3; i++)
-        {
-            int pos = (int)SendMessage(hwndList, LB_ADDSTRING, 0,
-                (LPARAM)listText[i]);
-            // Set the array index of the player as item data.
-            // This enables us to retrieve the item from the array
-            // even after the items are sorted by the list box.
-            SendMessage(hwndList, LB_SETITEMDATA, pos, (LPARAM)i);
+        if (qclient == NULL || quicwind_get_cnx_list(qclient, hDlg, IDC_CNX_LIST1) <= 0) {
+            MessageBox(hDlg, L"No connection available yet",
+                L"Close Connection error", MB_OK);
+            EndDialog(hDlg, LOWORD(IDCANCEL));
+            return (INT_PTR)TRUE;
         }
-        // Set selected index.
-        int lbItem = (int)SendMessage(hwndList, LB_SETCURSEL, 0, 0);
-        // Set input focus to the list box.
-        SetFocus(hwndList);
-        return (INT_PTR)TRUE;
+        else {
+            return (INT_PTR)TRUE;
+        }
     }
 
     case WM_COMMAND: 
@@ -336,13 +426,21 @@ INT_PTR CALLBACK CloseConnection(HWND hDlg, UINT message, WPARAM wParam, LPARAM 
         {
             HWND hwndList = GetDlgItem(hDlg, IDC_CNX_LIST1);
 
+
             // Get selected index.
             int lbItem = (int)SendMessage(hwndList, LB_GETCURSEL, 0, 0);
 
             // Get item data.
-            final_rank = (int)SendMessage(hwndList, LB_GETITEMDATA, lbItem, 0);
+            int sel_cid = (int)SendMessage(hwndList, LB_GETITEMDATA, lbItem, 0);
 
-            EndDialog(hDlg, LOWORD(wParam));
+            if (quicwind_disconnect(qclient, sel_cid) != 0) {
+                MessageBox(hDlg, L"Something happened, could not close",
+                    L"Close Connection error", MB_OK);
+            }
+            else {
+                AppendText(_T("Connection closed\r\n"));
+                EndDialog(hDlg, LOWORD(wParam));
+            }
             return (INT_PTR)TRUE;
         }
         case IDCANCEL:

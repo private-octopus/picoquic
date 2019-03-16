@@ -1488,10 +1488,12 @@ static int picoquic_add_to_tls_stream(picoquic_cnx_t* cnx, const uint8_t* data, 
             }
         }
 #if 0
+#if 0
         picoquic_cnx_set_next_wake_time(cnx, picoquic_get_quic_time(cnx->quic));
 #else
         /* reset the connection at its new logical position */
         picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
+#endif
 #endif
     }
 
