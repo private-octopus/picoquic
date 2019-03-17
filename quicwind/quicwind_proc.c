@@ -13,6 +13,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <ws2tcpip.h>
+#include "picoquic.h"
+#include "h3zero.h"
+#include "democlient.h"
 #include "quicwind.h"
 
 #ifndef SOCKET_TYPE
@@ -92,6 +95,58 @@ static quicwind_stream_ctx_t* quicwind_find_stream(
     return stream_ctx;
 }
 
+static void quicwind_delete_stream_context(quicwind_callback_ctx_t* ctx,
+    quicwind_stream_ctx_t * stream_ctx)
+{
+    int removed_from_context = 0;
+
+#if 0
+    h3zero_delete_data_stream_state(&stream_ctx->stream_state);
+#endif
+
+    if (stream_ctx->F != NULL) {
+        fclose(stream_ctx->F);
+    }
+
+    if (stream_ctx == ctx->first_stream) {
+        ctx->first_stream = stream_ctx->next_stream;
+        removed_from_context = 1;
+    }
+    else {
+        quicwind_stream_ctx_t * previous = ctx->first_stream;
+
+        while (previous != NULL) {
+            if (previous->next_stream == stream_ctx) {
+                previous->next_stream = stream_ctx->next_stream;
+                removed_from_context = 1;
+                break;
+            }
+            else {
+                previous = previous->next_stream;
+            }
+        }
+    }
+
+    if (removed_from_context) {
+        ctx->nb_open_streams--;
+    }
+
+    free(stream_ctx);
+}
+
+static void quicwind_delete_context(picoquic_cnx_t * cnx, quicwind_callback_ctx_t* ctx)
+{
+   quicwind_stream_ctx_t * stream_ctx;
+
+    picoquic_set_callback(cnx, NULL, NULL);
+
+    while ((stream_ctx = ctx->first_stream) != NULL) {
+        quicwind_delete_stream_context(ctx, stream_ctx);
+    }
+
+    free(ctx);
+}
+
 int quicwind_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx)
@@ -126,6 +181,7 @@ int quicwind_callback(picoquic_cnx_t* cnx,
                     while (bytes < bytes_max) {
                         bytes = h3zero_parse_data_stream(bytes, bytes_max, &stream_ctx->stream_state, &available_data, &error_found);
                         if (bytes == NULL) {
+                            AppendText(_T("Error parsing H3 stream, closing the connection.\r\n"));
                             ret = picoquic_close(cnx, error_found);
                             break;
                         }
@@ -146,40 +202,31 @@ int quicwind_callback(picoquic_cnx_t* cnx,
             }
 
             if (fin_or_event == picoquic_callback_stream_fin) {
-                fclose(stream_ctx->F);
-                stream_ctx->F = NULL;
-                ctx->nb_open_streams--;
-                fin_stream_id = stream_id;
+                quicwind_delete_stream_context(ctx, stream_ctx);
                 AppendText(_T("Stream ended\r\n"));
-                /*
-                fprintf(stdout, "Stream %d ended after %d bytes\n",
-                    (int)stream_id, (int)stream_ctx->received_length);*/
             }
         }
         break;
     case picoquic_callback_stream_reset: /* Server reset stream #x */
     case picoquic_callback_stop_sending: /* Server asks client to reset stream #x */
+        AppendText(_T("Received a stream reset.\n"));
         /* TODO: special case for uni streams. */
         stream_ctx = quicwind_find_stream(ctx, stream_id);
-        if (stream_ctx != NULL && stream_ctx->F != NULL) {
-            fclose(stream_ctx->F);
-            stream_ctx->F = NULL;
-            ctx->nb_open_streams--;
-            fin_stream_id = stream_id;
-        }
+        quicwind_delete_stream_context(ctx, stream_ctx);
         picoquic_reset_stream(cnx, stream_id, 0);
         /* TODO: higher level notify? */
         break;
     case picoquic_callback_stateless_reset:
         AppendText(_T("Received a stateless reset.\n"));
+        quicwind_delete_context(cnx, ctx);
         break;
     case picoquic_callback_close: /* Received connection close */
         AppendText(_T("Received a request to delete the connection.\n"));
-        picoquic_set_callback(cnx, NULL, NULL);
-        free(ctx);
+        quicwind_delete_context(cnx, ctx);
         break;
     case picoquic_callback_application_close: /* Received application close */
         AppendText(_T("Received a request to close the application.\n"));
+        quicwind_delete_context(cnx, ctx);
         break;
     case picoquic_callback_stream_gap:
         /* Gap indication, when unreliable streams are supported */
@@ -474,13 +521,30 @@ int quicwind_start_download(picoquic_cnx_t * cnx, quicwind_callback_ctx_t * ctx,
     }
     else {
         char file_name[256];
+        char name_buffer[256];
         char request[256];
+        uint8_t * path;
+        size_t path_len;
+        size_t request_length = 0;
         int name_index = 0;
         int doc_index = 0;
 
         memset(s_ctx, 0, sizeof(quicwind_stream_ctx_t));
         /* Set stream ID */
         s_ctx->stream_id = 4*ctx->nb_client_streams;
+
+        /* make sure that the doc name is properly formated */
+        path = (uint8_t *)doc_name;
+        path_len = strlen(doc_name);
+        if (doc_name[0] != '/' && strlen(doc_name) + 1 <= sizeof(name_buffer)) {
+            name_buffer[0] = '/';
+            if (path_len > 0) {
+                memcpy(&name_buffer[1], doc_name, path_len);
+            }
+            path = name_buffer;
+            path_len++;
+            name_buffer[path_len] = 0;
+        }
 
         /* Derive file name from doc name */
         if (doc_name[0] == '/') {
@@ -489,7 +553,7 @@ int quicwind_start_download(picoquic_cnx_t * cnx, quicwind_callback_ctx_t * ctx,
 
         while (doc_name[doc_index] != 0 && name_index < 255) {
             int c = doc_name[doc_index++];
-            if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-')) {
+            if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '.')) {
                 c = '_';
             }
             file_name[name_index++] = c;
@@ -511,12 +575,28 @@ int quicwind_start_download(picoquic_cnx_t * cnx, quicwind_callback_ctx_t * ctx,
             ctx->first_stream = s_ctx;
             ctx->nb_client_streams++;
             ctx->nb_open_streams++;
-            /* Format request and write on selected stream ID */
-            /* Assume http 0.9 for now */
-            (void) sprintf_s(request, sizeof(request), "GET %s%s \r\n\r\n", (doc_name[0] == '/') ? "" : "/", doc_name);
-            ret = picoquic_add_to_stream(cnx, s_ctx->stream_id, request, strlen(request), 1);
+
+            /* Format the protocol specific request */
+            switch (ctx->alpn) {
+            case picoquic_alpn_http_3:
+                ret = h3zero_client_create_stream_request(
+                    request, sizeof(request), path, path_len, &request_length, cnx->sni);
+                break;
+            case picoquic_alpn_http_0_9:
+            default:
+                ret = h09_demo_client_prepare_stream_open_command(
+                    request, sizeof(request), path, path_len, &request_length);
+                break;
+            }
+
+            /* Send the request and report */
+            if (ret == 0) {
+                ret = picoquic_add_to_stream(cnx, s_ctx->stream_id, request, request_length, 1);
+            }
+
             if (ret < 0) {
-                /* Somthing really bad happened */
+                AppendText(_T("Something really bad happened - closing the connection\r\n"));
+                /* Something really bad happened */
                 ret = picoquic_close(cnx, 0xFFFF);
             }
         }
@@ -575,9 +655,21 @@ int quicwind_start_connection(picoquic_quic_t * qclient,
             else {
                 memset(ctx, 0, sizeof(quicwind_callback_ctx_t));
 
+                ctx->alpn = picoquic_parse_alpn(alpn);
+
                 picoquic_set_callback(cnx_client, quicwind_callback, ctx);
 
                 ret = picoquic_start_client_cnx(cnx_client);
+
+                if (ret == 0) {
+                    switch (ctx->alpn) {
+                    case picoquic_alpn_http_3:
+                        ret = h3zero_client_init(cnx_client);
+                        break;
+                    default:
+                        break;
+                    }
+                }
 
                 if (ret == 0 && doc_name != 0) {
                     /* TODO: Start the download scenario */
