@@ -365,7 +365,7 @@ INT_PTR CALLBACK LoadFile(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
             // Get item data.
             int sel_cid = (int)SendMessage(hwndList, LB_GETITEMDATA, lbItem, 0);
             // Get the doc
-            int doc_len = GetDlgItemTextA(hDlg, IDC_DOC1, doc, (int)sizeof(doc));
+            int doc_len = GetDlgItemTextA(hDlg, IDC_DOC2, doc, (int)sizeof(doc));
 
             if (quicwind_load_file(qclient, sel_cid, doc) != 0) {
                 MessageBox(hDlg, L"Something happened, could not request the document",

@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <ws2tcpip.h>
+#include "quicwind.h"
 
 #ifndef SOCKET_TYPE
 #define SOCKET_TYPE SOCKET
@@ -66,24 +67,16 @@ typedef struct st_quicwind_stream_ctx_t {
     quicwind_stream_ctx_t* next_stream;
     h3zero_data_stream_state_t stream_state;
     size_t received_length;
-    size_t scenario_index;
     uint64_t stream_id;
     FILE* F; /* NULL if stream is closed. */
 } quicwind_stream_ctx_t;
 
 typedef struct st_quicwind_callback_ctx_t {
     quicwind_stream_ctx_t* first_stream;
-    quicwind_stream_desc_t const * demo_stream;
-    picoquic_tp_t const * tp;
     uint64_t last_interaction_time;
-
-    size_t nb_demo_streams;
-
-    int nb_open_streams;
     uint32_t nb_client_streams;
-
+    int nb_open_streams;
     picoquic_alpn_enum alpn;
-
     int progress_observed;
 } quicwind_callback_ctx_t;
 
@@ -215,13 +208,6 @@ int quicwind_callback(picoquic_cnx_t* cnx,
         AppendText(_T("Callback unexpected.\n"));
         break;
     }
-    /* TODO: start streams only from console interactions. */
-#if 0
-    if (ret == 0 && fin_stream_id != PICOQUIC_DEMO_STREAM_ID_INITIAL) {
-        /* start next batch of streams! */
-        ret = quicwind_start_streams(cnx, ctx, fin_stream_id);
-    }
-#endif
 
     /* that's it */
     return ret;
@@ -475,6 +461,70 @@ DWORD WINAPI quicwind_background_thread(LPVOID lpParam)
     return ret;
 }
 
+/* Start download of a document
+ */
+int quicwind_start_download(picoquic_cnx_t * cnx, quicwind_callback_ctx_t * ctx, char const * doc_name)
+{
+    int ret = 0;
+    quicwind_stream_ctx_t* s_ctx;
+
+    s_ctx = (quicwind_stream_ctx_t*)malloc(sizeof(quicwind_stream_ctx_t));
+    if (s_ctx == NULL) {
+        ret = -1;
+    }
+    else {
+        char file_name[256];
+        char request[256];
+        int name_index = 0;
+        int doc_index = 0;
+
+        memset(s_ctx, 0, sizeof(quicwind_stream_ctx_t));
+        /* Set stream ID */
+        s_ctx->stream_id = 4*ctx->nb_client_streams;
+
+        /* Derive file name from doc name */
+        if (doc_name[0] == '/') {
+            doc_index++;
+        }
+
+        while (doc_name[doc_index] != 0 && name_index < 255) {
+            int c = doc_name[doc_index++];
+            if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-')) {
+                c = '_';
+            }
+            file_name[name_index++] = c;
+        }
+
+        if (name_index == 0) {
+            file_name[name_index++] = '_';
+        }
+
+        file_name[name_index] = 0;
+
+        if (fopen_s(&s_ctx->F, file_name, "wb") != 0) {
+            ret = -1;
+            free(s_ctx);
+        } else {
+            /* Open file to receive stream */
+            /* Add stream to context */
+            s_ctx->next_stream = ctx->first_stream;
+            ctx->first_stream = s_ctx;
+            ctx->nb_client_streams++;
+            ctx->nb_open_streams++;
+            /* Format request and write on selected stream ID */
+            /* Assume http 0.9 for now */
+            (void) sprintf_s(request, sizeof(request), "GET %s%s \r\n\r\n", (doc_name[0] == '/') ? "" : "/", doc_name);
+            ret = picoquic_add_to_stream(cnx, s_ctx->stream_id, request, strlen(request), 1);
+            if (ret < 0) {
+                /* Somthing really bad happened */
+                ret = picoquic_close(cnx, 0xFFFF);
+            }
+        }
+    }
+
+    return ret;
+}
+
 /* Start a new connection.
  * Create a connection in the client context,
  * set addresses, etc. Add a first stream if needed.
@@ -517,7 +567,7 @@ int quicwind_start_connection(picoquic_quic_t * qclient,
             ret = -1;
         }
         else {
-            /* TODO: create callback context! */
+            /* create callback context! */
             quicwind_callback_ctx_t * ctx = (quicwind_callback_ctx_t *)malloc(sizeof(quicwind_callback_ctx_t));
             if (ctx == NULL) {
                 ret = -1;
@@ -531,6 +581,7 @@ int quicwind_start_connection(picoquic_quic_t * qclient,
 
                 if (ret == 0 && doc_name != 0) {
                     /* TODO: Start the download scenario */
+                    ret = quicwind_start_download(cnx_client, ctx, doc_name);
                 }
             }
         }
@@ -600,7 +651,16 @@ int quicwind_load_file(picoquic_quic_t * qclient, int sel_cid, char const * doc_
         ret = -1;
     }
     else {
-        /* Request to load the file */
+        /* Retrieve the app context from the connection */
+        void * v_ctx = picoquic_get_callback_context(cnx);
+
+        if (v_ctx == NULL) {
+            ret = -1;
+        }
+        else {
+            /* Request to load the file */
+            ret = quicwind_start_download(cnx, (quicwind_callback_ctx_t *)v_ctx, doc_name);
+        }
     }
 
     return ret;
