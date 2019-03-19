@@ -988,12 +988,11 @@ void usage()
     fprintf(stderr, "  -a alpn               alpn (default function of version)\n");
     fprintf(stderr, "  -r                    Do Reset Request\n");
     fprintf(stderr, "  -s <64b 64b>          Reset seed\n");
-    fprintf(stderr, "  -t file               root trust file");
+    fprintf(stderr, "  -t file               root trust file\n");
     fprintf(stderr, "  -u nb                 trigger key update after receiving <nb> packets on client\n");
-    fprintf(stderr, "  -v version            Version proposed by client, e.g. -v ff00000e\n");
-    fprintf(stderr, "                        or restrict the server to draft-14 mode.\n");
+    fprintf(stderr, "  -v version            Version proposed by client, e.g. -v ff000012\n");
     fprintf(stderr, "  -z                    Set TLS zero share behavior on client, to force HRR.\n");
-    fprintf(stderr, "  -1                    Once\n");
+    fprintf(stderr, "  -1                    Once: close the server after processing 1 connection.\n");
     fprintf(stderr, "  -S solution_dir       Set the path to the source files to find the default files\n");
     fprintf(stderr, "  -I length             Length of CNX_ID used by the client, default=8\n");
     fprintf(stderr, "\nThe scenario argument specifies the set of files that should be retrieved,\n");
@@ -1147,6 +1146,9 @@ int main(int argc, char** argv)
             }
             break;
         case 'h':
+            usage();
+            break;
+        default:
             usage();
             break;
         }
