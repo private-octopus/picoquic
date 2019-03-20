@@ -1035,7 +1035,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
 
                                 /* By default, copy to new frame, but if that does not fit also create overflow frame */
                                 ret = picoquic_split_stream_frame(&p->bytes[byte_index], frame_length,
-                                    &new_bytes[length], path_x->send_mtu - length - checksum_length, &copied_length,
+                                    &new_bytes[length], send_buffer_max - length - checksum_length, &copied_length,
                                     overflow, sizeof(overflow), &overflow_length);
 
                                 if (ret == 0) {
@@ -1046,8 +1046,13 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                                 }
                             }
                             else {
-                                memcpy(&new_bytes[length], &p->bytes[byte_index], frame_length);
-                                length += (uint32_t)frame_length;
+                                if (frame_length > send_buffer_max - length - checksum_length && 
+                                    (p->ptype == picoquic_packet_0rtt_protected || p->ptype == picoquic_packet_1rtt_protected)) {
+                                    ret = picoquic_queue_misc_frame(cnx, &p->bytes[byte_index], frame_length);
+                                } else {
+                                    memcpy(&new_bytes[length], &p->bytes[byte_index], frame_length);
+                                    length += (uint32_t)frame_length;
+                                }
                             }
                             packet_is_pure_ack = 0;
                         }
