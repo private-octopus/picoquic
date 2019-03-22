@@ -902,7 +902,6 @@ int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
     /* check if this is an ACK only packet */
     int ret = 0;
     int frame_is_pure_ack = 0;
-    uint8_t* old_bytes = old_p->bytes;
     size_t frame_length = 0;
     size_t byte_index = 0; /* Used when parsing the old packet */
     

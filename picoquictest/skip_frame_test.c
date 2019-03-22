@@ -1221,5 +1221,92 @@ int split_stream_frame_test()
     }
 
     return ret;
+}
 
+/*
+ * Test the copy for retransmit function
+ */
+typedef struct st_copy_retransmit_test_case_t {
+    uint8_t* packet;
+    uint32_t packet_length;
+    uint32_t offset;
+    int is_mtu_probe;
+    int is_ack_trap;
+    size_t copy_max;
+    uint8_t* b1_expected;
+    size_t b1_length;
+    size_t b2_max;
+    uint8_t* b2_expected;
+    size_t b2_length;
+    int is_pure_ack_expected;
+} copy_retransmit_test_case_t;
+
+static copy_retransmit_test_case_t copy_retransmit_case[] = { {0} };
+
+size_t nb_copy_retransmit_case = sizeof(copy_retransmit_case) / sizeof(copy_retransmit_test_case_t);
+
+int test_copy_for_retransmit()
+{
+    picoquic_quic_t * qtest = NULL;
+    picoquic_cnx_t * cnx = NULL;
+    int ret = 0;
+    picoquic_packet_t old_p;
+    uint8_t new_bytes[PICOQUIC_MAX_PACKET_SIZE];
+    uint32_t length = 0;
+    int packet_is_pure_ack = 0;
+    int do_not_detect_spurious = 1;
+    uint64_t simulated_time = 0;
+    struct sockaddr_in saddr;
+
+    memset(&saddr, 0, sizeof(struct sockaddr_in));
+
+    /* Initialize the connection context */
+    qtest = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
+    if (qtest == NULL) {
+        DBG_PRINTF("%s", "Cannot create QUIC context\n");
+        ret = -1;
+    }
+
+    /* Perform the tests */
+    for (size_t i = 0; i < nb_copy_retransmit_case; i++) {
+        cnx = picoquic_create_cnx(qtest,
+            picoquic_null_connection_id, picoquic_null_connection_id, (struct sockaddr *) &saddr,
+            simulated_time, 0, "test-sni", "test-alpn", 0);
+
+        if (cnx == NULL) {
+            DBG_PRINTF("%s", "Cannot create QUIC CNX context\n");
+            ret = -1;
+            break;
+        }
+        /* Initialize the old packet */
+        memset(&old_p, 0, sizeof(picoquic_packet_t));
+        memcpy(old_p.bytes, copy_retransmit_case[i].packet, copy_retransmit_case[i].packet_length);
+        old_p.length = copy_retransmit_case[i].packet_length;
+        old_p.offset = copy_retransmit_case[i].offset;
+        old_p.is_mtu_probe = copy_retransmit_case[i].is_mtu_probe;
+        old_p.is_ack_trap = copy_retransmit_case[i].is_ack_trap;
+        old_p.send_path = cnx->path[0];
+
+        ret = picoquic_copy_before_retransmit(&old_p, cnx, new_bytes,
+            copy_retransmit_case[i].copy_max,
+            &packet_is_pure_ack,
+            &do_not_detect_spurious,
+            &length);
+        /* Check whether pure ack matches expectation */
+
+        /* Compare bytes and length to expected */
+        /* Compare extra frames */
+        /* Free the extra frames */
+        if (cnx != NULL) {
+            picoquic_delete_cnx(cnx);
+        }
+    }
+
+    /* Free the connection context */
+    if (qtest != NULL) {
+        picoquic_free(qtest);
+    }
+    return 0;
 }
