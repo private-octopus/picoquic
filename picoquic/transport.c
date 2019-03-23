@@ -433,6 +433,27 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     return ret;
 }
 
+void picoquic_clear_transport_extensions(picoquic_cnx_t* cnx)
+{
+    cnx->remote_parameters.initial_max_stream_data_bidi_local = 0;
+    picoquic_update_stream_initial_remote(cnx);
+    cnx->remote_parameters.initial_max_stream_data_bidi_remote = 0;
+    picoquic_update_stream_initial_remote(cnx);
+    cnx->remote_parameters.initial_max_stream_data_uni = 0;
+    picoquic_update_stream_initial_remote(cnx);
+    cnx->remote_parameters.initial_max_data = 0;
+    cnx->maxdata_remote = cnx->remote_parameters.initial_max_data;
+    cnx->remote_parameters.initial_max_stream_id_bidir = 0;
+    cnx->max_stream_id_bidir_remote = 0;
+    cnx->remote_parameters.idle_timeout = 0xFFFFFFFF;
+    cnx->remote_parameters.max_packet_size = 1500;
+    cnx->remote_parameters.ack_delay_exponent = 3;
+    cnx->remote_parameters.initial_max_stream_id_unidir = 0;
+    cnx->max_stream_id_unidir_remote = 0;
+    cnx->remote_parameters.migration_disabled = 0;
+    cnx->remote_parameters.max_ack_delay = PICOQUIC_ACK_DELAY_MAX_DEFAULT;
+}
+
 int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mode,
     uint8_t* bytes, size_t bytes_max, size_t* consumed)
 {
@@ -442,6 +463,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     picoquic_connection_id_t original_connection_id = picoquic_null_connection_id;
 
     cnx->remote_parameters_received = 1;
+    picoquic_clear_transport_extensions(cnx);
 
     switch (extension_mode) {
     case 0: // Client hello
