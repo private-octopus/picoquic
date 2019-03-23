@@ -57,6 +57,7 @@ static const picoquic_test_def_t test_table[] = {
     { "TlsStreamFrame", TlsStreamFrameTest },
     { "StreamZeroFrame", StreamZeroFrameTest },
     { "split_stream_frame", split_stream_frame_test },
+    { "copy_for_retransmit", test_copy_for_retransmit },
     { "sendack", sendacktest },
     { "ackrange", ackrange_test },
     { "ack_of_ack", ack_of_ack_test },
