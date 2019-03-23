@@ -705,10 +705,6 @@ static int picoquic_update_traffic_key_callback(ptls_update_traffic_key_t * self
 
     int ret = picoquic_set_key_from_secret(cipher, is_enc, 0, &cnx->crypto_context[epoch], secret);
 
-    if (ret == 0 && cnx->client_mode && is_enc == 1 && epoch == 2) {
-        cnx->zero_rtt_data_accepted = tls_ctx->handshake_properties.client.early_data_accepted_by_peer;
-    }
-
     if (ret == 0 && epoch == 3) {
         memcpy((is_enc) ? tls_ctx->app_secret_enc : tls_ctx->app_secret_dec, secret, cipher->hash->digest_size);
     }
@@ -1763,6 +1759,18 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
                         data_pushed = 1;
                         ret = picoquic_add_to_tls_stream(cnx,
                             sendbuf.base + send_offset[i], send_offset[i + 1] - send_offset[i], i);
+                    }
+                }
+                if (cnx->client_mode) {
+                    switch (ctx->handshake_properties.client.early_data_acceptance) {
+                    case PTLS_EARLY_DATA_REJECTED:
+                        cnx->zero_rtt_data_accepted = 0;
+                        break;
+                    case PTLS_EARLY_DATA_ACCEPTED:
+                        cnx->zero_rtt_data_accepted = 1;
+                        break;
+                    default:
+                        break;
                     }
                 }
             }
