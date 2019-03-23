@@ -1086,6 +1086,10 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                     &do_not_detect_spurious,
                     &length);
 
+                if (ret != 0) {
+                    DBG_PRINTF("Copy before retransmit returns %d\n", ret);
+                }
+
                 /* Update the number of bytes in transit and remove old packet from queue */
                 /* If not pure ack, the packet will be placed in the "retransmitted" queue,
                  * in order to enable detection of spurious restransmissions */
