@@ -2817,7 +2817,7 @@ uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, uint8_t* bytes
 
     } else {
         int found_challenge = 0;
-        picoquic_path_t * found_path = NULL;
+
         /*
          * Check that the challenge corresponds to something that was sent locally
          */
