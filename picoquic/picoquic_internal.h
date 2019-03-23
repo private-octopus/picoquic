@@ -70,6 +70,8 @@ extern "C" {
 
 #define PICOQUIC_SPIN_RESERVE_MOD_256 17
 
+#define PICOQUIC_CHALLENGE_REPEAT_MAX 3
+
 /*
  * Types of frames
  */
@@ -483,7 +485,7 @@ typedef struct st_picoquic_path_t {
     uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE];
     /* Challenge used for this path */
     uint64_t challenge_response;
-    uint64_t challenge;
+    uint64_t challenge[PICOQUIC_CHALLENGE_REPEAT_MAX];
     uint64_t challenge_time;
     uint64_t demotion_time;
     uint8_t challenge_repeat_count;
@@ -495,11 +497,10 @@ typedef struct st_picoquic_path_t {
     unsigned long alt_if_index_dest;
     /* Challenge used for the NAT rebinding tests */
     uint64_t alt_challenge_response;
-    uint64_t alt_challenge;
+    uint64_t alt_challenge[PICOQUIC_CHALLENGE_REPEAT_MAX];
     uint64_t alt_challenge_timeout;
     uint8_t alt_challenge_repeat_count;
 
-#define PICOQUIC_CHALLENGE_REPEAT_MAX 3
     /* flags */
     unsigned int mtu_probe_sent : 1;
     unsigned int path_is_published : 1;
@@ -621,7 +622,7 @@ typedef struct st_picoquic_probe_t {
     int local_addr_len;
     unsigned long if_index_dest;
     /* Challenge used by this probe */
-    uint64_t challenge;
+    uint64_t challenge[PICOQUIC_CHALLENGE_REPEAT_MAX];
     uint64_t challenge_time;
     uint8_t challenge_repeat_count;
     /* Flags */
