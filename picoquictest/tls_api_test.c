@@ -3199,7 +3199,7 @@ int nat_rebinding_test_one(uint64_t loss_mask_data)
     }
 
     if (ret == 0) {
-        initial_challenge = test_ctx->cnx_server->path[0]->challenge;
+        initial_challenge = test_ctx->cnx_server->path[0]->challenge[0];
         loss_mask = loss_mask_data; 
         
         /* Change the client address */
@@ -3246,7 +3246,7 @@ int nat_rebinding_test_one(uint64_t loss_mask_data)
 
     /* Verify that the challenge was updated and done */
     if (ret == 0) {
-        if (initial_challenge == test_ctx->cnx_server->path[0]->challenge) {
+        if (initial_challenge == test_ctx->cnx_server->path[0]->challenge[0]) {
             DBG_PRINTF("%s", "Challenge was not renewed after NAT rebinding");
             ret = -1;
         }
@@ -3681,7 +3681,9 @@ int probe_api_test()
             }
 
             if (ret == 0 && ret_probe == 0) {
-                test_ctx->cnx_client->probe_first->challenge = 10000 + 10*i + j;
+                for (int ichal = 0; ichal < PICOQUIC_CHALLENGE_REPEAT_MAX; ichal++) {
+                    test_ctx->cnx_client->probe_first->challenge[ichal] = 10000 + 10 * i + j + 1000*ichal;
+                }
             }
         }
     }
@@ -3707,9 +3709,9 @@ int probe_api_test()
                     DBG_PRINTF("Retrieve by addr %d (%d, %d) fails\n", nb_trials, i, j);
                     ret = -1;
                 }
-                else if (probe->challenge != challenge){
+                else if (probe->challenge[0] != challenge){
                     DBG_PRINTF("Retrieve by addr %d (%d, %d) finds %d instead of %d\n", 
-                        nb_trials, i, j, (int)probe->challenge, (int)challenge);
+                        nb_trials, i, j, (int)probe->challenge[0], (int)challenge);
                     ret = -1;
                 }
             }
@@ -3725,21 +3727,24 @@ int probe_api_test()
     for (int i = 1; ret == 0 && i < PICOQUIC_NB_PATH_TARGET; i++) {
         for (int j = 0; ret == 0 && j < 2; j++) {
             picoquic_probe_t * probe;
-            uint64_t challenge = 10000 + 10 * i + j;
-            
-            probe = picoquic_find_probe_by_challenge(test_ctx->cnx_client, challenge);
-
             nb_trials++;
 
-            if (nb_trials <= PICOQUIC_NB_PATH_TARGET - 1) {
-                if (probe == NULL) {
-                    DBG_PRINTF("Retrieve by challenge %d (%d, %d) fails\n", nb_trials, i, j);
+            for (int ichal = 0; ichal < PICOQUIC_CHALLENGE_REPEAT_MAX; ichal++) {
+                uint64_t challenge = 10000 + 10 * i + j + 1000 * ichal;
+
+                probe = picoquic_find_probe_by_challenge(test_ctx->cnx_client, challenge);
+
+
+                if (nb_trials <= PICOQUIC_NB_PATH_TARGET - 1) {
+                    if (probe == NULL) {
+                        DBG_PRINTF("Retrieve by challenge %d (%d, %d) fails\n", nb_trials, i, j);
+                        ret = -1;
+                    }
+                }
+                else if (probe != NULL) {
+                    DBG_PRINTF("Retrieve by challenge %d (%d, %d) succeeds (unexpected)\n", nb_trials, i, j);
                     ret = -1;
                 }
-            }
-            else if (probe != NULL) {
-                DBG_PRINTF("Retrieve by challenge %d (%d, %d) succeeds (unexpected)\n", nb_trials, i, j);
-                ret = -1;
             }
         }
     }
@@ -3846,7 +3851,7 @@ int migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_sc
     while (ret == 0 && simulated_time < next_time && TEST_CLIENT_READY
         && TEST_SERVER_READY
         && (test_ctx->cnx_server->path[0]->challenge_verified != 1 || test_ctx->cnx_client->path[0]->path_is_demoted == 1 ||
-            initial_challenge == test_ctx->cnx_server->path[0]->challenge)) {
+            initial_challenge == test_ctx->cnx_server->path[0]->challenge[0])) {
         int was_active = 0;
 
         ret = tls_api_one_sim_round(test_ctx, &simulated_time, next_time, &was_active);
@@ -3855,7 +3860,7 @@ int migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_sc
     /* Verify that the challenge was updated and done */
     /* TODO: verify that exactly one challenge was sent */
     if (ret == 0) {
-        if (initial_challenge == test_ctx->cnx_server->path[0]->challenge) {
+        if (initial_challenge == test_ctx->cnx_server->path[0]->challenge[0]) {
             DBG_PRINTF("%s", "Challenge was not renewed after migration");
             ret = -1;
         }

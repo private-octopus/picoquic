@@ -170,6 +170,7 @@ int null_sni_test();
 int preferred_address_test();
 int cid_global_encrypt_test();
 int cid_mask_encrypt_test();
+int test_copy_for_retransmit();
 
 #ifdef __cplusplus
 }

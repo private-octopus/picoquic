@@ -1221,5 +1221,332 @@ int split_stream_frame_test()
     }
 
     return ret;
+}
 
+/*
+ * Test the copy for retransmit function
+ */
+
+#define COPY_PACKET_CID_DEST 1,2,3,4,5,6,7,8
+
+#define COPY_PACKET_HEADER_1RTT 0x43, COPY_PACKET_CID_DEST, 0, 0, 0, 1
+
+#define SPLIT_FRAME_TEST_SOURCE_68_77 68,69,70,71,72,73,74,75,76,77
+
+static uint8_t ct_packet_header_1rtt[] = { COPY_PACKET_HEADER_1RTT };
+
+static uint8_t ct_stream0_data[] = { SPLIT_FRAME_TEST_SOURCE_CONTENT_67, SPLIT_FRAME_TEST_SOURCE_68_77 };
+
+static uint8_t ct_test_packet1[] = {
+    COPY_PACKET_HEADER_1RTT,
+    picoquic_frame_type_stream_range_min | 2, 0x00, 0x40, 67,
+    SPLIT_FRAME_TEST_SOURCE_CONTENT_67
+};
+
+static uint8_t ct_test_packet2[] = {
+    COPY_PACKET_HEADER_1RTT,
+    picoquic_frame_type_stream_range_min, 0x00,
+    SPLIT_FRAME_TEST_SOURCE_CONTENT_67 };
+
+static uint8_t ct_test_packet3[] = {
+    COPY_PACKET_HEADER_1RTT,
+    picoquic_frame_type_stream_range_min, 0x00,
+    SPLIT_FRAME_TEST_SOURCE_CONTENT_67, SPLIT_FRAME_TEST_SOURCE_68_77
+};
+
+static uint8_t ct_test_packet4[] = {
+    COPY_PACKET_HEADER_1RTT,
+    picoquic_frame_type_stream_range_min | 6, 0x00, 0x40, 67, 0x0A,
+    SPLIT_FRAME_TEST_SOURCE_68_77,
+    picoquic_frame_type_stream_range_min, 0x00,
+    SPLIT_FRAME_TEST_SOURCE_CONTENT_67
+};
+
+static uint8_t ct_test_packet5[] = {
+    COPY_PACKET_HEADER_1RTT,
+    picoquic_frame_type_stream_range_min | 6, 0x00, 0x40, 67, 0x0A,
+    SPLIT_FRAME_TEST_SOURCE_68_77,
+    picoquic_frame_type_stream_range_min | 2, 0x00, 0x40, 67,
+    SPLIT_FRAME_TEST_SOURCE_CONTENT_67
+};
+
+static uint8_t ct_test_packet6[] = {
+    COPY_PACKET_HEADER_1RTT,
+    picoquic_frame_type_stream_range_min | 6, 0x00, 0x40, 67, 0x0A,
+    SPLIT_FRAME_TEST_SOURCE_68_77,
+    picoquic_frame_type_stream_range_min, 0x00,
+    SPLIT_FRAME_TEST_SOURCE_CONTENT_INIT_32
+};
+
+
+static uint8_t ct_test_frame_35_67[] = {
+    picoquic_frame_type_stream_range_min | 6, 0x00, 0x20, 0x23,
+    SPLIT_FRAME_TEST_SOURCE_CONTENT_LAST_35 };
+
+static uint8_t ct_test_frame_68_77[] = {
+    picoquic_frame_type_stream_range_min | 6, 0x00, 0x40, 67, 0x0A,
+    SPLIT_FRAME_TEST_SOURCE_68_77
+};
+
+static uint8_t ct_test_mtu_probe[] = {
+    COPY_PACKET_HEADER_1RTT,
+    picoquic_frame_type_ping,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+};
+
+typedef struct st_copy_retransmit_test_case_t {
+    uint8_t* packet;
+    uint32_t packet_length;
+    uint32_t offset;
+    int is_mtu_probe;
+    int is_ack_trap;
+    size_t copy_max;
+    uint8_t* b1_expected;
+    size_t b1_length;
+    size_t b1_offset;
+    uint8_t* b2_expected;
+    size_t b2_length;
+    int is_pure_ack_expected;
+} copy_retransmit_test_case_t;
+
+static copy_retransmit_test_case_t copy_retransmit_case[] = { 
+    {
+        ct_test_packet1,
+        (uint32_t) sizeof(ct_test_packet1),
+        (uint32_t) sizeof(ct_packet_header_1rtt),
+        0,
+        0,
+        PICOQUIC_MAX_PACKET_SIZE,
+        ct_test_packet1,
+        (uint32_t) sizeof(ct_test_packet1),
+        (uint32_t) sizeof(ct_packet_header_1rtt),
+        NULL,
+        0,
+        0
+    },
+    {
+        ct_test_packet2,
+        (uint32_t) sizeof(ct_test_packet2),
+        (uint32_t) sizeof(ct_packet_header_1rtt),
+        0,
+        0,
+        PICOQUIC_MAX_PACKET_SIZE,
+        ct_test_packet1,
+        (uint32_t) sizeof(ct_test_packet1),
+        (uint32_t) sizeof(ct_packet_header_1rtt),
+        NULL,
+        0,
+        0
+    },
+    {
+        ct_test_packet2,
+        (uint32_t) sizeof(ct_test_packet2),
+        (uint32_t) sizeof(ct_packet_header_1rtt),
+        0,
+        0,
+        (uint32_t) sizeof(ct_test_packet2),
+        ct_test_packet2,
+        (uint32_t) sizeof(ct_test_packet2),
+        (uint32_t) sizeof(ct_packet_header_1rtt),
+        NULL,
+        0,
+        0
+    },
+    {
+        ct_test_packet3,
+        (uint32_t) sizeof(ct_test_packet3),
+        (uint32_t) sizeof(ct_packet_header_1rtt),
+        0,
+        0,
+        (uint32_t) sizeof(ct_test_packet2),
+        ct_test_packet2,
+        (uint32_t) sizeof(ct_test_packet2),
+        (uint32_t) sizeof(ct_packet_header_1rtt),
+        ct_test_frame_68_77,
+        sizeof(ct_test_frame_68_77),
+        0
+    },
+    {
+        ct_test_packet4,
+        (uint32_t) sizeof(ct_test_packet4),
+        (uint32_t) sizeof(ct_packet_header_1rtt),
+        0,
+        0,
+        (uint32_t) sizeof(ct_test_packet4),
+        ct_test_packet4,
+        (uint32_t) sizeof(ct_test_packet4),
+        (uint32_t) sizeof(ct_packet_header_1rtt),
+        NULL,
+        0,
+        0
+    },
+    {
+        ct_test_packet4,
+        (uint32_t) sizeof(ct_test_packet4),
+        (uint32_t) sizeof(ct_packet_header_1rtt),
+        0,
+        0,
+        PICOQUIC_MAX_PACKET_SIZE,
+        ct_test_packet5,
+        (uint32_t) sizeof(ct_test_packet5),
+        (uint32_t) sizeof(ct_packet_header_1rtt),
+        NULL,
+        0,
+        0
+    },
+    {
+        ct_test_packet4,
+        (uint32_t) sizeof(ct_test_packet4),
+        (uint32_t) sizeof(ct_packet_header_1rtt),
+        0,
+        0,
+        (uint32_t) sizeof(ct_test_packet6),
+        ct_test_packet6,
+        (uint32_t) sizeof(ct_test_packet6),
+        (uint32_t) sizeof(ct_packet_header_1rtt),
+        ct_test_frame_35_67,
+        sizeof(ct_test_frame_35_67),
+        0
+    },
+    {
+        ct_test_mtu_probe,
+        (uint32_t) sizeof(ct_test_mtu_probe),
+        (uint32_t) sizeof(ct_packet_header_1rtt),
+        1,
+        0,
+        PICOQUIC_MAX_PACKET_SIZE,
+        NULL, 0, 0,
+        NULL, 0,
+        1
+    },
+    {
+        NULL,
+        0,
+        0,
+        0,
+        1,
+        PICOQUIC_MAX_PACKET_SIZE,
+        NULL, 0, 0,
+        NULL, 0,
+        1
+    }
+};
+
+size_t nb_copy_retransmit_case = sizeof(copy_retransmit_case) / sizeof(copy_retransmit_test_case_t);
+
+int test_copy_for_retransmit()
+{
+    picoquic_quic_t * qtest = NULL;
+    picoquic_cnx_t * cnx = NULL;
+    int ret = 0;
+    picoquic_packet_t old_p;
+    uint8_t new_bytes[PICOQUIC_MAX_PACKET_SIZE];
+    uint32_t length = 0;
+    int packet_is_pure_ack = 0;
+    int do_not_detect_spurious = 1;
+    uint64_t simulated_time = 0;
+    struct sockaddr_in saddr;
+
+    memset(&saddr, 0, sizeof(struct sockaddr_in));
+
+    /* Initialize the connection context */
+    qtest = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
+    if (qtest == NULL) {
+        DBG_PRINTF("%s", "Cannot create QUIC context\n");
+        ret = -1;
+    }
+
+    /* Perform the tests */
+    for (size_t i = 0; i < nb_copy_retransmit_case; i++) {
+        cnx = picoquic_create_cnx(qtest,
+            picoquic_null_connection_id, picoquic_null_connection_id, (struct sockaddr *) &saddr,
+            simulated_time, 0, "test-sni", "test-alpn", 1);
+
+        if (cnx == NULL) {
+            DBG_PRINTF("%s", "Cannot create QUIC CNX context\n");
+            ret = -1;
+            break;
+        }
+        /* Initialize stream 0 */
+        if ((ret = picoquic_add_to_stream(cnx, 0, ct_stream0_data, sizeof(ct_stream0_data), 0)) != 0) {
+            DBG_PRINTF("%s", "Cannot initialize stream 0\n");
+            ret = -1;
+            break;
+        }
+
+        /* Initialize the old packet */
+        memset(&old_p, 0, sizeof(picoquic_packet_t));
+        if (copy_retransmit_case[i].packet_length > 0) {
+            memcpy(old_p.bytes, copy_retransmit_case[i].packet, copy_retransmit_case[i].packet_length);
+            old_p.length = copy_retransmit_case[i].packet_length;
+        }
+        old_p.offset = copy_retransmit_case[i].offset;
+        old_p.is_mtu_probe = copy_retransmit_case[i].is_mtu_probe;
+        old_p.is_ack_trap = copy_retransmit_case[i].is_ack_trap;
+        old_p.send_path = cnx->path[0];
+
+        length = (uint32_t)copy_retransmit_case[i].b1_offset;
+
+        ret = picoquic_copy_before_retransmit(&old_p, cnx, new_bytes,
+            copy_retransmit_case[i].copy_max,
+            &packet_is_pure_ack,
+            &do_not_detect_spurious,
+            &length);
+
+        if (ret != 0) {
+            DBG_PRINTF("Cannot perform copy for test[%d]\n", i);
+        } else if (packet_is_pure_ack != copy_retransmit_case[i].is_pure_ack_expected) {
+            /* Check whether pure ack matches expectation */
+            DBG_PRINTF("Is pure ack mismatch on test[%d], got %d\n", i,
+                packet_is_pure_ack);
+            ret = -1;
+        }
+        else if (!packet_is_pure_ack) {
+            /* Compare bytes and length to expected */
+            if (length != copy_retransmit_case[i].b1_length) {
+                DBG_PRINTF("Length mismatch on test[%d], got %d vs %d\n", i,
+                    packet_is_pure_ack, length,
+                    copy_retransmit_case[i].b1_length);
+                ret = -1;
+            }
+            else if (memcmp(new_bytes + copy_retransmit_case[i].b1_offset, 
+                copy_retransmit_case[i].b1_expected + copy_retransmit_case[i].b1_offset, 
+                length - copy_retransmit_case[i].b1_offset) != 0) {
+                DBG_PRINTF("Value mismatch on test[%d]\n", i);
+                ret = -1;
+            }
+            else if (copy_retransmit_case[i].b2_expected == NULL) {
+                if (cnx->first_misc_frame != NULL) {
+                    DBG_PRINTF("Unexpected misc frame in test[%d]\n", i);
+                    ret = -1;
+                }
+            }
+            else if (cnx->first_misc_frame == NULL) {
+                DBG_PRINTF("Missing misc frame in test[%d]\n", i);
+                ret = -1;
+            }
+            else if (cnx->first_misc_frame->length != copy_retransmit_case[i].b2_length) {
+                DBG_PRINTF("Wrong misc frame in test[%d], got %d vs %d\n", i,
+                    cnx->first_misc_frame->length, copy_retransmit_case[i].b2_length);
+                ret = -1;
+            }
+            else if (memcmp(((uint8_t *)cnx->first_misc_frame) + sizeof(picoquic_misc_frame_header_t),
+                copy_retransmit_case[i].b2_expected, cnx->first_misc_frame->length) != 0) {
+                DBG_PRINTF("Mismatching misc frame in test[%d]\n", i);
+                ret = -1;
+            }
+        }
+        /* Free the extra frames */
+        if (cnx != NULL) {
+            picoquic_delete_cnx(cnx);
+        }
+    }
+
+    /* Free the connection context */
+    if (qtest != NULL) {
+        picoquic_free(qtest);
+    }
+    return ret;
 }

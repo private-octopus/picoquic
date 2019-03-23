@@ -67,8 +67,8 @@ Picoquic is developed in C, and can be built under Windows or Linux. Building th
 project requires first managing the dependencies, Picotls (https://github.com/h2o/picotls)
 and OpenSSL. Please note that you will need a recent version of Picotls --
 the Picotls API has eveolved recently to support the latest version of QUIC. The
-current code is tested against the Picotls version of Mon Feb 18 14:22:09 2019 +0900,
-after commit `e278d032381414641c286ae6f02c407f83c7586c`.
+current code is tested against the Picotls version of Wed Mar 20 14:25:57 2019 +0900,
+after commit `4e6080b6a1ede0d3b23c72a8be73b46ecaf1a084`.
 
 ## Picoquic on Windows
 

@@ -70,6 +70,8 @@ extern "C" {
 
 #define PICOQUIC_SPIN_RESERVE_MOD_256 17
 
+#define PICOQUIC_CHALLENGE_REPEAT_MAX 3
+
 /*
  * Types of frames
  */
@@ -483,7 +485,7 @@ typedef struct st_picoquic_path_t {
     uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE];
     /* Challenge used for this path */
     uint64_t challenge_response;
-    uint64_t challenge;
+    uint64_t challenge[PICOQUIC_CHALLENGE_REPEAT_MAX];
     uint64_t challenge_time;
     uint64_t demotion_time;
     uint8_t challenge_repeat_count;
@@ -495,11 +497,10 @@ typedef struct st_picoquic_path_t {
     unsigned long alt_if_index_dest;
     /* Challenge used for the NAT rebinding tests */
     uint64_t alt_challenge_response;
-    uint64_t alt_challenge;
+    uint64_t alt_challenge[PICOQUIC_CHALLENGE_REPEAT_MAX];
     uint64_t alt_challenge_timeout;
     uint8_t alt_challenge_repeat_count;
 
-#define PICOQUIC_CHALLENGE_REPEAT_MAX 4
     /* flags */
     unsigned int mtu_probe_sent : 1;
     unsigned int path_is_published : 1;
@@ -621,7 +622,7 @@ typedef struct st_picoquic_probe_t {
     int local_addr_len;
     unsigned long if_index_dest;
     /* Challenge used by this probe */
-    uint64_t challenge;
+    uint64_t challenge[PICOQUIC_CHALLENGE_REPEAT_MAX];
     uint64_t challenge_time;
     uint8_t challenge_repeat_count;
     /* Flags */
@@ -1015,6 +1016,13 @@ int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head* str
     uint8_t* bytes, size_t bytes_max, size_t* consumed, int* is_still_active);
 int picoquic_split_stream_frame(uint8_t* frame, size_t frame_length,
     uint8_t* b1, size_t b1_max, size_t *lb1, uint8_t* b2, size_t b2_max, size_t *lb2);
+int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
+    picoquic_cnx_t * cnx,
+    uint8_t * new_bytes,
+    size_t send_buffer_max_minus_checksum,
+    int * packet_is_pure_ack,
+    int * do_not_detect_spurious,
+    uint32_t * length);
 uint8_t* picoquic_decode_crypto_hs_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
     const uint8_t* bytes_max, int epoch);
 int picoquic_prepare_crypto_hs_frame(picoquic_cnx_t* cnx, int epoch,

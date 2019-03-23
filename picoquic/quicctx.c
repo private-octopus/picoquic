@@ -730,7 +730,9 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, struct sockad
             path_x->local_addr_len = picoquic_store_addr(&path_x->local_addr, local_addr);
 
             /* Set the challenge used for this path */
-            path_x->challenge = picoquic_public_random_64();
+            for (int ichal = 0; ichal < PICOQUIC_CHALLENGE_REPEAT_MAX; ichal++) {
+                path_x->challenge[ichal] = picoquic_public_random_64();
+            }
 
             /* Initialize the reset secret to a random value. This
             * will prevent spurious matches to an all zero value, for example.
@@ -1158,9 +1160,19 @@ picoquic_probe_t * picoquic_find_probe_by_challenge(const picoquic_cnx_t* cnx, u
 
     if (challenge != 0) {
         while (next != NULL) {
-            if (next->challenge == challenge) {
+            int is_found = 0;
+
+            for (int ichal = 0; ichal < PICOQUIC_CHALLENGE_REPEAT_MAX; ichal++) {
+                if (next->challenge[ichal] == challenge) {
+                    is_found = 1;
+                    break;
+                }
+            }
+
+            if (is_found) {
                 break;
             }
+
             next = next->next_probe;
         }
     }
@@ -1291,7 +1303,9 @@ int picoquic_create_probe(picoquic_cnx_t* cnx, const struct sockaddr* addr_to, c
                 probe->local_addr_len = picoquic_store_addr(&probe->local_addr, addr_from);
 
                 probe->challenge_required = 1;
-                probe->challenge = picoquic_public_random_64();
+                for (int ichal = 0; ichal < PICOQUIC_CHALLENGE_REPEAT_MAX; ichal++) {
+                    probe->challenge[ichal] = picoquic_public_random_64();
+                }
 
                 probe->next_probe = cnx->probe_first;
                 cnx->probe_first = probe;
