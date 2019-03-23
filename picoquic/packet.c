@@ -864,7 +864,7 @@ void picoquic_ignore_incoming_handshake(
         ret = picoquic_skip_frame(&bytes[byte_index],
             ph->payload_length - byte_index, &frame_length, &frame_is_pure_ack);
         byte_index += (uint32_t)frame_length;
-        ack_needed |= frame_is_pure_ack;
+        ack_needed |= ~frame_is_pure_ack;
     }
 
     /* If the packet contains ackable data, mark ack needed
@@ -1351,7 +1351,9 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header * ph
                     cnx->path[path_id]->path_is_activated = 1;
                     cnx->path[path_id]->remote_cnxid = probe->remote_cnxid;
                     cnx->path[path_id]->remote_cnxid_sequence = probe->sequence;
-                    cnx->path[path_id]->challenge = probe->challenge;
+                    for (int ichal = 0; ichal < PICOQUIC_CHALLENGE_REPEAT_MAX; ichal++) {
+                        cnx->path[path_id]->challenge[ichal] = probe->challenge[ichal];
+                    }
                     cnx->path[path_id]->challenge_time = probe->challenge_time;
                     cnx->path[path_id]->challenge_repeat_count = probe->challenge_repeat_count;
                     cnx->path[path_id]->challenge_required = probe->challenge_required;
@@ -1374,7 +1376,9 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header * ph
                         PICOQUIC_RESET_SECRET_SIZE);
                     cnx->path[path_id]->path_is_activated = 1;
                     cnx->path[path_id]->challenge_required = cnx->path[0]->challenge_required;
-                    cnx->path[path_id]->challenge = cnx->path[0]->challenge;
+                    for (int ichal = 0; ichal < PICOQUIC_CHALLENGE_REPEAT_MAX; ichal++) {
+                        cnx->path[path_id]->challenge[ichal] = cnx->path[0]->challenge[ichal];
+                    }
                     cnx->path[path_id]->challenge_time = cnx->path[0]->challenge_time;
                     cnx->path[path_id]->challenge_repeat_count = cnx->path[0]->challenge_repeat_count;
                     cnx->path[path_id]->challenge_required = cnx->path[0]->challenge_required;
@@ -1435,7 +1439,9 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header * ph
                      * some kind of attack. */
                     cnx->path[path_id]->alt_peer_addr_len = picoquic_store_addr(&cnx->path[path_id]->alt_peer_addr, addr_from);
                     cnx->path[path_id]->alt_local_addr_len = picoquic_store_addr(&cnx->path[path_id]->alt_local_addr, addr_to);
-                    cnx->path[path_id]->alt_challenge = picoquic_public_random_64();
+                    for (int ichal = 0; ichal < PICOQUIC_CHALLENGE_REPEAT_MAX; ichal++) {
+                        cnx->path[path_id]->alt_challenge[ichal] = picoquic_public_random_64();
+                    }
                     cnx->path[path_id]->alt_challenge_required = 1;
                     cnx->path[path_id]->alt_challenge_timeout = 0;
                     cnx->path[path_id]->alt_challenge_repeat_count = 0;
@@ -1455,7 +1461,9 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header * ph
     if (ret == 0 && new_challenge_required) {
         /* Reset the path challenge */
         cnx->path[path_id]->challenge_required = 1;
-        cnx->path[path_id]->challenge = picoquic_public_random_64();
+        for (int ichal = 0; ichal < PICOQUIC_CHALLENGE_REPEAT_MAX; ichal++) {
+            cnx->path[path_id]->challenge[ichal] = picoquic_public_random_64();
+        }
         cnx->path[path_id]->challenge_verified = 0;
         cnx->path[path_id]->challenge_time = current_time;
         cnx->path[path_id]->challenge_repeat_count = 0;
