@@ -499,7 +499,7 @@ typedef struct st_picoquic_path_t {
     uint64_t alt_challenge_timeout;
     uint8_t alt_challenge_repeat_count;
 
-#define PICOQUIC_CHALLENGE_REPEAT_MAX 4
+#define PICOQUIC_CHALLENGE_REPEAT_MAX 3
     /* flags */
     unsigned int mtu_probe_sent : 1;
     unsigned int path_is_published : 1;

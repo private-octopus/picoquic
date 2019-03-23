@@ -864,7 +864,7 @@ void picoquic_ignore_incoming_handshake(
         ret = picoquic_skip_frame(&bytes[byte_index],
             ph->payload_length - byte_index, &frame_length, &frame_is_pure_ack);
         byte_index += (uint32_t)frame_length;
-        ack_needed |= frame_is_pure_ack;
+        ack_needed |= ~frame_is_pure_ack;
     }
 
     /* If the packet contains ackable data, mark ack needed
