@@ -154,6 +154,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(copy_for_retransmit)
+        {
+            int ret = test_copy_for_retransmit();
+
+            Assert::AreEqual(ret, 0);
+        }
+
 		TEST_METHOD(test_sendack)
 		{
 			int ret = sendacktest();

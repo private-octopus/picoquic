@@ -1014,6 +1014,13 @@ int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head* str
     uint8_t* bytes, size_t bytes_max, size_t* consumed, int* is_still_active);
 int picoquic_split_stream_frame(uint8_t* frame, size_t frame_length,
     uint8_t* b1, size_t b1_max, size_t *lb1, uint8_t* b2, size_t b2_max, size_t *lb2);
+int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
+    picoquic_cnx_t * cnx,
+    uint8_t * new_bytes,
+    size_t send_buffer_max_minus_checksum,
+    int * packet_is_pure_ack,
+    int * do_not_detect_spurious,
+    uint32_t * length);
 uint8_t* picoquic_decode_crypto_hs_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
     const uint8_t* bytes_max, int epoch);
 int picoquic_prepare_crypto_hs_frame(picoquic_cnx_t* cnx, int epoch,
