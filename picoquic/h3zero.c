@@ -672,8 +672,9 @@ uint8_t * h3zero_create_request_header_frame(uint8_t * bytes, uint8_t * bytes_ma
     /* Path: doc_name. Use literal plus reference format */
     bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_CODE_PATH, path, path_length);
     /*Authority: host. Use literal plus reference format */
-    bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_AUTHORITY, (uint8_t const *)host, strlen(host));
-
+    if (host != NULL) {
+        bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_AUTHORITY, (uint8_t const *)host, strlen(host));
+    }
     return bytes;
 }
 
