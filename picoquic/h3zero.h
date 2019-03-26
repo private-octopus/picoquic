@@ -130,6 +130,7 @@ typedef enum {
 #define H3ZERO_QPACK_CODE_200 25
 #define H3ZERO_QPACK_ALLOW_GET 76
 #define H3ZERO_QPACK_AUTHORITY 0
+#define H3ZERO_QPACK_SCHEME_HTTPS 23
 
 typedef struct st_h3zero_qpack_static_t {
     int index;
