@@ -669,6 +669,8 @@ uint8_t * h3zero_create_request_header_frame(uint8_t * bytes, uint8_t * bytes_ma
     *bytes++ = 0;
     /* Method: GET */
     bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0xC0, 0x3F, H3ZERO_QPACK_CODE_GET);
+    /* Scheme: HTTPS */
+    bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0xC0, 0x3F, H3ZERO_QPACK_SCHEME_HTTPS);
     /* Path: doc_name. Use literal plus reference format */
     bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_CODE_PATH, path, path_length);
     /*Authority: host. Use literal plus reference format */
