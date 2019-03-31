@@ -1571,7 +1571,7 @@ int unidir_test()
 
 int many_short_loss_test()
 {
-    return tls_api_one_scenario_test(test_scenario_more_streams, sizeof(test_scenario_more_streams), 0, 0x88A888A888A888A8ull, 16000, 2000, 0, 0, NULL, NULL);
+    return tls_api_one_scenario_test(test_scenario_more_streams, sizeof(test_scenario_more_streams), 0, 0x882818A881288848ull, 16000, 2000, 0, 0, NULL, NULL);
 }
 
 /*
@@ -3982,12 +3982,12 @@ int rebinding_stress_test()
             uint64_t server_arrival = test_ctx->c_to_s_link->last_packet->arrival_time;
 
             if (server_arrival > last_inject_time) {
-                /* 49% chance of packet injection, 24% chances of reusing test address */
+                /* 49% chance of packet injection, 20% chances of reusing test address */
                 uint64_t rand100 = picoquic_test_uniform_random(&random_context, 100);
                 last_inject_time = server_arrival;
                 if (rand100 < 49) {
                     struct sockaddr * bad_address;
-                    if (rand100 < 24) {
+                    if (rand100 < 20) {
                         bad_address = (struct sockaddr *)&hack_address;
                     }
                     else {
