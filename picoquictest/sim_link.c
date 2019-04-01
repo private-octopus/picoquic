@@ -119,7 +119,7 @@ static int picoquictest_sim_link_testloss(uint64_t* loss_mask)
 
         /* Rotate loss mask by 1 to prepare next round */
         *loss_mask >>= 1;
-        *loss_mask ^= (loss_bit << 63);
+        *loss_mask |= (loss_bit << 63);
     }
 
     return (int)loss_bit;
