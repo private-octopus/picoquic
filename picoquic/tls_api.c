@@ -978,8 +978,14 @@ void picoquic_crypto_context_free(picoquic_crypto_context_t * ctx)
 
 ptls_key_exchange_algorithm_t *picoquic_key_exchanges[] = { &ptls_openssl_secp256r1, &ptls_minicrypto_x25519, NULL };
 ptls_cipher_suite_t *picoquic_cipher_suites[] = { 
-    &ptls_openssl_aes256gcmsha384, &ptls_openssl_aes128gcmsha256,
-    &ptls_minicrypto_chacha20poly1305sha256, NULL };
+    &ptls_openssl_aes128gcmsha256,
+    &ptls_openssl_aes256gcmsha384,
+#ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
+    &ptls_openssl_chacha20poly1305sha256,
+#else
+    &ptls_minicrypto_chacha20poly1305sha256,
+#endif
+    NULL };
 
 /*
  * Setting the master TLS context.
