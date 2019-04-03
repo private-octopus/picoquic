@@ -283,7 +283,11 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
 
 SOCKET_TYPE picoquic_open_client_socket(int af)
 {
+#ifdef _WINDOWS
+    SOCKET_TYPE sd = WSASocket(af, SOCK_DGRAM, IPPROTO_UDP, NULL, 0, WSA_FLAG_OVERLAPPED);
+#else
     SOCKET_TYPE sd = socket(af, SOCK_DGRAM, IPPROTO_UDP);
+#endif
 
     if (sd != INVALID_SOCKET) {
         if (picoquic_socket_set_pkt_info(sd, af) != 0) {
@@ -336,6 +340,124 @@ void picoquic_close_server_sockets(picoquic_server_sockets_t* sockets)
         }
     }
 }
+
+#ifdef _WINDOWS
+
+void picoquic_recvmsg_async_callback(
+    IN DWORD dwError,
+    IN DWORD cbTransferred,
+    IN LPWSAOVERLAPPED lpOverlapped,
+    IN DWORD dwFlags)
+{
+    picoquic_recvmsg_async_ctx_t * ctx = (picoquic_recvmsg_async_ctx_t*)lpOverlapped;
+
+    if (ctx == NULL) {
+        return;
+    }
+
+    if (dwError != 0) {
+        DBG_PRINTF("Could complete async call (WSARecvMsg) on UDP socket %d = %d!\n",
+            (int)ctx->fd, dwError);
+        ctx->bytes_recv = -1;
+    }
+    else {
+        /* TODO: call WSAGetOverlappedResult function */
+        struct cmsghdr* cmsg;
+
+        ctx->bytes_recv = cbTransferred;
+        ctx->from_length = ctx->msg.namelen;
+
+        /* Get the control information */
+        for (cmsg = WSA_CMSG_FIRSTHDR(&ctx->msg); cmsg != NULL; cmsg = WSA_CMSG_NXTHDR(&ctx->msg, cmsg)) {
+            if (cmsg->cmsg_level == IPPROTO_IP) {
+                if (cmsg->cmsg_type == IP_PKTINFO) {
+                    IN_PKTINFO* pPktInfo = (IN_PKTINFO*)WSA_CMSG_DATA(cmsg);
+                    ((struct sockaddr_in*)&ctx->addr_dest)->sin_family = AF_INET;
+                    ((struct sockaddr_in*)&ctx->addr_dest)->sin_port = 0;
+                    ((struct sockaddr_in*)&ctx->addr_dest)->sin_addr.s_addr = pPktInfo->ipi_addr.s_addr;
+                    ctx->dest_length = sizeof(struct sockaddr_in);
+                    ctx->dest_if = pPktInfo->ipi_ifindex;
+                }
+                else if (cmsg->cmsg_type == IP_TOS && cmsg->cmsg_len > 0) {
+                    ctx->received_ecn = *((unsigned char *)WSA_CMSG_DATA(cmsg));
+                }
+            }
+            else if (cmsg->cmsg_level == IPPROTO_IPV6) {
+                if (cmsg->cmsg_type == IPV6_PKTINFO) {
+                    IN6_PKTINFO* pPktInfo6 = (IN6_PKTINFO*)WSA_CMSG_DATA(cmsg);
+                    ((struct sockaddr_in6*)&ctx->addr_dest)->sin6_family = AF_INET6;
+                    ((struct sockaddr_in6*)&ctx->addr_dest)->sin6_port = 0;
+                    memcpy(&((struct sockaddr_in6*)&ctx->addr_dest)->sin6_addr, &pPktInfo6->ipi6_addr, sizeof(IN6_ADDR));
+                    ctx->dest_length = sizeof(struct sockaddr_in6);
+                    ctx->dest_if = pPktInfo6->ipi6_ifindex;
+                }
+                else if (cmsg->cmsg_type == IPV6_TCLASS
+#ifdef IPV6_ECN
+                    || cmsg->cmsg_type == IPV6_ECN
+#endif
+                    ) {
+                    if (cmsg->cmsg_len > 0) {
+                        ctx->received_ecn = *((unsigned char *)WSA_CMSG_DATA(cmsg));
+                    }
+                }
+            }
+        }
+    }
+}
+
+int picoquic_recvmsg_async(picoquic_recvmsg_async_ctx_t * ctx)
+{
+    GUID WSARecvMsg_GUID = WSAID_WSARECVMSG;
+    LPFN_WSARECVMSG WSARecvMsg;
+    WSABUF dataBuf;
+    DWORD NumberOfBytes;
+    int nResult;
+    int last_error;
+    int ret = 0; 
+
+    ctx->from_length = 0;
+    ctx->dest_length = 0;
+    ctx->dest_if = 0;
+    ctx->received_ecn = 0;
+
+    nResult = WSAIoctl(ctx->fd, SIO_GET_EXTENSION_FUNCTION_POINTER,
+        &WSARecvMsg_GUID, sizeof WSARecvMsg_GUID,
+        &WSARecvMsg, sizeof WSARecvMsg,
+        &NumberOfBytes, NULL, NULL);
+
+    if (nResult == SOCKET_ERROR) {
+        last_error = WSAGetLastError();
+        DBG_PRINTF("Could not initialize WSARecvMsg on UDP socket %d= %d!\n",
+            (int)ctx->fd, last_error);
+        ret = -1;
+    }
+    else {
+        memset(&ctx->overlap, 0, sizeof(ctx->overlap));
+
+        dataBuf.buf = (char*)ctx->buffer;
+        dataBuf.len = sizeof(ctx->buffer);
+
+        ctx->msg.name = (struct sockaddr*)&ctx->addr_from;
+        ctx->msg.namelen = sizeof(ctx->addr_from);
+        ctx->msg.lpBuffers = &dataBuf;
+        ctx->msg.dwBufferCount = 1;
+        ctx->msg.dwFlags = 0;
+        ctx->msg.Control.buf = ctx->cmsg_buffer;
+        ctx->msg.Control.len = sizeof(ctx->cmsg_buffer);
+
+        ret = WSARecvMsg(ctx->fd, &ctx->msg, &NumberOfBytes, &ctx->overlap, picoquic_recvmsg_async_callback);
+
+        if (ret != 0) {
+            last_error = WSAGetLastError();
+            DBG_PRINTF("Could not receive message (WSARecvMsg) on UDP socket %d = %d!\n",
+                (int)ctx->fd, last_error);
+            ctx->bytes_recv = -1;
+        }
+    }
+
+    return ret;
+}
+#endif
 
 int picoquic_recvmsg(SOCKET_TYPE fd,
     struct sockaddr_storage* addr_from,

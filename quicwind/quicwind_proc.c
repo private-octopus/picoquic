@@ -705,7 +705,9 @@ int quicwind_get_cnx_list(picoquic_quic_t * qclient, HWND hDlg, int list_box_id)
     }
 
     if (nb_cnx > 0){
-        // Set input focus to the list box.
+        /* Set selection to the first item */
+        SendMessageA(hwndList, LB_SETCURSEL, 0, 0);
+        /* Set input focus to the list box. */
         SetFocus(hwndList);
     }
 

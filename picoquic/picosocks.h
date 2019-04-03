@@ -106,6 +106,26 @@
 
 #include "picoquic_internal.h"
 
+#ifdef _WINDOWS
+typedef struct st_picoquic_recvmsg_async_ctx_t {
+    WSAOVERLAPPED overlap;
+    SOCKET_TYPE fd;
+    WSAEVENT hEvent;
+    WSAMSG msg;
+    struct sockaddr_storage addr_from;
+    socklen_t from_length;
+    struct sockaddr_storage* addr_dest;
+    socklen_t dest_length;
+    unsigned long dest_if;
+    unsigned char received_ecn;
+    int bytes_recv;
+    uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
+    char cmsg_buffer[1024];
+} picoquic_recvmsg_async_ctx_t;
+
+int picoquic_recvmsg_async(picoquic_recvmsg_async_ctx_t * ctx);
+#endif
+
 #define PICOQUIC_NB_SERVER_SOCKETS 2
 
 typedef struct st_picoquic_server_sockets_t {
