@@ -112,7 +112,7 @@ static char const * h3zero_default_page = "\
 Picoquic HTTP 3 service\
 </TITLE>\r\n</HEAD><BODY>\r\n\
 <h1>Simple HTTP 3 Responder</h1>\r\n\
-<p>GET / returns this text</p>\r\n\
+<p>GET / or GET /index.html returns this text</p>\r\n\
 <p>Get /NNNNN returns txt document of length NNNNN bytes(decimal)</p>\r\n\
 <p>Any other command will result in an error, and an empty response.</p>\r\n\
 <h1>Enjoy!</h1>\r\n\
@@ -126,7 +126,7 @@ static int h3zero_server_parse_path(const uint8_t * path, size_t path_length, ui
     if (path == NULL || path_length == 0 || path[0] != '/') {
         ret = -1;
     }
-    else if (path_length > 1) {
+    else if (path_length > 1 && (path_length != 11 || memcmp(path, "/index.html", 11) != 0)) {
         uint32_t x = 0;
         for (size_t i = 1; i < path_length; i++) {
             if (path[i] < '0' || path[i] > '9') {
@@ -201,12 +201,15 @@ static int h3zero_server_parse_request_frame(
                 o_bytes = h3zero_create_response_header_frame(o_bytes, o_bytes_max,
                     (stream_ctx->echo_length == 0) ? h3zero_content_type_text_html :
                     h3zero_content_type_text_plain);
-
-                response_length = (stream_ctx->echo_length == 0) ?
-                    strlen(h3zero_default_page) : stream_ctx->echo_length;
+                if (o_bytes != NULL) {
+                    response_length = (stream_ctx->echo_length == 0) ?
+                        strlen(h3zero_default_page) : stream_ctx->echo_length;
+                }
             }
 
-            if (o_bytes != NULL) {
+            if (o_bytes == NULL) {
+                ret = picoquic_reset_stream(cnx, stream_ctx->stream_id, H3ZERO_INTERNAL_ERROR);
+            } else {
                 size_t header_length = o_bytes - &buffer[3];
                 buffer[0] = (uint8_t)((header_length >> 8) | 0x40);
                 buffer[1] = (uint8_t)(header_length & 0xFF);
@@ -230,7 +233,7 @@ static int h3zero_server_parse_request_frame(
                                     o_bytes += test_length;
                                 }
                                 else {
-                                    o_bytes = 0;
+                                    o_bytes = NULL;
                                 }
                             }
                         }
@@ -300,6 +303,8 @@ static int h3zero_server_callback_data(
                 /* Push received bytes at selected offset */
                 if (stream_ctx->received_length + length > sizeof(stream_ctx->frame)) {
                     /* Too long, unexpected */
+                    ret = picoquic_stop_sending(cnx, stream_id, H3ZERO_INTERNAL_ERROR);
+                    picoquic_reset_stream(cnx, stream_id, H3ZERO_INTERNAL_ERROR);
                 }
                 else {
                     memcpy(&stream_ctx->frame[stream_ctx->received_length], bytes, length);

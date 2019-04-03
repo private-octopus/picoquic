@@ -73,8 +73,15 @@ static int h3zero_client_create_stream_request(
     }
     else {
         size_t header_length = o_bytes - &buffer[3];
-        buffer[0] = (uint8_t)((header_length >> 8) | 0x40);
-        buffer[1] = (uint8_t)(header_length & 0xFF);
+        if (header_length < 64) {
+            buffer[0] = (uint8_t)(header_length);
+            memmove(&buffer[1], &buffer[2], header_length + 1);
+            o_bytes--;
+        }
+        else {
+            buffer[0] = (uint8_t)((header_length >> 8) | 0x40);
+            buffer[1] = (uint8_t)(header_length & 0xFF);
+        }
         *consumed = o_bytes - buffer;
     }
 
