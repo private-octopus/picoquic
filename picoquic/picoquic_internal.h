@@ -376,15 +376,15 @@ typedef struct st_picoquic_sack_item_t {
  * or a callback can be set.
  */
 
-typedef struct _picoquic_stream_data {
-    struct _picoquic_stream_data* next_stream_data;
+typedef struct st_picoquic_stream_data_t {
+    struct st_picoquic_stream_data_t* next_stream_data;
     uint64_t offset;  /* Stream offset of the first octet in "bytes" */
     size_t length;    /* Number of octets in "bytes" */
     uint8_t* bytes;
-} picoquic_stream_data;
+} picoquic_stream_data_t;
 
-typedef struct _picoquic_stream_head {
-    struct _picoquic_stream_head* next_stream;
+typedef struct st_picoquic_stream_head_t {
+    struct st_picoquic_stream_head_t* next_stream;
     uint64_t stream_id;
     uint64_t consumed_offset;
     uint64_t fin_offset;
@@ -394,9 +394,9 @@ typedef struct _picoquic_stream_head {
     uint32_t remote_error;
     uint32_t local_stop_error;
     uint32_t remote_stop_error;
-    picoquic_stream_data* stream_data;
+    picoquic_stream_data_t* stream_data;
     uint64_t sent_offset;
-    picoquic_stream_data* send_queue;
+    picoquic_stream_data_t* send_queue;
     picoquic_sack_item_t first_sack_item;
     /* Flags describing the state of the stream */
     unsigned int is_active : 1; /* The application is actively managing data sending through callbacks */
@@ -413,7 +413,8 @@ typedef struct _picoquic_stream_head {
     unsigned int stop_sending_received : 1; /* Stop sending received from peer */
     unsigned int stop_sending_signalled : 1; /* After stop sending received from peer, application was notified */
     unsigned int max_stream_updated : 1; /* After stream was closed in both directions, the max stream id number was updated */
-} picoquic_stream_head;
+    unsigned int stream_data_blocked_sent : 1; /* If stream_data_blocked has been sent to peer, and no data sent on stream since */
+} picoquic_stream_head_t;
 
 #define IS_CLIENT_STREAM_ID(id) (unsigned int)(((id) & 1) == 0)
 #define IS_BIDIR_STREAM_ID(id)  (unsigned int)(((id) & 2) == 0)
@@ -653,7 +654,10 @@ typedef struct st_picoquic_cnx_t {
     unsigned int key_phase_enc : 1; /* Key phase used in outgoing packets */
     unsigned int key_phase_dec : 1; /* Key phase expected in incoming packets */
     unsigned int zero_rtt_data_accepted : 1; /* Peer confirmed acceptance of zero rtt data */
-    unsigned int sending_ecn_ack : 1; /* ECN data has been received, should be cpoied in acks */
+    unsigned int sending_ecn_ack : 1; /* ECN data has been received, should be copied in acks */
+    unsigned int sent_blocked_frame : 1; /* Blocked frame has been sent */
+    unsigned int stream_blocked_bidir_sent : 1; /* If stream_blocked has been sent to peer and no stream limit update since */
+    unsigned int stream_blocked_unidir_sent : 1; /* If stream_blocked has been sent to peer and no stream limit update since */
 
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;
@@ -701,7 +705,7 @@ typedef struct st_picoquic_cnx_t {
     struct st_ptls_buffer_t* tls_sendbuf;
     uint16_t psk_cipher_suite_id;
 
-    picoquic_stream_head tls_stream[PICOQUIC_NUMBER_OF_EPOCHS]; /* Separate input/output from each epoch */
+    picoquic_stream_head_t tls_stream[PICOQUIC_NUMBER_OF_EPOCHS]; /* Separate input/output from each epoch */
     picoquic_crypto_context_t crypto_context[PICOQUIC_NUMBER_OF_EPOCHS]; /* Encryption and decryption objects */
     picoquic_crypto_context_t crypto_context_old; /* Old encryption and decryption context after key rotation */
     picoquic_crypto_context_t crypto_context_new; /* New encryption and decryption context just before key rotation */
@@ -753,7 +757,7 @@ typedef struct st_picoquic_cnx_t {
     picoquic_misc_frame_header_t* first_misc_frame;
 
     /* Management of streams */
-    picoquic_stream_head * first_stream;
+    picoquic_stream_head_t * first_stream;
     uint64_t last_visited_stream_id;
     uint64_t high_priority_stream_id;
 
@@ -909,10 +913,6 @@ int picoquic_parse_ack_header(
 
 uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t pn);
 
-size_t  picoquic_decrypt_packet(picoquic_cnx_t* cnx,
-    uint8_t* bytes, picoquic_packet_header* ph,
-    void * pn_enc, void* aead_context, int * already_received);
-
 uint32_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     picoquic_packet_type_enum ptype,
     uint8_t * bytes, uint64_t sequence_number,
@@ -1004,14 +1004,14 @@ int picoquic_process_ack_of_ack_frame(
     uint8_t* bytes, size_t bytes_max, size_t* consumed, int is_ecn_14);
 
 /* stream management */
-picoquic_stream_head* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t stream_id);
+picoquic_stream_head_t* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t stream_id);
 void picoquic_update_stream_initial_remote(picoquic_cnx_t* cnx);
-picoquic_stream_head* picoquic_find_stream(picoquic_cnx_t* cnx, uint64_t stream_id, int create);
-picoquic_stream_head* picoquic_find_ready_stream(picoquic_cnx_t* cnx);
+picoquic_stream_head_t* picoquic_find_stream(picoquic_cnx_t* cnx, uint64_t stream_id, int create);
+picoquic_stream_head_t* picoquic_find_ready_stream(picoquic_cnx_t* cnx);
 int picoquic_is_tls_stream_ready(picoquic_cnx_t* cnx);
 uint8_t* picoquic_decode_stream_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
     const uint8_t* bytes_max, uint64_t current_time);
-int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head* stream,
+int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream,
     uint8_t* bytes, size_t bytes_max, size_t* consumed, int* is_still_active);
 int picoquic_split_stream_frame(uint8_t* frame, size_t frame_length,
     uint8_t* b1, size_t b1_max, size_t *lb1, uint8_t* b2, size_t b2_max, size_t *lb2);
@@ -1040,16 +1040,17 @@ int picoquic_prepare_required_max_stream_data_frames(picoquic_cnx_t* cnx,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
 int picoquic_prepare_max_data_frame(picoquic_cnx_t* cnx, uint64_t maxdata_increase,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
-void picoquic_update_max_stream_ID_local(picoquic_cnx_t* cnx, picoquic_stream_head* stream);
+void picoquic_update_max_stream_ID_local(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream);
 int picoquic_prepare_max_streams_frame_if_needed(picoquic_cnx_t* cnx,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
-void picoquic_clear_stream(picoquic_stream_head* stream);
+void picoquic_clear_stream(picoquic_stream_head_t* stream);
 int picoquic_prepare_path_challenge_frame(uint8_t* bytes,
     size_t bytes_max, size_t* consumed, uint64_t challenge);
 int picoquic_prepare_path_response_frame(uint8_t* bytes,
     size_t bytes_max, size_t* consumed, uint64_t challenge);
 int picoquic_prepare_new_connection_id_frame(picoquic_cnx_t * cnx, picoquic_path_t * path_x,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
+int picoquic_prepare_blocked_frames(picoquic_cnx_t* cnx, uint8_t* bytes, size_t bytes_max, size_t* consumed);
 int picoquic_queue_retire_connection_id_frame(picoquic_cnx_t * cnx, uint64_t sequence);
 int picoquic_queue_new_token_frame(picoquic_cnx_t * cnx, uint8_t * token, size_t token_length);
 

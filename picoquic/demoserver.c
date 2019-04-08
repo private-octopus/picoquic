@@ -449,7 +449,7 @@ int h3zero_server_callback(picoquic_cnx_t* cnx,
             break;
         case picoquic_callback_almost_ready:
         case picoquic_callback_ready:
-            /* do nothing */
+            /* Check that the transport parameters are what Http3 expects */
             break;
         default:
             /* unexpected */

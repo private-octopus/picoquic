@@ -1456,10 +1456,10 @@ int picoquic_tls_is_psk_handshake(picoquic_cnx_t* cnx)
 static int picoquic_add_to_tls_stream(picoquic_cnx_t* cnx, const uint8_t* data, size_t length, int epoch)
 {
     int ret = 0;
-    picoquic_stream_head* stream = &cnx->tls_stream[epoch];
+    picoquic_stream_head_t* stream = &cnx->tls_stream[epoch];
 
     if (length > 0) {
-        picoquic_stream_data* stream_data = (picoquic_stream_data*)malloc(sizeof(picoquic_stream_data));
+        picoquic_stream_data_t* stream_data = (picoquic_stream_data_t*)malloc(sizeof(picoquic_stream_data_t));
 
         if (stream_data == 0) {
             ret = -1;
@@ -1473,8 +1473,8 @@ static int picoquic_add_to_tls_stream(picoquic_cnx_t* cnx, const uint8_t* data, 
                 ret = -1;
             }
             else {
-                picoquic_stream_data** pprevious = &stream->send_queue;
-                picoquic_stream_data* next = stream->send_queue;
+                picoquic_stream_data_t** pprevious = &stream->send_queue;
+                picoquic_stream_data_t* next = stream->send_queue;
 
                 memcpy(stream_data->bytes, data, length);
                 stream_data->length = length;
@@ -1716,8 +1716,8 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
     size_t next_epoch = 0;
 
     for (size_t epoch = 0; epoch < PICOQUIC_NUMBER_OF_EPOCHS && ret == 0; epoch++) {
-        picoquic_stream_head* stream = &cnx->tls_stream[epoch];
-        picoquic_stream_data* data = stream->stream_data;
+        picoquic_stream_head_t* stream = &cnx->tls_stream[epoch];
+        picoquic_stream_data_t* data = stream->stream_data;
         size_t processed = 0;
         int data_pushed = 0;
 

@@ -160,7 +160,7 @@ static int StreamZeroFrameOneTest(struct test_case_st* test)
 
     if (ret == 0) {
         /* Check the content of all the data in the context */
-        picoquic_stream_data* data = cnx.first_stream->stream_data;
+        picoquic_stream_data_t* data = cnx.first_stream->stream_data;
         size_t data_rank = 0;
 
         while (data != NULL) {
@@ -301,7 +301,7 @@ static int TlsStreamFrameOneTest(struct test_case_st* test)
 
     if (ret == 0) {
         /* Check the content of all the data in the context */
-        picoquic_stream_data* data = cnx.tls_stream[test_epoch].stream_data;
+        picoquic_stream_data_t* data = cnx.tls_stream[test_epoch].stream_data;
         size_t data_rank = 0;
 
         while (data != NULL) {

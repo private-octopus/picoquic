@@ -42,10 +42,10 @@
  * generate new packets, which are queued in the chained list.
  */
 
-static picoquic_stream_head* picoquic_find_stream_for_writing(picoquic_cnx_t* cnx,
+static picoquic_stream_head_t* picoquic_find_stream_for_writing(picoquic_cnx_t* cnx,
     uint64_t stream_id, int * ret)
 {
-    picoquic_stream_head* stream = picoquic_find_stream(cnx, stream_id, 0);
+    picoquic_stream_head_t* stream = picoquic_find_stream(cnx, stream_id, 0);
 
     *ret = 0;
 
@@ -78,7 +78,7 @@ int picoquic_mark_active_stream(picoquic_cnx_t* cnx,
     uint64_t stream_id, int is_active)
 {
     int ret = 0;
-    picoquic_stream_head* stream = picoquic_find_stream_for_writing(cnx, stream_id, &ret);
+    picoquic_stream_head_t* stream = picoquic_find_stream_for_writing(cnx, stream_id, &ret);
 
     if (ret == 0) {
         if (is_active) {
@@ -116,7 +116,7 @@ int picoquic_add_to_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
     const uint8_t* data, size_t length, int set_fin)
 {
     int ret = 0;
-    picoquic_stream_head* stream = picoquic_find_stream_for_writing(cnx, stream_id, &ret);
+    picoquic_stream_head_t* stream = picoquic_find_stream_for_writing(cnx, stream_id, &ret);
 
     if (ret == 0 && set_fin) {
         if (stream->fin_requested) {
@@ -135,7 +135,7 @@ int picoquic_add_to_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
     }
 
     if (ret == 0 && length > 0) {
-        picoquic_stream_data* stream_data = (picoquic_stream_data*)malloc(sizeof(picoquic_stream_data));
+        picoquic_stream_data_t* stream_data = (picoquic_stream_data_t*)malloc(sizeof(picoquic_stream_data_t));
 
         if (stream_data == 0) {
             ret = -1;
@@ -147,8 +147,8 @@ int picoquic_add_to_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
                 stream_data = NULL;
                 ret = -1;
             } else {
-                picoquic_stream_data** pprevious = &stream->send_queue;
-                picoquic_stream_data* next = stream->send_queue;
+                picoquic_stream_data_t** pprevious = &stream->send_queue;
+                picoquic_stream_data_t* next = stream->send_queue;
 
                 memcpy(stream_data->bytes, data, length);
                 stream_data->length = length;
@@ -179,7 +179,7 @@ int picoquic_reset_stream(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint16_t local_stream_error)
 {
     int ret = 0;
-    picoquic_stream_head* stream = NULL;
+    picoquic_stream_head_t* stream = NULL;
 
     stream = picoquic_find_stream(cnx, stream_id, 1);
 
@@ -203,7 +203,7 @@ int picoquic_stop_sending(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint16_t local_stream_error)
 {
     int ret = 0;
-    picoquic_stream_head* stream = NULL;
+    picoquic_stream_head_t* stream = NULL;
 
     stream = picoquic_find_stream(cnx, stream_id, 1);
 
@@ -1302,7 +1302,7 @@ int picoquic_prepare_packet_0rtt(picoquic_cnx_t* cnx, picoquic_path_t * path_x, 
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length)
 {
     int ret = 0;
-    picoquic_stream_head* stream = NULL;
+    picoquic_stream_head_t* stream = NULL;
     picoquic_packet_type_enum packet_type = picoquic_packet_0rtt_protected;
     size_t data_bytes = 0;
     int padding_required = 0;
@@ -2279,7 +2279,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
 {
     int ret = 0;
     /* TODO: manage multiple streams. */
-    picoquic_stream_head* stream = NULL;
+    picoquic_stream_head_t* stream = NULL;
     picoquic_packet_type_enum packet_type = picoquic_packet_1rtt_protected;
     picoquic_packet_context_enum pc = picoquic_packet_context_application;
     int tls_ready = 0;
@@ -2567,6 +2567,18 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                                 *next_wake_time = current_time;
                                 ret = 0;
                                 break;
+                            }
+                        }
+
+                        if (length <= header_length) {
+                            ret = picoquic_prepare_blocked_frames(cnx, &bytes[length],
+                                send_buffer_min_max - checksum_overhead - length, &data_bytes);
+                            if (ret == 0) {
+                                length += (uint32_t)data_bytes;
+                                if (data_bytes > 0)
+                                {
+                                    is_pure_ack = 0;
+                                }
                             }
                         }
                     }
