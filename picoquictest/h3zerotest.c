@@ -231,6 +231,18 @@ static uint8_t qpack_test_get_1234[] = {
     0xa1, 0x72, 0x1e, 0x9b, 0x8d, 0x34, 0xcb, 0x3f
 };
 
+static uint8_t qpack_test_get_ats[] = {
+    0x00, 0x00, 0x50, 0x8a, 0xed, 0x69, 0x88, 0xb9,
+    0xe6, 0xb0, 0xab, 0x90, 0xf4, 0xff, 0xd1, 0xc1,
+    0xd7
+};
+
+static uint8_t qpack_test_get_ats2[] = {
+    0x00, 0x00, 0x50, 0x90, 0x49, 0x50, 0x95, 0xeb,
+    0xb0, 0xdd, 0xc6, 0x92, 0x9c, 0x89, 0x3d, 0x76,
+    0xa1, 0x72, 0x1e, 0x9f, 0xd1, 0xc1, 0xd7
+};
+
 static uint8_t qpack_test_string_index_html[] = { QPACK_TEST_HEADER_INDEX_HTML };
 static uint8_t qpack_test_string_slash[] = { '/' };
 static uint8_t qpack_test_string_zzz[] = { 'Z', 'Z', 'Z' };
@@ -287,6 +299,14 @@ static qpack_test_case_t qpack_test_case[] = {
     {
         qpack_test_get_1234, sizeof(qpack_test_get_1234),
         { h3zero_method_get, qpack_test_string_1234, sizeof(qpack_test_string_1234), 0, 0}
+    },
+    {
+        qpack_test_get_ats, sizeof(qpack_test_get_ats),
+        { h3zero_method_get, qpack_test_string_slash, sizeof(qpack_test_string_slash), 0, 0}
+    },
+    {
+        qpack_test_get_ats2, sizeof(qpack_test_get_ats2),
+        { h3zero_method_get, qpack_test_string_slash, sizeof(qpack_test_string_slash), 0, 0}
     }
 };
 

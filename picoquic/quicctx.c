@@ -1914,14 +1914,14 @@ int picoquic_queue_misc_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t 
     return ret;
 }
 
-void picoquic_clear_stream(picoquic_stream_head* stream)
+void picoquic_clear_stream(picoquic_stream_head_t* stream)
 {
-    picoquic_stream_data** pdata[2];
+    picoquic_stream_data_t** pdata[2];
     pdata[0] = &stream->stream_data;
     pdata[1] = &stream->send_queue;
 
     for (int i = 0; i < 2; i++) {
-        picoquic_stream_data* next;
+        picoquic_stream_data_t* next;
 
         while ((next = *pdata[i]) != NULL) {
             *pdata[i] = next->next_stream_data;
@@ -2105,7 +2105,7 @@ int picoquic_start_key_rotation(picoquic_cnx_t* cnx)
 
 void picoquic_delete_cnx(picoquic_cnx_t* cnx)
 {
-    picoquic_stream_head* stream;
+    picoquic_stream_head_t* stream;
     picoquic_misc_frame_header_t* misc_frame;
     picoquic_cnxid_stash_t* stashed_cnxid;
 
