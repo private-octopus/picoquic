@@ -2110,6 +2110,34 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, uint8_t* bytes,
 
             }
             break;
+        case picoquic_frame_type_data_blocked:
+            *no_need_to_repeat = !cnx->sent_blocked_frame;
+            break;
+        case picoquic_frame_type_streams_blocked_bidir:
+            *no_need_to_repeat = !cnx->stream_blocked_bidir_sent;
+            break;
+        case picoquic_frame_type_streams_blocked_unidir:
+            *no_need_to_repeat = !cnx->stream_blocked_unidir_sent;
+            break;
+        case picoquic_frame_type_stream_data_blocked:
+            if ((bytes = picoquic_frames_varint_decode(bytes + 1, p_last_byte, &stream_id)) == NULL ||
+                (bytes = picoquic_frames_varint_decode(bytes, p_last_byte, &maxdata)) == NULL) {
+                /* Malformed frame, do not retransmit */
+                *no_need_to_repeat = 1;
+            }
+            else if ((stream = picoquic_find_stream(cnx, stream_id, 0)) == NULL) {
+                /* No such stream do not retransmit */
+                *no_need_to_repeat = 1;
+            }
+            else if (stream->fin_requested || stream->reset_requested || stream->fin_sent || stream->reset_sent) {
+                /* Stream stopped, no need to increase the window */
+                *no_need_to_repeat = 1;
+            }
+            else if (maxdata < stream->maxdata_remote || !stream->stream_data_blocked_sent) {
+                /* Stream max data already increased */
+                *no_need_to_repeat = 1;
+            }
+            break;
         default:
             break;
         }
