@@ -2069,10 +2069,12 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, uint8_t* bytes,
         uint8_t * p_last_byte = bytes + bytes_max;
         switch (bytes[0]) {
         case picoquic_frame_type_max_data:
-            if ((bytes = picoquic_frames_varint_decode(bytes + 1, p_last_byte, &maxdata)) != NULL) {
-                if (maxdata < cnx->maxdata_local) {
-                    *no_need_to_repeat = 1;
-                }
+            if ((bytes = picoquic_frames_varint_decode(bytes + 1, p_last_byte, &maxdata)) == NULL) {
+                /* Malformed frame, do not retransmit */
+                *no_need_to_repeat = 1;
+            } else if (maxdata < cnx->maxdata_local) {
+                /* already updated */
+                *no_need_to_repeat = 1;
             }
             break;
         case picoquic_frame_type_max_stream_data:
@@ -2107,17 +2109,49 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, uint8_t* bytes,
             else if (cnx->max_stream_id_unidir_local > STREAM_ID_FROM_RANK(max_stream_rank, cnx->client_mode, 1)) {
                 /* Streams unidir already increased */
                 *no_need_to_repeat = 1;
-
             }
             break;
         case picoquic_frame_type_data_blocked:
-            *no_need_to_repeat = !cnx->sent_blocked_frame;
+            if ((bytes = picoquic_frames_varint_decode(bytes + 1, p_last_byte, &maxdata)) == NULL) {
+                /* Malformed frame, do not retransmit */
+                *no_need_to_repeat = 1;
+            }
+            else if (maxdata < cnx->maxdata_remote) {
+                /* already updated */
+                *no_need_to_repeat = 1;
+            }
+            else {
+                /* Only repeat if the sent flag is still there */
+                *no_need_to_repeat = !cnx->sent_blocked_frame;
+            }
             break;
         case picoquic_frame_type_streams_blocked_bidir:
-            *no_need_to_repeat = !cnx->stream_blocked_bidir_sent;
+            if ((bytes = picoquic_frames_varint_decode(bytes + 1, p_last_byte, &max_stream_rank)) == NULL) {
+                /* Malformed frame, do not retransmit */
+                *no_need_to_repeat = 1;
+            }
+            else if (cnx->max_stream_id_bidir_remote > STREAM_ID_FROM_RANK(max_stream_rank, cnx->client_mode, 0)) {
+                /* Streams bidir already increased */
+                *no_need_to_repeat = 1;
+            }
+            else {
+                /* Only repeat if the sent flag is still there */
+                *no_need_to_repeat = !cnx->stream_blocked_bidir_sent;
+            }
             break;
         case picoquic_frame_type_streams_blocked_unidir:
-            *no_need_to_repeat = !cnx->stream_blocked_unidir_sent;
+            if ((bytes = picoquic_frames_varint_decode(bytes + 1, p_last_byte, &max_stream_rank)) == NULL) {
+                /* Malformed frame, do not retransmit */
+                *no_need_to_repeat = 1;
+            }
+            else if (cnx->max_stream_id_unidir_remote > STREAM_ID_FROM_RANK(max_stream_rank, cnx->client_mode, 1)) {
+                /* Streams unidir already increased */
+                *no_need_to_repeat = 1;
+            }
+            else {
+                /* Only repeat if the sent flag is still there */
+                *no_need_to_repeat = !cnx->stream_blocked_unidir_sent;
+            }
             break;
         case picoquic_frame_type_stream_data_blocked:
             if ((bytes = picoquic_frames_varint_decode(bytes + 1, p_last_byte, &stream_id)) == NULL ||
