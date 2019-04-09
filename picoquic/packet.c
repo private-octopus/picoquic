@@ -636,7 +636,15 @@ int picoquic_incoming_version_negotiation(
         ret = 0;
     } else {
         /* Trying to renegotiate the version, just ignore the packet if not good. */
-        ret = picoquic_reset_cnx_version(cnx, bytes + ph->offset, length - ph->offset, current_time);
+        if (picoquic_supported_versions[cnx->version_index].version == PICOQUIC_ELEVENTH_INTEROP_VERSION) {
+            ret = picoquic_reset_cnx_version(cnx, bytes + ph->offset, length - ph->offset, current_time);
+        }
+        else {
+            /* TODO: add DOS resilience! */
+            DBG_PRINTF("%s", "Disconnect upon receiving version negotiation.\n");
+            cnx->cnx_state = picoquic_state_disconnected;
+            ret = 0;
+        }
     }
 
     return ret;

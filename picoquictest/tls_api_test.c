@@ -1319,7 +1319,33 @@ int tls_api_many_losses()
 int tls_api_version_negotiation_test()
 {
     const uint32_t version_grease = 0x0aca4a0a;
-    return tls_api_test_with_loss(NULL, version_grease, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN);
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, version_grease, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+
+    if (ret != 0)
+    {
+        DBG_PRINTF("Could not create the QUIC test contexts for V=%x\n", version_grease);
+    }
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, NULL, 0, &simulated_time);
+
+        if (test_ctx->cnx_client->cnx_state == picoquic_state_disconnected) {
+            ret = 0;
+        }
+        else {
+            DBG_PRINTF("Unexpected state: %d\n", test_ctx->cnx_client->cnx_state);
+            ret = -1;
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
 }
 
 int tls_api_sni_test()
