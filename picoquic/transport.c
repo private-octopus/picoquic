@@ -366,15 +366,8 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     }
 
     if (cnx->local_parameters.prefered_address.is_defined) {
-        if (picoquic_supported_versions[cnx->version_index].version ==
-            PICOQUIC_TENTH_INTEROP_VERSION) {
-            bytes = picoquic_encode_transport_param_prefered_address_old(
-                bytes, bytes_max, &cnx->local_parameters.prefered_address);
-        }
-        else {
-            bytes = picoquic_encode_transport_param_prefered_address(
-                bytes, bytes_max, &cnx->local_parameters.prefered_address);
-        }
+        bytes = picoquic_encode_transport_param_prefered_address(
+            bytes, bytes_max, &cnx->local_parameters.prefered_address);
     }
 
     if (cnx->local_parameters.migration_disabled != 0 && bytes != NULL) {
@@ -646,17 +639,8 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                                 break;
                             case picoquic_tp_server_preferred_address:
                             {
-                                size_t coded_length = 0;
-                                
-                                if (picoquic_supported_versions[cnx->version_index].version ==
-                                    PICOQUIC_TENTH_INTEROP_VERSION) {
-                                    coded_length = picoquic_decode_transport_param_prefered_address_old(
+                                size_t coded_length = picoquic_decode_transport_param_prefered_address(
                                         bytes + byte_index, extension_length, &cnx->remote_parameters.prefered_address);
-                                }
-                                else {
-                                    coded_length = picoquic_decode_transport_param_prefered_address(
-                                        bytes + byte_index, extension_length, &cnx->remote_parameters.prefered_address);
-                                }
 
                                 if (coded_length != extension_length) {
                                     ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);

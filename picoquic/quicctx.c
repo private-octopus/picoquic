@@ -147,11 +147,11 @@ const picoquic_version_parameters_t picoquic_supported_versions[] = {
         picoquic_version_header_17,
         sizeof(picoquic_cleartext_internal_test_1_salt),
         picoquic_cleartext_internal_test_1_salt },
-    { PICOQUIC_ELEVENTH_INTEROP_VERSION,
+    { PICOQUIC_TWELFTH_INTEROP_VERSION,
         picoquic_version_header_17,
         sizeof(picoquic_cleartext_draft_17_salt),
         picoquic_cleartext_draft_17_salt },
-    { PICOQUIC_TENTH_INTEROP_VERSION,
+    { PICOQUIC_ELEVENTH_INTEROP_VERSION,
         picoquic_version_header_17,
         sizeof(picoquic_cleartext_draft_17_salt),
         picoquic_cleartext_draft_17_salt }
