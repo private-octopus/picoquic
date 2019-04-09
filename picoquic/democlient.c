@@ -61,9 +61,8 @@ static int h3zero_client_create_stream_request(
     }
     else {
         /* Create the request frame for the specified document */
-        o_bytes += 2; /* reserve two bytes for frame length */
         *o_bytes++ = h3zero_frame_header;
-        /* create request header frame */
+        o_bytes += 2; /* reserve two bytes for frame length */
         o_bytes = h3zero_create_request_header_frame(o_bytes, o_bytes_max,
             (const uint8_t *)path, path_len, host);
     }
@@ -74,13 +73,13 @@ static int h3zero_client_create_stream_request(
     else {
         size_t header_length = o_bytes - &buffer[3];
         if (header_length < 64) {
-            buffer[0] = (uint8_t)(header_length);
-            memmove(&buffer[1], &buffer[2], header_length + 1);
+            buffer[1] = (uint8_t)(header_length);
+            memmove(&buffer[2], &buffer[3], header_length);
             o_bytes--;
         }
         else {
-            buffer[0] = (uint8_t)((header_length >> 8) | 0x40);
-            buffer[1] = (uint8_t)(header_length & 0xFF);
+            buffer[1] = (uint8_t)((header_length >> 8) | 0x40);
+            buffer[2] = (uint8_t)(header_length & 0xFF);
         }
         *consumed = o_bytes - buffer;
     }
@@ -90,8 +89,8 @@ static int h3zero_client_create_stream_request(
 
 static int h3zero_client_init(picoquic_cnx_t* cnx)
 {
-    uint8_t decoder_stream_head = 0x48;
-    uint8_t encoder_stream_head = 0x68;
+    uint8_t decoder_stream_head = 0x03;
+    uint8_t encoder_stream_head = 0x02;
     int ret = picoquic_add_to_stream(cnx, 2, h3zero_default_setting_frame, h3zero_default_setting_frame_size, 0);
 
     if (ret == 0) {
@@ -385,9 +384,8 @@ typedef struct st_picoquic_alpn_list_t {
 
 static picoquic_alpn_list_t alpn_list[] = {
     { picoquic_alpn_http_0_9, "hq-18"},
-    { picoquic_alpn_http_3, "h3-18" },
-    { picoquic_alpn_http_0_9, "hq-17"},
-    { picoquic_alpn_http_3, "h3-17" },
+    { picoquic_alpn_http_3, "h3-19" },
+    { picoquic_alpn_http_0_9, "hq-19"},
     { picoquic_alpn_http_3, "h3" },
 };
 

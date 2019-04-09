@@ -781,10 +781,10 @@ uint8_t * h3zero_parse_data_stream(uint8_t * bytes, uint8_t * bytes_max,
     if (!stream_state->frame_header_parsed) {
         size_t frame_header_length;
 
-        if (stream_state->frame_header_read == 0) {
+        while (stream_state->frame_header_read < 2) {
             stream_state->frame_header[stream_state->frame_header_read++] = *bytes++;
         }
-        frame_header_length = picoquic_varint_skip(stream_state->frame_header) + 1;
+        frame_header_length = picoquic_varint_skip(stream_state->frame_header + 1) + 1;
 
         if (frame_header_length > sizeof(stream_state->frame_header)) {
             *error_found = H3ZERO_INTERNAL_ERROR;
@@ -796,10 +796,10 @@ uint8_t * h3zero_parse_data_stream(uint8_t * bytes, uint8_t * bytes_max,
         }
 
         if (stream_state->frame_header_read >= frame_header_length) {
-            (void)picoquic_varint_decode(stream_state->frame_header, frame_header_length,
+            stream_state->current_frame_type = stream_state->frame_header[0];
+            (void)picoquic_varint_decode(stream_state->frame_header + 1, frame_header_length - 1,
                 &stream_state->current_frame_length);
             stream_state->current_frame_read = 0;
-            stream_state->current_frame_type = stream_state->frame_header[frame_header_length - 1];
             stream_state->frame_header_parsed = 1;
 
             if (stream_state->current_frame_type == h3zero_frame_data) {
@@ -908,14 +908,14 @@ void h3zero_delete_data_stream_state(h3zero_data_stream_state_t * stream_state)
 /*
  * Setting frame.
  * The setting frame is encoded as as set of 16 bit identifiers and varint values.
- * For convenience, we set the first byte to the letter 'C' that identifies
+ * For convenience, we set the first byte to the integer 0 that identifies
  * a control stream.
  */
 
 static uint8_t const h3zero_default_setting_frame_val[] = {
-    'C',
-    6, /* Length, excluding the type byte */
+    0,
     (uint8_t)h3zero_frame_settings, /* frame type */
+    6, /* Length, excluding the type byte */
     0, (uint8_t)h3zero_setting_header_table_size, 0, /* 16 bit type, then value*/
     0, (uint8_t)h3zero_qpack_blocked_streams, 0 /* 16 bit type, then value*/
 };
