@@ -1329,7 +1329,7 @@ int tls_api_version_negotiation_test()
     }
 
     if (ret == 0) {
-        ret = tls_api_connection_loop(test_ctx, NULL, 0, &simulated_time);
+        (void)tls_api_connection_loop(test_ctx, NULL, 0, &simulated_time);
 
         if (test_ctx->cnx_client->cnx_state == picoquic_state_disconnected) {
             ret = 0;
