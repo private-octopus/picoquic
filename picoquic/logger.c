@@ -1467,8 +1467,7 @@ void picoquic_log_draft18_extension_content(FILE* F, int log_cnxid, uint64_t cnx
 }
 
 void picoquic_log_transport_extension_content(FILE* F, int log_cnxid, uint64_t cnx_id_64,
-    uint8_t * bytes, size_t bytes_max, int client_mode,
-    uint32_t initial_version, uint32_t final_version)
+    uint8_t * bytes, size_t bytes_max)
 {
     int ret = 0;
     size_t byte_index = 0;
@@ -1617,8 +1616,7 @@ void picoquic_log_transport_extension(FILE* F, picoquic_cnx_t* cnx, int log_cnxi
         }
         else {
             picoquic_log_transport_extension_content(F, log_cnxid,
-                picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)), bytes, bytes_max, client_mode,
-                cnx->proposed_version, picoquic_supported_versions[cnx->version_index].version);
+                picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)), bytes, bytes_max);
         }
     }
 

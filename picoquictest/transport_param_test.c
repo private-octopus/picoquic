@@ -800,13 +800,11 @@ static char const* log_tp_fuzz_file = "log_tp_fuzz_test.txt";
 #endif
 
 void picoquic_log_transport_extension_content(FILE* F, int log_cnxid, uint64_t cnx_id_64,
-    uint8_t * bytes, size_t bytes_max, int client_mode,
-    uint32_t initial_version, uint32_t final_version);
+    uint8_t * bytes, size_t bytes_max);
 
 static void transport_param_log_test_one(FILE * F, uint8_t * bytes, size_t bytes_max, int client_mode)
 {
-    picoquic_log_transport_extension_content(F, 1, 0x0102030405060708ull, bytes, bytes_max, client_mode,
-        0x0A1A0A1A, picoquic_supported_versions[0].version);
+    picoquic_log_transport_extension_content(F, 1, 0x0102030405060708ull, bytes, bytes_max);
     fprintf(F, "\n");
 }
 

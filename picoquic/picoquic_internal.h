@@ -120,6 +120,7 @@ typedef struct st_picoquic_packet_header_t {
     unsigned int key_phase : 1;
     unsigned int spin : 1;
     unsigned int has_spin_bit : 1;
+    unsigned int has_reserved_bit_set : 1;
 
     uint32_t token_length;
     uint8_t * token_bytes;
