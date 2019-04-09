@@ -120,6 +120,7 @@ typedef struct st_picoquic_packet_header_t {
     unsigned int key_phase : 1;
     unsigned int spin : 1;
     unsigned int has_spin_bit : 1;
+    unsigned int has_reserved_bit_set : 1;
 
     uint32_t token_length;
     uint8_t * token_bytes;
@@ -158,9 +159,10 @@ typedef enum {
 #define PICOQUIC_EIGHT_INTEROP_VERSION 0xFF00000E
 #define PICOQUIC_NINTH_INTEROP_VERSION 0xFF00000F
 #define PICOQUIC_NINTH_BIS_INTEROP_VERSION 0xFF000010
-#endif
 #define PICOQUIC_TENTH_INTEROP_VERSION 0xFF000011
+#endif
 #define PICOQUIC_ELEVENTH_INTEROP_VERSION 0xFF000012
+#define PICOQUIC_TWELFTH_INTEROP_VERSION 0xFF000013
 #define PICOQUIC_INTERNAL_TEST_VERSION_1 0x50435130
 #define PICOQUIC_INTERNAL_TEST_VERSION_2 0x50435131
 

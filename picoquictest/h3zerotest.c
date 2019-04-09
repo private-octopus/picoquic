@@ -424,7 +424,7 @@ int h3zero_prepare_qpack_test()
  */
 
 static uint8_t h3zero_stream_test1[] = {
-    4, h3zero_frame_header,
+    h3zero_frame_header, 4,
     QPACK_TEST_HEADER_BLOCK_PREFIX, 0xC0 | 17, 0xC0 | 1 };
 
 #define H3ZERO_STREAM_TEST2_DATA 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l'
@@ -432,17 +432,17 @@ static uint8_t h3zero_stream_test1[] = {
 static uint8_t h3zero_stream_test2_data[] = { H3ZERO_STREAM_TEST2_DATA };
 
 static uint8_t h3zero_stream_test2[] = {
-    4, h3zero_frame_header,
+    h3zero_frame_header, 4,
     QPACK_TEST_HEADER_BLOCK_PREFIX, 0xC0 | 25, 0xC0 | 52,
-    12, h3zero_frame_data,
+    h3zero_frame_data, 12,
     H3ZERO_STREAM_TEST2_DATA };
 
 static uint8_t h3zero_stream_test3[] = {
-    0x40, 4, h3zero_frame_header,
+    h3zero_frame_header, 0x40, 4,
     QPACK_TEST_HEADER_BLOCK_PREFIX, 0xC0 | 25, 0xC0 | 52,
-    12, h3zero_frame_data,
+    h3zero_frame_data, 12,
     H3ZERO_STREAM_TEST2_DATA,
-    8, h3zero_frame_header,
+    h3zero_frame_header, 8,
     QPACK_TEST_HEADER_BLOCK_PREFIX, 0x50 | 0x0F, 13, 3, '4', '0', '4'
 };
 
@@ -731,18 +731,18 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
 
 int h3zero_server_test()
 {
-    return demo_server_test("h3-18", h3zero_server_callback);
+    return demo_server_test("h3-19", h3zero_server_callback);
 }
 
 int h09_server_test()
 {
-    return demo_server_test("hq-18", picoquic_h09_server_callback);
+    return demo_server_test("hq-19", picoquic_h09_server_callback);
 }
 
 int generic_server_test()
 {
-    char const * alpn_09 = "hq-18";
-    char const * alpn_3 = "h3-18";
+    char const * alpn_09 = "hq-19";
+    char const * alpn_3 = "h3-19";
     int ret = demo_server_test(alpn_09, picoquic_demo_server_callback);
 
     if (ret != 0) {

@@ -147,11 +147,11 @@ const picoquic_version_parameters_t picoquic_supported_versions[] = {
         picoquic_version_header_17,
         sizeof(picoquic_cleartext_internal_test_1_salt),
         picoquic_cleartext_internal_test_1_salt },
-    { PICOQUIC_ELEVENTH_INTEROP_VERSION,
+    { PICOQUIC_TWELFTH_INTEROP_VERSION,
         picoquic_version_header_17,
         sizeof(picoquic_cleartext_draft_17_salt),
         picoquic_cleartext_draft_17_salt },
-    { PICOQUIC_TENTH_INTEROP_VERSION,
+    { PICOQUIC_ELEVENTH_INTEROP_VERSION,
         picoquic_version_header_17,
         sizeof(picoquic_cleartext_draft_17_salt),
         picoquic_cleartext_draft_17_salt }
@@ -528,7 +528,7 @@ void picoquic_init_transport_parameters(picoquic_tp_t* tp, int client_mode)
         tp->initial_max_stream_id_bidir = 65532;
         tp->initial_max_stream_id_unidir = 65534;
     }
-    tp->idle_timeout = PICOQUIC_MICROSEC_HANDSHAKE_MAX/1000000;
+    tp->idle_timeout = PICOQUIC_MICROSEC_HANDSHAKE_MAX/1000;
     tp->max_packet_size = PICOQUIC_PRACTICAL_MAX_MTU;
     tp->ack_delay_exponent = 3;
 }
@@ -2284,7 +2284,11 @@ void picoquic_enable_keep_alive(picoquic_cnx_t* cnx, uint64_t interval)
             idle_timeout = cnx->remote_parameters.idle_timeout;
         }
         /* convert to microseconds */
-        idle_timeout *= 1000000;
+        idle_timeout *= 1000;
+        /* Ensure at least 3 PTO*/
+        if (idle_timeout < 3 * cnx->path[0]->retransmit_timer) {
+            idle_timeout = 3 * cnx->path[0]->retransmit_timer;
+        }
         /* set interval to half that value */
         cnx->keep_alive_interval = idle_timeout / 2;
     } else {

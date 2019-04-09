@@ -685,13 +685,6 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
-
-        TEST_METHOD(zero_rtt_vnego)
-        {
-            int ret = zero_rtt_vnego_test();
-
-            Assert::AreEqual(ret, 0);
-        }
         
         TEST_METHOD(test_probe_api)
         {

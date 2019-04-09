@@ -738,7 +738,7 @@ static uint8_t draft15_test_input_packet[] = {
 };
 #endif
 
-static uint32_t draft17_test_vn = 0xff000011;
+static uint32_t draft17_test_vn = 0xff000013;
 
 static picoquic_connection_id_t draft17_test_cnx_id = { 
     { 0x7d, 0xdc, 0x42, 0x90, 0xc4, 0xe7, 0xd2, 0x04 }, 8 };
