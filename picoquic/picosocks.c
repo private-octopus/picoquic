@@ -343,13 +343,14 @@ void picoquic_close_server_sockets(picoquic_server_sockets_t* sockets)
 
 #ifdef _WINDOWS
 
-void picoquic_recvmsg_async_callback(
+void CALLBACK picoquic_recvmsg_async_callback(
     IN DWORD dwError,
     IN DWORD cbTransferred,
     IN LPWSAOVERLAPPED lpOverlapped,
     IN DWORD dwFlags)
 {
     picoquic_recvmsg_async_ctx_t * ctx = (picoquic_recvmsg_async_ctx_t*)lpOverlapped;
+    UNREFERENCED_PARAMETER(dwFlags);
 
     if (ctx == NULL) {
         return;

@@ -424,12 +424,12 @@ typedef struct st_picoquic_stream_head_t {
 #define STREAM_ID_FROM_RANK(rank, client_mode, is_unidir) (((rank)<<2)|((is_unidir)<<1)|(client_mode))
 #define STREAM_RANK_FROM_ID(id) ((id)>>2)
 /*
-    * Frame queue. This is used for miscellaneous packets, such as the PONG
-    * response to a PING.
-    *
-    * The misc frame are allocated in meory as blobs, starting with the
-    * misc_frame_header, followed by the misc frame content.
-    */
+ * Frame queue. This is used for miscellaneous packets, such as the PONG
+ * response to a PING.
+ *
+ * The misc frame are allocated in meory as blobs, starting with the
+ * misc_frame_header, followed by the misc frame content.
+ */
 
 typedef struct st_picoquic_misc_frame_header_t {
     struct st_picoquic_misc_frame_header_t* next_misc_frame;
@@ -437,35 +437,35 @@ typedef struct st_picoquic_misc_frame_header_t {
 } picoquic_misc_frame_header_t;
 
 /*
-    * Per path context.
-    * Path contexts are created:
-    * - At the beginning of the connection for path[0]
-    * - When advertising a new connection ID to the peer.
-    * When a path is created, the corresponding connection ID is added to the hash table
-    * of connection ID in the master QUIC context, so incoming packets can be routed to
-    * that path. When a path is deleted, the corresponding ID is removed from the table.
-    *
-    * On the server side, paths are activated after receiving the first packet on that path.
-    * The server will then schedule allocate a non-zero challenge value for the path,
-    * consume a connection ID advertised by the client, and allocate it as remote
-    * connection ID for the path. (TODO: what if no new connection ID is available?).
-    *
-    * On the client side, challenges are initially sent without creating a path context,
-    * by "half-consuming" a connection ID sent by the peer. Challenges can be repeated
-    * up to 3 times before the probe is declared lost. The first response from the
-    * peer will arrive on an unitialized path. The client will check whether the
-    * challenge value correspond to a probe, and allocate the corresponding connection
-    * ID to the path.
-    *
-    * As soon as a path is validated, it moves to position 0. The old path[0] moves to the
-    * last position, and is marked as deprecated. After about 1 RTT, the path resource
-    * are freed. (TODO: once we actually support multipath, change that behavior.)
-    * (TODO: servers should only validate the path after receiving non-probing frames from
-    * the client.)
-    *
-    * Congestion control and spin bit management are path specific.
-    * Packet numbering is global.
-    */
+* Per path context.
+* Path contexts are created:
+* - At the beginning of the connection for path[0]
+* - When advertising a new connection ID to the peer.
+* When a path is created, the corresponding connection ID is added to the hash table
+* of connection ID in the master QUIC context, so incoming packets can be routed to
+* that path. When a path is deleted, the corresponding ID is removed from the table.
+*
+* On the server side, paths are activated after receiving the first packet on that path.
+* The server will then schedule allocate a non-zero challenge value for the path,
+* consume a connection ID advertised by the client, and allocate it as remote
+* connection ID for the path. (TODO: what if no new connection ID is available?).
+*
+* On the client side, challenges are initially sent without creating a path context,
+* by "half-consuming" a connection ID sent by the peer. Challenges can be repeated
+* up to 3 times before the probe is declared lost. The first response from the
+* peer will arrive on an unitialized path. The client will check whether the
+* challenge value correspond to a probe, and allocate the corresponding connection
+* ID to the path.
+*
+* As soon as a path is validated, it moves to position 0. The old path[0] moves to the
+* last position, and is marked as deprecated. After about 1 RTT, the path resource
+* are freed. (TODO: once we actually support multipath, change that behavior.)
+* (TODO: servers should only validate the path after receiving non-probing frames from
+* the client.)
+*
+* Congestion control and spin bit management are path specific.
+* Packet numbering is global.
+*/
 
 typedef struct st_picoquic_path_t {
     /* Local connection ID identifies a path */
@@ -540,13 +540,13 @@ typedef struct st_picoquic_path_t {
     void* congestion_alg_state;
 
     /*
-        * Pacing uses a set of per path variables:
-        * - pacing_evaluation_time: last time the path was evaluated.
-        * - pacing_bucket_nanosec: number of nanoseconds of transmission time that are allowed.
-        * - pacing_bucket_max: maximum value (capacity) of the leaky bucket.
-        * - pacing_packet_time_nanosec: number of nanoseconds required to send a full size packet.
-        * - pacing_packet_time_microsec: max of (packet_time_nano_sec/1024, 1) microsec.
-        */
+    * Pacing uses a set of per path variables:
+    * - pacing_evaluation_time: last time the path was evaluated.
+    * - pacing_bucket_nanosec: number of nanoseconds of transmission time that are allowed.
+    * - pacing_bucket_max: maximum value (capacity) of the leaky bucket.
+    * - pacing_packet_time_nanosec: number of nanoseconds required to send a full size packet.
+    * - pacing_packet_time_microsec: max of (packet_time_nano_sec/1024, 1) microsec.
+    */
     uint64_t pacing_evaluation_time;
     uint64_t pacing_bucket_nanosec;
     uint64_t pacing_bucket_max;
@@ -556,11 +556,11 @@ typedef struct st_picoquic_path_t {
 } picoquic_path_t;
 
 /* Per epoch crypto context. There are four such contexts:
-    * 0: Initial context, with encryption based on a version dependent key,
-    * 1: 0-RTT context
-    * 2: Handshake context
-    * 3: Application data
-    */
+* 0: Initial context, with encryption based on a version dependent key,
+* 1: 0-RTT context
+* 2: Handshake context
+* 3: Application data
+*/
 typedef struct st_picoquic_crypto_context_t {
     void* aead_encrypt;
     void* aead_decrypt;
@@ -569,11 +569,11 @@ typedef struct st_picoquic_crypto_context_t {
 } picoquic_crypto_context_t;
 
 /* Per epoch sequence/packet context.
-    * There are three such contexts:
-    * 0: Application (0-RTT and 1-RTT)
-    * 1: Handshake
-    * 2: Initial
-    */
+* There are three such contexts:
+* 0: Application (0-RTT and 1-RTT)
+* 1: Handshake
+* 2: Initial
+*/
 
 typedef struct st_picoquic_packet_context_t {
     uint64_t send_sequence;
@@ -599,8 +599,8 @@ typedef struct st_picoquic_packet_context_t {
 } picoquic_packet_context_t;
 
 /*
-    * New CNX-ID description, used for storage waiting for the CNX-ID to be validated
-    */
+* New CNX-ID description, used for storage waiting for the CNX-ID to be validated
+*/
 typedef struct st_picoquic_cnxid_stash_t {
     struct st_picoquic_cnxid_stash_t * next_in_stash;
     uint64_t sequence;
@@ -609,10 +609,10 @@ typedef struct st_picoquic_cnxid_stash_t {
 } picoquic_cnxid_stash_t;
 
 /*
-    * Probe in progress, waiting for validation in path.
-    * or upon reception of the first data packet from the peer otherwise.
-    * TODO: re-think that logic if using null CID.
-    */
+* Probe in progress, waiting for validation in path.
+* or upon reception of the first data packet from the peer otherwise.
+* TODO: re-think that logic if using null CID.
+*/
 typedef struct st_picoquic_probe_t {
     struct st_picoquic_probe_t * next_probe;
     uint64_t sequence;
@@ -635,8 +635,8 @@ typedef struct st_picoquic_probe_t {
 } picoquic_probe_t;
 
 /*
-    * Per connection context.
-    */
+* Per connection context.
+*/
 typedef struct st_picoquic_cnx_t {
     picoquic_quic_t* quic;
 

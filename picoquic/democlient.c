@@ -521,7 +521,7 @@ char * demo_client_parse_stream_format(char * text, int default_format, int * is
 char * demo_client_parse_stream_path(char * text, 
     char ** path, char ** f_name)
 {
-    int l_path = 0;
+    size_t l_path = 0;
     int is_complete = 0;
     int need_dup = 0;
 
