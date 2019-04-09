@@ -336,9 +336,8 @@ int picoquic_prepare_draft18_extensions(picoquic_cnx_t* cnx, int extension_mode,
                 cnx->local_parameters.initial_max_stream_id_bidir));
     }
 
-    /* TODO: when removing support of draft 14, make idle timeout optional */
     bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_idle_timeout,
-        cnx->local_parameters.idle_timeout);
+        cnx->local_parameters.idle_timeout/1000);
 
     bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_max_packet_size,
         cnx->local_parameters.max_packet_size);
@@ -728,8 +727,8 @@ static int picoquic_receive_draft18_extensions(picoquic_cnx_t* cnx, int extensio
 
                                 break;
                             case picoquic_tp_idle_timeout:
-                                cnx->remote_parameters.idle_timeout = (uint16_t)
-                                    picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
+                                cnx->remote_parameters.idle_timeout = (uint32_t)
+                                    (picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret)/1000);
                                 break;
 
                             case picoquic_tp_max_packet_size:
@@ -943,7 +942,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
 
                             break;
                         case picoquic_tp_idle_timeout:
-                            cnx->remote_parameters.idle_timeout = (uint16_t)
+                            cnx->remote_parameters.idle_timeout = (uint32_t)
                                 picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
                             break;
 
