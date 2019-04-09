@@ -2285,6 +2285,10 @@ void picoquic_enable_keep_alive(picoquic_cnx_t* cnx, uint64_t interval)
         }
         /* convert to microseconds */
         idle_timeout *= 1000;
+        /* Ensure at least 3 PTO*/
+        if (idle_timeout < 3 * cnx->path[0]->retransmit_timer) {
+            idle_timeout = 3 * cnx->path[0]->retransmit_timer;
+        }
         /* set interval to half that value */
         cnx->keep_alive_interval = idle_timeout / 2;
     } else {
