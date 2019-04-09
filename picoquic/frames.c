@@ -552,7 +552,7 @@ uint8_t* picoquic_skip_retire_connection_id_frame(uint8_t* bytes, const uint8_t*
  * MUST be damn sure that this not just a repeat of a previous retire connection ID message...
  */
 
-uint8_t* picoquic_decode_retire_connection_id_frame(picoquic_cnx_t* cnx, uint8_t* bytes, const uint8_t* bytes_max, uint64_t current_time)
+uint8_t* picoquic_decode_retire_connection_id_frame(picoquic_cnx_t* cnx, uint8_t* bytes, const uint8_t* bytes_max, uint64_t current_time, picoquic_path_t * path_x)
 {
     /* store the connection ID in order to support migration. */
     uint64_t sequence;
@@ -563,6 +563,11 @@ uint8_t* picoquic_decode_retire_connection_id_frame(picoquic_cnx_t* cnx, uint8_t
     }
     else if (sequence >= cnx->path_sequence_next || cnx->path[0]->local_cnxid.id_len == 0) {
         /* If there is no matching path, trigger an error */
+        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
+            picoquic_frame_type_retire_connection_id);
+    }
+    else if (sequence == path_x->path_sequence) {
+        /* Cannot delete the path through which it arrives */
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
             picoquic_frame_type_retire_connection_id);
     }
@@ -3317,7 +3322,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_
                 break;
             case picoquic_frame_type_retire_connection_id:
                 /* the old code point for ACK frames, but this is taken care of in the ACK tests above */
-                bytes = picoquic_decode_retire_connection_id_frame(cnx, bytes, bytes_max, current_time);
+                bytes = picoquic_decode_retire_connection_id_frame(cnx, bytes, bytes_max, current_time, path_x);
                 ack_needed = 1;
                 break;
             default: {
