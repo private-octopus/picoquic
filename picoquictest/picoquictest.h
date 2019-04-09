@@ -165,7 +165,6 @@ int tls_retry_token_test();
 int optimistic_ack_test();
 int document_addresses_test();
 int socket_ecn_test();
-int zero_rtt_vnego_test();
 int null_sni_test();
 int preferred_address_test();
 int cid_global_encrypt_test();
