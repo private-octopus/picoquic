@@ -521,7 +521,7 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
     picoquic_demo_stream_desc_t * client_sc = NULL;
 
     if (alpn == NULL) {
-        alpn = "hq-17";
+        alpn = "hq-19";
     }
 
     if (client_scenario_text != NULL) {

@@ -1319,7 +1319,33 @@ int tls_api_many_losses()
 int tls_api_version_negotiation_test()
 {
     const uint32_t version_grease = 0x0aca4a0a;
-    return tls_api_test_with_loss(NULL, version_grease, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN);
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, version_grease, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+
+    if (ret != 0)
+    {
+        DBG_PRINTF("Could not create the QUIC test contexts for V=%x\n", version_grease);
+    }
+
+    if (ret == 0) {
+        (void)tls_api_connection_loop(test_ctx, NULL, 0, &simulated_time);
+
+        if (test_ctx->cnx_client->cnx_state == picoquic_state_disconnected) {
+            ret = 0;
+        }
+        else {
+            DBG_PRINTF("Unexpected state: %d\n", test_ctx->cnx_client->cnx_state);
+            ret = -1;
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
 }
 
 int tls_api_sni_test()
@@ -2124,14 +2150,14 @@ int session_resume_test()
 /*
  * Zero RTT test. Like the session resume test, but with a twist...
  */
-int zero_rtt_test_one(int use_badcrypt, int hardreset, unsigned int early_loss, int v_nego)
+int zero_rtt_test_one(int use_badcrypt, int hardreset, unsigned int early_loss)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     char const* sni = PICOQUIC_TEST_SNI;
     char const* alpn = PICOQUIC_TEST_ALPN;
     uint64_t loss_mask = 0;
-    uint32_t proposed_version = (v_nego) ? 0x9a8a7a6a : 0;
+    uint32_t proposed_version = 0;
     int ret = 0;
 
     /* Initialize an empty ticket store */
@@ -2174,7 +2200,7 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, unsigned int early_loss, 
 
         if (ret == 0 && i == 1) {
             /* If resume succeeded, the second connection will have a type "PSK" */
-            if (use_badcrypt == 0 && hardreset == 0 && v_nego == 0 && (
+            if (use_badcrypt == 0 && hardreset == 0 && (
                 picoquic_tls_is_psk_handshake(test_ctx->cnx_server) == 0 || 
                 picoquic_tls_is_psk_handshake(test_ctx->cnx_client) == 0)) {
                 DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), connection %d not PSK.\n",
@@ -2208,7 +2234,7 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, unsigned int early_loss, 
                         use_badcrypt, hardreset);
                     ret = -1;
                 }
-                else if (early_loss == 0 && v_nego == 0 &&
+                else if (early_loss == 0 &&
                     test_ctx->cnx_client->nb_zero_rtt_acked != test_ctx->cnx_client->nb_zero_rtt_sent) {
                     DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), no zero RTT acked.\n",
                         use_badcrypt, hardreset);
@@ -2262,7 +2288,7 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, unsigned int early_loss, 
 
 int zero_rtt_test()
 {
-    return zero_rtt_test_one(0, 0, 0, 0);
+    return zero_rtt_test_one(0, 0, 0);
 }
 
 /*
@@ -2280,7 +2306,7 @@ int zero_rtt_loss_test()
     int ret = 0;
 
     for (unsigned int i = 1; ret == 0 && i < 16; i++) {
-        ret = zero_rtt_test_one(0, 0, i, 0);
+        ret = zero_rtt_test_one(0, 0, i);
         if (ret != 0) {
             DBG_PRINTF("Zero RTT test fails when packet #%d is lost.\n", i);
         }
@@ -2298,7 +2324,7 @@ int zero_rtt_loss_test()
 
 int zero_rtt_spurious_test()
 {
-    return zero_rtt_test_one(1, 0, 0, 0);
+    return zero_rtt_test_one(1, 0, 0);
 }
 
 /*
@@ -2310,20 +2336,9 @@ int zero_rtt_spurious_test()
 
 int zero_rtt_retry_test()
 {
-    return zero_rtt_test_one(0, 1, 0, 0);
+    return zero_rtt_test_one(0, 1, 0);
 }
 
-/*
-* Zero RTT Version Negotiation test.
-* Check what happens if the client attempts to resume a connection but the
-* server responds with a version negotiation. This is simulated by setting
-* the proposed version to a test value.
-*/
-
-int zero_rtt_vnego_test()
-{
-    return zero_rtt_test_one(0, 0, 0, 1);
-}
 /*
  * Stop sending test. Start a long transmission, but after receiving some bytes,
  * send a stop sending request. Then ask for another transmission. The
