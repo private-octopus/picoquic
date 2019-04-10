@@ -150,125 +150,112 @@ static int h3zero_server_parse_request_frame(
     h3zero_server_stream_ctx_t * stream_ctx)
 {
     int ret = 0;
-    uint64_t frame_type;
-    uint64_t frame_length;
     uint8_t * bytes = stream_ctx->frame;
     uint8_t * bytes_max = bytes + stream_ctx->received_length;
-    uint8_t buffer[1024]; /* used to compose the response */
-    size_t ll_f;
-    size_t ll_l;
+    h3zero_data_stream_state_t stream_state;
+    uint64_t available_data;
+    uint16_t error_found = 0;
 
+    memset(&stream_state, 0, sizeof(h3zero_data_stream_state_t));
 
-    /* Parse frame length, verify length */
-    ll_f = picoquic_varint_decode(bytes, stream_ctx->received_length, &frame_type);
-    ll_l = picoquic_varint_decode(bytes + ll_f, stream_ctx->received_length - ll_f, &frame_length);
-
-    /* Verify frame type = request header */
-    if (ll_f == 0 || ll_l == 0) {
-        ret = picoquic_reset_stream(cnx, stream_ctx->stream_id, H3ZERO_INCOMPLETE_REQUEST);
+    while (bytes != NULL && bytes < bytes_max) {
+        /* Parse the incoming data, looking for a header frame, ignoring data frame and unknown frames */
+        bytes = h3zero_parse_data_stream(bytes, bytes_max, &stream_state, &available_data, &error_found);
     }
-    else if (ll_f + ll_l + frame_length < stream_ctx->received_length) {
-        ret = picoquic_reset_stream(cnx, stream_ctx->stream_id, H3ZERO_INCOMPLETE_REQUEST);
+
+    if (bytes != NULL && (bytes != bytes_max || !stream_state.header_found)) {
+        error_found = H3ZERO_MALFORMED_FRAME(h3zero_frame_header);
+        bytes = NULL;
     }
-    else if (frame_type != h3zero_frame_header) {
-        ret = picoquic_reset_stream(cnx, stream_ctx->stream_id, H3ZERO_UNEXPECTED_FRAME);
+
+    if (bytes == NULL) {
+        ret = picoquic_reset_stream(cnx, stream_ctx->stream_id, error_found);
     }
     else {
-        /* Parse request header, verify length */
-        h3zero_header_parts_t parts;
+        /* Prepare response header */
+        uint8_t buffer[1024]; 
+        uint8_t * o_bytes = &buffer[0];
+        uint8_t * o_bytes_max = o_bytes + sizeof(buffer);
+        size_t response_length = 0;
 
-        bytes = h3zero_parse_qpack_header_frame(bytes + ll_f + ll_l, bytes_max, &parts);
+        *o_bytes++ = h3zero_frame_header;
+        o_bytes += 2; /* reserve two bytes for frame length */
 
-        if (bytes == NULL || bytes != bytes_max) {
-            ret = picoquic_reset_stream(cnx, stream_ctx->stream_id,
-                H3ZERO_MALFORMED_FRAME(h3zero_frame_header));
+        /* Parse path */
+        if (stream_state.header.method != h3zero_method_get) {
+            /* No such method supported -- error 405, header include "allow GET" */
+            o_bytes = h3zero_create_bad_method_header_frame(o_bytes, o_bytes_max);
+        }
+        else if (h3zero_server_parse_path(stream_state.header.path, stream_state.header.path_length, &stream_ctx->echo_length) != 0) {
+            /* If unknown, 404 */
+            o_bytes = h3zero_create_not_found_header_frame(o_bytes, o_bytes_max);
         }
         else {
-            uint8_t * o_bytes = &buffer[0];
-            uint8_t * o_bytes_max = o_bytes + sizeof(buffer);
-            size_t response_length = 0;
-
-            *o_bytes++ = h3zero_frame_header;
-            o_bytes += 2; /* reserve two bytes for frame length */
-
-            /* Parse path */
-            if (parts.method != h3zero_method_get) {
-                /* No such method supported -- error 405, header include "allow GET" */
-                o_bytes = h3zero_create_bad_method_header_frame(o_bytes, o_bytes_max);
+            /* If known, create response header frame */
+            o_bytes = h3zero_create_response_header_frame(o_bytes, o_bytes_max,
+                (stream_ctx->echo_length == 0) ? h3zero_content_type_text_html :
+                h3zero_content_type_text_plain);
+            if (o_bytes != NULL) {
+                response_length = (stream_ctx->echo_length == 0) ?
+                    strlen(h3zero_default_page) : stream_ctx->echo_length;
             }
-            else if (h3zero_server_parse_path(parts.path, parts.path_length, &stream_ctx->echo_length) != 0) {
-                /* If unknown, 404 */
-                o_bytes = h3zero_create_not_found_header_frame(o_bytes, o_bytes_max);
+        }
+
+        if (o_bytes == NULL) {
+            ret = picoquic_reset_stream(cnx, stream_ctx->stream_id, H3ZERO_INTERNAL_ERROR);
+        }
+        else {
+            size_t header_length = o_bytes - &buffer[3];
+            buffer[1] = (uint8_t)((header_length >> 8) | 0x40);
+            buffer[2] = (uint8_t)(header_length & 0xFF);
+
+            if (response_length > 0) {
+                size_t ld = 0;
+
+                if (o_bytes + 2 < o_bytes_max) {
+                    *o_bytes++ = h3zero_frame_data;
+                    ld = picoquic_varint_encode(o_bytes, o_bytes_max - o_bytes, response_length);
+                }
+
+                if (ld == 0) {
+                    o_bytes = NULL;
+                }
+                else {
+                    o_bytes += ld;
+
+                    if (stream_ctx->echo_length == 0) {
+                        size_t test_length = strlen(h3zero_default_page);
+
+                        if (o_bytes + test_length <= o_bytes_max) {
+                            memcpy(o_bytes, h3zero_default_page, test_length);
+                            o_bytes += test_length;
+                        }
+                        else {
+                            o_bytes = NULL;
+                        }
+                    }
+                }
             }
-            else {
-                /* If known, create response header frame */
-                o_bytes = h3zero_create_response_header_frame(o_bytes, o_bytes_max,
-                    (stream_ctx->echo_length == 0) ? h3zero_content_type_text_html :
-                    h3zero_content_type_text_plain);
-                if (o_bytes != NULL) {
-                    response_length = (stream_ctx->echo_length == 0) ?
-                        strlen(h3zero_default_page) : stream_ctx->echo_length;
+
+            if (o_bytes != NULL) {
+                ret = picoquic_add_to_stream(cnx, stream_ctx->stream_id,
+                    buffer, o_bytes - buffer,
+                    (stream_ctx->echo_length == 0) ? 1 : 0);
+                if (ret != 0) {
+                    o_bytes = NULL;
                 }
             }
 
             if (o_bytes == NULL) {
                 ret = picoquic_reset_stream(cnx, stream_ctx->stream_id, H3ZERO_INTERNAL_ERROR);
-            } else {
-                size_t header_length = o_bytes - &buffer[3];
-                buffer[1] = (uint8_t)((header_length >> 8) | 0x40);
-                buffer[2] = (uint8_t)(header_length & 0xFF);
-
-                if (response_length > 0) {
-                    size_t ld = 0;
-
-                    if (o_bytes + 2 < o_bytes_max) {
-                        *o_bytes++ = h3zero_frame_data;
-                        ld = picoquic_varint_encode(o_bytes, o_bytes_max - o_bytes, response_length);
-                    }
-
-                    if (ld == 0) {
-                        o_bytes = NULL;
-                    }
-                    else {
-                        o_bytes += ld;
-
-                        if (stream_ctx->echo_length == 0) {
-                            size_t test_length = strlen(h3zero_default_page);
-
-                            if (o_bytes + test_length <= o_bytes_max) {
-                                memcpy(o_bytes, h3zero_default_page, test_length);
-                                o_bytes += test_length;
-                            }
-                            else {
-                                o_bytes = NULL;
-                            }
-                        }
-                    }
-                }
-
-                if (o_bytes != NULL) {
-                    ret = picoquic_add_to_stream(cnx, stream_ctx->stream_id,
-                        buffer, o_bytes - buffer,
-                        (stream_ctx->echo_length == 0) ? 1 : 0);
-                    if (ret != 0) {
-                        o_bytes = NULL;
-                    }
-                }
-
-                if (o_bytes == NULL) {
-                    ret = picoquic_reset_stream(cnx, stream_ctx->stream_id, H3ZERO_INTERNAL_ERROR);
-                }
-                else if (stream_ctx->echo_length != 0) {
-                    ret = picoquic_mark_active_stream(cnx, stream_ctx->stream_id, 1);
-                }
+            }
+            else if (stream_ctx->echo_length != 0) {
+                ret = picoquic_mark_active_stream(cnx, stream_ctx->stream_id, 1);
             }
         }
-
-        if (parts.path != NULL) {
-            free((void *)parts.path);
-            *(void**)(&parts.path) = NULL;
-        }
     }
+
+    h3zero_delete_data_stream_state(&stream_state);
 
     return ret;
 }
