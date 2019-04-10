@@ -756,10 +756,12 @@ uint8_t * h3zero_create_bad_method_header_frame(uint8_t * bytes, uint8_t * bytes
 /* Parsing of a data stream. This is implemented as a filter, with a set of states:
  * 
  * - Reading frame length: obtaining the length and type of the next frame.
- * - Reading header frame: obtaining the bytes of the data frame.
+ * - Reading header frame: obtaining the bytes of the header frame.
  *   When all bytes are obtained, the header is parsed and the header
  *   structure is documented. State moves back to initial, with header-read
  *   flag set. Having two frame headers before a data frame is a bug.
+ * - Reading unknown frame: unknown frames can happen at any point in
+ *   the stream, and should just be ignored.
  * - Reading data frame: the frame header indicated a data frame of
  *   length N. Treat the following N bytes as data.
  * 
@@ -778,13 +780,35 @@ uint8_t * h3zero_parse_data_stream(uint8_t * bytes, uint8_t * bytes_max,
         return NULL;
     }
 
+    /* TODO: the frame type may be encoded as a varint */
+    /* TODO: ignore unknown frame types */
+
     if (!stream_state->frame_header_parsed) {
+        size_t frame_type_length;
         size_t frame_header_length;
 
-        while (stream_state->frame_header_read < 2) {
+        if (stream_state->frame_header_read < 1) {
             stream_state->frame_header[stream_state->frame_header_read++] = *bytes++;
         }
-        frame_header_length = picoquic_varint_skip(stream_state->frame_header + 1) + 1;
+        frame_type_length = picoquic_varint_skip(stream_state->frame_header);
+
+        while (stream_state->frame_header_read < frame_type_length && bytes < bytes_max) {
+            stream_state->frame_header[stream_state->frame_header_read++] = *bytes++;
+        }
+
+        if (stream_state->frame_header_read < frame_type_length) {
+            /* No change in state, wait for more bytes */
+            return bytes;
+        }
+
+        (void)picoquic_varint_decode(stream_state->frame_header, frame_type_length,
+            &stream_state->current_frame_type);
+
+        while (stream_state->frame_header_read < frame_type_length + 1) {
+            stream_state->frame_header[stream_state->frame_header_read++] = *bytes++;
+        }
+
+        frame_header_length = picoquic_varint_skip(stream_state->frame_header + frame_type_length) + frame_type_length;
 
         if (frame_header_length > sizeof(stream_state->frame_header)) {
             *error_found = H3ZERO_INTERNAL_ERROR;
@@ -796,8 +820,7 @@ uint8_t * h3zero_parse_data_stream(uint8_t * bytes, uint8_t * bytes_max,
         }
 
         if (stream_state->frame_header_read >= frame_header_length) {
-            stream_state->current_frame_type = stream_state->frame_header[0];
-            (void)picoquic_varint_decode(stream_state->frame_header + 1, frame_header_length - 1,
+            (void)picoquic_varint_decode(stream_state->frame_header + frame_type_length, frame_header_length - frame_type_length,
                 &stream_state->current_frame_length);
             stream_state->current_frame_read = 0;
             stream_state->frame_header_parsed = 1;
@@ -808,16 +831,19 @@ uint8_t * h3zero_parse_data_stream(uint8_t * bytes, uint8_t * bytes_max,
                     *error_found = H3ZERO_UNEXPECTED_FRAME;
                     bytes = NULL;
                 }
-            } else if (stream_state->current_frame_type == h3zero_frame_header) {
+            }
+            else if (stream_state->current_frame_type == h3zero_frame_header) {
                 if (stream_state->header_found && (!stream_state->data_found || stream_state->trailer_found)) {
                     /* protocol error */
                     *error_found = H3ZERO_UNEXPECTED_FRAME;
                     bytes = NULL;
-                } else if (stream_state->current_frame_length > 0x10000) {
+                }
+                else if (stream_state->current_frame_length > 0x10000) {
                     /* error, excessive load */
                     *error_found = H3ZERO_INTERNAL_ERROR;
                     bytes = NULL;
-                } else {
+                }
+                else {
                     stream_state->current_frame = (uint8_t *)malloc((size_t)stream_state->current_frame_length);
                     if (stream_state->current_frame == NULL) {
                         /* error, internal error */
@@ -826,13 +852,7 @@ uint8_t * h3zero_parse_data_stream(uint8_t * bytes, uint8_t * bytes_max,
                     }
                 }
             }
-            else {
-                /* unexpected frame, protocol error */
-                *error_found = H3ZERO_UNEXPECTED_FRAME;
-                bytes = NULL;
-            }
         }
-
         return bytes;
     }
     else {
@@ -878,9 +898,13 @@ uint8_t * h3zero_parse_data_stream(uint8_t * bytes, uint8_t * bytes_max,
             }
         }
         else {
-            /* should never happen - internal error */
-            *error_found = H3ZERO_INTERNAL_ERROR;
-            bytes = NULL;
+            /* Unknown frame type, should just be ignored */
+            stream_state->current_frame_read += available;
+            bytes += available;
+            if (stream_state->current_frame_read >= stream_state->current_frame_length) {
+                stream_state->frame_header_parsed = 0;
+                stream_state->frame_header_read = 0;
+            }
         }     
     }
 
