@@ -852,6 +852,16 @@ uint8_t * h3zero_parse_data_stream(uint8_t * bytes, uint8_t * bytes_max,
                     }
                 }
             }
+            else if (stream_state->current_frame_type == h3zero_frame_cancel_push || 
+                stream_state->current_frame_type == h3zero_frame_goaway ||
+                stream_state->current_frame_type == h3zero_frame_max_push_id) {
+                *error_found = H3ZERO_WRONG_STREAM;
+                bytes = NULL;
+            }
+            else if (stream_state->current_frame_type == h3zero_frame_settings) {
+                *error_found = H3ZERO_UNEXPECTED_FRAME;
+                bytes = NULL;
+            }
         }
         return bytes;
     }
