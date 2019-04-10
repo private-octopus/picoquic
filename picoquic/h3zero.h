@@ -217,11 +217,11 @@ typedef struct st_h3zero_data_stream_state_t {
     h3zero_header_parts_t header;
     h3zero_header_parts_t trailer;
     uint8_t * current_frame;
+    uint64_t current_frame_type;
     uint64_t current_frame_length;
     uint64_t current_frame_read;
+    uint8_t frame_header[16];
     size_t frame_header_read;
-    uint8_t current_frame_type;
-    uint8_t frame_header[9];
     unsigned int frame_header_parsed : 1;
     unsigned int header_found : 1;
     unsigned int data_found : 1;
