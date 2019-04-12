@@ -18,6 +18,7 @@ extern "C" {
     int quicwind_get_cnx_list(picoquic_quic_t * qclient, HWND hDlg, int list_box_id);
     int quicwind_load_file(picoquic_quic_t * qclient, int sel_cid, char const * doc_name);
     int quicwind_disconnect(picoquic_quic_t * qclient, int sel_cid);
+    void quicwind_wake_up_network();
     void quicwind_orderly_exit(picoquic_quic_t * qclient, HANDLE qclient_thread, DWORD dw_qclient_thread_id);
 
 #ifdef  __cplusplus

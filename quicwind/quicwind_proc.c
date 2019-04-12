@@ -47,6 +47,7 @@
 static const char* ticket_store_filename = "demo_ticket_store.bin";
 static const char* token_store_filename = "demo_token_store.bin";
 static int quicwind_is_closing = 0;
+HANDLE net_wake_up = NULL;
 
 /* Callback function 
  * TODO: remove the "queue of docs" logic, replace with UI requests.
@@ -339,11 +340,12 @@ DWORD WINAPI quicwind_background_thread(LPVOID lpParam)
     size_t client_sc_nb = 0;
     picoquic_demo_stream_desc_t * client_sc = NULL;
     picoquic_quic_t* qclient = (picoquic_quic_t*)lpParam;
-    HANDLE events[2];
+    HANDLE events[3];
 
     for (int i = 0; i < 2; i++) {
         sock_ctx[i] = picoquic_create_async_socket(socket_family[i]);
         if (sock_ctx[i] == NULL) {
+            AppendText(_T("Cannot create socket\r\n"));
             ret = -1;
             events[i] = 0;
         }
@@ -352,10 +354,23 @@ DWORD WINAPI quicwind_background_thread(LPVOID lpParam)
         }
     }
 
+    events[2] = NULL;
+    if (ret == 0) {
+        net_wake_up = CreateEvent(NULL, TRUE, FALSE, NULL);
+        if (net_wake_up == NULL) {
+            AppendText(_T("Cannot create wake-up event\r\n"));
+            ret = -1;
+        }
+        else {
+            events[2] = net_wake_up;
+        }
+    }
+
+
     /* Wait for packets */
     while (ret == 0 && !quicwind_is_closing) {
         DWORD delta_t_ms = (DWORD)((delta_t + 999) / 1000);
-        DWORD ret_event = WSAWaitForMultipleEvents(2, events, FALSE, delta_t_ms, 0);
+        DWORD ret_event = WSAWaitForMultipleEvents(3, events, FALSE, delta_t_ms, 0);
         current_time = picoquic_get_quic_time(qclient);
         bytes_recv = 0;
 
@@ -389,11 +404,14 @@ DWORD WINAPI quicwind_background_thread(LPVOID lpParam)
                         }
                     }
                     else {
-                        AppendText(_T("Packet processin error\r\n"));
+                        AppendText(_T("Packet processing error\r\n"));
                     }
                 }
             }
             else {
+                if (i_sock == 2) {
+                    ResetEvent(net_wake_up);
+                }
                 delta_t = delay_max;
             }
         }
@@ -489,11 +507,25 @@ DWORD WINAPI quicwind_background_thread(LPVOID lpParam)
             sock_ctx[i] = NULL;
         }
     }
+
+    if (net_wake_up != NULL) {
+        CloseHandle(net_wake_up);
+        net_wake_up = NULL;
+    }
+
     if (!quicwind_is_closing) {
         AppendText(_T("Error: Network thread exit.\r\n"));
     }
 
     return ret;
+}
+
+/* Wake up the network */
+void quicwind_wake_up_network()
+{
+    if (net_wake_up != NULL) {
+        SetEvent(net_wake_up);
+    }
 }
 
 /* Start download of a document
@@ -666,6 +698,8 @@ int quicwind_start_connection(picoquic_quic_t * qclient,
             }
         }
     }
+    
+    quicwind_wake_up_network();
 
     return ret;
 }
@@ -744,6 +778,8 @@ int quicwind_load_file(picoquic_quic_t * qclient, int sel_cid, char const * doc_
             ret = quicwind_start_download(cnx, (quicwind_callback_ctx_t *)v_ctx, doc_name);
         }
     }
+    
+    quicwind_wake_up_network();
 
     return ret;
 }
@@ -761,6 +797,8 @@ int quicwind_disconnect(picoquic_quic_t * qclient, int sel_cid)
         ret = picoquic_close(cnx, 0);
     }
 
+    quicwind_wake_up_network();
+
     return ret;
 
 }
@@ -772,6 +810,9 @@ void quicwind_orderly_exit(picoquic_quic_t * qclient, HANDLE qclient_thread, DWO
     if (qclient_thread != NULL) {
         /* Set the global close thread flag */
         quicwind_is_closing = 1;
+
+        quicwind_wake_up_network();
+
         /* Wait until background thread has terminated, or 3 seconds. */
         if (WaitForMultipleObjects(1, &qclient_thread, TRUE, 3000) == WAIT_TIMEOUT) {
             TerminateThread(qclient_thread, 0);
