@@ -395,10 +395,12 @@ picoquic_alpn_enum picoquic_parse_alpn(char const * alpn)
 {
     picoquic_alpn_enum code = picoquic_alpn_undef;
 
-    for (size_t i = 0; i < nb_alpn_list; i++) {
-        if (strcmp(alpn_list[i].alpn_val, alpn) == 0) {
-            code = alpn_list[i].alpn_code;
-            break;
+    if (alpn != NULL) {
+        for (size_t i = 0; i < nb_alpn_list; i++) {
+            if (strcmp(alpn_list[i].alpn_val, alpn) == 0) {
+                code = alpn_list[i].alpn_code;
+                break;
+            }
         }
     }
 	

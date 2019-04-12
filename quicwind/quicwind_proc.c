@@ -323,17 +323,11 @@ picoquic_quic_t* quicwind_create_context(const char * alpn, int mtu_max, const c
 DWORD WINAPI quicwind_background_thread(LPVOID lpParam)
 {
     int ret = 0;
-    struct sockaddr_storage packet_from;
-    struct sockaddr_storage packet_to;
-    socklen_t from_length;
-    socklen_t to_length;
     int bytes_recv;
-    unsigned long if_index_to;
     int server_addr_length = 0;
-    uint8_t buffer[1536];
     uint8_t send_buffer[1536];
     size_t send_length = 0;
-    picoquic_server_sockets_t sockets;
+    picoquic_recvmsg_async_ctx_t * sock_ctx[2];
     const int socket_family[2] = { AF_INET6, AF_INET};
     uint64_t current_time = 0;
     picoquic_stateless_packet_t* sp;
@@ -345,165 +339,159 @@ DWORD WINAPI quicwind_background_thread(LPVOID lpParam)
     size_t client_sc_nb = 0;
     picoquic_demo_stream_desc_t * client_sc = NULL;
     picoquic_quic_t* qclient = (picoquic_quic_t*)lpParam;
+    HANDLE events[2];
 
-    /* Open sockets */
-    memset(&sockets, 0, sizeof(picoquic_server_sockets_t));
-
-    _Analysis_assume_(PICOQUIC_NB_SERVER_SOCKETS == 2);
-
-    for (int i=0; ret == 0 && i<2; i++){
-        sockets.s_socket[i] = picoquic_open_client_socket(socket_family[i]);
-        if (sockets.s_socket[i] == INVALID_SOCKET) {
+    for (int i = 0; i < 2; i++) {
+        sock_ctx[i] = picoquic_create_async_socket(socket_family[i]);
+        if (sock_ctx[i] == NULL) {
             ret = -1;
+            events[i] = 0;
+        }
+        else {
+            events[i] = sock_ctx[i]->overlap.hEvent;
         }
     }
 
     /* Wait for packets */
-    while (ret == 0) {
-        unsigned char received_ecn;
+    while (ret == 0 && !quicwind_is_closing) {
+        DWORD delta_t_ms = (DWORD)((delta_t + 999) / 1000);
+        DWORD ret_event = WSAWaitForMultipleEvents(2, events, FALSE, delta_t_ms, 0);
+        current_time = picoquic_get_quic_time(qclient);
+        bytes_recv = 0;
 
-        from_length = to_length = sizeof(struct sockaddr_storage);
+        if (ret_event >= WSA_WAIT_EVENT_0) {
+            int i_sock = ret_event - WSA_WAIT_EVENT_0;
+            if (i_sock < 2) {
+                /* Received data on socket i */
+                ret = picoquic_recvmsg_async_finish(sock_ctx[i_sock]);
 
-        bytes_recv = picoquic_select(sockets.s_socket, 2, &packet_from, &from_length,
-            &packet_to, &to_length, &if_index_to, &received_ecn,
-            buffer, sizeof(buffer),
-            delta_t,
-            &current_time);
+                ResetEvent(sock_ctx[i_sock]->overlap.hEvent);
 
-        if (quicwind_is_closing) {
-            break;
-        }
+                bytes_recv = sock_ctx[i_sock]->bytes_recv;
 
-#if 0
-        if (bytes_recv != 0 && to_length != 0) {
-            /* Keeping track of the addresses and ports, as we
-             * need them to verify the migration behavior */
-            if (!address_updated) {
-                struct sockaddr_storage local_address;
-                if (picoquic_get_local_address(fd, &local_address) != 0) {
-                    memset(&local_address, 0, sizeof(struct sockaddr_storage));
+                if (ret != 0) {
+                    AppendText(_T("Cannot finish async recv\r\n"));
+                } else {
+                    AppendText(_T("Packet received\r\n"));
+                    /* Submit the packet to the client */
+                    ret = picoquic_incoming_packet(qclient, sock_ctx[i_sock]->buffer,
+                        (size_t)sock_ctx[i_sock]->bytes_recv, (struct sockaddr*)&sock_ctx[i_sock]->addr_from,
+                        (struct sockaddr*)&sock_ctx[i_sock]->addr_dest, sock_ctx[i_sock]->dest_if,
+                        sock_ctx[i_sock]->received_ecn, current_time);
+                    client_receive_loop++;
+                    delta_t = 0;
+
+                    if (ret == 0) {
+                        /* Restart waiting for packets on the socket */
+                        ret = picoquic_recvmsg_async_start(sock_ctx[i_sock]);
+                        if (ret == -1) {
+                            AppendText(_T("Cannot re-start async recv\r\n"));
+                        }
+                    }
+                    else {
+                        AppendText(_T("Packet processin error\r\n"));
+                    }
                 }
-
-                address_updated = 1;
-                picoquic_store_addr(&client_address, (struct sockaddr *)&packet_to);
-                if (client_address.ss_family == AF_INET) {
-                    ((struct sockaddr_in *)&client_address)->sin_port =
-                        ((struct sockaddr_in *)&local_address)->sin_port;
-                }
-                else {
-                    ((struct sockaddr_in6 *)&client_address)->sin6_port =
-                        ((struct sockaddr_in6 *)&local_address)->sin6_port;
-                }
-                fprintf(F_log, "Local address updated\n");
-            }
-
-
-            if (client_address.ss_family == AF_INET) {
-                ((struct sockaddr_in *)&packet_to)->sin_port =
-                    ((struct sockaddr_in *)&client_address)->sin_port;
             }
             else {
-                ((struct sockaddr_in6 *)&packet_to)->sin6_port =
-                    ((struct sockaddr_in6 *)&client_address)->sin6_port;
+                delta_t = delay_max;
             }
         }
-#endif
 
-        if (bytes_recv < 0) {
-            ret = -1;
-        }
-        else {
-            if (bytes_recv > 0) {
-                AppendText(_T("Packet received\r\n"));
-                /* Submit the packet to the client */
-                ret = picoquic_incoming_packet(qclient, buffer,
-                    (size_t)bytes_recv, (struct sockaddr*)&packet_from,
-                    (struct sockaddr*)&packet_to, if_index_to, received_ecn,
-                    current_time);
-                client_receive_loop++;
-                delta_t = 0;
-            }
-
+        if (ret == 0 && (bytes_recv == 0 || client_receive_loop > 64)) {
             /* In normal circumstances, the code waits until all packets in the receive
              * queue have been processed before sending new packets. However, if the server
              * is sending lots and lots of data this can lead to the client not getting
              * the occasion to send acknowledgements. The server will start retransmissions,
              * and may eventually drop the connection for lack of acks. So we limit
              * the number of packets that can be received before sending responses. */
+            picoquic_cnx_t * cnx_next = NULL;
 
-            if (bytes_recv == 0 || (ret == 0 && client_receive_loop > 64)) {
-                picoquic_cnx_t * cnx_next = NULL;
+            client_receive_loop = 0;
+            send_length = PICOQUIC_MAX_PACKET_SIZE;
 
-                client_receive_loop = 0;
+            while ((sp = picoquic_dequeue_stateless_packet(qclient)) != NULL) {
+                SOCKET s = (sp->addr_to.ss_family == AF_INET) ? sock_ctx[1]->fd : sock_ctx[0]->fd;
 
-                if (ret == 0) {
+                (void)picoquic_send_through_socket(s,
+                    (struct sockaddr*)&sp->addr_to,
+                    (sp->addr_to.ss_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6),
+                    (struct sockaddr*)&sp->addr_local,
+                    (sp->addr_local.ss_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6),
+                    sp->if_index_local,
+                    (const char*)sp->bytes, (int)sp->length);
 
-                    send_length = PICOQUIC_MAX_PACKET_SIZE;
+                /* TODO: log stateless packet */
 
-                    while ((sp = picoquic_dequeue_stateless_packet(qclient)) != NULL) {
-                        (void)picoquic_send_through_server_sockets(&sockets,
-                            (struct sockaddr*)&sp->addr_to,
-                            (sp->addr_to.ss_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6),
-                            (struct sockaddr*)&sp->addr_local,
-                            (sp->addr_local.ss_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6),
-                            sp->if_index_local,
-                            (const char*)sp->bytes, (int)sp->length);
+                fflush(stdout);
 
-                        /* TODO: log stateless packet */
+                picoquic_delete_stateless_packet(sp);
+            }
 
-                        fflush(stdout);
+            while (ret == 0 && !quicwind_is_closing && (cnx_next = picoquic_get_earliest_cnx_to_wake(qclient, current_time)) != NULL) {
+                int peer_addr_len = 0;
+                struct sockaddr_storage peer_addr;
+                int local_addr_len = 0;
+                struct sockaddr_storage local_addr;
 
-                        picoquic_delete_stateless_packet(sp);
-                    }
+                if (!cnx_next->context_complete) {
+                    /* Avoid processing a connection if it is not ready */
+                    break;
+                }
 
-                    while (ret == 0 && !quicwind_is_closing && (cnx_next = picoquic_get_earliest_cnx_to_wake(qclient, current_time)) != NULL) {
-                        int peer_addr_len = 0;
-                        struct sockaddr_storage peer_addr;
-                        int local_addr_len = 0;
-                        struct sockaddr_storage local_addr;
+                ret = picoquic_prepare_packet(cnx_next, current_time,
+                    send_buffer, sizeof(send_buffer), &send_length,
+                    &peer_addr, &peer_addr_len, &local_addr, &local_addr_len);
 
-                        if (!cnx_next->context_complete) {
-                            /* Avoid processing a connection if it is not ready */
-                            break;
-                        }
+                if (ret == PICOQUIC_ERROR_DISCONNECTED) {
+                    ret = 0;
 
-                        ret = picoquic_prepare_packet(cnx_next, current_time,
-                            send_buffer, sizeof(send_buffer), &send_length,
-                            &peer_addr, &peer_addr_len, &local_addr, &local_addr_len);
+                    picoquic_delete_cnx(cnx_next);
 
-                        if (ret == PICOQUIC_ERROR_DISCONNECTED) {
-                            ret = 0;
+                    fflush(stdout);
 
-                            picoquic_delete_cnx(cnx_next);
+                    break;
+                }
+                else if (ret == 0) {
 
-                            fflush(stdout);
+                    if (send_length > 0) {
+                        int i_sock = (peer_addr.ss_family == AF_INET) ? 1 : 0;
+                        SOCKET s = sock_ctx[i_sock]->fd;
 
-                            break;
-                        }
-                        else if (ret == 0) {
+                        (void)picoquic_send_through_socket(s,
+                            (struct sockaddr *)&peer_addr, peer_addr_len, (struct sockaddr *)&local_addr, local_addr_len,
+                            picoquic_get_local_if_index(cnx_next),
+                            (const char*)send_buffer, (int)send_length);
 
-                            if (send_length > 0) {
+                        AppendText(_T("Packet sent\r\n"));
 
-                                (void)picoquic_send_through_server_sockets(&sockets,
-                                    (struct sockaddr *)&peer_addr, peer_addr_len, (struct sockaddr *)&local_addr, local_addr_len,
-                                    picoquic_get_local_if_index(cnx_next),
-                                    (const char*)send_buffer, (int)send_length);
-
-                                AppendText(_T("Packet sent\r\n"));
+                        if (!sock_ctx[i_sock]->is_started) {
+                            sock_ctx[i_sock]->is_started = 1;
+                            ret = picoquic_recvmsg_async_start(sock_ctx[i_sock]);
+                            if (ret == -1) {
+                                AppendText(_T("Cannot start async recv\r\n"));
                             }
-                        }
-                        else {
-                            break;
                         }
                     }
                 }
-
-                delta_t = picoquic_get_next_wake_delay(qclient, current_time, delay_max);
+                else {
+                    break;
+                }
             }
+
+            delta_t = picoquic_get_next_wake_delay(qclient, current_time, delay_max);
         }
     }
-
-    picoquic_close_server_sockets(&sockets);
+    
+    for (int i = 0; i < 2; i++) {
+        if (sock_ctx[i] != NULL){
+            picoquic_delete_async_socket(sock_ctx[i]);
+            sock_ctx[i] = NULL;
+        }
+    }
+    if (!quicwind_is_closing) {
+        AppendText(_T("Error: Network thread exit.\r\n"));
+    }
 
     return ret;
 }

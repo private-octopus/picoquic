@@ -284,6 +284,7 @@ INT_PTR CALLBACK StartConnection(HWND hDlg, UINT message, WPARAM wParam, LPARAM 
     switch (message)
     {
     case WM_INITDIALOG: {
+        (void)SetDlgItemTextA(hDlg, IDC_SERVER_NAME, "test.privateoctopus.com");
         (void)SetDlgItemTextA(hDlg, IDC_PORT_NUMBER, "4433");
         return (INT_PTR)TRUE;
     }

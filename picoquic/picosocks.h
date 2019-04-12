@@ -109,21 +109,26 @@
 #ifdef _WINDOWS
 typedef struct st_picoquic_recvmsg_async_ctx_t {
     WSAOVERLAPPED overlap;
-    SOCKET_TYPE fd;
-    WSAEVENT hEvent;
+    WSABUF dataBuf;
     WSAMSG msg;
+    char cmsg_buffer[1024];
+    uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
     struct sockaddr_storage addr_from;
-    socklen_t from_length;
     struct sockaddr_storage* addr_dest;
+    socklen_t from_length;
     socklen_t dest_length;
+    SOCKET_TYPE fd;
     unsigned long dest_if;
     unsigned char received_ecn;
     int bytes_recv;
-    uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
-    char cmsg_buffer[1024];
+    int is_started;
 } picoquic_recvmsg_async_ctx_t;
 
-int picoquic_recvmsg_async(picoquic_recvmsg_async_ctx_t * ctx);
+picoquic_recvmsg_async_ctx_t * picoquic_create_async_socket(int af);
+void picoquic_delete_async_socket(picoquic_recvmsg_async_ctx_t * ctx);
+int picoquic_recvmsg_async_start(picoquic_recvmsg_async_ctx_t * ctx); 
+int picoquic_recvmsg_async_finish(picoquic_recvmsg_async_ctx_t * ctx);
+
 #endif
 
 #define PICOQUIC_NB_SERVER_SOCKETS 2
@@ -152,6 +157,12 @@ int picoquic_select(SOCKET_TYPE* sockets, int nb_sockets,
     uint8_t* buffer, int buffer_max,
     int64_t delta_t,
     uint64_t* current_time);
+
+int picoquic_send_through_socket(
+    SOCKET fd,
+    struct sockaddr* addr_dest, socklen_t dest_length,
+    struct sockaddr* addr_from, socklen_t from_length, unsigned long from_if,
+    const char* bytes, int length);
 
 int picoquic_send_through_server_sockets(
     picoquic_server_sockets_t* sockets,
