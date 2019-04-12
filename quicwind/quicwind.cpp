@@ -197,26 +197,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             }
         }
         break;
-#if 0
-    case WM_PAINT:
-        {
-            PAINTSTRUCT ps;
-            HDC hdc = BeginPaint(hWnd, &ps);
-            TCHAR greeting[] = _T("Hello, Windows desktop!");
 
-            // TODO: Add any drawing code that uses hdc here...
-            // Here your application is laid out.
-            // For this introduction, we just print out "Hello, Windows desktop!"
-            // in the top left corner.
-            TextOut(hdc,
-                5, 5,
-                greeting, (int) _tcslen(greeting));
-            // End application-specific layout section.
-
-            EndPaint(hWnd, &ps);
-        }
-        break;
-#endif
     case WM_SIZE:
         // Make the edit control the size of the window's client area. 
 
@@ -284,6 +265,14 @@ INT_PTR CALLBACK StartConnection(HWND hDlg, UINT message, WPARAM wParam, LPARAM 
     switch (message)
     {
     case WM_INITDIALOG: {
+        if (qclient == NULL) {
+            qclient = quicwind_create_context(NULL, 1500, NULL, 8);
+
+            if (qclient != NULL) {
+                qclient_thread = CreateThread(NULL, 0, quicwind_background_thread, (void*)qclient, 0, &dw_qclient_thread_id);
+            }
+        }
+
         (void)SetDlgItemTextA(hDlg, IDC_SERVER_NAME, "test.privateoctopus.com");
         (void)SetDlgItemTextA(hDlg, IDC_PORT_NUMBER, "4433");
         return (INT_PTR)TRUE;
@@ -305,29 +294,18 @@ INT_PTR CALLBACK StartConnection(HWND hDlg, UINT message, WPARAM wParam, LPARAM 
                 int alpn_len;
                 int sni_len;
 
-                if (qclient == NULL) {
-                    qclient = quicwind_create_context(NULL, 1500, NULL, 8);
-
-                    if (qclient != NULL) {
-                        qclient_thread = CreateThread(NULL, 0, quicwind_background_thread, (void*)qclient, 0, &dw_qclient_thread_id);
-                    }
-                }
-
                 name_len = GetDlgItemTextA(hDlg, IDC_SERVER_NAME, name, (int)sizeof(name));
                 port_len = GetDlgItemTextA(hDlg, IDC_PORT_NUMBER, port, (int)sizeof(port));
                 doc_len = GetDlgItemTextA(hDlg, IDC_DOC1, doc, (int)sizeof(doc));
                 alpn_len = GetDlgItemTextA(hDlg, IDC_ALPN, alpn, (int)sizeof(alpn));
                 sni_len = GetDlgItemTextA(hDlg, IDC_SNI, sni, (int)sizeof(sni));
 
-                if (quicwind_start_connection(qclient,
+                if (quicwind_add_work_item(quicwind_work_item_connection, 0,
                     (name_len > 0) ? name : NULL, (port_len > 0) ? port : NULL,
                     (doc_len > 0) ? doc : NULL, (alpn_len > 0) ? alpn : NULL,
                     (sni_len > 0) ? sni : NULL) != 0) {
                     MessageBox(hDlg, L"Could not create the connection",
                         L"Create Connection error", MB_OK);
-                }
-                else {
-                    AppendText(_T("Created a connection\r\n"));
                 }
             }
 
@@ -368,13 +346,13 @@ INT_PTR CALLBACK LoadFile(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
             // Get the doc
             int doc_len = GetDlgItemTextA(hDlg, IDC_DOC2, doc, (int)sizeof(doc));
 
-            if (quicwind_load_file(qclient, sel_cid, doc) != 0) {
+            if (quicwind_add_work_item(quicwind_work_item_load_file, sel_cid, NULL, NULL, doc, NULL, NULL) != 0) {
                 MessageBox(hDlg, L"Something happened, could not request the document",
-                    L"Close Connection error", MB_OK);
+                    L"Load file error", MB_OK);
             }
-            else {
-                EndDialog(hDlg, LOWORD(wParam));
-            }
+            
+            EndDialog(hDlg, LOWORD(wParam));
+
             return (INT_PTR)TRUE;
 
         } else if (LOWORD(wParam) == IDCANCEL){
@@ -406,23 +384,6 @@ INT_PTR CALLBACK CloseConnection(HWND hDlg, UINT message, WPARAM wParam, LPARAM 
 
     case WM_COMMAND: 
         switch (LOWORD(wParam)) {
-#if 0
-        case IDC_CNX_LIST1:
-            switch (HIWORD(wParam))
-            {
-            case LBN_SELCHANGE:
-            {
-                HWND hwndList = GetDlgItem(hDlg, IDC_CNX_LIST1);
-
-                // Get selected index.
-                int lbItem = (int)SendMessage(hwndList, LB_GETCURSEL, 0, 0);
-
-                // Get item data.
-                cnx_rank = (int)SendMessage(hwndList, LB_GETITEMDATA, lbItem, 0);
-            }
-            }
-            break;
-#endif
         case IDOK:
         {
             HWND hwndList = GetDlgItem(hDlg, IDC_CNX_LIST1);
@@ -434,14 +395,13 @@ INT_PTR CALLBACK CloseConnection(HWND hDlg, UINT message, WPARAM wParam, LPARAM 
             // Get item data.
             int sel_cid = (int)SendMessage(hwndList, LB_GETITEMDATA, lbItem, 0);
 
-            if (quicwind_disconnect(qclient, sel_cid) != 0) {
+            if (quicwind_add_work_item(quicwind_work_item_disconnect, sel_cid, NULL, NULL, NULL, NULL, NULL) != 0) {
                 MessageBox(hDlg, L"Something happened, could not close",
                     L"Close Connection error", MB_OK);
             }
-            else {
-                AppendText(_T("Connection closed\r\n"));
-                EndDialog(hDlg, LOWORD(wParam));
-            }
+            
+            EndDialog(hDlg, LOWORD(wParam));
+
             return (INT_PTR)TRUE;
         }
         case IDCANCEL:

@@ -1523,10 +1523,6 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         picoquic_register_path(cnx, cnx->path[0]);
 
         picoquic_open_cc_dump(cnx);
-
-        if (!cnx->client_mode) {
-            cnx->context_complete = 1;
-        }
     }
 
     return cnx;
@@ -1559,8 +1555,6 @@ picoquic_cnx_t* picoquic_create_client_cnx(picoquic_quic_t* quic,
 int picoquic_start_client_cnx(picoquic_cnx_t * cnx)
 {
     int ret = picoquic_initialize_tls_stream(cnx);
-
-    cnx->context_complete = 1;
 
     picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
 

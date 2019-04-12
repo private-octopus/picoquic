@@ -650,7 +650,6 @@ typedef struct st_picoquic_cnx_t {
     int version_index;
 
     /* Series of flags showing the state or choices of the connection */
-    unsigned int context_complete : 1; /* Finished setting up the connection context */
     unsigned int is_0RTT_accepted : 1; /* whether 0-RTT is accepted */
     unsigned int remote_parameters_received : 1; /* whether remote parameters where received */
     unsigned int client_mode : 1; /* Is this connection the client side? */
