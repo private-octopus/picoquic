@@ -159,7 +159,7 @@ int picoquic_select(SOCKET_TYPE* sockets, int nb_sockets,
     uint64_t* current_time);
 
 int picoquic_send_through_socket(
-    SOCKET fd,
+    SOCKET_TYPE fd,
     struct sockaddr* addr_dest, socklen_t dest_length,
     struct sockaddr* addr_from, socklen_t from_length, unsigned long from_if,
     const char* bytes, int length);
