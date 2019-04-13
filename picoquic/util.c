@@ -94,27 +94,26 @@ static int debug_suspended = 0;
 
 void debug_printf(const char* fmt, ...)
 {
-    if (debug_suspended == 0) {
+    if (debug_suspended == 0 && debug_out != NULL) {
         va_list args;
         va_start(args, fmt);
-        vfprintf(debug_out ? debug_out : stderr, fmt, args);
+        vfprintf(debug_out, fmt, args);
         va_end(args);
     }
 }
 
 void debug_dump(const void * x, int len)
 {
-    if (debug_suspended == 0) {
-        FILE * F = debug_out ? debug_out : stderr;
+    if (debug_suspended == 0 && debug_out != NULL) {
         uint8_t * bytes = (uint8_t *)x;
 
         for (int i = 0; i < len;) {
-            fprintf(F, "%04x:  ", (int)i);
+            fprintf(debug_out, "%04x:  ", (int)i);
 
             for (int j = 0; j < 16 && i < len; j++, i++) {
-                fprintf(F, "%02x ", bytes[i]);
+                fprintf(debug_out, "%02x ", bytes[i]);
             }
-            fprintf(F, "\n");
+            fprintf(debug_out, "\n");
         }
     }
 }

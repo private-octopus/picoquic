@@ -101,6 +101,8 @@ extern "C" {
 #define PICOQUIC_RESET_SECRET_SIZE 16
 #define PICOQUIC_RESET_PACKET_MIN_SIZE (1 + 20 + 16)
 
+#define PICOQUIC_LOG_PACKET_MAX_SEQUENCE 100
+
 
 /*
 * Connection states, useful to expose the state to the application.
