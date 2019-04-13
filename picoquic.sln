@@ -27,6 +27,11 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "picoquic_t", "picoquic_t\pi
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{A71B5718-FDFC-4047-A76C-15EA7A78ED6B}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "quicwind", "quicwind\quicwind.vcxproj", "{7C931959-3DBA-4440-A215-B085036F3EE1}"
+	ProjectSection(ProjectDependencies) = postProject
+		{63E1E6B7-DB5F-4EDC-8AC8-7E9F5990D11F} = {63E1E6B7-DB5F-4EDC-8AC8-7E9F5990D11F}
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -75,6 +80,14 @@ Global
 		{4898D6E0-6FC5-4375-99F5-4C69BB20CE94}.Release|x64.Build.0 = Release|x64
 		{4898D6E0-6FC5-4375-99F5-4C69BB20CE94}.Release|x86.ActiveCfg = Release|Win32
 		{4898D6E0-6FC5-4375-99F5-4C69BB20CE94}.Release|x86.Build.0 = Release|Win32
+		{7C931959-3DBA-4440-A215-B085036F3EE1}.Debug|x64.ActiveCfg = Debug|x64
+		{7C931959-3DBA-4440-A215-B085036F3EE1}.Debug|x64.Build.0 = Debug|x64
+		{7C931959-3DBA-4440-A215-B085036F3EE1}.Debug|x86.ActiveCfg = Debug|Win32
+		{7C931959-3DBA-4440-A215-B085036F3EE1}.Debug|x86.Build.0 = Debug|Win32
+		{7C931959-3DBA-4440-A215-B085036F3EE1}.Release|x64.ActiveCfg = Release|x64
+		{7C931959-3DBA-4440-A215-B085036F3EE1}.Release|x64.Build.0 = Release|x64
+		{7C931959-3DBA-4440-A215-B085036F3EE1}.Release|x86.ActiveCfg = Release|Win32
+		{7C931959-3DBA-4440-A215-B085036F3EE1}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -47,7 +47,7 @@ static picoquic_demo_client_stream_ctx_t* picoquic_demo_client_find_stream(
  * but the client implementation is barebone. 
  */
 
-static int h3zero_client_create_stream_request(
+int h3zero_client_create_stream_request(
     uint8_t * buffer, size_t max_bytes, uint8_t const * path, size_t path_len, size_t * consumed, const char * host)
 {
     int ret = 0;
@@ -87,7 +87,7 @@ static int h3zero_client_create_stream_request(
     return ret;
 }
 
-static int h3zero_client_init(picoquic_cnx_t* cnx)
+int h3zero_client_init(picoquic_cnx_t* cnx)
 {
     uint8_t decoder_stream_head = 0x03;
     uint8_t encoder_stream_head = 0x02;
@@ -120,7 +120,7 @@ static int h3zero_client_init(picoquic_cnx_t* cnx)
  * would simply be "GET /document.html\n\r\n\r".
  */
 
-static int h09_demo_client_prepare_stream_open_command(
+int h09_demo_client_prepare_stream_open_command(
     uint8_t * command, size_t max_size, uint8_t const* path, size_t path_len, size_t * consumed)
 {
     if (path_len + 6 >= max_size) {
@@ -395,10 +395,12 @@ picoquic_alpn_enum picoquic_parse_alpn(char const * alpn)
 {
     picoquic_alpn_enum code = picoquic_alpn_undef;
 
-    for (size_t i = 0; i < nb_alpn_list; i++) {
-        if (strcmp(alpn_list[i].alpn_val, alpn) == 0) {
-            code = alpn_list[i].alpn_code;
-            break;
+    if (alpn != NULL) {
+        for (size_t i = 0; i < nb_alpn_list; i++) {
+            if (strcmp(alpn_list[i].alpn_val, alpn) == 0) {
+                code = alpn_list[i].alpn_code;
+                break;
+            }
         }
     }
 	
@@ -521,7 +523,7 @@ char * demo_client_parse_stream_format(char * text, int default_format, int * is
 char * demo_client_parse_stream_path(char * text, 
     char ** path, char ** f_name)
 {
-    int l_path = 0;
+    size_t l_path = 0;
     int is_complete = 0;
     int need_dup = 0;
 
