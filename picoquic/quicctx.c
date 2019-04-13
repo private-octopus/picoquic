@@ -838,7 +838,6 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
     picoquic_path_t * path_x = cnx->path[path_index];
     picoquic_packet_t* p = NULL;
 
-    DBG_PRINTF("delete path[%d] (%x)\n", path_index, path_x);
     if (cnx->quic->F_log != NULL) {
         fflush(cnx->quic->F_log);
     }
