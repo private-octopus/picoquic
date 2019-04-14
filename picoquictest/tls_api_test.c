@@ -5385,6 +5385,7 @@ int padding_test()
 #else
 #define PACKET_TRACE_TEST_REF "picoquictest/packet_trace_ref.txt"
 #endif
+#define PACKET_TRACE_CSV "packet_trace.csv"
 
 int packet_trace_test()
 {
@@ -5427,9 +5428,9 @@ int packet_trace_test()
                 }
             }
             if (ret == 0){
-                memcpy(&trace_file_name[2 * test_ctx->cnx_server->initial_cnxid.id_len], ".csv", 5);
-                DBG_PRINTF("File name: %s\n", trace_file_name);
+                memcpy(&trace_file_name[2 * test_ctx->cnx_server->initial_cnxid.id_len], "-log.bin", 9);
             }
+
         }
     }
 
@@ -5439,6 +5440,11 @@ int packet_trace_test()
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;
+    }
+
+    /* Create a CSV file from the .bin log file */
+    if (ret == 0) {
+        ret = picoquic_cc_log_file_to_csv(trace_file_name, PACKET_TRACE_CSV);
     }
 
     /* compare the log file to the expected value */
@@ -5452,7 +5458,7 @@ int packet_trace_test()
             DBG_PRINTF("%s", "Cannot set the packet trace test ref file name.\n");
         }
         else {
-            ret = picoquic_test_compare_files(trace_file_name, packet_trace_test_ref);
+            ret = picoquic_test_compare_files(PACKET_TRACE_CSV, packet_trace_test_ref);
         }
     }
 

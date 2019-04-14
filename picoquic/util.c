@@ -424,3 +424,24 @@ int picoquic_get_input_path(char * target_file_path, size_t file_path_max, const
 
     return ret;
 }
+
+/* Safely open files in a portable way */
+FILE * picoquic_file_open(char const * file_name, char const * flags)
+{
+    FILE * F;
+
+#ifdef _WINDOWS
+    errno_t err = fopen_s(&F, file_name, flags);
+    if (err != 0 && F != NULL) {
+            fclose(F);
+            F = NULL;
+        }
+#else
+    F = fopen(file_name, flags);
+    if (F == NULL) {
+        ret = -1;
+    }
+#endif
+
+    return F;
+}

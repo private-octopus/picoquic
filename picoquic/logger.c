@@ -1846,7 +1846,7 @@ void picoquic_open_cc_dump(picoquic_cnx_t * cnx)
         DBG_PRINTF("%s", "CC LOG File is already open!\n");
     } else if (cnx->quic->cc_log_dir != NULL) {
         char cc_log_file_name[512];
-        char const * suffix = ".csv";
+        char const * suffix = "-log.bin";
         const size_t suffix_len = strlen(suffix);
         size_t folder_length = strlen(cnx->quic->cc_log_dir);
 
@@ -1887,12 +1887,12 @@ void picoquic_open_cc_dump(picoquic_cnx_t * cnx)
         if (ret == 0) {
 
 #ifdef _WINDOWS
-            errno_t err = fopen_s(&cnx->cc_log, cc_log_file_name, "w");
+            errno_t err = fopen_s(&cnx->cc_log, cc_log_file_name, "wb");
             if (err != 0 || cnx->cc_log == NULL) {
                 ret = -1;
             }
 #else
-            cnx->cc_log = fopen(cc_log_file_name, "w");
+            cnx->cc_log = fopen(cc_log_file_name, "wb");
             if (cnx->cc_log == NULL) {
                 ret = -1;
             }
@@ -1900,30 +1900,19 @@ void picoquic_open_cc_dump(picoquic_cnx_t * cnx)
             if (ret != 0) {
                 DBG_PRINTF("Cannot open file %s for write.\n", cc_log_file_name);
             } else {
-                /* TODO: maintain the list of headers as debugging data is added */
-                ret |= fprintf(cnx->cc_log, "time, ") <= 0;
-                ret |= fprintf(cnx->cc_log, "sequence, ") <= 0;
-                ret |= fprintf(cnx->cc_log, "highest ack, ") <= 0;
-                ret |= fprintf(cnx->cc_log, "high ack time, ") <= 0;
-                ret |= fprintf(cnx->cc_log, "last time ack, ") <= 0;
-                ret |= fprintf(cnx->cc_log, "cwin, ") <= 0;
-                ret |= fprintf(cnx->cc_log, "SRTT, ") <= 0;
-                ret |= fprintf(cnx->cc_log, "RTT min, ") <= 0;
-                ret |= fprintf(cnx->cc_log, "Send MTU, ") <= 0;
-                ret |= fprintf(cnx->cc_log, "pacing packet time(us), ") <= 0;
-                ret |= fprintf(cnx->cc_log, "nb retrans, ") <= 0;
-                ret |= fprintf(cnx->cc_log, "nb spurious, ") <= 0;
-                ret |= fprintf(cnx->cc_log, "cwin blkd, ") <= 0;
-                ret |= fprintf(cnx->cc_log, "flow blkd, ") <= 0;
-                ret |= fprintf(cnx->cc_log, "stream blkd, ") <= 0;
+                /* Write a header text with three words: magic number, number of integers, and current date  */
+                uint32_t header[3];
+                
+                header[0] = PICOQUIC_LOG_CC_MAGIC;
+                header[1] = PICOQUIC_LOG_CC_NB;
+                header[2] = (uint32_t)(picoquic_current_time() / 1000000ll);
 
-                ret |= fprintf(cnx->cc_log, "\n") <= 0;
-
-                if (ret != 0) {
+                if (fwrite(header, 3 * sizeof(uint32_t), 1, cnx->cc_log) <= 0) {
                     DBG_PRINTF("Cannot write header for file %s.\n", cc_log_file_name);
-                    picoquic_close_cc_dump(cnx);
+                    fclose(cnx->cc_log);
+                    cnx->cc_log = NULL;
                 }
-            }
+            };
         }
     }
 }
@@ -1945,11 +1934,12 @@ void picoquic_close_cc_dump(picoquic_cnx_t * cnx)
 void picoquic_cc_dump(picoquic_cnx_t * cnx, uint64_t current_time)
 {
     int ret = 0;
+    uint32_t buffer[PICOQUIC_LOG_CC_NB];
 
     if (cnx->cc_log == NULL) {
         return;
     }
-
+#if 0
     /* TODO: complete list of tracked data as needed for debugging */
     ret |= fprintf(cnx->cc_log, "%llu, ", (unsigned long long)current_time) <= 0;
     ret |= fprintf(cnx->cc_log, "%llu, ", (unsigned long long)cnx->pkt_ctx[picoquic_packet_context_application].send_sequence) <= 0;
@@ -1967,6 +1957,25 @@ void picoquic_cc_dump(picoquic_cnx_t * cnx, uint64_t current_time)
     ret |= fprintf(cnx->cc_log, "%d, ", cnx->flow_blocked) <= 0;
     ret |= fprintf(cnx->cc_log, "%d, ", cnx->stream_blocked) <= 0;
     ret |= fprintf(cnx->cc_log, "\n") <= 0;
+#else
+    buffer[0] = (uint32_t)(current_time - cnx->start_time);
+    buffer[1] = (uint32_t)cnx->pkt_ctx[picoquic_packet_context_application].send_sequence;
+    buffer[2] = (uint32_t)cnx->pkt_ctx[picoquic_packet_context_application].highest_acknowledged;
+    buffer[3] = (uint32_t)(cnx->pkt_ctx[picoquic_packet_context_application].highest_acknowledged_time - cnx->start_time);
+    buffer[4] = (uint32_t)(cnx->pkt_ctx[picoquic_packet_context_application].latest_time_acknowledged - cnx->start_time);
+    buffer[5] = (uint32_t)cnx->path[0]->cwin;
+    buffer[6] = (uint32_t)cnx->path[0]->smoothed_rtt;
+    buffer[7] = (uint32_t)cnx->path[0]->rtt_min;
+    buffer[8] = (uint32_t)cnx->path[0]->send_mtu;
+    buffer[9] = (uint32_t)cnx->path[0]->pacing_packet_time_microsec;
+    buffer[10] = (uint32_t)cnx->nb_retransmission_total;
+    buffer[11] = (uint32_t)cnx->nb_spurious;
+    buffer[12] = (uint32_t)cnx->cwin_blocked;
+    buffer[13] = (uint32_t)cnx->flow_blocked;
+    buffer[14] = (uint32_t)cnx->stream_blocked;
+
+    (void)fwrite(buffer, PICOQUIC_LOG_CC_NB*sizeof(uint32_t), 1, cnx->cc_log);
+#endif
     cnx->cwin_blocked = 0;
     cnx->flow_blocked = 0;
     cnx->stream_blocked = 0;
@@ -1974,4 +1983,128 @@ void picoquic_cc_dump(picoquic_cnx_t * cnx, uint64_t current_time)
     if (ret != 0) {
         picoquic_close_cc_dump(cnx);
     }
+}
+
+#define PICOQUIC_BYTE_SWAP_32(x) ((((uint32_t)x)>>24)|(((x)>>8)&0x0000FF00)|(((x)<<8)&0x00FF0000)|(((uint32_t)x)<<24))
+
+/* Open the bin file for reading */
+FILE * picoquic_open_cc_log_file_for_read(char const * bin_cc_log_name, int * is_wrong_endian, int * nb_numbers_in_line, uint32_t * log_time)
+{
+    int ret = 0;
+    FILE * bin_log = picoquic_file_open(bin_cc_log_name, "rb");
+
+    *nb_numbers_in_line = 0;
+    *is_wrong_endian = 0;
+    *log_time = 0;
+
+    if (ret == 0) {
+        uint32_t header[3];
+
+        if (fread(header, 3 * sizeof(uint32_t), 1, bin_log) <= 0) {
+            ret = -1;
+            DBG_PRINTF("Cannot read header for file %s.\n", bin_cc_log_name);
+        }
+        else if (header[0] == PICOQUIC_LOG_CC_MAGIC) {
+            *nb_numbers_in_line = header[1];
+            *log_time = header[2];
+        }
+        else if (header[0] == PICOQUIC_BYTE_SWAP_32(PICOQUIC_LOG_CC_MAGIC)) {
+            *is_wrong_endian = 1;
+            *nb_numbers_in_line = PICOQUIC_BYTE_SWAP_32(header[1]);
+            *log_time = PICOQUIC_BYTE_SWAP_32(header[2]);
+        }
+        else {
+            ret = -1;
+            DBG_PRINTF("Header for file %s does not start with magic number.\n", bin_cc_log_name);
+        }
+
+        if (ret != 0) {
+            fclose(bin_log);
+            bin_log = NULL;
+        }
+    }
+
+    return (bin_log);
+}
+
+int picoquic_cc_log_file_to_csv(char const * bin_cc_log_name, char const * csv_cc_log_name)
+{
+    /* Open the bin file for reading, the csv file for writing */
+    int ret = 0;
+    int is_wrong_endian;
+    int nb_numbers_in_line;
+    uint32_t log_time;
+    FILE * bin_log = picoquic_open_cc_log_file_for_read(bin_cc_log_name, &is_wrong_endian, &nb_numbers_in_line, &log_time);
+    FILE * csv_log = picoquic_file_open(csv_cc_log_name, "w");
+
+    if (bin_log == NULL || csv_log == NULL) {
+        ret = -1;
+    } else {
+        uint32_t log_line[512];
+        int n = 0;
+        int nl = 0;
+
+        /* TODO: maintain the list of headers as debugging data is added */
+        ret |= fprintf(csv_log, "time, ") <= 0;
+        ret |= fprintf(csv_log, "sequence, ") <= 0;
+        ret |= fprintf(csv_log, "highest ack, ") <= 0;
+        ret |= fprintf(csv_log, "high ack time, ") <= 0;
+        ret |= fprintf(csv_log, "last time ack, ") <= 0;
+        ret |= fprintf(csv_log, "cwin, ") <= 0;
+        ret |= fprintf(csv_log, "SRTT, ") <= 0;
+        ret |= fprintf(csv_log, "RTT min, ") <= 0;
+        ret |= fprintf(csv_log, "Send MTU, ") <= 0;
+        ret |= fprintf(csv_log, "pacing packet time(us), ") <= 0;
+        ret |= fprintf(csv_log, "nb retrans, ") <= 0;
+        ret |= fprintf(csv_log, "nb spurious, ") <= 0;
+        ret |= fprintf(csv_log, "cwin blkd, ") <= 0;
+        ret |= fprintf(csv_log, "flow blkd, ") <= 0;
+        ret |= fprintf(csv_log, "stream blkd, ") <= 0;
+        ret |= fprintf(csv_log, "\n") <= 0;
+
+        while (ret == 0 && (n = (int)fread(log_line, sizeof(uint32_t), 512, bin_log)) > 0) {
+            if (is_wrong_endian) {
+                for (int i = 0; i < n; i++) {
+                    log_line[i] = PICOQUIC_BYTE_SWAP_32(log_line[i]);
+                }
+            }
+
+            for (int i = 0; i < n; i++) {
+                if (fprintf(csv_log, "%d, ", log_line[i]) <= 0) {
+                    ret = -1;
+                    break;
+                }
+                nl++;
+                if (nl >= nb_numbers_in_line) {
+                    if (fprintf(csv_log, "\n") <= 0) {
+                        ret = -1;
+                        break;
+                    }
+                    nl = 0;
+                }
+            }
+        }
+
+        if (n < 0) {
+            DBG_PRINTF("Error reading data from file %s.\n", bin_cc_log_name);
+            ret = -1;
+        }
+
+        if (ret == 0 && nl > 0) {
+            if (fprintf(csv_log, "\n") <= 0) {
+                DBG_PRINTF("Error writing data on file %s.\n", csv_cc_log_name);
+                ret = -1;
+            }
+        }
+    }
+
+    if (csv_log != NULL) {
+        fclose(csv_log);
+    }
+
+    if (bin_log != NULL) {
+        fclose(bin_log);
+    }
+
+    return ret;
 }
