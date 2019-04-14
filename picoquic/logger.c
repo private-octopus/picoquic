@@ -1985,7 +1985,7 @@ void picoquic_cc_dump(picoquic_cnx_t * cnx, uint64_t current_time)
     }
 }
 
-#define PICOQUIC_BYTE_SWAP_32(x) ((((uint32_t)x)>>24)|(((x)>>8)&0x0000FF00)|(((x)<<8)&0x00FF0000)|(((uint32_t)x)<<24))
+#define PICOQUIC_BYTE_SWAP_32(x) ((((uint32_t)x)>>24)|((((uint32_t)x)>>8)&0x0000FF00)|((((uint32_t)x)<<8)&0x00FF0000)|(((uint32_t)x)<<24))
 
 /* Open the bin file for reading */
 FILE * picoquic_open_cc_log_file_for_read(char const * bin_cc_log_name, int * is_wrong_endian, int * nb_numbers_in_line, uint32_t * log_time)

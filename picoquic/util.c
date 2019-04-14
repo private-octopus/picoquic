@@ -438,9 +438,6 @@ FILE * picoquic_file_open(char const * file_name, char const * flags)
         }
 #else
     F = fopen(file_name, flags);
-    if (F == NULL) {
-        ret = -1;
-    }
 #endif
 
     return F;
