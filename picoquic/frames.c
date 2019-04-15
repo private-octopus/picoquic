@@ -1817,7 +1817,7 @@ static picoquic_packet_t* picoquic_update_rtt(picoquic_cnx_t* cnx, uint64_t larg
     picoquic_packet_t* packet = pkt_ctx->retransmit_newest;
 
     /* Check whether this is a new acknowledgement */
-    if (largest > pkt_ctx->highest_acknowledged || pkt_ctx->first_sack_item.start_of_sack_range == (uint64_t)((int64_t)-1)) {
+    if (largest > pkt_ctx->highest_acknowledged || pkt_ctx->highest_acknowledged == (uint64_t)((int64_t)-1)) {
         pkt_ctx->highest_acknowledged = largest;
         pkt_ctx->highest_acknowledged_time = current_time;
         pkt_ctx->ack_of_ack_requested = 0;
