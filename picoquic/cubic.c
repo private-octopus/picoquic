@@ -26,7 +26,9 @@
 typedef enum {
     picoquic_cubic_alg_slow_start = 0,
     picoquic_cubic_alg_recovery,
+#if 0
     picoquic_cubic_alg_tcp_friendly,
+#endif
     picoquic_cubic_alg_congestion_avoidance
 } picoquic_cubic_alg_state_t;
 
@@ -40,6 +42,7 @@ typedef struct st_picoquic_cubic_state_t {
     double W_last_max;
     double C;
     double beta;
+    double W_reno;
     uint64_t ssthresh;
 
     uint64_t residual_ack;
@@ -63,6 +66,7 @@ void picoquic_cubic_init(picoquic_path_t* path_x)
         cubic_state->C = 0.4;
         cubic_state->beta = 7.0 / 8.0;
         cubic_state->start_of_epoch = 0;
+        cubic_state->W_reno = PICOQUIC_CWIN_INITIAL;
 
         path_x->cwin = PICOQUIC_CWIN_INITIAL;
     }
@@ -71,14 +75,12 @@ void picoquic_cubic_init(picoquic_path_t* path_x)
 double picoquic_cubic_root(double x)
 {
     /* First find an approximation */
-    int n = 0;
     double v = 1;
     double y = 1.0;
     double y2;
     double y3;
 
     while (v < x) {
-        n++;
         v *= 8;
         y *= 2;
     }
@@ -99,7 +101,7 @@ static void picoquic_cubic_enter_avoidance(
     uint64_t current_time)
 {
     cubic_state->K = picoquic_cubic_root(cubic_state->W_max*(1.0 - cubic_state->beta) / cubic_state->C);
-    cubic_state->alg_state = picoquic_cubic_alg_tcp_friendly;
+    cubic_state->alg_state = picoquic_cubic_alg_congestion_avoidance;
     cubic_state->start_of_epoch = current_time;
 }
 
@@ -131,6 +133,7 @@ static void picoquic_cubic_enter_recovery(picoquic_path_t* path_x,
         cubic_state->start_of_epoch = current_time;
         cubic_state->alg_state = picoquic_cubic_alg_slow_start;
     } else {
+        cubic_state->W_reno = ((double)path_x->cwin)/2.0;
         path_x->cwin = cubic_state->ssthresh;
         /* Enter congestion avoidance immediately */
         picoquic_cubic_enter_avoidance(cubic_state, current_time);
@@ -163,21 +166,6 @@ static double picoquic_cubic_W_cubic(
     double W_cubic = (cubic_state->C * (delta_t_sec* delta_t_sec * delta_t_sec)) + cubic_state->W_max;
 
     return W_cubic;
-}
-
-/* W_est(t) = W_max * beta_cubic +
-        [3 * (1 - beta_cubic) / (1 + beta_cubic)] * (t / RTT); */
-static double picoquic_cubic_W_est(picoquic_path_t* path_x,
-    picoquic_cubic_state_t* cubic_state,
-    uint64_t current_time)
-{
-    double delta_t = (double)(current_time - cubic_state->start_of_epoch);
-    double delta_over_rtt = delta_t / ((double)path_x->smoothed_rtt);
-    double W_est =
-         cubic_state->beta * ((double)cubic_state->W_max) +
-         delta_over_rtt * 3.0 * (1.0 - cubic_state->beta) / (1.0 + cubic_state->beta);
-
-    return W_est;
 }
 
 /*
@@ -214,6 +202,7 @@ void picoquic_cubic_notify(picoquic_path_t* path_x,
                 }
                 /* if cnx->cwin exceeds SSTHRESH, exit and go to CA */
                 if (path_x->cwin >= cubic_state->ssthresh) {
+                    cubic_state->W_reno = ((double)path_x->cwin)/2.0;
                     picoquic_cubic_enter_avoidance(cubic_state, current_time);
                 }
                 break;
@@ -261,6 +250,7 @@ void picoquic_cubic_notify(picoquic_path_t* path_x,
                         cubic_state->ssthresh = path_x->cwin;
                         cubic_state->W_max = (double)path_x->cwin / (double)path_x->send_mtu;
                         cubic_state->W_last_max = cubic_state->W_max;
+                        cubic_state->W_reno = ((double)path_x->cwin)/2.0;
                         picoquic_cubic_enter_avoidance(cubic_state, current_time);
                     }
                 }
@@ -307,44 +297,24 @@ void picoquic_cubic_notify(picoquic_path_t* path_x,
                 }
             } 
             break;
-        case picoquic_cubic_alg_tcp_friendly:
-            switch (notification) {
-            case picoquic_congestion_notification_acknowledgement: {
-                /* Compute the cubic formula */
-                double W_cubic = picoquic_cubic_W_cubic(cubic_state, current_time);
-                /* Compute the w_est formula */
-                double W_est = picoquic_cubic_W_est(path_x, cubic_state, current_time);
-                /* Pick the largest */
-                if (W_cubic > W_est) {
-                    /* if cubic is larger, switch to cubic mode */
-                    cubic_state->alg_state = picoquic_cubic_alg_congestion_avoidance;
-                    path_x->cwin = (uint64_t)(W_cubic * (double)path_x->send_mtu);
-                }
-                else {
-                    path_x->cwin = (uint64_t)(W_est * (double)path_x->send_mtu);
-                }
-                break;
-            }
-            case picoquic_congestion_notification_ecn_ec:
-            case picoquic_congestion_notification_repeat:
-            case picoquic_congestion_notification_timeout:
-                if (current_time - cubic_state->start_of_epoch > path_x->smoothed_rtt) {
-                    /* re-enter recovery */
-                    picoquic_cubic_enter_recovery(path_x, notification, cubic_state, current_time);
-                }
-                break;
-            case picoquic_congestion_notification_spurious_repeat:
-            case picoquic_congestion_notification_rtt_measurement:
-            default:
-                /* ignore */
-                break;
-            }
-            break;
+
         case picoquic_cubic_alg_congestion_avoidance:
             switch (notification) {
             case picoquic_congestion_notification_acknowledgement: {
                 /* Compute the cubic formula */
-                path_x->cwin = (uint64_t)(picoquic_cubic_W_cubic(cubic_state, current_time)* (double)path_x->send_mtu);
+                double W_cubic = picoquic_cubic_W_cubic(cubic_state, current_time);
+                uint64_t win_cubic = (uint64_t)(W_cubic * (double)path_x->send_mtu);
+                /* Also compute the Reno formula */
+                cubic_state->W_reno += ((double)nb_bytes_acknowledged)*((double)path_x->send_mtu) / cubic_state->W_reno;
+
+                /* Pick the largest */
+                if (win_cubic > cubic_state->W_reno) {
+                    /* if cubic is larger than threshold, switch to cubic mode */
+                    path_x->cwin = win_cubic;
+                }
+                else {
+                    path_x->cwin = (uint64_t)cubic_state->W_reno;
+                }
                 break;
             }
             case picoquic_congestion_notification_ecn_ec:

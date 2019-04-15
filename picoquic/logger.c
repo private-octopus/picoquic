@@ -1939,25 +1939,7 @@ void picoquic_cc_dump(picoquic_cnx_t * cnx, uint64_t current_time)
     if (cnx->cc_log == NULL) {
         return;
     }
-#if 0
-    /* TODO: complete list of tracked data as needed for debugging */
-    ret |= fprintf(cnx->cc_log, "%llu, ", (unsigned long long)current_time) <= 0;
-    ret |= fprintf(cnx->cc_log, "%llu, ", (unsigned long long)cnx->pkt_ctx[picoquic_packet_context_application].send_sequence) <= 0;
-    ret |= fprintf(cnx->cc_log, "%lld, ", (long long)((int64_t)cnx->pkt_ctx[picoquic_packet_context_application].highest_acknowledged)) <= 0;
-    ret |= fprintf(cnx->cc_log, "%llu, ", (unsigned long long)cnx->pkt_ctx[picoquic_packet_context_application].highest_acknowledged_time) <= 0;
-    ret |= fprintf(cnx->cc_log, "%llu, ", (unsigned long long)cnx->pkt_ctx[picoquic_packet_context_application].latest_time_acknowledged) <= 0;
-    ret |= fprintf(cnx->cc_log, "%llu, ", (unsigned long long)cnx->path[0]->cwin) <= 0;
-    ret |= fprintf(cnx->cc_log, "%llu, ", (unsigned long long)cnx->path[0]->smoothed_rtt) <= 0;
-    ret |= fprintf(cnx->cc_log, "%llu, ", (unsigned long long)cnx->path[0]->rtt_min) <= 0;
-    ret |= fprintf(cnx->cc_log, "%u, ", cnx->path[0]->send_mtu) <= 0;
-    ret |= fprintf(cnx->cc_log, "%llu, ", (unsigned long long)cnx->path[0]->pacing_packet_time_microsec) <= 0;
-    ret |= fprintf(cnx->cc_log, "%llu, ", (unsigned long long)cnx->nb_retransmission_total) <= 0;
-    ret |= fprintf(cnx->cc_log, "%llu, ", (unsigned long long)cnx->nb_spurious) <= 0;
-    ret |= fprintf(cnx->cc_log, "%d, ", cnx->cwin_blocked) <= 0;
-    ret |= fprintf(cnx->cc_log, "%d, ", cnx->flow_blocked) <= 0;
-    ret |= fprintf(cnx->cc_log, "%d, ", cnx->stream_blocked) <= 0;
-    ret |= fprintf(cnx->cc_log, "\n") <= 0;
-#else
+
     buffer[0] = (uint32_t)(current_time - cnx->start_time);
     buffer[1] = (uint32_t)cnx->pkt_ctx[picoquic_packet_context_application].send_sequence;
     buffer[2] = (uint32_t)cnx->pkt_ctx[picoquic_packet_context_application].highest_acknowledged;
@@ -1975,7 +1957,7 @@ void picoquic_cc_dump(picoquic_cnx_t * cnx, uint64_t current_time)
     buffer[14] = (uint32_t)cnx->stream_blocked;
 
     (void)fwrite(buffer, PICOQUIC_LOG_CC_NB*sizeof(uint32_t), 1, cnx->cc_log);
-#endif
+
     cnx->cwin_blocked = 0;
     cnx->flow_blocked = 0;
     cnx->stream_blocked = 0;
