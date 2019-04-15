@@ -153,7 +153,7 @@ static int h3zero_server_parse_request_frame(
     uint8_t * bytes = stream_ctx->frame;
     uint8_t * bytes_max = bytes + stream_ctx->received_length;
     h3zero_data_stream_state_t stream_state;
-    uint64_t available_data;
+    size_t available_data;
     uint16_t error_found = 0;
 
     memset(&stream_state, 0, sizeof(h3zero_data_stream_state_t));

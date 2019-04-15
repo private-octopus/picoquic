@@ -847,7 +847,7 @@ void picoquic_update_pacing_data(picoquic_path_t * path_x);
         * so ready connections are polled first */
 void picoquic_reinsert_by_wake_time(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint64_t next_time);
 
-    /* Integer parsing macros */
+/* Integer parsing macros */
 #define PICOPARSE_16(b) ((((uint16_t)(b)[0]) << 8) | (b)[1])
 #define PICOPARSE_24(b) ((((uint32_t)PICOPARSE_16(b)) << 16) | ((b)[2]))
 #define PICOPARSE_32(b) ((((uint32_t)PICOPARSE_16(b)) << 16) | PICOPARSE_16((b) + 2))
@@ -978,7 +978,8 @@ void picoquic_set_key_log_file(picoquic_quic_t *quic, FILE* F_keylog);
 /* Handling of cc_log */
 void picoquic_open_cc_dump(picoquic_cnx_t * cnx);
 void picoquic_close_cc_dump(picoquic_cnx_t * cnx);
-void picoquic_cc_dump(picoquic_cnx_t * cnx, uint64_t current_time);
+void picoquic_cc_dump(picoquic_cnx_t * cnx, uint64_t current_time); 
+int picoquic_cc_log_file_to_csv(char const * bin_cc_log_name, char const * csv_cc_log_name);
 
 /* handling of ACK logic */
 int picoquic_is_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t * next_wake_time, picoquic_packet_context_enum pc);
