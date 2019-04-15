@@ -118,7 +118,7 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(OutDir);$(SolutionDir)..\picotls\picotlsvs\$(Platform)\$(Configuration)\;$(OPENSSLDIR);$(OPENSSLDIR)\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(OutDir);$(SolutionDir)..\picotls\picotlsvs\$(Configuration)\;$(OPENSSLDIR);$(OPENSSLDIR)\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>picoquic.lib;picotls.lib;cifra.lib;microecc.lib;ws2_32.lib;libcrypto.lib;bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
@@ -140,7 +140,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(OutDir);$(SolutionDir)..\picotls\picotlsvs\$(Platform)\$(Configuration)\;$(OPENSSLDIR);$(OPENSSLDIR)\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(OutDir);$(SolutionDir)..\picotls\picotlsvs\$(Configuration)\;$(OPENSSLDIR);$(OPENSSLDIR)\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>picoquic.lib;picotls.lib;cifra.lib;microecc.lib;ws2_32.lib;libcrypto.lib;bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>

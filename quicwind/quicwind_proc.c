@@ -773,6 +773,8 @@ int quicwind_execute_work_item(picoquic_quic_t * qclient)
         }
         free(w);
     }
+
+    return ret;
 }
 
 void quicwind_clear_work_items()
