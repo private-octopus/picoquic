@@ -43,6 +43,7 @@ extern "C" {
 #define PICOQUIC_RETRY_SECRET_SIZE 64
 #define PICOQUIC_DEFAULT_0RTT_WINDOW 4096
 #define PICOQUIC_NB_PATH_TARGET 9
+#define PICOQUIC_MAX_PACKETS_IN_POOL 0x8000
 
 #define PICOQUIC_NUMBER_OF_EPOCHS 4
 #define PICOQUIC_NUMBER_OF_EPOCH_OFFSETS (PICOQUIC_NUMBER_OF_EPOCHS+1)
@@ -343,6 +344,7 @@ typedef struct st_picoquic_quic_t {
     picohash_table* table_cnx_by_net;
 
     picoquic_packet_t * p_first_packet;
+    size_t nb_packets_in_pool;
 
     picoquic_connection_id_cb_fn cnx_id_callback_fn;
     void* cnx_id_callback_ctx;

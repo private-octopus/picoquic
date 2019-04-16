@@ -273,6 +273,7 @@ picoquic_packet_t* picoquic_create_packet(picoquic_quic_t * quic)
     }
     else {
         quic->p_first_packet = packet->next_packet;
+        quic->nb_packets_in_pool--;
     }
 
     if (packet != NULL) {
@@ -285,8 +286,14 @@ picoquic_packet_t* picoquic_create_packet(picoquic_quic_t * quic)
 void picoquic_recycle_packet(picoquic_quic_t * quic, picoquic_packet_t* packet)
 {
     if (packet != NULL) {
-        packet->next_packet = quic->p_first_packet;
-        quic->p_first_packet = packet;
+        if (quic->nb_packets_in_pool >= PICOQUIC_MAX_PACKETS_IN_POOL) {
+            free(packet);
+        }
+        else {
+            packet->next_packet = quic->p_first_packet;
+            quic->p_first_packet = packet;
+            quic->nb_packets_in_pool++;
+        }
     }
 }
 
