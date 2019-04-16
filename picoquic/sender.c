@@ -264,15 +264,37 @@ uint32_t picoquic_pad_to_policy(picoquic_cnx_t * cnx, uint8_t * bytes, uint32_t 
  * Packet management
  */
 
-picoquic_packet_t* picoquic_create_packet()
+picoquic_packet_t* picoquic_create_packet(picoquic_quic_t * quic)
 {
-    picoquic_packet_t* packet = (picoquic_packet_t*)malloc(sizeof(picoquic_packet_t));
+    picoquic_packet_t* packet = quic->p_first_packet;
+    
+    if (packet == NULL) {
+        packet = (picoquic_packet_t*)malloc(sizeof(picoquic_packet_t));
+    }
+    else {
+        quic->p_first_packet = packet->next_packet;
+        quic->nb_packets_in_pool--;
+    }
 
     if (packet != NULL) {
-        memset(packet, 0, sizeof(picoquic_packet_t));
+        memset(packet, 0, offsetof(struct st_picoquic_packet_t, bytes));
     }
 
     return packet;
+}
+
+void picoquic_recycle_packet(picoquic_quic_t * quic, picoquic_packet_t* packet)
+{
+    if (packet != NULL) {
+        if (quic->nb_packets_in_pool >= PICOQUIC_MAX_PACKETS_IN_POOL) {
+            free(packet);
+        }
+        else {
+            packet->next_packet = quic->p_first_packet;
+            quic->p_first_packet = packet;
+            quic->nb_packets_in_pool++;
+        }
+    }
 }
 
 void picoquic_update_payload_length(
@@ -676,7 +698,7 @@ picoquic_packet_t* picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, picoq
     }
 
     if (should_free) {
-        free(p);
+        picoquic_recycle_packet(cnx->quic, p);
         p = NULL;
     }
     else {
@@ -725,7 +747,7 @@ void picoquic_dequeue_retransmitted_packet(picoquic_cnx_t* cnx, picoquic_packet_
         p->next_packet->previous_packet = p->previous_packet;
     }
 
-    free(p);
+    picoquic_recycle_packet(cnx->quic, p);
 }
 
 /*
@@ -739,7 +761,7 @@ void picoquic_insert_hole_in_send_sequence_if_needed(picoquic_cnx_t* cnx, uint64
         cnx->quic->sequence_hole_pseudo_period > 0 &&
         !cnx->pkt_ctx[0].retransmit_newest->is_ack_trap &&
         picoquic_public_uniform_random(cnx->quic->sequence_hole_pseudo_period) == 0) {
-        picoquic_packet_t* packet = picoquic_create_packet();
+        picoquic_packet_t* packet = picoquic_create_packet(cnx->quic);
 
         if (packet != NULL) {
             packet->is_ack_trap = 1;
@@ -2767,7 +2789,7 @@ int picoquic_prepare_probe(picoquic_cnx_t* cnx,
         if (probe != NULL)
         {
             
-            packet = picoquic_create_packet();
+            packet = picoquic_create_packet(cnx->quic);
 
             if (packet == NULL) {
                 ret = PICOQUIC_ERROR_MEMORY;
@@ -2890,7 +2912,7 @@ static int picoquic_prepare_alt_challenge(picoquic_cnx_t* cnx,
                     current_time >= cnx->path[i]->alt_challenge_timeout))
                 || cnx->path[i]->alt_response_required)
                 && !cnx->path[i]->path_is_demoted) {
-                packet = picoquic_create_packet();
+                packet = picoquic_create_packet(cnx->quic);
 
                 if (packet == NULL) {
                     ret = PICOQUIC_ERROR_MEMORY;
@@ -3068,7 +3090,7 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
                 }
             }
 
-            packet = picoquic_create_packet();
+            packet = picoquic_create_packet(cnx->quic);
 
             if (packet == NULL) {
                 ret = PICOQUIC_ERROR_MEMORY;
@@ -3083,14 +3105,14 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
                     if (packet->length == 0 ||
                         packet->ptype == picoquic_packet_1rtt_protected) {
                         if (packet->length == 0) {
-                            free(packet);
+                            picoquic_recycle_packet(cnx->quic, packet);
                             packet = NULL;
                         }
                         break;
                     }
                 }
                 else {
-                    free(packet);
+                    picoquic_recycle_packet(cnx->quic, packet);
                     packet = NULL;
 
                     if (*send_length != 0) {
