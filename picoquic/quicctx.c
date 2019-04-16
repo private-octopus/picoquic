@@ -319,6 +319,12 @@ void picoquic_free(picoquic_quic_t* quic)
         /* delete the stored tickets */
         picoquic_free_tickets(&quic->p_first_ticket);
 
+        while (quic->p_first_packet != NULL) {
+            picoquic_packet_t * p = quic->p_first_packet->next_packet;
+            free(quic->p_first_packet);
+            quic->p_first_packet = p;
+        }
+
         /* delete all pending packets */
         while (quic->pending_stateless_packet != NULL) {
             picoquic_stateless_packet_t* to_delete = quic->pending_stateless_packet;

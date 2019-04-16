@@ -342,6 +342,8 @@ typedef struct st_picoquic_quic_t {
     picohash_table* table_cnx_by_id;
     picohash_table* table_cnx_by_net;
 
+    picoquic_packet_t * p_first_packet;
+
     picoquic_connection_id_cb_fn cnx_id_callback_fn;
     void* cnx_id_callback_ctx;
 

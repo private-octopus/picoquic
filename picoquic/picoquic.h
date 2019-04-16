@@ -543,7 +543,8 @@ int picoquic_incoming_packet(
     unsigned char received_ecn,
     uint64_t current_time);
 
-picoquic_packet_t* picoquic_create_packet();
+picoquic_packet_t* picoquic_create_packet(picoquic_quic_t * quic);
+void picoquic_recycle_packet(picoquic_quic_t * quic, picoquic_packet_t* packet);
 
 int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,

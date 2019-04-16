@@ -4909,14 +4909,14 @@ int false_migration_inject(picoquic_test_tls_api_ctx_t* test_ctx, int target_cli
     picoquic_cnx_t * cnx = (target_client) ? test_ctx->cnx_client : test_ctx->cnx_server;
     picoquictest_sim_link_t* target_link = (target_client) ? test_ctx->c_to_s_link : test_ctx->s_to_c_link;
     picoquictest_sim_packet_t* sim_packet = picoquictest_sim_link_create_packet();
-    picoquic_packet_t * packet = picoquic_create_packet();
+    picoquic_packet_t * packet = picoquic_create_packet(cnx->quic);
 
     if (sim_packet == NULL || packet == NULL || cnx == NULL) {
         if (sim_packet != NULL) {
             free(sim_packet);
         }
         if (packet != NULL) {
-            free(packet);
+            picoquic_recycle_packet(cnx->quic, packet);
         }
         ret = -1;
     }
