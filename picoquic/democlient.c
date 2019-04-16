@@ -168,17 +168,24 @@ static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
         ctx->first_stream = stream_ctx;
         stream_ctx->stream_id = stream_id;
 
+        if (ctx->no_disk) {
+            stream_ctx->F = NULL;
+        }
+        else {
 #ifdef _WINDOWS
-        if (fopen_s(&stream_ctx->F, fname, (is_binary == 0) ? "w" : "wb") != 0) {
-            ret = -1;
-        }
+            if (fopen_s(&stream_ctx->F, fname, (is_binary == 0) ? "w" : "wb") != 0) {
+                ret = -1;
+            }
 #else
-        stream_ctx->F = fopen(fname, (is_binary == 0) ? "w" : "wb");
-        if (stream_ctx->F == NULL) {
-            ret = -1;
-        }
+            stream_ctx->F = fopen(fname, (is_binary == 0) ? "w" : "wb");
+            if (stream_ctx->F == NULL) {
+                ret = -1;
+            }
 #endif
-        if (ret != 0) {
+        }
+        if (ret == 0) {
+            stream_ctx->is_open = 1;
+        }else {
             fprintf(stdout, "Cannot create file: %s\n", fname);
         }
     }
@@ -229,6 +236,21 @@ static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
         }
     }
 
+    return ret;
+}
+
+static int picoquic_demo_client_close_stream(
+    picoquic_demo_callback_ctx_t* ctx, picoquic_demo_client_stream_ctx_t* stream_ctx)
+{
+    int ret = 0;
+    if (stream_ctx != NULL && stream_ctx->is_open) {
+        if (stream_ctx->F != NULL) {
+            fclose(stream_ctx->F);
+            stream_ctx->F = NULL;
+        }
+        ctx->nb_open_streams--;
+        ret = 1;
+    }
     return ret;
 }
 
@@ -283,7 +305,7 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
         /* TODO: parse the frames. */
         /* TODO: check settings frame */
         stream_ctx = picoquic_demo_client_find_stream(ctx, stream_id);
-        if (stream_ctx != NULL && stream_ctx->F != NULL) {
+        if (stream_ctx != NULL && stream_ctx->is_open && (stream_ctx->F != NULL || ctx->no_disk != 0)) {
             if (length > 0) {
                 switch (ctx->alpn) {
                 case picoquic_alpn_http_3: {
@@ -297,7 +319,9 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
                             break;
                         }
                         else if (available_data > 0) {
-                            ret = (fwrite(bytes, 1, available_data, stream_ctx->F) > 0) ? 0 : -1;
+                            if (ctx->no_disk == 0) {
+                                ret = (fwrite(bytes, 1, available_data, stream_ctx->F) > 0) ? 0 : -1;
+                            }
                             stream_ctx->received_length += available_data;
                             bytes += available_data;
                         }
@@ -306,19 +330,20 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
                 }
                 case picoquic_alpn_http_0_9:
                 default:
-                    ret = (fwrite(bytes, 1, length, stream_ctx->F) > 0) ? 0 : -1;
+                    if (ctx->no_disk == 0) {
+                        ret = (fwrite(bytes, 1, length, stream_ctx->F) > 0) ? 0 : -1;
+                    }
                     stream_ctx->received_length += length;
                     break;
                 }
             }
 
             if (fin_or_event == picoquic_callback_stream_fin) {
-                fclose(stream_ctx->F);
-                stream_ctx->F = NULL;
-                ctx->nb_open_streams--;
-                fin_stream_id = stream_id;
-                fprintf(stdout, "Stream %d ended after %d bytes\n",
-                    (int)stream_id, (int)stream_ctx->received_length);
+                if (picoquic_demo_client_close_stream(ctx, stream_ctx)) {
+                    fin_stream_id = stream_id;
+                    fprintf(stdout, "Stream %d ended after %d bytes\n",
+                        (int)stream_id, (int)stream_ctx->received_length);
+                }
             }
         }
         break;
@@ -326,11 +351,10 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
     case picoquic_callback_stop_sending: /* Server asks client to reset stream #x */
         /* TODO: special case for uni streams. */
         stream_ctx = picoquic_demo_client_find_stream(ctx, stream_id);
-        if (stream_ctx != NULL && stream_ctx->F != NULL) {
-            fclose(stream_ctx->F);
-            stream_ctx->F = NULL;
-            ctx->nb_open_streams--;
+        if (picoquic_demo_client_close_stream(ctx, stream_ctx)) {
             fin_stream_id = stream_id;
+            fprintf(stdout, "Stream %d reset after %d bytes\n",
+                (int)stream_id, (int)stream_ctx->received_length);
         }
         picoquic_reset_stream(cnx, stream_id, 0);
         /* TODO: higher level notify? */
@@ -348,11 +372,10 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
         /* Gap indication, when unreliable streams are supported */
         fprintf(stdout, "Received a gap indication.\n");
         stream_ctx = picoquic_demo_client_find_stream(ctx, stream_id);
-        if (stream_ctx != NULL && stream_ctx->F != NULL) {
-            fclose(stream_ctx->F);
-            stream_ctx->F = NULL;
-            ctx->nb_open_streams--;
+        if (picoquic_demo_client_close_stream(ctx, stream_ctx)) {
             fin_stream_id = stream_id;
+            fprintf(stdout, "Stream %d reset after %d bytes\n",
+                (int)stream_id, (int)stream_ctx->received_length);
         }
         /* TODO: Define what error. Stop sending? */
         picoquic_reset_stream(cnx, stream_id, H3ZERO_INTERNAL_ERROR);
@@ -411,12 +434,14 @@ int picoquic_demo_client_initialize_context(
     picoquic_demo_callback_ctx_t* ctx,
     picoquic_demo_stream_desc_t const * demo_stream,
 	size_t nb_demo_streams,
-	char const * alpn)
+	char const * alpn,
+    int no_disk)
 {
     memset(ctx, 0, sizeof(picoquic_demo_callback_ctx_t));
     ctx->demo_stream = demo_stream;
     ctx->nb_demo_streams = nb_demo_streams;
     ctx->alpn = picoquic_parse_alpn(alpn);
+    ctx->no_disk = no_disk;
     return 0;
 }
 
