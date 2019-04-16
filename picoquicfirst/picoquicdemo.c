@@ -499,7 +499,8 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
     const char * alpn, const char * root_crt,
     uint32_t proposed_version, int force_zero_share, int force_migration,
     int nb_packets_before_key_update, int mtu_max, FILE* F_log,
-    int client_cnx_id_length, char * client_scenario_text, char const * cc_log_dir)
+    int client_cnx_id_length, char * client_scenario_text, char const * cc_log_dir,
+    int no_disk)
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
@@ -539,6 +540,10 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
         alpn = "hq-19";
     }
 
+    if (no_disk) {
+        fprintf(stdout, "Files not saved to disk (-D, no_disk)\n");
+    }
+
     if (client_scenario_text != NULL) {
         fprintf(stdout, "Testing scenario: <%s>\n", client_scenario_text);
         ret = demo_client_parse_scenario_desc(client_scenario_text, &client_sc_nb, &client_sc);
@@ -546,11 +551,11 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
             fprintf(stdout, "Cannot parse the specified scenario.\n");
         }
         else {
-            ret = picoquic_demo_client_initialize_context(&callback_ctx, client_sc, client_sc_nb, alpn);
+            ret = picoquic_demo_client_initialize_context(&callback_ctx, client_sc, client_sc_nb, alpn, no_disk);
         }
     }
     else {
-        ret = picoquic_demo_client_initialize_context(&callback_ctx, test_scenario, test_scenario_nb, alpn);
+        ret = picoquic_demo_client_initialize_context(&callback_ctx, test_scenario, test_scenario_nb, alpn, no_disk);
     }
 
     if (ret == 0) {
@@ -1020,7 +1025,8 @@ void usage()
     fprintf(stderr, "  -1                    Once: close the server after processing 1 connection.\n");
     fprintf(stderr, "  -S solution_dir       Set the path to the source files to find the default files\n");
     fprintf(stderr, "  -I length             Length of CNX_ID used by the client, default=8\n");
-    fprintf(stderr, "  -g cc_log_dir         Ask to log congection control traces in specified dir\n");
+    fprintf(stderr, "  -g cc_log_dir         log congestion control traces in specified dir\n");
+    fprintf(stderr, "  -D                    no disk: do not save received files on disk.\n");
     fprintf(stderr, "\nThe scenario argument specifies the set of files that should be retrieved,\n");
     fprintf(stderr, "and their order. The syntax is:\n");
     fprintf(stderr, "  *{[<stream_id>':'[<previous_stream>':'[<format>:]]]path;}\n");
@@ -1058,6 +1064,7 @@ int main(int argc, char** argv)
     int force_migration = 0;
     int nb_packets_before_update = 0;
     int client_cnx_id_length = 8;
+    int no_disk = 0;
     picoquic_connection_id_callback_ctx_t * cnx_id_cbdata = NULL;
     uint64_t* reset_seed = NULL;
     uint64_t reset_seed_x[2];
@@ -1077,7 +1084,7 @@ int main(int argc, char** argv)
 
     /* Get the parameters */
     int opt;
-    while ((opt = getopt(argc, argv, "c:k:p:u:v:1rhzf:i:s:e:l:m:n:a:t:S:I:g:")) != -1) {
+    while ((opt = getopt(argc, argv, "c:k:p:u:v:1rhzDf:i:s:e:l:m:n:a:t:S:I:g:")) != -1) {
         switch (opt) {
         case 'c':
             server_cert_file = optarg;
@@ -1168,13 +1175,15 @@ int main(int argc, char** argv)
                 usage();
             }
             break;
-            break;
         case 'I':
             client_cnx_id_length = atoi(optarg);
             if (client_cnx_id_length != 0 && (client_cnx_id_length < 4 || client_cnx_id_length > 18)){
                 fprintf(stderr, "Invalid connection id length: %s\n", optarg);
                 usage();
             }
+            break;
+        case 'D':
+            no_disk = 1;
             break;
         case 'h':
             usage();
@@ -1265,7 +1274,7 @@ int main(int argc, char** argv)
         /* Run as client */
         printf("Starting PicoQUIC connection to server IP = %s, port = %d\n", server_name, server_port);
         ret = quic_client(server_name, server_port, sni, alpn, root_trust_file, proposed_version, force_zero_share, 
-            force_migration, nb_packets_before_update, mtu_max, F_log, client_cnx_id_length, client_scenario, cc_log_dir);
+            force_migration, nb_packets_before_update, mtu_max, F_log, client_cnx_id_length, client_scenario, cc_log_dir, no_disk);
 
         printf("Client exit with code = %d\n", ret);
     }
