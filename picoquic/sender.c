@@ -638,7 +638,6 @@ void picoquic_queue_for_retransmit(picoquic_cnx_t* cnx, picoquic_path_t * path_x
 {
     picoquic_packet_context_enum pc = packet->pc;
 
-
     /* Manage the double linked packet list for retransmissions */
     packet->previous_packet = NULL;
     if (cnx->pkt_ctx[pc].retransmit_newest == NULL) {
