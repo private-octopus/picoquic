@@ -828,7 +828,7 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
                         }
                     }
 
-                    if ((bytes_recv == 0 || client_ready_loop > 4) && picoquic_is_cnx_backlog_empty(cnx_client)) {
+                    if (bytes_recv == 0 || client_ready_loop > 4) {
                         if (callback_ctx.nb_open_streams == 0) {
                             if (cnx_client->nb_zero_rtt_sent != 0) {
                                 fprintf(stdout, "Out of %d zero RTT packets, %d were acked by the server.\n",
@@ -862,8 +862,10 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
                             }
 
                             ret = picoquic_close(cnx_client, 0);
-                        } else if (
-                            current_time > callback_ctx.last_interaction_time && current_time - callback_ctx.last_interaction_time > 10000000ull) {
+                        }
+                        else if (
+                            current_time > callback_ctx.last_interaction_time && current_time - callback_ctx.last_interaction_time > 10000000ull
+                            && picoquic_is_cnx_backlog_empty(cnx_client)) {
                             fprintf(stdout, "No progress for 10 seconds. Closing. \n");
                             if (F_log != stdout && F_log != stderr && F_log != NULL)
                             {
@@ -1270,7 +1272,6 @@ int main(int argc, char** argv)
             (uint8_t*)reset_seed, dest_if, mtu_max, proposed_version, F_log, cc_log_dir);
         printf("Server exit with code = %d\n", ret);
     } else {
-
         /* Run as client */
         printf("Starting PicoQUIC connection to server IP = %s, port = %d\n", server_name, server_port);
         ret = quic_client(server_name, server_port, sni, alpn, root_trust_file, proposed_version, force_zero_share, 
