@@ -102,7 +102,7 @@ int picoquic_demo_client_initialize_context(
     int no_disk);
 void picoquic_demo_client_delete_context(picoquic_demo_callback_ctx_t* ctx);
 
-int demo_client_parse_scenario_desc(char * text, size_t * nb_streams, picoquic_demo_stream_desc_t ** desc);
+int demo_client_parse_scenario_desc(char const * text, size_t * nb_streams, picoquic_demo_stream_desc_t ** desc);
 void demo_client_delete_scenario_desc(size_t nb_streams, picoquic_demo_stream_desc_t * desc);
 
 #endif /* DEMO_CLIENT_H */

@@ -172,15 +172,13 @@ static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
             stream_ctx->F = NULL;
         }
         else {
-            char * x_name = fname;
+            char const * x_name = fname;
             char repeat_name[512];
             if (nb_repeat > 0) {
 #ifdef _WINDOWS
-                if (sprintf_s(repeat_name, sizeof(repeat_name), "r%dx%s", nb_repeat, fname) <= 0) {
-                    ret = -1;
-                }
+                ret = sprintf_s(repeat_name, sizeof(repeat_name), "r%dx%s", nb_repeat, fname) <= 0;
 #else
-                (void)sprintf_s(repeat_name, "r%dx%s", nb_repeat, fname);
+                ret = sprintf(repeat_name, "r%dx%s", nb_repeat, fname) <= 0;
 #endif
                 x_name = repeat_name;
             }
@@ -508,14 +506,14 @@ void picoquic_demo_client_delete_context(picoquic_demo_callback_ctx_t* ctx)
     }
 }
 
-char * demo_client_parse_stream_spaces(char * text) {
+char const * demo_client_parse_stream_spaces(char const * text) {
     while (*text == ' ' || *text == '\t' || *text == '\n' || *text == '\r') {
         text++;
     }
     return text;
 }
 
-char * demo_client_parse_stream_repeat(char * text, int * number)
+char const * demo_client_parse_stream_repeat(char const * text, int * number)
 {
     int rep = 0;
 
@@ -540,7 +538,7 @@ char * demo_client_parse_stream_repeat(char * text, int * number)
     return text;
 }
 
-char * demo_client_parse_stream_number(char * text, uint64_t default_number, uint64_t * number)
+char const * demo_client_parse_stream_number(char const * text, uint64_t default_number, uint64_t * number)
 {
     if (text[0] < '0' || text[0] > '9') {
         *number = default_number;
@@ -565,7 +563,7 @@ char * demo_client_parse_stream_number(char * text, uint64_t default_number, uin
     return text;
 }
 
-char * demo_client_parse_stream_format(char * text, int default_format, int * is_binary)
+char const * demo_client_parse_stream_format(char const * text, int default_format, int * is_binary)
 {
     if (text[0] != 'b' && text[0] != 't') {
         *is_binary = default_format;
@@ -586,7 +584,7 @@ char * demo_client_parse_stream_format(char * text, int default_format, int * is
     return text;
 }
 
-char * demo_client_parse_stream_path(char * text, 
+char const * demo_client_parse_stream_path(char const * text, 
     char ** path, char ** f_name)
 {
     size_t l_path = 0;
@@ -650,7 +648,7 @@ char * demo_client_parse_stream_path(char * text,
     return text;
 }
 
-char * demo_client_parse_stream_desc(char * text, uint64_t default_stream, uint64_t default_previous,
+char const * demo_client_parse_stream_desc(char const * text, uint64_t default_stream, uint64_t default_previous,
     picoquic_demo_stream_desc_t * desc)
 {
     text = demo_client_parse_stream_repeat(text, &desc->repeat_count);
@@ -692,7 +690,7 @@ void demo_client_delete_scenario_desc(size_t nb_streams, picoquic_demo_stream_de
     free(desc);
 }
 
-size_t demo_client_parse_nb_stream(char * text) {
+size_t demo_client_parse_nb_stream(char const * text) {
     size_t n = 0;
     int after_semi = 1;
 
@@ -711,7 +709,7 @@ size_t demo_client_parse_nb_stream(char * text) {
     return n;
 }
 
-int demo_client_parse_scenario_desc(char * text, size_t * nb_streams, picoquic_demo_stream_desc_t ** desc)
+int demo_client_parse_scenario_desc(char const * text, size_t * nb_streams, picoquic_demo_stream_desc_t ** desc)
 {
     int ret = 0;
     /* first count the number of streams and allocate memory */

@@ -230,8 +230,8 @@ int quic_server(const char* server_name, int server_port,
         from_length = to_length = sizeof(struct sockaddr_storage);
         if_index_to = 0;
 
-        if (just_once != 0 && F_log != NULL &&  delta_t > 10000 && cnx_server != NULL && cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence < PICOQUIC_LOG_PACKET_MAX_SEQUENCE
-            || qserver->use_long_log) {
+        if (just_once != 0 && F_log != NULL &&  delta_t > 10000 && cnx_server != NULL && 
+            (cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence < PICOQUIC_LOG_PACKET_MAX_SEQUENCE || qserver->use_long_log)) {
             picoquic_log_congestion_state(F_log, cnx_server, current_time);
         }
 
@@ -482,7 +482,7 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
     const char * alpn, const char * root_crt,
     uint32_t proposed_version, int force_zero_share, int force_migration,
     int nb_packets_before_key_update, int mtu_max, FILE* F_log,
-    int client_cnx_id_length, char * client_scenario_text, char const * cc_log_dir,
+    int client_cnx_id_length, char const * client_scenario_text, char const * cc_log_dir,
     int no_disk, int use_long_log)
 {
     /* Start: start the QUIC process with cert and key files */
