@@ -564,18 +564,23 @@ int h3zero_stream_test()
 
 char * parse_demo_scenario_text1 = "/;t:test.html;8:0:b:main.jpg;12:0:/bla/bla/";
 char * parse_demo_scenario_text2 = "/;b:main.jpg;t:test.html;";
+char * parse_demo_scenario_text3 = "*1000:/";
 
 static const picoquic_demo_stream_desc_t parse_demo_scenario_desc1[] = {
-    { 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0 },
-    { 4, 0, "test.html", "test.html", 0 },
-    { 8, 0, "main.jpg", "main.jpg", 1 },
-    { 12, 0, "/bla/bla/", "_bla_bla_", 0 }
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0 },
+    { 0, 4, 0, "test.html", "test.html", 0 },
+    { 0, 8, 0, "main.jpg", "main.jpg", 1 },
+    { 0, 12, 0, "/bla/bla/", "_bla_bla_", 0 }
 };
 
 static const picoquic_demo_stream_desc_t parse_demo_scenario_desc2[] = {
-    { 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0 },
-    { 4, 0, "main.jpg", "main.jpg", 1 },
-    { 8, 4, "test.html", "test.html", 0 }
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0 },
+    { 0, 4, 0, "main.jpg", "main.jpg", 1 },
+    { 0, 8, 4, "test.html", "test.html", 0 }
+};
+
+static const picoquic_demo_stream_desc_t parse_demo_scenario_desc3[] = {
+    { 1000, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0 }
 };
 
 int parse_demo_scenario_test_one(char * text, size_t nb_streams_ref, picoquic_demo_stream_desc_t const * desc_ref)
@@ -630,6 +635,12 @@ int parse_demo_scenario_test()
             parse_demo_scenario_desc2);
     }
 
+    if (ret == 0) {
+        ret = parse_demo_scenario_test_one(parse_demo_scenario_text3,
+            sizeof(parse_demo_scenario_desc3) / sizeof(picoquic_demo_stream_desc_t),
+            parse_demo_scenario_desc3);
+    }
+
     return ret;
 }
 
@@ -638,8 +649,8 @@ int parse_demo_scenario_test()
  * network simulation.
  */
 static const picoquic_demo_stream_desc_t demo_test_scenario[] = {
-    { 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "root.html", 0 },
-    { 4, 0, "12345", "doc-12345.txt", 0 } };
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "root.html", 0 },
+    { 0, 4, 0, "12345", "doc-12345.txt", 0 } };
 static size_t const nb_demo_test_scenario = sizeof(demo_test_scenario) / sizeof(picoquic_demo_stream_desc_t);
 
 static size_t const demo_test_stream_length[] = {

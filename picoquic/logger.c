@@ -340,6 +340,60 @@ char const* picoquic_log_frame_names(uint8_t frame_type)
     return frame_name;
 }
 
+char const* picoquic_log_tp_name(uint64_t tp_number)
+{
+    char const * tp_name = "unknown";
+
+    switch (tp_number) {
+    case picoquic_tp_original_connection_id:
+        tp_name = "ocid";
+        break;
+    case picoquic_tp_idle_timeout:
+        tp_name = "ocid";
+        break;
+    case picoquic_tp_stateless_reset_token:
+        tp_name = "stateless_reset_token";
+        break;
+    case picoquic_tp_max_packet_size:
+        tp_name = "max_packet_size";
+        break;
+    case picoquic_tp_initial_max_data:
+        tp_name = "initial_max_data";
+        break;
+    case picoquic_tp_initial_max_stream_data_bidi_local:
+        tp_name = "max_stream_data_bidi_local";
+        break;
+    case picoquic_tp_initial_max_stream_data_bidi_remote:
+        tp_name = "max_stream_data_bidi_remote";
+        break;
+    case picoquic_tp_initial_max_stream_data_uni:
+        tp_name = "max_stream_data_uni";
+        break;
+    case picoquic_tp_initial_max_streams_bidi:
+        tp_name = "max_streams_bidi";
+        break;
+    case picoquic_tp_initial_max_streams_uni:
+        tp_name = "max_streams_uni";
+        break;
+    case picoquic_tp_ack_delay_exponent:
+        tp_name = "ack_delay_exponent";
+        break;
+    case picoquic_tp_max_ack_delay:
+        tp_name = "max_ack_delay";
+        break;
+    case picoquic_tp_disable_migration:
+        tp_name = "disable_migration";
+        break;
+    case picoquic_tp_server_preferred_address:
+        tp_name = "server_preferred_address";
+        break;
+    default:
+        break;
+    }
+
+    return tp_name;
+}
+
 void picoquic_log_connection_id(FILE* F, picoquic_connection_id_t * cid)
 {
     fprintf(F, "<");
@@ -1480,7 +1534,7 @@ void picoquic_log_transport_extension_content(FILE* F, int log_cnxid, uint64_t c
                 if (log_cnxid != 0) {
                     fprintf(F, "%" PRIx64 ": ", cnx_id_64);
                 }
-                fprintf(F, "    Malformed extension list, only %d byte avaliable.\n", (int)(bytes_max - byte_index));
+                fprintf(F, "    Malformed extension list, only %d byte available.\n", (int)(bytes_max - byte_index));
                 ret = -1;
             }
             else {
@@ -1519,8 +1573,8 @@ void picoquic_log_transport_extension_content(FILE* F, int log_cnxid, uint64_t c
                             if (log_cnxid != 0) {
                                 fprintf(F, "%" PRIx64 ": ", cnx_id_64);
                             }
-                            fprintf(F, "        Extension type: %d, length %d (0x%04x / 0x%04x), ",
-                                extension_type, extension_length, extension_type, extension_length);
+                            fprintf(F, "        Extension type: %d (%s), length %d, ",
+                                extension_type, picoquic_log_tp_name(extension_type), extension_length);
 
                             if (byte_index + extension_length > extensions_end) {
                                 if (log_cnxid != 0) {

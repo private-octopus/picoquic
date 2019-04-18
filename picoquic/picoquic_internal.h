@@ -361,6 +361,7 @@ typedef struct st_picoquic_quic_t {
 
     picoquic_fuzz_fn fuzz_fn;
     void* fuzz_ctx;
+    unsigned int use_long_log : 1;
 } picoquic_quic_t;
 
 picoquic_packet_context_enum picoquic_context_from_epoch(int epoch);

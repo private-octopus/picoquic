@@ -163,7 +163,7 @@ int quic_server(const char* server_name, int server_port,
     const char* pem_cert, const char* pem_key,
     int just_once, int do_hrr, picoquic_connection_id_cb_fn cnx_id_callback,
     void* cnx_id_callback_ctx, uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE],
-    int dest_if, int mtu_max, uint32_t proposed_version, FILE * F_log, char const * cc_log_dir)
+    int dest_if, int mtu_max, uint32_t proposed_version, FILE * F_log, char const * cc_log_dir, int use_long_log)
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
@@ -185,7 +185,6 @@ int quic_server(const char* server_name, int server_port,
     picoquic_stateless_packet_t* sp;
     int64_t delay_max = 10000000;
     int connection_done = 0;
-    int log_count = 0;
 
     /* Open a UDP socket */
     ret = picoquic_open_server_sockets(&server_sockets, server_port);
@@ -208,8 +207,11 @@ int quic_server(const char* server_name, int server_port,
 
             picoquic_set_default_congestion_algorithm(qserver, picoquic_cubic_algorithm);
 
-            /* TODO: add log level, to reduce size in "normal" cases */
             PICOQUIC_SET_LOG(qserver, F_log);
+
+            if (use_long_log) {
+                qserver->use_long_log = 1;
+            }
 
             picoquic_set_key_log_file_from_env(qserver);
 
@@ -228,7 +230,8 @@ int quic_server(const char* server_name, int server_port,
         from_length = to_length = sizeof(struct sockaddr_storage);
         if_index_to = 0;
 
-        if (just_once != 0 && F_log != NULL &&  delta_t > 10000 && cnx_server != NULL && cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence < PICOQUIC_LOG_PACKET_MAX_SEQUENCE) {
+        if (just_once != 0 && F_log != NULL &&  delta_t > 10000 && cnx_server != NULL && 
+            (cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence < PICOQUIC_LOG_PACKET_MAX_SEQUENCE || qserver->use_long_log)) {
             picoquic_log_congestion_state(F_log, cnx_server, current_time);
         }
 
@@ -239,8 +242,7 @@ int quic_server(const char* server_name, int server_port,
             delta_t, &current_time);
 
         if (just_once != 0 && F_log != NULL && 
-            (cnx_server == NULL || cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence < PICOQUIC_LOG_PACKET_MAX_SEQUENCE)) {
-            log_count++;
+            (cnx_server == NULL || cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence < PICOQUIC_LOG_PACKET_MAX_SEQUENCE || qserver->use_long_log)) {
             if (bytes_recv > 0) {
                 fprintf(F_log, "Select returns %d, from length %d after %d us (wait for %d us)\n",
                     bytes_recv, from_length, (int)(current_time - time_before), (int)delta_t);
@@ -373,26 +375,7 @@ int quic_server(const char* server_name, int server_port,
     return ret;
 }
 
-static const picoquic_demo_stream_desc_t test_scenario[] = {
-#ifdef PICOQUIC_TEST_AGAINST_ATS
-    { 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "", "slash.html", 0 },
-    { 8, 4, "en/latest/", "slash_en_slash_latest.html", 0 }
-#else
-#ifdef PICOQUIC_TEST_AGAINST_QUICKLY
-    { 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "123.txt", "123.txt", 0 }
-#else
-    { 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "index.html", "index.html", 0 },
-    { 4, 0, "test.html", "test.html", 0 },
-    { 8, 0, "1234567", "doc-1234567.html", 0 },
-    { 12, 0, "main.jpg", "main.jpg", 1 },
-    { 16, 0, "war-and-peace.txt", "war-and-peace.txt", 0 },
-    { 20, 0, "en/latest/", "slash_en_slash_latest.html", 0 },
-    { 24, 0, "/file-123K", "file-123k.txt", 0 }
-#endif
-#endif
-};
-
-static const size_t test_scenario_nb = sizeof(test_scenario) / sizeof(picoquic_demo_stream_desc_t);
+static const char * test_scenario_default = "0:index.html;4:test.html;8:1234567;12:main.jpg;16:war-and-peace.txt;20:en/latest/;24:/file-123K";
 
 #define PICOQUIC_DEMO_CLIENT_MAX_RECEIVE_BATCH 4
 
@@ -499,8 +482,8 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
     const char * alpn, const char * root_crt,
     uint32_t proposed_version, int force_zero_share, int force_migration,
     int nb_packets_before_key_update, int mtu_max, FILE* F_log,
-    int client_cnx_id_length, char * client_scenario_text, char const * cc_log_dir,
-    int no_disk)
+    int client_cnx_id_length, char const * client_scenario_text, char const * cc_log_dir,
+    int no_disk, int use_long_log)
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
@@ -544,18 +527,17 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
         fprintf(stdout, "Files not saved to disk (-D, no_disk)\n");
     }
 
-    if (client_scenario_text != NULL) {
-        fprintf(stdout, "Testing scenario: <%s>\n", client_scenario_text);
-        ret = demo_client_parse_scenario_desc(client_scenario_text, &client_sc_nb, &client_sc);
-        if (ret != 0) {
-            fprintf(stdout, "Cannot parse the specified scenario.\n");
-        }
-        else {
-            ret = picoquic_demo_client_initialize_context(&callback_ctx, client_sc, client_sc_nb, alpn, no_disk);
-        }
+    if (client_scenario_text == NULL) {
+        client_scenario_text = test_scenario_default;
+    }
+
+    fprintf(stdout, "Testing scenario: <%s>\n", client_scenario_text);
+    ret = demo_client_parse_scenario_desc(client_scenario_text, &client_sc_nb, &client_sc);
+    if (ret != 0) {
+        fprintf(stdout, "Cannot parse the specified scenario.\n");
     }
     else {
-        ret = picoquic_demo_client_initialize_context(&callback_ctx, test_scenario, test_scenario_nb, alpn, no_disk);
+        ret = picoquic_demo_client_initialize_context(&callback_ctx, client_sc, client_sc_nb, alpn, no_disk);
     }
 
     if (ret == 0) {
@@ -598,6 +580,9 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
             (void)picoquic_set_default_connection_id_length(qclient, (uint8_t)client_cnx_id_length);
 
             PICOQUIC_SET_LOG(qclient, F_log);
+            if (use_long_log) {
+                qclient->use_long_log = 1;
+            }
 
             picoquic_set_key_log_file_from_env(qclient);
 
@@ -693,7 +678,8 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
             delta_t,
             &current_time);
 
-        if (bytes_recv != 0 && F_log != NULL) {
+        if (bytes_recv != 0 && F_log != NULL &&
+            (cnx_client == NULL || cnx_client->pkt_ctx[picoquic_packet_context_application].send_sequence < PICOQUIC_LOG_PACKET_MAX_SEQUENCE || qclient->use_long_log)){
             fprintf(F_log, "Select returns %d, from length %d\n", bytes_recv, from_length);
         }
 
@@ -1015,6 +1001,7 @@ void usage()
     fprintf(stderr, "                        val and mask must be hex strings of same length, 4 to 18\n");
     fprintf(stderr, "  -k file               key file (default: %s)\n", SERVER_KEY_FILE);
     fprintf(stderr, "  -l file               Log file, Log to stdout if file = \"n\". No logging if absent.\n");
+    fprintf(stderr, "  -L                    Log all packets. If absent, log stops after 100 packets.\n");
     fprintf(stderr, "  -p port               server port (default: %d)\n", default_server_port);
     fprintf(stderr, "  -m mtu_max            Largest mtu value that can be tried for discovery\n");
     fprintf(stderr, "  -n sni                sni (default: server name)\n");
@@ -1068,6 +1055,7 @@ int main(int argc, char** argv)
     int nb_packets_before_update = 0;
     int client_cnx_id_length = 8;
     int no_disk = 0;
+    int use_long_log = 0;
     picoquic_connection_id_callback_ctx_t * cnx_id_cbdata = NULL;
     uint64_t* reset_seed = NULL;
     uint64_t reset_seed_x[2];
@@ -1087,7 +1075,7 @@ int main(int argc, char** argv)
 
     /* Get the parameters */
     int opt;
-    while ((opt = getopt(argc, argv, "c:k:p:u:v:1rhzDf:i:s:e:l:m:n:a:t:S:I:g:")) != -1) {
+    while ((opt = getopt(argc, argv, "c:k:p:u:v:1rhzDLf:i:s:e:l:m:n:a:t:S:I:g:")) != -1) {
         switch (opt) {
         case 'c':
             server_cert_file = optarg;
@@ -1151,6 +1139,9 @@ int main(int argc, char** argv)
             break;
         case 'l':
             log_file = optarg;
+            break;
+        case 'L':
+            use_long_log = 1;
             break;
         case 'm':
             mtu_max = atoi(optarg);
@@ -1270,13 +1261,13 @@ int main(int argc, char** argv)
             server_cert_file, server_key_file, just_once, do_hrr,
             (cnx_id_cbdata == NULL) ? NULL : picoquic_connection_id_callback,
             (cnx_id_cbdata == NULL) ? NULL : (void*)cnx_id_cbdata,
-            (uint8_t*)reset_seed, dest_if, mtu_max, proposed_version, F_log, cc_log_dir);
+            (uint8_t*)reset_seed, dest_if, mtu_max, proposed_version, F_log, cc_log_dir, use_long_log);
         printf("Server exit with code = %d\n", ret);
     } else {
         /* Run as client */
         printf("Starting PicoQUIC connection to server IP = %s, port = %d\n", server_name, server_port);
         ret = quic_client(server_name, server_port, sni, alpn, root_trust_file, proposed_version, force_zero_share, 
-            force_migration, nb_packets_before_update, mtu_max, F_log, client_cnx_id_length, client_scenario, cc_log_dir, no_disk);
+            force_migration, nb_packets_before_update, mtu_max, F_log, client_cnx_id_length, client_scenario, cc_log_dir, no_disk, use_long_log);
 
         printf("Client exit with code = %d\n", ret);
     }
