@@ -373,6 +373,9 @@ int quic_server(const char* server_name, int server_port,
     return ret;
 }
 
+static const char * test_scenario_default = "0:index.html;4:test.html;8:1234567;12:main.jpg;16:war-and-peace.txt;20:en/latest/;24:/file-123K";
+
+#if 0
 static const picoquic_demo_stream_desc_t test_scenario[] = {
 #ifdef PICOQUIC_TEST_AGAINST_ATS
     { 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "", "slash.html", 0 },
@@ -393,6 +396,7 @@ static const picoquic_demo_stream_desc_t test_scenario[] = {
 };
 
 static const size_t test_scenario_nb = sizeof(test_scenario) / sizeof(picoquic_demo_stream_desc_t);
+#endif
 
 #define PICOQUIC_DEMO_CLIENT_MAX_RECEIVE_BATCH 4
 
@@ -544,18 +548,17 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
         fprintf(stdout, "Files not saved to disk (-D, no_disk)\n");
     }
 
-    if (client_scenario_text != NULL) {
-        fprintf(stdout, "Testing scenario: <%s>\n", client_scenario_text);
-        ret = demo_client_parse_scenario_desc(client_scenario_text, &client_sc_nb, &client_sc);
-        if (ret != 0) {
-            fprintf(stdout, "Cannot parse the specified scenario.\n");
-        }
-        else {
-            ret = picoquic_demo_client_initialize_context(&callback_ctx, client_sc, client_sc_nb, alpn, no_disk);
-        }
+    if (client_scenario_text == NULL) {
+        client_scenario_text = test_scenario_default;
+    }
+
+    fprintf(stdout, "Testing scenario: <%s>\n", client_scenario_text);
+    ret = demo_client_parse_scenario_desc(client_scenario_text, &client_sc_nb, &client_sc);
+    if (ret != 0) {
+        fprintf(stdout, "Cannot parse the specified scenario.\n");
     }
     else {
-        ret = picoquic_demo_client_initialize_context(&callback_ctx, test_scenario, test_scenario_nb, alpn, no_disk);
+        ret = picoquic_demo_client_initialize_context(&callback_ctx, client_sc, client_sc_nb, alpn, no_disk);
     }
 
     if (ret == 0) {

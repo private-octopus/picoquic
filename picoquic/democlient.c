@@ -149,7 +149,7 @@ int h09_demo_client_prepare_stream_open_command(
 
 static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
     picoquic_demo_callback_ctx_t* ctx,
-    uint64_t stream_id, char const* doc_name, char const* fname, int is_binary)
+    uint64_t stream_id, char const* doc_name, char const* fname, int is_binary, int nb_repeat)
 {
     int ret = 0;
     uint8_t buffer[1024];
@@ -166,22 +166,33 @@ static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
         memset(stream_ctx, 0, sizeof(picoquic_demo_client_stream_ctx_t));
         stream_ctx->next_stream = ctx->first_stream;
         ctx->first_stream = stream_ctx;
-        stream_ctx->stream_id = stream_id;
+        stream_ctx->stream_id = stream_id + 4*nb_repeat;
 
         if (ctx->no_disk) {
             stream_ctx->F = NULL;
         }
         else {
+            char * x_name = fname;
+            char repeat_name[512];
+            if (nb_repeat > 0) {
 #ifdef _WINDOWS
-            if (fopen_s(&stream_ctx->F, fname, (is_binary == 0) ? "w" : "wb") != 0) {
-                ret = -1;
-            }
+                if (sprintf_s(repeat_name, sizeof(repeat_name), "r%dx%s", nb_repeat, fname) <= 0) {
+                    ret = -1;
+                }
 #else
-            stream_ctx->F = fopen(fname, (is_binary == 0) ? "w" : "wb");
-            if (stream_ctx->F == NULL) {
-                ret = -1;
-            }
+                (void)sprintf_s(repeat_name, "r%dx%s", nb_repeat, fname);
 #endif
+                x_name = repeat_name;
+            }
+            if (ret == 0) {
+                stream_ctx->F = picoquic_file_open(x_name, (is_binary == 0) ? "w" : "wb");
+                if (stream_ctx->F == NULL) {
+                    ret = -1;
+                }
+            }
+            else {
+                stream_ctx->F = NULL;
+            }
         }
         if (ret == 0) {
             stream_ctx->is_open = 1;
@@ -225,14 +236,14 @@ static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
 		/* Send the request and report */
 
         if (ret == 0) {
-            ret = picoquic_add_to_stream(cnx, stream_id, buffer, request_length, 1);
+            ret = picoquic_add_to_stream(cnx, stream_ctx->stream_id, buffer, request_length, 1);
         }
 
         if (ret != 0) {
-            fprintf(stdout, "Cannot send GET command for stream(%d): %s\n", (int)stream_id, path);
+            fprintf(stdout, "Cannot send GET command for stream(%d): %s\n", (int)stream_ctx->stream_id, path);
         }
         else {
-            fprintf(stdout, "Opening stream %d to GET %s\n", (int)stream_id, path);
+            fprintf(stdout, "Opening stream %d to GET %s\n", (int)stream_ctx->stream_id, path);
         }
     }
 
@@ -275,10 +286,15 @@ int picoquic_demo_client_start_streams(picoquic_cnx_t* cnx,
 	 * just finished */
     for (size_t i = 0; ret == 0 && i < ctx->nb_demo_streams; i++) {
         if (ctx->demo_stream[i].previous_stream_id == fin_stream_id) {
-            ret = picoquic_demo_client_open_stream(cnx, ctx, ctx->demo_stream[i].stream_id,
-                ctx->demo_stream[i].doc_name, 
-                ctx->demo_stream[i].f_name,
-                ctx->demo_stream[i].is_binary);
+            int repeat_nb = 0;
+            do {
+                ret = picoquic_demo_client_open_stream(cnx, ctx, ctx->demo_stream[i].stream_id,
+                    ctx->demo_stream[i].doc_name,
+                    ctx->demo_stream[i].f_name,
+                    ctx->demo_stream[i].is_binary,
+                    repeat_nb);
+                repeat_nb++;
+            } while (repeat_nb < ctx->demo_stream[i].repeat_count);
         }
     }
 
@@ -499,6 +515,31 @@ char * demo_client_parse_stream_spaces(char * text) {
     return text;
 }
 
+char * demo_client_parse_stream_repeat(char * text, int * number)
+{
+    int rep = 0;
+
+    if (*text == '*') {
+        text++;
+        while (text[0] >= '0' && text[0] <= '9') {
+            rep *= 10;
+            rep += *text++ - '0';
+        }
+
+        text = demo_client_parse_stream_spaces(text);
+
+        if (*text == ':') {
+            text++;
+        }
+        else {
+            text = NULL;
+        }
+    }
+    *number = rep;
+
+    return text;
+}
+
 char * demo_client_parse_stream_number(char * text, uint64_t default_number, uint64_t * number)
 {
     if (text[0] < '0' || text[0] > '9') {
@@ -612,7 +653,11 @@ char * demo_client_parse_stream_path(char * text,
 char * demo_client_parse_stream_desc(char * text, uint64_t default_stream, uint64_t default_previous,
     picoquic_demo_stream_desc_t * desc)
 {
-    text = demo_client_parse_stream_number(text, default_stream, &desc->stream_id);
+    text = demo_client_parse_stream_repeat(text, &desc->repeat_count);
+
+    if (text != NULL) {
+        text = demo_client_parse_stream_number(text, default_stream, &desc->stream_id);
+    }
 
     if (text != NULL) {
         text = demo_client_parse_stream_number(
