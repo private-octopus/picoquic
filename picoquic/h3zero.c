@@ -949,9 +949,9 @@ void h3zero_delete_data_stream_state(h3zero_data_stream_state_t * stream_state)
 static uint8_t const h3zero_default_setting_frame_val[] = {
     0,
     (uint8_t)h3zero_frame_settings, /* frame type */
-    6, /* Length, excluding the type byte */
-    0, (uint8_t)h3zero_setting_header_table_size, 0, /* 16 bit type, then value*/
-    0, (uint8_t)h3zero_qpack_blocked_streams, 0 /* 16 bit type, then value*/
+    4, /* Length */
+    (uint8_t)h3zero_setting_header_table_size, 0, /* 16 bit type, then value*/
+    (uint8_t)h3zero_qpack_blocked_streams, 0 /* 16 bit type, then value*/
 };
 
 uint8_t const * h3zero_default_setting_frame = h3zero_default_setting_frame_val;
