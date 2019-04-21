@@ -595,9 +595,16 @@ uint8_t* picoquic_provide_stream_data_buffer(void* context, size_t nb_bytes, int
  * when ready. The data is copied in an intermediate buffer managed by
  * the transport. Calling this API automatically erases the "active
  * mark" that might have been set by using "picoquic_mark_active_stream".
+ * It also erases the "app_stream_ctx" value set in previous calls to
+ * picoquic_add_to_stream_with_ctx or picoquic_mark_active_stream
  */
 int picoquic_add_to_stream(picoquic_cnx_t* cnx,
     uint64_t stream_id, const uint8_t* data, size_t length, int set_fin);
+
+/* Same as "picoquic_add_to_stream", but also sets the application stream context.
+ * The context is used in call backs, so the application can directly process responses.
+ */
+int picoquic_add_to_stream_with_ctx(picoquic_cnx_t * cnx, uint64_t stream_id, const uint8_t * data, size_t length, int set_fin, void * app_stream_ctx);
 
 /* Reset a stream, indicating that no more data will be sent on 
  * that stream and that any data currently queued can be abandoned. */

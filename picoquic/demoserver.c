@@ -238,9 +238,9 @@ static int h3zero_server_parse_request_frame(
             }
 
             if (o_bytes != NULL) {
-                ret = picoquic_add_to_stream(cnx, stream_ctx->stream_id,
+                ret = picoquic_add_to_stream_with_ctx(cnx, stream_ctx->stream_id,
                     buffer, o_bytes - buffer,
-                    (stream_ctx->echo_length == 0) ? 1 : 0);
+                    (stream_ctx->echo_length == 0) ? 1 : 0, stream_ctx);
                 if (ret != 0) {
                     o_bytes = NULL;
                 }

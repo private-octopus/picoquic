@@ -113,8 +113,8 @@ int picoquic_mark_high_priority_stream(picoquic_cnx_t * cnx, uint64_t stream_id,
     return 0;
 }
 
-int picoquic_add_to_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
-    const uint8_t* data, size_t length, int set_fin)
+int picoquic_add_to_stream_with_ctx(picoquic_cnx_t* cnx, uint64_t stream_id,
+    const uint8_t* data, size_t length, int set_fin, void * app_stream_ctx)
 {
     int ret = 0;
     picoquic_stream_head_t* stream = picoquic_find_stream_for_writing(cnx, stream_id, &ret);
@@ -171,9 +171,16 @@ int picoquic_add_to_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
     if (ret == 0) {
         cnx->nb_bytes_queued += length;
         stream->is_active = 0;
+        stream->app_stream_ctx = app_stream_ctx;
     }
 
     return ret;
+}
+
+int picoquic_add_to_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
+    const uint8_t* data, size_t length, int set_fin)
+{
+    return picoquic_add_to_stream_with_ctx(cnx, stream_id, data, length, set_fin, NULL);
 }
 
 int picoquic_reset_stream(picoquic_cnx_t* cnx,
