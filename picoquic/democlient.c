@@ -311,8 +311,9 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
     uint64_t fin_stream_id = PICOQUIC_DEMO_STREAM_ID_INITIAL;
     picoquic_demo_callback_ctx_t* ctx = (picoquic_demo_callback_ctx_t*)callback_ctx;
     picoquic_demo_client_stream_ctx_t* stream_ctx;
+#ifdef _WINDOWS
     UNREFERENCED_PARAMETER(v_stream_ctx);
-
+#endif
 
     ctx->last_interaction_time = picoquic_get_quic_time(cnx->quic);
     ctx->progress_observed = 1;
