@@ -297,7 +297,7 @@ static int test_api_queue_initial_queries(picoquic_test_tls_api_ctx_t* test_ctx,
     }
 
     if (test_ctx->stream0_target > 0) {
-        ret = picoquic_mark_active_stream(test_ctx->cnx_client, 0, 1);
+        ret = picoquic_mark_active_stream(test_ctx->cnx_client, 0, 1, NULL);
     }
 
     if (more_stream == 0) {
@@ -319,7 +319,7 @@ static int test_api_queue_initial_queries(picoquic_test_tls_api_ctx_t* test_ctx,
 
 static int test_api_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
-    picoquic_call_back_event_t fin_or_event, void* callback_ctx)
+    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx)
 {
     /* Need to implement the server sending strategy */
     test_api_callback_t* cb_ctx = (test_api_callback_t*)callback_ctx;
@@ -5796,7 +5796,7 @@ typedef struct st_tls_api_address_are_documented_t {
 
 static int test_local_address_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
-    picoquic_call_back_event_t fin_or_event, void* callback_ctx)
+    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx)
 {
     int ret = 0;
     int local_addr_len, remote_addr_len;
@@ -5840,7 +5840,7 @@ static int test_local_address_callback(picoquic_cnx_t* cnx,
         picoquic_stream_data_cb_fn new_fn;
         void * new_ctx;
 
-        ret = (cb_ctx->callback_fn)(cnx, stream_id, bytes, length, fin_or_event, cb_ctx->callback_ctx);
+        ret = (cb_ctx->callback_fn)(cnx, stream_id, bytes, length, fin_or_event, cb_ctx->callback_ctx, NULL);
 
         /* Check that the callbacks were not reset during the last call */
         new_fn = picoquic_get_callback_function(cnx);

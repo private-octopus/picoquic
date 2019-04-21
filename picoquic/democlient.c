@@ -240,7 +240,7 @@ static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
         if (ret != 0) {
             fprintf(stdout, "Cannot send GET command for stream(%d): %s\n", (int)stream_ctx->stream_id, path);
         }
-        else {
+        else if (nb_repeat == 0) {
             fprintf(stdout, "Opening stream %d to GET %s\n", (int)stream_ctx->stream_id, path);
         }
     }
@@ -292,7 +292,11 @@ int picoquic_demo_client_start_streams(picoquic_cnx_t* cnx,
                     ctx->demo_stream[i].is_binary,
                     repeat_nb);
                 repeat_nb++;
-            } while (repeat_nb < ctx->demo_stream[i].repeat_count);
+            } while (ret == 0 && repeat_nb < ctx->demo_stream[i].repeat_count);
+
+            if (ret == 0 && repeat_nb > 1) {
+                fprintf(stdout, "Repeated stream opening %d times.\n", repeat_nb);
+            }
         }
     }
 
@@ -301,13 +305,14 @@ int picoquic_demo_client_start_streams(picoquic_cnx_t* cnx,
 
 int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
-    picoquic_call_back_event_t fin_or_event, void* callback_ctx)
+    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx)
 {
     int ret = 0;
     uint64_t fin_stream_id = PICOQUIC_DEMO_STREAM_ID_INITIAL;
-
     picoquic_demo_callback_ctx_t* ctx = (picoquic_demo_callback_ctx_t*)callback_ctx;
     picoquic_demo_client_stream_ctx_t* stream_ctx;
+    UNREFERENCED_PARAMETER(v_stream_ctx);
+
 
     ctx->last_interaction_time = picoquic_get_quic_time(cnx->quic);
     ctx->progress_observed = 1;

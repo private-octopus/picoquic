@@ -1213,7 +1213,7 @@ int picoquic_incoming_stateless_reset(
     cnx->cnx_state = picoquic_state_disconnected;
 
     if (cnx->callback_fn) {
-        (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_stateless_reset, cnx->callback_ctx);
+        (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_stateless_reset, cnx->callback_ctx, NULL);
     }
 
     return PICOQUIC_ERROR_AEAD_CHECK;

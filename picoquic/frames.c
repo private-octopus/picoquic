@@ -385,7 +385,7 @@ uint8_t* picoquic_decode_stream_reset_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
         picoquic_update_max_stream_ID_local(cnx, stream);
 
         if (cnx->callback_fn != NULL && !stream->reset_signalled) {
-            if (cnx->callback_fn(cnx, stream->stream_id, NULL, 0, picoquic_callback_stream_reset, cnx->callback_ctx) != 0) {
+            if (cnx->callback_fn(cnx, stream->stream_id, NULL, 0, picoquic_callback_stream_reset, cnx->callback_ctx, stream->app_stream_ctx) != 0) {
                 picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR,
                     picoquic_frame_type_reset_stream);
             }
@@ -715,7 +715,7 @@ uint8_t* picoquic_decode_stop_sending_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
         stream->remote_stop_error = error_code;
 
         if (cnx->callback_fn != NULL && !stream->stop_sending_signalled) {
-            if (cnx->callback_fn(cnx, stream->stream_id, NULL, 0, picoquic_callback_stop_sending, cnx->callback_ctx) != 0) {
+            if (cnx->callback_fn(cnx, stream->stream_id, NULL, 0, picoquic_callback_stop_sending, cnx->callback_ctx, stream->app_stream_ctx) != 0) {
                 picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR,
                     picoquic_frame_type_stop_sending);
             }
@@ -819,7 +819,7 @@ void picoquic_stream_data_callback(picoquic_cnx_t* cnx, picoquic_stream_head_t* 
         }
 
         if (cnx->callback_fn(cnx, stream->stream_id, data->bytes + start, data_length, fin_now,
-            cnx->callback_ctx) != 0) {
+            cnx->callback_ctx, stream->app_stream_ctx) != 0) {
             picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
         }
 
@@ -834,7 +834,7 @@ void picoquic_stream_data_callback(picoquic_cnx_t* cnx, picoquic_stream_head_t* 
     if (stream->consumed_offset >= stream->fin_offset && stream->fin_received && !stream->fin_signalled) {
         stream->fin_signalled = 1;
         if (cnx->callback_fn(cnx, stream->stream_id, NULL, 0, picoquic_callback_stream_fin,
-            cnx->callback_ctx) != 0) {
+            cnx->callback_ctx, stream->app_stream_ctx) != 0) {
             picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
         }
     }
@@ -1394,7 +1394,7 @@ int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head_t* s
                 stream_data_context.length = 0;
                 stream_data_context.is_fin = 0;
 
-                if ((cnx->callback_fn)(cnx, stream->stream_id, (uint8_t*)&stream_data_context, allowed_space, picoquic_callback_prepare_to_send, cnx->callback_ctx) != 0) {
+                if ((cnx->callback_fn)(cnx, stream->stream_id, (uint8_t*)&stream_data_context, allowed_space, picoquic_callback_prepare_to_send, cnx->callback_ctx, stream->app_stream_ctx) != 0) {
                     /* something went wrong */
                     ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
                 }
@@ -2662,7 +2662,7 @@ uint8_t* picoquic_decode_connection_close_frame(picoquic_cnx_t* cnx, uint8_t* by
         cnx->cnx_state = (cnx->cnx_state < picoquic_state_client_ready_start || cnx->crypto_context[3].aead_decrypt == NULL) ? picoquic_state_disconnected : picoquic_state_closing_received;
 
         if (cnx->callback_fn) {
-            (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx);
+            (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx, NULL);
         }
     }
 
@@ -2713,7 +2713,7 @@ uint8_t* picoquic_decode_application_close_frame(picoquic_cnx_t* cnx, uint8_t* b
     else {
         cnx->cnx_state = (cnx->cnx_state < picoquic_state_client_ready_start) ? picoquic_state_disconnected : picoquic_state_closing_received;
         if (cnx->callback_fn) {
-            (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_application_close, cnx->callback_ctx);
+            (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_application_close, cnx->callback_ctx, NULL);
         }
     }
 

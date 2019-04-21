@@ -332,7 +332,7 @@ uint64_t picoquic_get_quic_time(picoquic_quic_t* quic); /* connection time, comp
  */
 typedef int (*picoquic_stream_data_cb_fn)(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
-    picoquic_call_back_event_t fin_or_event, void* callback_ctx);
+    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void * stream_ctx);
 
 /* Callback function for producing a connection ID compatible
  * with the server environment.
@@ -556,7 +556,7 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
  * queued data has been sent.
  */
 int picoquic_mark_active_stream(picoquic_cnx_t* cnx,
-    uint64_t stream_id, int is_active);
+    uint64_t stream_id, int is_active, void* v_stream_ctx);
 
 /* Mark stream as high priority. This guarantees that the data
  * queued on this stream will be sent before data from any other

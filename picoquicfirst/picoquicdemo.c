@@ -1075,7 +1075,7 @@ int main(int argc, char** argv)
 
     /* Get the parameters */
     int opt;
-    while ((opt = getopt(argc, argv, "c:k:p:u:v:1rhzDLf:i:s:e:l:m:n:a:t:S:I:g:")) != -1) {
+    while ((opt = getopt(argc, argv, "c:k:p:u:v:f:i:s:e:l:m:n:a:t:S:I:g:1rhzDL")) != -1) {
         switch (opt) {
         case 'c':
             server_cert_file = optarg;

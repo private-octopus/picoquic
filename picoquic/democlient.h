@@ -93,7 +93,7 @@ int picoquic_demo_client_start_streams(picoquic_cnx_t* cnx,
     picoquic_demo_callback_ctx_t* ctx, uint64_t fin_stream_id);
 int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
-    picoquic_call_back_event_t fin_or_event, void* callback_ctx);
+    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx);
 int picoquic_demo_client_initialize_context(
     picoquic_demo_callback_ctx_t* ctx,
     picoquic_demo_stream_desc_t const * demo_stream,

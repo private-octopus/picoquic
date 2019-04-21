@@ -59,7 +59,7 @@ typedef struct st_h3zero_server_callback_ctx_t {
 
 int h3zero_server_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
-    picoquic_call_back_event_t fin_or_event, void* callback_ctx);
+    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx);
 
 
 /* Defining then the Http 0.9 variant of the server
@@ -84,6 +84,7 @@ typedef struct st_picoquic_h09_server_stream_ctx_t {
 } picoquic_h09_server_stream_ctx_t;
 
 typedef struct st_picoquic_h09_server_callback_ctx_t {
+
     picoquic_h09_server_stream_ctx_t* first_stream;
     size_t buffer_max;
     uint8_t* buffer;
@@ -91,7 +92,7 @@ typedef struct st_picoquic_h09_server_callback_ctx_t {
 
 int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
-    picoquic_call_back_event_t fin_or_event, void* callback_ctx);
+    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx);
 
 /* The generic server callback will call either http3 or http0.9,
  * according to the ALPN selected by the client
@@ -99,6 +100,6 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
 
 int picoquic_demo_server_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
-    picoquic_call_back_event_t fin_or_event, void* callback_ctx);
+    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx);
 
 #endif /* DEMO_SERVER_H */
