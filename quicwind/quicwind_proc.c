@@ -152,7 +152,7 @@ static void quicwind_delete_context(picoquic_cnx_t * cnx, quicwind_callback_ctx_
 
 int quicwind_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
-    picoquic_call_back_event_t fin_or_event, void* callback_ctx)
+    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx)
 {
     int ret = 0;
     uint64_t fin_stream_id = PICOQUIC_DEMO_STREAM_ID_INITIAL;

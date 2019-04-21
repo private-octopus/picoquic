@@ -31,7 +31,7 @@ static int compare_int(void *l, void *r) {
     return *((int*)l) - *((int*)r);
 }
 
-static int check_node_sanity(picosplay_node *x, void *floor, void *ceil, picosplay_comparator comp) {
+static int check_node_sanity(picosplay_node_t *x, void *floor, void *ceil, picosplay_comparator comp) {
     int count = 0;
 
     if (x != NULL) {
@@ -72,7 +72,7 @@ static int check_node_sanity(picosplay_node *x, void *floor, void *ceil, picospl
 int splay_test() {
     int ret = 0;
     int count = 0;
-    picosplay_tree *tree = picosplay_new_tree(&compare_int);
+    picosplay_tree_t *tree = picosplay_new_tree(&compare_int);
     int values[] = {3, 4, 1, 2, 8, 5, 7};
     int values_first[] = { 3, 3, 1, 1, 1, 1, 1 };
     int values_last[] = { 3, 4, 4, 4, 8, 8, 8 };

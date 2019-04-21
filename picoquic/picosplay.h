@@ -27,31 +27,31 @@
 
 typedef int (*picosplay_comparator)(void *left, void *right);
 
-typedef struct picosplay_node {
-    struct picosplay_node *parent, *left, *right;
+typedef struct st_picosplay_node_t {
+    struct st_picosplay_node_t *parent, *left, *right;
     void *value;
-} picosplay_node;
+} picosplay_node_t;
 
-typedef struct picosplay_tree {
-    picosplay_node *root;
+typedef struct st_picosplay_tree_t {
+    picosplay_node_t *root;
     picosplay_comparator comp;
     int size;
-} picosplay_tree;
+} picosplay_tree_t;
 
-void picosplay_init_tree(picosplay_tree* tree, picosplay_comparator comp);
-picosplay_tree* picosplay_new_tree(picosplay_comparator comp);
-picosplay_node* picosplay_insert(picosplay_tree *tree, void *value);
-picosplay_node* picosplay_find(picosplay_tree *tree, void *value);
-picosplay_node* picosplay_first(picosplay_tree *tree);
-picosplay_node* picosplay_next(picosplay_node *node);
-picosplay_node* picosplay_last(picosplay_tree *tree);
+void picosplay_init_tree(picosplay_tree_t* tree, picosplay_comparator comp);
+picosplay_tree_t* picosplay_new_tree(picosplay_comparator comp);
+picosplay_node_t* picosplay_insert(picosplay_tree_t *tree, void *value);
+picosplay_node_t* picosplay_find(picosplay_tree_t *tree, void *value);
+picosplay_node_t* picosplay_first(picosplay_tree_t *tree);
+picosplay_node_t* picosplay_next(picosplay_node_t *node);
+picosplay_node_t* picosplay_last(picosplay_tree_t *tree);
 #if 0
 /* analyzer flags a memory leak in this code. We do not use it yet. */
 /* TODO: fix memory leak before restoring this. */
-void* picosplay_contents(picosplay_tree *tree);
+void* picosplay_contents(picosplay_tree_t *tree);
 #endif
-void picosplay_delete(picosplay_tree *tree, void *value);
-void picosplay_delete_hint(picosplay_tree *tree, picosplay_node *node);
-void picosplay_empty_tree(picosplay_tree *tree);
+void picosplay_delete(picosplay_tree_t *tree, void *value);
+void picosplay_delete_hint(picosplay_tree_t *tree, picosplay_node_t *node);
+void picosplay_empty_tree(picosplay_tree_t *tree);
 
 #endif /* PICOSPLAY_H */

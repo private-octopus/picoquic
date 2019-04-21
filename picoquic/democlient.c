@@ -234,13 +234,13 @@ static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
 		/* Send the request and report */
 
         if (ret == 0) {
-            ret = picoquic_add_to_stream(cnx, stream_ctx->stream_id, buffer, request_length, 1);
+            ret = picoquic_add_to_stream_with_ctx(cnx, stream_ctx->stream_id, buffer, request_length, 1, stream_ctx);
         }
 
         if (ret != 0) {
             fprintf(stdout, "Cannot send GET command for stream(%d): %s\n", (int)stream_ctx->stream_id, path);
         }
-        else {
+        else if (nb_repeat == 0) {
             fprintf(stdout, "Opening stream %d to GET %s\n", (int)stream_ctx->stream_id, path);
         }
     }
@@ -292,7 +292,11 @@ int picoquic_demo_client_start_streams(picoquic_cnx_t* cnx,
                     ctx->demo_stream[i].is_binary,
                     repeat_nb);
                 repeat_nb++;
-            } while (repeat_nb < ctx->demo_stream[i].repeat_count);
+            } while (ret == 0 && repeat_nb < ctx->demo_stream[i].repeat_count);
+
+            if (ret == 0 && repeat_nb > 1) {
+                fprintf(stdout, "Repeated stream opening %d times.\n", repeat_nb);
+            }
         }
     }
 
@@ -301,13 +305,12 @@ int picoquic_demo_client_start_streams(picoquic_cnx_t* cnx,
 
 int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
-    picoquic_call_back_event_t fin_or_event, void* callback_ctx)
+    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx)
 {
     int ret = 0;
     uint64_t fin_stream_id = PICOQUIC_DEMO_STREAM_ID_INITIAL;
-
     picoquic_demo_callback_ctx_t* ctx = (picoquic_demo_callback_ctx_t*)callback_ctx;
-    picoquic_demo_client_stream_ctx_t* stream_ctx;
+    picoquic_demo_client_stream_ctx_t* stream_ctx = (picoquic_demo_client_stream_ctx_t *)v_stream_ctx;
 
     ctx->last_interaction_time = picoquic_get_quic_time(cnx->quic);
     ctx->progress_observed = 1;
@@ -318,7 +321,9 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
         /* Data arrival on stream #x, maybe with fin mark */
         /* TODO: parse the frames. */
         /* TODO: check settings frame */
-        stream_ctx = picoquic_demo_client_find_stream(ctx, stream_id);
+        if (stream_ctx == NULL) {
+            stream_ctx = picoquic_demo_client_find_stream(ctx, stream_id);
+        }
         if (stream_ctx != NULL && stream_ctx->is_open && (stream_ctx->F != NULL || ctx->no_disk != 0)) {
             if (length > 0) {
                 switch (ctx->alpn) {
@@ -355,8 +360,10 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
             if (fin_or_event == picoquic_callback_stream_fin) {
                 if (picoquic_demo_client_close_stream(ctx, stream_ctx)) {
                     fin_stream_id = stream_id;
-                    fprintf(stdout, "Stream %d ended after %d bytes\n",
-                        (int)stream_id, (int)stream_ctx->received_length);
+                    if (stream_id <= 64) {
+                        fprintf(stdout, "Stream %d ended after %d bytes\n",
+                            (int)stream_id, (int)stream_ctx->received_length);
+                    }
                 }
             }
         }
@@ -364,7 +371,9 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
     case picoquic_callback_stream_reset: /* Server reset stream #x */
     case picoquic_callback_stop_sending: /* Server asks client to reset stream #x */
         /* TODO: special case for uni streams. */
-        stream_ctx = picoquic_demo_client_find_stream(ctx, stream_id);
+        if (stream_ctx == NULL) {
+            stream_ctx = picoquic_demo_client_find_stream(ctx, stream_id);
+        }
         if (picoquic_demo_client_close_stream(ctx, stream_ctx)) {
             fin_stream_id = stream_id;
             fprintf(stdout, "Stream %d reset after %d bytes\n",
@@ -385,7 +394,9 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
     case picoquic_callback_stream_gap:
         /* Gap indication, when unreliable streams are supported */
         fprintf(stdout, "Received a gap indication.\n");
-        stream_ctx = picoquic_demo_client_find_stream(ctx, stream_id);
+        if (stream_ctx == NULL) {
+            stream_ctx = picoquic_demo_client_find_stream(ctx, stream_id);
+        }
         if (picoquic_demo_client_close_stream(ctx, stream_ctx)) {
             fin_stream_id = stream_id;
             fprintf(stdout, "Stream %d reset after %d bytes\n",

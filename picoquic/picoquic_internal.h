@@ -404,6 +404,7 @@ typedef struct st_picoquic_stream_head_t {
     picoquic_stream_data_t* stream_data;
     uint64_t sent_offset;
     picoquic_stream_data_t* send_queue;
+    void * app_stream_ctx;
     picoquic_sack_item_t first_sack_item;
     /* Flags describing the state of the stream */
     unsigned int is_active : 1; /* The application is actively managing data sending through callbacks */

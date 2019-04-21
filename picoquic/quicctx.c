@@ -2113,7 +2113,7 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
             /* Give the application a chance to clean up its state */
             cnx->cnx_state = picoquic_state_disconnected;
             if (cnx->callback_fn) {
-                (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx);
+                (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx, NULL);
             }
         }
 
