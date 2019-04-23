@@ -120,7 +120,7 @@ int picoquic_deserialize_ticket(picoquic_stored_ticket_t ** ticket, uint8_t * by
     uint16_t sni_length = 0;
     uint16_t alpn_length = 0;
     uint16_t ticket_length = 0;
-    uint64_t tp_0rtt[PICOQUIC_NB_TP_0RTT];
+    uint64_t tp_0rtt[PICOQUIC_NB_TP_0RTT] = { 0, 0, 0, 0, 0, 0 };
 
     *consumed = 0;
     *ticket = NULL;
