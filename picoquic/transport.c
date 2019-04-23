@@ -77,9 +77,9 @@ uint8_t* picoquic_transport_param_type_varint_encode(uint8_t* bytes, const uint8
     return bytes;
 }
 
-uint32_t picoquic_decode_transport_param_stream_id(uint32_t rank, int extension_mode, int stream_type) 
+uint64_t picoquic_decode_transport_param_stream_id(uint64_t rank, int extension_mode, int stream_type) 
 {
-    uint32_t stream_id = 0xFFFFFFFF;
+    uint64_t stream_id = 0xFFFFFFFFFFFFFFFFull;
     
     if (rank > 0) {
         stream_id = stream_type;
@@ -91,11 +91,11 @@ uint32_t picoquic_decode_transport_param_stream_id(uint32_t rank, int extension_
     return stream_id;
 }
 
-uint16_t picoquic_prepare_transport_param_stream_id(uint32_t stream_id) 
+uint64_t picoquic_prepare_transport_param_stream_id(uint64_t stream_id) 
 {
-    uint16_t rank = 0;
+    uint64_t rank = 0;
 
-    if (stream_id != 0xFFFFFFFF) {
+    if (stream_id != 0xFFFFFFFFFFFFFFFFll) {
         rank = 1 + (uint16_t) (stream_id / 4);
     }
 
@@ -687,7 +687,7 @@ static int picoquic_receive_draft18_extensions(picoquic_cnx_t* cnx, int extensio
 
                             switch (extension_type) {
                             case picoquic_tp_initial_max_stream_data_bidi_local:
-                                cnx->remote_parameters.initial_max_stream_data_bidi_local = (uint32_t)
+                                cnx->remote_parameters.initial_max_stream_data_bidi_local = 
                                     picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
 
                                 /* If we sent zero rtt data, the streams were created with the
@@ -696,7 +696,7 @@ static int picoquic_receive_draft18_extensions(picoquic_cnx_t* cnx, int extensio
                                 picoquic_update_stream_initial_remote(cnx);
                                 break;
                             case picoquic_tp_initial_max_stream_data_bidi_remote:
-                                cnx->remote_parameters.initial_max_stream_data_bidi_remote = (uint32_t)
+                                cnx->remote_parameters.initial_max_stream_data_bidi_remote = 
                                     picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
                                 /* If we sent zero rtt data, the streams were created with the
                                 * old value of the remote parameter. We need to update that.
@@ -704,7 +704,7 @@ static int picoquic_receive_draft18_extensions(picoquic_cnx_t* cnx, int extensio
                                 picoquic_update_stream_initial_remote(cnx);
                                 break;
                             case picoquic_tp_initial_max_stream_data_uni:
-                                cnx->remote_parameters.initial_max_stream_data_uni = (uint32_t)
+                                cnx->remote_parameters.initial_max_stream_data_uni = 
                                     picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
                                 /* If we sent zero rtt data, the streams were created with the
                                 * old value of the remote parameter. We need to update that.
@@ -712,7 +712,7 @@ static int picoquic_receive_draft18_extensions(picoquic_cnx_t* cnx, int extensio
                                 picoquic_update_stream_initial_remote(cnx);
                                 break;
                             case picoquic_tp_initial_max_data:
-                                cnx->remote_parameters.initial_max_data = (uint32_t)
+                                cnx->remote_parameters.initial_max_data = 
                                     picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
                                 cnx->maxdata_remote = cnx->remote_parameters.initial_max_data;
                                 break;

@@ -527,7 +527,7 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx)
 {
     picoquic_h09_server_callback_ctx_t* ctx = (picoquic_h09_server_callback_ctx_t*)callback_ctx;
-    picoquic_h09_server_stream_ctx_t* stream_ctx = NULL;
+    picoquic_h09_server_stream_ctx_t* stream_ctx = (picoquic_h09_server_stream_ctx_t*)v_stream_ctx;
 
     if (cnx->quic->F_log != NULL) {
         fprintf(cnx->quic->F_log, "%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
@@ -575,11 +575,13 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
         }
     }
 
-    stream_ctx = ctx->first_stream;
+    if (stream_ctx == NULL) {
+        stream_ctx = ctx->first_stream;
 
-    /* if stream is already present, check its state. New bytes? */
-    while (stream_ctx != NULL && stream_ctx->stream_id != stream_id) {
-        stream_ctx = stream_ctx->next_stream;
+        /* if stream is already present, check its state. New bytes? */
+        while (stream_ctx != NULL && stream_ctx->stream_id != stream_id) {
+            stream_ctx = stream_ctx->next_stream;
+        }
     }
 
     if (stream_ctx == NULL) {

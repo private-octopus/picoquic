@@ -477,6 +477,7 @@ int picoquic_client_save_ticket_call_back(ptls_save_ticket_t* save_ticket_ctx,
     picoquic_quic_t* quic = *((picoquic_quic_t**)(((char*)save_ticket_ctx) + sizeof(ptls_save_ticket_t)));
     const char* sni = ptls_get_server_name(tls);
     const char* alpn = ptls_get_negotiated_protocol(tls);
+    picoquic_cnx_t * cnx = (picoquic_cnx_t *)*ptls_get_data_ptr(tls);
 
     if (alpn == NULL && quic != NULL) {
         alpn = quic->default_alpn;
@@ -484,7 +485,7 @@ int picoquic_client_save_ticket_call_back(ptls_save_ticket_t* save_ticket_ctx,
 
     if (sni != NULL && alpn != NULL) {
         ret = picoquic_store_ticket(&quic->p_first_ticket, 0, sni, (uint16_t)strlen(sni),
-            alpn, (uint16_t)strlen(alpn), input.base, (uint16_t)input.len);
+            alpn, (uint16_t)strlen(alpn), input.base, (uint16_t)input.len, &cnx->remote_parameters);
     } else {
         DBG_PRINTF("Received incorrect session resume ticket, sni = %s, alpn = %s, length = %d\n",
             (sni == NULL) ? "NULL" : sni, (alpn == NULL) ? "NULL" : alpn, (int)input.len);
@@ -1251,7 +1252,7 @@ int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint6
 
                 if (picoquic_get_ticket(cnx->quic->p_first_ticket, current_time,
                         cnx->sni, (uint16_t)strlen(cnx->sni), cnx->alpn, (uint16_t)strlen(cnx->alpn),
-                        &ticket, &ticket_length, 1)
+                        &ticket, &ticket_length, &cnx->remote_parameters, 1)
                     == 0) {
                     ctx->handshake_properties.client.session_ticket.base = ticket;
                     ctx->handshake_properties.client.session_ticket.len = ticket_length;

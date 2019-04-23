@@ -191,8 +191,8 @@ typedef struct st_picoquic_spinbit_def_t {
 extern picoquic_spinbit_def_t picoquic_spin_function_table[];
 
 /*
-    * Codes used for representing the various types of packet encodings.
-    */
+ * Codes used for representing the various types of packet encodings.
+ */
 typedef enum {
     picoquic_version_header_17
 } picoquic_version_header_encoding;
@@ -210,14 +210,26 @@ extern const size_t picoquic_nb_supported_versions;
 int picoquic_get_version_index(uint32_t proposed_version);
 
 /*
-    * Definition of the session ticket store and connection token
-    * store that can be associated with a
-    * client context.
-    */
+ * Definition of the session ticket store and connection token
+ * store that can be associated with a
+ * client context.
+ */
+
+typedef enum {
+    picoquic_tp_0rtt_max_data = 0,
+    picoquic_tp_0rtt_max_stream_data_bidi_local = 1,
+    picoquic_tp_0rtt_max_stream_data_bidi_remote = 2,
+    picoquic_tp_0rtt_max_stream_data_uni = 3,
+    picoquic_tp_0rtt_max_streams_id_bidir = 4,
+    picoquic_tp_0rtt_max_streams_id_unidir = 5
+} picoquic_tp_0rtt_enum;
+#define PICOQUIC_NB_TP_0RTT 6
+
 typedef struct st_picoquic_stored_ticket_t {
     struct st_picoquic_stored_ticket_t* next_ticket;
     char* sni;
     char* alpn;
+    uint64_t tp_0rtt[PICOQUIC_NB_TP_0RTT];
     uint8_t* ticket;
     uint64_t time_valid_until;
     uint16_t sni_length;
@@ -229,11 +241,11 @@ typedef struct st_picoquic_stored_ticket_t {
 int picoquic_store_ticket(picoquic_stored_ticket_t** p_first_ticket,
     uint64_t current_time,
     char const* sni, uint16_t sni_length, char const* alpn, uint16_t alpn_length,
-    uint8_t* ticket, uint16_t ticket_length);
+    uint8_t* ticket, uint16_t ticket_length, picoquic_tp_t const * tp);
 int picoquic_get_ticket(picoquic_stored_ticket_t* p_first_ticket,
     uint64_t current_time,
     char const* sni, uint16_t sni_length, char const* alpn, uint16_t alpn_length,
-    uint8_t** ticket, uint16_t* ticket_length, int mark_used);
+    uint8_t** ticket, uint16_t* ticket_length, picoquic_tp_t * tp, int mark_used);
 
 int picoquic_save_tickets(const picoquic_stored_ticket_t* first_ticket,
     uint64_t current_time, char const* ticket_file_name);
@@ -271,22 +283,8 @@ int picoquic_load_tokens(picoquic_stored_token_t** pp_first_token,
 void picoquic_free_tokens(picoquic_stored_token_t** pp_first_token);
 
 /*
-    * Transport parameters, as defined by the QUIC transport specification
-            original_connection_id(0),
-            idle_timeout(1),
-            stateless_reset_token(2),
-            max_packet_size(3),
-            initial_max_data(4),
-            initial_max_stream_data_bidi_local(5),
-            initial_max_stream_data_bidi_remote(6),
-            initial_max_stream_data_uni(7),
-            initial_max_streams_bidi(8),
-            initial_max_streams_uni(9),
-            ack_delay_exponent(10),
-            max_ack_delay(11),
-            disable_migration(12),
-            preferred_address(13),
-    */
+ * Transport parameters, as defined by the QUIC transport specification
+ */
 
 typedef enum {
     picoquic_tp_original_connection_id = 0,
@@ -1078,8 +1076,8 @@ int picoquic_skip_frame(uint8_t* bytes, size_t bytes_max, size_t* consumed, int*
 int picoquic_decode_closing_frames(uint8_t* bytes,
     size_t bytes_max, int* closing_received);
 
-uint32_t picoquic_decode_transport_param_stream_id(uint32_t rank, int extension_mode, int stream_type);
-uint16_t picoquic_prepare_transport_param_stream_id(uint32_t stream_id);
+uint64_t picoquic_decode_transport_param_stream_id(uint64_t rank, int extension_mode, int stream_type);
+uint64_t picoquic_prepare_transport_param_stream_id(uint64_t stream_id);
 
 int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mode,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
