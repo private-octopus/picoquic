@@ -27,7 +27,7 @@
 
 picoquic_stored_ticket_t* picoquic_format_ticket(uint64_t time_valid_until,
     char const* sni, uint16_t sni_length, char const* alpn, uint16_t alpn_length,
-    uint8_t* ticket, uint16_t ticket_length)
+    uint8_t* ticket, uint16_t ticket_length, picoquic_tp_t const * tp)
 {
     size_t ticket_size = sizeof(picoquic_stored_ticket_t) + sni_length + 1 + alpn_length + 1 + ticket_length;
     picoquic_stored_ticket_t* stored = (picoquic_stored_ticket_t*)malloc(ticket_size);
@@ -48,6 +48,15 @@ picoquic_stored_ticket_t* picoquic_format_ticket(uint64_t time_valid_until,
         memcpy(next_p, alpn, alpn_length);
         next_p += alpn_length;
         *next_p++ = 0;
+
+        if (tp != NULL) {
+            stored->tp_0rtt[picoquic_tp_0rtt_max_data] = tp->initial_max_data;
+            stored->tp_0rtt[picoquic_tp_0rtt_max_stream_data_bidi_local] = tp->initial_max_stream_data_bidi_local;
+            stored->tp_0rtt[picoquic_tp_0rtt_max_stream_data_bidi_remote] = tp->initial_max_stream_data_bidi_remote;
+            stored->tp_0rtt[picoquic_tp_0rtt_max_stream_data_uni] = tp->initial_max_stream_data_uni;
+            stored->tp_0rtt[picoquic_tp_0rtt_max_streams_id_bidir] = tp->initial_max_stream_id_bidir;
+            stored->tp_0rtt[picoquic_tp_0rtt_max_streams_id_unidir] = tp->initial_max_stream_id_unidir;
+        }
 
         stored->ticket = (uint8_t*)next_p;
         stored->ticket_length = ticket_length;
@@ -83,6 +92,11 @@ int picoquic_serialize_ticket(const picoquic_stored_ticket_t * ticket, uint8_t *
         memcpy(bytes + byte_index, ticket->alpn, ticket->alpn_length);
         byte_index += ticket->alpn_length;
 
+        for (int i = 0; i < PICOQUIC_NB_TP_0RTT; i++) {
+            picoformat_64(bytes + byte_index, ticket->tp_0rtt[i]);
+            byte_index += 8;
+        }
+
         picoformat_16(bytes + byte_index, ticket->ticket_length);
         byte_index += 2;
         memcpy(bytes + byte_index, ticket->ticket, ticket->ticket_length);
@@ -98,7 +112,7 @@ int picoquic_deserialize_ticket(picoquic_stored_ticket_t ** ticket, uint8_t * by
 {
     int ret = 0;
     uint64_t time_valid_until = 0;
-    size_t required_length = 8 + 2 + 2 + 2;
+    size_t required_length = 8 + 2 + 2 + PICOQUIC_NB_TP_0RTT * 8 + 2;
     size_t byte_index = 0;
     size_t sni_index = 0;
     size_t alpn_index = 0;
@@ -106,7 +120,7 @@ int picoquic_deserialize_ticket(picoquic_stored_ticket_t ** ticket, uint8_t * by
     uint16_t sni_length = 0;
     uint16_t alpn_length = 0;
     uint16_t ticket_length = 0;
-
+    uint64_t tp_0rtt[PICOQUIC_NB_TP_0RTT];
 
     *consumed = 0;
     *ticket = NULL;
@@ -120,13 +134,20 @@ int picoquic_deserialize_ticket(picoquic_stored_ticket_t ** ticket, uint8_t * by
         required_length += sni_length;
         byte_index += sni_length;
     }
-    
+
     if (required_length < bytes_max) {
         alpn_length = PICOPARSE_16(bytes + byte_index);
         byte_index += 2;
         alpn_index = byte_index;
         required_length += alpn_length;
         byte_index += alpn_length;
+    }
+
+    if (required_length < bytes_max) {
+        for (int i = 0; i < PICOQUIC_NB_TP_0RTT; i++) {
+            tp_0rtt[i] = PICOPARSE_64(bytes + byte_index);
+            byte_index += 8;
+        }
     }
 
     if (required_length < bytes_max) {
@@ -141,11 +162,14 @@ int picoquic_deserialize_ticket(picoquic_stored_ticket_t ** ticket, uint8_t * by
         ret = PICOQUIC_ERROR_INVALID_TICKET;
     } else {
         *ticket = picoquic_format_ticket(time_valid_until, (const char *)(bytes + sni_index), sni_length,
-            (const char *)(bytes + alpn_index), alpn_length, bytes + ticket_index, ticket_length);
+            (const char *)(bytes + alpn_index), alpn_length, bytes + ticket_index, ticket_length, NULL);
         if (*ticket == NULL) {
             ret = PICOQUIC_ERROR_MEMORY;
         }
         else {
+            for (int i=0; i< PICOQUIC_NB_TP_0RTT; i++) {
+                (*ticket)->tp_0rtt[i] = tp_0rtt[i];
+            }
             *consumed = required_length;
         }
     }
@@ -156,7 +180,7 @@ int picoquic_deserialize_ticket(picoquic_stored_ticket_t ** ticket, uint8_t * by
 int picoquic_store_ticket(picoquic_stored_ticket_t** pp_first_ticket,
     uint64_t current_time,
     char const* sni, uint16_t sni_length, char const* alpn, uint16_t alpn_length,
-    uint8_t* ticket, uint16_t ticket_length)
+    uint8_t* ticket, uint16_t ticket_length, picoquic_tp_t const * tp)
 {
     int ret = 0;
 
@@ -180,14 +204,13 @@ int picoquic_store_ticket(picoquic_stored_ticket_t** pp_first_ticket,
             ret = PICOQUIC_ERROR_INVALID_TICKET;
         } else {
             picoquic_stored_ticket_t* stored = picoquic_format_ticket(time_valid_until, sni, sni_length,
-                    alpn, alpn_length, ticket, ticket_length);
+                    alpn, alpn_length, ticket, ticket_length, tp);
             if (stored == NULL) {
                 ret = PICOQUIC_ERROR_MEMORY;
             }
             else {
                 picoquic_stored_ticket_t* next;
                 picoquic_stored_ticket_t** pprevious;
-
 
                 stored->next_ticket = next = *pp_first_ticket;
                 *pp_first_ticket = stored;
@@ -216,7 +239,7 @@ int picoquic_store_ticket(picoquic_stored_ticket_t** pp_first_ticket,
 int picoquic_get_ticket(picoquic_stored_ticket_t* p_first_ticket,
     uint64_t current_time,
     char const* sni, uint16_t sni_length, char const* alpn, uint16_t alpn_length,
-    uint8_t** ticket, uint16_t* ticket_length, int mark_used)
+    uint8_t** ticket, uint16_t* ticket_length, picoquic_tp_t * tp, int mark_used)
 {
     int ret = 0;
     picoquic_stored_ticket_t* next = p_first_ticket;
@@ -234,6 +257,14 @@ int picoquic_get_ticket(picoquic_stored_ticket_t* p_first_ticket,
         *ticket_length = 0;
         ret = -1;
     } else {
+        if (tp != NULL) {
+            tp->initial_max_data = next->tp_0rtt[picoquic_tp_0rtt_max_data];
+            tp->initial_max_stream_data_bidi_local = next->tp_0rtt[picoquic_tp_0rtt_max_stream_data_bidi_local];
+            tp->initial_max_stream_data_bidi_remote = next->tp_0rtt[picoquic_tp_0rtt_max_stream_data_bidi_remote];
+            tp->initial_max_stream_data_uni = next->tp_0rtt[picoquic_tp_0rtt_max_stream_data_uni];
+            tp->initial_max_stream_id_bidir = next->tp_0rtt[picoquic_tp_0rtt_max_streams_id_bidir];
+            tp->initial_max_stream_id_unidir = next->tp_0rtt[picoquic_tp_0rtt_max_streams_id_unidir];
+        }
         *ticket = next->ticket;
         *ticket_length = next->ticket_length;
         next->was_used = mark_used;

@@ -309,9 +309,9 @@ int stream_id_to_rank_test()
     for (int stream_type = 0; stream_type < 4; stream_type += 2) {
         for (int extension_mode = 0; extension_mode < 2; extension_mode ++) {
             for (int rank_id = 0; rank_id < 5; rank_id++) {
-                uint32_t stream_id = picoquic_decode_transport_param_stream_id(test_rank[rank_id], extension_mode, stream_type);
-                uint16_t decoded_rank = picoquic_prepare_transport_param_stream_id(stream_id); 
-                uint32_t decoded_stream_id = picoquic_decode_transport_param_stream_id(decoded_rank, extension_mode, stream_type);
+                uint64_t stream_id = picoquic_decode_transport_param_stream_id(test_rank[rank_id], extension_mode, stream_type);
+                uint64_t decoded_rank = picoquic_prepare_transport_param_stream_id(stream_id);
+                uint64_t decoded_stream_id = picoquic_decode_transport_param_stream_id(decoded_rank, extension_mode, stream_type);
 
                 if (decoded_rank != test_rank[rank_id] || decoded_stream_id != stream_id) {
                     ret = -1;
@@ -954,7 +954,7 @@ int transport_param_stream_id_test() {
 
     /* Decoding test */
     for (size_t i = 0; i < nb_transport_param_stream_id_test_table; i++) {
-        uint16_t rank = picoquic_prepare_transport_param_stream_id(
+        uint64_t rank = picoquic_prepare_transport_param_stream_id(
             transport_param_stream_id_test_table[i].stream_id);
 
         if (rank != transport_param_stream_id_test_table[i].rank) {
@@ -968,7 +968,7 @@ int transport_param_stream_id_test() {
 
     /* Encoding test */
     for (size_t i = 0; i < nb_transport_param_stream_id_test_table; i++) {
-        uint32_t stream_id = picoquic_decode_transport_param_stream_id(
+        uint64_t stream_id = picoquic_decode_transport_param_stream_id(
             transport_param_stream_id_test_table[i].rank,
             transport_param_stream_id_test_table[i].extension_mode,
             transport_param_stream_id_test_table[i].stream_id_type);
