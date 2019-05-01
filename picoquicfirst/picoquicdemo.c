@@ -375,7 +375,7 @@ int quic_server(const char* server_name, int server_port,
     return ret;
 }
 
-static const char * test_scenario_default = "0:index.html;4:test.html;8:1234567;12:main.jpg;16:war-and-peace.txt;20:en/latest/;24:/file-123K";
+static const char * test_scenario_default = "0:index.html;4:test.html;8:/1234567;12:main.jpg;16:war-and-peace.txt;20:en/latest/;24:/file-123K";
 
 #define PICOQUIC_DEMO_CLIENT_MAX_RECEIVE_BATCH 4
 
@@ -520,7 +520,7 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
     picoquic_demo_stream_desc_t * client_sc = NULL;
 
     if (alpn == NULL) {
-        alpn = "hq-19";
+        alpn = "h3-20";
     }
 
     if (no_disk) {
