@@ -213,6 +213,7 @@ picoquic_quic_t* picoquic_create(uint32_t nb_connections,
             }
             else if (ret != 0) {
                 DBG_PRINTF("Cannot load tickets from <%s>\n", ticket_file_name);
+                ret = 0;
             }
         }
 
