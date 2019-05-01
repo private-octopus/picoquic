@@ -137,13 +137,16 @@ static uint8_t picoquic_cleartext_draft_17_salt[] = {
      0x48, 0x5e, 0x09, 0xa0
 };
 
-/* Support for draft 13! */
 const picoquic_version_parameters_t picoquic_supported_versions[] = {
     { PICOQUIC_INTERNAL_TEST_VERSION_2,
         picoquic_version_header_17,
         sizeof(picoquic_cleartext_internal_test_1_salt),
         picoquic_cleartext_internal_test_1_salt },
     { PICOQUIC_INTERNAL_TEST_VERSION_1,
+        picoquic_version_header_17,
+        sizeof(picoquic_cleartext_internal_test_1_salt),
+        picoquic_cleartext_internal_test_1_salt },
+    { PICOQUIC_THIRTEENTH_INTEROP_VERSION,
         picoquic_version_header_17,
         sizeof(picoquic_cleartext_internal_test_1_salt),
         picoquic_cleartext_internal_test_1_salt },
