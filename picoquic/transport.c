@@ -572,6 +572,7 @@ static int picoquic_receive_draft18_extensions(picoquic_cnx_t* cnx, int extensio
     size_t byte_index = 0;
     uint32_t present_flag = 0;
     picoquic_connection_id_t original_connection_id = picoquic_null_connection_id;
+    uint64_t max_ack_delay = 0;
 
     cnx->remote_parameters_received = 1;
     picoquic_clear_transport_extensions(cnx);
@@ -653,6 +654,7 @@ static int picoquic_receive_draft18_extensions(picoquic_cnx_t* cnx, int extensio
             byte_index += 2;
             extensions_end = byte_index + extensions_size;
 
+
             /* Set the parameters to default value zero */
             memset(&cnx->remote_parameters, 0, sizeof(picoquic_tp_t));
             /* Except for ack_delay_exponent, whose default is 3 */
@@ -718,12 +720,17 @@ static int picoquic_receive_draft18_extensions(picoquic_cnx_t* cnx, int extensio
                                 break;
                             case picoquic_tp_initial_max_streams_bidi:
                                 cnx->remote_parameters.initial_max_stream_id_bidir =
-                                    picoquic_decode_transport_param_stream_id((uint32_t)
+                                    picoquic_decode_transport_param_stream_id(
                                         picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret), extension_mode,
                                         PICOQUIC_STREAM_ID_BIDIR);
 
-                                cnx->max_stream_id_bidir_remote =
-                                    (cnx->remote_parameters.initial_max_stream_id_bidir == 0xFFFFFFFF) ? 0 : cnx->remote_parameters.initial_max_stream_id_bidir;
+                                if (cnx->remote_parameters.initial_max_stream_id_bidir >= (1ull << 62)) {
+                                    ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_STREAM_LIMIT_ERROR, 0);
+                                }
+                                else {
+                                    cnx->max_stream_id_bidir_remote =
+                                        (cnx->remote_parameters.initial_max_stream_id_bidir == 0xFFFFFFFFFFFFFFFFull) ? 0 : cnx->remote_parameters.initial_max_stream_id_bidir;
+                                }
 
                                 break;
                             case picoquic_tp_idle_timeout:
@@ -755,9 +762,13 @@ static int picoquic_receive_draft18_extensions(picoquic_cnx_t* cnx, int extensio
                                     picoquic_decode_transport_param_stream_id((uint32_t)
                                         picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret), extension_mode,
                                         PICOQUIC_STREAM_ID_UNIDIR);
-
-                                cnx->max_stream_id_unidir_remote =
-                                    (cnx->remote_parameters.initial_max_stream_id_unidir == 0xFFFFFFFF) ? 0 : cnx->remote_parameters.initial_max_stream_id_unidir;
+                                if (cnx->remote_parameters.initial_max_stream_id_unidir >= (1ull << 62)) {
+                                    ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_STREAM_LIMIT_ERROR, 0);
+                                }
+                                else {
+                                    cnx->max_stream_id_unidir_remote =
+                                        (cnx->remote_parameters.initial_max_stream_id_unidir == 0xFFFFFFFFFFFFFFFFull) ? 0 : cnx->remote_parameters.initial_max_stream_id_unidir;
+                                }
 
                                 break;
                             case picoquic_tp_server_preferred_address:
@@ -779,11 +790,8 @@ static int picoquic_receive_draft18_extensions(picoquic_cnx_t* cnx, int extensio
                                 }
                                 break;
                             case picoquic_tp_max_ack_delay:
-                                cnx->remote_parameters.max_ack_delay = (uint32_t)
-                                    picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret) * 1000;
-                                if (cnx->remote_parameters.max_ack_delay > PICOQUIC_MAX_ACK_DELAY_MAX_MS * 1000) {
-                                    ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
-                                }
+                                max_ack_delay =
+                                    picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
                                 break;
                             case picoquic_tp_original_connection_id:
                                 if (extension_length >= 256) {
@@ -818,6 +826,13 @@ static int picoquic_receive_draft18_extensions(picoquic_cnx_t* cnx, int extensio
 
     if (ret == 0 && (present_flag & (1 << picoquic_tp_max_ack_delay)) == 0) {
         cnx->remote_parameters.max_ack_delay = PICOQUIC_ACK_DELAY_MAX_DEFAULT;
+    }
+    else {
+        if (max_ack_delay > (PICOQUIC_MAX_ACK_DELAY_MAX_MS >> cnx->remote_parameters.ack_delay_exponent)) {
+            ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+        } else {
+            cnx->remote_parameters.max_ack_delay = (max_ack_delay << cnx->remote_parameters.ack_delay_exponent) * 1000;
+        }
     }
 
     /* Clients must not include reset token, server address, or original cid  */

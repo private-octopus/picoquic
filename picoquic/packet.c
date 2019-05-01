@@ -672,6 +672,7 @@ int picoquic_prepare_version_negotiation(
     if (sp != NULL) {
         uint8_t* bytes = sp->bytes;
         size_t byte_index = 0;
+        uint32_t rand_vn;
 
         /* Packet type set to random value for version negotiation */
         picoquic_public_random(bytes + byte_index, 1);
@@ -690,6 +691,12 @@ int picoquic_prepare_version_negotiation(
             picoformat_32(bytes + byte_index, picoquic_supported_versions[i].version);
             byte_index += 4;
         }
+        /* Add random reserved value as grease, but be careful to not match proposed version */
+        do {
+            rand_vn = (((uint32_t)picoquic_public_random_64()) & 0x0F0F0F0F) | 0x0A0A0A0A;
+        } while (rand_vn == ph->vn);
+        picoformat_32(bytes + byte_index, rand_vn);
+        byte_index += 4;
 
         /* Set length and addresses, and queue. */
         sp->length = byte_index;
