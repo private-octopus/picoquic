@@ -578,6 +578,8 @@ char const * demo_client_parse_stream_number(char const * text, uint64_t default
 
 char const * demo_client_parse_stream_format(char const * text, int default_format, int * is_binary)
 {
+    char const * orig = text;
+
     if (text[0] != 'b' && text[0] != 't') {
         *is_binary = default_format;
     }
@@ -590,7 +592,7 @@ char const * demo_client_parse_stream_format(char const * text, int default_form
             text++;
         }
         else {
-            text = NULL;
+            text = orig;
         }
     }
 

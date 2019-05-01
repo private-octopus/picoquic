@@ -375,7 +375,7 @@ int quic_server(const char* server_name, int server_port,
     return ret;
 }
 
-static const char * test_scenario_default = "0:index.html;4:test.html;8:1234567;12:main.jpg;16:war-and-peace.txt;20:en/latest/;24:/file-123K";
+static const char * test_scenario_default = "0:index.html;4:test.html;8:/1234567;12:main.jpg;16:war-and-peace.txt;20:en/latest/;24:/file-123K";
 
 #define PICOQUIC_DEMO_CLIENT_MAX_RECEIVE_BATCH 4
 
@@ -520,7 +520,7 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
     picoquic_demo_stream_desc_t * client_sc = NULL;
 
     if (alpn == NULL) {
-        alpn = "hq-19";
+        alpn = "h3-20";
     }
 
     if (no_disk) {
@@ -563,15 +563,15 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
     if (ret == 0) {
         qclient = picoquic_create(8, NULL, NULL, root_crt, alpn, NULL, NULL, NULL, NULL, NULL, current_time, NULL, ticket_store_filename, NULL, 0);
 
-        picoquic_set_default_congestion_algorithm(qclient, picoquic_cubic_algorithm);
-
-        if (picoquic_load_tokens(&qclient->p_first_token, current_time, token_store_filename) != 0) {
-            fprintf(stderr, "Could not load tokens from <%s>.\n", token_store_filename);
-        }
-
         if (qclient == NULL) {
             ret = -1;
         } else {
+            picoquic_set_default_congestion_algorithm(qclient, picoquic_cubic_algorithm);
+
+            if (picoquic_load_tokens(&qclient->p_first_token, current_time, token_store_filename) != 0) {
+                fprintf(stderr, "Could not load tokens from <%s>.\n", token_store_filename);
+            }
+
             if (force_zero_share) {
                 qclient->flags |= picoquic_context_client_zero_share;
             }
