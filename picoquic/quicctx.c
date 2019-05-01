@@ -2130,7 +2130,12 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
             free((void*)cnx->sni);
             cnx->sni = NULL;
         }
-        
+
+        if (cnx->retry_token != NULL) {
+            free(cnx->retry_token);
+            cnx->retry_token = NULL;
+        }
+
         picoquic_remove_cnx_from_list(cnx);
         picoquic_remove_cnx_from_wake_list(cnx);
 

@@ -241,13 +241,13 @@ int picoquic_get_token(picoquic_stored_token_t* p_first_token,
         next = next->next_token;
     }
 
-    if (best_match == NULL) {
+    if (best_match == NULL || best_match->token_length == 0 || (*token = (uint8_t *)malloc(best_match->token_length)) == NULL) {
         *token = NULL;
         *token_length = 0;
         ret = -1;
     } else {
-        *token = (uint8_t*)best_match->token;
         *token_length = best_match->token_length;
+        memcpy(*token, (uint8_t*)best_match->token, best_match->token_length);
         best_match->was_used = mark_used;
     }
 

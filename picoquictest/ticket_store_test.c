@@ -335,6 +335,11 @@ int token_store_test()
                 ret = -1;
                 break;
             }
+
+            if (token != NULL) {
+                free(token);
+                token = NULL;
+            }
         }
     }
     /* Store them on a file */
