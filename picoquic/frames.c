@@ -1811,6 +1811,70 @@ void picoquic_check_spurious_retransmission(picoquic_cnx_t* cnx,
     }
 }
 
+void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, int64_t rtt_estimate,
+    picoquic_packet_context_t * pkt_ctx, uint64_t current_time, uint64_t ack_delay)
+{
+    if (rtt_estimate > 0 && old_path != NULL) {
+        if (ack_delay > old_path->max_ack_delay) {
+            old_path->max_ack_delay = ack_delay;
+        }
+
+        if (old_path->smoothed_rtt == PICOQUIC_INITIAL_RTT && old_path->rtt_variant == 0) {
+            old_path->smoothed_rtt = rtt_estimate;
+            old_path->rtt_variant = rtt_estimate / 2;
+            old_path->rtt_min = rtt_estimate;
+            old_path->retransmit_timer = 3 * rtt_estimate + old_path->max_ack_delay;
+            pkt_ctx->ack_delay_local = old_path->rtt_min / 4;
+            if (pkt_ctx->ack_delay_local < PICOQUIC_ACK_DELAY_MIN) {
+                pkt_ctx->ack_delay_local = PICOQUIC_ACK_DELAY_MIN;
+            }
+        }
+        else {
+            /* Computation per RFC 6298 */
+            int64_t delta_rtt = rtt_estimate - old_path->smoothed_rtt;
+            int64_t delta_rtt_average = 0;
+            old_path->smoothed_rtt += delta_rtt / 8;
+
+            if (delta_rtt < 0) {
+                delta_rtt_average = (-delta_rtt) - old_path->rtt_variant;
+            }
+            else {
+                delta_rtt_average = delta_rtt - old_path->rtt_variant;
+            }
+            old_path->rtt_variant += delta_rtt_average / 4;
+
+            if (rtt_estimate < (int64_t)old_path->rtt_min) {
+                old_path->rtt_min = rtt_estimate;
+
+                pkt_ctx->ack_delay_local = old_path->rtt_min / 4;
+                if (pkt_ctx->ack_delay_local < PICOQUIC_ACK_DELAY_MIN) {
+                    pkt_ctx->ack_delay_local = PICOQUIC_ACK_DELAY_MIN;
+                }
+                else if (pkt_ctx->ack_delay_local > PICOQUIC_ACK_DELAY_MAX) {
+                    pkt_ctx->ack_delay_local = PICOQUIC_ACK_DELAY_MAX;
+                }
+            }
+
+            if (4 * old_path->rtt_variant < old_path->rtt_min) {
+                old_path->rtt_variant = old_path->rtt_min / 4;
+            }
+
+            old_path->retransmit_timer = old_path->smoothed_rtt + 4 * old_path->rtt_variant +
+                cnx->remote_parameters.max_ack_delay;
+        }
+
+        if (PICOQUIC_MIN_RETRANSMIT_TIMER > old_path->retransmit_timer) {
+            old_path->retransmit_timer = PICOQUIC_MIN_RETRANSMIT_TIMER;
+        }
+
+        if (cnx->congestion_alg != NULL) {
+            cnx->congestion_alg->alg_notify(old_path,
+                picoquic_congestion_notification_rtt_measurement,
+                rtt_estimate, 0, 0, current_time);
+        }
+    }
+}
+
 static picoquic_packet_t* picoquic_update_rtt(picoquic_cnx_t* cnx, uint64_t largest,
     uint64_t current_time, uint64_t ack_delay, picoquic_packet_context_enum pc)
 {
@@ -1839,6 +1903,7 @@ static picoquic_packet_t* picoquic_update_rtt(picoquic_cnx_t* cnx, uint64_t larg
                 uint64_t acknowledged_time = current_time - ack_delay;
                 int64_t rtt_estimate = acknowledged_time - packet->send_time;
 
+
                 if (pkt_ctx->latest_time_acknowledged < packet->send_time) {
                     pkt_ctx->latest_time_acknowledged = packet->send_time;
                 }
@@ -1848,6 +1913,7 @@ static picoquic_packet_t* picoquic_update_rtt(picoquic_cnx_t* cnx, uint64_t larg
                     picoquic_path_t * old_path = packet->send_path;
 
                     if (old_path != NULL) {
+#if 0
                         if (ack_delay > old_path->max_ack_delay) {
                             old_path->max_ack_delay = ack_delay;
                         }
@@ -1905,6 +1971,9 @@ static picoquic_packet_t* picoquic_update_rtt(picoquic_cnx_t* cnx, uint64_t larg
                                 picoquic_congestion_notification_rtt_measurement,
                                 rtt_estimate, 0, 0, current_time);
                         }
+#else
+                        picoquic_update_path_rtt(cnx, old_path, rtt_estimate, pkt_ctx, current_time, ack_delay);
+#endif
                     }
                 }
             }
