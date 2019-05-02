@@ -1011,6 +1011,9 @@ int picoquic_process_ack_of_ack_frame(
     picoquic_sack_item_t* first_sack,
     uint8_t* bytes, size_t bytes_max, size_t* consumed, int is_ecn_14);
 
+void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, int64_t rtt_estimate,
+    picoquic_packet_context_t * pkt_ctx, uint64_t current_time, uint64_t ack_delay);
+
 /* stream management */
 picoquic_stream_head_t* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t stream_id);
 void picoquic_update_stream_initial_remote(picoquic_cnx_t* cnx);
