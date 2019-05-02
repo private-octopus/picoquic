@@ -66,7 +66,7 @@ int h3zero_server_callback(picoquic_cnx_t* cnx,
  */
 
 #define PICOQUIC_FIRST_COMMAND_MAX 128
-#define PICOQUIC_FIRST_RESPONSE_MAX (1 << 20)
+#define PICOQUIC_FIRST_RESPONSE_MAX (10*(1 << 20))
 
 typedef enum {
     picoquic_h09_server_stream_status_none = 0,
