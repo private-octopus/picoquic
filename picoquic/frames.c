@@ -982,6 +982,13 @@ picoquic_stream_head_t* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
     if (cnx->high_priority_stream_id != (uint64_t)((int64_t)-1)) {
         picoquic_stream_head_t* hi_pri_stream = cnx->first_stream;
 
+        /* Check parity */
+        if (IS_CLIENT_STREAM_ID(cnx->high_priority_stream_id) == cnx->client_mode) {
+            if (cnx->high_priority_stream_id > ((IS_BIDIR_STREAM_ID(cnx->high_priority_stream_id)) ? cnx->max_stream_id_bidir_remote : cnx->max_stream_id_unidir_remote)) {
+                return NULL;
+            }
+        }
+
         while (hi_pri_stream && hi_pri_stream->stream_id != cnx->high_priority_stream_id) {
             hi_pri_stream = hi_pri_stream->next_stream;
         }
