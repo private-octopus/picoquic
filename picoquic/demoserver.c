@@ -340,8 +340,21 @@ static int demo_server_prepare_to_send(void * context, size_t space, size_t echo
 
         buffer = picoquic_provide_stream_data_buffer(context, available, is_fin, !is_fin);
         if (buffer != NULL) {
+            int r = (74 - (*echo_sent % 74)) - 2;
+
             /* TODO: fill buffer with some text */
             memset(buffer, 0x5A, available);
+
+            while (r < (int)available ) {
+                if (r >= 0) {
+                    buffer[r] = '\r';
+                }
+                r++;
+                if (r >= 0 && r < available ) {
+                    buffer[r] = '\n';
+                }
+                r += 73;
+            }
             *echo_sent += (uint32_t)available;
             ret = 0;
         }
