@@ -46,8 +46,8 @@ typedef struct st_h3zero_server_stream_ctx_t {
     h3zero_server_stream_status_t status;
     uint64_t stream_id;
     size_t received_length;
-    uint32_t echo_length;
-    uint32_t echo_sent;
+    size_t echo_length;
+    size_t echo_sent;
     uint8_t frame[H3ZERO_SERVER_FRAME_MAX];
 } h3zero_server_stream_ctx_t;
 
@@ -80,14 +80,13 @@ typedef struct st_picoquic_h09_server_stream_ctx_t {
     uint64_t stream_id;
     size_t command_length;
     size_t response_length;
+    size_t echo_length;
+    size_t echo_sent;
     uint8_t command[PICOQUIC_FIRST_COMMAND_MAX];
 } picoquic_h09_server_stream_ctx_t;
 
 typedef struct st_picoquic_h09_server_callback_ctx_t {
-
     picoquic_h09_server_stream_ctx_t* first_stream;
-    size_t buffer_max;
-    uint8_t* buffer;
 } picoquic_h09_server_callback_ctx_t;
 
 int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
