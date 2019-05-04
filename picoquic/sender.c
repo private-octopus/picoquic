@@ -2603,6 +2603,9 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                                 ret = 0;
                                 break;
                             }
+                            else {
+                                break;
+                            }
                         }
 
                         if (length <= header_length) {
