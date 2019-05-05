@@ -668,6 +668,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int max_stream_data_needed : 1; /* If at least one stream needs more data */
     unsigned int path_demotion_needed : 1; /* If at least one path was recently demoted */
     unsigned int alt_path_challenge_needed : 1; /* If at least one alt path challenge is needed or in progress */
+    unsigned int is_handshake_finished : 1; /* If there are no more packets to ack or retransmit in initial  or handshake contexts */
 
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;

@@ -2336,18 +2336,27 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
         picoquic_ready_state_transition(cnx, current_time);
     }
 
-    /* Verify first that there is no need for retransmit or ack
-     * on initial or handshake context. This does not deal with EOED packets,
-     * as they are handled from within the general retransmission path.
-     * This is needed even with implicit acks for now, because the peer may
-     * be retransmitting data and thus requires acks. */
+    if (!cnx->is_handshake_finished) {
+        /* Verify first that there is no need for retransmit or ack
+         * on initial or handshake context. This does not deal with EOED packets,
+         * as they are handled from within the general retransmission path.
+         * This is needed even with implicit acks for now, because the peer may
+         * be retransmitting data and thus requires acks. */
 
-    length = picoquic_prepare_packet_old_context(cnx, picoquic_packet_context_initial,
-        path_x, packet, send_buffer_min_max, current_time, next_wake_time, &header_length);
-
-    if (length == 0) {
-        length = picoquic_prepare_packet_old_context(cnx, picoquic_packet_context_handshake,
+        length = picoquic_prepare_packet_old_context(cnx, picoquic_packet_context_initial,
             path_x, packet, send_buffer_min_max, current_time, next_wake_time, &header_length);
+
+        if (length == 0) {
+            length = picoquic_prepare_packet_old_context(cnx, picoquic_packet_context_handshake,
+                path_x, packet, send_buffer_min_max, current_time, next_wake_time, &header_length);
+        }
+        
+        cnx->is_handshake_finished = length == 0 && cnx->cnx_state == picoquic_state_ready &&
+            !cnx->pkt_ctx[picoquic_packet_context_initial].ack_needed &&
+            cnx->pkt_ctx[picoquic_packet_context_initial].retransmit_oldest == NULL &&
+            !cnx->pkt_ctx[picoquic_packet_context_handshake].ack_needed &&
+            cnx->pkt_ctx[picoquic_packet_context_handshake].retransmit_oldest == NULL;
+
     }
 
     if (length == 0) {
