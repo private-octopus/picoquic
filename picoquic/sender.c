@@ -3050,16 +3050,17 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
         picoquic_delete_abandoned_paths(cnx, current_time, &next_wake_time);
     }
 
-    /* Remove failed probes */
-    picoquic_delete_failed_probes(cnx);
-
     /* Check whether to insert a hole in the sequence of packets */
     picoquic_insert_hole_in_send_sequence_if_needed(cnx, current_time);
 
+    if (cnx->probe_first != NULL) {
+        /* Remove failed probes */
+        picoquic_delete_failed_probes(cnx);
 
-    /* If probes are in waiting, send the first one */
-    ret = picoquic_prepare_probe(cnx, current_time, send_buffer, send_buffer_max, send_length,
-        p_addr_to, to_len, p_addr_from, from_len, &addr_to_log, &next_wake_time);
+        /* If probes are in waiting, send the first one */
+        ret = picoquic_prepare_probe(cnx, current_time, send_buffer, send_buffer_max, send_length,
+            p_addr_to, to_len, p_addr_from, from_len, &addr_to_log, &next_wake_time);
+    }
 
     /* If alternate challenges are waiting, send them */
     if (ret == 0 && *send_length == 0 && cnx->alt_path_challenge_needed) {
