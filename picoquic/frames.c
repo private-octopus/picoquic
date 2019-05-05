@@ -1021,8 +1021,8 @@ picoquic_stream_head_t* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
     }
 
     /* Skip to the first non visited stream */
-    while (start_stream && start_stream->stream_id <= cnx->last_visited_stream_id) {
-        start_stream = start_stream->next_stream;
+    if (cnx->last_visited_stream != NULL && cnx->last_visited_stream->next_stream != NULL){
+        start_stream = cnx->last_visited_stream->next_stream;
     }
 
     if (start_stream == NULL) {
@@ -1489,7 +1489,7 @@ int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head_t* s
 
         if (ret == 0) {
             /* remember the last stream on which data is sent so each stream is visited in turn. */
-            cnx->last_visited_stream_id = stream->stream_id;
+            cnx->last_visited_stream = stream;
             /* mark the stream as unblocked since we sent something */
             stream->stream_data_blocked_sent = 0;
             cnx->sent_blocked_frame = 0;

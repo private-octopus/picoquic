@@ -766,7 +766,7 @@ typedef struct st_picoquic_cnx_t {
 
     /* Management of streams */
     picoquic_stream_head_t * first_stream;
-    uint64_t last_visited_stream_id;
+    picoquic_stream_head_t * last_visited_stream;
     uint64_t high_priority_stream_id;
 
     /* If not `0`, the connection will send keep alive messages in the given interval. */
