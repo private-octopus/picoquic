@@ -75,11 +75,14 @@ static h3zero_server_stream_ctx_t * h3zero_find_or_create_stream(
     h3zero_server_callback_ctx_t* ctx,
     int should_create)
 {
-    h3zero_server_stream_ctx_t * stream_ctx = ctx->first_stream;
+    h3zero_server_stream_ctx_t * stream_ctx = NULL;
 
     /* if stream is already present, check its state. New bytes? */
-    while (stream_ctx != NULL && stream_ctx->stream_id != stream_id) {
-        stream_ctx = stream_ctx->next_stream;
+    if (!should_create) {
+        stream_ctx = ctx->first_stream;
+        while (stream_ctx != NULL && stream_ctx->stream_id != stream_id) {
+            stream_ctx = stream_ctx->next_stream;
+        }
     }
 
     if (stream_ctx == NULL && should_create) {
@@ -261,13 +264,12 @@ static int h3zero_server_parse_request_frame(
 }
 
 static int h3zero_server_callback_data(
-    picoquic_cnx_t* cnx,
+    picoquic_cnx_t* cnx, h3zero_server_stream_ctx_t * stream_ctx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event,
     h3zero_server_callback_ctx_t* ctx)
 {
     int ret = 0;
-    h3zero_server_stream_ctx_t * stream_ctx = NULL;
 
     /* Find whether this is bidir or unidir stream */
     if (IS_BIDIR_STREAM_ID(stream_id)) {
@@ -440,7 +442,7 @@ int h3zero_server_callback(picoquic_cnx_t* cnx,
         case picoquic_callback_stream_data:
         case picoquic_callback_stream_fin:
             /* Data arrival on stream #x, maybe with fin mark */
-            ret = h3zero_server_callback_data(cnx, stream_id, bytes, length, fin_or_event, ctx);
+            ret = h3zero_server_callback_data(cnx, stream_ctx, stream_id, bytes, length, fin_or_event, ctx);
             break;
         case picoquic_callback_stream_reset: /* Client reset stream #x */
         case picoquic_callback_stop_sending: /* Client asks server to reset stream #x */
@@ -636,27 +638,29 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
     }
 
     if (stream_ctx == NULL) {
-        stream_ctx = ctx->first_stream;
+        if (fin_or_event != picoquic_callback_stream_data && fin_or_event != picoquic_callback_stream_fin) {
+            stream_ctx = ctx->first_stream;
 
-        /* if stream is already present, check its state. New bytes? */
-        while (stream_ctx != NULL && stream_ctx->stream_id != stream_id) {
-            stream_ctx = stream_ctx->next_stream;
+            /* if stream is already present, check its state. New bytes? */
+            while (stream_ctx != NULL && stream_ctx->stream_id != stream_id) {
+                stream_ctx = stream_ctx->next_stream;
+            }
         }
-    }
 
-    if (stream_ctx == NULL) {
-        stream_ctx = (picoquic_h09_server_stream_ctx_t*)
-            malloc(sizeof(picoquic_h09_server_stream_ctx_t));
         if (stream_ctx == NULL) {
-            /* Could not handle this stream */
-            picoquic_reset_stream(cnx, stream_id, 500);
-            return 0;
-        }
-        else {
-            memset(stream_ctx, 0, sizeof(picoquic_h09_server_stream_ctx_t));
-            stream_ctx->next_stream = ctx->first_stream;
-            ctx->first_stream = stream_ctx;
-            stream_ctx->stream_id = stream_id;
+            stream_ctx = (picoquic_h09_server_stream_ctx_t*)
+                malloc(sizeof(picoquic_h09_server_stream_ctx_t));
+            if (stream_ctx == NULL) {
+                /* Could not handle this stream */
+                picoquic_reset_stream(cnx, stream_id, 500);
+                return 0;
+            }
+            else {
+                memset(stream_ctx, 0, sizeof(picoquic_h09_server_stream_ctx_t));
+                stream_ctx->next_stream = ctx->first_stream;
+                ctx->first_stream = stream_ctx;
+                stream_ctx->stream_id = stream_id;
+            }
         }
     }
 

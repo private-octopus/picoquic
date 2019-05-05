@@ -257,6 +257,7 @@ static int picoquic_demo_client_close_stream(
             fclose(stream_ctx->F);
             stream_ctx->F = NULL;
         }
+        stream_ctx->is_open = 0;
         ctx->nb_open_streams--;
         ret = 1;
     }
