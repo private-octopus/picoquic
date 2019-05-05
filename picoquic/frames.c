@@ -3136,6 +3136,7 @@ uint8_t* picoquic_decode_path_challenge_frame(picoquic_cnx_t* cnx, uint8_t* byte
             addr_to != NULL && picoquic_compare_addr(addr_to, (struct sockaddr *)&path_x->alt_local_addr) == 0) {
             path_x->alt_challenge_response = challenge_response;
             path_x->alt_response_required = 1;
+            cnx->alt_path_challenge_needed = 1;
         } else {
             DBG_PRINTF("%s", "Path challenge ignored, wrong addresses\n");
         }

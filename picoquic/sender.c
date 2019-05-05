@@ -2904,11 +2904,13 @@ static int picoquic_prepare_alt_challenge(picoquic_cnx_t* cnx,
 {
     int ret = 0;
     picoquic_packet_t * packet = NULL;
+    unsigned int is_alt_challenge_still_needed = 0;
 
     *send_length = 0;
 
     if (send_buffer_max < PICOQUIC_INITIAL_MTU_IPV6) {
         ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
+        is_alt_challenge_still_needed = 1;
     }
     else if (
         cnx->cnx_state == picoquic_state_ready ||
@@ -2918,7 +2920,7 @@ static int picoquic_prepare_alt_challenge(picoquic_cnx_t* cnx,
 
             if (cnx->path[i]->alt_challenge_required &&
                 cnx->path[i]->alt_challenge_repeat_count > 3 &&
-                current_time >= cnx->path[i]->alt_challenge_timeout){
+                current_time >= cnx->path[i]->alt_challenge_timeout) {
                 /* Challenge is failing. Set required to 0. */
                 cnx->path[i]->alt_challenge_required = 0;
             }
@@ -2955,7 +2957,7 @@ static int picoquic_prepare_alt_challenge(picoquic_cnx_t* cnx,
                         (cnx->path[i]->alt_challenge_repeat_count == 0 ||
                             current_time >= cnx->path[i]->alt_challenge_timeout)) {
                         ret = picoquic_prepare_path_challenge_frame(&bytes[length],
-                            send_buffer_max - checksum_overhead - length, &data_bytes, 
+                            send_buffer_max - checksum_overhead - length, &data_bytes,
                             cnx->path[i]->alt_challenge[cnx->path[i]->alt_challenge_repeat_count]);
                         if (ret == 0) {
                             length += (uint32_t)data_bytes;
@@ -2984,7 +2986,7 @@ static int picoquic_prepare_alt_challenge(picoquic_cnx_t* cnx,
                         *to_len = picoquic_store_addr(p_addr_to, (struct sockaddr*)&cnx->path[i]->alt_peer_addr);
                     }
                     /* Remember the log address */
-                    (void) picoquic_store_addr(addr_to_log, (struct sockaddr*)&cnx->path[i]->alt_peer_addr);
+                    (void)picoquic_store_addr(addr_to_log, (struct sockaddr*)&cnx->path[i]->alt_peer_addr);
                     /* Set the source address */
                     if (p_addr_from != NULL) {
                         *from_len = picoquic_store_addr(p_addr_from, (struct sockaddr*)&cnx->path[i]->alt_local_addr);
@@ -2996,17 +2998,26 @@ static int picoquic_prepare_alt_challenge(picoquic_cnx_t* cnx,
                         send_length, send_buffer, (uint32_t)send_buffer_max,
                         &cnx->path[i]->remote_cnxid, &cnx->path[0]->local_cnxid, cnx->path[0], current_time);
 
-                    /* no need to check the other paths yet. */
+                    /* no need to check the other paths yet. Will check at next invocation. */
+                    is_alt_challenge_still_needed = 1;
                     break;
                 }
+
+                is_alt_challenge_still_needed |= cnx->path[i]->alt_challenge_required;
+                is_alt_challenge_still_needed |= cnx->path[i]->alt_response_required;
             }
             else if (cnx->path[i]->alt_challenge_required &&
                 cnx->path[i]->alt_challenge_repeat_count < 4 &&
                 *next_wake_time > cnx->path[i]->alt_challenge_timeout) {
                 *next_wake_time = cnx->path[i]->alt_challenge_timeout;
+                is_alt_challenge_still_needed = 1;
             }
         }
+    } else {
+        is_alt_challenge_still_needed = 1;
     }
+
+    cnx->alt_path_challenge_needed = is_alt_challenge_still_needed;
 
     return ret;
 }
@@ -3026,7 +3037,9 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     *send_length = 0;
 
     /* Remove delete paths */
-    picoquic_delete_abandoned_paths(cnx, current_time, &next_wake_time);
+    if (cnx->path_demotion_needed) {
+        picoquic_delete_abandoned_paths(cnx, current_time, &next_wake_time);
+    }
 
     /* Remove failed probes */
     picoquic_delete_failed_probes(cnx);
@@ -3040,7 +3053,7 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
         p_addr_to, to_len, p_addr_from, from_len, &addr_to_log, &next_wake_time);
 
     /* If alternate challenges are waiting, send them */
-    if (ret == 0 && *send_length == 0) {
+    if (ret == 0 && *send_length == 0 && cnx->alt_path_challenge_needed) {
         ret = picoquic_prepare_alt_challenge(cnx, current_time, send_buffer, send_buffer_max, send_length,
             p_addr_to, to_len, p_addr_from, from_len, &addr_to_log, &next_wake_time);
     }
