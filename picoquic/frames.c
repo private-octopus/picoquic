@@ -950,6 +950,12 @@ static int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id
         picoquic_stream_data_callback(cnx, stream);
     }
 
+    if (ret == 0) {
+        if (!stream->fin_received && !stream->reset_received && 2 * stream->consumed_offset > stream->maxdata_local) {
+            cnx->max_stream_data_needed = 1;
+        }
+    }
+
     return ret;
 }
 
@@ -2913,6 +2919,10 @@ int picoquic_prepare_required_max_stream_data_frames(picoquic_cnx_t* cnx,
             }
         }
         stream = stream->next_stream;
+    }
+
+    if (ret == 0 && stream == NULL) {
+        cnx->max_stream_data_needed = 0;
     }
 
     if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {

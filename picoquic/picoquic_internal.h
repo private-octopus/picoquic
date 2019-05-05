@@ -665,6 +665,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int sent_blocked_frame : 1; /* Blocked frame has been sent */
     unsigned int stream_blocked_bidir_sent : 1; /* If stream_blocked has been sent to peer and no stream limit update since */
     unsigned int stream_blocked_unidir_sent : 1; /* If stream_blocked has been sent to peer and no stream limit update since */
+    unsigned int max_stream_data_needed : 1; /* If at least one stream needs more data */
 
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;
