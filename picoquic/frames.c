@@ -950,6 +950,12 @@ static int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id
         picoquic_stream_data_callback(cnx, stream);
     }
 
+    if (ret == 0) {
+        if (!stream->fin_received && !stream->reset_received && 2 * stream->consumed_offset > stream->maxdata_local) {
+            cnx->max_stream_data_needed = 1;
+        }
+    }
+
     return ret;
 }
 
@@ -1015,8 +1021,8 @@ picoquic_stream_head_t* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
     }
 
     /* Skip to the first non visited stream */
-    while (start_stream && start_stream->stream_id <= cnx->last_visited_stream_id) {
-        start_stream = start_stream->next_stream;
+    if (cnx->last_visited_stream != NULL && cnx->last_visited_stream->next_stream != NULL){
+        start_stream = cnx->last_visited_stream->next_stream;
     }
 
     if (start_stream == NULL) {
@@ -1483,7 +1489,7 @@ int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head_t* s
 
         if (ret == 0) {
             /* remember the last stream on which data is sent so each stream is visited in turn. */
-            cnx->last_visited_stream_id = stream->stream_id;
+            cnx->last_visited_stream = stream;
             /* mark the stream as unblocked since we sent something */
             stream->stream_data_blocked_sent = 0;
             cnx->sent_blocked_frame = 0;
@@ -2913,6 +2919,10 @@ int picoquic_prepare_required_max_stream_data_frames(picoquic_cnx_t* cnx,
             }
         }
         stream = stream->next_stream;
+    }
+
+    if (ret == 0 && stream == NULL) {
+        cnx->max_stream_data_needed = 0;
     }
 
     if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {

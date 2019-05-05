@@ -831,7 +831,7 @@ static int picoquic_receive_draft18_extensions(picoquic_cnx_t* cnx, int extensio
         if (max_ack_delay > (PICOQUIC_MAX_ACK_DELAY_MAX_MS >> cnx->remote_parameters.ack_delay_exponent)) {
             ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
         } else {
-            cnx->remote_parameters.max_ack_delay = (max_ack_delay << cnx->remote_parameters.ack_delay_exponent) * 1000;
+            cnx->remote_parameters.max_ack_delay = (uint32_t)((max_ack_delay << cnx->remote_parameters.ack_delay_exponent) * 1000);
         }
     }
 

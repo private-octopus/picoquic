@@ -2558,7 +2558,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                             }
                         }
                         /* If necessary, encode the max stream data frames */
-                        if (ret == 0) {
+                        if (ret == 0 && cnx->max_stream_data_needed) {
                             ret = picoquic_prepare_required_max_stream_data_frames(cnx, &bytes[length],
                                 send_buffer_min_max - checksum_overhead - length, &data_bytes);
 
