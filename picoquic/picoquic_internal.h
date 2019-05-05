@@ -584,6 +584,7 @@ typedef struct st_picoquic_packet_context_t {
     uint64_t send_sequence;
 
     picoquic_sack_item_t first_sack_item;
+    uint64_t next_sequence_hole;
     uint64_t time_stamp_largest_received;
     uint64_t highest_ack_sent;
     uint64_t highest_ack_sent_time;

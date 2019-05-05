@@ -763,22 +763,29 @@ void picoquic_dequeue_retransmitted_packet(picoquic_cnx_t* cnx, picoquic_packet_
  */
 void picoquic_insert_hole_in_send_sequence_if_needed(picoquic_cnx_t* cnx, uint64_t current_time)
 {
-    if (cnx->cnx_state == picoquic_state_ready &&
+    if (cnx->quic->sequence_hole_pseudo_period == 0) {
+        /* Holing disabled. Set to max value, never worry about it later */
+        cnx->pkt_ctx[0].next_sequence_hole = (uint64_t)((int64_t)-1);
+    } else if (cnx->cnx_state == picoquic_state_ready &&
         cnx->pkt_ctx[0].retransmit_newest != NULL &&
-        cnx->quic->sequence_hole_pseudo_period > 0 &&
-        !cnx->pkt_ctx[0].retransmit_newest->is_ack_trap &&
-        picoquic_public_uniform_random(cnx->quic->sequence_hole_pseudo_period) == 0) {
-        picoquic_packet_t* packet = picoquic_create_packet(cnx->quic);
+        cnx->pkt_ctx[0].send_sequence >= cnx->pkt_ctx[0].next_sequence_hole) {
+        if (cnx->pkt_ctx[0].next_sequence_hole != 0 &&
+            !cnx->pkt_ctx[0].retransmit_newest->is_ack_trap) {
+            /* Insert a hole in sequence */
+            picoquic_packet_t* packet = picoquic_create_packet(cnx->quic);
 
-        if (packet != NULL) {
-            packet->is_ack_trap = 1;
-            packet->pc = picoquic_packet_context_application;
-            packet->ptype = picoquic_packet_1rtt_protected;
-            packet->send_path = cnx->path[0];
-            packet->send_time = current_time;
-            packet->sequence_number = cnx->pkt_ctx[picoquic_packet_context_application].send_sequence++;
-            picoquic_queue_for_retransmit(cnx, cnx->path[0], packet, 0, current_time);
+            if (packet != NULL) {
+                packet->is_ack_trap = 1;
+                packet->pc = picoquic_packet_context_application;
+                packet->ptype = picoquic_packet_1rtt_protected;
+                packet->send_path = cnx->path[0];
+                packet->send_time = current_time;
+                packet->sequence_number = cnx->pkt_ctx[picoquic_packet_context_application].send_sequence++;
+                picoquic_queue_for_retransmit(cnx, cnx->path[0], packet, 0, current_time);
+            }
         }
+        /* Predict the next hole*/
+        cnx->pkt_ctx[0].next_sequence_hole = cnx->pkt_ctx[picoquic_packet_context_application].send_sequence + 1 + picoquic_public_uniform_random(cnx->quic->sequence_hole_pseudo_period);
     }
 }
 
@@ -3051,7 +3058,9 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     }
 
     /* Check whether to insert a hole in the sequence of packets */
-    picoquic_insert_hole_in_send_sequence_if_needed(cnx, current_time);
+    if (cnx->pkt_ctx[0].send_sequence >= cnx->pkt_ctx[0].next_sequence_hole) {
+        picoquic_insert_hole_in_send_sequence_if_needed(cnx, current_time);
+    }
 
     if (cnx->probe_first != NULL) {
         /* Remove failed probes */
