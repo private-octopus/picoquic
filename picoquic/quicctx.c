@@ -895,18 +895,21 @@ void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time,
 {
     int path_index_good = 1;
     int path_index_current = 1;
+    unsigned int is_demotion_in_progress = 0;
 
     while (path_index_current < cnx->nb_paths) {
         if (cnx->path[path_index_current]->challenge_failed ||
             (cnx->path[path_index_current]->path_is_demoted &&
                 current_time >= cnx->path[path_index_current]->demotion_time)) {
             /* Only increment the current index */
+            is_demotion_in_progress |= cnx->path[path_index_current]->path_is_demoted;
             path_index_current++;
         } else {
             if (cnx->path[path_index_current]->path_is_demoted &&
                 current_time < cnx->path[path_index_current]->demotion_time &&
                 *next_wake_time > cnx->path[path_index_current]->demotion_time) {
                 *next_wake_time = cnx->path[path_index_current]->demotion_time;
+                is_demotion_in_progress |= 1;
             }
 
             if (path_index_current > path_index_good) {
@@ -930,6 +933,7 @@ void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time,
     }
 
     /* TODO: what if there are no paths left? */
+    cnx->path_demotion_needed = is_demotion_in_progress;
 }
 
 /* 
@@ -946,6 +950,7 @@ void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_
 
         cnx->path[path_index]->path_is_demoted = 1;
         cnx->path[path_index]->demotion_time = current_time + 3* demote_timer;
+        cnx->path_demotion_needed = 1;
     }
 }
 

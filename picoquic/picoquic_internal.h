@@ -584,6 +584,7 @@ typedef struct st_picoquic_packet_context_t {
     uint64_t send_sequence;
 
     picoquic_sack_item_t first_sack_item;
+    uint64_t next_sequence_hole;
     uint64_t time_stamp_largest_received;
     uint64_t highest_ack_sent;
     uint64_t highest_ack_sent_time;
@@ -666,6 +667,9 @@ typedef struct st_picoquic_cnx_t {
     unsigned int stream_blocked_bidir_sent : 1; /* If stream_blocked has been sent to peer and no stream limit update since */
     unsigned int stream_blocked_unidir_sent : 1; /* If stream_blocked has been sent to peer and no stream limit update since */
     unsigned int max_stream_data_needed : 1; /* If at least one stream needs more data */
+    unsigned int path_demotion_needed : 1; /* If at least one path was recently demoted */
+    unsigned int alt_path_challenge_needed : 1; /* If at least one alt path challenge is needed or in progress */
+    unsigned int is_handshake_finished : 1; /* If there are no more packets to ack or retransmit in initial  or handshake contexts */
 
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;

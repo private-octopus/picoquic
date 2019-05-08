@@ -1892,7 +1892,7 @@ static picoquic_packet_t* picoquic_update_rtt(picoquic_cnx_t* cnx, uint64_t larg
     uint64_t current_time, uint64_t ack_delay, picoquic_packet_context_enum pc)
 {
     picoquic_packet_context_t * pkt_ctx = &cnx->pkt_ctx[pc];
-    picoquic_packet_t* packet = pkt_ctx->retransmit_newest;
+    picoquic_packet_t* packet = pkt_ctx->retransmit_oldest;
 
     /* Check whether this is a new acknowledgement */
     if (largest > pkt_ctx->highest_acknowledged || pkt_ctx->highest_acknowledged == (uint64_t)((int64_t)-1)) {
@@ -1904,11 +1904,11 @@ static picoquic_packet_t* picoquic_update_rtt(picoquic_cnx_t* cnx, uint64_t larg
             /* if the ACK is reasonably recent, use it to update the RTT */
             /* find the stored copy of the largest acknowledged packet */
 
-            while (packet != NULL && packet->sequence_number > largest) {
-                packet = packet->next_packet;
+            while (packet != NULL && packet->previous_packet != NULL && packet->sequence_number < largest) {
+                packet = packet->previous_packet;
             }
 
-            if (packet == NULL || packet->sequence_number < largest) {
+            if (packet == NULL || packet->sequence_number != largest) {
                 /* There is no copy of this packet in store. It may have
                  * been deleted because too old, or maybe already
                  * retransmitted */
@@ -3136,6 +3136,7 @@ uint8_t* picoquic_decode_path_challenge_frame(picoquic_cnx_t* cnx, uint8_t* byte
             addr_to != NULL && picoquic_compare_addr(addr_to, (struct sockaddr *)&path_x->alt_local_addr) == 0) {
             path_x->alt_challenge_response = challenge_response;
             path_x->alt_response_required = 1;
+            cnx->alt_path_challenge_needed = 1;
         } else {
             DBG_PRINTF("%s", "Path challenge ignored, wrong addresses\n");
         }

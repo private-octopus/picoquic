@@ -763,22 +763,29 @@ void picoquic_dequeue_retransmitted_packet(picoquic_cnx_t* cnx, picoquic_packet_
  */
 void picoquic_insert_hole_in_send_sequence_if_needed(picoquic_cnx_t* cnx, uint64_t current_time)
 {
-    if (cnx->cnx_state == picoquic_state_ready &&
+    if (cnx->quic->sequence_hole_pseudo_period == 0) {
+        /* Holing disabled. Set to max value, never worry about it later */
+        cnx->pkt_ctx[0].next_sequence_hole = (uint64_t)((int64_t)-1);
+    } else if (cnx->cnx_state == picoquic_state_ready &&
         cnx->pkt_ctx[0].retransmit_newest != NULL &&
-        cnx->quic->sequence_hole_pseudo_period > 0 &&
-        !cnx->pkt_ctx[0].retransmit_newest->is_ack_trap &&
-        picoquic_public_uniform_random(cnx->quic->sequence_hole_pseudo_period) == 0) {
-        picoquic_packet_t* packet = picoquic_create_packet(cnx->quic);
+        cnx->pkt_ctx[0].send_sequence >= cnx->pkt_ctx[0].next_sequence_hole) {
+        if (cnx->pkt_ctx[0].next_sequence_hole != 0 &&
+            !cnx->pkt_ctx[0].retransmit_newest->is_ack_trap) {
+            /* Insert a hole in sequence */
+            picoquic_packet_t* packet = picoquic_create_packet(cnx->quic);
 
-        if (packet != NULL) {
-            packet->is_ack_trap = 1;
-            packet->pc = picoquic_packet_context_application;
-            packet->ptype = picoquic_packet_1rtt_protected;
-            packet->send_path = cnx->path[0];
-            packet->send_time = current_time;
-            packet->sequence_number = cnx->pkt_ctx[picoquic_packet_context_application].send_sequence++;
-            picoquic_queue_for_retransmit(cnx, cnx->path[0], packet, 0, current_time);
+            if (packet != NULL) {
+                packet->is_ack_trap = 1;
+                packet->pc = picoquic_packet_context_application;
+                packet->ptype = picoquic_packet_1rtt_protected;
+                packet->send_path = cnx->path[0];
+                packet->send_time = current_time;
+                packet->sequence_number = cnx->pkt_ctx[picoquic_packet_context_application].send_sequence++;
+                picoquic_queue_for_retransmit(cnx, cnx->path[0], packet, 0, current_time);
+            }
         }
+        /* Predict the next hole*/
+        cnx->pkt_ctx[0].next_sequence_hole = cnx->pkt_ctx[picoquic_packet_context_application].send_sequence + 1 + picoquic_public_uniform_random(cnx->quic->sequence_hole_pseudo_period);
     }
 }
 
@@ -2336,18 +2343,27 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
         picoquic_ready_state_transition(cnx, current_time);
     }
 
-    /* Verify first that there is no need for retransmit or ack
-     * on initial or handshake context. This does not deal with EOED packets,
-     * as they are handled from within the general retransmission path.
-     * This is needed even with implicit acks for now, because the peer may
-     * be retransmitting data and thus requires acks. */
+    if (!cnx->is_handshake_finished) {
+        /* Verify first that there is no need for retransmit or ack
+         * on initial or handshake context. This does not deal with EOED packets,
+         * as they are handled from within the general retransmission path.
+         * This is needed even with implicit acks for now, because the peer may
+         * be retransmitting data and thus requires acks. */
 
-    length = picoquic_prepare_packet_old_context(cnx, picoquic_packet_context_initial,
-        path_x, packet, send_buffer_min_max, current_time, next_wake_time, &header_length);
-
-    if (length == 0) {
-        length = picoquic_prepare_packet_old_context(cnx, picoquic_packet_context_handshake,
+        length = picoquic_prepare_packet_old_context(cnx, picoquic_packet_context_initial,
             path_x, packet, send_buffer_min_max, current_time, next_wake_time, &header_length);
+
+        if (length == 0) {
+            length = picoquic_prepare_packet_old_context(cnx, picoquic_packet_context_handshake,
+                path_x, packet, send_buffer_min_max, current_time, next_wake_time, &header_length);
+        }
+        
+        cnx->is_handshake_finished = length == 0 && cnx->cnx_state == picoquic_state_ready &&
+            !cnx->pkt_ctx[picoquic_packet_context_initial].ack_needed &&
+            cnx->pkt_ctx[picoquic_packet_context_initial].retransmit_oldest == NULL &&
+            !cnx->pkt_ctx[picoquic_packet_context_handshake].ack_needed &&
+            cnx->pkt_ctx[picoquic_packet_context_handshake].retransmit_oldest == NULL;
+
     }
 
     if (length == 0) {
@@ -2904,11 +2920,13 @@ static int picoquic_prepare_alt_challenge(picoquic_cnx_t* cnx,
 {
     int ret = 0;
     picoquic_packet_t * packet = NULL;
+    unsigned int is_alt_challenge_still_needed = 0;
 
     *send_length = 0;
 
     if (send_buffer_max < PICOQUIC_INITIAL_MTU_IPV6) {
         ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
+        is_alt_challenge_still_needed = 1;
     }
     else if (
         cnx->cnx_state == picoquic_state_ready ||
@@ -2918,7 +2936,7 @@ static int picoquic_prepare_alt_challenge(picoquic_cnx_t* cnx,
 
             if (cnx->path[i]->alt_challenge_required &&
                 cnx->path[i]->alt_challenge_repeat_count > 3 &&
-                current_time >= cnx->path[i]->alt_challenge_timeout){
+                current_time >= cnx->path[i]->alt_challenge_timeout) {
                 /* Challenge is failing. Set required to 0. */
                 cnx->path[i]->alt_challenge_required = 0;
             }
@@ -2955,7 +2973,7 @@ static int picoquic_prepare_alt_challenge(picoquic_cnx_t* cnx,
                         (cnx->path[i]->alt_challenge_repeat_count == 0 ||
                             current_time >= cnx->path[i]->alt_challenge_timeout)) {
                         ret = picoquic_prepare_path_challenge_frame(&bytes[length],
-                            send_buffer_max - checksum_overhead - length, &data_bytes, 
+                            send_buffer_max - checksum_overhead - length, &data_bytes,
                             cnx->path[i]->alt_challenge[cnx->path[i]->alt_challenge_repeat_count]);
                         if (ret == 0) {
                             length += (uint32_t)data_bytes;
@@ -2984,7 +3002,7 @@ static int picoquic_prepare_alt_challenge(picoquic_cnx_t* cnx,
                         *to_len = picoquic_store_addr(p_addr_to, (struct sockaddr*)&cnx->path[i]->alt_peer_addr);
                     }
                     /* Remember the log address */
-                    (void) picoquic_store_addr(addr_to_log, (struct sockaddr*)&cnx->path[i]->alt_peer_addr);
+                    (void)picoquic_store_addr(addr_to_log, (struct sockaddr*)&cnx->path[i]->alt_peer_addr);
                     /* Set the source address */
                     if (p_addr_from != NULL) {
                         *from_len = picoquic_store_addr(p_addr_from, (struct sockaddr*)&cnx->path[i]->alt_local_addr);
@@ -2996,17 +3014,26 @@ static int picoquic_prepare_alt_challenge(picoquic_cnx_t* cnx,
                         send_length, send_buffer, (uint32_t)send_buffer_max,
                         &cnx->path[i]->remote_cnxid, &cnx->path[0]->local_cnxid, cnx->path[0], current_time);
 
-                    /* no need to check the other paths yet. */
+                    /* no need to check the other paths yet. Will check at next invocation. */
+                    is_alt_challenge_still_needed = 1;
                     break;
                 }
+
+                is_alt_challenge_still_needed |= cnx->path[i]->alt_challenge_required;
+                is_alt_challenge_still_needed |= cnx->path[i]->alt_response_required;
             }
             else if (cnx->path[i]->alt_challenge_required &&
                 cnx->path[i]->alt_challenge_repeat_count < 4 &&
                 *next_wake_time > cnx->path[i]->alt_challenge_timeout) {
                 *next_wake_time = cnx->path[i]->alt_challenge_timeout;
+                is_alt_challenge_still_needed = 1;
             }
         }
+    } else {
+        is_alt_challenge_still_needed = 1;
     }
+
+    cnx->alt_path_challenge_needed = is_alt_challenge_still_needed;
 
     return ret;
 }
@@ -3026,21 +3053,26 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     *send_length = 0;
 
     /* Remove delete paths */
-    picoquic_delete_abandoned_paths(cnx, current_time, &next_wake_time);
-
-    /* Remove failed probes */
-    picoquic_delete_failed_probes(cnx);
+    if (cnx->path_demotion_needed) {
+        picoquic_delete_abandoned_paths(cnx, current_time, &next_wake_time);
+    }
 
     /* Check whether to insert a hole in the sequence of packets */
-    picoquic_insert_hole_in_send_sequence_if_needed(cnx, current_time);
+    if (cnx->pkt_ctx[0].send_sequence >= cnx->pkt_ctx[0].next_sequence_hole) {
+        picoquic_insert_hole_in_send_sequence_if_needed(cnx, current_time);
+    }
 
+    if (cnx->probe_first != NULL) {
+        /* Remove failed probes */
+        picoquic_delete_failed_probes(cnx);
 
-    /* If probes are in waiting, send the first one */
-    ret = picoquic_prepare_probe(cnx, current_time, send_buffer, send_buffer_max, send_length,
-        p_addr_to, to_len, p_addr_from, from_len, &addr_to_log, &next_wake_time);
+        /* If probes are in waiting, send the first one */
+        ret = picoquic_prepare_probe(cnx, current_time, send_buffer, send_buffer_max, send_length,
+            p_addr_to, to_len, p_addr_from, from_len, &addr_to_log, &next_wake_time);
+    }
 
     /* If alternate challenges are waiting, send them */
-    if (ret == 0 && *send_length == 0) {
+    if (ret == 0 && *send_length == 0 && cnx->alt_path_challenge_needed) {
         ret = picoquic_prepare_alt_challenge(cnx, current_time, send_buffer, send_buffer_max, send_length,
             p_addr_to, to_len, p_addr_from, from_len, &addr_to_log, &next_wake_time);
     }
