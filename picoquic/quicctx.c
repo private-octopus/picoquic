@@ -532,11 +532,11 @@ void picoquic_init_transport_parameters(picoquic_tp_t* tp, int client_mode)
     tp->initial_max_stream_data_uni = 65535;
     tp->initial_max_data = 0x100000;
     if (client_mode) {
-        tp->initial_max_stream_id_bidir = 65533;
-        tp->initial_max_stream_id_unidir = 65535;
+        tp->initial_max_stream_id_bidir = 2049;
+        tp->initial_max_stream_id_unidir = 2051;
     } else {
-        tp->initial_max_stream_id_bidir = 65532;
-        tp->initial_max_stream_id_unidir = 65534;
+        tp->initial_max_stream_id_bidir = 2048;
+        tp->initial_max_stream_id_unidir = 2050;
     }
     tp->idle_timeout = PICOQUIC_MICROSEC_HANDSHAKE_MAX/1000;
     tp->max_packet_size = PICOQUIC_PRACTICAL_MAX_MTU;
@@ -1362,6 +1362,9 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             cnx->path[0]->challenge_verified = 1;
 
             cnx->high_priority_stream_id = (uint64_t)((int64_t)-1);
+            for (int i = 0; i < 4; i++) {
+                cnx->next_stream_id[i] = i;
+            }
         }
     }
 
@@ -1388,7 +1391,6 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         {
             cnx->local_parameters.max_packet_size = cnx->quic->mtu_max;
         }
-
 
         /* Initialize local flow control variables to advertised values */
         cnx->maxdata_local = ((uint64_t)cnx->local_parameters.initial_max_data);
@@ -1939,6 +1941,12 @@ void picoquic_clear_stream(picoquic_stream_head_t* stream)
             }
             free(next);
         }
+    }
+
+    while (stream->first_sack_item.next_sack != NULL) {
+        picoquic_sack_item_t * sack = stream->first_sack_item.next_sack;
+        stream->first_sack_item.next_sack = sack->next_sack;
+        free(sack);
     }
 }
 

@@ -189,15 +189,141 @@ picoquic_stream_head_t* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t str
         }
 
         stream->next_stream = next_stream;
+        stream->previous_stream = previous_stream;
 
         if (previous_stream == NULL) {
             cnx->first_stream = stream;
         } else {
             previous_stream->next_stream = stream;
         }
+
+        if (next_stream == NULL) {
+            cnx->last_stream = stream;
+        }
+        else {
+            next_stream->previous_stream = stream;
+        }
+
+        if (stream_id >= cnx->next_stream_id[STREAM_TYPE_FROM_ID(stream_id)]) {
+            cnx->next_stream_id[STREAM_TYPE_FROM_ID(stream_id)] = NEXT_STREAM_ID_FOR_TYPE(stream_id);
+        }
     }
 
     return stream;
+}
+
+picoquic_stream_head_t* picoquic_create_missing_streams(picoquic_cnx_t* cnx, uint64_t stream_id, int is_remote)
+{
+    /* Verify the stream ID control conditions */
+    picoquic_stream_head_t* stream = NULL;
+    unsigned int expect_client_stream = cnx->client_mode ^ is_remote;
+
+    if (IS_CLIENT_STREAM_ID(stream_id) != expect_client_stream){
+        /* TODO: not an error if lower than next stream, would be just an old stream. */
+        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_STREAM_LIMIT_ERROR, 0);
+    }
+    else if (is_remote && stream_id > (IS_BIDIR_STREAM_ID(stream_id) ? cnx->max_stream_id_bidir_local : cnx->max_stream_id_unidir_local)){
+        /* Protocol error, stream ID too high */
+        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_STREAM_LIMIT_ERROR, 0);
+    } 
+    else if (stream_id < cnx->next_stream_id[STREAM_TYPE_FROM_ID(stream_id)]) {
+        /* Protocol error, stream already closed */
+        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_STREAM_STATE_ERROR, 0);
+    } else {
+        while (stream_id >= cnx->next_stream_id[STREAM_TYPE_FROM_ID(stream_id)]) {
+            stream = picoquic_create_stream(cnx, cnx->next_stream_id[STREAM_TYPE_FROM_ID(stream_id)]);
+            if (stream == NULL) {
+                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
+                break;
+            }
+            else if (!IS_BIDIR_STREAM_ID(stream_id)) {
+                if (!IS_LOCAL_STREAM_ID(stream_id, cnx->client_mode)) {
+                    /* Mark the stream as already finished in our direction */
+                    stream->fin_requested = 1;
+                    stream->fin_sent = 1;
+                }
+            }
+        }
+    }
+
+    return stream;
+}
+
+int picoquic_is_stream_closed(picoquic_stream_head_t* stream, int client_mode)
+{
+    int is_closed = 0;
+
+    if (IS_BIDIR_STREAM_ID(stream->stream_id)) {
+        is_closed = ((stream->fin_requested && stream->fin_sent) || (stream->reset_requested && stream->reset_sent)) &&
+            ((stream->fin_received && stream->fin_signalled) || (stream->reset_received && stream->reset_signalled));
+    }
+    else if (IS_LOCAL_STREAM_ID(stream->stream_id, client_mode)) {
+        /* Unidir from local host*/
+        is_closed = ((stream->fin_requested && stream->fin_sent) || (stream->reset_requested && stream->reset_sent));
+    }
+    else {
+        is_closed = ((stream->fin_received && stream->fin_signalled) || (stream->reset_received && stream->reset_signalled));
+    }
+
+    return is_closed;
+}
+
+int picoquic_delete_stream_if_closed(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream)
+{
+    int ret = 0;
+
+    if (picoquic_is_stream_closed(stream, cnx->client_mode)){
+        ret = 1;
+        /* manage link to last used stream */
+        if (stream == cnx->last_visited_stream) {
+            cnx->last_visited_stream = stream->previous_stream;
+        }
+
+        if (stream->previous_stream == NULL) {
+            cnx->first_stream = stream->next_stream;
+        }
+        else {
+            stream->previous_stream->next_stream = stream->next_stream;
+        }
+
+        if (stream->next_stream == NULL) {
+            cnx->last_stream = stream->previous_stream;
+        }
+        else {
+            stream->next_stream->previous_stream = stream->previous_stream;
+        }
+
+        picoquic_clear_stream(stream);
+        free(stream);
+    }
+
+    return ret;
+}
+
+void picoquic_delete_closed_streams(picoquic_cnx_t* cnx)
+{
+    picoquic_stream_head_t* stream = cnx->first_stream;
+    picoquic_stream_head_t** p_previous = &cnx->first_stream;
+
+    while (stream != NULL) {
+        int is_closed = picoquic_is_stream_closed(stream, cnx->client_mode);
+
+        /* TODO: should we wait for acknowledgements from the peer that the data has been received? */
+        /* How abou waiting an RTO? */
+
+        if (is_closed) {
+            /* Delete the stream */
+            picoquic_stream_head_t* deleted_stream = stream; 
+            stream = deleted_stream->next_stream;
+            *p_previous = stream;
+            
+            picoquic_clear_stream(deleted_stream);
+        }
+        else {
+            p_previous = &stream->next_stream;
+            stream = stream->next_stream;
+        }
+    }
 }
 
 /* if the initial remote has changed, update the existing streams.
@@ -225,7 +351,7 @@ void picoquic_update_stream_initial_remote(picoquic_cnx_t* cnx)
     };
 }
 
-picoquic_stream_head_t* picoquic_find_stream(picoquic_cnx_t* cnx, uint64_t stream_id, int create)
+picoquic_stream_head_t* picoquic_find_stream(picoquic_cnx_t* cnx, uint64_t stream_id)
 {
     picoquic_stream_head_t* stream = cnx->first_stream;
 
@@ -235,10 +361,6 @@ picoquic_stream_head_t* picoquic_find_stream(picoquic_cnx_t* cnx, uint64_t strea
         } else {
             stream = stream->next_stream;
         }
-    };
-
-    if (create != 0 && stream == NULL) {
-        stream = picoquic_create_stream(cnx, stream_id);
     }
 
     return stream;
@@ -246,23 +368,10 @@ picoquic_stream_head_t* picoquic_find_stream(picoquic_cnx_t* cnx, uint64_t strea
 
 picoquic_stream_head_t* picoquic_find_or_create_stream(picoquic_cnx_t* cnx, uint64_t stream_id, int is_remote)
 {
-    picoquic_stream_head_t* stream = picoquic_find_stream(cnx, stream_id, 0);
+    picoquic_stream_head_t* stream = picoquic_find_stream(cnx, stream_id);
 
     if (stream == NULL) {
-        /* Verify the stream ID control conditions */
-        unsigned int expect_client_stream = cnx->client_mode ^ is_remote;
-        uint64_t max_stream = IS_BIDIR_STREAM_ID(stream_id) ? cnx->max_stream_id_bidir_local : cnx->max_stream_id_unidir_local;
-
-        if (IS_CLIENT_STREAM_ID(stream_id) != expect_client_stream || stream_id > max_stream) {
-            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_STREAM_LIMIT_ERROR, 0);
-        } else if ((stream = picoquic_create_stream(cnx, stream_id)) == NULL) {
-            picoquic_connection_error(cnx, PICOQUIC_ERROR_MEMORY, 0);
-
-        } else if (!IS_BIDIR_STREAM_ID(stream_id)) {
-            /* Mark the stream as already finished in our direction */
-            stream->fin_requested = 1;
-            stream->fin_sent = 1;
-        }
+        stream = picoquic_create_missing_streams(cnx, stream_id, is_remote);
     }
 
     return stream;
@@ -346,6 +455,7 @@ int picoquic_prepare_stream_reset_frame(picoquic_cnx_t* cnx, picoquic_stream_hea
                 free(stream->send_queue);
                 stream->send_queue = next;
             }
+            (void)picoquic_delete_stream_if_closed(cnx, stream);
         }
     }
 
@@ -389,6 +499,7 @@ uint8_t* picoquic_decode_stream_reset_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
                     picoquic_frame_type_reset_stream);
             }
             stream->reset_signalled = 1;
+            (void)picoquic_delete_stream_if_closed(cnx, stream);
         }
     }
 
@@ -951,8 +1062,10 @@ static int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id
     }
 
     if (ret == 0) {
-        if (!stream->fin_received && !stream->reset_received && 2 * stream->consumed_offset > stream->maxdata_local) {
-            cnx->max_stream_data_needed = 1;
+        if (!stream->fin_signalled || !picoquic_delete_stream_if_closed(cnx, stream)) {
+            if (!stream->fin_received && !stream->reset_received && 2 * stream->consumed_offset > stream->maxdata_local) {
+                cnx->max_stream_data_needed = 1;
+            }
         }
     }
 
@@ -1348,6 +1461,7 @@ int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head_t* s
     uint8_t* bytes, size_t bytes_max, size_t* consumed, int* is_still_active)
 {
     int ret = 0;
+    int may_close = 0;
 
     /* Check parity */
     if (IS_CLIENT_STREAM_ID(stream->stream_id) == cnx->client_mode) {
@@ -1423,6 +1537,7 @@ int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head_t* s
                         stream->fin_requested = 1;
                         stream->fin_sent = 1;
                         picoquic_update_max_stream_ID_local(cnx, stream);
+                        may_close = 1;
 
                         if (is_still_active != NULL) {
                           *is_still_active = 0;
@@ -1477,6 +1592,7 @@ int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head_t* s
                         bytes[start_index] |= 1;
 
                         picoquic_update_max_stream_ID_local(cnx, stream);
+                        may_close = 1;
                     }
                 }
                 else if (length == 0) {
@@ -1488,11 +1604,13 @@ int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head_t* s
         }
 
         if (ret == 0) {
-            /* remember the last stream on which data is sent so each stream is visited in turn. */
-            cnx->last_visited_stream = stream;
-            /* mark the stream as unblocked since we sent something */
-            stream->stream_data_blocked_sent = 0;
-            cnx->sent_blocked_frame = 0;
+            if (!may_close || !picoquic_delete_stream_if_closed(cnx, stream)){
+                /* remember the last stream on which data is sent so each stream is visited in turn. */
+                cnx->last_visited_stream = stream;
+                /* mark the stream as unblocked since we sent something */
+                stream->stream_data_blocked_sent = 0;
+                cnx->sent_blocked_frame = 0;
+            }
         }
     }
 
@@ -2139,10 +2257,9 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, uint8_t* bytes,
             &stream_id, &offset, &data_length, &fin, &consumed);
 
         if (ret == 0) {
-            stream = picoquic_find_stream(cnx, stream_id, 0);
+            stream = picoquic_find_stream(cnx, stream_id);
             if (stream == NULL) {
-                /* this is weird -- the stream was destroyed. */
-                *no_need_to_repeat = 1;
+                /* the stream was destroyed. Just keep repeating, to be on the safe side. */
             } else {
                 if (stream->reset_sent) {
                     *no_need_to_repeat = 1;
@@ -2171,8 +2288,9 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, uint8_t* bytes,
                 /* Malformed frame, do not retransmit */
                 *no_need_to_repeat = 1;
             }
-            else if ((stream = picoquic_find_stream(cnx, stream_id, 1)) == NULL) {
+            else if ((stream = picoquic_find_stream(cnx, stream_id)) == NULL) {
                 /* No such stream do not retransmit */
+                *no_need_to_repeat = 1;
             }
             else if (stream->fin_received || stream->reset_received || stream->stop_sending_sent) {
                 /* Stream stopped, no need to increase the window */
@@ -2247,7 +2365,7 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, uint8_t* bytes,
                 /* Malformed frame, do not retransmit */
                 *no_need_to_repeat = 1;
             }
-            else if ((stream = picoquic_find_stream(cnx, stream_id, 0)) == NULL) {
+            else if ((stream = picoquic_find_stream(cnx, stream_id)) == NULL) {
                 /* No such stream do not retransmit */
                 *no_need_to_repeat = 1;
             }
@@ -2286,7 +2404,7 @@ static int picoquic_process_ack_of_stream_frame(picoquic_cnx_t* cnx, uint8_t* by
         *consumed += data_length;
 
         /* record the ack range for the stream */
-        stream = picoquic_find_stream(cnx, stream_id, 0);
+        stream = picoquic_find_stream(cnx, stream_id);
         if (stream != NULL) {
             (void)picoquic_update_sack_list(&stream->first_sack_item,
                 offset, offset + data_length - 1);
@@ -2877,22 +2995,27 @@ int picoquic_prepare_max_stream_data_frame(picoquic_stream_head_t* stream,
 uint8_t* picoquic_decode_max_stream_data_frame(picoquic_cnx_t* cnx, uint8_t* bytes, const uint8_t* bytes_max)
 {
     uint64_t stream_id;
-    uint64_t maxdata;
-    picoquic_stream_head_t* stream;
+    uint64_t maxdata = 0;
+    picoquic_stream_head_t* stream = NULL;
 
-    if ((bytes = picoquic_frames_varint_decode(bytes+1, bytes_max, &stream_id)) == NULL ||
-        (bytes = picoquic_frames_varint_decode(bytes,   bytes_max, &maxdata))   == NULL)
+    if ((bytes = picoquic_frames_varint_decode(bytes + 1, bytes_max, &stream_id)) == NULL ||
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &maxdata)) == NULL)
     {
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, picoquic_frame_type_max_stream_data);
-
-    } else if ((stream = picoquic_find_stream(cnx, stream_id, 1)) == NULL) {
-        picoquic_connection_error(cnx, PICOQUIC_ERROR_MEMORY, picoquic_frame_type_max_stream_data);
-        bytes = NULL;
-
-    } else if (maxdata > stream->maxdata_remote) {
+    }
+    else if ((stream = picoquic_find_stream(cnx, stream_id)) == NULL) {
+        /* TODO: maybe not an error if the stream is already closed */
+        if ((stream = picoquic_create_missing_streams(cnx, stream_id, 1)) == NULL) {
+            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, picoquic_frame_type_max_stream_data);
+            bytes = NULL;
+        }
+    }
+    
+    if (stream != NULL && maxdata > stream->maxdata_remote) {
         /* TODO: call back if the stream was blocked? */
         stream->maxdata_remote = maxdata;
     }
+
 
     return bytes;
 }

@@ -45,7 +45,7 @@
 static picoquic_stream_head_t* picoquic_find_stream_for_writing(picoquic_cnx_t* cnx,
     uint64_t stream_id, int * ret)
 {
-    picoquic_stream_head_t* stream = picoquic_find_stream(cnx, stream_id, 0);
+    picoquic_stream_head_t* stream = picoquic_find_stream(cnx, stream_id);
 
     *ret = 0;
 
@@ -58,15 +58,10 @@ static picoquic_stream_head_t* picoquic_find_stream_for_writing(picoquic_cnx_t* 
         }
 
         if (*ret == 0) {
-            stream = picoquic_create_stream(cnx, stream_id);
+            stream = picoquic_create_missing_streams(cnx, stream_id, 0);
 
             if (stream == NULL) {
                 *ret = PICOQUIC_ERROR_MEMORY;
-            }
-            else if (!IS_BIDIR_STREAM_ID(stream_id)) {
-                /* Mark the stream as already finished in remote direction */
-                stream->fin_signalled = 1;
-                stream->fin_received = 1;
             }
         }
     }
@@ -189,7 +184,7 @@ int picoquic_reset_stream(picoquic_cnx_t* cnx,
     int ret = 0;
     picoquic_stream_head_t* stream = NULL;
 
-    stream = picoquic_find_stream(cnx, stream_id, 1);
+    stream = picoquic_find_stream(cnx, stream_id);
 
     if (stream == NULL) {
         ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
@@ -213,7 +208,7 @@ int picoquic_stop_sending(picoquic_cnx_t* cnx,
     int ret = 0;
     picoquic_stream_head_t* stream = NULL;
 
-    stream = picoquic_find_stream(cnx, stream_id, 1);
+    stream = picoquic_find_stream(cnx, stream_id);
 
     if (stream == NULL) {
         ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
