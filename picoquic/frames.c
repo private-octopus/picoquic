@@ -3086,7 +3086,7 @@ int picoquic_prepare_max_streams_frame_if_needed(picoquic_cnx_t* cnx,
         else {
             size_t l1;
             
-            new_bidir_local = cnx->max_stream_id_bidir_local + 4* STREAM_RANK_FROM_ID(cnx->local_parameters.initial_max_stream_id_bidir);
+            new_bidir_local = cnx->max_stream_id_bidir_local + 4* STREAM_RANK_FROM_ID(cnx->local_parameters.initial_max_stream_id_bidir) + 4;
             
             l1 = picoquic_varint_encode(bytes + 1, bytes_max - 1, STREAM_RANK_FROM_ID(new_bidir_local));
 
@@ -3109,7 +3109,7 @@ int picoquic_prepare_max_streams_frame_if_needed(picoquic_cnx_t* cnx,
             }
             else {
                 size_t l1;
-                new_unidir_local = cnx->max_stream_id_unidir_local + cnx->local_parameters.initial_max_stream_id_unidir;
+                new_unidir_local = cnx->max_stream_id_unidir_local + cnx->local_parameters.initial_max_stream_id_unidir + 4;
 
                 l1 = picoquic_varint_encode(bytes + 1, bytes_max - 1, new_unidir_local);
 
