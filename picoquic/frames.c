@@ -218,7 +218,9 @@ picoquic_stream_head_t* picoquic_create_missing_streams(picoquic_cnx_t* cnx, uin
     picoquic_stream_head_t* stream = NULL;
     unsigned int expect_client_stream = cnx->client_mode ^ is_remote;
 
-    if (IS_CLIENT_STREAM_ID(stream_id) != expect_client_stream){
+    if (is_remote && stream_id < cnx->next_stream_id[STREAM_TYPE_FROM_ID(stream_id)]) {
+        return NULL;
+    } else if (IS_CLIENT_STREAM_ID(stream_id) != expect_client_stream){
         /* TODO: not an error if lower than next stream, would be just an old stream. */
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_STREAM_LIMIT_ERROR, 0);
     }
@@ -1024,8 +1026,11 @@ static int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id
     uint64_t new_fin_offset = offset + length;
 
     if ((stream = picoquic_find_or_create_stream(cnx, stream_id, 1)) == NULL) {
-        ret = 1;  // Error already signaled
-
+        if (stream_id < cnx->next_stream_id[STREAM_TYPE_FROM_ID(stream_id)]) {
+            return 0;
+        } else {
+            ret = 1;  // Error already signaled
+        }
     } else if (stream->fin_received) {
 
         if (fin != 0 ? stream->fin_offset != new_fin_offset : new_fin_offset > stream->fin_offset) {
@@ -3069,15 +3074,21 @@ int picoquic_prepare_max_streams_frame_if_needed(picoquic_cnx_t* cnx,
 {
     int ret = 0;
     size_t byte_index = 0;
+    uint64_t new_bidir_local = cnx->max_stream_id_bidir_local;
+    uint64_t new_unidir_local = cnx->max_stream_id_unidir_local;
 
     *consumed = 0;
-
-    if (cnx->max_stream_id_bidir_local_computed > cnx->max_stream_id_bidir_local) {
+    
+    if (cnx->max_stream_id_bidir_local_computed + (cnx->local_parameters.initial_max_stream_id_bidir >> 1) > cnx->max_stream_id_bidir_local) {
         if (1 > bytes_max) {
             ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
         }
         else {
-            size_t l1 = picoquic_varint_encode(bytes + 1, bytes_max - 1, STREAM_RANK_FROM_ID(cnx->max_stream_id_bidir_local_computed));
+            size_t l1;
+            
+            new_bidir_local = cnx->max_stream_id_bidir_local + 4* STREAM_RANK_FROM_ID(cnx->local_parameters.initial_max_stream_id_bidir);
+            
+            l1 = picoquic_varint_encode(bytes + 1, bytes_max - 1, STREAM_RANK_FROM_ID(new_bidir_local));
 
             if (l1 == 0) {
                 ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
@@ -3092,12 +3103,15 @@ int picoquic_prepare_max_streams_frame_if_needed(picoquic_cnx_t* cnx,
 
     if (ret == 0) {
 
-        if (cnx->max_stream_id_unidir_local_computed > cnx->max_stream_id_unidir_local) {
+        if (cnx->max_stream_id_unidir_local_computed + (cnx->local_parameters.initial_max_stream_id_unidir >> 1) > cnx->max_stream_id_unidir_local) {
             if (byte_index + 1 > bytes_max) {
                 ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
             }
             else {
-                size_t l1 = picoquic_varint_encode(bytes + 1, bytes_max - 1, cnx->max_stream_id_unidir_local_computed);
+                size_t l1;
+                new_unidir_local = cnx->max_stream_id_unidir_local + cnx->local_parameters.initial_max_stream_id_unidir;
+
+                l1 = picoquic_varint_encode(bytes + 1, bytes_max - 1, new_unidir_local);
 
                 if (l1 == 0) {
                     ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
@@ -3111,8 +3125,8 @@ int picoquic_prepare_max_streams_frame_if_needed(picoquic_cnx_t* cnx,
     }
 
     if (ret == 0) {
-        cnx->max_stream_id_bidir_local = cnx->max_stream_id_bidir_local_computed;
-        cnx->max_stream_id_unidir_local = cnx->max_stream_id_unidir_local_computed;
+        cnx->max_stream_id_bidir_local = new_bidir_local;
+        cnx->max_stream_id_unidir_local = new_unidir_local;
         *consumed = byte_index;
     }
 

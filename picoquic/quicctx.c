@@ -1395,9 +1395,9 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         /* Initialize local flow control variables to advertised values */
         cnx->maxdata_local = ((uint64_t)cnx->local_parameters.initial_max_data);
         cnx->max_stream_id_bidir_local = cnx->local_parameters.initial_max_stream_id_bidir;
-        cnx->max_stream_id_bidir_local_computed = cnx->max_stream_id_bidir_local;
+        cnx->max_stream_id_bidir_local_computed = STREAM_TYPE_FROM_ID(cnx->local_parameters.initial_max_stream_id_bidir);
         cnx->max_stream_id_unidir_local = cnx->local_parameters.initial_max_stream_id_unidir;
-        cnx->max_stream_id_unidir_local_computed = cnx->max_stream_id_unidir_local;
+        cnx->max_stream_id_unidir_local_computed = STREAM_TYPE_FROM_ID(cnx->local_parameters.initial_max_stream_id_unidir);
 
         /* Initialize remote variables to some plausible value. 
 		 * Hopefully, this will be overwritten by the parameters received in
