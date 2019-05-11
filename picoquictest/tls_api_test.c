@@ -5696,7 +5696,7 @@ int long_rtt_test()
 /*
  * Test the insertion of holes in the ACK sequence. We start a large
  * download, while setting the policy to insert a hole approximately
- * every 32 packets. We verify that the transfer completes. Then,
+ * every 16 packets. We verify that the transfer completes. Then,
  * we repeat that test but inject optimistic acks, which should
  * break the connection.
  */
@@ -5712,7 +5712,7 @@ int optimistic_ack_test_one(int shall_spoof_ack)
 
     if (ret == 0) {
         /* set the optimistic ack policy*/
-        picoquic_set_optimistic_ack_policy(test_ctx->qserver, 32);
+        picoquic_set_optimistic_ack_policy(test_ctx->qserver, 16);
         /* add a log request for debugging */
         picoquic_set_cc_log(test_ctx->qserver, ".");
 
@@ -5772,12 +5772,11 @@ int optimistic_ack_test_one(int shall_spoof_ack)
                             ret = picoquic_record_pn_received(test_ctx->cnx_client, picoquic_packet_context_application,
                                 hole_number, simulated_time);
                         }
+                        nb_holes++;
                         break;
                     }
                     packet = packet->previous_packet;
                 }
-
-                nb_holes++;
             }
         }
 
