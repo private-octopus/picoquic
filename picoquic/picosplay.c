@@ -78,19 +78,20 @@ static void zigzag(picosplay_node_t *x) {
 }
 
 /* Initialize an empty tree, storing the picosplay_comparator. */
-void picosplay_init_tree(picosplay_tree_t* tree, picosplay_comparator comp) {
+void picosplay_init_tree(picosplay_tree_t* tree, picosplay_comparator comp, picosplay_create create, picosplay_delete_node delete_node, picosplay_node_value node_value) {
     tree->comp = comp;
+    tree->create = create;
+    tree->delete_node = delete_node;
+    tree->node_value = node_value;
     tree->root = NULL;
     tree->size = 0;
 }
 
 /* Return an empty tree, storing the picosplay_comparator. */
-picosplay_tree_t* picosplay_new_tree(picosplay_comparator comp) {
+picosplay_tree_t* picosplay_new_tree(picosplay_comparator comp, picosplay_create create, picosplay_delete_node delete_node, picosplay_node_value node_value) {
     picosplay_tree_t *new = malloc(sizeof(picosplay_tree_t));
     if (new != NULL) {
-        new->comp = comp;
-        new->root = NULL;
-        new->size = 0;
+        picosplay_init_tree(new, comp, create, delete_node, node_value);
     }
     return new;
 }
@@ -99,10 +100,9 @@ picosplay_tree_t* picosplay_new_tree(picosplay_comparator comp) {
  * The insertion is essentially a generic BST insertion.
  */
 picosplay_node_t* picosplay_insert(picosplay_tree_t *tree, void *value) {
-    picosplay_node_t *new = malloc(sizeof(picosplay_node_t));
+    picosplay_node_t *new = tree->create(value);
 
     if (new != NULL) {
-        new->value = value;
         new->left = NULL;
         new->right = NULL;
         if (tree->root == NULL) {
@@ -115,7 +115,7 @@ picosplay_node_t* picosplay_insert(picosplay_tree_t *tree, void *value) {
             int left = 0;
             while (curr != NULL) {
                 parent = curr;
-                if (tree->comp(new->value, curr->value) < 0) {
+                if (tree->comp(tree->node_value(new), tree->node_value(curr)) < 0) {
                     left = 1;
                     curr = curr->left;
                 }
@@ -142,7 +142,7 @@ picosplay_node_t* picosplay_find(picosplay_tree_t *tree, void *value) {
     picosplay_node_t *curr = tree->root;
     int found = 0;
     while(curr != NULL && !found) {
-        int relation = tree->comp(value, curr->value);
+        int relation = tree->comp(value, tree->node_value(curr));
         if(relation == 0) {
             found = 1;
         } else if(relation < 0) {
@@ -192,7 +192,7 @@ void picosplay_delete_hint(picosplay_tree_t *tree, picosplay_node_t *node) {
         x->left = node->left;
         x->left->parent = x;
     }
-    free(node);
+    tree->delete_node(node);
     tree->size--;
 }
 
