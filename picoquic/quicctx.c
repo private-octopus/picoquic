@@ -153,10 +153,6 @@ const picoquic_version_parameters_t picoquic_supported_versions[] = {
     { PICOQUIC_TWELFTH_INTEROP_DRAFT19,
         picoquic_version_header_17,
         sizeof(picoquic_cleartext_draft_17_salt),
-        picoquic_cleartext_draft_17_salt },
-    { PICOQUIC_ELEVENTH_INTEROP_VERSION,
-        picoquic_version_header_17,
-        sizeof(picoquic_cleartext_draft_17_salt),
         picoquic_cleartext_draft_17_salt }
 };
 
@@ -2038,6 +2034,8 @@ int picoquic_reset_cnx(picoquic_cnx_t* cnx, uint64_t current_time)
     return ret;
 }
 
+#if 0
+/* TODO: consider restoring this code once draft 20 stabilizes */
 int picoquic_reset_cnx_version(picoquic_cnx_t* cnx, uint8_t* bytes, size_t length, uint64_t current_time)
 {
     /* First parse the incoming connection negotiation to choose the
@@ -2075,6 +2073,7 @@ int picoquic_reset_cnx_version(picoquic_cnx_t* cnx, uint8_t* bytes, size_t lengt
 
     return ret;
 }
+#endif
 
 int picoquic_connection_error(picoquic_cnx_t* cnx, uint16_t local_error, uint64_t frame_type)
 {

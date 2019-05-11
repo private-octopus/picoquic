@@ -163,6 +163,7 @@ int h09_server_test();
 int generic_server_test();
 int tls_retry_token_test();
 int optimistic_ack_test();
+int optimistic_hole_test();
 int document_addresses_test();
 int socket_ecn_test();
 int null_sni_test();
@@ -170,6 +171,7 @@ int preferred_address_test();
 int cid_global_encrypt_test();
 int cid_mask_encrypt_test();
 int test_copy_for_retransmit();
+int bad_coalesce_test();
 
 #ifdef __cplusplus
 }

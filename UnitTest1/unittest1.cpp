@@ -861,6 +861,21 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(optimistic_hole)
+        {
+            int ret = optimistic_hole_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(bad_coalesce)
+        {
+            int ret = bad_coalesce_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+
         TEST_METHOD(document_addresses)
         {
             int ret = document_addresses_test();

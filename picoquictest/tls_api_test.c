@@ -853,9 +853,25 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                 /* check whether the client has something to send */
                 int peer_addr_len = 0;
                 int local_addr_len = 0;
+                uint8_t coalesced_length = 0;
 
+                if (test_ctx->do_bad_coalesce_test && test_ctx->cnx_client->cnx_state > picoquic_state_server_handshake) {
+                    uint32_t hl = 0;
+                    memmove(packet->bytes + coalesced_length, packet->bytes, packet->length);
+
+                    packet->bytes[hl++] = 0xE0; /* handshake */
+                    picoformat_32(&packet->bytes[hl],
+                        picoquic_supported_versions[test_ctx->cnx_client->version_index].version);
+                    hl += 4;
+                    packet->bytes[hl++] = picoquic_create_packet_header_cnxid_lengths(test_ctx->cnx_client->path[0]->remote_cnxid.id_len, test_ctx->cnx_client->path[0]->local_cnxid.id_len);
+                    hl += picoquic_format_connection_id(&packet->bytes[hl], PICOQUIC_MAX_PACKET_SIZE - hl, test_ctx->cnx_client->path[0]->remote_cnxid);
+                    hl += picoquic_format_connection_id(&packet->bytes[hl], PICOQUIC_MAX_PACKET_SIZE - hl, test_ctx->cnx_client->path[0]->local_cnxid);
+                    packet->bytes[hl++] = 21;
+                    picoquic_public_random(&packet->bytes[hl], 21);
+                    coalesced_length = hl + 21;
+                }
                 ret = picoquic_prepare_packet(test_ctx->cnx_client, *simulated_time,
-                    packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length,
+                    packet->bytes + coalesced_length, PICOQUIC_MAX_PACKET_SIZE - coalesced_length, &packet->length,
                     &packet->addr_to, &peer_addr_len, &packet->addr_from, &local_addr_len);
                 if (ret != 0)
                 {
@@ -863,6 +879,7 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                     ret = -1;
                 }
                 else if (packet->length > 0) {
+                    packet->length += coalesced_length;
                     /* queue in c_to_s */
                     if (local_addr_len == 0) {
                         memcpy(&packet->addr_from, &test_ctx->client_addr, sizeof(struct sockaddr_in));
@@ -5375,6 +5392,44 @@ int padding_test()
     return ret;
 }
 
+/*
+ * Test whether the server correctly processes coalesced packets when one of the segments does not decrypt correctly 
+ */
+
+int bad_coalesce_test()
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+
+    /* Set the coalescing policy in the test context
+     */
+    if (ret == 0) {
+        test_ctx->do_bad_coalesce_test = 1;
+
+        /* Run a basic test scenario
+         */
+
+        ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+            test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0, 0, 0, 0, 250000);
+    }
+
+    /* And then free the resource
+     */
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+
 
 /*
  * Test whether packet tracing works correctly by setting up a basic connection
@@ -5641,7 +5696,7 @@ int long_rtt_test()
 /*
  * Test the insertion of holes in the ACK sequence. We start a large
  * download, while setting the policy to insert a hole approximately
- * every 32 packets. We verify that the transfer completes. Then,
+ * every 16 packets. We verify that the transfer completes. Then,
  * we repeat that test but inject optimistic acks, which should
  * break the connection.
  */
@@ -5657,7 +5712,7 @@ int optimistic_ack_test_one(int shall_spoof_ack)
 
     if (ret == 0) {
         /* set the optimistic ack policy*/
-        picoquic_set_optimistic_ack_policy(test_ctx->qserver, 32);
+        picoquic_set_optimistic_ack_policy(test_ctx->qserver, 16);
         /* add a log request for debugging */
         picoquic_set_cc_log(test_ctx->qserver, ".");
 
@@ -5717,12 +5772,11 @@ int optimistic_ack_test_one(int shall_spoof_ack)
                             ret = picoquic_record_pn_received(test_ctx->cnx_client, picoquic_packet_context_application,
                                 hole_number, simulated_time);
                         }
+                        nb_holes++;
                         break;
                     }
                     packet = packet->previous_packet;
                 }
-
-                nb_holes++;
             }
         }
 
@@ -5762,11 +5816,14 @@ int optimistic_ack_test_one(int shall_spoof_ack)
 
 int optimistic_ack_test()
 {
-    int ret = optimistic_ack_test_one(0);
+    int ret = optimistic_ack_test_one(1);
 
-    if (ret == 0) {
-        ret = optimistic_ack_test_one(1);
-    }
+    return ret;
+}
+
+int optimistic_hole_test()
+{
+    int ret = optimistic_ack_test_one(0);
 
     return ret;
 }

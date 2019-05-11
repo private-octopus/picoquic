@@ -135,6 +135,7 @@ typedef struct st_picoquic_test_tls_api_ctx_t {
     picoquic_cnx_t* cnx_server;
     int client_use_nat;
     int server_use_multiple_addresses;
+    int do_bad_coalesce_test;
     struct sockaddr_in client_addr;
     struct sockaddr_in server_addr;
     test_api_callback_t client_callback;
