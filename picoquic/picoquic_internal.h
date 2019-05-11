@@ -391,6 +391,7 @@ typedef struct st_picoquic_stream_data_t {
 
 typedef struct st_picoquic_stream_head_t {
     struct st_picoquic_stream_head_t* next_stream;
+    struct st_picoquic_stream_head_t* previous_stream;
     uint64_t stream_id;
     uint64_t consumed_offset;
     uint64_t fin_offset;
@@ -428,6 +429,8 @@ typedef struct st_picoquic_stream_head_t {
 #define IS_LOCAL_STREAM_ID(id, client_mode)  (unsigned int)(((id)^(client_mode)) & 1)
 #define STREAM_ID_FROM_RANK(rank, client_mode, is_unidir) (((rank)<<2)|((is_unidir)<<1)|(client_mode))
 #define STREAM_RANK_FROM_ID(id) ((id)>>2)
+#define STREAM_TYPE_FROM_ID(id) ((id)&3)
+#define NEXT_STREAM_ID_FOR_TYPE(id) ((id)+4)
 /*
  * Frame queue. This is used for miscellaneous packets, such as the PONG
  * response to a PING.
@@ -770,8 +773,10 @@ typedef struct st_picoquic_cnx_t {
 
     /* Management of streams */
     picoquic_stream_head_t * first_stream;
+    picoquic_stream_head_t * last_stream;
     picoquic_stream_head_t * last_visited_stream;
     uint64_t high_priority_stream_id;
+    uint64_t next_stream_id[4];
 
     /* If not `0`, the connection will send keep alive messages in the given interval. */
     uint64_t keep_alive_interval;
@@ -1012,8 +1017,8 @@ int picoquic_check_sack_list(picoquic_sack_item_t* sack,
     uint64_t pn64_min, uint64_t pn64_max);
 
 /*
-        * Process ack of ack
-        */
+ * Process ack of ack
+ */
 int picoquic_process_ack_of_ack_frame(
     picoquic_sack_item_t* first_sack,
     uint8_t* bytes, size_t bytes_max, size_t* consumed, int is_ecn_14);
@@ -1022,9 +1027,13 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, i
     picoquic_packet_context_t * pkt_ctx, uint64_t current_time, uint64_t ack_delay);
 
 /* stream management */
-picoquic_stream_head_t* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t stream_id);
+picoquic_stream_head_t* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t stream_id); 
+picoquic_stream_head_t* picoquic_create_missing_streams(picoquic_cnx_t* cnx, uint64_t stream_id, int is_remote);
+int picoquic_is_stream_closed(picoquic_stream_head_t* stream, int client_mode); 
+int picoquic_delete_stream_if_closed(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream);
+
 void picoquic_update_stream_initial_remote(picoquic_cnx_t* cnx);
-picoquic_stream_head_t* picoquic_find_stream(picoquic_cnx_t* cnx, uint64_t stream_id, int create);
+picoquic_stream_head_t* picoquic_find_stream(picoquic_cnx_t* cnx, uint64_t stream_id);
 picoquic_stream_head_t* picoquic_find_ready_stream(picoquic_cnx_t* cnx);
 int picoquic_is_tls_stream_ready(picoquic_cnx_t* cnx);
 uint8_t* picoquic_decode_stream_frame(picoquic_cnx_t* cnx, uint8_t* bytes,

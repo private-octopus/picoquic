@@ -308,6 +308,9 @@ static int h3zero_server_callback_data(
                         /* Parse the request header and process it. */
                         ret = h3zero_server_parse_request_frame(cnx, stream_ctx);
                     }
+                    else {
+                        ret = picoquic_add_to_stream_with_ctx(cnx, stream_id, NULL, 0, 0, stream_ctx);
+                    }
                 }
             }
         }
