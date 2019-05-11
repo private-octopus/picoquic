@@ -5700,14 +5700,12 @@ int long_rtt_test()
  * we repeat that test but inject optimistic acks, which should
  * break the connection.
  */
-int optimistic_ack_test_one(int shall_spoof_ack, uint64_t previous_test_ret, uint64_t * this_test_ret)
+int optimistic_ack_test_one(int shall_spoof_ack)
 {
     int ret = 0;
     uint64_t simulated_time = 0;
     int nb_holes = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-
-    *this_test_ret = 0;
 
     ret = tls_api_one_scenario_init(&test_ctx, &simulated_time,
         0, NULL, NULL);
@@ -5808,8 +5806,6 @@ int optimistic_ack_test_one(int shall_spoof_ack, uint64_t previous_test_ret, uin
             ret = tls_api_one_scenario_body_verify(test_ctx, &simulated_time, 0);
         }
     }
-    
-    *this_test_ret = simulated_time + previous_test_ret;
 
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
@@ -5821,17 +5817,14 @@ int optimistic_ack_test_one(int shall_spoof_ack, uint64_t previous_test_ret, uin
 
 int optimistic_ack_test()
 {
-    uint64_t first_ret = 0;
-    uint64_t second_ret = 0;
-    int ret = optimistic_ack_test_one(0, 0, &first_ret);
+    int ret = optimistic_ack_test_one(1);
 
-    if (ret == 0) {
-        ret = optimistic_ack_test_one(1, first_ret, &second_ret);
+    return ret;
+}
 
-        if (ret == 0 && second_ret > 1000000) {
-            ret = -1;
-        }
-    }
+int optimistic_hole_test()
+{
+    int ret = optimistic_ack_test_one(0);
 
     return ret;
 }
