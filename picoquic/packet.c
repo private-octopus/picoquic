@@ -66,8 +66,9 @@ int picoquic_parse_packet_header(
             /* Required length: 
              * (packet type(1) + version number(4) + cid_lengths(1) = 6,
              * cid lengths,
-             * sequence number (4) */
-            if (6 + l_dest_id + l_srce_id + 4 > (int) length) {
+             * payload length (1+)
+             * sequence number (1+) */
+            if (6 + l_dest_id + l_srce_id + 2 > (int) length) {
                 /* malformed packet */
                 ret = -1;
             }
@@ -102,7 +103,6 @@ int picoquic_parse_packet_header(
                 else {
                     char context_by_addr = 0;
                     uint64_t payload_length = 0;
-                    uint64_t pn_length_clear = 0;  
                     uint32_t var_length = 0; 
 
                     ph->version_index = picoquic_get_version_index(ph->vn);
@@ -187,13 +187,7 @@ int picoquic_parse_packet_header(
                                 length - ph->offset, &payload_length);
                         }
 
-                        if (var_length <= 0 || ph->offset + var_length + pn_length_clear + payload_length > length ||
-                            ph->version_index < 0) {
-                            ph->ptype = picoquic_packet_error;
-                            ph->payload_length = (uint16_t)((length > ph->offset) ? length - ph->offset : 0);
-                            ph->pl_val = ph->payload_length;
-                        }
-                        if (var_length <= 0 || ph->offset + var_length + pn_length_clear + payload_length > length ||
+                        if (var_length <= 0 || ph->offset + var_length + payload_length > length ||
                             ph->version_index < 0) {
                             ph->ptype = picoquic_packet_error;
                             ph->payload_length = (uint16_t)((length > ph->offset) ? length - ph->offset : 0);
@@ -563,8 +557,6 @@ int picoquic_parse_header_and_decrypt(
                 else {
                     decoded_length = ph->payload_length + 1;
                 }
-                length = ph->offset + ph->payload_length;
-                *consumed = length;
 
                 /* TODO: consider the error "too soon" */
                 if (decoded_length > (length - ph->offset)) {
@@ -632,23 +624,21 @@ int picoquic_incoming_version_negotiation(
     /* Parse the content */
     int ret = -1;
 #ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(bytes);
+    UNREFERENCED_PARAMETER(length);
     UNREFERENCED_PARAMETER(addr_from);
+    UNREFERENCED_PARAMETER(current_time);
 #endif
 
     if (picoquic_compare_connection_id(&ph->dest_cnx_id, &cnx->path[0]->local_cnxid) != 0 || ph->vn != 0) {
         /* Packet that do not match the "echo" checks should be logged and ignored */
         ret = 0;
     } else {
-        /* Trying to renegotiate the version, just ignore the packet if not good. */
-        if (picoquic_supported_versions[cnx->version_index].version == PICOQUIC_ELEVENTH_INTEROP_VERSION) {
-            ret = picoquic_reset_cnx_version(cnx, bytes + ph->offset, length - ph->offset, current_time);
-        }
-        else {
-            /* TODO: add DOS resilience! */
-            DBG_PRINTF("%s", "Disconnect upon receiving version negotiation.\n");
-            cnx->cnx_state = picoquic_state_disconnected;
-            ret = 0;
-        }
+        /* TODO: add DOS resilience! */
+        /* TODO: consider rewriting the version negotiation code */
+        DBG_PRINTF("%s", "Disconnect upon receiving version negotiation.\n");
+        cnx->cnx_state = picoquic_state_disconnected;
+        ret = 0;
     }
 
     return ret;
@@ -1789,7 +1779,13 @@ int picoquic_incoming_segment(
         DBG_PRINTF("Packet (%d) dropped, t: %d, e: %d, pc: %d, pn: %d, l: %d, ret : %x\n",
             (cnx == NULL) ? -1 : cnx->client_mode, ph.ptype, ph.epoch, ph.pc, (int)ph.pn, 
             length, ret);
-        ret = -1;
+
+        if (ret == PICOQUIC_ERROR_AEAD_CHECK) {
+            ret = 0;
+        }
+        else {
+            ret = -1;
+        }
         if (cnx != NULL) {
             picoquic_reinsert_by_wake_time(cnx->quic, cnx, current_time);
         }
