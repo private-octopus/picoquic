@@ -22,6 +22,7 @@
 * copyright (c) Remigiusz Modrzejewski 2014, filed on Github with MIT license.
 */
 
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include "util.h"
@@ -37,6 +38,7 @@ static int_node_t * new_int_node(int x) {
     if (i_n != NULL) {
         i_n->v = x;
     }
+    return i_n;
 }
 
 static int compare_int(void *l, void *r) {
