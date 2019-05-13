@@ -142,7 +142,7 @@ picosplay_node_t* picosplay_find(picosplay_tree_t *tree, void *value) {
     picosplay_node_t *curr = tree->root;
     int found = 0;
     while(curr != NULL && !found) {
-        int relation = tree->comp(value, tree->node_value(curr));
+        int64_t relation = tree->comp(value, tree->node_value(curr));
         if(relation == 0) {
             found = 1;
         } else if(relation < 0) {
@@ -192,7 +192,7 @@ void picosplay_delete_hint(picosplay_tree_t *tree, picosplay_node_t *node) {
         x->left = node->left;
         x->left->parent = x;
     }
-    tree->delete_node(node);
+    tree->delete_node(tree, node);
     tree->size--;
 }
 

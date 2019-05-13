@@ -41,25 +41,25 @@ static int_node_t * new_int_node(int x) {
     return i_n;
 }
 
-static int compare_int(void *l, void *r) {
+static int64_t compare_int(void *l, void *r) {
     return ((int_node_t*)l)->v - ((int_node_t*)r)->v;
 }
 
-static picosplay_node_t * create_int_node(void * value) {
-#ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(value);
-#endif
+static picosplay_node_t * create_int_node(void * value)
+{
     return &((int_node_t *)value)->node;
 }
 
 
-static void * int_node_value(picosplay_node_t * node) {
+static void * int_node_value(picosplay_node_t * node)
+{
     return (void*)((char*)node - offsetof(struct st_int_node_t, node));
 }
 
-static void delete_int_node(picosplay_node_t * node) {
+static void delete_int_node(void * tree, picosplay_node_t * node)
+{
 #ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(node);
+    UNREFERENCED_PARAMETER(tree);
 #endif
     free(int_node_value(node));
 }

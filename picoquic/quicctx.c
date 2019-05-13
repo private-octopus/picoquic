@@ -1326,6 +1326,172 @@ int picoquic_create_probe(picoquic_cnx_t* cnx, const struct sockaddr* addr_to, c
     return ret;
 }
 
+/* Stream splay management */
+
+static int64_t picoquic_stream_node_compare(void *l, void *r)
+{
+    /* STream values are from 0 to 2^62-1, which means we are not worried with rollover */
+    return ((picoquic_stream_head_t*)l)->stream_id - ((picoquic_stream_head_t*)r)->stream_id;
+}
+
+static picosplay_node_t * picoquic_stream_node_create(void * value)
+{
+    return &((picoquic_stream_head_t *)value)->stream_node;
+}
+
+
+static void * picoquic_stream_node_value(picosplay_node_t * node)
+{
+    return (void*)((char*)node - offsetof(struct st_picoquic_stream_head_t, stream_node));
+}
+
+void picoquic_clear_stream(picoquic_stream_head_t* stream)
+{
+    picoquic_stream_data_t** pdata[2];
+    pdata[0] = &stream->stream_data;
+    pdata[1] = &stream->send_queue;
+
+    for (int i = 0; i < 2; i++) {
+        picoquic_stream_data_t* next;
+
+        while ((next = *pdata[i]) != NULL) {
+            *pdata[i] = next->next_stream_data;
+
+            if (next->bytes != NULL) {
+                free(next->bytes);
+            }
+            free(next);
+        }
+    }
+
+    while (stream->first_sack_item.next_sack != NULL) {
+        picoquic_sack_item_t * sack = stream->first_sack_item.next_sack;
+        stream->first_sack_item.next_sack = sack->next_sack;
+        free(sack);
+    }
+}
+
+
+static void picoquic_stream_node_delete(void * tree, picosplay_node_t * node)
+{
+    picoquic_cnx_t * cnx = (picoquic_cnx_t *)((char*)tree - offsetof(struct st_picoquic_cnx_t, stream_tree));
+    picoquic_stream_head_t * stream = picoquic_stream_node_value(node);
+
+    if (cnx->last_visited_stream == stream) {
+        cnx->last_visited_stream = NULL;
+    }
+
+    picoquic_clear_stream(stream);
+
+    free(stream);
+}
+
+/* Management of streams */
+
+picoquic_stream_head_t * picoquic_stream_from_node(picosplay_node_t * node)
+{
+#ifdef TOO_CAUTIOUS
+    return(picoquic_stream_head_t *)((node == NULL)?NULL:picoquic_stream_node_value(node));
+#else
+    return (picoquic_stream_head_t *)node;
+#endif
+}
+
+picoquic_stream_head_t * picoquic_first_stream(picoquic_cnx_t* cnx)
+{
+#ifdef TOO_CAUTIOUS
+    return picoquic_stream_from_node(picosplay_first(&cnx->stream_tree));
+#else
+    return (picoquic_stream_head_t *)picosplay_first(&cnx->stream_tree);
+#endif
+}
+
+picoquic_stream_head_t * picoquic_last_stream(picoquic_cnx_t* cnx)
+{
+#ifdef TOO_CAUTIOUS
+    return picoquic_stream_from_node(picosplay_last(&cnx->stream_tree));
+#else
+    return (picoquic_stream_head_t *)picosplay_last(&cnx->stream_tree);
+#endif
+}
+
+picoquic_stream_head_t * picoquic_next_stream(picoquic_stream_head_t * stream)
+{
+#ifdef TOO_CAUTIOUS
+    return picoquic_stream_from_node(picosplay_next(picoquic_stream_node_create(stream)));
+#else
+    return (picoquic_stream_head_t *)picosplay_next((picosplay_node_t *)stream);
+#endif
+}
+
+picoquic_stream_head_t* picoquic_find_stream(picoquic_cnx_t* cnx, uint64_t stream_id)
+{
+#ifdef TOO_CAUTIOUS
+    picoquic_stream_head_t target;
+    picoquic_stream_head_t* stream;
+    picosplay_node_t * node;
+
+    target.stream_id = stream_id;
+
+    node = picosplay_find(&cnx->stream_tree, (void*)&target);
+
+    if (node != NULL) {
+        stream = picoquic_stream_from_node(node);
+    }
+    else {
+        stream = NULL;
+    }
+#else
+    picoquic_stream_head_t target;
+    target.stream_id = stream_id;
+
+    return (picoquic_stream_head_t *)picosplay_find(&cnx->stream_tree, (void*)&target);
+#endif
+}
+
+picoquic_stream_head_t* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t stream_id)
+{
+    picoquic_stream_head_t* stream = (picoquic_stream_head_t*)malloc(sizeof(picoquic_stream_head_t));
+    if (stream != NULL) {
+        memset(stream, 0, sizeof(picoquic_stream_head_t));
+        stream->stream_id = stream_id;
+
+        if (IS_LOCAL_STREAM_ID(stream_id, cnx->client_mode)) {
+            if (IS_BIDIR_STREAM_ID(stream_id)) {
+                stream->maxdata_local = cnx->local_parameters.initial_max_stream_data_bidi_local;
+                stream->maxdata_remote = cnx->remote_parameters.initial_max_stream_data_bidi_remote;
+            }
+            else {
+                stream->maxdata_local = 0;
+                stream->maxdata_remote = cnx->remote_parameters.initial_max_stream_data_uni;
+            }
+        }
+        else {
+            if (IS_BIDIR_STREAM_ID(stream_id)) {
+                stream->maxdata_local = cnx->local_parameters.initial_max_stream_data_bidi_remote;
+                stream->maxdata_remote = cnx->remote_parameters.initial_max_stream_data_bidi_local;
+            }
+            else {
+                stream->maxdata_local = cnx->local_parameters.initial_max_stream_data_uni;
+                stream->maxdata_remote = 0;
+            }
+        }
+
+        picosplay_insert(&cnx->stream_tree, stream);
+
+        if (stream_id >= cnx->next_stream_id[STREAM_TYPE_FROM_ID(stream_id)]) {
+            cnx->next_stream_id[STREAM_TYPE_FROM_ID(stream_id)] = NEXT_STREAM_ID_FOR_TYPE(stream_id);
+        }
+    }
+
+    return stream;
+}
+
+void picoquic_delete_stream(picoquic_cnx_t * cnx, picoquic_stream_head_t* stream)
+{
+    picosplay_delete(&cnx->stream_tree, stream);
+}
+
 /* Connection management
  */
 
@@ -1499,8 +1665,9 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             cnx->tls_stream[epoch].stream_id = 0;
             cnx->tls_stream[epoch].consumed_offset = 0;
             cnx->tls_stream[epoch].fin_offset = 0;
-            cnx->tls_stream[epoch].next_stream = NULL;
-            cnx->tls_stream[epoch].stream_data = NULL;
+            cnx->tls_stream[epoch].stream_node.left = NULL;
+            cnx->tls_stream[epoch].stream_node.parent = NULL;
+            cnx->tls_stream[epoch].stream_node.right = NULL;
             cnx->tls_stream[epoch].sent_offset = 0;
             cnx->tls_stream[epoch].local_error = 0;
             cnx->tls_stream[epoch].remote_error = 0;
@@ -1508,6 +1675,8 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             cnx->tls_stream[epoch].maxdata_remote = (uint64_t)((int64_t)-1);
             /* No need to reset the state flags, as they are not used for the crypto stream */
         }
+
+        picosplay_init_tree(&cnx->stream_tree, picoquic_stream_node_compare, picoquic_stream_node_create, picoquic_stream_node_delete, picoquic_stream_node_value);
 
         cnx->congestion_alg = cnx->quic->default_congestion_alg;
         if (cnx->congestion_alg != NULL) {
@@ -1920,32 +2089,6 @@ int picoquic_queue_misc_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t 
     return ret;
 }
 
-void picoquic_clear_stream(picoquic_stream_head_t* stream)
-{
-    picoquic_stream_data_t** pdata[2];
-    pdata[0] = &stream->stream_data;
-    pdata[1] = &stream->send_queue;
-
-    for (int i = 0; i < 2; i++) {
-        picoquic_stream_data_t* next;
-
-        while ((next = *pdata[i]) != NULL) {
-            *pdata[i] = next->next_stream_data;
-
-            if (next->bytes != NULL) {
-                free(next->bytes);
-            }
-            free(next);
-        }
-    }
-
-    while (stream->first_sack_item.next_sack != NULL) {
-        picoquic_sack_item_t * sack = stream->first_sack_item.next_sack;
-        stream->first_sack_item.next_sack = sack->next_sack;
-        free(sack);
-    }
-}
-
 void picoquic_reset_packet_context(picoquic_cnx_t* cnx,
     picoquic_packet_context_enum pc)
 {
@@ -1982,7 +2125,7 @@ void picoquic_reset_packet_context(picoquic_cnx_t* cnx,
 * - sequence number is not changed.
 * - all queued 0-RTT retransmission will be considered lost (to do with 0-RTT)
 * - Client Initial packet is considered lost, free. A new one will have to be formatted.
-* - Stream 0 is reset, all data is freed.
+* - TLS stream is reset, all TLS data is freed.
 * - TLS API is called again.
 * - State changes.
 */
@@ -2120,7 +2263,6 @@ int picoquic_start_key_rotation(picoquic_cnx_t* cnx)
 
 void picoquic_delete_cnx(picoquic_cnx_t* cnx)
 {
-    picoquic_stream_head_t* stream;
     picoquic_misc_frame_header_t* misc_frame;
     picoquic_cnxid_stash_t* stashed_cnxid;
 
@@ -2170,11 +2312,7 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
             picoquic_clear_stream(&cnx->tls_stream[epoch]);
         }
 
-        while ((stream = cnx->first_stream) != NULL) {
-            cnx->first_stream = stream->next_stream;
-            picoquic_clear_stream(stream);
-            free(stream);
-        }
+        picosplay_empty_tree(&cnx->stream_tree);
 
         if (cnx->tls_ctx != NULL) {
             picoquic_tlscontext_free(cnx->tls_ctx);

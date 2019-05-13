@@ -25,15 +25,15 @@
 #ifndef PICOSPLAY_H
 #define PICOSPLAY_H
 
-
+#include <stdint.h>
 
 typedef struct st_picosplay_node_t {
     struct st_picosplay_node_t *parent, *left, *right;
 } picosplay_node_t;
 
-typedef int(*picosplay_comparator)(void *left, void *right);
+typedef int64_t(*picosplay_comparator)(void *left, void *right);
 typedef picosplay_node_t * (*picosplay_create)(void * value);
-typedef void(*picosplay_delete_node)(picosplay_node_t * node);
+typedef void(*picosplay_delete_node)(void * tree, picosplay_node_t * node);
 typedef void* (*picosplay_node_value)(picosplay_node_t * node);
 
 typedef struct st_picosplay_tree_t {

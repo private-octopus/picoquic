@@ -535,6 +535,7 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
     ret = demo_client_parse_scenario_desc(client_scenario_text, &client_sc_nb, &client_sc);
     if (ret != 0) {
         fprintf(stdout, "Cannot parse the specified scenario.\n");
+        return -1;
     }
     else {
         ret = picoquic_demo_client_initialize_context(&callback_ctx, client_sc, client_sc_nb, alpn, no_disk);
