@@ -1417,43 +1417,22 @@ picoquic_stream_head_t * picoquic_last_stream(picoquic_cnx_t* cnx)
 
 picoquic_stream_head_t * picoquic_next_stream(picoquic_stream_head_t * stream)
 {
-#ifdef TOO_CAUTIOUS
-    return picoquic_stream_from_node(picosplay_next(picoquic_stream_node_create(stream)));
-#else
     return (picoquic_stream_head_t *)picosplay_next((picosplay_node_t *)stream);
-#endif
 }
 
 picoquic_stream_head_t* picoquic_find_stream(picoquic_cnx_t* cnx, uint64_t stream_id)
 {
-#ifdef TOO_CAUTIOUS
-    picoquic_stream_head_t target;
-    picoquic_stream_head_t* stream;
-    picosplay_node_t * node;
-
-    target.stream_id = stream_id;
-
-    node = picosplay_find(&cnx->stream_tree, (void*)&target);
-
-    if (node != NULL) {
-        stream = picoquic_stream_from_node(node);
-    }
-    else {
-        stream = NULL;
-    }
-#else
     picoquic_stream_head_t target;
     target.stream_id = stream_id;
 
     return (picoquic_stream_head_t *)picosplay_find(&cnx->stream_tree, (void*)&target);
-#endif
 }
 
 void picoquic_add_output_streams(picoquic_cnx_t* cnx, uint64_t old_limit, uint64_t new_limit, unsigned int is_bidir)
 {
-    picoquic_stream_head_t* stream = picoquic_first_stream(cnx);
-
-    /* TODO: use splay to start from old limit */
+    uint64_t old_rank = STREAM_RANK_FROM_ID(old_limit);
+    uint64_t first_new_id = STREAM_ID_FROM_RANK(old_rank + 1, !cnx->client_mode, !is_bidir);
+    picoquic_stream_head_t* stream = picoquic_find_stream(cnx, first_new_id );
 
     while (stream) {
         if (stream->stream_id > old_limit) {
