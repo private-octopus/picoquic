@@ -5737,7 +5737,7 @@ int optimistic_ack_test_one(int shall_spoof_ack)
         int nb_inactive = 0;
         uint64_t hole_number = 0;
 
-        while (ret == 0 && nb_trials < 8096 && nb_inactive < 256 && TEST_CLIENT_READY && TEST_SERVER_READY) {
+        while (ret == 0 && nb_trials < 64000 && nb_inactive < 256 && TEST_CLIENT_READY && TEST_SERVER_READY) {
             int was_active = 0;
 
             nb_trials++;
