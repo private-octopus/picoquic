@@ -692,7 +692,6 @@ int stream_output_test_delete(picoquic_cnx_t * cnx, uint64_t stream_id, int R_or
 int stream_output_test()
 {
     int ret = 0;
-    int count = 0;
     picoquic_quic_t *quic = NULL;
     picoquic_cnx_t *cnx = NULL;
     uint64_t simulated_time = 0;
@@ -702,7 +701,6 @@ int stream_output_test()
     uint64_t output2[] = { 8, 5, 2, 1, 4, 0 };
     uint64_t delete_order[] = { 5, 0, 8, 4, 2, 1 };
     picoquic_stream_head_t * stream = NULL;
-    size_t rank = 0;
 
     quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
         NULL, NULL, NULL, NULL, simulated_time,
