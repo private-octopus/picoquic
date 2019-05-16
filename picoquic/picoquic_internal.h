@@ -392,6 +392,7 @@ typedef struct st_picoquic_stream_data_t {
 
 typedef struct st_picoquic_stream_head_t {
     picosplay_node_t stream_node;
+    struct st_picoquic_stream_head_t * next_output_stream;
     uint64_t stream_id;
     uint64_t consumed_offset;
     uint64_t fin_offset;
@@ -422,6 +423,7 @@ typedef struct st_picoquic_stream_head_t {
     unsigned int stop_sending_signalled : 1; /* After stop sending received from peer, application was notified */
     unsigned int max_stream_updated : 1; /* After stream was closed in both directions, the max stream id number was updated */
     unsigned int stream_data_blocked_sent : 1; /* If stream_data_blocked has been sent to peer, and no data sent on stream since */
+    unsigned int is_output_stream : 1; /* If stream is listed in the output list */
 } picoquic_stream_head_t;
 
 #define IS_CLIENT_STREAM_ID(id) (unsigned int)(((id) & 1) == 0)
@@ -773,6 +775,7 @@ typedef struct st_picoquic_cnx_t {
 
     /* Management of streams */
     picosplay_tree_t stream_tree;
+    picoquic_stream_head_t * first_output_stream;
     picoquic_stream_head_t * last_visited_stream;
     uint64_t high_priority_stream_id;
     uint64_t next_stream_id[4];
@@ -1038,6 +1041,7 @@ picoquic_stream_head_t * picoquic_first_stream(picoquic_cnx_t * cnx);
 picoquic_stream_head_t * picoquic_last_stream(picoquic_cnx_t * cnx);
 picoquic_stream_head_t * picoquic_next_stream(picoquic_stream_head_t * stream);
 picoquic_stream_head_t* picoquic_find_stream(picoquic_cnx_t* cnx, uint64_t stream_id);
+void picoquic_add_output_streams(picoquic_cnx_t * cnx, uint64_t old_limit, uint64_t new_limit, unsigned int is_bidir);
 picoquic_stream_head_t* picoquic_find_ready_stream(picoquic_cnx_t* cnx);
 int picoquic_is_tls_stream_ready(picoquic_cnx_t* cnx);
 uint8_t* picoquic_decode_stream_frame(picoquic_cnx_t* cnx, uint8_t* bytes,

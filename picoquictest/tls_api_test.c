@@ -76,7 +76,7 @@ static test_api_stream_desc_t test_scenario_stop_sending[] = {
 
 static test_api_stream_desc_t test_scenario_unidir[] = {
     { 2, 0, 4000, 0 },
-    { 3, 0, 5000, 0 }
+    { 6, 0, 5000, 0 }
 };
 
 static test_api_stream_desc_t test_scenario_mtu_discovery[] = {

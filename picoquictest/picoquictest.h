@@ -173,6 +173,7 @@ int cid_mask_encrypt_test();
 int test_copy_for_retransmit();
 int bad_coalesce_test();
 int stream_splay_test();
+int stream_output_test();
 
 #ifdef __cplusplus
 }

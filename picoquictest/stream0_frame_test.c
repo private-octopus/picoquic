@@ -19,6 +19,7 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <string.h>
 #include "picoquic_internal.h"
 
 /*
@@ -545,3 +546,256 @@ int stream_splay_test()
 
     return ret;
 }
+
+/* Test that the list of active streams is properly maintained */
+
+static int stream_output_test_callback(picoquic_cnx_t* cnx,
+    uint64_t stream_id, uint8_t* bytes, size_t length,
+    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx)
+{
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(cnx);
+    UNREFERENCED_PARAMETER(stream_id);
+    UNREFERENCED_PARAMETER(bytes);
+    UNREFERENCED_PARAMETER(length);
+    UNREFERENCED_PARAMETER(fin_or_event);
+    UNREFERENCED_PARAMETER(callback_ctx);
+    UNREFERENCED_PARAMETER(v_stream_ctx);
+#endif
+    return 0;
+}
+
+static int stream_output_test_list(picoquic_cnx_t * cnx, size_t nb_output, uint64_t * output)
+{
+    int ret = 0;
+    picoquic_stream_head_t * stream;
+    size_t nb_found = 0;
+
+    /* test order and value of output list */
+    stream = cnx->first_output_stream;
+    while (ret == 0) {
+        if (stream == NULL) {
+            if (nb_found < nb_output) {
+                DBG_PRINTF("Stream[%d] is NULL\n", (int)nb_found);
+                ret = -1;
+            }
+            break;
+        }
+        else if (nb_found >= nb_output) {
+            if (nb_found < nb_output) {
+                DBG_PRINTF("Stream[%d] is not NULL\n", (int)nb_found);
+                ret = -1;
+            }
+        }
+        else if (stream->stream_id != output[nb_found]) {
+            DBG_PRINTF("Stream[%d].stream_id = %d, expected %d\n", (int)nb_found, (int)stream->stream_id, (int)output[nb_found]);
+            ret = -1;
+        }
+        else {
+            stream = stream->next_output_stream;
+            nb_found++;
+        }
+    }
+
+    return ret;
+}
+
+int stream_output_test_delete(picoquic_cnx_t * cnx, uint64_t stream_id, int R_or_F)
+{
+    int ret = 0;
+    picoquic_stream_head_t * stream = picoquic_find_stream(cnx, stream_id);
+    picoquic_stream_head_t * previous = NULL;
+    picoquic_stream_head_t * ready_stream = NULL;
+    int is_last = 0;
+
+    if (stream == NULL) {
+        DBG_PRINTF("Stream[%d] was already deleted\n", (int)stream_id);
+        ret = -1;
+    }
+    else if (!stream->is_output_stream) {
+        DBG_PRINTF("Stream[%d] is not output stream\n", (int)stream_id);
+        ret = -1;
+    }
+    else {
+        /* Set the flags to mimic termination */
+        if (R_or_F == 0) {
+            stream->fin_requested = 1;
+            stream->fin_sent = 1;
+        }
+        else {
+            stream->reset_requested = 1;
+            stream->reset_sent = 1;
+        }
+        stream->is_active = 0;
+
+        if (IS_BIDIR_STREAM_ID(stream_id)) {
+            stream->fin_received = 1;
+            stream->fin_signalled = 1;
+        }
+
+        /* Make sure the search will start at this specific stream */
+        if (stream == cnx->first_output_stream && stream->next_output_stream == NULL) {
+            cnx->last_visited_stream = stream;
+            previous = NULL;
+            is_last = 1;
+        }
+        else {
+            previous = cnx->first_output_stream;
+            while (previous != NULL) {
+                if (previous->next_output_stream == stream) {
+                    break;
+                }
+                previous = previous->next_output_stream;
+            }
+            cnx->last_visited_stream = previous;
+        }
+        /* Call find ready stream to trigger deletion */
+        ready_stream = picoquic_find_ready_stream(cnx);
+        /* Verify that ready stream is as expected */
+        if (ready_stream == NULL) {
+            if (!is_last) {
+                DBG_PRINTF("No stream available after delete[%d]\n", stream_id);
+                ret = -1;
+            }
+        }
+        else if (is_last) {
+            DBG_PRINTF("Stream available after delete[%d]\n", stream_id);
+            ret = -1;
+        }
+        else if (ready_stream->stream_id == stream_id) {
+            DBG_PRINTF("Stream still available after delete[%d]\n", stream_id);
+            ret = -1;
+        }
+
+        /* Verify that the stream is removed from the output list */
+        previous = cnx->first_output_stream;
+        while (ret == 0 && previous != NULL) {
+            if (previous->stream_id == stream_id) {
+                DBG_PRINTF("Stream %d not removed from list\n", (int)stream_id);
+                ret = -1;
+                break;
+            }
+            previous = previous->next_output_stream;
+        }
+
+        if (ret == 0) {
+            /* Verify that stream is deleted */
+            if (picoquic_find_stream(cnx, stream_id) != NULL) {
+                DBG_PRINTF("Stream %d not deleted\n", (int)stream_id);
+                ret = -1;
+            }
+        }
+    }
+    return ret;
+}
+
+int stream_output_test()
+{
+    int ret = 0;
+    int count = 0;
+    picoquic_quic_t *quic = NULL;
+    picoquic_cnx_t *cnx = NULL;
+    uint64_t simulated_time = 0;
+    struct sockaddr_in saddr;
+    uint64_t values[] = { 0, 3, 4, 1, 2, 8, 5, 7 };
+    uint64_t output1[] = { 5, 2, 1, 4, 0  };
+    uint64_t output2[] = { 8, 5, 2, 1, 4, 0 };
+    uint64_t delete_order[] = { 5, 0, 8, 4, 2, 1 };
+    picoquic_stream_head_t * stream = NULL;
+    size_t rank = 0;
+
+    quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
+
+    memset(&saddr, 0, sizeof(struct sockaddr_in));
+    saddr.sin_family = AF_INET;
+    saddr.sin_port = 1000;
+
+    if (quic == NULL) {
+        DBG_PRINTF("%s", "Cannot create QUIC context\n");
+        ret = -1;
+    }
+    else {
+        cnx = picoquic_create_cnx(quic,
+            picoquic_null_connection_id, picoquic_null_connection_id, (struct sockaddr *) &saddr,
+            simulated_time, 0, "test-sni", "test-alpn", 1);
+
+        if (cnx == NULL) {
+            DBG_PRINTF("%s", "Cannot create connection\n");
+            ret = -1;
+        }
+        else {
+            picoquic_set_callback(cnx, stream_output_test_callback, NULL);
+
+            /* Create the list of streams */
+            for (int i = 0; i < 7; i++) {
+                picoquic_create_stream(cnx, values[i]);
+            }
+
+            ret = stream_output_test_list(cnx, sizeof(output1) / sizeof(uint64_t), output1);
+
+            if (ret == 0) {
+                /* Relax the max stream id value and test order again */
+                picoquic_add_output_streams(cnx, cnx->max_stream_id_bidir_remote, 8, 1);
+                cnx->max_stream_id_bidir_remote = 8;
+                ret = stream_output_test_list(cnx, sizeof(output2) / sizeof(uint64_t), output2);
+            }
+
+            if (ret == 0) {
+                /* Check that find ready stream returns NULL when no stream is ready */
+                stream = picoquic_find_ready_stream(cnx);
+                if (stream != NULL) {
+                    DBG_PRINTF("Unexpected ready stream[%d]\n", (int)stream->stream_id);
+                    ret = -1;
+                }
+            }
+
+            if (ret == 0) {
+                /* Mark all streams as active */
+                stream = cnx->first_output_stream;
+
+                while (stream != NULL) {
+                    stream->maxdata_remote = 4096;
+                    picoquic_mark_active_stream(cnx, stream->stream_id, 1, NULL);
+                    stream = stream->next_output_stream;
+                }
+
+                /* Check that streams are returned in the expected order */
+                for (int i = 0; ret == 0 && i < 2; i++) {
+                    for (size_t j = 0; ret == 0 && j < (sizeof(output2) / sizeof(uint64_t)); j++) {
+                        stream = picoquic_find_ready_stream(cnx);
+                        if (stream == NULL) {
+                            DBG_PRINTF("Expected stream[%d],got NULL\n", (int)output2[j]);
+                            ret = -1;
+                        }
+                        else if (stream->stream_id != output2[j]) {
+                            DBG_PRINTF("Expected stream[%d],got %d\n", (int)output2[j], (int)stream->stream_id);
+                            ret = -1;
+                        }
+                        else {
+                            cnx->last_visited_stream = stream;
+                        }
+                    }
+                }
+            }
+
+            if (ret == 0) {
+                /* Check automated stream deletion */
+                for (size_t i = 0; ret == 0 && i < (sizeof(delete_order) / sizeof(uint64_t)); i++) {
+                    ret = stream_output_test_delete(cnx, delete_order[i], i & 1);
+                }
+            }
+
+            picoquic_delete_cnx(cnx);
+            cnx = NULL;
+        }
+
+        picoquic_free(quic);
+        quic = NULL;
+    }
+
+    return ret;
+}
+
+

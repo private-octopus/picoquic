@@ -1449,6 +1449,27 @@ picoquic_stream_head_t* picoquic_find_stream(picoquic_cnx_t* cnx, uint64_t strea
 #endif
 }
 
+void picoquic_add_output_streams(picoquic_cnx_t* cnx, uint64_t old_limit, uint64_t new_limit, unsigned int is_bidir)
+{
+    picoquic_stream_head_t* stream = picoquic_first_stream(cnx);
+
+    /* TODO: use splay to start from old limit */
+
+    while (stream) {
+        if (stream->stream_id > old_limit) {
+            if (stream->stream_id > new_limit) {
+                break;
+            }
+            if (IS_LOCAL_STREAM_ID(stream->stream_id, cnx->client_mode) && (IS_BIDIR_STREAM_ID(stream->stream_id) == is_bidir)) {
+                stream->next_output_stream = cnx->first_output_stream;
+                cnx->first_output_stream = stream;
+                stream->is_output_stream = 1;
+            }
+        }
+        stream = picoquic_next_stream(stream);
+    }
+}
+
 picoquic_stream_head_t* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t stream_id)
 {
     picoquic_stream_head_t* stream = (picoquic_stream_head_t*)malloc(sizeof(picoquic_stream_head_t));
@@ -1460,24 +1481,33 @@ picoquic_stream_head_t* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t str
             if (IS_BIDIR_STREAM_ID(stream_id)) {
                 stream->maxdata_local = cnx->local_parameters.initial_max_stream_data_bidi_local;
                 stream->maxdata_remote = cnx->remote_parameters.initial_max_stream_data_bidi_remote;
+                stream->is_output_stream = stream->stream_id <= cnx->max_stream_id_bidir_remote;
+
             }
             else {
                 stream->maxdata_local = 0;
                 stream->maxdata_remote = cnx->remote_parameters.initial_max_stream_data_uni;
+                stream->is_output_stream = stream->stream_id <= cnx->max_stream_id_unidir_remote;
             }
         }
         else {
             if (IS_BIDIR_STREAM_ID(stream_id)) {
                 stream->maxdata_local = cnx->local_parameters.initial_max_stream_data_bidi_remote;
                 stream->maxdata_remote = cnx->remote_parameters.initial_max_stream_data_bidi_local;
+                stream->is_output_stream = 1;
             }
             else {
                 stream->maxdata_local = cnx->local_parameters.initial_max_stream_data_uni;
                 stream->maxdata_remote = 0;
+                stream->is_output_stream = 0;
             }
         }
 
         picosplay_insert(&cnx->stream_tree, stream);
+        if (stream->is_output_stream) {
+            stream->next_output_stream = cnx->first_output_stream;
+            cnx->first_output_stream = stream;
+        }
 
         if (stream_id >= cnx->next_stream_id[STREAM_TYPE_FROM_ID(stream_id)]) {
             cnx->next_stream_id[STREAM_TYPE_FROM_ID(stream_id)] = NEXT_STREAM_ID_FOR_TYPE(stream_id);
