@@ -5765,8 +5765,8 @@ int optimistic_ack_test_one(int shall_spoof_ack)
             if (test_ctx->cnx_server != NULL) {
                 picoquic_packet_t * packet = test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].retransmit_oldest;
 
-                while (packet != NULL) {
-                    if (packet->is_ack_trap && packet->sequence_number > hole_number) {
+                while (packet != NULL && packet->sequence_number > hole_number) {
+                    if (packet->is_ack_trap) {
                         hole_number = packet->sequence_number;
                         if (shall_spoof_ack) {
                             ret = picoquic_record_pn_received(test_ctx->cnx_client, picoquic_packet_context_application,
@@ -5778,6 +5778,10 @@ int optimistic_ack_test_one(int shall_spoof_ack)
                     packet = packet->previous_packet;
                 }
             }
+        }
+
+        if (!test_ctx->test_finished) {
+            DBG_PRINTF("Data loop exit after %d rounds, %d inactive\n", nb_trials, nb_inactive);
         }
 
         if (ret != 0)
