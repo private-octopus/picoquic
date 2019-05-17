@@ -76,7 +76,7 @@ static test_api_stream_desc_t test_scenario_stop_sending[] = {
 
 static test_api_stream_desc_t test_scenario_unidir[] = {
     { 2, 0, 4000, 0 },
-    { 3, 0, 5000, 0 }
+    { 6, 0, 5000, 0 }
 };
 
 static test_api_stream_desc_t test_scenario_mtu_discovery[] = {
@@ -5737,7 +5737,7 @@ int optimistic_ack_test_one(int shall_spoof_ack)
         int nb_inactive = 0;
         uint64_t hole_number = 0;
 
-        while (ret == 0 && nb_trials < 8096 && nb_inactive < 256 && TEST_CLIENT_READY && TEST_SERVER_READY) {
+        while (ret == 0 && nb_trials < 64000 && nb_inactive < 256 && TEST_CLIENT_READY && TEST_SERVER_READY) {
             int was_active = 0;
 
             nb_trials++;
@@ -5765,8 +5765,8 @@ int optimistic_ack_test_one(int shall_spoof_ack)
             if (test_ctx->cnx_server != NULL) {
                 picoquic_packet_t * packet = test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].retransmit_oldest;
 
-                while (packet != NULL) {
-                    if (packet->is_ack_trap && packet->sequence_number > hole_number) {
+                while (packet != NULL && packet->sequence_number > hole_number) {
+                    if (packet->is_ack_trap) {
                         hole_number = packet->sequence_number;
                         if (shall_spoof_ack) {
                             ret = picoquic_record_pn_received(test_ctx->cnx_client, picoquic_packet_context_application,
@@ -5778,6 +5778,10 @@ int optimistic_ack_test_one(int shall_spoof_ack)
                     packet = packet->previous_packet;
                 }
             }
+        }
+
+        if (!test_ctx->test_finished) {
+            DBG_PRINTF("Data loop exit after %d rounds, %d inactive\n", nb_trials, nb_inactive);
         }
 
         if (ret != 0)

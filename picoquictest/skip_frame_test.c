@@ -231,9 +231,11 @@ size_t nb_test_skip_list = sizeof(test_skip_list) / sizeof(test_skip_frames_t);
 
 uint64_t picoquic_test_random(uint64_t * random_context)
 {
-    uint64_t z = (*random_context += 0x9e3779b97f4a7c15);
-    z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9;
-    z = (z ^ (z >> 27)) * 0x94d049bb133111eb;
+    uint64_t z; 
+    *random_context += 0x9e3779b97f4a7c15;
+    z = *random_context;
+    z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9ull;
+    z = (z ^ (z >> 27)) * 0x94d049bb133111ebull;
     return z ^ (z >> 31);
 }
 

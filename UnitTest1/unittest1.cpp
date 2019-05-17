@@ -147,6 +147,20 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(stream_splay)
+        {
+            int ret = stream_splay_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(stream_output)
+        {
+            int ret = stream_output_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(split_stream_frame)
         {
             int ret = split_stream_frame_test();
