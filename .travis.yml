@@ -68,6 +68,7 @@ script:
   - if [ "$CHECK" == "cppcheck" ]; then cppcheck --project=compile_commands.json --quiet; fi
   - ${EXTRA} make
   - ulimit -c unlimited -S
+  - ./picoquic_ct optimistic_hole
   - ./picoquic_ct -n && RESULT=$? 
   # Early out if the program exited successfully
   - if [[ ${RESULT} == 0 ]]; then exit 0; fi;
