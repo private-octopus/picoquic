@@ -3237,7 +3237,6 @@ uint8_t* picoquic_decode_path_challenge_frame(picoquic_cnx_t* cnx, uint8_t* byte
     return bytes;
 }
 
-
 int picoquic_prepare_path_response_frame(uint8_t* bytes,
     size_t bytes_max, size_t* consumed, uint64_t challenge)
 {
@@ -3381,6 +3380,87 @@ static uint8_t* picoquic_skip_0len_frame(uint8_t* bytes, const uint8_t* bytes_ma
     return bytes;
 }
 
+/* Handling of datagram frames.
+ * We follow the spec in
+ * https://datatracker.ietf.org/doc/draft-pauly-quic-datagram/?include_text=1
+ */
+
+uint8_t* picoquic_skip_datagram_frame(uint8_t* bytes, const uint8_t* bytes_max)
+{
+    uint8_t frame_id = *bytes++;
+    unsigned int has_length = frame_id & 1;
+    unsigned int has_id = (frame_id & 2)>>1;
+    uint64_t length = 0;
+
+    if (has_id) {
+        bytes = picoquic_frames_varint_skip(bytes, bytes_max);
+    }
+
+    if (bytes != NULL) {
+        if (has_length) {
+            bytes = picoquic_frames_varint_decode(bytes, bytes_max, &length);
+        }
+        else {
+            length = bytes_max - bytes ;
+        }
+
+        if (bytes != NULL) {
+            bytes += length;
+            if (bytes > bytes_max) {
+                bytes = NULL;
+            }
+        }
+    }
+
+    return bytes;
+}
+
+uint8_t* picoquic_decode_datagram_frame(picoquic_cnx_t* cnx, uint8_t* bytes, const uint8_t* bytes_max)
+{
+    uint8_t frame_id = *bytes++;
+    unsigned int has_length = frame_id & 1;
+    unsigned int has_id = (frame_id & 2) >> 1;
+    uint64_t id = 0;
+    uint64_t length = 0;
+
+    if (has_id && (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &id)) == NULL) {
+        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
+            frame_id);
+    }
+
+    if (has_length) {
+        if (bytes != NULL && (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &length)) == NULL) {
+            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
+                frame_id);
+        }
+        if (bytes != NULL && bytes + length > bytes_max) {
+            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
+                frame_id);
+            bytes = NULL;
+        }
+    }
+    else {
+        length = bytes_max - bytes;
+    }
+
+    if (bytes != NULL) {
+        if (cnx->callback_fn != NULL) {
+            /* submit the data to the app */
+            if (cnx->callback_fn(cnx, id, bytes, length, picoquic_callback_datagram,
+                cnx->callback_ctx, NULL) != 0) {
+                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
+                bytes = NULL;
+            }
+        }
+
+        bytes += length;
+    }
+
+    return bytes;
+}
+
+
+
 
 /*
  * Decoding of the received frames.
@@ -3510,6 +3590,12 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_
                 /* the old code point for ACK frames, but this is taken care of in the ACK tests above */
                 bytes = picoquic_decode_retire_connection_id_frame(cnx, bytes, bytes_max, current_time, path_x);
                 ack_needed = 1;
+                break;
+            case picoquic_frame_type_datagram:
+            case picoquic_frame_type_datagram_l:
+            case picoquic_frame_type_datagram_id:
+            case picoquic_frame_type_datagram_id_l:
+                bytes = picoquic_decode_datagram_frame(cnx, bytes, bytes_max);
                 break;
             default: {
                 uint64_t frame_id64;
@@ -3742,6 +3828,12 @@ int picoquic_skip_frame(uint8_t* bytes, size_t bytes_maxsize, size_t* consumed, 
             /* the old code point for ACK frames, but this is taken care of in the ACK tests above */
             bytes = picoquic_skip_retire_connection_id_frame(bytes, bytes_max);
             *pure_ack = 0;
+            break;
+        case picoquic_frame_type_datagram:
+        case picoquic_frame_type_datagram_l:
+        case picoquic_frame_type_datagram_id:
+        case picoquic_frame_type_datagram_id_l:
+            bytes = picoquic_skip_datagram_frame(bytes, bytes_max);
             break;
         default: {
             uint64_t frame_id64;
