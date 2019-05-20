@@ -77,7 +77,7 @@ static picoquic_tp_t transport_param_test1 = {
 };
 
 static picoquic_tp_t transport_param_test2 = {
-    0x1000000, 0, 0, 0x1000000, 1, 0, 255, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 3, 0, TRANSPORT_PREFERED_ADDRESS_NULL
+    0x1000000, 0, 0, 0x1000000, 1, 0, 255, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 3, 0, TRANSPORT_PREFERED_ADDRESS_NULL, 1480
 };
 
 static picoquic_tp_t transport_param_test3 = {
@@ -126,12 +126,13 @@ uint8_t client_param1[] = {
 };
 
 uint8_t client_param2[] = {
-    0, 0x21,
+    0, 0x27,
     0, picoquic_tp_initial_max_stream_data_bidi_local, 0, 4, 0x81, 0, 0, 0,
     0, picoquic_tp_initial_max_data, 0, 4, 0x81, 0, 0, 0,
     0, picoquic_tp_initial_max_streams_bidi, 0, 1, 0x01,
     0, picoquic_tp_idle_timeout, 0, 2, 0x40, 0xFF,
-    0, picoquic_tp_max_packet_size, 0, 2, 0x45, 0xC8
+    0, picoquic_tp_max_packet_size, 0, 2, 0x45, 0xC8,
+    0, picoquic_tp_max_datagram_size, 0, 2,0x45, 0xC8
 };
 
 uint8_t client_param3[] = {
@@ -390,6 +391,11 @@ static int transport_param_compare(picoquic_tp_t* param, picoquic_tp_t* ref) {
     }
     else if (memcmp(param->prefered_address.statelessResetToken, ref->prefered_address.statelessResetToken, 16) != 0) {
         DBG_PRINTF("%s", "prefered_address.statelessResetToken: values don't match\n");
+        ret = -1;
+    }
+    else if (param->max_datagram_size != ref->max_datagram_size) {
+        DBG_PRINTF("max_datagram_size: got %d, expected %d\n",
+            param->max_datagram_size, ref->max_datagram_size);
         ret = -1;
     }
 

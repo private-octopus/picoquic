@@ -246,6 +246,7 @@ typedef enum {
     picoquic_callback_prepare_to_send, /* Ask application to send data in frame, see picoquic_provide_stream_data_buffer for details */
     picoquic_callback_almost_ready, /* Data can be sent, but the connection is not fully established */
     picoquic_callback_ready, /* Data can be sent and received, connection migration can be initiated */
+    picoquic_callback_datagram /* Datagram frame has been received */
 } picoquic_call_back_event_t;
 
 
@@ -283,6 +284,7 @@ typedef struct st_picoquic_tp_t {
     uint8_t ack_delay_exponent;
     unsigned int migration_disabled;
     picoquic_tp_prefered_address_t prefered_address;
+    uint32_t max_datagram_size;
 } picoquic_tp_t;
 
 /*

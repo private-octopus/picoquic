@@ -101,7 +101,11 @@ typedef enum {
     picoquic_frame_type_path_challenge = 0x1a,
     picoquic_frame_type_path_response = 0x1b,
     picoquic_frame_type_connection_close = 0x1c,
-    picoquic_frame_type_application_close = 0x1d
+    picoquic_frame_type_application_close = 0x1d,
+    picoquic_frame_type_datagram = 0x20,
+    picoquic_frame_type_datagram_l = 0x21,
+    picoquic_frame_type_datagram_id = 0x22,
+    picoquic_frame_type_datagram_id_l = 0x23
 } picoquic_frame_type_enum_t;
 
 typedef struct st_picoquic_packet_header_t {
@@ -302,7 +306,8 @@ typedef enum {
     picoquic_tp_ack_delay_exponent = 10,
     picoquic_tp_max_ack_delay = 11,
     picoquic_tp_disable_migration = 12,
-    picoquic_tp_server_preferred_address = 13
+    picoquic_tp_server_preferred_address = 13,
+    picoquic_tp_max_datagram_size = 32 /* per draft-pauly-quic-datagram-02 */
 } picoquic_tp_enum;
 
 /*

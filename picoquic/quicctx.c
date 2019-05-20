@@ -536,6 +536,7 @@ void picoquic_init_transport_parameters(picoquic_tp_t* tp, int client_mode)
     }
     tp->idle_timeout = PICOQUIC_MICROSEC_HANDSHAKE_MAX/1000;
     tp->max_packet_size = PICOQUIC_PRACTICAL_MAX_MTU;
+    tp->max_datagram_size = 0;
     tp->ack_delay_exponent = 3;
 }
 
