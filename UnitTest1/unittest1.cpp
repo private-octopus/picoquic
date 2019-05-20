@@ -315,6 +315,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(stream_rank)
+        {
+            int ret = stream_rank_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(stream_id_to_rank)
         {
             int ret = stream_id_to_rank_test();

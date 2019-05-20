@@ -174,6 +174,7 @@ int test_copy_for_retransmit();
 int bad_coalesce_test();
 int stream_splay_test();
 int stream_output_test();
+int stream_rank_test();
 
 #ifdef __cplusplus
 }
