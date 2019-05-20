@@ -3460,7 +3460,53 @@ uint8_t* picoquic_decode_datagram_frame(picoquic_cnx_t* cnx, uint8_t* bytes, con
 }
 
 
+int picoquic_prepare_datagram_frame(uint64_t id, size_t length, uint8_t * src, uint8_t * bytes, size_t bytes_max, size_t * consumed)
+{
+    int ret = 0;
+    size_t byte_index = 0;
+    size_t l_id = 0;
+    size_t l_l = 0;
 
+    bytes[byte_index++] = (id == 0) ? picoquic_frame_type_datagram_l : picoquic_frame_type_datagram_id_l;
+
+    if (id == 0) {
+        bytes[byte_index++] = picoquic_frame_type_datagram_l;
+    }
+    else {
+        bytes[byte_index++] = picoquic_frame_type_datagram_id_l;
+
+        byte_index += picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index, id);
+    }
+    
+    byte_index += picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index, length);
+
+    if (byte_index + length <= bytes_max) {
+        memcpy(bytes + byte_index, src, length);
+        byte_index += length;
+    }
+    else {
+        ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
+        byte_index = 0;
+    }
+
+    *consumed = byte_index;
+
+    return ret;
+}
+
+int picoquic_queue_datagram_frame(picoquic_cnx_t * cnx, uint64_t id,
+    size_t length, uint8_t * bytes)
+{
+    size_t consumed = 0;
+    uint8_t frame_buffer[PICOQUIC_MAX_PACKET_SIZE];
+    int ret = picoquic_prepare_datagram_frame(id, length, bytes, frame_buffer, sizeof(frame_buffer), &consumed);
+
+    if (ret == 0 && consumed > 0) {
+        ret = picoquic_queue_misc_frame(cnx, frame_buffer, consumed);
+    }
+
+    return ret;
+}
 
 /*
  * Decoding of the received frames.

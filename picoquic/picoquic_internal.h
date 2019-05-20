@@ -306,7 +306,8 @@ typedef enum {
     picoquic_tp_ack_delay_exponent = 10,
     picoquic_tp_max_ack_delay = 11,
     picoquic_tp_disable_migration = 12,
-    picoquic_tp_server_preferred_address = 13
+    picoquic_tp_server_preferred_address = 13,
+    picoquic_tp_max_datagram_size = 32 /* per draft-pauly-quic-datagram-02 */
 } picoquic_tp_enum;
 
 /*

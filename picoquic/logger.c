@@ -393,6 +393,9 @@ char const* picoquic_log_tp_name(uint64_t tp_number)
     case picoquic_tp_server_preferred_address:
         tp_name = "server_preferred_address";
         break;
+    case picoquic_tp_max_datagram_size:
+        tp_name = "max_datagram_size";
+        break;
     default:
         break;
     }

@@ -376,6 +376,11 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         }
     }
 
+    if (cnx->local_parameters.max_datagram_size > 0 && bytes != NULL) {
+        bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_max_datagram_size,
+            cnx->local_parameters.max_datagram_size);
+    }
+
     /* Finally, update the parameter slength */
 
     if (bytes == NULL) {
@@ -411,6 +416,7 @@ void picoquic_clear_transport_extensions(picoquic_cnx_t* cnx)
     cnx->max_stream_id_unidir_remote = 0;
     cnx->remote_parameters.migration_disabled = 0;
     cnx->remote_parameters.max_ack_delay = PICOQUIC_ACK_DELAY_MAX_DEFAULT;
+    cnx->remote_parameters.max_datagram_size = 0;
 }
 
 int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mode,
@@ -418,7 +424,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
 {
     int ret = 0;
     size_t byte_index = 0;
-    uint32_t present_flag = 0;
+    uint64_t present_flag = 0;
     picoquic_connection_id_t original_connection_id = picoquic_null_connection_id;
 
     cnx->remote_parameters_received = 1;
@@ -456,12 +462,12 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                     }
                     else {
                         if (extension_type < 64) {
-                            if ((present_flag & (1 << extension_type)) != 0) {
+                            if ((present_flag & (1ull << extension_type)) != 0) {
                                 /* Malformed, already present */
                                 ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
                             }
                             else {
-                                present_flag |= (1 << extension_type);
+                                present_flag |= (1ull << extension_type);
                             }
                         }
 
@@ -512,7 +518,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                             break;
 
                         case picoquic_tp_max_packet_size:
-                            cnx->remote_parameters.max_packet_size = (uint16_t)
+                            cnx->remote_parameters.max_packet_size = (uint32_t)
                                 picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
                             break;
                         case picoquic_tp_stateless_reset_token:
@@ -576,7 +582,9 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                                 }
                             }
                             break;
-
+                        case picoquic_tp_max_datagram_size:
+                            cnx->remote_parameters.max_datagram_size = (uint32_t)
+                                picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
                         default:
                             /* ignore unknown extensions */
                             break;
@@ -595,16 +603,16 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         cnx->remote_parameters.idle_timeout = (uint32_t)((int32_t)-1);
     }
 
-    if (ret == 0 && (present_flag & (1 << picoquic_tp_max_ack_delay)) == 0) {
+    if (ret == 0 && (present_flag & (1ull << picoquic_tp_max_ack_delay)) == 0) {
         cnx->remote_parameters.max_ack_delay = PICOQUIC_ACK_DELAY_MAX_DEFAULT;
     }
 
     /* Clients must not include reset token, server address, or original cid  */
 
     if (ret == 0 && extension_mode == 0 &&
-        ((present_flag & (1 << picoquic_tp_stateless_reset_token)) != 0 ||
-        (present_flag & (1 << picoquic_tp_server_preferred_address)) != 0 ||
-        (present_flag & (1 << picoquic_tp_original_connection_id)) != 0)) {
+        ((present_flag & (1ull << picoquic_tp_stateless_reset_token)) != 0 ||
+        (present_flag & (1ull << picoquic_tp_server_preferred_address)) != 0 ||
+        (present_flag & (1ull << picoquic_tp_original_connection_id)) != 0)) {
         ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
     }
 
