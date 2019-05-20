@@ -83,6 +83,7 @@ static const picoquic_test_def_t test_table[] = {
     { "client_losses", tls_api_client_losses_test },
     { "server_losses", tls_api_server_losses_test },
     { "transport_param_stream_id", transport_param_stream_id_test },
+    { "stream_rank", stream_rank_test },
     { "stream_id_to_rank", stream_id_to_rank_test},
     { "transport_param", transport_param_test },
     { "tls_api_sni", tls_api_sni_test },
@@ -313,6 +314,9 @@ int main(int argc, char** argv)
 
         if (disable_debug) {
             debug_printf_suspend();
+        }
+        else {
+            debug_printf_push_stream(stderr);
         }
 
         if (ret == 0 && stress_minutes > 0) {
