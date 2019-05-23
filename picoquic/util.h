@@ -38,6 +38,7 @@
 #define PRIst "zu"
 #endif
 
+void debug_set_stream(FILE *F);
 void debug_printf(const char* fmt, ...);
 void debug_printf_push_stream(FILE* f);
 void debug_printf_pop_stream(void);

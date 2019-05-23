@@ -92,6 +92,11 @@ char* picoquic_strip_endofline(char* buf, size_t bufmax, char const* line)
 static FILE* debug_out = NULL;
 static int debug_suspended = 0;
 
+void debug_set_stream(FILE *F)
+{
+    debug_out = F;
+}
+
 void debug_printf(const char* fmt, ...)
 {
     if (debug_suspended == 0 && debug_out != NULL) {

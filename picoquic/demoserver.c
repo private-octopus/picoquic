@@ -464,6 +464,8 @@ int h3zero_server_callback(picoquic_cnx_t* cnx,
             h3zero_server_callback_delete_context(ctx);
             picoquic_set_callback(cnx, h3zero_server_callback, NULL);
             break;
+        case picoquic_callback_version_negotiation:
+            break;
         case picoquic_callback_stream_gap:
             /* Gap indication, when unreliable streams are supported */
             if (stream_ctx == NULL) {
@@ -608,7 +610,9 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
     switch (fin_or_event) {
     case picoquic_callback_almost_ready:
     case picoquic_callback_ready:
-            return 0;
+        return 0;
+    case picoquic_callback_version_negotiation:
+        return 0;
     case picoquic_callback_close:
     case picoquic_callback_application_close:
     case picoquic_callback_stateless_reset:

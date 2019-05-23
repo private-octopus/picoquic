@@ -327,10 +327,10 @@ static int test_api_callback(picoquic_cnx_t* cnx,
     size_t stream_index;
     picoquic_call_back_event_t stream_finished = picoquic_callback_stream_data;
 
-    if (fin_or_event == picoquic_callback_close || 
+    if (fin_or_event == picoquic_callback_close ||
         fin_or_event == picoquic_callback_application_close ||
         fin_or_event == picoquic_callback_almost_ready ||
-        fin_or_event == picoquic_callback_ready)  {
+        fin_or_event == picoquic_callback_ready) {
         /* do nothing in our tests */
         return 0;
     }
@@ -339,6 +339,13 @@ static int test_api_callback(picoquic_cnx_t* cnx,
         ctx = (picoquic_test_tls_api_ctx_t*)(((char*)callback_ctx) - offsetof(struct st_picoquic_test_tls_api_ctx_t, client_callback));
     } else {
         ctx = (picoquic_test_tls_api_ctx_t*)(((char*)callback_ctx) - offsetof(struct st_picoquic_test_tls_api_ctx_t, server_callback));
+    }
+
+
+    if (fin_or_event == picoquic_callback_version_negotiation) {
+        if (ctx != NULL) {
+            ctx->received_version_negotiation = 1;
+        }
     }
 
     if (fin_or_event == picoquic_callback_stateless_reset) {
@@ -1355,6 +1362,15 @@ int tls_api_version_negotiation_test()
             DBG_PRINTF("Unexpected state: %d\n", test_ctx->cnx_client->cnx_state);
             ret = -1;
         }
+    }
+
+
+    if (ret == 0) {
+        if (!test_ctx->received_version_negotiation){
+            DBG_PRINTF("%s", "No version negotiation notified\n");
+            ret = -1;
+        }
+
     }
 
     if (test_ctx != NULL) {

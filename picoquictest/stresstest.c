@@ -132,6 +132,7 @@ static int stress_server_callback(picoquic_cnx_t* cnx,
         }
     }
     else if (
+        fin_or_event == picoquic_callback_version_negotiation ||
         fin_or_event == picoquic_callback_almost_ready ||
         fin_or_event == picoquic_callback_ready) {
         /* do nothing */
@@ -307,7 +308,9 @@ static int stress_client_callback(picoquic_cnx_t* cnx,
     int ret = 0;
     picoquic_stress_client_callback_ctx_t* ctx = (picoquic_stress_client_callback_ctx_t*)callback_ctx;
 
-    if (fin_or_event == picoquic_callback_close || 
+    if (fin_or_event == picoquic_callback_version_negotiation) {
+        /* Do nothing */
+    } else  if (fin_or_event == picoquic_callback_close || 
         fin_or_event == picoquic_callback_application_close ||
         fin_or_event == picoquic_callback_stateless_reset) {
         /* Free per connection resource */
