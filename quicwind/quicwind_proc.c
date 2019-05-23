@@ -231,6 +231,9 @@ int quicwind_callback(picoquic_cnx_t* cnx,
         AppendText(_T("Received a request to close the application.\n"));
         quicwind_delete_context(cnx, ctx);
         break;
+    case picoquic_callback_version_negotiation: /* Received version negotiation */
+        AppendText(_T("Received a version negotiation request.\n"));
+        break;
     case picoquic_callback_stream_gap:
         /* Gap indication, when unreliable streams are supported */
         AppendText(_T("Received a gap indication.\r\n"));

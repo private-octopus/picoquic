@@ -144,6 +144,7 @@ typedef struct st_picoquic_test_tls_api_ctx_t {
     test_api_stream_t test_stream[PICOQUIC_TEST_MAX_TEST_STREAMS];
     picoquictest_sim_link_t* c_to_s_link;
     picoquictest_sim_link_t* s_to_c_link;
+    int received_version_negotiation;
 
     /* Stream 0 is reserved for the "infinite stream" simulation */
     size_t stream0_target;

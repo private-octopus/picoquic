@@ -523,82 +523,88 @@ int picoquic_parse_header_and_decrypt(
 
     *new_ctx_created = 0;
 
-    if (ret == 0 && ph->ptype != picoquic_packet_version_negotiation && ph->ptype != picoquic_packet_retry){
-        /* TODO: clarify length, payload length, packet length -- special case of initial packet */
-        length = ph->offset + ph->payload_length;
-        *consumed = length;
+    if (ret == 0) {
+        if (ph->ptype != picoquic_packet_version_negotiation && ph->ptype != picoquic_packet_retry) {
+            /* TODO: clarify length, payload length, packet length -- special case of initial packet */
+            length = ph->offset + ph->payload_length;
+            *consumed = length;
 
-        if (*pcnx == NULL) {
-            if (ph->ptype == picoquic_packet_initial) {
-                /* Create a connection context if the CI is acceptable */
-                if (packet_length < PICOQUIC_ENFORCED_INITIAL_MTU) {
-                    /* Unexpected packet. Reject, drop and log. */
-                    ret = PICOQUIC_ERROR_INITIAL_TOO_SHORT;
-                }
-                else if (ph->dest_cnx_id.id_len < PICOQUIC_ENFORCED_INITIAL_CID_LENGTH) {
-                    /* Initial CID too short -- ignore the packet */
-                    ret = PICOQUIC_ERROR_INITIAL_CID_TOO_SHORT;
-                } else {
-                    /* if listening is OK, listen */
-                    *pcnx = picoquic_create_cnx(quic, ph->dest_cnx_id, ph->srce_cnx_id, addr_from, current_time, ph->vn, NULL, NULL, 0);
-                    *new_ctx_created = (*pcnx == NULL) ? 0 : 1;
+            if (*pcnx == NULL) {
+                if (ph->ptype == picoquic_packet_initial) {
+                    /* Create a connection context if the CI is acceptable */
+                    if (packet_length < PICOQUIC_ENFORCED_INITIAL_MTU) {
+                        /* Unexpected packet. Reject, drop and log. */
+                        ret = PICOQUIC_ERROR_INITIAL_TOO_SHORT;
+                    }
+                    else if (ph->dest_cnx_id.id_len < PICOQUIC_ENFORCED_INITIAL_CID_LENGTH) {
+                        /* Initial CID too short -- ignore the packet */
+                        ret = PICOQUIC_ERROR_INITIAL_CID_TOO_SHORT;
+                    }
+                    else {
+                        /* if listening is OK, listen */
+                        *pcnx = picoquic_create_cnx(quic, ph->dest_cnx_id, ph->srce_cnx_id, addr_from, current_time, ph->vn, NULL, NULL, 0);
+                        *new_ctx_created = (*pcnx == NULL) ? 0 : 1;
+                    }
                 }
             }
-        }
 
-        if (ret == 0) {
-            if (*pcnx != NULL) {
-                /* Remove header protection at this point */
-                ret = picoquic_remove_header_protection(*pcnx, bytes, ph);
+            if (ret == 0) {
+                if (*pcnx != NULL) {
+                    /* Remove header protection at this point */
+                    ret = picoquic_remove_header_protection(*pcnx, bytes, ph);
 
-                if (ret == 0) {
-                    decoded_length = picoquic_remove_packet_protection(*pcnx, bytes, ph, current_time, &already_received);
+                    if (ret == 0) {
+                        decoded_length = picoquic_remove_packet_protection(*pcnx, bytes, ph, current_time, &already_received);
+                    }
+                    else {
+                        decoded_length = ph->payload_length + 1;
+                    }
+
+                    /* TODO: consider the error "too soon" */
+                    if (decoded_length > (length - ph->offset)) {
+                        if (ph->ptype == picoquic_packet_1rtt_protected &&
+                            length >= PICOQUIC_RESET_PACKET_MIN_SIZE &&
+                            memcmp(bytes + length - PICOQUIC_RESET_SECRET_SIZE,
+                            (*pcnx)->path[0]->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0) {
+                            ret = PICOQUIC_ERROR_STATELESS_RESET;
+                        }
+                        else {
+                            ret = PICOQUIC_ERROR_AEAD_CHECK;
+                            if (*new_ctx_created) {
+                                picoquic_delete_cnx(*pcnx);
+                                *pcnx = NULL;
+                                *new_ctx_created = 0;
+                            }
+                        }
+                    }
+                    else if (already_received != 0) {
+                        ret = PICOQUIC_ERROR_DUPLICATE;
+                    }
+                    else {
+                        ph->payload_length = (uint16_t)decoded_length;
+                    }
                 }
-                else {
-                    decoded_length = ph->payload_length + 1;
-                }
+                else if (ph->ptype == picoquic_packet_1rtt_protected)
+                {
+                    /* This may be a stateless reset */
+                    *pcnx = picoquic_cnx_by_net(quic, addr_from);
 
-                /* TODO: consider the error "too soon" */
-                if (decoded_length > (length - ph->offset)) {
-                    if (ph->ptype == picoquic_packet_1rtt_protected &&
-                        length >= PICOQUIC_RESET_PACKET_MIN_SIZE &&
+                    if (*pcnx != NULL && length >= PICOQUIC_RESET_PACKET_MIN_SIZE &&
                         memcmp(bytes + length - PICOQUIC_RESET_SECRET_SIZE,
                         (*pcnx)->path[0]->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0) {
                         ret = PICOQUIC_ERROR_STATELESS_RESET;
                     }
                     else {
-                        ret = PICOQUIC_ERROR_AEAD_CHECK;
-                        if (*new_ctx_created) {
-                            picoquic_delete_cnx(*pcnx);
-                            *pcnx = NULL;
-                            *new_ctx_created = 0;
-                        }
+                        *pcnx = NULL;
                     }
-                }
-                else if (already_received != 0) {
-                    ret = PICOQUIC_ERROR_DUPLICATE;
-                }
-                else {
-                    ph->payload_length = (uint16_t)decoded_length;
-                }
-            }
-            else if (ph->ptype == picoquic_packet_1rtt_protected)
-            {
-                /* This may be a stateless reset */
-                *pcnx = picoquic_cnx_by_net(quic, addr_from);
-
-                if (*pcnx != NULL && length >= PICOQUIC_RESET_PACKET_MIN_SIZE &&
-                    memcmp(bytes + length - PICOQUIC_RESET_SECRET_SIZE,
-                    (*pcnx)->path[0]->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0) {
-                    ret = PICOQUIC_ERROR_STATELESS_RESET;
-                }
-                else {
-                    *pcnx = NULL;
                 }
             }
         }
+        else {
+            *consumed = length;
+        }
     }
-
+    
     return ret;
 }
 
@@ -634,7 +640,12 @@ int picoquic_incoming_version_negotiation(
         /* Packet that do not match the "echo" checks should be logged and ignored */
         ret = 0;
     } else {
-        /* TODO: add DOS resilience! */
+        /* TODO: add DOS resilience */
+        /* Signal VN to the application */
+        if (cnx->callback_fn && length > ph->offset) {
+            (void)(cnx->callback_fn)(cnx, 0, bytes + ph->offset, length - ph->offset,
+                picoquic_callback_version_negotiation, cnx->callback_ctx, NULL);
+        }
         /* TODO: consider rewriting the version negotiation code */
         DBG_PRINTF("%s", "Disconnect upon receiving version negotiation.\n");
         cnx->cnx_state = picoquic_state_disconnected;
