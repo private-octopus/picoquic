@@ -741,8 +741,6 @@ typedef struct st_picoquic_cnx_t {
 
     /* Statistics */
     uint64_t nb_bytes_queued;
-    uint32_t nb_path_challenge_sent;
-    uint32_t nb_path_response_received;
     uint32_t nb_zero_rtt_sent;
     uint32_t nb_zero_rtt_acked;
     uint64_t nb_retransmission_total;

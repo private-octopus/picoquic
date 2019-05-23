@@ -1356,8 +1356,10 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header * ph
 
 
     if (ret == 0) {
-        if (picoquic_compare_addr((struct sockaddr *)&cnx->path[path_id]->peer_addr, addr_from) == 0 &&
-            picoquic_compare_addr((struct sockaddr *)&cnx->path[path_id]->local_addr, addr_to) == 0) {
+        if (picoquic_compare_addr((struct sockaddr *)&cnx->path[path_id]->peer_addr, addr_from) == 0) {
+            if (picoquic_compare_addr((struct sockaddr *)&cnx->path[path_id]->local_addr, addr_to) != 0) {
+                picoquic_store_addr(&cnx->path[path_id]->local_addr, addr_to);
+            }
             /* All is good. Consider the path activated */
             cnx->path[path_id]->path_is_activated = 1;
         }
