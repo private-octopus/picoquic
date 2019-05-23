@@ -1364,6 +1364,15 @@ int tls_api_version_negotiation_test()
         }
     }
 
+
+    if (ret == 0) {
+        if (!test_ctx->received_version_negotiation){
+            DBG_PRINTF("%s", "No version negotiation notified\n");
+            ret = -1;
+        }
+
+    }
+
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;
