@@ -125,6 +125,7 @@ typedef enum {
 } http_header_enum_t;
 
 #define H3ZERO_QPACK_CODE_GET 17
+#define H3ZERO_QPACK_CODE_POST 20
 #define H3ZERO_QPACK_CODE_PATH 1
 #define H3ZERO_QPACK_CODE_404 27
 #define H3ZERO_QPACK_CODE_200 25
@@ -192,6 +193,8 @@ uint8_t * h3zero_qpack_int_decode(uint8_t * bytes, uint8_t * bytes_max,
 uint8_t * h3zero_parse_qpack_header_frame(uint8_t * bytes, uint8_t * bytes_max,
     h3zero_header_parts_t * parts);
 
+uint8_t * h3zero_create_post_header_frame(uint8_t * bytes, uint8_t * bytes_max,
+    uint8_t const * path, size_t path_length, char const * host, h3zero_content_type_enum content_type);
 uint8_t * h3zero_create_request_header_frame(uint8_t * bytes, uint8_t * bytes_max,
     uint8_t const * path, size_t path_length, char const * host);
 uint8_t * h3zero_create_response_header_frame(uint8_t * bytes, uint8_t * bytes_max,

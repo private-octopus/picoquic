@@ -315,7 +315,7 @@ static qpack_test_case_t qpack_test_case[] = {
     },
     {
         qpack_test_post_zzz, sizeof(qpack_test_post_zzz),
-        { h3zero_method_post, qpack_test_string_zzz, sizeof(qpack_test_string_zzz), 0, 0}
+        { h3zero_method_post, qpack_test_string_zzz, sizeof(qpack_test_string_zzz), 0, h3zero_content_type_text_plain}
     }
 };
 
@@ -394,7 +394,7 @@ int h3zero_parse_qpack_test()
 int h3zero_prepare_qpack_test()
 {
     int ret = 0;
-    int qpack_compare_test[] = { 0, 2, 4, 7, 8, -1 };
+    int qpack_compare_test[] = { 0, 2, 4, 7, 8, 13, -1 };
     
     for (int i = 0; ret == 0 && qpack_compare_test[i] >= 0; i++) {
         uint8_t buffer[256];
@@ -403,9 +403,22 @@ int h3zero_prepare_qpack_test()
         int j = qpack_compare_test[i];
 
         if (qpack_test_case[j].parts.path != NULL) {
-            /* Create a request header */
-            bytes = h3zero_create_request_header_frame(buffer, bytes_max,
-                qpack_test_case[j].parts.path, qpack_test_case[j].parts.path_length, "example.com");
+            if (qpack_test_case[j].parts.method == h3zero_method_get)
+            {
+                /* Create a request header */
+                bytes = h3zero_create_request_header_frame(buffer, bytes_max,
+                    qpack_test_case[j].parts.path, qpack_test_case[j].parts.path_length, "example.com");
+            }
+            else  if (qpack_test_case[j].parts.method == h3zero_method_post)
+            {
+                /* Create a post header */
+                bytes = h3zero_create_post_header_frame(buffer, bytes_max,
+                    qpack_test_case[j].parts.path, qpack_test_case[j].parts.path_length, "example.com", h3zero_content_type_text_plain);
+            }
+            else {
+                DBG_PRINTF("Case %d, unexpected method: %d\n", j, qpack_test_case[j].parts.method);
+                ret = -1;
+            }
         }
         else if (qpack_test_case[j].parts.content_type != 0) {
             bytes = h3zero_create_response_header_frame(buffer, bytes_max,

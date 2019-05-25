@@ -656,7 +656,55 @@ static uint8_t * h3zero_qpack_literal_plus_ref_encode(uint8_t * bytes, uint8_t *
     return bytes;
 }
 
+uint8_t * h3zero_encode_content_type(uint8_t * bytes, uint8_t * bytes_max, h3zero_content_type_enum content_type)
+{
+    /* Content type header */
+    if (bytes != NULL) {
+        int code = -1;
+        for (size_t i = 0; i < h3zero_qpack_nb_static; i++) {
+            if (qpack_static[i].header == http_header_content_type &&
+                qpack_static[i].enum_as_int == content_type) {
+                code = qpack_static[i].index;
+                break;
+            }
+        }
 
+        if (code < 0) {
+            /* Error, no such content */
+            bytes = NULL;
+        }
+        else {
+            bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0xC0, 0x3F, code);
+        }
+    }
+
+    return bytes;
+}
+
+uint8_t * h3zero_create_post_header_frame(uint8_t * bytes, uint8_t * bytes_max,
+    uint8_t const * path, size_t path_length, char const * host, h3zero_content_type_enum content_type)
+{
+    if (bytes == NULL || bytes + 2 > bytes_max) {
+        return NULL;
+    }
+    /* Push 2 NULL bytes for request header: base, and delta */
+    *bytes++ = 0;
+    *bytes++ = 0;
+    /* Method */
+    bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0xC0, 0x3F, H3ZERO_QPACK_CODE_POST);
+    /* Scheme: HTTPS */
+    bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0xC0, 0x3F, H3ZERO_QPACK_SCHEME_HTTPS);
+    /* Path: doc_name. Use literal plus reference format */
+    bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_CODE_PATH, path, path_length);
+    /*Authority: host. Use literal plus reference format */
+    if (host != NULL) {
+        bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_AUTHORITY, (uint8_t const *)host, strlen(host));
+    }
+    /* Document type */
+    bytes = h3zero_encode_content_type(bytes, bytes_max, content_type);
+
+    return bytes;
+}
 
 uint8_t * h3zero_create_request_header_frame(uint8_t * bytes, uint8_t * bytes_max,
     uint8_t const * path, size_t path_length, char const * host)
@@ -695,24 +743,7 @@ uint8_t * h3zero_create_response_header_frame(uint8_t * bytes, uint8_t * bytes_m
     bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0xC0, 0x3F, H3ZERO_QPACK_CODE_200);
 
     /* Content type header */
-    if (bytes != NULL) {
-        int code = -1;
-        for (size_t i = 0; i < h3zero_qpack_nb_static; i++) {
-            if (qpack_static[i].header == http_header_content_type &&
-                qpack_static[i].enum_as_int == doc_type) {
-                code = qpack_static[i].index;
-                break;
-            }
-        }
-
-        if (code < 0) {
-            /* Error, no such content */
-            bytes = NULL;
-        }
-        else {
-            bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0xC0, 0x3F, code);
-        }
-    }
+    bytes = h3zero_encode_content_type(bytes, bytes_max, doc_type);
 
     return bytes;
 }
