@@ -245,7 +245,7 @@ static uint8_t qpack_test_get_ats2[] = {
 
 static uint8_t qpack_test_post_zzz[] = {
     QPACK_TEST_HEADER_BLOCK_PREFIX, 0xC0 | 20, 0x50 | 1,
-    0x80 | 3, QPACK_TEST_HEADER_QPACK_PATH
+    0x80 | 3, QPACK_TEST_HEADER_QPACK_PATH, 0xC0 | 53
 };
 
 static uint8_t qpack_test_string_index_html[] = { QPACK_TEST_HEADER_INDEX_HTML };
@@ -382,6 +382,9 @@ int h3zero_parse_qpack_test()
     for (size_t i = 0; ret == 0 && i < nb_qpack_test_case; i++) {
         ret = h3zero_parse_qpack_test_one(i,
             qpack_test_case[i].bytes, qpack_test_case[i].bytes_length);
+        if (ret != 0) {
+            DBG_PRINTF("Parse QPACK test %d fails.\n", i);
+        }
     }
 
     return ret;
