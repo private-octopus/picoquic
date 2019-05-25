@@ -243,6 +243,11 @@ static uint8_t qpack_test_get_ats2[] = {
     0xa1, 0x72, 0x1e, 0x9f, 0xd1, 0xc1, 0xd7
 };
 
+static uint8_t qpack_test_post_zzz[] = {
+    QPACK_TEST_HEADER_BLOCK_PREFIX, 0xC0 | 20, 0x50 | 1,
+    0x80 | 3, QPACK_TEST_HEADER_QPACK_PATH
+};
+
 static uint8_t qpack_test_string_index_html[] = { QPACK_TEST_HEADER_INDEX_HTML };
 static uint8_t qpack_test_string_slash[] = { '/' };
 static uint8_t qpack_test_string_zzz[] = { 'Z', 'Z', 'Z' };
@@ -307,6 +312,10 @@ static qpack_test_case_t qpack_test_case[] = {
     {
         qpack_test_get_ats2, sizeof(qpack_test_get_ats2),
         { h3zero_method_get, qpack_test_string_slash, sizeof(qpack_test_string_slash), 0, 0}
+    },
+    {
+        qpack_test_post_zzz, sizeof(qpack_test_post_zzz),
+        { h3zero_method_post, qpack_test_string_zzz, sizeof(qpack_test_string_zzz), 0, 0}
     }
 };
 
