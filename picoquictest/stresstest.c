@@ -945,7 +945,7 @@ static void stress_delete_client_context(int client_index, picoquic_stress_ctx_t
     }
 }
 
-static int stress_or_fuzz_test(picoquic_fuzz_fn fuzz_fn, void * fuzz_ctx, uint64_t duration)
+static int stress_or_fuzz_test(picoquic_fuzz_fn fuzz_fn, void * fuzz_ctx, uint64_t duration, uint64_t wall_time_max)
 {
     int ret = 0;
     picoquic_stress_ctx_t stress_ctx;
@@ -953,7 +953,6 @@ static int stress_or_fuzz_test(picoquic_fuzz_fn fuzz_fn, void * fuzz_ctx, uint64
     double target_seconds = 0;
     double wall_time_seconds = 0;
     uint64_t wall_time_start = picoquic_current_time();
-    uint64_t wall_time_max = wall_time_start + duration;
     uint64_t nb_connections = 0;
     uint64_t sim_time_next_log = 1000000;
 
@@ -1010,8 +1009,9 @@ static int stress_or_fuzz_test(picoquic_fuzz_fn fuzz_fn, void * fuzz_ctx, uint64
     /* Run the simulation until the specified time */
     sim_time_next_log = stress_ctx.simulated_time + 1000000;
     while (ret == 0 && stress_ctx.simulated_time < duration) {
-        if (picoquic_current_time() > wall_time_max) {
-            DBG_PRINTF("%s", "Stress time takes too long!\n");
+        if ((picoquic_current_time() - wall_time_start) > wall_time_max) {
+            DBG_PRINTF("Stress time takes more than %d, still %d remaining\n",
+                (int)wall_time_max, (int)(duration - stress_ctx.simulated_time));
             ret = -1;
             break;
         }
@@ -1074,7 +1074,7 @@ static int stress_or_fuzz_test(picoquic_fuzz_fn fuzz_fn, void * fuzz_ctx, uint64
 
 int stress_test()
 {
-    return stress_or_fuzz_test(NULL, NULL, picoquic_stress_test_duration);
+    return stress_or_fuzz_test(NULL, NULL, picoquic_stress_test_duration, picoquic_stress_test_duration);
 }
 
 /*
@@ -1160,7 +1160,7 @@ int fuzz_test()
     fuzz_ctx.random_context = 0xDEADBEEFBABACAFEull;
     fuzz_ctx.random_context ^= picoquic_stress_test_duration;
 
-    ret = stress_or_fuzz_test(basic_fuzzer, &fuzz_ctx, picoquic_stress_test_duration);
+    ret = stress_or_fuzz_test(basic_fuzzer, &fuzz_ctx, picoquic_stress_test_duration, picoquic_stress_test_duration);
 
     DBG_PRINTF("Fuzzed %d packets out of %d, changed %d lengths, ret = %d\n",
         fuzz_ctx.nb_fuzzed, fuzz_ctx.nb_packets, fuzz_ctx.nb_fuzzed_length, ret);
@@ -1382,7 +1382,7 @@ int fuzz_initial_test()
     fuzz_ctx.random_context = 0x01234567DEADBEEFull;
     fuzz_ctx.random_context ^= picoquic_stress_test_duration;
 
-    ret = stress_or_fuzz_test(initial_fuzzer, &fuzz_ctx, 2*picoquic_stress_test_duration);
+    ret = stress_or_fuzz_test(initial_fuzzer, &fuzz_ctx, 2*picoquic_stress_test_duration, 4*picoquic_stress_test_duration);
 
     return ret;
 }
