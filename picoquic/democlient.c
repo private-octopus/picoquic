@@ -618,7 +618,7 @@ char const * demo_client_parse_stream_path(char const * text,
     while (text != NULL) {
         char c = text[l_path];
 
-        if (c == 0 || c == ';') {
+        if (c == 0 || c == ';' || c == ':') {
             is_complete = 1;
             break;
         }
@@ -661,7 +661,8 @@ char const * demo_client_parse_stream_path(char const * text,
         }
 
         text += l_path;
-        if (*text != 0) {
+
+        if (*text == ':') {
             text++;
         }
     }
@@ -671,6 +672,32 @@ char const * demo_client_parse_stream_path(char const * text,
     
     return text;
 }
+
+char const * demo_client_parse_post_size(char const * text, uint64_t * post_size)
+{
+    if (text[0] < '0' || text[0] > '9') {
+        *post_size = 0;
+    }
+    else {
+        *post_size = 0;
+        do {
+            *post_size *= 10;
+            *post_size += *text++ - '0';
+        } while (text[0] >= '0' && text[0] <= '9');
+
+        text = demo_client_parse_stream_spaces(text);
+
+        if (*text == ':') {
+            text++;
+        }
+        else if (*text != 0 && *text != ';'){
+            text = NULL;
+        }
+    }
+
+    return text;
+}
+
 
 char const * demo_client_parse_stream_desc(char const * text, uint64_t default_stream, uint64_t default_previous,
     picoquic_demo_stream_desc_t * desc)
@@ -694,6 +721,15 @@ char const * demo_client_parse_stream_desc(char const * text, uint64_t default_s
     if (text != NULL){
         text = demo_client_parse_stream_path(
             demo_client_parse_stream_spaces(text), (char **)&desc->doc_name, (char **)&desc->f_name);
+    }
+
+    if (text != NULL) {
+        text = demo_client_parse_post_size(demo_client_parse_stream_spaces(text), &desc->post_size);
+    }
+
+    /* Skip the final ';' */
+    if (text != NULL && *text == ';') {
+        text++;
     }
 
     return text;

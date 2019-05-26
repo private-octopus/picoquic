@@ -47,6 +47,7 @@ typedef struct st_picoquic_demo_stream_desc_t {
     char const* doc_name;
     char const* f_name;
     int is_binary;
+    uint64_t post_size;
 } picoquic_demo_stream_desc_t;
 
 #define PICOQUIC_DEMO_STREAM_LIST_MAX 16

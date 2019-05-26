@@ -590,22 +590,28 @@ int h3zero_stream_test()
 char * parse_demo_scenario_text1 = "/;t:test.html;8:0:b:main.jpg;12:0:/bla/bla/";
 char * parse_demo_scenario_text2 = "/;b:main.jpg;t:test.html;";
 char * parse_demo_scenario_text3 = "*1000:/";
+char * parse_demo_scenario_text4 = "/cgi-sink:1000000;4:/";
 
 static const picoquic_demo_stream_desc_t parse_demo_scenario_desc1[] = {
-    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0 },
-    { 0, 4, 0, "test.html", "test.html", 0 },
-    { 0, 8, 0, "main.jpg", "main.jpg", 1 },
-    { 0, 12, 0, "/bla/bla/", "_bla_bla_", 0 }
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0, 0},
+    { 0, 4, 0, "test.html", "test.html", 0, 0 },
+    { 0, 8, 0, "main.jpg", "main.jpg", 1, 0 },
+    { 0, 12, 0, "/bla/bla/", "_bla_bla_", 0, 0 }
 };
 
 static const picoquic_demo_stream_desc_t parse_demo_scenario_desc2[] = {
-    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0 },
-    { 0, 4, 0, "main.jpg", "main.jpg", 1 },
-    { 0, 8, 4, "test.html", "test.html", 0 }
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0, 0 },
+    { 0, 4, 0, "main.jpg", "main.jpg", 1, 0 },
+    { 0, 8, 4, "test.html", "test.html", 0, 0 }
 };
 
 static const picoquic_demo_stream_desc_t parse_demo_scenario_desc3[] = {
-    { 1000, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0 }
+    { 1000, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0, 0 }
+};
+
+static const picoquic_demo_stream_desc_t parse_demo_scenario_desc4[] = {
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/cgi-sink", "_cgi-sink", 0, 1000000 },
+    { 0, 4, 0, "/", "_", 0, 0 }
 };
 
 int parse_demo_scenario_test_one(char * text, size_t nb_streams_ref, picoquic_demo_stream_desc_t const * desc_ref)
@@ -632,6 +638,9 @@ int parse_demo_scenario_test_one(char * text, size_t nb_streams_ref, picoquic_de
                     ret = -1;
                 }
                 else if (strcmp(desc[i].f_name, desc_ref[i].f_name) != 0) {
+                    ret = -1;
+                }
+                else if (desc[i].post_size !=  desc_ref[i].post_size) {
                     ret = -1;
                 }
             }
@@ -664,6 +673,12 @@ int parse_demo_scenario_test()
         ret = parse_demo_scenario_test_one(parse_demo_scenario_text3,
             sizeof(parse_demo_scenario_desc3) / sizeof(picoquic_demo_stream_desc_t),
             parse_demo_scenario_desc3);
+    }
+
+    if (ret == 0) {
+        ret = parse_demo_scenario_test_one(parse_demo_scenario_text4,
+            sizeof(parse_demo_scenario_desc4) / sizeof(picoquic_demo_stream_desc_t),
+            parse_demo_scenario_desc4);
     }
 
     return ret;
