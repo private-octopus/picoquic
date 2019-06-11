@@ -42,13 +42,56 @@ static picoquic_demo_client_stream_ctx_t* picoquic_demo_client_find_stream(
     return stream_ctx;
 }
 
+
+int demo_client_prepare_to_send(void * context, size_t space, size_t echo_length, size_t * echo_sent)
+{
+    int ret = 0;
+
+    if (*echo_sent < echo_length) {
+        uint8_t * buffer;
+        size_t available = echo_length - *echo_sent;
+        int is_fin = 1;
+
+        if (available > space) {
+            available = space;
+            is_fin = 0;
+        }
+
+        buffer = picoquic_provide_stream_data_buffer(context, available, is_fin, !is_fin);
+        if (buffer != NULL) {
+            int r = (74 - (*echo_sent % 74)) - 2;
+
+            /* TODO: fill buffer with some text */
+            memset(buffer, 0x5A, available);
+
+            while (r < (int)available) {
+                if (r >= 0) {
+                    buffer[r] = '\r';
+                }
+                r++;
+                if (r >= 0 && r < available) {
+                    buffer[r] = '\n';
+                }
+                r += 73;
+            }
+            *echo_sent += (uint32_t)available;
+            ret = 0;
+        }
+        else {
+            ret = -1;
+        }
+    }
+
+    return ret;
+}
+
 /*
  * H3Zero client. This is a simple client that conforms to HTTP 3.0,
- * but the client implementation is barebone. 
+ * but the client implementation is barebone.
  */
 
 int h3zero_client_create_stream_request(
-    uint8_t * buffer, size_t max_bytes, uint8_t const * path, size_t path_len, size_t * consumed, const char * host)
+    uint8_t * buffer, size_t max_bytes, uint8_t const * path, size_t path_len, size_t post_size, const char * host, size_t * consumed)
 {
     int ret = 0;
     uint8_t * o_bytes = buffer;
@@ -63,8 +106,14 @@ int h3zero_client_create_stream_request(
         /* Create the request frame for the specified document */
         *o_bytes++ = h3zero_frame_header;
         o_bytes += 2; /* reserve two bytes for frame length */
-        o_bytes = h3zero_create_request_header_frame(o_bytes, o_bytes_max,
-            (const uint8_t *)path, path_len, host);
+        if (post_size == 0) {
+            o_bytes = h3zero_create_request_header_frame(o_bytes, o_bytes_max,
+                (const uint8_t *)path, path_len, host);
+        }
+        else {
+            o_bytes = h3zero_create_post_header_frame(o_bytes, o_bytes_max,
+                (const uint8_t *)path, path_len, host, h3zero_content_type_text_plain);
+        }
     }
 
     if (o_bytes == NULL) {
@@ -81,7 +130,26 @@ int h3zero_client_create_stream_request(
             buffer[1] = (uint8_t)((header_length >> 8) | 0x40);
             buffer[2] = (uint8_t)(header_length & 0xFF);
         }
-        *consumed = o_bytes - buffer;
+
+        if (post_size > 0) {
+            /* Add initial DATA frame for POST */
+            size_t ll = 0;
+
+            if (o_bytes < o_bytes_max) {
+                *o_bytes++ = h3zero_frame_data;
+                ll = picoquic_varint_encode(o_bytes, o_bytes_max - o_bytes, post_size);
+                o_bytes += ll;
+            }
+            if (ll == 0) {
+                ret = -1;
+            }
+            else {
+                *consumed = o_bytes - buffer;
+            }
+        }
+        else {
+            *consumed = o_bytes - buffer;
+        }
     }
 
     return ret;
@@ -121,24 +189,51 @@ int h3zero_client_init(picoquic_cnx_t* cnx)
  */
 
 int h09_demo_client_prepare_stream_open_command(
-    uint8_t * command, size_t max_size, uint8_t const* path, size_t path_len, size_t * consumed)
+    uint8_t * command, size_t max_size, uint8_t const* path, size_t path_len, size_t post_size, char const * host, size_t * consumed)
 {
-    if (path_len + 6 >= max_size) {
-        return -1;
-    }
 
-    command[0] = 'G';
-    command[1] = 'E';
-    command[2] = 'T';
-    command[3] = ' ';
-    if (path_len > 0) {
-        memcpy(&command[4], path, path_len);
-    }
-    command[path_len + 4] = '\r';
-    command[path_len + 5] = '\n';
-    command[path_len + 6] = 0;
+    if (post_size == 0) {
+        if (path_len + 6 >= max_size) {
+            return -1;
+        }
 
-    *consumed = path_len + 6;
+        command[0] = 'G';
+        command[1] = 'E';
+        command[2] = 'T';
+        command[3] = ' ';
+        if (path_len > 0) {
+            memcpy(&command[4], path, path_len);
+        }
+        command[path_len + 4] = '\r';
+        command[path_len + 5] = '\n';
+        command[path_len + 6] = 0;
+
+        *consumed = path_len + 6;
+    }
+    else {
+        size_t byte_index = 0;
+        char const * post_head = "POST ";
+        char const * post_middle = " HTTP/1.0\r\nHost: ";
+        char const * post_trail = "\r\nContent-Type: text/plain\r\n\r\n";
+        size_t host_len = (host == NULL) ? 0 : strlen(host);
+        if (path_len + host_len + strlen(post_head) + strlen(post_middle) + strlen(post_trail) >= max_size) {
+            return -1;
+        }
+        memcpy(command, post_head, strlen(post_head));
+        byte_index = strlen(post_head);
+        memcpy(command + byte_index, path, path_len);
+        byte_index += path_len;
+        memcpy(command + byte_index, post_middle, strlen(post_middle));
+        byte_index += strlen(post_middle);
+        if (host != NULL) {
+            memcpy(command + byte_index, host, host_len);
+        }
+        byte_index += host_len;
+        memcpy(command + byte_index, post_trail, strlen(post_trail));
+        byte_index += strlen(post_trail);
+        command[byte_index] = 0;
+        *consumed = byte_index;
+    }
 
     return 0;
 }
@@ -149,7 +244,7 @@ int h09_demo_client_prepare_stream_open_command(
 
 static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
     picoquic_demo_callback_ctx_t* ctx,
-    uint64_t stream_id, char const* doc_name, char const* fname, int is_binary, int nb_repeat)
+    uint64_t stream_id, char const* doc_name, char const* fname, int is_binary, size_t post_size, int nb_repeat)
 {
     int ret = 0;
     uint8_t buffer[1024];
@@ -167,6 +262,7 @@ static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
         stream_ctx->next_stream = ctx->first_stream;
         ctx->first_stream = stream_ctx;
         stream_ctx->stream_id = stream_id + 4*nb_repeat;
+        stream_ctx->post_size = post_size;
 
         if (ctx->no_disk) {
             stream_ctx->F = NULL;
@@ -222,26 +318,30 @@ static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
         switch (ctx->alpn) {
         case picoquic_alpn_http_3:
             ret = h3zero_client_create_stream_request(
-                buffer, sizeof(buffer), path, path_len, &request_length, cnx->sni);
+                buffer, sizeof(buffer), path, path_len, post_size, cnx->sni, &request_length);
             break;
         case picoquic_alpn_http_0_9:
         default:
             ret = h09_demo_client_prepare_stream_open_command(
-                buffer, sizeof(buffer), path, path_len, &request_length);
+                buffer, sizeof(buffer), path, path_len, post_size, cnx->sni, &request_length);
             break;
         }
 
-		/* Send the request and report */
+		/* Send the request */
 
         if (ret == 0) {
-            ret = picoquic_add_to_stream_with_ctx(cnx, stream_ctx->stream_id, buffer, request_length, 1, stream_ctx);
+            ret = picoquic_add_to_stream_with_ctx(cnx, stream_ctx->stream_id, buffer, request_length,
+                (post_size > 0)?0:1, stream_ctx);
+            if (post_size > 0) {
+                ret = picoquic_mark_active_stream(cnx, stream_id, 1, stream_ctx);
+            }
         }
 
         if (ret != 0) {
-            fprintf(stdout, "Cannot send GET command for stream(%d): %s\n", (int)stream_ctx->stream_id, path);
+            fprintf(stdout, "Cannot send %s command for stream(%d): %s\n", (post_size==0)?"GET":"POST", (int)stream_ctx->stream_id, path);
         }
         else if (nb_repeat == 0) {
-            fprintf(stdout, "Opening stream %d to GET %s\n", (int)stream_ctx->stream_id, path);
+            fprintf(stdout, "Opening stream %d to %s %s\n", (int)stream_ctx->stream_id, (post_size == 0) ? "GET" : "POST", path);
         }
     }
 
@@ -291,6 +391,7 @@ int picoquic_demo_client_start_streams(picoquic_cnx_t* cnx,
                     ctx->demo_stream[i].doc_name,
                     ctx->demo_stream[i].f_name,
                     ctx->demo_stream[i].is_binary,
+                    ctx->demo_stream[i].post_size,
                     repeat_nb);
                 repeat_nb++;
             } while (ret == 0 && repeat_nb < ctx->demo_stream[i].repeat_count);
@@ -415,8 +516,16 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
         picoquic_reset_stream(cnx, stream_id, H3ZERO_INTERNAL_ERROR);
         break;
     case picoquic_callback_prepare_to_send:
-        /* Used for active streams -- never used on client */
-        break;
+        /* Used on client when posting data */
+            /* Used for active streams */
+        if (stream_ctx == NULL) {
+            /* Unexpected */
+            picoquic_reset_stream(cnx, stream_id, 0);
+            return 0;
+        }
+        else {
+            return demo_client_prepare_to_send((void*)bytes, length, stream_ctx->post_size, &stream_ctx->post_sent);
+        }
     case picoquic_callback_almost_ready:
     case picoquic_callback_ready:
         break;

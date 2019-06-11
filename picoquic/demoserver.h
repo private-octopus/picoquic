@@ -37,17 +37,21 @@
 
 typedef enum {
     h3zero_server_stream_status_none = 0,
-    h3zero_server_stream_status_receiving,
+    h3zero_server_stream_status_receiving_frame,
+    h3zero_server_stream_status_receiving_request,
+    h3zero_server_stream_status_receiving_data,
     h3zero_server_stream_status_finished
 } h3zero_server_stream_status_t;
 
 typedef struct st_h3zero_server_stream_ctx_t {
     struct st_h3zero_server_stream_ctx_t* next_stream;
+    h3zero_data_stream_state_t stream_state;
     h3zero_server_stream_status_t status;
     uint64_t stream_id;
     size_t received_length;
     size_t echo_length;
     size_t echo_sent;
+    int is_post;
     uint8_t frame[H3ZERO_SERVER_FRAME_MAX];
 } h3zero_server_stream_ctx_t;
 
@@ -70,6 +74,8 @@ int h3zero_server_callback(picoquic_cnx_t* cnx,
 
 typedef enum {
     picoquic_h09_server_stream_status_none = 0,
+    picoquic_h09_server_stream_status_header,
+    picoquic_h09_server_stream_status_crlf,
     picoquic_h09_server_stream_status_receiving,
     picoquic_h09_server_stream_status_finished
 } picoquic_h09_server_stream_status_t;
@@ -82,7 +88,9 @@ typedef struct st_picoquic_h09_server_stream_ctx_t {
     size_t response_length;
     size_t echo_length;
     size_t echo_sent;
+    size_t post_received;
     uint8_t command[PICOQUIC_FIRST_COMMAND_MAX];
+    int method;
 } picoquic_h09_server_stream_ctx_t;
 
 typedef struct st_picoquic_h09_server_callback_ctx_t {

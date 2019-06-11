@@ -401,12 +401,12 @@ int quicwind_start_download(picoquic_cnx_t * cnx, quicwind_callback_ctx_t * ctx,
             switch (ctx->alpn) {
             case picoquic_alpn_http_3:
                 ret = h3zero_client_create_stream_request(
-                    request, sizeof(request), path, path_len, &request_length, cnx->sni);
+                    request, sizeof(request), path, path_len, 0, cnx->sni, &request_length);
                 break;
             case picoquic_alpn_http_0_9:
             default:
                 ret = h09_demo_client_prepare_stream_open_command(
-                    request, sizeof(request), path, path_len, &request_length);
+                    request, sizeof(request), path, path_len, 0, cnx->sni, &request_length);
                 break;
             }
 

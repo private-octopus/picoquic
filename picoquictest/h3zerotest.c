@@ -689,13 +689,17 @@ int parse_demo_scenario_test()
  * network simulation.
  */
 static const picoquic_demo_stream_desc_t demo_test_scenario[] = {
-    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "root.html", 0 },
-    { 0, 4, 0, "12345", "doc-12345.txt", 0 } };
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "root.html", 0, 0 },
+    { 0, 4, 0, "12345", "doc-12345.txt", 0, 0 },
+    { 0, 8, 4, "post-test", "post-test.html", 0, 12345 }
+};
+
 static size_t const nb_demo_test_scenario = sizeof(demo_test_scenario) / sizeof(picoquic_demo_stream_desc_t);
 
 static size_t const demo_test_stream_length[] = {
     128,
-    12345
+    12345,
+    190
 };
 
 static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server_callback_fn)
@@ -783,6 +787,11 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
         else if (stream->received_length < demo_test_stream_length[i]) {
             DBG_PRINTF("Scenario stream %d, only %d bytes received\n", 
                 (int)i, (int)stream->received_length);
+            ret = -1;
+        }
+        else if (stream->post_sent < demo_test_scenario[i].post_size) {
+            DBG_PRINTF("Scenario stream %d, only %d bytes sent\n",
+                (int)i, (int)stream->post_sent);
             ret = -1;
         }
     }

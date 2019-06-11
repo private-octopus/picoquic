@@ -778,8 +778,8 @@ uint8_t * h3zero_create_bad_method_header_frame(uint8_t * bytes, uint8_t * bytes
         *bytes++ = '0';
         *bytes++ = '5';
     }
-    /* Only the GET method is allowed */
-    bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0xC0, 0x3F, H3ZERO_QPACK_ALLOW_GET);
+    /* Allow GET and POST */
+    bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_ALLOW_GET, (uint8_t *)"GET, POST", 9);
 
     return bytes;
 }
@@ -810,9 +810,6 @@ uint8_t * h3zero_parse_data_stream(uint8_t * bytes, uint8_t * bytes_max,
         *error_found = H3ZERO_INTERNAL_ERROR;
         return NULL;
     }
-
-    /* TODO: the frame type may be encoded as a varint */
-    /* TODO: ignore unknown frame types */
 
     if (!stream_state->frame_header_parsed) {
         size_t frame_type_length;

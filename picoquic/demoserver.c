@@ -78,11 +78,9 @@ static h3zero_server_stream_ctx_t * h3zero_find_or_create_stream(
     h3zero_server_stream_ctx_t * stream_ctx = NULL;
 
     /* if stream is already present, check its state. New bytes? */
-    if (!should_create) {
-        stream_ctx = ctx->first_stream;
-        while (stream_ctx != NULL && stream_ctx->stream_id != stream_id) {
-            stream_ctx = stream_ctx->next_stream;
-        }
+    stream_ctx = ctx->first_stream;
+    while (stream_ctx != NULL && stream_ctx->stream_id != stream_id) {
+        stream_ctx = stream_ctx->next_stream;
     }
 
     if (stream_ctx == NULL && should_create) {
@@ -121,6 +119,19 @@ Picoquic HTTP 3 service\
 <h1>Enjoy!</h1>\r\n\
 </BODY></HTML>\r\n";
 
+static char const * demo_server_post_response_header = "\
+200 OK\r\n\
+Content-Type: text/html\r\n\
+\r\n";
+
+static char const * demo_server_post_response_page = "\
+<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\">\r\n<HTML>\r\n<HEAD>\r\n<TITLE>\
+Picoquic POST Response\
+</TITLE>\r\n</HEAD><BODY>\r\n\
+<h1>POST successful</h1>\r\n\
+<p>Received %d bytes.\r\n\
+</BODY></HTML>\r\n";
+
 static int demo_server_parse_path(const uint8_t * path, size_t path_length, size_t * echo_size)
 {
     int ret = 0;
@@ -148,120 +159,123 @@ static int demo_server_parse_path(const uint8_t * path, size_t path_length, size
     return ret;
 }
 
-static int h3zero_server_parse_request_frame(
+/* Processing of the request frame.
+ * This function is called after the client's stream is closed,
+ * after verifying that a request was received */
+
+static int h3zero_server_process_request_frame(
     picoquic_cnx_t* cnx,
     h3zero_server_stream_ctx_t * stream_ctx)
 {
+    /* Prepare response header */
+    uint8_t buffer[1024];
+    uint8_t post_response[1024];
+    uint8_t * o_bytes = &buffer[0];
+    uint8_t * o_bytes_max = o_bytes + sizeof(buffer);
+    size_t response_length = 0;
     int ret = 0;
-    uint8_t * bytes = stream_ctx->frame;
-    uint8_t * bytes_max = bytes + stream_ctx->received_length;
-    h3zero_data_stream_state_t stream_state;
-    size_t available_data;
-    uint16_t error_found = 0;
 
-    memset(&stream_state, 0, sizeof(h3zero_data_stream_state_t));
+    *o_bytes++ = h3zero_frame_header;
+    o_bytes += 2; /* reserve two bytes for frame length */
 
-    while (bytes != NULL && bytes < bytes_max) {
-        /* Parse the incoming data, looking for a header frame, ignoring data frame and unknown frames */
-        bytes = h3zero_parse_data_stream(bytes, bytes_max, &stream_state, &available_data, &error_found);
+    if (stream_ctx->stream_state.header.method != h3zero_method_get &&
+        stream_ctx->stream_state.header.method != h3zero_method_post) {
+        /* No such method supported -- error 405, header include "allow GET. POST" */
+        o_bytes = h3zero_create_bad_method_header_frame(o_bytes, o_bytes_max);
     }
-
-    if (bytes != NULL && (bytes != bytes_max || !stream_state.header_found)) {
-        error_found = H3ZERO_MALFORMED_FRAME(h3zero_frame_header);
-        bytes = NULL;
-    }
-
-    if (bytes == NULL) {
-        ret = picoquic_reset_stream(cnx, stream_ctx->stream_id, error_found);
+    else if (stream_ctx->stream_state.header.method == h3zero_method_get &&
+        demo_server_parse_path(stream_ctx->stream_state.header.path, stream_ctx->stream_state.header.path_length, &stream_ctx->echo_length) != 0) {
+        /* If unknown, 404 */
+        o_bytes = h3zero_create_not_found_header_frame(o_bytes, o_bytes_max);
     }
     else {
-        /* Prepare response header */
-        uint8_t buffer[1024]; 
-        uint8_t * o_bytes = &buffer[0];
-        uint8_t * o_bytes_max = o_bytes + sizeof(buffer);
-        size_t response_length = 0;
-
-        *o_bytes++ = h3zero_frame_header;
-        o_bytes += 2; /* reserve two bytes for frame length */
-
-        /* Parse path */
-        if (stream_state.header.method != h3zero_method_get) {
-            /* No such method supported -- error 405, header include "allow GET" */
-            o_bytes = h3zero_create_bad_method_header_frame(o_bytes, o_bytes_max);
-        }
-        else if (demo_server_parse_path(stream_state.header.path, stream_state.header.path_length, &stream_ctx->echo_length) != 0) {
-            /* If unknown, 404 */
-            o_bytes = h3zero_create_not_found_header_frame(o_bytes, o_bytes_max);
+        if (stream_ctx->stream_state.header.method == h3zero_method_post) {
+            /* Prepare generic POST response */
+#ifdef _WINDOWS
+            response_length = sprintf_s((char *)post_response, sizeof(post_response), demo_server_post_response_page, (int)stream_ctx->received_length);
+#else
+            response_length = sprintf((char *)post_response, demo_server_post_response_page, (int)stream_ctx->post_received);
+#endif
+            stream_ctx->echo_length = 0;
         }
         else {
-            /* If known, create response header frame */
-            o_bytes = h3zero_create_response_header_frame(o_bytes, o_bytes_max,
-                (stream_ctx->echo_length == 0) ? h3zero_content_type_text_html :
-                h3zero_content_type_text_plain);
-            if (o_bytes != NULL) {
-                response_length = (stream_ctx->echo_length == 0) ?
-                    strlen(demo_server_default_page) : stream_ctx->echo_length;
+            response_length = (stream_ctx->echo_length == 0) ?
+                strlen(demo_server_default_page) : stream_ctx->echo_length;
+        }
+        /* If known, create response header frame */
+        o_bytes = h3zero_create_response_header_frame(o_bytes, o_bytes_max,
+            (stream_ctx->echo_length == 0) ? h3zero_content_type_text_html :
+            h3zero_content_type_text_plain);
+    }
+
+    if (o_bytes == NULL) {
+        ret = picoquic_reset_stream(cnx, stream_ctx->stream_id, H3ZERO_INTERNAL_ERROR);
+    }
+    else {
+        size_t header_length = o_bytes - &buffer[3];
+        buffer[1] = (uint8_t)((header_length >> 8) | 0x40);
+        buffer[2] = (uint8_t)(header_length & 0xFF);
+
+        if (response_length > 0) {
+            size_t ld = 0;
+
+            if (o_bytes + 2 < o_bytes_max) {
+                *o_bytes++ = h3zero_frame_data;
+                ld = picoquic_varint_encode(o_bytes, o_bytes_max - o_bytes, response_length);
+            }
+
+            if (ld == 0) {
+                o_bytes = NULL;
+            }
+            else {
+                o_bytes += ld; if (stream_ctx->echo_length == 0) {
+
+                    if (o_bytes + response_length <= o_bytes_max) {
+                        memcpy(o_bytes, (stream_ctx->stream_state.header.method == h3zero_method_post) ? post_response : (uint8_t *)demo_server_default_page, response_length);
+                        o_bytes += response_length;
+                    }
+                    else {
+                        o_bytes = NULL;
+                    }
+                }
+            }
+        }
+
+        if (o_bytes != NULL) {
+            ret = picoquic_add_to_stream_with_ctx(cnx, stream_ctx->stream_id,
+                buffer, o_bytes - buffer,
+                (stream_ctx->echo_length == 0) ? 1 : 0, stream_ctx);
+            if (ret != 0) {
+                o_bytes = NULL;
             }
         }
 
         if (o_bytes == NULL) {
             ret = picoquic_reset_stream(cnx, stream_ctx->stream_id, H3ZERO_INTERNAL_ERROR);
         }
-        else {
-            size_t header_length = o_bytes - &buffer[3];
-            buffer[1] = (uint8_t)((header_length >> 8) | 0x40);
-            buffer[2] = (uint8_t)(header_length & 0xFF);
-
-            if (response_length > 0) {
-                size_t ld = 0;
-
-                if (o_bytes + 2 < o_bytes_max) {
-                    *o_bytes++ = h3zero_frame_data;
-                    ld = picoquic_varint_encode(o_bytes, o_bytes_max - o_bytes, response_length);
-                }
-
-                if (ld == 0) {
-                    o_bytes = NULL;
-                }
-                else {
-                    o_bytes += ld;
-
-                    if (stream_ctx->echo_length == 0) {
-                        size_t test_length = strlen(demo_server_default_page);
-
-                        if (o_bytes + test_length <= o_bytes_max) {
-                            memcpy(o_bytes, demo_server_default_page, test_length);
-                            o_bytes += test_length;
-                        }
-                        else {
-                            o_bytes = NULL;
-                        }
-                    }
-                }
-            }
-
-            if (o_bytes != NULL) {
-                ret = picoquic_add_to_stream_with_ctx(cnx, stream_ctx->stream_id,
-                    buffer, o_bytes - buffer,
-                    (stream_ctx->echo_length == 0) ? 1 : 0, stream_ctx);
-                if (ret != 0) {
-                    o_bytes = NULL;
-                }
-            }
-
-            if (o_bytes == NULL) {
-                ret = picoquic_reset_stream(cnx, stream_ctx->stream_id, H3ZERO_INTERNAL_ERROR);
-            }
-            else if (stream_ctx->echo_length != 0) {
-                ret = picoquic_mark_active_stream(cnx, stream_ctx->stream_id, 1, stream_ctx);
-            }
+        else if (stream_ctx->echo_length != 0) {
+            ret = picoquic_mark_active_stream(cnx, stream_ctx->stream_id, 1, stream_ctx);
         }
     }
 
-    h3zero_delete_data_stream_state(&stream_state);
-
     return ret;
 }
+
+/* Server call back, data processing.
+ * The bidir client streams can support either a GET or a POST command.
+ * In all case, the stream is a set of frames.
+ * For GET streams: a request frame, with possibly some extension frames.
+ * For POST streams: a request frame, with a set of data frames.
+ * In both cases, the first request frame is parsed, and then data is
+ * read. The actual response is only sent when all data has been received.
+ * For GET requests, receiving data frames is an error.
+ * For get commands, the answer depends on the "path" property.
+ * For POST commands, the answer depends on the amount of data.
+ * Stream state include:
+ * - Receiving frame
+ * - waiting next frame
+ * - receiving data frame
+ */
 
 static int h3zero_server_callback_data(
     picoquic_cnx_t* cnx, h3zero_server_stream_ctx_t * stream_ctx,
@@ -294,22 +308,30 @@ static int h3zero_server_callback_data(
                 }
             }
             else {
-                /* Push received bytes at selected offset */
-                if (stream_ctx->received_length + length > sizeof(stream_ctx->frame)) {
-                    /* Too long, unexpected */
-                    ret = picoquic_stop_sending(cnx, stream_id, H3ZERO_INTERNAL_ERROR);
-                    picoquic_reset_stream(cnx, stream_id, H3ZERO_INTERNAL_ERROR);
+                uint16_t error_found = 0;
+                size_t available_data = 0;
+                uint8_t * bytes_max = bytes + length;
+                while (bytes < bytes_max) {
+                    bytes = h3zero_parse_data_stream(bytes, bytes_max, &stream_ctx->stream_state, &available_data, &error_found);
+                    if (bytes == NULL) {
+                        ret = picoquic_close(cnx, error_found);
+                        break;
+                    }
+                    else if (available_data > 0) {
+                        /* Received data for a POST command. */
+                        stream_ctx->received_length += available_data;
+                        bytes += available_data;
+                    }
                 }
-                else {
-                    memcpy(&stream_ctx->frame[stream_ctx->received_length], bytes, length);
-                    stream_ctx->received_length += length;
-
-                    if (fin_or_event == picoquic_callback_stream_fin) {
-                        /* Parse the request header and process it. */
-                        ret = h3zero_server_parse_request_frame(cnx, stream_ctx);
+                
+                if (fin_or_event == picoquic_callback_stream_fin) {
+                    /* Process the request header. */
+                    if (stream_ctx->stream_state.header_found) {
+                        ret = h3zero_server_process_request_frame(cnx, stream_ctx);
                     }
                     else {
-                        ret = picoquic_add_to_stream_with_ctx(cnx, stream_id, NULL, 0, 0, stream_ctx);
+                        /* Unexpected end of stream before the header is received */
+                        ret = picoquic_reset_stream(cnx, stream_id, H3ZERO_MALFORMED_FRAME(h3zero_frame_header));
                     }
                 }
             }
@@ -324,48 +346,6 @@ static int h3zero_server_callback_data(
           * the reserved streams (*1F). In fact, we implement that by
           * just switching the state to absorbing. */
           /* For now, do nothing, just ignore the data */
-    }
-
-    return ret;
-}
-
-static int demo_server_prepare_to_send(void * context, size_t space, size_t echo_length, size_t * echo_sent)
-{
-    int ret = 0;
-
-    if (*echo_sent < echo_length) {
-        uint8_t * buffer;
-        size_t available = echo_length - *echo_sent;
-        int is_fin = 1;
-
-        if (available > space) {
-            available = space;
-            is_fin = 0;
-        }
-
-        buffer = picoquic_provide_stream_data_buffer(context, available, is_fin, !is_fin);
-        if (buffer != NULL) {
-            int r = (74 - (*echo_sent % 74)) - 2;
-
-            /* TODO: fill buffer with some text */
-            memset(buffer, 0x5A, available);
-
-            while (r < (int)available ) {
-                if (r >= 0) {
-                    buffer[r] = '\r';
-                }
-                r++;
-                if (r >= 0 && r < available ) {
-                    buffer[r] = '\n';
-                }
-                r += 73;
-            }
-            *echo_sent += (uint32_t)available;
-            ret = 0;
-        }
-        else {
-            ret = -1;
-        }
     }
 
     return ret;
@@ -386,7 +366,7 @@ int h3zero_server_callback_prepare_to_send(picoquic_cnx_t* cnx,
         ret = picoquic_reset_stream(cnx, stream_id, H3ZERO_INTERNAL_ERROR);
     }
     else {
-        ret = demo_server_prepare_to_send(context, space, stream_ctx->echo_length, &stream_ctx->echo_sent);
+        ret = demo_client_prepare_to_send(context, space, stream_ctx->echo_length, &stream_ctx->echo_sent);
     }
 
     return ret;
@@ -497,7 +477,7 @@ int h3zero_server_callback(picoquic_cnx_t* cnx,
  * The simple server provides simple responses, precanned index files or randomly
  * generated content */
 
-static const char* bad_request_message = "<html><head><title>Bad Request</title></head><body>Bad request. Why don't you try \"GET /doc-456789.html\"?</body></html>";
+static const char* bad_request_message = "<html><head><title>Bad Request</title></head><body>Bad request. Why don't you try \"GET /456789\"?</body></html>";
 
 static char* strip_endofline(char* buf, size_t bufmax, char const* line)
 {
@@ -543,51 +523,291 @@ static void picoquic_h09_server_callback_delete_context(picoquic_h09_server_call
     free(ctx);
 }
 
-static int picoquic_h09_server_process_command(uint8_t* command, size_t command_length, size_t * echo_length)
-{
-    int ret = 0;
-    size_t byte_index = 3;
 
-    *echo_length = 0;
-    /* Strip white spaces at the end of the command */
-    while (command_length > 0) {
-        int c = command[command_length - 1];
+static int picoquic_h09_server_parse_method(uint8_t* command, size_t command_length, size_t * consumed)
+{
+    int byte_index = 0;
+    int ret = -1;
+
+    if (command_length >= 3 && (command[0] == 'G' || command[0] == 'g') && (command[1] == 'E' || command[1] == 'e') && (command[2] == 'T' || command[2] == 't')) {
+        ret = 0;
+        byte_index = 3;
+    } else if (command_length >= 4 && (command[0] == 'P' || command[0] == 'p') && (command[1] == 'O' || command[1] == 'o') && (command[2] == 'S' || command[2] == 's') && (command[3] == 'T' || command[3] == 't')) {
+        ret = 1;
+        byte_index = 4;
+    }
+
+    if (consumed) {
+        *consumed = byte_index;
+    }
+
+    return ret;
+}
+
+static void picoquic_h09_server_parse_protocol(uint8_t* command, size_t command_length, int * proto, size_t * consumed)
+{
+    size_t byte_index = (command_length > 0)?command_length -1:0;
+    size_t last_proto_index;
+    int space_count = 0;
+
+    *proto = 0;
+
+    /* skip white space at the end */
+    while (byte_index >= 0) {
+        int c = command[byte_index];
 
         if (c == ' ' || c == '\n' || c == '\r' || c == '\t') {
-            command_length--;
+            byte_index--;
+            space_count++;
         }
         else {
             break;
         }
     }
+    *consumed = space_count;
+    last_proto_index = byte_index;
 
-    /* Check whether someone added an HTTP/0.9 tag at the end of the command */
-    if (command_length > 8 && command[command_length - 1] == '9' && command[command_length - 2] == '.' && command[command_length - 3] == '0' && command[command_length - 4] == '/' && (command[command_length - 5] == 'p' || command[command_length - 5] == 'P') && (command[command_length - 6] == 't' || command[command_length - 6] == 'T') && (command[command_length - 7] == 't' || command[command_length - 7] == 'T') && (command[command_length - 8] == 'h' || command[command_length - 8] == 'H')) {
-        command_length -= 8;
+    /* find non space char */
+    while (byte_index > 0) {
+        int c = command[byte_index];
 
-        while (command_length > 0 && (command[command_length - 1] == ' ' || command[command_length - 1] == '\t')) {
-            command_length--;
+        if (c == ' ' || c == '\n' || c == '\r' || c == '\t') {
+            byte_index++;
+            break;
+        }
+        else {
+            byte_index--;
         }
     }
 
-    /* Parse the input. It should be "get <docname> */
-    if (command_length < 4 || (command[0] != 'G' && command[0] != 'g') || (command[1] != 'E' && command[1] != 'e') || (command[2] != 'T' && command[2] != 't')) {
-        ret = -1;
+    /* Parse protocol version */
+    if (last_proto_index - byte_index == 7 &&
+        command[byte_index + 6] == '.' &&
+        command[byte_index + 4] == '/' &&
+        (command[byte_index + 3] == 'p' || command[byte_index + 3] == 'P') &&
+        (command[byte_index + 2] == 't' || command[byte_index + 2] == 'T') &&
+        (command[byte_index + 1] == 't' || command[byte_index + 1] == 'T') &&
+        (command[byte_index] == 'h' || command[byte_index] == 'H')) {
+        int bad_version = 0;
+        if (command[byte_index + 5] == '1' && (command[byte_index + 7] == '0' || command[byte_index + 7] == '1')) {
+            *proto = 1;
+        }
+        else if (command[byte_index + 5] == '0' && command[byte_index + 7] == '9') {
+            *proto = 0;
+        }
+        else {
+            bad_version = 1;
+        }
+
+        if (!bad_version) {
+            *consumed += 8;
+
+            if (byte_index > 0) {
+                byte_index--;
+                while (byte_index > 0 && command[byte_index] == ' ' || command[byte_index] == '\t') {
+                    byte_index--;
+                    *consumed += 1;
+                }
+            }
+        }
     }
-    else {
+}
+
+static int picoquic_h09_server_process_command(uint8_t* command, size_t command_length, int * method, size_t * echo_length)
+{
+    int ret = 0;
+    size_t byte_index = 0;
+    size_t consumed;
+    int proto;
+
+
+    *echo_length = 0;
+
+    /* Find first line of command, ignore the rest */
+    for (size_t i = 0; i < command_length; i++) {
+        if (command[i] == '\r' || command[i] == '\n') {
+            command_length = i;
+            break;
+        }
+    }
+
+    /* Parse protocol version and strip white spaces at the end of the command */
+    picoquic_h09_server_parse_protocol(command, command_length, &proto, &consumed);
+    command_length -= consumed;
+
+    /* parse the method */
+    *method = picoquic_h09_server_parse_method(command, command_length, &consumed);
+
+    if (*method < 0) {
+        ret = -1;
+    } else {
+        byte_index = consumed;
+
         /* Skip at list one space */
         while (command_length > byte_index && (command[byte_index] == ' ' || command[byte_index] == '\t')) {
             byte_index++;
         }
 
-        if (byte_index == 3 || byte_index >= command_length) {
+        if (byte_index >= command_length) {
             ret = -1;
         }
     }
 
     /* if the input is in incorrect form, return 0 length error message */
-    if (ret == 0) {
+    if (ret == 0 && *method != 1) {
         ret = demo_server_parse_path(command + byte_index, command_length - byte_index, echo_length);
+    }
+
+    return ret;
+}
+
+/*
+ * Process the incoming data. 
+ * We can expect the following:
+ * - Initial command line: {GET|POST} <path> [HTTP/{0.9|1.0|1.1}] /r/n
+ * - Additional command lines concluded with /r/n
+ * - Empty line: /r/n
+ * - Posted data
+ * This can be interrupted at any time by a FIN mark. In the case of the 
+ * GET command, there should not be any posted data. 
+ * The server should parse the initial line to gather the type of command
+ * and the name of the document. It should then parse data until the fin
+ * mark is received.
+ * The additional headers are ignored.
+ * The amount of posted data is counted, will be used to prepare the response.
+ *
+ * The response is sent after the FIN is received (POST) or after the 
+ * header line is fully parsed (GET).
+ */
+
+int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
+    uint64_t stream_id, uint8_t* bytes, size_t length,
+    picoquic_call_back_event_t fin_or_event, picoquic_h09_server_stream_ctx_t* stream_ctx)
+{
+    int ret = 0;
+    size_t processed = 0;
+    int last_char = 0;
+    while (processed < length) {
+        if (stream_ctx->status == picoquic_h09_server_stream_status_none) {
+            /* If the command has not been received yet, try to process it */
+            int crlf_present = 0;
+
+            while (processed < length && crlf_present == 0) {
+                if (bytes[processed] == '\r' || bytes[processed] == '\n') {
+                    crlf_present = 1;
+                }
+                else if (stream_ctx->command_length < sizeof(stream_ctx->command)) {
+                    stream_ctx->command[stream_ctx->command_length++] = bytes[processed];
+                }
+                else {
+                    /* Too much data */
+                    crlf_present = 1;
+                }
+                last_char = bytes[processed];
+                processed++;
+            }
+
+            if (crlf_present) {
+                stream_ctx->status = picoquic_h09_server_stream_status_crlf;
+            }
+
+            if (crlf_present || fin_or_event == picoquic_callback_stream_fin) {
+                /* Parse the command */
+                stream_ctx->method = picoquic_h09_server_parse_method(stream_ctx->command, stream_ctx->command_length, NULL);
+            }
+        }
+        else if (stream_ctx->status == picoquic_h09_server_stream_status_crlf) {
+            if (bytes[processed] == '\n') {
+                /* empty line */
+                stream_ctx->status = picoquic_h09_server_stream_status_receiving;
+            }
+            else if (bytes[processed] != '\r') {
+                stream_ctx->status = picoquic_h09_server_stream_status_header;
+            }
+            last_char = bytes[processed];
+            processed++;
+        }
+        else if (stream_ctx->status == picoquic_h09_server_stream_status_header) {
+            if (bytes[processed] == '\n') {
+                stream_ctx->status = picoquic_h09_server_stream_status_crlf;
+            }
+            last_char = bytes[processed];
+            processed++;
+        }
+        else if (stream_ctx->status == picoquic_h09_server_stream_status_receiving) {
+            stream_ctx->post_received += length - processed;
+            processed = length;
+        }
+        else {
+            /* No more processing expected on this stream. */
+            processed = length;
+        }
+    }
+
+    /* if FIN present, process request through http 0.9 */
+    if (fin_or_event == picoquic_callback_stream_fin || (stream_ctx->method == 0 && stream_ctx->status == picoquic_h09_server_stream_status_crlf)) {
+        char buf[256];
+
+        stream_ctx->command[stream_ctx->command_length] = 0;
+        /* if data generated, just send it. Otherwise, just FIN the stream. */
+        stream_ctx->status = picoquic_h09_server_stream_status_finished;
+
+        if (picoquic_h09_server_process_command(stream_ctx->command, stream_ctx->command_length, &stream_ctx->method, &stream_ctx->echo_length)
+            != 0) {
+            if (cnx->quic->F_log != NULL) {
+                fprintf(cnx->quic->F_log, "%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
+                fprintf(cnx->quic->F_log, "Server CB, Stream: %" PRIu64 ", Reply with bad request message after command: %s\n",
+                    stream_id, strip_endofline(buf, sizeof(buf), (char*)&stream_ctx->command));
+            }
+
+            stream_ctx->response_length = strlen(bad_request_message);
+            (void)picoquic_add_to_stream_with_ctx(cnx, stream_ctx->stream_id, (const uint8_t *)bad_request_message,
+                stream_ctx->response_length, 1, (void *)stream_ctx);
+        } else {
+            if (cnx->quic->F_log != NULL) {
+                fprintf(cnx->quic->F_log, "%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
+                fprintf(cnx->quic->F_log, "Server CB, Stream: %" PRIu64 ", Processing command: %s\n",
+                    stream_id, strip_endofline(buf, sizeof(buf), (char*)&stream_ctx->command));
+            }
+            if (stream_ctx->echo_length > 0) {
+                picoquic_mark_active_stream(cnx, stream_ctx->stream_id, 1, (void *)stream_ctx);
+            }
+            else if (stream_ctx->method == 1) {
+                /* TODO: Process the response to a POST */
+                char post_response[512];
+#ifdef _WINDOWS
+                stream_ctx->response_length = sprintf_s(post_response, sizeof(post_response), demo_server_post_response_page, (int)stream_ctx->post_received);
+#else
+                stream_ctx->response_length = sprintf(post_response, demo_server_post_response_page, (int)stream_ctx->post_received);
+#endif
+                picoquic_add_to_stream_with_ctx(cnx, stream_id, (uint8_t *)demo_server_post_response_header,
+                    strlen(demo_server_post_response_header), 0, (void *)stream_ctx);
+                picoquic_add_to_stream_with_ctx(cnx, stream_id, (uint8_t *)post_response,
+                    stream_ctx->response_length, 1, (void *)stream_ctx);
+
+                if (cnx->quic->F_log != NULL) {
+                    fprintf(cnx->quic->F_log, "%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
+                    fprintf(cnx->quic->F_log, "Server CB, Stream: %" PRIu64 ", %s, %d data received\n",
+                        stream_id, strip_endofline(buf, sizeof(buf), (char*)&stream_ctx->command), (int)stream_ctx->post_received);
+                }
+            }
+            else {
+                /* Send the canned index.html response */
+                stream_ctx->response_length = strlen(demo_server_default_page);
+                picoquic_add_to_stream_with_ctx(cnx, stream_id, (uint8_t *)demo_server_default_page,
+                    stream_ctx->response_length, 1, (void *)stream_ctx);
+            } 
+        }
+    }
+    else if (stream_ctx->response_length == 0 && stream_ctx->echo_length == 0 && stream_ctx->method == 0) {
+        char buf[256];
+        stream_ctx->command[stream_ctx->command_length] = 0;
+        if (cnx->quic->F_log != NULL) {
+            fprintf(cnx->quic->F_log, "%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
+            fprintf(cnx->quic->F_log, "Server CB, Stream: %" PRIu64 ", Partial command: %s\n",
+                stream_id, strip_endofline(buf, sizeof(buf), (char*)&stream_ctx->command));
+            fflush(cnx->quic->F_log);
+        }
     }
 
     return ret;
@@ -645,13 +865,11 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
     }
 
     if (stream_ctx == NULL) {
-        if (fin_or_event != picoquic_callback_stream_data && fin_or_event != picoquic_callback_stream_fin) {
-            stream_ctx = ctx->first_stream;
+        stream_ctx = ctx->first_stream;
 
-            /* if stream is already present, check its state. New bytes? */
-            while (stream_ctx != NULL && stream_ctx->stream_id != stream_id) {
-                stream_ctx = stream_ctx->next_stream;
-            }
+        /* if stream is already present, check its state. New bytes? */
+        while (stream_ctx != NULL && stream_ctx->stream_id != stream_id) {
+            stream_ctx = stream_ctx->next_stream;
         }
 
         if (stream_ctx == NULL) {
@@ -698,28 +916,13 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
                 return 0;
             }
             else {
-                return demo_server_prepare_to_send((void*)bytes, length, stream_ctx->echo_length, &stream_ctx->echo_sent);
+                return demo_client_prepare_to_send((void*)bytes, length, stream_ctx->echo_length, &stream_ctx->echo_sent);
             }
     default:
         break;
     }
-    
-    if (stream_ctx->status == picoquic_h09_server_stream_status_finished || stream_ctx->command_length + length > (PICOQUIC_FIRST_COMMAND_MAX - 1)) {
-        if (fin_or_event == picoquic_callback_stream_fin && length == 0) {
-            /* no problem, this is fine. */
-        }
-        else {
-            /* send after fin, or too many bytes => reset! */
-            picoquic_reset_stream(cnx, stream_id, PICOQUIC_TRANSPORT_STREAM_STATE_ERROR);
-            if (cnx->quic->F_log != NULL) {
-                fprintf(cnx->quic->F_log, "%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
-                fprintf(cnx->quic->F_log, "Server CB, Stream: %" PRIu64 ", RESET, too long or after FIN\n",
-                    stream_id);
-            }
-        }
-        return 0;
-    }
-    else if (fin_or_event == picoquic_callback_stream_gap) {
+
+    if (fin_or_event == picoquic_callback_stream_gap) {
         /* We do not support this, yet */
         stream_ctx->status = picoquic_h09_server_stream_status_finished;
         picoquic_reset_stream(cnx, stream_id, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION);
@@ -730,6 +933,11 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
         return 0;
     }
     else if (fin_or_event == picoquic_callback_stream_data || fin_or_event == picoquic_callback_stream_fin) {
+#if  1
+        if (picoquic_h09_server_process_data(cnx, stream_id, bytes, length, fin_or_event, stream_ctx)) {
+            /* something bad happened. */
+        }
+#else
         int crlf_present = 0;
 
         if (length > 0) {
@@ -752,7 +960,7 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
             /* if data generated, just send it. Otherwise, just FIN the stream. */
             stream_ctx->status = picoquic_h09_server_stream_status_finished;
 
-            if (picoquic_h09_server_process_command(stream_ctx->command, stream_ctx->command_length, &stream_ctx->echo_length)
+            if (picoquic_h09_server_process_command(stream_ctx->command, stream_ctx->command_length, &stream_ctx->method, &stream_ctx->echo_length)
                 != 0) {
                 if (cnx->quic->F_log != NULL) {
                     fprintf(cnx->quic->F_log, "%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
@@ -769,13 +977,33 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
                     fprintf(cnx->quic->F_log, "Server CB, Stream: %" PRIu64 ", Processing command: %s\n",
                         stream_id, strip_endofline(buf, sizeof(buf), (char*)&stream_ctx->command));
                 }
+
                 if (stream_ctx->echo_length > 0) {
                     picoquic_mark_active_stream(cnx, stream_ctx->stream_id, 1, (void *)stream_ctx);
-                } else {
+                } else if (stream_ctx->method == 0){
                     /* Send the canned index.html response */
                     stream_ctx->response_length = strlen(demo_server_default_page);
                     picoquic_add_to_stream_with_ctx(cnx, stream_id, (uint8_t *)demo_server_default_page,
                         stream_ctx->response_length, 1, (void *)stream_ctx);
+                }
+                else {
+                    /* Send POST response */
+                    char post_response[512];
+#ifdef _WINDOWS
+                    stream_ctx->response_length = sprintf_s(post_response, sizeof(post_response), demo_server_post_response_page, (int)stream_ctx->post_received);
+#else
+                    stream_ctx->response_length = sprintf(post_response, demo_server_post_response_page, (int)stream_ctx->post_received);
+#endif
+                    picoquic_add_to_stream_with_ctx(cnx, stream_id, (uint8_t *)demo_server_post_response_header,
+                        strlen(demo_server_post_response_header), 0, (void *)stream_ctx);
+                    picoquic_add_to_stream_with_ctx(cnx, stream_id, (uint8_t *)post_response,
+                        stream_ctx->response_length, 1, (void *)stream_ctx);
+
+                    if (cnx->quic->F_log != NULL) {
+                        fprintf(cnx->quic->F_log, "%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
+                        fprintf(cnx->quic->F_log, "Server CB, Stream: %" PRIu64 ", %s, %d data received\n",
+                            stream_id, strip_endofline(buf, sizeof(buf), (char*)&stream_ctx->command), (int)stream_ctx->post_received);
+                    }
                 }
             }
         }
@@ -789,6 +1017,7 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
                 fflush(cnx->quic->F_log);
             }
         }
+#endif
     } else {
         /* Unknown event */
         stream_ctx->status = picoquic_h09_server_stream_status_finished;

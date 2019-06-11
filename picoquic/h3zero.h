@@ -132,6 +132,7 @@ typedef enum {
 #define H3ZERO_QPACK_ALLOW_GET 76
 #define H3ZERO_QPACK_AUTHORITY 0
 #define H3ZERO_QPACK_SCHEME_HTTPS 23
+#define H3ZERO_QPACK_TEXT_PLAIN 53
 
 typedef struct st_h3zero_qpack_static_t {
     int index;
@@ -192,11 +193,11 @@ uint8_t * h3zero_qpack_int_decode(uint8_t * bytes, uint8_t * bytes_max,
 
 uint8_t * h3zero_parse_qpack_header_frame(uint8_t * bytes, uint8_t * bytes_max,
     h3zero_header_parts_t * parts);
-
-uint8_t * h3zero_create_post_header_frame(uint8_t * bytes, uint8_t * bytes_max,
-    uint8_t const * path, size_t path_length, char const * host, h3zero_content_type_enum content_type);
 uint8_t * h3zero_create_request_header_frame(uint8_t * bytes, uint8_t * bytes_max,
     uint8_t const * path, size_t path_length, char const * host);
+uint8_t * h3zero_create_post_header_frame(uint8_t * bytes, uint8_t * bytes_max,
+    uint8_t const * path, size_t path_length, char const * host,
+    h3zero_content_type_enum content_type);
 uint8_t * h3zero_create_response_header_frame(uint8_t * bytes, uint8_t * bytes_max,
     h3zero_content_type_enum doc_type);
 uint8_t * h3zero_create_not_found_header_frame(uint8_t * bytes, uint8_t * bytes_max);
