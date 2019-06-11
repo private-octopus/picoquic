@@ -421,6 +421,7 @@ int h3zero_prepare_qpack_test()
             else {
                 DBG_PRINTF("Case %d, unexpected method: %d\n", j, qpack_test_case[j].parts.method);
                 ret = -1;
+                break;
             }
         }
         else if (qpack_test_case[j].parts.content_type != 0) {
