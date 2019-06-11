@@ -243,6 +243,11 @@ static uint8_t qpack_test_get_ats2[] = {
     0xa1, 0x72, 0x1e, 0x9f, 0xd1, 0xc1, 0xd7
 };
 
+static uint8_t qpack_test_post_zzz[] = {
+    QPACK_TEST_HEADER_BLOCK_PREFIX, 0xC0 | 20, 0x50 | 1,
+    0x80 | 3, QPACK_TEST_HEADER_QPACK_PATH, 0xC0 | 53
+};
+
 static uint8_t qpack_test_string_index_html[] = { QPACK_TEST_HEADER_INDEX_HTML };
 static uint8_t qpack_test_string_slash[] = { '/' };
 static uint8_t qpack_test_string_zzz[] = { 'Z', 'Z', 'Z' };
@@ -307,6 +312,10 @@ static qpack_test_case_t qpack_test_case[] = {
     {
         qpack_test_get_ats2, sizeof(qpack_test_get_ats2),
         { h3zero_method_get, qpack_test_string_slash, sizeof(qpack_test_string_slash), 0, 0}
+    },
+    {
+        qpack_test_post_zzz, sizeof(qpack_test_post_zzz),
+        { h3zero_method_post, qpack_test_string_zzz, sizeof(qpack_test_string_zzz), 0, h3zero_content_type_text_plain}
     }
 };
 
@@ -373,6 +382,9 @@ int h3zero_parse_qpack_test()
     for (size_t i = 0; ret == 0 && i < nb_qpack_test_case; i++) {
         ret = h3zero_parse_qpack_test_one(i,
             qpack_test_case[i].bytes, qpack_test_case[i].bytes_length);
+        if (ret != 0) {
+            DBG_PRINTF("Parse QPACK test %d fails.\n", i);
+        }
     }
 
     return ret;
@@ -385,7 +397,7 @@ int h3zero_parse_qpack_test()
 int h3zero_prepare_qpack_test()
 {
     int ret = 0;
-    int qpack_compare_test[] = { 0, 2, 4, 7, 8, -1 };
+    int qpack_compare_test[] = { 0, 2, 4, 7, 8, 13, -1 };
     
     for (int i = 0; ret == 0 && qpack_compare_test[i] >= 0; i++) {
         uint8_t buffer[256];
@@ -394,9 +406,23 @@ int h3zero_prepare_qpack_test()
         int j = qpack_compare_test[i];
 
         if (qpack_test_case[j].parts.path != NULL) {
-            /* Create a request header */
-            bytes = h3zero_create_request_header_frame(buffer, bytes_max,
-                qpack_test_case[j].parts.path, qpack_test_case[j].parts.path_length, "example.com");
+            if (qpack_test_case[j].parts.method == h3zero_method_get)
+            {
+                /* Create a request header */
+                bytes = h3zero_create_request_header_frame(buffer, bytes_max,
+                    qpack_test_case[j].parts.path, qpack_test_case[j].parts.path_length, "example.com");
+            }
+            else  if (qpack_test_case[j].parts.method == h3zero_method_post)
+            {
+                /* Create a post header */
+                bytes = h3zero_create_post_header_frame(buffer, bytes_max,
+                    qpack_test_case[j].parts.path, qpack_test_case[j].parts.path_length, "example.com", h3zero_content_type_text_plain);
+            }
+            else {
+                DBG_PRINTF("Case %d, unexpected method: %d\n", j, qpack_test_case[j].parts.method);
+                ret = -1;
+                break;
+            }
         }
         else if (qpack_test_case[j].parts.content_type != 0) {
             bytes = h3zero_create_response_header_frame(buffer, bytes_max,
@@ -565,22 +591,28 @@ int h3zero_stream_test()
 char * parse_demo_scenario_text1 = "/;t:test.html;8:0:b:main.jpg;12:0:/bla/bla/";
 char * parse_demo_scenario_text2 = "/;b:main.jpg;t:test.html;";
 char * parse_demo_scenario_text3 = "*1000:/";
+char * parse_demo_scenario_text4 = "/cgi-sink:1000000;4:/";
 
 static const picoquic_demo_stream_desc_t parse_demo_scenario_desc1[] = {
-    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0 },
-    { 0, 4, 0, "test.html", "test.html", 0 },
-    { 0, 8, 0, "main.jpg", "main.jpg", 1 },
-    { 0, 12, 0, "/bla/bla/", "_bla_bla_", 0 }
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0, 0},
+    { 0, 4, 0, "test.html", "test.html", 0, 0 },
+    { 0, 8, 0, "main.jpg", "main.jpg", 1, 0 },
+    { 0, 12, 0, "/bla/bla/", "_bla_bla_", 0, 0 }
 };
 
 static const picoquic_demo_stream_desc_t parse_demo_scenario_desc2[] = {
-    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0 },
-    { 0, 4, 0, "main.jpg", "main.jpg", 1 },
-    { 0, 8, 4, "test.html", "test.html", 0 }
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0, 0 },
+    { 0, 4, 0, "main.jpg", "main.jpg", 1, 0 },
+    { 0, 8, 4, "test.html", "test.html", 0, 0 }
 };
 
 static const picoquic_demo_stream_desc_t parse_demo_scenario_desc3[] = {
-    { 1000, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0 }
+    { 1000, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0, 0 }
+};
+
+static const picoquic_demo_stream_desc_t parse_demo_scenario_desc4[] = {
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/cgi-sink", "_cgi-sink", 0, 1000000 },
+    { 0, 4, 0, "/", "_", 0, 0 }
 };
 
 int parse_demo_scenario_test_one(char * text, size_t nb_streams_ref, picoquic_demo_stream_desc_t const * desc_ref)
@@ -607,6 +639,9 @@ int parse_demo_scenario_test_one(char * text, size_t nb_streams_ref, picoquic_de
                     ret = -1;
                 }
                 else if (strcmp(desc[i].f_name, desc_ref[i].f_name) != 0) {
+                    ret = -1;
+                }
+                else if (desc[i].post_size !=  desc_ref[i].post_size) {
                     ret = -1;
                 }
             }
@@ -641,6 +676,12 @@ int parse_demo_scenario_test()
             parse_demo_scenario_desc3);
     }
 
+    if (ret == 0) {
+        ret = parse_demo_scenario_test_one(parse_demo_scenario_text4,
+            sizeof(parse_demo_scenario_desc4) / sizeof(picoquic_demo_stream_desc_t),
+            parse_demo_scenario_desc4);
+    }
+
     return ret;
 }
 
@@ -649,13 +690,17 @@ int parse_demo_scenario_test()
  * network simulation.
  */
 static const picoquic_demo_stream_desc_t demo_test_scenario[] = {
-    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "root.html", 0 },
-    { 0, 4, 0, "12345", "doc-12345.txt", 0 } };
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "root.html", 0, 0 },
+    { 0, 4, 0, "12345", "doc-12345.txt", 0, 0 },
+    { 0, 8, 4, "post-test", "post-test.html", 0, 12345 }
+};
+
 static size_t const nb_demo_test_scenario = sizeof(demo_test_scenario) / sizeof(picoquic_demo_stream_desc_t);
 
 static size_t const demo_test_stream_length[] = {
     128,
-    12345
+    12345,
+    190
 };
 
 static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server_callback_fn)
@@ -743,6 +788,11 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
         else if (stream->received_length < demo_test_stream_length[i]) {
             DBG_PRINTF("Scenario stream %d, only %d bytes received\n", 
                 (int)i, (int)stream->received_length);
+            ret = -1;
+        }
+        else if (stream->post_sent < demo_test_scenario[i].post_size) {
+            DBG_PRINTF("Scenario stream %d, only %d bytes sent\n",
+                (int)i, (int)stream->post_sent);
             ret = -1;
         }
     }
