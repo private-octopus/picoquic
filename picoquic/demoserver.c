@@ -194,7 +194,7 @@ static int h3zero_server_process_request_frame(
 #ifdef _WINDOWS
             response_length = sprintf_s((char *)post_response, sizeof(post_response), demo_server_post_response_page, (int)stream_ctx->received_length);
 #else
-            response_length = sprintf((char *)post_response, demo_server_post_response_page, (int)stream_ctx->post_received);
+            response_length = sprintf((char *)post_response, demo_server_post_response_page, (int)stream_ctx->received_length);
 #endif
             stream_ctx->echo_length = 0;
         }
@@ -604,7 +604,7 @@ static void picoquic_h09_server_parse_protocol(uint8_t* command, size_t command_
 
             if (byte_index > 0) {
                 byte_index--;
-                while (byte_index > 0 && command[byte_index] == ' ' || command[byte_index] == '\t') {
+                while (byte_index > 0 && (command[byte_index] == ' ' || command[byte_index] == '\t')) {
                     byte_index--;
                     *consumed += 1;
                 }
@@ -686,7 +686,7 @@ int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
 {
     int ret = 0;
     size_t processed = 0;
-    int last_char = 0;
+
     while (processed < length) {
         if (stream_ctx->status == picoquic_h09_server_stream_status_none) {
             /* If the command has not been received yet, try to process it */
@@ -703,7 +703,6 @@ int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
                     /* Too much data */
                     crlf_present = 1;
                 }
-                last_char = bytes[processed];
                 processed++;
             }
 
@@ -724,14 +723,12 @@ int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
             else if (bytes[processed] != '\r') {
                 stream_ctx->status = picoquic_h09_server_stream_status_header;
             }
-            last_char = bytes[processed];
             processed++;
         }
         else if (stream_ctx->status == picoquic_h09_server_stream_status_header) {
             if (bytes[processed] == '\n') {
                 stream_ctx->status = picoquic_h09_server_stream_status_crlf;
             }
-            last_char = bytes[processed];
             processed++;
         }
         else if (stream_ctx->status == picoquic_h09_server_stream_status_receiving) {
