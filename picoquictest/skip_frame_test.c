@@ -1264,11 +1264,13 @@ int split_stream_frame_test()
 
 #define COPY_PACKET_CID_DEST 1,2,3,4,5,6,7,8
 
+#define SIZEOF_CID_DEST 8
+
 #define COPY_PACKET_HEADER_1RTT 0x43, COPY_PACKET_CID_DEST, 0, 0, 0, 1
 
-#define SPLIT_FRAME_TEST_SOURCE_68_77 68,69,70,71,72,73,74,75,76,77
+#define SIZEOF_1RTT_HEADER (SIZEOF_CID_DEST + 5)
 
-static uint8_t ct_packet_header_1rtt[] = { COPY_PACKET_HEADER_1RTT };
+#define SPLIT_FRAME_TEST_SOURCE_68_77 68,69,70,71,72,73,74,75,76,77
 
 static uint8_t ct_stream0_data[] = { SPLIT_FRAME_TEST_SOURCE_CONTENT_67, SPLIT_FRAME_TEST_SOURCE_68_77 };
 
@@ -1348,13 +1350,13 @@ static copy_retransmit_test_case_t copy_retransmit_case[] = {
     {
         ct_test_packet1,
         (uint32_t) sizeof(ct_test_packet1),
-        (uint32_t) sizeof(ct_packet_header_1rtt),
+        (uint32_t) SIZEOF_1RTT_HEADER,
         0,
         0,
         PICOQUIC_MAX_PACKET_SIZE,
         ct_test_packet1,
         (uint32_t) sizeof(ct_test_packet1),
-        (uint32_t) sizeof(ct_packet_header_1rtt),
+        (uint32_t) SIZEOF_1RTT_HEADER,
         NULL,
         0,
         0
@@ -1362,13 +1364,13 @@ static copy_retransmit_test_case_t copy_retransmit_case[] = {
     {
         ct_test_packet2,
         (uint32_t) sizeof(ct_test_packet2),
-        (uint32_t) sizeof(ct_packet_header_1rtt),
+        (uint32_t) SIZEOF_1RTT_HEADER,
         0,
         0,
         PICOQUIC_MAX_PACKET_SIZE,
         ct_test_packet1,
         (uint32_t) sizeof(ct_test_packet1),
-        (uint32_t) sizeof(ct_packet_header_1rtt),
+        (uint32_t) SIZEOF_1RTT_HEADER,
         NULL,
         0,
         0
@@ -1376,13 +1378,13 @@ static copy_retransmit_test_case_t copy_retransmit_case[] = {
     {
         ct_test_packet2,
         (uint32_t) sizeof(ct_test_packet2),
-        (uint32_t) sizeof(ct_packet_header_1rtt),
+        (uint32_t) SIZEOF_1RTT_HEADER,
         0,
         0,
         (uint32_t) sizeof(ct_test_packet2),
         ct_test_packet2,
         (uint32_t) sizeof(ct_test_packet2),
-        (uint32_t) sizeof(ct_packet_header_1rtt),
+        (uint32_t) SIZEOF_1RTT_HEADER,
         NULL,
         0,
         0
@@ -1390,13 +1392,13 @@ static copy_retransmit_test_case_t copy_retransmit_case[] = {
     {
         ct_test_packet3,
         (uint32_t) sizeof(ct_test_packet3),
-        (uint32_t) sizeof(ct_packet_header_1rtt),
+        (uint32_t) SIZEOF_1RTT_HEADER,
         0,
         0,
         (uint32_t) sizeof(ct_test_packet2),
         ct_test_packet2,
         (uint32_t) sizeof(ct_test_packet2),
-        (uint32_t) sizeof(ct_packet_header_1rtt),
+        (uint32_t) SIZEOF_1RTT_HEADER,
         ct_test_frame_68_77,
         sizeof(ct_test_frame_68_77),
         0
@@ -1404,13 +1406,13 @@ static copy_retransmit_test_case_t copy_retransmit_case[] = {
     {
         ct_test_packet4,
         (uint32_t) sizeof(ct_test_packet4),
-        (uint32_t) sizeof(ct_packet_header_1rtt),
+        (uint32_t) SIZEOF_1RTT_HEADER,
         0,
         0,
         (uint32_t) sizeof(ct_test_packet4),
         ct_test_packet4,
         (uint32_t) sizeof(ct_test_packet4),
-        (uint32_t) sizeof(ct_packet_header_1rtt),
+        (uint32_t) SIZEOF_1RTT_HEADER,
         NULL,
         0,
         0
@@ -1418,13 +1420,13 @@ static copy_retransmit_test_case_t copy_retransmit_case[] = {
     {
         ct_test_packet4,
         (uint32_t) sizeof(ct_test_packet4),
-        (uint32_t) sizeof(ct_packet_header_1rtt),
+        (uint32_t) SIZEOF_1RTT_HEADER,
         0,
         0,
         PICOQUIC_MAX_PACKET_SIZE,
         ct_test_packet5,
         (uint32_t) sizeof(ct_test_packet5),
-        (uint32_t) sizeof(ct_packet_header_1rtt),
+        (uint32_t) SIZEOF_1RTT_HEADER,
         NULL,
         0,
         0
@@ -1432,13 +1434,13 @@ static copy_retransmit_test_case_t copy_retransmit_case[] = {
     {
         ct_test_packet4,
         (uint32_t) sizeof(ct_test_packet4),
-        (uint32_t) sizeof(ct_packet_header_1rtt),
+        (uint32_t) SIZEOF_1RTT_HEADER,
         0,
         0,
         (uint32_t) sizeof(ct_test_packet6),
         ct_test_packet6,
         (uint32_t) sizeof(ct_test_packet6),
-        (uint32_t) sizeof(ct_packet_header_1rtt),
+        (uint32_t) SIZEOF_1RTT_HEADER,
         ct_test_frame_35_67,
         sizeof(ct_test_frame_35_67),
         0
@@ -1446,7 +1448,7 @@ static copy_retransmit_test_case_t copy_retransmit_case[] = {
     {
         ct_test_mtu_probe,
         (uint32_t) sizeof(ct_test_mtu_probe),
-        (uint32_t) sizeof(ct_packet_header_1rtt),
+        (uint32_t) SIZEOF_1RTT_HEADER,
         1,
         0,
         PICOQUIC_MAX_PACKET_SIZE,

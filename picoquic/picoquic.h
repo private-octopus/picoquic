@@ -388,6 +388,14 @@ void picoquic_set_fuzz(picoquic_quic_t* quic, picoquic_fuzz_fn fuzz_fn, void * f
  */
 void picoquic_set_cc_log(picoquic_quic_t * quic, char const * cc_log_dir);
 
+/* Set the ESNI key.
+ * May be called several times to set several keys.
+ */
+int picoquic_esni_load_key(picoquic_quic_t * quic, char const * esni_key_file_name);
+
+/* Set the ESNI RR. Must be called after setting the ESNI key at least once. */
+int picoquic_esni_server_setup(picoquic_quic_t * quic, char const * esni_rr_file_name);
+
 /* Will be called to verify that the given data corresponds to the given signature.
  * This callback and the `verify_ctx` will be set by the `verify_certificate_cb_fn`.
  * If `data` and `sign` are empty buffers, an error occurred and `verify_ctx` should be freed.
@@ -479,6 +487,8 @@ picoquic_cnx_t* picoquic_create_client_cnx(picoquic_quic_t* quic,
 int picoquic_start_client_cnx(picoquic_cnx_t* cnx);
 
 void picoquic_delete_cnx(picoquic_cnx_t* cnx);
+
+int picoquic_esni_client_from_file(picoquic_cnx_t * cnx, char const * esni_rr_file_name);
 
 int picoquic_close(picoquic_cnx_t* cnx, uint16_t reason_code);
 

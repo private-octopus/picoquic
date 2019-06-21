@@ -310,14 +310,14 @@ typedef enum {
     picoquic_tp_max_datagram_size = 32 /* per draft-pauly-quic-datagram-02 */
 } picoquic_tp_enum;
 
-/*
-    * QUIC context, defining the tables of connections,
-    * open sockets, etc.
-    */
+/* QUIC context, defining the tables of connections,
+ * open sockets, etc.
+ */
 typedef struct st_picoquic_quic_t {
     void * F_log;
     char const * cc_log_dir;
     void* tls_master_ctx;
+    struct st_ptls_key_exchange_context_t * esni_key_exchange[16];
     picoquic_stream_data_cb_fn default_callback_fn;
     void* default_callback_ctx;
     char const* default_alpn;
@@ -326,8 +326,8 @@ typedef struct st_picoquic_quic_t {
     uint64_t* p_simulated_time;
     char const* ticket_file_name;
     char const* token_file_name;
-    picoquic_stored_ticket_t* p_first_ticket;
-    picoquic_stored_token_t* p_first_token;
+    picoquic_stored_ticket_t * p_first_ticket;
+    picoquic_stored_token_t * p_first_token;
     uint32_t mtu_max;
     uint32_t flags;
     uint32_t padding_multiple_default;
