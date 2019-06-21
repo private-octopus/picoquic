@@ -226,6 +226,7 @@ int usage(char const * argv0)
     fprintf(stderr, "  -s nnn            Run stress for nnn minutes.\n");
     fprintf(stderr, "  -f nnn            Run fuzz for nnn minutes.\n");
     fprintf(stderr, "  -n                Disable debug prints.\n");
+    fprintf(stderr, "  -r                Retry failed tests with debug print enabled.\n");
     fprintf(stderr, "  -h                Print this help message\n");
     fprintf(stderr, "  -S solution_dir   Set the path to the source files to find the default files\n");
 
@@ -257,6 +258,7 @@ int main(int argc, char** argv)
     int do_fuzz = 0;
     int do_stress = 0;
     int disable_debug = 0;
+    int retry_failed_test = 0;
 
     if (test_status == NULL)
     {
@@ -265,7 +267,7 @@ int main(int argc, char** argv)
     }
     else
     {
-        while (ret == 0 && (opt = getopt(argc, argv, "f:s:S:x:nh")) != -1) {
+        while (ret == 0 && (opt = getopt(argc, argv, "f:s:S:x:nrh")) != -1) {
             switch (opt) {
             case 'x': {
                 int test_number = get_test_number(optarg);
@@ -301,6 +303,9 @@ int main(int argc, char** argv)
                 break;
             case 'n':
                 disable_debug = 1;
+                break;
+            case 'r':
+                retry_failed_test = 1;
                 break;
             case 'h':
                 usage(argv[0]);
@@ -395,6 +400,38 @@ int main(int argc, char** argv)
                 }
             }
             fprintf(stderr, "\n");
+
+            if (disable_debug && retry_failed_test) {
+                debug_printf_push_stream(stderr);
+                debug_printf_resume();
+                ret = 0;
+                for (size_t i = 0; i < nb_tests; i++) {
+                    if (test_status[i] == test_failed) {
+                        fprintf(stderr, "Retrying %s:\n", test_table[i].test_name);
+                        if (do_one_test(i, stdout) != 0) {
+                            test_status[i] = test_failed;
+                            nb_test_failed++;
+                            ret = -1;
+                        }
+                        else {
+                            /* This was a Heisenbug.. */
+                            test_status[i] = test_success;
+                        }
+                    }
+                }
+                if (ret == 0) {
+                    fprintf(stderr, "All tests pass after second try.\n");
+                }
+                else {
+                    fprintf(stderr, "Still failing: ");
+                    for (size_t i = 0; i < nb_tests; i++) {
+                        if (test_status[i] == test_failed) {
+                            fprintf(stderr, "%s ", test_table[i].test_name);
+                        }
+                    }
+                    fprintf(stderr, "\n");
+                }
+            }
         }
 
         free(test_status);

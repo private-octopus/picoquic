@@ -35,7 +35,7 @@ test_script:
  - ps: cd "$Env:Configuration"
  - ps: vstest.console /logger:Appveyor UnitTest1.dll
  # Alternative to UnitTest1 (apparently running the same tests):
- - ps: .\picoquic_t -n
+ - ps: .\picoquic_t -n -r
 
 deploy: off
 
