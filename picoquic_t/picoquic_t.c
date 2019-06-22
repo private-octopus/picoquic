@@ -309,8 +309,8 @@ int main(int argc, char** argv)
                 break;
             case 'h':
                 usage(argv[0]);
-                exit(0);
-                break;
+exit(0);
+break;
             default:
                 ret = usage(argv[0]);
                 break;
@@ -329,7 +329,7 @@ int main(int argc, char** argv)
                 for (size_t i = 0; i < nb_tests; i++) {
                     if (strcmp(test_table[i].test_name, "stress") == 0)
                     {
-                        if (do_stress == 0){
+                        if (do_stress == 0) {
                             test_status[i] = test_excluded;
                         }
                     }
@@ -337,7 +337,8 @@ int main(int argc, char** argv)
                         if (do_fuzz == 0) {
                             test_status[i] = test_excluded;
                         }
-                    } else {
+                    }
+                    else {
                         test_status[i] = test_excluded;
                     }
                 }
@@ -356,7 +357,8 @@ int main(int argc, char** argv)
                             test_status[i] = test_failed;
                             nb_test_failed++;
                             ret = -1;
-                        } else {
+                        }
+                        else {
                             test_status[i] = test_success;
                         }
                     }
@@ -364,7 +366,8 @@ int main(int argc, char** argv)
                         fprintf(stderr, "test number %d (%s) is bypassed.\n", (int)i, test_table[i].test_name);
                     }
                 }
-            } else {
+            }
+            else {
                 for (int arg_num = optind; arg_num < argc; arg_num++) {
                     int test_number = get_test_number(argv[arg_num]);
 
@@ -378,7 +381,8 @@ int main(int argc, char** argv)
                             test_status[test_number] = test_failed;
                             nb_test_failed++;
                             ret = -1;
-                        } else if (test_status[test_number] == test_not_run) {
+                        }
+                        else if (test_status[test_number] == test_not_run) {
                             test_status[test_number] = test_success;
                         }
                         break;
@@ -406,16 +410,27 @@ int main(int argc, char** argv)
                 debug_printf_resume();
                 ret = 0;
                 for (size_t i = 0; i < nb_tests; i++) {
+                    int is_fuzz = 0;
+                    if (strcmp("stress", test_table[i].test_name) == 0 ||
+                        strcmp("fuzz", test_table[i].test_name) == 0 ||
+                        strcmp("fuzz_initial", test_table[i].test_name) == 0) {
+                        is_fuzz = 1;
+                    }
                     if (test_status[i] == test_failed) {
                         fprintf(stderr, "Retrying %s:\n", test_table[i].test_name);
+                        if (is_fuzz) {
+                            debug_printf_suspend();
+                        }
                         if (do_one_test(i, stdout) != 0) {
                             test_status[i] = test_failed;
-                            nb_test_failed++;
                             ret = -1;
                         }
                         else {
                             /* This was a Heisenbug.. */
                             test_status[i] = test_success;
+                        }
+                        if (is_fuzz) {
+                            debug_printf_resume();
                         }
                     }
                 }
