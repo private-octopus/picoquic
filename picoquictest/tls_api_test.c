@@ -3723,7 +3723,7 @@ int probe_api_test()
 
             nb_trials++;
 
-            if (nb_trials <= PICOQUIC_NB_PATH_TARGET - 1) {
+            if (nb_trials <= PICOQUIC_NB_PATH_TARGET) {
                 if (ret_probe != 0) {
                     DBG_PRINTF("Trial %d (%d, %d) fails with ret = %x\n", nb_trials, i, j, ret_probe);
                     ret = -1;
@@ -3758,7 +3758,7 @@ int probe_api_test()
 
             nb_trials++;
 
-            if (nb_trials <= PICOQUIC_NB_PATH_TARGET - 1) {
+            if (nb_trials <= PICOQUIC_NB_PATH_TARGET) {
                 if (probe == NULL) {
                     DBG_PRINTF("Retrieve by addr %d (%d, %d) fails\n", nb_trials, i, j);
                     ret = -1;
@@ -3789,7 +3789,7 @@ int probe_api_test()
                 probe = picoquic_find_probe_by_challenge(test_ctx->cnx_client, challenge);
 
 
-                if (nb_trials <= PICOQUIC_NB_PATH_TARGET - 1) {
+                if (nb_trials <= PICOQUIC_NB_PATH_TARGET) {
                     if (probe == NULL) {
                         DBG_PRINTF("Retrieve by challenge %d (%d, %d) fails\n", nb_trials, i, j);
                         ret = -1;
@@ -4265,7 +4265,7 @@ int retire_cnxid_test()
             nb_rounds++;
 
             if (test_ctx->cnx_client->nb_paths >= PICOQUIC_NB_PATH_TARGET &&
-                test_ctx->cnx_server->nb_paths == PICOQUIC_NB_PATH_TARGET &&
+                test_ctx->cnx_server->nb_paths >= PICOQUIC_NB_PATH_TARGET &&
                 test_ctx->cnx_client->first_misc_frame == NULL &&
                 test_cnxid_count_stash(test_ctx->cnx_client) >= (PICOQUIC_NB_PATH_TARGET - 1) &&
                 picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) &&
@@ -4284,8 +4284,8 @@ int retire_cnxid_test()
     /* Check */
 
     if (ret == 0) {
-        if (test_ctx->cnx_server->nb_paths!= PICOQUIC_NB_PATH_TARGET) {
-            DBG_PRINTF("Found %d paths active on server instead of %d.\n", test_ctx->cnx_server->nb_paths, PICOQUIC_NB_PATH_TARGET);
+        if (test_ctx->cnx_server->nb_paths != PICOQUIC_NB_PATH_TARGET + 1) {
+            DBG_PRINTF("Found %d paths active on server instead of %d.\n", test_ctx->cnx_server->nb_paths, PICOQUIC_NB_PATH_TARGET+1);
             ret = -1;
         }
     }

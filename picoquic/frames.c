@@ -587,6 +587,9 @@ uint8_t* picoquic_decode_retire_connection_id_frame(picoquic_cnx_t* cnx, uint8_t
 
         for (int i = 0; i < cnx->nb_paths; i++) {
             if (cnx->path[i]->path_sequence == sequence) {
+                if (sequence == 0) {
+                    cnx->is_path_0_deleted = 1;
+                }
                 /* Mark the corresponding path as demoted */
                 picoquic_demote_path(cnx, i, current_time);
                 break;

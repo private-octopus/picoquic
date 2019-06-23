@@ -282,6 +282,7 @@ typedef struct st_picoquic_tp_t {
     uint32_t idle_timeout;
     uint32_t max_packet_size;
     uint32_t max_ack_delay; /* stored in in microseconds for convenience */
+    uint32_t active_connection_id_limit;
     uint8_t ack_delay_exponent;
     unsigned int migration_disabled;
     picoquic_tp_prefered_address_t prefered_address;

@@ -43,7 +43,7 @@ extern "C" {
 #define PICOQUIC_PRACTICAL_MAX_MTU 1440
 #define PICOQUIC_RETRY_SECRET_SIZE 64
 #define PICOQUIC_DEFAULT_0RTT_WINDOW 4096
-#define PICOQUIC_NB_PATH_TARGET 9
+#define PICOQUIC_NB_PATH_TARGET 8
 #define PICOQUIC_MAX_PACKETS_IN_POOL 0x8000
 
 #define PICOQUIC_NUMBER_OF_EPOCHS 4
@@ -307,6 +307,7 @@ typedef enum {
     picoquic_tp_max_ack_delay = 11,
     picoquic_tp_disable_migration = 12,
     picoquic_tp_server_preferred_address = 13,
+    picoquic_tp_active_connection_id_limit = 14,
     picoquic_tp_max_datagram_size = 32 /* per draft-pauly-quic-datagram-02 */
 } picoquic_tp_enum;
 
@@ -680,6 +681,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int path_demotion_needed : 1; /* If at least one path was recently demoted */
     unsigned int alt_path_challenge_needed : 1; /* If at least one alt path challenge is needed or in progress */
     unsigned int is_handshake_finished : 1; /* If there are no more packets to ack or retransmit in initial  or handshake contexts */
+    unsigned int is_path_0_deleted : 1; /* If the initial connection ID has been deleted */
 
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;

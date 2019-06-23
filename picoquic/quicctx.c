@@ -538,6 +538,7 @@ void picoquic_init_transport_parameters(picoquic_tp_t* tp, int client_mode)
     tp->max_packet_size = PICOQUIC_PRACTICAL_MAX_MTU;
     tp->max_datagram_size = 0;
     tp->ack_delay_exponent = 3;
+    tp->active_connection_id_limit = PICOQUIC_NB_PATH_TARGET;
 }
 
 
