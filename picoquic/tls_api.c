@@ -2261,7 +2261,9 @@ int picoquic_esni_load_key(picoquic_quic_t * quic, char const * esni_key_file_na
     if (quic->esni_key_exchange[esni_key_exchange_count] != 0) {
         DBG_PRINTF("Too many ESNI private key file, %d already\n", esni_key_exchange_count);
         ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
-    } else if ((fp = picoquic_file_open(esni_key_file_name, "rt")) == NULL) {
+#if 0
+    }
+    else if ((fp = picoquic_file_open(esni_key_file_name, "rt")) == NULL) {
         DBG_PRINTF("failed to open ESNI private key file:%s\n", esni_key_file_name);
         ret = PICOQUIC_ERROR_INVALID_FILE;
     }
@@ -2271,6 +2273,15 @@ int picoquic_esni_load_key(picoquic_quic_t * quic, char const * esni_key_file_na
             ret = PICOQUIC_ERROR_INVALID_FILE;
         }
         else {
+#else
+    } else {
+        BIO* bio = BIO_new_file(esni_key_file_name, "rb");
+        EVP_PKEY *pkey = PEM_read_bio_PrivateKey(bio, NULL, NULL, NULL);
+        if (pkey == NULL) {
+            DBG_PRINTF("%s", "failed to load private key");
+            ret = PICOQUIC_ERROR_INVALID_FILE;
+        } else {
+#endif
             quic->esni_key_exchange[esni_key_exchange_count] = (ptls_key_exchange_context_t*)malloc(sizeof(ptls_key_exchange_context_t));
             if (quic->esni_key_exchange[esni_key_exchange_count] == NULL) {
                 DBG_PRINTF("%s", "no memory for ESNI private key\n");
@@ -2285,14 +2296,19 @@ int picoquic_esni_load_key(picoquic_quic_t * quic, char const * esni_key_file_na
             else {
                 EVP_PKEY_free(pkey);
             }
+#if 0
             fclose(fp);
+#endif
         }
+#if 1
+        BIO_free(bio);
+#endif
     }
 
     return ret;
 }
 
-static int picoquic_esni_load_rr(char const * esni_rr_file_name, uint8_t *esnikeys, size_t esnikeys_max, size_t *esnikeys_len)
+int picoquic_esni_load_rr(char const * esni_rr_file_name, uint8_t *esnikeys, size_t esnikeys_max, size_t *esnikeys_len)
 {
     FILE * fp = NULL;
     int ret = 0;
@@ -2381,3 +2397,4 @@ int picoquic_esni_client_from_file(picoquic_cnx_t * cnx, char const * esni_rr_fi
 
     return ret;
 }
+
