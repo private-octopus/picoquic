@@ -26,6 +26,12 @@
 #include "h3zero.h"
 #include "democlient.h"
 #include "demoserver.h"
+/* Include picotls.h in order to support tests of ESNI */
+#ifdef _WINDOWS
+#include "wincompat.h"
+#endif
+#include "picotls.h"
+#include "tls_api.h"
 
 /*
  * Test of the prefixed integer encoding
@@ -886,7 +892,26 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
         }
     }
 
-    /* TODO: Verify that ESNI was properly negotiated */
+    /* Verify that ESNI was properly negotiated, ut only if ESNI is supported in local version of Picotls */
+#ifdef PTLS_ESNI_NONCE_SIZE
+    if (ret == 0 && do_esni) {
+        if (picoquic_esni_version(test_ctx->cnx_client) == 0) {
+            DBG_PRINTF("%s", "ESNI not negotiated for client connection.\n");
+            ret = -1;
+        } else if (picoquic_esni_version(test_ctx->cnx_server) == 0) {
+            DBG_PRINTF("%s", "ESNI not negotiated for server connection.\n");
+            ret = -1;
+        } else if(picoquic_esni_version(test_ctx->cnx_client) != picoquic_esni_version(test_ctx->cnx_server)) {
+            DBG_PRINTF("ESNI client version %d, server version %d.\n",
+                picoquic_esni_version(test_ctx->cnx_client), picoquic_esni_version(test_ctx->cnx_server));
+                ret = -1;
+        }
+        else if (memcmp(picoquic_esni_nonce(test_ctx->cnx_client), picoquic_esni_nonce(test_ctx->cnx_server), PTLS_ESNI_NONCE_SIZE) != 0) {
+            DBG_PRINTF("%s", "Client and server nonce do not match.\n");
+            ret = -1;
+        }
+    }
+#endif
 
     picoquic_demo_client_delete_context(&callback_ctx);
 

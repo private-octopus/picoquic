@@ -345,6 +345,8 @@ typedef struct st_picoquic_quic_t {
     struct st_picoquic_cnx_t* cnx_wake_first;
     struct st_picoquic_cnx_t* cnx_wake_last;
 
+    struct st_picoquic_cnx_t* cnx_in_progress;
+
     picohash_table* table_cnx_by_id;
     picohash_table* table_cnx_by_net;
 
