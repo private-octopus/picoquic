@@ -1107,9 +1107,9 @@ int picoquic_prepare_misc_frame(picoquic_misc_frame_header_t* misc_frame, uint8_
 int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_t* bytes, size_t bytes_max,
     int epoch, struct sockaddr* addr_from, struct sockaddr* addr_to, uint64_t current_time);
 
-int picoquic_skip_frame(uint8_t* bytes, size_t bytes_max, size_t* consumed, int* pure_ack);
+int picoquic_skip_frame(picoquic_cnx_t* cnx, uint8_t* bytes, size_t bytes_max, size_t* consumed, int* pure_ack);
 
-int picoquic_decode_closing_frames(uint8_t* bytes,
+int picoquic_decode_closing_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
     size_t bytes_max, int* closing_received);
 
 uint64_t picoquic_decode_transport_param_stream_id(uint64_t rank, int extension_mode, int stream_type);

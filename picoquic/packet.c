@@ -881,7 +881,7 @@ void picoquic_ignore_incoming_handshake(
     while (ret == 0 && byte_index < ph->payload_length) {
         size_t frame_length = 0;
         int frame_is_pure_ack = 0;
-        ret = picoquic_skip_frame(&bytes[byte_index],
+        ret = picoquic_skip_frame(cnx, &bytes[byte_index],
             ph->payload_length - byte_index, &frame_length, &frame_is_pure_ack);
         byte_index += (uint32_t)frame_length;
         if (frame_is_pure_ack == 0) {
@@ -1562,7 +1562,7 @@ int picoquic_incoming_encrypted(
                 int closing_received = 0;
 
                 ret = picoquic_decode_closing_frames(
-                    bytes + ph->offset, ph->payload_length, &closing_received);
+                    cnx, bytes + ph->offset, ph->payload_length, &closing_received);
 
                 if (ret == 0) {
                     if (closing_received) {
