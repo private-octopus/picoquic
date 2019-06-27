@@ -69,7 +69,7 @@ int demo_client_prepare_to_send(void * context, size_t space, size_t echo_length
                     buffer[r] = '\r';
                 }
                 r++;
-                if (r >= 0 && r < available) {
+                if (r >= 0 && (unsigned int)r < available) {
                     buffer[r] = '\n';
                 }
                 r += 73;
@@ -391,7 +391,7 @@ int picoquic_demo_client_start_streams(picoquic_cnx_t* cnx,
                     ctx->demo_stream[i].doc_name,
                     ctx->demo_stream[i].f_name,
                     ctx->demo_stream[i].is_binary,
-                    ctx->demo_stream[i].post_size,
+                    (size_t)ctx->demo_stream[i].post_size,
                     repeat_nb);
                 repeat_nb++;
             } while (ret == 0 && repeat_nb < ctx->demo_stream[i].repeat_count);

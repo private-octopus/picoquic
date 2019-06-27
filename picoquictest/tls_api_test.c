@@ -755,7 +755,7 @@ int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_versi
                 /* Create a client connection */
                 test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
                     picoquic_null_connection_id, picoquic_null_connection_id,
-                    (struct sockaddr*)&test_ctx->server_addr, 0,
+                    (struct sockaddr*)&test_ctx->server_addr, *p_simulated_time,
                     proposed_version, sni, alpn, 1);
 
                 if (test_ctx->cnx_client == NULL) {
@@ -5759,7 +5759,7 @@ int optimistic_ack_test_one(int shall_spoof_ack)
         int nb_inactive = 0;
         uint64_t hole_number = 0;
 
-        while (ret == 0 && nb_trials < 64000 && nb_inactive < 256 && TEST_CLIENT_READY && TEST_SERVER_READY) {
+        while (ret == 0 && nb_trials < 64000 && nb_inactive < 1024 && TEST_CLIENT_READY && TEST_SERVER_READY) {
             int was_active = 0;
 
             nb_trials++;

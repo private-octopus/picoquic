@@ -3449,7 +3449,7 @@ uint8_t* picoquic_decode_datagram_frame(picoquic_cnx_t* cnx, uint8_t* bytes, con
     if (bytes != NULL) {
         if (cnx->callback_fn != NULL) {
             /* submit the data to the app */
-            if (cnx->callback_fn(cnx, id, bytes, length, picoquic_callback_datagram,
+            if (cnx->callback_fn(cnx, id, bytes, (size_t)length, picoquic_callback_datagram,
                 cnx->callback_ctx, NULL) != 0) {
                 picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
                 bytes = NULL;

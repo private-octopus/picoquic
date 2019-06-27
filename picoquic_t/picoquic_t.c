@@ -176,7 +176,8 @@ static const picoquic_test_def_t test_table[] = {
     { "parse_demo_scenario", parse_demo_scenario_test },
     { "h3zero_server", h3zero_server_test },
     { "h09_server", h09_server_test },
-    { "generic_server", generic_server_test}
+    { "generic_server", generic_server_test},
+    { "esni", esni_test }
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);
@@ -226,6 +227,7 @@ int usage(char const * argv0)
     fprintf(stderr, "  -s nnn            Run stress for nnn minutes.\n");
     fprintf(stderr, "  -f nnn            Run fuzz for nnn minutes.\n");
     fprintf(stderr, "  -n                Disable debug prints.\n");
+    fprintf(stderr, "  -r                Retry failed tests with debug print enabled.\n");
     fprintf(stderr, "  -h                Print this help message\n");
     fprintf(stderr, "  -S solution_dir   Set the path to the source files to find the default files\n");
 
@@ -257,6 +259,7 @@ int main(int argc, char** argv)
     int do_fuzz = 0;
     int do_stress = 0;
     int disable_debug = 0;
+    int retry_failed_test = 0;
 
     if (test_status == NULL)
     {
@@ -265,7 +268,7 @@ int main(int argc, char** argv)
     }
     else
     {
-        while (ret == 0 && (opt = getopt(argc, argv, "f:s:S:x:nh")) != -1) {
+        while (ret == 0 && (opt = getopt(argc, argv, "f:s:S:x:nrh")) != -1) {
             switch (opt) {
             case 'x': {
                 int test_number = get_test_number(optarg);
@@ -302,10 +305,13 @@ int main(int argc, char** argv)
             case 'n':
                 disable_debug = 1;
                 break;
+            case 'r':
+                retry_failed_test = 1;
+                break;
             case 'h':
                 usage(argv[0]);
-                exit(0);
-                break;
+exit(0);
+break;
             default:
                 ret = usage(argv[0]);
                 break;
@@ -324,7 +330,7 @@ int main(int argc, char** argv)
                 for (size_t i = 0; i < nb_tests; i++) {
                     if (strcmp(test_table[i].test_name, "stress") == 0)
                     {
-                        if (do_stress == 0){
+                        if (do_stress == 0) {
                             test_status[i] = test_excluded;
                         }
                     }
@@ -332,7 +338,8 @@ int main(int argc, char** argv)
                         if (do_fuzz == 0) {
                             test_status[i] = test_excluded;
                         }
-                    } else {
+                    }
+                    else {
                         test_status[i] = test_excluded;
                     }
                 }
@@ -351,7 +358,8 @@ int main(int argc, char** argv)
                             test_status[i] = test_failed;
                             nb_test_failed++;
                             ret = -1;
-                        } else {
+                        }
+                        else {
                             test_status[i] = test_success;
                         }
                     }
@@ -359,7 +367,8 @@ int main(int argc, char** argv)
                         fprintf(stderr, "test number %d (%s) is bypassed.\n", (int)i, test_table[i].test_name);
                     }
                 }
-            } else {
+            }
+            else {
                 for (int arg_num = optind; arg_num < argc; arg_num++) {
                     int test_number = get_test_number(argv[arg_num]);
 
@@ -373,7 +382,8 @@ int main(int argc, char** argv)
                             test_status[test_number] = test_failed;
                             nb_test_failed++;
                             ret = -1;
-                        } else if (test_status[test_number] == test_not_run) {
+                        }
+                        else if (test_status[test_number] == test_not_run) {
                             test_status[test_number] = test_success;
                         }
                         break;
@@ -395,6 +405,49 @@ int main(int argc, char** argv)
                 }
             }
             fprintf(stderr, "\n");
+
+            if (disable_debug && retry_failed_test) {
+                debug_printf_push_stream(stderr);
+                debug_printf_resume();
+                ret = 0;
+                for (size_t i = 0; i < nb_tests; i++) {
+                    int is_fuzz = 0;
+                    if (strcmp("stress", test_table[i].test_name) == 0 ||
+                        strcmp("fuzz", test_table[i].test_name) == 0 ||
+                        strcmp("fuzz_initial", test_table[i].test_name) == 0) {
+                        is_fuzz = 1;
+                    }
+                    if (test_status[i] == test_failed) {
+                        fprintf(stderr, "Retrying %s:\n", test_table[i].test_name);
+                        if (is_fuzz) {
+                            debug_printf_suspend();
+                        }
+                        if (do_one_test(i, stdout) != 0) {
+                            test_status[i] = test_failed;
+                            ret = -1;
+                        }
+                        else {
+                            /* This was a Heisenbug.. */
+                            test_status[i] = test_success;
+                        }
+                        if (is_fuzz) {
+                            debug_printf_resume();
+                        }
+                    }
+                }
+                if (ret == 0) {
+                    fprintf(stderr, "All tests pass after second try.\n");
+                }
+                else {
+                    fprintf(stderr, "Still failing: ");
+                    for (size_t i = 0; i < nb_tests; i++) {
+                        if (test_status[i] == test_failed) {
+                            fprintf(stderr, "%s ", test_table[i].test_name);
+                        }
+                    }
+                    fprintf(stderr, "\n");
+                }
+            }
         }
 
         free(test_status);
