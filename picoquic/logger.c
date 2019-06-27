@@ -196,6 +196,9 @@ char const* picoquic_log_state_name(picoquic_state_enum state)
     case picoquic_state_handshake_failure:
         state_name = "handshake_failure";
         break;
+    case picoquic_state_handshake_failure_resend:
+        state_name = "handshake_failure_resend";
+        break;
     case picoquic_state_server_almost_ready:
         state_name = "server_almost_ready";
         break;

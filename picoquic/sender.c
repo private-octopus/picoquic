@@ -2095,6 +2095,10 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
             packet_type = picoquic_packet_initial;
         }
         break;
+    case picoquic_state_handshake_failure_resend:
+        pc = picoquic_packet_context_handshake;
+        packet_type = picoquic_packet_handshake;
+        break;
     case picoquic_state_disconnecting:
         packet_type = picoquic_packet_1rtt_protected;
         is_cleartext_mode = 0;
@@ -2207,7 +2211,9 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
             *next_wake_time = exit_time;
         }
         length = 0;
-    } else if (ret == 0 && (cnx->cnx_state == picoquic_state_disconnecting || cnx->cnx_state == picoquic_state_handshake_failure)) {
+    } else if (ret == 0 && (cnx->cnx_state == picoquic_state_disconnecting || 
+        cnx->cnx_state == picoquic_state_handshake_failure || 
+        cnx->cnx_state == picoquic_state_handshake_failure_resend)) {
         length = picoquic_predict_packet_header_length(
             cnx, packet_type);
         packet->ptype = packet_type;
@@ -2248,6 +2254,15 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
         }
 
         if (cnx->cnx_state == picoquic_state_handshake_failure) {
+            if (pc == picoquic_packet_context_initial &&
+                cnx->crypto_context[2].aead_encrypt != NULL) {
+                cnx->cnx_state = picoquic_state_handshake_failure_resend;
+            }
+            else {
+                cnx->cnx_state = picoquic_state_disconnected;
+            }
+        }
+        else if (cnx->cnx_state == picoquic_state_handshake_failure_resend) {
             cnx->cnx_state = picoquic_state_disconnected;
         }
         else {
@@ -2759,6 +2774,7 @@ int picoquic_prepare_segment(picoquic_cnx_t* cnx, picoquic_path_t * path_x, pico
             ret = picoquic_prepare_packet_ready(cnx, path_x, packet, current_time, send_buffer, send_buffer_max, send_length, next_wake_time);
             break;
         case picoquic_state_handshake_failure:
+        case picoquic_state_handshake_failure_resend:
         case picoquic_state_disconnecting:
         case picoquic_state_closing_received:
         case picoquic_state_closing:

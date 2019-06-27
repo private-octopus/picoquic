@@ -122,6 +122,7 @@ typedef enum {
     picoquic_state_client_handshake_start,
     picoquic_state_client_handshake_progress,
     picoquic_state_handshake_failure,
+    picoquic_state_handshake_failure_resend,
     picoquic_state_client_almost_ready,
     picoquic_state_server_almost_ready,
     picoquic_state_server_false_start,
