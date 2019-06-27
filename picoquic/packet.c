@@ -728,7 +728,7 @@ int picoquic_prepare_version_negotiation(
  * the server can respond with a public reset.
  *
  * Per draft 14, the stateless reset starts with the packet code 0K110000.
- * The packet has after the first byte at least 20 random bytes, and then
+ * The packet has after the first byte at least 23 random bytes, and then
  * the 16 bytes reset token.
  */
 void picoquic_process_unexpected_cnxid(
@@ -739,19 +739,20 @@ void picoquic_process_unexpected_cnxid(
     unsigned long if_index_to,
     picoquic_packet_header* ph)
 {
-    if (length >= PICOQUIC_RESET_PACKET_MIN_SIZE && 
+    if (length > PICOQUIC_RESET_PACKET_MIN_SIZE && 
         ph->ptype == picoquic_packet_1rtt_protected) {
         picoquic_stateless_packet_t* sp = picoquic_create_stateless_packet(quic);
         if (sp != NULL) {
-            uint32_t pad_size = length - 17;
+            uint32_t pad_size = length - PICOQUIC_RESET_SECRET_SIZE -1;
             uint8_t* bytes = sp->bytes;
             size_t byte_index = 0;
 
-            if (pad_size > 20) {
-                pad_size = (uint32_t)picoquic_public_uniform_random(pad_size - 20) + 20;
+            if (pad_size > PICOQUIC_RESET_PACKET_PAD_SIZE) {
+                pad_size = (uint32_t)picoquic_public_uniform_random(pad_size - PICOQUIC_RESET_PACKET_PAD_SIZE)
+                    + PICOQUIC_RESET_PACKET_PAD_SIZE;
             }
             else {
-                pad_size = 20;
+                pad_size = PICOQUIC_RESET_PACKET_PAD_SIZE;
             }
 
             /* Packet type set to short header, randomize the 5 lower bits */
