@@ -4039,7 +4039,7 @@ int rebinding_stress_test()
                 /* 49% chance of packet injection, 20% chances of reusing test address */
                 uint64_t rand100 = picoquic_test_uniform_random(&random_context, 100);
                 last_inject_time = server_arrival;
-                if (rand100 < 49) {
+                if (rand100 < 39) {
                     struct sockaddr * bad_address;
                     if (rand100 < 20) {
                         bad_address = (struct sockaddr *)&hack_address;

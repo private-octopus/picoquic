@@ -3332,14 +3332,15 @@ uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, uint8_t* bytes
             }
 
             if (found_challenge) {
-                if ((addr_from == NULL || picoquic_compare_addr(addr_from, (struct sockaddr *)&cnx->path[i]->peer_addr) == 0) &&
-                    (addr_to == NULL || picoquic_compare_addr(addr_to, (struct sockaddr *)&cnx->path[i]->local_addr) == 0)) {
-                    cnx->path[i]->challenge_verified = 1;
-                }
-                else {
-                    DBG_PRINTF("%s", "Challenge response from different address, ignored.\n");
-                }
-                break;
+                if (picoquic_supported_versions[cnx->version_index].version != PICOQUIC_TWELFTH_INTEROP_VERSION ||
+                    ((addr_from == NULL || picoquic_compare_addr(addr_from, (struct sockaddr *)&cnx->path[i]->peer_addr) == 0) &&
+                        (addr_to == NULL || picoquic_compare_addr(addr_to, (struct sockaddr *)&cnx->path[i]->local_addr) == 0))) {
+                        cnx->path[i]->challenge_verified = 1;
+                    }
+                    else {
+                        DBG_PRINTF("%s", "Challenge response from different address, ignored.\n");
+                    }
+                    break;
             }
             else {
                 for (int ichal = 0; ichal < PICOQUIC_CHALLENGE_REPEAT_MAX; ichal++) {
@@ -3349,8 +3350,9 @@ uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, uint8_t* bytes
                     }
                 }
                 if (found_challenge) {
-                    if ((addr_from == NULL || picoquic_compare_addr(addr_from, (struct sockaddr *)&cnx->path[i]->alt_peer_addr) == 0) &&
-                        (addr_to == NULL || picoquic_compare_addr(addr_to, (struct sockaddr *)&cnx->path[i]->alt_local_addr) == 0)) {
+                    if (picoquic_supported_versions[cnx->version_index].version != PICOQUIC_TWELFTH_INTEROP_VERSION ||
+                        ((addr_from == NULL || picoquic_compare_addr(addr_from, (struct sockaddr *)&cnx->path[i]->alt_peer_addr) == 0) &&
+                        (addr_to == NULL || picoquic_compare_addr(addr_to, (struct sockaddr *)&cnx->path[i]->alt_local_addr) == 0))) {
                         /* Promote the alt address to valid address */
                         cnx->path[i]->peer_addr_len = picoquic_store_addr(&cnx->path[i]->peer_addr, (struct sockaddr *)&cnx->path[i]->alt_peer_addr);
                         cnx->path[i]->local_addr_len = picoquic_store_addr(&cnx->path[i]->local_addr, (struct sockaddr *)&cnx->path[i]->alt_local_addr);
