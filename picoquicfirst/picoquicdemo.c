@@ -163,7 +163,9 @@ int quic_server(const char* server_name, int server_port,
     const char* pem_cert, const char* pem_key,
     int just_once, int do_hrr, picoquic_connection_id_cb_fn cnx_id_callback,
     void* cnx_id_callback_ctx, uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE],
-    int dest_if, int mtu_max, uint32_t proposed_version, FILE * F_log, char const * cc_log_dir, int use_long_log)
+    int dest_if, int mtu_max, uint32_t proposed_version, 
+    const char * esni_key_file_name, const char * esni_rr_file_name,
+    FILE * F_log, char const * cc_log_dir, int use_long_log)
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
@@ -217,6 +219,13 @@ int quic_server(const char* server_name, int server_port,
 
             if (cc_log_dir != NULL) {
                 picoquic_set_cc_log(qserver, cc_log_dir);
+            }
+
+            if (esni_key_file_name != NULL && esni_rr_file_name != NULL) {
+                ret = picoquic_esni_load_key(qserver, esni_key_file_name);
+                if (ret == 0) {
+                    ret = picoquic_esni_server_setup(qserver, esni_rr_file_name);
+                }
             }
         }
     }
@@ -410,7 +419,7 @@ int quic_client_migrate(picoquic_cnx_t * cnx, SOCKET_TYPE * fd, struct sockaddr 
         }
     }
 
-    if (ret == 0){
+    if (ret == 0) {
         if (force_migration == 1) {
             fprintf(stdout, "Switch to new port. Will test NAT rebinding support.\n");
             if (F_log != stdout && F_log != stderr && F_log != NULL)
@@ -478,7 +487,8 @@ int quic_client_migrate(picoquic_cnx_t * cnx, SOCKET_TYPE * fd, struct sockaddr 
 }
 
 /* Quic Client */
-int quic_client(const char* ip_address_text, int server_port, const char * sni,
+int quic_client(const char* ip_address_text, int server_port, 
+    const char * sni, const char * esni_rr_file,
     const char * alpn, const char * root_crt,
     uint32_t proposed_version, int force_zero_share, int force_migration,
     int nb_packets_before_key_update, int mtu_max, FILE* F_log,
@@ -631,6 +641,10 @@ int quic_client(const char* ip_address_text, int server_port, const char * sni,
 
             if (callback_ctx.tp != NULL) {
                 picoquic_set_transport_parameters(cnx_client, callback_ctx.tp);
+            }
+
+            if (esni_rr_file != NULL) {
+                ret = picoquic_esni_client_from_file(cnx_client, esni_rr_file);
             }
 
             ret = picoquic_start_client_cnx(cnx_client);
@@ -1001,6 +1015,8 @@ void usage()
     fprintf(stderr, "                            3: same as 0, plus encryption of all data\n");
     fprintf(stderr, "                        val and mask must be hex strings of same length, 4 to 18\n");
     fprintf(stderr, "  -k file               key file (default: %s)\n", SERVER_KEY_FILE);
+    fprintf(stderr, "  -K file               ESNI private key file (default: don't use ESNI)\n");
+    fprintf(stderr, "  -E file               ESNI RR file (default: don't use ESNI)\n");
     fprintf(stderr, "  -l file               Log file, Log to stdout if file = \"n\". No logging if absent.\n");
     fprintf(stderr, "  -L                    Log all packets. If absent, log stops after 100 packets.\n");
     fprintf(stderr, "  -p port               server port (default: %d)\n", default_server_port);
@@ -1038,10 +1054,12 @@ void usage()
 int main(int argc, char** argv)
 {
     const char * solution_dir = NULL;
-    const char* server_name = default_server_name;
-    const char* server_cert_file = NULL;
-    const char* server_key_file = NULL;
-    const char* log_file = NULL;
+    const char * server_name = default_server_name;
+    const char * server_cert_file = NULL;
+    const char * server_key_file = NULL;
+    const char * esni_key_file = NULL;
+    const char * esni_rr_file = NULL;
+    const char * log_file = NULL;
     const char * sni = NULL;
     const char * alpn = NULL;
     const char * cc_log_dir = NULL;
@@ -1076,13 +1094,16 @@ int main(int argc, char** argv)
 
     /* Get the parameters */
     int opt;
-    while ((opt = getopt(argc, argv, "c:k:p:u:v:f:i:s:e:l:m:n:a:t:S:I:g:1rhzDL")) != -1) {
+    while ((opt = getopt(argc, argv, "c:k:K:p:u:v:f:i:s:e:E:l:m:n:a:t:S:I:g:1rhzDL")) != -1) {
         switch (opt) {
         case 'c':
             server_cert_file = optarg;
             break;
         case 'k':
             server_key_file = optarg;
+            break;
+        case 'K':
+            esni_key_file = optarg;
             break;
         case 'p':
             if ((server_port = atoi(optarg)) <= 0) {
@@ -1125,6 +1146,9 @@ int main(int argc, char** argv)
             break;
         case 'e':
             dest_if = atoi(optarg);
+            break;
+        case 'E':
+            esni_rr_file = optarg;
             break;
         case 'i':
             if (optind + 2 > argc) {
@@ -1262,12 +1286,14 @@ int main(int argc, char** argv)
             server_cert_file, server_key_file, just_once, do_hrr,
             (cnx_id_cbdata == NULL) ? NULL : picoquic_connection_id_callback,
             (cnx_id_cbdata == NULL) ? NULL : (void*)cnx_id_cbdata,
-            (uint8_t*)reset_seed, dest_if, mtu_max, proposed_version, F_log, cc_log_dir, use_long_log);
+            (uint8_t*)reset_seed, dest_if, mtu_max, proposed_version,
+            esni_key_file, esni_rr_file,
+            F_log, cc_log_dir, use_long_log);
         printf("Server exit with code = %d\n", ret);
     } else {
         /* Run as client */
         printf("Starting PicoQUIC connection to server IP = %s, port = %d\n", server_name, server_port);
-        ret = quic_client(server_name, server_port, sni, alpn, root_trust_file, proposed_version, force_zero_share, 
+        ret = quic_client(server_name, server_port, sni, esni_rr_file, alpn, root_trust_file, proposed_version, force_zero_share, 
             force_migration, nb_packets_before_update, mtu_max, F_log, client_cnx_id_length, client_scenario, cc_log_dir, no_disk, use_long_log);
 
         printf("Client exit with code = %d\n", ret);

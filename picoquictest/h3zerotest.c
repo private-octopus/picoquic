@@ -26,6 +26,12 @@
 #include "h3zero.h"
 #include "democlient.h"
 #include "demoserver.h"
+/* Include picotls.h in order to support tests of ESNI */
+#ifdef _WINDOWS
+#include "wincompat.h"
+#endif
+#include "picotls.h"
+#include "tls_api.h"
 
 /*
  * Test of the prefixed integer encoding
@@ -703,7 +709,66 @@ static size_t const demo_test_stream_length[] = {
     190
 };
 
-static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server_callback_fn)
+uint64_t demo_server_test_time_from_esni_rr(char const * esni_rr_file)
+{
+    uint8_t esnikeys[2048];
+    size_t esnikeys_len;
+    uint64_t not_before = 0;
+    uint64_t not_after = 0;
+    uint64_t esni_start = 0;
+    uint16_t version = 0;
+    uint16_t l;
+
+    /* Load the rr file */
+    if (picoquic_esni_load_rr(esni_rr_file, esnikeys, sizeof(esnikeys), &esnikeys_len) == 0)
+    {
+        size_t byte_index = 0;
+
+        if (byte_index + 2 <= esnikeys_len) {
+            version = PICOPARSE_16(&esnikeys[byte_index]);
+            byte_index += 2;
+        }
+        /* 4 bytes checksum */
+        byte_index += 4;
+        /* If > V2, 16 bits length + published SNI */
+        if (version != 0xFF01 && byte_index + 2 <= esnikeys_len) {
+            l = PICOPARSE_16(&esnikeys[byte_index]);
+            byte_index += 2 + l;
+        }
+        /* 16 bits length + key exchanges */
+        if (byte_index + 2 <= esnikeys_len) {
+            l = PICOPARSE_16(&esnikeys[byte_index]);
+            byte_index += 2 + l;
+        }
+        /* 16 bits length + ciphersuites */
+        if (byte_index + 2 <= esnikeys_len) {
+            l = PICOPARSE_16(&esnikeys[byte_index]);
+            byte_index += 2 + l;
+        }
+        /* 16 bits padded length */
+        byte_index += 2;
+        /* 64 bits not before */
+        if (byte_index + 8 <= esnikeys_len) {
+            not_before = PICOPARSE_64(&esnikeys[byte_index]);
+            byte_index += 8;
+        }
+        /* 64 bits not after */
+        if (byte_index + 8 <= esnikeys_len) {
+            not_after = PICOPARSE_64(&esnikeys[byte_index]);
+            byte_index += 8;
+        }
+        else {
+            not_after = not_before;
+        }
+        /* 16 bits length + extensions. ignored */
+    }
+    esni_start = ((not_before + not_after) / 2) * 1000000;
+
+    return esni_start;
+}
+
+static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server_callback_fn,
+    int do_esni)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -713,6 +778,21 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     picoquic_demo_callback_ctx_t callback_ctx;
     int ret;
+    /* Locate the esni record and key files */
+    char test_server_esni_key_file[512];
+    char test_server_esni_rr_file[512];
+
+    if (do_esni) {
+        ret = picoquic_get_input_path(test_server_esni_key_file, sizeof(test_server_esni_key_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_ESNI_KEY);
+
+        if (ret == 0) {
+            ret = picoquic_get_input_path(test_server_esni_rr_file, sizeof(test_server_esni_rr_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_ESNI_RR);
+        }
+
+        if (ret == 0) {
+            simulated_time = demo_server_test_time_from_esni_rr(test_server_esni_rr_file);
+        }
+    }
 
     ret = picoquic_demo_client_initialize_context(&callback_ctx, demo_test_scenario, nb_demo_test_scenario, alpn, 0);
 
@@ -736,6 +816,21 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
     if (ret == 0) {
         picoquic_set_default_callback(test_ctx->qserver, server_callback_fn, NULL);
         picoquic_set_callback(test_ctx->cnx_client, picoquic_demo_client_callback, &callback_ctx);
+        if (do_esni) {
+            /* Add the esni parameters to the server */
+            if (ret == 0) {
+                ret = picoquic_esni_load_key(test_ctx->qserver, test_server_esni_key_file);
+            }
+
+            if (ret == 0) {
+                ret = picoquic_esni_server_setup(test_ctx->qserver, test_server_esni_rr_file);
+            }
+
+            /* Add the SNI parameters to the client */
+            if (ret == 0) {
+                ret = picoquic_esni_client_from_file(test_ctx->cnx_client, test_server_esni_rr_file);
+            }
+        }
         ret = picoquic_start_client_cnx(test_ctx->cnx_client);
     }
 
@@ -797,6 +892,27 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
         }
     }
 
+    /* Verify that ESNI was properly negotiated, ut only if ESNI is supported in local version of Picotls */
+#ifdef PTLS_ESNI_NONCE_SIZE
+    if (ret == 0 && do_esni) {
+        if (picoquic_esni_version(test_ctx->cnx_client) == 0) {
+            DBG_PRINTF("%s", "ESNI not negotiated for client connection.\n");
+            ret = -1;
+        } else if (picoquic_esni_version(test_ctx->cnx_server) == 0) {
+            DBG_PRINTF("%s", "ESNI not negotiated for server connection.\n");
+            ret = -1;
+        } else if(picoquic_esni_version(test_ctx->cnx_client) != picoquic_esni_version(test_ctx->cnx_server)) {
+            DBG_PRINTF("ESNI client version %d, server version %d.\n",
+                picoquic_esni_version(test_ctx->cnx_client), picoquic_esni_version(test_ctx->cnx_server));
+                ret = -1;
+        }
+        else if (memcmp(picoquic_esni_nonce(test_ctx->cnx_client), picoquic_esni_nonce(test_ctx->cnx_server), PTLS_ESNI_NONCE_SIZE) != 0) {
+            DBG_PRINTF("%s", "Client and server nonce do not match.\n");
+            ret = -1;
+        }
+    }
+#endif
+
     picoquic_demo_client_delete_context(&callback_ctx);
 
     if (test_ctx != NULL) {
@@ -809,25 +925,25 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
 
 int h3zero_server_test()
 {
-    return demo_server_test("h3-19", h3zero_server_callback);
+    return demo_server_test("h3-19", h3zero_server_callback, 0);
 }
 
 int h09_server_test()
 {
-    return demo_server_test("hq-19", picoquic_h09_server_callback);
+    return demo_server_test("hq-19", picoquic_h09_server_callback, 0);
 }
 
 int generic_server_test()
 {
     char const * alpn_09 = "hq-19";
     char const * alpn_3 = "h3-19";
-    int ret = demo_server_test(alpn_09, picoquic_demo_server_callback);
+    int ret = demo_server_test(alpn_09, picoquic_demo_server_callback, 0);
 
     if (ret != 0) {
         DBG_PRINTF("Generic server test fails for %s\n", alpn_09);
     }
     else {
-        ret = demo_server_test(alpn_3, picoquic_demo_server_callback);
+        ret = demo_server_test(alpn_3, picoquic_demo_server_callback, 0);
 
         if (ret != 0) {
             DBG_PRINTF("Generic server test fails for %s\n", alpn_3);
@@ -835,4 +951,9 @@ int generic_server_test()
     }
 
     return ret;
+}
+
+int esni_test()
+{
+    return demo_server_test("h3-19", h3zero_server_callback, 1);
 }

@@ -10,7 +10,7 @@ foreach ($dir in "$Env:OPENSSLDIR","$Env:OPENSSL64DIR") {
 }
 
 pushd ..
-git clone --branch master --single-branch https://github.com/h2o/picotls 2>&1 | %{ "$_" }
+git clone https://github.com/h2o/picotls 2>&1 | %{ "$_" }
 cd picotls
 git checkout -q "$COMMIT_ID"
 git apply ..\picoquic\ci\picotls-win32.patch

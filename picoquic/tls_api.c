@@ -46,6 +46,13 @@
 #define PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION 0xFFA5
 #define PICOQUIC_TRANSPORT_PARAMETERS_MAX_SIZE 256
 
+#ifdef PTLS_ESNI_NONCE_SIZE
+#define PICOQUIC_ESNI_NONCE_SIZE PTLS_ESNI_NONCE_SIZE
+#else 
+#define PICOQUIC_ESNI_NONCE_SIZE 16
+#endif
+
+
 typedef struct st_picoquic_tls_ctx_t {
     ptls_t* tls;
     picoquic_cnx_t* cnx;
@@ -57,6 +64,8 @@ typedef struct st_picoquic_tls_ctx_t {
     uint8_t ext_received[PICOQUIC_TRANSPORT_PARAMETERS_MAX_SIZE];
     size_t ext_received_length;
     int ext_received_return;
+    uint16_t esni_version;
+    uint8_t esni_nonce[PICOQUIC_ESNI_NONCE_SIZE];
     uint8_t app_secret_enc[PTLS_MAX_DIGEST_SIZE];
     uint8_t app_secret_dec[PTLS_MAX_DIGEST_SIZE];
 } picoquic_tls_ctx_t;
@@ -365,6 +374,18 @@ int picoquic_client_hello_call_back(ptls_on_client_hello_t* on_hello_cb_ctx,
 
     /* Save the server name */
     ptls_set_server_name(tls, (const char *)params->server_name.base, params->server_name.len);
+
+#ifdef PTLS_ESNI_NONCE_SIZE
+    if (params->esni && quic->cnx_in_progress != NULL) {
+        /* Find the ESNI secret if any, and copy key values to picoquic tls context */
+        picoquic_tls_ctx_t* tls_ctx = (picoquic_tls_ctx_t*)quic->cnx_in_progress->tls_ctx;
+        struct st_ptls_esni_secret_t * esni = ptls_get_esni_secret(tls_ctx->tls);
+        if (esni != NULL) {
+            tls_ctx->esni_version = esni->version;
+            memcpy(tls_ctx->esni_nonce, esni->nonce, PTLS_ESNI_NONCE_SIZE);
+        }
+    }
+#endif
 
     /* Check if the client is proposing the expected ALPN */
     if (quic->default_alpn != NULL) {
@@ -1531,6 +1552,14 @@ int picoquic_initialize_tls_stream(picoquic_cnx_t* cnx)
 
     /* assume that all the data goes to epoch 0, initial */
     if ((ret == 0 || ret == PTLS_ERROR_IN_PROGRESS)) {
+#ifdef PTLS_ESNI_NONCE_SIZE
+        /* Find the ESNI secret if any, and copy key values to picoquic tls context */
+        struct st_ptls_esni_secret_t * esni = ptls_get_esni_secret(ctx->tls);
+        if (esni != NULL) {
+            ctx->esni_version = esni->version;
+            memcpy(ctx->esni_nonce, esni->nonce, PTLS_ESNI_NONCE_SIZE);
+        }
+#endif
         if (sendbuf.off > 0) {
             ret = picoquic_add_to_tls_stream(cnx, sendbuf.base, sendbuf.off, 0);
         }
@@ -1717,6 +1746,9 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
     int ret = 0;
     picoquic_tls_ctx_t* ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
     size_t next_epoch = 0;
+
+    /* Provide indication of current connection for later callbacks */
+    cnx->quic->cnx_in_progress = cnx;
 
     for (size_t epoch = 0; epoch < PICOQUIC_NUMBER_OF_EPOCHS && ret == 0; epoch++) {
         picoquic_stream_head_t* stream = &cnx->tls_stream[epoch];
@@ -2235,4 +2267,178 @@ void picoquic_cid_encrypt_global(void *cid_enc, const picoquic_connection_id_t *
 void picoquic_cid_decrypt_global(void *cid_enc, const picoquic_connection_id_t * cid_in, picoquic_connection_id_t * cid_out)
 {
     picoquic_cid_encrypt_global(cid_enc, cid_in, cid_out);
+}
+
+/* Support for encrypted SNI (ESNI).
+ */
+
+/* Load the ESNI exchange keys. This function must be called at least once
+ * before setting up ESNI for the server. 
+ * esni_key_elements should be declared as an array of ptls_key_exchange_context_t*
+ * of size less than *esni_key_count.
+ * The last element in the array should be a NULL pointer.
+ */
+
+int picoquic_esni_load_key(picoquic_quic_t * quic, char const * esni_key_file_name)
+{
+    EVP_PKEY *pkey = NULL;
+    int ret = 0;
+    size_t esni_key_exchange_count = 0;
+    
+    while (esni_key_exchange_count < 15 &&
+        quic->esni_key_exchange[esni_key_exchange_count] != 0)
+        esni_key_exchange_count++;
+
+    if (quic->esni_key_exchange[esni_key_exchange_count] != 0) {
+        DBG_PRINTF("Too many ESNI private key file, %d already\n", esni_key_exchange_count);
+        ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
+#if 0
+    }
+    else if ((fp = picoquic_file_open(esni_key_file_name, "rt")) == NULL) {
+        DBG_PRINTF("failed to open ESNI private key file:%s\n", esni_key_file_name);
+        ret = PICOQUIC_ERROR_INVALID_FILE;
+    }
+    else {
+        if ((pkey = PEM_read_PrivateKey(fp, NULL, NULL, NULL)) == NULL) {
+            DBG_PRINTF("failed to load private key from file:%s\n", picoquic_file_open);
+            ret = PICOQUIC_ERROR_INVALID_FILE;
+        }
+        else {
+#else
+    } else {
+        BIO* bio = BIO_new_file(esni_key_file_name, "rb");
+        pkey = PEM_read_bio_PrivateKey(bio, NULL, NULL, NULL);
+        if (pkey == NULL) {
+            DBG_PRINTF("%s", "failed to load private key");
+            ret = PICOQUIC_ERROR_INVALID_FILE;
+        } else {
+#endif
+            quic->esni_key_exchange[esni_key_exchange_count] = (ptls_key_exchange_context_t*)malloc(sizeof(ptls_key_exchange_context_t));
+            if (quic->esni_key_exchange[esni_key_exchange_count] == NULL) {
+                DBG_PRINTF("%s", "no memory for ESNI private key\n");
+                ret = PICOQUIC_ERROR_MEMORY;
+            }
+            if ((ret = ptls_openssl_create_key_exchange(&quic->esni_key_exchange[esni_key_exchange_count], pkey)) != 0) {
+                DBG_PRINTF("failed to load private key from file:%s:picotls-error:%d", picoquic_file_open, ret);
+                ret = PICOQUIC_ERROR_INVALID_FILE;
+                free(quic->esni_key_exchange[esni_key_exchange_count]);
+                quic->esni_key_exchange[esni_key_exchange_count] = NULL;
+            }
+            else {
+                EVP_PKEY_free(pkey);
+            }
+#if 0
+            fclose(fp);
+#endif
+        }
+#if 1
+        BIO_free(bio);
+#endif
+    }
+
+    return ret;
+}
+
+int picoquic_esni_load_rr(char const * esni_rr_file_name, uint8_t *esnikeys, size_t esnikeys_max, size_t *esnikeys_len)
+{
+    FILE * fp = NULL;
+    int ret = 0;
+
+    *esnikeys_len = 0;
+
+    if ((fp = picoquic_file_open(esni_rr_file_name, "rb")) == NULL) {
+        fprintf(stderr, "failed to open file:%s\n", esni_rr_file_name);
+        ret = PICOQUIC_ERROR_INVALID_FILE;
+    }
+    else {
+        *esnikeys_len = fread(esnikeys, 1, esnikeys_max, fp);
+        if (*esnikeys_len == 0 || !feof(fp)) {
+            DBG_PRINTF("failed to load ESNI data from file:%s\n", esni_rr_file_name);
+        }
+        fclose(fp);
+    }
+
+    return ret;
+}
+
+/* Setup ESNI by providing a set of RRDATA for the specified context.
+ * The "esni_rr_file_name" file contains the RRDATA of _ESNI RR published for the service in the DNS.
+ * The "esni_key_elements" contains a null terminated array of ptls_key_exchange_context_t* 
+ * TODO: in theory, it should be possible to support multuple ESNI contexts in a single server.
+ * This would require repeated calls to the "init context" API, and an esni vector
+ * containing a longer null terminated list of esni pointers.
+ */
+int picoquic_esni_server_setup(picoquic_quic_t * quic, char const * esni_rr_file_name)
+{
+    uint8_t esnikeys[65536];
+    size_t esnikeys_len;
+    ptls_context_t *ctx = (ptls_context_t *)quic->tls_master_ctx;
+    int ret = 0;
+
+    /* read esnikeys */
+    ret = picoquic_esni_load_rr(esni_rr_file_name, esnikeys, sizeof(esnikeys), &esnikeys_len);
+
+    /* Install the ESNI data in the server context */
+    if (ret == 0) {
+        ctx->esni = malloc(sizeof(*ctx->esni) * 2);
+
+        if (ctx->esni != NULL) {
+            ctx->esni[1] = NULL;
+            ctx->esni[0] = malloc(sizeof(**ctx->esni));
+        }
+
+        if (ctx->esni  == NULL || ctx->esni[0] == NULL) {
+            DBG_PRINTF("%s", "no memory for SNI allocation.\n");
+            ret = PICOQUIC_ERROR_MEMORY;
+        } 
+        else {
+            if ((ret = ptls_esni_init_context(ctx, ctx->esni[0], ptls_iovec_init(esnikeys, esnikeys_len), quic->esni_key_exchange)) != 0) {
+                DBG_PRINTF("failed to parse ESNI data of file:%s:error=%d\n", esni_rr_file_name, ret);
+            }
+        }
+    }
+
+    return ret;
+}
+
+/* Setup the client side ESNI record, prior to using ESNI in a connection attempt. 
+ */
+int picoquic_esni_client_from_file(picoquic_cnx_t * cnx, char const * esni_rr_file_name)
+{
+    int ret = 0;
+    picoquic_tls_ctx_t* ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
+    uint8_t esnikeys[65536];
+    size_t esnikeys_len;
+
+    /* read esnikeys */
+    ret = picoquic_esni_load_rr(esni_rr_file_name, esnikeys, sizeof(esnikeys), &esnikeys_len);
+
+    if (ret == 0) {
+        ctx->handshake_properties.client.esni_keys.base = (uint8_t *) malloc(esnikeys_len);
+        if (ctx->handshake_properties.client.esni_keys.base == NULL) {
+            ctx->handshake_properties.client.esni_keys.len = 0;
+            DBG_PRINTF("%s", "no memory for SNI allocation.\n");
+            ret = PICOQUIC_ERROR_MEMORY;
+        }
+        else {
+            ctx->handshake_properties.client.esni_keys.len = esnikeys_len;
+            memcpy(ctx->handshake_properties.client.esni_keys.base, esnikeys, esnikeys_len);
+        }
+    }
+
+    return ret;
+}
+
+/**
+ * Access to ESNI data for tests
+ */
+
+uint16_t picoquic_esni_version(picoquic_cnx_t * cnx)
+{
+    return(((picoquic_tls_ctx_t*)cnx->tls_ctx)->esni_version);
+}
+
+uint8_t * picoquic_esni_nonce(picoquic_cnx_t * cnx)
+{
+    return(((picoquic_tls_ctx_t*)cnx->tls_ctx)->esni_nonce);
 }
