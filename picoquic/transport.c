@@ -357,9 +357,11 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
             cnx->local_parameters.initial_max_stream_data_uni);
     }
 
-    if (cnx->local_parameters.active_connection_id_limit > 0) {
-        bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_active_connection_id_limit,
-            cnx->local_parameters.active_connection_id_limit);
+    if (picoquic_supported_versions[cnx->version_index].version != PICOQUIC_TWELFTH_INTEROP_VERSION) {
+        if (cnx->local_parameters.active_connection_id_limit > 0) {
+            bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_active_connection_id_limit,
+                cnx->local_parameters.active_connection_id_limit);
+        }
     }
 
     if (cnx->local_parameters.max_ack_delay != PICOQUIC_ACK_DELAY_MAX_DEFAULT) {
@@ -612,6 +614,11 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                 }
             }
         }
+    }
+
+    if (picoquic_supported_versions[cnx->version_index].version == PICOQUIC_TWELFTH_INTEROP_VERSION &&
+        (present_flag&(1ull << picoquic_tp_active_connection_id_limit)) == 0) {
+        cnx->remote_parameters.active_connection_id_limit = PICOQUIC_NB_PATH_TARGET;
     }
 
     if (ret == 0 && cnx->remote_parameters.idle_timeout == 0) {

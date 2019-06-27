@@ -149,10 +149,6 @@ const picoquic_version_parameters_t picoquic_supported_versions[] = {
     { PICOQUIC_TWELFTH_INTEROP_VERSION,
         picoquic_version_header_17,
         sizeof(picoquic_cleartext_draft_17_salt),
-        picoquic_cleartext_draft_17_salt },
-    { PICOQUIC_TWELFTH_INTEROP_DRAFT19,
-        picoquic_version_header_17,
-        sizeof(picoquic_cleartext_draft_17_salt),
         picoquic_cleartext_draft_17_salt }
 };
 
