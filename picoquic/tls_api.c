@@ -2070,33 +2070,98 @@ static int picoquic_get_retry_token_hash(picoquic_quic_t* quic, struct sockaddr 
     return ret;
 }
 
+static void picoquic_server_encrypt_retry_token(picoquic_quic_t* quic, struct sockaddr * addr_peer,
+    uint8_t * token, uint32_t * token_length, uint8_t * text, size_t text_length)
+{
+    /* Assume that the keys are in the quic context
+     * The tickets are composed of a 64 bit "sequence number"
+     * followed by the result of the clear text encryption.
+     */
+    uint64_t sequence;
+    uint8_t* auth_data;
+    size_t auth_data_length;
+
+    if (addr_peer->sa_family == AF_INET) {
+        auth_data = (uint8_t*)&((struct sockaddr_in *)addr_peer)->sin_addr;
+        auth_data_length = 4;
+    }
+    else {
+        auth_data = (uint8_t*)&((struct sockaddr_in6 *)addr_peer)->sin6_addr;
+        auth_data_length = 16;
+    }
+    picoquic_crypto_random(quic, token, 8);
+    sequence = PICOPARSE_64(token);
+
+    *token_length = 8 + (uint32_t)picoquic_aead_encrypt_generic(token + 8, text, text_length,
+        sequence, auth_data, auth_data_length, quic->aead_encrypt_ticket_ctx);
+}
+
+static int picoquic_server_decrypt_retry_token(picoquic_quic_t* quic, struct sockaddr * addr_peer,
+    uint8_t * token, size_t token_length, uint8_t * text, size_t *text_length)
+{
+    int ret = 0;
+    uint64_t sequence;
+    uint8_t* auth_data;
+    size_t auth_data_length;
+
+    if (addr_peer->sa_family == AF_INET) {
+        auth_data = (uint8_t*)&((struct sockaddr_in *)addr_peer)->sin_addr;
+        auth_data_length = 4;
+    }
+    else {
+        auth_data = (uint8_t*)&((struct sockaddr_in6 *)addr_peer)->sin6_addr;
+        auth_data_length = 16;
+    }
+
+    if (token_length < 8) {
+        ret = -1;
+    }
+    else {
+        sequence = PICOPARSE_64(token);
+
+        *text_length = picoquic_aead_decrypt_generic(text, token+8, token_length-8,
+            sequence, auth_data, auth_data_length, quic->aead_decrypt_ticket_ctx);
+        if (*text_length >= token_length - 8) {
+            ret = -1;
+        }
+    }
+
+    return ret;
+}
+
 int picoquic_prepare_retry_token(picoquic_quic_t* quic, struct sockaddr * addr_peer,
     uint64_t current_time, picoquic_connection_id_t * odcid,
     uint8_t * token, uint32_t token_max, uint32_t * token_size)
 {
     int ret = 0;
-    uint32_t token_index = 0;
-    uint32_t min_size = 9 + odcid->id_len + 16;
+    uint32_t min_size = 8 + 9 + odcid->id_len + 16;
 
     *token_size = 0;
     if (min_size > token_max) {
         ret = -1;
     }
     else {
-        /* Encode the clear text components */
-        uint32_t hash_size = 0;
-        picoformat_64(token, current_time);
-        token_index += 8;
-        token[token_index++] = odcid->id_len;
+        uint8_t text[128];
+        size_t text_len = 0;
+        uint64_t token_time = current_time;
+
+        /* set a short life time for short lived tokens, 24 hours otherwise */
+        if (odcid->id_len == 0) {
+            token_time += 24ull * 3600ull * 1000000ull;
+        }
+        else {
+            token_time += 4000000ull;
+        }
+        /* serialize the token components */
+        picoformat_64(text, current_time);
+        text_len += 8;
+        text[text_len++] = odcid->id_len;
         if (odcid->id_len > 0) {
-            memcpy(token + token_index, odcid->id, odcid->id_len);
-            token_index += odcid->id_len;
+            memcpy(text + text_len, odcid->id, odcid->id_len);
+            text_len += odcid->id_len;
         }
-        ret = picoquic_get_retry_token_hash(quic, addr_peer, token, token_index,
-            token + token_index, token_max - token_index, &hash_size);
-        if (ret == 0) {
-            *token_size = token_index + (uint32_t)hash_size;
-        }
+        /* Encode the clear text components */
+        picoquic_server_encrypt_retry_token(quic, addr_peer, token, token_size, text, text_len);
     }
 
     return ret;
@@ -2107,40 +2172,32 @@ int picoquic_verify_retry_token(picoquic_quic_t* quic, struct sockaddr * addr_pe
     uint8_t * token, uint32_t token_size)
 {
     int ret = 0;
-    uint32_t header_size = 9;
+    uint8_t text[128];
+    size_t text_len = 0;
 
-    if (header_size > token_size) {
+    odcid->id_len = 0;
+
+    /* decode the encrypted token */
+    ret = picoquic_server_decrypt_retry_token(quic, addr_peer, token, token_size,
+        text, &text_len);
+    if (text_len < 9) {
         ret = -1;
     }
-    else {
+    if (ret == 0){
         /* Decode the clear text components */
-        uint64_t token_time = PICOPARSE_64(token);
+        uint64_t token_time = PICOPARSE_64(text);
         /* Verify that the token time is not too old */
         if (token_time < current_time) {
             ret = -1;
-        }
-        else {
-            header_size += token[8];
-            if (header_size >= token_size) {
+        } else {
+            odcid->id_len = text[8];
+            
+            if (odcid->id_len + 9 != text_len) {
                 ret = -1;
             }
-            else {
-                uint32_t hash_size = 0;
-                uint8_t expected_hash[PTLS_MAX_DIGEST_SIZE];
-
-                ret = picoquic_get_retry_token_hash(quic, addr_peer, token, header_size,
-                    expected_hash, (uint32_t)sizeof(expected_hash), &hash_size);
-                if (ret == 0) {
-                    if (header_size + hash_size != token_size) {
-                        ret = -1;
-                    } else if (memcmp(expected_hash, token + header_size, hash_size) != 0) {
-                        ret = -1;
-                    }
-                    else {
-                        /* document the odcid if present */
-                        picoquic_parse_connection_id(token + 9, token[8], odcid);
-                    }
-                }
+            else if (odcid->id_len > 0){
+                /* document the odcid if present */
+                picoquic_parse_connection_id(&text[9], text[8], odcid);
             }
         }
     }
