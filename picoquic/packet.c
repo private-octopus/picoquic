@@ -914,9 +914,11 @@ int picoquic_incoming_initial(
     int ret = 0;
 
     if ((*pcnx)->cnx_state == picoquic_state_ready ) {
-        /* Ignoring handshake frames in ready state, but sending ACK
-         * if the client mistakenly repeats them */
-        picoquic_ignore_incoming_handshake(*pcnx, bytes, ph);
+        if (picoquic_supported_versions[(*pcnx)->version_index].version == PICOQUIC_TWELFTH_INTEROP_VERSION) {
+            /* Ignoring handshake frames in ready state, but sending ACK
+             * if the client mistakenly repeats them */
+            picoquic_ignore_incoming_handshake(*pcnx, bytes, ph);
+        }
         return ret;
     }
 
@@ -1118,10 +1120,13 @@ int picoquic_incoming_server_cleartext(
                     cnx->cnx_state == picoquic_state_client_ready_start)
                     && 
                 cnx->crypto_context[2].aead_decrypt != NULL &&
-                cnx->crypto_context[2].aead_encrypt != NULL)) {
-            /* Ignoring handshake frames in ready state, but sending ACK
-             * if the client mistakenly repeats them */
-            picoquic_ignore_incoming_handshake(cnx, bytes, ph);
+                cnx->crypto_context[2].aead_encrypt != NULL &&
+                cnx->pkt_ctx[picoquic_packet_context_handshake].first_sack_item.end_of_sack_range >= 0)) {
+            if (picoquic_supported_versions[cnx->version_index].version == PICOQUIC_TWELFTH_INTEROP_VERSION) {
+                /* Ignoring handshake frames in ready state, but sending ACK
+                 * if the client mistakenly repeats them */
+                picoquic_ignore_incoming_handshake(cnx, bytes, ph);
+            }
         }
         else {
             /* Accept the incoming frames */
@@ -1178,9 +1183,11 @@ int picoquic_incoming_client_handshake(
         if (picoquic_compare_connection_id(&ph->srce_cnx_id, &cnx->path[0]->remote_cnxid) != 0) {
             ret = PICOQUIC_ERROR_CNXID_CHECK;
         } else if (cnx->cnx_state == picoquic_state_ready) {
-            /* Ignoring handshake frames in ready state, but sending ACK
-             * if the client mistakenly repeats them */
-            picoquic_ignore_incoming_handshake(cnx, bytes, ph);
+            if (picoquic_supported_versions[cnx->version_index].version == PICOQUIC_TWELFTH_INTEROP_VERSION) {
+                /* Ignoring handshake frames in ready state, but sending ACK
+                 * if the client mistakenly repeats them */
+                picoquic_ignore_incoming_handshake(cnx, bytes, ph);
+            }
         } else {
             /* Accept the incoming frames */
             if (ph->payload_length == 0) {
