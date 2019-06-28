@@ -436,7 +436,6 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
 
     if (ph->epoch == 3) {
         /* Manage key rotation */
-        /* TODO: simplify, now that we can rely on PN */
         if (ph->key_phase == cnx->key_phase_dec) {
             /* AEAD Decrypt, in place */
             decoded = picoquic_aead_decrypt_generic(bytes + ph->offset,

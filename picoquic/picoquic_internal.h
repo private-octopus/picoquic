@@ -726,6 +726,7 @@ typedef struct st_picoquic_cnx_t {
 
     /* TLS context, TLS Send Buffer, streams, epochs */
     void* tls_ctx;
+    uint64_t crypto_epoch_sequence;
     uint64_t crypto_rotation_sequence;
     uint64_t crypto_rotation_time_guard;
     struct st_ptls_buffer_t* tls_sendbuf;

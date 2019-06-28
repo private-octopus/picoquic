@@ -2258,12 +2258,22 @@ int picoquic_connection_error(picoquic_cnx_t* cnx, uint16_t local_error, uint64_
 
 int picoquic_start_key_rotation(picoquic_cnx_t* cnx)
 {
-    int ret = picoquic_compute_new_rotated_keys(cnx);
+    int ret = 0;
+
+    /* Verify that a packet of the previous rotation was acked*/
+    if (cnx->cnx_state != picoquic_state_ready ||
+        cnx->crypto_epoch_sequence >
+        cnx->pkt_ctx[picoquic_packet_context_application].first_sack_item.end_of_sack_range) {
+        ret = PICOQUIC_ERROR_KEY_ROTATION_NOT_READY;
+    }
+    else {
+        ret = picoquic_compute_new_rotated_keys(cnx);
+    }
 
     if (ret == 0) {
         picoquic_apply_rotated_keys(cnx, 1);
-
         picoquic_crypto_context_free(&cnx->crypto_context_old);
+        cnx->crypto_epoch_sequence = cnx->pkt_ctx[picoquic_packet_context_application].send_sequence;
     }
 
     return ret;

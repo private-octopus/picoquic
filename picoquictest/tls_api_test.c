@@ -4691,7 +4691,7 @@ static int key_rotation_test_one(int inject_bad_packet)
 
     /* Prepare to send data */
     if (ret == 0) {
-        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_very_long, sizeof(test_scenario_very_long));
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_sustained, sizeof(test_scenario_sustained));
     }
 
     /* Perform a data sending loop, during which various key rotations are tried
@@ -4716,6 +4716,10 @@ static int key_rotation_test_one(int inject_bad_packet)
         }
 
         if (test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence > rotation_sequence &&
+            test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].first_sack_item.end_of_sack_range >
+            test_ctx->cnx_server->crypto_epoch_sequence &&
+            test_ctx->cnx_client->pkt_ctx[picoquic_packet_context_application].first_sack_item.end_of_sack_range >
+            test_ctx->cnx_client->crypto_epoch_sequence &&
             test_ctx->cnx_server->key_phase_enc == test_ctx->cnx_server->key_phase_dec &&
             test_ctx->cnx_client->key_phase_enc == test_ctx->cnx_client->key_phase_dec) {
             rotation_sequence = test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence + 100;
