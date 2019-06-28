@@ -870,8 +870,9 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                     picoformat_32(&packet->bytes[hl],
                         picoquic_supported_versions[test_ctx->cnx_client->version_index].version);
                     hl += 4;
-                    packet->bytes[hl++] = picoquic_create_packet_header_cnxid_lengths(test_ctx->cnx_client->path[0]->remote_cnxid.id_len, test_ctx->cnx_client->path[0]->local_cnxid.id_len);
+                    packet->bytes[hl++] = test_ctx->cnx_client->path[0]->remote_cnxid.id_len;
                     hl += picoquic_format_connection_id(&packet->bytes[hl], PICOQUIC_MAX_PACKET_SIZE - hl, test_ctx->cnx_client->path[0]->remote_cnxid);
+                    packet->bytes[hl++] = test_ctx->cnx_client->path[0]->local_cnxid.id_len;
                     hl += picoquic_format_connection_id(&packet->bytes[hl], PICOQUIC_MAX_PACKET_SIZE - hl, test_ctx->cnx_client->path[0]->local_cnxid);
                     packet->bytes[hl++] = 21;
                     picoquic_public_random(&packet->bytes[hl], 21);
@@ -1342,7 +1343,7 @@ int tls_api_many_losses()
 
 int tls_api_version_negotiation_test()
 {
-    const uint32_t version_grease = 0x0aca4a0a;
+    const uint32_t version_grease = 0x1aca4a0a;
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, version_grease, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);

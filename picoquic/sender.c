@@ -315,6 +315,37 @@ void picoquic_update_payload_length(
     }
 }
 
+static int picoquic_is_sending_old_invariant(
+    picoquic_cnx_t* cnx,
+    picoquic_packet_type_enum packet_type)
+{
+    int use_old_invariants = 0;
+    uint32_t vn = (packet_type == picoquic_packet_initial) ? cnx->proposed_version :
+        picoquic_supported_versions[cnx->version_index].version;
+
+    /* Check whether to use old or new version of the invariants */
+    if ((vn & 0xFFFFFF00) == 0xFF000000) {
+        /* Draft versions before #20 use the old invariants */
+        int draft_nb = vn & 0xFF;
+        use_old_invariants = (draft_nb <= 20) ? 1 : 0;
+    }
+    else if ((vn & 0xFFFFFFF0) == 0 ||
+        vn == PICOQUIC_INTERNAL_TEST_VERSION_1 ||
+        vn == PICOQUIC_INTERNAL_TEST_VERSION_2) {
+        /* Final versions and internal versions use the new invariants */
+        use_old_invariants = 0;
+    }
+    else if ((vn & 0xF0000000) == 0) {
+        /* greasing version, number starts with 0 */
+        use_old_invariants = 1;
+    }
+    else {
+        use_old_invariants = 0;
+    }
+
+    return use_old_invariants;
+}
+
 uint32_t picoquic_create_packet_header(
     picoquic_cnx_t* cnx,
     picoquic_packet_type_enum packet_type,
@@ -372,16 +403,22 @@ uint32_t picoquic_create_packet_header(
             picoformat_32(&bytes[length], cnx->proposed_version);
         }
         else {
-            picoformat_32(&bytes[length],
-                picoquic_supported_versions[cnx->version_index].version);
+            picoformat_32(&bytes[length], picoquic_supported_versions[cnx->version_index].version);
         }
         length += 4;
 
-        bytes[length++] = picoquic_create_packet_header_cnxid_lengths(dest_cnx_id.id_len, local_cnxid->id_len);
+        if (picoquic_is_sending_old_invariant(cnx, packet_type)) {
+            bytes[length++] = picoquic_create_packet_header_cnxid_lengths(dest_cnx_id.id_len, local_cnxid->id_len);
 
-        length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, dest_cnx_id);
-        length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, *local_cnxid);
-
+            length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, dest_cnx_id);
+            length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, *local_cnxid);
+        }
+        else {
+            bytes[length++] = dest_cnx_id.id_len;
+            length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, dest_cnx_id);
+            bytes[length++] = local_cnxid->id_len;
+            length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, *local_cnxid);
+        }
         /* Special case of packet initial -- encode token as part of header */
         if (packet_type == picoquic_packet_initial) {
             length += (uint32_t)picoquic_varint_encode(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, cnx->retry_token_length);
@@ -429,7 +466,12 @@ uint32_t picoquic_predict_packet_header_length(
     }
     else {
         /* Compute length of a long packet header */
-        header_length = 1 + /* version */ 4 + /* cnx_id prefix */ 1;
+        if (picoquic_is_sending_old_invariant(cnx, packet_type)) {
+            header_length = 1 + /* version */ 4 + /* cnx_id prefix */ 1;
+        }
+        else {
+            header_length = 1 + /* version */ 4 + /* cnx_id length bytes  */ 2;
+        }
 
         /* add dest-id length */
         if (cnx->client_mode && (packet_type == picoquic_packet_initial ||

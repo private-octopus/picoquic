@@ -34,8 +34,106 @@
 #include <stdlib.h>
 #include <string.h>
 
+/**
+ * If the version is not know, need special code as long as we support
+ * draft-20 and the corresponding format */
+
+int picoquic_is_old_header_invariant(
+    picoquic_quic_t* quic,
+    uint8_t* bytes,
+    uint32_t length,
+    picoquic_packet_header* ph)
+{
+    int ret = 0; /* return 1 if old invariant */
+    if ((ph->vn & 0xFFFFFF00) == 0xFF000000) {
+        /* Draft versions before #20 use the old invariants */
+        int draft_nb = ph->vn & 0xFF;
+        ret = (draft_nb <= 20) ? 1 : 0;
+    }
+    else if ((ph->vn & 0xFFFFFFF0) == 0 ||
+        ph->vn == PICOQUIC_INTERNAL_TEST_VERSION_1 ||
+        ph->vn == PICOQUIC_INTERNAL_TEST_VERSION_2) {
+        /* Final versions and internal versions use the new invariants */
+        ret = 0;
+    } else {
+        /* Cases where the version is either NULL, or one of the greasing
+         * values, or maybe a proprietary value. We first do a heuristic test
+         * based on the plausibility of the CID values. */
+        uint8_t l_dest_id1, l_srce_id1, l_dest_id2, l_srce_id2, l1, l2;
+
+        picoquic_parse_packet_header_cnxid_lengths(bytes[5], &l_dest_id1, &l_srce_id1);
+        l_dest_id2 = bytes[5];
+        l1 = 5 + 1 + l_dest_id1 + l_srce_id1;
+        if (l1 > length) {
+            ret = 0;
+        } else if (l_dest_id2 > 20u || 5u + l_dest_id2 + 1u > length) {
+            /* if packet is old invariant, this test will succeed whenever the
+             * destination id is longer than 4, which covers a lot of cases */
+            ret = 1;
+        }
+        else {
+            l_srce_id2 = bytes[5 + l_dest_id2 + 1];
+            l2 = 5 + l_dest_id2 + 1 + l_dest_id2;
+            if (l_dest_id2 > 20 || l2 > length) {
+                /* If packet is old invarion, bytes[l_srce_id2] will likely be 
+                 * a random number, so this test will succeed more than 90% of the time. */
+                ret = 1;
+            }
+            else if (ph->vn == 0) {
+                /* Heuristics have failed. Check whether this can be parsed reasonably
+                 * as a version negotiation, i.e. header plus list of versions */
+                if (((length - l1) % 4) != 0) {
+                    /* Parsing with old invariant would result in malformed packets */
+                    ret = 0;
+                } else if (((length - l2) % 4) != 0){
+                    /* Parsing with new invariant would result in malformed packets */
+                    ret = 1;
+                }
+                else if (l_srce_id1 < PICOQUIC_ENFORCED_INITIAL_CID_LENGTH) {
+                    /* In a VN packet, source should copy inital CID */
+                    ret = 0;
+                }
+                else if (l_srce_id2 < PICOQUIC_ENFORCED_INITIAL_CID_LENGTH) {
+                    ret = 1;
+                }
+                else if (l_dest_id1 == quic->local_cnxid_length && 
+                    l_dest_id2 != quic->local_cnxid_length) {
+                    /* plausible old VN response to local request */
+                    ret = 1;
+                }
+                else if (l_dest_id2 == quic->local_cnxid_length &&
+                    l_dest_id1 != quic->local_cnxid_length) {
+                    /* plausible new VN response to local request */
+                    ret = 0;
+                }
+                else {
+                    /* Running out of heuristics, just pick version = new */
+                    ret = 0;
+                }
+            }
+            else {
+                /* Unknown version, not a version negotiation packet.
+                 * Check whether it can plausibly parse as an Initial packet */
+                if (l_dest_id1 < PICOQUIC_ENFORCED_INITIAL_CID_LENGTH) {
+                    /* Initial CID mismatch if old version. This is a very strong test,
+                     * since the most significant nibble of dest length can only take
+                     * values 0 or 1 in new format, i.e. length 0 or 4 in old format */
+                    ret = 0;
+                }
+                else {
+                    /* we don't know, so let's assume old version. */
+                    ret = 1;
+                }
+            }
+        }
+    }
+    ph->is_old_invariant = ret;
+
+    return ret;
+}
+
 /*
- * The new packet header parsing is version dependent
+ * The packet header parsing is version dependent
  */
 
 int picoquic_parse_packet_header(
@@ -59,25 +157,38 @@ int picoquic_parse_packet_header(
             ret = -1;
         } else {
             uint8_t l_dest_id, l_srce_id;
+            uint32_t i_srce_id, l_req;
+
             /* The bytes at position 1..4 describe the version */
             ph->vn = PICOPARSE_32(bytes + 1);
-            /* Obtain the connection ID lengths from the byte following the version */
-            picoquic_parse_packet_header_cnxid_lengths(bytes[5], &l_dest_id, &l_srce_id);
-            /* Required length: 
-             * (packet type(1) + version number(4) + cid_lengths(1) = 6,
-             * cid lengths,
-             * payload length (1+)
-             * sequence number (1+) */
-            if (6 + l_dest_id + l_srce_id + 2 > (int) length) {
+            if (picoquic_is_old_header_invariant(quic, bytes, length, ph)) {
+                /* Obtain the connection ID lengths from the byte following the version */
+                picoquic_parse_packet_header_cnxid_lengths(bytes[5], &l_dest_id, &l_srce_id);
+                
+                l_req = 6 + l_dest_id + l_srce_id + 2;
+                i_srce_id = 6 + l_dest_id;
+            }
+            else {
+                l_dest_id = bytes[5];
+                if (6u + l_dest_id + 1u > length) {
+                    l_srce_id = 255;
+                    i_srce_id = length;
+                }
+                else {
+                    l_srce_id = bytes[6 + l_dest_id];
+                    i_srce_id = 6 + l_dest_id + 1;
+                }
+            }
+            /* Required length: at least one length byte and at least one seqnum byte
+             * after the srce id*/
+            if (i_srce_id + l_srce_id + 2 > (int) length) {
                 /* malformed packet */
                 ret = -1;
             }
-            else {
-                ph->offset = 6;
-                ph->offset += picoquic_parse_connection_id(bytes + ph->offset, l_dest_id, &ph->dest_cnx_id);
-                ph->offset += picoquic_parse_connection_id(bytes + ph->offset, l_srce_id, &ph->srce_cnx_id);
-
-                /* Not applicable for long packets. */
+            else {         
+                (void)picoquic_parse_connection_id(bytes + 6, l_dest_id, &ph->dest_cnx_id);
+                (void)picoquic_parse_connection_id(bytes + i_srce_id, l_srce_id, &ph->srce_cnx_id);
+                ph->offset = i_srce_id + l_srce_id;
                 
                 if (ph->vn == 0) {
                     /* VN = zero identifies a version negotiation packet */
@@ -680,12 +791,19 @@ int picoquic_prepare_version_negotiation(
         /* Set the version number to zero */
         picoformat_32(bytes + byte_index, 0);
         byte_index += 4;
-        /* Encode the ID lengths */
-        bytes[byte_index++] = picoquic_create_packet_header_cnxid_lengths(ph->srce_cnx_id.id_len, ph->dest_cnx_id.id_len);
-        /* Copy the incoming connection ID */
-        byte_index += picoquic_format_connection_id(bytes + byte_index, PICOQUIC_MAX_PACKET_SIZE - byte_index, ph->srce_cnx_id);
-        byte_index += picoquic_format_connection_id(bytes + byte_index, PICOQUIC_MAX_PACKET_SIZE - byte_index, ph->dest_cnx_id);
-        
+        if (ph->is_old_invariant) {
+            /* Encode the ID lengths */
+            bytes[byte_index++] = picoquic_create_packet_header_cnxid_lengths(ph->srce_cnx_id.id_len, ph->dest_cnx_id.id_len);
+            /* Copy the incoming connection ID */
+            byte_index += picoquic_format_connection_id(bytes + byte_index, PICOQUIC_MAX_PACKET_SIZE - byte_index, ph->srce_cnx_id);
+            byte_index += picoquic_format_connection_id(bytes + byte_index, PICOQUIC_MAX_PACKET_SIZE - byte_index, ph->dest_cnx_id);
+        }
+        else {
+            bytes[byte_index++] = ph->srce_cnx_id.id_len;
+            byte_index += picoquic_format_connection_id(bytes + byte_index, PICOQUIC_MAX_PACKET_SIZE - byte_index, ph->srce_cnx_id);
+            bytes[byte_index++] = ph->dest_cnx_id.id_len;
+            byte_index += picoquic_format_connection_id(bytes + byte_index, PICOQUIC_MAX_PACKET_SIZE - byte_index, ph->dest_cnx_id);
+        }
         /* Set the payload to the list of versions */
         for (size_t i = 0; i < picoquic_nb_supported_versions; i++) {
             picoformat_32(bytes + byte_index, picoquic_supported_versions[i].version);
