@@ -684,6 +684,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int alt_path_challenge_needed : 1; /* If at least one alt path challenge is needed or in progress */
     unsigned int is_handshake_finished : 1; /* If there are no more packets to ack or retransmit in initial  or handshake contexts */
     unsigned int is_path_0_deleted : 1; /* If the initial connection ID has been deleted */
+    unsigned int is_1rtt_received : 1; /* If the initial connection ID has been deleted */
 
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;

@@ -1252,7 +1252,7 @@ int picoquic_incoming_0rtt(
         ret = PICOQUIC_ERROR_CNXID_CHECK;
     } else if (cnx->cnx_state == picoquic_state_server_almost_ready || 
         cnx->cnx_state == picoquic_state_server_false_start ||
-        cnx->cnx_state == picoquic_state_ready) {
+        (cnx->cnx_state == picoquic_state_ready && !cnx->is_1rtt_received)) {
         if (ph->vn != picoquic_supported_versions[cnx->version_index].version) {
             ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0);
         } else {
@@ -1607,6 +1607,7 @@ int picoquic_incoming_encrypted(
             if (ret == 0) {
                 picoquic_path_t * path_x = cnx->path[path_id];
 
+                cnx->is_1rtt_received = 1;
                 picoquic_spin_function_table[cnx->spin_policy].spinbit_incoming(cnx, path_x, ph);
                 /* Accept the incoming frames */
                 ret = picoquic_decode_frames(cnx, cnx->path[path_id], 
@@ -1753,12 +1754,10 @@ int picoquic_incoming_segment(
                 }
                 break;
             case picoquic_packet_0rtt_protected:
-                /* TODO : decrypt with 0RTT key */
                 ret = picoquic_incoming_0rtt(cnx, bytes, &ph, current_time);
                 break;
             case picoquic_packet_1rtt_protected:
                 ret = picoquic_incoming_encrypted(cnx, bytes, &ph, addr_from, addr_to, received_ecn, current_time);
-                /* TODO : roll key based on PHI */
                 break;
             default:
                 /* Packet type error. Log and ignore */
