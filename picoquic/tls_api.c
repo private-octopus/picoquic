@@ -2030,46 +2030,19 @@ int picoquic_tls_client_authentication_activated(picoquic_quic_t* quic) {
  * - specific tokens are tied to an Original DCID.
  * - generic tokens work with a zero length DCID.
  * The structure of the token is:
- * - time of issue: uint64_t
+ * - time valid until: uint64_t
  * - ODCID length, one byte
  * - ODCID, length bytes
- * - Hash value, the digest size of the selected algorithm.
- * The hash is on (secret | IP_address | <time, odcid length, odcid> | secret)
+ * This is encrypted using the same AEAD contexts as the encryption of session tickets.
+ * The encrypted structure is:
+ * - 64 bit random sequence number.
+ * - Encrypted value of the ticket.
+ * - AEAD checksum.
+ * When invoking AEAD, the sequence number is used to update the IV, and the IP address
+ * is passed as "authenticated" data. The 64 bit random number alleviates the concern of
+ * reusing the same AEAD key twice. The authenticated data ensures that if the token is
+ * used from a different address, the decryption will fail.
  */
-static int picoquic_get_retry_token_hash(picoquic_quic_t* quic, struct sockaddr * addr_peer,
-    uint8_t * token_header, uint32_t token_header_length, uint8_t * hash, uint32_t hash_max, uint32_t * hash_length)
-{
-    /*Using OpenSSL for now: ptls_hash_algorithm_t ptls_openssl_sha256 */
-    int ret = 0;
-    ptls_hash_algorithm_t* algo = &ptls_openssl_sha256;
-    ptls_hash_context_t* hash_ctx = algo->create();
-
-    *hash_length = 0;
-    if (hash_ctx == NULL || hash_max < algo->digest_size) {
-        ret = -1;
-    }
-    else {
-        uint8_t * ip_addr;
-        uint8_t ip_addr_length;
-
-        picoquic_get_ip_addr(addr_peer, &ip_addr, &ip_addr_length);
-        if (ip_addr == NULL || ip_addr_length == 0) {
-            ret = -1;
-        }
-        else {
-            hash_ctx->update(hash_ctx, quic->retry_seed, sizeof(quic->retry_seed));
-            hash_ctx->update(hash_ctx, &ip_addr_length, 1);
-            hash_ctx->update(hash_ctx, ip_addr, ip_addr_length);
-            hash_ctx->update(hash_ctx, &token_header_length, sizeof(token_header_length));
-            hash_ctx->update(hash_ctx, token_header, token_header_length);
-            hash_ctx->update(hash_ctx, quic->retry_seed, sizeof(quic->retry_seed));
-            hash_ctx->final(hash_ctx, hash, PTLS_HASH_FINAL_MODE_FREE);
-            *hash_length = (uint32_t)algo->digest_size;
-        }
-    }
-
-    return ret;
-}
 
 static void picoquic_server_encrypt_retry_token(picoquic_quic_t* quic, struct sockaddr * addr_peer,
     uint8_t * token, uint32_t * token_length, uint8_t * text, size_t text_length)
@@ -2154,7 +2127,7 @@ int picoquic_prepare_retry_token(picoquic_quic_t* quic, struct sockaddr * addr_p
             token_time += 4000000ull;
         }
         /* serialize the token components */
-        picoformat_64(text, current_time);
+        picoformat_64(text, token_time);
         text_len += 8;
         text[text_len++] = odcid->id_len;
         if (odcid->id_len > 0) {
@@ -2375,8 +2348,7 @@ int picoquic_esni_load_key(picoquic_quic_t * quic, char const * esni_key_file_na
             if (quic->esni_key_exchange[esni_key_exchange_count] == NULL) {
                 DBG_PRINTF("%s", "no memory for ESNI private key\n");
                 ret = PICOQUIC_ERROR_MEMORY;
-            }
-            if ((ret = ptls_openssl_create_key_exchange(&quic->esni_key_exchange[esni_key_exchange_count], pkey)) != 0) {
+            } else if ((ret = ptls_openssl_create_key_exchange(&quic->esni_key_exchange[esni_key_exchange_count], pkey)) != 0) {
                 DBG_PRINTF("failed to load private key from file:%s:picotls-error:%d", picoquic_file_open, ret);
                 ret = PICOQUIC_ERROR_INVALID_FILE;
                 free(quic->esni_key_exchange[esni_key_exchange_count]);

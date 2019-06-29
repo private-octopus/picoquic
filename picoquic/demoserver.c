@@ -553,12 +553,17 @@ static void picoquic_h09_server_parse_protocol(uint8_t* command, size_t command_
     *proto = 0;
 
     /* skip white space at the end */
-    while (byte_index >= 0) {
+    for (;;) {
         int c = command[byte_index];
 
         if (c == ' ' || c == '\n' || c == '\r' || c == '\t') {
-            byte_index--;
             space_count++;
+            if (byte_index > 0) {
+                byte_index--;
+            }
+            else {
+                break;
+            }
         }
         else {
             break;

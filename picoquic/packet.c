@@ -158,15 +158,14 @@ int picoquic_parse_packet_header(
             ret = -1;
         } else {
             uint8_t l_dest_id, l_srce_id;
-            uint32_t i_srce_id, l_req;
+            uint32_t i_srce_id;
 
             /* The bytes at position 1..4 describe the version */
             ph->vn = PICOPARSE_32(bytes + 1);
             if (picoquic_is_old_header_invariant(quic, bytes, length, ph)) {
                 /* Obtain the connection ID lengths from the byte following the version */
                 picoquic_parse_packet_header_cnxid_lengths(bytes[5], &l_dest_id, &l_srce_id);
-                
-                l_req = 6 + l_dest_id + l_srce_id + 2;
+
                 i_srce_id = 6 + l_dest_id;
             }
             else {
@@ -1240,7 +1239,8 @@ int picoquic_incoming_server_cleartext(
                     && 
                 cnx->crypto_context[2].aead_decrypt != NULL &&
                 cnx->crypto_context[2].aead_encrypt != NULL &&
-                cnx->pkt_ctx[picoquic_packet_context_handshake].first_sack_item.end_of_sack_range >= 0)) {
+                cnx->pkt_ctx[picoquic_packet_context_handshake].first_sack_item.end_of_sack_range
+                != (uint64_t)((int64_t)-1))) {
             if (picoquic_supported_versions[cnx->version_index].version == PICOQUIC_TWELFTH_INTEROP_VERSION) {
                 /* Ignoring handshake frames in ready state, but sending ACK
                  * if the client mistakenly repeats them */

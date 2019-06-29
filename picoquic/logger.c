@@ -713,7 +713,7 @@ size_t picoquic_log_reset_stream_frame(picoquic_cnx_t * cnx, FILE* F, uint8_t* b
         l1 = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &stream_id);
         byte_index += l1;
         if (l1 > 0 && bytes_max >= byte_index + 2) {
-            if (picoquic_supported_versions[cnx->version_index].version == PICOQUIC_TWELFTH_INTEROP_VERSION) {
+            if (cnx != NULL && picoquic_supported_versions[cnx->version_index].version == PICOQUIC_TWELFTH_INTEROP_VERSION) {
                 error_code = PICOPARSE_16(bytes + byte_index);
                 l2 = 2;
             }
@@ -772,7 +772,7 @@ size_t picoquic_log_generic_close_frame(picoquic_cnx_t * cnx, FILE* F, uint8_t* 
     size_t l0 = 0;
 
     if (bytes_max >= 3) {
-        if (picoquic_supported_versions[cnx->version_index].version == PICOQUIC_TWELFTH_INTEROP_VERSION) {
+        if (cnx != NULL && picoquic_supported_versions[cnx->version_index].version == PICOQUIC_TWELFTH_INTEROP_VERSION) {
             error_code = PICOPARSE_16(bytes + byte_index);
             l0 = 2;
         }

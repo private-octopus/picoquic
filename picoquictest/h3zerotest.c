@@ -755,7 +755,6 @@ uint64_t demo_server_test_time_from_esni_rr(char const * esni_rr_file)
         /* 64 bits not after */
         if (byte_index + 8 <= esnikeys_len) {
             not_after = PICOPARSE_64(&esnikeys[byte_index]);
-            byte_index += 8;
         }
         else {
             not_after = not_before;
@@ -831,7 +830,9 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
                 ret = picoquic_esni_client_from_file(test_ctx->cnx_client, test_server_esni_rr_file);
             }
         }
-        ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+        if (ret == 0) {
+            ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+        }
     }
 
     if (ret == 0) {
