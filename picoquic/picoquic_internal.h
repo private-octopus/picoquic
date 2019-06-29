@@ -800,6 +800,7 @@ typedef struct st_picoquic_cnx_t {
     int nb_path_alloc;
     int path_sequence_next;
     /* Management of the CNX-ID stash */
+    uint64_t retire_cnxid_before;
     picoquic_cnxid_stash_t * cnxid_stash_first;
     /* Management of ongoing probes */
     picoquic_probe_t * probe_first;
