@@ -319,9 +319,15 @@ static int picoquic_is_sending_old_invariant(
     picoquic_cnx_t* cnx,
     picoquic_packet_type_enum packet_type)
 {
-    int use_old_invariants = 0;
-    uint32_t vn = (packet_type == picoquic_packet_initial) ? cnx->proposed_version :
-        picoquic_supported_versions[cnx->version_index].version;
+    int use_old_invariants;
+    uint32_t vn;
+
+    if ((cnx->cnx_state == picoquic_state_client_init || cnx->cnx_state == picoquic_state_client_init_sent) && packet_type == picoquic_packet_initial) {
+        vn = cnx->proposed_version;
+    }
+    else {
+        vn = picoquic_supported_versions[cnx->version_index].version;
+    }
 
     /* Check whether to use old or new version of the invariants */
     if ((vn & 0xFFFFFF00) == 0xFF000000) {

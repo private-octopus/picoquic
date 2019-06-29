@@ -50,9 +50,10 @@ int picoquic_is_old_header_invariant(
         int draft_nb = ph->vn & 0xFF;
         ret = (draft_nb <= 20) ? 1 : 0;
     }
-    else if ((ph->vn & 0xFFFFFFF0) == 0 ||
+    else if (ph->vn != 0 && (
+        (ph->vn & 0xFFFFFFF0) == 0 ||
         ph->vn == PICOQUIC_INTERNAL_TEST_VERSION_1 ||
-        ph->vn == PICOQUIC_INTERNAL_TEST_VERSION_2) {
+        ph->vn == PICOQUIC_INTERNAL_TEST_VERSION_2)) {
         /* Final versions and internal versions use the new invariants */
         ret = 0;
     } else {

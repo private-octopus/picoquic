@@ -1343,7 +1343,7 @@ int tls_api_many_losses()
 
 int tls_api_version_negotiation_test()
 {
-    const uint32_t version_grease = 0x1aca4a0a;
+    const uint32_t version_grease = 0x0aca4a0a;
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, version_grease, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
