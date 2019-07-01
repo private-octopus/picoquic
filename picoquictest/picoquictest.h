@@ -176,6 +176,7 @@ int bad_coalesce_test();
 int stream_splay_test();
 int stream_output_test();
 int stream_rank_test();
+int not_before_cnxid_test();
 
 #ifdef __cplusplus
 }

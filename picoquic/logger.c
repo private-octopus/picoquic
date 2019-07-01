@@ -1022,7 +1022,7 @@ size_t picoquic_log_new_connection_id_frame(picoquic_cnx_t * cnx, FILE* F, uint8
             fprintf(F, "%02x", bytes[byte_index++]);
         }
         if (retire_before != 0) {
-            fprintf(F, ", retire before: %d", retire_before);
+            fprintf(F, ", retire before: %d", (int)retire_before);
         }
         fprintf(F, "\n");
     }

@@ -2166,7 +2166,7 @@ int picoquic_verify_retry_token(picoquic_quic_t* quic, struct sockaddr * addr_pe
         } else {
             odcid->id_len = text[8];
             
-            if (odcid->id_len + 9 != text_len) {
+            if (odcid->id_len + 9u != text_len) {
                 ret = -1;
             }
             else if (odcid->id_len > 0){

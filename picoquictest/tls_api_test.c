@@ -4146,7 +4146,7 @@ int cnxid_renewal_test()
 
     /* Renew the connection ID */
     if (ret == 0) {
-        ret = picoquic_renew_connection_id(test_ctx->cnx_client);
+        ret = picoquic_renew_connection_id(test_ctx->cnx_client, 0);
         if (ret == 0) {
             target_id = test_ctx->cnx_client->path[0]->remote_cnxid;
             previous_local_id = test_ctx->cnx_client->path[0]->local_cnxid;
@@ -4287,6 +4287,92 @@ int retire_cnxid_test()
     if (ret == 0) {
         if (test_ctx->cnx_server->nb_paths != PICOQUIC_NB_PATH_TARGET + 1) {
             DBG_PRINTF("Found %d paths active on server instead of %d.\n", test_ctx->cnx_server->nb_paths, PICOQUIC_NB_PATH_TARGET+1);
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        ret = transmit_cnxid_test_stash(test_ctx->cnx_client, test_ctx->cnx_server, "client");
+    }
+
+    if (ret == 0) {
+        ret = transmit_cnxid_test_stash(test_ctx->cnx_server, test_ctx->cnx_client, "server");
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+
+/*
+ * Perform a test of the "not before" CNXID function.
+ * The test will artificially simulate receiving a "not before"
+ * parameter in a new connection ID test, to check that the
+ * old connection ID are removed and successfully replaced.
+ */
+int not_before_cnxid_test()
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    uint64_t not_before;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    /* run a receive loop until no outstanding data */
+    if (ret == 0) {
+        ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, PICOQUIC_NB_PATH_TARGET, 0);
+    }
+
+    /* find a plausible "not before" value,and apply it */
+    if (ret == 0) {
+        not_before = test_ctx->cnx_server->path[test_ctx->cnx_server->nb_paths - 1]->path_sequence;
+        ret = picoquic_remove_not_before_cid(test_ctx->cnx_client, not_before, simulated_time);
+    }
+
+    /* run the loop again until no outstanding data */
+    if (ret == 0) {
+        uint64_t time_out = simulated_time + 8000000;
+        int nb_rounds = 0;
+        int success = 0;
+
+        while (ret == 0 && simulated_time < time_out &&
+            nb_rounds < 2048 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
+            int was_active = 0;
+
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
+            nb_rounds++;
+
+            if (test_ctx->cnx_client->nb_paths >= PICOQUIC_NB_PATH_TARGET &&
+                test_ctx->cnx_server->nb_paths >= PICOQUIC_NB_PATH_TARGET &&
+                test_ctx->cnx_client->first_misc_frame == NULL &&
+                test_cnxid_count_stash(test_ctx->cnx_client) >= (PICOQUIC_NB_PATH_TARGET - 1) &&
+                picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) &&
+                picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)) {
+                success = 1;
+                break;
+            }
+        }
+
+        if (ret == 0 && success == 0) {
+            DBG_PRINTF("Exit synch loop after %d rounds, backlog or not enough paths (%d & %d).\n",
+                nb_rounds, test_ctx->cnx_client->nb_paths, test_ctx->cnx_server->nb_paths);
+        }
+    }
+
+    /* Check */
+
+    if (ret == 0) {
+        if (test_ctx->cnx_server->nb_paths != PICOQUIC_NB_PATH_TARGET) {
+            DBG_PRINTF("Found %d paths active on server instead of %d.\n", test_ctx->cnx_server->nb_paths, PICOQUIC_NB_PATH_TARGET + 1);
             ret = -1;
         }
     }

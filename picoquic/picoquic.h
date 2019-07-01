@@ -498,7 +498,7 @@ int picoquic_close(picoquic_cnx_t* cnx, uint16_t reason_code);
 
 int picoquic_create_probe(picoquic_cnx_t* cnx, const struct sockaddr* addr_to, const struct sockaddr* addr_from);
 
-int picoquic_renew_connection_id(picoquic_cnx_t* cnx);
+int picoquic_renew_connection_id(picoquic_cnx_t* cnx, int path_id);
 
 int picoquic_start_key_rotation(picoquic_cnx_t * cnx);
 

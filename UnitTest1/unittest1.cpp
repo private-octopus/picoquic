@@ -756,6 +756,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(not_before_cnxid)
+        {
+            int ret = not_before_cnxid_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(test_server_busy)
         {
             int ret = server_busy_test();

@@ -428,7 +428,7 @@ int quic_client_migrate(picoquic_cnx_t * cnx, SOCKET_TYPE * fd, struct sockaddr 
             }
         }
         else if (force_migration == 2) {
-            ret = picoquic_renew_connection_id(cnx);
+            ret = picoquic_renew_connection_id(cnx, 0);
             if (ret != 0) {
                 if (ret == PICOQUIC_ERROR_MIGRATION_DISABLED) {
                     fprintf(stdout, "Migration disabled, cannot test CNXID renewal.\n");

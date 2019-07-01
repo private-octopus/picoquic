@@ -836,6 +836,8 @@ int picoquic_enqueue_cnxid_stash(picoquic_cnx_t * cnx,
     const uint64_t sequence, const uint8_t cid_length, const uint8_t * cnxid_bytes,
     const uint8_t * secret_bytes, picoquic_cnxid_stash_t ** pstashed);
 
+int picoquic_remove_not_before_cid(picoquic_cnx_t* cnx, uint64_t not_before, uint64_t current_time);
+
 /* Management of probes */
 picoquic_probe_t * picoquic_find_probe_by_challenge(const picoquic_cnx_t* cnx, uint64_t challenge);
 

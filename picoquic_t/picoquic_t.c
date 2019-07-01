@@ -143,6 +143,7 @@ static const picoquic_test_def_t test_table[] = {
     { "preferred_address", preferred_address_test},
     { "cnxid_renewal",  cnxid_renewal_test },
     { "retire_cnxid", retire_cnxid_test },
+    { "not_before_cnxid", not_before_cnxid_test },
     { "server_busy", server_busy_test },
     { "initial_close", initial_close_test },
     { "initial_server_close", initial_server_close_test },

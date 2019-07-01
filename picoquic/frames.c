@@ -493,7 +493,7 @@ uint8_t* picoquic_skip_new_connection_id_frame(picoquic_cnx_t * cnx, uint8_t* by
     return bytes;
 }
 
-uint8_t* picoquic_decode_new_connection_id_frame(picoquic_cnx_t* cnx, uint8_t* bytes, const uint8_t* bytes_max)
+uint8_t* picoquic_decode_new_connection_id_frame(picoquic_cnx_t* cnx, uint8_t* bytes, const uint8_t* bytes_max, uint64_t current_time)
 {
     /* store the connection ID in order to support migration. */
     uint64_t sequence = 0;
@@ -522,16 +522,18 @@ uint8_t* picoquic_decode_new_connection_id_frame(picoquic_cnx_t* cnx, uint8_t* b
         picoquic_connection_error(cnx, (bytes == NULL) ? PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR : PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
             picoquic_frame_type_new_connection_id);
     } else {
+        uint16_t ret = 0;
+
         if (sequence >= cnx->retire_cnxid_before) {
-            uint16_t ret = (uint16_t)picoquic_enqueue_cnxid_stash(cnx, sequence, cid_length, cnxid_bytes, secret_bytes, NULL);
-            if (ret != 0) {
-                picoquic_connection_error(cnx, ret, picoquic_frame_type_new_connection_id);
-                bytes = NULL;
-            }
+            ret = (uint16_t)picoquic_enqueue_cnxid_stash(cnx, sequence, cid_length, cnxid_bytes, secret_bytes, NULL);
         }
         if (bytes != NULL && retire_before > cnx->retire_cnxid_before) {
             /* TODO: retire the now deprecated CID */
-
+            ret = (uint16_t)picoquic_remove_not_before_cid(cnx, retire_before, current_time);
+        }
+        if (ret != 0) {
+            picoquic_connection_error(cnx, ret, picoquic_frame_type_new_connection_id);
+            bytes = NULL;
         }
     }
 
@@ -3694,7 +3696,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_
                 ack_needed = 1;
                 break;
             case picoquic_frame_type_new_connection_id:
-                bytes = picoquic_decode_new_connection_id_frame(cnx, bytes, bytes_max);
+                bytes = picoquic_decode_new_connection_id_frame(cnx, bytes, bytes_max, current_time);
                 ack_needed = 1;
                 break;
             case picoquic_frame_type_stop_sending:
