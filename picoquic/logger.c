@@ -996,7 +996,7 @@ size_t picoquic_log_new_connection_id_frame(picoquic_cnx_t * cnx, FILE* F, uint8
     byte_index += l_seq;
 
 
-    if (picoquic_supported_versions[cnx->version_index].version != PICOQUIC_TWELFTH_INTEROP_VERSION) {
+    if (cnx != NULL && picoquic_supported_versions[cnx->version_index].version != PICOQUIC_TWELFTH_INTEROP_VERSION) {
         l_ret = picoquic_varint_decode(&bytes[byte_index], bytes_max, &retire_before);
         min_size += l_ret;
         byte_index += l_ret;

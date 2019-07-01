@@ -5825,7 +5825,7 @@ int optimistic_ack_test_one(int shall_spoof_ack)
 
     if (ret == 0) {
         /* set the optimistic ack policy*/
-        picoquic_set_optimistic_ack_policy(test_ctx->qserver, 16);
+        picoquic_set_optimistic_ack_policy(test_ctx->qserver, 29);
         /* add a log request for debugging */
         picoquic_set_cc_log(test_ctx->qserver, ".");
 
