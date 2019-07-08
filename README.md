@@ -102,7 +102,7 @@ To build Picoquic on Linux, you need to:
    cmake .
    make
 ~~~
- * Run the test program "picoquic_ct" to verify the port.
+ * Run the test program `picoquic_ct` to verify the port.
 
 ## Picoquic on MacOSX
 
