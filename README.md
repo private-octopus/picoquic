@@ -23,7 +23,7 @@ at https://github.com/quicwg/base-drafts/wiki/Implementations. The current
 interoperability matrix is listed at
 https://docs.google.com/spreadsheets/d/1D0tW89vOoaScs3IY9RGC0UesWGAwE6xyLk0l4JtvTVg/edit#gid=273618597.
 
-Bastian Köcher has developed [bindings of the picoquic library to RUST](https://www.rust-lang.org/en-US/). 
+Bastian Köcher has developed bindings of the picoquic library to [RUST](https://www.rust-lang.org/en-US/). 
 His repository can be found [here](https://github.com/bkchr/picoquic-rs)
 You may want to check it.
 
