@@ -54,7 +54,7 @@ the interface between QUIC and TLS, 0-RTT, migration and key rollover. The state
 development is tracked in the list of issues in this repository.
 
 In parallel, we still plan to do an implementation
-of [DNS over QUIC] (https://datatracker.ietf.org/doc/draft-huitema-quic-dnsoquic/).
+of [DNS over QUIC](https://datatracker.ietf.org/doc/draft-huitema-quic-dnsoquic/).
 
 We are spending time bettering the implementation. Until now 
 the focus has been on correctness rather than performance. We will keep correctness,
