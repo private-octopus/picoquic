@@ -1,5 +1,5 @@
 # Build at a known-good commit
-$COMMIT_ID="d18549f4586a43ec5fadbbdd1d0aa640a2bd75fe"
+$COMMIT_ID="aa309cc0728dee0b4d45b0615fd04bf019e63e9c"
 
 # Match expectations of picotlsvs project.
 foreach ($dir in "$Env:OPENSSLDIR","$Env:OPENSSL64DIR") {
