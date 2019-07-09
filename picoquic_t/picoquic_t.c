@@ -399,16 +399,16 @@ break;
         }
 
         if (nb_test_failed > 0) {
-            fprintf(stderr, "Failed test(s): ");
+            fprintf(stdout, "Failed test(s): ");
             for (size_t i = 0; i < nb_tests; i++) {
                 if (test_status[i] == test_failed) {
-                    fprintf(stderr, "%s ", test_table[i].test_name);
+                    fprintf(stdout, "%s ", test_table[i].test_name);
                 }
             }
-            fprintf(stderr, "\n");
+            fprintf(stdout, "\n");
 
             if (disable_debug && retry_failed_test) {
-                debug_printf_push_stream(stderr);
+                /* debug_printf_push_stream(stderr); */
                 debug_printf_resume();
                 ret = 0;
                 for (size_t i = 0; i < nb_tests; i++) {
@@ -419,7 +419,7 @@ break;
                         is_fuzz = 1;
                     }
                     if (test_status[i] == test_failed) {
-                        fprintf(stderr, "Retrying %s:\n", test_table[i].test_name);
+                        fprintf(stdout, "Retrying %s:\n", test_table[i].test_name);
                         if (is_fuzz) {
                             debug_printf_suspend();
                         }
@@ -437,16 +437,16 @@ break;
                     }
                 }
                 if (ret == 0) {
-                    fprintf(stderr, "All tests pass after second try.\n");
+                    fprintf(stdout, "All tests pass after second try.\n");
                 }
                 else {
-                    fprintf(stderr, "Still failing: ");
+                    fprintf(stdout, "Still failing: ");
                     for (size_t i = 0; i < nb_tests; i++) {
                         if (test_status[i] == test_failed) {
-                            fprintf(stderr, "%s ", test_table[i].test_name);
+                            fprintf(stdout, "%s ", test_table[i].test_name);
                         }
                     }
-                    fprintf(stderr, "\n");
+                    fprintf(stdout, "\n");
                 }
             }
         }
