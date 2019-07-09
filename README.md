@@ -23,8 +23,8 @@ at https://github.com/quicwg/base-drafts/wiki/Implementations. The current
 interoperability matrix is listed at
 https://docs.google.com/spreadsheets/d/1D0tW89vOoaScs3IY9RGC0UesWGAwE6xyLk0l4JtvTVg/edit#gid=273618597.
 
-Bastian Köcher has developed bindings of the picoquic library to RUST (https://www.rust-lang.org/en-US/). 
-His repository can be found here: https://github.com/bkchr/picoquic-rs.
+Bastian Köcher has developed bindings of the picoquic library to [RUST](https://www.rust-lang.org/en-US/). 
+His repository can be found [here](https://github.com/bkchr/picoquic-rs).
 You may want to check it.
 
 
@@ -32,8 +32,8 @@ You may want to check it.
 
 Picoquic is currently developed as a Visual Studio 2017 project,
 and simultaneously tested on Windows and on Linux. It has a dependency
-on the Picotls implementation of TLS 1.3 (https://github.com/h2o/picotls).
-Picotls has two mode, a feature rich version that depends on OpenSSL, and a
+on the [Picotls implementation of TLS 1.3](https://github.com/h2o/picotls).
+Picotls has two modes, a feature rich version that depends on OpenSSL, and a
 leaner version that only depends on the "minicrypto" library. For now,
 Picoquic uses the OpenSSL version, and has a dependency on OpenSSL.
 
@@ -54,7 +54,7 @@ the interface between QUIC and TLS, 0-RTT, migration and key rollover. The state
 development is tracked in the list of issues in this repository.
 
 In parallel, we still plan to do an implementation
-of DNS over QUIC (https://datatracker.ietf.org/doc/draft-huitema-quic-dnsoquic/).
+of [DNS over QUIC](https://datatracker.ietf.org/doc/draft-huitema-quic-dnsoquic/).
 
 We are spending time bettering the implementation. Until now 
 the focus has been on correctness rather than performance. We will keep correctness,
@@ -64,7 +64,7 @@ applications. Suggestions are wellcome.
 # Building Picoquic
 
 Picoquic is developed in C, and can be built under Windows or Linux. Building the
-project requires first managing the dependencies, Picotls (https://github.com/h2o/picotls)
+project requires first managing the dependencies, [Picotls](https://github.com/h2o/picotls)
 and OpenSSL. Please note that you will need a recent version of Picotls --
 the Picotls API has eveolved recently to support the latest version of QUIC. The
 current code is tested against the Picotls version of Wed Mar 20 14:25:57 2019 +0900,
@@ -102,7 +102,7 @@ To build Picoquic on Linux, you need to:
    cmake .
    make
 ~~~
- * Run the test program "picoquic_ct" to verify the port.
+ * Run the test program `picoquic_ct` to verify the port.
 
 ## Picoquic on MacOSX
 
