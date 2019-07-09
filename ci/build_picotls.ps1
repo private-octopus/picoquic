@@ -1,11 +1,12 @@
 # Build at a known-good commit
-$COMMIT_ID="b15c0158bda62e35ec9f0e9581f8788c5e53be34"
+$COMMIT_ID="aa309cc0728dee0b4d45b0615fd04bf019e63e9c"
 
 # Match expectations of picotlsvs project.
 foreach ($dir in "$Env:OPENSSLDIR","$Env:OPENSSL64DIR") {
     if ($dir) {
         cp "$dir\lib\libcrypto.lib" "$dir"
-        cp C:\OpenSSL-Win32\include\openssl\applink.c "$dir\include\openssl"
+		mkdir $dir\include\ms
+        cp C:\OpenSSL-Win32\include\openssl\applink.c "$dir\ms"
     }
 }
 
