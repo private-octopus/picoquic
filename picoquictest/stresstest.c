@@ -956,6 +956,9 @@ static int stress_or_fuzz_test(picoquic_fuzz_fn fuzz_fn, void * fuzz_ctx, uint64
     uint64_t nb_connections = 0;
     uint64_t sim_time_next_log = 1000000;
 
+
+    stress_random_ctx = 0xBabaC001BaddBab1ull;
+
     picoquic_fuzz_in_progress = (fuzz_fn == NULL) ? 0 : 1;
 
     /* Initialization */
