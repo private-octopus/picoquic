@@ -3043,11 +3043,8 @@ uint8_t* picoquic_decode_max_stream_data_frame(picoquic_cnx_t* cnx, uint8_t* byt
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, picoquic_frame_type_max_stream_data);
     }
     else if ((stream = picoquic_find_stream(cnx, stream_id)) == NULL) {
-        /* TODO: maybe not an error if the stream is already closed */
-        if ((stream = picoquic_create_missing_streams(cnx, stream_id, 1)) == NULL) {
-            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, picoquic_frame_type_max_stream_data);
-            bytes = NULL;
-        }
+        /* Maybe not an error if the stream is already closed, so just be tolerant */
+        stream = picoquic_create_missing_streams(cnx, stream_id, 1);
     }
     
     if (stream != NULL && maxdata > stream->maxdata_remote) {
