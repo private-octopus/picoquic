@@ -930,8 +930,14 @@ void picoquic_queue_stateless_retry(picoquic_cnx_t* cnx,
             0, &cnx->path[0]->remote_cnxid, &cnx->path[0]->local_cnxid,
             bytes, &pn_offset, &pn_length);
 
-        /* Encode ODCIL in bottom 4 bits of first byte */
-        bytes[0] |= picoquic_create_packet_header_cnxid_lengths(0, cnx->initial_cnxid.id_len);
+
+        if (picoquic_supported_versions[cnx->version_index].version == PICOQUIC_TWELFTH_INTEROP_VERSION) {
+            /* Encode ODCIL in bottom 4 bits of first byte */
+            bytes[0] |= picoquic_create_packet_header_cnxid_lengths(0, cnx->initial_cnxid.id_len);
+        }
+        else {
+            bytes[byte_index++] = cnx->initial_cnxid.id_len;
+        }
 
         /* Encode DCIL */
         byte_index += picoquic_format_connection_id(bytes + byte_index,
@@ -1148,8 +1154,12 @@ int picoquic_incoming_retry(
         uint8_t odcil;
         uint8_t unused_cil;
 
-        picoquic_parse_packet_header_cnxid_lengths(bytes[0], &unused_cil, &odcil);
-
+        if (picoquic_supported_versions[cnx->version_index].version == PICOQUIC_TWELFTH_INTEROP_VERSION) {
+            picoquic_parse_packet_header_cnxid_lengths(bytes[0], &unused_cil, &odcil);
+        }
+        else {
+            odcil = bytes[byte_index++];
+        }
 
         if (odcil != cnx->initial_cnxid.id_len || odcil + 1 > ph->payload_length ||
             memcmp(cnx->initial_cnxid.id, &bytes[byte_index], odcil) != 0) {
