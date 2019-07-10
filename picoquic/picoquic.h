@@ -78,6 +78,7 @@ extern "C" {
 #define PICOQUIC_ERROR_CANNOT_CHANGE_ACTIVE_CONTEXT (PICOQUIC_ERROR_CLASS + 37)
 #define PICOQUIC_ERROR_INVALID_TOKEN (PICOQUIC_ERROR_CLASS + 38)
 #define PICOQUIC_ERROR_INITIAL_CID_TOO_SHORT (PICOQUIC_ERROR_CLASS + 39)
+#define PICOQUIC_ERROR_KEY_ROTATION_NOT_READY (PICOQUIC_ERROR_CLASS + 40)
 
 /*
  * Protocol errors defined in the QUIC spec
@@ -102,7 +103,8 @@ extern "C" {
 
 #define PICOQUIC_MAX_PACKET_SIZE 1536
 #define PICOQUIC_RESET_SECRET_SIZE 16
-#define PICOQUIC_RESET_PACKET_MIN_SIZE (1 + 20 + 16)
+#define PICOQUIC_RESET_PACKET_PAD_SIZE 23
+#define PICOQUIC_RESET_PACKET_MIN_SIZE (PICOQUIC_RESET_PACKET_PAD_SIZE + PICOQUIC_RESET_SECRET_SIZE)
 
 #define PICOQUIC_LOG_PACKET_MAX_SEQUENCE 100
 #define PICOQUIC_LOG_CC_MAGIC 0x50515452 /* Hex rendering of 'PQTR' */
@@ -122,6 +124,7 @@ typedef enum {
     picoquic_state_client_handshake_start,
     picoquic_state_client_handshake_progress,
     picoquic_state_handshake_failure,
+    picoquic_state_handshake_failure_resend,
     picoquic_state_client_almost_ready,
     picoquic_state_server_almost_ready,
     picoquic_state_server_false_start,
@@ -176,8 +179,8 @@ typedef enum {
 /*
  * Provisional definition of the connection ID.
  */
-#define PICOQUIC_CONNECTION_ID_MIN_SIZE 4
-#define PICOQUIC_CONNECTION_ID_MAX_SIZE 18
+#define PICOQUIC_CONNECTION_ID_MIN_SIZE 0
+#define PICOQUIC_CONNECTION_ID_MAX_SIZE 20
 
 typedef struct st_picoquic_connection_id_t {
     uint8_t id[PICOQUIC_CONNECTION_ID_MAX_SIZE];
@@ -282,6 +285,7 @@ typedef struct st_picoquic_tp_t {
     uint32_t idle_timeout;
     uint32_t max_packet_size;
     uint32_t max_ack_delay; /* stored in in microseconds for convenience */
+    uint32_t active_connection_id_limit;
     uint8_t ack_delay_exponent;
     unsigned int migration_disabled;
     picoquic_tp_prefered_address_t prefered_address;
@@ -494,7 +498,7 @@ int picoquic_close(picoquic_cnx_t* cnx, uint16_t reason_code);
 
 int picoquic_create_probe(picoquic_cnx_t* cnx, const struct sockaddr* addr_to, const struct sockaddr* addr_from);
 
-int picoquic_renew_connection_id(picoquic_cnx_t* cnx);
+int picoquic_renew_connection_id(picoquic_cnx_t* cnx, int path_id);
 
 int picoquic_start_key_rotation(picoquic_cnx_t * cnx);
 

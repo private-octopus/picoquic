@@ -27,6 +27,8 @@
 
 /* test vectors and corresponding structure */
 #define TEST_CNXID_LEN_BYTE 0x51
+#define TEST_CNXID_LEN_INI 8
+#define TEST_CNXID_LEN_REM 4
 #define TEST_CNXID_INI_BYTES 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07
 #define TEST_CNXID_INI_BYTES_ZERO 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 #define TEST_CNXID_INI_VAL {{TEST_CNXID_INI_BYTES, TEST_CNXID_INI_BYTES_ZERO}, 8}
@@ -35,13 +37,14 @@
 #define TEST_CNXID_REM_VAL {{TEST_CNXID_REM_BYTES, TEST_CNXID_REM_BYTES_ZERO}, 4}
 #define TEST_CNXID_NULL_VAL {{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 0}
 #define TEST_CNXID_LOCAL_BYTE 0x55
+#define TEST_CNXID_LEN_LOCAL 8
 #define TEST_CNXID_LOCAL_BYTES 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08
 #define TEST_CNXID_LOCAL_VAL {{TEST_CNXID_LOCAL_BYTES, TEST_CNXID_INI_BYTES_ZERO}, 8}
 
 /*
  * New definitions
  */
-
+#define TEST_CNXID_LEN_10 8
 #define TEST_CNXID_10_BYTES 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09
 #define TEST_CNXID_10_VAL { { TEST_CNXID_10_BYTES, TEST_CNXID_INI_BYTES_ZERO }, 8 }
 
@@ -53,8 +56,9 @@ static picoquic_connection_id_t test_cnxid_r10 = TEST_CNXID_10_VAL;
 static uint8_t pinitial10[] = {
     0xC3,
     0x50, 0x43, 0x51, 0x30,
-    TEST_CNXID_LEN_BYTE,
+    TEST_CNXID_LEN_INI,
     TEST_CNXID_INI_BYTES,
+    TEST_CNXID_LEN_REM,
     TEST_CNXID_REM_BYTES,
     0x00,
     0x44, 00,
@@ -66,8 +70,8 @@ static picoquic_packet_header hinitial10 = {
     TEST_CNXID_REM_VAL,
     0xDEADBEEF,
     0x50435130,
-    21,
-    21,
+    22,
+    22,
     picoquic_packet_initial,
     0xFFFFFFFF00000000ull,
     0, 
@@ -80,14 +84,16 @@ static picoquic_packet_header hinitial10 = {
     0,
     0,
     0,
+    0,
     0
 };
 
 static uint8_t pinitial10_l[] = {
     0xC3,
     0x50, 0x43, 0x51, 0x30,
-    TEST_CNXID_LOCAL_BYTE,
+    TEST_CNXID_LEN_INI,
     TEST_CNXID_INI_BYTES,
+    TEST_CNXID_LEN_LOCAL,
     TEST_CNXID_LOCAL_BYTES,
     0,
     0x44, 00,
@@ -99,8 +105,8 @@ static picoquic_packet_header hinitial10_l = {
     TEST_CNXID_LOCAL_VAL,
     0xDEADBEEF,
     0x50435130,
-    25,
-    25,
+    26,
+    26,
     picoquic_packet_initial,
     0xFFFFFFFF00000000ull,
     0,
@@ -113,14 +119,16 @@ static picoquic_packet_header hinitial10_l = {
     0,
     0,
     0,
+    0,
     0
 };
 
 static uint8_t pvnego10[] = {
     0xFF,
     0, 0, 0, 0,
-    TEST_CNXID_LEN_BYTE,
+    TEST_CNXID_LEN_10,
     TEST_CNXID_10_BYTES,
+    TEST_CNXID_LEN_REM,
     TEST_CNXID_REM_BYTES,
     0x50, 0x43, 0x51, 0x30,
     0xFF, 0, 0, 7
@@ -129,8 +137,9 @@ static uint8_t pvnego10[] = {
 static uint8_t pvnegobis10[] = {
     0xAA,
     0, 0, 0, 0,
-    TEST_CNXID_LEN_BYTE,
+    TEST_CNXID_LEN_10,
     TEST_CNXID_10_BYTES,
+    TEST_CNXID_LEN_REM,
     TEST_CNXID_REM_BYTES,
     0x50, 0x43, 0x51, 0x30,
     0xFF, 0, 0, 7
@@ -141,15 +150,16 @@ static picoquic_packet_header hvnego10 = {
     TEST_CNXID_REM_VAL,
     0,
     0,
-    18,
+    19,
     0,
     picoquic_packet_version_negotiation,
     0,
     0,
-    PICOQUIC_MAX_PACKET_SIZE - 18,
+    PICOQUIC_MAX_PACKET_SIZE - 19,
     0,
     0,
     picoquic_packet_context_initial,
+    0,
     0,
     0,
     0,
@@ -161,8 +171,9 @@ static picoquic_packet_header hvnego10 = {
 static uint8_t phandshake[] = {
     0xE3,
     0x50, 0x43, 0x51, 0x30,
-    TEST_CNXID_LEN_BYTE,
+    TEST_CNXID_LEN_LOCAL,
     TEST_CNXID_LOCAL_BYTES,
+    TEST_CNXID_LEN_REM,
     TEST_CNXID_REM_BYTES,
     0x44, 00,
     0xDE, 0xAD, 0xBE, 0xEF
@@ -173,8 +184,8 @@ static picoquic_packet_header hhandshake = {
     TEST_CNXID_REM_VAL,
     0xDEADBEEF,
     0x50435130,
-    20,
-    20,
+    21,
+    21,
     picoquic_packet_handshake,
     0xFFFFFFFF00000000ull,
     0,
@@ -182,6 +193,7 @@ static picoquic_packet_header hhandshake = {
     0,
     2,
     picoquic_packet_context_handshake,
+    0,
     0,
     0,
     0,
@@ -210,6 +222,7 @@ static picoquic_packet_header hphi0_c_32 = {
     0,
     3,
     picoquic_packet_context_application,
+    0,
     0,
     0,
     0,
@@ -243,6 +256,7 @@ static picoquic_packet_header hphi0_c_32_spin = {
     0,
     1,
     0,
+    0,
     0
 };
 
@@ -266,6 +280,7 @@ static picoquic_packet_header hphi1_noc_32 = {
     3,
     picoquic_packet_context_application,
     1,
+    0,
     0,
     0,
     0,

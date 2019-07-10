@@ -315,6 +315,43 @@ void picoquic_update_payload_length(
     }
 }
 
+static int picoquic_is_sending_old_invariant(
+    picoquic_cnx_t* cnx,
+    picoquic_packet_type_enum packet_type)
+{
+    int use_old_invariants;
+    uint32_t vn;
+
+    if ((cnx->cnx_state == picoquic_state_client_init || cnx->cnx_state == picoquic_state_client_init_sent) && packet_type == picoquic_packet_initial) {
+        vn = cnx->proposed_version;
+    }
+    else {
+        vn = picoquic_supported_versions[cnx->version_index].version;
+    }
+
+    /* Check whether to use old or new version of the invariants */
+    if ((vn & 0xFFFFFF00) == 0xFF000000) {
+        /* Draft versions before #20 use the old invariants */
+        int draft_nb = vn & 0xFF;
+        use_old_invariants = (draft_nb <= 20) ? 1 : 0;
+    }
+    else if ((vn & 0xFFFFFFF0) == 0 ||
+        vn == PICOQUIC_INTERNAL_TEST_VERSION_1 ||
+        vn == PICOQUIC_INTERNAL_TEST_VERSION_2) {
+        /* Final versions and internal versions use the new invariants */
+        use_old_invariants = 0;
+    }
+    else if ((vn & 0xF0000000) == 0) {
+        /* greasing version, number starts with 0 */
+        use_old_invariants = 1;
+    }
+    else {
+        use_old_invariants = 0;
+    }
+
+    return use_old_invariants;
+}
+
 uint32_t picoquic_create_packet_header(
     picoquic_cnx_t* cnx,
     picoquic_packet_type_enum packet_type,
@@ -372,16 +409,22 @@ uint32_t picoquic_create_packet_header(
             picoformat_32(&bytes[length], cnx->proposed_version);
         }
         else {
-            picoformat_32(&bytes[length],
-                picoquic_supported_versions[cnx->version_index].version);
+            picoformat_32(&bytes[length], picoquic_supported_versions[cnx->version_index].version);
         }
         length += 4;
 
-        bytes[length++] = picoquic_create_packet_header_cnxid_lengths(dest_cnx_id.id_len, local_cnxid->id_len);
+        if (picoquic_is_sending_old_invariant(cnx, packet_type)) {
+            bytes[length++] = picoquic_create_packet_header_cnxid_lengths(dest_cnx_id.id_len, local_cnxid->id_len);
 
-        length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, dest_cnx_id);
-        length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, *local_cnxid);
-
+            length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, dest_cnx_id);
+            length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, *local_cnxid);
+        }
+        else {
+            bytes[length++] = dest_cnx_id.id_len;
+            length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, dest_cnx_id);
+            bytes[length++] = local_cnxid->id_len;
+            length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, *local_cnxid);
+        }
         /* Special case of packet initial -- encode token as part of header */
         if (packet_type == picoquic_packet_initial) {
             length += (uint32_t)picoquic_varint_encode(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, cnx->retry_token_length);
@@ -429,7 +472,12 @@ uint32_t picoquic_predict_packet_header_length(
     }
     else {
         /* Compute length of a long packet header */
-        header_length = 1 + /* version */ 4 + /* cnx_id prefix */ 1;
+        if (picoquic_is_sending_old_invariant(cnx, packet_type)) {
+            header_length = 1 + /* version */ 4 + /* cnx_id prefix */ 1;
+        }
+        else {
+            header_length = 1 + /* version */ 4 + /* cnx_id length bytes  */ 2;
+        }
 
         /* add dest-id length */
         if (cnx->client_mode && (packet_type == picoquic_packet_initial ||
@@ -961,7 +1009,7 @@ int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
         byte_index = old_p->offset;
 
         while (ret == 0 && byte_index < old_p->length) {
-            ret = picoquic_skip_frame(&old_p->bytes[byte_index],
+            ret = picoquic_skip_frame(cnx, &old_p->bytes[byte_index],
                 old_p->length - byte_index, &frame_length, &frame_is_pure_ack);
 
             /* Check whether the data was already acked, which may happen in
@@ -1072,7 +1120,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                             packet_is_pure_ack = 0;
                             break;
                         }
-                        ret = picoquic_skip_frame(&old_p->bytes[byte_index],
+                        ret = picoquic_skip_frame(cnx, &old_p->bytes[byte_index],
                             old_p->length - byte_index, &frame_length, &frame_is_pure_ack);
                         byte_index += frame_length;
                     }
@@ -1216,7 +1264,7 @@ int picoquic_is_cnx_backlog_empty(picoquic_cnx_t* cnx)
 
 
             while (ret == 0 && byte_index < p->length) {
-                ret = picoquic_skip_frame(&p->bytes[byte_index],
+                ret = picoquic_skip_frame(cnx, &p->bytes[byte_index],
                     p->length - p->offset, &frame_length, &frame_is_pure_ack);
 
                 if (!frame_is_pure_ack) {
@@ -2095,6 +2143,10 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
             packet_type = picoquic_packet_initial;
         }
         break;
+    case picoquic_state_handshake_failure_resend:
+        pc = picoquic_packet_context_handshake;
+        packet_type = picoquic_packet_handshake;
+        break;
     case picoquic_state_disconnecting:
         packet_type = picoquic_packet_1rtt_protected;
         is_cleartext_mode = 0;
@@ -2207,7 +2259,9 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
             *next_wake_time = exit_time;
         }
         length = 0;
-    } else if (ret == 0 && (cnx->cnx_state == picoquic_state_disconnecting || cnx->cnx_state == picoquic_state_handshake_failure)) {
+    } else if (ret == 0 && (cnx->cnx_state == picoquic_state_disconnecting || 
+        cnx->cnx_state == picoquic_state_handshake_failure || 
+        cnx->cnx_state == picoquic_state_handshake_failure_resend)) {
         length = picoquic_predict_packet_header_length(
             cnx, packet_type);
         packet->ptype = packet_type;
@@ -2248,6 +2302,15 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
         }
 
         if (cnx->cnx_state == picoquic_state_handshake_failure) {
+            if (pc == picoquic_packet_context_initial &&
+                cnx->crypto_context[2].aead_encrypt != NULL) {
+                cnx->cnx_state = picoquic_state_handshake_failure_resend;
+            }
+            else {
+                cnx->cnx_state = picoquic_state_disconnected;
+            }
+        }
+        else if (cnx->cnx_state == picoquic_state_handshake_failure_resend) {
             cnx->cnx_state = picoquic_state_disconnected;
         }
         else {
@@ -2524,7 +2587,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                         /* If there are not enough paths, create and advertise */
                         while (ret == 0 && cnx->remote_parameters.migration_disabled == 0 &&
                             cnx->local_parameters.migration_disabled == 0 &&
-                            cnx->nb_paths < PICOQUIC_NB_PATH_TARGET) {
+                            cnx->nb_paths < (int)(cnx->remote_parameters.active_connection_id_limit + 1 - cnx->is_path_0_deleted)) {
                             ret = picoquic_prepare_new_path_and_id(cnx, &bytes[length],
                                 send_buffer_min_max - checksum_overhead - length,
                                 current_time, &data_bytes);
@@ -2759,6 +2822,7 @@ int picoquic_prepare_segment(picoquic_cnx_t* cnx, picoquic_path_t * path_x, pico
             ret = picoquic_prepare_packet_ready(cnx, path_x, packet, current_time, send_buffer, send_buffer_max, send_length, next_wake_time);
             break;
         case picoquic_state_handshake_failure:
+        case picoquic_state_handshake_failure_resend:
         case picoquic_state_disconnecting:
         case picoquic_state_closing_received:
         case picoquic_state_closing:

@@ -146,11 +146,11 @@ const picoquic_version_parameters_t picoquic_supported_versions[] = {
         picoquic_version_header_17,
         sizeof(picoquic_cleartext_internal_test_1_salt),
         picoquic_cleartext_internal_test_1_salt },
-    { PICOQUIC_TWELFTH_INTEROP_VERSION,
+    { PICOQUIC_THIRTEENTH_INTEROP_VERSION,
         picoquic_version_header_17,
         sizeof(picoquic_cleartext_draft_17_salt),
         picoquic_cleartext_draft_17_salt },
-    { PICOQUIC_TWELFTH_INTEROP_DRAFT19,
+    { PICOQUIC_TWELFTH_INTEROP_VERSION,
         picoquic_version_header_17,
         sizeof(picoquic_cleartext_draft_17_salt),
         picoquic_cleartext_draft_17_salt }
@@ -538,6 +538,7 @@ void picoquic_init_transport_parameters(picoquic_tp_t* tp, int client_mode)
     tp->max_packet_size = PICOQUIC_PRACTICAL_MAX_MTU;
     tp->max_datagram_size = 0;
     tp->ack_delay_exponent = 3;
+    tp->active_connection_id_limit = PICOQUIC_NB_PATH_TARGET;
 }
 
 
@@ -1129,11 +1130,81 @@ int picoquic_enqueue_cnxid_stash(picoquic_cnx_t * cnx,
     return ret;
 }
 
+int picoquic_remove_not_before_cid(picoquic_cnx_t* cnx, uint64_t not_before, uint64_t current_time)
+{
+    int ret = 0;
+    picoquic_cnxid_stash_t * next_stash = cnx->cnxid_stash_first;
+    picoquic_cnxid_stash_t * previous_stash = NULL;
+    picoquic_probe_t * next_probe = cnx->probe_first;
+
+    /* Destash all probes with old CID*/
+    while (ret == 0 && next_stash != NULL) {
+        if (next_stash->sequence < not_before) {
+            ret = picoquic_queue_retire_connection_id_frame(cnx, next_stash->sequence);
+            if (ret == 0){
+                next_stash = next_stash->next_in_stash;
+                if (previous_stash == NULL) {
+                    cnx->cnxid_stash_first = next_stash;
+                }
+                else {
+                    previous_stash->next_in_stash = next_stash;
+                }
+            }
+        }
+        else {
+            previous_stash = next_stash;
+            next_stash = next_stash->next_in_stash;
+        }
+    }
+
+
+    /* Mark all probes with all CID as failed. We cannot just delete the probe
+     * context, because we might receive an incoming response to a probe in flight.
+     * The code would create a connection error if the response could not be
+     * matched to a pending probe, so we need to keep the context around for at least
+     * one full round trip time. Instead of just deleting the probe, we bump up
+     * the number of transmissions, so the probe is deleted after a time-out. */
+    while (ret == 0 && next_probe != NULL) {
+        if (next_probe->sequence < not_before) {
+            /* Probe is using the old sequence */
+            next_probe->challenge_repeat_count = PICOQUIC_CHALLENGE_REPEAT_MAX + 1;
+        }
+        next_probe = next_probe->next_probe;
+    }
+
+    /* We need to stop transmitting data to the old CID. But we cannot just delete
+     * the correspondng paths,because there may be some data in transit. We must
+     * also ensure that at least one default path migrates successfully to a
+     * valid CID. As long as new CID are available, we can simply replace the
+     * old one by a new one. If no CID is available, the old path should be marked
+     * as failing, and thus scheduled for deletion after a time-out */
+
+    for (int i = 0; ret == 0 && i < cnx->nb_paths; i++) {
+        if (cnx->path[i]->remote_cnxid_sequence < not_before &&
+            cnx->path[i]->remote_cnxid.id_len > 0 && 
+            !cnx->path[i]->path_is_demoted) {
+            ret = picoquic_renew_connection_id(cnx, i);
+            if (ret != 0) {
+                DBG_PRINTF("Renew CNXID returns %x\n", ret);
+                if (i == 0) {
+                    ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
+                }
+                else {
+                    ret = 0;
+                    picoquic_demote_path(cnx, i, current_time);
+                }
+            }
+        }
+    }
+
+    return ret;
+}
+
 /*
  * Start using a new connection ID for the existing connection
  */
 
-int picoquic_renew_connection_id(picoquic_cnx_t* cnx)
+int picoquic_renew_connection_id(picoquic_cnx_t* cnx, int path_id)
 {
     int ret = 0;
     picoquic_cnxid_stash_t * stashed = NULL;
@@ -1149,10 +1220,10 @@ int picoquic_renew_connection_id(picoquic_cnx_t* cnx)
         if (stashed == NULL) {
             ret = PICOQUIC_ERROR_CNXID_NOT_AVAILABLE;
         } else {
-            ret = picoquic_queue_retire_connection_id_frame(cnx, cnx->path[0]->remote_cnxid_sequence);
-            cnx->path[0]->remote_cnxid = stashed->cnx_id;
-            cnx->path[0]->remote_cnxid_sequence = stashed->sequence;
-            memcpy(cnx->path[0]->reset_secret, stashed->reset_secret,
+            ret = picoquic_queue_retire_connection_id_frame(cnx, cnx->path[path_id]->remote_cnxid_sequence);
+            cnx->path[path_id]->remote_cnxid = stashed->cnx_id;
+            cnx->path[path_id]->remote_cnxid_sequence = stashed->sequence;
+            memcpy(cnx->path[path_id]->reset_secret, stashed->reset_secret,
                 PICOQUIC_RESET_SECRET_SIZE);
             free(stashed);
         }
@@ -2240,17 +2311,23 @@ int picoquic_connection_error(picoquic_cnx_t* cnx, uint16_t local_error, uint64_
 {
     if (cnx->cnx_state == picoquic_state_ready || 
         cnx->cnx_state == picoquic_state_client_ready_start || cnx->cnx_state == picoquic_state_server_false_start) {
-        cnx->local_error = local_error;
+        if (local_error > PICOQUIC_ERROR_CLASS) {
+            cnx->local_error = PICOQUIC_TRANSPORT_INTERNAL_ERROR;
+        }
+        else {
+            cnx->local_error = local_error;
+        }
         cnx->cnx_state = picoquic_state_disconnecting;
 
         DBG_PRINTF("Protocol error (%x)", local_error);
     } else if (cnx->cnx_state < picoquic_state_server_false_start) {
-        if (cnx->cnx_state != picoquic_state_handshake_failure) {
+        if (cnx->cnx_state != picoquic_state_handshake_failure &&
+            cnx->cnx_state != picoquic_state_handshake_failure_resend) {
             cnx->local_error = local_error;
-        }
-        cnx->cnx_state = picoquic_state_handshake_failure;
+            cnx->cnx_state = picoquic_state_handshake_failure;
 
-        DBG_PRINTF("Protocol error %x", local_error);
+            DBG_PRINTF("Protocol error %x", local_error);
+        }
     }
 
     cnx->offending_frame_type = frame_type;
@@ -2260,12 +2337,22 @@ int picoquic_connection_error(picoquic_cnx_t* cnx, uint16_t local_error, uint64_
 
 int picoquic_start_key_rotation(picoquic_cnx_t* cnx)
 {
-    int ret = picoquic_compute_new_rotated_keys(cnx);
+    int ret = 0;
+
+    /* Verify that a packet of the previous rotation was acked*/
+    if (cnx->cnx_state != picoquic_state_ready ||
+        cnx->crypto_epoch_sequence >
+        cnx->pkt_ctx[picoquic_packet_context_application].first_sack_item.end_of_sack_range) {
+        ret = PICOQUIC_ERROR_KEY_ROTATION_NOT_READY;
+    }
+    else {
+        ret = picoquic_compute_new_rotated_keys(cnx);
+    }
 
     if (ret == 0) {
         picoquic_apply_rotated_keys(cnx, 1);
-
         picoquic_crypto_context_free(&cnx->crypto_context_old);
+        cnx->crypto_epoch_sequence = cnx->pkt_ctx[picoquic_packet_context_application].send_sequence;
     }
 
     return ret;

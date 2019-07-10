@@ -428,7 +428,7 @@ int quic_client_migrate(picoquic_cnx_t * cnx, SOCKET_TYPE * fd, struct sockaddr 
             }
         }
         else if (force_migration == 2) {
-            ret = picoquic_renew_connection_id(cnx);
+            ret = picoquic_renew_connection_id(cnx, 0);
             if (ret != 0) {
                 if (ret == PICOQUIC_ERROR_MIGRATION_DISABLED) {
                     fprintf(stdout, "Migration disabled, cannot test CNXID renewal.\n");
@@ -647,7 +647,9 @@ int quic_client(const char* ip_address_text, int server_port,
                 ret = picoquic_esni_client_from_file(cnx_client, esni_rr_file);
             }
 
-            ret = picoquic_start_client_cnx(cnx_client);
+            if (ret == 0) {
+                ret = picoquic_start_client_cnx(cnx_client);
+            }
 
             if (ret == 0) {
                 if (picoquic_is_0rtt_available(cnx_client) && (proposed_version & 0x0a0a0a0a) != 0x0a0a0a0a) {

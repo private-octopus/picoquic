@@ -43,7 +43,7 @@ extern "C" {
 #define PICOQUIC_PRACTICAL_MAX_MTU 1440
 #define PICOQUIC_RETRY_SECRET_SIZE 64
 #define PICOQUIC_DEFAULT_0RTT_WINDOW 4096
-#define PICOQUIC_NB_PATH_TARGET 9
+#define PICOQUIC_NB_PATH_TARGET 8
 #define PICOQUIC_MAX_PACKETS_IN_POOL 0x8000
 
 #define PICOQUIC_NUMBER_OF_EPOCHS 4
@@ -127,6 +127,7 @@ typedef struct st_picoquic_packet_header_t {
     unsigned int spin : 1;
     unsigned int has_spin_bit : 1;
     unsigned int has_reserved_bit_set : 1;
+    unsigned int is_old_invariant : 1;
 
     uint32_t token_length;
     uint8_t * token_bytes;
@@ -167,9 +168,10 @@ typedef struct st_picoquic_packet_header_t {
 #define PICOQUIC_NINTH_BIS_INTEROP_VERSION 0xFF000010
 #define PICOQUIC_TENTH_INTEROP_VERSION 0xFF000011
 #define PICOQUIC_ELEVENTH_INTEROP_VERSION 0xFF000012
-#endif
 #define PICOQUIC_TWELFTH_INTEROP_DRAFT19 0xFF000013
+#endif
 #define PICOQUIC_TWELFTH_INTEROP_VERSION 0xFF000014
+#define PICOQUIC_THIRTEENTH_INTEROP_VERSION 0xFF000016
 #define PICOQUIC_INTERNAL_TEST_VERSION_1 0x50435130
 #define PICOQUIC_INTERNAL_TEST_VERSION_2 0x50435131
 
@@ -307,6 +309,7 @@ typedef enum {
     picoquic_tp_max_ack_delay = 11,
     picoquic_tp_disable_migration = 12,
     picoquic_tp_server_preferred_address = 13,
+    picoquic_tp_active_connection_id_limit = 14,
     picoquic_tp_max_datagram_size = 32 /* per draft-pauly-quic-datagram-02 */
 } picoquic_tp_enum;
 
@@ -682,6 +685,8 @@ typedef struct st_picoquic_cnx_t {
     unsigned int path_demotion_needed : 1; /* If at least one path was recently demoted */
     unsigned int alt_path_challenge_needed : 1; /* If at least one alt path challenge is needed or in progress */
     unsigned int is_handshake_finished : 1; /* If there are no more packets to ack or retransmit in initial  or handshake contexts */
+    unsigned int is_path_0_deleted : 1; /* If the initial connection ID has been deleted */
+    unsigned int is_1rtt_received : 1; /* If the initial connection ID has been deleted */
 
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;
@@ -724,6 +729,7 @@ typedef struct st_picoquic_cnx_t {
 
     /* TLS context, TLS Send Buffer, streams, epochs */
     void* tls_ctx;
+    uint64_t crypto_epoch_sequence;
     uint64_t crypto_rotation_sequence;
     uint64_t crypto_rotation_time_guard;
     struct st_ptls_buffer_t* tls_sendbuf;
@@ -794,6 +800,7 @@ typedef struct st_picoquic_cnx_t {
     int nb_path_alloc;
     int path_sequence_next;
     /* Management of the CNX-ID stash */
+    uint64_t retire_cnxid_before;
     picoquic_cnxid_stash_t * cnxid_stash_first;
     /* Management of ongoing probes */
     picoquic_probe_t * probe_first;
@@ -828,6 +835,8 @@ picoquic_cnxid_stash_t * picoquic_dequeue_cnxid_stash(picoquic_cnx_t* cnx);
 int picoquic_enqueue_cnxid_stash(picoquic_cnx_t * cnx,
     const uint64_t sequence, const uint8_t cid_length, const uint8_t * cnxid_bytes,
     const uint8_t * secret_bytes, picoquic_cnxid_stash_t ** pstashed);
+
+int picoquic_remove_not_before_cid(picoquic_cnx_t* cnx, uint64_t not_before, uint64_t current_time);
 
 /* Management of probes */
 picoquic_probe_t * picoquic_find_probe_by_challenge(const picoquic_cnx_t* cnx, uint64_t challenge);
@@ -1105,9 +1114,9 @@ int picoquic_prepare_misc_frame(picoquic_misc_frame_header_t* misc_frame, uint8_
 int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_t* bytes, size_t bytes_max,
     int epoch, struct sockaddr* addr_from, struct sockaddr* addr_to, uint64_t current_time);
 
-int picoquic_skip_frame(uint8_t* bytes, size_t bytes_max, size_t* consumed, int* pure_ack);
+int picoquic_skip_frame(picoquic_cnx_t* cnx, uint8_t* bytes, size_t bytes_max, size_t* consumed, int* pure_ack);
 
-int picoquic_decode_closing_frames(uint8_t* bytes,
+int picoquic_decode_closing_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
     size_t bytes_max, int* closing_received);
 
 uint64_t picoquic_decode_transport_param_stream_id(uint64_t rank, int extension_mode, int stream_type);

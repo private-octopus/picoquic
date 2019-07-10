@@ -36,26 +36,26 @@ static uint8_t test_frame_type_padding[] = { 0, 0, 0 };
 static uint8_t test_frame_type_reset_stream[] = {
     picoquic_frame_type_reset_stream,
     17,
-    0, 1,
+    1,
     1
 };
 
 static uint8_t test_type_connection_close[] = {
     picoquic_frame_type_connection_close,
-    0xcf, 0xff, 0x00,
+    0x80, 0x00, 0xCF, 0xFF, 0,
     9,
     '1', '2', '3', '4', '5', '6', '7', '8', '9'
 };
 
 static uint8_t test_type_application_close[] = {
     picoquic_frame_type_application_close,
-    0, 0,
+    0,
     0
 };
 
 static uint8_t test_type_application_close_reason[] = {
     picoquic_frame_type_application_close,
-    4, 4,
+    0x44, 4,
     4,
     't', 'e', 's', 't'
 };
@@ -106,6 +106,7 @@ static uint8_t test_frame_type_streams_blocked_unidir[] = {
 static uint8_t test_frame_type_new_connection_id[] = {
     picoquic_frame_type_new_connection_id,
     7,
+    0,
     8,
     1, 2, 3, 4, 5, 6, 7, 8,
     0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7,
@@ -331,10 +332,12 @@ static int skip_test_packet(uint8_t * bytes, size_t bytes_max)
     int pure_ack;
     int ret = 0;
     size_t byte_index = 0;
+    picoquic_cnx_t cnx;
+    memset(&cnx, 0, sizeof(cnx));
 
     while (ret == 0 && byte_index < bytes_max) {
         size_t consumed;
-        ret = picoquic_skip_frame(bytes + byte_index, bytes_max - byte_index, &consumed, &pure_ack);
+        ret = picoquic_skip_frame(&cnx, bytes + byte_index, bytes_max - byte_index, &consumed, &pure_ack);
         if (ret == 0) {
             byte_index += consumed;
         }
@@ -366,6 +369,9 @@ int skip_frame_test()
     uint64_t random_context = 0xBABED011;
     int fuzz_count = 0;
     int fuzz_fail = 0;
+    picoquic_cnx_t cnx;
+
+    memset(&cnx, 0, sizeof(cnx)); /* Null value gets default test version */
 
     for (size_t i = 0; i < nb_test_skip_list; i++) {
         for (int sharp_end = 0; sharp_end < 2; sharp_end++) {
@@ -381,7 +387,7 @@ int skip_frame_test()
                 byte_max += sizeof(extra_bytes);
             }
 
-            t_ret = picoquic_skip_frame(buffer, byte_max, &consumed, &pure_ack);
+            t_ret = picoquic_skip_frame(&cnx, buffer, byte_max, &consumed, &pure_ack);
 
             if (t_ret != 0) {
                 DBG_PRINTF("Skip frame <%s> fails, ret = %d\n", test_skip_list[i].name, t_ret);
@@ -502,7 +508,7 @@ int parse_frame_test()
     return ret;
 }
 
-void picoquic_log_frames(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t length);
+void picoquic_log_frames(picoquic_cnx_t * cnx, FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t length);
 
 static char const* log_test_file = "log_test.txt";
 static char const* log_fuzz_test_file = "log_fuzz_test.txt";
@@ -634,6 +640,8 @@ int logger_test()
     uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
     uint8_t fuzz_buffer[PICOQUIC_MAX_PACKET_SIZE];
     uint64_t random_context = 0xF00BAB;
+    picoquic_cnx_t cnx;
+    memset(&cnx, 0, sizeof(cnx));
 
 #ifdef _WINDOWS
     if (fopen_s(&F, log_test_file, "w") != 0) {
@@ -651,7 +659,7 @@ int logger_test()
     }
     else {
         for (size_t i = 0; i < nb_test_skip_list; i++) {
-            picoquic_log_frames(F, 0, test_skip_list[i].val, test_skip_list[i].len);
+            picoquic_log_frames(&cnx, F, 0, test_skip_list[i].val, test_skip_list[i].len);
         }
         picoquic_log_picotls_ticket(F, logger_test_cid,
             log_test_ticket, (uint16_t) sizeof(log_test_ticket));
@@ -694,7 +702,7 @@ int logger_test()
         }
         else {
             ret &= fprintf(F, "Log packet test #%d\n", (int)i);
-            picoquic_log_frames(F, 0, buffer, bytes_max);
+            picoquic_log_frames(&cnx, F, 0, buffer, bytes_max);
             fclose(F);
             F = NULL;
         }
@@ -751,14 +759,14 @@ int logger_test()
         }
 #endif
         ret &= fprintf(F, "Log fuzz test #%d\n", (int)i);
-        picoquic_log_frames(F, 0, buffer, bytes_max);
+        picoquic_log_frames(&cnx, F, 0, buffer, bytes_max);
 
         /* Attempt to log fuzzed packets, and hope nothing crashes */
         for (size_t j = 0; j < 100; j++) {
             ret &= fprintf(F, "Log fuzz test #%d, packet %d\n", (int)i, (int)j);
             fflush(F);
             skip_test_fuzz_packet(fuzz_buffer, buffer, bytes_max, &random_context);
-            picoquic_log_frames(F, 0, fuzz_buffer, bytes_max);
+            picoquic_log_frames(&cnx, F, 0, fuzz_buffer, bytes_max);
         }
         fclose(F);
         F = NULL;
@@ -951,7 +959,7 @@ int new_cnxid_test()
                 size_t skipped = 0;
                 int pure_ack = 0;
 
-                ret = picoquic_skip_frame(frame_buffer, sizeof(frame_buffer), &skipped, &pure_ack);
+                ret = picoquic_skip_frame(cnx, frame_buffer, sizeof(frame_buffer), &skipped, &pure_ack);
 
                 if (ret != 0) {
                     DBG_PRINTF("Cannot skip connection ID frame, ret = %x\n", ret);

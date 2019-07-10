@@ -1355,7 +1355,7 @@ static uint32_t initial_fuzzer(void * fuzz_ctx, picoquic_cnx_t* cnx,
         }
         else {
             uint64_t fuzz_pilot = picoquic_test_random(&ctx->random_context);
-            uint32_t fuzz_index = (uint32_t)((fuzz_pilot & 0xFFFF) % length);
+            uint32_t fuzz_index = (uint32_t)((fuzz_pilot & 0xFFFF) % (uint32_t)length);
             uint8_t fuzz_length;
             fuzz_pilot >>= 16;
             fuzz_length = (uint8_t)(((fuzz_pilot & 0xFF) % 5) + 1);

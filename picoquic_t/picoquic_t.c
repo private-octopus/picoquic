@@ -143,6 +143,7 @@ static const picoquic_test_def_t test_table[] = {
     { "preferred_address", preferred_address_test},
     { "cnxid_renewal",  cnxid_renewal_test },
     { "retire_cnxid", retire_cnxid_test },
+    { "not_before_cnxid", not_before_cnxid_test },
     { "server_busy", server_busy_test },
     { "initial_close", initial_close_test },
     { "initial_server_close", initial_server_close_test },
@@ -364,7 +365,7 @@ break;
                         }
                     }
                     else if (stress_minutes == 0) {
-                        fprintf(stderr, "test number %d (%s) is bypassed.\n", (int)i, test_table[i].test_name);
+                        fprintf(stdout, "Test number %d (%s) is bypassed.\n", (int)i, test_table[i].test_name);
                     }
                 }
             }
@@ -398,16 +399,16 @@ break;
         }
 
         if (nb_test_failed > 0) {
-            fprintf(stderr, "Failed test(s): ");
+            fprintf(stdout, "Failed test(s): ");
             for (size_t i = 0; i < nb_tests; i++) {
                 if (test_status[i] == test_failed) {
-                    fprintf(stderr, "%s ", test_table[i].test_name);
+                    fprintf(stdout, "%s ", test_table[i].test_name);
                 }
             }
-            fprintf(stderr, "\n");
+            fprintf(stdout, "\n");
 
             if (disable_debug && retry_failed_test) {
-                debug_printf_push_stream(stderr);
+                /* debug_printf_push_stream(stderr); */
                 debug_printf_resume();
                 ret = 0;
                 for (size_t i = 0; i < nb_tests; i++) {
@@ -418,7 +419,7 @@ break;
                         is_fuzz = 1;
                     }
                     if (test_status[i] == test_failed) {
-                        fprintf(stderr, "Retrying %s:\n", test_table[i].test_name);
+                        fprintf(stdout, "Retrying %s:\n", test_table[i].test_name);
                         if (is_fuzz) {
                             debug_printf_suspend();
                         }
@@ -436,16 +437,16 @@ break;
                     }
                 }
                 if (ret == 0) {
-                    fprintf(stderr, "All tests pass after second try.\n");
+                    fprintf(stdout, "All tests pass after second try.\n");
                 }
                 else {
-                    fprintf(stderr, "Still failing: ");
+                    fprintf(stdout, "Still failing: ");
                     for (size_t i = 0; i < nb_tests; i++) {
                         if (test_status[i] == test_failed) {
-                            fprintf(stderr, "%s ", test_table[i].test_name);
+                            fprintf(stdout, "%s ", test_table[i].test_name);
                         }
                     }
-                    fprintf(stderr, "\n");
+                    fprintf(stdout, "\n");
                 }
             }
         }

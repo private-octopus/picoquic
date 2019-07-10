@@ -30,7 +30,7 @@ static char const* test_alpn[] = { "hq05", "hq07", "hq09" };
 static const size_t nb_test_sni = sizeof(test_sni) / sizeof(char const*);
 static const size_t nb_test_alpn = sizeof(test_alpn) / sizeof(char const*);
 static picoquic_tp_t test_tp = {
-    123, 456, 78, 91011, 1234, 567, 0, 0, 0, 0, 0,
+    123, 456, 78, 91011, 1234, 567, 0, 0, 0, 0, 0, 0,
     { 0, {0,0,0,0}, 0, {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}, 0,
         {{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}, 0},
         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}}
