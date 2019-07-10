@@ -365,7 +365,7 @@ break;
                         }
                     }
                     else if (stress_minutes == 0) {
-                        fprintf(stderr, "test number %d (%s) is bypassed.\n", (int)i, test_table[i].test_name);
+                        fprintf(stdout, "Test number %d (%s) is bypassed.\n", (int)i, test_table[i].test_name);
                     }
                 }
             }
