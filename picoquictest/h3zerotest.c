@@ -936,8 +936,8 @@ int h09_server_test()
 
 int generic_server_test()
 {
-    char const * alpn_09 = "hq-19";
-    char const * alpn_3 = "h3-19";
+    char const * alpn_09 = "hq-22";
+    char const * alpn_3 = "h3-22";
     int ret = demo_server_test(alpn_09, picoquic_demo_server_callback, 0);
 
     if (ret != 0) {
