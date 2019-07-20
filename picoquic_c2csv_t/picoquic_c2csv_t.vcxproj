@@ -101,7 +101,7 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(OutDir);$(SolutionDir)..\picotls\picotlsvs\$(Platform)\$(Configuration)\;$(OPENSSL64DIR);$(OPENSSL64DIR)\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>picoquic.lib;picotls.lib;cifra.lib;microecc.lib;ws2_32.lib;libcrypto.lib;bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>picoquic.lib;picotls-core.lib;picotls-esni.lib;picotls-minicrypto.lib;picotls-minicrypto-deps.lib;picotls-openssl.lib;ws2_32.lib;libssl.lib;libcrypto.lib;bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -119,7 +119,7 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(OutDir);$(SolutionDir)..\picotls\picotlsvs\$(Configuration)\;$(OPENSSLDIR);$(OPENSSLDIR)\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>picoquic.lib;picotls.lib;cifra.lib;microecc.lib;ws2_32.lib;libcrypto.lib;bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>picoquic.lib;picotls-core.lib;picotls-esni.lib;picotls-minicrypto.lib;picotls-minicrypto-deps.lib;picotls-openssl.lib;ws2_32.lib;libssl.lib;libcrypto.lib;bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -141,7 +141,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(OutDir);$(SolutionDir)..\picotls\picotlsvs\$(Configuration)\;$(OPENSSLDIR);$(OPENSSLDIR)\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>picoquic.lib;picotls.lib;cifra.lib;microecc.lib;ws2_32.lib;libcrypto.lib;bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>picoquic.lib;picotls-core.lib;picotls-esni.lib;picotls-minicrypto.lib;picotls-minicrypto-deps.lib;picotls-openssl.lib;ws2_32.lib;libssl.lib;libcrypto.lib;bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -163,7 +163,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(OutDir);$(SolutionDir)..\picotls\picotlsvs\$(Platform)\$(Configuration)\;$(OPENSSL64DIR);$(OPENSSL64DIR)\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>picoquic.lib;picotls.lib;cifra.lib;microecc.lib;ws2_32.lib;libcrypto.lib;bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>picoquic.lib;picotls-core.lib;picotls-esni.lib;picotls-minicrypto.lib;picotls-minicrypto-deps.lib;picotls-openssl.lib;ws2_32.lib;libssl.lib;libcrypto.lib;bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
