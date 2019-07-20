@@ -3403,8 +3403,9 @@ uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, uint8_t* bytes
             picoquic_probe_t * probe = picoquic_find_probe_by_challenge(cnx, response);
 
             if (probe != NULL){
-                if (addr_from != NULL && picoquic_compare_addr(addr_from, (struct sockaddr *)&probe->peer_addr) == 0 &&
-                    addr_to != NULL && picoquic_compare_addr(addr_to, (struct sockaddr *)&probe->local_addr) == 0) {
+                if (picoquic_supported_versions[cnx->version_index].version != PICOQUIC_TWELFTH_INTEROP_VERSION ||
+                    (addr_from != NULL && picoquic_compare_addr(addr_from, (struct sockaddr *)&probe->peer_addr) == 0 &&
+                    addr_to != NULL && picoquic_compare_addr(addr_to, (struct sockaddr *)&probe->local_addr) == 0)) {
                     probe->challenge_verified = 1;
                 }
                 else {

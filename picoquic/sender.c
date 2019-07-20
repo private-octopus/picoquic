@@ -1616,7 +1616,7 @@ int picoquic_prepare_server_address_migration(picoquic_cnx_t* cnx)
             if (ipv6_received) {
                 /* configure an IPv6 sockaddr */
                 struct sockaddr_in6 * d6 = (struct sockaddr_in6 *)&dest_addr;
-                d6->sin6_family = AF_INET;
+                d6->sin6_family = AF_INET6;
                 d6->sin6_port = htons(cnx->remote_parameters.prefered_address.ipv6Port);
                 memcpy(&d6->sin6_addr, cnx->remote_parameters.prefered_address.ipv6Address, 16);
             }

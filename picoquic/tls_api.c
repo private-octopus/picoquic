@@ -369,6 +369,7 @@ int picoquic_client_hello_call_back(ptls_on_client_hello_t* on_hello_cb_ctx,
     ptls_t* tls, ptls_on_client_hello_parameters_t *params)
 {
     int alpn_found = 0;
+    int ret = 0;
     picoquic_quic_t** ppquic = (picoquic_quic_t**)(((char*)on_hello_cb_ctx) + sizeof(ptls_on_client_hello_t));
     picoquic_quic_t* quic = *ppquic;
 
@@ -409,8 +410,12 @@ int picoquic_client_hello_call_back(ptls_on_client_hello_t* on_hello_cb_ctx,
             if (params->negotiated_protocols.list[i].len > 0) {
                 ptls_set_negotiated_protocol(tls,
                     (char const*)params->negotiated_protocols.list[i].base, params->negotiated_protocols.list[i].len);
+                alpn_found = 1;
                 break;
             }
+        }
+        if (alpn_found == 0) {
+            ret = PTLS_ALERT_NO_APPLICATION_PROTOCOL;
         }
     }
 
