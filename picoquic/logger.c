@@ -134,6 +134,7 @@ void picoquic_log_packet_address(FILE* F, uint64_t log_cnxid64, picoquic_cnx_t* 
         struct sockaddr_in6* s6 = (struct sockaddr_in6*)addr_peer;
         uint8_t* addr = (uint8_t*)&s6->sin6_addr;
 
+        fprintf(F, "[");
         for (int i = 0; i < 8; i++) {
             if (i != 0) {
                 fprintf(F, ":");
@@ -145,6 +146,7 @@ void picoquic_log_packet_address(FILE* F, uint64_t log_cnxid64, picoquic_cnx_t* 
                 fprintf(F, "%x", addr[(2 * i) + 1]);
             }
         }
+        fprintf(F, "]:%d\n", ntohs(s6->sin6_port));
     }
 
     if (cnx != NULL) {
