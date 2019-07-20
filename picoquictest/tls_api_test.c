@@ -5831,6 +5831,11 @@ int optimistic_ack_test_one(int shall_spoof_ack)
 
         ret = tls_api_one_scenario_body_connect(test_ctx, &simulated_time, 0,
             0, 0);
+
+        if (ret != 0)
+        {
+            DBG_PRINTF("Connect scenario returns %d\n", ret);
+        }
     }
 
     /* Prepare to send data */
@@ -5920,6 +5925,9 @@ int optimistic_ack_test_one(int shall_spoof_ack)
     else {
         if (ret == 0) {
             ret = tls_api_one_scenario_body_verify(test_ctx, &simulated_time, 0);
+            if (ret != 0) {
+                DBG_PRINTF("Scenario verification returns %d", ret);
+            }
         }
     }
 
