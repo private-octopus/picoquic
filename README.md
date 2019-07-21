@@ -49,7 +49,7 @@ builds, the tests are run through a command line program.
 As explained in the Wiki, Picoquic is actively tested against other implementations
 during the QUIC Interop days. See https://github.com/private-octopus/picoquic/wiki/QUIC-milestones-and-interop-testing.
 
-The current version is aligned with draft 17. Most big features are now tested, including
+The current version is aligned with draft 22. All big features are supported, including
 the interface between QUIC and TLS, 0-RTT, migration and key rollover. The state of
 development is tracked in the list of issues in this repository.
 
@@ -67,8 +67,8 @@ Picoquic is developed in C, and can be built under Windows or Linux. Building th
 project requires first managing the dependencies, [Picotls](https://github.com/h2o/picotls)
 and OpenSSL. Please note that you will need a recent version of Picotls --
 the Picotls API has eveolved recently to support the latest version of QUIC. The
-current code is tested against the Picotls version of Wed Mar 20 14:25:57 2019 +0900,
-after commit `4e6080b6a1ede0d3b23c72a8be73b46ecaf1a084`.
+current code is tested against the Picotls version of Sat Jul 20 15:24:49 2019 -0500,
+after commit `850b3a1eef82b6e3016ede301494fe526bae22c7`.
 
 ## Picoquic on Windows
 
@@ -123,9 +123,8 @@ release. The sources are in "picoquicfirst/picoquicdemo.c".
 ## Testing previous versions
 
 The code is constantly updated to track the latest version of the specification. It currently
-conforms to draft-17, and will only negotiate support for the corresponding version `0xFF000011`.
-The previous version, draft-16, can be tested by downloading from Github the code at the
-commit `5370eaadbf3e138dc9319a742488edccf40b5a12`, dated `Wed Dec 19 22:07:48 2018 -0800`.
+conforms to draft-22, and will negotiate support for the corresponding version `0xFF000016`.
+It will also accept negotiation of version `0xFF000014`, draft-20. 
 
 
 
