@@ -805,6 +805,8 @@ void picoquic_register_path(picoquic_cnx_t* cnx, picoquic_path_t * path_x)
     if (path_x->peer_addr_len != 0) {
         (void)picoquic_register_net_id(cnx->quic, cnx, cnx->path[0], (struct sockaddr *)&path_x->peer_addr);
     }
+
+    path_x->path_is_registered = 1;
 }
 
 /* To delete a path, we need to delete the data allocated to the path: search items in
@@ -980,6 +982,32 @@ void picoquic_promote_path_to_default(picoquic_cnx_t* cnx, int path_index, uint6
         cnx->path[path_index] = cnx->path[0];
         cnx->path[0] = path_x;
     }
+}
+
+/* Fill path data from probe */
+void picoquic_fill_path_data_from_probe(picoquic_cnx_t* cnx, int path_id, picoquic_probe_t * probe, struct sockaddr * addr_peer, struct sockaddr * addr_local)
+{
+    cnx->path[path_id]->path_is_activated = 1;
+    cnx->path[path_id]->remote_cnxid = probe->remote_cnxid;
+    cnx->path[path_id]->remote_cnxid_sequence = probe->sequence;
+    for (int ichal = 0; ichal < PICOQUIC_CHALLENGE_REPEAT_MAX; ichal++) {
+        cnx->path[path_id]->challenge[ichal] = probe->challenge[ichal];
+    }
+    cnx->path[path_id]->challenge_time = probe->challenge_time;
+    cnx->path[path_id]->challenge_repeat_count = probe->challenge_repeat_count;
+    cnx->path[path_id]->challenge_required = probe->challenge_required;
+    cnx->path[path_id]->challenge_verified = probe->challenge_verified;
+    cnx->path[path_id]->challenge_failed = probe->challenge_failed;
+    /* No challenge required, since we already sent one for the probe. */
+    if (addr_peer != NULL) {
+        cnx->path[path_id]->peer_addr_len = picoquic_store_addr(&cnx->path[path_id]->peer_addr, addr_peer);
+    }
+    if (addr_local != NULL) {
+        cnx->path[path_id]->local_addr_len = picoquic_store_addr(&cnx->path[path_id]->local_addr, addr_local);
+    }
+
+    /* Delete the probe, since the data have moved to the path */
+    picoquic_delete_probe(cnx, probe);
 }
 
 /*
@@ -1352,6 +1380,74 @@ void picoquic_delete_failed_probes(picoquic_cnx_t* cnx)
     }
 }
 
+/* Promote successful probe if one was acknowledged by the previously received packet */
+void picoquic_promote_successful_probe(picoquic_cnx_t* cnx, uint64_t current_time)
+{
+    if (cnx->has_successful_probe && (
+        cnx->cnx_state == picoquic_state_ready ||
+        cnx->cnx_state == picoquic_state_client_ready_start)) {
+        picoquic_probe_t * probe = cnx->probe_first;
+        picoquic_probe_t * previous_probe;
+
+        cnx->has_successful_probe = 0;
+
+        while (probe != NULL) {
+            if (!probe->challenge_verified) {
+                /* Nothing to promote here */
+                probe = probe->next_probe;
+            }
+            else {
+                break;
+            }
+        }
+
+        if (probe != NULL) {
+            int path_index;
+
+            path_index = picoquic_create_path(cnx, current_time, NULL, NULL);
+
+            if (path_index >= 0) {
+                picoquic_fill_path_data_from_probe(cnx, path_index, probe, (struct sockaddr *)&probe->peer_addr,
+                    (probe->local_addr_len > 0) ? (struct sockaddr *)&probe->local_addr : (struct sockaddr *)NULL);
+
+                /* set the CNX_ID len to the default value for the connection, without actually registering the path. */
+                cnx->path[path_index]->local_cnxid.id_len = cnx->path[0]->local_cnxid.id_len;
+
+                picoquic_promote_path_to_default(cnx, path_index, current_time);
+            }
+
+            /* We should remove all other successful probes from the list, because either probing
+             * was successful, or we do not have the resource to create the required path*/
+            probe = cnx->probe_first;
+            previous_probe = NULL;
+
+            while (probe != NULL) {
+                if (!probe->challenge_verified) {
+                    previous_probe = probe;
+                    probe = probe->next_probe;
+                }
+                else {
+                    picoquic_probe_t * abandoned = probe;
+                    probe = probe->next_probe;
+
+                    if (previous_probe == NULL) {
+                        cnx->probe_first = probe;
+                    }
+                    else {
+                        previous_probe->next_probe = probe;
+                    }
+
+                    /* Before deleting, post a notification to the peer */
+                    (void)picoquic_queue_retire_connection_id_frame(cnx, abandoned->sequence);
+                    free(abandoned);
+                }
+            }
+        }
+    }
+}
+
+/* Create probe */
+
 int picoquic_create_probe(picoquic_cnx_t* cnx, const struct sockaddr* addr_to, const struct sockaddr* addr_from)
 {
     int ret = 0;
@@ -1518,7 +1614,8 @@ void picoquic_add_output_streams(picoquic_cnx_t* cnx, uint64_t old_limit, uint64
             if (stream->stream_id > new_limit) {
                 break;
             }
-            if (IS_LOCAL_STREAM_ID(stream->stream_id, cnx->client_mode) && (IS_BIDIR_STREAM_ID(stream->stream_id) == is_bidir)) {
+            if (IS_LOCAL_STREAM_ID(stream->stream_id, cnx->client_mode) && (IS_BIDIR_STREAM_ID(stream->stream_id) == is_bidir)
+                && stream->is_output_stream == 0) {
                 stream->next_output_stream = cnx->first_output_stream;
                 cnx->first_output_stream = stream;
                 stream->is_output_stream = 1;

@@ -3117,6 +3117,9 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     memset(&addr_to_log, 0, sizeof(addr_to_log));
     *send_length = 0;
 
+    /* Promote successful probe */
+    picoquic_promote_successful_probe(cnx, current_time);
+
     /* Remove delete paths */
     if (cnx->path_demotion_needed) {
         picoquic_delete_abandoned_paths(cnx, current_time, &next_wake_time);

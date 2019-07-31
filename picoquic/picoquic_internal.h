@@ -536,6 +536,7 @@ typedef struct st_picoquic_path_t {
     unsigned int alt_challenge_required : 1;
     unsigned int alt_response_required : 1;
     unsigned int current_spin : 1;
+    unsigned int path_is_registered : 1;
 
     /* number of retransmissions observed on path */
     uint64_t retrans_count;
@@ -687,6 +688,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int is_handshake_finished : 1; /* If there are no more packets to ack or retransmit in initial  or handshake contexts */
     unsigned int is_path_0_deleted : 1; /* If the initial connection ID has been deleted */
     unsigned int is_1rtt_received : 1; /* If the initial connection ID has been deleted */
+    unsigned int has_successful_probe : 1; /* At least one probe was successful */
 
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;
@@ -828,6 +830,7 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index);
 void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_time);
 void picoquic_promote_path_to_default(picoquic_cnx_t* cnx, int path_index, uint64_t current_time);
 void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t * next_wake_time);
+void picoquic_fill_path_data_from_probe(picoquic_cnx_t* cnx, int path_id, picoquic_probe_t * probe, struct sockaddr * addr_peer, struct sockaddr * addr_local);
 
 /* Management of the CNX-ID stash */
 picoquic_cnxid_stash_t * picoquic_dequeue_cnxid_stash(picoquic_cnx_t* cnx);
@@ -846,6 +849,7 @@ picoquic_probe_t * picoquic_find_probe_by_addr(const picoquic_cnx_t* cnx,
 
 void picoquic_delete_probe(picoquic_cnx_t* cnx, picoquic_probe_t * probe);
 void picoquic_delete_failed_probes(picoquic_cnx_t* cnx);
+void picoquic_promote_successful_probe(picoquic_cnx_t* cnx, uint64_t current_time);
 
 /* handling of retransmission queue */
 picoquic_packet_t* picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet_t* p, int should_free);

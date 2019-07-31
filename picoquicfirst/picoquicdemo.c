@@ -528,9 +528,10 @@ int quic_client(const char* ip_address_text, int server_port,
     int zero_rtt_available = 0;
     size_t client_sc_nb = 0;
     picoquic_demo_stream_desc_t * client_sc = NULL;
+    int is_first_stop = 1;
 
     if (alpn == NULL) {
-        alpn = "h3-20";
+        alpn = "h3-22";
     }
 
     if (no_disk) {

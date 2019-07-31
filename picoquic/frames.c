@@ -439,7 +439,7 @@ int picoquic_prepare_new_connection_id_frame(picoquic_cnx_t * cnx, picoquic_path
 
     *consumed = 0;
 
-    if (path_x->path_sequence > 0 && path_x->local_cnxid.id_len > 0) {
+    if (path_x->path_sequence > 0 && path_x->local_cnxid.id_len > 0 && path_x->path_is_registered) {
         if (bytes_max < 2) {
             ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
         } else {
@@ -621,7 +621,7 @@ uint8_t* picoquic_decode_retire_connection_id_frame(picoquic_cnx_t* cnx, uint8_t
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
             picoquic_frame_type_retire_connection_id);
     }
-    else if (sequence == path_x->path_sequence) {
+    else if (sequence == path_x->path_sequence && path_x->path_is_registered) {
         /* Cannot delete the path through which it arrives */
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
             picoquic_frame_type_retire_connection_id);
@@ -630,7 +630,7 @@ uint8_t* picoquic_decode_retire_connection_id_frame(picoquic_cnx_t* cnx, uint8_t
         /* Go through the list of paths to find the connection ID */
 
         for (int i = 0; i < cnx->nb_paths; i++) {
-            if (cnx->path[i]->path_sequence == sequence) {
+            if (cnx->path[i]->path_sequence == sequence && path_x->path_is_registered) {
                 if (sequence == 0) {
                     cnx->is_path_0_deleted = 1;
                 }
@@ -1047,10 +1047,10 @@ uint8_t* picoquic_decode_stream_frame(picoquic_cnx_t* cnx, uint8_t* bytes, const
 picoquic_stream_head_t* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
 {
     picoquic_stream_head_t* start_stream = NULL;
-    picoquic_stream_head_t* previous_stream = NULL;
     picoquic_stream_head_t* found_stream = NULL;
-    picoquic_stream_head_t* previous_start = NULL;
-    int should_delete_start =  0;
+    picoquic_stream_head_t* previous_stream = NULL;
+    picoquic_stream_head_t* end_of_second_pass = NULL;
+    int is_second_pass = 0;
 
     if (cnx->high_priority_stream_id != (uint64_t)((int64_t)-1)) {
         picoquic_stream_head_t* hi_pri_stream = NULL;
@@ -1089,16 +1089,20 @@ picoquic_stream_head_t* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
     if (cnx->last_visited_stream != NULL) {
         previous_stream = cnx->last_visited_stream;
         start_stream = cnx->last_visited_stream->next_output_stream;
+        end_of_second_pass = start_stream;
+        cnx->last_visited_stream = NULL;
     }
 
     if (start_stream == NULL) {
         previous_stream = NULL;
         start_stream = cnx->first_output_stream;
+        is_second_pass = 1; 
     }
 
     /* Look for a ready stream */
     if (start_stream != NULL) {
         picoquic_stream_head_t* stream = start_stream;
+
         do {
             if ((cnx->maxdata_remote > cnx->data_sent && stream->sent_offset < stream->maxdata_remote && (stream->is_active ||
                 (stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset) ||
@@ -1112,30 +1116,19 @@ picoquic_stream_head_t* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
             else if (((stream->fin_requested && stream->fin_sent) || (stream->reset_requested && stream->reset_sent)) && (!stream->stop_sending_requested || stream->stop_sending_sent)) {
                 picoquic_stream_head_t * next_stream = stream->next_output_stream;
                 /* If stream is exhausted, remove from output list */
-                if (stream == start_stream) {
-                    should_delete_start = 1;
-                    previous_start = previous_stream;
-                    previous_stream = stream;
-                    stream = stream->next_output_stream;
+                if (stream == end_of_second_pass) {
+                    end_of_second_pass = next_stream;
+                }
+                if (stream == cnx->first_output_stream) {
+                    cnx->first_output_stream = next_stream;
                 }
                 else {
-                    if (previous_stream == NULL) {
-                        cnx->first_output_stream = next_stream;
-                    }
-                    else {
-                        previous_stream->next_output_stream = next_stream;
-                    }
-                    stream->next_output_stream = NULL;
-                    stream->is_output_stream = 0;
-                    if (stream == start_stream) {
-                        start_stream = next_stream;
-                    }
-                    if (stream == previous_start) {
-                        previous_start = previous_stream;
-                    }
-                    picoquic_delete_stream_if_closed(cnx, stream);
-                    stream = next_stream;
+                    previous_stream->next_output_stream = next_stream;
                 }
+                stream->next_output_stream = NULL;
+                stream->is_output_stream = 0;
+                picoquic_delete_stream_if_closed(cnx, stream);
+                stream = next_stream;
             }
             else {
                 if (stream->is_active ||
@@ -1151,23 +1144,16 @@ picoquic_stream_head_t* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
                 stream = stream->next_output_stream;
             }
 
-            if (stream == NULL) {
+            if (stream == NULL && !is_second_pass) {
                 previous_stream = NULL;
-                stream =cnx->first_output_stream;
+                stream = cnx->first_output_stream;
+                is_second_pass = 1;
             }
-        } while (stream != start_stream && stream != NULL);
-    }
-
-    if (should_delete_start) {
-        if (previous_start == NULL) {
-            cnx->first_output_stream = start_stream->next_output_stream;
-        }
-        else {
-            previous_start->next_output_stream = start_stream->next_output_stream;
-        }
-        start_stream->next_output_stream = NULL;
-        start_stream->is_output_stream = 0;
-        picoquic_delete_stream_if_closed(cnx, start_stream);
+            else if (is_second_pass && stream == end_of_second_pass) {
+                stream = NULL;
+                break;
+            }
+        } while (stream != NULL);
     }
 
     return found_stream;
@@ -3407,6 +3393,7 @@ uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, uint8_t* bytes
                     (addr_from != NULL && picoquic_compare_addr(addr_from, (struct sockaddr *)&probe->peer_addr) == 0 &&
                     addr_to != NULL && picoquic_compare_addr(addr_to, (struct sockaddr *)&probe->local_addr) == 0)) {
                     probe->challenge_verified = 1;
+                    cnx->has_successful_probe = 1;
                 }
                 else {
                     DBG_PRINTF("%s", "Probe response from different address, ignored.\n");

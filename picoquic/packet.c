@@ -1448,7 +1448,8 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header * ph
          * created and announced to the peer.
          */
         for (int i = 0; i < cnx->nb_paths; i++) {
-            if (picoquic_compare_connection_id(&ph->dest_cnx_id, &cnx->path[i]->local_cnxid) == 0) {
+            if (cnx->path[i]->path_is_registered &&
+                picoquic_compare_connection_id(&ph->dest_cnx_id, &cnx->path[i]->local_cnxid) == 0) {
                 path_id = i;
                 break;
             }
@@ -1508,22 +1509,7 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header * ph
                 /* if there is a probe in progress, find it. */
                 picoquic_probe_t * probe = picoquic_find_probe_by_addr(cnx, addr_from, addr_to);
                 if (probe != NULL) {
-                    cnx->path[path_id]->path_is_activated = 1;
-                    cnx->path[path_id]->remote_cnxid = probe->remote_cnxid;
-                    cnx->path[path_id]->remote_cnxid_sequence = probe->sequence;
-                    for (int ichal = 0; ichal < PICOQUIC_CHALLENGE_REPEAT_MAX; ichal++) {
-                        cnx->path[path_id]->challenge[ichal] = probe->challenge[ichal];
-                    }
-                    cnx->path[path_id]->challenge_time = probe->challenge_time;
-                    cnx->path[path_id]->challenge_repeat_count = probe->challenge_repeat_count;
-                    cnx->path[path_id]->challenge_required = probe->challenge_required;
-                    cnx->path[path_id]->challenge_verified = probe->challenge_verified;
-                    cnx->path[path_id]->challenge_failed = probe->challenge_failed;
-
-                    picoquic_delete_probe(cnx, probe);
-                    /* No challenge required, since we already sent one for the probe. */
-                    cnx->path[path_id]->peer_addr_len = picoquic_store_addr(&cnx->path[path_id]->peer_addr, addr_from);
-                    cnx->path[path_id]->local_addr_len = picoquic_store_addr(&cnx->path[path_id]->local_addr, addr_to);
+                    picoquic_fill_path_data_from_probe(cnx, path_id, probe, addr_from, addr_to);
                 }
                 else if (picoquic_compare_addr((struct sockaddr *)&cnx->path[0]->peer_addr,
                     (struct sockaddr *)addr_from) == 0 &&

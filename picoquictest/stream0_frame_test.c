@@ -635,7 +635,7 @@ int stream_output_test_delete(picoquic_cnx_t * cnx, uint64_t stream_id, int R_or
 
         /* Make sure the search will start at this specific stream */
         if (stream == cnx->first_output_stream && stream->next_output_stream == NULL) {
-            cnx->last_visited_stream = stream;
+            cnx->last_visited_stream = NULL;
             previous = NULL;
             is_last = 1;
         }
