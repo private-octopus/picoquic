@@ -1518,7 +1518,8 @@ void picoquic_add_output_streams(picoquic_cnx_t* cnx, uint64_t old_limit, uint64
             if (stream->stream_id > new_limit) {
                 break;
             }
-            if (IS_LOCAL_STREAM_ID(stream->stream_id, cnx->client_mode) && (IS_BIDIR_STREAM_ID(stream->stream_id) == is_bidir)) {
+            if (IS_LOCAL_STREAM_ID(stream->stream_id, cnx->client_mode) && (IS_BIDIR_STREAM_ID(stream->stream_id) == is_bidir)
+                && stream->is_output_stream == 0) {
                 stream->next_output_stream = cnx->first_output_stream;
                 cnx->first_output_stream = stream;
                 stream->is_output_stream = 1;
