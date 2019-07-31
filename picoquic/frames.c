@@ -439,7 +439,7 @@ int picoquic_prepare_new_connection_id_frame(picoquic_cnx_t * cnx, picoquic_path
 
     *consumed = 0;
 
-    if (path_x->path_sequence > 0 && path_x->local_cnxid.id_len > 0) {
+    if (path_x->path_sequence > 0 && path_x->local_cnxid.id_len > 0 && path_x->path_is_registered) {
         if (bytes_max < 2) {
             ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
         } else {
@@ -621,7 +621,7 @@ uint8_t* picoquic_decode_retire_connection_id_frame(picoquic_cnx_t* cnx, uint8_t
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
             picoquic_frame_type_retire_connection_id);
     }
-    else if (sequence == path_x->path_sequence) {
+    else if (sequence == path_x->path_sequence && path_x->path_is_registered) {
         /* Cannot delete the path through which it arrives */
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
             picoquic_frame_type_retire_connection_id);
@@ -630,7 +630,7 @@ uint8_t* picoquic_decode_retire_connection_id_frame(picoquic_cnx_t* cnx, uint8_t
         /* Go through the list of paths to find the connection ID */
 
         for (int i = 0; i < cnx->nb_paths; i++) {
-            if (cnx->path[i]->path_sequence == sequence) {
+            if (cnx->path[i]->path_sequence == sequence && path_x->path_is_registered) {
                 if (sequence == 0) {
                     cnx->is_path_0_deleted = 1;
                 }
@@ -3393,6 +3393,7 @@ uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, uint8_t* bytes
                     (addr_from != NULL && picoquic_compare_addr(addr_from, (struct sockaddr *)&probe->peer_addr) == 0 &&
                     addr_to != NULL && picoquic_compare_addr(addr_to, (struct sockaddr *)&probe->local_addr) == 0)) {
                     probe->challenge_verified = 1;
+                    cnx->has_successful_probe = 1;
                 }
                 else {
                     DBG_PRINTF("%s", "Probe response from different address, ignored.\n");
