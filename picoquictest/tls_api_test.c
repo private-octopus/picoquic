@@ -1275,7 +1275,7 @@ static int tls_api_test_with_loss(uint64_t* loss_mask, uint32_t proposed_version
 
 int tls_api_test()
 {
-    return tls_api_test_with_loss(NULL, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, NULL);
+    return tls_api_test_with_loss(NULL, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN);
 }
 
 int tls_api_silence_test()
@@ -6160,7 +6160,7 @@ int document_addresses_test()
 
 int null_sni_test()
 {
-    return tls_api_test_with_loss(NULL, PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, NULL);
+    return tls_api_test_with_loss(NULL, PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, PICOQUIC_TEST_ALPN);
 }
 
 /*
