@@ -419,7 +419,7 @@ int picoquic_client_hello_call_back(ptls_on_client_hello_t* on_hello_cb_ctx,
         }
     }
 
-    return 0;
+    return ret;
 }
 
 /*
