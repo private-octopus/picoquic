@@ -113,12 +113,12 @@ typedef struct st_picoquic_packet_header_t {
     picoquic_connection_id_t srce_cnx_id;
     uint32_t pn;
     uint32_t vn;
-    uint32_t offset;
-    uint32_t pn_offset;
+    size_t offset;
+    size_t pn_offset;
     picoquic_packet_type_enum ptype;
     uint64_t pnmask;
     uint64_t pn64;
-    uint16_t payload_length;
+    size_t payload_length;
     int version_index;
     int epoch;
     picoquic_packet_context_enum pc;
@@ -129,9 +129,9 @@ typedef struct st_picoquic_packet_header_t {
     unsigned int has_reserved_bit_set : 1;
     unsigned int is_old_invariant : 1;
 
-    uint32_t token_length;
+    size_t token_length;
     uint8_t * token_bytes;
-    uint16_t pl_val;
+    size_t pl_val;
 } picoquic_packet_header;
 
 /* PMTU discovery requirement status */
@@ -552,8 +552,8 @@ typedef struct st_picoquic_path_t {
     uint64_t max_reorder_gap;
 
     /* MTU */
-    uint32_t send_mtu;
-    uint32_t send_mtu_max_tried;
+    size_t send_mtu;
+    size_t send_mtu_max_tried;
 
     /* Congestion control state */
     uint64_t cwin;
@@ -910,30 +910,30 @@ char* picoquic_string_duplicate(const char* original);
 int picoquic_parse_packet_header(
     picoquic_quic_t* quic,
     uint8_t* bytes,
-    uint32_t length,
+    size_t length,
     struct sockaddr* addr_from,
     picoquic_packet_header* ph,
     picoquic_cnx_t** pcnx,
     int receiving);
 
-uint32_t picoquic_create_packet_header(
+size_t picoquic_create_packet_header(
     picoquic_cnx_t* cnx,
     picoquic_packet_type_enum packet_type,
     uint64_t sequence_number,
     picoquic_connection_id_t * dest_cnxid,
     picoquic_connection_id_t * srce_cnxid,
     uint8_t* bytes,
-    uint32_t * pn_offset,
-    uint32_t * pn_length);
+    size_t* pn_offset,
+    size_t* pn_length);
 
-uint32_t  picoquic_predict_packet_header_length(
+size_t picoquic_predict_packet_header_length(
     picoquic_cnx_t* cnx,
     picoquic_packet_type_enum packet_type);
 
 void picoquic_update_payload_length(
-    uint8_t* bytes, size_t pnum_index, size_t header_length, uint32_t packet_length);
+    uint8_t* bytes, size_t pnum_index, size_t header_length, size_t packet_length);
 
-uint32_t picoquic_get_checksum_length(picoquic_cnx_t* cnx, int is_cleartext_mode);
+size_t picoquic_get_checksum_length(picoquic_cnx_t* cnx, int is_cleartext_mode);
 
 int picoquic_is_stream_frame_unlimited(const uint8_t* bytes);
 int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, uint8_t* bytes,
@@ -952,18 +952,18 @@ int picoquic_parse_ack_header(
 
 uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t pn);
 
-uint32_t picoquic_protect_packet(picoquic_cnx_t* cnx,
+size_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     picoquic_packet_type_enum ptype,
     uint8_t * bytes, uint64_t sequence_number,
     picoquic_connection_id_t * remote_cnxid,
     picoquic_connection_id_t * local_cnxid,
-    uint32_t length, uint32_t header_length,
-    uint8_t* send_buffer, uint32_t send_buffer_max,
+    size_t length, size_t header_length,
+    uint8_t* send_buffer, size_t send_buffer_max,
     void * aead_context, void* pn_enc);
 
 void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet_t * packet, int ret,
-    uint32_t length, uint32_t header_length, uint32_t checksum_overhead,
-    size_t * send_length, uint8_t * send_buffer, uint32_t send_buffer_max,
+    size_t length, size_t header_length, size_t checksum_overhead,
+    size_t * send_length, uint8_t * send_buffer, size_t send_buffer_max,
     picoquic_connection_id_t * remote_cnxid,
     picoquic_connection_id_t * local_cnxid,
     picoquic_path_t * path_x, uint64_t current_time);
@@ -974,13 +974,13 @@ void picoquic_ready_state_transition(picoquic_cnx_t* cnx, uint64_t current_time)
 int picoquic_parse_header_and_decrypt(
     picoquic_quic_t* quic,
     uint8_t* bytes,
-    uint32_t length,
-    uint32_t packet_length,
+    size_t length,
+    size_t packet_length,
     struct sockaddr* addr_from,
     uint64_t current_time,
     picoquic_packet_header* ph,
     picoquic_cnx_t** pcnx,
-    uint32_t * consumed,
+    size_t * consumed,
     int * new_context_created);
 
 /* Handling of packet logging */
@@ -990,8 +990,8 @@ void picoquic_log_decrypted_segment(void* F_log, int log_cnxid, picoquic_cnx_t* 
 void picoquic_log_outgoing_segment(void* F_log, int log_cnxid, picoquic_cnx_t* cnx,
     uint8_t * bytes,
     uint64_t sequence_number,
-    uint32_t length,
-    uint8_t* send_buffer, uint32_t send_length);
+    size_t length,
+    uint8_t* send_buffer, size_t send_length);
 
 void picoquic_log_packet_address(FILE* F, uint64_t log_cnxid64, picoquic_cnx_t* cnx,
     struct sockaddr* addr_peer, int receiving, size_t length, uint64_t current_time);
@@ -1074,7 +1074,7 @@ int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
     size_t send_buffer_max_minus_checksum,
     int * packet_is_pure_ack,
     int * do_not_detect_spurious,
-    uint32_t * length);
+    size_t * length);
 uint8_t* picoquic_decode_crypto_hs_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
     const uint8_t* bytes_max, int epoch);
 int picoquic_prepare_crypto_hs_frame(picoquic_cnx_t* cnx, int epoch,
