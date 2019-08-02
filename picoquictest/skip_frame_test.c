@@ -1486,7 +1486,7 @@ int test_copy_for_retransmit()
     int ret = 0;
     picoquic_packet_t old_p;
     uint8_t new_bytes[PICOQUIC_MAX_PACKET_SIZE];
-    uint32_t length = 0;
+    size_t length = 0;
     int packet_is_pure_ack = 0;
     int do_not_detect_spurious = 1;
     uint64_t simulated_time = 0;
@@ -1532,7 +1532,7 @@ int test_copy_for_retransmit()
         old_p.is_ack_trap = copy_retransmit_case[i].is_ack_trap;
         old_p.send_path = cnx->path[0];
 
-        length = (uint32_t)copy_retransmit_case[i].b1_offset;
+        length = copy_retransmit_case[i].b1_offset;
 
         ret = picoquic_copy_before_retransmit(&old_p, cnx, new_bytes,
             copy_retransmit_case[i].copy_max,
