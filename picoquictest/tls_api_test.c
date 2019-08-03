@@ -5891,10 +5891,11 @@ int optimistic_ack_test_one(int shall_spoof_ack)
                             ret = picoquic_record_pn_received(test_ctx->cnx_client, picoquic_packet_context_application,
                                 hole_number, simulated_time);
                             if (ret != 0) {
-                                DBG_PRINTF("Record pn hole %d number %d returns %d\n", (int)hole_number, ret);
+                                DBG_PRINTF("Record pn hole %d number returns %d\n", (int)hole_number, ret);
                                 break;
                             }
                         }
+                        DBG_PRINTF("Inserted pn hole number %d\n", (int)hole_number, ret);
                         nb_holes++;
                         break;
                     }
