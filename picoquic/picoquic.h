@@ -219,9 +219,9 @@ typedef struct st_picoquic_packet_t {
     struct st_picoquic_path_t * send_path;
     uint64_t sequence_number;
     uint64_t send_time;
-    uint32_t length;
-    uint32_t checksum_overhead;
-    uint32_t offset;
+    size_t length;
+    size_t checksum_overhead;
+    size_t offset;
     picoquic_packet_type_enum ptype;
     picoquic_packet_context_enum pc;
     unsigned int is_evaluated : 1;
@@ -556,7 +556,7 @@ void picoquic_delete_stateless_packet(picoquic_stateless_packet_t* sp);
 int picoquic_incoming_packet(
     picoquic_quic_t* quic,
     uint8_t* bytes,
-    uint32_t length,
+    size_t length,
     struct sockaddr* addr_from,
     struct sockaddr* addr_to,
     int if_index_to,

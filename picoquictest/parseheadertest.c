@@ -388,9 +388,9 @@ int parseheadertest()
     }
 
     for (size_t i = 0; ret == 0 && i < nb_test_entries; i++) {
-        uint32_t header_length;
-        uint32_t pn_offset;
-        uint32_t pn_length;
+        size_t header_length;
+        size_t pn_offset;
+        size_t pn_length;
 
         if (test_entries[i].decode_test_only) {
             continue;
@@ -441,12 +441,12 @@ int test_packet_decrypt_one(
     uint64_t current_time = 0;
     picoquic_packet_header received_ph;
     picoquic_cnx_t* server_cnx = NULL;
-    uint32_t consumed = 0;
+    size_t consumed = 0;
     int new_context_created = 0;
 
     /* Decrypt the packet */
     decoding_return = picoquic_parse_header_and_decrypt(q_server,
-        send_buffer, (uint32_t)send_length, (uint32_t)packet_length,
+        send_buffer, send_length, packet_length,
         addr_from,
         current_time, &received_ph, &server_cnx,
         &consumed, &new_context_created);
@@ -501,8 +501,8 @@ int test_packet_encrypt_one(
 )
 {
     int ret = 0;
-    uint32_t header_length = 0;
-    uint32_t checksum_overhead = 0;
+    size_t header_length = 0;
+    size_t checksum_overhead = 0;
     size_t send_length = 0;
     uint8_t send_buffer[PICOQUIC_MAX_PACKET_SIZE];
     picoquic_path_t * path_x = cnx_client->path[0];

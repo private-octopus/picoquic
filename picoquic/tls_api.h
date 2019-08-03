@@ -64,7 +64,7 @@ void picoquic_public_random_seed(picoquic_quic_t* quic);
 void picoquic_public_random(void* buf, size_t len);
 uint64_t picoquic_public_uniform_random(uint64_t rnd_max);
 
-uint32_t picoquic_aead_get_checksum_length(void* aead_context);
+size_t picoquic_aead_get_checksum_length(void* aead_context);
 
 size_t picoquic_aead_encrypt_generic(uint8_t* output, uint8_t* input, size_t input_length,
     uint64_t seq_num, uint8_t* auth_data, size_t auth_data_length, void* aead_context);
@@ -133,7 +133,7 @@ int picoquic_prepare_retry_token(picoquic_quic_t* quic, struct sockaddr * addr_p
 
 int picoquic_verify_retry_token(picoquic_quic_t* quic, struct sockaddr * addr_peer,
     uint64_t current_time, picoquic_connection_id_t * odcid,
-    uint8_t * token, uint32_t token_size);
+    uint8_t * token, size_t token_size);
 
 void picoquic_cid_free_under_mask_ctx(void * v_pn_enc);
 int picoquic_cid_get_under_mask_ctx(void ** v_pn_enc, const void * secret);
