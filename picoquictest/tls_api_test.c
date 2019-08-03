@@ -33,6 +33,8 @@
 #include <openssl/pem.h>
 #include "picoquictest_internal.h"
 
+#define RANDOM_PUBLIC_TEST_SEED 0xDEADBEEFCAFEC001ull
+
 char const * picoquic_test_solution_dir = NULL;
 
 static const uint8_t test_ticket_encrypt_key[32] = {
@@ -5829,6 +5831,9 @@ int optimistic_ack_test_one(int shall_spoof_ack)
         /* add a log request for debugging */
         picoquic_set_cc_log(test_ctx->qserver, ".");
 
+        /* Reset the uniform random test */
+        picoquic_public_random_seed_64(RANDOM_PUBLIC_TEST_SEED, 1);
+
         ret = tls_api_one_scenario_body_connect(test_ctx, &simulated_time, 0,
             0, 0);
 
@@ -6230,6 +6235,54 @@ int preferred_address_test()
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+
+/* Test that the random public generation behaves in expected ways */
+int random_public_tester_test()
+{
+#define RANDOM_PUBLIC_TEST_CONST 11
+#define RANDOM_PUBLIC_TEST_ROUNDS 100
+#define RANDOM_PUBLIC_CHI_SQUARE 18.31 /* Fail if significance of bias < P = 0.05 */
+    int ret = 0;
+    int r_count[RANDOM_PUBLIC_TEST_CONST];
+    /* creat a quic context to initialize the function */
+    uint64_t sim_time = 0;
+
+    picoquic_public_random_seed_64(RANDOM_PUBLIC_TEST_SEED, 1);
+
+    memset(r_count, 0, sizeof(r_count));
+
+    for (int i = 0; i < RANDOM_PUBLIC_TEST_CONST*RANDOM_PUBLIC_TEST_ROUNDS; i++) {
+        uint64_t x = picoquic_public_uniform_random(RANDOM_PUBLIC_TEST_CONST);
+
+        if (x >= RANDOM_PUBLIC_TEST_CONST) {
+            DBG_PRINTF("Value %d >= %d\n", x, RANDOM_PUBLIC_TEST_CONST);
+            ret = -1;
+            break;
+        }
+        else {
+            r_count[x] += 1;
+        }
+    }
+
+    if (ret == 0) {
+        double chi_squared = 0;
+
+        for (int i = 0; i < RANDOM_PUBLIC_TEST_CONST; i++) {
+            double delta = ((double)RANDOM_PUBLIC_TEST_ROUNDS - r_count[i]);
+            double d2 = delta * delta;
+            d2 /= ((double)RANDOM_PUBLIC_TEST_ROUNDS);
+            chi_squared += d2;
+        }
+
+        if (chi_squared > RANDOM_PUBLIC_CHI_SQUARE) {
+            DBG_PRINTF("Chi2 = %f, larger than %f\n", chi_squared, RANDOM_PUBLIC_CHI_SQUARE);
+            ret = -1;
+        }
     }
 
     return ret;

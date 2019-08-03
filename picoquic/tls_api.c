@@ -229,6 +229,23 @@ uint64_t picoquic_public_random_64(void)
     return s1 * public_random_multiplier;
 }
 
+void picoquic_public_random_seed_64(uint64_t seed, int reset)
+{
+    if (reset) {
+        public_random_index = 0;
+        for (int i = 0; i < 16; i++) {
+            public_random_seed[i] = i + 1;
+        }
+    }
+
+    public_random_seed[public_random_index] ^= seed;
+
+    for (int i = 0; i < 16; i++) {
+        (void)picoquic_public_random_64();
+    }
+}
+
+
 void picoquic_public_random_seed(picoquic_quic_t* quic)
 {
     uint64_t seed;
