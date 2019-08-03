@@ -461,14 +461,14 @@ void picoquic_log_packet_header(FILE* F, uint64_t log_cnxid64, picoquic_packet_h
         picoquic_log_connection_id(F, &ph->dest_cnx_id);
         fprintf(F, ", ");
         picoquic_log_connection_id(F, &ph->srce_cnx_id);
-        fprintf(F, ", Seq: %d, pl: %d\n", ph->pn, ph->pl_val);
+        fprintf(F, ", Seq: %d, pl: %zd\n", ph->pn, ph->pl_val);
         if (ph->ptype == picoquic_packet_initial) {
             picoquic_log_prefix_initial_cid64(F, log_cnxid64);
-            fprintf(F, "    Token length: %d", ph->token_length);
+            fprintf(F, "    Token length: %zd", ph->token_length);
             if (ph->token_length > 0) {
-                uint32_t printed_length = (ph->token_length > 16) ? 16 : ph->token_length;
+                size_t printed_length = (ph->token_length > 16) ? 16 : ph->token_length;
                 fprintf(F, ", Token: ");
-                for (uint8_t i = 0; i < printed_length; i++) {
+                for (size_t i = 0; i < printed_length; i++) {
                     fprintf(F, "%02x", ph->token_bytes[i]);
                 }
                 if (printed_length < ph->token_length) {
@@ -1395,12 +1395,12 @@ void picoquic_log_decrypted_segment(void* F_log, int log_cnxid, picoquic_cnx_t* 
 void picoquic_log_outgoing_segment(void* F_log, int log_cnxid, picoquic_cnx_t* cnx,
     uint8_t * bytes,
     uint64_t sequence_number,
-    uint32_t length,
-    uint8_t* send_buffer, uint32_t send_length)
+    size_t length,
+    uint8_t* send_buffer, size_t send_length)
 {
     picoquic_cnx_t* pcnx = cnx;
     picoquic_packet_header ph;
-    uint32_t checksum_length = (cnx != NULL) ? picoquic_get_checksum_length(cnx, 0) : 16;
+    size_t checksum_length = (cnx != NULL) ? picoquic_get_checksum_length(cnx, 0) : 16;
     struct sockaddr_in default_addr;
     int ret;
 

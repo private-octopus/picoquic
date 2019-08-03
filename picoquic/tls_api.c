@@ -1612,9 +1612,9 @@ void picoquic_aead_free(void* aead_context)
     ptls_aead_free((ptls_aead_context_t*)aead_context);
 }
 
-uint32_t picoquic_aead_get_checksum_length(void* aead_context)
+size_t picoquic_aead_get_checksum_length(void* aead_context)
 {
-    uint32_t tag_size = (uint32_t)((ptls_aead_context_t*)aead_context)->algo->tag_size;
+    size_t tag_size = ((ptls_aead_context_t*)aead_context)->algo->tag_size;
     /* TODO: remove this temporary fix to deal with Feb 2019 change in picotls */
     if (tag_size > 16) {
         tag_size = 16;
@@ -2148,7 +2148,7 @@ int picoquic_prepare_retry_token(picoquic_quic_t* quic, struct sockaddr * addr_p
 
 int picoquic_verify_retry_token(picoquic_quic_t* quic, struct sockaddr * addr_peer,
     uint64_t current_time, picoquic_connection_id_t * odcid,
-    uint8_t * token, uint32_t token_size)
+    uint8_t * token, size_t token_size)
 {
     int ret = 0;
     uint8_t text[128];

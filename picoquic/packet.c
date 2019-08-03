@@ -41,7 +41,7 @@
 int picoquic_is_old_header_invariant(
     picoquic_quic_t* quic,
     uint8_t* bytes,
-    uint32_t length,
+    size_t length,
     picoquic_packet_header* ph)
 {
     int ret = 0; /* return 1 if old invariant */
@@ -140,7 +140,7 @@ int picoquic_is_old_header_invariant(
 int picoquic_parse_packet_header(
     picoquic_quic_t* quic,
     uint8_t* bytes,
-    uint32_t length,
+    size_t length,
     struct sockaddr* addr_from,
     picoquic_packet_header* ph,
     picoquic_cnx_t** pcnx,
@@ -172,7 +172,7 @@ int picoquic_parse_packet_header(
                 l_dest_id = bytes[5];
                 if (6u + l_dest_id + 1u > length) {
                     l_srce_id = 255;
-                    i_srce_id = length;
+                    i_srce_id = (uint32_t)length;
                 }
                 else {
                     l_srce_id = bytes[6 + l_dest_id];
@@ -617,13 +617,13 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
 int picoquic_parse_header_and_decrypt(
     picoquic_quic_t* quic,
     uint8_t* bytes,
-    uint32_t length,
-    uint32_t packet_length,
+    size_t length,
+    size_t packet_length,
     struct sockaddr* addr_from,
     uint64_t current_time,
     picoquic_packet_header* ph,
     picoquic_cnx_t** pcnx,
-    uint32_t * consumed,
+    size_t * consumed,
     int * new_ctx_created)
 {
     /* Parse the clear text header. Ret == 0 means an incorrect packet that could not be parsed */
@@ -732,7 +732,7 @@ int picoquic_parse_header_and_decrypt(
 int picoquic_incoming_version_negotiation(
     picoquic_cnx_t* cnx,
     uint8_t* bytes,
-    uint32_t length,
+    size_t length,
     struct sockaddr* addr_from,
     picoquic_packet_header* ph,
     uint64_t current_time)
@@ -850,7 +850,7 @@ int picoquic_prepare_version_negotiation(
  */
 void picoquic_process_unexpected_cnxid(
     picoquic_quic_t* quic,
-    uint32_t length,
+    size_t length,
     struct sockaddr* addr_from,
     struct sockaddr* addr_to,
     unsigned long if_index_to,
@@ -860,7 +860,7 @@ void picoquic_process_unexpected_cnxid(
         ph->ptype == picoquic_packet_1rtt_protected) {
         picoquic_stateless_packet_t* sp = picoquic_create_stateless_packet(quic);
         if (sp != NULL) {
-            uint32_t pad_size = length - PICOQUIC_RESET_SECRET_SIZE -1;
+            size_t pad_size = length - PICOQUIC_RESET_SECRET_SIZE -1;
             uint8_t* bytes = sp->bytes;
             size_t byte_index = 0;
 
@@ -918,11 +918,11 @@ void picoquic_queue_stateless_retry(picoquic_cnx_t* cnx,
 
     if (sp != NULL) {
         uint8_t* bytes = sp->bytes;
-        uint32_t byte_index = 0;
+        size_t byte_index = 0;
         size_t data_bytes = 0;
-        uint32_t header_length = 0;
-        uint32_t pn_offset;
-        uint32_t pn_length;
+        size_t header_length = 0;
+        size_t pn_offset;
+        size_t pn_length;
 
         cnx->path[0]->remote_cnxid = ph->srce_cnx_id;
 
@@ -1752,9 +1752,9 @@ int picoquic_incoming_encrypted(
 int picoquic_incoming_segment(
     picoquic_quic_t* quic,
     uint8_t* bytes,
-    uint32_t length,
-    uint32_t packet_length,
-    uint32_t * consumed,
+    size_t length,
+    size_t packet_length,
+    size_t * consumed,
     struct sockaddr* addr_from,
     struct sockaddr* addr_to,
     int if_index_to,
@@ -1941,20 +1941,20 @@ int picoquic_incoming_segment(
 int picoquic_incoming_packet(
     picoquic_quic_t* quic,
     uint8_t* bytes,
-    uint32_t packet_length,
+    size_t packet_length,
     struct sockaddr* addr_from,
     struct sockaddr* addr_to,
     int if_index_to,
     unsigned char received_ecn,
     uint64_t current_time)
 {
-    uint32_t consumed_index = 0;
+    size_t consumed_index = 0;
     int ret = 0;
     picoquic_connection_id_t previous_destid = picoquic_null_connection_id;
 
 
     while (consumed_index < packet_length) {
-        uint32_t consumed = 0;
+        size_t consumed = 0;
 
         ret = picoquic_incoming_segment(quic, bytes + consumed_index, 
             packet_length - consumed_index, packet_length,
