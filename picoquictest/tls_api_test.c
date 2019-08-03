@@ -6249,8 +6249,6 @@ int random_public_tester_test()
 #define RANDOM_PUBLIC_CHI_SQUARE 18.31 /* Fail if significance of bias < P = 0.05 */
     int ret = 0;
     int r_count[RANDOM_PUBLIC_TEST_CONST];
-    /* creat a quic context to initialize the function */
-    uint64_t sim_time = 0;
 
     picoquic_public_random_seed_64(RANDOM_PUBLIC_TEST_SEED, 1);
 

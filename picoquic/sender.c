@@ -744,7 +744,7 @@ picoquic_packet_t* picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, picoq
 
     /* Account for bytes in transit, for congestion control */
 
-    if (p->send_path != NULL) {
+    if (p->send_path != NULL && !p->is_ack_trap) {
         if (p->send_path->bytes_in_transit > dequeued_length) {
             p->send_path->bytes_in_transit -= dequeued_length;
         }
@@ -1089,6 +1089,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                 old_p = p_next;
                 continue;
             } else {
+
                 break;
             }
         } else {
@@ -1189,7 +1190,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                             /*
                              * Max retransmission count was exceeded. Disconnect.
                              */
-                            DBG_PRINTF("%s\n", "Too many retransmits, disconnect");
+                            DBG_PRINTF("Too many retransmits of packet number %d, disconnect", (int)old_p->sequence_number);
                             cnx->cnx_state = picoquic_state_disconnected;
                             if (cnx->callback_fn) {
                                 (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx, NULL);
