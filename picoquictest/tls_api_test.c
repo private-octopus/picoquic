@@ -5863,6 +5863,7 @@ int optimistic_ack_test_one(int shall_spoof_ack)
             ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
 
             if (ret < 0) {
+                DBG_PRINTF("Sim round number %d returns %d\n", nb_trials, ret);
                 break;
             }
 
@@ -5889,6 +5890,10 @@ int optimistic_ack_test_one(int shall_spoof_ack)
                         if (shall_spoof_ack) {
                             ret = picoquic_record_pn_received(test_ctx->cnx_client, picoquic_packet_context_application,
                                 hole_number, simulated_time);
+                            if (ret != 0) {
+                                DBG_PRINTF("Record pn hole %d number %d returns %d\n", (int)hole_number, ret);
+                                break;
+                            }
                         }
                         nb_holes++;
                         break;
