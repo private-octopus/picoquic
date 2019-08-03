@@ -218,8 +218,10 @@ static const uint64_t public_random_multiplier = 1181783497276652981ull;
 
 uint64_t picoquic_public_random_64(void)
 {
+    uint64_t s1;
     const uint64_t s0 = public_random_seed[public_random_index++];
-    uint64_t s1 = public_random_seed[public_random_index &= 15];
+    public_random_index &= 15;
+    s1 = public_random_seed[public_random_index];
     s1 ^= s1 << 31; // a
     s1 ^= s1 >> 11; // b
     s1 ^= s0 ^ (s0 >> 30); // c
