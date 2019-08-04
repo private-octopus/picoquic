@@ -5054,9 +5054,9 @@ int false_migration_inject(picoquic_test_tls_api_ctx_t* test_ctx, int target_cli
     }
     else {
         struct sockaddr_in false_address;
-        uint32_t checksum_overhead = 8;
+        size_t checksum_overhead = 8;
         uint32_t header_length = 0;
-        uint32_t length = 0;
+        size_t length = 0;
         int is_cleartext_mode = 0;
         picoquic_path_t * path_x = cnx->path[0];
 

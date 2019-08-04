@@ -834,7 +834,7 @@ void picoquic_insert_hole_in_send_sequence_if_needed(picoquic_cnx_t* cnx, uint64
             }
         }
         /* Predict the next hole*/
-        cnx->pkt_ctx[0].next_sequence_hole = cnx->pkt_ctx[picoquic_packet_context_application].send_sequence + 1 + picoquic_public_uniform_random(cnx->quic->sequence_hole_pseudo_period);
+        cnx->pkt_ctx[0].next_sequence_hole = cnx->pkt_ctx[picoquic_packet_context_application].send_sequence + 3 + picoquic_public_uniform_random(cnx->quic->sequence_hole_pseudo_period);
     }
 }
 
@@ -1076,6 +1076,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
         int ret = 0;
 
         length = 0;
+
         /* Get the packet type */
 
         should_retransmit = picoquic_retransmit_needed_by_packet(cnx, old_p, current_time, next_retransmit_time, &timer_based_retransmit);
@@ -1088,10 +1089,15 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
             if (old_p->ptype == picoquic_packet_0rtt_protected) {
                 old_p = p_next;
                 continue;
-            } else {
+            }
+            else {
 
                 break;
             }
+        } else if (old_p->is_ack_trap){
+            picoquic_dequeue_retransmit_packet(cnx, old_p, 1);
+            old_p = p_next;
+            continue;
         } else {
             /* check if this is an ACK only packet */
             int packet_is_pure_ack = 1;
@@ -1294,9 +1300,9 @@ int picoquic_should_send_max_data(picoquic_cnx_t* cnx)
 }
 
 /* Compute the next logical probe length */
-static uint64_t picoquic_next_mtu_probe_length(picoquic_cnx_t* cnx, picoquic_path_t * path_x)
+static size_t picoquic_next_mtu_probe_length(picoquic_cnx_t* cnx, picoquic_path_t * path_x)
 {
-    uint64_t probe_length;
+    size_t probe_length;
 
     if (path_x->send_mtu_max_tried == 0) {
         if (cnx->remote_parameters.max_packet_size > 0) {
@@ -1366,12 +1372,12 @@ picoquic_pmtu_discovery_status_enum picoquic_is_mtu_probe_needed(picoquic_cnx_t*
 }
 
 /* Prepare an MTU probe packet */
-uint64_t picoquic_prepare_mtu_probe(picoquic_cnx_t* cnx,
+size_t picoquic_prepare_mtu_probe(picoquic_cnx_t* cnx,
     picoquic_path_t * path_x,
     size_t header_length, size_t checksum_length,
     uint8_t* bytes)
 {
-    uint64_t probe_length = picoquic_next_mtu_probe_length(cnx, path_x);
+    size_t probe_length = picoquic_next_mtu_probe_length(cnx, path_x);
     size_t length = header_length;
 
     bytes[length++] = picoquic_frame_type_ping;
