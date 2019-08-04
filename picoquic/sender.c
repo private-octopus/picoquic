@@ -810,7 +810,7 @@ void picoquic_dequeue_retransmitted_packet(picoquic_cnx_t* cnx, picoquic_packet_
  * Inserting holes in the send sequence to trap optimistic ack.
  * return 0 if hole was inserted, !0 if packet should be freed.
  */
-void picoquic_insert_hole_in_send_sequence_if_needed(picoquic_cnx_t* cnx, uint64_t current_time)
+void picoquic_insert_hole_in_send_sequence_if_needed(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t * next_wake_time)
 {
     if (cnx->quic->sequence_hole_pseudo_period == 0) {
         /* Holing disabled. Set to max value, never worry about it later */
@@ -831,6 +831,7 @@ void picoquic_insert_hole_in_send_sequence_if_needed(picoquic_cnx_t* cnx, uint64
                 packet->send_time = current_time;
                 packet->sequence_number = cnx->pkt_ctx[picoquic_packet_context_application].send_sequence++;
                 picoquic_queue_for_retransmit(cnx, cnx->path[0], packet, 0, current_time);
+                *next_wake_time = current_time;
             }
         }
         /* Predict the next hole*/
@@ -968,6 +969,10 @@ static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t* cnx,
     if (current_time >= retransmit_time) {
         should_retransmit = 1;
         *timer_based = is_timer_based;
+        if (cnx->quic->sequence_hole_pseudo_period != 0 && pc == picoquic_packet_context_application && !p->is_ack_trap) {
+            DBG_PRINTF("Retransmit #%d, delta=%d, timer=%d \n",
+                (int)p->sequence_number, (int)delta_seq, is_timer_based);
+        }
     } else {
         *next_retransmit_time = retransmit_time;
         *timer_based = 0;
@@ -3134,7 +3139,7 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
 
     /* Check whether to insert a hole in the sequence of packets */
     if (cnx->pkt_ctx[0].send_sequence >= cnx->pkt_ctx[0].next_sequence_hole) {
-        picoquic_insert_hole_in_send_sequence_if_needed(cnx, current_time);
+        picoquic_insert_hole_in_send_sequence_if_needed(cnx, current_time, &next_wake_time);
     }
 
     if (cnx->probe_first != NULL) {
