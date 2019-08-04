@@ -753,7 +753,7 @@ picoquic_packet_t* picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, picoq
         }
     }
 
-    if (should_free) {
+    if (should_free || p->is_ack_trap) {
         picoquic_recycle_packet(cnx->quic, p);
         p = NULL;
     }

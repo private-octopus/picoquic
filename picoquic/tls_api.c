@@ -251,11 +251,7 @@ void picoquic_public_random_seed(picoquic_quic_t* quic)
     uint64_t seed;
     picoquic_crypto_random(quic, &seed, sizeof(seed));
 
-    public_random_seed[public_random_index] ^= seed;
-
-    for (int i = 0; i < 16; i++) {
-        (void)picoquic_public_random_64();
-    }
+    picoquic_public_random_seed_64(seed, 0);
 }
 
 void picoquic_public_random(void* buf, size_t len)
