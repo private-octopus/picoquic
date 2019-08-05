@@ -99,7 +99,6 @@ static const picoquic_test_def_t test_table[] = {
     { "tls_api_very_long_with_err", tls_api_very_long_with_err_test },
     { "tls_api_very_long_congestion", tls_api_very_long_congestion_test },
     { "many_short_loss", many_short_loss_test },
-    { "http0dot9", http0dot9_test },
     { "retry", tls_api_retry_test },
     { "retry_token", tls_retry_token_test },
     { "two_connections", tls_api_two_connections_test },
@@ -170,16 +169,6 @@ static const picoquic_test_def_t test_table[] = {
     { "stress", stress_test },
     { "fuzz", fuzz_test },
     { "fuzz_initial", fuzz_initial_test},
-    { "h3zero_integer", h3zero_integer_test },
-    { "qpack_huffman", qpack_huffman_test },
-    { "h3zero_parse_qpack", h3zero_parse_qpack_test },
-    { "h3zero_prepare_qpack", h3zero_prepare_qpack_test },
-    { "h3zero_stream_test", h3zero_stream_test },
-    { "parse_demo_scenario", parse_demo_scenario_test },
-    { "h3zero_server", h3zero_server_test },
-    { "h09_server", h09_server_test },
-    { "generic_server", generic_server_test},
-    { "esni", esni_test }
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);

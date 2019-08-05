@@ -140,9 +140,7 @@
     <ClCompile Include="cnx_creation_test.c" />
     <ClCompile Include="float16test.c" />
     <ClCompile Include="fnv1atest.c" />
-    <ClCompile Include="h3zerotest.c" />
     <ClCompile Include="hashtest.c" />
-    <ClCompile Include="http0dot9test.c" />
     <ClCompile Include="intformattest.c" />
     <ClCompile Include="sim_link.c" />
     <ClCompile Include="parseheadertest.c" />
