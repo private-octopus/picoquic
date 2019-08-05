@@ -1161,7 +1161,7 @@ int picoquic_incoming_retry(
             odcil = bytes[byte_index++];
         }
 
-        if (odcil != cnx->initial_cnxid.id_len || odcil + 1 > ph->payload_length ||
+        if (odcil != cnx->initial_cnxid.id_len || odcil + 1u > ph->payload_length ||
             memcmp(cnx->initial_cnxid.id, &bytes[byte_index], odcil) != 0) {
             /* malformed ODCIL, or does not match initial cid; ignore */
             ret = PICOQUIC_ERROR_UNEXPECTED_PACKET;

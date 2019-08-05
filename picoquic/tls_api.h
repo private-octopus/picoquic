@@ -59,6 +59,7 @@ void picoquic_crypto_random(picoquic_quic_t* quic, void* buf, size_t len);
 uint64_t picoquic_crypto_uniform_random(picoquic_quic_t* quic, uint64_t rnd_max);
 
 uint64_t picoquic_public_random_64(void);
+void picoquic_public_random_seed_64(uint64_t seed, int reset);
 void picoquic_public_random_seed(picoquic_quic_t* quic);
 void picoquic_public_random(void* buf, size_t len);
 uint64_t picoquic_public_uniform_random(uint64_t rnd_max);

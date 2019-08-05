@@ -121,6 +121,7 @@ int TlsStreamFrameTest();
 int draft17_vector_test();
 int fuzz_test();
 int random_tester_test();
+int random_public_tester_test();
 int cnxid_stash_test();
 int new_cnxid_test();
 int transmit_cnxid_test();

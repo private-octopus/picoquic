@@ -135,6 +135,7 @@ static const picoquic_test_def_t test_table[] = {
     { "zero_rtt_spurious", zero_rtt_spurious_test },
     { "zero_rtt_retry", zero_rtt_retry_test },
     { "random_tester", random_tester_test},
+    { "random_public_tester", random_public_tester_test},
     { "transmit_cnxid", transmit_cnxid_test },
     { "probe_api", probe_api_test },
     { "migration" , migration_test },

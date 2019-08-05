@@ -1093,7 +1093,7 @@ typedef struct st_basic_fuzzer_ctx_t {
 } basic_fuzzer_ctx_t;
 
 static uint32_t basic_fuzzer(void * fuzz_ctx, picoquic_cnx_t* cnx, 
-    uint8_t * bytes, size_t bytes_max, size_t length, uint32_t header_length)
+    uint8_t * bytes, size_t bytes_max, size_t length, size_t header_length)
 {
     basic_fuzzer_ctx_t * ctx = (basic_fuzzer_ctx_t *)fuzz_ctx;
     uint64_t fuzz_pilot = picoquic_test_random(&ctx->random_context);
@@ -1300,7 +1300,7 @@ typedef struct st_initial_fuzzer_ctx_t {
 } initial_fuzzer_ctx_t;
 
 static uint32_t initial_fuzzer(void * fuzz_ctx, picoquic_cnx_t* cnx,
-    uint8_t * bytes, size_t bytes_max, size_t length, uint32_t header_length)
+    uint8_t * bytes, size_t bytes_max, size_t length, size_t header_length)
 {
     initial_fuzzer_ctx_t * ctx = (initial_fuzzer_ctx_t *)fuzz_ctx;
     uint32_t should_fuzz = 0;

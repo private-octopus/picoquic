@@ -33,6 +33,8 @@
 #include <openssl/pem.h>
 #include "picoquictest_internal.h"
 
+#define RANDOM_PUBLIC_TEST_SEED 0xDEADBEEFCAFEC001ull
+
 char const * picoquic_test_solution_dir = NULL;
 
 static const uint8_t test_ticket_encrypt_key[32] = {
@@ -737,8 +739,8 @@ int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_versi
 
             /* register the links */
             if (ret == 0) {
-                test_ctx->c_to_s_link = picoquictest_sim_link_create(0.01, 10000, 0, 0, 0);
-                test_ctx->s_to_c_link = picoquictest_sim_link_create(0.01, 10000, 0, 0, 0);
+                test_ctx->c_to_s_link = picoquictest_sim_link_create(0.01, 10000, NULL, 0, 0);
+                test_ctx->s_to_c_link = picoquictest_sim_link_create(0.01, 10000, NULL, 0, 0);
 
                 if (test_ctx->c_to_s_link == NULL || test_ctx->s_to_c_link == NULL) {
                     ret = -1;
@@ -789,7 +791,7 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
         next_action = 1;
     }
     else {
-        uint64_t next_time = *simulated_time + 120000000;
+        uint64_t next_time = *simulated_time + 120000000ull;
         uint64_t client_arrival, server_arrival;
 
         if (test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
@@ -2212,8 +2214,8 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, unsigned int early_loss)
         if (ret == 0 && i == 1) {
             uint8_t test_data[8] = { 't', 'e', 's', 't', '0', 'r', 't', 't' };
             /* set the link delays to 100 ms, for realistic testing */
-            test_ctx->c_to_s_link->microsec_latency = 100000;
-            test_ctx->s_to_c_link->microsec_latency = 100000;
+            test_ctx->c_to_s_link->microsec_latency = 100000ull;
+            test_ctx->s_to_c_link->microsec_latency = 100000ull;
 
             /* Queue an initial frame on the client connection */
             (void)picoquic_add_to_stream(test_ctx->cnx_client, 0, test_data, sizeof(test_data), 1);
@@ -2508,14 +2510,14 @@ int spurious_retransmit_test()
     int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
 
     if (ret == 0) {
-        test_ctx->c_to_s_link->microsec_latency = 50000;
-        test_ctx->s_to_c_link->microsec_latency = 50000;
+        test_ctx->c_to_s_link->microsec_latency = 50000ull;
+        test_ctx->s_to_c_link->microsec_latency = 50000ull;
 
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
     }
 
     /* simulate 1 second of silence */
-    next_time = simulated_time + 1000000;
+    next_time = simulated_time + 1000000ull;
     while (ret == 0 && simulated_time < next_time && TEST_CLIENT_READY && TEST_SERVER_READY) {
         int was_active = 0;
 
@@ -5052,9 +5054,9 @@ int false_migration_inject(picoquic_test_tls_api_ctx_t* test_ctx, int target_cli
     }
     else {
         struct sockaddr_in false_address;
-        uint32_t checksum_overhead = 8;
+        size_t checksum_overhead = 8;
         uint32_t header_length = 0;
-        uint32_t length = 0;
+        size_t length = 0;
         int is_cleartext_mode = 0;
         picoquic_path_t * path_x = cnx->path[0];
 
@@ -5773,7 +5775,7 @@ int long_rtt_test()
 {
     int ret = 0;
     uint64_t simulated_time = 0;
-    uint64_t latency = 300000; /* assume that each direction is 300 ms, e.g. satellite link */
+    uint64_t latency = 300000ull; /* assume that each direction is 300 ms, e.g. satellite link */
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
 
     ret = tls_api_one_scenario_init(&test_ctx, &simulated_time,
@@ -5829,6 +5831,9 @@ int optimistic_ack_test_one(int shall_spoof_ack)
         /* add a log request for debugging */
         picoquic_set_cc_log(test_ctx->qserver, ".");
 
+        /* Reset the uniform random test */
+        picoquic_public_random_seed_64(RANDOM_PUBLIC_TEST_SEED, 1);
+
         ret = tls_api_one_scenario_body_connect(test_ctx, &simulated_time, 0,
             0, 0);
 
@@ -5855,6 +5860,9 @@ int optimistic_ack_test_one(int shall_spoof_ack)
         int nb_inactive = 0;
         uint64_t hole_number = 0;
 
+        test_ctx->c_to_s_link->loss_mask = NULL;
+        test_ctx->s_to_c_link->loss_mask = NULL;
+
         while (ret == 0 && nb_trials < 64000 && nb_inactive < 1024 && TEST_CLIENT_READY && TEST_SERVER_READY) {
             int was_active = 0;
 
@@ -5863,6 +5871,12 @@ int optimistic_ack_test_one(int shall_spoof_ack)
             ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
 
             if (ret < 0) {
+                DBG_PRINTF("Sim round number %d returns %d\n", nb_trials, ret);
+                break;
+            }
+            else if (test_ctx->cnx_server->nb_retransmission_total > 0) {
+                DBG_PRINTF("Unexpected retransmission at T=%d", (int)simulated_time);
+                ret = -1;
                 break;
             }
 
@@ -5889,6 +5903,10 @@ int optimistic_ack_test_one(int shall_spoof_ack)
                         if (shall_spoof_ack) {
                             ret = picoquic_record_pn_received(test_ctx->cnx_client, picoquic_packet_context_application,
                                 hole_number, simulated_time);
+                            if (ret != 0) {
+                                DBG_PRINTF("Record pn hole %d number returns %d\n", (int)hole_number, ret);
+                                break;
+                            }
                         }
                         nb_holes++;
                         break;
@@ -5905,6 +5923,13 @@ int optimistic_ack_test_one(int shall_spoof_ack)
         if (ret != 0)
         {
             DBG_PRINTF("Data sending loop returns %d\n", ret);
+        }
+        else if (test_ctx->cnx_server != NULL) {
+            DBG_PRINTF("Complete after %d packets sent, %d r. by client, %d retransmits, %d spurious.\n",
+                (int)(test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence - 1),
+                (int)test_ctx->cnx_client->pkt_ctx[picoquic_packet_context_application].first_sack_item.end_of_sack_range,
+                test_ctx->cnx_server->nb_retransmission_total,
+                test_ctx->cnx_server->nb_spurious);
         }
     }
 
@@ -6224,6 +6249,52 @@ int preferred_address_test()
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+
+/* Test that the random public generation behaves in expected ways */
+int random_public_tester_test()
+{
+#define RANDOM_PUBLIC_TEST_CONST 11
+#define RANDOM_PUBLIC_TEST_ROUNDS 100
+#define RANDOM_PUBLIC_CHI_SQUARE 18.31 /* Fail if significance of bias < P = 0.05 */
+    int ret = 0;
+    int r_count[RANDOM_PUBLIC_TEST_CONST];
+
+    picoquic_public_random_seed_64(RANDOM_PUBLIC_TEST_SEED, 1);
+
+    memset(r_count, 0, sizeof(r_count));
+
+    for (int i = 0; i < RANDOM_PUBLIC_TEST_CONST*RANDOM_PUBLIC_TEST_ROUNDS; i++) {
+        uint64_t x = picoquic_public_uniform_random(RANDOM_PUBLIC_TEST_CONST);
+
+        if (x >= RANDOM_PUBLIC_TEST_CONST) {
+            DBG_PRINTF("Value %d >= %d\n", x, RANDOM_PUBLIC_TEST_CONST);
+            ret = -1;
+            break;
+        }
+        else {
+            r_count[x] += 1;
+        }
+    }
+
+    if (ret == 0) {
+        double chi_squared = 0;
+
+        for (int i = 0; i < RANDOM_PUBLIC_TEST_CONST; i++) {
+            double delta = ((double)RANDOM_PUBLIC_TEST_ROUNDS - r_count[i]);
+            double d2 = delta * delta;
+            d2 /= ((double)RANDOM_PUBLIC_TEST_ROUNDS);
+            chi_squared += d2;
+        }
+
+        if (chi_squared > RANDOM_PUBLIC_CHI_SQUARE) {
+            DBG_PRINTF("Chi2 = %f, larger than %f\n", chi_squared, RANDOM_PUBLIC_CHI_SQUARE);
+            ret = -1;
+        }
     }
 
     return ret;
