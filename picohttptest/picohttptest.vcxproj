@@ -20,9 +20,9 @@
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>
-    <ProjectGuid>{63E1E6B7-DB5F-4EDC-8AC8-7E9F5990D11F}</ProjectGuid>
+    <ProjectGuid>{15ac68c7-bfe9-4098-afce-92b0d77b8d01}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
-    <RootNamespace>picoquic</RootNamespace>
+    <RootNamespace>picoquictest</RootNamespace>
     <WindowsTargetPlatformVersion>10.0.14393.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -75,10 +75,10 @@
     <ClCompile>
       <PrecompiledHeader>
       </PrecompiledHeader>
-      <WarningLevel>Level4</WarningLevel>
+      <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_LIB;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(OPENSSLDIR)\include;..\..\picotls\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)\picoquic;$(OPENSSLDIR)\include;..\..\picotls\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -88,10 +88,10 @@
     <ClCompile>
       <PrecompiledHeader>
       </PrecompiledHeader>
-      <WarningLevel>Level4</WarningLevel>
+      <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>_DEBUG;_LIB;_WINDOWS;_WINDOWS64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(OPENSSL64DIR)\include;..\..\picotls\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)\picoquic;$(OPENSSL64DIR)\include;..\..\picotls\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -106,7 +106,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>WIN32;NDEBUG;_LIB;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(OPENSSLDIR)\include;..\..\picotls\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)\picoquic;$(OPENSSLDIR)\include;..\..\picotls\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -123,7 +123,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>NDEBUG;_LIB;_WINDOWS;_WINDOWS64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(OPENSSL64DIR)\include;..\..\picotls\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)\picoquic;$(SolutionDir)\picohttp;$(OPENSSL64DIR)\include;..\..\picotls\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -135,39 +135,12 @@
     <Text Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="cubic.c" />
-    <ClCompile Include="fnv1a.c" />
-    <ClCompile Include="frames.c" />
-    <ClCompile Include="intformat.c" />
-    <ClCompile Include="logger.c" />
-    <ClCompile Include="newreno.c" />
-    <ClCompile Include="picosocks.c" />
-    <ClCompile Include="picosplay.c" />
-    <ClCompile Include="quicctx.c" />
-    <ClCompile Include="packet.c" />
-    <ClCompile Include="picohash.c" />
-    <ClCompile Include="sacks.c" />
-    <ClCompile Include="sender.c" />
-    <ClCompile Include="spinbit.c" />
-    <ClCompile Include="ticket_store.c" />
-    <ClCompile Include="tls_api.c" />
-    <ClCompile Include="token_store.c" />
-    <ClCompile Include="transport.c" />
-    <ClCompile Include="util.c" />
+    <ClCompile Include="h3zerotest.c" />
+    <ClCompile Include="http0dot9test.c" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="democlient.h" />
-    <ClInclude Include="demoserver.h" />
-    <ClInclude Include="fnv1a.h" />
-    <ClInclude Include="h3zero.h" />
-    <ClInclude Include="picohash.h" />
-    <ClInclude Include="picoquic_internal.h" />
-    <ClInclude Include="picosocks.h" />
-    <ClInclude Include="picosplay.h" />
-    <ClInclude Include="picotlsapi.h" />
-    <ClInclude Include="picoquic.h" />
-    <ClInclude Include="tls_api.h" />
-    <ClInclude Include="wincompat.h" />
+    <ClInclude Include="picohttptest.h" />
+    <ClInclude Include="picohttptest_internal.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -20,7 +20,7 @@
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>
-    <ProjectGuid>{63E1E6B7-DB5F-4EDC-8AC8-7E9F5990D11F}</ProjectGuid>
+    <ProjectGuid>{c8f3740e-56fb-4be7-9d8c-30a954846146}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>picoquic</RootNamespace>
     <WindowsTargetPlatformVersion>10.0.14393.0</WindowsTargetPlatformVersion>
@@ -132,41 +132,15 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <Text Include="ReadMe.txt" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="cubic.c" />
-    <ClCompile Include="fnv1a.c" />
-    <ClCompile Include="frames.c" />
-    <ClCompile Include="intformat.c" />
-    <ClCompile Include="logger.c" />
-    <ClCompile Include="newreno.c" />
-    <ClCompile Include="picosocks.c" />
-    <ClCompile Include="picosplay.c" />
-    <ClCompile Include="quicctx.c" />
-    <ClCompile Include="packet.c" />
-    <ClCompile Include="picohash.c" />
-    <ClCompile Include="sacks.c" />
-    <ClCompile Include="sender.c" />
-    <ClCompile Include="spinbit.c" />
-    <ClCompile Include="ticket_store.c" />
-    <ClCompile Include="tls_api.c" />
-    <ClCompile Include="token_store.c" />
-    <ClCompile Include="transport.c" />
-    <ClCompile Include="util.c" />
+    <ClCompile Include="democlient.c" />
+    <ClCompile Include="demoserver.c" />
+    <ClCompile Include="h3zero.c" />
+    <ClCompile Include="http0dot9.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="democlient.h" />
     <ClInclude Include="demoserver.h" />
-    <ClInclude Include="fnv1a.h" />
     <ClInclude Include="h3zero.h" />
-    <ClInclude Include="picohash.h" />
-    <ClInclude Include="picoquic_internal.h" />
-    <ClInclude Include="picosocks.h" />
-    <ClInclude Include="picosplay.h" />
-    <ClInclude Include="picotlsapi.h" />
-    <ClInclude Include="picoquic.h" />
-    <ClInclude Include="tls_api.h" />
     <ClInclude Include="wincompat.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

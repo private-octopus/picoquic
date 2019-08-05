@@ -20,33 +20,33 @@
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>
-    <ProjectGuid>{63E1E6B7-DB5F-4EDC-8AC8-7E9F5990D11F}</ProjectGuid>
+    <ProjectGuid>{c9138a46-c3d0-491b-bacf-c7c65592d1f7}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
-    <RootNamespace>picoquic</RootNamespace>
+    <RootNamespace>picoquic_t</RootNamespace>
     <WindowsTargetPlatformVersion>10.0.14393.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
-    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v141</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
-    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>v141</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
-    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v141</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
-    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>v141</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
@@ -70,31 +70,46 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
-  <PropertyGroup />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <LinkIncremental>true</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <LinkIncremental>true</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <PrecompiledHeader>
       </PrecompiledHeader>
-      <WarningLevel>Level4</WarningLevel>
+      <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_LIB;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(OPENSSLDIR)\include;..\..\picotls\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(SolutionDir)\picoquic;$(SolutionDir)\picohttp;$(SolutionDir)\picohttptest;$(SolutionDir)\picoquicfirst;..\..\picotls\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
-      <SubSystem>Windows</SubSystem>
+      <SubSystem>Console</SubSystem>
+      <AdditionalDependencies>picoquic.lib;picohttp.lib;picohttptest.lib;picotls-core.lib;picotls-esni.lib;picotls-minicrypto.lib;picotls-minicrypto-deps.lib;picotls-openssl.lib;ws2_32.lib;libcrypto.lib;bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(OutDir);$(SolutionDir)..\picotls\picotlsvs\$(Configuration)\;$(OPENSSLDIR);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
       <PrecompiledHeader>
       </PrecompiledHeader>
-      <WarningLevel>Level4</WarningLevel>
+      <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>_DEBUG;_LIB;_WINDOWS;_WINDOWS64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(OPENSSL64DIR)\include;..\..\picotls\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;_WINDOWS;_WINDOWS64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(SolutionDir)\picoquic;$(SolutionDir)\picohttp;$(SolutionDir)\picohttptest;$(SolutionDir)\picoquicfirst;..\..\picotls\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
-      <SubSystem>Windows</SubSystem>
+      <SubSystem>Console</SubSystem>
+      <AdditionalDependencies>picoquic.lib;picohttp.lib;picohttptest.lib;picotls-core.lib;picotls-esni.lib;picotls-minicrypto.lib;picotls-minicrypto-deps.lib;picotls-openssl.lib;ws2_32.lib;libcrypto.lib;bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(OutDir);$(SolutionDir)..\picotls\picotlsvs\$(Platform)\$(Configuration)\;$(OPENSSL64DIR);$(OPENSSL64DIR)\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -105,13 +120,15 @@
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_LIB;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(OPENSSLDIR)\include;..\..\picotls\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(SolutionDir)\picoquic;$(SolutionDir)\picohttp;$(SolutionDir)\picohttptest;$(SolutionDir)\picoquicfirst;..\..\picotls\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
-      <SubSystem>Windows</SubSystem>
+      <SubSystem>Console</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalDependencies>picoquic.lib;picohttp.lib;picohttptest.lib;picotls-core.lib;picotls-esni.lib;picotls-minicrypto.lib;picotls-minicrypto-deps.lib;picotls-openssl.lib;ws2_32.lib;libcrypto.lib;bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(OutDir);$(SolutionDir)..\picotls\picotlsvs\$(Configuration)\;$(OPENSSLDIR);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -122,52 +139,20 @@
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>NDEBUG;_LIB;_WINDOWS;_WINDOWS64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(OPENSSL64DIR)\include;..\..\picotls\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;_WINDOWS;_WINDOWS64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(SolutionDir)\picoquic;$(SolutionDir)\picohttp;$(SolutionDir)\picohttptest;$(SolutionDir)\picoquicfirst;..\..\picotls\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
-      <SubSystem>Windows</SubSystem>
+      <SubSystem>Console</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalDependencies>picoquic.lib;picohttp.lib;picohttptest.lib;picotls-core.lib;picotls-esni.lib;picotls-minicrypto.lib;picotls-minicrypto-deps.lib;picotls-openssl.lib;ws2_32.lib;libcrypto.lib;bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(OutDir);$(SolutionDir)..\picotls\picotlsvs\$(Platform)\$(Configuration)\;$(OPENSSL64DIR);$(OPENSSL64DIR)\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <Text Include="ReadMe.txt" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="cubic.c" />
-    <ClCompile Include="fnv1a.c" />
-    <ClCompile Include="frames.c" />
-    <ClCompile Include="intformat.c" />
-    <ClCompile Include="logger.c" />
-    <ClCompile Include="newreno.c" />
-    <ClCompile Include="picosocks.c" />
-    <ClCompile Include="picosplay.c" />
-    <ClCompile Include="quicctx.c" />
-    <ClCompile Include="packet.c" />
-    <ClCompile Include="picohash.c" />
-    <ClCompile Include="sacks.c" />
-    <ClCompile Include="sender.c" />
-    <ClCompile Include="spinbit.c" />
-    <ClCompile Include="ticket_store.c" />
-    <ClCompile Include="tls_api.c" />
-    <ClCompile Include="token_store.c" />
-    <ClCompile Include="transport.c" />
-    <ClCompile Include="util.c" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="democlient.h" />
-    <ClInclude Include="demoserver.h" />
-    <ClInclude Include="fnv1a.h" />
-    <ClInclude Include="h3zero.h" />
-    <ClInclude Include="picohash.h" />
-    <ClInclude Include="picoquic_internal.h" />
-    <ClInclude Include="picosocks.h" />
-    <ClInclude Include="picosplay.h" />
-    <ClInclude Include="picotlsapi.h" />
-    <ClInclude Include="picoquic.h" />
-    <ClInclude Include="tls_api.h" />
-    <ClInclude Include="wincompat.h" />
+    <ClCompile Include="..\picoquicfirst\getopt.c" />
+    <ClCompile Include="picohttp_t.c" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
