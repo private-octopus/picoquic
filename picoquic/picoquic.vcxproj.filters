@@ -57,9 +57,6 @@
     <ClCompile Include="newreno.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="http0dot9.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="picosocks.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -73,15 +70,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="cubic.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="h3zero.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="democlient.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="demoserver.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="token_store.c">
