@@ -655,19 +655,19 @@ void picoquic_update_pacing_data(picoquic_path_t * path_x)
     }
     else {
 
-        path_x->pacing_packet_time_nanosec = (rtt_nanosec * path_x->send_mtu) / path_x->cwin;
+        path_x->pacing_packet_time_nanosec = (rtt_nanosec * ((uint64_t)path_x->send_mtu)) / path_x->cwin;
 
         if (path_x->pacing_packet_time_nanosec <= 0) {
             path_x->pacing_packet_time_nanosec = 1;
             path_x->pacing_packet_time_microsec = 1;
         }
         else {
-            path_x->pacing_packet_time_microsec = (path_x->pacing_packet_time_nanosec + 1023) >> 10;
+            path_x->pacing_packet_time_microsec = (path_x->pacing_packet_time_nanosec + 1023ull) >> 10;
         }
 
         path_x->pacing_bucket_max = (rtt_nanosec / 4);
-        if (path_x->pacing_bucket_max < 2 * path_x->pacing_packet_time_nanosec) {
-            path_x->pacing_bucket_max = 2 * path_x->pacing_packet_time_nanosec;
+        if (path_x->pacing_bucket_max < 2ull * path_x->pacing_packet_time_nanosec) {
+            path_x->pacing_bucket_max = 2ull * path_x->pacing_packet_time_nanosec;
         }
     }
 }
@@ -932,15 +932,12 @@ static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t* cnx,
 
     if (delta_seq > 0) {
         /* By default, we use timer based RACK logic to absorb out of order deliveries */
-        retransmit_time = p->send_time + cnx->path[0]->smoothed_rtt + (cnx->path[0]->smoothed_rtt >> 3);
-
-        /* RACK logic fails when the smoothed RTT is too small, in which case we
-         * rely on dupack logic possible, or on a safe estimate of the RACK delay if it
-         * is not */
+        retransmit_time = p->send_time + cnx->path[0]->retransmit_timer; /* cnx->path[0]->smoothed_rtt + (cnx->path[0]->smoothed_rtt >> 3); */
+        /* RACK logic works best when the amount of reordering is not too large */
         if (delta_seq < 3) {
-            uint64_t rack_timer_min = cnx->pkt_ctx[pc].latest_time_acknowledged + 
-                cnx->remote_parameters.max_ack_delay;
-            if (retransmit_time < rack_timer_min) {
+            uint64_t rack_timer_min = cnx->pkt_ctx[pc].latest_time_acknowledged +
+                cnx->remote_parameters.max_ack_delay + (cnx->path[0]->smoothed_rtt >> 2);
+            if (retransmit_time > rack_timer_min) {
                 retransmit_time = rack_timer_min;
             }
         }
@@ -966,16 +963,18 @@ static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t* cnx,
         }
     }
 
-    if (current_time >= retransmit_time) {
+    if (current_time >= retransmit_time || (p->is_ack_trap && delta_seq > 0)) {
         should_retransmit = 1;
         *timer_based = is_timer_based;
         if (cnx->quic->sequence_hole_pseudo_period != 0 && pc == picoquic_packet_context_application && !p->is_ack_trap) {
-            DBG_PRINTF("Retransmit #%d, delta=%d, timer=%d \n",
-                (int)p->sequence_number, (int)delta_seq, is_timer_based);
+            DBG_PRINTF("Retransmit #%d, delta=%d, timer=%d, time=%d, sent: %d, ack_t: %d, s_rtt: %d, rt: %d",
+                (int)p->sequence_number, (int)delta_seq, is_timer_based, (int)current_time, (int)p->send_time, 
+                (int)cnx->pkt_ctx[pc].latest_time_acknowledged, (int)cnx->path[0]->smoothed_rtt, (int) retransmit_time);
         }
-    } else {
+    }
+
+    if (retransmit_time < *next_retransmit_time) {
         *next_retransmit_time = retransmit_time;
-        *timer_based = 0;
     }
 
     return should_retransmit;

@@ -739,8 +739,8 @@ int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_versi
 
             /* register the links */
             if (ret == 0) {
-                test_ctx->c_to_s_link = picoquictest_sim_link_create(0.01, 10000, 0, 0, 0);
-                test_ctx->s_to_c_link = picoquictest_sim_link_create(0.01, 10000, 0, 0, 0);
+                test_ctx->c_to_s_link = picoquictest_sim_link_create(0.01, 10000, NULL, 0, 0);
+                test_ctx->s_to_c_link = picoquictest_sim_link_create(0.01, 10000, NULL, 0, 0);
 
                 if (test_ctx->c_to_s_link == NULL || test_ctx->s_to_c_link == NULL) {
                     ret = -1;
@@ -791,7 +791,7 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
         next_action = 1;
     }
     else {
-        uint64_t next_time = *simulated_time + 120000000;
+        uint64_t next_time = *simulated_time + 120000000ull;
         uint64_t client_arrival, server_arrival;
 
         if (test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
@@ -2214,8 +2214,8 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, unsigned int early_loss)
         if (ret == 0 && i == 1) {
             uint8_t test_data[8] = { 't', 'e', 's', 't', '0', 'r', 't', 't' };
             /* set the link delays to 100 ms, for realistic testing */
-            test_ctx->c_to_s_link->microsec_latency = 100000;
-            test_ctx->s_to_c_link->microsec_latency = 100000;
+            test_ctx->c_to_s_link->microsec_latency = 100000ull;
+            test_ctx->s_to_c_link->microsec_latency = 100000ull;
 
             /* Queue an initial frame on the client connection */
             (void)picoquic_add_to_stream(test_ctx->cnx_client, 0, test_data, sizeof(test_data), 1);
@@ -2510,14 +2510,14 @@ int spurious_retransmit_test()
     int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
 
     if (ret == 0) {
-        test_ctx->c_to_s_link->microsec_latency = 50000;
-        test_ctx->s_to_c_link->microsec_latency = 50000;
+        test_ctx->c_to_s_link->microsec_latency = 50000ull;
+        test_ctx->s_to_c_link->microsec_latency = 50000ull;
 
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
     }
 
     /* simulate 1 second of silence */
-    next_time = simulated_time + 1000000;
+    next_time = simulated_time + 1000000ull;
     while (ret == 0 && simulated_time < next_time && TEST_CLIENT_READY && TEST_SERVER_READY) {
         int was_active = 0;
 
@@ -5775,7 +5775,7 @@ int long_rtt_test()
 {
     int ret = 0;
     uint64_t simulated_time = 0;
-    uint64_t latency = 300000; /* assume that each direction is 300 ms, e.g. satellite link */
+    uint64_t latency = 300000ull; /* assume that each direction is 300 ms, e.g. satellite link */
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
 
     ret = tls_api_one_scenario_init(&test_ctx, &simulated_time,
@@ -5860,6 +5860,9 @@ int optimistic_ack_test_one(int shall_spoof_ack)
         int nb_inactive = 0;
         uint64_t hole_number = 0;
 
+        test_ctx->c_to_s_link->loss_mask = NULL;
+        test_ctx->s_to_c_link->loss_mask = NULL;
+
         while (ret == 0 && nb_trials < 64000 && nb_inactive < 1024 && TEST_CLIENT_READY && TEST_SERVER_READY) {
             int was_active = 0;
 
@@ -5869,6 +5872,11 @@ int optimistic_ack_test_one(int shall_spoof_ack)
 
             if (ret < 0) {
                 DBG_PRINTF("Sim round number %d returns %d\n", nb_trials, ret);
+                break;
+            }
+            else if (test_ctx->cnx_server->nb_retransmission_total > 0) {
+                DBG_PRINTF("Unexpected retransmission at T=%d", (int)simulated_time);
+                ret = -1;
                 break;
             }
 
@@ -5900,7 +5908,6 @@ int optimistic_ack_test_one(int shall_spoof_ack)
                                 break;
                             }
                         }
-                        DBG_PRINTF("Inserted pn hole number %d\n", (int)hole_number, ret);
                         nb_holes++;
                         break;
                     }
@@ -5918,10 +5925,11 @@ int optimistic_ack_test_one(int shall_spoof_ack)
             DBG_PRINTF("Data sending loop returns %d\n", ret);
         }
         else if (test_ctx->cnx_server != NULL) {
-            DBG_PRINTF("Complete after %d packets sent, %d r. by client, %d retransmits.\n",
+            DBG_PRINTF("Complete after %d packets sent, %d r. by client, %d retransmits, %d spurious.\n",
                 (int)(test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence - 1),
                 (int)test_ctx->cnx_client->pkt_ctx[picoquic_packet_context_application].first_sack_item.end_of_sack_range,
-                test_ctx->cnx_server->nb_retransmission_total);
+                test_ctx->cnx_server->nb_retransmission_total,
+                test_ctx->cnx_server->nb_spurious);
         }
     }
 

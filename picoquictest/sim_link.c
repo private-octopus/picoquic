@@ -73,7 +73,6 @@ picoquictest_sim_packet_t* picoquictest_sim_link_create_packet()
     picoquictest_sim_packet_t* packet = (picoquictest_sim_packet_t*)malloc(sizeof(picoquictest_sim_packet_t));
     if (packet != NULL) {
         packet->next_packet = NULL;
-        packet->sent_time = 0;
         packet->arrival_time = 0;
         packet->length = 0;
     }
@@ -129,7 +128,7 @@ void picoquictest_sim_link_submit(picoquictest_sim_link_t* link, picoquictest_si
     uint64_t current_time)
 {
     uint64_t queue_delay = (current_time > link->queue_time) ? 0 : link->queue_time - current_time;
-    uint64_t transmit_time = ((link->picosec_per_byte * packet->length) >> 20);
+    uint64_t transmit_time = ((link->picosec_per_byte * ((uint64_t)packet->length)) >> 20);
     if (transmit_time <= 0)
         transmit_time = 1;
 

@@ -64,7 +64,6 @@ extern char const * picoquic_test_solution_dir;
 
 typedef struct st_picoquictest_sim_packet_t {
     struct st_picoquictest_sim_packet_t* next_packet;
-    uint64_t sent_time;
     uint64_t arrival_time;
     size_t length;
     struct sockaddr_storage addr_from;
