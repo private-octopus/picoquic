@@ -15,12 +15,8 @@ endif()
 
 set(PICOQUIC_LIBRARY_FILES
     picoquic/cubic.c
-	picoquic/democlient.c
-	picoquic/demoserver.c
     picoquic/fnv1a.c
     picoquic/frames.c
-    picoquic/h3zero.c
-    picoquic/http0dot9.c
     picoquic/intformat.c
     picoquic/logger.c
     picoquic/newreno.c
@@ -45,9 +41,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/cnx_creation_test.c
     picoquictest/float16test.c
     picoquictest/fnv1atest.c
-    picoquictest/h3zerotest.c
     picoquictest/hashtest.c
-    picoquictest/http0dot9test.c
     picoquictest/intformattest.c
     picoquictest/parseheadertest.c
     picoquictest/pn2pn64test.c
@@ -61,6 +55,18 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/ticket_store_test.c
     picoquictest/tls_api_test.c
     picoquictest/transport_param_test.c
+)
+
+set(PICOHTTP_LIBRARY_FILES
+    picohttp/democlient.c
+    picohttp/demoserver.c
+    picohttp/h3zero.c
+    picohttp/http0dot9.c
+)
+
+set(PICOHTTP_TEST_LIBRARY_FILES
+    picoquictest/h3zerotest.c
+    picoquictest/http0dot9test.c
 )
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
@@ -81,13 +87,19 @@ add_library(picoquic-core
     ${PICOQUIC_LIBRARY_FILES}
 )
 
+add_library(picohttp-core
+    ${PICOHTTP_LIBRARY_FILES}
+)
+
 add_executable(picoquicdemo picoquicfirst/picoquicdemo.c
                             picoquicfirst/getopt.c )
-target_link_libraries(picoquicdemo picoquic-core
+target_link_libraries(picoquicdemo picoquic-core picohttp-core
     ${PTLS_LIBRARIES}
     ${OPENSSL_LIBRARIES}
     ${CMAKE_DL_LIBS}
 )
+
+target_include_directories(picoquicdemo PRIVATE picohttp)
 
 add_executable(picoquic_c2csv picoquic_c2csv_t/picoquic_c2csv_t.c)
 target_link_libraries(picoquic_c2csv picoquic-core
@@ -97,14 +109,29 @@ target_link_libraries(picoquic_c2csv picoquic-core
 )
 
 add_executable(picoquic_ct picoquic_t/picoquic_t.c
- ${PICOQUIC_TEST_LIBRARY_FILES} )
+    ${PICOQUIC_TEST_LIBRARY_FILES}
+)
+
 target_link_libraries(picoquic_ct picoquic-core
     ${PTLS_LIBRARIES}
     ${OPENSSL_LIBRARIES}
     ${CMAKE_DL_LIBS}
 )
 
-set(TEST_EXES picoquic_ct)
+add_executable(picohttp_ct picohttp_t/picohttp_t.c
+    ${PICOQUIC_TEST_LIBRARY_FILES}
+    ${PICOHTTP_TEST_LIBRARY_FILES}
+)
+
+target_link_libraries(picohttp_ct picoquic-core picohttp-core
+    ${PTLS_LIBRARIES}
+    ${OPENSSL_LIBRARIES}
+    ${CMAKE_DL_LIBS}
+)
+
+target_include_directories(picohttp_ct PRIVATE picohttp)
+
+set(TEST_EXES picoquic_ct picohttp_ct)
 
 # get all project files for formatting
 file(GLOB_RECURSE CLANG_FORMAT_SOURCE_FILES *.c *.h)

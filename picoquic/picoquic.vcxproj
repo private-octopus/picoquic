@@ -136,12 +136,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="cubic.c" />
-    <ClCompile Include="democlient.c" />
-    <ClCompile Include="demoserver.c" />
     <ClCompile Include="fnv1a.c" />
     <ClCompile Include="frames.c" />
-    <ClCompile Include="h3zero.c" />
-    <ClCompile Include="http0dot9.c" />
     <ClCompile Include="intformat.c" />
     <ClCompile Include="logger.c" />
     <ClCompile Include="newreno.c" />

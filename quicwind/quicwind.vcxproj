@@ -90,12 +90,12 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>..\picoquic</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)\picoquic;$(SolutionDir)\picohttp;</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>picoquic.lib;picotls-core.lib;picotls-esni.lib;picotls-minicrypto.lib;picotls-minicrypto-deps.lib;picotls-openssl.lib;ws2_32.lib;libcrypto.lib;bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>picoquic.lib;picotls-core.lib;picohttp.lib;picotls-esni.lib;picotls-minicrypto.lib;picotls-minicrypto-deps.lib;picotls-openssl.lib;ws2_32.lib;libcrypto.lib;bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(OutDir);$(SolutionDir)..\picotls\picotlsvs\$(Platform)\$(Configuration)\;$(OPENSSL64DIR);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
@@ -107,12 +107,12 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>..\picoquic</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)\picoquic;$(SolutionDir)\picohttp;</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>picoquic.lib;picotls-core.lib;picotls-esni.lib;picotls-minicrypto.lib;picotls-minicrypto-deps.lib;picotls-openssl.lib;ws2_32.lib;libcrypto.lib;bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>picoquic.lib;picotls-core.lib;picohttp.lib;picotls-esni.lib;picotls-minicrypto.lib;picotls-minicrypto-deps.lib;picotls-openssl.lib;ws2_32.lib;libcrypto.lib;bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(OutDir);$(SolutionDir)..\picotls\picotlsvs\$(Configuration)\;$(OPENSSLDIR);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
@@ -126,14 +126,14 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>..\picoquic</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)\picoquic;$(SolutionDir)\picohttp;</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>picoquic.lib;picotls-core.lib;picotls-esni.lib;picotls-minicrypto.lib;picotls-minicrypto-deps.lib;picotls-openssl.lib;ws2_32.lib;libcrypto.lib;bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>picoquic.lib;picotls-core.lib;picohttp.lib;picotls-esni.lib;picotls-minicrypto.lib;picotls-minicrypto-deps.lib;picotls-openssl.lib;ws2_32.lib;libcrypto.lib;bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(OutDir);$(SolutionDir)..\picotls\picotlsvs\$(Configuration)\;$(OPENSSLDIR);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
@@ -147,14 +147,14 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>..\picoquic</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)\picoquic;$(SolutionDir)\picohttp;</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>picoquic.lib;picotls-core.lib;picotls-esni.lib;picotls-minicrypto.lib;picotls-minicrypto-deps.lib;picotls-openssl.lib;ws2_32.lib;libcrypto.lib;bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>picoquic.lib;picotls-core.lib;picohttp.lib;picotls-esni.lib;picotls-minicrypto.lib;picotls-minicrypto-deps.lib;picotls-openssl.lib;ws2_32.lib;libcrypto.lib;bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(OutDir);$(SolutionDir)..\picotls\picotlsvs\$(Platform)\$(Configuration)\;$(OPENSSL64DIR);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>

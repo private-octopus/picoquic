@@ -20,9 +20,9 @@
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>
-    <ProjectGuid>{B04168BD-4D56-4DE9-B1E3-CF4C16FE21C7}</ProjectGuid>
+    <ProjectGuid>{c8f3740e-56fb-4be7-9d8c-30a954846146}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
-    <RootNamespace>picoquictest</RootNamespace>
+    <RootNamespace>picoquic</RootNamespace>
     <WindowsTargetPlatformVersion>10.0.14393.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -75,11 +75,10 @@
     <ClCompile>
       <PrecompiledHeader>
       </PrecompiledHeader>
-      <WarningLevel>Level3</WarningLevel>
+      <WarningLevel>Level4</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_LIB;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>
-        $(SolutionDir)\picoquic;$(SolutionDir)\picohttp;$(OPENSSLDIR)\include;..\..\picotls\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(OPENSSLDIR)\include;..\..\picotls\include;$(SolutionDir)\picoquic;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -89,10 +88,10 @@
     <ClCompile>
       <PrecompiledHeader>
       </PrecompiledHeader>
-      <WarningLevel>Level3</WarningLevel>
+      <WarningLevel>Level4</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>_DEBUG;_LIB;_WINDOWS;_WINDOWS64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(SolutionDir)\picoquic;$(SolutionDir)\picohttp;$(OPENSSL64DIR)\include;..\..\picotls\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(OPENSSL64DIR)\include;..\..\picotls\include;$(SolutionDir)\picoquic;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -107,8 +106,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>WIN32;NDEBUG;_LIB;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>
-        $(SolutionDir)\picoquic;$(SolutionDir)\picohttp;$(OPENSSLDIR)\include;..\..\picotls\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(OPENSSLDIR)\include;..\..\picotls\include;$(SolutionDir)\picoquic;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -125,7 +123,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>NDEBUG;_LIB;_WINDOWS;_WINDOWS64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(SolutionDir)\picoquic;$(SolutionDir)\picohttp;$(OPENSSL64DIR)\include;..\..\picotls\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(OPENSSL64DIR)\include;..\..\picotls\include;$(SolutionDir)\picoquic;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -134,34 +132,16 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <Text Include="ReadMe.txt" />
+    <ClCompile Include="democlient.c" />
+    <ClCompile Include="demoserver.c" />
+    <ClCompile Include="h3zero.c" />
+    <ClCompile Include="http0dot9.c" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="ack_of_ack_test.c" />
-    <ClCompile Include="cleartext_aead_test.c" />
-    <ClCompile Include="cnx_creation_test.c" />
-    <ClCompile Include="float16test.c" />
-    <ClCompile Include="fnv1atest.c" />
-    <ClCompile Include="h3zerotest.c" />
-    <ClCompile Include="hashtest.c" />
-    <ClCompile Include="http0dot9test.c" />
-    <ClCompile Include="intformattest.c" />
-    <ClCompile Include="sim_link.c" />
-    <ClCompile Include="parseheadertest.c" />
-    <ClCompile Include="pn2pn64test.c" />
-    <ClCompile Include="sacktest.c" />
-    <ClCompile Include="skip_frame_test.c" />
-    <ClCompile Include="socket_test.c" />
-    <ClCompile Include="splay_test.c" />
-    <ClCompile Include="stream0_frame_test.c" />
-    <ClCompile Include="stresstest.c" />
-    <ClCompile Include="ticket_store_test.c" />
-    <ClCompile Include="tls_api_test.c" />
-    <ClCompile Include="transport_param_test.c" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="picoquictest.h" />
-    <ClInclude Include="picoquictest_internal.h" />
+    <ClInclude Include="democlient.h" />
+    <ClInclude Include="demoserver.h" />
+    <ClInclude Include="h3zero.h" />
+    <ClInclude Include="wincompat.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
