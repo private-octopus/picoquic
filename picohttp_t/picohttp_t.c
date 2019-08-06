@@ -23,7 +23,7 @@
 #endif
 #include "picoquic.h"
 #include "util.h"
-#include "picohttptest.h"
+#include "picoquictest.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>

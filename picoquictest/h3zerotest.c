@@ -22,7 +22,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include "picoquic_internal.h"
-#include "picohttptest_internal.h"
+#include "picoquictest_internal.h"
 #include "h3zero.h"
 #include "democlient.h"
 #include "demoserver.h"
