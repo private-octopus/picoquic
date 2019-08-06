@@ -99,6 +99,8 @@ target_link_libraries(picoquicdemo picoquic-core picohttp-core
     ${CMAKE_DL_LIBS}
 )
 
+target_include_directories(picoquicdemo PRIVATE picohttp)
+
 add_executable(picoquic_c2csv picoquic_c2csv_t/picoquic_c2csv_t.c)
 target_link_libraries(picoquic_c2csv picoquic-core
     ${PTLS_LIBRARIES}
