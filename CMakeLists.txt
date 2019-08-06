@@ -120,7 +120,7 @@ add_executable(picohttp_ct picohttp_t/picohttp_t.c
     ${PICOHTTP_TEST_LIBRARY_FILES}
 )
 
-target_link_libraries(picoquic_ct picoquic-core picohttp-core
+target_link_libraries(picohttp_ct picoquic-core picohttp-core
     ${PTLS_LIBRARIES}
     ${OPENSSL_LIBRARIES}
     ${CMAKE_DL_LIBS}
