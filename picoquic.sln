@@ -30,6 +30,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "quicwind", "quicwind\quicwind.vcxproj", "{7C931959-3DBA-4440-A215-B085036F3EE1}"
 	ProjectSection(ProjectDependencies) = postProject
+		{C8F3740E-56FB-4BE7-9D8C-30A954846146} = {C8F3740E-56FB-4BE7-9D8C-30A954846146}
 		{63E1E6B7-DB5F-4EDC-8AC8-7E9F5990D11F} = {63E1E6B7-DB5F-4EDC-8AC8-7E9F5990D11F}
 	EndProjectSection
 EndProject
