@@ -126,6 +126,8 @@ target_link_libraries(picohttp_ct picoquic-core picohttp-core
     ${CMAKE_DL_LIBS}
 )
 
+target_include_directories(picohttp_ct PRIVATE picohttp)
+
 set(TEST_EXES picoquic_ct picohttp_ct)
 
 # get all project files for formatting
