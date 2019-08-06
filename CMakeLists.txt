@@ -117,6 +117,7 @@ target_link_libraries(picoquic_ct picoquic-core
 )
 
 add_executable(picohttp_ct picohttp_t/picohttp_t.c
+    ${PICOQUIC_TEST_LIBRARY_FILES}
     ${PICOHTTP_TEST_LIBRARY_FILES}
 )
 
