@@ -326,5 +326,9 @@ break;
 
         free(test_status);
     }
+    
+    if (ret == 0){
+        ret = -1;
+    }
     return (ret);
 }
