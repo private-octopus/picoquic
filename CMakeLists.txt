@@ -65,8 +65,8 @@ set(PICOHTTP_LIBRARY_FILES
 )
 
 set(PICOHTTP_TEST_LIBRARY_FILES
-    picohttptest/h3zerotest.c
-    picohttptest/http0dot9test.c
+    picoquictest/h3zerotest.c
+    picoquictest/http0dot9test.c
 )
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
