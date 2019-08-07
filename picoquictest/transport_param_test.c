@@ -863,8 +863,8 @@ static int transport_param_log_fuzz_test(int client_mode, uint8_t* target, size_
                     /* log */
                     transport_param_log_test_one(F, buffer, target_length - dl, client_mode);
                 }
+                fclose(F);
             }
-            fclose(F);
         }
     }
 
