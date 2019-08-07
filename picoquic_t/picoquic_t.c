@@ -301,8 +301,8 @@ int main(int argc, char** argv)
                 break;
             case 'h':
                 usage(argv[0]);
-exit(0);
-break;
+                exit(0);
+                break;
             default:
                 ret = usage(argv[0]);
                 break;
