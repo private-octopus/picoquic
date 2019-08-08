@@ -67,13 +67,13 @@ int picoquic_is_old_header_invariant(
         l1 = 5 + 1 + l_dest_id1 + l_srce_id1;
         if (l1 > length) {
             ret = 0;
-        } else if (l_dest_id2 > 20u || 5u + l_dest_id2 + 1u > length) {
+        } else if (l_dest_id2 > (size_t)20 || (size_t)5 + (size_t)l_dest_id2 + (size_t)1 > length) {
             /* if packet is old invariant, this test will succeed whenever the
              * destination id is longer than 4, which covers a lot of cases */
             ret = 1;
         }
         else {
-            l_srce_id2 = bytes[5 + l_dest_id2 + 1];
+            l_srce_id2 = bytes[(size_t)5 + (size_t)l_dest_id2 + (size_t)1];
             l2 = 5 + l_dest_id2 + 1 + l_dest_id2;
             if (l_dest_id2 > 20 || l2 > length) {
                 /* If packet is old invarion, bytes[l_srce_id2] will likely be 
@@ -170,13 +170,13 @@ int picoquic_parse_packet_header(
             }
             else {
                 l_dest_id = bytes[5];
-                if (6u + l_dest_id + 1u > length) {
+                if ((size_t)6 + l_dest_id + (size_t)1 > length) {
                     l_srce_id = 255;
                     i_srce_id = (uint32_t)length;
                 }
                 else {
-                    l_srce_id = bytes[6 + l_dest_id];
-                    i_srce_id = 6 + l_dest_id + 1;
+                    l_srce_id = bytes[(size_t)6 + l_dest_id];
+                    i_srce_id = (size_t)6 + l_dest_id + (size_t)1;
                 }
             }
             /* Required length: at least one length byte and at least one seqnum byte
@@ -188,7 +188,7 @@ int picoquic_parse_packet_header(
             else {         
                 (void)picoquic_parse_connection_id(bytes + 6, l_dest_id, &ph->dest_cnx_id);
                 (void)picoquic_parse_connection_id(bytes + i_srce_id, l_srce_id, &ph->srce_cnx_id);
-                ph->offset = i_srce_id + l_srce_id;
+                ph->offset = (size_t)i_srce_id + l_srce_id;
                 
                 if (ph->vn == 0) {
                     /* VN = zero identifies a version negotiation packet */
@@ -359,7 +359,7 @@ int picoquic_parse_packet_header(
 
          if ((int)length >= 1 + cnxid_length) {
              /* We can identify the connection by its ID */
-             ph->offset = (uint32_t)( 1 + picoquic_parse_connection_id(bytes + 1, cnxid_length, &ph->dest_cnx_id));
+             ph->offset = (uint32_t)((size_t)1 + picoquic_parse_connection_id(bytes + 1, cnxid_length, &ph->dest_cnx_id));
              /* TODO: should consider using combination of CNX ID and ADDR_FROM */
              if (*pcnx == NULL)
              {
@@ -537,12 +537,14 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
     int ret = 0;
 
     /* verify that the packet is new */
-    if (already_received != NULL && picoquic_is_pn_already_received(cnx, ph->pc, ph->pn64) != 0) {
-        /* Set error type: already received */
-        *already_received = 1;
-    }
-    else {
-        *already_received = 0;
+    if (already_received != NULL) {
+        if (picoquic_is_pn_already_received(cnx, ph->pc, ph->pn64) != 0) {
+            /* Set error type: already received */
+            *already_received = 1;
+        }
+        else {
+            *already_received = 0;
+        }
     }
 
     if (ph->epoch == 3) {
@@ -865,7 +867,7 @@ void picoquic_process_unexpected_cnxid(
             size_t byte_index = 0;
 
             if (pad_size > PICOQUIC_RESET_PACKET_PAD_SIZE) {
-                pad_size = (uint32_t)picoquic_public_uniform_random(pad_size - PICOQUIC_RESET_PACKET_PAD_SIZE)
+                pad_size = (size_t)picoquic_public_uniform_random(pad_size - PICOQUIC_RESET_PACKET_PAD_SIZE)
                     + PICOQUIC_RESET_PACKET_PAD_SIZE;
             }
             else {
@@ -1161,7 +1163,7 @@ int picoquic_incoming_retry(
             odcil = bytes[byte_index++];
         }
 
-        if (odcil != cnx->initial_cnxid.id_len || odcil + 1u > ph->payload_length ||
+        if (odcil != cnx->initial_cnxid.id_len || (size_t)odcil + 1u > ph->payload_length ||
             memcmp(cnx->initial_cnxid.id, &bytes[byte_index], odcil) != 0) {
             /* malformed ODCIL, or does not match initial cid; ignore */
             ret = PICOQUIC_ERROR_UNEXPECTED_PACKET;

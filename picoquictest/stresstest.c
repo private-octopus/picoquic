@@ -416,14 +416,14 @@ int stress_client_set_callback(picoquic_cnx_t* cnx)
             }
             picoquic_set_callback(cnx, stress_client_callback, ctx);
 
-            if ((ctx->message_disconnect_trigger = (uint32_t) picoquic_test_uniform_random(&stress_random_ctx, 2* picoquic_stress_max_message_before_drop)) >= picoquic_stress_max_message_before_drop){
+            if ((ctx->message_disconnect_trigger = (uint32_t) picoquic_test_uniform_random(&stress_random_ctx, ((uint64_t)2)* picoquic_stress_max_message_before_drop)) >= picoquic_stress_max_message_before_drop){
                 ctx->message_disconnect_trigger = 0;
             }
             else {
                 ctx->message_disconnect_trigger++;
             }
 
-            if ((ctx->message_migration_trigger = (uint32_t)picoquic_test_uniform_random(&stress_random_ctx, 2 * picoquic_stress_max_message_before_migrate)) >= picoquic_stress_max_message_before_migrate) {
+            if ((ctx->message_migration_trigger = (uint32_t)picoquic_test_uniform_random(&stress_random_ctx, ((uint64_t)2) * picoquic_stress_max_message_before_migrate)) >= picoquic_stress_max_message_before_migrate) {
                 ctx->message_migration_trigger = 0;
             }
             else {
