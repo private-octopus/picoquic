@@ -221,10 +221,10 @@ picoquic_quic_t* picoquic_create(uint32_t nb_connections,
         }
 
         if (ret == 0) {
-            quic->table_cnx_by_id = picohash_create(nb_connections * 4,
+            quic->table_cnx_by_id = picohash_create((size_t)nb_connections * 4,
                 picoquic_cnx_id_hash, picoquic_cnx_id_compare);
 
-            quic->table_cnx_by_net = picohash_create(nb_connections * 4,
+            quic->table_cnx_by_net = picohash_create((size_t)nb_connections * 4,
                 picoquic_net_id_hash, picoquic_net_id_compare);
 
             if (quic->table_cnx_by_id == NULL || quic->table_cnx_by_net == NULL) {
@@ -1606,7 +1606,7 @@ picoquic_stream_head_t* picoquic_find_stream(picoquic_cnx_t* cnx, uint64_t strea
 void picoquic_add_output_streams(picoquic_cnx_t* cnx, uint64_t old_limit, uint64_t new_limit, unsigned int is_bidir)
 {
     uint64_t old_rank = STREAM_RANK_FROM_ID(old_limit);
-    uint64_t first_new_id = STREAM_ID_FROM_RANK(old_rank + 1, !cnx->client_mode, !is_bidir);
+    uint64_t first_new_id = STREAM_ID_FROM_RANK(old_rank + 1ull, !cnx->client_mode, !is_bidir);
     picoquic_stream_head_t* stream = picoquic_find_stream(cnx, first_new_id );
 
     while (stream) {
