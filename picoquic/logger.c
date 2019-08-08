@@ -1857,17 +1857,11 @@ void picoquic_open_cc_dump(picoquic_cnx_t * cnx)
 
         if (ret == 0) {
 
-#ifdef _WINDOWS
-            errno_t err = fopen_s(&cnx->cc_log, cc_log_file_name, "wb");
-            if (err != 0 || cnx->cc_log == NULL) {
-                ret = -1;
-            }
-#else
-            cnx->cc_log = fopen(cc_log_file_name, "wb");
+            cnx->cc_log = picoquic_file_open(cc_log_file_name, "wb");
             if (cnx->cc_log == NULL) {
                 ret = -1;
             }
-#endif
+
             if (ret != 0) {
                 DBG_PRINTF("Cannot open file %s for write.\n", cc_log_file_name);
             } else {
