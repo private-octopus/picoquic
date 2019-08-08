@@ -1066,8 +1066,8 @@ static int stress_or_fuzz_test(picoquic_fuzz_fn fuzz_fn, void * fuzz_ctx, uint64
         ret = -1;
     }
     else {
-        DBG_PRINTF("Stress complete after simulating %3f s. in %3f s., returns %d\n",
-            run_time_seconds, wall_time_seconds, ret);
+        DBG_PRINTF("Stress complete after simulating %3f s. in %3f s., returns %d, rand %x\n",
+            run_time_seconds, wall_time_seconds, ret, (int)((picoquic_test_random(&stress_random_ctx)>>48)&0xFFFF));
     }
 
     picoquic_fuzz_in_progress = 0;
@@ -1285,6 +1285,7 @@ int random_tester_test()
 
 /*
  * Initial fuzz test.
+ *
  * This test specializes in fuzzing the initial packet, and checking what happens. All the
  * packets sent there are illegitimate, and should result in broken connections.
  *
@@ -1343,7 +1344,9 @@ static uint32_t initial_fuzzer(void * fuzz_ctx, picoquic_cnx_t* cnx,
                 }
                 break;
             case 2:
-                memcpy(&bytes[header_length], test_skip_list[ctx->current_frame].val, len);
+                if (length + len <= bytes_max) {
+                    memcpy(&bytes[header_length], test_skip_list[ctx->current_frame].val, len);
+                }
                 if (length > header_length + len) {
                     memset(&bytes[header_length + len], 0, length - (header_length + len));
                 }
