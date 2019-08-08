@@ -227,7 +227,7 @@ static int stress_server_callback(picoquic_cnx_t* cnx,
                     if (response_length > 0) {
                         /* Push data on the stream */
 
-                        while (response_length > PICOQUIC_STRESS_MESSAGE_BUFFER_SIZE) {
+                        while (response_length > PICOQUIC_STRESS_MESSAGE_BUFFER_SIZE && ret == 0) {
                             if ( (ret = picoquic_add_to_stream(cnx, stream_id, ctx->buffer,
                                 PICOQUIC_STRESS_MESSAGE_BUFFER_SIZE, 0)) != 0) {
                                 ret = stress_debug_break(0);
@@ -235,7 +235,7 @@ static int stress_server_callback(picoquic_cnx_t* cnx,
 
                             response_length -= PICOQUIC_STRESS_MESSAGE_BUFFER_SIZE;
                         }
-                        if ((ret = picoquic_add_to_stream(cnx, stream_id, ctx->buffer,
+                        if (ret == 0 && (ret = picoquic_add_to_stream(cnx, stream_id, ctx->buffer,
                                 response_length, 1)) != 0) {
                             ret = stress_debug_break(0);
                         }
@@ -269,7 +269,7 @@ static int stress_server_callback(picoquic_cnx_t* cnx,
  */
 
 
-static void stress_client_start_streams(picoquic_cnx_t* cnx,
+static int stress_client_start_streams(picoquic_cnx_t* cnx,
     picoquic_stress_client_callback_ctx_t* ctx) 
 {
     int ret = 0;
@@ -286,7 +286,7 @@ static void stress_client_start_streams(picoquic_cnx_t* cnx,
         }
 
         if (stream_index < 0) {
-            ret = stress_debug_break(0);
+            ret = stress_debug_break(1);
         }
         else {
             memset(buf, 0, sizeof(buf));
@@ -298,10 +298,12 @@ static void stress_client_start_streams(picoquic_cnx_t* cnx,
             ctx->nb_open_streams++;
 
             if ((ret = picoquic_add_to_stream(cnx, ctx->stream_id[stream_index], buf, sizeof(buf), 1)) != 0){
-                ret = stress_debug_break(0);
+                ret = stress_debug_break(1);
             }
         }
     }
+
+    return ret;
 }
 
 static int stress_client_callback(picoquic_cnx_t* cnx,
@@ -378,14 +380,14 @@ static int stress_client_callback(picoquic_cnx_t* cnx,
                 }
                 else {
                     /* Initialize the next bidir stream  */
-                    stress_client_start_streams(cnx, ctx);
+                    ret = stress_client_start_streams(cnx, ctx);
                 }
             }
         }
     }
 
     /* that's it */
-    return 0;
+    return ret;
 }
 
 int stress_client_set_callback(picoquic_cnx_t* cnx) 
@@ -429,7 +431,7 @@ int stress_client_set_callback(picoquic_cnx_t* cnx)
                 ctx->message_migration_trigger++;
             }
 
-            stress_client_start_streams(cnx, ctx);
+            ret = stress_client_start_streams(cnx, ctx);
         }
     }
 
