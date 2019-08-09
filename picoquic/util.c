@@ -42,16 +42,21 @@ char* picoquic_string_create(const char* original, size_t len)
     char * str = NULL;
 
     /* tests to protect against integer overflow */
-    if (len < allocated && allocated > 0) {
+    if (allocated > 0) {
         str = (char*)malloc(allocated);
 
         if (str != NULL) {
             if (original == NULL || len == 0) {
                 str[0] = 0;
             }
-            else {
+            else if (allocated > len) {
                 memcpy(str, original, len);
                 str[len] = 0;
+            }
+            else {
+                /* This could happen only in case of integer overflow */
+                free(str);
+                str = NULL;
             }
         }
     }
