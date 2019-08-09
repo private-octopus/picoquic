@@ -679,8 +679,9 @@ char const * demo_client_parse_stream_number(char const * text, uint64_t default
     else {
         *number = 0;
         do {
+            int delta = *text++ - '0';
             *number *= 10;
-            *number += (uint64_t)(*text++) - (uint64_t)'0';
+            *number += delta;
         } while (text[0] >= '0' && text[0] <= '9');
 
         text = demo_client_parse_stream_spaces(text);
@@ -792,8 +793,9 @@ char const * demo_client_parse_post_size(char const * text, uint64_t * post_size
     else {
         *post_size = 0;
         do {
+            int delta = *text++ - '0';
             *post_size *= 10;
-            *post_size += (uint64_t)(*text++) - '0';
+            *post_size += delta;
         } while (text[0] >= '0' && text[0] <= '9');
 
         text = demo_client_parse_stream_spaces(text);
