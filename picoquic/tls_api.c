@@ -233,8 +233,8 @@ void picoquic_public_random_seed_64(uint64_t seed, int reset)
 {
     if (reset) {
         public_random_index = 0;
-        for (int i = 0; i < 16; i++) {
-            public_random_seed[i] = i + 1;
+        for (uint64_t i = 0; i < 16; i++) {
+            public_random_seed[i] = i + 1u;
         }
     }
 
@@ -2186,7 +2186,7 @@ int picoquic_verify_retry_token(picoquic_quic_t* quic, struct sockaddr * addr_pe
         } else {
             odcid->id_len = text[8];
             
-            if (odcid->id_len + 9u != text_len) {
+            if ((size_t)odcid->id_len + 9u != text_len) {
                 ret = -1;
             }
             else if (odcid->id_len > 0){
@@ -2278,7 +2278,7 @@ void picoquic_cid_free_encrypt_global_ctx(void ** v_cid_enc)
     }
 }
 
-int picoquic_cid_get_encrypt_global_ctx(void ** v_cid_enc, int is_enc, const void *secret, int cid_length)
+int picoquic_cid_get_encrypt_global_ctx(void ** v_cid_enc, int is_enc, const void *secret, size_t cid_length)
 {
     uint8_t cidkey[PTLS_MAX_SECRET_SIZE];
     uint8_t long_secret[PTLS_MAX_DIGEST_SIZE];
@@ -2298,7 +2298,7 @@ int picoquic_cid_get_encrypt_global_ctx(void ** v_cid_enc, int is_enc, const voi
         DBG_PRINTF("CID Global Encryption key (%d):\n", (int)cipher.aead->ctr_cipher->key_size);
         debug_dump(cidkey, (int)cipher.aead->ctr_cipher->key_size);
 #endif
-        if ((*v_cid_enc = ptls_ffx_new(cipher.aead->ctr_cipher, is_enc, PICOQUIC_LABEL_CID_GLOBAL_ROUNDS, 8*cid_length, cidkey)) == NULL) {
+        if ((*v_cid_enc = ptls_ffx_new(cipher.aead->ctr_cipher, is_enc, PICOQUIC_LABEL_CID_GLOBAL_ROUNDS, cid_length*8u, cidkey)) == NULL) {
             ret = PTLS_ERROR_NO_MEMORY;
         }
     }

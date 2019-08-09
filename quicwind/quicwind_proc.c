@@ -352,7 +352,7 @@ int quicwind_start_download(picoquic_cnx_t * cnx, quicwind_callback_ctx_t * ctx,
 
         memset(s_ctx, 0, sizeof(quicwind_stream_ctx_t));
         /* Set stream ID */
-        s_ctx->stream_id = 4*ctx->nb_client_streams;
+        s_ctx->stream_id = ((uint64_t)ctx->nb_client_streams)*4u;
 
         /* make sure that the doc name is properly formated */
         path = (uint8_t *)doc_name;

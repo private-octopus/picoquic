@@ -244,7 +244,7 @@ int h09_demo_client_prepare_stream_open_command(
 
 static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
     picoquic_demo_callback_ctx_t* ctx,
-    uint64_t stream_id, char const* doc_name, char const* fname, int is_binary, size_t post_size, int nb_repeat)
+    uint64_t stream_id, char const* doc_name, char const* fname, int is_binary, size_t post_size, uint64_t nb_repeat)
 {
     int ret = 0;
     uint8_t buffer[1024];
@@ -261,7 +261,7 @@ static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
         memset(stream_ctx, 0, sizeof(picoquic_demo_client_stream_ctx_t));
         stream_ctx->next_stream = ctx->first_stream;
         ctx->first_stream = stream_ctx;
-        stream_ctx->stream_id = stream_id + 4*nb_repeat;
+        stream_ctx->stream_id = stream_id + nb_repeat*4u;
         stream_ctx->post_size = post_size;
 
         if (ctx->no_disk) {
@@ -272,7 +272,7 @@ static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
             char repeat_name[512];
             if (nb_repeat > 0) {
 #ifdef _WINDOWS
-                ret = sprintf_s(repeat_name, sizeof(repeat_name), "r%dx%s", nb_repeat, fname) <= 0;
+                ret = sprintf_s(repeat_name, sizeof(repeat_name), "r%dx%s", (int)nb_repeat, fname) <= 0;
 #else
                 ret = sprintf(repeat_name, "r%dx%s", nb_repeat, fname) <= 0;
 #endif
@@ -385,7 +385,7 @@ int picoquic_demo_client_start_streams(picoquic_cnx_t* cnx,
 	 * just finished */
     for (size_t i = 0; ret == 0 && i < ctx->nb_demo_streams; i++) {
         if (ctx->demo_stream[i].previous_stream_id == fin_stream_id) {
-            int repeat_nb = 0;
+            uint64_t repeat_nb = 0;
             do {
                 ret = picoquic_demo_client_open_stream(cnx, ctx, ctx->demo_stream[i].stream_id,
                     ctx->demo_stream[i].doc_name,
@@ -397,7 +397,7 @@ int picoquic_demo_client_start_streams(picoquic_cnx_t* cnx,
             } while (ret == 0 && repeat_nb < ctx->demo_stream[i].repeat_count);
 
             if (ret == 0 && repeat_nb > 1) {
-                fprintf(stdout, "Repeated stream opening %d times.\n", repeat_nb);
+                fprintf(stdout, "Repeated stream opening %d times.\n", (int)repeat_nb);
             }
         }
     }
@@ -680,7 +680,7 @@ char const * demo_client_parse_stream_number(char const * text, uint64_t default
         *number = 0;
         do {
             *number *= 10;
-            *number += *text++ - '0';
+            *number += (uint64_t)(*text++) - (uint64_t)'0';
         } while (text[0] >= '0' && text[0] <= '9');
 
         text = demo_client_parse_stream_spaces(text);
@@ -793,7 +793,7 @@ char const * demo_client_parse_post_size(char const * text, uint64_t * post_size
         *post_size = 0;
         do {
             *post_size *= 10;
-            *post_size += *text++ - '0';
+            *post_size += (uint64_t)(*text++) - '0';
         } while (text[0] >= '0' && text[0] <= '9');
 
         text = demo_client_parse_stream_spaces(text);

@@ -1821,7 +1821,7 @@ void picoquic_open_cc_dump(picoquic_cnx_t * cnx)
         const size_t suffix_len = strlen(suffix);
         size_t folder_length = strlen(cnx->quic->cc_log_dir);
 
-        if (folder_length + (size_t)1 + ((size_t)2)* (size_t)cnx->initial_cnxid.id_len + suffix_len + (size_t)1 > sizeof(cc_log_file_name)) {
+        if (folder_length + 1u + (size_t)cnx->initial_cnxid.id_len*2u + suffix_len + 1u > sizeof(cc_log_file_name)) {
             ret = -1;
         }
         else {

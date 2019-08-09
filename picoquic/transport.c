@@ -96,7 +96,7 @@ uint64_t picoquic_prepare_transport_param_stream_id(uint64_t stream_id)
     uint64_t rank = 0;
 
     if (stream_id != 0xFFFFFFFFFFFFFFFFll) {
-        rank = 1 + (uint16_t) (stream_id / 4);
+        rank = (uint64_t)1 +  (stream_id / 4);
     }
 
     return rank;
@@ -243,7 +243,7 @@ size_t picoquic_decode_transport_param_prefered_address_old(uint8_t * bytes, siz
     size_t byte_index = 0;
     uint8_t ip_length = 0;
     uint8_t cnx_id_length = 0;
-    size_t minimal_length = 1 + 1 + ip_length + 2 + 1 + cnx_id_length + 16;
+    size_t minimal_length = (size_t)1 + 1u + ip_length + 2u + 1u + cnx_id_length + 16u;
     size_t ret = 0;
     int ip_version;
 

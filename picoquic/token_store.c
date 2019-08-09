@@ -64,7 +64,7 @@ int picoquic_serialize_token(const picoquic_stored_token_t * token, uint8_t * by
     size_t required_length;
 
     /* Compute serialized length */
-    required_length = 8 + 2 + 2 + 2 + token->sni_length + token->ip_addr_length + token->token_length;
+    required_length = (size_t)(8 + 2 + 2 + 2) + token->sni_length + token->ip_addr_length + token->token_length;
     /* Serialize */
     if (required_length > bytes_max) {
         ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
