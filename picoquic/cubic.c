@@ -226,7 +226,7 @@ void picoquic_cubic_notify(picoquic_path_t* path_x,
                         cubic_state->min_rtt = rtt_measurement;
                     }
 
-                    if (cubic_state->nb_rtt > NB_RTT_CUBIC) {
+                    if (cubic_state->nb_rtt >= NB_RTT_CUBIC) {
                         cubic_state->nb_rtt = 0;
                     }
 

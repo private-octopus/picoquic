@@ -908,10 +908,11 @@ int demo_client_parse_scenario_desc(char const * text, size_t * nb_streams, pico
                 break;
             }
             else {
-                text = demo_client_parse_stream_desc(text, stream_id, previous, &(*desc)[i]);
+                picoquic_demo_stream_desc_t* stream_desc = &(*desc)[i];
+                text = demo_client_parse_stream_desc(text, stream_id, previous, stream_desc);
                 if (text != NULL) {
-                    stream_id = (*desc)[i].stream_id + 4;
-                    previous = (*desc)[i].stream_id;
+                    stream_id = stream_desc->stream_id + 4;
+                    previous = stream_desc->stream_id;
                     i++;
                 }
             }
