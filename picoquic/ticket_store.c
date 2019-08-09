@@ -73,7 +73,7 @@ int picoquic_serialize_ticket(const picoquic_stored_ticket_t * ticket, uint8_t *
     size_t required_length;
 
     /* Compute serialized length */
-    required_length = 8 + 2 + 2 + 2 + ticket->sni_length + ticket->alpn_length + ticket->ticket_length;
+    required_length = (size_t)(8 + 2 + 2 + 2) + ticket->sni_length + ticket->alpn_length + ticket->ticket_length;
     /* Serialize */
     if (required_length > bytes_max) {
         ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;

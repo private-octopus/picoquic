@@ -41,16 +41,22 @@ char* picoquic_string_create(const char* original, size_t len)
     size_t allocated = len + 1;
     char * str = NULL;
 
-    if (allocated > len) {
+    /* tests to protect against integer overflow */
+    if (allocated > 0) {
         str = (char*)malloc(allocated);
 
         if (str != NULL) {
             if (original == NULL || len == 0) {
                 str[0] = 0;
             }
-            else {
+            else if (allocated > len) {
                 memcpy(str, original, len);
                 str[len] = 0;
+            }
+            else {
+                /* This could happen only in case of integer overflow */
+                free(str);
+                str = NULL;
             }
         }
     }
@@ -229,9 +235,9 @@ void picoquic_parse_packet_header_cnxid_lengths(uint8_t l_byte, uint8_t *dest_le
     *srce_len = (h2 == 0) ? 0 : h2 + 3;
 }
 
-uint32_t picoquic_format_connection_id(uint8_t* bytes, size_t bytes_max, picoquic_connection_id_t cnx_id)
+uint8_t picoquic_format_connection_id(uint8_t* bytes, size_t bytes_max, picoquic_connection_id_t cnx_id)
 {
-    uint32_t copied = cnx_id.id_len;
+    uint8_t copied = cnx_id.id_len;
     if (copied > bytes_max || copied == 0) {
         copied = 0;
     } else {
@@ -249,7 +255,7 @@ int picoquic_is_connection_id_length_valid(uint8_t len) {
     return ret;
 }
 
-uint32_t picoquic_parse_connection_id(const uint8_t * bytes, uint8_t len, picoquic_connection_id_t * cnx_id)
+uint8_t picoquic_parse_connection_id(const uint8_t * bytes, uint8_t len, picoquic_connection_id_t * cnx_id)
 {
     if (picoquic_is_connection_id_length_valid(len)) {
         cnx_id->id_len = len;

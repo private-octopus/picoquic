@@ -233,8 +233,8 @@ void picoquic_public_random_seed_64(uint64_t seed, int reset)
 {
     if (reset) {
         public_random_index = 0;
-        for (int i = 0; i < 16; i++) {
-            public_random_seed[i] = i + 1;
+        for (uint64_t i = 0; i < 16; i++) {
+            public_random_seed[i] = i + 1u;
         }
     }
 
@@ -2186,7 +2186,7 @@ int picoquic_verify_retry_token(picoquic_quic_t* quic, struct sockaddr * addr_pe
         } else {
             odcid->id_len = text[8];
             
-            if (odcid->id_len + 9u != text_len) {
+            if ((size_t)odcid->id_len + 9u != text_len) {
                 ret = -1;
             }
             else if (odcid->id_len > 0){
@@ -2278,7 +2278,7 @@ void picoquic_cid_free_encrypt_global_ctx(void ** v_cid_enc)
     }
 }
 
-int picoquic_cid_get_encrypt_global_ctx(void ** v_cid_enc, int is_enc, const void *secret, int cid_length)
+int picoquic_cid_get_encrypt_global_ctx(void ** v_cid_enc, int is_enc, const void *secret, size_t cid_length)
 {
     uint8_t cidkey[PTLS_MAX_SECRET_SIZE];
     uint8_t long_secret[PTLS_MAX_DIGEST_SIZE];
@@ -2298,7 +2298,7 @@ int picoquic_cid_get_encrypt_global_ctx(void ** v_cid_enc, int is_enc, const voi
         DBG_PRINTF("CID Global Encryption key (%d):\n", (int)cipher.aead->ctr_cipher->key_size);
         debug_dump(cidkey, (int)cipher.aead->ctr_cipher->key_size);
 #endif
-        if ((*v_cid_enc = ptls_ffx_new(cipher.aead->ctr_cipher, is_enc, PICOQUIC_LABEL_CID_GLOBAL_ROUNDS, 8*cid_length, cidkey)) == NULL) {
+        if ((*v_cid_enc = ptls_ffx_new(cipher.aead->ctr_cipher, is_enc, PICOQUIC_LABEL_CID_GLOBAL_ROUNDS, cid_length*8u, cidkey)) == NULL) {
             ret = PTLS_ERROR_NO_MEMORY;
         }
     }
@@ -2418,34 +2418,44 @@ int picoquic_esni_load_rr(char const * esni_rr_file_name, uint8_t *esnikeys, siz
  * This would require repeated calls to the "init context" API, and an esni vector
  * containing a longer null terminated list of esni pointers.
  */
+
+static const size_t picoquic_esnikeys_max_rr = 65536;
+
 int picoquic_esni_server_setup(picoquic_quic_t * quic, char const * esni_rr_file_name)
 {
-    uint8_t esnikeys[65536];
+    uint8_t * esnikeys = malloc(picoquic_esnikeys_max_rr);
     size_t esnikeys_len;
     ptls_context_t *ctx = (ptls_context_t *)quic->tls_master_ctx;
     int ret = 0;
 
-    /* read esnikeys */
-    ret = picoquic_esni_load_rr(esni_rr_file_name, esnikeys, sizeof(esnikeys), &esnikeys_len);
+    if (esnikeys != NULL) {
+        /* read esnikeys */
+        ret = picoquic_esni_load_rr(esni_rr_file_name, esnikeys, picoquic_esnikeys_max_rr, &esnikeys_len);
 
-    /* Install the ESNI data in the server context */
-    if (ret == 0) {
-        ctx->esni = malloc(sizeof(*ctx->esni) * 2);
+        /* Install the ESNI data in the server context */
+        if (ret == 0) {
+            ctx->esni = malloc(sizeof(*ctx->esni) * 2);
 
-        if (ctx->esni != NULL) {
-            ctx->esni[1] = NULL;
-            ctx->esni[0] = malloc(sizeof(**ctx->esni));
-        }
+            if (ctx->esni != NULL) {
+                ctx->esni[1] = NULL;
+                ctx->esni[0] = malloc(sizeof(**ctx->esni));
+            }
 
-        if (ctx->esni  == NULL || ctx->esni[0] == NULL) {
-            DBG_PRINTF("%s", "no memory for SNI allocation.\n");
-            ret = PICOQUIC_ERROR_MEMORY;
-        } 
-        else {
-            if ((ret = ptls_esni_init_context(ctx, ctx->esni[0], ptls_iovec_init(esnikeys, esnikeys_len), quic->esni_key_exchange)) != 0) {
-                DBG_PRINTF("failed to parse ESNI data of file:%s:error=%d\n", esni_rr_file_name, ret);
+            if (ctx->esni == NULL || ctx->esni[0] == NULL) {
+                DBG_PRINTF("%s", "no memory for SNI allocation.\n");
+                ret = PICOQUIC_ERROR_MEMORY;
+            }
+            else {
+                if ((ret = ptls_esni_init_context(ctx, ctx->esni[0], ptls_iovec_init(esnikeys, esnikeys_len), quic->esni_key_exchange)) != 0) {
+                    DBG_PRINTF("failed to parse ESNI data of file:%s:error=%d\n", esni_rr_file_name, ret);
+                }
             }
         }
+        free(esnikeys);
+    }
+    else {
+        DBG_PRINTF("failed to allocate memory(%d) for parsing esni record\n", picoquic_esnikeys_max_rr);
+        ret = PICOQUIC_ERROR_MEMORY;
     }
 
     return ret;
@@ -2457,23 +2467,37 @@ int picoquic_esni_client_from_file(picoquic_cnx_t * cnx, char const * esni_rr_fi
 {
     int ret = 0;
     picoquic_tls_ctx_t* ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
-    uint8_t esnikeys[65536];
+    uint8_t* esnikeys = malloc(picoquic_esnikeys_max_rr);
     size_t esnikeys_len;
 
-    /* read esnikeys */
-    ret = picoquic_esni_load_rr(esni_rr_file_name, esnikeys, sizeof(esnikeys), &esnikeys_len);
+    if (esnikeys != NULL) {
+        /* read esnikeys */
+        ret = picoquic_esni_load_rr(esni_rr_file_name, esnikeys, picoquic_esnikeys_max_rr, &esnikeys_len);
 
-    if (ret == 0) {
-        ctx->handshake_properties.client.esni_keys.base = (uint8_t *) malloc(esnikeys_len);
-        if (ctx->handshake_properties.client.esni_keys.base == NULL) {
-            ctx->handshake_properties.client.esni_keys.len = 0;
-            DBG_PRINTF("%s", "no memory for SNI allocation.\n");
-            ret = PICOQUIC_ERROR_MEMORY;
+        if (ret == 0 && esnikeys_len > 0 && esnikeys_len <= picoquic_esnikeys_max_rr){
+            ctx->handshake_properties.client.esni_keys.base = (uint8_t*)malloc(esnikeys_len);
+            if (ctx->handshake_properties.client.esni_keys.base == NULL) {
+                ctx->handshake_properties.client.esni_keys.len = 0;
+                DBG_PRINTF("%s", "no memory for SNI allocation.\n");
+                ret = PICOQUIC_ERROR_MEMORY;
+            }
+            else {
+                ctx->handshake_properties.client.esni_keys.len = esnikeys_len;
+                memcpy(ctx->handshake_properties.client.esni_keys.base, esnikeys, esnikeys_len);
+            }
         }
         else {
-            ctx->handshake_properties.client.esni_keys.len = esnikeys_len;
-            memcpy(ctx->handshake_properties.client.esni_keys.base, esnikeys, esnikeys_len);
+            ctx->handshake_properties.client.esni_keys.len = 0;
+            ctx->handshake_properties.client.esni_keys.base = NULL;
+            if (ret != 0) {
+                ret = PICOQUIC_ERROR_INVALID_FILE;
+            }
         }
+        free(esnikeys);
+    }
+    else {
+        DBG_PRINTF("failed to allocate memory(%d) for parsing esni record\n", picoquic_esnikeys_max_rr);
+        ret = PICOQUIC_ERROR_MEMORY;
     }
 
     return ret;

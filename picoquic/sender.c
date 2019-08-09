@@ -646,7 +646,7 @@ void picoquic_update_pacing_data(picoquic_path_t * path_x)
 {
     uint64_t rtt_nanosec = (path_x->smoothed_rtt << 10);
 
-    if (path_x->cwin < 8 * path_x->send_mtu) {
+    if (path_x->cwin < path_x->send_mtu*8) {
         /* Small windows, should only relie on ACK clocking */
         path_x->pacing_bucket_max = rtt_nanosec;
         path_x->pacing_packet_time_nanosec = 1;

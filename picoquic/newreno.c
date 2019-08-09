@@ -161,7 +161,7 @@ void picoquic_newreno_notify(picoquic_path_t* path_x,
                     nr_state->min_rtt = rtt_measurement;
                 }
 
-                if (nr_state->nb_rtt > NB_RTT_RENO) {
+                if (nr_state->nb_rtt >= NB_RTT_RENO) {
                     nr_state->nb_rtt = 0;
                 }
 

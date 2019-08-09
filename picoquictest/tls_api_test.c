@@ -1161,7 +1161,7 @@ static int wait_application_aead_ready(picoquic_test_tls_api_ctx_t* test_ctx,
         }
     }
 
-    if (test_ctx->cnx_server->crypto_context[3].aead_decrypt == NULL) {
+    if (ret == 0 && test_ctx->cnx_server != NULL && test_ctx->cnx_server->crypto_context[3].aead_decrypt == NULL) {
         DBG_PRINTF("Could not obtain the 1-RTT decryption key, state = %d\n",
             test_ctx->cnx_server->cnx_state);
         ret = -1;
@@ -1308,7 +1308,7 @@ int tls_api_silence_test()
         /* verify the absence of any spurious retransmission */
         if (test_ctx->cnx_client->nb_retransmission_total != 0) {
             ret = -1;
-        } else if (test_ctx->cnx_server->nb_retransmission_total != 0) {
+        } else if (test_ctx->cnx_server != NULL && test_ctx->cnx_server->nb_retransmission_total != 0) {
             ret = -1;
         }
     }
@@ -2532,7 +2532,7 @@ int spurious_retransmit_test()
         /* verify the absence of any spurious retransmission */
         if (test_ctx->cnx_client->nb_spurious != 0) {
             ret = -1;
-        } else if (test_ctx->cnx_server->nb_spurious != 0) {
+        } else if (test_ctx->cnx_server != NULL && test_ctx->cnx_server->nb_spurious != 0) {
             ret = -1;
         }
     }
@@ -3299,7 +3299,10 @@ int nat_rebinding_test_one(uint64_t loss_mask_data)
 
     /* Verify that the challenge was updated and done */
     if (ret == 0) {
-        if (initial_challenge == test_ctx->cnx_server->path[0]->challenge[0]) {
+        if (test_ctx->cnx_server == NULL) {
+            DBG_PRINTF("%s", "Server connection disappeared");
+            ret = -1;
+        } else if (initial_challenge == test_ctx->cnx_server->path[0]->challenge[0]) {
             DBG_PRINTF("%s", "Challenge was not renewed after NAT rebinding");
             ret = -1;
         }
@@ -3739,7 +3742,7 @@ int probe_api_test()
 
             if (ret == 0 && ret_probe == 0) {
                 for (int ichal = 0; ichal < PICOQUIC_CHALLENGE_REPEAT_MAX; ichal++) {
-                    test_ctx->cnx_client->probe_first->challenge[ichal] = 10000 + 10 * i + j + 1000*ichal;
+                    test_ctx->cnx_client->probe_first->challenge[ichal] = (uint64_t)10000 + (uint64_t)10 * i + j + (uint64_t)1000*ichal;
                 }
             }
         }
@@ -3751,7 +3754,7 @@ int probe_api_test()
     for (int i = 1; ret == 0 && i < PICOQUIC_NB_PATH_TARGET; i++) {
         for (int j = 0; ret == 0 && j < 2; j++) {
             picoquic_probe_t * probe;
-            uint64_t challenge = 10000 + 10 * i + j;
+            uint64_t challenge = (uint64_t)10000 + (uint64_t)10 * i + j;
             if (j == 0) {
                 probe = picoquic_find_probe_by_addr(test_ctx->cnx_client, (struct sockaddr *) &t4[0], (struct sockaddr *) &t4[i]);
             }
@@ -3787,7 +3790,7 @@ int probe_api_test()
             nb_trials++;
 
             for (int ichal = 0; ichal < PICOQUIC_CHALLENGE_REPEAT_MAX; ichal++) {
-                uint64_t challenge = 10000 + 10 * i + j + 1000 * ichal;
+                uint64_t challenge = (uint64_t)10000 + (uint64_t)10 * i + j + (uint64_t)1000 * ichal;
 
                 probe = picoquic_find_probe_by_challenge(test_ctx->cnx_client, challenge);
 
@@ -3811,7 +3814,7 @@ int probe_api_test()
         picoquic_probe_t * probe;
         int i = 1;
         int j = 1;
-        uint64_t challenge = 10000 + 10 * i + j;
+        uint64_t challenge = (uint64_t)10000 + (uint64_t)10 * i + j;
 
         probe = picoquic_find_probe_by_challenge(test_ctx->cnx_client, challenge);
 
@@ -3916,7 +3919,7 @@ int migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_sc
 
     /* Verify that the challenge was updated and done */
     /* TODO: verify that exactly one challenge was sent */
-    if (ret == 0) {
+    if (ret == 0 && test_ctx->cnx_server != NULL) {
         if (initial_challenge == test_ctx->cnx_server->path[0]->challenge[0]) {
             DBG_PRINTF("%s", "Challenge was not renewed after migration");
             ret = -1;
@@ -4182,7 +4185,7 @@ int cnxid_renewal_test()
             DBG_PRINTF("%s", "The default client path is demoted");
             ret = -1;
         }
-        if (test_ctx->cnx_server->path[0]->path_is_demoted) {
+        if (test_ctx->cnx_server != NULL && test_ctx->cnx_server->path[0]->path_is_demoted) {
             DBG_PRINTF("%s", "The default server path is demoted");
             ret = -1;
         }
@@ -5041,7 +5044,13 @@ int false_migration_inject(picoquic_test_tls_api_ctx_t* test_ctx, int target_cli
     picoquic_cnx_t * cnx = (target_client) ? test_ctx->cnx_client : test_ctx->cnx_server;
     picoquictest_sim_link_t* target_link = (target_client) ? test_ctx->c_to_s_link : test_ctx->s_to_c_link;
     picoquictest_sim_packet_t* sim_packet = picoquictest_sim_link_create_packet();
-    picoquic_packet_t * packet = picoquic_create_packet(cnx->quic);
+    picoquic_packet_t* packet = NULL;
+
+    if (cnx == NULL) {
+        return -1;
+    }
+
+    packet = picoquic_create_packet(cnx->quic);
 
     if (sim_packet == NULL || packet == NULL || cnx == NULL) {
         if (sim_packet != NULL) {

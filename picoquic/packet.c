@@ -359,7 +359,7 @@ int picoquic_parse_packet_header(
 
          if ((int)length >= 1 + cnxid_length) {
              /* We can identify the connection by its ID */
-             ph->offset = (uint32_t)((size_t)1 + picoquic_parse_connection_id(bytes + 1, cnxid_length, &ph->dest_cnx_id));
+             ph->offset = (size_t)1 + picoquic_parse_connection_id(bytes + 1, cnxid_length, &ph->dest_cnx_id);
              /* TODO: should consider using combination of CNX ID and ADDR_FROM */
              if (*pcnx == NULL)
              {

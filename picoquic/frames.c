@@ -64,7 +64,7 @@ typedef uint8_t* (*skip_frame_fn)(uint8_t* bytes, const uint8_t* bytes_max);
  * These functions return NULL in case of a failure (insufficient buffer).
  */
 
-#define VARINT_LEN(bytes) (1U << (((bytes)[0] & 0xC0) >> 6))
+#define VARINT_LEN(bytes) ((size_t)1 << (((bytes)[0] & 0xC0) >> 6))
 
 
 static uint8_t* picoquic_frames_fixed_skip(uint8_t* bytes, const uint8_t* bytes_max, size_t size)
@@ -75,7 +75,7 @@ static uint8_t* picoquic_frames_fixed_skip(uint8_t* bytes, const uint8_t* bytes_
 
 static uint8_t* picoquic_frames_varint_skip(uint8_t* bytes, const uint8_t* bytes_max)
 {
-    return bytes < bytes_max ? picoquic_frames_fixed_skip(bytes, bytes_max, (uint64_t)VARINT_LEN(bytes)) : NULL;
+    return bytes < bytes_max ? picoquic_frames_fixed_skip(bytes, bytes_max, VARINT_LEN(bytes)) : NULL;
 }
 
 
@@ -84,7 +84,7 @@ uint8_t* picoquic_frames_varint_decode(uint8_t* bytes, const uint8_t* bytes_max,
 {
     uint8_t length;
 
-    if (bytes < bytes_max && bytes + (length=VARINT_LEN(bytes)) <= bytes_max) {
+    if (bytes < bytes_max && bytes + (length=(uint8_t)VARINT_LEN(bytes)) <= bytes_max) {
         uint64_t v = *bytes++ & 0x3F;
 
         while (--length > 0) {
@@ -486,7 +486,7 @@ uint8_t* picoquic_skip_new_connection_id_frame(picoquic_cnx_t * cnx, uint8_t* by
         }
         if (bytes != NULL &&
             (bytes = picoquic_frames_uint8_decode(bytes + 1, bytes_max, &cid_length)) != NULL) {
-            bytes = picoquic_frames_fixed_skip(bytes, bytes_max, cid_length + PICOQUIC_RESET_SECRET_SIZE);
+            bytes = picoquic_frames_fixed_skip(bytes, bytes_max, (size_t)cid_length + PICOQUIC_RESET_SECRET_SIZE);
         }
     }
 
@@ -514,7 +514,7 @@ uint8_t* picoquic_decode_new_connection_id_frame(picoquic_cnx_t* cnx, uint8_t* b
     if (bytes != NULL) {
         cnxid_bytes = bytes;
         secret_bytes = bytes + cid_length;
-        bytes = picoquic_frames_fixed_skip(bytes, bytes_max, cid_length + PICOQUIC_RESET_SECRET_SIZE);
+        bytes = picoquic_frames_fixed_skip(bytes, bytes_max, (size_t)cid_length + PICOQUIC_RESET_SECRET_SIZE);
     }
 
     if (bytes == NULL || picoquic_is_connection_id_length_valid(cid_length) == 0 ||
@@ -899,7 +899,7 @@ void picoquic_stream_data_callback(picoquic_cnx_t* cnx, picoquic_stream_head_t* 
 }
 
 /* Common code to data stream and crypto hs stream */
-static int picoquic_queue_network_input(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream, size_t offset, uint8_t* bytes, size_t length, int * new_data_available)
+static int picoquic_queue_network_input(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream, uint64_t offset, uint8_t* bytes, size_t length, int * new_data_available)
 {
     int ret = 0;
     picoquic_stream_data_t** pprevious = &stream->stream_data;
@@ -999,7 +999,7 @@ static int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id
     if (ret == 0) {
         int new_data_available = 0;
 
-        ret = picoquic_queue_network_input(cnx, stream, (size_t)offset, bytes, length, &new_data_available);
+        ret = picoquic_queue_network_input(cnx, stream, offset, bytes, length, &new_data_available);
 
         if (new_data_available) {
             should_notify = 1;
@@ -1732,7 +1732,7 @@ uint8_t* picoquic_decode_crypto_hs_frame(picoquic_cnx_t* cnx, uint8_t* bytes, co
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, picoquic_frame_type_crypto_hs);
         bytes = NULL;
 
-    } else if (picoquic_queue_network_input(cnx, &cnx->tls_stream[epoch], (size_t)offset, bytes, (size_t)data_length, &new_data_available) != 0) {
+    } else if (picoquic_queue_network_input(cnx, &cnx->tls_stream[epoch], offset, bytes, (size_t)data_length, &new_data_available) != 0) {
         bytes = NULL;  // Error signaled
 
     } else {
