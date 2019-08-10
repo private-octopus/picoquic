@@ -164,6 +164,35 @@ int debug_printf_reset(int suspended)
     return ret;
 }
 
+int picoquic_sprintf(char* buf, size_t buf_len, const char* fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    int res = vsnprintf(buf, buf_len, fmt, args);
+    va_end(args);
+
+    // vsnprintf returns <0 for errors and >=0 for nb of characters required.
+    // We return 0 when printing was successful.
+    return res >= 0 ? (res >= buf_len) : res;
+}
+
+int picoquic_print_connection_id_hexa(char* buf, size_t buf_len, const picoquic_connection_id_t * cnxid)
+{
+    static const char hex_to_char[16] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f' };
+    if (buf_len < cnxid->id_len * 2u + 1u) {
+        return -1;  
+    }
+
+    for (unsigned i = 0; i < cnxid->id_len; i++) {
+        buf[i * 2u] = hex_to_char[cnxid->id[i] >> 4];
+        buf[i * 2u + 1u] = hex_to_char[cnxid->id[i] & 0x0f];
+    }
+
+    buf[cnxid->id_len * 2u] = '\0';
+
+    return 0;
+}
+
 int picoquic_parse_hexa_digit(char x) {
     int ret = -1;
 
@@ -385,19 +414,6 @@ void picoquic_get_ip_addr(struct sockaddr * addr, uint8_t ** ip_addr, uint8_t * 
         *ip_addr_len = 0;
     }
 }
-
-/* Return a directory path based on solution dir and file name */
-#ifdef _WINDOWS
-#define PICOQUIC_FILE_SEPARATOR '\\'
-#ifdef _WINDOWS64
-#define PICOQUIC_DEFAULT_SOLUTION_DIR "..\\..\\"
-#else
-#define PICOQUIC_DEFAULT_SOLUTION_DIR "..\\"
-#endif
-#else
-#define PICOQUIC_DEFAULT_SOLUTION_DIR "./"
-#define PICOQUIC_FILE_SEPARATOR '/'
-#endif
 
 int picoquic_get_input_path(char * target_file_path, size_t file_path_max, const char * solution_path, const char * file_name) 
 {

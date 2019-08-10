@@ -41,6 +41,9 @@ typedef enum {
 } test_status_t;
 
 static const picoquic_test_def_t test_table[] = {
+    { "connection_id_print", util_connection_id_print_test },
+    { "connection_id_parse", util_connection_id_parse_test },
+    { "sprintf", util_sprintf_test },
     { "picohash", picohash_test },
     { "splay", splay_test },
     { "cnxcreation", cnxcreation_test },

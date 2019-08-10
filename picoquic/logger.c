@@ -1811,73 +1811,45 @@ void picoquic_log_picotls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
 
 void picoquic_open_cc_dump(picoquic_cnx_t * cnx)
 {
-    int ret = 0;
-
     if (cnx->cc_log != NULL) {
         DBG_PRINTF("%s", "CC LOG File is already open!\n");
-    } else if (cnx->quic->cc_log_dir != NULL) {
-        char cc_log_file_name[512];
-        char const * suffix = "-log.bin";
-        const size_t suffix_len = strlen(suffix);
-        size_t folder_length = strlen(cnx->quic->cc_log_dir);
+        return;
+    }
 
-        if (folder_length + 1u + (size_t)cnx->initial_cnxid.id_len*2u + suffix_len + 1u > sizeof(cc_log_file_name)) {
-            ret = -1;
-        }
-        else {
-            size_t byte_index = 0;
+    if (cnx->quic->cc_log_dir == NULL) {
+        DBG_PRINTF("%s", "CC LOG directory not set!\n");
+        return;
+    }
 
-            memcpy(cc_log_file_name, cnx->quic->cc_log_dir, folder_length);
-            byte_index += folder_length;
-#ifdef _WINDOWS
-            cc_log_file_name[byte_index++] = '\\';
-#else
-            cc_log_file_name[byte_index++] = '/';
-#endif
-            for (size_t i = 0; ret == 0 && i < cnx->initial_cnxid.id_len; i++) {
-#ifdef _WINDOWS
-                ret = sprintf_s(&cc_log_file_name[byte_index], sizeof(cc_log_file_name) - byte_index, "%02x", cnx->initial_cnxid.id[i]) <= 0;
-#else
-                ret = sprintf(&cc_log_file_name[byte_index], "%02x", cnx->initial_cnxid.id[i]) <= 0;
-#endif
+    char cnxid_str[2 * PICOQUIC_CONNECTION_ID_MAX_SIZE + 1];
+    int ret = picoquic_print_connection_id_hexa(cnxid_str, sizeof(cnxid_str), &cnx->initial_cnxid);
 
-                byte_index += 2;
-            }
+    char cc_log_file_name[512];
+    if (ret == 0) {
+        ret = picoquic_sprintf(cc_log_file_name, sizeof(cc_log_file_name), "%s%c%s-log.bin", cnx->quic->cc_log_dir, PICOQUIC_FILE_SEPARATOR, cnxid_str) <= 0;
+    }
 
-            if (ret == 0) {
-                memcpy(&cc_log_file_name[byte_index], suffix, suffix_len);
-                byte_index += suffix_len;
-                cc_log_file_name[byte_index] = 0;
-            }
+    if (ret != 0) {
+        DBG_PRINTF("Cannot format file name into folder %s, id_len = %d\n", cnx->quic->cc_log_dir, cnx->initial_cnxid.id_len);
+        return;
+    }
 
-            if (ret != 0) {
-                DBG_PRINTF("Cannot format file name into folder %s, id_len = %d\n", cnx->quic->cc_log_dir, cnx->initial_cnxid.id_len);
-            }
-        }
-
-        if (ret == 0) {
-
-            cnx->cc_log = picoquic_file_open(cc_log_file_name, "wb");
-            if (cnx->cc_log == NULL) {
-                ret = -1;
-            }
-
-            if (ret != 0) {
-                DBG_PRINTF("Cannot open file %s for write.\n", cc_log_file_name);
-            } else {
-                /* Write a header text with three words: magic number, number of integers, and current date  */
-                uint32_t header[3];
+    cnx->cc_log = picoquic_file_open(cc_log_file_name, "wb");
+    if (cnx->cc_log == NULL) {
+        DBG_PRINTF("Cannot open file %s for write.\n", cc_log_file_name);
+        ret = -1;
+    } else {
+        /* Write a header text with three words: magic number, number of integers, and current date  */
+        uint32_t header[3];
                 
-                header[0] = PICOQUIC_LOG_CC_MAGIC;
-                header[1] = PICOQUIC_LOG_CC_NB;
-                header[2] = (uint32_t)(picoquic_current_time() / 1000000ll);
+        header[0] = PICOQUIC_LOG_CC_MAGIC;
+        header[1] = PICOQUIC_LOG_CC_NB;
+        header[2] = (uint32_t)(picoquic_current_time() / 1000000ll);
 
-                if (fwrite(header, 3 * sizeof(uint32_t), 1, cnx->cc_log) <= 0) {
-                    DBG_PRINTF("Cannot write header for file %s.\n", cc_log_file_name);
-                    fclose(cnx->cc_log);
-                    cnx->cc_log = NULL;
-                }
-            };
+        if (fwrite(header, 3 * sizeof(uint32_t), 1, cnx->cc_log) <= 0) {
+            DBG_PRINTF("Cannot write header for file %s.\n", cc_log_file_name);
+            fclose(cnx->cc_log);
+            cnx->cc_log = NULL;
         }
     }
 }

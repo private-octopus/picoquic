@@ -47,6 +47,8 @@ void debug_printf_resume(void);
 int debug_printf_reset(int suspended);
 void debug_dump(const void * x, int len);
 
+int picoquic_sprintf(char* buf, size_t buf_len, const char* fmt, ...);
+
 extern const picoquic_connection_id_t picoquic_null_connection_id;
 uint8_t picoquic_format_connection_id(uint8_t* bytes, size_t bytes_max, picoquic_connection_id_t cnx_id);
 int picoquic_is_connection_id_length_valid(uint8_t len);
@@ -56,6 +58,7 @@ int picoquic_compare_connection_id(const picoquic_connection_id_t * cnx_id1, con
 uint64_t picoquic_val64_connection_id(picoquic_connection_id_t cnx_id);
 void picoquic_set64_connection_id(picoquic_connection_id_t * cnx_id, uint64_t val64);
 uint8_t picoquic_parse_connection_id_hexa(char const * hex_input, size_t input_length, picoquic_connection_id_t * cnx_id);
+int picoquic_print_connection_id_hexa(char* buf, size_t buf_len, const picoquic_connection_id_t* cnxid);
 uint8_t picoquic_create_packet_header_cnxid_lengths(uint8_t dest_len, uint8_t srce_len);
 void picoquic_parse_packet_header_cnxid_lengths(uint8_t l_byte, uint8_t *dest_len, uint8_t *srce_len);
 
@@ -67,6 +70,19 @@ int picoquic_get_input_path(char * target_file_path, size_t file_path_max, const
 
 #ifndef MAX
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
+#endif
+
+/* Return a directory path based on solution dir and file name */
+#ifdef _WINDOWS
+#define PICOQUIC_FILE_SEPARATOR '\\'
+#ifdef _WINDOWS64
+#define PICOQUIC_DEFAULT_SOLUTION_DIR "..\\..\\"
+#else
+#define PICOQUIC_DEFAULT_SOLUTION_DIR "..\\"
+#endif
+#else
+#define PICOQUIC_DEFAULT_SOLUTION_DIR "./"
+#define PICOQUIC_FILE_SEPARATOR '/'
 #endif
 
 #ifndef DISABLE_DEBUG_PRINTF
