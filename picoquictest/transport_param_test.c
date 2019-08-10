@@ -833,19 +833,10 @@ static int transport_param_log_fuzz_test(int client_mode, uint8_t* target, size_
     for (size_t l = 1; l <= 8; l++) {
         for (size_t i = l; i <= target_length; i++) {
             FILE *F;
-#ifdef _WINDOWS
-            if (fopen_s(&F, log_tp_fuzz_file, "w") != 0) {
-                if (F != NULL) {
-                    fclose(F);
-                    F = NULL;
-                }
-            }
-#else
-            F = fopen(log_tp_fuzz_file, "w");
-#endif
 
-            if (F == NULL) {
-                ret = -1;
+            if ((F = picoquic_file_open(log_tp_fuzz_file, "w")) == NULL) {
+                fprintf(stderr, "failed to open file:%s\n", log_tp_test_file);
+                ret = PICOQUIC_ERROR_INVALID_FILE;
             }
             else {
                 /* copy message to buffer */
@@ -878,17 +869,10 @@ int transport_param_log_test()
     FILE* F = NULL;
     int ret = 0;
 
-#ifdef _WINDOWS
-    if (fopen_s(&F, log_tp_test_file, "w") != 0) {
-        ret = -1;
-        if (F != NULL) {
-            fclose(F);
-            F = NULL;
-        }
+    if ((F = picoquic_file_open(log_tp_test_file, "w")) == NULL) {
+        fprintf(stderr, "failed to open file:%s\n", log_tp_test_file);
+        ret = PICOQUIC_ERROR_INVALID_FILE;
     }
-#else
-    F = fopen(log_tp_test_file, "w");
-#endif
 
     if (F != NULL) {
         char log_tp_test_ref[512];

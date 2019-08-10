@@ -51,7 +51,7 @@ char* picoquic_string_create(const char* original, size_t len)
             }
             else if (allocated > len) {
                 memcpy(str, original, len);
-                str[len] = 0;
+                str[allocated - 1] = 0;
             }
             else {
                 /* This could happen only in case of integer overflow */
@@ -183,7 +183,7 @@ int picoquic_sprintf(char* buf, size_t buf_len, const char* fmt, ...)
 int picoquic_print_connection_id_hexa(char* buf, size_t buf_len, const picoquic_connection_id_t * cnxid)
 {
     static const char hex_to_char[16] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f' };
-    if (buf_len < cnxid->id_len * 2u + 1u) {
+    if (buf_len < ((size_t)cnxid->id_len) * 2u + 1u) {
         return -1;  
     }
 
@@ -458,19 +458,32 @@ int picoquic_get_input_path(char * target_file_path, size_t file_path_max, const
 }
 
 /* Safely open files in a portable way */
-FILE * picoquic_file_open(char const * file_name, char const * flags)
+FILE * picoquic_file_open_ex(char const * file_name, char const * flags, int * last_err)
 {
     FILE * F;
 
 #ifdef _WINDOWS
     errno_t err = fopen_s(&F, file_name, flags);
-    if (err != 0 && F != NULL) {
+    if (err != 0){
+        if (last_err != NULL) {
+            *last_err = err;
+        }
+        if (F != NULL) {
             fclose(F);
             F = NULL;
         }
+    }
 #else
     F = fopen(file_name, flags);
+    if (F == NULL && last_err != NULL) {
+        *last_err = err_no;
+    }
 #endif
 
     return F;
+}
+
+FILE* picoquic_file_open(char const* file_name, char const* flags)
+{
+    return picoquic_file_open_ex(file_name, flags, NULL);
 }

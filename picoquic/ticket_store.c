@@ -280,17 +280,8 @@ int picoquic_save_tickets(const picoquic_stored_ticket_t* first_ticket,
     int ret = 0;
     FILE* F = NULL;
     const picoquic_stored_ticket_t* next = first_ticket;
-#ifdef _WINDOWS
-    errno_t err = fopen_s(&F, ticket_file_name, "wb");
-    if (err != 0 && F != NULL) {
-        fclose(F);
-        F = NULL;
-    }
-#else
-    F = fopen(ticket_file_name, "wb");
-#endif
 
-    if (F == NULL) {
+    if ((F = picoquic_file_open(ticket_file_name, "wb")) == NULL) {
         ret = -1;
     } else {
         while (ret == 0 && next != NULL) {
@@ -321,23 +312,18 @@ int picoquic_load_tickets(picoquic_stored_ticket_t** pp_first_ticket,
     uint64_t current_time, char const* ticket_file_name)
 {
     int ret = 0;
+    int file_err = 0;
     FILE* F = NULL;
     picoquic_stored_ticket_t* previous = NULL;
-    picoquic_stored_ticket_t* next;
+    picoquic_stored_ticket_t* next = NULL;
     uint32_t record_size;
     uint32_t storage_size;
 
-#ifdef _WINDOWS
-    errno_t err = fopen_s(&F, ticket_file_name, "rb");
-    if (err != 0 || F == NULL) {
-        ret = (err == ENOENT)? PICOQUIC_ERROR_NO_SUCH_FILE:-1;
+
+    if ((F = picoquic_file_open_ex(ticket_file_name, "rb", &file_err)) == NULL) {
+        ret = (file_err == ENOENT) ? PICOQUIC_ERROR_NO_SUCH_FILE : -1;
     }
-#else
-    F = fopen(ticket_file_name, "rb");
-    if (F == NULL) {
-        ret = (errno == ENOENT) ? PICOQUIC_ERROR_NO_SUCH_FILE : -1;
-    }
-#endif
+
     while (ret == 0) {
         if (fread(&storage_size, 4, 1, F) != 1) {
             /* end of file */
@@ -367,6 +353,7 @@ int picoquic_load_tickets(picoquic_stored_ticket_t** pp_first_ticket,
                     if (ret == 0 && next != NULL) {
                         if (next->time_valid_until < current_time) {
                             free(next);
+                            next = NULL;
                         }
                         else {
                             next->sni = ((char*)next) + sizeof(picoquic_stored_ticket_t);
