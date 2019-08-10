@@ -42,6 +42,26 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
 	    }
 
+        TEST_METHOD(connection_id_print)
+        {
+            int ret = util_connection_id_print_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(connection_id_parse)
+        {
+            int ret = util_connection_id_parse_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(sprintf)
+        {
+            int ret = util_sprintf_test();
+
+            Assert::AreEqual(ret, 0);
+        }
         TEST_METHOD(random_tester)
         {
             int ret = random_tester_test();
