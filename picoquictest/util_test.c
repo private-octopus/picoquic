@@ -90,21 +90,23 @@ int util_connection_id_parse_test()
 int util_sprintf_test()
 {
     int ret = 0;
+    size_t nb_chars;
     char str[8];
-    if (picoquic_sprintf(str, sizeof(str), "%s%s", "foo", "bar") != 0) {
-        DBG_PRINTF("%s", "'foobar' test failed.\n");
+    if (picoquic_sprintf(str, sizeof(str), NULL, "%s%s", "foo", "bar") != 0) {
+        DBG_PRINTF("%s", "'foobar' test failed.");
         ret = -1;
     }
-    if (picoquic_sprintf(str, sizeof(str), "%s%c%s", "foo", PICOQUIC_FILE_SEPARATOR, "bar") != 0) {
-        DBG_PRINTF("%s", "'foo/bar' test failed.\n");
+    if (picoquic_sprintf(str, sizeof(str), &nb_chars, "%s%c%s", "foo", PICOQUIC_FILE_SEPARATOR, "bar") != 0 ||
+        nb_chars != 7) {
+        DBG_PRINTF("'foo/bar' test failed. Ret = %d, Nb_chars = %d", ret, (int)nb_chars);
         ret = -1;
     }
-    if (picoquic_sprintf(str, sizeof(str), "%s%c%s", "fooo", PICOQUIC_FILE_SEPARATOR, "bar") == 0) {
-        DBG_PRINTF("%s", "'fooo/bar' test failed.\n");
+    if (picoquic_sprintf(str, sizeof(str), NULL, "%s%c%s", "fooo", PICOQUIC_FILE_SEPARATOR, "bar") == 0) {
+        DBG_PRINTF("%s", "'fooo/bar' test failed.");
         ret = -1;
     }
-    if (picoquic_sprintf(str, sizeof(str), "%s%c%s", "fooo", PICOQUIC_FILE_SEPARATOR, "barr") == 0) {
-        DBG_PRINTF("%s", "'fooo/barr' test failed.\n");
+    if (picoquic_sprintf(str, sizeof(str), NULL, "%s%c%s", "fooo", PICOQUIC_FILE_SEPARATOR, "barr") == 0) {
+        DBG_PRINTF("%s", "'fooo/barr' test failed.");
         ret = -1;
     }
     return ret;

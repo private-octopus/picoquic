@@ -733,17 +733,17 @@ uint64_t demo_server_test_time_from_esni_rr(char const * esni_rr_file)
         /* If > V2, 16 bits length + published SNI */
         if (version != 0xFF01 && byte_index + 2 <= esnikeys_len) {
             l = PICOPARSE_16(&esnikeys[byte_index]);
-            byte_index += 2 + l;
+            byte_index += (size_t)l + 2;
         }
         /* 16 bits length + key exchanges */
         if (byte_index + 2 <= esnikeys_len) {
             l = PICOPARSE_16(&esnikeys[byte_index]);
-            byte_index += 2 + l;
+            byte_index += (size_t)l + 2;
         }
         /* 16 bits length + ciphersuites */
         if (byte_index + 2 <= esnikeys_len) {
             l = PICOPARSE_16(&esnikeys[byte_index]);
-            byte_index += 2 + l;
+            byte_index += (size_t)l + 2;
         }
         /* 16 bits padded length */
         byte_index += 2;

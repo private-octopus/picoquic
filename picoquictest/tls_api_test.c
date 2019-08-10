@@ -5596,11 +5596,7 @@ int packet_trace_test()
         }
         else {
             for (size_t i = 0; ret == 0 && i < test_ctx->cnx_server->initial_cnxid.id_len; i++) {
-#ifdef _WINDOWS
-                ret = sprintf_s(&trace_file_name[2*i], sizeof(trace_file_name) - 2*i, "%02x", test_ctx->cnx_server->initial_cnxid.id[i]) <= 0;
-#else
-                ret = sprintf(&trace_file_name[2*i], "%02x", test_ctx->cnx_server->initial_cnxid.id[i]) <= 0;
-#endif
+                ret = picoquic_sprintf(&trace_file_name[2 * i], sizeof(trace_file_name) - 2 * i, NULL, "%02x", test_ctx->cnx_server->initial_cnxid.id[i]);
                 if (ret != 0) {
                     DBG_PRINTF("Cannot format the file name, i=%d, icid len=%d\n", i, test_ctx->cnx_server->initial_cnxid.id_len);
                     ret = -1;

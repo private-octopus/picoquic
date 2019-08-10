@@ -164,7 +164,7 @@ int debug_printf_reset(int suspended)
     return ret;
 }
 
-int picoquic_sprintf(char* buf, size_t buf_len, const char* fmt, ...)
+int picoquic_sprintf(char* buf, size_t buf_len, size_t * nb_chars, const char* fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
@@ -174,6 +174,10 @@ int picoquic_sprintf(char* buf, size_t buf_len, const char* fmt, ...)
     int res = vsnprintf(buf, buf_len, fmt, args);
 #endif
     va_end(args);
+
+    if (nb_chars != NULL) {
+        *nb_chars = res;
+    }
 
     // vsnprintf returns <0 for errors and >=0 for nb of characters required.
     // We return 0 when printing was successful.

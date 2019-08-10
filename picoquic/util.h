@@ -47,7 +47,7 @@ void debug_printf_resume(void);
 int debug_printf_reset(int suspended);
 void debug_dump(const void * x, int len);
 
-int picoquic_sprintf(char* buf, size_t buf_len, const char* fmt, ...);
+int picoquic_sprintf(char* buf, size_t buf_len, size_t * nb_chars, const char* fmt, ...);
 
 extern const picoquic_connection_id_t picoquic_null_connection_id;
 uint8_t picoquic_format_connection_id(uint8_t* bytes, size_t bytes_max, picoquic_connection_id_t cnx_id);
