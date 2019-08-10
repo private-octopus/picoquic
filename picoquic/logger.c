@@ -1821,35 +1821,34 @@ void picoquic_open_cc_dump(picoquic_cnx_t * cnx)
         return;
     }
 
-    char cnxid_str[2 * PICOQUIC_CONNECTION_ID_MAX_SIZE + 1];
-    int ret = picoquic_print_connection_id_hexa(cnxid_str, sizeof(cnxid_str), &cnx->initial_cnxid);
-
     char cc_log_file_name[512];
-    if (ret == 0) {
-        ret = picoquic_sprintf(cc_log_file_name, sizeof(cc_log_file_name), "%s%c%s-log.bin", cnx->quic->cc_log_dir, PICOQUIC_FILE_SEPARATOR, cnxid_str);
-    }
+    char cnxid_str[2 * PICOQUIC_CONNECTION_ID_MAX_SIZE + 1];
+    int ret = 0;
 
-    if (ret != 0) {
+    if (picoquic_print_connection_id_hexa(cnxid_str, sizeof(cnxid_str), &cnx->initial_cnxid) != 0
+        || picoquic_sprintf(cc_log_file_name, sizeof(cc_log_file_name), "%s%c%s-log.bin", cnx->quic->cc_log_dir, PICOQUIC_FILE_SEPARATOR, cnxid_str) != 0)
+    {
         DBG_PRINTF("Cannot format file name into folder %s, id_len = %d\n", cnx->quic->cc_log_dir, cnx->initial_cnxid.id_len);
-        return;
-    }
-
-    cnx->cc_log = picoquic_file_open(cc_log_file_name, "wb");
-    if (cnx->cc_log == NULL) {
-        DBG_PRINTF("Cannot open file %s for write.\n", cc_log_file_name);
         ret = -1;
-    } else {
-        /* Write a header text with three words: magic number, number of integers, and current date  */
-        uint32_t header[3];
+    }
+    else {
+        cnx->cc_log = picoquic_file_open(cc_log_file_name, "wb");
+        if (cnx->cc_log == NULL) {
+            DBG_PRINTF("Cannot open file %s for write.\n", cc_log_file_name);
+            ret = -1;
+        } else {
+            /* Write a header text with three words: magic number, number of integers, and current date  */
+            uint32_t header[3];
                 
-        header[0] = PICOQUIC_LOG_CC_MAGIC;
-        header[1] = PICOQUIC_LOG_CC_NB;
-        header[2] = (uint32_t)(picoquic_current_time() / 1000000ll);
+            header[0] = PICOQUIC_LOG_CC_MAGIC;
+            header[1] = PICOQUIC_LOG_CC_NB;
+            header[2] = (uint32_t)(picoquic_current_time() / 1000000ll);
 
-        if (fwrite(header, 3 * sizeof(uint32_t), 1, cnx->cc_log) <= 0) {
-            DBG_PRINTF("Cannot write header for file %s.\n", cc_log_file_name);
-            fclose(cnx->cc_log);
-            cnx->cc_log = NULL;
+            if (fwrite(header, 3 * sizeof(uint32_t), 1, cnx->cc_log) <= 0) {
+                DBG_PRINTF("Cannot write header for file %s.\n", cc_log_file_name);
+                fclose(cnx->cc_log);
+                cnx->cc_log = NULL;
+            }
         }
     }
 }
