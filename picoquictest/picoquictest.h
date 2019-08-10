@@ -37,6 +37,9 @@ void picoquic_test_set_solution_dir(char const * solution_dir);
 extern uint64_t picoquic_stress_test_duration; /* In microseconds; defaults to 2 minutes */
 
 /* List of test functions */
+int util_connection_id_print_test();
+int util_connection_id_parse_test();
+int util_sprintf_test();
 int picohash_test();
 int cnxcreation_test();
 int parseheadertest();
