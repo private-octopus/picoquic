@@ -44,50 +44,68 @@ static size_t test_cases = sizeof(expected_cnxid) / sizeof(picoquic_connection_i
 
 int util_connection_id_print_test()
 {
+    int ret = 0;  
     char cnxid_str[2 * PICOQUIC_CONNECTION_ID_MAX_SIZE + 1];
   
     for (size_t i = 0; i < test_cases; ++i)
     {
-        if (picoquic_print_connection_id_hexa(cnxid_str, sizeof(cnxid_str), &expected_cnxid[i]) != 0
-            || strcmp(cnxid_str, expected_str[i]) != 0) {
-            return -1;
+        int result = picoquic_print_connection_id_hexa(cnxid_str, sizeof(cnxid_str), &expected_cnxid[i]);
+        if (result != 0) {
+            DBG_PRINTF("picoquic_print_connection_id_hexa failed with: %d\n", result);
+            ret = -1;
+        }
+        if (strcmp(cnxid_str, expected_str[i]) != 0) {
+            DBG_PRINTF("result: %s, expected: %s\n", cnxid_str, expected_str[i]);
+            ret = -1;
         }
     }
 
     // Test invalid call
     if (picoquic_print_connection_id_hexa("", 0, &expected_cnxid[0]) == 0) {
-        return -1;
+        DBG_PRINTF("picoquic_print_connection_id_hexa did not fail\n");
+        ret = -1;
     }
 
-    return 0;
+    return ret;
 }
 
 int util_connection_id_parse_test()
 {
+    int ret = 0;  
     for (size_t i = 0; i < test_cases; ++i) {
         picoquic_connection_id_t cnxid;
-        if (picoquic_parse_connection_id_hexa(expected_str[i], strlen(expected_str[i]), &cnxid) != expected_cnxid[i].id_len
-            || picoquic_compare_connection_id(&cnxid, &expected_cnxid[i]) != 0) {
-            return -1;
+        uint8_t id_len = picoquic_parse_connection_id_hexa(expected_str[i], strlen(expected_str[i]), &cnxid);
+        if (id_len != expected_cnxid[i].id_len) {
+            DBG_PRINTF("Wrong length returned. result: %d, expected: %d\n", id_len, expected_cnxid[i].id_len);
+            ret = -1;
+        }
+        if (picoquic_compare_connection_id(&cnxid, &expected_cnxid[i]) != 0) {
+            DBG_PRINTF("the returned connection id is different than expected.\n");
+            ret = -1;
         }
     }
-    return 0;
+    return ret;
 }
 
 int util_sprintf_test()
 {
+    int ret = 0;
     char str[8];
     if (picoquic_sprintf(str, sizeof(str), "%s%s", "foo", "bar") != 0) {
-        return -1;
+        DBG_PRINTF("'foobar' test failed.\n");
+        ret = -1;
     }
     if (picoquic_sprintf(str, sizeof(str), "%s%c%s", "foo", PICOQUIC_FILE_SEPARATOR, "bar") != 0) {
-        return -1;
+        DBG_PRINTF("'foo/bar' test failed.\n");
+        ret = -1;
     }
     if (picoquic_sprintf(str, sizeof(str), "%s%c%s", "fooo", PICOQUIC_FILE_SEPARATOR, "bar") == 0) {
-        return -1;
+        DBG_PRINTF("'fooo/bar' test failed.\n");
+        ret = -1;
     }
     if (picoquic_sprintf(str, sizeof(str), "%s%c%s", "fooo", PICOQUIC_FILE_SEPARATOR, "barr") == 0) {
-        return -1;
+        DBG_PRINTF("'fooo/barr' test failed.\n");
+        ret = -1;
     }
-    return 0;
+    return ret;
 }
