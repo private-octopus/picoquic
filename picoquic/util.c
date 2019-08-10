@@ -480,7 +480,7 @@ FILE * picoquic_file_open_ex(char const * file_name, char const * flags, int * l
 #else
     F = fopen(file_name, flags);
     if (F == NULL && last_err != NULL) {
-        *last_err = err_no;
+        *last_err = errno;
     }
 #endif
 
