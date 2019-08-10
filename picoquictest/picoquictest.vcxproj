@@ -153,6 +153,7 @@
     <ClCompile Include="hashtest.c" />
     <ClCompile Include="http0dot9test.c" />
     <ClCompile Include="intformattest.c" />
+    <ClCompile Include="picostream_test.c" />
     <ClCompile Include="sim_link.c" />
     <ClCompile Include="parseheadertest.c" />
     <ClCompile Include="pn2pn64test.c" />

@@ -45,6 +45,7 @@ static const picoquic_test_def_t test_table[] = {
     { "connection_id_parse", util_connection_id_parse_test },
     { "sprintf", util_sprintf_test },
     { "picohash", picohash_test },
+    { "picostream", picostream_test },
     { "splay", splay_test },
     { "cnxcreation", cnxcreation_test },
     { "parseheader", parseheadertest },

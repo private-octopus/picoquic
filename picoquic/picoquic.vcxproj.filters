@@ -75,6 +75,9 @@
     <ClCompile Include="token_store.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="picostream.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquic.h">
@@ -111,6 +114,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="demoserver.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="picostream.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="util.h">

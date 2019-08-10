@@ -41,6 +41,7 @@ int util_connection_id_print_test();
 int util_connection_id_parse_test();
 int util_sprintf_test();
 int picohash_test();
+int picostream_test();
 int cnxcreation_test();
 int parseheadertest();
 int pn2pn64test();
