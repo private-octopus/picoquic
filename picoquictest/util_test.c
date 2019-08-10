@@ -62,7 +62,7 @@ int util_connection_id_print_test()
 
     // Test invalid call
     if (picoquic_print_connection_id_hexa("", 0, &expected_cnxid[0]) == 0) {
-        DBG_PRINTF("picoquic_print_connection_id_hexa did not fail\n");
+        DBG_PRINTF("%s", "picoquic_print_connection_id_hexa did not fail\n");
         ret = -1;
     }
 
@@ -80,7 +80,7 @@ int util_connection_id_parse_test()
             ret = -1;
         }
         if (picoquic_compare_connection_id(&cnxid, &expected_cnxid[i]) != 0) {
-            DBG_PRINTF("the returned connection id is different than expected.\n");
+            DBG_PRINTF("%s", "the returned connection id is different than expected.\n");
             ret = -1;
         }
     }
@@ -92,19 +92,19 @@ int util_sprintf_test()
     int ret = 0;
     char str[8];
     if (picoquic_sprintf(str, sizeof(str), "%s%s", "foo", "bar") != 0) {
-        DBG_PRINTF("'foobar' test failed.\n");
+        DBG_PRINTF("%s", "'foobar' test failed.\n");
         ret = -1;
     }
     if (picoquic_sprintf(str, sizeof(str), "%s%c%s", "foo", PICOQUIC_FILE_SEPARATOR, "bar") != 0) {
-        DBG_PRINTF("'foo/bar' test failed.\n");
+        DBG_PRINTF("%s", "'foo/bar' test failed.\n");
         ret = -1;
     }
     if (picoquic_sprintf(str, sizeof(str), "%s%c%s", "fooo", PICOQUIC_FILE_SEPARATOR, "bar") == 0) {
-        DBG_PRINTF("'fooo/bar' test failed.\n");
+        DBG_PRINTF("%s", "'fooo/bar' test failed.\n");
         ret = -1;
     }
     if (picoquic_sprintf(str, sizeof(str), "%s%c%s", "fooo", PICOQUIC_FILE_SEPARATOR, "barr") == 0) {
-        DBG_PRINTF("'fooo/barr' test failed.\n");
+        DBG_PRINTF("%s", "'fooo/barr' test failed.\n");
         ret = -1;
     }
     return ret;
