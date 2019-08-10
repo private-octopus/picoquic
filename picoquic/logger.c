@@ -1826,7 +1826,7 @@ void picoquic_open_cc_dump(picoquic_cnx_t * cnx)
 
     char cc_log_file_name[512];
     if (ret == 0) {
-        ret = picoquic_sprintf(cc_log_file_name, sizeof(cc_log_file_name), "%s%c%s-log.bin", cnx->quic->cc_log_dir, PICOQUIC_FILE_SEPARATOR, cnxid_str) <= 0;
+        ret = picoquic_sprintf(cc_log_file_name, sizeof(cc_log_file_name), "%s%c%s-log.bin", cnx->quic->cc_log_dir, PICOQUIC_FILE_SEPARATOR, cnxid_str);
     }
 
     if (ret != 0) {
