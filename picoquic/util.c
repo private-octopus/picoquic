@@ -168,7 +168,11 @@ int picoquic_sprintf(char* buf, size_t buf_len, const char* fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
+#ifdef _WINDOWS
+    int res = vsnprintf_s(buf, buf_len, _TRUNCATE, fmt, args);
+#else
     int res = vsnprintf(buf, buf_len, fmt, args);
+#endif
     va_end(args);
 
     // vsnprintf returns <0 for errors and >=0 for nb of characters required.
@@ -415,7 +419,8 @@ void picoquic_get_ip_addr(struct sockaddr * addr, uint8_t ** ip_addr, uint8_t * 
     }
 }
 
-int picoquic_get_input_path(char * target_file_path, size_t file_path_max, const char * solution_path, const char * file_name) 
+/* Return a directory path based on solution dir and file name */
+int picoquic_get_input_path(char * target_file_path, size_t file_path_max, const char * solution_path, const char * file_name)
 {
     int ret = 0;
     size_t solution_path_length;
