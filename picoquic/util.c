@@ -29,6 +29,7 @@
 #else
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <errno.h>
 #endif
 #include "picoquic_internal.h"
 #include <stdarg.h>
