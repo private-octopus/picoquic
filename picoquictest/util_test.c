@@ -98,7 +98,7 @@ int util_sprintf_test()
     }
     if (picoquic_sprintf(str, sizeof(str), &nb_chars, "%s%c%s", "foo", PICOQUIC_FILE_SEPARATOR, "bar") != 0 ||
         nb_chars != 7) {
-        DBG_PRINTF("'foo/bar' test failed. Ret = %d, Nb_chars = %d", ret, (int)nb_chars);
+        DBG_PRINTF("'foo/bar' test failed. Nb_chars = %d", (int)nb_chars);
         ret = -1;
     }
     if (picoquic_sprintf(str, sizeof(str), NULL, "%s%c%s", "fooo", PICOQUIC_FILE_SEPARATOR, "bar") == 0) {
