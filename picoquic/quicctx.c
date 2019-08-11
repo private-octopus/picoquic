@@ -1888,7 +1888,9 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
     if (cnx != NULL) {
         picoquic_register_path(cnx, cnx->path[0]);
 
-        picoquic_open_cc_dump(cnx);
+        if (cnx->quic->cc_log_dir != NULL) {
+            picoquic_open_cc_dump(cnx);
+        }
     }
 
     return cnx;
