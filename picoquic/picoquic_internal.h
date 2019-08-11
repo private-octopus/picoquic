@@ -1013,7 +1013,7 @@ void picoquic_log_time(FILE* F, picoquic_cnx_t* cnx, uint64_t current_time,
 void picoquic_set_key_log_file(picoquic_quic_t *quic, FILE* F_keylog);
 
 /* Handling of cc_log */
-void picoquic_open_cc_dump(picoquic_cnx_t * cnx);
+int picoquic_open_cc_dump(picoquic_cnx_t * cnx);
 void picoquic_close_cc_dump(picoquic_cnx_t * cnx);
 void picoquic_cc_dump(picoquic_cnx_t * cnx, uint64_t current_time); 
 int picoquic_cc_log_file_to_csv(char const * bin_cc_log_name, char const * csv_cc_log_name);

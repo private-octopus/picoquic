@@ -1809,16 +1809,16 @@ void picoquic_log_picotls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
  * the master context specifies the directory where to log the file.
  */
 
-void picoquic_open_cc_dump(picoquic_cnx_t * cnx)
+int picoquic_open_cc_dump(picoquic_cnx_t * cnx)
 {
     if (cnx->cc_log != NULL) {
         DBG_PRINTF("%s", "CC LOG File is already open!\n");
-        return;
+        return -1;
     }
 
     if (cnx->quic->cc_log_dir == NULL) {
         DBG_PRINTF("%s", "CC LOG directory not set!\n");
-        return;
+        return -1;
     }
 
     char cc_log_file_name[512];
@@ -1851,6 +1851,8 @@ void picoquic_open_cc_dump(picoquic_cnx_t * cnx)
             }
         }
     }
+
+    return ret;
 }
 
 void picoquic_close_cc_dump(picoquic_cnx_t * cnx)
