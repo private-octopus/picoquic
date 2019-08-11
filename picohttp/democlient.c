@@ -271,11 +271,7 @@ static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
             char const * x_name = fname;
             char repeat_name[512];
             if (nb_repeat > 0) {
-#ifdef _WINDOWS
-                ret = sprintf_s(repeat_name, sizeof(repeat_name), "r%dx%s", (int)nb_repeat, fname) <= 0;
-#else
-                ret = sprintf(repeat_name, "r%dx%s", (int)nb_repeat, fname) <= 0;
-#endif
+                ret = picoquic_sprintf(repeat_name, sizeof(repeat_name), NULL, "r%dx%s", (int)nb_repeat, fname);
                 x_name = repeat_name;
             }
             if (ret == 0) {

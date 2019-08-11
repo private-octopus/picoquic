@@ -191,11 +191,7 @@ static int h3zero_server_process_request_frame(
     else {
         if (stream_ctx->stream_state.header.method == h3zero_method_post) {
             /* Prepare generic POST response */
-#ifdef _WINDOWS
-            response_length = sprintf_s((char *)post_response, sizeof(post_response), demo_server_post_response_page, (int)stream_ctx->received_length);
-#else
-            response_length = sprintf((char *)post_response, demo_server_post_response_page, (int)stream_ctx->received_length);
-#endif
+            (void)picoquic_sprintf((char*)post_response, sizeof(post_response), &response_length, demo_server_post_response_page, (int)stream_ctx->received_length);
             stream_ctx->echo_length = 0;
         }
         else {
@@ -777,11 +773,9 @@ int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
             else if (stream_ctx->method == 1) {
                 /* TODO: Process the response to a POST */
                 char post_response[512];
-#ifdef _WINDOWS
-                stream_ctx->response_length = sprintf_s(post_response, sizeof(post_response), demo_server_post_response_page, (int)stream_ctx->post_received);
-#else
-                stream_ctx->response_length = sprintf(post_response, demo_server_post_response_page, (int)stream_ctx->post_received);
-#endif
+
+                (void)picoquic_sprintf(post_response, sizeof(post_response), &stream_ctx->response_length, demo_server_post_response_page, (int)stream_ctx->post_received);
+
                 picoquic_add_to_stream_with_ctx(cnx, stream_id, (uint8_t *)demo_server_post_response_header,
                     strlen(demo_server_post_response_header), 0, (void *)stream_ctx);
                 picoquic_add_to_stream_with_ctx(cnx, stream_id, (uint8_t *)post_response,

@@ -1252,14 +1252,7 @@ int main(int argc, char** argv)
         }
         else
         {
-#ifdef _WINDOWS
-            if (fopen_s(&F_log, log_file, "w") != 0) {
-                F_log = NULL;
-            }
-#else
-            F_log = fopen(log_file, "w");
-#endif
-            if (F_log == NULL) {
+            if ((F_log = picoquic_file_open(log_file, "w")) == NULL) {
                 fprintf(stderr, "Could not open the log file <%s>\n", log_file);
             }
         }

@@ -543,35 +543,20 @@ static int compare_lines(char const* b1, char const* b2)
 
 int picoquic_test_compare_files(char const* fname1, char const* fname2)
 {
-    FILE* F1 = NULL;
+    FILE* F1;
     FILE* F2 = NULL;
     int ret = 0;
     int nb_line = 0;
 
-#ifdef _WINDOWS
-    errno_t err = fopen_s(&F1, fname1, "r");
-    if (err != 0) {
+    if ((F1 = picoquic_file_open(fname1, "r")) == NULL) {
         DBG_PRINTF("Cannot open file %s\n", fname1);
         ret = -1;
-    } else {
-        err = fopen_s(&F2, fname2, "r");
-        if (err != 0) {
-            DBG_PRINTF("Cannot open file %s\n", fname2);
-            ret = -1;
-        }
     }
-#else
-    F1 = fopen(fname1, "r");
-    if (F1 == NULL) {
+    else if ((F2 = picoquic_file_open(fname2, "r")) == NULL) {
+        DBG_PRINTF("Cannot open file %s\n", fname2);
         ret = -1;
-    } else {
-        F2 = fopen(fname2, "r");
-        if (F2 == NULL) {
-            ret = -1;
-        }
     }
-#endif
-    if (ret == 0 && F1 != NULL && F2 != NULL) {
+    else {
         char buffer1[256];
         char buffer2[256];
 
@@ -643,18 +628,8 @@ int logger_test()
     picoquic_cnx_t cnx;
     memset(&cnx, 0, sizeof(cnx));
 
-#ifdef _WINDOWS
-    if (fopen_s(&F, log_test_file, "w") != 0) {
-        if (F != NULL) {
-            fclose(F);
-            F = NULL;
-        }
-    }
-#else
-    F = fopen(log_test_file, "w");
-#endif
-
-    if (F == NULL) {
+    if ((F = picoquic_file_open(log_test_file, "w")) == NULL) {
+        DBG_PRINTF("failed to open file:%s\n", log_test_file);
         ret = -1;
     }
     else {
@@ -686,17 +661,9 @@ int logger_test()
     for (size_t i = 0; ret == 0 && i < 100; i++) {
         char log_line[1024];
         size_t bytes_max = format_random_packet(buffer, sizeof(buffer), &random_context);
-#ifdef _WINDOWS
-        if (fopen_s(&F, log_packet_test_file, "w") != 0) {
-            if (F != NULL) {
-                fclose(F);
-                F = NULL;
-            }
-        }
-#else
-        F = fopen(log_packet_test_file, "w");
-#endif
-        if (F == NULL) {
+
+        if ((F = picoquic_file_open(log_packet_test_file, "w")) == NULL) {
+            DBG_PRINTF("failed to open file:%s\n", log_packet_test_file);
             ret = -1;
             break;
         }
@@ -707,19 +674,9 @@ int logger_test()
             F = NULL;
         }
 
-#ifdef _WINDOWS
-        if (fopen_s(&F, log_packet_test_file, "w") != 0) {
-            if (F != NULL) {
-                fclose(F);
-                F = NULL;
-            }
-        }
-#else
-        F = fopen(log_packet_test_file, "w");
-#endif
-
-        if (F == NULL) {
-            ret = -1;
+        if ((F = picoquic_file_open(log_packet_test_file, "w")) == NULL) {
+            DBG_PRINTF("failed to open file:%s\n", log_packet_test_file);
+            ret = PICOQUIC_ERROR_INVALID_FILE;
             break;
         } else {
             while (fgets(log_line, (int)sizeof(log_line), F) != NULL) {
@@ -746,18 +703,13 @@ int logger_test()
     /* Do a minimal fuzz test */
     for (size_t i = 0; ret == 0 && i < 100; i++) {
         size_t bytes_max = format_random_packet(buffer, sizeof(buffer), &random_context);
-#ifdef _WINDOWS
-        if (fopen_s(&F, log_fuzz_test_file, "w") != 0) {
-            ret = -1;
+
+        if ((F = picoquic_file_open(log_fuzz_test_file, "w")) == NULL) {
+            DBG_PRINTF("failed to open file:%s\n", log_fuzz_test_file);
+            ret = PICOQUIC_ERROR_INVALID_FILE;
             break;
         }
-#else
-        F = fopen(log_fuzz_test_file, "w");
-        if (F == NULL) {
-            ret = -1;
-            break;
-        }
-#endif
+
         ret &= fprintf(F, "Log fuzz test #%d\n", (int)i);
         picoquic_log_frames(&cnx, F, 0, buffer, bytes_max);
 
