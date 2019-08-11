@@ -375,9 +375,7 @@ int picoquic_load_tickets(picoquic_stored_ticket_t** pp_first_ticket,
         }
     }
 
-    if (F != NULL) {
-        fclose(F);
-    }
+    picoquic_file_close(F);
 
     return ret;
 }

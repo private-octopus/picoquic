@@ -586,13 +586,8 @@ int picoquic_test_compare_files(char const* fname1, char const* fname2)
         }
     }
 
-    if (F1 != NULL) {
-        fclose(F1);
-    }
-
-    if (F2 != NULL) {
-        fclose(F2);
-    }
+    picoquic_file_close(F1);
+    picoquic_file_close(F2);
 
     return ret;
 }

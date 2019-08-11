@@ -487,8 +487,15 @@ FILE * picoquic_file_open_ex(char const * file_name, char const * flags, int * l
 
     return F;
 }
-
 FILE* picoquic_file_open(char const* file_name, char const* flags)
 {
     return picoquic_file_open_ex(file_name, flags, NULL);
+}
+
+/* Safely close files in a portable way */
+void picoquic_file_close(FILE * F)
+{
+    if (F != NULL) {
+        (void)fclose(F);
+    }
 }

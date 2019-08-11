@@ -107,9 +107,7 @@ static void quicwind_delete_stream_context(quicwind_callback_ctx_t* ctx,
     h3zero_delete_data_stream_state(&stream_ctx->stream_state);
 #endif
 
-    if (stream_ctx->F != NULL) {
-        fclose(stream_ctx->F);
-    }
+    picoquic_file_close(stream_ctx->F);
 
     if (stream_ctx == ctx->first_stream) {
         ctx->first_stream = stream_ctx->next_stream;

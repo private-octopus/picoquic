@@ -355,9 +355,7 @@ int picoquic_load_tokens(picoquic_stored_token_t** pp_first_token,
         }
     }
 
-    if (F != NULL) {
-        fclose(F);
-    }
+    picoquic_file_close(F);
 
     return ret;
 }
