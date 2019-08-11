@@ -1910,6 +1910,10 @@ FILE * picoquic_open_cc_log_file_for_read(char const * bin_cc_log_name, int * is
 {
     int ret = 0;
     FILE * bin_log = picoquic_file_open(bin_cc_log_name, "rb");
+    if (bin_log == NULL) {
+        DBG_PRINTF("Cannot open CC file %s.\n", bin_cc_log_name);
+        ret = -1;
+    }
 
     *nb_numbers_in_line = 0;
     *is_wrong_endian = 0;
@@ -1942,7 +1946,7 @@ FILE * picoquic_open_cc_log_file_for_read(char const * bin_cc_log_name, int * is
         }
     }
 
-    return (bin_log);
+    return bin_log;
 }
 
 int picoquic_cc_log_file_to_csv(char const * bin_cc_log_name, char const * csv_cc_log_name)
