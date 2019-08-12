@@ -27,76 +27,174 @@
 #endif
 #include <string.h>
 
-static const uint8_t picoquic_buffer[8] = {
-    'p',  'i',  'c',  'o',  'q',  'u',  'i',  'c',
-};
-
-static const uint8_t expected_stream0[24] =
+static const uint8_t expected_stream0[16] =
 {
     0x00, 0x01, 0x42, 0x03, 0x84, 0x05, 0x06, 0x07,
     0xc8, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
-    'p',  'i',  'c',  'o',  'q',  'u',  'i',  'c',
 };
 
-//static const size_t nb_test_cases = sizeof(expected_stream)/sizeof(expected_stream[0]);
-int verify_expected_stream0(picostream * s)
+int eval_picostream_write(picostream * s, int ret, const char * fn_name)
 {
-    int ret = 0;
-
+    size_t expected_size = sizeof(expected_stream0);
     size_t stream_len = picostream_length(s);
-    if (stream_len != sizeof(expected_stream0)) {
-        DBG_PRINTF("picostream length does not match: result: %zu, expected: %zu\n", stream_len, sizeof(expected_stream0));
+
+    if (ret != 0) {
+        DBG_PRINTF("%s failed to write %zu bytes. result: %d, length: %zu\n", fn_name, expected_size, ret, stream_len);
+    }
+
+    if (ret == 0 && stream_len != expected_size) {
+        DBG_PRINTF("%s stream length does not match: result: %zu, expected: %zu\n", fn_name, stream_len, expected_size);
         ret = -1;
     }
-    if (ret == 0) {
-        if (memcmp(picostream_data(s), expected_stream0, sizeof(expected_stream0)) != 0) {
-            DBG_PRINTF("%s", "picostream content does not match\n");
-            ret = -1;
-        }
+
+    if (ret == 0 && memcmp(picostream_data(s), expected_stream0, expected_size) != 0) {
+        DBG_PRINTF("%s content does not match\n", fn_name);
+        ret = -1;
     }
+
     return ret;
 }
 
-/*
- * This tests picostream functionality when allocated on the stack.
- */
+int eval_picostream_read(picostream * s, int ret, const char * fn_name)
+{
+    size_t expected_size = sizeof(expected_stream0);
+    size_t stream_len = picostream_length(s);
+
+    if (ret != 0) {
+        DBG_PRINTF("%s failed to read %zu bytes. result: %d, length: %zu\n", fn_name, expected_size, ret, stream_len);
+    }
+
+    if (ret == 0 && stream_len != expected_size) {
+        DBG_PRINTF("%s stream length does not match: result: %zu, expected: %zu\n", fn_name, stream_len, expected_size);
+        ret = -1;
+    }
+
+    return ret;
+}
+
+int verify_picostream_write_int32(picostream * s)
+{
+    int ret = 0;
+    ret |= picostream_write_int32(s, 0x00014203);
+    ret |= picostream_write_int32(s, 0x84050607);
+    ret |= picostream_write_int32(s, 0xc8090a0b);
+    ret |= picostream_write_int32(s, 0x0c0d0e0f);
+    return eval_picostream_write(s, ret, "picostream_write_int32");
+}
+
+int verify_picostream_write_int(picostream * s)
+{
+    int ret = 0;
+    ret |= picostream_write_int(s, 0x00);
+    ret |= picostream_write_int(s, 0x01);
+    ret |= picostream_write_int(s, 0x0203);
+    ret |= picostream_write_int(s, 0x04050607);
+    ret |= picostream_write_int(s, 0x08090a0b0c0d0e0f);
+    return eval_picostream_write(s, ret, "picostream_write_int");
+}
+
+int verify_picostream_write_buffer(picostream * s)
+{
+    int ret = 0;
+    ret |= picostream_write_buffer(s, expected_stream0, 2);
+    ret |= picostream_write_buffer(s, expected_stream0 + 2, 14);
+    return eval_picostream_write(s, ret, "picostream_write_buffer");
+}
+
+int verify_picostream_read_int32(picostream * s)
+{
+    int ret = 0;
+    uint32_t value = 0;
+    ret |= picostream_read_int32(s, &value) || value != 0x00014203;
+    ret |= picostream_read_int32(s, &value) || value != 0x84050607;
+    ret |= picostream_read_int32(s, &value) || value != 0xc8090a0b;
+    ret |= picostream_read_int32(s, &value) || value != 0x0c0d0e0f;
+    return eval_picostream_read(s, ret, "picostream_read_int32");
+}
+
+int verify_picostream_read_int(picostream * s)
+{
+    int ret = 0;
+    uint64_t value64 = 0;
+    ret |= picostream_read_int(s, &value64) != 0 || value64 != 0x00;
+    ret |= picostream_read_int(s, &value64) != 0 || value64 != 0x01;
+    ret |= picostream_read_int(s, &value64) != 0 || value64 != 0x0203;
+    ret |= picostream_read_int(s, &value64) != 0 || value64 != 0x04050607;
+    ret |= picostream_read_int(s, &value64) != 0 || value64 != 0x08090a0b0c0d0e0f;
+    return eval_picostream_read(s, ret, "picostream_read_int");
+}
+
+int verify_picostream_read_buffer(picostream* s)
+{
+    int ret = 0;
+    uint8_t buf[16];
+    ret |= picostream_read_buffer(s, buf, 2) != 0 || memcmp(expected_stream0, buf, 2) != 0;
+    ret |= picostream_read_buffer(s, buf, 14) != 0 || memcmp(expected_stream0+2, buf, 14) != 0;
+    return eval_picostream_read(s, ret, "picostream_read_buffer");
+}
+
+int verify_picostream_write(picostream * s)
+{
+    int ret = 0;
+
+    picostream_reset(s);
+    memset(picostream_data(s), 0x00, sizeof(expected_stream0));
+    ret |= verify_picostream_write_int32(s);
+
+    picostream_reset(s);
+    memset(picostream_data(s), 0x00, sizeof(expected_stream0));
+    ret |= verify_picostream_write_int(s);
+
+    picostream_reset(s);
+    memset(picostream_data(s), 0x00, sizeof(expected_stream0));
+    ret |= verify_picostream_write_buffer(s);
+
+    return ret;
+}
+
+int verify_picostream_read(picostream * s)
+{
+    int ret = 0;
+
+    picostream_reset(s);
+    ret |= verify_picostream_read_int32(s);
+
+    picostream_reset(s);
+    ret |= verify_picostream_read_int(s);
+
+    picostream_reset(s);
+    ret |= verify_picostream_read_buffer(s);
+
+    return ret;
+}
+
 int verify_picostream_on_stack()
 {
     int ret = 0;
 
     pico_writestream wstream;
     picostream * ws = picostream_init_write(&wstream);
-    int ret_int = 0;
-    ret_int |= picostream_write_int(ws, 0x00);
-    ret_int |= picostream_write_int(ws, 0x01);
-    ret_int |= picostream_write_int(ws, 0x0203);
-    ret_int |= picostream_write_int(ws, 0x04050607);
-    ret_int |= picostream_write_int(ws, 0x08090a0b0c0d0e0f);
-
-    size_t ws_len = picostream_length(ws);
-    if (ret_int != 0 || ws_len != 16u) {
-        DBG_PRINTF("%s", "stack picostream_write_int should have written 16 bytes. result %zu:\n", ws_len);
-        ret = -1;
-    }
+    ret |= verify_picostream_write(ws);
 
     picostream rstream;
     picostream * rs = picostream_init_read(&rstream, expected_stream0, sizeof(expected_stream0));
-    int ret_int32 = 0;
-    uint32_t value = 0;
-    ret_int32 |= picostream_read_int32(rs, &value) || value != 0x00014203;
-    ret_int32 |= picostream_read_int32(rs, &value) || value != 0x84050607;
-    ret_int32 |= picostream_read_int32(rs, &value) || value != 0xc8090a0b;
-    ret_int32 |= picostream_read_int32(rs, &value) || value != 0x0c0d0e0f;
+    ret |= verify_picostream_read(rs);
 
-    size_t rs_len = picostream_length(rs);
-    if (ret_int32 != 0 || rs_len != 16u) {
-        DBG_PRINTF("%s", "stack picostream_read_int32 should have read 16 bytes. result: %d, length %zu:\n", ret_int32, rs_len);
-        ret = -1;
-    }
+    return ret;
+}
 
-    if (picostream_length(ws) != 16u) {
-        ret = -1;
-    }
+int verify_picostream_on_heap()
+{
+    int ret = 0;
+
+    picostream * s = picostream_alloc(sizeof(expected_stream0));
+    ret |= verify_picostream_write(s);
+
+    picostream_reset(s);
+    memcpy(picostream_data(s), expected_stream0, sizeof(expected_stream0));
+    ret |= verify_picostream_read(s);
+
+    picostream_delete(s);
 
     return ret;
 }
@@ -211,71 +309,13 @@ int picostream_test_read_limits()
 
 int picostream_test()
 {
-    uint8_t buffer[sizeof(expected_stream0)];
-    int ret = 0;  
-  
-    picostream * s = picostream_alloc(sizeof(expected_stream0));
-
-    picostream_write_int32(s, 0x00014203);
-    picostream_write_int32(s, 0x84050607);
-    picostream_write_int32(s, 0xc8090a0b);
-    picostream_write_int32(s, 0x0c0d0e0f);
-    picostream_write_buffer(s, picoquic_buffer, sizeof(picoquic_buffer));
-    ret |= verify_expected_stream0(s);
-
-    picostream_reset(s);
-    memset(picostream_data(s), 0x00, sizeof(expected_stream0));
-
-    picostream_write_int(s, 0x00);
-    picostream_write_int(s, 0x01);
-    picostream_write_int(s, 0x0203);
-    picostream_write_int(s, 0x04050607);
-    picostream_write_int(s, 0x08090a0b0c0d0e0f);
-    picostream_write_buffer(s, picoquic_buffer, sizeof(picoquic_buffer));
-    ret |= verify_expected_stream0(s);
-
-    picostream_reset(s);
-    memcpy(picostream_data(s), expected_stream0, sizeof(expected_stream0));
-
-    picostream_skip(s, 16u);
-    picostream_read_buffer(s, buffer, sizeof(picoquic_buffer));
-    if (memcmp(buffer, picoquic_buffer, sizeof(picoquic_buffer)) != 0) {
-        DBG_PRINTF("%s", "picostream_skip or picostream_read_buffer failed\n");
-        ret = -1;
-    }
-
-    picostream_reset(s);
-    memcpy(picostream_data(s), expected_stream0, sizeof(expected_stream0));
-
-    int ret_int32 = 0;
-    uint32_t value32 = 0;
-    ret_int32 |= picostream_read_int32(s, &value32) != 0 || value32 != 0x00014203;
-    ret_int32 |= picostream_read_int32(s, &value32) != 0 || value32 != 0x84050607;
-    ret_int32 |= picostream_read_int32(s, &value32) != 0 || value32 != 0xc8090a0b;
-    ret_int32 |= picostream_read_int32(s, &value32) != 0 || value32 != 0x0c0d0e0f;
-    if (ret_int32 != 0) {
-        DBG_PRINTF("%s", "heap picostream_read_int32 failed\n");
-        ret = -1;
-    }
-
-    picostream_reset(s);
-    memcpy(picostream_data(s), expected_stream0, sizeof(expected_stream0));
-
-    int ret_int = 0;
-    uint64_t value64 = 0;
-    ret_int |= picostream_read_int(s, &value64) != 0 || value64 != 0x00;
-    ret_int |= picostream_read_int(s, &value64) != 0 || value64 != 0x01;
-    ret_int |= picostream_read_int(s, &value64) != 0 || value64 != 0x0203;
-    ret_int |= picostream_read_int(s, &value64) != 0 || value64 != 0x04050607;
-    ret_int |= picostream_read_int(s, &value64) != 0 || value64 != 0x08090a0b0c0d0e0f;
-    if (ret_int32 != 0) {
-        DBG_PRINTF("%s", "picostream_read_int failed\n");
-        ret = -1;
-    }
-
-    picostream_delete(s);
+    int ret = 0;
 
     if (verify_picostream_on_stack() != 0) {
+        ret = -1;
+    }
+
+    if (verify_picostream_on_heap() != 0) {
         ret = -1;
     }
 
