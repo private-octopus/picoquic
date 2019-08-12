@@ -25,6 +25,24 @@
 #include "picostream.h"
 #include "picoquic_internal.h"
 
+picostream * picostream_init_read(picostream * s, const void * bytes, size_t nb_bytes)
+{
+    s->data = (uint8_t*)bytes;
+    s->size = nb_bytes;
+    s->ptr = 0;
+
+    return s;
+}
+
+picostream * picostream_init_write(pico_writestream * s)
+{
+    s->s.data = s->buf;
+    s->s.size = PICOSTREAM_MAX_BUFFER_SIZE;
+    s->s.ptr = 0;
+
+    return &s->s;
+}
+
 picostream * picostream_alloc(size_t nb_bytes)
 {
     picostream* s = (picostream*)malloc(sizeof(picostream));

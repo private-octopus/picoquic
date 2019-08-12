@@ -24,12 +24,21 @@
 
 #include "picoquic_internal.h"
 
+#define PICOSTREAM_MAX_BUFFER_SIZE 2048
+
 typedef struct {
     uint8_t * data;
     size_t size;
     size_t ptr;
 } picostream;
 
+typedef struct {
+    picostream s;
+    uint8_t buf[PICOSTREAM_MAX_BUFFER_SIZE];
+} pico_writestream;
+
+picostream * picostream_init_read(picostream * s, const void * bytes, size_t nb_bytes);
+picostream * picostream_init_write(pico_writestream * s);
 picostream * picostream_alloc(size_t nb_bytes);
 void picostream_delete(picostream * s);
 void * picostream_data(picostream * s);
