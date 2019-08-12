@@ -62,7 +62,7 @@ int picostream_test()
     uint8_t buffer[sizeof(expected_stream0)];
     int ret = 0;  
   
-    picostream * s = picostream_create(sizeof(expected_stream0));
+    picostream * s = picostream_alloc(sizeof(expected_stream0));
 
     picostream_write_int32(s, 0x00014203);
     picostream_write_int32(s, 0x84050607);
@@ -96,12 +96,13 @@ int picostream_test()
     memcpy(picostream_data(s), expected_stream0, sizeof(expected_stream0));
 
     int ret_int32 = 0;
-    ret_int32 |= picostream_read_int32(s) != 0x00014203;
-    ret_int32 |= picostream_read_int32(s) != 0x84050607;
-    ret_int32 |= picostream_read_int32(s) != 0xc8090a0b;
-    ret_int32 |= picostream_read_int32(s) != 0x0c0d0e0f;
+    uint32_t value32 = 0;
+    ret_int32 |= picostream_read_int32(s, &value32) != 0 || value32 != 0x00014203;
+    ret_int32 |= picostream_read_int32(s, &value32) != 0 || value32 != 0x84050607;
+    ret_int32 |= picostream_read_int32(s, &value32) != 0 || value32 != 0xc8090a0b;
+    ret_int32 |= picostream_read_int32(s, &value32) != 0 || value32 != 0x0c0d0e0f;
     if (ret_int32 != 0) {
-        DBG_PRINTF("%s", "picostream_read_int32 failed\n");
+        DBG_PRINTF("%s", "heap picostream_read_int32 failed\n");
         ret = -1;
     }
 
@@ -109,11 +110,12 @@ int picostream_test()
     memcpy(picostream_data(s), expected_stream0, sizeof(expected_stream0));
 
     int ret_int = 0;
-    ret_int |= picostream_read_int(s) != 0x00;
-    ret_int |= picostream_read_int(s) != 0x01;
-    ret_int |= picostream_read_int(s) != 0x0203;
-    ret_int |= picostream_read_int(s) != 0x04050607;
-    ret_int |= picostream_read_int(s) != 0x08090a0b0c0d0e0f;
+    uint64_t value64 = 0;
+    ret_int |= picostream_read_int(s, &value64) != 0 || value64 != 0x00;
+    ret_int |= picostream_read_int(s, &value64) != 0 || value64 != 0x01;
+    ret_int |= picostream_read_int(s, &value64) != 0 || value64 != 0x0203;
+    ret_int |= picostream_read_int(s, &value64) != 0 || value64 != 0x04050607;
+    ret_int |= picostream_read_int(s, &value64) != 0 || value64 != 0x08090a0b0c0d0e0f;
     if (ret_int32 != 0) {
         DBG_PRINTF("%s", "picostream_read_int failed\n");
         ret = -1;

@@ -30,21 +30,22 @@ typedef struct {
     size_t ptr;
 } picostream;
 
-picostream * picostream_create(size_t nb_bytes);
+picostream * picostream_alloc(size_t nb_bytes);
 void picostream_delete(picostream * s);
 void * picostream_data(picostream * s);
 size_t picostream_size(picostream * s);
 size_t picostream_length(picostream * s);
 
 void picostream_reset(picostream * s);
-void picostream_skip(picostream * s, size_t nb_bytes);
+int picostream_skip(picostream * s, size_t nb_bytes);
 
-void picostream_write_int32(picostream* s, uint32_t value);
-void picostream_write_int(picostream * s, uint64_t value);
-void picostream_write_buffer(picostream* s, const void* buffer, size_t length);
+int picostream_write_int32(picostream * s, uint32_t value);
+int picostream_read_int32(picostream * s, uint32_t * value);
 
-uint32_t picostream_read_int32(picostream* s);
-uint64_t picostream_read_int(picostream * s);
-void picostream_read_buffer(picostream * s, void * buffer, size_t length);
+int picostream_write_int(picostream * s, uint64_t value);
+int picostream_read_int(picostream * s, uint64_t * value);
+
+int picostream_write_buffer(picostream * s, const void * buffer, size_t length);
+int picostream_read_buffer(picostream * s, void * buffer, size_t length);
 
 #endif /* PICOQUIC_PICOSTREAM_H */

@@ -25,7 +25,7 @@
 #include "picostream.h"
 #include "picoquic_internal.h"
 
-picostream * picostream_create(size_t nb_bytes)
+picostream * picostream_alloc(size_t nb_bytes)
 {
     picostream* s = (picostream*)malloc(sizeof(picostream));
     if (s == NULL) {
@@ -73,74 +73,93 @@ void picostream_reset(picostream * s)
     s->ptr = 0;
 }
 
-void picostream_skip(picostream * s, size_t nb_bytes)
+int picostream_skip(picostream * s, size_t nb_bytes)
 {
     size_t max_bytes = s->size - s->ptr;
     if (max_bytes < nb_bytes) {
-        return;
-    }
-    s->ptr += nb_bytes;
-}
-
-void picostream_write_int32(picostream * s, uint32_t value)
-{
-    size_t max_bytes = s->size - s->ptr;
-    if (max_bytes < 4) {
-        return;
-    }
-
-    picoformat_32(s->data + s->ptr, value);
-    s->ptr += 4;
-}
-
-void picostream_write_int(picostream * s, uint64_t value)
-{
-    size_t len = picoquic_varint_encode(s->data + s->ptr, s->size - s->ptr, value);
-    s->ptr += len;
-}
-
-uint64_t picostream_read_int(picostream * s)
-{
-    uint64_t value = 0;
-    size_t len = picoquic_varint_decode(s->data + s->ptr, s->size - s->ptr, &value);
-    s->ptr += len;
-    return value;
-}
-
-uint32_t picostream_read_int32(picostream * s)
-{
-    size_t max_bytes = s->size - s->ptr;
-    if (max_bytes < 4) {
+        s->ptr = s->size;
+        return -1;
+    } else {
+        s->ptr += nb_bytes;
         return 0;
     }
-
-    uint32_t v = 0;
-    for (size_t i = 0; i < 4; i++) {
-        v <<= 8;
-        v += s->data[s->ptr++];
-    }
-
-    return v;
 }
 
-void picostream_write_buffer(picostream * s, const void * buffer, size_t length)
+int picostream_write_int(picostream * s, uint64_t value)
+{
+    size_t len = picoquic_varint_encode(s->data + s->ptr, s->size - s->ptr, value);
+    if (len == 0) {
+        s->ptr += s->size;
+        return -1;
+    } else {
+        s->ptr += len;
+        return 0;
+    }
+}
+
+int picostream_read_int(picostream * s, uint64_t * value)
+{
+    size_t len = picoquic_varint_decode(s->data + s->ptr, s->size - s->ptr, value);
+    if (len == 0) {
+        s->ptr += s->size;
+        return -1;
+    } else {
+        s->ptr += len;
+        return 0;
+    }
+}
+
+int picostream_write_int32(picostream * s, uint32_t value)
+{
+    size_t max_bytes = s->size - s->ptr;
+    if (max_bytes < 4) {
+        s->ptr = s->size;
+        return -1;
+    } else {
+        picoformat_32(s->data + s->ptr, value);
+        s->ptr += 4;
+        return 0;
+    }
+}
+
+int picostream_read_int32(picostream * s, uint32_t * value)
+{
+    size_t max_bytes = s->size - s->ptr;
+    if (max_bytes < 4) {
+        s->ptr = s->size;
+        return -1;
+    }
+    else {
+        uint32_t v = 0;
+        for (size_t i = 0; i < 4; i++) {
+            v <<= 8;
+            v += s->data[s->ptr++];
+        }
+        *value = v;
+        return 0;
+    }
+}
+
+int picostream_write_buffer(picostream * s, const void * buffer, size_t length)
 {
     size_t max_bytes = s->size - s->ptr;
     if (max_bytes < length) {
-        return;
+        return -1;
     }
 
     memcpy(s->data + s->ptr, buffer, length);
     s->ptr += length;
+    return 0;
 }
 
-void picostream_read_buffer(picostream * s, void * buffer, size_t length)
+int picostream_read_buffer(picostream * s, void * buffer, size_t length)
 {
     size_t max_bytes = s->size - s->ptr;
     if (max_bytes < length) {
-        return;
+        return -1;
     }
 
     memcpy(buffer, s->data + s->ptr, length);
     s->ptr += length;
+    return 0;
 }
