@@ -100,6 +100,112 @@ int verify_picostream_on_stack()
         if (picostream_length(ws) != 16u) {
             ret = -1;
         }
+    return ret;
+}
+
+/*
+ * This tests picostream write functionality when close to or over the allocated limits.
+ */
+int picostream_test_write_limits()
+{
+    int ret = 0;
+    static uint8_t buf[4] = { 0x0c, 0x0d, 0x0e, 0x0f };
+    picostream * s3 = picostream_alloc(3);
+    picostream * s4 = picostream_alloc(4);
+
+    if (picostream_write_int32(s3, 0x0c0d0e0f) == 0) {
+        DBG_PRINTF("%s", "picostream_write_int32 of 4 bytes didn't fail on 3 byte buffer\n");
+        ret = -1;
+    }
+
+    if (picostream_write_int32(s4, 0x0c0d0e0f) != 0) {
+        DBG_PRINTF("%s", "picostream_write_int32 of 4 bytes failed on 4 byte buffer\n");
+        ret = -1;
+    }
+
+    picostream_reset(s3);
+    picostream_reset(s4);
+
+    if (picostream_write_int(s3, 0x0c0d0e0f) == 0) {
+        DBG_PRINTF("%s", "picostream_write_int of 4 bytes didn't fail on 3 byte buffer\n");
+        ret = -1;
+    }
+
+    if (picostream_write_int(s4, 0x0c0d0e0f) != 0) {
+        DBG_PRINTF("%s", "picostream_write_int of 4 bytes failed on 4 byte buffer\n");
+        ret = -1;
+    }
+
+    picostream_reset(s3);
+    picostream_reset(s4);
+
+    if (picostream_write_buffer(s3, buf, sizeof(buf)) == 0) {
+        DBG_PRINTF("%s", "picostream_write_buffer of 4 bytes didn't fail on 3 byte buffer\n");
+        ret = -1;
+    }
+
+    if (picostream_write_buffer(s4, buf, sizeof(buf)) != 0) {
+        DBG_PRINTF("%s", "picostream_write_buffer of 4 bytes failed on 4 byte buffer\n");
+        ret = -1;
+    }
+
+    picostream_delete(s3);
+    picostream_delete(s4);
+
+    return ret;
+}
+
+/*
+ * This tests picostream read functionality when close to or over the allocated limits.
+ */
+int picostream_test_read_limits()
+{
+    static const uint8_t buf[4] = { 0x8c, 0x0d, 0x0e, 0x0f };
+    uint8_t tmp[4];
+
+    picostream stream3;
+    picostream stream4;
+    picostream * s3 = picostream_init_read(&stream3, buf, 3);
+    picostream * s4 = picostream_init_read(&stream4, buf, 4);
+
+    int ret = 0;
+
+    uint32_t value32 = 0;
+    if (picostream_read_int32(s3, &value32) == 0) {
+        DBG_PRINTF("%s", "picostream_read_int32 of 4 bytes didn't fail on 3 byte buffer\n");
+        ret = -1;
+    }
+
+    if (picostream_read_int32(s4, &value32) != 0) {
+        DBG_PRINTF("%s", "picostream_read_int32 of 4 bytes failed on 4 byte buffer\n");
+        ret = -1;
+    }
+
+    picostream_reset(s3);
+    picostream_reset(s4);
+
+    uint64_t value64 = 0;
+    if (picostream_read_int(s3, &value64) == 0) {
+        DBG_PRINTF("%s", "picostream_read_int of 4 bytes didn't fail on 3 byte buffer\n");
+        ret = -1;
+    }
+
+    if (picostream_read_int(s4, &value64) != 0) {
+        DBG_PRINTF("%s", "picostream_read_int of 4 bytes failed on 4 byte buffer\n");
+        ret = -1;
+    }
+
+    picostream_reset(s3);
+    picostream_reset(s4);
+
+    if (picostream_read_buffer(s3, tmp, sizeof(tmp)) == 0) {
+        DBG_PRINTF("%s", "picostream_read_buffer of 4 bytes didn't fail on 3 byte buffer\n");
+        ret = -1;
+    }
+
+    if (picostream_read_buffer(s4, tmp, sizeof(tmp)) != 0) {
+        DBG_PRINTF("%s", "picostream_read_buffer of 4 bytes failed on 4 byte buffer\n");
+        ret = -1;
     }
 
     return ret;
@@ -172,6 +278,14 @@ int picostream_test()
     picostream_delete(s);
 
     if (verify_picostream_on_stack() != 0) {
+        ret = -1;
+    }
+
+    if (picostream_test_write_limits() != 0) {
+        ret = -1;
+    }
+
+    if (picostream_test_read_limits() != 0) {
         ret = -1;
     }
 
