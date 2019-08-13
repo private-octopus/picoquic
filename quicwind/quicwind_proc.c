@@ -107,7 +107,7 @@ static void quicwind_delete_stream_context(quicwind_callback_ctx_t* ctx,
     h3zero_delete_data_stream_state(&stream_ctx->stream_state);
 #endif
 
-    picoquic_file_close(stream_ctx->F);
+    stream_ctx->F = picoquic_file_close(stream_ctx->F);
 
     if (stream_ctx == ctx->first_stream) {
         ctx->first_stream = stream_ctx->next_stream;
@@ -237,8 +237,7 @@ int quicwind_callback(picoquic_cnx_t* cnx,
         AppendText(_T("Received a gap indication.\r\n"));
         stream_ctx = quicwind_find_stream(ctx, stream_id);
         if (stream_ctx != NULL && stream_ctx->F != NULL) {
-            fclose(stream_ctx->F);
-            stream_ctx->F = NULL;
+            stream_ctx->F = picoquic_file_close(stream_ctx->F);
             ctx->nb_open_streams--;
             fin_stream_id = stream_id;
         }

@@ -349,8 +349,7 @@ static int picoquic_demo_client_close_stream(
 {
     int ret = 0;
     if (stream_ctx != NULL && stream_ctx->is_open) {
-        picoquic_file_close(stream_ctx->F);
-        stream_ctx->F = NULL;
+        stream_ctx->F = picoquic_file_close(stream_ctx->F);
         stream_ctx->is_open = 0;
         ctx->nb_open_streams--;
         ret = 1;
@@ -594,7 +593,7 @@ static void picoquic_demo_client_delete_stream_context(picoquic_demo_callback_ct
 
     h3zero_delete_data_stream_state(&stream_ctx->stream_state);
 
-    picoquic_file_close(stream_ctx->F);
+    stream_ctx->F = picoquic_file_close(stream_ctx->F);
 
     if (stream_ctx == ctx->first_stream) {
         ctx->first_stream = stream_ctx->next_stream;

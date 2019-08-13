@@ -283,7 +283,7 @@ int picoquic_save_tokens(const picoquic_stored_token_t* first_token,
             }
             next = next->next_token;
         }
-        fclose(F);
+        F = picoquic_file_close(F);
     }
 
     return ret;
@@ -355,7 +355,7 @@ int picoquic_load_tokens(picoquic_stored_token_t** pp_first_token,
         }
     }
 
-    picoquic_file_close(F);
+    (void)picoquic_file_close(F);
 
     return ret;
 }

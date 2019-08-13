@@ -496,9 +496,10 @@ FILE* picoquic_file_open(char const* file_name, char const* flags)
 }
 
 /* Safely close files in a portable way */
-void picoquic_file_close(FILE * F)
+FILE * picoquic_file_close(FILE * F)
 {
     if (F != NULL) {
         (void)fclose(F);
     }
+    return NULL;
 }
