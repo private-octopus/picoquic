@@ -1846,8 +1846,7 @@ int picoquic_open_cc_dump(picoquic_cnx_t * cnx)
 
             if (fwrite(header, 3 * sizeof(uint32_t), 1, cnx->cc_log) <= 0) {
                 DBG_PRINTF("Cannot write header for file %s.\n", cc_log_file_name);
-                fclose(cnx->cc_log);
-                cnx->cc_log = NULL;
+                cnx->cc_log = picoquic_file_close(cnx->cc_log);
             }
         }
     }
@@ -1857,10 +1856,7 @@ int picoquic_open_cc_dump(picoquic_cnx_t * cnx)
 
 void picoquic_close_cc_dump(picoquic_cnx_t * cnx)
 {
-    if (cnx->cc_log != NULL) {
-        (void) fclose(cnx->cc_log);
-        cnx->cc_log = NULL;
-    }
+    cnx->cc_log = picoquic_file_close(cnx->cc_log);
 }
 
 /*
@@ -1943,8 +1939,7 @@ FILE * picoquic_open_cc_log_file_for_read(char const * bin_cc_log_name, int * is
         }
 
         if (ret != 0) {
-            fclose(bin_log);
-            bin_log = NULL;
+            bin_log = picoquic_file_close(bin_log);
         }
     }
 
@@ -2022,13 +2017,8 @@ int picoquic_cc_log_file_to_csv(char const * bin_cc_log_name, char const * csv_c
         }
     }
 
-    if (csv_log != NULL) {
-        fclose(csv_log);
-    }
-
-    if (bin_log != NULL) {
-        fclose(bin_log);
-    }
+    (void)picoquic_file_close(csv_log);
+    (void)picoquic_file_close(bin_log);
 
     return ret;
 }

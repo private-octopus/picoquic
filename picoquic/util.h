@@ -106,7 +106,8 @@ int picoquic_get_input_path(char * target_file_path, size_t file_path_max, const
 #endif //#ifdef DISABLE_DEBUG_PRINTF
 
 /* Safely open files in a portable way */
-FILE* picoquic_file_open_ex(char const * file_name, char const * flags, int * last_err);
+FILE * picoquic_file_open_ex(char const * file_name, char const * flags, int * last_err);
 FILE * picoquic_file_open(char const * file_name, char const * flags);
+FILE * picoquic_file_close(FILE * F);
 
 #endif

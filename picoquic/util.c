@@ -19,9 +19,10 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/* clang-format off */
+
 /* Simple set of utilities */
 #ifdef _WINDOWS
-/* clang-format off */
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 #include <WinSock2.h>
@@ -36,6 +37,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include "util.h"
+
+/* clang-format on */
 
 char* picoquic_string_create(const char* original, size_t len)
 {
@@ -487,8 +490,16 @@ FILE * picoquic_file_open_ex(char const * file_name, char const * flags, int * l
 
     return F;
 }
-
 FILE* picoquic_file_open(char const* file_name, char const* flags)
 {
     return picoquic_file_open_ex(file_name, flags, NULL);
+}
+
+/* Safely close files in a portable way */
+FILE * picoquic_file_close(FILE * F)
+{
+    if (F != NULL) {
+        (void)fclose(F);
+    }
+    return NULL;
 }

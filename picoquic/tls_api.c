@@ -2378,7 +2378,7 @@ int picoquic_esni_load_key(picoquic_quic_t * quic, char const * esni_key_file_na
                 EVP_PKEY_free(pkey);
             }
 #if 0
-            fclose(fp);
+            fp = picoquic_file_close(fp);
 #endif
         }
 #if 1
@@ -2405,7 +2405,7 @@ int picoquic_esni_load_rr(char const * esni_rr_file_name, uint8_t *esnikeys, siz
         if (*esnikeys_len == 0 || !feof(fp)) {
             DBG_PRINTF("failed to load ESNI data from file:%s\n", esni_rr_file_name);
         }
-        fclose(fp);
+        fp = picoquic_file_close(fp);
     }
 
     return ret;

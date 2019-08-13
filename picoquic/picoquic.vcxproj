@@ -169,6 +169,7 @@
     <ClInclude Include="picotlsapi.h" />
     <ClInclude Include="picoquic.h" />
     <ClInclude Include="tls_api.h" />
+    <ClInclude Include="util.h" />
     <ClInclude Include="wincompat.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

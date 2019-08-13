@@ -586,13 +586,8 @@ int picoquic_test_compare_files(char const* fname1, char const* fname2)
         }
     }
 
-    if (F1 != NULL) {
-        fclose(F1);
-    }
-
-    if (F2 != NULL) {
-        fclose(F2);
-    }
+    (void)picoquic_file_close(F1);
+    (void)picoquic_file_close(F2);
 
     return ret;
 }
@@ -638,8 +633,7 @@ int logger_test()
         }
         picoquic_log_picotls_ticket(F, logger_test_cid,
             log_test_ticket, (uint16_t) sizeof(log_test_ticket));
-        fclose(F);
-        F = NULL;
+        F = picoquic_file_close(F);
     }
 
     if (ret == 0) {
@@ -670,8 +664,7 @@ int logger_test()
         else {
             ret &= fprintf(F, "Log packet test #%d\n", (int)i);
             picoquic_log_frames(&cnx, F, 0, buffer, bytes_max);
-            fclose(F);
-            F = NULL;
+            F = picoquic_file_close(F);
         }
 
         if ((F = picoquic_file_open(log_packet_test_file, "w")) == NULL) {
@@ -696,7 +689,7 @@ int logger_test()
                     break;
                 }
             }
-            fclose(F);
+            F = picoquic_file_close(F);
         }
     }
 
@@ -720,8 +713,7 @@ int logger_test()
             skip_test_fuzz_packet(fuzz_buffer, buffer, bytes_max, &random_context);
             picoquic_log_frames(&cnx, F, 0, fuzz_buffer, bytes_max);
         }
-        fclose(F);
-        F = NULL;
+        F = picoquic_file_close(F);
     }
 
     return ret;
