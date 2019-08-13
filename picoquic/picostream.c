@@ -127,6 +127,58 @@ int picostream_read_int(picostream * s, uint64_t * value)
     }
 }
 
+int picostream_write_int8(picostream * s, uint8_t value)
+{
+    size_t max_bytes = s->size - s->ptr;
+    if (max_bytes < 1) {
+        s->ptr = s->size;
+        return -1;
+    } else {
+        s->data[s->ptr++] = value;
+        return 0;
+    }
+}
+
+int picostream_read_int8(picostream * s, uint8_t * value)
+{
+    size_t max_bytes = s->size - s->ptr;
+    if (max_bytes < 1) {
+        s->ptr = s->size;
+        return -1;
+    }
+    else {
+        *value = s->data[s->ptr++];
+        return 0;
+    }
+}
+
+int picostream_write_int16(picostream * s, uint16_t value)
+{
+    size_t max_bytes = s->size - s->ptr;
+    if (max_bytes < 2) {
+        s->ptr = s->size;
+        return -1;
+    } else {
+        picoformat_16(s->data + s->ptr, value);
+        s->ptr += 2;
+        return 0;
+    }
+}
+
+int picostream_read_int16(picostream * s, uint16_t * value)
+{
+    size_t max_bytes = s->size - s->ptr;
+    if (max_bytes < 2) {
+        s->ptr = s->size;
+        return -1;
+    }
+    else {
+        *value = (s->data[s->ptr] << 8) | s->data[s->ptr + 1];
+        s->ptr += 2;
+        return 0;
+    }
+}
+
 int picostream_write_int32(picostream * s, uint32_t value)
 {
     size_t max_bytes = s->size - s->ptr;
@@ -150,6 +202,37 @@ int picostream_read_int32(picostream * s, uint32_t * value)
     else {
         uint32_t v = 0;
         for (size_t i = 0; i < 4; i++) {
+            v <<= 8;
+            v += s->data[s->ptr++];
+        }
+        *value = v;
+        return 0;
+    }
+}
+
+int picostream_write_int64(picostream * s, uint64_t value)
+{
+    size_t max_bytes = s->size - s->ptr;
+    if (max_bytes < 8) {
+        s->ptr = s->size;
+        return -1;
+    } else {
+        picoformat_64(s->data + s->ptr, value);
+        s->ptr += 8;
+        return 0;
+    }
+}
+
+int picostream_read_int64(picostream * s, uint64_t * value)
+{
+    size_t max_bytes = s->size - s->ptr;
+    if (max_bytes < 8) {
+        s->ptr = s->size;
+        return -1;
+    }
+    else {
+        uint64_t v = 0;
+        for (size_t i = 0; i < 8; i++) {
             v <<= 8;
             v += s->data[s->ptr++];
         }

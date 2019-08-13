@@ -48,8 +48,17 @@ size_t picostream_length(picostream * s);
 void picostream_reset(picostream * s);
 int picostream_skip(picostream * s, size_t nb_bytes);
 
+int picostream_write_int8(picostream * s, uint8_t value);
+int picostream_read_int8(picostream * s, uint8_t * value);
+
+int picostream_write_int16(picostream * s, uint16_t value);
+int picostream_read_int16(picostream * s, uint16_t * value);
+
 int picostream_write_int32(picostream * s, uint32_t value);
 int picostream_read_int32(picostream * s, uint32_t * value);
+
+int picostream_write_int64(picostream * s, uint64_t value);
+int picostream_read_int64(picostream * s, uint64_t * value);
 
 int picostream_write_int(picostream * s, uint64_t value);
 int picostream_read_int(picostream * s, uint64_t * value);

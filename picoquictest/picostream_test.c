@@ -72,14 +72,15 @@ int eval_picostream_read(picostream * s, int ret, const char * fn_name)
     return ret;
 }
 
-int verify_picostream_write_int32(picostream * s)
+int verify_picostream_write_intXX(picostream * s)
 {
     int ret = 0;
-    ret |= picostream_write_int32(s, 0x00014203);
+    ret |= picostream_write_int8(s, 0x00);
+    ret |= picostream_write_int8(s, 0x01);
+    ret |= picostream_write_int16(s, 0x4203);
     ret |= picostream_write_int32(s, 0x84050607);
-    ret |= picostream_write_int32(s, 0xc8090a0b);
-    ret |= picostream_write_int32(s, 0x0c0d0e0f);
-    return eval_picostream_write(s, ret, "picostream_write_int32");
+    ret |= picostream_write_int64(s, 0xc8090a0b0c0d0e0f);
+    return eval_picostream_write(s, ret, "picostream_write_intXX");
 }
 
 int verify_picostream_write_int(picostream * s)
@@ -101,15 +102,23 @@ int verify_picostream_write_buffer(picostream * s)
     return eval_picostream_write(s, ret, "picostream_write_buffer");
 }
 
-int verify_picostream_read_int32(picostream * s)
+int verify_picostream_read_intXX(picostream * s)
 {
     int ret = 0;
-    uint32_t value = 0;
-    ret |= picostream_read_int32(s, &value) || value != 0x00014203;
-    ret |= picostream_read_int32(s, &value) || value != 0x84050607;
-    ret |= picostream_read_int32(s, &value) || value != 0xc8090a0b;
-    ret |= picostream_read_int32(s, &value) || value != 0x0c0d0e0f;
-    return eval_picostream_read(s, ret, "picostream_read_int32");
+    uint8_t val8 = 0;
+    ret |= picostream_read_int8(s, &val8) || val8 != 0x00;
+    ret |= picostream_read_int8(s, &val8) || val8 != 0x01;
+
+    uint16_t val16 = 0;
+    ret |= picostream_read_int16(s, &val16) || val16 != 0x4203;
+
+    uint32_t val32 = 0;
+    ret |= picostream_read_int32(s, &val32) || val32 != 0x84050607;
+
+    uint64_t val64 = 0;
+    ret |= picostream_read_int64(s, &val64) || val64 != 0xc8090a0b0c0d0e0f;
+
+    return eval_picostream_read(s, ret, "picostream_read_intXX");
 }
 
 int verify_picostream_read_int(picostream * s)
@@ -139,7 +148,7 @@ int verify_picostream_write(picostream * s)
 
     picostream_reset(s);
     memset(picostream_data(s), 0x00, sizeof(expected_stream0));
-    ret |= verify_picostream_write_int32(s);
+    ret |= verify_picostream_write_intXX(s);
 
     picostream_reset(s);
     memset(picostream_data(s), 0x00, sizeof(expected_stream0));
@@ -157,7 +166,7 @@ int verify_picostream_read(picostream * s)
     int ret = 0;
 
     picostream_reset(s);
-    ret |= verify_picostream_read_int32(s);
+    ret |= verify_picostream_read_intXX(s);
 
     picostream_reset(s);
     ret |= verify_picostream_read_int(s);
@@ -205,48 +214,85 @@ int verify_picostream_on_heap()
 int picostream_test_write_limits()
 {
     int ret = 0;
-    static uint8_t buf[4] = { 0x0c, 0x0d, 0x0e, 0x0f };
-    picostream * s3 = picostream_alloc(3);
-    picostream * s4 = picostream_alloc(4);
+    static uint8_t buf[8] = { 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f };
+    picostream * s9 = picostream_alloc(9);
 
-    if (picostream_write_int32(s3, 0x0c0d0e0f) == 0) {
-        DBG_PRINTF("%s", "picostream_write_int32 of 4 bytes didn't fail on 3 byte buffer\n");
+    picostream_reset(s9);
+    picostream_skip(s9, 9 - 1);
+
+    if (picostream_write_int8(s9, 0x0e) != 0) {
+        DBG_PRINTF("%s", "picostream_write_int8 failed on 9 byte buffer\n");
         ret = -1;
     }
 
-    if (picostream_write_int32(s4, 0x0c0d0e0f) != 0) {
-        DBG_PRINTF("%s", "picostream_write_int32 of 4 bytes failed on 4 byte buffer\n");
+    if (picostream_write_int8(s9, 0x0f) == 0) {
+        DBG_PRINTF("%s", "picostream_write_int8 didn't fail on 9 byte buffer\n");
         ret = -1;
     }
 
-    picostream_reset(s3);
-    picostream_reset(s4);
+    picostream_reset(s9);
+    picostream_skip(s9, 9 - 3);
 
-    if (picostream_write_int(s3, 0x0c0d0e0f) == 0) {
-        DBG_PRINTF("%s", "picostream_write_int of 4 bytes didn't fail on 3 byte buffer\n");
+    if (picostream_write_int16(s9, 0x0c0d) != 0) {
+        DBG_PRINTF("%s", "picostream_write_int16 failed on 9 byte buffer\n");
         ret = -1;
     }
 
-    if (picostream_write_int(s4, 0x0c0d0e0f) != 0) {
-        DBG_PRINTF("%s", "picostream_write_int of 4 bytes failed on 4 byte buffer\n");
+    if (picostream_write_int16(s9, 0x0e0f) == 0) {
+        DBG_PRINTF("%s", "picostream_write_int16 didn't fail on 9 byte buffer\n");
         ret = -1;
     }
 
-    picostream_reset(s3);
-    picostream_reset(s4);
+    picostream_reset(s9);
+    picostream_skip(s9, 9 - 5);
 
-    if (picostream_write_buffer(s3, buf, sizeof(buf)) == 0) {
-        DBG_PRINTF("%s", "picostream_write_buffer of 4 bytes didn't fail on 3 byte buffer\n");
+    if (picostream_write_int32(s9, 0x08090a0b) != 0) {
+        DBG_PRINTF("%s", "first picostream_write_int32 failed on 9 byte buffer\n");
         ret = -1;
     }
 
-    if (picostream_write_buffer(s4, buf, sizeof(buf)) != 0) {
-        DBG_PRINTF("%s", "picostream_write_buffer of 4 bytes failed on 4 byte buffer\n");
+    if (picostream_write_int32(s9, 0x0c0d0e0f) == 0) {
+        DBG_PRINTF("%s", "second picostream_write_int32 didn't fail on 9 byte buffer\n");
         ret = -1;
     }
 
-    picostream_delete(s3);
-    picostream_delete(s4);
+    picostream_reset(s9);
+
+    if (picostream_write_int64(s9, 0x0102030405060708) != 0) {
+        DBG_PRINTF("%s", "first picostream_write_int64 failed on 9 byte buffer\n");
+        ret = -1;
+    }
+
+    if (picostream_write_int64(s9, 0x08090a0b0c0d0e0f) == 0) {
+        DBG_PRINTF("%s", "second picostream_write_int64 didn't fail on 9 byte buffer\n");
+        ret = -1;
+    }
+
+    picostream_reset(s9);
+
+    if (picostream_write_int(s9, 0x0102030405060708) != 0) {
+        DBG_PRINTF("%s", "first picostream_write_int failed on 9 byte buffer\n");
+        ret = -1;
+    }
+
+    if (picostream_write_int(s9, 0x08090a0b0c0d0e0f) == 0) {
+        DBG_PRINTF("%s", "second picostream_write_int didn't fail on 9 byte buffer\n");
+        ret = -1;
+    }
+
+    picostream_reset(s9);
+
+    if (picostream_write_buffer(s9, buf, sizeof(buf)) != 0) {
+        DBG_PRINTF("%s", "picostream_write_buffer of 8 bytes failed on 9 byte buffer\n");
+        ret = -1;
+    }
+
+    if (picostream_write_buffer(s9, buf, sizeof(buf)) == 0) {
+        DBG_PRINTF("%s", "picostream_write_buffer of 8 bytes didn't fail on 9 byte buffer\n");
+        ret = -1;
+    }
+
+    picostream_delete(s9);
 
     return ret;
 }
