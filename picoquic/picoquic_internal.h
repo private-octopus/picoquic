@@ -1015,6 +1015,28 @@ void picoquic_log_time(FILE* F, picoquic_cnx_t* cnx, uint64_t current_time,
 
 void picoquic_set_key_log_file(picoquic_quic_t *quic, FILE* F_keylog);
 
+typedef enum {
+    picoquic_log_event_packet_sent = 0x0002,
+    picoquic_log_event_packet_recv = 0x0003,
+    picoquic_log_event_packet_dropped = 0x0004,
+
+    picoquic_log_event_new_connection = 0x0010,
+    picoquic_log_event_connection_close = 0x0011,
+    picoquic_log_event_connection_id_update = 0x0012,
+
+    picoquic_log_event_tls_key_update = 0x0020,
+    picoquic_log_event_tls_key_retired = 0x0021,
+
+    picoquic_log_event_version_update = 0x0035,
+    picoquic_log_event_param_update = 0x0036,
+    picoquic_log_event_alpn_update = 0x0037,
+    picoquic_log_event_cc_update = 0x0038,
+    picoquic_log_event_stream_update = 0x0039,
+
+    picoquic_log_event_frame_sent = 0x0082,
+    picoquic_log_event_frame_recv = 0x0083,
+} picoquic_log_event_type;
+
 /* Handling of cc_log */
 int picoquic_open_cc_dump(picoquic_cnx_t * cnx);
 void picoquic_close_cc_dump(picoquic_cnx_t * cnx);

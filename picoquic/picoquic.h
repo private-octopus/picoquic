@@ -107,8 +107,8 @@ extern "C" {
 #define PICOQUIC_RESET_PACKET_MIN_SIZE (PICOQUIC_RESET_PACKET_PAD_SIZE + PICOQUIC_RESET_SECRET_SIZE)
 
 #define PICOQUIC_LOG_PACKET_MAX_SEQUENCE 100
-#define PICOQUIC_LOG_CC_MAGIC 0x50515452 /* Hex rendering of 'PQTR' */
-#define PICOQUIC_LOG_CC_NB 15
+
+#define FOURCC(a, b, c, d) ((((uint32_t)(d)<<24) | ((c)<<16) | ((b)<<8) | (a)))
 
 /*
 * Connection states, useful to expose the state to the application.
