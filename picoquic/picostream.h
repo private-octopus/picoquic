@@ -39,7 +39,7 @@ typedef struct {
 
 picostream * picostream_init_read(picostream * s, const void * bytes, size_t nb_bytes);
 picostream * picostream_init_write(pico_writestream * s);
-picostream * picostream_alloc(size_t nb_bytes);
+picostream * picostream_alloc(picostream * s, size_t nb_bytes);
 void picostream_delete(picostream * s);
 void * picostream_data(picostream * s);
 size_t picostream_size(picostream * s);

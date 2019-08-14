@@ -196,7 +196,10 @@ int verify_picostream_on_heap()
 {
     int ret = 0;
 
-    picostream * s = picostream_alloc(sizeof(expected_stream0));
+    picostream stream;
+    picostream * s = picostream_alloc(&stream, sizeof(expected_stream0));
+
+    picostream_reset(s);
     ret |= verify_picostream_write(s);
 
     picostream_reset(s);
@@ -215,7 +218,9 @@ int picostream_test_write_limits()
 {
     int ret = 0;
     static uint8_t buf[8] = { 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f };
-    picostream * s9 = picostream_alloc(9);
+
+    picostream stream;
+    picostream * s9 = picostream_alloc(&stream, 9);
 
     picostream_reset(s9);
     picostream_skip(s9, 9 - 1);

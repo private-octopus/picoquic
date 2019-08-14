@@ -43,13 +43,8 @@ picostream * picostream_init_write(pico_writestream * s)
     return &s->s;
 }
 
-picostream * picostream_alloc(size_t nb_bytes)
+picostream * picostream_alloc(picostream * s, size_t nb_bytes)
 {
-    picostream* s = (picostream*)malloc(sizeof(picostream));
-    if (s == NULL) {
-        return NULL;
-    }
-
     s->data = (uint8_t*)malloc(nb_bytes);
     if (s->data == NULL) {
         free(s);
@@ -63,11 +58,9 @@ picostream * picostream_alloc(size_t nb_bytes)
 
 void picostream_delete(picostream * s)
 {
-    if (s != NULL) {
-        if (s->data != NULL) {
-            free(s->data);
-        }
-        free(s);
+    if (s->data != NULL) {
+        free(s->data);
+        s->data = NULL;
     }
 }
 
