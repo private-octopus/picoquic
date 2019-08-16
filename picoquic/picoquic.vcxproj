@@ -141,6 +141,7 @@
     <Text Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="bytestream.c" />
     <ClCompile Include="cubic.c" />
     <ClCompile Include="fnv1a.c" />
     <ClCompile Include="frames.c" />
@@ -149,7 +150,6 @@
     <ClCompile Include="newreno.c" />
     <ClCompile Include="picosocks.c" />
     <ClCompile Include="picosplay.c" />
-    <ClCompile Include="picostream.c" />
     <ClCompile Include="quicctx.c" />
     <ClCompile Include="packet.c" />
     <ClCompile Include="picohash.c" />
@@ -163,6 +163,7 @@
     <ClCompile Include="util.c" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="bytestream.h" />
     <ClInclude Include="democlient.h" />
     <ClInclude Include="demoserver.h" />
     <ClInclude Include="fnv1a.h" />
@@ -171,7 +172,6 @@
     <ClInclude Include="picoquic_internal.h" />
     <ClInclude Include="picosocks.h" />
     <ClInclude Include="picosplay.h" />
-    <ClInclude Include="picostream.h" />
     <ClInclude Include="picotlsapi.h" />
     <ClInclude Include="picoquic.h" />
     <ClInclude Include="tls_api.h" />

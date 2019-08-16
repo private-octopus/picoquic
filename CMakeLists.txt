@@ -14,6 +14,7 @@ if(DISABLE_DEBUG_PRINTF)
 endif()
 
 set(PICOQUIC_LIBRARY_FILES
+    picoquic/bytestream.c
     picoquic/cubic.c
     picoquic/fnv1a.c
     picoquic/frames.c
@@ -24,7 +25,6 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/picohash.c
     picoquic/picosocks.c
     picoquic/picosplay.c
-    picoquic/picostream.c
     picoquic/quicctx.c
     picoquic/sacks.c
     picoquic/sender.c
@@ -38,13 +38,13 @@ set(PICOQUIC_LIBRARY_FILES
 
 set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/ack_of_ack_test.c
+    picoquictest/bytestream_test.c
     picoquictest/cleartext_aead_test.c
     picoquictest/cnx_creation_test.c
     picoquictest/fnv1atest.c
     picoquictest/hashtest.c
     picoquictest/intformattest.c
     picoquictest/parseheadertest.c
-    picoquictest/picostream_test.c
     picoquictest/pn2pn64test.c
     picoquictest/sacktest.c
     picoquictest/skip_frame_test.c

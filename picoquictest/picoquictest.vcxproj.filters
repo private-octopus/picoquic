@@ -81,7 +81,7 @@
     <ClCompile Include="util_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="picostream_test.c">
+    <ClCompile Include="bytestream_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

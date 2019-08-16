@@ -30,40 +30,40 @@ typedef struct {
     uint8_t * data;
     size_t size;
     size_t ptr;
-} picostream;
+} bytestream;
 
 typedef struct {
-    picostream s;
+    bytestream s;
     uint8_t buf[PICOSTREAM_MAX_BUFFER_SIZE];
-} pico_writestream;
+} bytestream_buf;
 
-picostream * picostream_init_read(picostream * s, const void * bytes, size_t nb_bytes);
-picostream * picostream_init_write(pico_writestream * s);
-picostream * picostream_alloc(picostream * s, size_t nb_bytes);
-void picostream_delete(picostream * s);
-void * picostream_data(picostream * s);
-size_t picostream_size(picostream * s);
-size_t picostream_length(picostream * s);
+bytestream * bytereader_init(bytestream * s, const void * bytes, size_t nb_bytes);
+bytestream * bytewriter_init(bytestream_buf * s);
+bytestream * bytestream_alloc(bytestream * s, size_t nb_bytes);
+void bytestream_delete(bytestream * s);
+void * bytestream_data(bytestream * s);
+size_t bytestream_size(bytestream * s);
+size_t bytestream_length(bytestream * s);
 
-void picostream_reset(picostream * s);
-int picostream_skip(picostream * s, size_t nb_bytes);
+void bytestream_reset(bytestream * s);
+int bytestream_skip(bytestream * s, size_t nb_bytes);
 
-int picostream_write_int8(picostream * s, uint8_t value);
-int picostream_read_int8(picostream * s, uint8_t * value);
+int bytewrite_int8(bytestream * s, uint8_t value);
+int byteread_int8(bytestream * s, uint8_t * value);
 
-int picostream_write_int16(picostream * s, uint16_t value);
-int picostream_read_int16(picostream * s, uint16_t * value);
+int bytewrite_int16(bytestream * s, uint16_t value);
+int byteread_int16(bytestream * s, uint16_t * value);
 
-int picostream_write_int32(picostream * s, uint32_t value);
-int picostream_read_int32(picostream * s, uint32_t * value);
+int bytewrite_int32(bytestream * s, uint32_t value);
+int byteread_int32(bytestream * s, uint32_t * value);
 
-int picostream_write_int64(picostream * s, uint64_t value);
-int picostream_read_int64(picostream * s, uint64_t * value);
+int bytewrite_int64(bytestream * s, uint64_t value);
+int byteread_int64(bytestream * s, uint64_t * value);
 
-int picostream_write_int(picostream * s, uint64_t value);
-int picostream_read_int(picostream * s, uint64_t * value);
+int bytewrite_vint(bytestream * s, uint64_t value);
+int byteread_vint(bytestream * s, uint64_t * value);
 
-int picostream_write_buffer(picostream * s, const void * buffer, size_t length);
-int picostream_read_buffer(picostream * s, void * buffer, size_t length);
+int bytewrite_buffer(bytestream * s, const void * buffer, size_t length);
+int byteread_buffer(bytestream * s, void * buffer, size_t length);
 
 #endif /* PICOQUIC_PICOSTREAM_H */
