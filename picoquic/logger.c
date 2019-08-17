@@ -1879,17 +1879,27 @@ void picoquic_cc_dump(picoquic_cnx_t * cnx, uint64_t current_time)
 
     bytestream_buf stream_msg;
     bytestream * ps_msg = bytewriter_init(&stream_msg);
+    picoquic_packet_context_t * pkt_ctx = &cnx->pkt_ctx[picoquic_packet_context_application];
+    picoquic_path_t * path = cnx->path[0];
 
     bytewrite_vint(ps_msg, current_time - cnx->start_time);
     bytewrite_vint(ps_msg, cnx->pkt_ctx[picoquic_packet_context_application].send_sequence);
-    bytewrite_vint(ps_msg, cnx->pkt_ctx[picoquic_packet_context_application].highest_acknowledged);
-    bytewrite_vint(ps_msg, cnx->pkt_ctx[picoquic_packet_context_application].highest_acknowledged_time - cnx->start_time);
-    bytewrite_vint(ps_msg, cnx->pkt_ctx[picoquic_packet_context_application].latest_time_acknowledged - cnx->start_time);
-    bytewrite_vint(ps_msg, cnx->path[0]->cwin);
-    bytewrite_vint(ps_msg, cnx->path[0]->smoothed_rtt);
-    bytewrite_vint(ps_msg, cnx->path[0]->rtt_min);
-    bytewrite_vint(ps_msg, cnx->path[0]->send_mtu);
-    bytewrite_vint(ps_msg, cnx->path[0]->pacing_packet_time_microsec);
+
+    if (pkt_ctx->highest_acknowledged != (uint64_t)(int64_t)-1) {
+        bytewrite_vint(ps_msg, 1);
+        bytewrite_vint(ps_msg, pkt_ctx->highest_acknowledged);
+        bytewrite_vint(ps_msg, pkt_ctx->highest_acknowledged_time - cnx->start_time);
+        bytewrite_vint(ps_msg, pkt_ctx->latest_time_acknowledged - cnx->start_time);
+    }
+    else {
+        bytewrite_vint(ps_msg, 0);
+    }
+
+    bytewrite_vint(ps_msg, path->cwin);
+    bytewrite_vint(ps_msg, path->smoothed_rtt);
+    bytewrite_vint(ps_msg, path->rtt_min);
+    bytewrite_vint(ps_msg, path->send_mtu);
+    bytewrite_vint(ps_msg, path->pacing_packet_time_microsec);
     bytewrite_vint(ps_msg, cnx->nb_retransmission_total);
     bytewrite_vint(ps_msg, cnx->nb_spurious);
     bytewrite_vint(ps_msg, cnx->cwin_blocked);
@@ -2004,13 +2014,48 @@ int picoquic_cc_log_file_to_csv(char const * bin_cc_log_name, char const * csv_c
                     ret = -1;
                 }
                 else {
-                    for (int i = 0; i < 15; i++) {
-                        uint64_t val = 0;
-                        ret |= byteread_vint(ps_msg, &val);
-                        if (fprintf(csv_log, "%" PRIu64 ", ", val) <= 0) {
-                            ret = -1;
-                            break;
-                        }
+                    uint64_t time = 0;
+                    uint64_t sequence = 0;
+                    uint64_t packet_rcvd = 0;
+                    uint64_t highest_ack = (uint64_t)(int64_t)-1;
+                    uint64_t high_ack_time = 0;
+                    uint64_t last_time_ack = 0;
+                    uint64_t cwin = 0;
+                    uint64_t SRTT = 0;
+                    uint64_t RTT_min = 0;
+                    uint64_t Send_MTU = 0;
+                    uint64_t pacing_packet_time = 0;
+                    uint64_t nb_retrans = 0;
+                    uint64_t nb_spurious = 0;
+                    uint64_t cwin_blkd = 0;
+                    uint64_t flow_blkd = 0;
+                    uint64_t stream_blkd = 0;
+
+                    ret |= byteread_vint(ps_msg, &time);
+                    ret |= byteread_vint(ps_msg, &sequence);
+                    ret |= byteread_vint(ps_msg, &packet_rcvd);
+                    if (packet_rcvd != 0) {
+                        ret |= byteread_vint(ps_msg, &highest_ack);
+                        ret |= byteread_vint(ps_msg, &high_ack_time);
+                        ret |= byteread_vint(ps_msg, &last_time_ack);
+                    }
+                    ret |= byteread_vint(ps_msg, &cwin);
+                    ret |= byteread_vint(ps_msg, &SRTT);
+                    ret |= byteread_vint(ps_msg, &RTT_min);
+                    ret |= byteread_vint(ps_msg, &Send_MTU);
+                    ret |= byteread_vint(ps_msg, &pacing_packet_time);
+                    ret |= byteread_vint(ps_msg, &nb_retrans);
+                    ret |= byteread_vint(ps_msg, &nb_spurious);
+                    ret |= byteread_vint(ps_msg, &cwin_blkd);
+                    ret |= byteread_vint(ps_msg, &flow_blkd);
+                    ret |= byteread_vint(ps_msg, &stream_blkd);
+
+                    if (fprintf(csv_log, "%" PRIu64 ", %" PRIu64 ", %" PRId64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", ",
+                        time, sequence, (int64_t)highest_ack, high_ack_time, last_time_ack,
+                        cwin, SRTT, RTT_min, Send_MTU, pacing_packet_time,
+                        nb_retrans, nb_spurious, cwin_blkd, flow_blkd, stream_blkd) <= 0) {
+                        ret = -1;
+                        break;
                     }
                     if (ret == 0) {
                         if (fprintf(csv_log, "\n") <= 0) {
