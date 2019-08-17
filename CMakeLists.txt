@@ -39,7 +39,6 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/ack_of_ack_test.c
     picoquictest/cleartext_aead_test.c
     picoquictest/cnx_creation_test.c
-    picoquictest/float16test.c
     picoquictest/fnv1atest.c
     picoquictest/hashtest.c
     picoquictest/intformattest.c

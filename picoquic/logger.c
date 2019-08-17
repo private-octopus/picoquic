@@ -1809,16 +1809,16 @@ void picoquic_log_picotls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
  * the master context specifies the directory where to log the file.
  */
 
-void picoquic_open_cc_dump(picoquic_cnx_t * cnx)
+int picoquic_open_cc_dump(picoquic_cnx_t * cnx)
 {
     if (cnx->cc_log != NULL) {
         DBG_PRINTF("%s", "CC LOG File is already open!\n");
-        return;
+        return -1;
     }
 
     if (cnx->quic->cc_log_dir == NULL) {
         DBG_PRINTF("%s", "CC LOG directory not set!\n");
-        return;
+        return -1;
     }
 
     char cc_log_file_name[512];
@@ -1846,19 +1846,17 @@ void picoquic_open_cc_dump(picoquic_cnx_t * cnx)
 
             if (fwrite(header, 3 * sizeof(uint32_t), 1, cnx->cc_log) <= 0) {
                 DBG_PRINTF("Cannot write header for file %s.\n", cc_log_file_name);
-                fclose(cnx->cc_log);
-                cnx->cc_log = NULL;
+                cnx->cc_log = picoquic_file_close(cnx->cc_log);
             }
         }
     }
+
+    return ret;
 }
 
 void picoquic_close_cc_dump(picoquic_cnx_t * cnx)
 {
-    if (cnx->cc_log != NULL) {
-        (void) fclose(cnx->cc_log);
-        cnx->cc_log = NULL;
-    }
+    cnx->cc_log = picoquic_file_close(cnx->cc_log);
 }
 
 /*
@@ -1910,6 +1908,10 @@ FILE * picoquic_open_cc_log_file_for_read(char const * bin_cc_log_name, int * is
 {
     int ret = 0;
     FILE * bin_log = picoquic_file_open(bin_cc_log_name, "rb");
+    if (bin_log == NULL) {
+        DBG_PRINTF("Cannot open CC file %s.\n", bin_cc_log_name);
+        ret = -1;
+    }
 
     *nb_numbers_in_line = 0;
     *is_wrong_endian = 0;
@@ -1937,12 +1939,11 @@ FILE * picoquic_open_cc_log_file_for_read(char const * bin_cc_log_name, int * is
         }
 
         if (ret != 0) {
-            fclose(bin_log);
-            bin_log = NULL;
+            bin_log = picoquic_file_close(bin_log);
         }
     }
 
-    return (bin_log);
+    return bin_log;
 }
 
 int picoquic_cc_log_file_to_csv(char const * bin_cc_log_name, char const * csv_cc_log_name)
@@ -2016,13 +2017,8 @@ int picoquic_cc_log_file_to_csv(char const * bin_cc_log_name, char const * csv_c
         }
     }
 
-    if (csv_log != NULL) {
-        fclose(csv_log);
-    }
-
-    if (bin_log != NULL) {
-        fclose(bin_log);
-    }
+    (void)picoquic_file_close(csv_log);
+    (void)picoquic_file_close(bin_log);
 
     return ret;
 }

@@ -1294,8 +1294,8 @@ int main(int argc, char** argv)
         printf("Client exit with code = %d\n", ret);
     }
 
-    if (F_log != NULL && F_log != stdout) {
-        fclose(F_log);
+    if (F_log != stdout) {
+        F_log = picoquic_file_close(F_log);
     }
 
     if (cnx_id_cbdata != NULL) {

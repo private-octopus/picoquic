@@ -1013,7 +1013,7 @@ void picoquic_log_time(FILE* F, picoquic_cnx_t* cnx, uint64_t current_time,
 void picoquic_set_key_log_file(picoquic_quic_t *quic, FILE* F_keylog);
 
 /* Handling of cc_log */
-void picoquic_open_cc_dump(picoquic_cnx_t * cnx);
+int picoquic_open_cc_dump(picoquic_cnx_t * cnx);
 void picoquic_close_cc_dump(picoquic_cnx_t * cnx);
 void picoquic_cc_dump(picoquic_cnx_t * cnx, uint64_t current_time); 
 int picoquic_cc_log_file_to_csv(char const * bin_cc_log_name, char const * csv_cc_log_name);
@@ -1025,8 +1025,6 @@ int picoquic_is_pn_already_received(picoquic_cnx_t* cnx,
     picoquic_packet_context_enum pc, uint64_t pn64);
 int picoquic_record_pn_received(picoquic_cnx_t* cnx,
     picoquic_packet_context_enum pc, uint64_t pn64, uint64_t current_microsec);
-uint16_t picoquic_deltat_to_float16(uint64_t delta_t);
-uint64_t picoquic_float16_to_deltat(uint16_t float16);
 
 int picoquic_update_sack_list(picoquic_sack_item_t* sack,
     uint64_t pn64_min, uint64_t pn64_max);
