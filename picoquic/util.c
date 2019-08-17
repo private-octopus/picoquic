@@ -182,7 +182,7 @@ int picoquic_sprintf(char* buf, size_t buf_len, size_t * nb_chars, const char* f
 
     // vsnprintf returns <0 for errors and >=0 for nb of characters required.
     // We return 0 when printing was successful.
-    return res >= 0 ? (res >= buf_len) : res;
+    return res >= 0 ? ((size_t)res >= buf_len) : res;
 }
 
 int picoquic_print_connection_id_hexa(char* buf, size_t buf_len, const picoquic_connection_id_t * cnxid)
