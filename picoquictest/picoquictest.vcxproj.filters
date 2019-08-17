@@ -36,9 +36,6 @@
     <ClCompile Include="sacktest.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="float16test.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="tls_api_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>

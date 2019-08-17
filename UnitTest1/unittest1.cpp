@@ -118,13 +118,6 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(test_float16)
-        {
-            int ret = float16test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
         TEST_METHOD(test_varints)
         {
             int ret = varint_test();
