@@ -1080,7 +1080,7 @@ size_t picoquic_log_new_token_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
     } else {
         byte_index += l_toklen;
         fprintf(F, "    NEW TOKEN[%d]: 0x", (int)toklen);
-        for (int x = 0; x < toklen && x < 16; x++) {
+        for (uint64_t x = 0; x < toklen && x < 16u; x++) {
             fprintf(F, "%02x", bytes[byte_index + x]);
         }
         byte_index += (size_t)toklen;
