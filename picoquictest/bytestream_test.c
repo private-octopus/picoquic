@@ -217,7 +217,7 @@ int verify_picostream_on_heap()
 int picostream_test_write_limits()
 {
     int ret = 0;
-    static uint8_t buf[8] = { 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f };
+    const static uint8_t buf[8] = { 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f };
 
     bytestream stream;
     bytestream * s9 = bytestream_alloc(&stream, 9);
@@ -307,51 +307,93 @@ int picostream_test_write_limits()
  */
 int picostream_test_read_limits()
 {
-    static const uint8_t buf[4] = { 0x8c, 0x0d, 0x0e, 0x0f };
-    uint8_t tmp[4];
-
-    bytestream stream3;
-    bytestream stream4;
-    bytestream * s3 = bytereader_init(&stream3, buf, 3);
-    bytestream * s4 = bytereader_init(&stream4, buf, 4);
-
     int ret = 0;
+    
+    uint8_t i8;
+    uint16_t i16;
+    uint32_t i32;
+    uint64_t i64;
+    uint8_t buf[8];
+    
+    const static uint8_t buf9[9] = {
+        0xc8, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0xc8
+    };
 
-    uint32_t value32 = 0;
-    if (byteread_int32(s3, &value32) == 0) {
-        DBG_PRINTF("%s", "byteread_int32 of 4 bytes didn't fail on 3 byte buffer\n");
+    bytestream stream;
+    bytestream * s9 = bytereader_init(&stream, buf9, 9);
+
+    bytestream_reset(s9);
+    bytestream_skip(s9, 9 - 1);
+
+    if (byteread_int8(s9, &i8) != 0) {
+        DBG_PRINTF("%s", "byteread_int8 failed on 9 byte buffer\n");
         ret = -1;
     }
 
-    if (byteread_int32(s4, &value32) != 0) {
-        DBG_PRINTF("%s", "byteread_int32 of 4 bytes failed on 4 byte buffer\n");
+    if (byteread_int8(s9, &i8) == 0) {
+        DBG_PRINTF("%s", "byteread_int8 didn't fail on 9 byte buffer\n");
         ret = -1;
     }
 
-    bytestream_reset(s3);
-    bytestream_reset(s4);
+    bytestream_reset(s9);
+    bytestream_skip(s9, 9 - 3);
 
-    uint64_t value64 = 0;
-    if (byteread_vint(s3, &value64) == 0) {
-        DBG_PRINTF("%s", "byteread_vint of 4 bytes didn't fail on 3 byte buffer\n");
+    if (byteread_int16(s9, &i16) != 0) {
+        DBG_PRINTF("%s", "byteread_int16 failed on 9 byte buffer\n");
         ret = -1;
     }
 
-    if (byteread_vint(s4, &value64) != 0) {
-        DBG_PRINTF("%s", "byteread_vint of 4 bytes failed on 4 byte buffer\n");
+    if (byteread_int16(s9, &i16) == 0) {
+        DBG_PRINTF("%s", "byteread_int16 didn't fail on 9 byte buffer\n");
         ret = -1;
     }
 
-    bytestream_reset(s3);
-    bytestream_reset(s4);
+    bytestream_reset(s9);
+    bytestream_skip(s9, 9 - 5);
 
-    if (byteread_buffer(s3, tmp, sizeof(tmp)) == 0) {
-        DBG_PRINTF("%s", "byteread_buffer of 4 bytes didn't fail on 3 byte buffer\n");
+    if (byteread_int32(s9, &i32) != 0) {
+        DBG_PRINTF("%s", "first byteread_int32 failed on 9 byte buffer\n");
         ret = -1;
     }
 
-    if (byteread_buffer(s4, tmp, sizeof(tmp)) != 0) {
-        DBG_PRINTF("%s", "byteread_buffer of 4 bytes failed on 4 byte buffer\n");
+    if (byteread_int32(s9, &i32) == 0) {
+        DBG_PRINTF("%s", "second byteread_int32 didn't fail on 9 byte buffer\n");
+        ret = -1;
+    }
+
+    bytestream_reset(s9);
+
+    if (byteread_int64(s9, &i64) != 0) {
+        DBG_PRINTF("%s", "first byteread_int64 failed on 9 byte buffer\n");
+        ret = -1;
+    }
+
+    if (byteread_int64(s9, &i64) == 0) {
+        DBG_PRINTF("%s", "second byteread_int64 didn't fail on 9 byte buffer\n");
+        ret = -1;
+    }
+
+    bytestream_reset(s9);
+
+    if (byteread_vint(s9, &i64) != 0) {
+        DBG_PRINTF("%s", "first byteread_vint failed on 9 byte buffer\n");
+        ret = -1;
+    }
+
+    if (byteread_vint(s9, &i64) == 0) {
+        DBG_PRINTF("%s", "second byteread_vint didn't fail on 9 byte buffer\n");
+        ret = -1;
+    }
+
+    bytestream_reset(s9);
+
+    if (byteread_buffer(s9, buf, sizeof(buf)) != 0) {
+        DBG_PRINTF("%s", "byteread_buffer of 8 bytes failed on 9 byte buffer\n");
+        ret = -1;
+    }
+
+    if (byteread_buffer(s9, buf, sizeof(buf)) == 0) {
+        DBG_PRINTF("%s", "byteread_buffer of 8 bytes didn't fail on 9 byte buffer\n");
         ret = -1;
     }
 
