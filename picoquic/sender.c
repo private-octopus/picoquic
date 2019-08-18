@@ -2044,12 +2044,12 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                     /* On a server that does address validation, send a NEW TOKEN frame */
                     if (cnx->client_mode == 0 && (cnx->quic->flags&picoquic_context_check_token) != 0) {
                         uint8_t token_buffer[256];
-                        uint32_t token_size;
+                        size_t token_size;
                         picoquic_connection_id_t n_cid = picoquic_null_connection_id;
 
                         if (picoquic_prepare_retry_token(cnx->quic, (struct sockaddr *)&cnx->path[0]->peer_addr,
                             current_time + PICOQUIC_TOKEN_DELAY_LONG, &n_cid, 
-                            token_buffer, (uint32_t) sizeof(token_buffer), &token_size) == 0) {
+                            token_buffer, sizeof(token_buffer), &token_size) == 0) {
                             if (picoquic_queue_new_token_frame(cnx, token_buffer, token_size) != 0) {
                                 picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, picoquic_frame_type_new_token);
                             }
