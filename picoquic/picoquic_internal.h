@@ -495,7 +495,7 @@ typedef struct st_picoquic_path_t {
     struct st_picoquic_cnx_id_key_t* first_cnx_id;
     struct st_picoquic_net_id_key_t* first_net_id;
 
-    int path_sequence;
+    uint64_t path_sequence;
     uint64_t remote_cnxid_sequence;
 
     /* Peer address. */
@@ -800,7 +800,7 @@ typedef struct st_picoquic_cnx_t {
     picoquic_path_t ** path;
     int nb_paths;
     int nb_path_alloc;
-    int path_sequence_next;
+    uint64_t path_sequence_next;
     /* Management of the CNX-ID stash */
     uint64_t retire_cnxid_before;
     picoquic_cnxid_stash_t * cnxid_stash_first;
