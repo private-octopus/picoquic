@@ -24,6 +24,7 @@
 #include <string.h>
 #include "picoquic_internal.h"
 #include "tls_api.h"
+#include "bytestream.h"
 
 /* ****************************************************
  * Frames private declarations
@@ -1832,49 +1833,31 @@ int picoquic_parse_ack_header(uint8_t const* bytes, size_t bytes_max,
     uint64_t* largest, uint64_t* ack_delay, size_t* consumed,
     uint8_t ack_delay_exponent)
 {
+    bytestream stream;
+    bytestream * s = bytereader_init(&stream, bytes, bytes_max);
+
     int ret = 0;
-    size_t byte_index = 1;
-    size_t l_largest = 0;
-    size_t l_delay = 0;
-    size_t l_blocks = 0;
+    ret |= bytestream_skip(s, 1);
+    ret |= byteread_vint(s, largest);
+    ret |= byteread_vint(s, ack_delay);
 
-    if (bytes_max > byte_index) {
-        l_largest = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, largest);
-        byte_index += l_largest;
-    }
-
-    if (bytes_max > byte_index) {
-        l_delay = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, ack_delay);
-        *ack_delay <<= ack_delay_exponent;
-        byte_index += l_delay;
-    }
+    *ack_delay <<= ack_delay_exponent;
 
     if (nb_ecnx3 != NULL) {
         for (int ecnx = 0; ecnx < 3; ecnx++) {
-            size_t l_ecnx = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &nb_ecnx3[ecnx]);
-
-            if (l_ecnx == 0) {
-                byte_index = bytes_max;
-            }
-            else {
-                byte_index += l_ecnx;
-            }
+            ret |= byteread_vint(s, & nb_ecnx3[ecnx]);
         }
     }
 
-    if (bytes_max > byte_index) {
-        l_blocks = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, num_block);
-        byte_index += l_blocks;
-    }
+    ret |= byteread_vint(s, num_block);
 
-    if (l_largest == 0 || l_delay == 0 || l_blocks == 0 || bytes_max < byte_index) {
+    if (ret != 0) {
         DBG_PRINTF("ack frame fixed header too large: first_byte=0x%02x, bytes_max=%" PRIst,
             bytes[0], bytes_max);
-        byte_index = bytes_max;
         ret = -1;
     }
 
-    *consumed = byte_index;
+    *consumed = bytestream_length(s);
     return ret;
 }
 
