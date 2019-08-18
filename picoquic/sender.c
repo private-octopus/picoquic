@@ -427,7 +427,7 @@ size_t picoquic_create_packet_header(
         }
         /* Special case of packet initial -- encode token as part of header */
         if (packet_type == picoquic_packet_initial) {
-            length += (uint32_t)picoquic_varint_encode(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, cnx->retry_token_length);
+            length += picoquic_varint_encode(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, cnx->retry_token_length);
             if (cnx->retry_token_length > 0) {
                 memcpy(&bytes[length], cnx->retry_token, cnx->retry_token_length);
                 length += cnx->retry_token_length;
@@ -566,7 +566,7 @@ size_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     }
 
     /* Encrypt the packet */
-    send_length = (uint32_t)picoquic_aead_encrypt_generic(send_buffer + /* header_length */ h_length,
+    send_length = picoquic_aead_encrypt_generic(send_buffer + /* header_length */ h_length,
         bytes + header_length, length - header_length,
         sequence_number, send_buffer, /* header_length */ h_length, aead_context);
 
@@ -998,7 +998,7 @@ int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
         if (old_p->send_path != NULL) {
             /* MTU probe was lost, presumably because of packet too big */
             old_p->send_path->mtu_probe_sent = 0;
-            old_p->send_path->send_mtu_max_tried = (uint32_t)(old_p->length + old_p->checksum_overhead);
+            old_p->send_path->send_mtu_max_tried = old_p->length + old_p->checksum_overhead;
         }
         /* MTU probes should not be retransmitted */
         *packet_is_pure_ack = 1;
@@ -1036,7 +1036,7 @@ int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
                         overflow, sizeof(overflow), &overflow_length);
 
                     if (ret == 0) {
-                        *length += (uint32_t)copied_length;
+                        *length += copied_length;
                         if (overflow_length > 0) {
                             ret = picoquic_queue_misc_frame(cnx, overflow, overflow_length);
                         }
@@ -1049,7 +1049,7 @@ int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
                     }
                     else {
                         memcpy(&new_bytes[*length], &old_p->bytes[byte_index], frame_length);
-                        *length += (uint32_t)frame_length;
+                        *length += frame_length;
                     }
                 }
                 *packet_is_pure_ack = 0;
@@ -1385,7 +1385,6 @@ size_t picoquic_prepare_mtu_probe(picoquic_cnx_t* cnx,
     size_t length = header_length;
 
     bytes[length++] = picoquic_frame_type_ping;
-    bytes[length++] = 0;
     memset(&bytes[length], 0, probe_length - checksum_length - length);
 
     return probe_length - checksum_length;
@@ -1435,7 +1434,7 @@ int picoquic_prepare_packet_0rtt(picoquic_cnx_t* cnx, picoquic_path_t * path_x, 
                 send_buffer_max - checksum_overhead - length, &data_bytes);
 
             if (ret == 0) {
-                length += (uint32_t)data_bytes;
+                length += data_bytes;
             } else {
                 break;
             }
@@ -1448,7 +1447,7 @@ int picoquic_prepare_packet_0rtt(picoquic_cnx_t* cnx, picoquic_path_t * path_x, 
                 send_buffer_max - checksum_overhead - length, &data_bytes, &is_still_active);
 
             if (ret == 0) {
-                length += (uint32_t)data_bytes;
+                length += data_bytes;
 
                 if (send_buffer_max > checksum_overhead + length + 8) {
                     stream = picoquic_find_ready_stream(cnx);
@@ -1465,13 +1464,13 @@ int picoquic_prepare_packet_0rtt(picoquic_cnx_t* cnx, picoquic_path_t * path_x, 
 
         /* Add padding if required */
         if (padding_required) {
-            length = picoquic_pad_to_target_length(bytes, length, (uint32_t)(send_buffer_max - checksum_overhead));
+            length = picoquic_pad_to_target_length(bytes, length, send_buffer_max - checksum_overhead);
         }
     }
 
     picoquic_finalize_and_protect_packet(cnx, packet,
         ret, length, header_length, checksum_overhead,
-        send_length, send_buffer, (uint32_t)send_buffer_max,
+        send_length, send_buffer, send_buffer_max,
         &cnx->initial_cnxid,
         &path_x->local_cnxid,
         path_x, current_time);
@@ -1549,7 +1548,7 @@ size_t picoquic_prepare_packet_old_context(picoquic_cnx_t* cnx, picoquic_packet_
             if (picoquic_prepare_ack_frame(cnx, current_time, pc, &packet->bytes[length],
                 send_buffer_max - checksum_overhead - length, &data_bytes)
                 == 0) {
-                length += (uint32_t)data_bytes;
+                length += data_bytes;
             }
         }
         packet->length = length;
@@ -1741,7 +1740,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                 ret = picoquic_prepare_ack_frame(cnx, current_time, pc, &bytes[length],
                     send_buffer_max - checksum_overhead - length, &data_bytes);
                 if (ret == 0) {
-                    length += (uint32_t)data_bytes;
+                    length += data_bytes;
                 }
                 else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
                     ret = 0;
@@ -1784,7 +1783,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                         ret = picoquic_prepare_ack_frame(cnx, current_time, pc, &bytes[length],
                             send_buffer_max - checksum_overhead - length, &data_bytes);
                         if (ret == 0) {
-                            length += (uint32_t)data_bytes;
+                            length += data_bytes;
                             data_bytes = 0;
                         }
                         else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
@@ -1798,7 +1797,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                         ret = picoquic_prepare_path_response_frame(&bytes[length],
                             send_buffer_max - checksum_overhead - length, &data_bytes, path_x->challenge_response);
                         if (ret == 0) {
-                            length += (uint32_t)data_bytes;
+                            length += data_bytes;
                             path_x->response_required = 0;
                         }
                         else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
@@ -1812,7 +1811,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                         ret = picoquic_prepare_first_misc_frame(cnx, &bytes[length],
                             send_buffer_max - checksum_overhead - length, &data_bytes);
                         if (ret == 0) {
-                            length += (uint32_t)data_bytes;
+                            length += data_bytes;
                             data_bytes = 0;
                         }
                         else {
@@ -1832,7 +1831,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                                 send_buffer_max - checksum_overhead - length, &data_bytes);
 
                             if (ret == 0) {
-                                length += (uint32_t)data_bytes;
+                                length += data_bytes;
                             }
                             else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
                                 ret = 0;
@@ -1895,7 +1894,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
     else {
         picoquic_finalize_and_protect_packet(cnx, packet,
             ret, length, header_length, checksum_overhead,
-            send_length, send_buffer, (uint32_t)send_buffer_max,
+            send_length, send_buffer, send_buffer_max,
             &path_x->remote_cnxid, &path_x->local_cnxid, path_x, current_time);
     }
 
@@ -1971,7 +1970,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                     if (picoquic_prepare_path_challenge_frame(&bytes[length],
                         send_buffer_max - checksum_overhead - length, &data_bytes,
                         path_x->challenge[path_x->challenge_repeat_count]) == 0) {
-                        length += (uint32_t)data_bytes;
+                        length += data_bytes;
                         path_x->challenge_time = current_time;
                         path_x->challenge_repeat_count++;
 
@@ -1979,7 +1978,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                         if (picoquic_prepare_ack_frame(cnx, current_time, pc, &bytes[length],
                             send_buffer_max - checksum_overhead - length, &data_bytes)
                             == 0) {
-                            length += (uint32_t)data_bytes;
+                            length += data_bytes;
                         }
 
                         packet->length = length;
@@ -2012,7 +2011,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             if (picoquic_prepare_ack_frame(cnx, current_time, pc, &bytes[length],
                 send_buffer_max - checksum_overhead - length, &data_bytes)
                 == 0) {
-                length += (uint32_t)data_bytes;
+                length += data_bytes;
                 data_bytes = 0;
             }
 
@@ -2020,7 +2019,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             if (path_x->response_required) {
                 if (picoquic_prepare_path_response_frame(&bytes[length],
                     send_buffer_max - checksum_overhead - length, &data_bytes, path_x->challenge_response) == 0) {
-                    length += (uint32_t)data_bytes;
+                    length += data_bytes;
                     path_x->response_required = 0;
                 }
             }
@@ -2029,7 +2028,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             ret = picoquic_prepare_crypto_hs_frame(cnx, epoch, &bytes[length],
                 send_buffer_max - checksum_overhead - length, &data_bytes);
             if (ret == 0) {
-                length += (uint32_t)data_bytes;
+                length += data_bytes;
             }
             else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
                 /* todo: reset offset to previous position? */
@@ -2077,7 +2076,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             ret = picoquic_prepare_ack_frame(cnx, current_time, pc, &bytes[length],
                 send_buffer_max - checksum_overhead - length, &data_bytes);
             if (ret == 0) {
-                length += (uint32_t)data_bytes;
+                length += data_bytes;
                 packet->length = length;
             }
             else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
@@ -2095,7 +2094,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             ret = picoquic_prepare_ack_frame(cnx, current_time, pc, &bytes[length],
                 send_buffer_max - checksum_overhead - length, &data_bytes);
             if (ret == 0) {
-                length += (uint32_t)data_bytes;
+                length += data_bytes;
                 packet->length = length;
             }
             else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
@@ -2110,7 +2109,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
 
     picoquic_finalize_and_protect_packet(cnx, packet,
         ret, length, header_length, checksum_overhead,
-        send_length, send_buffer, (uint32_t)send_buffer_max,
+        send_length, send_buffer, send_buffer_max,
         &path_x->remote_cnxid, &path_x->local_cnxid, path_x, current_time);
 
     return ret;
@@ -2206,7 +2205,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
             send_buffer_max - checksum_overhead - length, &consumed);
 
         if (ret == 0) {
-            length += (uint32_t)consumed;
+            length += consumed;
         }
         cnx->cnx_state = picoquic_state_draining;
         *next_wake_time = exit_time;
@@ -2246,7 +2245,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
                         send_buffer_max - checksum_overhead - length, &consumed);
                 }
                 if (ret == 0) {
-                    length += (uint32_t)consumed;
+                    length += consumed;
                 }
                 cnx->pkt_ctx[pc].ack_needed = 0;
             }
@@ -2294,7 +2293,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
         ret = picoquic_prepare_ack_frame(cnx, current_time, pc, &bytes[length],
             send_buffer_max - checksum_overhead - length, &consumed);
         if (ret == 0) {
-            length += (uint32_t)consumed;
+            length += consumed;
         }
 
         consumed = 0;
@@ -2309,7 +2308,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
         }
 
         if (ret == 0) {
-            length += (uint32_t)consumed;
+            length += consumed;
         }
 
         if (cnx->cnx_state == picoquic_state_handshake_failure) {
@@ -2341,7 +2340,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
 
     picoquic_finalize_and_protect_packet(cnx, packet,
         ret, length, header_length, checksum_overhead,
-        send_length, send_buffer, (uint32_t)send_buffer_max,
+        send_length, send_buffer, send_buffer_max,
         &path_x->remote_cnxid, &path_x->local_cnxid, path_x, current_time);
 
     return ret;
@@ -2455,7 +2454,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                 if (picoquic_prepare_ack_frame(cnx, current_time, pc, &bytes[length],
                     send_buffer_min_max - checksum_overhead - length, &data_bytes)
                     == 0) {
-                    length += (uint32_t)data_bytes;
+                    length += data_bytes;
                     packet->length = length;
                 }
             }
@@ -2481,7 +2480,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                         if (picoquic_prepare_path_challenge_frame(&bytes[length],
                             send_buffer_max - checksum_overhead - length, &data_bytes,
                             path_x->challenge[path_x->challenge_repeat_count]) == 0) {
-                            length += (uint32_t)data_bytes;
+                            length += data_bytes;
                             path_x->challenge_time = current_time;
                             path_x->challenge_repeat_count++;
                         }
@@ -2490,7 +2489,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                         ret = picoquic_prepare_ack_frame(cnx, current_time, pc, &bytes[length],
                             send_buffer_max - checksum_overhead - length, &data_bytes);
                         if (ret == 0) {
-                            length += (uint32_t)data_bytes;
+                            length += data_bytes;
                         }
                         else {
                             if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
@@ -2523,7 +2522,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
             if (path_x->response_required) {
                 if (picoquic_prepare_path_response_frame(&bytes[length],
                     send_buffer_max - checksum_overhead - length, &data_bytes, path_x->challenge_response) == 0) {
-                    length += (uint32_t)data_bytes;
+                    length += data_bytes;
                     path_x->response_required = 0;
                 }
             }
@@ -2533,7 +2532,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                     ret = picoquic_prepare_ack_frame(cnx, current_time, pc, &bytes[length],
                         send_buffer_min_max - checksum_overhead - length, &data_bytes);
                     if (ret == 0) {
-                        length += (uint32_t)data_bytes;
+                        length += data_bytes;
                     }
                     else {
                         if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
@@ -2564,7 +2563,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                             send_buffer_min_max - checksum_overhead - length, &data_bytes);
 
                         if (ret == 0) {
-                            length += (uint32_t)data_bytes;
+                            length += data_bytes;
                             if (data_bytes > 0)
                             {
                                 is_pure_ack = 0;
@@ -2584,7 +2583,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                             ret = picoquic_prepare_first_misc_frame(cnx, &bytes[length],
                                 send_buffer_min_max - checksum_overhead - length, &data_bytes);
                             if (ret == 0) {
-                                length += (uint32_t)data_bytes;
+                                length += data_bytes;
                             }
                             else {
                                 if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
@@ -2603,7 +2602,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                                 send_buffer_min_max - checksum_overhead - length,
                                 current_time, &data_bytes);
                             if (ret == 0) {
-                                length += (uint32_t)data_bytes;
+                                length += data_bytes;
                             }
                             else {
                                 if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
@@ -2619,7 +2618,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                             ret = picoquic_prepare_max_streams_frame_if_needed(cnx,
                                 &bytes[length], send_buffer_min_max - checksum_overhead - length, &data_bytes);
                             if (ret == 0) {
-                                length += (uint32_t)data_bytes;
+                                length += data_bytes;
                                 if (data_bytes > 0)
                                 {
                                     is_pure_ack = 0;
@@ -2637,7 +2636,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                                 send_buffer_min_max - checksum_overhead - length, &data_bytes);
 
                             if (ret == 0) {
-                                length += (uint32_t)data_bytes;
+                                length += data_bytes;
                                 if (data_bytes > 0)
                                 {
                                     is_pure_ack = 0;
@@ -2654,7 +2653,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                                 send_buffer_min_max - checksum_overhead - length, &data_bytes);
 
                             if (ret == 0) {
-                                length += (uint32_t)data_bytes;
+                                length += data_bytes;
                                 if (data_bytes > 0)
                                 {
                                     is_pure_ack = 0;
@@ -2673,7 +2672,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                                 send_buffer_min_max - checksum_overhead - length, &data_bytes, &is_still_active);
 
                             if (ret == 0) {
-                                length += (uint32_t)data_bytes;
+                                length += data_bytes;
                                 if (data_bytes > 0)
                                 {
                                     is_pure_ack = 0;
@@ -2703,7 +2702,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                             ret = picoquic_prepare_blocked_frames(cnx, &bytes[length],
                                 send_buffer_min_max - checksum_overhead - length, &data_bytes);
                             if (ret == 0) {
-                                length += (uint32_t)data_bytes;
+                                length += data_bytes;
                                 if (data_bytes > 0)
                                 {
                                     is_pure_ack = 0;
@@ -2935,7 +2934,7 @@ int picoquic_prepare_probe(picoquic_cnx_t* cnx,
                         send_buffer_max - checksum_overhead - length,
                         current_time, &data_bytes);
                     if (ret == 0) {
-                        length += (uint32_t)data_bytes;
+                        length += data_bytes;
                     }
                 }
                 else {
@@ -2943,7 +2942,7 @@ int picoquic_prepare_probe(picoquic_cnx_t* cnx,
                     ret = picoquic_prepare_new_connection_id_frame(cnx, cnx->path[inactive_path_index], &bytes[length],
                         send_buffer_max - checksum_overhead - length, &data_bytes);
                     if (ret == 0) {
-                        length += (uint32_t)data_bytes;
+                        length += data_bytes;
                     }
                 }
 
@@ -2953,7 +2952,7 @@ int picoquic_prepare_probe(picoquic_cnx_t* cnx,
                         send_buffer_max - checksum_overhead - length, &data_bytes,
                         probe->challenge[probe->challenge_repeat_count]);
                     if (ret == 0) {
-                        length += (uint32_t)data_bytes;
+                        length += data_bytes;
                         probe->challenge_required = 0;
                         probe->challenge_time = current_time;
                         probe->challenge_repeat_count++;
@@ -2979,7 +2978,7 @@ int picoquic_prepare_probe(picoquic_cnx_t* cnx,
                 /* final protection */
                 picoquic_finalize_and_protect_packet(cnx, packet,
                     ret, length, header_length, checksum_overhead,
-                    send_length, send_buffer, (uint32_t)send_buffer_max,
+                    send_length, send_buffer, send_buffer_max,
                     &probe->remote_cnxid, &cnx->path[0]->local_cnxid, cnx->path[0], current_time);
             }
         }
@@ -3052,7 +3051,7 @@ static int picoquic_prepare_alt_challenge(picoquic_cnx_t* cnx,
                             send_buffer_max - checksum_overhead - length, &data_bytes,
                             cnx->path[i]->alt_challenge[cnx->path[i]->alt_challenge_repeat_count]);
                         if (ret == 0) {
-                            length += (uint32_t)data_bytes;
+                            length += data_bytes;
                             cnx->path[i]->alt_challenge_timeout = current_time + cnx->path[i]->retransmit_timer;
                             cnx->path[i]->alt_challenge_repeat_count++;
                         }
@@ -3062,7 +3061,7 @@ static int picoquic_prepare_alt_challenge(picoquic_cnx_t* cnx,
                         ret = picoquic_prepare_path_response_frame(&bytes[length],
                             send_buffer_max - checksum_overhead - length, &data_bytes, cnx->path[i]->alt_challenge_response);
                         if (ret == 0) {
-                            length += (uint32_t)data_bytes;
+                            length += data_bytes;
                             cnx->path[i]->alt_challenge_timeout = current_time + cnx->path[i]->retransmit_timer;
                         }
                         cnx->path[i]->alt_response_required = 0;
@@ -3087,7 +3086,7 @@ static int picoquic_prepare_alt_challenge(picoquic_cnx_t* cnx,
                     /* final protection */
                     picoquic_finalize_and_protect_packet(cnx, packet,
                         ret, length, header_length, checksum_overhead,
-                        send_length, send_buffer, (uint32_t)send_buffer_max,
+                        send_length, send_buffer, send_buffer_max,
                         &cnx->path[i]->remote_cnxid, &cnx->path[0]->local_cnxid, cnx->path[0], current_time);
 
                     /* no need to check the other paths yet. Will check at next invocation. */

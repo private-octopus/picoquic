@@ -481,7 +481,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
 
                         switch (extension_type) {
                         case picoquic_tp_initial_max_stream_data_bidi_local:
-                            cnx->remote_parameters.initial_max_stream_data_bidi_local = (uint32_t)
+                            cnx->remote_parameters.initial_max_stream_data_bidi_local = 
                                 picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
 
                             /* If we sent zero rtt data, the streams were created with the
@@ -490,7 +490,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                             picoquic_update_stream_initial_remote(cnx);
                             break;
                         case picoquic_tp_initial_max_stream_data_bidi_remote:
-                            cnx->remote_parameters.initial_max_stream_data_bidi_remote = (uint32_t)
+                            cnx->remote_parameters.initial_max_stream_data_bidi_remote = 
                                 picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
                             /* If we sent zero rtt data, the streams were created with the
                             * old value of the remote parameter. We need to update that.
@@ -498,7 +498,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                             picoquic_update_stream_initial_remote(cnx);
                             break;
                         case picoquic_tp_initial_max_stream_data_uni:
-                            cnx->remote_parameters.initial_max_stream_data_uni = (uint32_t)
+                            cnx->remote_parameters.initial_max_stream_data_uni = 
                                 picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
                             /* If we sent zero rtt data, the streams were created with the
                             * old value of the remote parameter. We need to update that.
@@ -506,14 +506,14 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                             picoquic_update_stream_initial_remote(cnx);
                             break;
                         case picoquic_tp_initial_max_data:
-                            cnx->remote_parameters.initial_max_data = (uint32_t)
+                            cnx->remote_parameters.initial_max_data = 
                                 picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
                             cnx->maxdata_remote = cnx->remote_parameters.initial_max_data;
                             break;
                         case picoquic_tp_initial_max_streams_bidi: {
                             uint64_t old_limit = cnx->max_stream_id_bidir_remote;
                             cnx->remote_parameters.initial_max_stream_id_bidir =
-                                picoquic_decode_transport_param_stream_id((uint32_t)
+                                picoquic_decode_transport_param_stream_id(
                                     picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret), extension_mode,
                                     PICOQUIC_STREAM_ID_BIDIR);
 
@@ -550,7 +550,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                         case picoquic_tp_initial_max_streams_uni: {
                             uint64_t old_limit = cnx->max_stream_id_unidir_remote;
                             cnx->remote_parameters.initial_max_stream_id_unidir =
-                                picoquic_decode_transport_param_stream_id((uint32_t)
+                                picoquic_decode_transport_param_stream_id(
                                     picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret), extension_mode,
                                     PICOQUIC_STREAM_ID_UNIDIR);
 
