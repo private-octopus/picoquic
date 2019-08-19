@@ -129,7 +129,7 @@ int picoquic_tls_client_authentication_activated(picoquic_quic_t* quic);
 
 int picoquic_prepare_retry_token(picoquic_quic_t* quic, struct sockaddr * addr_peer,
     uint64_t current_time, picoquic_connection_id_t * odcid,
-    uint8_t * token, uint32_t token_max, uint32_t * token_size);
+    uint8_t * token, size_t token_max, size_t * token_size);
 
 int picoquic_verify_retry_token(picoquic_quic_t* quic, struct sockaddr * addr_peer,
     uint64_t current_time, picoquic_connection_id_t * odcid,

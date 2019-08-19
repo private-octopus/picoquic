@@ -243,9 +243,9 @@ int picoquic_parse_packet_header(
                                     ph->pc = 0;
                                 }
                                 else {
-                                    ph->token_length = (uint32_t)tok_len;
-                                    ph->token_bytes = bytes + ph->offset + (uint32_t)l_tok_len;
-                                    ph->offset += (uint32_t)(l_tok_len + (size_t)tok_len);
+                                    ph->token_length = (size_t)tok_len;
+                                    ph->token_bytes = bytes + ph->offset + l_tok_len;
+                                    ph->offset += l_tok_len + (size_t)tok_len;
                                 }
 
                                 break;
@@ -831,8 +831,8 @@ int picoquic_prepare_version_negotiation(
 
         if (quic->F_log != NULL) {
             picoquic_log_outgoing_segment(quic->F_log, 1, NULL,
-                bytes, 0, (uint32_t)sp->length,
-                bytes, (uint32_t)sp->length);
+                bytes, 0, sp->length,
+                bytes, sp->length);
         }
 
         picoquic_queue_stateless_packet(quic, sp);
@@ -944,9 +944,9 @@ void picoquic_queue_stateless_retry(picoquic_cnx_t* cnx,
         /* Encode DCIL */
         byte_index += picoquic_format_connection_id(bytes + byte_index,
             PICOQUIC_MAX_PACKET_SIZE - byte_index - checksum_length, cnx->initial_cnxid);
-        byte_index += (uint32_t)data_bytes;
+        byte_index += data_bytes;
         memcpy(&bytes[byte_index], token, token_length);
-        byte_index += (uint32_t)token_length;
+        byte_index += token_length;
 
         sp->length = byte_index;
 
@@ -962,8 +962,8 @@ void picoquic_queue_stateless_retry(picoquic_cnx_t* cnx,
 
         if (cnx->quic->F_log != NULL) {
             picoquic_log_outgoing_segment(cnx->quic->F_log, 1, cnx,
-                bytes, 0, (uint32_t)sp->length,
-                bytes, (uint32_t)sp->length);
+                bytes, 0, sp->length,
+                bytes, sp->length);
         }
 
         picoquic_queue_stateless_packet(cnx->quic, sp);
@@ -987,7 +987,7 @@ void picoquic_ignore_incoming_handshake(
     /* The data starts at ph->index, and its length
      * is ph->payload_length. */
     int ret = 0;
-    uint32_t byte_index = 0;
+    size_t byte_index = 0;
     int ack_needed = 0;
     picoquic_packet_context_enum pc;
     
@@ -1009,7 +1009,7 @@ void picoquic_ignore_incoming_handshake(
         int frame_is_pure_ack = 0;
         ret = picoquic_skip_frame(cnx, &bytes[byte_index],
             ph->payload_length - byte_index, &frame_length, &frame_is_pure_ack);
-        byte_index += (uint32_t)frame_length;
+        byte_index += frame_length;
         if (frame_is_pure_ack == 0) {
             ack_needed = 1;
         }
@@ -1056,11 +1056,11 @@ int picoquic_incoming_initial(
         if (picoquic_verify_retry_token((*pcnx)->quic, addr_from, current_time,
             &(*pcnx)->original_cnxid, ph->token_bytes, ph->token_length) != 0) {
             uint8_t token_buffer[256];
-            uint32_t token_size;
+            size_t token_size;
 
             if (picoquic_prepare_retry_token((*pcnx)->quic, addr_from, 
                 current_time + PICOQUIC_TOKEN_DELAY_SHORT, &ph->dest_cnx_id,
-                token_buffer, (uint32_t)sizeof(token_buffer), &token_size) != 0){ 
+                token_buffer, sizeof(token_buffer), &token_size) != 0){ 
                 ret = PICOQUIC_ERROR_MEMORY;
             }
             else {
@@ -1793,7 +1793,7 @@ int picoquic_incoming_segment(
 
     /* Log the incoming segment */
     if (quic->F_log != NULL && (cnx == NULL || cnx->pkt_ctx[picoquic_packet_context_application].send_sequence < PICOQUIC_LOG_PACKET_MAX_SEQUENCE || quic->use_long_log)) {
-        picoquic_log_decrypted_segment(quic->F_log, 1, cnx, 1, &ph, bytes, (uint32_t)*consumed, ret);
+        picoquic_log_decrypted_segment(quic->F_log, 1, cnx, 1, &ph, bytes, *consumed, ret);
     }
 
     if (ret == 0) {
