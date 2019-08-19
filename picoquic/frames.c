@@ -2425,171 +2425,202 @@ void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t* cnx, picoquic_pa
     }
 }
 
-static int picoquic_process_ack_range(
-    picoquic_cnx_t* cnx, picoquic_packet_context_enum pc, uint64_t highest, uint64_t range, picoquic_packet_t** ppacket,
-    uint64_t current_time)
+/* Acknowledge a single packet p */
+static int picoquic_process_ack(
+    picoquic_cnx_t* cnx, picoquic_packet_context_enum pc,
+    picoquic_packet_t * p, uint64_t current_time)
 {
-    picoquic_packet_t* p = *ppacket;
     int ret = 0;
-    /* Compare the range to the retransmit queue */
-    while (p != NULL && range > 0) {
-        if (p->sequence_number > highest) {
-            p = p->next_packet;
-        } else {
-            if (p->sequence_number == highest) {
-                /* TODO: RTT Estimate */
-                picoquic_packet_t* next = p->next_packet;
-                picoquic_path_t * old_path = p->send_path;
 
-                if (p->is_ack_trap) {
-                    ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, picoquic_frame_type_ack);
-                    break;
-                }
+    /* TODO: RTT Estimate */
+    picoquic_path_t* old_path = p->send_path;
 
-                if (old_path != NULL) {
-                    if (cnx->congestion_alg != NULL) {
-                        cnx->congestion_alg->alg_notify(old_path,
-                            picoquic_congestion_notification_acknowledgement,
-                            0, p->length, 0, current_time);
-                    }
+    if (p->is_ack_trap) {
+        ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, picoquic_frame_type_ack);
+    }
 
+    if (ret == 0) {
 
-                    /* If packet is larger than the current MTU, update the MTU */
-                    if ((p->length + p->checksum_overhead) > old_path->send_mtu) {
-                        old_path->send_mtu = p->length + p->checksum_overhead;
-                        old_path->mtu_probe_sent = 0;
-                    }
-                }
-
-                /* If the packet contained an ACK frame, perform the ACK of ACK pruning logic */
-                picoquic_process_possible_ack_of_ack_frame(cnx, p);
-
-                /* Keep track of reception of ACK of 1RTT data */
-                if (p->ptype == picoquic_packet_1rtt_protected &&
-                    (cnx->cnx_state == picoquic_state_client_ready_start ||
-                        cnx->cnx_state == picoquic_state_server_false_start)) {
-                    /* Transition to client ready state.
-                     * The handshake is complete, all the handshake packets are implicitly acknowledged */
-                    picoquic_ready_state_transition(cnx, current_time);
-                }
-
-                (void)picoquic_dequeue_retransmit_packet(cnx, p, 1);
-                p = next;
-                /* Any acknowledgement shows progress */
-                cnx->pkt_ctx[pc].nb_retransmit = 0;
+        if (old_path != NULL) {
+            if (cnx->congestion_alg != NULL) {
+                cnx->congestion_alg->alg_notify(old_path,
+                    picoquic_congestion_notification_acknowledgement,
+                    0, p->length, 0, current_time);
             }
 
-            range--;
-            highest--;
+            /* If packet is larger than the current MTU, update the MTU */
+            if ((p->length + p->checksum_overhead) > old_path->send_mtu) {
+                old_path->send_mtu = p->length + p->checksum_overhead;
+                old_path->mtu_probe_sent = 0;
+            }
         }
+
+        /* If the packet contained an ACK frame, perform the ACK of ACK pruning logic */
+        picoquic_process_possible_ack_of_ack_frame(cnx, p);
+
+        /* Keep track of reception of ACK of 1RTT data */
+        if (p->ptype == picoquic_packet_1rtt_protected &&
+            (cnx->cnx_state == picoquic_state_client_ready_start ||
+                cnx->cnx_state == picoquic_state_server_false_start)) {
+            /* Transition to client ready state.
+             * The handshake is complete, all the handshake packets are implicitly acknowledged */
+            picoquic_ready_state_transition(cnx, current_time);
+        }
+
+        (void)picoquic_dequeue_retransmit_packet(cnx, p, 1);
+
+        /* Any acknowledgement shows progress */
+        cnx->pkt_ctx[pc].nb_retransmit = 0;
+    }
+
+    return ret;
+}
+
+/* Acknowledge a range of packets (largest-gap-range .. largest-gap] */
+
+static int picoquic_process_ack_range(
+    picoquic_cnx_t* cnx, picoquic_packet_context_enum pc, picoquic_packet_t** ppacket,
+    uint64_t * plargest, uint64_t range, uint64_t current_time)
+{
+    picoquic_packet_t* p = *ppacket;
+    uint64_t largest = *plargest;
+    int ret = 0;
+
+    range++;
+
+    if (largest + 1 < range) {
+        DBG_PRINTF("Malformed ACK RANGE, largest=% " PRIx64 ", range=% " PRIx64, largest, range);
+        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, picoquic_frame_type_ack);
+        ret = -1;
+    }
+    else
+    {
+        *plargest = *plargest - range;
+
+        /* Compare the range to the retransmit queue */
+        while (ret == 0 && p != NULL && range > 0) {
+            picoquic_packet_t* next = p->next_packet;
+            if (p->sequence_number > largest) {
+                p = next;
+            } else {
+                if (p->sequence_number == largest) {
+                    if (picoquic_process_ack(cnx, pc, p, current_time) != 0) {
+                        ret = -1;
+                        break;
+                    }
+                    p = next;
+                }
+
+                range--;
+                largest--;
+            }
+        }
+    }
+
+    if (range > 0) {
+        picoquic_check_spurious_retransmission(cnx, largest + 1 - range, largest, current_time, pc);
     }
 
     *ppacket = p;
     return ret;
 }
 
-uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
-    const uint8_t* bytes_max, uint64_t current_time, int epoch, int is_ecn)
+/* Skip a range of packets */
+static int picoquic_skip_ack_range(picoquic_cnx_t* cnx, uint64_t* plargest, uint64_t gap)
 {
-    uint64_t num_block;
+    int ret = 0;
+
+    if (*plargest < gap + 1) {
+        DBG_PRINTF("Malformed ACK GAP, gap=% " PRIx64, gap);
+        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, picoquic_frame_type_ack);
+        ret = -1;
+    }
+    else
+    {
+        *plargest -= gap + 1;
+    }
+
+    return ret;
+}
+
+static uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
+    const uint8_t* bytes_max, uint64_t current_time, picoquic_packet_context_enum pc)
+{
+    uint8_t ftype;
     uint64_t largest;
     uint64_t ack_delay;
-    size_t   consumed;
-    picoquic_packet_context_enum pc = picoquic_context_from_epoch(epoch);
-    uint64_t ecnx3[3] = { 0, 0, 0 };
-    uint8_t first_byte = bytes[0];
+    uint64_t nb_blocks;
 
-    if (picoquic_parse_ack_header(bytes, bytes_max-bytes, &num_block, NULL,
-        &largest, &ack_delay, &consumed,
-        cnx->remote_parameters.ack_delay_exponent) != 0) {
-        bytes = NULL;
-        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, first_byte);
+    bytestream stream;
+    bytestream * s = bytereader_init(&stream, bytes, bytes_max - bytes);
+
+    int ret = 0;
+    ret |= byteread_int8(s, &ftype);
+    ret |= byteread_vint(s, &largest);
+    ret |= byteread_vint(s, &ack_delay);
+    ret |= byteread_vint(s, &nb_blocks);
+
+    if (ret != 0) {
+        DBG_PRINTF("Malformed ACK, header too small: %zu bytes\n", bytestream_size(s));
+        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, ftype);
     } else if (largest >= cnx->pkt_ctx[pc].send_sequence) {
-        bytes = NULL;
-        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, first_byte);
+        DBG_PRINTF("Malformed ACK, largest(%" PRIx64 ") >= seq_no(%" PRIx64 ")\n", largest, cnx->pkt_ctx[pc].send_sequence);
+        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, ftype);
+        ret = -1;
     } else {
-        bytes += consumed;
+        ack_delay <<= cnx->remote_parameters.ack_delay_exponent;
 
         /* Attempt to update the RTT */
         picoquic_packet_t* top_packet = picoquic_update_rtt(cnx, largest, current_time, ack_delay, pc);
 
-        while (bytes != NULL) {
+        for (uint64_t block = 0; block <= nb_blocks; block++) {
+
+            if (block != 0) {
+                uint64_t gap = 0;
+                if (byteread_vint(s, &gap) != 0 || picoquic_skip_ack_range(cnx, &largest, gap)) {
+                    ret = -1;
+                    break;
+                }
+            }
+
             uint64_t range;
-            uint64_t block_to_block;
-
-            if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &range)) == NULL) {
-                DBG_PRINTF("Malformed ACK RANGE, %d blocks remain.\n", (int)num_block);
-                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, first_byte);
-                bytes = NULL;
+            if (byteread_vint(s, &range) != 0 || picoquic_process_ack_range(cnx, pc, &top_packet, &largest, range, current_time) != 0) {
+                ret = -1;
                 break;
             }
-
-            range ++;
-            if (largest + 1 < range) {
-                DBG_PRINTF("ack range error: largest=%" PRIx64 ", range=%" PRIx64, largest, range);
-                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, first_byte);
-                bytes = NULL;
-                break;
-            }
-
-            if (picoquic_process_ack_range(cnx, pc, largest, range, &top_packet, current_time) != 0) {
-                bytes = NULL;
-                break;
-            }
-
-            if (range > 0) {
-                picoquic_check_spurious_retransmission(cnx, largest + 1 - range, largest, current_time, pc);
-            }
-
-            if (num_block-- == 0)
-                break;
-
-            /* Skip the gap */
-            if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &block_to_block)) == NULL) {
-                DBG_PRINTF("    Malformed ACK GAP, %d blocks remain.\n", (int)num_block);
-                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, first_byte);
-                bytes = NULL;
-                break;
-            }
-
-            block_to_block += 1; /* add 1, since zero is ruled out by varint, see spec. */
-            block_to_block += range;
-
-            if (largest < block_to_block) {
-                DBG_PRINTF("ack gap error: largest=%" PRIx64 ", range=%" PRIx64 ", gap=%" PRIu64,
-                    largest, range, block_to_block - range);
-                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, first_byte);
-                bytes = NULL;
-                break;
-            }
-
-            largest -= block_to_block;
         }
     }
 
-    if (bytes != 0 && is_ecn) {
-        for (int ecnx = 0; bytes != NULL && ecnx < 3; ecnx++) {
-            bytes = picoquic_frames_varint_decode(bytes, bytes_max, &ecnx3[ecnx]);
+    if (ret == 0 && ftype == picoquic_frame_type_ack_ecn)
+    {
+        uint64_t ecnx3[3] = { 0, 0, 0 };
+        for (int ecnx = 0; ecnx < 3; ecnx++) {
+            ret |= byteread_vint(s, &ecnx3[ecnx]);
+        }
+
+        if (ret == 0) {
+            if (ecnx3[0] > cnx->ecn_ect0_total_remote) {
+                cnx->ecn_ect0_total_remote = ecnx3[0];
+            }
+            if (ecnx3[1] > cnx->ecn_ect1_total_remote) {
+                cnx->ecn_ect1_total_remote = ecnx3[1];
+            }
+            if (ecnx3[2] > cnx->ecn_ce_total_remote) {
+                cnx->ecn_ce_total_remote = ecnx3[2];
+
+                cnx->congestion_alg->alg_notify(cnx->path[0],
+                    picoquic_congestion_notification_ecn_ec,
+                    0, 0, cnx->pkt_ctx[pc].first_sack_item.end_of_sack_range, current_time);
+            }
         }
     }
 
-    if (bytes != 0 && is_ecn) {
-        if (ecnx3[0] > cnx->ecn_ect0_total_remote) {
-            cnx->ecn_ect0_total_remote = ecnx3[0];
-        }
-        if (ecnx3[1] > cnx->ecn_ect1_total_remote) {
-            cnx->ecn_ect1_total_remote = ecnx3[1];
-        }
-        if (ecnx3[2] > cnx->ecn_ce_total_remote) {
-            cnx->ecn_ce_total_remote = ecnx3[2];
-
-            cnx->congestion_alg->alg_notify(cnx->path[0],
-                picoquic_congestion_notification_ecn_ec,
-                0, 0, cnx->pkt_ctx[pc].first_sack_item.end_of_sack_range, current_time);
-        }
+    /* Once picoquic_decode_ack_frame() is called with a bytestream this will change to "return ret;" */
+    if (ret == 0) {
+        return bytes + bytestream_length(s);
+    } else {
+        return NULL;
     }
-
-    return bytes;
 }
 
 static int encode_ecn_block(picoquic_cnx_t* cnx, uint8_t* bytes, size_t bytes_max, size_t* byte_index)
@@ -3565,22 +3596,14 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_
             bytes = picoquic_decode_stream_frame(cnx, bytes, bytes_max, current_time);
             ack_needed = 1;
 
-        } else if (first_byte == picoquic_frame_type_ack) {
+        } else if (first_byte == picoquic_frame_type_ack || first_byte == picoquic_frame_type_ack_ecn) {
             if (epoch == 1) {
-                DBG_PRINTF("Ack frame (0x%x) not expected in 0-RTT packet", first_byte);
+                DBG_PRINTF("Ack/Ack-ECN frame (0x%x) not expected in 0-RTT packet", first_byte);
                 picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, first_byte);
                 bytes = NULL;
                 break;
             }
-            bytes = picoquic_decode_ack_frame(cnx, bytes, bytes_max, current_time, epoch, 0);
-        } else if (first_byte == picoquic_frame_type_ack_ecn) {
-            if (epoch == 1) {
-                DBG_PRINTF("Ack-ECN frame (0x%x) not expected in 0-RTT packet", first_byte);
-                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, first_byte);
-                bytes = NULL;
-                break;
-            }
-            bytes = picoquic_decode_ack_frame(cnx, bytes, bytes_max, current_time, epoch, 1); 
+            bytes = picoquic_decode_ack_frame(cnx, bytes, bytes_max, current_time, pc);
         } else if (epoch != 1 && epoch != 3 && first_byte != picoquic_frame_type_padding
                                             && first_byte != picoquic_frame_type_path_challenge
                                             && first_byte != picoquic_frame_type_path_response
