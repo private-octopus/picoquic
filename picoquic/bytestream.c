@@ -161,7 +161,8 @@ int byteread_int16(bytestream * s, uint16_t * value)
         return bytestream_error(s);
     }
     else {
-        *value = (s->data[s->ptr] << 8) | s->data[s->ptr + 1];
+        const uint8_t * ptr = s->data + s->ptr;
+        *value = (ptr[0] << 8) | ptr[1];
         s->ptr += 2;
         return 0;
     }
@@ -186,12 +187,9 @@ int byteread_int32(bytestream * s, uint32_t * value)
         return bytestream_error(s);
     }
     else {
-        uint32_t v = 0;
-        for (size_t i = 0; i < 4; i++) {
-            v <<= 8;
-            v += s->data[s->ptr++];
-        }
-        *value = v;
+        const uint8_t * ptr = s->data + s->ptr;
+        *value = (ptr[0] << 24) | (ptr[1] << 16) | (ptr[2] << 8) | ptr[3];
+        s->ptr += 4;
         return 0;
     }
 }
