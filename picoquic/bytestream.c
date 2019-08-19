@@ -25,6 +25,8 @@
 #include "bytestream.h"
 #include "picoquic_internal.h"
 
+static int bytestream_error(bytestream * s);
+
 bytestream * bytereader_init(bytestream * s, const void * bytes, size_t nb_bytes)
 {
     s->data = (uint8_t*)bytes;
@@ -88,8 +90,7 @@ int bytestream_skip(bytestream * s, size_t nb_bytes)
 {
     size_t max_bytes = s->size - s->ptr;
     if (max_bytes < nb_bytes) {
-        s->ptr = s->size;
-        return -1;
+        return bytestream_error(s);
     } else {
         s->ptr += nb_bytes;
         return 0;
@@ -100,8 +101,7 @@ int bytewrite_vint(bytestream * s, uint64_t value)
 {
     size_t len = picoquic_varint_encode(s->data + s->ptr, s->size - s->ptr, value);
     if (len == 0) {
-        s->ptr += s->size;
-        return -1;
+        return bytestream_error(s);
     } else {
         s->ptr += len;
         return 0;
@@ -112,8 +112,7 @@ int byteread_vint(bytestream * s, uint64_t * value)
 {
     size_t len = picoquic_varint_decode(s->data + s->ptr, s->size - s->ptr, value);
     if (len == 0) {
-        s->ptr += s->size;
-        return -1;
+        return bytestream_error(s);
     } else {
         s->ptr += len;
         return 0;
@@ -124,8 +123,7 @@ int bytewrite_int8(bytestream * s, uint8_t value)
 {
     size_t max_bytes = s->size - s->ptr;
     if (max_bytes < 1) {
-        s->ptr = s->size;
-        return -1;
+        return bytestream_error(s);
     } else {
         s->data[s->ptr++] = value;
         return 0;
@@ -136,8 +134,7 @@ int byteread_int8(bytestream * s, uint8_t * value)
 {
     size_t max_bytes = s->size - s->ptr;
     if (max_bytes < 1) {
-        s->ptr = s->size;
-        return -1;
+        return bytestream_error(s);
     }
     else {
         *value = s->data[s->ptr++];
@@ -149,8 +146,7 @@ int bytewrite_int16(bytestream * s, uint16_t value)
 {
     size_t max_bytes = s->size - s->ptr;
     if (max_bytes < 2) {
-        s->ptr = s->size;
-        return -1;
+        return bytestream_error(s);
     } else {
         picoformat_16(s->data + s->ptr, value);
         s->ptr += 2;
@@ -162,8 +158,7 @@ int byteread_int16(bytestream * s, uint16_t * value)
 {
     size_t max_bytes = s->size - s->ptr;
     if (max_bytes < 2) {
-        s->ptr = s->size;
-        return -1;
+        return bytestream_error(s);
     }
     else {
         *value = (s->data[s->ptr] << 8) | s->data[s->ptr + 1];
@@ -176,8 +171,7 @@ int bytewrite_int32(bytestream * s, uint32_t value)
 {
     size_t max_bytes = s->size - s->ptr;
     if (max_bytes < 4) {
-        s->ptr = s->size;
-        return -1;
+        return bytestream_error(s);
     } else {
         picoformat_32(s->data + s->ptr, value);
         s->ptr += 4;
@@ -189,8 +183,7 @@ int byteread_int32(bytestream * s, uint32_t * value)
 {
     size_t max_bytes = s->size - s->ptr;
     if (max_bytes < 4) {
-        s->ptr = s->size;
-        return -1;
+        return bytestream_error(s);
     }
     else {
         uint32_t v = 0;
@@ -207,8 +200,7 @@ int bytewrite_int64(bytestream * s, uint64_t value)
 {
     size_t max_bytes = s->size - s->ptr;
     if (max_bytes < 8) {
-        s->ptr = s->size;
-        return -1;
+        return bytestream_error(s);
     } else {
         picoformat_64(s->data + s->ptr, value);
         s->ptr += 8;
@@ -220,8 +212,7 @@ int byteread_int64(bytestream * s, uint64_t * value)
 {
     size_t max_bytes = s->size - s->ptr;
     if (max_bytes < 8) {
-        s->ptr = s->size;
-        return -1;
+        return bytestream_error(s);
     }
     else {
         uint64_t v = 0;
@@ -238,7 +229,7 @@ int bytewrite_buffer(bytestream * s, const void * buffer, size_t length)
 {
     size_t max_bytes = s->size - s->ptr;
     if (max_bytes < length) {
-        return -1;
+        return bytestream_error(s);
     }
 
     memcpy(s->data + s->ptr, buffer, length);
@@ -250,10 +241,16 @@ int byteread_buffer(bytestream * s, void * buffer, size_t length)
 {
     size_t max_bytes = s->size - s->ptr;
     if (max_bytes < length) {
-        return -1;
+        return bytestream_error(s);
     }
 
     memcpy(buffer, s->data + s->ptr, length);
     s->ptr += length;
     return 0;
+}
+
+static int bytestream_error(bytestream* s)
+{
+    s->ptr = s->size;
+    return -1;
 }

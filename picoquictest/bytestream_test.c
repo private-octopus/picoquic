@@ -297,6 +297,12 @@ int picostream_test_write_limits()
         ret = -1;
     }
 
+    /* Also expect that no other, smaller write call succeeds */
+    if (bytewrite_int8(s9, 0x01) == 0) {
+        DBG_PRINTF("%s", "bytewrite_int8 didn't fail after write failure\n");
+        ret = -1;
+    }
+
     bytestream_delete(s9);
 
     return ret;
@@ -394,6 +400,12 @@ int picostream_test_read_limits()
 
     if (byteread_buffer(s9, buf, sizeof(buf)) == 0) {
         DBG_PRINTF("%s", "byteread_buffer of 8 bytes didn't fail on 9 byte buffer\n");
+        ret = -1;
+    }
+
+    /* Also expect that no other, smaller read call succeeds */
+    if (byteread_int8(s9, &i8) == 0) {
+        DBG_PRINTF("%s", "byteread_int8 didn't fail after read failure\n");
         ret = -1;
     }
 
