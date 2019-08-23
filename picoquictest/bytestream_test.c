@@ -133,6 +133,18 @@ int verify_picostream_read_int(bytestream * s)
     return eval_picostream_read(s, ret, "byteread_vint");
 }
 
+int verify_picostream_skip_int(bytestream * s)
+{
+    int ret = 0;
+    size_t len = 0;
+    ret |= byteread_skip_vint(s, &len) != 0 || len != 1;
+    ret |= byteread_skip_vint(s, &len) != 0 || len != 1;
+    ret |= byteread_skip_vint(s, &len) != 0 || len != 2;
+    ret |= byteread_skip_vint(s, &len) != 0 || len != 4;
+    ret |= byteread_skip_vint(s, &len) != 0 || len != 8;
+    return eval_picostream_read(s, ret, "byteread_skip_vint");
+}
+
 int verify_picostream_read_buffer(bytestream* s)
 {
     int ret = 0;
@@ -188,6 +200,9 @@ int verify_picostream_on_stack()
     bytestream rstream;
     bytestream * rs = bytereader_init(&rstream, expected_stream0, sizeof(expected_stream0));
     ret |= verify_picostream_read(rs);
+
+    bytestream_reset(rs);
+    ret |= verify_picostream_skip_int(rs);
 
     return ret;
 }
@@ -320,7 +335,8 @@ int picostream_test_read_limits()
     uint32_t i32;
     uint64_t i64;
     uint8_t buf[8];
-    
+    size_t len;
+
     const static uint8_t buf9[9] = {
         0xc8, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0xc8
     };
@@ -401,6 +417,23 @@ int picostream_test_read_limits()
 
     bytestream_reset(s9);
 
+    if (byteread_skip_vint(s9, &len) != 0) {
+        DBG_PRINTF("%s", "first byteread_skip_vint failed on 9 byte buffer\n");
+        ret = -1;
+    }
+
+    if (byteread_skip_vint(s9, &len) == 0) {
+        DBG_PRINTF("%s", "second byteread_skip_vint didn't fail on 9 byte buffer\n");
+        ret = -1;
+    }
+
+    if (byteread_skip_vint(s9, &len) == 0) {
+        DBG_PRINTF("%s", "third byteread_skip_vint didn't fail on 9 byte buffer\n");
+        ret = -1;
+    }
+
+    bytestream_reset(s9);
+
     if (byteread_buffer(s9, buf, sizeof(buf)) != 0) {
         DBG_PRINTF("%s", "byteread_buffer of 8 bytes failed on 9 byte buffer\n");
         ret = -1;
@@ -421,6 +454,47 @@ int picostream_test_read_limits()
     return ret;
 }
 
+typedef struct st_picoquic_val_len {
+    uint64_t val;
+    size_t len;
+} picoquic_val_len;
+
+int picostream_test_vint()
+{
+    int ret = 0;
+
+    static const picoquic_val_len values[] = {
+        { 0, 1 },
+        { 10, 1 },
+        { 100, 2 },
+        { 1000, 2 },
+        { 10000, 2 },
+        { 100000, 4 },
+        { 10000000, 4 },
+        { 1000000000, 4 },
+        { 100000000000, 8 },
+        { 1000000000000000, 8 },
+        { 0x3f, 1 },
+        { 0x40, 2 },
+        { 0x3fff, 2 },
+        { 0x4000, 4 },
+        { 0x3fffffff, 4 },
+        { 0x40000000, 8 },
+    };
+
+    for (size_t i = 0; i < sizeof(values) / sizeof(values[0]); ++i)
+    {
+        size_t len = bytestream_vint_len(values[i].val);
+        if (len != values[i].len) {
+            DBG_PRINTF("bytestream_vint_len(%" PRIu64 ") returned %zu instead of %zu\n",
+                values[i].val, len, values[i].len);
+            ret = -1;
+        }
+    }
+
+    return ret;
+}
+
 int picostream_test()
 {
     int ret = 0;
@@ -438,6 +512,10 @@ int picostream_test()
     }
 
     if (picostream_test_read_limits() != 0) {
+        ret = -1;
+    }
+
+    if (picostream_test_vint() != 0) {
         ret = -1;
     }
 

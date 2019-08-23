@@ -97,6 +97,17 @@ int bytestream_skip(bytestream * s, size_t nb_bytes)
     }
 }
 
+int byteread_skip_vint(bytestream* s, size_t* len)
+{
+    size_t max_bytes = s->size - s->ptr;
+    if (max_bytes < 1) {
+        return bytestream_error(s);
+    }
+
+    *len = picoquic_decode_varint_length(s->data[s->ptr]);
+    return bytestream_skip(s, *len);
+}
+
 int bytewrite_vint(bytestream * s, uint64_t value)
 {
     size_t len = picoquic_varint_encode(s->data + s->ptr, s->size - s->ptr, value);
@@ -122,6 +133,11 @@ int byteread_vint(bytestream * s, uint64_t * value)
         s->ptr += len;
         return 0;
     }
+}
+
+size_t bytestream_vint_len(uint64_t value)
+{
+    return picoquic_encode_varint_length(value);
 }
 
 int bytewrite_int8(bytestream * s, uint8_t value)

@@ -58,6 +58,27 @@ void picoformat_64(uint8_t* bytes, uint64_t n64)
  * 10       4       30       0-1073741823
  * 11       8       62       0-4611686018427387903
  */
+size_t picoquic_encode_varint_length(uint64_t n64)
+{
+    if (n64 < 16384) {
+        if (n64 < 64) {
+            return 1u;
+        } else {
+            return 2u;
+        }
+    } else {
+        if (n64 < 1073741824) {
+            return 4u;
+        } else {
+            return 8u;
+        }
+    }
+}
+
+size_t picoquic_decode_varint_length(uint8_t byte)
+{
+    return ((size_t)1u) << ((byte & 0xC0) >> 6);
+}
 
 size_t picoquic_varint_encode(uint8_t* bytes, size_t max_bytes, uint64_t n64)
 {
@@ -126,9 +147,7 @@ size_t picoquic_varint_decode(const uint8_t* bytes, size_t max_bytes, uint64_t* 
     return length;
 }
 
-size_t picoquic_varint_skip(uint8_t* bytes)
+size_t picoquic_varint_skip(const uint8_t* bytes)
 {
-    size_t length = ((size_t)1) << ((bytes[0] & 0xC0) >> 6);
-
-    return length;
+    return picoquic_decode_varint_length(bytes[0]);
 }
