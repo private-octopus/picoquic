@@ -325,8 +325,11 @@ int picostream_test_read_limits()
         0xc8, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0xc8
     };
 
+    uint8_t * heap = malloc(sizeof(buf9));
+    memcpy(heap, buf9, sizeof(buf9));
+
     bytestream stream;
-    bytestream * s9 = bytereader_init(&stream, buf9, 9);
+    bytestream * s9 = bytereader_init(&stream, heap, sizeof(buf9));
 
     bytestream_reset(s9);
     bytestream_skip(s9, 9 - 1);
@@ -391,6 +394,11 @@ int picostream_test_read_limits()
         ret = -1;
     }
 
+    if (byteread_vint(s9, &i64) == 0) {
+        DBG_PRINTF("%s", "third byteread_vint didn't fail on 9 byte buffer\n");
+        ret = -1;
+    }
+
     bytestream_reset(s9);
 
     if (byteread_buffer(s9, buf, sizeof(buf)) != 0) {
@@ -409,6 +417,7 @@ int picostream_test_read_limits()
         ret = -1;
     }
 
+    free(heap);
     return ret;
 }
 

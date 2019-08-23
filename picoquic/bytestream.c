@@ -110,6 +110,11 @@ int bytewrite_vint(bytestream * s, uint64_t value)
 
 int byteread_vint(bytestream * s, uint64_t * value)
 {
+    size_t max_bytes = s->size - s->ptr;
+    if (max_bytes < 1) {
+        return bytestream_error(s);
+    }
+
     size_t len = picoquic_varint_decode(s->data + s->ptr, s->size - s->ptr, value);
     if (len == 0) {
         return bytestream_error(s);
