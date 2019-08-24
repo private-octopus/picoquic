@@ -288,7 +288,7 @@ uint8_t picoquic_format_connection_id(uint8_t* bytes, size_t bytes_max, picoquic
     return copied;
 }
 
-int picoquic_is_connection_id_length_valid(uint8_t len) {
+int picoquic_is_valid_cid_len(uint8_t len) {
     int ret = 0;
     if (len >= PICOQUIC_CONNECTION_ID_MIN_SIZE && len <= PICOQUIC_CONNECTION_ID_MAX_SIZE) {
         ret = len;
@@ -298,7 +298,7 @@ int picoquic_is_connection_id_length_valid(uint8_t len) {
 
 uint8_t picoquic_parse_connection_id(const uint8_t * bytes, uint8_t len, picoquic_connection_id_t * cnx_id)
 {
-    if (picoquic_is_connection_id_length_valid(len)) {
+    if (picoquic_is_valid_cid_len(len)) {
         cnx_id->id_len = len;
         memcpy(cnx_id->id, bytes, len);
     } else {

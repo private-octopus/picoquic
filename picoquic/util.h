@@ -51,7 +51,7 @@ int picoquic_sprintf(char* buf, size_t buf_len, size_t * nb_chars, const char* f
 
 extern const picoquic_connection_id_t picoquic_null_connection_id;
 uint8_t picoquic_format_connection_id(uint8_t* bytes, size_t bytes_max, picoquic_connection_id_t cnx_id);
-int picoquic_is_connection_id_length_valid(uint8_t len);
+int picoquic_is_valid_cid_len(uint8_t len);
 uint8_t picoquic_parse_connection_id(const uint8_t* bytes, uint8_t len, picoquic_connection_id_t *cnx_id);
 int picoquic_is_connection_id_null(picoquic_connection_id_t cnx_id);
 int picoquic_compare_connection_id(const picoquic_connection_id_t * cnx_id1, const picoquic_connection_id_t * cnx_id2);
