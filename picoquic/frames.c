@@ -2623,6 +2623,44 @@ static uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
     }
 }
 
+/*
+ * The ACK skipping function only supports the varint format.
+ * The old "fixed int" versions are supported by code in the skip_frame function
+ */
+static uint8_t* picoquic_skip_ack_frame(uint8_t* bytes, const uint8_t* bytes_max)
+{
+    bytestream stream;
+    bytestream* s = bytereader_init(&stream, bytes, bytes_max - bytes);
+
+    int ret = 0;
+
+    uint8_t ftype;
+    ret |= byteread_int8(s, &ftype);
+    ret |= byteread_skip_vint(s);
+    ret |= byteread_skip_vint(s);
+
+    uint64_t nb_blocks;
+    ret |= byteread_vint(s, &nb_blocks);
+    ret |= byteread_skip_vint(s);
+
+    for (uint64_t block = 0; block < nb_blocks && ret == 0; block++) {
+        ret |= byteread_skip_vint(s);
+        ret |= byteread_skip_vint(s);
+    }
+
+    if (ret == 0 && ftype == picoquic_frame_type_ack_ecn) {
+        for (int i = 0; bytes != NULL && i < 3; i++) {
+            ret |= byteread_skip_vint(s);
+        }
+    }
+
+    if (ret == 0) {
+        return bytes + bytestream_length(s);
+    } else {
+        return NULL;
+    }
+}
+
 static int encode_ecn_block(picoquic_cnx_t* cnx, uint8_t* bytes, size_t bytes_max, size_t* byte_index)
 {
     int ret = 0;
@@ -3774,40 +3812,6 @@ static uint8_t* picoquic_skip_application_close_frame(picoquic_cnx_t * cnx, uint
     if (bytes != NULL) {
         bytes = picoquic_frames_length_data_skip(bytes, bytes_max);
     }
-    return bytes;
-}
-
-
-/*
- * The ACK skipping function only supports the varint format.
- * The old "fixed int" versions are supported by code in the skip_frame function
- */
-static uint8_t* picoquic_skip_ack_frame(uint8_t* bytes, const uint8_t* bytes_max)
-{
-    uint64_t nb_blocks;
-
-    int is_ecn = bytes[0] == picoquic_frame_type_ack_ecn;
-
-    if ((bytes = picoquic_frames_varint_skip(bytes + 1, bytes_max)) != NULL &&
-        (bytes = picoquic_frames_varint_skip(bytes, bytes_max)) != NULL &&
-        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &nb_blocks)) != NULL &&
-        (bytes = picoquic_frames_varint_skip(bytes,   bytes_max))             != NULL)
-    {
-        while (nb_blocks-- != 0) {
-            if ((bytes = picoquic_frames_varint_skip(bytes, bytes_max)) == NULL ||
-                (bytes = picoquic_frames_varint_skip(bytes, bytes_max)) == NULL)
-            {
-                break;
-            }
-        }
-    }
-
-    if (bytes != NULL && is_ecn) {
-        for (int i = 0; bytes != NULL && i < 3; i++) {
-            bytes = picoquic_frames_varint_skip(bytes, bytes_max);
-        }
-    }
-
     return bytes;
 }
 
