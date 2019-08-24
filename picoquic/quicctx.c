@@ -2546,7 +2546,7 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
     }
 }
 
-int picoquic_is_handshake_error(uint16_t error_code)
+int picoquic_is_handshake_error(uint64_t error_code)
 {
     return ((error_code & 0xFF00) == PICOQUIC_TRANSPORT_CRYPTO_ERROR(0) ||
         error_code == PICOQUIC_TLS_HANDSHAKE_FAILED);
@@ -2684,12 +2684,12 @@ int picoquic_is_client(picoquic_cnx_t* cnx)
     return cnx->client_mode;
 }
 
-int picoquic_get_local_error(picoquic_cnx_t* cnx)
+uint64_t picoquic_get_local_error(picoquic_cnx_t* cnx)
 {
     return cnx->local_error;
 }
 
-int picoquic_get_remote_error(picoquic_cnx_t* cnx)
+uint64_t picoquic_get_remote_error(picoquic_cnx_t* cnx)
 {
     return cnx->remote_error;
 }

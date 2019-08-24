@@ -189,7 +189,7 @@ typedef struct st_picoquic_connection_id_t {
 
 /* Detect whether error occured in TLS
  */
-int picoquic_is_handshake_error(uint16_t error_code);
+int picoquic_is_handshake_error(uint64_t error_code);
 /*
 * The stateless packet structure is used to temporarily store
 * stateless packets before they can be sent by servers.
@@ -694,10 +694,10 @@ void picoquic_disable_keep_alive(picoquic_cnx_t* cnx);
 int picoquic_is_client(picoquic_cnx_t* cnx);
 
 /* Returns the local error of the given connection context. */
-int picoquic_get_local_error(picoquic_cnx_t* cnx);
+uint64_t picoquic_get_local_error(picoquic_cnx_t* cnx);
 
 /* Returns the remote error of the given connection context. */
-int picoquic_get_remote_error(picoquic_cnx_t* cnx);
+uint64_t picoquic_get_remote_error(picoquic_cnx_t* cnx);
 
 uint64_t picoquic_get_data_sent(picoquic_cnx_t * cnx);
 

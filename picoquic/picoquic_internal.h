@@ -409,7 +409,7 @@ typedef struct st_picoquic_stream_head_t {
     uint64_t maxdata_local;
     uint64_t maxdata_remote;
     uint32_t local_error;
-    uint32_t remote_error;
+    uint64_t remote_error;
     uint32_t local_stop_error;
     uint32_t remote_stop_error;
     picoquic_stream_data_t* stream_data;
@@ -715,10 +715,10 @@ typedef struct st_picoquic_cnx_t {
     picoquic_connection_id_t initial_cnxid;
     picoquic_connection_id_t original_cnxid;
     uint64_t start_time;
-    uint16_t application_error;
-    uint16_t local_error;
-    uint16_t remote_application_error;
-    uint16_t remote_error;
+    uint64_t application_error;
+    uint64_t local_error;
+    uint64_t remote_application_error;
+    uint64_t remote_error;
     uint64_t offending_frame_type;
     uint16_t retry_token_length;
     uint8_t * retry_token;
