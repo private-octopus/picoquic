@@ -435,43 +435,27 @@ int picoquic_prepare_new_connection_id_frame(picoquic_cnx_t * cnx, picoquic_path
     uint8_t* bytes, size_t bytes_max, size_t* consumed)
 {
     int ret = 0;
-    size_t byte_index = 0;
-    size_t ls;
 
-    *consumed = 0;
+    bytestream stream;
+    bytestream * s = bytestream_ref_init(&stream, bytes, bytes_max);
 
     if (path_x->path_sequence > 0 && path_x->local_cnxid.id_len > 0 && path_x->path_is_registered) {
-        if (bytes_max < 2) {
-            ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
-        } else {
-            bytes[byte_index++] = picoquic_frame_type_new_connection_id;
-            ls = picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index,
-                path_x->path_sequence);
-            byte_index += ls;
-            if (ls == 0) {
-                ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
-            } else {
+
+        ret |= bytewrite_int8(s, picoquic_frame_type_new_connection_id);
+        ret |= bytewrite_vint(s, path_x->path_sequence);
                 if (picoquic_supported_versions[cnx->version_index].version != PICOQUIC_TWELFTH_INTEROP_VERSION) {
-                    if (byte_index + 1 < bytes_max) {
-                        bytes[byte_index] = 0;
-                    }
-                    byte_index++;
-                }
-                if (byte_index + 1 + path_x->local_cnxid.id_len + PICOQUIC_RESET_SECRET_SIZE > bytes_max){
-                    ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
-                }
-                else {
-                    bytes[byte_index++] = path_x->local_cnxid.id_len;
-                    memcpy(bytes + byte_index, path_x->local_cnxid.id, path_x->local_cnxid.id_len);
-                    byte_index += path_x->local_cnxid.id_len;
-                    (void)picoquic_create_cnxid_reset_secret(cnx->quic, path_x->local_cnxid,
-                        bytes + byte_index);
-                    byte_index += PICOQUIC_RESET_SECRET_SIZE;
-                    *consumed = byte_index;
-                }
-            }
+            ret |= bytewrite_int8(s, 0);
         }
+
+        uint8_t secret[PICOQUIC_RESET_SECRET_SIZE];
+        ret |= picoquic_create_cnxid_reset_secret(cnx->quic, path_x->local_cnxid, secret);
+
+        ret |= bytewrite_int8(s, path_x->local_cnxid.id_len);
+        ret |= bytewrite_buffer(s, path_x->local_cnxid.id, path_x->local_cnxid.id_len);
+        ret |= bytewrite_buffer(s, secret, PICOQUIC_RESET_SECRET_SIZE);
     }
+
+    *consumed = (ret == 0) ? bytestream_length(s) : 0;
 
     *consumed = (ret == 0) ? bytestream_length(s) : 0;
 
@@ -484,7 +468,7 @@ uint8_t* picoquic_skip_new_connection_id_frame(picoquic_cnx_t * cnx, uint8_t* by
     bytestream * s = bytestream_ref_init(&stream, bytes + 1, bytes_max - bytes);
 
     int ret = byteread_skip_vint(s);
-        if (picoquic_supported_versions[cnx->version_index].version != PICOQUIC_TWELFTH_INTEROP_VERSION) {
+    if (picoquic_supported_versions[cnx->version_index].version != PICOQUIC_TWELFTH_INTEROP_VERSION) {
         ret |= byteread_skip_vint(s);
     }
 
@@ -507,7 +491,7 @@ uint8_t* picoquic_decode_new_connection_id_frame(picoquic_cnx_t* cnx, uint8_t* b
     uint64_t retire_before = 0;
 
     ret |= byteread_vint(s, &sequence);
-        if (picoquic_supported_versions[cnx->version_index].version != PICOQUIC_TWELFTH_INTEROP_VERSION) {
+    if (picoquic_supported_versions[cnx->version_index].version != PICOQUIC_TWELFTH_INTEROP_VERSION) {
         ret |= byteread_vint(s, &retire_before);
     }
 
@@ -532,9 +516,9 @@ uint8_t* picoquic_decode_new_connection_id_frame(picoquic_cnx_t* cnx, uint8_t* b
             /* TODO: retire the now deprecated CID */
             ret = picoquic_remove_not_before_cid(cnx, retire_before, current_time);
         }
-        }
+    }
 
-        if (ret != 0) {
+    if (ret != 0) {
         picoquic_connection_error(cnx, (uint16_t)ret, picoquic_frame_type_new_connection_id);
     }
 
