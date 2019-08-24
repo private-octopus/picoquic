@@ -44,6 +44,7 @@ typedef enum {
 } h3zero_server_stream_status_t;
 
 typedef struct st_h3zero_server_stream_ctx_t {
+    /* TODO: identification of URL to process POST or GET? */
     struct st_h3zero_server_stream_ctx_t* next_stream;
     h3zero_data_stream_state_t stream_state;
     h3zero_server_stream_status_t status;
@@ -65,6 +66,20 @@ int h3zero_server_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx);
 
+/* Define the per URL callback used to implement POSt and other
+ * REST-like interactions
+ */
+typedef enum {
+    picohttp_callback_get, /* Received a get command */
+    picohttp_callback_post, /* Received a post command */
+    picohttp_callback_post_data, /* Data received from peer on stream N */
+    picohttp_callback_post_fin, /* All posted data have been received */
+    picohttp_callback_reset /* Stream has been abandoned. */
+} picohttp_call_back_event_t;
+
+typedef int (*picohttp_post_data_cb_fn)(picoquic_cnx_t* cnx,
+    uint64_t stream_id, uint8_t* bytes, size_t length,
+    picohttp_call_back_event_t fin_or_event, void* callback_ctx, void* stream_ctx);
 
 /* Defining then the Http 0.9 variant of the server
  */
@@ -81,6 +96,7 @@ typedef enum {
 } picoquic_h09_server_stream_status_t;
 
 typedef struct st_picoquic_h09_server_stream_ctx_t {
+    /* TODO: identification of URL to process POST or GET? */
     struct st_picoquic_h09_server_stream_ctx_t* next_stream;
     picoquic_h09_server_stream_status_t status;
     uint64_t stream_id;

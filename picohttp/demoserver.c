@@ -27,7 +27,6 @@
 #include "h3zero.h"
 #include "democlient.h"
 #include "demoserver.h"
-
 /*
  * Create and delete server side connection context
  */
@@ -187,9 +186,11 @@ static int h3zero_server_process_request_frame(
         demo_server_parse_path(stream_ctx->stream_state.header.path, stream_ctx->stream_state.header.path_length, &stream_ctx->echo_length) != 0) {
         /* If unknown, 404 */
         o_bytes = h3zero_create_not_found_header_frame(o_bytes, o_bytes_max);
+        /* TODO: consider known-url?data construct */
     }
     else {
         if (stream_ctx->stream_state.header.method == h3zero_method_post) {
+            /* TODO: specific response if provided by post callback. */
             /* Prepare generic POST response */
             (void)picoquic_sprintf((char*)post_response, sizeof(post_response), &response_length, demo_server_post_response_page, (int)stream_ctx->received_length);
             stream_ctx->echo_length = 0;
@@ -315,6 +316,7 @@ static int h3zero_server_callback_data(
                     }
                     else if (available_data > 0) {
                         /* Received data for a POST command. */
+                        /* TODO: if known URL, pass the data to URL specific callback. */
                         stream_ctx->received_length += available_data;
                         bytes += available_data;
                     }
@@ -733,6 +735,7 @@ int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
             processed++;
         }
         else if (stream_ctx->status == picoquic_h09_server_stream_status_receiving) {
+            /* TODO: pass data to selected API */
             stream_ctx->post_received += length - processed;
             processed = length;
         }
@@ -969,6 +972,87 @@ int picoquic_demo_server_callback(picoquic_cnx_t* cnx,
     case picoquic_alpn_http_0_9:
     default:
         ret = picoquic_h09_server_callback(cnx, stream_id, bytes, length, fin_or_event, callback_ctx, v_stream_ctx);
+        break;
+    }
+
+    return ret;
+}
+
+/* Handling of post callback */
+void picohttp_set_post_callback(picoquic_cnx_t* cnx,
+    picohttp_post_data_cb_fn callback_fn, void* callback_ctx)
+{
+    cnx->callback_fn = callback_fn;
+    cnx->callback_ctx = callback_ctx;
+}
+
+/* Sample callback used for demonstrating the callback API.
+ * The transaction returns the MD5 of the posted data */
+
+typedef struct st_picohttp_demo_post_sha256_ctx_t {
+    void* hash_context;
+    uint8_t buf[PICOQUIC_HASH_SIZE_MAX];
+} picohttp_demo_post_ctx_t;
+
+int picohttp_demo_post_sha256_callback(picoquic_cnx_t* cnx,
+    uint64_t stream_id, uint8_t* bytes, size_t length,
+    picohttp_call_back_event_t event, void* callback_ctx, void* post_ctx)
+{
+    int ret = 0;
+    picohttp_demo_post_ctx_t* ctx = (picohttp_demo_post_ctx_t*)post_ctx;
+
+    switch (event) {
+    case picohttp_callback_get: /* Received a get command */
+        break;
+    case picohttp_callback_post: /* Received a post command */
+        if (ctx == NULL) {
+            ctx = picohttp_demo_post_callback_create_context();
+            if (ctx == NULL) {
+                /* cannot handle the stream -- TODO: reset stream? */
+                return -1;
+            }
+            else {
+                memset(ctx->buf, 0, PICOQUIC_HASH_SIZE_MAX);
+                ctx->hash_context = picoquic_hash_create("SHA256");
+                picohttp_set_post_callback(cnx, picohttp_demo_post_sha256_callback, ctx);
+            }
+        }
+        else {
+            /* unexpected. Should not have a context here */
+            return -1;
+        }
+        break;
+    case picohttp_callback_post_data: /* Data received from peer on stream N */
+        /* Add data to the hash context */
+        if (ctx == NULL || ctx->hash_context == NULL) {
+            ret = -1;
+        }
+        else {
+            picoquic_hash_update(bytes, length, ctx->hash_context);
+        }
+        break;
+    case picohttp_callback_post_fin: /* All posted data have been received */
+        /* Finalize the hash context */
+        if (ctx == NULL || ctx->hash_context == NULL) {
+            ret = -1;
+        }
+        else {
+            picoquic_hash_finalize(ctx->buf, ctx->hash_context);
+            ctx->hash_context = NULL;
+        }
+        break;
+    case picohttp_callback_reset: /* stream is abandoned */
+        picohttp_set_post_callback(cnx, NULL, NULL);
+        if (ctx != NULL){
+            if (ctx->hash_context != NULL) {
+                picoquic_hash_finalize(ctx->buf, ctx->hash_context);
+                ctx->hash_context = NULL;
+            }
+            free(ctx);
+        }
+        break;
+    default:
+        ret = -1;
         break;
     }
 
