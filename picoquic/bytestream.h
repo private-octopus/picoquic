@@ -55,6 +55,7 @@ int bytestream_skip(bytestream * s, size_t nb_bytes);
 
 int bytewrite_int8(bytestream * s, uint8_t value);
 int byteread_int8(bytestream * s, uint8_t * value);
+int byteshow_int8(bytestream * s, uint8_t * value);
 
 int bytewrite_int16(bytestream * s, uint16_t value);
 int byteread_int16(bytestream * s, uint16_t * value);

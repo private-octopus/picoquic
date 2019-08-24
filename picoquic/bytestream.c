@@ -177,9 +177,19 @@ int byteread_int8(bytestream * s, uint8_t * value)
     size_t max_bytes = s->size - s->ptr;
     if (max_bytes < 1) {
         return bytestream_error(s);
-    }
-    else {
+    } else {
         *value = s->data[s->ptr++];
+        return 0;
+    }
+}
+
+int byteshow_int8(bytestream * s, uint8_t * value)
+{
+    size_t max_bytes = s->size - s->ptr;
+    if (max_bytes < 1) {
+        return -1;
+    } else {
+        *value = s->data[s->ptr];
         return 0;
     }
 }

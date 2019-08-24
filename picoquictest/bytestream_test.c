@@ -106,7 +106,9 @@ int verify_bytestream_read_intXX(bytestream * s)
 {
     int ret = 0;
     uint8_t val8 = 0;
+    ret |= byteshow_int8(s, &val8) || val8 != 0x00;
     ret |= byteread_int8(s, &val8) || val8 != 0x00;
+    ret |= byteshow_int8(s, &val8) || val8 != 0x01;
     ret |= byteread_int8(s, &val8) || val8 != 0x01;
 
     uint16_t val16 = 0;
@@ -353,6 +355,21 @@ int bytestream_test_read_limits()
 
     if (byteread_int8(s9, &i8) == 0) {
         DBG_PRINTF("%s", "byteread_int8 didn't fail on 9 byte buffer\n");
+        ret = -1;
+    }
+
+    bytestream_reset(s9);
+    bytestream_skip(s9, 9 - 1);
+
+    if (byteshow_int8(s9, &i8) != 0) {
+        DBG_PRINTF("%s", "byteshow_int8 failed on 9 byte buffer\n");
+        ret = -1;
+    }
+
+    bytestream_skip(s9, 1);
+
+    if (byteshow_int8(s9, &i8) == 0) {
+        DBG_PRINTF("%s", "byteshow_int8 didn't fail on 9 byte buffer\n");
         ret = -1;
     }
 
