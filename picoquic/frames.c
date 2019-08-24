@@ -320,42 +320,24 @@ int picoquic_prepare_stream_reset_frame(picoquic_cnx_t* cnx, picoquic_stream_hea
     uint8_t* bytes, size_t bytes_max, size_t* consumed)
 {
     int ret = 0;
-    size_t byte_index = 0;
 
-    if (!stream->reset_requested || stream->reset_sent) {
-        *consumed = 0;
-    } else {
-        size_t l1 = 0, l2 = 0, l3 = 0;
-        if (bytes_max > 2) {
-            bytes[byte_index++] = picoquic_frame_type_reset_stream;
-            l1 = picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index, stream->stream_id);
-            byte_index += l1;
-            if (l1 > 0) {
-                if (picoquic_supported_versions[cnx->version_index].version == PICOQUIC_TWELFTH_INTEROP_VERSION) {
-                    if (byte_index + 2 < bytes_max) {
-                        picoformat_16(bytes + byte_index, (uint16_t)stream->local_error);
-                        l2 = 2;
-                    }
-                }
-                else {
-                    l2 = picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index, stream->local_error);
-                }
-                if (l2 > 0) {
-                    byte_index += l2;
-                    l3 = picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index, stream->sent_offset);
-                    byte_index += l3;
-                }
-            }
-        }
+    bytestream bs;
+    bytestream * s = bytereader_init(&bs, bytes, bytes_max);
 
-        if (l1 == 0 || l2 == 0 || l3 == 0) {
-            ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
-            *consumed = 0;
+    if (stream->reset_requested && !stream->reset_sent) {
+
+        ret |= bytewrite_int8(s, picoquic_frame_type_reset_stream);
+        ret |= bytewrite_vint(s, stream->stream_id);
+        if (picoquic_supported_versions[cnx->version_index].version == PICOQUIC_TWELFTH_INTEROP_VERSION) {
+            ret |= bytewrite_int16(s, (uint16_t)stream->local_error);
         } else {
-            *consumed = byte_index;
-            stream->reset_sent = 1;
-            stream->fin_sent = 1;
+            ret |= bytewrite_vint(s, stream->local_error);
+        }
+        ret |= bytewrite_vint(s, stream->sent_offset);
 
+        if (ret != 0) {
+            ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
+        } else {
             picoquic_update_max_stream_ID_local(cnx, stream);
 
             /* Free the queued data */
@@ -368,9 +350,13 @@ int picoquic_prepare_stream_reset_frame(picoquic_cnx_t* cnx, picoquic_stream_hea
                 stream->send_queue = next;
             }
             (void)picoquic_delete_stream_if_closed(cnx, stream);
+
+            stream->reset_sent = 1;
+            stream->fin_sent = 1;
         }
     }
 
+    *consumed = (ret == 0) ? bytestream_length(s) : 0;
     return ret;
 }
 
