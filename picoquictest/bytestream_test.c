@@ -491,6 +491,73 @@ int bytestream_test_vint()
     return ret;
 }
 
+int bytestream_test_utils()
+{
+    int ret = 0;
+    size_t size = 0;
+    int finish = 0;
+
+    const static uint8_t buf9[9] = {
+        0xc8, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0xc8
+    };
+
+    bytestream stream;
+    bytestream* s9 = bytereader_init(&stream, buf9, sizeof(buf9));
+
+    bytestream_reset(s9);
+
+    if ((size = bytestream_size(s9)) != sizeof(buf9)) {
+        DBG_PRINTF("bytestream_size returned %zu on 9 byte buffer\n", size);
+        ret = -1;
+    }
+
+    if ((size = bytestream_length(s9)) != 0) {
+        DBG_PRINTF("first bytestream_length returned %zu\n", size);
+        ret = -1;
+    }
+
+    if ((size = bytestream_remain(s9)) != sizeof(buf9)) {
+        DBG_PRINTF("first bytestream_remain returned %zu\n", size);
+        ret = -1;
+    }
+
+    bytestream_skip(s9, 9 - 1);
+
+    if ((size = bytestream_length(s9)) != 9 - 1) {
+        DBG_PRINTF("second bytestream_length returned %zu\n", size);
+        ret = -1;
+    }
+
+    if ((size = bytestream_remain(s9)) != 1) {
+        DBG_PRINTF("second bytestream_remain returned %zu\n", size);
+        ret = -1;
+    }
+
+    if ((finish = bytestream_finished(s9)) != 0) {
+        DBG_PRINTF("first bytestream_finished returned %d\n", finish);
+        ret = -1;
+    }
+
+    bytestream_skip(s9, 1);
+
+    if ((size = bytestream_length(s9)) != sizeof(buf9)) {
+        DBG_PRINTF("second bytestream_length returned %zu\n", size);
+        ret = -1;
+    }
+
+    if ((size = bytestream_remain(s9)) != 0) {
+        DBG_PRINTF("third bytestream_remain returned %zu\n", size);
+        ret = -1;
+    }
+
+    if ((finish = bytestream_finished(s9)) == 0) {
+        DBG_PRINTF("second bytestream_finished returned %d\n", finish);
+        ret = -1;
+    }
+
+    return ret;
+}
+
 int bytestream_test()
 {
     int ret = 0;
@@ -512,6 +579,10 @@ int bytestream_test()
     }
 
     if (bytestream_test_vint() != 0) {
+        ret = -1;
+    }
+
+    if (bytestream_test_utils() != 0) {
         ret = -1;
     }
 

@@ -42,11 +42,15 @@ bytestream * bytewriter_init(bytestream_buf * s);
 bytestream * bytestream_alloc(bytestream * s, size_t nb_bytes);
 void bytestream_delete(bytestream * s);
 const uint8_t * bytestream_data(bytestream * s);
+const uint8_t * bytestream_ptr(bytestream * s);
 size_t bytestream_size(bytestream * s);
 size_t bytestream_length(bytestream * s);
+size_t bytestream_remain(bytestream * s);
 
 void bytestream_reset(bytestream * s);
 void bytestream_clear(bytestream * s);
+int bytestream_finished(bytestream * s);
+
 int bytestream_skip(bytestream * s, size_t nb_bytes);
 
 int bytewrite_int8(bytestream * s, uint8_t value);

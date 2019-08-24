@@ -71,6 +71,11 @@ const uint8_t * bytestream_data(bytestream * s)
     return s->data;
 }
 
+const uint8_t * bytestream_ptr(bytestream * s)
+{
+    return s->data + s->ptr;
+}
+
 size_t bytestream_size(bytestream * s)
 {
     return s->size;
@@ -79,6 +84,11 @@ size_t bytestream_size(bytestream * s)
 size_t bytestream_length(bytestream * s)
 {
     return s->ptr;
+}
+
+size_t bytestream_remain(bytestream * s)
+{
+    return s->size - s->ptr;
 }
 
 void bytestream_reset(bytestream * s)
@@ -90,6 +100,11 @@ void bytestream_clear(bytestream * s)
 {
     s->ptr = 0;
     memset(s->data, 0, s->size);
+}
+
+int bytestream_finished(bytestream * s)
+{
+    return s->ptr >= s->size;
 }
 
 int bytestream_skip(bytestream * s, size_t nb_bytes)
