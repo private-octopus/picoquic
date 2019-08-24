@@ -725,26 +725,26 @@ int picoquic_prepare_stop_sending_frame(picoquic_stream_head_t* stream,
     uint8_t* bytes, size_t bytes_max, size_t* consumed)
 {
     int ret = 0;
-    const size_t min_length = 1 + 4 + 2;
-    size_t byte_index = 0;
 
-    if (bytes_max < min_length) {
-        ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
-    } else if (!stream->stop_sending_requested || stream->stop_sending_sent || stream->fin_received || stream->reset_received) {
+    bytestream bs;
+    bytestream * s = bytereader_init(&bs, bytes, bytes_max);
+
+    if (stream->stop_sending_requested && !stream->stop_sending_sent && !stream->fin_received && !stream->reset_received) {
+        ret |= bytewrite_int8(s, picoquic_frame_type_stop_sending);
+        ret |= bytewrite_vint(s, stream->stream_id);
+        ret |= bytewrite_int16(s, (uint16_t)stream->local_stop_error);
+
+        if (ret != 0) {
+            ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
+        }
+    }
+
+    if (ret == 0) {
         /* set this, so we will not be called again */
-        stream->stop_sending_sent = 1;
-        /* no need to send a stop sending frame */
-        *consumed = 0;
-    } else {
-        bytes[byte_index++] = picoquic_frame_type_stop_sending;
-        byte_index += picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index,
-            (uint64_t)stream->stream_id);
-        picoformat_16(bytes + byte_index, (uint16_t)stream->local_stop_error);
-        byte_index += 2;
-        *consumed = byte_index;
         stream->stop_sending_sent = 1;
     }
 
+    *consumed = (ret == 0) ? bytestream_length(s) : 0;
     return ret;
 }
 
