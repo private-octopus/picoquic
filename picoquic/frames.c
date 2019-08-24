@@ -750,40 +750,57 @@ int picoquic_prepare_stop_sending_frame(picoquic_stream_head_t* stream,
 
 uint8_t* picoquic_decode_stop_sending_frame(picoquic_cnx_t* cnx, uint8_t* bytes, const uint8_t* bytes_max)
 {
+    int ret = 0;
     uint64_t stream_id = 0;
     uint16_t error_code = 0;
-    picoquic_stream_head_t* stream;
 
-    if ((bytes = picoquic_frames_varint_decode(bytes+1, bytes_max, &stream_id))  == NULL ||
-        (bytes = picoquic_frames_uint16_decode(bytes,   bytes_max, &error_code)) == NULL)
-    {
-        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
-            picoquic_frame_type_stop_sending);
+    bytestream bs;
+    bytestream * s = bytereader_init(&bs, bytes, bytes_max - bytes);
 
-    } else if ((stream = picoquic_find_or_create_stream(cnx, stream_id, 1)) == NULL) {
-        bytes = NULL;  // Error already signaled
-    } else if (!stream->stop_sending_received && !stream->reset_requested) {
-        stream->stop_sending_received = 1;
-        stream->remote_stop_error = error_code;
+    ret |= bytestream_skip(s, 1u);
+    ret |= byteread_vint(s, &stream_id);
+    ret |= byteread_int16(s, &error_code);
 
-        if (cnx->callback_fn != NULL && !stream->stop_sending_signalled) {
-            if (cnx->callback_fn(cnx, stream->stream_id, NULL, 0, picoquic_callback_stop_sending, cnx->callback_ctx, stream->app_stream_ctx) != 0) {
-                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR,
-                    picoquic_frame_type_stop_sending);
+    if (ret != 0) {
+        ret = PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR;
+    }
+    else {
+        picoquic_stream_head_t * stream = picoquic_find_or_create_stream(cnx, stream_id, 1);
+        if (stream == NULL) {
+            ret = -1;
+        }
+        else if (!stream->stop_sending_received && !stream->reset_requested) {
+            stream->stop_sending_received = 1;
+            stream->remote_stop_error = error_code;
+
+            if (cnx->callback_fn != NULL && !stream->stop_sending_signalled) {
+                if (cnx->callback_fn(cnx, stream->stream_id, NULL, 0, picoquic_callback_stop_sending, cnx->callback_ctx, stream->app_stream_ctx) != 0) {
+                    ret = PICOQUIC_TRANSPORT_INTERNAL_ERROR;
+                }
+                stream->stop_sending_signalled = 1;
             }
-            stream->stop_sending_signalled = 1;
         }
     }
 
-    return bytes;
+    if (ret != 0 && ret != -1) {
+        picoquic_connection_error(cnx, (uint16_t)ret, picoquic_frame_type_stop_sending);
+    }
+
+    return ret == 0 ? bytes + bytestream_length(s) : NULL;
 }
 
 uint8_t* picoquic_skip_stop_sending_frame(uint8_t* bytes, const uint8_t* bytes_max)
 {
-    if ((bytes = picoquic_frames_varint_skip(bytes+1, bytes_max)) != NULL) {
-        bytes = picoquic_frames_fixed_skip(bytes, bytes_max, sizeof(uint16_t));
-    }
-    return bytes;
+    int ret = 0;
+
+    bytestream bs;
+    bytestream* s = bytereader_init(&bs, bytes, bytes_max - bytes);
+
+    ret |= bytestream_skip(s, 1u);
+    ret |= byteread_skip_vint(s);
+    ret |= bytestream_skip(s, 2u);
+
+    return ret == 0 ? bytes + bytestream_length(s) : NULL;
 }
 
 
