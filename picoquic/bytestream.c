@@ -39,7 +39,7 @@ bytestream * bytereader_init(bytestream * s, const void * bytes, size_t nb_bytes
 bytestream * bytewriter_init(bytestream_buf * s)
 {
     s->s.data = s->buf;
-    s->s.size = PICOSTREAM_MAX_BUFFER_SIZE;
+    s->s.size = BYTESTREAM_MAX_BUFFER_SIZE;
     s->s.ptr = 0;
 
     return &s->s;

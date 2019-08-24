@@ -19,12 +19,12 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef PICOQUIC_PICOSTREAM_H
-#define PICOQUIC_PICOSTREAM_H
+#ifndef PICOQUIC_BYTESTREAM_H
+#define PICOQUIC_BYTESTREAM_H
 
 #include "picoquic_internal.h"
 
-#define PICOSTREAM_MAX_BUFFER_SIZE 2048
+#define BYTESTREAM_MAX_BUFFER_SIZE 2048
 
 typedef struct {
     uint8_t * data;
@@ -34,7 +34,7 @@ typedef struct {
 
 typedef struct {
     bytestream s;
-    uint8_t buf[PICOSTREAM_MAX_BUFFER_SIZE];
+    uint8_t buf[BYTESTREAM_MAX_BUFFER_SIZE];
 } bytestream_buf;
 
 bytestream * bytereader_init(bytestream * s, const void * bytes, size_t nb_bytes);
@@ -68,4 +68,4 @@ size_t bytestream_vint_len(uint64_t value);
 int bytewrite_buffer(bytestream * s, const void * buffer, size_t length);
 int byteread_buffer(bytestream * s, void * buffer, size_t length);
 
-#endif /* PICOQUIC_PICOSTREAM_H */
+#endif /* PICOQUIC_BYTESTREAM_H */

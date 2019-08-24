@@ -33,7 +33,7 @@ static const uint8_t expected_stream0[16] =
     0xc8, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
 };
 
-int eval_picostream_write(bytestream * s, int ret, const char * fn_name)
+int eval_bytestream_write(bytestream * s, int ret, const char * fn_name)
 {
     size_t expected_size = sizeof(expected_stream0);
     size_t stream_len = bytestream_length(s);
@@ -55,7 +55,7 @@ int eval_picostream_write(bytestream * s, int ret, const char * fn_name)
     return ret;
 }
 
-int eval_picostream_read(bytestream * s, int ret, const char * fn_name)
+int eval_bytestream_read(bytestream * s, int ret, const char * fn_name)
 {
     size_t expected_size = sizeof(expected_stream0);
     size_t stream_len = bytestream_length(s);
@@ -72,7 +72,7 @@ int eval_picostream_read(bytestream * s, int ret, const char * fn_name)
     return ret;
 }
 
-int verify_picostream_write_intXX(bytestream * s)
+int verify_bytestream_write_intXX(bytestream * s)
 {
     int ret = 0;
     ret |= bytewrite_int8(s, 0x00);
@@ -80,10 +80,10 @@ int verify_picostream_write_intXX(bytestream * s)
     ret |= bytewrite_int16(s, 0x4203);
     ret |= bytewrite_int32(s, 0x84050607);
     ret |= bytewrite_int64(s, 0xc8090a0b0c0d0e0f);
-    return eval_picostream_write(s, ret, "bytewrite_intXX");
+    return eval_bytestream_write(s, ret, "bytewrite_intXX");
 }
 
-int verify_picostream_write_int(bytestream * s)
+int verify_bytestream_write_int(bytestream * s)
 {
     int ret = 0;
     ret |= bytewrite_vint(s, 0x00);
@@ -91,18 +91,18 @@ int verify_picostream_write_int(bytestream * s)
     ret |= bytewrite_vint(s, 0x0203);
     ret |= bytewrite_vint(s, 0x04050607);
     ret |= bytewrite_vint(s, 0x08090a0b0c0d0e0f);
-    return eval_picostream_write(s, ret, "bytewrite_vint");
+    return eval_bytestream_write(s, ret, "bytewrite_vint");
 }
 
-int verify_picostream_write_buffer(bytestream * s)
+int verify_bytestream_write_buffer(bytestream * s)
 {
     int ret = 0;
     ret |= bytewrite_buffer(s, expected_stream0, 2);
     ret |= bytewrite_buffer(s, expected_stream0 + 2, 14);
-    return eval_picostream_write(s, ret, "bytewrite_buffer");
+    return eval_bytestream_write(s, ret, "bytewrite_buffer");
 }
 
-int verify_picostream_read_intXX(bytestream * s)
+int verify_bytestream_read_intXX(bytestream * s)
 {
     int ret = 0;
     uint8_t val8 = 0;
@@ -118,10 +118,10 @@ int verify_picostream_read_intXX(bytestream * s)
     uint64_t val64 = 0;
     ret |= byteread_int64(s, &val64) || val64 != 0xc8090a0b0c0d0e0f;
 
-    return eval_picostream_read(s, ret, "byteread_intXX");
+    return eval_bytestream_read(s, ret, "byteread_intXX");
 }
 
-int verify_picostream_read_int(bytestream * s)
+int verify_bytestream_read_int(bytestream * s)
 {
     int ret = 0;
     uint64_t value64 = 0;
@@ -130,10 +130,10 @@ int verify_picostream_read_int(bytestream * s)
     ret |= byteread_vint(s, &value64) != 0 || value64 != 0x0203;
     ret |= byteread_vint(s, &value64) != 0 || value64 != 0x04050607;
     ret |= byteread_vint(s, &value64) != 0 || value64 != 0x08090a0b0c0d0e0f;
-    return eval_picostream_read(s, ret, "byteread_vint");
+    return eval_bytestream_read(s, ret, "byteread_vint");
 }
 
-int verify_picostream_skip_int(bytestream * s)
+int verify_bytestream_skip_int(bytestream * s)
 {
     int ret = 0;
     size_t len = 0;
@@ -142,72 +142,72 @@ int verify_picostream_skip_int(bytestream * s)
     ret |= byteread_skip_vint(s, &len) != 0 || len != 2;
     ret |= byteread_skip_vint(s, &len) != 0 || len != 4;
     ret |= byteread_skip_vint(s, &len) != 0 || len != 8;
-    return eval_picostream_read(s, ret, "byteread_skip_vint");
+    return eval_bytestream_read(s, ret, "byteread_skip_vint");
 }
 
-int verify_picostream_read_buffer(bytestream* s)
+int verify_bytestream_read_buffer(bytestream* s)
 {
     int ret = 0;
     uint8_t buf[16];
     ret |= byteread_buffer(s, buf, 2) != 0 || memcmp(expected_stream0, buf, 2) != 0;
     ret |= byteread_buffer(s, buf, 14) != 0 || memcmp(expected_stream0+2, buf, 14) != 0;
-    return eval_picostream_read(s, ret, "byteread_buffer");
+    return eval_bytestream_read(s, ret, "byteread_buffer");
 }
 
-int verify_picostream_write(bytestream * s)
+int verify_bytestream_write(bytestream * s)
 {
     int ret = 0;
 
     bytestream_reset(s);
     memset(bytestream_data(s), 0x00, sizeof(expected_stream0));
-    ret |= verify_picostream_write_intXX(s);
+    ret |= verify_bytestream_write_intXX(s);
 
     bytestream_reset(s);
     memset(bytestream_data(s), 0x00, sizeof(expected_stream0));
-    ret |= verify_picostream_write_int(s);
+    ret |= verify_bytestream_write_int(s);
 
     bytestream_reset(s);
     memset(bytestream_data(s), 0x00, sizeof(expected_stream0));
-    ret |= verify_picostream_write_buffer(s);
+    ret |= verify_bytestream_write_buffer(s);
 
     return ret;
 }
 
-int verify_picostream_read(bytestream * s)
+int verify_bytestream_read(bytestream * s)
 {
     int ret = 0;
 
     bytestream_reset(s);
-    ret |= verify_picostream_read_intXX(s);
+    ret |= verify_bytestream_read_intXX(s);
 
     bytestream_reset(s);
-    ret |= verify_picostream_read_int(s);
+    ret |= verify_bytestream_read_int(s);
 
     bytestream_reset(s);
-    ret |= verify_picostream_read_buffer(s);
+    ret |= verify_bytestream_read_buffer(s);
 
     return ret;
 }
 
-int verify_picostream_on_stack()
+int verify_bytestream_on_stack()
 {
     int ret = 0;
 
     bytestream_buf wstream;
     bytestream * ws = bytewriter_init(&wstream);
-    ret |= verify_picostream_write(ws);
+    ret |= verify_bytestream_write(ws);
 
     bytestream rstream;
     bytestream * rs = bytereader_init(&rstream, expected_stream0, sizeof(expected_stream0));
-    ret |= verify_picostream_read(rs);
+    ret |= verify_bytestream_read(rs);
 
     bytestream_reset(rs);
-    ret |= verify_picostream_skip_int(rs);
+    ret |= verify_bytestream_skip_int(rs);
 
     return ret;
 }
 
-int verify_picostream_on_heap()
+int verify_bytestream_on_heap()
 {
     int ret = 0;
 
@@ -215,11 +215,11 @@ int verify_picostream_on_heap()
     bytestream * s = bytestream_alloc(&stream, sizeof(expected_stream0));
 
     bytestream_reset(s);
-    ret |= verify_picostream_write(s);
+    ret |= verify_bytestream_write(s);
 
     bytestream_reset(s);
     memcpy(bytestream_data(s), expected_stream0, sizeof(expected_stream0));
-    ret |= verify_picostream_read(s);
+    ret |= verify_bytestream_read(s);
 
     bytestream_delete(s);
 
@@ -229,7 +229,7 @@ int verify_picostream_on_heap()
 /*
  * This tests bytestream write functionality when close to or over the allocated limits.
  */
-int picostream_test_write_limits()
+int bytestream_test_write_limits()
 {
     int ret = 0;
     const static uint8_t buf[8] = { 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f };
@@ -326,7 +326,7 @@ int picostream_test_write_limits()
 /*
  * This tests bytestream read functionality when close to or over the allocated limits.
  */
-int picostream_test_read_limits()
+int bytestream_test_read_limits()
 {
     int ret = 0;
     
@@ -459,7 +459,7 @@ typedef struct st_picoquic_val_len {
     size_t len;
 } picoquic_val_len;
 
-int picostream_test_vint()
+int bytestream_test_vint()
 {
     int ret = 0;
 
@@ -495,27 +495,27 @@ int picostream_test_vint()
     return ret;
 }
 
-int picostream_test()
+int bytestream_test()
 {
     int ret = 0;
 
-    if (verify_picostream_on_stack() != 0) {
+    if (verify_bytestream_on_stack() != 0) {
         ret = -1;
     }
 
-    if (verify_picostream_on_heap() != 0) {
+    if (verify_bytestream_on_heap() != 0) {
         ret = -1;
     }
 
-    if (picostream_test_write_limits() != 0) {
+    if (bytestream_test_write_limits() != 0) {
         ret = -1;
     }
 
-    if (picostream_test_read_limits() != 0) {
+    if (bytestream_test_read_limits() != 0) {
         ret = -1;
     }
 
-    if (picostream_test_vint() != 0) {
+    if (bytestream_test_vint() != 0) {
         ret = -1;
     }
 
