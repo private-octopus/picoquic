@@ -136,12 +136,11 @@ int verify_bytestream_read_int(bytestream * s)
 int verify_bytestream_skip_int(bytestream * s)
 {
     int ret = 0;
-    size_t len = 0;
-    ret |= byteread_skip_vint(s, &len) != 0 || len != 1;
-    ret |= byteread_skip_vint(s, &len) != 0 || len != 1;
-    ret |= byteread_skip_vint(s, &len) != 0 || len != 2;
-    ret |= byteread_skip_vint(s, &len) != 0 || len != 4;
-    ret |= byteread_skip_vint(s, &len) != 0 || len != 8;
+    ret |= byteread_skip_vint(s) != 0 || bytestream_length(s) != 1;
+    ret |= byteread_skip_vint(s) != 0 || bytestream_length(s) != 2;
+    ret |= byteread_skip_vint(s) != 0 || bytestream_length(s) != 4;
+    ret |= byteread_skip_vint(s) != 0 || bytestream_length(s) != 8;
+    ret |= byteread_skip_vint(s) != 0 || bytestream_length(s) != 16;
     return eval_bytestream_read(s, ret, "byteread_skip_vint");
 }
 
@@ -335,7 +334,6 @@ int bytestream_test_read_limits()
     uint32_t i32;
     uint64_t i64;
     uint8_t buf[8];
-    size_t len;
 
     const static uint8_t buf9[9] = {
         0xc8, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0xc8
@@ -417,17 +415,17 @@ int bytestream_test_read_limits()
 
     bytestream_reset(s9);
 
-    if (byteread_skip_vint(s9, &len) != 0) {
+    if (byteread_skip_vint(s9) != 0) {
         DBG_PRINTF("%s", "first byteread_skip_vint failed on 9 byte buffer\n");
         ret = -1;
     }
 
-    if (byteread_skip_vint(s9, &len) == 0) {
+    if (byteread_skip_vint(s9) == 0) {
         DBG_PRINTF("%s", "second byteread_skip_vint didn't fail on 9 byte buffer\n");
         ret = -1;
     }
 
-    if (byteread_skip_vint(s9, &len) == 0) {
+    if (byteread_skip_vint(s9) == 0) {
         DBG_PRINTF("%s", "third byteread_skip_vint didn't fail on 9 byte buffer\n");
         ret = -1;
     }

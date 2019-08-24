@@ -97,15 +97,15 @@ int bytestream_skip(bytestream * s, size_t nb_bytes)
     }
 }
 
-int byteread_skip_vint(bytestream* s, size_t* len)
+int byteread_skip_vint(bytestream * s)
 {
     size_t max_bytes = s->size - s->ptr;
     if (max_bytes < 1) {
         return bytestream_error(s);
     }
 
-    *len = picoquic_decode_varint_length(s->data[s->ptr]);
-    return bytestream_skip(s, *len);
+    size_t len = picoquic_decode_varint_length(s->data[s->ptr]);
+    return bytestream_skip(s, len);
 }
 
 int bytewrite_vint(bytestream * s, uint64_t value)
