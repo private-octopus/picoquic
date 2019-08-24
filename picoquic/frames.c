@@ -3782,9 +3782,11 @@ static uint8_t* picoquic_skip_application_close_frame(picoquic_cnx_t * cnx, uint
  * The ACK skipping function only supports the varint format.
  * The old "fixed int" versions are supported by code in the skip_frame function
  */
-static uint8_t* picoquic_skip_ack_frame_maybe_ecn(uint8_t* bytes, const uint8_t* bytes_max, int is_ecn)
+static uint8_t* picoquic_skip_ack_frame(uint8_t* bytes, const uint8_t* bytes_max)
 {
     uint64_t nb_blocks;
+
+    int is_ecn = bytes[0] == picoquic_frame_type_ack_ecn;
 
     if ((bytes = picoquic_frames_varint_skip(bytes + 1, bytes_max)) != NULL &&
         (bytes = picoquic_frames_varint_skip(bytes, bytes_max)) != NULL &&
@@ -3807,14 +3809,6 @@ static uint8_t* picoquic_skip_ack_frame_maybe_ecn(uint8_t* bytes, const uint8_t*
     }
 
     return bytes;
-}
-
-static uint8_t* picoquic_skip_ack_frame(uint8_t* bytes, const uint8_t* bytes_max) {
-    return picoquic_skip_ack_frame_maybe_ecn(bytes, bytes_max, 0);
-}
-
-static uint8_t* picoquic_skip_ack_ecn_frame(uint8_t* bytes, const uint8_t* bytes_max) {
-    return picoquic_skip_ack_frame_maybe_ecn(bytes, bytes_max, 1);
 }
 
 /* Lots of simple frames...
@@ -3868,10 +3862,8 @@ int picoquic_skip_frame(picoquic_cnx_t * cnx, uint8_t* bytes, size_t bytes_maxsi
     if (PICOQUIC_IN_RANGE(first_byte, picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
         *pure_ack = 0;
         bytes = picoquic_skip_stream_frame(bytes, bytes_max);
-    } else if (first_byte == picoquic_frame_type_ack) {
+    } else if (first_byte == picoquic_frame_type_ack || first_byte == picoquic_frame_type_ack_ecn) {
         bytes = picoquic_skip_ack_frame(bytes, bytes_max);
-    } else if (first_byte == picoquic_frame_type_ack_ecn) {
-        bytes = picoquic_skip_ack_ecn_frame(bytes, bytes_max);
     } else {
         switch (first_byte) {
         case picoquic_frame_type_padding:
