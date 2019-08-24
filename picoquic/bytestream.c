@@ -66,7 +66,7 @@ void bytestream_delete(bytestream * s)
     }
 }
 
-void * bytestream_data(bytestream * s)
+const uint8_t * bytestream_data(bytestream * s)
 {
     return s->data;
 }
@@ -84,6 +84,12 @@ size_t bytestream_length(bytestream * s)
 void bytestream_reset(bytestream * s)
 {
     s->ptr = 0;
+}
+
+void bytestream_clear(bytestream * s)
+{
+    s->ptr = 0;
+    memset(s->data, 0, s->size);
 }
 
 int bytestream_skip(bytestream * s, size_t nb_bytes)

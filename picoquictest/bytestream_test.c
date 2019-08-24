@@ -157,16 +157,13 @@ int verify_bytestream_write(bytestream * s)
 {
     int ret = 0;
 
-    bytestream_reset(s);
-    memset(bytestream_data(s), 0x00, sizeof(expected_stream0));
+    bytestream_clear(s);
     ret |= verify_bytestream_write_intXX(s);
 
-    bytestream_reset(s);
-    memset(bytestream_data(s), 0x00, sizeof(expected_stream0));
+    bytestream_clear(s);
     ret |= verify_bytestream_write_int(s);
 
-    bytestream_reset(s);
-    memset(bytestream_data(s), 0x00, sizeof(expected_stream0));
+    bytestream_clear(s);
     ret |= verify_bytestream_write_buffer(s);
 
     return ret;
@@ -217,7 +214,8 @@ int verify_bytestream_on_heap()
     ret |= verify_bytestream_write(s);
 
     bytestream_reset(s);
-    memcpy(bytestream_data(s), expected_stream0, sizeof(expected_stream0));
+    bytewrite_buffer(s, expected_stream0, sizeof(expected_stream0));
+    bytestream_reset(s);
     ret |= verify_bytestream_read(s);
 
     bytestream_delete(s);
