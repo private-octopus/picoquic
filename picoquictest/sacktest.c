@@ -281,6 +281,7 @@ int sendacktest()
 
     memset(&cnx, 0, sizeof(cnx));
     cnx.pkt_ctx[pc].first_sack_item.start_of_sack_range = (uint64_t)((int64_t)-1);
+    cnx.sending_ecn_ack = 0; /* don't write an ack_ecn frame */
 
     for (size_t i = 0; ret == 0 && i < nb_test_pn64; i++) {
         current_time = i * 100;
@@ -291,7 +292,7 @@ int sendacktest()
 
         if (ret == 0) {
             consumed = 0;
-            ret = picoquic_prepare_ack_frame_basic(&cnx, 0, pc, bytes, sizeof(bytes), &consumed);
+            ret = picoquic_prepare_ack_frame(&cnx, 0, pc, bytes, sizeof(bytes), &consumed);
 
             received_mask |= 1ull << (test_pn64[i] & 63);
 
