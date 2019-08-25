@@ -1747,6 +1747,20 @@ uint8_t* picoquic_decode_crypto_hs_frame(picoquic_cnx_t* cnx, uint8_t* bytes, co
     return (ret == 0) ? (uint8_t*)bytestream_ptr(s) : NULL;
 }
 
+static void stream_consume_bytes(picoquic_stream_head_t* stream, size_t length)
+{
+    stream->send_queue->offset += length;
+
+    if (stream->send_queue->offset >= stream->send_queue->length) {
+        picoquic_stream_data_t* next = stream->send_queue->next_stream_data;
+        free(stream->send_queue->bytes);
+        free(stream->send_queue);
+        stream->send_queue = next;
+    }
+
+    stream->sent_offset += length;
+}
+
 int picoquic_prepare_crypto_hs_frame(picoquic_cnx_t* cnx, int epoch,
     uint8_t* bytes, size_t bytes_max, size_t* consumed)
 {
@@ -1755,76 +1769,34 @@ int picoquic_prepare_crypto_hs_frame(picoquic_cnx_t* cnx, int epoch,
 
     if (stream->send_queue == NULL || stream->send_queue->length <= stream->send_queue->offset) {
         *consumed = 0;
-    } else {
-        size_t byte_index = 0;
-        size_t l_off = 0;
-        size_t length = 0;
+    }
+    else {
+        bytestream bs;
+        bytestream* s = bytestream_ref_init(&bs, bytes, bytes_max);
 
-        bytes[byte_index++] = picoquic_frame_type_crypto_hs;
+        size_t queue_length = stream->send_queue->length - stream->send_queue->offset;
+        size_t approx_length = queue_length < bytes_max ? queue_length : bytes_max;
 
-        if (bytes_max > byte_index) {
-            l_off = picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index, stream->sent_offset);
-            byte_index += l_off;
-        }
-
-        if (byte_index > bytes_max || (stream->sent_offset > 0 && l_off == 0)) {
+        size_t required_len = 1u + bytestream_vint_len(stream->sent_offset) + bytestream_vint_len(approx_length);
+        if (required_len >= bytes_max) {
             *consumed = 0;
             ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
         }
         else {
-            /* Compute the length */
-            size_t space = bytes_max - byte_index;
-
-            if (space < 2) {
-                length = 0;
-            } else {
-                size_t l_len = 0;
-                size_t available = stream->send_queue->length - (size_t)stream->send_queue->offset;
-
-                length = available;
-                /* Trial encoding */
-                l_len = picoquic_varint_encode(bytes + byte_index, space,
-                    (uint64_t)length);
-
-                if (length + l_len >= space) {
-                    if (space < l_len) {
-                        /* Will not try a silly encoding */
-            *consumed = 0;
-            ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
-        }
-        else {
-                        /* New encoding with appropriate length */
-                        length = space - l_len;
-                        l_len = picoquic_varint_encode(bytes + byte_index, space,
-                            (uint64_t)length);
-                    }
-            }
-                /* This is good */
-                byte_index += l_len;
+            size_t length = bytes_max - required_len;
+            if (length > queue_length) {
+                length = queue_length;
             }
 
-            if (ret == 0 && length > 0) {
-                memcpy(&bytes[byte_index], stream->send_queue->bytes + stream->send_queue->offset, length);
-                byte_index += length;
+            bytewrite_int8(s, picoquic_frame_type_crypto_hs);
+            bytewrite_vint(s, stream->sent_offset);
+            bytewrite_vint(s, length);
+            bytewrite_buffer(s, stream->send_queue->bytes + stream->send_queue->offset, length);
 
-                stream->send_queue->offset += length;
-                if (stream->send_queue->offset >= stream->send_queue->length) {
-                    picoquic_stream_data_t* next = stream->send_queue->next_stream_data;
-                    free(stream->send_queue->bytes);
-                    free(stream->send_queue);
-                    stream->send_queue = next;
-                }
-
-                stream->sent_offset += length;
-                *consumed = byte_index;
-            } else if (ret == 0 && length == 0) {
-                /* No point in sending a silly packet */
-                *consumed = 0;
-                ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
-            }
+            stream_consume_bytes(stream, length);
+            *consumed = bytestream_length(s);
         }
     }
-
     return ret;
 }
 
