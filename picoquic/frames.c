@@ -3314,10 +3314,8 @@ int picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, bytestream * s,
 }
 
 
-int picoquic_decode_blocked_frame(picoquic_cnx_t * cnx, bytestream * s)
+int picoquic_decode_blocked_frame(bytestream * s)
 {
-    UNREFERENCED_PARAMETER(cnx);
-
     if (byteread_skip_vint(s) != 0) {
         return PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR;
     } else {
@@ -3326,10 +3324,8 @@ int picoquic_decode_blocked_frame(picoquic_cnx_t * cnx, bytestream * s)
 }
 
 
-int picoquic_decode_stream_blocked_frame(picoquic_cnx_t * cnx, bytestream * s)
+int picoquic_decode_stream_blocked_frame(bytestream * s)
 {
-    UNREFERENCED_PARAMETER(cnx);
-
     /* TODO: check that the stream number is valid */
     if (byteread_skip_vint(s) != 0 || byteread_skip_vint(s) != 0) {
         return PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR;
@@ -3339,10 +3335,8 @@ int picoquic_decode_stream_blocked_frame(picoquic_cnx_t * cnx, bytestream * s)
 }
 
 
-int picoquic_decode_streams_blocked_frame(picoquic_cnx_t * cnx, bytestream * s)
+int picoquic_decode_streams_blocked_frame(bytestream * s)
 {
-    UNREFERENCED_PARAMETER(cnx);
-
     if (byteread_skip_vint(s) != 0) {
         return PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR;
     } else {
@@ -3565,16 +3559,16 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_
                 ack_needed = 1;
                 break;
             case picoquic_frame_type_data_blocked:
-                ret = picoquic_decode_blocked_frame(cnx, s);
+                ret = picoquic_decode_blocked_frame(s);
                 ack_needed = 1;
                 break;
             case picoquic_frame_type_stream_data_blocked:
-                ret = picoquic_decode_stream_blocked_frame(cnx, s);
+                ret = picoquic_decode_stream_blocked_frame(s);
                 ack_needed = 1;
                 break;
             case picoquic_frame_type_streams_blocked_unidir:
             case picoquic_frame_type_streams_blocked_bidir:
-                ret = picoquic_decode_streams_blocked_frame(cnx, s);
+                ret = picoquic_decode_streams_blocked_frame(s);
                 ack_needed = 1;
                 break;
             case picoquic_frame_type_new_connection_id:
