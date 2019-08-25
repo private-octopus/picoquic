@@ -27,6 +27,7 @@
 #include "picoquic.h"
 #include "picotlsapi.h"
 #include "util.h"
+#include "bytestream.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -942,10 +943,8 @@ int picoquic_is_stream_frame_unlimited(const uint8_t* bytes);
 int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, uint8_t* bytes,
     size_t bytes_max, int* no_need_to_repeat);
 
-int picoquic_parse_stream_header(
-    const uint8_t* bytes, size_t bytes_max,
-    uint64_t* stream_id, uint64_t* offset, size_t* data_length, int* fin,
-    size_t* consumed);
+int picoquic_parse_stream_header(bytestream* s,
+    uint64_t* stream_id, uint64_t* offset, uint8_t** data_bytes, size_t* length, int* fin);
 
 int picoquic_parse_ack_header(
     uint8_t const* bytes, size_t bytes_max,
@@ -1063,7 +1062,7 @@ picoquic_stream_head_t* picoquic_find_stream(picoquic_cnx_t* cnx, uint64_t strea
 void picoquic_add_output_streams(picoquic_cnx_t * cnx, uint64_t old_limit, uint64_t new_limit, unsigned int is_bidir);
 picoquic_stream_head_t* picoquic_find_ready_stream(picoquic_cnx_t* cnx);
 int picoquic_is_tls_stream_ready(picoquic_cnx_t* cnx);
-uint8_t* picoquic_decode_stream_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
+uint8_t* picoquic_decode_stream_frame(picoquic_cnx_t* cnx, int epoch, uint8_t* bytes,
     const uint8_t* bytes_max, uint64_t current_time);
 int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream,
     uint8_t* bytes, size_t bytes_max, size_t* consumed, int* is_still_active);

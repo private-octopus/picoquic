@@ -22,7 +22,7 @@
 #ifndef PICOQUIC_BYTESTREAM_H
 #define PICOQUIC_BYTESTREAM_H
 
-#include "picoquic_internal.h"
+#include <inttypes.h>
 
 #define BYTESTREAM_MAX_BUFFER_SIZE 2048
 

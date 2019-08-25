@@ -162,7 +162,7 @@ static int StreamZeroFrameOneTest(struct test_case_st* test)
             cnx->client_mode = 0;
 
             for (size_t i = 0; ret == 0 && i < test->list_size; i++) {
-                if (NULL == picoquic_decode_stream_frame(cnx, test->list[i].packet,
+                if (NULL == picoquic_decode_stream_frame(cnx, 3, test->list[i].packet,
                     test->list[i].packet + test->list[i].packet_length, current_time)) {
                     FAIL(test, "packet %" PRIst, i);
                     ret = -1;
