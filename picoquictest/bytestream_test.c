@@ -192,11 +192,11 @@ int verify_bytestream_on_stack()
     int ret = 0;
 
     bytestream_buf wstream;
-    bytestream * ws = bytewriter_init(&wstream, sizeof(expected_stream0));
+    bytestream * ws = bytestream_buf_init(&wstream, sizeof(expected_stream0));
     ret |= verify_bytestream_write(ws);
 
     bytestream rstream;
-    bytestream * rs = bytereader_init(&rstream, expected_stream0, sizeof(expected_stream0));
+    bytestream * rs = bytestream_ref_init(&rstream, expected_stream0, sizeof(expected_stream0));
     ret |= verify_bytestream_read(rs);
 
     bytestream_reset(rs);
@@ -343,7 +343,7 @@ int bytestream_test_read_limits()
     memcpy(heap, buf9, sizeof(buf9));
 
     bytestream stream;
-    bytestream * s9 = bytereader_init(&stream, heap, sizeof(buf9));
+    bytestream * s9 = bytestream_ref_init(&stream, heap, sizeof(buf9));
 
     bytestream_reset(s9);
     bytestream_skip(s9, 9 - 1);
@@ -519,7 +519,7 @@ int bytestream_test_utils()
     };
 
     bytestream stream;
-    bytestream* s9 = bytereader_init(&stream, buf9, sizeof(buf9));
+    bytestream* s9 = bytestream_ref_init(&stream, buf9, sizeof(buf9));
 
     bytestream_reset(s9);
 

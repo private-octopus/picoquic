@@ -27,7 +27,7 @@
 
 static int bytestream_error(bytestream * s);
 
-bytestream * bytereader_init(bytestream * s, const void * bytes, size_t nb_bytes)
+bytestream * bytestream_ref_init(bytestream * s, const void * bytes, size_t nb_bytes)
 {
     s->data = (uint8_t*)bytes;
     s->size = nb_bytes;
@@ -36,7 +36,7 @@ bytestream * bytereader_init(bytestream * s, const void * bytes, size_t nb_bytes
     return s;
 }
 
-bytestream * bytewriter_init(bytestream_buf * s, size_t nb_bytes)
+bytestream * bytestream_buf_init(bytestream_buf * s, size_t nb_bytes)
 {
     if (nb_bytes > BYTESTREAM_MAX_BUFFER_SIZE) {
         return NULL;

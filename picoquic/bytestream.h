@@ -37,8 +37,8 @@ typedef struct {
     uint8_t buf[BYTESTREAM_MAX_BUFFER_SIZE];
 } bytestream_buf;
 
-bytestream * bytereader_init(bytestream * s, const void * bytes, size_t nb_bytes);
-bytestream * bytewriter_init(bytestream_buf * s, size_t nb_bytes);
+bytestream * bytestream_ref_init(bytestream * s, const void * bytes, size_t nb_bytes);
+bytestream * bytestream_buf_init(bytestream_buf * s, size_t nb_bytes);
 bytestream * bytestream_alloc(bytestream * s, size_t nb_bytes);
 void bytestream_delete(bytestream * s);
 const uint8_t * bytestream_data(bytestream * s);
