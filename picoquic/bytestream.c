@@ -36,10 +36,14 @@ bytestream * bytereader_init(bytestream * s, const void * bytes, size_t nb_bytes
     return s;
 }
 
-bytestream * bytewriter_init(bytestream_buf * s)
+bytestream * bytewriter_init(bytestream_buf * s, size_t nb_bytes)
 {
+    if (nb_bytes > BYTESTREAM_MAX_BUFFER_SIZE) {
+        return NULL;
+    }
+
     s->s.data = s->buf;
-    s->s.size = BYTESTREAM_MAX_BUFFER_SIZE;
+    s->s.size = nb_bytes;
     s->s.ptr = 0;
 
     return &s->s;

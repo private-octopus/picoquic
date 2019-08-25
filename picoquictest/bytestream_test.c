@@ -192,7 +192,7 @@ int verify_bytestream_on_stack()
     int ret = 0;
 
     bytestream_buf wstream;
-    bytestream * ws = bytewriter_init(&wstream);
+    bytestream * ws = bytewriter_init(&wstream, sizeof(expected_stream0));
     ret |= verify_bytestream_write(ws);
 
     bytestream rstream;
