@@ -943,7 +943,7 @@ int picoquic_is_stream_frame_unlimited(const uint8_t* bytes);
 int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, uint8_t* bytes,
     size_t bytes_max, int* no_need_to_repeat);
 
-int picoquic_parse_stream_header(bytestream* s,
+int picoquic_parse_stream_header(bytestream* s, uint8_t ftype,
     uint64_t* stream_id, uint64_t* offset, uint8_t** data_bytes, size_t* length, int* fin);
 
 int picoquic_parse_ack_header(
@@ -1062,8 +1062,7 @@ picoquic_stream_head_t* picoquic_find_stream(picoquic_cnx_t* cnx, uint64_t strea
 void picoquic_add_output_streams(picoquic_cnx_t * cnx, uint64_t old_limit, uint64_t new_limit, unsigned int is_bidir);
 picoquic_stream_head_t* picoquic_find_ready_stream(picoquic_cnx_t* cnx);
 int picoquic_is_tls_stream_ready(picoquic_cnx_t* cnx);
-uint8_t* picoquic_decode_stream_frame(picoquic_cnx_t* cnx, int epoch, uint8_t* bytes,
-    const uint8_t* bytes_max, uint64_t current_time);
+int picoquic_decode_stream_frame(picoquic_cnx_t* cnx, int epoch, uint8_t ftype, bytestream* s, uint64_t current_time);
 int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream,
     uint8_t* bytes, size_t bytes_max, size_t* consumed, int* is_still_active);
 int picoquic_split_stream_frame(uint8_t* frame, size_t frame_length,
@@ -1075,14 +1074,10 @@ int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
     int * packet_is_pure_ack,
     int * do_not_detect_spurious,
     size_t * length);
-uint8_t* picoquic_decode_crypto_hs_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
-    const uint8_t* bytes_max, int epoch);
+int picoquic_decode_crypto_hs_frame(picoquic_cnx_t* cnx, int epoch, bytestream* s);
 int picoquic_prepare_crypto_hs_frame(picoquic_cnx_t* cnx, int epoch,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
 int picoquic_prepare_ack_frame(picoquic_cnx_t* cnx, uint64_t current_time,
-    picoquic_packet_context_enum pc,
-    uint8_t* bytes, size_t bytes_max, size_t* consumed);
-int picoquic_prepare_ack_frame_basic(picoquic_cnx_t* cnx, uint64_t current_time,
     picoquic_packet_context_enum pc,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
 int picoquic_prepare_connection_close_frame(picoquic_cnx_t* cnx,

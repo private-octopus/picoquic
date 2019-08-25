@@ -162,8 +162,14 @@ static int StreamZeroFrameOneTest(struct test_case_st* test)
             cnx->client_mode = 0;
 
             for (size_t i = 0; ret == 0 && i < test->list_size; i++) {
-                if (NULL == picoquic_decode_stream_frame(cnx, 3, test->list[i].packet,
-                    test->list[i].packet + test->list[i].packet_length, current_time)) {
+
+                bytestream bs;
+                bytestream* s = bytestream_ref_init(&bs, test->list[i].packet, test->list[i].packet_length);
+
+                uint8_t ftype;
+                byteread_int8(s, &ftype);
+
+                if (picoquic_decode_stream_frame(cnx, 3, ftype, s, current_time) != 0) {
                     FAIL(test, "packet %" PRIst, i);
                     ret = -1;
                 }
@@ -319,8 +325,14 @@ static int TlsStreamFrameOneTest(struct test_case_st* test)
     picoquic_cnx_t cnx = { 0 };
 
     for (size_t i = 0; ret == 0 && i < test->list_size; i++) {
-        if (NULL == picoquic_decode_crypto_hs_frame(&cnx, test->list[i].packet,
-                test->list[i].packet + test->list[i].packet_length, test_epoch )) {
+
+        bytestream bs;
+        bytestream* s = bytestream_ref_init(&bs, test->list[i].packet, test->list[i].packet_length);
+
+        uint8_t ftype;
+        byteread_int8(s, &ftype);
+
+        if (picoquic_decode_crypto_hs_frame(&cnx, test_epoch, s) != 0) {
             FAIL(test, "packet %" PRIst, i);
             ret = -1;
         }

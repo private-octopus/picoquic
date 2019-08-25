@@ -561,8 +561,11 @@ size_t picoquic_log_stream_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
     bytestream stream;
     bytestream * s = bytestream_ref_init(&stream, bytes, bytes_max);
 
+    uint8_t ftype;
+    byteread_int8(s, &ftype);
+
     int suspended = debug_printf_reset(1);
-    int ret = picoquic_parse_stream_header(s,
+    int ret = picoquic_parse_stream_header(s, ftype,
         &stream_id, &offset, &data_bytes, &data_length, &fin);
     (void)debug_printf_reset(suspended);
 
