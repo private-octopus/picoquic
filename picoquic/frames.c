@@ -2543,8 +2543,7 @@ static int picoquic_skip_ack_range(picoquic_cnx_t* cnx, uint64_t* plargest, uint
     return ret;
 }
 
-static uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
-    const uint8_t* bytes_max, uint64_t current_time, picoquic_packet_context_enum pc)
+static uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, int epoch, uint8_t* bytes, const uint8_t* bytes_max, uint64_t current_time)
 {
     uint8_t ftype;
     uint64_t largest;
@@ -2553,6 +2552,7 @@ static uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
 
     bytestream stream;
     bytestream * s = bytestream_ref_init(&stream, bytes, bytes_max - bytes);
+    picoquic_packet_context_enum pc = picoquic_context_from_epoch(epoch);
 
     int ret = 0;
     ret |= byteread_int8(s, &ftype);
@@ -2562,11 +2562,13 @@ static uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
 
     if (ret != 0) {
         DBG_PRINTF("Malformed ACK, header too small: %zu bytes\n", bytestream_size(s));
-        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, ftype);
+        ret = PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR;
+    } else if (epoch == 1) {
+        DBG_PRINTF("Ack/Ack-ECN frame (0x%x) not expected in 0-RTT packet", ftype);
+        ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
     } else if (largest >= cnx->pkt_ctx[pc].send_sequence) {
         DBG_PRINTF("Malformed ACK, largest(%" PRIx64 ") >= seq_no(%" PRIx64 ")\n", largest, cnx->pkt_ctx[pc].send_sequence);
-        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, ftype);
-        ret = -1;
+        ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
     } else {
         ack_delay <<= cnx->remote_parameters.ack_delay_exponent;
 
@@ -2615,12 +2617,11 @@ static uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
         }
     }
 
-    /* Once picoquic_decode_ack_frame() is called with a bytestream this will change to "return ret;" */
-    if (ret == 0) {
-        return bytes + bytestream_length(s);
-    } else {
-        return NULL;
+    if (ret != 0 && ret != -1) {
+        picoquic_connection_error(cnx, (uint16_t)ret, ftype);
     }
+
+    return (ret == 0) ? (uint8_t*)bytestream_ptr(s) : NULL;
 }
 
 /*
@@ -2655,7 +2656,7 @@ static uint8_t* picoquic_skip_ack_frame(uint8_t* bytes, const uint8_t* bytes_max
     }
 
     if (ret == 0) {
-        return bytes + bytestream_length(s);
+        return (uint8_t*)bytestream_ptr(s);
     } else {
         return NULL;
     }
@@ -3634,15 +3635,9 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_
             bytes = picoquic_decode_stream_frame(cnx, bytes, bytes_max, current_time);
             ack_needed = 1;
 
-        } else if (first_byte == picoquic_frame_type_ack || first_byte == picoquic_frame_type_ack_ecn) {
-            if (epoch == 1) {
-                DBG_PRINTF("Ack/Ack-ECN frame (0x%x) not expected in 0-RTT packet", first_byte);
-                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, first_byte);
-                bytes = NULL;
-                break;
-            }
-            bytes = picoquic_decode_ack_frame(cnx, bytes, bytes_max, current_time, pc);
         } else if (epoch != 1 && epoch != 3 && first_byte != picoquic_frame_type_padding
+                                            && first_byte != picoquic_frame_type_ack
+                                            && first_byte != picoquic_frame_type_ack_ecn
                                             && first_byte != picoquic_frame_type_path_challenge
                                             && first_byte != picoquic_frame_type_path_response
                                             && first_byte != picoquic_frame_type_connection_close
@@ -3655,6 +3650,10 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_
             switch (first_byte) {
             case picoquic_frame_type_padding:
                 bytes = picoquic_skip_0len_frame(bytes, bytes_max);
+                break;
+            case picoquic_frame_type_ack:
+            case picoquic_frame_type_ack_ecn:
+                bytes = picoquic_decode_ack_frame(cnx, epoch, bytes, bytes_max, current_time);
                 break;
             case picoquic_frame_type_reset_stream:
                 bytes = picoquic_decode_stream_reset_frame(cnx, bytes, bytes_max);
