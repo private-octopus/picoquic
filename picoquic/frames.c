@@ -1715,28 +1715,36 @@ int picoquic_is_tls_stream_ready(picoquic_cnx_t* cnx)
 
 uint8_t* picoquic_decode_crypto_hs_frame(picoquic_cnx_t* cnx, uint8_t* bytes, const uint8_t* bytes_max, int epoch)
 {
+    int new_data_available;  // Unused
+    int ret = 0;
+
+    bytestream bs;
+    bytestream* s = bytestream_ref_init(&bs, bytes, bytes_max - bytes);
+
+    uint8_t ftype;
+    ret |= byteread_int8(s, &ftype);
+
     uint64_t offset;
-    uint64_t data_length;
-    int      new_data_available;  // Unused
+    uint64_t length;
 
-    if ((bytes = picoquic_frames_varint_decode(bytes+1, bytes_max, &offset))      == NULL ||
-        (bytes = picoquic_frames_varint_decode(bytes,   bytes_max, &data_length)) == NULL )
-    {
-        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, picoquic_frame_type_crypto_hs);
+    ret |= byteread_vint(s, &offset);
+    ret |= byteread_vint(s, &length);
 
-    } else if ((uint64_t)(bytes_max - bytes) < data_length) {
-        DBG_PRINTF("crypto hs data past the end of the packet: data_length=%" PRIst ", remaining_space=%" PRIst, data_length, bytes_max - bytes);
-        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, picoquic_frame_type_crypto_hs);
-        bytes = NULL;
+    uint8_t * data_bytes = (uint8_t*)bytestream_ptr(s);
+    ret |= bytestream_skip(s, length);
 
-    } else if (picoquic_queue_network_input(cnx, &cnx->tls_stream[epoch], offset, bytes, (size_t)data_length, &new_data_available) != 0) {
-        bytes = NULL;  // Error signaled
-
-    } else {
-        bytes += data_length;
+    if (ret != 0) {
+        DBG_PRINTF("crypto hs data past the end of the packet: data_length=%" PRIst ", remaining_space=%" PRIst, length, bytestream_remain(s));
+        ret = PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR;
+    } else if (picoquic_queue_network_input(cnx, &cnx->tls_stream[epoch], offset, data_bytes, length, &new_data_available) != 0) {
+        ret = -1;  // Error signaled
     }
 
-    return bytes;
+    if (ret != 0 && ret != -1) {
+        picoquic_connection_error(cnx, (uint16_t)ret, ftype);
+    }
+
+    return (ret == 0) ? (uint8_t*)bytestream_ptr(s) : NULL;
 }
 
 int picoquic_prepare_crypto_hs_frame(picoquic_cnx_t* cnx, int epoch,
