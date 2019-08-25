@@ -595,21 +595,26 @@ uint8_t* picoquic_skip_retire_connection_id_frame(uint8_t* bytes, const uint8_t*
 uint8_t* picoquic_decode_retire_connection_id_frame(picoquic_cnx_t* cnx, uint8_t* bytes, const uint8_t* bytes_max, uint64_t current_time, picoquic_path_t * path_x)
 {
     /* store the connection ID in order to support migration. */
+    int ret = 0;
+
+    bytestream bs;
+    bytestream* s = bytestream_ref_init(&bs, bytes, bytes_max - bytes);
+
+    uint8_t ftype;
+    ret |= byteread_int8(s, &ftype);
+
     uint64_t sequence;
 
-    if ((bytes = picoquic_frames_varint_decode(bytes + 1, bytes_max, &sequence)) == NULL) {
-        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
-            picoquic_frame_type_retire_connection_id);
+    if (byteread_vint(s, &sequence) != 0) {
+        ret = PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR;
     }
     else if (sequence >= cnx->path_sequence_next || cnx->path[0]->local_cnxid.id_len == 0) {
         /* If there is no matching path, trigger an error */
-        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
-            picoquic_frame_type_retire_connection_id);
+        ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
     }
     else if (sequence == path_x->path_sequence && path_x->path_is_registered) {
         /* Cannot delete the path through which it arrives */
-        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
-            picoquic_frame_type_retire_connection_id);
+        ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
     }
     else {
         /* Go through the list of paths to find the connection ID */
@@ -626,7 +631,11 @@ uint8_t* picoquic_decode_retire_connection_id_frame(picoquic_cnx_t* cnx, uint8_t
         }
     }
 
-    return bytes;
+    if (ret != 0 && ret != -1) {
+        picoquic_connection_error(cnx, (uint16_t)ret, ftype);
+    }
+
+    return (ret == 0) ? (uint8_t*)bytestream_ptr(s) : NULL;
 }
 
 /*
