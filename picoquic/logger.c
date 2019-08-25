@@ -1878,7 +1878,7 @@ void picoquic_cc_dump(picoquic_cnx_t * cnx, uint64_t current_time)
     }
 
     bytestream_buf stream_msg;
-    bytestream * ps_msg = bytewriter_init(&stream_msg);
+    bytestream * ps_msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
     picoquic_packet_context_t * pkt_ctx = &cnx->pkt_ctx[picoquic_packet_context_application];
     picoquic_path_t * path = cnx->path[0];
 
@@ -1907,7 +1907,7 @@ void picoquic_cc_dump(picoquic_cnx_t * cnx, uint64_t current_time)
     bytewrite_vint(ps_msg, cnx->stream_blocked);
 
     bytestream_buf stream_head;
-    bytestream * ps_head = bytewriter_init(&stream_head);
+    bytestream * ps_head = bytestream_buf_init(&stream_head, BYTESTREAM_MAX_BUFFER_SIZE);
 
     bytewrite_int32(ps_head, picoquic_log_event_cc_update);
     bytewrite_int32(ps_head, (uint32_t)bytestream_length(ps_msg));
@@ -1931,13 +1931,13 @@ FILE * picoquic_open_cc_log_file_for_read(char const * bin_cc_log_name, uint32_t
     }
 
     if (ret == 0) {
-        bytestream stream;
-        bytestream * ps = bytestream_alloc(&stream, 16);
+        bytestream_buf stream;
+        bytestream * ps = bytestream_buf_init(&stream, 16);
 
         uint32_t fcc = 0;
         uint32_t version = 0;
 
-        if (fread(bytestream_data(ps), bytestream_size(ps), 1, bin_log) <= 0) {
+        if (fread(stream.buf, bytestream_size(ps), 1, bin_log) <= 0) {
             ret = -1;
             DBG_PRINTF("Cannot read header for file %s.\n", bin_cc_log_name);
         }
@@ -1952,7 +1952,6 @@ FILE * picoquic_open_cc_log_file_for_read(char const * bin_cc_log_name, uint32_t
         else {
             ret = byteread_int32(ps, log_time);
         }
-        bytestream_delete(ps);
     }
 
     if (ret != 0) {
@@ -1994,10 +1993,14 @@ int picoquic_cc_log_file_to_csv(char const * bin_cc_log_name, char const * csv_c
         ret |= fprintf(csv_log, "stream blkd, ") <= 0;
         ret |= fprintf(csv_log, "\n") <= 0;
 
-        bytestream stream;
-        bytestream * ps_head = bytestream_alloc(&stream, 8);
+        bytestream_buf stream;
+        bytestream * ps_head = bytestream_buf_init(&stream, 8);
 
-        while (ret == 0 && fread(bytestream_data(ps_head), bytestream_size(ps_head), 1, bin_log) > 0) {
+        if (ps_head == NULL) {
+            ret = -1;
+        }
+
+        while (ret == 0 && fread(stream.buf, bytestream_size(ps_head), 1, bin_log) > 0) {
 
             uint32_t id, len;
             ret |= byteread_int32(ps_head, &id);
@@ -2007,10 +2010,10 @@ int picoquic_cc_log_file_to_csv(char const * bin_cc_log_name, char const * csv_c
 
             if (id == picoquic_log_event_cc_update) {
                 
-                bytestream stream_msg;
-                bytestream * ps_msg = bytestream_alloc(&stream_msg, len);
+                bytestream_buf stream_msg;
+                bytestream * ps_msg = bytestream_buf_init(&stream_msg, len);
 
-                if (fread(bytestream_data(ps_msg), bytestream_size(ps_msg), 1, bin_log) <= 0) {
+                if (ps_msg == NULL || fread(stream_msg.buf, bytestream_size(ps_msg), 1, bin_log) <= 0) {
                     ret = -1;
                 }
                 else {
@@ -2064,14 +2067,11 @@ int picoquic_cc_log_file_to_csv(char const * bin_cc_log_name, char const * csv_c
                         }
                     }
                 }
-                bytestream_delete(ps_msg);
             }
             else {
                 fseek(bin_log, len, SEEK_CUR);
             }
         }
-
-        bytestream_delete(ps_head);
     }
 
     (void)picoquic_file_close(csv_log);
