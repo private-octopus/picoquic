@@ -632,7 +632,7 @@ uint8_t* picoquic_decode_retire_connection_id_frame(picoquic_cnx_t* cnx, uint8_t
         /* Go through the list of paths to find the connection ID */
 
         for (int i = 0; i < cnx->nb_paths; i++) {
-            if (cnx->path[i]->path_sequence == sequence && path_x->path_is_registered) {
+            if (cnx->path[i]->path_sequence == sequence && cnx->path[i]->path_is_registered) {
                 if (sequence == 0) {
                     cnx->is_path_0_deleted = 1;
                 }
