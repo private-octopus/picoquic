@@ -482,6 +482,7 @@ int parse_frame_test()
                 pc = picoquic_context_from_epoch(test_skip_list[i].epoch);
 
                 cnx->pkt_ctx[0].send_sequence = 0x0102030406;
+                cnx->path_sequence_next = 2;
 
                 t_ret = picoquic_decode_frames(cnx, cnx->path[0], buffer, byte_max, test_skip_list[i].epoch, NULL, NULL, simulated_time);
 

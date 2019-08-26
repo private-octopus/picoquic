@@ -620,11 +620,13 @@ uint8_t* picoquic_decode_retire_connection_id_frame(picoquic_cnx_t* cnx, uint8_t
         /* If there is no matching path, trigger an error */
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
             picoquic_frame_type_retire_connection_id);
+        bytes = NULL;
     }
     else if (sequence == path_x->path_sequence && path_x->path_is_registered) {
         /* Cannot delete the path through which it arrives */
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
             picoquic_frame_type_retire_connection_id);
+        bytes = NULL;
     }
     else {
         /* Go through the list of paths to find the connection ID */
