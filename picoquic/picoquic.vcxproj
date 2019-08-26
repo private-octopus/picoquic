@@ -141,6 +141,7 @@
     <Text Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="bytestream.c" />
     <ClCompile Include="cubic.c" />
     <ClCompile Include="fnv1a.c" />
     <ClCompile Include="frames.c" />
@@ -162,6 +163,7 @@
     <ClCompile Include="util.c" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="bytestream.h" />
     <ClInclude Include="democlient.h" />
     <ClInclude Include="demoserver.h" />
     <ClInclude Include="fnv1a.h" />
