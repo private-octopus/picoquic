@@ -24,8 +24,10 @@
 */
 #include <stdio.h>
 #include <string.h>
+#include <inttypes.h>
 #include "fnv1a.h"
 #include "picoquic_internal.h"
+#include "bytestream.h"
 #include "tls_api.h"
 
 void picoquic_log_bytes(FILE* F, uint8_t* bytes, size_t bytes_max)
@@ -1836,18 +1838,22 @@ int picoquic_open_cc_dump(picoquic_cnx_t * cnx)
         if (cnx->cc_log == NULL) {
             DBG_PRINTF("Cannot open file %s for write.\n", cc_log_file_name);
             ret = -1;
-        } else {
-            /* Write a header text with three words: magic number, number of integers, and current date  */
-            uint32_t header[3];
-                
-            header[0] = PICOQUIC_LOG_CC_MAGIC;
-            header[1] = PICOQUIC_LOG_CC_NB;
-            header[2] = (uint32_t)(picoquic_current_time() / 1000000ll);
+        }
+        else {
+            /* Write a header text with version identifier and current date  */
+            bytestream stream;
+            bytestream * ps = bytestream_alloc(&stream, 16);
+            bytewrite_int32(ps, FOURCC('q', 'l', 'o', 'g'));
+            bytewrite_int32(ps, 0x01);
+            bytewrite_int32(ps, (uint32_t)(picoquic_current_time() / 1000000ll));
+            bytewrite_int32(ps, 0);
 
-            if (fwrite(header, 3 * sizeof(uint32_t), 1, cnx->cc_log) <= 0) {
+            if (fwrite(bytestream_data(ps), bytestream_length(ps), 1, cnx->cc_log) <= 0) {
                 DBG_PRINTF("Cannot write header for file %s.\n", cc_log_file_name);
                 cnx->cc_log = picoquic_file_close(cnx->cc_log);
             }
+
+            bytestream_delete(ps);
         }
     }
 
@@ -1867,44 +1873,55 @@ void picoquic_close_cc_dump(picoquic_cnx_t * cnx)
 
 void picoquic_cc_dump(picoquic_cnx_t * cnx, uint64_t current_time)
 {
-    int ret = 0;
-    uint32_t buffer[PICOQUIC_LOG_CC_NB];
-
     if (cnx->cc_log == NULL) {
         return;
     }
 
-    buffer[0] = (uint32_t)(current_time - cnx->start_time);
-    buffer[1] = (uint32_t)cnx->pkt_ctx[picoquic_packet_context_application].send_sequence;
-    buffer[2] = (uint32_t)cnx->pkt_ctx[picoquic_packet_context_application].highest_acknowledged;
-    buffer[3] = (uint32_t)(cnx->pkt_ctx[picoquic_packet_context_application].highest_acknowledged_time - cnx->start_time);
-    buffer[4] = (uint32_t)(cnx->pkt_ctx[picoquic_packet_context_application].latest_time_acknowledged - cnx->start_time);
-    buffer[5] = (uint32_t)cnx->path[0]->cwin;
-    buffer[6] = (uint32_t)cnx->path[0]->smoothed_rtt;
-    buffer[7] = (uint32_t)cnx->path[0]->rtt_min;
-    buffer[8] = (uint32_t)cnx->path[0]->send_mtu;
-    buffer[9] = (uint32_t)cnx->path[0]->pacing_packet_time_microsec;
-    buffer[10] = (uint32_t)cnx->nb_retransmission_total;
-    buffer[11] = (uint32_t)cnx->nb_spurious;
-    buffer[12] = (uint32_t)cnx->cwin_blocked;
-    buffer[13] = (uint32_t)cnx->flow_blocked;
-    buffer[14] = (uint32_t)cnx->stream_blocked;
+    bytestream_buf stream_msg;
+    bytestream * ps_msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
+    picoquic_packet_context_t * pkt_ctx = &cnx->pkt_ctx[picoquic_packet_context_application];
+    picoquic_path_t * path = cnx->path[0];
 
-    (void)fwrite(buffer, PICOQUIC_LOG_CC_NB*sizeof(uint32_t), 1, cnx->cc_log);
+    bytewrite_vint(ps_msg, current_time - cnx->start_time);
+    bytewrite_vint(ps_msg, cnx->pkt_ctx[picoquic_packet_context_application].send_sequence);
+
+    if (pkt_ctx->highest_acknowledged != (uint64_t)(int64_t)-1) {
+        bytewrite_vint(ps_msg, 1);
+        bytewrite_vint(ps_msg, pkt_ctx->highest_acknowledged);
+        bytewrite_vint(ps_msg, pkt_ctx->highest_acknowledged_time - cnx->start_time);
+        bytewrite_vint(ps_msg, pkt_ctx->latest_time_acknowledged - cnx->start_time);
+    }
+    else {
+        bytewrite_vint(ps_msg, 0);
+    }
+
+    bytewrite_vint(ps_msg, path->cwin);
+    bytewrite_vint(ps_msg, path->smoothed_rtt);
+    bytewrite_vint(ps_msg, path->rtt_min);
+    bytewrite_vint(ps_msg, path->send_mtu);
+    bytewrite_vint(ps_msg, path->pacing_packet_time_microsec);
+    bytewrite_vint(ps_msg, cnx->nb_retransmission_total);
+    bytewrite_vint(ps_msg, cnx->nb_spurious);
+    bytewrite_vint(ps_msg, cnx->cwin_blocked);
+    bytewrite_vint(ps_msg, cnx->flow_blocked);
+    bytewrite_vint(ps_msg, cnx->stream_blocked);
+
+    bytestream_buf stream_head;
+    bytestream * ps_head = bytestream_buf_init(&stream_head, BYTESTREAM_MAX_BUFFER_SIZE);
+
+    bytewrite_int32(ps_head, picoquic_log_event_cc_update);
+    bytewrite_int32(ps_head, (uint32_t)bytestream_length(ps_msg));
+
+    (void)fwrite(bytestream_data(ps_head), bytestream_length(ps_head), 1, cnx->cc_log);
+    (void)fwrite(bytestream_data(ps_msg), bytestream_length(ps_msg), 1, cnx->cc_log);
 
     cnx->cwin_blocked = 0;
     cnx->flow_blocked = 0;
     cnx->stream_blocked = 0;
-
-    if (ret != 0) {
-        picoquic_close_cc_dump(cnx);
-    }
 }
 
-#define PICOQUIC_BYTE_SWAP_32(x) ((((uint32_t)x)>>24)|((((uint32_t)x)>>8)&0x0000FF00)|((((uint32_t)x)<<8)&0x00FF0000)|(((uint32_t)x)<<24))
-
 /* Open the bin file for reading */
-FILE * picoquic_open_cc_log_file_for_read(char const * bin_cc_log_name, int * is_wrong_endian, int * nb_numbers_in_line, uint32_t * log_time)
+FILE * picoquic_open_cc_log_file_for_read(char const * bin_cc_log_name, uint32_t * log_time)
 {
     int ret = 0;
     FILE * bin_log = picoquic_file_open(bin_cc_log_name, "rb");
@@ -1913,55 +1930,50 @@ FILE * picoquic_open_cc_log_file_for_read(char const * bin_cc_log_name, int * is
         ret = -1;
     }
 
-    *nb_numbers_in_line = 0;
-    *is_wrong_endian = 0;
-    *log_time = 0;
-
     if (ret == 0) {
-        uint32_t header[3];
+        bytestream_buf stream;
+        bytestream * ps = bytestream_buf_init(&stream, 16);
 
-        if (fread(header, 3 * sizeof(uint32_t), 1, bin_log) <= 0) {
+        uint32_t fcc = 0;
+        uint32_t version = 0;
+
+        if (fread(stream.buf, bytestream_size(ps), 1, bin_log) <= 0) {
             ret = -1;
             DBG_PRINTF("Cannot read header for file %s.\n", bin_cc_log_name);
         }
-        else if (header[0] == PICOQUIC_LOG_CC_MAGIC) {
-            *nb_numbers_in_line = header[1];
-            *log_time = header[2];
-        }
-        else if (header[0] == PICOQUIC_BYTE_SWAP_32(PICOQUIC_LOG_CC_MAGIC)) {
-            *is_wrong_endian = 1;
-            *nb_numbers_in_line = PICOQUIC_BYTE_SWAP_32(header[1]);
-            *log_time = PICOQUIC_BYTE_SWAP_32(header[2]);
-        }
-        else {
+        else if (byteread_int32(ps, &fcc) != 0 || fcc != FOURCC('q', 'l', 'o', 'g')) {
             ret = -1;
             DBG_PRINTF("Header for file %s does not start with magic number.\n", bin_cc_log_name);
         }
-
-        if (ret != 0) {
-            bin_log = picoquic_file_close(bin_log);
+        else if (byteread_int32(ps, &version) != 0 || version != 0x01) {
+            ret = -1;
+            DBG_PRINTF("Header for file %s requires unsupported version.\n", bin_cc_log_name);
         }
+        else {
+            ret = byteread_int32(ps, log_time);
+        }
+    }
+
+    if (ret != 0) {
+        bin_log = picoquic_file_close(bin_log);
     }
 
     return bin_log;
 }
 
+/* Extract all picoquic_log_event_cc_update events from the binary log file and write them into an csv file. */
 int picoquic_cc_log_file_to_csv(char const * bin_cc_log_name, char const * csv_cc_log_name)
 {
     /* Open the bin file for reading, the csv file for writing */
     int ret = 0;
-    int is_wrong_endian;
-    int nb_numbers_in_line;
-    uint32_t log_time;
-    FILE * bin_log = picoquic_open_cc_log_file_for_read(bin_cc_log_name, &is_wrong_endian, &nb_numbers_in_line, &log_time);
+    uint32_t log_time = 0;
+    FILE * bin_log = picoquic_open_cc_log_file_for_read(bin_cc_log_name, &log_time);
     FILE * csv_log = picoquic_file_open(csv_cc_log_name, "w");
 
     if (bin_log == NULL || csv_log == NULL) {
         ret = -1;
-    } else {
-        uint32_t log_line[512];
-        int n = 0;
-        int nl = 0;
+    }
+    else {
 
         /* TODO: maintain the list of headers as debugging data is added */
         ret |= fprintf(csv_log, "time, ") <= 0;
@@ -1981,38 +1993,83 @@ int picoquic_cc_log_file_to_csv(char const * bin_cc_log_name, char const * csv_c
         ret |= fprintf(csv_log, "stream blkd, ") <= 0;
         ret |= fprintf(csv_log, "\n") <= 0;
 
-        while (ret == 0 && (n = (int)fread(log_line, sizeof(uint32_t), 512, bin_log)) > 0) {
-            if (is_wrong_endian) {
-                for (int i = 0; i < n; i++) {
-                    log_line[i] = PICOQUIC_BYTE_SWAP_32(log_line[i]);
-                }
-            }
+        bytestream_buf stream;
+        bytestream * ps_head = bytestream_buf_init(&stream, 8);
 
-            for (int i = 0; i < n; i++) {
-                if (fprintf(csv_log, "%d, ", log_line[i]) <= 0) {
-                    ret = -1;
-                    break;
-                }
-                nl++;
-                if (nl >= nb_numbers_in_line) {
-                    if (fprintf(csv_log, "\n") <= 0) {
-                        ret = -1;
-                        break;
-                    }
-                    nl = 0;
-                }
-            }
-        }
-
-        if (n < 0) {
-            DBG_PRINTF("Error reading data from file %s.\n", bin_cc_log_name);
+        if (ps_head == NULL) {
             ret = -1;
         }
 
-        if (ret == 0 && nl > 0) {
-            if (fprintf(csv_log, "\n") <= 0) {
-                DBG_PRINTF("Error writing data on file %s.\n", csv_cc_log_name);
-                ret = -1;
+        while (ret == 0 && fread(stream.buf, bytestream_size(ps_head), 1, bin_log) > 0) {
+
+            uint32_t id, len;
+            ret |= byteread_int32(ps_head, &id);
+            ret |= byteread_int32(ps_head, &len);
+
+            bytestream_reset(ps_head);
+
+            if (ret == 0 && id == picoquic_log_event_cc_update) {
+                
+                bytestream_buf stream_msg;
+                bytestream * ps_msg = bytestream_buf_init(&stream_msg, len);
+
+                if (ps_msg == NULL || fread(stream_msg.buf, bytestream_size(ps_msg), 1, bin_log) <= 0) {
+                    ret = -1;
+                }
+                else {
+                    uint64_t time = 0;
+                    uint64_t sequence = 0;
+                    uint64_t packet_rcvd = 0;
+                    uint64_t highest_ack = (uint64_t)(int64_t)-1;
+                    uint64_t high_ack_time = 0;
+                    uint64_t last_time_ack = 0;
+                    uint64_t cwin = 0;
+                    uint64_t SRTT = 0;
+                    uint64_t RTT_min = 0;
+                    uint64_t Send_MTU = 0;
+                    uint64_t pacing_packet_time = 0;
+                    uint64_t nb_retrans = 0;
+                    uint64_t nb_spurious = 0;
+                    uint64_t cwin_blkd = 0;
+                    uint64_t flow_blkd = 0;
+                    uint64_t stream_blkd = 0;
+
+                    ret |= byteread_vint(ps_msg, &time);
+                    ret |= byteread_vint(ps_msg, &sequence);
+                    ret |= byteread_vint(ps_msg, &packet_rcvd);
+                    if (packet_rcvd != 0) {
+                        ret |= byteread_vint(ps_msg, &highest_ack);
+                        ret |= byteread_vint(ps_msg, &high_ack_time);
+                        ret |= byteread_vint(ps_msg, &last_time_ack);
+                    }
+                    ret |= byteread_vint(ps_msg, &cwin);
+                    ret |= byteread_vint(ps_msg, &SRTT);
+                    ret |= byteread_vint(ps_msg, &RTT_min);
+                    ret |= byteread_vint(ps_msg, &Send_MTU);
+                    ret |= byteread_vint(ps_msg, &pacing_packet_time);
+                    ret |= byteread_vint(ps_msg, &nb_retrans);
+                    ret |= byteread_vint(ps_msg, &nb_spurious);
+                    ret |= byteread_vint(ps_msg, &cwin_blkd);
+                    ret |= byteread_vint(ps_msg, &flow_blkd);
+                    ret |= byteread_vint(ps_msg, &stream_blkd);
+
+                    if (ret != 0 || fprintf(csv_log, "%" PRIu64 ", %" PRIu64 ", %" PRId64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", ",
+                        time, sequence, (int64_t)highest_ack, high_ack_time, last_time_ack,
+                        cwin, SRTT, RTT_min, Send_MTU, pacing_packet_time,
+                        nb_retrans, nb_spurious, cwin_blkd, flow_blkd, stream_blkd) <= 0) {
+                        ret = -1;
+                        break;
+                    }
+                    if (ret == 0) {
+                        if (fprintf(csv_log, "\n") <= 0) {
+                            DBG_PRINTF("Error writing data on file %s.\n", csv_cc_log_name);
+                            ret = -1;
+                        }
+                    }
+                }
+            }
+            else {
+                fseek(bin_log, len, SEEK_CUR);
             }
         }
     }
