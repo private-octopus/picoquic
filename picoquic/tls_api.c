@@ -2552,15 +2552,9 @@ size_t picoquic_hash_get_length(char const* algorithm_name) {
 }
 
 void picoquic_hash_update(uint8_t* input, size_t input_length, void* hash_context) {
-    ((ptls_hash_context_t * )hash_context)->update(ctx, input, input_length);
+    ((ptls_hash_context_t * )hash_context)->update((ptls_hash_context_t*)hash_context, input, input_length);
 }
 
-size_t picoquic_hash_finalize(uint8_t* output, void* hash_context) {
-    ((ptls_hash_context_t*)hash_context)->final(ctx, output, PTLS_HASH_FINAL_MODE_FREE);
+void picoquic_hash_finalize(uint8_t* output, void* hash_context) {
+    ((ptls_hash_context_t*)hash_context)->final((ptls_hash_context_t*)hash_context, output, PTLS_HASH_FINAL_MODE_FREE);
 }
-
-void picoquic_hash_free(void* hash_context) {
-
-}
-
-ptls_hash_context_t* ctx;

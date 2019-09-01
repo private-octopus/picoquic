@@ -767,7 +767,7 @@ uint64_t demo_server_test_time_from_esni_rr(char const * esni_rr_file)
 }
 
 static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server_callback_fn,
-    int do_esni)
+    int do_esni, const picoquic_demo_stream_desc_t * demo_scenario, size_t nb_scenario, size_t const * demo_length)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -793,7 +793,7 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
         }
     }
 
-    ret = picoquic_demo_client_initialize_context(&callback_ctx, demo_test_scenario, nb_demo_test_scenario, alpn, 0);
+    ret = picoquic_demo_client_initialize_context(&callback_ctx, demo_scenario, nb_scenario, alpn, 0);
 
     if (ret == 0) {
         ret = tls_api_init_ctx(&test_ctx,
@@ -866,10 +866,10 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
     }
 
     /* Verify that the data was properly received. */
-    for (size_t i = 0; ret == 0 && i < nb_demo_test_scenario; i++) {
+    for (size_t i = 0; ret == 0 && i < nb_scenario; i++) {
         picoquic_demo_client_stream_ctx_t* stream = callback_ctx.first_stream;
 
-        while (stream != NULL && stream->stream_id != demo_test_scenario[i].stream_id) {
+        while (stream != NULL && stream->stream_id != demo_scenario[i].stream_id) {
             stream = stream->next_stream;
         }
 
@@ -881,12 +881,12 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
             DBG_PRINTF("Scenario stream %d, file was not closed\n", (int)i);
             ret = -1;
         }
-        else if (stream->received_length < demo_test_stream_length[i]) {
+        else if (stream->received_length < demo_length[i]) {
             DBG_PRINTF("Scenario stream %d, only %d bytes received\n", 
                 (int)i, (int)stream->received_length);
             ret = -1;
         }
-        else if (stream->post_sent < demo_test_scenario[i].post_size) {
+        else if (stream->post_sent < demo_scenario[i].post_size) {
             DBG_PRINTF("Scenario stream %d, only %d bytes sent\n",
                 (int)i, (int)stream->post_sent);
             ret = -1;
@@ -926,25 +926,25 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
 
 int h3zero_server_test()
 {
-    return demo_server_test("h3-19", h3zero_server_callback, 0);
+    return demo_server_test("h3-22", h3zero_server_callback, 0, demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length);
 }
 
 int h09_server_test()
 {
-    return demo_server_test("hq-19", picoquic_h09_server_callback, 0);
+    return demo_server_test("hq-22", picoquic_h09_server_callback, 0, demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length);
 }
 
 int generic_server_test()
 {
     char const * alpn_09 = "hq-22";
     char const * alpn_3 = "h3-22";
-    int ret = demo_server_test(alpn_09, picoquic_demo_server_callback, 0);
+    int ret = demo_server_test(alpn_09, picoquic_demo_server_callback, 0, demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length);
 
     if (ret != 0) {
         DBG_PRINTF("Generic server test fails for %s\n", alpn_09);
     }
     else {
-        ret = demo_server_test(alpn_3, picoquic_demo_server_callback, 0);
+        ret = demo_server_test(alpn_3, picoquic_demo_server_callback, 0, demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length);
 
         if (ret != 0) {
             DBG_PRINTF("Generic server test fails for %s\n", alpn_3);
@@ -956,5 +956,10 @@ int generic_server_test()
 
 int esni_test()
 {
-    return demo_server_test("h3-19", h3zero_server_callback, 1);
+    return demo_server_test("h3-19", h3zero_server_callback, 1, demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length);
+}
+
+int h3zero_post_test()
+{
+    return -1;
 }
