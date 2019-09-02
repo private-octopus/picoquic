@@ -766,7 +766,7 @@ uint64_t demo_server_test_time_from_esni_rr(char const * esni_rr_file)
     return esni_start;
 }
 
-static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server_callback_fn,
+static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server_callback_fn, void * server_param,
     int do_esni, const picoquic_demo_stream_desc_t * demo_scenario, size_t nb_scenario, size_t const * demo_length)
 {
     uint64_t simulated_time = 0;
@@ -813,7 +813,7 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
      * We want to replace that by the H3 callback */
 
     if (ret == 0) {
-        picoquic_set_default_callback(test_ctx->qserver, server_callback_fn, NULL);
+        picoquic_set_default_callback(test_ctx->qserver, server_callback_fn, server_param);
         picoquic_set_callback(test_ctx->cnx_client, picoquic_demo_client_callback, &callback_ctx);
         if (do_esni) {
             /* Add the esni parameters to the server */
@@ -926,25 +926,25 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
 
 int h3zero_server_test()
 {
-    return demo_server_test("h3-22", h3zero_server_callback, 0, demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length);
+    return demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, NULL, 0, demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length);
 }
 
 int h09_server_test()
 {
-    return demo_server_test("hq-22", picoquic_h09_server_callback, 0, demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length);
+    return demo_server_test(PICOHTTP_ALPN_HQ_LATEST, picoquic_h09_server_callback, NULL, 0, demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length);
 }
 
 int generic_server_test()
 {
-    char const * alpn_09 = "hq-22";
-    char const * alpn_3 = "h3-22";
-    int ret = demo_server_test(alpn_09, picoquic_demo_server_callback, 0, demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length);
+    char const * alpn_09 = PICOHTTP_ALPN_HQ_LATEST;
+    char const * alpn_3 = PICOHTTP_ALPN_H3_LATEST;
+    int ret = demo_server_test(alpn_09, picoquic_demo_server_callback, NULL, 0, demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length);
 
     if (ret != 0) {
         DBG_PRINTF("Generic server test fails for %s\n", alpn_09);
     }
     else {
-        ret = demo_server_test(alpn_3, picoquic_demo_server_callback, 0, demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length);
+        ret = demo_server_test(alpn_3, picoquic_demo_server_callback, NULL, 0, demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length);
 
         if (ret != 0) {
             DBG_PRINTF("Generic server test fails for %s\n", alpn_3);
@@ -956,10 +956,138 @@ int generic_server_test()
 
 int esni_test()
 {
-    return demo_server_test("h3-19", h3zero_server_callback, 1, demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length);
+    return demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, NULL, 1, demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length);
 }
+
+/* Test the server side post API */
+
+/* Sample callback used for demonstrating the callback API.
+ * The transaction returns the MD5 of the posted data */
+
+#define PICOQUIC_ECHO_SIZE_MAX 8192
+
+typedef struct st_hzero_post_echo_ctx_t {
+    size_t nb_received;
+    size_t nb_echo;
+    size_t nb_sent;
+    uint8_t buf[PICOQUIC_ECHO_SIZE_MAX];
+} hzero_post_echo_ctx_t;
+
+int h3zero_test_ping_callback(picoquic_cnx_t* cnx,
+    uint8_t* bytes, size_t length,
+    picohttp_call_back_event_t event, void* post_ctx, picohttp_server_stream_ctx_t* stream_ctx)
+{
+    int ret = 0;
+    hzero_post_echo_ctx_t* ctx = (hzero_post_echo_ctx_t*)stream_ctx->path_callback_ctx;
+
+    switch (event) {
+    case picohttp_callback_get: /* Received a get command */
+        break;
+    case picohttp_callback_post: /* Received a post command */
+        if (ctx == NULL) {
+            ctx = (hzero_post_echo_ctx_t*)malloc(sizeof(hzero_post_echo_ctx_t));
+            if (ctx == NULL) {
+                /* cannot handle the stream -- TODO: reset stream? */
+                return -1;
+            }
+            else {
+                memset(ctx, 0, sizeof(hzero_post_echo_ctx_t));
+                stream_ctx->path_callback_ctx = (void *) ctx;
+            }
+        }
+        else {
+            /* unexpected. Should not have a context here */
+            return -1;
+        }
+        break;
+    case picohttp_callback_post_data: /* Data received from peer on stream N */
+        /* Add data to echo size */
+        if (ctx == NULL) {
+            ret = -1;
+        }
+        else { 
+            if (ctx->nb_received < PICOQUIC_ECHO_SIZE_MAX) {
+                size_t available = PICOQUIC_ECHO_SIZE_MAX - ctx->nb_received;
+                size_t copied = (available > length) ? length : available;
+                memcpy(ctx->buf + ctx->nb_received, bytes, copied);
+                ctx->nb_echo += copied;
+            }
+            ctx->nb_received += length;
+        }
+        break;
+    case picohttp_callback_post_fin: /* All posted data have been received, prepare the response now. */
+        if (ctx != NULL) {
+            if (ctx->nb_echo <= length) {
+                memcpy(bytes, ctx->buf, ctx->nb_echo);
+            }
+            ret = ctx->nb_echo;
+        }
+        else {
+            ret = -1;
+        }
+        break;
+    case picohttp_callback_provide_data:
+        if (ctx == NULL || ctx->nb_sent > ctx->nb_echo) {
+            ret = -1;
+        }
+        else
+        {
+            /* Provide data. */
+            uint8_t* buffer;
+            size_t available = ctx->nb_echo - ctx->nb_sent;
+            int is_fin = 1;
+
+            if (available > length) {
+                available = length;
+                is_fin = 0;
+            }
+
+            buffer = picoquic_provide_stream_data_buffer(bytes, available, is_fin, !is_fin);
+            if (buffer != NULL) {
+                memcpy(buffer, ctx->buf + ctx->nb_sent, available);
+                ctx->nb_sent += available;
+                ret = 0;
+            }
+            else {
+                ret = -1;
+            }
+        }
+        break;
+    case picohttp_callback_reset: /* stream is abandoned */
+        picohttp_set_post_callback(stream_ctx, NULL, NULL);
+        if (ctx != NULL) {
+            free(ctx);
+        }
+        break;
+    default:
+        ret = -1;
+        break;
+    }
+
+    return ret;
+}
+
+static const picoquic_demo_stream_desc_t post_test_scenario[] = {
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/ping", "ping-test.html", 0, 2345 }
+};
+
+picohttp_server_path_item_t ping_test_item = {
+    "/ping",
+    5,
+    h3zero_test_ping_callback
+};
+
+picohttp_server_parameters_t ping_test_param = {
+    &ping_test_item,
+    1
+};
+
+
+static size_t const nb_post_test_scenario = sizeof(post_test_scenario) / sizeof(picoquic_demo_stream_desc_t);
+
+static size_t const post_test_stream_length[] = { 2345 };
 
 int h3zero_post_test()
 {
-    return -1;
+    return demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, (void *) &ping_test_param, 0, post_test_scenario, nb_post_test_scenario, post_test_stream_length);
 }

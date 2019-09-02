@@ -250,7 +250,7 @@ typedef enum {
     picoquic_callback_almost_ready, /* Data can be sent, but the connection is not fully established */
     picoquic_callback_ready, /* Data can be sent and received, connection migration can be initiated */
     picoquic_callback_datagram, /* Datagram frame has been received */
-    picoquic_callback_version_negotiation
+    picoquic_callback_version_negotiation /* version negotiation requested */
 } picoquic_call_back_event_t;
 
 

@@ -35,6 +35,9 @@
 #define PICOHTTP_FIRST_COMMAND_MAX 256
 #define PICOHTTP_RESPONSE_MAX (1 << 20)
 
+#define PICOHTTP_ALPN_H3_LATEST "h3-22"
+#define PICOHTTP_ALPN_HQ_LATEST "hq-22"
+
 
 
   /* Define the per URL callback used to implement POST and other
@@ -57,15 +60,20 @@ typedef int (*picohttp_post_data_cb_fn)(picoquic_cnx_t* cnx,
     picohttp_call_back_event_t fin_or_event, void* callback_ctx, struct st_picohttp_server_stream_ctx_t* stream_ctx);
 
 /* Define the table of special-purpose paths used for POST or REST queries */
-typedef struct st_picoquic_demoserver_path_item_t {
+typedef struct st_picohttp_server_path_item_t {
     char* path;
-    int path_length;
+    size_t path_length;
     picohttp_post_data_cb_fn path_callback;
-} picoquic_demoserver_path_item_t;
+} picohttp_server_path_item_t;
+
+typedef struct st_picohttp_server_parameters_t {
+    picohttp_server_path_item_t* path_table;
+    size_t path_table_nb;
+} picohttp_server_parameters_t;
 
 /* Identify the path item based on the incoming path in GET or POST */
 
-int picohttp_find_path_item(const uint8_t* path, size_t path_length, const picoquic_demoserver_path_item_t* path_table, size_t path_table_nb);
+int picohttp_find_path_item(const uint8_t* path, size_t path_length, const picohttp_server_path_item_t* path_table, size_t path_table_nb);
 
 /* Define stream context common to http 3 and http 09 callbacks
  */
@@ -101,7 +109,7 @@ typedef struct st_h3zero_server_callback_ctx_t {
     picohttp_server_stream_ctx_t* first_stream;
     size_t buffer_max;
     uint8_t* buffer;
-    picoquic_demoserver_path_item_t * path_table;
+    picohttp_server_path_item_t * path_table;
     size_t path_table_nb;
 } h3zero_server_callback_ctx_t;
 
@@ -115,7 +123,7 @@ int h3zero_server_callback(picoquic_cnx_t* cnx,
 
 typedef struct st_picoquic_h09_server_callback_ctx_t {
     picohttp_server_stream_ctx_t* first_stream;
-    picoquic_demoserver_path_item_t * path_table;
+    picohttp_server_path_item_t * path_table;
     size_t path_table_nb;
 } picoquic_h09_server_callback_ctx_t;
 
