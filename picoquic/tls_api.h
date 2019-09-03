@@ -156,6 +156,6 @@ uint8_t * picoquic_esni_nonce(picoquic_cnx_t * cnx);
 void * picoquic_hash_create(char const * algorithm_name);
 size_t picoquic_hash_get_length(char const* algorithm_name);
 void picoquic_hash_update(uint8_t* input, size_t input_length, void* hash_context);
-size_t picoquic_hash_finalize(uint8_t* output, void* hash_context);
+void picoquic_hash_finalize(uint8_t* output, void* hash_context);
 
 #endif /* TLS_API_H */

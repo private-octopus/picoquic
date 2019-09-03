@@ -42,6 +42,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
 	    }
 
+        TEST_METHOD(bytestream)
+        {
+            int ret = bytestream_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(connection_id_print)
         {
             int ret = util_connection_id_print_test();
@@ -1006,12 +1013,22 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-
         TEST_METHOD(esni) {
             int ret = esni_test();
 
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(h3zero_post) {
+            int ret = h3zero_post_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(h09_post) {
+            int ret = h09_post_test();
+
+            Assert::AreEqual(ret, 0);
+        }
     };
 }

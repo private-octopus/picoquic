@@ -41,6 +41,7 @@ int util_connection_id_print_test();
 int util_connection_id_parse_test();
 int util_sprintf_test();
 int picohash_test();
+int bytestream_test();
 int cnxcreation_test();
 int parseheadertest();
 int pn2pn64test();
@@ -181,6 +182,8 @@ int stream_splay_test();
 int stream_output_test();
 int stream_rank_test();
 int not_before_cnxid_test();
+int h3zero_post_test();
+int h09_post_test();
 
 #ifdef __cplusplus
 }
