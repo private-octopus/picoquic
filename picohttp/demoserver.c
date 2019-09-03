@@ -147,11 +147,6 @@ Picoquic HTTP 3 service\
 <h1>Enjoy!</h1>\r\n\
 </BODY></HTML>\r\n";
 
-static char const * demo_server_post_response_header = "\
-200 OK\r\n\
-Content-Type: text/html\r\n\
-\r\n";
-
 static char const * demo_server_post_response_page = "\
 <!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\">\r\n<HTML>\r\n<HEAD>\r\n<TITLE>\
 Picoquic POST Response\
@@ -488,7 +483,7 @@ int h3zero_server_callback(picoquic_cnx_t* cnx,
 {
     int ret = 0;
     h3zero_server_callback_ctx_t* ctx = NULL;
-    picohttp_server_stream_ctx_t* stream_ctx = NULL; (picohttp_server_stream_ctx_t*)v_stream_ctx;
+    picohttp_server_stream_ctx_t* stream_ctx = (picohttp_server_stream_ctx_t*)v_stream_ctx;
 
     if (callback_ctx == NULL || callback_ctx == picoquic_get_default_callback_context(cnx->quic)) {
         ctx = h3zero_server_callback_create_context((picohttp_server_parameters_t *)callback_ctx);
