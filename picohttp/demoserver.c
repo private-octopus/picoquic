@@ -56,6 +56,7 @@ static picohttp_server_stream_ctx_t * picohttp_find_or_create_stream(
             stream_ctx->next_stream = *p_first_stream;
             *p_first_stream = stream_ctx;
             stream_ctx->stream_id = stream_id;
+            stream_ctx->is_h3 = is_h3;
         }
     }
 
@@ -799,7 +800,9 @@ int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
             int crlf_present = 0;
 
             while (processed < length && crlf_present == 0) {
-                if (bytes[processed] == '\r' || bytes[processed] == '\n') {
+                if (bytes[processed] == '\r') {
+                    /* Ignore \n, so end of header is either CRLF/CRLF, of just LF/LF, or maybe LF/CR/LF */
+                } else if (bytes[processed] == '\n') {
                     crlf_present = 1;
                 }
                 else if (stream_ctx->ps.hq.command_length < sizeof(stream_ctx->frame)) {
