@@ -31,34 +31,94 @@
  /* Defining first the Http 3.0 variant of the server 
   */
 
-#define H3ZERO_SERVER_FRAME_MAX 4096
-#define H3ZERO_COMMAND_MAX 256
-#define H3ZERO_RESPONSE_MAX (1 << 20)
+#define PICOHTTP_SERVER_FRAME_MAX 4096
+#define PICOHTTP_FIRST_COMMAND_MAX 256
+#define PICOHTTP_RESPONSE_MAX (1 << 20)
+
+#define PICOHTTP_ALPN_H3_LATEST "h3-22"
+#define PICOHTTP_ALPN_HQ_LATEST "hq-22"
+
+
+
+  /* Define the per URL callback used to implement POST and other
+   * REST-like interactions
+   */
 
 typedef enum {
-    h3zero_server_stream_status_none = 0,
-    h3zero_server_stream_status_receiving_frame,
-    h3zero_server_stream_status_receiving_request,
-    h3zero_server_stream_status_receiving_data,
-    h3zero_server_stream_status_finished
-} h3zero_server_stream_status_t;
+    picohttp_callback_get, /* Received a get command */
+    picohttp_callback_post, /* Received a post command */
+    picohttp_callback_post_data, /* Data received from peer on stream N */
+    picohttp_callback_post_fin, /* All posted data have been received */
+    picohttp_callback_provide_data, /* Stack is ready to send chunk of response */
+    picohttp_callback_reset /* Stream has been abandoned. */
+} picohttp_call_back_event_t;
 
-typedef struct st_h3zero_server_stream_ctx_t {
-    struct st_h3zero_server_stream_ctx_t* next_stream;
-    h3zero_data_stream_state_t stream_state;
-    h3zero_server_stream_status_t status;
+struct st_picohttp_server_stream_ctx_t;
+
+typedef int (*picohttp_post_data_cb_fn)(picoquic_cnx_t* cnx,
+    uint8_t* bytes, size_t length,
+    picohttp_call_back_event_t fin_or_event, struct st_picohttp_server_stream_ctx_t* stream_ctx);
+
+/* Define the table of special-purpose paths used for POST or REST queries */
+typedef struct st_picohttp_server_path_item_t {
+    char* path;
+    size_t path_length;
+    picohttp_post_data_cb_fn path_callback;
+} picohttp_server_path_item_t;
+
+typedef struct st_picohttp_server_parameters_t {
+    picohttp_server_path_item_t* path_table;
+    size_t path_table_nb;
+} picohttp_server_parameters_t;
+
+/* Identify the path item based on the incoming path in GET or POST */
+
+int picohttp_find_path_item(const uint8_t* path, size_t path_length, const picohttp_server_path_item_t* path_table, size_t path_table_nb);
+
+/* Define stream context common to http 3 and http 09 callbacks
+ */
+typedef enum {
+    picohttp_server_stream_status_none = 0,
+    picohttp_server_stream_status_header,
+    picohttp_server_stream_status_crlf,
+    picohttp_server_stream_status_receiving,
+    picohttp_server_stream_status_finished
+} picohttp_server_stream_status_t;
+
+typedef struct st_picohttp_server_stream_ctx_t {
+    /* TODO-POST: identification of URL to process POST or GET? */
+    /* TODO-POST: provide content-type */
+    struct st_picohttp_server_stream_ctx_t* next_stream;
+    int is_h3;
+    union {
+        h3zero_data_stream_state_t stream_state; /* h3 only */
+        struct {
+            picohttp_server_stream_status_t status; 
+            int proto; 
+            uint8_t* path; 
+            size_t path_length;
+            size_t command_length;
+        } hq; /* h09 only */
+    } ps; /* Protocol specific state */
     uint64_t stream_id;
-    size_t received_length;
+    size_t response_length;
     size_t echo_length;
     size_t echo_sent;
-    int is_post;
-    uint8_t frame[H3ZERO_SERVER_FRAME_MAX];
-} h3zero_server_stream_ctx_t;
+    size_t post_received;
+    uint8_t frame[PICOHTTP_SERVER_FRAME_MAX];
+    int method;
+    picohttp_post_data_cb_fn path_callback;
+    void* path_callback_ctx;
+} picohttp_server_stream_ctx_t;
+
+/* Define the H3Zero server callback */
 
 typedef struct st_h3zero_server_callback_ctx_t {
-    h3zero_server_stream_ctx_t* first_stream;
+    picohttp_server_stream_ctx_t* first_stream;
     size_t buffer_max;
     uint8_t* buffer;
+    picohttp_server_path_item_t * path_table;
+    size_t path_table_nb;
 } h3zero_server_callback_ctx_t;
 
 int h3zero_server_callback(picoquic_cnx_t* cnx,
@@ -69,32 +129,10 @@ int h3zero_server_callback(picoquic_cnx_t* cnx,
 /* Defining then the Http 0.9 variant of the server
  */
 
-#define PICOQUIC_FIRST_COMMAND_MAX 128
-#define PICOQUIC_FIRST_RESPONSE_MAX (10*(1 << 20))
-
-typedef enum {
-    picoquic_h09_server_stream_status_none = 0,
-    picoquic_h09_server_stream_status_header,
-    picoquic_h09_server_stream_status_crlf,
-    picoquic_h09_server_stream_status_receiving,
-    picoquic_h09_server_stream_status_finished
-} picoquic_h09_server_stream_status_t;
-
-typedef struct st_picoquic_h09_server_stream_ctx_t {
-    struct st_picoquic_h09_server_stream_ctx_t* next_stream;
-    picoquic_h09_server_stream_status_t status;
-    uint64_t stream_id;
-    size_t command_length;
-    size_t response_length;
-    size_t echo_length;
-    size_t echo_sent;
-    size_t post_received;
-    uint8_t command[PICOQUIC_FIRST_COMMAND_MAX];
-    int method;
-} picoquic_h09_server_stream_ctx_t;
-
 typedef struct st_picoquic_h09_server_callback_ctx_t {
-    picoquic_h09_server_stream_ctx_t* first_stream;
+    picohttp_server_stream_ctx_t* first_stream;
+    picohttp_server_path_item_t * path_table;
+    size_t path_table_nb;
 } picoquic_h09_server_callback_ctx_t;
 
 int picoquic_h09_server_callback(picoquic_cnx_t* cnx,

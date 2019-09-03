@@ -69,6 +69,19 @@ static picoquic_stream_head_t* picoquic_find_stream_for_writing(picoquic_cnx_t* 
     return stream;
 }
 
+int picoquic_set_app_stream_ctx(picoquic_cnx_t* cnx,
+    uint64_t stream_id, void* app_stream_ctx)
+{
+    int ret = 0;
+    picoquic_stream_head_t* stream = picoquic_find_stream_for_writing(cnx, stream_id, &ret);
+
+    if (ret == 0) {
+        stream->app_stream_ctx = app_stream_ctx;
+    }
+
+    return ret;
+}
+
 int picoquic_mark_active_stream(picoquic_cnx_t* cnx,
     uint64_t stream_id, int is_active, void * app_stream_ctx)
 {

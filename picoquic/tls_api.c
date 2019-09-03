@@ -2516,3 +2516,45 @@ uint8_t * picoquic_esni_nonce(picoquic_cnx_t * cnx)
 {
     return(((picoquic_tls_ctx_t*)cnx->tls_ctx)->esni_nonce);
 }
+
+/* Export hash functions so applications do not need to access picotls */
+
+void* picoquic_hash_create(char const* algorithm_name) {
+    ptls_hash_context_t* ctx;
+
+    if (strcmp(algorithm_name, "SHA256") == 0) {
+        ctx = ptls_minicrypto_sha256.create();
+    }
+    else if (strcmp(algorithm_name, "SHA384") == 0) {
+        ctx = ptls_minicrypto_sha384.create();
+    }
+    else {
+        ctx = NULL;
+    }
+
+    return (void*)ctx;
+}
+
+size_t picoquic_hash_get_length(char const* algorithm_name) {
+    size_t len;
+
+    if (strcmp(algorithm_name, "SHA256") == 0) {
+        len = ptls_minicrypto_sha256.digest_size;
+    }
+    else if (strcmp(algorithm_name, "SHA384") == 0) {
+        len = ptls_minicrypto_sha384.digest_size;
+    }
+    else {
+        len = 0;
+    }
+
+    return len;
+}
+
+void picoquic_hash_update(uint8_t* input, size_t input_length, void* hash_context) {
+    ((ptls_hash_context_t * )hash_context)->update((ptls_hash_context_t*)hash_context, input, input_length);
+}
+
+void picoquic_hash_finalize(uint8_t* output, void* hash_context) {
+    ((ptls_hash_context_t*)hash_context)->final((ptls_hash_context_t*)hash_context, output, PTLS_HASH_FINAL_MODE_FREE);
+}

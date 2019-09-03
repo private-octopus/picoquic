@@ -250,7 +250,7 @@ typedef enum {
     picoquic_callback_almost_ready, /* Data can be sent, but the connection is not fully established */
     picoquic_callback_ready, /* Data can be sent and received, connection migration can be initiated */
     picoquic_callback_datagram, /* Datagram frame has been received */
-    picoquic_callback_version_negotiation
+    picoquic_callback_version_negotiation /* version negotiation requested */
 } picoquic_call_back_event_t;
 
 
@@ -569,6 +569,10 @@ void picoquic_recycle_packet(picoquic_quic_t * quic, picoquic_packet_t* packet);
 int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
     struct sockaddr_storage * p_addr_to, int * to_len, struct sockaddr_storage * p_addr_from, int * from_len);
+
+/* Associate stream with app context */
+int picoquic_set_app_stream_ctx(picoquic_cnx_t* cnx,
+    uint64_t stream_id, void* app_stream_ctx);
 
 /* Mark stream as active, or not.
  * If a stream is active, it will be polled for data when the transport
