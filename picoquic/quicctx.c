@@ -790,7 +790,7 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, struct sockad
  */
 void picoquic_register_path(picoquic_cnx_t* cnx, picoquic_path_t * path_x)
 {
-    if (picoquic_is_connection_id_null(path_x->local_cnxid)) {
+    if (picoquic_is_connection_id_null(&path_x->local_cnxid)) {
         picoquic_create_random_cnx_id(cnx->quic, &path_x->local_cnxid, cnx->quic->local_cnxid_length);
 
         if (cnx->quic->cnx_id_callback_fn)
@@ -798,7 +798,7 @@ void picoquic_register_path(picoquic_cnx_t* cnx, picoquic_path_t * path_x)
                 cnx->quic->cnx_id_callback_ctx, &path_x->local_cnxid);
     }
 
-    if (!picoquic_is_connection_id_null(path_x->local_cnxid)) {
+    if (!picoquic_is_connection_id_null(&path_x->local_cnxid)) {
         (void)picoquic_register_cnx_id(cnx->quic, cnx, path_x, path_x->local_cnxid);
     }
 
@@ -933,7 +933,7 @@ void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time,
 
     while (cnx->nb_paths > path_index_good) {
         int d_path = cnx->nb_paths - 1;
-        if (!picoquic_is_connection_id_null(cnx->path[d_path]->remote_cnxid)) {
+        if (!picoquic_is_connection_id_null(&cnx->path[d_path]->remote_cnxid)) {
             (void)picoquic_queue_retire_connection_id_frame(cnx, cnx->path[d_path]->remote_cnxid_sequence);
         }
         picoquic_delete_path(cnx, d_path);
@@ -1801,7 +1801,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             }
 
             cnx->cnx_state = picoquic_state_client_init;
-            if (picoquic_is_connection_id_null(initial_cnx_id)) {
+            if (picoquic_is_connection_id_null(&initial_cnx_id)) {
                 picoquic_create_random_cnx_id(quic, &initial_cnx_id, 8);
             }
 

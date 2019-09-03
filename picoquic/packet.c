@@ -1231,7 +1231,7 @@ int picoquic_incoming_server_cleartext(
     int restricted = cnx->cnx_state != picoquic_state_client_handshake_start && cnx->cnx_state != picoquic_state_client_handshake_progress;
 
     /* Check the server cnx id */
-    if (picoquic_is_connection_id_null(cnx->path[0]->remote_cnxid) && restricted == 0) {
+    if (picoquic_is_connection_id_null(&cnx->path[0]->remote_cnxid) && restricted == 0) {
         /* On first response from the server, copy the cnx ID and the incoming address */
         cnx->path[0]->remote_cnxid = ph->srce_cnx_id;
         cnx->path[0]->local_addr_len = picoquic_store_addr(&cnx->path[0]->local_addr, addr_to);
@@ -1506,8 +1506,8 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header * ph
             /* If this is a newly activated path, try document the remote connection ID
              * and request a probe if this is possible. Else, treat this as a NAT rebinding
              * and request a probe */
-            if (!picoquic_is_connection_id_null(cnx->path[0]->remote_cnxid) &&
-                picoquic_is_connection_id_null(cnx->path[path_id]->remote_cnxid)) {
+            if (!picoquic_is_connection_id_null(&cnx->path[0]->remote_cnxid) &&
+                picoquic_is_connection_id_null(&cnx->path[path_id]->remote_cnxid)) {
                 /* if there is a probe in progress, find it. */
                 picoquic_probe_t * probe = picoquic_find_probe_by_addr(cnx, addr_from, addr_to);
                 if (probe != NULL) {
@@ -1775,7 +1775,7 @@ int picoquic_incoming_segment(
 
     /* Verify that the segment coalescing is for the same destination ID */
     if (ret == 0) {
-        if (picoquic_is_connection_id_null(*previous_dest_id)) {
+        if (picoquic_is_connection_id_null(previous_dest_id)) {
             /* This is the first segment in the incoming packet */
             *previous_dest_id = ph.dest_cnx_id;
 
@@ -1806,7 +1806,7 @@ int picoquic_incoming_segment(
             }
             else {
                 /* Unexpected packet. Reject, drop and log. */
-                if (!picoquic_is_connection_id_null(ph.dest_cnx_id)) {
+                if (!picoquic_is_connection_id_null(&ph.dest_cnx_id)) {
                     picoquic_process_unexpected_cnxid(quic, length, addr_from, addr_to, if_index_to, &ph);
                 }
                 ret = PICOQUIC_ERROR_DETECTED;
@@ -1832,7 +1832,7 @@ int picoquic_incoming_segment(
                 if ((!cnx->client_mode && picoquic_compare_connection_id(&ph.dest_cnx_id, &cnx->initial_cnxid) == 0) ||
                     picoquic_compare_connection_id(&ph.dest_cnx_id, &cnx->path[0]->local_cnxid) == 0) {
                     /* Verify that the source CID matches expectation */
-                    if (picoquic_is_connection_id_null(cnx->path[0]->remote_cnxid)) {
+                    if (picoquic_is_connection_id_null(&cnx->path[0]->remote_cnxid)) {
                         cnx->path[0]->remote_cnxid = ph.srce_cnx_id;
                     } else if (picoquic_compare_connection_id(&cnx->path[0]->remote_cnxid, &ph.srce_cnx_id) != 0) {
                         DBG_PRINTF("Error wrong srce cnxid (%d), type: %d, epoch: %d, pc: %d, pn: %d\n",
