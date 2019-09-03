@@ -1017,5 +1017,11 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(h09_post) {
+            int ret = h09_post_test();
+
+            Assert::AreEqual(ret, 0);
+        }
     };
 }

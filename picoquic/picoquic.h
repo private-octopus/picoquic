@@ -570,6 +570,10 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
     struct sockaddr_storage * p_addr_to, int * to_len, struct sockaddr_storage * p_addr_from, int * from_len);
 
+/* Associate stream with app context */
+int picoquic_set_app_stream_ctx(picoquic_cnx_t* cnx,
+    uint64_t stream_id, void* app_stream_ctx);
+
 /* Mark stream as active, or not.
  * If a stream is active, it will be polled for data when the transport
  * is ready to send. The polling will only start after all currently

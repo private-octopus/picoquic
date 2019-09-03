@@ -975,7 +975,7 @@ typedef struct st_hzero_post_echo_ctx_t {
 
 int h3zero_test_ping_callback(picoquic_cnx_t* cnx,
     uint8_t* bytes, size_t length,
-    picohttp_call_back_event_t event, void* post_ctx, picohttp_server_stream_ctx_t* stream_ctx)
+    picohttp_call_back_event_t event, picohttp_server_stream_ctx_t* stream_ctx)
 {
     int ret = 0;
     hzero_post_echo_ctx_t* ctx = (hzero_post_echo_ctx_t*)stream_ctx->path_callback_ctx;
@@ -1020,7 +1020,7 @@ int h3zero_test_ping_callback(picoquic_cnx_t* cnx,
             if (ctx->nb_echo <= length) {
                 memcpy(bytes, ctx->buf, ctx->nb_echo);
             }
-            ret = ctx->nb_echo;
+            ret = (int)ctx->nb_echo;
         }
         else {
             ret = -1;
@@ -1054,7 +1054,9 @@ int h3zero_test_ping_callback(picoquic_cnx_t* cnx,
         }
         break;
     case picohttp_callback_reset: /* stream is abandoned */
-        picohttp_set_post_callback(stream_ctx, NULL, NULL);
+        stream_ctx->path_callback = NULL;
+        stream_ctx->path_callback_ctx = NULL;
+       
         if (ctx != NULL) {
             free(ctx);
         }
@@ -1090,4 +1092,9 @@ static size_t const post_test_stream_length[] = { 2345 };
 int h3zero_post_test()
 {
     return demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, (void *) &ping_test_param, 0, post_test_scenario, nb_post_test_scenario, post_test_stream_length);
+}
+
+int h09_post_test()
+{
+    return demo_server_test(PICOHTTP_ALPN_HQ_LATEST, picoquic_h09_server_callback, (void*)& ping_test_param, 0, post_test_scenario, nb_post_test_scenario, post_test_stream_length);
 }

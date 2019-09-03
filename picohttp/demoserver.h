@@ -57,7 +57,7 @@ struct st_picohttp_server_stream_ctx_t;
 
 typedef int (*picohttp_post_data_cb_fn)(picoquic_cnx_t* cnx,
     uint8_t* bytes, size_t length,
-    picohttp_call_back_event_t fin_or_event, void* callback_ctx, struct st_picohttp_server_stream_ctx_t* stream_ctx);
+    picohttp_call_back_event_t fin_or_event, struct st_picohttp_server_stream_ctx_t* stream_ctx);
 
 /* Define the table of special-purpose paths used for POST or REST queries */
 typedef struct st_picohttp_server_path_item_t {
@@ -89,10 +89,18 @@ typedef struct st_picohttp_server_stream_ctx_t {
     /* TODO-POST: identification of URL to process POST or GET? */
     /* TODO-POST: provide content-type */
     struct st_picohttp_server_stream_ctx_t* next_stream;
-    picohttp_server_stream_status_t status;
-    h3zero_data_stream_state_t stream_state;
+    int is_h3;
+    union {
+        h3zero_data_stream_state_t stream_state; /* h3 only */
+        struct {
+            picohttp_server_stream_status_t status; 
+            int proto; 
+            uint8_t* path; 
+            size_t path_length;
+            size_t command_length;
+        } hq; /* h09 only */
+    } ps; /* Protocol specific state */
     uint64_t stream_id;
-    size_t command_length;
     size_t response_length;
     size_t echo_length;
     size_t echo_sent;
