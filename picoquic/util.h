@@ -26,6 +26,10 @@
 #include <inttypes.h>
 #include "picoquic.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifdef WIN32
 #define PRIst "Iu"
 #ifndef PRIu64
@@ -109,4 +113,7 @@ int picoquic_get_input_path(char * target_file_path, size_t file_path_max, const
 FILE* picoquic_file_open_ex(char const * file_name, char const * flags, int * last_err);
 FILE * picoquic_file_open(char const * file_name, char const * flags);
 
+#ifdef __cplusplus
+}
+#endif
 #endif
