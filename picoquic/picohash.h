@@ -36,7 +36,7 @@ extern "C" {
 typedef struct _picohash_item {
     uint64_t hash;
     struct _picohash_item* next_in_bin;
-    void* key;
+    const void* key;
 } picohash_item;
 
 typedef struct picohash_table {
@@ -44,17 +44,17 @@ typedef struct picohash_table {
     picohash_item** hash_bin;
     size_t nb_bin;
     size_t count;
-    uint64_t (*picohash_hash)(void*);
-    int (*picohash_compare)(void*, void*);
+    uint64_t (*picohash_hash)(const void*);
+    int (*picohash_compare)(const void*, const void*);
 } picohash_table;
 
 picohash_table* picohash_create(size_t nb_bin,
-    uint64_t (*picohash_hash)(void*),
-    int (*picohash_compute)(void*, void*));
+    uint64_t (*picohash_hash)(const void*),
+    int (*picohash_compute)(const void*, const void*));
 
-picohash_item* picohash_retrieve(picohash_table* hash_table, void* key);
+picohash_item* picohash_retrieve(picohash_table* hash_table, const void* key);
 
-int picohash_insert(picohash_table* hash_table, void* key);
+int picohash_insert(picohash_table* hash_table, const void* key);
 
 void picohash_item_delete(picohash_table* hash_table, picohash_item* item, int delete_key_too);
 

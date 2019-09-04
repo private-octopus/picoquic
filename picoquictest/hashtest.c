@@ -29,17 +29,17 @@ struct hashtestkey {
     uint64_t x;
 };
 
-static uint64_t hashtest_hash(void* v)
+static uint64_t hashtest_hash(const void* v)
 {
-    struct hashtestkey* k = (struct hashtestkey*)v;
+    const struct hashtestkey* k = (const struct hashtestkey*)v;
     uint64_t hash = (k->x + 0xDEADBEEFull);
     return hash;
 }
 
-static int hashtest_compare(void* v1, void* v2)
+static int hashtest_compare(const void* v1, const void* v2)
 {
-    struct hashtestkey* k1 = (struct hashtestkey*)v1;
-    struct hashtestkey* k2 = (struct hashtestkey*)v2;
+    const struct hashtestkey* k1 = (const struct hashtestkey*)v1;
+    const struct hashtestkey* k2 = (const struct hashtestkey*)v2;
 
     return (k1->x == k2->x) ? 0 : -1;
 }

@@ -47,33 +47,33 @@ typedef struct st_picoquic_net_id_key_t {
 } picoquic_net_id_key_t;
 
 /* Hash and compare for CNX hash tables */
-static uint64_t picoquic_cnx_id_hash(void* key)
+static uint64_t picoquic_cnx_id_hash(const void* key)
 {
-    picoquic_cnx_id_key_t* cid = (picoquic_cnx_id_key_t*)key;
+    const picoquic_cnx_id_key_t* cid = (const picoquic_cnx_id_key_t*)key;
 
     /* TODO: should scramble the value for security and DOS protection */
     return picoquic_val64_connection_id(cid->cnx_id);
 }
 
-static int picoquic_cnx_id_compare(void* key1, void* key2)
+static int picoquic_cnx_id_compare(const void* key1, const void* key2)
 {
-    picoquic_cnx_id_key_t* cid1 = (picoquic_cnx_id_key_t*)key1;
-    picoquic_cnx_id_key_t* cid2 = (picoquic_cnx_id_key_t*)key2;
+    const picoquic_cnx_id_key_t* cid1 = (const picoquic_cnx_id_key_t*)key1;
+    const picoquic_cnx_id_key_t* cid2 = (const picoquic_cnx_id_key_t*)key2;
 
     return picoquic_compare_connection_id(&cid1->cnx_id, &cid2->cnx_id);
 }
 
-static uint64_t picoquic_net_id_hash(void* key)
+static uint64_t picoquic_net_id_hash(const void* key)
 {
-    picoquic_net_id_key_t* net = (picoquic_net_id_key_t*)key;
+    const picoquic_net_id_key_t* net = (const picoquic_net_id_key_t*)key;
 
     return picohash_bytes((uint8_t*)&net->saddr, sizeof(net->saddr));
 }
 
-static int picoquic_net_id_compare(void* key1, void* key2)
+static int picoquic_net_id_compare(const void* key1, const void* key2)
 {
-    picoquic_net_id_key_t* net1 = (picoquic_net_id_key_t*)key1;
-    picoquic_net_id_key_t* net2 = (picoquic_net_id_key_t*)key2;
+    const picoquic_net_id_key_t* net1 = (const picoquic_net_id_key_t*)key1;
+    const picoquic_net_id_key_t* net2 = (const picoquic_net_id_key_t*)key2;
 
     return memcmp(&net1->saddr, &net2->saddr, sizeof(net1->saddr));
 }
