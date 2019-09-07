@@ -29,9 +29,20 @@
 
 static const uint8_t expected_stream0[16] =
 {
-    0x00, 0x01, 0x42, 0x03, 0x84, 0x05, 0x06, 0x07,
-    0xc8, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+    0x09, 0x01, 0x42, 0x03, 0x84, 0x05, 0x06, 0x07,
+    0xc8, 0x09, 0x05, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
 };
+
+static const picoquic_connection_id_t cid0 = {
+    { 0x01, 0x42, 0x03, 0x84, 0x05, 0x06, 0x07, 0xc8, 0x09 }, 9
+};
+
+static const picoquic_connection_id_t cid1 = {
+    { 0x0b, 0x0c, 0x0d, 0x0e, 0x0f }, 5
+};
+
+static const char * str0 = "\x01\x42\x03\x84\x05\x06\x07\xc8\x09";
+static const char * str1 = "\x0b\x0c\x0d\x0e\x0f";
 
 int eval_bytestream_write(bytestream * s, int ret, const char * fn_name)
 {
@@ -75,22 +86,22 @@ int eval_bytestream_read(bytestream * s, int ret, const char * fn_name)
 int verify_bytestream_write_intXX(bytestream * s)
 {
     int ret = 0;
-    ret |= bytewrite_int8(s, 0x00);
+    ret |= bytewrite_int8(s, 0x09);
     ret |= bytewrite_int8(s, 0x01);
     ret |= bytewrite_int16(s, 0x4203);
     ret |= bytewrite_int32(s, 0x84050607);
-    ret |= bytewrite_int64(s, 0xc8090a0b0c0d0e0f);
+    ret |= bytewrite_int64(s, 0xc809050b0c0d0e0f);
     return eval_bytestream_write(s, ret, "bytewrite_intXX");
 }
 
 int verify_bytestream_write_int(bytestream * s)
 {
     int ret = 0;
-    ret |= bytewrite_vint(s, 0x00);
+    ret |= bytewrite_vint(s, 0x09);
     ret |= bytewrite_vint(s, 0x01);
     ret |= bytewrite_vint(s, 0x0203);
     ret |= bytewrite_vint(s, 0x04050607);
-    ret |= bytewrite_vint(s, 0x08090a0b0c0d0e0f);
+    ret |= bytewrite_vint(s, 0x0809050b0c0d0e0f);
     return eval_bytestream_write(s, ret, "bytewrite_vint");
 }
 
@@ -102,12 +113,28 @@ int verify_bytestream_write_buffer(bytestream * s)
     return eval_bytestream_write(s, ret, "bytewrite_buffer");
 }
 
+int verify_bytestream_write_cid(bytestream * s)
+{
+    int ret = 0;
+    ret |= bytewrite_cid(s, &cid0);
+    ret |= bytewrite_cid(s, &cid1);
+    return eval_bytestream_write(s, ret, "bytewrite_cid");
+}
+
+int verify_bytestream_write_cstr(bytestream * s)
+{
+    int ret = 0;
+    ret |= bytewrite_cstr(s, str0);
+    ret |= bytewrite_cstr(s, str1);
+    return eval_bytestream_write(s, ret, "bytewrite_cstr");
+}
+
 int verify_bytestream_read_intXX(bytestream * s)
 {
     int ret = 0;
     uint8_t val8 = 0;
-    ret |= byteshow_int8(s, &val8) || val8 != 0x00;
-    ret |= byteread_int8(s, &val8) || val8 != 0x00;
+    ret |= byteshow_int8(s, &val8) || val8 != 0x09;
+    ret |= byteread_int8(s, &val8) || val8 != 0x09;
     ret |= byteshow_int8(s, &val8) || val8 != 0x01;
     ret |= byteread_int8(s, &val8) || val8 != 0x01;
 
@@ -118,7 +145,7 @@ int verify_bytestream_read_intXX(bytestream * s)
     ret |= byteread_int32(s, &val32) || val32 != 0x84050607;
 
     uint64_t val64 = 0;
-    ret |= byteread_int64(s, &val64) || val64 != 0xc8090a0b0c0d0e0f;
+    ret |= byteread_int64(s, &val64) || val64 != 0xc809050b0c0d0e0f;
 
     return eval_bytestream_read(s, ret, "byteread_intXX");
 }
@@ -127,11 +154,11 @@ int verify_bytestream_read_int(bytestream * s)
 {
     int ret = 0;
     uint64_t value64 = 0;
-    ret |= byteread_vint(s, &value64) != 0 || value64 != 0x00;
+    ret |= byteread_vint(s, &value64) != 0 || value64 != 0x09;
     ret |= byteread_vint(s, &value64) != 0 || value64 != 0x01;
     ret |= byteread_vint(s, &value64) != 0 || value64 != 0x0203;
     ret |= byteread_vint(s, &value64) != 0 || value64 != 0x04050607;
-    ret |= byteread_vint(s, &value64) != 0 || value64 != 0x08090a0b0c0d0e0f;
+    ret |= byteread_vint(s, &value64) != 0 || value64 != 0x0809050b0c0d0e0f;
     return eval_bytestream_read(s, ret, "byteread_vint");
 }
 
@@ -155,6 +182,40 @@ int verify_bytestream_read_buffer(bytestream* s)
     return eval_bytestream_read(s, ret, "byteread_buffer");
 }
 
+int verify_bytestream_read_cid(bytestream* s)
+{
+    int ret = 0;
+    picoquic_connection_id_t cid;
+    ret |= byteread_cid(s, &cid) != 0 || picoquic_compare_connection_id(&cid0, &cid) != 0;
+    ret |= byteread_cid(s, &cid) != 0 || picoquic_compare_connection_id(&cid1, &cid) != 0;
+    return eval_bytestream_read(s, ret, "byteread_cid");
+}
+
+int verify_bytestream_skip_cid(bytestream* s)
+{
+    int ret = 0;
+    ret |= byteskip_cid(s) != 0 || bytestream_length(s) != 10;
+    ret |= byteskip_cid(s) != 0 || bytestream_length(s) != 16;
+    return eval_bytestream_read(s, ret, "byteskip_cid");
+}
+
+int verify_bytestream_read_cstr(bytestream* s)
+{
+    int ret = 0;
+    char str[16];
+    ret |= byteread_cstr(s, str, sizeof(str)) != 0 || strcmp(str0, str) != 0;
+    ret |= byteread_cstr(s, str, sizeof(str)) != 0 || strcmp(str1, str) != 0;
+    return eval_bytestream_read(s, ret, "byteread_cstr");
+}
+
+int verify_bytestream_skip_cstr(bytestream* s)
+{
+    int ret = 0;
+    ret |= byteskip_cstr(s) != 0 || bytestream_length(s) != 10;
+    ret |= byteskip_cstr(s) != 0 || bytestream_length(s) != 16;
+    return eval_bytestream_read(s, ret, "byteskip_cstr");
+}
+
 int verify_bytestream_write(bytestream * s)
 {
     int ret = 0;
@@ -167,6 +228,12 @@ int verify_bytestream_write(bytestream * s)
 
     bytestream_clear(s);
     ret |= verify_bytestream_write_buffer(s);
+
+    bytestream_clear(s);
+    ret |= verify_bytestream_write_cid(s);
+
+    bytestream_clear(s);
+    ret |= verify_bytestream_write_cstr(s);
 
     return ret;
 }
@@ -183,6 +250,12 @@ int verify_bytestream_read(bytestream * s)
 
     bytestream_reset(s);
     ret |= verify_bytestream_read_buffer(s);
+
+    bytestream_reset(s);
+    ret |= verify_bytestream_read_cid(s);
+
+    bytestream_reset(s);
+    ret |= verify_bytestream_read_cstr(s);
 
     return ret;
 }
@@ -201,6 +274,12 @@ int verify_bytestream_on_stack()
 
     bytestream_reset(rs);
     ret |= verify_bytestream_skip_int(rs);
+
+    bytestream_reset(rs);
+    ret |= verify_bytestream_skip_cid(rs);
+
+    bytestream_reset(rs);
+    ret |= verify_bytestream_skip_cstr(rs);
 
     return ret;
 }

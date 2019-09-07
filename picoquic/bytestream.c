@@ -303,6 +303,61 @@ int byteread_buffer(bytestream * s, void * buffer, size_t length)
     return 0;
 }
 
+/* supplementary byte stream I/O */
+
+int bytewrite_cid(bytestream * s, const picoquic_connection_id_t * cid)
+{
+    int ret = bytewrite_int8(s, cid->id_len);
+    ret |= bytewrite_buffer(s, cid->id, cid->id_len);
+    return ret;
+}
+
+int byteread_cid(bytestream * s, picoquic_connection_id_t * cid)
+{
+    memset(cid->id, 0, sizeof(cid->id));
+
+    int ret = byteread_int8(s, &cid->id_len);
+    ret |= byteread_buffer(s, cid->id, cid->id_len);
+    return ret;
+}
+
+int byteskip_cid(bytestream * s)
+{
+    uint8_t id_len = 0;
+    int ret = byteread_int8(s, &id_len);
+    ret |= bytestream_skip(s, id_len);
+    return ret;
+}
+
+int bytewrite_cstr(bytestream * s, const char * cstr)
+{
+    size_t l_cstr = cstr != NULL ? strlen(cstr) : 0;
+    int ret = bytewrite_vint(s, l_cstr);
+    ret |= bytewrite_buffer(s, cstr, l_cstr);
+    return ret;
+}
+
+int byteread_cstr(bytestream * s, char * cstr, size_t max_len)
+{
+    uint64_t l_cstr = 0;
+    int ret = byteread_vint(s, &l_cstr);
+
+    size_t len = (l_cstr <= max_len - 1) ? l_cstr : max_len - 1;
+    ret |= byteread_buffer(s, cstr, len);
+
+    cstr[len] = 0;
+
+    return ret;
+}
+
+int byteskip_cstr(bytestream * s)
+{
+    uint64_t len = 0;
+    int ret = byteread_vint(s, &len);
+    ret |= bytestream_skip(s, len);
+    return ret;
+}
+
 static int bytestream_error(bytestream* s)
 {
     s->ptr = s->size;
