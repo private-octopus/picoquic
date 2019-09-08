@@ -418,7 +418,7 @@ int bytestream_test_read_limits()
         0xc8, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0xc8
     };
 
-    uint8_t * heap = malloc(sizeof(buf9));
+    uint8_t * heap = (uint8_t*)malloc(sizeof(buf9));
     memcpy(heap, buf9, sizeof(buf9));
 
     bytestream stream;
@@ -587,6 +587,61 @@ int bytestream_test_vint()
     return ret;
 }
 
+int bytestream_test_addr_version(const struct sockaddr * in, struct sockaddr * out, size_t addr_size, const char * type_name)
+{
+    int ret = 0;
+
+    bytestream_buf stream;
+    bytestream * s = bytestream_buf_init(&stream, 2 * addr_size);
+
+    ret |= bytewrite_addr(s, in);
+    ret |= bytewrite_addr(s, in);
+
+    bytestream_reset(s);
+
+    ret |= byteskip_addr(s);
+    ret |= byteread_addr(s, out);
+
+    if (ret != 0) {
+        DBG_PRINTF("read/write/skip of %s failed\n", type_name);
+    } else if (memcmp(in, out, addr_size) != 0) {
+        DBG_PRINTF("unexpected value of %s\n", type_name);
+        ret = -1;
+    }
+    return ret;
+}
+
+int bytestream_test_addr()
+{
+    int ret = 0;
+
+    struct sockaddr_in addr_in = { 0 };
+    addr_in.sin_family = AF_INET;
+    addr_in.sin_addr.S_un.S_addr = 0x01020304;
+    addr_in.sin_port = 1234;
+
+    struct sockaddr_in addr_in_res = { 0 };
+    ret |= bytestream_test_addr_version(
+        (const struct sockaddr*)&addr_in,
+        (struct sockaddr*)&addr_in_res,
+        sizeof(struct sockaddr_in),
+        "sockaddr_in");
+
+    struct sockaddr_in6 addr_in6 = { 0 };
+    addr_in6.sin6_family = AF_INET6;
+    addr_in6.sin6_addr.u.Word[0] = 12;
+    addr_in6.sin6_port = 1234;
+
+    struct sockaddr_in6 addr_in6_res = { 0 };
+    ret |= bytestream_test_addr_version(
+        (const struct sockaddr*)&addr_in6,
+        (struct sockaddr*)&addr_in6_res,
+        sizeof(struct sockaddr_in6),
+        "sockaddr_in6");
+
+    return ret;
+}
+
 int bytestream_test_utils()
 {
     int ret = 0;
@@ -675,6 +730,10 @@ int bytestream_test()
     }
 
     if (bytestream_test_vint() != 0) {
+        ret = -1;
+    }
+
+    if (bytestream_test_addr() != 0) {
         ret = -1;
     }
 
