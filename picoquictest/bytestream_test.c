@@ -629,7 +629,7 @@ int bytestream_test_addr()
 
     struct sockaddr_in6 addr_in6 = { 0 };
     addr_in6.sin6_family = AF_INET6;
-    addr_in6.sin6_addr.s6_words[0] = 12;
+    addr_in6.sin6_addr.s6_addr[0] = 12;
     addr_in6.sin6_port = 1234;
 
     struct sockaddr_in6 addr_in6_res = { 0 };
