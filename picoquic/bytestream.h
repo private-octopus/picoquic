@@ -82,4 +82,8 @@ int bytewrite_cstr(bytestream* s, const char* cstr);
 int byteread_cstr(bytestream* s, char* cstr, size_t max_len);
 int byteskip_cstr(bytestream* s);
 
+int bytewrite_addr(bytestream * s, const struct sockaddr * addr);
+int byteread_addr(bytestream * s, struct sockaddr * addr);
+int byteskip_addr(bytestream * s);
+
 #endif /* PICOQUIC_BYTESTREAM_H */

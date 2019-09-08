@@ -358,6 +358,53 @@ int byteskip_cstr(bytestream * s)
     return ret;
 }
 
+int bytewrite_addr(bytestream* s, const struct sockaddr* addr)
+{
+    int ret = bytewrite_vint(s, addr->sa_family);
+    if (addr->sa_family == AF_INET) {
+        struct sockaddr_in* s4 = (struct sockaddr_in*)addr;
+        ret |= bytewrite_buffer(s, &s4->sin_addr, 4);
+        ret |= bytewrite_int16(s, s4->sin_port);
+    } else {
+        struct sockaddr_in6* s6 = (struct sockaddr_in6*)addr;
+        ret |= bytewrite_buffer(s, &s6->sin6_addr, 16);
+        ret |= bytewrite_int16(s, s6->sin6_port);
+    }
+    return ret;
+}
+
+int byteread_addr(bytestream* s, struct sockaddr* addr)
+{
+    uint64_t family = 0;
+    int ret = byteread_vint(s, &family);
+
+    if (ret == 0 && family == AF_INET) {
+        struct sockaddr_in* s4 = (struct sockaddr_in*)addr;
+        s4->sin_family = AF_INET;
+        ret |= byteread_buffer(s, &s4->sin_addr, 4);
+        ret |= byteread_int16(s, &s4->sin_port);
+    } else {
+        struct sockaddr_in6* s6 = (struct sockaddr_in6*)addr;
+        s6->sin6_family = AF_INET6;
+        ret |= byteread_buffer(s, &s6->sin6_addr, 16);
+        ret |= byteread_int16(s, &s6->sin6_port);
+    }
+    return ret;
+}
+
+int byteskip_addr(bytestream* s)
+{
+    uint64_t family = 0;
+    int ret = byteread_vint(s, &family);
+
+    if (ret == 0 && family == AF_INET) {
+        ret |= bytestream_skip(s, 4 + 2);
+    } else {
+        ret |= bytestream_skip(s, 16 + 2);
+    }
+    return ret;
+}
+
 static int bytestream_error(bytestream* s)
 {
     s->ptr = s->size;
