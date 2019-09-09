@@ -636,7 +636,7 @@ int logger_test()
         }
         picoquic_log_picotls_ticket(F, logger_test_cid,
             log_test_ticket, (uint16_t) sizeof(log_test_ticket));
-        F = picoquic_file_close(F);
+        (void)picoquic_file_close(F);
     }
 
     if (ret == 0) {
@@ -667,7 +667,7 @@ int logger_test()
         else {
             ret &= fprintf(F, "Log packet test #%d\n", (int)i);
             picoquic_log_frames(&cnx, F, 0, buffer, bytes_max);
-            F = picoquic_file_close(F);
+            (void)picoquic_file_close(F);
         }
 
         if ((F = picoquic_file_open(log_packet_test_file, "w")) == NULL) {
@@ -692,7 +692,7 @@ int logger_test()
                     break;
                 }
             }
-            F = picoquic_file_close(F);
+            (void)picoquic_file_close(F);
         }
     }
 
@@ -716,7 +716,7 @@ int logger_test()
             skip_test_fuzz_packet(fuzz_buffer, buffer, bytes_max, &random_context);
             picoquic_log_frames(&cnx, F, 0, fuzz_buffer, bytes_max);
         }
-        F = picoquic_file_close(F);
+        (void)picoquic_file_close(F);
     }
 
     return ret;

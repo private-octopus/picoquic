@@ -1295,7 +1295,7 @@ int main(int argc, char** argv)
     }
 
     if (F_log != stdout) {
-        F_log = picoquic_file_close(F_log);
+        (void)picoquic_file_close(F_log);
     }
 
     if (cnx_id_cbdata != NULL) {
