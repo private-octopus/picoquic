@@ -33,7 +33,7 @@ int http0dot9_test_one(char const* command, int expected_ret, size_t expected_le
             else {
                 (void)fwrite(big_buffer, 1, content_length, F);
 
-                F = picoquic_file_close(F);
+                (void)picoquic_file_close(F);
             }
         }
         free(big_buffer);

@@ -302,7 +302,7 @@ int picoquic_save_tickets(const picoquic_stored_ticket_t* first_ticket,
             }
             next = next->next_ticket;
         }
-        F = picoquic_file_close(F);
+        (void)picoquic_file_close(F);
     }
 
     return ret;
