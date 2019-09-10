@@ -1044,7 +1044,6 @@ typedef enum {
 int picoquic_open_cc_dump(picoquic_cnx_t * cnx);
 void picoquic_close_cc_dump(picoquic_cnx_t * cnx);
 void picoquic_cc_dump(picoquic_cnx_t * cnx, uint64_t current_time); 
-int picoquic_cc_log_file_to_csv(char const * bin_cc_log_name, char const * csv_cc_log_name);
 
 /* handling of ACK logic */
 int picoquic_is_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t * next_wake_time, picoquic_packet_context_enum pc);

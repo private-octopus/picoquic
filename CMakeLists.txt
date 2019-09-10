@@ -36,6 +36,10 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/util.c
 )
 
+set(LOGLIB_LIBRARY_FILES
+    loglib/txtlog.c
+)
+
 set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/ack_of_ack_test.c
     picoquictest/bytestream_test.c
@@ -89,49 +93,73 @@ add_library(picoquic-core
     ${PICOQUIC_LIBRARY_FILES}
 )
 
+add_library(picoquic-log
+    ${LOGLIB_LIBRARY_FILES}
+)
+
 add_library(picohttp-core
     ${PICOHTTP_LIBRARY_FILES}
 )
 
-add_executable(picoquicdemo picoquicfirst/picoquicdemo.c
-                            picoquicfirst/getopt.c )
-target_link_libraries(picoquicdemo picoquic-core picohttp-core
+add_executable(picoquicdemo
+    picoquicfirst/picoquicdemo.c
+    picoquicfirst/getopt.c
+)
+
+target_link_libraries(picoquicdemo
+    picoquic-log
+    picoquic-core
+    picohttp-core
     ${PTLS_LIBRARIES}
     ${OPENSSL_LIBRARIES}
     ${CMAKE_DL_LIBS}
 )
 
-target_include_directories(picoquicdemo PRIVATE picohttp)
+target_include_directories(picoquicdemo PRIVATE loglib picohttp)
 
-add_executable(picoquic_c2csv picoquic_c2csv_t/picoquic_c2csv_t.c)
-target_link_libraries(picoquic_c2csv picoquic-core
+add_executable(picoquic_c2csv
+    picoquic_c2csv_t/picoquic_c2csv_t.c
+)
+
+target_link_libraries(picoquic_c2csv
+    picoquic-log
+    picoquic-core
     ${PTLS_LIBRARIES}
     ${OPENSSL_LIBRARIES}
     ${CMAKE_DL_LIBS}
 )
+
+target_include_directories(picoquic_c2csv PRIVATE loglib)
 
 add_executable(picoquic_ct picoquic_t/picoquic_t.c
     ${PICOQUIC_TEST_LIBRARY_FILES}
 )
 
-target_link_libraries(picoquic_ct picoquic-core
+target_link_libraries(picoquic_ct
+    picoquic-log
+    picoquic-core
     ${PTLS_LIBRARIES}
     ${OPENSSL_LIBRARIES}
     ${CMAKE_DL_LIBS}
 )
+
+target_include_directories(picoquic_ct PRIVATE loglib)
 
 add_executable(picohttp_ct picohttp_t/picohttp_t.c
     ${PICOQUIC_TEST_LIBRARY_FILES}
     ${PICOHTTP_TEST_LIBRARY_FILES}
 )
 
-target_link_libraries(picohttp_ct picoquic-core picohttp-core
+target_link_libraries(picohttp_ct
+    picoquic-log
+    picoquic-core
+    picohttp-core
     ${PTLS_LIBRARIES}
     ${OPENSSL_LIBRARIES}
     ${CMAKE_DL_LIBS}
 )
 
-target_include_directories(picohttp_ct PRIVATE picohttp)
+target_include_directories(picohttp_ct PRIVATE loglib picohttp)
 
 set(TEST_EXES picoquic_ct picohttp_ct)
 
