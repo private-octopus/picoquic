@@ -24,7 +24,7 @@
 #include <inttypes.h>
 
 #include "picoquic_internal.h"
-#include "txtlog.h"
+#include "csv.h"
 #ifdef _WINDOWS
 #include "../picoquicfirst/getopt.h"
 #endif

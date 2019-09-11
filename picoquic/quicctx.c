@@ -21,13 +21,13 @@
 */
 
 #include "picoquic_internal.h"
+#include "logwriter.h"
 #include "tls_api.h"
 #include <stdlib.h>
 #include <string.h>
 #ifndef _WINDOWS
 #include <sys/time.h>
 #endif
-
 
 /*
 * Structures used in the hash table of connections

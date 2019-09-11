@@ -18,20 +18,19 @@
 * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
-#include "csv.h"
+
+#include <stdio.h>
+#include <string.h>
+#include <inttypes.h>
 #include "picoquic_internal.h"
+#include "bytestream.h"
 
-int main(int argc, char ** argv)
-{
-    if (argc != 3) {
-        fprintf(stderr, "Usage:\n");
-        fprintf(stderr, "\t%s <input_log_file.bin> <output_log_file.csv>\n", argv[0]);
-        fprintf(stderr, "Convert a binary congestion control log file produced by\n");
-        fprintf(stderr, "picoquic to a csv format.\n");
-        return -1;
-    }
+int fileread_binlog(FILE * bin_log, int(*cb)(bytestream *, void *), void * cbptr);
 
-    debug_printf_push_stream(stderr);
+FILE * picoquic_open_cc_log_file_for_read(char const * bin_cc_log_name, uint32_t * log_time);
 
-    return picoquic_cc_log_file_to_csv(argv[1], argv[2]);
-}
+int picoquic_cc_log_file_to_csv(char const * bin_cc_log_name, char const * csv_cc_log_name);
+
+int byteread_addr(bytestream* s, struct sockaddr* addr);
+int byteread_packet_header(bytestream* s, picoquic_packet_header* ph);
+int byteread_frames(bytestream* s);
