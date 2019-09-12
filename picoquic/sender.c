@@ -2037,7 +2037,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                 }
             }
 
-            /* Encode the stream frame */
+            /* Encode the crypto frame */
             ret = picoquic_prepare_crypto_hs_frame(cnx, epoch, &bytes[length],
                 send_buffer_max - checksum_overhead - length, &data_bytes);
             if (ret == 0) {
@@ -2489,6 +2489,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
             if (path_x->challenge_verified == 0 && path_x->challenge_failed == 0) {
                 if (path_x->challenge_time + path_x->retransmit_timer <= current_time || path_x->challenge_repeat_count == 0) {
                     if (path_x->challenge_repeat_count < PICOQUIC_CHALLENGE_REPEAT_MAX) {
+                        int ack_needed = cnx->pkt_ctx[pc].ack_needed;
                         /* When blocked, repeat the path challenge or wait */
                         if (picoquic_prepare_path_challenge_frame(&bytes[length],
                             send_buffer_max - checksum_overhead - length, &data_bytes,
@@ -2501,6 +2502,9 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                         /* add an ACK just to be nice */
                         ret = picoquic_prepare_ack_frame(cnx, current_time, pc, &bytes[length],
                             send_buffer_max - checksum_overhead - length, &data_bytes);
+                        /* Restore the ACK needed flags, because challenges are not reliable. */
+                        cnx->pkt_ctx[pc].ack_needed = ack_needed;
+
                         if (ret == 0) {
                             length += data_bytes;
                         }
