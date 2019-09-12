@@ -47,7 +47,6 @@
 typedef enum {
 	h3zero_frame_data = 0,
     h3zero_frame_header = 1,
-    h3zero_frame_priority = 2,
     h3zero_frame_cancel_push = 3,
     h3zero_frame_settings = 4,
     h3zero_frame_push_promise = 5,
@@ -60,7 +59,6 @@ typedef enum {
 typedef enum {
     h3zero_setting_reserved = 0x0,
 	h3zero_setting_header_table_size = 0x1,
-    h3zero_setting_num_placeholder = 0x9, 
     h3zero_setting_max_header_list_size = 0x6,
 	h3zero_qpack_blocked_streams = 0x07,
 	h3zero_setting_grease_signature =0x0a0a,
