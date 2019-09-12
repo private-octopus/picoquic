@@ -1026,7 +1026,7 @@ int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
         byte_index = old_p->offset;
 
         while (ret == 0 && byte_index < old_p->length) {
-            ret = picoquic_skip_frame(cnx, &old_p->bytes[byte_index],
+            ret = picoquic_skip_frame(&old_p->bytes[byte_index],
                 old_p->length - byte_index, &frame_length, &frame_is_pure_ack);
 
             /* Check whether the data was already acked, which may happen in
@@ -1144,7 +1144,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                             packet_is_pure_ack = 0;
                             break;
                         }
-                        ret = picoquic_skip_frame(cnx, &old_p->bytes[byte_index],
+                        ret = picoquic_skip_frame(&old_p->bytes[byte_index],
                             old_p->length - byte_index, &frame_length, &frame_is_pure_ack);
                         byte_index += frame_length;
                     }
@@ -1288,7 +1288,7 @@ int picoquic_is_cnx_backlog_empty(picoquic_cnx_t* cnx)
 
 
             while (ret == 0 && byte_index < p->length) {
-                ret = picoquic_skip_frame(cnx, &p->bytes[byte_index],
+                ret = picoquic_skip_frame(&p->bytes[byte_index],
                     p->length - p->offset, &frame_length, &frame_is_pure_ack);
 
                 if (!frame_is_pure_ack) {

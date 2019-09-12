@@ -169,13 +169,15 @@ typedef struct st_picoquic_packet_header_t {
 #define PICOQUIC_TENTH_INTEROP_VERSION 0xFF000011
 #define PICOQUIC_ELEVENTH_INTEROP_VERSION 0xFF000012
 #define PICOQUIC_TWELFTH_INTEROP_DRAFT19 0xFF000013
-#endif
 #define PICOQUIC_TWELFTH_INTEROP_VERSION 0xFF000014
+#endif
 #define PICOQUIC_THIRTEENTH_INTEROP_VERSION 0xFF000016
 #define PICOQUIC_INTERNAL_TEST_VERSION_1 0x50435130
 #define PICOQUIC_INTERNAL_TEST_VERSION_2 0x50435131
 
 #define PICOQUIC_INTEROP_VERSION_INDEX 1
+
+#define PICOQUIC_INTEROP_VERSION_LATEST PICOQUIC_THIRTEENTH_INTEROP_VERSION
 
 
 
@@ -1141,7 +1143,7 @@ int picoquic_prepare_misc_frame(picoquic_misc_frame_header_t* misc_frame, uint8_
 int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_t* bytes, size_t bytes_max,
     int epoch, struct sockaddr* addr_from, struct sockaddr* addr_to, uint64_t current_time);
 
-int picoquic_skip_frame(picoquic_cnx_t* cnx, uint8_t* bytes, size_t bytes_max, size_t* consumed, int* pure_ack);
+int picoquic_skip_frame(uint8_t* bytes, size_t bytes_max, size_t* consumed, int* pure_ack);
 
 int picoquic_decode_closing_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
     size_t bytes_max, int* closing_received);
