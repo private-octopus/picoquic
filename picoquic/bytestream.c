@@ -336,7 +336,7 @@ int byteskip_cid(bytestream * s)
 
 int bytewrite_cstr(bytestream * s, const char * cstr)
 {
-    size_t l_cstr = cstr != NULL ? strlen(cstr) : 0;
+    size_t l_cstr = strlen(cstr);
     int ret = bytewrite_vint(s, l_cstr);
     ret |= bytewrite_buffer(s, cstr, l_cstr);
     return ret;
