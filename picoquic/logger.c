@@ -718,9 +718,11 @@ size_t picoquic_log_reset_stream_frame(FILE* F, uint8_t* bytes, size_t bytes_max
     if (bytes_max > 2) {
         l1 = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &stream_id);
         byte_index += l1;
-        if (l1 > 0 && bytes_max >= byte_index + 2) {
+        if (l1 > 0) {
             l2 = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &error_code);
             byte_index += l2;
+        }
+        if (l2 > 0) {
             l3 = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &offset);
             byte_index += l3;
         }
@@ -771,10 +773,10 @@ size_t picoquic_log_generic_close_frame(FILE* F, uint8_t* bytes, size_t bytes_ma
     size_t l1 = 0;
     size_t l0 = 0;
 
-    if (bytes_max >= 3) {
+    if (bytes_max >= 2) {
         l0 = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &error_code);
         byte_index += l0;
-        if (ftype == picoquic_frame_type_connection_close) {
+        if (ftype == picoquic_frame_type_connection_close && l0 != 0) {
             lf = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &offending_frame_type);
             if (lf == 0) {
                 byte_index = bytes_max;

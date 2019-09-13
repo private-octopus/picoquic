@@ -164,8 +164,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="bytestream.h" />
-    <ClInclude Include="democlient.h" />
-    <ClInclude Include="demoserver.h" />
+    <ClInclude Include="fnv1a.h" />
     <ClInclude Include="picohash.h" />
     <ClInclude Include="picoquic_internal.h" />
     <ClInclude Include="picosocks.h" />
