@@ -413,9 +413,12 @@ int bytestream_test_read_limits()
     uint32_t i32;
     uint64_t i64;
     uint8_t buf[8];
+    char str[0x100];
+
+    picoquic_connection_id_t cid;
 
     const static uint8_t buf9[9] = {
-        0xc8, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0xc8
+        0xc8, 0x00, 0x01, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0xc8
     };
 
     uint8_t * heap = (uint8_t*)malloc(sizeof(buf9));
@@ -542,6 +545,69 @@ int bytestream_test_read_limits()
         ret = -1;
     }
 
+    bytestream_reset(s9);
+
+    if (byteskip_cid(s9) == 0) {
+        DBG_PRINTF("%s", "byteskip_cid didn't fail\n");
+        ret = -1;
+    }
+
+    bytestream_reset(s9);
+
+    if (byteread_cid(s9, &cid) == 0) {
+        DBG_PRINTF("%s", "byteread_cid didn't fail\n");
+        ret = -1;
+    }
+
+    const uint8_t long_cid[PICOQUIC_CONNECTION_ID_MAX_SIZE + 2] = { PICOQUIC_CONNECTION_ID_MAX_SIZE + 1 };
+    bytestream cid_stream;
+    bytestream * scid = bytestream_ref_init(&cid_stream, long_cid, sizeof(long_cid));
+
+    if (byteread_cid(scid, &cid) == 0) {
+        DBG_PRINTF("%s", "byteread_cid() of oversized cid didn't fail\n");
+        ret = -1;
+    }
+
+    bytestream_reset(s9);
+
+    if (byteskip_cstr(s9) == 0) {
+        DBG_PRINTF("%s", "byteskip_cstr() over byte stream limit didn't fail\n");
+        ret = -1;
+    }
+
+    bytestream_reset(s9);
+
+    if (byteread_cstr(s9, str, 0x100) == 0) {
+        DBG_PRINTF("%s", "byteread_cstr(len=0x100) over byte stream limit didn't fail\n");
+        ret = -1;
+    }
+
+    const uint8_t short_str[] = { 0x02, 0x00, 0x00 };
+    bytestream cstr_stream;
+    bytestream * sstr = bytestream_ref_init(&cstr_stream, short_str, sizeof(short_str));
+
+    if (byteread_cstr(sstr, str, 1) == 0) {
+        DBG_PRINTF("%s", "byteread_cstr(len=1) of 2 character string didn't fail\n");
+        ret = -1;
+    }
+
+    const uint8_t empty_str[] = { 0x00 };
+    bytestream * s0 = bytestream_ref_init(&stream, empty_str, sizeof(empty_str));
+
+    bytestream_reset(s0);
+
+    if (byteread_cstr(s0, str, 0) == 0) {
+        DBG_PRINTF("%s", "byteread_cstr(len=0) didn't fail\n");
+        ret = -1;
+    }
+
+    bytestream_reset(s0);
+
+    if (byteread_cstr(s0, str, 1) != 0) {
+        DBG_PRINTF("%s", "byteread_cstr(len=1) failed\n");
+        ret = -1;
+    }
+
     free(heap);
     return ret;
 }
@@ -568,6 +634,8 @@ int bytestream_test_vint()
         { 1000000000000000, 8 },
         { 0x3f, 1 },
         { 0x40, 2 },
+        { 0xff, 2 },
+        { 0x100, 2 },
         { 0x3fff, 2 },
         { 0x4000, 4 },
         { 0x3fffffff, 4 },
