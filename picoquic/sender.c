@@ -535,7 +535,7 @@ size_t picoquic_get_checksum_length(picoquic_cnx_t* cnx, int is_cleartext_mode)
     return ret;
 }
 
-size_t picoquic_protect_packet(picoquic_cnx_t* cnx, 
+static size_t picoquic_protect_packet(picoquic_cnx_t* cnx, 
     picoquic_packet_type_enum ptype,
     uint8_t * bytes, 
     uint64_t sequence_number,
@@ -543,7 +543,7 @@ size_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     picoquic_connection_id_t * local_cnxid,
     size_t length, size_t header_length,
     uint8_t* send_buffer, size_t send_buffer_max,
-    void * aead_context, void* pn_enc)
+    void * aead_context, void* pn_enc, uint64_t current_time)
 {
     size_t send_length;
     size_t h_length;
@@ -590,6 +590,11 @@ size_t picoquic_protect_packet(picoquic_cnx_t* cnx,
         picoquic_log_outgoing_segment(cnx->quic->F_log, 1, cnx,
             bytes, sequence_number, length,
             send_buffer, send_length);
+    }
+    if (cnx->quic->f_binlog != NULL && (cnx->pkt_ctx[picoquic_packet_context_application].send_sequence < PICOQUIC_LOG_PACKET_MAX_SEQUENCE || cnx->quic->use_long_log)) {
+        binlog_outgoing_packet(cnx->quic->f_binlog, cnx,
+            bytes, sequence_number, length,
+            send_buffer, send_length, current_time);
     }
 
     /* Next, encrypt the PN -- The sample is located after the pn_offset */
@@ -879,31 +884,36 @@ void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet_t
             length = picoquic_protect_packet(cnx, packet->ptype, packet->bytes, packet->sequence_number,
                 remote_cnxid, local_cnxid,
                 length, header_length,
-                send_buffer, send_buffer_max, cnx->crypto_context[0].aead_encrypt, cnx->crypto_context[0].pn_enc);
+                send_buffer, send_buffer_max, cnx->crypto_context[0].aead_encrypt, cnx->crypto_context[0].pn_enc,
+                current_time);
             break;
         case picoquic_packet_handshake:
             length = picoquic_protect_packet(cnx, packet->ptype, packet->bytes, packet->sequence_number,
                 remote_cnxid, local_cnxid,
                 length, header_length,
-                send_buffer, send_buffer_max, cnx->crypto_context[2].aead_encrypt, cnx->crypto_context[2].pn_enc);
+                send_buffer, send_buffer_max, cnx->crypto_context[2].aead_encrypt, cnx->crypto_context[2].pn_enc,
+                current_time);
             break;
         case picoquic_packet_retry:
             length = picoquic_protect_packet(cnx, packet->ptype, packet->bytes, packet->sequence_number,
                 remote_cnxid, local_cnxid,
                 length, header_length,
-                send_buffer, send_buffer_max, cnx->crypto_context[0].aead_encrypt, cnx->crypto_context[0].pn_enc);
+                send_buffer, send_buffer_max, cnx->crypto_context[0].aead_encrypt, cnx->crypto_context[0].pn_enc,
+                current_time);
             break;
         case picoquic_packet_0rtt_protected:
             length = picoquic_protect_packet(cnx, packet->ptype, packet->bytes, packet->sequence_number, 
                 remote_cnxid, local_cnxid,
                 length, header_length,
-                send_buffer, send_buffer_max, cnx->crypto_context[1].aead_encrypt, cnx->crypto_context[1].pn_enc);
+                send_buffer, send_buffer_max, cnx->crypto_context[1].aead_encrypt, cnx->crypto_context[1].pn_enc,
+                current_time);
             break;
         case picoquic_packet_1rtt_protected:
             length = picoquic_protect_packet(cnx, packet->ptype, packet->bytes, packet->sequence_number,
                 remote_cnxid, local_cnxid,
                 length, header_length,
-                send_buffer, send_buffer_max, cnx->crypto_context[3].aead_encrypt, cnx->crypto_context[3].pn_enc);
+                send_buffer, send_buffer_max, cnx->crypto_context[3].aead_encrypt, cnx->crypto_context[3].pn_enc,
+                current_time);
             break;
         default:
             /* Packet type error. Do nothing at all. */
@@ -3272,6 +3282,10 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
         picoquic_log_packet_address(cnx->quic->F_log,
             picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)),
             cnx, (struct sockaddr *)&addr_to_log, 0, *send_length, current_time);
+    }
+    if (*send_length > 0 && cnx->quic->f_binlog != NULL && (cnx->pkt_ctx[picoquic_packet_context_application].send_sequence < PICOQUIC_LOG_PACKET_MAX_SEQUENCE || cnx->quic->use_long_log)) {
+        binlog_pdu(cnx->quic->f_binlog, &cnx->initial_cnxid, 0, current_time,
+            (struct sockaddr *)&addr_to_log, *send_length);
     }
 
     /* Update the wake up time for the connection */

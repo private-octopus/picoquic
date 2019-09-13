@@ -55,7 +55,7 @@ void binlog_pdu(FILE * f, const picoquic_connection_id_t* cid, int receiving, ui
     const struct sockaddr* addr_peer, size_t packet_length);
 
 void binlog_packet(FILE * f, const picoquic_connection_id_t* cid, int receiving, uint64_t current_time,
-    const picoquic_packet_header * ph, const uint8_t* bytes, size_t bytes_max, int log_frames);
+    const picoquic_packet_header * ph, const uint8_t* bytes, size_t bytes_max);
 
 void binlog_outgoing_packet(FILE * f, picoquic_cnx_t* cnx,
     uint8_t * bytes,

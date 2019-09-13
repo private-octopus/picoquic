@@ -423,7 +423,7 @@ void binlog_pdu(FILE* f, const picoquic_connection_id_t* cid, int receiving, uin
 }
 
 void binlog_packet(FILE* f, const picoquic_connection_id_t* cid, int receiving, uint64_t current_time,
-    const picoquic_packet_header* ph, const uint8_t* bytes, size_t bytes_max, int log_frames)
+    const picoquic_packet_header* ph, const uint8_t* bytes, size_t bytes_max)
 {
     long fpos0 = ftell(f);
 
@@ -463,7 +463,7 @@ void binlog_packet(FILE* f, const picoquic_connection_id_t* cid, int receiving, 
     if (ph->ptype == picoquic_packet_version_negotiation || ph->ptype == picoquic_packet_retry) {
         picoquic_log_frame(f, bytes, bytes + bytes_max);
     }
-    else if (ph->ptype != picoquic_packet_error && log_frames) {
+    else if (ph->ptype != picoquic_packet_error) {
         picoquic_log_frames(f, bytes + ph->offset, ph->payload_length);
     }
 
@@ -487,14 +487,13 @@ void binlog_outgoing_packet(FILE * f, picoquic_cnx_t* cnx,
     picoquic_packet_header ph;
     size_t checksum_length = (cnx != NULL) ? picoquic_get_checksum_length(cnx, 0) : 16;
     struct sockaddr_in default_addr;
-    int ret;
 
     const picoquic_connection_id_t * cnxid = (cnx != NULL) ? &cnx->initial_cnxid : &picoquic_null_connection_id;
 
     memset(&default_addr, 0, sizeof(struct sockaddr_in));
     default_addr.sin_family = AF_INET;
 
-    ret = picoquic_parse_packet_header((cnx == NULL) ? NULL : cnx->quic, send_buffer, send_length,
+    picoquic_parse_packet_header((cnx == NULL) ? NULL : cnx->quic, send_buffer, send_length,
         ((cnx == NULL || cnx->path[0] == NULL) ? (struct sockaddr *)&default_addr :
         (struct sockaddr *)&cnx->path[0]->local_addr), &ph, &pcnx, 0);
 
@@ -515,7 +514,7 @@ void binlog_outgoing_packet(FILE * f, picoquic_cnx_t* cnx,
         }
     }
 
-    binlog_packet(f, cnxid, 0, current_time, &ph, bytes, length, 1);
+    binlog_packet(f, cnxid, 0, current_time, &ph, bytes, length);
 }
 
 void binlog_transport_extension(FILE * f, picoquic_cnx_t* cnx)

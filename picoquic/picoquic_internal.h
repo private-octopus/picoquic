@@ -959,15 +959,6 @@ int picoquic_parse_ack_header(
 
 uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t pn);
 
-size_t picoquic_protect_packet(picoquic_cnx_t* cnx,
-    picoquic_packet_type_enum ptype,
-    uint8_t * bytes, uint64_t sequence_number,
-    picoquic_connection_id_t * remote_cnxid,
-    picoquic_connection_id_t * local_cnxid,
-    size_t length, size_t header_length,
-    uint8_t* send_buffer, size_t send_buffer_max,
-    void * aead_context, void* pn_enc);
-
 void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet_t * packet, int ret,
     size_t length, size_t header_length, size_t checksum_overhead,
     size_t * send_length, uint8_t * send_buffer, size_t send_buffer_max,
