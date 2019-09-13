@@ -314,10 +314,15 @@ int bytewrite_cid(bytestream * s, const picoquic_connection_id_t * cid)
 
 int byteread_cid(bytestream * s, picoquic_connection_id_t * cid)
 {
-    memset(cid->id, 0, sizeof(cid->id));
-
     int ret = byteread_int8(s, &cid->id_len);
-    ret |= byteread_buffer(s, cid->id, cid->id_len);
+
+    if (cid->id_len > PICOQUIC_CONNECTION_ID_MAX_SIZE) {
+        ret = -1;
+    } else {
+        memset(cid->id, 0, sizeof(cid->id));
+        ret |= byteread_buffer(s, cid->id, cid->id_len);
+    }
+
     return ret;
 }
 
@@ -342,10 +347,12 @@ int byteread_cstr(bytestream * s, char * cstr, size_t max_len)
     uint64_t l_cstr = 0;
     int ret = byteread_vint(s, &l_cstr);
 
-    size_t len = (l_cstr <= max_len - 1) ? l_cstr : max_len - 1;
-    ret |= byteread_buffer(s, cstr, len);
-
-    cstr[len] = 0;
+    if (ret != 0 || l_cstr + 1 > max_len) {
+        ret = -1;
+    } else {
+        ret |= byteread_buffer(s, cstr, l_cstr);
+        cstr[l_cstr] = 0;
+    }
 
     return ret;
 }
