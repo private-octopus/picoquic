@@ -86,9 +86,6 @@
     <ClInclude Include="picohash.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="fnv1a.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="picotlsapi.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -107,19 +104,13 @@
     <ClInclude Include="picosplay.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="h3zero.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="democlient.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="demoserver.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="util.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="bytestream.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="fnv1a.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

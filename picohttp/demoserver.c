@@ -335,8 +335,8 @@ static int h3zero_server_callback_data(
          * parse the header */
         if (!IS_CLIENT_STREAM_ID(stream_id)) {
             /* Should never happen */
-            ret = picoquic_stop_sending(cnx, stream_id, H3ZERO_WRONG_STREAM);
-            picoquic_reset_stream(cnx, stream_id, H3ZERO_WRONG_STREAM);
+            ret = picoquic_stop_sending(cnx, stream_id, H3ZERO_GENERAL_PROTOCOL_ERROR);
+            picoquic_reset_stream(cnx, stream_id, H3ZERO_GENERAL_PROTOCOL_ERROR);
         }
         else {
             /* Find or create stream context */
@@ -389,7 +389,7 @@ static int h3zero_server_callback_data(
                     }
                     else {
                         /* Unexpected end of stream before the header is received */
-                        ret = picoquic_reset_stream(cnx, stream_id, H3ZERO_MALFORMED_FRAME(h3zero_frame_header));
+                        ret = picoquic_reset_stream(cnx, stream_id, H3ZERO_FRAME_ERROR);
                     }
                 }
             }

@@ -21,33 +21,27 @@
 #ifndef H3ZERO_H
 #define H3ZERO_H
 
-#define H3ZERO_NO_ERROR 0x0000 /* No error */
-#define H3ZERO_WRONG_SETTING_DIRECTION 0x0001 /* Setting sent in wrong direction */
-#define H3ZERO_PUSH_REFUSED 0x0002 /* Client refused pushed content */
-#define H3ZERO_INTERNAL_ERROR 0x0003 /* Internal error */
-#define H3ZERO_PUSH_ALREADY_IN_CACHE 0x0004 /* Pushed content already cached */
-#define H3ZERO_REQUEST_CANCELLED 0x0005 /* Data no longer needed */
-#define H3ZERO_INCOMPLETE_REQUEST 0x0006 /* Stream terminated early */
-#define H3ZERO_CONNECT_ERROR 0x0007 /* TCP reset or error on CONNECT request */
-#define H3ZERO_EXCESSIVE_LOAD 0x0008 /* Peer generating excessive load */
-#define H3ZERO_VERSION_FALLBACK 0x0009 /* Retry over HTTP/1.1 */
-#define H3ZERO_WRONG_STREAM 0x000A /* A frame was sent on the wrong stream */
-#define H3ZERO_LIMIT_EXCEEDED 0x000B /* An identifier limit was exceeded */
-#define H3ZERO_DUPLICATE_PUSH 0x000C /* Push ID was fulfilled multiple times */
-#define H3ZERO_UNKNOWN_STREAM_TYPE 0x000D /* Unknown unidirectional stream type */
-#define H3ZERO_WRONG_STREAM_COUNT 0x000E /* Too many unidirectional streams */
-#define H3ZERO_CLOSED_CRITICAL_STREAM 0x000F /* Critical stream was closed */
-#define H3ZERO_WRONG_STREAM_DIRECTION 0x0010 /* Unidirectional stream in wrong direction */
-#define H3ZERO_EARLY_RESPONSE 0x0011 /* Remainder of request not needed */
-#define H3ZERO_MISSING_SETTINGS 0x0012 /* No SETTINGS frame received */
-#define H3ZERO_UNEXPECTED_FRAME 0x0013 /* Frame not permitted in the current state */
-#define H3ZERO_MALFORMED_FRAME(frame_type) (0x0100|frame_type) /* Error in frame formatting */
-
+#define H3ZERO_NO_ERROR 0x0100 /* No error */
+#define H3ZERO_GENERAL_PROTOCOL_ERROR  0x0101 /* Protocol violation, or no more specific information */
+#define H3ZERO_INTERNAL_ERROR 0x0102 /* Internal error */
+#define H3ZERO_STREAM_CREATION_ERROR 0x0103 /* Stream creation error */
+#define H3ZERO_CLOSED_CRITICAL_STREAM 0x0104 /* Critical stream was closed */
+#define H3ZERO_FRAME_UNEXPECTED 0x0105 /* Frame not permitted in the current state */
+#define H3ZERO_FRAME_ERROR 0x0106 /* Frame violated layout or size rules */
+#define H3ZERO_EXCESSIVE_LOAD 0x0107 /* Peer generating excessive load */
+#define H3ZERO_ID_ERROR 0x0108 /* An identifier was used incorrectly */
+#define H3ZERO_SETTINGS_ERROR 0x0109 /* SETTINGS frame contained invalid values */
+#define H3ZERO_MISSING_SETTINGS 0x010A /* No SETTINGS frame received */
+#define H3ZERO_REQUEST_REJECTED 0x010B /* Request not processed */
+#define H3ZERO_REQUEST_CANCELLED 0x010C /* Data no longer needed */
+#define H3ZERO_REQUEST_INCOMPLETE 0x010D /* Stream terminated early */
+#define H3ZERO_EARLY_RESPONSE 0x010E /* Remainder of request not needed */
+#define H3ZERO_CONNECT_ERROR 0x010F /* TCP reset or error on CONNECT request */
+#define H3ZERO_VERSION_FALLBACK 0x0110 /* Retry over  H3ZERO/1.1 */
 
 typedef enum {
 	h3zero_frame_data = 0,
     h3zero_frame_header = 1,
-    h3zero_frame_priority = 2,
     h3zero_frame_cancel_push = 3,
     h3zero_frame_settings = 4,
     h3zero_frame_push_promise = 5,
@@ -60,7 +54,6 @@ typedef enum {
 typedef enum {
     h3zero_setting_reserved = 0x0,
 	h3zero_setting_header_table_size = 0x1,
-    h3zero_setting_num_placeholder = 0x9, 
     h3zero_setting_max_header_list_size = 0x6,
 	h3zero_qpack_blocked_streams = 0x07,
 	h3zero_setting_grease_signature =0x0a0a,

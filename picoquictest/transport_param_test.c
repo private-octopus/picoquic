@@ -214,6 +214,29 @@ uint8_t client_param9[] = {
     0, picoquic_tp_disable_migration, 0, 0
 };
 
+uint8_t client_param10[] = {
+    0, 0x23,
+    0, picoquic_tp_initial_max_stream_data_bidi_local, 0, 4, 0x80, 0, 0xFF, 0xFF,
+    0, picoquic_tp_initial_max_data, 0, 4, 0x80, 0x40, 0, 0,
+    0, picoquic_tp_idle_timeout, 0, 1, 0x1E,
+    0, picoquic_tp_max_packet_size, 0, 2, 0x45, 0xC8,
+    /* Add "grease" parameter to test greasing */
+    0x0C, 0x56, 0, 4, 0xde, 0xad, 0xbe, 0xef
+};
+
+uint8_t client_param11[] = {
+    0, 0x36,
+    0, picoquic_tp_initial_max_stream_data_bidi_local, 0, 4, 0x80, 0, 0xFF, 0xFF,
+    0, picoquic_tp_initial_max_data, 0, 4, 0x80, 0x40, 0, 0,
+    0, picoquic_tp_initial_max_streams_bidi, 0, 4, 0x80, 0, 0x40, 0x00,
+    0, picoquic_tp_idle_timeout, 0, 1, 0x1E,
+    0, picoquic_tp_max_packet_size, 0, 2, 0x45, 0xC8,
+    0, picoquic_tp_initial_max_streams_uni, 0, 4, 0x80, 0, 0x40, 0x00,
+    0, picoquic_tp_active_connection_id_limit, 0, 1, PICOQUIC_NB_PATH_TARGET,
+    /* Add same grease value that the server will generate */
+    0, 0x59, 0, 2, 0x42, 0x03
+};
+
 /* Error 2: wrong option length, larger than message size */
 uint8_t client_param_err2[] = {
     0, 0x2B,
@@ -453,8 +476,8 @@ int transport_param_set_contexts(picoquic_quic_t ** quic_ctx, picoquic_cnx_t ** 
     return ret;
 }
 
-int transport_param_one_test(int mode, uint32_t version, uint32_t proposed_version,
-    picoquic_tp_t* param, uint8_t* target, size_t target_length)
+int transport_param_one_test(int mode, int grease, uint32_t version, uint32_t proposed_version,
+    picoquic_tp_t* param, const uint8_t* target, size_t target_length)
 {
     int ret;
     picoquic_quic_t * quic_ctx;
@@ -471,6 +494,10 @@ int transport_param_one_test(int mode, uint32_t version, uint32_t proposed_versi
         // test_cnx.version = version;
         test_cnx->version_index = picoquic_get_version_index(version);
         test_cnx->proposed_version = proposed_version;
+
+        if (grease) {
+            test_cnx->grease_transport_parameters = 1;
+        }
 
         ret = picoquic_prepare_transport_extensions(test_cnx, mode, buffer, sizeof(buffer), &encoded);
     }
@@ -693,12 +720,12 @@ int transport_param_test()
     uint64_t proof = 0;
     uint32_t version_default = picoquic_supported_versions[0].version;
 
-    ret = transport_param_one_test(0, version_default, version_default,
+    ret = transport_param_one_test(0, 0, version_default, version_default,
         &transport_param_test1, client_param1, sizeof(client_param1));
     if (ret != 0) {
         DBG_PRINTF("Param test TP1, CP1 returns %x\n", ret);
     } else {
-        ret = transport_param_one_test(0, version_default, 0x0A1A0A1A,
+        ret = transport_param_one_test(0, 0, version_default, 0x0A1A0A1A,
             &transport_param_test2, client_param2, sizeof(client_param2));
         if (ret != 0) {
             DBG_PRINTF("Param test TP2, CP2 returns %x\n", ret);
@@ -714,7 +741,7 @@ int transport_param_test()
     }
 
     if (ret == 0) {
-        ret = transport_param_one_test(1, version_default, version_default,
+        ret = transport_param_one_test(1, 0, version_default, version_default,
             &transport_param_test4, server_param1, sizeof(server_param1));
         if (ret != 0) {
             DBG_PRINTF("Param test TP4, SP1 returns %x\n", ret);
@@ -722,7 +749,7 @@ int transport_param_test()
     }
 
     if (ret == 0) {
-        ret = transport_param_one_test(1, version_default, 0x0A1A0A1A,
+        ret = transport_param_one_test(1, 0, version_default, 0x0A1A0A1A,
             &transport_param_test5, server_param2, sizeof(server_param2));
         if (ret != 0) {
             DBG_PRINTF("Param test TP5, SP2 returns %x\n", ret);
@@ -762,12 +789,29 @@ int transport_param_test()
     }
 
     if (ret == 0) {
-        ret = transport_param_one_test(0, version_default, version_default,
+        ret = transport_param_one_test(0, 0, version_default, version_default,
             &transport_param_test10, client_param9, sizeof(client_param9));
         if (ret != 0) {
             DBG_PRINTF("Param test TP10, CP9 returns %x\n", ret);
         }
     }
+
+    if (ret == 0) {
+        ret = transport_param_decode_test(0, version_default, 0x0A1A0A1A,
+            &transport_param_test8, client_param10, sizeof(client_param10));
+        if (ret != 0) {
+            DBG_PRINTF("Decode test TP8, CP10 returns %x\n", ret);
+        }
+    }
+
+    if (ret == 0) {
+        ret = transport_param_one_test(0, 1, version_default, version_default,
+            &transport_param_test1, client_param11, sizeof(client_param11));
+        if (ret != 0) {
+            DBG_PRINTF("Param test TP1, CP1 returns %x\n", ret);
+        }
+    }
+
 
     for (size_t i = 0; ret == 0 && i < nb_transport_param_error_case; i++) {
         ret = transport_param_error_test(transport_param_error_case[i].mode, transport_param_error_case[i].target, 

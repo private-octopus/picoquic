@@ -856,14 +856,14 @@ uint8_t * h3zero_parse_data_stream(uint8_t * bytes, uint8_t * bytes_max,
             if (stream_state->current_frame_type == h3zero_frame_data) {
                 if (!stream_state->header_found || stream_state->trailer_found) {
                     /* protocol error */
-                    *error_found = H3ZERO_UNEXPECTED_FRAME;
+                    *error_found = H3ZERO_FRAME_UNEXPECTED;
                     bytes = NULL;
                 }
             }
             else if (stream_state->current_frame_type == h3zero_frame_header) {
                 if (stream_state->header_found && (!stream_state->data_found || stream_state->trailer_found)) {
                     /* protocol error */
-                    *error_found = H3ZERO_UNEXPECTED_FRAME;
+                    *error_found = H3ZERO_FRAME_UNEXPECTED;
                     bytes = NULL;
                 }
                 else if (stream_state->current_frame_length > 0x10000) {
@@ -883,11 +883,11 @@ uint8_t * h3zero_parse_data_stream(uint8_t * bytes, uint8_t * bytes_max,
             else if (stream_state->current_frame_type == h3zero_frame_cancel_push || 
                 stream_state->current_frame_type == h3zero_frame_goaway ||
                 stream_state->current_frame_type == h3zero_frame_max_push_id) {
-                *error_found = H3ZERO_WRONG_STREAM;
+                *error_found = H3ZERO_GENERAL_PROTOCOL_ERROR;
                 bytes = NULL;
             }
             else if (stream_state->current_frame_type == h3zero_frame_settings) {
-                *error_found = H3ZERO_UNEXPECTED_FRAME;
+                *error_found = H3ZERO_FRAME_UNEXPECTED;
                 bytes = NULL;
             }
         }
@@ -916,7 +916,7 @@ uint8_t * h3zero_parse_data_stream(uint8_t * bytes, uint8_t * bytes_max,
                     stream_state->current_frame + stream_state->current_frame_length, parts);
                 if (parsed == NULL || (size_t)(parsed - stream_state->current_frame) != stream_state->current_frame_length) {
                     /* protocol error */
-                    *error_found = H3ZERO_MALFORMED_FRAME(h3zero_frame_header);
+                    *error_found = H3ZERO_FRAME_ERROR;
                     bytes = NULL;
                 }
                 /* free resource */

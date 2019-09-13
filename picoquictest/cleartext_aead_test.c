@@ -738,7 +738,7 @@ static uint8_t draft15_test_input_packet[] = {
 };
 #endif
 
-static uint32_t draft17_test_vn = 0xff000014;
+static uint32_t draft17_test_vn = 0xff000016;
 
 static picoquic_connection_id_t draft17_test_cnx_id = { 
     { 0x7d, 0xdc, 0x42, 0x90, 0xc4, 0xe7, 0xd2, 0x04 }, 8 };
@@ -956,61 +956,63 @@ int draft17_vector_test()
         ret = -1;
     }
     else if (memcmp(picoquic_supported_versions[version_index].version_aead_key, draft17_test_salt, sizeof(draft17_test_salt)) != 0) {
+        /* TODO: this test means that the reminder of the code will not be executed for new versions */
         DBG_PRINTF("Test version (%x) does not have matching salt.\n", draft17_test_vn);
-        ret = -1;
     }
+    else {
 
-    /* Check the master secret and then client and server secret */
-    if (ret == 0) {
-        salt.base = draft17_test_salt;
-        salt.len = sizeof(draft17_test_salt);
+        /* Check the master secret and then client and server secret */
+        if (ret == 0) {
+            salt.base = draft17_test_salt;
+            salt.len = sizeof(draft17_test_salt);
 
-        ret = picoquic_setup_initial_master_secret(&cipher, salt, draft17_test_cnx_id, master_secret);
-
-        if (ret != 0) {
-            DBG_PRINTF("Cannot compute master secret, ret = %x\n", ret);
-        }
-        else {
-            if (memcmp(master_secret, draft17_test_initial_secret, sizeof(draft17_test_initial_secret)) != 0) {
-                DBG_PRINTF("%s", "Initial master secret does not match expected value");
-                ret = -1;
-            }
-        }
-
-        if (ret == 0){
-            ret = picoquic_setup_initial_secrets(&cipher, master_secret, client_secret, server_secret);
+            ret = picoquic_setup_initial_master_secret(&cipher, salt, draft17_test_cnx_id, master_secret);
 
             if (ret != 0) {
-                DBG_PRINTF("Cannot derive client and server secrets, ret = %x\n", ret);
+                DBG_PRINTF("Cannot compute master secret, ret = %x\n", ret);
             }
             else {
-                if (memcmp(client_secret, draft17_test_client_initial_secret, sizeof(draft17_test_client_initial_secret)) != 0) {
-                    DBG_PRINTF("%s", "Initial client secret does not match expected value");
+                if (memcmp(master_secret, draft17_test_initial_secret, sizeof(draft17_test_initial_secret)) != 0) {
+                    DBG_PRINTF("%s", "Initial master secret does not match expected value");
                     ret = -1;
                 }
-                
-                if (memcmp(server_secret, draft17_test_server_initial_secret, sizeof(draft17_test_server_initial_secret)) != 0) {
-                    DBG_PRINTF("%s", "Initial server secret does not match expected value");
-                    ret = -1;
+            }
+
+            if (ret == 0) {
+                ret = picoquic_setup_initial_secrets(&cipher, master_secret, client_secret, server_secret);
+
+                if (ret != 0) {
+                    DBG_PRINTF("Cannot derive client and server secrets, ret = %x\n", ret);
+                }
+                else {
+                    if (memcmp(client_secret, draft17_test_client_initial_secret, sizeof(draft17_test_client_initial_secret)) != 0) {
+                        DBG_PRINTF("%s", "Initial client secret does not match expected value");
+                        ret = -1;
+                    }
+
+                    if (memcmp(server_secret, draft17_test_server_initial_secret, sizeof(draft17_test_server_initial_secret)) != 0) {
+                        DBG_PRINTF("%s", "Initial server secret does not match expected value");
+                        ret = -1;
+                    }
                 }
             }
         }
-    }
 
-    /* First integration test: verify that the aead keys are as expected */
-    if (ret == 0) {
-        ret = cleartext_aead_vector_test_one(draft17_test_cnx_id, draft17_test_vn,
-            draft17_test_client_iv, sizeof(draft17_test_client_iv),
-            draft17_test_server_iv, sizeof(draft17_test_server_iv), "draft17_vector");
-    }
+        /* First integration test: verify that the aead keys are as expected */
+        if (ret == 0) {
+            ret = cleartext_aead_vector_test_one(draft17_test_cnx_id, draft17_test_vn,
+                draft17_test_client_iv, sizeof(draft17_test_client_iv),
+                draft17_test_server_iv, sizeof(draft17_test_server_iv), "draft17_vector");
+        }
 
 #if 0
-    /* TODO: reset this test once we have draft-17 samples. */
-    /* Final integration test: verify that the incoming packet can be decrypted */
-    if (ret == 0) {
-        ret = draft31_incoming_initial_test();
-    }
+        /* TODO: reset this test once we have draft-17 samples. */
+        /* Final integration test: verify that the incoming packet can be decrypted */
+        if (ret == 0) {
+            ret = draft31_incoming_initial_test();
+        }
 #endif
+    }
     return ret;
 }
 

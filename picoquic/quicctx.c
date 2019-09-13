@@ -131,12 +131,6 @@ static uint8_t picoquic_cleartext_internal_test_1_salt[] = {
     0x3d, 0xc1, 0xca, 0x36
 };
 
-static uint8_t picoquic_cleartext_draft_17_salt[] = {
-     0xef, 0x4f, 0xb0, 0xab, 0xb4, 0x74, 0x70, 0xc4,
-     0x1b, 0xef, 0xcf, 0x80, 0x31, 0x33, 0x4f, 0xae,
-     0x48, 0x5e, 0x09, 0xa0
-};
-
 static uint8_t picoquic_cleartext_draft_22_salt[] = {
     0x7f, 0xbc, 0xdb, 0x0e, 0x7c, 0x66, 0xbb, 0xe9,
     0x19, 0x3a, 0x96, 0xcd, 0x21, 0x51, 0x9e, 0xbd,
@@ -144,7 +138,21 @@ static uint8_t picoquic_cleartext_draft_22_salt[] = {
 };
 
 
+static uint8_t picoquic_cleartext_draft_23_salt[] = {
+    0xc3, 0xee, 0xf7, 0x12, 0xc7, 0x2e, 0xbb, 0x5a,
+    0x11, 0xa7, 0xd2, 0x43, 0x2b, 0xb4, 0x63, 0x65,
+    0xbe, 0xf9, 0xf5, 0x02
+};
+
 const picoquic_version_parameters_t picoquic_supported_versions[] = {
+    { PICOQUIC_FOURTEENTH_INTEROP_VERSION,
+        picoquic_version_header_17,
+        sizeof(picoquic_cleartext_draft_23_salt),
+        picoquic_cleartext_draft_23_salt },
+    { PICOQUIC_THIRTEENTH_INTEROP_VERSION,
+        picoquic_version_header_17,
+        sizeof(picoquic_cleartext_draft_22_salt),
+        picoquic_cleartext_draft_22_salt },
     { PICOQUIC_INTERNAL_TEST_VERSION_2,
         picoquic_version_header_17,
         sizeof(picoquic_cleartext_internal_test_1_salt),
@@ -152,15 +160,7 @@ const picoquic_version_parameters_t picoquic_supported_versions[] = {
     { PICOQUIC_INTERNAL_TEST_VERSION_1,
         picoquic_version_header_17,
         sizeof(picoquic_cleartext_internal_test_1_salt),
-        picoquic_cleartext_internal_test_1_salt },
-    { PICOQUIC_THIRTEENTH_INTEROP_VERSION,
-        picoquic_version_header_17,
-        sizeof(picoquic_cleartext_draft_22_salt),
-        picoquic_cleartext_draft_22_salt },
-    { PICOQUIC_TWELFTH_INTEROP_VERSION,
-        picoquic_version_header_17,
-        sizeof(picoquic_cleartext_draft_17_salt),
-        picoquic_cleartext_draft_17_salt }
+        picoquic_cleartext_internal_test_1_salt }
 };
 
 const size_t picoquic_nb_supported_versions = sizeof(picoquic_supported_versions) / sizeof(picoquic_version_parameters_t);

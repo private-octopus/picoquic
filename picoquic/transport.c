@@ -357,11 +357,9 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
             cnx->local_parameters.initial_max_stream_data_uni);
     }
 
-    if (picoquic_supported_versions[cnx->version_index].version != PICOQUIC_TWELFTH_INTEROP_VERSION) {
-        if (cnx->local_parameters.active_connection_id_limit > 0) {
-            bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_active_connection_id_limit,
-                cnx->local_parameters.active_connection_id_limit);
-        }
+    if (cnx->local_parameters.active_connection_id_limit > 0) {
+        bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_active_connection_id_limit,
+            cnx->local_parameters.active_connection_id_limit);
     }
 
     if (cnx->local_parameters.max_ack_delay != PICOQUIC_ACK_DELAY_MAX_DEFAULT) {
@@ -388,7 +386,15 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
             cnx->local_parameters.max_datagram_size);
     }
 
-    /* Finally, update the parameter slength */
+    if (cnx->grease_transport_parameters) {
+        /* Do not use a purely random value, so we can repetitive tests */
+        int n = 31 *(cnx->initial_cnxid.id[0] + cnx->client_mode) + 27;
+        uint64_t v = cnx->initial_cnxid.id[1];
+        v = (v<<8) + cnx->initial_cnxid.id[2];
+        bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, n, v);
+    }
+
+    /* Finally, update the parameters length */
 
     if (bytes == NULL) {
         *consumed = 0;
@@ -602,6 +608,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                         case picoquic_tp_max_datagram_size:
                             cnx->remote_parameters.max_datagram_size = (uint32_t)
                                 picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
+                            break;
                         default:
                             /* ignore unknown extensions */
                             break;
@@ -614,11 +621,6 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                 }
             }
         }
-    }
-
-    if (picoquic_supported_versions[cnx->version_index].version == PICOQUIC_TWELFTH_INTEROP_VERSION &&
-        (present_flag&(1ull << picoquic_tp_active_connection_id_limit)) == 0) {
-        cnx->remote_parameters.active_connection_id_limit = PICOQUIC_NB_PATH_TARGET;
     }
 
     if (ret == 0 && cnx->remote_parameters.idle_timeout == 0) {
