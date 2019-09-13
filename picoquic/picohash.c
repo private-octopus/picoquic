@@ -27,8 +27,8 @@
 #include <string.h>
 
 picohash_table* picohash_create(size_t nb_bin,
-    uint64_t (*picohash_hash)(void*),
-    int (*picohash_compare)(void*, void*))
+    uint64_t (*picohash_hash)(const void*),
+    int (*picohash_compare)(const void*, const void*))
 {
     picohash_table* t = (picohash_table*)malloc(sizeof(picohash_table));
     if (t != NULL) {
@@ -49,7 +49,7 @@ picohash_table* picohash_create(size_t nb_bin,
     return t;
 }
 
-picohash_item* picohash_retrieve(picohash_table* hash_table, void* key)
+picohash_item* picohash_retrieve(picohash_table* hash_table, const void* key)
 {
     uint64_t hash = hash_table->picohash_hash(key);
     uint32_t bin = (uint32_t)(hash % hash_table->nb_bin);
@@ -66,7 +66,7 @@ picohash_item* picohash_retrieve(picohash_table* hash_table, void* key)
     return item;
 }
 
-int picohash_insert(picohash_table* hash_table, void* key)
+int picohash_insert(picohash_table* hash_table, const void* key)
 {
     uint64_t hash = hash_table->picohash_hash(key);
     uint32_t bin = (uint32_t)(hash % hash_table->nb_bin);
@@ -104,7 +104,7 @@ void picohash_item_delete(picohash_table* hash_table, picohash_item* item, int d
         }
 
     if (delete_key_too) {
-        free(item->key);
+        free((void*)item->key);
     }
 
     free(item);
