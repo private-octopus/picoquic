@@ -568,30 +568,15 @@ void binlog_picotls_ticket(FILE* f, picoquic_connection_id_t cnx_id,
     (void)fwrite(bytestream_data(msg), bytestream_length(msg), 1, f);
 }
 
-int binlog_open(picoquic_quic_t * quic)
+int binlog_open(picoquic_quic_t * quic, char const * binlog_file)
 {
-    if (quic->f_binlog != NULL) {
-        DBG_PRINTF("%s", "Binary log is already open!\n");
-        return -1;
-    }
-
-    if (quic->cc_log_dir == NULL) {
-        DBG_PRINTF("%s", "Binary log directory not set!\n");
-        return -1;
-    }
-
-    char log_file_name[512];
     int ret = 0;
+    quic->f_binlog = picoquic_file_close(quic->f_binlog);
 
-    if (picoquic_sprintf(log_file_name, sizeof(log_file_name), NULL, "%s%clog.bin", quic->cc_log_dir, PICOQUIC_FILE_SEPARATOR) != 0)
-    {
-        DBG_PRINTF("Cannot format file name into folder %s\n", quic->cc_log_dir);
-        ret = -1;
-    }
-    else {
-        quic->f_binlog = picoquic_file_open(log_file_name, "wb");
+    if (binlog_file != NULL) {
+        quic->f_binlog = picoquic_file_open(binlog_file, "wb");
         if (quic->f_binlog == NULL) {
-            DBG_PRINTF("Cannot open file %s for write.\n", log_file_name);
+            DBG_PRINTF("Cannot open file %s for write.\n", binlog_file);
             ret = -1;
         }
         else {
@@ -604,8 +589,9 @@ int binlog_open(picoquic_quic_t * quic)
             bytewrite_int32(ps, 0);
 
             if (fwrite(bytestream_data(ps), bytestream_length(ps), 1, quic->f_binlog) <= 0) {
-                DBG_PRINTF("Cannot write header for file %s.\n", log_file_name);
+                DBG_PRINTF("Cannot write header for file %s.\n", binlog_file);
                 quic->f_binlog = picoquic_file_close(quic->f_binlog);
+                ret = -1;
             }
         }
     }

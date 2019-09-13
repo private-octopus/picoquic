@@ -165,7 +165,7 @@ int quic_server(const char* server_name, int server_port,
     void* cnx_id_callback_ctx, uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE],
     int dest_if, int mtu_max, uint32_t proposed_version, 
     const char * esni_key_file_name, const char * esni_rr_file_name,
-    FILE * F_log, char const * cc_log_dir, int use_long_log)
+    FILE * F_log, char const * bin_file, char const * cc_log_dir, int use_long_log)
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
@@ -219,6 +219,10 @@ int quic_server(const char* server_name, int server_port,
 
             if (cc_log_dir != NULL) {
                 picoquic_set_cc_log(qserver, cc_log_dir);
+            }
+
+            if (bin_file != NULL) {
+                picoquic_set_binlog(qserver, bin_file);
             }
 
             if (esni_key_file_name != NULL && esni_rr_file_name != NULL) {
@@ -491,7 +495,7 @@ int quic_client(const char* ip_address_text, int server_port,
     const char * sni, const char * esni_rr_file,
     const char * alpn, const char * root_crt,
     uint32_t proposed_version, int force_zero_share, int force_migration,
-    int nb_packets_before_key_update, int mtu_max, FILE* F_log,
+    int nb_packets_before_key_update, int mtu_max, FILE* F_log, char const * bin_file,
     int client_cnx_id_length, char const * client_scenario_text, char const * cc_log_dir,
     int no_disk, int use_long_log)
 {
@@ -601,6 +605,9 @@ int quic_client(const char* ip_address_text, int server_port,
                 picoquic_set_cc_log(qclient, cc_log_dir);
             }
 
+            if (bin_file != NULL) {
+                picoquic_set_binlog(qclient, bin_file);
+            }
 
             if (sni == NULL) {
                 /* Standard verifier would crash */
@@ -1064,6 +1071,7 @@ int main(int argc, char** argv)
     const char * esni_key_file = NULL;
     const char * esni_rr_file = NULL;
     const char * log_file = NULL;
+    const char * bin_file = NULL;
     const char * sni = NULL;
     const char * alpn = NULL;
     const char * cc_log_dir = NULL;
@@ -1098,7 +1106,7 @@ int main(int argc, char** argv)
 
     /* Get the parameters */
     int opt;
-    while ((opt = getopt(argc, argv, "c:k:K:p:u:v:f:i:s:e:E:l:m:n:a:t:S:I:g:1rhzDL")) != -1) {
+    while ((opt = getopt(argc, argv, "c:k:K:p:u:v:f:i:s:e:E:l:b:m:n:a:t:S:I:g:1rhzDL")) != -1) {
         switch (opt) {
         case 'c':
             server_cert_file = optarg;
@@ -1168,6 +1176,9 @@ int main(int argc, char** argv)
             break;
         case 'l':
             log_file = optarg;
+            break;
+        case 'b':
+            bin_file = optarg;
             break;
         case 'L':
             use_long_log = 1;
@@ -1285,13 +1296,13 @@ int main(int argc, char** argv)
             (cnx_id_cbdata == NULL) ? NULL : (void*)cnx_id_cbdata,
             (uint8_t*)reset_seed, dest_if, mtu_max, proposed_version,
             esni_key_file, esni_rr_file,
-            F_log, cc_log_dir, use_long_log);
+            F_log, bin_file, cc_log_dir, use_long_log);
         printf("Server exit with code = %d\n", ret);
     } else {
         /* Run as client */
         printf("Starting PicoQUIC connection to server IP = %s, port = %d\n", server_name, server_port);
         ret = quic_client(server_name, server_port, sni, esni_rr_file, alpn, root_trust_file, proposed_version, force_zero_share, 
-            force_migration, nb_packets_before_update, mtu_max, F_log, client_cnx_id_length, client_scenario, cc_log_dir, no_disk, use_long_log);
+            force_migration, nb_packets_before_update, mtu_max, F_log, bin_file, client_cnx_id_length, client_scenario, cc_log_dir, no_disk, use_long_log);
 
         printf("Client exit with code = %d\n", ret);
     }

@@ -393,6 +393,11 @@ void picoquic_set_fuzz(picoquic_quic_t* quic, picoquic_fuzz_fn fuzz_fn, void * f
  */
 void picoquic_set_cc_log(picoquic_quic_t * quic, char const * cc_log_dir);
 
+/* Set the binary log file and start tracing into it.
+ * Set to NULL value to stop binary tracing.
+ */
+void picoquic_set_binlog(picoquic_quic_t * quic, char const * binlog_file);
+
 /* Set the ESNI key.
  * May be called several times to set several keys.
  */

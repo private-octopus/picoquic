@@ -68,7 +68,7 @@ void binlog_transport_extension(FILE * f, picoquic_cnx_t* cnx);
 void binlog_picotls_ticket(FILE* f, picoquic_connection_id_t cnx_id,
     uint8_t* ticket, uint16_t ticket_length);
 
-int binlog_open(picoquic_quic_t* quic);
+int binlog_open(picoquic_quic_t * quic, char const * binlog_file);
 
 int picoquic_open_cc_dump(picoquic_cnx_t * cnx);
 void picoquic_close_cc_dump(picoquic_cnx_t * cnx);

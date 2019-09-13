@@ -2196,6 +2196,11 @@ void picoquic_set_cc_log(picoquic_quic_t * quic, char const * cc_log_dir)
     quic->cc_log_dir = cc_log_dir;
 }
 
+void picoquic_set_binlog(picoquic_quic_t * quic, char const * binlog_file)
+{
+    binlog_open(quic, binlog_file);
+}
+
 int picoquic_set_default_connection_id_length(picoquic_quic_t* quic, uint8_t cid_length)
 {
     int ret = 0;
