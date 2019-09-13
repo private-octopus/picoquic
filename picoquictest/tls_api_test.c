@@ -31,7 +31,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <openssl/pem.h>
-#include "picoquictest_internal.h"
+#include "txtlog.h"
 
 #define RANDOM_PUBLIC_TEST_SEED 0xDEADBEEFCAFEC001ull
 
