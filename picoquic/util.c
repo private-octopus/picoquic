@@ -311,9 +311,9 @@ uint8_t picoquic_parse_connection_id(const uint8_t * bytes, uint8_t len, picoqui
 const picoquic_connection_id_t picoquic_null_connection_id = { 
     { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 0 };
 
-int picoquic_is_connection_id_null(picoquic_connection_id_t cnx_id)
+int picoquic_is_connection_id_null(const picoquic_connection_id_t * cnx_id)
 {
-    return (cnx_id.id_len == 0) ? 1 : 0;
+    return (cnx_id->id_len == 0) ? 1 : 0;
 }
 
 int picoquic_compare_connection_id(const picoquic_connection_id_t * cnx_id1, const picoquic_connection_id_t * cnx_id2)
