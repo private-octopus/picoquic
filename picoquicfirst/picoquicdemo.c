@@ -637,6 +637,8 @@ int quic_client(const char* ip_address_text, int server_port,
         }
         else {
             picoquic_set_callback(cnx_client, picoquic_demo_client_callback, &callback_ctx);
+            /* Requires TP grease, for interop tests */
+            cnx_client->grease_transport_parameters = 1;
 
 
             if (callback_ctx.tp != NULL) {

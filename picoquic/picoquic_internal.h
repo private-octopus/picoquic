@@ -691,7 +691,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int is_path_0_deleted : 1; /* If the initial connection ID has been deleted */
     unsigned int is_1rtt_received : 1; /* If the initial connection ID has been deleted */
     unsigned int has_successful_probe : 1; /* At least one probe was successful */
-
+    unsigned int grease_transport_parameters : 1; /* Exercise greasing of transport parameters */
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;
 
@@ -1145,8 +1145,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_
 
 int picoquic_skip_frame(uint8_t* bytes, size_t bytes_max, size_t* consumed, int* pure_ack);
 
-int picoquic_decode_closing_frames(picoquic_cnx_t* cnx, uint8_t* bytes,
-    size_t bytes_max, int* closing_received);
+int picoquic_decode_closing_frames(uint8_t* bytes, size_t bytes_max, int* closing_received);
 
 uint64_t picoquic_decode_transport_param_stream_id(uint64_t rank, int extension_mode, int stream_type);
 uint64_t picoquic_prepare_transport_param_stream_id(uint64_t stream_id);

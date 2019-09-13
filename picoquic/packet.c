@@ -1655,7 +1655,7 @@ int picoquic_incoming_encrypted(
                 int closing_received = 0;
 
                 ret = picoquic_decode_closing_frames(
-                    cnx, bytes + ph->offset, ph->payload_length, &closing_received);
+                    bytes + ph->offset, ph->payload_length, &closing_received);
 
                 if (ret == 0) {
                     if (closing_received) {
