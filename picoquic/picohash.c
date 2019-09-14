@@ -93,10 +93,12 @@ void picohash_item_delete(picohash_table* hash_table, picohash_item* item, int d
 
     if (previous == item) {
         hash_table->hash_bin[bin] = item->next_in_bin;
+        hash_table->count--;
     } else
         while (previous != NULL) {
             if (previous->next_in_bin == item) {
                 previous->next_in_bin = item->next_in_bin;
+                hash_table->count--;
                 break;
             } else {
                 previous = previous->next_in_bin;
