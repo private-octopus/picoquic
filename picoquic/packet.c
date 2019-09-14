@@ -27,7 +27,6 @@
  * - For initial packets, has to perform version checks.
  */
 
-#include "fnv1a.h"
 #include "picoquic_internal.h"
 #include "tls_api.h"
 #include <stdint.h>
@@ -1874,7 +1873,7 @@ int picoquic_incoming_segment(
         ret = -1;
     } else if (ret == PICOQUIC_ERROR_AEAD_CHECK || ret == PICOQUIC_ERROR_INITIAL_TOO_SHORT ||
         ret == PICOQUIC_ERROR_INITIAL_CID_TOO_SHORT ||
-        ret == PICOQUIC_ERROR_UNEXPECTED_PACKET || ret == PICOQUIC_ERROR_FNV1A_CHECK || 
+        ret == PICOQUIC_ERROR_UNEXPECTED_PACKET || 
         ret == PICOQUIC_ERROR_CNXID_CHECK || 
         ret == PICOQUIC_ERROR_RETRY || ret == PICOQUIC_ERROR_DETECTED ||
         ret == PICOQUIC_ERROR_CONNECTION_DELETED ||

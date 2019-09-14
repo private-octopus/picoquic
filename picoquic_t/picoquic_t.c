@@ -51,7 +51,6 @@ static const picoquic_test_def_t test_table[] = {
     { "parseheader", parseheadertest },
     { "pn2pn64", pn2pn64test },
     { "intformat", intformattest },
-    { "fnv1a", fnv1atest },
     { "varint", varint_test },
     { "sack", sacktest },
     { "skip_frames", skip_frame_test },

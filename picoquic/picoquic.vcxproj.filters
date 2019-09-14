@@ -27,9 +27,6 @@
     <ClCompile Include="quicctx.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="fnv1a.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="intformat.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -108,9 +105,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="bytestream.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="fnv1a.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
