@@ -24,90 +24,186 @@
 #include <inttypes.h>
 
 #include "picoquic_internal.h"
+#include "bytestream.h"
 #include "csv.h"
+#include "cidset.h"
+#include "logreader.h"
 #ifdef _WINDOWS
 #include "../picoquicfirst/getopt.h"
 #endif
 
-FILE * open_outfile(const char * log_name, const char * out_file, const char * out_ext);
+typedef struct app_conversion_context_st
+{
+    const char * out_format;
+    const char * out_dir;
+    const char * log_name;
+    FILE * f_binlog;
+    uint32_t log_time;
+} app_conversion_context_t;
 
-void usage();
+int binlog_list_cids(FILE * f_binlog, picohash_table * cids);
+int convert_csv(const picoquic_connection_id_t * cid, void * cbptr);
+
+int usage();
 
 int main(int argc, char ** argv)
 {
     int ret = 0;
 
-    const char * log_name = NULL;
-    const char * out_format = "csv";
-    const char * out_file = NULL;
+    picohash_table * cids = cidset_create();
+
+    const char * cid_name = NULL;
+    picoquic_connection_id_t cid = picoquic_null_connection_id;
+
+    app_conversion_context_t appctx = { 0 };
+    appctx.out_format = "csv";
 
     int opt;
-    while ((opt = getopt(argc, argv, "o:f")) != -1) {
+    while ((opt = getopt(argc, argv, "o:f:c:h")) != -1) {
         switch (opt) {
         case 'o':
-            out_file = optarg;
+            appctx.out_dir = optarg;
             break;
         case 'f':
-            out_format = optarg;
+            appctx.out_format = optarg;
             break;
+        case 'c':
+            cid_name = optarg;
+            break;
+        case 'h':
         default:
-            usage();
+            return usage();
             break;
         }
     }
 
     if (optind < argc) {
-        log_name = argv[optind++];
+        appctx.log_name = argv[optind++];
+    } else {
+        return usage();
+    }
+
+    if (cids == NULL) {
+        fprintf(stderr, "Fatal: failed to create resources.\n");
+        return 1;
+    }
+
+    if (cid_name != NULL && picoquic_parse_connection_id_hexa(cid_name, strlen(cid_name), &cid) == 0) {
+        fprintf(stderr, "Could not parse connection id: %s\n", cid_name);
+        ret = -1;
     }
 
     debug_printf_push_stream(stderr);
 
-    uint32_t log_time = 0;
-    FILE* log = log_name ? picoquic_open_cc_log_file_for_read(log_name, &log_time) : NULL;
-
-    if (log_name != NULL && log == NULL) {
-        fprintf(stderr, "Could not open file %s\n", log_name);
-        exit(1);
+    appctx.f_binlog = picoquic_open_cc_log_file_for_read(appctx.log_name, &appctx.log_time);
+    if (appctx.f_binlog == NULL) {
+        fprintf(stderr, "Could not open file %s\n", appctx.log_name);
+        ret = -1;
     }
 
-    if (strcmp(out_format, "csv") == 0) {
-        ret = picoquic_cc_bin_to_csv(log, open_outfile(log_name, out_file, "csv"));
-    } else {
-        fprintf(stderr, "Invalid output format %s\n", out_format);
-        ret = 1;
-    }
+    if (ret == 0) {
+        binlog_list_cids(appctx.f_binlog, cids);
+        
+        fprintf(stderr, "%s contains %"PRIst" connection(s):\n\n", appctx.log_name, cids->count);
+        cidset_print(stderr, cids);
 
-    (void)picoquic_file_close(log);
-    return ret;
-}
-
-FILE * open_outfile(const char * log_name, const char * out_file, const char * out_ext)
-{
-    int ret = 0;
-
-    char filename[512];
-    if (out_file == NULL) {
-        out_file = filename;
-
-        if (picoquic_sprintf(filename, sizeof(filename), NULL, "%s.%s", log_name, out_ext) != 0) {
-            DBG_PRINTF("Cannot format file name for %s", log_name);
-            ret = -1;
+        if (!picoquic_is_connection_id_null(&cid)) {
+            if (!cidset_has_cid(cids, &cid)) {
+                fprintf(stderr, "%s does not contain connection %s\n", appctx.log_name, cid_name);
+                ret = -1;
+            } else {
+                (void)cidset_delete(cids);
+                cids = cidset_create();
+                cidset_insert(cids, &cid);
+            }
         }
     }
 
     if (ret == 0) {
-        return picoquic_file_open(out_file, "w");
+        if (strcmp(appctx.out_format, "csv") == 0) {
+            ret = cidset_iterate(cids, convert_csv, &appctx);
+        } else {
+            fprintf(stderr, "Invalid output format %s\n", appctx.out_format);
+            ret = 1;
+        }
+    }
+
+    (void)picoquic_file_close(appctx.f_binlog);
+    (void)cidset_delete(cids);
+    return ret;
+}
+
+int usage()
+{
+    fprintf(stderr, "PicoQUIC log file converter\n");
+    fprintf(stderr, "Usage: picolog <options> input \n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "Options:\n");
+    fprintf(stderr, "  -o directory          output directory name\n");
+    fprintf(stderr, "                        default is current working directory\n");
+    fprintf(stderr, "  -f format             output format:\n");
+    fprintf(stderr, "                        -f csv: generate CC csv file\n");
+    fprintf(stderr, "  -c connection-id      only convert logs from specified connection id\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "picolog converts binary log files into the format specified. Output files are\n");
+    fprintf(stderr, "placed in the specified directory with their connection-id as file name.\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "If no connection id is specified all connections contained in the binary file\n");
+    fprintf(stderr, "are converted.\n");
+    return 1;
+}
+
+FILE * open_outfile(const picoquic_connection_id_t * cid, const char * log_name, const char * out_dir, const char * out_ext)
+{
+    int ret = 0;
+
+    char cid_name[2 * PICOQUIC_CONNECTION_ID_MAX_SIZE + 1];
+    if (picoquic_print_connection_id_hexa(cid_name, sizeof(cid_name), cid) != 0) {
+        DBG_PRINTF("Cannot convert connection id for %s", log_name);
+        ret = -1;
+    }
+
+    char filename[512];
+    if (ret == 0) {
+        if (out_dir != NULL) {
+            ret = picoquic_sprintf(filename, sizeof(filename), NULL, "%s%c%s.%s",
+                out_dir, PICOQUIC_FILE_SEPARATOR, cid_name, out_ext);
+        } else {
+            ret = picoquic_sprintf(filename, sizeof(filename), NULL, "%s.%s",
+                cid_name, out_ext);
+        }
+        if (ret != 0) {
+            DBG_PRINTF("Cannot format file name for connection %s in file %s", cid_name, log_name);
+        }
+    }
+
+    if (ret == 0) {
+        return picoquic_file_open(filename, "w");
     } else {
         return NULL;
     }
 }
 
-void usage()
+int convert_csv(const picoquic_connection_id_t * cid, void * ptr)
 {
-    fprintf(stderr, "PicoQUIC log file converter\n");
-    fprintf(stderr, "Usage: picolog <options> [input] \n");
-    fprintf(stderr, "Options:\n");
-    fprintf(stderr, "  -o file               output file name\n");
-    fprintf(stderr, "  -f format             output format:\n");
-    fprintf(stderr, "                        -f csv: generate CC csv file\n");
+    const app_conversion_context_t* appctx = (const app_conversion_context_t*)ptr;
+    return picoquic_cc_bin_to_csv(appctx->f_binlog,
+        open_outfile(cid, appctx->log_name, appctx->out_dir, "csv"));
+}
+
+static int list_cids_cb(bytestream * s, void * cbptr)
+{
+    picoquic_connection_id_t cid;
+    int ret = byteread_cid(s, &cid);
+
+    if (ret == 0) {
+        ret = cidset_insert((picohash_table*)cbptr, &cid);
+    }
+
+    return ret;
+}
+
+int binlog_list_cids(FILE * binlog, picohash_table * cids)
+{
+    return fileread_binlog(binlog, list_cids_cb, cids);
 }

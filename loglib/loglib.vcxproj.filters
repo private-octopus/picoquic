@@ -12,12 +12,18 @@
     <ClCompile Include="logreader.c">
       <Filter>Source</Filter>
     </ClCompile>
+    <ClCompile Include="cidset.c">
+      <Filter>Source</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="csv.h">
       <Filter>Source</Filter>
     </ClInclude>
     <ClInclude Include="logreader.h">
+      <Filter>Source</Filter>
+    </ClInclude>
+    <ClInclude Include="cidset.h">
       <Filter>Source</Filter>
     </ClInclude>
   </ItemGroup>
