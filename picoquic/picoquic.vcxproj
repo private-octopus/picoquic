@@ -143,7 +143,6 @@
   <ItemGroup>
     <ClCompile Include="bytestream.c" />
     <ClCompile Include="cubic.c" />
-    <ClCompile Include="fnv1a.c" />
     <ClCompile Include="frames.c" />
     <ClCompile Include="intformat.c" />
     <ClCompile Include="logger.c" />
@@ -164,7 +163,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="bytestream.h" />
-    <ClInclude Include="fnv1a.h" />
     <ClInclude Include="picohash.h" />
     <ClInclude Include="picoquic_internal.h" />
     <ClInclude Include="picosocks.h" />

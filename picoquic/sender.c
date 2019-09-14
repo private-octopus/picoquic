@@ -19,7 +19,6 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "fnv1a.h"
 #include "picoquic_internal.h"
 #include "tls_api.h"
 #include <stdlib.h>

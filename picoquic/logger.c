@@ -25,7 +25,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <inttypes.h>
-#include "fnv1a.h"
 #include "picoquic_internal.h"
 #include "bytestream.h"
 #include "tls_api.h"

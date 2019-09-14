@@ -16,7 +16,6 @@ endif()
 set(PICOQUIC_LIBRARY_FILES
     picoquic/bytestream.c
     picoquic/cubic.c
-    picoquic/fnv1a.c
     picoquic/frames.c
     picoquic/intformat.c
     picoquic/logger.c
@@ -45,7 +44,6 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/bytestream_test.c
     picoquictest/cleartext_aead_test.c
     picoquictest/cnx_creation_test.c
-    picoquictest/fnv1atest.c
     picoquictest/hashtest.c
     picoquictest/intformattest.c
     picoquictest/parseheadertest.c
