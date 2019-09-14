@@ -23,6 +23,8 @@
 #ifdef _WINDOWS
 #include <malloc.h>
 #endif
+
+#include "picoquic_internal.h"
 #include "picohash.h"
 
 struct hashtestkey {
@@ -62,13 +64,27 @@ int picohash_test()
     picohash_table* t = picohash_create(32, hashtest_hash, hashtest_compare);
 
     if (t == NULL) {
+        DBG_PRINTF("%s", "picohash_create() failed\n");
         ret = -1;
     } else {
         struct hashtestkey hk;
 
+        if (t->count != 0) {
+            DBG_PRINTF("picohash empty table count != 0 (count=%"PRIst")\n", t->count);
+            ret = -1;
+        }
+
         /* Enter a bunch of values, all different */
         for (uint64_t i = 1; ret == 0 && i < 10; i += 2) {
-            ret = picohash_insert(t, hashtest_item(i));
+            if (picohash_insert(t, hashtest_item(i)) != 0) {
+                DBG_PRINTF("picohash_insert(%"PRId64") failed\n", i);
+                ret = -1;
+            }
+        }
+
+        if (t->count != 5) {
+            DBG_PRINTF("picohash table count != 5 (count=%"PRIst")\n", t->count);
+            ret = -1;
         }
 
         /* Test whether each value can be retrieved */
@@ -77,6 +93,7 @@ int picohash_test()
             picohash_item* pi = picohash_retrieve(t, &hk);
 
             if (pi == NULL) {
+                DBG_PRINTF("picohash_retrieve(%"PRId64") failed\n", i);
                 ret = -1;
             }
         }
@@ -84,8 +101,16 @@ int picohash_test()
         /* Create a bunch of collisions */
         for (uint64_t k = 1; ret == 0 && k < 6; k += 4) {
             for (uint64_t j = 1; ret == 0 && j <= k; j++) {
-                ret = picohash_insert(t, hashtest_item(k + 32 * j));
+                if (picohash_insert(t, hashtest_item(k + 32 * j)) != 0) {
+                    DBG_PRINTF("picohash_insert(%"PRId64" + 32 * %"PRId64") failed\n", k, j);
+                    ret = -1;
+                }
             }
+        }
+
+        if (t->count != 11) {
+            DBG_PRINTF("picohash table count != 11 (count=%"PRIst")\n", t->count);
+            ret = -1;
         }
 
         /* Check that the collisions can be retrieved */
@@ -94,7 +119,10 @@ int picohash_test()
                 hk.x = k + 32 * j;
                 picohash_item* pi = picohash_retrieve(t, &hk);
 
-                ret = (pi != NULL) ? 0 : -1;
+                if (pi == NULL) {
+                    DBG_PRINTF("picohash_retrieve(%"PRId64" + 32 * %"PRId64") failed\n", k, j);
+                    ret = -1;
+                }
             }
         }
 
@@ -103,7 +131,10 @@ int picohash_test()
             hk.x = i;
             picohash_item* pi = picohash_retrieve(t, &hk);
 
-            ret = (pi == NULL) ? 0 : -1;
+            if (pi != NULL) {
+                DBG_PRINTF("picohash_retrieve(%"PRId64") returned invalid item\n", i);
+                ret = -1;
+            }
         }
 
         /* Delete first, last and middle */
@@ -112,6 +143,7 @@ int picohash_test()
             picohash_item* pi = picohash_retrieve(t, &hk);
 
             if (pi == NULL) {
+                DBG_PRINTF("picohash_retrieve(%"PRId64") failed\n", i);
                 ret = -1;
             } else {
                 picohash_item_delete(t, pi, 1);
@@ -120,11 +152,17 @@ int picohash_test()
 
         /* Check that the deleted are gone */
 
+        if (t->count != 8) {
+            DBG_PRINTF("picohash table count != 8 (count=%"PRIst")\n", t->count);
+            ret = -1;
+        }
+
         for (uint64_t i = 1; ret == 0 && i < 10; i += 4) {
             hk.x = i;
             picohash_item* pi = picohash_retrieve(t, &hk);
 
             if (pi != NULL) {
+                DBG_PRINTF("picohash_retrieve(%"PRId64") deleted value still found\n", i);
                 ret = -1;
             }
         }
