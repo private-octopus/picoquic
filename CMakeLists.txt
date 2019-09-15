@@ -129,6 +129,20 @@ target_link_libraries(picoquic_c2csv
 
 target_include_directories(picoquic_c2csv PRIVATE loglib)
 
+add_executable(picolog_t
+    picolog/picolog.c
+)
+
+target_link_libraries(picolog_t
+    picoquic-log
+    picoquic-core
+    ${PTLS_LIBRARIES}
+    ${OPENSSL_LIBRARIES}
+    ${CMAKE_DL_LIBS}
+)
+
+target_include_directories(picolog_t PRIVATE loglib)
+
 add_executable(picoquic_ct picoquic_t/picoquic_t.c
     ${PICOQUIC_TEST_LIBRARY_FILES}
 )
