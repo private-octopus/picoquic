@@ -31,8 +31,9 @@ typedef struct log_file_ctx_st {
     FILE * f_binlog;
     FILE * f_txtlog;
 
-    int (*packet)(uint64_t time, const picoquic_packet_header * ph, int rxtx, void * ptr);
     int (*pdu)(uint64_t time, int rxtx, void * ptr);
+    int (*packet)(uint64_t time, const picoquic_packet_header * ph, int rxtx, void * ptr);
+    int (*frame)(bytestream * s, void * ptr);
 
     void * ptr;
 

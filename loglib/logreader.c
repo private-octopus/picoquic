@@ -81,6 +81,19 @@ int convert_log_file_cb(bytestream * s, void * ptr)
         if (ret == 0) {
             ret = ctx->packet(time, &ph, id == picoquic_log_event_packet_recv, ctx->ptr);
         }
+
+        while (ret == 0 && bytestream_remain(s) > 0) {
+            uint64_t len = 0;
+            ret |= byteread_vint(s, &len);
+
+            bytestream stream;
+            bytestream* frame = bytestream_ref_init(&stream, bytestream_ptr(s), len);
+
+            ret |= bytestream_skip(s, len);
+            if (ret == 0) {
+                ret |= ctx->frame(frame, ctx->ptr);
+            }
+        }
     }
 
     return ret;

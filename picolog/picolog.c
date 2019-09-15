@@ -226,6 +226,91 @@ typedef struct svg_context_st {
 
 } svg_context_t;
 
+const char * ptype2str(picoquic_packet_type_enum ptype)
+{
+    switch (ptype) {
+    case picoquic_packet_error:
+        return "error";
+    case picoquic_packet_version_negotiation:
+        return "version";
+    case picoquic_packet_initial:
+        return "initial";
+    case picoquic_packet_retry:
+        return "retry";
+    case picoquic_packet_handshake:
+        return "handshake";
+    case picoquic_packet_0rtt_protected:
+        return "0rtt";
+    case picoquic_packet_1rtt_protected:
+        return "1rtt";
+    case picoquic_packet_type_max:
+    default:
+        return "unknown";
+    }
+}
+
+char const* fname2str(picoquic_frame_type_enum_t ftype)
+{
+    if ((int)ftype >= picoquic_frame_type_stream_range_min &&
+        (int)ftype <= picoquic_frame_type_stream_range_max) {
+        return "stream";
+    }
+
+    switch (ftype) {
+    case picoquic_frame_type_padding:
+        return "padding";
+    case picoquic_frame_type_reset_stream:
+        return "reset_stream";
+    case picoquic_frame_type_connection_close:
+        return "connection_close";
+    case picoquic_frame_type_application_close:
+        return "application_close";
+    case picoquic_frame_type_max_data:
+        return "max_data";
+    case picoquic_frame_type_max_stream_data:
+        return "max_stream_data";
+    case picoquic_frame_type_max_streams_bidir:
+        return "max_streams_bidir";
+    case picoquic_frame_type_max_streams_unidir:
+        return "max_streams_unidir";
+    case picoquic_frame_type_ping:
+        return "ping";
+    case picoquic_frame_type_data_blocked:
+        return "data_blocked";
+    case picoquic_frame_type_stream_data_blocked:
+        return "stream_data_blocked";
+    case picoquic_frame_type_streams_blocked_bidir:
+        return "streams_blocked_bidir";
+    case picoquic_frame_type_streams_blocked_unidir:
+        return "streams_blocked_unidir";
+    case picoquic_frame_type_new_connection_id:
+        return "cid";
+    case picoquic_frame_type_stop_sending:
+        return "stop_sending";
+    case picoquic_frame_type_ack:
+        return "ack";
+    case picoquic_frame_type_path_challenge:
+        return "path_challenge";
+    case picoquic_frame_type_path_response:
+        return "path_response";
+    case picoquic_frame_type_crypto_hs:
+        return "crypto_hs";
+    case picoquic_frame_type_new_token:
+        return "new_token";
+    case picoquic_frame_type_ack_ecn:
+        return "ack_ecn";
+    case picoquic_frame_type_retire_connection_id:
+        return "retire_connection_id";
+    case picoquic_frame_type_datagram:
+    case picoquic_frame_type_datagram_l:
+    case picoquic_frame_type_datagram_id:
+    case picoquic_frame_type_datagram_id_l:
+        return "datagram";
+    default:
+        return "unknown";
+    }
+}
+
 int svg_packet(uint64_t time, const picoquic_packet_header * ph, int rxtx, void * ptr)
 {
     const int event_height = 32;
@@ -246,21 +331,48 @@ int svg_packet(uint64_t time, const picoquic_packet_header * ph, int rxtx, void 
     uint64_t time1 = time / 1000;
     uint64_t time01 = (time % 1000) / 100;
 
+    if (svg->nb != 0) {
+        fprintf(f, "</text>\n");
+    }
+
     fprintf(f, "  <use x=\"%d\" y=\"%d\" xlink:href=\"#packet-%s\" />\n", x_pos, y_pos, dir);
     fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"end\" class=\"time\">%I64d.%I64d ms</text>\n", x_pos - 4, y_pos + 8, time1, time01);
 
     if (rxtx == 0) {
         fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"end\" class=\"seq_%s\">%I64d</text>\n", x_pos - 4, y_pos - 4, dir, ph->pn64);
         fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"end\" class=\"arw\">%I64d b</text>\n", 80, y_pos - 2, ph->payload_length);
+        fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"start\" class=\"frm\" xml:space=\"preserve\"> %s</text>\n", 80, y_pos - 2, ptype2str(ph->ptype));
+        fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"start\" class=\"frm\" xml:space=\"preserve\">", x_pos + 30, y_pos + 10);
     }
     else {
         fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"start\" class=\"seq_%s\">%I64d</text>\n", 600 - x_pos + 4, y_pos - 4, dir, ph->pn64);
         fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"start\" class=\"arw\">%I64d b</text>\n", 600 - 80, y_pos - 2, ph->payload_length);
+        fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"end\" class=\"frm\" xml:space=\"preserve\">%s </text>\n", 600-80, y_pos - 2, ptype2str(ph->ptype));
+        fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"end\" class=\"frm\" xml:space=\"preserve\">", 600 - x_pos - 30, y_pos + 10);
     }
 
     svg->nb++;
     return 0;
 }
+
+int svg_frame(bytestream * s, void * ptr)
+{
+    svg_context_t * svg = (svg_context_t*)ptr;
+
+    uint8_t ftype = 0;
+    byteread_int8(s, &ftype);
+
+    if (ftype >= picoquic_frame_type_stream_range_min &&
+        ftype <= picoquic_frame_type_stream_range_max) {
+        uint64_t stream_id = 0;
+        byteread_vint(s, &stream_id);
+        fprintf(svg->f_txtlog, " stream[%I64d] ", stream_id);
+    } else {
+        fprintf(svg->f_txtlog, " %s ", fname2str(ftype));
+    }
+    return 0;
+}
+
 
 int svg_pdu(uint64_t time, int rxtx, void * ptr)
 {
@@ -278,8 +390,9 @@ int convert_svg(const picoquic_connection_id_t * cid, void * ptr)
     ctx.cid = cid;
     ctx.f_binlog = appctx->f_binlog;
     ctx.f_txtlog = open_outfile(cid, appctx->binlog_name, appctx->out_dir, "svg");
-    ctx.packet = svg_packet;
     ctx.pdu = svg_pdu;
+    ctx.packet = svg_packet;
+    ctx.frame = svg_frame;
     ctx.ptr = &svg;
 
     svg.f_binlog = ctx.f_binlog;
@@ -293,6 +406,9 @@ int convert_svg(const picoquic_connection_id_t * cid, void * ptr)
             fprintf(ctx.f_txtlog, line);
         } else {
             ret = convert_log_file(appctx->f_binlog, &ctx);
+            if (svg.nb != 0) {
+                fprintf(svg.f_txtlog, "</text>\n");
+            }
         }
     }
 
