@@ -25,12 +25,25 @@
 #include "picoquic_internal.h"
 #include "bytestream.h"
 
+typedef struct log_file_ctx_st {
+    const picoquic_connection_id_t * cid;
+
+    FILE * f_binlog;
+    FILE * f_txtlog;
+
+    int (*packet)(uint64_t time, const picoquic_packet_header * ph, int rxtx, void * ptr);
+    int (*pdu)(uint64_t time, int rxtx, void * ptr);
+
+    void * ptr;
+
+} log_file_ctx_t;
+
 int fileread_binlog(FILE * bin_log, int(*cb)(bytestream *, void *), void * cbptr);
+int convert_log_file(FILE * f_binlog, const log_file_ctx_t * ctx);
 
 FILE * picoquic_open_cc_log_file_for_read(char const * bin_cc_log_name, uint32_t * log_time);
 
 int picoquic_cc_log_file_to_csv(char const * bin_cc_log_name, char const * csv_cc_log_name);
 
-int byteread_addr(bytestream* s, struct sockaddr* addr);
 int byteread_packet_header(bytestream* s, picoquic_packet_header* ph);
 int byteread_frames(bytestream* s);

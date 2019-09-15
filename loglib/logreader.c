@@ -24,6 +24,8 @@
 #include <inttypes.h>
 #include "picoquic_internal.h"
 #include "bytestream.h"
+#include "logreader.h"
+#include "logwriter.h"
 
 int fileread_binlog(FILE* bin_log, int(*cb)(bytestream*, void*), void* cbptr)
 {
@@ -52,6 +54,43 @@ int fileread_binlog(FILE* bin_log, int(*cb)(bytestream*, void*), void* cbptr)
 
     return ret;
 }
+
+int convert_log_file_cb(bytestream * s, void * ptr)
+{
+    log_file_ctx_t * ctx = (log_file_ctx_t*)ptr;
+
+    int ret = 0;
+
+    picoquic_connection_id_t cid;
+    ret |= byteread_cid(s, &cid);
+
+    if (picoquic_compare_connection_id(&cid, ctx->cid) != 0) {
+        return 0;
+    }
+
+    uint64_t time = 0;
+    ret |= byteread_vint(s, &time);
+
+    uint64_t id = 0;
+    ret |= byteread_vint(s, &id);
+
+    if (id == picoquic_log_event_packet_recv || id == picoquic_log_event_packet_sent) {
+        picoquic_packet_header ph;
+        ret |= byteread_packet_header(s, &ph);
+
+        if (ret == 0) {
+            ret = ctx->packet(time, &ph, id == picoquic_log_event_packet_recv, ctx->ptr);
+        }
+    }
+
+    return ret;
+}
+
+int convert_log_file(FILE * f_binlog, const log_file_ctx_t * ctx)
+{
+    return fileread_binlog(f_binlog, convert_log_file_cb, (void*)ctx);
+}
+
 
 int byteread_packet_header(bytestream * s, picoquic_packet_header * ph)
 {
