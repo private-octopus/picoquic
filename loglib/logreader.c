@@ -142,45 +142,6 @@ int byteread_packet_header(bytestream * s, picoquic_packet_header * ph)
     return ret;
 }
 
-int byteread_frames(bytestream * s)
-{
-    int ret = 0;
-
-    uint64_t time, seq_no, length, type;
-
-    bytestream_reset(s);
-    ret |= byteread_vint(s, &time);
-    ret |= byteread_vint(s, &seq_no);
-    ret |= byteread_vint(s, &length);
-    ret |= byteread_vint(s, &type);
-
-    uint64_t nb_frames = 0;
-    ret |= byteread_vint(s, &nb_frames);
-
-    for (uint64_t i = 0; i < nb_frames; ++i) {
-
-        uint64_t ftype, frame_length, stream_id, epoch, path_seq;
-        ret |= byteread_vint(s, &ftype);
-        ret |= byteread_vint(s, &frame_length);
-
-        if (ftype >= picoquic_frame_type_stream_range_min &&
-            ftype <= picoquic_frame_type_stream_range_max) {
-            ret |= byteread_vint(s, &stream_id);
-        }
-        else switch (ftype) {
-
-        case picoquic_frame_type_crypto_hs:
-            ret |= byteread_vint(s, &epoch);
-            break;
-        case picoquic_frame_type_new_connection_id:
-            ret |= byteread_vint(s, &path_seq);
-            break;
-        }
-    }
-
-    return ret;
-}
-
 /* Open the bin file for reading */
 FILE * picoquic_open_cc_log_file_for_read(char const * bin_cc_log_name, uint32_t * log_time)
 {

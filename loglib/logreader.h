@@ -47,4 +47,3 @@ FILE * picoquic_open_cc_log_file_for_read(char const * bin_cc_log_name, uint32_t
 int picoquic_cc_log_file_to_csv(char const * bin_cc_log_name, char const * csv_cc_log_name);
 
 int byteread_packet_header(bytestream* s, picoquic_packet_header* ph);
-int byteread_frames(bytestream* s);
