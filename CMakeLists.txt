@@ -14,6 +14,7 @@ if(DISABLE_DEBUG_PRINTF)
 endif()
 
 set(PICOQUIC_LIBRARY_FILES
+    picoquic/fastcc.c
     picoquic/bytestream.c
     picoquic/cubic.c
     picoquic/frames.c

@@ -143,6 +143,7 @@
   <ItemGroup>
     <ClCompile Include="bytestream.c" />
     <ClCompile Include="cubic.c" />
+    <ClCompile Include="fastcc.c" />
     <ClCompile Include="frames.c" />
     <ClCompile Include="intformat.c" />
     <ClCompile Include="logger.c" />

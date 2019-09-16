@@ -75,6 +75,9 @@
     <ClCompile Include="bytestream.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="fastcc.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquic.h">

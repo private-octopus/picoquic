@@ -577,7 +577,7 @@ int quic_client(const char* ip_address_text, int server_port,
         if (qclient == NULL) {
             ret = -1;
         } else {
-            picoquic_set_default_congestion_algorithm(qclient, picoquic_cubic_algorithm);
+            picoquic_set_default_congestion_algorithm(qclient, picoquic_fastcc_algorithm);
 
             if (picoquic_load_tokens(&qclient->p_first_token, current_time, token_store_filename) != 0) {
                 fprintf(stderr, "Could not load tokens from <%s>.\n", token_store_filename);

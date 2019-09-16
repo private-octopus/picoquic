@@ -350,7 +350,7 @@ void picoquic_cubic_delete(picoquic_path_t* path_x)
     }
 }
 
-/* Definition record for the New Reno algorithm */
+/* Definition record for the Cubic algorithm */
 
 #define picoquic_cubic_ID 0x43424942 /* CBIC */
 

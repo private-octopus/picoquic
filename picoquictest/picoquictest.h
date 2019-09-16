@@ -181,7 +181,8 @@ int stream_output_test();
 int stream_rank_test();
 int not_before_cnxid_test();
 int h3zero_post_test();
-int h09_post_test();
+int h09_post_test(); 
+int fastcc_test();
 
 #ifdef __cplusplus
 }

@@ -5675,7 +5675,8 @@ int ready_to_send_test()
     return ret;
 }
 
-int cubic_test()
+
+static int congestion_control_test(picoquic_congestion_algorithm_t * ccalgo, uint64_t max_completion_time)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -5685,15 +5686,15 @@ int cubic_test()
         ret = -1;
     }
 
-    /* Set the congestion algorithm to cubic. Also, request a packet trace */
+    /* Set the congestion algorithm to specified value. Also, request a packet trace */
     if (ret == 0) {
-        picoquic_set_default_congestion_algorithm(test_ctx->qserver, picoquic_cubic_algorithm);
-        picoquic_set_congestion_algorithm(test_ctx->cnx_client, picoquic_cubic_algorithm);
+        picoquic_set_default_congestion_algorithm(test_ctx->qserver, ccalgo);
+        picoquic_set_congestion_algorithm(test_ctx->cnx_client, ccalgo);
 
         picoquic_set_cc_log(test_ctx->qserver, ".");
 
         ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
-            test_scenario_sustained, sizeof(test_scenario_sustained), 0, 0, 0, 20000, 3600000);
+            test_scenario_sustained, sizeof(test_scenario_sustained), 0, 0, 0, 20000, max_completion_time);
     }
 
     /* Free the resource, which will close the log file.
@@ -5706,6 +5707,17 @@ int cubic_test()
 
     return ret;
 }
+
+int cubic_test() 
+{
+    return congestion_control_test(picoquic_cubic_algorithm, 3600000);
+}
+
+int fastcc_test()
+{
+    return congestion_control_test(picoquic_fastcc_algorithm, 3600000);
+}
+
 
 /* Test that different CID length are properly supported */
 int cid_length_test_one(uint8_t length)
