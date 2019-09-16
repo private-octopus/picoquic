@@ -51,6 +51,7 @@ int convert_csv(const picoquic_connection_id_t * cid, void * ptr);
 int convert_svg(const picoquic_connection_id_t * cid, void * ptr);
 
 int usage();
+void usage_formats();
 
 int main(int argc, char ** argv)
 {
@@ -142,7 +143,8 @@ int main(int argc, char ** argv)
                 ret = cidset_iterate(cids, convert_svg, &appctx);
             }
         } else {
-            fprintf(stderr, "Invalid output format %s\n", appctx.out_format);
+            fprintf(stderr, "Invalid output format '%s'. Valid formats are\n\n", appctx.out_format);
+            usage_formats();
             ret = 1;
         }
     }
@@ -162,9 +164,7 @@ int usage()
     fprintf(stderr, "  -o directory          output directory name\n");
     fprintf(stderr, "                        default is current working directory\n");
     fprintf(stderr, "  -f format             output format:\n");
-    fprintf(stderr, "                        -f csv: generate CC csv file\n");
-    fprintf(stderr, "                        -f svg: generate svg packet flow diagram.\n");
-    fprintf(stderr, "                                requires a template specified by -t\n");
+    usage_formats();
     fprintf(stderr, "  -t template-file      template file for svg format conversion\n");
     fprintf(stderr, "  -c connection-id      only convert logs of specified connection id\n");
     fprintf(stderr, "\n");
@@ -175,6 +175,13 @@ int usage()
     fprintf(stderr, "are converted producing as many output files as connections are found in the\n");
     fprintf(stderr, "binary file.\n");
     return 1;
+}
+
+void usage_formats()
+{
+    fprintf(stderr, "                        -f csv : generate CC csv file\n");
+    fprintf(stderr, "                        -f svg : generate svg packet flow diagram.\n");
+    fprintf(stderr, "                                 requires a template specified by -t\n");
 }
 
 FILE * open_outfile(const picoquic_connection_id_t * cid, const char * binlog_name, const char * out_dir, const char * out_ext)
@@ -225,6 +232,12 @@ typedef struct svg_context_st {
     int nb;
 
 } svg_context_t;
+
+int svg_pdu(uint64_t time, int rxtx, void * ptr)
+{
+    svg_context_t * svg = (svg_context_t*)ptr;
+    return 0;
+}
 
 const char * ptype2str(picoquic_packet_type_enum ptype)
 {
@@ -373,12 +386,6 @@ int svg_frame(bytestream * s, void * ptr)
     return 0;
 }
 
-
-int svg_pdu(uint64_t time, int rxtx, void * ptr)
-{
-    svg_context_t * svg = (svg_context_t*)ptr;
-    return 0;
-}
 
 int convert_svg(const picoquic_connection_id_t * cid, void * ptr)
 {
