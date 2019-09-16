@@ -26,6 +26,9 @@
 #include "bytestream.h"
 #include "logreader.h"
 #include "logwriter.h"
+#include "cidset.h"
+
+static int byteread_packet_header(bytestream * s, picoquic_packet_header * ph);
 
 int fileread_binlog(FILE* bin_log, int(*cb)(bytestream*, void*), void* cbptr)
 {
@@ -55,17 +58,24 @@ int fileread_binlog(FILE* bin_log, int(*cb)(bytestream*, void*), void* cbptr)
     return ret;
 }
 
-int convert_log_file_cb(bytestream * s, void * ptr)
-{
-    log_file_ctx_t * ctx = (log_file_ctx_t*)ptr;
+typedef struct convert_log_file_event_st {
 
+    const picoquic_connection_id_t * cid;
+    binlog_convert_cb_t * callbacks;
+
+} convert_log_file_event_t;
+
+static int binlog_convert_event(bytestream * s, void * ptr)
+{
     int ret = 0;
+    convert_log_file_event_t* ctx = (convert_log_file_event_t*)ptr;
+    void * cbptr = ctx->callbacks->ptr;
 
     picoquic_connection_id_t cid;
     ret |= byteread_cid(s, &cid);
 
     if (picoquic_compare_connection_id(&cid, ctx->cid) != 0) {
-        return 0;
+        return ret;
     }
 
     uint64_t time = 0;
@@ -74,12 +84,17 @@ int convert_log_file_cb(bytestream * s, void * ptr)
     uint64_t id = 0;
     ret |= byteread_vint(s, &id);
 
+    if (id == picoquic_log_event_pdu_recv || id == picoquic_log_event_pdu_sent) {
+        ret |= ctx->callbacks->pdu(time, id == picoquic_log_event_pdu_recv, cbptr);
+    }
+
     if (id == picoquic_log_event_packet_recv || id == picoquic_log_event_packet_sent) {
+
         picoquic_packet_header ph;
         ret |= byteread_packet_header(s, &ph);
 
         if (ret == 0) {
-            ret = ctx->packet(time, &ph, id == picoquic_log_event_packet_recv, ctx->ptr);
+            ret = ctx->callbacks->packet_start(time, &ph, id == picoquic_log_event_packet_recv, cbptr);
         }
 
         while (ret == 0 && bytestream_remain(s) > 0) {
@@ -91,21 +106,44 @@ int convert_log_file_cb(bytestream * s, void * ptr)
 
             ret |= bytestream_skip(s, len);
             if (ret == 0) {
-                ret |= ctx->frame(frame, ctx->ptr);
+                ret |= ctx->callbacks->packet_frame(frame, cbptr);
             }
+        }
+        if (ret == 0) {
+            ret |= ctx->callbacks->packet_end(cbptr);
         }
     }
 
     return ret;
 }
 
-int convert_log_file(FILE * f_binlog, const log_file_ctx_t * ctx)
+int binlog_convert(FILE * f_binlog, const picoquic_connection_id_t * cid, binlog_convert_cb_t * callbacks)
 {
-    return fileread_binlog(f_binlog, convert_log_file_cb, (void*)ctx);
+    convert_log_file_event_t ctx;
+    ctx.cid = cid;
+    ctx.callbacks = callbacks;
+
+    return fileread_binlog(f_binlog, binlog_convert_event, &ctx);
 }
 
+static int binlog_list_cids_cb(bytestream * s, void * cbptr)
+{
+    picoquic_connection_id_t cid;
+    int ret = byteread_cid(s, &cid);
 
-int byteread_packet_header(bytestream * s, picoquic_packet_header * ph)
+    if (ret == 0) {
+        ret = cidset_insert((picohash_table*)cbptr, &cid);
+    }
+
+    return ret;
+}
+
+int binlog_list_cids(FILE * binlog, picohash_table * cids)
+{
+    return fileread_binlog(binlog, binlog_list_cids_cb, cids);
+}
+
+static int byteread_packet_header(bytestream * s, picoquic_packet_header * ph)
 {
     int ret = 0;
 

@@ -25,25 +25,50 @@
 #include "picoquic_internal.h"
 #include "bytestream.h"
 
-typedef struct log_file_ctx_st {
-    const picoquic_connection_id_t * cid;
+/*! \brief Read the contents of a binary log file and call the callback
+ *         function for each event found in the file.
+ *
+ *  \param f_binlog The file handle of the opened binary log file.
+ *  \param cb       The callback function which receives a bytestream of
+ *                  the binary event blob.
+ *  \param cbptr    A caller provided context pointer that is passed through
+ *                  to the callback.
+ */
+int fileread_binlog(FILE * f_binlog, int (*cb)(bytestream*, void*), void * cbptr);
 
-    FILE * f_binlog;
-    FILE * f_txtlog;
+/*! \brief List of log events to be called back to the application when used with
+ *         binlog_convert.
+ */
+typedef struct binlog_convert_cb_st {
 
     int (*pdu)(uint64_t time, int rxtx, void * ptr);
-    int (*packet)(uint64_t time, const picoquic_packet_header * ph, int rxtx, void * ptr);
-    int (*frame)(bytestream * s, void * ptr);
+    int (*packet_start)(uint64_t time, const picoquic_packet_header * ph, int rxtx, void * ptr);
+    int (*packet_frame)(bytestream * s, void * ptr);
+    int (*packet_end)(void * ptr);
 
+    /*! Caller provided context pointer that is passed through to the callbacks */
     void * ptr;
 
-} log_file_ctx_t;
+} binlog_convert_cb_t;
 
-int fileread_binlog(FILE * bin_log, int(*cb)(bytestream *, void *), void * cbptr);
-int convert_log_file(FILE * f_binlog, const log_file_ctx_t * ctx);
+/*! \brief Convert the content of a binary log file into a sequence of log
+ *         event calls for a specific connection.
+ *
+ *  \param f_binlog  The file handle of the opened binary log file.
+ *  \param cid       Initial connection id for the events to be called back.
+ *  \param callbacks Callback functions for the events.
+ */
+int binlog_convert(FILE * f_binlog, const picoquic_connection_id_t * cid, binlog_convert_cb_t * callbacks);
+
+/*! \brief Write all connection ids contained in a binary log file into a
+ *         picohash_table.
+ *
+ *  \param f_binlog The file handle of the opened binary log file.
+ *  \param cids     picohash_table that will collect the connection ids
+ *                  found in f_binlog.
+ */
+int binlog_list_cids(FILE * binlog, picohash_table * cids);
 
 FILE * picoquic_open_cc_log_file_for_read(char const * bin_cc_log_name, uint32_t * log_time);
 
 int picoquic_cc_log_file_to_csv(char const * bin_cc_log_name, char const * csv_cc_log_name);
-
-int byteread_packet_header(bytestream* s, picoquic_packet_header* ph);

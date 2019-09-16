@@ -46,7 +46,6 @@ typedef struct app_conversion_context_st
     uint32_t log_time;
 } app_conversion_context_t;
 
-int binlog_list_cids(FILE * f_binlog, picohash_table * cids);
 int convert_csv(const picoquic_connection_id_t * cid, void * ptr);
 int convert_svg(const picoquic_connection_id_t * cid, void * ptr);
 
@@ -107,11 +106,17 @@ int main(int argc, char ** argv)
 
     appctx.f_binlog = picoquic_open_cc_log_file_for_read(appctx.binlog_name, &appctx.log_time);
     if (appctx.f_binlog == NULL) {
-        fprintf(stderr, "Could not open file %s\n", appctx.binlog_name);
+        fprintf(stderr, "Could not open log file %s\n", appctx.binlog_name);
         ret = -1;
     }
 
-    appctx.f_template = appctx.template_name != NULL ? picoquic_file_open(appctx.template_name, "r") : NULL;
+    if (appctx.template_name != NULL) {
+        appctx.f_template = picoquic_file_open(appctx.template_name, "r");
+        if (appctx.f_template == NULL) {
+            fprintf(stderr, "Could not open template file %s\n", appctx.binlog_name);
+            ret = -1;
+        }
+    }
 
     if (ret == 0) {
         binlog_list_cids(appctx.f_binlog, cids);
@@ -224,12 +229,9 @@ int convert_csv(const picoquic_connection_id_t * cid, void * ptr)
 
 typedef struct svg_context_st {
 
-    FILE * f_binlog;
-    FILE * f_txtlog;
-
-    uint64_t start_time;
-
-    int nb;
+    FILE * f_txtlog;      /*!< The file handle of the opened SVG file. */
+    uint64_t start_time;  /*!< Timestamp is very first log event reported. */
+    int packet_count;
 
 } svg_context_t;
 
@@ -324,29 +326,25 @@ char const* fname2str(picoquic_frame_type_enum_t ftype)
     }
 }
 
-int svg_packet(uint64_t time, const picoquic_packet_header * ph, int rxtx, void * ptr)
+int svg_packet_start(uint64_t time, const picoquic_packet_header * ph, int rxtx, void * ptr)
 {
     const int event_height = 32;
     svg_context_t * svg = (svg_context_t*)ptr;
     FILE * f = svg->f_txtlog;
 
-    if (svg->nb == 0) {
+    if (svg->packet_count == 0) {
         svg->start_time = time;
     }
 
     time -= svg->start_time;
 
     int x_pos = 50;
-    int y_pos = 32 + svg->nb * event_height;
+    int y_pos = 32 + svg->packet_count * event_height;
 
     const char * dir = rxtx == 0 ? "out" : "in";
 
     uint64_t time1 = time / 1000;
     uint64_t time01 = (time % 1000) / 100;
-
-    if (svg->nb != 0) {
-        fprintf(f, "</text>\n");
-    }
 
     fprintf(f, "  <use x=\"%d\" y=\"%d\" xlink:href=\"#packet-%s\" />\n", x_pos, y_pos, dir);
     fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"end\" class=\"time\">%I64d.%I64d ms</text>\n", x_pos - 4, y_pos + 8, time1, time01);
@@ -364,11 +362,11 @@ int svg_packet(uint64_t time, const picoquic_packet_header * ph, int rxtx, void 
         fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"end\" class=\"frm\" xml:space=\"preserve\">", 600 - x_pos - 30, y_pos + 10);
     }
 
-    svg->nb++;
+    svg->packet_count++;
     return 0;
 }
 
-int svg_frame(bytestream * s, void * ptr)
+int svg_packet_frame(bytestream * s, void * ptr)
 {
     svg_context_t * svg = (svg_context_t*)ptr;
 
@@ -386,6 +384,13 @@ int svg_frame(bytestream * s, void * ptr)
     return 0;
 }
 
+int svg_packet_end(void * ptr)
+{
+    svg_context_t * svg = (svg_context_t*)ptr;
+    FILE * f = svg->f_txtlog;
+    fprintf(f, "</text>\n");
+    return 0;
+}
 
 int convert_svg(const picoquic_connection_id_t * cid, void * ptr)
 {
@@ -393,48 +398,26 @@ int convert_svg(const picoquic_connection_id_t * cid, void * ptr)
     int ret = 0;
 
     svg_context_t svg;
-    log_file_ctx_t ctx;
-    ctx.cid = cid;
-    ctx.f_binlog = appctx->f_binlog;
-    ctx.f_txtlog = open_outfile(cid, appctx->binlog_name, appctx->out_dir, "svg");
-    ctx.pdu = svg_pdu;
-    ctx.packet = svg_packet;
-    ctx.frame = svg_frame;
-    ctx.ptr = &svg;
-
-    svg.f_binlog = ctx.f_binlog;
-    svg.f_txtlog = ctx.f_txtlog;
+    svg.f_txtlog = open_outfile(cid, appctx->binlog_name, appctx->out_dir, "svg");
     svg.start_time = 0;
-    svg.nb = 0;
+    svg.packet_count = 0;
+
+    binlog_convert_cb_t ctx;
+    ctx.pdu = svg_pdu;
+    ctx.packet_start = svg_packet_start;
+    ctx.packet_frame = svg_packet_frame;
+    ctx.packet_end = svg_packet_end;
+    ctx.ptr = &svg;
 
     char line[256];
     while (fgets(line, sizeof(line), appctx->f_template) != NULL) /* read a line */ {
         if (strcmp(line, "#\n") != 0) {
-            fprintf(ctx.f_txtlog, line);
+            /* Copy the template to the SVG file */
+            fprintf(svg.f_txtlog, line);
         } else {
-            ret = convert_log_file(appctx->f_binlog, &ctx);
-            if (svg.nb != 0) {
-                fprintf(svg.f_txtlog, "</text>\n");
-            }
+            ret = binlog_convert(appctx->f_binlog, cid, &ctx);
         }
     }
 
     return ret;
-}
-
-static int list_cids_cb(bytestream * s, void * cbptr)
-{
-    picoquic_connection_id_t cid;
-    int ret = byteread_cid(s, &cid);
-
-    if (ret == 0) {
-        ret = cidset_insert((picohash_table*)cbptr, &cid);
-    }
-
-    return ret;
-}
-
-int binlog_list_cids(FILE * binlog, picohash_table * cids)
-{
-    return fileread_binlog(binlog, list_cids_cb, cids);
 }
