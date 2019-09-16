@@ -74,7 +74,8 @@ static int binlog_convert_event(bytestream * s, void * ptr)
     picoquic_connection_id_t cid;
     ret |= byteread_cid(s, &cid);
 
-    if (picoquic_compare_connection_id(&cid, ctx->cid) != 0) {
+    /* filter for connection id */
+    if (ret != 0 || picoquic_compare_connection_id(&cid, ctx->cid) != 0) {
         return ret;
     }
 
@@ -85,16 +86,19 @@ static int binlog_convert_event(bytestream * s, void * ptr)
     ret |= byteread_vint(s, &id);
 
     if (id == picoquic_log_event_pdu_recv || id == picoquic_log_event_pdu_sent) {
-        ret |= ctx->callbacks->pdu(time, id == picoquic_log_event_pdu_recv, cbptr);
+        int rxtx = id == picoquic_log_event_pdu_recv;
+        ret |= ctx->callbacks->pdu(time, rxtx, cbptr);
     }
 
     if (id == picoquic_log_event_packet_recv || id == picoquic_log_event_packet_sent) {
+
+        int rxtx = id == picoquic_log_event_packet_recv;
 
         picoquic_packet_header ph;
         ret |= byteread_packet_header(s, &ph);
 
         if (ret == 0) {
-            ret = ctx->callbacks->packet_start(time, &ph, id == picoquic_log_event_packet_recv, cbptr);
+            ret = ctx->callbacks->packet_start(time, &ph, rxtx, cbptr);
         }
 
         while (ret == 0 && bytestream_remain(s) > 0) {
