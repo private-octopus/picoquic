@@ -51,20 +51,25 @@ typedef enum {
     picoquic_log_event_frame_recv = 0x0083,
 } picoquic_log_event_type;
 
+/* binary alternative to picoquic_log_packet_address() */
 void binlog_pdu(FILE * f, const picoquic_connection_id_t* cid, int receiving, uint64_t current_time,
     const struct sockaddr* addr_peer, size_t packet_length);
 
+/* binary alternative to picoquic_log_decrypted_segment() */
 void binlog_packet(FILE * f, const picoquic_connection_id_t* cid, int receiving, uint64_t current_time,
     const picoquic_packet_header * ph, const uint8_t* bytes, size_t bytes_max);
 
+/* binary alternative to picoquic_log_outgoing_segment() */
 void binlog_outgoing_packet(FILE * f, picoquic_cnx_t* cnx,
     uint8_t * bytes,
     uint64_t sequence_number,
     size_t length,
     uint8_t* send_buffer, size_t send_length, uint64_t current_time);
 
+/* binary alternative to picoquic_log_transport_extension() */
 void binlog_transport_extension(FILE * f, picoquic_cnx_t* cnx);
 
+/* binary alternative to picoquic_log_tls_ticket() */
 void binlog_picotls_ticket(FILE* f, picoquic_connection_id_t cnx_id,
     uint8_t* ticket, uint16_t ticket_length);
 
