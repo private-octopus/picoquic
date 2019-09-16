@@ -165,7 +165,7 @@ int quic_server(const char* server_name, int server_port,
     void* cnx_id_callback_ctx, uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE],
     int dest_if, int mtu_max, uint32_t proposed_version, 
     const char * esni_key_file_name, const char * esni_rr_file_name,
-    FILE * F_log, char const * cc_log_dir, int use_long_log)
+    FILE * F_log, char const * cc_log_dir, int use_long_log, picoquic_congestion_algorithm_t const * cc_algorithm)
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
@@ -207,7 +207,10 @@ int quic_server(const char* server_name, int server_port,
             }
             qserver->mtu_max = mtu_max;
 
-            picoquic_set_default_congestion_algorithm(qserver, picoquic_cubic_algorithm);
+            if (cc_algorithm == NULL) {
+                cc_algorithm = picoquic_cubic_algorithm;
+            }
+            picoquic_set_default_congestion_algorithm(qserver, cc_algorithm);
 
             PICOQUIC_SET_LOG(qserver, F_log);
 
@@ -493,7 +496,7 @@ int quic_client(const char* ip_address_text, int server_port,
     uint32_t proposed_version, int force_zero_share, int force_migration,
     int nb_packets_before_key_update, int mtu_max, FILE* F_log,
     int client_cnx_id_length, char const * client_scenario_text, char const * cc_log_dir,
-    int no_disk, int use_long_log)
+    int no_disk, int use_long_log, picoquic_congestion_algorithm_t const* cc_algorithm)
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
@@ -577,7 +580,10 @@ int quic_client(const char* ip_address_text, int server_port,
         if (qclient == NULL) {
             ret = -1;
         } else {
-            picoquic_set_default_congestion_algorithm(qclient, picoquic_fastcc_algorithm);
+            if (cc_algorithm == NULL) {
+                cc_algorithm = picoquic_cubic_algorithm;
+            }
+            picoquic_set_default_congestion_algorithm(qclient, cc_algorithm);
 
             if (picoquic_load_tokens(&qclient->p_first_token, current_time, token_store_filename) != 0) {
                 fprintf(stderr, "Could not load tokens from <%s>.\n", token_store_filename);
@@ -1037,6 +1043,8 @@ void usage()
     fprintf(stderr, "  -S solution_dir       Set the path to the source files to find the default files\n");
     fprintf(stderr, "  -I length             Length of CNX_ID used by the client, default=8\n");
     fprintf(stderr, "  -g cc_log_dir         log congestion control traces in specified dir\n");
+    fprintf(stderr, "  -G cc_algorithm       Use the specified congestion control algorithm:\n");
+    fprintf(stderr, "                        reno, cubic or fast. Defaults to cubic.\n");
     fprintf(stderr, "  -D                    no disk: do not save received files on disk.\n");
     fprintf(stderr, "\nThe scenario argument specifies the set of files that should be retrieved,\n");
     fprintf(stderr, "and their order. The syntax is:\n");
@@ -1066,7 +1074,8 @@ int main(int argc, char** argv)
     const char * log_file = NULL;
     const char * sni = NULL;
     const char * alpn = NULL;
-    const char * cc_log_dir = NULL;
+    const char * cc_log_dir = NULL; 
+    picoquic_congestion_algorithm_t const* cc_algorithm = NULL;
     int server_port = default_server_port;
     const char* root_trust_file = NULL;
     uint32_t proposed_version = 0;
@@ -1098,7 +1107,7 @@ int main(int argc, char** argv)
 
     /* Get the parameters */
     int opt;
-    while ((opt = getopt(argc, argv, "c:k:K:p:u:v:f:i:s:e:E:l:m:n:a:t:S:I:g:1rhzDL")) != -1) {
+    while ((opt = getopt(argc, argv, "c:k:K:p:u:v:f:i:s:e:E:l:m:n:a:t:S:I:g:G:1rhzDL")) != -1) {
         switch (opt) {
         case 'c':
             server_cert_file = optarg;
@@ -1147,6 +1156,13 @@ int main(int argc, char** argv)
             break;
         case 'g':
             cc_log_dir = optarg;
+            break;
+        case 'G':
+            cc_algorithm = picoquic_get_congestion_algorithm(optarg);
+            if (cc_algorithm == NULL) {
+                fprintf(stderr, "Unsupported congestion control algorithm: %s\n", optarg);
+                usage();
+            }
             break;
         case 'e':
             dest_if = atoi(optarg);
@@ -1285,13 +1301,14 @@ int main(int argc, char** argv)
             (cnx_id_cbdata == NULL) ? NULL : (void*)cnx_id_cbdata,
             (uint8_t*)reset_seed, dest_if, mtu_max, proposed_version,
             esni_key_file, esni_rr_file,
-            F_log, cc_log_dir, use_long_log);
+            F_log, cc_log_dir, use_long_log, cc_algorithm);
         printf("Server exit with code = %d\n", ret);
     } else {
         /* Run as client */
         printf("Starting PicoQUIC connection to server IP = %s, port = %d\n", server_name, server_port);
         ret = quic_client(server_name, server_port, sni, esni_rr_file, alpn, root_trust_file, proposed_version, force_zero_share, 
-            force_migration, nb_packets_before_update, mtu_max, F_log, client_cnx_id_length, client_scenario, cc_log_dir, no_disk, use_long_log);
+            force_migration, nb_packets_before_update, mtu_max, F_log, client_cnx_id_length, client_scenario, 
+            cc_log_dir, no_disk, use_long_log, cc_algorithm);
 
         printf("Client exit with code = %d\n", ret);
     }

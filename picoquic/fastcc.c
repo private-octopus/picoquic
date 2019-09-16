@@ -87,7 +87,7 @@ void fastcc_process_cc_event(picoquic_path_t* path_x, picoquic_fastcc_state_t* f
         /* Too many events, reduce the window */
         if (fastcc_state->alg_state != picoquic_fastcc_freeze) {
             fastcc_state->alg_state = picoquic_fastcc_freeze;
-            fastcc_state->end_of_freeze = current_time + path_x->smoothed_rtt;
+            fastcc_state->end_of_freeze = current_time + fastcc_state->rtt_min;
             path_x->cwin -= (uint64_t)(FASTCC_BETA * (double)path_x->cwin);
             if (path_x->cwin < PICOQUIC_CWIN_MINIMUM) {
                 path_x->cwin = PICOQUIC_CWIN_MINIMUM;
@@ -129,7 +129,7 @@ void picoquic_fastcc_notify(picoquic_path_t* path_x,
                 /* Count the bytes since last RTT measurement */
                 fastcc_state->nb_bytes_ack_since_rtt += nb_bytes_acknowledged;
 
-                if (fastcc_state->alg_state == picoquic_fastcc_init){
+                if (fastcc_state->alg_state == picoquic_fastcc_initial){
                     /* In initial phase, compute the instant bandwidth and the corresponding bandwidth delay product */
                     /* first evaluate the ack delay and the nb bytes to take into account*/
                     uint64_t delta_time_ack = current_time - fastcc_state->last_ack_time;
@@ -194,7 +194,7 @@ void picoquic_fastcc_notify(picoquic_path_t* path_x,
                 fastcc_state->delay_threshold = picoquic_fastcc_delay_threshold(fastcc_state->rtt_min);
                 fastcc_state->last_rtt_min[0] = fastcc_state->rolling_rtt_min;
                 fastcc_state->rolling_rtt_min = rtt_measurement;
-                fastcc_state->end_of_epoch = current_time + path_x->smoothed_rtt;
+                fastcc_state->end_of_epoch = current_time + FASTCC_PERIOD;
             }
             else if (rtt_measurement < fastcc_state->rolling_rtt_min || fastcc_state->rolling_rtt_min == 0) {
                 /* If not end of epoch, update the rolling minimum */
