@@ -52,6 +52,17 @@ int convert_svg(const picoquic_connection_id_t * cid, void * ptr);
 int usage();
 void usage_formats();
 
+/* - Open binary log file and find all connection ids it contains by:
+ *   - read each event
+ *   - read connection id of the event
+ *   - store connection id in the hashtable if it doesn't contain it already
+ * - Print all connection ids found.
+ * - Check if user provided a connection id on the command line and verify it is
+ *   contained in the hashtable. If so, replace the hashtable of connection ids
+ *   with a new hashtable only containing the user provided connection id.
+ * - Iterate over all connection ids in the hashtable and for each connection id
+ *   convert all events for that connection id into the specified format.
+ */
 int main(int argc, char ** argv)
 {
     int ret = 0;

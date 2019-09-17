@@ -26,12 +26,7 @@
 static uint64_t picoquic_cid_hash(const void* key)
 {
     const picoquic_connection_id_t* cid = (const picoquic_connection_id_t*)key;
-    uint64_t h = picoquic_val64_connection_id(*cid);
-    for (size_t i = 8; i < cid->id_len; i++) {
-        h += h << 8;
-        h += cid->id[i];
-    }
-    return h;
+    return picoquic_connection_id_hash(cid);
 }
 
 static int picoquic_cid_compare(const void* key0, const void* key1)

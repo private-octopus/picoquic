@@ -50,9 +50,7 @@ typedef struct st_picoquic_net_id_key_t {
 static uint64_t picoquic_cnx_id_hash(const void* key)
 {
     const picoquic_cnx_id_key_t* cid = (const picoquic_cnx_id_key_t*)key;
-
-    /* TODO: should scramble the value for security and DOS protection */
-    return picoquic_val64_connection_id(cid->cnx_id);
+    return picoquic_connection_id_hash(&cid->cnx_id);
 }
 
 static int picoquic_cnx_id_compare(const void* key1, const void* key2)
