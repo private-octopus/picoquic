@@ -19,6 +19,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/frames.c
     picoquic/intformat.c
     picoquic/logger.c
+    picoquic/logwriter.c
     picoquic/newreno.c
     picoquic/packet.c
     picoquic/picohash.c
@@ -36,7 +37,9 @@ set(PICOQUIC_LIBRARY_FILES
 )
 
 set(LOGLIB_LIBRARY_FILES
-    loglib/txtlog.c
+    loglib/cidset.c
+    loglib/csv.c
+    loglib/logreader.c
 )
 
 set(PICOQUIC_TEST_LIBRARY_FILES

@@ -21,13 +21,13 @@
 */
 
 #include "picoquic_internal.h"
+#include "logwriter.h"
 #include "tls_api.h"
 #include <stdlib.h>
 #include <string.h>
 #ifndef _WINDOWS
 #include <sys/time.h>
 #endif
-
 
 /*
 * Structures used in the hash table of connections
@@ -429,6 +429,10 @@ picoquic_stateless_packet_t* picoquic_dequeue_stateless_packet(picoquic_quic_t* 
         if (quic->F_log != NULL) {
             picoquic_log_packet_address(quic->F_log, sp->cnxid_log64,
                 NULL, (struct sockaddr*)&sp->addr_to, 0, sp->length, picoquic_get_quic_time(quic));
+        }
+        if (quic->f_binlog != NULL) {
+            binlog_pdu(quic->f_binlog, &sp->initial_cid, 0, picoquic_get_quic_time(quic),
+                (struct sockaddr*)&sp->addr_to, sp->length);
         }
     }
 
@@ -2190,6 +2194,11 @@ void picoquic_set_fuzz(picoquic_quic_t * quic, picoquic_fuzz_fn fuzz_fn, void * 
 void picoquic_set_cc_log(picoquic_quic_t * quic, char const * cc_log_dir)
 {
     quic->cc_log_dir = cc_log_dir;
+}
+
+void picoquic_set_binlog(picoquic_quic_t * quic, char const * binlog_file)
+{
+    binlog_open(quic, binlog_file);
 }
 
 int picoquic_set_default_connection_id_length(picoquic_quic_t* quic, uint8_t cid_length)

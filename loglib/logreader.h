@@ -1,0 +1,74 @@
+/*
+* Author: Christian Huitema
+* Copyright (c) 2019, Private Octopus, Inc.
+* All rights reserved.
+*
+* Permission to use, copy, modify, and distribute this software for any
+* purpose with or without fee is hereby granted, provided that the above
+* copyright notice and this permission notice appear in all copies.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+* ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+* DISCLAIMED. IN NO EVENT SHALL Private Octopus, Inc. BE LIABLE FOR ANY
+* DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+* (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+* LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+* ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+* (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+* SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+
+#include <stdio.h>
+#include <string.h>
+#include <inttypes.h>
+#include "picoquic_internal.h"
+#include "bytestream.h"
+
+/*! \brief Read the contents of a binary log file and call the callback
+ *         function for each event found in the file.
+ *
+ *  \param f_binlog The file handle of the opened binary log file.
+ *  \param cb       The callback function which receives a bytestream of
+ *                  the binary event blob.
+ *  \param cbptr    A caller provided context pointer that is passed through
+ *                  to the callback.
+ */
+int fileread_binlog(FILE * f_binlog, int (*cb)(bytestream*, void*), void * cbptr);
+
+/*! \brief List of log events to be called back to the application when used with
+ *         binlog_convert.
+ */
+typedef struct binlog_convert_cb_st {
+
+    int (*pdu)(uint64_t time, int rxtx, void * ptr);
+    int (*packet_start)(uint64_t time, const picoquic_packet_header * ph, int rxtx, void * ptr);
+    int (*packet_frame)(bytestream * s, void * ptr);
+    int (*packet_end)(void * ptr);
+
+    /*! Caller provided context pointer that is passed through to the callbacks */
+    void * ptr;
+
+} binlog_convert_cb_t;
+
+/*! \brief Convert the content of a binary log file into a sequence of log
+ *         event calls for a specific connection.
+ *
+ *  \param f_binlog  The file handle of the opened binary log file.
+ *  \param cid       Initial connection id for the events to be called back.
+ *  \param callbacks Callback functions for the events.
+ */
+int binlog_convert(FILE * f_binlog, const picoquic_connection_id_t * cid, binlog_convert_cb_t * callbacks);
+
+/*! \brief Write all connection ids contained in a binary log file into a
+ *         picohash_table.
+ *
+ *  \param f_binlog The file handle of the opened binary log file.
+ *  \param cids     picohash_table that will collect the connection ids
+ *                  found in f_binlog.
+ */
+int binlog_list_cids(FILE * binlog, picohash_table * cids);
+
+FILE * picoquic_open_cc_log_file_for_read(char const * bin_cc_log_name, uint32_t * log_time);
+
+int picoquic_cc_log_file_to_csv(char const * bin_cc_log_name, char const * csv_cc_log_name);

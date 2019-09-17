@@ -200,7 +200,9 @@ typedef struct st_picoquic_stateless_packet_t {
     struct sockaddr_storage addr_local;
     unsigned long if_index_local;
     size_t length;
+
     uint64_t cnxid_log64;
+    picoquic_connection_id_t initial_cid;
 
     uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE];
 } picoquic_stateless_packet_t;
@@ -390,6 +392,11 @@ void picoquic_set_fuzz(picoquic_quic_t* quic, picoquic_fuzz_fn fuzz_fn, void * f
  * Set to a NULL value to stop traces on new connections.
  */
 void picoquic_set_cc_log(picoquic_quic_t * quic, char const * cc_log_dir);
+
+/* Set the binary log file and start tracing into it.
+ * Set to NULL value to stop binary tracing.
+ */
+void picoquic_set_binlog(picoquic_quic_t * quic, char const * binlog_file);
 
 /* Set the ESNI key.
  * May be called several times to set several keys.
