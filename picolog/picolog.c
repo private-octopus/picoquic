@@ -248,7 +248,9 @@ typedef struct svg_context_st {
 
 int svg_pdu(uint64_t time, int rxtx, void * ptr)
 {
-    svg_context_t * svg = (svg_context_t*)ptr;
+    (void)time;
+    (void)rxtx;
+    (void)ptr;
     return 0;
 }
 
@@ -358,17 +360,17 @@ int svg_packet_start(uint64_t time, const picoquic_packet_header * ph, int rxtx,
     uint64_t time01 = (time % 1000) / 100;
 
     fprintf(f, "  <use x=\"%d\" y=\"%d\" xlink:href=\"#packet-%s\" />\n", x_pos, y_pos, dir);
-    fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"end\" class=\"time\">%I64d.%I64d ms</text>\n", x_pos - 4, y_pos + 8, time1, time01);
+    fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"end\" class=\"time\">%"PRIu64".%"PRIu64" ms</text>\n", x_pos - 4, y_pos + 8, time1, time01);
 
     if (rxtx == 0) {
-        fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"end\" class=\"seq_%s\">%I64d</text>\n", x_pos - 4, y_pos - 4, dir, ph->pn64);
-        fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"end\" class=\"arw\">%I64d b</text>\n", 80, y_pos - 2, ph->payload_length);
+        fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"end\" class=\"seq_%s\">%"PRIu64"</text>\n", x_pos - 4, y_pos - 4, dir, ph->pn64);
+        fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"end\" class=\"arw\">%zu b</text>\n", 80, y_pos - 2, ph->payload_length);
         fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"start\" class=\"frm\" xml:space=\"preserve\"> %s</text>\n", 80, y_pos - 2, ptype2str(ph->ptype));
         fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"start\" class=\"frm\" xml:space=\"preserve\">", x_pos + 30, y_pos + 10);
     }
     else {
-        fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"start\" class=\"seq_%s\">%I64d</text>\n", 600 - x_pos + 4, y_pos - 4, dir, ph->pn64);
-        fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"start\" class=\"arw\">%I64d b</text>\n", 600 - 80, y_pos - 2, ph->payload_length);
+        fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"start\" class=\"seq_%s\">%"PRIu64"</text>\n", 600 - x_pos + 4, y_pos - 4, dir, ph->pn64);
+        fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"start\" class=\"arw\">%zu b</text>\n", 600 - 80, y_pos - 2, ph->payload_length);
         fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"end\" class=\"frm\" xml:space=\"preserve\">%s </text>\n", 600-80, y_pos - 2, ptype2str(ph->ptype));
         fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"end\" class=\"frm\" xml:space=\"preserve\">", 600 - x_pos - 30, y_pos + 10);
     }
@@ -388,7 +390,7 @@ int svg_packet_frame(bytestream * s, void * ptr)
         ftype <= picoquic_frame_type_stream_range_max) {
         uint64_t stream_id = 0;
         byteread_vint(s, &stream_id);
-        fprintf(svg->f_txtlog, " stream[%I64d] ", stream_id);
+        fprintf(svg->f_txtlog, " stream[%"PRIu64"] ", stream_id);
     } else {
         fprintf(svg->f_txtlog, " %s ", fname2str(ftype));
     }
