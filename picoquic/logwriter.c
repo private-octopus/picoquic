@@ -535,8 +535,8 @@ void binlog_transport_extension(FILE * f, picoquic_cnx_t* cnx)
     bytestream_buf stream_msg;
     bytestream* msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
     bytewrite_cid(msg, &cnx->initial_cnxid);
-    bytewrite_vint(msg, picoquic_log_event_param_update);
     bytewrite_vint(msg, 0);
+    bytewrite_vint(msg, picoquic_log_event_param_update);
 
     bytewrite_cstr(msg, sni);
     bytewrite_cstr(msg, alpn);
@@ -555,16 +555,66 @@ void binlog_picotls_ticket(FILE* f, picoquic_connection_id_t cnx_id,
     uint8_t* ticket, uint16_t ticket_length)
 {
     bytestream_buf stream_msg;
-    bytestream* msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
+    bytestream * msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
     bytewrite_cid(msg, &cnx_id);
-    bytewrite_vint(msg, picoquic_log_event_tls_key_update);
     bytewrite_vint(msg, 0);
+    bytewrite_vint(msg, picoquic_log_event_tls_key_update);
 
     bytewrite_vint(msg, ticket_length);
     bytewrite_buffer(msg, ticket, ticket_length);
 
     bytestream_buf stream_head;
-    bytestream* head = bytestream_buf_init(&stream_head, 8);
+    bytestream * head = bytestream_buf_init(&stream_head, 8);
+    bytewrite_int32(head, (uint32_t)bytestream_length(msg));
+
+    (void)fwrite(bytestream_data(head), bytestream_length(head), 1, f);
+    (void)fwrite(bytestream_data(msg), bytestream_length(msg), 1, f);
+}
+
+void binlog_new_connection(picoquic_cnx_t * cnx)
+{
+    FILE * f = cnx->quic->f_binlog;
+    if (f == NULL) {
+        return;
+    }
+
+    bytestream_buf stream_msg;
+    bytestream * msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
+    bytewrite_cid(msg, &cnx->initial_cnxid);
+    bytewrite_vint(msg, cnx->start_time);
+    bytewrite_vint(msg, picoquic_log_event_new_connection);
+
+    bytewrite_int8(msg, cnx->client_mode != 0);
+    bytewrite_int32(msg, cnx->proposed_version);
+    bytewrite_cid(msg, &cnx->path[0]->remote_cnxid);
+
+    /* Algorithms used */
+    bytewrite_vint(msg, cnx->congestion_alg->congestion_algorithm_id);
+    bytewrite_vint(msg, cnx->spin_policy);
+
+    bytestream_buf stream_head;
+    bytestream * head = bytestream_buf_init(&stream_head, 8);
+    bytewrite_int32(head, (uint32_t)bytestream_length(msg));
+
+    (void)fwrite(bytestream_data(head), bytestream_length(head), 1, f);
+    (void)fwrite(bytestream_data(msg), bytestream_length(msg), 1, f);
+}
+
+void binlog_close_connection(picoquic_cnx_t * cnx)
+{
+    FILE * f = cnx->quic->f_binlog;
+    if (f == NULL) {
+        return;
+    }
+
+    bytestream_buf stream_msg;
+    bytestream * msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
+    bytewrite_cid(msg, &cnx->initial_cnxid);
+    bytewrite_vint(msg, picoquic_current_time());
+    bytewrite_vint(msg, picoquic_log_event_connection_close);
+
+    bytestream_buf stream_head;
+    bytestream * head = bytestream_buf_init(&stream_head, 8);
     bytewrite_int32(head, (uint32_t)bytestream_length(msg));
 
     (void)fwrite(bytestream_data(head), bytestream_length(head), 1, f);

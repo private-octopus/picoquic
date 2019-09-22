@@ -1893,6 +1893,8 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         if (cnx->quic->cc_log_dir != NULL) {
             (void)picoquic_open_cc_dump(cnx);
         }
+
+        binlog_new_connection(cnx);
     }
 
     return cnx;
@@ -2477,6 +2479,9 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
     picoquic_cnxid_stash_t* stashed_cnxid;
 
     if (cnx != NULL) {
+
+        binlog_close_connection(cnx);
+
         if (cnx->cnx_state < picoquic_state_disconnected) {
             /* Give the application a chance to clean up its state */
             cnx->cnx_state = picoquic_state_disconnected;

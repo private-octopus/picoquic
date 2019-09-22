@@ -254,11 +254,16 @@ int convert_csv(const picoquic_connection_id_t * cid, void * ptr)
 
 typedef struct svg_context_st {
 
-    FILE * f_txtlog;      /*!< The file handle of the opened SVG file. */
+    FILE * f_txtlog;      /*!< The file handle of the opened output file. */
+    FILE * f_template;    /*!< The file handle of the opened template file. */
+
+    const char * cid_name; /*!< Name of the connection, default = initial connection id */
+
     uint64_t start_time;  /*!< Timestamp is very first log event reported. */
     int packet_count;
     int frame_count;
 
+    int state;
 } svg_context_t;
 
 int svg_pdu(uint64_t time, int rxtx, void * ptr)
@@ -354,6 +359,25 @@ char const* fname2str(picoquic_frame_type_enum_t ftype)
     }
 }
 
+int svg_connection_start(uint64_t time, const picoquic_connection_id_t * cid, int client_mode,
+    uint32_t proposed_version, const picoquic_connection_id_t * remote_cnxid, void * ptr)
+{
+    (void)time;
+    (void)cid;
+    (void)client_mode;
+    (void)proposed_version;
+    (void)remote_cnxid;
+    (void)ptr;
+    return 0;
+}
+
+int svg_connection_end(uint64_t time, void* ptr)
+{
+    (void)time;
+    (void)ptr;
+    return 0;
+}
+
 int svg_packet_start(uint64_t time, uint64_t size, const picoquic_packet_header * ph, int rxtx, void * ptr)
 {
     const int event_height = 32;
@@ -429,10 +453,14 @@ int convert_svg(const picoquic_connection_id_t * cid, void * ptr)
 
     svg_context_t svg;
     svg.f_txtlog = open_outfile(cid_name, appctx->binlog_name, appctx->out_dir, "svg");
+    svg.f_template = appctx->f_template;
+    svg.cid_name = cid_name;
     svg.start_time = appctx->log_time;
     svg.packet_count = 0;
 
     binlog_convert_cb_t ctx;
+    ctx.connection_start = svg_connection_start;
+    ctx.connection_end = svg_connection_end;
     ctx.pdu = svg_pdu;
     ctx.packet_start = svg_packet_start;
     ctx.packet_frame = svg_packet_frame;
@@ -560,7 +588,39 @@ int qlog_packet_end(void * ptr)
     return 0;
 }
 
-int convert_qlog(const picoquic_connection_id_t * cid, void * ptr)
+int qlog_connection_start(uint64_t time, const picoquic_connection_id_t * cid, int client_mode,
+    uint32_t proposed_version, const picoquic_connection_id_t * remote_cnxid, void * ptr)
+{
+    svg_context_t * ctx = (svg_context_t*)ptr;
+    FILE * f = ctx->f_txtlog;
+
+    ctx->start_time = 0; // appctx->log_time;
+    ctx->packet_count = 0;
+
+    fprintf(f, "{ \"qlog_version\": \"draft-00\", \"title\": \"picoquic\", \"traces\": [\n");
+    fprintf(f, "{ \"vantage_point\": { \"name\": \"backend-67\", \"type\": \"%s\" },\n",
+        client_mode?"CLIENT":"SERVER");
+
+    fprintf(f, "\"title\": \"picoquic\", \"description\": \"%s\",", ctx->cid_name);
+    fprintf(f, "\"event_fields\": [\"relative_time\", \"CATEGORY\", \"EVENT_TYPE\", \"DATA\"],\n");
+    fprintf(f, "\"configuration\": {\"time_units\": \"us\"},\n");
+    fprintf(f, "\"common_fields\": { \"protocol_type\": \"QUIC_HTTP3\", \"reference_time\": \"%"PRIu64"\"},\n", ctx->start_time);
+    fprintf(f, "\"events\": [\n");
+    ctx->state = 1;
+    return 0;
+}
+
+int qlog_connection_end(uint64_t time, void * ptr)
+{
+    svg_context_t * ctx = (svg_context_t*)ptr;
+    FILE * f = ctx->f_txtlog;
+    fprintf(f, "]}]}\n");
+
+    ctx->state = 2;
+    return 0;
+}
+
+int convert_qlog(const picoquic_connection_id_t* cid, void* ptr)
 {
     const app_conversion_context_t* appctx = (const app_conversion_context_t*)ptr;
     int ret = 0;
@@ -573,28 +633,25 @@ int convert_qlog(const picoquic_connection_id_t * cid, void * ptr)
 
     svg_context_t qlog;
     qlog.f_txtlog = open_outfile(cid_name, appctx->binlog_name, appctx->out_dir, "qlog");
+    qlog.f_template = appctx->f_template;
+    qlog.cid_name = cid_name;
     qlog.start_time = 0; // appctx->log_time;
     qlog.packet_count = 0;
+    qlog.state = 0;
 
     binlog_convert_cb_t ctx;
+    ctx.connection_start = qlog_connection_start;
+    ctx.connection_end = qlog_connection_end;
     ctx.pdu = svg_pdu;
     ctx.packet_start = qlog_packet_start;
     ctx.packet_frame = qlog_packet_frame;
     ctx.packet_end = qlog_packet_end;
     ctx.ptr = &qlog;
 
-    char line[256];
-    while (fgets(line, sizeof(line), appctx->f_template) != NULL) /* read a line */ {
-        if (strcmp(line, "@\n") == 0) {
-            fprintf(qlog.f_txtlog, "                \"description\": \"%s\",\n", cid_name);
-        } else if (strcmp(line, "+\n") == 0) {
-            fprintf(qlog.f_txtlog, "                \"reference_time\": \"%"PRIu64"\"\n", qlog.start_time);
-        } else if (strcmp(line, "#\n") == 0) {
-            ret = binlog_convert(appctx->f_binlog, cid, &ctx);
-        } else {
-            /* Copy the template to the qlog file */
-            fprintf(qlog.f_txtlog, line);
-        }
+    ret = binlog_convert(appctx->f_binlog, cid, &ctx);
+
+    if (qlog.state == 1) {
+        qlog_connection_end(0, &qlog);
     }
 
     return ret;

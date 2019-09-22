@@ -85,6 +85,28 @@ static int binlog_convert_event(bytestream * s, void * ptr)
     uint64_t id = 0;
     ret |= byteread_vint(s, &id);
 
+    if (id == picoquic_log_event_new_connection) {
+
+        uint8_t client_mode = 0;
+        ret |= byteread_int8(s, &client_mode);
+
+        uint32_t proposed_version = 0;
+        ret |= byteread_int32(s, &proposed_version);
+
+        picoquic_connection_id_t remote_cnxid;
+        ret |= byteread_cid(s, &remote_cnxid);
+
+        if (ret == 0) {
+            ret |= ctx->callbacks->connection_start(time, &cid, client_mode, proposed_version, &remote_cnxid, cbptr);
+        }
+    }
+
+    if (id == picoquic_log_event_connection_close) {
+        if (ret == 0) {
+            ret |= ctx->callbacks->connection_end(time, cbptr);
+        }
+    }
+
     if (id == picoquic_log_event_pdu_recv || id == picoquic_log_event_pdu_sent) {
         int rxtx = id == picoquic_log_event_pdu_recv;
         ret |= ctx->callbacks->pdu(time, rxtx, cbptr);
