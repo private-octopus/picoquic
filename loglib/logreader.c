@@ -94,11 +94,14 @@ static int binlog_convert_event(bytestream * s, void * ptr)
 
         int rxtx = id == picoquic_log_event_packet_recv;
 
+        uint64_t packet_length = 0;
+        ret |= byteread_vint(s, &packet_length);
+
         picoquic_packet_header ph;
         ret |= byteread_packet_header(s, &ph);
 
         if (ret == 0) {
-            ret = ctx->callbacks->packet_start(time, &ph, rxtx, cbptr);
+            ret = ctx->callbacks->packet_start(time, packet_length, &ph, rxtx, cbptr);
         }
 
         while (ret == 0 && bytestream_remain(s) > 0) {

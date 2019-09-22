@@ -348,7 +348,7 @@ char const* fname2str(picoquic_frame_type_enum_t ftype)
     }
 }
 
-int svg_packet_start(uint64_t time, const picoquic_packet_header * ph, int rxtx, void * ptr)
+int svg_packet_start(uint64_t time, uint64_t size, const picoquic_packet_header * ph, int rxtx, void * ptr)
 {
     const int event_height = 32;
     svg_context_t * svg = (svg_context_t*)ptr;
@@ -373,13 +373,13 @@ int svg_packet_start(uint64_t time, const picoquic_packet_header * ph, int rxtx,
 
     if (rxtx == 0) {
         fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"end\" class=\"seq_%s\">%"PRIu64"</text>\n", x_pos - 4, y_pos - 4, dir, ph->pn64);
-        fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"end\" class=\"arw\">%zu b</text>\n", 80, y_pos - 2, ph->payload_length);
+        fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"end\" class=\"arw\">%zu b</text>\n", 80, y_pos - 2, size);
         fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"start\" class=\"frm\" xml:space=\"preserve\"> %s</text>\n", 80, y_pos - 2, ptype2str(ph->ptype));
         fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"start\" class=\"frm\" xml:space=\"preserve\">", x_pos + 30, y_pos + 10);
     }
     else {
         fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"start\" class=\"seq_%s\">%"PRIu64"</text>\n", 600 - x_pos + 4, y_pos - 4, dir, ph->pn64);
-        fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"start\" class=\"arw\">%zu b</text>\n", 600 - 80, y_pos - 2, ph->payload_length);
+        fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"start\" class=\"arw\">%zu b</text>\n", 600 - 80, y_pos - 2, size);
         fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"end\" class=\"frm\" xml:space=\"preserve\">%s </text>\n", 600-80, y_pos - 2, ptype2str(ph->ptype));
         fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"end\" class=\"frm\" xml:space=\"preserve\">", 600 - x_pos - 30, y_pos + 10);
     }
@@ -444,7 +444,7 @@ int convert_svg(const picoquic_connection_id_t * cid, void * ptr)
     return ret;
 }
 
-int qlog_packet_start(uint64_t time, const picoquic_packet_header * ph, int rxtx, void * ptr)
+int qlog_packet_start(uint64_t time, uint64_t size, const picoquic_packet_header * ph, int rxtx, void * ptr)
 {
     svg_context_t * ctx = (svg_context_t*)ptr;
     FILE * f = ctx->f_txtlog;
@@ -461,8 +461,22 @@ int qlog_packet_start(uint64_t time, const picoquic_packet_header * ph, int rxtx
         fprintf(f, "\n");
     }
 
-    fprintf(f, "[%"PRIu64", \"TRANSPORT\", \"%s\", { \"packet_type\": \"%s\", \"header\": { \"packet_number\": \"%"PRIu64"\", \"payload_length\": %zu }, \"frames\": [",
-        time, (rxtx == 0)?"PACKET_SENT":"PACKET_RECEIVED", ptype2str(ph->ptype), ph->pn64, ph->payload_length);
+    fprintf(f, "[%"PRId64", \"TRANSPORT\", \"%s\", { \"packet_type\": \"%s\", \"header\": { \"packet_number\": \"%"PRIu64"\", \"packet_size\": %"PRIu64", \"payload_length\": %zu",
+        delta_time, (rxtx == 0)?"PACKET_SENT":"PACKET_RECEIVED", ptype2str(ph->ptype), ph->pn64, size, ph->payload_length);
+
+    if (ph->srce_cnx_id.id_len > 0) {
+        char scid_name[2 * PICOQUIC_CONNECTION_ID_MAX_SIZE + 1];
+        picoquic_print_connection_id_hexa(scid_name, sizeof(scid_name), &ph->srce_cnx_id);
+        fprintf(f, ", \"scid\": \"%s\"", scid_name);
+    }
+
+    if (ph->dest_cnx_id.id_len > 0) {
+        char dcid_name[2 * PICOQUIC_CONNECTION_ID_MAX_SIZE + 1];
+        picoquic_print_connection_id_hexa(dcid_name, sizeof(dcid_name), &ph->dest_cnx_id);
+        fprintf(f, ", \"dcid\": \"%s\"", dcid_name);
+    }
+
+    fprintf(f, " }, \"frames\": [");
 
     ctx->frame_count = 0;
     return 0;
