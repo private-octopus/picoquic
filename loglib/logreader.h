@@ -69,6 +69,6 @@ int binlog_convert(FILE * f_binlog, const picoquic_connection_id_t * cid, binlog
  */
 int binlog_list_cids(FILE * binlog, picohash_table * cids);
 
-FILE * picoquic_open_cc_log_file_for_read(char const * bin_cc_log_name, uint32_t * log_time);
+FILE * picoquic_open_cc_log_file_for_read(char const * bin_cc_log_name, uint64_t * log_time);
 
 int picoquic_cc_log_file_to_csv(char const * bin_cc_log_name, char const * csv_cc_log_name);

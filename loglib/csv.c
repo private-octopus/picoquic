@@ -40,7 +40,7 @@ int picoquic_cc_log_file_to_csv(char const* bin_cc_log_name, char const* csv_cc_
 {
     /* Open the bin file for reading, the csv file for writing */
     int ret = 0;
-    uint32_t log_time = 0;
+    uint64_t log_time = 0;
     FILE* f_binlog = picoquic_open_cc_log_file_for_read(bin_cc_log_name, &log_time);
     FILE* f_csvlog = picoquic_file_open(csv_cc_log_name, "w");
 

@@ -43,7 +43,7 @@ typedef struct app_conversion_context_st
     const char * template_name;
     FILE * f_template;
 
-    uint32_t log_time;
+    uint64_t log_time;
 } app_conversion_context_t;
 
 int convert_csv(const picoquic_connection_id_t * cid, void * ptr);

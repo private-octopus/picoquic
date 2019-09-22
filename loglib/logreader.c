@@ -185,7 +185,7 @@ static int byteread_packet_header(bytestream * s, picoquic_packet_header * ph)
 }
 
 /* Open the bin file for reading */
-FILE * picoquic_open_cc_log_file_for_read(char const * bin_cc_log_name, uint32_t * log_time)
+FILE * picoquic_open_cc_log_file_for_read(char const * bin_cc_log_name, uint64_t * log_time)
 {
     int ret = 0;
     FILE * bin_log = picoquic_file_open(bin_cc_log_name, "rb");
@@ -214,7 +214,7 @@ FILE * picoquic_open_cc_log_file_for_read(char const * bin_cc_log_name, uint32_t
             DBG_PRINTF("Header for file %s requires unsupported version.\n", bin_cc_log_name);
         }
         else {
-            ret = byteread_int32(ps, log_time);
+            ret = byteread_int64(ps, log_time);
         }
     }
 
