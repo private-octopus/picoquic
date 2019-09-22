@@ -48,6 +48,7 @@ typedef struct app_conversion_context_st
 
 int convert_csv(const picoquic_connection_id_t * cid, void * ptr);
 int convert_svg(const picoquic_connection_id_t * cid, void * ptr);
+int convert_qlog(const picoquic_connection_id_t * cid, void * ptr);
 
 int usage();
 void usage_formats();
@@ -158,6 +159,13 @@ int main(int argc, char ** argv)
             } else {
                 ret = cidset_iterate(cids, convert_svg, &appctx);
             }
+        } else if (strcmp(appctx.out_format, "qlog") == 0) {
+            if (appctx.f_template == NULL) {
+                fprintf(stderr, "The qlog format conversion requires a template file specified by parameter -t\n");
+                ret = -1;
+            } else {
+                ret = cidset_iterate(cids, convert_qlog, &appctx);
+            }
         } else {
             fprintf(stderr, "Invalid output format '%s'. Valid formats are\n\n", appctx.out_format);
             usage_formats();
@@ -243,6 +251,7 @@ typedef struct svg_context_st {
     FILE * f_txtlog;      /*!< The file handle of the opened SVG file. */
     uint64_t start_time;  /*!< Timestamp is very first log event reported. */
     int packet_count;
+    int frame_count;
 
 } svg_context_t;
 
@@ -306,13 +315,13 @@ char const* fname2str(picoquic_frame_type_enum_t ftype)
     case picoquic_frame_type_data_blocked:
         return "data_blocked";
     case picoquic_frame_type_stream_data_blocked:
-        return "stream_data_blocked";
+        return "streams_blocked";
     case picoquic_frame_type_streams_blocked_bidir:
         return "streams_blocked_bidir";
     case picoquic_frame_type_streams_blocked_unidir:
         return "streams_blocked_unidir";
     case picoquic_frame_type_new_connection_id:
-        return "cid";
+        return "new_connection_id";
     case picoquic_frame_type_stop_sending:
         return "stop_sending";
     case picoquic_frame_type_ack:
@@ -322,7 +331,7 @@ char const* fname2str(picoquic_frame_type_enum_t ftype)
     case picoquic_frame_type_path_response:
         return "path_response";
     case picoquic_frame_type_crypto_hs:
-        return "crypto_hs";
+        return "crypto";
     case picoquic_frame_type_new_token:
         return "new_token";
     case picoquic_frame_type_ack_ecn:
@@ -427,6 +436,134 @@ int convert_svg(const picoquic_connection_id_t * cid, void * ptr)
         if (strcmp(line, "#\n") != 0) {
             /* Copy the template to the SVG file */
             fprintf(svg.f_txtlog, line);
+        } else {
+            ret = binlog_convert(appctx->f_binlog, cid, &ctx);
+        }
+    }
+
+    return ret;
+}
+
+int qlog_packet_start(uint64_t time, const picoquic_packet_header * ph, int rxtx, void * ptr)
+{
+    svg_context_t * ctx = (svg_context_t*)ptr;
+    FILE * f = ctx->f_txtlog;
+
+    if (ctx->packet_count == 0) {
+        ctx->start_time = time;
+    }
+
+    time -= ctx->start_time;
+
+    if (ctx->packet_count != 0) {
+        fprintf(f, ",\n");
+    } else {
+        fprintf(f, "\n");
+    }
+
+    fprintf(f, "[%"PRIu64", \"TRANSPORT\", \"%s\", { \"packet_type\": \"%s\", \"header\": { \"packet_number\": \"%"PRIu64"\", \"payload_length\": %zu }, \"frames\": [",
+        time, (rxtx == 0)?"PACKET_SENT":"PACKET_RECEIVED", ptype2str(ph->ptype), ph->pn64, ph->payload_length);
+
+    ctx->frame_count = 0;
+    return 0;
+}
+
+int qlog_packet_frame(bytestream * s, void * ptr)
+{
+    svg_context_t * ctx = (svg_context_t*)ptr;
+    FILE * f = ctx->f_txtlog;
+
+    if (ctx->frame_count != 0) {
+        fprintf(f, ", ");
+    }
+
+    fprintf(f, "{ ");
+
+    uint8_t ftype = 0;
+    byteread_int8(s, &ftype);
+
+    fprintf(f, "\"frame_type\": \"%s\"", fname2str(ftype));
+
+    if (ftype >= picoquic_frame_type_stream_range_min &&
+        ftype <= picoquic_frame_type_stream_range_max) {
+        uint64_t stream_id = 0;
+        byteread_vint(s, &stream_id);
+        uint64_t offset = 0;
+        if ((ftype & 4) != 0) {
+            byteread_vint(s, &offset);
+        }
+        uint64_t length = bytestream_remain(s);
+        if ((ftype & 2) != 0) {
+            byteread_vint(s, &length);
+        }
+        fprintf(f, ", \"id\": %"PRIu64", \"offset\": %"PRIu64", \"length\": %"PRIu64", \"fin\": %s ",
+            stream_id, offset, length, (ftype & 1) ? "true":"false");
+    } else switch (ftype) {
+    case picoquic_frame_type_ack: {
+        uint64_t largest = 0;
+        byteread_vint(s, &largest);
+        uint64_t ack_delay = 0;
+        byteread_vint(s, &ack_delay);
+        fprintf(f, ", \"ack_delay\": %"PRIu64"", ack_delay);
+        uint64_t num = 0;
+        byteread_vint(s, &num);
+        fprintf(f, ", \"acked_ranges\": [");
+        for (uint64_t i = 0; i <= num; i++) {
+            uint64_t skip = 0;
+            if (i != 0) {
+                byteread_vint(s, &skip);
+                skip++;
+
+                largest -= skip;
+                fprintf(f, ", ");
+            }
+            uint64_t range = 0;
+            byteread_vint(s, &range);
+
+            fprintf(f, "[%"PRIu64", %"PRIu64"]", largest - range, largest);
+            largest -= range + 1;
+        }
+        fprintf(f, "]");
+        break;
+    }
+    }
+
+    fprintf(f, "}");
+    ctx->frame_count++;
+    return 0;
+}
+
+int qlog_packet_end(void * ptr)
+{
+    svg_context_t * ctx = (svg_context_t*)ptr;
+    FILE * f = ctx->f_txtlog;
+    fprintf(f, "]}]");
+    ctx->packet_count++;
+    return 0;
+}
+
+int convert_qlog(const picoquic_connection_id_t * cid, void * ptr)
+{
+    const app_conversion_context_t* appctx = (const app_conversion_context_t*)ptr;
+    int ret = 0;
+
+    svg_context_t qlog;
+    qlog.f_txtlog = open_outfile(cid, appctx->binlog_name, appctx->out_dir, "qlog");
+    qlog.start_time = 0;
+    qlog.packet_count = 0;
+
+    binlog_convert_cb_t ctx;
+    ctx.pdu = svg_pdu;
+    ctx.packet_start = qlog_packet_start;
+    ctx.packet_frame = qlog_packet_frame;
+    ctx.packet_end = qlog_packet_end;
+    ctx.ptr = &qlog;
+
+    char line[256];
+    while (fgets(line, sizeof(line), appctx->f_template) != NULL) /* read a line */ {
+        if (strcmp(line, "#\n") != 0) {
+            /* Copy the template to the qlog file */
+            fprintf(qlog.f_txtlog, line);
         } else {
             ret = binlog_convert(appctx->f_binlog, cid, &ctx);
         }
