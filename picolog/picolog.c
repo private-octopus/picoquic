@@ -360,10 +360,6 @@ int svg_packet_start(uint64_t time, uint64_t size, const picoquic_packet_header 
     svg_context_t * svg = (svg_context_t*)ptr;
     FILE * f = svg->f_txtlog;
 
-    if (svg->packet_count == 0) {
-        svg->start_time = time;
-    }
-
     time -= svg->start_time;
 
     int x_pos = 50;
@@ -433,7 +429,7 @@ int convert_svg(const picoquic_connection_id_t * cid, void * ptr)
 
     svg_context_t svg;
     svg.f_txtlog = open_outfile(cid_name, appctx->binlog_name, appctx->out_dir, "svg");
-    svg.start_time = 0;
+    svg.start_time = appctx->log_time;
     svg.packet_count = 0;
 
     binlog_convert_cb_t ctx;
@@ -461,11 +457,7 @@ int qlog_packet_start(uint64_t time, uint64_t size, const picoquic_packet_header
     svg_context_t * ctx = (svg_context_t*)ptr;
     FILE * f = ctx->f_txtlog;
 
-    if (ctx->packet_count == 0) {
-        ctx->start_time = time;
-    }
-
-    time -= ctx->start_time;
+    int64_t delta_time = time - ctx->start_time;
 
     if (ctx->packet_count != 0) {
         fprintf(f, ",\n");
@@ -581,6 +573,7 @@ int convert_qlog(const picoquic_connection_id_t * cid, void * ptr)
 
     svg_context_t qlog;
     qlog.f_txtlog = open_outfile(cid_name, appctx->binlog_name, appctx->out_dir, "qlog");
+    qlog.start_time = 0; // appctx->log_time;
     qlog.packet_count = 0;
 
     binlog_convert_cb_t ctx;
@@ -592,11 +585,15 @@ int convert_qlog(const picoquic_connection_id_t * cid, void * ptr)
 
     char line[256];
     while (fgets(line, sizeof(line), appctx->f_template) != NULL) /* read a line */ {
-        if (strcmp(line, "#\n") != 0) {
+        if (strcmp(line, "@\n") == 0) {
+            fprintf(qlog.f_txtlog, "                \"description\": \"%s\",\n", cid_name);
+        } else if (strcmp(line, "+\n") == 0) {
+            fprintf(qlog.f_txtlog, "                \"reference_time\": \"%"PRIu64"\"\n", qlog.start_time);
+        } else if (strcmp(line, "#\n") == 0) {
+            ret = binlog_convert(appctx->f_binlog, cid, &ctx);
+        } else {
             /* Copy the template to the qlog file */
             fprintf(qlog.f_txtlog, line);
-        } else {
-            ret = binlog_convert(appctx->f_binlog, cid, &ctx);
         }
     }
 
