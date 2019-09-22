@@ -208,15 +208,9 @@ void usage_formats()
     fprintf(stderr, "                                 requires a template specified by -t\n");
 }
 
-FILE * open_outfile(const picoquic_connection_id_t * cid, const char * binlog_name, const char * out_dir, const char * out_ext)
+FILE * open_outfile(const char * cid_name, const char * binlog_name, const char * out_dir, const char * out_ext)
 {
     int ret = 0;
-
-    char cid_name[2 * PICOQUIC_CONNECTION_ID_MAX_SIZE + 1];
-    if (picoquic_print_connection_id_hexa(cid_name, sizeof(cid_name), cid) != 0) {
-        DBG_PRINTF("Cannot convert connection id for %s", binlog_name);
-        ret = -1;
-    }
 
     char filename[512];
     if (ret == 0) {
@@ -242,8 +236,20 @@ FILE * open_outfile(const picoquic_connection_id_t * cid, const char * binlog_na
 int convert_csv(const picoquic_connection_id_t * cid, void * ptr)
 {
     const app_conversion_context_t* appctx = (const app_conversion_context_t*)ptr;
-    return picoquic_cc_bin_to_csv(appctx->f_binlog,
-        open_outfile(cid, appctx->binlog_name, appctx->out_dir, "csv"));
+    int ret = 0;
+
+    char cid_name[2 * PICOQUIC_CONNECTION_ID_MAX_SIZE + 1];
+    if (picoquic_print_connection_id_hexa(cid_name, sizeof(cid_name), cid) != 0) {
+        DBG_PRINTF("Cannot convert connection id for %s", appctx->binlog_name);
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        ret = picoquic_cc_bin_to_csv(appctx->f_binlog,
+            open_outfile(cid_name, appctx->binlog_name, appctx->out_dir, "csv"));
+    }
+
+    return ret;
 }
 
 typedef struct svg_context_st {
@@ -419,8 +425,14 @@ int convert_svg(const picoquic_connection_id_t * cid, void * ptr)
     const app_conversion_context_t* appctx = (const app_conversion_context_t*)ptr;
     int ret = 0;
 
+    char cid_name[2 * PICOQUIC_CONNECTION_ID_MAX_SIZE + 1];
+    if (picoquic_print_connection_id_hexa(cid_name, sizeof(cid_name), cid) != 0) {
+        DBG_PRINTF("Cannot convert connection id for %s", appctx->binlog_name);
+        ret = -1;
+    }
+
     svg_context_t svg;
-    svg.f_txtlog = open_outfile(cid, appctx->binlog_name, appctx->out_dir, "svg");
+    svg.f_txtlog = open_outfile(cid_name, appctx->binlog_name, appctx->out_dir, "svg");
     svg.start_time = 0;
     svg.packet_count = 0;
 
@@ -561,9 +573,14 @@ int convert_qlog(const picoquic_connection_id_t * cid, void * ptr)
     const app_conversion_context_t* appctx = (const app_conversion_context_t*)ptr;
     int ret = 0;
 
+    char cid_name[2 * PICOQUIC_CONNECTION_ID_MAX_SIZE + 1];
+    if (picoquic_print_connection_id_hexa(cid_name, sizeof(cid_name), cid) != 0) {
+        DBG_PRINTF("Cannot convert connection id for %s", appctx->binlog_name);
+        ret = -1;
+    }
+
     svg_context_t qlog;
-    qlog.f_txtlog = open_outfile(cid, appctx->binlog_name, appctx->out_dir, "qlog");
-    qlog.start_time = 0;
+    qlog.f_txtlog = open_outfile(cid_name, appctx->binlog_name, appctx->out_dir, "qlog");
     qlog.packet_count = 0;
 
     binlog_convert_cb_t ctx;
