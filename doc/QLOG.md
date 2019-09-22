@@ -14,7 +14,7 @@ Binary logging can be used for clients and for servers.
 
 
 ```
-picoquicdemo [...] -b log-client\log2.bin [...]
+picoquicdemo -b <path_to_binary_log> [...]
 ```
 
 ### C Interface
