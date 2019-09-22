@@ -126,9 +126,6 @@ The code is constantly updated to track the latest version of the specification.
 conforms to draft-22, and will negotiate support for the corresponding version `0xFF000016`.
 It will also accept negotiation of version `0xFF000014`, draft-20. 
 
+# Creating QLOG Log Files
 
-
- 
-
-
-
+See [How To Produce QLOG files with picoquic](doc/QLOG.md)
