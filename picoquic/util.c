@@ -327,6 +327,19 @@ int picoquic_compare_connection_id(const picoquic_connection_id_t * cnx_id1, con
     return ret;
 }
 
+/* Hash connection ids for picohash_table's */
+uint64_t picoquic_connection_id_hash(const picoquic_connection_id_t * cid)
+{
+    uint64_t val64 = 0;
+
+    for (size_t i = 0; i < cid->id_len; i++) {
+        val64 += val64 << 8;
+        val64 += cid->id[i];
+    }
+
+    return val64;
+}
+
 uint64_t picoquic_val64_connection_id(picoquic_connection_id_t cnx_id)
 {
     uint64_t val64 = 0;

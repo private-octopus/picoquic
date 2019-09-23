@@ -21,6 +21,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/frames.c
     picoquic/intformat.c
     picoquic/logger.c
+    picoquic/logwriter.c
     picoquic/newreno.c
     picoquic/packet.c
     picoquic/picohash.c
@@ -38,7 +39,9 @@ set(PICOQUIC_LIBRARY_FILES
 )
 
 set(LOGLIB_LIBRARY_FILES
-    loglib/txtlog.c
+    loglib/cidset.c
+    loglib/csv.c
+    loglib/logreader.c
 )
 
 set(PICOQUIC_TEST_LIBRARY_FILES
@@ -130,6 +133,20 @@ target_link_libraries(picoquic_c2csv
 )
 
 target_include_directories(picoquic_c2csv PRIVATE loglib)
+
+add_executable(picolog_t
+    picolog/picolog.c
+)
+
+target_link_libraries(picolog_t
+    picoquic-log
+    picoquic-core
+    ${PTLS_LIBRARIES}
+    ${OPENSSL_LIBRARIES}
+    ${CMAKE_DL_LIBS}
+)
+
+target_include_directories(picolog_t PRIVATE loglib)
 
 add_executable(picoquic_ct picoquic_t/picoquic_t.c
     ${PICOQUIC_TEST_LIBRARY_FILES}

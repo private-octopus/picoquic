@@ -22,7 +22,7 @@
 #include <stdio.h>
 #include <inttypes.h>
 
-FILE * picoquic_open_cc_log_file_for_read(char const * bin_cc_log_name, uint32_t * log_time);
+FILE * picoquic_open_cc_log_file_for_read(char const * bin_cc_log_name, uint64_t * log_time);
 
 /* Extract all picoquic_log_event_cc_update events from the binary log file and write them into an csv file. */
 int picoquic_cc_log_file_to_csv(char const* bin_cc_log_name, char const* csv_cc_log_name);
