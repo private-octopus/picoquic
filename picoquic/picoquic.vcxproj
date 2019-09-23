@@ -148,6 +148,7 @@
     <ClCompile Include="frames.c" />
     <ClCompile Include="intformat.c" />
     <ClCompile Include="logger.c" />
+    <ClCompile Include="logwriter.c" />
     <ClCompile Include="newreno.c" />
     <ClCompile Include="picosocks.c" />
     <ClCompile Include="picosplay.c" />
@@ -166,6 +167,7 @@
   <ItemGroup>
     <ClInclude Include="bytestream.h" />
     <ClInclude Include="cc_common.h" />
+    <ClInclude Include="logwriter.h" />
     <ClInclude Include="picohash.h" />
     <ClInclude Include="picoquic_internal.h" />
     <ClInclude Include="picosocks.h" />
