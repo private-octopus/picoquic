@@ -165,7 +165,7 @@ int quic_server(const char* server_name, int server_port,
     void* cnx_id_callback_ctx, uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE],
     int dest_if, int mtu_max, uint32_t proposed_version, 
     const char * esni_key_file_name, const char * esni_rr_file_name,
-    FILE * F_log, char const * cc_log_dir, int use_long_log, picoquic_congestion_algorithm_t const * cc_algorithm)
+    FILE * F_log, char const* bin_file, char const * cc_log_dir, int use_long_log, picoquic_congestion_algorithm_t const * cc_algorithm)
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
