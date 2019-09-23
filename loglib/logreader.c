@@ -85,6 +85,28 @@ static int binlog_convert_event(bytestream * s, void * ptr)
     uint64_t id = 0;
     ret |= byteread_vint(s, &id);
 
+    if (id == picoquic_log_event_new_connection) {
+
+        uint8_t client_mode = 0;
+        ret |= byteread_int8(s, &client_mode);
+
+        uint32_t proposed_version = 0;
+        ret |= byteread_int32(s, &proposed_version);
+
+        picoquic_connection_id_t remote_cnxid;
+        ret |= byteread_cid(s, &remote_cnxid);
+
+        if (ret == 0) {
+            ret |= ctx->callbacks->connection_start(time, &cid, client_mode, proposed_version, &remote_cnxid, cbptr);
+        }
+    }
+
+    if (id == picoquic_log_event_connection_close) {
+        if (ret == 0) {
+            ret |= ctx->callbacks->connection_end(time, cbptr);
+        }
+    }
+
     if (id == picoquic_log_event_pdu_recv || id == picoquic_log_event_pdu_sent) {
         int rxtx = id == picoquic_log_event_pdu_recv;
         ret |= ctx->callbacks->pdu(time, rxtx, cbptr);
@@ -94,11 +116,14 @@ static int binlog_convert_event(bytestream * s, void * ptr)
 
         int rxtx = id == picoquic_log_event_packet_recv;
 
+        uint64_t packet_length = 0;
+        ret |= byteread_vint(s, &packet_length);
+
         picoquic_packet_header ph;
         ret |= byteread_packet_header(s, &ph);
 
         if (ret == 0) {
-            ret = ctx->callbacks->packet_start(time, &ph, rxtx, cbptr);
+            ret = ctx->callbacks->packet_start(time, packet_length, &ph, rxtx, cbptr);
         }
 
         while (ret == 0 && bytestream_remain(s) > 0) {
@@ -185,7 +210,7 @@ static int byteread_packet_header(bytestream * s, picoquic_packet_header * ph)
 }
 
 /* Open the bin file for reading */
-FILE * picoquic_open_cc_log_file_for_read(char const * bin_cc_log_name, uint32_t * log_time)
+FILE * picoquic_open_cc_log_file_for_read(char const * bin_cc_log_name, uint64_t * log_time)
 {
     int ret = 0;
     FILE * bin_log = picoquic_file_open(bin_cc_log_name, "rb");
@@ -214,7 +239,7 @@ FILE * picoquic_open_cc_log_file_for_read(char const * bin_cc_log_name, uint32_t
             DBG_PRINTF("Header for file %s requires unsupported version.\n", bin_cc_log_name);
         }
         else {
-            ret = byteread_int32(ps, log_time);
+            ret = byteread_int64(ps, log_time);
         }
     }
 
