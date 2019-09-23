@@ -22,14 +22,15 @@
 #include "picoquic_internal.h"
 #include <stdlib.h>
 #include <string.h>
+#include "cc_common.h"
 
 
 #define FASTCC_MIN_ACK_DELAY_FOR_BANDWIDTH 10
 #define FASTCC_BANDWIDTH_FRACTION 0.5
-#define FASTCC_REPEAT_THRESHOLD 3
+#define FASTCC_REPEAT_THRESHOLD 4
 #define FASTCC_BETA 0.125
-#define FASTCC_EVAL_ALPHA 0.125
-#define FASTCC_DELAY_THRESHOLD_MAX 10000
+#define FASTCC_EVAL_ALPHA 0.25
+#define FASTCC_DELAY_THRESHOLD_MAX 50000
 #define FASTCC_NB_PERIOD 6
 #define FASTCC_PERIOD 1000000
 
@@ -48,6 +49,7 @@ typedef struct st_picoquic_fastcc_state_t {
     uint64_t nb_bytes_ack;
     uint64_t nb_bytes_ack_since_rtt; /* accumulate byte count until RTT measured */
     uint64_t end_of_epoch;
+    uint64_t recovery_sequence;
     uint64_t rtt_min;
     uint64_t delay_threshold;
     uint64_t rolling_rtt_min; /* Min RTT measured for this epoch */
@@ -80,7 +82,8 @@ void picoquic_fastcc_init(picoquic_path_t* path_x)
     }
 }
 
-void fastcc_process_cc_event(picoquic_path_t* path_x, picoquic_fastcc_state_t* fastcc_state, uint64_t current_time)
+void fastcc_process_cc_event(picoquic_cnx_t * cnx, 
+    picoquic_path_t* path_x, picoquic_fastcc_state_t* fastcc_state, uint64_t current_time)
 {
     fastcc_state->nb_cc_events++;
     if (fastcc_state->nb_cc_events >= FASTCC_REPEAT_THRESHOLD) {
@@ -88,6 +91,7 @@ void fastcc_process_cc_event(picoquic_path_t* path_x, picoquic_fastcc_state_t* f
         if (fastcc_state->alg_state != picoquic_fastcc_freeze) {
             fastcc_state->alg_state = picoquic_fastcc_freeze;
             fastcc_state->end_of_freeze = current_time + fastcc_state->rtt_min;
+            fastcc_state->recovery_sequence = picoquic_cc_get_sequence_number(cnx);
             path_x->cwin -= (uint64_t)(FASTCC_BETA * (double)path_x->cwin);
             if (path_x->cwin < PICOQUIC_CWIN_MINIMUM) {
                 path_x->cwin = PICOQUIC_CWIN_MINIMUM;
@@ -104,7 +108,8 @@ void fastcc_process_cc_event(picoquic_path_t* path_x, picoquic_fastcc_state_t* f
  * to condensate all that in a single API, which could be shared
  * by many different congestion control algorithms.
  */
-void picoquic_fastcc_notify(picoquic_path_t* path_x,
+void picoquic_fastcc_notify(
+    picoquic_cnx_t* cnx, picoquic_path_t* path_x,
     picoquic_congestion_notification_t notification,
     uint64_t rtt_measurement,
     uint64_t nb_bytes_acknowledged,
@@ -117,7 +122,9 @@ void picoquic_fastcc_notify(picoquic_path_t* path_x,
     picoquic_fastcc_state_t* fastcc_state = (picoquic_fastcc_state_t*)path_x->congestion_alg_state;
 
     if (fastcc_state != NULL) {
-        if (fastcc_state->alg_state == picoquic_fastcc_freeze && current_time > fastcc_state->end_of_freeze) {
+        if (fastcc_state->alg_state == picoquic_fastcc_freeze && 
+            (current_time > fastcc_state->end_of_freeze ||
+                fastcc_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx))) {
             fastcc_state->alg_state = picoquic_fastcc_eval;
             fastcc_state->nb_cc_events = 0;
             fastcc_state->nb_bytes_ack_since_rtt = 0;
@@ -168,7 +175,7 @@ void picoquic_fastcc_notify(picoquic_path_t* path_x,
         case picoquic_congestion_notification_timeout:
             if (fastcc_state->alg_state != picoquic_fastcc_freeze) {
                 /* Count packet losses as maybe cc events */
-                fastcc_process_cc_event(path_x, fastcc_state, current_time);
+                fastcc_process_cc_event(cnx, path_x, fastcc_state, current_time);
             }
             break;
         case picoquic_congestion_notification_spurious_repeat:
@@ -212,10 +219,7 @@ void picoquic_fastcc_notify(picoquic_path_t* path_x,
 
                 if (delta_rtt < fastcc_state->delay_threshold) {
                     double alpha = 1.0;
-
-                    if (fastcc_state->nb_cc_events > 0) {
-                        fastcc_state->nb_cc_events = 0;
-                    }
+                    fastcc_state->nb_cc_events = 0;
 
                     if (fastcc_state->alg_state != picoquic_fastcc_initial) {
                         alpha -= ((double)delta_rtt / (double)fastcc_state->delay_threshold);
@@ -228,7 +232,7 @@ void picoquic_fastcc_notify(picoquic_path_t* path_x,
                 }
                 else {
                     /* May well be congested */
-                    fastcc_process_cc_event(path_x, fastcc_state, current_time);
+                    fastcc_process_cc_event(cnx, path_x, fastcc_state, current_time);
                 }
             }
         }

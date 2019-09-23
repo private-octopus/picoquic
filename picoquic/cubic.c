@@ -22,6 +22,7 @@
 #include "picoquic_internal.h"
 #include <stdlib.h>
 #include <string.h>
+#include "cc_common.h"
 
 typedef enum {
     picoquic_cubic_alg_slow_start = 0,
@@ -36,6 +37,7 @@ typedef enum {
 
 typedef struct st_picoquic_cubic_state_t {
     picoquic_cubic_alg_state_t alg_state;
+    uint64_t recovery_sequence;
     uint64_t start_of_epoch;
     double K;
     double W_max;
@@ -67,7 +69,7 @@ void picoquic_cubic_init(picoquic_path_t* path_x)
         cubic_state->beta = 7.0 / 8.0;
         cubic_state->start_of_epoch = 0;
         cubic_state->W_reno = PICOQUIC_CWIN_INITIAL;
-
+        cubic_state->recovery_sequence = 0;
         path_x->cwin = PICOQUIC_CWIN_INITIAL;
     }
 }
@@ -107,11 +109,13 @@ static void picoquic_cubic_enter_avoidance(
 
 /* The recovery state last 1 RTT, during which parameters will be frozen
  */
-static void picoquic_cubic_enter_recovery(picoquic_path_t* path_x,
+static void picoquic_cubic_enter_recovery(picoquic_cnx_t * cnx,
+    picoquic_path_t* path_x,
     picoquic_congestion_notification_t notification,
     picoquic_cubic_state_t* cubic_state,
     uint64_t current_time)
 {
+    cubic_state->recovery_sequence = picoquic_cc_get_sequence_number(cnx);
     /* Update similar to new reno, but different beta */
     cubic_state->W_max = (double)path_x->cwin / (double)path_x->send_mtu;
     /* Apply fast convergence */
@@ -174,7 +178,8 @@ static double picoquic_cubic_W_cubic(
  * to condensate all that in a single API, which could be shared
  * by many different congestion control algorithms.
  */
-void picoquic_cubic_notify(picoquic_path_t* path_x,
+void picoquic_cubic_notify(
+    picoquic_cnx_t* cnx, picoquic_path_t* path_x,
     picoquic_congestion_notification_t notification,
     uint64_t rtt_measurement,
     uint64_t nb_bytes_acknowledged,
@@ -210,8 +215,9 @@ void picoquic_cubic_notify(picoquic_path_t* path_x,
             case picoquic_congestion_notification_repeat:
             case picoquic_congestion_notification_timeout:
                 /* enter recovery */
-                if (current_time - cubic_state->start_of_epoch > path_x->smoothed_rtt) {
-                    picoquic_cubic_enter_recovery(path_x, notification, cubic_state, current_time);
+                if (current_time - cubic_state->start_of_epoch > path_x->smoothed_rtt ||
+                    cubic_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx)) {
+                    picoquic_cubic_enter_recovery(cnx, path_x, notification, cubic_state, current_time);
                 }
                 break;
             case picoquic_congestion_notification_spurious_repeat:
@@ -285,9 +291,10 @@ void picoquic_cubic_notify(picoquic_path_t* path_x,
                 case picoquic_congestion_notification_ecn_ec:
                 case picoquic_congestion_notification_repeat:
                 case picoquic_congestion_notification_timeout:
-                    if (current_time - cubic_state->start_of_epoch > path_x->smoothed_rtt) {
+                    if (current_time - cubic_state->start_of_epoch > path_x->smoothed_rtt ||
+                        cubic_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx)) {
                         /* re-enter recovery if this is a new loss */
-                        picoquic_cubic_enter_recovery(path_x, notification, cubic_state, current_time);
+                        picoquic_cubic_enter_recovery(cnx, path_x, notification, cubic_state, current_time);
                     }
                     break;
                 case picoquic_congestion_notification_rtt_measurement:
@@ -320,9 +327,10 @@ void picoquic_cubic_notify(picoquic_path_t* path_x,
             case picoquic_congestion_notification_ecn_ec:
             case picoquic_congestion_notification_repeat:
             case picoquic_congestion_notification_timeout:
-                if (current_time - cubic_state->start_of_epoch > path_x->smoothed_rtt) {
+                if (current_time - cubic_state->start_of_epoch > path_x->smoothed_rtt ||
+                    cubic_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx)) {
                     /* re-enter recovery */
-                    picoquic_cubic_enter_recovery(path_x, notification, cubic_state, current_time);
+                    picoquic_cubic_enter_recovery(cnx, path_x, notification, cubic_state, current_time);
                 }
                 break;
             case picoquic_congestion_notification_spurious_repeat:

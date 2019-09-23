@@ -78,6 +78,9 @@
     <ClCompile Include="fastcc.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="cc_common.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquic.h">
@@ -108,6 +111,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="bytestream.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="cc_common.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

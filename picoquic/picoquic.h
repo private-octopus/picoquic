@@ -650,7 +650,9 @@ typedef enum {
 } picoquic_congestion_notification_t;
 
 typedef void (*picoquic_congestion_algorithm_init)(picoquic_path_t* path_x);
-typedef void (*picoquic_congestion_algorithm_notify)(picoquic_path_t* path_x,
+typedef void (*picoquic_congestion_algorithm_notify)(
+    picoquic_cnx_t * cnx,
+    picoquic_path_t* path_x,
     picoquic_congestion_notification_t notification,
     uint64_t rtt_measurement,
     uint64_t nb_bytes_acknowledged,
