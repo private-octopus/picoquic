@@ -132,7 +132,7 @@ int main(int argc, char ** argv)
 
     if (ret == 0) {
         binlog_list_cids(appctx.f_binlog, cids);
-        
+
         fprintf(stderr, "%s contains %"PRIst" connection(s):\n\n", appctx.binlog_name, cids->count);
         cidset_print(stderr, cids);
         fprintf(stderr, "\n");
@@ -326,7 +326,7 @@ char const* fname2str(picoquic_frame_type_enum_t ftype)
     case picoquic_frame_type_data_blocked:
         return "data_blocked";
     case picoquic_frame_type_stream_data_blocked:
-        return "streams_blocked";
+        return "stream_data_blocked";
     case picoquic_frame_type_streams_blocked_bidir:
         return "streams_blocked_bidir";
     case picoquic_frame_type_streams_blocked_unidir:
