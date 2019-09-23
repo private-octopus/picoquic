@@ -599,7 +599,7 @@ int qlog_connection_start(uint64_t time, const picoquic_connection_id_t * cid, i
 
     fprintf(f, "{ \"qlog_version\": \"draft-00\", \"title\": \"picoquic\", \"traces\": [\n");
     fprintf(f, "{ \"vantage_point\": { \"name\": \"backend-67\", \"type\": \"%s\" },\n",
-        client_mode?"CLIENT":"SERVER");
+        client_mode?"client":"server");
 
     fprintf(f, "\"title\": \"picoquic\", \"description\": \"%s\",", ctx->cid_name);
     fprintf(f, "\"event_fields\": [\"relative_time\", \"CATEGORY\", \"EVENT_TYPE\", \"DATA\"],\n");
