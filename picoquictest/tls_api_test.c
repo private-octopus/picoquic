@@ -5676,7 +5676,7 @@ int ready_to_send_test()
 }
 
 
-static int congestion_control_test(picoquic_congestion_algorithm_t * ccalgo, uint64_t max_completion_time)
+static int congestion_control_test(picoquic_congestion_algorithm_t * ccalgo, uint64_t max_completion_time, uint64_t jitter)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -5690,6 +5690,9 @@ static int congestion_control_test(picoquic_congestion_algorithm_t * ccalgo, uin
     if (ret == 0) {
         picoquic_set_default_congestion_algorithm(test_ctx->qserver, ccalgo);
         picoquic_set_congestion_algorithm(test_ctx->cnx_client, ccalgo);
+
+        test_ctx->c_to_s_link->jitter = jitter;
+        test_ctx->s_to_c_link->jitter = jitter;
 
         picoquic_set_cc_log(test_ctx->qserver, ".");
 
@@ -5710,14 +5713,23 @@ static int congestion_control_test(picoquic_congestion_algorithm_t * ccalgo, uin
 
 int cubic_test() 
 {
-    return congestion_control_test(picoquic_cubic_algorithm, 3600000);
+    return congestion_control_test(picoquic_cubic_algorithm, 3600000, 0);
+}
+
+int cubic_jitter_test()
+{
+    return congestion_control_test(picoquic_cubic_algorithm, 3600000, 5000);
 }
 
 int fastcc_test()
 {
-    return congestion_control_test(picoquic_fastcc_algorithm, 3600000);
+    return congestion_control_test(picoquic_fastcc_algorithm, 3600000, 0);
 }
 
+int fastcc_jitter_test()
+{
+    return congestion_control_test(picoquic_fastcc_algorithm, 3600000, 5000);
+}
 
 /* Test that different CID length are properly supported */
 int cid_length_test_one(uint8_t length)

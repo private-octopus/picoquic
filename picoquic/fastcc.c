@@ -25,12 +25,12 @@
 #include "cc_common.h"
 
 
-#define FASTCC_MIN_ACK_DELAY_FOR_BANDWIDTH 10
+#define FASTCC_MIN_ACK_DELAY_FOR_BANDWIDTH 5000
 #define FASTCC_BANDWIDTH_FRACTION 0.5
 #define FASTCC_REPEAT_THRESHOLD 4
 #define FASTCC_BETA 0.125
 #define FASTCC_EVAL_ALPHA 0.25
-#define FASTCC_DELAY_THRESHOLD_MAX 50000
+#define FASTCC_DELAY_THRESHOLD_MAX 25000
 #define FASTCC_NB_PERIOD 6
 #define FASTCC_PERIOD 1000000
 
@@ -55,6 +55,7 @@ typedef struct st_picoquic_fastcc_state_t {
     uint64_t rolling_rtt_min; /* Min RTT measured for this epoch */
     uint64_t last_rtt_min[FASTCC_NB_PERIOD];
     int nb_cc_events;
+    picoquic_min_max_rtt_t rtt_filter;
 } picoquic_fastcc_state_t;
 
 uint64_t picoquic_fastcc_delay_threshold(uint64_t rtt_min)
@@ -70,15 +71,19 @@ void picoquic_fastcc_init(picoquic_path_t* path_x)
 {
     /* Initialize the state of the congestion control algorithm */
     picoquic_fastcc_state_t* fastcc_state = (picoquic_fastcc_state_t*)malloc(sizeof(picoquic_fastcc_state_t));
-    path_x->congestion_alg_state = (void*)fastcc_state;
-
-    if (path_x->congestion_alg_state != NULL) {
+    
+    if (fastcc_state != NULL) {
         memset(fastcc_state, 0, sizeof(picoquic_fastcc_state_t));
-        fastcc_state->alg_state = picoquic_fastcc_initial;
-        fastcc_state->rtt_min = path_x->smoothed_rtt;
-        fastcc_state->rolling_rtt_min = fastcc_state->rtt_min;
-        fastcc_state->delay_threshold = picoquic_fastcc_delay_threshold(fastcc_state->rtt_min);
-        path_x->cwin = PICOQUIC_CWIN_INITIAL;
+        path_x->congestion_alg_state = (void*)fastcc_state;
+
+        if (path_x->congestion_alg_state != NULL) {
+            memset(fastcc_state, 0, sizeof(picoquic_fastcc_state_t));
+            fastcc_state->alg_state = picoquic_fastcc_initial;
+            fastcc_state->rtt_min = path_x->smoothed_rtt;
+            fastcc_state->rolling_rtt_min = fastcc_state->rtt_min;
+            fastcc_state->delay_threshold = picoquic_fastcc_delay_threshold(fastcc_state->rtt_min);
+            path_x->cwin = PICOQUIC_CWIN_INITIAL;
+        }
     }
 }
 
@@ -136,12 +141,14 @@ void picoquic_fastcc_notify(
                 /* Count the bytes since last RTT measurement */
                 fastcc_state->nb_bytes_ack_since_rtt += nb_bytes_acknowledged;
 
+#if 0
                 if (fastcc_state->alg_state == picoquic_fastcc_initial){
                     /* In initial phase, compute the instant bandwidth and the corresponding bandwidth delay product */
                     /* first evaluate the ack delay and the nb bytes to take into account*/
                     uint64_t delta_time_ack = current_time - fastcc_state->last_ack_time;
 
-                    if (delta_time_ack < FASTCC_MIN_ACK_DELAY_FOR_BANDWIDTH) {
+                    if (delta_time_ack < FASTCC_MIN_ACK_DELAY_FOR_BANDWIDTH ||
+                        delta_time_ack*4 < path_x->rtt_min) {
                         /* Merge back to back acknowledgement before evaluating bandwidth */
                         fastcc_state->ack_interval += delta_time_ack;
                         fastcc_state->nb_bytes_ack += nb_bytes_acknowledged;
@@ -155,7 +162,7 @@ void picoquic_fastcc_notify(
                     /* If enough bytes resceived, reset the bandwidth */
                     if (fastcc_state->ack_interval > 0) {
                         double instant_megabyte_per_usec = (double)fastcc_state->nb_bytes_ack / (double)fastcc_state->ack_interval;
-                        double instant_bdp_in_bytes = instant_megabyte_per_usec * (double)fastcc_state->rtt_min;
+                        double instant_bdp_in_bytes = instant_megabyte_per_usec * path_x->rtt_min;
                         double delta_cwin = instant_bdp_in_bytes - (double)path_x->cwin;
 
                         if (delta_cwin > 0) {
@@ -165,7 +172,7 @@ void picoquic_fastcc_notify(
                         }
                     }
                 }
-
+#endif
                 /* Compute pacing data. */
                 picoquic_update_pacing_data(path_x);
             }
@@ -187,30 +194,38 @@ void picoquic_fastcc_notify(
         {
             uint64_t delta_rtt = 0;
 
-            if (current_time > fastcc_state->end_of_epoch) {
-                /* If end of epoch, reset the min RTT to min of remembered periods,
-                 * and roll the period. */
-                fastcc_state->rtt_min = (uint64_t)((int64_t)-1);
-                for (int i = FASTCC_NB_PERIOD - 1; i > 0; i--) {
-                    fastcc_state->last_rtt_min[i] = fastcc_state->last_rtt_min[i - 1];
-                    if (fastcc_state->last_rtt_min[i] > 0 &&
-                        fastcc_state->last_rtt_min[i] < fastcc_state->rtt_min) {
-                        fastcc_state->rtt_min = fastcc_state->last_rtt_min[i];
+            picoquic_filter_rtt_min_max(&fastcc_state->rtt_filter, rtt_measurement);
+
+            if (fastcc_state->rtt_filter.is_init) {
+                /* We use the maximum of the last samples as the candidate for the
+                 * min RTT, in order to filter the rtt jitter */
+                if (current_time > fastcc_state->end_of_epoch) {
+                    /* If end of epoch, reset the min RTT to min of remembered periods,
+                     * and roll the period. */
+                    fastcc_state->rtt_min = (uint64_t)((int64_t)-1);
+                    for (int i = FASTCC_NB_PERIOD - 1; i > 0; i--) {
+                        fastcc_state->last_rtt_min[i] = fastcc_state->last_rtt_min[i - 1];
+                        if (fastcc_state->last_rtt_min[i] > 0 &&
+                            fastcc_state->last_rtt_min[i] < fastcc_state->rtt_min) {
+                            fastcc_state->rtt_min = fastcc_state->last_rtt_min[i];
+                        }
+                    }
+                    fastcc_state->delay_threshold = picoquic_fastcc_delay_threshold(fastcc_state->rtt_min);
+                    fastcc_state->last_rtt_min[0] = fastcc_state->rolling_rtt_min;
+                    fastcc_state->rolling_rtt_min = fastcc_state->rtt_filter.sample_max;
+                    fastcc_state->end_of_epoch = current_time + FASTCC_PERIOD;
+                }
+                else if (fastcc_state->rtt_filter.sample_max < fastcc_state->rolling_rtt_min || fastcc_state->rolling_rtt_min == 0) {
+                    /* If not end of epoch, update the rolling minimum */
+                    fastcc_state->rolling_rtt_min = fastcc_state->rtt_filter.sample_max;
+                    if (fastcc_state->rolling_rtt_min < fastcc_state->rtt_min) {
+                        fastcc_state->rtt_min = fastcc_state->rolling_rtt_min;
                     }
                 }
-                fastcc_state->delay_threshold = picoquic_fastcc_delay_threshold(fastcc_state->rtt_min);
-                fastcc_state->last_rtt_min[0] = fastcc_state->rolling_rtt_min;
-                fastcc_state->rolling_rtt_min = rtt_measurement;
-                fastcc_state->end_of_epoch = current_time + FASTCC_PERIOD;
-            }
-            else if (rtt_measurement < fastcc_state->rolling_rtt_min || fastcc_state->rolling_rtt_min == 0) {
-                /* If not end of epoch, update the rolling minimum */
-                fastcc_state->rolling_rtt_min = rtt_measurement;
             }
 
             if (fastcc_state->alg_state != picoquic_fastcc_freeze) {
                 if (rtt_measurement < fastcc_state->rtt_min) {
-                    fastcc_state->rtt_min = rtt_measurement;
                     fastcc_state->delay_threshold = picoquic_fastcc_delay_threshold(fastcc_state->rtt_min);
                 }
                 else {

@@ -1284,6 +1284,35 @@ int random_tester_test()
     return ret;
 }
 
+#define RANDOM_GAUSS_NB_TESTS 255
+int random_gauss_test()
+{
+    uint64_t t_seed = 0xDEADBEEFBABAC001ull;
+    int ret = 0;
+    double x2 = 0;
+    double x_sum = 0;
+    double a;
+    double v;
+    double stdev;
+
+    for (int i = 0; i < RANDOM_GAUSS_NB_TESTS; i++) {
+        double x = picoquic_test_gauss_random(&t_seed);
+        x_sum += x;
+        x2 += x * x;
+    }
+
+    a = x_sum / RANDOM_GAUSS_NB_TESTS;
+    v = x2 / RANDOM_GAUSS_NB_TESTS;
+
+    if (a < -0.02 || a > 0.02) {
+        ret = -1;
+    }
+    else if (v < 0.97 || v > 1.03) {
+        ret = -1;
+    }
+
+    return ret;
+}
 
 /*
  * Initial fuzz test.

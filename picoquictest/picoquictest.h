@@ -123,6 +123,7 @@ int TlsStreamFrameTest();
 int draft17_vector_test();
 int fuzz_test();
 int random_tester_test();
+int random_gauss_test();
 int random_public_tester_test();
 int cnxid_stash_test();
 int new_cnxid_test();
@@ -152,6 +153,7 @@ int many_short_loss_test();
 int ready_to_send_test();
 int split_stream_frame_test();
 int cubic_test();
+int cubic_jitter_test();
 int long_rtt_test();
 int cid_length_test();
 int initial_server_close_test();
@@ -183,6 +185,7 @@ int not_before_cnxid_test();
 int h3zero_post_test();
 int h09_post_test(); 
 int fastcc_test();
+int fastcc_jitter_test();
 
 #ifdef __cplusplus
 }

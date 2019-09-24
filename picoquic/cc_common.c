@@ -22,6 +22,8 @@
 #include "picoquic_internal.h"
 #include <stdlib.h>
 #include <string.h>
+#include "cc_common.h"
+
 
 uint64_t picoquic_cc_get_sequence_number(picoquic_cnx_t* cnx)
 {
@@ -31,4 +33,32 @@ uint64_t picoquic_cc_get_sequence_number(picoquic_cnx_t* cnx)
 uint64_t picoquic_cc_get_ack_number(picoquic_cnx_t* cnx)
 {
     return cnx->pkt_ctx[picoquic_packet_context_application].highest_acknowledged;
+}
+
+void picoquic_filter_rtt_min_max(picoquic_min_max_rtt_t * rtt_track, uint64_t rtt)
+{
+    int x = rtt_track->sample_current;
+    int x_max;
+
+
+    rtt_track->samples[x] = rtt;
+
+    rtt_track->sample_current = x + 1;
+    if (rtt_track->sample_current >= PICOQUIC_MIN_MAX_RTT_SCOPE) {
+        rtt_track->is_init = 1;
+        rtt_track->sample_current = 0;
+    }
+    
+    x_max = (rtt_track->is_init) ? PICOQUIC_MIN_MAX_RTT_SCOPE : x + 1;
+
+    rtt_track->sample_min = rtt_track->samples[0];
+    rtt_track->sample_max = rtt_track->samples[0];
+
+    for (int i = 1; i < x_max; i++) {
+        if (rtt_track->samples[i] < rtt_track->sample_min) {
+            rtt_track->sample_min = rtt_track->samples[i];
+        } else if (rtt_track->samples[i] > rtt_track->sample_max) {
+            rtt_track->sample_max = rtt_track->samples[i];
+        }
+    }
 }

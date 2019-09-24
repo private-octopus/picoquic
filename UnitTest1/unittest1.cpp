@@ -76,6 +76,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(random_gauss)
+        {
+            int ret = random_gauss_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(random_public_tester)
         {
             int ret = random_public_tester_test();
@@ -888,9 +895,22 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(cubic_jitter)
+        {
+            int ret = cubic_jitter_test();
+
+            Assert::AreEqual(ret, 0);
+        }
         TEST_METHOD(fastcc)
         {
             int ret = fastcc_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(fastcc_jitter)
+        {
+            int ret = fastcc_jitter_test();
 
             Assert::AreEqual(ret, 0);
         }
