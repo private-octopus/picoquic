@@ -48,9 +48,12 @@ typedef struct st_picoquic_cubic_state_t {
     uint64_t ssthresh;
 
     uint64_t residual_ack;
+#if 0
     uint64_t min_rtt;
     uint64_t last_rtt[NB_RTT_CUBIC];
     int nb_rtt;
+#endif
+    picoquic_min_max_rtt_t rtt_filter;
 } picoquic_cubic_state_t;
 
 void picoquic_cubic_init(picoquic_path_t* path_x)
@@ -58,19 +61,22 @@ void picoquic_cubic_init(picoquic_path_t* path_x)
     /* Initialize the state of the congestion control algorithm */
     picoquic_cubic_state_t* cubic_state = (picoquic_cubic_state_t*)malloc(sizeof(picoquic_cubic_state_t));
     path_x->congestion_alg_state = (void*)cubic_state;
+    if (cubic_state != NULL) {
+        memset(&cubic_state->rtt_filter, 0, sizeof(picoquic_min_max_rtt_t));
 
-    if (path_x->congestion_alg_state != NULL) {
-        memset(cubic_state, 0, sizeof(picoquic_cubic_state_t));
-        cubic_state->alg_state = picoquic_cubic_alg_slow_start;
-        cubic_state->ssthresh = (uint64_t)((int64_t)-1);
-        cubic_state->W_last_max = (double)cubic_state->ssthresh/(double)path_x->send_mtu;
-        cubic_state->W_max = cubic_state->W_last_max;
-        cubic_state->C = 0.4;
-        cubic_state->beta = 7.0 / 8.0;
-        cubic_state->start_of_epoch = 0;
-        cubic_state->W_reno = PICOQUIC_CWIN_INITIAL;
-        cubic_state->recovery_sequence = 0;
-        path_x->cwin = PICOQUIC_CWIN_INITIAL;
+        if (path_x->congestion_alg_state != NULL) {
+            memset(cubic_state, 0, sizeof(picoquic_cubic_state_t));
+            cubic_state->alg_state = picoquic_cubic_alg_slow_start;
+            cubic_state->ssthresh = (uint64_t)((int64_t)-1);
+            cubic_state->W_last_max = (double)cubic_state->ssthresh / (double)path_x->send_mtu;
+            cubic_state->W_max = cubic_state->W_last_max;
+            cubic_state->C = 0.4;
+            cubic_state->beta = 7.0 / 8.0;
+            cubic_state->start_of_epoch = 0;
+            cubic_state->W_reno = PICOQUIC_CWIN_INITIAL;
+            cubic_state->recovery_sequence = 0;
+            path_x->cwin = PICOQUIC_CWIN_INITIAL;
+        }
     }
 }
 
@@ -225,8 +231,24 @@ void picoquic_cubic_notify(
             case picoquic_congestion_notification_rtt_measurement:
                 /* Using RTT increases as signal to get out of initial slow start */
                 if (cubic_state->ssthresh == (uint64_t)((int64_t)-1)) {
+                    picoquic_filter_rtt_min_max(&cubic_state->rtt_filter, rtt_measurement);
+
+                    if (cubic_state->rtt_filter.is_init) {
+                        uint64_t delta_rtt = cubic_state->rtt_filter.sample_min - path_x->rtt_min;
+                        if (delta_rtt * 4 > path_x->rtt_min) {
+                            /* RTT increased too much, get out of slow start! */
+                            cubic_state->ssthresh = path_x->cwin;
+                            cubic_state->W_max = (double)path_x->cwin / (double)path_x->send_mtu;
+                            cubic_state->W_last_max = cubic_state->W_max;
+                            cubic_state->W_reno = ((double)path_x->cwin) / 2.0;
+                            picoquic_cubic_enter_avoidance(cubic_state, current_time);
+                        }
+                    }
+                }
+#if 0
                     uint64_t rolling_min;
-                    uint64_t delta_rtt;
+
+
 
                     if (rtt_measurement < cubic_state->min_rtt || cubic_state->min_rtt == 0) {
                         cubic_state->min_rtt = rtt_measurement;
@@ -260,7 +282,7 @@ void picoquic_cubic_notify(
                         picoquic_cubic_enter_avoidance(cubic_state, current_time);
                     }
                 }
-                break;
+#endif
                 break;
             default:
                 /* ignore */
