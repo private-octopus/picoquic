@@ -198,9 +198,10 @@ int usage()
 
 void usage_formats()
 {
-    fprintf(stderr, "                        -f csv : generate CC csv file\n");
-    fprintf(stderr, "                        -f svg : generate svg packet flow diagram.\n");
-    fprintf(stderr, "                                 requires a template specified by -t\n");
+    fprintf(stderr, "                        -f csv  : generate CC csv file\n");
+    fprintf(stderr, "                        -f svg  : generate svg packet flow diagram.\n");
+    fprintf(stderr, "                                  requires a template specified by -t\n");
+    fprintf(stderr, "                        -f qlog : generate IETF QLOG file\n");
 }
 
 FILE * open_outfile(const char * cid_name, const char * binlog_name, const char * out_dir, const char * out_ext)
