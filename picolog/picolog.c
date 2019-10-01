@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <inttypes.h>
+#include <errno.h>
 
 #include "picoquic_internal.h"
 #include "bytestream.h"
@@ -160,12 +161,7 @@ int main(int argc, char ** argv)
                 ret = cidset_iterate(cids, convert_svg, &appctx);
             }
         } else if (strcmp(appctx.out_format, "qlog") == 0) {
-            if (appctx.f_template == NULL) {
-                fprintf(stderr, "The qlog format conversion requires a template file specified by parameter -t\n");
-                ret = -1;
-            } else {
-                ret = cidset_iterate(cids, convert_qlog, &appctx);
-            }
+            ret = cidset_iterate(cids, convert_qlog, &appctx);
         } else {
             fprintf(stderr, "Invalid output format '%s'. Valid formats are\n\n", appctx.out_format);
             usage_formats();
@@ -203,34 +199,32 @@ int usage()
 
 void usage_formats()
 {
-    fprintf(stderr, "                        -f csv : generate CC csv file\n");
-    fprintf(stderr, "                        -f svg : generate svg packet flow diagram.\n");
-    fprintf(stderr, "                                 requires a template specified by -t\n");
+    fprintf(stderr, "                        -f csv  : generate CC csv file\n");
+    fprintf(stderr, "                        -f svg  : generate svg packet flow diagram.\n");
+    fprintf(stderr, "                                  requires a template specified by -t\n");
+    fprintf(stderr, "                        -f qlog : generate IETF QLOG file\n");
 }
 
 FILE * open_outfile(const char * cid_name, const char * binlog_name, const char * out_dir, const char * out_ext)
 {
-    int ret = 0;
+    if (out_dir == NULL) {
+        return stdout;
+    }
 
     char filename[512];
-    if (ret == 0) {
-        if (out_dir != NULL) {
-            ret = picoquic_sprintf(filename, sizeof(filename), NULL, "%s%c%s.%s",
-                out_dir, PICOQUIC_FILE_SEPARATOR, cid_name, out_ext);
-        } else {
-            ret = picoquic_sprintf(filename, sizeof(filename), NULL, "%s.%s",
-                cid_name, out_ext);
-        }
-        if (ret != 0) {
-            DBG_PRINTF("Cannot format file name for connection %s in file %s", cid_name, binlog_name);
-        }
-    }
+    int ret = picoquic_sprintf(filename, sizeof(filename), NULL, "%s%c%s.%s",
+        out_dir, PICOQUIC_FILE_SEPARATOR, cid_name, out_ext);
 
-    if (ret == 0) {
-        return picoquic_file_open(filename, "w");
-    } else {
+    if (ret != 0) {
+        DBG_PRINTF("Cannot format file name for connection %s in file %s", cid_name, binlog_name);
         return NULL;
     }
+    
+    FILE * f = picoquic_file_open(filename, "w");
+    if (f == NULL) {
+        fprintf(stderr, "Could not open '%s' for writing (err=%d)", filename, errno);
+    }
+    return f;
 }
 
 int convert_csv(const picoquic_connection_id_t * cid, void * ptr)
@@ -471,7 +465,7 @@ int convert_svg(const picoquic_connection_id_t * cid, void * ptr)
     while (fgets(line, sizeof(line), appctx->f_template) != NULL) /* read a line */ {
         if (strcmp(line, "#\n") != 0) {
             /* Copy the template to the SVG file */
-            fprintf(svg.f_txtlog, line);
+            fprintf(svg.f_txtlog, "%s", line);
         } else {
             ret = binlog_convert(appctx->f_binlog, cid, &ctx);
         }
@@ -630,8 +624,13 @@ int convert_qlog(const picoquic_connection_id_t* cid, void* ptr)
         ret = -1;
     }
 
+    FILE * f_txtlog = open_outfile(cid_name, appctx->binlog_name, appctx->out_dir, "qlog");
+    if (f_txtlog == NULL) {
+        return -1;
+    }
+
     svg_context_t qlog;
-    qlog.f_txtlog = open_outfile(cid_name, appctx->binlog_name, appctx->out_dir, "qlog");
+    qlog.f_txtlog = f_txtlog;
     qlog.f_template = appctx->f_template;
     qlog.cid_name = cid_name;
     qlog.start_time = appctx->log_time;

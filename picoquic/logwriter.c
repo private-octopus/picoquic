@@ -619,6 +619,8 @@ void binlog_close_connection(picoquic_cnx_t * cnx)
 
     (void)fwrite(bytestream_data(head), bytestream_length(head), 1, f);
     (void)fwrite(bytestream_data(msg), bytestream_length(msg), 1, f);
+
+    fflush(f);
 }
 
 int binlog_open(picoquic_quic_t * quic, char const * binlog_file)
