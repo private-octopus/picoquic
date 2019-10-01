@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <inttypes.h>
+#include <errno.h>
 
 #include "picoquic_internal.h"
 #include "bytestream.h"
@@ -464,7 +465,7 @@ int convert_svg(const picoquic_connection_id_t * cid, void * ptr)
     while (fgets(line, sizeof(line), appctx->f_template) != NULL) /* read a line */ {
         if (strcmp(line, "#\n") != 0) {
             /* Copy the template to the SVG file */
-            fprintf(svg.f_txtlog, line);
+            fprintf(svg.f_txtlog, "%s", line);
         } else {
             ret = binlog_convert(appctx->f_binlog, cid, &ctx);
         }
