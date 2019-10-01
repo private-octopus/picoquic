@@ -594,7 +594,6 @@ int qlog_connection_start(uint64_t time, const picoquic_connection_id_t * cid, i
     svg_context_t * ctx = (svg_context_t*)ptr;
     FILE * f = ctx->f_txtlog;
 
-    ctx->start_time = 0; // appctx->log_time;
     ctx->packet_count = 0;
 
     fprintf(f, "{ \"qlog_version\": \"draft-00\", \"title\": \"picoquic\", \"traces\": [\n");
@@ -635,7 +634,7 @@ int convert_qlog(const picoquic_connection_id_t* cid, void* ptr)
     qlog.f_txtlog = open_outfile(cid_name, appctx->binlog_name, appctx->out_dir, "qlog");
     qlog.f_template = appctx->f_template;
     qlog.cid_name = cid_name;
-    qlog.start_time = 0; // appctx->log_time;
+    qlog.start_time = appctx->log_time;
     qlog.packet_count = 0;
     qlog.state = 0;
 
