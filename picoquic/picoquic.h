@@ -657,7 +657,9 @@ typedef enum {
 } picoquic_congestion_notification_t;
 
 typedef void (*picoquic_congestion_algorithm_init)(picoquic_path_t* path_x);
-typedef void (*picoquic_congestion_algorithm_notify)(picoquic_path_t* path_x,
+typedef void (*picoquic_congestion_algorithm_notify)(
+    picoquic_cnx_t * cnx,
+    picoquic_path_t* path_x,
     picoquic_congestion_notification_t notification,
     uint64_t rtt_measurement,
     uint64_t nb_bytes_acknowledged,
@@ -674,8 +676,11 @@ typedef struct st_picoquic_congestion_algorithm_t {
 
 extern picoquic_congestion_algorithm_t* picoquic_newreno_algorithm;
 extern picoquic_congestion_algorithm_t* picoquic_cubic_algorithm;
+extern picoquic_congestion_algorithm_t* picoquic_fastcc_algorithm;
 
 #define PICOQUIC_DEFAULT_CONGESTION_ALGORITHM picoquic_newreno_algorithm;
+
+picoquic_congestion_algorithm_t const* picoquic_get_congestion_algorithm(char const* alg_name);
 
 void picoquic_set_default_congestion_algorithm(picoquic_quic_t* quic, picoquic_congestion_algorithm_t const* algo);
 

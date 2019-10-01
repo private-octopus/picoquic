@@ -22,6 +22,7 @@
 #include "picoquic_internal.h"
 #include <stdlib.h>
 #include <string.h>
+#include "cc_common.h"
 
 typedef enum {
     picoquic_newreno_alg_slow_start = 0,
@@ -35,6 +36,7 @@ typedef struct st_picoquic_newreno_state_t {
     uint64_t residual_ack;
     uint64_t ssthresh;
     uint64_t recovery_start;
+    uint64_t recovery_sequence;
     uint64_t min_rtt;
     uint64_t last_rtt[NB_RTT_RENO];
     int nb_rtt;
@@ -59,7 +61,9 @@ void picoquic_newreno_init(picoquic_path_t* path_x)
 
 /* The recovery state last 1 RTT, during which parameters will be frozen
  */
-static void picoquic_newreno_enter_recovery(picoquic_path_t* path_x,
+static void picoquic_newreno_enter_recovery(
+    picoquic_cnx_t* cnx,
+    picoquic_path_t* path_x,
     picoquic_congestion_notification_t notification,
     picoquic_newreno_state_t* nr_state,
     uint64_t current_time)
@@ -78,10 +82,9 @@ static void picoquic_newreno_enter_recovery(picoquic_path_t* path_x,
     }
 
     nr_state->recovery_start = current_time;
+    nr_state->recovery_sequence = picoquic_cc_get_sequence_number(cnx);
 
     nr_state->residual_ack = 0;
-
-
 }
 
 /*
@@ -90,7 +93,9 @@ static void picoquic_newreno_enter_recovery(picoquic_path_t* path_x,
  * to condensate all that in a single API, which could be shared
  * by many different congestion control algorithms.
  */
-void picoquic_newreno_notify(picoquic_path_t* path_x,
+void picoquic_newreno_notify(
+    picoquic_cnx_t * cnx,
+    picoquic_path_t* path_x,
     picoquic_congestion_notification_t notification,
     uint64_t rtt_measurement,
     uint64_t nb_bytes_acknowledged,
@@ -135,12 +140,14 @@ void picoquic_newreno_notify(picoquic_path_t* path_x,
         case picoquic_congestion_notification_repeat:
         case picoquic_congestion_notification_timeout:
             /* enter recovery */
-            if (current_time - nr_state->recovery_start > path_x->smoothed_rtt) {
-                picoquic_newreno_enter_recovery(path_x, notification, nr_state, current_time);
+            if (current_time - nr_state->recovery_start > path_x->smoothed_rtt ||
+                nr_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx)) {
+                picoquic_newreno_enter_recovery(cnx, path_x, notification, nr_state, current_time);
             }
             break;
         case picoquic_congestion_notification_spurious_repeat:
-            if (current_time - nr_state->recovery_start < path_x->smoothed_rtt) {
+            if (current_time - nr_state->recovery_start < path_x->smoothed_rtt &&
+                nr_state->recovery_sequence > picoquic_cc_get_ack_number(cnx)) {
                 /* If spurious repeat of initial loss detected,
                  * exit recovery and reset threshold to pre-entry cwin.
                  */

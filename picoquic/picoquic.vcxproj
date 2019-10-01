@@ -142,7 +142,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="bytestream.c" />
+    <ClCompile Include="cc_common.c" />
     <ClCompile Include="cubic.c" />
+    <ClCompile Include="fastcc.c" />
     <ClCompile Include="frames.c" />
     <ClCompile Include="intformat.c" />
     <ClCompile Include="logger.c" />
@@ -164,6 +166,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="bytestream.h" />
+    <ClInclude Include="cc_common.h" />
     <ClInclude Include="logwriter.h" />
     <ClInclude Include="picohash.h" />
     <ClInclude Include="picoquic_internal.h" />

@@ -15,7 +15,9 @@ endif()
 
 set(PICOQUIC_LIBRARY_FILES
     picoquic/bytestream.c
+	picoquic/cc_common.c
     picoquic/cubic.c
+    picoquic/fastcc.c
     picoquic/frames.c
     picoquic/intformat.c
     picoquic/logger.c

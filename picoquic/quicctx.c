@@ -2614,6 +2614,26 @@ int picoquic_retrieve_by_cnx_id_or_net_id(picoquic_quic_t * quic, picoquic_conne
     return 0;
 }
 
+/* Get congestion control algorithm by name */
+picoquic_congestion_algorithm_t const* picoquic_get_congestion_algorithm(char const* alg_name)
+{
+    picoquic_congestion_algorithm_t const* alg = NULL;
+    if (alg_name != NULL) {
+        if (strcmp(alg_name, "reno") == 0) {
+            alg = picoquic_newreno_algorithm;
+        }
+        else if (strcmp(alg_name, "cubic") == 0) {
+            alg = picoquic_cubic_algorithm;
+        }
+        else if (strcmp(alg_name, "fast") == 0) {
+            alg = picoquic_fastcc_algorithm;
+        }
+        else {
+            alg = NULL;
+        }
+    }
+    return alg;
+}
 /*
  * Set or reset the congestion control algorithm
  */

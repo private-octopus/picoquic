@@ -1252,7 +1252,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                     cnx->nb_retransmission_total++;
 
                     if (cnx->congestion_alg != NULL && old_path != NULL) {
-                        cnx->congestion_alg->alg_notify(old_path,
+                        cnx->congestion_alg->alg_notify(cnx, old_path,
                             (timer_based_retransmit == 0) ? picoquic_congestion_notification_repeat : picoquic_congestion_notification_timeout,
                             0, 0, lost_packet_number, current_time);
                     } 
@@ -1603,7 +1603,7 @@ void picoquic_implicit_handshake_ack(picoquic_cnx_t* cnx, picoquic_packet_contex
             }
 
             if (cnx->congestion_alg != NULL) {
-                cnx->congestion_alg->alg_notify(old_path,
+                cnx->congestion_alg->alg_notify(cnx, old_path,
                     picoquic_congestion_notification_acknowledgement,
                     0, p->length, 0, current_time);
             }

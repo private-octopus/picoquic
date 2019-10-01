@@ -22,6 +22,7 @@
 #include "picoquic_internal.h"
 #include <stdlib.h>
 #include <string.h>
+#include "cc_common.h"
 
 typedef enum {
     picoquic_cubic_alg_slow_start = 0,
@@ -36,6 +37,7 @@ typedef enum {
 
 typedef struct st_picoquic_cubic_state_t {
     picoquic_cubic_alg_state_t alg_state;
+    uint64_t recovery_sequence;
     uint64_t start_of_epoch;
     double K;
     double W_max;
@@ -46,9 +48,12 @@ typedef struct st_picoquic_cubic_state_t {
     uint64_t ssthresh;
 
     uint64_t residual_ack;
+#if 0
     uint64_t min_rtt;
     uint64_t last_rtt[NB_RTT_CUBIC];
     int nb_rtt;
+#endif
+    picoquic_min_max_rtt_t rtt_filter;
 } picoquic_cubic_state_t;
 
 void picoquic_cubic_init(picoquic_path_t* path_x)
@@ -56,19 +61,22 @@ void picoquic_cubic_init(picoquic_path_t* path_x)
     /* Initialize the state of the congestion control algorithm */
     picoquic_cubic_state_t* cubic_state = (picoquic_cubic_state_t*)malloc(sizeof(picoquic_cubic_state_t));
     path_x->congestion_alg_state = (void*)cubic_state;
+    if (cubic_state != NULL) {
+        memset(&cubic_state->rtt_filter, 0, sizeof(picoquic_min_max_rtt_t));
 
-    if (path_x->congestion_alg_state != NULL) {
-        memset(cubic_state, 0, sizeof(picoquic_cubic_state_t));
-        cubic_state->alg_state = picoquic_cubic_alg_slow_start;
-        cubic_state->ssthresh = (uint64_t)((int64_t)-1);
-        cubic_state->W_last_max = (double)cubic_state->ssthresh/(double)path_x->send_mtu;
-        cubic_state->W_max = cubic_state->W_last_max;
-        cubic_state->C = 0.4;
-        cubic_state->beta = 7.0 / 8.0;
-        cubic_state->start_of_epoch = 0;
-        cubic_state->W_reno = PICOQUIC_CWIN_INITIAL;
-
-        path_x->cwin = PICOQUIC_CWIN_INITIAL;
+        if (path_x->congestion_alg_state != NULL) {
+            memset(cubic_state, 0, sizeof(picoquic_cubic_state_t));
+            cubic_state->alg_state = picoquic_cubic_alg_slow_start;
+            cubic_state->ssthresh = (uint64_t)((int64_t)-1);
+            cubic_state->W_last_max = (double)cubic_state->ssthresh / (double)path_x->send_mtu;
+            cubic_state->W_max = cubic_state->W_last_max;
+            cubic_state->C = 0.4;
+            cubic_state->beta = 7.0 / 8.0;
+            cubic_state->start_of_epoch = 0;
+            cubic_state->W_reno = PICOQUIC_CWIN_INITIAL;
+            cubic_state->recovery_sequence = 0;
+            path_x->cwin = PICOQUIC_CWIN_INITIAL;
+        }
     }
 }
 
@@ -107,11 +115,13 @@ static void picoquic_cubic_enter_avoidance(
 
 /* The recovery state last 1 RTT, during which parameters will be frozen
  */
-static void picoquic_cubic_enter_recovery(picoquic_path_t* path_x,
+static void picoquic_cubic_enter_recovery(picoquic_cnx_t * cnx,
+    picoquic_path_t* path_x,
     picoquic_congestion_notification_t notification,
     picoquic_cubic_state_t* cubic_state,
     uint64_t current_time)
 {
+    cubic_state->recovery_sequence = picoquic_cc_get_sequence_number(cnx);
     /* Update similar to new reno, but different beta */
     cubic_state->W_max = (double)path_x->cwin / (double)path_x->send_mtu;
     /* Apply fast convergence */
@@ -174,7 +184,8 @@ static double picoquic_cubic_W_cubic(
  * to condensate all that in a single API, which could be shared
  * by many different congestion control algorithms.
  */
-void picoquic_cubic_notify(picoquic_path_t* path_x,
+void picoquic_cubic_notify(
+    picoquic_cnx_t* cnx, picoquic_path_t* path_x,
     picoquic_congestion_notification_t notification,
     uint64_t rtt_measurement,
     uint64_t nb_bytes_acknowledged,
@@ -210,8 +221,9 @@ void picoquic_cubic_notify(picoquic_path_t* path_x,
             case picoquic_congestion_notification_repeat:
             case picoquic_congestion_notification_timeout:
                 /* enter recovery */
-                if (current_time - cubic_state->start_of_epoch > path_x->smoothed_rtt) {
-                    picoquic_cubic_enter_recovery(path_x, notification, cubic_state, current_time);
+                if (current_time - cubic_state->start_of_epoch > path_x->smoothed_rtt ||
+                    cubic_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx)) {
+                    picoquic_cubic_enter_recovery(cnx, path_x, notification, cubic_state, current_time);
                 }
                 break;
             case picoquic_congestion_notification_spurious_repeat:
@@ -219,8 +231,24 @@ void picoquic_cubic_notify(picoquic_path_t* path_x,
             case picoquic_congestion_notification_rtt_measurement:
                 /* Using RTT increases as signal to get out of initial slow start */
                 if (cubic_state->ssthresh == (uint64_t)((int64_t)-1)) {
+                    picoquic_filter_rtt_min_max(&cubic_state->rtt_filter, rtt_measurement);
+
+                    if (cubic_state->rtt_filter.is_init) {
+                        uint64_t delta_rtt = cubic_state->rtt_filter.sample_min - path_x->rtt_min;
+                        if (delta_rtt * 4 > path_x->rtt_min) {
+                            /* RTT increased too much, get out of slow start! */
+                            cubic_state->ssthresh = path_x->cwin;
+                            cubic_state->W_max = (double)path_x->cwin / (double)path_x->send_mtu;
+                            cubic_state->W_last_max = cubic_state->W_max;
+                            cubic_state->W_reno = ((double)path_x->cwin) / 2.0;
+                            picoquic_cubic_enter_avoidance(cubic_state, current_time);
+                        }
+                    }
+                }
+#if 0
                     uint64_t rolling_min;
-                    uint64_t delta_rtt;
+
+
 
                     if (rtt_measurement < cubic_state->min_rtt || cubic_state->min_rtt == 0) {
                         cubic_state->min_rtt = rtt_measurement;
@@ -254,7 +282,7 @@ void picoquic_cubic_notify(picoquic_path_t* path_x,
                         picoquic_cubic_enter_avoidance(cubic_state, current_time);
                     }
                 }
-                break;
+#endif
                 break;
             default:
                 /* ignore */
@@ -285,9 +313,10 @@ void picoquic_cubic_notify(picoquic_path_t* path_x,
                 case picoquic_congestion_notification_ecn_ec:
                 case picoquic_congestion_notification_repeat:
                 case picoquic_congestion_notification_timeout:
-                    if (current_time - cubic_state->start_of_epoch > path_x->smoothed_rtt) {
+                    if (current_time - cubic_state->start_of_epoch > path_x->smoothed_rtt ||
+                        cubic_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx)) {
                         /* re-enter recovery if this is a new loss */
-                        picoquic_cubic_enter_recovery(path_x, notification, cubic_state, current_time);
+                        picoquic_cubic_enter_recovery(cnx, path_x, notification, cubic_state, current_time);
                     }
                     break;
                 case picoquic_congestion_notification_rtt_measurement:
@@ -320,9 +349,10 @@ void picoquic_cubic_notify(picoquic_path_t* path_x,
             case picoquic_congestion_notification_ecn_ec:
             case picoquic_congestion_notification_repeat:
             case picoquic_congestion_notification_timeout:
-                if (current_time - cubic_state->start_of_epoch > path_x->smoothed_rtt) {
+                if (current_time - cubic_state->start_of_epoch > path_x->smoothed_rtt ||
+                    cubic_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx)) {
                     /* re-enter recovery */
-                    picoquic_cubic_enter_recovery(path_x, notification, cubic_state, current_time);
+                    picoquic_cubic_enter_recovery(cnx, path_x, notification, cubic_state, current_time);
                 }
                 break;
             case picoquic_congestion_notification_spurious_repeat:
@@ -350,7 +380,7 @@ void picoquic_cubic_delete(picoquic_path_t* path_x)
     }
 }
 
-/* Definition record for the New Reno algorithm */
+/* Definition record for the Cubic algorithm */
 
 #define picoquic_cubic_ID 0x43424942 /* CBIC */
 

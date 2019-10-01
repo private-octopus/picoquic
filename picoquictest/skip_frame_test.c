@@ -289,7 +289,6 @@ void picoquic_test_random_bytes(uint64_t * random_context, uint8_t * bytes, size
 
 uint64_t picoquic_test_uniform_random(uint64_t * random_context, uint64_t rnd_max)
 {
-
     uint64_t rnd = 0;
 
     if (rnd_max > 0) {
@@ -303,6 +302,29 @@ uint64_t picoquic_test_uniform_random(uint64_t * random_context, uint64_t rnd_ma
 
     return rnd;
 }
+
+double picoquic_test_gauss_random(uint64_t* random_context)
+{
+    double dx = 0;
+
+    /* Sum of 12 variables in [0..1], provides 
+     * average = 6.0, stdev = 3.0 */
+    for (int i = 0; i < 12; i++) {
+        double d;
+        uint64_t r = picoquic_test_random(random_context);
+        r ^= r >> 17;
+        r ^= r >> 34;
+        d = (double)(r& 0x1ffff) + 0.5;
+        d /= (double)(0x20000);
+        dx += d;
+        r >>= 5;
+    }
+
+    dx -= 6.0;
+
+    return dx;
+}
+
 
 static size_t format_random_packet(uint8_t * bytes, size_t bytes_max, uint64_t * random_context)
 {

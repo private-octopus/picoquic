@@ -136,6 +136,7 @@ static const picoquic_test_def_t test_table[] = {
     { "zero_rtt_spurious", zero_rtt_spurious_test },
     { "zero_rtt_retry", zero_rtt_retry_test },
     { "random_tester", random_tester_test},
+    { "random_gauss", random_gauss_test},
     { "random_public_tester", random_public_tester_test},
     { "transmit_cnxid", transmit_cnxid_test },
     { "probe_api", probe_api_test },
@@ -162,6 +163,9 @@ static const picoquic_test_def_t test_table[] = {
     { "rebiding_stress", rebinding_stress_test },
     { "ready_to_send", ready_to_send_test },
     { "cubic", cubic_test },
+    { "cubic_jitter", cubic_jitter_test },
+    { "fastcc", fastcc_test },
+    { "fastcc_jitter", fastcc_jitter_test },
     { "long_rtt", long_rtt_test },
     { "cid_length", cid_length_test },
     { "optimistic_ack", optimistic_ack_test },
@@ -170,7 +174,7 @@ static const picoquic_test_def_t test_table[] = {
     { "document_addresses", document_addresses_test },
     { "stress", stress_test },
     { "fuzz", fuzz_test },
-    { "fuzz_initial", fuzz_initial_test},
+    { "fuzz_initial", fuzz_initial_test}
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);

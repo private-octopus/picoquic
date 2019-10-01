@@ -51,6 +51,8 @@ picoquictest_sim_link_t* picoquictest_sim_link_create(double data_rate_in_gps,
         link->first_packet = NULL;
         link->last_packet = NULL;
         link->loss_mask = loss_mask;
+        link->jitter_seed = 0xDEADBEEFBABAC001ull;
+        link->jitter = 0;
     }
 
     return link;
@@ -124,6 +126,19 @@ static int picoquictest_sim_link_testloss(uint64_t* loss_mask)
     return (int)loss_bit;
 }
 
+static uint64_t picoquictest_sim_link_jitter(picoquictest_sim_link_t* link)
+{
+    uint64_t jitter = link->jitter;
+    double x = picoquic_test_gauss_random(&link->jitter_seed);
+    if (x < -3.0) {
+        x = -3.0;
+    }
+    x /= 3.0;
+    jitter += (int64_t)(x * (double)jitter);
+
+    return jitter;
+}
+
 void picoquictest_sim_link_submit(picoquictest_sim_link_t* link, picoquictest_sim_packet_t* packet,
     uint64_t current_time)
 {
@@ -149,6 +164,9 @@ void picoquictest_sim_link_submit(picoquictest_sim_link_t* link, picoquictest_si
             link->last_packet = packet;
             packet->next_packet = NULL;
             packet->arrival_time = link->queue_time + link->microsec_latency;
+            if (link->jitter != 0) {
+                packet->arrival_time += picoquictest_sim_link_jitter(link);
+            }
         }
     } else {
         /* simulate congestion loss on queue full */

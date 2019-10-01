@@ -75,11 +75,14 @@
     <ClCompile Include="bytestream.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="logwriter.c">
+    <ClCompile Include="fastcc.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="logwriter.h">
-      <Filter>Header Files</Filter>
+    <ClCompile Include="cc_common.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="logwriter.c">
+      <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -111,6 +114,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="bytestream.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="cc_common.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="logwriter.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

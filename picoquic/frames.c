@@ -1902,7 +1902,7 @@ void picoquic_check_spurious_retransmission(picoquic_cnx_t* cnx,
                 }
 
                 if (cnx->congestion_alg != NULL ) {
-                    cnx->congestion_alg->alg_notify(old_path, picoquic_congestion_notification_spurious_repeat,
+                    cnx->congestion_alg->alg_notify(cnx, old_path, picoquic_congestion_notification_spurious_repeat,
                         0, 0, p->sequence_number, current_time);
                 }
             }
@@ -1978,7 +1978,7 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, i
         }
 
         if (cnx->congestion_alg != NULL) {
-            cnx->congestion_alg->alg_notify(old_path,
+            cnx->congestion_alg->alg_notify(cnx, old_path,
                 picoquic_congestion_notification_rtt_measurement,
                 rtt_estimate, 0, 0, current_time);
         }
@@ -2449,7 +2449,7 @@ static int picoquic_process_ack_range(
 
                 if (old_path != NULL) {
                     if (cnx->congestion_alg != NULL) {
-                        cnx->congestion_alg->alg_notify(old_path,
+                        cnx->congestion_alg->alg_notify(cnx, old_path,
                             picoquic_congestion_notification_acknowledgement,
                             0, p->length, 0, current_time);
                     }
@@ -2584,7 +2584,7 @@ uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
         if (ecnx3[2] > cnx->ecn_ce_total_remote) {
             cnx->ecn_ce_total_remote = ecnx3[2];
 
-            cnx->congestion_alg->alg_notify(cnx->path[0],
+            cnx->congestion_alg->alg_notify(cnx, cnx->path[0],
                 picoquic_congestion_notification_ecn_ec,
                 0, 0, cnx->pkt_ctx[pc].first_sack_item.end_of_sack_range, current_time);
         }
