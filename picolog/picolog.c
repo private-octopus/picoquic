@@ -160,12 +160,7 @@ int main(int argc, char ** argv)
                 ret = cidset_iterate(cids, convert_svg, &appctx);
             }
         } else if (strcmp(appctx.out_format, "qlog") == 0) {
-            if (appctx.f_template == NULL) {
-                fprintf(stderr, "The qlog format conversion requires a template file specified by parameter -t\n");
-                ret = -1;
-            } else {
-                ret = cidset_iterate(cids, convert_qlog, &appctx);
-            }
+            ret = cidset_iterate(cids, convert_qlog, &appctx);
         } else {
             fprintf(stderr, "Invalid output format '%s'. Valid formats are\n\n", appctx.out_format);
             usage_formats();
