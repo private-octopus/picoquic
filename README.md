@@ -49,7 +49,7 @@ builds, the tests are run through a command line program.
 As explained in the Wiki, Picoquic is actively tested against other implementations
 during the QUIC Interop days. See https://github.com/private-octopus/picoquic/wiki/QUIC-milestones-and-interop-testing.
 
-The current version is aligned with draft 22. All big features are supported, including
+The current version is aligned with draft 23. All big features are supported, including
 the interface between QUIC and TLS, 0-RTT, migration and key rollover. The state of
 development is tracked in the list of issues in this repository.
 
