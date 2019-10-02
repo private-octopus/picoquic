@@ -626,7 +626,7 @@ void binlog_close_connection(picoquic_cnx_t * cnx)
 int binlog_open(picoquic_quic_t * quic, char const * binlog_file)
 {
     int ret = 0;
-    quic->f_binlog = picoquic_file_close(quic->f_binlog);
+    binlog_close(quic);
 
     if (binlog_file != NULL) {
         quic->f_binlog = picoquic_file_open(binlog_file, "wb");
@@ -651,6 +651,11 @@ int binlog_open(picoquic_quic_t * quic, char const * binlog_file)
     }
 
     return ret;
+}
+
+void binlog_close(picoquic_quic_t * quic)
+{
+    quic->f_binlog = picoquic_file_close(quic->f_binlog);
 }
 
 /*

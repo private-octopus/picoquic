@@ -373,6 +373,8 @@ void picoquic_free(picoquic_quic_t* quic)
             quic->tls_master_ctx = NULL;
         }
 
+        binlog_close(quic);
+
         free(quic);
     }
 }
