@@ -957,7 +957,7 @@ static int stress_or_fuzz_test(picoquic_fuzz_fn fuzz_fn, void * fuzz_ctx, uint64
     uint64_t wall_time_start = picoquic_current_time();
     uint64_t nb_connections = 0;
     uint64_t sim_time_next_log = 1000000;
-
+    const int nb_clients = (const int)picoquic_stress_nb_clients;
 
     stress_random_ctx = 0xBabaC001BaddBab1ull;
 
@@ -966,7 +966,7 @@ static int stress_or_fuzz_test(picoquic_fuzz_fn fuzz_fn, void * fuzz_ctx, uint64
     /* Initialization */
     memset(&stress_ctx, 0, sizeof(picoquic_stress_ctx_t));
     stress_set_ip_address_from_index(&stress_ctx.server_addr, -1);
-    stress_ctx.nb_clients = (int)picoquic_stress_nb_clients;
+    stress_ctx.nb_clients = nb_clients;
     if (stress_ctx.nb_clients > PICOQUIC_MAX_STRESS_CLIENTS) {
         DBG_PRINTF("Number of stress clients too high (%d). Should be lower than %d\n",
             stress_ctx.nb_clients, PICOQUIC_MAX_STRESS_CLIENTS);
@@ -1001,7 +1001,7 @@ static int stress_or_fuzz_test(picoquic_fuzz_fn fuzz_fn, void * fuzz_ctx, uint64
                 ret = -1;
             }
             else {
-                for (int i = 0; ret == 0 && i < stress_ctx.nb_clients; i++) {
+                for (int i = 0; ret == 0 && i < nb_clients; i++) {
                     ret = stress_create_client_context(i, &stress_ctx);
                     if (ret == 0 && fuzz_fn != NULL) {
                         picoquic_set_fuzz(stress_ctx.c_ctx[i]->qclient, fuzz_fn, fuzz_ctx);
@@ -1048,8 +1048,8 @@ static int stress_or_fuzz_test(picoquic_fuzz_fn fuzz_fn, void * fuzz_ctx, uint64
     }
 
     /* Shut down everything */
-    for (int i = 0; i < stress_ctx.nb_clients; i++) {
-        stress_delete_client_context((int)i, &stress_ctx);
+    for (int i = 0; i < nb_clients; i++) {
+        stress_delete_client_context(i, &stress_ctx);
     }
 
     if (stress_ctx.qserver != NULL) {
