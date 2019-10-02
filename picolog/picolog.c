@@ -623,33 +623,37 @@ int convert_qlog(const picoquic_connection_id_t* cid, void* ptr)
         DBG_PRINTF("Cannot convert connection id for %s", appctx->binlog_name);
         ret = -1;
     }
+    else {
 
-    FILE * f_txtlog = open_outfile(cid_name, appctx->binlog_name, appctx->out_dir, "qlog");
-    if (f_txtlog == NULL) {
-        return -1;
-    }
+        FILE* f_txtlog = open_outfile(cid_name, appctx->binlog_name, appctx->out_dir, "qlog");
+        if (f_txtlog == NULL) {
+            ret = -1;
+        }
+        else {
 
-    svg_context_t qlog;
-    qlog.f_txtlog = f_txtlog;
-    qlog.f_template = appctx->f_template;
-    qlog.cid_name = cid_name;
-    qlog.start_time = appctx->log_time;
-    qlog.packet_count = 0;
-    qlog.state = 0;
+            svg_context_t qlog;
+            qlog.f_txtlog = f_txtlog;
+            qlog.f_template = appctx->f_template;
+            qlog.cid_name = cid_name;
+            qlog.start_time = appctx->log_time;
+            qlog.packet_count = 0;
+            qlog.state = 0;
 
-    binlog_convert_cb_t ctx;
-    ctx.connection_start = qlog_connection_start;
-    ctx.connection_end = qlog_connection_end;
-    ctx.pdu = svg_pdu;
-    ctx.packet_start = qlog_packet_start;
-    ctx.packet_frame = qlog_packet_frame;
-    ctx.packet_end = qlog_packet_end;
-    ctx.ptr = &qlog;
+            binlog_convert_cb_t ctx;
+            ctx.connection_start = qlog_connection_start;
+            ctx.connection_end = qlog_connection_end;
+            ctx.pdu = svg_pdu;
+            ctx.packet_start = qlog_packet_start;
+            ctx.packet_frame = qlog_packet_frame;
+            ctx.packet_end = qlog_packet_end;
+            ctx.ptr = &qlog;
 
-    ret = binlog_convert(appctx->f_binlog, cid, &ctx);
+            ret = binlog_convert(appctx->f_binlog, cid, &ctx);
 
-    if (qlog.state == 1) {
-        qlog_connection_end(0, &qlog);
+            if (qlog.state == 1) {
+                qlog_connection_end(0, &qlog);
+            }
+        }
     }
 
     return ret;

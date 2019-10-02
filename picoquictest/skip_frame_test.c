@@ -317,7 +317,6 @@ double picoquic_test_gauss_random(uint64_t* random_context)
         d = (double)(r& 0x1ffff) + 0.5;
         d /= (double)(0x20000);
         dx += d;
-        r >>= 5;
     }
 
     dx -= 6.0;

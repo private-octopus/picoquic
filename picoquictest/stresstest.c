@@ -1293,7 +1293,6 @@ int random_gauss_test()
     double x_sum = 0;
     double a;
     double v;
-    double stdev;
 
     for (int i = 0; i < RANDOM_GAUSS_NB_TESTS; i++) {
         double x = picoquic_test_gauss_random(&t_seed);
