@@ -1484,10 +1484,10 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header * ph
                 if (probe != NULL) {
                     picoquic_fill_path_data_from_probe(cnx, path_id, probe, addr_from, addr_to);
                 }
-                else if (picoquic_compare_addr((struct sockaddr *)&cnx->path[0]->peer_addr,
+                else if (cnx->client_mode && (picoquic_compare_addr((struct sockaddr *)&cnx->path[0]->peer_addr,
                     (struct sockaddr *)addr_from) == 0 &&
                     picoquic_compare_addr((struct sockaddr *)&cnx->path[0]->local_addr,
-                        addr_to) == 0) {
+                        addr_to) == 0)) {
                     /* Only the connection ID changed from path 0. Use the path[0] remote ID, validate this path, invalidate path[0]. */
                     cnx->path[path_id]->remote_cnxid = cnx->path[0]->remote_cnxid;
                     cnx->path[path_id]->remote_cnxid_sequence = cnx->path[0]->remote_cnxid_sequence;

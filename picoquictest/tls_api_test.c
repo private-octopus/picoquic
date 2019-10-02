@@ -4123,6 +4123,8 @@ int rebinding_stress_test()
 
 
 /* Connection ID renewal test.
+ * The client starts using a new server CID.
+ * We expect the server to switch to using a new client CID
  */
 
 int cnxid_renewal_test()
@@ -4197,8 +4199,8 @@ int cnxid_renewal_test()
             DBG_PRINTF("%s", "The remote CNX ID migrated from the selected value");
             ret = -1;
         }
-        else if (picoquic_compare_connection_id(&test_ctx->cnx_client->path[0]->local_cnxid, &previous_local_id) != 0) {
-            DBG_PRINTF("%s", "The local CNX ID changed to a new value");
+        else if (picoquic_compare_connection_id(&test_ctx->cnx_client->path[0]->local_cnxid, &previous_local_id) == 0) {
+            DBG_PRINTF("%s", "The local CNX ID did not change to a new value");
             ret = -1;
         }
     }
