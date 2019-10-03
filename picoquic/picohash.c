@@ -94,7 +94,7 @@ void picohash_item_delete(picohash_table* hash_table, picohash_item* item, int d
     if (previous == item) {
         hash_table->hash_bin[bin] = item->next_in_bin;
         hash_table->count--;
-    } else
+    } else {
         while (previous != NULL) {
             if (previous->next_in_bin == item) {
                 previous->next_in_bin = item->next_in_bin;
@@ -104,6 +104,7 @@ void picohash_item_delete(picohash_table* hash_table, picohash_item* item, int d
                 previous = previous->next_in_bin;
             }
         }
+    }
 
     if (delete_key_too) {
         free((void*)item->key);
@@ -115,9 +116,15 @@ void picohash_item_delete(picohash_table* hash_table, picohash_item* item, int d
 void picohash_delete(picohash_table* hash_table, int delete_key_too)
 {
     for (uint32_t i = 0; i < hash_table->nb_bin; i++) {
-        while (hash_table->hash_bin[i] != NULL) {
-            /* TODO: could be faster */
-            picohash_item_delete(hash_table, hash_table->hash_bin[i], delete_key_too);
+        for (picohash_item * item = hash_table->hash_bin[i]; item != NULL;) {
+
+            picohash_item * tmp = item;
+            item = item->next_in_bin;
+
+            if (delete_key_too) {
+                free((void*)tmp->key);
+            }
+            free(tmp);
         }
     }
 
