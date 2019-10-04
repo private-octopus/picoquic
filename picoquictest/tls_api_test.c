@@ -1841,7 +1841,7 @@ int tls_retry_token_test()
 int tls_api_retry_test()
 {
     uint64_t simulated_time = 0;
-    const uint64_t target_time = 210000ull;
+    const uint64_t target_time = 220000ull;
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
@@ -4042,12 +4042,12 @@ int rebinding_stress_test()
             uint64_t server_arrival = test_ctx->c_to_s_link->last_packet->arrival_time;
 
             if (server_arrival > last_inject_time) {
-                /* 49% chance of packet injection, 20% chances of reusing test address */
+                /* 37% chance of packet injection, 15% chances of reusing test address */
                 uint64_t rand100 = picoquic_test_uniform_random(&random_context, 100);
                 last_inject_time = server_arrival;
                 if (rand100 < 37) {
                     struct sockaddr * bad_address;
-                    if (rand100 < 20) {
+                    if (rand100 < 15) {
                         bad_address = (struct sockaddr *)&hack_address;
                     }
                     else {
