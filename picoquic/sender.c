@@ -958,7 +958,7 @@ static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t* cnx,
         retransmit_time = p->send_time + cnx->path[0]->retransmit_timer; /* cnx->path[0]->smoothed_rtt + (cnx->path[0]->smoothed_rtt >> 3); */
         /* RACK logic works best when the amount of reordering is not too large */
         if (delta_seq < 3) {
-            uint64_t rack_timer_min = cnx->pkt_ctx[pc].latest_time_acknowledged +
+            uint64_t rack_timer_min = cnx->pkt_ctx[pc].highest_acknowledged_time +
                 cnx->remote_parameters.max_ack_delay + (cnx->path[0]->smoothed_rtt >> 2);
             if (retransmit_time > rack_timer_min) {
                 retransmit_time = rack_timer_min;

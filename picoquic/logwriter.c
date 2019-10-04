@@ -224,7 +224,7 @@ static const uint8_t* picoquic_log_new_connection_id_frame(FILE* f, const uint8_
     bytes = picoquic_log_varint_skip(bytes, bytes_max);
     bytes = picoquic_log_varint_skip(bytes, bytes_max);
     if (bytes != NULL) {
-        bytes = picoquic_log_fixed_skip(bytes, bytes_max, 1 + bytes[0]);
+        bytes = picoquic_log_fixed_skip(bytes, bytes_max, ((size_t)1) + bytes[0]);
     }
 
     picoquic_log_frame(f, bytes_begin, bytes);
@@ -409,7 +409,7 @@ void binlog_pdu(FILE* f, const picoquic_connection_id_t* cid, int receiving, uin
     /* Common chunk header */
     bytewrite_cid(msg, cid);
     bytewrite_vint(msg, current_time);
-    bytewrite_vint(msg, picoquic_log_event_pdu_sent + receiving);
+    bytewrite_vint(msg, ((uint64_t)picoquic_log_event_pdu_sent) + receiving);
 
     /* PDU information */
     bytewrite_addr(msg, addr_peer);
@@ -436,7 +436,7 @@ void binlog_packet(FILE* f, const picoquic_connection_id_t* cid, int receiving, 
     /* Common chunk header */
     bytewrite_cid(msg, cid);
     bytewrite_vint(msg, current_time);
-    bytewrite_vint(msg, picoquic_log_event_packet_sent + receiving);
+    bytewrite_vint(msg, ((uint64_t)picoquic_log_event_packet_sent) + receiving);
 
     /* packet information */
     bytewrite_vint(msg, bytes_max);

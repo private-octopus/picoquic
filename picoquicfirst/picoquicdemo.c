@@ -902,6 +902,8 @@ int quic_client(const char* ip_address_text, int server_port,
 
                     send_length = PICOQUIC_MAX_PACKET_SIZE;
 
+                    current_time = picoquic_get_quic_time(qclient);
+
                     ret = picoquic_prepare_packet(cnx_client, current_time,
                         send_buffer, sizeof(send_buffer), &send_length, &x_to, &x_to_length, &x_from, &x_from_length);
 
