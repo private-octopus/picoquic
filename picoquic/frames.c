@@ -2745,7 +2745,12 @@ int picoquic_is_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t 
     picoquic_packet_context_t * pkt_ctx = &cnx->pkt_ctx[pc];
 
     if (pkt_ctx->ack_needed) {
-        if (pkt_ctx->highest_ack_sent + 2 <= pkt_ctx->first_sack_item.end_of_sack_range ||
+        uint64_t ack_gap = 2;
+        if (pc == picoquic_packet_context_application && pkt_ctx->first_sack_item.next_sack == NULL &&
+            pkt_ctx->first_sack_item.end_of_sack_range > 128) {
+            ack_gap = 4;
+        }
+        if (pkt_ctx->highest_ack_sent + ack_gap <= pkt_ctx->first_sack_item.end_of_sack_range ||
             pkt_ctx->highest_ack_sent_time + pkt_ctx->ack_delay_local <= current_time) {
             ret = 1;
         }
