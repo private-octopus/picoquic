@@ -37,9 +37,7 @@ typedef struct st_picoquic_newreno_state_t {
     uint64_t ssthresh;
     uint64_t recovery_start;
     uint64_t recovery_sequence;
-    uint64_t min_rtt;
-    uint64_t last_rtt[NB_RTT_RENO];
-    int nb_rtt;
+    picoquic_min_max_rtt_t rtt_filter;
 } picoquic_newreno_state_t;
 
 void picoquic_newreno_init(picoquic_path_t* path_x)
@@ -160,37 +158,11 @@ void picoquic_newreno_notify(
         case picoquic_congestion_notification_rtt_measurement:
             /* Using RTT increases as signal to get out of initial slow start */
             if (nr_state->alg_state == picoquic_newreno_alg_slow_start &&
-                nr_state->ssthresh == (uint64_t)((int64_t)-1)) {
-                uint64_t rolling_min;
-                uint64_t delta_rtt;
-
-                if (rtt_measurement < nr_state->min_rtt || nr_state->min_rtt == 0) {
-                    nr_state->min_rtt = rtt_measurement;
-                }
-
-                if (nr_state->nb_rtt >= NB_RTT_RENO) {
-                    nr_state->nb_rtt = 0;
-                }
-
-                nr_state->last_rtt[nr_state->nb_rtt] = rtt_measurement;
-                nr_state->nb_rtt++;
-
-                rolling_min = nr_state->last_rtt[0];
-
-                for (int i = 1; i < NB_RTT_RENO; i++) {
-                    if (nr_state->last_rtt[i] == 0) {
-                        break;
-                    }
-                    else if (nr_state->last_rtt[i] < rolling_min) {
-                        rolling_min = nr_state->last_rtt[i];
-                    }
-                }
-
-                delta_rtt = rolling_min - nr_state->min_rtt;
-                if (delta_rtt * 4 > nr_state->min_rtt) {
-                    /* RTT increased too much, get out of slow start! */
-                    nr_state->alg_state = picoquic_newreno_alg_congestion_avoidance;
-                }
+                nr_state->ssthresh == (uint64_t)((int64_t)-1) &&
+                picoquic_hystart_test(&nr_state->rtt_filter, rtt_measurement, current_time)) {
+                /* RTT increased too much, get out of slow start! */
+                nr_state->ssthresh = path_x->cwin;
+                nr_state->alg_state = picoquic_newreno_alg_congestion_avoidance;
             }
             break;
         default:

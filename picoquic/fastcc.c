@@ -140,39 +140,6 @@ void picoquic_fastcc_notify(
             if (fastcc_state->alg_state != picoquic_fastcc_freeze) {
                 /* Count the bytes since last RTT measurement */
                 fastcc_state->nb_bytes_ack_since_rtt += nb_bytes_acknowledged;
-
-#if 0
-                if (fastcc_state->alg_state == picoquic_fastcc_initial){
-                    /* In initial phase, compute the instant bandwidth and the corresponding bandwidth delay product */
-                    /* first evaluate the ack delay and the nb bytes to take into account*/
-                    uint64_t delta_time_ack = current_time - fastcc_state->last_ack_time;
-
-                    if (delta_time_ack < FASTCC_MIN_ACK_DELAY_FOR_BANDWIDTH ||
-                        delta_time_ack*4 < path_x->rtt_min) {
-                        /* Merge back to back acknowledgement before evaluating bandwidth */
-                        fastcc_state->ack_interval += delta_time_ack;
-                        fastcc_state->nb_bytes_ack += nb_bytes_acknowledged;
-                    }
-                    else {
-                        /* Evaluate bandwdith based on this acknowledgement alone */
-                        fastcc_state->ack_interval = delta_time_ack;
-                        fastcc_state->nb_bytes_ack = nb_bytes_acknowledged;
-                    }
-                    fastcc_state->last_ack_time = current_time;
-                    /* If enough bytes resceived, reset the bandwidth */
-                    if (fastcc_state->ack_interval > 0) {
-                        double instant_megabyte_per_usec = (double)fastcc_state->nb_bytes_ack / (double)fastcc_state->ack_interval;
-                        double instant_bdp_in_bytes = instant_megabyte_per_usec * path_x->rtt_min;
-                        double delta_cwin = instant_bdp_in_bytes - (double)path_x->cwin;
-
-                        if (delta_cwin > 0) {
-                            /* Only take into account a fraction of the measured bandwidth */
-                            delta_cwin *= FASTCC_BANDWIDTH_FRACTION;
-                            path_x->cwin += (uint64_t)delta_cwin;
-                        }
-                    }
-                }
-#endif
                 /* Compute pacing data. */
                 picoquic_update_pacing_data(path_x);
             }

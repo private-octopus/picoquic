@@ -62,3 +62,38 @@ void picoquic_filter_rtt_min_max(picoquic_min_max_rtt_t * rtt_track, uint64_t rt
         }
     }
 }
+
+int picoquic_hystart_test(picoquic_min_max_rtt_t* rtt_track, uint64_t rtt_measurement, uint64_t current_time)
+{
+    int ret = 0;
+
+    if(current_time > rtt_track->last_rtt_sample_time + 1000) {
+        picoquic_filter_rtt_min_max(rtt_track, rtt_measurement);
+        rtt_track->last_rtt_sample_time = current_time;
+
+        if (rtt_track->is_init) {
+            uint64_t delta_rtt = 0;
+
+            if (rtt_track->rtt_filtered_min == 0 ||
+                rtt_track->rtt_filtered_min > rtt_track->sample_max) {
+                rtt_track->rtt_filtered_min = rtt_track->sample_max;
+            }
+
+            if (rtt_track->sample_min > rtt_track->rtt_filtered_min) {
+                delta_rtt = rtt_track->sample_min - rtt_track->rtt_filtered_min;
+                if (delta_rtt * 4 > rtt_track->rtt_filtered_min) {
+                    rtt_track->nb_rtt_excess++;
+                    if (rtt_track->nb_rtt_excess >= PICOQUIC_MIN_MAX_RTT_SCOPE) {
+                        /* RTT increased too much, get out of slow start! */
+                        ret = 1;
+                    }
+                }
+                else {
+                    rtt_track->nb_rtt_excess = 0;
+                }
+            }
+        }
+    }
+
+    return ret;
+}

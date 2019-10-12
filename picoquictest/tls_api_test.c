@@ -4042,10 +4042,10 @@ int rebinding_stress_test()
             uint64_t server_arrival = test_ctx->c_to_s_link->last_packet->arrival_time;
 
             if (server_arrival > last_inject_time) {
-                /* 37% chance of packet injection, 15% chances of reusing test address */
+                /* 30% chance of packet injection, 15% chances of reusing test address */
                 uint64_t rand100 = picoquic_test_uniform_random(&random_context, 100);
                 last_inject_time = server_arrival;
-                if (rand100 < 37) {
+                if (rand100 < 27) {
                     struct sockaddr * bad_address;
                     if (rand100 < 15) {
                         bad_address = (struct sockaddr *)&hack_address;
@@ -5583,7 +5583,7 @@ int packet_trace_test()
      * current working directory, and run a basic test scenario */
     if (ret == 0) {
         picoquic_set_cc_log(test_ctx->qserver, ".");
-    
+
         ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
             test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0, 0, 20000, 1000000);
     }
