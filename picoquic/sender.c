@@ -2384,6 +2384,7 @@ int picoquic_prepare_new_path_and_id(picoquic_cnx_t* cnx, uint8_t* bytes, size_t
     if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
         /* Oops. Try again next time. */
         picoquic_delete_path(cnx, path_index);
+        cnx->path_sequence_next--;
         *consumed = 0;
     }
 
@@ -2560,6 +2561,16 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                         send_buffer_min_max - checksum_overhead - length, &data_bytes);
                     if (ret == 0) {
                         length += data_bytes;
+                        if (data_bytes > 0 && !cnx->pkt_ctx[pc].ack_of_ack_requested &&
+                            length + checksum_overhead < send_buffer_min_max &&
+                            cnx->pkt_ctx[pc].highest_acknowledged + 64 < cnx->pkt_ctx[pc].send_sequence &&
+                            path_x == cnx->path[0] &&
+                            cnx->pkt_ctx[pc].highest_acknowledged_time + 2 * cnx->path[0]->smoothed_rtt < current_time) {
+                            /* Bundle a Ping with ACK, so as to get trigger an Acknowledgement */
+                            bytes[length++] = picoquic_frame_type_ping;
+                            cnx->pkt_ctx[pc].ack_of_ack_requested = 1;
+                            is_pure_ack = 0;
+                        }
                     }
                     else {
                         if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
@@ -2739,18 +2750,6 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                     }
 
                     if (length > header_length) {
-                        if (is_pure_ack &&
-                            cnx->pkt_ctx[pc].highest_acknowledged + 64 < cnx->pkt_ctx[pc].send_sequence &&
-                            !cnx->pkt_ctx[pc].ack_of_ack_requested &&
-                            path_x == cnx->path[0] &&
-                            cnx->pkt_ctx[pc].highest_acknowledged_time + 2*cnx->path[0]->smoothed_rtt < current_time &&
-                            send_buffer_min_max - checksum_overhead > length) {
-                            /* In the case where many acks are not acknowledged, ask one from the server */
-                            bytes[length++] = picoquic_frame_type_ping;
-                            cnx->pkt_ctx[pc].ack_of_ack_requested = 1;
-                            is_pure_ack = 0;
-                        }
-
                         length = picoquic_pad_to_policy(cnx, bytes, length, (uint32_t)(send_buffer_min_max - checksum_overhead));
                     }
                     else if (ret == 0 && send_buffer_max > path_x->send_mtu
