@@ -3194,7 +3194,7 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
                 path_id = 0;
                 break;
             }
-            else if (path_id < 0 && cnx->path[i]->path_is_activated) {
+            else if (path_id < 0) {
                 if (cnx->path[i]->response_required) {
                     path_id = i;
                 } else if (cnx->path[i]->challenge_required) {
