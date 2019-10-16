@@ -393,13 +393,13 @@ int svg_packet_start(uint64_t time, uint64_t size, const picoquic_packet_header 
 
     if (rxtx == 0) {
         fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"end\" class=\"seq_%s\">%"PRIu64"</text>\n", x_pos - 4, y_pos - 4, dir, ph->pn64);
-        fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"end\" class=\"arw\">%zu b</text>\n", 80, y_pos - 2, size);
+        fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"end\" class=\"arw\">%"PRIu64" b</text>\n", 80, y_pos - 2, size);
         fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"start\" class=\"frm\" xml:space=\"preserve\"> %s</text>\n", 80, y_pos - 2, ptype2str(ph->ptype));
         fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"start\" class=\"frm\" xml:space=\"preserve\">", x_pos + 30, y_pos + 10);
     }
     else {
         fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"start\" class=\"seq_%s\">%"PRIu64"</text>\n", 600 - x_pos + 4, y_pos - 4, dir, ph->pn64);
-        fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"start\" class=\"arw\">%zu b</text>\n", 600 - 80, y_pos - 2, size);
+        fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"start\" class=\"arw\">%"PRIu64" b</text>\n", 600 - 80, y_pos - 2, size);
         fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"end\" class=\"frm\" xml:space=\"preserve\">%s </text>\n", 600-80, y_pos - 2, ptype2str(ph->ptype));
         fprintf(f, "  <text x=\"%d\" y=\"%d\" text-anchor=\"end\" class=\"frm\" xml:space=\"preserve\">", 600 - x_pos - 30, y_pos + 10);
     }
