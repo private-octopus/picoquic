@@ -22,6 +22,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <inttypes.h>
+#include <errno.h>
+
 #include "picoquic_internal.h"
 #include "bytestream.h"
 #include "logreader.h"
@@ -207,6 +209,28 @@ static int byteread_packet_header(bytestream * s, picoquic_packet_header * ph)
     }
 
     return ret;
+}
+
+FILE * open_outfile(const char * cid_name, const char * binlog_name, const char * out_dir, const char * out_ext)
+{
+    if (out_dir == NULL) {
+        return stdout;
+    }
+
+    char filename[512];
+    int ret = picoquic_sprintf(filename, sizeof(filename), NULL, "%s%c%s.%s",
+        out_dir, PICOQUIC_FILE_SEPARATOR, cid_name, out_ext);
+
+    if (ret != 0) {
+        DBG_PRINTF("Cannot format file name for connection %s in file %s", cid_name, binlog_name);
+        return NULL;
+    }
+    
+    FILE * f = picoquic_file_open(filename, "w");
+    if (f == NULL) {
+        fprintf(stderr, "Could not open '%s' for writing (err=%d)", filename, errno);
+    }
+    return f;
 }
 
 /* Open the bin file for reading */

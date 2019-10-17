@@ -15,6 +15,15 @@
     <ClCompile Include="cidset.c">
       <Filter>Source</Filter>
     </ClCompile>
+    <ClCompile Include="logconvert.c">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="qlog.c">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="svg.c">
+      <Filter>Source</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="csv.h">
@@ -24,6 +33,15 @@
       <Filter>Source</Filter>
     </ClInclude>
     <ClInclude Include="cidset.h">
+      <Filter>Source</Filter>
+    </ClInclude>
+    <ClInclude Include="logconvert.h">
+      <Filter>Source</Filter>
+    </ClInclude>
+    <ClInclude Include="qlog.h">
+      <Filter>Source</Filter>
+    </ClInclude>
+    <ClInclude Include="svg.h">
       <Filter>Source</Filter>
     </ClInclude>
   </ItemGroup>

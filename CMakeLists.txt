@@ -41,7 +41,10 @@ set(PICOQUIC_LIBRARY_FILES
 set(LOGLIB_LIBRARY_FILES
     loglib/cidset.c
     loglib/csv.c
+    loglib/logconvert.c
     loglib/logreader.c
+    loglib/qlog.c
+    loglib/svg.c
 )
 
 set(PICOQUIC_TEST_LIBRARY_FILES
