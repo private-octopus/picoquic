@@ -419,7 +419,6 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         *consumed = bytes - bytes_zero;
     }
 
-
     return ret;
 }
 
