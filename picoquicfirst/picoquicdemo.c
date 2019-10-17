@@ -500,7 +500,8 @@ int quic_client(const char* ip_address_text, int server_port,
     uint32_t proposed_version, int force_zero_share, int force_migration,
     int nb_packets_before_key_update, int mtu_max, FILE* F_log, char const* bin_file,
     int client_cnx_id_length, char const * client_scenario_text, char const * cc_log_dir,
-    int no_disk, int use_long_log, picoquic_congestion_algorithm_t const* cc_algorithm)
+    int no_disk, int use_long_log, picoquic_congestion_algorithm_t const* cc_algorithm,
+    int large_client_hello)
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
@@ -653,6 +654,9 @@ int quic_client(const char* ip_address_text, int server_port,
             /* Requires TP grease, for interop tests */
             cnx_client->grease_transport_parameters = 1;
 
+            if (large_client_hello) {
+                cnx_client->test_large_chello = 1;
+            }
 
             if (callback_ctx.tp != NULL) {
                 picoquic_set_transport_parameters(cnx_client, callback_ctx.tp);
@@ -1055,6 +1059,9 @@ void usage()
     fprintf(stderr, "  -G cc_algorithm       Use the specified congestion control algorithm:\n");
     fprintf(stderr, "                        reno, cubic or fast. Defaults to cubic.\n");
     fprintf(stderr, "  -D                    no disk: do not save received files on disk.\n");
+    fprintf(stderr, "  -Q                    send a large client hello in order to test post quantum\n");
+    fprintf(stderr, "                        readiness.\n");
+
     fprintf(stderr, "\nThe scenario argument specifies the set of files that should be retrieved,\n");
     fprintf(stderr, "and their order. The syntax is:\n");
     fprintf(stderr, "  *{[<stream_id>':'[<previous_stream>':'[<format>:]]]path;}\n");
@@ -1094,6 +1101,7 @@ int main(int argc, char** argv)
     int do_hrr = 0;
     int force_zero_share = 0;
     int force_migration = 0;
+    int large_client_hello = 0;
     int nb_packets_before_update = 0;
     int client_cnx_id_length = 8;
     int no_disk = 0;
@@ -1117,7 +1125,7 @@ int main(int argc, char** argv)
 
     /* Get the parameters */
     int opt;
-    while ((opt = getopt(argc, argv, "c:k:K:p:u:v:f:i:s:e:E:l:b:m:n:a:t:S:I:g:G:1rhzDL")) != -1) {
+    while ((opt = getopt(argc, argv, "c:k:K:p:u:v:f:i:s:e:E:l:b:m:n:a:t:S:I:g:G:1rhzDLQ")) != -1) {
         switch (opt) {
         case 'c':
             server_cert_file = optarg;
@@ -1237,6 +1245,9 @@ int main(int argc, char** argv)
         case 'D':
             no_disk = 1;
             break;
+        case 'Q':
+            large_client_hello = 1;
+            break;
         case 'h':
             usage();
             break;
@@ -1321,7 +1332,7 @@ int main(int argc, char** argv)
         printf("Starting PicoQUIC connection to server IP = %s, port = %d\n", server_name, server_port);
         ret = quic_client(server_name, server_port, sni, esni_rr_file, alpn, root_trust_file, proposed_version, force_zero_share, 
             force_migration, nb_packets_before_update, mtu_max, F_log, bin_file, client_cnx_id_length, client_scenario,
-            cc_log_dir, no_disk, use_long_log, cc_algorithm);
+            cc_log_dir, no_disk, use_long_log, cc_algorithm, large_client_hello);
 
         printf("Client exit with code = %d\n", ret);
     }

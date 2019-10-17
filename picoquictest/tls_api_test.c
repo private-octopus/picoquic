@@ -6330,3 +6330,41 @@ int random_public_tester_test()
 
     return ret;
 }
+
+/*
+ * Test whether connections can be established when the client hello is larger than a 
+ * single packet. This is done by adding a "padding" transport parameter.
+ */
+
+int large_client_hello_test()
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+
+    /* Set the test large hello flag in the client connection
+     */
+    if (ret == 0) {
+        test_ctx->cnx_client->test_large_chello = 1;
+
+        /* Run a basic test scenario
+         */
+
+        ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+            test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0, 0, 0, 0, 250000);
+    }
+
+    /* And then free the resource
+     */
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}

@@ -388,10 +388,24 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
 
     if (cnx->grease_transport_parameters) {
         /* Do not use a purely random value, so we can repetitive tests */
-        int n = 31 *(cnx->initial_cnxid.id[0] + cnx->client_mode) + 27;
+        int n = 31 * (cnx->initial_cnxid.id[0] + cnx->client_mode) + 27;
         uint64_t v = cnx->initial_cnxid.id[1];
-        v = (v<<8) + cnx->initial_cnxid.id[2];
+        v = (v << 8) + cnx->initial_cnxid.id[2];
         bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, n, v);
+    }
+
+    if (cnx->test_large_chello && bytes != NULL) {
+        if (bytes + 4 + 1200 > bytes_max) {
+            bytes = NULL;
+        }
+        else {
+            picoformat_16(bytes, picoquic_tp_test_large_chello);
+            bytes += 2;
+            picoformat_16(bytes, 1200);
+            bytes += 2;
+            memset(bytes, 'Q', 1200);
+            bytes += 1200;
+        }
     }
 
     /* Finally, update the parameters length */

@@ -958,6 +958,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(large_client_hello) {
+            int ret = large_client_hello_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(stress)
         {
             int ret = stress_test();
