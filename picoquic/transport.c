@@ -394,7 +394,7 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, n, v);
     }
 
-    if (cnx->test_large_chello) {
+    if (cnx->test_large_chello && bytes != NULL) {
         if (bytes + 4 + 1200 > bytes_max) {
             bytes = NULL;
         }
