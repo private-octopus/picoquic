@@ -1079,7 +1079,7 @@ int picoquic_incoming_initial(
         /* decode the incoming frames */
         if (ret == 0) {
             ret = picoquic_decode_frames(*pcnx, (*pcnx)->path[0],
-                bytes + ph->offset, ph->payload_length, ph->epoch, addr_from, addr_to, current_time);
+                bytes + ph->offset, ph->payload_length, ph->epoch, addr_from, addr_to, NULL, current_time);
         }
 
         /* processing of client initial packet */
@@ -1245,7 +1245,7 @@ int picoquic_incoming_server_cleartext(
             }
             else {
                 ret = picoquic_decode_frames(cnx, cnx->path[0],
-                    bytes + ph->offset, ph->payload_length, ph->epoch, NULL, addr_to, current_time);
+                    bytes + ph->offset, ph->payload_length, ph->epoch, NULL, addr_to, NULL, current_time);
             }
 
             /* processing of initial packet */
@@ -1298,7 +1298,7 @@ int picoquic_incoming_client_handshake(
             }
             else {
                 ret = picoquic_decode_frames(cnx, cnx->path[0],
-                    bytes + ph->offset, ph->payload_length, ph->epoch, NULL, NULL, current_time);
+                    bytes + ph->offset, ph->payload_length, ph->epoch, NULL, NULL, NULL, current_time);
             }
             /* processing of client clear text packet */
             if (ret == 0) {
@@ -1354,7 +1354,7 @@ int picoquic_incoming_0rtt(
         ret = PICOQUIC_ERROR_CNXID_CHECK;
     } else if (cnx->cnx_state == picoquic_state_server_almost_ready || 
         cnx->cnx_state == picoquic_state_server_false_start ||
-        (cnx->cnx_state == picoquic_state_ready && !cnx->is_1rtt_received)) {
+        (cnx->cnx_state == picoquic_state_ready && !cnx->is_1rtt_ackable_received)) {
         if (ph->vn != picoquic_supported_versions[cnx->version_index].version) {
             ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0);
         } else {
@@ -1365,7 +1365,7 @@ int picoquic_incoming_0rtt(
             }
             else {
                 ret = picoquic_decode_frames(cnx, cnx->path[0],
-                    bytes + ph->offset, ph->payload_length, ph->epoch, NULL, NULL, current_time);
+                    bytes + ph->offset, ph->payload_length, ph->epoch, NULL, NULL, NULL, current_time);
             }
 
             if (ret == 0) {
@@ -1694,12 +1694,24 @@ int picoquic_incoming_encrypted(
 
             if (ret == 0) {
                 picoquic_path_t * path_x = cnx->path[path_id];
+                int is_ack_needed = 0;
 
-                cnx->is_1rtt_received = 1;
+                cnx->is_1rtt_ackable_received = 1;
                 picoquic_spin_function_table[cnx->spin_policy].spinbit_incoming(cnx, path_x, ph);
                 /* Accept the incoming frames */
                 ret = picoquic_decode_frames(cnx, cnx->path[path_id], 
-                    bytes + ph->offset, ph->payload_length, ph->epoch, addr_from, addr_to, current_time);
+                    bytes + ph->offset, ph->payload_length, ph->epoch, addr_from, addr_to, &is_ack_needed, current_time);
+
+                if (is_ack_needed &&
+                    (cnx->cnx_state == picoquic_state_client_ready_start ||
+                        cnx->cnx_state == picoquic_state_server_false_start)) {
+                    cnx->is_1rtt_ackable_received = 1;
+                    if (cnx->is_1rtt_acked) {
+                        /* Transition to client ready state.
+                         * The handshake is complete, all the handshake packets are implicitly acknowledged */
+                        picoquic_ready_state_transition(cnx, current_time);
+                    }
+                }
             }
 
             if (ret == 0) {

@@ -692,7 +692,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int alt_path_challenge_needed : 1; /* If at least one alt path challenge is needed or in progress */
     unsigned int is_handshake_finished : 1; /* If there are no more packets to ack or retransmit in initial  or handshake contexts */
     unsigned int is_path_0_deleted : 1; /* If the initial connection ID has been deleted */
-    unsigned int is_1rtt_received : 1; /* If at least one 1RTT packet has been received */
+    unsigned int is_1rtt_ackable_received : 1; /* If at least one 1RTT packet has been received */
     unsigned int is_1rtt_acked : 1; /* If at least one 1RTT packet has been acked by the peer */
     unsigned int has_successful_probe : 1; /* At least one probe was successful */
     unsigned int grease_transport_parameters : 1; /* Exercise greasing of transport parameters */
@@ -1110,7 +1110,7 @@ int picoquic_prepare_misc_frame(picoquic_misc_frame_header_t* misc_frame, uint8_
 /* send/receive */
 
 int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_t* bytes, size_t bytes_max,
-    int epoch, struct sockaddr* addr_from, struct sockaddr* addr_to, uint64_t current_time);
+    int epoch, struct sockaddr* addr_from, struct sockaddr* addr_to, int* is_ack_needed, uint64_t current_time);
 
 int picoquic_skip_frame(uint8_t* bytes, size_t bytes_max, size_t* consumed, int* pure_ack);
 

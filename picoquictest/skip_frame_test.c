@@ -507,7 +507,7 @@ int parse_frame_test()
                 /* create a path which can be retired with a connection_id_retire frame */
                 picoquic_create_path(cnx, cnx->start_time, (struct sockaddr*)&cnx->path[0]->local_addr, NULL);
 
-                t_ret = picoquic_decode_frames(cnx, cnx->path[0], buffer, byte_max, test_skip_list[i].epoch, NULL, NULL, simulated_time);
+                t_ret = picoquic_decode_frames(cnx, cnx->path[0], buffer, byte_max, test_skip_list[i].epoch, NULL, NULL, NULL, simulated_time);
 
                 if (t_ret != 0) {
                     DBG_PRINTF("Parse frame <%s> fails, ret = %d\n", test_skip_list[i].name, t_ret);
