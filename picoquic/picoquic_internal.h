@@ -313,7 +313,8 @@ typedef enum {
     picoquic_tp_disable_migration = 12,
     picoquic_tp_server_preferred_address = 13,
     picoquic_tp_active_connection_id_limit = 14,
-    picoquic_tp_max_datagram_size = 32 /* per draft-pauly-quic-datagram-02 */
+    picoquic_tp_max_datagram_size = 32 /* per draft-pauly-quic-datagram-02 */,
+    picoquic_tp_test_large_chello = 3127
 } picoquic_tp_enum;
 
 /* QUIC context, defining the tables of connections,
@@ -691,9 +692,12 @@ typedef struct st_picoquic_cnx_t {
     unsigned int alt_path_challenge_needed : 1; /* If at least one alt path challenge is needed or in progress */
     unsigned int is_handshake_finished : 1; /* If there are no more packets to ack or retransmit in initial  or handshake contexts */
     unsigned int is_path_0_deleted : 1; /* If the initial connection ID has been deleted */
-    unsigned int is_1rtt_received : 1; /* If the initial connection ID has been deleted */
+    unsigned int is_1rtt_received : 1; /* If at least one 1RTT packet has been received */
+    unsigned int is_1rtt_acked : 1; /* If at least one 1RTT packet has been acked by the peer */
     unsigned int has_successful_probe : 1; /* At least one probe was successful */
     unsigned int grease_transport_parameters : 1; /* Exercise greasing of transport parameters */
+    unsigned int test_large_chello : 1; /* Add a greasing parameter to test sending CHello on multiple packets */
+
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;
 

@@ -172,6 +172,7 @@ static const picoquic_test_def_t test_table[] = {
     { "optimistic_hole", optimistic_hole_test },
     { "bad_coalesce", bad_coalesce_test },
     { "document_addresses", document_addresses_test },
+    { "large_client_hello", large_client_hello_test },
     { "stress", stress_test },
     { "fuzz", fuzz_test },
     { "fuzz_initial", fuzz_initial_test}
