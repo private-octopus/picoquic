@@ -1879,6 +1879,19 @@ int picoquic_incoming_segment(
     } else if (ret == PICOQUIC_ERROR_STATELESS_RESET) {
         ret = picoquic_incoming_stateless_reset(cnx);
     }
+    else if (ret == PICOQUIC_ERROR_AEAD_CHECK &&
+        ph.ptype == picoquic_packet_handshake &&
+        cnx != NULL &&
+        (cnx->cnx_state == picoquic_state_client_init_sent || cnx->cnx_state == picoquic_state_client_init_resent))
+    {
+        /* Indicates that the server probably sent initial and handshake but initial was lost */
+        if (cnx->pkt_ctx[picoquic_packet_context_initial].retransmit_oldest != NULL &&
+            cnx->pkt_ctx[picoquic_packet_context_initial].nb_retransmit == 0) {
+            /* Reset the retransmit timer to start retransmission immediately */
+            cnx->path[0]->retransmit_timer = current_time -
+                cnx->pkt_ctx[picoquic_packet_context_initial].retransmit_oldest->send_time;
+        }
+    }
 
     if (ret == 0 || ret == PICOQUIC_ERROR_SPURIOUS_REPEAT) {
         if (cnx != NULL && cnx->cnx_state != picoquic_state_disconnected &&
