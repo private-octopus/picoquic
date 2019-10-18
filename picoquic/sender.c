@@ -2432,7 +2432,6 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
     size_t checksum_overhead = picoquic_get_checksum_length(cnx, is_cleartext_mode);
     size_t send_buffer_min_max = (send_buffer_max > path_x->send_mtu) ? path_x->send_mtu : send_buffer_max;
 
-#if 0
     /*
      * Manage the end of false start transition.
      */
@@ -2441,7 +2440,6 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
         cnx->crypto_context[3].aead_decrypt != NULL) {
         picoquic_ready_state_transition(cnx, current_time);
     }
-#endif
 
     if (!cnx->is_handshake_finished) {
         /* Verify first that there is no need for retransmit or ack
