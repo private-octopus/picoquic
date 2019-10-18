@@ -2469,9 +2469,12 @@ static int picoquic_process_ack_range(
                 if (p->ptype == picoquic_packet_1rtt_protected &&
                     (cnx->cnx_state == picoquic_state_client_ready_start ||
                         cnx->cnx_state == picoquic_state_server_false_start)) {
-                    /* Transition to client ready state.
-                     * The handshake is complete, all the handshake packets are implicitly acknowledged */
-                    picoquic_ready_state_transition(cnx, current_time);
+                    cnx->is_1rtt_acked = 1;
+                    if (cnx->is_1rtt_ackable_received) {
+                        /* Transition to client ready state.
+                         * The handshake is complete, all the handshake packets are implicitly acknowledged */
+                        picoquic_ready_state_transition(cnx, current_time);
+                    }
                 }
 
                 (void)picoquic_dequeue_retransmit_packet(cnx, p, 1);
@@ -3509,7 +3512,9 @@ int picoquic_queue_datagram_frame(picoquic_cnx_t * cnx, uint64_t id,
 int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_t* bytes,
     size_t bytes_maxsize, int epoch,
     struct sockaddr* addr_from,
-    struct sockaddr* addr_to, uint64_t current_time)
+    struct sockaddr* addr_to,
+    int * is_ack_needed,
+    uint64_t current_time)
 {
     const uint8_t *bytes_max = bytes + bytes_maxsize;
     int ack_needed = 0;
@@ -3651,6 +3656,9 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_
     if (bytes != NULL && ack_needed != 0) {
         cnx->latest_progress_time = current_time;
         pkt_ctx->ack_needed = 1;
+        if (is_ack_needed != NULL) {
+            *is_ack_needed = 1;
+        }
     }
 
     return bytes != NULL ? 0 : PICOQUIC_ERROR_DETECTED;
