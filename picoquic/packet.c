@@ -1194,7 +1194,7 @@ int picoquic_incoming_retry(
  * Processing of a server clear text packet.
  */
 
-int picoquic_incoming_server_cleartext(
+int picoquic_incoming_server_initial(
     picoquic_cnx_t* cnx,
     uint8_t* bytes,
     struct sockaddr* addr_to,
@@ -1204,7 +1204,6 @@ int picoquic_incoming_server_cleartext(
 {
     int ret = 0;
 #ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(addr_to);
     UNREFERENCED_PARAMETER(if_index_to);
 #endif
 
@@ -1212,7 +1211,7 @@ int picoquic_incoming_server_cleartext(
         cnx->cnx_state = picoquic_state_client_handshake_start;
     }
 
-    int restricted = cnx->cnx_state != picoquic_state_client_handshake_start && cnx->cnx_state != picoquic_state_client_handshake_progress;
+    int restricted = cnx->cnx_state != picoquic_state_client_handshake_start;
 
     /* Check the server cnx id */
     if (picoquic_is_connection_id_null(&cnx->path[0]->remote_cnxid) && restricted == 0) {
@@ -1224,21 +1223,9 @@ int picoquic_incoming_server_cleartext(
         ret = PICOQUIC_ERROR_CNXID_CHECK; /* protocol error */
     }
 
-
     if (ret == 0) {
-        if (! (cnx->cnx_state == picoquic_state_ready ||
-            (ph->ptype == picoquic_packet_initial && 
-                (cnx->cnx_state == picoquic_state_client_handshake_start ||
-                    cnx->cnx_state == picoquic_state_client_handshake_progress ||
-                    cnx->cnx_state == picoquic_state_client_almost_ready ||
-                    cnx->cnx_state == picoquic_state_client_ready_start)
-                    && 
-                cnx->crypto_context[2].aead_decrypt != NULL &&
-                cnx->crypto_context[2].aead_encrypt != NULL &&
-                cnx->pkt_ctx[picoquic_packet_context_handshake].first_sack_item.end_of_sack_range
-                != (uint64_t)((int64_t)-1)))) {
+        if (cnx->cnx_state < picoquic_state_client_handshake_progress) {
             /* Accept the incoming frames */
-
             if (ph->payload_length == 0) {
                 /* empty payload! */
                 ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0);
@@ -1258,6 +1245,7 @@ int picoquic_incoming_server_cleartext(
                 if (ret == 0 && cnx->crypto_context[2].aead_decrypt != NULL &&
                     cnx->crypto_context[2].aead_encrypt != NULL)
                 {
+                    cnx->cnx_state = picoquic_state_client_handshake_progress;
                     picoquic_implicit_handshake_ack(cnx, picoquic_packet_context_initial, current_time);
                 }
             }
@@ -1266,12 +1254,76 @@ int picoquic_incoming_server_cleartext(
                 /* This is bad. should just delete the context, log the packet, etc */
             }
         }
+        else if (cnx->cnx_state < picoquic_state_ready) {
+            /* Require an acknowledgement if the packet contains ackable frames */
+            picoquic_ignore_incoming_handshake(cnx, bytes, ph);
+        }
+        else {
+            /* Initial keys should have been discarded, treat packet as unexpected */
+            ret = PICOQUIC_ERROR_UNEXPECTED_PACKET;
+        }
+    }
+
+    return ret;
+}
+
+
+int picoquic_incoming_server_handshake(
+    picoquic_cnx_t* cnx,
+    uint8_t* bytes,
+    struct sockaddr* addr_to,
+    unsigned long if_index_to,
+    picoquic_packet_header* ph,
+    uint64_t current_time)
+{
+    int ret = 0;
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(addr_to);
+    UNREFERENCED_PARAMETER(if_index_to);
+#endif
+
+    int restricted = cnx->cnx_state != picoquic_state_client_handshake_start && cnx->cnx_state != picoquic_state_client_handshake_progress;
+    
+    if (picoquic_compare_connection_id(&cnx->path[0]->remote_cnxid, &ph->srce_cnx_id) != 0) {
+        ret = PICOQUIC_ERROR_CNXID_CHECK; /* protocol error */
+    }
+
+
+    if (ret == 0) {
+        if (cnx->cnx_state < picoquic_state_client_ready_start) {
+            /* Accept the incoming frames */
+
+            if (ph->payload_length == 0) {
+                /* empty payload! */
+                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0);
+            }
+            else {
+                ret = picoquic_decode_frames(cnx, cnx->path[0],
+                    bytes + ph->offset, ph->payload_length, ph->epoch, NULL, addr_to, NULL, current_time);
+            }
+
+            /* processing of initial packet */
+            if (ret == 0 && restricted == 0) {
+                ret = picoquic_tls_stream_process(cnx);
+            }
+
+            if (ret != 0) {
+                /* This is bad. should just delete the context, log the packet, etc */
+            }
+        }
+        else if (cnx->cnx_state < picoquic_state_ready) {
+            /* Prepare an acknowledgement if the packet contains ackable frames */
+            picoquic_ignore_incoming_handshake(cnx, bytes, ph);
+        }
+        else {
+            /* Initial keys should have been discarded, treat packet as unexpected */
+            ret = PICOQUIC_ERROR_UNEXPECTED_PACKET;
+        }
     }
 
 
     return ret;
 }
-
 /*
  * Processing of client handshake packet.
  */
@@ -1839,7 +1891,7 @@ int picoquic_incoming_segment(
                         }
                         else {
                             /* TODO: this really depends on the current receive epoch */
-                            ret = picoquic_incoming_server_cleartext(cnx, bytes, addr_to, if_index_to, &ph, current_time);
+                            ret = picoquic_incoming_server_initial(cnx, bytes, addr_to, if_index_to, &ph, current_time);
                         }
                     }
                 } else {
@@ -1855,7 +1907,7 @@ int picoquic_incoming_segment(
             case picoquic_packet_handshake:
                 if (cnx->client_mode)
                 {
-                    ret = picoquic_incoming_server_cleartext(cnx, bytes, addr_to, if_index_to, &ph, current_time);
+                    ret = picoquic_incoming_server_handshake(cnx, bytes, addr_to, if_index_to, &ph, current_time);
                 }
                 else
                 {
