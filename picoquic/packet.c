@@ -1354,8 +1354,11 @@ int picoquic_incoming_client_handshake(
             }
         }
     }
-    else if (cnx->cnx_state < picoquic_state_ready) {
-        /* Require an acknowledgement if the packet contains ackable frames */
+    else if (cnx->cnx_state <= picoquic_state_ready) {
+        /* Because the client is never guaranteed to discard handshake keys,
+         * we need to keep it for the duration of the connection.
+         * Process the incoming frames, ignore them, but 
+         * require an acknowledgement if the packet contains ackable frames */
         picoquic_ignore_incoming_handshake(cnx, bytes, ph);
     }
     else {
