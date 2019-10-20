@@ -84,6 +84,7 @@ int tls_api_server_losses_test();
 int skip_frame_test();
 int keep_alive_test();
 int logger_test();
+int binlog_test();
 int socket_test();
 int ticket_store_test();
 int token_store_test();

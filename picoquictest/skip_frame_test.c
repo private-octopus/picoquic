@@ -533,10 +533,12 @@ int parse_frame_test()
 }
 
 void picoquic_log_frames(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t length);
+void picoquic_binlog_frames(FILE* F, uint8_t* bytes, size_t length);
 
 static char const* log_test_file = "log_test.txt";
 static char const* log_fuzz_test_file = "log_fuzz_test.txt";
 static char const* log_packet_test_file = "log_fuzz_test.txt";
+static char const* binlog_test_file = "binlog_test.txt";
 
 #ifdef _WINDOWS
 #define LOG_TEST_REF "picoquictest\\log_test_ref.txt"
@@ -743,6 +745,22 @@ int logger_test()
     return ret;
 }
 
+int binlog_test()
+{
+    FILE * f = picoquic_file_open(binlog_test_file, "w");
+    int ret = 0;
+
+    if (f == NULL) {
+        DBG_PRINTF("failed to open file:%s\n", log_test_file);
+        ret = -1;
+    } else {
+        for (size_t i = 0; i < nb_test_skip_list; i++) {
+            picoquic_binlog_frames(f, test_skip_list[i].val, test_skip_list[i].len);
+        }
+        (void)picoquic_file_close(f);
+    }
+    return 0;
+}
 
 /* Basic test of connection ID stash, part of migration support  */
 static const picoquic_cnxid_stash_t stash_test_case[] = {
