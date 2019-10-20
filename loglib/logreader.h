@@ -72,6 +72,22 @@ int binlog_convert(FILE * f_binlog, const picoquic_connection_id_t * cid, binlog
  */
 int binlog_list_cids(FILE * binlog, picohash_table * cids);
 
+/*! \brief Return the file handle of the output file for log file conversion.
+ *
+ *  \param cid_name The initial connection id converted to a string. This will
+ *                  be used as the standard output file name if out_dir is not
+ *                  NULL.
+ *  \param binlog_name This is the name of the input file and is used for error
+ *                  reporting only.
+ *  \param out_dir  If out_dir is not NULL it contains the output directory name.
+ *                  Otherwise, if out_dir is NULL the returned file handle is
+ *                  standard output.
+ *  \param out_ext  out_ext will be used as extenstion for the file name if out_dir
+ *                  is not NULL.
+ *
+ */
+FILE * open_outfile(const char * cid_name, const char * binlog_name, const char * out_dir, const char * out_ext);
+
 FILE * picoquic_open_cc_log_file_for_read(char const * bin_cc_log_name, uint64_t * log_time);
 
 int picoquic_cc_log_file_to_csv(char const * bin_cc_log_name, char const * csv_cc_log_name);
