@@ -687,7 +687,7 @@ int quic_client(const char* ip_address_text, int server_port,
                     send_buffer, sizeof(send_buffer), &send_length, NULL, NULL, NULL, NULL);
 
                 if (ret == 0 && send_length > 0) {
-                    bytes_sent = sendto(fd, send_buffer, (int)send_length, 0,
+                    bytes_sent = sendto(fd, (const char*)send_buffer, (int)send_length, 0,
                         (struct sockaddr*)&server_address, server_addr_length);
 
                     if (F_log != NULL) {
@@ -842,7 +842,7 @@ int quic_client(const char* ip_address_text, int server_port,
                         int key_rot_ret = picoquic_start_key_rotation(cnx_client);
                         if (key_rot_ret != 0) {
                             fprintf(stdout, "Will not test key rotation.\n");
-                            key_update_done = -1;
+                            key_update_done = (uint64_t)-1;
                         }
                         else {
                             fprintf(stdout, "Key rotation started.\n");
@@ -921,7 +921,7 @@ int quic_client(const char* ip_address_text, int server_port,
                     }
 
                     if (ret == 0 && send_length > 0) {
-                        bytes_sent = sendto(fd, send_buffer, (int)send_length, 0,
+                        bytes_sent = sendto(fd, (const char*)send_buffer, (int)send_length, 0,
                             (struct sockaddr*)&x_to, x_to_length);
 
                         if (bytes_sent <= 0)
