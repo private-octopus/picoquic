@@ -165,6 +165,15 @@ size_t bytestream_vint_len(uint64_t value)
     return picoquic_encode_varint_length(value);
 }
 
+int byteread_vlen(bytestream * s, size_t * value)
+{
+    uint64_t val_read = 0;
+    int ret = byteread_vint(s, &val_read);
+
+    *value = (size_t)val_read;
+    return *value != val_read ? -1 : ret;
+}
+
 int bytewrite_int8(bytestream * s, uint8_t value)
 {
     size_t max_bytes = s->size - s->ptr;

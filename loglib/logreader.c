@@ -191,8 +191,8 @@ static int byteread_packet_header(bytestream * s, picoquic_packet_header * ph)
     ph->spin = (header_flags & 2) != 0;
     ph->key_phase = (header_flags & 1) != 0;
 
-    uint64_t payload_length = 0;
-    byteread_vint(s, &payload_length);
+    size_t payload_length = 0;
+    byteread_vlen(s, &payload_length);
     ph->payload_length = payload_length;
 
     uint64_t ptype;
@@ -210,8 +210,8 @@ static int byteread_packet_header(bytestream * s, picoquic_packet_header * ph)
     }
 
     if (ptype == picoquic_packet_initial) {
-        uint64_t token_length = 0;
-        byteread_vint(s, &token_length);
+        size_t token_length = 0;
+        byteread_vlen(s, &token_length);
         bytestream_skip(s, token_length);
     }
 
