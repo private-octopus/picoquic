@@ -344,10 +344,12 @@ int bytewrite_cstr(bytestream * s, const char * cstr)
 
 int byteread_cstr(bytestream * s, char * cstr, size_t max_len)
 {
-    uint64_t l_cstr = 0;
-    int ret = byteread_vint(s, &l_cstr);
+    uint64_t l_read = 0;
+    int ret = byteread_vint(s, &l_read);
 
-    if (ret != 0 || l_cstr + 1 > max_len) {
+    size_t l_cstr = (size_t)l_read;
+
+    if (ret != 0 || l_cstr != l_read || l_cstr + 1 > max_len) {
         ret = -1;
     } else {
         ret |= byteread_buffer(s, cstr, l_cstr);
@@ -359,9 +361,16 @@ int byteread_cstr(bytestream * s, char * cstr, size_t max_len)
 
 int byteskip_cstr(bytestream * s)
 {
-    uint64_t len = 0;
-    int ret = byteread_vint(s, &len);
-    ret |= bytestream_skip(s, len);
+    uint64_t l_read = 0;
+    int ret = byteread_vint(s, &l_read);
+
+    size_t l_cstr = (size_t)l_read;
+
+    if (ret != 0 || l_cstr != l_read) {
+        ret = -1;
+    } else {
+        ret = bytestream_skip(s, l_cstr);
+    }
     return ret;
 }
 

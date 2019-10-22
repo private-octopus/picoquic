@@ -44,6 +44,14 @@ static const uint8_t* picoquic_log_varint(const uint8_t* bytes, const uint8_t* b
     return len == 0 ? NULL : bytes + len;
 }
 
+static const uint8_t* picoquic_log_length(const uint8_t* bytes, const uint8_t* bytes_max, size_t* nsz)
+{
+    uint64_t n64 = 0;
+    size_t len = picoquic_varint_decode(bytes, bytes_max - bytes, &n64);
+    *nsz = (size_t)n64;
+    return len == 0 || *nsz != n64 ? NULL : bytes + len;
+}
+
 static void picoquic_log_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
 {
     if (bytes != NULL && bytes_max != NULL) {
@@ -59,7 +67,7 @@ static const uint8_t* picoquic_log_stream_frame(FILE* f, const uint8_t* bytes, c
 {
     const uint8_t* bytes_begin = bytes;
     uint8_t ftype = bytes[0];
-    uint64_t length = 0;
+    size_t length = 0;
 
     bytes = picoquic_log_fixed_skip(bytes, bytes_max, 1);
     bytes = picoquic_log_varint_skip(bytes, bytes_max);
@@ -69,7 +77,7 @@ static const uint8_t* picoquic_log_stream_frame(FILE* f, const uint8_t* bytes, c
     }
 
     if ((ftype & 2) != 0) {
-        bytes = picoquic_log_varint(bytes, bytes_max, &length);
+        bytes = picoquic_log_length(bytes, bytes_max, &length);
     } else {
         length = bytes_max - bytes;
     }
@@ -136,12 +144,12 @@ static const uint8_t* picoquic_log_stop_sending_frame(FILE* f, const uint8_t* by
 static const uint8_t* picoquic_log_close_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
 {
     const uint8_t* bytes_begin = bytes;
-    uint64_t length = 0;
+    size_t length = 0;
 
     bytes = picoquic_log_fixed_skip(bytes, bytes_max, 1);
     bytes = picoquic_log_varint_skip(bytes, bytes_max);
     bytes = picoquic_log_varint_skip(bytes, bytes_max);
-    bytes = picoquic_log_varint(bytes, bytes_max, &length);
+    bytes = picoquic_log_length(bytes, bytes_max, &length);
     bytes = picoquic_log_fixed_skip(bytes, bytes_max, length);
 
     picoquic_log_frame(f, bytes_begin, bytes);
@@ -247,10 +255,10 @@ static const uint8_t* picoquic_log_retire_connection_id_frame(FILE* f, const uin
 static const uint8_t* picoquic_log_new_token_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
 {
     const uint8_t* bytes_begin = bytes;
-    uint64_t length = 0;
+    size_t length = 0;
 
     bytes = picoquic_log_fixed_skip(bytes, bytes_max, 1);
-    bytes = picoquic_log_varint(bytes, bytes_max, &length);
+    bytes = picoquic_log_length(bytes, bytes_max, &length);
 
     picoquic_log_frame(f, bytes_begin, bytes);
 
@@ -271,11 +279,11 @@ static const uint8_t* picoquic_log_path_frame(FILE* f, const uint8_t* bytes, con
 static const uint8_t* picoquic_log_crypto_hs_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
 {
     const uint8_t* bytes_begin = bytes;
-    uint64_t length = 0;
+    size_t length = 0;
 
     bytes = picoquic_log_fixed_skip(bytes, bytes_max, 1);
     bytes = picoquic_log_varint_skip(bytes, bytes_max);
-    bytes = picoquic_log_varint(bytes, bytes_max, &length);
+    bytes = picoquic_log_length(bytes, bytes_max, &length);
 
     picoquic_log_frame(f, bytes_begin, bytes);
 
@@ -287,7 +295,7 @@ static const uint8_t* picoquic_log_datagram_frame(FILE* f, const uint8_t* bytes,
 {
     const uint8_t* bytes_begin = bytes;
     uint8_t ftype = bytes[0];
-    uint64_t length = 0;
+    size_t length = 0;
 
     bytes = picoquic_log_fixed_skip(bytes, bytes_max, 1);
 
@@ -296,7 +304,7 @@ static const uint8_t* picoquic_log_datagram_frame(FILE* f, const uint8_t* bytes,
     }
 
     if (ftype & 1) {
-        bytes = picoquic_log_varint(bytes, bytes_max, &length);
+        bytes = picoquic_log_length(bytes, bytes_max, &length);
     } else {
         length = bytes_max - bytes;
     }
