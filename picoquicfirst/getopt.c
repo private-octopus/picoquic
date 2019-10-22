@@ -36,6 +36,10 @@
 #include <stdio.h>
 #include <string.h>
 
+#ifdef _MSC_VER
+#pragma warning(disable: 4706) // assignment within conditional expression
+#endif
+
 int opterr = 1, /* if error message should be printed */
     optind = 1, /* index into parent argv vector */
     optopt, /* character checked for validity */

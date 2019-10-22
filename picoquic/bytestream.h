@@ -71,6 +71,8 @@ int byteread_vint(bytestream * s, uint64_t * value);
 int byteread_skip_vint(bytestream * s);
 size_t bytestream_vint_len(uint64_t value);
 
+int byteread_vlen(bytestream * s, size_t * value);
+
 int bytewrite_buffer(bytestream * s, const void * buffer, size_t length);
 int byteread_buffer(bytestream * s, void * buffer, size_t length);
 

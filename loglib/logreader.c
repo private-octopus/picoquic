@@ -129,19 +129,23 @@ static int binlog_convert_event(bytestream * s, void * ptr)
         }
 
         while (ret == 0 && bytestream_remain(s) > 0) {
-            uint64_t len = 0;
-            ret |= byteread_vint(s, &len);
 
-            bytestream stream;
-            bytestream* frame = bytestream_ref_init(&stream, bytestream_ptr(s), len);
+            size_t len = 0;
+            ret = byteread_vlen(s, &len);
 
-            ret |= bytestream_skip(s, len);
             if (ret == 0) {
-                ret |= ctx->callbacks->packet_frame(frame, cbptr);
+                bytestream stream;
+                bytestream* frame = bytestream_ref_init(&stream, bytestream_ptr(s), len);
+
+                ret = bytestream_skip(s, len);
+                if (ret == 0) {
+                    ret = ctx->callbacks->packet_frame(frame, cbptr);
+                }
             }
         }
+
         if (ret == 0) {
-            ret |= ctx->callbacks->packet_end(cbptr);
+            ret = ctx->callbacks->packet_end(cbptr);
         }
     }
 
@@ -184,8 +188,8 @@ static int byteread_packet_header(bytestream * s, picoquic_packet_header * ph)
     ph->spin = (header_flags & 2) != 0;
     ph->key_phase = (header_flags & 1) != 0;
 
-    uint64_t payload_length = 0;
-    byteread_vint(s, &payload_length);
+    size_t payload_length = 0;
+    byteread_vlen(s, &payload_length);
     ph->payload_length = payload_length;
 
     uint64_t ptype;
@@ -203,8 +207,8 @@ static int byteread_packet_header(bytestream * s, picoquic_packet_header * ph)
     }
 
     if (ptype == picoquic_packet_initial) {
-        uint64_t token_length = 0;
-        byteread_vint(s, &token_length);
+        size_t token_length = 0;
+        byteread_vlen(s, &token_length);
         bytestream_skip(s, token_length);
     }
 
