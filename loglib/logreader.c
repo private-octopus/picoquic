@@ -129,8 +129,15 @@ static int binlog_convert_event(bytestream * s, void * ptr)
         }
 
         while (ret == 0 && bytestream_remain(s) > 0) {
-            uint64_t len = 0;
-            ret |= byteread_vint(s, &len);
+
+            uint64_t len_read = 0;
+            ret |= byteread_vint(s, &len_read);
+
+            size_t len = (size_t)len_read;
+            if (len != len_read) {
+                ret = -1;
+                break;
+            }
 
             bytestream stream;
             bytestream* frame = bytestream_ref_init(&stream, bytestream_ptr(s), len);
