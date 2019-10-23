@@ -280,10 +280,6 @@ int picoquic_parse_short_packet_header(
     return ret;
 }
 
-/*
- * The packet header parsing is version dependent
- */
-
 int picoquic_parse_packet_header(
     picoquic_quic_t* quic,
     uint8_t* bytes,
