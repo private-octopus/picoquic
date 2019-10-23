@@ -540,11 +540,8 @@ static char const* log_fuzz_test_file = "log_fuzz_test.txt";
 static char const* log_packet_test_file = "log_fuzz_test.txt";
 static char const* binlog_test_file = "binlog_test.txt";
 
-#ifdef _WINDOWS
-#define LOG_TEST_REF "picoquictest\\log_test_ref.txt"
-#else
-#define LOG_TEST_REF "picoquictest/log_test_ref.txt"
-#endif
+#define LOG_TEST_REF "picoquictest" PICOQUIC_FILE_SEPARATOR "log_test_ref.txt"
+#define BINLOG_TEST_REF "picoquictest" PICOQUIC_FILE_SEPARATOR "binlog_ref.log"
 
 static int compare_lines(char const* b1, char const* b2)
 {
@@ -567,55 +564,96 @@ static int compare_lines(char const* b1, char const* b2)
     return (*b1 == 0 && *b2 == 0) ? 0 : -1;
 }
 
-int picoquic_test_compare_files(char const* fname1, char const* fname2)
+int picoquic_compare_text_files(char const * fname1, char const * fname2, FILE * F1, FILE * F2)
 {
-    FILE* F1;
-    FILE* F2 = NULL;
     int ret = 0;
     int nb_line = 0;
 
-    if ((F1 = picoquic_file_open(fname1, "r")) == NULL) {
-        DBG_PRINTF("Cannot open file %s\n", fname1);
-        ret = -1;
-    }
-    else if ((F2 = picoquic_file_open(fname2, "r")) == NULL) {
-        DBG_PRINTF("Cannot open file %s\n", fname2);
-        ret = -1;
-    }
-    else {
-        char buffer1[256];
-        char buffer2[256];
+    char buffer1[256];
+    char buffer2[256];
 
-        while (ret == 0 && fgets(buffer1, sizeof(buffer1), F1) != NULL) {
-            nb_line++;
-            if (fgets(buffer2, sizeof(buffer2), F2) == NULL) {
-                /* F2 is too short */
-                DBG_PRINTF("File %s is shorter than %s\n", fname2, fname1);
-                DBG_PRINTF("    Missing line %d: %s", nb_line, buffer1);
-                ret = -1;
-            } else {
-                ret = compare_lines(buffer1, buffer2);
-                if (ret != 0)
-                {
-                    DBG_PRINTF("File %s differs %s at line %d\n", fname2, fname1, nb_line);
-                    DBG_PRINTF("    Got: %s", buffer1);
-                    DBG_PRINTF("    Vs:  %s", buffer2);
-                }
+    while (ret == 0 && fgets(buffer1, sizeof(buffer1), F1) != NULL) {
+        nb_line++;
+        if (fgets(buffer2, sizeof(buffer2), F2) == NULL) {
+            /* F2 is too short */
+            DBG_PRINTF("File %s is shorter than %s\n", fname2, fname1);
+            DBG_PRINTF("    Missing line %d: %s", nb_line, buffer1);
+            ret = -1;
+        } else {
+            ret = compare_lines(buffer1, buffer2);
+            if (ret != 0)
+            {
+                DBG_PRINTF("File %s differs %s at line %d\n", fname2, fname1, nb_line);
+                DBG_PRINTF("    Got: %s", buffer1);
+                DBG_PRINTF("    Vs:  %s", buffer2);
             }
         }
-
-        if (ret == 0 && fgets(buffer2, sizeof(buffer2), F2) != NULL) {
-            /* F2 is too long */
-            DBG_PRINTF("File %s is longer than %s\n", fname2, fname1);
-            DBG_PRINTF("    Extra line %d: %s", nb_line+1, buffer2);
-            ret = -1;
-        }
     }
 
-    (void)picoquic_file_close(F1);
-    (void)picoquic_file_close(F2);
+    if (ret == 0 && fgets(buffer2, sizeof(buffer2), F2) != NULL) {
+        /* F2 is too long */
+        DBG_PRINTF("File %s is longer than %s\n", fname2, fname1);
+        DBG_PRINTF("    Extra line %d: %s", nb_line+1, buffer2);
+        ret = -1;
+    }
 
     return ret;
+}
+
+static int picoquic_compare_binary_files(char const * fname1, char const * fname2, FILE * f1, FILE * f2)
+{
+	int more_data = 0;
+	int ret = 0;
+
+	do
+	{
+		char buffer1[256];
+		char buffer2[256];
+		size_t len1 = fread(buffer1, 1, sizeof(buffer1), f1);
+		size_t len2 = fread(buffer2, 1, sizeof(buffer2), f2);
+
+		if (ret == 0 && len1 != len2) {
+			ret = -1;
+		}
+		if (ret == 0 && memcmp(buffer1, buffer2, len1) != 0) {
+			ret = -1;
+		}
+
+		more_data = len1 == sizeof(buffer1);
+
+	} while (ret == 0 && more_data);
+
+	return ret;
+}
+
+int picoquic_test_compare_files(char const * fname1, char const * fname2, const char * mode,
+	int (*compare)(char const * fname1, char const * fname2, FILE * f1, FILE * f2))
+{
+	FILE * f1 = picoquic_file_open(fname1, mode);
+	FILE * f2 = picoquic_file_open(fname2, mode);
+	int ret = 0;
+
+	if (f1 == NULL || f2 == NULL) {
+		DBG_PRINTF("Cannot open file %s\n", f1 == NULL ? fname1 : fname2);
+		ret = -1;
+	} else {
+		ret = compare(fname1, fname2, f1, f2);
+	}
+
+	(void)picoquic_file_close(f1);
+	(void)picoquic_file_close(f2);
+
+	return ret;
+}
+
+int picoquic_test_compare_text_files(char const* fname1, char const* fname2)
+{
+	return picoquic_test_compare_files(fname1, fname2, "r", picoquic_compare_text_files);
+}
+
+int picoquic_test_compare_binary_files(char const* fname1, char const* fname2)
+{
+	return picoquic_test_compare_files(fname1, fname2, "rb", picoquic_compare_binary_files);
 }
 
 uint8_t log_test_ticket[] = {
@@ -671,7 +709,7 @@ int logger_test()
             DBG_PRINTF("%s", "Cannot set the log ref file name.\n");
         }
         else {
-            ret = picoquic_test_compare_files(log_test_file, log_test_ref);
+            ret = picoquic_test_compare_text_files(log_test_file, log_test_ref);
         }
     }
 
@@ -751,7 +789,7 @@ int binlog_test()
     int ret = 0;
 
     if (f == NULL) {
-        DBG_PRINTF("failed to open file:%s\n", log_test_file);
+        DBG_PRINTF("failed to open file:%s\n", binlog_test_file);
         ret = -1;
     } else {
         for (size_t i = 0; i < nb_test_skip_list; i++) {
@@ -759,7 +797,20 @@ int binlog_test()
         }
         (void)picoquic_file_close(f);
     }
-    return 0;
+
+	if (ret == 0) {
+
+		char log_test_ref[512];
+		ret = picoquic_get_input_path(log_test_ref, sizeof(log_test_ref), picoquic_test_solution_dir, BINLOG_TEST_REF);
+
+		if (ret != 0) {
+			DBG_PRINTF("%s", "Cannot set the log ref file name.\n");
+		} else {
+			ret = picoquic_test_compare_binary_files(binlog_test_file, log_test_ref);
+		}
+	}
+	
+	return 0;
 }
 
 /* Basic test of connection ID stash, part of migration support  */
