@@ -160,14 +160,14 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
         
-		TEST_METHOD(test_binlog)
-		{
-			int ret = binlog_test();
+        TEST_METHOD(test_binlog)
+        {
+            int ret = binlog_test();
 
-			Assert::AreEqual(ret, 0);
-		}
+            Assert::AreEqual(ret, 0);
+        }
 
-		TEST_METHOD(test_TlsStreamFrame)
+        TEST_METHOD(test_TlsStreamFrame)
         {
             int ret = TlsStreamFrameTest();
 
