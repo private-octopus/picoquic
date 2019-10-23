@@ -65,7 +65,6 @@ void picoquic_set64_connection_id(picoquic_connection_id_t * cnx_id, uint64_t va
 uint8_t picoquic_parse_connection_id_hexa(char const * hex_input, size_t input_length, picoquic_connection_id_t * cnx_id);
 int picoquic_print_connection_id_hexa(char* buf, size_t buf_len, const picoquic_connection_id_t* cnxid);
 uint8_t picoquic_create_packet_header_cnxid_lengths(uint8_t dest_len, uint8_t srce_len);
-void picoquic_parse_packet_header_cnxid_lengths(uint8_t l_byte, uint8_t *dest_len, uint8_t *srce_len);
 
 int picoquic_compare_addr(const struct sockaddr * expected, const struct sockaddr * actual);
 int picoquic_store_addr(struct sockaddr_storage * stored_addr, const struct sockaddr * addr);
