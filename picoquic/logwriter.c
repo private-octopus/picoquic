@@ -688,7 +688,7 @@ int picoquic_open_cc_dump(picoquic_cnx_t * cnx)
     int ret = 0;
 
     if (picoquic_print_connection_id_hexa(cnxid_str, sizeof(cnxid_str), &cnx->initial_cnxid) != 0
-        || picoquic_sprintf(cc_log_file_name, sizeof(cc_log_file_name), NULL, "%s%c%s-log.bin", cnx->quic->cc_log_dir, PICOQUIC_FILE_SEPARATOR, cnxid_str) != 0)
+        || picoquic_sprintf(cc_log_file_name, sizeof(cc_log_file_name), NULL, "%s%s%s-log.bin", cnx->quic->cc_log_dir, PICOQUIC_FILE_SEPARATOR, cnxid_str) != 0)
     {
         DBG_PRINTF("Cannot format file name into folder %s, id_len = %d\n", cnx->quic->cc_log_dir, cnx->initial_cnxid.id_len);
         ret = -1;
