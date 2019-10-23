@@ -87,61 +87,50 @@ int picoquic_parse_long_packet_header(
             if (ph->version_index >= 0) {
                 /* If the version is supported now, the format field in the version table
                 * describes the encoding. */
-                switch (picoquic_supported_versions[ph->version_index].version_header_encoding) {
-                case picoquic_version_header_17:
-                    ph->spin = 0;
-                    ph->has_spin_bit = 0;
-                    switch ((flags >> 4) & 7) {
-                    case 4: /* Initial */
-                    {
-                        /* special case of the initial packets. They contain a retry token between the header
-                        * and the encrypted payload */
-                        uint64_t tok_len = 0;
-                        size_t l_tok_len = picoquic_varint_decode(bytes + ph->offset, length - ph->offset, &tok_len);
+                ph->spin = 0;
+                ph->has_spin_bit = 0;
+                switch ((flags >> 4) & 7) {
+                case 4: /* Initial */
+                {
+                    /* special case of the initial packets. They contain a retry token between the header
+                    * and the encrypted payload */
+                    uint64_t tok_len = 0;
+                    size_t l_tok_len = picoquic_varint_decode(bytes + ph->offset, length - ph->offset, &tok_len);
 
-                        ph->ptype = picoquic_packet_initial;
-                        ph->pc = picoquic_packet_context_initial;
-                        ph->epoch = 0;
-                        if (l_tok_len == 0) {
-                            /* packet is malformed */
-                            ph->offset = length;
-                            ph->ptype = picoquic_packet_error;
-                            ph->pc = 0;
-                        }
-                        else {
-                            ph->token_length = (size_t)tok_len;
-                            ph->token_bytes = bytes + ph->offset + l_tok_len;
-                            ph->offset += l_tok_len + (size_t)tok_len;
-                        }
-
-                        break;
-                    }
-                    case 5: /* 0-RTT Protected */
-                        ph->ptype = picoquic_packet_0rtt_protected;
-                        ph->pc = picoquic_packet_context_application;
-                        ph->epoch = 1;
-                        break;
-                    case 6: /* Handshake */
-                        ph->ptype = picoquic_packet_handshake;
-                        ph->pc = picoquic_packet_context_handshake;
-                        ph->epoch = 2;
-                        break;
-                    case 7: /* Retry */
-                        ph->ptype = picoquic_packet_retry;
-                        ph->pc = picoquic_packet_context_initial;
-                        ph->epoch = 0;
-                        break;
-                    default: /* Not a valid packet type */
-                        DBG_PRINTF("Packet type is not recognized: 0x%02x\n", flags);
+                    ph->ptype = picoquic_packet_initial;
+                    ph->pc = picoquic_packet_context_initial;
+                    ph->epoch = 0;
+                    if (l_tok_len == 0) {
+                        /* packet is malformed */
+                        ph->offset = length;
                         ph->ptype = picoquic_packet_error;
-                        ph->version_index = -1;
                         ph->pc = 0;
-                        break;
                     }
+                    else {
+                        ph->token_length = (size_t)tok_len;
+                        ph->token_bytes = bytes + ph->offset + l_tok_len;
+                        ph->offset += l_tok_len + (size_t)tok_len;
+                    }
+
                     break;
-                default:
-                    /* version is not supported */
-                    DBG_PRINTF("Version (%x) is recognized but encoding not supported\n", ph->vn);
+                }
+                case 5: /* 0-RTT Protected */
+                    ph->ptype = picoquic_packet_0rtt_protected;
+                    ph->pc = picoquic_packet_context_application;
+                    ph->epoch = 1;
+                    break;
+                case 6: /* Handshake */
+                    ph->ptype = picoquic_packet_handshake;
+                    ph->pc = picoquic_packet_context_handshake;
+                    ph->epoch = 2;
+                    break;
+                case 7: /* Retry */
+                    ph->ptype = picoquic_packet_retry;
+                    ph->pc = picoquic_packet_context_initial;
+                    ph->epoch = 0;
+                    break;
+                default: /* Not a valid packet type */
+                    DBG_PRINTF("Packet type is not recognized: 0x%02x\n", flags);
                     ph->ptype = picoquic_packet_error;
                     ph->version_index = -1;
                     ph->pc = 0;
@@ -260,24 +249,20 @@ int picoquic_parse_short_packet_header(
     if (*pcnx != NULL) {
         ph->epoch = 3;
         ph->version_index = (*pcnx)->version_index;
-        /* If the connection is identified, decode the short header per version ID */
-        switch (picoquic_supported_versions[ph->version_index].version_header_encoding) {
-        case picoquic_version_header_17:
-            if ((bytes[0] & 0x40) != 0x40) {
-                /* Check for QUIC bit failed! */
-                ph->ptype = picoquic_packet_error;
-            }
-            else {
-                ph->ptype = picoquic_packet_1rtt_protected;
-            }
-            ph->has_spin_bit = 1;
-            ph->spin = (bytes[0] >> 5) & 1;
-            ph->pn_offset = ph->offset;
-            ph->pn = 0;
-            ph->pnmask = 0;
-            ph->key_phase = ((bytes[0] >> 2) & 1); /* Initialize here so that simple tests with unencrypted headers can work */
-            break;
+
+        if ((bytes[0] & 0x40) != 0x40) {
+            /* Check for QUIC bit failed! */
+            ph->ptype = picoquic_packet_error;
+        } else {
+            ph->ptype = picoquic_packet_1rtt_protected;
         }
+
+        ph->has_spin_bit = 1;
+        ph->spin = (bytes[0] >> 5) & 1;
+        ph->pn_offset = ph->offset;
+        ph->pn = 0;
+        ph->pnmask = 0;
+        ph->key_phase = ((bytes[0] >> 2) & 1); /* Initialize here so that simple tests with unencrypted headers can work */
 
         if (length < ph->offset || ph->ptype == picoquic_packet_error) {
             ret = -1;
@@ -316,7 +301,7 @@ int picoquic_parse_packet_header(
 
     /* Is this a long header or a short header? -- in any case, we need at least 17 bytes */
     if ((bytes[0] & 0x80) == 0x80) {
-        ret = picoquic_parse_long_packet_header(quic, bytes, length, addr_from, ph, pcnx, receiving);
+        ret = picoquic_parse_long_packet_header(quic, bytes, length, addr_from, ph, pcnx);
     } else {
         ret = picoquic_parse_short_packet_header(quic, bytes, length, addr_from, ph, pcnx, receiving);
     }
