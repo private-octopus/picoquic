@@ -538,7 +538,7 @@ void picoquic_binlog_frames(FILE* F, uint8_t* bytes, size_t length);
 static char const* log_test_file = "log_test.txt";
 static char const* log_fuzz_test_file = "log_fuzz_test.txt";
 static char const* log_packet_test_file = "log_fuzz_test.txt";
-static char const* binlog_test_file = "binlog_test.txt";
+static char const* binlog_test_file = "binlog_test.log";
 
 #define LOG_TEST_REF "picoquictest" PICOQUIC_FILE_SEPARATOR "log_test_ref.txt"
 #define BINLOG_TEST_REF "picoquictest" PICOQUIC_FILE_SEPARATOR "binlog_ref.log"
