@@ -129,8 +129,9 @@ int picoqinq_server_callback_data(picoquic_cnx_t* cnx, picoqinq_server_stream_ct
             /* Submit the message, obtain the response, send it back and finish the stream. */
             uint8_t response[256];
             size_t response_length=0;
+            /* TODO
             ret = picoqinq_server_protocol_input(callback_ctx, stream_ctx->frame, stream_ctx->data_received,
-                response, sizeof(response), &response_length);
+                response, sizeof(response), &response_length); */
             if (ret == 0) {
                 ret = picoquic_add_to_stream(cnx, stream_id, response, response_length, 1);
             }

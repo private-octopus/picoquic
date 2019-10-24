@@ -56,7 +56,7 @@ int picoqinq_parse_datagram_header(picoqinq_cnx_ctx_t* ctx, bytestream* stream, 
     ret = byteread_vint(stream, &hcid);
     if (ret == 0) {
         if (hcid == 0) {
-            if ((ret = byteread_vint(stream, address_length)) == 0) {
+            if ((ret = byteread_vlen(stream, address_length)) == 0) {
                 *address = bytestream_ptr(stream);
                 if ((ret = bytestream_skip(stream, *address_length)) == 0) {
                     ret = byteread_int16(stream, port);
@@ -122,7 +122,7 @@ int picoqinq_parse_reserve_header(bytestream* stream,
 
     if ((ret = byteread_vint(stream, direction)) == 0 &&
         (ret = byteread_vint(stream, hcid)) == 0 &&
-        (ret = byteread_vint(stream, address_length)) == 0) {
+        (ret = byteread_vlen(stream, address_length)) == 0) {
         *address = bytestream_ptr(stream);
         if ((ret = bytestream_skip(stream, *address_length)) == 0 &&
             (ret = byteread_int16(stream, port)) == 0) {
@@ -252,7 +252,7 @@ int picoqinq_parse_reserve_cid(bytestream* stream, picoquic_connection_id_t* cid
     return byteread_cid(stream, cid);
 }
 
-uint8_t* picoqinq_register_cid(picoqinq_cnx_ctx_t* ctx, picoquic_connection_id_t* cid)
+int picoqinq_register_cid(picoqinq_cnx_ctx_t* ctx, picoquic_connection_id_t* cid)
 {
     /* add to the hash table. */
     /* add to the local table. */
