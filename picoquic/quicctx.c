@@ -556,6 +556,11 @@ void picoquic_init_transport_parameters(picoquic_tp_t* tp, int client_mode)
 
 /* management of the list of connections in context */
 
+picoquic_quic_t* picoquic_get_quic_ctx(picoquic_cnx_t* cnx)
+{
+    return (cnx == NULL)?NULL:cnx->quic;
+}
+
 picoquic_cnx_t* picoquic_get_first_cnx(picoquic_quic_t* quic)
 {
     return quic->cnx_list;

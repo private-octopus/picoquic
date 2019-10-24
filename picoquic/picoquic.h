@@ -189,6 +189,41 @@ typedef struct st_picoquic_connection_id_t {
 /* Detect whether error occured in TLS
  */
 int picoquic_is_handshake_error(uint16_t error_code);
+
+/* Packet header structure.
+ */
+
+typedef struct st_picoquic_packet_header_t {
+    picoquic_connection_id_t dest_cnx_id;
+    picoquic_connection_id_t srce_cnx_id;
+    uint32_t pn;
+    uint32_t vn;
+    size_t offset;
+    size_t pn_offset;
+    picoquic_packet_type_enum ptype;
+    uint64_t pnmask;
+    uint64_t pn64;
+    size_t payload_length;
+    int version_index;
+    int epoch;
+    picoquic_packet_context_enum pc;
+
+    unsigned int key_phase : 1;
+    unsigned int spin : 1;
+    unsigned int has_spin_bit : 1;
+    unsigned int has_reserved_bit_set : 1;
+    unsigned int is_old_invariant : 1;
+
+    size_t token_length;
+    uint8_t* token_bytes;
+    size_t pl_val;
+} picoquic_packet_header;
+
+int picoquic_header_invariants(
+    uint8_t* bytes,
+    size_t length,
+    picoquic_packet_header* ph);
+
 /*
 * The stateless packet structure is used to temporarily store
 * stateless packets before they can be sent by servers.
@@ -508,6 +543,7 @@ int picoquic_renew_connection_id(picoquic_cnx_t* cnx, int path_id);
 
 int picoquic_start_key_rotation(picoquic_cnx_t * cnx);
 
+picoquic_quic_t* picoquic_get_quic_ctx(picoquic_cnx_t* cnx);
 picoquic_cnx_t* picoquic_get_first_cnx(picoquic_quic_t* quic);
 picoquic_cnx_t* picoquic_get_next_cnx(picoquic_cnx_t* cnx);
 int64_t picoquic_get_next_wake_delay(picoquic_quic_t* quic,
@@ -555,7 +591,9 @@ void * picoquic_get_callback_context(picoquic_cnx_t* cnx);
 int picoquic_queue_misc_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t length);
 
 /* Send and receive network packets */
-
+/* Handling of stateless packets */
+picoquic_stateless_packet_t* picoquic_create_stateless_packet(picoquic_quic_t* quic);
+void picoquic_queue_stateless_packet(picoquic_quic_t* quic, picoquic_stateless_packet_t* sp);
 picoquic_stateless_packet_t* picoquic_dequeue_stateless_packet(picoquic_quic_t* quic);
 void picoquic_delete_stateless_packet(picoquic_stateless_packet_t* sp);
 
