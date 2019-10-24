@@ -102,7 +102,7 @@ uint8_t* picoquic_frames_varint_decode(uint8_t* bytes, const uint8_t* bytes_max,
 
 uint8_t* picoquic_frames_varlen_decode(uint8_t* bytes, const uint8_t* bytes_max, size_t* n)
 {
-    size_t len = 0;
+    uint64_t len = 0;
     bytes = picoquic_frames_varint_decode(bytes, bytes_max, &len);
     *n = (size_t)len;
     return (*n == len) ? bytes : NULL;
