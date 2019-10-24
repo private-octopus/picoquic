@@ -28,12 +28,19 @@
  */
 
 #include "picoquic_internal.h"
-#include "bytestream.h"
 #include "logwriter.h"
 #include "tls_api.h"
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+
+uint8_t* picoquic_frames_varint_decode(uint8_t* bytes, const uint8_t* bytes_max, uint64_t* n64);
+uint8_t* picoquic_frames_varlen_decode(uint8_t* bytes, const uint8_t* bytes_max, size_t* n);
+uint8_t* picoquic_frames_uint8_decode(uint8_t* bytes, const uint8_t* bytes_max, uint8_t* n);
+uint8_t* picoquic_frames_uint16_decode(uint8_t* bytes, const uint8_t* bytes_max, uint16_t* n);
+uint8_t* picoquic_frames_uint32_decode(uint8_t* bytes, const uint8_t* bytes_max, uint32_t* n);
+uint8_t* picoquic_frames_uint64_decode(uint8_t* bytes, const uint8_t* bytes_max, uint64_t* n);
+uint8_t* picoquic_frames_cid_decode(uint8_t* bytes, const uint8_t* bytes_max, picoquic_connection_id_t* n);
 
 int picoquic_parse_long_packet_header(
     picoquic_quic_t* quic,
@@ -44,17 +51,20 @@ int picoquic_parse_long_packet_header(
     picoquic_cnx_t** pcnx)
 {
     int ret = 0;
-    bytestream stream;
-    bytestream * s = bytestream_ref_init(&stream, bytes, length);
 
+    const uint8_t* bytes_start = bytes;
+    const uint8_t* bytes_max = bytes + length;
     uint8_t flags = 0;
-    ret |= byteread_int8(s, &flags);
-    ret |= byteread_int32(s, &ph->vn);
-    ret |= byteread_cid(s, &ph->dest_cnx_id);
-    ret |= byteread_cid(s, &ph->srce_cnx_id);
+
+    if ((bytes = picoquic_frames_uint8_decode(bytes, bytes_max, &flags)) == NULL ||
+        (bytes = picoquic_frames_uint32_decode(bytes, bytes_max, &ph->vn)) == NULL ||
+        (bytes = picoquic_frames_cid_decode(bytes, bytes_max, &ph->dest_cnx_id)) == NULL ||
+        (bytes = picoquic_frames_cid_decode(bytes, bytes_max, &ph->srce_cnx_id)) == NULL) {
+        ret = -1;
+    }
 
     if (ret == 0) {
-        ph->offset = bytestream_length(s);
+        ph->offset = bytes - bytes_start;
 
         if (ph->vn == 0) {
             /* VN = zero identifies a version negotiation packet */
@@ -79,8 +89,7 @@ int picoquic_parse_long_packet_header(
         }
         else {
             char context_by_addr = 0;
-            uint64_t payload_length = 0;
-            uint32_t var_length = 0;
+            size_t payload_length = 0;
 
             ph->version_index = picoquic_get_version_index(ph->vn);
 
@@ -94,22 +103,25 @@ int picoquic_parse_long_packet_header(
                 {
                     /* special case of the initial packets. They contain a retry token between the header
                     * and the encrypted payload */
-                    uint64_t tok_len = 0;
-                    size_t l_tok_len = picoquic_varint_decode(bytes + ph->offset, length - ph->offset, &tok_len);
+                    size_t tok_len = 0;
+                    bytes = picoquic_frames_varlen_decode(bytes, bytes_max, &tok_len);
 
-                    ph->ptype = picoquic_packet_initial;
-                    ph->pc = picoquic_packet_context_initial;
+                    size_t bytes_left = bytes_max - bytes;
+
                     ph->epoch = 0;
-                    if (l_tok_len == 0) {
+                    if (bytes == NULL || bytes_left < tok_len) {
                         /* packet is malformed */
-                        ph->offset = length;
                         ph->ptype = picoquic_packet_error;
                         ph->pc = 0;
+                        ph->offset = length;
                     }
                     else {
-                        ph->token_length = (size_t)tok_len;
-                        ph->token_bytes = bytes + ph->offset + l_tok_len;
-                        ph->offset += l_tok_len + (size_t)tok_len;
+                        ph->ptype = picoquic_packet_initial;
+                        ph->pc = picoquic_packet_context_initial;
+                        ph->token_length = tok_len;
+                        ph->token_bytes = bytes;
+                        bytes += tok_len;
+                        ph->offset = bytes - bytes_start;
                     }
 
                     break;
@@ -141,7 +153,7 @@ int picoquic_parse_long_packet_header(
             if (ph->ptype == picoquic_packet_retry) {
                 /* No segment length or sequence number in retry packets */
                 if (length > ph->offset) {
-                    payload_length = (uint16_t)length - ph->offset;
+                    payload_length = length - ph->offset;
                 }
                 else {
                     payload_length = 0;
@@ -149,13 +161,10 @@ int picoquic_parse_long_packet_header(
                 }
             }
             else {
-                if (ph->offset < length) {
-                    var_length = (uint32_t)picoquic_varint_decode(bytes + ph->offset,
-                        length - ph->offset, &payload_length);
-                }
+                bytes = picoquic_frames_varlen_decode(bytes, bytes_max, &payload_length);
 
-                if (var_length <= 0 || ph->offset + var_length + payload_length > length ||
-                    ph->version_index < 0) {
+                size_t bytes_left = (bytes_max > bytes) ? bytes_max - bytes : 0;
+                if (bytes == NULL || bytes_left < payload_length || ph->version_index < 0) {
                     ph->ptype = picoquic_packet_error;
                     ph->payload_length = (uint16_t)((length > ph->offset) ? length - ph->offset : 0);
                     ph->pl_val = ph->payload_length;
@@ -166,7 +175,7 @@ int picoquic_parse_long_packet_header(
             {
                 ph->pl_val = (uint16_t)payload_length;
                 ph->payload_length = (uint16_t)payload_length;
-                ph->offset += var_length;
+                ph->offset = bytes - bytes_start;
                 ph->pn_offset = ph->offset;
 
                 /* Retrieve the connection context */
