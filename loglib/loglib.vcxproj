@@ -81,6 +81,7 @@
       <AdditionalIncludeDirectories>$(SolutionDir)\picoquic;$(OPENSSLDIR)\include;..\..\picotls\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ControlFlowGuard>Guard</ControlFlowGuard>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <TreatWarningAsError>true</TreatWarningAsError>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -96,6 +97,7 @@
       <AdditionalIncludeDirectories>$(SolutionDir)\picoquic;$(OPENSSL64DIR)\include;..\..\picotls\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ControlFlowGuard>Guard</ControlFlowGuard>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <TreatWarningAsError>true</TreatWarningAsError>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -103,7 +105,7 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
+      <WarningLevel>Level4</WarningLevel>
       <PrecompiledHeader>
       </PrecompiledHeader>
       <Optimization>MaxSpeed</Optimization>
@@ -112,6 +114,7 @@
       <PreprocessorDefinitions>WIN32;NDEBUG;_LIB;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(SolutionDir)\picoquic;$(OPENSSLDIR)\include;..\..\picotls\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ControlFlowGuard>Guard</ControlFlowGuard>
+      <TreatWarningAsError>true</TreatWarningAsError>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -121,7 +124,7 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
+      <WarningLevel>Level4</WarningLevel>
       <PrecompiledHeader>
       </PrecompiledHeader>
       <Optimization>MaxSpeed</Optimization>
@@ -130,6 +133,7 @@
       <PreprocessorDefinitions>NDEBUG;_LIB;_WINDOWS;_WINDOWS64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(SolutionDir)\picoquic;$(OPENSSL64DIR)\include;..\..\picotls\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ControlFlowGuard>Guard</ControlFlowGuard>
+      <TreatWarningAsError>true</TreatWarningAsError>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -140,12 +144,18 @@
   <ItemGroup>
     <ClCompile Include="cidset.c" />
     <ClCompile Include="csv.c" />
+    <ClCompile Include="logconvert.c" />
     <ClCompile Include="logreader.c" />
+    <ClCompile Include="qlog.c" />
+    <ClCompile Include="svg.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="cidset.h" />
     <ClInclude Include="csv.h" />
+    <ClInclude Include="logconvert.h" />
     <ClInclude Include="logreader.h" />
+    <ClInclude Include="qlog.h" />
+    <ClInclude Include="svg.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

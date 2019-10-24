@@ -22,6 +22,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <inttypes.h>
+#include <errno.h>
+
 #include "picoquic_internal.h"
 #include "bytestream.h"
 #include "logreader.h"
@@ -127,19 +129,23 @@ static int binlog_convert_event(bytestream * s, void * ptr)
         }
 
         while (ret == 0 && bytestream_remain(s) > 0) {
-            uint64_t len = 0;
-            ret |= byteread_vint(s, &len);
 
-            bytestream stream;
-            bytestream* frame = bytestream_ref_init(&stream, bytestream_ptr(s), len);
+            size_t len = 0;
+            ret = byteread_vlen(s, &len);
 
-            ret |= bytestream_skip(s, len);
             if (ret == 0) {
-                ret |= ctx->callbacks->packet_frame(frame, cbptr);
+                bytestream stream;
+                bytestream* frame = bytestream_ref_init(&stream, bytestream_ptr(s), len);
+
+                ret = bytestream_skip(s, len);
+                if (ret == 0) {
+                    ret = ctx->callbacks->packet_frame(frame, cbptr);
+                }
             }
         }
+
         if (ret == 0) {
-            ret |= ctx->callbacks->packet_end(cbptr);
+            ret = ctx->callbacks->packet_end(cbptr);
         }
     }
 
@@ -182,8 +188,8 @@ static int byteread_packet_header(bytestream * s, picoquic_packet_header * ph)
     ph->spin = (header_flags & 2) != 0;
     ph->key_phase = (header_flags & 1) != 0;
 
-    uint64_t payload_length = 0;
-    byteread_vint(s, &payload_length);
+    size_t payload_length = 0;
+    byteread_vlen(s, &payload_length);
     ph->payload_length = payload_length;
 
     uint64_t ptype;
@@ -201,12 +207,34 @@ static int byteread_packet_header(bytestream * s, picoquic_packet_header * ph)
     }
 
     if (ptype == picoquic_packet_initial) {
-        uint64_t token_length = 0;
-        byteread_vint(s, &token_length);
+        size_t token_length = 0;
+        byteread_vlen(s, &token_length);
         bytestream_skip(s, token_length);
     }
 
     return ret;
+}
+
+FILE * open_outfile(const char * cid_name, const char * binlog_name, const char * out_dir, const char * out_ext)
+{
+    if (out_dir == NULL) {
+        return stdout;
+    }
+
+    char filename[512];
+    int ret = picoquic_sprintf(filename, sizeof(filename), NULL, "%s%c%s.%s",
+        out_dir, PICOQUIC_FILE_SEPARATOR, cid_name, out_ext);
+
+    if (ret != 0) {
+        DBG_PRINTF("Cannot format file name for connection %s in file %s", cid_name, binlog_name);
+        return NULL;
+    }
+    
+    FILE * f = picoquic_file_open(filename, "w");
+    if (f == NULL) {
+        fprintf(stderr, "Could not open '%s' for writing (err=%d)", filename, errno);
+    }
+    return f;
 }
 
 /* Open the bin file for reading */

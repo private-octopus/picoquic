@@ -81,6 +81,7 @@
       <AdditionalIncludeDirectories>$(SolutionDir)\picoquic;$(SolutionDir)\picohttp;$(SolutionDir)\loglib;$(OPENSSLDIR)\include;..\..\picotls\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ControlFlowGuard>Guard</ControlFlowGuard>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <TreatWarningAsError>true</TreatWarningAsError>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -98,6 +99,7 @@
       <ForceConformanceInForLoopScope>true</ForceConformanceInForLoopScope>
       <RemoveUnreferencedCodeData>true</RemoveUnreferencedCodeData>
       <DebugInformationFormat>OldStyle</DebugInformationFormat>
+      <TreatWarningAsError>true</TreatWarningAsError>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -114,6 +116,7 @@
       <PreprocessorDefinitions>WIN32;NDEBUG;_LIB;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(SolutionDir)\picoquic;$(SolutionDir)\picohttp;$(SolutionDir)\loglib;$(OPENSSLDIR)\include;..\..\picotls\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ControlFlowGuard>Guard</ControlFlowGuard>
+      <TreatWarningAsError>true</TreatWarningAsError>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -132,6 +135,7 @@
       <PreprocessorDefinitions>NDEBUG;_LIB;_WINDOWS;_WINDOWS64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(SolutionDir)picoquic;$(SolutionDir)picohttp;$(SolutionDir)loglib;$(SolutionDir)picoqinq;$(OPENSSL64DIR)\include;..\..\picotls\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ControlFlowGuard>Guard</ControlFlowGuard>
+      <TreatWarningAsError>true</TreatWarningAsError>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
