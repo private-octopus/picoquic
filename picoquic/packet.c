@@ -160,7 +160,7 @@ int picoquic_parse_long_packet_header(
                     ph->ptype = picoquic_packet_error;
                 }
             }
-            else {
+            else if (ph->ptype != picoquic_packet_error) {
                 bytes = picoquic_frames_varlen_decode(bytes, bytes_max, &payload_length);
 
                 size_t bytes_left = (bytes_max > bytes) ? bytes_max - bytes : 0;
