@@ -937,7 +937,7 @@ int transport_param_log_test()
         if (ret != 0) {
             DBG_PRINTF("%s", "Cannot set the log TP ref file name.\n");
         } else {
-            ret = picoquic_test_compare_files(log_tp_test_file, log_tp_test_ref);
+            ret = picoquic_test_compare_text_files(log_tp_test_file, log_tp_test_ref);
         }
     }
 

@@ -434,37 +434,18 @@ void picoquic_get_ip_addr(struct sockaddr * addr, uint8_t ** ip_addr, uint8_t * 
 /* Return a directory path based on solution dir and file name */
 int picoquic_get_input_path(char * target_file_path, size_t file_path_max, const char * solution_path, const char * file_name)
 {
-    int ret = 0;
-    size_t solution_path_length;
-    size_t file_name_length;
-    size_t separator_length = 0;
     if (solution_path == NULL) {
         solution_path = PICOQUIC_DEFAULT_SOLUTION_DIR;
     }
 
-    solution_path_length = strlen(solution_path);
-    file_name_length = strlen(file_name);
-    if (solution_path_length == 0 || solution_path[solution_path_length - 1] != PICOQUIC_FILE_SEPARATOR) {
-        separator_length = 1;
+    const char * separator = PICOQUIC_FILE_SEPARATOR;
+    size_t solution_path_length = strlen(solution_path);
+    if (solution_path_length != 0 && solution_path[solution_path_length - 1] == separator[0]) {
+        separator = "";
     }
 
-    if (solution_path_length + separator_length + file_name_length + 1 > file_path_max) {
-        target_file_path[0] = 0;
-        ret = -1;
-    }
-    else {
-        size_t byte_index = 0;
-        memcpy(&target_file_path[byte_index], solution_path, solution_path_length);
-        byte_index += solution_path_length;
-
-        if (separator_length) {
-            target_file_path[byte_index++] = PICOQUIC_FILE_SEPARATOR;
-        }
-        memcpy(&target_file_path[byte_index], file_name, file_name_length);
-        byte_index += file_name_length;
-
-        target_file_path[byte_index] = 0;
-    }
+    int ret = picoquic_sprintf(target_file_path, file_path_max, NULL, "%s%s%s",
+        solution_path, separator, file_name);
 
     return ret;
 }

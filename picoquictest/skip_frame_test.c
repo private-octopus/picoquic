@@ -259,13 +259,13 @@ size_t nb_test_skip_list = sizeof(test_skip_list) / sizeof(test_skip_frames_t);
 
 /* Pseudo random generation suitable for tests. Guaranties that the
 * same seed will produce the same sequence, allows for specific
-* random sequence for a given test. 
+* random sequence for a given test.
 * Adapted from http://xoroshiro.di.unimi.it/splitmix64.c,
 * Written in 2015 by Sebastiano Vigna (vigna@acm.org)  */
 
 uint64_t picoquic_test_random(uint64_t * random_context)
 {
-    uint64_t z; 
+    uint64_t z;
     *random_context += 0x9e3779b97f4a7c15;
     z = *random_context;
     z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9ull;
@@ -307,7 +307,7 @@ double picoquic_test_gauss_random(uint64_t* random_context)
 {
     double dx = 0;
 
-    /* Sum of 12 variables in [0..1], provides 
+    /* Sum of 12 variables in [0..1], provides
      * average = 6.0, stdev = 3.0 */
     for (int i = 0; i < 12; i++) {
         double d;
@@ -430,7 +430,7 @@ int skip_frame_test()
     /* Do a minimal fuzz test */
     for (size_t i = 0; ret == 0 && i < 100; i++) {
         size_t bytes_max = format_random_packet(buffer, sizeof(buffer), &random_context);
-        
+
         ret = skip_test_packet(buffer, bytes_max);
         if (ret != 0) {
             DBG_PRINTF("Skip packet <%d> fails, ret = %d\n", i, ret);
@@ -480,7 +480,7 @@ int parse_frame_test()
         for (int sharp_end = 0; ret == 0 && sharp_end < 2; sharp_end++) {
             size_t byte_max = 0;
             int t_ret = 0;
-            picoquic_cnx_t * cnx = picoquic_create_cnx(qclient, 
+            picoquic_cnx_t * cnx = picoquic_create_cnx(qclient,
                 picoquic_null_connection_id, picoquic_null_connection_id, (struct sockaddr *) &saddr,
                 simulated_time, 0, "test-sni", "test-alpn", 1);
 
@@ -533,16 +533,15 @@ int parse_frame_test()
 }
 
 void picoquic_log_frames(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t length);
+void picoquic_binlog_frames(FILE* F, uint8_t* bytes, size_t length);
 
 static char const* log_test_file = "log_test.txt";
 static char const* log_fuzz_test_file = "log_fuzz_test.txt";
 static char const* log_packet_test_file = "log_fuzz_test.txt";
+static char const* binlog_test_file = "binlog_test.log";
 
-#ifdef _WINDOWS
-#define LOG_TEST_REF "picoquictest\\log_test_ref.txt"
-#else
-#define LOG_TEST_REF "picoquictest/log_test_ref.txt"
-#endif
+#define LOG_TEST_REF "picoquictest" PICOQUIC_FILE_SEPARATOR "log_test_ref.txt"
+#define BINLOG_TEST_REF "picoquictest" PICOQUIC_FILE_SEPARATOR "binlog_ref.log"
 
 static int compare_lines(char const* b1, char const* b2)
 {
@@ -565,55 +564,97 @@ static int compare_lines(char const* b1, char const* b2)
     return (*b1 == 0 && *b2 == 0) ? 0 : -1;
 }
 
-int picoquic_test_compare_files(char const* fname1, char const* fname2)
+int picoquic_compare_text_files(char const * fname1, char const * fname2, FILE * F1, FILE * F2)
 {
-    FILE* F1;
-    FILE* F2 = NULL;
     int ret = 0;
     int nb_line = 0;
 
-    if ((F1 = picoquic_file_open(fname1, "r")) == NULL) {
-        DBG_PRINTF("Cannot open file %s\n", fname1);
+    char buffer1[256];
+    char buffer2[256];
+
+    while (ret == 0 && fgets(buffer1, sizeof(buffer1), F1) != NULL) {
+        nb_line++;
+        if (fgets(buffer2, sizeof(buffer2), F2) == NULL) {
+            /* F2 is too short */
+            DBG_PRINTF("File %s is shorter than %s\n", fname2, fname1);
+            DBG_PRINTF("    Missing line %d: %s", nb_line, buffer1);
+            ret = -1;
+        } else {
+            ret = compare_lines(buffer1, buffer2);
+            if (ret != 0)
+            {
+                DBG_PRINTF("File %s differs %s at line %d\n", fname2, fname1, nb_line);
+                DBG_PRINTF("    Got: %s", buffer1);
+                DBG_PRINTF("    Vs:  %s", buffer2);
+            }
+        }
+    }
+
+    if (ret == 0 && fgets(buffer2, sizeof(buffer2), F2) != NULL) {
+        /* F2 is too long */
+        DBG_PRINTF("File %s is longer than %s\n", fname2, fname1);
+        DBG_PRINTF("    Extra line %d: %s", nb_line+1, buffer2);
         ret = -1;
     }
-    else if ((F2 = picoquic_file_open(fname2, "r")) == NULL) {
-        DBG_PRINTF("Cannot open file %s\n", fname2);
+
+    return ret;
+}
+
+static int picoquic_compare_binary_files(char const* fname1, char const* fname2, FILE* f1, FILE* f2)
+{
+    int more_data = 0;
+    int ret = 0;
+
+    do
+    {
+        char buffer1[256];
+        char buffer2[256];
+        size_t len1 = fread(buffer1, 1, sizeof(buffer1), f1);
+        size_t len2 = fread(buffer2, 1, sizeof(buffer2), f2);
+
+        if (ret == 0 && len1 != len2) {
+            ret = -1;
+        }
+        if (ret == 0 && memcmp(buffer1, buffer2, len1) != 0) {
+            ret = -1;
+        }
+
+        more_data = len1 == sizeof(buffer1);
+
+    } while (ret == 0 && more_data);
+
+    return ret;
+}
+
+int picoquic_test_compare_files(char const* fname1, char const* fname2, const char* mode,
+    int (*compare)(char const* fname1, char const* fname2, FILE* f1, FILE* f2))
+{
+    FILE* f1 = picoquic_file_open(fname1, mode);
+    FILE* f2 = picoquic_file_open(fname2, mode);
+    int ret = 0;
+
+    if (f1 == NULL || f2 == NULL) {
+        DBG_PRINTF("Cannot open file %s\n", f1 == NULL ? fname1 : fname2);
         ret = -1;
     }
     else {
-        char buffer1[256];
-        char buffer2[256];
-
-        while (ret == 0 && fgets(buffer1, sizeof(buffer1), F1) != NULL) {
-            nb_line++;
-            if (fgets(buffer2, sizeof(buffer2), F2) == NULL) {
-                /* F2 is too short */
-                DBG_PRINTF("File %s is shorter than %s\n", fname2, fname1);
-                DBG_PRINTF("    Missing line %d: %s", nb_line, buffer1);
-                ret = -1;
-            } else {
-                ret = compare_lines(buffer1, buffer2);
-                if (ret != 0)
-                {
-                    DBG_PRINTF("File %s differs %s at line %d\n", fname2, fname1, nb_line);
-                    DBG_PRINTF("    Got: %s", buffer1);
-                    DBG_PRINTF("    Vs:  %s", buffer2);
-                }
-            }
-        }
-
-        if (ret == 0 && fgets(buffer2, sizeof(buffer2), F2) != NULL) {
-            /* F2 is too long */
-            DBG_PRINTF("File %s is longer than %s\n", fname2, fname1);
-            DBG_PRINTF("    Extra line %d: %s", nb_line+1, buffer2);
-            ret = -1;
-        }
+        ret = compare(fname1, fname2, f1, f2);
     }
 
-    (void)picoquic_file_close(F1);
-    (void)picoquic_file_close(F2);
+    (void)picoquic_file_close(f1);
+    (void)picoquic_file_close(f2);
 
     return ret;
+}
+
+int picoquic_test_compare_text_files(char const* fname1, char const* fname2)
+{
+    return picoquic_test_compare_files(fname1, fname2, "r", picoquic_compare_text_files);
+}
+
+int picoquic_test_compare_binary_files(char const* fname1, char const* fname2)
+{
+    return picoquic_test_compare_files(fname1, fname2, "rb", picoquic_compare_binary_files);
 }
 
 uint8_t log_test_ticket[] = {
@@ -669,11 +710,11 @@ int logger_test()
             DBG_PRINTF("%s", "Cannot set the log ref file name.\n");
         }
         else {
-            ret = picoquic_test_compare_files(log_test_file, log_test_ref);
+            ret = picoquic_test_compare_text_files(log_test_file, log_test_ref);
         }
     }
 
-    /* Create a set of randomized packets. Verify that they can be logged without 
+    /* Create a set of randomized packets. Verify that they can be logged without
      * causing the dreaded "Unknown frame" message */
 
     for (size_t i = 0; ret == 0 && i < 100; i++) {
@@ -743,6 +784,35 @@ int logger_test()
     return ret;
 }
 
+int binlog_test()
+{
+    FILE * f = picoquic_file_open(binlog_test_file, "w");
+    int ret = 0;
+
+    if (f == NULL) {
+        DBG_PRINTF("failed to open file:%s\n", binlog_test_file);
+        ret = -1;
+    } else {
+        for (size_t i = 0; i < nb_test_skip_list; i++) {
+            picoquic_binlog_frames(f, test_skip_list[i].val, test_skip_list[i].len);
+        }
+        (void)picoquic_file_close(f);
+    }
+
+    if (ret == 0) {
+
+        char log_test_ref[512];
+        ret = picoquic_get_input_path(log_test_ref, sizeof(log_test_ref), picoquic_test_solution_dir, BINLOG_TEST_REF);
+
+        if (ret != 0) {
+            DBG_PRINTF("%s", "Cannot set the log ref file name.\n");
+        } else {
+            ret = picoquic_test_compare_binary_files(binlog_test_file, log_test_ref);
+        }
+    }
+
+    return 0;
+}
 
 /* Basic test of connection ID stash, part of migration support  */
 static const picoquic_cnxid_stash_t stash_test_case[] = {
@@ -952,7 +1022,7 @@ int new_cnxid_test()
 }
 
 /* Test the split frame process. We start with a variety of stream data frames, and
- * verify that the split process works correctly. This tests the stream header encoding 
+ * verify that the split process works correctly. This tests the stream header encoding
  * and length encoding functions used in the prepare_stream_frame function, without
  * having side effects on the state of a connection.
  */
@@ -979,7 +1049,7 @@ int new_cnxid_test()
    61, 62, 63, 64, 65, 66, 67
 
 uint8_t split_frame_source_stream0_lundef[] = {
-    picoquic_frame_type_stream_range_min, 0x00, 
+    picoquic_frame_type_stream_range_min, 0x00,
     SPLIT_FRAME_TEST_SOURCE_CONTENT_67 };
 
 uint8_t split_frame_source_stream0_lundef_fin[] = {
@@ -1111,7 +1181,7 @@ split_frame_test_case_t split_test_case[] = {
         split_frame_source_stream0_lundef, sizeof(split_frame_source_stream0_lundef),
         sizeof(split_frame_source_stream0_lundef_init32),
         split_frame_source_stream0_lundef_init32, sizeof(split_frame_source_stream0_lundef_init32),
-        1024, 
+        1024,
         split_frame_source_stream0_ldef_last35, sizeof(split_frame_source_stream0_ldef_last35),
         0
     } /* 8 */,
@@ -1228,7 +1298,7 @@ int split_stream_frame_test()
                 DBG_PRINTF("Testcase %d b2 values differ\n", (int)i);
                 ret = -1;
             }
-        }    
+        }
     }
 
     return ret;
@@ -1322,7 +1392,7 @@ typedef struct st_copy_retransmit_test_case_t {
     int is_pure_ack_expected;
 } copy_retransmit_test_case_t;
 
-static copy_retransmit_test_case_t copy_retransmit_case[] = { 
+static copy_retransmit_test_case_t copy_retransmit_case[] = {
     {
         ct_test_packet1,
         (uint32_t) sizeof(ct_test_packet1),
@@ -1524,8 +1594,8 @@ int test_copy_for_retransmit()
                     copy_retransmit_case[i].b1_length);
                 ret = -1;
             }
-            else if (memcmp(new_bytes + copy_retransmit_case[i].b1_offset, 
-                copy_retransmit_case[i].b1_expected + copy_retransmit_case[i].b1_offset, 
+            else if (memcmp(new_bytes + copy_retransmit_case[i].b1_offset,
+                copy_retransmit_case[i].b1_expected + copy_retransmit_case[i].b1_offset,
                 length - copy_retransmit_case[i].b1_offset) != 0) {
                 DBG_PRINTF("Value mismatch on test[%d]\n", i);
                 ret = -1;
