@@ -507,3 +507,135 @@ FILE * picoquic_file_close(FILE * F)
     }
     return NULL;
 }
+
+/* Encoding functions of the form uint8_t * picoquic_frame_XXX_encode(uint8_t * bytes, uint8_t * bytes-max, ...)
+ */
+uint8_t* picoquic_frames_varint_encode(uint8_t* bytes, const uint8_t* bytes_max, uint64_t n64)
+{
+    if (n64 < 16384) {
+        if (n64 < 64) {
+            if (bytes + 1 <= bytes_max) {
+                *bytes++ = (uint8_t)(n64);
+            }
+            else {
+                bytes = NULL;
+            }
+        }
+        else {
+            if (bytes + 2 <= bytes_max) {
+                *bytes++ = (uint8_t)((n64 >> 8) | 0x40);
+                *bytes++ = (uint8_t)(n64);
+            }
+            else {
+                bytes = NULL;
+            }
+        }
+    }
+    else if (n64 < 1073741824) {
+        if (bytes + 4 <= bytes_max) {
+            *bytes++ = (uint8_t)((n64 >> 24) | 0x80);
+            *bytes++ = (uint8_t)(n64 >> 16);
+            *bytes++ = (uint8_t)(n64 >> 8);
+            *bytes++ = (uint8_t)(n64);
+        }
+        else {
+            bytes = NULL;
+        }
+    }
+    else {
+        if (bytes + 8 <= bytes_max) {
+            *bytes++ = (uint8_t)((n64 >> 56) | 0xC0);
+            *bytes++ = (uint8_t)(n64 >> 48);
+            *bytes++ = (uint8_t)(n64 >> 40);
+            *bytes++ = (uint8_t)(n64 >> 32);
+            *bytes++ = (uint8_t)(n64 >> 24);
+            *bytes++ = (uint8_t)(n64 >> 16);
+            *bytes++ = (uint8_t)(n64 >> 8);
+            *bytes++ = (uint8_t)(n64);
+        }
+        else {
+            bytes = NULL;
+        }
+    }
+
+    return bytes;
+}
+
+uint8_t* picoquic_frames_varlen_encode(uint8_t* bytes, const uint8_t* bytes_max, size_t n)
+{
+    return picoquic_frames_varint_encode(bytes, bytes_max, n);
+}
+
+uint8_t* picoquic_frames_uint8_encode(uint8_t* bytes, const uint8_t* bytes_max, uint8_t n)
+{
+    if (bytes + sizeof(n) > bytes_max) {
+        bytes = NULL;
+    }
+    else {
+        *bytes++ = n;
+    }
+
+    return (bytes);
+}
+uint8_t* picoquic_frames_uint16_encode(uint8_t* bytes, const uint8_t* bytes_max, uint16_t n)
+{
+    if (bytes + sizeof(n) > bytes_max) {
+        bytes = NULL;
+    }
+    else {
+        *bytes++ = (uint8_t)(n >> 8);
+        *bytes++ = (uint8_t)n;
+    }
+    return (bytes);
+}
+
+uint8_t* picoquic_frames_uint32_encode(uint8_t* bytes, const uint8_t* bytes_max, uint32_t n)
+{
+    if (bytes + sizeof(n) > bytes_max) {
+        bytes = NULL;
+    }
+    else {
+        *bytes++ = (uint8_t)(n >> 24);
+        *bytes++ = (uint8_t)(n >> 16);
+        *bytes++ = (uint8_t)(n >> 8);
+        *bytes++ = (uint8_t)n;
+    }
+    return (bytes);
+}
+
+uint8_t* picoquic_frames_uint64_encode(uint8_t* bytes, const uint8_t* bytes_max, uint64_t n)
+{
+    if (bytes + sizeof(n) > bytes_max) {
+        bytes = NULL;
+    }
+    else {
+        *bytes++ = (uint8_t)(n >> 56);
+        *bytes++ = (uint8_t)(n >> 48);
+        *bytes++ = (uint8_t)(n >> 40);
+        *bytes++ = (uint8_t)(n >> 32);
+        *bytes++ = (uint8_t)(n >> 24);
+        *bytes++ = (uint8_t)(n >> 16);
+        *bytes++ = (uint8_t)(n >> 8);
+        *bytes++ = (uint8_t)n;
+    }
+    return (bytes);
+
+}
+
+uint8_t* picoquic_frames_l_v_encode(uint8_t* bytes, const uint8_t* bytes_max, size_t l, uint8_t* v)
+{
+    if ((bytes = picoquic_frames_varlen_encode(bytes, bytes_max, l)) != NULL &&
+        (bytes + l) <= bytes_max) {
+        memcpy(bytes, v, l);
+    }
+    else {
+        bytes = NULL;
+    }
+
+    return bytes;
+}
+
+uint8_t* picoquic_frames_cid_encode(uint8_t* bytes, const uint8_t* bytes_max, picoquic_connection_id_t* cid)
+{
+    return picoquic_frames_l_v_encode(bytes, bytes_max, cid->id_len, cid->id);
+}
