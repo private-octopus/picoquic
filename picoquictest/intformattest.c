@@ -56,47 +56,77 @@ int intformattest()
     uint16_t test16;
     uint64_t test64;
 
-    /* First test with 16 bits macros */
-    for (size_t i = 0; ret == 0 && i < nb_test_numbers; i++) {
-        test16 = (uint16_t)test_number[i];
-        picoformat_16(bytes, test16);
-        decoded = decode_number(bytes, 2);
-        if (decoded != test16) {
-            ret = -1;
-        } else {
-            parsed = PICOPARSE_16(bytes);
-            if (parsed != test16) {
+    for (int new_encoding = 0; new_encoding < 2; new_encoding++) {
+        /* First test with 16 bits macros */
+        for (size_t i = 0; ret == 0 && i < nb_test_numbers; i++) {
+            test16 = (uint16_t)test_number[i];
+            if (new_encoding == 0) {
+                picoformat_16(bytes, test16);
+            }
+            else {
+                uint8_t* next_byte = picoquic_frames_uint16_encode(bytes, bytes + sizeof(bytes), test16);
+                if ((next_byte - bytes) != 2) {
+                    ret = -1;
+                }
+            }
+            decoded = decode_number(bytes, 2);
+            if (decoded != test16) {
                 ret = -1;
             }
-        }
-    }
-
-    /* Next test with 32 bits macros */
-    for (size_t i = 0; ret == 0 && i < nb_test_numbers; i++) {
-        test32 = (uint32_t)test_number[i];
-        picoformat_32(bytes, test32);
-        decoded = decode_number(bytes, 4);
-        if (decoded != test32) {
-            ret = -1;
-        } else {
-            parsed = PICOPARSE_32(bytes);
-            if (parsed != test32) {
-                ret = -1;
+            else {
+                parsed = PICOPARSE_16(bytes);
+                if (parsed != test16) {
+                    ret = -1;
+                }
             }
         }
-    }
 
-    /* Test with 64 bits macros */
-    for (size_t i = 0; ret == 0 && i < nb_test_numbers; i++) {
-        test64 = test_number[i];
-        picoformat_64(bytes, test64);
-        decoded = decode_number(bytes, 8);
-        if (decoded != test64) {
-            ret = -1;
-        } else {
-            parsed = PICOPARSE_64(bytes);
-            if (parsed != test64) {
+        /* Next test with 32 bits macros */
+        for (size_t i = 0; ret == 0 && i < nb_test_numbers; i++) {
+            test32 = (uint32_t)test_number[i];
+            if (new_encoding == 0) {
+                picoformat_32(bytes, test32);
+            }
+            else {
+                uint8_t* next_byte = picoquic_frames_uint32_encode(bytes, bytes + sizeof(bytes), test32);
+                if ((next_byte - bytes) != 4) {
+                    ret = -1;
+                }
+            }
+            decoded = decode_number(bytes, 4);
+            if (decoded != test32) {
                 ret = -1;
+            }
+            else {
+                parsed = PICOPARSE_32(bytes);
+                if (parsed != test32) {
+                    ret = -1;
+                }
+            }
+        }
+
+        /* Test with 64 bits macros */
+        for (size_t i = 0; ret == 0 && i < nb_test_numbers; i++) {
+            test64 = test_number[i];
+            picoformat_64(bytes, test64);
+            if (new_encoding == 0) {
+                picoformat_64(bytes, test64);
+            }
+            else {
+                uint8_t* next_byte = picoquic_frames_uint64_encode(bytes, bytes + sizeof(bytes), test64);
+                if ((next_byte - bytes) != 8) {
+                    ret = -1;
+                }
+            }
+            decoded = decode_number(bytes, 8);
+            if (decoded != test64) {
+                ret = -1;
+            }
+            else {
+                parsed = PICOPARSE_64(bytes);
+                if (parsed != test64) {
+                    ret = -1;
+                }
             }
         }
     }
@@ -193,52 +223,73 @@ static size_t nb_varint_test_cases = sizeof(varint_test_cases) / sizeof(picoquic
 int varint_test()
 {
     int ret = 0;
+    const picoquic_varintformat_test_t* max_test = varint_test_cases + nb_varint_test_cases;
 
-    for (int is_new_decode = 0 ; is_new_decode <= 1 ; is_new_decode++) {
-        const picoquic_varintformat_test_t *max_test = varint_test_cases + nb_varint_test_cases;
-        for (picoquic_varintformat_test_t *test = varint_test_cases ; test < max_test; test++) {
-            for (size_t buf_size = 0 ; buf_size <= test->length+2 ; buf_size++) {
+    for (picoquic_varintformat_test_t* test = varint_test_cases; test < max_test; test++) {
+        for (int is_new_decode = 0; is_new_decode <= 1; is_new_decode++) {
+            for (size_t buf_size = 0; buf_size <= test->length + 2; buf_size++) {
                 int test_ret = 0;
                 uint64_t n64;
                 size_t length;
 
                 if (is_new_decode) {
-                    const uint8_t *bytes = picoquic_frames_varint_decode(test->encoding, test->encoding + buf_size, &n64);
+                    const uint8_t* bytes = picoquic_frames_varint_decode(test->encoding, test->encoding + buf_size, &n64);
                     length = bytes != NULL ? bytes - test->encoding : 0;
-                } else {
+                }
+                else {
                     length = picoquic_varint_decode(test->encoding, buf_size, &n64);
                 }
 
                 if (length != (buf_size < test->length ? 0 : test->length)) {
-                    fprintf(stderr, "Varint: unexpected length %u", (unsigned)length);
+                    DBG_PRINTF("Varint: unexpected length %u", (unsigned)length);
                     test_ret = -1;
-                } else if (length == 0) {
+                }
+                else if (length == 0) {
                     continue;
-                } else if (n64 != test->decoded) {
-                    fprintf(stderr, "Varint: unexpected value %llu [expected %llu]", 
+                }
+                else if (n64 != test->decoded) {
+                    DBG_PRINTF("Varint: unexpected value %llu [expected %llu]",
                         (unsigned long long)n64, (unsigned long long)test->decoded);
                     test_ret = -1;
-                } else if (test->is_canonical != 0) {
-                    uint8_t encoding[8];
-                    size_t coded_length = picoquic_varint_encode(encoding, test->length, n64);
-
-                    if (coded_length != test->length) {
-                        fprintf(stderr, "Varint: unexpected coded_length=%"PRIst, coded_length);
-                        test_ret = -1;
-                    } else if (memcmp(encoding, test->encoding, coded_length) != 0) {
-                        fprintf(stderr, "Varint: unexpected coded value");
-                        test_ret = -1;
-                    }
                 }
 
                 if (test_ret != 0) {
-                    fprintf(stderr, " (is_new=%d, test=%u, buf_size=%u/%u)\n",
-                            is_new_decode, (unsigned)(max_test-test), (unsigned)buf_size, (unsigned)test->length);
+                    DBG_PRINTF(" (is_new=%d, test=%u, buf_size=%u/%u)\n",
+                        is_new_decode, (unsigned)(max_test - test), (unsigned)buf_size, (unsigned)test->length);
+                    ret = -1;
+                }
+            }
+        }
+
+        for (int is_new_encode = 0; is_new_encode <= 1; is_new_encode++) {
+            if (test->is_canonical != 0) {
+                uint8_t encoding[8];
+                size_t coded_length = 0;
+
+                if (is_new_encode) {
+                    uint8_t *bytes = picoquic_frames_varint_encode(encoding, &encoding[0] + sizeof(encoding), test->decoded);
+                    if (bytes == NULL) {
+                        coded_length = SIZE_MAX;
+                    }
+                    else {
+                        coded_length = bytes - encoding;
+                    }
+                }
+                else {
+                    coded_length = picoquic_varint_encode(encoding, test->length, test->decoded);
+                }
+
+                if (coded_length != test->length) {
+                    DBG_PRINTF("Varint, is_new=%d: unexpected coded_length=%"PRIst, is_new_encode, coded_length);
+                    ret = -1;
+                }
+                else if (memcmp(encoding, test->encoding, coded_length) != 0) {
+                    DBG_PRINTF("Varint, is_new=%d: unexpected coded value", is_new_encode);
                     ret = -1;
                 }
             }
         }
     }
-
+ 
     return ret;
 }
