@@ -25,6 +25,8 @@
 #include <string.h>
 #include "qinqproto.h"
 
+uint8_t* picoquic_frames_varint_skip(uint8_t* bytes, const uint8_t* bytes_max);
+
 struct st_qinq_test_rh_t {
     uint64_t direction;
     uint64_t hcid;
@@ -55,26 +57,27 @@ static struct st_qinq_test_rh_t rh2 = {
 
 static int qinq_test_one_rh(const struct st_qinq_test_rh_t* rh, size_t length, uint8_t* message)
 {
-    bytestream stream;
-    int ret;
-    uint64_t direction;
-    uint64_t hcid;
-    size_t address_length;
-    uint8_t const *address;
-    uint16_t port;
-    picoquic_connection_id_t cid;
+    int ret = 0;
+    uint64_t direction= UINT64_MAX;
+    uint64_t hcid = UINT64_MAX;
+    size_t address_length = 0;
+    uint8_t const *address = NULL;
+    uint16_t port = 0;
+    picoquic_connection_id_t cid = { {0}, 0 };
+    uint8_t* bytes = message;
+    uint8_t* bytes_max = message + length;
 
-    bytestream_ref_init(&stream, message, length);
+    if ((bytes = picoquic_frames_varint_skip(bytes, bytes_max)) != NULL) {
+        bytes = picoqinq_decode_reserve_header(bytes, bytes_max, &direction, &hcid, &address_length, &address, &port, &cid);
+    }
 
-    ret = bytestream_skip(&stream, 1);
-    ret |= picoqinq_parse_reserve_header(&stream, &direction, &hcid, &address_length, &address, &port, &cid);
-
-    if (ret != 0) {
+    if (bytes == NULL) {
+        ret = -1;
         DBG_PRINTF("Parsing reserve header returns: %d\n", ret);
     }
-    else if (bytestream_remain(&stream) > 0) {
+    else if (bytes_max > bytes) {
         DBG_PRINTF("Bytes remain after parsing reserve header: %llu\n",
-            (unsigned long long)bytestream_remain(&stream));
+            (unsigned long long)(bytes_max - bytes));
         ret = -1;
     }
     else if (direction != rh->direction) {
@@ -99,17 +102,17 @@ static int qinq_test_one_rh(const struct st_qinq_test_rh_t* rh, size_t length, u
     }
 
     if (ret == 0) {
-        bytestream wstream;
-        size_t buf[256];
+        uint8_t buf[256];
+        
+        bytes_max = buf + sizeof(buf);
 
-        bytestream_ref_init(&wstream, buf, sizeof(buf));
-
-        ret = picoqinq_prepare_reserve_header(&wstream, direction, hcid, address_length, address, port, &cid);
-        if (ret != 0) {
+        bytes = picoqinq_encode_reserve_header(buf, bytes_max, direction, hcid, address_length, address, port, &cid);
+        if (bytes == NULL) {
+            ret = -1;
             DBG_PRINTF("Preparing reserve header returns: %d\n", ret);
         }
-        else if (bytestream_length(&wstream) != length) {
-            DBG_PRINTF("Preparing reserve header wrong length: %llu\n", (unsigned long long)bytestream_length(&wstream));
+        else if (bytes - buf != length) {
+            DBG_PRINTF("Preparing reserve header wrong length: %llu\n", (unsigned long long)(bytes - buf));
             ret = -1;
         }
         else if (memcmp(buf, message, length) != 0) {

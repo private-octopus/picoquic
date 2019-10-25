@@ -19,8 +19,17 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 #include "util.h"
-#include "bytestream.h"
 #include "qinqproto.h"
+#include "util.h"
+
+uint8_t* picoquic_frames_fixed_skip(uint8_t* bytes, const uint8_t* bytes_max, size_t size);
+uint8_t* picoquic_frames_varint_decode(uint8_t* bytes, const uint8_t* bytes_max, uint64_t* n64);
+uint8_t* picoquic_frames_varlen_decode(uint8_t* bytes, const uint8_t* bytes_max, size_t* n);
+uint8_t* picoquic_frames_uint8_decode(uint8_t* bytes, const uint8_t* bytes_max, uint8_t* n);
+uint8_t* picoquic_frames_uint16_decode(uint8_t* bytes, const uint8_t* bytes_max, uint16_t* n);
+uint8_t* picoquic_frames_uint32_decode(uint8_t* bytes, const uint8_t* bytes_max, uint32_t* n);
+uint8_t* picoquic_frames_uint64_decode(uint8_t* bytes, const uint8_t* bytes_max, uint64_t* n);
+uint8_t* picoquic_frames_cid_decode(uint8_t* bytes, const uint8_t* bytes_max, picoquic_connection_id_t* n);
 
 picoqinq_cnx_ctx_t* picoqinq_create_ctx()
 {
@@ -42,24 +51,23 @@ void picoqinq_delete_ctx(picoqinq_cnx_ctx_t* ctx)
  * Compression of Initial or handshake packet is for further study.
  */
 
-int picoqinq_parse_datagram_header(picoqinq_cnx_ctx_t* ctx, bytestream* stream, size_t* address_length, const uint8_t** address, uint16_t* port,
+uint8_t * picoqinq_decode_datagram_header(picoqinq_cnx_ctx_t* ctx, uint8_t * bytes, uint8_t * bytes_max, size_t* address_length, const uint8_t** address, uint16_t* port,
     picoquic_connection_id_t** cid)
 {
     uint64_t hcid;
-    int ret = 0;
 
     *address_length = 0;
     *address = NULL;
     *port = 0;
     *cid = NULL;
 
-    ret = byteread_vint(stream, &hcid);
-    if (ret == 0) {
+    bytes = picoquic_frames_varint_decode(bytes, bytes_max, &hcid);
+    if (bytes == 0) {
         if (hcid == 0) {
-            if ((ret = byteread_vlen(stream, address_length)) == 0) {
-                *address = bytestream_ptr(stream);
-                if ((ret = bytestream_skip(stream, *address_length)) == 0) {
-                    ret = byteread_int16(stream, port);
+            if ((bytes = picoquic_frames_varlen_decode(bytes, bytes_max, address_length)) != NULL) {
+                *address = bytes;
+                if ((bytes = picoquic_frames_fixed_skip(bytes, bytes_max, *address_length)) != NULL) {
+                    bytes = picoquic_frames_uint16_decode(bytes, bytes_max, port);
                 }
             }
         }
@@ -67,7 +75,7 @@ int picoqinq_parse_datagram_header(picoqinq_cnx_ctx_t* ctx, bytestream* stream, 
             picoqinq_header_compression_t* hc = picoqinq_find_reserve_header_by_id(&ctx->receive_hc, hcid);
 
             if (hc == NULL) {
-                ret = -1;
+                bytes = NULL;
             }
             else {
                 *address_length = hc->address_length;
@@ -77,7 +85,7 @@ int picoqinq_parse_datagram_header(picoqinq_cnx_ctx_t* ctx, bytestream* stream, 
         }
     }
 
-    return ret;
+    return bytes;
 }
 
 /* To reserve a header, the node send a reserve header message on a new bidir
@@ -96,41 +104,36 @@ int picoqinq_parse_datagram_header(picoqinq_cnx_ctx_t* ctx, bytestream* stream, 
  * Other replies indicate that the compression code can now be used.
  */
 
-int picoqinq_prepare_reserve_header(bytestream * stream,
+uint8_t* picoqinq_encode_reserve_header(uint8_t* bytes, uint8_t* bytes_max,
     uint64_t direction, uint64_t hcid,
     size_t address_length, const uint8_t* address, uint16_t port, const picoquic_connection_id_t* cid)
 {
-    int ret;
-
-    if ((ret = bytewrite_vint(stream, QINQ_PROTO_RESERVE_HEADER)) == 0 &&
-        (ret = bytewrite_vint(stream, direction)) == 0 &&
-        (ret = bytewrite_vint(stream, hcid)) == 0 &&
-        (ret = bytewrite_vint(stream, address_length)) == 0 &&
-        (ret = bytewrite_buffer(stream, address, address_length)) == 0 &&
-        (ret = bytewrite_int16(stream, port)) == 0) {
-        ret = bytewrite_cid(stream, cid);
+    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, QINQ_PROTO_RESERVE_HEADER)) != NULL &&
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, direction)) != NULL &&
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, hcid)) != NULL &&
+        (bytes = picoquic_frames_l_v_encode(bytes, bytes_max, address_length, address)) != NULL &&
+        (bytes = picoquic_frames_uint16_encode(bytes, bytes_max, port)) != NULL) {
+        bytes = picoquic_frames_cid_encode(bytes, bytes_max, cid);
     }
-    return ret;
+    return bytes;
 }
 
 /* Assume that the operation code is already parsed */
-int picoqinq_parse_reserve_header(bytestream* stream,
+uint8_t* picoqinq_decode_reserve_header(uint8_t* bytes, uint8_t* bytes_max,
     uint64_t* direction, uint64_t* hcid,
     size_t* address_length, const uint8_t** address, uint16_t* port, picoquic_connection_id_t* cid)
 {
-    int ret;
-
-    if ((ret = byteread_vint(stream, direction)) == 0 &&
-        (ret = byteread_vint(stream, hcid)) == 0 &&
-        (ret = byteread_vlen(stream, address_length)) == 0) {
-        *address = bytestream_ptr(stream);
-        if ((ret = bytestream_skip(stream, *address_length)) == 0 &&
-            (ret = byteread_int16(stream, port)) == 0) {
-            ret = byteread_cid(stream, cid);
+    if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, direction)) != NULL &&
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, hcid)) != NULL &&
+        (bytes = picoquic_frames_varlen_decode(bytes, bytes_max, address_length)) != NULL) {
+        *address = bytes;
+        if ((bytes = picoquic_frames_fixed_skip(bytes, bytes_max, *address_length)) != NULL &&
+            (bytes = picoquic_frames_uint16_decode(bytes, bytes_max, port)) != NULL) {
+            bytes = picoquic_frames_cid_decode(bytes, bytes_max, cid);
         }
     }
 
-    return ret;
+    return bytes;
 }
 
 /* Confirm once approved */
@@ -237,19 +240,17 @@ picoqinq_header_compression_t* picoqinq_find_reserve_header_by_id(picoqinq_heade
  * connection checks the match for the full CID. 
  */
 
-int picoqinq_prepare_reserve_cid(bytestream* stream, const picoquic_connection_id_t* cid)
+uint8_t* picoqinq_encode_reserve_cid(uint8_t* bytes, uint8_t* bytes_max, const picoquic_connection_id_t* cid)
 {
-    int ret;
-
-    if ((ret = bytewrite_vint(stream, QINQ_PROTO_RESERVE_HEADER)) == 0) {
-        ret = bytewrite_cid(stream, cid);
+    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, QINQ_PROTO_RESERVE_HEADER)) != NULL) {
+        bytes = picoquic_frames_cid_encode(bytes, bytes_max, cid);
     }
-    return ret;
+    return bytes;
 }
 
-int picoqinq_parse_reserve_cid(bytestream* stream, picoquic_connection_id_t* cid)
+uint8_t* picoqinq_decode_reserve_cid(uint8_t* bytes, uint8_t* bytes_max, picoquic_connection_id_t* cid)
 {
-    return byteread_cid(stream, cid);
+    return picoquic_frames_cid_decode(bytes, bytes_max, cid);
 }
 
 int picoqinq_register_cid(picoqinq_cnx_ctx_t* ctx, picoquic_connection_id_t* cid)

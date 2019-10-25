@@ -24,7 +24,6 @@
 
 #include <stdint.h>
 #include "picoquic.h"
-#include "bytestream.h"
 
 #define QINQ_PROTO_RESERVE_HEADER 1
 #define QINQ_PROTO_RESERVE_CID 2
@@ -51,13 +50,13 @@ typedef struct st_picoqinq_cnx_ctx_t {
 picoqinq_cnx_ctx_t* picoqinq_create_ctx();
 void picoqinq_delete_ctx(picoqinq_cnx_ctx_t* ctx);
 
-int picoqinq_parse_datagram_header(picoqinq_cnx_ctx_t* ctx, bytestream* stream, size_t* address_length, const uint8_t** address, uint16_t* port,
+uint8_t* picoqinq_decode_datagram_header(picoqinq_cnx_ctx_t* ctx, uint8_t* bytes, uint8_t* bytes_max, size_t* address_length, const uint8_t** address, uint16_t* port,
     picoquic_connection_id_t** cid);
 
-int picoqinq_prepare_reserve_header(bytestream* stream,
+uint8_t* picoqinq_encode_reserve_header(uint8_t* bytes, uint8_t* bytes_max,
     uint64_t direction, uint64_t hcid,
     size_t address_length, const uint8_t* address, uint16_t port, const picoquic_connection_id_t* cid);
-int picoqinq_parse_reserve_header(bytestream* stream,
+uint8_t* picoqinq_decode_reserve_header(uint8_t* bytes, uint8_t* bytes_max,
     uint64_t* direction, uint64_t* hcid,
     size_t* address_length, const uint8_t** address, uint16_t* port, picoquic_connection_id_t* cid);
 picoqinq_header_compression_t* picoqinq_create_header(uint64_t hcid,
@@ -66,7 +65,7 @@ void picoqinq_reserve_header(picoqinq_header_compression_t* hc, picoqinq_header_
 uint64_t picoqinq_find_reserve_header_id_by_address(picoqinq_header_compression_t** phc_head, size_t address_length, const uint8_t* address, uint16_t port, const picoquic_connection_id_t* cid);
 picoqinq_header_compression_t* picoqinq_find_reserve_header_by_id(picoqinq_header_compression_t** phc_head, uint64_t hcid);
 
-int picoqinq_prepare_reserve_cid(bytestream* stream, const picoquic_connection_id_t* cid);
-int picoqinq_parse_reserve_cid(bytestream* stream, picoquic_connection_id_t* cid);
+uint8_t* picoqinq_encode_reserve_cid(uint8_t* bytes, uint8_t* bytes_max, const picoquic_connection_id_t* cid);
+uint8_t* picoqinq_decode_reserve_cid(uint8_t* bytes, uint8_t* bytes_max, picoquic_connection_id_t* cid);
 
 #endif /* QINQ_PROTO_H */
