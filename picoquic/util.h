@@ -122,8 +122,8 @@ uint8_t* picoquic_frames_uint8_encode(uint8_t* bytes, const uint8_t* bytes_max, 
 uint8_t* picoquic_frames_uint16_encode(uint8_t* bytes, const uint8_t* bytes_max, uint16_t n);
 uint8_t* picoquic_frames_uint32_encode(uint8_t* bytes, const uint8_t* bytes_max, uint32_t n);
 uint8_t* picoquic_frames_uint64_encode(uint8_t* bytes, const uint8_t* bytes_max, uint64_t n);
-uint8_t* picoquic_frames_l_v_encode(uint8_t* bytes, const uint8_t* bytes_max, size_t l, uint8_t* v);
-uint8_t* picoquic_frames_cid_encode(uint8_t* bytes, const uint8_t* bytes_max, picoquic_connection_id_t* cid);
+uint8_t* picoquic_frames_l_v_encode(uint8_t* bytes, const uint8_t* bytes_max, size_t l, const uint8_t* v);
+uint8_t* picoquic_frames_cid_encode(uint8_t* bytes, const uint8_t* bytes_max, const picoquic_connection_id_t* cid);
 
 #ifdef __cplusplus
 }
