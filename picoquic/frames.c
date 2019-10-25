@@ -100,8 +100,15 @@ uint8_t* picoquic_frames_varint_decode(uint8_t* bytes, const uint8_t* bytes_max,
     return bytes;
 }
 
+uint8_t* picoquic_frames_varlen_decode(uint8_t* bytes, const uint8_t* bytes_max, size_t* n)
+{
+    uint64_t len = 0;
+    bytes = picoquic_frames_varint_decode(bytes, bytes_max, &len);
+    *n = (size_t)len;
+    return (*n == len) ? bytes : NULL;
+}
 
-static uint8_t* picoquic_frames_uint8_decode(uint8_t* bytes, const uint8_t* bytes_max, uint8_t* n)
+uint8_t* picoquic_frames_uint8_decode(uint8_t* bytes, const uint8_t* bytes_max, uint8_t* n)
 {
     if (bytes < bytes_max) {
         *n = *bytes++;
@@ -112,7 +119,7 @@ static uint8_t* picoquic_frames_uint8_decode(uint8_t* bytes, const uint8_t* byte
 }
 
 
-static uint8_t* picoquic_frames_uint16_decode(uint8_t* bytes, const uint8_t* bytes_max, uint16_t* n)
+uint8_t* picoquic_frames_uint16_decode(uint8_t* bytes, const uint8_t* bytes_max, uint16_t* n)
 {
     if (bytes + sizeof(*n) <= bytes_max) {
         *n = PICOPARSE_16(bytes);
@@ -123,8 +130,19 @@ static uint8_t* picoquic_frames_uint16_decode(uint8_t* bytes, const uint8_t* byt
     return bytes;
 }
 
+uint8_t* picoquic_frames_uint32_decode(uint8_t* bytes, const uint8_t* bytes_max, uint32_t* n)
+{
+    if (bytes + sizeof(*n) <= bytes_max) {
+        *n = PICOPARSE_32(bytes);
+        bytes += sizeof(*n);
+    }
+    else {
+        bytes = NULL;
+    }
+    return bytes;
+}
 
-static uint8_t* picoquic_frames_uint64_decode(uint8_t* bytes, const uint8_t* bytes_max, uint64_t* n)
+uint8_t* picoquic_frames_uint64_decode(uint8_t* bytes, const uint8_t* bytes_max, uint64_t* n)
 {
     if (bytes + sizeof(*n) <= bytes_max) {
         *n = PICOPARSE_64(bytes);
@@ -135,7 +153,6 @@ static uint8_t* picoquic_frames_uint64_decode(uint8_t* bytes, const uint8_t* byt
     return bytes;
 }
 
-
 static uint8_t* picoquic_frames_length_data_skip(uint8_t* bytes, const uint8_t* bytes_max)
 {
     uint64_t length;
@@ -145,6 +162,22 @@ static uint8_t* picoquic_frames_length_data_skip(uint8_t* bytes, const uint8_t* 
     return bytes;
 }
 
+uint8_t* picoquic_frames_cid_decode(uint8_t* bytes, const uint8_t* bytes_max, picoquic_connection_id_t* cid)
+{
+    bytes = picoquic_frames_uint8_decode(bytes, bytes_max, &cid->id_len);
+
+    if (cid->id_len > PICOQUIC_CONNECTION_ID_MAX_SIZE ||
+        bytes + cid->id_len > bytes_max) {
+        bytes = NULL;
+    }
+    else {
+        memset(cid->id, 0, sizeof(cid->id));
+        memcpy(cid->id, bytes, cid->id_len);
+        bytes += cid->id_len;
+    }
+
+    return bytes;
+}
 
 /* ****************************************************** */
 
