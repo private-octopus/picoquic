@@ -5635,7 +5635,7 @@ int packet_trace_test()
             DBG_PRINTF("%s", "Cannot set the packet trace test ref file name.\n");
         }
         else {
-            ret = picoquic_test_compare_files(PACKET_TRACE_CSV, packet_trace_test_ref);
+            ret = picoquic_test_compare_text_files(PACKET_TRACE_CSV, packet_trace_test_ref);
         }
     }
 

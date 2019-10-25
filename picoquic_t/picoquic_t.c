@@ -56,6 +56,7 @@ static const picoquic_test_def_t test_table[] = {
     { "skip_frames", skip_frame_test },
     { "parse_frames", parse_frame_test },
     { "logger", logger_test },
+    { "binlog", binlog_test },
     { "TlsStreamFrame", TlsStreamFrameTest },
     { "StreamZeroFrame", StreamZeroFrameTest },
     { "stream_splay", stream_splay_test },

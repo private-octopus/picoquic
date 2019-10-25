@@ -77,7 +77,7 @@ int picoquic_get_input_path(char * target_file_path, size_t file_path_max, const
 #endif
 
 #ifdef _WINDOWS
-#define PICOQUIC_FILE_SEPARATOR '\\'
+#define PICOQUIC_FILE_SEPARATOR "\\"
 #ifdef _WINDOWS64
 #define PICOQUIC_DEFAULT_SOLUTION_DIR "..\\..\\"
 #else
@@ -85,7 +85,7 @@ int picoquic_get_input_path(char * target_file_path, size_t file_path_max, const
 #endif
 #else
 #define PICOQUIC_DEFAULT_SOLUTION_DIR "./"
-#define PICOQUIC_FILE_SEPARATOR '/'
+#define PICOQUIC_FILE_SEPARATOR "/"
 #endif
 
 #ifndef DISABLE_DEBUG_PRINTF

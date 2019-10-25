@@ -222,7 +222,7 @@ FILE * open_outfile(const char * cid_name, const char * binlog_name, const char 
     }
 
     char filename[512];
-    int ret = picoquic_sprintf(filename, sizeof(filename), NULL, "%s%c%s.%s",
+    int ret = picoquic_sprintf(filename, sizeof(filename), NULL, "%s%s%s.%s",
         out_dir, PICOQUIC_FILE_SEPARATOR, cid_name, out_ext);
 
     if (ret != 0) {
