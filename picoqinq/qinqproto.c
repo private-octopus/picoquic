@@ -31,13 +31,229 @@ uint8_t* picoquic_frames_uint32_decode(uint8_t* bytes, const uint8_t* bytes_max,
 uint8_t* picoquic_frames_uint64_decode(uint8_t* bytes, const uint8_t* bytes_max, uint64_t* n);
 uint8_t* picoquic_frames_cid_decode(uint8_t* bytes, const uint8_t* bytes_max, picoquic_connection_id_t* n);
 
-picoqinq_cnx_ctx_t* picoqinq_create_ctx()
+
+/* In order to route incoming connection, the Qinq context contains a hash table
+ * of connection ID, or rather of the first N bytes of the connection ID, with
+ * N a confirmation parameter. Each table entry contains a chained list of the
+ * "links" between a connection and a hash item (route), plus the actual value
+ * of the CID reserved for the connection, which may be larger than the
+ * minimum. The links are organized in two linked lists: one per route, for
+ * all the CID that point to the route, and one per connection, with all
+ * the CID reserved for that connection.
+ *
+ * The Qinq context also contains a double linked list of connections.
+ * When a connection is deleted, all the links are deleted, and if there is
+ * no more link for a selected route that route is deleted from the
+ * hash table. */
+
+static uint64_t picoqinq_rcid_hash(const void* key)
 {
-    return NULL;
+    const picoqinq_qinq_cid_prefix_route_t* cid = (const picoqinq_qinq_cid_prefix_route_t*)key;
+    return picoquic_connection_id_hash(&cid->cid_prefix);
 }
 
-void picoqinq_delete_ctx(picoqinq_cnx_ctx_t* ctx)
+static int picoqinq_rcid_compare(const void* key1, const void* key2)
 {
+    const picoqinq_qinq_cid_prefix_route_t* cid1 = (const picoqinq_qinq_cid_prefix_route_t*)key1;
+    const picoqinq_qinq_cid_prefix_route_t* cid2 = (const picoqinq_qinq_cid_prefix_route_t*)key2;
+
+    return picoquic_compare_connection_id(&cid1->cid_prefix, &cid2->cid_prefix);
+}
+
+static void picoqinq_cid_cnx_link_delete(picoquic_cid_cnx_link_t* link)
+{
+    picoqinq_qinq_cid_prefix_route_t* route = link->cid_route;
+    picoquic_cid_cnx_link_t** pprevious = &route->first_route;
+
+    /* Remove the links in the route table */
+    while (*pprevious != NULL) {
+        if ((*pprevious) == link) {
+            *pprevious = link->next_route;
+            link->next_route = NULL;
+            break;
+        }
+        else {
+            pprevious = &(*pprevious)->next_route;
+        }
+    }
+
+    /* Remove the links in the cnx context */
+    pprevious = &link->cnx_ctx->first_cid;
+    while (*pprevious != NULL) {
+        if ((*pprevious) == link) {
+            *pprevious = link->next_cid;
+            link->next_cid = NULL;
+            break;
+        }
+        else {
+            pprevious = &(*pprevious)->next_cid;
+        }
+    }
+
+    if (route->first_route == NULL) {
+        /* No other CID shares the prefix. Remove the item from the hash table */
+        picohash_item* item = picohash_retrieve(link->cnx_ctx->qinq->table_prefix_route, link->cid_route);
+        if (item != NULL) {
+            picohash_item_delete(link->cnx_ctx->qinq->table_prefix_route, item, 1);
+        }
+    }
+
+    free(link);
+}
+
+int picoqinq_cid_cnx_link_create(picoqinq_cnx_ctx_t* cnx_ctx, picoquic_connection_id_t * cid)
+{
+    int ret = 0;
+
+    picoquic_cid_cnx_link_t* link = (picoquic_cid_cnx_link_t*)malloc(sizeof(picoquic_cid_cnx_link_t));
+    picoqinq_qinq_cid_prefix_route_t* key = (picoqinq_qinq_cid_prefix_route_t*)malloc(sizeof(picoqinq_qinq_cid_prefix_route_t));
+
+    if (link == NULL || key == NULL) {
+        ret = PICOQINQ_ERROR_INTERNAL;
+    }
+    else {
+        picohash_item* item;
+        memset(key, 0, sizeof(picoqinq_qinq_cid_prefix_route_t));
+        picoquic_parse_connection_id(cid->id, cnx_ctx->qinq->min_prefix_length, &key->cid_prefix);
+
+        item = picohash_retrieve(cnx_ctx->qinq->table_prefix_route, key);
+
+        if (item == NULL) {
+            ret = picohash_insert(cnx_ctx->qinq->table_prefix_route, key);
+        }
+        else {
+            free(key);
+            key = (picoqinq_qinq_cid_prefix_route_t*)item;
+        }
+
+        if (ret == 0) {
+            picoquic_parse_connection_id(cid->id, cid->id_len, &link->cid);
+            link->cid_route = key;
+            link->cnx_ctx = cnx_ctx;
+            link->next_cid = cnx_ctx->first_cid;
+            cnx_ctx->first_cid = link;
+            link->next_route = key->first_route;
+            key->first_route = link;
+            key = NULL;
+            link = NULL;
+        }
+    }
+
+    if (ret != 0) {
+        if (key) {
+            free(key);
+        }
+        if (link) {
+            free(link);
+        }
+    }
+
+    return(ret);
+}
+
+picoqinq_qinq_cid_prefix_route_t* picoqinq_find_route_by_cid(picoqinq_qinq_t* qinq, uint8_t* id)
+{
+    picoqinq_qinq_cid_prefix_route_t* route = NULL;
+    picoqinq_qinq_cid_prefix_route_t key;
+    picohash_item* item;
+    memset(&key, 0, sizeof(picoqinq_qinq_cid_prefix_route_t));
+    picoquic_parse_connection_id(id, qinq->min_prefix_length, &key.cid_prefix);
+
+    item = picohash_retrieve(qinq->table_prefix_route, &key);
+
+    if (item != NULL) {
+        route = (picoqinq_qinq_cid_prefix_route_t *)item->key;
+    }
+
+    return route;
+}
+
+picoqinq_qinq_t* picoqinq_create(uint8_t min_prefix_length, size_t nb_cid)
+{
+    picoqinq_qinq_t* qinq = (picoqinq_qinq_t*)malloc(sizeof(picoqinq_qinq_t));
+
+    if (qinq != NULL) {
+        qinq->min_prefix_length = min_prefix_length;
+        qinq->cnx_first = NULL;
+        qinq->cnx_last = NULL;
+        qinq->table_prefix_route = picohash_create((size_t)nb_cid * 4,
+            picoqinq_rcid_hash, picoqinq_rcid_compare);
+
+        if (qinq->table_prefix_route == NULL) {
+            DBG_PRINTF("%s", "Cannot initialize hash tables\n");
+            free(qinq);
+            qinq = NULL;
+        }
+    }
+
+    return qinq;
+}
+
+void picoqinq_delete(picoqinq_qinq_t* qinq)
+{
+    while (qinq->cnx_first != NULL) {
+        picoqinq_delete_cnx_ctx(qinq->cnx_first);
+    }
+
+    picohash_delete(qinq->table_prefix_route, 1);
+}
+
+picoqinq_cnx_ctx_t* picoqinq_create_cnx_ctx(picoqinq_qinq_t* qinq)
+{
+    picoqinq_cnx_ctx_t* cnx_ctx = (picoqinq_cnx_ctx_t*)malloc(sizeof(picoqinq_cnx_ctx_t));
+    
+    if (cnx_ctx != NULL) {
+        cnx_ctx->qinq = qinq;
+        cnx_ctx->receive_hc = NULL;
+        cnx_ctx->send_hc = NULL;
+        cnx_ctx->first_cid = NULL;
+        if (qinq->cnx_last == NULL) {
+            qinq->cnx_last = cnx_ctx;
+        }
+        cnx_ctx->ctx_previous = NULL;
+        cnx_ctx->ctx_next = qinq->cnx_first;
+        qinq->cnx_first = cnx_ctx;
+    }
+
+    return cnx_ctx;
+}
+
+static void picoqinq_delete_cnx_ctx_hc(picoqinq_header_compression_t** phc)
+{
+    picoqinq_header_compression_t* hc;
+
+    while((hc = *phc) != NULL) {
+        *phc = hc->next_hc;
+        free(hc);
+    }
+}
+
+void picoqinq_delete_cnx_ctx(picoqinq_cnx_ctx_t* ctx)
+{
+    picoqinq_delete_cnx_ctx_hc(&ctx->receive_hc);
+    picoqinq_delete_cnx_ctx_hc(&ctx->send_hc);
+
+    while (ctx->first_cid) {
+        picoqinq_cid_cnx_link_delete(ctx->first_cid);
+    }
+
+    if (ctx->ctx_previous == NULL) {
+        ctx->qinq->cnx_first = ctx->ctx_next;
+    }
+    else {
+        ctx->ctx_previous->ctx_next = ctx->ctx_next;
+    }
+    ctx->ctx_previous = NULL;
+
+    if (ctx->ctx_next == NULL) {
+        ctx->qinq->cnx_last = ctx->ctx_previous;
+    }
+    else {
+        ctx->ctx_next->ctx_previous = ctx->ctx_previous;
+    }
+    ctx->ctx_next = NULL;
+
+    free(ctx);
 }
 
 /* The datagram frames start with:
@@ -136,7 +352,6 @@ uint8_t* picoqinq_decode_reserve_header(uint8_t* bytes, uint8_t* bytes_max,
     return bytes;
 }
 
-/* Confirm once approved */
 picoqinq_header_compression_t* picoqinq_create_header(uint64_t hcid,
     size_t address_length, const uint8_t* address, uint16_t port, const picoquic_connection_id_t* cid)
 {
@@ -242,7 +457,7 @@ picoqinq_header_compression_t* picoqinq_find_reserve_header_by_id(picoqinq_heade
 
 uint8_t* picoqinq_encode_reserve_cid(uint8_t* bytes, uint8_t* bytes_max, const picoquic_connection_id_t* cid)
 {
-    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, QINQ_PROTO_RESERVE_HEADER)) != NULL) {
+    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, QINQ_PROTO_RESERVE_CID)) != NULL) {
         bytes = picoquic_frames_cid_encode(bytes, bytes_max, cid);
     }
     return bytes;
@@ -251,11 +466,4 @@ uint8_t* picoqinq_encode_reserve_cid(uint8_t* bytes, uint8_t* bytes_max, const p
 uint8_t* picoqinq_decode_reserve_cid(uint8_t* bytes, uint8_t* bytes_max, picoquic_connection_id_t* cid)
 {
     return picoquic_frames_cid_decode(bytes, bytes_max, cid);
-}
-
-int picoqinq_register_cid(picoqinq_cnx_ctx_t* ctx, picoquic_connection_id_t* cid)
-{
-    /* add to the hash table. */
-    /* add to the local table. */
-    return -1;
 }
