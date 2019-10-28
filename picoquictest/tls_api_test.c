@@ -3349,13 +3349,8 @@ int nat_rebinding_loss_test()
 int fast_nat_rebinding_test()
 {
     uint64_t simulated_time = 0;
-    uint64_t next_time = 0;
     uint64_t loss_mask = 0;
-    uint64_t initial_challenge = 0;
-    uint64_t client_challenge = 0;
-    int nb_inactive = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    /*picoquic_tp_t client_params;*/
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
 
@@ -3383,6 +3378,9 @@ int fast_nat_rebinding_test()
         int switched = 0;
         int nb_switched = 0;
 
+        test_ctx->client_use_nat = 1;
+        test_ctx->client_use_multiple_addresses = 1;
+
         while (ret == 0 && nb_trials < max_trials && nb_inactive < 256 && simulated_time < next_time && TEST_CLIENT_READY && TEST_SERVER_READY) {
             int was_active = 0;
 
@@ -3407,8 +3405,6 @@ int fast_nat_rebinding_test()
                     else if (simulated_time >= switch_time) {
                         /* Change the client address */
                         test_ctx->client_addr.sin_port ^= 17;
-                        test_ctx->client_use_nat = 1;
-                        test_ctx->client_use_multiple_addresses = 1;
                         switched = 1;
                         nb_switched++;
                     }
