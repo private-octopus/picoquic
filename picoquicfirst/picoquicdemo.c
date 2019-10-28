@@ -289,12 +289,19 @@ int quic_server(const char* server_name, int server_port,
                     cnx_server = picoquic_get_first_cnx(qserver);
                     memset(&client_from, 0, sizeof(client_from));
                     memcpy(&client_from, &addr_from, from_length);
+                    if (client_from.ss_family == AF_INET) {
+                        struct sockaddr_in* addr = (struct sockaddr_in*) & client_from;
+                        addr->sin_port = ntohs(addr->sin_port);
+                    }
+                    else {
+                        struct sockaddr_in6* addr = (struct sockaddr_in6*) & client_from;
+                        addr->sin6_port = ntohs(addr->sin6_port);
+                    }
                     if (F_log != NULL) {
-                        fprintf(F_log, "%llx: ", (unsigned long long)picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx_server)));
+                        fprintf(F_log, "%16llx: ", (unsigned long long)picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx_server)));
                         picoquic_log_time(F_log, cnx_server, picoquic_current_time(), "", " : ");
                         fprintf(F_log, "Connection established, state = %d, from length: %d\n",
                             picoquic_get_cnx_state(picoquic_get_first_cnx(qserver)), from_length);
-
                         print_address(F_log, (struct sockaddr*)&client_from, "Client address:",
                             picoquic_get_logging_cnxid(cnx_server));
                         picoquic_log_transport_extension(F_log, cnx_server, 1);
