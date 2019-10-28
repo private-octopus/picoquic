@@ -954,7 +954,9 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
 
             /* Check the destination address  before submitting the packet */
             if (picoquic_compare_addr((struct sockaddr *)&test_ctx->client_addr,
-                (struct sockaddr *)&packet->addr_to) == 0) {
+                (struct sockaddr *)&packet->addr_to) == 0 ||
+                (packet->addr_to.ss_family == test_ctx->client_addr.sin_family &&
+                    test_ctx->client_use_multiple_addresses)){
                 ret = picoquic_incoming_packet(test_ctx->qclient, packet->bytes, (uint32_t)packet->length,
                     (struct sockaddr*)&packet->addr_from,
                     (struct sockaddr*)&packet->addr_to, 0, 0,
@@ -3336,6 +3338,112 @@ int nat_rebinding_loss_test()
     uint64_t loss_mask = 0x2412;
 
     return nat_rebinding_test_one(loss_mask);
+}
+
+/*
+* Fast NAT Rebinding test. The client is unaware of the migration,
+* and is programmed to not support migration. The NAT alternates
+* between ports based on time, or packet counts.
+*/
+
+int fast_nat_rebinding_test()
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = PICOQUIC_ERROR_MEMORY;
+    }
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    if (ret == 0) {
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_sustained, sizeof(test_scenario_sustained));
+    }
+
+    /* Perform a data sending loop */
+    if (ret == 0) {
+        uint64_t delta_t = (test_ctx->c_to_s_link->microsec_latency + test_ctx->s_to_c_link->microsec_latency);
+        uint64_t next_time = simulated_time + 200000000;
+        int ret = 0;
+        int nb_trials = 0;
+        int nb_inactive = 0;
+        int max_trials = 1000000;
+        uint64_t switch_time = simulated_time;
+        int switched = 0;
+        int nb_switched = 0;
+
+        test_ctx->client_use_nat = 1;
+        test_ctx->client_use_multiple_addresses = 1;
+
+        while (ret == 0 && nb_trials < max_trials && nb_inactive < 256 && simulated_time < next_time && TEST_CLIENT_READY && TEST_SERVER_READY) {
+            int was_active = 0;
+
+            nb_trials++;
+
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, next_time, &was_active);
+
+            if (ret < 0)
+            {
+                break;
+            }
+
+            if (ret == 0 && test_ctx->cnx_server != NULL && test_ctx->cnx_server->cnx_state == picoquic_state_ready) {
+                if (((struct sockaddr_in*) & test_ctx->cnx_server->path[0]->peer_addr)->sin_port == 0) {
+                    DBG_PRINTF("Client address out of sync, port: %d", ((struct sockaddr_in*) & test_ctx->cnx_server->path[0]->peer_addr)->sin_port);
+                }
+                else if (((struct sockaddr_in*) & test_ctx->cnx_server->path[0]->peer_addr)->sin_port == test_ctx->client_addr.sin_port) {
+                    if (switched) {
+                        switch_time = simulated_time + delta_t;
+                        switched = 0;
+                    }
+                    else if (simulated_time >= switch_time) {
+                        /* Change the client address */
+                        test_ctx->client_addr.sin_port ^= 17;
+                        switched = 1;
+                        nb_switched++;
+                    }
+                }
+            }
+
+            if (was_active) {
+                nb_inactive = 0;
+            }
+            else {
+                nb_inactive++;
+
+                if (nb_inactive == 254) {
+                    DBG_PRINTF("Almost stalled after %d trials, %d inactive, %d switches", nb_trials, nb_inactive, nb_switched);
+                }
+            }
+
+            if (test_ctx->test_finished) {
+                if (picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) && picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)) {
+                    break;
+                }
+            }
+        }
+
+        DBG_PRINTF("Exit after %d trials, %d inactive, %d switches", nb_trials, nb_inactive, nb_switched);
+
+    }
+
+    /* verify that the transmission was complete */
+    if (ret == 0) {
+        ret = tls_api_one_scenario_verify(test_ctx);
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
 }
 
 /*
