@@ -509,6 +509,12 @@ void picoquic_set_default_padding(picoquic_quic_t* quic, uint32_t padding_multip
 /* Set default spin bit policy for the context */
 void picoquic_set_default_spinbit_policy(picoquic_quic_t * quic, picoquic_spinbit_version_enum default_spinbit_policy);
 
+/* Get the local CID length */
+uint8_t picoquic_get_local_cid_length(picoquic_quic_t* quic);
+
+/* Check whether a CID is locally defined */
+int picoquic_is_local_cid(picoquic_quic_t* quic, picoquic_connection_id_t* cid);
+
 /* Set default connection ID length for the context.
  * All valid values are supported on the client.
  * Using a null value on the server is not tested, may not work.

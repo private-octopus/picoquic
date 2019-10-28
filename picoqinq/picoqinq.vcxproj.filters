@@ -21,12 +21,18 @@
     <ClInclude Include="qinqproto.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="qinqclient.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="qinqserver.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="qinqproto.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="qinqclient.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

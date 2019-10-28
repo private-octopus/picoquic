@@ -131,10 +131,12 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="qinqclient.c" />
     <ClCompile Include="qinqproto.c" />
     <ClCompile Include="qinqserver.c" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="qinqclient.h" />
     <ClInclude Include="qinqproto.h" />
     <ClInclude Include="qinqserver.h" />
   </ItemGroup>

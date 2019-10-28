@@ -37,7 +37,7 @@ struct st_qinq_test_rh_t {
 };
 
 static uint8_t qinq_rh1[] = {
-    QINQ_PROTO_RESERVE_HEADER, 0, 1, 4, 10, 0, 0, 1, 1, 167, 4, 0x01, 0x02, 0x03, 0x04
+    QINQ_PROTO_RESERVE_HEADER, 0, 1, 4, 10, 0, 0, 1, 1, 187, 4, 0x01, 0x02, 0x03, 0x04
 };
 
 static struct st_qinq_test_rh_t rh1 = {
@@ -66,9 +66,26 @@ static int qinq_test_one_rh(const struct st_qinq_test_rh_t* rh, size_t length, u
     picoquic_connection_id_t cid = { {0}, 0 };
     uint8_t* bytes = message;
     uint8_t* bytes_max = message + length;
+    struct sockaddr_storage addr_s;
+    struct sockaddr_storage addr_target;
+
+    memset(&addr_target, 0, sizeof(struct sockaddr_storage));
+
+    if (rh->address_length == 4) {
+        struct sockaddr_in* addr4 = (struct sockaddr_in*) & addr_target;
+        addr4->sin_family = AF_INET;
+        memcpy(&addr4->sin_addr, rh->address, 4);
+        addr4->sin_port = rh->port;
+    }
+    else if (rh->address_length == 16) {
+        struct sockaddr_in6* addr6 = (struct sockaddr_in6*) & addr_target;
+        addr6->sin6_family = AF_INET6;
+        memcpy(&addr6->sin6_addr, rh->address, 16);
+        addr6->sin6_port = rh->port;
+    }
 
     if ((bytes = picoquic_frames_varint_skip(bytes, bytes_max)) != NULL) {
-        bytes = picoqinq_decode_reserve_header(bytes, bytes_max, &direction, &hcid, &address_length, &address, &port, &cid);
+        bytes = picoqinq_decode_reserve_header(bytes, bytes_max, &direction, &hcid, &addr_s, &cid);
     }
 
     if (bytes == NULL) {
@@ -88,12 +105,8 @@ static int qinq_test_one_rh(const struct st_qinq_test_rh_t* rh, size_t length, u
         DBG_PRINTF("Wrong hcid: %d\n", hcid);
         ret = -1;
     }
-    else if (address_length != rh->address_length) {
-        DBG_PRINTF("Wrong address_length: %d\n", address_length);
-        ret = -1;
-    }
-    else if (memcmp(address, rh->address, address_length) != 0) {
-        DBG_PRINTF("Wrong address: { %d, %d, %d, %d, ... }\n", address[0], address[1], address[2], address[3]);
+    else if (picoquic_compare_addr((struct sockaddr *)&addr_target, (struct sockaddr*) & addr_s) != 0){
+        DBG_PRINTF("Wrong address, family: %d\n", addr_s.ss_family);
         ret = -1;
     }
     else if (picoquic_compare_connection_id(&cid, &rh->cid) != 0) {
@@ -106,7 +119,7 @@ static int qinq_test_one_rh(const struct st_qinq_test_rh_t* rh, size_t length, u
         
         bytes_max = buf + sizeof(buf);
 
-        bytes = picoqinq_encode_reserve_header(buf, bytes_max, direction, hcid, address_length, address, port, &cid);
+        bytes = picoqinq_encode_reserve_header(buf, bytes_max, direction, hcid, (struct sockaddr *)&addr_target, &cid);
         if (bytes == NULL) {
             ret = -1;
             DBG_PRINTF("Preparing reserve header returns: %d\n", ret);

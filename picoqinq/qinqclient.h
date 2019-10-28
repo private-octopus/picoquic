@@ -54,6 +54,8 @@ typedef struct st_picoqinq_client_callback_ctx_t {
     picoqinq_client_stream_ctx_t* first_stream;
     size_t buffer_max;
     uint8_t* buffer;
+    picoqinq_header_compression_t* receive_hc;
+    picoqinq_header_compression_t* send_hc;
 } picoqinq_client_callback_ctx_t;
 
 /*

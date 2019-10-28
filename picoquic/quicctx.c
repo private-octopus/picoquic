@@ -299,6 +299,17 @@ void picoquic_set_default_spinbit_policy(picoquic_quic_t * quic, picoquic_spinbi
     quic->default_spin_policy = default_spinbit_policy;
 }
 
+uint8_t picoquic_get_local_cid_length(picoquic_quic_t* quic)
+{
+    return quic->local_cnxid_length;
+}
+
+int picoquic_is_local_cid(picoquic_quic_t* quic, picoquic_connection_id_t* cid)
+{
+    return (cid->id_len == quic->local_cnxid_length &&
+        picoquic_cnx_by_id(quic, *cid) != NULL);
+}
+
 void picoquic_free(picoquic_quic_t* quic)
 {
     if (quic != NULL) {

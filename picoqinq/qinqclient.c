@@ -32,12 +32,17 @@
 /*
  * Datagram call back, process Quic datagrams received from a qinq server.
  */
-int picoqinq_client_callback_datagram(picoqinq_client_callback_ctx_t* ctx, uint8_t* bytes, size_t length)
+int picoqinq_client_callback_datagram(picoqinq_client_callback_ctx_t* ctx, uint8_t* bytes0, size_t length)
 {
     /* Decode the datagram and queue it for input processing by the quic context */
     int ret = 0;
 
     /* TODO */
+    struct sockaddr_storage addr_s;
+    uint8_t* bytes_max = bytes0 + length;
+    picoquic_connection_id_t * cid = NULL;
+    uint8_t* bytes = picoqinq_decode_datagram_header(bytes0, bytes_max, &addr_s, &cid, &ctx->receive_hc);
+
 
     return ret;
 }
@@ -83,7 +88,7 @@ void picoqinq_forget_stream(picoqinq_client_callback_ctx_t* ctx, picoqinq_client
     if (ctx != NULL && stream_ctx != NULL) {
         picoqinq_client_stream_ctx_t** previous_link = &ctx->first_stream;
         while (*previous_link != NULL && *previous_link != stream_ctx) {
-            previous_link = (*previous_link)->next_stream;
+            previous_link = &(*previous_link)->next_stream;
         }
         if (*previous_link == stream_ctx) {
             *previous_link = stream_ctx->next_stream;
@@ -116,7 +121,7 @@ int picoqinq_client_callback_data(picoquic_cnx_t* cnx, picoqinq_client_stream_ct
         if (fin_or_event == picoquic_callback_stream_fin) {
             /* TODO: decode the message and validate the transaction  */
             if (ret == 0) {
-                ret = picoquic_add_to_stream(cnx, stream_id, response, response_length, 1);
+                /* TODO: ret = picoquic_add_to_stream(cnx, stream_id, response, response_length, 1); */
             }
             else {
                 /* Reset the stream */
