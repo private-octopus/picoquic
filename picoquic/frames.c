@@ -3327,7 +3327,7 @@ uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, uint8_t* bytes
                     }
                 }
                 if (found_challenge) {
-                    if (cnx->path[i]->alt_challenge_required) {
+                    if (cnx->path[i]->alt_challenge_required && !cnx->path[i]->challenge_verified) {
                         /* Promote the alt address to valid address */
                         cnx->path[i]->peer_addr_len = picoquic_store_addr(&cnx->path[i]->peer_addr, (struct sockaddr*) & cnx->path[i]->alt_peer_addr);
                         cnx->path[i]->local_addr_len = picoquic_store_addr(&cnx->path[i]->local_addr, (struct sockaddr*) & cnx->path[i]->alt_local_addr);
