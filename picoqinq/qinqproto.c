@@ -30,9 +30,9 @@ uint8_t* picoquic_frames_uint32_decode(uint8_t* bytes, const uint8_t* bytes_max,
 uint8_t* picoquic_frames_uint64_decode(uint8_t* bytes, const uint8_t* bytes_max, uint64_t* n);
 uint8_t* picoquic_frames_cid_decode(uint8_t* bytes, const uint8_t* bytes_max, picoquic_connection_id_t* n);
 
-static int qinq_copy_address(struct sockaddr_storage* addr_s, size_t address_length, const uint8_t* address, uint16_t port) {
+int qinq_copy_address(struct sockaddr_storage* addr_s, size_t address_length, const uint8_t* address, uint16_t port) {
     int ret = 0;
-
+    memset(addr_s, 0, sizeof(struct sockaddr_storage));
     if (address_length == 4) {
         struct sockaddr_in* addr4 = (struct sockaddr_in*)addr_s;
         addr4->sin_family = AF_INET;
@@ -99,6 +99,124 @@ uint8_t * picoqinq_decode_datagram_header(uint8_t * bytes, uint8_t * bytes_max,
                 bytes = NULL;
             } else {
                 *cid = &hc->cid;
+            }
+        }
+    }
+
+    return bytes;
+}
+
+int picoqinq_datagram_to_packet(uint8_t* bytes, uint8_t* bytes_max, struct sockaddr_storage* addr_s, 
+    uint8_t* packet_data, size_t packet_data_max, size_t * packet_length,
+    picoqinq_header_compression_t** p_receive_hc)
+{
+    picoquic_connection_id_t* cid = NULL;
+    uint8_t* next_input_bytes = picoqinq_decode_datagram_header(bytes, bytes_max, addr_s, &cid, p_receive_hc);
+    uint8_t* next_packet_bytes = packet_data;
+    int ret = 0;
+
+    if (next_input_bytes == NULL) {
+        ret = PICOQINQ_ERROR_PROTOCOL;
+    }
+    else {
+        size_t length = bytes_max - next_input_bytes;
+        if (cid) {
+            if ((next_input_bytes[0] & 0x80) == 0x80) {
+                if (length + 1 + cid->id_len > packet_data_max || length < 5) {
+                    ret = PICOQINQ_ERROR_INTERNAL;
+                    *packet_length = 0;
+                }
+                else {
+                    memcpy(next_packet_bytes, next_input_bytes, 5);
+                    next_input_bytes += 5;
+                    next_packet_bytes += 5;
+                    *next_packet_bytes++ = cid->id_len;
+                    memcpy(next_packet_bytes, cid->id, cid->id_len);
+                    next_packet_bytes += cid->id_len;
+                    memcpy(next_packet_bytes, next_input_bytes, length - 5);
+                    *packet_length = length + 1 + cid->id_len;
+                }
+            }
+            else {
+                if (length + cid->id_len > packet_data_max || length < 1) {
+                    ret = PICOQINQ_ERROR_INTERNAL;
+                    *packet_length = 0;
+                }
+                else {
+                    *next_packet_bytes++ = *next_input_bytes++;
+                    memcpy(next_packet_bytes, cid->id, cid->id_len);
+                    next_packet_bytes += cid->id_len;
+                    memcpy(next_packet_bytes, next_input_bytes, length - 1);
+                    *packet_length = length + cid->id_len;
+                }
+            }
+        }
+        else {
+            if (length > packet_data_max) {
+                ret = PICOQINQ_ERROR_INTERNAL;
+                *packet_length = 0;
+            }
+            else {
+                memcpy(next_packet_bytes, next_input_bytes, length);
+                *packet_length = length;
+            }
+        }
+    }
+
+    return ret;
+}
+
+uint8_t* picoqinq_packet_to_datagram(uint8_t* bytes, uint8_t* bytes_max, struct sockaddr* addr,
+    picoquic_connection_id_t* cid, uint8_t* packet_data, size_t packet_length, picoqinq_header_compression_t** p_send_hc)
+{
+    uint64_t hcid = picoqinq_find_reserve_header_id_by_address(p_send_hc, addr, cid);
+
+    if ((bytes = picoquic_frames_varlen_encode(bytes, bytes_max, hcid)) != NULL) {
+        if (hcid == 0) {
+            uint8_t addr_length;
+            uint8_t * addr_data;
+            uint16_t port;
+            if (addr->sa_family == AF_INET) {
+                addr_length = 4;
+                addr_data = (uint8_t *)&((struct sockaddr_in*)addr)->sin_addr;
+                port = ((struct sockaddr_in*)addr)->sin_port;
+            } else {
+                addr_length = 16;
+                addr_data = (uint8_t*)&((struct sockaddr_in6*)addr)->sin6_addr;
+                port = ((struct sockaddr_in6*)addr)->sin6_port;
+            }
+            if (bytes + packet_length + addr_length + 3 > bytes_max) {
+                bytes = NULL;
+            }
+            else {
+                *bytes++ = addr_length;
+                memcpy(bytes, addr_data, addr_length);
+                if ((bytes = picoquic_frames_uint16_encode(bytes + addr_length, bytes_max, port)) != NULL) {
+                    memcpy(bytes, packet_data, packet_length);
+                    bytes += packet_length;
+                }
+            }
+        }
+        else {
+            if ((bytes[0] & 0x80) == 0x80) {
+                if (bytes + packet_length - cid->id_len - 1 > bytes_max) {
+                    bytes = NULL;
+                }
+                else {
+                    memcpy(bytes, packet_data, 5);
+                    memcpy(bytes + 5, packet_data + 6 + cid->id_len, packet_length - 6 - cid->id_len);
+                    bytes += packet_length - 1 - cid->id_len;
+                }
+            }
+            else {
+                if (bytes + packet_length - cid->id_len > bytes_max) {
+                    bytes = NULL;
+                }
+                else {
+                    bytes[0] = packet_data[0];
+                    memcpy(bytes + 1, packet_data + 1 + cid->id_len, packet_length - 1 - cid->id_len);
+                    bytes += packet_length - cid->id_len;
+                }
             }
         }
     }

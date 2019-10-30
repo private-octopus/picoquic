@@ -53,8 +53,13 @@ typedef struct st_picoqinq_packet_t {
     uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE];
 } picoqinq_packet_t;
 
+int qinq_copy_address(struct sockaddr_storage* addr_s, size_t address_length, const uint8_t* address, uint16_t port);
+
 uint8_t* picoqinq_decode_datagram_header(uint8_t* bytes, uint8_t* bytes_max, struct sockaddr_storage * addr_s,
     picoquic_connection_id_t** cid, picoqinq_header_compression_t** p_receive_hc);
+int picoqinq_datagram_to_packet(uint8_t* bytes, uint8_t* bytes_max, struct sockaddr_storage* addr_s,
+    uint8_t* packet_data, size_t packet_data_max, size_t* packet_length,
+    picoqinq_header_compression_t** p_receive_hc);
 
 uint8_t* picoqinq_encode_reserve_header(uint8_t* bytes, uint8_t* bytes_max,
     uint64_t direction, uint64_t hcid, const struct sockaddr* addr, const picoquic_connection_id_t* cid);

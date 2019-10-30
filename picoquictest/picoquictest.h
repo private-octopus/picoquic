@@ -192,6 +192,7 @@ int large_client_hello_test();
 int fast_nat_rebinding_test();
 
 int qinq_rh_test();
+int qinq_incoming_datagram_parse_test();
 
 #ifdef __cplusplus
 }

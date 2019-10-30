@@ -414,7 +414,7 @@ int picoqinq_server_callback_datagram(picoqinq_srv_cnx_ctx_t* ctx, uint8_t* byte
  * protocol machine is called, and the response is posted on the stream.
  */
 
-picoqinq_server_stream_ctx_t* picoqinq_find_or_create_stream(picoquic_cnx_t* cnx, uint64_t stream_id, picoqinq_srv_cnx_ctx_t* ctx, int should_create)
+picoqinq_server_stream_ctx_t* picoqinq_find_or_create_server_stream(picoquic_cnx_t* cnx, uint64_t stream_id, picoqinq_srv_cnx_ctx_t* ctx, int should_create)
 {
     picoqinq_server_stream_ctx_t* stream_ctx = NULL;
 
@@ -443,7 +443,7 @@ picoqinq_server_stream_ctx_t* picoqinq_find_or_create_stream(picoquic_cnx_t* cnx
 }
 
 
-void picoqinq_forget_stream(picoqinq_srv_cnx_ctx_t* ctx, picoqinq_server_stream_ctx_t* stream_ctx)
+void picoqinq_forget_server_stream(picoqinq_srv_cnx_ctx_t* ctx, picoqinq_server_stream_ctx_t* stream_ctx)
 {
     if (ctx != NULL && stream_ctx != NULL) {
         picoqinq_server_stream_ctx_t** previous_link = &ctx->first_stream;
@@ -462,7 +462,7 @@ int picoqinq_server_callback_data(picoquic_cnx_t* cnx, picoqinq_server_stream_ct
     int ret = 0;
 
     if (stream_ctx == NULL) {
-        stream_ctx = picoqinq_find_or_create_stream(cnx, stream_id, callback_ctx, 1);
+        stream_ctx = picoqinq_find_or_create_server_stream(cnx, stream_id, callback_ctx, 1);
     }
 
     if (stream_ctx == NULL) {
@@ -576,7 +576,7 @@ int picoqinq_server_callback(picoquic_cnx_t* cnx,
             break;
         case picoquic_callback_stream_reset: /* Client reset stream #x */
         case picoquic_callback_stop_sending: /* Client asks server to reset stream #x */
-            picoqinq_forget_stream(ctx, stream_ctx);
+            picoqinq_forget_server_stream(ctx, stream_ctx);
             picoquic_reset_stream(cnx, stream_id, 0);
             break;
         case picoquic_callback_stateless_reset:
@@ -590,11 +590,11 @@ int picoqinq_server_callback(picoquic_cnx_t* cnx,
         case picoquic_callback_stream_gap:
             /* Gap indication, when unreliable streams are supported */
             if (stream_ctx == NULL) {
-                stream_ctx = picoqinq_find_or_create_stream(cnx, stream_id, ctx, 0);
+                stream_ctx = picoqinq_find_or_create_server_stream(cnx, stream_id, ctx, 0);
             }
             if (stream_ctx != NULL) {
                 /* Reset the stream status */
-                picoqinq_forget_stream(ctx, stream_ctx);
+                picoqinq_forget_server_stream(ctx, stream_ctx);
                 stream_ctx = NULL;
                 picoquic_reset_stream(cnx, stream_id, 0);
             }

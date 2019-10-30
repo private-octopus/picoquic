@@ -220,3 +220,143 @@ int qinq_rh_test()
 
     return ret;
 }
+
+static struct st_qinq_test_rh_t* header_list[] = { &rh1, &rh2 };
+size_t header_list_nb = sizeof(header_list) / sizeof(struct st_qinq_test_rh_t*);
+
+uint8_t qinq_dg1[] = {
+    0,  4, 10, 0, 0, 1, 1, 187, 0x0, 0x01, 0x02, 0x03, 0x04, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef };
+uint8_t qinq_dg1c[] = {
+    1,  0x0, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef };
+uint8_t qinq_dg2[] = {
+    0,  16, 0x20, 0x01, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 0x12, 0x34, 0xCF, 0xff, 0x00, 0x00, 0x17, 8, 11, 12, 13, 14, 15, 16, 17, 18, 8, 41, 42, 43, 44, 45, 46, 47, 48, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef };
+uint8_t qinq_dg2c[] = {
+    2,  0xCF, 0xff, 0x00, 0x00, 0x17, 8, 41, 42, 43, 44, 45, 46, 47, 48, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef };
+
+struct st_qinq_test_dg_t {
+    uint64_t hcid;
+    size_t address_length;
+    uint8_t * address;
+    uint16_t port;
+    picoquic_connection_id_t cid;
+    uint8_t * dg;
+    size_t dg_length;
+    uint8_t * packet;
+    size_t packet_length;
+    size_t parsed_bytes;
+};
+
+static struct st_qinq_test_dg_t dg_list[] = {
+    { 0, 4, &qinq_dg1[2], 443, {{0}, 0}, qinq_dg1, sizeof(qinq_dg1), &qinq_dg1[8], sizeof(qinq_dg1) - 8, 8},
+    { 1, 4, &qinq_dg1[2], 443, {{0x01, 0x02, 0x03, 0x04}, 4}, qinq_dg1c, sizeof(qinq_dg1c), &qinq_dg1[8], sizeof(qinq_dg1) - 8, 1 },
+    { 0, 16, &qinq_dg2[2], 0x1234, {{0}, 0}, qinq_dg2, sizeof(qinq_dg2), &qinq_dg2[20], sizeof(qinq_dg2) - 20, 20 },
+    { 2, 16, &qinq_dg2[2], 0x1234, {{ 11, 12, 13, 14, 15, 16, 17, 18}, 8}, qinq_dg2c, sizeof(qinq_dg2c), &qinq_dg2[20], sizeof(qinq_dg2) - 20, 1}
+};
+
+size_t dg_list_nb = sizeof(dg_list) / sizeof(struct st_qinq_test_dg_t);
+
+int qinq_incoming_datagram_parse_test()
+{
+    int ret = 0;
+    picoqinq_header_compression_t* hc_head = NULL;
+
+    for (size_t i = 0; ret == 0 && i < header_list_nb; i++) {
+        struct sockaddr_storage addr_s;
+        if (qinq_copy_address(&addr_s, header_list[i]->address_length, header_list[i]->address, header_list[i]->port) != 0) {
+            DBG_PRINTF("Cannot copy address #%d, length: %d\n", (int)i, (int)header_list[i]->address_length);
+            ret = -1;
+        }
+        else {
+            picoqinq_header_compression_t* hc = picoqinq_create_header(i + 1, (struct sockaddr*) & addr_s, &header_list[i]->cid);
+            if (hc == NULL) {
+                DBG_PRINTF("Cannot create hc #%d\n", (int)i);
+                ret = -1;
+            }
+            else {
+                picoqinq_reserve_header(hc, &hc_head);
+            }
+        }
+    }
+
+    /* Unit test of datagram parser */
+    for (size_t i = 0; ret == 0 && i < dg_list_nb; i++) {
+        struct sockaddr_storage addr_s;
+        struct sockaddr_storage addr_ref;
+        if (qinq_copy_address(&addr_ref, dg_list[i].address_length, dg_list[i].address, dg_list[i].port) != 0) {
+            DBG_PRINTF("Cannot copy address #%d, length: %d\n", (int)i, (int)dg_list[i].address_length);
+            ret = -1;
+        }
+        else {
+            picoquic_connection_id_t* cid;
+            uint8_t* bytes = dg_list[i].dg;
+            uint8_t* bytes_max = bytes + dg_list[i].dg_length;
+
+            bytes = picoqinq_decode_datagram_header(bytes, bytes_max, &addr_s, &cid, &hc_head);
+            if (bytes == NULL) {
+                ret = -1;
+                DBG_PRINTF("Parsing header of dg[%d] fails\n", (int)i);
+            }
+            else if (picoquic_compare_addr((struct sockaddr*) & addr_s, (struct sockaddr*) & addr_ref) != 0) {
+                ret = -1;
+                DBG_PRINTF("Parsing header of dg[%d]: address mismatch\n", (int)i);
+            }
+            else if (cid == NULL && dg_list[i].cid.id_len > 0) {
+                ret = -1;
+                DBG_PRINTF("Parsing header of dg[%d]: cid not parsed\n", (int)i);
+            }
+            else if (cid != NULL && dg_list[i].cid.id_len == 0) {
+                ret = -1;
+                DBG_PRINTF("Parsing header of dg[%d]: unexpected cid parsed\n", (int)i);
+            }
+            else if (dg_list[i].cid.id_len > 0 && picoquic_compare_connection_id(&dg_list[i].cid, cid) != 0) {
+                ret = -1;
+                DBG_PRINTF("Parsing header of dg[%d]: cid mismatch\n", (int)i);
+            }
+            else if (bytes - dg_list[i].dg != dg_list[i].parsed_bytes) {
+                ret = -1;
+                DBG_PRINTF("Parsing header of dg[%d]: parsed bytes count mismatch\n", (int)i);
+            }
+        }
+    }
+
+    /* Unit test of datagram to packet */
+    for (size_t i = 0; ret == 0 && i < dg_list_nb; i++) {
+        struct sockaddr_storage addr_s;
+        struct sockaddr_storage addr_ref;
+        if (qinq_copy_address(&addr_ref, dg_list[i].address_length, dg_list[i].address, dg_list[i].port) != 0) {
+            DBG_PRINTF("Cannot copy address #%d, length: %d\n", (int)i, (int)dg_list[i].address_length);
+            ret = -1;
+        }
+        else {
+            uint8_t* bytes = dg_list[i].dg;
+            uint8_t* bytes_max = bytes + dg_list[i].dg_length;
+            uint8_t packet[1024];
+            size_t packet_length;
+            ret = picoqinq_datagram_to_packet(bytes, bytes_max, &addr_s, packet, sizeof(packet), &packet_length, &hc_head);
+            if (ret != 0) {
+                DBG_PRINTF("Packeting of dg[%d] fails\n", (int)i);
+            }
+            else if (picoquic_compare_addr((struct sockaddr*) & addr_s, (struct sockaddr*) & addr_ref) != 0) {
+                ret = -1;
+                DBG_PRINTF("Packeting  of dg[%d]: address mismatch\n", (int)i);
+            }
+            else if (packet_length != dg_list[i].packet_length) {
+                ret = -1;
+                DBG_PRINTF("Packeting  of dg[%d]: packet length mismatch\n", (int)i);
+            }
+            else if (memcmp(dg_list[i].packet, packet, packet_length) != 0) {
+                ret = -1;
+                DBG_PRINTF("Packeting  of dg[%d]: packet mismatch\n", (int)i);
+            }
+        }
+    }
+
+    /* Finally */
+    while (hc_head != NULL) {
+        picoqinq_header_compression_t* hc = hc_head;
+        hc_head = hc->next_hc;
+        free(hc);
+    }
+
+    return ret;
+}

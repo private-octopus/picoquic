@@ -1076,5 +1076,11 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(qinq_incoming_datagram_parse) {
+            int ret = qinq_incoming_datagram_parse_test();
+
+            Assert::AreEqual(ret, 0);
+        }
     };
 }
