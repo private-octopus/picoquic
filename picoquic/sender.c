@@ -215,6 +215,13 @@ int picoquic_reset_stream(picoquic_cnx_t* cnx,
     return ret;
 }
 
+uint64_t picoquic_get_next_local_stream_id(picoquic_cnx_t* cnx, int is_unidir)
+{
+    int stream_type_id = (cnx->client_mode ^ 1) | ((is_unidir) ? 2 : 0);
+
+    return cnx->next_stream_id[stream_type_id];     
+}
+
 int picoquic_stop_sending(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint16_t local_stream_error)
 {

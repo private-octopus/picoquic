@@ -267,7 +267,7 @@ int qinq_incoming_datagram_parse_test()
             ret = -1;
         }
         else {
-            picoqinq_header_compression_t* hc = picoqinq_create_header(i + 1, (struct sockaddr*) & addr_s, &header_list[i]->cid);
+            picoqinq_header_compression_t* hc = picoqinq_create_header(i + 1, (struct sockaddr*) & addr_s, &header_list[i]->cid, 0);
             if (hc == NULL) {
                 DBG_PRINTF("Cannot create hc #%d\n", (int)i);
                 ret = -1;
@@ -291,7 +291,7 @@ int qinq_incoming_datagram_parse_test()
             uint8_t* bytes = dg_list[i].dg;
             uint8_t* bytes_max = bytes + dg_list[i].dg_length;
 
-            bytes = picoqinq_decode_datagram_header(bytes, bytes_max, &addr_s, &cid, &hc_head);
+            bytes = picoqinq_decode_datagram_header(bytes, bytes_max, &addr_s, &cid, &hc_head, 0);
             if (bytes == NULL) {
                 ret = -1;
                 DBG_PRINTF("Parsing header of dg[%d] fails\n", (int)i);
@@ -332,13 +332,26 @@ int qinq_incoming_datagram_parse_test()
             uint8_t* bytes_max = bytes + dg_list[i].dg_length;
             uint8_t packet[1024];
             size_t packet_length;
-            ret = picoqinq_datagram_to_packet(bytes, bytes_max, &addr_s, packet, sizeof(packet), &packet_length, &hc_head);
+            picoquic_connection_id_t* cid = NULL;
+            ret = picoqinq_datagram_to_packet(bytes, bytes_max, &addr_s, &cid, packet, sizeof(packet), &packet_length, &hc_head, 0);
             if (ret != 0) {
                 DBG_PRINTF("Packeting of dg[%d] fails\n", (int)i);
             }
             else if (picoquic_compare_addr((struct sockaddr*) & addr_s, (struct sockaddr*) & addr_ref) != 0) {
                 ret = -1;
-                DBG_PRINTF("Packeting  of dg[%d]: address mismatch\n", (int)i);
+                DBG_PRINTF("Packeting of dg[%d]: address mismatch\n", (int)i);
+            }
+            else if (cid == NULL && dg_list[i].cid.id_len > 0) {
+                ret = -1;
+                DBG_PRINTF("Packeting of dg[%d]: cid not parsed\n", (int)i);
+            }
+            else if (cid != NULL && dg_list[i].cid.id_len == 0) {
+                ret = -1;
+                DBG_PRINTF("Packeting of dg[%d]: unexpected cid parsed\n", (int)i);
+            }
+            else if (dg_list[i].cid.id_len > 0 && picoquic_compare_connection_id(&dg_list[i].cid, cid) != 0) {
+                ret = -1;
+                DBG_PRINTF("Packeting of dg[%d]: cid mismatch\n", (int)i);
             }
             else if (packet_length != dg_list[i].packet_length) {
                 ret = -1;

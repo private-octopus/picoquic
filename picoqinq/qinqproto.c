@@ -66,7 +66,8 @@ int qinq_copy_address(struct sockaddr_storage* addr_s, size_t address_length, co
 
 uint8_t * picoqinq_decode_datagram_header(uint8_t * bytes, uint8_t * bytes_max,
     struct sockaddr_storage* addr_s,
-    picoquic_connection_id_t** cid, picoqinq_header_compression_t ** p_receive_hc)
+    picoquic_connection_id_t** cid, picoqinq_header_compression_t ** p_receive_hc,
+    uint64_t current_time)
 {
     uint64_t hcid;
     size_t address_length = 0; 
@@ -90,7 +91,7 @@ uint8_t * picoqinq_decode_datagram_header(uint8_t * bytes, uint8_t * bytes_max,
             }
         }
         else {
-            picoqinq_header_compression_t* hc = picoqinq_find_reserve_header_by_id(p_receive_hc, hcid);
+            picoqinq_header_compression_t* hc = picoqinq_find_reserve_header_by_id(p_receive_hc, hcid, current_time);
 
             if (hc == NULL) {
                 bytes = NULL;
@@ -107,11 +108,10 @@ uint8_t * picoqinq_decode_datagram_header(uint8_t * bytes, uint8_t * bytes_max,
 }
 
 int picoqinq_datagram_to_packet(uint8_t* bytes, uint8_t* bytes_max, struct sockaddr_storage* addr_s, 
-    uint8_t* packet_data, size_t packet_data_max, size_t * packet_length,
-    picoqinq_header_compression_t** p_receive_hc)
+    picoquic_connection_id_t** cid, uint8_t* packet_data, size_t packet_data_max, size_t * packet_length,
+    picoqinq_header_compression_t** p_receive_hc, uint64_t current_time)
 {
-    picoquic_connection_id_t* cid = NULL;
-    uint8_t* next_input_bytes = picoqinq_decode_datagram_header(bytes, bytes_max, addr_s, &cid, p_receive_hc);
+    uint8_t* next_input_bytes = picoqinq_decode_datagram_header(bytes, bytes_max, addr_s, cid, p_receive_hc, current_time);
     uint8_t* next_packet_bytes = packet_data;
     int ret = 0;
 
@@ -120,9 +120,9 @@ int picoqinq_datagram_to_packet(uint8_t* bytes, uint8_t* bytes_max, struct socka
     }
     else {
         size_t length = bytes_max - next_input_bytes;
-        if (cid) {
+        if (*cid) {
             if ((next_input_bytes[0] & 0x80) == 0x80) {
-                if (length + 1 + cid->id_len > packet_data_max || length < 5) {
+                if (length + 1 + (*cid)->id_len > packet_data_max || length < 5) {
                     ret = PICOQINQ_ERROR_INTERNAL;
                     *packet_length = 0;
                 }
@@ -130,24 +130,24 @@ int picoqinq_datagram_to_packet(uint8_t* bytes, uint8_t* bytes_max, struct socka
                     memcpy(next_packet_bytes, next_input_bytes, 5);
                     next_input_bytes += 5;
                     next_packet_bytes += 5;
-                    *next_packet_bytes++ = cid->id_len;
-                    memcpy(next_packet_bytes, cid->id, cid->id_len);
-                    next_packet_bytes += cid->id_len;
+                    *next_packet_bytes++ = (*cid)->id_len;
+                    memcpy(next_packet_bytes, (*cid)->id, (*cid)->id_len);
+                    next_packet_bytes += (*cid)->id_len;
                     memcpy(next_packet_bytes, next_input_bytes, length - 5);
-                    *packet_length = length + 1 + cid->id_len;
+                    *packet_length = length + 1 + (*cid)->id_len;
                 }
             }
             else {
-                if (length + cid->id_len > packet_data_max || length < 1) {
+                if (length + (*cid)->id_len > packet_data_max || length < 1) {
                     ret = PICOQINQ_ERROR_INTERNAL;
                     *packet_length = 0;
                 }
                 else {
                     *next_packet_bytes++ = *next_input_bytes++;
-                    memcpy(next_packet_bytes, cid->id, cid->id_len);
-                    next_packet_bytes += cid->id_len;
+                    memcpy(next_packet_bytes, (*cid)->id, (*cid)->id_len);
+                    next_packet_bytes += (*cid)->id_len;
                     memcpy(next_packet_bytes, next_input_bytes, length - 1);
-                    *packet_length = length + cid->id_len;
+                    *packet_length = length + (*cid)->id_len;
                 }
             }
         }
@@ -167,9 +167,10 @@ int picoqinq_datagram_to_packet(uint8_t* bytes, uint8_t* bytes_max, struct socka
 }
 
 uint8_t* picoqinq_packet_to_datagram(uint8_t* bytes, uint8_t* bytes_max, struct sockaddr* addr,
-    picoquic_connection_id_t* cid, uint8_t* packet_data, size_t packet_length, picoqinq_header_compression_t** p_send_hc)
+    picoquic_connection_id_t* cid, uint8_t* packet_data, size_t packet_length, picoqinq_header_compression_t** p_send_hc,
+    uint64_t current_time)
 {
-    uint64_t hcid = picoqinq_find_reserve_header_id_by_address(p_send_hc, addr, cid);
+    uint64_t hcid = picoqinq_find_reserve_header_id_by_address(p_send_hc, addr, cid, current_time);
 
     if ((bytes = picoquic_frames_varlen_encode(bytes, bytes_max, hcid)) != NULL) {
         if (hcid == 0) {
@@ -299,7 +300,7 @@ uint8_t* picoqinq_decode_reserve_header(uint8_t* bytes, uint8_t* bytes_max,
     return bytes;
 }
 
-picoqinq_header_compression_t* picoqinq_create_header(uint64_t hcid, struct sockaddr * addr, const picoquic_connection_id_t* cid)
+picoqinq_header_compression_t* picoqinq_create_header(uint64_t hcid, struct sockaddr * addr, const picoquic_connection_id_t* cid, uint64_t current_time)
 {
     picoqinq_header_compression_t* hc = (picoqinq_header_compression_t*)malloc(sizeof(picoqinq_header_compression_t));
     if (hc != NULL) {
@@ -308,6 +309,7 @@ picoqinq_header_compression_t* picoqinq_create_header(uint64_t hcid, struct sock
         picoquic_store_addr(&hc->addr_s, addr);
         memcpy(hc->cid.id, cid->id, cid->id_len);
         hc->cid.id_len = cid->id_len;
+        hc->last_access_time = current_time;
     }
     return hc;
 }
@@ -332,9 +334,8 @@ void picoqinq_reserve_header(picoqinq_header_compression_t* hc, picoqinq_header_
     }
 }
 
-uint64_t picoqinq_find_reserve_header_id_by_address(picoqinq_header_compression_t** phc_head, struct sockaddr* addr, const picoquic_connection_id_t* cid)
+picoqinq_header_compression_t* picoqinq_find_reserve_header_by_address(picoqinq_header_compression_t** phc_head, struct sockaddr* addr, const picoquic_connection_id_t* cid, uint64_t current_time)
 {
-    uint64_t hcid = 0;
     picoqinq_header_compression_t** pnext = phc_head;
     picoqinq_header_compression_t* next;
 
@@ -342,8 +343,9 @@ uint64_t picoqinq_find_reserve_header_id_by_address(picoqinq_header_compression_
         if (picoquic_compare_addr((struct sockaddr*)&next->addr_s, addr) == 0 &&
             next->cid.id_len == cid->id_len &&
             memcmp(next->cid.id, cid->id, cid->id_len) == 0) {
-            hcid = next->hcid;
-
+            if (current_time) {
+                next->last_access_time = current_time;
+            }
             if (next != *phc_head) {
                 /* Bring LRU on top of list */
                 *pnext = next->next_hc;
@@ -356,16 +358,25 @@ uint64_t picoqinq_find_reserve_header_id_by_address(picoqinq_header_compression_
             pnext = &next->next_hc;
         }
     }
-    return hcid;
+    return next;
 }
 
-picoqinq_header_compression_t* picoqinq_find_reserve_header_by_id(picoqinq_header_compression_t** phc_head, uint64_t hcid)
+uint64_t picoqinq_find_reserve_header_id_by_address(picoqinq_header_compression_t** phc_head, struct sockaddr* addr, const picoquic_connection_id_t* cid, uint64_t current_time)
+{
+    picoqinq_header_compression_t* next = picoqinq_find_reserve_header_by_address(phc_head, addr, cid, current_time);
+    return (next == NULL) ? 0 : next->hcid;
+}
+
+picoqinq_header_compression_t* picoqinq_find_reserve_header_by_id(picoqinq_header_compression_t** phc_head, uint64_t hcid, uint64_t current_time)
 {
     picoqinq_header_compression_t** pnext = phc_head;
     picoqinq_header_compression_t* next;
 
     while ((next = *pnext) != NULL) {
         if (next->hcid == hcid) {
+            if (current_time){
+                next->last_access_time = current_time;
+            }
             if (next != *phc_head) {
                 /* Bring LRU on top of list */
                 *pnext = next->next_hc;

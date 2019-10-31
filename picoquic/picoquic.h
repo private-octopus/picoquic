@@ -685,6 +685,9 @@ int picoquic_add_to_stream_with_ctx(picoquic_cnx_t * cnx, uint64_t stream_id, co
 int picoquic_reset_stream(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint16_t local_stream_error);
 
+/* Obtain the next available stream ID in the local category */
+uint64_t picoquic_get_next_local_stream_id(picoquic_cnx_t* cnx, int is_unidir);
+
 /* Ask the peer to stop sending on a stream. The peer is expected
  * to reset that stream when receiving the "stop sending" signal. */
 int picoquic_stop_sending(picoquic_cnx_t* cnx,

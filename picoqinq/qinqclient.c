@@ -24,24 +24,107 @@
 #include <string.h>
 #include <stdint.h>
 
+#include "util.h"
 #include "picoquic.h"
 #include "qinqproto.h"
 #include "qinqclient.h"
 #include "picohash.h"
 
+/* Register an address, cid pair with the peer if it is not already reserved.
+ * Send the corresponding request to the server.
+ */
+void picoqinq_client_register_address_cid_pair(picoquic_cnx_t* cnx, picoqinq_client_callback_ctx_t* ctx, struct sockaddr* addr, picoquic_connection_id_t* cid, uint64_t direction,
+    uint64_t current_time)
+{
+    /* TODO: Should do some flow control, only reserve a small number of CID at a time */
+    /* Look in the table whether the mapping already exists */
+    picoqinq_header_compression_t** phc_head = (direction == 0) ? &ctx->receive_hc : &ctx->send_hc;
+    picoqinq_header_compression_t* hc = picoqinq_find_reserve_header_by_address(phc_head, addr, cid, 0);
+
+    if (hc == NULL) {
+        /* If there is no entry, create one and resent the message. */
+        uint64_t hcid;
+        if (direction == 0) {
+            hcid = ++ctx->receive_hcid;
+        }
+        else {
+            hcid = ++ctx->send_hcid;
+        }
+        hc = picoqinq_create_header(hcid, addr, cid, current_time);
+        if (hc != NULL) {
+            picoqinq_reserve_header(hc, phc_head);
+        }
+    }
+    else if (hc->last_access_time + PICOQINQ_RESERVATION_DELAY > current_time) {
+        hc->last_access_time = current_time;
+    } else {
+        /* The entry is still fresh, do not repeat it */
+        hc = NULL;
+    }
+
+    if (hc != NULL) {
+        uint8_t message[1024];
+        size_t message_length = 0;
+        uint8_t* eom;
+
+        eom = picoqinq_encode_reserve_header(message, message + sizeof(message), direction, hc->hcid, addr, cid);
+
+        if (eom != NULL) {
+            /* Find the next client stream */
+            picoquic_add_to_stream(cnx, picoquic_get_next_local_stream_id(cnx, 0), message, message_length, 1);
+        }
+    }
+}
+
 /*
  * Datagram call back, process Quic datagrams received from a qinq server.
  */
-int picoqinq_client_callback_datagram(picoqinq_client_callback_ctx_t* ctx, uint8_t* bytes0, size_t length)
+int picoqinq_client_callback_datagram(picoquic_cnx_t * cnx, picoqinq_client_callback_ctx_t* ctx, uint8_t* bytes0, size_t length, uint64_t current_time)
 {
     /* Decode the datagram and queue it for input processing by the quic context */
-    int ret = 0;
-
-    /* TODO */
+    
+    /* TODO: use real packet type, chain it to context, return it when polled for "something to send"?
+     * Or, consider as input. */
+    uint8_t packet[1536];
+    size_t packet_length = 0;
     struct sockaddr_storage addr_s;
+    picoquic_connection_id_t* cid;
+    picoquic_connection_id_t in_cid;
+    struct sockaddr* peer_addr = NULL;
+    int peer_addr_len = 0;
     uint8_t* bytes_max = bytes0 + length;
-    picoquic_connection_id_t * cid = NULL;
-    uint8_t* bytes = picoqinq_decode_datagram_header(bytes0, bytes_max, &addr_s, &cid, &ctx->receive_hc);
+    int ret = picoqinq_datagram_to_packet(bytes0, bytes_max, &addr_s, &cid, packet, sizeof(packet), &packet_length, &ctx->receive_hc, current_time);
+
+    if (ret == 0) {
+        if (cid == NULL) {
+            /* This packet could not be compressed.
+             * Find the CID from the packet, verify that it is local,
+             * If it is, add a header compression entry */
+
+            if ((packet[0] & 0x80) == 0x80) {
+                if (packet[5] == picoquic_get_local_cid_length(ctx->qinq_ctx->quic)) {
+                    (void)picoquic_parse_connection_id(packet + 6, packet[5], &in_cid);
+                    cid = &in_cid;
+                }
+            }
+            else {
+                (void)picoquic_parse_connection_id(packet + 1, picoquic_get_local_cid_length(ctx->qinq_ctx->quic), &in_cid);
+                cid = &in_cid;
+            }
+
+            if (cid != NULL && picoquic_is_local_cid(ctx->qinq_ctx->quic, cid)) {
+                picoqinq_client_register_address_cid_pair(cnx, ctx, (struct sockaddr*) & addr_s, cid, 0, current_time);
+            }
+        }
+
+        /* Whether the packet is confirmed local or not, pass it to the local quic server */
+        picoquic_get_peer_addr(cnx, &peer_addr, &peer_addr_len);
+
+        ret = picoquic_incoming_packet(ctx->qinq_ctx->quic, packet, packet_length, (struct sockaddr*) & addr_s, peer_addr, 0, 0, current_time);
+    }
+    else {
+        ret = PICOQINQ_ERROR_PROTOCOL;
+    }
 
     return ret;
 }
@@ -239,7 +322,8 @@ int picoqinq_client_callback(picoquic_cnx_t* cnx,
             break;
         case picoquic_callback_datagram:
             /* Process the datagram, which contains an address and a QUIC packet */
-            ret = picoqinq_client_callback_datagram(ctx, bytes, length);
+            ret = picoqinq_client_callback_datagram(cnx, ctx, bytes, length,
+                picoquic_get_quic_time(ctx->qinq_ctx->quic));
             break;
         case picoquic_callback_almost_ready:
         case picoquic_callback_ready:
