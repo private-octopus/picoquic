@@ -51,24 +51,27 @@ typedef struct st_picoqinq_server_stream_ctx_t {
 /* Context management definitions.
  */
 
-typedef struct st_picoquic_cid_cnx_link_t {
+typedef struct st_picoqinq_cnx_address_link_t {
     struct st_picoqinq_srv_cnx_ctx_t* cnx_ctx;
-    picoquic_connection_id_t cid;
-    struct st_picoqinq_qinq_cid_prefix_route_t* cid_route;
-    struct st_picoquic_cid_cnx_link_t* next_route;
-    struct st_picoquic_cid_cnx_link_t* next_cid;
-} picoquic_cid_cnx_link_t;
+    struct st_picoqinq_peer_address_record_t * address_record;
+    uint64_t last_access_time;
+    struct st_picoqinq_cnx_address_link_t* next_cnx_by_address;
+    struct st_picoqinq_cnx_address_link_t* next_address_by_cnx;
+} picoqinq_cnx_address_link_t;
 
-typedef struct st_picoqinq_qinq_cid_prefix_route_t {
-    picoquic_connection_id_t cid_prefix; /* Reduced to agreed min length of CID */
-    picoquic_cid_cnx_link_t* first_route;
-} picoqinq_qinq_cid_prefix_route_t;
+
+typedef struct st_picoqinq_peer_address_record_t {
+    struct sockaddr_storage peer_addr;
+    picoqinq_cnx_address_link_t* first_cnx_by_address;
+} picoqinq_peer_address_record_t;
 
 typedef struct st_picoqinq_srv_ctx_t {
     /* Quic in Quic context, server side */
     picoquic_quic_t* quic;
     uint8_t min_prefix_length;
-    picohash_table* table_prefix_route;
+
+    picohash_table* table_peer_addresses;
+
     struct st_picoqinq_srv_cnx_ctx_t* cnx_first;
     struct st_picoqinq_srv_cnx_ctx_t* cnx_last;
 } picoqinq_srv_ctx_t;
@@ -79,7 +82,7 @@ typedef struct st_picoqinq_srv_cnx_ctx_t {
     struct st_picoqinq_srv_cnx_ctx_t* ctx_next;
     picoqinq_header_compression_t* receive_hc;
     picoqinq_header_compression_t* send_hc;
-    picoquic_cid_cnx_link_t* first_cid;
+    picoqinq_cnx_address_link_t* first_address_by_cnx;
     picoqinq_server_stream_ctx_t* first_stream;
 } picoqinq_srv_cnx_ctx_t;
 
@@ -104,7 +107,7 @@ int picoqinq_server_incoming_packet(
     unsigned char received_ecn,
     uint64_t current_time);
 
-picoqinq_srv_ctx_t* picoqinq_create_srv_ctx(picoquic_quic_t* quic, uint8_t min_prefix_length, size_t nb_cid);
+picoqinq_srv_ctx_t* picoqinq_create_srv_ctx(picoquic_quic_t* quic, uint8_t min_prefix_length, size_t nb_connections);
 void picoqinq_delete_srv_ctx(picoqinq_srv_ctx_t* ctx);
 
 picoqinq_srv_cnx_ctx_t* picoqinq_create_srv_cnx_ctx(picoqinq_srv_ctx_t* qinq);

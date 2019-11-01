@@ -65,7 +65,8 @@ static uint64_t picoquic_net_id_hash(const void* key)
 {
     const picoquic_net_id_key_t* net = (const picoquic_net_id_key_t*)key;
 
-    return picohash_bytes((uint8_t*)&net->saddr, sizeof(net->saddr));
+    // return picohash_bytes((uint8_t*)&net->saddr, sizeof(net->saddr));
+    return picoquic_hash_addr((struct sockaddr*) & net->saddr);
 }
 
 static int picoquic_net_id_compare(const void* key1, const void* key2)
@@ -73,7 +74,7 @@ static int picoquic_net_id_compare(const void* key1, const void* key2)
     const picoquic_net_id_key_t* net1 = (const picoquic_net_id_key_t*)key1;
     const picoquic_net_id_key_t* net2 = (const picoquic_net_id_key_t*)key2;
 
-    return memcmp(&net1->saddr, &net2->saddr, sizeof(net1->saddr));
+    return picoquic_compare_addr((struct sockaddr*) & net1->saddr, (struct sockaddr*) & net2->saddr);
 }
 
 #if 0
