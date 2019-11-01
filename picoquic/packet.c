@@ -598,7 +598,15 @@ int picoquic_parse_header_and_decrypt(
                 }
                 else if (ph->ptype == picoquic_packet_1rtt_protected)
                 {
-                    /* This may be a stateless reset */
+                    /* This may be a stateless reset.
+                     * Note that the QUIC specification says that we must use a constant time
+                     * comparison function for the stateless token. It turns out that on
+                     * memcmp of a 16 byte string is actually constant time on Intel processors,
+                     * and that replacements are less constant time than that. So we just use
+                     * memcmp for now. */
+
+                    /* TODO: if we support multiple connections to same address, we will need to
+                     * rewrite this code and test against all possible matches */
                     *pcnx = picoquic_cnx_by_net(quic, addr_from);
 
                     if (*pcnx != NULL && length >= PICOQUIC_RESET_PACKET_MIN_SIZE &&
