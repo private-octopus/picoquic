@@ -1084,12 +1084,18 @@ int picoquic_enqueue_cnxid_stash(picoquic_cnx_t * cnx,
                 (int)sequence, (int)cnx->path[i]->remote_cnxid_sequence);
             ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
         }
+        else if (memcmp(secret_bytes, &cnx->path[i]->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0) {
+            DBG_PRINTF("Path %d, Cnx_id: %02x%02x%02x%02x..., Sequence %d vs. %d, same secret\n",
+                i, cnx_id.id[0], cnx_id.id[1], cnx_id.id[2], cnx_id.id[3],
+                (int)sequence, (int)cnx->path[i]->remote_cnxid_sequence);
+            ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
+        }
     }
 
     if (ret == 0 && is_duplicate == 0) {
         picoquic_probe_t * next_probe = cnx->probe_first;
 
-        while (ret == 0 && next_probe != NULL) {
+        while (next_probe != NULL) {
             if (sequence == next_probe->sequence) {
                 if (picoquic_compare_connection_id(&cnx_id, &next_probe->remote_cnxid) == 0)
                 {
@@ -1104,10 +1110,16 @@ int picoquic_enqueue_cnxid_stash(picoquic_cnx_t * cnx,
                 }
                 else {
                     ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
+                    break;
                 }
             }
             else if (picoquic_compare_connection_id(&cnx_id, &next_probe->remote_cnxid) == 0) {
                 ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
+                break;
+            }
+            else if (memcmp(secret_bytes, next_probe->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0) {
+                ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
+                break;
             }
 
             next_probe = next_probe->next_probe;
@@ -1117,7 +1129,7 @@ int picoquic_enqueue_cnxid_stash(picoquic_cnx_t * cnx,
     if (ret == 0 && is_duplicate == 0) {
         next_stash = cnx->cnxid_stash_first;
 
-        while (next_stash != NULL) {
+        while (next_stash != NULL && ret == 0 && is_duplicate == 0) {
             if (picoquic_compare_connection_id(&cnx_id, &next_stash->cnx_id) == 0)
             {
                 if (next_stash->sequence == sequence &&
@@ -1130,6 +1142,9 @@ int picoquic_enqueue_cnxid_stash(picoquic_cnx_t * cnx,
                 break;
             }
             else if (next_stash->sequence == sequence) {
+                ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
+            }
+            else if (memcmp(secret_bytes, next_stash->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0) {
                 ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
             }
             last_stash = next_stash;
