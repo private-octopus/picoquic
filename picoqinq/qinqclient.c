@@ -82,9 +82,6 @@ void picoqinq_client_register_address_cid_pair(picoquic_cnx_t* cnx, picoqinq_cli
 int picoqinq_client_callback_datagram(picoquic_cnx_t * cnx, picoqinq_client_callback_ctx_t* ctx, uint8_t* bytes0, size_t length, uint64_t current_time)
 {
     /* Decode the datagram and queue it for input processing by the quic context */
-    
-    /* TODO: use real packet type, chain it to context, return it when polled for "something to send"?
-     * Or, consider as input. */
     uint8_t packet[1536];
     size_t packet_length = 0;
     struct sockaddr_storage addr_s;

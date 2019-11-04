@@ -391,32 +391,3 @@ picoqinq_header_compression_t* picoqinq_find_reserve_header_by_id(picoqinq_heade
     }
     return next;
 }
-
-/* To reserve a CID to handle incoming packets, the client sends a CID reservation
- * message on a new bidir client stream. The message has the format:
- *     - Op code "reserve header" -- varint.
- *     - cid length -- varint
- *     - cid content bytes 
- * There is no reply necessary -- the server just closes the stream.  
- * There is no synchronization requirement -- this is best effort.
- *
- * The CID is pushed when it is created.
- * We may consider dropping when it is retired.
- *
- * The hash table managed by the server lists the first N bytes of the CID.
- * This delivers a list of matching connection. A secondary filter per
- * connection checks the match for the full CID. 
- */
-
-uint8_t* picoqinq_encode_reserve_cid(uint8_t* bytes, uint8_t* bytes_max, const picoquic_connection_id_t* cid)
-{
-    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, QINQ_PROTO_RESERVE_CID)) != NULL) {
-        bytes = picoquic_frames_cid_encode(bytes, bytes_max, cid);
-    }
-    return bytes;
-}
-
-uint8_t* picoqinq_decode_reserve_cid(uint8_t* bytes, uint8_t* bytes_max, picoquic_connection_id_t* cid)
-{
-    return picoquic_frames_cid_decode(bytes, bytes_max, cid);
-}

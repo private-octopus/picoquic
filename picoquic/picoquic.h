@@ -596,6 +596,9 @@ void * picoquic_get_callback_context(picoquic_cnx_t* cnx);
 /* Send extra frames */
 int picoquic_queue_misc_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t length);
 
+/* Send datagram frame */
+int picoquic_queue_datagram_frame(picoquic_cnx_t* cnx, uint64_t id, size_t length, uint8_t* bytes);
+
 /* Send and receive network packets */
 /* Handling of stateless packets */
 picoquic_stateless_packet_t* picoquic_create_stateless_packet(picoquic_quic_t* quic);

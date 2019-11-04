@@ -78,6 +78,7 @@ typedef struct st_picoqinq_srv_ctx_t {
 
 typedef struct st_picoqinq_srv_cnx_ctx_t {
     picoqinq_srv_ctx_t* qinq;
+    picoquic_cnx_t* cnx;
     struct st_picoqinq_srv_cnx_ctx_t* ctx_previous;
     struct st_picoqinq_srv_cnx_ctx_t* ctx_next;
     picoqinq_header_compression_t* receive_hc;
@@ -87,14 +88,11 @@ typedef struct st_picoqinq_srv_cnx_ctx_t {
 } picoqinq_srv_cnx_ctx_t;
 
 int picoquic_incoming_proxy_packet(
-    picoqinq_srv_cnx_ctx_t* qinq,
-    uint8_t* bytes,
+    picoqinq_srv_cnx_ctx_t* cnx_ctx,
+    uint8_t* packet_data,
     size_t packet_length,
     picoquic_connection_id_t* dcid,
     struct sockaddr* addr_from,
-    struct sockaddr* addr_to,
-    int if_index_to,
-    unsigned char received_ecn,
     uint64_t current_time);
 
 int picoqinq_server_incoming_packet(

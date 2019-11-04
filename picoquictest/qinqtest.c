@@ -137,85 +137,12 @@ static int qinq_test_one_rh(const struct st_qinq_test_rh_t* rh, size_t length, u
     return ret;
 }
 
-struct st_qinq_test_rcid_t {
-    picoquic_connection_id_t cid;
-};
-
-static uint8_t qinq_rcid1[] = {
-    QINQ_PROTO_RESERVE_CID, 4, 0x01, 0x02, 0x03, 0x04
-};
-
-static struct st_qinq_test_rcid_t rcid1 = {
-    { { 0x01, 0x02, 0x03, 0x04}, 4}
-};
-
-static uint8_t qinq_rcid2[] = {
-    QINQ_PROTO_RESERVE_CID, 8, 11, 12, 13, 14, 15, 16, 17, 18
-};
-
-static struct st_qinq_test_rcid_t rcid2 = {
-    { { 11, 12, 13, 14, 15, 16, 17, 18}, 8}
-};
-
-static int qinq_test_one_cid(const struct st_qinq_test_rcid_t* rcid, size_t length, uint8_t* message)
-{
-    int ret = 0;
-    picoquic_connection_id_t cid = { {0}, 0 };
-    uint8_t* bytes = message;
-    uint8_t* bytes_max = message + length;
-
-    if ((bytes = picoquic_frames_varint_skip(bytes, bytes_max)) != NULL) {
-        bytes = picoqinq_decode_reserve_cid(bytes, bytes_max, &cid);
-    }
-
-    if (bytes == NULL) {
-        ret = -1;
-        DBG_PRINTF("Parsing reserve cid returns: %d\n", ret);
-    }
-    else if (bytes_max > bytes) {
-        DBG_PRINTF("Bytes remain after parsing reserve cid: %llu\n",
-            (unsigned long long)(bytes_max - bytes));
-        ret = -1;
-    }
-    else if (picoquic_compare_connection_id(&cid, &rcid->cid) != 0) {
-        DBG_PRINTF("Wrong CID: %d: { %d, %d, %d, %d, ... }\n", cid.id_len, cid.id[0], cid.id[1], cid.id[2], cid.id[3]);
-        ret = -1;
-    }
-
-    if (ret == 0) {
-        uint8_t buf[256];
-
-        bytes_max = buf + sizeof(buf);
-
-        bytes = picoqinq_encode_reserve_cid(buf, bytes_max, &cid);
-        if (bytes == NULL) {
-            ret = -1;
-            DBG_PRINTF("Preparing reserve cid returns: %d\n", ret);
-        }
-        else if (bytes - buf != length) {
-            DBG_PRINTF("Preparing reserve cid wrong length: %llu\n", (unsigned long long)(bytes - buf));
-            ret = -1;
-        }
-        else if (memcmp(buf, message, length) != 0) {
-            DBG_PRINTF("%s", "Prepared reserve cid does not match\n");
-            ret = -1;
-        }
-    }
-
-    return ret;
-}
-
 int qinq_rh_test()
 {
     int ret;
 
     if ((ret = qinq_test_one_rh(&rh1, sizeof(qinq_rh1), qinq_rh1)) == 0) {
         ret = qinq_test_one_rh(&rh2, sizeof(qinq_rh2), qinq_rh2);
-    }
-
-    if (ret == 0 &&
-        (ret = qinq_test_one_cid(&rcid1, sizeof(qinq_rcid1), qinq_rcid1)) == 0) {
-        ret = qinq_test_one_cid(&rcid2, sizeof(qinq_rcid2), qinq_rcid2);
     }
 
     return ret;

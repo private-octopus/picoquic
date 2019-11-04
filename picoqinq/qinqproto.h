@@ -60,9 +60,14 @@ int qinq_copy_address(struct sockaddr_storage* addr_s, size_t address_length, co
 
 uint8_t* picoqinq_decode_datagram_header(uint8_t* bytes, uint8_t* bytes_max, struct sockaddr_storage * addr_s,
     picoquic_connection_id_t** cid, picoqinq_header_compression_t** p_receive_hc, uint64_t current_time);
+
 int picoqinq_datagram_to_packet(uint8_t* bytes, uint8_t* bytes_max, struct sockaddr_storage* addr_s,
     picoquic_connection_id_t** cid, uint8_t* packet_data, size_t packet_data_max, size_t* packet_length,
     picoqinq_header_compression_t** p_receive_hc, uint64_t current_time);
+
+uint8_t* picoqinq_packet_to_datagram(uint8_t* bytes, uint8_t* bytes_max, struct sockaddr* addr,
+    picoquic_connection_id_t* cid, uint8_t* packet_data, size_t packet_length, picoqinq_header_compression_t** p_send_hc,
+    uint64_t current_time);
 
 uint8_t* picoqinq_encode_reserve_header(uint8_t* bytes, uint8_t* bytes_max,
     uint64_t direction, uint64_t hcid, const struct sockaddr* addr, const picoquic_connection_id_t* cid);
@@ -73,8 +78,5 @@ void picoqinq_reserve_header(picoqinq_header_compression_t* hc, picoqinq_header_
 picoqinq_header_compression_t* picoqinq_find_reserve_header_by_address(picoqinq_header_compression_t** phc_head, struct sockaddr* addr, const picoquic_connection_id_t* cid, uint64_t current_time);
 uint64_t picoqinq_find_reserve_header_id_by_address(picoqinq_header_compression_t** phc_head, struct sockaddr* addr, const picoquic_connection_id_t* cid, uint64_t current_time);
 picoqinq_header_compression_t* picoqinq_find_reserve_header_by_id(picoqinq_header_compression_t** phc_head, uint64_t hcid, uint64_t current_time);
-
-uint8_t* picoqinq_encode_reserve_cid(uint8_t* bytes, uint8_t* bytes_max, const picoquic_connection_id_t* cid);
-uint8_t* picoqinq_decode_reserve_cid(uint8_t* bytes, uint8_t* bytes_max, picoquic_connection_id_t* cid);
 
 #endif /* QINQ_PROTO_H */
