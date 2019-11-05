@@ -1068,7 +1068,8 @@ int key_rotation_vector_test()
     for (int i = 0; ret == 0 && key_rotation_test_suites[i] != NULL; i++) {
         memset(new_secret, 0, sizeof(new_secret));
         memcpy(new_secret, key_rotation_test_init, key_rotation_test_suites[i]->hash->digest_size);
-        ret = picoquic_rotate_app_secret(key_rotation_test_suites[i], new_secret);
+        /* TODO: update to use the test vector of draft 24 */
+        ret = picoquic_rotate_app_secret(key_rotation_test_suites[i], new_secret, 1);
         if (ret != 0) {
             DBG_PRINTF("Cannot rotate secret[%d], ret=%x\n", i, ret);
         }

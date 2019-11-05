@@ -26,7 +26,8 @@
 #define PICOQUIC_LABEL_INITIAL_CLIENT "client in"
 #define PICOQUIC_LABEL_INITIAL_SERVER "server in"
 
-#define PICOQUIC_LABEL_TRAFFIC_UPDATE "traffic upd"
+#define PICOQUIC_LABEL_TRAFFIC_UPDATE "quic ku"
+#define PICOQUIC_LABEL_TRAFFIC_UPDATE_23 "traffic upd"
 
 #define PICOQUIC_LABEL_KEY "key"
 #define PICOQUIC_LABEL_IV "iv"
@@ -98,7 +99,7 @@ uint8_t * picoquic_get_app_secret(picoquic_cnx_t* cnx, int is_enc);
 size_t picoquic_get_app_secret_size(picoquic_cnx_t* cnx);
 int picoquic_compute_new_rotated_keys(picoquic_cnx_t * cnx);
 void picoquic_apply_rotated_keys(picoquic_cnx_t * cnx, int is_enc);
-int picoquic_rotate_app_secret(ptls_cipher_suite_t * cipher, uint8_t * secret);
+int picoquic_rotate_app_secret(ptls_cipher_suite_t * cipher, uint8_t * secret, int compat23);
 
 void picoquic_crypto_context_free(picoquic_crypto_context_t * ctx);
 
