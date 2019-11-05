@@ -42,12 +42,6 @@ extern "C" {
 #define PRIst "zu"
 #endif
 
-#ifdef __APPLE__
-#ifndef PICOQUIC_USE_CONSTANT_TIME_MEMCMP
-#define PICOQUIC_USE_CONSTANT_TIME_MEMCMP
-#endif
-#endif
-
 void debug_set_stream(FILE *F);
 void debug_printf(const char* fmt, ...);
 void debug_printf_push_stream(FILE* f);
