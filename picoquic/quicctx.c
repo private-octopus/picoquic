@@ -143,12 +143,12 @@ static uint8_t picoquic_cleartext_draft_23_salt[] = {
 };
 
 const picoquic_version_parameters_t picoquic_supported_versions[] = {
+    { PICOQUIC_FIFTEENTH_INTEROP_VERSION,
+        sizeof(picoquic_cleartext_draft_23_salt),
+        picoquic_cleartext_draft_23_salt },
     { PICOQUIC_FOURTEENTH_INTEROP_VERSION,
         sizeof(picoquic_cleartext_draft_23_salt),
         picoquic_cleartext_draft_23_salt },
-    { PICOQUIC_THIRTEENTH_INTEROP_VERSION,
-        sizeof(picoquic_cleartext_draft_22_salt),
-        picoquic_cleartext_draft_22_salt },
     { PICOQUIC_INTERNAL_TEST_VERSION_2,
         sizeof(picoquic_cleartext_internal_test_1_salt),
         picoquic_cleartext_internal_test_1_salt },
