@@ -186,6 +186,7 @@ int util_memcmp_test()
             }
         }
 
+
         /* Time measurement: Compare a long string, at 16 different intervals. */
         while (ret == 0) {
             int zero_found = 0;
@@ -237,6 +238,7 @@ int util_memcmp_test()
         }
     }
 
+#ifndef PICOQUIC_USE_CONSTANT_TIME_MEMCMP
     while (ret == 0) {
         for (size_t i = 0; ret == 0 && i < 2; i++) {
             /* prepare the y string */
@@ -253,7 +255,7 @@ int util_memcmp_test()
             for (int r = 0; r < nb_round; r++) {
                 /* measure compare time */
                 for (size_t j = 0; j < l_total; j += 16) {
-                    carry &= (memcmp(x, y, l_total) != 0);
+                    carry &= (memcmp(x, y, 16) != 0);
                 }
 
                 if (carry != 1) {
@@ -274,14 +276,15 @@ int util_memcmp_test()
 
     if (ret == 0){
         if (memcmp_time[1] > 2 * memcmp_time[0]) {
-            /* This test is a bit unreliable, so we will not fail if the time is too long. */
             DBG_PRINTF("Memcmp not constant time on 16 bytes: t[0] = %d, t[15] = %d\n", (int)memcmp_time[0], (int)memcmp_time[1]);
             DBG_PRINTF("%s", "Need to compile with -DPICOQUIC_USE_CONSTANT_TIME_MEMCMP");
+            ret = -1;
         }
         else {
             DBG_PRINTF("Memcmp constant time on 16 bytes: t[0] = %d, t[15] = %d\n", (int)memcmp_time[0], (int)memcmp_time[1]);
         }
     }
+#endif
 
     if (x != NULL) {
         free(x);
