@@ -86,6 +86,7 @@ static const picoquic_test_def_t test_table[] = {
     { "SH_loss", tls_api_server_first_loss_test },
     { "client_losses", tls_api_client_losses_test },
     { "server_losses", tls_api_server_losses_test },
+    { "ddos_amplification", ddos_amplification_test},
     { "transport_param_stream_id", transport_param_stream_id_test },
     { "stream_rank", stream_rank_test },
     { "stream_id_to_rank", stream_id_to_rank_test},

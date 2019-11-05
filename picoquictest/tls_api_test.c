@@ -6476,3 +6476,122 @@ int large_client_hello_test()
 
     return ret;
 }
+
+/* DDOS Amplification Mitigation test
+ *
+ * In this test, the client sends a first packet (client hello) and then disappears.
+ * This simulates an attempts to use the Quic server as an amplifier in a DDOS attack.
+ * We want to verify that the server does not send out more than 3 times the amount
+ * of data sent by the client.
+ */
+
+int ddos_amplification_test()
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    uint32_t proposed_version = PICOQUIC_INTEROP_VERSION_LATEST;
+    int ret = tls_api_init_ctx(&test_ctx, proposed_version, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+    picoquictest_sim_packet_t* packet = picoquictest_sim_link_create_packet();
+    int peer_addr_len = 0;
+    int local_addr_len = 0;
+    size_t data_sent_by_client = 0;
+    size_t data_sent_by_server = 0;
+    int nb_server_packets = 0;
+    int nb_loops = 0;
+    int nb_inactive = 0;
+
+    if (ret != 0 || packet == NULL)
+    {
+        DBG_PRINTF("Could not create the QUIC test contexts for V=%x\n", proposed_version);
+    }
+
+    if (ret == 0) {
+        /* Prepare a first packet from the client to the server */
+        ret = picoquic_prepare_packet(test_ctx->cnx_client, simulated_time,
+            packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length,
+            &packet->addr_to, &peer_addr_len, &packet->addr_from, &local_addr_len);
+
+        if (packet->length == 0) {
+            ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
+        }
+        if (ret != 0 )
+        {
+            DBG_PRINTF("Could not create first client packet, ret=%x\n", ret);
+        }
+        else {
+            data_sent_by_client += packet->length;
+
+            ret = picoquic_incoming_packet(test_ctx->qserver, packet->bytes, (uint32_t)packet->length,
+                (struct sockaddr*) & packet->addr_from,
+                (struct sockaddr*) & packet->addr_to, 0, 0,
+                simulated_time);
+
+            if (ret == 0) {
+                picoquic_cnx_t* next = test_ctx->qserver->cnx_list;
+
+                while (next != NULL && picoquic_compare_connection_id(&next->initial_cnxid, &test_ctx->cnx_client->initial_cnxid) != 0) {
+                    next = next->next_in_table;
+                }
+
+                if (next != NULL) {
+                    test_ctx->cnx_server = next;
+                } else {
+                    ret = -1;
+                    DBG_PRINTF("Could not create server side connection, ret = %d\n", ret);
+                }
+            }
+        }
+    }
+
+    while (ret == 0 && test_ctx->cnx_server != NULL && test_ctx->cnx_server->cnx_state != picoquic_state_disconnected && nb_loops < 1024 && nb_inactive < 256) {
+        /* Update the time to the next server time */
+        simulated_time = test_ctx->cnx_server->next_wake_time;
+        packet->length = 0;
+        peer_addr_len = 0;
+        local_addr_len = 0;
+        nb_loops++;
+
+        ret = picoquic_prepare_packet(test_ctx->cnx_server, simulated_time,
+            packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length,
+            &packet->addr_to, &peer_addr_len, &packet->addr_from, &local_addr_len);
+
+        if (ret == PICOQUIC_ERROR_DISCONNECTED) {
+            ret = 0;
+        }
+
+        if (ret != 0)
+        {
+            DBG_PRINTF("Could not create server packet, ret=%x\n", ret);
+        }
+        else if (packet->length > 0) {
+            data_sent_by_server += packet->length;
+            nb_server_packets++;
+            nb_inactive = 0;
+        }
+        else {
+            nb_inactive++;
+        }
+    }
+
+    if (ret == 0 && test_ctx->cnx_server != NULL && test_ctx->cnx_server->cnx_state != picoquic_state_disconnected) {
+        DBG_PRINTF("Simulation was looping, closed before termination, loops: %d, inactive: %d\n", nb_loops, nb_inactive);
+        ret = -1;
+    }
+
+    if (ret == 0 && data_sent_by_server > 3*data_sent_by_client) {
+        DBG_PRINTF("Client sent %d bytes, server sent >3x more, %d bytes, %d packets\n", (int)data_sent_by_client, (int)data_sent_by_server, nb_server_packets);
+        ret = -1;
+    }
+
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    if (packet != NULL) {
+        free(packet);
+    }
+
+    return ret;
+}
