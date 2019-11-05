@@ -601,17 +601,26 @@ int picoquic_parse_header_and_decrypt(
                     /* This may be a stateless reset.
                      * Note that the QUIC specification says that we must use a constant time
                      * comparison function for the stateless token. It turns out that on
-                     * memcmp of a 16 byte string is actually constant time on Intel processors,
+                     * memcmp of a 16 byte string is actually constant time on Intel 64 bits processors,
                      * and that replacements are less constant time than that. So we just use
-                     * memcmp for now. */
+                     * memcmp on these platforms. Just to be on the safe side, we added a test of 
+                     * memcmp constant time in the build, and a constant time replacement option
+                     * that we use when compiling with 32 bits on Windows */
 
                     /* TODO: if we support multiple connections to same address, we will need to
                      * rewrite this code and test against all possible matches */
                     *pcnx = picoquic_cnx_by_net(quic, addr_from);
 
-                    if (*pcnx != NULL && length >= PICOQUIC_RESET_PACKET_MIN_SIZE &&
+                    if (*pcnx != NULL && 
+                        length >= PICOQUIC_RESET_PACKET_MIN_SIZE &&
+#ifdef PICOQUIC_USE_CONSTANT_TIME_MEMCMP
+                        picoquic_constant_time_memcmp(bytes + length - PICOQUIC_RESET_SECRET_SIZE,
+                        (*pcnx)->path[0]->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0
+#else
                         memcmp(bytes + length - PICOQUIC_RESET_SECRET_SIZE,
-                        (*pcnx)->path[0]->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0) {
+                        (*pcnx)->path[0]->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0
+#endif
+                        ) {
                         ret = PICOQUIC_ERROR_STATELESS_RESET;
                     }
                     else {
