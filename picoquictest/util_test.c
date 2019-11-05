@@ -207,7 +207,7 @@ int util_memcmp_test()
                     ret = -1;
                     break;
                 }
-                if (i == 0 && const_compare_time[i] < 1000) {
+                if (i == 0 && const_compare_time[i] < 4000) {
                     zero_found = 1;
                     break;
                 }
