@@ -3586,7 +3586,7 @@ int spin_bit_test()
 * responsive.
 */
 
-int client_error_test()
+int client_error_test_modal(int mode)
 {
     uint64_t simulated_time = 0;
     uint64_t next_time = 0;
@@ -3611,9 +3611,31 @@ int client_error_test()
 
     /* Inject an erroneous frame */
     if (ret == 0) {
-        /* Queue a data frame on stream 4, which was already closed */
-        uint8_t stream_error_frame[] = { 0x17, 0x04, 0x41, 0x01, 0x08, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 };
-        picoquic_queue_misc_frame(test_ctx->cnx_client, stream_error_frame, sizeof(stream_error_frame));
+        if (mode == 0) {
+            /* Queue a data frame on stream 4, which was already closed */
+            uint8_t stream_error_frame[] = { 0x17, 0x04, 0x41, 0x01, 0x08, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 };
+            picoquic_queue_misc_frame(test_ctx->cnx_client, stream_error_frame, sizeof(stream_error_frame));
+        }
+        else if (mode == 1 && test_ctx->cnx_server != NULL) {
+            /* Test injection of a wrong NEW CONNECTION ID */
+            uint8_t new_cnxid_error[1024];
+            uint8_t* x = new_cnxid_error;
+
+            *x++ = picoquic_frame_type_new_connection_id;
+            *x++ = test_ctx->cnx_client->nb_paths + 3;
+            *x++ = 0;
+            *x++ = 8;
+            for (int i = 0; i < 8; i++) {
+                *x++ = 0x99; /* Hommage to Dilbert's random generator */
+            }
+            /* deliberate error: repeat the reset secret defined for path[0] */
+            memcpy(x, test_ctx->cnx_server->path[0]->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
+            x += PICOQUIC_RESET_SECRET_SIZE;
+            picoquic_queue_misc_frame(test_ctx->cnx_client, new_cnxid_error, x - new_cnxid_error);
+        }
+        else {
+            DBG_PRINTF("Error mode %d is not defined yet", mode);
+        }
     }
 
     /* Add a time loop of 3 seconds to give some time for the error to be repeated */
@@ -3671,6 +3693,22 @@ int client_error_test()
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+int client_error_test()
+{
+    int ret = 0;
+    char const* modes[] = { "stream", "new_connection_id" };
+    size_t nb_modes = sizeof(modes) / sizeof(char const*);
+
+    for (int mode = 0; mode < nb_modes; mode++) {
+        if (client_error_test_modal(mode) != 0) {
+            DBG_PRINTF("Client error test mode(%s) failed.\n");
+            ret = -1;
+        }
     }
 
     return ret;
