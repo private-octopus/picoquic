@@ -933,6 +933,7 @@ void picoquic_ignore_incoming_handshake(
 int picoquic_incoming_client_initial(
     picoquic_cnx_t** pcnx,
     uint8_t* bytes,
+    size_t packet_length,
     struct sockaddr* addr_from,
     struct sockaddr* addr_to,
     unsigned long if_index_to,
@@ -963,9 +964,21 @@ int picoquic_incoming_client_initial(
                 ret = PICOQUIC_ERROR_RETRY;
             }
         }
+        else {
+            (*pcnx)->initial_validated = 1;
+        }
     }
 
     if (ret == 0) {
+        if (picoquic_compare_connection_id(&ph->dest_cnx_id, &(*pcnx)->path[0]->local_cnxid) == 0) {
+            (*pcnx)->initial_validated = 1;
+        }
+
+        if (!(*pcnx)->initial_validated && (*pcnx)->pkt_ctx[picoquic_packet_context_initial].retransmit_oldest != NULL
+            && packet_length >= PICOQUIC_ENFORCED_INITIAL_MTU) {
+            (*pcnx)->initial_repeat_needed = 1;
+        }
+
         if ((*pcnx)->cnx_state == picoquic_state_server_init && 
             (*pcnx)->quic->flags & picoquic_context_server_busy) {
             (*pcnx)->local_error = PICOQUIC_TRANSPORT_SERVER_BUSY;
@@ -1240,6 +1253,8 @@ int picoquic_incoming_client_handshake(
     uint64_t current_time)
 {
     int ret = 0;
+
+    cnx->initial_validated = 1;
 
     if (cnx->cnx_state < picoquic_state_server_almost_ready) {
         if (picoquic_compare_connection_id(&ph->srce_cnx_id, &cnx->path[0]->remote_cnxid) != 0) {
@@ -1778,7 +1793,7 @@ int picoquic_incoming_segment(
                     }
                     if (ret == 0) {
                         if (cnx->client_mode == 0) {
-                            ret = picoquic_incoming_client_initial(&cnx, bytes,
+                            ret = picoquic_incoming_client_initial(&cnx, bytes, packet_length,
                                 addr_from, addr_to, if_index_to, &ph, current_time, new_context_created);
                         }
                         else {
