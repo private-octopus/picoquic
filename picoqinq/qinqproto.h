@@ -26,7 +26,6 @@
 #include "picoquic.h"
 
 #define QINQ_PROTO_RESERVE_HEADER 1
-#define QINQ_PROTO_RESERVE_CID 2
 
 #define PICOQINQ_ERROR_NO_ERROR 0x500
 #define PICOQINQ_ERROR_INTERNAL 0x501
@@ -37,6 +36,9 @@
 #define PICOQINQ_RESERVATION_DELAY 1000000
 
 #define PICOQINQ_MINIMUM_CID_LENGTH 4
+
+#define PICOQINQ_DIRECTION_SERVER_TO_CLIENT 0
+#define PICOQINQ_DIRECTION_CLIENT_TO_SERVER 1
 
 typedef struct st_picoqinq_header_compression_t {
     struct st_picoqinq_header_compression_t* next_hc;

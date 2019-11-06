@@ -30,6 +30,16 @@
 #include "qinqproto.h"
 #include "qinqserver.h"
 
+
+uint8_t* picoquic_frames_fixed_skip(uint8_t* bytes, const uint8_t* bytes_max, size_t size);
+uint8_t* picoquic_frames_varint_decode(uint8_t* bytes, const uint8_t* bytes_max, uint64_t* n64);
+uint8_t* picoquic_frames_varlen_decode(uint8_t* bytes, const uint8_t* bytes_max, size_t* n);
+uint8_t* picoquic_frames_uint8_decode(uint8_t* bytes, const uint8_t* bytes_max, uint8_t* n);
+uint8_t* picoquic_frames_uint16_decode(uint8_t* bytes, const uint8_t* bytes_max, uint16_t* n);
+uint8_t* picoquic_frames_uint32_decode(uint8_t* bytes, const uint8_t* bytes_max, uint32_t* n);
+uint8_t* picoquic_frames_uint64_decode(uint8_t* bytes, const uint8_t* bytes_max, uint64_t* n);
+uint8_t* picoquic_frames_cid_decode(uint8_t* bytes, const uint8_t* bytes_max, picoquic_connection_id_t* n);
+
 /* In order to manage an incoming connection, we manage a list of outgoing packets and their
  * ties to local proxy contexts. This is  a table of:
  *   <address>, <proxy-client-connection>, <time>
@@ -159,7 +169,7 @@ picoqinq_peer_address_record_t* picoqinq_find_address_record(picoqinq_srv_ctx_t*
     return ar;
 }
 
-/* Forward incoming packet as datgram on proxy connection */
+/* Forward incoming packet as datagram on proxy connection */
 
 int picoquic_incoming_proxy_packet(
     picoqinq_srv_cnx_ctx_t* cnx_ctx,
@@ -204,12 +214,13 @@ int picoqinq_test_proxy_for_incoming(
 
     while (next != NULL) {
         if (picoquic_compare_addr((struct sockaddr*) & next->addr_s, addr_from) == 0) {
+            /* Assume DCID only NULL if the incoming is a short packet */
             if (dcid != NULL) {
                 ret = (picoquic_compare_connection_id(dcid, &next->cid) == 0);
                 break;
             }
-            else if (packet_length > next->cid.id_len + 1) {
-                ret = (memcmp(dcid, next->cid.id, next->cid.id_len) == 0);
+            else if (packet_length > (size_t)next->cid.id_len + 1) {
+                ret = (memcmp(bytes + 1, next->cid.id, next->cid.id_len) == 0);
                 break;
             }
         }
@@ -240,7 +251,7 @@ picoqinq_srv_cnx_ctx_t* picoqinq_find_best_proxy_for_incoming(
 
         while (link != NULL) {
             /* Packet may be bound to this proxied connections, pending address check */
-            if (link->cnx_ctx, bytes, packet_length, dcid, addr_from){
+            if (picoqinq_find_reserve_header_by_address(&link->cnx_ctx->send_hc, addr_from, dcid, 0) != NULL){
                 if (best_match_cnx == NULL || link->last_access_time < match_time) {
                     best_match_cnx = link->cnx_ctx;
                     match_time = link->last_access_time;
@@ -321,7 +332,8 @@ int picoqinq_server_incoming_packet(
         else {
             picoqinq_srv_cnx_ctx_t* cnx_ctx = picoqinq_find_best_proxy_for_incoming(qinq, bytes, packet_length, p_cid, addr_from);
 
-            if (cnx_ctx = NULL) {
+            if (cnx_ctx != NULL) {
+                ret = picoquic_incoming_proxy_packet(cnx_ctx, bytes, packet_length, p_cid, addr_from, current_time);
             }
             else {
                 /* TODO: if this is an initial packet, it may be bound to the local SNI/ALPN,
@@ -424,26 +436,31 @@ void picoqinq_delete_srv_cnx_ctx(picoqinq_srv_cnx_ctx_t* ctx)
     free(ctx);
 }
 
-/* TODO: the QINQ context shall be created on server launch, and initialized
- * as an ALPN definition.
- */
-
 /*
  * Datagram call back, process Quic datagrams received from a qinq client.
  */
-int picoqinq_server_callback_datagram(picoqinq_srv_cnx_ctx_t* ctx, uint8_t* bytes, size_t length)
+int picoqinq_server_callback_datagram(picoqinq_srv_cnx_ctx_t* cnx_ctx, uint8_t* bytes, size_t length, uint64_t current_time)
 {
     /* Verify that this is an expected destination for which quic is supported. */
     /* Possibly, verify that this is a valid CNX-ID, but consider possible migrations. */
     /* Send the datagram on the selected socket for the context. */
     int ret = 0;
-    picoquic_stateless_packet_t* outpack = picoquic_create_stateless_packet(ctx->qinq->quic);
+    picoquic_stateless_packet_t* outpack = picoquic_create_stateless_packet(cnx_ctx->qinq->quic);
+    picoquic_connection_id_t* cid;
 
     if (outpack != NULL) {
         /* TODO: Parse the datagram header to extract the address_to */
-        /* TODO: perform address verifications */
-        /* TODO: keep track of CID */
-        picoquic_queue_stateless_packet(ctx->qinq->quic, outpack);
+        ret = picoqinq_datagram_to_packet(bytes, bytes+length, &outpack->addr_to, &cid, 
+            outpack->bytes, sizeof(outpack->bytes), &outpack->length, &cnx_ctx->receive_hc, current_time);
+
+        if (ret != 0) {
+            picoquic_delete_stateless_packet(outpack);
+        }
+        else {
+            /* TODO: perform address verifications */
+            /* TODO: keep track of address? */
+            picoquic_queue_stateless_packet(cnx_ctx->qinq->quic, outpack);
+        }
     }
     else {
         ret = PICOQUIC_ERROR_MEMORY;
@@ -502,7 +519,44 @@ void picoqinq_forget_server_stream(picoqinq_srv_cnx_ctx_t* ctx, picoqinq_server_
     }
 }
 
-int picoqinq_server_callback_data(picoquic_cnx_t* cnx, picoqinq_server_stream_ctx_t* stream_ctx, uint64_t stream_id, uint8_t* bytes, size_t length, picoquic_call_back_event_t fin_or_event, picoqinq_srv_cnx_ctx_t* callback_ctx)
+int picoqinq_server_protocol_input(picoqinq_srv_cnx_ctx_t * cnx_ctx, uint8_t * frame, size_t frame_length, uint64_t current_time) {
+    uint8_t* bytes = frame;
+    uint8_t* bytes_max = frame + frame_length;
+    uint64_t proto_code = 0;
+    int ret = 0;
+
+    if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &proto_code)) != NULL)
+    {
+        if (proto_code != QINQ_PROTO_RESERVE_HEADER) {
+            ret = PICOQINQ_ERROR_PROTOCOL;
+        }
+        else {
+            uint64_t hcid = 0;
+            uint64_t direction = 0;
+            struct sockaddr_storage addr_s;
+            picoquic_connection_id_t cid;
+
+            if ((bytes = picoqinq_decode_reserve_header(bytes, bytes_max, &direction, &hcid, &addr_s, &cid)) != 0){
+                picoqinq_header_compression_t* hc = picoqinq_create_header(hcid, (struct sockaddr*) &addr_s, &cid, current_time);
+                if (hc == NULL) {
+                    ret = PICOQINQ_ERROR_INTERNAL;
+                }
+                else {
+                    picoqinq_reserve_header(hc, (direction == PICOQINQ_DIRECTION_SERVER_TO_CLIENT)?&cnx_ctx->send_hc:&cnx_ctx->receive_hc);
+                }
+            }
+        }
+    }
+
+    if (ret == 0 && bytes == NULL) {
+        ret = PICOQINQ_ERROR_PROTOCOL;
+    }
+
+    return ret;
+}
+
+int picoqinq_server_callback_data(picoquic_cnx_t* cnx, picoqinq_server_stream_ctx_t* stream_ctx, uint64_t stream_id, uint8_t* bytes, 
+    size_t length, picoquic_call_back_event_t fin_or_event, picoqinq_srv_cnx_ctx_t* callback_ctx, uint64_t current_time)
 {
     int ret = 0;
 
@@ -515,7 +569,7 @@ int picoqinq_server_callback_data(picoquic_cnx_t* cnx, picoqinq_server_stream_ct
         ret = picoquic_stop_sending(cnx, stream_id, PICOQINQ_ERROR_INTERNAL);
     } else if (stream_ctx->data_received + length > sizeof(stream_ctx->frame)) {
         /* Message too big. */
-        ret = -1;
+        ret = picoquic_reset_stream(cnx, stream_id, PICOQINQ_ERROR_PROTOCOL);
     }
     else {
         if (length > 0) {
@@ -528,18 +582,19 @@ int picoqinq_server_callback_data(picoquic_cnx_t* cnx, picoqinq_server_stream_ct
             /* Submit the message, obtain the response, send it back and finish the stream. */
             uint8_t response[256];
             size_t response_length=0;
-            /* TODO
-            ret = picoqinq_server_protocol_input(callback_ctx, stream_ctx->frame, stream_ctx->data_received,
-                response, sizeof(response), &response_length); */
-            if (ret == 0) {
-                ret = picoquic_add_to_stream(cnx, stream_id, response, response_length, 1);
+            int proto_ret = picoqinq_server_protocol_input(callback_ctx, stream_ctx->frame, stream_ctx->data_received, current_time);
+
+            if (proto_ret == 0) {
+                *response = 0;
+                ret = picoquic_add_to_stream(cnx, stream_id, response, 1, 1);
             }
             else {
                 /* Reset the stream */
-                ret = picoquic_reset_stream(cnx, stream_id, PICOQINQ_ERROR_PROTOCOL);
+                ret = picoquic_reset_stream(cnx, stream_id, proto_ret);
             }
         }
     }
+
     return ret;
 }
 
@@ -618,7 +673,7 @@ int picoqinq_server_callback(picoquic_cnx_t* cnx,
         case picoquic_callback_stream_data:
         case picoquic_callback_stream_fin:
             /* Data arrival on stream #x, maybe with fin mark */
-            ret = picoqinq_server_callback_data(cnx, stream_ctx, stream_id, bytes, length, fin_or_event, ctx);
+            ret = picoqinq_server_callback_data(cnx, stream_ctx, stream_id, bytes, length, fin_or_event, ctx, picoquic_get_quic_time(picoquic_get_quic_ctx(cnx)));
             break;
         case picoquic_callback_stream_reset: /* Client reset stream #x */
         case picoquic_callback_stop_sending: /* Client asks server to reset stream #x */
@@ -652,7 +707,7 @@ int picoqinq_server_callback(picoquic_cnx_t* cnx,
             break;
         case picoquic_callback_datagram:
             /* Process the datagram, which contains an address and a QUIC packet */
-            ret = picoqinq_server_callback_datagram(ctx, bytes, length);
+            ret = picoqinq_server_callback_datagram(ctx, bytes, length, picoquic_get_quic_time(picoquic_get_quic_ctx(cnx)));
             break;
         case picoquic_callback_almost_ready:
         case picoquic_callback_ready:
@@ -667,4 +722,6 @@ int picoqinq_server_callback(picoquic_cnx_t* cnx,
     return ret;
 }
 
-
+/* TODO: the QINQ context shall be created on server launch, and initialized
+ * as an ALPN definition.
+ */

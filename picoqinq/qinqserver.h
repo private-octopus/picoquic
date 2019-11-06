@@ -118,7 +118,7 @@ picoqinq_server_stream_ctx_t * picoqinq_find_or_create_stream(
     int should_create);
 
 int picoqinq_server_callback_data(picoquic_cnx_t* cnx, picoqinq_server_stream_ctx_t * stream_ctx, uint64_t stream_id, uint8_t* bytes,
-    size_t length, picoquic_call_back_event_t fin_or_event, picoqinq_srv_cnx_ctx_t* callback_ctx);
+    size_t length, picoquic_call_back_event_t fin_or_event, picoqinq_srv_cnx_ctx_t* callback_ctx, uint64_t current_time);
 
 void picoqinq_server_callback_delete_context(picoqinq_srv_cnx_ctx_t * ctx);
 
