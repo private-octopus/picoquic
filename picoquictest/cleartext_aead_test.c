@@ -738,7 +738,7 @@ static uint8_t draft15_test_input_packet[] = {
 };
 #endif
 
-static uint32_t draft17_test_vn = 0xff000016;
+static uint32_t draft17_test_vn = PICOQUIC_INTEROP_VERSION_LATEST;
 
 static picoquic_connection_id_t draft17_test_cnx_id = { 
     { 0x7d, 0xdc, 0x42, 0x90, 0xc4, 0xe7, 0xd2, 0x04 }, 8 };
@@ -1068,7 +1068,8 @@ int key_rotation_vector_test()
     for (int i = 0; ret == 0 && key_rotation_test_suites[i] != NULL; i++) {
         memset(new_secret, 0, sizeof(new_secret));
         memcpy(new_secret, key_rotation_test_init, key_rotation_test_suites[i]->hash->digest_size);
-        ret = picoquic_rotate_app_secret(key_rotation_test_suites[i], new_secret);
+        /* TODO: update to use the test vector of draft 24 */
+        ret = picoquic_rotate_app_secret(key_rotation_test_suites[i], new_secret, 1);
         if (ret != 0) {
             DBG_PRINTF("Cannot rotate secret[%d], ret=%x\n", i, ret);
         }

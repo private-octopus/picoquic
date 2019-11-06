@@ -621,3 +621,23 @@ uint8_t* picoquic_frames_cid_encode(uint8_t* bytes, const uint8_t* bytes_max, co
 {
     return picoquic_frames_l_v_encode(bytes, bytes_max, cid->id_len, cid->id);
 }
+
+/* Constant time memory comparison. This is only required now for
+ * the comparison of 16 bytes long stateless reset secrets, so we have
+ * only minimal requriements for performance, and privilege portability.
+ *
+ * Returns uint64_t value so the code works for arbitrary length.
+ * Value is zero if strings match.
+ */
+
+uint64_t picoquic_constant_time_memcmp(const uint8_t* x, const uint8_t* y, size_t l)
+{
+    uint64_t ret = 0;
+
+    while (l > 0) {
+        ret += (*x++ ^ *y++);
+        l--;
+    }
+
+    return ret;
+}

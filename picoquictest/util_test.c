@@ -25,6 +25,7 @@
 #include <malloc.h>
 #endif
 #include <string.h>
+#include "picoquictest_internal.h"
 
 static const picoquic_connection_id_t expected_cnxid[4] = {
     { { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0, 0, 0, 0 } , 16 },
@@ -109,5 +110,189 @@ int util_sprintf_test()
         DBG_PRINTF("%s", "'fooo/barr' test failed.");
         ret = -1;
     }
+    return ret;
+}
+
+/* Test the constant time memcmp for correctness and for
+ * time constants. The test suite will include two 4MB
+ * strings each comprising blocks of 16 bytes.
+ *
+ * The first block is composed of simple sequences of
+ * pseudo random numbers. For each trial, each slice of
+ * 16 bytes in the second matches the first one up to a
+ * length L. We do the tests with L = 0 to 16, and measure
+ * the execution time for each length. They are suppose
+ * to not vary with the length. We also measure the
+ * execution time of memcmp.
+ *
+ * The test pass if all the tests at length 0..15 return
+ * non zero, if all the tests at length 16 return 0,
+ * and if the time differences are not too high
+ */
+
+int util_memcmp_test()
+{
+    int ret = 0;
+    size_t nb8 = (1 << 20) / sizeof(uint64_t);
+    size_t l_total = nb8 * sizeof(uint64_t);
+    uint64_t* x8 = (uint64_t*)malloc(l_total);
+    uint8_t* x = (uint8_t*)x8;
+    uint8_t* y = (uint8_t*)malloc(l_total);
+    uint64_t random_seed = 0xbabac001;
+    uint64_t time_start;
+    uint64_t const_compare_time[16];
+#ifndef PICOQUIC_USE_CONSTANT_TIME_MEMCMP
+    uint64_t memcmp_time[2];
+#endif
+    uint64_t carry;
+    uint64_t nb_round = 2;
+
+    if (x == NULL || y == NULL) {
+        ret = -1;
+    }
+    else {
+        x8[0] = 0;
+        x8[1] = 0;
+        x8[2] = 0xffffffffffffffffull;
+        x8[3] = 0xffffffffffffffffull;
+
+        for (size_t i = 4; i < nb8; i++) {
+            x8[i] = picoquic_test_random(&random_seed);
+        }
+        /* test for correct detection of equality */
+        memcpy(y, x, l_total);
+        for (size_t j = 0; j < l_total; j += 16) {
+            if (picoquic_constant_time_memcmp(x + j, y + j, 16) != 0) {
+                DBG_PRINTF("Unexpected mismatch, rank %d\n", (int)j);
+                ret = -1;
+                break;
+            }
+        }
+
+        for (size_t i = 0; ret == 0 && i < 16; i++) {
+            /* prepare the y string */
+            memcpy(y, x, l_total);
+            for (size_t j = i; j < l_total; j += 16) {
+                y[j] ^= (uint8_t)0xff;
+            }
+
+            /* test for correct detection of differences */
+            for (size_t j = 0; j < l_total; j += 16) {
+                if (picoquic_constant_time_memcmp(x + j, y + j, 16) == 0) {
+                    DBG_PRINTF("Unexpected match, step %d, rank %d\n", (int)i, (int)j);
+                    ret = -1;
+                    break;
+                }
+            }
+        }
+
+
+        /* Time measurement: Compare a long string, at 16 different intervals. */
+        while (ret == 0) {
+            int zero_found = 0;
+            for (size_t i = 0; ret == 0 && i < 16; i++) {
+                /* prepare the y string */
+                memcpy(y, x, l_total);
+                y[1 + ((i * l_total) / 16)] ^= 0xff;
+
+                carry = 1;
+                time_start = picoquic_current_time();
+                for (int j = 0; j < nb_round; j++) {
+                    x[j] ^= 1;
+                    y[j] ^= 1;
+                    carry &= (picoquic_constant_time_memcmp(x, y, l_total) != 0);
+                }
+                const_compare_time[i] = picoquic_current_time() - time_start;
+                if (carry != 1) {
+                    DBG_PRINTF("Unexpected match, step %d\n", (int)i);
+                    ret = -1;
+                    break;
+                }
+                if (i == 0 && const_compare_time[i] < 2000) {
+                    zero_found = 1;
+                    break;
+                }
+            }
+
+            if (zero_found) {
+                nb_round *= 2;
+            }
+            else {
+                break;
+            }
+        }
+    }
+
+    if (ret == 0) {
+        DBG_PRINTF("%s", "Delta at, const memcmp (ns)\n");
+        for (size_t i = 0; ret == 0 && i < 16; i++) {
+            double d = 1000.0*(double)(const_compare_time[i]) / (double)(nb_round * l_total / 16);
+            DBG_PRINTF("%d, %f\n", 1 + ((i * l_total) / 16), d);
+        }
+    }
+
+    for (size_t i = 0; ret == 0 && i < 16; i++) {
+        /* The time tests are information only, because measuring time is to susceptible to random noise */
+        if (i > 0 && const_compare_time[0] >= 1000 && const_compare_time[i] >= 1000 && ((const_compare_time[i] > 2 * const_compare_time[0]) || (const_compare_time[0] > 2 * const_compare_time[i]))) {
+            DBG_PRINTF("Step %d, const cmp time different from step 0, %d vs %d\n", (int)i, (int)const_compare_time[i], (int)const_compare_time[0]);
+        }
+    }
+
+#ifndef PICOQUIC_USE_CONSTANT_TIME_MEMCMP
+    while (ret == 0) {
+        for (size_t i = 0; ret == 0 && i < 2; i++) {
+            /* prepare the y string */
+            memcpy(y, x, l_total);
+
+            for (size_t j = 15*i; j < l_total; j += 16) {
+                y[j] ^= (uint8_t)0xff;
+            }
+
+
+            carry = 1;
+            time_start = picoquic_current_time();
+
+            for (int r = 0; r < nb_round; r++) {
+                /* measure compare time */
+                for (size_t j = 0; j < l_total; j += 16) {
+                    carry &= (memcmp(x, y, 16) != 0);
+                }
+
+                if (carry != 1) {
+                    DBG_PRINTF("Unexpected memcmp match, step %d\n", (int)i);
+                    ret = -1;
+                    break;
+                }
+            }
+
+            memcmp_time[i] = picoquic_current_time() - time_start;
+        }
+
+        if (memcmp_time[0] > 2000 && memcmp_time[1] > 2000) {
+            break;
+        }
+        nb_round *= 2;
+    } 
+
+    if (ret == 0){
+        if (memcmp_time[1] > 2 * memcmp_time[0]) {
+            DBG_PRINTF("Memcmp not constant time on 16 bytes: t[0] = %d, t[15] = %d\n", (int)memcmp_time[0], (int)memcmp_time[1]);
+            DBG_PRINTF("%s", "Need to compile with -DPICOQUIC_USE_CONSTANT_TIME_MEMCMP");
+            ret = -1;
+        }
+        else {
+            DBG_PRINTF("Memcmp constant time on 16 bytes: t[0] = %d, t[15] = %d\n", (int)memcmp_time[0], (int)memcmp_time[1]);
+        }
+    }
+#endif
+
+    if (x != NULL) {
+        free(x);
+    }
+
+    if (y != NULL) {
+        free(y);
+    }
+
     return ret;
 }
