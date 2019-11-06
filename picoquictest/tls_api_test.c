@@ -3701,12 +3701,12 @@ int client_error_test_modal(int mode)
 int client_error_test()
 {
     int ret = 0;
-    char const* modes[] = { "stream", "new_connection_id" };
-    size_t nb_modes = sizeof(modes) / sizeof(char const*);
+    char const* mode_name[] = { "stream", "new_connection_id" };
+    size_t nb_modes = sizeof(mode_name) / sizeof(char const*);
 
     for (int mode = 0; mode < nb_modes; mode++) {
         if (client_error_test_modal(mode) != 0) {
-            DBG_PRINTF("Client error test mode(%s) failed.\n");
+            DBG_PRINTF("Client error test mode(%s) failed.\n", mode_name[mode]);
             ret = -1;
         }
     }
