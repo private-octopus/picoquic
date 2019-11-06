@@ -3616,7 +3616,7 @@ int client_error_test_modal(int mode)
             uint8_t stream_error_frame[] = { 0x17, 0x04, 0x41, 0x01, 0x08, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 };
             picoquic_queue_misc_frame(test_ctx->cnx_client, stream_error_frame, sizeof(stream_error_frame));
         }
-        else if (mode == 1 && test_ctx->cnx_server != NULL) {
+        else if (mode == 1) {
             /* Test injection of a wrong NEW CONNECTION ID */
             uint8_t new_cnxid_error[1024];
             uint8_t* x = new_cnxid_error;
@@ -3702,7 +3702,7 @@ int client_error_test()
 {
     int ret = 0;
     char const* mode_name[] = { "stream", "new_connection_id" };
-    size_t nb_modes = sizeof(mode_name) / sizeof(char const*);
+    int nb_modes = (int)(sizeof(mode_name) / sizeof(char const*));
 
     for (int mode = 0; mode < nb_modes; mode++) {
         if (client_error_test_modal(mode) != 0) {
@@ -6541,6 +6541,7 @@ int ddos_amplification_test()
     if (ret != 0 || packet == NULL)
     {
         DBG_PRINTF("Could not create the QUIC test contexts for V=%x\n", proposed_version);
+        ret = -1;
     }
 
     if (ret == 0) {
