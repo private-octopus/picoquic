@@ -3586,7 +3586,7 @@ int spin_bit_test()
 * responsive.
 */
 
-int client_error_test()
+int client_error_test_modal(int mode)
 {
     uint64_t simulated_time = 0;
     uint64_t next_time = 0;
@@ -3611,9 +3611,31 @@ int client_error_test()
 
     /* Inject an erroneous frame */
     if (ret == 0) {
-        /* Queue a data frame on stream 4, which was already closed */
-        uint8_t stream_error_frame[] = { 0x17, 0x04, 0x41, 0x01, 0x08, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 };
-        picoquic_queue_misc_frame(test_ctx->cnx_client, stream_error_frame, sizeof(stream_error_frame));
+        if (mode == 0) {
+            /* Queue a data frame on stream 4, which was already closed */
+            uint8_t stream_error_frame[] = { 0x17, 0x04, 0x41, 0x01, 0x08, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 };
+            picoquic_queue_misc_frame(test_ctx->cnx_client, stream_error_frame, sizeof(stream_error_frame));
+        }
+        else if (mode == 1) {
+            /* Test injection of a wrong NEW CONNECTION ID */
+            uint8_t new_cnxid_error[1024];
+            uint8_t* x = new_cnxid_error;
+
+            *x++ = picoquic_frame_type_new_connection_id;
+            *x++ = test_ctx->cnx_client->nb_paths + 3;
+            *x++ = 0;
+            *x++ = 8;
+            for (int i = 0; i < 8; i++) {
+                *x++ = 0x99; /* Hommage to Dilbert's random generator */
+            }
+            /* deliberate error: repeat the reset secret defined for path[0] */
+            memcpy(x, test_ctx->cnx_server->path[0]->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
+            x += PICOQUIC_RESET_SECRET_SIZE;
+            picoquic_queue_misc_frame(test_ctx->cnx_client, new_cnxid_error, x - new_cnxid_error);
+        }
+        else {
+            DBG_PRINTF("Error mode %d is not defined yet", mode);
+        }
     }
 
     /* Add a time loop of 3 seconds to give some time for the error to be repeated */
@@ -3671,6 +3693,22 @@ int client_error_test()
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+int client_error_test()
+{
+    int ret = 0;
+    char const* mode_name[] = { "stream", "new_connection_id" };
+    int nb_modes = (int)(sizeof(mode_name) / sizeof(char const*));
+
+    for (int mode = 0; mode < nb_modes; mode++) {
+        if (client_error_test_modal(mode) != 0) {
+            DBG_PRINTF("Client error test mode(%s) failed.\n", mode_name[mode]);
+            ret = -1;
+        }
     }
 
     return ret;
@@ -6472,6 +6510,126 @@ int large_client_hello_test()
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+/* DDOS Amplification Mitigation test
+ *
+ * In this test, the client sends a first packet (client hello) and then disappears.
+ * This simulates an attempts to use the Quic server as an amplifier in a DDOS attack.
+ * We want to verify that the server does not send out more than 3 times the amount
+ * of data sent by the client.
+ */
+
+int ddos_amplification_test()
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    uint32_t proposed_version = PICOQUIC_INTEROP_VERSION_LATEST;
+    int ret = tls_api_init_ctx(&test_ctx, proposed_version, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+    picoquictest_sim_packet_t* packet = picoquictest_sim_link_create_packet();
+    int peer_addr_len = 0;
+    int local_addr_len = 0;
+    size_t data_sent_by_client = 0;
+    size_t data_sent_by_server = 0;
+    int nb_server_packets = 0;
+    int nb_loops = 0;
+    int nb_inactive = 0;
+
+    if (ret != 0 || packet == NULL)
+    {
+        DBG_PRINTF("Could not create the QUIC test contexts for V=%x\n", proposed_version);
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        /* Prepare a first packet from the client to the server */
+        ret = picoquic_prepare_packet(test_ctx->cnx_client, simulated_time,
+            packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length,
+            &packet->addr_to, &peer_addr_len, &packet->addr_from, &local_addr_len);
+
+        if (packet->length == 0) {
+            ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
+        }
+        if (ret != 0 )
+        {
+            DBG_PRINTF("Could not create first client packet, ret=%x\n", ret);
+        }
+        else {
+            data_sent_by_client += packet->length;
+
+            ret = picoquic_incoming_packet(test_ctx->qserver, packet->bytes, (uint32_t)packet->length,
+                (struct sockaddr*) & packet->addr_from,
+                (struct sockaddr*) & packet->addr_to, 0, 0,
+                simulated_time);
+
+            if (ret == 0) {
+                picoquic_cnx_t* next = test_ctx->qserver->cnx_list;
+
+                while (next != NULL && picoquic_compare_connection_id(&next->initial_cnxid, &test_ctx->cnx_client->initial_cnxid) != 0) {
+                    next = next->next_in_table;
+                }
+
+                if (next != NULL) {
+                    test_ctx->cnx_server = next;
+                } else {
+                    ret = -1;
+                    DBG_PRINTF("Could not create server side connection, ret = %d\n", ret);
+                }
+            }
+        }
+    }
+
+    while (ret == 0 && test_ctx->cnx_server != NULL && test_ctx->cnx_server->cnx_state != picoquic_state_disconnected && nb_loops < 1024 && nb_inactive < 256) {
+        /* Update the time to the next server time */
+        simulated_time = test_ctx->cnx_server->next_wake_time;
+        packet->length = 0;
+        peer_addr_len = 0;
+        local_addr_len = 0;
+        nb_loops++;
+
+        ret = picoquic_prepare_packet(test_ctx->cnx_server, simulated_time,
+            packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length,
+            &packet->addr_to, &peer_addr_len, &packet->addr_from, &local_addr_len);
+
+        if (ret == PICOQUIC_ERROR_DISCONNECTED) {
+            ret = 0;
+        }
+
+        if (ret != 0)
+        {
+            DBG_PRINTF("Could not create server packet, ret=%x\n", ret);
+        }
+        else if (packet->length > 0) {
+            data_sent_by_server += packet->length;
+            nb_server_packets++;
+            nb_inactive = 0;
+        }
+        else {
+            nb_inactive++;
+        }
+    }
+
+    if (ret == 0 && test_ctx->cnx_server != NULL && test_ctx->cnx_server->cnx_state != picoquic_state_disconnected) {
+        DBG_PRINTF("Simulation was looping, closed before termination, loops: %d, inactive: %d\n", nb_loops, nb_inactive);
+        ret = -1;
+    }
+
+    if (ret == 0 && data_sent_by_server > 3*data_sent_by_client) {
+        DBG_PRINTF("Client sent %d bytes, server sent >3x more, %d bytes, %d packets\n", (int)data_sent_by_client, (int)data_sent_by_server, nb_server_packets);
+        ret = -1;
+    }
+
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    if (packet != NULL) {
+        free(packet);
     }
 
     return ret;

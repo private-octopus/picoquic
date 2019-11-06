@@ -130,13 +130,6 @@ static uint8_t picoquic_cleartext_internal_test_1_salt[] = {
     0x3d, 0xc1, 0xca, 0x36
 };
 
-static uint8_t picoquic_cleartext_draft_22_salt[] = {
-    0x7f, 0xbc, 0xdb, 0x0e, 0x7c, 0x66, 0xbb, 0xe9,
-    0x19, 0x3a, 0x96, 0xcd, 0x21, 0x51, 0x9e, 0xbd,
-    0x7a, 0x02, 0x64, 0x4a
-};
-
-
 static uint8_t picoquic_cleartext_draft_23_salt[] = {
     0xc3, 0xee, 0xf7, 0x12, 0xc7, 0x2e, 0xbb, 0x5a,
     0x11, 0xa7, 0xd2, 0x43, 0x2b, 0xb4, 0x63, 0x65,
@@ -144,12 +137,12 @@ static uint8_t picoquic_cleartext_draft_23_salt[] = {
 };
 
 const picoquic_version_parameters_t picoquic_supported_versions[] = {
+    { PICOQUIC_FIFTEENTH_INTEROP_VERSION,
+        sizeof(picoquic_cleartext_draft_23_salt),
+        picoquic_cleartext_draft_23_salt },
     { PICOQUIC_FOURTEENTH_INTEROP_VERSION,
         sizeof(picoquic_cleartext_draft_23_salt),
         picoquic_cleartext_draft_23_salt },
-    { PICOQUIC_THIRTEENTH_INTEROP_VERSION,
-        sizeof(picoquic_cleartext_draft_22_salt),
-        picoquic_cleartext_draft_22_salt },
     { PICOQUIC_INTERNAL_TEST_VERSION_2,
         sizeof(picoquic_cleartext_internal_test_1_salt),
         picoquic_cleartext_internal_test_1_salt },
@@ -1044,16 +1037,17 @@ picoquic_cnxid_stash_t * picoquic_dequeue_cnxid_stash(picoquic_cnx_t * cnx)
     return stashed;
 }
 
-int picoquic_enqueue_cnxid_stash(picoquic_cnx_t * cnx,
-    const uint64_t sequence, const uint8_t cid_length, const uint8_t * cnxid_bytes, 
-    const uint8_t * secret_bytes, picoquic_cnxid_stash_t ** pstashed)
+int picoquic_enqueue_cnxid_stash(picoquic_cnx_t* cnx,
+    const uint64_t sequence, const uint8_t cid_length, const uint8_t* cnxid_bytes,
+    const uint8_t* secret_bytes, picoquic_cnxid_stash_t** pstashed)
 {
     int ret = 0;
     int is_duplicate = 0;
     picoquic_connection_id_t cnx_id;
-    picoquic_cnxid_stash_t * next_stash = NULL;
-    picoquic_cnxid_stash_t * last_stash = NULL;
-    picoquic_cnxid_stash_t * stashed = NULL;
+    picoquic_cnxid_stash_t* next_stash = cnx->cnxid_stash_first;
+    picoquic_cnxid_stash_t* last_stash = NULL;
+    picoquic_cnxid_stash_t* stashed = NULL;
+    picoquic_probe_t* next_probe = cnx->probe_first;
 
     /* verify the format */
     if (picoquic_parse_connection_id(cnxid_bytes, cid_length, &cnx_id) == 0) {
@@ -1101,44 +1095,19 @@ int picoquic_enqueue_cnxid_stash(picoquic_cnx_t * cnx,
                 (int)sequence, (int)cnx->path[i]->remote_cnxid_sequence);
             ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
         }
-    }
-
-    if (ret == 0 && is_duplicate == 0) {
-        picoquic_probe_t * next_probe = cnx->probe_first;
-
-        while (ret == 0 && next_probe != NULL) {
-            if (sequence == next_probe->sequence) {
-                if (picoquic_compare_connection_id(&cnx_id, &next_probe->remote_cnxid) == 0)
-                {
-                    if (memcmp(secret_bytes, next_probe->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0) {
-                        is_duplicate = 1;
-                        break;
-                    }
-                    else {
-                        ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
-                    }
-                    break;
-                }
-                else {
-                    ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
-                }
-            }
-            else if (picoquic_compare_connection_id(&cnx_id, &next_probe->remote_cnxid) == 0) {
-                ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
-            }
-
-            next_probe = next_probe->next_probe;
+        else if (memcmp(secret_bytes, &cnx->path[i]->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0) {
+            DBG_PRINTF("Path %d, Cnx_id: %02x%02x%02x%02x..., Sequence %d vs. %d, same secret\n",
+                i, cnx_id.id[0], cnx_id.id[1], cnx_id.id[2], cnx_id.id[3],
+                (int)sequence, (int)cnx->path[i]->remote_cnxid_sequence);
+            ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
         }
     }
 
-    if (ret == 0 && is_duplicate == 0) {
-        next_stash = cnx->cnxid_stash_first;
-
-        while (next_stash != NULL) {
-            if (picoquic_compare_connection_id(&cnx_id, &next_stash->cnx_id) == 0)
+    while (ret == 0 && is_duplicate == 0 && next_probe != NULL) {
+        if (sequence == next_probe->sequence) {
+            if (picoquic_compare_connection_id(&cnx_id, &next_probe->remote_cnxid) == 0)
             {
-                if (next_stash->sequence == sequence &&
-                    memcmp(secret_bytes, next_stash->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0) {
+                if (memcmp(secret_bytes, next_probe->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0) {
                     is_duplicate = 1;
                 }
                 else {
@@ -1146,12 +1115,40 @@ int picoquic_enqueue_cnxid_stash(picoquic_cnx_t * cnx,
                 }
                 break;
             }
-            else if (next_stash->sequence == sequence) {
+            else {
                 ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
             }
-            last_stash = next_stash;
-            next_stash = next_stash->next_in_stash;
         }
+        else if (picoquic_compare_connection_id(&cnx_id, &next_probe->remote_cnxid) == 0) {
+            ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
+        }
+        else if (memcmp(secret_bytes, next_probe->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0) {
+            ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
+        }
+
+        next_probe = next_probe->next_probe;
+    }
+    
+    while (ret == 0 && is_duplicate == 0 && next_stash != NULL) {
+        if (picoquic_compare_connection_id(&cnx_id, &next_stash->cnx_id) == 0)
+        {
+            if (next_stash->sequence == sequence &&
+                memcmp(secret_bytes, next_stash->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0) {
+                is_duplicate = 1;
+            }
+            else {
+                ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
+            }
+            break;
+        }
+        else if (next_stash->sequence == sequence) {
+            ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
+        }
+        else if (memcmp(secret_bytes, next_stash->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0) {
+            ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
+        }
+        last_stash = next_stash;
+        next_stash = next_stash->next_in_stash;
     }
 
     if (ret == 0 && is_duplicate == 0) {

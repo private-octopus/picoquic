@@ -148,15 +148,16 @@ typedef enum {
 #define PICOQUIC_ELEVENTH_INTEROP_VERSION 0xFF000012
 #define PICOQUIC_TWELFTH_INTEROP_DRAFT19 0xFF000013
 #define PICOQUIC_TWELFTH_INTEROP_VERSION 0xFF000014
-#endif
 #define PICOQUIC_THIRTEENTH_INTEROP_VERSION 0xFF000016
+#endif
 #define PICOQUIC_FOURTEENTH_INTEROP_VERSION 0xFF000017
+#define PICOQUIC_FIFTEENTH_INTEROP_VERSION 0xFF000018
 #define PICOQUIC_INTERNAL_TEST_VERSION_1 0x50435130
 #define PICOQUIC_INTERNAL_TEST_VERSION_2 0x50435131
 
 #define PICOQUIC_INTEROP_VERSION_INDEX 1
 
-#define PICOQUIC_INTEROP_VERSION_LATEST PICOQUIC_THIRTEENTH_INTEROP_VERSION
+#define PICOQUIC_INTEROP_VERSION_LATEST PICOQUIC_FIFTEENTH_INTEROP_VERSION
 
 
 
@@ -667,6 +668,8 @@ typedef struct st_picoquic_cnx_t {
     unsigned int has_successful_probe : 1; /* At least one probe was successful */
     unsigned int grease_transport_parameters : 1; /* Exercise greasing of transport parameters */
     unsigned int test_large_chello : 1; /* Add a greasing parameter to test sending CHello on multiple packets */
+    unsigned int initial_validated : 1; /* Path has been validated, DOS amplification protection is lifted */
+    unsigned int initial_repeat_needed : 1; /* Path has not been validated, repeated initial was received */
 
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;
