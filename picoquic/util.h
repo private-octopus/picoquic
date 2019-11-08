@@ -42,6 +42,14 @@ extern "C" {
 #define PRIst "zu"
 #endif
 
+#ifdef _WINDOWS
+#ifndef _WINDOWS64
+#ifndef PICOQUIC_USE_CONSTANT_TIME_MEMCMP
+#define PICOQUIC_USE_CONSTANT_TIME_MEMCMP
+#endif
+#endif
+#endif
+
 #ifdef __APPLE__
 #ifndef PICOQUIC_USE_CONSTANT_TIME_MEMCMP
 #define PICOQUIC_USE_CONSTANT_TIME_MEMCMP
