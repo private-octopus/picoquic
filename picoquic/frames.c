@@ -2390,6 +2390,10 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, uint8_t* bytes,
                 *no_need_to_repeat = 1;
             }
             break;
+        case picoquic_frame_type_path_challenge:
+            /* Path challenge repeat follows its own logic. */
+            *no_need_to_repeat = 1;
+            break;
         default:
             break;
         }
@@ -3344,7 +3348,7 @@ uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, uint8_t* bytes
                         cnx->path[i]->alt_challenge_response = 0;
                     }
                     else {
-                        DBG_PRINTF("Repeated challenge: %16llx\n", (unsigned long long)response);
+                        DBG_PRINTF("Duplicate challenge response: %16llx\n", (unsigned long long)response);
                     }
                     break;
                 }  
