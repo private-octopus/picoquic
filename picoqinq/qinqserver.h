@@ -38,6 +38,7 @@ typedef enum {
 } picoqinq_server_stream_status_t;
 
 #define PICOQINQ_SERVER_FRAME_MAX 2048
+#define PICOQINQ_ADDRESS_USE_TIME_DEFAULT 30000000 /* Remember outgoing packets for 30 seconds */
 
 typedef struct st_picoqinq_server_stream_ctx_t {
     struct st_picoqinq_server_stream_ctx_t* next_stream;
@@ -87,12 +88,18 @@ typedef struct st_picoqinq_srv_cnx_ctx_t {
     picoqinq_server_stream_ctx_t* first_stream;
 } picoqinq_srv_cnx_ctx_t;
 
+int picoqinq_cnx_address_link_create_or_touch(picoqinq_srv_cnx_ctx_t* cnx_ctx, const struct sockaddr* addr, uint64_t current_time);
+void picoqinq_cnx_address_link_delete(picoqinq_cnx_address_link_t * link);
+
 int picoquic_incoming_proxy_packet(
     picoqinq_srv_cnx_ctx_t* cnx_ctx,
     uint8_t* packet_data,
     size_t packet_length,
     picoquic_connection_id_t* dcid,
     struct sockaddr* addr_from,
+    uint64_t current_time);
+
+picoqinq_srv_cnx_ctx_t* picoqinq_find_best_proxy_for_incoming(picoqinq_srv_ctx_t* qinq, const picoquic_connection_id_t* dcid, const struct sockaddr* addr_from,
     uint64_t current_time);
 
 int picoqinq_server_incoming_packet(
@@ -108,19 +115,13 @@ int picoqinq_server_incoming_packet(
 picoqinq_srv_ctx_t* picoqinq_create_srv_ctx(picoquic_quic_t* quic, uint8_t min_prefix_length, size_t nb_connections);
 void picoqinq_delete_srv_ctx(picoqinq_srv_ctx_t* ctx);
 
-picoqinq_srv_cnx_ctx_t* picoqinq_create_srv_cnx_ctx(picoqinq_srv_ctx_t* qinq);
+picoqinq_srv_cnx_ctx_t* picoqinq_create_srv_cnx_ctx(picoqinq_srv_ctx_t* qinq, picoquic_cnx_t* cnx);
 void picoqinq_delete_srv_cnx_ctx(picoqinq_srv_cnx_ctx_t* ctx);
 
-picoqinq_server_stream_ctx_t * picoqinq_find_or_create_stream(
-    picoquic_cnx_t* cnx,
-    uint64_t stream_id,
-    picoqinq_srv_cnx_ctx_t * ctx,
-    int should_create);
+picoqinq_server_stream_ctx_t* picoqinq_find_or_create_server_stream(picoquic_cnx_t* cnx, uint64_t stream_id, picoqinq_srv_cnx_ctx_t* ctx, int should_create);
 
 int picoqinq_server_callback_data(picoquic_cnx_t* cnx, picoqinq_server_stream_ctx_t * stream_ctx, uint64_t stream_id, uint8_t* bytes,
     size_t length, picoquic_call_back_event_t fin_or_event, picoqinq_srv_cnx_ctx_t* callback_ctx, uint64_t current_time);
-
-void picoqinq_server_callback_delete_context(picoqinq_srv_cnx_ctx_t * ctx);
 
 int picoqinq_server_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,

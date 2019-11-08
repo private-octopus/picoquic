@@ -42,7 +42,8 @@ typedef enum {
 
 static const picoquic_test_def_t test_table[] = {
     { "qinq_rh", qinq_rh_test },
-    { "qinq_incoming_datagram_parse", qinq_incoming_datagram_parse_test}
+    { "qinq_incoming_datagram_parse", qinq_incoming_datagram_parse_test},
+    {"qinq_address_table", qinq_address_table_test}
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);

@@ -195,6 +195,7 @@ int ddos_amplification_test();
 
 int qinq_rh_test();
 int qinq_incoming_datagram_parse_test();
+int qinq_address_table_test();
 
 #ifdef __cplusplus
 }

@@ -172,7 +172,7 @@ uint8_t* picoqinq_packet_to_datagram(uint8_t* bytes, uint8_t* bytes_max, struct 
 {
     uint64_t hcid = picoqinq_find_reserve_header_id_by_address(p_send_hc, addr, cid, current_time);
 
-    if ((bytes = picoquic_frames_varlen_encode(bytes, bytes_max, hcid)) != NULL) {
+    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, hcid)) != NULL) {
         if (hcid == 0) {
             uint8_t addr_length;
             uint8_t * addr_data;
@@ -334,7 +334,7 @@ void picoqinq_reserve_header(picoqinq_header_compression_t* hc, picoqinq_header_
     }
 }
 
-picoqinq_header_compression_t* picoqinq_find_reserve_header_by_address(picoqinq_header_compression_t** phc_head, struct sockaddr* addr, const picoquic_connection_id_t* cid, uint64_t current_time)
+picoqinq_header_compression_t* picoqinq_find_reserve_header_by_address(picoqinq_header_compression_t** phc_head, const struct sockaddr* addr, const picoquic_connection_id_t* cid, uint64_t current_time)
 {
     picoqinq_header_compression_t** pnext = phc_head;
     picoqinq_header_compression_t* next;

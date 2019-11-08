@@ -24,6 +24,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "qinqproto.h"
+#include "qinqserver.h"
 
 uint8_t* picoquic_frames_varint_skip(uint8_t* bytes, const uint8_t* bytes_max);
 
@@ -194,7 +195,7 @@ int qinq_incoming_datagram_parse_test()
             ret = -1;
         }
         else {
-            picoqinq_header_compression_t* hc = picoqinq_create_header(i + 1, (struct sockaddr*) & addr_s, &header_list[i]->cid, 0);
+            picoqinq_header_compression_t* hc = picoqinq_create_header((uint64_t)i + 1, (struct sockaddr*) & addr_s, &header_list[i]->cid, 0);
             if (hc == NULL) {
                 DBG_PRINTF("Cannot create hc #%d\n", (int)i);
                 ret = -1;
@@ -296,6 +297,184 @@ int qinq_incoming_datagram_parse_test()
         picoqinq_header_compression_t* hc = hc_head;
         hc_head = hc->next_hc;
         free(hc);
+    }
+
+    return ret;
+}
+
+/* Test of the server side address table management.
+ *  - Simulate prior departure of a number of packets from the server.
+ *  - Simulate packet arrival.
+ *  - Verify that the test provides the desired outcome.
+ *
+ * The addresses are entered in a test list, which is parsed to a list
+ * of sockaddr * in the test program.
+ *
+
+ */
+
+struct st_qinq_test_address_list_t {
+    char const* ip_addr;
+    uint16_t port;
+};
+
+struct st_qinq_test_address_table_t {
+    int direction; /* departure = 0, arrival = 1 */
+    int address_list_index;
+    uint64_t time_interval;
+    int cnx_index; /* -1 if retrieval is not expected */
+};
+
+#define QINQ_NB_TEST_ADDRESS 9
+#define QINQ_NB_TEST_CNX 4
+
+static const struct st_qinq_test_address_list_t address_list[QINQ_NB_TEST_ADDRESS] = {
+    { "10.0.0.1", 443 },
+    { "10.0.0.1", 4433 },
+    { "10.0.0.1", 4434 },
+    { "10.0.0.2", 443 },
+    { "10.0.0.2", 4433 },
+    { "10.0.0.2", 4434 },
+    { "2001::dead:beef", 443},
+    { "2001::c001:ca7", 443},
+    { "2001::bad:cafe", 443}
+};
+
+static const struct st_qinq_test_address_table_t address_event[] = {
+    { 1, 0, 0, -1}, /* No answer if unknown */
+    { 0, 0, 100000, 0},
+    { 1, 0, 100000, 0}, /* answer if known */
+    { 1, 0, PICOQINQ_ADDRESS_USE_TIME_DEFAULT + 100000, -1}, /* Disappears after delay */
+    { 0, 0, 100000, 0},
+    { 0, 0, 100000, 1},
+    { 1, 0, 100000, 1}, /* Most recent win */
+    { 0, 1, 100000, 2},
+    { 0, 2, 100000, 3},
+    { 1, 1, 1000, 2}, /* use correct address */
+    { 1, 2, 1000, 3}, /* use correct address */
+    { 1, 3, 1000, -1}, /* unknown */
+    { 0, 6, 1000, 0},
+    { 1, 6, 1000, 0}, /* retreive IPv6 */
+    { 0, 7, 1000, 1}, 
+    { 0, 8, 1000, 2}, 
+    { 1, 7, 1000, 1}, /* use correct IPv6 */
+    { 0, 7, 1000, 2},
+    { 1, 7, 1000, 2}, /* use most recent IPv6 IPv6 */
+    { 2, 0, 1000, 2}, /* Delete connection #2 */
+    { 1, 7, 1000, 1} /* use correct IPv6 */
+};
+
+static const size_t nb_address_event = sizeof(address_event) / sizeof(struct st_qinq_test_address_table_t);
+
+int picoquic_get_test_address(const char* ip_address_text, int server_port,
+    struct sockaddr_storage* server_address)
+{
+    int ret = 0;
+    struct sockaddr_in* ipv4_dest = (struct sockaddr_in*)server_address;
+    struct sockaddr_in6* ipv6_dest = (struct sockaddr_in6*)server_address;
+
+    /* get the IP address of the server */
+    memset(server_address, 0, sizeof(struct sockaddr_storage));
+
+    if (inet_pton(AF_INET, ip_address_text, &ipv4_dest->sin_addr) == 1) {
+        /* Valid IPv4 address */
+        ipv4_dest->sin_family = AF_INET;
+        ipv4_dest->sin_port = htons((unsigned short)server_port);
+    }
+    else if (inet_pton(AF_INET6, ip_address_text, &ipv6_dest->sin6_addr) == 1) {
+        /* Valid IPv6 address */
+        ipv6_dest->sin6_family = AF_INET6;
+        ipv6_dest->sin6_port = htons((unsigned short)server_port);
+    }
+    else {
+        ret = -1;
+    }
+
+    return ret;
+}
+
+int qinq_address_table_test()
+{
+    struct sockaddr_storage addr_s[QINQ_NB_TEST_ADDRESS];
+    picoqinq_srv_ctx_t* qinq;
+    picoqinq_srv_cnx_ctx_t* cnx_ctx[QINQ_NB_TEST_CNX];
+    picoqinq_srv_cnx_ctx_t* c;
+    int c_match;
+    int ret = 0;
+    uint64_t current_time = 0;
+
+    memset(cnx_ctx, 0, sizeof(cnx_ctx));
+
+    qinq = picoqinq_create_srv_ctx(NULL, 4, QINQ_NB_TEST_CNX);
+    if (qinq == NULL) {
+        DBG_PRINTF("Cannot create qinq context with %d connections\n", QINQ_NB_TEST_CNX);
+        ret = -1;
+    }
+
+    for (size_t i = 0; ret == 0 && i < QINQ_NB_TEST_ADDRESS; i++) {
+        if ((ret = picoquic_get_test_address(address_list[i].ip_addr, address_list[i].port, &addr_s[i])) != 0) {
+            DBG_PRINTF("Cannot parse address %s, port %d, ret=%d\n", address_list[i].ip_addr, address_list[i].port, ret);
+        }
+    }
+
+    for (int x = 0; ret == 0 && x < QINQ_NB_TEST_CNX; x++) {
+        if ((cnx_ctx[x] = picoqinq_create_srv_cnx_ctx(qinq, NULL)) == NULL) {
+            DBG_PRINTF("Cannot create connection #%d\n", x);
+            ret = -1;
+        }
+    }
+
+    for (size_t i = 0; ret == 0 && i < nb_address_event; i++) {
+        current_time += address_event[i].time_interval;
+
+        switch (address_event[i].direction) {
+        case 0:
+            ret = picoqinq_cnx_address_link_create_or_touch(cnx_ctx[address_event[i].cnx_index],
+                (const struct sockaddr*) & addr_s[address_event[i].address_list_index], current_time);
+            if (ret != 0) {
+                DBG_PRINTF("Cannot touch address %d, conx %d at event %d\n",
+                    address_event[i].address_list_index, address_event[i].cnx_index, (int)i);
+            }
+            break;
+        case 1:
+            c = picoqinq_find_best_proxy_for_incoming(qinq, (picoquic_connection_id_t*)NULL, (const struct sockaddr*) & addr_s[address_event[i].address_list_index], current_time);
+            c_match = -1;
+
+            for (int x = 0; ret == 0 && x < QINQ_NB_TEST_CNX; x++) {
+                if (cnx_ctx[x] == c) {
+                    c_match = x;
+                    break;
+                }
+            }
+            if (c_match != address_event[i].cnx_index) {
+                DBG_PRINTF("For event %d, found connection %d instead of %d", (int)i, c_match, address_event[i].cnx_index);
+                ret = -1;
+            } else if (c_match != -1 && c == NULL){
+                DBG_PRINTF("For event %d, found connection %x instead of NULL", (int)i, c);
+                ret = -1;
+            }
+            break;
+        case 2:
+            picoqinq_delete_srv_cnx_ctx(cnx_ctx[address_event[i].cnx_index]);
+            cnx_ctx[address_event[i].cnx_index] = NULL;
+            break;
+        default:
+            DBG_PRINTF("Unsupported event: %d\n", address_event[i].direction);
+            ret = -1;
+            break;
+        }
+    }
+
+    for (int x = 0; x < QINQ_NB_TEST_CNX; x++) {
+        if (cnx_ctx[x] != NULL) {
+            picoqinq_delete_srv_cnx_ctx(cnx_ctx[x]);
+            cnx_ctx[x] = NULL;
+        } 
+    }
+
+    if (qinq != NULL) {
+        picoqinq_delete_srv_ctx(qinq);
+        qinq = NULL;
     }
 
     return ret;

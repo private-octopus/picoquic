@@ -62,7 +62,7 @@ static int picoqinq_address_record_compare(const void* key1, const void* key2)
     return picoquic_compare_addr((struct sockaddr *)&ar1->peer_addr, (struct sockaddr*) &ar2->peer_addr);
 }
 
-static void picoqinq_cnx_address_link_delete(picoqinq_cnx_address_link_t* link)
+void picoqinq_cnx_address_link_delete(picoqinq_cnx_address_link_t* link)
 {
     picoqinq_peer_address_record_t* ar = link->address_record;
     picoqinq_cnx_address_link_t** pprevious = &ar->first_cnx_by_address;
@@ -103,56 +103,71 @@ static void picoqinq_cnx_address_link_delete(picoqinq_cnx_address_link_t* link)
     free(link);
 }
 
-int picoqinq_cid_cnx_address_link_create(picoqinq_srv_cnx_ctx_t* cnx_ctx, struct sockaddr * addr)
+int picoqinq_cnx_address_link_create_or_touch(picoqinq_srv_cnx_ctx_t* cnx_ctx, const struct sockaddr* addr, uint64_t current_time)
 {
     int ret = 0;
 
-    picoqinq_cnx_address_link_t* link = (picoqinq_cnx_address_link_t*)malloc(sizeof(picoqinq_cnx_address_link_t));
-    picoqinq_peer_address_record_t* key = (picoqinq_peer_address_record_t*)malloc(sizeof(picoqinq_peer_address_record_t));
+    picoqinq_peer_address_record_t s_key;
+    picoqinq_peer_address_record_t* key = NULL;
+    picoqinq_cnx_address_link_t* link = NULL;
+    picohash_item* item;
+    memset(&s_key, 0, sizeof(picoqinq_peer_address_record_t));
+    picoquic_store_addr(&s_key.peer_addr, addr);
 
-    if (link == NULL || key == NULL) {
-        ret = PICOQINQ_ERROR_INTERNAL;
-    }
-    else {
-        picohash_item* item;
-        memset(key, 0, sizeof(picoqinq_peer_address_record_t));
-        picoquic_store_addr(&key->peer_addr, addr);
+    item = picohash_retrieve(cnx_ctx->qinq->table_peer_addresses, &s_key);
 
-        item = picohash_retrieve(cnx_ctx->qinq->table_peer_addresses, key);
+    if (item == NULL) {
+        key = (picoqinq_peer_address_record_t*)malloc(sizeof(picoqinq_peer_address_record_t));
 
-        if (item == NULL) {
-            ret = picohash_insert(cnx_ctx->qinq->table_peer_addresses, key);
+        if (key == NULL) {
+            ret = PICOQINQ_ERROR_INTERNAL;
         }
         else {
-            free(key);
-            key = (picoqinq_peer_address_record_t*)item;
-        }
+            memset(key, 0, sizeof(picoqinq_peer_address_record_t));
+            picoquic_store_addr(&key->peer_addr, addr);
+            ret = picohash_insert(cnx_ctx->qinq->table_peer_addresses, key);
 
-        if (ret == 0) {
-            link->address_record = key;
-            link->cnx_ctx = cnx_ctx;
-            link->next_address_by_cnx = cnx_ctx->first_address_by_cnx;
-            cnx_ctx->first_address_by_cnx = link;
-            link->next_cnx_by_address = key->first_cnx_by_address;
-            key->first_cnx_by_address = link;
-            key = NULL;
-            link = NULL;
+            if (ret != 0) {
+                free(key);
+            }
+        }
+    }
+    else {
+        key = (picoqinq_peer_address_record_t*)item->key;
+
+        /* Find whether there is a link associated with the current connection. */
+        link = key->first_cnx_by_address;
+
+        while (link != NULL && link->cnx_ctx != cnx_ctx) {
+            link = link->next_cnx_by_address;
         }
     }
 
-    if (ret != 0) {
-        if (key) {
-            free(key);
+    if (ret == 0) {
+        if (link == NULL) {
+            link = (picoqinq_cnx_address_link_t*)malloc(sizeof(picoqinq_cnx_address_link_t));
+            if (link == NULL) {
+                ret = PICOQINQ_ERROR_INTERNAL;
+            }
+            else {
+                link->last_access_time = current_time;
+                link->address_record = key;
+                link->cnx_ctx = cnx_ctx;
+                link->next_address_by_cnx = cnx_ctx->first_address_by_cnx;
+                cnx_ctx->first_address_by_cnx = link;
+                link->next_cnx_by_address = key->first_cnx_by_address;
+                key->first_cnx_by_address = link;
+            }
         }
-        if (link) {
-            free(link);
+        else {
+            link->last_access_time = current_time;
         }
     }
 
     return(ret);
 }
 
-picoqinq_peer_address_record_t* picoqinq_find_address_record(picoqinq_srv_ctx_t* qinq, struct sockaddr * addr)
+picoqinq_peer_address_record_t* picoqinq_find_address_record(picoqinq_srv_ctx_t* qinq, const struct sockaddr * addr)
 {
     picoqinq_peer_address_record_t* ar = NULL;
     picoqinq_peer_address_record_t key;
@@ -194,8 +209,6 @@ int picoquic_incoming_proxy_packet(
     return ret;
 }
 
-
-
 /* Check whether a proxy connection is the best match for an incoming packet.
  *
  * The Good match argument states whether the incoming CID matches a value registered by the proxy.
@@ -235,10 +248,9 @@ int picoqinq_test_proxy_for_incoming(
 
 picoqinq_srv_cnx_ctx_t* picoqinq_find_best_proxy_for_incoming(
     picoqinq_srv_ctx_t* qinq,
-    uint8_t* bytes,
-    size_t packet_length,
-    picoquic_connection_id_t* dcid,
-    struct sockaddr* addr_from)
+    const picoquic_connection_id_t* dcid,
+    const struct sockaddr* addr_from,
+    uint64_t current_time)
 {
     picoqinq_srv_cnx_ctx_t * cnx_ctx = NULL;
     picoqinq_peer_address_record_t* ar = picoqinq_find_address_record(qinq, addr_from);
@@ -250,17 +262,23 @@ picoqinq_srv_cnx_ctx_t* picoqinq_find_best_proxy_for_incoming(
         uint64_t match_time;
 
         while (link != NULL) {
-            /* Packet may be bound to this proxied connections, pending address check */
-            if (picoqinq_find_reserve_header_by_address(&link->cnx_ctx->send_hc, addr_from, dcid, 0) != NULL){
-                if (best_match_cnx == NULL || link->last_access_time < match_time) {
-                    best_match_cnx = link->cnx_ctx;
+            if (link->last_access_time + PICOQINQ_ADDRESS_USE_TIME_DEFAULT >= current_time) {
+                /* Packet may be bound to this proxied connections, pending address check */
+                if (picoqinq_find_reserve_header_by_address(&link->cnx_ctx->send_hc, addr_from, dcid, 0) != NULL) {
+                    if (best_match_cnx == NULL || link->last_access_time > match_time) {
+                        best_match_cnx = link->cnx_ctx;
+                        match_time = link->last_access_time;
+                    }
+                }
+                else if (best_match_cnx == NULL && (most_recent_cnx == NULL || link->last_access_time > match_time)) {
+                    most_recent_cnx = link->cnx_ctx;
                     match_time = link->last_access_time;
                 }
             }
-            else if (best_match_cnx == NULL && (most_recent_cnx == NULL || link->last_access_time < match_time)) {
-                most_recent_cnx = link->cnx_ctx;
-                match_time = link->last_access_time;
+            else {
+                /* TODO: Links that are too old should be removed */
             }
+            link = link->next_cnx_by_address;
         }
 
         if (best_match_cnx != NULL) {
@@ -330,7 +348,7 @@ int picoqinq_server_incoming_packet(
             ret = picoquic_incoming_packet(qinq->quic, bytes, packet_length, addr_from, addr_to, if_index_to, received_ecn, current_time);
         }
         else {
-            picoqinq_srv_cnx_ctx_t* cnx_ctx = picoqinq_find_best_proxy_for_incoming(qinq, bytes, packet_length, p_cid, addr_from);
+            picoqinq_srv_cnx_ctx_t* cnx_ctx = picoqinq_find_best_proxy_for_incoming(qinq, p_cid, addr_from, current_time);
 
             if (cnx_ctx != NULL) {
                 ret = picoquic_incoming_proxy_packet(cnx_ctx, bytes, packet_length, p_cid, addr_from, current_time);
@@ -378,19 +396,25 @@ void picoqinq_delete_srv_ctx(picoqinq_srv_ctx_t* qinq)
     picohash_delete(qinq->table_peer_addresses, 1);
 }
 
-picoqinq_srv_cnx_ctx_t* picoqinq_create_srv_cnx_ctx(picoqinq_srv_ctx_t* qinq)
+picoqinq_srv_cnx_ctx_t* picoqinq_create_srv_cnx_ctx(picoqinq_srv_ctx_t* qinq, picoquic_cnx_t* cnx)
 {
     picoqinq_srv_cnx_ctx_t* cnx_ctx = (picoqinq_srv_cnx_ctx_t*)malloc(sizeof(picoqinq_srv_cnx_ctx_t));
 
     if (cnx_ctx != NULL) {
+        memset(cnx_ctx, 0, sizeof(picoqinq_srv_cnx_ctx_t));
+        cnx_ctx->first_stream = NULL;
+        cnx_ctx->cnx = cnx;
         cnx_ctx->qinq = qinq;
         cnx_ctx->receive_hc = NULL;
         cnx_ctx->send_hc = NULL;
         cnx_ctx->first_address_by_cnx = NULL;
-        if (qinq->cnx_last == NULL) {
+        cnx_ctx->ctx_previous = NULL;
+        if (qinq->cnx_first == NULL) {
             qinq->cnx_last = cnx_ctx;
         }
-        cnx_ctx->ctx_previous = NULL;
+        else {
+            qinq->cnx_first->ctx_previous = cnx_ctx;
+        }
         cnx_ctx->ctx_next = qinq->cnx_first;
         qinq->cnx_first = cnx_ctx;
     }
@@ -410,30 +434,43 @@ static void picoqinq_delete_srv_cnx_ctx_hc(picoqinq_header_compression_t** phc)
 
 void picoqinq_delete_srv_cnx_ctx(picoqinq_srv_cnx_ctx_t* ctx)
 {
-    picoqinq_delete_srv_cnx_ctx_hc(&ctx->receive_hc);
-    picoqinq_delete_srv_cnx_ctx_hc(&ctx->send_hc);
+    if (ctx != NULL) {
+        picoqinq_server_stream_ctx_t* stream_ctx;
 
-    while (ctx->first_address_by_cnx) {
-        picoqinq_cnx_address_link_delete(ctx->first_address_by_cnx);
-    }
+        /* Delete the streams contexts */
+        while ((stream_ctx = ctx->first_stream) != NULL) {
+            ctx->first_stream = stream_ctx->next_stream;
+            free(stream_ctx);
+        }
+        
+        /* Delete the hcid contexts */
+        picoqinq_delete_srv_cnx_ctx_hc(&ctx->receive_hc);
+        picoqinq_delete_srv_cnx_ctx_hc(&ctx->send_hc);
 
-    if (ctx->ctx_previous == NULL) {
-        ctx->qinq->cnx_first = ctx->ctx_next;
-    }
-    else {
-        ctx->ctx_previous->ctx_next = ctx->ctx_next;
-    }
-    ctx->ctx_previous = NULL;
+        /* Remove the address links*/
+        while (ctx->first_address_by_cnx) {
+            picoqinq_cnx_address_link_delete(ctx->first_address_by_cnx);
+        }
 
-    if (ctx->ctx_next == NULL) {
-        ctx->qinq->cnx_last = ctx->ctx_previous;
-    }
-    else {
-        ctx->ctx_next->ctx_previous = ctx->ctx_previous;
-    }
-    ctx->ctx_next = NULL;
+        /* Unlink the connection from the server context */
+        if (ctx->ctx_previous == NULL) {
+            ctx->qinq->cnx_first = ctx->ctx_next;
+        }
+        else {
+            ctx->ctx_previous->ctx_next = ctx->ctx_next;
+        }
 
-    free(ctx);
+        if (ctx->ctx_next == NULL) {
+            ctx->qinq->cnx_last = ctx->ctx_previous;
+        }
+        else {
+            ctx->ctx_next->ctx_previous = ctx->ctx_previous;
+        }
+        ctx->ctx_next = NULL;
+        ctx->ctx_previous = NULL;
+
+        free(ctx);
+    }
 }
 
 /*
@@ -441,7 +478,10 @@ void picoqinq_delete_srv_cnx_ctx(picoqinq_srv_cnx_ctx_t* ctx)
  */
 int picoqinq_server_callback_datagram(picoqinq_srv_cnx_ctx_t* cnx_ctx, uint8_t* bytes, size_t length, uint64_t current_time)
 {
-    /* Verify that this is an expected destination for which quic is supported. */
+
+    /* TODO: perform address verifications: we should implement some firewall logic to test
+     * whether there were replies from that address already. If they were not, we should
+     * at a minimum perform some rate limiting, to prevent abuses. */
     /* Possibly, verify that this is a valid CNX-ID, but consider possible migrations. */
     /* Send the datagram on the selected socket for the context. */
     int ret = 0;
@@ -450,16 +490,17 @@ int picoqinq_server_callback_datagram(picoqinq_srv_cnx_ctx_t* cnx_ctx, uint8_t* 
 
     if (outpack != NULL) {
         /* TODO: Parse the datagram header to extract the address_to */
-        ret = picoqinq_datagram_to_packet(bytes, bytes+length, &outpack->addr_to, &cid, 
+        ret = picoqinq_datagram_to_packet(bytes, bytes + length, &outpack->addr_to, &cid,
             outpack->bytes, sizeof(outpack->bytes), &outpack->length, &cnx_ctx->receive_hc, current_time);
 
         if (ret != 0) {
             picoquic_delete_stateless_packet(outpack);
         }
         else {
-            /* TODO: perform address verifications */
-            /* TODO: keep track of address? */
             picoquic_queue_stateless_packet(cnx_ctx->qinq->quic, outpack);
+
+            /* Keep track of address so responses can be matched to connection */
+            ret = picoqinq_cnx_address_link_create_or_touch(cnx_ctx, (struct sockaddr*) & outpack->addr_to, current_time);
         }
     }
     else {
@@ -503,7 +544,6 @@ picoqinq_server_stream_ctx_t* picoqinq_find_or_create_server_stream(picoquic_cnx
 
     return stream_ctx;
 }
-
 
 void picoqinq_forget_server_stream(picoqinq_srv_cnx_ctx_t* ctx, picoqinq_server_stream_ctx_t* stream_ctx)
 {
@@ -609,41 +649,6 @@ int picoqinq_server_callback_data(picoquic_cnx_t* cnx, picoqinq_server_stream_ct
  *  - the identity of the client, if it is known.
  */
 
-picoqinq_srv_cnx_ctx_t* picoqinq_server_callback_create_context(picoqinq_srv_ctx_t* qinq_ctx, picoquic_cnx_t * cnx)
-{
-    picoqinq_srv_cnx_ctx_t* ctx = (picoqinq_srv_cnx_ctx_t*)
-        malloc(sizeof(picoqinq_srv_cnx_ctx_t));
-
-    if (ctx != NULL) {
-        memset(ctx, 0, sizeof(picoqinq_srv_cnx_ctx_t));
-        ctx->first_stream = NULL;
-        ctx->cnx = cnx;
-    }
-    return ctx;
-}
-
-void picoqinq_server_callback_delete_context(picoqinq_srv_cnx_ctx_t* ctx)
-{
-    if (ctx != NULL) {
-        picoqinq_server_stream_ctx_t* stream_ctx = NULL;
-        /* Manage the list of streams. */
-        while (1) {
-            picoqinq_server_stream_ctx_t* stream_ctx = ctx->first_stream;
-            if (stream_ctx != NULL) {
-                ctx->first_stream = stream_ctx->next_stream;
-                free(stream_ctx);
-            }
-            else {
-                break;
-            }
-        }
-        /* TODO: manage the list of CID. */
-        /* TODO: manage identity. */
-        free(ctx);
-    }
-}
-
-
 int picoqinq_server_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx)
@@ -652,8 +657,12 @@ int picoqinq_server_callback(picoquic_cnx_t* cnx,
     picoqinq_srv_cnx_ctx_t* ctx = NULL;
     picoqinq_server_stream_ctx_t* stream_ctx = (picoqinq_server_stream_ctx_t*)v_stream_ctx;
 
+
+    /* TODO: the default context found here should be a function of the protocol, but
+     * in the current setup it is just set globally.
+     */
     if (callback_ctx == NULL || callback_ctx == picoquic_get_default_callback_context(picoquic_get_quic_ctx(cnx))) {
-        ctx = picoqinq_server_callback_create_context(
+        ctx = picoqinq_create_srv_cnx_ctx(
             (picoqinq_srv_ctx_t*)picoquic_get_default_callback_context(picoquic_get_quic_ctx(cnx)), cnx);
         if (ctx == NULL) {
             /* cannot handle the connection */
@@ -683,7 +692,7 @@ int picoqinq_server_callback(picoquic_cnx_t* cnx,
         case picoquic_callback_stateless_reset:
         case picoquic_callback_close: /* Received connection close */
         case picoquic_callback_application_close: /* Received application close */
-            picoqinq_server_callback_delete_context(ctx);
+            picoqinq_delete_srv_cnx_ctx(ctx);
             picoquic_set_callback(cnx, NULL, NULL);
             break;
         case picoquic_callback_version_negotiation:
