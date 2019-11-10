@@ -23,8 +23,12 @@
 #include "picoquictest_internal.h"
 #include <stdlib.h>
 #include <string.h>
+#include "h3zero.h"
+#include "demoserver.h"
+#include "democlient.h"
 #include "qinqproto.h"
 #include "qinqserver.h"
+#include "qinqclient.h"
 
 uint8_t* picoquic_frames_varint_skip(uint8_t* bytes, const uint8_t* bytes_max);
 
@@ -295,7 +299,7 @@ int qinq_incoming_datagram_parse_test()
     /* Finally */
     while (hc_head != NULL) {
         picoqinq_header_compression_t* hc = hc_head;
-        hc_head = hc->next_hc;
+        hc_head = hc_head->next_hc;
         free(hc);
     }
 
@@ -475,6 +479,162 @@ int qinq_address_table_test()
     if (qinq != NULL) {
         picoqinq_delete_srv_ctx(qinq);
         qinq = NULL;
+    }
+
+    return ret;
+}
+
+/* Proxy simulation setup */
+struct st_picoqinq_test_ctx_t {
+    uint64_t simulated_time;
+    picoquic_quic_t* qclient;
+    picoquic_quic_t* qproxy;
+    picoquic_quic_t* qserver;
+    picoqinq_srv_ctx_t* qinq_srv;
+    struct sockaddr_storage client_addr;
+    struct sockaddr_storage proxy_addr;
+    struct sockaddr_storage server_addr;
+    char test_server_cert_file[512];
+    char test_server_key_file[512];
+    char test_server_cert_store_file[512];
+    picoquictest_sim_link_t* c2p_link;
+    picoquictest_sim_link_t* p2c_link;
+    picoquictest_sim_link_t* p2s_link;
+    picoquictest_sim_link_t* s2p_link;
+};
+
+void picoqinq_test_ctx_delete(struct st_picoqinq_test_ctx_t* test_ctx)
+{
+
+    if (test_ctx->qinq_srv != NULL) {
+        picoqinq_delete_srv_ctx(test_ctx->qinq_srv);
+        test_ctx->qinq_srv = NULL;
+    }
+    if (test_ctx->qclient != NULL) {
+        picoquic_free(test_ctx->qclient);
+        test_ctx->qclient = NULL;
+    }
+    if (test_ctx->qserver != NULL) {
+        picoquic_free(test_ctx->qserver);
+        test_ctx->qserver = NULL;
+    }
+    if (test_ctx->qproxy != NULL) {
+        picoquic_free(test_ctx->qproxy);
+        test_ctx->qproxy = NULL;
+    }
+
+    if (test_ctx->c2p_link != NULL) {
+        picoquictest_sim_link_delete(test_ctx->c2p_link);
+        test_ctx->c2p_link = NULL;
+    }
+    if (test_ctx->p2c_link != NULL) {
+        picoquictest_sim_link_delete(test_ctx->p2c_link);
+        test_ctx->p2c_link = NULL;
+    }
+    if (test_ctx->p2s_link != NULL) {
+        picoquictest_sim_link_delete(test_ctx->p2s_link);
+        test_ctx->p2s_link = NULL;
+    }
+    if (test_ctx->s2p_link != NULL) {
+        picoquictest_sim_link_delete(test_ctx->s2p_link);
+        test_ctx->qclient = NULL;
+    }
+
+    free(test_ctx);
+}
+
+struct st_picoqinq_test_ctx_t* picoqinq_test_ctx_init()
+{
+    struct st_picoqinq_test_ctx_t* test_ctx = (struct st_picoqinq_test_ctx_t*)malloc(sizeof(struct st_picoqinq_test_ctx_t));
+
+    if (test_ctx != NULL) {
+        int ret = 0;
+
+        memset(test_ctx, 0, sizeof(struct st_picoqinq_test_ctx_t));
+
+        ret = picoquic_get_input_path(test_ctx->test_server_cert_file, sizeof(test_ctx->test_server_cert_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_SERVER_CERT);
+
+        if (ret == 0) {
+            ret = picoquic_get_input_path(test_ctx->test_server_key_file, sizeof(test_ctx->test_server_key_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY);
+        }
+
+        if (ret == 0) {
+            ret = picoquic_get_input_path(test_ctx->test_server_cert_store_file, sizeof(test_ctx->test_server_cert_store_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE);
+        }
+
+        if (ret == 0 && (
+            (ret = picoquic_get_test_address("10.0.0.1", 443, &test_ctx->server_addr)) != 0 ||
+            (ret = picoquic_get_test_address("10.0.0.2", 443, &test_ctx->proxy_addr)) != 0 ||
+            (ret = picoquic_get_test_address("10.0.0.3", 12345, &test_ctx->client_addr)) != 0)) {
+            DBG_PRINTF("Cannot initialize addresses, ret=%d\n", ret);
+        }
+
+        if (ret == 0) {
+            test_ctx->qclient = picoquic_create(8, NULL, NULL, test_ctx->test_server_cert_store_file, NULL, NULL, NULL, NULL, NULL, NULL, test_ctx->simulated_time, &test_ctx->simulated_time, NULL, NULL, 0);
+            test_ctx->qserver = picoquic_create(8, test_ctx->test_server_cert_file, test_ctx->test_server_key_file, test_ctx->test_server_cert_store_file, PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, NULL, NULL, NULL, NULL, test_ctx->simulated_time, &test_ctx->simulated_time, NULL, NULL, 0);
+            test_ctx->qproxy = picoquic_create(8, test_ctx->test_server_cert_file, test_ctx->test_server_key_file, test_ctx->test_server_cert_store_file, NULL, picoqinq_server_callback, NULL, NULL, NULL, NULL, test_ctx->simulated_time, &test_ctx->simulated_time, NULL, NULL, 0);
+            test_ctx->qinq_srv = picoqinq_create_srv_ctx(test_ctx->qproxy, 4, 8);
+            test_ctx->c2p_link = picoquictest_sim_link_create(0.01, 10000, NULL, 0, 0);
+            test_ctx->p2c_link = picoquictest_sim_link_create(0.01, 10000, NULL, 0, 0);
+            test_ctx->p2s_link = picoquictest_sim_link_create(0.01, 10000, NULL, 0, 0);
+            test_ctx->s2p_link = picoquictest_sim_link_create(0.01, 10000, NULL, 0, 0);
+            if (test_ctx->qclient == NULL || test_ctx->qserver == NULL || test_ctx->qproxy == NULL || test_ctx->qinq_srv == NULL ||
+                test_ctx->c2p_link == NULL || test_ctx->p2c_link == NULL || test_ctx->p2s_link == NULL || test_ctx->s2p_link == NULL) {
+                DBG_PRINTF("%s", "Cannot allocate initial contexts.\n");
+                picoqinq_test_ctx_delete(test_ctx);
+                test_ctx = NULL;
+            }
+            else {
+                picoquic_set_default_callback(test_ctx->qproxy, picoqinq_server_callback, test_ctx->qinq_srv);
+            }
+        }
+    }
+
+    return test_ctx;
+}
+
+
+/* End to end test 
+ * Set a network with three nodes: client, proxy and server.
+ * Server supports test.
+ * Client supports test and qinq.
+ * Proxy supports qinq.
+ *
+ * Set proxy connection from client to proxy.
+ * Set connection from client to server.
+ * 
+ * Verify that the connection is routed via the proxy.
+ * Verify that a basic scenario works.
+ * 
+ * Close.
+ */
+
+int qinq_e2e_basic_test()
+{
+    struct st_picoqinq_test_ctx_t* test_ctx = picoqinq_test_ctx_init();
+    int ret = 0;
+
+    if (test_ctx == NULL) {
+        ret = -1;
+    }
+    else {
+
+        /* First, set a connection between client and proxy */
+        /* cnx_proxy = picoquic_create_client_cnx(qclient, (struct sockaddr*) & proxy_addr, simulated_time, 0, PICOQUIC_TEST_SNI, PICOQINQ_ALPN, picoqinq_client_callback, NULL);*/
+
+        /* Simulate the connection */
+
+        /* Set a connection between client and server. Set local address to proxy address. */
+
+        /* Simulate the three party connection until established. */
+
+        /* Send one data request over client connection */
+
+        /* Run until some data is received */
+
+        /* If data arrived, declare victory */
+
+        picoqinq_test_ctx_delete(test_ctx);
     }
 
     return ret;

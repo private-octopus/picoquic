@@ -43,6 +43,8 @@ typedef struct st_picoqinq_client_stream_ctx_t {
     size_t data_received;
     int is_fin_received : 1;
     int is_reset : 1;
+    int hc_direction;
+    picoqinq_header_compression_t* hc;
     uint8_t frame[PICOQINQ_client_FRAME_MAX];
 } picoqinq_client_stream_ctx_t;
 

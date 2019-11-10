@@ -30,6 +30,90 @@
 #include "qinqclient.h"
 #include "picohash.h"
 
+uint8_t* picoquic_frames_fixed_skip(uint8_t* bytes, const uint8_t* bytes_max, size_t size);
+uint8_t* picoquic_frames_varint_decode(uint8_t* bytes, const uint8_t* bytes_max, uint64_t* n64);
+uint8_t* picoquic_frames_varlen_decode(uint8_t* bytes, const uint8_t* bytes_max, size_t* n);
+uint8_t* picoquic_frames_uint8_decode(uint8_t* bytes, const uint8_t* bytes_max, uint8_t* n);
+uint8_t* picoquic_frames_uint16_decode(uint8_t* bytes, const uint8_t* bytes_max, uint16_t* n);
+uint8_t* picoquic_frames_uint32_decode(uint8_t* bytes, const uint8_t* bytes_max, uint32_t* n);
+uint8_t* picoquic_frames_uint64_decode(uint8_t* bytes, const uint8_t* bytes_max, uint64_t* n);
+uint8_t* picoquic_frames_cid_decode(uint8_t* bytes, const uint8_t* bytes_max, picoquic_connection_id_t* n);
+
+
+/* Per stream context.
+ *
+ * QINQ uses streams to send protocol elements such as registration of connection IDs.
+ * The "end of stream" marks the end of a protocol element. When it is received, the
+ * protocol machine is called, and the response is posted on the stream.
+ */
+
+picoqinq_client_stream_ctx_t* picoqinq_find_or_create_client_stream(picoquic_cnx_t* cnx, uint64_t stream_id, picoqinq_client_callback_ctx_t* ctx, int should_create)
+{
+    picoqinq_client_stream_ctx_t* stream_ctx = NULL;
+
+    /* if stream is already present, check its state. New bytes? */
+    stream_ctx = ctx->first_stream;
+    while (stream_ctx != NULL && stream_ctx->stream_id != stream_id) {
+        stream_ctx = stream_ctx->next_stream;
+    }
+
+    if (stream_ctx == NULL && should_create) {
+        stream_ctx = (picoqinq_client_stream_ctx_t*)
+            malloc(sizeof(picoqinq_client_stream_ctx_t));
+        if (stream_ctx == NULL) {
+            /* Could not handle this stream */
+            picoquic_reset_stream(cnx, stream_id, PICOQINQ_ERROR_INTERNAL);
+        }
+        else {
+            memset(stream_ctx, 0, sizeof(picoqinq_client_stream_ctx_t));
+            stream_ctx->next_stream = ctx->first_stream;
+            ctx->first_stream = stream_ctx;
+            stream_ctx->stream_id = stream_id;
+        }
+    }
+
+    return stream_ctx;
+}
+
+
+void picoqinq_forget_client_stream(picoqinq_client_callback_ctx_t* ctx, picoqinq_client_stream_ctx_t* stream_ctx)
+{
+    if (ctx != NULL && stream_ctx != NULL) {
+        picoqinq_client_stream_ctx_t** previous_link = &ctx->first_stream;
+        while (*previous_link != NULL && *previous_link != stream_ctx) {
+            previous_link = &(*previous_link)->next_stream;
+        }
+        if (*previous_link == stream_ctx) {
+            *previous_link = stream_ctx->next_stream;
+        }
+        if (stream_ctx->hc != NULL) {
+            free(stream_ctx->hc);
+            stream_ctx->hc = NULL;
+        }
+        free(stream_ctx);
+    }
+}
+
+/* Management of header compression
+ */
+
+int picoqinq_client_is_register_address_pending(picoqinq_client_callback_ctx_t* ctx, struct sockaddr* addr, picoquic_connection_id_t* cid, uint64_t direction)
+{
+    picoqinq_client_stream_ctx_t* stream_ctx = ctx->first_stream;
+
+    while (stream_ctx != NULL) {
+        if (stream_ctx->hc != NULL &&
+            stream_ctx->hc_direction == direction &&
+            picoquic_compare_addr((struct sockaddr*) & stream_ctx->hc->addr_s, addr) == 0 &&
+            picoquic_compare_connection_id(&stream_ctx->hc->cid, cid) == 0) {
+            break;
+        }
+        stream_ctx = stream_ctx->next_stream;
+    }
+
+    return (stream_ctx != NULL);
+}
+
 /* Register an address, cid pair with the peer if it is not already reserved.
  * Send the corresponding request to the server.
  */
@@ -40,38 +124,54 @@ void picoqinq_client_register_address_cid_pair(picoquic_cnx_t* cnx, picoqinq_cli
     /* Look in the table whether the mapping already exists */
     picoqinq_header_compression_t** phc_head = (direction == 0) ? &ctx->receive_hc : &ctx->send_hc;
     picoqinq_header_compression_t* hc = picoqinq_find_reserve_header_by_address(phc_head, addr, cid, 0);
+    int should_really_register = 0;
+
+    if (hc != NULL){
+        if (hc->last_access_time + PICOQINQ_RESERVATION_DELAY < current_time) {
+            /* There is an entry, but it is really old. TODO: Delete it */
+            hc = NULL;
+        } else {
+            hc->last_access_time = current_time;
+        }
+    }
 
     if (hc == NULL) {
-        /* If there is no entry, create one and resent the message. */
+        /* If there is no entry, create one and send the message. */
         uint64_t hcid;
-        if (direction == 0) {
+        if (direction == PICOQINQ_DIRECTION_SERVER_TO_CLIENT) {
             hcid = ++ctx->receive_hcid;
         }
         else {
             hcid = ++ctx->send_hcid;
         }
         hc = picoqinq_create_header(hcid, addr, cid, current_time);
-        if (hc != NULL) {
-            picoqinq_reserve_header(hc, phc_head);
-        }
-    }
-    else if (hc->last_access_time + PICOQINQ_RESERVATION_DELAY > current_time) {
-        hc->last_access_time = current_time;
-    } else {
-        /* The entry is still fresh, do not repeat it */
-        hc = NULL;
-    }
-
-    if (hc != NULL) {
         uint8_t message[1024];
         size_t message_length = 0;
         uint8_t* eom;
 
         eom = picoqinq_encode_reserve_header(message, message + sizeof(message), direction, hc->hcid, addr, cid);
-
         if (eom != NULL) {
+
             /* Find the next client stream */
-            picoquic_add_to_stream(cnx, picoquic_get_next_local_stream_id(cnx, 0), message, message_length, 1);
+            uint64_t stream_id = picoquic_get_next_local_stream_id(cnx, 0);
+            picoqinq_client_stream_ctx_t* stream_ctx = picoqinq_find_or_create_client_stream(cnx, stream_id, ctx, 1);
+            int ret = 0;
+
+            if (stream_ctx == NULL ||
+                (ret = picoquic_add_to_stream_with_ctx(cnx, stream_id, message, eom - message, 1, stream_ctx)) != 0) {
+                /* Clean up after failure */
+                if (stream_ctx == NULL) {
+                    DBG_PRINTF("Could not vreate stream #%lld", (unsigned long long) stream_id);
+                } else {
+                    DBG_PRINTF("Could not write stream #%lld", (unsigned long long) stream_id);
+                }
+                free(hc);
+            }
+            else {
+                /* Remember the pending transaction */
+                stream_ctx->hc_direction = (int)direction;
+                stream_ctx->hc = hc;
+            }
         }
     }
 }
@@ -126,55 +226,6 @@ int picoqinq_client_callback_datagram(picoquic_cnx_t * cnx, picoqinq_client_call
     return ret;
 }
 
-/* Per stream context.
- *
- * QINQ uses streams to send protocol elements such as registration of connection IDs.
- * The "end of stream" marks the end of a protocol element. When it is received, the
- * protocol machine is called, and the response is posted on the stream.
- */
-
-picoqinq_client_stream_ctx_t* picoqinq_find_or_create_client_stream(picoquic_cnx_t* cnx, uint64_t stream_id, picoqinq_client_callback_ctx_t* ctx, int should_create)
-{
-    picoqinq_client_stream_ctx_t* stream_ctx = NULL;
-
-    /* if stream is already present, check its state. New bytes? */
-    stream_ctx = ctx->first_stream;
-    while (stream_ctx != NULL && stream_ctx->stream_id != stream_id) {
-        stream_ctx = stream_ctx->next_stream;
-    }
-
-    if (stream_ctx == NULL && should_create) {
-        stream_ctx = (picoqinq_client_stream_ctx_t*)
-            malloc(sizeof(picoqinq_client_stream_ctx_t));
-        if (stream_ctx == NULL) {
-            /* Could not handle this stream */
-            picoquic_reset_stream(cnx, stream_id, PICOQINQ_ERROR_INTERNAL);
-        }
-        else {
-            memset(stream_ctx, 0, sizeof(picoqinq_client_stream_ctx_t));
-            stream_ctx->next_stream = ctx->first_stream;
-            ctx->first_stream = stream_ctx;
-            stream_ctx->stream_id = stream_id;
-        }
-    }
-
-    return stream_ctx;
-}
-
-
-void picoqinq_forget_client_stream(picoqinq_client_callback_ctx_t* ctx, picoqinq_client_stream_ctx_t* stream_ctx)
-{
-    if (ctx != NULL && stream_ctx != NULL) {
-        picoqinq_client_stream_ctx_t** previous_link = &ctx->first_stream;
-        while (*previous_link != NULL && *previous_link != stream_ctx) {
-            previous_link = &(*previous_link)->next_stream;
-        }
-        if (*previous_link == stream_ctx) {
-            *previous_link = stream_ctx->next_stream;
-        }
-        free(stream_ctx);
-    }
-}
 
 int picoqinq_client_callback_data(picoquic_cnx_t* cnx, picoqinq_client_stream_ctx_t* stream_ctx, uint64_t stream_id, uint8_t* bytes, size_t length, picoquic_call_back_event_t fin_or_event, picoqinq_client_callback_ctx_t* callback_ctx)
 {
@@ -189,7 +240,8 @@ int picoqinq_client_callback_data(picoquic_cnx_t* cnx, picoqinq_client_stream_ct
         ret = picoquic_stop_sending(cnx, stream_id, PICOQINQ_ERROR_INTERNAL);
     } else if (stream_ctx->data_received + length > sizeof(stream_ctx->frame)) {
         /* Message too big. */
-        ret = -1;
+        ret = picoquic_stop_sending(cnx, stream_id, PICOQINQ_ERROR_PROTOCOL);
+        picoqinq_forget_client_stream(callback_ctx, stream_ctx);
     }
     else {
         if (length > 0) {
@@ -198,16 +250,25 @@ int picoqinq_client_callback_data(picoquic_cnx_t* cnx, picoqinq_client_stream_ct
         }
 
         if (fin_or_event == picoquic_callback_stream_fin) {
-            /* TODO: decode the message and validate the transaction  */
-            if (ret == 0) {
-                /* TODO: ret = picoquic_add_to_stream(cnx, stream_id, response, response_length, 1); */
+            /* decode the message and validate the transaction  */
+            uint64_t return_code;
+            uint8_t * next_byte = picoquic_frames_varint_decode(stream_ctx->frame, stream_ctx->frame + stream_ctx->data_received, &return_code);
+
+            if (next_byte != NULL && return_code == 0) {
+                if (stream_ctx->hc != NULL) {
+                    picoqinq_reserve_header(stream_ctx->hc, (stream_ctx->hc_direction == PICOQINQ_DIRECTION_SERVER_TO_CLIENT) ? &callback_ctx->receive_hc : &callback_ctx->send_hc);
+                    stream_ctx->hc = NULL;
+                }
             }
-            else {
-                /* Reset the stream */
-                ret = picoquic_reset_stream(cnx, stream_id, PICOQINQ_ERROR_PROTOCOL);
+            else if (next_byte == NULL) {
+                DBG_PRINTF("Cannot parse message received on stream %lld", (unsigned long long)stream_id);
             }
+
+            picoquic_reset_stream_ctx(cnx, stream_id);
+            picoqinq_forget_client_stream(callback_ctx, stream_ctx);
         }
     }
+
     return ret;
 }
 

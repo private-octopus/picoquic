@@ -678,6 +678,8 @@ uint8_t* picoquic_provide_stream_data_buffer(void* context, size_t nb_bytes, int
 int picoquic_add_to_stream(picoquic_cnx_t* cnx,
     uint64_t stream_id, const uint8_t* data, size_t length, int set_fin);
 
+void picoquic_reset_stream_ctx(picoquic_cnx_t* cnx, uint64_t stream_id);
+
 /* Same as "picoquic_add_to_stream", but also sets the application stream context.
  * The context is used in call backs, so the application can directly process responses.
  */
