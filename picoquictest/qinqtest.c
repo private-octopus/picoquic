@@ -485,59 +485,44 @@ int qinq_address_table_test()
 }
 
 /* Proxy simulation setup */
+#define PICOQINQ_SIM_NB_CTX 3
+#define PICOQINQ_SIM_NB_LINK 4
+#define PICOQINQ_SIM_CLIENT 0
+#define PICOQINQ_SIM_SERVER 1
+#define PICOQINQ_SIM_PROXY 2
+
 struct st_picoqinq_test_ctx_t {
     uint64_t simulated_time;
-    picoquic_quic_t* qclient;
-    picoquic_quic_t* qproxy;
-    picoquic_quic_t* qserver;
+    picoquic_quic_t* qctx[PICOQINQ_SIM_NB_CTX];
+    struct sockaddr_storage addr_s[PICOQINQ_SIM_NB_CTX];
     picoqinq_srv_ctx_t* qinq_srv;
-    struct sockaddr_storage client_addr;
-    struct sockaddr_storage proxy_addr;
-    struct sockaddr_storage server_addr;
     char test_server_cert_file[512];
     char test_server_key_file[512];
     char test_server_cert_store_file[512];
-    picoquictest_sim_link_t* c2p_link;
-    picoquictest_sim_link_t* p2c_link;
-    picoquictest_sim_link_t* p2s_link;
-    picoquictest_sim_link_t* s2p_link;
+    picoquictest_sim_link_t* link[PICOQINQ_SIM_NB_LINK];
+    int link_src[PICOQINQ_SIM_NB_LINK];
+    int link_dest[PICOQINQ_SIM_NB_LINK];
 };
 
 void picoqinq_test_ctx_delete(struct st_picoqinq_test_ctx_t* test_ctx)
 {
-
     if (test_ctx->qinq_srv != NULL) {
         picoqinq_delete_srv_ctx(test_ctx->qinq_srv);
         test_ctx->qinq_srv = NULL;
     }
-    if (test_ctx->qclient != NULL) {
-        picoquic_free(test_ctx->qclient);
-        test_ctx->qclient = NULL;
-    }
-    if (test_ctx->qserver != NULL) {
-        picoquic_free(test_ctx->qserver);
-        test_ctx->qserver = NULL;
-    }
-    if (test_ctx->qproxy != NULL) {
-        picoquic_free(test_ctx->qproxy);
-        test_ctx->qproxy = NULL;
+
+    for (int i = 0; i < PICOQINQ_SIM_NB_CTX; i++) {
+        if (test_ctx->qctx[i] != NULL) {
+            picoquic_free(test_ctx->qctx[i]);
+            test_ctx->qctx[i] = NULL;
+        }
     }
 
-    if (test_ctx->c2p_link != NULL) {
-        picoquictest_sim_link_delete(test_ctx->c2p_link);
-        test_ctx->c2p_link = NULL;
-    }
-    if (test_ctx->p2c_link != NULL) {
-        picoquictest_sim_link_delete(test_ctx->p2c_link);
-        test_ctx->p2c_link = NULL;
-    }
-    if (test_ctx->p2s_link != NULL) {
-        picoquictest_sim_link_delete(test_ctx->p2s_link);
-        test_ctx->p2s_link = NULL;
-    }
-    if (test_ctx->s2p_link != NULL) {
-        picoquictest_sim_link_delete(test_ctx->s2p_link);
-        test_ctx->qclient = NULL;
+    for (int i = 0; i < PICOQINQ_SIM_NB_LINK; i++) {
+        if (test_ctx->link[i] != NULL) {
+            picoquictest_sim_link_delete(test_ctx->link[i]);
+            test_ctx->link[i] = NULL;
+        }
     }
 
     free(test_ctx);
@@ -546,6 +531,7 @@ void picoqinq_test_ctx_delete(struct st_picoqinq_test_ctx_t* test_ctx)
 struct st_picoqinq_test_ctx_t* picoqinq_test_ctx_init()
 {
     struct st_picoqinq_test_ctx_t* test_ctx = (struct st_picoqinq_test_ctx_t*)malloc(sizeof(struct st_picoqinq_test_ctx_t));
+    const char* addr_txt[3] = { "10.0.0.1", "10.0.0.2", "10.0.0.3" };
 
     if (test_ctx != NULL) {
         int ret = 0;
@@ -562,37 +548,187 @@ struct st_picoqinq_test_ctx_t* picoqinq_test_ctx_init()
             ret = picoquic_get_input_path(test_ctx->test_server_cert_store_file, sizeof(test_ctx->test_server_cert_store_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE);
         }
 
+        for (int i = 0; ret == 0 && i < PICOQINQ_SIM_NB_CTX; i++) {
+            if ((ret = picoquic_get_test_address(addr_txt[i], 443, &test_ctx->addr_s[i])) != 0) {
+                DBG_PRINTF("Cannot initialize addresses, ret=%d\n", ret);
+            }
+        }
+
         if (ret == 0 && (
-            (ret = picoquic_get_test_address("10.0.0.1", 443, &test_ctx->server_addr)) != 0 ||
-            (ret = picoquic_get_test_address("10.0.0.2", 443, &test_ctx->proxy_addr)) != 0 ||
-            (ret = picoquic_get_test_address("10.0.0.3", 12345, &test_ctx->client_addr)) != 0)) {
-            DBG_PRINTF("Cannot initialize addresses, ret=%d\n", ret);
+            (test_ctx->qctx[PICOQINQ_SIM_CLIENT] = picoquic_create(8, NULL, NULL, test_ctx->test_server_cert_store_file, NULL, NULL, NULL, NULL, NULL, NULL, test_ctx->simulated_time, &test_ctx->simulated_time, NULL, NULL, 0)) == NULL ||
+            (test_ctx->qctx[PICOQINQ_SIM_SERVER] = picoquic_create(8, test_ctx->test_server_cert_file, test_ctx->test_server_key_file, test_ctx->test_server_cert_store_file, PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, NULL, NULL, NULL, NULL, test_ctx->simulated_time, &test_ctx->simulated_time, NULL, NULL, 0)) == NULL ||
+            (test_ctx->qctx[PICOQINQ_SIM_PROXY] = picoquic_create(8, test_ctx->test_server_cert_file, test_ctx->test_server_key_file, test_ctx->test_server_cert_store_file, NULL, picoqinq_server_callback, NULL, NULL, NULL, NULL, test_ctx->simulated_time, &test_ctx->simulated_time, NULL, NULL, 0)) == NULL ||
+            (test_ctx->qinq_srv = picoqinq_create_srv_ctx(test_ctx->qctx[PICOQINQ_SIM_PROXY], 4, 8)) == NULL )){
+            ret = -1;
+        }
+        else {
+            picoquic_set_default_callback(test_ctx->qctx[2], picoqinq_server_callback, test_ctx->qinq_srv);
+        }
+
+        for (int i = 0; ret == 0 && i < PICOQINQ_SIM_NB_LINK; i++) {
+            if ((test_ctx->link[i] = picoquictest_sim_link_create(0.01, 10000, NULL, 0, 0)) == NULL) {
+                ret = -1;
+            }
         }
 
         if (ret == 0) {
-            test_ctx->qclient = picoquic_create(8, NULL, NULL, test_ctx->test_server_cert_store_file, NULL, NULL, NULL, NULL, NULL, NULL, test_ctx->simulated_time, &test_ctx->simulated_time, NULL, NULL, 0);
-            test_ctx->qserver = picoquic_create(8, test_ctx->test_server_cert_file, test_ctx->test_server_key_file, test_ctx->test_server_cert_store_file, PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, NULL, NULL, NULL, NULL, test_ctx->simulated_time, &test_ctx->simulated_time, NULL, NULL, 0);
-            test_ctx->qproxy = picoquic_create(8, test_ctx->test_server_cert_file, test_ctx->test_server_key_file, test_ctx->test_server_cert_store_file, NULL, picoqinq_server_callback, NULL, NULL, NULL, NULL, test_ctx->simulated_time, &test_ctx->simulated_time, NULL, NULL, 0);
-            test_ctx->qinq_srv = picoqinq_create_srv_ctx(test_ctx->qproxy, 4, 8);
-            test_ctx->c2p_link = picoquictest_sim_link_create(0.01, 10000, NULL, 0, 0);
-            test_ctx->p2c_link = picoquictest_sim_link_create(0.01, 10000, NULL, 0, 0);
-            test_ctx->p2s_link = picoquictest_sim_link_create(0.01, 10000, NULL, 0, 0);
-            test_ctx->s2p_link = picoquictest_sim_link_create(0.01, 10000, NULL, 0, 0);
-            if (test_ctx->qclient == NULL || test_ctx->qserver == NULL || test_ctx->qproxy == NULL || test_ctx->qinq_srv == NULL ||
-                test_ctx->c2p_link == NULL || test_ctx->p2c_link == NULL || test_ctx->p2s_link == NULL || test_ctx->s2p_link == NULL) {
-                DBG_PRINTF("%s", "Cannot allocate initial contexts.\n");
-                picoqinq_test_ctx_delete(test_ctx);
-                test_ctx = NULL;
-            }
-            else {
-                picoquic_set_default_callback(test_ctx->qproxy, picoqinq_server_callback, test_ctx->qinq_srv);
-            }
+            test_ctx->link_src[0] = PICOQINQ_SIM_CLIENT;
+            test_ctx->link_src[1] = PICOQINQ_SIM_SERVER;
+            test_ctx->link_src[2] = PICOQINQ_SIM_PROXY;
+            test_ctx->link_src[3] = PICOQINQ_SIM_PROXY;
+            test_ctx->link_dest[0] = PICOQINQ_SIM_PROXY;
+            test_ctx->link_src[1] = PICOQINQ_SIM_PROXY;
+            test_ctx->link_src[2] = PICOQINQ_SIM_CLIENT;
+            test_ctx->link_src[3] = PICOQINQ_SIM_SERVER;
         }
+
+
+        if (ret != 0) {
+            DBG_PRINTF("%s", "Cannot allocate initial contexts.\n");
+            picoqinq_test_ctx_delete(test_ctx);
+            test_ctx = NULL;
+        }
+
     }
 
     return test_ctx;
 }
 
+int picoqinq_test_sim_step(struct st_picoqinq_test_ctx_t* test_ctx)
+{
+    int ret = 0;
+    int selected_link = -1;
+    int selected_ctx = -1;
+    int is_stateless = 0;
+    uint64_t next_time = UINT64_MAX;
+
+    /* Find next arrival or departure time */
+    for (int i=0; i< PICOQINQ_SIM_NB_CTX; i++){
+        if (test_ctx->qctx[i]->pending_stateless_packet != NULL) {
+            selected_ctx = i;
+            is_stateless = 1;
+            next_time = test_ctx->simulated_time;
+        } else if (test_ctx->qctx[i]->cnx_wake_first != NULL) {
+            if (test_ctx->qctx[i]->cnx_wake_first->next_wake_time < next_time) {
+                selected_ctx = i;
+                is_stateless = 0;
+                next_time = test_ctx->qctx[i]->cnx_wake_first->next_wake_time;
+            }
+        }
+    }
+
+    for (int i = 0; i < PICOQINQ_SIM_NB_LINK; i++) {
+        picoquictest_sim_packet_t* packet = test_ctx->link[i]->first_packet;
+
+        if (packet != NULL && packet->arrival_time < next_time) {
+            next_time = packet->arrival_time;
+            selected_link = i;
+        }
+    }
+
+    /* Progress the time */
+    if (next_time < UINT64_MAX && next_time > test_ctx->simulated_time) {
+        test_ctx->simulated_time = next_time;
+    }
+
+    /* If next event is arrival, do it */
+    if (selected_link >= 0) {
+        picoquictest_sim_packet_t* packet = picoquictest_sim_link_dequeue(test_ctx->link[selected_link], test_ctx->simulated_time);
+
+        if (packet == NULL) {
+            ret = -1;
+        } else {
+            ret = picoquic_incoming_packet(test_ctx->qctx[test_ctx->link_dest[selected_link]], packet->bytes, (uint32_t)packet->length,
+                (struct sockaddr*) & packet->addr_from,
+                (struct sockaddr*) & packet->addr_to, 0, 0,
+                test_ctx->simulated_time);
+            free(packet);
+        }
+    }
+    else if (selected_ctx > 0) {
+        picoquictest_sim_packet_t* packet = picoquictest_sim_link_create_packet();
+        int peer_addr_len = 0;
+        int local_addr_len = 0;
+
+        if (packet == NULL) {
+            ret = -1;
+        }
+        else if (is_stateless) {
+            picoquic_stateless_packet_t* sp = picoquic_dequeue_stateless_packet(test_ctx->qctx[selected_ctx]);
+
+            if (sp == NULL) {
+                ret = -1;
+            } else {
+                if (sp->length > 0) {
+                    memcpy(&packet->addr_from, &sp->addr_local,
+                        (sp->addr_local.ss_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
+                    memcpy(&packet->addr_to, &sp->addr_to,
+                        (sp->addr_to.ss_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
+                    memcpy(packet->bytes, sp->bytes, sp->length);
+                    packet->length = sp->length;
+                }
+                picoquic_delete_stateless_packet(sp);
+            }
+        }
+        else if (test_ctx->qctx[selected_ctx]->cnx_wake_first == NULL) {
+            ret = -1; /* unexpected */
+        }
+        else {
+            /* check whether there is something to send */
+
+            ret = picoquic_prepare_packet(test_ctx->qctx[selected_ctx]->cnx_wake_first, test_ctx->simulated_time,
+                packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length,
+                &packet->addr_to, &peer_addr_len, &packet->addr_from, &local_addr_len);
+            if (ret != 0)
+            {
+                /* useless test, but makes it easier to add a breakpoint under debugger */
+                ret = -1;
+            }
+        }
+
+        if (ret == 0 && packet->length > 0) {
+             /* Verify that addresses are what we expect */
+            int target_link = -1;
+            if (local_addr_len == 0) {
+                (void)picoquic_store_addr(&packet->addr_from, (struct sockaddr*) & test_ctx->addr_s[selected_ctx]);
+            }
+            else if (picoquic_compare_addr((struct sockaddr*) &packet->addr_from, (struct sockaddr*) & test_ctx->addr_s[selected_ctx]) != 0) {
+                /* topology violation*/
+                DBG_PRINTF("Wrong source address for ctx: %d", selected_ctx);
+                ret = -1;
+            }
+
+            if (ret == 0) {
+                for (int i = 0; i < PICOQINQ_SIM_NB_LINK; i++) {
+                    if (picoquic_compare_addr((struct sockaddr*) &packet->addr_from, (struct sockaddr*) & test_ctx->addr_s[test_ctx->link_src[i]]) == 0 &&
+                        picoquic_compare_addr((struct sockaddr*) &packet->addr_to, (struct sockaddr*) & test_ctx->addr_s[test_ctx->link_dest[i]]) == 0) {
+                        target_link = i;
+                        break;
+                    }
+                }
+
+                if (target_link < 0) {
+                    DBG_PRINTF("No link for address selected by ctx: %d", selected_ctx);
+                    ret = -1;
+                }
+                else {
+                    picoquictest_sim_link_submit(test_ctx->link[target_link], packet, test_ctx->simulated_time);
+                }
+            }
+        }
+
+        if (ret != 0) {
+            free(packet);
+        }
+    }
+    else
+    {
+        ret = -1;
+    }
+
+
+    return ret;
+}
 
 /* End to end test 
  * Set a network with three nodes: client, proxy and server.
