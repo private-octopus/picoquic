@@ -3589,6 +3589,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_
             }
             bytes = picoquic_decode_ack_frame(cnx, bytes, bytes_max, current_time, epoch, 1); 
         } else if (epoch != 1 && epoch != 3 && first_byte != picoquic_frame_type_padding
+                                            && first_byte != picoquic_frame_type_ping
                                             && first_byte != picoquic_frame_type_path_challenge
                                             && first_byte != picoquic_frame_type_path_response
                                             && first_byte != picoquic_frame_type_connection_close
