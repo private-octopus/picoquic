@@ -2546,6 +2546,59 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                     }
                 }
 
+                /* if necessary, prepare the MAX STREAM frames */
+                if (ret == 0) {
+                    ret = picoquic_prepare_max_streams_frame_if_needed(cnx,
+                        &bytes[length], send_buffer_min_max - checksum_overhead - length, &data_bytes);
+                    if (ret == 0) {
+                        length += data_bytes;
+                        if (data_bytes > 0)
+                        {
+                            is_pure_ack = 0;
+                        }
+                    }
+                    else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
+                        *next_wake_time = current_time;
+                        ret = 0;
+                    }
+                }
+
+                /* If necessary, encode the max data frame */
+                if (ret == 0 && 2 * cnx->data_received > cnx->maxdata_local) {
+                    ret = picoquic_prepare_max_data_frame(cnx, 2 * cnx->data_received, &bytes[length],
+                        send_buffer_min_max - checksum_overhead - length, &data_bytes);
+
+                    if (ret == 0) {
+                        length += data_bytes;
+                        if (data_bytes > 0)
+                        {
+                            is_pure_ack = 0;
+                        }
+                    }
+                    else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
+                        *next_wake_time = current_time;
+                        ret = 0;
+                    }
+                }
+
+                /* If necessary, encode the max stream data frames */
+                if (ret == 0 && cnx->max_stream_data_needed) {
+                    ret = picoquic_prepare_required_max_stream_data_frames(cnx, &bytes[length],
+                        send_buffer_min_max - checksum_overhead - length, &data_bytes);
+
+                    if (ret == 0) {
+                        length += data_bytes;
+                        if (data_bytes > 0)
+                        {
+                            is_pure_ack = 0;
+                        }
+                    }
+                    else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
+                        *next_wake_time = current_time;
+                        ret = 0;
+                    }
+                }
+
 
                 if (path_x->cwin < path_x->bytes_in_transit) {
                     uint64_t cwin_time = current_time + path_x->smoothed_rtt;
@@ -2618,57 +2671,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                             }
                         }
 
-                        /* if necessary, prepare the MAX STREAM frames */
-                        if (ret == 0) {
-                            ret = picoquic_prepare_max_streams_frame_if_needed(cnx,
-                                &bytes[length], send_buffer_min_max - checksum_overhead - length, &data_bytes);
-                            if (ret == 0) {
-                                length += data_bytes;
-                                if (data_bytes > 0)
-                                {
-                                    is_pure_ack = 0;
-                                }
-                            }
-                            else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
-                                *next_wake_time = current_time;
-                                ret = 0;
-                            }
-                        }
-
-                        /* If necessary, encode the max data frame */
-                        if (ret == 0 && 2 * cnx->data_received > cnx->maxdata_local) {
-                            ret = picoquic_prepare_max_data_frame(cnx, 2 * cnx->data_received, &bytes[length],
-                                send_buffer_min_max - checksum_overhead - length, &data_bytes);
-
-                            if (ret == 0) {
-                                length += data_bytes;
-                                if (data_bytes > 0)
-                                {
-                                    is_pure_ack = 0;
-                                }
-                            }
-                            else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
-                                *next_wake_time = current_time;
-                                ret = 0;
-                            }
-                        }
-                        /* If necessary, encode the max stream data frames */
-                        if (ret == 0 && cnx->max_stream_data_needed) {
-                            ret = picoquic_prepare_required_max_stream_data_frames(cnx, &bytes[length],
-                                send_buffer_min_max - checksum_overhead - length, &data_bytes);
-
-                            if (ret == 0) {
-                                length += data_bytes;
-                                if (data_bytes > 0)
-                                {
-                                    is_pure_ack = 0;
-                                }
-                            }
-                            else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
-                                *next_wake_time = current_time;
-                                ret = 0;
-                            }
-                        }
+                        
 
                         /* Encode the stream frame, or frames */
                         while (stream != NULL) {
