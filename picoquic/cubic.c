@@ -45,7 +45,7 @@ typedef struct st_picoquic_cubic_state_t {
     picoquic_min_max_rtt_t rtt_filter;
 } picoquic_cubic_state_t;
 
-void picoquic_cubic_init(picoquic_path_t* path_x)
+static void picoquic_cubic_init(picoquic_path_t* path_x)
 {
     /* Initialize the state of the congestion control algorithm */
     picoquic_cubic_state_t* cubic_state = (picoquic_cubic_state_t*)malloc(sizeof(picoquic_cubic_state_t));
@@ -69,7 +69,7 @@ void picoquic_cubic_init(picoquic_path_t* path_x)
     }
 }
 
-double picoquic_cubic_root(double x)
+static double picoquic_cubic_root(double x)
 {
     /* First find an approximation */
     double v = 1;
@@ -202,7 +202,7 @@ static void picoquic_cubic_correct_spurious(picoquic_path_t* path_x,
  * to condensate all that in a single API, which could be shared
  * by many different congestion control algorithms.
  */
-void picoquic_cubic_notify(
+static void picoquic_cubic_notify(
     picoquic_cnx_t* cnx, picoquic_path_t* path_x,
     picoquic_congestion_notification_t notification,
     uint64_t rtt_measurement,
@@ -360,7 +360,7 @@ void picoquic_cubic_notify(
 }
 
 /* Release the state of the congestion control algorithm */
-void picoquic_cubic_delete(picoquic_path_t* path_x)
+static void picoquic_cubic_delete(picoquic_path_t* path_x)
 {
     if (path_x->congestion_alg_state != NULL) {
         free(path_x->congestion_alg_state);
