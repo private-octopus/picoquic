@@ -199,17 +199,17 @@ int picoqinq_client_callback_datagram(picoquic_cnx_t * cnx, picoqinq_client_call
              * If it is, add a header compression entry */
 
             if ((packet[0] & 0x80) == 0x80) {
-                if (packet[5] == picoquic_get_local_cid_length(ctx->qinq_ctx->quic)) {
+                if (packet[5] == picoquic_get_local_cid_length(ctx->quic)) {
                     (void)picoquic_parse_connection_id(packet + 6, packet[5], &in_cid);
                     cid = &in_cid;
                 }
             }
             else {
-                (void)picoquic_parse_connection_id(packet + 1, picoquic_get_local_cid_length(ctx->qinq_ctx->quic), &in_cid);
+                (void)picoquic_parse_connection_id(packet + 1, picoquic_get_local_cid_length(ctx->quic), &in_cid);
                 cid = &in_cid;
             }
 
-            if (cid != NULL && picoquic_is_local_cid(ctx->qinq_ctx->quic, cid)) {
+            if (cid != NULL && picoquic_is_local_cid(ctx->quic, cid)) {
                 picoqinq_client_register_address_cid_pair(cnx, ctx, (struct sockaddr*) & addr_s, cid, 0, current_time);
             }
         }
@@ -217,7 +217,7 @@ int picoqinq_client_callback_datagram(picoquic_cnx_t * cnx, picoqinq_client_call
         /* Whether the packet is confirmed local or not, pass it to the local quic server */
         picoquic_get_peer_addr(cnx, &peer_addr, &peer_addr_len);
 
-        ret = picoquic_incoming_packet(ctx->qinq_ctx->quic, packet, packet_length, (struct sockaddr*) & addr_s, peer_addr, 0, 0, current_time);
+        ret = picoquic_incoming_packet(ctx->quic, packet, packet_length, (struct sockaddr*) & addr_s, peer_addr, 0, 0, current_time);
     }
     else {
         ret = PICOQINQ_ERROR_PROTOCOL;
@@ -283,7 +283,7 @@ int picoqinq_client_callback_data(picoquic_cnx_t* cnx, picoqinq_client_stream_ct
  *  - the identity of the client, if it is known.
  */
 
-picoqinq_client_callback_ctx_t* picoqinq_client_callback_create_context(picoqinq_ctx_t* qinq_ctx)
+picoqinq_client_callback_ctx_t* picoqinq_client_callback_create_context(picoquic_quic_t* quic)
 {
     picoqinq_client_callback_ctx_t* ctx = (picoqinq_client_callback_ctx_t*)
         malloc(sizeof(picoqinq_client_callback_ctx_t));
@@ -291,6 +291,7 @@ picoqinq_client_callback_ctx_t* picoqinq_client_callback_create_context(picoqinq
     if (ctx != NULL) {
         memset(ctx, 0, sizeof(picoqinq_client_callback_ctx_t));
         ctx->first_stream = NULL;
+        ctx->quic = quic;
     }
     return ctx;
 }
@@ -325,9 +326,8 @@ int picoqinq_client_callback(picoquic_cnx_t* cnx,
     picoqinq_client_callback_ctx_t* ctx = NULL;
     picoqinq_client_stream_ctx_t* stream_ctx = (picoqinq_client_stream_ctx_t*)v_stream_ctx;
 
-    if (callback_ctx == NULL || callback_ctx == picoquic_get_default_callback_context(picoquic_get_quic_ctx(cnx))) {
-        ctx = picoqinq_client_callback_create_context(
-            (picoqinq_ctx_t*)picoquic_get_default_callback_context(picoquic_get_quic_ctx(cnx)));
+    if (callback_ctx == NULL) {
+        ctx = picoqinq_client_callback_create_context(picoquic_get_quic_ctx(cnx));
         if (ctx == NULL) {
             /* cannot handle the connection */
             picoquic_close(cnx, PICOQUIC_ERROR_MEMORY);
@@ -381,7 +381,7 @@ int picoqinq_client_callback(picoquic_cnx_t* cnx,
         case picoquic_callback_datagram:
             /* Process the datagram, which contains an address and a QUIC packet */
             ret = picoqinq_client_callback_datagram(cnx, ctx, bytes, length,
-                picoquic_get_quic_time(ctx->qinq_ctx->quic));
+                picoquic_get_quic_time(ctx->quic));
             break;
         case picoquic_callback_almost_ready:
         case picoquic_callback_ready:

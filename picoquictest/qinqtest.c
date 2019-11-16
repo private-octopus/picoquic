@@ -788,6 +788,7 @@ int qinq_e2e_basic_test()
     }
     else {
         /* First, set a connection between client and proxy */
+
         test_ctx->cnx_proxy = picoquic_create_client_cnx(
             test_ctx->qctx[PICOQINQ_SIM_CLIENT],(struct sockaddr*) & test_ctx->addr_s[PICOQINQ_SIM_PROXY], 
             test_ctx->simulated_time, 0, PICOQUIC_TEST_SNI, PICOQINQ_ALPN, picoqinq_client_callback, NULL);
@@ -815,7 +816,7 @@ int qinq_e2e_basic_test()
                 ret = picoquic_demo_client_initialize_context(&test_ctx->callback_ctx, client_sc, client_sc_nb, PICOHTTP_ALPN_H3_LATEST, 0);
             }
         }
-#if NOT_READY_YET
+
         if (ret == 0) {
             /* Set a connection between client and server. Set local address to proxy address. */
             picoquic_cnx_t* cnx_client = picoqinq_create_proxied_cnx(
@@ -825,20 +826,22 @@ int qinq_e2e_basic_test()
 
             if (cnx_client == NULL) {
                 ret = -1;
+                DBG_PRINTF("%s", "Could not create the client connection");
             }
             else {
+                /* Simulate the three party connection until established. */
                 ret = picoqinq_test_sim_connection(test_ctx, cnx_client);
+                if (ret != 0) {
+                    DBG_PRINTF("Could not establish the end to end connection, ret=%x", ret);
+                }
             }
         }
-#endif
 
-        /* Simulate the three party connection until established. */
+        /* TODO: Send one data request over client connection */
 
-        /* Send one data request over client connection */
+        /* TODO: Run until some data is received */
 
-        /* Run until some data is received */
-
-        /* If data arrived, declare victory */
+        /* TODO: If data arrived, declare victory */
 
         picoqinq_test_ctx_delete(test_ctx);
     }

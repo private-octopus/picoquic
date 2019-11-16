@@ -3197,15 +3197,7 @@ int picoquic_prepare_first_misc_or_dg_frame(picoquic_misc_frame_header_t ** firs
     int ret = picoquic_prepare_misc_frame(*first, bytes, bytes_max, consumed);
 
     if (ret == 0) {
-        picoquic_misc_frame_header_t* misc_frame = *first;
-        *first = misc_frame->next_misc_frame;
-        if (misc_frame->next_misc_frame == NULL) {
-            *last = NULL;
-        }
-        else {
-            misc_frame->next_misc_frame->previous_misc_frame = NULL;
-        }
-        free(misc_frame);
+        picoquic_delete_misc_or_dg(first, last, *first);
     }
 
     return ret;
@@ -3543,7 +3535,8 @@ int picoquic_queue_datagram_frame(picoquic_cnx_t * cnx, uint64_t id, size_t leng
     int ret = picoquic_prepare_datagram_frame(id, length, bytes, frame_buffer, sizeof(frame_buffer), &consumed);
 
     if (ret == 0 && consumed > 0) {
-        return picoquic_queue_misc_or_dg_frame(cnx, &cnx->first_datagram, &cnx->last_datagram, bytes, length);
+        return picoquic_queue_misc_or_dg_frame(cnx, &cnx->first_datagram, &cnx->last_datagram, 
+            frame_buffer, consumed);
     }
 
     return ret;

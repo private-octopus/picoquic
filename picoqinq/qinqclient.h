@@ -52,7 +52,7 @@ typedef struct st_picoqinq_client_stream_ctx_t {
 /* Define the QinQ server callback */
 
 typedef struct st_picoqinq_client_callback_ctx_t {
-    struct st_picoqinq_ctx_t* qinq_ctx;
+    struct picoquic_quit_t * quic;
     picoqinq_client_stream_ctx_t* first_stream;
     size_t buffer_max;
     uint8_t* buffer;

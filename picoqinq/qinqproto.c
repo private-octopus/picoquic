@@ -112,7 +112,7 @@ int picoqinq_parse_dcid(picoquic_connection_id_t* dcid, uint8_t* bytes, size_t l
     int ret = 0;
 
     if ((bytes[0] & 0x80) == 0x80) {
-        if (length < 6 || 6 + bytes[5] > length) {
+        if (length < 6 || (size_t)6 + bytes[5] > length) {
             ret = PICOQINQ_ERROR_INTERNAL;
         }
         else {
@@ -120,11 +120,11 @@ int picoqinq_parse_dcid(picoquic_connection_id_t* dcid, uint8_t* bytes, size_t l
         }
     }
     else {
-        if (length < 1 || 1 + default_cid_length > length) {
+        if (length < 1 || (size_t)1 + default_cid_length > length) {
             ret = PICOQINQ_ERROR_INTERNAL;
         }
         else {
-            (void)picoquic_parse_connection_id(bytes + 6, bytes[5], default_cid_length);
+            (void)picoquic_parse_connection_id(bytes + 6, default_cid_length, dcid);
         }
     }
 
