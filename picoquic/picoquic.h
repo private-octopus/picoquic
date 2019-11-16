@@ -553,6 +553,7 @@ void * picoquic_get_callback_context(picoquic_cnx_t* cnx);
 
 /* Send extra frames */
 int picoquic_queue_misc_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t length);
+int picoquic_queue_datagram_frame(picoquic_cnx_t* cnx, uint64_t id, size_t length, uint8_t* bytes);
 
 /* Send and receive network packets */
 
