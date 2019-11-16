@@ -374,13 +374,11 @@ uint64_t picoquic_hash_addr(const struct sockaddr* addr)
         struct sockaddr_in* a4 = (struct sockaddr_in*)addr;
         h = picohash_bytes((uint8_t*)&a4->sin_addr , 4);
         h += 128ull * a4->sin_port;
-        h ^= 0x04040404;
     }
     else {
         struct sockaddr_in6* a6 = (struct sockaddr_in6*)addr;
-        h = picohash_bytes((uint8_t*)& a6->sin6_addr, 4);
+        h = picohash_bytes((uint8_t*)& a6->sin6_addr, 16);
         h += 128ull * a6->sin6_port;
-        h ^= 0x06060606;
     }
 
     return h;

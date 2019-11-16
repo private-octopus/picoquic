@@ -62,6 +62,7 @@ picoqinq_client_stream_ctx_t* picoqinq_find_or_create_client_stream(picoquic_cnx
             malloc(sizeof(picoqinq_client_stream_ctx_t));
         if (stream_ctx == NULL) {
             /* Could not handle this stream */
+            DBG_PRINTF("Could not allocate data for stream %llu\n", (unsigned long long)stream_id);
             picoquic_reset_stream(cnx, stream_id, PICOQINQ_ERROR_INTERNAL);
         }
         else {
@@ -97,7 +98,7 @@ void picoqinq_forget_client_stream(picoqinq_client_callback_ctx_t* ctx, picoqinq
 /* Management of header compression
  */
 
-int picoqinq_client_is_register_address_pending(picoqinq_client_callback_ctx_t* ctx, struct sockaddr* addr, picoquic_connection_id_t* cid, uint64_t direction)
+int picoqinq_client_is_register_address_pending(const picoqinq_client_callback_ctx_t* ctx, const struct sockaddr* addr, const picoquic_connection_id_t* cid, uint64_t direction)
 {
     picoqinq_client_stream_ctx_t* stream_ctx = ctx->first_stream;
 
@@ -117,7 +118,7 @@ int picoqinq_client_is_register_address_pending(picoqinq_client_callback_ctx_t* 
 /* Register an address, cid pair with the peer if it is not already reserved.
  * Send the corresponding request to the server.
  */
-void picoqinq_client_register_address_cid_pair(picoquic_cnx_t* cnx, picoqinq_client_callback_ctx_t* ctx, struct sockaddr* addr, picoquic_connection_id_t* cid, uint64_t direction,
+void picoqinq_client_register_address_cid_pair(picoquic_cnx_t* cnx, picoqinq_client_callback_ctx_t* ctx, const struct sockaddr* addr, const picoquic_connection_id_t* cid, uint64_t direction,
     uint64_t current_time)
 {
     /* TODO: Should do some flow control, only reserve a small number of CID at a time */
@@ -401,7 +402,7 @@ int picoqinq_forward_outgoing_packet(
     picoquic_cnx_t* cnx,
     uint8_t* bytes,
     size_t length,
-    struct sockaddr* addr_to,
+    const struct sockaddr* addr_to,
     uint64_t current_time)
 {
     /* Submit packet as datagram on specified connection */

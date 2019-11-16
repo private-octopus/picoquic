@@ -193,7 +193,7 @@ int picoqinq_datagram_to_packet(uint8_t* bytes, uint8_t* bytes_max, struct socka
     return ret;
 }
 
-uint8_t* picoqinq_packet_to_datagram(uint8_t* bytes, uint8_t* bytes_max, struct sockaddr* addr,
+uint8_t* picoqinq_packet_to_datagram(uint8_t* bytes, uint8_t* bytes_max, const struct sockaddr* addr,
     picoquic_connection_id_t* cid, uint8_t* packet_data, size_t packet_length, picoqinq_header_compression_t** p_send_hc,
     uint64_t current_time)
 {
@@ -327,7 +327,7 @@ uint8_t* picoqinq_decode_reserve_header(uint8_t* bytes, uint8_t* bytes_max,
     return bytes;
 }
 
-picoqinq_header_compression_t* picoqinq_create_header(uint64_t hcid, struct sockaddr * addr, const picoquic_connection_id_t* cid, uint64_t current_time)
+picoqinq_header_compression_t* picoqinq_create_header(uint64_t hcid, const struct sockaddr * addr, const picoquic_connection_id_t* cid, uint64_t current_time)
 {
     picoqinq_header_compression_t* hc = (picoqinq_header_compression_t*)malloc(sizeof(picoqinq_header_compression_t));
     if (hc != NULL) {
@@ -388,7 +388,7 @@ picoqinq_header_compression_t* picoqinq_find_reserve_header_by_address(picoqinq_
     return next;
 }
 
-uint64_t picoqinq_find_reserve_header_id_by_address(picoqinq_header_compression_t** phc_head, struct sockaddr* addr, const picoquic_connection_id_t* cid, uint64_t current_time)
+uint64_t picoqinq_find_reserve_header_id_by_address(picoqinq_header_compression_t** phc_head, const struct sockaddr* addr, const picoquic_connection_id_t* cid, uint64_t current_time)
 {
     picoqinq_header_compression_t* next = picoqinq_find_reserve_header_by_address(phc_head, addr, cid, current_time);
     return (next == NULL) ? 0 : next->hcid;
