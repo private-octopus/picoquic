@@ -107,6 +107,30 @@ uint8_t * picoqinq_decode_datagram_header(uint8_t * bytes, uint8_t * bytes_max,
     return bytes;
 }
 
+int picoqinq_parse_dcid(picoquic_connection_id_t* dcid, uint8_t* bytes, size_t length, uint8_t default_cid_length)
+{
+    int ret = 0;
+
+    if ((bytes[0] & 0x80) == 0x80) {
+        if (length < 6 || 6 + bytes[5] > length) {
+            ret = PICOQINQ_ERROR_INTERNAL;
+        }
+        else {
+            (void)picoquic_parse_connection_id(bytes + 6, bytes[5], dcid);
+        }
+    }
+    else {
+        if (length < 1 || 1 + default_cid_length > length) {
+            ret = PICOQINQ_ERROR_INTERNAL;
+        }
+        else {
+            (void)picoquic_parse_connection_id(bytes + 6, bytes[5], default_cid_length);
+        }
+    }
+
+    return ret;
+}
+
 int picoqinq_datagram_to_packet(uint8_t* bytes, uint8_t* bytes_max, struct sockaddr_storage* addr_s, 
     picoquic_connection_id_t** cid, uint8_t* packet_data, size_t packet_data_max, size_t * packet_length,
     picoqinq_header_compression_t** p_receive_hc, uint64_t current_time)

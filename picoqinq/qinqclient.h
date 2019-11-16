@@ -97,4 +97,8 @@ int picoqinq_client_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx);
 
+int picoqinq_forward_outgoing_packet(picoquic_cnx_t* cnx, uint8_t* bytes, size_t length, struct sockaddr* addr_to, uint64_t current_time);
+
+picoquic_cnx_t* picoqinq_create_proxied_cnx(picoquic_cnx_t* cnx_proxy, struct sockaddr* addr, uint64_t start_time, uint32_t preferred_version, char const* sni, char const* alpn, picoquic_stream_data_cb_fn callback_fn, void* callback_ctx);
+
 #endif /* DEMO_client_H */

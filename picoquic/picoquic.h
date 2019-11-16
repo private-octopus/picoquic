@@ -570,6 +570,9 @@ void picoquic_get_peer_addr(picoquic_cnx_t* cnx, struct sockaddr** addr, int* ad
 void picoquic_get_local_addr(picoquic_cnx_t* cnx, struct sockaddr** addr, int* addr_len);
 unsigned long picoquic_get_local_if_index(picoquic_cnx_t* cnx);
 
+int picoquic_set_local_addr(picoquic_cnx_t* cnx, struct sockaddr* addr);
+
+
 picoquic_connection_id_t picoquic_get_local_cnxid(picoquic_cnx_t* cnx);
 picoquic_connection_id_t picoquic_get_remote_cnxid(picoquic_cnx_t* cnx);
 picoquic_connection_id_t picoquic_get_initial_cnxid(picoquic_cnx_t* cnx);
@@ -738,7 +741,7 @@ void picoquic_set_default_congestion_algorithm(picoquic_quic_t* quic, picoquic_c
 
 void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_algorithm_t const* algo);
 
-/*
+/* 
  * Set the optimistic ack policy. The holes will be inserted at random locations,
  * which in average will be separated by the pseudo period. By default,
  * the pseudo perio is 0, which means no hole insertion.

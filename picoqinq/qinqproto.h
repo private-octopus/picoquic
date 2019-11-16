@@ -65,6 +65,8 @@ int qinq_copy_address(struct sockaddr_storage* addr_s, size_t address_length, co
 uint8_t* picoqinq_decode_datagram_header(uint8_t* bytes, uint8_t* bytes_max, struct sockaddr_storage * addr_s,
     picoquic_connection_id_t** cid, picoqinq_header_compression_t** p_receive_hc, uint64_t current_time);
 
+int picoqinq_parse_dcid(picoquic_connection_id_t* dcid, uint8_t* bytes, size_t length, uint8_t default_cid_length);
+
 int picoqinq_datagram_to_packet(uint8_t* bytes, uint8_t* bytes_max, struct sockaddr_storage* addr_s,
     picoquic_connection_id_t** cid, uint8_t* packet_data, size_t packet_data_max, size_t* packet_length,
     picoqinq_header_compression_t** p_receive_hc, uint64_t current_time);

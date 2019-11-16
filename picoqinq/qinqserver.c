@@ -321,7 +321,7 @@ int picoqinq_server_incoming_packet(
         /* packet too short */
         ret = -1;
     }
-    else if ((bytes[0] & 64) != 0) {
+    else if ((bytes[0] & 64) != 64) {
         /* Not a QUIC packet */
         ret = -1;
     }
@@ -343,7 +343,7 @@ int picoqinq_server_incoming_packet(
     }
 
     if (ret == 0) {
-        if (picoquic_is_local_cid(qinq->quic, p_cid)) {
+        if (p_cid != NULL && picoquic_is_local_cid(qinq->quic, p_cid)) {
             /* Local packet. Forward to local quic context */
             ret = picoquic_incoming_packet(qinq->quic, bytes, packet_length, addr_from, addr_to, if_index_to, received_ecn, current_time);
         }

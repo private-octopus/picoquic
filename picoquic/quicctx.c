@@ -2686,6 +2686,20 @@ void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_
     }
 }
 
+int picoquic_set_local_addr(picoquic_cnx_t* cnx, struct sockaddr* addr)
+{
+    int ret = 0;
+
+    if (cnx != NULL && cnx->path[0] != NULL && cnx->path[0]->local_addr_len == 0) {
+        ret = ((cnx->path[0]->local_addr_len = picoquic_store_addr(&cnx->path[0]->local_addr, addr)) > 0) ? 0 : -1;
+    }
+    else {
+        ret = -1;
+    }
+
+    return ret;
+}
+
 void picoquic_enable_keep_alive(picoquic_cnx_t* cnx, uint64_t interval)
 {
     if (interval == 0) {

@@ -3498,8 +3498,6 @@ int picoquic_prepare_datagram_frame(uint64_t id, size_t length, uint8_t * src, u
     size_t l_id = 0;
     size_t l_l = 0;
 
-    bytes[byte_index++] = (id == 0) ? picoquic_frame_type_datagram_l : picoquic_frame_type_datagram_id_l;
-
     if (id == 0) {
         bytes[byte_index++] = picoquic_frame_type_datagram_l;
     }
@@ -3513,7 +3511,7 @@ int picoquic_prepare_datagram_frame(uint64_t id, size_t length, uint8_t * src, u
     l_l = picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index, length);
     byte_index += l_l;
 
-    if (l_l > 0 && l_id> 0 && byte_index + length <= bytes_max) {
+    if (l_l > 0 && (id == 0 || l_id> 0) && byte_index + length <= bytes_max) {
         memcpy(bytes + byte_index, src, length);
         byte_index += length;
     }

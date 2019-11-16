@@ -24,6 +24,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "h3zero.h"
+#include "democlient.h"
 #include "demoserver.h"
 #include "democlient.h"
 #include "qinqproto.h"
@@ -502,15 +503,12 @@ struct st_picoqinq_test_ctx_t {
     picoquictest_sim_link_t* link[PICOQINQ_SIM_NB_LINK];
     int link_src[PICOQINQ_SIM_NB_LINK];
     int link_dest[PICOQINQ_SIM_NB_LINK];
+    picoquic_demo_callback_ctx_t callback_ctx;
+    picoquic_cnx_t* cnx_proxy;
 };
 
 void picoqinq_test_ctx_delete(struct st_picoqinq_test_ctx_t* test_ctx)
 {
-    if (test_ctx->qinq_srv != NULL) {
-        picoqinq_delete_srv_ctx(test_ctx->qinq_srv);
-        test_ctx->qinq_srv = NULL;
-    }
-
     for (int i = 0; i < PICOQINQ_SIM_NB_CTX; i++) {
         if (test_ctx->qctx[i] != NULL) {
             picoquic_free(test_ctx->qctx[i]);
@@ -577,9 +575,9 @@ struct st_picoqinq_test_ctx_t* picoqinq_test_ctx_init()
             test_ctx->link_src[2] = PICOQINQ_SIM_PROXY;
             test_ctx->link_src[3] = PICOQINQ_SIM_PROXY;
             test_ctx->link_dest[0] = PICOQINQ_SIM_PROXY;
-            test_ctx->link_src[1] = PICOQINQ_SIM_PROXY;
-            test_ctx->link_src[2] = PICOQINQ_SIM_CLIENT;
-            test_ctx->link_src[3] = PICOQINQ_SIM_SERVER;
+            test_ctx->link_dest[1] = PICOQINQ_SIM_PROXY;
+            test_ctx->link_dest[2] = PICOQINQ_SIM_CLIENT;
+            test_ctx->link_dest[3] = PICOQINQ_SIM_SERVER;
         }
 
 
@@ -638,14 +636,24 @@ int picoqinq_test_sim_step(struct st_picoqinq_test_ctx_t* test_ctx)
         if (packet == NULL) {
             ret = -1;
         } else {
-            ret = picoquic_incoming_packet(test_ctx->qctx[test_ctx->link_dest[selected_link]], packet->bytes, (uint32_t)packet->length,
-                (struct sockaddr*) & packet->addr_from,
-                (struct sockaddr*) & packet->addr_to, 0, 0,
-                test_ctx->simulated_time);
-            free(packet);
+            int dest = test_ctx->link_dest[selected_link];
+
+            if (dest == PICOQINQ_SIM_PROXY) {
+                ret = picoqinq_server_incoming_packet(test_ctx->qinq_srv, packet->bytes, (uint32_t)packet->length,
+                    (struct sockaddr*) & packet->addr_from,
+                    (struct sockaddr*) & packet->addr_to, 0, 0,
+                    test_ctx->simulated_time);
+            }
+            else {
+                ret = picoquic_incoming_packet(test_ctx->qctx[test_ctx->link_dest[selected_link]], packet->bytes, (uint32_t)packet->length,
+                    (struct sockaddr*) & packet->addr_from,
+                    (struct sockaddr*) & packet->addr_to, 0, 0,
+                    test_ctx->simulated_time);
+                free(packet);
+            }
         }
     }
-    else if (selected_ctx > 0) {
+    else if (selected_ctx >= 0) {
         picoquictest_sim_packet_t* packet = picoquictest_sim_link_create_packet();
         int peer_addr_len = 0;
         int local_addr_len = 0;
@@ -686,6 +694,13 @@ int picoqinq_test_sim_step(struct st_picoqinq_test_ctx_t* test_ctx)
             }
         }
 
+        if (ret == 0 && packet->length > 0 && selected_ctx == PICOQINQ_SIM_CLIENT &&
+            picoquic_compare_addr((struct sockaddr*) & packet->addr_from, (struct sockaddr*) & test_ctx->addr_s[PICOQINQ_SIM_PROXY]) == 0) {
+            /* Simulate interception by proxy connection */
+            ret = picoqinq_forward_outgoing_packet(test_ctx->cnx_proxy, packet->bytes, packet->length, (struct sockaddr*) & packet->addr_to, test_ctx->simulated_time);
+            packet->length = 0;
+        }
+
         if (ret == 0 && packet->length > 0) {
              /* Verify that addresses are what we expect */
             int target_link = -1;
@@ -717,7 +732,7 @@ int picoqinq_test_sim_step(struct st_picoqinq_test_ctx_t* test_ctx)
             }
         }
 
-        if (ret != 0) {
+        if (ret != 0 || packet->length == 0) {
             free(packet);
         }
     }
@@ -726,6 +741,24 @@ int picoqinq_test_sim_step(struct st_picoqinq_test_ctx_t* test_ctx)
         ret = -1;
     }
 
+
+    return ret;
+}
+
+/* Connection check
+ */
+int picoqinq_test_sim_connection(struct st_picoqinq_test_ctx_t* test_ctx, picoquic_cnx_t* cnx_ctx)
+{
+    int ret = 0;
+
+    while (ret == 0 && cnx_ctx->cnx_state < picoquic_state_client_almost_ready) {
+        ret = picoqinq_test_sim_step(test_ctx);
+    }
+
+    if (ret == 0 && cnx_ctx->cnx_state > picoquic_state_ready) {
+        DBG_PRINTF("Connection failed, state: %d", cnx_ctx->cnx_state);
+        ret = -1;
+    }
 
     return ret;
 }
@@ -754,13 +787,50 @@ int qinq_e2e_basic_test()
         ret = -1;
     }
     else {
-
         /* First, set a connection between client and proxy */
-        /* cnx_proxy = picoquic_create_client_cnx(qclient, (struct sockaddr*) & proxy_addr, simulated_time, 0, PICOQUIC_TEST_SNI, PICOQINQ_ALPN, picoqinq_client_callback, NULL);*/
+        test_ctx->cnx_proxy = picoquic_create_client_cnx(
+            test_ctx->qctx[PICOQINQ_SIM_CLIENT],(struct sockaddr*) & test_ctx->addr_s[PICOQINQ_SIM_PROXY], 
+            test_ctx->simulated_time, 0, PICOQUIC_TEST_SNI, PICOQINQ_ALPN, picoqinq_client_callback, NULL);
 
-        /* Simulate the connection */
+        if (test_ctx->cnx_proxy != NULL) {
+            /* Simulate the connection establishment */
+            ret = picoqinq_test_sim_connection(test_ctx, test_ctx->cnx_proxy);
+        }
+        else {
+            ret = -1;
+        }
 
-        /* Set a connection between client and server. Set local address to proxy address. */
+        if (ret == 0) {
+            size_t client_sc_nb = 0;
+            picoquic_demo_stream_desc_t* client_sc;
+
+            test_ctx->cnx_proxy->path[0]->send_mtu = 1400;
+
+            ret = demo_client_parse_scenario_desc("/", &client_sc_nb, &client_sc);
+            if (ret != 0) {
+                fprintf(stdout, "Cannot parse the specified scenario.\n");
+                return -1;
+            }
+            else {
+                ret = picoquic_demo_client_initialize_context(&test_ctx->callback_ctx, client_sc, client_sc_nb, PICOHTTP_ALPN_H3_LATEST, 0);
+            }
+        }
+#if NOT_READY_YET
+        if (ret == 0) {
+            /* Set a connection between client and server. Set local address to proxy address. */
+            picoquic_cnx_t* cnx_client = picoqinq_create_proxied_cnx(
+                test_ctx->cnx_proxy, (struct sockaddr*) & test_ctx->addr_s[PICOQINQ_SIM_SERVER],
+                test_ctx->simulated_time, 0, PICOQUIC_TEST_SNI, PICOHTTP_ALPN_H3_LATEST,
+                picoquic_demo_client_callback, &test_ctx->callback_ctx);
+
+            if (cnx_client == NULL) {
+                ret = -1;
+            }
+            else {
+                ret = picoqinq_test_sim_connection(test_ctx, cnx_client);
+            }
+        }
+#endif
 
         /* Simulate the three party connection until established. */
 

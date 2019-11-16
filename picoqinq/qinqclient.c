@@ -398,20 +398,57 @@ int picoqinq_client_callback(picoquic_cnx_t* cnx,
 
 /*
  * Manage an outgoing packet, sending it as a datagram to the proxy.
- * 
  */
 
 int picoqinq_forward_outgoing_packet(
-    picoquic_quic_t* quic,
+    picoquic_cnx_t* cnx,
     uint8_t* bytes,
-    size_t packet_length,
-    struct sockaddr* addr_from,
+    size_t length,
     struct sockaddr* addr_to,
-    int if_index_to,
-    unsigned char received_ecn,
     uint64_t current_time)
 {
-    return -1;
+    /* Submit packet as datagram on specified connection */
+    int ret = 0;
+    uint8_t dg[PICOQUIC_MAX_PACKET_SIZE];
+    picoqinq_client_callback_ctx_t* cnx_ctx = (picoqinq_client_callback_ctx_t*)picoquic_get_callback_context(cnx);
+    picoquic_connection_id_t dcid;
+
+    ret = picoqinq_parse_dcid(&dcid, bytes, length, picoquic_get_local_cid_length(picoquic_get_quic_ctx(cnx)));
+
+    if (ret == 0) {
+        uint8_t* next_dg_byte = picoqinq_packet_to_datagram(dg, dg + PICOQUIC_MAX_PACKET_SIZE, addr_to, &dcid, bytes, length,
+            &cnx_ctx->send_hc, current_time);
+
+        if (next_dg_byte == NULL) {
+            ret = -1;
+        }
+        else {
+            ret = picoquic_queue_datagram_frame(cnx, 0, next_dg_byte - dg, dg);
+        }
+    }
+
+    return ret;
 }
 
 
+picoquic_cnx_t* picoqinq_create_proxied_cnx(picoquic_cnx_t* cnx_proxy,
+    struct sockaddr* addr, uint64_t start_time, uint32_t preferred_version,
+    char const* sni, char const* alpn,
+    picoquic_stream_data_cb_fn callback_fn, void* callback_ctx)
+{
+    picoquic_cnx_t* cnx = picoquic_create_client_cnx(picoquic_get_quic_ctx(cnx_proxy),
+        addr, start_time, preferred_version, sni, alpn, callback_fn, callback_ctx);
+
+    if (cnx != NULL) {
+        struct sockaddr* addr = NULL;
+        int addr_len = 0;
+
+        picoquic_get_peer_addr(cnx_proxy, &addr, &addr_len);
+        if (picoquic_set_local_addr(cnx, addr) != 0) {
+            picoquic_delete_cnx(cnx);
+            cnx = NULL;
+        }
+    }
+
+    return cnx;
+}
