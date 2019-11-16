@@ -2502,7 +2502,6 @@ int picoquic_start_key_rotation(picoquic_cnx_t* cnx)
 
 void picoquic_delete_cnx(picoquic_cnx_t* cnx)
 {
-    picoquic_misc_frame_header_t* misc_frame;
     picoquic_cnxid_stash_t* stashed_cnxid;
 
     if (cnx != NULL) {
@@ -2546,10 +2545,14 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
             picoquic_reset_packet_context(cnx, pc);
         }
 
-        while ((misc_frame = cnx->first_misc_frame) != NULL) {
-            cnx->first_misc_frame = misc_frame->next_misc_frame;
-            free(misc_frame);
+        while (cnx->first_misc_frame != NULL) {
+            picoquic_delete_misc_or_dg(&cnx->first_misc_frame, &cnx->last_misc_frame, cnx->first_misc_frame);
         }
+
+        while (cnx->first_datagram != NULL) {
+            picoquic_delete_misc_or_dg(&cnx->first_datagram, &cnx->last_datagram, cnx->first_datagram);
+        }
+
         for (int epoch = 0; epoch < PICOQUIC_NUMBER_OF_EPOCHS; epoch++) {
             picoquic_clear_stream(&cnx->tls_stream[epoch]);
         }
