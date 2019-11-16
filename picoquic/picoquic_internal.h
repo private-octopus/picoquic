@@ -429,6 +429,7 @@ typedef struct st_picoquic_stream_head_t {
 
 typedef struct st_picoquic_misc_frame_header_t {
     struct st_picoquic_misc_frame_header_t* next_misc_frame;
+    struct st_picoquic_misc_frame_header_t* previous_misc_frame;
     size_t length;
 } picoquic_misc_frame_header_t;
 
@@ -766,6 +767,7 @@ typedef struct st_picoquic_cnx_t {
 
     /* Queue for frames waiting to be sent */
     picoquic_misc_frame_header_t* first_misc_frame;
+    picoquic_misc_frame_header_t* last_misc_frame;
 
     /* Management of streams */
     picosplay_tree_t stream_tree;
@@ -773,6 +775,10 @@ typedef struct st_picoquic_cnx_t {
     picoquic_stream_head_t * last_visited_stream;
     uint64_t high_priority_stream_id;
     uint64_t next_stream_id[4];
+
+    /* Management of datagrams */
+    picoquic_misc_frame_header_t* first_datagram;
+    picoquic_misc_frame_header_t* last_datagram;
 
     /* If not `0`, the connection will send keep alive messages in the given interval. */
     uint64_t keep_alive_interval;
@@ -1074,6 +1080,11 @@ int picoquic_queue_new_token_frame(picoquic_cnx_t * cnx, uint8_t * token, size_t
 int picoquic_prepare_first_misc_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
     size_t bytes_max, size_t* consumed);
 int picoquic_prepare_misc_frame(picoquic_misc_frame_header_t* misc_frame, uint8_t* bytes,
+    size_t bytes_max, size_t* consumed);
+int picoquic_queue_misc_or_dg_frame(picoquic_cnx_t* cnx, picoquic_misc_frame_header_t** first, picoquic_misc_frame_header_t** last, const uint8_t* bytes, size_t length);
+void picoquic_delete_misc_or_dg(picoquic_misc_frame_header_t** first, picoquic_misc_frame_header_t** last, picoquic_misc_frame_header_t* frame);
+
+int picoquic_prepare_first_datagram_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
     size_t bytes_max, size_t* consumed);
 
 /* send/receive */
