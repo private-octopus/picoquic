@@ -2257,14 +2257,14 @@ picoquic_misc_frame_header_t* picoquic_create_misc_frame(const uint8_t* bytes, s
         return NULL;
     } else {
         picoquic_misc_frame_header_t* head = (picoquic_misc_frame_header_t*)misc_frame;
+        memset(head, 0, sizeof(picoquic_misc_frame_header_t));
         head->length = length;
         memcpy(misc_frame + sizeof(picoquic_misc_frame_header_t), bytes, length);
-
         return head;
     }
 }
 
-int picoquic_queue_misc_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t length)
+int picoquic_queue_misc_or_dg_frame(picoquic_cnx_t * cnx, picoquic_misc_frame_header_t** first, picoquic_misc_frame_header_t** last, const uint8_t* bytes, size_t length)
 {
     int ret = 0;
     picoquic_misc_frame_header_t* misc_frame = picoquic_create_misc_frame(bytes, length);
@@ -2272,13 +2272,44 @@ int picoquic_queue_misc_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t 
     if (misc_frame == NULL) {
         ret = PICOQUIC_ERROR_MEMORY;
     } else {
-        misc_frame->next_misc_frame = cnx->first_misc_frame;
-        cnx->first_misc_frame = misc_frame;
+        if (*last == NULL) {
+            *first = misc_frame;
+            *last = misc_frame;
+        }
+        else {
+            (*last)->next_misc_frame = misc_frame;
+            misc_frame->previous_misc_frame = *last;
+            *last = misc_frame;
+        }
     }
 
     picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
 
     return ret;
+}
+
+int picoquic_queue_misc_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t length)
+{
+    return picoquic_queue_misc_or_dg_frame(cnx, &cnx->first_misc_frame, &cnx->last_misc_frame, bytes, length);
+}
+
+void picoquic_delete_misc_or_dg(picoquic_misc_frame_header_t** first, picoquic_misc_frame_header_t** last, picoquic_misc_frame_header_t* frame)
+{
+    if (frame->next_misc_frame) {
+        frame->next_misc_frame->previous_misc_frame = frame->previous_misc_frame;
+    }
+    else {
+        *last = frame->previous_misc_frame;
+    }
+
+    if (frame->previous_misc_frame) {
+        frame->previous_misc_frame->next_misc_frame = frame->next_misc_frame;
+    }
+    else {
+        *first = frame->next_misc_frame;
+    }
+
+    free(frame);
 }
 
 void picoquic_reset_packet_context(picoquic_cnx_t* cnx,

@@ -2671,10 +2671,16 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                             }
                         }
 
-                        
+                        if (length <= header_length && cnx->first_datagram != NULL) {
+                            ret = picoquic_prepare_first_datagram_frame(cnx, &bytes[length],
+                                send_buffer_max - checksum_overhead - length, &data_bytes);
+                            if (ret == 0) {
+                                length += data_bytes;
+                            }
+                        }
 
                         /* Encode the stream frame, or frames */
-                        while (stream != NULL) {
+                        while (stream != NULL && length + checksum_overhead < send_buffer_min_max) {
                             int is_still_active = 0;
                             ret = picoquic_prepare_stream_frame(cnx, stream, &bytes[length],
                                 send_buffer_min_max - checksum_overhead - length, &data_bytes, &is_still_active);
