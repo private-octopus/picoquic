@@ -259,7 +259,7 @@ picoqinq_srv_cnx_ctx_t* picoqinq_find_best_proxy_for_incoming(
         picoqinq_cnx_address_link_t* link = ar->first_cnx_by_address;
         picoqinq_srv_cnx_ctx_t* best_match_cnx = NULL;
         picoqinq_srv_cnx_ctx_t* most_recent_cnx = NULL;
-        uint64_t match_time;
+        uint64_t match_time = 0;
 
         while (link != NULL) {
             if (link->last_access_time + PICOQINQ_ADDRESS_USE_TIME_DEFAULT >= current_time) {
@@ -621,7 +621,7 @@ int picoqinq_server_callback_data(picoquic_cnx_t* cnx, picoqinq_server_stream_ct
             /* TODO: consider server streams */
             /* Submit the message, obtain the response, send it back and finish the stream. */
             uint8_t response[256];
-            size_t response_length=0;
+
             int proto_ret = picoqinq_server_protocol_input(callback_ctx, stream_ctx->frame, stream_ctx->data_received, current_time);
 
             if (proto_ret == 0) {
