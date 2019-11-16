@@ -124,7 +124,6 @@ void picoqinq_client_register_address_cid_pair(picoquic_cnx_t* cnx, picoqinq_cli
     /* Look in the table whether the mapping already exists */
     picoqinq_header_compression_t** phc_head = (direction == 0) ? &ctx->receive_hc : &ctx->send_hc;
     picoqinq_header_compression_t* hc = picoqinq_find_reserve_header_by_address(phc_head, addr, cid, 0);
-    int should_really_register = 0;
 
     if (hc != NULL){
         if (hc->last_access_time + PICOQINQ_RESERVATION_DELAY < current_time) {
@@ -146,7 +145,6 @@ void picoqinq_client_register_address_cid_pair(picoquic_cnx_t* cnx, picoqinq_cli
         }
         hc = picoqinq_create_header(hcid, addr, cid, current_time);
         uint8_t message[1024];
-        size_t message_length = 0;
         uint8_t* eom;
 
         eom = picoqinq_encode_reserve_header(message, message + sizeof(message), direction, hc->hcid, addr, cid);
@@ -299,7 +297,6 @@ picoqinq_client_callback_ctx_t* picoqinq_client_callback_create_context(picoquic
 void picoqinq_client_callback_delete_context(picoqinq_client_callback_ctx_t* ctx)
 {
     if (ctx != NULL) {
-        picoqinq_client_stream_ctx_t* stream_ctx = NULL;
         /* Manage the list of streams. */
         while (1) {
             picoqinq_client_stream_ctx_t* stream_ctx = ctx->first_stream;

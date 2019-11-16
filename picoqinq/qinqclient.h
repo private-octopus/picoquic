@@ -52,7 +52,7 @@ typedef struct st_picoqinq_client_stream_ctx_t {
 /* Define the QinQ server callback */
 
 typedef struct st_picoqinq_client_callback_ctx_t {
-    struct picoquic_quit_t * quic;
+    picoquic_quic_t * quic;
     picoqinq_client_stream_ctx_t* first_stream;
     size_t buffer_max;
     uint8_t* buffer;
@@ -89,7 +89,7 @@ picoqinq_client_stream_ctx_t * picoqinq_find_or_create_stream(
 int picoqinq_client_callback_data(picoquic_cnx_t* cnx, picoqinq_client_stream_ctx_t * stream_ctx, uint64_t stream_id, uint8_t* bytes, 
     size_t length, picoquic_call_back_event_t fin_or_event, picoqinq_client_callback_ctx_t* callback_ctx);
 
-picoqinq_client_callback_ctx_t * picoqinq_client_callback_create_context(picoqinq_ctx_t * qinq_ctx);
+picoqinq_client_callback_ctx_t * picoqinq_client_callback_create_context(picoquic_quic_t * quic);
 
 void picoqinq_client_callback_delete_context(picoqinq_client_callback_ctx_t * ctx);
 
