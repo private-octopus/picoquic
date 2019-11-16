@@ -66,9 +66,6 @@ static int qinq_test_one_rh(const struct st_qinq_test_rh_t* rh, size_t length, u
     int ret = 0;
     uint64_t direction= UINT64_MAX;
     uint64_t hcid = UINT64_MAX;
-    size_t address_length = 0;
-    uint8_t const *address = NULL;
-    uint16_t port = 0;
     picoquic_connection_id_t cid = { {0}, 0 };
     uint8_t* bytes = message;
     uint8_t* bytes_max = message + length;
