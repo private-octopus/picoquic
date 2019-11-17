@@ -81,6 +81,16 @@ set(PICOHTTP_TEST_LIBRARY_FILES
     picoquictest/http0dot9test.c
 )
 
+set(PICOQINQ_LIBRARY_FILES
+    picoqinq/qinqclient.c
+    picoqinq/qinqproto.c
+    picoqinq/qinqserver.c
+)
+
+set(PICOQINQ_TEST_LIBRARY_FILES
+    picoquictest/qinqtest.c
+)
+
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 find_package(PTLS REQUIRED)
 message(STATUS "picotls/include: ${PTLS_INCLUDE_DIRS}" )
@@ -105,6 +115,10 @@ add_library(picoquic-log
 
 add_library(picohttp-core
     ${PICOHTTP_LIBRARY_FILES}
+)
+
+add_library(picoqinq-core
+    ${PICOQINQ_LIBRARY_FILES}
 )
 
 add_executable(picoquicdemo
@@ -181,7 +195,25 @@ target_link_libraries(picohttp_ct
 
 target_include_directories(picohttp_ct PRIVATE loglib picohttp)
 
-set(TEST_EXES picoquic_ct picohttp_ct)
+add_executable(picoqinq_ct picoqinq_t/picoqinq_t.c
+    ${PICOQUIC_TEST_LIBRARY_FILES}
+    ${PICOHTTP_TEST_LIBRARY_FILES}
+    ${PICOQINQ_TEST_LIBRARY_FILES}
+)
+
+target_link_libraries(picoqinq_ct
+    picoquic-log
+    picoquic-core
+    picohttp-core
+	picoqinq-core
+    ${PTLS_LIBRARIES}
+    ${OPENSSL_LIBRARIES}
+    ${CMAKE_DL_LIBS}
+)
+
+target_include_directories(picoqinq_ct PRIVATE loglib picohttp picoqinq)
+
+set(TEST_EXES picoquic_ct picohttp_ct picoqinq_ct)
 
 # get all project files for formatting
 file(GLOB_RECURSE CLANG_FORMAT_SOURCE_FILES *.c *.h)

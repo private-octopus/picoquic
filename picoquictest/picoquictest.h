@@ -183,6 +183,7 @@ int stream_splay_test();
 int stream_output_test();
 int stream_rank_test();
 int not_before_cnxid_test();
+
 int h3zero_post_test();
 int h09_post_test(); 
 int fastcc_test();
@@ -191,6 +192,11 @@ int large_client_hello_test();
 int fast_nat_rebinding_test();
 int util_memcmp_test();
 int ddos_amplification_test();
+
+int qinq_rh_test();
+int qinq_incoming_datagram_parse_test();
+int qinq_address_table_test();
+int qinq_e2e_basic_test();
 
 #ifdef __cplusplus
 }

@@ -67,13 +67,13 @@ typedef uint8_t* (*skip_frame_fn)(uint8_t* bytes, const uint8_t* bytes_max);
 #define VARINT_LEN(bytes) ((size_t)1 << (((bytes)[0] & 0xC0) >> 6))
 
 
-static uint8_t* picoquic_frames_fixed_skip(uint8_t* bytes, const uint8_t* bytes_max, size_t size)
+uint8_t* picoquic_frames_fixed_skip(uint8_t* bytes, const uint8_t* bytes_max, size_t size)
 {
     return (bytes += size) <= bytes_max ? bytes : NULL;
 }
 
 
-static uint8_t* picoquic_frames_varint_skip(uint8_t* bytes, const uint8_t* bytes_max)
+uint8_t* picoquic_frames_varint_skip(uint8_t* bytes, const uint8_t* bytes_max)
 {
     return bytes < bytes_max ? picoquic_frames_fixed_skip(bytes, bytes_max, VARINT_LEN(bytes)) : NULL;
 }
@@ -3197,15 +3197,7 @@ int picoquic_prepare_first_misc_or_dg_frame(picoquic_misc_frame_header_t ** firs
     int ret = picoquic_prepare_misc_frame(*first, bytes, bytes_max, consumed);
 
     if (ret == 0) {
-        picoquic_misc_frame_header_t* misc_frame = *first;
-        *first = misc_frame->next_misc_frame;
-        if (misc_frame->next_misc_frame == NULL) {
-            *last = NULL;
-        }
-        else {
-            misc_frame->next_misc_frame->previous_misc_frame = NULL;
-        }
-        free(misc_frame);
+        picoquic_delete_misc_or_dg(first, last, *first);
     }
 
     return ret;
@@ -3509,8 +3501,6 @@ int picoquic_prepare_datagram_frame(uint64_t id, size_t length, uint8_t * src, u
     size_t l_id = 0;
     size_t l_l = 0;
 
-    bytes[byte_index++] = (id == 0) ? picoquic_frame_type_datagram_l : picoquic_frame_type_datagram_id_l;
-
     if (id == 0) {
         bytes[byte_index++] = picoquic_frame_type_datagram_l;
     }
@@ -3524,7 +3514,7 @@ int picoquic_prepare_datagram_frame(uint64_t id, size_t length, uint8_t * src, u
     l_l = picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index, length);
     byte_index += l_l;
 
-    if (l_l > 0 && l_id> 0 && byte_index + length <= bytes_max) {
+    if (l_l > 0 && (id == 0 || l_id> 0) && byte_index + length <= bytes_max) {
         memcpy(bytes + byte_index, src, length);
         byte_index += length;
     }
@@ -3545,7 +3535,8 @@ int picoquic_queue_datagram_frame(picoquic_cnx_t * cnx, uint64_t id, size_t leng
     int ret = picoquic_prepare_datagram_frame(id, length, bytes, frame_buffer, sizeof(frame_buffer), &consumed);
 
     if (ret == 0 && consumed > 0) {
-        return picoquic_queue_misc_or_dg_frame(cnx, &cnx->first_datagram, &cnx->last_datagram, bytes, length);
+        return picoquic_queue_misc_or_dg_frame(cnx, &cnx->first_datagram, &cnx->last_datagram, 
+            frame_buffer, consumed);
     }
 
     return ret;

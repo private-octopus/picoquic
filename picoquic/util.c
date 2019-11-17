@@ -366,6 +366,24 @@ void picoquic_set64_connection_id(picoquic_connection_id_t * cnx_id, uint64_t va
     cnx_id->id_len = 8;
 }
 
+uint64_t picoquic_hash_addr(const struct sockaddr* addr)
+{
+    uint64_t h;
+
+    if (addr->sa_family == AF_INET) {
+        struct sockaddr_in* a4 = (struct sockaddr_in*)addr;
+        h = picohash_bytes((uint8_t*)&a4->sin_addr , 4);
+        h += 128ull * a4->sin_port;
+    }
+    else {
+        struct sockaddr_in6* a6 = (struct sockaddr_in6*)addr;
+        h = picohash_bytes((uint8_t*)& a6->sin6_addr, 16);
+        h += 128ull * a6->sin6_port;
+    }
+
+    return h;
+}
+
 int picoquic_compare_addr(const struct sockaddr * expected, const struct sockaddr * actual)
 {
     int ret = -1;

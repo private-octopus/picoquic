@@ -112,32 +112,6 @@ typedef enum {
     picoquic_frame_type_datagram_id_l = 0x23
 } picoquic_frame_type_enum_t;
 
-typedef struct st_picoquic_packet_header_t {
-    picoquic_connection_id_t dest_cnx_id;
-    picoquic_connection_id_t srce_cnx_id;
-    uint32_t pn;
-    uint32_t vn;
-    size_t offset;
-    size_t pn_offset;
-    picoquic_packet_type_enum ptype;
-    uint64_t pnmask;
-    uint64_t pn64;
-    size_t payload_length;
-    int version_index;
-    int epoch;
-    picoquic_packet_context_enum pc;
-
-    unsigned int key_phase : 1;
-    unsigned int spin : 1;
-    unsigned int has_spin_bit : 1;
-    unsigned int has_reserved_bit_set : 1;
-    unsigned int is_old_invariant : 1;
-
-    size_t token_length;
-    uint8_t * token_bytes;
-    size_t pl_val;
-} picoquic_packet_header;
-
 /* PMTU discovery requirement status */
 
     typedef enum {
@@ -827,10 +801,6 @@ int picoquic_load_token_file(picoquic_quic_t* quic, char const * token_file_name
 /* Init of transport parameters */
 int picoquic_set_default_tp(picoquic_quic_t* quic, picoquic_tp_t * tp);
 void picoquic_init_transport_parameters(picoquic_tp_t* tp, int client_mode);
-
-/* Handling of stateless packets */
-picoquic_stateless_packet_t* picoquic_create_stateless_packet(picoquic_quic_t* quic);
-void picoquic_queue_stateless_packet(picoquic_quic_t* quic, picoquic_stateless_packet_t* sp);
 
 /* Registration of per path connection ID in server context */
 int picoquic_register_cnx_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, picoquic_path_t* path, picoquic_connection_id_t cnx_id);

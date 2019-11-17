@@ -65,7 +65,8 @@ static uint64_t picoquic_net_id_hash(const void* key)
 {
     const picoquic_net_id_key_t* net = (const picoquic_net_id_key_t*)key;
 
-    return picohash_bytes((uint8_t*)&net->saddr, sizeof(net->saddr));
+    // return picohash_bytes((uint8_t*)&net->saddr, sizeof(net->saddr));
+    return picoquic_hash_addr((struct sockaddr*) & net->saddr);
 }
 
 static int picoquic_net_id_compare(const void* key1, const void* key2)
@@ -73,7 +74,7 @@ static int picoquic_net_id_compare(const void* key1, const void* key2)
     const picoquic_net_id_key_t* net1 = (const picoquic_net_id_key_t*)key1;
     const picoquic_net_id_key_t* net2 = (const picoquic_net_id_key_t*)key2;
 
-    return memcmp(&net1->saddr, &net2->saddr, sizeof(net1->saddr));
+    return picoquic_compare_addr((struct sockaddr*) & net1->saddr, (struct sockaddr*) & net2->saddr);
 }
 
 #if 0
@@ -290,6 +291,17 @@ void picoquic_set_default_padding(picoquic_quic_t* quic, uint32_t padding_multip
 void picoquic_set_default_spinbit_policy(picoquic_quic_t * quic, picoquic_spinbit_version_enum default_spinbit_policy)
 {
     quic->default_spin_policy = default_spinbit_policy;
+}
+
+uint8_t picoquic_get_local_cid_length(picoquic_quic_t* quic)
+{
+    return quic->local_cnxid_length;
+}
+
+int picoquic_is_local_cid(picoquic_quic_t* quic, picoquic_connection_id_t* cid)
+{
+    return (cid->id_len == quic->local_cnxid_length &&
+        picoquic_cnx_by_id(quic, *cid) != NULL);
 }
 
 void picoquic_free(picoquic_quic_t* quic)
@@ -544,6 +556,11 @@ void picoquic_init_transport_parameters(picoquic_tp_t* tp, int client_mode)
 
 
 /* management of the list of connections in context */
+
+picoquic_quic_t* picoquic_get_quic_ctx(picoquic_cnx_t* cnx)
+{
+    return (cnx == NULL)?NULL:cnx->quic;
+}
 
 picoquic_cnx_t* picoquic_get_first_cnx(picoquic_quic_t* quic)
 {
@@ -2701,6 +2718,20 @@ void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_
             }
         }
     }
+}
+
+int picoquic_set_local_addr(picoquic_cnx_t* cnx, struct sockaddr* addr)
+{
+    int ret = 0;
+
+    if (cnx != NULL && cnx->path[0] != NULL && cnx->path[0]->local_addr_len == 0) {
+        ret = ((cnx->path[0]->local_addr_len = picoquic_store_addr(&cnx->path[0]->local_addr, addr)) > 0) ? 0 : -1;
+    }
+    else {
+        ret = -1;
+    }
+
+    return ret;
 }
 
 void picoquic_enable_keep_alive(picoquic_cnx_t* cnx, uint64_t interval)

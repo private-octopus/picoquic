@@ -191,6 +191,14 @@ int picoquic_add_to_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
     return picoquic_add_to_stream_with_ctx(cnx, stream_id, data, length, set_fin, NULL);
 }
 
+void picoquic_reset_stream_ctx(picoquic_cnx_t* cnx, uint64_t stream_id)
+{
+    picoquic_stream_head_t* stream = picoquic_find_stream(cnx, stream_id);
+    if (stream != NULL) {
+        stream->app_stream_ctx = NULL;
+    }
+}
+
 int picoquic_reset_stream(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint16_t local_stream_error)
 {
@@ -202,17 +210,27 @@ int picoquic_reset_stream(picoquic_cnx_t* cnx,
     if (stream == NULL) {
         ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
     }
-    else if (stream->fin_sent) {
-        ret = PICOQUIC_ERROR_STREAM_ALREADY_CLOSED;
-    }
-    else if (!stream->reset_requested) {
-        stream->local_error = local_stream_error;
-        stream->reset_requested = 1;
+    else {
+        stream->app_stream_ctx = NULL;
+        if (stream->fin_sent) {
+            ret = PICOQUIC_ERROR_STREAM_ALREADY_CLOSED;
+        }
+        else if (!stream->reset_requested) {
+            stream->local_error = local_stream_error;
+            stream->reset_requested = 1;
+        }
     }
 
     picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
 
     return ret;
+}
+
+uint64_t picoquic_get_next_local_stream_id(picoquic_cnx_t* cnx, int is_unidir)
+{
+    int stream_type_id = (cnx->client_mode ^ 1) | ((is_unidir) ? 2 : 0);
+
+    return cnx->next_stream_id[stream_type_id];     
 }
 
 int picoquic_stop_sending(picoquic_cnx_t* cnx,
@@ -226,17 +244,21 @@ int picoquic_stop_sending(picoquic_cnx_t* cnx,
     if (stream == NULL) {
         ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
     }
-    else if (stream->reset_received) {
-        ret = PICOQUIC_ERROR_STREAM_ALREADY_CLOSED;
-    }
-    else if (!stream->stop_sending_requested) {
-        stream->local_stop_error = local_stream_error;
-        stream->stop_sending_requested = 1;
+    else {
+        stream->app_stream_ctx = NULL;
 
-        if (!stream->is_output_stream) {
-            stream->is_output_stream = 1;
-            stream->next_output_stream = cnx->first_output_stream;
-            cnx->first_output_stream = stream;
+        if (stream->reset_received) {
+            ret = PICOQUIC_ERROR_STREAM_ALREADY_CLOSED;
+        }
+        else if (!stream->stop_sending_requested) {
+            stream->local_stop_error = local_stream_error;
+            stream->stop_sending_requested = 1;
+
+            if (!stream->is_output_stream) {
+                stream->is_output_stream = 1;
+                stream->next_output_stream = cnx->first_output_stream;
+                cnx->first_output_stream = stream;
+            }
         }
     }
 
@@ -615,7 +637,7 @@ void picoquic_update_pacing_data(picoquic_path_t * path_x)
 {
     uint64_t rtt_nanosec = (path_x->smoothed_rtt << 10);
 
-    if (path_x->cwin < path_x->send_mtu*8) {
+    if (path_x->cwin < ((uint64_t)path_x->send_mtu)*8) {
         /* Small windows, should only relie on ACK clocking */
         path_x->pacing_bucket_max = rtt_nanosec;
         path_x->pacing_packet_time_nanosec = 1;

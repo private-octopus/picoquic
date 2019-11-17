@@ -42,6 +42,14 @@ extern "C" {
 #define PRIst "zu"
 #endif
 
+#ifdef _WINDOWS
+#ifndef _WINDOWS64
+#ifndef PICOQUIC_USE_CONSTANT_TIME_MEMCMP
+#define PICOQUIC_USE_CONSTANT_TIME_MEMCMP
+#endif
+#endif
+#endif
+
 #ifdef __APPLE__
 #ifndef PICOQUIC_USE_CONSTANT_TIME_MEMCMP
 #define PICOQUIC_USE_CONSTANT_TIME_MEMCMP
@@ -68,6 +76,7 @@ int picoquic_compare_connection_id(const picoquic_connection_id_t * cnx_id1, con
 uint64_t picoquic_connection_id_hash(const picoquic_connection_id_t * cid);
 uint64_t picoquic_val64_connection_id(picoquic_connection_id_t cnx_id);
 void picoquic_set64_connection_id(picoquic_connection_id_t * cnx_id, uint64_t val64);
+uint64_t picoquic_hash_addr(const struct sockaddr* addr);
 uint8_t picoquic_parse_connection_id_hexa(char const * hex_input, size_t input_length, picoquic_connection_id_t * cnx_id);
 int picoquic_print_connection_id_hexa(char* buf, size_t buf_len, const picoquic_connection_id_t* cnxid);
 uint8_t picoquic_create_packet_header_cnxid_lengths(uint8_t dest_len, uint8_t srce_len);

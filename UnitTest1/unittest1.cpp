@@ -1085,5 +1085,29 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(qinq_rh) {
+            int ret = qinq_rh_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qinq_incoming_datagram_parse) {
+            int ret = qinq_incoming_datagram_parse_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qinq_address_table) {
+            int ret = qinq_address_table_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qinq_e2e_basic) {
+            int ret = qinq_e2e_basic_test();
+
+            Assert::AreEqual(ret, 0);
+        }   
     };
 }

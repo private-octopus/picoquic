@@ -189,6 +189,41 @@ typedef struct st_picoquic_connection_id_t {
 /* Detect whether error occured in TLS
  */
 int picoquic_is_handshake_error(uint16_t error_code);
+
+/* Packet header structure.
+ */
+
+typedef struct st_picoquic_packet_header_t {
+    picoquic_connection_id_t dest_cnx_id;
+    picoquic_connection_id_t srce_cnx_id;
+    uint32_t pn;
+    uint32_t vn;
+    size_t offset;
+    size_t pn_offset;
+    picoquic_packet_type_enum ptype;
+    uint64_t pnmask;
+    uint64_t pn64;
+    size_t payload_length;
+    int version_index;
+    int epoch;
+    picoquic_packet_context_enum pc;
+
+    unsigned int key_phase : 1;
+    unsigned int spin : 1;
+    unsigned int has_spin_bit : 1;
+    unsigned int has_reserved_bit_set : 1;
+    unsigned int is_old_invariant : 1;
+
+    size_t token_length;
+    uint8_t* token_bytes;
+    size_t pl_val;
+} picoquic_packet_header;
+
+int picoquic_header_invariants(
+    uint8_t* bytes,
+    size_t length,
+    picoquic_packet_header* ph);
+
 /*
 * The stateless packet structure is used to temporarily store
 * stateless packets before they can be sent by servers.
@@ -474,6 +509,12 @@ void picoquic_set_default_padding(picoquic_quic_t* quic, uint32_t padding_multip
 /* Set default spin bit policy for the context */
 void picoquic_set_default_spinbit_policy(picoquic_quic_t * quic, picoquic_spinbit_version_enum default_spinbit_policy);
 
+/* Get the local CID length */
+uint8_t picoquic_get_local_cid_length(picoquic_quic_t* quic);
+
+/* Check whether a CID is locally defined */
+int picoquic_is_local_cid(picoquic_quic_t* quic, picoquic_connection_id_t* cid);
+
 /* Set default connection ID length for the context.
  * All valid values are supported on the client.
  * Using a null value on the server is not tested, may not work.
@@ -508,6 +549,7 @@ int picoquic_renew_connection_id(picoquic_cnx_t* cnx, int path_id);
 
 int picoquic_start_key_rotation(picoquic_cnx_t * cnx);
 
+picoquic_quic_t* picoquic_get_quic_ctx(picoquic_cnx_t* cnx);
 picoquic_cnx_t* picoquic_get_first_cnx(picoquic_quic_t* quic);
 picoquic_cnx_t* picoquic_get_next_cnx(picoquic_cnx_t* cnx);
 int64_t picoquic_get_next_wake_delay(picoquic_quic_t* quic,
@@ -527,6 +569,9 @@ int picoquic_tls_is_psk_handshake(picoquic_cnx_t* cnx);
 void picoquic_get_peer_addr(picoquic_cnx_t* cnx, struct sockaddr** addr, int* addr_len);
 void picoquic_get_local_addr(picoquic_cnx_t* cnx, struct sockaddr** addr, int* addr_len);
 unsigned long picoquic_get_local_if_index(picoquic_cnx_t* cnx);
+
+int picoquic_set_local_addr(picoquic_cnx_t* cnx, struct sockaddr* addr);
+
 
 picoquic_connection_id_t picoquic_get_local_cnxid(picoquic_cnx_t* cnx);
 picoquic_connection_id_t picoquic_get_remote_cnxid(picoquic_cnx_t* cnx);
@@ -555,8 +600,13 @@ void * picoquic_get_callback_context(picoquic_cnx_t* cnx);
 int picoquic_queue_misc_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t length);
 int picoquic_queue_datagram_frame(picoquic_cnx_t* cnx, uint64_t id, size_t length, uint8_t* bytes);
 
-/* Send and receive network packets */
+/* Send datagram frame */
+int picoquic_queue_datagram_frame(picoquic_cnx_t* cnx, uint64_t id, size_t length, uint8_t* bytes);
 
+/* Send and receive network packets */
+/* Handling of stateless packets */
+picoquic_stateless_packet_t* picoquic_create_stateless_packet(picoquic_quic_t* quic);
+void picoquic_queue_stateless_packet(picoquic_quic_t* quic, picoquic_stateless_packet_t* sp);
 picoquic_stateless_packet_t* picoquic_dequeue_stateless_packet(picoquic_quic_t* quic);
 void picoquic_delete_stateless_packet(picoquic_stateless_packet_t* sp);
 
@@ -632,6 +682,8 @@ uint8_t* picoquic_provide_stream_data_buffer(void* context, size_t nb_bytes, int
 int picoquic_add_to_stream(picoquic_cnx_t* cnx,
     uint64_t stream_id, const uint8_t* data, size_t length, int set_fin);
 
+void picoquic_reset_stream_ctx(picoquic_cnx_t* cnx, uint64_t stream_id);
+
 /* Same as "picoquic_add_to_stream", but also sets the application stream context.
  * The context is used in call backs, so the application can directly process responses.
  */
@@ -641,6 +693,9 @@ int picoquic_add_to_stream_with_ctx(picoquic_cnx_t * cnx, uint64_t stream_id, co
  * that stream and that any data currently queued can be abandoned. */
 int picoquic_reset_stream(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint16_t local_stream_error);
+
+/* Obtain the next available stream ID in the local category */
+uint64_t picoquic_get_next_local_stream_id(picoquic_cnx_t* cnx, int is_unidir);
 
 /* Ask the peer to stop sending on a stream. The peer is expected
  * to reset that stream when receiving the "stop sending" signal. */
@@ -687,7 +742,7 @@ void picoquic_set_default_congestion_algorithm(picoquic_quic_t* quic, picoquic_c
 
 void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_algorithm_t const* algo);
 
-/*
+/* 
  * Set the optimistic ack policy. The holes will be inserted at random locations,
  * which in average will be separated by the pseudo period. By default,
  * the pseudo perio is 0, which means no hole insertion.
