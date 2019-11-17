@@ -368,33 +368,6 @@ static const struct st_qinq_test_address_table_t address_event[] = {
 
 static const size_t nb_address_event = sizeof(address_event) / sizeof(struct st_qinq_test_address_table_t);
 
-int picoquic_get_test_address(const char* ip_address_text, int server_port,
-    struct sockaddr_storage* server_address)
-{
-    int ret = 0;
-    struct sockaddr_in* ipv4_dest = (struct sockaddr_in*)server_address;
-    struct sockaddr_in6* ipv6_dest = (struct sockaddr_in6*)server_address;
-
-    /* get the IP address of the server */
-    memset(server_address, 0, sizeof(struct sockaddr_storage));
-
-    if (inet_pton(AF_INET, ip_address_text, &ipv4_dest->sin_addr) == 1) {
-        /* Valid IPv4 address */
-        ipv4_dest->sin_family = AF_INET;
-        ipv4_dest->sin_port = htons((unsigned short)server_port);
-    }
-    else if (inet_pton(AF_INET6, ip_address_text, &ipv6_dest->sin6_addr) == 1) {
-        /* Valid IPv6 address */
-        ipv6_dest->sin6_family = AF_INET6;
-        ipv6_dest->sin6_port = htons((unsigned short)server_port);
-    }
-    else {
-        ret = -1;
-    }
-
-    return ret;
-}
-
 int qinq_address_table_test()
 {
     struct sockaddr_storage addr_s[QINQ_NB_TEST_ADDRESS];

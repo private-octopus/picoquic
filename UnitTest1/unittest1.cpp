@@ -993,6 +993,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(send_stream_blocked) {
+            int ret = send_stream_blocked_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(stress)
         {
             int ret = stress_test();

@@ -177,6 +177,7 @@ static const picoquic_test_def_t test_table[] = {
     { "bad_coalesce", bad_coalesce_test },
     { "document_addresses", document_addresses_test },
     { "large_client_hello", large_client_hello_test },
+    { "send_stream_blocked", send_stream_blocked_test },
     { "stress", stress_test },
     { "fuzz", fuzz_test },
     { "fuzz_initial", fuzz_initial_test}

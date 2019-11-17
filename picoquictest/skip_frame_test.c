@@ -1633,3 +1633,156 @@ int test_copy_for_retransmit()
     }
     return ret;
 }
+
+/* Store a test address */
+int picoquic_get_test_address(const char* ip_address_text, int server_port,
+    struct sockaddr_storage* server_address)
+{
+    int ret = 0;
+    struct sockaddr_in* ipv4_dest = (struct sockaddr_in*)server_address;
+    struct sockaddr_in6* ipv6_dest = (struct sockaddr_in6*)server_address;
+
+    /* get the IP address of the server */
+    memset(server_address, 0, sizeof(struct sockaddr_storage));
+
+    if (inet_pton(AF_INET, ip_address_text, &ipv4_dest->sin_addr) == 1) {
+        /* Valid IPv4 address */
+        ipv4_dest->sin_family = AF_INET;
+        ipv4_dest->sin_port = htons((unsigned short)server_port);
+    }
+    else if (inet_pton(AF_INET6, ip_address_text, &ipv6_dest->sin6_addr) == 1) {
+        /* Valid IPv6 address */
+        ipv6_dest->sin6_family = AF_INET6;
+        ipv6_dest->sin6_port = htons((unsigned short)server_port);
+    }
+    else {
+        ret = -1;
+    }
+
+    return ret;
+}
+
+/* Testing the sending of blocked frames */
+struct st_stream_blocked_test_t {
+    uint64_t stream_id;
+    int is_id_blocked;
+    int is_data_blocked;
+    int is_client;
+    int expect_bidir_blocked;
+    int expect_unidir_blocked;
+    int expect_data_blocked;
+};
+
+static const struct st_stream_blocked_test_t stream_blocked_test[] = {
+    { 4, 1, 0, 1, 0, 0, 0},
+    { 4, 1, 1, 0, 0, 0, 1},
+    { 4, 0, 1, 0, 0, 0, 1}
+};
+
+static const size_t nb_stream_blocked_test = sizeof(stream_blocked_test) / sizeof(struct st_stream_blocked_test_t);
+
+int send_stream_blocked_test_one(const struct st_stream_blocked_test_t * test)
+{
+    int ret = 0;
+    uint8_t buf[1024];
+    uint8_t bytes[1024];
+    uint64_t simulated_time = 0;
+    picoquic_quic_t* quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
+    picoquic_cnx_t * cnx = NULL;
+    struct sockaddr_storage addr;
+    picoquic_stream_head_t* stream = NULL;
+    size_t consumed = 0;
+
+    if (quic == NULL) {
+        ret = -1;
+    }
+    else {
+        ret = picoquic_get_test_address("10.0.0.1", 1234, &addr);
+        if (ret == 0) {
+            cnx = picoquic_create_client_cnx(quic, (struct sockaddr*) & addr, simulated_time, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, NULL, NULL);
+            if (cnx == NULL) {
+                ret = -1;
+            }
+        }
+    }
+
+    if (ret == 0) {
+        /* Setup the initial conditions */
+        if (!test->is_client) {
+            cnx->client_mode = 0;
+        }
+        if (test->is_id_blocked) {
+            cnx->remote_parameters.initial_max_stream_id_bidir = 0;
+            cnx->remote_parameters.initial_max_stream_id_unidir = 0;
+        }
+        else {
+            cnx->remote_parameters.initial_max_stream_id_bidir = 1024;
+            cnx->remote_parameters.initial_max_stream_id_unidir = 1024;
+        }
+        if (test->is_data_blocked) {
+            cnx->remote_parameters.initial_max_stream_data_bidi_local = 0;
+            cnx->remote_parameters.initial_max_stream_data_bidi_remote = 0;
+            cnx->remote_parameters.initial_max_stream_data_uni = 0;
+        }
+        else {
+            cnx->remote_parameters.initial_max_stream_data_bidi_local = 100000;
+            cnx->remote_parameters.initial_max_stream_data_bidi_remote = 100000;
+            cnx->remote_parameters.initial_max_stream_data_uni = 100000;
+        }
+        /* Create the stream so it picks the required parameters */
+        stream = picoquic_create_stream(cnx, test->stream_id);
+        if (stream != NULL) {
+            memset(buf, 0, sizeof(buf));
+            ret = picoquic_add_to_stream(cnx, test->stream_id, buf, sizeof(buf), 0);
+        }
+        if (stream == NULL) {
+            DBG_PRINTF("Could not find stream #%d", (int)test->stream_id);
+            ret = -1;
+        }
+        if (ret == 0) {
+            /* Call the blocked frame API */
+            ret = picoquic_prepare_one_blocked_frame(cnx, bytes, sizeof(bytes), stream, &consumed);
+        }
+
+        if (ret == 0 &&
+            test->expect_bidir_blocked != cnx->stream_blocked_bidir_sent){
+            DBG_PRINTF("Stream blocked bidir: %d vs %d", test->expect_bidir_blocked, cnx->stream_blocked_bidir_sent);
+            ret = -1;
+        }
+
+        if (ret == 0 &&
+            test->expect_unidir_blocked != cnx->stream_blocked_unidir_sent) {
+            DBG_PRINTF("Stream blocked bidir: %d vs %d", test->expect_unidir_blocked, cnx->stream_blocked_unidir_sent);
+            ret = -1;
+        }
+
+        if (ret == 0 &&
+            test->expect_data_blocked != stream->stream_data_blocked_sent) {
+            DBG_PRINTF("Stream data blocked: %d vs %d", test->expect_data_blocked, stream->stream_data_blocked_sent);
+            ret = -1;
+        }
+
+    }
+    
+
+    if (quic != NULL) {
+        picoquic_free(quic);
+    }
+
+    return ret;
+}
+
+int send_stream_blocked_test()
+{
+    int ret = 0;
+
+    for (size_t i = 0; ret == 0 && i < nb_stream_blocked_test; i++) {
+        if ((ret = send_stream_blocked_test_one(&stream_blocked_test[i])) != 0) {
+            DBG_PRINTF("Stream blocked test %d failed", (int)i);
+        }
+    }
+
+    return ret;
+}

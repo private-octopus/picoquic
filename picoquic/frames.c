@@ -1286,7 +1286,7 @@ int picoquic_prepare_stream_blocked_frame(uint8_t* bytes,
     return ret;
 }
 
-static int picoquic_prepare_one_blocked_frame(picoquic_cnx_t* cnx, uint8_t* bytes, size_t bytes_max, picoquic_stream_head_t * stream, size_t* data_bytes)
+int picoquic_prepare_one_blocked_frame(picoquic_cnx_t* cnx, uint8_t* bytes, size_t bytes_max, picoquic_stream_head_t * stream, size_t* data_bytes)
 {
     int ret = 0;
 
@@ -1295,18 +1295,21 @@ static int picoquic_prepare_one_blocked_frame(picoquic_cnx_t* cnx, uint8_t* byte
         /* The stream has some data to send */
         /* if the stream is not active yet, verify that it fits under
             * the max stream id limit, which depends of the type of stream */
-        if (IS_CLIENT_STREAM_ID(stream->stream_id) != cnx->client_mode ||
+        if (IS_CLIENT_STREAM_ID(stream->stream_id) != cnx->client_mode &&
             stream->stream_id > ((IS_BIDIR_STREAM_ID(stream->stream_id)) ? cnx->max_stream_id_bidir_remote : cnx->max_stream_id_unidir_remote)) {
-            /* Prepare a stream blocked frame */
-            ret = picoquic_prepare_stream_blocked_frame(bytes, bytes_max, data_bytes, cnx, stream->stream_id);
-            if (ret == 0) {
-                if (IS_BIDIR_STREAM_ID(stream->stream_id)) {
-                    cnx->stream_blocked_bidir_sent = 1;
+            if (!(IS_BIDIR_STREAM_ID(stream->stream_id) ? cnx->stream_blocked_bidir_sent : cnx->stream_blocked_unidir_sent))
+            {
+                /* Prepare a stream blocked frame */
+                ret = picoquic_prepare_stream_blocked_frame(bytes, bytes_max, data_bytes, cnx, stream->stream_id);
+                if (ret == 0) {
+                    if (IS_BIDIR_STREAM_ID(stream->stream_id)) {
+                        cnx->stream_blocked_bidir_sent = 1;
+                    }
+                    else {
+                        cnx->stream_blocked_unidir_sent = 1;
+                    }
                 }
-                else {
-                    cnx->stream_blocked_unidir_sent = 1;
-                }
-            }
+            }       
         }
         else {
             if (cnx->maxdata_remote <= cnx->data_sent && !cnx->sent_blocked_frame) {

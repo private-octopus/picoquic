@@ -218,6 +218,9 @@ void picoquic_test_random_bytes(uint64_t * random_context, uint8_t * bytes, size
 uint64_t picoquic_test_uniform_random(uint64_t * random_context, uint64_t rnd_max);
 double picoquic_test_gauss_random(uint64_t* random_context); /* random gaussian of variance 1.0, average 0 */
 
+int picoquic_get_test_address(const char* ip_address_text, int server_port,
+    struct sockaddr_storage* server_address);
+
 #ifdef __cplusplus
 }
 #endif

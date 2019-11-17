@@ -1051,9 +1051,6 @@ int picoquic_prepare_crypto_hs_frame(picoquic_cnx_t* cnx, int epoch,
 int picoquic_prepare_ack_frame(picoquic_cnx_t* cnx, uint64_t current_time,
     picoquic_packet_context_enum pc,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
-int picoquic_prepare_ack_frame_basic(picoquic_cnx_t* cnx, uint64_t current_time,
-    picoquic_packet_context_enum pc,
-    uint8_t* bytes, size_t bytes_max, size_t* consumed);
 int picoquic_prepare_connection_close_frame(picoquic_cnx_t* cnx,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
 int picoquic_prepare_application_close_frame(picoquic_cnx_t* cnx,
@@ -1076,6 +1073,7 @@ int picoquic_prepare_new_connection_id_frame(picoquic_cnx_t * cnx, picoquic_path
 int picoquic_prepare_blocked_frames(picoquic_cnx_t* cnx, uint8_t* bytes, size_t bytes_max, size_t* consumed);
 int picoquic_queue_retire_connection_id_frame(picoquic_cnx_t * cnx, uint64_t sequence);
 int picoquic_queue_new_token_frame(picoquic_cnx_t * cnx, uint8_t * token, size_t token_length);
+int picoquic_prepare_one_blocked_frame(picoquic_cnx_t* cnx, uint8_t* bytes, size_t bytes_max, picoquic_stream_head_t* stream, size_t* data_bytes);
 
 int picoquic_prepare_first_misc_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
     size_t bytes_max, size_t* consumed);
