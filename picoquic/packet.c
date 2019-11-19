@@ -1284,8 +1284,10 @@ int picoquic_incoming_client_handshake(
             }
             /* processing of client clear text packet */
             if (ret == 0) {
-                /* initialization of context & creation of data */
-                /* TODO: find path to send data produced by TLS. */
+                /* Any successful handshake packet is an explicit ack of initial packets */
+                picoquic_implicit_handshake_ack(cnx, picoquic_packet_context_initial, current_time);
+
+                /* If TLS data present, progress the TLS state */
                 ret = picoquic_tls_stream_process(cnx);
             }
         }
