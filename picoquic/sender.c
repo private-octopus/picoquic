@@ -1216,7 +1216,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                     }
 
                     /* special case for the client initial */
-                    if (old_p->ptype == picoquic_packet_initial) {
+                    if (old_p->ptype == picoquic_packet_initial && cnx->client_mode) {
                         length = picoquic_pad_to_target_length(new_bytes, length, send_buffer_max - checksum_length);
                     }
                     packet->length = length;
@@ -1918,8 +1918,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
 
 /* Prepare the next packet to send when in one the server initial states */
 int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * path_x, picoquic_packet_t* packet,
-    uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length, uint64_t * next_wake_time,
-    int * is_initial_sent)
+    uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length, uint64_t * next_wake_time)
 {
     int ret = 0;
     int tls_ready = 0;
@@ -1958,7 +1957,6 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
     if ((cnx->initial_validated||cnx->initial_repeat_needed) && pc == picoquic_packet_context_handshake) {
         length = picoquic_prepare_packet_old_context(cnx, picoquic_packet_context_initial,
             path_x, packet, send_buffer_max, current_time, next_wake_time, &header_length);
-        *is_initial_sent |= (length > 0);
     }
 
     if (length == 0) {
@@ -2127,8 +2125,6 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             packet->length = 0;
         }
     }
-
-    *is_initial_sent |= (packet->ptype == picoquic_packet_initial && length > 0);
 
     picoquic_finalize_and_protect_packet(cnx, packet,
         ret, length, header_length, checksum_overhead,
@@ -2361,7 +2357,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
         length = 0;
     }
 
-    if (length > 0 && packet->ptype == picoquic_packet_initial) {
+    if (length > 0 && packet->ptype == picoquic_packet_initial && cnx->client_mode) {
         length = picoquic_pad_to_target_length(bytes, length, send_buffer_max - checksum_overhead);
     }
 
@@ -2467,7 +2463,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
         if (length > 0) {
             cnx->initial_repeat_needed = 0;
 
-            if (send_buffer_min_max < length + checksum_overhead + PICOQUIC_MIN_SEGMENT_SIZE) {
+            if (cnx->client_mode && *is_initial_sent && send_buffer_min_max < length + checksum_overhead + PICOQUIC_MIN_SEGMENT_SIZE) {
                 length = picoquic_pad_to_target_length(packet->bytes, length, send_buffer_min_max - checksum_overhead);
             }
         }
@@ -2776,7 +2772,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                     }
 
                     if (length > header_length) {
-                        if (*is_initial_sent) {
+                        if (*is_initial_sent && cnx->client_mode) {
                             length = picoquic_pad_to_target_length(bytes, length, (uint32_t)(send_buffer_min_max - checksum_overhead));
                         }
                         else {
@@ -2881,7 +2877,7 @@ int picoquic_prepare_segment(picoquic_cnx_t* cnx, picoquic_path_t * path_x, pico
         case picoquic_state_server_almost_ready:
         case picoquic_state_server_init:
         case picoquic_state_server_handshake:
-            ret = picoquic_prepare_packet_server_init(cnx, path_x, packet, current_time, send_buffer, send_buffer_max, send_length, next_wake_time, is_initial_sent);
+            ret = picoquic_prepare_packet_server_init(cnx, path_x, packet, current_time, send_buffer, send_buffer_max, send_length, next_wake_time);
             break;
         case picoquic_state_server_false_start:
         case picoquic_state_client_ready_start:
