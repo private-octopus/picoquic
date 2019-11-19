@@ -5876,7 +5876,7 @@ int fastcc_test()
 
 int fastcc_jitter_test()
 {
-    return congestion_control_test(picoquic_fastcc_algorithm, 3600000, 5000);
+    return congestion_control_test(picoquic_fastcc_algorithm, 3610000, 5000);
 }
 
 /* Test that different CID length are properly supported */
