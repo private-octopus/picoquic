@@ -1907,6 +1907,10 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             }
         }
 
+        if (length > 0 && packet->ptype == picoquic_packet_handshake) {
+            picoquic_implicit_handshake_ack(cnx, picoquic_packet_context_initial, current_time);
+        }
+
         picoquic_finalize_and_protect_packet(cnx, packet,
             ret, length, header_length, checksum_overhead,
             send_length, send_buffer, send_buffer_max,
