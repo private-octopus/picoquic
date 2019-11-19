@@ -559,6 +559,10 @@ int picoquic_parse_header_and_decrypt(
                     }
                 }
             }
+            else if (!(*pcnx)->client_mode && ph->ptype == picoquic_packet_initial && packet_length < PICOQUIC_ENFORCED_INITIAL_MTU) {
+                /* Unexpected packet. Reject, drop and log. */
+                ret = PICOQUIC_ERROR_INITIAL_TOO_SHORT;
+            }
 
             if (ret == 0) {
                 if (*pcnx != NULL) {
