@@ -140,11 +140,13 @@
     <ClCompile Include="demoserver.c" />
     <ClCompile Include="h3zero.c" />
     <ClCompile Include="http0dot9.c" />
+    <ClCompile Include="siduck.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="democlient.h" />
     <ClInclude Include="demoserver.h" />
     <ClInclude Include="h3zero.h" />
+    <ClInclude Include="siduck.h" />
     <ClInclude Include="wincompat.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

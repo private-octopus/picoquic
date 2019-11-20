@@ -299,10 +299,6 @@ static const uint8_t* picoquic_log_datagram_frame(FILE* f, const uint8_t* bytes,
 
     bytes = picoquic_log_fixed_skip(bytes, bytes_max, 1);
 
-    if (ftype & 2) {
-        bytes = picoquic_log_varint_skip(bytes, bytes_max);
-    }
-
     if (ftype & 1) {
         bytes = picoquic_log_length(bytes, bytes_max, &length);
     } else {
@@ -397,8 +393,6 @@ void picoquic_binlog_frames(FILE * f, const uint8_t* bytes, size_t length)
             break;
         case picoquic_frame_type_datagram:
         case picoquic_frame_type_datagram_l:
-        case picoquic_frame_type_datagram_id:
-        case picoquic_frame_type_datagram_id_l:
             bytes = picoquic_log_datagram_frame(f, bytes, bytes_max);
             break;
         default:

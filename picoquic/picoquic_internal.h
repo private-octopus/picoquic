@@ -106,10 +106,8 @@ typedef enum {
     picoquic_frame_type_path_response = 0x1b,
     picoquic_frame_type_connection_close = 0x1c,
     picoquic_frame_type_application_close = 0x1d,
-    picoquic_frame_type_datagram = 0x20,
-    picoquic_frame_type_datagram_l = 0x21,
-    picoquic_frame_type_datagram_id = 0x22,
-    picoquic_frame_type_datagram_id_l = 0x23
+    picoquic_frame_type_datagram = 0x30,
+    picoquic_frame_type_datagram_l = 0x31
 } picoquic_frame_type_enum_t;
 
 /* PMTU discovery requirement status */

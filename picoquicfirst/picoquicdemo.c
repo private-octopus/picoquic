@@ -104,6 +104,14 @@ static const char* token_store_filename = "demo_token_store.bin";
 #include "h3zero.c"
 #include "democlient.h"
 #include "demoserver.h"
+#include "siduck.h"
+
+/*
+ * SIDUCK datagram demo call back.
+ */
+int siduck_callback(picoquic_cnx_t* cnx,
+    uint64_t stream_id, uint8_t* bytes, size_t length,
+    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx);
 
 void print_address(FILE* F_log, struct sockaddr* address, char* label, picoquic_connection_id_t cnx_id)
 {
@@ -543,27 +551,42 @@ int quic_client(const char* ip_address_text, int server_port,
     int zero_rtt_available = 0;
     size_t client_sc_nb = 0;
     picoquic_demo_stream_desc_t * client_sc = NULL;
+    int is_siduck = 0;
+    siduck_ctx_t* siduck_ctx = NULL;
 
     if (alpn == NULL) {
         alpn = PICOHTTP_ALPN_H3_LATEST;
     }
 
-    if (no_disk) {
-        fprintf(stdout, "Files not saved to disk (-D, no_disk)\n");
-    }
-
-    if (client_scenario_text == NULL) {
-        client_scenario_text = test_scenario_default;
-    }
-
-    fprintf(stdout, "Testing scenario: <%s>\n", client_scenario_text);
-    ret = demo_client_parse_scenario_desc(client_scenario_text, &client_sc_nb, &client_sc);
-    if (ret != 0) {
-        fprintf(stdout, "Cannot parse the specified scenario.\n");
-        return -1;
+    if (strcmp(alpn, "siduck") == 0) {
+        /* Set a siduck client */
+        is_siduck = 1;
+        siduck_ctx = siduck_create_ctx(stdout);
+        if (siduck_ctx == NULL) {
+            fprintf(stdout, "Could not get ready to quack\n");
+            return -1;
+        }
+        fprintf(stdout, "Getting ready to quack\n");
     }
     else {
-        ret = picoquic_demo_client_initialize_context(&callback_ctx, client_sc, client_sc_nb, alpn, no_disk);
+
+        if (no_disk) {
+            fprintf(stdout, "Files not saved to disk (-D, no_disk)\n");
+        }
+
+        if (client_scenario_text == NULL) {
+            client_scenario_text = test_scenario_default;
+        }
+
+        fprintf(stdout, "Testing scenario: <%s>\n", client_scenario_text);
+        ret = demo_client_parse_scenario_desc(client_scenario_text, &client_sc_nb, &client_sc);
+        if (ret != 0) {
+            fprintf(stdout, "Cannot parse the specified scenario.\n");
+            return -1;
+        }
+        else {
+            ret = picoquic_demo_client_initialize_context(&callback_ctx, client_sc, client_sc_nb, alpn, no_disk);
+        }
     }
 
     if (ret == 0) {
@@ -657,16 +680,23 @@ int quic_client(const char* ip_address_text, int server_port,
             ret = -1;
         }
         else {
-            picoquic_set_callback(cnx_client, picoquic_demo_client_callback, &callback_ctx);
-            /* Requires TP grease, for interop tests */
-            cnx_client->grease_transport_parameters = 1;
+            if (is_siduck) {
+                picoquic_set_callback(cnx_client, siduck_callback, siduck_ctx);
+                cnx_client->local_parameters.max_datagram_size = 128;
+            }
+            else {
+                picoquic_set_callback(cnx_client, picoquic_demo_client_callback, &callback_ctx);
+
+                /* Requires TP grease, for interop tests */
+                cnx_client->grease_transport_parameters = 1;
+
+                if (callback_ctx.tp != NULL) {
+                    picoquic_set_transport_parameters(cnx_client, callback_ctx.tp);
+                }
+            }
 
             if (large_client_hello) {
                 cnx_client->test_large_chello = 1;
-            }
-
-            if (callback_ctx.tp != NULL) {
-                picoquic_set_transport_parameters(cnx_client, callback_ctx.tp);
             }
 
             if (esni_rr_file != NULL) {
@@ -677,7 +707,7 @@ int quic_client(const char* ip_address_text, int server_port,
                 ret = picoquic_start_client_cnx(cnx_client);
             }
 
-            if (ret == 0) {
+            if (ret == 0 && !is_siduck) {
                 if (picoquic_is_0rtt_available(cnx_client) && (proposed_version & 0x0a0a0a0a) != 0x0a0a0a0a) {
                     zero_rtt_available = 1;
 
@@ -819,7 +849,7 @@ int quic_client(const char* ip_address_text, int server_port,
                             (unsigned long long)picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx_client)));
                         established = 1;
 
-                        if (zero_rtt_available == 0) {
+                        if (zero_rtt_available == 0 && !is_siduck) {
                             /* Start the download scenario */
 
                             picoquic_demo_client_start_streams(cnx_client, &callback_ctx, PICOQUIC_DEMO_STREAM_ID_INITIAL);
@@ -858,7 +888,7 @@ int quic_client(const char* ip_address_text, int server_port,
                     }
 
                     if (bytes_recv == 0 || client_ready_loop > 4) {
-                        if (callback_ctx.nb_open_streams == 0) {
+                        if (!is_siduck && callback_ctx.nb_open_streams == 0) {
                             if (cnx_client->nb_zero_rtt_sent != 0) {
                                 fprintf(stdout, "Out of %d zero RTT packets, %d were acked by the server.\n",
                                     cnx_client->nb_zero_rtt_sent, cnx_client->nb_zero_rtt_acked);
@@ -945,7 +975,7 @@ int quic_client(const char* ip_address_text, int server_port,
 
                 delta_t = picoquic_get_next_wake_delay(qclient, current_time, delay_max);
 
-                if (delta_t > 10000 && callback_ctx.nb_open_streams == 0 &&
+                if (delta_t > 10000 && (is_siduck || callback_ctx.nb_open_streams == 0) &&
                     picoquic_is_cnx_backlog_empty(cnx_client)) {
                     delta_t = 10000;
                 }
@@ -954,7 +984,11 @@ int quic_client(const char* ip_address_text, int server_port,
     }
 
     /* Clean up */
-    picoquic_demo_client_delete_context(&callback_ctx);
+    if (is_siduck) {
+        free(siduck_ctx);
+    } else {
+        picoquic_demo_client_delete_context(&callback_ctx);
+    }
 
     if (qclient != NULL) {
         uint8_t* ticket;

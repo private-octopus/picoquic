@@ -97,8 +97,6 @@ const char * ftype2str(picoquic_frame_type_enum_t ftype)
         return "retire_connection_id";
     case picoquic_frame_type_datagram:
     case picoquic_frame_type_datagram_l:
-    case picoquic_frame_type_datagram_id:
-    case picoquic_frame_type_datagram_id_l:
         return "datagram";
     default:
         return "unknown";

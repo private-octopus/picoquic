@@ -3427,12 +3427,7 @@ uint8_t* picoquic_skip_datagram_frame(uint8_t* bytes, const uint8_t* bytes_max)
 {
     uint8_t frame_id = *bytes++;
     unsigned int has_length = frame_id & 1;
-    unsigned int has_id = (frame_id & 2)>>1;
     uint64_t length = 0;
-
-    if (has_id) {
-        bytes = picoquic_frames_varint_skip(bytes, bytes_max);
-    }
 
     if (bytes != NULL) {
         if (has_length) {
@@ -3457,14 +3452,7 @@ uint8_t* picoquic_decode_datagram_frame(picoquic_cnx_t* cnx, uint8_t* bytes, con
 {
     uint8_t frame_id = *bytes++;
     unsigned int has_length = frame_id & 1;
-    unsigned int has_id = (frame_id & 2) >> 1;
-    uint64_t id = 0;
     uint64_t length = 0;
-
-    if (has_id && (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &id)) == NULL) {
-        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
-            frame_id);
-    }
 
     if (has_length) {
         if (bytes != NULL && (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &length)) == NULL) {
@@ -3484,7 +3472,7 @@ uint8_t* picoquic_decode_datagram_frame(picoquic_cnx_t* cnx, uint8_t* bytes, con
     if (bytes != NULL) {
         if (cnx->callback_fn != NULL) {
             /* submit the data to the app */
-            if (cnx->callback_fn(cnx, id, bytes, (size_t)length, picoquic_callback_datagram,
+            if (cnx->callback_fn(cnx, 0, bytes, (size_t)length, picoquic_callback_datagram,
                 cnx->callback_ctx, NULL) != 0) {
                 picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
                 bytes = NULL;
@@ -3497,27 +3485,18 @@ uint8_t* picoquic_decode_datagram_frame(picoquic_cnx_t* cnx, uint8_t* bytes, con
     return bytes;
 }
 
-int picoquic_prepare_datagram_frame(uint64_t id, size_t length, uint8_t * src, uint8_t * bytes, size_t bytes_max, size_t * consumed)
+int picoquic_prepare_datagram_frame(size_t length, const uint8_t* src, uint8_t* bytes, size_t bytes_max, size_t* consumed)
 {
     int ret = 0;
     size_t byte_index = 0;
-    size_t l_id = 0;
     size_t l_l = 0;
 
-    if (id == 0) {
-        bytes[byte_index++] = picoquic_frame_type_datagram_l;
-    }
-    else {
-        bytes[byte_index++] = picoquic_frame_type_datagram_id_l;
+    bytes[byte_index++] = picoquic_frame_type_datagram_l;
 
-        l_id = picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index, id);
-        byte_index += l_id;
-    }
-    
     l_l = picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index, length);
     byte_index += l_l;
 
-    if (l_l > 0 && (id == 0 || l_id> 0) && byte_index + length <= bytes_max) {
+    if (l_l > 0 && byte_index + length <= bytes_max) {
         memcpy(bytes + byte_index, src, length);
         byte_index += length;
     }
@@ -3531,11 +3510,11 @@ int picoquic_prepare_datagram_frame(uint64_t id, size_t length, uint8_t * src, u
     return ret;
 }
 
-int picoquic_queue_datagram_frame(picoquic_cnx_t * cnx, uint64_t id, size_t length, uint8_t * bytes)
+int picoquic_queue_datagram_frame(picoquic_cnx_t * cnx, size_t length, const uint8_t * bytes)
 {
     size_t consumed = 0;
     uint8_t frame_buffer[PICOQUIC_MAX_PACKET_SIZE];
-    int ret = picoquic_prepare_datagram_frame(id, length, bytes, frame_buffer, sizeof(frame_buffer), &consumed);
+    int ret = picoquic_prepare_datagram_frame(length, bytes, frame_buffer, sizeof(frame_buffer), &consumed);
 
     if (ret == 0 && consumed > 0) {
         return picoquic_queue_misc_or_dg_frame(cnx, &cnx->first_datagram, &cnx->last_datagram, 
@@ -3695,8 +3674,6 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_
                 break;
             case picoquic_frame_type_datagram:
             case picoquic_frame_type_datagram_l:
-            case picoquic_frame_type_datagram_id:
-            case picoquic_frame_type_datagram_id_l:
                 bytes = picoquic_decode_datagram_frame(cnx, bytes, bytes_max);
                 break;
             default: {
@@ -3942,8 +3919,6 @@ int picoquic_skip_frame(uint8_t* bytes, size_t bytes_maxsize, size_t* consumed, 
             break;
         case picoquic_frame_type_datagram:
         case picoquic_frame_type_datagram_l:
-        case picoquic_frame_type_datagram_id:
-        case picoquic_frame_type_datagram_id_l:
             bytes = picoquic_skip_datagram_frame(bytes, bytes_max);
             break;
         default: {

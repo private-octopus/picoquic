@@ -381,6 +381,11 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         }
     }
 
+    if (!cnx->client_mode && cnx->local_parameters.max_datagram_size == 0 &&
+        cnx->remote_parameters.max_datagram_size > 0) {
+        cnx->local_parameters.max_datagram_size = PICOQUIC_MAX_PACKET_SIZE;
+    }
+
     if (cnx->local_parameters.max_datagram_size > 0 && bytes != NULL) {
         bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_max_datagram_size,
             cnx->local_parameters.max_datagram_size);

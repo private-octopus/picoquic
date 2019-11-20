@@ -341,8 +341,6 @@ char const* picoquic_log_frame_names(uint8_t frame_type)
         break;
     case picoquic_frame_type_datagram:
     case picoquic_frame_type_datagram_l:
-    case picoquic_frame_type_datagram_id:
-    case picoquic_frame_type_datagram_id_l:
         frame_name = "datagram";
         break;
     default:
@@ -1144,31 +1142,21 @@ size_t picoquic_log_datagram_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
 {
     uint8_t frame_id = bytes[0];
     unsigned int has_length = frame_id & 1;
-    unsigned int has_id = (frame_id & 2) >> 1;
-    size_t l_id = 0;
     size_t l_l = 0;
-    uint64_t id = 0;
     uint64_t length = 0;
     size_t byte_index = 1;
 
-    if (has_id && bytes_max > byte_index) {
-        l_id = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &id);
-        byte_index += l_id;
-    }
-
-    if (!has_id || l_id > 0) {
-        if (has_length) {
-            if (bytes_max > byte_index) {
-                l_l = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &length);
-                byte_index += l_l;
-            }
-        }
-        else {
-            length = bytes_max - byte_index;
+    if (has_length) {
+        if (bytes_max > byte_index) {
+            l_l = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &length);
+            byte_index += l_l;
         }
     }
+    else {
+        length = bytes_max - byte_index;
+    }
 
-    if ((has_id && l_id ==0) || (has_length && l_l == 0) || byte_index + length > bytes_max) {
+    if ((has_length && l_l == 0) || byte_index + length > bytes_max) {
         /* log format error */
         fprintf(F, "    Malformed Datagram frame: ");
         for (size_t i = 0; i < bytes_max && i < 8; i++) {
@@ -1183,9 +1171,6 @@ size_t picoquic_log_datagram_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
     }
     else {
         fprintf(F, "    Datagram frame");
-        if (has_id) {
-            fprintf(F, ", ID: %llu", (unsigned long long)id);
-        }
         fprintf(F, ", length: %d: ", (int)length);
         for (size_t i = 0; i < 8 && i < length; i++) {
             fprintf(F, "%02x", bytes[byte_index + i]);
@@ -1299,8 +1284,6 @@ void picoquic_log_frames(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t leng
             break; 
         case picoquic_frame_type_datagram:
         case picoquic_frame_type_datagram_l:
-        case picoquic_frame_type_datagram_id:
-        case picoquic_frame_type_datagram_id_l:
             byte_index += picoquic_log_datagram_frame(F, bytes + byte_index, length - byte_index);
             break;
         default: {

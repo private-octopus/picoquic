@@ -13,6 +13,9 @@
     <ClCompile Include="http0dot9.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="siduck.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="democlient.h">
@@ -25,6 +28,9 @@
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="wincompat.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="siduck.h">
       <Filter>Source Files</Filter>
     </ClInclude>
   </ItemGroup>
