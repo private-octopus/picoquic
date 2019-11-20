@@ -3485,7 +3485,7 @@ uint8_t* picoquic_decode_datagram_frame(picoquic_cnx_t* cnx, uint8_t* bytes, con
     return bytes;
 }
 
-int picoquic_prepare_datagram_frame(size_t length, uint8_t* src, uint8_t* bytes, size_t bytes_max, size_t* consumed)
+int picoquic_prepare_datagram_frame(size_t length, const uint8_t* src, uint8_t* bytes, size_t bytes_max, size_t* consumed)
 {
     int ret = 0;
     size_t byte_index = 0;
@@ -3510,7 +3510,7 @@ int picoquic_prepare_datagram_frame(size_t length, uint8_t* src, uint8_t* bytes,
     return ret;
 }
 
-int picoquic_queue_datagram_frame(picoquic_cnx_t * cnx, size_t length, uint8_t * bytes)
+int picoquic_queue_datagram_frame(picoquic_cnx_t * cnx, size_t length, const uint8_t * bytes)
 {
     size_t consumed = 0;
     uint8_t frame_buffer[PICOQUIC_MAX_PACKET_SIZE];

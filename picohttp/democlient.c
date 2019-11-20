@@ -548,6 +548,7 @@ static picoquic_alpn_list_t alpn_list[] = {
     { picoquic_alpn_http_0_9, "hq"},
     { picoquic_alpn_http_0_9, "hq-23"},
     { picoquic_alpn_http_0_9, "hq-24"},
+    { picoquic_alpn_siduck, "siduck"}
 };
 
 static size_t nb_alpn_list = sizeof(alpn_list) / sizeof(picoquic_alpn_list_t);
