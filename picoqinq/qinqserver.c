@@ -448,7 +448,7 @@ void picoqinq_delete_srv_cnx_ctx(picoqinq_srv_cnx_ctx_t* ctx)
         picoqinq_delete_srv_cnx_ctx_hc(&ctx->send_hc);
 
         /* Remove the address links*/
-        while (ctx->first_address_by_cnx) {
+        while (ctx->first_address_by_cnx != NULL) {
             picoqinq_cnx_address_link_delete(ctx->first_address_by_cnx);
         }
 

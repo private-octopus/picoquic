@@ -793,7 +793,7 @@ int binlog_test()
         }
     }
 
-    return 0;
+    return ret;
 }
 
 /* Basic test of connection ID stash, part of migration support  */
