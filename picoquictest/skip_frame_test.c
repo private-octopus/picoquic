@@ -195,22 +195,6 @@ static uint8_t test_frame_type_datagram_l[] = {
     0xA8, 0xA9, 0xAA, 0xAB, 0xAC, 0xAD, 0xAE, 0xAF
 };
 
-static uint8_t test_frame_type_datagram_id[] = {
-    picoquic_frame_type_datagram_id,
-    0x41,0x10,
-    0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7,
-    0xA8, 0xA9, 0xAA, 0xAB, 0xAC, 0xAD, 0xAE, 0xAF
-};
-
-static uint8_t test_frame_type_datagram_id_l[] = {
-    picoquic_frame_type_datagram_id_l,
-    0x41,0x10,
-    0x10,
-    0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7,
-    0xA8, 0xA9, 0xAA, 0xAB, 0xAC, 0xAD, 0xAE, 0xAF
-};
-
-
 #define TEST_SKIP_ITEM(n, x, a, l, e) \
     {                              \
         n, x, sizeof(x), a, l, e     \
@@ -244,8 +228,6 @@ test_skip_frames_t test_skip_list[] = {
     TEST_SKIP_ITEM("retire_connection_id", test_frame_type_retire_connection_id, 0, 0, 3),
     TEST_SKIP_ITEM("datagram", test_frame_type_datagram, 1, 1, 3),
     TEST_SKIP_ITEM("datagram_l", test_frame_type_datagram_l, 1, 0, 3),
-    TEST_SKIP_ITEM("datagram_id", test_frame_type_datagram_id, 1, 1, 3),
-    TEST_SKIP_ITEM("datagram_id_l", test_frame_type_datagram_id_l, 1, 1, 3),
 };
 
 size_t nb_test_skip_list = sizeof(test_skip_list) / sizeof(test_skip_frames_t);

@@ -421,7 +421,7 @@ int picoqinq_forward_outgoing_packet(
             ret = -1;
         }
         else {
-            ret = picoquic_queue_datagram_frame(cnx, 0, next_dg_byte - dg, dg);
+            ret = picoquic_queue_datagram_frame(cnx, next_dg_byte - dg, dg);
         }
     }
 

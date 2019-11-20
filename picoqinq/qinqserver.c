@@ -203,7 +203,7 @@ int picoquic_incoming_proxy_packet(
         ret = -1;
     }
     else {
-        ret = picoquic_queue_datagram_frame(cnx_ctx->cnx, 0, next_dg_byte - dg, dg);
+        ret = picoquic_queue_datagram_frame(cnx_ctx->cnx, next_dg_byte - dg, dg);
     }
     
     return ret;
