@@ -1098,3 +1098,32 @@ int h09_post_test()
 {
     return demo_server_test(PICOHTTP_ALPN_HQ_LATEST, picoquic_h09_server_callback, (void*)& ping_test_param, 0, post_test_scenario, nb_post_test_scenario, post_test_stream_length);
 }
+
+int demo_file_sanitize_test()
+{
+    int ret = 0;
+    char const* good[] = {
+        "/index.html", "/example.com.txt", "/5000000", "/123_45.png", "/a-b-C-Z"
+    };
+    size_t nb_good = sizeof(good) / sizeof(const*);
+    char const* bad[] = {
+        "/../index.html", "example.com.txt", "/5000000/", "/.123_45.png", "/a-b-C-Z\\..\\password.txt"
+    };
+    size_t nb_bad = sizeof(bad) / sizeof(const*);
+
+    for (size_t i = 0; ret == 0 && i < nb_good; i++) {
+        if (demo_server_is_path_sane((uint8_t*)good[i], strlen(good[i])) != 0) {
+            DBG_PRINTF("Found good frame not good: %s\n", good[i]);
+            ret = -1;
+        }
+    }
+
+    for (size_t i = 0; ret == 0 && i < nb_bad; i++) {
+        if (demo_server_is_path_sane((uint8_t*)bad[i], strlen(bad[i])) == 0) {
+            DBG_PRINTF("Found bad frame not bad: %s\n", bad[i]);
+            ret = -1;
+        }
+    }
+
+    return ret;
+}

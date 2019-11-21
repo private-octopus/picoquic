@@ -109,6 +109,7 @@ typedef struct st_picohttp_server_stream_ctx_t {
     int method;
     picohttp_post_data_cb_fn path_callback;
     void* path_callback_ctx;
+    FILE* F;
 } picohttp_server_stream_ctx_t;
 
 /* Define the H3Zero server callback */
@@ -148,3 +149,5 @@ int picoquic_demo_server_callback(picoquic_cnx_t* cnx,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx);
 
 #endif /* DEMO_SERVER_H */
+
+int demo_server_is_path_sane(const uint8_t* path, size_t path_length);

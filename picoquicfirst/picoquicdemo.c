@@ -1081,6 +1081,7 @@ void usage()
     fprintf(stderr, "  -k file               key file (default: %s)\n", SERVER_KEY_FILE);
     fprintf(stderr, "  -K file               ESNI private key file (default: don't use ESNI)\n");
     fprintf(stderr, "  -E file               ESNI RR file (default: don't use ESNI)\n");
+    fprintf(stderr, "  -w folder             Folder containing web pages served by server\n");
     fprintf(stderr, "  -l file               Log file, Log to stdout if file = \"n\". No logging if absent.\n");
     fprintf(stderr, "  -L                    Log all packets. If absent, log stops after 100 packets.\n");
     fprintf(stderr, "  -p port               server port (default: %d)\n", default_server_port);
@@ -1132,7 +1133,8 @@ int main(int argc, char** argv)
     const char * bin_file = NULL;
     const char * sni = NULL;
     const char * alpn = NULL;
-    const char * cc_log_dir = NULL; 
+    const char * cc_log_dir = NULL;
+    const char* www_dir = NULL;
     picoquic_congestion_algorithm_t const* cc_algorithm = NULL;
     int server_port = default_server_port;
     const char* root_trust_file = NULL;
@@ -1166,7 +1168,7 @@ int main(int argc, char** argv)
 
     /* Get the parameters */
     int opt;
-    while ((opt = getopt(argc, argv, "c:k:K:p:u:v:f:i:s:e:E:l:b:m:n:a:t:S:I:g:G:1rhzDLQ")) != -1) {
+    while ((opt = getopt(argc, argv, "c:k:K:p:u:v:w:f:i:s:e:E:l:b:m:n:a:t:S:I:g:G:1rhzDLQ")) != -1) {
         switch (opt) {
         case 'c':
             server_cert_file = optarg;
@@ -1194,6 +1196,9 @@ int main(int argc, char** argv)
                 fprintf(stderr, "Invalid version: %s\n", optarg);
                 usage();
             }
+            break;
+        case 'w':
+            www_dir = optarg;
             break;
         case '1':
             just_once = 1;

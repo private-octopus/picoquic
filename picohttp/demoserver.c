@@ -64,9 +64,12 @@ static picohttp_server_stream_ctx_t * picohttp_find_or_create_stream(
     return stream_ctx;
 }
 
-
 static void picohttp_delete_stream(picohttp_server_stream_ctx_t* stream_ctx)
 {
+    if (stream_ctx->F != NULL) {
+        fclose(stream_ctx->F);
+        stream_ctx->F = NULL;
+    }
 
     if (stream_ctx->path_callback != NULL) {
         (void)stream_ctx->path_callback(NULL, NULL, 0, picohttp_callback_reset, stream_ctx);
@@ -156,7 +159,50 @@ Picoquic POST Response\
 <p>Received %d bytes.\r\n\
 </BODY></HTML>\r\n";
 
-static int demo_server_parse_path(const uint8_t * path, size_t path_length, size_t * echo_size)
+
+/* Sanity check of path name to prevent directory traversal.
+ * We use a simple command that check for file names mae of alpha,
+ * num, hyphens and underlines, plus non repeated dots */
+int demo_server_is_path_sane(const uint8_t* path, size_t path_length)
+{
+    int ret = 0;
+    size_t i = 0;
+    int past_is_dot = 0;
+    int nb_good = 0;
+
+    if (path[0] == '/') {
+        i++;
+    }
+    else {
+        ret = -1;
+    }
+
+    for (; ret == 0 && i < path_length; i++) {
+        int c = path[i];
+        if ((c >= 'a' && c <= 'z') ||
+            (c >= 'A' && c <= 'Z') ||
+            (c >= '0' && c <= '9') ||
+            c == '-' || c == '_') {
+            nb_good++;
+            past_is_dot = 0;
+        }
+        else if (c == '.' && !past_is_dot && nb_good > 0){
+            past_is_dot = 1;
+        }
+        else {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0 && nb_good == 0) {
+        ret = -1;
+    }
+
+    return ret;
+}
+
+
+static int demo_server_parse_path(const uint8_t * path, size_t path_length, size_t * echo_size, FILE ** pF)
 {
     /* TODO-POST: consider known URL for post from table? */
     int ret = 0;
@@ -211,7 +257,7 @@ static int h3zero_server_process_request_frame(
         o_bytes = h3zero_create_bad_method_header_frame(o_bytes, o_bytes_max);
     }
     else if (stream_ctx->ps.stream_state.header.method == h3zero_method_get &&
-        demo_server_parse_path(stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, &stream_ctx->echo_length) != 0) {
+        demo_server_parse_path(stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, &stream_ctx->echo_length, &stream_ctx->F) != 0) {
         /* If unknown, 404 */
         o_bytes = h3zero_create_not_found_header_frame(o_bytes, o_bytes_max);
         /* TODO: consider known-url?data construct */
@@ -881,7 +927,7 @@ int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
         }
 
         if (stream_ctx->method == 0){
-            if (demo_server_parse_path(stream_ctx->ps.hq.path, stream_ctx->ps.hq.path_length, &stream_ctx->echo_length)) {
+            if (demo_server_parse_path(stream_ctx->ps.hq.path, stream_ctx->ps.hq.path_length, &stream_ctx->echo_length, &stream_ctx->F)) {
                 is_not_found = 1;
             }
         }

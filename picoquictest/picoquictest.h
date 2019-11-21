@@ -194,6 +194,8 @@ int fast_nat_rebinding_test();
 int util_memcmp_test();
 int ddos_amplification_test();
 
+int demo_file_sanitize_test();
+
 int qinq_rh_test();
 int qinq_incoming_datagram_parse_test();
 int qinq_address_table_test();
