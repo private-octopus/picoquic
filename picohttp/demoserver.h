@@ -67,6 +67,7 @@ typedef struct st_picohttp_server_path_item_t {
 } picohttp_server_path_item_t;
 
 typedef struct st_picohttp_server_parameters_t {
+    char const* web_folder;
     picohttp_server_path_item_t* path_table;
     size_t path_table_nb;
 } picohttp_server_parameters_t;
@@ -120,6 +121,7 @@ typedef struct st_h3zero_server_callback_ctx_t {
     uint8_t* buffer;
     picohttp_server_path_item_t * path_table;
     size_t path_table_nb;
+    char const* web_folder;
 } h3zero_server_callback_ctx_t;
 
 int h3zero_server_callback(picoquic_cnx_t* cnx,
@@ -134,6 +136,7 @@ typedef struct st_picoquic_h09_server_callback_ctx_t {
     picohttp_server_stream_ctx_t* first_stream;
     picohttp_server_path_item_t * path_table;
     size_t path_table_nb;
+    char const* web_folder;
 } picoquic_h09_server_callback_ctx_t;
 
 int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
@@ -151,3 +154,5 @@ int picoquic_demo_server_callback(picoquic_cnx_t* cnx,
 #endif /* DEMO_SERVER_H */
 
 int demo_server_is_path_sane(const uint8_t* path, size_t path_length);
+
+int demo_server_try_file_path(const uint8_t* path, size_t path_length, size_t* echo_size, FILE** pF, char const* web_folder);

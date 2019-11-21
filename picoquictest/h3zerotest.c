@@ -1080,6 +1080,7 @@ picohttp_server_path_item_t ping_test_item = {
 };
 
 picohttp_server_parameters_t ping_test_param = {
+    NULL,
     &ping_test_item,
     1
 };
@@ -1122,6 +1123,79 @@ int demo_file_sanitize_test()
         if (demo_server_is_path_sane((uint8_t*)bad[i], strlen(bad[i])) == 0) {
             DBG_PRINTF("Found bad frame not bad: %s\n", bad[i]);
             ret = -1;
+        }
+    }
+
+    return ret;
+}
+
+int demo_file_access_test()
+{
+    int ret = 0;
+#ifdef _WINDOWS
+    char const* folder = ".\\";
+#else
+    char const* folder = "./";
+#endif
+    char const* path = "/x1234x5678.zzz";
+    char const* bad_path = "/../etc/passwd";
+    size_t f_size = 0;
+    size_t echo_size = 0;
+
+    FILE* F = picoquic_file_open(path + 1, "wb");
+
+    if (F == NULL) {
+        DBG_PRINTF("Cannot create file: %s", path + 1);
+        ret = -1;
+    }
+    else {
+        char buf[128];
+        for (int i = 0; i < 16; i++) {
+            memset(buf, i, sizeof(buf));
+            fwrite(buf, 1, sizeof(buf), F);
+            f_size += sizeof(buf);
+        }
+        F = picoquic_file_close(F);
+    }
+
+    if (ret == 0) {
+        ret = demo_server_try_file_path((uint8_t*)path, strlen(path), &echo_size, &F, folder);
+        if (ret != 0) {
+            DBG_PRINTF("Could not try file path <%s> <%s>, ret = %d", folder, path, ret);
+        }
+        else if (echo_size != f_size) {
+            DBG_PRINTF("Found size = %d instead of %d", (int)echo_size, (int)f_size);
+            ret = -1;
+        }
+        if (F != NULL) {
+            F = picoquic_file_close(F);
+        }
+    }
+
+    if (ret == 0) {
+        ret = remove(path + 1);
+        if (ret != 0) {
+            DBG_PRINTF("Could not remove %s", path + 1);
+        }
+    }
+
+    if (ret == 0) {
+        if (demo_server_try_file_path((uint8_t*)path, strlen(path), &echo_size, &F, folder) == 0) {
+            DBG_PRINTF("Could open deleted file path <%s> <%s>", folder, path);
+            ret = -1;
+        }
+        if (F != NULL) {
+            F = picoquic_file_close(F);
+        }
+    }
+
+    if (ret == 0) {
+        if (demo_server_try_file_path((uint8_t*)bad_path, strlen(bad_path), &echo_size, &F, folder) == 0) {
+            DBG_PRINTF("Could open deleted bad path <%s> <%s>", folder, bad_path);
+            ret = -1;
+        }
+        if (F != NULL) {
+            F = picoquic_file_close(F);
         }
     }
 

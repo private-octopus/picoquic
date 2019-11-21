@@ -87,7 +87,7 @@ typedef struct st_picoquic_demo_client_callback_ctx_t {
 picoquic_alpn_enum picoquic_parse_alpn(char const * alpn);
 
 int h3zero_client_init(picoquic_cnx_t* cnx);
-int demo_client_prepare_to_send(void * context, size_t space, size_t echo_length, size_t * echo_sent);
+int demo_client_prepare_to_send(void * context, size_t space, size_t echo_length, size_t * echo_sent, FILE * F);
 int h3zero_client_create_stream_request(
     uint8_t * buffer, size_t max_bytes, uint8_t const * path, size_t path_len, size_t post_size, const char * host, size_t * consumed);
 

@@ -1098,6 +1098,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(demo_file_access) {
+            int ret = demo_file_access_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(qinq_rh) {
             int ret = qinq_rh_test();
 

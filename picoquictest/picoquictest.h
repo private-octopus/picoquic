@@ -195,6 +195,7 @@ int util_memcmp_test();
 int ddos_amplification_test();
 
 int demo_file_sanitize_test();
+int demo_file_access_test();
 
 int qinq_rh_test();
 int qinq_incoming_datagram_parse_test();
