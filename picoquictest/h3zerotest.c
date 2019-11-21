@@ -1141,6 +1141,8 @@ int demo_file_access_test()
     char const* bad_path = "/../etc/passwd";
     size_t f_size = 0;
     size_t echo_size = 0;
+    char buf[128];
+    const int nb_blocks = 16;
 
     FILE* F = picoquic_file_open(path + 1, "wb");
 
@@ -1149,8 +1151,7 @@ int demo_file_access_test()
         ret = -1;
     }
     else {
-        char buf[128];
-        for (int i = 0; i < 16; i++) {
+        for (int i = 0; i < nb_blocks; i++) {
             memset(buf, i, sizeof(buf));
             fwrite(buf, 1, sizeof(buf), F);
             f_size += sizeof(buf);
@@ -1167,6 +1168,23 @@ int demo_file_access_test()
             DBG_PRINTF("Found size = %d instead of %d", (int)echo_size, (int)f_size);
             ret = -1;
         }
+        else {
+            for (int i = 0; ret == 0 && i < nb_blocks; i++) {
+                int nb_read = (int)fread(buf, 1, sizeof(buf), F);
+                if (nb_read != (int)sizeof(buf)) {
+                    ret = -1;
+                }
+                else {
+                    for (size_t j = 0; j < sizeof(buf); j++) {
+                        if (buf[j] != i) {
+                            ret = -1;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
         if (F != NULL) {
             F = picoquic_file_close(F);
         }
