@@ -1228,7 +1228,7 @@ static const picoquic_demo_stream_desc_t file_test_scenario[] = {
 };
 
 static size_t const demo_file_test_stream_length[] = {
-    4598
+    4499
 };
 
 static size_t nb_file_test_scenario = sizeof(file_test_scenario) / sizeof(picoquic_demo_stream_desc_t);
