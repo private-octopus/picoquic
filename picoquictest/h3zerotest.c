@@ -1106,7 +1106,7 @@ int demo_file_sanitize_test()
     char const* good[] = {
         "/index.html", "/example.com.txt", "/5000000", "/123_45.png", "/a-b-C-Z"
     };
-    size_t nb_good = sizeof(good) / sizeof(const*);
+    size_t nb_good = sizeof(good) / sizeof(char const*);
     char const* bad[] = {
         "/../index.html", "example.com.txt", "/5000000/", "/.123_45.png", "/a-b-C-Z\\..\\password.txt"
     };
