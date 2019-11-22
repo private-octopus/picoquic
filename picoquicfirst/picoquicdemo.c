@@ -173,7 +173,8 @@ int quic_server(const char* server_name, int server_port,
     void* cnx_id_callback_ctx, uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE],
     int dest_if, int mtu_max, uint32_t proposed_version, 
     const char * esni_key_file_name, const char * esni_rr_file_name,
-    FILE * F_log, char const* bin_file, char const * cc_log_dir, int use_long_log, picoquic_congestion_algorithm_t const * cc_algorithm)
+    FILE * F_log, char const* bin_file, char const * cc_log_dir, int use_long_log, 
+    picoquic_congestion_algorithm_t const * cc_algorithm, char const * web_folder)
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
@@ -195,6 +196,12 @@ int quic_server(const char* server_name, int server_port,
     picoquic_stateless_packet_t* sp;
     int64_t delay_max = 10000000;
     int connection_done = 0;
+    picohttp_server_parameters_t picoquic_file_param;
+
+    memset(&picoquic_file_param, 0, sizeof(picohttp_server_parameters_t));
+    picoquic_file_param.web_folder = web_folder;
+
+    // picoquic_set_default_callback(test_ctx->qserver, server_callback_fn, server_param);
 
     /* Open a UDP socket */
     ret = picoquic_open_server_sockets(&server_sockets, server_port);
@@ -203,7 +210,8 @@ int quic_server(const char* server_name, int server_port,
     if (ret == 0) {
         current_time = picoquic_current_time();
         /* Create QUIC context */
-        qserver = picoquic_create(8, pem_cert, pem_key, NULL, NULL, picoquic_demo_server_callback, NULL,
+        qserver = picoquic_create(8, pem_cert, pem_key, NULL, NULL,
+            picoquic_demo_server_callback, &picoquic_file_param,
             cnx_id_callback, cnx_id_callback_ctx, reset_seed, current_time, NULL, NULL, NULL, 0);
 
         if (qserver == NULL) {
@@ -1371,7 +1379,7 @@ int main(int argc, char** argv)
             (cnx_id_cbdata == NULL) ? NULL : (void*)cnx_id_cbdata,
             (uint8_t*)reset_seed, dest_if, mtu_max, proposed_version,
             esni_key_file, esni_rr_file,
-            F_log, bin_file, cc_log_dir, use_long_log, cc_algorithm);
+            F_log, bin_file, cc_log_dir, use_long_log, cc_algorithm, www_dir);
         printf("Server exit with code = %d\n", ret);
     } else {
         /* Run as client */
