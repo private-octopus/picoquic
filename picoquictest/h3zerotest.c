@@ -1110,7 +1110,7 @@ int demo_file_sanitize_test()
     char const* bad[] = {
         "/../index.html", "example.com.txt", "/5000000/", "/.123_45.png", "/a-b-C-Z\\..\\password.txt"
     };
-    size_t nb_bad = sizeof(bad) / sizeof(const*);
+    size_t nb_bad = sizeof(bad) / sizeof(char const*);
 
     for (size_t i = 0; ret == 0 && i < nb_good; i++) {
         if (demo_server_is_path_sane((uint8_t*)good[i], strlen(good[i])) != 0) {
