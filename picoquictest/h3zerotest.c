@@ -1219,3 +1219,54 @@ int demo_file_access_test()
 
     return ret;
 }
+
+
+#define PICOQUIC_TEST_FILE_DEMO_FOLDER "picoquictest"
+
+static const picoquic_demo_stream_desc_t file_test_scenario[] = {
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/file_test_ref.txt", "file_test_ref.txt", 0, 0 }
+};
+
+static size_t const demo_file_test_stream_length[] = {
+    4598
+};
+
+static size_t nb_file_test_scenario = sizeof(file_test_scenario) / sizeof(picoquic_demo_stream_desc_t);
+
+int serve_file_test_set_param(picohttp_server_parameters_t* file_param, char * buf, size_t buf_size)
+{
+    int ret = picoquic_get_input_path(buf, buf_size, picoquic_test_solution_dir, PICOQUIC_TEST_FILE_DEMO_FOLDER);
+
+    memset(file_param, 0, sizeof(picohttp_server_parameters_t));
+    file_param->web_folder = buf;
+
+    return ret;
+}
+
+
+int demo_server_file_test()
+{
+    int ret = 0;
+    char file_name_buffer[1024];
+    picohttp_server_parameters_t file_param;
+
+    ret = serve_file_test_set_param(&file_param, file_name_buffer, sizeof(file_name_buffer));
+
+    if (ret == 0 && (ret = demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, (void*)&file_param, 0, file_test_scenario, nb_file_test_scenario, demo_file_test_stream_length)) != 0) {
+        DBG_PRINTF("H3 server (%s) file test fails, ret = %d\n", PICOHTTP_ALPN_H3_LATEST, ret);
+    }
+
+    if (ret == 0 && (ret = demo_server_test(PICOHTTP_ALPN_HQ_LATEST, picoquic_h09_server_callback, (void*)&file_param, 0, file_test_scenario, nb_file_test_scenario, demo_file_test_stream_length)) != 0) {
+        DBG_PRINTF("H09 server (%s) file test fails, ret = %d\n", PICOHTTP_ALPN_HQ_LATEST, ret);
+    }
+
+    if (ret == 0 && (ret = demo_server_test(PICOHTTP_ALPN_H3_LATEST, picoquic_demo_server_callback, (void*)&file_param, 0, file_test_scenario, nb_file_test_scenario, demo_file_test_stream_length)) != 0) {
+        DBG_PRINTF("Demo server (%s) file test fails, ret = %d\n", PICOHTTP_ALPN_H3_LATEST, ret);
+    }
+
+    if (ret == 0 && (ret = demo_server_test(PICOHTTP_ALPN_HQ_LATEST, picoquic_demo_server_callback, (void*)&file_param, 0, file_test_scenario, nb_file_test_scenario, demo_test_stream_length)) != 0) {
+        DBG_PRINTF("Demo server (%s) file test fails, ret = %d\n", PICOHTTP_ALPN_HQ_LATEST, ret);
+    }
+
+    return ret;
+}
