@@ -248,8 +248,13 @@ int demo_server_try_file_path(const uint8_t* path, size_t path_length, size_t* e
 
 static int demo_server_parse_path(const uint8_t * path, size_t path_length, size_t * echo_size, FILE ** pF, char const * web_folder)
 {
-    /* TODO-POST: consider known URL for post from table? */
     int ret = 0;
+
+    if (path != NULL && path_length == 1 && path[0] == '/') {
+        /* Redirect the root requests to the default index so it can be read from file if file is present */
+        path = (const uint8_t *)"/index.html";
+        path_length = 11;
+    }
 
     *echo_size = 0;
     if (path == NULL || path_length == 0 || path[0] != '/') {
