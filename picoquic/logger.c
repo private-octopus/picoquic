@@ -406,6 +406,12 @@ char const* picoquic_log_tp_name(uint64_t tp_number)
     case picoquic_tp_max_datagram_size:
         tp_name = "max_datagram_size";
         break;
+    case picoquic_tp_test_large_chello:
+        tp_name = "large_chello";
+        break;
+    case picoquic_tp_enable_loss_bit:
+        tp_name = "enable_loss_bit";
+        break;
     default:
         break;
     }
@@ -1464,8 +1470,9 @@ void picoquic_log_transport_extension_content(FILE* F, int log_cnxid, uint64_t c
                             if (log_cnxid != 0) {
                                 fprintf(F, "%" PRIx64 ": ", cnx_id_64);
                             }
-                            fprintf(F, "        Extension type: %d (%s), length %d, ",
-                                extension_type, picoquic_log_tp_name(extension_type), extension_length);
+                            fprintf(F, "        Extension type: %d (%s), length %d%s",
+                                extension_type, picoquic_log_tp_name(extension_type), extension_length,
+                                (extension_length == 0)?"":", ");
 
                             if (byte_index + extension_length > extensions_end) {
                                 if (log_cnxid != 0) {

@@ -375,7 +375,7 @@ int picoquic_remove_header_protection(picoquic_cnx_t* cnx,
         else
         {   /* Decode */
             uint8_t first_byte = bytes[0];
-            uint8_t first_mask = ((first_byte & 0x80) == 0x80) ? 0x0F : 0x1F;
+            uint8_t first_mask = ((first_byte & 0x80) == 0x80) ? 0x0F : (cnx->is_loss_bit_enabled)?0x07:0x1F;
             uint8_t pn_l;
             uint32_t pn_val = 0;
 
@@ -406,8 +406,8 @@ int picoquic_remove_header_protection(picoquic_cnx_t* cnx,
                 cnx->pkt_ctx[ph->pc].first_sack_item.end_of_sack_range, ph->pnmask, ph->pn);
 
             /* Check the reserved bits */
-            ph->has_reserved_bit_set = ((first_byte & 0x80) == 0) &&
-                ((first_byte & 0x18) != 0);
+            ph->has_reserved_bit_set = ((first_byte & 0x80) == 0 && !cnx->is_loss_bit_enabled &&
+                (first_byte & 0x18) != 0);
         }
     }
     else {

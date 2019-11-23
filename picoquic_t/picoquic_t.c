@@ -134,6 +134,7 @@ static const picoquic_test_def_t test_table[] = {
     { "nat_rebinding_loss", nat_rebinding_loss_test },
     { "fast_nat_rebinding", fast_nat_rebinding_test},
     { "spin_bit", spin_bit_test},
+    { "loss_bit", loss_bit_test},
     { "client_error", client_error_test },
     { "packet_enc_dec", packet_enc_dec_test},
     { "pn_vector", cleartext_pn_vector_test },

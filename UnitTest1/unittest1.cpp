@@ -721,6 +721,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(loss_bit)
+        {
+            int ret = loss_bit_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(test_client_error)
         {
             int ret = client_error_test();
