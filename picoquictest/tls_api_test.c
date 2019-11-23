@@ -3578,6 +3578,34 @@ int spin_bit_test()
     return ret;
 }
 
+/*
+ * Test whether the loss bit reporting can be enabled without breaking the connection
+ */
+
+int loss_bit_test()
+{
+    int ret = 0;
+    picoquic_tp_t client_parameters;
+    picoquic_tp_t server_parameters;
+
+    for (int i = 0; ret == 0 && i <= 3; i++) {
+        memset(&client_parameters, 0, sizeof(picoquic_tp_t));
+        memset(&server_parameters, 0, sizeof(picoquic_tp_t));
+        picoquic_init_transport_parameters(&client_parameters, 1);
+        picoquic_init_transport_parameters(&server_parameters, 0);
+
+        client_parameters.enable_loss_bit = (i & 1);
+        server_parameters.enable_loss_bit = ((i > 1) & 1);
+
+        ret = tls_api_one_scenario_test(test_scenario_many_streams, sizeof(test_scenario_many_streams), 0, 0, 0, 0, 0, 250000, &client_parameters, &server_parameters);
+        if (ret != 0) {
+            DBG_PRINTF("Loss bit test fails for client: %d, server: %d, ret = %d", i & 1, i >> 1, ret);
+        }
+    }
+
+    return ret;
+}
+
 
 /*
 * Closing on error test. We voluntarily inject an erroneous

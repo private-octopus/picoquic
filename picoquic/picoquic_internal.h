@@ -282,8 +282,9 @@ typedef enum {
     picoquic_tp_disable_migration = 12,
     picoquic_tp_server_preferred_address = 13,
     picoquic_tp_active_connection_id_limit = 14,
-    picoquic_tp_max_datagram_size = 32 /* per draft-pauly-quic-datagram-02 */,
-    picoquic_tp_test_large_chello = 3127
+    picoquic_tp_max_datagram_size = 32 /* per draft-pauly-quic-datagram-05 */,
+    picoquic_tp_test_large_chello = 3127,
+    picoquic_tp_enable_loss_bit = 0x1055
 } picoquic_tp_enum;
 
 /* QUIC context, defining the tables of connections,
@@ -549,6 +550,11 @@ typedef struct st_picoquic_path_t {
     uint64_t pacing_packet_time_nanosec;
     uint64_t pacing_packet_time_microsec;
 
+    /* Loss bit data */
+    uint64_t nb_losses_found;
+    uint64_t nb_losses_reported;
+    uint64_t q_square;
+
 } picoquic_path_t;
 
 /* Per epoch crypto context. There are four such contexts:
@@ -669,6 +675,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int test_large_chello : 1; /* Add a greasing parameter to test sending CHello on multiple packets */
     unsigned int initial_validated : 1; /* Path has been validated, DOS amplification protection is lifted */
     unsigned int initial_repeat_needed : 1; /* Path has not been validated, repeated initial was received */
+    unsigned int is_loss_bit_enabled : 1; /* Insert the loss bits in outgoing packets, read on incoming */
 
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;
