@@ -516,7 +516,8 @@ static size_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     picoquic_connection_id_t * local_cnxid,
     size_t length, size_t header_length,
     uint8_t* send_buffer, size_t send_buffer_max,
-    void * aead_context, void* pn_enc, uint64_t current_time)
+    void * aead_context, void* pn_enc,
+    picoquic_path_t* path_x, uint64_t current_time)
 {
     size_t send_length;
     size_t h_length;
@@ -524,15 +525,32 @@ static size_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     size_t sample_offset = 0;
     size_t pn_length = 0;
     size_t aead_checksum_length = picoquic_aead_get_checksum_length(aead_context);
+    uint8_t first_mask = 0x0F;
 
     /* Create the packet header just before encrypting the content */
     h_length = picoquic_create_packet_header(cnx, ptype,
         sequence_number, remote_cnxid, local_cnxid, send_buffer, &pn_offset, &pn_length);
-    /* If the destination ID does not match the local context, reset the spin bit */
-    if (ptype == picoquic_packet_1rtt_protected &&
-        remote_cnxid != &cnx->path[0]->remote_cnxid) {
-        /* Packet is sent to a different CID: reset the spin bits to 0 */
-        send_buffer[0] &= 0xDF;
+    if (ptype == picoquic_packet_1rtt_protected) {
+        if (remote_cnxid != &path_x->remote_cnxid) {
+            /* Packet is sent to a different CID: reset the spin bit and loss bit Q to 0 */
+            send_buffer[0] &= 0xDF;
+            path_x->q_square = 0;
+        }
+
+        if (cnx->is_loss_bit_enabled) {
+            first_mask = 0x07;
+            path_x->q_square++;
+            if ((path_x->q_square & 128) != 0) {
+                send_buffer[0] |= 0x10;
+            }
+            if (path_x->nb_losses_found > path_x->nb_losses_reported) {
+                send_buffer[0] |= 0x08;
+                path_x->nb_losses_reported++;
+            }
+        }
+        else {
+            first_mask = 0x1F;
+        }
     }
 
     /* Make sure that the payload length is encoded in the header */
@@ -576,8 +594,6 @@ static size_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     if (pn_offset < sample_offset)
     {
         /* This is always true, as use pn_length = 4 */
-        uint8_t first_byte = send_buffer[0];
-        uint8_t first_mask = ((first_byte & 0x80) == 0x80) ? 0x0F : 0x1F;
         uint8_t mask_bytes[5] = { 0, 0, 0, 0, 0 };
 
         picoquic_pn_encrypt(pn_enc, send_buffer + sample_offset, mask_bytes, mask_bytes, 5);
@@ -823,6 +839,8 @@ void picoquic_insert_hole_in_send_sequence_if_needed(picoquic_cnx_t* cnx, uint64
                 packet->sequence_number = cnx->pkt_ctx[picoquic_packet_context_application].send_sequence++;
                 picoquic_queue_for_retransmit(cnx, cnx->path[0], packet, 0, current_time);
                 *next_wake_time = current_time;
+                /* Simulate local loss on the Q bit square function. */
+                cnx->path[0]->q_square++;
             }
         }
         /* Predict the next hole*/
@@ -858,35 +876,35 @@ void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet_t
                 remote_cnxid, local_cnxid,
                 length, header_length,
                 send_buffer, send_buffer_max, cnx->crypto_context[0].aead_encrypt, cnx->crypto_context[0].pn_enc,
-                current_time);
+                path_x, current_time);
             break;
         case picoquic_packet_handshake:
             length = picoquic_protect_packet(cnx, packet->ptype, packet->bytes, packet->sequence_number,
                 remote_cnxid, local_cnxid,
                 length, header_length,
                 send_buffer, send_buffer_max, cnx->crypto_context[2].aead_encrypt, cnx->crypto_context[2].pn_enc,
-                current_time);
+                path_x, current_time);
             break;
         case picoquic_packet_retry:
             length = picoquic_protect_packet(cnx, packet->ptype, packet->bytes, packet->sequence_number,
                 remote_cnxid, local_cnxid,
                 length, header_length,
                 send_buffer, send_buffer_max, cnx->crypto_context[0].aead_encrypt, cnx->crypto_context[0].pn_enc,
-                current_time);
+                path_x, current_time);
             break;
         case picoquic_packet_0rtt_protected:
             length = picoquic_protect_packet(cnx, packet->ptype, packet->bytes, packet->sequence_number, 
                 remote_cnxid, local_cnxid,
                 length, header_length,
                 send_buffer, send_buffer_max, cnx->crypto_context[1].aead_encrypt, cnx->crypto_context[1].pn_enc,
-                current_time);
+                path_x, current_time);
             break;
         case picoquic_packet_1rtt_protected:
             length = picoquic_protect_packet(cnx, packet->ptype, packet->bytes, packet->sequence_number,
                 remote_cnxid, local_cnxid,
                 length, header_length,
                 send_buffer, send_buffer_max, cnx->crypto_context[3].aead_encrypt, cnx->crypto_context[3].pn_enc,
-                current_time);
+                path_x, current_time);
             break;
         default:
             /* Packet type error. Do nothing at all. */
@@ -1222,11 +1240,15 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                     packet->length = length;
                     cnx->nb_retransmission_total++;
 
-                    if (cnx->congestion_alg != NULL && old_path != NULL) {
-                        cnx->congestion_alg->alg_notify(cnx, old_path,
-                            (timer_based_retransmit == 0) ? picoquic_congestion_notification_repeat : picoquic_congestion_notification_timeout,
-                            0, 0, lost_packet_number, current_time);
-                    } 
+                    if (old_path != NULL) {
+                        old_path->nb_losses_found++;
+
+                        if (cnx->congestion_alg != NULL) {
+                            cnx->congestion_alg->alg_notify(cnx, old_path,
+                                (timer_based_retransmit == 0) ? picoquic_congestion_notification_repeat : picoquic_congestion_notification_timeout,
+                                0, 0, lost_packet_number, current_time);
+                        }
+                    }
 
                     break;
                 }

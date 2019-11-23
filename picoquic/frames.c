@@ -1941,6 +1941,10 @@ void picoquic_check_spurious_retransmission(picoquic_cnx_t* cnx,
                     cnx->congestion_alg->alg_notify(cnx, old_path, picoquic_congestion_notification_spurious_repeat,
                         0, 0, p->sequence_number, current_time);
                 }
+
+                if (old_path->nb_losses_found > 0) {
+                    old_path->nb_losses_found--;
+                }
             }
 
             cnx->nb_spurious++;

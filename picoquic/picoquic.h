@@ -326,6 +326,7 @@ typedef struct st_picoquic_tp_t {
     unsigned int migration_disabled;
     picoquic_tp_prefered_address_t prefered_address;
     uint32_t max_datagram_size;
+    int enable_loss_bit;
 } picoquic_tp_t;
 
 /*

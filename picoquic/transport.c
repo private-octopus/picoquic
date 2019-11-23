@@ -413,8 +413,19 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         }
     }
 
-    /* Finally, update the parameters length */
+    if (cnx->local_parameters.enable_loss_bit > 0 && bytes != NULL) {
+        if (bytes + 4 > bytes_max) {
+            bytes = NULL;
+        }
+        else {
+            picoformat_16(bytes, picoquic_tp_enable_loss_bit);
+            bytes += 2;
+            picoformat_16(bytes, 0);
+            bytes += 2;
+        }
+    }
 
+    /* Finally, update the parameters length */
     if (bytes == NULL) {
         *consumed = 0;
         ret = PICOQUIC_ERROR_EXTENSION_BUFFER_TOO_SMALL;
@@ -449,6 +460,7 @@ void picoquic_clear_transport_extensions(picoquic_cnx_t* cnx)
     cnx->remote_parameters.max_ack_delay = PICOQUIC_ACK_DELAY_MAX_DEFAULT;
     cnx->remote_parameters.max_datagram_size = 0;
     cnx->remote_parameters.active_connection_id_limit = 0;
+    cnx->remote_parameters.enable_loss_bit = 0;
 }
 
 int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mode,
@@ -627,6 +639,14 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                             cnx->remote_parameters.max_datagram_size = (uint32_t)
                                 picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
                             break;
+                        case picoquic_tp_enable_loss_bit:
+                            if (extension_length != 0) {
+                                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+                            }
+                            else {
+                                cnx->remote_parameters.enable_loss_bit = 1;
+                            }
+                            break;
                         default:
                             /* ignore unknown extensions */
                             break;
@@ -667,6 +687,9 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
             ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
         }
     }
+
+    /* Loss bit is only enabled if negotiated by both parties */
+    cnx->is_loss_bit_enabled = cnx->local_parameters.enable_loss_bit && cnx->remote_parameters.enable_loss_bit;
 
     *consumed = byte_index;
 
