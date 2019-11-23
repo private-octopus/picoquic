@@ -64,9 +64,11 @@ static picohttp_server_stream_ctx_t * picohttp_find_or_create_stream(
     return stream_ctx;
 }
 
-
 static void picohttp_delete_stream(picohttp_server_stream_ctx_t* stream_ctx)
 {
+    if (stream_ctx->F != NULL) {
+        stream_ctx->F = picoquic_file_close(stream_ctx->F);
+    }
 
     if (stream_ctx->path_callback != NULL) {
         (void)stream_ctx->path_callback(NULL, NULL, 0, picohttp_callback_reset, stream_ctx);
@@ -105,6 +107,7 @@ static h3zero_server_callback_ctx_t* h3zero_server_callback_create_context(picoh
             if (param != NULL) {
                 ctx->path_table = param->path_table;
                 ctx->path_table_nb = param->path_table_nb;
+                ctx->web_folder = param->web_folder;
             }
         }
     }
@@ -156,14 +159,109 @@ Picoquic POST Response\
 <p>Received %d bytes.\r\n\
 </BODY></HTML>\r\n";
 
-static int demo_server_parse_path(const uint8_t * path, size_t path_length, size_t * echo_size)
+
+/* Sanity check of path name to prevent directory traversal.
+ * We use a simple command that check for file names mae of alpha,
+ * num, hyphens and underlines, plus non repeated dots */
+int demo_server_is_path_sane(const uint8_t* path, size_t path_length)
 {
-    /* TODO-POST: consider known URL for post from table? */
     int ret = 0;
+    size_t i = 0;
+    int past_is_dot = 0;
+    int nb_good = 0;
+
+    if (path[0] == '/') {
+        i++;
+    }
+    else {
+        ret = -1;
+    }
+
+    for (; ret == 0 && i < path_length; i++) {
+        int c = path[i];
+        if ((c >= 'a' && c <= 'z') ||
+            (c >= 'A' && c <= 'Z') ||
+            (c >= '0' && c <= '9') ||
+            c == '-' || c == '_') {
+            nb_good++;
+            past_is_dot = 0;
+        }
+        else if (c == '.' && !past_is_dot && nb_good > 0){
+            past_is_dot = 1;
+        }
+        else {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0 && nb_good == 0) {
+        ret = -1;
+    }
+
+    return ret;
+}
+
+int demo_server_try_file_path(const uint8_t* path, size_t path_length, size_t* echo_size, FILE** pF, char const* web_folder)
+{
+    int ret = -1;
+    char file_name[1024];
+    size_t len = strlen(web_folder);
+
+    if (len + path_length + 1 <= sizeof(file_name) && demo_server_is_path_sane(path, path_length) == 0) {
+        memcpy(file_name, web_folder, len);
+#ifdef _WINDOWS
+        if (len == 0 || file_name[len - 1] != '\\') {
+            file_name[len] = '\\';
+            len++;
+        }
+#else
+        if (len == 0 || file_name[len - 1] != '/') {
+            file_name[len] = '/';
+            len++;
+        }
+#endif
+        memcpy(file_name + len, path+1, path_length-1);
+        len += path_length - 1;
+        file_name[len] = 0;
+
+        *pF = picoquic_file_open(file_name, "rb");
+
+        if (*pF != NULL) {
+            long sz;
+            fseek(*pF, 0, SEEK_END);
+            sz = ftell(*pF);
+
+            if (sz <= 0) {
+                *pF = picoquic_file_close(*pF);
+            }
+            else {
+                *echo_size = (size_t)sz;
+                fseek(*pF, 0, SEEK_SET);
+                ret = 0;
+            }
+        }
+    }
+
+    return ret;
+}
+
+
+static int demo_server_parse_path(const uint8_t * path, size_t path_length, size_t * echo_size, FILE ** pF, char const * web_folder)
+{
+    int ret = 0;
+
+    if (path != NULL && path_length == 1 && path[0] == '/') {
+        /* Redirect the root requests to the default index so it can be read from file if file is present */
+        path = (const uint8_t *)"/index.html";
+        path_length = 11;
+    }
 
     *echo_size = 0;
     if (path == NULL || path_length == 0 || path[0] != '/') {
         ret = -1;
+    }
+    else if (web_folder != NULL && demo_server_try_file_path(path, path_length, echo_size, pF, web_folder) == 0) {
+        ret = 0;
     }
     else if (path_length > 1 && (path_length != 11 || memcmp(path, "/index.html", 11) != 0)) {
         uint32_t x = 0;
@@ -191,8 +289,7 @@ static int demo_server_parse_path(const uint8_t * path, size_t path_length, size
 static int h3zero_server_process_request_frame(
     picoquic_cnx_t* cnx,
     picohttp_server_stream_ctx_t * stream_ctx,
-    picohttp_server_path_item_t* path_table,
-    size_t path_table_nb)
+    h3zero_server_callback_ctx_t * app_ctx)
 {
     /* Prepare response header */
     uint8_t buffer[1024];
@@ -211,7 +308,7 @@ static int h3zero_server_process_request_frame(
         o_bytes = h3zero_create_bad_method_header_frame(o_bytes, o_bytes_max);
     }
     else if (stream_ctx->ps.stream_state.header.method == h3zero_method_get &&
-        demo_server_parse_path(stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, &stream_ctx->echo_length) != 0) {
+        demo_server_parse_path(stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, &stream_ctx->echo_length, &stream_ctx->F, app_ctx->web_folder) != 0) {
         /* If unknown, 404 */
         o_bytes = h3zero_create_not_found_header_frame(o_bytes, o_bytes_max);
         /* TODO: consider known-url?data construct */
@@ -219,10 +316,10 @@ static int h3zero_server_process_request_frame(
     else {
         if (stream_ctx->ps.stream_state.header.method == h3zero_method_post) {
             if (stream_ctx->path_callback == NULL && stream_ctx->post_received == 0) {
-                int path_item = picohttp_find_path_item(stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, path_table, path_table_nb);
+                int path_item = picohttp_find_path_item(stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, app_ctx->path_table, app_ctx->path_table_nb);
                 if (path_item >= 0) {
                     /* TODO-POST: move this code to post-fin callback.*/
-                    stream_ctx->path_callback = path_table[path_item].path_callback;
+                    stream_ctx->path_callback = app_ctx->path_table[path_item].path_callback;
                     stream_ctx->path_callback(cnx, (uint8_t*)stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, picohttp_callback_post, stream_ctx);
                 }
             }
@@ -386,7 +483,7 @@ static int h3zero_server_callback_data(
                 if (fin_or_event == picoquic_callback_stream_fin) {
                     /* Process the request header. */
                     if (stream_ctx->ps.stream_state.header_found) {
-                        ret = h3zero_server_process_request_frame(cnx, stream_ctx, ctx->path_table, ctx->path_table_nb);
+                        ret = h3zero_server_process_request_frame(cnx, stream_ctx, ctx);
                     }
                     else {
                         /* Unexpected end of stream before the header is received */
@@ -431,7 +528,8 @@ int h3zero_server_callback_prepare_to_send(picoquic_cnx_t* cnx,
         }
         else {
             /* default reply for known URL */
-            ret = demo_client_prepare_to_send(context, space, stream_ctx->echo_length, &stream_ctx->echo_sent);
+            ret = demo_client_prepare_to_send(context, space, stream_ctx->echo_length, &stream_ctx->echo_sent,
+                stream_ctx->F);
         }
     }
 
@@ -596,6 +694,7 @@ static picoquic_h09_server_callback_ctx_t* first_server_callback_create_context(
         if (param != NULL) {
             ctx->path_table = param->path_table;
             ctx->path_table_nb = param->path_table_nb;
+            ctx->web_folder = param->web_folder;
         }
     }
 
@@ -881,7 +980,8 @@ int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
         }
 
         if (stream_ctx->method == 0){
-            if (demo_server_parse_path(stream_ctx->ps.hq.path, stream_ctx->ps.hq.path_length, &stream_ctx->echo_length)) {
+            if (demo_server_parse_path(stream_ctx->ps.hq.path, stream_ctx->ps.hq.path_length, &stream_ctx->echo_length, 
+                &stream_ctx->F, app_ctx->web_folder)) {
                 is_not_found = 1;
             }
         }
@@ -1065,7 +1165,8 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
                 }
                 else {
                     /* TODO-POST: notify callback. */
-                    return demo_client_prepare_to_send((void*)bytes, length, stream_ctx->echo_length, &stream_ctx->echo_sent);
+                    return demo_client_prepare_to_send((void*)bytes, length, stream_ctx->echo_length, &stream_ctx->echo_sent,
+                        stream_ctx->F);
                 }
             }
     default:

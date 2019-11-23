@@ -43,7 +43,7 @@ static picoquic_demo_client_stream_ctx_t* picoquic_demo_client_find_stream(
 }
 
 
-int demo_client_prepare_to_send(void * context, size_t space, size_t echo_length, size_t * echo_sent)
+int demo_client_prepare_to_send(void * context, size_t space, size_t echo_length, size_t * echo_sent, FILE * F)
 {
     int ret = 0;
 
@@ -59,23 +59,36 @@ int demo_client_prepare_to_send(void * context, size_t space, size_t echo_length
 
         buffer = picoquic_provide_stream_data_buffer(context, available, is_fin, !is_fin);
         if (buffer != NULL) {
-            int r = (74 - (*echo_sent % 74)) - 2;
+            if (F) {
+                size_t nb_read = fread(buffer, 1, available, F);
 
-            /* TODO: fill buffer with some text */
-            memset(buffer, 0x5A, available);
-
-            while (r < (int)available) {
-                if (r >= 0) {
-                    buffer[r] = '\r';
+                if (nb_read != available) {
+                    ret = -1;
                 }
-                r++;
-                if (r >= 0 && (unsigned int)r < available) {
-                    buffer[r] = '\n';
+                else {
+                    *echo_sent += (uint32_t)available;
+                    ret = 0;
                 }
-                r += 73;
             }
-            *echo_sent += (uint32_t)available;
-            ret = 0;
+            else {
+                int r = (74 - (*echo_sent % 74)) - 2;
+
+                /* TODO: fill buffer with some text */
+                memset(buffer, 0x5A, available);
+
+                while (r < (int)available) {
+                    if (r >= 0) {
+                        buffer[r] = '\r';
+                    }
+                    r++;
+                    if (r >= 0 && (unsigned int)r < available) {
+                        buffer[r] = '\n';
+                    }
+                    r += 73;
+                }
+                *echo_sent += (uint32_t)available;
+                ret = 0;
+            }
         }
         else {
             ret = -1;
@@ -517,7 +530,7 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
             return 0;
         }
         else {
-            return demo_client_prepare_to_send((void*)bytes, length, stream_ctx->post_size, &stream_ctx->post_sent);
+            return demo_client_prepare_to_send((void*)bytes, length, stream_ctx->post_size, &stream_ctx->post_sent, NULL);
         }
     case picoquic_callback_almost_ready:
     case picoquic_callback_ready:

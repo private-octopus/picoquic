@@ -173,7 +173,8 @@ int quic_server(const char* server_name, int server_port,
     void* cnx_id_callback_ctx, uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE],
     int dest_if, int mtu_max, uint32_t proposed_version, 
     const char * esni_key_file_name, const char * esni_rr_file_name,
-    FILE * F_log, char const* bin_file, char const * cc_log_dir, int use_long_log, picoquic_congestion_algorithm_t const * cc_algorithm)
+    FILE * F_log, char const* bin_file, char const * cc_log_dir, int use_long_log, 
+    picoquic_congestion_algorithm_t const * cc_algorithm, char const * web_folder)
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
@@ -195,6 +196,12 @@ int quic_server(const char* server_name, int server_port,
     picoquic_stateless_packet_t* sp;
     int64_t delay_max = 10000000;
     int connection_done = 0;
+    picohttp_server_parameters_t picoquic_file_param;
+
+    memset(&picoquic_file_param, 0, sizeof(picohttp_server_parameters_t));
+    picoquic_file_param.web_folder = web_folder;
+
+    // picoquic_set_default_callback(test_ctx->qserver, server_callback_fn, server_param);
 
     /* Open a UDP socket */
     ret = picoquic_open_server_sockets(&server_sockets, server_port);
@@ -203,7 +210,8 @@ int quic_server(const char* server_name, int server_port,
     if (ret == 0) {
         current_time = picoquic_current_time();
         /* Create QUIC context */
-        qserver = picoquic_create(8, pem_cert, pem_key, NULL, NULL, picoquic_demo_server_callback, NULL,
+        qserver = picoquic_create(8, pem_cert, pem_key, NULL, NULL,
+            picoquic_demo_server_callback, &picoquic_file_param,
             cnx_id_callback, cnx_id_callback_ctx, reset_seed, current_time, NULL, NULL, NULL, 0);
 
         if (qserver == NULL) {
@@ -1081,6 +1089,7 @@ void usage()
     fprintf(stderr, "  -k file               key file (default: %s)\n", SERVER_KEY_FILE);
     fprintf(stderr, "  -K file               ESNI private key file (default: don't use ESNI)\n");
     fprintf(stderr, "  -E file               ESNI RR file (default: don't use ESNI)\n");
+    fprintf(stderr, "  -w folder             Folder containing web pages served by server\n");
     fprintf(stderr, "  -l file               Log file, Log to stdout if file = \"n\". No logging if absent.\n");
     fprintf(stderr, "  -L                    Log all packets. If absent, log stops after 100 packets.\n");
     fprintf(stderr, "  -p port               server port (default: %d)\n", default_server_port);
@@ -1132,7 +1141,8 @@ int main(int argc, char** argv)
     const char * bin_file = NULL;
     const char * sni = NULL;
     const char * alpn = NULL;
-    const char * cc_log_dir = NULL; 
+    const char * cc_log_dir = NULL;
+    const char* www_dir = NULL;
     picoquic_congestion_algorithm_t const* cc_algorithm = NULL;
     int server_port = default_server_port;
     const char* root_trust_file = NULL;
@@ -1166,7 +1176,7 @@ int main(int argc, char** argv)
 
     /* Get the parameters */
     int opt;
-    while ((opt = getopt(argc, argv, "c:k:K:p:u:v:f:i:s:e:E:l:b:m:n:a:t:S:I:g:G:1rhzDLQ")) != -1) {
+    while ((opt = getopt(argc, argv, "c:k:K:p:u:v:w:f:i:s:e:E:l:b:m:n:a:t:S:I:g:G:1rhzDLQ")) != -1) {
         switch (opt) {
         case 'c':
             server_cert_file = optarg;
@@ -1194,6 +1204,9 @@ int main(int argc, char** argv)
                 fprintf(stderr, "Invalid version: %s\n", optarg);
                 usage();
             }
+            break;
+        case 'w':
+            www_dir = optarg;
             break;
         case '1':
             just_once = 1;
@@ -1366,7 +1379,7 @@ int main(int argc, char** argv)
             (cnx_id_cbdata == NULL) ? NULL : (void*)cnx_id_cbdata,
             (uint8_t*)reset_seed, dest_if, mtu_max, proposed_version,
             esni_key_file, esni_rr_file,
-            F_log, bin_file, cc_log_dir, use_long_log, cc_algorithm);
+            F_log, bin_file, cc_log_dir, use_long_log, cc_algorithm, www_dir);
         printf("Server exit with code = %d\n", ret);
     } else {
         /* Run as client */

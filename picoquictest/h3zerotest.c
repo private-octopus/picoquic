@@ -1080,6 +1080,7 @@ picohttp_server_path_item_t ping_test_item = {
 };
 
 picohttp_server_parameters_t ping_test_param = {
+    NULL,
     &ping_test_item,
     1
 };
@@ -1097,4 +1098,175 @@ int h3zero_post_test()
 int h09_post_test()
 {
     return demo_server_test(PICOHTTP_ALPN_HQ_LATEST, picoquic_h09_server_callback, (void*)& ping_test_param, 0, post_test_scenario, nb_post_test_scenario, post_test_stream_length);
+}
+
+int demo_file_sanitize_test()
+{
+    int ret = 0;
+    char const* good[] = {
+        "/index.html", "/example.com.txt", "/5000000", "/123_45.png", "/a-b-C-Z"
+    };
+    size_t nb_good = sizeof(good) / sizeof(char const*);
+    char const* bad[] = {
+        "/../index.html", "example.com.txt", "/5000000/", "/.123_45.png", "/a-b-C-Z\\..\\password.txt"
+    };
+    size_t nb_bad = sizeof(bad) / sizeof(char const*);
+
+    for (size_t i = 0; ret == 0 && i < nb_good; i++) {
+        if (demo_server_is_path_sane((uint8_t*)good[i], strlen(good[i])) != 0) {
+            DBG_PRINTF("Found good frame not good: %s\n", good[i]);
+            ret = -1;
+        }
+    }
+
+    for (size_t i = 0; ret == 0 && i < nb_bad; i++) {
+        if (demo_server_is_path_sane((uint8_t*)bad[i], strlen(bad[i])) == 0) {
+            DBG_PRINTF("Found bad frame not bad: %s\n", bad[i]);
+            ret = -1;
+        }
+    }
+
+    return ret;
+}
+
+int demo_file_access_test()
+{
+    int ret = 0;
+#ifdef _WINDOWS
+    char const* folder = ".\\";
+#else
+    char const* folder = "./";
+#endif
+    char const* path = "/x1234x5678.zzz";
+    char const* bad_path = "/../etc/passwd";
+    size_t f_size = 0;
+    size_t echo_size = 0;
+    char buf[128];
+    const int nb_blocks = 16;
+
+    FILE* F = picoquic_file_open(path + 1, "wb");
+
+    if (F == NULL) {
+        DBG_PRINTF("Cannot create file: %s", path + 1);
+        ret = -1;
+    }
+    else {
+        for (int i = 0; i < nb_blocks; i++) {
+            memset(buf, i, sizeof(buf));
+            fwrite(buf, 1, sizeof(buf), F);
+            f_size += sizeof(buf);
+        }
+        F = picoquic_file_close(F);
+    }
+
+    if (ret == 0) {
+        ret = demo_server_try_file_path((uint8_t*)path, strlen(path), &echo_size, &F, folder);
+        if (ret != 0) {
+            DBG_PRINTF("Could not try file path <%s> <%s>, ret = %d", folder, path, ret);
+        }
+        else if (echo_size != f_size) {
+            DBG_PRINTF("Found size = %d instead of %d", (int)echo_size, (int)f_size);
+            ret = -1;
+        }
+        else {
+            for (int i = 0; ret == 0 && i < nb_blocks; i++) {
+                int nb_read = (int)fread(buf, 1, sizeof(buf), F);
+                if (nb_read != (int)sizeof(buf)) {
+                    ret = -1;
+                }
+                else {
+                    for (size_t j = 0; j < sizeof(buf); j++) {
+                        if (buf[j] != i) {
+                            ret = -1;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        if (F != NULL) {
+            F = picoquic_file_close(F);
+        }
+    }
+
+    if (ret == 0) {
+        ret = remove(path + 1);
+        if (ret != 0) {
+            DBG_PRINTF("Could not remove %s", path + 1);
+        }
+    }
+
+    if (ret == 0) {
+        if (demo_server_try_file_path((uint8_t*)path, strlen(path), &echo_size, &F, folder) == 0) {
+            DBG_PRINTF("Could open deleted file path <%s> <%s>", folder, path);
+            ret = -1;
+        }
+        if (F != NULL) {
+            F = picoquic_file_close(F);
+        }
+    }
+
+    if (ret == 0) {
+        if (demo_server_try_file_path((uint8_t*)bad_path, strlen(bad_path), &echo_size, &F, folder) == 0) {
+            DBG_PRINTF("Could open deleted bad path <%s> <%s>", folder, bad_path);
+            ret = -1;
+        }
+        if (F != NULL) {
+            F = picoquic_file_close(F);
+        }
+    }
+
+    return ret;
+}
+
+
+#define PICOQUIC_TEST_FILE_DEMO_FOLDER "picoquictest"
+
+static const picoquic_demo_stream_desc_t file_test_scenario[] = {
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/file_test_ref.txt", "file_test_ref.txt", 0, 0 }
+};
+
+static size_t const demo_file_test_stream_length[] = {
+    4499
+};
+
+static size_t nb_file_test_scenario = sizeof(file_test_scenario) / sizeof(picoquic_demo_stream_desc_t);
+
+int serve_file_test_set_param(picohttp_server_parameters_t* file_param, char * buf, size_t buf_size)
+{
+    int ret = picoquic_get_input_path(buf, buf_size, picoquic_test_solution_dir, PICOQUIC_TEST_FILE_DEMO_FOLDER);
+
+    memset(file_param, 0, sizeof(picohttp_server_parameters_t));
+    file_param->web_folder = buf;
+
+    return ret;
+}
+
+
+int demo_server_file_test()
+{
+    int ret = 0;
+    char file_name_buffer[1024];
+    picohttp_server_parameters_t file_param;
+
+    ret = serve_file_test_set_param(&file_param, file_name_buffer, sizeof(file_name_buffer));
+
+    if (ret == 0 && (ret = demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, (void*)&file_param, 0, file_test_scenario, nb_file_test_scenario, demo_file_test_stream_length)) != 0) {
+        DBG_PRINTF("H3 server (%s) file test fails, ret = %d\n", PICOHTTP_ALPN_H3_LATEST, ret);
+    }
+
+    if (ret == 0 && (ret = demo_server_test(PICOHTTP_ALPN_HQ_LATEST, picoquic_h09_server_callback, (void*)&file_param, 0, file_test_scenario, nb_file_test_scenario, demo_file_test_stream_length)) != 0) {
+        DBG_PRINTF("H09 server (%s) file test fails, ret = %d\n", PICOHTTP_ALPN_HQ_LATEST, ret);
+    }
+
+    if (ret == 0 && (ret = demo_server_test(PICOHTTP_ALPN_H3_LATEST, picoquic_demo_server_callback, (void*)&file_param, 0, file_test_scenario, nb_file_test_scenario, demo_file_test_stream_length)) != 0) {
+        DBG_PRINTF("Demo server (%s) file test fails, ret = %d\n", PICOHTTP_ALPN_H3_LATEST, ret);
+    }
+
+    if (ret == 0 && (ret = demo_server_test(PICOHTTP_ALPN_HQ_LATEST, picoquic_demo_server_callback, (void*)&file_param, 0, file_test_scenario, nb_file_test_scenario, demo_test_stream_length)) != 0) {
+        DBG_PRINTF("Demo server (%s) file test fails, ret = %d\n", PICOHTTP_ALPN_HQ_LATEST, ret);
+    }
+
+    return ret;
 }
