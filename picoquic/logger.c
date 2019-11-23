@@ -444,7 +444,11 @@ void picoquic_log_packet_header(FILE* F, uint64_t log_cnxid64, picoquic_packet_h
         picoquic_log_prefix_initial_cid64(F, log_cnxid64);
         fprintf(F, "    ");
         picoquic_log_connection_id(F, &ph->dest_cnx_id);
-        fprintf(F, ", Seq: %d (%llu), Phi: %d,\n", ph->pn, (unsigned long long)ph->pn64, ph->key_phase);
+        fprintf(F, ", Seq: %d (%llu), Phi: %d,", ph->pn, (unsigned long long)ph->pn64, ph->key_phase);
+        if (ph->has_loss_bits) {
+            fprintf(F, " Q(%d), L(%d),", ph->loss_bit_Q, ph->loss_bit_L);
+        }
+        fprintf(F, "\n");
         break;
     case picoquic_packet_version_negotiation:
         /* V nego. log both CID */

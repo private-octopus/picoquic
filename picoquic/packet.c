@@ -273,6 +273,11 @@ int picoquic_parse_short_packet_header(
         ph->pnmask = 0;
         ph->key_phase = ((bytes[0] >> 2) & 1); /* Initialize here so that simple tests with unencrypted headers can work */
 
+        if ((*pcnx)->is_loss_bit_enabled) {
+            ph->has_loss_bits = 1;
+            ph->loss_bit_L = (bytes[0] >> 3) & 1;
+            ph->loss_bit_Q = (bytes[0] >> 4) & 1;
+        }
         if (length < ph->offset || ph->ptype == picoquic_packet_error) {
             ret = -1;
             ph->payload_length = 0;
