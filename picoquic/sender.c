@@ -540,7 +540,7 @@ static size_t picoquic_protect_packet(picoquic_cnx_t* cnx,
         if (cnx->is_loss_bit_enabled) {
             first_mask = 0x07;
             path_x->q_square++;
-            if ((path_x->q_square & 128) != 0) {
+            if ((path_x->q_square & PICOQUIC_LOSS_BIT_Q_HALF_PERIOD) != 0) {
                 send_buffer[0] |= 0x10;
             }
             if (path_x->nb_losses_found > path_x->nb_losses_reported) {
