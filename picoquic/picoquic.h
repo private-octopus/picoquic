@@ -222,10 +222,7 @@ typedef struct st_picoquic_packet_header_t {
     size_t pl_val;
 } picoquic_packet_header;
 
-int picoquic_header_invariants(
-    uint8_t* bytes,
-    size_t length,
-    picoquic_packet_header* ph);
+#define PICOQUIC_LOSS_BIT_Q_HALF_PERIOD 64
 
 /*
 * The stateless packet structure is used to temporarily store
