@@ -2055,7 +2055,7 @@ uint64_t picoquic_current_time()
     * of 100-nanosecond intervals since January 1, 1601 (UTC),
     * in FILETIME format.
     */
-    GetSystemTimeAsFileTime(&ft);
+    GetSystemTimePreciseAsFileTime(&ft);
 
     /*
     * Convert to plain 64 bit format, without making
