@@ -276,6 +276,73 @@ static int test_api_stream0_prepare(picoquic_cnx_t* cnx, picoquic_test_tls_api_c
     return ret;
 }
 
+static int tls_api_inject_packet(picoquic_test_tls_api_ctx_t* test_ctx, int from_client,
+    int epoch, const uint8_t* payload, size_t p_length, int path_id, uint64_t current_time)
+{
+    int ret = 0;
+    /* Identify the connection */
+    picoquic_cnx_t* cnx = (from_client) ? test_ctx->cnx_client : test_ctx->cnx_server;
+    picoquic_path_t* path_x = cnx->path[path_id];
+    /* Prepare the creation of cleartext and sim packet */
+    picoquic_packet_t* packet = picoquic_create_packet(cnx->quic);
+    picoquictest_sim_packet_t* sim_packet = picoquictest_sim_link_create_packet();
+
+    if (packet == NULL || sim_packet == NULL) {
+        ret = -1;
+        if (packet != NULL) {
+            picoquic_recycle_packet(cnx->quic, packet);
+        }
+        if (sim_packet != NULL) {
+            free(sim_packet);
+        }
+    }
+    else {
+        picoquic_packet_type_enum packet_type;
+        picoquic_packet_context_enum pc;
+        size_t length = 0;
+        size_t header_length;
+        size_t checksum_overhead = picoquic_get_checksum_length(cnx, (epoch == 0 || epoch == 2));
+        switch (epoch) {
+        case 0:
+            packet_type = picoquic_packet_initial;
+            pc = picoquic_packet_context_initial;
+            break;
+        case 1:
+            packet_type = picoquic_packet_0rtt_protected;
+            pc = picoquic_packet_context_application;
+            break;
+        case 2:
+            packet_type = picoquic_packet_handshake;
+            pc = picoquic_packet_context_handshake;
+            break;
+        case 3:
+        default:
+            packet_type = picoquic_packet_1rtt_protected;
+            pc = picoquic_packet_context_application;
+            break;
+        }
+        header_length = picoquic_predict_packet_header_length(cnx, packet_type);
+        memcpy(packet->bytes + header_length, payload, p_length);
+        length = header_length + p_length;
+
+        packet->ptype = packet_type;
+        packet->offset = header_length;
+        packet->sequence_number = cnx->pkt_ctx[pc].send_sequence;
+        packet->send_time = current_time;
+        packet->send_path = path_x;
+        packet->pc = pc;
+        packet->length = length;
+
+        picoquic_finalize_and_protect_packet(cnx, packet, 0, length, header_length, checksum_overhead,
+            &sim_packet->length, sim_packet->bytes, sizeof(sim_packet->bytes),
+            &path_x->remote_cnxid, &path_x->local_cnxid, path_x, current_time);
+        /* Forward on selected link */
+        picoquictest_sim_link_submit((from_client) ? test_ctx->c_to_s_link : test_ctx->s_to_c_link, sim_packet, current_time);
+    }
+
+    return ret;
+}
+
 static int test_api_queue_initial_queries(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t stream_id)
 {
     int ret = 0;
@@ -1201,32 +1268,13 @@ static int tls_api_attempt_to_close(
     return ret;
 }
 
-static int tls_api_test_with_loss(uint64_t* loss_mask, uint32_t proposed_version,
-    char const* sni, char const* alpn)
+static int tls_api_test_with_loss_final(picoquic_test_tls_api_ctx_t* test_ctx, uint32_t proposed_version,
+    char const* sni, char const* alpn, uint64_t * simulated_time)
 {
-    uint64_t simulated_time = 0;
-    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, proposed_version, sni, alpn, &simulated_time, NULL, NULL, 0, 0, 0);
-
-    if (ret != 0)
-    {
-        DBG_PRINTF("Could not create the QUIC test contexts for V=%x\n", proposed_version);
-    }
-    else if (sni == NULL) {
-        picoquic_set_null_verifier(test_ctx->qclient);
-    }
+    int ret = 0;
 
     if (ret == 0) {
-        ret = tls_api_connection_loop(test_ctx, loss_mask, 0, &simulated_time);
-
-        if (ret != 0)
-        {
-            DBG_PRINTF("Connection loop returns %d\n", ret);
-        }
-    }
-
-    if (ret == 0) {
-        ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
+        ret = tls_api_attempt_to_close(test_ctx, simulated_time);
 
         if (ret != 0)
         {
@@ -1269,6 +1317,37 @@ static int tls_api_test_with_loss(uint64_t* loss_mask, uint32_t proposed_version
         }
     }
 
+    return ret;
+}
+
+static int tls_api_test_with_loss(uint64_t* loss_mask, uint32_t proposed_version,
+    char const* sni, char const* alpn)
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, proposed_version, sni, alpn, &simulated_time, NULL, NULL, 0, 0, 0);
+
+    if (ret != 0)
+    {
+        DBG_PRINTF("Could not create the QUIC test contexts for V=%x\n", proposed_version);
+    }
+    else if (sni == NULL) {
+        picoquic_set_null_verifier(test_ctx->qclient);
+    }
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, loss_mask, 0, &simulated_time);
+
+        if (ret != 0)
+        {
+            DBG_PRINTF("Connection loop returns %d\n", ret);
+        }
+    }
+
+    if (ret == 0) {
+        ret = tls_api_test_with_loss_final(test_ctx, proposed_version, sni, alpn, &simulated_time);
+    }
+
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;
@@ -1280,6 +1359,69 @@ static int tls_api_test_with_loss(uint64_t* loss_mask, uint32_t proposed_version
 int tls_api_test()
 {
     return tls_api_test_with_loss(NULL, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN);
+}
+
+int tls_api_inject_hs_ack_test()
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+
+    if (ret != 0)
+    {
+        DBG_PRINTF("Could not create the QUIC test contexts for V=%x\n", PICOQUIC_INTERNAL_TEST_VERSION_1);
+    }
+
+    if (ret == 0) {
+        int ret = 0;
+        int nb_trials = 0;
+        int nb_inactive = 0;
+        int injected = 0;
+
+        while (ret == 0 && nb_trials < 1024 && nb_inactive < 512 && (!TEST_CLIENT_READY || (test_ctx->cnx_server == NULL || !TEST_SERVER_READY))) {
+            int was_active = 0;
+            nb_trials++;
+
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+
+            if (test_ctx->cnx_client->cnx_state == picoquic_state_disconnected &&
+                (test_ctx->cnx_server == NULL || test_ctx->cnx_server->cnx_state == picoquic_state_disconnected)) {
+                break;
+            }
+
+            if (!injected && test_ctx->cnx_client->crypto_context[2].aead_encrypt != NULL) {
+                const uint8_t ack_only[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    picoquic_frame_type_ack, 0, 0, 0, 0 };
+
+                ret = tls_api_inject_packet(test_ctx, 1, 2, ack_only, sizeof(ack_only), 0, simulated_time);
+
+                injected = 1;
+            }
+
+            if (was_active) {
+                nb_inactive = 0;
+            }
+            else {
+                nb_inactive++;
+            }
+        }
+
+        if (ret != 0)
+        {
+            DBG_PRINTF("Connection loop returns %d\n", ret);
+        }
+    }
+
+    if (ret == 0) {
+        ret = tls_api_test_with_loss_final(test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time);
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
 }
 
 int tls_api_silence_test()
