@@ -197,6 +197,8 @@ int quic_server(const char* server_name, int server_port,
     int64_t delay_max = 10000000;
     int connection_done = 0;
     picohttp_server_parameters_t picoquic_file_param;
+    uint64_t loop_count_time = 0;
+    int nb_loops = 0;
 
     memset(&picoquic_file_param, 0, sizeof(picohttp_server_parameters_t));
     picoquic_file_param.web_folder = web_folder;
@@ -209,6 +211,7 @@ int quic_server(const char* server_name, int server_port,
     /* Wait for packets and process them */
     if (ret == 0) {
         current_time = picoquic_current_time();
+        loop_count_time = current_time;
         /* Create QUIC context */
         qserver = picoquic_create(8, pem_cert, pem_key, NULL, NULL,
             picoquic_demo_server_callback, &picoquic_file_param,
@@ -272,6 +275,16 @@ int quic_server(const char* server_name, int server_port,
             &addr_to, &to_length, &if_index_to, &received_ecn,
             buffer, sizeof(buffer),
             delta_t, &current_time);
+
+        nb_loops++;
+        if (nb_loops > 10000) {
+            uint64_t loop_delta = current_time - loop_count_time;
+            loop_count_time = current_time;
+            fprintf(F_log, "Looped %d times in %llu microsec, file: %d, line: %d\n", 
+                nb_loops, (unsigned long long) loop_delta, qserver->wake_file, qserver->wake_line);
+            fflush(F_log);
+            nb_loops = 0;
+        }
 
         if (just_once != 0 && F_log != NULL && 
             (cnx_server == NULL || cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence < PICOQUIC_LOG_PACKET_MAX_SEQUENCE || qserver->use_long_log)) {
@@ -403,6 +416,11 @@ int quic_server(const char* server_name, int server_port,
     }
 
     printf("Server exit, ret = %d\n", ret);
+    fprintf(F_log, "Server exit, ret = %d\n", ret);
+    fflush(F_log);
+    if (F_log != stdout) {
+        (void)picoquic_file_close(F_log);
+    }
 
     /* Clean up */
     if (qserver != NULL) {

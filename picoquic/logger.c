@@ -147,7 +147,7 @@ void picoquic_log_packet_address(FILE* F, uint64_t log_cnxid64, picoquic_cnx_t* 
                 fprintf(F, "%x", addr[(2 * i) + 1]);
             }
         }
-        fprintf(F, "]:%d\n", ntohs(s6->sin6_port));
+        fprintf(F, "]:%d", ntohs(s6->sin6_port));
     }
 
     if (cnx != NULL) {

@@ -56,6 +56,14 @@ extern "C" {
 #endif
 #endif
 
+/* File identifiers in simple tracing functions */
+#define PICOQUIC_SENDER 1
+#define PICOQUIC_PACKET 2
+#define PICOQUIC_QUICCTX 3
+#define PICOQUIC_FRAME 4
+#define SET_LAST_WAKE(quic, file_id) ((quic)->wake_file = file_id, (quic)->wake_line = __LINE__)
+
+
 void debug_set_stream(FILE *F);
 void debug_printf(const char* fmt, ...);
 void debug_printf_push_stream(FILE* f);

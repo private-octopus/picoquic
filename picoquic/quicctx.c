@@ -649,6 +649,7 @@ void picoquic_reinsert_by_wake_time(picoquic_quic_t* quic, picoquic_cnx_t* cnx, 
 {
     picoquic_remove_cnx_from_wake_list(cnx);
     cnx->next_wake_time = next_time;
+    SET_LAST_WAKE(cnx->quic, PICOQUIC_QUICCTX);
     picoquic_insert_cnx_by_wake_time(quic, cnx);
 }
 
@@ -1715,6 +1716,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             cnx = NULL;
         } else {
             cnx->next_wake_time = start_time;
+            SET_LAST_WAKE(quic, PICOQUIC_SENDER);
             cnx->start_time = start_time;
             cnx->client_mode = client_mode;
 
