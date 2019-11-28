@@ -561,6 +561,14 @@ int picoquic_parse_header_and_decrypt(
                         /* if listening is OK, listen */
                         *pcnx = picoquic_create_cnx(quic, ph->dest_cnx_id, ph->srce_cnx_id, addr_from, current_time, ph->vn, NULL, NULL, 0);
                         *new_ctx_created = (*pcnx == NULL) ? 0 : 1;
+                        if (*pcnx == NULL) {
+                            DBG_PRINTF("%s", "Cannot create connection context\n");
+                        }
+                        else if (quic->F_log){
+                            picoquic_log_packet_address(quic->F_log, picoquic_val64_connection_id(ph->dest_cnx_id),
+                                *pcnx, addr_from, 1, length, current_time);
+                            fflush(quic->F_log);
+                        }
                     }
                 }
             }

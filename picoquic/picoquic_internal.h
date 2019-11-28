@@ -346,6 +346,9 @@ typedef struct st_picoquic_quic_t {
 
     picoquic_fuzz_fn fuzz_fn;
     void* fuzz_ctx;
+    int wake_file;
+    int wake_line;
+
     unsigned int use_long_log : 1;
 } picoquic_quic_t;
 

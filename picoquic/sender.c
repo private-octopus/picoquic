@@ -839,6 +839,7 @@ void picoquic_insert_hole_in_send_sequence_if_needed(picoquic_cnx_t* cnx, uint64
                 packet->sequence_number = cnx->pkt_ctx[picoquic_packet_context_application].send_sequence++;
                 picoquic_queue_for_retransmit(cnx, cnx->path[0], packet, 0, current_time);
                 *next_wake_time = current_time;
+                SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
                 /* Simulate local loss on the Q bit square function. */
                 cnx->path[0]->q_square++;
             }
@@ -989,6 +990,7 @@ static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t* cnx,
 
     if (retransmit_time < *next_retransmit_time) {
         *next_retransmit_time = retransmit_time;
+        SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
     }
 
     return should_retransmit;
@@ -1684,6 +1686,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
 
     if (*next_wake_time > cnx->start_time + PICOQUIC_MICROSEC_HANDSHAKE_MAX) {
         *next_wake_time = cnx->start_time + PICOQUIC_MICROSEC_HANDSHAKE_MAX;
+        SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
     }
 
     cnx->initial_validated = 1; /* always validated on client */
@@ -1809,6 +1812,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                         else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
                             ret = 0;
                             *next_wake_time = current_time;
+                            SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
                         }
                     }
 
@@ -1823,6 +1827,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                         else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
                             ret = 0;
                             *next_wake_time = current_time;
+                            SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
                         }
                     }
 
@@ -1838,6 +1843,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                             if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
                                 ret = 0;
                                 *next_wake_time = current_time;
+                                SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
                             }
                             break;
                         }
@@ -1856,6 +1862,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                             else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
                                 ret = 0;
                                 *next_wake_time = current_time;
+                                SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
                             }
                         }
 
@@ -1960,6 +1967,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
 
     if (*next_wake_time > cnx->start_time + PICOQUIC_MICROSEC_HANDSHAKE_MAX) {
         *next_wake_time = cnx->start_time + PICOQUIC_MICROSEC_HANDSHAKE_MAX;
+        SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
     }
 
     /* The only purpose of the test below is to appease the static analyzer, so it
@@ -2026,6 +2034,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                     }
                     else if (path_x->challenge_time + path_x->retransmit_timer < *next_wake_time) {
                         *next_wake_time = path_x->challenge_time + path_x->retransmit_timer;
+                        SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
                     }
                 }
                 else {
@@ -2045,6 +2054,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             }
             else if (path_x->challenge_time + path_x->retransmit_timer < *next_wake_time) {
                 *next_wake_time = path_x->challenge_time + path_x->retransmit_timer;
+                SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
             }
         }
         else if ((tls_ready != 0 && path_x->cwin > path_x->bytes_in_transit) 
@@ -2075,6 +2085,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                 /* todo: reset offset to previous position? */
                 ret = 0;
                 *next_wake_time = current_time;
+                SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
             }
 
             /* progress the state if the epoch data is all sent */
@@ -2126,6 +2137,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                 else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
                     ret = 0;
                     *next_wake_time = current_time;
+                    SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
                 }
             }
             /* document the send time & overhead */
@@ -2145,6 +2157,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
                 ret = 0;
                 *next_wake_time = current_time;
+                SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
             }
         } else {
             length = 0;
@@ -2261,6 +2274,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
         if (current_time >= exit_time) {
             cnx->cnx_state = picoquic_state_disconnected;
             *next_wake_time = current_time;
+            SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
         }
         else if (current_time >= cnx->next_wake_time) {
             uint64_t delta_t = path_x->rtt_min;
@@ -2300,6 +2314,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
             }
 
             *next_wake_time = next_time;
+            SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
         }
     } else if (ret == 0 && cnx->cnx_state == picoquic_state_draining) {
         /* Nothing is ever sent in the draining state */
@@ -2309,9 +2324,11 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
         if (current_time >= exit_time) {
             cnx->cnx_state = picoquic_state_disconnected;
             *next_wake_time = current_time;
+            SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
         }
         else {
             *next_wake_time = exit_time;
+            SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
         }
         length = 0;
     } else if (ret == 0 && (cnx->cnx_state == picoquic_state_disconnecting || 
@@ -2581,6 +2598,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                 else {
                     if (path_x->challenge_time + path_x->retransmit_timer < *next_wake_time) {
                         *next_wake_time = path_x->challenge_time + path_x->retransmit_timer;
+                        SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
                     }
                 }
             }
@@ -2613,6 +2631,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                     else {
                         if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
                             *next_wake_time = current_time;
+                            SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
                             ret = 0;
                         }
                     }
@@ -2649,6 +2668,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                     }
                     else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
                         *next_wake_time = current_time;
+                        SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
                         ret = 0;
                     }
                 }
@@ -2667,6 +2687,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                     }
                     else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
                         *next_wake_time = current_time;
+                        SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
                         ret = 0;
                     }
                 }
@@ -2678,6 +2699,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                     cnx->cwin_blocked = 1;
                     if (cwin_time < *next_wake_time) {
                         *next_wake_time = cwin_time;
+                        SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
                     }
                 } else if (picoquic_is_sending_authorized_by_pacing(path_x, current_time, next_wake_time)) {
                     /* Check whether PMTU discovery is required. The call will return
@@ -2701,6 +2723,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                         else {
                             if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
                                 *next_wake_time = current_time;
+                                SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
                                 ret = 0;
                             }
                         }
@@ -2717,6 +2740,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                             else {
                                 if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
                                     *next_wake_time = current_time;
+                                    SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
                                     ret = 0;
                                 }
                                 break;
@@ -2737,6 +2761,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                             else {
                                 if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
                                     *next_wake_time = current_time;
+                                    SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
                                     ret = 0;
                                 }
                                 break;
@@ -2770,12 +2795,14 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                                 else {
                                     if (is_still_active) {
                                       *next_wake_time = current_time;
+                                      SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
                                     }
                                     break;
                                 }
                             }
                             else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
                                 *next_wake_time = current_time;
+                                SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
                                 ret = 0;
                                 break;
                             }
@@ -2847,6 +2874,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                 }
                 else if (cnx->latest_progress_time + cnx->keep_alive_interval < *next_wake_time) {
                     *next_wake_time = cnx->latest_progress_time + cnx->keep_alive_interval;
+                    SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
                 }
             }
         }
@@ -2859,6 +2887,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
 
     if (*send_length > 0) {
         *next_wake_time = current_time;
+        SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
 
         if (ret == 0 && cnx->cc_log != NULL) {
             picoquic_cc_dump(cnx, current_time);
@@ -2967,6 +2996,7 @@ int picoquic_prepare_probe(picoquic_cnx_t* cnx,
                 }
                 else if (next_probe_time < *next_wake_time) {
                     *next_wake_time = next_probe_time;
+                    SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
                 }
             }
             probe = probe->next_probe;
@@ -3181,6 +3211,7 @@ static int picoquic_prepare_alt_challenge(picoquic_cnx_t* cnx,
                 *next_wake_time > cnx->path[i]->alt_challenge_timeout) {
                 *next_wake_time = cnx->path[i]->alt_challenge_timeout;
                 is_alt_challenge_still_needed = 1;
+                SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
             }
         }
     } else {
@@ -3203,6 +3234,8 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     struct sockaddr_storage addr_to_log;
     uint64_t next_wake_time = cnx->latest_progress_time + PICOQUIC_MICROSEC_SILENCE_MAX * (2 - cnx->client_mode);
     int is_initial_sent=0;
+
+    SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
 
     memset(&addr_to_log, 0, sizeof(addr_to_log));
     *send_length = 0;
@@ -3260,6 +3293,7 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
                     }
                     else if (next_challenge_time < next_wake_time) {
                         next_wake_time = next_challenge_time;
+                        SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
                     }
                 }
             }
@@ -3348,6 +3382,7 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     /* Update the wake up time for the connection */
     if (*send_length > 0 || cnx->cnx_state == picoquic_state_disconnected ) {
         next_wake_time = current_time;
+        SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
     }
     
     picoquic_reinsert_by_wake_time(cnx->quic, cnx, next_wake_time);
