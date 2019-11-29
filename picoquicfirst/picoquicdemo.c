@@ -416,10 +416,12 @@ int quic_server(const char* server_name, int server_port,
     }
 
     printf("Server exit, ret = %d\n", ret);
-    fprintf(F_log, "Server exit, ret = %d\n", ret);
-    fflush(F_log);
-    if (F_log != stdout) {
-        (void)picoquic_file_close(F_log);
+    if (F_log != NULL) {
+        fprintf(F_log, "Server exit, ret = %d\n", ret);
+        fflush(F_log);
+        if (F_log != stdout) {
+            (void)picoquic_file_close(F_log);
+        }
     }
 
     /* Clean up */

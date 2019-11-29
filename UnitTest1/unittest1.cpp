@@ -294,6 +294,12 @@ namespace UnitTest1
 			Assert::AreEqual(ret, 0);
 		}
 
+        TEST_METHOD(tls_api_inject_hs_ack)
+        {
+            int ret = tls_api_inject_hs_ack_test();
+
+            Assert::AreEqual(ret, 0);
+        }
         TEST_METHOD(null_sni)
         {
             int ret = null_sni_test();
