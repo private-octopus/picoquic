@@ -53,7 +53,6 @@ matrix:
 		  addons: &addons_macos
 			homebrew:
 			  packages:
-				- libfaketime
 				- openssl
           env:
               - CMAKE_OPTS=" -DOPENSSL_ROOT_DIR=/usr/local/opt/openssl/"
