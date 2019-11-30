@@ -51,7 +51,7 @@ matrix:
           os: osx
           osx_image: xcode10.1
           env:
-              - CMAKE_OPTS=" -DOPENSSL_ROOT_DIR=/usr/local/opt/openssl/ -DOPENSSL_INCLUDE_DIR=/usr/local/opt/openssl/include/"
+              - CMAKE_OPTS=" -DOPENSSL_ROOT_DIR=/usr/local/opt/openssl/"
 before_install:
   - cmake --version
 before_script:
