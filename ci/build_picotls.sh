@@ -4,13 +4,6 @@
 # Build at a known-good commit
 COMMIT_ID=3fdf6a54c4c0762226afcbabda3b2016af5a8761
 
-whereis openssl
-whereis openssl/lib
-ls /usr/bin/openssl
-ls /usr/lib/openssl
-ls /usr/local/bin/openssl
-ls /usr/local/lib/openssl
-
 cd ..
 # git clone --branch master --single-branch --shallow-submodules --recurse-submodules --no-tags https://github.com/h2o/picotls
 git clone https://github.com/h2o/picotls
