@@ -50,8 +50,13 @@ matrix:
         - name: macOS (xcode 10.1/clang-10)
           os: osx
           osx_image: xcode10.1
+		  addons: &addons_macos
+			homebrew:
+			  packages:
+				- libfaketime
+				- openssl
           env:
-              - CMAKE_OPTS=" -DOPENSSL_ROOT_DIR=/usr/bin/openssl/"
+              - CMAKE_OPTS=" -DOPENSSL_ROOT_DIR=/usr/local/opt/openssl/"
 before_install:
   - cmake --version
 before_script:
