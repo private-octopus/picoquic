@@ -51,12 +51,12 @@ matrix:
           os: osx
           osx_image: xcode10.1
           env:
-              - CMAKE_OPTS=" -DOPENSSL_ROOT_DIR=/usr/local/opt/openssl/"
+              - CMAKE_OPTS=" -DOPENSSL_ROOT_DIR=/usr/local/opt/openssl/ -DOPENSSL_INCLUDE_DIR=/usr/local/opt/openssl/include/"
 before_install:
   - cmake --version
 before_script:
   # First build external lib
-  - if [ "$TRAVIS_OSX_IMAGE" == "xcode10.1" ]; then brew install libssl-dev; fi
+  - if [ "$TRAVIS_OSX_IMAGE" == "xcode10.1" ]; then brew install openssl; fi
   - ./ci/build_picotls.sh
   - if [ "$CHECK" == "cppcheck" ]; then ./ci/build_cppcheck.sh; fi
   - if [ "$TRAVIS_OS_NAME" == "linux" ]; then sudo sh -c 'echo 0 > /proc/sys/net/ipv6/conf/all/disable_ipv6'; fi
