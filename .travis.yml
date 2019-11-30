@@ -50,7 +50,7 @@ matrix:
         - name: macOS (xcode 10.1/clang-10)
           os: osx
           osx_image: xcode10.1
-		  addons: &addons_macos
+		  addons:
 			homebrew:
 			  packages:
 				- openssl
