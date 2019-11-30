@@ -2694,13 +2694,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
 
 
                 if (path_x->cwin < path_x->bytes_in_transit) {
-                    uint64_t cwin_time = current_time + path_x->smoothed_rtt;
-
                     cnx->cwin_blocked = 1;
-                    if (cwin_time < *next_wake_time) {
-                        *next_wake_time = cwin_time;
-                        SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
-                    }
                 } else if (picoquic_is_sending_authorized_by_pacing(path_x, current_time, next_wake_time)) {
                     /* Check whether PMTU discovery is required. The call will return
                      * three values: not needed at all, optional, or required.
