@@ -3037,17 +3037,22 @@ int picoquic_prepare_required_max_stream_data_frames(picoquic_cnx_t* cnx,
     picoquic_stream_head_t* stream = picoquic_first_stream(cnx);
 
     while (stream != NULL && ret == 0 && byte_index < bytes_max) {
-        if (!stream->fin_received && !stream->reset_received && 2 * stream->consumed_offset > stream->maxdata_local) {
-            size_t bytes_in_frame = 0;
+        if (!stream->fin_received){
+            uint64_t new_window = picoquic_cc_increased_window(cnx, stream->maxdata_local);
+            
+            if (!stream->reset_received && 2 * stream->consumed_offset > stream->maxdata_local) {
+                size_t bytes_in_frame = 0;
 
-            ret = picoquic_prepare_max_stream_data_frame(stream,
-                bytes + byte_index, bytes_max - byte_index,
-                stream->maxdata_local + 2 * stream->consumed_offset,
-                &bytes_in_frame);
-            if (ret == 0) {
-                byte_index += bytes_in_frame;
-            } else {
-                break;
+                ret = picoquic_prepare_max_stream_data_frame(stream,
+                    bytes + byte_index, bytes_max - byte_index,
+                    stream->maxdata_local + new_window,
+                    &bytes_in_frame);
+                if (ret == 0) {
+                    byte_index += bytes_in_frame;
+                }
+                else {
+                    break;
+                }
             }
         }
         stream = picoquic_next_stream(stream);

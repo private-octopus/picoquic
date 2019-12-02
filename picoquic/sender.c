@@ -2658,7 +2658,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
 
                 /* If necessary, encode the max data frame */
                 if (ret == 0 && 2 * cnx->data_received > cnx->maxdata_local) {
-                    ret = picoquic_prepare_max_data_frame(cnx, 2 * cnx->data_received, &bytes[length],
+                    ret = picoquic_prepare_max_data_frame(cnx, picoquic_cc_increased_window(cnx, cnx->maxdata_local), &bytes[length],
                         send_buffer_min_max - checksum_overhead - length, &data_bytes);
 
                     if (ret == 0) {
