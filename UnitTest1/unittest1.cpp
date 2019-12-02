@@ -964,6 +964,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(satellite_basic)
+        {
+            int ret = satellite_basic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(cid_length)
         {
             int ret = cid_length_test();

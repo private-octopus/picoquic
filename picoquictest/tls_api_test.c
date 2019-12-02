@@ -31,6 +31,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <openssl/pem.h>
+#include "logwriter.h"
 #include "csv.h"
 
 #define RANDOM_PUBLIC_TEST_SEED 0xDEADBEEFCAFEC001ull
@@ -6047,6 +6048,60 @@ int fastcc_test()
 int fastcc_jitter_test()
 {
     return congestion_control_test(picoquic_fastcc_algorithm, 3610000, 5000);
+}
+
+/* This is similar to the long rtt test, but operating at a higher speed.
+ * We allow for loss simulation and jitter simulation to simulate wi-fi + satellite.
+ * Also, we want to check overhead targets, such as ratio of data bytes over control bytes.
+ */
+static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, uint64_t max_completion_time, uint64_t jitter, int has_loss)
+{
+    uint64_t simulated_time = 0;
+    uint64_t latency = 300000;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
+
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+
+    /* Simulate satellite links: 100 mbps, 300ms delay in each direction */
+    /* Set the congestion algorithm to specified value. Also, request a packet trace */
+    if (ret == 0) {
+        picoquic_set_default_congestion_algorithm(test_ctx->qserver, ccalgo);
+        picoquic_set_congestion_algorithm(test_ctx->cnx_client, ccalgo);
+
+        test_ctx->c_to_s_link->jitter = jitter;
+        test_ctx->c_to_s_link->microsec_latency = latency;
+        test_ctx->c_to_s_link->picosec_per_byte = 80; /* 100 Mbps */
+        test_ctx->s_to_c_link->microsec_latency = latency;
+        test_ctx->s_to_c_link->picosec_per_byte = 80; /* 100 Mbps */
+        test_ctx->s_to_c_link->jitter = jitter;
+
+        picoquic_set_cc_log(test_ctx->qclient, ".");
+        ret = picoquic_open_cc_dump(test_ctx->cnx_client);
+
+        if (ret == 0) {
+            ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+                test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 10000000, (has_loss) ? 0x10000000:0, 0, 5 * latency, max_completion_time);
+        }
+    }
+
+    /* Free the resource, which will close the log file.
+     */
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+int satellite_basic_test()
+{
+    return satellite_test_one(picoquic_cubic_algorithm, 7000000, 0, 0);
 }
 
 /* Test that different CID length are properly supported */

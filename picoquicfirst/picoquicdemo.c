@@ -277,7 +277,7 @@ int quic_server(const char* server_name, int server_port,
             delta_t, &current_time);
 
         nb_loops++;
-        if (nb_loops > 10000) {
+        if (nb_loops >= 10000) {
             uint64_t loop_delta = current_time - loop_count_time;
             loop_count_time = current_time;
             fprintf(F_log, "Looped %d times in %llu microsec, file: %d, line: %d\n", 
