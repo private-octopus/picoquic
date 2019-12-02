@@ -6074,9 +6074,9 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, uint64_t 
 
         test_ctx->c_to_s_link->jitter = jitter;
         test_ctx->c_to_s_link->microsec_latency = latency;
-        test_ctx->c_to_s_link->picosec_per_byte = 80; /* 100 Mbps */
+        test_ctx->c_to_s_link->picosec_per_byte = 80000; /* 100 Mbps */
         test_ctx->s_to_c_link->microsec_latency = latency;
-        test_ctx->s_to_c_link->picosec_per_byte = 80; /* 100 Mbps */
+        test_ctx->s_to_c_link->picosec_per_byte = 80000; /* 100 Mbps */
         test_ctx->s_to_c_link->jitter = jitter;
 
         picoquic_set_cc_log(test_ctx->qclient, ".");
