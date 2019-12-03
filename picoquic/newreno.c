@@ -176,7 +176,7 @@ static void picoquic_newreno_notify(
     }
 
     /* Compute pacing data */
-    picoquic_update_pacing_data(path_x);
+    picoquic_update_pacing_data(path_x, (nr_state->alg_state == picoquic_newreno_alg_slow_start && nr_state->ssthresh == (uint64_t)((int64_t)-1)));
 }
 
 /* Release the state of the congestion control algorithm */

@@ -102,7 +102,8 @@ void fastcc_process_cc_event(picoquic_cnx_t * cnx,
             if (path_x->cwin < PICOQUIC_CWIN_MINIMUM) {
                 path_x->cwin = PICOQUIC_CWIN_MINIMUM;
             }
-            picoquic_update_pacing_data(path_x);
+            /* Compute pacing data. */
+            picoquic_update_pacing_data(path_x, (fastcc_state->alg_state == picoquic_fastcc_initial));
         }
     }
 }
@@ -142,7 +143,7 @@ void picoquic_fastcc_notify(
                 /* Count the bytes since last RTT measurement */
                 fastcc_state->nb_bytes_ack_since_rtt += nb_bytes_acknowledged;
                 /* Compute pacing data. */
-                picoquic_update_pacing_data(path_x);
+                picoquic_update_pacing_data(path_x, (fastcc_state->alg_state == picoquic_fastcc_initial));
             }
             break;  
         case picoquic_congestion_notification_ecn_ec:
@@ -212,6 +213,9 @@ void picoquic_fastcc_notify(
                     /* Increase the window if it is not frozen */
                     path_x->cwin += (uint64_t)(alpha * (double)fastcc_state->nb_bytes_ack_since_rtt);
                     fastcc_state->nb_bytes_ack_since_rtt = 0;
+
+                    /* Compute pacing data. */
+                    picoquic_update_pacing_data(path_x, (fastcc_state->alg_state == picoquic_fastcc_initial));
                 }
                 else {
                     /* May well be congested */
