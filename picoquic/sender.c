@@ -675,8 +675,12 @@ void picoquic_update_pacing_data(picoquic_path_t * path_x)
         path_x->pacing_bucket_max = (rtt_nanosec / 4);
         if (path_x->pacing_bucket_max < 2ull * path_x->pacing_packet_time_nanosec) {
             path_x->pacing_bucket_max = 2ull * path_x->pacing_packet_time_nanosec;
-        } else if (path_x->pacing_bucket_max < 10ull * path_x->pacing_packet_time_nanosec) {
-            path_x->pacing_bucket_max = 10ull * path_x->pacing_packet_time_nanosec;
+        } else if (path_x->pacing_bucket_max > 16ull * path_x->pacing_packet_time_nanosec) {
+            path_x->pacing_bucket_max = 16ull * path_x->pacing_packet_time_nanosec;
+        }
+
+        if (path_x->pacing_bucket_nanosec > path_x->pacing_bucket_max) {
+            path_x->pacing_bucket_nanosec = path_x->pacing_bucket_max;
         }
     }
 }
