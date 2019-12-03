@@ -368,7 +368,7 @@ static void picoquic_cubic_notify(
         }
 
         /* Compute pacing data */
-        picoquic_update_pacing_data(path_x, (cubic_state->alg_state == picoquic_cubic_alg_slow_start && cubic_state->ssthresh == (uint64_t)((int64_t)-1)));
+        picoquic_update_pacing_data(path_x);
     }
 }
 

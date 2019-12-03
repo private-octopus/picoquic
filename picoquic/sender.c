@@ -649,7 +649,7 @@ int picoquic_is_sending_authorized_by_pacing(picoquic_path_t * path_x, uint64_t 
  * The max bucket is set to contain at least 2 packets more than 1/8th of the congestion window.
  */
 
-void picoquic_update_pacing_data(picoquic_path_t * path_x, int is_initial)
+void picoquic_update_pacing_data(picoquic_path_t * path_x)
 {
     uint64_t rtt_nanosec = (path_x->smoothed_rtt << 10);
 
@@ -663,10 +663,6 @@ void picoquic_update_pacing_data(picoquic_path_t * path_x, int is_initial)
     else {
 
         path_x->pacing_packet_time_nanosec = (rtt_nanosec * ((uint64_t)path_x->send_mtu)) / path_x->cwin;
-
-        if (is_initial) {
-            path_x->pacing_packet_time_nanosec -= path_x->pacing_packet_time_nanosec / 4;
-        }
 
         if (path_x->pacing_packet_time_nanosec <= 0) {
             path_x->pacing_packet_time_nanosec = 1;
