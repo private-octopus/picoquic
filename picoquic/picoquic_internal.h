@@ -602,6 +602,7 @@ typedef struct st_picoquic_packet_context_t {
 
     unsigned int ack_needed : 1;
     unsigned int ack_of_ack_requested : 1;
+    unsigned int ack_after_fin : 1;
 } picoquic_packet_context_t;
 
 /*

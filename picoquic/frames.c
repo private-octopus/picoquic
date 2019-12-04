@@ -1056,6 +1056,9 @@ uint8_t* picoquic_decode_stream_frame(picoquic_cnx_t* cnx, uint8_t* bytes, const
         bytes = NULL;
     } else {
         bytes += data_length;
+        if (fin) {
+            cnx->pkt_ctx[picoquic_packet_context_application].ack_after_fin = 1;
+        }
     }
 
     return bytes;
@@ -2778,6 +2781,7 @@ int picoquic_prepare_ack_frame(picoquic_cnx_t* cnx, uint64_t current_time,
 
     if (ret == 0) {
         pkt_ctx->ack_needed = 0;
+        pkt_ctx->ack_after_fin = 0;
     }
 
     return ret;
@@ -2791,8 +2795,12 @@ int picoquic_is_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t 
     if (pkt_ctx->ack_needed) {
         uint64_t ack_gap = 2;
         if (pc == picoquic_packet_context_application && pkt_ctx->first_sack_item.next_sack == NULL &&
-            pkt_ctx->first_sack_item.end_of_sack_range > 128) {
+            pkt_ctx->first_sack_item.end_of_sack_range > 128 &&
+            !pkt_ctx->ack_after_fin) {
             ack_gap = 4;
+            if (cnx->path[0]->cwin > 256ull * cnx->path[0]->send_mtu) {
+                ack_gap = (cnx->path[0]->cwin / (4 * cnx->path[0]->send_mtu));
+            }
         }
         if (pkt_ctx->highest_ack_sent + ack_gap <= pkt_ctx->first_sack_item.end_of_sack_range ||
             pkt_ctx->highest_ack_sent_time + pkt_ctx->ack_delay_local <= current_time) {
