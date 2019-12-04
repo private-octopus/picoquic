@@ -1130,7 +1130,7 @@ static int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
     test_ctx->s_to_c_link->loss_mask = loss_mask;
 
     if (max_trials <= 0) {
-        max_trials = 100000;
+        max_trials = 4000000;
     }
 
     while (ret == 0 && nb_trials < max_trials && nb_inactive < 256 && TEST_CLIENT_READY && TEST_SERVER_READY) {
@@ -6053,11 +6053,21 @@ int fastcc_jitter_test()
 /* This is similar to the long rtt test, but operating at a higher speed.
  * We allow for loss simulation and jitter simulation to simulate wi-fi + satellite.
  * Also, we want to check overhead targets, such as ratio of data bytes over control bytes.
+ *
+ * The satellite link that we define here corresponds to models suggested by 
+ * John Border of Hughes: 250 Mbps for the server to client link, 3 Mbps for the client
+ * to server link. We reverse the role, as our test sends data from the cleint to the
+ * server. John suggested tested with a 1GB download; we compromise here to 100MB,
+ * in order to execut the test in reasonable time. There should be two test
+ * variants: 0% loss, and 1 %loss.
  */
 static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, uint64_t max_completion_time, uint64_t jitter, int has_loss)
 {
     uint64_t simulated_time = 0;
     uint64_t latency = 300000;
+    uint64_t picoseq_per_byte_250 = (1000000ull * 8) / 250;
+    uint64_t picoseq_per_byte_3 = (1000000ull * 8) / 3;
+
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
 
@@ -6066,7 +6076,7 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, uint64_t 
         ret = -1;
     }
 
-    /* Simulate satellite links: 100 mbps, 300ms delay in each direction */
+    /* Simulate satellite links: 250 mbps, 300ms delay in each direction */
     /* Set the congestion algorithm to specified value. Also, request a packet trace */
     if (ret == 0) {
         picoquic_set_default_congestion_algorithm(test_ctx->qserver, ccalgo);
@@ -6074,9 +6084,9 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, uint64_t 
 
         test_ctx->c_to_s_link->jitter = jitter;
         test_ctx->c_to_s_link->microsec_latency = latency;
-        test_ctx->c_to_s_link->picosec_per_byte = 80000; /* 100 Mbps */
+        test_ctx->c_to_s_link->picosec_per_byte = picoseq_per_byte_250;
         test_ctx->s_to_c_link->microsec_latency = latency;
-        test_ctx->s_to_c_link->picosec_per_byte = 80000; /* 100 Mbps */
+        test_ctx->s_to_c_link->picosec_per_byte = picoseq_per_byte_3; 
         test_ctx->s_to_c_link->jitter = jitter;
 
         picoquic_set_cc_log(test_ctx->qclient, ".");
@@ -6084,7 +6094,7 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, uint64_t 
 
         if (ret == 0) {
             ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
-                test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 10000000, (has_loss) ? 0x10000000:0, 0, 5 * latency, max_completion_time);
+                test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 100000000, (has_loss) ? 0x10000000:0, 0, 5 * latency, max_completion_time);
         }
     }
 
@@ -6101,7 +6111,7 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, uint64_t 
 
 int satellite_basic_test()
 {
-    return satellite_test_one(picoquic_cubic_algorithm, 5350000, 0, 0);
+    return satellite_test_one(picoquic_cubic_algorithm, 8250000, 0, 0);
 }
 
 /* Test that different CID length are properly supported */
