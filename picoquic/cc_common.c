@@ -81,7 +81,8 @@ int picoquic_hystart_test(picoquic_min_max_rtt_t* rtt_track, uint64_t rtt_measur
 
             if (rtt_track->sample_min > rtt_track->rtt_filtered_min) {
                 delta_rtt = rtt_track->sample_min - rtt_track->rtt_filtered_min;
-                if (delta_rtt * 4 > rtt_track->rtt_filtered_min) {
+                if (delta_rtt * 4 > rtt_track->rtt_filtered_min ||
+                    delta_rtt * 4 > PICOQUIC_TARGET_RENO_RTT) {
                     rtt_track->nb_rtt_excess++;
                     if (rtt_track->nb_rtt_excess >= PICOQUIC_MIN_MAX_RTT_SCOPE) {
                         /* RTT increased too much, get out of slow start! */
@@ -96,4 +97,24 @@ int picoquic_hystart_test(picoquic_min_max_rtt_t* rtt_track, uint64_t rtt_measur
     }
 
     return ret;
+}
+
+int picoquic_cc_was_cwin_blocked(picoquic_cnx_t* cnx, uint64_t last_sequence_blocked)
+{
+    return (last_sequence_blocked == 0 || picoquic_cc_get_ack_number(cnx) <= last_sequence_blocked);
+}
+
+uint64_t picoquic_cc_increased_window(picoquic_cnx_t* cnx, uint64_t previous_window)
+{
+    uint64_t new_window;
+    if (cnx->path[0]->rtt_min <= PICOQUIC_TARGET_RENO_RTT) {
+        new_window = previous_window * 2;
+    }
+    else {
+        double w = (double)previous_window;
+        w /= (double)PICOQUIC_TARGET_RENO_RTT;
+        w *= cnx->path[0]->rtt_min;
+        new_window = (uint64_t)w;
+    }
+    return new_window;
 }

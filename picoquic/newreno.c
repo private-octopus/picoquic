@@ -38,6 +38,7 @@ typedef struct st_picoquic_newreno_state_t {
     uint64_t recovery_start;
     uint64_t recovery_sequence;
     picoquic_min_max_rtt_t rtt_filter;
+    uint64_t last_sequence_blocked;
 } picoquic_newreno_state_t;
 
 static void picoquic_newreno_init(picoquic_path_t* path_x)
@@ -164,6 +165,9 @@ static void picoquic_newreno_notify(
                 nr_state->ssthresh = path_x->cwin;
                 nr_state->alg_state = picoquic_newreno_alg_congestion_avoidance;
             }
+            break;
+        case picoquic_congestion_notification_cwin_blocked:
+            nr_state->last_sequence_blocked = picoquic_cc_get_sequence_number(cnx);
             break;
         default:
             /* ignore */

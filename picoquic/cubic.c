@@ -43,6 +43,7 @@ typedef struct st_picoquic_cubic_state_t {
     double W_reno;
     uint64_t ssthresh;
     picoquic_min_max_rtt_t rtt_filter;
+    uint64_t last_sequence_blocked;
 } picoquic_cubic_state_t;
 
 static void picoquic_cubic_init(picoquic_path_t* path_x)
@@ -221,18 +222,20 @@ static void picoquic_cubic_notify(
         case picoquic_cubic_alg_slow_start:
             switch (notification) {
             case picoquic_congestion_notification_acknowledgement:
-                if (path_x->smoothed_rtt <= PICOQUIC_TARGET_RENO_RTT) {
-                    path_x->cwin += nb_bytes_acknowledged;
-                }
-                else {
-                    double delta = ((double)path_x->smoothed_rtt) / ((double)PICOQUIC_TARGET_RENO_RTT);
-                    delta *= (double)nb_bytes_acknowledged;
-                    path_x->cwin += (uint64_t)delta;
-                }
-                /* if cnx->cwin exceeds SSTHRESH, exit and go to CA */
-                if (path_x->cwin >= cubic_state->ssthresh) {
-                    cubic_state->W_reno = ((double)path_x->cwin)/2.0;
-                    picoquic_cubic_enter_avoidance(cubic_state, current_time);
+                if (picoquic_cc_was_cwin_blocked(cnx, cubic_state->last_sequence_blocked)) {
+                    if (path_x->smoothed_rtt <= PICOQUIC_TARGET_RENO_RTT) {
+                        path_x->cwin += nb_bytes_acknowledged;
+                    }
+                    else {
+                        double delta = ((double)path_x->smoothed_rtt) / ((double)PICOQUIC_TARGET_RENO_RTT);
+                        delta *= (double)nb_bytes_acknowledged;
+                        path_x->cwin += (uint64_t)delta;
+                    }
+                    /* if cnx->cwin exceeds SSTHRESH, exit and go to CA */
+                    if (path_x->cwin >= cubic_state->ssthresh) {
+                        cubic_state->W_reno = ((double)path_x->cwin) / 2.0;
+                        picoquic_cubic_enter_avoidance(cubic_state, current_time);
+                    }
                 }
                 break;
             case picoquic_congestion_notification_ecn_ec:
@@ -268,6 +271,9 @@ static void picoquic_cubic_notify(
                     }
                 }
 
+                break;
+            case picoquic_congestion_notification_cwin_blocked:
+                cubic_state->last_sequence_blocked = picoquic_cc_get_sequence_number(cnx);
                 break;
             default:
                 /* ignore */
@@ -306,6 +312,9 @@ static void picoquic_cubic_notify(
                     }
                     break;
                 case picoquic_congestion_notification_rtt_measurement:
+                case picoquic_congestion_notification_cwin_blocked:
+                    cubic_state->last_sequence_blocked = picoquic_cc_get_sequence_number(cnx);
+                    break;
                 default:
                     /* ignore */
                     break;
@@ -315,23 +324,24 @@ static void picoquic_cubic_notify(
 
         case picoquic_cubic_alg_congestion_avoidance:
             switch (notification) {
-            case picoquic_congestion_notification_acknowledgement: {
-                /* Compute the cubic formula */
-                double W_cubic = picoquic_cubic_W_cubic(cubic_state, current_time);
-                uint64_t win_cubic = (uint64_t)(W_cubic * (double)path_x->send_mtu);
-                /* Also compute the Reno formula */
-                cubic_state->W_reno += ((double)nb_bytes_acknowledged)*((double)path_x->send_mtu) / cubic_state->W_reno;
+            case picoquic_congestion_notification_acknowledgement: 
+                if (picoquic_cc_was_cwin_blocked(cnx, cubic_state->last_sequence_blocked)) {
+                    /* Compute the cubic formula */
+                    double W_cubic = picoquic_cubic_W_cubic(cubic_state, current_time);
+                    uint64_t win_cubic = (uint64_t)(W_cubic * (double)path_x->send_mtu);
+                    /* Also compute the Reno formula */
+                    cubic_state->W_reno += ((double)nb_bytes_acknowledged) * ((double)path_x->send_mtu) / cubic_state->W_reno;
 
-                /* Pick the largest */
-                if (win_cubic > cubic_state->W_reno) {
-                    /* if cubic is larger than threshold, switch to cubic mode */
-                    path_x->cwin = win_cubic;
-                }
-                else {
-                    path_x->cwin = (uint64_t)cubic_state->W_reno;
+                    /* Pick the largest */
+                    if (win_cubic > cubic_state->W_reno) {
+                        /* if cubic is larger than threshold, switch to cubic mode */
+                        path_x->cwin = win_cubic;
+                    }
+                    else {
+                        path_x->cwin = (uint64_t)cubic_state->W_reno;
+                    }
                 }
                 break;
-            }
             case picoquic_congestion_notification_ecn_ec:
             case picoquic_congestion_notification_repeat:
             case picoquic_congestion_notification_timeout:
@@ -343,6 +353,9 @@ static void picoquic_cubic_notify(
                 break;
             case picoquic_congestion_notification_spurious_repeat:
                 picoquic_cubic_correct_spurious(path_x, cubic_state, current_time);
+                break;
+            case picoquic_congestion_notification_cwin_blocked:
+                cubic_state->last_sequence_blocked = picoquic_cc_get_sequence_number(cnx);
                 break;
             case picoquic_congestion_notification_rtt_measurement:
             default:

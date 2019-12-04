@@ -675,6 +675,12 @@ void picoquic_update_pacing_data(picoquic_path_t * path_x)
         path_x->pacing_bucket_max = (rtt_nanosec / 4);
         if (path_x->pacing_bucket_max < 2ull * path_x->pacing_packet_time_nanosec) {
             path_x->pacing_bucket_max = 2ull * path_x->pacing_packet_time_nanosec;
+        } else if (path_x->pacing_bucket_max > 16ull * path_x->pacing_packet_time_nanosec) {
+            path_x->pacing_bucket_max = 16ull * path_x->pacing_packet_time_nanosec;
+        }
+
+        if (path_x->pacing_bucket_nanosec > path_x->pacing_bucket_max) {
+            path_x->pacing_bucket_nanosec = path_x->pacing_bucket_max;
         }
     }
 }
@@ -2656,7 +2662,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
 
                 /* If necessary, encode the max data frame */
                 if (ret == 0 && 2 * cnx->data_received > cnx->maxdata_local) {
-                    ret = picoquic_prepare_max_data_frame(cnx, 2 * cnx->data_received, &bytes[length],
+                    ret = picoquic_prepare_max_data_frame(cnx, picoquic_cc_increased_window(cnx, cnx->maxdata_local), &bytes[length],
                         send_buffer_min_max - checksum_overhead - length, &data_bytes);
 
                     if (ret == 0) {
@@ -2695,6 +2701,11 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
 
                 if (path_x->cwin < path_x->bytes_in_transit) {
                     cnx->cwin_blocked = 1;
+                    if (cnx->congestion_alg != NULL) {
+                        cnx->congestion_alg->alg_notify(cnx, path_x,
+                            picoquic_congestion_notification_cwin_blocked,
+                            0, 0, 0, current_time);
+                    }
                 } else if (picoquic_is_sending_authorized_by_pacing(path_x, current_time, next_wake_time)) {
                     /* Check whether PMTU discovery is required. The call will return
                      * three values: not needed at all, optional, or required.
