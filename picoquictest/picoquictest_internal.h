@@ -157,6 +157,7 @@ typedef struct st_picoquic_test_tls_api_ctx_t {
     size_t stream0_sent;
     size_t stream0_received;
     int stream0_test_option;
+    int stream0_flow_release;
 
     int sum_data_received_at_server;
     int sum_data_received_at_client;

@@ -694,6 +694,9 @@ int picoquic_add_to_stream_with_ctx(picoquic_cnx_t * cnx, uint64_t stream_id, co
 int picoquic_reset_stream(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint16_t local_stream_error);
 
+/* Open the flow control for receiving the expected data on a stream */
+int picoquic_open_flow_control(picoquic_cnx_t* cnx, uint64_t stream_id, uint64_t expected_data_size);
+
 /* Obtain the next available stream ID in the local category */
 uint64_t picoquic_get_next_local_stream_id(picoquic_cnx_t* cnx, int is_unidir);
 

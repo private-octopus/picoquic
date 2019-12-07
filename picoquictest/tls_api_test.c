@@ -452,6 +452,9 @@ static int test_api_callback(picoquic_cnx_t* cnx,
                 }
             }
         }
+        if (ctx->stream0_received == 0 && length > 0 && ctx->stream0_flow_release) {
+            (void)picoquic_open_flow_control(cnx, stream_id, ctx->stream0_target);
+        }
         ctx->stream0_received += length;
         if (ctx->streams_finished && ctx->stream0_received >= ctx->stream0_target) {
             ctx->test_finished = 1;
@@ -6088,6 +6091,7 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, uint64_t 
         test_ctx->s_to_c_link->microsec_latency = latency;
         test_ctx->s_to_c_link->picosec_per_byte = picoseq_per_byte_3; 
         test_ctx->s_to_c_link->jitter = jitter;
+        test_ctx->stream0_flow_release = 1;
 
         picoquic_set_cc_log(test_ctx->qclient, ".");
         ret = picoquic_open_cc_dump(test_ctx->cnx_client);

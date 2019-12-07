@@ -191,6 +191,35 @@ int picoquic_add_to_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
     return picoquic_add_to_stream_with_ctx(cnx, stream_id, data, length, set_fin, NULL);
 }
 
+int picoquic_open_flow_control(picoquic_cnx_t* cnx, uint64_t stream_id, uint64_t expected_data_size)
+{
+    int ret = 0;
+    uint8_t buffer[512];
+    size_t length = 0;
+    size_t consumed = 0;
+    picoquic_stream_head_t* stream = picoquic_find_stream(cnx, stream_id);
+
+    if (stream == NULL) {
+        ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
+    }
+    else {
+        ret = picoquic_prepare_max_stream_data_frame(stream, buffer, sizeof(buffer), stream->maxdata_local + expected_data_size, &consumed);
+    }
+
+    if (ret == 0) {
+        length += consumed;
+        consumed = 0;
+        ret = picoquic_prepare_max_data_frame(cnx, expected_data_size, buffer + length, sizeof(buffer) - length, &consumed);
+    }
+
+    if (ret == 0) {
+        length += consumed;
+        ret = picoquic_queue_misc_frame(cnx, buffer, length);
+    }
+
+    return ret;
+}
+
 void picoquic_reset_stream_ctx(picoquic_cnx_t* cnx, uint64_t stream_id)
 {
     picoquic_stream_head_t* stream = picoquic_find_stream(cnx, stream_id);
