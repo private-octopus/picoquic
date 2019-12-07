@@ -253,7 +253,7 @@ static void picoquic_cubic_notify(
                 break;
             case picoquic_congestion_notification_rtt_measurement:
                 /* Using RTT increases as signal to get out of initial slow start */
-                if (cubic_state->ssthresh == (uint64_t)((int64_t)-1) && picoquic_hystart_test(&cubic_state->rtt_filter, rtt_measurement, current_time)) {
+                if (cubic_state->ssthresh == (uint64_t)((int64_t)-1) && picoquic_hystart_test(&cubic_state->rtt_filter, rtt_measurement, cnx->path[0]->pacing_packet_time_microsec, current_time)) {
                     /* RTT increased too much, get out of slow start! */
                     cubic_state->ssthresh = path_x->cwin;
                     cubic_state->W_max = (double)path_x->cwin / (double)path_x->send_mtu;

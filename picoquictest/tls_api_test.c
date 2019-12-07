@@ -6094,7 +6094,7 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, uint64_t 
 
         if (ret == 0) {
             ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
-                test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 100000000, (has_loss) ? 0x10000000:0, 0, 5 * latency, max_completion_time);
+                test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 100000000, (has_loss) ? 0x10000000:0, 0, 2 * latency, max_completion_time);
         }
     }
 
