@@ -81,6 +81,7 @@ int picoquic_hystart_test(picoquic_min_max_rtt_t* rtt_track, uint64_t rtt_measur
 
             if (rtt_track->sample_min > rtt_track->rtt_filtered_min) {
                 delta_rtt = rtt_track->sample_min - rtt_track->rtt_filtered_min;
+                rtt_track->past_threshold = 1;
                 if (delta_rtt * 4 > rtt_track->rtt_filtered_min ||
                     (rtt_track->rtt_filtered_min > PICOQUIC_TARGET_RENO_RTT && delta_rtt > 256 * packet_time)) {
                     rtt_track->nb_rtt_excess++;

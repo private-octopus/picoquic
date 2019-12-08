@@ -223,7 +223,7 @@ static void picoquic_cubic_notify(
             switch (notification) {
             case picoquic_congestion_notification_acknowledgement:
                 if (picoquic_cc_was_cwin_blocked(cnx, cubic_state->last_sequence_blocked)) {
-                    if (path_x->smoothed_rtt <= PICOQUIC_TARGET_RENO_RTT) {
+                    if (path_x->smoothed_rtt <= PICOQUIC_TARGET_RENO_RTT || cubic_state->rtt_filter.past_threshold) {
                         path_x->cwin += nb_bytes_acknowledged;
                     }
                     else {
@@ -255,6 +255,12 @@ static void picoquic_cubic_notify(
                 /* Using RTT increases as signal to get out of initial slow start */
                 if (cubic_state->ssthresh == (uint64_t)((int64_t)-1) && picoquic_hystart_test(&cubic_state->rtt_filter, rtt_measurement, cnx->path[0]->pacing_packet_time_microsec, current_time)) {
                     /* RTT increased too much, get out of slow start! */
+                    if (cubic_state->rtt_filter.rtt_filtered_min > PICOQUIC_TARGET_RENO_RTT) {
+                        double correction = (double)PICOQUIC_TARGET_RENO_RTT / (double)cubic_state->rtt_filter.rtt_filtered_min;
+                        uint64_t base_window = (uint64_t)(correction * (double)path_x->cwin);
+                        uint64_t delta_window = path_x->cwin - base_window;
+                        path_x->cwin -= (delta_window / 2);
+                    }
                     cubic_state->ssthresh = path_x->cwin;
                     cubic_state->W_max = (double)path_x->cwin / (double)path_x->send_mtu;
                     cubic_state->W_last_max = cubic_state->W_max;
