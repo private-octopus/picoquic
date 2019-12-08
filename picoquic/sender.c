@@ -3355,6 +3355,10 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
                         }
                         break;
                     }
+                    else if (segment_length == 0) {
+                        DBG_PRINTF("Send bug: segment length = %d, packet length = %d\n", segment_length, packet->length);
+                        break;
+                    }
                 }
                 else {
                     picoquic_recycle_packet(cnx->quic, packet);

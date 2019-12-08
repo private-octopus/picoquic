@@ -1960,6 +1960,10 @@ int picoquic_incoming_packet(
 
         if (ret == 0) {
             consumed_index += consumed;
+            if (consumed == 0) {
+                DBG_PRINTF("%s", "Receive bug, ret = 0 && consumed = 0\n");
+                break;
+            }
         } else {
             ret = 0;
             break;
