@@ -30,6 +30,7 @@ typedef struct st_picoquic_min_max_rtt_t {
     int nb_rtt_excess;
     int sample_current;
     int is_init;
+    int past_threshold;
     uint64_t sample_min;
     uint64_t sample_max;
     uint64_t samples[PICOQUIC_MIN_MAX_RTT_SCOPE];
@@ -41,7 +42,7 @@ uint64_t picoquic_cc_get_ack_number(picoquic_cnx_t* cnx);
 
 void picoquic_filter_rtt_min_max(picoquic_min_max_rtt_t* rtt_track, uint64_t rtt);
 
-int picoquic_hystart_test(picoquic_min_max_rtt_t* rtt_track, uint64_t rtt_measurement, uint64_t current_time);
+int picoquic_hystart_test(picoquic_min_max_rtt_t* rtt_track, uint64_t rtt_measurement, uint64_t packet_time, uint64_t current_time);
 
 int picoquic_cc_was_cwin_blocked(picoquic_cnx_t* cnx, uint64_t last_sequence_blocked);
 
