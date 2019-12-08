@@ -1663,7 +1663,7 @@ int tls_api_one_scenario_body_verify(picoquic_test_tls_api_ctx_t* test_ctx,
     }
 
     if (ret == 0 && max_completion_microsec != 0) {
-        if (*simulated_time > max_completion_microsec)
+        if (*simulated_time - test_ctx->cnx_client->start_time > max_completion_microsec)
         {
             DBG_PRINTF("Scenario completes in %llu microsec, more than %llu\n",
                 (unsigned long long)*simulated_time, (unsigned long long)max_completion_microsec);
@@ -5875,6 +5875,109 @@ int bad_coalesce_test()
     return ret;
 }
 
+/*
+ * Bad packet test. The client opens a connection, requests a page, and then only
+ * sends bad 1RTT packets. The test succeeds if the server closes its connection
+ * in a reasonable time. */
+typedef struct st_header_fuzzer_ctx_t {
+    uint64_t random_context;
+    uint32_t nb_packets;
+    uint32_t nb_fuzzed;
+} header_fuzzer_ctx_t;
+
+static uint32_t header_fuzzer(void* fuzz_ctx, picoquic_cnx_t* cnx,
+    uint8_t* bytes, size_t bytes_max, size_t length, size_t header_length)
+{
+    header_fuzzer_ctx_t* ctx = (header_fuzzer_ctx_t*)fuzz_ctx;
+
+    ctx->nb_packets++;
+
+    if (cnx->cnx_state >= picoquic_state_client_almost_ready &&
+        cnx->pkt_ctx[picoquic_packet_context_application].send_sequence > 2) {
+        uint64_t fuzz_pilot = picoquic_test_random(&ctx->random_context);
+        
+        for (size_t i =1; i <= 8 && i < length ; i++) {
+            bytes[i] ^= (uint8_t)fuzz_pilot;
+            fuzz_pilot >>= 8;
+        }
+
+        ctx->nb_fuzzed++;
+    }
+
+    return (uint32_t)length;
+}
+
+int bad_cnxid_test()
+{
+    uint64_t simulated_time = 0;
+    header_fuzzer_ctx_t fuzz_ctx;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
+
+    memset(&fuzz_ctx, 0, sizeof(fuzz_ctx));
+    fuzz_ctx.random_context = 0x123456789ABCDEF0ull;
+
+    if (ret == 0) {
+        /* Prepare to send data */
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_very_long, sizeof(test_scenario_very_long));
+    }
+
+    if (ret == 0) {
+        /* establish the connection */
+        ret = tls_api_one_scenario_body_connect(test_ctx, &simulated_time, 0, 0, 0);
+    }
+
+    /* Set fuzzer, then perform a data sending loop */
+    if (ret == 0) {
+        picoquic_set_fuzz(test_ctx->qclient, header_fuzzer, &fuzz_ctx);
+
+        (void) tls_api_data_sending_loop(test_ctx, NULL, &simulated_time, 0);
+
+
+        /* verify that the server connection has disappeared */
+        if (fuzz_ctx.nb_fuzzed > 0 && (test_ctx->cnx_server == NULL || test_ctx->cnx_server->cnx_state == picoquic_state_disconnected)) {
+            ret = 0;
+        }
+        else {
+            DBG_PRINTF("Unexpected server state: %d, packet: %d, fuzzed: %d\n", test_ctx->cnx_server->cnx_state, 
+                fuzz_ctx.nb_packets, fuzz_ctx.nb_fuzzed);
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        /* Remove the reference to the old server connection */
+        test_ctx->cnx_server = NULL;
+        /* Delete the old client connection */
+        picoquic_delete_cnx(test_ctx->cnx_client);
+        test_ctx->cnx_client = NULL;
+        /* Remove the fuzzer */
+        picoquic_set_fuzz(test_ctx->qclient, NULL, NULL);
+        /* re-create a client connection */
+        test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
+            picoquic_null_connection_id, picoquic_null_connection_id,
+            (struct sockaddr*) & test_ctx->server_addr, simulated_time,
+            PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
+        if (test_ctx->cnx_client == NULL) {
+            DBG_PRINTF("%s", "Could not create second client connection\n");    
+            ret = -1;
+        }
+        else {
+            ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+                test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0, 0, 0, 20000, 100000);
+            if (ret != 0) {
+                DBG_PRINTF("Second connection fails, ret=%d (x%x)\n", ret, ret);
+            }
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
 
 
 /*
