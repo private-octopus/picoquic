@@ -36,7 +36,6 @@ WCHAR szWindowClass[MAX_LOADSTRING];            // the main window class name
 picoquic_quic_t * qclient = NULL;               // the quic client context.
 HANDLE qclient_thread = NULL;
 DWORD dw_qclient_thread_id = 0;
-WSADATA wsaData;
 HWND hWndEdit = NULL;
 #define IDC_EDITBOX 100
 
@@ -56,9 +55,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 {
     UNREFERENCED_PARAMETER(hPrevInstance);
     UNREFERENCED_PARAMETER(lpCmdLine);
-
-    // Init windows sockets
-    (void)WSAStartup(MAKEWORD(2, 2), &wsaData);
 
     // Initialize global strings
     LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);

@@ -142,14 +142,7 @@ int socket_test()
     int ret = 0;
     int test_port = 12345;
     picoquic_server_sockets_t server_sockets;
-#ifdef _WINDOWS
-    WSADATA wsaData;
 
-    if (WSA_START(MAKEWORD(2, 2), &wsaData)) {
-        DBG_PRINTF("Cannot init WSA\n");
-        ret = -1;
-    }
-#endif
     /* Open server sockets */
     ret = picoquic_open_server_sockets(&server_sockets, test_port);
 
@@ -208,14 +201,7 @@ int socket_ecn_test_one(int af_domain)
 int socket_ecn_test()
 {
     int ret;
-#ifdef _WINDOWS
-    WSADATA wsaData;
 
-    if (WSA_START(MAKEWORD(2, 2), &wsaData)) {
-        DBG_PRINTF("Cannot init WSA\n");
-        return -1;
-    }
-#endif
     ret = socket_ecn_test_one(AF_INET);
 
     if (ret == 0) {

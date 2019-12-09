@@ -21,18 +21,6 @@
 #ifndef SOCKET_TYPE
 #define SOCKET_TYPE SOCKET
 #endif
-#ifndef SOCKET_CLOSE
-#define SOCKET_CLOSE(x) closesocket(x)
-#endif
-#ifndef WSA_START_DATA
-#define WSA_START_DATA WSADATA
-#endif
-#ifndef WSA_START
-#define WSA_START(x, y) WSAStartup((x), (y))
-#endif
-#ifndef WSA_LAST_ERROR
-#define WSA_LAST_ERROR(x) WSAGetLastError()
-#endif
 #ifndef socklen_t
 #define socklen_t int
 #endif
