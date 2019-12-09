@@ -1631,9 +1631,7 @@ void picoquic_implicit_handshake_ack(picoquic_cnx_t* cnx, picoquic_packet_contex
         /* Update the congestion control state for the path */
         if (old_path != NULL) {
             if (old_path->smoothed_rtt == PICOQUIC_INITIAL_RTT && old_path->rtt_variant == 0) {
-                uint64_t rtt_estimate = current_time - p->send_time;
-
-                picoquic_update_path_rtt(cnx, old_path, rtt_estimate, &cnx->pkt_ctx[pc], current_time, 0);
+                picoquic_update_path_rtt(cnx, old_path, p->send_time, &cnx->pkt_ctx[pc], current_time, 0, 0);
             }
 
             if (cnx->congestion_alg != NULL) {

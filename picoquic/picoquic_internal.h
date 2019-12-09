@@ -524,7 +524,10 @@ typedef struct st_picoquic_path_t {
     uint64_t retrans_count;
 
     /* Time measurement */
+    uint64_t phase_delay;
     uint64_t max_ack_delay;
+    uint64_t rtt_sample;
+    uint64_t one_way_delay_sample;
     uint64_t smoothed_rtt;
     uint64_t rtt_variant;
     uint64_t retransmit_timer;
@@ -1025,8 +1028,8 @@ int picoquic_process_ack_of_ack_frame(
     picoquic_sack_item_t* first_sack,
     uint8_t* bytes, size_t bytes_max, size_t* consumed, int is_ecn, int has_1wd);
 
-void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, int64_t rtt_estimate,
-    picoquic_packet_context_t * pkt_ctx, uint64_t current_time, uint64_t ack_delay);
+void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, uint64_t send_time,
+    picoquic_packet_context_t * pkt_ctx, uint64_t current_time, uint64_t ack_delay, uint64_t remote_time_stamp);
 
 /* stream management */
 picoquic_stream_head_t* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t stream_id);

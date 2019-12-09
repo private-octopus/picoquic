@@ -123,11 +123,11 @@ int qlog_packet_frame(bytestream * s, void * ptr)
         uint64_t largest = 0;
         byteread_vint(s, &largest);
         uint64_t ack_delay = 0;
-        uint64_t one_way_delay = 0;
+        uint64_t remote_time_stamp = 0;
         if (ftype == picoquic_frame_type_ack_1wd ||
             ftype == picoquic_frame_type_ack_ecn_1wd) {
-            byteread_vint(s, &one_way_delay);
-            fprintf(f, ", \"one_way_delay\": %"PRIu64"", one_way_delay);
+            byteread_vint(s, &remote_time_stamp);
+            fprintf(f, ", \"remote_time_stamp\": %"PRIu64"", remote_time_stamp);
         }
         byteread_vint(s, &ack_delay);
         fprintf(f, ", \"ack_delay\": %"PRIu64"", ack_delay);

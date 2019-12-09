@@ -750,6 +750,8 @@ void picoquic_cc_dump(picoquic_cnx_t * cnx, uint64_t current_time)
     }
 
     bytewrite_vint(ps_msg, path->cwin);
+    bytewrite_vint(ps_msg, path->one_way_delay_sample);
+    bytewrite_vint(ps_msg, path->rtt_sample);
     bytewrite_vint(ps_msg, path->smoothed_rtt);
     bytewrite_vint(ps_msg, path->rtt_min);
     bytewrite_vint(ps_msg, path->send_mtu);
