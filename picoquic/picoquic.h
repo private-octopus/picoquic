@@ -327,6 +327,7 @@ typedef struct st_picoquic_tp_t {
     picoquic_tp_prefered_address_t prefered_address;
     uint32_t max_datagram_size;
     int enable_loss_bit;
+    int enable_one_way_delay;
 } picoquic_tp_t;
 
 /*

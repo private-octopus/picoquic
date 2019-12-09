@@ -412,6 +412,9 @@ char const* picoquic_log_tp_name(uint64_t tp_number)
     case picoquic_tp_enable_loss_bit:
         tp_name = "enable_loss_bit";
         break;
+    case picoquic_tp_enable_one_way_delay:
+        tp_name = "enable_one_way_delay";
+        break;
     default:
         break;
     }

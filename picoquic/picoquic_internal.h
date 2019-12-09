@@ -284,7 +284,8 @@ typedef enum {
     picoquic_tp_active_connection_id_limit = 14,
     picoquic_tp_max_datagram_size = 32 /* per draft-pauly-quic-datagram-05 */,
     picoquic_tp_test_large_chello = 3127,
-    picoquic_tp_enable_loss_bit = 0x1055
+    picoquic_tp_enable_loss_bit = 0x1055,
+    picoquic_tp_enable_one_way_delay = 0x10DE
 } picoquic_tp_enum;
 
 /* QUIC context, defining the tables of connections,
