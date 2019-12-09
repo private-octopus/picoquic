@@ -107,7 +107,9 @@ typedef enum {
     picoquic_frame_type_connection_close = 0x1c,
     picoquic_frame_type_application_close = 0x1d,
     picoquic_frame_type_datagram = 0x30,
-    picoquic_frame_type_datagram_l = 0x31
+    picoquic_frame_type_datagram_l = 0x31,
+    picoquic_frame_type_ack_1wd = 0x34,
+    picoquic_frame_type_ack_ecn_1wd = 0x35
 } picoquic_frame_type_enum_t;
 
 /* PMTU discovery requirement status */
@@ -942,9 +944,9 @@ int picoquic_parse_stream_header(
 
 int picoquic_parse_ack_header(
     uint8_t const* bytes, size_t bytes_max,
-    uint64_t* num_block, uint64_t* nb_ecnx3, uint64_t* largest,
+    uint64_t* num_block, uint64_t* largest,
     uint64_t* ack_delay, size_t* consumed,
-    uint8_t ack_delay_exponent);
+    uint8_t ack_delay_exponent, uint64_t * one_way_delay);
 
 uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t pn);
 
@@ -1020,7 +1022,7 @@ int picoquic_check_sack_list(picoquic_sack_item_t* sack,
  */
 int picoquic_process_ack_of_ack_frame(
     picoquic_sack_item_t* first_sack,
-    uint8_t* bytes, size_t bytes_max, size_t* consumed, int is_ecn_14);
+    uint8_t* bytes, size_t bytes_max, size_t* consumed, int is_ecn, int has_1wd);
 
 void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, int64_t rtt_estimate,
     picoquic_packet_context_t * pkt_ctx, uint64_t current_time, uint64_t ack_delay);

@@ -98,6 +98,10 @@ const char * ftype2str(picoquic_frame_type_enum_t ftype)
     case picoquic_frame_type_datagram:
     case picoquic_frame_type_datagram_l:
         return "datagram";
+    case picoquic_frame_type_ack_1wd:
+        return "ack_1wd";
+    case picoquic_frame_type_ack_ecn_1wd:
+        return "ack_ecn_1wd";
     default:
         return "unknown";
     }

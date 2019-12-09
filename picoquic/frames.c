@@ -1851,9 +1851,9 @@ int picoquic_prepare_crypto_hs_frame(picoquic_cnx_t* cnx, int epoch,
  */
 
 int picoquic_parse_ack_header(uint8_t const* bytes, size_t bytes_max,
-    uint64_t* num_block, uint64_t* nb_ecnx3,
+    uint64_t* num_block,
     uint64_t* largest, uint64_t* ack_delay, size_t* consumed,
-    uint8_t ack_delay_exponent)
+    uint8_t ack_delay_exponent, uint64_t * one_way_delay)
 {
     int ret = 0;
     size_t byte_index = 1;
@@ -1866,23 +1866,26 @@ int picoquic_parse_ack_header(uint8_t const* bytes, size_t bytes_max,
         byte_index += l_largest;
     }
 
+    if (one_way_delay != NULL) {
+        if (bytes_max > byte_index) {
+            size_t l_1wd = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, one_way_delay);
+            if (l_1wd == 0) {
+                byte_index = bytes_max;
+            }
+            else {
+                *one_way_delay <<= ack_delay_exponent;
+                byte_index += l_1wd;
+            }
+        }
+        else {
+            *one_way_delay = 0;
+        }
+    }
+
     if (bytes_max > byte_index) {
         l_delay = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, ack_delay);
         *ack_delay <<= ack_delay_exponent;
         byte_index += l_delay;
-    }
-
-    if (nb_ecnx3 != NULL) {
-        for (int ecnx = 0; ecnx < 3; ecnx++) {
-            size_t l_ecnx = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &nb_ecnx3[ecnx]);
-
-            if (l_ecnx == 0) {
-                byte_index = bytes_max;
-            }
-            else {
-                byte_index += l_ecnx;
-            }
-        }
     }
 
     if (bytes_max > byte_index) {
@@ -2167,13 +2170,13 @@ static void picoquic_process_ack_of_ack_range(picoquic_sack_item_t* first_sack,
 
 int picoquic_process_ack_of_ack_frame(
     picoquic_sack_item_t* first_sack,
-    uint8_t* bytes, size_t bytes_max, size_t* consumed, int is_ecn_14)
+    uint8_t* bytes, size_t bytes_max, size_t* consumed, int is_ecn, int has_1wd)
 {
     int ret;
     uint64_t largest;
     uint64_t ack_delay;
     uint64_t num_block;
-    uint64_t ecnx3[3];
+    uint64_t one_way_delay;
 
     /* Find the oldest ACK range, in order to calibrate the
      * extension of the largest number to 64 bits */
@@ -2184,8 +2187,8 @@ int picoquic_process_ack_of_ack_frame(
     }
 
     ret = picoquic_parse_ack_header(bytes, bytes_max,
-        &num_block, (is_ecn_14)? ecnx3 : NULL,
-        &largest, &ack_delay, consumed, 0);
+        &num_block,
+        &largest, &ack_delay, consumed, 0, (has_1wd)?&one_way_delay:0);
 
     if (ret == 0) {
         size_t byte_index = *consumed;
@@ -2251,6 +2254,26 @@ int picoquic_process_ack_of_ack_frame(
             }
 
             largest -= block_to_block;
+        }
+
+        if (ret == 0 && is_ecn) {
+            if (byte_index >= bytes_max) {
+                ret = -1;
+            }
+            else {
+                for (int ecnx = 0; ecnx < 3; ecnx++) {
+                    uint64_t ecn;
+                    size_t l_ecn = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &ecn);
+                    if (l_ecn == 0) {
+                        byte_index = bytes_max;
+                        ret = -1;
+                        break;
+                    }
+                    else {
+                        byte_index += l_ecn;
+                    }
+                }
+            }
         }
 
         *consumed = byte_index;
@@ -2456,13 +2479,23 @@ void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t* cnx, picoquic_pa
     while (ret == 0 && byte_index < p->length) {
         if (p->bytes[byte_index] == picoquic_frame_type_ack) {
             ret = picoquic_process_ack_of_ack_frame(&cnx->pkt_ctx[p->pc].first_sack_item,
-                &p->bytes[byte_index], p->length - byte_index, &frame_length, 0);
+                &p->bytes[byte_index], p->length - byte_index, &frame_length, 0, 0);
             byte_index += frame_length;
         } else if (p->bytes[byte_index] == picoquic_frame_type_ack_ecn) {
             ret = picoquic_process_ack_of_ack_frame(&cnx->pkt_ctx[p->pc].first_sack_item,
-                &p->bytes[byte_index], p->length - byte_index, &frame_length, 1);
+                &p->bytes[byte_index], p->length - byte_index, &frame_length, 1, 0);
             byte_index += frame_length;
-        } else if (PICOQUIC_IN_RANGE(p->bytes[byte_index], picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
+        } else  if (p->bytes[byte_index] == picoquic_frame_type_ack_1wd) {
+            ret = picoquic_process_ack_of_ack_frame(&cnx->pkt_ctx[p->pc].first_sack_item,
+                &p->bytes[byte_index], p->length - byte_index, &frame_length, 0, 1);
+            byte_index += frame_length;
+        }
+        else if (p->bytes[byte_index] == picoquic_frame_type_ack_ecn_1wd) {
+            ret = picoquic_process_ack_of_ack_frame(&cnx->pkt_ctx[p->pc].first_sack_item,
+                &p->bytes[byte_index], p->length - byte_index, &frame_length, 1, 1);
+            byte_index += frame_length;
+        }
+        else if (PICOQUIC_IN_RANGE(p->bytes[byte_index], picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
             ret = picoquic_process_ack_of_stream_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);
             byte_index += frame_length;
         } else {
@@ -2537,19 +2570,20 @@ static int picoquic_process_ack_range(
 }
 
 uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
-    const uint8_t* bytes_max, uint64_t current_time, int epoch, int is_ecn)
+    const uint8_t* bytes_max, uint64_t current_time, int epoch, int is_ecn, int has_1wd)
 {
     uint64_t num_block;
     uint64_t largest;
     uint64_t ack_delay;
+    uint64_t one_way_delay = 0;
     size_t   consumed;
     picoquic_packet_context_enum pc = picoquic_context_from_epoch(epoch);
     uint64_t ecnx3[3] = { 0, 0, 0 };
     uint8_t first_byte = bytes[0];
 
-    if (picoquic_parse_ack_header(bytes, bytes_max-bytes, &num_block, NULL,
+    if (picoquic_parse_ack_header(bytes, bytes_max-bytes, &num_block,
         &largest, &ack_delay, &consumed,
-        cnx->remote_parameters.ack_delay_exponent) != 0) {
+        cnx->remote_parameters.ack_delay_exponent, (has_1wd)?&one_way_delay:NULL) != 0) {
         bytes = NULL;
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, first_byte);
     } else if (largest >= cnx->pkt_ctx[pc].send_sequence) {
@@ -3593,7 +3627,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_
                 bytes = NULL;
                 break;
             }
-            bytes = picoquic_decode_ack_frame(cnx, bytes, bytes_max, current_time, epoch, 0);
+            bytes = picoquic_decode_ack_frame(cnx, bytes, bytes_max, current_time, epoch, 0, 0);
         } else if (first_byte == picoquic_frame_type_ack_ecn) {
             if (epoch == 1) {
                 DBG_PRINTF("Ack-ECN frame (0x%x) not expected in 0-RTT packet", first_byte);
@@ -3601,8 +3635,27 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_
                 bytes = NULL;
                 break;
             }
-            bytes = picoquic_decode_ack_frame(cnx, bytes, bytes_max, current_time, epoch, 1); 
-        } else if (epoch != 1 && epoch != 3 && first_byte != picoquic_frame_type_padding
+            bytes = picoquic_decode_ack_frame(cnx, bytes, bytes_max, current_time, epoch, 1, 0); 
+        }
+        else if (first_byte == picoquic_frame_type_ack_1wd) {
+            if (epoch == 1) {
+                DBG_PRINTF("Ack-1wd frame (0x%x) not expected in 0-RTT packet", first_byte);
+                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, first_byte);
+                bytes = NULL;
+                break;
+            }
+            bytes = picoquic_decode_ack_frame(cnx, bytes, bytes_max, current_time, epoch, 0, 1);
+        }
+        else if (first_byte == picoquic_frame_type_ack_ecn_1wd) {
+            if (epoch == 1) {
+                DBG_PRINTF("Ack-ecn-1wd frame (0x%x) not expected in 0-RTT packet", first_byte);
+                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, first_byte);
+                bytes = NULL;
+                break;
+            }
+            bytes = picoquic_decode_ack_frame(cnx, bytes, bytes_max, current_time, epoch, 1, 1);
+        }
+        else if (epoch != 1 && epoch != 3 && first_byte != picoquic_frame_type_padding
                                             && first_byte != picoquic_frame_type_ping
                                             && first_byte != picoquic_frame_type_path_challenge
                                             && first_byte != picoquic_frame_type_path_response
@@ -3770,24 +3823,29 @@ static uint8_t* picoquic_skip_application_close_frame(uint8_t* bytes, const uint
  * The ACK skipping function only supports the varint format.
  * The old "fixed int" versions are supported by code in the skip_frame function
  */
-static uint8_t* picoquic_skip_ack_frame_maybe_ecn(uint8_t* bytes, const uint8_t* bytes_max, int is_ecn)
+static uint8_t* picoquic_skip_ack_frame_maybe_ecn(uint8_t* bytes, const uint8_t* bytes_max, int is_ecn, int has_1wd)
 {
     uint64_t nb_blocks;
 
-    if ((bytes = picoquic_frames_varint_skip(bytes + 1, bytes_max)) != NULL &&
-        (bytes = picoquic_frames_varint_skip(bytes, bytes_max)) != NULL &&
-        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &nb_blocks)) != NULL &&
-        (bytes = picoquic_frames_varint_skip(bytes,   bytes_max))             != NULL)
-    {
-        while (nb_blocks-- != 0) {
-            if ((bytes = picoquic_frames_varint_skip(bytes, bytes_max)) == NULL ||
-                (bytes = picoquic_frames_varint_skip(bytes, bytes_max)) == NULL)
-            {
-                break;
+    if ((bytes = picoquic_frames_varint_skip(bytes + 1, bytes_max)) != NULL) {
+        if (has_1wd) {
+            bytes = picoquic_frames_varint_skip(bytes, bytes_max);
+        }
+        if (bytes != NULL &&
+            (bytes = picoquic_frames_varint_skip(bytes, bytes_max)) != NULL &&
+            (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &nb_blocks)) != NULL &&
+            (bytes = picoquic_frames_varint_skip(bytes, bytes_max)) != NULL)
+        {
+            while (nb_blocks-- != 0) {
+                if ((bytes = picoquic_frames_varint_skip(bytes, bytes_max)) == NULL ||
+                    (bytes = picoquic_frames_varint_skip(bytes, bytes_max)) == NULL)
+                {
+                    break;
+                }
             }
         }
     }
-
+   
     if (bytes != NULL && is_ecn) {
         for (int i = 0; bytes != NULL && i < 3; i++) {
             bytes = picoquic_frames_varint_skip(bytes, bytes_max);
@@ -3798,11 +3856,19 @@ static uint8_t* picoquic_skip_ack_frame_maybe_ecn(uint8_t* bytes, const uint8_t*
 }
 
 static uint8_t* picoquic_skip_ack_frame(uint8_t* bytes, const uint8_t* bytes_max) {
-    return picoquic_skip_ack_frame_maybe_ecn(bytes, bytes_max, 0);
+    return picoquic_skip_ack_frame_maybe_ecn(bytes, bytes_max, 0, 0);
 }
 
 static uint8_t* picoquic_skip_ack_ecn_frame(uint8_t* bytes, const uint8_t* bytes_max) {
-    return picoquic_skip_ack_frame_maybe_ecn(bytes, bytes_max, 1);
+    return picoquic_skip_ack_frame_maybe_ecn(bytes, bytes_max, 1, 0);
+}
+
+static uint8_t* picoquic_skip_ack_1wd_frame(uint8_t* bytes, const uint8_t* bytes_max) {
+    return picoquic_skip_ack_frame_maybe_ecn(bytes, bytes_max, 0, 1);
+}
+
+static uint8_t* picoquic_skip_ack_ecn_1wd_frame(uint8_t* bytes, const uint8_t* bytes_max) {
+    return picoquic_skip_ack_frame_maybe_ecn(bytes, bytes_max, 1, 1);
 }
 
 /* Lots of simple frames...
@@ -3855,6 +3921,12 @@ int picoquic_skip_frame(uint8_t* bytes, size_t bytes_maxsize, size_t* consumed, 
         bytes = picoquic_skip_ack_frame(bytes, bytes_max);
     } else if (first_byte == picoquic_frame_type_ack_ecn) {
         bytes = picoquic_skip_ack_ecn_frame(bytes, bytes_max);
+    }
+    else if (first_byte == picoquic_frame_type_ack_1wd) {
+        bytes = picoquic_skip_ack_1wd_frame(bytes, bytes_max);
+    }
+    else if (first_byte == picoquic_frame_type_ack_ecn_1wd) {
+        bytes = picoquic_skip_ack_ecn_1wd_frame(bytes, bytes_max);
     } else {
         switch (first_byte) {
         case picoquic_frame_type_padding:
