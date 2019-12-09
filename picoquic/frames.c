@@ -2570,7 +2570,7 @@ static int picoquic_process_ack_range(
 }
 
 uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
-    const uint8_t* bytes_max, uint64_t current_time, int epoch, int is_ecn, int has_1wd)
+    const uint8_t* bytes_max, uint64_t current_time, int epoch, int is_ecn, unsigned int has_1wd)
 {
     uint64_t num_block;
     uint64_t largest;
@@ -2581,7 +2581,10 @@ uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
     uint64_t ecnx3[3] = { 0, 0, 0 };
     uint8_t first_byte = bytes[0];
 
-    if (picoquic_parse_ack_header(bytes, bytes_max-bytes, &num_block,
+    if (has_1wd != cnx->is_one_way_delay_enabled && epoch == 3) {
+        bytes = NULL;
+        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, first_byte);
+    } else if (picoquic_parse_ack_header(bytes, bytes_max-bytes, &num_block,
         &largest, &ack_delay, &consumed,
         cnx->remote_parameters.ack_delay_exponent, (has_1wd)?&one_way_delay:NULL) != 0) {
         bytes = NULL;
