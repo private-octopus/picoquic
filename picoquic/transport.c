@@ -712,6 +712,15 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     /* Loss bit is only enabled if negotiated by both parties */
     cnx->is_loss_bit_enabled = cnx->local_parameters.enable_loss_bit && cnx->remote_parameters.enable_loss_bit;
 
+    /* One way delay only enabled if asked by client and accepted by server */
+    if (cnx->client_mode) {
+        cnx->is_one_way_delay_enabled = cnx->local_parameters.enable_one_way_delay && cnx->remote_parameters.enable_one_way_delay;
+    }
+    else if (cnx->remote_parameters.enable_one_way_delay) {
+        cnx->local_parameters.enable_one_way_delay = 1;
+        cnx->is_one_way_delay_enabled = 1;
+    }
+
     *consumed = byte_index;
 
     return ret;

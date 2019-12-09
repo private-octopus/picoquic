@@ -2708,6 +2708,7 @@ int picoquic_prepare_ack_frame(picoquic_cnx_t* cnx, uint64_t current_time,
     size_t byte_index = 0;
     uint64_t num_block = 0;
     size_t l_largest = 0;
+    size_t l_1wd = 0;
     size_t l_delay = 0;
     size_t l_first_range = 0;
     picoquic_packet_context_t * pkt_ctx = &cnx->pkt_ctx[pc];
@@ -2718,7 +2719,9 @@ int picoquic_prepare_ack_frame(picoquic_cnx_t* cnx, uint64_t current_time,
     uint64_t lowest_acknowledged = 0;
     size_t num_block_index = 0;
     int is_ecn = cnx->sending_ecn_ack;
-    uint8_t ack_type_byte = ((is_ecn) ? picoquic_frame_type_ack_ecn : picoquic_frame_type_ack);
+    uint8_t ack_type_byte = (cnx->is_one_way_delay_enabled)?
+        ((is_ecn) ? picoquic_frame_type_ack_ecn_1wd : picoquic_frame_type_ack_1wd):
+        ((is_ecn) ? picoquic_frame_type_ack_ecn : picoquic_frame_type_ack);
 
     /* Check that there is enough room in the packet, and something to acknowledge */
     if (pkt_ctx->first_sack_item.start_of_sack_range == (uint64_t)((int64_t)-1)) {
@@ -2736,6 +2739,14 @@ int picoquic_prepare_ack_frame(picoquic_cnx_t* cnx, uint64_t current_time,
         l_largest = picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index,
             pkt_ctx->first_sack_item.end_of_sack_range);
         byte_index += l_largest;
+        /* Encode the one way delay if required */
+        if (byte_index < bytes_max && cnx->is_one_way_delay_enabled) {
+            uint64_t one_way_delay = current_time - cnx->start_time;
+            one_way_delay >>= cnx->local_parameters.ack_delay_exponent;
+            l_1wd = picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index,
+                one_way_delay);
+            byte_index += l_1wd;
+        }
         /* Encode the ack delay */
         if (byte_index < bytes_max) {
             if (current_time > pkt_ctx->time_stamp_largest_received) {
@@ -2758,7 +2769,7 @@ int picoquic_prepare_ack_frame(picoquic_cnx_t* cnx, uint64_t current_time,
             byte_index += l_first_range;
         }
 
-        if (l_delay == 0 || l_largest == 0 || l_first_range == 0 || byte_index > bytes_max) {
+        if (l_delay == 0 || l_largest == 0 || l_first_range == 0 || byte_index > bytes_max || (l_1wd == 0 && cnx->is_one_way_delay_enabled)) {
             /* not enough space */
             *consumed = 0;
             ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
