@@ -597,18 +597,12 @@ size_t picoquic_log_ack_frame(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t
     uint64_t largest;
     uint64_t ack_delay;
     uint64_t ecnx3[3];
-    uint64_t one_way_delay = 0;
+    uint64_t time_stamp = 0;
     int suspended = debug_printf_reset(1);
     int ret;
 
-    if (!has_one_way_delay) {
-        ret = picoquic_parse_ack_header(bytes, bytes_max, &num_block,
-            &largest, &ack_delay, &byte_index, 0, NULL);
-    }
-    else {
-        ret = picoquic_parse_ack_header(bytes, bytes_max, &num_block,
-            &largest, &ack_delay, &byte_index, 0, &one_way_delay);
-    }
+    ret = picoquic_parse_ack_header(bytes, bytes_max, &num_block,
+            &largest, &ack_delay, &byte_index, 0, (has_one_way_delay)?&time_stamp:NULL);
 
     (void)debug_printf_reset(suspended);
 
@@ -618,10 +612,10 @@ size_t picoquic_log_ack_frame(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t
     /* Now that the size is good, print it */
     if (has_one_way_delay) {
         if (is_ecn) {
-            fprintf(F, "    ACK_ECN_1WD %" PRIx64 ", (nb=%u)",  one_way_delay, (int)num_block);
+            fprintf(F, "    ACK_ECN_1WD %" PRIx64 ", (nb=%u)", time_stamp, (int)num_block);
         }
         else {
-            fprintf(F, "    ACK_1WD %" PRIx64 ", (nb=%u)", one_way_delay, (int)num_block);
+            fprintf(F, "    ACK_1WD %" PRIx64 ", (nb=%u)", time_stamp, (int)num_block);
         }
     }
     else {
