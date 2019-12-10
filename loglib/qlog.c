@@ -115,10 +115,20 @@ int qlog_packet_frame(bytestream * s, void * ptr)
         fprintf(f, ", \"id\": %"PRIu64", \"offset\": %"PRIu64", \"length\": %"PRIu64", \"fin\": %s ",
             stream_id, offset, length, (ftype & 1) ? "true":"false");
     } else switch (ftype) {
-    case picoquic_frame_type_ack: {
+    case picoquic_frame_type_ack:
+    case picoquic_frame_type_ack_ecn:
+    case picoquic_frame_type_ack_1wd:
+    case picoquic_frame_type_ack_ecn_1wd:
+    {
         uint64_t largest = 0;
         byteread_vint(s, &largest);
         uint64_t ack_delay = 0;
+        uint64_t remote_time_stamp = 0;
+        if (ftype == picoquic_frame_type_ack_1wd ||
+            ftype == picoquic_frame_type_ack_ecn_1wd) {
+            byteread_vint(s, &remote_time_stamp);
+            fprintf(f, ", \"remote_time_stamp\": %"PRIu64"", remote_time_stamp);
+        }
         byteread_vint(s, &ack_delay);
         fprintf(f, ", \"ack_delay\": %"PRIu64"", ack_delay);
         uint64_t num = 0;
@@ -138,6 +148,16 @@ int qlog_packet_frame(bytestream * s, void * ptr)
 
             fprintf(f, "[%"PRIu64", %"PRIu64"]", largest - range, largest);
             largest -= range + 1;
+        }
+        if (ftype == picoquic_frame_type_ack_ecn ||
+            ftype == picoquic_frame_type_ack_ecn_1wd) {
+            fprintf(f, ", \"ecn\": [");
+            for (int ecnx = 0; ecnx < 3; ecnx++) {
+                uint64_t ecn_v = 0;
+                byteread_vint(s, &ecn_v);
+                fprintf(f, "%s%"PRIu64, (ecnx == 0) ? "" : ",", ecn_v);
+            }
+            fprintf(f, "]");
         }
         fprintf(f, "]");
         break;

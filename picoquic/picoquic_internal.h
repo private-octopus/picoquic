@@ -107,7 +107,9 @@ typedef enum {
     picoquic_frame_type_connection_close = 0x1c,
     picoquic_frame_type_application_close = 0x1d,
     picoquic_frame_type_datagram = 0x30,
-    picoquic_frame_type_datagram_l = 0x31
+    picoquic_frame_type_datagram_l = 0x31,
+    picoquic_frame_type_ack_1wd = 0x34,
+    picoquic_frame_type_ack_ecn_1wd = 0x35
 } picoquic_frame_type_enum_t;
 
 /* PMTU discovery requirement status */
@@ -284,7 +286,8 @@ typedef enum {
     picoquic_tp_active_connection_id_limit = 14,
     picoquic_tp_max_datagram_size = 32 /* per draft-pauly-quic-datagram-05 */,
     picoquic_tp_test_large_chello = 3127,
-    picoquic_tp_enable_loss_bit = 0x1055
+    picoquic_tp_enable_loss_bit = 0x1055,
+    picoquic_tp_enable_one_way_delay = 0x10DE
 } picoquic_tp_enum;
 
 /* QUIC context, defining the tables of connections,
@@ -521,7 +524,10 @@ typedef struct st_picoquic_path_t {
     uint64_t retrans_count;
 
     /* Time measurement */
+    uint64_t phase_delay;
     uint64_t max_ack_delay;
+    uint64_t rtt_sample;
+    uint64_t one_way_delay_sample;
     uint64_t smoothed_rtt;
     uint64_t rtt_variant;
     uint64_t retransmit_timer;
@@ -680,6 +686,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int initial_validated : 1; /* Path has been validated, DOS amplification protection is lifted */
     unsigned int initial_repeat_needed : 1; /* Path has not been validated, repeated initial was received */
     unsigned int is_loss_bit_enabled : 1; /* Insert the loss bits in outgoing packets, read on incoming */
+    unsigned int is_one_way_delay_enabled : 1; /* Add time stamp to acks, read on incoming */
 
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;
@@ -941,9 +948,9 @@ int picoquic_parse_stream_header(
 
 int picoquic_parse_ack_header(
     uint8_t const* bytes, size_t bytes_max,
-    uint64_t* num_block, uint64_t* nb_ecnx3, uint64_t* largest,
+    uint64_t* num_block, uint64_t* largest,
     uint64_t* ack_delay, size_t* consumed,
-    uint8_t ack_delay_exponent);
+    uint8_t ack_delay_exponent, uint64_t * one_way_delay);
 
 uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t pn);
 
@@ -1019,10 +1026,10 @@ int picoquic_check_sack_list(picoquic_sack_item_t* sack,
  */
 int picoquic_process_ack_of_ack_frame(
     picoquic_sack_item_t* first_sack,
-    uint8_t* bytes, size_t bytes_max, size_t* consumed, int is_ecn_14);
+    uint8_t* bytes, size_t bytes_max, size_t* consumed, int is_ecn, int has_1wd);
 
-void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, int64_t rtt_estimate,
-    picoquic_packet_context_t * pkt_ctx, uint64_t current_time, uint64_t ack_delay);
+void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, uint64_t send_time,
+    picoquic_packet_context_t * pkt_ctx, uint64_t current_time, uint64_t ack_delay, uint64_t remote_time_stamp);
 
 /* stream management */
 picoquic_stream_head_t* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t stream_id);

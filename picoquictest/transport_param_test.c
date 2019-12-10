@@ -74,42 +74,42 @@
 
 static picoquic_tp_t transport_param_test1 = {
     65535, 0, 0, 0x400000, 65533, 65535, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT,
-    PICOQUIC_NB_PATH_TARGET, 3, 0,  TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0
+    PICOQUIC_NB_PATH_TARGET, 3, 0,  TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test2 = {
     0x1000000, 0, 0, 0x1000000, 1, 0, 255, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 1480, 1
+    TRANSPORT_PREFERED_ADDRESS_NULL, 1480, 1, 1
 };
 
 static picoquic_tp_t transport_param_test3 = {
     0x1000000, 0, 0, 0x1000000, 1, 0, 255, 0, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0
+    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 1
 };
 
 static picoquic_tp_t transport_param_test4 = {
     65535, 0, 0, 0x400000, 65532, 0, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0,
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0
+    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test5 = {
     0x1000000, 0, 0, 0x1000000, 4, 0, 255, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0
+    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test6 = {
     0x10000, 0, 0, 0xffffffff, 0, 0, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0,
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0
+    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test7 = {
     8192, 0, 0, 16384, 5, 0, 10, 1472, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 17, 0, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0
+    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test8 = {
     65535, 0, 0, 0x400000, 0, 0, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0
+    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test9 = {
@@ -117,12 +117,12 @@ static picoquic_tp_t transport_param_test9 = {
     { 1, { 10, 0, 0, 1}, 4433, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 0,
     {{1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },4},
         { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 }},
-        0, 0
+        0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test10 = {
     65535, 0, 0, 0x400000, 65533, 65535, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 1, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0
+    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0
 };
 
 uint8_t client_param1[] = {
@@ -137,22 +137,23 @@ uint8_t client_param1[] = {
 };
 
 uint8_t client_param2[] = {
-    0, 0x2b,
+    0, 0x2F,
     0, picoquic_tp_initial_max_stream_data_bidi_local, 0, 4, 0x81, 0, 0, 0,
     0, picoquic_tp_initial_max_data, 0, 4, 0x81, 0, 0, 0,
     0, picoquic_tp_initial_max_streams_bidi, 0, 1, 0x01,
     0, picoquic_tp_idle_timeout, 0, 2, 0x40, 0xFF,
     0, picoquic_tp_max_packet_size, 0, 2, 0x45, 0xC8,
     0, picoquic_tp_max_datagram_size, 0, 2,0x45, 0xC8,
-    0x10, 0x55, 0x00, 0x00
+    0x10, 0x55, 0x00, 0x00, 0x10, 0xDE, 0x00, 0x00
 };
 
 uint8_t client_param3[] = {
-    0, 0x1B,
+    0, 0x1F,
     0, picoquic_tp_initial_max_stream_data_bidi_local, 0, 4, 0x81, 0, 0, 0,
     0, picoquic_tp_initial_max_data, 0, 4, 0x81, 0, 0, 0,
     0, picoquic_tp_initial_max_streams_bidi, 0, 1, 0x01,
-    0, picoquic_tp_idle_timeout, 0, 2, 0x40, 0xFF
+    0, picoquic_tp_idle_timeout, 0, 2, 0x40, 0xFF,
+    0x10, 0xDE, 0x00, 0x00
 };
 
 uint8_t client_param4[] = {
@@ -436,6 +437,11 @@ static int transport_param_compare(picoquic_tp_t* param, picoquic_tp_t* ref) {
     else if (param->enable_loss_bit != ref->enable_loss_bit) {
         DBG_PRINTF("enable_loss_bit: got %d, expected %d\n",
             param->enable_loss_bit, ref->enable_loss_bit);
+        ret = -1;
+    }
+    else if (param->enable_one_way_delay != ref->enable_one_way_delay) {
+        DBG_PRINTF("enable_loss_bit: got %d, expected %d\n",
+            param->enable_one_way_delay, ref->enable_one_way_delay);
         ret = -1;
     }
 

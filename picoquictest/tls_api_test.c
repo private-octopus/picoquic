@@ -6173,10 +6173,15 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, uint64_t 
     uint64_t latency = 300000;
     uint64_t picoseq_per_byte_250 = (1000000ull * 8) / 250;
     uint64_t picoseq_per_byte_3 = (1000000ull * 8) / 3;
-
+    picoquic_tp_t client_parameters;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
+    int ret = 0;
 
+    memset(&client_parameters, 0, sizeof(picoquic_tp_t));
+    picoquic_init_transport_parameters(&client_parameters, 1);
+    client_parameters.enable_one_way_delay = 1;
+
+    ret = tls_api_one_scenario_init(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, &client_parameters, NULL);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;

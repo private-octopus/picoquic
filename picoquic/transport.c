@@ -425,6 +425,18 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         }
     }
 
+    if (cnx->local_parameters.enable_one_way_delay > 0 && bytes != NULL) {
+        if (bytes + 4 > bytes_max) {
+            bytes = NULL;
+        }
+        else {
+            picoformat_16(bytes, picoquic_tp_enable_one_way_delay);
+            bytes += 2;
+            picoformat_16(bytes, 0);
+            bytes += 2;
+        }
+    }
+
     /* Finally, update the parameters length */
     if (bytes == NULL) {
         *consumed = 0;
@@ -461,6 +473,7 @@ void picoquic_clear_transport_extensions(picoquic_cnx_t* cnx)
     cnx->remote_parameters.max_datagram_size = 0;
     cnx->remote_parameters.active_connection_id_limit = 0;
     cnx->remote_parameters.enable_loss_bit = 0;
+    cnx->remote_parameters.enable_one_way_delay = 0;
 }
 
 int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mode,
@@ -647,6 +660,14 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                                 cnx->remote_parameters.enable_loss_bit = 1;
                             }
                             break;
+                        case picoquic_tp_enable_one_way_delay:
+                            if (extension_length != 0) {
+                                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+                            }
+                            else {
+                                cnx->remote_parameters.enable_one_way_delay = 1;
+                            }
+                            break;
                         default:
                             /* ignore unknown extensions */
                             break;
@@ -690,6 +711,15 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
 
     /* Loss bit is only enabled if negotiated by both parties */
     cnx->is_loss_bit_enabled = cnx->local_parameters.enable_loss_bit && cnx->remote_parameters.enable_loss_bit;
+
+    /* One way delay only enabled if asked by client and accepted by server */
+    if (cnx->client_mode) {
+        cnx->is_one_way_delay_enabled = cnx->local_parameters.enable_one_way_delay && cnx->remote_parameters.enable_one_way_delay;
+    }
+    else if (cnx->remote_parameters.enable_one_way_delay) {
+        cnx->local_parameters.enable_one_way_delay = 1;
+        cnx->is_one_way_delay_enabled = 1;
+    }
 
     *consumed = byte_index;
 
