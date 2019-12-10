@@ -37,12 +37,6 @@
 #ifndef SOCKET_CLOSE
 #define SOCKET_CLOSE(x) closesocket(x)
 #endif
-#ifndef WSA_START_DATA
-#define WSA_START_DATA WSADATA
-#endif
-#ifndef WSA_START
-#define WSA_START(x, y) WSAStartup((x), (y))
-#endif
 #ifndef WSA_LAST_ERROR
 #define WSA_LAST_ERROR(x) WSAGetLastError()
 #endif
@@ -1186,10 +1180,6 @@ int main(int argc, char** argv)
     char default_server_key_file[512];
     char * client_scenario = NULL;
     FILE* F_log = NULL;
-
-#ifdef _WINDOWS
-    WSADATA wsaData;
-#endif
     int ret = 0;
 
     /* HTTP09 test */
@@ -1351,16 +1341,6 @@ int main(int argc, char** argv)
     if (optind < argc) {
         usage();
     }
-
-#ifdef _WINDOWS
-    // Init WSA.
-    if (ret == 0) {
-        if (WSA_START(MAKEWORD(2, 2), &wsaData)) {
-            fprintf(stderr, "Cannot init WSA\n");
-            ret = -1;
-        }
-    }
-#endif
 
     if (log_file != NULL) {
         if (strcmp(log_file, "-") == 0) {

@@ -284,6 +284,8 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
 SOCKET_TYPE picoquic_open_client_socket(int af)
 {
 #ifdef _WINDOWS
+    WSADATA wsaData = { 0 };
+    WSA_START(MAKEWORD(2, 2), &wsaData);
     SOCKET_TYPE sd = WSASocket(af, SOCK_DGRAM, IPPROTO_UDP, NULL, 0, WSA_FLAG_OVERLAPPED);
 #else
     SOCKET_TYPE sd = socket(af, SOCK_DGRAM, IPPROTO_UDP);
@@ -308,6 +310,14 @@ SOCKET_TYPE picoquic_open_client_socket(int af)
 int picoquic_open_server_sockets(picoquic_server_sockets_t* sockets, int port)
 {
     int ret = 0;
+
+#ifdef _WINDOWS
+    WSADATA wsaData = { 0 };
+    if (WSA_START(MAKEWORD(2, 2), &wsaData)) {
+        ret = -1;
+    }
+#endif
+
     const int sock_af[] = { AF_INET6, AF_INET };
 
     for (int i = 0; i < PICOQUIC_NB_SERVER_SOCKETS; i++) {

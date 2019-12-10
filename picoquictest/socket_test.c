@@ -137,31 +137,50 @@ static int socket_test_one(char const* addr_text, int server_port, int should_be
     return ret;
 }
 
+int socket_test_port(picoquic_server_sockets_t* server_sockets, int test_port)
+{
+    int ret = 0;
+
+    /* For a series of server addresses, do a ping pong test */
+    if (socket_test_one("127.0.0.1", test_port, 0, server_sockets) != 0) {
+        ret = -1;
+    }
+    else if (socket_test_one("::1", test_port, 0, server_sockets) != 0) {
+        ret = -1;
+    }
+    else if (socket_test_one("localhost", test_port, 1, server_sockets) != 0) {
+        ret = -1;
+    }
+
+    return ret;
+}
+
 int socket_test()
 {
     int ret = 0;
     int test_port = 12345;
-    picoquic_server_sockets_t server_sockets;
-#ifdef _WINDOWS
-    WSADATA wsaData;
+    int test_port2 = 1234;
 
-    if (WSA_START(MAKEWORD(2, 2), &wsaData)) {
-        DBG_PRINTF("Cannot init WSA\n");
-        ret = -1;
-    }
-#endif
     /* Open server sockets */
+    picoquic_server_sockets_t server_sockets;
     ret = picoquic_open_server_sockets(&server_sockets, test_port);
 
     if (ret == 0) {
-        /* For a series of server addresses, do a ping pong test */
-        if (socket_test_one("127.0.0.1", test_port, 0, &server_sockets) != 0) {
-            ret = -1;
-        } else if (socket_test_one("::1", test_port, 0, &server_sockets) != 0) {
-            ret = -1;
-        } else if (socket_test_one("localhost", test_port, 1, &server_sockets) != 0) {
-            ret = -1;
+
+        /* Test with one server socket */
+        ret = socket_test_port(&server_sockets, test_port);
+
+        if (ret == 0) {
+            /* Test with two server sockets */
+            picoquic_server_sockets_t server_sockets2;
+            ret = picoquic_open_server_sockets(&server_sockets2, test_port2);
+
+            if (ret == 0) {
+                ret = socket_test_port(&server_sockets2, test_port2);
+                picoquic_close_server_sockets(&server_sockets2);
+            }
         }
+
         /* Close the sockets */
         picoquic_close_server_sockets(&server_sockets);
     }
@@ -208,14 +227,7 @@ int socket_ecn_test_one(int af_domain)
 int socket_ecn_test()
 {
     int ret;
-#ifdef _WINDOWS
-    WSADATA wsaData;
 
-    if (WSA_START(MAKEWORD(2, 2), &wsaData)) {
-        DBG_PRINTF("Cannot init WSA\n");
-        return -1;
-    }
-#endif
     ret = socket_ecn_test_one(AF_INET);
 
     if (ret == 0) {
