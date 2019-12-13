@@ -6226,6 +6226,11 @@ int satellite_basic_test()
     return satellite_test_one(picoquic_dcubic_algorithm, 8250000, 0, 0);
 }
 
+int satellite_loss_test()
+{
+    return satellite_test_one(picoquic_dcubic_algorithm, 11000000, 0, 1);
+}
+
 /* Test that different CID length are properly supported */
 int cid_length_test_one(uint8_t length)
 {

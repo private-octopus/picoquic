@@ -2732,7 +2732,7 @@ int picoquic_prepare_ack_frame(picoquic_cnx_t* cnx, uint64_t current_time,
             /* Set the lowest acknowledged */
             lowest_acknowledged = pkt_ctx->first_sack_item.start_of_sack_range;
             /* Encode the ack blocks that fit in the allocated space */
-            while (num_block < 63 && next_sack != NULL) {
+            while (num_block < 32 && next_sack != NULL) {
                 size_t l_gap = 0;
                 size_t l_range = 0;
 
