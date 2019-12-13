@@ -207,6 +207,7 @@ static void picoquic_cubic_notify(
     picoquic_cnx_t* cnx, picoquic_path_t* path_x,
     picoquic_congestion_notification_t notification,
     uint64_t rtt_measurement,
+    uint64_t one_way_delay,
     uint64_t nb_bytes_acknowledged,
     uint64_t lost_packet_number,
     uint64_t current_time)
@@ -253,7 +254,9 @@ static void picoquic_cubic_notify(
                 break;
             case picoquic_congestion_notification_rtt_measurement:
                 /* Using RTT increases as signal to get out of initial slow start */
-                if (cubic_state->ssthresh == (uint64_t)((int64_t)-1) && picoquic_hystart_test(&cubic_state->rtt_filter, rtt_measurement, cnx->path[0]->pacing_packet_time_microsec, current_time)) {
+                if (cubic_state->ssthresh == (uint64_t)((int64_t)-1) && 
+                    picoquic_hystart_test(&cubic_state->rtt_filter, (cnx->is_one_way_delay_enabled) ? one_way_delay : rtt_measurement,
+                        cnx->path[0]->pacing_packet_time_microsec, current_time, cnx->is_one_way_delay_enabled)) {
                     /* RTT increased too much, get out of slow start! */
                     if (cubic_state->rtt_filter.rtt_filtered_min > PICOQUIC_TARGET_RENO_RTT) {
                         double correction = (double)PICOQUIC_TARGET_RENO_RTT / (double)cubic_state->rtt_filter.rtt_filtered_min;

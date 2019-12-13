@@ -63,7 +63,7 @@ void picoquic_filter_rtt_min_max(picoquic_min_max_rtt_t * rtt_track, uint64_t rt
     }
 }
 
-int picoquic_hystart_test(picoquic_min_max_rtt_t* rtt_track, uint64_t rtt_measurement, uint64_t packet_time, uint64_t current_time)
+int picoquic_hystart_test(picoquic_min_max_rtt_t* rtt_track, uint64_t rtt_measurement, uint64_t packet_time, uint64_t current_time, int is_one_way_delay_enabled)
 {
     int ret = 0;
 
@@ -83,7 +83,8 @@ int picoquic_hystart_test(picoquic_min_max_rtt_t* rtt_track, uint64_t rtt_measur
                 delta_rtt = rtt_track->sample_min - rtt_track->rtt_filtered_min;
                 rtt_track->past_threshold = 1;
                 if (delta_rtt * 4 > rtt_track->rtt_filtered_min ||
-                    (rtt_track->rtt_filtered_min > PICOQUIC_TARGET_RENO_RTT && delta_rtt > 256 * packet_time)) {
+                    (rtt_track->rtt_filtered_min > ((is_one_way_delay_enabled)?(PICOQUIC_TARGET_RENO_RTT/2): PICOQUIC_TARGET_RENO_RTT)
+                        && delta_rtt > 256 * packet_time)) {
                     rtt_track->nb_rtt_excess++;
                     if (rtt_track->nb_rtt_excess >= PICOQUIC_MIN_MAX_RTT_SCOPE) {
                         /* RTT increased too much, get out of slow start! */

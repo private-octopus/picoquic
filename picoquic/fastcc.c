@@ -118,6 +118,7 @@ void picoquic_fastcc_notify(
     picoquic_cnx_t* cnx, picoquic_path_t* path_x,
     picoquic_congestion_notification_t notification,
     uint64_t rtt_measurement,
+    uint64_t one_way_delay,
     uint64_t nb_bytes_acknowledged,
     uint64_t lost_packet_number,
     uint64_t current_time)

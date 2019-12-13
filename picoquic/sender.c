@@ -1287,7 +1287,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                         if (cnx->congestion_alg != NULL) {
                             cnx->congestion_alg->alg_notify(cnx, old_path,
                                 (timer_based_retransmit == 0) ? picoquic_congestion_notification_repeat : picoquic_congestion_notification_timeout,
-                                0, 0, lost_packet_number, current_time);
+                                0, 0, 0, lost_packet_number, current_time);
                         }
                     }
 
@@ -1637,7 +1637,7 @@ void picoquic_implicit_handshake_ack(picoquic_cnx_t* cnx, picoquic_packet_contex
             if (cnx->congestion_alg != NULL) {
                 cnx->congestion_alg->alg_notify(cnx, old_path,
                     picoquic_congestion_notification_acknowledgement,
-                    0, p->length, 0, current_time);
+                    0, 0, p->length, 0, current_time);
             }
         }
         /* Update the number of bytes in transit and remove old packet from queue */
@@ -2735,7 +2735,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                     if (cnx->congestion_alg != NULL) {
                         cnx->congestion_alg->alg_notify(cnx, path_x,
                             picoquic_congestion_notification_cwin_blocked,
-                            0, 0, 0, current_time);
+                            0, 0, 0, 0, current_time);
                     }
                 } else if (picoquic_is_sending_authorized_by_pacing(path_x, current_time, next_wake_time)) {
                     /* Check whether PMTU discovery is required. The call will return
