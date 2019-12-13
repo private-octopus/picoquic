@@ -2675,6 +2675,9 @@ picoquic_congestion_algorithm_t const* picoquic_get_congestion_algorithm(char co
         else if (strcmp(alg_name, "cubic") == 0) {
             alg = picoquic_cubic_algorithm;
         }
+        else if (strcmp(alg_name, "dcubic") == 0) {
+            alg = picoquic_dcubic_algorithm;
+        }
         else if (strcmp(alg_name, "fast") == 0) {
             alg = picoquic_fastcc_algorithm;
         }
