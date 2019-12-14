@@ -1518,6 +1518,24 @@ int picoquic_create_probe(picoquic_cnx_t* cnx, const struct sockaddr* addr_to, c
     return ret;
 }
 
+/* stream data splay management */
+static int64_t picoquic_stream_data_node_compare(void* l, void* r)
+{
+    /* Offset values are from 0 to 2^62-1, which means we are not worried with rollover */
+    return ((picoquic_stream_data_node_t*)l)->offset - ((picoquic_stream_data_node_t*)r)->offset;
+}
+
+static picosplay_node_t* picoquic_stream_data_node_create(void* value)
+{
+    return &((picoquic_stream_data_node_t*)value)->stream_data_node;
+}
+
+
+static void* picoquic_stream_data_node_value(picosplay_node_t* node)
+{
+    return (void*)((char*)node - offsetof(struct st_picoquic_stream_data_node_t, stream_data_node));
+}
+
 /* Stream splay management */
 
 static int64_t picoquic_stream_node_compare(void *l, void *r)

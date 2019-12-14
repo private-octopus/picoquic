@@ -368,11 +368,11 @@ typedef struct st_picoquic_sack_item_t {
 } picoquic_sack_item_t;
 
 /*
-    * Stream head.
-    * Stream contains bytes of data, which are not always delivered in order.
-    * When in order data is available, the application can read it,
-    * or a callback can be set.
-    */
+ * Stream head.
+ * Stream contains bytes of data, which are not always delivered in order.
+ * When in order data is available, the application can read it,
+ * or a callback can be set.
+ */
 
 typedef struct st_picoquic_stream_data_t {
     struct st_picoquic_stream_data_t* next_stream_data;
@@ -380,6 +380,15 @@ typedef struct st_picoquic_stream_data_t {
     size_t length;    /* Number of octets in "bytes" */
     uint8_t* bytes;
 } picoquic_stream_data_t;
+
+typedef struct st_picoquic_stream_data_node_t {
+    picosplay_node_t stream_data_node;
+    struct st_picoquic_stream_data_t* next_stream_data;
+    uint64_t offset;  /* Stream offset of the first octet in "bytes" */
+    size_t length;    /* Number of octets in "bytes" */
+    uint8_t* bytes;
+} picoquic_stream_data_node_t;
+
 
 typedef struct st_picoquic_stream_head_t {
     picosplay_node_t stream_node;

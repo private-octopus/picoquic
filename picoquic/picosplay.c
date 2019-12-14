@@ -138,7 +138,8 @@ picosplay_node_t* picosplay_insert(picosplay_tree_t *tree, void *value) {
 }
 
 /* Find a node with the given value, splaying the tree. */
-picosplay_node_t* picosplay_find(picosplay_tree_t *tree, void *value) {
+picosplay_node_t* picosplay_find(picosplay_tree_t *tree, void *value)
+{
     picosplay_node_t *curr = tree->root;
     int found = 0;
     while(curr != NULL && !found) {
@@ -158,6 +159,30 @@ picosplay_node_t* picosplay_find(picosplay_tree_t *tree, void *value) {
     if(curr != NULL)
         splay(tree, curr);
     return curr;
+}
+
+/* Find a node with the given value, splaying the tree. */
+picosplay_node_t* picosplay_find_previous(picosplay_tree_t* tree, void* value)
+{
+    picosplay_node_t* curr = tree->root;
+    picosplay_node_t* previous = NULL;
+    int found = 0;
+    while (curr != NULL && !found) {
+        int64_t relation = tree->comp(value, tree->node_value(curr));
+        if (relation == 0) {
+            found = 1;
+            previous = curr;
+        }
+        else if (relation < 0) {
+            curr = curr->left;
+        }
+        else {
+            previous = curr;
+            curr = curr->right;
+        }
+    }
+
+    return previous;
 }
 
 /* Remove a node with the given value, splaying the tree. */
