@@ -144,7 +144,7 @@ int picoquic_add_to_stream_with_ctx(picoquic_cnx_t* cnx, uint64_t stream_id,
     }
 
     if (ret == 0 && length > 0) {
-        picoquic_stream_data_t* stream_data = (picoquic_stream_data_t*)malloc(sizeof(picoquic_stream_data_t));
+        picoquic_stream_data_node_t* stream_data = (picoquic_stream_data_node_t*)malloc(sizeof(picoquic_stream_data_node_t));
 
         if (stream_data == 0) {
             ret = -1;
@@ -156,8 +156,8 @@ int picoquic_add_to_stream_with_ctx(picoquic_cnx_t* cnx, uint64_t stream_id,
                 stream_data = NULL;
                 ret = -1;
             } else {
-                picoquic_stream_data_t** pprevious = &stream->send_queue;
-                picoquic_stream_data_t* next = stream->send_queue;
+                picoquic_stream_data_node_t** pprevious = &stream->send_queue;
+                picoquic_stream_data_node_t* next = stream->send_queue;
 
                 memcpy(stream_data->bytes, data, length);
                 stream_data->length = length;

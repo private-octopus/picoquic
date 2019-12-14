@@ -374,16 +374,9 @@ typedef struct st_picoquic_sack_item_t {
  * or a callback can be set.
  */
 
-typedef struct st_picoquic_stream_data_t {
-    struct st_picoquic_stream_data_t* next_stream_data;
-    uint64_t offset;  /* Stream offset of the first octet in "bytes" */
-    size_t length;    /* Number of octets in "bytes" */
-    uint8_t* bytes;
-} picoquic_stream_data_t;
-
 typedef struct st_picoquic_stream_data_node_t {
     picosplay_node_t stream_data_node;
-    struct st_picoquic_stream_data_t* next_stream_data;
+    struct st_picoquic_stream_data_node_t* next_stream_data;
     uint64_t offset;  /* Stream offset of the first octet in "bytes" */
     size_t length;    /* Number of octets in "bytes" */
     uint8_t* bytes;
@@ -402,9 +395,9 @@ typedef struct st_picoquic_stream_head_t {
     uint32_t remote_error;
     uint32_t local_stop_error;
     uint32_t remote_stop_error;
-    picoquic_stream_data_t* stream_data;
+    picosplay_tree_t stream_data_tree;
     uint64_t sent_offset;
-    picoquic_stream_data_t* send_queue;
+    picoquic_stream_data_node_t* send_queue;
     void * app_stream_ctx;
     picoquic_sack_item_t first_sack_item;
     /* Flags describing the state of the stream */

@@ -1502,7 +1502,7 @@ static int picoquic_add_to_tls_stream(picoquic_cnx_t* cnx, const uint8_t* data, 
     picoquic_stream_head_t* stream = &cnx->tls_stream[epoch];
 
     if (length > 0) {
-        picoquic_stream_data_t* stream_data = (picoquic_stream_data_t*)malloc(sizeof(picoquic_stream_data_t));
+        picoquic_stream_data_node_t* stream_data = (picoquic_stream_data_node_t*)malloc(sizeof(picoquic_stream_data_node_t));
 
         if (stream_data == 0) {
             ret = -1;
@@ -1516,8 +1516,8 @@ static int picoquic_add_to_tls_stream(picoquic_cnx_t* cnx, const uint8_t* data, 
                 ret = -1;
             }
             else {
-                picoquic_stream_data_t** pprevious = &stream->send_queue;
-                picoquic_stream_data_t* next = stream->send_queue;
+                picoquic_stream_data_node_t** pprevious = &stream->send_queue;
+                picoquic_stream_data_node_t* next = stream->send_queue;
 
                 memcpy(stream_data->bytes, data, length);
                 stream_data->length = length;
@@ -1532,14 +1532,6 @@ static int picoquic_add_to_tls_stream(picoquic_cnx_t* cnx, const uint8_t* data, 
                 *pprevious = stream_data;
             }
         }
-#if 0
-#if 0
-        picoquic_cnx_set_next_wake_time(cnx, picoquic_get_quic_time(cnx->quic));
-#else
-        /* reset the connection at its new logical position */
-        picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
-#endif
-#endif
     }
 
     return ret;
@@ -1773,7 +1765,7 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
 
     for (size_t epoch = 0; epoch < PICOQUIC_NUMBER_OF_EPOCHS && ret == 0; epoch++) {
         picoquic_stream_head_t* stream = &cnx->tls_stream[epoch];
-        picoquic_stream_data_t* data = stream->stream_data;
+        picoquic_stream_data_node_t* data = (picoquic_stream_data_node_t*)picosplay_first(&stream->stream_data_tree);
         size_t processed = 0;
         int data_pushed = 0;
 
@@ -1841,10 +1833,8 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
             processed += epoch_data;
 
             if (start + epoch_data >= data->length) {
-                free(data->bytes);
-                cnx->tls_stream[epoch].stream_data = data->next_stream_data;
-                free(data);
-                data = cnx->tls_stream[epoch].stream_data;
+                picosplay_delete_hint(&cnx->tls_stream[epoch].stream_data_tree, &data->stream_data_node);
+                data = (picoquic_stream_data_node_t*)picosplay_first(&cnx->tls_stream[epoch].stream_data_tree);
             }
 
             ptls_buffer_dispose(&sendbuf);

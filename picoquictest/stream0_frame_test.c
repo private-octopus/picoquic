@@ -181,7 +181,7 @@ static int StreamZeroFrameOneTest(struct test_case_st* test)
 
             if (ret == 0) {
                 /* Check the content of all the data in the context */
-                picoquic_stream_data_t* data = picoquic_first_stream(cnx)->stream_data;
+                picoquic_stream_data_node_t* data = (picoquic_stream_data_node_t*)picosplay_first(&picoquic_first_stream(cnx)->stream_data_tree);
                 size_t data_rank = 0;
 
                 while (data != NULL) {
@@ -198,7 +198,7 @@ static int StreamZeroFrameOneTest(struct test_case_st* test)
                         }
                     }
 
-                    data = data->next_stream_data;
+                    data = (picoquic_stream_data_node_t*)picosplay_next(&data->stream_data_node);
                 }
 
                 if (ret == 0 && data_rank != test->expected_length) {
@@ -311,12 +311,19 @@ static struct test_case_st tls_test_case[] = {
 
 static size_t const nb_tls_test_cases = sizeof(tls_test_case) / sizeof(struct test_case_st);
 
+int64_t picoquic_stream_data_node_compare(void* l, void* r);
+picosplay_node_t* picoquic_stream_data_node_create(void* value);
+void* picoquic_stream_data_node_value(picosplay_node_t* node);
+void picoquic_stream_data_node_delete(void* tree, picosplay_node_t* node);
+
 static int TlsStreamFrameOneTest(struct test_case_st* test)
 {
     int ret = 0;
     int test_epoch = 2; /* epoch = 2 for handshake */
 
     picoquic_cnx_t cnx = { 0 };
+    picosplay_init_tree(&cnx.tls_stream[2].stream_data_tree, picoquic_stream_data_node_compare, picoquic_stream_data_node_create, picoquic_stream_data_node_delete, picoquic_stream_data_node_value);
+
 
     for (size_t i = 0; ret == 0 && i < test->list_size; i++) {
         if (NULL == picoquic_decode_crypto_hs_frame(&cnx, test->list[i].packet,
@@ -328,7 +335,7 @@ static int TlsStreamFrameOneTest(struct test_case_st* test)
 
     if (ret == 0) {
         /* Check the content of all the data in the context */
-        picoquic_stream_data_t* data = cnx.tls_stream[test_epoch].stream_data;
+        picoquic_stream_data_node_t* data = (picoquic_stream_data_node_t* )picosplay_first(&cnx.tls_stream[test_epoch].stream_data_tree);
         size_t data_rank = 0;
 
         while (data != NULL) {
@@ -345,7 +352,7 @@ static int TlsStreamFrameOneTest(struct test_case_st* test)
                 }
             }
 
-            data = data->next_stream_data;
+            data = (picoquic_stream_data_node_t*)picosplay_next(&data->stream_data_node);
         }
 
         if (ret == 0 && data_rank != test->expected_length) {
