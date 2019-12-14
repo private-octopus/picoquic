@@ -962,7 +962,7 @@ static int picoquic_queue_network_input(picoquic_cnx_t* cnx, picoquic_stream_hea
 
             if (next != NULL && next->offset < offset + length) {
                 /* the tail of the frame overlaps with the next frame received */
-                data_length = next->offset - offset - start;
+                data_length = (size_t)(next->offset - offset - start);
             }
 
             if (data_length > 0) {
@@ -993,7 +993,7 @@ static int picoquic_queue_network_input(picoquic_cnx_t* cnx, picoquic_stream_hea
             /* Check whether there may be some missing data after the next frame. */
             if (ret == 0 && start < length && next != NULL) {
                 if (offset + length > next->offset + next->length) {
-                    start = next->offset + next->length - offset;
+                    start = (size_t)(next->offset + next->length - offset);
                     /* Continue the loop with the next block */
                     next = (picoquic_stream_data_node_t*)picosplay_next(&previous->stream_data_node);
                 }
