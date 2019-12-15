@@ -1422,14 +1422,19 @@ picoquic_pmtu_discovery_status_enum picoquic_is_mtu_probe_needed(picoquic_cnx_t*
              * for that. */
             uint64_t next_probe = picoquic_next_mtu_probe_length(cnx, path_x);
             if (next_probe > path_x->send_mtu) {
-                uint64_t packets_to_send_before = cnx->nb_bytes_queued / path_x->send_mtu;
-                uint64_t packets_to_send_after = cnx->nb_bytes_queued / next_probe;
-                uint64_t delta = (packets_to_send_before - packets_to_send_after) * 60;
-                if (delta > next_probe) {
+                if (cnx->is_pmtud_required) {
                     ret = picoquic_pmtu_discovery_required;
                 }
                 else {
-                    ret = picoquic_pmtu_discovery_optional;
+                    uint64_t packets_to_send_before = cnx->nb_bytes_queued / path_x->send_mtu;
+                    uint64_t packets_to_send_after = cnx->nb_bytes_queued / next_probe;
+                    uint64_t delta = (packets_to_send_before - packets_to_send_after) * 60;
+                    if (delta > next_probe) {
+                        ret = picoquic_pmtu_discovery_required;
+                    }
+                    else {
+                        ret = picoquic_pmtu_discovery_optional;
+                    }
                 }
             }
         }

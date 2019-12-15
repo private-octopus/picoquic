@@ -2077,6 +2077,11 @@ void picoquic_cnx_set_spinbit_policy(picoquic_cnx_t * cnx, picoquic_spinbit_vers
     cnx->spin_policy = spinbit_policy;
 }
 
+void picoquic_cnx_set_pmtud_required(picoquic_cnx_t* cnx, int is_pmtud_required)
+{
+    cnx->is_pmtud_required = is_pmtud_required;
+}
+
 /*
  * Provide clock time
  */

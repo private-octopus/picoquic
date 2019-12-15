@@ -6201,6 +6201,8 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, uint64_t 
         test_ctx->s_to_c_link->jitter = jitter;
         test_ctx->stream0_flow_release = 1;
 
+        picoquic_cnx_set_pmtud_required(test_ctx->cnx_client, 1);
+
         picoquic_set_cc_log(test_ctx->qclient, ".");
         ret = picoquic_open_cc_dump(test_ctx->cnx_client);
 
@@ -6223,12 +6225,12 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, uint64_t 
 
 int satellite_basic_test()
 {
-    return satellite_test_one(picoquic_dcubic_algorithm, 8250000, 0, 0);
+    return satellite_test_one(picoquic_dcubic_algorithm, 7500000, 0, 0);
 }
 
 int satellite_loss_test()
 {
-    return satellite_test_one(picoquic_dcubic_algorithm, 11000000, 0, 1);
+    return satellite_test_one(picoquic_dcubic_algorithm, 10000000, 0, 1);
 }
 
 /* Test that different CID length are properly supported */
