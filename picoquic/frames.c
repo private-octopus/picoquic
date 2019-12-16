@@ -912,95 +912,82 @@ void picoquic_stream_data_callback(picoquic_cnx_t* cnx, picoquic_stream_head_t* 
     }
 }
 
-/* Common code to data stream and crypto hs stream */
-static int picoquic_queue_network_input(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream, uint64_t offset, uint8_t* bytes, size_t length, int * new_data_available)
+static int add_chunk_node(picosplay_tree_t* tree, uint64_t offset, size_t length, const uint8_t* bytes, int* chunk_added)
 {
     int ret = 0;
-    picoquic_stream_data_node_t* previous = NULL;
-    picoquic_stream_data_node_t* next = NULL;
-    picoquic_stream_data_node_t target;
-    size_t start = 0;
 
-    if (offset <= stream->consumed_offset) {
-        /* Remove data that is already consumed */
-        if (offset + length <= stream->consumed_offset) {
-            /* already received */
-            start = length;
-        }
-        else {
-            start = (size_t)(stream->consumed_offset - offset);
-        }
+    picoquic_stream_data_node_t* node = (picoquic_stream_data_node_t*)malloc(sizeof(picoquic_stream_data_node_t));
+    uint8_t* chunk_bytes = (uint8_t*)malloc(length);
+
+    if (node == NULL || chunk_bytes == NULL) {
+        free(node);
+        free(chunk_bytes);
+        ret = PICOQUIC_ERROR_MEMORY;
+    } else {
+        memcpy(chunk_bytes, bytes, length);
+        memset(node, 0, sizeof(picoquic_stream_data_node_t));
+        node->offset = offset;
+        node->length = length;
+        node->bytes = chunk_bytes;
+
+        picosplay_insert(tree, node);
+        *chunk_added = 1;
     }
 
-    if (start < length) {
-        size_t data_length = 0;
+    return ret;
+}
 
-        /* check for data that is already received in blocks with offset <= offset + start */
+/* Common code to data stream and crypto hs stream */
+static int picoquic_queue_network_input(picoquic_stream_head_t* stream, uint64_t stream_ofs, uint8_t* bytes, size_t length, int * new_data_available)
+{
+    const uint64_t input_begin = stream_ofs;
+    const uint64_t input_end = stream_ofs + length;
+    int ret = 0;
+
+    /* Remove data that is already consumed */
+    if (stream_ofs < stream->consumed_offset) {
+        stream_ofs = stream->consumed_offset;
+    }
+
+    /* check for data that is already received in blocks with offset <= end */
+    if (stream_ofs < input_end) {
+
+        picoquic_stream_data_node_t target;
         memset(&target, 0, sizeof(picoquic_stream_data_node_t));
-        target.offset = offset + start;
-        previous = (picoquic_stream_data_node_t*)picosplay_find_previous(&stream->stream_data_tree, &target);
-        if (previous == NULL) {
+        target.offset = stream_ofs;
+
+        picoquic_stream_data_node_t* next = (picoquic_stream_data_node_t*)picosplay_find_previous(&stream->stream_data_tree, &target);
+        if (next == NULL) {
             next = (picoquic_stream_data_node_t*)picosplay_first(&stream->stream_data_tree);
-        }
-        else {
-            next = (picoquic_stream_data_node_t*)picosplay_next(&previous->stream_data_node);
-            /* By definition, previous->offset <= offset. Check whether the
-             * beginning of the frame is already received */
-            if (offset + start < previous->offset + previous->length) {
-                if (offset + length <= previous->offset + previous->length) {
-                    start = length;
-                }
-                else {
-                    start = (size_t)(previous->offset + previous->length - offset);
-                }
-            }
+        } else {
+            /* By definition, next->offset <= stream_ofs. Check whether the
+             * beginning of the frame is already received and skip if necessary */
+            const uint64_t next_end = next->offset + next->length;
+            stream_ofs = stream_ofs > next_end ? stream_ofs : next_end;
+            next = (picoquic_stream_data_node_t*)picosplay_next(&next->stream_data_node);
         }
 
-        /* Check whether parts of the frame are covered by the next frames */
-        while (ret == 0 && start < length) {
-            data_length = length - start;
+        /* Check whether parts of the new frame are covered by already received chunks */
+        while (ret == 0 && stream_ofs < input_end && next != NULL && next->offset < input_end) {
 
-            if (next != NULL && next->offset < offset + length) {
-                /* the tail of the frame overlaps with the next frame received */
-                data_length = (size_t)(next->offset - offset - start);
-            }
+            /* the tail of the frame overlaps with the next frame received */
+            const uint64_t chunk_ofs = stream_ofs;
+            const uint64_t chunk_len = next->offset > stream_ofs ? next->offset - stream_ofs : 0;
 
-            if (data_length > 0) {
+            if (chunk_len > 0) {
                 /* There is a gap between previous and next frame, and it will be at least partially filled */
-                picoquic_stream_data_node_t* data = (picoquic_stream_data_node_t*)malloc(sizeof(picoquic_stream_data_node_t));
-
-                if (data == NULL) {
-                    ret = picoquic_connection_error(cnx, PICOQUIC_ERROR_MEMORY, 0);
-                }
-                else {
-                    memset(data, 0, sizeof(picoquic_stream_data_node_t));
-                    data->length = data_length;
-                    data->bytes = (uint8_t*)malloc(data_length);
-                    if (data->bytes == NULL) {
-                        ret = picoquic_connection_error(cnx, PICOQUIC_ERROR_MEMORY, 0);
-                        free(data);
-                    }
-                    else {
-                        data->offset = offset + start;
-                        memcpy(data->bytes, bytes + start, data_length);
-                        picosplay_insert(&stream->stream_data_tree, data);
-                        start += data_length;
-                        *new_data_available = 1;
-                    }
-                }
+                ret = add_chunk_node(&stream->stream_data_tree, chunk_ofs, (size_t)chunk_len, bytes + stream_ofs - input_begin, new_data_available);
             }
 
-            /* Check whether there may be some missing data after the next frame. */
-            if (ret == 0 && start < length && next != NULL) {
-                if (offset + length > next->offset + next->length) {
-                    start = (size_t)(next->offset + next->length - offset);
-                    /* Continue the loop with the next block */
-                    next = (picoquic_stream_data_node_t*)picosplay_next(&next->stream_data_node);
-                }
-                else {
-                    start = length;
-                }
-            }
+            stream_ofs = next->offset + next->length;
+            next = (picoquic_stream_data_node_t*)picosplay_next(&next->stream_data_node);
+        }
+
+        /* no further already received chunk within the new frame */
+        if (ret == 0 && stream_ofs < input_end) {
+            const uint64_t chunk_ofs = stream_ofs;
+            const uint64_t chunk_len = input_end - stream_ofs;
+            ret = add_chunk_node(&stream->stream_data_tree, chunk_ofs, (size_t)chunk_len, bytes + stream_ofs - input_begin, new_data_available);
         }
     }
 
@@ -1044,9 +1031,10 @@ static int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id
     if (ret == 0) {
         int new_data_available = 0;
 
-        ret = picoquic_queue_network_input(cnx, stream, offset, bytes, length, &new_data_available);
-
-        if (new_data_available) {
+        ret = picoquic_queue_network_input(stream, offset, bytes, length, &new_data_available);
+        if (ret != 0) {
+            ret = picoquic_connection_error(cnx, (int16_t)ret, 0);
+        } else if (new_data_available) {
             should_notify = 1;
             cnx->latest_progress_time = current_time;
         }
@@ -1783,11 +1771,14 @@ uint8_t* picoquic_decode_crypto_hs_frame(picoquic_cnx_t* cnx, uint8_t* bytes, co
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, picoquic_frame_type_crypto_hs);
         bytes = NULL;
 
-    } else if (picoquic_queue_network_input(cnx, &cnx->tls_stream[epoch], offset, bytes, (size_t)data_length, &new_data_available) != 0) {
-        bytes = NULL;  // Error signaled
-
     } else {
-        bytes += data_length;
+        int ret = picoquic_queue_network_input(&cnx->tls_stream[epoch], offset, bytes, (size_t)data_length, &new_data_available);
+        if (ret != 0) {
+            picoquic_connection_error(cnx, (int16_t)ret, picoquic_frame_type_crypto_hs);
+            bytes = NULL;
+        } else {
+            bytes += data_length;
+        }
     }
 
     return bytes;
