@@ -1800,3 +1800,96 @@ int send_stream_blocked_test()
 
     return ret;
 }
+
+int picoquic_queue_network_input(picosplay_tree_t* tree, uint64_t consumed_offset,
+    uint64_t stream_ofs, const uint8_t* bytes, size_t length, int* new_data_available);
+
+int64_t picoquic_stream_data_node_compare(void* l, void* r);
+picosplay_node_t* picoquic_stream_data_node_create(void* value);
+void picoquic_stream_data_node_delete(void* tree, picosplay_node_t* node);
+void* picoquic_stream_data_node_value(picosplay_node_t* node);
+
+int queue_network_input_test()
+{
+    int ret = 0;
+
+    const size_t expected_length[3] = { 4, 2, 4 };
+    const uint8_t expected[3][4] = {
+        { 0, 1, 2, 3 },
+        { 4, 5 },
+        { 6, 7, 8, 9 }
+    };
+
+    const uint8_t data[10] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
+    int new_data_available = 0;
+
+    picosplay_tree_t* tree = picosplay_new_tree(
+        picoquic_stream_data_node_compare,
+        picoquic_stream_data_node_create,
+        picoquic_stream_data_node_delete,
+        picoquic_stream_data_node_value);
+
+    /* Fill 0..3 */
+    new_data_available = 0;
+    if ((ret = picoquic_queue_network_input(tree, 0, 0, data, 4, &new_data_available)) != 0) {
+        DBG_PRINTF("picoquic_queue_network_input(0, 0, 4) failed");
+    }
+
+    if (new_data_available == 0) {
+        DBG_PRINTF("new_data_available doesn't signal new data");
+        ret = 1;
+    }
+
+    /* Fill 6..9 */
+    new_data_available = 0;
+    if ((ret = picoquic_queue_network_input(tree, 0, 6, data + 6, 4, &new_data_available)) != 0) {
+        DBG_PRINTF("picoquic_queue_network_input(0, 6, 4) failed");
+    }
+
+    if (new_data_available == 0) {
+        DBG_PRINTF("new_data_available doesn't signal new data");
+        ret = 1;
+    }
+
+    /* Fill the gap from 4..5 with a chunk from 2..7 */
+    new_data_available = 0;
+    if ((ret = picoquic_queue_network_input(tree, 0, 2, data + 2, 6, &new_data_available)) != 0) {
+        DBG_PRINTF("picoquic_queue_network_input(0, 2, 6) failed");
+    }
+
+    if (new_data_available == 0) {
+        DBG_PRINTF("new_data_available signals new data");
+        ret = 1;
+    }
+
+    /* No new data delivered by chunk 2..7 */
+    new_data_available = 0;
+    if ((ret = picoquic_queue_network_input(tree, 0, 2, data, 6, &new_data_available)) != 0) {
+        DBG_PRINTF("picoquic_queue_network_input(0, 2, 6) failed");
+    }
+
+    if (new_data_available != 0) {
+        DBG_PRINTF("new_data_available signals new data");
+        ret = 1;
+    }
+
+    picoquic_stream_data_node_t* next = (picoquic_stream_data_node_t*)picosplay_first(tree);
+    for (int i = 0; i < 3; ++i) {
+        if (next == NULL) {
+            DBG_PRINTF("tree does not contain enough data");
+            ret = 1;
+            break;
+        }
+        else {
+            if (expected_length[i] != next->length
+                || memcmp(next->bytes, expected[i], next->length) != 0) {
+                DBG_PRINTF("tree does not contain correct data");
+                ret = 1;
+                break;
+            }
+        }
+        next = (picoquic_stream_data_node_t*)picosplay_next(&next->stream_data_node);
+    }
+
+    return ret;
+}

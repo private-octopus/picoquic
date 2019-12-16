@@ -939,7 +939,7 @@ static int add_chunk_node(picosplay_tree_t* tree, uint64_t offset, size_t length
 
 /* Common code to data stream and crypto hs stream */
 int picoquic_queue_network_input(picosplay_tree_t* tree, uint64_t consumed_offset,
-    uint64_t stream_ofs, uint8_t* bytes, size_t length, int* new_data_available)
+    uint64_t stream_ofs, const uint8_t* bytes, size_t length, int* new_data_available)
 {
     const uint64_t input_begin = stream_ofs;
     const uint64_t input_end = stream_ofs + length;
