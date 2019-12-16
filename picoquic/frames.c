@@ -995,7 +995,7 @@ static int picoquic_queue_network_input(picoquic_cnx_t* cnx, picoquic_stream_hea
                 if (offset + length > next->offset + next->length) {
                     start = (size_t)(next->offset + next->length - offset);
                     /* Continue the loop with the next block */
-                    next = (picoquic_stream_data_node_t*)picosplay_next(&previous->stream_data_node);
+                    next = (picoquic_stream_data_node_t*)picosplay_next(&next->stream_data_node);
                 }
                 else {
                     start = length;
