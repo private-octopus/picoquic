@@ -809,9 +809,9 @@ picoquic_packet_t* picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, picoq
             p->previous_packet = NULL;
         }
         else {
-            cnx->pkt_ctx[pc].retransmitted_oldest->next_packet = p;
-            p->previous_packet = cnx->pkt_ctx[pc].retransmitted_oldest;
-            cnx->pkt_ctx[pc].retransmitted_oldest = p;
+            cnx->pkt_ctx[pc].retransmitted_newest->next_packet = p;
+            p->previous_packet = cnx->pkt_ctx[pc].retransmitted_newest;
+            cnx->pkt_ctx[pc].retransmitted_newest = p;
         }
     }
 
@@ -822,27 +822,27 @@ void picoquic_dequeue_retransmitted_packet(picoquic_cnx_t* cnx, picoquic_packet_
 {
     picoquic_packet_context_enum pc = p->pc;
 
-    if (p->previous_packet == NULL) {
-        cnx->pkt_ctx[pc].retransmitted_newest = p->next_packet;
+    if (p->next_packet == NULL) {
+        cnx->pkt_ctx[pc].retransmitted_newest = p->previous_packet;
     }
     else {
-        p->previous_packet->next_packet = p->next_packet;
+        p->next_packet->previous_packet = p->previous_packet;
     }
 
-    if (p->next_packet == NULL) {
-        cnx->pkt_ctx[pc].retransmitted_oldest = p->previous_packet;
+    if (p->previous_packet == NULL) {
+        cnx->pkt_ctx[pc].retransmitted_oldest = p->next_packet;
     }
     else {
 #ifdef _DEBUG
-        if (p->next_packet->pc != pc) {
-            DBG_PRINTF("Inconsistent PC in queue, %d vs %d\n", p->next_packet->pc, pc);
+        if (p->previous_packet->pc != pc) {
+            DBG_PRINTF("Inconsistent PC in queue, %d vs %d\n", p->previous_packet->pc, pc);
         }
 
-        if (p->next_packet->previous_packet != p) {
+        if (p->previous_packet->next_packet != p) {
             DBG_PRINTF("Inconsistent chain of packets, pc = %d\n", pc);
         }
 #endif
-        p->next_packet->previous_packet = p->previous_packet;
+        p->previous_packet->next_packet = p->next_packet;
     }
 
     picoquic_recycle_packet(cnx->quic, p);
