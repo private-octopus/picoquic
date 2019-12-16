@@ -956,16 +956,17 @@ static int picoquic_queue_network_input(picoquic_stream_head_t* stream, uint64_t
         memset(&target, 0, sizeof(picoquic_stream_data_node_t));
         target.offset = stream_ofs;
 
-        picoquic_stream_data_node_t* next = (picoquic_stream_data_node_t*)picosplay_find_previous(&stream->stream_data_tree, &target);
-        if (next == NULL) {
-            next = (picoquic_stream_data_node_t*)picosplay_first(&stream->stream_data_tree);
-        } else {
+        picoquic_stream_data_node_t* prev = (picoquic_stream_data_node_t*)picosplay_find_previous(tree, &target);
+        if (prev != NULL) {
             /* By definition, next->offset <= stream_ofs. Check whether the
              * beginning of the frame is already received and skip if necessary */
-            const uint64_t next_end = next->offset + next->length;
-            stream_ofs = stream_ofs > next_end ? stream_ofs : next_end;
-            next = (picoquic_stream_data_node_t*)picosplay_next(&next->stream_data_node);
+            const uint64_t prev_end = prev->offset + prev->length;
+            stream_ofs = stream_ofs > prev_end ? stream_ofs : prev_end;
         }
+
+        picoquic_stream_data_node_t* next = (prev == NULL) ?
+            (picoquic_stream_data_node_t*)picosplay_first(tree) :
+            (picoquic_stream_data_node_t*)picosplay_next(&prev->stream_data_node);
 
         /* Check whether parts of the new frame are covered by already received chunks */
         while (ret == 0 && stream_ofs < input_end && next != NULL && next->offset < input_end) {
