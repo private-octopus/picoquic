@@ -144,7 +144,7 @@ int picoquic_add_to_stream_with_ctx(picoquic_cnx_t* cnx, uint64_t stream_id,
     }
 
     if (ret == 0 && length > 0) {
-        picoquic_stream_data_t* stream_data = (picoquic_stream_data_t*)malloc(sizeof(picoquic_stream_data_t));
+        picoquic_stream_data_node_t* stream_data = (picoquic_stream_data_node_t*)malloc(sizeof(picoquic_stream_data_node_t));
 
         if (stream_data == 0) {
             ret = -1;
@@ -156,8 +156,8 @@ int picoquic_add_to_stream_with_ctx(picoquic_cnx_t* cnx, uint64_t stream_id,
                 stream_data = NULL;
                 ret = -1;
             } else {
-                picoquic_stream_data_t** pprevious = &stream->send_queue;
-                picoquic_stream_data_t* next = stream->send_queue;
+                picoquic_stream_data_node_t** pprevious = &stream->send_queue;
+                picoquic_stream_data_node_t* next = stream->send_queue;
 
                 memcpy(stream_data->bytes, data, length);
                 stream_data->length = length;
@@ -1287,7 +1287,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                         if (cnx->congestion_alg != NULL) {
                             cnx->congestion_alg->alg_notify(cnx, old_path,
                                 (timer_based_retransmit == 0) ? picoquic_congestion_notification_repeat : picoquic_congestion_notification_timeout,
-                                0, 0, lost_packet_number, current_time);
+                                0, 0, 0, lost_packet_number, current_time);
                         }
                     }
 
@@ -1637,7 +1637,7 @@ void picoquic_implicit_handshake_ack(picoquic_cnx_t* cnx, picoquic_packet_contex
             if (cnx->congestion_alg != NULL) {
                 cnx->congestion_alg->alg_notify(cnx, old_path,
                     picoquic_congestion_notification_acknowledgement,
-                    0, p->length, 0, current_time);
+                    0, 0, p->length, 0, current_time);
             }
         }
         /* Update the number of bytes in transit and remove old packet from queue */
@@ -2735,7 +2735,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                     if (cnx->congestion_alg != NULL) {
                         cnx->congestion_alg->alg_notify(cnx, path_x,
                             picoquic_congestion_notification_cwin_blocked,
-                            0, 0, 0, current_time);
+                            0, 0, 0, 0, current_time);
                     }
                 } else if (picoquic_is_sending_authorized_by_pacing(path_x, current_time, next_wake_time)) {
                     /* Check whether PMTU discovery is required. The call will return

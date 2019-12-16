@@ -158,6 +158,7 @@ int split_stream_frame_test();
 int cubic_test();
 int cubic_jitter_test();
 int satellite_basic_test();
+int satellite_loss_test();
 int long_rtt_test();
 int cid_length_test();
 int initial_server_close_test();

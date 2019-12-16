@@ -50,6 +50,7 @@ void picosplay_init_tree(picosplay_tree_t* tree, picosplay_comparator comp, pico
 picosplay_tree_t* picosplay_new_tree(picosplay_comparator comp, picosplay_create create, picosplay_delete_node delete_node, picosplay_node_value node_value);
 picosplay_node_t* picosplay_insert(picosplay_tree_t *tree, void *value);
 picosplay_node_t* picosplay_find(picosplay_tree_t *tree, void *value);
+picosplay_node_t* picosplay_find_previous(picosplay_tree_t* tree, void* value);
 picosplay_node_t* picosplay_first(picosplay_tree_t *tree);
 picosplay_node_t* picosplay_next(picosplay_node_t *node);
 picosplay_node_t* picosplay_last(picosplay_tree_t *tree);

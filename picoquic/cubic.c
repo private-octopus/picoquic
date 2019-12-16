@@ -207,6 +207,7 @@ static void picoquic_cubic_notify(
     picoquic_cnx_t* cnx, picoquic_path_t* path_x,
     picoquic_congestion_notification_t notification,
     uint64_t rtt_measurement,
+    uint64_t one_way_delay,
     uint64_t nb_bytes_acknowledged,
     uint64_t lost_packet_number,
     uint64_t current_time)
@@ -253,7 +254,9 @@ static void picoquic_cubic_notify(
                 break;
             case picoquic_congestion_notification_rtt_measurement:
                 /* Using RTT increases as signal to get out of initial slow start */
-                if (cubic_state->ssthresh == (uint64_t)((int64_t)-1) && picoquic_hystart_test(&cubic_state->rtt_filter, rtt_measurement, cnx->path[0]->pacing_packet_time_microsec, current_time)) {
+                if (cubic_state->ssthresh == (uint64_t)((int64_t)-1) && 
+                    picoquic_hystart_test(&cubic_state->rtt_filter, (cnx->is_one_way_delay_enabled) ? one_way_delay : rtt_measurement,
+                        cnx->path[0]->pacing_packet_time_microsec, current_time, cnx->is_one_way_delay_enabled)) {
                     /* RTT increased too much, get out of slow start! */
                     if (cubic_state->rtt_filter.rtt_filtered_min > PICOQUIC_TARGET_RENO_RTT) {
                         double correction = (double)PICOQUIC_TARGET_RENO_RTT / (double)cubic_state->rtt_filter.rtt_filtered_min;
@@ -378,6 +381,198 @@ static void picoquic_cubic_notify(
     }
 }
 
+
+/*
+ * Define delay-based Cubic, dcubic, and alternative congestion control protocol similar to Cubic but 
+ * using delay measurements instead of reacting to packet losses. This is a quic hack, intended for
+ * trials of a lossy satellite networks.
+ */
+static void picoquic_dcubic_notify(
+    picoquic_cnx_t* cnx, picoquic_path_t* path_x,
+    picoquic_congestion_notification_t notification,
+    uint64_t rtt_measurement,
+    uint64_t one_way_delay,
+    uint64_t nb_bytes_acknowledged,
+    uint64_t lost_packet_number,
+    uint64_t current_time)
+{
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(rtt_measurement);
+    UNREFERENCED_PARAMETER(lost_packet_number);
+#endif
+    picoquic_cubic_state_t* cubic_state = (picoquic_cubic_state_t*)path_x->congestion_alg_state;
+
+    if (cubic_state != NULL) {
+        switch (cubic_state->alg_state) {
+        case picoquic_cubic_alg_slow_start:
+            switch (notification) {
+            case picoquic_congestion_notification_acknowledgement:
+                /* Same as Cubic */
+                if (picoquic_cc_was_cwin_blocked(cnx, cubic_state->last_sequence_blocked)) {
+                    if (path_x->smoothed_rtt <= PICOQUIC_TARGET_RENO_RTT || cubic_state->rtt_filter.past_threshold) {
+                        path_x->cwin += nb_bytes_acknowledged;
+                    }
+                    else {
+                        double delta = ((double)path_x->smoothed_rtt) / ((double)PICOQUIC_TARGET_RENO_RTT);
+                        delta *= (double)nb_bytes_acknowledged;
+                        path_x->cwin += (uint64_t)delta;
+                    }
+                    /* if cnx->cwin exceeds SSTHRESH, exit and go to CA */
+                    if (path_x->cwin >= cubic_state->ssthresh) {
+                        cubic_state->W_reno = ((double)path_x->cwin) / 2.0;
+                        picoquic_cubic_enter_avoidance(cubic_state, current_time);
+                    }
+                }
+                break;
+            case picoquic_congestion_notification_ecn_ec:
+            case picoquic_congestion_notification_repeat:
+            case picoquic_congestion_notification_timeout:
+                /* In contrast to Cubic, do nothing here */
+                break;
+            case picoquic_congestion_notification_spurious_repeat:
+                /* Unlike Cubic, losses have no effect so do nothing here */
+                break;
+            case picoquic_congestion_notification_rtt_measurement:
+                /* Using RTT increases as congestion signal. This is used
+                 * for getting out of slow start, but also for ending a cycle
+                 * during congestion avoidance */
+                if (picoquic_hystart_test(&cubic_state->rtt_filter, (cnx->is_one_way_delay_enabled) ? one_way_delay : rtt_measurement,
+                    cnx->path[0]->pacing_packet_time_microsec, current_time, cnx->is_one_way_delay_enabled)) {
+                    if (cubic_state->ssthresh == (uint64_t)((int64_t)-1)) {
+                        if (cubic_state->rtt_filter.rtt_filtered_min > PICOQUIC_TARGET_RENO_RTT) {
+                            double correction = (double)PICOQUIC_TARGET_RENO_RTT / (double)cubic_state->rtt_filter.rtt_filtered_min;
+                            uint64_t base_window = (uint64_t)(correction * (double)path_x->cwin);
+                            uint64_t delta_window = path_x->cwin - base_window;
+                            path_x->cwin -= (delta_window / 2);
+                        }
+
+                        cubic_state->ssthresh = path_x->cwin;
+                        cubic_state->W_max = (double)path_x->cwin / (double)path_x->send_mtu;
+                        cubic_state->W_last_max = cubic_state->W_max;
+                        cubic_state->W_reno = ((double)path_x->cwin);
+                        picoquic_cubic_enter_avoidance(cubic_state, current_time);
+                        /* apply a correction to enter the test phase immediately */
+                        uint64_t K_micro = (uint64_t)(cubic_state->K * 1000000.0);
+                        if (K_micro > current_time) {
+                            cubic_state->K = ((double)current_time) / 1000000.0;
+                            cubic_state->start_of_epoch = 0;
+                        }
+                        else {
+                            cubic_state->start_of_epoch = current_time - K_micro;
+                        }
+                    } else {
+                        if (current_time - cubic_state->start_of_epoch > path_x->smoothed_rtt ||
+                            cubic_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx)) {
+                            /* re-enter recovery if this is a new event */
+                            picoquic_cubic_enter_recovery(cnx, path_x, notification, cubic_state, current_time);
+                        }
+                        break;
+                    }
+                }
+                break;
+            case picoquic_congestion_notification_cwin_blocked:
+                cubic_state->last_sequence_blocked = picoquic_cc_get_sequence_number(cnx);
+                break;
+            default:
+                /* ignore */
+                break;
+            }
+            break;
+        case picoquic_cubic_alg_recovery:
+            /* If the notification is coming less than 1RTT after start,
+             * ignore it, unless it is a spurious retransmit detection */
+            switch (notification) {
+            case picoquic_congestion_notification_acknowledgement:
+                /* exit recovery, move to CA or SS, depending on CWIN */
+                cubic_state->alg_state = picoquic_cubic_alg_slow_start;
+                path_x->cwin += nb_bytes_acknowledged;
+                /* if cnx->cwin exceeds SSTHRESH, exit and go to CA */
+                if (path_x->cwin >= cubic_state->ssthresh) {
+                    cubic_state->alg_state = picoquic_cubic_alg_congestion_avoidance;
+                }
+                break;
+            case picoquic_congestion_notification_spurious_repeat:
+                /* DO nothing */
+                break;
+            case picoquic_congestion_notification_ecn_ec:
+            case picoquic_congestion_notification_repeat:
+            case picoquic_congestion_notification_timeout:
+                /* do nothing */
+            case picoquic_congestion_notification_rtt_measurement:
+                if (picoquic_hystart_test(&cubic_state->rtt_filter, (cnx->is_one_way_delay_enabled) ? one_way_delay : rtt_measurement,
+                    cnx->path[0]->pacing_packet_time_microsec, current_time, cnx->is_one_way_delay_enabled)) {
+                    if (current_time - cubic_state->start_of_epoch > path_x->smoothed_rtt ||
+                        cubic_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx)) {
+                        /* re-enter recovery if this is a new event */
+                        picoquic_cubic_enter_recovery(cnx, path_x, notification, cubic_state, current_time);
+                    }
+                }
+                break;
+            case picoquic_congestion_notification_cwin_blocked:
+                cubic_state->last_sequence_blocked = picoquic_cc_get_sequence_number(cnx);
+                break;
+            default:
+                /* ignore */
+                break;
+            }
+            break;
+
+        case picoquic_cubic_alg_congestion_avoidance:
+            switch (notification) {
+            case picoquic_congestion_notification_acknowledgement:
+                if (picoquic_cc_was_cwin_blocked(cnx, cubic_state->last_sequence_blocked)) {
+                    /* Compute the cubic formula */
+                    double W_cubic = picoquic_cubic_W_cubic(cubic_state, current_time);
+                    uint64_t win_cubic = (uint64_t)(W_cubic * (double)path_x->send_mtu);
+                    /* Also compute the Reno formula */
+                    cubic_state->W_reno += ((double)nb_bytes_acknowledged) * ((double)path_x->send_mtu) / cubic_state->W_reno;
+
+                    /* Pick the largest */
+                    if (win_cubic > cubic_state->W_reno) {
+                        /* if cubic is larger than threshold, switch to cubic mode */
+                        path_x->cwin = win_cubic;
+                    }
+                    else {
+                        path_x->cwin = (uint64_t)cubic_state->W_reno;
+                    }
+                }
+                break;
+            case picoquic_congestion_notification_ecn_ec:
+            case picoquic_congestion_notification_repeat:
+            case picoquic_congestion_notification_timeout:
+                /* Do nothing */
+                break;
+            case picoquic_congestion_notification_spurious_repeat:
+                /* Do nothing */
+                break;
+            case picoquic_congestion_notification_cwin_blocked:
+                cubic_state->last_sequence_blocked = picoquic_cc_get_sequence_number(cnx);
+                break;
+            case picoquic_congestion_notification_rtt_measurement:
+                if (picoquic_hystart_test(&cubic_state->rtt_filter, (cnx->is_one_way_delay_enabled) ? one_way_delay : rtt_measurement,
+                    cnx->path[0]->pacing_packet_time_microsec, current_time, cnx->is_one_way_delay_enabled)) {
+                    if (current_time - cubic_state->start_of_epoch > path_x->smoothed_rtt ||
+                        cubic_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx)) {
+                        /* re-enter recovery */
+                        picoquic_cubic_enter_recovery(cnx, path_x, notification, cubic_state, current_time);
+                    }
+                }
+                break;
+            default:
+                /* ignore */
+                break;
+            }
+            break;
+        default:
+            break;
+        }
+
+        /* Compute pacing data */
+        picoquic_update_pacing_data(path_x);
+    }
+}
+
+
 /* Release the state of the congestion control algorithm */
 static void picoquic_cubic_delete(picoquic_path_t* path_x)
 {
@@ -390,6 +585,7 @@ static void picoquic_cubic_delete(picoquic_path_t* path_x)
 /* Definition record for the Cubic algorithm */
 
 #define picoquic_cubic_ID 0x43424942 /* CBIC */
+#define picoquic_dcubic_ID 0x44424942 /* DBIC */
 
 picoquic_congestion_algorithm_t picoquic_cubic_algorithm_struct = {
     picoquic_cubic_ID,
@@ -398,4 +594,12 @@ picoquic_congestion_algorithm_t picoquic_cubic_algorithm_struct = {
     picoquic_cubic_delete
 };
 
+picoquic_congestion_algorithm_t picoquic_dcubic_algorithm_struct = {
+    picoquic_dcubic_ID,
+    picoquic_cubic_init,
+    picoquic_dcubic_notify,
+    picoquic_cubic_delete
+};
+
 picoquic_congestion_algorithm_t* picoquic_cubic_algorithm = &picoquic_cubic_algorithm_struct;
+picoquic_congestion_algorithm_t* picoquic_dcubic_algorithm = &picoquic_dcubic_algorithm_struct;

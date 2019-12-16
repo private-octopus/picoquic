@@ -723,6 +723,7 @@ typedef void (*picoquic_congestion_algorithm_notify)(
     picoquic_path_t* path_x,
     picoquic_congestion_notification_t notification,
     uint64_t rtt_measurement,
+    uint64_t one_way_delay,
     uint64_t nb_bytes_acknowledged,
     uint64_t lost_packet_number,
     uint64_t current_time);
@@ -737,6 +738,7 @@ typedef struct st_picoquic_congestion_algorithm_t {
 
 extern picoquic_congestion_algorithm_t* picoquic_newreno_algorithm;
 extern picoquic_congestion_algorithm_t* picoquic_cubic_algorithm;
+extern picoquic_congestion_algorithm_t* picoquic_dcubic_algorithm;
 extern picoquic_congestion_algorithm_t* picoquic_fastcc_algorithm;
 
 #define PICOQUIC_DEFAULT_CONGESTION_ALGORITHM picoquic_newreno_algorithm;

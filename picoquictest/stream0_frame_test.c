@@ -181,7 +181,7 @@ static int StreamZeroFrameOneTest(struct test_case_st* test)
 
             if (ret == 0) {
                 /* Check the content of all the data in the context */
-                picoquic_stream_data_t* data = picoquic_first_stream(cnx)->stream_data;
+                picoquic_stream_data_node_t* data = (picoquic_stream_data_node_t*)picosplay_first(&picoquic_first_stream(cnx)->stream_data_tree);
                 size_t data_rank = 0;
 
                 while (data != NULL) {
@@ -198,7 +198,7 @@ static int StreamZeroFrameOneTest(struct test_case_st* test)
                         }
                     }
 
-                    data = data->next_stream_data;
+                    data = (picoquic_stream_data_node_t*)picosplay_next(&data->stream_data_node);
                 }
 
                 if (ret == 0 && data_rank != test->expected_length) {
@@ -275,6 +275,24 @@ static uint8_t tlsv0_45_overlap[] = {
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF /* Some random data */
 };
 
+static uint8_t tlsv0_550_overlap2[] = {
+    0x18,
+    0x05, /* Offset */
+    0x2d, /* length */
+    6, 7, 8, 9, 10, /* Some random data */
+    11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 
+    21, 22, 23, 24, 25, 26, 27, 28, 29, 30,
+    31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
+    41, 42, 43, 44, 45, 46, 47, 48, 49, 50
+};
+
+static uint8_t tlsv0_05[] = {
+    0x18,
+    0, /* One byte offset */
+    0x05, /* One byte length */
+    1, 2, 3, 4, 5, /* Some random data */
+};
+
 static struct packet tlslist_v1[] = {
     { tlsv0_1, sizeof(tlsv0_1), 0, 10, 0 },
     { tlsv0_2, sizeof(tlsv0_2), 10, 10, 0 },
@@ -303,13 +321,26 @@ static struct packet tlslist_v3[] = {
     { tlsv0_45_overlap, sizeof(tlsv0_45_overlap), 35, 10, 0 }
 };
 
+static struct packet tlslist_v4[] = {
+    { tlsv0_3, sizeof(tlsv0_3), 20, 10, 0 },
+    { tlsv0_4, sizeof(tlsv0_4), 30, 10, 0 },
+    { tlsv0_550_overlap2, sizeof(tlsv0_550_overlap2), 5, 45, 0 },
+    { tlsv0_05, sizeof(tlsv0_05), 0, 5, 0 }
+};
+
 static struct test_case_st tls_test_case[] = {
     { "tlstest_v1", tlslist_v1, sizeof(tlslist_v1) / sizeof(struct packet), 50 },
     { "tlstest_v2", tlslist_v2, sizeof(tlslist_v2) / sizeof(struct packet), 50 },
-    { "tlstest_v3", tlslist_v3, sizeof(tlslist_v3) / sizeof(struct packet), 50 }
+    { "tlstest_v3", tlslist_v3, sizeof(tlslist_v3) / sizeof(struct packet), 50 },
+    { "tlstest_v4", tlslist_v4, sizeof(tlslist_v4) / sizeof(struct packet), 50 }
 };
 
 static size_t const nb_tls_test_cases = sizeof(tls_test_case) / sizeof(struct test_case_st);
+
+int64_t picoquic_stream_data_node_compare(void* l, void* r);
+picosplay_node_t* picoquic_stream_data_node_create(void* value);
+void* picoquic_stream_data_node_value(picosplay_node_t* node);
+void picoquic_stream_data_node_delete(void* tree, picosplay_node_t* node);
 
 static int TlsStreamFrameOneTest(struct test_case_st* test)
 {
@@ -317,6 +348,8 @@ static int TlsStreamFrameOneTest(struct test_case_st* test)
     int test_epoch = 2; /* epoch = 2 for handshake */
 
     picoquic_cnx_t cnx = { 0 };
+    picosplay_init_tree(&cnx.tls_stream[2].stream_data_tree, picoquic_stream_data_node_compare, picoquic_stream_data_node_create, picoquic_stream_data_node_delete, picoquic_stream_data_node_value);
+
 
     for (size_t i = 0; ret == 0 && i < test->list_size; i++) {
         if (NULL == picoquic_decode_crypto_hs_frame(&cnx, test->list[i].packet,
@@ -328,7 +361,7 @@ static int TlsStreamFrameOneTest(struct test_case_st* test)
 
     if (ret == 0) {
         /* Check the content of all the data in the context */
-        picoquic_stream_data_t* data = cnx.tls_stream[test_epoch].stream_data;
+        picoquic_stream_data_node_t* data = (picoquic_stream_data_node_t* )picosplay_first(&cnx.tls_stream[test_epoch].stream_data_tree);
         size_t data_rank = 0;
 
         while (data != NULL) {
@@ -345,7 +378,7 @@ static int TlsStreamFrameOneTest(struct test_case_st* test)
                 }
             }
 
-            data = data->next_stream_data;
+            data = (picoquic_stream_data_node_t*)picosplay_next(&data->stream_data_node);
         }
 
         if (ret == 0 && data_rank != test->expected_length) {

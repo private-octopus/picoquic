@@ -174,6 +174,7 @@ static const picoquic_test_def_t test_table[] = {
     { "fastcc_jitter", fastcc_jitter_test },
     { "long_rtt", long_rtt_test },
     { "satellite_basic", satellite_basic_test },
+    { "satellite_loss", satellite_loss_test },
     { "cid_length", cid_length_test },
     { "optimistic_ack", optimistic_ack_test },
     { "optimistic_hole", optimistic_hole_test },

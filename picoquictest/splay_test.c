@@ -42,7 +42,7 @@ static int_node_t * new_int_node(int x) {
 }
 
 static int64_t compare_int(void *l, void *r) {
-    return ((int_node_t*)l)->v - ((int_node_t*)r)->v;
+    return (int64_t)((int_node_t*)l)->v - ((int_node_t*)r)->v;
 }
 
 static picosplay_node_t * create_int_node(void * value)
@@ -106,11 +106,13 @@ int splay_test() {
     int ret = 0;
     int count = 0;
     picosplay_tree_t *tree = picosplay_new_tree(&compare_int, create_int_node, delete_int_node, int_node_value);
-    int values[] = {3, 4, 1, 2, 8, 5, 7};
-    int values_first[] = { 3, 3, 1, 1, 1, 1, 1 };
-    int values_last[] = { 3, 4, 4, 4, 8, 8, 8 };
-    int value2_first[] = { 1, 1, 2, 5, 5, 7, 0 };
-    int value2_last[] = { 8, 8, 8, 8, 7, 7, 0 };
+    int values[] = {5, 7, 1, 3, 13, 9, 11};
+    int values_first[] = { 5, 5, 1, 1, 1, 1, 1 };
+    int values_last[] = { 5, 7, 7, 7, 13, 13, 13 };
+    int previous_test[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 };
+    int previous_value[] = { -1, 1, 1, 3, 3, 5, 5, 7, 7, 9, 9, 11, 11, 13, 13 };
+    int value2_first[] = { 1, 1, 3, 9, 9, 11, 0 };
+    int value2_last[] = { 13, 13, 13, 13, 11, 11, 0 };
 
     if (tree == NULL) {
         DBG_PRINTF("%s", "Cannot create tree.\n");
@@ -142,6 +144,68 @@ int splay_test() {
                     i, values[i],
                     values_last[i], ((int_node_t*)int_node_value(picosplay_last(tree)))->v);
                 ret = -1;
+            }
+        }
+
+        for (int i = 0; ret == 0 && i < 15; i++) {
+            int_node_t x;
+            picosplay_node_t* y;
+            
+            x.v = previous_test[i];
+            y = picosplay_find(tree, (void*)&x);
+
+            if (previous_value[i] == previous_test[i]) {
+                if (y == NULL) {
+                    DBG_PRINTF("Find v[%d] = %d, expected = %d, got NULL instead\n",
+                        i, previous_test[i], previous_value[i]);
+                    ret = -1;
+                }
+                else {
+                    int v = ((int_node_t*)int_node_value(y))->v;
+                    if (v != previous_value[i]) {
+                        DBG_PRINTF("Find v[%d] = %d, expected = %d, got %d instead\n",
+                            i, previous_test[i], previous_value[i], v);
+                        ret = -1;
+                    }
+                }
+            }
+            else {
+                if (y != NULL) {
+                    DBG_PRINTF("Find v[%d], expected NULL, got %d instead\n",
+                        i, ((int_node_t*)int_node_value(y))->v);
+                    ret = -1;
+                }
+            }
+        }
+
+        for (int i = 0; ret == 0 && i < 15; i++) {
+            int_node_t x;
+            picosplay_node_t* y;
+
+            x.v = previous_test[i];
+            y = picosplay_find_previous(tree, (void*)&x);
+
+            if (previous_value[i] >= 0) {
+                if (y == NULL) {
+                    DBG_PRINTF("Next v[%d] = %d, expected = %d, got NULL instead\n",
+                        i, previous_test[i], previous_value[i]);
+                    ret = -1;
+                }
+                else {
+                    int v = ((int_node_t*)int_node_value(y))->v;
+                    if (v != previous_value[i]) {
+                        DBG_PRINTF("next v[%d] = %d, expected = %d, got %d instead\n",
+                            i, previous_test[i], previous_value[i], v);
+                        ret = -1;
+                    }
+                }
+            }
+            else {
+                if (y != NULL) {
+                    DBG_PRINTF("Next v[%d], expected NULL, got %d instead\n",
+                        i, ((int_node_t*)int_node_value(y))->v);
+                    ret = -1;
+                }
             }
         }
 

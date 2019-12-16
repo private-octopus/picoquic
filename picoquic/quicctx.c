@@ -1518,6 +1518,37 @@ int picoquic_create_probe(picoquic_cnx_t* cnx, const struct sockaddr* addr_to, c
     return ret;
 }
 
+/* stream data splay management */
+int64_t picoquic_stream_data_node_compare(void* l, void* r)
+{
+    /* Offset values are from 0 to 2^62-1, which means we are not worried with rollover */
+    return ((picoquic_stream_data_node_t*)l)->offset - ((picoquic_stream_data_node_t*)r)->offset;
+}
+
+picosplay_node_t* picoquic_stream_data_node_create(void* value)
+{
+    return &((picoquic_stream_data_node_t*)value)->stream_data_node;
+}
+
+
+void* picoquic_stream_data_node_value(picosplay_node_t* node)
+{
+    return (void*)((char*)node - offsetof(struct st_picoquic_stream_data_node_t, stream_data_node));
+}
+
+
+void picoquic_stream_data_node_delete(void* tree, picosplay_node_t* node)
+{
+    picoquic_stream_data_node_t* stream_data = (picoquic_stream_data_node_t*)picoquic_stream_data_node_value(node);
+
+    if (stream_data->bytes != NULL) {
+        free(stream_data->bytes);
+        stream_data->bytes = NULL;
+    }
+
+    free(stream_data);
+}
+
 /* Stream splay management */
 
 static int64_t picoquic_stream_node_compare(void *l, void *r)
@@ -1539,22 +1570,19 @@ static void * picoquic_stream_node_value(picosplay_node_t * node)
 
 void picoquic_clear_stream(picoquic_stream_head_t* stream)
 {
-    picoquic_stream_data_t** pdata[2];
-    pdata[0] = &stream->stream_data;
-    pdata[1] = &stream->send_queue;
+    picoquic_stream_data_node_t* ready = stream->send_queue;
+    picoquic_stream_data_node_t* next;
 
-    for (int i = 0; i < 2; i++) {
-        picoquic_stream_data_t* next;
+    while ((next = ready) != NULL) {
+        ready = next->next_stream_data;
 
-        while ((next = *pdata[i]) != NULL) {
-            *pdata[i] = next->next_stream_data;
-
-            if (next->bytes != NULL) {
-                free(next->bytes);
-            }
-            free(next);
+        if (next->bytes != NULL) {
+            free(next->bytes);
         }
+        free(next);
     }
+
+    picosplay_empty_tree(&stream->stream_data_tree);
 
     while (stream->first_sack_item.next_sack != NULL) {
         picoquic_sack_item_t * sack = stream->first_sack_item.next_sack;
@@ -1674,6 +1702,8 @@ picoquic_stream_head_t* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t str
                 stream->is_output_stream = 0;
             }
         }
+
+        picosplay_init_tree(&stream->stream_data_tree, picoquic_stream_data_node_compare, picoquic_stream_data_node_create, picoquic_stream_data_node_delete, picoquic_stream_data_node_value);
 
         picosplay_insert(&cnx->stream_tree, stream);
         if (stream->is_output_stream) {
@@ -1876,6 +1906,9 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             cnx->tls_stream[epoch].remote_error = 0;
             cnx->tls_stream[epoch].maxdata_local = (uint64_t)((int64_t)-1);
             cnx->tls_stream[epoch].maxdata_remote = (uint64_t)((int64_t)-1);
+
+            picosplay_init_tree(&cnx->tls_stream[epoch].stream_data_tree, picoquic_stream_data_node_compare, picoquic_stream_data_node_create, picoquic_stream_data_node_delete, picoquic_stream_data_node_value);
+
             /* No need to reset the state flags, as they are not used for the crypto stream */
         }
 
@@ -2674,6 +2707,9 @@ picoquic_congestion_algorithm_t const* picoquic_get_congestion_algorithm(char co
         }
         else if (strcmp(alg_name, "cubic") == 0) {
             alg = picoquic_cubic_algorithm;
+        }
+        else if (strcmp(alg_name, "dcubic") == 0) {
+            alg = picoquic_dcubic_algorithm;
         }
         else if (strcmp(alg_name, "fast") == 0) {
             alg = picoquic_fastcc_algorithm;
