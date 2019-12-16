@@ -2141,33 +2141,37 @@ static picoquic_packet_t* picoquic_update_rtt(picoquic_cnx_t* cnx, uint64_t larg
     return packet;
 }
 
-static void picoquic_process_ack_of_ack_range(picoquic_sack_item_t* first_sack,
+static picoquic_sack_item_t* picoquic_process_ack_of_ack_range(picoquic_sack_item_t* first_sack, picoquic_sack_item_t* previous,
     uint64_t start_of_range, uint64_t end_of_range)
 {
-    if (first_sack->start_of_sack_range == start_of_range) {
-        if (end_of_range < first_sack->end_of_sack_range) {
-            first_sack->start_of_sack_range = end_of_range + 1;
-        } else {
-            first_sack->start_of_sack_range = first_sack->end_of_sack_range;
-        }
-    } else {
-        picoquic_sack_item_t* previous = first_sack;
-        picoquic_sack_item_t* next = previous->next_sack;
+    picoquic_sack_item_t* next = (previous == NULL)? first_sack: previous->next_sack;
 
-        while (next != NULL) {
-            if (next->end_of_sack_range == end_of_range && next->start_of_sack_range == start_of_range) {
+    while (next != NULL) {
+        if (next->start_of_sack_range == start_of_range) {
+            if (next == first_sack) {
+                if (end_of_range < first_sack->end_of_sack_range) {
+                    first_sack->start_of_sack_range = end_of_range + 1;
+                }
+                else {
+                    first_sack->start_of_sack_range = first_sack->end_of_sack_range;
+                }
+            }
+            else if (next->end_of_sack_range == end_of_range) {
                 /* Matching range should be removed */
                 previous->next_sack = next->next_sack;
                 free(next);
-                break;
-            } else if (next->end_of_sack_range > end_of_range) {
-                previous = next;
-                next = next->next_sack;
-            } else {
-                break;
             }
+            break;
+        } else if (next->end_of_sack_range > end_of_range) {
+            previous = next;
+            next = next->next_sack;
+        }
+        else {
+            break;
         }
     }
+
+    return previous;
 }
 
 int picoquic_process_ack_of_ack_frame(
@@ -2180,20 +2184,13 @@ int picoquic_process_ack_of_ack_frame(
     uint64_t num_block;
     uint64_t remote_time_stamp;
 
-    /* Find the oldest ACK range, in order to calibrate the
-     * extension of the largest number to 64 bits */
-
-    picoquic_sack_item_t* target_sack = first_sack;
-    while (target_sack->next_sack != NULL) {
-        target_sack = target_sack->next_sack;
-    }
-
     ret = picoquic_parse_ack_header(bytes, bytes_max,
         &num_block,
         &largest, &ack_delay, consumed, 0, (has_1wd)?&remote_time_stamp:0);
 
     if (ret == 0) {
         size_t byte_index = *consumed;
+        picoquic_sack_item_t* previous_sack_item = NULL;
 
         /* Process each successive range */
 
@@ -2224,7 +2221,7 @@ int picoquic_process_ack_of_ack_frame(
             }
 
             if (range > 0) {
-                picoquic_process_ack_of_ack_range(first_sack, largest + 1 - range, largest);
+                previous_sack_item = picoquic_process_ack_of_ack_range(first_sack, previous_sack_item, largest + 1 - range, largest);
             }
 
             if (num_block-- == 0)
