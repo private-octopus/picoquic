@@ -552,6 +552,12 @@ typedef struct st_picoquic_path_t {
     uint64_t sent_time_epoch; /* Time at which last packet in delivered epoch was sent */
     uint64_t bandwidth_estimate; /* In bytes per second */
 
+    uint64_t received; /* Total amount of bytes received from the path */
+    uint64_t receive_rate_epoch; /* Time of last receive rate measurement */
+    uint64_t received_prior; /* Total amount received at start of epoch */
+    uint64_t receive_rate_estimate; /* In bytes per second */
+    uint64_t receive_rate_max; /* In bytes per second */
+
     /* Congestion control state */
     uint64_t cwin;
     uint64_t bytes_in_transit;

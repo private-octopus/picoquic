@@ -71,6 +71,7 @@ int picoquic_cc_bin_to_csv(FILE * f_binlog, FILE * f_csvlog)
     ret |= fprintf(f_csvlog, "SRTT, ") <= 0;
     ret |= fprintf(f_csvlog, "RTT min, ") <= 0;
     ret |= fprintf(f_csvlog, "Bandwidth (B/s), ") <= 0;
+    ret |= fprintf(f_csvlog, "Receive rate (B/s), ") <= 0;
     ret |= fprintf(f_csvlog, "Send MTU, ") <= 0;
     ret |= fprintf(f_csvlog, "pacing packet time(us), ") <= 0;
     ret |= fprintf(f_csvlog, "nb retrans, ") <= 0;
@@ -128,6 +129,7 @@ int csv_cb(bytestream * s, void * ptr)
         uint64_t SRTT = 0;
         uint64_t RTT_min = 0;
         uint64_t bandwidth_estimate = 0;
+        uint64_t receive_rate_estimate = 0;
         uint64_t Send_MTU = 0;
         uint64_t pacing_packet_time = 0;
         uint64_t nb_retrans = 0;
@@ -149,6 +151,7 @@ int csv_cb(bytestream * s, void * ptr)
         ret |= byteread_vint(s, &SRTT);
         ret |= byteread_vint(s, &RTT_min);
         ret |= byteread_vint(s, &bandwidth_estimate);
+        ret |= byteread_vint(s, &receive_rate_estimate);
         ret |= byteread_vint(s, &Send_MTU);
         ret |= byteread_vint(s, &pacing_packet_time);
         ret |= byteread_vint(s, &nb_retrans);
@@ -157,9 +160,9 @@ int csv_cb(bytestream * s, void * ptr)
         ret |= byteread_vint(s, &flow_blkd);
         ret |= byteread_vint(s, &stream_blkd);
 
-        if (ret != 0 || fprintf(f_csvlog, "%" PRIu64 ", %" PRIu64 ", %" PRId64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", ",
+        if (ret != 0 || fprintf(f_csvlog, "%" PRIu64 ", %" PRIu64 ", %" PRId64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", ",
             time, sequence, (int64_t)highest_ack, high_ack_time, last_time_ack,
-            cwin, one_way_delay, rtt_sample, SRTT, RTT_min, bandwidth_estimate, Send_MTU, pacing_packet_time,
+            cwin, one_way_delay, rtt_sample, SRTT, RTT_min, bandwidth_estimate, receive_rate_estimate, Send_MTU, pacing_packet_time,
             nb_retrans, nb_spurious, cwin_blkd, flow_blkd, stream_blkd) <= 0) {
             ret = -1;
         }
