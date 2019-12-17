@@ -65,6 +65,9 @@ extern "C" {
 #define PICOQUIC_TOKEN_DELAY_LONG (24*60*60*1000000ull) /* 24 hours */
 #define PICOQUIC_TOKEN_DELAY_SHORT (2*60*1000000ull) /* 2 minutes */
 
+#define PICOQUIC_BANDWIDTH_ESTIMATE_MAX 10000000000ull /* 10 GB per second */
+#define PICOQUIC_BANDWIDTH_TIME_INTERVAL_MIN 1000
+
 #define PICOQUIC_SPURIOUS_RETRANSMIT_DELAY_MAX 1000000ull /* one second */
 
 #define PICOQUIC_MICROSEC_SILENCE_MAX 120000000ull /* 120 seconds for now */
@@ -541,6 +544,13 @@ typedef struct st_picoquic_path_t {
     /* MTU */
     size_t send_mtu;
     size_t send_mtu_max_tried;
+
+    /* Bandwidth measurement */
+    uint64_t delivered; /* The total amount of data delivered so far on the path */
+    uint64_t epoch_start_time; /* Start of bandwidth measurement epoch */
+    uint64_t delivered_epoch; /* Delivered at start of measurement epoch */
+    uint64_t sent_time_epoch; /* Time at which last packet in delivered epoch was sent */
+    uint64_t bandwidth_estimate; /* In bytes per second */
 
     /* Congestion control state */
     uint64_t cwin;
