@@ -1063,6 +1063,10 @@ static int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id
                 cnx->max_stream_data_needed = 1;
             }
         }
+
+        if (stream->fin_received || stream->reset_received) {
+            cnx->pkt_ctx[picoquic_packet_context_application].ack_after_fin = 1;
+        }
     }
 
     return ret;
@@ -1084,9 +1088,6 @@ uint8_t* picoquic_decode_stream_frame(picoquic_cnx_t* cnx, uint8_t* bytes, const
         bytes = NULL;
     } else {
         bytes += data_length;
-        if (fin) {
-            cnx->pkt_ctx[picoquic_packet_context_application].ack_after_fin = 1;
-        }
     }
 
     return bytes;
@@ -2895,11 +2896,19 @@ int picoquic_is_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t 
 
     if (pkt_ctx->ack_needed) {
         uint64_t ack_gap = 2;
-        if (pc == picoquic_packet_context_application && pkt_ctx->first_sack_item.next_sack == NULL &&
-            pkt_ctx->first_sack_item.end_of_sack_range > 128 &&
-            !pkt_ctx->ack_after_fin) {
-            ack_gap = 4;
+
+        if (pc == picoquic_packet_context_application && pkt_ctx->first_sack_item.end_of_sack_range > 128 && !pkt_ctx->ack_after_fin) {
+            if (cnx->path[0]->rtt_min > PICOQUIC_TARGET_RENO_RTT &&
+                cnx->path[0]->receive_rate_estimate > 10000000) {
+                ack_gap = 10;
+            }
+            else if (pkt_ctx->first_sack_item.next_sack == NULL) {
+                ack_gap = 4;
+            }
+        } else if (pkt_ctx->ack_after_fin && cnx->path[0]->rtt_min > PICOQUIC_TARGET_RENO_RTT) {
+            ack_gap = 1;
         }
+
         if (pkt_ctx->highest_ack_sent + ack_gap <= pkt_ctx->first_sack_item.end_of_sack_range ||
             pkt_ctx->highest_ack_sent_time + pkt_ctx->ack_delay_local <= current_time) {
             ret = 1;
