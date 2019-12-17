@@ -1038,7 +1038,6 @@ int quic_client(const char* ip_address_text, int server_port,
         SOCKET_CLOSE(fd);
     }
 
-
     if (client_scenario_text != NULL && client_sc != NULL) {
         demo_client_delete_scenario_desc(client_sc_nb, client_sc);
         client_sc = NULL;
@@ -1182,7 +1181,10 @@ int main(int argc, char** argv)
     FILE* F_log = NULL;
     int ret = 0;
 
-    /* HTTP09 test */
+#ifdef _WINDOWS
+    WSADATA wsaData = { 0 };
+    WSA_START(MAKEWORD(2, 2), &wsaData);
+#endif
 
     /* Get the parameters */
     int opt;
