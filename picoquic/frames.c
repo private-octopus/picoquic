@@ -939,31 +939,31 @@ static int add_chunk_node(picosplay_tree_t* tree, uint64_t offset, size_t length
 
 /* Common code to data stream and crypto hs stream */
 int picoquic_queue_network_input(picosplay_tree_t* tree, uint64_t consumed_offset,
-    uint64_t stream_ofs, const uint8_t* bytes, size_t length, int* new_data_available)
+    uint64_t frame_data_offset, const uint8_t* bytes, size_t length, int* new_data_available)
 {
-    const uint64_t input_begin = stream_ofs;
-    const uint64_t input_end = stream_ofs + length;
+    const uint64_t input_begin = frame_data_offset;
+    const uint64_t input_end = frame_data_offset + length;
 
     int ret = 0;
 
     /* Remove data that is already consumed */
-    if (stream_ofs < consumed_offset) {
-        stream_ofs = consumed_offset;
+    if (frame_data_offset < consumed_offset) {
+        frame_data_offset = consumed_offset;
     }
 
-    /* check for data that is already received in blocks with offset <= end */
-    if (stream_ofs < input_end) {
+    /* check for data that is already received in chunks with offset <= end */
+    if (frame_data_offset < input_end) {
 
         picoquic_stream_data_node_t target;
         memset(&target, 0, sizeof(picoquic_stream_data_node_t));
-        target.offset = stream_ofs;
+        target.offset = frame_data_offset;
 
         picoquic_stream_data_node_t* prev = (picoquic_stream_data_node_t*)picosplay_find_previous(tree, &target);
         if (prev != NULL) {
-            /* By definition, prev->offset <= stream_ofs. Check whether the
+            /* By definition, prev->offset <= frame_data_offset. Check whether the
              * beginning of the frame is already received and skip if necessary */
             const uint64_t prev_end = prev->offset + prev->length;
-            stream_ofs = stream_ofs > prev_end ? stream_ofs : prev_end;
+            frame_data_offset = frame_data_offset > prev_end ? frame_data_offset : prev_end;
         }
 
         picoquic_stream_data_node_t* next = (prev == NULL) ?
@@ -971,26 +971,26 @@ int picoquic_queue_network_input(picosplay_tree_t* tree, uint64_t consumed_offse
             (picoquic_stream_data_node_t*)picosplay_next(&prev->stream_data_node);
 
         /* Check whether parts of the new frame are covered by already received chunks */
-        while (ret == 0 && stream_ofs < input_end && next != NULL && next->offset < input_end) {
+        while (ret == 0 && frame_data_offset < input_end && next != NULL && next->offset < input_end) {
 
             /* the tail of the frame overlaps with the next frame received */
-            const uint64_t chunk_ofs = stream_ofs;
-            const uint64_t chunk_len = next->offset > stream_ofs ? next->offset - stream_ofs : 0;
+            const uint64_t chunk_ofs = frame_data_offset;
+            const uint64_t chunk_len = next->offset > frame_data_offset ? next->offset - frame_data_offset : 0;
 
             if (chunk_len > 0) {
                 /* There is a gap between previous and next frame, and it will be at least partially filled */
-                ret = add_chunk_node(tree, chunk_ofs, (size_t)chunk_len, bytes + stream_ofs - input_begin, new_data_available);
+                ret = add_chunk_node(tree, chunk_ofs, (size_t)chunk_len, bytes + frame_data_offset - input_begin, new_data_available);
             }
 
-            stream_ofs = next->offset + next->length;
+            frame_data_offset = next->offset + next->length;
             next = (picoquic_stream_data_node_t*)picosplay_next(&next->stream_data_node);
         }
 
         /* no further already received chunk within the new frame */
-        if (ret == 0 && stream_ofs < input_end) {
-            const uint64_t chunk_ofs = stream_ofs;
-            const uint64_t chunk_len = input_end - stream_ofs;
-            ret = add_chunk_node(tree, chunk_ofs, (size_t)chunk_len, bytes + stream_ofs - input_begin, new_data_available);
+        if (ret == 0 && frame_data_offset < input_end) {
+            const uint64_t chunk_ofs = frame_data_offset;
+            const uint64_t chunk_len = input_end - frame_data_offset;
+            ret = add_chunk_node(tree, chunk_ofs, (size_t)chunk_len, bytes + frame_data_offset - input_begin, new_data_available);
         }
     }
 
