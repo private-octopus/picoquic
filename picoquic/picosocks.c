@@ -1183,8 +1183,8 @@ int picoquic_get_server_address(const char* ip_address_text, int server_port,
         hints.ai_socktype = SOCK_DGRAM;
         hints.ai_protocol = IPPROTO_UDP;
 
-        if (getaddrinfo(ip_address_text, NULL, &hints, &result) != 0) {
-            fprintf(stderr, "Cannot get IP address for %s\n", ip_address_text);
+        if ((ret = getaddrinfo(ip_address_text, NULL, &hints, &result)) != 0) {
+            fprintf(stderr, "Cannot get IP address for %s, err = %d (0x%x)\n", ip_address_text, ret, ret);
             ret = -1;
         } else {
             *is_name = 1;
