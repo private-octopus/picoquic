@@ -566,6 +566,8 @@ void picoquic_cnx_get_padding_policy(picoquic_cnx_t * cnx, uint32_t * padding_mu
 /* Set spin bit policy for the connection */
 void picoquic_cnx_set_spinbit_policy(picoquic_cnx_t * cnx, picoquic_spinbit_version_enum spinbit_policy);
 
+void picoquic_cnx_set_pmtud_required(picoquic_cnx_t* cnx, int is_pmtud_required);
+
 int picoquic_tls_is_psk_handshake(picoquic_cnx_t* cnx);
 
 void picoquic_get_peer_addr(picoquic_cnx_t* cnx, struct sockaddr** addr, int* addr_len);

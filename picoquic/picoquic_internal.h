@@ -689,6 +689,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int initial_repeat_needed : 1; /* Path has not been validated, repeated initial was received */
     unsigned int is_loss_bit_enabled : 1; /* Insert the loss bits in outgoing packets, read on incoming */
     unsigned int is_one_way_delay_enabled : 1; /* Add time stamp to acks, read on incoming */
+    unsigned int is_pmtud_required : 1; /* Force PMTU discovery */
 
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;
