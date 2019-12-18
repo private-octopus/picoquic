@@ -1705,6 +1705,24 @@ int picoquic_incoming_encrypted(
             }
 
             if (ret == 0) {
+                /* Compute receive bandwidth */
+                cnx->path[path_id]->received += ph->offset + ph->payload_length + picoquic_get_checksum_length(cnx, 0);
+                if (cnx->path[path_id]->receive_rate_epoch == 0) {
+                    cnx->path[path_id]->received_prior = cnx->path[path_id]->received;
+                    cnx->path[path_id]->receive_rate_epoch = current_time;
+                }
+                else {
+                    uint64_t delta = current_time - cnx->path[path_id]->receive_rate_epoch;
+                    if (delta > cnx->path[path_id]->smoothed_rtt && delta > PICOQUIC_BANDWIDTH_TIME_INTERVAL_MIN) {
+                        cnx->path[path_id]->receive_rate_estimate = ((cnx->path[path_id]->received - cnx->path[path_id]->received_prior)*1000000) / delta;
+                        cnx->path[path_id]->received_prior = cnx->path[path_id]->received;
+                        cnx->path[path_id]->receive_rate_epoch = current_time;
+                        if (cnx->path[path_id]->receive_rate_estimate > cnx->path[path_id]->receive_rate_max) {
+                            cnx->path[path_id]->receive_rate_max = cnx->path[path_id]->receive_rate_estimate;
+                        }
+                    }
+                }
+
                 /* Perform ECN accounting */
                 picoquic_ecn_accounting(cnx, received_ecn, path_id);
                 /* Processing of TLS messages  */

@@ -754,6 +754,8 @@ void picoquic_cc_dump(picoquic_cnx_t * cnx, uint64_t current_time)
     bytewrite_vint(ps_msg, path->rtt_sample);
     bytewrite_vint(ps_msg, path->smoothed_rtt);
     bytewrite_vint(ps_msg, path->rtt_min);
+    bytewrite_vint(ps_msg, path->bandwidth_estimate);
+    bytewrite_vint(ps_msg, path->receive_rate_estimate);
     bytewrite_vint(ps_msg, path->send_mtu);
     bytewrite_vint(ps_msg, path->pacing_packet_time_microsec);
     bytewrite_vint(ps_msg, cnx->nb_retransmission_total);
