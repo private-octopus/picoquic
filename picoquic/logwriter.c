@@ -634,7 +634,7 @@ void binlog_close_connection(picoquic_cnx_t * cnx)
     bytestream_buf stream_msg;
     bytestream * msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
     bytewrite_cid(msg, &cnx->initial_cnxid);
-    bytewrite_vint(msg, 0);
+    bytewrite_vint(msg, picoquic_get_quic_time(cnx->quic));
     bytewrite_vint(msg, picoquic_log_event_connection_close);
 
     bytestream_buf stream_head;
@@ -676,7 +676,7 @@ int binlog_open(picoquic_quic_t* quic, char const* binlog_file)
 
     binlog_close(quic);
     if (binlog_file != NULL) {
-        quic->f_binlog = create_binlog(binlog_file, picoquic_current_time());
+        quic->f_binlog = create_binlog(binlog_file, picoquic_get_quic_time(quic));
         if (quic->f_binlog == NULL) {
             ret = -1;
         }
@@ -728,7 +728,7 @@ int picoquic_open_cc_dump(picoquic_cnx_t * cnx)
             bytestream* ps = bytestream_buf_init(&stream, 16);
             bytewrite_int32(ps, FOURCC('q', 'l', 'o', 'g'));
             bytewrite_int32(ps, 0x01);
-            bytewrite_int64(ps, picoquic_current_time());
+            bytewrite_int64(ps, picoquic_get_quic_time(cnx->quic));
 
             if (fwrite(bytestream_data(ps), bytestream_length(ps), 1, cnx->cc_log) <= 0) {
                 DBG_PRINTF("Cannot write header for file %s.\n", cc_log_file_name);

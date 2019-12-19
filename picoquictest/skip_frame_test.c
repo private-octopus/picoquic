@@ -817,7 +817,6 @@ int binlog_test()
     uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
     uint8_t fuzz_buffer[PICOQUIC_MAX_PACKET_SIZE];
     uint64_t random_context = 0xF00BAB;
-    FILE * f = create_binlog(binlog_test_file, 0);
     int ret = 0;
 
     const picoquic_connection_id_t srce_cid = {
@@ -839,10 +838,7 @@ int binlog_test()
         NULL, NULL, NULL, NULL, simulated_time,
         &simulated_time, NULL, NULL, 0);
 
-    if (f == NULL) {
-        DBG_PRINTF("failed to open file:%s\n", binlog_test_file);
-        ret = -1;
-    } else if (quic == NULL) {
+    if (quic == NULL) {
         DBG_PRINTF("%s", "Cannot create QUIC context\n");
         ret = -1;
     } else if (ret_bin != 0 || ret_qlog != 0) {
@@ -850,8 +846,7 @@ int binlog_test()
         ret = -1;
     }
     else {
-        quic->f_binlog = f;
-        
+        picoquic_set_binlog(quic, binlog_test_file);        
         picoquic_set_default_spinbit_policy(quic, picoquic_spinbit_null);
 
         struct sockaddr_in saddr;
@@ -886,23 +881,29 @@ int binlog_test()
     picoquic_free(quic);
 
     if (ret == 0) {
-        ret = picoquic_test_compare_binary_files(binlog_test_file, log_test_ref);
-        if (ret != 0) {
+        ret_bin = picoquic_test_compare_binary_files(binlog_test_file, log_test_ref);
+        if (ret_bin != 0) {
             DBG_PRINTF("%s", "Unexpected content in binary log file.\n");
         }
-        else {
-            /* Convert to QLOG and verify */
-            uint64_t log_time = 0;
-            FILE* f_binlog = picoquic_open_cc_log_file_for_read(binlog_test_file, &log_time);
-            ret = qlog_convert(&srce_cid, f_binlog, binlog_test_file, ".");
-            if (ret != 0) {
-                DBG_PRINTF("%s", "Cannot convert the binary log into QLOG.\n");
+
+        /* Convert to QLOG and verify */
+        uint64_t log_time = 0;
+        FILE* f_binlog = picoquic_open_cc_log_file_for_read(binlog_test_file, &log_time);
+        
+        ret = qlog_convert(&srce_cid, f_binlog, binlog_test_file, ".");
+        if (ret != 0) {
+            DBG_PRINTF("%s", "Cannot convert the binary log into QLOG.\n");
+        } else {
+            /* When changing the reference QLOG file please verify the new file at:
+                https://qvis.edm.uhasselt.be/#/files */
+            ret_qlog = picoquic_test_compare_text_files(qlog_test_file, qlog_test_ref);
+            if (ret_qlog != 0) {
+                DBG_PRINTF("%s", "Unexpected content in QLOG log file.\n");
             }
-            else {
-                /* When changing the reference QLOG file please verify the new file at:
-                   https://qvis.edm.uhasselt.be/#/files */
-                ret = picoquic_test_compare_text_files(qlog_test_file, qlog_test_ref);
-            }
+        }
+
+        if (ret_bin != 0 || ret_qlog != 0) {
+            ret = -1;
         }
     }
 
