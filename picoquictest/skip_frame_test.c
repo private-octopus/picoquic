@@ -621,8 +621,8 @@ static int picoquic_compare_binary_files(char const* fname1, char const* fname2,
 
     do
     {
-        char buffer1[256];
-        char buffer2[256];
+        uint8_t buffer1[256];
+        uint8_t buffer2[256];
         size_t len1 = fread(buffer1, 1, sizeof(buffer1), f1);
         size_t len2 = fread(buffer2, 1, sizeof(buffer2), f2);
 

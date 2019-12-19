@@ -160,6 +160,20 @@ static const uint8_t* picoquic_log_close_frame(FILE* f, const uint8_t* bytes, co
     return bytes;
 }
 
+static const uint8_t* picoquic_log_app_close_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
+{
+    const uint8_t* bytes_begin = bytes;
+    size_t length = 0;
+
+    bytes = picoquic_log_fixed_skip(bytes, bytes_max, 1);
+    bytes = picoquic_log_varint_skip(bytes, bytes_max);
+    bytes = picoquic_log_length(bytes, bytes_max, &length);
+    bytes = picoquic_log_fixed_skip(bytes, bytes_max, length);
+
+    picoquic_binlog_frame(f, bytes_begin, bytes);
+    return bytes;
+}
+
 static const uint8_t* picoquic_log_max_data_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
 {
     const uint8_t* bytes_begin = bytes;
@@ -332,7 +346,6 @@ void picoquic_binlog_frames(FILE * f, const uint8_t* bytes, size_t length)
     const uint8_t* bytes_max = bytes + length;
 
     while (bytes != NULL && bytes < bytes_max) {
-
         uint8_t ftype = bytes[0];
 
         if (PICOQUIC_IN_RANGE(ftype, picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
@@ -358,8 +371,10 @@ void picoquic_binlog_frames(FILE * f, const uint8_t* bytes, size_t length)
             bytes = picoquic_log_reset_stream_frame(f, bytes, bytes_max);
             break;
         case picoquic_frame_type_connection_close:
-        case picoquic_frame_type_application_close:
             bytes = picoquic_log_close_frame(f, bytes, bytes_max);
+            break;
+        case picoquic_frame_type_application_close:
+            bytes = picoquic_log_app_close_frame(f, bytes, bytes_max);
             break;
         case picoquic_frame_type_max_data:
             bytes = picoquic_log_max_data_frame(f, bytes, bytes_max);
@@ -407,6 +422,7 @@ void picoquic_binlog_frames(FILE * f, const uint8_t* bytes, size_t length)
         }
     }
 }
+
 
 void binlog_pdu(FILE* f, const picoquic_connection_id_t* cid, int receiving, uint64_t current_time,
     const struct sockaddr* addr_peer, size_t packet_length)
