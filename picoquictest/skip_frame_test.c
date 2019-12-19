@@ -553,6 +553,7 @@ static char const* log_test_file = "log_test.txt";
 static char const* log_fuzz_test_file = "log_fuzz_test.txt";
 static char const* log_packet_test_file = "log_fuzz_test.txt";
 static char const* binlog_test_file = "binlog_test.log";
+static char const* binlog_fuzz_test_file = "binlog_fuzz_test.log";
 
 #define LOG_TEST_REF "picoquictest" PICOQUIC_FILE_SEPARATOR "log_test_ref.txt"
 #define BINLOG_TEST_REF "picoquictest" PICOQUIC_FILE_SEPARATOR "binlog_ref.log"
@@ -800,7 +801,10 @@ int logger_test()
 
 int binlog_test()
 {
-    FILE * f = picoquic_file_open(binlog_test_file, "w");
+    uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
+    uint8_t fuzz_buffer[PICOQUIC_MAX_PACKET_SIZE];
+    uint64_t random_context = 0xF00BAB;
+    FILE * f = picoquic_file_open(binlog_test_file, "wb");
     int ret = 0;
 
     if (f == NULL) {
@@ -823,6 +827,28 @@ int binlog_test()
         } else {
             ret = picoquic_test_compare_binary_files(binlog_test_file, log_test_ref);
         }
+    }
+
+    /* Do a minimal fuzz test */
+    for (size_t i = 0; ret == 0 && i < 100; i++) {
+        size_t bytes_max = format_random_packet(buffer, sizeof(buffer), &random_context);
+        FILE* F;
+
+        if ((F = picoquic_file_open(binlog_fuzz_test_file, "wb")) == NULL) {
+            DBG_PRINTF("failed to open file:%s\n", log_fuzz_test_file);
+            ret = PICOQUIC_ERROR_INVALID_FILE;
+            break;
+        }
+
+        picoquic_binlog_frames(F, buffer, bytes_max);
+
+        /* Attempt to log fuzzed packets, and hope nothing crashes */
+        for (size_t j = 0; j < 100; j++) {
+            fflush(F);
+            skip_test_fuzz_packet(fuzz_buffer, buffer, bytes_max, &random_context);
+            picoquic_binlog_frames(F, fuzz_buffer, bytes_max);
+        }
+        (void)picoquic_file_close(F);
     }
 
     return ret;
