@@ -25,6 +25,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "logreader.h"
+#include "qlog.h"
+
 /*
  * Test of the skip frame API.
  * This test is only defined for the varint encodings -- the older fixed int
@@ -557,6 +560,7 @@ static char const* binlog_fuzz_test_file = "binlog_fuzz_test.log";
 
 #define LOG_TEST_REF "picoquictest" PICOQUIC_FILE_SEPARATOR "log_test_ref.txt"
 #define BINLOG_TEST_REF "picoquictest" PICOQUIC_FILE_SEPARATOR "binlog_ref.log"
+#define QLOG_TEST_REF "picoquictest" PICOQUIC_FILE_SEPARATOR "binlog_ref.qlog"
 
 static int compare_lines(char const* b1, char const* b2)
 {
@@ -799,33 +803,103 @@ int logger_test()
     return ret;
 }
 
+// From logwriter.c
+FILE* create_binlog(char const* binlog_file, uint64_t creation_time);
+
+void binlog_new_connection(picoquic_cnx_t* cnx);
+
+void binlog_packet(FILE* f, const picoquic_connection_id_t* cid, int receiving, uint64_t current_time,
+    const picoquic_packet_header* ph, const uint8_t* bytes, size_t bytes_max);
+
 int binlog_test()
 {
     uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
     uint8_t fuzz_buffer[PICOQUIC_MAX_PACKET_SIZE];
     uint64_t random_context = 0xF00BAB;
-    FILE * f = picoquic_file_open(binlog_test_file, "wb");
+    FILE * f = create_binlog(binlog_test_file, 0);
     int ret = 0;
+
+    const picoquic_connection_id_t srce_cid = {
+        { 1, 2, 3, 4, 5, 6, 7, 8 }, 4
+    };
+
+    const picoquic_connection_id_t dest_cid = {
+        { 5, 6, 7, 8 }, 4
+    };
+
+    char log_test_ref[512];
+    int ret_bin = picoquic_get_input_path(log_test_ref, sizeof(log_test_ref), picoquic_test_solution_dir, BINLOG_TEST_REF);
+
+    char qlog_test_ref[512];
+    int ret_qlog = picoquic_get_input_path(qlog_test_ref, sizeof(qlog_test_ref), picoquic_test_solution_dir, QLOG_TEST_REF);
+
+    uint64_t simulated_time = 0;
+    picoquic_quic_t* quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
 
     if (f == NULL) {
         DBG_PRINTF("failed to open file:%s\n", binlog_test_file);
         ret = -1;
-    } else {
-        for (size_t i = 0; i < nb_test_skip_list; i++) {
-            picoquic_binlog_frames(f, test_skip_list[i].val, test_skip_list[i].len);
+    } else if (quic == NULL) {
+        DBG_PRINTF("%s", "Cannot create QUIC context\n");
+        ret = -1;
+    } else if (ret_bin != 0 || ret_qlog != 0) {
+        DBG_PRINTF("%s", "Cannot set the log ref file name.\n");
+        ret = -1;
+    }
+    else {
+        quic->f_binlog = f;
+
+        struct sockaddr_in saddr;
+        memset(&saddr, 0, sizeof(struct sockaddr_in));
+        picoquic_cnx_t* cnx = picoquic_create_cnx(quic, srce_cid, dest_cid, (struct sockaddr*) & saddr,
+            simulated_time, 0, "test-sni", "test-alpn", 1);
+
+        if (cnx == NULL) {
+            DBG_PRINTF("%s", "Cannot create QUIC CNX context\n");
+            ret = -1;
+        } else {
+            for (size_t i = 0; i < nb_test_skip_list; i++) {
+
+                picoquic_packet_header ph;
+                memset(&ph, 0, sizeof(ph));
+
+                ph.ptype = picoquic_packet_1rtt_protected;
+                ph.pn64 = i;
+                ph.dest_cnx_id = srce_cid;
+                ph.srce_cnx_id = dest_cid;
+
+                ph.offset = 0;
+                ph.payload_length = test_skip_list[i].len;
+
+                binlog_packet(quic->f_binlog, &srce_cid, 0, 0, &ph, test_skip_list[i].val, test_skip_list[i].len);
+            }
+
+            picoquic_delete_cnx(cnx);
         }
-        (void)picoquic_file_close(f);
     }
 
+    picoquic_free(quic);
+
     if (ret == 0) {
-
-        char log_test_ref[512];
-        ret = picoquic_get_input_path(log_test_ref, sizeof(log_test_ref), picoquic_test_solution_dir, BINLOG_TEST_REF);
-
+        ret = picoquic_test_compare_binary_files(binlog_test_file, log_test_ref);
         if (ret != 0) {
-            DBG_PRINTF("%s", "Cannot set the log ref file name.\n");
-        } else {
-            ret = picoquic_test_compare_binary_files(binlog_test_file, log_test_ref);
+            DBG_PRINTF("%s", "Unexpected content in binary log file.\n");
+        }
+        else {
+            /* Convert to QLOG and verify */
+            uint64_t log_time = 0;
+            FILE* f_binlog = picoquic_open_cc_log_file_for_read(binlog_test_file, &log_time);
+            ret = qlog_convert(&srce_cid, f_binlog, binlog_test_file, ".");
+            if (ret != 0) {
+                DBG_PRINTF("%s", "Cannot convert the binary log into QLOG.\n");
+            }
+            else {
+                /* When changing the reference QLOG file please verify the new file at:
+                   https://qvis.edm.uhasselt.be/#/files */
+                ret = picoquic_test_compare_text_files("01020304.qlog", qlog_test_ref);
+            }
         }
     }
 

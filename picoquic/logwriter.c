@@ -634,7 +634,7 @@ void binlog_close_connection(picoquic_cnx_t * cnx)
     bytestream_buf stream_msg;
     bytestream * msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
     bytewrite_cid(msg, &cnx->initial_cnxid);
-    bytewrite_vint(msg, picoquic_current_time());
+    bytewrite_vint(msg, 0);
     bytewrite_vint(msg, picoquic_log_event_connection_close);
 
     bytestream_buf stream_head;
@@ -647,33 +647,40 @@ void binlog_close_connection(picoquic_cnx_t * cnx)
     fflush(f);
 }
 
-int binlog_open(picoquic_quic_t * quic, char const * binlog_file)
+FILE* create_binlog(char const* binlog_file, uint64_t creation_time)
 {
-    int ret = 0;
-    binlog_close(quic);
+    FILE* f_binlog = picoquic_file_open(binlog_file, "wb");
+    if (f_binlog == NULL) {
+        DBG_PRINTF("Cannot open file %s for write.\n", binlog_file);
+    }
+    else {
+        /* Write a header text with version identifier and current date  */
+        bytestream_buf stream;
+        bytestream* ps = bytestream_buf_init(&stream, 16);
+        bytewrite_int32(ps, FOURCC('q', 'l', 'o', 'g'));
+        bytewrite_int32(ps, 0x01);
+        bytewrite_int64(ps, creation_time);
 
-    if (binlog_file != NULL) {
-        quic->f_binlog = picoquic_file_open(binlog_file, "wb");
-        if (quic->f_binlog == NULL) {
-            DBG_PRINTF("Cannot open file %s for write.\n", binlog_file);
-            ret = -1;
-        }
-        else {
-            /* Write a header text with version identifier and current date  */
-            bytestream_buf stream;
-            bytestream* ps = bytestream_buf_init(&stream, 16);
-            bytewrite_int32(ps, FOURCC('q', 'l', 'o', 'g'));
-            bytewrite_int32(ps, 0x01);
-            bytewrite_int64(ps, picoquic_current_time());
-
-            if (fwrite(bytestream_data(ps), bytestream_length(ps), 1, quic->f_binlog) <= 0) {
-                DBG_PRINTF("Cannot write header for file %s.\n", binlog_file);
-                quic->f_binlog = picoquic_file_close(quic->f_binlog);
-                ret = -1;
-            }
+        if (fwrite(bytestream_data(ps), bytestream_length(ps), 1, f_binlog) <= 0) {
+            DBG_PRINTF("Cannot write header for file %s.\n", binlog_file);
+            f_binlog = picoquic_file_close(f_binlog);
         }
     }
 
+    return f_binlog;
+}
+
+int binlog_open(picoquic_quic_t* quic, char const* binlog_file)
+{
+    int ret = 0;
+
+    binlog_close(quic);
+    if (binlog_file != NULL) {
+        quic->f_binlog = create_binlog(binlog_file, picoquic_current_time());
+        if (quic->f_binlog == NULL) {
+            ret = -1;
+        }
+    }
     return ret;
 }
 

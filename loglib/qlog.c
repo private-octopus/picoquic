@@ -149,6 +149,7 @@ int qlog_packet_frame(bytestream * s, void * ptr)
             fprintf(f, "[%"PRIu64", %"PRIu64"]", largest - range, largest);
             largest -= range + 1;
         }
+        fprintf(f, "]");
         if (ftype == picoquic_frame_type_ack_ecn ||
             ftype == picoquic_frame_type_ack_ecn_1wd) {
             fprintf(f, ", \"ecn\": [");
@@ -159,7 +160,6 @@ int qlog_packet_frame(bytestream * s, void * ptr)
             }
             fprintf(f, "]");
         }
-        fprintf(f, "]");
         break;
     }
     }
@@ -248,6 +248,8 @@ int qlog_convert(const picoquic_connection_id_t* cid, FILE * f_binlog, const cha
             if (qlog.state == 1) {
                 qlog_connection_end(0, &qlog);
             }
+
+            picoquic_file_close(f_txtlog);
         }
     }
 
