@@ -40,14 +40,14 @@ static const uint8_t* picoquic_log_varint_skip(const uint8_t* bytes, const uint8
 
 static const uint8_t* picoquic_log_varint(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* n64)
 {
-    size_t len = picoquic_varint_decode(bytes, bytes_max - bytes, n64);
+    size_t len = (bytes == NULL) ? 0 : picoquic_varint_decode(bytes, bytes_max - bytes, n64);
     return len == 0 ? NULL : bytes + len;
 }
 
 static const uint8_t* picoquic_log_length(const uint8_t* bytes, const uint8_t* bytes_max, size_t* nsz)
 {
     uint64_t n64 = 0;
-    size_t len = picoquic_varint_decode(bytes, bytes_max - bytes, &n64);
+    size_t len = (bytes == NULL) ? 0 : picoquic_varint_decode(bytes, bytes_max - bytes, &n64);
     *nsz = (size_t)n64;
     return len == 0 || *nsz != n64 ? NULL : bytes + len;
 }
@@ -95,18 +95,22 @@ static const uint8_t* picoquic_log_ack_frame(FILE* f, const uint8_t* bytes, cons
     uint64_t nb_blocks;
 
     bytes = picoquic_log_fixed_skip(bytes, bytes_max, 1);
+
+    if (ftype == picoquic_frame_type_ack_1wd || ftype == picoquic_frame_type_ack_ecn_1wd) {
+        bytes = picoquic_log_varint_skip(bytes, bytes_max);
+    }
     bytes = picoquic_log_varint_skip(bytes, bytes_max);
     bytes = picoquic_log_varint_skip(bytes, bytes_max);
     bytes = picoquic_log_varint(bytes, bytes_max, &nb_blocks);
 
-    for (uint64_t i = 0; i <= nb_blocks; i++) {
+    for (uint64_t i = 0; bytes != NULL && i <= nb_blocks; i++) {
         if (i != 0) {
             bytes = picoquic_log_varint_skip(bytes, bytes_max);
         }
         bytes = picoquic_log_varint_skip(bytes, bytes_max);
     }
-
-    if (ftype == picoquic_frame_type_ack_ecn) {
+    
+    if (ftype == picoquic_frame_type_ack_ecn || ftype == picoquic_frame_type_ack_ecn_1wd) {
         bytes = picoquic_log_varint_skip(bytes, bytes_max);
         bytes = picoquic_log_varint_skip(bytes, bytes_max);
         bytes = picoquic_log_varint_skip(bytes, bytes_max);
@@ -148,6 +152,20 @@ static const uint8_t* picoquic_log_close_frame(FILE* f, const uint8_t* bytes, co
 
     bytes = picoquic_log_fixed_skip(bytes, bytes_max, 1);
     bytes = picoquic_log_varint_skip(bytes, bytes_max);
+    bytes = picoquic_log_varint_skip(bytes, bytes_max);
+    bytes = picoquic_log_length(bytes, bytes_max, &length);
+    bytes = picoquic_log_fixed_skip(bytes, bytes_max, length);
+
+    picoquic_binlog_frame(f, bytes_begin, bytes);
+    return bytes;
+}
+
+static const uint8_t* picoquic_log_app_close_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
+{
+    const uint8_t* bytes_begin = bytes;
+    size_t length = 0;
+
+    bytes = picoquic_log_fixed_skip(bytes, bytes_max, 1);
     bytes = picoquic_log_varint_skip(bytes, bytes_max);
     bytes = picoquic_log_length(bytes, bytes_max, &length);
     bytes = picoquic_log_fixed_skip(bytes, bytes_max, length);
@@ -328,7 +346,6 @@ void picoquic_binlog_frames(FILE * f, const uint8_t* bytes, size_t length)
     const uint8_t* bytes_max = bytes + length;
 
     while (bytes != NULL && bytes < bytes_max) {
-
         uint8_t ftype = bytes[0];
 
         if (PICOQUIC_IN_RANGE(ftype, picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
@@ -338,7 +355,9 @@ void picoquic_binlog_frames(FILE * f, const uint8_t* bytes, size_t length)
 
         switch (ftype) {
         case picoquic_frame_type_ack:
+        case picoquic_frame_type_ack_1wd:
         case picoquic_frame_type_ack_ecn:
+        case picoquic_frame_type_ack_ecn_1wd:
             bytes = picoquic_log_ack_frame(f, bytes, bytes_max);
             break;
         case picoquic_frame_type_retire_connection_id:
@@ -352,8 +371,10 @@ void picoquic_binlog_frames(FILE * f, const uint8_t* bytes, size_t length)
             bytes = picoquic_log_reset_stream_frame(f, bytes, bytes_max);
             break;
         case picoquic_frame_type_connection_close:
-        case picoquic_frame_type_application_close:
             bytes = picoquic_log_close_frame(f, bytes, bytes_max);
+            break;
+        case picoquic_frame_type_application_close:
+            bytes = picoquic_log_app_close_frame(f, bytes, bytes_max);
             break;
         case picoquic_frame_type_max_data:
             bytes = picoquic_log_max_data_frame(f, bytes, bytes_max);
@@ -401,6 +422,7 @@ void picoquic_binlog_frames(FILE * f, const uint8_t* bytes, size_t length)
         }
     }
 }
+
 
 void binlog_pdu(FILE* f, const picoquic_connection_id_t* cid, int receiving, uint64_t current_time,
     const struct sockaddr* addr_peer, size_t packet_length)
