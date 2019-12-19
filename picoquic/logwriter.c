@@ -40,14 +40,14 @@ static const uint8_t* picoquic_log_varint_skip(const uint8_t* bytes, const uint8
 
 static const uint8_t* picoquic_log_varint(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* n64)
 {
-    size_t len = picoquic_varint_decode(bytes, bytes_max - bytes, n64);
+    size_t len = (bytes == NULL) ? 0 : picoquic_varint_decode(bytes, bytes_max - bytes, n64);
     return len == 0 ? NULL : bytes + len;
 }
 
 static const uint8_t* picoquic_log_length(const uint8_t* bytes, const uint8_t* bytes_max, size_t* nsz)
 {
     uint64_t n64 = 0;
-    size_t len = picoquic_varint_decode(bytes, bytes_max - bytes, &n64);
+    size_t len = (bytes == NULL) ? 0 : picoquic_varint_decode(bytes, bytes_max - bytes, &n64);
     *nsz = (size_t)n64;
     return len == 0 || *nsz != n64 ? NULL : bytes + len;
 }
@@ -95,18 +95,22 @@ static const uint8_t* picoquic_log_ack_frame(FILE* f, const uint8_t* bytes, cons
     uint64_t nb_blocks;
 
     bytes = picoquic_log_fixed_skip(bytes, bytes_max, 1);
+
+    if (ftype == picoquic_frame_type_ack_1wd || ftype == picoquic_frame_type_ack_ecn_1wd) {
+        bytes = picoquic_log_varint_skip(bytes, bytes_max);
+    }
     bytes = picoquic_log_varint_skip(bytes, bytes_max);
     bytes = picoquic_log_varint_skip(bytes, bytes_max);
     bytes = picoquic_log_varint(bytes, bytes_max, &nb_blocks);
 
-    for (uint64_t i = 0; i <= nb_blocks; i++) {
+    for (uint64_t i = 0; bytes != NULL && i <= nb_blocks; i++) {
         if (i != 0) {
             bytes = picoquic_log_varint_skip(bytes, bytes_max);
         }
         bytes = picoquic_log_varint_skip(bytes, bytes_max);
     }
-
-    if (ftype == picoquic_frame_type_ack_ecn) {
+    
+    if (ftype == picoquic_frame_type_ack_ecn || ftype == picoquic_frame_type_ack_ecn_1wd) {
         bytes = picoquic_log_varint_skip(bytes, bytes_max);
         bytes = picoquic_log_varint_skip(bytes, bytes_max);
         bytes = picoquic_log_varint_skip(bytes, bytes_max);
@@ -338,7 +342,9 @@ void picoquic_binlog_frames(FILE * f, const uint8_t* bytes, size_t length)
 
         switch (ftype) {
         case picoquic_frame_type_ack:
+        case picoquic_frame_type_ack_1wd:
         case picoquic_frame_type_ack_ecn:
+        case picoquic_frame_type_ack_ecn_1wd:
             bytes = picoquic_log_ack_frame(f, bytes, bytes_max);
             break;
         case picoquic_frame_type_retire_connection_id:
