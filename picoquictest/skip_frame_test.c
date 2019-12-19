@@ -557,6 +557,7 @@ static char const* log_fuzz_test_file = "log_fuzz_test.txt";
 static char const* log_packet_test_file = "log_fuzz_test.txt";
 static char const* binlog_test_file = "binlog_test.log";
 static char const* binlog_fuzz_test_file = "binlog_fuzz_test.log";
+static char const* qlog_test_file = "01020304.qlog";
 
 #define LOG_TEST_REF "picoquictest" PICOQUIC_FILE_SEPARATOR "log_test_ref.txt"
 #define BINLOG_TEST_REF "picoquictest" PICOQUIC_FILE_SEPARATOR "binlog_ref.log"
@@ -820,7 +821,7 @@ int binlog_test()
     int ret = 0;
 
     const picoquic_connection_id_t srce_cid = {
-        { 1, 2, 3, 4, 5, 6, 7, 8 }, 4
+        { 1, 2, 3, 4 }, 4
     };
 
     const picoquic_connection_id_t dest_cid = {
@@ -850,6 +851,8 @@ int binlog_test()
     }
     else {
         quic->f_binlog = f;
+        
+        picoquic_set_default_spinbit_policy(quic, picoquic_spinbit_null);
 
         struct sockaddr_in saddr;
         memset(&saddr, 0, sizeof(struct sockaddr_in));
@@ -898,7 +901,7 @@ int binlog_test()
             else {
                 /* When changing the reference QLOG file please verify the new file at:
                    https://qvis.edm.uhasselt.be/#/files */
-                ret = picoquic_test_compare_text_files("01020304.qlog", qlog_test_ref);
+                ret = picoquic_test_compare_text_files(qlog_test_file, qlog_test_ref);
             }
         }
     }
