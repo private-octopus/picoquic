@@ -255,6 +255,9 @@ typedef struct st_picoquic_packet_t {
     struct st_picoquic_path_t * send_path;
     uint64_t sequence_number;
     uint64_t send_time;
+    uint64_t delivered_prior;
+    uint64_t delivered_time_prior;
+    uint64_t delivered_sent_prior;
     size_t length;
     size_t checksum_overhead;
     size_t offset;
@@ -265,6 +268,7 @@ typedef struct st_picoquic_packet_t {
     unsigned int contains_crypto : 1;
     unsigned int is_mtu_probe : 1;
     unsigned int is_ack_trap : 1;
+    unsigned int delivered_app_limited : 1;
 
     uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE];
 } picoquic_packet_t;

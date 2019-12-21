@@ -547,9 +547,10 @@ typedef struct st_picoquic_path_t {
 
     /* Bandwidth measurement */
     uint64_t delivered; /* The total amount of data delivered so far on the path */
-    uint64_t epoch_start_time; /* Start of bandwidth measurement epoch */
-    uint64_t delivered_epoch; /* Delivered at start of measurement epoch */
-    uint64_t sent_time_epoch; /* Time at which last packet in delivered epoch was sent */
+    uint64_t delivered_last;
+    uint64_t delivered_time_last;
+    uint64_t delivered_sent_last;
+    uint64_t delivered_limited_index;
     uint64_t bandwidth_estimate; /* In bytes per second */
 
     uint64_t received; /* Total amount of bytes received from the path */

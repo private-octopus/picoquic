@@ -902,6 +902,10 @@ void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet_t
     if (ret == 0 && length > 0) {
         packet->length = length;
         cnx->pkt_ctx[packet->pc].send_sequence++;
+        packet->delivered_prior = path_x->delivered_last;
+        packet->delivered_time_prior = path_x->delivered_time_last;
+        packet->delivered_sent_prior = path_x->delivered_sent_last;
+        packet->delivered_app_limited = (path_x->delivered_limited_index != 0);
 
         switch (packet->ptype) {
         case picoquic_packet_version_negotiation:
@@ -2858,6 +2862,9 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                         }
 
                         if (length <= header_length) {
+                            /* Mark the bandwidth estimation as application limited */
+                            path_x->delivered_limited_index = path_x->delivered;
+                            /* Notify the peer if something is blocked */
                             ret = picoquic_prepare_blocked_frames(cnx, &bytes[length],
                                 send_buffer_min_max - checksum_overhead - length, &data_bytes);
                             if (ret == 0) {
