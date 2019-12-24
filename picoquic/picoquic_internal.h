@@ -897,7 +897,7 @@ int picoquic_retrieve_by_cnx_id_or_net_id(picoquic_quic_t* quic, picoquic_connec
     struct sockaddr* addr, picoquic_cnx_t ** pcnx);
 
 /* Reset the pacing data after CWIN is updated */
-void picoquic_update_pacing_data(picoquic_path_t * path_x);
+void picoquic_update_pacing_data(picoquic_path_t * path_x, double pacing_gain);
 
 /* Next time is used to order the list of available connections,
         * so ready connections are polled first */

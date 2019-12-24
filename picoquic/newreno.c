@@ -179,7 +179,7 @@ static void picoquic_newreno_notify(
     }
 
     /* Compute pacing data */
-    picoquic_update_pacing_data(path_x);
+    picoquic_update_pacing_data(path_x, 1.0);
 }
 
 /* Release the state of the congestion control algorithm */
