@@ -707,39 +707,6 @@ void picoquic_update_pacing_rate(picoquic_path_t* path_x, double pacing_rate, ui
 
 void picoquic_update_pacing_data(picoquic_path_t * path_x)
 {
-#if 0
-    uint64_t rtt_nanosec = path_x->smoothed_rtt*1000;
-
-    if (path_x->cwin < ((uint64_t)path_x->send_mtu)*8) {
-        /* Small windows, should only relie on ACK clocking */
-        path_x->pacing_bucket_max = rtt_nanosec;
-        path_x->pacing_packet_time_nanosec = 1;
-        path_x->pacing_packet_time_microsec = 1;
-
-    }
-    else {
-        path_x->pacing_packet_time_nanosec = (rtt_nanosec * path_x->send_mtu) / path_x->cwin;
-
-        if (path_x->pacing_packet_time_nanosec <= 0) {
-            path_x->pacing_packet_time_nanosec = 1;
-            path_x->pacing_packet_time_microsec = 1;
-        }
-        else {
-            path_x->pacing_packet_time_microsec = (path_x->pacing_packet_time_nanosec + 1023ull) / 1000;
-        }
-
-        path_x->pacing_bucket_max = (uint64_t)(rtt_nanosec / 4);
-        if (path_x->pacing_bucket_max < 2ull * path_x->pacing_packet_time_nanosec) {
-            path_x->pacing_bucket_max = 2ull * path_x->pacing_packet_time_nanosec;
-        } else if (path_x->pacing_bucket_max > 16ull * path_x->pacing_packet_time_nanosec) {
-            path_x->pacing_bucket_max = 16ull * path_x->pacing_packet_time_nanosec;
-        }
-
-        if (path_x->pacing_bucket_nanosec > path_x->pacing_bucket_max) {
-            path_x->pacing_bucket_nanosec = path_x->pacing_bucket_max;
-        }
-    }
-#else
     uint64_t rtt_nanosec = path_x->smoothed_rtt * 1000;
 
     if ((path_x->cwin < ((uint64_t)path_x->send_mtu) * 8) || rtt_nanosec <= 1000) {
@@ -765,7 +732,6 @@ void picoquic_update_pacing_data(picoquic_path_t * path_x)
 
         picoquic_update_pacing_rate(path_x, pacing_rate, quantum);
     }
-#endif
 }
 
 /* 

@@ -218,11 +218,13 @@ static void picoquic_bbr_delete(picoquic_path_t* path_x)
  * the beginning of the round, and thus that at least one RTT has elapsed
  * for this round. */
 
-void BBRUpdateBtlBw(picoquic_bbr_state_t* bbr_state, uint64_t packet_delivered, uint64_t delivered, uint64_t delivery_rate, int rs_is_app_limited, uint64_t current_time)
+void BBRUpdateBtlBw(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x)
 {
-    if (packet_delivered >= bbr_state->next_round_delivered)
+    uint64_t bandwidth_estimate = path_x->bandwidth_estimate;
+
+    if (path_x->delivered_last_packet >= bbr_state->next_round_delivered)
     {
-        bbr_state->next_round_delivered = delivered;
+        bbr_state->next_round_delivered = path_x->delivered;
         bbr_state->round_count++;
         bbr_state->round_start = 1;
     }
@@ -247,10 +249,10 @@ void BBRUpdateBtlBw(picoquic_bbr_state_t* bbr_state, uint64_t packet_delivered, 
         bbr_state->btl_bw_filter[0] = 0;
     }
 
-    if (delivery_rate > bbr_state->btl_bw_filter[0]) {
-        bbr_state->btl_bw_filter[0] = delivery_rate;
-        if (delivery_rate > bbr_state->btl_bw) {
-            bbr_state->btl_bw = delivery_rate;
+    if (bandwidth_estimate > bbr_state->btl_bw_filter[0]) {
+        bbr_state->btl_bw_filter[0] =bandwidth_estimate;
+        if (bandwidth_estimate > bbr_state->btl_bw) {
+            bbr_state->btl_bw = bandwidth_estimate;
         }
     }
 }
@@ -293,10 +295,10 @@ void BBRAdvanceCyclePhase(picoquic_bbr_state_t* bbr_state, uint64_t current_time
     bbr_state->pacing_gain = bbr_pacing_gain_cycle[bbr_state->cycle_index];
 }
 
-void BBRCheckCyclePhase(picoquic_bbr_state_t* bbr_state, uint64_t prior_inflight, uint64_t packets_lost, uint64_t current_time)
+void BBRCheckCyclePhase(picoquic_bbr_state_t* bbr_state, uint64_t packets_lost, uint64_t current_time)
 {
     if (bbr_state->state == picoquic_bbr_alg_probe_bw &&
-        BBRIsNextCyclePhase(bbr_state, prior_inflight, packets_lost, current_time)) {
+        BBRIsNextCyclePhase(bbr_state, bbr_state->prior_in_flight, packets_lost, current_time)) {
         BBRAdvanceCyclePhase(bbr_state, current_time);
     }
 }
@@ -386,7 +388,7 @@ void BBRRestoreCwnd(picoquic_bbr_state_t* bbr_state, picoquic_path_t * path_x)
 }
 
 
-void BBRHandleProbeRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t * path_x, uint64_t delivered, uint64_t bytes_in_transit, uint64_t current_time)
+void BBRHandleProbeRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t * path_x, uint64_t bytes_in_transit, uint64_t current_time)
 {
 #if 0
     /* Ignore low rate samples during ProbeRTT: */
@@ -399,7 +401,7 @@ void BBRHandleProbeRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t * path_x
         bbr_state->probe_rtt_done_stamp =
             current_time + BBR_PROBE_RTT_DURATION;
         bbr_state->probe_rtt_round_done = 0;
-        bbr_state->next_round_delivered = delivered;
+        bbr_state->next_round_delivered = path_x->delivered;
     }
     else if (bbr_state->probe_rtt_done_stamp != 0) {
         if (bbr_state->round_start) {
@@ -415,7 +417,7 @@ void BBRHandleProbeRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t * path_x
     }
 }
 
-void BBRCheckProbeRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t delivered, uint64_t bytes_in_transit, uint64_t current_time)
+void BBRCheckProbeRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t bytes_in_transit, uint64_t current_time)
 {
     if (bbr_state->state != picoquic_bbr_alg_probe_rtt &&
         bbr_state->rt_prop_expired &&
@@ -426,20 +428,20 @@ void BBRCheckProbeRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, 
     }
     
     if (bbr_state->state == picoquic_bbr_alg_probe_rtt) {
-        BBRHandleProbeRTT(bbr_state, path_x, delivered, bytes_in_transit, current_time);
+        BBRHandleProbeRTT(bbr_state, path_x, bytes_in_transit, current_time);
         bbr_state->idle_restart = 0;
     }
 }
 
-void BBRUpdateModelAndState(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t delivered, uint64_t packet_delivered, uint64_t delivery_rate, int rs_is_app_limited,
-    uint64_t rtt_sample, uint64_t bytes_in_transit, uint64_t prior_inflight, uint64_t packets_lost, uint64_t current_time)
+void BBRUpdateModelAndState(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x,
+    uint64_t rtt_sample, uint64_t bytes_in_transit, uint64_t packets_lost, uint64_t current_time)
 {
-    BBRUpdateBtlBw(bbr_state, delivered, packet_delivered, delivery_rate, rs_is_app_limited, current_time);
-    BBRCheckCyclePhase(bbr_state, prior_inflight, packets_lost, current_time);
-    BBRCheckFullPipe(bbr_state, rs_is_app_limited);
+    BBRUpdateBtlBw(bbr_state, path_x);
+    BBRCheckCyclePhase(bbr_state, packets_lost, current_time);
+    BBRCheckFullPipe(bbr_state, path_x->last_bw_estimate_path_limited);
     BBRCheckDrain(bbr_state, bytes_in_transit, current_time);
     BBRUpdateRTprop(bbr_state, rtt_sample, current_time);
-    BBRCheckProbeRTT(bbr_state, path_x, delivered, bytes_in_transit, current_time);
+    BBRCheckProbeRTT(bbr_state, path_x, bytes_in_transit, current_time);
 }
 
 void BBRSetPacingRateWithGain(picoquic_bbr_state_t* bbr_state, double pacing_gain)
@@ -535,12 +537,11 @@ void BBRHandleRestartFromIdle(picoquic_bbr_state_t* bbr_state, uint64_t bytes_in
  *  - the delivery rate sample has been computed.
  */
 
-void  BBRUpdateOnACK(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t delivered, uint64_t packet_delivered, 
-    uint64_t delivery_rate, int rs_is_app_limited, 
-    uint64_t rtt_sample, uint64_t bytes_in_transit, uint64_t prior_in_flight, uint64_t packets_lost, uint64_t bytes_delivered,
+void  BBRUpdateOnACK(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x,   
+    uint64_t rtt_sample, uint64_t bytes_in_transit, uint64_t packets_lost, uint64_t bytes_delivered,
     uint64_t current_time)
 {
-    BBRUpdateModelAndState(bbr_state, path_x, delivered, packet_delivered, delivery_rate, rs_is_app_limited, rtt_sample, bytes_in_transit, prior_in_flight,
+    BBRUpdateModelAndState(bbr_state, path_x, rtt_sample, bytes_in_transit,
         packets_lost, current_time);
     BBRUpdateControlParameters(bbr_state, path_x, bytes_in_transit, packets_lost, bytes_delivered);
 }
@@ -595,7 +596,6 @@ static void picoquic_bbr_notify(
     uint64_t current_time)
 {
 #ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(rtt_measurement);
     UNREFERENCED_PARAMETER(lost_packet_number);
 #endif
     picoquic_bbr_state_t* bbr_state = (picoquic_bbr_state_t*)path_x->congestion_alg_state;
@@ -618,9 +618,8 @@ static void picoquic_bbr_notify(
             break;
         case picoquic_congestion_notification_bw_measurement:
             /* RTT measurements will happen after the bandwidth is estimated */
-            BBRUpdateOnACK(bbr_state, path_x, path_x->delivered, path_x->delivered_last_packet,
-                path_x->bandwidth_estimate, path_x->last_bw_estimate_path_limited,
-                rtt_measurement, path_x->bytes_in_transit, bbr_state->prior_in_flight, 0 /* packets_lost */, bbr_state->bytes_delivered,
+            BBRUpdateOnACK(bbr_state, path_x, 
+                rtt_measurement, path_x->bytes_in_transit, 0 /* packets_lost */, bbr_state->bytes_delivered,
                 current_time);
             /* Remember the number in flight before the next ACK -- TODO: update after send instead. */
             bbr_state->prior_in_flight = path_x->bytes_in_transit;
