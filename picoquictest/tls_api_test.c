@@ -6156,6 +6156,16 @@ int fastcc_jitter_test()
     return congestion_control_test(picoquic_fastcc_algorithm, 3650000, 5000);
 }
 
+int bbr_test()
+{
+    return congestion_control_test(picoquic_bbr_algorithm, 3600000, 0);
+}
+
+int bbr_jitter_test()
+{
+    return congestion_control_test(picoquic_bbr_algorithm, 3650000, 5000);
+}
+
 /* This is similar to the long rtt test, but operating at a higher speed.
  * We allow for loss simulation and jitter simulation to simulate wi-fi + satellite.
  * Also, we want to check overhead targets, such as ratio of data bytes over control bytes.
@@ -6230,7 +6240,7 @@ int satellite_basic_test()
 
 int satellite_loss_test()
 {
-    return satellite_test_one(picoquic_dcubic_algorithm, 10000000, 0, 1);
+    return satellite_test_one(picoquic_dcubic_algorithm, 10300000, 0, 1);
 }
 
 /* Test that different CID length are properly supported */

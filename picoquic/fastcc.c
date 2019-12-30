@@ -102,7 +102,7 @@ void fastcc_process_cc_event(picoquic_cnx_t * cnx,
             if (path_x->cwin < PICOQUIC_CWIN_MINIMUM) {
                 path_x->cwin = PICOQUIC_CWIN_MINIMUM;
             }
-            picoquic_update_pacing_data(path_x, 1.0);
+            picoquic_update_pacing_data(path_x);
         }
     }
 }
@@ -143,7 +143,7 @@ void picoquic_fastcc_notify(
                 /* Count the bytes since last RTT measurement */
                 fastcc_state->nb_bytes_ack_since_rtt += nb_bytes_acknowledged;
                 /* Compute pacing data. */
-                picoquic_update_pacing_data(path_x, 1.0);
+                picoquic_update_pacing_data(path_x);
             }
             break;  
         case picoquic_congestion_notification_ecn_ec:

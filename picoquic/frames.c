@@ -2056,6 +2056,8 @@ void picoquic_estimate_path_bandwidth(picoquic_path_t* path_x, uint64_t send_tim
                 path_x->delivered_last = path_x->delivered;
                 path_x->delivered_time_last = delivery_time;
                 path_x->delivered_sent_last = send_time;
+                path_x->delivered_last_packet = delivered_prior;
+                path_x->last_bw_estimate_path_limited = rs_is_path_limited;
                 if (path_x->delivered > path_x->delivered_limited_index) {
                     path_x->delivered_limited_index = 0;
                 }
@@ -2146,7 +2148,7 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, u
 }
 
 static picoquic_packet_t* picoquic_update_rtt(picoquic_cnx_t* cnx, uint64_t largest,
-    uint64_t current_time, uint64_t ack_delay, uint64_t remote_time_stamp, picoquic_packet_context_enum pc)
+    uint64_t current_time, uint64_t ack_delay, uint64_t remote_time_stamp, picoquic_packet_context_enum pc, int * is_new_ack)
 {
     picoquic_packet_context_t * pkt_ctx = &cnx->pkt_ctx[pc];
     picoquic_packet_t* packet = pkt_ctx->retransmit_oldest;
@@ -2156,6 +2158,7 @@ static picoquic_packet_t* picoquic_update_rtt(picoquic_cnx_t* cnx, uint64_t larg
         pkt_ctx->highest_acknowledged = largest;
         pkt_ctx->highest_acknowledged_time = current_time;
         pkt_ctx->ack_of_ack_requested = 0;
+        *is_new_ack = 1;
 
         if (ack_delay < PICOQUIC_ACK_DELAY_MAX) {
             /* if the ACK is reasonably recent, use it to update the RTT */
@@ -2181,6 +2184,9 @@ static picoquic_packet_t* picoquic_update_rtt(picoquic_cnx_t* cnx, uint64_t larg
                     picoquic_update_path_rtt(cnx, old_path, packet->send_time, pkt_ctx, current_time, ack_delay, remote_time_stamp);
                 }
             }
+        }
+        else {
+            *is_new_ack = 0;
         }
     }
 
@@ -2643,7 +2649,8 @@ uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
         bytes += consumed;
 
         /* Attempt to update the RTT */
-        picoquic_packet_t* top_packet = picoquic_update_rtt(cnx, largest, current_time, ack_delay, remote_time_stamp, pc);
+        int is_new_ack = 0;
+        picoquic_packet_t* top_packet = picoquic_update_rtt(cnx, largest, current_time, ack_delay, remote_time_stamp, pc, &is_new_ack);
         picoquic_packet_t* p_retransmitted_previous = cnx->pkt_ctx[pc].retransmitted_newest;
         uint64_t largest_sent_time = 0;
         uint64_t delivered_prior = 0;
@@ -2716,10 +2723,16 @@ uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
 
         picoquic_dequeue_old_retransmitted_packets(cnx, pc);
 
-        if (old_path != NULL) {
+        if (old_path != NULL && is_new_ack) {
             picoquic_estimate_path_bandwidth(old_path, largest_sent_time, 
                 delivered_prior, delivered_time_prior, delivered_sent_prior,
                 (has_1wd) ? remote_time_stamp : current_time, current_time, rs_is_path_limited);
+
+            if (cnx->congestion_alg != NULL) {
+                cnx->congestion_alg->alg_notify(cnx, old_path,
+                    picoquic_congestion_notification_bw_measurement,
+                    old_path->rtt_sample, old_path->one_way_delay_sample, 0, 0, current_time);
+            }
         }
     }
 

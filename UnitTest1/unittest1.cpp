@@ -957,6 +957,20 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(bbr)
+        {
+            int ret = bbr_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(bbr_jitter)
+        {
+            int ret = bbr_jitter_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(long_rtt)
         {
             int ret = long_rtt_test();
