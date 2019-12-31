@@ -6156,6 +6156,96 @@ int fastcc_jitter_test()
     return congestion_control_test(picoquic_fastcc_algorithm, 3650000, 5000);
 }
 
+int bbr_test()
+{
+    return congestion_control_test(picoquic_bbr_algorithm, 3600000, 0);
+}
+
+int bbr_jitter_test()
+{
+    return congestion_control_test(picoquic_bbr_algorithm, 3650000, 5000);
+}
+
+int bbr_long_test()
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+
+    /* Set the congestion algorithm to specified value. Also, request a packet trace */
+    if (ret == 0) {
+        picoquic_set_default_congestion_algorithm(test_ctx->qserver, picoquic_bbr_algorithm);
+        picoquic_set_congestion_algorithm(test_ctx->cnx_client, picoquic_bbr_algorithm);
+
+        test_ctx->c_to_s_link->jitter = 0;
+        test_ctx->s_to_c_link->jitter = 0;
+        test_ctx->c_to_s_link->picosec_per_byte = 8000000; /* Simulate 1 Mbps */
+
+        picoquic_set_cc_log(test_ctx->qserver, ".");
+
+        ret = tls_api_one_scenario_body_connect(test_ctx, &simulated_time, 0, 0, 0);
+        if (ret != 0)
+        {
+            DBG_PRINTF("Connection loop returns %d\n", ret);
+        }
+    }
+
+    /* Prepare to send data */
+    if (ret == 0) {
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_sustained, sizeof(test_scenario_sustained));
+
+        if (ret != 0)
+        {
+            DBG_PRINTF("Init send receive scenario returns %d\n", ret);
+        }
+    }
+
+    /* Run a data sending loop for 1024 rounds, causing BBR to detect a low RTT */
+    if (ret == 0) {
+        ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 1024);
+
+        if (ret != 0)
+        {
+            DBG_PRINTF("Data sending loop returns %d\n", ret);
+        }
+    }
+
+    /* Increase the RTT from the previous value, which will cause the bandwidth to drop unless RTT is reset  */
+    if (ret == 0) {
+        test_ctx->c_to_s_link->microsec_latency = 5 * test_ctx->c_to_s_link->microsec_latency;
+        test_ctx->s_to_c_link->microsec_latency = 5 * test_ctx->s_to_c_link->microsec_latency;
+    }
+    
+    
+    /* Perform a data sending loop */
+    if (ret == 0) {
+        ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 0);
+
+        if (ret != 0)
+        {
+            DBG_PRINTF("Data sending loop returns %d\n", ret);
+        }
+    }
+
+    if (ret == 0) {
+        ret = tls_api_one_scenario_body_verify(test_ctx, &simulated_time, 13000000);
+    }
+
+    /* Free the resource, which will close the log file. */
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
 /* This is similar to the long rtt test, but operating at a higher speed.
  * We allow for loss simulation and jitter simulation to simulate wi-fi + satellite.
  * Also, we want to check overhead targets, such as ratio of data bytes over control bytes.
@@ -6230,7 +6320,7 @@ int satellite_basic_test()
 
 int satellite_loss_test()
 {
-    return satellite_test_one(picoquic_dcubic_algorithm, 10000000, 0, 1);
+    return satellite_test_one(picoquic_dcubic_algorithm, 10300000, 0, 1);
 }
 
 /* Test that different CID length are properly supported */

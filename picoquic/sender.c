@@ -673,6 +673,33 @@ int picoquic_is_sending_authorized_by_pacing(picoquic_path_t * path_x, uint64_t 
     return ret;
 }
 
+/* Reset the pacing data after recomputing the pacing rate
+ */
+void picoquic_update_pacing_rate(picoquic_path_t* path_x, double pacing_rate, uint64_t quantum)
+{
+    double packet_time = (double)path_x->send_mtu / pacing_rate;
+
+    path_x->pacing_packet_time_nanosec = (uint64_t)(packet_time * 1000000000.0);
+
+    if (path_x->pacing_packet_time_nanosec > 1000000000) {
+        path_x->pacing_packet_time_nanosec = 1000000000;
+    }
+
+    if (path_x->pacing_packet_time_nanosec <= 0) {
+        path_x->pacing_packet_time_nanosec = 1;
+        path_x->pacing_packet_time_microsec = 1;
+    }
+    else {
+        path_x->pacing_packet_time_microsec = (path_x->pacing_packet_time_nanosec + 1023ull) / 1000;
+    }
+
+    path_x->pacing_bucket_max = (uint64_t)(((double)quantum/ pacing_rate) * 1000000000.0);
+
+    if (path_x->pacing_bucket_nanosec > path_x->pacing_bucket_max) {
+        path_x->pacing_bucket_nanosec = path_x->pacing_bucket_max;
+    }
+}
+
 /*
  * Reset the pacing data after CWIN is updated.
  * The max bucket is set to contain at least 2 packets more than 1/8th of the congestion window.
@@ -680,37 +707,30 @@ int picoquic_is_sending_authorized_by_pacing(picoquic_path_t * path_x, uint64_t 
 
 void picoquic_update_pacing_data(picoquic_path_t * path_x)
 {
-    uint64_t rtt_nanosec = (path_x->smoothed_rtt << 10);
+    uint64_t rtt_nanosec = path_x->smoothed_rtt * 1000;
 
-    if (path_x->cwin < ((uint64_t)path_x->send_mtu)*8) {
+    if ((path_x->cwin < ((uint64_t)path_x->send_mtu) * 8) || rtt_nanosec <= 1000) {
         /* Small windows, should only relie on ACK clocking */
         path_x->pacing_bucket_max = rtt_nanosec;
         path_x->pacing_packet_time_nanosec = 1;
         path_x->pacing_packet_time_microsec = 1;
 
-    }
-    else {
-
-        path_x->pacing_packet_time_nanosec = (rtt_nanosec * ((uint64_t)path_x->send_mtu)) / path_x->cwin;
-
-        if (path_x->pacing_packet_time_nanosec <= 0) {
-            path_x->pacing_packet_time_nanosec = 1;
-            path_x->pacing_packet_time_microsec = 1;
-        }
-        else {
-            path_x->pacing_packet_time_microsec = (path_x->pacing_packet_time_nanosec + 1023ull) >> 10;
-        }
-
-        path_x->pacing_bucket_max = (rtt_nanosec / 4);
-        if (path_x->pacing_bucket_max < 2ull * path_x->pacing_packet_time_nanosec) {
-            path_x->pacing_bucket_max = 2ull * path_x->pacing_packet_time_nanosec;
-        } else if (path_x->pacing_bucket_max > 16ull * path_x->pacing_packet_time_nanosec) {
-            path_x->pacing_bucket_max = 16ull * path_x->pacing_packet_time_nanosec;
-        }
-
         if (path_x->pacing_bucket_nanosec > path_x->pacing_bucket_max) {
             path_x->pacing_bucket_nanosec = path_x->pacing_bucket_max;
         }
+    }
+    else {
+        double pacing_rate = ((double)path_x->cwin / (double)rtt_nanosec) * 1000000000.0;
+        uint64_t quantum = path_x->cwin / 4;
+
+        if (quantum < 2ull * path_x->send_mtu) {
+            quantum = 2ull * path_x->send_mtu;
+        }
+        else if (quantum > 16ull * path_x->send_mtu) {
+            quantum = 16ull * path_x->send_mtu;
+        }
+
+        picoquic_update_pacing_rate(path_x, pacing_rate, quantum);
     }
 }
 
@@ -902,6 +922,10 @@ void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet_t
     if (ret == 0 && length > 0) {
         packet->length = length;
         cnx->pkt_ctx[packet->pc].send_sequence++;
+        packet->delivered_prior = path_x->delivered_last;
+        packet->delivered_time_prior = path_x->delivered_time_last;
+        packet->delivered_sent_prior = path_x->delivered_sent_last;
+        packet->delivered_app_limited = (path_x->delivered_limited_index != 0);
 
         switch (packet->ptype) {
         case picoquic_packet_version_negotiation:
@@ -2858,6 +2882,9 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                         }
 
                         if (length <= header_length) {
+                            /* Mark the bandwidth estimation as application limited */
+                            path_x->delivered_limited_index = path_x->delivered;
+                            /* Notify the peer if something is blocked */
                             ret = picoquic_prepare_blocked_frames(cnx, &bytes[length],
                                 send_buffer_min_max - checksum_overhead - length, &data_bytes);
                             if (ret == 0) {
