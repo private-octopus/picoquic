@@ -67,6 +67,7 @@ extern "C" {
 
 #define PICOQUIC_BANDWIDTH_ESTIMATE_MAX 10000000000ull /* 10 GB per second */
 #define PICOQUIC_BANDWIDTH_TIME_INTERVAL_MIN 1000
+#define PICOQUIC_BANDWIDTH_MEDIUM 1250000 /* 10 Mbps, threshold for coalescing 10 packets per ACK */
 
 #define PICOQUIC_SPURIOUS_RETRANSMIT_DELAY_MAX 1000000ull /* one second */
 
