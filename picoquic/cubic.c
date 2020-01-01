@@ -53,20 +53,18 @@ static void picoquic_cubic_init(picoquic_path_t* path_x)
     path_x->congestion_alg_state = (void*)cubic_state;
     if (cubic_state != NULL) {
         memset(&cubic_state->rtt_filter, 0, sizeof(picoquic_min_max_rtt_t));
-        if (path_x->congestion_alg_state != NULL) {
-            memset(cubic_state, 0, sizeof(picoquic_cubic_state_t));
-            cubic_state->alg_state = picoquic_cubic_alg_slow_start;
-            cubic_state->ssthresh = (uint64_t)((int64_t)-1);
-            cubic_state->W_last_max = (double)cubic_state->ssthresh / (double)path_x->send_mtu;
-            cubic_state->W_max = cubic_state->W_last_max;
-            cubic_state->C = 0.4;
-            cubic_state->beta = 7.0 / 8.0;
-            cubic_state->start_of_epoch = 0;
-            cubic_state->previous_start_of_epoch = 0;
-            cubic_state->W_reno = PICOQUIC_CWIN_INITIAL;
-            cubic_state->recovery_sequence = 0;
-            path_x->cwin = PICOQUIC_CWIN_INITIAL;
-        }
+        memset(cubic_state, 0, sizeof(picoquic_cubic_state_t));
+        cubic_state->alg_state = picoquic_cubic_alg_slow_start;
+        cubic_state->ssthresh = (uint64_t)((int64_t)-1);
+        cubic_state->W_last_max = (double)cubic_state->ssthresh / (double)path_x->send_mtu;
+        cubic_state->W_max = cubic_state->W_last_max;
+        cubic_state->C = 0.4;
+        cubic_state->beta = 7.0 / 8.0;
+        cubic_state->start_of_epoch = 0;
+        cubic_state->previous_start_of_epoch = 0;
+        cubic_state->W_reno = PICOQUIC_CWIN_INITIAL;
+        cubic_state->recovery_sequence = 0;
+        path_x->cwin = PICOQUIC_CWIN_INITIAL;
     }
 }
 
@@ -224,14 +222,7 @@ static void picoquic_cubic_notify(
             switch (notification) {
             case picoquic_congestion_notification_acknowledgement:
                 if (picoquic_cc_was_cwin_blocked(cnx, cubic_state->last_sequence_blocked)) {
-                    if (path_x->smoothed_rtt <= PICOQUIC_TARGET_RENO_RTT || cubic_state->rtt_filter.past_threshold) {
-                        path_x->cwin += nb_bytes_acknowledged;
-                    }
-                    else {
-                        double delta = ((double)path_x->smoothed_rtt) / ((double)PICOQUIC_TARGET_RENO_RTT);
-                        delta *= (double)nb_bytes_acknowledged;
-                        path_x->cwin += (uint64_t)delta;
-                    }
+                    picoquic_hystart_increase(path_x, &cubic_state->rtt_filter, nb_bytes_acknowledged);
                     /* if cnx->cwin exceeds SSTHRESH, exit and go to CA */
                     if (path_x->cwin >= cubic_state->ssthresh) {
                         cubic_state->W_reno = ((double)path_x->cwin) / 2.0;

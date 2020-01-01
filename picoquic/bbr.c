@@ -93,7 +93,27 @@ in the "BBR state" structure, with a few exceptions:
 * Compute bytes_delivered by summing all calls to ACK(bytes) before
   the call to RTT update.
 
+* In the Probe BW mode, the draft suggests cwnd_gain = 2. We observed
+  that this results in queue sizes of 2, which is too high, so we
+  reset that to 1.125.
+
 The "packet" variables are defined in the picoquic_packet_t.
+
+Early testing showed that BBR startup phase requires several more RTT
+than the Hystart process used in modern versions of Reno or Cubic. BBR
+only ramps up the data rate after the first bandwidth measurement is
+available, 2*RTT after start, while Reno or Cubic start ramping up
+after just 1 RTT. BBR only exits startup if three consecutive RTT
+pass without significant BW measurement increase, which not only
+adds delay but also creates big queues as data is sent at 2.89 times
+the bottleneck rate. This is a tradeoff: longer search for bandwidth in
+slow start is less likely to stop too early because of transient
+issues, but one high bandwidth and long delay links this translates
+to long delays and a big batch of packet losses.
+
+This BBR implementation addresses these issues by switching to
+Hystart instead of startup if the RTT is above the Reno target of
+100 ms. 
 
 */
 
@@ -101,7 +121,8 @@ typedef enum {
     picoquic_bbr_alg_startup = 0,
     picoquic_bbr_alg_drain,
     picoquic_bbr_alg_probe_bw,
-    picoquic_bbr_alg_probe_rtt
+    picoquic_bbr_alg_probe_rtt,
+    picoquic_bbr_alg_startup_long_rtt
 } picoquic_bbr_alg_state_t;
 
 #define BBR_BTL_BW_FILTER_LENGTH 10
@@ -132,6 +153,7 @@ typedef struct st_picoquic_bbr_state_t {
     uint64_t prior_in_flight;
     uint64_t bytes_delivered;
     uint64_t send_quantum;
+    picoquic_min_max_rtt_t rtt_filter;
     uint64_t target_cwnd;
     double pacing_gain;
     double cwnd_gain;
@@ -140,12 +162,28 @@ typedef struct st_picoquic_bbr_state_t {
     int cycle_index;
     int full_bw_count;
     int filled_pipe : 1;
+#if 0
+    int filled_queue : 1;
+#endif
     int round_start : 1;
     int rt_prop_expired : 1;
     int probe_rtt_round_done : 1;
     int idle_restart : 1;
     int packet_conservation : 1;
 } picoquic_bbr_state_t;
+
+void BBREnterStartupLongRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x)
+{
+    uint64_t cwnd = PICOQUIC_CWIN_INITIAL;
+    bbr_state->state = picoquic_bbr_alg_startup_long_rtt;
+
+    if (path_x->smoothed_rtt > PICOQUIC_TARGET_RENO_RTT) {
+        cwnd = (uint64_t)((double)cwnd * (double)path_x->smoothed_rtt / (double)PICOQUIC_TARGET_RENO_RTT);
+    }
+    if (cwnd > path_x->cwin) {
+        path_x->cwin = cwnd;
+    }
+}
 
 void BBREnterStartup(picoquic_bbr_state_t* bbr_state)
 {
@@ -346,6 +384,23 @@ void BBRCheckDrain(picoquic_bbr_state_t* bbr_state, uint64_t bytes_in_transit, u
     }
 }
 
+void BBRExitStartupLongRtt(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time)
+{
+    /* Reset the round filter so it will start at current time */
+    bbr_state->next_round_delivered = path_x->delivered;
+    bbr_state->round_count++;
+    bbr_state->round_start = 1;
+    /* Set the filled pipe indicator */
+    bbr_state->full_bw = bbr_state->btl_bw;
+    bbr_state->full_bw_count = 3;
+    bbr_state->filled_pipe = 1;
+    /* Enter drain */
+    BBREnterDrain(bbr_state);
+    /* If there were just few bytes in transit, enter probe */
+    if (path_x->bytes_in_transit <= BBRInflight(bbr_state, 1.0)) {
+        BBREnterProbeBW(bbr_state, current_time);
+    }
+}
 
 void BBREnterProbeRTT(picoquic_bbr_state_t* bbr_state)
 {
@@ -615,20 +670,58 @@ static void picoquic_bbr_notify(
         case picoquic_congestion_notification_spurious_repeat:
             break;
         case picoquic_congestion_notification_rtt_measurement:
+#if 0
+            if (bbr_state->state == picoquic_bbr_alg_startup && path_x->smoothed_rtt > PICOQUIC_TARGET_RENO_RTT){
+                if (picoquic_hystart_test(&bbr_state->rtt_filter, (cnx->is_one_way_delay_enabled) ? one_way_delay : rtt_measurement,
+                    cnx->path[0]->pacing_packet_time_microsec, current_time, cnx->is_one_way_delay_enabled)) {
+                    bbr_state->filled_queue = 1;
+                }
+                else if (bbr_state->rtt_filter.past_threshold) {
+                    bbr_state->pacing_gain = BBR_HIGH_GAIN;
+                    bbr_state->cwnd_gain = BBR_HIGH_GAIN;
+                }
+                else {
+                    bbr_state->pacing_gain = BBR_HIGH_GAIN + (double)path_x->smoothed_rtt / (double)PICOQUIC_TARGET_RENO_RTT;
+                    bbr_state->cwnd_gain = bbr_state->pacing_gain;
+                }
+            }
+#endif
+            if (bbr_state->state == picoquic_bbr_alg_startup && path_x->smoothed_rtt > PICOQUIC_TARGET_RENO_RTT) {
+                BBREnterStartupLongRTT(bbr_state, path_x);
+            }
+            if (bbr_state->state == picoquic_bbr_alg_startup_long_rtt) {
+                if (picoquic_hystart_test(&bbr_state->rtt_filter, (cnx->is_one_way_delay_enabled) ? one_way_delay : rtt_measurement,
+                    cnx->path[0]->pacing_packet_time_microsec, current_time, cnx->is_one_way_delay_enabled)) {
+                    BBRExitStartupLongRtt(bbr_state, path_x, current_time);
+                }
+            }
             break;
         case picoquic_congestion_notification_bw_measurement:
             /* RTT measurements will happen after the bandwidth is estimated */
-            BBRUpdateOnACK(bbr_state, path_x, 
-                rtt_measurement, path_x->bytes_in_transit, 0 /* packets_lost */, bbr_state->bytes_delivered,
-                current_time);
-            /* Remember the number in flight before the next ACK -- TODO: update after send instead. */
-            bbr_state->prior_in_flight = path_x->bytes_in_transit;
-            /* Reset the number of bytes delivered */
-            bbr_state->bytes_delivered = 0;
+            if (bbr_state->state == picoquic_bbr_alg_startup_long_rtt) {
+                BBRUpdateBtlBw(bbr_state, path_x);
+                if (rtt_measurement <= bbr_state->rt_prop) {
+                    bbr_state->rt_prop = rtt_measurement;
+                    bbr_state->rt_prop_stamp = current_time;
+                }
 
-            if (bbr_state->pacing_rate > 0) {
-                /* Set the pacing rate in picoquic sender */
-                picoquic_update_pacing_rate(path_x, bbr_state->pacing_rate, bbr_state->send_quantum);
+                picoquic_hystart_increase(path_x, &bbr_state->rtt_filter, bbr_state->bytes_delivered);
+                bbr_state->bytes_delivered = 0;
+
+                picoquic_update_pacing_data(path_x);
+            } else {
+                BBRUpdateOnACK(bbr_state, path_x,
+                    rtt_measurement, path_x->bytes_in_transit, 0 /* packets_lost */, bbr_state->bytes_delivered,
+                    current_time);
+                /* Remember the number in flight before the next ACK -- TODO: update after send instead. */
+                bbr_state->prior_in_flight = path_x->bytes_in_transit;
+                /* Reset the number of bytes delivered */
+                bbr_state->bytes_delivered = 0;
+
+                if (bbr_state->pacing_rate > 0) {
+                    /* Set the pacing rate in picoquic sender */
+                    picoquic_update_pacing_rate(path_x, bbr_state->pacing_rate, bbr_state->send_quantum);
+                }
             }
             break;
         case picoquic_congestion_notification_cwin_blocked:

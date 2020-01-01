@@ -44,6 +44,8 @@ void picoquic_filter_rtt_min_max(picoquic_min_max_rtt_t* rtt_track, uint64_t rtt
 
 int picoquic_hystart_test(picoquic_min_max_rtt_t* rtt_track, uint64_t rtt_measurement, uint64_t packet_time, uint64_t current_time, int is_one_way_delay_enabled);
 
+void picoquic_hystart_increase(picoquic_path_t* path_x, picoquic_min_max_rtt_t* rtt_filter, uint64_t nb_delivered);
+
 int picoquic_cc_was_cwin_blocked(picoquic_cnx_t* cnx, uint64_t last_sequence_blocked);
 
 #endif

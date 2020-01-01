@@ -2929,7 +2929,7 @@ int picoquic_is_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t 
 
         if (pc == picoquic_packet_context_application && pkt_ctx->first_sack_item.end_of_sack_range > 128 && !pkt_ctx->ack_after_fin) {
             if (cnx->path[0]->rtt_min > PICOQUIC_TARGET_RENO_RTT &&
-                cnx->path[0]->receive_rate_estimate > 10000000) {
+                cnx->path[0]->receive_rate_estimate > PICOQUIC_BANDWIDTH_MEDIUM) {
                 ack_gap = 10;
             }
             else if (pkt_ctx->first_sack_item.next_sack == NULL) {

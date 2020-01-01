@@ -6315,12 +6315,12 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, uint64_t 
 
 int satellite_basic_test()
 {
-    return satellite_test_one(picoquic_dcubic_algorithm, 7500000, 0, 0);
+    return satellite_test_one(picoquic_bbr_algorithm, 6600000, 0, 0);
 }
 
 int satellite_loss_test()
 {
-    return satellite_test_one(picoquic_dcubic_algorithm, 10300000, 0, 1);
+    return satellite_test_one(picoquic_bbr_algorithm, 10000000, 0, 1);
 }
 
 /* Test that different CID length are properly supported */
