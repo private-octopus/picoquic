@@ -135,7 +135,7 @@ typedef enum {
 #define BBR_PACING_RATE_LOW 150000.0 /* 150000 B/s = 1.2 Mbps */
 #define BBR_PACING_RATE_MEDIUM 3000000.0 /* 3000000 B/s = 24 Mbps */
 
-static const double bbr_pacing_gain_cycle[] = { 1.25, 0.75, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0 };
+static const double bbr_pacing_gain_cycle[] = { 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.25, 0.75};
 static const int bbr_gain_cycle_len = (int)(sizeof(bbr_pacing_gain_cycle) / sizeof(double));
 
 typedef struct st_picoquic_bbr_state_t {
@@ -328,8 +328,15 @@ int BBRIsNextCyclePhase(picoquic_bbr_state_t* bbr_state, uint64_t prior_in_fligh
 void BBRAdvanceCyclePhase(picoquic_bbr_state_t* bbr_state, uint64_t current_time)
 {
     bbr_state->cycle_stamp = current_time;
-    bbr_state->cycle_index = (bbr_state->cycle_index + 1) % bbr_gain_cycle_len;
-
+    bbr_state->cycle_index++;
+    if (bbr_state->cycle_index > bbr_gain_cycle_len) {
+        int start = (int)(bbr_state->rt_prop / PICOQUIC_TARGET_RENO_RTT);
+        if (start > 5) {
+            start = 5;
+        }
+        bbr_state->cycle_index = start;
+    }
+   
     bbr_state->pacing_gain = bbr_pacing_gain_cycle[bbr_state->cycle_index];
 }
 
@@ -362,7 +369,7 @@ void BBREnterProbeBW(picoquic_bbr_state_t* bbr_state, uint64_t current_time)
     bbr_state->state = picoquic_bbr_alg_probe_bw;
     bbr_state->pacing_gain = 1.0;
     bbr_state->cwnd_gain = 1.125;
-    bbr_state->cycle_index = bbr_gain_cycle_len - 1 - 3;  /* TODO: BBRGainCycleLen - 1 - random_int_in_range(0, 6); */
+    bbr_state->cycle_index = 4;  /* TODO: random_int_in_range(0, 6); */
     BBRAdvanceCyclePhase(bbr_state, current_time);
 }
 
@@ -670,22 +677,6 @@ static void picoquic_bbr_notify(
         case picoquic_congestion_notification_spurious_repeat:
             break;
         case picoquic_congestion_notification_rtt_measurement:
-#if 0
-            if (bbr_state->state == picoquic_bbr_alg_startup && path_x->smoothed_rtt > PICOQUIC_TARGET_RENO_RTT){
-                if (picoquic_hystart_test(&bbr_state->rtt_filter, (cnx->is_one_way_delay_enabled) ? one_way_delay : rtt_measurement,
-                    cnx->path[0]->pacing_packet_time_microsec, current_time, cnx->is_one_way_delay_enabled)) {
-                    bbr_state->filled_queue = 1;
-                }
-                else if (bbr_state->rtt_filter.past_threshold) {
-                    bbr_state->pacing_gain = BBR_HIGH_GAIN;
-                    bbr_state->cwnd_gain = BBR_HIGH_GAIN;
-                }
-                else {
-                    bbr_state->pacing_gain = BBR_HIGH_GAIN + (double)path_x->smoothed_rtt / (double)PICOQUIC_TARGET_RENO_RTT;
-                    bbr_state->cwnd_gain = bbr_state->pacing_gain;
-                }
-            }
-#endif
             if (bbr_state->state == picoquic_bbr_alg_startup && path_x->smoothed_rtt > PICOQUIC_TARGET_RENO_RTT) {
                 BBREnterStartupLongRTT(bbr_state, path_x);
             }

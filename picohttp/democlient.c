@@ -446,7 +446,11 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
                             break;
                         }
                         else if (available_data > 0) {
-                            if (ctx->no_disk == 0) {
+                            if (stream_ctx->stream_state.current_frame_read <= available_data &&
+                                stream_ctx->stream_state.current_frame_length >= 0x100000) {
+                                ret = picoquic_open_flow_control(cnx, stream_id, stream_ctx->stream_state.current_frame_length);
+                            }
+                            if (ret == 0 && ctx->no_disk == 0) {
                                 ret = (fwrite(bytes, 1, available_data, stream_ctx->F) > 0) ? 0 : -1;
                             }
                             stream_ctx->received_length += available_data;

@@ -1168,6 +1168,18 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(h3zero_satellite) {
+            int ret = h3zero_satellite_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(h09_satellite) {
+            int ret = h09_satellite_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(qinq_rh) {
             int ret = qinq_rh_test();
 

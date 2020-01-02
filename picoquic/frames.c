@@ -2129,7 +2129,13 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, u
         }
 
         if (remote_time_stamp > 0) {
-            int64_t time_stamp_local = remote_time_stamp - ack_delay + old_path->phase_delay + cnx->start_time;
+            int64_t time_stamp_local = remote_time_stamp - ack_delay + cnx->start_time;
+
+            if (cnx->client_mode) {
+                time_stamp_local += old_path->phase_delay;
+            } else {
+                time_stamp_local -= old_path->phase_delay;
+            }
 
             one_way_delay = time_stamp_local - send_time;
             if (one_way_delay < 0) {

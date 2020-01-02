@@ -767,7 +767,8 @@ uint64_t demo_server_test_time_from_esni_rr(char const * esni_rr_file)
 }
 
 static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server_callback_fn, void * server_param,
-    int do_esni, const picoquic_demo_stream_desc_t * demo_scenario, size_t nb_scenario, size_t const * demo_length)
+    int do_esni, const picoquic_demo_stream_desc_t * demo_scenario, size_t nb_scenario, size_t const * demo_length,
+    int do_sat, uint64_t completion_target)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -780,6 +781,7 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
     /* Locate the esni record and key files */
     char test_server_esni_key_file[512];
     char test_server_esni_rr_file[512];
+    picoquic_tp_t client_parameters;
 
     if (do_esni) {
         ret = picoquic_get_input_path(test_server_esni_key_file, sizeof(test_server_esni_key_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_ESNI_KEY);
@@ -799,6 +801,22 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
         ret = tls_api_init_ctx(&test_ctx,
             PICOQUIC_INTERNAL_TEST_VERSION_1,
             PICOQUIC_TEST_SNI, alpn, &simulated_time, NULL, NULL, 0, 1, 0);
+
+        if (ret == 0 && do_sat) {
+            /* For the satellite test, set long delays, 10 Mbps one way, 1 Mbps the other way */
+            const uint64_t satellite_latency = 300000;
+            test_ctx->c_to_s_link->microsec_latency = satellite_latency;
+            test_ctx->c_to_s_link->picosec_per_byte = 8000000;
+            test_ctx->s_to_c_link->microsec_latency = satellite_latency;
+            test_ctx->s_to_c_link->picosec_per_byte = 800000;
+            picoquic_set_default_congestion_algorithm(test_ctx->qserver, picoquic_bbr_algorithm);
+            picoquic_set_congestion_algorithm(test_ctx->cnx_client, picoquic_bbr_algorithm);
+            picoquic_set_cc_log(test_ctx->qserver, ".");
+            memset(&client_parameters, 0, sizeof(picoquic_tp_t));
+            picoquic_init_transport_parameters(&client_parameters, 1);
+            client_parameters.enable_one_way_delay = 1;
+            picoquic_set_transport_parameters(test_ctx->cnx_client, &client_parameters);
+        }
     }
 
     if (ret != 0) {
@@ -914,6 +932,13 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
     }
 #endif
 
+    if (ret == 0 && completion_target != 0) {
+        if (simulated_time > completion_target) {
+            DBG_PRINTF("Test uses %llu microsec instead of %llu", simulated_time, completion_target);
+            ret = -1;
+        }
+    }
+
     picoquic_demo_client_delete_context(&callback_ctx);
 
     if (test_ctx != NULL) {
@@ -926,25 +951,25 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
 
 int h3zero_server_test()
 {
-    return demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, NULL, 0, demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length);
+    return demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, NULL, 0, demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length, 0, 0);
 }
 
 int h09_server_test()
 {
-    return demo_server_test(PICOHTTP_ALPN_HQ_LATEST, picoquic_h09_server_callback, NULL, 0, demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length);
+    return demo_server_test(PICOHTTP_ALPN_HQ_LATEST, picoquic_h09_server_callback, NULL, 0, demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length, 0, 0);
 }
 
 int generic_server_test()
 {
-    char const * alpn_09 = PICOHTTP_ALPN_HQ_LATEST;
-    char const * alpn_3 = PICOHTTP_ALPN_H3_LATEST;
-    int ret = demo_server_test(alpn_09, picoquic_demo_server_callback, NULL, 0, demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length);
+    char const* alpn_09 = PICOHTTP_ALPN_HQ_LATEST;
+    char const* alpn_3 = PICOHTTP_ALPN_H3_LATEST;
+    int ret = demo_server_test(alpn_09, picoquic_demo_server_callback, NULL, 0, demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length, 0, 0);
 
     if (ret != 0) {
         DBG_PRINTF("Generic server test fails for %s\n", alpn_09);
     }
     else {
-        ret = demo_server_test(alpn_3, picoquic_demo_server_callback, NULL, 0, demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length);
+        ret = demo_server_test(alpn_3, picoquic_demo_server_callback, NULL, 0, demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length, 0, 0);
 
         if (ret != 0) {
             DBG_PRINTF("Generic server test fails for %s\n", alpn_3);
@@ -956,7 +981,7 @@ int generic_server_test()
 
 int esni_test()
 {
-    return demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, NULL, 1, demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length);
+    return demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, NULL, 1, demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length, 0, 0);
 }
 
 /* Test the server side post API */
@@ -1092,12 +1117,12 @@ static size_t const post_test_stream_length[] = { 2345 };
 
 int h3zero_post_test()
 {
-    return demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, (void *) &ping_test_param, 0, post_test_scenario, nb_post_test_scenario, post_test_stream_length);
+    return demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, (void*)&ping_test_param, 0, post_test_scenario, nb_post_test_scenario, post_test_stream_length, 0, 0);
 }
 
 int h09_post_test()
 {
-    return demo_server_test(PICOHTTP_ALPN_HQ_LATEST, picoquic_h09_server_callback, (void*)& ping_test_param, 0, post_test_scenario, nb_post_test_scenario, post_test_stream_length);
+    return demo_server_test(PICOHTTP_ALPN_HQ_LATEST, picoquic_h09_server_callback, (void*)&ping_test_param, 0, post_test_scenario, nb_post_test_scenario, post_test_stream_length, 0, 0);
 }
 
 int demo_file_sanitize_test()
@@ -1252,21 +1277,37 @@ int demo_server_file_test()
 
     ret = serve_file_test_set_param(&file_param, file_name_buffer, sizeof(file_name_buffer));
 
-    if (ret == 0 && (ret = demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, (void*)&file_param, 0, file_test_scenario, nb_file_test_scenario, demo_file_test_stream_length)) != 0) {
+    if (ret == 0 && (ret = demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, (void*)&file_param, 0, file_test_scenario, nb_file_test_scenario, demo_file_test_stream_length, 0, 0)) != 0) {
         DBG_PRINTF("H3 server (%s) file test fails, ret = %d\n", PICOHTTP_ALPN_H3_LATEST, ret);
     }
 
-    if (ret == 0 && (ret = demo_server_test(PICOHTTP_ALPN_HQ_LATEST, picoquic_h09_server_callback, (void*)&file_param, 0, file_test_scenario, nb_file_test_scenario, demo_file_test_stream_length)) != 0) {
+    if (ret == 0 && (ret = demo_server_test(PICOHTTP_ALPN_HQ_LATEST, picoquic_h09_server_callback, (void*)&file_param, 0, file_test_scenario, nb_file_test_scenario, demo_file_test_stream_length, 0, 0)) != 0) {
         DBG_PRINTF("H09 server (%s) file test fails, ret = %d\n", PICOHTTP_ALPN_HQ_LATEST, ret);
     }
 
-    if (ret == 0 && (ret = demo_server_test(PICOHTTP_ALPN_H3_LATEST, picoquic_demo_server_callback, (void*)&file_param, 0, file_test_scenario, nb_file_test_scenario, demo_file_test_stream_length)) != 0) {
+    if (ret == 0 && (ret = demo_server_test(PICOHTTP_ALPN_H3_LATEST, picoquic_demo_server_callback, (void*)&file_param, 0, file_test_scenario, nb_file_test_scenario, demo_file_test_stream_length, 0, 0)) != 0) {
         DBG_PRINTF("Demo server (%s) file test fails, ret = %d\n", PICOHTTP_ALPN_H3_LATEST, ret);
     }
 
-    if (ret == 0 && (ret = demo_server_test(PICOHTTP_ALPN_HQ_LATEST, picoquic_demo_server_callback, (void*)&file_param, 0, file_test_scenario, nb_file_test_scenario, demo_test_stream_length)) != 0) {
+    if (ret == 0 && (ret = demo_server_test(PICOHTTP_ALPN_HQ_LATEST, picoquic_demo_server_callback, (void*)&file_param, 0, file_test_scenario, nb_file_test_scenario, demo_test_stream_length, 0, 0)) != 0) {
         DBG_PRINTF("Demo server (%s) file test fails, ret = %d\n", PICOHTTP_ALPN_HQ_LATEST, ret);
     }
 
     return ret;
+}
+
+static const picoquic_demo_stream_desc_t satellite_test_scenario[] = {
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/10000000", "bin10M.txt", 0, 0 }
+};
+
+static const size_t nb_satellite_test_scenario = sizeof(satellite_test_scenario) / sizeof(picoquic_demo_stream_desc_t);
+
+int h3zero_satellite_test()
+{
+    return demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, NULL, 0, satellite_test_scenario, nb_satellite_test_scenario, demo_test_stream_length, 1, 10700000);
+}
+
+int h09_satellite_test()
+{
+    return demo_server_test(PICOHTTP_ALPN_HQ_LATEST, picoquic_h09_server_callback, NULL, 0, satellite_test_scenario, nb_satellite_test_scenario, demo_test_stream_length, 1, 10750000);
 }
