@@ -162,9 +162,6 @@ typedef struct st_picoquic_bbr_state_t {
     int cycle_index;
     int full_bw_count;
     int filled_pipe : 1;
-#if 0
-    int filled_queue : 1;
-#endif
     int round_start : 1;
     int rt_prop_expired : 1;
     int probe_rtt_round_done : 1;
@@ -329,7 +326,7 @@ void BBRAdvanceCyclePhase(picoquic_bbr_state_t* bbr_state, uint64_t current_time
 {
     bbr_state->cycle_stamp = current_time;
     bbr_state->cycle_index++;
-    if (bbr_state->cycle_index > bbr_gain_cycle_len) {
+    if (bbr_state->cycle_index >= bbr_gain_cycle_len) {
         int start = (int)(bbr_state->rt_prop / PICOQUIC_TARGET_RENO_RTT);
         if (start > 5) {
             start = 5;
@@ -599,7 +596,7 @@ void BBRHandleRestartFromIdle(picoquic_bbr_state_t* bbr_state, uint64_t bytes_in
  *  - the delivery rate sample has been computed.
  */
 
-void  BBRUpdateOnACK(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x,   
+void  BBRUpdateOnACK(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x,
     uint64_t rtt_sample, uint64_t bytes_in_transit, uint64_t packets_lost, uint64_t bytes_delivered,
     uint64_t current_time)
 {

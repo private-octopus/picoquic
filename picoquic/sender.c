@@ -678,6 +678,7 @@ int picoquic_is_sending_authorized_by_pacing(picoquic_path_t * path_x, uint64_t 
 void picoquic_update_pacing_rate(picoquic_path_t* path_x, double pacing_rate, uint64_t quantum)
 {
     double packet_time = (double)path_x->send_mtu / pacing_rate;
+    double quantum_time = (double)quantum / pacing_rate;
 
     path_x->pacing_packet_time_nanosec = (uint64_t)(packet_time * 1000000000.0);
 
@@ -693,7 +694,10 @@ void picoquic_update_pacing_rate(picoquic_path_t* path_x, double pacing_rate, ui
         path_x->pacing_packet_time_microsec = (path_x->pacing_packet_time_nanosec + 1023ull) / 1000;
     }
 
-    path_x->pacing_bucket_max = (uint64_t)(((double)quantum/ pacing_rate) * 1000000000.0);
+    path_x->pacing_bucket_max = (uint64_t)(quantum_time * 1000000000.0);
+    if (path_x->pacing_bucket_max <= 0) {
+        path_x->pacing_bucket_max = 16 * path_x->pacing_packet_time_nanosec;
+    }
 
     if (path_x->pacing_bucket_nanosec > path_x->pacing_bucket_max) {
         path_x->pacing_bucket_nanosec = path_x->pacing_bucket_max;
