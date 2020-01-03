@@ -199,22 +199,28 @@ int picoquic_open_flow_control(picoquic_cnx_t* cnx, uint64_t stream_id, uint64_t
     size_t consumed = 0;
     picoquic_stream_head_t* stream = picoquic_find_stream(cnx, stream_id);
 
-    if (stream == NULL) {
-        ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
-    }
-    else {
-        ret = picoquic_prepare_max_stream_data_frame(stream, buffer, sizeof(buffer), stream->maxdata_local + expected_data_size, &consumed);
-    }
+    if (cnx->cnx_state == picoquic_state_ready) {
+        /* Only send the update in ready state, so that the misc frame is not picked by the
+         * wrong transport context.
+         * TODO: find way to queue the update so it is only sent as 0RTT or 1RTT packet.
+         */
+        if (stream == NULL) {
+            ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
+        }
+        else {
+            ret = picoquic_prepare_max_stream_data_frame(stream, buffer, sizeof(buffer), stream->maxdata_local + expected_data_size, &consumed);
+        }
 
-    if (ret == 0) {
-        length += consumed;
-        consumed = 0;
-        ret = picoquic_prepare_max_data_frame(cnx, expected_data_size, buffer + length, sizeof(buffer) - length, &consumed);
-    }
+        if (ret == 0) {
+            length += consumed;
+            consumed = 0;
+            ret = picoquic_prepare_max_data_frame(cnx, expected_data_size, buffer + length, sizeof(buffer) - length, &consumed);
+        }
 
-    if (ret == 0) {
-        length += consumed;
-        ret = picoquic_queue_misc_frame(cnx, buffer, length);
+        if (ret == 0) {
+            length += consumed;
+            ret = picoquic_queue_misc_frame(cnx, buffer, length);
+        }
     }
 
     return ret;

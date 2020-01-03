@@ -221,7 +221,7 @@ int quic_server(const char* server_name, int server_port,
             qserver->mtu_max = mtu_max;
 
             if (cc_algorithm == NULL) {
-                cc_algorithm = picoquic_cubic_algorithm;
+                cc_algorithm = picoquic_bbr_algorithm;
             }
             picoquic_set_default_congestion_algorithm(qserver, cc_algorithm);
 
@@ -638,7 +638,7 @@ int quic_client(const char* ip_address_text, int server_port,
             ret = -1;
         } else {
             if (cc_algorithm == NULL) {
-                cc_algorithm = picoquic_cubic_algorithm;
+                cc_algorithm = picoquic_bbr_algorithm;
             }
             picoquic_set_default_congestion_algorithm(qclient, cc_algorithm);
 
@@ -711,6 +711,7 @@ int quic_client(const char* ip_address_text, int server_port,
 
                 /* Requires TP grease, for interop tests */
                 cnx_client->grease_transport_parameters = 1;
+                cnx_client->local_parameters.enable_one_way_delay = 1;
 
                 if (callback_ctx.tp != NULL) {
                     picoquic_set_transport_parameters(cnx_client, callback_ctx.tp);
