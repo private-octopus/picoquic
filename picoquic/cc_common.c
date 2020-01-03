@@ -72,31 +72,30 @@ int picoquic_hystart_test(picoquic_min_max_rtt_t* rtt_track, uint64_t rtt_measur
         rtt_track->last_rtt_sample_time = current_time;
 
         if (rtt_track->is_init) {
-            uint64_t delta_rtt = 0;
+            uint64_t delta_max;
 
             if (rtt_track->rtt_filtered_min == 0 ||
                 rtt_track->rtt_filtered_min > rtt_track->sample_max) {
                 rtt_track->rtt_filtered_min = rtt_track->sample_max;
             }
+            delta_max = rtt_track->rtt_filtered_min / 4;
+
+            if (is_one_way_delay_enabled && delta_max > PICOQUIC_TARGET_RENO_RTT / 2) {
+                delta_max = PICOQUIC_TARGET_RENO_RTT / 2;
+            }
 
             if (rtt_track->sample_min > rtt_track->rtt_filtered_min) {
-                delta_rtt = rtt_track->sample_min - rtt_track->rtt_filtered_min;
                 rtt_track->past_threshold = 1;
-                if (delta_rtt * 4 > rtt_track->rtt_filtered_min  ||
-                    (is_one_way_delay_enabled && delta_rtt > PICOQUIC_TARGET_RENO_RTT/4)){
+                if (rtt_track->sample_min > rtt_track->rtt_filtered_min + delta_max) {
                     rtt_track->nb_rtt_excess++;
                     if (rtt_track->nb_rtt_excess >= PICOQUIC_MIN_MAX_RTT_SCOPE) {
                         /* RTT increased too much, get out of slow start! */
                         ret = 1;
                     }
                 }
-                else if (is_one_way_delay_enabled &&
-                    delta_rtt * 4 > PICOQUIC_TARGET_RENO_RTT / 2) {
-
-                }
-                else {
-                    rtt_track->nb_rtt_excess = 0;
-                }
+            }
+            else {
+                rtt_track->nb_rtt_excess = 0;
             }
         }
     }

@@ -56,7 +56,9 @@ static const picoquic_test_def_t test_table[] = {
     { "h09_post", h09_post_test},
     { "demo_file_sanitize", demo_file_sanitize_test },
     { "demo_file_access", demo_file_access_test },
-    { "demo_server_file", demo_server_file_test }
+    { "demo_server_file", demo_server_file_test },
+    { "h3zero_satellite", h3zero_satellite_test },
+    { "h09_satellite", h09_satellite_test }
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);

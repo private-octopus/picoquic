@@ -829,7 +829,7 @@ size_t picoquic_log_generic_close_frame(FILE* F, uint8_t* bytes, size_t bytes_ma
         fprintf(F, "    %s, Error 0x%04x, ", picoquic_log_frame_names(ftype), (uint16_t)error_code);
         if (ftype == picoquic_frame_type_connection_close && 
             offending_frame_type != 0) {
-            fprintf(F, "Offending frame %llx\n",
+            fprintf(F, "Offending frame 0x%llx\n",
                 (unsigned long long)offending_frame_type);
         }
         fprintf(F, "Reason length %llu\n", (unsigned long long)string_length);
