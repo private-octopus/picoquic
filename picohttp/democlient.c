@@ -340,7 +340,7 @@ static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
 
         if (ret == 0) {
             ret = picoquic_add_to_stream_with_ctx(cnx, stream_ctx->stream_id, buffer, request_length,
-                (post_size > 0)?0:1, stream_ctx);
+                (post_size > 0 || (ctx->delay_fin && stream_id == 0))?0:1, stream_ctx);
             if (post_size > 0) {
                 ret = picoquic_mark_active_stream(cnx, stream_id, 1, stream_ctx);
             }
@@ -591,13 +591,15 @@ int picoquic_demo_client_initialize_context(
     picoquic_demo_stream_desc_t const * demo_stream,
 	size_t nb_demo_streams,
 	char const * alpn,
-    int no_disk)
+    int no_disk, int delay_fin)
 {
     memset(ctx, 0, sizeof(picoquic_demo_callback_ctx_t));
     ctx->demo_stream = demo_stream;
     ctx->nb_demo_streams = nb_demo_streams;
     ctx->alpn = picoquic_parse_alpn(alpn);
     ctx->no_disk = no_disk;
+    ctx->delay_fin = delay_fin;
+
     return 0;
 }
 

@@ -607,7 +607,7 @@ int quic_client(const char* ip_address_text, int server_port,
             return -1;
         }
         else {
-            ret = picoquic_demo_client_initialize_context(&callback_ctx, client_sc, client_sc_nb, alpn, no_disk);
+            ret = picoquic_demo_client_initialize_context(&callback_ctx, client_sc, client_sc_nb, alpn, no_disk, 0);
         }
     }
 

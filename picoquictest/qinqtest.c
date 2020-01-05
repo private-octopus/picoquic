@@ -783,7 +783,7 @@ int qinq_e2e_basic_test()
                 return -1;
             }
             else {
-                ret = picoquic_demo_client_initialize_context(&test_ctx->callback_ctx, client_sc, client_sc_nb, PICOHTTP_ALPN_H3_LATEST, 0);
+                ret = picoquic_demo_client_initialize_context(&test_ctx->callback_ctx, client_sc, client_sc_nb, PICOHTTP_ALPN_H3_LATEST, 0, 0);
             }
         }
 
