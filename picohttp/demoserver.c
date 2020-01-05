@@ -964,108 +964,111 @@ int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
     }
 
     /* if FIN present, process request through http 0.9 */
-    if (fin_or_event == picoquic_callback_stream_fin || (stream_ctx->method == 0 && stream_ctx->ps.hq.status == picohttp_server_stream_status_crlf)) {
-        char buf[1024];
-        uint8_t post_response[512];
-        int is_bad_request = 0;
-        int is_not_found = 0;
+    if (stream_ctx->ps.hq.status != picohttp_server_stream_status_finished) {
+        if (fin_or_event == picoquic_callback_stream_fin || (stream_ctx->method == 0 && stream_ctx->ps.hq.status == picohttp_server_stream_status_crlf)) {
+            char buf[1024];
+            uint8_t post_response[512];
+            int is_bad_request = 0;
+            int is_not_found = 0;
 
-        stream_ctx->frame[stream_ctx->ps.hq.command_length] = 0;
-        stream_ctx->ps.hq.status = picohttp_server_stream_status_finished;
-
-        if (cnx->quic->F_log != NULL) {
-            fprintf(cnx->quic->F_log, "%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
-            fprintf(cnx->quic->F_log, "Server CB, Stream: %" PRIu64 ", Processing command: %s\n",
-                stream_id, strip_endofline(buf, sizeof(buf), (char*)& stream_ctx->frame));
-        }
-
-        if (stream_ctx->method == 0){
-            if (demo_server_parse_path(stream_ctx->ps.hq.path, stream_ctx->ps.hq.path_length, &stream_ctx->echo_length, 
-                &stream_ctx->F, app_ctx->web_folder)) {
-                is_not_found = 1;
-            }
-        }
-        else if (stream_ctx->method == 1) {
-            if (stream_ctx->post_received == 0) {
-                int path_item = picohttp_find_path_item(stream_ctx->ps.hq.path, stream_ctx->ps.hq.path_length, app_ctx->path_table, app_ctx->path_table_nb);
-                if (path_item >= 0) {
-                    /* TODO-POST: move this code to post-fin callback.*/
-                    stream_ctx->path_callback = app_ctx->path_table[path_item].path_callback;
-                    stream_ctx->path_callback(cnx, (uint8_t*)stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, picohttp_callback_post, stream_ctx);
-                }
-            }
-
-            if (stream_ctx->path_callback != NULL) {
-                stream_ctx->response_length = stream_ctx->path_callback(cnx, post_response, sizeof(post_response), picohttp_callback_post_fin, stream_ctx);
-                if (stream_ctx->response_length == 0) {
-                    is_bad_request = 1;
-                }
-            }
-            else {
-                /* Prepare generic POST response */
-                (void)picoquic_sprintf((char*)post_response, sizeof(post_response), &stream_ctx->response_length, demo_server_post_response_page, (int)stream_ctx->post_received);
-            }
-            stream_ctx->echo_length = 0;
-        }
-        else {
-            is_bad_request = 1;
-        }
-
-        if (is_bad_request || is_not_found) {
-            /* If this is HTTP1, send an HTTP1 OK message, with the appropriate content type */
-            if (stream_ctx->ps.hq.proto != 0) {
-                size_t header_length = 0;
-
-                picoquic_sprintf(buf, sizeof(buf), &header_length, "%s\r\n\r\n",
-                    (is_not_found) ? "404 Not Found" : "400 Bad Request");
-                picoquic_add_to_stream_with_ctx(cnx, stream_id, (uint8_t *)buf, header_length, 0, (void*)stream_ctx);
-            }
+            stream_ctx->frame[stream_ctx->ps.hq.command_length] = 0;
+            stream_ctx->ps.hq.status = picohttp_server_stream_status_finished;
 
             if (cnx->quic->F_log != NULL) {
                 fprintf(cnx->quic->F_log, "%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
-                fprintf(cnx->quic->F_log, "Server CB, Stream: %" PRIu64 ", Reply with bad request message after command: %s\n",
-                    stream_id, strip_endofline(buf, sizeof(buf), (char*)& stream_ctx->frame));
+                fprintf(cnx->quic->F_log, "Server CB, Stream: %" PRIu64 ", Processing command: %s\n",
+                    stream_id, strip_endofline(buf, sizeof(buf), (char*)&stream_ctx->frame));
             }
 
-            stream_ctx->response_length = strlen(bad_request_message);
-            (void)picoquic_add_to_stream_with_ctx(cnx, stream_ctx->stream_id, (const uint8_t*)bad_request_message,
-                stream_ctx->response_length, 1, (void*)stream_ctx);
-        } else {
-            /* If this is HTTP1, send an HTTP1 OK message, with the appropriate content type */
-            if (stream_ctx->ps.hq.proto != 0) {
-                size_t header_length = 0;
+            if (stream_ctx->method == 0) {
+                if (demo_server_parse_path(stream_ctx->ps.hq.path, stream_ctx->ps.hq.path_length, &stream_ctx->echo_length,
+                    &stream_ctx->F, app_ctx->web_folder)) {
+                    is_not_found = 1;
+                }
+            }
+            else if (stream_ctx->method == 1) {
+                if (stream_ctx->post_received == 0) {
+                    int path_item = picohttp_find_path_item(stream_ctx->ps.hq.path, stream_ctx->ps.hq.path_length, app_ctx->path_table, app_ctx->path_table_nb);
+                    if (path_item >= 0) {
+                        /* TODO-POST: move this code to post-fin callback.*/
+                        stream_ctx->path_callback = app_ctx->path_table[path_item].path_callback;
+                        stream_ctx->path_callback(cnx, (uint8_t*)stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, picohttp_callback_post, stream_ctx);
+                    }
+                }
 
-                picoquic_sprintf(buf, sizeof(buf), &header_length, "200 OK\r\nContent-Type:%s\r\n\r\n",
-                    (stream_ctx->echo_length == 0 || stream_ctx->method == 1) ? "text/plain" : "test/html");
-                picoquic_add_to_stream_with_ctx(cnx, stream_id, (uint8_t *)buf, header_length, 0, (void*)stream_ctx);
+                if (stream_ctx->path_callback != NULL) {
+                    stream_ctx->response_length = stream_ctx->path_callback(cnx, post_response, sizeof(post_response), picohttp_callback_post_fin, stream_ctx);
+                    if (stream_ctx->response_length == 0) {
+                        is_bad_request = 1;
+                    }
+                }
+                else {
+                    /* Prepare generic POST response */
+                    (void)picoquic_sprintf((char*)post_response, sizeof(post_response), &stream_ctx->response_length, demo_server_post_response_page, (int)stream_ctx->post_received);
+                }
+                stream_ctx->echo_length = 0;
             }
-            
-            if (stream_ctx->response_length == 0 && stream_ctx->echo_length == 0) {
-                /* Send the canned index.html response */
-                stream_ctx->response_length = strlen(demo_server_default_page);
-                picoquic_add_to_stream_with_ctx(cnx, stream_id, (uint8_t*)demo_server_default_page,
-                    stream_ctx->response_length, 1, (void*)stream_ctx);
+            else {
+                is_bad_request = 1;
             }
-            else if (stream_ctx->echo_length == 0 && stream_ctx->response_length < sizeof(post_response)) {
-                /* For short responses, post directly.
-                 * TODO-POST: for long responses, we expect that the application
-                 * will have set a data provision shortcut. Verify that! */
-                picoquic_add_to_stream_with_ctx(cnx, stream_id, post_response,
+
+            if (is_bad_request || is_not_found) {
+                /* If this is HTTP1, send an HTTP1 OK message, with the appropriate content type */
+                if (stream_ctx->ps.hq.proto != 0) {
+                    size_t header_length = 0;
+
+                    picoquic_sprintf(buf, sizeof(buf), &header_length, "%s\r\n\r\n",
+                        (is_not_found) ? "404 Not Found" : "400 Bad Request");
+                    picoquic_add_to_stream_with_ctx(cnx, stream_id, (uint8_t*)buf, header_length, 0, (void*)stream_ctx);
+                }
+
+                if (cnx->quic->F_log != NULL) {
+                    fprintf(cnx->quic->F_log, "%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
+                    fprintf(cnx->quic->F_log, "Server CB, Stream: %" PRIu64 ", Reply with bad request message after command: %s\n",
+                        stream_id, strip_endofline(buf, sizeof(buf), (char*)&stream_ctx->frame));
+                }
+
+                stream_ctx->response_length = strlen(bad_request_message);
+                (void)picoquic_add_to_stream_with_ctx(cnx, stream_ctx->stream_id, (const uint8_t*)bad_request_message,
                     stream_ctx->response_length, 1, (void*)stream_ctx);
             }
             else {
-                picoquic_mark_active_stream(cnx, stream_ctx->stream_id, 1, stream_ctx);
+                /* If this is HTTP1, send an HTTP1 OK message, with the appropriate content type */
+                if (stream_ctx->ps.hq.proto != 0) {
+                    size_t header_length = 0;
+
+                    picoquic_sprintf(buf, sizeof(buf), &header_length, "200 OK\r\nContent-Type:%s\r\n\r\n",
+                        (stream_ctx->echo_length == 0 || stream_ctx->method == 1) ? "text/plain" : "test/html");
+                    picoquic_add_to_stream_with_ctx(cnx, stream_id, (uint8_t*)buf, header_length, 0, (void*)stream_ctx);
+                }
+
+                if (stream_ctx->response_length == 0 && stream_ctx->echo_length == 0) {
+                    /* Send the canned index.html response */
+                    stream_ctx->response_length = strlen(demo_server_default_page);
+                    picoquic_add_to_stream_with_ctx(cnx, stream_id, (uint8_t*)demo_server_default_page,
+                        stream_ctx->response_length, 1, (void*)stream_ctx);
+                }
+                else if (stream_ctx->echo_length == 0 && stream_ctx->response_length < sizeof(post_response)) {
+                    /* For short responses, post directly.
+                     * TODO-POST: for long responses, we expect that the application
+                     * will have set a data provision shortcut. Verify that! */
+                    picoquic_add_to_stream_with_ctx(cnx, stream_id, post_response,
+                        stream_ctx->response_length, 1, (void*)stream_ctx);
+                }
+                else {
+                    picoquic_mark_active_stream(cnx, stream_ctx->stream_id, 1, stream_ctx);
+                }
             }
         }
-    }
-    else if (stream_ctx->response_length == 0 && stream_ctx->echo_length == 0 && stream_ctx->method == 0) {
-        char buf[256];
-        stream_ctx->frame[stream_ctx->ps.hq.command_length] = 0;
-        if (cnx->quic->F_log != NULL) {
-            fprintf(cnx->quic->F_log, "%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
-            fprintf(cnx->quic->F_log, "Server CB, Stream: %" PRIu64 ", Partial command: %s\n",
-                stream_id, strip_endofline(buf, sizeof(buf), (char*)&stream_ctx->frame));
-            fflush(cnx->quic->F_log);
+        else if (stream_ctx->response_length == 0 && stream_ctx->echo_length == 0 && stream_ctx->method == 0) {
+            char buf[256];
+            stream_ctx->frame[stream_ctx->ps.hq.command_length] = 0;
+            if (cnx->quic->F_log != NULL) {
+                fprintf(cnx->quic->F_log, "%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
+                fprintf(cnx->quic->F_log, "Server CB, Stream: %" PRIu64 ", Partial command: %s\n",
+                    stream_id, strip_endofline(buf, sizeof(buf), (char*)&stream_ctx->frame));
+                fflush(cnx->quic->F_log);
+            }
         }
     }
 
