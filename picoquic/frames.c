@@ -1408,6 +1408,7 @@ typedef struct st_picoquic_stream_data_buffer_argument_t {
     size_t length; /* number of bytes that the application commits to write */
     int is_fin; /* Whether this is the end of the stream */
     int is_still_active; /* whether the stream is still considered active after this call */
+    uint8_t* app_buffer; /* buffer provided to the application. */
 } picoquic_stream_data_buffer_argument_t;
 
 static size_t picoquic_encode_length_of_stream_frame(
@@ -1460,6 +1461,7 @@ uint8_t* picoquic_provide_stream_data_buffer(void* context, size_t length, int i
             data_ctx->byte_index, data_ctx->byte_space, length, &start_index);
 
         buffer = data_ctx->bytes + data_ctx->byte_index;
+        data_ctx->app_buffer = buffer;
     }
 
     return buffer;
@@ -1560,6 +1562,8 @@ int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head_t* s
                 stream_data_context.byte_space = bytes_max - byte_index;
                 stream_data_context.length = 0;
                 stream_data_context.is_fin = 0;
+                stream_data_context.is_still_active = 0;
+                stream_data_context.app_buffer = NULL;
 
                 if ((cnx->callback_fn)(cnx, stream->stream_id, (uint8_t*)&stream_data_context, allowed_space, picoquic_callback_prepare_to_send, cnx->callback_ctx, stream->app_stream_ctx) != 0) {
                     /* something went wrong */
@@ -1570,6 +1574,16 @@ int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head_t* s
                     stream->sent_offset += stream_data_context.length;
                     cnx->data_sent += stream_data_context.length;
                     *consumed = byte_index;
+
+                    if (stream_data_context.length > 0) {
+                        if (stream_data_context.app_buffer == NULL ||
+                            stream_data_context.app_buffer < bytes ||
+                            stream_data_context.app_buffer >= bytes + bytes_max) {
+                            long long delta_buf = (long long)(stream_data_context.app_buffer - bytes);
+                            DBG_PRINTF("Stream data buffer corruption, delta = %lld\n", delta_buf);
+                            ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
+                        }
+                    }
 
                     if (stream_data_context.is_fin) {
                         stream->is_active = 0;
