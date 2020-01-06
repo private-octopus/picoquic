@@ -194,6 +194,8 @@ int quic_server(const char* server_name, int server_port,
     uint64_t loop_count_time = 0;
     int nb_loops = 0;
 
+    printf("Starting picoquic server version %s\n", PICOQUIC_VERSION);
+
     memset(&picoquic_file_param, 0, sizeof(picohttp_server_parameters_t));
     picoquic_file_param.web_folder = web_folder;
 

@@ -863,9 +863,14 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
 
     if (delay_fin) {
         /* Trigger sending the first stream requests, then send a separate FIN on stream 0 */
-        time_out = simulated_time + 1000000;
-        while (ret == 0 && test_ctx->cnx_client->data_sent == 0) {
+        int is_sent = 0;
+        time_out = simulated_time + 3000000;
+        while (ret == 0 && simulated_time < time_out) {
             ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
+            if (!is_sent && test_ctx->cnx_client->data_sent > 0) {
+                is_sent = 1;
+                time_out = simulated_time + 250;
+            }
         }
         if (ret == 0) {
             picoquic_add_to_stream_with_ctx(test_ctx->cnx_client, 0, NULL, 0, 1, callback_ctx.first_stream);
