@@ -30,6 +30,13 @@ void picoformat_16(uint8_t* bytes, uint16_t n16)
     bytes[1] = (uint8_t)(n16);
 }
 
+void picoformat_24(uint8_t* bytes, uint32_t n24)
+{
+    bytes[0] = (uint8_t)(n24 >> 16);
+    bytes[1] = (uint8_t)(n24 >> 8);
+    bytes[2] = (uint8_t)(n24);
+}
+
 void picoformat_32(uint8_t* bytes, uint32_t n32)
 {
     bytes[0] = (uint8_t)(n32 >> 24);

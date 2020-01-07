@@ -918,6 +918,7 @@ void picoquic_reinsert_by_wake_time(picoquic_quic_t* quic, picoquic_cnx_t* cnx, 
 
 /* Integer formatting functions */
 void picoformat_16(uint8_t* bytes, uint16_t n16);
+void picoformat_24(uint8_t* bytes, uint32_t n24);
 void picoformat_32(uint8_t* bytes, uint32_t n32);
 void picoformat_64(uint8_t* bytes, uint64_t n64);
 
@@ -951,6 +952,7 @@ size_t picoquic_create_packet_header(
     uint64_t sequence_number,
     picoquic_connection_id_t * dest_cnxid,
     picoquic_connection_id_t * srce_cnxid,
+    size_t header_length,
     uint8_t* bytes,
     size_t* pn_offset,
     size_t* pn_length);

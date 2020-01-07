@@ -53,6 +53,7 @@ int intformattest()
     uint64_t decoded;
     uint64_t parsed;
     uint32_t test32;
+    uint32_t test24;
     uint16_t test16;
     uint64_t test64;
 
@@ -76,6 +77,31 @@ int intformattest()
             else {
                 parsed = PICOPARSE_16(bytes);
                 if (parsed != test16) {
+                    ret = -1;
+                }
+            }
+        }
+
+        /* Next test with 24 bits macros */
+        for (size_t i = 0; ret == 0 && i < nb_test_numbers; i++) {
+
+            test24 = (uint32_t)(test_number[i]&0xFFFFFF);
+            if (new_encoding == 0) {
+                picoformat_24(bytes, test24);
+            }
+            else {
+                uint8_t* next_byte = picoquic_frames_uint24_encode(bytes, bytes + sizeof(bytes), test24);
+                if ((next_byte - bytes) != 3) {
+                    ret = -1;
+                }
+            }
+            decoded = decode_number(bytes, 3);
+            if (decoded != test24) {
+                ret = -1;
+            }
+            else {
+                parsed = PICOPARSE_24(bytes);
+                if (parsed != test24) {
                     ret = -1;
                 }
             }
