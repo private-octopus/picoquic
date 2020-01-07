@@ -576,12 +576,26 @@ uint8_t* picoquic_frames_uint8_encode(uint8_t* bytes, const uint8_t* bytes_max, 
 
     return (bytes);
 }
+
 uint8_t* picoquic_frames_uint16_encode(uint8_t* bytes, const uint8_t* bytes_max, uint16_t n)
 {
     if (bytes + sizeof(n) > bytes_max) {
         bytes = NULL;
     }
     else {
+        *bytes++ = (uint8_t)(n >> 8);
+        *bytes++ = (uint8_t)n;
+    }
+    return (bytes);
+}
+
+uint8_t* picoquic_frames_uint24_encode(uint8_t* bytes, const uint8_t* bytes_max, uint32_t n)
+{
+    if (bytes + 3 > bytes_max) {
+        bytes = NULL;
+    }
+    else {
+        *bytes++ = (uint8_t)(n >> 16);
         *bytes++ = (uint8_t)(n >> 8);
         *bytes++ = (uint8_t)n;
     }

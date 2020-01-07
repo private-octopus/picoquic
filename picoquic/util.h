@@ -143,6 +143,7 @@ uint8_t* picoquic_frames_varint_encode(uint8_t* bytes, const uint8_t* bytes_max,
 uint8_t* picoquic_frames_varlen_encode(uint8_t* bytes, const uint8_t* bytes_max, size_t n);
 uint8_t* picoquic_frames_uint8_encode(uint8_t* bytes, const uint8_t* bytes_max, uint8_t n);
 uint8_t* picoquic_frames_uint16_encode(uint8_t* bytes, const uint8_t* bytes_max, uint16_t n);
+uint8_t* picoquic_frames_uint24_encode(uint8_t * bytes, const uint8_t * bytes_max, uint32_t n);
 uint8_t* picoquic_frames_uint32_encode(uint8_t* bytes, const uint8_t* bytes_max, uint32_t n);
 uint8_t* picoquic_frames_uint64_encode(uint8_t* bytes, const uint8_t* bytes_max, uint64_t n);
 uint8_t* picoquic_frames_l_v_encode(uint8_t* bytes, const uint8_t* bytes_max, size_t l, const uint8_t* v);

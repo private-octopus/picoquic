@@ -391,6 +391,7 @@ size_t picoquic_create_packet_header(
     uint64_t sequence_number,
     picoquic_connection_id_t * remote_cnxid,
     picoquic_connection_id_t * local_cnxid,
+    size_t header_length,
     uint8_t* bytes,
     size_t* pn_offset,
     size_t* pn_length)
@@ -406,15 +407,33 @@ size_t picoquic_create_packet_header(
     if (packet_type == picoquic_packet_1rtt_protected) {
         /* Create a short packet -- using 32 bit sequence numbers for now */
         uint8_t K = (cnx->key_phase_enc) ? 0x04 : 0;
-        const uint8_t C = 0x43; /* default packet length to 4 bytes; set the QUIC bit */
+        const uint8_t C = 0x40; /* set the QUIC bit */
+        size_t pn_l = 4;  /* default packet length to 4 bytes */
         length = 0;
         bytes[length++] = (K | C | picoquic_spin_function_table[cnx->spin_policy].spinbit_outgoing(cnx));
         length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, dest_cnx_id);
 
         *pn_offset = length;
-        *pn_length = 4;
-        picoformat_32(&bytes[length], (uint32_t)sequence_number);
-        length += 4;
+        if (header_length > length && header_length < length + 4) {
+            pn_l = header_length - length;
+        }
+        *pn_length = pn_l;
+        bytes[0] |= (pn_l - 1);
+        switch (pn_l) {
+        case 1:
+            bytes[length] = (uint8_t)sequence_number;
+            break;
+        case 2:
+            picoformat_16(&bytes[length], (uint16_t)sequence_number);
+            break;
+        case 3:
+            picoformat_24(&bytes[length], (uint32_t)sequence_number);
+            break;
+        default:
+            picoformat_32(&bytes[length], (uint32_t)sequence_number);
+            break;
+        }
+        length += pn_l;
     }
     else {
         /* Create a long packet -- default encode PP=3 */
@@ -493,8 +512,24 @@ size_t picoquic_predict_packet_header_length(
     }
 
     if (packet_type == picoquic_packet_1rtt_protected) {
+        /* Predict acceptable length of packet number */
+        uint8_t pn_l = 4;
+        int64_t delta = cnx->pkt_ctx[picoquic_packet_context_application].send_sequence;
+        if (cnx->pkt_ctx[picoquic_packet_context_application].retransmit_oldest != NULL) {
+            delta -= cnx->pkt_ctx[picoquic_packet_context_application].retransmit_oldest->sequence_number;
+        }
+        if (delta < 262144) {
+            pn_l = 3;
+            if (cnx->pkt_ctx[picoquic_packet_context_application].send_sequence < 1024) {
+                pn_l = 2;
+                if (cnx->pkt_ctx[picoquic_packet_context_application].send_sequence < 16) {
+                    pn_l = 1;
+                }
+            }
+        }
+
         /* Compute length of a short packet header */
-        header_length = 1 + cnx->path[0]->remote_cnxid.id_len + 4;
+        header_length = 1 + cnx->path[0]->remote_cnxid.id_len + pn_l;
     }
     else {
         /* Compute length of a long packet header */
@@ -564,7 +599,7 @@ static size_t picoquic_protect_packet(picoquic_cnx_t* cnx,
 
     /* Create the packet header just before encrypting the content */
     h_length = picoquic_create_packet_header(cnx, ptype,
-        sequence_number, remote_cnxid, local_cnxid, send_buffer, &pn_offset, &pn_length);
+        sequence_number, remote_cnxid, local_cnxid, header_length, send_buffer, &pn_offset, &pn_length);
     if (ptype == picoquic_packet_1rtt_protected) {
         if (remote_cnxid != &path_x->remote_cnxid) {
             /* Packet is sent to a different CID: reset the spin bit and loss bit Q to 0 */
@@ -630,13 +665,15 @@ static size_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     {
         /* This is always true, as use pn_length = 4 */
         uint8_t mask_bytes[5] = { 0, 0, 0, 0, 0 };
+        uint8_t pn_l;
 
         picoquic_pn_encrypt(pn_enc, send_buffer + sample_offset, mask_bytes, mask_bytes, 5);
-        /* Decode the first byte */
+        /* Encode the first byte */
+        pn_l = (send_buffer[0] & 3) + 1;
         send_buffer[0] ^= (mask_bytes[0] & first_mask);
 
         /* Packet encoding is 1 to 4 bytes */
-        for (uint8_t i = 0; i < 4; i++) {
+        for (uint8_t i = 0; i < pn_l; i++) {
             send_buffer[pn_offset+i] ^= mask_bytes[i+1];
         }
     }
