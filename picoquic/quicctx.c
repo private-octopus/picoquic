@@ -804,11 +804,18 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, struct sockad
 void picoquic_register_path(picoquic_cnx_t* cnx, picoquic_path_t * path_x)
 {
     if (picoquic_is_connection_id_null(&path_x->local_cnxid)) {
-        picoquic_create_random_cnx_id(cnx->quic, &path_x->local_cnxid, cnx->quic->local_cnxid_length);
+        for (int i = 0; i < 32; i++) {
+            picoquic_create_random_cnx_id(cnx->quic, &path_x->local_cnxid, cnx->quic->local_cnxid_length);
 
-        if (cnx->quic->cnx_id_callback_fn)
-            cnx->quic->cnx_id_callback_fn(cnx->quic, path_x->local_cnxid, cnx->initial_cnxid,
-                cnx->quic->cnx_id_callback_ctx, &path_x->local_cnxid);
+            if (cnx->quic->cnx_id_callback_fn)
+                cnx->quic->cnx_id_callback_fn(cnx->quic, path_x->local_cnxid, cnx->initial_cnxid,
+                    cnx->quic->cnx_id_callback_ctx, &path_x->local_cnxid);
+
+            if (cnx->quic->local_cnxid_length >= 8 || cnx->quic->local_cnxid_length == 0 ||
+                picoquic_cnx_by_id(cnx->quic, path_x->local_cnxid) == NULL){
+                break;
+            }
+        }
     }
 
     if (!picoquic_is_connection_id_null(&path_x->local_cnxid)) {
