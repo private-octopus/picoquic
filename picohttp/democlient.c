@@ -543,7 +543,7 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
                     stream_ctx->received_length += length;
                     break;
                 default:
-                    DBG_PRINTF("ALPN not selected!");
+                    DBG_PRINTF("%s", "ALPN not selected!");
                     ret = -1;
                     break;
                 }
