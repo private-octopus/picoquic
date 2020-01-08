@@ -290,7 +290,9 @@ typedef enum {
     picoquic_callback_almost_ready, /* Data can be sent, but the connection is not fully established */
     picoquic_callback_ready, /* Data can be sent and received, connection migration can be initiated */
     picoquic_callback_datagram, /* Datagram frame has been received */
-    picoquic_callback_version_negotiation /* version negotiation requested */
+    picoquic_callback_version_negotiation, /* version negotiation requested */
+    picoquic_callback_request_alpn_list, /* Provide the list of supported ALPN */
+    picoquic_callback_set_alpn /* Set ALPN to negotiated value */
 } picoquic_call_back_event_t;
 
 
@@ -385,6 +387,9 @@ uint64_t picoquic_get_quic_time(picoquic_quic_t* quic); /* connection time, comp
 typedef int (*picoquic_stream_data_cb_fn)(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void * stream_ctx);
+
+/* Function used during callback to provision an ALPN context */
+int picoquic_add_proposed_alpn(void* tls_context, const char* alpn);
 
 /* Callback function for producing a connection ID compatible
  * with the server environment.

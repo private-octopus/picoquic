@@ -577,12 +577,15 @@ int quic_client(const char* ip_address_text, int server_port,
     picoquic_demo_stream_desc_t * client_sc = NULL;
     int is_siduck = 0;
     siduck_ctx_t* siduck_ctx = NULL;
+    char const* saved_alpn = NULL;
 
+#if 0
     if (alpn == NULL) {
         alpn = PICOHTTP_ALPN_H3_LATEST;
     }
+#endif
 
-    if (strcmp(alpn, "siduck") == 0) {
+    if (alpn != NULL && strcmp(alpn, "siduck") == 0) {
         /* Set a siduck client */
         is_siduck = 1;
         siduck_ctx = siduck_create_ctx(stdout);
@@ -680,7 +683,6 @@ int quic_client(const char* ip_address_text, int server_port,
                 picoquic_set_null_verifier(qclient);
             }
             else if (root_crt == NULL) {
-
                 /* Standard verifier would crash */
                 fprintf(stdout, "No root crt list specified, certificate will not be verified.\n");
                 if (F_log != stdout && F_log != stderr && F_log != NULL)
@@ -710,6 +712,13 @@ int quic_client(const char* ip_address_text, int server_port,
             }
             else {
                 picoquic_set_callback(cnx_client, picoquic_demo_client_callback, &callback_ctx);
+
+                if (cnx_client->alpn == NULL) {
+                    picoquic_demo_client_set_alpn_from_tickets(cnx_client, &callback_ctx, current_time);
+                    if (cnx_client->alpn != NULL) {
+                        fprintf(stdout, "Set ALPN to %s based on stored ticket\n", cnx_client->alpn);
+                    }
+                }
 
                 /* Requires TP grease, for interop tests */
                 cnx_client->grease_transport_parameters = 1;
@@ -841,6 +850,11 @@ int quic_client(const char* ip_address_text, int server_port,
 
                     if (cnx_client->zero_rtt_data_accepted) {
                         fprintf(stdout, "Zero RTT data is accepted!\n");
+                    }
+
+                    if (cnx_client->alpn != NULL) {
+                        fprintf(stdout, "Negotiated ALPN: %s\n", cnx_client->alpn);
+                        saved_alpn = picoquic_string_duplicate(cnx_client->alpn);
                     }
                     fprintf(stdout, "Almost ready!\n\n");
                     notified_ready = 1;
@@ -1019,9 +1033,10 @@ int quic_client(const char* ip_address_text, int server_port,
         uint8_t* ticket;
         uint16_t ticket_length;
 
-        if (sni != NULL && 0 == picoquic_get_ticket(qclient->p_first_ticket, current_time, sni, (uint16_t)strlen(sni), alpn, (uint16_t)strlen(alpn), &ticket, &ticket_length, NULL, 0)) {
+        if (sni != NULL && saved_alpn != NULL && 0 == picoquic_get_ticket(qclient->p_first_ticket, current_time, sni, (uint16_t)strlen(sni), saved_alpn,
+            (uint16_t)strlen(saved_alpn), &ticket, &ticket_length, NULL, 0)) {
             FILE * F = (F_log != NULL) ? F_log : stdout;
-            fprintf(F, "Received ticket from %s:\n", sni);
+            fprintf(F, "Received ticket from %s (%s):\n", sni, saved_alpn);
             picoquic_log_picotls_ticket(F, picoquic_null_connection_id, ticket, ticket_length);
         }
 
@@ -1039,6 +1054,11 @@ int quic_client(const char* ip_address_text, int server_port,
 
     if (fd != INVALID_SOCKET) {
         SOCKET_CLOSE(fd);
+    }
+
+    if (saved_alpn != NULL) {
+        free((void *)saved_alpn);
+        saved_alpn = NULL;
     }
 
     if (client_scenario_text != NULL && client_sc != NULL) {

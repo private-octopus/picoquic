@@ -990,6 +990,13 @@ int generic_server_test()
         if (ret != 0) {
             DBG_PRINTF("Generic server test fails for %s\n", alpn_3);
         }
+        else {
+            ret = demo_server_test(NULL, picoquic_demo_server_callback, NULL, 0, demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length, 0, 0, 0);
+
+            if (ret != 0) {
+                DBG_PRINTF("Generic server test fails for %s\n", alpn_3);
+            }
+        }
     }
 
     return ret;

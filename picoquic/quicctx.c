@@ -1969,7 +1969,7 @@ picoquic_cnx_t* picoquic_create_client_cnx(picoquic_quic_t* quic,
             cnx->callback_fn = callback_fn;
         if (callback_ctx != NULL)
             cnx->callback_ctx = callback_ctx;
-        ret = picoquic_initialize_tls_stream(cnx);
+        ret = picoquic_initialize_tls_stream(cnx, picoquic_get_quic_time(quic));
         if (ret != 0) {
             /* Cannot just do partial initialization! */
             picoquic_delete_cnx(cnx);
@@ -1982,7 +1982,7 @@ picoquic_cnx_t* picoquic_create_client_cnx(picoquic_quic_t* quic,
 
 int picoquic_start_client_cnx(picoquic_cnx_t * cnx)
 {
-    int ret = picoquic_initialize_tls_stream(cnx);
+    int ret = picoquic_initialize_tls_stream(cnx, picoquic_get_quic_time(cnx->quic));
 
     picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
 
@@ -2467,7 +2467,7 @@ int picoquic_reset_cnx(picoquic_cnx_t* cnx, uint64_t current_time)
         ret = picoquic_tlscontext_create(cnx->quic, cnx, current_time);
     }
     if (ret == 0) {
-        ret = picoquic_initialize_tls_stream(cnx);
+        ret = picoquic_initialize_tls_stream(cnx, current_time);
     }
 
     return ret;
