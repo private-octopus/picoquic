@@ -416,23 +416,18 @@ int picoquic_client_hello_call_back(ptls_on_client_hello_t* on_hello_cb_ctx,
             }
         }
     }
+    else if (quic->alpn_select_fn != NULL) {
+        size_t selected = quic->alpn_select_fn(quic, params->negotiated_protocols.list, params->negotiated_protocols.count);
 
-    /* If no common ALPN found, pick the first choice of the client. 
-	 * This could be problematic, but right now alpn use in quic is in flux.
-	 */
+        if (selected < params->negotiated_protocols.count) {
+            alpn_found = 1;
+            ptls_set_negotiated_protocol(tls, (const char *)params->negotiated_protocols.list[selected].base, params->negotiated_protocols.list[selected].len);
+        }
+    }
 
+    /* ALPN is mandatory in Quic. Return an error if no match found. */
     if (alpn_found == 0) {
-        for (size_t i = 0; i < params->negotiated_protocols.count; i++) {
-            if (params->negotiated_protocols.list[i].len > 0) {
-                ptls_set_negotiated_protocol(tls,
-                    (char const*)params->negotiated_protocols.list[i].base, params->negotiated_protocols.list[i].len);
-                alpn_found = 1;
-                break;
-            }
-        }
-        if (alpn_found == 0) {
-            ret = PTLS_ALERT_NO_APPLICATION_PROTOCOL;
-        }
+        ret = PTLS_ALERT_NO_APPLICATION_PROTOCOL;
     }
 
     return ret;

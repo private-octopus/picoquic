@@ -217,6 +217,7 @@ int quic_server(const char* server_name, int server_port,
             printf("Could not create server context\n");
             ret = -1;
         } else {
+            picoquic_set_alpn_select_fn(qserver, picoquic_demo_server_callback_select_alpn);
             if (do_hrr != 0) {
                 picoquic_set_cookie_mode(qserver, 1);
             }

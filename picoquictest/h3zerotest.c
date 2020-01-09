@@ -828,9 +828,10 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
     }
 
     /* The default procedure creates connections using the test callback.
-     * We want to replace that by the H3 callback */
+     * We want to replace that by the demo client callback */
 
     if (ret == 0) {
+        picoquic_set_alpn_select_fn(test_ctx->qserver, picoquic_demo_server_callback_select_alpn);
         picoquic_set_default_callback(test_ctx->qserver, server_callback_fn, server_param);
         picoquic_set_callback(test_ctx->cnx_client, picoquic_demo_client_callback, &callback_ctx);
         if (do_esni) {

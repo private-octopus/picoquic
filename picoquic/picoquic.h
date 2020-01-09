@@ -96,6 +96,7 @@ extern "C" {
 #define PICOQUIC_TRANSPORT_CRYPTO_BUFFER_EXCEEDED (0xD)
 
 #define PICOQUIC_TRANSPORT_CRYPTO_ERROR(Alert) (((uint16_t)0x100) | ((uint16_t)((Alert)&0xFF)))
+#define PICOQUIC_TLS_ALERT_WRONG_ALPN (0x178)
 #define PICOQUIC_TLS_HANDSHAKE_FAILED (0x201)
 #define PICOQUIC_TLS_FATAL_ALERT_GENERATED (0x202)
 #define PICOQUIC_TLS_FATAL_ALERT_RECEIVED (0x203)
@@ -185,6 +186,10 @@ typedef struct st_picoquic_connection_id_t {
     uint8_t id[PICOQUIC_CONNECTION_ID_MAX_SIZE];
     uint8_t id_len;
 } picoquic_connection_id_t;
+
+
+/* forward definition to avoid full dependency on picotls.h */
+typedef struct st_ptls_iovec_t ptls_iovec_t; 
 
 /* Detect whether error occured in TLS
  */
@@ -380,15 +385,28 @@ typedef struct st_picoquic_tp_t {
 uint64_t picoquic_current_time(); /* wall time */
 uint64_t picoquic_get_quic_time(picoquic_quic_t* quic); /* connection time, compatible with simulations */
 
-/* Callback function for providing stream data to the application. 
- * If stream_id is zero, this delivers misc frames or changes in 
- * connection state.
+/* Callback function for providing stream data to the application,
+ * and generally for notifying events from stack to application.
+ * The type of event is specified in an enum picoquic_call_back_event_t.
+ * For stream related calls, stream ID provides the stream number, and the
+ * parameter stream_ctx provides the application supplied stream context.
  */
 typedef int (*picoquic_stream_data_cb_fn)(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void * stream_ctx);
 
-/* Function used during callback to provision an ALPN context */
+/* Callback from the TLS stack upon receiving a list of proposed ALPN in the Client Hello
+ * The stack passes a <list> of io <count> vectors (base, len) each containing a proposed
+ * ALPN. The implementation returns the index of the selected ALPN, or a value >= count
+ * if none of the proposed ALPN is supported.
+ *
+ * The callback is only called if no default ALPN is specified in the Quic context.
+ */
+typedef size_t (*picoquic_alpn_select_fn)(picoquic_quic_t* quic, ptls_iovec_t* list, size_t count);
+
+/* Function used during callback to provision an ALPN context. The stack 
+ * issues a callback of type 
+ */
 int picoquic_add_proposed_alpn(void* tls_context, const char* alpn);
 
 /* Callback function for producing a connection ID compatible
@@ -457,7 +475,7 @@ int picoquic_esni_server_setup(picoquic_quic_t * quic, char const * esni_rr_file
  * If `data` and `sign` are empty buffers, an error occurred and `verify_ctx` should be freed.
  * Expect `0` as return value, when the data matches the signature.
  */
-typedef struct st_ptls_iovec_t ptls_iovec_t; /* forward definition to avoid full dependency on picotls.h */
+
 typedef int (*picoquic_verify_sign_cb_fn)(void* verify_ctx, ptls_iovec_t data, ptls_iovec_t sign);
 /* Will be called to verify a certificate of a connection.
  * The arguments `verify_sign` and `verify_sign_ctx` are expected to be set, when the function returns `0`.
@@ -532,6 +550,8 @@ int picoquic_is_local_cid(picoquic_quic_t* quic, picoquic_connection_id_t* cid);
  * Cannot be changed if there are active connections in the context.
  * Value must be compatible with what the cnx_id_callback() expects on a server */
 int picoquic_set_default_connection_id_length(picoquic_quic_t* quic, uint8_t cid_length);
+
+void picoquic_set_alpn_select_fn(picoquic_quic_t* quic, picoquic_alpn_select_fn alpn_select_fn);
 
 void picoquic_set_default_callback(picoquic_quic_t * quic, picoquic_stream_data_cb_fn callback_fn, void * callback_ctx);
 
