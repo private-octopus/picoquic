@@ -6418,7 +6418,7 @@ int cid_length_test_one(uint8_t length)
 int cid_length_test()
 {
     int ret = 0;
-    const uint8_t tested_length[] = { 0, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18 };
+    const uint8_t tested_length[] = { 0, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20 };
 
     for (size_t i = 0; i < sizeof(tested_length); i++) {
         ret = cid_length_test_one(tested_length[i]);

@@ -2267,7 +2267,7 @@ int picoquic_set_default_connection_id_length(picoquic_quic_t* quic, uint8_t cid
     int ret = 0;
 
     if (cid_length != quic->local_cnxid_length) {
-        if (cid_length != 0 && (cid_length < 4 || cid_length > 18)) {
+        if (cid_length > PICOQUIC_CONNECTION_ID_MAX_SIZE) {
             ret = PICOQUIC_ERROR_CNXID_CHECK;
         }
         else if (quic->cnx_list != NULL) {

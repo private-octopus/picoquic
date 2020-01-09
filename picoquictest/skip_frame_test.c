@@ -1937,62 +1937,64 @@ int queue_network_input_test()
     new_data_available = 0;
     if ((ret = picoquic_queue_network_input(tree, 0, 0, data, 4, &new_data_available)) != 0) {
         DBG_PRINTF("picoquic_queue_network_input(0, 0, 4) failed (%d)", ret);
-    }
-
-    if (new_data_available == 0) {
+    } else if (new_data_available == 0) {
         DBG_PRINTF("new_data_available doesn't signal new data (%d)", new_data_available);
         ret = 1;
     }
 
     /* Fill 6..9 */
-    new_data_available = 0;
-    if ((ret = picoquic_queue_network_input(tree, 0, 6, data + 6, 4, &new_data_available)) != 0) {
-        DBG_PRINTF("picoquic_queue_network_input(0, 6, 4) failed (%d)", ret);
-    }
-
-    if (new_data_available == 0) {
-        DBG_PRINTF("new_data_available doesn't signal new data (%d)", new_data_available);
-        ret = 1;
+    if (ret == 0) {
+        new_data_available = 0;
+        if ((ret = picoquic_queue_network_input(tree, 0, 6, data + 6, 4, &new_data_available)) != 0) {
+            DBG_PRINTF("picoquic_queue_network_input(0, 6, 4) failed (%d)", ret);
+        } else if (new_data_available == 0) {
+            DBG_PRINTF("new_data_available doesn't signal new data (%d)", new_data_available);
+            ret = 1;
+        }
     }
 
     /* Fill the gap from 4..5 with a chunk from 2..7 */
-    new_data_available = 0;
-    if ((ret = picoquic_queue_network_input(tree, 0, 2, data + 2, 6, &new_data_available)) != 0) {
-        DBG_PRINTF("picoquic_queue_network_input(0, 2, 6) failed (%d)", ret);
-    }
-
-    if (new_data_available == 0) {
-        DBG_PRINTF("new_data_available signals new data (%d)", new_data_available);
-        ret = 1;
+    if (ret == 0) {
+        new_data_available = 0;
+        if ((ret = picoquic_queue_network_input(tree, 0, 2, data + 2, 6, &new_data_available)) != 0) {
+            DBG_PRINTF("picoquic_queue_network_input(0, 2, 6) failed (%d)", ret);
+        } else if (new_data_available == 0) {
+            DBG_PRINTF("new_data_available signals new data (%d)", new_data_available);
+            ret = 1;
+        }
     }
 
     /* No new data delivered by chunk 2..7 */
-    new_data_available = 0;
-    if ((ret = picoquic_queue_network_input(tree, 0, 2, data, 6, &new_data_available)) != 0) {
-        DBG_PRINTF("picoquic_queue_network_input(0, 2, 6) failed (%d)", ret);
-    }
-
-    if (new_data_available != 0) {
-        DBG_PRINTF("new_data_available signals new data (%d)", new_data_available);
-        ret = 1;
-    }
-
-    picoquic_stream_data_node_t* next = (picoquic_stream_data_node_t*)picosplay_first(tree);
-    for (int i = 0; i < 3; ++i) {
-        if (next == NULL) {
-            DBG_PRINTF("tree does not contain enough data (%d chunks vs 3 exptected)", i);
-            ret = 1;
-            break;
+    if (ret == 0) {
+        new_data_available = 0;
+        if ((ret = picoquic_queue_network_input(tree, 0, 2, data, 6, &new_data_available)) != 0) {
+            DBG_PRINTF("picoquic_queue_network_input(0, 2, 6) failed (%d)", ret);
         }
-        else {
-            if (expected_length[i] != next->length
-                || memcmp(next->bytes, expected[i], next->length) != 0) {
-                DBG_PRINTF("tree does not contain correct data (length: %zu vs %zu expected)", next->length, expected_length[i]);
+
+        if (new_data_available != 0) {
+            DBG_PRINTF("new_data_available signals new data (%d)", new_data_available);
+            ret = 1;
+        }
+    }
+
+    if (ret == 0) {
+        picoquic_stream_data_node_t* next = (picoquic_stream_data_node_t*)picosplay_first(tree);
+        for (int i = 0; i < 3; ++i) {
+            if (next == NULL) {
+                DBG_PRINTF("tree does not contain enough data (%d chunks vs 3 exptected)", i);
                 ret = 1;
                 break;
             }
+            else {
+                if (expected_length[i] != next->length
+                    || memcmp(next->bytes, expected[i], next->length) != 0) {
+                    DBG_PRINTF("tree does not contain correct data (length: %zu vs %zu expected)", next->length, expected_length[i]);
+                    ret = 1;
+                    break;
+                }
+            }
+            next = (picoquic_stream_data_node_t*)picosplay_next(&next->stream_data_node);
         }
-        next = (picoquic_stream_data_node_t*)picosplay_next(&next->stream_data_node);
     }
 
     return ret;
