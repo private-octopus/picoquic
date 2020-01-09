@@ -26,6 +26,83 @@
 #include "h3zero.h"
 #include "democlient.h"
 
+/* List of supported protocols 
+ */
+
+typedef struct st_picoquic_alpn_list_t {
+    picoquic_alpn_enum alpn_code;
+    char const* alpn_val;
+} picoquic_alpn_list_t;
+
+static picoquic_alpn_list_t alpn_list[] = {
+    { picoquic_alpn_http_3, "h3-24" },
+    { picoquic_alpn_http_0_9, "hq-24"},
+    { picoquic_alpn_http_3, "h3-23" },
+    { picoquic_alpn_http_0_9, "hq-23"},
+    { picoquic_alpn_http_3, "h3" },
+    { picoquic_alpn_http_0_9, "hq"},
+    { picoquic_alpn_siduck, "siduck"}
+};
+
+static size_t nb_alpn_list = sizeof(alpn_list) / sizeof(picoquic_alpn_list_t);
+
+void picoquic_demo_client_set_alpn_list(void* tls_context)
+{
+    int ret = 0;
+
+    for (size_t i = 0; i < nb_alpn_list; i++) {
+        if (alpn_list[i].alpn_code == picoquic_alpn_http_3 ||
+            alpn_list[i].alpn_code == picoquic_alpn_http_0_9) {
+            ret = picoquic_add_proposed_alpn(tls_context, alpn_list[i].alpn_val);
+            if (ret != 0) {
+                DBG_PRINTF("Could not propose ALPN=%s, ret=0x%x", alpn_list[i].alpn_val, ret);
+                break;
+            }
+        }
+    }
+}
+
+picoquic_alpn_enum picoquic_parse_alpn(char const* alpn)
+{
+    picoquic_alpn_enum code = picoquic_alpn_undef;
+
+    if (alpn != NULL) {
+        for (size_t i = 0; i < nb_alpn_list; i++) {
+            if (strcmp(alpn_list[i].alpn_val, alpn) == 0) {
+                code = alpn_list[i].alpn_code;
+                break;
+            }
+        }
+    }
+
+    return code;
+}
+
+void picoquic_demo_client_set_alpn_from_tickets(picoquic_cnx_t* cnx, picoquic_demo_callback_ctx_t* ctx, uint64_t current_time)
+{
+    const char* sni = cnx->sni;
+    if (sni != NULL) {
+        uint16_t sni_len = (uint16_t) strlen(sni);
+
+        for (size_t i = 0; i < nb_alpn_list; i++) {
+            if ((alpn_list[i].alpn_code == picoquic_alpn_http_3 ||
+                alpn_list[i].alpn_code == picoquic_alpn_http_0_9) &&
+                alpn_list[i].alpn_val != NULL) {
+                uint8_t* ticket;
+                uint16_t ticket_length;
+                picoquic_tp_t tp;
+
+                if (picoquic_get_ticket(cnx->quic->p_first_ticket, current_time, sni, sni_len,
+                    alpn_list[i].alpn_val, (uint16_t) strlen(alpn_list[i].alpn_val), &ticket, &ticket_length, &tp, 0) == 0) {
+                    ctx->alpn = alpn_list[i].alpn_code;
+                    cnx->alpn = picoquic_string_duplicate(alpn_list[i].alpn_val);
+                    break;
+                }
+            }
+        }
+    }
+}
+
 /*
  * Code common to H3 and H09 clients
  */
@@ -460,11 +537,14 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
                     break;
                 }
                 case picoquic_alpn_http_0_9:
-                default:
                     if (ctx->no_disk == 0) {
                         ret = (fwrite(bytes, 1, length, stream_ctx->F) > 0) ? 0 : -1;
                     }
                     stream_ctx->received_length += length;
+                    break;
+                default:
+                    DBG_PRINTF("%s", "ALPN not selected!");
+                    ret = -1;
                     break;
                 }
             }
@@ -539,6 +619,12 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
     case picoquic_callback_almost_ready:
     case picoquic_callback_ready:
         break;
+    case picoquic_callback_request_alpn_list:
+        picoquic_demo_client_set_alpn_list((void*)bytes);
+        break;
+    case picoquic_callback_set_alpn:
+        ctx->alpn = picoquic_parse_alpn((const char*)bytes);
+        break;
     default:
         /* unexpected */
         break;
@@ -551,39 +637,6 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
 
     /* that's it */
     return ret;
-}
-
-typedef struct st_picoquic_alpn_list_t {
-    picoquic_alpn_enum alpn_code;
-    char const * alpn_val;
-} picoquic_alpn_list_t;
-
-static picoquic_alpn_list_t alpn_list[] = {
-    { picoquic_alpn_http_3, "h3" },
-    { picoquic_alpn_http_3, "h3-23" },
-    { picoquic_alpn_http_3, "h3-24" },
-    { picoquic_alpn_http_0_9, "hq"},
-    { picoquic_alpn_http_0_9, "hq-23"},
-    { picoquic_alpn_http_0_9, "hq-24"},
-    { picoquic_alpn_siduck, "siduck"}
-};
-
-static size_t nb_alpn_list = sizeof(alpn_list) / sizeof(picoquic_alpn_list_t);
-
-picoquic_alpn_enum picoquic_parse_alpn(char const * alpn)
-{
-    picoquic_alpn_enum code = picoquic_alpn_undef;
-
-    if (alpn != NULL) {
-        for (size_t i = 0; i < nb_alpn_list; i++) {
-            if (strcmp(alpn_list[i].alpn_val, alpn) == 0) {
-                code = alpn_list[i].alpn_code;
-                break;
-            }
-        }
-    }
-	
-    return code;
 }
 
 int picoquic_demo_client_initialize_context(

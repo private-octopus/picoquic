@@ -525,7 +525,7 @@ struct st_picoqinq_test_ctx_t* picoqinq_test_ctx_init()
         if (ret == 0 && (
             (test_ctx->qctx[PICOQINQ_SIM_CLIENT] = picoquic_create(8, NULL, NULL, test_ctx->test_server_cert_store_file, NULL, NULL, NULL, NULL, NULL, NULL, test_ctx->simulated_time, &test_ctx->simulated_time, NULL, NULL, 0)) == NULL ||
             (test_ctx->qctx[PICOQINQ_SIM_SERVER] = picoquic_create(8, test_ctx->test_server_cert_file, test_ctx->test_server_key_file, test_ctx->test_server_cert_store_file, PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, NULL, NULL, NULL, NULL, test_ctx->simulated_time, &test_ctx->simulated_time, NULL, NULL, 0)) == NULL ||
-            (test_ctx->qctx[PICOQINQ_SIM_PROXY] = picoquic_create(8, test_ctx->test_server_cert_file, test_ctx->test_server_key_file, test_ctx->test_server_cert_store_file, NULL, picoqinq_server_callback, NULL, NULL, NULL, NULL, test_ctx->simulated_time, &test_ctx->simulated_time, NULL, NULL, 0)) == NULL ||
+            (test_ctx->qctx[PICOQINQ_SIM_PROXY] = picoquic_create(8, test_ctx->test_server_cert_file, test_ctx->test_server_key_file, test_ctx->test_server_cert_store_file, PICOQINQ_ALPN, picoqinq_server_callback, NULL, NULL, NULL, NULL, test_ctx->simulated_time, &test_ctx->simulated_time, NULL, NULL, 0)) == NULL ||
             (test_ctx->qinq_srv = picoqinq_create_srv_ctx(test_ctx->qctx[PICOQINQ_SIM_PROXY], 4, 8)) == NULL )){
             ret = -1;
         }

@@ -84,6 +84,8 @@ extern "C" {
 
 #define PICOQUIC_CHALLENGE_REPEAT_MAX 3
 
+#define PICOQUIC_ALPN_NUMBER_MAX 8
+
 /*
     * Types of frames
     */
@@ -308,6 +310,7 @@ typedef struct st_picoquic_quic_t {
     picoquic_stream_data_cb_fn default_callback_fn;
     void* default_callback_ctx;
     char const* default_alpn;
+    picoquic_alpn_select_fn alpn_select_fn;
     uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE];
     uint8_t retry_seed[PICOQUIC_RETRY_SECRET_SIZE];
     uint64_t* p_simulated_time;

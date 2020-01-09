@@ -52,7 +52,7 @@ void picoquic_tlscontext_remove_ticket(picoquic_cnx_t* cnx);
 
 int picoquic_tls_stream_process(picoquic_cnx_t* cnx);
 
-int picoquic_initialize_tls_stream(picoquic_cnx_t* cnx);
+int picoquic_initialize_tls_stream(picoquic_cnx_t* cnx, uint64_t current_time);
 
 uint64_t picoquic_get_tls_time(picoquic_quic_t* quic);
 

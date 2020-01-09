@@ -799,7 +799,7 @@ int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_versi
 
             test_ctx->qserver = picoquic_create(8,
                 test_server_cert_file, test_server_key_file, test_server_cert_store_file,
-                PICOQUIC_TEST_ALPN, test_api_callback, (void*)&test_ctx->server_callback, NULL, NULL, NULL,
+                (alpn == NULL)?PICOQUIC_TEST_ALPN:alpn, test_api_callback, (void*)&test_ctx->server_callback, NULL, NULL, NULL,
                 *p_simulated_time, p_simulated_time, NULL,
                 (use_bad_crypt == 0) ? test_ticket_encrypt_key : test_ticket_badcrypt_key,
                 (use_bad_crypt == 0) ? sizeof(test_ticket_encrypt_key) : sizeof(test_ticket_badcrypt_key));
@@ -1521,7 +1521,6 @@ int tls_api_version_negotiation_test()
             DBG_PRINTF("%s", "No version negotiation notified\n");
             ret = -1;
         }
-
     }
 
     if (test_ctx != NULL) {
@@ -1544,7 +1543,50 @@ int tls_api_alpn_test()
 
 int tls_api_wrong_alpn_test()
 {
-    return tls_api_test_with_loss(NULL, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_WRONG_ALPN);
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_WRONG_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+
+    if (ret == 0) {
+        /* By default, client and servers are using the same ALPN. Correct that on the server side 
+         * so we can test the wrong ALPN condition */
+        free((void*)test_ctx->qserver->default_alpn);
+        test_ctx->qserver->default_alpn = picoquic_string_duplicate(PICOQUIC_TEST_ALPN);
+    }
+
+    if (ret != 0)
+    {
+        DBG_PRINTF("Could not create the QUIC test contexts for V=%x\n", 0);
+    }
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, 0, 0, &simulated_time);
+
+        if (ret == 0)
+        {
+            if (test_ctx->cnx_client != NULL) {
+                if (test_ctx->cnx_client->cnx_state == picoquic_state_disconnected &&
+                    test_ctx->cnx_client->remote_error == PICOQUIC_TLS_ALERT_WRONG_ALPN) {
+                    ret = 0;
+                }
+                else {
+                    DBG_PRINTF("Connection loop returns 0x%x\n", test_ctx->cnx_client->remote_error);
+                    ret = -1;
+                }
+            }
+            else {
+                DBG_PRINTF("%s", "Could not establish a client connection");
+                ret = -1;
+            }
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
 }
 
 /*
