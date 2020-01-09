@@ -92,6 +92,7 @@ static const char* default_server_name = "::";
 static const char* ticket_store_filename = "demo_ticket_store.bin";
 static const char* token_store_filename = "demo_token_store.bin";
 
+#include "picoquic.h"
 #include "picoquic_internal.h"
 #include "picosocks.h"
 #include "util.h"
@@ -193,8 +194,6 @@ int quic_server(const char* server_name, int server_port,
     picohttp_server_parameters_t picoquic_file_param;
     uint64_t loop_count_time = 0;
     int nb_loops = 0;
-
-    printf("Starting picoquic server version %s\n", PICOQUIC_VERSION);
 
     memset(&picoquic_file_param, 0, sizeof(picohttp_server_parameters_t));
     picoquic_file_param.web_folder = web_folder;
@@ -579,12 +578,6 @@ int quic_client(const char* ip_address_text, int server_port,
     int is_siduck = 0;
     siduck_ctx_t* siduck_ctx = NULL;
     char const* saved_alpn = NULL;
-
-#if 0
-    if (alpn == NULL) {
-        alpn = PICOHTTP_ALPN_H3_LATEST;
-    }
-#endif
 
     if (alpn != NULL && strcmp(alpn, "siduck") == 0) {
         /* Set a siduck client */
@@ -1203,7 +1196,7 @@ int main(int argc, char** argv)
 
 #ifdef _WINDOWS
     WSADATA wsaData = { 0 };
-    WSA_START(MAKEWORD(2, 2), &wsaData);
+    (void)WSA_START(MAKEWORD(2, 2), &wsaData);
 #endif
 
     /* Get the parameters */
@@ -1393,8 +1386,8 @@ int main(int argc, char** argv)
         }
 
         /* Run as server */
-        printf("Starting PicoQUIC server on port %d, server name = %s, just_once = %d, hrr= %d\n",
-            server_port, server_name, just_once, do_hrr);
+        printf("Starting Picoquic server (v%s) on port %d, server name = %s, just_once = %d, hrr= %d\n",
+            PICOQUIC_VERSION, server_port, server_name, just_once, do_hrr);
         ret = quic_server(server_name, server_port,
             server_cert_file, server_key_file, just_once, do_hrr,
             (cnx_id_cbdata == NULL) ? NULL : picoquic_connection_id_callback,
@@ -1405,7 +1398,7 @@ int main(int argc, char** argv)
         printf("Server exit with code = %d\n", ret);
     } else {
         /* Run as client */
-        printf("Starting PicoQUIC connection to server IP = %s, port = %d\n", server_name, server_port);
+        printf("Starting Picoquic (v%s) connection to server = %s, port = %d\n", PICOQUIC_VERSION, server_name, server_port);
         ret = quic_client(server_name, server_port, sni, esni_rr_file, alpn, root_trust_file, proposed_version, force_zero_share, 
             force_migration, nb_packets_before_update, mtu_max, F_log, bin_file, client_cnx_id_length, client_scenario,
             cc_log_dir, no_disk, use_long_log, cc_algorithm, large_client_hello);

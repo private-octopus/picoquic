@@ -285,7 +285,7 @@ SOCKET_TYPE picoquic_open_client_socket(int af)
 {
 #ifdef _WINDOWS
     WSADATA wsaData = { 0 };
-    WSA_START(MAKEWORD(2, 2), &wsaData);
+    (void)WSA_START(MAKEWORD(2, 2), &wsaData);
     SOCKET_TYPE sd = WSASocket(af, SOCK_DGRAM, IPPROTO_UDP, NULL, 0, WSA_FLAG_OVERLAPPED);
 #else
     SOCKET_TYPE sd = socket(af, SOCK_DGRAM, IPPROTO_UDP);

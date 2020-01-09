@@ -134,9 +134,10 @@ typedef enum {
 #define BBR_PROBE_RTT_DURATION 200000 /* 200msec, 200000 microsecs */
 #define BBR_PACING_RATE_LOW 150000.0 /* 150000 B/s = 1.2 Mbps */
 #define BBR_PACING_RATE_MEDIUM 3000000.0 /* 3000000 B/s = 24 Mbps */
+#define BBR_GAIN_CYCLE_LEN 8
+#define BBR_GAIN_CYCLE_MAX_START 5
 
-static const double bbr_pacing_gain_cycle[] = { 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.25, 0.75};
-static const int bbr_gain_cycle_len = (int)(sizeof(bbr_pacing_gain_cycle) / sizeof(double));
+static const double bbr_pacing_gain_cycle[BBR_GAIN_CYCLE_LEN] = { 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.25, 0.75};
 
 typedef struct st_picoquic_bbr_state_t {
     picoquic_bbr_alg_state_t state;
@@ -158,8 +159,8 @@ typedef struct st_picoquic_bbr_state_t {
     double pacing_gain;
     double cwnd_gain;
     double pacing_rate;
+    size_t cycle_index;
     int round_count;
-    int cycle_index;
     int full_bw_count;
     int filled_pipe : 1;
     int round_start : 1;
@@ -326,10 +327,10 @@ void BBRAdvanceCyclePhase(picoquic_bbr_state_t* bbr_state, uint64_t current_time
 {
     bbr_state->cycle_stamp = current_time;
     bbr_state->cycle_index++;
-    if (bbr_state->cycle_index >= bbr_gain_cycle_len) {
+    if (bbr_state->cycle_index >= BBR_GAIN_CYCLE_LEN) {
         int start = (int)(bbr_state->rt_prop / PICOQUIC_TARGET_RENO_RTT);
-        if (start > 5) {
-            start = 5;
+        if (start > BBR_GAIN_CYCLE_MAX_START) {
+            start = BBR_GAIN_CYCLE_MAX_START;
         }
         bbr_state->cycle_index = start;
     }
@@ -366,7 +367,7 @@ void BBREnterProbeBW(picoquic_bbr_state_t* bbr_state, uint64_t current_time)
     bbr_state->state = picoquic_bbr_alg_probe_bw;
     bbr_state->pacing_gain = 1.0;
     bbr_state->cwnd_gain = 1.125;
-    bbr_state->cycle_index = 4;  /* TODO: random_int_in_range(0, 6); */
+    bbr_state->cycle_index = 4;  /* TODO: random_int_in_range(0, 5); */
     BBRAdvanceCyclePhase(bbr_state, current_time);
 }
 
