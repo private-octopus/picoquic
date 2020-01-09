@@ -837,10 +837,6 @@ int quic_client(const char* ip_address_text, int server_port,
                     current_time);
                 client_receive_loop++;
 
-                if (F_log != NULL) {
-                    picoquic_log_processing(F_log, cnx_client, bytes_recv, ret);
-                }
-
                 if (picoquic_get_cnx_state(cnx_client) == picoquic_state_client_almost_ready && notified_ready == 0) {
                     if (picoquic_tls_is_psk_handshake(cnx_client)) {
                         fprintf(stdout, "The session was properly resumed!\n");
@@ -1327,7 +1323,7 @@ int main(int argc, char** argv)
             break;
         case 'I':
             client_cnx_id_length = atoi(optarg);
-            if (client_cnx_id_length != 0 && (client_cnx_id_length < 4 || client_cnx_id_length > 18)){
+            if (client_cnx_id_length < 0 || client_cnx_id_length > PICOQUIC_CONNECTION_ID_MAX_SIZE){
                 fprintf(stderr, "Invalid connection id length: %s\n", optarg);
                 usage();
             }
