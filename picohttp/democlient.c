@@ -365,7 +365,7 @@ static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
                 x_name = repeat_name;
             }
             if (ret == 0) {
-                stream_ctx->F = picoquic_file_open(x_name, (is_binary == 0) ? "w" : "wb");
+                stream_ctx->F = picoquic_file_open(x_name, "wb");
                 if (stream_ctx->F == NULL) {
                     ret = -1;
                 }
@@ -759,6 +759,29 @@ char const * demo_client_parse_stream_number(char const * text, uint64_t default
     return text;
 }
 
+char const* demo_client_parse_stream_previous(char const* text, uint64_t default_number, uint64_t* number)
+{
+
+    if (text[0] != '-') {
+        text = demo_client_parse_stream_number(text, default_number, number);
+    }
+    else {
+        *number = PICOQUIC_DEMO_STREAM_ID_INITIAL;
+        text++;
+
+        text = demo_client_parse_stream_spaces(text);
+
+        if (*text == ':') {
+            text++;
+        }
+        else {
+            text = NULL;
+        }
+    }
+
+    return text;
+}
+
 char const * demo_client_parse_stream_format(char const * text, int default_format, int * is_binary)
 {
     char const * orig = text;
@@ -884,7 +907,7 @@ char const * demo_client_parse_stream_desc(char const * text, uint64_t default_s
     }
 
     if (text != NULL) {
-        text = demo_client_parse_stream_number(
+        text = demo_client_parse_stream_previous(
             demo_client_parse_stream_spaces(text), default_previous, &desc->previous_stream_id);
     }
 
