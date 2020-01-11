@@ -594,34 +594,51 @@ int h3zero_stream_test()
  * Test the scenario parsing function
  */
 
-char * parse_demo_scenario_text1 = "/;t:test.html;8:0:b:main.jpg;12:0:/bla/bla/";
-char * parse_demo_scenario_text2 = "/;b:main.jpg;t:test.html;";
-char * parse_demo_scenario_text3 = "*1000:/";
-char * parse_demo_scenario_text4 = "/cgi-sink:1000000;4:/";
-
-static const picoquic_demo_stream_desc_t parse_demo_scenario_desc1[] = {
+static picoquic_demo_stream_desc_t const parse_demo_scenario_desc1[] = {
     { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0, 0},
     { 0, 4, 0, "test.html", "test.html", 0, 0 },
     { 0, 8, 0, "main.jpg", "main.jpg", 1, 0 },
     { 0, 12, 0, "/bla/bla/", "_bla_bla_", 0, 0 }
 };
 
-static const picoquic_demo_stream_desc_t parse_demo_scenario_desc2[] = {
+static picoquic_demo_stream_desc_t const parse_demo_scenario_desc2[] = {
     { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0, 0 },
     { 0, 4, 0, "main.jpg", "main.jpg", 1, 0 },
     { 0, 8, 4, "test.html", "test.html", 0, 0 }
 };
 
-static const picoquic_demo_stream_desc_t parse_demo_scenario_desc3[] = {
+static picoquic_demo_stream_desc_t const parse_demo_scenario_desc3[] = {
     { 1000, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0, 0 }
 };
 
-static const picoquic_demo_stream_desc_t parse_demo_scenario_desc4[] = {
+static picoquic_demo_stream_desc_t const parse_demo_scenario_desc4[] = {
     { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/cgi-sink", "_cgi-sink", 0, 1000000 },
     { 0, 4, 0, "/", "_", 0, 0 }
 };
 
-int parse_demo_scenario_test_one(char * text, size_t nb_streams_ref, picoquic_demo_stream_desc_t const * desc_ref)
+static picoquic_demo_stream_desc_t const parse_demo_scenario_desc5[] = {
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/32", "_32", 0, 0 },
+    { 0, 4, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/33", "_33", 0, 0 }
+};
+
+typedef struct st_demo_scenario_test_case_t {
+    char const* text;
+    const picoquic_demo_stream_desc_t* desc;
+    size_t nb_streams;
+} demo_scenario_test_case_t;
+
+static const demo_scenario_test_case_t demo_scenario_test_cases[] = {
+    { "/;t:test.html;8:0:b:main.jpg;12:0:/bla/bla/", parse_demo_scenario_desc1, sizeof(parse_demo_scenario_desc1) / sizeof(picoquic_demo_stream_desc_t) },
+    { "/;b:main.jpg;t:test.html;", parse_demo_scenario_desc2, sizeof(parse_demo_scenario_desc2) / sizeof(picoquic_demo_stream_desc_t) },
+    { "*1000:/", parse_demo_scenario_desc3, sizeof(parse_demo_scenario_desc3) / sizeof(picoquic_demo_stream_desc_t) },
+    { "/cgi-sink:1000000;4:/", parse_demo_scenario_desc4, sizeof(parse_demo_scenario_desc4) / sizeof(picoquic_demo_stream_desc_t) },
+    { "-:/32;-:/33", parse_demo_scenario_desc5, sizeof(parse_demo_scenario_desc5) / sizeof(picoquic_demo_stream_desc_t) }
+};
+
+static size_t nb_demo_scenario_test_cases = sizeof(demo_scenario_test_cases) / sizeof(demo_scenario_test_case_t);
+
+
+int parse_demo_scenario_test_one(const char * text, picoquic_demo_stream_desc_t const * desc_ref, size_t nb_streams_ref)
 {
     size_t nb_streams = 0;
     picoquic_demo_stream_desc_t * desc = NULL;
@@ -666,26 +683,13 @@ int parse_demo_scenario_test_one(char * text, size_t nb_streams_ref, picoquic_de
 
 int parse_demo_scenario_test()
 {
-    int ret = parse_demo_scenario_test_one(parse_demo_scenario_text1,
-        sizeof(parse_demo_scenario_desc1) / sizeof(picoquic_demo_stream_desc_t),
-        parse_demo_scenario_desc1);
+    int ret = 0;
 
-    if (ret == 0){
-        ret = parse_demo_scenario_test_one(parse_demo_scenario_text2,
-            sizeof(parse_demo_scenario_desc2) / sizeof(picoquic_demo_stream_desc_t),
-            parse_demo_scenario_desc2);
-    }
-
-    if (ret == 0) {
-        ret = parse_demo_scenario_test_one(parse_demo_scenario_text3,
-            sizeof(parse_demo_scenario_desc3) / sizeof(picoquic_demo_stream_desc_t),
-            parse_demo_scenario_desc3);
-    }
-
-    if (ret == 0) {
-        ret = parse_demo_scenario_test_one(parse_demo_scenario_text4,
-            sizeof(parse_demo_scenario_desc4) / sizeof(picoquic_demo_stream_desc_t),
-            parse_demo_scenario_desc4);
+    for (size_t i = 0; ret == 0 && i < nb_demo_scenario_test_cases; i++) {
+        ret = parse_demo_scenario_test_one(demo_scenario_test_cases[i].text, demo_scenario_test_cases[i].desc, demo_scenario_test_cases[i].nb_streams);
+        if (ret != 0) {
+            DBG_PRINTF("Could not parse scenario %d: %s", i, demo_scenario_test_cases[i].text);
+        }
     }
 
     return ret;
