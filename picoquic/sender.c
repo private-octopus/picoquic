@@ -3534,3 +3534,39 @@ int picoquic_close(picoquic_cnx_t* cnx, uint16_t reason_code)
 
     return ret;
 }
+
+/* Quic context level call.
+ * will send a stateless packet if one is queued, or ask the first connection in
+ * the wake list to prepare a packet */
+
+int picoquic_prepare_next_packet(picoquic_quic_t* quic,
+    uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
+    struct sockaddr_storage* p_addr_to, int* to_len, struct sockaddr_storage* p_addr_from, int* from_len)
+{
+    int ret = 0;
+    picoquic_stateless_packet_t* sp = picoquic_dequeue_stateless_packet(quic);
+
+    if (sp != NULL) {
+        if (sp->length > send_buffer_max) {
+            *send_length = 0;
+        }
+        else {
+            memcpy(send_buffer, sp->bytes, sp->length);
+            *send_length = sp->length;
+            *to_len = picoquic_store_addr(p_addr_to, (struct sockaddr*) & sp->addr_to);
+            *from_len = picoquic_store_addr(p_addr_from, (struct sockaddr*) & sp->addr_local);
+        }
+        picoquic_delete_stateless_packet(sp);
+    }
+    else {
+        picoquic_cnx_t* cnx = picoquic_get_earliest_cnx_to_wake(quic, current_time);
+
+        if (cnx == NULL) {
+            *send_length = 0;
+        } else {
+            ret = picoquic_prepare_packet(cnx, current_time, send_buffer, send_buffer_max, send_length, p_addr_to, to_len, p_addr_from, from_len);
+        }
+    }
+
+    return ret;
+}
