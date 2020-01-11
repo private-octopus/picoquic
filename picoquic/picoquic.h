@@ -659,6 +659,10 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
     struct sockaddr_storage * p_addr_to, int * to_len, struct sockaddr_storage * p_addr_from, int * from_len);
 
+int picoquic_prepare_next_packet(picoquic_quic_t* quic,
+    uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
+    struct sockaddr_storage* p_addr_to, int* to_len, struct sockaddr_storage* p_addr_from, int* from_len, int * if_index);
+
 /* Associate stream with app context */
 int picoquic_set_app_stream_ctx(picoquic_cnx_t* cnx,
     uint64_t stream_id, void* app_stream_ctx);

@@ -175,7 +175,6 @@ int quic_server(const char* server_name, int server_port,
     int ret = 0;
     picoquic_quic_t* qserver = NULL;
     picoquic_cnx_t* cnx_server = NULL;
-    picoquic_cnx_t* cnx_next = NULL;
     picoquic_server_sockets_t server_sockets;
     struct sockaddr_storage addr_from;
     struct sockaddr_storage addr_to;
@@ -188,10 +187,10 @@ int quic_server(const char* server_name, int server_port,
     size_t send_length = 0;
     int bytes_recv;
     uint64_t current_time = 0;
-    picoquic_stateless_packet_t* sp;
     int64_t delay_max = 10000000;
     int connection_done = 0;
     picohttp_server_parameters_t picoquic_file_param;
+    uint64_t server_next_time = 0;
     uint64_t loop_count_time = 0;
     int nb_loops = 0;
 
@@ -260,11 +259,6 @@ int quic_server(const char* server_name, int server_port,
 
         from_length = to_length = sizeof(struct sockaddr_storage);
         if_index_to = 0;
-
-        if (just_once != 0 && F_log != NULL &&  delta_t > 10000 && cnx_server != NULL && 
-            (cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence < PICOQUIC_LOG_PACKET_MAX_SEQUENCE || qserver->use_long_log)) {
-            picoquic_log_congestion_state(F_log, cnx_server, current_time);
-        }
 
         bytes_recv = picoquic_select(server_sockets.s_socket, PICOQUIC_NB_SERVER_SOCKETS,
             &addr_from, &from_length,
@@ -335,6 +329,27 @@ int quic_server(const char* server_name, int server_port,
             }
             loop_time = current_time;
 
+            do {
+                int peer_addr_len = 0;
+                struct sockaddr_storage peer_addr;
+                int local_addr_len = 0;
+                struct sockaddr_storage local_addr;
+                int if_index = dest_if;
+
+
+                ret = picoquic_prepare_next_packet(qserver, loop_time,
+                    send_buffer, sizeof(send_buffer), &send_length,
+                    &peer_addr, &peer_addr_len, &local_addr, &local_addr_len,
+                    &if_index);
+
+                if (ret == 0 && send_length > 0) {
+                    (void)picoquic_send_through_server_sockets(&server_sockets,
+                        (struct sockaddr*) & peer_addr, peer_addr_len, (struct sockaddr*) & local_addr, local_addr_len, if_index,
+                        (const char*)send_buffer, (int)send_length);
+                }
+
+            } while (ret == 0 && send_length > 0);
+#if 0
             while ((sp = picoquic_dequeue_stateless_packet(qserver)) != NULL) {
                 (void)picoquic_send_through_server_sockets(&server_sockets,
                     (struct sockaddr*)&sp->addr_to,
@@ -388,6 +403,7 @@ int quic_server(const char* server_name, int server_port,
                 else if (ret == 0) {
 
                     if (send_length > 0) {
+#if 0
                         if (F_log != NULL && (just_once != 0 ||
                             cnx_next->cnx_state < picoquic_state_server_false_start ||
                             cnx_next->cnx_state >= picoquic_state_disconnecting) &&
@@ -396,6 +412,7 @@ int quic_server(const char* server_name, int server_port,
                             fprintf(F_log, "Connection state = %d\n",
                                 picoquic_get_cnx_state(cnx_next));
                         }
+#endif
 
                         (void)picoquic_send_through_server_sockets(&server_sockets,
                             (struct sockaddr *)&peer_addr, peer_addr_len, (struct sockaddr *)&local_addr, local_addr_len,
@@ -406,8 +423,8 @@ int quic_server(const char* server_name, int server_port,
                 else {
                     break;
                 }
-
             }
+#endif
         }
     }
 
