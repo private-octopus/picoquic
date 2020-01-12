@@ -3534,3 +3534,59 @@ int picoquic_close(picoquic_cnx_t* cnx, uint16_t reason_code)
 
     return ret;
 }
+
+/* Quic context level call.
+ * will send a stateless packet if one is queued, or ask the first connection in
+ * the wake list to prepare a packet */
+
+int picoquic_prepare_next_packet(picoquic_quic_t* quic,
+    uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
+    struct sockaddr_storage* p_addr_to, int* to_len, struct sockaddr_storage* p_addr_from, int* from_len, int * if_index)
+{
+    int ret = 0;
+    picoquic_stateless_packet_t* sp = picoquic_dequeue_stateless_packet(quic);
+
+    if (sp != NULL) {
+        if (sp->length > send_buffer_max) {
+            *send_length = 0;
+        }
+        else {
+            memcpy(send_buffer, sp->bytes, sp->length);
+            *send_length = sp->length;
+            *to_len = picoquic_store_addr(p_addr_to, (struct sockaddr*) & sp->addr_to);
+            *from_len = picoquic_store_addr(p_addr_from, (struct sockaddr*) & sp->addr_local);
+        }
+        picoquic_delete_stateless_packet(sp);
+    }
+    else {
+        picoquic_cnx_t* cnx = picoquic_get_earliest_cnx_to_wake(quic, current_time);
+
+        if (cnx == NULL) {
+            *send_length = 0;
+        }
+        else {
+            ret = picoquic_prepare_packet(cnx, current_time, send_buffer, send_buffer_max, send_length, p_addr_to, to_len, p_addr_from, from_len);
+
+            if (ret == PICOQUIC_ERROR_DISCONNECTED) {
+                ret = 0;
+                if (quic->F_log != NULL) {
+                    fprintf(quic->F_log, "%llx: ", (unsigned long long)picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
+                    picoquic_log_time(quic->F_log, cnx, picoquic_current_time(), "", " : ");
+                    fprintf(quic->F_log, "Closed. Retrans= %d, spurious= %d, max sp gap = %d, max sp delay = %d\n",
+                        (int)cnx->nb_retransmission_total, (int)cnx->nb_spurious,
+                        (int)cnx->path[0]->max_reorder_gap, (int)cnx->path[0]->max_spurious_rtt);
+                    fflush(quic->F_log);
+                }
+
+                picoquic_delete_cnx(cnx);
+            }
+            else {
+                if (*if_index == -1) {
+                    *if_index = picoquic_get_local_if_index(cnx);
+                }
+            }
+        }
+    }
+
+    return ret;
+}
