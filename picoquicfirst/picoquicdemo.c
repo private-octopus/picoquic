@@ -188,7 +188,6 @@ int quic_server(const char* server_name, int server_port,
     int64_t delay_max = 10000000;
     int connection_done = 0;
     picohttp_server_parameters_t picoquic_file_param;
-    uint64_t server_next_time = 0;
     uint64_t loop_count_time = 0;
     int nb_loops = 0;
     int first_connection_seen = 0;
@@ -253,7 +252,6 @@ int quic_server(const char* server_name, int server_port,
     /* Wait for packets */
     while (ret == 0 && (!just_once || !connection_done)) {
         int64_t delta_t = picoquic_get_next_wake_delay(qserver, current_time, delay_max);
-        uint64_t time_before = current_time;
         unsigned char received_ecn;
 
         from_length = to_length = sizeof(struct sockaddr_storage);
