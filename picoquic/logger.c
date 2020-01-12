@@ -1556,12 +1556,17 @@ void picoquic_log_transport_extension_content(FILE* F, int log_cnxid, uint64_t c
     }
 }
 
-void picoquic_log_transport_extension(FILE* F, picoquic_cnx_t* cnx, int log_cnxid)
+void picoquic_log_transport_extension(FILE* F, picoquic_cnx_t* cnx, int received, int log_cnxid, uint8_t* bytes, size_t bytes_max)
 {
-    uint8_t* bytes = NULL;
-    size_t bytes_max = 0;
-    int ext_received_return = 0;
-    int client_mode = 1;
+    uint64_t cnx_id_64 = (log_cnxid) ? picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)) : 0;
+
+    picoquic_log_prefix_initial_cid64(F, cnx_id_64);
+    fprintf(F, "%s transport parameter TLS extension (%d bytes):\n", (received)?"Received":"Sending", (uint32_t)bytes_max);
+    picoquic_log_transport_extension_content(F, log_cnxid, cnx_id_64, bytes, bytes_max);
+}
+
+void picoquic_log_transport_ids(FILE* F, picoquic_cnx_t* cnx, int log_cnxid)
+{
     char const* sni = picoquic_tls_get_sni(cnx);
     char const* alpn = picoquic_tls_get_negotiated_alpn(cnx);
     uint64_t cnx_id64 = (log_cnxid) ? picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)) : 0;
@@ -1578,25 +1583,6 @@ void picoquic_log_transport_extension(FILE* F, picoquic_cnx_t* cnx, int log_cnxi
         fprintf(F, "ALPN not received.\n");
     } else {
         fprintf(F, "Received ALPN: %s\n", alpn);
-    }
-
-    picoquic_provide_received_transport_extensions(cnx,
-        &bytes, &bytes_max, &ext_received_return, &client_mode);
-
-    if (bytes_max == 0) {
-        picoquic_log_prefix_initial_cid64(F, cnx_id64);
-        fprintf(F, "Did not receive transport parameter TLS extension.\n");
-    }
-    else {
-        picoquic_log_prefix_initial_cid64(F, cnx_id64);
-        fprintf(F, "Received transport parameter TLS extension (%d bytes):\n", (uint32_t)bytes_max);
-        
-        picoquic_log_transport_extension_content(F, log_cnxid,
-            picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)), bytes, bytes_max);
-    }
-
-    if (log_cnxid == 0) {
-        fprintf(F, "\n");
     }
 }
 

@@ -445,6 +445,10 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     else {
         picoformat_16(bytes_param_start, (uint16_t)(bytes - bytes_param_start - 2));
         *consumed = bytes - bytes_zero;
+
+        if (cnx->quic->F_log) {
+            picoquic_log_transport_extension(cnx->quic->F_log, cnx, 0, 1, bytes_zero, *consumed);
+        }
     }
 
     return ret;
@@ -486,6 +490,10 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
 
     cnx->remote_parameters_received = 1;
     picoquic_clear_transport_extensions(cnx);
+
+    if (cnx->quic->F_log) {
+        picoquic_log_transport_extension(cnx->quic->F_log, cnx, 1, 1, bytes, bytes_max);
+    }
 
     if (byte_index + 2 > bytes_max) {
         ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
