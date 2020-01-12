@@ -174,12 +174,10 @@ int quic_server(const char* server_name, int server_port,
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
     picoquic_quic_t* qserver = NULL;
-    picoquic_cnx_t* cnx_server = NULL;
     picoquic_server_sockets_t server_sockets;
     struct sockaddr_storage addr_from;
     struct sockaddr_storage addr_to;
     unsigned long if_index_to;
-    struct sockaddr_storage client_from;
     socklen_t from_length;
     socklen_t to_length;
     uint8_t buffer[1536];
@@ -193,6 +191,7 @@ int quic_server(const char* server_name, int server_port,
     uint64_t server_next_time = 0;
     uint64_t loop_count_time = 0;
     int nb_loops = 0;
+    int first_connection_seen = 0;
 
     memset(&picoquic_file_param, 0, sizeof(picohttp_server_parameters_t));
     picoquic_file_param.web_folder = web_folder;
@@ -252,7 +251,7 @@ int quic_server(const char* server_name, int server_port,
     }
 
     /* Wait for packets */
-    while (ret == 0 && (just_once == 0 || connection_done == 0)) {
+    while (ret == 0 && (!just_once || !connection_done)) {
         int64_t delta_t = picoquic_get_next_wake_delay(qserver, current_time, delay_max);
         uint64_t time_before = current_time;
         unsigned char received_ecn;
@@ -276,18 +275,6 @@ int quic_server(const char* server_name, int server_port,
             nb_loops = 0;
         }
 
-        if (just_once != 0 && F_log != NULL && 
-            (cnx_server == NULL || cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence < PICOQUIC_LOG_PACKET_MAX_SEQUENCE || qserver->use_long_log)) {
-            if (bytes_recv > 0) {
-                fprintf(F_log, "Select returns %d, from length %d after %d us (wait for %d us)\n",
-                    bytes_recv, from_length, (int)(current_time - time_before), (int)delta_t);
-                print_address(F_log, (struct sockaddr*)&addr_from, "recv from:", picoquic_null_connection_id);
-            } else {
-                fprintf(F_log, "Select return %d, after %d us (wait for %d us)\n", bytes_recv,
-                    (int)(current_time - time_before), (int)delta_t);
-            }
-        }
-
         if (bytes_recv < 0) {
             ret = -1;
         } else {
@@ -304,7 +291,10 @@ int quic_server(const char* server_name, int server_port,
                     ret = 0;
                 }
 
-                if (cnx_server != picoquic_get_first_cnx(qserver) && picoquic_get_first_cnx(qserver) != NULL) {
+                if (just_once && !first_connection_seen && picoquic_get_first_cnx(qserver) != NULL) {
+                    first_connection_seen = 1;
+                    fprintf(stdout, "First connection noticed.\n");
+#if 0
                     cnx_server = picoquic_get_first_cnx(qserver);
                     memset(&client_from, 0, sizeof(client_from));
                     memcpy(&client_from, &addr_from, from_length);
@@ -325,6 +315,7 @@ int quic_server(const char* server_name, int server_port,
                             picoquic_get_logging_cnxid(cnx_server));
                         picoquic_log_transport_extension(F_log, cnx_server, 1);
                     }
+#endif
                 }
             }
             loop_time = current_time;
@@ -349,6 +340,12 @@ int quic_server(const char* server_name, int server_port,
                 }
 
             } while (ret == 0 && send_length > 0);
+
+            if (just_once && first_connection_seen && picoquic_get_first_cnx(qserver) == NULL) {
+                fprintf(stdout, "No more active connections.\n");
+                connection_done = 1;
+            }
+
 #if 0
             while ((sp = picoquic_dequeue_stateless_packet(qserver)) != NULL) {
                 (void)picoquic_send_through_server_sockets(&server_sockets,
@@ -888,7 +885,7 @@ int quic_client(const char* ip_address_text, int server_port,
                     picoquic_get_cnx_state(cnx_client) == picoquic_state_client_ready_start)) {
                     if (established == 0) {
                         if (F_log != NULL) {
-                            picoquic_log_transport_extension(F_log, cnx_client, 0);
+                            picoquic_log_transport_ids(F_log, cnx_client, 0);
                         }
                         printf("Connection established. Version = %x, I-CID: %llx\n",
                             picoquic_supported_versions[cnx_client->version_index].version,
