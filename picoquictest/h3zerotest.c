@@ -1500,7 +1500,7 @@ http_stress_client_context_t* http_stress_client_create(size_t client_id, uint64
             }
 
             /* Create a client connection */
-            ctx->cnx_client = picoquic_create_cnx(ctx->qclient, picoquic_null_connection_id, picoquic_null_connection_id, server_address, *simulated_time, 0, PICOQUIC_TEST_FILE_SERVER_CERT, alpn, 1);
+            ctx->cnx_client = picoquic_create_cnx(ctx->qclient, i_cid, picoquic_null_connection_id, server_address, *simulated_time, 0, PICOQUIC_TEST_FILE_SERVER_CERT, alpn, 1);
 
             if (ctx->cnx_client == NULL) {
                 ret = -1;
