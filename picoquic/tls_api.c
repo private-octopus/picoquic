@@ -404,6 +404,10 @@ int picoquic_client_hello_call_back(ptls_on_client_hello_t* on_hello_cb_ctx,
     }
 #endif
 
+    if (quic->F_log != NULL && quic->cnx_in_progress != NULL) {
+        picoquic_log_negotiated_alpn(quic->F_log, quic->cnx_in_progress, 1, 1, params->negotiated_protocols.list, params->negotiated_protocols.count);
+    }
+
     /* Check if the client is proposing the expected ALPN */
     if (quic->default_alpn != NULL) {
         size_t len = strlen(quic->default_alpn);
@@ -1553,6 +1557,10 @@ int picoquic_initialize_tls_stream(picoquic_cnx_t* cnx, uint64_t current_time)
         if (ret != 0) {
             DBG_PRINTF("ALPN list callback returns 0x%x", ret);
         }
+    }
+
+    if (cnx->quic->F_log != NULL) {
+        picoquic_log_negotiated_alpn(cnx->quic->F_log, cnx, 0, 1, ctx->handshake_properties.client.negotiated_protocols.list, ctx->handshake_properties.client.negotiated_protocols.count);
     }
 
     /* No resumption if no alpn specified upfront, because it would make the negotiation and
