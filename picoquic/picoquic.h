@@ -588,6 +588,8 @@ int64_t picoquic_get_next_wake_delay(picoquic_quic_t* quic,
     int64_t delay_max);
 picoquic_cnx_t* picoquic_get_earliest_cnx_to_wake(picoquic_quic_t* quic, uint64_t max_wake_time);
 
+uint64_t picoquic_get_next_wake_time(picoquic_quic_t* quic, uint64_t current_time);
+
 picoquic_state_enum picoquic_get_cnx_state(picoquic_cnx_t* cnx);
 
 void picoquic_cnx_set_padding_policy(picoquic_cnx_t * cnx, uint32_t padding_multiple, uint32_t padding_minsize);
@@ -661,7 +663,7 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
 
 int picoquic_prepare_next_packet(picoquic_quic_t* quic,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
-    struct sockaddr_storage* p_addr_to, int* to_len, struct sockaddr_storage* p_addr_from, int* from_len, int * if_index);
+    struct sockaddr_storage* p_addr_to, int* to_len, struct sockaddr_storage* p_addr_from, int* from_len, int* if_index);
 
 /* Associate stream with app context */
 int picoquic_set_app_stream_ctx(picoquic_cnx_t* cnx,

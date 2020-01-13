@@ -1,4 +1,5 @@
 #include "picoquic.h"
+#include "picoquic.h"
 /*
 * Author: Christian Huitema
 * Copyright (c) 2017, Private Octopus, Inc.
@@ -664,6 +665,18 @@ picoquic_cnx_t* picoquic_get_earliest_cnx_to_wake(picoquic_quic_t* quic, uint64_
     return cnx;
 }
 
+uint64_t picoquic_get_next_wake_time(picoquic_quic_t* quic, uint64_t current_time)
+{
+    uint64_t wake_time = UINT64_MAX;
+
+    if (quic->pending_stateless_packet != NULL) {
+        wake_time = current_time;
+    } else if (quic->cnx_wake_first != NULL) {
+        wake_time = quic->cnx_wake_first->next_wake_time;
+    }
+
+    return wake_time;
+}
 
 int64_t picoquic_get_next_wake_delay(picoquic_quic_t* quic,
     uint64_t current_time, int64_t delay_max)

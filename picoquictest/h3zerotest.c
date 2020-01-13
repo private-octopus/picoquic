@@ -1382,3 +1382,393 @@ int h09_lone_fin_test()
 
     return ret;
 }
+
+/* HTTP Server stress.
+ * Execute in parallel a series of connection requests to the HTTP server.
+ * Verify that all requests are served.
+ *
+ * Requirement:
+ *  - network connection to each client.
+ *  - set of scenarios (pick prime number)
+ *     - in scenario parsing, add a client number to each download file name.
+ *  - choice of h09 or h3 for each scenario (alternate)
+ *  - number of clients
+ */
+
+
+static const picoquic_demo_stream_desc_t http_stress_scenario_1[] = {
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0, 0},
+    { 0, 4, 0, "test.html", "test.html", 0, 0 },
+    { 0, 8, 0, "main.jpg", "main.jpg", 1, 0 },
+    { 0, 12, 0, "/bla/bla/", "_bla_bla_", 0, 0 }
+};
+
+static const picoquic_demo_stream_desc_t http_stress_scenario_2[] = {
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0, 0 },
+    { 0, 4, 0, "main.jpg", "main.jpg", 1, 0 },
+    { 0, 8, 4, "test.html", "test.html", 0, 0 }
+};
+
+static const picoquic_demo_stream_desc_t http_stress_scenario_3[] = {
+    { 1000, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0, 0 }
+};
+
+static const picoquic_demo_stream_desc_t http_stress_scenario_4[] = {
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/cgi-sink", "_cgi-sink", 0, 1000000 },
+    { 0, 4, 0, "/", "_", 0, 0 }
+};
+
+typedef struct st_http_stress_scenario_list_t {
+    const picoquic_demo_stream_desc_t * sc;
+    const size_t sc_nb;
+} http_stress_scenario_list_t;
+
+#define HTTP_TEST_SCENARIO(scenario) { scenario, sizeof(scenario)/sizeof(picoquic_demo_stream_desc_t) }
+
+static const http_stress_scenario_list_t http_stress_scenario_list[] = {
+    HTTP_TEST_SCENARIO(http_stress_scenario_1),
+    HTTP_TEST_SCENARIO(http_stress_scenario_2),
+    HTTP_TEST_SCENARIO(http_stress_scenario_3),
+    HTTP_TEST_SCENARIO(http_stress_scenario_4)
+};
+
+static size_t nb_http_stress_scenario = sizeof(http_stress_scenario_list) / sizeof(http_stress_scenario_list_t);
+
+typedef struct st_http_stress_client_context_t {
+    picoquic_quic_t * qclient;
+    picoquic_cnx_t * cnx_client;
+    picoquic_demo_callback_ctx_t callback_ctx;
+    struct sockaddr_storage client_address;
+    uint64_t client_time;
+
+} http_stress_client_context_t;
+
+http_stress_client_context_t* http_stress_client_delete(http_stress_client_context_t* ctx)
+{
+    picoquic_demo_client_delete_context(&ctx->callback_ctx);
+    if (ctx->cnx_client != NULL) {
+        ctx->cnx_client = NULL;
+    }
+    if (ctx->qclient != NULL) {
+        picoquic_free(ctx->qclient);
+        ctx->qclient = NULL;
+    }
+    free(ctx);
+    return(NULL);
+}
+
+http_stress_client_context_t* http_stress_client_create(size_t client_id, uint64_t * simulated_time, struct sockaddr* server_address)
+{
+    int ret = 0;
+    http_stress_client_context_t* ctx = (http_stress_client_context_t*)malloc(sizeof(http_stress_client_context_t));
+
+    if (ctx != NULL) {
+        char const* alpn = NULL;
+
+        memset(ctx, 0, sizeof(http_stress_client_context_t));
+
+        /* alternate ALPN between H3, HQ and "server chooses" */
+        switch (client_id % 3) {
+        case 0:
+            alpn = PICOHTTP_ALPN_H3_LATEST;
+            break;
+        case 1:
+            alpn = PICOHTTP_ALPN_HQ_LATEST;
+            break;
+        default:
+            break;
+        }
+
+        ctx->qclient = picoquic_create(8, NULL, NULL, NULL, alpn, NULL, NULL, NULL, NULL, NULL, *simulated_time, simulated_time, NULL, NULL, 0);
+
+        if (ctx->qclient == NULL) {
+            ret = -1;
+        }
+        else {
+            /* Use predictable value for ICID */
+            picoquic_connection_id_t i_cid = picoquic_null_connection_id;
+            uint64_t id64 = 0xdeadbeefbabac001ull;
+
+            picoquic_set_default_congestion_algorithm(ctx->qclient, picoquic_bbr_algorithm);
+            picoquic_set_null_verifier(ctx->qclient);
+
+            i_cid.id_len = 8;
+            id64 ^= (uint64_t)client_id;
+            for (int i = 0; i < 8; i++) {
+                i_cid.id[i] = (uint8_t)id64;
+                id64 >>= 8;
+            }
+
+            /* Create a client connection */
+            ctx->cnx_client = picoquic_create_cnx(ctx->qclient, i_cid, picoquic_null_connection_id, server_address, *simulated_time, 0, PICOQUIC_TEST_FILE_SERVER_CERT, alpn, 1);
+
+            if (ctx->cnx_client == NULL) {
+                ret = -1;
+            }
+            else {
+                size_t scenario_id = client_id % nb_http_stress_scenario;
+
+                ret = picoquic_demo_client_initialize_context(&ctx->callback_ctx, http_stress_scenario_list[scenario_id].sc, http_stress_scenario_list[scenario_id].sc_nb, alpn, 1 /* No disk!*/, 0);
+                if (ret == 0) {
+                    picoquic_set_callback(ctx->cnx_client, picoquic_demo_client_callback, &ctx->callback_ctx);
+                    ctx->callback_ctx.no_print = 1;
+                }
+            }
+        }
+
+        if (ret == 0) {
+            char test_addr[256];
+            size_t nb_written = 0;
+
+            if ((ret = picoquic_sprintf(test_addr, sizeof(test_addr), &nb_written, "2::%x:%x", (uint16_t)(client_id >> 16), (uint16_t)client_id & 0xFFFF)) == 0) {
+                ret = picoquic_get_test_address(test_addr, 4443, &ctx->client_address);
+            }
+        }
+        
+        if (ret == 0)
+        {
+            /* Requires TP grease, for interop tests */
+            ctx->cnx_client->grease_transport_parameters = 1;
+            ctx->cnx_client->local_parameters.enable_one_way_delay = 1;
+            ctx->client_time = *simulated_time;
+
+            if (ret == 0) {
+                ret = picoquic_start_client_cnx(ctx->cnx_client);
+            }
+        }
+
+        if (ret == 0) {
+            ret = picoquic_demo_client_start_streams(ctx->cnx_client, &ctx->callback_ctx, PICOQUIC_DEMO_STREAM_ID_INITIAL);
+        }
+    }
+
+    if (ret != 0 && ctx != NULL) {
+        /* TODO: delete context */
+        ctx = http_stress_client_delete(ctx);
+    }
+
+    return ctx;
+}
+
+size_t picohttp_nb_stress_clients = 128;
+
+int http_stress_test()
+{
+    /* initialize the server, address 1::1 */
+    /* Create QUIC context */
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 , 13, 14, 15, 16 };
+    char test_server_cert_file[512];
+    char test_server_key_file[512];
+    char file_name_buffer[1024];
+    picohttp_server_parameters_t file_param;
+    picoquic_quic_t* qserver = NULL;
+    http_stress_client_context_t** ctx_client = NULL;
+    picoquictest_sim_link_t* lan = NULL;
+    struct sockaddr_storage server_address;
+    uint64_t server_time = 0;
+
+    ret = picoquic_get_test_address("1::1", 443, &server_address);
+
+    if (ret == 0) {
+        ret = serve_file_test_set_param(&file_param, file_name_buffer, sizeof(file_name_buffer));
+    }
+
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_SERVER_CERT);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY);
+    }
+    if (ret == 0) {
+        qserver = picoquic_create(256, test_server_cert_file, test_server_key_file, NULL, NULL,
+            picoquic_demo_server_callback, &file_param,
+            NULL, NULL, reset_seed, simulated_time, &simulated_time, NULL, NULL, 0);
+        if (qserver == NULL) {
+            DBG_PRINTF("%s", "Cannot create http_stress server");
+            ret = -1;
+        }
+        else {
+            picoquic_set_alpn_select_fn(qserver, picoquic_demo_server_callback_select_alpn);
+        }
+    }
+
+    if (ret == 0) {
+        ctx_client = (http_stress_client_context_t**)malloc(sizeof(http_stress_client_context_t*) * picohttp_nb_stress_clients);
+        if (ctx_client == NULL) {
+            ret = -1;
+        }
+        else {
+            /* initialize each client, address 2::nnnn */
+            memset(ctx_client, 0, sizeof(http_stress_client_context_t*) * picohttp_nb_stress_clients);
+            for (size_t i = 0; ret == 0 && i < picohttp_nb_stress_clients; i++) {
+                ctx_client[i] = http_stress_client_create(i, &simulated_time, (struct sockaddr*) & server_address);
+                if (ctx_client[i] == NULL) {
+                    ret = -1;
+                }
+            }
+        }
+    }
+
+    if (ret == 0)
+    {
+        /* simulate a local network linking every client and the server */
+        lan = picoquictest_sim_link_create(1.0, 1000, NULL, 10000, simulated_time);
+        if (lan == NULL) {
+            ret = -1;
+        }
+    }
+
+    /* run the simulation until all clients are served */
+    while (ret == 0) {
+        uint64_t next_time = UINT64_MAX;
+        int is_lan_ready = lan->first_packet != NULL;
+        size_t client_id = picohttp_nb_stress_clients;
+        picoquic_quic_t* qready = NULL;
+        struct sockaddr* ready_from = NULL;
+
+        if (is_lan_ready) {
+            next_time = picoquictest_sim_link_next_arrival(lan, next_time);
+        }
+
+        if (lan->queue_time < simulated_time + lan->queue_delay_max) {
+            /* Simulate contention on access to LAN, to avoid creating peak loads and huge queues */
+            if (server_time < next_time) {
+                qready = qserver;
+                ready_from = (struct sockaddr*) & server_address;
+                next_time = server_time;
+            }
+
+            for (size_t i = 0; ret == 0 && i < picohttp_nb_stress_clients; i++) {
+                if (ctx_client[i]->client_time < next_time) {
+                    qready = ctx_client[i]->qclient;
+                    ready_from = (struct sockaddr*) & ctx_client[i]->client_address;
+                    next_time = ctx_client[i]->client_time;
+                    client_id = i;
+                }
+            }
+        }
+
+        if (next_time > simulated_time) {
+            if (next_time == UINT64_MAX) {
+                DBG_PRINTF("%s", "end of simulation");
+                break;
+            }
+            else {
+                simulated_time = next_time;
+            }
+        }
+        if (qready != NULL) {
+            picoquictest_sim_packet_t* prepared = picoquictest_sim_link_create_packet();
+
+            if (prepared == NULL) {
+                ret = -1;
+            }
+            else {
+                /* ask server to prepare next packet */
+                int if_index = -1;
+                int to_len;
+                int from_len;
+                ret = picoquic_prepare_next_packet(qready, simulated_time, prepared->bytes, sizeof(prepared->bytes),
+                    &prepared->length, &prepared->addr_to, &to_len, &prepared->addr_from, &from_len, &if_index);
+
+                if (prepared->length == 0) {
+                    free(prepared);
+                }
+                else {
+                    if (from_len == 0) {
+                        picoquic_store_addr(&prepared->addr_from, ready_from);
+                    }
+                    picoquictest_sim_link_submit(lan, prepared, simulated_time);
+                }
+            }
+
+            if (client_id < picohttp_nb_stress_clients) {
+                ctx_client[client_id]->client_time = picoquic_get_next_wake_time(ctx_client[client_id]->qclient, simulated_time);
+                if (ctx_client[client_id]->client_time == UINT64_MAX) {
+                    DBG_PRINTF("End of client %d", (int)client_id);
+                }
+            }
+            else {
+                server_time = picoquic_get_next_wake_time(qserver, simulated_time);
+                if (server_time == UINT64_MAX) {
+                    DBG_PRINTF("End of server at %llu", (unsigned long long)simulated_time);
+                }
+            }
+        }
+        else if (is_lan_ready) {
+            picoquictest_sim_packet_t* arrival = picoquictest_sim_link_dequeue(lan, simulated_time);
+
+            if (arrival != NULL) {
+                if (picoquic_compare_addr((struct sockaddr*) & arrival->addr_to, (struct sockaddr*) & server_address) == 0) {
+                    /* submit to server */
+                    ret = picoquic_incoming_packet(qserver, arrival->bytes, arrival->length,
+                        (struct sockaddr*) & arrival->addr_from, (struct sockaddr*) & arrival->addr_to, 0, 0, simulated_time);
+                    server_time = picoquic_get_next_wake_time(qserver, simulated_time);
+                }
+                else {
+                    int is_matched = 0;
+                    for (size_t i = 0; ret == 0 && i < picohttp_nb_stress_clients; i++) {
+                        if (picoquic_compare_addr((struct sockaddr*) & arrival->addr_to, (struct sockaddr*) & ctx_client[i]->client_address) == 0) {
+                            /* submit to client */
+                            ret = picoquic_incoming_packet(ctx_client[i]->qclient, arrival->bytes, arrival->length,
+                                (struct sockaddr*) & arrival->addr_from, (struct sockaddr*) & arrival->addr_to, 0, 0, simulated_time);
+                            ctx_client[i]->client_time = picoquic_get_next_wake_time(ctx_client[i]->qclient, simulated_time);
+                            is_matched = 1;
+                        }
+                    }
+                    if (!is_matched) {
+                        DBG_PRINTF("%s", "Packet cannot be delivered");
+                    }
+                }
+
+                free(arrival);
+            }
+        }
+        else {
+            /* end of simulation. */
+            break;
+        }
+    }
+
+    /* verify that each client scenario is properly completed */
+    for (size_t i = 0; ret == 0 && i < picohttp_nb_stress_clients; i++) {
+        if (!ctx_client[i]->callback_ctx.connection_ready) {
+            DBG_PRINTF("Connection #%d failed", (int)i);
+            ret = -1;
+        }
+        else if (!ctx_client[i]->callback_ctx.connection_closed) {
+            DBG_PRINTF("Connection #%d not closed", (int)i);
+            ret = -1;
+        }
+    }
+
+    /* verify that the global execution time makes sense */
+    if (ret == 0 && simulated_time > 240000000ull + 1000000ull * picohttp_nb_stress_clients) {
+        DBG_PRINTF("Taking %llu microseconds for %d clients!", (unsigned long long)simulated_time, (int)picohttp_nb_stress_clients);
+        ret = -1;
+    }
+
+    /* clean up */
+    if (lan != NULL) {
+        picoquictest_sim_link_delete(lan);
+        lan = NULL;
+    }
+
+    if (ctx_client != NULL) {
+        for (size_t i = 0; i < picohttp_nb_stress_clients; i++) {
+            if (ctx_client[i] != NULL) {
+                ctx_client[i] = http_stress_client_delete(ctx_client[i]);
+            }
+        }
+        free(ctx_client);
+    }
+
+    if (qserver != NULL) {
+        picoquic_free(qserver);
+    }
+
+    return ret;
+}

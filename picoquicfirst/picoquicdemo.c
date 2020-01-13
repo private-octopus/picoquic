@@ -280,40 +280,14 @@ int quic_server(const char* server_name, int server_port,
 
             if (bytes_recv > 0) {
                 /* Submit the packet to the server */
-                ret = picoquic_incoming_packet(qserver, buffer,
+                (void)picoquic_incoming_packet(qserver, buffer,
                     (size_t)bytes_recv, (struct sockaddr*)&addr_from,
                     (struct sockaddr*)&addr_to, if_index_to, received_ecn,
                     current_time);
 
-                if (ret != 0) {
-                    ret = 0;
-                }
-
                 if (just_once && !first_connection_seen && picoquic_get_first_cnx(qserver) != NULL) {
                     first_connection_seen = 1;
                     fprintf(stdout, "First connection noticed.\n");
-#if 0
-                    cnx_server = picoquic_get_first_cnx(qserver);
-                    memset(&client_from, 0, sizeof(client_from));
-                    memcpy(&client_from, &addr_from, from_length);
-                    if (client_from.ss_family == AF_INET) {
-                        struct sockaddr_in* addr = (struct sockaddr_in*) & client_from;
-                        addr->sin_port = ntohs(addr->sin_port);
-                    }
-                    else {
-                        struct sockaddr_in6* addr = (struct sockaddr_in6*) & client_from;
-                        addr->sin6_port = ntohs(addr->sin6_port);
-                    }
-                    if (F_log != NULL) {
-                        fprintf(F_log, "%16llx: ", (unsigned long long)picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx_server)));
-                        picoquic_log_time(F_log, cnx_server, picoquic_current_time(), "", " : ");
-                        fprintf(F_log, "Connection established, state = %d, from length: %d\n",
-                            picoquic_get_cnx_state(picoquic_get_first_cnx(qserver)), from_length);
-                        print_address(F_log, (struct sockaddr*)&client_from, "Client address:",
-                            picoquic_get_logging_cnxid(cnx_server));
-                        picoquic_log_transport_extension(F_log, cnx_server, 1);
-                    }
-#endif
                 }
             }
             loop_time = current_time;
@@ -343,83 +317,6 @@ int quic_server(const char* server_name, int server_port,
                 fprintf(stdout, "No more active connections.\n");
                 connection_done = 1;
             }
-
-#if 0
-            while ((sp = picoquic_dequeue_stateless_packet(qserver)) != NULL) {
-                (void)picoquic_send_through_server_sockets(&server_sockets,
-                    (struct sockaddr*)&sp->addr_to,
-                    (sp->addr_to.ss_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6),
-                    (struct sockaddr*)&sp->addr_local,
-                    (sp->addr_local.ss_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6),
-                    dest_if == -1 ? sp->if_index_local : dest_if,
-                    (const char*)sp->bytes, (int)sp->length);
-
-                /* TODO: log stateless packet */
-                if (F_log != NULL) {
-                    fflush(F_log);
-                }
-
-                picoquic_delete_stateless_packet(sp);
-            }
-
-            while (ret == 0 && (cnx_next = picoquic_get_earliest_cnx_to_wake(qserver, loop_time)) != NULL) {
-                int peer_addr_len = 0;
-                struct sockaddr_storage peer_addr;
-                int local_addr_len = 0;
-                struct sockaddr_storage local_addr;
-
-                ret = picoquic_prepare_packet(cnx_next, current_time,
-                    send_buffer, sizeof(send_buffer), &send_length,
-                    &peer_addr, &peer_addr_len, &local_addr, &local_addr_len);
-
-                if (ret == PICOQUIC_ERROR_DISCONNECTED) {
-                    ret = 0;
-
-                    if (F_log != NULL) {
-                        fprintf(F_log, "%llx: ", (unsigned long long)picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx_next)));
-                        picoquic_log_time(F_log, cnx_server, picoquic_current_time(), "", " : ");
-                        fprintf(F_log, "Closed. Retrans= %d, spurious= %d, max sp gap = %d, max sp delay = %d\n",
-                            (int)cnx_next->nb_retransmission_total, (int)cnx_next->nb_spurious,
-                            (int)cnx_next->path[0]->max_reorder_gap, (int)cnx_next->path[0]->max_spurious_rtt);
-                        fflush(F_log);
-                    }
-
-                    if (cnx_next == cnx_server) {
-                        cnx_server = NULL;
-                    }
-
-                    picoquic_delete_cnx(cnx_next);
-
-
-                    connection_done = 1;
-
-                    break;
-                }
-                else if (ret == 0) {
-
-                    if (send_length > 0) {
-#if 0
-                        if (F_log != NULL && (just_once != 0 ||
-                            cnx_next->cnx_state < picoquic_state_server_false_start ||
-                            cnx_next->cnx_state >= picoquic_state_disconnecting) &&
-                            cnx_next->pkt_ctx[picoquic_packet_context_application].send_sequence < 100) {
-                            fprintf(F_log, "%llx: ", (unsigned long long)picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx_next)));
-                            fprintf(F_log, "Connection state = %d\n",
-                                picoquic_get_cnx_state(cnx_next));
-                        }
-#endif
-
-                        (void)picoquic_send_through_server_sockets(&server_sockets,
-                            (struct sockaddr *)&peer_addr, peer_addr_len, (struct sockaddr *)&local_addr, local_addr_len,
-                            dest_if == -1 ? picoquic_get_local_if_index(cnx_next) : dest_if,
-                            (const char*)send_buffer, (int)send_length);
-                    }
-                }
-                else {
-                    break;
-                }
-            }
-#endif
         }
     }
 

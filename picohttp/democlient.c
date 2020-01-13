@@ -423,11 +423,13 @@ static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
             }
         }
 
-        if (ret != 0) {
-            fprintf(stdout, "Cannot send %s command for stream(%d): %s\n", (post_size==0)?"GET":"POST", (int)stream_ctx->stream_id, path);
-        }
-        else if (nb_repeat == 0) {
-            fprintf(stdout, "Opening stream %d to %s %s\n", (int)stream_ctx->stream_id, (post_size == 0) ? "GET" : "POST", path);
+        if (!ctx->no_print) {
+            if (ret != 0) {
+                fprintf(stdout, "Cannot send %s command for stream(%d): %s\n", (post_size == 0) ? "GET" : "POST", (int)stream_ctx->stream_id, path);
+            }
+            else if (nb_repeat == 0) {
+                fprintf(stdout, "Opening stream %d to %s %s\n", (int)stream_ctx->stream_id, (post_size == 0) ? "GET" : "POST", path);
+            }
         }
     }
 
@@ -479,7 +481,7 @@ int picoquic_demo_client_start_streams(picoquic_cnx_t* cnx,
                 repeat_nb++;
             } while (ret == 0 && repeat_nb < ctx->demo_stream[i].repeat_count);
 
-            if (ret == 0 && repeat_nb > 1) {
+            if (ret == 0 && repeat_nb > 1 && !ctx->no_print) {
                 fprintf(stdout, "Repeated stream opening %d times.\n", (int)repeat_nb);
             }
         }
@@ -552,7 +554,7 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
             if (fin_or_event == picoquic_callback_stream_fin) {
                 if (picoquic_demo_client_close_stream(ctx, stream_ctx)) {
                     fin_stream_id = stream_id;
-                    if (stream_id <= 64) {
+                    if (stream_id <= 64 && !ctx->no_print) {
                         fprintf(stdout, "Stream %d ended after %d bytes\n",
                             (int)stream_id, (int)stream_ctx->received_length);
                     }
@@ -568,28 +570,40 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
         }
         if (picoquic_demo_client_close_stream(ctx, stream_ctx)) {
             fin_stream_id = stream_id;
-            fprintf(stdout, "Stream %d reset after %d bytes\n",
-                (int)stream_id, (int)stream_ctx->received_length);
+            if (!ctx->no_print) {
+                fprintf(stdout, "Stream %d reset after %d bytes\n",
+                    (int)stream_id, (int)stream_ctx->received_length);
+            }
         }
         picoquic_reset_stream(cnx, stream_id, 0);
         /* TODO: higher level notify? */
         break;
     case picoquic_callback_stateless_reset:
-        fprintf(stdout, "Received a stateless reset.\n");
+        if (!ctx->no_print) {
+            fprintf(stdout, "Received a stateless reset.\n");
+        }
         break;
     case picoquic_callback_close: /* Received connection close */
-        fprintf(stdout, "Received a request to close the connection.\n");
+        if (!ctx->no_print) {
+            fprintf(stdout, "Received a request to close the connection.\n");
+        }
+        ctx->connection_closed = 1;
         break;
     case picoquic_callback_application_close: /* Received application close */
-        fprintf(stdout, "Received a request to close the application.\n");
+        if (!ctx->no_print) {
+            fprintf(stdout, "Received a request to close the application.\n");
+        }
+        ctx->connection_closed = 1;
         break;
     case picoquic_callback_version_negotiation:
-        fprintf(stdout, "Received a version negotiation request:");
-        for (size_t byte_index = 0; byte_index + 4 <= length; byte_index += 4) {
-            uint32_t vn = PICOPARSE_32(bytes + byte_index);
-            fprintf(stdout, "%s%x", (byte_index == 0)?" ":", ", vn);
+        if (!ctx->no_print) {
+            fprintf(stdout, "Received a version negotiation request:");
+            for (size_t byte_index = 0; byte_index + 4 <= length; byte_index += 4) {
+                uint32_t vn = PICOPARSE_32(bytes + byte_index);
+                fprintf(stdout, "%s%x", (byte_index == 0) ? " " : ", ", vn);
+            }
+            fprintf(stdout, "\n");
         }
-        fprintf(stdout, "\n");
         break;
     case picoquic_callback_stream_gap:
         /* Gap indication, when unreliable streams are supported */
@@ -618,6 +632,7 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
         }
     case picoquic_callback_almost_ready:
     case picoquic_callback_ready:
+        ctx->connection_ready = 1;
         break;
     case picoquic_callback_request_alpn_list:
         picoquic_demo_client_set_alpn_list((void*)bytes);
