@@ -83,6 +83,7 @@ typedef struct st_picoquic_demo_client_callback_ctx_t {
     int progress_observed;
     int no_disk;
     int delay_fin; /* For tests only! */
+    int no_print;
     int connection_ready;
     int connection_closed;
 } picoquic_demo_callback_ctx_t;

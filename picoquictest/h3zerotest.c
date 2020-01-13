@@ -1485,8 +1485,19 @@ http_stress_client_context_t* http_stress_client_create(size_t client_id, uint64
             ret = -1;
         }
         else {
+            /* Use predictable value for ICID */
+            picoquic_connection_id_t i_cid = picoquic_null_connection_id;
+            uint64_t id64 = 0xdeadbeefbabac001ull;
+
             picoquic_set_default_congestion_algorithm(ctx->qclient, picoquic_bbr_algorithm);
             picoquic_set_null_verifier(ctx->qclient);
+
+            i_cid.id_len = 8;
+            id64 ^= (uint64_t)client_id;
+            for (int i = 0; i < 8; i++) {
+                i_cid.id[i] = (uint8_t)id64;
+                id64 >>= 8;
+            }
 
             /* Create a client connection */
             ctx->cnx_client = picoquic_create_cnx(ctx->qclient, picoquic_null_connection_id, picoquic_null_connection_id, server_address, *simulated_time, 0, PICOQUIC_TEST_FILE_SERVER_CERT, alpn, 1);
@@ -1500,6 +1511,7 @@ http_stress_client_context_t* http_stress_client_create(size_t client_id, uint64
                 ret = picoquic_demo_client_initialize_context(&ctx->callback_ctx, http_stress_scenario_list[scenario_id].sc, http_stress_scenario_list[scenario_id].sc_nb, alpn, 1 /* No disk!*/, 0);
                 if (ret == 0) {
                     picoquic_set_callback(ctx->cnx_client, picoquic_demo_client_callback, &ctx->callback_ctx);
+                    ctx->callback_ctx.no_print = 1;
                 }
             }
         }
@@ -1611,9 +1623,7 @@ int http_stress_test()
     while (ret == 0) {
         uint64_t next_time = UINT64_MAX;
         int is_lan_ready = lan->first_packet != NULL;
-        int is_server_ready = 0;
         size_t client_id = picohttp_nb_stress_clients;
-        picoquic_cnx_t* cnx = NULL;
         picoquic_quic_t* qready = NULL;
         struct sockaddr* ready_from = NULL;
 
@@ -1627,7 +1637,6 @@ int http_stress_test()
                 qready = qserver;
                 ready_from = (struct sockaddr*) & server_address;
                 next_time = server_time;
-                is_server_ready = 1;
             }
 
             for (size_t i = 0; ret == 0 && i < picohttp_nb_stress_clients; i++) {

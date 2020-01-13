@@ -395,6 +395,11 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         /* Do not use a purely random value, so we can repetitive tests */
         int n = 31 * (cnx->initial_cnxid.id[0] + cnx->client_mode) + 27;
         uint64_t v = cnx->initial_cnxid.id[1];
+        while (n == picoquic_tp_test_large_chello ||
+            n == picoquic_tp_enable_loss_bit ||
+            n == picoquic_tp_enable_one_way_delay){
+            n += 31;
+        }
         v = (v << 8) + cnx->initial_cnxid.id[2];
         bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, n, v);
     }
