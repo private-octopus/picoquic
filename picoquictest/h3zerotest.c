@@ -1571,7 +1571,9 @@ int http_stress_test()
 
     ret = picoquic_get_test_address("1::1", 443, &server_address);
 
-    ret = serve_file_test_set_param(&file_param, file_name_buffer, sizeof(file_name_buffer));
+    if (ret == 0) {
+        ret = serve_file_test_set_param(&file_param, file_name_buffer, sizeof(file_name_buffer));
+    }
 
     if (ret == 0) {
         ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_SERVER_CERT);
