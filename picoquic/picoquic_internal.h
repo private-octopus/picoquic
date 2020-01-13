@@ -1027,6 +1027,7 @@ void picoquic_log_error_packet(FILE* F, uint8_t* bytes, size_t bytes_max, int re
 void picoquic_log_processing(FILE* F, picoquic_cnx_t* cnx, size_t length, int ret);
 void picoquic_log_transport_ids(FILE* F, picoquic_cnx_t* cnx, int log_cnxid);
 void picoquic_log_transport_extension(FILE* F, picoquic_cnx_t* cnx, int received, int log_cnxid, uint8_t* bytes, size_t bytes_max);
+void picoquic_log_negotiated_alpn(FILE* F, picoquic_cnx_t* cnx, int received, int log_cnxid, const ptls_iovec_t* list, size_t count);
 void picoquic_log_congestion_state(FILE* F, picoquic_cnx_t* cnx, uint64_t current_time);
 void picoquic_log_picotls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
     uint8_t* ticket, uint16_t ticket_length);
