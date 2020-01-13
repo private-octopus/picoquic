@@ -209,6 +209,7 @@ int demo_server_file_test();
 int h3zero_satellite_test();
 int h09_satellite_test();
 int h09_lone_fin_test();
+int http_stress_test();
 
 int qinq_rh_test();
 int qinq_incoming_datagram_parse_test();

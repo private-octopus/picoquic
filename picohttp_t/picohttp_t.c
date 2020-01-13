@@ -28,6 +28,8 @@
 #include <string.h>
 #include <stdlib.h>
 
+extern size_t picohttp_nb_stress_clients;
+
 typedef struct st_picoquic_test_def_t {
     char const* test_name;
     int (*test_fn)();
@@ -59,7 +61,8 @@ static const picoquic_test_def_t test_table[] = {
     { "demo_server_file", demo_server_file_test },
     { "h3zero_satellite", h3zero_satellite_test },
     { "h09_satellite", h09_satellite_test },
-    { "h09_lone_fin", h09_lone_fin_test }
+    { "h09_lone_fin", h09_lone_fin_test },
+    { "http_stress", http_stress_test }
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);
@@ -106,8 +109,8 @@ int usage(char const * argv0)
     }
     fprintf(stderr, "Options: \n");
     fprintf(stderr, "  -x test           Do not run the specified test.\n");
-    fprintf(stderr, "  -s nnn            Run stress for nnn minutes.\n");
-    fprintf(stderr, "  -f nnn            Run fuzz for nnn minutes.\n");
+    fprintf(stderr, "  -s nnn            Run stress for nnn clients.\n");
+    fprintf(stderr, "  -f nnn            Run fuzz for nnn clients.\n");
     fprintf(stderr, "  -n                Disable debug prints.\n");
     fprintf(stderr, "  -r                Retry failed tests with debug print enabled.\n");
     fprintf(stderr, "  -h                Print this help message\n");
@@ -134,7 +137,7 @@ int main(int argc, char** argv)
     int ret = 0;
     int nb_test_tried = 0;
     int nb_test_failed = 0;
-    int stress_minutes = 0;
+    int stress_clients = 0;
     int found_exclusion = 0;
     test_status_t * test_status = (test_status_t *) calloc(nb_tests, sizeof(test_status_t));
     int opt;
@@ -167,16 +170,16 @@ int main(int argc, char** argv)
             }
             case 'f':
                 do_fuzz = 1;
-                stress_minutes = atoi(optarg);
-                if (stress_minutes <= 0) {
+                stress_clients = atoi(optarg);
+                if (stress_clients <= 0) {
                     fprintf(stderr, "Incorrect stress minutes: %s\n", optarg);
                     ret = usage(argv[0]);
                 }
                 break;
             case 's':
                 do_stress = 1;
-                stress_minutes = atoi(optarg);
-                if (stress_minutes <= 0) {
+                stress_clients = atoi(optarg);
+                if (stress_clients <= 0) {
                     fprintf(stderr, "Incorrect stress minutes: %s\n", optarg);
                     ret = usage(argv[0]);
                 }
@@ -207,16 +210,16 @@ int main(int argc, char** argv)
             debug_printf_push_stream(stderr);
         }
 
-        if (ret == 0 && stress_minutes > 0) {
+        if (ret == 0 && stress_clients > 0) {
             if (optind >= argc && found_exclusion == 0) {
                 for (size_t i = 0; i < nb_tests; i++) {
-                    if (strcmp(test_table[i].test_name, "stress") == 0)
+                    if (strcmp(test_table[i].test_name, "http_stress") == 0)
                     {
                         if (do_stress == 0) {
                             test_status[i] = test_excluded;
                         }
                     }
-                    else if (strcmp(test_table[i].test_name, "fuzz") == 0) {
+                    else if (strcmp(test_table[i].test_name, "http_fuzz") == 0) {
                         if (do_fuzz == 0) {
                             test_status[i] = test_excluded;
                         }
@@ -225,8 +228,8 @@ int main(int argc, char** argv)
                         test_status[i] = test_excluded;
                     }
                 }
-                picoquic_stress_test_duration = stress_minutes;
-                picoquic_stress_test_duration *= 60000000;
+                
+                picohttp_nb_stress_clients = (size_t) stress_clients;
             }
         }
 
@@ -245,7 +248,7 @@ int main(int argc, char** argv)
                             test_status[i] = test_success;
                         }
                     }
-                    else if (stress_minutes == 0) {
+                    else if (stress_clients == 0) {
                         fprintf(stdout, "Test number %d (%s) is bypassed.\n", (int)i, test_table[i].test_name);
                     }
                 }
@@ -293,15 +296,13 @@ int main(int argc, char** argv)
                 debug_printf_resume();
                 ret = 0;
                 for (size_t i = 0; i < nb_tests; i++) {
-                    int is_fuzz = 0;
-                    if (strcmp("stress", test_table[i].test_name) == 0 ||
-                        strcmp("fuzz", test_table[i].test_name) == 0 ||
-                        strcmp("fuzz_initial", test_table[i].test_name) == 0) {
-                        is_fuzz = 1;
+                    int is_stress = 0;
+                    if (strcmp("http_stress", test_table[i].test_name) == 0) {
+                        is_stress = 1;
                     }
                     if (test_status[i] == test_failed) {
                         fprintf(stdout, "Retrying %s:\n", test_table[i].test_name);
-                        if (is_fuzz) {
+                        if (is_stress && !disable_debug) {
                             debug_printf_suspend();
                         }
                         if (do_one_test(i, stdout) != 0) {
@@ -312,7 +313,7 @@ int main(int argc, char** argv)
                             /* This was a Heisenbug.. */
                             test_status[i] = test_success;
                         }
-                        if (is_fuzz) {
+                        if (is_stress && !disable_debug) {
                             debug_printf_resume();
                         }
                     }

@@ -1186,6 +1186,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(http_stress) {
+            int ret = http_stress_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(qinq_rh) {
             int ret = qinq_rh_test();
 

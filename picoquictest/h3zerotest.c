@@ -1447,7 +1447,6 @@ http_stress_client_context_t* http_stress_client_delete(http_stress_client_conte
 {
     picoquic_demo_client_delete_context(&ctx->callback_ctx);
     if (ctx->cnx_client != NULL) {
-        picoquic_delete_cnx(ctx->cnx_client);
         ctx->cnx_client = NULL;
     }
     if (ctx->qclient != NULL) {
@@ -1490,8 +1489,7 @@ http_stress_client_context_t* http_stress_client_create(size_t client_id, uint64
             picoquic_set_null_verifier(ctx->qclient);
 
             /* Create a client connection */
-            ctx->cnx_client = picoquic_create_cnx(ctx->qclient, picoquic_null_connection_id, picoquic_null_connection_id,
-                (struct sockaddr*) & server_address, *simulated_time, 0, PICOQUIC_TEST_FILE_SERVER_CERT, alpn, 1);
+            ctx->cnx_client = picoquic_create_cnx(ctx->qclient, picoquic_null_connection_id, picoquic_null_connection_id, server_address, *simulated_time, 0, PICOQUIC_TEST_FILE_SERVER_CERT, alpn, 1);
 
             if (ctx->cnx_client == NULL) {
                 ret = -1;
@@ -1499,7 +1497,7 @@ http_stress_client_context_t* http_stress_client_create(size_t client_id, uint64
             else {
                 size_t scenario_id = client_id % nb_http_stress_scenario;
 
-                ret = picoquic_demo_client_initialize_context(&ctx->callback_ctx, http_stress_scenario_list[client_id].sc, http_stress_scenario_list[client_id].sc_nb, alpn, 1 /* No disk!*/, 0);
+                ret = picoquic_demo_client_initialize_context(&ctx->callback_ctx, http_stress_scenario_list[scenario_id].sc, http_stress_scenario_list[scenario_id].sc_nb, alpn, 1 /* No disk!*/, 0);
                 if (ret == 0) {
                     picoquic_set_callback(ctx->cnx_client, picoquic_demo_client_callback, &ctx->callback_ctx);
                 }
@@ -1511,7 +1509,7 @@ http_stress_client_context_t* http_stress_client_create(size_t client_id, uint64
             size_t nb_written = 0;
 
             if ((ret = picoquic_sprintf(test_addr, sizeof(test_addr), &nb_written, "2::%x:%x", (uint16_t)(client_id >> 16), (uint16_t)client_id & 0xFFFF)) == 0) {
-                ret = picoquic_get_test_address("1::0", 4443, &ctx->client_address);
+                ret = picoquic_get_test_address(test_addr, 4443, &ctx->client_address);
             }
         }
         
@@ -1555,9 +1553,9 @@ int http_stress_test()
     picohttp_server_parameters_t file_param;
     picoquic_quic_t* qserver = NULL;
     http_stress_client_context_t** ctx_client = NULL;
-    picoquictest_sim_link_t * lan = NULL;
+    picoquictest_sim_link_t* lan = NULL;
     struct sockaddr_storage server_address;
-    uint64_t server_time = UINT64_MAX;
+    uint64_t server_time = 0;
 
     ret = picoquic_get_test_address("1::1", 443, &server_address);
 
@@ -1623,24 +1621,33 @@ int http_stress_test()
             next_time = picoquictest_sim_link_next_arrival(lan, next_time);
         }
 
-        for (size_t i = 0; ret == 0 && i < picohttp_nb_stress_clients; i++) {
-            if (ctx_client[i]->client_time < next_time) {
-                qready = ctx_client[i]->qclient;
-                ready_from = (struct sockaddr*) & ctx_client[i]->client_address;
-                next_time = ctx_client[i]->client_time;
-                client_id = i;
+        if (lan->queue_time < simulated_time + lan->queue_delay_max) {
+            /* Simulate contention on access to LAN, to avoid creating peak loads and huge queues */
+            if (server_time < next_time) {
+                qready = qserver;
+                ready_from = (struct sockaddr*) & server_address;
+                next_time = server_time;
+                is_server_ready = 1;
+            }
+
+            for (size_t i = 0; ret == 0 && i < picohttp_nb_stress_clients; i++) {
+                if (ctx_client[i]->client_time < next_time) {
+                    qready = ctx_client[i]->qclient;
+                    ready_from = (struct sockaddr*) & ctx_client[i]->client_address;
+                    next_time = ctx_client[i]->client_time;
+                    client_id = i;
+                }
             }
         }
 
-        if (server_time < next_time) {
-            qready = qserver;
-            ready_from = (struct sockaddr*) & server_address;
-            next_time = server_time;
-            is_server_ready = 1;
-        }
-
         if (next_time > simulated_time) {
-            simulated_time = next_time;
+            if (next_time == UINT64_MAX) {
+                DBG_PRINTF("%s", "end of simulation");
+                break;
+            }
+            else {
+                simulated_time = next_time;
+            }
         }
         if (qready != NULL) {
             picoquictest_sim_packet_t* prepared = picoquictest_sim_link_create_packet();
@@ -1666,6 +1673,19 @@ int http_stress_test()
                     picoquictest_sim_link_submit(lan, prepared, simulated_time);
                 }
             }
+
+            if (client_id < picohttp_nb_stress_clients) {
+                ctx_client[client_id]->client_time = picoquic_get_next_wake_time(ctx_client[client_id]->qclient, simulated_time);
+                if (ctx_client[client_id]->client_time == UINT64_MAX) {
+                    DBG_PRINTF("End of client %d", (int)client_id);
+                }
+            }
+            else {
+                server_time = picoquic_get_next_wake_time(qserver, simulated_time);
+                if (server_time == UINT64_MAX) {
+                    DBG_PRINTF("End of server at %llu", (unsigned long long)simulated_time);
+                }
+            }
         }
         else if (is_lan_ready) {
             picoquictest_sim_packet_t* arrival = picoquictest_sim_link_dequeue(lan, simulated_time);
@@ -1678,13 +1698,18 @@ int http_stress_test()
                     server_time = picoquic_get_next_wake_time(qserver, simulated_time);
                 }
                 else {
+                    int is_matched = 0;
                     for (size_t i = 0; ret == 0 && i < picohttp_nb_stress_clients; i++) {
                         if (picoquic_compare_addr((struct sockaddr*) & arrival->addr_to, (struct sockaddr*) & ctx_client[i]->client_address) == 0) {
                             /* submit to client */
                             ret = picoquic_incoming_packet(ctx_client[i]->qclient, arrival->bytes, arrival->length,
                                 (struct sockaddr*) & arrival->addr_from, (struct sockaddr*) & arrival->addr_to, 0, 0, simulated_time);
                             ctx_client[i]->client_time = picoquic_get_next_wake_time(ctx_client[i]->qclient, simulated_time);
+                            is_matched = 1;
                         }
+                    }
+                    if (!is_matched) {
+                        DBG_PRINTF("%s", "Packet cannot be delivered");
                     }
                 }
 
@@ -1698,10 +1723,41 @@ int http_stress_test()
     }
 
     /* verify that each client scenario is properly completed */
+    for (size_t i = 0; ret == 0 && i < picohttp_nb_stress_clients; i++) {
+        if (!ctx_client[i]->callback_ctx.connection_ready) {
+            DBG_PRINTF("Connection #%d failed", (int)i);
+            ret = -1;
+        }
+        else if (!ctx_client[i]->callback_ctx.connection_closed) {
+            DBG_PRINTF("Connection #%d not closed", (int)i);
+            ret = -1;
+        }
+    }
 
     /* verify that the global execution time makes sense */
+    if (ret == 0 && simulated_time > 240000000ull + 1000000ull * picohttp_nb_stress_clients) {
+        DBG_PRINTF("Taking %llu microseconds for %d clients!", (unsigned long long)simulated_time, (int)picohttp_nb_stress_clients);
+        ret = -1;
+    }
 
     /* clean up */
+    if (lan != NULL) {
+        picoquictest_sim_link_delete(lan);
+        lan = NULL;
+    }
+
+    if (ctx_client != NULL) {
+        for (size_t i = 0; i < picohttp_nb_stress_clients; i++) {
+            if (ctx_client[i] != NULL) {
+                ctx_client[i] = http_stress_client_delete(ctx_client[i]);
+            }
+        }
+        free(ctx_client);
+    }
+
+    if (qserver != NULL) {
+        picoquic_free(qserver);
+    }
 
     return ret;
 }

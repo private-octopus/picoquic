@@ -579,9 +579,11 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
         break;
     case picoquic_callback_close: /* Received connection close */
         fprintf(stdout, "Received a request to close the connection.\n");
+        ctx->connection_closed = 1;
         break;
     case picoquic_callback_application_close: /* Received application close */
         fprintf(stdout, "Received a request to close the application.\n");
+        ctx->connection_closed = 1;
         break;
     case picoquic_callback_version_negotiation:
         fprintf(stdout, "Received a version negotiation request:");
@@ -618,6 +620,7 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
         }
     case picoquic_callback_almost_ready:
     case picoquic_callback_ready:
+        ctx->connection_ready = 1;
         break;
     case picoquic_callback_request_alpn_list:
         picoquic_demo_client_set_alpn_list((void*)bytes);
