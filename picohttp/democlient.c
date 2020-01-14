@@ -600,7 +600,7 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
             fprintf(stdout, "Received a version negotiation request:");
             for (size_t byte_index = 0; byte_index + 4 <= length; byte_index += 4) {
                 uint32_t vn = PICOPARSE_32(bytes + byte_index);
-                fprintf(stdout, "%s%x", (byte_index == 0) ? " " : ", ", vn);
+                fprintf(stdout, "%s%08x", (byte_index == 0) ? " " : ", ", vn);
             }
             fprintf(stdout, "\n");
         }

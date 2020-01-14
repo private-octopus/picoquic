@@ -747,7 +747,7 @@ int picoquic_prepare_version_negotiation(
         }
         /* Add random reserved value as grease, but be careful to not match proposed version */
         do {
-            rand_vn = (((uint32_t)picoquic_public_random_64()) & 0x0F0F0F0F) | 0x0A0A0A0A;
+            rand_vn = (((uint32_t)picoquic_public_random_64()) & 0xF0F0F0F0) | 0x0A0A0A0A;
         } while (rand_vn == ph->vn);
         picoformat_32(bytes + byte_index, rand_vn);
         byte_index += 4;
