@@ -3555,6 +3555,7 @@ int picoquic_prepare_next_packet(picoquic_quic_t* quic,
             *send_length = sp->length;
             *to_len = picoquic_store_addr(p_addr_to, (struct sockaddr*) & sp->addr_to);
             *from_len = picoquic_store_addr(p_addr_from, (struct sockaddr*) & sp->addr_local);
+            *if_index = sp->if_index_local;
         }
         picoquic_delete_stateless_packet(sp);
     }
