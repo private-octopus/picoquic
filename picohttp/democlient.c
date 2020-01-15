@@ -334,7 +334,7 @@ int h09_demo_client_prepare_stream_open_command(
 
 static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
     picoquic_demo_callback_ctx_t* ctx,
-    uint64_t stream_id, char const* doc_name, char const* fname, int is_binary, size_t post_size, uint64_t nb_repeat)
+    uint64_t stream_id, char const* doc_name, char const* fname, size_t post_size, uint64_t nb_repeat)
 {
     int ret = 0;
     uint8_t buffer[1024];
@@ -475,7 +475,6 @@ int picoquic_demo_client_start_streams(picoquic_cnx_t* cnx,
                 ret = picoquic_demo_client_open_stream(cnx, ctx, ctx->demo_stream[i].stream_id,
                     ctx->demo_stream[i].doc_name,
                     ctx->demo_stream[i].f_name,
-                    ctx->demo_stream[i].is_binary,
                     (size_t)ctx->demo_stream[i].post_size,
                     repeat_nb);
                 repeat_nb++;
@@ -797,29 +796,6 @@ char const* demo_client_parse_stream_previous(char const* text, uint64_t default
     return text;
 }
 
-char const * demo_client_parse_stream_format(char const * text, int default_format, int * is_binary)
-{
-    char const * orig = text;
-
-    if (text[0] != 'b' && text[0] != 't') {
-        *is_binary = default_format;
-    }
-    else {
-        *is_binary = (text[0] == 'b') ? 1 : 0;
-
-        text = demo_client_parse_stream_spaces(++text);
-
-        if (*text == ':') {
-            text++;
-        }
-        else {
-            text = orig;
-        }
-    }
-
-    return text;
-}
-
 char const * demo_client_parse_stream_path(char const * text, 
     char ** path, char ** f_name)
 {
@@ -924,11 +900,6 @@ char const * demo_client_parse_stream_desc(char const * text, uint64_t default_s
     if (text != NULL) {
         text = demo_client_parse_stream_previous(
             demo_client_parse_stream_spaces(text), default_previous, &desc->previous_stream_id);
-    }
-
-    if (text != NULL) {
-        text = demo_client_parse_stream_format(
-            demo_client_parse_stream_spaces(text), 0, &desc->is_binary);
     }
     
     if (text != NULL){
