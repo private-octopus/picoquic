@@ -650,7 +650,7 @@ static size_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     if (cnx->quic->F_log != NULL && (cnx->pkt_ctx[picoquic_packet_context_application].send_sequence < PICOQUIC_LOG_PACKET_MAX_SEQUENCE || cnx->quic->use_long_log)) {
         picoquic_log_outgoing_segment(cnx->quic->F_log, 1, cnx,
             bytes, sequence_number, length,
-            send_buffer, send_length);
+            send_buffer, send_length, pn_length);
     }
     if (cnx->quic->f_binlog != NULL && (cnx->pkt_ctx[picoquic_packet_context_application].send_sequence < PICOQUIC_LOG_PACKET_MAX_SEQUENCE || cnx->quic->use_long_log)) {
         binlog_outgoing_packet(cnx->quic->f_binlog, cnx,

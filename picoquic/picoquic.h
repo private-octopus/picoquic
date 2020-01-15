@@ -217,7 +217,6 @@ typedef struct st_picoquic_packet_header_t {
     unsigned int spin : 1;
     unsigned int has_spin_bit : 1;
     unsigned int has_reserved_bit_set : 1;
-    unsigned int is_old_invariant : 1;
     unsigned int has_loss_bits : 1;
     unsigned int loss_bit_Q : 1;
     unsigned int loss_bit_L : 1;
