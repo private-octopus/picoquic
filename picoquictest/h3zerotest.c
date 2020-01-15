@@ -595,30 +595,30 @@ int h3zero_stream_test()
  */
 
 static picoquic_demo_stream_desc_t const parse_demo_scenario_desc1[] = {
-    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0, 0},
-    { 0, 4, 0, "test.html", "test.html", 0, 0 },
-    { 0, 8, 0, "main.jpg", "main.jpg", 1, 0 },
-    { 0, 12, 0, "/bla/bla/", "_bla_bla_", 0, 0 }
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0},
+    { 0, 4, 0, "test.html", "test.html", 0 },
+    { 0, 8, 0, "main.jpg", "main.jpg", 0 },
+    { 0, 12, 0, "/bla/bla/", "_bla_bla_", 0 }
 };
 
 static picoquic_demo_stream_desc_t const parse_demo_scenario_desc2[] = {
-    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0, 0 },
-    { 0, 4, 0, "main.jpg", "main.jpg", 1, 0 },
-    { 0, 8, 4, "test.html", "test.html", 0, 0 }
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0 },
+    { 0, 4, 0, "main.jpg", "main.jpg", 0 },
+    { 0, 8, 4, "test.html", "test.html", 0 }
 };
 
 static picoquic_demo_stream_desc_t const parse_demo_scenario_desc3[] = {
-    { 1000, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0, 0 }
+    { 1000, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0 }
 };
 
 static picoquic_demo_stream_desc_t const parse_demo_scenario_desc4[] = {
-    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/cgi-sink", "_cgi-sink", 0, 1000000 },
-    { 0, 4, 0, "/", "_", 0, 0 }
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/cgi-sink", "_cgi-sink", 1000000 },
+    { 0, 4, 0, "/", "_", 0 }
 };
 
 static picoquic_demo_stream_desc_t const parse_demo_scenario_desc5[] = {
-    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/32", "_32", 0, 0 },
-    { 0, 4, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/33", "_33", 0, 0 }
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/32", "_32", 0 },
+    { 0, 4, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/33", "_33", 0 }
 };
 
 typedef struct st_demo_scenario_test_case_t {
@@ -628,8 +628,8 @@ typedef struct st_demo_scenario_test_case_t {
 } demo_scenario_test_case_t;
 
 static const demo_scenario_test_case_t demo_scenario_test_cases[] = {
-    { "/;t:test.html;8:0:b:main.jpg;12:0:/bla/bla/", parse_demo_scenario_desc1, sizeof(parse_demo_scenario_desc1) / sizeof(picoquic_demo_stream_desc_t) },
-    { "/;b:main.jpg;t:test.html;", parse_demo_scenario_desc2, sizeof(parse_demo_scenario_desc2) / sizeof(picoquic_demo_stream_desc_t) },
+    { "/;test.html;8:0:main.jpg;12:0:/bla/bla/", parse_demo_scenario_desc1, sizeof(parse_demo_scenario_desc1) / sizeof(picoquic_demo_stream_desc_t) },
+    { "/;main.jpg;test.html;", parse_demo_scenario_desc2, sizeof(parse_demo_scenario_desc2) / sizeof(picoquic_demo_stream_desc_t) },
     { "*1000:/", parse_demo_scenario_desc3, sizeof(parse_demo_scenario_desc3) / sizeof(picoquic_demo_stream_desc_t) },
     { "/cgi-sink:1000000;4:/", parse_demo_scenario_desc4, sizeof(parse_demo_scenario_desc4) / sizeof(picoquic_demo_stream_desc_t) },
     { "-:/32;-:/33", parse_demo_scenario_desc5, sizeof(parse_demo_scenario_desc5) / sizeof(picoquic_demo_stream_desc_t) }
@@ -653,9 +653,6 @@ int parse_demo_scenario_test_one(const char * text, picoquic_demo_stream_desc_t 
                 if (desc[i].stream_id != desc_ref[i].stream_id) {
                     ret = -1;
                 } else if (desc[i].previous_stream_id != desc_ref[i].previous_stream_id) {
-                    ret = -1;
-                }
-                else if (desc[i].is_binary != desc_ref[i].is_binary) {
                     ret = -1;
                 }
                 else if (strcmp(desc[i].doc_name, desc_ref[i].doc_name) != 0) {
@@ -700,9 +697,9 @@ int parse_demo_scenario_test()
  * network simulation.
  */
 static const picoquic_demo_stream_desc_t demo_test_scenario[] = {
-    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "root.html", 0, 0 },
-    { 0, 4, 0, "12345", "doc-12345.txt", 0, 0 },
-    { 0, 8, 4, "post-test", "post-test.html", 0, 12345 }
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "root.html", 0 },
+    { 0, 4, 0, "12345", "doc-12345.txt", 0 },
+    { 0, 8, 4, "post-test", "post-test.html", 12345 }
 };
 
 static size_t const nb_demo_test_scenario = sizeof(demo_test_scenario) / sizeof(picoquic_demo_stream_desc_t);
@@ -1123,7 +1120,7 @@ int h3zero_test_ping_callback(picoquic_cnx_t* cnx,
 }
 
 static const picoquic_demo_stream_desc_t post_test_scenario[] = {
-    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/ping", "ping-test.html", 0, 2345 }
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/ping", "ping-test.html", 2345 }
 };
 
 picohttp_server_path_item_t ping_test_item = {
@@ -1277,7 +1274,7 @@ int demo_file_access_test()
 #define PICOQUIC_TEST_FILE_DEMO_FOLDER "picoquictest"
 
 static const picoquic_demo_stream_desc_t file_test_scenario[] = {
-    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/file_test_ref.txt", "file_test_ref.txt", 0, 0 }
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/file_test_ref.txt", "file_test_ref.txt", 0 }
 };
 
 static size_t const demo_file_test_stream_length[] = {
@@ -1350,7 +1347,7 @@ int demo_server_file_test()
 }
 
 static const picoquic_demo_stream_desc_t satellite_test_scenario[] = {
-    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/10000000", "bin10M.txt", 0, 0 }
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/10000000", "bin10M.txt", 0 }
 };
 
 static const size_t nb_satellite_test_scenario = sizeof(satellite_test_scenario) / sizeof(picoquic_demo_stream_desc_t);
@@ -1397,25 +1394,25 @@ int h09_lone_fin_test()
 
 
 static const picoquic_demo_stream_desc_t http_stress_scenario_1[] = {
-    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0, 0},
-    { 0, 4, 0, "test.html", "test.html", 0, 0 },
-    { 0, 8, 0, "main.jpg", "main.jpg", 1, 0 },
-    { 0, 12, 0, "/bla/bla/", "_bla_bla_", 0, 0 }
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0},
+    { 0, 4, 0, "test.html", "test.html", 0 },
+    { 0, 8, 0, "main.jpg", "main.jpg", 0 },
+    { 0, 12, 0, "/bla/bla/", "_bla_bla_", 0 }
 };
 
 static const picoquic_demo_stream_desc_t http_stress_scenario_2[] = {
-    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0, 0 },
-    { 0, 4, 0, "main.jpg", "main.jpg", 1, 0 },
-    { 0, 8, 4, "test.html", "test.html", 0, 0 }
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0 },
+    { 0, 4, 0, "main.jpg", "main.jpg", 0 },
+    { 0, 8, 4, "test.html", "test.html", 0 }
 };
 
 static const picoquic_demo_stream_desc_t http_stress_scenario_3[] = {
-    { 1000, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0, 0 }
+    { 1000, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0 }
 };
 
 static const picoquic_demo_stream_desc_t http_stress_scenario_4[] = {
-    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/cgi-sink", "_cgi-sink", 0, 1000000 },
-    { 0, 4, 0, "/", "_", 0, 0 }
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/cgi-sink", "_cgi-sink", 1000000 },
+    { 0, 4, 0, "/", "_", 0 }
 };
 
 typedef struct st_http_stress_scenario_list_t {

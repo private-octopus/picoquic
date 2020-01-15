@@ -47,7 +47,6 @@ typedef struct st_picoquic_demo_stream_desc_t {
     uint64_t previous_stream_id;
     char const* doc_name;
     char const* f_name;
-    int is_binary;
     uint64_t post_size;
 } picoquic_demo_stream_desc_t;
 
