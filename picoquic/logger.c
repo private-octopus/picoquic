@@ -1400,7 +1400,7 @@ void picoquic_log_outgoing_segment(void* F_log, int log_cnxid, picoquic_cnx_t* c
     uint8_t * bytes,
     uint64_t sequence_number,
     size_t length,
-    uint8_t* send_buffer, size_t send_length)
+    uint8_t* send_buffer, size_t send_length, size_t pn_length)
 {
     picoquic_cnx_t* pcnx = cnx;
     picoquic_packet_header ph;
@@ -1423,8 +1423,8 @@ void picoquic_log_outgoing_segment(void* F_log, int log_cnxid, picoquic_cnx_t* c
     ph.pn = (uint32_t)ph.pn64;
     if (ph.ptype != picoquic_packet_retry) {
         if (ph.pn_offset != 0) {
-            ph.offset = ph.pn_offset + 4; /* todo: should provide the actual length */
-            ph.payload_length -= 4;
+            ph.offset = ph.pn_offset + pn_length;
+            ph.payload_length -= pn_length;
         }
     }
     if (ph.ptype != picoquic_packet_version_negotiation) {

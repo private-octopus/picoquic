@@ -767,7 +767,7 @@ int picoquic_prepare_version_negotiation(
         if (quic->F_log != NULL) {
             picoquic_log_outgoing_segment(quic->F_log, 1, NULL,
                 bytes, 0, sp->length,
-                bytes, sp->length);
+                bytes, sp->length, 0);
         }
 
         picoquic_queue_stateless_packet(quic, sp);
@@ -892,7 +892,7 @@ void picoquic_queue_stateless_retry(picoquic_cnx_t* cnx,
         if (cnx->quic->F_log != NULL) {
             picoquic_log_outgoing_segment(cnx->quic->F_log, 1, cnx,
                 bytes, 0, sp->length,
-                bytes, sp->length);
+                bytes, sp->length, pn_length);
         }
 
         picoquic_queue_stateless_packet(cnx->quic, sp);

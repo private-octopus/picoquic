@@ -414,6 +414,7 @@ int picoquic_client_hello_call_back(ptls_on_client_hello_t* on_hello_cb_ctx,
 
         for (size_t i = 0; i < params->negotiated_protocols.count; i++) {
             if (params->negotiated_protocols.list[i].len == len && memcmp(params->negotiated_protocols.list[i].base, quic->default_alpn, len) == 0) {
+                DBG_PRINTF("ALPN[%d] matches default alpn (%s)", (int)i, quic->default_alpn);
                 alpn_found = 1;
                 ptls_set_negotiated_protocol(tls, quic->default_alpn, len);
                 break;
@@ -422,6 +423,8 @@ int picoquic_client_hello_call_back(ptls_on_client_hello_t* on_hello_cb_ctx,
     }
     else if (quic->alpn_select_fn != NULL) {
         size_t selected = quic->alpn_select_fn(quic, params->negotiated_protocols.list, params->negotiated_protocols.count);
+
+        DBG_PRINTF("ALPN Selection call back selects %d (out of %d)", (int)selected, (int)params->negotiated_protocols.count);
 
         if (selected < params->negotiated_protocols.count) {
             alpn_found = 1;
@@ -433,6 +436,8 @@ int picoquic_client_hello_call_back(ptls_on_client_hello_t* on_hello_cb_ctx,
     if (alpn_found == 0) {
         ret = PTLS_ALERT_NO_APPLICATION_PROTOCOL;
     }
+
+    DBG_PRINTF("Client Hello call back returns %d (0x%x)", ret, ret);
 
     return ret;
 }
