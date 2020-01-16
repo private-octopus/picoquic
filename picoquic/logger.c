@@ -1424,7 +1424,7 @@ void picoquic_log_outgoing_segment(void* F_log, int log_cnxid, picoquic_cnx_t* c
     if (ph.ptype != picoquic_packet_retry) {
         if (ph.pn_offset != 0) {
             ph.offset = ph.pn_offset + pn_length;
-            ph.payload_length -= 4;
+            ph.payload_length -= pn_length;
         }
     }
     if (ph.ptype != picoquic_packet_version_negotiation) {
