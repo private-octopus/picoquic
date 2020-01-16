@@ -1658,21 +1658,15 @@ picoquic_stream_head_t * picoquic_last_stream(picoquic_cnx_t* cnx)
 void picoquic_insert_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t * stream)
 {
     if (stream->is_output_stream == 0) {
-        picoquic_stream_head_t * previous_stream = NULL;
-        picoquic_stream_head_t * next_stream = cnx->first_output_stream;
-
-        while (next_stream != NULL && next_stream->stream_id < stream->stream_id) {
-            previous_stream = next_stream;
-            next_stream = next_stream->next_output_stream;
-        }
-
-        if (previous_stream == NULL) {
-            stream->next_output_stream = cnx->first_output_stream;
+        stream->previous_output_stream = cnx->last_output_stream;
+        stream->next_output_stream = NULL;
+        if (cnx->last_output_stream == NULL) {
             cnx->first_output_stream = stream;
+            cnx->last_output_stream = stream;
         }
         else {
-            stream->next_output_stream = previous_stream->next_output_stream;
-            previous_stream->next_output_stream = stream;
+            cnx->last_output_stream->next_output_stream = stream;
+            cnx->last_output_stream = stream;
         }
         stream->is_output_stream = 1;
     }
@@ -1683,26 +1677,19 @@ void picoquic_remove_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t *
     if (stream->is_output_stream) {
         stream->is_output_stream = 0;
 
-        if (stream == cnx->first_output_stream) {
+        if (stream->previous_output_stream == NULL) {
             cnx->first_output_stream = stream->next_output_stream;
         }
         else {
-            if (previous_stream == NULL) {
-                previous_stream = cnx->first_output_stream;
-                while (previous_stream != NULL && previous_stream->next_output_stream != stream) {
-                    previous_stream = previous_stream->next_output_stream;
-                }
-            }
-
-            if (previous_stream != NULL) {
-                previous_stream->next_output_stream = stream->next_output_stream;
-            }
-            else {
-                DBG_PRINTF("Corrupted list of output streams found when removing stream %d", (int)stream->stream_id);
-            }
+            stream->previous_output_stream->next_output_stream = stream->next_output_stream;
         }
 
-        stream->next_output_stream = NULL;
+        if (stream->next_output_stream == NULL) {
+            cnx->last_output_stream = stream->previous_output_stream;
+        }
+        else {
+            stream->next_output_stream->previous_output_stream = stream->previous_output_stream;
+        }
     }
 }
 

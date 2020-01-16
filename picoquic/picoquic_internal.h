@@ -395,6 +395,7 @@ typedef struct st_picoquic_stream_data_node_t {
 typedef struct st_picoquic_stream_head_t {
     picosplay_node_t stream_node;
     struct st_picoquic_stream_head_t * next_output_stream;
+    struct st_picoquic_stream_head_t * previous_output_stream;
     uint64_t stream_id;
     uint64_t consumed_offset;
     uint64_t fin_offset;
@@ -816,6 +817,7 @@ typedef struct st_picoquic_cnx_t {
     /* Management of streams */
     picosplay_tree_t stream_tree;
     picoquic_stream_head_t * first_output_stream;
+    picoquic_stream_head_t * last_output_stream;
     picoquic_stream_head_t * last_visited_stream;
     uint64_t high_priority_stream_id;
     uint64_t next_stream_id[4];
