@@ -84,7 +84,8 @@ picoquic_alpn_enum picoquic_parse_alpn_nz(char const* alpn, size_t len)
 
     if (alpn != NULL) {
         for (size_t i = 0; i < nb_alpn_list; i++) {
-            if (memcmp(alpn, alpn_list[i].alpn_val, len) == 0) {
+            if (memcmp(alpn, alpn_list[i].alpn_val, len) == 0 &&
+                alpn_list[i].alpn_val[len] == 0) {
                 code = alpn_list[i].alpn_code;
                 break;
             }
