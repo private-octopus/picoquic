@@ -1016,7 +1016,7 @@ void picoquic_log_outgoing_segment(void* F_log, int log_cnxid, picoquic_cnx_t* c
     uint8_t * bytes,
     uint64_t sequence_number,
     size_t length,
-    uint8_t* send_buffer, size_t send_length);
+    uint8_t* send_buffer, size_t send_length, size_t pn_length);
 
 void picoquic_log_packet_address(FILE* F, uint64_t log_cnxid64, picoquic_cnx_t* cnx,
     struct sockaddr* addr_peer, int receiving, size_t length, uint64_t current_time);
