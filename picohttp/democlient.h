@@ -88,6 +88,7 @@ typedef struct st_picoquic_demo_client_callback_ctx_t {
 } picoquic_demo_callback_ctx_t;
 
 picoquic_alpn_enum picoquic_parse_alpn(char const * alpn);
+picoquic_alpn_enum picoquic_parse_alpn_nz(char const* alpn, size_t len);
 
 void picoquic_demo_client_set_alpn_from_tickets(picoquic_cnx_t* cnx, picoquic_demo_callback_ctx_t* ctx, uint64_t current_time);
 

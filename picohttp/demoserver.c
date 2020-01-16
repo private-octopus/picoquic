@@ -1245,7 +1245,7 @@ size_t picoquic_demo_server_callback_select_alpn(picoquic_quic_t* quic, ptls_iov
     size_t ret = count;
 
     for (size_t i = 0; i < count; i++) {
-        if (picoquic_parse_alpn((const char *)list[i].base) != picoquic_alpn_undef) {
+        if (picoquic_parse_alpn_nz((const char *)list[i].base, list[i].len) != picoquic_alpn_undef) {
             ret = i;
             break;
         }

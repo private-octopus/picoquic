@@ -78,6 +78,23 @@ picoquic_alpn_enum picoquic_parse_alpn(char const* alpn)
     return code;
 }
 
+picoquic_alpn_enum picoquic_parse_alpn_nz(char const* alpn, size_t len)
+{
+    picoquic_alpn_enum code = picoquic_alpn_undef;
+
+    if (alpn != NULL) {
+        for (size_t i = 0; i < nb_alpn_list; i++) {
+            if (memcmp(alpn, alpn_list[i].alpn_val, len) == 0 &&
+                alpn_list[i].alpn_val[len] == 0) {
+                code = alpn_list[i].alpn_code;
+                break;
+            }
+        }
+    }
+
+    return code;
+}
+
 void picoquic_demo_client_set_alpn_from_tickets(picoquic_cnx_t* cnx, picoquic_demo_callback_ctx_t* ctx, uint64_t current_time)
 {
     const char* sni = cnx->sni;
