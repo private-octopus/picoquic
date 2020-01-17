@@ -1767,6 +1767,7 @@ picoquic_stream_head_t* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t str
         }
         else {
             picoquic_remove_output_stream(cnx, stream, NULL);
+            picoquic_delete_stream_if_closed(cnx, stream);
         }
 
         if (stream_id >= cnx->next_stream_id[STREAM_TYPE_FROM_ID(stream_id)]) {
