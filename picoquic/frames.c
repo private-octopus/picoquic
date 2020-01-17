@@ -1160,18 +1160,9 @@ picoquic_stream_head_t* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
                 if (stream == end_of_second_pass) {
                     end_of_second_pass = next_stream;
                 }
-                if (stream == cnx->first_output_stream) {
-                    cnx->first_output_stream = next_stream;
-                }
-                else if (previous_stream != NULL) {
-                    previous_stream->next_output_stream = next_stream;
-                }
-                else {
-                    DBG_PRINTF("Corrupted list of output streams found when removing stream %d", (int)stream->stream_id);
-                    break;
-                }
-                stream->next_output_stream = NULL;
-                stream->is_output_stream = 0;
+
+                picoquic_remove_output_stream(cnx, stream, previous_stream);
+
                 picoquic_delete_stream_if_closed(cnx, stream);
                 stream = next_stream;
             }

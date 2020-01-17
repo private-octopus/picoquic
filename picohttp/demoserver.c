@@ -23,6 +23,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <picotls.h>
+#include "picosplay.h"
 #include "picoquic_internal.h"
 #include "tls_api.h"
 #include "h3zero.h"
@@ -30,42 +31,26 @@
 #include "demoserver.h"
 #include "siduck.h"
 
+/* Stream context splay management */
 
-static picohttp_server_stream_ctx_t * picohttp_find_or_create_stream(
-    picoquic_cnx_t* cnx,
-    uint64_t stream_id,
-    picohttp_server_stream_ctx_t ** p_first_stream,
-    int should_create,
-    int is_h3)
+static int64_t picohttp_stream_node_compare(void *l, void *r)
 {
-    picohttp_server_stream_ctx_t * stream_ctx = NULL;
-
-    /* if stream is already present, check its state. New bytes? */
-    stream_ctx = *p_first_stream;
-    while (stream_ctx != NULL && stream_ctx->stream_id != stream_id) {
-        stream_ctx = stream_ctx->next_stream;
-    }
-
-    if (stream_ctx == NULL && should_create) {
-        stream_ctx = (picohttp_server_stream_ctx_t*)
-            malloc(sizeof(picohttp_server_stream_ctx_t));
-        if (stream_ctx == NULL) {
-            /* Could not handle this stream */
-            picoquic_reset_stream(cnx, stream_id, H3ZERO_INTERNAL_ERROR);
-        }
-        else {
-            memset(stream_ctx, 0, sizeof(picohttp_server_stream_ctx_t));
-            stream_ctx->next_stream = *p_first_stream;
-            *p_first_stream = stream_ctx;
-            stream_ctx->stream_id = stream_id;
-            stream_ctx->is_h3 = is_h3;
-        }
-    }
-
-    return stream_ctx;
+    /* Stream values are from 0 to 2^62-1, which means we are not worried with rollover */
+    return ((picohttp_server_stream_ctx_t*)l)->stream_id - ((picohttp_server_stream_ctx_t*)r)->stream_id;
 }
 
-static void picohttp_delete_stream(picohttp_server_stream_ctx_t* stream_ctx)
+static picosplay_node_t * picohttp_stream_node_create(void * value)
+{
+    return &((picohttp_server_stream_ctx_t *)value)->http_stream_node;
+}
+
+
+static void * picohttp_stream_node_value(picosplay_node_t * node)
+{
+    return (void*)((char*)node - offsetof(struct st_picohttp_server_stream_ctx_t, http_stream_node));
+}
+
+static void picohttp_clear_stream_ctx(picohttp_server_stream_ctx_t* stream_ctx)
 {
     if (stream_ctx->F != NULL) {
         stream_ctx->F = picoquic_file_close(stream_ctx->F);
@@ -83,8 +68,64 @@ static void picohttp_delete_stream(picohttp_server_stream_ctx_t* stream_ctx)
             free(stream_ctx->ps.hq.path);
         }
     }
-    
+}
+
+static void picohttp_stream_node_delete(void * tree, picosplay_node_t * node)
+{
+    picohttp_server_stream_ctx_t * stream_ctx = picohttp_stream_node_value(node);
+
+    picohttp_clear_stream_ctx(stream_ctx);
+
     free(stream_ctx);
+}
+
+void picohttp_delete_stream(picosplay_tree_t * http_stream_tree, picohttp_server_stream_ctx_t* stream)
+{
+    picosplay_delete(http_stream_tree, &stream->http_stream_node);
+}
+
+static picohttp_server_stream_ctx_t* picohttp_find_stream(picosplay_tree_t * stream_tree, uint64_t stream_id)
+{
+    picohttp_server_stream_ctx_t * ret = NULL;
+    picohttp_server_stream_ctx_t target;
+    target.stream_id = stream_id;
+    picosplay_node_t * node = picosplay_find(stream_tree, (void*)&target);
+    
+    if (node != NULL) {
+        ret = (picohttp_server_stream_ctx_t *)picohttp_stream_node_value(node);
+    }
+
+    return ret;
+}
+
+static picohttp_server_stream_ctx_t * picohttp_find_or_create_stream(
+    picoquic_cnx_t* cnx,
+    uint64_t stream_id,
+    picosplay_tree_t * stream_tree,
+    picohttp_server_stream_ctx_t ** p_first_stream,
+    int should_create,
+    int is_h3)
+{
+    picohttp_server_stream_ctx_t * stream_ctx = picohttp_find_stream(stream_tree, stream_id);
+
+    /* if stream is already present, check its state. New bytes? */
+
+    if (stream_ctx == NULL && should_create) {
+        stream_ctx = (picohttp_server_stream_ctx_t*)
+            malloc(sizeof(picohttp_server_stream_ctx_t));
+        if (stream_ctx == NULL) {
+            /* Could not handle this stream */
+            picoquic_reset_stream(cnx, stream_id, H3ZERO_INTERNAL_ERROR);
+        }
+        else {
+            memset(stream_ctx, 0, sizeof(picohttp_server_stream_ctx_t));
+            stream_ctx->stream_id = stream_id;
+            stream_ctx->is_h3 = is_h3;
+            picosplay_insert(stream_tree, stream_ctx);
+        }
+    }
+
+    return stream_ctx;
 }
 
 /*
@@ -97,6 +138,9 @@ static h3zero_server_callback_ctx_t* h3zero_server_callback_create_context(picoh
 
     if (ctx != NULL) {
         memset(ctx, 0, sizeof(h3zero_server_callback_ctx_t));
+
+        picosplay_init_tree(&ctx->h3_stream_tree, picohttp_stream_node_compare, picohttp_stream_node_create, picohttp_stream_node_delete, picohttp_stream_node_value);
+
         ctx->first_stream = NULL;
         ctx->buffer = (uint8_t*)malloc(PICOHTTP_RESPONSE_MAX);
         if (ctx->buffer == NULL) {
@@ -118,12 +162,7 @@ static h3zero_server_callback_ctx_t* h3zero_server_callback_create_context(picoh
 
 static void h3zero_server_callback_delete_context(h3zero_server_callback_ctx_t* ctx)
 {
-    picohttp_server_stream_ctx_t* stream_ctx;
-
-    while ((stream_ctx = ctx->first_stream) != NULL) {
-        ctx->first_stream = stream_ctx->next_stream;
-        picohttp_delete_stream(stream_ctx);
-    }
+    picosplay_empty_tree(&ctx->h3_stream_tree);
 
     if (ctx->buffer != NULL) {
         free(ctx->buffer);
@@ -440,7 +479,7 @@ static int h3zero_server_callback_data(
         else {
             /* Find or create stream context */
             if (stream_ctx == NULL) {
-                stream_ctx = picohttp_find_or_create_stream(cnx, stream_id, &ctx->first_stream, 1, 1);
+                stream_ctx = picohttp_find_or_create_stream(cnx, stream_id, &ctx->h3_stream_tree, &ctx->first_stream, 1, 1);
             }
 
             if (stream_ctx == NULL) {
@@ -516,7 +555,7 @@ int h3zero_server_callback_prepare_to_send(picoquic_cnx_t* cnx,
     int ret = -1;
 
     if (stream_ctx == NULL) {
-        stream_ctx = picohttp_find_or_create_stream(cnx, stream_id, &ctx->first_stream, 0, 1);
+        stream_ctx = picohttp_find_or_create_stream(cnx, stream_id, &ctx->h3_stream_tree, &ctx->first_stream, 0, 1);
     }
 
     if (stream_ctx == NULL) {
@@ -611,7 +650,7 @@ int h3zero_server_callback(picoquic_cnx_t* cnx,
         case picoquic_callback_stop_sending: /* Client asks server to reset stream #x */
             /* TODO: special case for uni streams. */
             if (stream_ctx == NULL) {
-                stream_ctx = picohttp_find_or_create_stream(cnx, stream_id, &ctx->first_stream, 0, 1);
+                stream_ctx = picohttp_find_or_create_stream(cnx, stream_id, &ctx->h3_stream_tree, &ctx->first_stream, 0, 1);
             }
             if (stream_ctx != NULL) {
                 /* reset post callback. */
@@ -632,7 +671,7 @@ int h3zero_server_callback(picoquic_cnx_t* cnx,
         case picoquic_callback_stream_gap:
             /* Gap indication, when unreliable streams are supported */
             if (stream_ctx == NULL) {
-                stream_ctx = picohttp_find_or_create_stream(cnx, stream_id, &ctx->first_stream, 0, 1);
+                stream_ctx = picohttp_find_or_create_stream(cnx, stream_id, &ctx->h3_stream_tree, &ctx->first_stream, 0, 1);
             }
             if (stream_ctx != NULL) {
                 if (stream_ctx->path_callback != NULL) {
@@ -691,6 +730,9 @@ static picoquic_h09_server_callback_ctx_t* first_server_callback_create_context(
 
     if (ctx != NULL) {
         memset(ctx, 0, sizeof(picoquic_h09_server_callback_ctx_t));
+
+        picosplay_init_tree(&ctx->h09_stream_tree, picohttp_stream_node_compare, picohttp_stream_node_create, picohttp_stream_node_delete, picohttp_stream_node_value);
+
         ctx->first_stream = NULL;
         if (param != NULL) {
             ctx->path_table = param->path_table;
@@ -704,12 +746,8 @@ static picoquic_h09_server_callback_ctx_t* first_server_callback_create_context(
 
 static void picoquic_h09_server_callback_delete_context(picoquic_h09_server_callback_ctx_t* ctx)
 {
-    picohttp_server_stream_ctx_t* stream_ctx;
 
-    while ((stream_ctx = ctx->first_stream) != NULL) {
-        ctx->first_stream = stream_ctx->next_stream;
-        picohttp_delete_stream(stream_ctx);
-    }
+    picosplay_empty_tree(&ctx->h09_stream_tree);
 
     free(ctx);
 }
@@ -1132,7 +1170,7 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
     }
 
     if (stream_ctx == NULL) {
-        stream_ctx = picohttp_find_or_create_stream(cnx, stream_id, &ctx->first_stream, 1, 0);
+        stream_ctx = picohttp_find_or_create_stream(cnx, stream_id, &ctx->h09_stream_tree, &ctx->first_stream, 1, 0);
     }
 
     switch (fin_or_event) {

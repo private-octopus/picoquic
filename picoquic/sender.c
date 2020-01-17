@@ -288,12 +288,7 @@ int picoquic_stop_sending(picoquic_cnx_t* cnx,
         else if (!stream->stop_sending_requested) {
             stream->local_stop_error = local_stream_error;
             stream->stop_sending_requested = 1;
-
-            if (!stream->is_output_stream) {
-                stream->is_output_stream = 1;
-                stream->next_output_stream = cnx->first_output_stream;
-                cnx->first_output_stream = stream;
-            }
+            picoquic_insert_output_stream(cnx, stream);
         }
     }
 

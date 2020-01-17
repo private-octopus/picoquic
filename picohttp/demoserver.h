@@ -89,6 +89,7 @@ typedef enum {
 typedef struct st_picohttp_server_stream_ctx_t {
     /* TODO-POST: identification of URL to process POST or GET? */
     /* TODO-POST: provide content-type */
+    picosplay_node_t http_stream_node;
     struct st_picohttp_server_stream_ctx_t* next_stream;
     int is_h3;
     union {
@@ -116,6 +117,7 @@ typedef struct st_picohttp_server_stream_ctx_t {
 /* Define the H3Zero server callback */
 
 typedef struct st_h3zero_server_callback_ctx_t {
+    picosplay_tree_t h3_stream_tree;
     picohttp_server_stream_ctx_t* first_stream;
     size_t buffer_max;
     uint8_t* buffer;
@@ -133,6 +135,7 @@ int h3zero_server_callback(picoquic_cnx_t* cnx,
  */
 
 typedef struct st_picoquic_h09_server_callback_ctx_t {
+    picosplay_tree_t h09_stream_tree;
     picohttp_server_stream_ctx_t* first_stream;
     picohttp_server_path_item_t * path_table;
     size_t path_table_nb;

@@ -1655,6 +1655,44 @@ picoquic_stream_head_t * picoquic_last_stream(picoquic_cnx_t* cnx)
 #endif
 }
 
+void picoquic_insert_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t * stream)
+{
+    if (stream->is_output_stream == 0) {
+        stream->previous_output_stream = cnx->last_output_stream;
+        stream->next_output_stream = NULL;
+        if (cnx->last_output_stream == NULL) {
+            cnx->first_output_stream = stream;
+            cnx->last_output_stream = stream;
+        }
+        else {
+            cnx->last_output_stream->next_output_stream = stream;
+            cnx->last_output_stream = stream;
+        }
+        stream->is_output_stream = 1;
+    }
+}
+
+void picoquic_remove_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t * stream, picoquic_stream_head_t * previous_stream)
+{
+    if (stream->is_output_stream) {
+        stream->is_output_stream = 0;
+
+        if (stream->previous_output_stream == NULL) {
+            cnx->first_output_stream = stream->next_output_stream;
+        }
+        else {
+            stream->previous_output_stream->next_output_stream = stream->next_output_stream;
+        }
+
+        if (stream->next_output_stream == NULL) {
+            cnx->last_output_stream = stream->previous_output_stream;
+        }
+        else {
+            stream->next_output_stream->previous_output_stream = stream->previous_output_stream;
+        }
+    }
+}
+
 picoquic_stream_head_t * picoquic_next_stream(picoquic_stream_head_t * stream)
 {
     return (picoquic_stream_head_t *)picosplay_next((picosplay_node_t *)stream);
@@ -1679,11 +1717,8 @@ void picoquic_add_output_streams(picoquic_cnx_t* cnx, uint64_t old_limit, uint64
             if (stream->stream_id > new_limit) {
                 break;
             }
-            if (IS_LOCAL_STREAM_ID(stream->stream_id, cnx->client_mode) && (IS_BIDIR_STREAM_ID(stream->stream_id) == is_bidir)
-                && stream->is_output_stream == 0) {
-                stream->next_output_stream = cnx->first_output_stream;
-                cnx->first_output_stream = stream;
-                stream->is_output_stream = 1;
+            if (IS_LOCAL_STREAM_ID(stream->stream_id, cnx->client_mode) && IS_BIDIR_STREAM_ID(stream->stream_id) == is_bidir) {
+                picoquic_insert_output_stream(cnx, stream);
             }
         }
         stream = picoquic_next_stream(stream);
@@ -1694,6 +1729,7 @@ picoquic_stream_head_t* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t str
 {
     picoquic_stream_head_t* stream = (picoquic_stream_head_t*)malloc(sizeof(picoquic_stream_head_t));
     if (stream != NULL) {
+        int is_output_stream = 0;
         memset(stream, 0, sizeof(picoquic_stream_head_t));
         stream->stream_id = stream_id;
 
@@ -1701,34 +1737,37 @@ picoquic_stream_head_t* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t str
             if (IS_BIDIR_STREAM_ID(stream_id)) {
                 stream->maxdata_local = cnx->local_parameters.initial_max_stream_data_bidi_local;
                 stream->maxdata_remote = cnx->remote_parameters.initial_max_stream_data_bidi_remote;
-                stream->is_output_stream = stream->stream_id <= cnx->max_stream_id_bidir_remote;
+                is_output_stream = stream->stream_id <= cnx->max_stream_id_bidir_remote;
 
             }
             else {
                 stream->maxdata_local = 0;
                 stream->maxdata_remote = cnx->remote_parameters.initial_max_stream_data_uni;
-                stream->is_output_stream = stream->stream_id <= cnx->max_stream_id_unidir_remote;
+                is_output_stream = stream->stream_id <= cnx->max_stream_id_unidir_remote;
             }
         }
         else {
             if (IS_BIDIR_STREAM_ID(stream_id)) {
                 stream->maxdata_local = cnx->local_parameters.initial_max_stream_data_bidi_remote;
                 stream->maxdata_remote = cnx->remote_parameters.initial_max_stream_data_bidi_local;
-                stream->is_output_stream = 1;
+                is_output_stream = 1;
             }
             else {
                 stream->maxdata_local = cnx->local_parameters.initial_max_stream_data_uni;
                 stream->maxdata_remote = 0;
-                stream->is_output_stream = 0;
+                is_output_stream = 0;
             }
         }
 
         picosplay_init_tree(&stream->stream_data_tree, picoquic_stream_data_node_compare, picoquic_stream_data_node_create, picoquic_stream_data_node_delete, picoquic_stream_data_node_value);
 
         picosplay_insert(&cnx->stream_tree, stream);
-        if (stream->is_output_stream) {
-            stream->next_output_stream = cnx->first_output_stream;
-            cnx->first_output_stream = stream;
+        if (is_output_stream) {
+            picoquic_insert_output_stream(cnx, stream);
+        }
+        else {
+            picoquic_remove_output_stream(cnx, stream, NULL);
+            picoquic_delete_stream_if_closed(cnx, stream);
         }
 
         if (stream_id >= cnx->next_stream_id[STREAM_TYPE_FROM_ID(stream_id)]) {
