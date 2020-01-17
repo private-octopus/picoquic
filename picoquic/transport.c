@@ -396,7 +396,7 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         int n = 31 * (cnx->initial_cnxid.id[0] + cnx->client_mode) + 27;
         uint64_t v = cnx->initial_cnxid.id[1];
         while (n == picoquic_tp_test_large_chello ||
-            n == picoquic_tp_enable_loss_bit ||
+            n == picoquic_tp_enable_loss_bit_old ||
             n == picoquic_tp_enable_one_way_delay){
             n += 31;
         }
@@ -419,15 +419,8 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     }
 
     if (cnx->local_parameters.enable_loss_bit > 0 && bytes != NULL) {
-        if (bytes + 4 > bytes_max) {
-            bytes = NULL;
-        }
-        else {
-            picoformat_16(bytes, picoquic_tp_enable_loss_bit);
-            bytes += 2;
-            picoformat_16(bytes, 0);
-            bytes += 2;
-        }
+        bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_enable_loss_bit,
+            (cnx->local_parameters.enable_loss_bit > 1) ? 1 : 0);
     }
 
     if (cnx->local_parameters.enable_one_way_delay > 0 && bytes != NULL) {
@@ -665,14 +658,27 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                             cnx->remote_parameters.max_datagram_size = (uint32_t)
                                 picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
                             break;
-                        case picoquic_tp_enable_loss_bit:
-                            if (extension_length != 0) {
-                                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
-                            }
-                            else {
-                                cnx->remote_parameters.enable_loss_bit = 1;
+                        case picoquic_tp_enable_loss_bit_old:
+                            /* The old loss bit definition is obsolete */
+                            break;
+                        case picoquic_tp_enable_loss_bit: {
+                            uint64_t enabled = picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
+                            if (ret == 0) {
+                                if (enabled == 0) {
+                                    /* Send only variant of loss bit */
+                                    cnx->remote_parameters.enable_loss_bit = 1;
+                                }
+                                else if (enabled == 1) {
+                                    /* Both send and receive are enabled */
+                                    cnx->remote_parameters.enable_loss_bit = 2;
+                                }
+                                else {
+                                    /* Only values 0 and 1 are expected */
+                                    ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+                                }
                             }
                             break;
+                        }
                         case picoquic_tp_enable_one_way_delay:
                             if (extension_length != 0) {
                                 ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
@@ -723,7 +729,8 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     }
 
     /* Loss bit is only enabled if negotiated by both parties */
-    cnx->is_loss_bit_enabled = cnx->local_parameters.enable_loss_bit && cnx->remote_parameters.enable_loss_bit;
+    cnx->is_loss_bit_enabled_outgoing = (cnx->local_parameters.enable_loss_bit > 1) && (cnx->remote_parameters.enable_loss_bit > 0);
+    cnx->is_loss_bit_enabled_incoming = (cnx->local_parameters.enable_loss_bit > 0) && (cnx->remote_parameters.enable_loss_bit > 1);
 
     /* One way delay only enabled if asked by client and accepted by server */
     if (cnx->client_mode) {

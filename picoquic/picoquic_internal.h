@@ -294,7 +294,8 @@ typedef enum {
     picoquic_tp_active_connection_id_limit = 14,
     picoquic_tp_max_datagram_size = 32 /* per draft-pauly-quic-datagram-05 */,
     picoquic_tp_test_large_chello = 3127,
-    picoquic_tp_enable_loss_bit = 0x1055,
+    picoquic_tp_enable_loss_bit_old = 0x1055,
+    picoquic_tp_enable_loss_bit = 0x1057,
     picoquic_tp_enable_one_way_delay = 0x10DE
 } picoquic_tp_enum;
 
@@ -714,6 +715,8 @@ typedef struct st_picoquic_cnx_t {
     unsigned int initial_validated : 1; /* Path has been validated, DOS amplification protection is lifted */
     unsigned int initial_repeat_needed : 1; /* Path has not been validated, repeated initial was received */
     unsigned int is_loss_bit_enabled : 1; /* Insert the loss bits in outgoing packets, read on incoming */
+    unsigned int is_loss_bit_enabled_incoming : 1; /* Read the loss bits in incoming packets */
+    unsigned int is_loss_bit_enabled_outgoing : 1; /* Insert the loss bits in outgoing packets */
     unsigned int is_one_way_delay_enabled : 1; /* Add time stamp to acks, read on incoming */
     unsigned int is_pmtud_required : 1; /* Force PMTU discovery */
 

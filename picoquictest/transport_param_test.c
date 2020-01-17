@@ -79,7 +79,7 @@ static picoquic_tp_t transport_param_test1 = {
 
 static picoquic_tp_t transport_param_test2 = {
     0x1000000, 0, 0, 0x1000000, 1, 0, 255, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 1480, 1, 1
+    TRANSPORT_PREFERED_ADDRESS_NULL, 1480, 2, 1
 };
 
 static picoquic_tp_t transport_param_test3 = {
@@ -137,14 +137,15 @@ uint8_t client_param1[] = {
 };
 
 uint8_t client_param2[] = {
-    0, 0x2F,
+    0, 0x30,
     0, picoquic_tp_initial_max_stream_data_bidi_local, 0, 4, 0x81, 0, 0, 0,
     0, picoquic_tp_initial_max_data, 0, 4, 0x81, 0, 0, 0,
     0, picoquic_tp_initial_max_streams_bidi, 0, 1, 0x01,
     0, picoquic_tp_idle_timeout, 0, 2, 0x40, 0xFF,
     0, picoquic_tp_max_packet_size, 0, 2, 0x45, 0xC8,
     0, picoquic_tp_max_datagram_size, 0, 2,0x45, 0xC8,
-    0x10, 0x55, 0x00, 0x00, 0x10, 0xDE, 0x00, 0x00
+    0x10, 0x57, 0x00, 0x01, 1,
+    0x10, 0xDE, 0x00, 0x00
 };
 
 uint8_t client_param3[] = {
