@@ -714,7 +714,6 @@ typedef struct st_picoquic_cnx_t {
     unsigned int test_large_chello : 1; /* Add a greasing parameter to test sending CHello on multiple packets */
     unsigned int initial_validated : 1; /* Path has been validated, DOS amplification protection is lifted */
     unsigned int initial_repeat_needed : 1; /* Path has not been validated, repeated initial was received */
-    unsigned int is_loss_bit_enabled : 1; /* Insert the loss bits in outgoing packets, read on incoming */
     unsigned int is_loss_bit_enabled_incoming : 1; /* Read the loss bits in incoming packets */
     unsigned int is_loss_bit_enabled_outgoing : 1; /* Insert the loss bits in outgoing packets */
     unsigned int is_one_way_delay_enabled : 1; /* Add time stamp to acks, read on incoming */

@@ -6311,7 +6311,6 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, uint64_t 
 
     memset(&client_parameters, 0, sizeof(picoquic_tp_t));
     picoquic_init_transport_parameters(&client_parameters, 1);
-    client_parameters.enable_loss_bit = 0;
     client_parameters.enable_one_way_delay = 1;
 
     ret = tls_api_one_scenario_init(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, &client_parameters, NULL);
@@ -6358,7 +6357,7 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, uint64_t 
 
 int satellite_basic_test()
 {
-    return satellite_test_one(picoquic_bbr_algorithm, 6600000, 0, 0);
+    return satellite_test_one(picoquic_bbr_algorithm, 7850000, 0, 0);
 }
 
 int satellite_loss_test()
