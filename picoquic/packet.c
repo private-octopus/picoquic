@@ -256,6 +256,7 @@ int picoquic_parse_short_packet_header(
     }
 
     if (*pcnx != NULL) {
+        int has_loss_bit = (receiving && (*pcnx)->is_loss_bit_enabled_incoming) || ((!receiving && (*pcnx)->is_loss_bit_enabled_outgoing));
         ph->epoch = 3;
         ph->version_index = (*pcnx)->version_index;
 
@@ -273,7 +274,7 @@ int picoquic_parse_short_packet_header(
         ph->pnmask = 0;
         ph->key_phase = ((bytes[0] >> 2) & 1); /* Initialize here so that simple tests with unencrypted headers can work */
 
-        if ((*pcnx)->is_loss_bit_enabled) {
+        if (has_loss_bit) {
             ph->has_loss_bits = 1;
             ph->loss_bit_L = (bytes[0] >> 3) & 1;
             ph->loss_bit_Q = (bytes[0] >> 4) & 1;
@@ -380,7 +381,7 @@ int picoquic_remove_header_protection(picoquic_cnx_t* cnx,
         else
         {   /* Decode */
             uint8_t first_byte = bytes[0];
-            uint8_t first_mask = ((first_byte & 0x80) == 0x80) ? 0x0F : (cnx->is_loss_bit_enabled)?0x07:0x1F;
+            uint8_t first_mask = ((first_byte & 0x80) == 0x80) ? 0x0F : (cnx->is_loss_bit_enabled_incoming)?0x07:0x1F;
             uint8_t pn_l;
             uint32_t pn_val = 0;
 
@@ -411,7 +412,7 @@ int picoquic_remove_header_protection(picoquic_cnx_t* cnx,
                 cnx->pkt_ctx[ph->pc].first_sack_item.end_of_sack_range, ph->pnmask, ph->pn);
 
             /* Check the reserved bits */
-            ph->has_reserved_bit_set = ((first_byte & 0x80) == 0 && !cnx->is_loss_bit_enabled &&
+            ph->has_reserved_bit_set = ((first_byte & 0x80) == 0 && !cnx->is_loss_bit_enabled_incoming &&
                 (first_byte & 0x18) != 0);
         }
     }

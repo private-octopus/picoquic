@@ -553,7 +553,7 @@ void picoquic_init_transport_parameters(picoquic_tp_t* tp, int client_mode)
     tp->ack_delay_exponent = 3;
     tp->active_connection_id_limit = PICOQUIC_NB_PATH_TARGET;
     tp->max_ack_delay = PICOQUIC_ACK_DELAY_MAX;
-    tp->enable_loss_bit = 1;
+    tp->enable_loss_bit = 2;
     tp->enable_one_way_delay = 0;
 }
 

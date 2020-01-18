@@ -416,6 +416,9 @@ char const* picoquic_log_tp_name(uint64_t tp_number)
     case picoquic_tp_test_large_chello:
         tp_name = "large_chello";
         break;
+    case picoquic_tp_enable_loss_bit_old:
+        tp_name = "enable_loss_bit(old)";
+        break;
     case picoquic_tp_enable_loss_bit:
         tp_name = "enable_loss_bit";
         break;

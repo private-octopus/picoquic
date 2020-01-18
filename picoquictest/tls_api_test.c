@@ -6357,7 +6357,7 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, uint64_t 
 
 int satellite_basic_test()
 {
-    return satellite_test_one(picoquic_bbr_algorithm, 6600000, 0, 0);
+    return satellite_test_one(picoquic_bbr_algorithm, 7850000, 0, 0);
 }
 
 int satellite_loss_test()
