@@ -137,19 +137,26 @@ static uint8_t picoquic_cleartext_draft_23_salt[] = {
     0xbe, 0xf9, 0xf5, 0x02
 };
 
+uint8_t picoquic_retry_protection_key_25[16] = {
+    0xf5, 0xed, 0x46, 0x42, 0xe0, 0xe4, 0xc8, 0xd8, 0x78, 0xbb, 0xbc, 0x8a, 0x82, 0x88, 0x21, 0xc9 };
+
 const picoquic_version_parameters_t picoquic_supported_versions[] = {
     { PICOQUIC_FIFTEENTH_INTEROP_VERSION,
         sizeof(picoquic_cleartext_draft_23_salt),
-        picoquic_cleartext_draft_23_salt },
+        picoquic_cleartext_draft_23_salt, 0, NULL },
     { PICOQUIC_FOURTEENTH_INTEROP_VERSION,
         sizeof(picoquic_cleartext_draft_23_salt),
-        picoquic_cleartext_draft_23_salt },
+        picoquic_cleartext_draft_23_salt, 0, NULL },
     { PICOQUIC_INTERNAL_TEST_VERSION_2,
         sizeof(picoquic_cleartext_internal_test_1_salt),
-        picoquic_cleartext_internal_test_1_salt },
+        picoquic_cleartext_internal_test_1_salt, 
+        sizeof(picoquic_retry_protection_key_25),
+        picoquic_retry_protection_key_25},
     { PICOQUIC_INTERNAL_TEST_VERSION_1,
         sizeof(picoquic_cleartext_internal_test_1_salt),
-        picoquic_cleartext_internal_test_1_salt }
+        picoquic_cleartext_internal_test_1_salt,
+        sizeof(picoquic_retry_protection_key_25),
+        picoquic_retry_protection_key_25 }
 };
 
 const size_t picoquic_nb_supported_versions = sizeof(picoquic_supported_versions) / sizeof(picoquic_version_parameters_t);

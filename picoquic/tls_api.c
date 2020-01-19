@@ -2604,3 +2604,38 @@ void picoquic_hash_update(uint8_t* input, size_t input_length, void* hash_contex
 void picoquic_hash_finalize(uint8_t* output, void* hash_context) {
     ((ptls_hash_context_t*)hash_context)->final((ptls_hash_context_t*)hash_context, output, PTLS_HASH_FINAL_MODE_FREE);
 }
+
+/* Retry Packet Protection.
+ * This is done by applying AES-GCM128 with a constant key and a NULL nonce,
+ * using an extension of the retry packet as authenticated data and a zero
+ * length content, computing a 16 bytes checksum. Or verifying it in the
+ * other direction.
+ *
+ * The retry protection key is stored in the Quic context. It is created on
+ * first use, and deleted when the context is deleted.
+ */
+
+void * picoquic_create_retry_protection_context(int is_enc, uint8_t * key)
+{
+    ptls_aead_algorithm_t *aead = &ptls_openssl_aes128gcm;
+    ptls_aead_context_t *ctx;
+
+    if ((ctx = (ptls_aead_context_t *)malloc(aead->context_size)) != NULL) {
+
+#ifdef _WINDOWS
+#pragma warning(disable:4204)
+#endif
+        *ctx = (ptls_aead_context_t) { aead };
+#ifdef _WINDOWS
+#pragma warning(default:4204)
+#endif
+        memset(ctx->static_iv, 0, aead->iv_size);
+
+        if (aead->setup_crypto(ctx, is_enc, key) != 0) {
+            free(ctx);
+            ctx = NULL;
+        }
+    }
+
+    return (void *) ctx;
+}

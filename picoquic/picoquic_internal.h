@@ -193,6 +193,8 @@ typedef struct st_picoquic_version_parameters_t {
     uint32_t version;
     size_t version_aead_key_length;
     uint8_t* version_aead_key;
+    size_t version_retry_key_length;
+    uint8_t* version_retry_key;
 } picoquic_version_parameters_t;
 
 extern const picoquic_version_parameters_t picoquic_supported_versions[];

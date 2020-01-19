@@ -159,4 +159,7 @@ size_t picoquic_hash_get_length(char const* algorithm_name);
 void picoquic_hash_update(uint8_t* input, size_t input_length, void* hash_context);
 void picoquic_hash_finalize(uint8_t* output, void* hash_context);
 
+/* Special AEAD context definition function used for replay protection */
+void * picoquic_create_retry_protection_context(int is_enc, uint8_t * key);
+
 #endif /* TLS_API_H */
