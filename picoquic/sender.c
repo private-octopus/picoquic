@@ -1065,6 +1065,9 @@ static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t* cnx,
         if (rto > PICOQUIC_MAX_RETRANSMIT_TIMER) {
             rto = PICOQUIC_MAX_RETRANSMIT_TIMER;
         }
+        else if (cnx->pkt_ctx[pc].nb_retransmit > 3 && rto < PICOQUIC_INITIAL_RETRANSMIT_TIMER) {
+            rto = PICOQUIC_INITIAL_RETRANSMIT_TIMER;
+        }
         retransmit_time = p->send_time + rto;
         is_timer_based = 1;
     }
@@ -1325,7 +1328,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                     length = 0;
                 } else {
                     if (timer_based_retransmit != 0) {
-                        if (cnx->pkt_ctx[pc].nb_retransmit > 4) {
+                        if (cnx->pkt_ctx[pc].nb_retransmit > 5) {
                             /*
                              * Max retransmission count was exceeded. Disconnect.
                              */
