@@ -975,7 +975,9 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                 ret = picoquic_prepare_packet(test_ctx->cnx_server, *simulated_time,
                     packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length,
                     &packet->addr_to, &peer_addr_len, &packet->addr_from, &local_addr_len);
-                if (ret != 0)
+                if (ret == PICOQUIC_ERROR_DISCONNECTED) {
+                    ret = 0;
+                } else if (ret != 0)
                 {
                     /* useless test, but makes it easier to add a breakpoint under debugger */
                     ret = -1;
@@ -1484,7 +1486,10 @@ int tls_api_many_losses()
     for (uint64_t i = 0; ret == 0 && i < 6; i++) {
         for (uint64_t j = 1; ret == 0 && j < 4; j++) {
             loss_mask = ((((uint64_t)1) << j) - ((uint64_t)1)) << i;
-            ret = tls_api_test_with_loss(&loss_mask, 0, NULL, NULL);
+            ret = tls_api_loss_test(loss_mask);
+            if (ret != 0) {
+                DBG_PRINTF("Handshake fails for mask %d-%d = %llx", (int)i, (int)j, (unsigned long long)loss_mask);
+            }
         }
     }
 

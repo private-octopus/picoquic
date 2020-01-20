@@ -1659,7 +1659,7 @@ size_t picoquic_prepare_packet_old_context(picoquic_cnx_t* cnx, picoquic_packet_
     if (cnx->initial_validated || cnx->initial_repeat_needed) {
         length = picoquic_retransmit_needed(cnx, pc, path_x, current_time, next_wake_time, packet, send_buffer_max,
             &is_cleartext_mode, header_length);
-        if (length > 0) {
+        if (length > 0 && pc == picoquic_packet_context_handshake) {
             cnx->initial_repeat_needed = 0;
         }
     }
@@ -1679,7 +1679,7 @@ size_t picoquic_prepare_packet_old_context(picoquic_cnx_t* cnx, picoquic_packet_
     }
 
     if (length > 0) {
-        if (packet->ptype != picoquic_packet_0rtt_protected) {
+        if (packet->ptype != picoquic_packet_0rtt_protected && cnx->initial_validated) {
             /* Check whether it makes sens to add an ACK at the end of the retransmission */
             if (picoquic_prepare_ack_frame(cnx, current_time, pc, &packet->bytes[length],
                 send_buffer_max - checksum_overhead - length, &data_bytes)
@@ -3485,7 +3485,7 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
         }
     }
 
-    if (*send_length > 0 && is_initial_sent && *send_length < 1200) {
+    if (*send_length > 0 && is_initial_sent && *send_length < 1200 && cnx->client_mode) {
         DBG_PRINTF("%s", "BUG");
     }
 
