@@ -19,7 +19,6 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "stdafx.h"
 #include "CppUnitTest.h"
 #include "picoquictest/picoquictest.h"
 
