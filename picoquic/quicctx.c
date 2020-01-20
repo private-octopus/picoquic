@@ -315,6 +315,8 @@ int picoquic_is_local_cid(picoquic_quic_t* quic, picoquic_connection_id_t* cid)
 void picoquic_free(picoquic_quic_t* quic)
 {
     if (quic != NULL) {
+        picoquic_delete_retry_protection_contexts(quic);
+
         if (quic->aead_encrypt_ticket_ctx != NULL) {
             picoquic_aead_free(quic->aead_encrypt_ticket_ctx);
             quic->aead_encrypt_ticket_ctx = NULL;

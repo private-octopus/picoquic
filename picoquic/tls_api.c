@@ -2639,3 +2639,101 @@ void * picoquic_create_retry_protection_context(int is_enc, uint8_t * key)
 
     return (void *) ctx;
 }
+
+void * picoquic_find_retry_protection_context(picoquic_cnx_t * cnx, int sending)
+{
+    void * aead_ctx = NULL;
+    void ** aead_vector = (sending) ? cnx->quic->retry_integrity_sign_ctx : cnx->quic->retry_integrity_verify_ctx;
+
+    if (picoquic_supported_versions[cnx->version_index].version_retry_key != NULL) {
+        if (aead_vector == NULL) {
+            if (sending) {
+                cnx->quic->retry_integrity_sign_ctx = (void**)malloc(sizeof(void*)*picoquic_nb_supported_versions);
+                aead_vector = cnx->quic->retry_integrity_sign_ctx;
+            }
+            else {
+                cnx->quic->retry_integrity_verify_ctx = (void**)malloc(sizeof(void*)*picoquic_nb_supported_versions);
+                aead_vector = cnx->quic->retry_integrity_verify_ctx;
+            }
+            if (aead_vector != NULL) {
+                memset(aead_vector, 0, sizeof(void*)*picoquic_nb_supported_versions);
+            }
+        }
+
+        if (aead_vector != NULL) {
+            aead_ctx = aead_vector[cnx->version_index];
+            if (aead_ctx == NULL) {
+                aead_ctx = picoquic_create_retry_protection_context(sending, picoquic_supported_versions[cnx->version_index].version_retry_key);
+                aead_vector[cnx->version_index] = aead_ctx;
+            }
+        }
+    }
+
+    return aead_ctx;
+}
+
+static void ** picoquic_delete_one_retry_protection_context(void ** ctx)
+{
+    if (ctx != NULL) {
+        for (size_t i = 0; i < picoquic_nb_supported_versions; i++) {
+            if (ctx[i] != NULL) {
+                picoquic_aead_free(ctx[i]);
+            }
+        }
+        free(ctx);
+    }
+    return NULL;
+}
+
+void picoquic_delete_retry_protection_contexts(picoquic_quic_t * quic)
+{
+    quic->retry_integrity_sign_ctx = picoquic_delete_one_retry_protection_context(quic->retry_integrity_sign_ctx);
+    quic->retry_integrity_verify_ctx = picoquic_delete_one_retry_protection_context(quic->retry_integrity_verify_ctx);
+}
+
+static size_t picoquic_format_retry_protection_pseudo_packet(uint8_t * pseudo_packet, uint8_t * bytes, size_t byte_index, const picoquic_connection_id_t * odcid)
+{
+    size_t pseudo_index = 0;
+
+    if (byte_index + odcid->id_len + 1 < PICOQUIC_MAX_PACKET_SIZE) {
+        pseudo_packet[pseudo_index++] = odcid->id_len;
+        memcpy(&pseudo_packet[pseudo_index], odcid->id, odcid->id_len);
+        pseudo_index += odcid->id_len;
+        memcpy(&pseudo_packet[pseudo_index], bytes, byte_index);
+        pseudo_index += byte_index;
+    }
+
+    return pseudo_index;
+}
+
+size_t picoquic_encode_retry_protection(void * integrity_aead, uint8_t * bytes, size_t bytes_max, size_t byte_index, const picoquic_connection_id_t * odcid)
+{
+    size_t pseudo_index;
+    uint8_t pseudo_packet[PICOQUIC_MAX_PACKET_SIZE];
+
+    if (integrity_aead != NULL && byte_index + picoquic_aead_get_checksum_length(integrity_aead) < bytes_max &&
+        (pseudo_index = picoquic_format_retry_protection_pseudo_packet(pseudo_packet, bytes, byte_index, odcid)) > 0){
+        byte_index += picoquic_aead_encrypt_generic(bytes+byte_index, bytes+byte_index, 0, 0, pseudo_packet, pseudo_index, integrity_aead);
+    }
+
+    return byte_index;
+}
+
+int picoquic_verify_retry_protection(void * integrity_aead, uint8_t * bytes, size_t * length, size_t byte_index, const picoquic_connection_id_t * odcid)
+{
+    int ret = PICOQUIC_ERROR_AEAD_CHECK;
+    size_t pseudo_index;
+    uint8_t pseudo_packet[PICOQUIC_MAX_PACKET_SIZE];
+    uint8_t decoded[PICOQUIC_MAX_PACKET_SIZE];
+    size_t checksum_length = picoquic_aead_get_checksum_length(integrity_aead);
+
+    if (byte_index + checksum_length < *length) {
+        *length -= checksum_length;
+        if ((pseudo_index = picoquic_format_retry_protection_pseudo_packet(pseudo_packet, bytes, *length, odcid)) > 0 &&
+            picoquic_aead_decrypt_generic(decoded, bytes + *length, checksum_length, 0, pseudo_packet, pseudo_index, integrity_aead) == 0) {
+            ret = 0;
+        }
+    }
+
+    return ret;
+}

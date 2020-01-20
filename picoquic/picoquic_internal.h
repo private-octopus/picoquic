@@ -352,6 +352,8 @@ typedef struct st_picoquic_quic_t {
 
     void* aead_encrypt_ticket_ctx;
     void* aead_decrypt_ticket_ctx;
+    void ** retry_integrity_sign_ctx;
+    void ** retry_integrity_verify_ctx;
 
     picoquic_verify_certificate_cb_fn verify_certificate_callback_fn;
     picoquic_free_verify_certificate_ctx free_verify_certificate_callback_fn;
@@ -1038,6 +1040,7 @@ void picoquic_log_negotiated_alpn(FILE* F, picoquic_cnx_t* cnx, int received, in
 void picoquic_log_congestion_state(FILE* F, picoquic_cnx_t* cnx, uint64_t current_time);
 void picoquic_log_picotls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
     uint8_t* ticket, uint16_t ticket_length);
+void picoquic_log_retry_packet_error(FILE * F, picoquic_cnx_t * cnx, char const * message);
 const char * picoquic_log_fin_or_event_name(picoquic_call_back_event_t ev);
 void picoquic_log_time(FILE* F, picoquic_cnx_t* cnx, uint64_t current_time,
     const char* label1, const char* label2);
