@@ -1483,12 +1483,20 @@ int tls_api_many_losses()
     uint64_t loss_mask = 0;
     int ret = 0;
 
-    for (uint64_t i = 0; ret == 0 && i < 6; i++) {
-        for (uint64_t j = 1; ret == 0 && j < 4; j++) {
-            loss_mask = ((((uint64_t)1) << j) - ((uint64_t)1)) << i;
+    for (int i = 0; ret == 0 && i < 6; i++) {
+        for (int j = 0; ret == 0 && j < 4; j++) {
+            uint64_t j_mask = ~(UINT64_MAX << j);
+            loss_mask = j_mask << i;
             ret = tls_api_loss_test(loss_mask);
             if (ret != 0) {
-                DBG_PRINTF("Handshake fails for mask %d-%d = %llx", (int)i, (int)j, (unsigned long long)loss_mask);
+                DBG_PRINTF("Handshake fails for mask %d-%d = %llx", i, j, (unsigned long long)loss_mask);
+            }
+        }
+        for (int j = 8; ret == 0 && j < 11; j++) {
+            loss_mask = (j | (j << 4) | (j << 8))<<i;
+            ret = tls_api_loss_test(loss_mask);
+            if (ret != 0) {
+                DBG_PRINTF("Handshake fails for mask %d, %d = %llx", i, j,  (unsigned long long)loss_mask);
             }
         }
     }
