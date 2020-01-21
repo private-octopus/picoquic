@@ -1216,16 +1216,6 @@ int picoquic_incoming_server_initial(
             /* processing of initial packet */
             if (ret == 0 && restricted == 0) {
                 ret = picoquic_tls_stream_process(cnx);
-
-                /* If the handshake keys have been received there is no need to
-                 * repeat the initial packet any more */
-
-                if (ret == 0 && cnx->crypto_context[2].aead_decrypt != NULL &&
-                    cnx->crypto_context[2].aead_encrypt != NULL)
-                {
-                    cnx->cnx_state = picoquic_state_client_handshake_progress;
-                    picoquic_implicit_handshake_ack(cnx, picoquic_packet_context_initial, current_time);
-                }
             }
         }
         else if (cnx->cnx_state < picoquic_state_ready) {

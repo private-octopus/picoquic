@@ -1065,6 +1065,9 @@ static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t* cnx,
         if (rto > PICOQUIC_MAX_RETRANSMIT_TIMER) {
             rto = PICOQUIC_MAX_RETRANSMIT_TIMER;
         }
+        else if (cnx->pkt_ctx[pc].nb_retransmit > 3 && rto < PICOQUIC_INITIAL_RETRANSMIT_TIMER) {
+            rto = PICOQUIC_INITIAL_RETRANSMIT_TIMER;
+        }
         retransmit_time = p->send_time + rto;
         is_timer_based = 1;
     }
@@ -1201,7 +1204,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
 
         /* Get the packet type */
 
-        should_retransmit = picoquic_retransmit_needed_by_packet(cnx, old_p, current_time, &next_retransmit_time, &timer_based_retransmit);
+        should_retransmit = cnx->initial_repeat_needed || picoquic_retransmit_needed_by_packet(cnx, old_p, current_time, &next_retransmit_time, &timer_based_retransmit);
 
         if (should_retransmit == 0) {
             /*
@@ -1325,7 +1328,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                     length = 0;
                 } else {
                     if (timer_based_retransmit != 0) {
-                        if (cnx->pkt_ctx[pc].nb_retransmit > 4) {
+                        if (cnx->pkt_ctx[pc].nb_retransmit > 5) {
                             /*
                              * Max retransmission count was exceeded. Disconnect.
                              */
@@ -1659,7 +1662,7 @@ size_t picoquic_prepare_packet_old_context(picoquic_cnx_t* cnx, picoquic_packet_
     if (cnx->initial_validated || cnx->initial_repeat_needed) {
         length = picoquic_retransmit_needed(cnx, pc, path_x, current_time, next_wake_time, packet, send_buffer_max,
             &is_cleartext_mode, header_length);
-        if (length > 0) {
+        if (length > 0 && (pc == picoquic_packet_context_handshake || cnx->pkt_ctx[picoquic_packet_context_handshake].retransmit_oldest == NULL)) {
             cnx->initial_repeat_needed = 0;
         }
     }
@@ -1679,7 +1682,7 @@ size_t picoquic_prepare_packet_old_context(picoquic_cnx_t* cnx, picoquic_packet_
     }
 
     if (length > 0) {
-        if (packet->ptype != picoquic_packet_0rtt_protected) {
+        if (packet->ptype != picoquic_packet_0rtt_protected && cnx->initial_validated) {
             /* Check whether it makes sens to add an ACK at the end of the retransmission */
             if (picoquic_prepare_ack_frame(cnx, current_time, pc, &packet->bytes[length],
                 send_buffer_max - checksum_overhead - length, &data_bytes)
@@ -1798,6 +1801,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
     uint8_t* bytes = packet->bytes;
     size_t length = 0;
     int epoch = 0;
+    int is_ack_only = 1;
     picoquic_packet_context_enum pc = picoquic_packet_context_initial;
 
     if (*next_wake_time > cnx->start_time + PICOQUIC_MICROSEC_HANDSHAKE_MAX) {
@@ -1974,6 +1978,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
 
                             if (ret == 0) {
                                 length += data_bytes;
+                                is_ack_only &= (data_bytes == 0);
                             }
                             else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
                                 ret = 0;
@@ -2052,7 +2057,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             }
         }
 
-        if (length > 0 && packet->ptype == picoquic_packet_handshake) {
+        if (length > 0 && packet->ptype == picoquic_packet_handshake && !is_ack_only) {
             picoquic_implicit_handshake_ack(cnx, picoquic_packet_context_initial, current_time);
         }
 
@@ -3485,7 +3490,7 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
         }
     }
 
-    if (*send_length > 0 && is_initial_sent && *send_length < 1200) {
+    if (*send_length > 0 && is_initial_sent && *send_length < 1200 && cnx->client_mode) {
         DBG_PRINTF("%s", "BUG");
     }
 
