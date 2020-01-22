@@ -985,10 +985,13 @@ int picoquic_incoming_client_initial(
                 token_buffer, sizeof(token_buffer), &token_size) != 0){ 
                 ret = PICOQUIC_ERROR_MEMORY;
             }
-            else {
+            else if (ph->token_length == 0){
                 picoquic_queue_stateless_retry(*pcnx, ph,
                     addr_from, addr_to, if_index_to, token_buffer, token_size);
                 ret = PICOQUIC_ERROR_RETRY;
+            }
+            else {
+                ret = picoquic_connection_error(*pcnx, PICOQUIC_TRANSPORT_INVALID_TOKEN, 0);
             }
         }
         else {
