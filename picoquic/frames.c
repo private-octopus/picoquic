@@ -24,6 +24,7 @@
 #include <string.h>
 #include "picoquic_internal.h"
 #include "tls_api.h"
+#include "frames.h"
 
 /* ****************************************************
  * Frames private declarations
@@ -3583,6 +3584,38 @@ static uint8_t* picoquic_skip_0len_frame(uint8_t* bytes, const uint8_t* bytes_ma
     return bytes;
 }
 
+/* Handling of Handshake Done frame. 
+ * The decode function is defined here, as well as a queue function.
+ * There is no prepare function or skip function for this single byte frame.
+ */
+uint8_t* picoquic_decode_handshake_done_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint64_t current_time)
+{
+    if (!cnx->client_mode) {
+        DBG_PRINTF("Handshake done (0x%x) not expected from client", bytes[0]);
+        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, bytes[0]);
+        bytes = NULL;
+    }
+    else {
+        bytes++;
+
+        /* The connection is now confirmed */
+        if (cnx->cnx_state == picoquic_state_client_ready_start) {
+            /* Transition to client ready state.
+             * The handshake is complete, all the handshake packets are implicitly acknowledged */
+            picoquic_ready_state_transition(cnx, current_time);
+        }
+    }
+    return bytes;
+}
+
+int picoquic_queue_handshake_done_frame(picoquic_cnx_t* cnx)
+{
+    uint8_t frame_buffer = picoquic_frame_type_handshake_done;
+
+    return picoquic_queue_misc_or_dg_frame(cnx, &cnx->first_datagram, &cnx->last_datagram,
+            &frame_buffer, 1);
+}
+
 /* Handling of datagram frames.
  * We follow the spec in
  * https://datatracker.ietf.org/doc/draft-pauly-quic-datagram/?include_text=1
@@ -3856,6 +3889,10 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_
                 bytes = picoquic_decode_retire_connection_id_frame(cnx, bytes, bytes_max, current_time, path_x);
                 ack_needed = 1;
                 break;
+            case picoquic_frame_type_handshake_done:
+                bytes = picoquic_decode_handshake_done_frame(cnx, bytes, current_time);
+                ack_needed = 1;
+                break;
             case picoquic_frame_type_datagram:
             case picoquic_frame_type_datagram_l:
                 bytes = picoquic_decode_datagram_frame(cnx, bytes, bytes_max);
@@ -4118,6 +4155,10 @@ int picoquic_skip_frame(uint8_t* bytes, size_t bytes_maxsize, size_t* consumed, 
         case picoquic_frame_type_retire_connection_id:
             /* the old code point for ACK frames, but this is taken care of in the ACK tests above */
             bytes = picoquic_skip_retire_connection_id_frame(bytes, bytes_max);
+            *pure_ack = 0;
+            break;
+        case picoquic_frame_type_handshake_done:
+            bytes = bytes + 1;
             *pure_ack = 0;
             break;
         case picoquic_frame_type_datagram:

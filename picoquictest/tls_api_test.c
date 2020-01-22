@@ -370,8 +370,17 @@ static int test_api_queue_initial_queries(picoquic_test_tls_api_ctx_t* test_ctx,
         ret = picoquic_mark_active_stream(test_ctx->cnx_client, 0, 1, NULL);
     }
 
+    /* TODO: check whether the test is actually finished */
+    if (!more_stream) {
+        for (size_t i = 0; ret == 0 && i < test_ctx->nb_test_streams; i++) {
+            if (test_ctx->test_stream[i].r_received == 0) {
+                more_stream = 1;
+                break;
+            }
+        }
+    }
+
     if (more_stream == 0) {
-        /* TODO: check whether the test is actually finished */
         test_ctx->streams_finished = 1;
         if (test_ctx->stream0_received >= test_ctx->stream0_target) {
             test_ctx->test_finished = 1;
@@ -6473,7 +6482,7 @@ int long_rtt_test()
          * but could not completely fix. */
         ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
             test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0, 0, 2*latency,
-            3400000);
+            3500000);
     }
 
     if (test_ctx != NULL) {

@@ -1313,6 +1313,13 @@ int picoquic_incoming_client_handshake(
 
                 /* If TLS data present, progress the TLS state */
                 ret = picoquic_tls_stream_process(cnx);
+
+                /* If TLS FIN has been received, the server side handshake is ready */
+                if (!cnx->client_mode && cnx->cnx_state < picoquic_state_ready && picoquic_is_tls_complete(cnx) && 
+                    picoquic_supported_versions[cnx->version_index].version != PICOQUIC_FOURTEENTH_INTEROP_VERSION &&
+                    picoquic_supported_versions[cnx->version_index].version != PICOQUIC_FIFTEENTH_INTEROP_VERSION) {
+                    picoquic_ready_state_transition(cnx, current_time);
+                }
             }
         }
     }

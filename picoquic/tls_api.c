@@ -2008,6 +2008,15 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
 }
 
 /*
+ * Test whether the TLS handshake is complete according to TLS stack
+ */
+int picoquic_is_tls_complete(picoquic_cnx_t* cnx)
+{
+    picoquic_tls_ctx_t* ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
+    return ptls_handshake_is_complete(ctx->tls);
+}
+
+/*
  * Compute the 16 byte reset secret associated with a connection ID.
  * We implement it as the hash of a secret seed maintained per QUIC context
  * and the 8 bytes connection ID.

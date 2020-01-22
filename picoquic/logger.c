@@ -340,6 +340,9 @@ char const* picoquic_log_frame_names(uint8_t frame_type)
     case picoquic_frame_type_retire_connection_id:
         frame_name = "retire_connection_id";
         break;
+    case picoquic_frame_type_handshake_done:
+        frame_name = "handshake_done";
+        break;
     case picoquic_frame_type_datagram:
     case picoquic_frame_type_datagram_l:
         frame_name = "datagram";
@@ -1192,7 +1195,6 @@ size_t picoquic_log_crypto_hs_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
     return byte_index;
 }
 
-
 size_t picoquic_log_datagram_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
 {
     uint8_t frame_id = bytes[0];
@@ -1342,7 +1344,11 @@ void picoquic_log_frames(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t leng
             break;
         case picoquic_frame_type_new_token:
             byte_index += picoquic_log_new_token_frame(F, bytes + byte_index, length - byte_index);
-            break; 
+            break;
+        case picoquic_frame_type_handshake_done: 
+            fprintf(F, "    %s\n", picoquic_log_frame_names(frame_id));
+            byte_index++;
+            break;
         case picoquic_frame_type_datagram:
         case picoquic_frame_type_datagram_l:
             byte_index += picoquic_log_datagram_frame(F, bytes + byte_index, length - byte_index);

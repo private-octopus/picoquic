@@ -309,6 +309,17 @@ static const uint8_t* picoquic_log_crypto_hs_frame(FILE* f, const uint8_t* bytes
     return bytes;
 }
 
+
+static const uint8_t* picoquic_log_handshake_done_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
+{
+    const uint8_t* bytes_begin = bytes;
+
+    bytes = picoquic_log_fixed_skip(bytes, bytes_max, 1);
+
+    picoquic_binlog_frame(f, bytes_begin, bytes);
+    return bytes;
+}
+
 static const uint8_t* picoquic_log_datagram_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
 {
     const uint8_t* bytes_begin = bytes;
@@ -411,6 +422,9 @@ void picoquic_binlog_frames(FILE * f, const uint8_t* bytes, size_t length)
             break;
         case picoquic_frame_type_new_token:
             bytes = picoquic_log_new_token_frame(f, bytes, bytes_max);
+            break;
+        case picoquic_frame_type_handshake_done:
+            bytes = picoquic_log_handshake_done_frame(f, bytes, bytes_max);
             break;
         case picoquic_frame_type_datagram:
         case picoquic_frame_type_datagram_l:
