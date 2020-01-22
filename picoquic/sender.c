@@ -1340,8 +1340,11 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                             length = 0;
                             break;
                         } else {
-                            cnx->pkt_ctx[pc].nb_retransmit++;
-                            cnx->pkt_ctx[pc].latest_retransmit_time = current_time;
+                            if (cnx->pkt_ctx[pc].nb_retransmit == 0 ||
+                                old_p->sequence_number >= cnx->pkt_ctx[pc].retransmit_sequence) {
+                                cnx->pkt_ctx[pc].nb_retransmit++;
+                                cnx->pkt_ctx[pc].latest_retransmit_time = current_time;
+                            }
                         }
                     }
 
