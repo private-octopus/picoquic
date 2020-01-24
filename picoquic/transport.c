@@ -653,6 +653,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                         case picoquic_tp_active_connection_id_limit:
                             cnx->remote_parameters.active_connection_id_limit = (uint32_t)
                             picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
+                            /* TODO: may need to check the value, but conditions are unclear */
                             break;
                         case picoquic_tp_max_datagram_size:
                             cnx->remote_parameters.max_datagram_size = (uint32_t)
@@ -707,6 +708,15 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
 
     if (ret == 0 && (present_flag & (1ull << picoquic_tp_max_ack_delay)) == 0) {
         cnx->remote_parameters.max_ack_delay = PICOQUIC_ACK_DELAY_MAX_DEFAULT;
+    }
+
+    if (ret == 0 && (present_flag & (1ull << picoquic_tp_active_connection_id_limit)) == 0) {
+        if (cnx->path[0]->local_cnxid.id_len == 0) {
+            cnx->remote_parameters.active_connection_id_limit = 0;
+        }
+        else {
+            cnx->remote_parameters.active_connection_id_limit = PICOQUIC_NB_PATH_DEFAULT;
+        }
     }
 
     /* Clients must not include reset token, server address, or original cid  */
