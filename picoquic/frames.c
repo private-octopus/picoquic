@@ -24,7 +24,6 @@
 #include <string.h>
 #include "picoquic_internal.h"
 #include "tls_api.h"
-#include "frames.h"
 
 /* ****************************************************
  * Frames private declarations
@@ -540,12 +539,12 @@ uint8_t* picoquic_decode_new_connection_id_frame(picoquic_cnx_t* cnx, uint8_t* b
     } else {
         uint16_t ret = 0;
 
-        if (sequence >= cnx->retire_cnxid_before) {
-            ret = (uint16_t)picoquic_enqueue_cnxid_stash(cnx, sequence, cid_length, cnxid_bytes, secret_bytes, NULL);
-        }
         if (bytes != NULL && retire_before > cnx->retire_cnxid_before) {
             /* TODO: retire the now deprecated CID */
             ret = (uint16_t)picoquic_remove_not_before_cid(cnx, retire_before, current_time);
+        }
+        if (ret == 0 && sequence >= cnx->retire_cnxid_before) {
+            ret = (uint16_t)picoquic_enqueue_cnxid_stash(cnx, sequence, cid_length, cnxid_bytes, secret_bytes, NULL);
         }
         if (ret != 0) {
             picoquic_connection_error(cnx, ret, picoquic_frame_type_new_connection_id);
@@ -649,9 +648,6 @@ uint8_t* picoquic_decode_retire_connection_id_frame(picoquic_cnx_t* cnx, uint8_t
 
         for (int i = 0; i < cnx->nb_paths; i++) {
             if (cnx->path[i]->path_sequence == sequence && cnx->path[i]->path_is_registered) {
-                if (sequence == 0) {
-                    cnx->is_path_0_deleted = 1;
-                }
                 /* Mark the corresponding path as demoted */
                 picoquic_demote_path(cnx, i, current_time);
                 break;

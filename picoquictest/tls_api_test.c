@@ -4113,7 +4113,7 @@ int probe_api_test()
 
             nb_trials++;
 
-            if (nb_trials <= PICOQUIC_NB_PATH_TARGET) {
+            if (nb_trials < PICOQUIC_NB_PATH_TARGET) {
                 if (ret_probe != 0) {
                     DBG_PRINTF("Trial %d (%d, %d) fails with ret = %x\n", nb_trials, i, j, ret_probe);
                     ret = -1;
@@ -4148,7 +4148,7 @@ int probe_api_test()
 
             nb_trials++;
 
-            if (nb_trials <= PICOQUIC_NB_PATH_TARGET) {
+            if (nb_trials < PICOQUIC_NB_PATH_TARGET) {
                 if (probe == NULL) {
                     DBG_PRINTF("Retrieve by addr %d (%d, %d) fails\n", nb_trials, i, j);
                     ret = -1;
@@ -4159,7 +4159,7 @@ int probe_api_test()
                     ret = -1;
                 }
             }
-            else if (probe != 0) {
+            else if (probe != NULL) {
                 DBG_PRINTF("Retrieve by addr %d (%d, %d) succeeds (unexpected)\n", nb_trials, i, j);
                 ret = -1;
             }
@@ -4179,7 +4179,7 @@ int probe_api_test()
                 probe = picoquic_find_probe_by_challenge(test_ctx->cnx_client, challenge);
 
 
-                if (nb_trials <= PICOQUIC_NB_PATH_TARGET) {
+                if (nb_trials < PICOQUIC_NB_PATH_TARGET) {
                     if (probe == NULL) {
                         DBG_PRINTF("Retrieve by challenge %d (%d, %d) fails\n", nb_trials, i, j);
                         ret = -1;
@@ -4676,8 +4676,8 @@ int retire_cnxid_test()
     /* Check */
 
     if (ret == 0) {
-        if (test_ctx->cnx_server->nb_paths != PICOQUIC_NB_PATH_TARGET + 1) {
-            DBG_PRINTF("Found %d paths active on server instead of %d.\n", test_ctx->cnx_server->nb_paths, PICOQUIC_NB_PATH_TARGET+1);
+        if (test_ctx->cnx_server->nb_paths != PICOQUIC_NB_PATH_TARGET) {
+            DBG_PRINTF("Found %d paths active on server instead of %d.\n", test_ctx->cnx_server->nb_paths, PICOQUIC_NB_PATH_TARGET);
             ret = -1;
         }
     }
@@ -6384,7 +6384,7 @@ int satellite_basic_test()
 
 int satellite_loss_test()
 {
-    return satellite_test_one(picoquic_bbr_algorithm, 10000000, 0, 1);
+    return satellite_test_one(picoquic_bbr_algorithm, 11000000, 0, 1);
 }
 
 /* Test that different CID length are properly supported */
