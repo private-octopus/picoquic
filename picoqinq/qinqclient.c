@@ -160,7 +160,7 @@ void picoqinq_client_register_address_cid_pair(picoquic_cnx_t* cnx, picoqinq_cli
                 (ret = picoquic_add_to_stream_with_ctx(cnx, stream_id, message, eom - message, 1, stream_ctx)) != 0) {
                 /* Clean up after failure */
                 if (stream_ctx == NULL) {
-                    DBG_PRINTF("Could not vreate stream #%lld", (unsigned long long) stream_id);
+                    DBG_PRINTF("Could not create stream #%lld", (unsigned long long) stream_id);
                 } else {
                     DBG_PRINTF("Could not write stream #%lld", (unsigned long long) stream_id);
                 }
