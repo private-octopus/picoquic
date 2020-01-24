@@ -303,8 +303,10 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                 cnx->local_parameters.initial_max_stream_id_bidir));
     }
 
-    bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_idle_timeout,
-        cnx->local_parameters.idle_timeout);
+    if (cnx->local_parameters.idle_timeout > 0) {
+        bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_idle_timeout,
+            cnx->local_parameters.idle_timeout);
+    }
 
     bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_max_packet_size,
         cnx->local_parameters.max_packet_size);
@@ -465,7 +467,7 @@ void picoquic_clear_transport_extensions(picoquic_cnx_t* cnx)
     cnx->maxdata_remote = cnx->remote_parameters.initial_max_data;
     cnx->remote_parameters.initial_max_stream_id_bidir = 0;
     cnx->max_stream_id_bidir_remote = 0;
-    cnx->remote_parameters.idle_timeout = 0xFFFFFFFF;
+    cnx->remote_parameters.idle_timeout = 0;
     cnx->remote_parameters.max_packet_size = 1500;
     cnx->remote_parameters.ack_delay_exponent = 3;
     cnx->remote_parameters.initial_max_stream_id_unidir = 0;
@@ -702,8 +704,18 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         }
     }
 
-    if (ret == 0 && cnx->remote_parameters.idle_timeout == 0) {
-        cnx->remote_parameters.idle_timeout = (uint32_t)((int32_t)-1);
+    /* Compute the negotiated version of the time out 
+     */
+    cnx->idle_timeout = cnx->local_parameters.idle_timeout;
+    if (cnx->idle_timeout == 0 || 
+        (cnx->remote_parameters.idle_timeout > 0 && cnx->remote_parameters.idle_timeout < cnx->idle_timeout)) {
+        cnx->idle_timeout = cnx->remote_parameters.idle_timeout;
+    }
+    if (cnx->idle_timeout == 0) {
+        cnx->idle_timeout = UINT64_MAX;
+    }
+    else {
+        cnx->idle_timeout *= 1000;
     }
 
     if (ret == 0 && (present_flag & (1ull << picoquic_tp_max_ack_delay)) == 0) {

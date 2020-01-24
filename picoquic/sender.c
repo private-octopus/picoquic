@@ -1037,6 +1037,19 @@ void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet_t
  * a different path, with different MTU.
  */
 
+static uint64_t picoquic_current_retransmit_timer(picoquic_cnx_t* cnx, picoquic_packet_context_enum pc)
+{
+    uint64_t rto = cnx->path[0]->retransmit_timer << cnx->pkt_ctx[pc].nb_retransmit;
+    if (rto > PICOQUIC_MAX_RETRANSMIT_TIMER) {
+        rto = PICOQUIC_MAX_RETRANSMIT_TIMER;
+    }
+    else if (cnx->pkt_ctx[pc].nb_retransmit > 3 && rto < PICOQUIC_INITIAL_RETRANSMIT_TIMER) {
+        rto = PICOQUIC_INITIAL_RETRANSMIT_TIMER;
+    }
+
+    return rto;
+}
+
 static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t* cnx,
     picoquic_packet_t* p, uint64_t current_time, uint64_t * next_retransmit_time, int* timer_based)
 {
@@ -1061,14 +1074,7 @@ static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t* cnx,
     else
     {
         /* There has not been any higher packet acknowledged, thus we fall back on timer logic. */
-        uint64_t rto = cnx->path[0]->retransmit_timer << cnx->pkt_ctx[pc].nb_retransmit;
-        if (rto > PICOQUIC_MAX_RETRANSMIT_TIMER) {
-            rto = PICOQUIC_MAX_RETRANSMIT_TIMER;
-        }
-        else if (cnx->pkt_ctx[pc].nb_retransmit > 3 && rto < PICOQUIC_INITIAL_RETRANSMIT_TIMER) {
-            rto = PICOQUIC_INITIAL_RETRANSMIT_TIMER;
-        }
-        retransmit_time = p->send_time + rto;
+        retransmit_time = p->send_time + picoquic_current_retransmit_timer(cnx, pc);
         is_timer_based = 1;
     }
 
@@ -3048,26 +3054,50 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
     return ret;
 }
 
-/* Prepare next packet to send, or nothing.. */
-int picoquic_prepare_segment(picoquic_cnx_t* cnx, picoquic_path_t * path_x, picoquic_packet_t* packet,
-    uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
-    uint64_t * next_wake_time, int * is_initial_sent)
+
+static int picoquic_check_idle_timer(picoquic_cnx_t* cnx, uint64_t* next_wake_time, uint64_t current_time)
 {
     int ret = 0;
-  
-    /* Check that the connection is still alive -- the timer is asymmetric, so client will drop faster */
-    if ((cnx->cnx_state < picoquic_state_disconnecting && 
-        (current_time - cnx->latest_progress_time) >= (PICOQUIC_MICROSEC_SILENCE_MAX*(2 - cnx->client_mode))) ||
-        (cnx->cnx_state < picoquic_state_server_false_start &&
-            current_time >= cnx->start_time + PICOQUIC_MICROSEC_HANDSHAKE_MAX))
-    {
+    uint64_t idle_timer = 0;
+
+    if (cnx->cnx_state >= picoquic_state_server_false_start) {
+        uint64_t rto = picoquic_current_retransmit_timer(cnx, picoquic_packet_context_application);
+        idle_timer = cnx->idle_timeout;
+        if (idle_timer < 3 * rto) {
+            idle_timer = 3 * rto;
+        }
+        idle_timer += cnx->latest_progress_time;
+
+        if (idle_timer < cnx->idle_timeout) {
+            idle_timer = UINT64_MAX;
+        }
+    }
+    else {
+        idle_timer = cnx->start_time + PICOQUIC_MICROSEC_HANDSHAKE_MAX;
+    }
+
+    if (current_time >= idle_timer) {
         /* Too long silence, break it. */
         cnx->cnx_state = picoquic_state_disconnected;
         ret = PICOQUIC_ERROR_DISCONNECTED;
         if (cnx->callback_fn) {
             (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx, NULL);
         }
-    } else {
+    } else if (idle_timer < *next_wake_time) {
+        *next_wake_time = idle_timer;
+    }
+
+    return ret;
+}
+
+/* Prepare next packet to send, or nothing.. */
+int picoquic_prepare_segment(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_t* packet,
+    uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
+    uint64_t* next_wake_time, int* is_initial_sent)
+{
+    int ret = picoquic_check_idle_timer(cnx, next_wake_time, current_time);
+
+    if (ret == 0){
         /* Prepare header -- depend on connection state */
         /* TODO: 0-RTT work. */
         switch (cnx->cnx_state) {
@@ -3383,7 +3413,7 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     int ret = 0;
     picoquic_packet_t * packet = NULL;
     struct sockaddr_storage addr_to_log;
-    uint64_t next_wake_time = cnx->latest_progress_time + PICOQUIC_MICROSEC_SILENCE_MAX * (2 - cnx->client_mode);
+    uint64_t next_wake_time = cnx->latest_progress_time + 2*PICOQUIC_MICROSEC_SILENCE_MAX;
     int is_initial_sent=0;
 
     SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);

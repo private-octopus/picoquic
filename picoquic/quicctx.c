@@ -2892,14 +2892,8 @@ int picoquic_set_local_addr(picoquic_cnx_t* cnx, struct sockaddr* addr)
 void picoquic_enable_keep_alive(picoquic_cnx_t* cnx, uint64_t interval)
 {
     if (interval == 0) {
-        /* Examine the transport parameters */
-        uint64_t idle_timeout = cnx->local_parameters.idle_timeout;
-
-        if (cnx->cnx_state >= picoquic_state_client_ready_start && idle_timeout > cnx->remote_parameters.idle_timeout) {
-            idle_timeout = cnx->remote_parameters.idle_timeout;
-        }
-        /* convert to microseconds */
-        idle_timeout *= 1000;
+        /* Use the negotiated value */
+        uint64_t idle_timeout = cnx->idle_timeout;
         /* Ensure at least 3 PTO*/
         if (idle_timeout < 3 * cnx->path[0]->retransmit_timer) {
             idle_timeout = 3 * cnx->path[0]->retransmit_timer;

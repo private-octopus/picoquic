@@ -728,7 +728,8 @@ typedef struct st_picoquic_cnx_t {
 
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;
-
+    /* Idle timeout in microseconds */
+    uint64_t idle_timeout;
     /* Local and remote parameters */
     picoquic_tp_t local_parameters;
     picoquic_tp_t remote_parameters;
