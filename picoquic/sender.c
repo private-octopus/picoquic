@@ -1940,7 +1940,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                     }
 
                     /* encode path challenge response if required */
-                    if (path_x->response_required) {
+                    if (path_x->response_required && packet_type == picoquic_packet_1rtt_protected) {
                         ret = picoquic_prepare_path_response_frame(&bytes[length],
                             send_buffer_max - checksum_overhead - length, &data_bytes, path_x->challenge_response);
                         if (ret == 0) {
@@ -2209,7 +2209,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             }
 
             /* encode path challenge response if required */
-            if (path_x->response_required) {
+            if (path_x->response_required && packet_type == picoquic_packet_1rtt_protected) {
                 if (picoquic_prepare_path_response_frame(&bytes[length],
                     send_buffer_max - checksum_overhead - length, &data_bytes, path_x->challenge_response) == 0) {
                     length += data_bytes;

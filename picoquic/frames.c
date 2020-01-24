@@ -3803,8 +3803,6 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_
         }
         else if (epoch != 1 && epoch != 3 && first_byte != picoquic_frame_type_padding
                                             && first_byte != picoquic_frame_type_ping
-                                            && first_byte != picoquic_frame_type_path_challenge
-                                            && first_byte != picoquic_frame_type_path_response
                                             && first_byte != picoquic_frame_type_connection_close
                                             && first_byte != picoquic_frame_type_crypto_hs) {
             picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, first_byte);
