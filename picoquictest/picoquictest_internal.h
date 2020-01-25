@@ -23,6 +23,7 @@
 #define PICOQUICTEST_INTERNAL_H
 
 #include "picoquic_internal.h"
+#include "picoquictest_internal.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -221,6 +222,8 @@ double picoquic_test_gauss_random(uint64_t* random_context); /* random gaussian 
 
 int picoquic_get_test_address(const char* ip_address_text, int server_port,
     struct sockaddr_storage* server_address);
+
+uint64_t demo_server_test_time_from_esni_rr(char const* esni_rr_file);
 
 #ifdef __cplusplus
 }

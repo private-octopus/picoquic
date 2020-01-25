@@ -7133,3 +7133,144 @@ int ddos_amplification_test()
 
     return ret;
 }
+
+/* ESNI Test. */
+uint64_t demo_server_test_time_from_esni_rr(char const* esni_rr_file)
+{
+    uint8_t esnikeys[2048];
+    size_t esnikeys_len;
+    uint64_t not_before = 0;
+    uint64_t not_after = 0;
+    uint64_t esni_start = 0;
+    uint16_t version = 0;
+    uint16_t l;
+
+    /* Load the rr file */
+    if (picoquic_esni_load_rr(esni_rr_file, esnikeys, sizeof(esnikeys), &esnikeys_len) == 0)
+    {
+        size_t byte_index = 0;
+
+        if (byte_index + 2 <= esnikeys_len) {
+            version = PICOPARSE_16(&esnikeys[byte_index]);
+            byte_index += 2;
+        }
+        /* 4 bytes checksum */
+        byte_index += 4;
+        /* If > V2, 16 bits length + published SNI */
+        if (version != 0xFF01 && byte_index + 2 <= esnikeys_len) {
+            l = PICOPARSE_16(&esnikeys[byte_index]);
+            byte_index += (size_t)l + 2;
+        }
+        /* 16 bits length + key exchanges */
+        if (byte_index + 2 <= esnikeys_len) {
+            l = PICOPARSE_16(&esnikeys[byte_index]);
+            byte_index += (size_t)l + 2;
+        }
+        /* 16 bits length + ciphersuites */
+        if (byte_index + 2 <= esnikeys_len) {
+            l = PICOPARSE_16(&esnikeys[byte_index]);
+            byte_index += (size_t)l + 2;
+        }
+        /* 16 bits padded length */
+        byte_index += 2;
+        /* 64 bits not before */
+        if (byte_index + 8 <= esnikeys_len) {
+            not_before = PICOPARSE_64(&esnikeys[byte_index]);
+            byte_index += 8;
+        }
+        /* 64 bits not after */
+        if (byte_index + 8 <= esnikeys_len) {
+            not_after = PICOPARSE_64(&esnikeys[byte_index]);
+        }
+        else {
+            not_after = not_before;
+        }
+        /* 16 bits length + extensions. ignored */
+    }
+    esni_start = ((not_before + not_after) / 2) * 1000000;
+
+    return esni_start;
+}
+
+
+int esni_test()
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    char test_server_esni_key_file[512];
+    char test_server_esni_rr_file[512];
+    int ret = 0;
+
+    /* Locate the esni record and key files */
+    ret = picoquic_get_input_path(test_server_esni_key_file, sizeof(test_server_esni_key_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_ESNI_KEY);
+
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_esni_rr_file, sizeof(test_server_esni_rr_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_ESNI_RR);
+    }
+
+    /* Set the simulated time to conform to the ESNI ticket */
+    if (ret == 0) {
+        simulated_time = demo_server_test_time_from_esni_rr(test_server_esni_rr_file);
+    }
+
+    /* Create the test context */
+    if (ret == 0) {
+        tls_api_one_scenario_init(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, NULL);
+
+        if (ret == 0 && test_ctx == NULL) {
+            ret = -1;
+        }
+    }
+
+    /* Add the esni parameters to the server */
+    if (ret == 0) {
+        ret = picoquic_esni_load_key(test_ctx->qserver, test_server_esni_key_file);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_esni_server_setup(test_ctx->qserver, test_server_esni_rr_file);
+    }
+
+    /* Add the SNI parameters to the client */
+    if (ret == 0) {
+        ret = picoquic_esni_client_from_file(test_ctx->cnx_client, test_server_esni_rr_file);
+    }
+
+    /* Perform the transmission test */
+    if (ret == 0) {
+        ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+            test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0, 0, 0, 0, 250000);
+    }
+
+    /* Verify that ESNI was properly negotiated */
+    if (ret == 0) {
+        if (picoquic_esni_version(test_ctx->cnx_client) == 0) {
+            DBG_PRINTF("%s", "ESNI not negotiated for client connection.\n");
+            ret = -1;
+        }
+        else if (picoquic_esni_version(test_ctx->cnx_server) == 0) {
+            DBG_PRINTF("%s", "ESNI not negotiated for server connection.\n");
+            ret = -1;
+        }
+        else if (picoquic_esni_version(test_ctx->cnx_client) != picoquic_esni_version(test_ctx->cnx_server)) {
+            DBG_PRINTF("ESNI client version %d, server version %d.\n",
+                picoquic_esni_version(test_ctx->cnx_client), picoquic_esni_version(test_ctx->cnx_server));
+            ret = -1;
+        }
+        else if (memcmp(picoquic_esni_nonce(test_ctx->cnx_client), picoquic_esni_nonce(test_ctx->cnx_server), PTLS_ESNI_NONCE_SIZE) != 0) {
+            DBG_PRINTF("%s", "Client and server nonce do not match.\n");
+            ret = -1;
+        }
+    }
+
+    /* And then free the resource
+     */
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+
+}
