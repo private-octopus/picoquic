@@ -75,6 +75,7 @@ static const picoquic_test_def_t test_table[] = {
     { "cid_mask_encrypt", cid_mask_encrypt_test },
     { "retry_protection_vector", retry_protection_vector_test },
     { "draft17_vector", draft17_vector_test },
+    { "esni", esni_test },
     { "pn_enc_1rtt", pn_enc_1rtt_test },
     { "cnxid_stash", cnxid_stash_test },
     { "new_cnxid", new_cnxid_test },
