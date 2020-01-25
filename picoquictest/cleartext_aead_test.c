@@ -1259,9 +1259,23 @@ static uint8_t retry_protection_pseudo_packet[] = {
     RETRY_PROTECTION_TEST_SCID_BYTES,
     RETRY_PROTECTION_TEST_RETRY_TOKEN
 };
+static uint8_t retry_protection_test_iv[12] = {
+    0x4d, 0x16, 0x11, 0xd0, 0x55, 0x13, 0xa5, 0x52, 0xc5, 0x87, 0xd5, 0x75
+};
 
 static uint8_t retry_protection_test_checksum[16] = {
-    0x53, 0x1d, 0xb4, 0xc5, 0x88, 0x7a, 0x3a, 0xb0, 0x7a, 0xa4, 0xfa, 0x35, 0xc2, 0xfb, 0xa6, 0x95 };
+    0xf9, 0x50, 0xf8, 0x85, 0x71, 0x4b, 0xae, 0x7a, 0xf1, 0xe2, 0x86, 0x7d, 0xd8, 0xf7, 0x83, 0x92 };
+
+
+static picoquic_connection_id_t retry_protection_odcid_draft25 = {
+    { 0x83, 0x94, 0xc8, 0xf0, 0x3e, 0x51, 0x57, 0x08 }, 8 };
+
+static uint8_t retry_protection_packet_draft25[36] = {
+    0xff, 0xff, 0x00, 0x00, 0x19, 0x00, 0x08, 0xf0, 0x67, 0xa5, 0x50, 0x2a, 0x42, 0x62, 0xb5, 0x74, 
+    0x6f, 0x6b, 0x65, 0x6e, 0x1e, 0x5e, 0xc5, 0xb0, 0x14, 0xcb, 0xb1, 0xf0, 0xfd, 0x93, 0xdf, 0x40,
+    0x48, 0xc4, 0x46, 0xa6
+};
+
 
 extern uint8_t picoquic_retry_protection_key_25[16];
 
@@ -1275,6 +1289,10 @@ int retry_protection_vector_test()
         DBG_PRINTF("%s", "Cannot create protection context!");
         ret = -1;
     }
+    else if (0 != cleartext_iv_cmp(protection_ctx, retry_protection_test_iv, sizeof(retry_protection_test_iv))) {
+        DBG_PRINTF("%s", "Clear protection IV does not match expected value.\n");
+            ret = -1;
+    } 
     else {
         uint8_t encoded[256];
         size_t encoded_length = picoquic_aead_encrypt_generic(encoded, encoded, 0, 0, retry_protection_pseudo_packet, sizeof(retry_protection_pseudo_packet), protection_ctx);
@@ -1295,6 +1313,10 @@ int retry_protection_vector_test()
             if (verification_ctx == NULL) {
                 DBG_PRINTF("%s", "Cannot create verification context!");
                 ret = -1;
+            }
+            else if (0 != cleartext_iv_cmp(verification_ctx, retry_protection_test_iv, sizeof(retry_protection_test_iv))) {
+                DBG_PRINTF("%s", "Clear verification IV does not match expected value.\n");
+                    ret = -1;
             }
             else {
                 uint8_t decoded[256];
@@ -1374,6 +1396,20 @@ int retry_protection_vector_test()
                         if (picoquic_verify_retry_protection(verification_ctx, packet, &data_length, bytes_index, &bad_odcid) == 0) {
                             DBG_PRINTF("%s", "Bad odcid not detected!");
                             ret = -1;
+                        }
+                    }
+
+
+                    if (ret == 0) {
+                        /* Verify that the draft 25 vector passes */
+                        data_length = sizeof(retry_protection_packet_draft25);
+                        memcpy(packet, retry_protection_packet_draft25, data_length);
+                        bytes_index = data_length - RETRY_PROTECTION_TEST_RETRY_TOKEN_LENGTH;
+
+                        ret = picoquic_verify_retry_protection(verification_ctx, packet, &data_length, bytes_index, &retry_protection_odcid_draft25);
+
+                        if (ret != 0) {
+                            DBG_PRINTF("Testing vector in draft 25 returns %d (0x%x)!", ret, ret);
                         }
                     }
 

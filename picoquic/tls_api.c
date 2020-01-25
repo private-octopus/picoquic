@@ -2626,6 +2626,7 @@ void picoquic_hash_finalize(uint8_t* output, void* hash_context) {
 
 void * picoquic_create_retry_protection_context(int is_enc, uint8_t * key)
 {
+#if 0
     ptls_aead_algorithm_t *aead = &ptls_openssl_aes128gcm;
     ptls_aead_context_t *ctx;
 
@@ -2645,8 +2646,9 @@ void * picoquic_create_retry_protection_context(int is_enc, uint8_t * key)
             ctx = NULL;
         }
     }
+#endif
 
-    return (void *) ctx;
+    return (void *)picoquic_setup_test_aead_context(is_enc, key);
 }
 
 void * picoquic_find_retry_protection_context(picoquic_cnx_t * cnx, int sending)
