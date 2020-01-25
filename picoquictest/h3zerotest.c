@@ -710,63 +710,6 @@ static size_t const demo_test_stream_length[] = {
     190
 };
 
-uint64_t demo_server_test_time_from_esni_rr(char const * esni_rr_file)
-{
-    uint8_t esnikeys[2048];
-    size_t esnikeys_len;
-    uint64_t not_before = 0;
-    uint64_t not_after = 0;
-    uint64_t esni_start = 0;
-    uint16_t version = 0;
-    uint16_t l;
-
-    /* Load the rr file */
-    if (picoquic_esni_load_rr(esni_rr_file, esnikeys, sizeof(esnikeys), &esnikeys_len) == 0)
-    {
-        size_t byte_index = 0;
-
-        if (byte_index + 2 <= esnikeys_len) {
-            version = PICOPARSE_16(&esnikeys[byte_index]);
-            byte_index += 2;
-        }
-        /* 4 bytes checksum */
-        byte_index += 4;
-        /* If > V2, 16 bits length + published SNI */
-        if (version != 0xFF01 && byte_index + 2 <= esnikeys_len) {
-            l = PICOPARSE_16(&esnikeys[byte_index]);
-            byte_index += (size_t)l + 2;
-        }
-        /* 16 bits length + key exchanges */
-        if (byte_index + 2 <= esnikeys_len) {
-            l = PICOPARSE_16(&esnikeys[byte_index]);
-            byte_index += (size_t)l + 2;
-        }
-        /* 16 bits length + ciphersuites */
-        if (byte_index + 2 <= esnikeys_len) {
-            l = PICOPARSE_16(&esnikeys[byte_index]);
-            byte_index += (size_t)l + 2;
-        }
-        /* 16 bits padded length */
-        byte_index += 2;
-        /* 64 bits not before */
-        if (byte_index + 8 <= esnikeys_len) {
-            not_before = PICOPARSE_64(&esnikeys[byte_index]);
-            byte_index += 8;
-        }
-        /* 64 bits not after */
-        if (byte_index + 8 <= esnikeys_len) {
-            not_after = PICOPARSE_64(&esnikeys[byte_index]);
-        }
-        else {
-            not_after = not_before;
-        }
-        /* 16 bits length + extensions. ignored */
-    }
-    esni_start = ((not_before + not_after) / 2) * 1000000;
-
-    return esni_start;
-}
-
 static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server_callback_fn, void * server_param,
     int do_esni, const picoquic_demo_stream_desc_t * demo_scenario, size_t nb_scenario, size_t const * demo_length,
     int do_sat, uint64_t completion_target, int delay_fin)
@@ -1004,7 +947,7 @@ int generic_server_test()
     return ret;
 }
 
-int esni_test()
+int http_esni_test()
 {
     return demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, NULL, 1, demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length, 0, 0, 0);
 }
