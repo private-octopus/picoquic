@@ -85,17 +85,24 @@ int picoquic_hystart_test(picoquic_min_max_rtt_t* rtt_track, uint64_t rtt_measur
             }
 
             if (rtt_track->sample_min > rtt_track->rtt_filtered_min) {
-                rtt_track->past_threshold = 1;
                 if (rtt_track->sample_min > rtt_track->rtt_filtered_min + delta_max) {
+                    rtt_track->past_threshold = 1;
                     rtt_track->nb_rtt_excess++;
                     if (rtt_track->nb_rtt_excess >= PICOQUIC_MIN_MAX_RTT_SCOPE) {
                         /* RTT increased too much, get out of slow start! */
                         ret = 1;
                     }
                 }
+                else {
+                    rtt_track->threshold_count++;
+                    if (rtt_track->threshold_count >= PICOQUIC_MIN_MAX_RTT_SCOPE) {
+                        rtt_track->past_threshold = 1;
+                    }
+                }
             }
             else {
                 rtt_track->nb_rtt_excess = 0;
+                rtt_track->threshold_count = 0;
             }
         }
     }
