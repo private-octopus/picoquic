@@ -31,6 +31,7 @@ typedef struct st_picoquic_min_max_rtt_t {
     int sample_current;
     int is_init;
     int past_threshold;
+    int threshold_count;
     uint64_t sample_min;
     uint64_t sample_max;
     uint64_t samples[PICOQUIC_MIN_MAX_RTT_SCOPE];
