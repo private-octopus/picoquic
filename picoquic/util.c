@@ -662,7 +662,7 @@ uint8_t* picoquic_frames_cid_encode(uint8_t* bytes, const uint8_t* bytes_max, co
  * Value is zero if strings match.
  */
 
-uint64_t picoquic_constant_time_memcmp(const uint8_t* x, const uint8_t* y, size_t l)
+int picoquic_constant_time_memcmp(const uint8_t* x, const uint8_t* y, size_t l)
 {
     uint64_t ret = 0;
 
@@ -671,5 +671,5 @@ uint64_t picoquic_constant_time_memcmp(const uint8_t* x, const uint8_t* y, size_
         l--;
     }
 
-    return ret;
+    return (ret == 0)?0:-1;
 }

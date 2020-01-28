@@ -150,7 +150,7 @@ uint8_t* picoquic_frames_l_v_encode(uint8_t* bytes, const uint8_t* bytes_max, si
 uint8_t* picoquic_frames_cid_encode(uint8_t* bytes, const uint8_t* bytes_max, const picoquic_connection_id_t* cid);
 
 /* Constant time memory comparison may be required on some platforms for testing reset secrets */
-uint64_t picoquic_constant_time_memcmp(const uint8_t* x, const uint8_t* y, size_t l);
+int picoquic_constant_time_memcmp(const uint8_t* x, const uint8_t* y, size_t l);
 
 #ifdef __cplusplus
 }
