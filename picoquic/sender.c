@@ -2591,6 +2591,8 @@ void picoquic_ready_state_transition(picoquic_cnx_t* cnx, uint64_t current_time)
     picoquic_implicit_handshake_ack(cnx, picoquic_packet_context_initial, current_time);
     picoquic_implicit_handshake_ack(cnx, picoquic_packet_context_handshake, current_time);
 
+    (void) picoquic_register_net_secret(cnx);
+
     if (!cnx->client_mode &&
         picoquic_supported_versions[cnx->version_index].version != PICOQUIC_FIFTEENTH_INTEROP_VERSION &&
         picoquic_supported_versions[cnx->version_index].version != PICOQUIC_FOURTEENTH_INTEROP_VERSION) {
