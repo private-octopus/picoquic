@@ -2206,7 +2206,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         }
     }
 
-    if (cnx != NULL && !client_mode) {
+    if (cnx != NULL && !client_mode && quic->local_cnxid_length > 0) {
         if (picoquic_register_net_icid(cnx) != 0) {
             DBG_PRINTF("%s", "Could not register the ICID in table.\n");
             picoquic_delete_cnx(cnx);
