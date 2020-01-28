@@ -146,7 +146,7 @@ int picohash_test()
                 DBG_PRINTF("picohash_retrieve(%"PRId64") failed\n", i);
                 ret = -1;
             } else {
-                picohash_item_delete(t, pi, 1);
+                picohash_delete_item(t, pi, 1);
             }
         }
 

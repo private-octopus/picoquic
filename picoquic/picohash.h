@@ -56,11 +56,15 @@ picohash_item* picohash_retrieve(picohash_table* hash_table, const void* key);
 
 int picohash_insert(picohash_table* hash_table, const void* key);
 
-void picohash_item_delete(picohash_table* hash_table, picohash_item* item, int delete_key_too);
+void picohash_delete_item(picohash_table* hash_table, picohash_item* item, int delete_key_too);
+
+void picohash_delete_key(picohash_table* hash_table, void* key, int delete_key_too);
 
 void picohash_delete(picohash_table* hash_table, int delete_key_too);
 
-uint64_t picohash_bytes(uint8_t* key, uint32_t length);
+uint64_t picohash_hash_mix(uint64_t hash, uint64_t h2);
+
+uint64_t picohash_bytes(const uint8_t* key, uint32_t length);
 
 #ifdef __cplusplus
 }

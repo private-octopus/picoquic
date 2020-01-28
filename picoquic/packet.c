@@ -75,20 +75,14 @@ int picoquic_parse_long_packet_header(
 
             if (*pcnx == NULL && quic != NULL) {
                 /* The version negotiation should always include the cnx-id sent by the client */
-                if (ph->dest_cnx_id.id_len > 0) {
-                    *pcnx = picoquic_cnx_by_id(quic, ph->dest_cnx_id);
-                }
-                else {
+                if (quic->local_cnxid_length == 0) {
                     *pcnx = picoquic_cnx_by_net(quic, addr_from);
-
-                    if (*pcnx != NULL && (*pcnx)->path[0]->local_cnxid.id_len != 0) {
-                        *pcnx = NULL;
-                    }
+                } else if (ph->dest_cnx_id.id_len == quic->local_cnxid_length){
+                    *pcnx = picoquic_cnx_by_id(quic, ph->dest_cnx_id);
                 }
             }
         }
         else {
-            char context_by_addr = 0;
             size_t payload_length = 0;
 
             ph->version_index = picoquic_get_version_index(ph->vn);
@@ -180,36 +174,18 @@ int picoquic_parse_long_packet_header(
 
                 /* Retrieve the connection context */
                 if (*pcnx == NULL) {
-                    if (ph->dest_cnx_id.id_len != 0) {
-                        *pcnx = picoquic_cnx_by_id(quic, ph->dest_cnx_id);
-                    }
-
-                    /* TODO: something for the case of client initial, e.g. source IP + initial CNX_ID */
-                    if (*pcnx == NULL) {
+                    if (quic->local_cnxid_length == 0) {
                         *pcnx = picoquic_cnx_by_net(quic, addr_from);
-
-                        if (*pcnx != NULL)
-                        {
-                            context_by_addr = 1;
-                        }
                     }
-                }
-
-                /* If the context was found by using `addr_from`, but the packet type
-                    * does not allow that, reset the context to NULL. */
-                if (context_by_addr)
-                {
-                    if ((*pcnx)->client_mode) {
-                        if ((*pcnx)->path[0]->local_cnxid.id_len != 0) {
-                            *pcnx = NULL;
-                        }
-                    }
-                    else if (ph->ptype != picoquic_packet_initial && ph->ptype != picoquic_packet_0rtt_protected)
+                    else
                     {
-                        *pcnx = NULL;
-                    }
-                    else if (picoquic_compare_connection_id(&(*pcnx)->initial_cnxid, &ph->dest_cnx_id) != 0) {
-                        *pcnx = NULL;
+                        if (ph->dest_cnx_id.id_len == quic->local_cnxid_length) {
+                            *pcnx = picoquic_cnx_by_id(quic, ph->dest_cnx_id);
+                        }
+
+                        if (*pcnx == NULL && (ph->ptype == picoquic_packet_initial || ph->ptype == picoquic_packet_0rtt_protected)) {
+                            *pcnx = picoquic_cnx_by_icid(quic, &ph->dest_cnx_id, addr_from);
+                        }
                     }
                 }
             }
@@ -561,11 +537,12 @@ int picoquic_parse_header_and_decrypt(
                     else {
                         /* if listening is OK, listen */
                         *pcnx = picoquic_create_cnx(quic, ph->dest_cnx_id, ph->srce_cnx_id, addr_from, current_time, ph->vn, NULL, NULL, 0);
+                        /* If an incoming connection was created, register the ICID */
                         *new_ctx_created = (*pcnx == NULL) ? 0 : 1;
                         if (*pcnx == NULL) {
                             DBG_PRINTF("%s", "Cannot create connection context\n");
                         }
-                        else if (quic->F_log){
+                        else if (quic->F_log) {
                             picoquic_log_packet_address(quic->F_log, picoquic_val64_connection_id(ph->dest_cnx_id),
                                 *pcnx, addr_from, 1, length, current_time);
                             fflush(quic->F_log);
@@ -617,32 +594,15 @@ int picoquic_parse_header_and_decrypt(
                 else if (ph->ptype == picoquic_packet_1rtt_protected)
                 {
                     /* This may be a stateless reset.
-                     * Note that the QUIC specification says that we must use a constant time
-                     * comparison function for the stateless token. It turns out that on
-                     * memcmp of a 16 byte string is actually constant time on Intel 64 bits processors,
-                     * and that replacements are less constant time than that. So we just use
-                     * memcmp on these platforms. Just to be on the safe side, we added a test of 
-                     * memcmp constant time in the build, and a constant time replacement option
-                     * that we use when compiling with 32 bits on Windows */
+                     * We test the address + putative reset secret pair against the hash table
+                     * of registered secrets. If there is a match, the corresponding connection is
+                     * found and the packet is marked as Stateless Reset */
 
-                    /* TODO: if we support multiple connections to same address, we will need to
-                     * rewrite this code and test against all possible matches */
-                    *pcnx = picoquic_cnx_by_net(quic, addr_from);
-
-                    if (*pcnx != NULL && 
-                        length >= PICOQUIC_RESET_PACKET_MIN_SIZE &&
-#ifdef PICOQUIC_USE_CONSTANT_TIME_MEMCMP
-                        picoquic_constant_time_memcmp(bytes + length - PICOQUIC_RESET_SECRET_SIZE,
-                        (*pcnx)->path[0]->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0
-#else
-                        memcmp(bytes + length - PICOQUIC_RESET_SECRET_SIZE,
-                        (*pcnx)->path[0]->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0
-#endif
-                        ) {
-                        ret = PICOQUIC_ERROR_STATELESS_RESET;
-                    }
-                    else {
-                        *pcnx = NULL;
+                    if (length >= PICOQUIC_RESET_PACKET_MIN_SIZE) {
+                        *pcnx = picoquic_cnx_by_secret(quic, bytes + length - PICOQUIC_RESET_SECRET_SIZE, addr_from);
+                        if (*pcnx != NULL) {
+                            ret = PICOQUIC_ERROR_STATELESS_RESET;
+                        }
                     }
                 }
             }
@@ -1436,6 +1396,7 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header * ph
     int ret = 0;
     int path_id = -1;
     int new_challenge_required = 0;
+    int path0_updated = 0;
 
     if (cnx->path[0]->local_cnxid.id_len > 0) {
         /* Paths must have been created in advance, when the local connection ID was
@@ -1483,6 +1444,7 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header * ph
 
     if (ret == 0 && cnx->path[path_id]->local_addr_len == 0) {
         cnx->path[path_id]->local_addr_len = picoquic_store_addr(&cnx->path[path_id]->local_addr, addr_to);
+        path0_updated |= (path_id == 0);
     }
 
 
@@ -1531,6 +1493,7 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header * ph
                     path_id = 0;
                     /* No new challenge required there */
                     new_challenge_required = 0;
+                    path0_updated = 1;
                 }
                 else if (cnx->path[path_id]->path_is_activated == 0) {
                     /* The peer is probing for a new path */
@@ -1547,6 +1510,7 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header * ph
                         new_challenge_required = 1;
                         cnx->path[path_id]->peer_addr_len = picoquic_store_addr(&cnx->path[path_id]->peer_addr, addr_from);
                         cnx->path[path_id]->local_addr_len = picoquic_store_addr(&cnx->path[path_id]->local_addr, addr_to);
+                        path0_updated |= (path_id == 0);
                     }
                     else {
                         /* Do not activate the path if no connection ID is available */
@@ -1614,6 +1578,10 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header * ph
     }
 
     *p_path_id = path_id;
+
+    if (ret == 0 && path0_updated) {
+        ret = picoquic_register_net_secret(cnx);
+    }
 
     return ret;
 }

@@ -86,7 +86,7 @@ int picohash_insert(picohash_table* hash_table, const void* key)
     return ret;
 }
 
-void picohash_item_delete(picohash_table* hash_table, picohash_item* item, int delete_key_too)
+void picohash_delete_item(picohash_table* hash_table, picohash_item* item, int delete_key_too)
 {
     uint32_t bin = (uint32_t)(item->hash % hash_table->nb_bin);
     picohash_item* previous = hash_table->hash_bin[bin];
@@ -113,6 +113,18 @@ void picohash_item_delete(picohash_table* hash_table, picohash_item* item, int d
     free(item);
 }
 
+void picohash_delete_key(picohash_table* hash_table, void* key, int delete_key_too)
+{
+    picohash_item* item = picohash_retrieve(hash_table, key);
+
+    if (item != NULL) {
+        picohash_delete_item(hash_table, item, delete_key_too);
+    }
+    else if (delete_key_too) {
+        free(key);
+    }
+}
+
 void picohash_delete(picohash_table* hash_table, int delete_key_too)
 {
     for (uint32_t i = 0; i < hash_table->nb_bin; i++) {
@@ -132,7 +144,15 @@ void picohash_delete(picohash_table* hash_table, int delete_key_too)
     free(hash_table);
 }
 
-uint64_t picohash_bytes(uint8_t* key, uint32_t length)
+uint64_t picohash_hash_mix(uint64_t hash, uint64_t h2)
+{
+    h2 ^= (hash << 17) ^ (hash >> 37);
+    hash ^= ((h2 << 31) ^ (h2 >> 17));
+
+    return hash;
+}
+
+uint64_t picohash_bytes(const uint8_t* key, uint32_t length)
 {
     uint64_t hash = 0xDEADBEEF;
 
@@ -143,3 +163,4 @@ uint64_t picohash_bytes(uint8_t* key, uint32_t length)
 
     return hash;
 }
+

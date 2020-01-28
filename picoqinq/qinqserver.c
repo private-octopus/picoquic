@@ -96,7 +96,7 @@ void picoqinq_cnx_address_link_delete(picoqinq_cnx_address_link_t* link)
         /* No other connection shares this address. Remove the item from the hash table */
         picohash_item* item = picohash_retrieve(link->cnx_ctx->qinq->table_peer_addresses, ar);
         if (item != NULL) {
-            picohash_item_delete(link->cnx_ctx->qinq->table_peer_addresses, item, 1);
+            picohash_delete_item(link->cnx_ctx->qinq->table_peer_addresses, item, 1);
         }
     }
 
