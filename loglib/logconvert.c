@@ -95,6 +95,8 @@ const char * ftype2str(picoquic_frame_type_enum_t ftype)
         return "ack_ecn";
     case picoquic_frame_type_retire_connection_id:
         return "retire_connection_id";
+    case picoquic_frame_type_handshake_done:
+        return "handshake_done";
     case picoquic_frame_type_datagram:
     case picoquic_frame_type_datagram_l:
         return "datagram";

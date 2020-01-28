@@ -846,12 +846,12 @@ void picoquic_queue_stateless_retry(picoquic_cnx_t* cnx,
     size_t token_length)
 {
     picoquic_stateless_packet_t* sp = picoquic_create_stateless_packet(cnx->quic);
-    size_t checksum_length = picoquic_get_checksum_length(cnx, 1);
+    void * integrity_aead = picoquic_find_retry_protection_context(cnx, 1);
+    size_t checksum_length = (integrity_aead == NULL) ? 0 : picoquic_aead_get_checksum_length(integrity_aead);
 
     if (sp != NULL) {
         uint8_t* bytes = sp->bytes;
         size_t byte_index = 0;
-        size_t data_bytes = 0;
         size_t header_length = 0;
         size_t pn_offset;
         size_t pn_length;
@@ -862,14 +862,21 @@ void picoquic_queue_stateless_retry(picoquic_cnx_t* cnx,
             0, &cnx->path[0]->remote_cnxid, &cnx->path[0]->local_cnxid, 0,
             bytes, &pn_offset, &pn_length);
 
-        bytes[byte_index++] = cnx->initial_cnxid.id_len;
+        /* In the old drafts, there is no header protection and the sender copies the ODCID
+         * in the packet. In the recent draft, the ODCID is not sent but
+         * is verified as part of integrity checksum */
+        if (integrity_aead == NULL) {
+            bytes[byte_index++] = cnx->initial_cnxid.id_len;
+            byte_index += picoquic_format_connection_id(bytes + byte_index,
+                PICOQUIC_MAX_PACKET_SIZE - byte_index - checksum_length, cnx->initial_cnxid);
+        }
 
-        /* Encode DCIL */
-        byte_index += picoquic_format_connection_id(bytes + byte_index,
-            PICOQUIC_MAX_PACKET_SIZE - byte_index - checksum_length, cnx->initial_cnxid);
-        byte_index += data_bytes;
+        /* Add the token */
         memcpy(&bytes[byte_index], token, token_length);
         byte_index += token_length;
+
+        /* Encode the retry integrity protection if required. */
+        byte_index = picoquic_encode_retry_protection(integrity_aead, bytes, PICOQUIC_MAX_PACKET_SIZE, byte_index, &cnx->initial_cnxid);
 
         sp->length = byte_index;
 
@@ -978,10 +985,13 @@ int picoquic_incoming_client_initial(
                 token_buffer, sizeof(token_buffer), &token_size) != 0){ 
                 ret = PICOQUIC_ERROR_MEMORY;
             }
-            else {
+            else if (ph->token_length == 0){
                 picoquic_queue_stateless_retry(*pcnx, ph,
                     addr_from, addr_to, if_index_to, token_buffer, token_size);
                 ret = PICOQUIC_ERROR_RETRY;
+            }
+            else {
+                ret = picoquic_connection_error(*pcnx, PICOQUIC_TRANSPORT_INVALID_TOKEN, 0);
             }
         }
         else {
@@ -1093,24 +1103,44 @@ int picoquic_incoming_retry(
 
     if (ret == 0) {
         /* Parse the retry frame */
+        void * integrity_aead = picoquic_find_retry_protection_context(cnx, 0);
         size_t byte_index = ph->offset;
-        uint8_t odcil;
-        
-        odcil = bytes[byte_index++];
+        size_t data_length = ph->offset + ph->payload_length;
 
-        if (odcil != cnx->initial_cnxid.id_len || (size_t)odcil + 1u > ph->payload_length ||
-            memcmp(cnx->initial_cnxid.id, &bytes[byte_index], odcil) != 0) {
-            /* malformed ODCIL, or does not match initial cid; ignore */
-            ret = PICOQUIC_ERROR_UNEXPECTED_PACKET;
-        } else {
-            byte_index += odcil;
-            token_length = ph->offset + ph->payload_length - byte_index;
+        /* Assume that is aead context is null, this is the old format and the 
+         * integrity shall be verifed by checking the ODCID */
+        if (integrity_aead == NULL) {
+            uint8_t odcil = bytes[byte_index++];
+
+            if (odcil != cnx->initial_cnxid.id_len || (size_t)odcil + 1u > ph->payload_length ||
+                memcmp(cnx->initial_cnxid.id, &bytes[byte_index], odcil) != 0) {
+                /* malformed ODCIL, or does not match initial cid; ignore */
+                ret = PICOQUIC_ERROR_UNEXPECTED_PACKET;
+                if (ret != 0 && cnx->quic->F_log != NULL) {
+                    picoquic_log_retry_packet_error(cnx->quic->F_log, cnx, "odcid check failed");
+                }
+            }
+            else {
+                byte_index += odcil;
+            }
+        }
+        else {
+            ret = picoquic_verify_retry_protection(integrity_aead, bytes, &data_length, byte_index, &cnx->initial_cnxid);
+
+            if (ret != 0 && cnx->quic->F_log != NULL) {
+                picoquic_log_retry_packet_error(cnx->quic->F_log, cnx, "integrity check failed");
+            }
+        }
+
+        if (ret == 0) {
+            token_length = data_length - byte_index;
 
             if (token_length > 0) {
                 token = malloc(token_length);
                 if (token == NULL) {
                     ret = PICOQUIC_ERROR_MEMORY;
-                } else {
+                }
+                else {
                     memcpy(token, &bytes[byte_index], token_length);
                 }
             }
@@ -1286,6 +1316,13 @@ int picoquic_incoming_client_handshake(
 
                 /* If TLS data present, progress the TLS state */
                 ret = picoquic_tls_stream_process(cnx);
+
+                /* If TLS FIN has been received, the server side handshake is ready */
+                if (!cnx->client_mode && cnx->cnx_state < picoquic_state_ready && picoquic_is_tls_complete(cnx) && 
+                    picoquic_supported_versions[cnx->version_index].version != PICOQUIC_FOURTEENTH_INTEROP_VERSION &&
+                    picoquic_supported_versions[cnx->version_index].version != PICOQUIC_FIFTEENTH_INTEROP_VERSION) {
+                    picoquic_ready_state_transition(cnx, current_time);
+                }
             }
         }
     }

@@ -264,6 +264,13 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(retry_protection_vector)
+        {
+            int ret = retry_protection_vector_test();
+
+            Assert::AreEqual(ret, 0);
+        }
         
         TEST_METHOD(test_pn_enc_1rtt)
         {

@@ -1037,6 +1037,19 @@ void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet_t
  * a different path, with different MTU.
  */
 
+static uint64_t picoquic_current_retransmit_timer(picoquic_cnx_t* cnx, picoquic_packet_context_enum pc)
+{
+    uint64_t rto = cnx->path[0]->retransmit_timer << cnx->pkt_ctx[pc].nb_retransmit;
+    if (rto > PICOQUIC_MAX_RETRANSMIT_TIMER) {
+        rto = PICOQUIC_MAX_RETRANSMIT_TIMER;
+    }
+    else if (cnx->pkt_ctx[pc].nb_retransmit > 3 && rto < PICOQUIC_INITIAL_RETRANSMIT_TIMER) {
+        rto = PICOQUIC_INITIAL_RETRANSMIT_TIMER;
+    }
+
+    return rto;
+}
+
 static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t* cnx,
     picoquic_packet_t* p, uint64_t current_time, uint64_t * next_retransmit_time, int* timer_based)
 {
@@ -1061,14 +1074,7 @@ static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t* cnx,
     else
     {
         /* There has not been any higher packet acknowledged, thus we fall back on timer logic. */
-        uint64_t rto = cnx->path[0]->retransmit_timer << cnx->pkt_ctx[pc].nb_retransmit;
-        if (rto > PICOQUIC_MAX_RETRANSMIT_TIMER) {
-            rto = PICOQUIC_MAX_RETRANSMIT_TIMER;
-        }
-        else if (cnx->pkt_ctx[pc].nb_retransmit > 3 && rto < PICOQUIC_INITIAL_RETRANSMIT_TIMER) {
-            rto = PICOQUIC_INITIAL_RETRANSMIT_TIMER;
-        }
-        retransmit_time = p->send_time + rto;
+        retransmit_time = p->send_time + picoquic_current_retransmit_timer(cnx, pc);
         is_timer_based = 1;
     }
 
@@ -1340,8 +1346,11 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                             length = 0;
                             break;
                         } else {
-                            cnx->pkt_ctx[pc].nb_retransmit++;
-                            cnx->pkt_ctx[pc].latest_retransmit_time = current_time;
+                            if (cnx->pkt_ctx[pc].nb_retransmit == 0 ||
+                                old_p->sequence_number >= cnx->pkt_ctx[pc].retransmit_sequence) {
+                                cnx->pkt_ctx[pc].nb_retransmit++;
+                                cnx->pkt_ctx[pc].latest_retransmit_time = current_time;
+                            }
                         }
                     }
 
@@ -1937,7 +1946,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                     }
 
                     /* encode path challenge response if required */
-                    if (path_x->response_required) {
+                    if (path_x->response_required && packet_type == picoquic_packet_1rtt_protected) {
                         ret = picoquic_prepare_path_response_frame(&bytes[length],
                             send_buffer_max - checksum_overhead - length, &data_bytes, path_x->challenge_response);
                         if (ret == 0) {
@@ -2070,6 +2079,23 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
     return ret;
 }
 
+/* Compute the time at which to send the next challenge
+ */
+
+uint64_t picoquic_next_challenge_time(picoquic_cnx_t* cnx, picoquic_path_t* path_x)
+{
+    uint64_t next_challenge_time = path_x->challenge_time;
+
+    if (path_x->challenge_repeat_count <= 1) {
+        next_challenge_time += path_x->retransmit_timer << path_x->challenge_repeat_count;
+    }
+    else {
+        next_challenge_time += PICOQUIC_INITIAL_RETRANSMIT_TIMER;
+    }
+
+    return next_challenge_time;
+}
+
 /* Prepare the next packet to send when in one the server initial states */
 int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * path_x, picoquic_packet_t* packet,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length, uint64_t * next_wake_time)
@@ -2134,7 +2160,8 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
         }
 
         if (path_x->challenge_verified == 0 && path_x->challenge_failed == 0) {
-            if (path_x->challenge_time + path_x->retransmit_timer <= current_time || path_x->challenge_time == 0) {
+            uint64_t next_challenge_time = picoquic_next_challenge_time(cnx, path_x);
+            if (next_challenge_time <= current_time || path_x->challenge_time == 0) {
                 if (path_x->challenge_repeat_count < PICOQUIC_CHALLENGE_REPEAT_MAX) {
                     /* When blocked, repeat the path challenge or wait */
                     if (picoquic_prepare_path_challenge_frame(&bytes[length],
@@ -2153,8 +2180,8 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
 
                         packet->length = length;
                     }
-                    else if (path_x->challenge_time + path_x->retransmit_timer < *next_wake_time) {
-                        *next_wake_time = path_x->challenge_time + path_x->retransmit_timer;
+                    else if (next_challenge_time < *next_wake_time) {
+                        *next_wake_time = next_challenge_time;
                         SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
                     }
                 }
@@ -2173,8 +2200,8 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                     length = 0;
                 }
             }
-            else if (path_x->challenge_time + path_x->retransmit_timer < *next_wake_time) {
-                *next_wake_time = path_x->challenge_time + path_x->retransmit_timer;
+            else if (next_challenge_time < *next_wake_time) {
+                *next_wake_time = next_challenge_time;
                 SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
             }
         }
@@ -2188,7 +2215,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             }
 
             /* encode path challenge response if required */
-            if (path_x->response_required) {
+            if (path_x->response_required && packet_type == picoquic_packet_1rtt_protected) {
                 if (picoquic_prepare_path_response_frame(&bytes[length],
                     send_buffer_max - checksum_overhead - length, &data_bytes, path_x->challenge_response) == 0) {
                     length += data_bytes;
@@ -2560,8 +2587,15 @@ void picoquic_ready_state_transition(picoquic_cnx_t* cnx, uint64_t current_time)
     /* Transition to server ready state.
      * The handshake is complete, all the handshake packets are implicitly acknowledged */
     cnx->cnx_state = picoquic_state_ready;
+    cnx->is_handshake_finished = 1;
     picoquic_implicit_handshake_ack(cnx, picoquic_packet_context_initial, current_time);
     picoquic_implicit_handshake_ack(cnx, picoquic_packet_context_handshake, current_time);
+
+    if (!cnx->client_mode &&
+        picoquic_supported_versions[cnx->version_index].version != PICOQUIC_FIFTEENTH_INTEROP_VERSION &&
+        picoquic_supported_versions[cnx->version_index].version != PICOQUIC_FOURTEENTH_INTEROP_VERSION) {
+        (void)picoquic_queue_handshake_done_frame(cnx);
+    }
 
     /* Start migration to server preferred address if present */
     if (cnx->client_mode) {
@@ -2673,7 +2707,8 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
             packet->send_path = path_x;
 
             if (path_x->challenge_verified == 0 && path_x->challenge_failed == 0) {
-                if (path_x->challenge_time + path_x->retransmit_timer <= current_time || path_x->challenge_repeat_count == 0) {
+                uint64_t next_challenge_time = picoquic_next_challenge_time(cnx, path_x);
+                if (next_challenge_time <= current_time || path_x->challenge_repeat_count == 0) {
                     if (path_x->challenge_repeat_count < PICOQUIC_CHALLENGE_REPEAT_MAX) {
                         int ack_needed = cnx->pkt_ctx[pc].ack_needed;
                         /* When blocked, repeat the path challenge or wait */
@@ -2716,8 +2751,8 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                     }
                 }
                 else {
-                    if (path_x->challenge_time + path_x->retransmit_timer < *next_wake_time) {
-                        *next_wake_time = path_x->challenge_time + path_x->retransmit_timer;
+                    if (next_challenge_time < *next_wake_time) {
+                        *next_wake_time = next_challenge_time;
                         SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
                     }
                 }
@@ -2869,7 +2904,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                         /* If there are not enough paths, create and advertise */
                         while (ret == 0 && cnx->remote_parameters.migration_disabled == 0 &&
                             cnx->local_parameters.migration_disabled == 0 &&
-                            cnx->nb_paths < (int)(cnx->remote_parameters.active_connection_id_limit + 1 - cnx->is_path_0_deleted) &&
+                            cnx->nb_paths < (int)(cnx->remote_parameters.active_connection_id_limit) &&
                             cnx->nb_paths <= PICOQUIC_NB_PATH_TARGET) {
                             ret = picoquic_prepare_new_path_and_id(cnx, &bytes[length],
                                 send_buffer_min_max - checksum_overhead - length,
@@ -3019,26 +3054,50 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
     return ret;
 }
 
-/* Prepare next packet to send, or nothing.. */
-int picoquic_prepare_segment(picoquic_cnx_t* cnx, picoquic_path_t * path_x, picoquic_packet_t* packet,
-    uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
-    uint64_t * next_wake_time, int * is_initial_sent)
+
+static int picoquic_check_idle_timer(picoquic_cnx_t* cnx, uint64_t* next_wake_time, uint64_t current_time)
 {
     int ret = 0;
-  
-    /* Check that the connection is still alive -- the timer is asymmetric, so client will drop faster */
-    if ((cnx->cnx_state < picoquic_state_disconnecting && 
-        (current_time - cnx->latest_progress_time) >= (PICOQUIC_MICROSEC_SILENCE_MAX*(2 - cnx->client_mode))) ||
-        (cnx->cnx_state < picoquic_state_server_false_start &&
-            current_time >= cnx->start_time + PICOQUIC_MICROSEC_HANDSHAKE_MAX))
-    {
+    uint64_t idle_timer = 0;
+
+    if (cnx->cnx_state >= picoquic_state_server_false_start) {
+        uint64_t rto = picoquic_current_retransmit_timer(cnx, picoquic_packet_context_application);
+        idle_timer = cnx->idle_timeout;
+        if (idle_timer < 3 * rto) {
+            idle_timer = 3 * rto;
+        }
+        idle_timer += cnx->latest_progress_time;
+
+        if (idle_timer < cnx->idle_timeout) {
+            idle_timer = UINT64_MAX;
+        }
+    }
+    else {
+        idle_timer = cnx->start_time + PICOQUIC_MICROSEC_HANDSHAKE_MAX;
+    }
+
+    if (current_time >= idle_timer) {
         /* Too long silence, break it. */
         cnx->cnx_state = picoquic_state_disconnected;
         ret = PICOQUIC_ERROR_DISCONNECTED;
         if (cnx->callback_fn) {
             (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx, NULL);
         }
-    } else {
+    } else if (idle_timer < *next_wake_time) {
+        *next_wake_time = idle_timer;
+    }
+
+    return ret;
+}
+
+/* Prepare next packet to send, or nothing.. */
+int picoquic_prepare_segment(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_t* packet,
+    uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
+    uint64_t* next_wake_time, int* is_initial_sent)
+{
+    int ret = picoquic_check_idle_timer(cnx, next_wake_time, current_time);
+
+    if (ret == 0){
         /* Prepare header -- depend on connection state */
         /* TODO: 0-RTT work. */
         switch (cnx->cnx_state) {
@@ -3354,7 +3413,7 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     int ret = 0;
     picoquic_packet_t * packet = NULL;
     struct sockaddr_storage addr_to_log;
-    uint64_t next_wake_time = cnx->latest_progress_time + PICOQUIC_MICROSEC_SILENCE_MAX * (2 - cnx->client_mode);
+    uint64_t next_wake_time = cnx->latest_progress_time + 2*PICOQUIC_MICROSEC_SILENCE_MAX;
     int is_initial_sent=0;
 
     SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);

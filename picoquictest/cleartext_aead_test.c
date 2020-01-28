@@ -1222,3 +1222,202 @@ int cid_mask_encrypt_test()
 
     return ret;
 }
+
+/* Retry protection test vector */
+
+#define RETRY_PROTECTION_FIRST_BYTE 0xF5
+#define RETRY_PROTECTION_VERSION 0xFF,0,0,25
+#define RETRY_PROTECTION_TEST_ODCID_LENGTH 8
+#define RETRY_PROTECTION_TEST_ODCID_BYTES 81,82,83,84,85,86,87,88
+#define RETRY_PROTECTION_TEST_DCID_LENGTH 6
+#define RETRY_PROTECTION_TEST_DCID_BYTES 61,62,63,64,65,66
+#define RETRY_PROTECTION_TEST_SCID_LENGTH 4
+#define RETRY_PROTECTION_TEST_SCID_BYTES 44,45,46,47
+#define RETRY_PROTECTION_TEST_RETRY_TOKEN_LENGTH 24
+#define RETRY_PROTECTION_TEST_RETRY_TOKEN 101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120,121,122,123,124
+
+static uint8_t retry_protection_test_input[] = {
+    RETRY_PROTECTION_FIRST_BYTE,
+    RETRY_PROTECTION_VERSION,
+    RETRY_PROTECTION_TEST_DCID_LENGTH,
+    RETRY_PROTECTION_TEST_DCID_BYTES,
+    RETRY_PROTECTION_TEST_SCID_LENGTH,
+    RETRY_PROTECTION_TEST_SCID_BYTES,
+    RETRY_PROTECTION_TEST_RETRY_TOKEN
+};
+
+static picoquic_connection_id_t retry_protection_test_odcid = { {RETRY_PROTECTION_TEST_ODCID_BYTES}, RETRY_PROTECTION_TEST_ODCID_LENGTH };
+
+static uint8_t retry_protection_pseudo_packet[] = {
+    RETRY_PROTECTION_TEST_ODCID_LENGTH,
+    RETRY_PROTECTION_TEST_ODCID_BYTES,
+    RETRY_PROTECTION_FIRST_BYTE,
+    RETRY_PROTECTION_VERSION,
+    RETRY_PROTECTION_TEST_DCID_LENGTH,
+    RETRY_PROTECTION_TEST_DCID_BYTES,
+    RETRY_PROTECTION_TEST_SCID_LENGTH,
+    RETRY_PROTECTION_TEST_SCID_BYTES,
+    RETRY_PROTECTION_TEST_RETRY_TOKEN
+};
+static uint8_t retry_protection_test_iv[12] = {
+    0x4d, 0x16, 0x11, 0xd0, 0x55, 0x13, 0xa5, 0x52, 0xc5, 0x87, 0xd5, 0x75
+};
+
+static uint8_t retry_protection_test_checksum[16] = {
+    0xf9, 0x50, 0xf8, 0x85, 0x71, 0x4b, 0xae, 0x7a, 0xf1, 0xe2, 0x86, 0x7d, 0xd8, 0xf7, 0x83, 0x92 };
+
+
+static picoquic_connection_id_t retry_protection_odcid_draft25 = {
+    { 0x83, 0x94, 0xc8, 0xf0, 0x3e, 0x51, 0x57, 0x08 }, 8 };
+
+static uint8_t retry_protection_packet_draft25[36] = {
+    0xff, 0xff, 0x00, 0x00, 0x19, 0x00, 0x08, 0xf0, 0x67, 0xa5, 0x50, 0x2a, 0x42, 0x62, 0xb5, 0x74, 
+    0x6f, 0x6b, 0x65, 0x6e, 0x1e, 0x5e, 0xc5, 0xb0, 0x14, 0xcb, 0xb1, 0xf0, 0xfd, 0x93, 0xdf, 0x40,
+    0x48, 0xc4, 0x46, 0xa6
+};
+
+
+extern uint8_t picoquic_retry_protection_key_25[16];
+
+int retry_protection_vector_test()
+{
+    /* First, create a protection context to test the basic mechanisms */
+    int ret = 0;
+    void* protection_ctx = picoquic_create_retry_protection_context(1, picoquic_retry_protection_key_25);
+
+    if (protection_ctx == NULL) {
+        DBG_PRINTF("%s", "Cannot create protection context!");
+        ret = -1;
+    }
+    else if (0 != cleartext_iv_cmp(protection_ctx, retry_protection_test_iv, sizeof(retry_protection_test_iv))) {
+        DBG_PRINTF("%s", "Clear protection IV does not match expected value.\n");
+            ret = -1;
+    } 
+    else {
+        uint8_t encoded[256];
+        size_t encoded_length = picoquic_aead_encrypt_generic(encoded, encoded, 0, 0, retry_protection_pseudo_packet, sizeof(retry_protection_pseudo_packet), protection_ctx);
+
+        if (encoded_length != 16) {
+            DBG_PRINTF("Encoded length = %d instead of 16", (int)encoded_length);
+            ret = -1;
+        }
+        else if (memcmp(encoded, retry_protection_test_checksum, 16) != 0) {
+            DBG_PRINTF("%s", "Test vector does not match!");
+            ret = -1;
+        }
+
+        picoquic_aead_free(protection_ctx);
+
+        if (ret == 0) {
+            void* verification_ctx = picoquic_create_retry_protection_context(0, picoquic_retry_protection_key_25);
+            if (verification_ctx == NULL) {
+                DBG_PRINTF("%s", "Cannot create verification context!");
+                ret = -1;
+            }
+            else if (0 != cleartext_iv_cmp(verification_ctx, retry_protection_test_iv, sizeof(retry_protection_test_iv))) {
+                DBG_PRINTF("%s", "Clear verification IV does not match expected value.\n");
+                    ret = -1;
+            }
+            else {
+                uint8_t decoded[256];
+                size_t decoded_length = picoquic_aead_decrypt_generic(decoded, encoded, encoded_length, 0, retry_protection_pseudo_packet, sizeof(retry_protection_pseudo_packet), verification_ctx);
+
+                if (decoded_length != 0) {
+                    DBG_PRINTF("Decoded length = %d instead of 0", (int)decoded_length);
+                    ret = -1;
+                }
+                else {
+                    /* Positive test succeeded, now do a negative test */
+                    encoded[0] ^= 1;
+                    decoded_length = picoquic_aead_decrypt_generic(decoded, encoded, encoded_length, 0, retry_protection_pseudo_packet, sizeof(retry_protection_pseudo_packet), verification_ctx);
+                    if (decoded_length == 0) {
+                        DBG_PRINTF("Decoded length = 0 instead of expected error", (int)decoded_length);
+                        ret = -1;
+                    }
+                }
+
+                picoquic_aead_free(verification_ctx);
+            }
+        }
+    }
+
+    if (ret == 0) {
+        /* Test the verification functions */
+        void* protection_ctx = picoquic_create_retry_protection_context(1, picoquic_retry_protection_key_25);
+        uint8_t packet[PICOQUIC_MAX_PACKET_SIZE];
+        size_t packet_index = sizeof(retry_protection_test_input);
+
+        if (protection_ctx == NULL) {
+            DBG_PRINTF("%s", "Cannot create protection context!");
+            ret = -1;
+        }
+        else {
+            size_t length;
+            memcpy(packet, retry_protection_test_input, packet_index);
+
+            length = picoquic_encode_retry_protection(protection_ctx, packet, PICOQUIC_MAX_PACKET_SIZE, packet_index, &retry_protection_test_odcid);
+
+            if (length != packet_index + sizeof(retry_protection_test_checksum)) {
+                DBG_PRINTF("Packet length = %d instead of %d+16", (int)length, (int)packet_index);
+                ret = -1;
+            }
+            else if (memcmp(packet + packet_index, retry_protection_test_checksum, sizeof(retry_protection_test_checksum)) != 0) {
+                DBG_PRINTF("%s", "Packet checksum does not match!");
+                ret = -1;
+            }
+            
+            picoquic_aead_free(protection_ctx);
+
+            if (ret == 0) {
+                void* verification_ctx = picoquic_create_retry_protection_context(0, picoquic_retry_protection_key_25);
+                if (verification_ctx == NULL) {
+                    DBG_PRINTF("%s", "Cannot create verification context!");
+                    ret = -1;
+                }
+                else {
+                    size_t data_length = length;
+                    size_t bytes_index = sizeof(retry_protection_test_input) - RETRY_PROTECTION_TEST_RETRY_TOKEN_LENGTH;
+
+                    ret = picoquic_verify_retry_protection(verification_ctx, packet, &data_length, bytes_index, &retry_protection_test_odcid);
+
+                    if (ret != 0) {
+                        DBG_PRINTF("Verification returns %d (0x%d)!", ret, ret);
+                    }
+                    else if (data_length != sizeof(retry_protection_test_input)) {
+                        DBG_PRINTF("Verification returns length %d instead of %d!", (int)data_length, (int)sizeof(retry_protection_test_input));
+                        ret = -1;
+                    }
+
+                    if (ret == 0) {
+                        /* Try verification with a different odcid. It should fail */
+                        picoquic_connection_id_t bad_odcid = retry_protection_test_odcid;
+                        bad_odcid.id[0] ^= 1;
+                        data_length = length;
+                        if (picoquic_verify_retry_protection(verification_ctx, packet, &data_length, bytes_index, &bad_odcid) == 0) {
+                            DBG_PRINTF("%s", "Bad odcid not detected!");
+                            ret = -1;
+                        }
+                    }
+
+
+                    if (ret == 0) {
+                        /* Verify that the draft 25 vector passes */
+                        data_length = sizeof(retry_protection_packet_draft25);
+                        memcpy(packet, retry_protection_packet_draft25, data_length);
+                        bytes_index = data_length - RETRY_PROTECTION_TEST_RETRY_TOKEN_LENGTH;
+
+                        ret = picoquic_verify_retry_protection(verification_ctx, packet, &data_length, bytes_index, &retry_protection_odcid_draft25);
+
+                        if (ret != 0) {
+                            DBG_PRINTF("Testing vector in draft 25 returns %d (0x%x)!", ret, ret);
+                        }
+                    }
+
+                    picoquic_aead_free(verification_ctx);
+                }
+            }
+        }
+    }
+
+    return ret;
+}

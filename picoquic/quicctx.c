@@ -137,19 +137,32 @@ static uint8_t picoquic_cleartext_draft_23_salt[] = {
     0xbe, 0xf9, 0xf5, 0x02
 };
 
+uint8_t picoquic_retry_protection_key_25[32] = {
+    0x65, 0x6e, 0x61, 0xe3, 0x36, 0xae, 0x94, 0x17, 0xf7, 0xf0, 0xed, 0xd8, 0xd7, 0x8d, 0x46, 0x1e,
+    0x2a, 0xa7, 0x08, 0x4a, 0xba, 0x7a, 0x14, 0xc1, 0xe9, 0xf7, 0x26, 0xd5, 0x57, 0x09, 0x16, 0x9a };
+
 const picoquic_version_parameters_t picoquic_supported_versions[] = {
+    { PICOQUIC_SIXTEENTH_INTEROP_VERSION,
+        sizeof(picoquic_cleartext_draft_23_salt),
+        picoquic_cleartext_draft_23_salt,
+        sizeof(picoquic_retry_protection_key_25),
+        picoquic_retry_protection_key_25 },
     { PICOQUIC_FIFTEENTH_INTEROP_VERSION,
         sizeof(picoquic_cleartext_draft_23_salt),
-        picoquic_cleartext_draft_23_salt },
+        picoquic_cleartext_draft_23_salt, 0, NULL },
     { PICOQUIC_FOURTEENTH_INTEROP_VERSION,
         sizeof(picoquic_cleartext_draft_23_salt),
-        picoquic_cleartext_draft_23_salt },
+        picoquic_cleartext_draft_23_salt, 0, NULL },
     { PICOQUIC_INTERNAL_TEST_VERSION_2,
         sizeof(picoquic_cleartext_internal_test_1_salt),
-        picoquic_cleartext_internal_test_1_salt },
+        picoquic_cleartext_internal_test_1_salt, 
+        sizeof(picoquic_retry_protection_key_25),
+        picoquic_retry_protection_key_25},
     { PICOQUIC_INTERNAL_TEST_VERSION_1,
         sizeof(picoquic_cleartext_internal_test_1_salt),
-        picoquic_cleartext_internal_test_1_salt }
+        picoquic_cleartext_internal_test_1_salt,
+        sizeof(picoquic_retry_protection_key_25),
+        picoquic_retry_protection_key_25 }
 };
 
 const size_t picoquic_nb_supported_versions = sizeof(picoquic_supported_versions) / sizeof(picoquic_version_parameters_t);
@@ -308,6 +321,8 @@ int picoquic_is_local_cid(picoquic_quic_t* quic, picoquic_connection_id_t* cid)
 void picoquic_free(picoquic_quic_t* quic)
 {
     if (quic != NULL) {
+        picoquic_delete_retry_protection_contexts(quic);
+
         if (quic->aead_encrypt_ticket_ctx != NULL) {
             picoquic_aead_free(quic->aead_encrypt_ticket_ctx);
             quic->aead_encrypt_ticket_ctx = NULL;
@@ -1065,11 +1080,13 @@ int picoquic_enqueue_cnxid_stash(picoquic_cnx_t* cnx,
 {
     int ret = 0;
     int is_duplicate = 0;
+    size_t nb_cid_received = 0;
     picoquic_connection_id_t cnx_id;
     picoquic_cnxid_stash_t* next_stash = cnx->cnxid_stash_first;
     picoquic_cnxid_stash_t* last_stash = NULL;
     picoquic_cnxid_stash_t* stashed = NULL;
     picoquic_probe_t* next_probe = cnx->probe_first;
+    uint64_t cnxid_mask = 0;
 
     /* verify the format */
     if (picoquic_parse_connection_id(cnxid_bytes, cid_length, &cnx_id) == 0) {
@@ -1083,45 +1100,56 @@ int picoquic_enqueue_cnxid_stash(picoquic_cnx_t* cnx,
 
     /* Verify that the proposed CID is not already in use */
     for (int i = 0; ret == 0 && i < cnx->nb_paths; i++) {
-        if (sequence == cnx->path[i]->remote_cnxid_sequence) {
-            if (picoquic_compare_connection_id(&cnx_id, &cnx->path[i]->remote_cnxid) == 0)
-            {
-                if (memcmp(secret_bytes, cnx->path[i]->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0) {
-                    is_duplicate = 1;
+        if (cnx->path[i]->remote_cnxid.id_len > 0) {
+            if (sequence == cnx->path[i]->remote_cnxid_sequence) {
+                if (picoquic_compare_connection_id(&cnx_id, &cnx->path[i]->remote_cnxid) == 0)
+                {
+                    if (memcmp(secret_bytes, cnx->path[i]->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0) {
+                        is_duplicate = 1;
+                        break;
+                    }
+                    else {
+                        DBG_PRINTF("Path %d, Cnx_id: %02x%02x%02x%02x..., Reset = %02x%02x%02x%02x... vs %02x%02x%02x%02x...\n",
+                            i,
+                            cnx->path[i]->remote_cnxid.id[0], cnx->path[i]->remote_cnxid.id[1],
+                            cnx->path[i]->remote_cnxid.id[2], cnx->path[i]->remote_cnxid.id[3],
+                            secret_bytes[0], secret_bytes[1], secret_bytes[2], secret_bytes[3],
+                            cnx->path[i]->reset_secret[0], cnx->path[i]->reset_secret[1],
+                            cnx->path[i]->reset_secret[2], cnx->path[i]->reset_secret[3]);
+                        ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
+                    }
                     break;
                 }
                 else {
-                    DBG_PRINTF("Path %d, Cnx_id: %02x%02x%02x%02x..., Reset = %02x%02x%02x%02x... vs %02x%02x%02x%02x...\n",
-                        i,
+                    DBG_PRINTF("Path %d, Sequence %d, Cnx_id: %02x%02x%02x%02x..., vs %02x%02x%02x%02x...\n",
+                        i, (int)sequence,
                         cnx->path[i]->remote_cnxid.id[0], cnx->path[i]->remote_cnxid.id[1],
                         cnx->path[i]->remote_cnxid.id[2], cnx->path[i]->remote_cnxid.id[3],
-                        secret_bytes[0], secret_bytes[1], secret_bytes[2], secret_bytes[3],
-                        cnx->path[i]->reset_secret[0], cnx->path[i]->reset_secret[1],
-                        cnx->path[i]->reset_secret[2], cnx->path[i]->reset_secret[3]);
+                        cnx_id.id[0], cnx_id.id[1], cnx_id.id[2], cnx_id.id[3]);
                     ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
                 }
-                break;
             }
-            else {
-                DBG_PRINTF("Path %d, Sequence %d, Cnx_id: %02x%02x%02x%02x..., vs %02x%02x%02x%02x...\n",
-                    i, (int)sequence,
-                    cnx->path[i]->remote_cnxid.id[0], cnx->path[i]->remote_cnxid.id[1],
-                    cnx->path[i]->remote_cnxid.id[2], cnx->path[i]->remote_cnxid.id[3],
-                    cnx_id.id[0], cnx_id.id[1], cnx_id.id[2], cnx_id.id[3]);
+            else if (picoquic_compare_connection_id(&cnx_id, &cnx->path[i]->remote_cnxid) == 0) {
+                DBG_PRINTF("Path %d, Cnx_id: %02x%02x%02x%02x..., Sequence %d vs. %d\n",
+                    i, cnx_id.id[0], cnx_id.id[1], cnx_id.id[2], cnx_id.id[3],
+                    (int)sequence, (int)cnx->path[i]->remote_cnxid_sequence);
                 ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
             }
-        }
-        else if (picoquic_compare_connection_id(&cnx_id, &cnx->path[i]->remote_cnxid) == 0) {
-            DBG_PRINTF("Path %d, Cnx_id: %02x%02x%02x%02x..., Sequence %d vs. %d\n",
-                i, cnx_id.id[0], cnx_id.id[1], cnx_id.id[2], cnx_id.id[3],
-                (int)sequence, (int)cnx->path[i]->remote_cnxid_sequence);
-            ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
-        }
-        else if (memcmp(secret_bytes, &cnx->path[i]->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0) {
-            DBG_PRINTF("Path %d, Cnx_id: %02x%02x%02x%02x..., Sequence %d vs. %d, same secret\n",
-                i, cnx_id.id[0], cnx_id.id[1], cnx_id.id[2], cnx_id.id[3],
-                (int)sequence, (int)cnx->path[i]->remote_cnxid_sequence);
-            ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
+            else if (memcmp(secret_bytes, &cnx->path[i]->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0) {
+                DBG_PRINTF("Path %d, Cnx_id: %02x%02x%02x%02x..., Sequence %d vs. %d, same secret\n",
+                    i, cnx_id.id[0], cnx_id.id[1], cnx_id.id[2], cnx_id.id[3],
+                    (int)sequence, (int)cnx->path[i]->remote_cnxid_sequence);
+                ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
+            }
+            else {
+                if (!cnx->path[i]->path_is_demoted) {
+                    uint64_t check = ((uint64_t)1) << cnx->path[i]->remote_cnxid_sequence;
+                    if ((cnxid_mask & check) == 0) {
+                        nb_cid_received++;
+                        cnxid_mask |= check;
+                    }
+                }
+            }
         }
     }
 
@@ -1147,6 +1175,15 @@ int picoquic_enqueue_cnxid_stash(picoquic_cnx_t* cnx,
         else if (memcmp(secret_bytes, next_probe->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0) {
             ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
         }
+        else {
+            if (next_probe->challenge_repeat_count < PICOQUIC_CHALLENGE_REPEAT_MAX) {
+                uint64_t check = ((uint64_t)1) << next_probe->sequence;
+                if ((cnxid_mask & check) == 0) {
+                    nb_cid_received++;
+                    cnxid_mask |= check;
+                }
+            }
+        }
 
         next_probe = next_probe->next_probe;
     }
@@ -1169,26 +1206,35 @@ int picoquic_enqueue_cnxid_stash(picoquic_cnx_t* cnx,
         else if (memcmp(secret_bytes, next_stash->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0) {
             ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
         }
+        else {
+            nb_cid_received++;
+        }
         last_stash = next_stash;
         next_stash = next_stash->next_in_stash;
     }
 
     if (ret == 0 && is_duplicate == 0) {
-        stashed = (picoquic_cnxid_stash_t *)malloc(sizeof(picoquic_cnxid_stash_t));
+        if (nb_cid_received >= cnx->local_parameters.active_connection_id_limit) {
+            ret = PICOQUIC_TRANSPORT_CONNECTION_ID_LIMIT_ERROR;
+        }
+        else {
+            stashed = (picoquic_cnxid_stash_t*)malloc(sizeof(picoquic_cnxid_stash_t));
 
-        if (stashed == NULL) {
-            ret = PICOQUIC_TRANSPORT_INTERNAL_ERROR;
-        } else {
-            (void)picoquic_parse_connection_id(cnxid_bytes, cid_length, &stashed->cnx_id);
-            stashed->sequence = sequence;
-            memcpy(stashed->reset_secret, secret_bytes, PICOQUIC_RESET_SECRET_SIZE);
-            stashed->next_in_stash = NULL;
-
-            if (last_stash == NULL) {
-                cnx->cnxid_stash_first = stashed;
+            if (stashed == NULL) {
+                ret = PICOQUIC_TRANSPORT_INTERNAL_ERROR;
             }
             else {
-                last_stash->next_in_stash = stashed;
+                (void)picoquic_parse_connection_id(cnxid_bytes, cid_length, &stashed->cnx_id);
+                stashed->sequence = sequence;
+                memcpy(stashed->reset_secret, secret_bytes, PICOQUIC_RESET_SECRET_SIZE);
+                stashed->next_in_stash = NULL;
+
+                if (last_stash == NULL) {
+                    cnx->cnxid_stash_first = stashed;
+                }
+                else {
+                    last_stash->next_in_stash = stashed;
+                }
             }
         }
     }
@@ -2852,14 +2898,8 @@ int picoquic_set_local_addr(picoquic_cnx_t* cnx, struct sockaddr* addr)
 void picoquic_enable_keep_alive(picoquic_cnx_t* cnx, uint64_t interval)
 {
     if (interval == 0) {
-        /* Examine the transport parameters */
-        uint64_t idle_timeout = cnx->local_parameters.idle_timeout;
-
-        if (cnx->cnx_state >= picoquic_state_client_ready_start && idle_timeout > cnx->remote_parameters.idle_timeout) {
-            idle_timeout = cnx->remote_parameters.idle_timeout;
-        }
-        /* convert to microseconds */
-        idle_timeout *= 1000;
+        /* Use the negotiated value */
+        uint64_t idle_timeout = cnx->idle_timeout;
         /* Ensure at least 3 PTO*/
         if (idle_timeout < 3 * cnx->path[0]->retransmit_timer) {
             idle_timeout = 3 * cnx->path[0]->retransmit_timer;

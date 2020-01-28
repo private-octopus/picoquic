@@ -340,6 +340,9 @@ char const* picoquic_log_frame_names(uint8_t frame_type)
     case picoquic_frame_type_retire_connection_id:
         frame_name = "retire_connection_id";
         break;
+    case picoquic_frame_type_handshake_done:
+        frame_name = "handshake_done";
+        break;
     case picoquic_frame_type_datagram:
     case picoquic_frame_type_datagram_l:
         frame_name = "datagram";
@@ -528,41 +531,62 @@ void picoquic_log_retry_packet(FILE* F, uint64_t log_cnxid64,
     int token_length = 0;
     uint8_t odcil;
     int payload_length = (int)(ph->payload_length);
-    /* Decode ODCIL from bottom 4 bits of first byte */
-    
-    odcil = bytes[byte_index];
-    byte_index++;
-    payload_length--;
+    int is_err = 0;
+    int has_checksum = picoquic_supported_versions[ph->version_index].version_retry_key != NULL;
 
-    if ((int)odcil > payload_length) {
-        picoquic_log_prefix_initial_cid64(F, log_cnxid64);
-        fprintf(F, "packet too short, ODCIL: %d, only %d bytes available.\n", 
-            odcil, payload_length);
-    } else {
-        /* Dump the old connection ID */
-        picoquic_log_prefix_initial_cid64(F, log_cnxid64);
-        fprintf(F, "    ODCIL: <");
-        for (uint8_t i = 0; i < odcil; i++) {
-            fprintf(F, "%02x", bytes[byte_index++]);
-        }
+    if (!has_checksum) {
+        odcil = bytes[byte_index];
+        byte_index++;
+        payload_length--;
 
-        token_length = payload_length - odcil;
-        fprintf(F, ">, Token length: %d\n", token_length);
-        /* Print the token or an error */
-        if (token_length > 0) {
-            int printed_length = (token_length > 16) ? 16 : token_length; 
+        if ((int)odcil > payload_length) {
             picoquic_log_prefix_initial_cid64(F, log_cnxid64);
-            fprintf(F, "    Token: ");
-            for (uint8_t i = 0; i < printed_length; i++) {
+            fprintf(F, "    packet too short, ODCIL: %d, only %d bytes available.\n",
+                odcil, payload_length);
+            is_err = 1;
+        }
+        else {
+            /* Dump the old connection ID */
+            picoquic_log_prefix_initial_cid64(F, log_cnxid64);
+            fprintf(F, "    ODCIL: <");
+            for (uint8_t i = 0; i < odcil; i++) {
                 fprintf(F, "%02x", bytes[byte_index++]);
             }
-            if (printed_length < token_length) {
-                fprintf(F, "...");
-            }
-            fprintf(F, "\n");
+            token_length = payload_length - odcil;
+            fprintf(F, ">, Token length: %d\n", token_length);
         }
     }
-    fprintf(F, "\n");
+    else {
+        int checksum_length = 16;
+
+        if (checksum_length >= payload_length) {
+            picoquic_log_prefix_initial_cid64(F, log_cnxid64);
+            fprintf(F, "    packet too short, checksum: %d bytes, only %d bytes available.\n",
+                checksum_length, payload_length);
+            is_err = 1;
+        }
+        else {
+            token_length = payload_length - checksum_length;
+
+            picoquic_log_prefix_initial_cid64(F, log_cnxid64);
+            fprintf(F, "    Token length: %d, Checksum length: %d\n",
+                token_length, checksum_length);
+        }
+    }
+
+    /* Print the token if there was no error */
+    if (token_length > 0 && !is_err) {
+        int printed_length = (token_length > 16) ? 16 : token_length;
+        picoquic_log_prefix_initial_cid64(F, log_cnxid64);
+        fprintf(F, "    Token: ");
+        for (uint8_t i = 0; i < printed_length; i++) {
+            fprintf(F, "%02x", bytes[byte_index++]);
+        }
+        if (printed_length < token_length) {
+            fprintf(F, "...");
+        }
+        fprintf(F, "\n");
+    }
 }
 
 size_t picoquic_log_stream_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
@@ -1171,7 +1195,6 @@ size_t picoquic_log_crypto_hs_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
     return byte_index;
 }
 
-
 size_t picoquic_log_datagram_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
 {
     uint8_t frame_id = bytes[0];
@@ -1321,7 +1344,11 @@ void picoquic_log_frames(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t leng
             break;
         case picoquic_frame_type_new_token:
             byte_index += picoquic_log_new_token_frame(F, bytes + byte_index, length - byte_index);
-            break; 
+            break;
+        case picoquic_frame_type_handshake_done: 
+            fprintf(F, "    %s\n", picoquic_log_frame_names(frame_id));
+            byte_index++;
+            break;
         case picoquic_frame_type_datagram:
         case picoquic_frame_type_datagram_l:
             byte_index += picoquic_log_datagram_frame(F, bytes + byte_index, length - byte_index);
@@ -1825,4 +1852,10 @@ void picoquic_log_picotls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
         picoquic_log_prefix_initial_cid64(F, cnx_id64);
         fprintf(F, "Malformed PTLS ticket, %d extra bytes.\n", ticket_length - min_length);
     }
+}
+
+void picoquic_log_retry_packet_error(FILE* F, picoquic_cnx_t * cnx, char const * message)
+{
+    picoquic_log_prefix_initial_cid64(F, picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
+    fprintf(F, "Retry packet rejected: %s\n", message);
 }

@@ -51,6 +51,7 @@ void picoquic_tlscontext_free(void* ctx);
 void picoquic_tlscontext_remove_ticket(picoquic_cnx_t* cnx);
 
 int picoquic_tls_stream_process(picoquic_cnx_t* cnx);
+int picoquic_is_tls_complete(picoquic_cnx_t* cnx);
 
 int picoquic_initialize_tls_stream(picoquic_cnx_t* cnx, uint64_t current_time);
 
@@ -158,5 +159,12 @@ void * picoquic_hash_create(char const * algorithm_name);
 size_t picoquic_hash_get_length(char const* algorithm_name);
 void picoquic_hash_update(uint8_t* input, size_t input_length, void* hash_context);
 void picoquic_hash_finalize(uint8_t* output, void* hash_context);
+
+/* Special AEAD context definition functions used for stateless retry integrity protection */
+void * picoquic_create_retry_protection_context(int is_enc, uint8_t * key);
+void * picoquic_find_retry_protection_context(picoquic_cnx_t * cnx, int sending);
+void picoquic_delete_retry_protection_contexts(picoquic_quic_t * quic);
+size_t picoquic_encode_retry_protection(void * integrity_aead, uint8_t * bytes, size_t bytes_max, size_t byte_index, const picoquic_connection_id_t * odcid);
+int picoquic_verify_retry_protection(void * integrity_aead, uint8_t * bytes, size_t * length, size_t byte_index, const picoquic_connection_id_t * odcid);
 
 #endif /* TLS_API_H */
