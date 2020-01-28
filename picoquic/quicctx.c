@@ -47,6 +47,18 @@ typedef struct st_picoquic_net_id_key_t {
     struct st_picoquic_net_id_key_t* next_net_id;
 } picoquic_net_id_key_t;
 
+typedef struct st_picoquic_net_icid_key_t {
+    struct sockaddr_storage saddr;
+    picoquic_connection_id_t icid;
+    picoquic_cnx_t* cnx;
+} picoquic_net_icid_key_t;
+
+typedef struct st_picoquic_net_secret_key_t {
+    struct sockaddr_storage saddr;
+    uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE];
+    picoquic_cnx_t* cnx;
+} picoquic_net_secret_key_t;
+
 /* Hash and compare for CNX hash tables */
 static uint64_t picoquic_cnx_id_hash(const void* key)
 {
@@ -76,6 +88,52 @@ static int picoquic_net_id_compare(const void* key1, const void* key2)
     const picoquic_net_id_key_t* net2 = (const picoquic_net_id_key_t*)key2;
 
     return picoquic_compare_addr((struct sockaddr*) & net1->saddr, (struct sockaddr*) & net2->saddr);
+}
+
+static uint64_t picoquic_net_icid_hash(const void* key)
+{
+    const picoquic_net_icid_key_t* net_icid = (const picoquic_net_icid_key_t*)key;
+
+    return picohash_hash_mix(picoquic_hash_addr((struct sockaddr*) & net_icid->saddr), 
+        picoquic_connection_id_hash(&net_icid->icid));
+
+}
+
+static int picoquic_net_icid_compare(const void* key1, const void* key2)
+{
+    const picoquic_net_icid_key_t* net_icid1 = (const picoquic_net_icid_key_t*)key1;
+    const picoquic_net_icid_key_t* net_icid2 = (const picoquic_net_icid_key_t*)key2;
+    int ret = picoquic_compare_addr((struct sockaddr*) & net_icid1->saddr, (struct sockaddr*) & net_icid2->saddr);
+    if (ret == 0) {
+        ret = picoquic_compare_connection_id(&net_icid1->icid, &net_icid2->icid);
+    }
+
+    return ret;
+}
+
+static uint64_t picoquic_net_secret_hash(const void* key)
+{
+    const picoquic_net_secret_key_t* net_secret = (const picoquic_net_secret_key_t*)key;
+
+    return picohash_hash_mix(picoquic_hash_addr((struct sockaddr*) & net_secret->saddr),
+        picohash_bytes(net_secret->reset_secret, PICOQUIC_RESET_SECRET_SIZE));
+
+}
+
+static int picoquic_net_secret_compare(const void* key1, const void* key2)
+{
+    const picoquic_net_secret_key_t* net_secret1 = (const picoquic_net_secret_key_t*)key1;
+    const picoquic_net_secret_key_t* net_secret2 = (const picoquic_net_secret_key_t*)key2;
+    int ret = picoquic_compare_addr((struct sockaddr*) & net_secret1->saddr, (struct sockaddr*) & net_secret2->saddr);
+
+    if (ret == 0) {
+#ifdef PICOQUIC_USE_CONSTANT_TIME_MEMCMP
+        ret = picoquic_constant_time_memcmp(net_secret1->reset_secret, net_secret2->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
+#else
+        ret = memcmp(net_secret1->reset_secret, net_secret2->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
+#endif
+    }
+    return ret;
 }
 
 #if 0
@@ -216,7 +274,14 @@ picoquic_quic_t* picoquic_create(uint32_t nb_connections,
             quic->table_cnx_by_net = picohash_create((size_t)nb_connections * 4,
                 picoquic_net_id_hash, picoquic_net_id_compare);
 
-            if (quic->table_cnx_by_id == NULL || quic->table_cnx_by_net == NULL) {
+            quic->table_cnx_by_icid = picohash_create((size_t)nb_connections,
+                picoquic_net_icid_hash, picoquic_net_icid_compare);
+
+            quic->table_cnx_by_secret = picohash_create((size_t)nb_connections * 4,
+                picoquic_net_secret_hash, picoquic_net_secret_compare);
+
+            if (quic->table_cnx_by_id == NULL || quic->table_cnx_by_net == NULL ||
+                quic->table_cnx_by_icid == NULL || quic->table_cnx_by_secret == NULL) {
                 ret = -1;
                 DBG_PRINTF("%s", "Cannot initialize hash tables\n");
             }
@@ -352,6 +417,14 @@ void picoquic_free(picoquic_quic_t* quic)
             picohash_delete(quic->table_cnx_by_net, 1);
         }
 
+        if (quic->table_cnx_by_icid != NULL) {
+            picohash_delete(quic->table_cnx_by_icid, 1);
+        }
+
+        if (quic->table_cnx_by_secret != NULL) {
+            picohash_delete(quic->table_cnx_by_secret, 1);
+        }
+
         if (quic->verify_certificate_ctx != NULL &&
             quic->free_verify_certificate_callback_fn != NULL) {
             (quic->free_verify_certificate_callback_fn)(quic->verify_certificate_ctx);
@@ -473,32 +546,6 @@ int picoquic_register_cnx_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, picoqui
     return ret;
 }
 
-static void picoquic_set_hash_key_by_address(picoquic_net_id_key_t * key, struct sockaddr* addr)
-{
-    memset(&key->saddr, 0, sizeof(struct sockaddr_storage));
-
-    if (addr->sa_family == AF_INET) {
-        struct sockaddr_in * key4 = (struct sockaddr_in *) &key->saddr;
-        struct sockaddr_in * s4 = (struct sockaddr_in *) addr;
-
-#ifdef _WINDOWS
-        key4->sin_addr.S_un.S_addr = s4->sin_addr.S_un.S_addr;
-#else
-        key4->sin_addr.s_addr = s4->sin_addr.s_addr;
-#endif
-        key4->sin_family = s4->sin_family;
-        key4->sin_port = s4->sin_port;
-    }
-    else {
-        struct sockaddr_in6 * key6 = (struct sockaddr_in6 *) &key->saddr;
-        struct sockaddr_in6 * s6 = (struct sockaddr_in6 *) addr;
-        memcpy(&key6->sin6_addr, &s6->sin6_addr, sizeof(struct in6_addr));
-        key6->sin6_family = s6->sin6_family;
-        key6->sin6_port = s6->sin6_port;
-        /* TODO: special code for local addresses may be needed if scope is specified */
-    }
-}
-
 int picoquic_register_net_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, picoquic_path_t * path_x, struct sockaddr* addr)
 {
     int ret = 0;
@@ -508,7 +555,8 @@ int picoquic_register_net_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, picoqui
     if (key == NULL) {
         ret = -1;
     } else {
-        picoquic_set_hash_key_by_address(key, addr);
+        memset(key, 0, sizeof(picoquic_net_id_key_t));
+        picoquic_store_addr(&key->saddr, addr);
 
         key->cnx = cnx;
         key->path = path_x;
@@ -533,6 +581,113 @@ int picoquic_register_net_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, picoqui
 
     return ret;
 }
+
+/* The initial CID and the reset secret are tracked in specific tables:
+ *
+ * - quic->table_cnx_by_icid: keyed by client address and initial CID. Created
+ *   when the connection for the specified initial CID and address is created
+ *   by the server (or the peer receiving the connection in P2P cases)
+ * - quic->table_cnx_by_secret: keyed by peer address and reset secret for
+ *   the default path of the connection (cnx->path[0]).
+ *
+ * In both cases, the address is that associated to the default path. The
+ * path can be updated after migration, either by an address change or by
+ * a change of CID and secret while keeping the address constant.
+ *
+ * If either the default address or the default reset secret changes, the
+ * old table entry is updated to track the new address and secret. The
+ * entry is kept up to date until the connection closes.
+ *
+ * Migration can only happen after a connection is established, but
+ * packets could still arrive after that, maybe due to network delays.
+ * In order to keep the design simple, the ICID entry is created once, and
+ * kept for the duration of the connection.
+ *
+ * To facilitate management, the hash table keys are remembered in the
+ * connection context as:
+ *
+ * - cnx->reset_secret_key
+ * - cnx->net_icid_key
+ */
+
+int picoquic_register_net_icid(picoquic_cnx_t* cnx)
+{
+    int ret = 0;
+    picohash_item* item;
+    picoquic_net_icid_key_t* key = (picoquic_net_icid_key_t*)malloc(sizeof(picoquic_net_icid_key_t));
+
+    if (key == NULL) {
+        ret = -1;
+    }
+    else {
+        memset(key, 0, sizeof(picoquic_net_icid_key_t));
+        picoquic_store_addr(&key->saddr, (struct sockaddr *)&cnx->path[0]->peer_addr);
+        key->icid = cnx->initial_cnxid;
+
+        key->cnx = cnx;
+
+        item = picohash_retrieve(cnx->quic->table_cnx_by_icid, key);
+
+        if (item != NULL) {
+            ret = -1;
+        }
+        else {
+            ret = picohash_insert(cnx->quic->table_cnx_by_icid, key);
+
+            if (ret == 0) {
+                cnx->net_icid_key = key;
+            }
+        }
+    }
+
+    if (key != NULL && ret != 0) {
+        free(key);
+    }
+
+    return ret;
+}
+
+int picoquic_register_net_secret(picoquic_quic_t* quic, picoquic_cnx_t* cnx)
+{
+    int ret = 0;
+    picohash_item* item;
+    picoquic_net_secret_key_t* key = (picoquic_net_secret_key_t*)malloc(sizeof(picoquic_net_secret_key_t));
+
+    if (key == NULL) {
+        ret = -1;
+    }
+    else {
+        memset(key, 0, sizeof(picoquic_net_secret_key_t));
+        picoquic_store_addr(&key->saddr, (struct sockaddr *)&cnx->path[0]->peer_addr);
+        memcpy(key->reset_secret, cnx->path[0]->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
+
+        key->cnx = cnx;
+
+        item = picohash_retrieve(quic->table_cnx_by_secret, key);
+
+        if (item != NULL) {
+            ret = -1;
+        } 
+        else {
+            ret = picohash_insert(quic->table_cnx_by_secret, key);
+            
+            if (ret == 0) {
+                if (cnx->reset_secret_key != NULL) {
+                    picohash_delete_key(quic->table_cnx_by_secret, cnx->reset_secret_key, 1);
+                }
+                cnx->reset_secret_key = key;
+            }
+        }
+    }
+
+    if (key != NULL && ret != 0) {
+        free(key);
+    }
+
+    return ret;
+}
+
+
 
 void picoquic_init_transport_parameters(picoquic_tp_t* tp, int client_mode)
 {
@@ -601,6 +756,16 @@ static void picoquic_remove_cnx_from_list(picoquic_cnx_t* cnx)
     }
     else {
         cnx->previous_in_table->next_in_table = cnx->next_in_table;
+    }
+
+    if (cnx->net_icid_key != NULL) {
+        picohash_delete_key(cnx->quic->table_cnx_by_icid, cnx->net_icid_key, 1);
+        cnx->net_icid_key = NULL;
+    }
+
+    if (cnx->reset_secret_key != NULL) {
+        picohash_delete_key(cnx->quic->table_cnx_by_secret, cnx->reset_secret_key, 1);
+        cnx->reset_secret_key = NULL;
     }
 }
 
@@ -859,7 +1024,7 @@ static void picoquic_clear_path_data(picoquic_cnx_t* cnx, picoquic_path_t * path
 
         item = picohash_retrieve(cnx->quic->table_cnx_by_id, cnx_id_key);
         if (item != NULL) {
-            picohash_item_delete(cnx->quic->table_cnx_by_id, item, 1);
+            picohash_delete_item(cnx->quic->table_cnx_by_id, item, 1);
         }
     }
 
@@ -871,7 +1036,7 @@ static void picoquic_clear_path_data(picoquic_cnx_t* cnx, picoquic_path_t * path
 
         item = picohash_retrieve(cnx->quic->table_cnx_by_net, net_id_key);
         if (item != NULL) {
-            picohash_item_delete(cnx->quic->table_cnx_by_net, item, 1);
+            picohash_delete_item(cnx->quic->table_cnx_by_net, item, 1);
         }
     }
     /* Remove the congestion data */
@@ -1995,6 +2160,14 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         }
     }
 
+    if (cnx != NULL && !client_mode) {
+        if (picoquic_register_net_icid(cnx) != 0) {
+            DBG_PRINTF("%s", "Could not register the ICID in table.\n");
+            picoquic_delete_cnx(cnx);
+            cnx = NULL;
+        }
+    }
+
     if (cnx != NULL) {
         picoquic_register_path(cnx, cnx->path[0]);
 
@@ -2744,7 +2917,8 @@ picoquic_cnx_t* picoquic_cnx_by_net(picoquic_quic_t* quic, struct sockaddr* addr
     picohash_item* item;
     picoquic_net_id_key_t key;
 
-    picoquic_set_hash_key_by_address(&key, addr);
+    memset(&key, 0, sizeof(key));
+    picoquic_store_addr(&key.saddr, addr);
 
     item = picohash_retrieve(quic->table_cnx_by_net, &key);
 
@@ -2754,8 +2928,28 @@ picoquic_cnx_t* picoquic_cnx_by_net(picoquic_quic_t* quic, struct sockaddr* addr
     return ret;
 }
 
-int picoquic_retrieve_by_cnx_id_or_net_id(picoquic_quic_t * quic, picoquic_connection_id_t * cnx_id, 
-    struct sockaddr * addr, picoquic_cnx_t ** pcnx)
+picoquic_cnx_t* picoquic_cnx_path_by_icid(picoquic_quic_t* quic, picoquic_connection_id_t* icid,
+    struct sockaddr* addr)
+{
+    picoquic_cnx_t* ret = NULL;
+    picohash_item* item;
+    picoquic_net_icid_key_t key;
+
+    memset(&key, 0, sizeof(key));
+    picoquic_store_addr(&key.saddr, addr);
+    key.icid = *icid;
+
+    item = picohash_retrieve(quic->table_cnx_by_icid, &key);
+
+    if (item != NULL) {
+        ret = ((picoquic_net_icid_key_t*)item->key)->cnx;
+    }
+    return ret;
+}
+
+#if 0
+int picoquic_cnx_by_secret(picoquic_quic_t* quic, picoquic_connection_id_t* cnx_id,
+    struct sockaddr* addr, picoquic_cnx_t** pcnx)
 {
     if (cnx_id->id_len > 0) {
         *pcnx = picoquic_cnx_by_id(quic, *cnx_id);
@@ -2769,6 +2963,7 @@ int picoquic_retrieve_by_cnx_id_or_net_id(picoquic_quic_t * quic, picoquic_conne
     }
     return 0;
 }
+#endif
 
 /* Get congestion control algorithm by name */
 picoquic_congestion_algorithm_t const* picoquic_get_congestion_algorithm(char const* alg_name)

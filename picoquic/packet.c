@@ -75,15 +75,10 @@ int picoquic_parse_long_packet_header(
 
             if (*pcnx == NULL && quic != NULL) {
                 /* The version negotiation should always include the cnx-id sent by the client */
-                if (ph->dest_cnx_id.id_len > 0) {
-                    *pcnx = picoquic_cnx_by_id(quic, ph->dest_cnx_id);
-                }
-                else {
+                if (quic->local_cnxid_length == 0) {
                     *pcnx = picoquic_cnx_by_net(quic, addr_from);
-
-                    if (*pcnx != NULL && (*pcnx)->path[0]->local_cnxid.id_len != 0) {
-                        *pcnx = NULL;
-                    }
+                } else if (ph->dest_cnx_id.id_len == quic->local_cnxid_length){
+                    *pcnx = picoquic_cnx_by_id(quic, ph->dest_cnx_id);
                 }
             }
         }
@@ -180,13 +175,21 @@ int picoquic_parse_long_packet_header(
 
                 /* Retrieve the connection context */
                 if (*pcnx == NULL) {
-                    if (ph->dest_cnx_id.id_len != 0) {
+                    if (quic->local_cnxid_length == 0) {
+                        *pcnx = picoquic_cnx_by_net(quic, addr_from);
+
+                        if (*pcnx != NULL)
+                        {
+                            context_by_addr = 1;
+                        }
+                    }
+                    else if (ph->dest_cnx_id.id_len == quic->local_cnxid_length) {
                         *pcnx = picoquic_cnx_by_id(quic, ph->dest_cnx_id);
                     }
 
                     /* TODO: something for the case of client initial, e.g. source IP + initial CNX_ID */
-                    if (*pcnx == NULL) {
-                        *pcnx = picoquic_cnx_by_net(quic, addr_from);
+                    if (*pcnx == NULL && (ph->ptype == picoquic_packet_initial || ph->ptype == picoquic_packet_0rtt_protected)) {
+                        *pcnx = picoquic_cnx_path_by_icid(quic, &ph->dest_cnx_id, addr_from);
 
                         if (*pcnx != NULL)
                         {
@@ -561,11 +564,12 @@ int picoquic_parse_header_and_decrypt(
                     else {
                         /* if listening is OK, listen */
                         *pcnx = picoquic_create_cnx(quic, ph->dest_cnx_id, ph->srce_cnx_id, addr_from, current_time, ph->vn, NULL, NULL, 0);
+                        /* If an incoming connection was created, register the ICID */
                         *new_ctx_created = (*pcnx == NULL) ? 0 : 1;
                         if (*pcnx == NULL) {
                             DBG_PRINTF("%s", "Cannot create connection context\n");
                         }
-                        else if (quic->F_log){
+                        else if (quic->F_log) {
                             picoquic_log_packet_address(quic->F_log, picoquic_val64_connection_id(ph->dest_cnx_id),
                                 *pcnx, addr_from, 1, length, current_time);
                             fflush(quic->F_log);

@@ -341,6 +341,8 @@ typedef struct st_picoquic_quic_t {
 
     picohash_table* table_cnx_by_id;
     picohash_table* table_cnx_by_net;
+    picohash_table* table_cnx_by_icid;
+    picohash_table* table_cnx_by_secret;
 
     picoquic_packet_t * p_first_packet;
     size_t nb_packets_in_pool;
@@ -744,6 +746,8 @@ typedef struct st_picoquic_cnx_t {
     picoquic_state_enum cnx_state;
     picoquic_connection_id_t initial_cnxid;
     picoquic_connection_id_t original_cnxid;
+    struct st_picoquic_net_icid_key_t* net_icid_key;
+    struct st_picoquic_net_secret_key_t* reset_secret_key;
     uint64_t start_time;
     uint16_t application_error;
     uint16_t local_error;
@@ -905,9 +909,8 @@ int picoquic_connection_error(picoquic_cnx_t* cnx, uint16_t local_error, uint64_
 /* Connection context retrieval functions */
 picoquic_cnx_t* picoquic_cnx_by_id(picoquic_quic_t* quic, picoquic_connection_id_t cnx_id);
 picoquic_cnx_t* picoquic_cnx_by_net(picoquic_quic_t* quic, struct sockaddr* addr);
-
-int picoquic_retrieve_by_cnx_id_or_net_id(picoquic_quic_t* quic, picoquic_connection_id_t* cnx_id,
-    struct sockaddr* addr, picoquic_cnx_t ** pcnx);
+picoquic_cnx_t* picoquic_cnx_path_by_icid(picoquic_quic_t* quic, picoquic_connection_id_t* icid,
+    struct sockaddr* addr);
 
 /* Reset the pacing data after CWIN is updated */
 void picoquic_update_pacing_data(picoquic_path_t * path_x);
