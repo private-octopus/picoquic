@@ -410,10 +410,10 @@ typedef struct st_picoquic_stream_head_t {
     uint64_t fin_offset;
     uint64_t maxdata_local;
     uint64_t maxdata_remote;
-    uint32_t local_error;
-    uint32_t remote_error;
-    uint32_t local_stop_error;
-    uint32_t remote_stop_error;
+    uint64_t local_error;
+    uint64_t remote_error;
+    uint64_t local_stop_error;
+    uint64_t remote_stop_error;
     picosplay_tree_t stream_data_tree;
     uint64_t sent_offset;
     picoquic_stream_data_node_t* send_queue;
