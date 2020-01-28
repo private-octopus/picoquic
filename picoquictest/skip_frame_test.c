@@ -98,14 +98,17 @@ static uint8_t test_frame_type_stream_blocked[] = {
     0x80, 1, 0, 0,
     0x80, 0x01, 0, 0
 };
+
 static uint8_t test_frame_type_streams_blocked_bidir[] = {
     picoquic_frame_type_streams_blocked_bidir,
     0x41, 0
 };
+
 static uint8_t test_frame_type_streams_blocked_unidir[] = {
     picoquic_frame_type_streams_blocked_unidir,
     0x81, 2, 3, 4
 };
+
 static uint8_t test_frame_type_new_connection_id[] = {
     picoquic_frame_type_new_connection_id,
     7,
@@ -115,10 +118,11 @@ static uint8_t test_frame_type_new_connection_id[] = {
     0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7,
     0xA8, 0xA9, 0xAA, 0xAB, 0xAC, 0xAD, 0xAE, 0xAF
 };
+
 static uint8_t test_frame_type_stop_sending[] = {
     picoquic_frame_type_stop_sending,
     17,
-    0x40, 0
+    0x17
 };
 
 static uint8_t test_frame_type_path_challenge[] = {

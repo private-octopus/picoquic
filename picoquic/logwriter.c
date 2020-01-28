@@ -139,7 +139,7 @@ static const uint8_t* picoquic_log_stop_sending_frame(FILE* f, const uint8_t* by
 
     bytes = picoquic_log_fixed_skip(bytes, bytes_max, 1);
     bytes = picoquic_log_varint_skip(bytes, bytes_max);
-    bytes = picoquic_log_fixed_skip(bytes, bytes_max, 2);
+    bytes = picoquic_log_varint_skip(bytes, bytes_max);
 
     picoquic_binlog_frame(f, bytes_begin, bytes);
     return bytes;

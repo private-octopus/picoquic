@@ -798,22 +798,25 @@ size_t picoquic_log_reset_stream_frame(FILE* F, uint8_t* bytes, size_t bytes_max
 size_t picoquic_log_stop_sending_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
 {
     size_t byte_index = 1;
-    const size_t min_size = 1 + picoquic_varint_skip(bytes + 1) + 2;
+    size_t l1 = 0;
+    size_t l2 = 0;
     uint64_t stream_id;
-    uint32_t error_code;
+    uint64_t error_code = 0;
 
-    if (min_size > bytes_max) {
-        fprintf(F, "    Malformed STOP SENDING, requires %d bytes out of %d\n", (int)min_size, (int)bytes_max);
+    l1 = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &stream_id);
+    if (l1 != 0){
+        byte_index += l1;
+        l2 = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &error_code);
+        byte_index += l2;
+    }
+
+    if (l1 == 0 || l2 == 0 || byte_index > bytes_max) {
+        fprintf(F, "    Malformed STOP SENDING, requires more than %d bytes\n", (int)bytes_max);
         return bytes_max;
     }
 
-    /* Now that the size is good, parse and print it */
-    byte_index += picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &stream_id);
-    error_code = PICOPARSE_16(bytes + byte_index);
-    byte_index += 2;
-
-    fprintf(F, "    STOP SENDING %d (0x%08x), Error 0x%x.\n",
-        (uint32_t)stream_id, (uint32_t)stream_id, error_code);
+    fprintf(F, "    STOP SENDING Stream %lld (0x%llx), Error 0x%llx.\n",
+        (unsigned long long)stream_id, (unsigned long long)stream_id, (unsigned long long)error_code);
 
     return byte_index;
 }
