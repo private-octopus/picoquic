@@ -1990,7 +1990,7 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
                 ret = 0;
             }
             else {
-                uint16_t error_code = PICOQUIC_TLS_HANDSHAKE_FAILED;
+                uint16_t error_code = PICOQUIC_TRANSPORT_INTERNAL_ERROR;
 
                 if (PTLS_ERROR_GET_CLASS(ret) == PTLS_ERROR_CLASS_SELF_ALERT) {
                     error_code = PICOQUIC_TRANSPORT_CRYPTO_ERROR(ret);
@@ -2005,6 +2005,15 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
     }
 
     return ret;
+}
+
+/*
+ * Test whether the TLS handshake is complete according to TLS stack
+ */
+int picoquic_is_tls_complete(picoquic_cnx_t* cnx)
+{
+    picoquic_tls_ctx_t* ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
+    return ptls_handshake_is_complete(ctx->tls);
 }
 
 /*
@@ -2603,4 +2612,139 @@ void picoquic_hash_update(uint8_t* input, size_t input_length, void* hash_contex
 
 void picoquic_hash_finalize(uint8_t* output, void* hash_context) {
     ((ptls_hash_context_t*)hash_context)->final((ptls_hash_context_t*)hash_context, output, PTLS_HASH_FINAL_MODE_FREE);
+}
+
+/* Retry Packet Protection.
+ * This is done by applying AES-GCM128 with a constant key and a NULL nonce,
+ * using an extension of the retry packet as authenticated data and a zero
+ * length content, computing a 16 bytes checksum. Or verifying it in the
+ * other direction.
+ *
+ * The retry protection key is stored in the Quic context. It is created on
+ * first use, and deleted when the context is deleted.
+ */
+
+void * picoquic_create_retry_protection_context(int is_enc, uint8_t * key)
+{
+#if 0
+    ptls_aead_algorithm_t *aead = &ptls_openssl_aes128gcm;
+    ptls_aead_context_t *ctx;
+
+    if ((ctx = (ptls_aead_context_t *)malloc(aead->context_size)) != NULL) {
+
+#ifdef _WINDOWS
+#pragma warning(disable:4204)
+#endif
+        *ctx = (ptls_aead_context_t) { aead };
+#ifdef _WINDOWS
+#pragma warning(default:4204)
+#endif
+        memset(ctx->static_iv, 0, aead->iv_size);
+
+        if (aead->setup_crypto(ctx, is_enc, key) != 0) {
+            free(ctx);
+            ctx = NULL;
+        }
+    }
+#endif
+
+    return (void *)picoquic_setup_test_aead_context(is_enc, key);
+}
+
+void * picoquic_find_retry_protection_context(picoquic_cnx_t * cnx, int sending)
+{
+    void * aead_ctx = NULL;
+    void ** aead_vector = (sending) ? cnx->quic->retry_integrity_sign_ctx : cnx->quic->retry_integrity_verify_ctx;
+
+    if (picoquic_supported_versions[cnx->version_index].version_retry_key != NULL) {
+        if (aead_vector == NULL) {
+            if (sending) {
+                cnx->quic->retry_integrity_sign_ctx = (void**)malloc(sizeof(void*)*picoquic_nb_supported_versions);
+                aead_vector = cnx->quic->retry_integrity_sign_ctx;
+            }
+            else {
+                cnx->quic->retry_integrity_verify_ctx = (void**)malloc(sizeof(void*)*picoquic_nb_supported_versions);
+                aead_vector = cnx->quic->retry_integrity_verify_ctx;
+            }
+            if (aead_vector != NULL) {
+                memset(aead_vector, 0, sizeof(void*)*picoquic_nb_supported_versions);
+            }
+        }
+
+        if (aead_vector != NULL) {
+            aead_ctx = aead_vector[cnx->version_index];
+            if (aead_ctx == NULL) {
+                aead_ctx = picoquic_create_retry_protection_context(sending, picoquic_supported_versions[cnx->version_index].version_retry_key);
+                aead_vector[cnx->version_index] = aead_ctx;
+            }
+        }
+    }
+
+    return aead_ctx;
+}
+
+static void ** picoquic_delete_one_retry_protection_context(void ** ctx)
+{
+    if (ctx != NULL) {
+        for (size_t i = 0; i < picoquic_nb_supported_versions; i++) {
+            if (ctx[i] != NULL) {
+                picoquic_aead_free(ctx[i]);
+            }
+        }
+        free(ctx);
+    }
+    return NULL;
+}
+
+void picoquic_delete_retry_protection_contexts(picoquic_quic_t * quic)
+{
+    quic->retry_integrity_sign_ctx = picoquic_delete_one_retry_protection_context(quic->retry_integrity_sign_ctx);
+    quic->retry_integrity_verify_ctx = picoquic_delete_one_retry_protection_context(quic->retry_integrity_verify_ctx);
+}
+
+static size_t picoquic_format_retry_protection_pseudo_packet(uint8_t * pseudo_packet, uint8_t * bytes, size_t byte_index, const picoquic_connection_id_t * odcid)
+{
+    size_t pseudo_index = 0;
+
+    if (byte_index + odcid->id_len + 1 < PICOQUIC_MAX_PACKET_SIZE) {
+        pseudo_packet[pseudo_index++] = odcid->id_len;
+        memcpy(&pseudo_packet[pseudo_index], odcid->id, odcid->id_len);
+        pseudo_index += odcid->id_len;
+        memcpy(&pseudo_packet[pseudo_index], bytes, byte_index);
+        pseudo_index += byte_index;
+    }
+
+    return pseudo_index;
+}
+
+size_t picoquic_encode_retry_protection(void * integrity_aead, uint8_t * bytes, size_t bytes_max, size_t byte_index, const picoquic_connection_id_t * odcid)
+{
+    size_t pseudo_index;
+    uint8_t pseudo_packet[PICOQUIC_MAX_PACKET_SIZE];
+
+    if (integrity_aead != NULL && byte_index + picoquic_aead_get_checksum_length(integrity_aead) < bytes_max &&
+        (pseudo_index = picoquic_format_retry_protection_pseudo_packet(pseudo_packet, bytes, byte_index, odcid)) > 0){
+        byte_index += picoquic_aead_encrypt_generic(bytes+byte_index, bytes+byte_index, 0, 0, pseudo_packet, pseudo_index, integrity_aead);
+    }
+
+    return byte_index;
+}
+
+int picoquic_verify_retry_protection(void * integrity_aead, uint8_t * bytes, size_t * length, size_t byte_index, const picoquic_connection_id_t * odcid)
+{
+    int ret = PICOQUIC_ERROR_AEAD_CHECK;
+    size_t pseudo_index;
+    uint8_t pseudo_packet[PICOQUIC_MAX_PACKET_SIZE];
+    uint8_t decoded[PICOQUIC_MAX_PACKET_SIZE];
+    size_t checksum_length = picoquic_aead_get_checksum_length(integrity_aead);
+
+    if (byte_index + checksum_length < *length) {
+        *length -= checksum_length;
+        if ((pseudo_index = picoquic_format_retry_protection_pseudo_packet(pseudo_packet, bytes, *length, odcid)) > 0 &&
+            picoquic_aead_decrypt_generic(decoded, bytes + *length, checksum_length, 0, pseudo_packet, pseudo_index, integrity_aead) == 0) {
+            ret = 0;
+        }
+    }
+
+    return ret;
 }

@@ -370,8 +370,17 @@ static int test_api_queue_initial_queries(picoquic_test_tls_api_ctx_t* test_ctx,
         ret = picoquic_mark_active_stream(test_ctx->cnx_client, 0, 1, NULL);
     }
 
+    /* TODO: check whether the test is actually finished */
+    if (!more_stream) {
+        for (size_t i = 0; ret == 0 && i < test_ctx->nb_test_streams; i++) {
+            if (test_ctx->test_stream[i].r_received == 0) {
+                more_stream = 1;
+                break;
+            }
+        }
+    }
+
     if (more_stream == 0) {
-        /* TODO: check whether the test is actually finished */
         test_ctx->streams_finished = 1;
         if (test_ctx->stream0_received >= test_ctx->stream0_target) {
             test_ctx->test_finished = 1;
@@ -4104,7 +4113,7 @@ int probe_api_test()
 
             nb_trials++;
 
-            if (nb_trials <= PICOQUIC_NB_PATH_TARGET) {
+            if (nb_trials < PICOQUIC_NB_PATH_TARGET) {
                 if (ret_probe != 0) {
                     DBG_PRINTF("Trial %d (%d, %d) fails with ret = %x\n", nb_trials, i, j, ret_probe);
                     ret = -1;
@@ -4139,7 +4148,7 @@ int probe_api_test()
 
             nb_trials++;
 
-            if (nb_trials <= PICOQUIC_NB_PATH_TARGET) {
+            if (nb_trials < PICOQUIC_NB_PATH_TARGET) {
                 if (probe == NULL) {
                     DBG_PRINTF("Retrieve by addr %d (%d, %d) fails\n", nb_trials, i, j);
                     ret = -1;
@@ -4150,7 +4159,7 @@ int probe_api_test()
                     ret = -1;
                 }
             }
-            else if (probe != 0) {
+            else if (probe != NULL) {
                 DBG_PRINTF("Retrieve by addr %d (%d, %d) succeeds (unexpected)\n", nb_trials, i, j);
                 ret = -1;
             }
@@ -4170,7 +4179,7 @@ int probe_api_test()
                 probe = picoquic_find_probe_by_challenge(test_ctx->cnx_client, challenge);
 
 
-                if (nb_trials <= PICOQUIC_NB_PATH_TARGET) {
+                if (nb_trials < PICOQUIC_NB_PATH_TARGET) {
                     if (probe == NULL) {
                         DBG_PRINTF("Retrieve by challenge %d (%d, %d) fails\n", nb_trials, i, j);
                         ret = -1;
@@ -4667,8 +4676,8 @@ int retire_cnxid_test()
     /* Check */
 
     if (ret == 0) {
-        if (test_ctx->cnx_server->nb_paths != PICOQUIC_NB_PATH_TARGET + 1) {
-            DBG_PRINTF("Found %d paths active on server instead of %d.\n", test_ctx->cnx_server->nb_paths, PICOQUIC_NB_PATH_TARGET+1);
+        if (test_ctx->cnx_server->nb_paths != PICOQUIC_NB_PATH_TARGET) {
+            DBG_PRINTF("Found %d paths active on server instead of %d.\n", test_ctx->cnx_server->nb_paths, PICOQUIC_NB_PATH_TARGET);
             ret = -1;
         }
     }
@@ -6370,7 +6379,7 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, uint64_t 
 
 int satellite_basic_test()
 {
-    return satellite_test_one(picoquic_bbr_algorithm, 7850000, 0, 0);
+    return satellite_test_one(picoquic_bbr_algorithm, 7000000, 0, 0);
 }
 
 int satellite_loss_test()
@@ -6473,7 +6482,7 @@ int long_rtt_test()
          * but could not completely fix. */
         ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
             test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0, 0, 2*latency,
-            3400000);
+            3500000);
     }
 
     if (test_ctx != NULL) {

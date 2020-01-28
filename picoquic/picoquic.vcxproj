@@ -172,6 +172,7 @@
   <ItemGroup>
     <ClInclude Include="bytestream.h" />
     <ClInclude Include="cc_common.h" />
+    <ClInclude Include="frames.h" />
     <ClInclude Include="logwriter.h" />
     <ClInclude Include="picohash.h" />
     <ClInclude Include="picoquic_internal.h" />

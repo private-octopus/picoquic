@@ -50,6 +50,7 @@ extern "C" {
 #define PICOQUIC_RETRY_SECRET_SIZE 64
 #define PICOQUIC_DEFAULT_0RTT_WINDOW 4096
 #define PICOQUIC_NB_PATH_TARGET 8
+#define PICOQUIC_NB_PATH_DEFAULT 2
 #define PICOQUIC_MAX_PACKETS_IN_POOL 0x8000
 
 #define PICOQUIC_NUMBER_OF_EPOCHS 4
@@ -115,6 +116,7 @@ typedef enum {
     picoquic_frame_type_path_response = 0x1b,
     picoquic_frame_type_connection_close = 0x1c,
     picoquic_frame_type_application_close = 0x1d,
+    picoquic_frame_type_handshake_done = 0x1e,
     picoquic_frame_type_datagram = 0x30,
     picoquic_frame_type_datagram_l = 0x31,
     picoquic_frame_type_ack_1wd = 0x34,
@@ -161,6 +163,7 @@ typedef enum {
 #endif
 #define PICOQUIC_FOURTEENTH_INTEROP_VERSION 0xFF000017
 #define PICOQUIC_FIFTEENTH_INTEROP_VERSION 0xFF000018
+#define PICOQUIC_SIXTEENTH_INTEROP_VERSION 0xFF000019
 #define PICOQUIC_INTERNAL_TEST_VERSION_1 0x50435130
 #define PICOQUIC_INTERNAL_TEST_VERSION_2 0x50435131
 
@@ -193,6 +196,8 @@ typedef struct st_picoquic_version_parameters_t {
     uint32_t version;
     size_t version_aead_key_length;
     uint8_t* version_aead_key;
+    size_t version_retry_key_length;
+    uint8_t* version_retry_key;
 } picoquic_version_parameters_t;
 
 extern const picoquic_version_parameters_t picoquic_supported_versions[];
@@ -352,6 +357,8 @@ typedef struct st_picoquic_quic_t {
 
     void* aead_encrypt_ticket_ctx;
     void* aead_decrypt_ticket_ctx;
+    void ** retry_integrity_sign_ctx;
+    void ** retry_integrity_verify_ctx;
 
     picoquic_verify_certificate_cb_fn verify_certificate_callback_fn;
     picoquic_free_verify_certificate_ctx free_verify_certificate_callback_fn;
@@ -630,6 +637,7 @@ typedef struct st_picoquic_packet_context_t {
 
     uint64_t nb_retransmit;
     uint64_t latest_retransmit_time;
+    uint64_t retransmit_sequence;
     uint64_t highest_acknowledged;
     uint64_t latest_time_acknowledged; /* time at which the highest acknowledged was sent */
     uint64_t highest_acknowledged_time; /* time at which the highest ack was received */
@@ -709,7 +717,6 @@ typedef struct st_picoquic_cnx_t {
     unsigned int path_demotion_needed : 1; /* If at least one path was recently demoted */
     unsigned int alt_path_challenge_needed : 1; /* If at least one alt path challenge is needed or in progress */
     unsigned int is_handshake_finished : 1; /* If there are no more packets to ack or retransmit in initial  or handshake contexts */
-    unsigned int is_path_0_deleted : 1; /* If the initial connection ID has been deleted */
     unsigned int is_1rtt_received : 1; /* If at least one 1RTT packet has been received */
     unsigned int is_1rtt_acked : 1; /* If at least one 1RTT packet has been acked by the peer */
     unsigned int has_successful_probe : 1; /* At least one probe was successful */
@@ -724,7 +731,8 @@ typedef struct st_picoquic_cnx_t {
 
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;
-
+    /* Idle timeout in microseconds */
+    uint64_t idle_timeout;
     /* Local and remote parameters */
     picoquic_tp_t local_parameters;
     picoquic_tp_t remote_parameters;
@@ -1039,6 +1047,7 @@ void picoquic_log_negotiated_alpn(FILE* F, picoquic_cnx_t* cnx, int received, in
 void picoquic_log_congestion_state(FILE* F, picoquic_cnx_t* cnx, uint64_t current_time);
 void picoquic_log_picotls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
     uint8_t* ticket, uint16_t ticket_length);
+void picoquic_log_retry_packet_error(FILE * F, picoquic_cnx_t * cnx, char const * message);
 const char * picoquic_log_fin_or_event_name(picoquic_call_back_event_t ev);
 void picoquic_log_time(FILE* F, picoquic_cnx_t* cnx, uint64_t current_time,
     const char* label1, const char* label2);
@@ -1144,7 +1153,7 @@ int picoquic_prepare_misc_frame(picoquic_misc_frame_header_t* misc_frame, uint8_
     size_t bytes_max, size_t* consumed);
 int picoquic_queue_misc_or_dg_frame(picoquic_cnx_t* cnx, picoquic_misc_frame_header_t** first, picoquic_misc_frame_header_t** last, const uint8_t* bytes, size_t length);
 void picoquic_delete_misc_or_dg(picoquic_misc_frame_header_t** first, picoquic_misc_frame_header_t** last, picoquic_misc_frame_header_t* frame);
-
+int picoquic_queue_handshake_done_frame(picoquic_cnx_t* cnx);
 int picoquic_prepare_first_datagram_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
     size_t bytes_max, size_t* consumed);
 

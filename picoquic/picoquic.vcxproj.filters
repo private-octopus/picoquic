@@ -125,5 +125,8 @@
     <ClInclude Include="logwriter.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="frames.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
