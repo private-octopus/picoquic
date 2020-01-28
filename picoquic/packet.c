@@ -83,7 +83,6 @@ int picoquic_parse_long_packet_header(
             }
         }
         else {
-            char context_by_addr = 0;
             size_t payload_length = 0;
 
             ph->version_index = picoquic_get_version_index(ph->vn);
@@ -177,11 +176,6 @@ int picoquic_parse_long_packet_header(
                 if (*pcnx == NULL) {
                     if (quic->local_cnxid_length == 0) {
                         *pcnx = picoquic_cnx_by_net(quic, addr_from);
-
-                        if (*pcnx != NULL)
-                        {
-                            context_by_addr = 1;
-                        }
                     }
                     else if (ph->dest_cnx_id.id_len == quic->local_cnxid_length) {
                         *pcnx = picoquic_cnx_by_id(quic, ph->dest_cnx_id);
@@ -190,29 +184,6 @@ int picoquic_parse_long_packet_header(
                     /* TODO: something for the case of client initial, e.g. source IP + initial CNX_ID */
                     if (*pcnx == NULL && (ph->ptype == picoquic_packet_initial || ph->ptype == picoquic_packet_0rtt_protected)) {
                         *pcnx = picoquic_cnx_path_by_icid(quic, &ph->dest_cnx_id, addr_from);
-
-                        if (*pcnx != NULL)
-                        {
-                            context_by_addr = 1;
-                        }
-                    }
-                }
-
-                /* If the context was found by using `addr_from`, but the packet type
-                    * does not allow that, reset the context to NULL. */
-                if (context_by_addr)
-                {
-                    if ((*pcnx)->client_mode) {
-                        if ((*pcnx)->path[0]->local_cnxid.id_len != 0) {
-                            *pcnx = NULL;
-                        }
-                    }
-                    else if (ph->ptype != picoquic_packet_initial && ph->ptype != picoquic_packet_0rtt_protected)
-                    {
-                        *pcnx = NULL;
-                    }
-                    else if (picoquic_compare_connection_id(&(*pcnx)->initial_cnxid, &ph->dest_cnx_id) != 0) {
-                        *pcnx = NULL;
                     }
                 }
             }
