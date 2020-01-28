@@ -181,7 +181,6 @@ int picoquic_parse_long_packet_header(
                         *pcnx = picoquic_cnx_by_id(quic, ph->dest_cnx_id);
                     }
 
-                    /* TODO: something for the case of client initial, e.g. source IP + initial CNX_ID */
                     if (*pcnx == NULL && (ph->ptype == picoquic_packet_initial || ph->ptype == picoquic_packet_0rtt_protected)) {
                         *pcnx = picoquic_cnx_path_by_icid(quic, &ph->dest_cnx_id, addr_from);
                     }
