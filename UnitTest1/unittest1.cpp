@@ -369,6 +369,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(blackhole)
+        {
+            int ret = blackhole_test();
+
+            Assert::AreEqual(ret, 0);
+        }
 		TEST_METHOD(test_tls_api_version_negotiation)
 		{
 			int ret = tls_api_version_negotiation_test();

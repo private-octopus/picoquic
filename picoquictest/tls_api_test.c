@@ -125,6 +125,20 @@ static test_api_stream_desc_t test_scenario_more_streams[] = {
     { 72, 0, 32, 633 }
 };
 
+static test_api_stream_desc_t test_scenario_10mb[] = {
+    { 4, 0, 257, 1000000 },
+    { 8, 4, 257, 1000000 },
+    { 12, 8, 257, 1000000 },
+    { 16, 12, 257, 1000000 },
+    { 20, 16, 257, 1000000 },
+    { 24, 20, 257, 1000000 },
+    { 28, 24, 257, 1000000 },
+    { 32, 28, 257, 1000000 },
+    { 36, 32, 257, 1000000 },
+    { 40, 36, 257, 1000000 }
+};
+
+
 void picoquic_test_set_solution_dir(char const * solution_dir)
 {
     picoquic_test_solution_dir = solution_dir;
@@ -1015,6 +1029,11 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                         }
                     }
                 }
+
+                if (*simulated_time < test_ctx->blackhole_end && *simulated_time >= test_ctx->blackhole_start) {
+                    simulate_loss = 1;
+                }
+
                 if (simulate_loss == 0) {
                     picoquictest_sim_link_submit(target_link, packet, *simulated_time);
                 }
@@ -7282,4 +7301,55 @@ int esni_test()
 
     return ret;
 
+}
+
+static int blackhole_test_one(picoquic_congestion_algorithm_t* ccalgo, uint64_t max_completion_time, uint64_t jitter)
+{
+    uint64_t simulated_time = 0;
+    uint64_t latency = 15000;
+    uint64_t picoseq_per_byte_10 = (1000000ull * 8) / 10;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = 0;
+
+    ret = tls_api_one_scenario_init(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, NULL);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+
+    /* Simulate 10 ms link, 15ms latency, 2 seconds blackhole */
+    if (ret == 0) {
+        picoquic_set_default_congestion_algorithm(test_ctx->qserver, ccalgo);
+        picoquic_set_congestion_algorithm(test_ctx->cnx_client, ccalgo);
+
+        test_ctx->c_to_s_link->jitter = jitter;
+        test_ctx->c_to_s_link->microsec_latency = latency;
+        test_ctx->c_to_s_link->picosec_per_byte = picoseq_per_byte_10;
+        test_ctx->s_to_c_link->microsec_latency = latency;
+        test_ctx->s_to_c_link->picosec_per_byte = picoseq_per_byte_10;
+        test_ctx->s_to_c_link->jitter = jitter;
+        test_ctx->blackhole_end = 7000000;
+        test_ctx->blackhole_start = 5000000;
+
+        if (ret == 0) {
+            ret = tls_api_one_scenario_body(test_ctx, &simulated_time, test_scenario_10mb, sizeof(test_scenario_10mb), 0, 0, 0, 2 * latency, max_completion_time);
+        }
+    }
+
+    /* Free the resource, which will close the log file.
+     */
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+int blackhole_test()
+{
+    int ret = blackhole_test_one(picoquic_bbr_algorithm, 15000000, 0);
+
+    return ret;
 }
