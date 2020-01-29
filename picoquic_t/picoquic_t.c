@@ -179,6 +179,7 @@ static const picoquic_test_def_t test_table[] = {
     { "bbr", bbr_test },
     { "bbr_jitter", bbr_jitter_test },
     { "bbr_long", bbr_long_test },
+    { "bbr_performance", bbr_performance_test },
     { "long_rtt", long_rtt_test },
     { "satellite_basic", satellite_basic_test },
     { "satellite_loss", satellite_loss_test },
