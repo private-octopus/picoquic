@@ -127,15 +127,15 @@ static test_api_stream_desc_t test_scenario_more_streams[] = {
 
 static test_api_stream_desc_t test_scenario_10mb[] = {
     { 4, 0, 257, 1000000 },
-    { 8, 4, 257, 1000000 },
-    { 12, 8, 257, 1000000 },
-    { 16, 12, 257, 1000000 },
-    { 20, 16, 257, 1000000 },
-    { 24, 20, 257, 1000000 },
-    { 28, 24, 257, 1000000 },
-    { 32, 28, 257, 1000000 },
-    { 36, 32, 257, 1000000 },
-    { 40, 36, 257, 1000000 }
+    { 8, 0, 257, 1000000 },
+    { 12, 0, 257, 1000000 },
+    { 16, 0, 257, 1000000 },
+    { 20, 0, 257, 1000000 },
+    { 24, 0, 257, 1000000 },
+    { 28, 0, 257, 1000000 },
+    { 32, 0, 257, 1000000 },
+    { 36, 0, 257, 1000000 },
+    { 40, 0, 257, 1000000 }
 };
 
 
@@ -6320,6 +6320,55 @@ int bbr_long_test()
     }
 
     /* Free the resource, which will close the log file. */
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+/* BBR Performance test.
+ * Verify that 10 MB can be downloaded in less than 1 second on a 100 mbps link.
+ */
+
+int bbr_performance_test()
+{
+
+    uint64_t simulated_time = 0;
+    uint64_t max_completion_time = 1000000;
+    uint64_t latency = 10000;
+    uint64_t jitter = 5000;
+    uint64_t picoseq_per_byte_100 = (1000000ull * 8) / 100;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_congestion_algorithm_t* ccalgo = picoquic_bbr_algorithm;
+    int ret = 0;
+
+    ret = tls_api_one_scenario_init(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, NULL);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        picoquic_set_default_congestion_algorithm(test_ctx->qserver, ccalgo);
+        picoquic_set_congestion_algorithm(test_ctx->cnx_client, ccalgo);
+
+        test_ctx->c_to_s_link->jitter = jitter;
+        test_ctx->c_to_s_link->microsec_latency = latency;
+        test_ctx->c_to_s_link->picosec_per_byte = picoseq_per_byte_100;
+        test_ctx->s_to_c_link->microsec_latency = latency;
+        test_ctx->s_to_c_link->picosec_per_byte = picoseq_per_byte_100;
+        test_ctx->s_to_c_link->jitter = jitter;
+
+        if (ret == 0) {
+            ret = tls_api_one_scenario_body(test_ctx, &simulated_time, test_scenario_10mb, sizeof(test_scenario_10mb), 0, 0, 0, 2 * latency, max_completion_time);
+        }
+    }
+
+    /* Free the resource, which will close the log file.
+     */
 
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
