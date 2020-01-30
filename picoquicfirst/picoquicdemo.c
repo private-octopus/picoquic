@@ -704,6 +704,7 @@ int quic_client(const char* ip_address_text, int server_port,
                 struct sockaddr_storage local_address;
                 if (picoquic_get_local_address(fd, &local_address) != 0) {
                     memset(&local_address, 0, sizeof(struct sockaddr_storage));
+                    fprintf(stderr, "Could not read local address.\n");
                 }
 
                 address_updated = 1;
@@ -711,10 +712,21 @@ int quic_client(const char* ip_address_text, int server_port,
                 if (client_address.ss_family == AF_INET) {
                     ((struct sockaddr_in *)&client_address)->sin_port =
                         ((struct sockaddr_in *)&local_address)->sin_port;
+                    fprintf(stdout, "IPv4 port: %d.\n", ((struct sockaddr_in*)& client_address)->sin_port);
                 }
                 else {
                     ((struct sockaddr_in6 *)&client_address)->sin6_port =
                         ((struct sockaddr_in6 *)&local_address)->sin6_port;
+                    fprintf(stdout, "IPv6 port: %d.\n", ((struct sockaddr_in6*)& client_address)->sin6_port);
+                }
+                if (F_log != stdout && F_log != stderr && F_log != NULL)
+                {
+                    fprintf(F_log, "Client port (AF=%d): %d.\n",
+                        client_address.ss_family,
+                        (client_address.ss_family == AF_INET)?
+                        ((struct sockaddr_in*) & client_address)->sin_port:
+                        ((struct sockaddr_in6*) & client_address)->sin6_port
+                    );
                 }
                 if (F_log != NULL) {
                     fprintf(F_log, "Local address updated\n");
@@ -893,7 +905,10 @@ int quic_client(const char* ip_address_text, int server_port,
                     if (migration_started && force_migration == 3){
                         if (address_updated) {
                             if (picoquic_compare_addr((struct sockaddr *)&x_from, (struct sockaddr *)&client_address) != 0) {
-                                fprintf(F_log, "Dropping packet sent from wrong address\n");
+                                fprintf(F_log, "Dropping packet sent from wrong address, port: %d\n",
+                                    (client_address.ss_family == AF_INET) ?
+                                    ((struct sockaddr_in*) & x_from)->sin_port :
+                                    ((struct sockaddr_in6*) & x_from)->sin6_port);
                                 send_length = 0;
                             }
                         }
