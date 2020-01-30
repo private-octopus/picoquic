@@ -1223,6 +1223,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
             }
             else {
                 *next_wake_time = next_retransmit_time;
+                SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
                 break;
             }
         } else if (old_p->is_ack_trap){
@@ -1898,6 +1899,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                 else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
                     ret = 0;
                     *next_wake_time = current_time;
+                    SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
                 }
             } 
             /* document the send time & overhead */
@@ -2416,6 +2418,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
         }
         cnx->cnx_state = picoquic_state_draining;
         *next_wake_time = exit_time;
+        SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
     } else if (ret == 0 && cnx->cnx_state == picoquic_state_closing) {
         /* if more than 3*RTO is elapsed, move to disconnected */
         uint64_t exit_time = cnx->latest_progress_time + 3 * path_x->retransmit_timer;
@@ -2539,6 +2542,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
         }
         cnx->latest_progress_time = current_time;
         *next_wake_time = current_time + delta_t;
+        SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
         cnx->pkt_ctx[pc].ack_needed = 0;
 
         if (cnx->callback_fn) {
@@ -2735,6 +2739,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                         else {
                             if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
                                 *next_wake_time = current_time;
+                                SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
                                 ret = 0;
                             }
                         }
@@ -3088,6 +3093,7 @@ static int picoquic_check_idle_timer(picoquic_cnx_t* cnx, uint64_t* next_wake_ti
         }
     } else if (idle_timer < *next_wake_time) {
         *next_wake_time = idle_timer;
+        SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
     }
 
     return ret;

@@ -265,11 +265,13 @@ int quic_server(const char* server_name, int server_port,
 
         nb_loops++;
         if (nb_loops >= 10000) {
+            FILE* loop_out = (F_log == NULL) ? stdout : F_log;
             uint64_t loop_delta = current_time - loop_count_time;
             loop_count_time = current_time;
-            fprintf(F_log, "Looped %d times in %llu microsec, file: %d, line: %d\n", 
+
+            fprintf(loop_out, "Looped %d times in %llu microsec, file: %d, line: %d\n",
                 nb_loops, (unsigned long long) loop_delta, qserver->wake_file, qserver->wake_line);
-            fflush(F_log);
+            fflush(loop_out);
             nb_loops = 0;
         }
 
@@ -306,6 +308,8 @@ int quic_server(const char* server_name, int server_port,
                     &if_index);
 
                 if (ret == 0 && send_length > 0) {
+                    loop_count_time = current_time;
+                    nb_loops = 0;
                     (void)picoquic_send_through_server_sockets(&server_sockets,
                         (struct sockaddr*) & peer_addr, peer_addr_len, (struct sockaddr*) & local_addr, local_addr_len, if_index,
                         (const char*)send_buffer, (int)send_length);

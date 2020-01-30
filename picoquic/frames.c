@@ -2952,6 +2952,7 @@ int picoquic_is_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t 
         }
         else if (pkt_ctx->highest_ack_sent_time + pkt_ctx->ack_delay_local < *next_wake_time) {
             *next_wake_time = pkt_ctx->highest_ack_sent_time + pkt_ctx->ack_delay_local;
+            SET_LAST_WAKE(cnx->quic, PICOQUIC_FRAME);
         }
     }
     else if (pkt_ctx->highest_ack_sent + 8 <= pkt_ctx->first_sack_item.end_of_sack_range &&
