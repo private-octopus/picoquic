@@ -1126,10 +1126,12 @@ void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time,
             path_index_current++;
         } else {
             if (cnx->path[path_index_current]->path_is_demoted &&
-                current_time < cnx->path[path_index_current]->demotion_time &&
-                *next_wake_time > cnx->path[path_index_current]->demotion_time) {
-                *next_wake_time = cnx->path[path_index_current]->demotion_time;
+                current_time < cnx->path[path_index_current]->demotion_time){
                 is_demotion_in_progress |= 1;
+                if (*next_wake_time > cnx->path[path_index_current]->demotion_time) {
+                    *next_wake_time = cnx->path[path_index_current]->demotion_time;
+                    SET_LAST_WAKE(cnx->quic, PICOQUIC_QUICCTX);
+                }
             }
 
             if (path_index_current > path_index_good) {
@@ -2020,7 +2022,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             cnx = NULL;
         } else {
             cnx->next_wake_time = start_time;
-            SET_LAST_WAKE(quic, PICOQUIC_SENDER);
+            SET_LAST_WAKE(quic, PICOQUIC_QUICCTX);
             cnx->start_time = start_time;
             cnx->client_mode = client_mode;
 
