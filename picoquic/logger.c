@@ -113,6 +113,37 @@ void picoquic_log_prefix_initial_cid64(FILE* F, uint64_t log_cnxid64)
     }
 }
 
+static void picoquic_log_address(FILE* F, struct sockaddr* addr_peer)
+{
+    if (addr_peer->sa_family == AF_INET) {
+        struct sockaddr_in* s4 = (struct sockaddr_in*)addr_peer;
+        uint8_t* addr = (uint8_t*)&s4->sin_addr;
+
+        fprintf(F, "%d.%d.%d.%d:%d",
+            addr[0], addr[1], addr[2], addr[3],
+            ntohs(s4->sin_port));
+    }
+    else {
+        struct sockaddr_in6* s6 = (struct sockaddr_in6*)addr_peer;
+        uint8_t* addr = (uint8_t*)&s6->sin6_addr;
+
+        fprintf(F, "[");
+        for (int i = 0; i < 8; i++) {
+            if (i != 0) {
+                fprintf(F, ":");
+            }
+
+            if (addr[2 * i] != 0) {
+                fprintf(F, "%x%02x", addr[2 * i], addr[(2 * i) + 1]);
+            }
+            else {
+                fprintf(F, "%x", addr[(2 * i) + 1]);
+            }
+        }
+        fprintf(F, "]:%d", ntohs(s6->sin6_port));
+    }
+}
+
 void picoquic_log_packet_address(FILE* F, uint64_t log_cnxid64, picoquic_cnx_t* cnx,
     struct sockaddr* addr_peer, int receiving, size_t length, uint64_t current_time)
 {
@@ -125,31 +156,7 @@ void picoquic_log_packet_address(FILE* F, uint64_t log_cnxid64, picoquic_cnx_t* 
     fprintf(F, (receiving) ? "Receiving %d bytes from " : "Sending %d bytes to ",
         (int)length);
 
-    if (addr_peer->sa_family == AF_INET) {
-        struct sockaddr_in* s4 = (struct sockaddr_in*)addr_peer;
-        uint8_t* addr = (uint8_t*)&s4->sin_addr;
-
-        fprintf(F, "%d.%d.%d.%d:%d",
-            addr[0], addr[1], addr[2], addr[3],
-            ntohs(s4->sin_port));
-    } else {
-        struct sockaddr_in6* s6 = (struct sockaddr_in6*)addr_peer;
-        uint8_t* addr = (uint8_t*)&s6->sin6_addr;
-
-        fprintf(F, "[");
-        for (int i = 0; i < 8; i++) {
-            if (i != 0) {
-                fprintf(F, ":");
-            }
-
-            if (addr[2 * i] != 0) {
-                fprintf(F, "%x%02x", addr[2 * i], addr[(2 * i) + 1]);
-            } else {
-                fprintf(F, "%x", addr[(2 * i) + 1]);
-            }
-        }
-        fprintf(F, "]:%d", ntohs(s6->sin6_port));
-    }
+    picoquic_log_address(F, addr_peer);
 
     if (cnx != NULL) {
         delta_t = current_time - cnx->start_time;
@@ -1861,4 +1868,54 @@ void picoquic_log_retry_packet_error(FILE* F, picoquic_cnx_t * cnx, char const *
 {
     picoquic_log_prefix_initial_cid64(F, picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
     fprintf(F, "Retry packet rejected: %s\n", message);
+}
+
+void picoquic_log_path_promotion(FILE* F, picoquic_cnx_t* cnx, int path_index, uint64_t current_time)
+{
+    uint64_t cnx_id64 = picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx));
+    picoquic_log_prefix_initial_cid64(F, cnx_id64);
+    fprintf(F, "Path %d promoted to default at T=", path_index);
+    picoquic_log_time(F, cnx, current_time, "", "\n");
+    picoquic_log_prefix_initial_cid64(F, cnx_id64);
+    fprintf(F, "    Local address:");
+    picoquic_log_address(F, (struct sockaddr*)& cnx->path[path_index]->local_addr);
+    fprintf(F, "\n");
+    picoquic_log_prefix_initial_cid64(F, cnx_id64);
+    fprintf(F, "    Peer address:");
+    picoquic_log_address(F, (struct sockaddr*) & cnx->path[path_index]->peer_addr);
+    fprintf(F, "\n");
+}
+
+void picoquic_log_probe_action(FILE* F, picoquic_cnx_t* cnx, picoquic_probe_t * probe, int probe_action, uint64_t current_time)
+{
+    uint64_t cnx_id64 = picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx));
+    char const* probe_string = "???";
+
+    switch (probe_action) {
+    case 1:
+        probe_string = "created";
+        break;
+    case 2:
+        probe_string = "deleted";
+        break;
+    case 3:
+        probe_string = "promoted";
+        break;
+    default:
+        break;
+    }
+
+    picoquic_log_prefix_initial_cid64(F, cnx_id64);
+    fprintf(F, "Probe %s at T=", probe_string);
+    picoquic_log_time(F, cnx, current_time, "", "\n");
+    picoquic_log_prefix_initial_cid64(F, cnx_id64);
+    if (probe->local_addr.ss_family != 0) {
+        fprintf(F, "    Local address:");
+        picoquic_log_address(F, (struct sockaddr*) & probe->local_addr);
+        fprintf(F, "\n");
+    }
+    picoquic_log_prefix_initial_cid64(F, cnx_id64);
+    fprintf(F, "    Peer address:");
+    picoquic_log_address(F, (struct sockaddr*) & probe->peer_addr);
+    fprintf(F, "\n");
 }

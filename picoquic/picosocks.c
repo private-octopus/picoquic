@@ -22,7 +22,7 @@
 #include "picosocks.h"
 #include "util.h"
 
-static int bind_to_port(SOCKET_TYPE fd, int af, int port)
+int picoquic_bind_to_port(SOCKET_TYPE fd, int af, int port)
 {
     struct sockaddr_storage sa;
     int addr_length = 0;
@@ -333,7 +333,7 @@ int picoquic_open_server_sockets(picoquic_server_sockets_t* sockets, int port)
         else {
             ret = picoquic_socket_set_pkt_info(sockets->s_socket[i], sock_af[i]);
             if (ret == 0) {
-                ret = bind_to_port(sockets->s_socket[i], sock_af[i], port);
+                ret = picoquic_bind_to_port(sockets->s_socket[i], sock_af[i], port);
             }
         }
     }

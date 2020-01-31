@@ -1788,7 +1788,12 @@ int picoquic_prepare_server_address_migration(picoquic_cnx_t* cnx)
 
             /* Only send a probe if not already using that address */
             if (picoquic_compare_addr((struct sockaddr *)&dest_addr, (struct sockaddr *)&cnx->path[0]->peer_addr) != 0) {
-                ret = picoquic_create_probe(cnx, (struct sockaddr *)&dest_addr, NULL);
+                struct sockaddr* local_addr = NULL;
+                if (cnx->path[0]->local_addr.ss_family != 0) {
+                    local_addr = (struct sockaddr*) & cnx->path[0]->local_addr;
+                }
+
+                ret = picoquic_create_probe(cnx, (struct sockaddr *)&dest_addr, local_addr);
             }
         }
     }

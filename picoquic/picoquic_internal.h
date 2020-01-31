@@ -1052,6 +1052,8 @@ void picoquic_log_congestion_state(FILE* F, picoquic_cnx_t* cnx, uint64_t curren
 void picoquic_log_picotls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
     uint8_t* ticket, uint16_t ticket_length);
 void picoquic_log_retry_packet_error(FILE * F, picoquic_cnx_t * cnx, char const * message);
+void picoquic_log_path_promotion(FILE* F, picoquic_cnx_t* cnx, int path_index, uint64_t current_time);
+void picoquic_log_probe_action(FILE* F, picoquic_cnx_t* cnx, picoquic_probe_t* probe, int probe_action, uint64_t current_time);
 const char * picoquic_log_fin_or_event_name(picoquic_call_back_event_t ev);
 void picoquic_log_time(FILE* F, picoquic_cnx_t* cnx, uint64_t current_time,
     const char* label1, const char* label2);
