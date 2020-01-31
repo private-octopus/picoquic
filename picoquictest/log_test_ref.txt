@@ -7,8 +7,8 @@
         Reason: test
     MAX DATA: 0x10000000000.
     MAX STREAM DATA, Stream: 1, max data: 0x10000.
-    max_streams_bidir: 256.
-    max_streams_unidir: 263.
+    max_streams_bidir: max rank 256.
+    max_streams_unidir: max rank 263.
     ping, 1 bytes
     BLOCKED: offset 65536.
     STREAM BLOCKED: 65536.

@@ -1897,15 +1897,25 @@ picoquic_stream_head_t * picoquic_last_stream(picoquic_cnx_t* cnx)
 void picoquic_insert_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t * stream)
 {
     if (stream->is_output_stream == 0) {
-        stream->previous_output_stream = cnx->last_output_stream;
-        stream->next_output_stream = NULL;
-        if (cnx->last_output_stream == NULL) {
+        if (stream->stream_id == cnx->high_priority_stream_id) {
+            /* insert in front */
+            stream->previous_output_stream = NULL;
+            stream->next_output_stream = cnx->first_output_stream;
+            if (cnx->first_output_stream != NULL) {
+                cnx->first_output_stream->previous_output_stream = stream;
+            }
             cnx->first_output_stream = stream;
-            cnx->last_output_stream = stream;
-        }
-        else {
-            cnx->last_output_stream->next_output_stream = stream;
-            cnx->last_output_stream = stream;
+        } else {
+            stream->previous_output_stream = cnx->last_output_stream;
+            stream->next_output_stream = NULL;
+            if (cnx->last_output_stream == NULL) {
+                cnx->first_output_stream = stream;
+                cnx->last_output_stream = stream;
+            }
+            else {
+                cnx->last_output_stream->next_output_stream = stream;
+                cnx->last_output_stream = stream;
+            }
         }
         stream->is_output_stream = 1;
     }

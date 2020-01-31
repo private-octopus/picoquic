@@ -245,8 +245,12 @@ int picoquic_delete_stream_if_closed(picoquic_cnx_t* cnx, picoquic_stream_head_t
 {
     int ret = 0;
 
-    if (picoquic_is_stream_closed(stream, cnx->client_mode)){
+    if (!stream->is_closed && picoquic_is_stream_closed(stream, cnx->client_mode)){
+        picoquic_update_max_stream_ID_local(cnx, stream);
+        stream->is_closed = 1;
+#if 0
         picoquic_delete_stream(cnx, stream);
+#endif
         ret = 1;
     }
 
@@ -1046,14 +1050,21 @@ static int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id
     }
 
     if (ret == 0) {
-        if (!stream->fin_signalled || !picoquic_delete_stream_if_closed(cnx, stream)) {
-            if (!stream->fin_received && !stream->reset_received && 2 * stream->consumed_offset > stream->maxdata_local) {
-                cnx->max_stream_data_needed = 1;
-            }
+        int is_deleted = 0;
+
+        if (stream->fin_signalled) {
+            is_deleted = picoquic_delete_stream_if_closed(cnx, stream);
         }
 
-        if (stream->fin_received || stream->reset_received) {
-            cnx->pkt_ctx[picoquic_packet_context_application].ack_after_fin = 1;
+        if (!is_deleted) {
+            if (!stream->fin_signalled) {
+                if (!stream->fin_received && !stream->reset_received && 2 * stream->consumed_offset > stream->maxdata_local) {
+                    cnx->max_stream_data_needed = 1;
+                }
+            }
+            if (stream->fin_received || stream->reset_received) {
+                cnx->pkt_ctx[picoquic_packet_context_application].ack_after_fin = 1;
+            }
         }
     }
 
@@ -1080,6 +1091,9 @@ uint8_t* picoquic_decode_stream_frame(picoquic_cnx_t* cnx, uint8_t* bytes, const
 
     return bytes;
 }
+
+#if 0
+/* Previous version, round robin */
 
 picoquic_stream_head_t* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
 {
@@ -1190,6 +1204,52 @@ picoquic_stream_head_t* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
 
     return found_stream;
 }
+#else
+picoquic_stream_head_t* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
+{
+    picoquic_stream_head_t* first_stream = cnx->first_output_stream;
+    picoquic_stream_head_t* stream = first_stream;
+    picoquic_stream_head_t* found_stream = NULL;
+    picoquic_stream_head_t* previous_stream = NULL;
+
+
+    /* Look for a ready stream */
+    while (stream != NULL) {
+        if ((cnx->maxdata_remote > cnx->data_sent&& stream->sent_offset < stream->maxdata_remote && (stream->is_active ||
+            (stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset) ||
+            (stream->fin_requested && !stream->fin_sent))) ||
+            (stream->reset_requested && !stream->reset_sent) ||
+            (stream->stop_sending_requested && !stream->stop_sending_sent)) {
+            /* Something can be sent */
+            found_stream = stream;
+            break;
+        }
+        else if (((stream->fin_requested && stream->fin_sent) || (stream->reset_requested && stream->reset_sent)) && (!stream->stop_sending_requested || stream->stop_sending_sent)) {
+            picoquic_stream_head_t* next_stream = stream->next_output_stream;
+            /* If stream is exhausted, remove from output list */
+            picoquic_remove_output_stream(cnx, stream, previous_stream);
+
+            picoquic_delete_stream_if_closed(cnx, stream);
+            stream = next_stream;
+        }
+        else {
+            if (stream->is_active ||
+                (stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset)) {
+                if (stream->sent_offset >= stream->maxdata_remote) {
+                    cnx->stream_blocked = 1;
+                }
+                else if (cnx->maxdata_remote <= cnx->data_sent) {
+                    cnx->flow_blocked = 1;
+                }
+            }
+            previous_stream = stream;
+            stream = stream->next_output_stream;
+        }
+    }
+
+    return found_stream;
+}
+#endif
 
 /* Management of BLOCKED signals
  */
@@ -2933,7 +2993,7 @@ int picoquic_is_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t 
 
     if (pkt_ctx->ack_needed) {
         uint64_t ack_gap = 2;
-
+        
         if (pc == picoquic_packet_context_application && pkt_ctx->first_sack_item.end_of_sack_range > 128 && !pkt_ctx->ack_after_fin) {
             if (cnx->path[0]->rtt_min > PICOQUIC_TARGET_RENO_RTT &&
                 cnx->path[0]->receive_rate_estimate > PICOQUIC_BANDWIDTH_MEDIUM) {

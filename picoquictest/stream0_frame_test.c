@@ -713,7 +713,7 @@ int stream_output_test_delete(picoquic_cnx_t * cnx, uint64_t stream_id, int R_or
 
         if (ret == 0) {
             /* Verify that stream is deleted */
-            if (picoquic_find_stream(cnx, stream_id) != NULL) {
+            if ((stream = picoquic_find_stream(cnx, stream_id)) != NULL && !stream->is_closed) {
                 DBG_PRINTF("Stream %d not deleted\n", (int)stream_id);
                 ret = -1;
             }
@@ -730,9 +730,9 @@ int stream_output_test()
     uint64_t simulated_time = 0;
     struct sockaddr_in saddr;
     uint64_t values[] = { 0, 3, 4, 1, 2, 8, 5, 7 };
-    uint64_t output1[] = { 0, 4, 1, 2, 5 };
-    uint64_t output2[] = { 0, 4, 1, 2, 5, 8 };
-    uint64_t delete_order[] = { 5, 0, 8, 4, 2, 1 };
+    uint64_t output1[] = { 1, 0, 4, 2, 5 };
+    uint64_t output2[] = { 1, 0, 4, 2, 5, 8 };
+    uint64_t delete_order[] = { 1, 0, 4, 2, 5, 8 };
     picoquic_stream_head_t * stream = NULL;
 
     quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
@@ -758,6 +758,8 @@ int stream_output_test()
         }
         else {
             picoquic_set_callback(cnx, stream_output_test_callback, NULL);
+
+            cnx->high_priority_stream_id = 1;
 
             /* Create the list of streams */
             for (int i = 0; i < 7; i++) {
@@ -792,22 +794,15 @@ int stream_output_test()
                     stream = stream->next_output_stream;
                 }
 
-                /* Check that streams are returned in the expected order */
-                for (int i = 0; ret == 0 && i < 2; i++) {
-                    for (size_t j = 0; ret == 0 && j < (sizeof(output2) / sizeof(uint64_t)); j++) {
-                        stream = picoquic_find_ready_stream(cnx);
-                        if (stream == NULL) {
-                            DBG_PRINTF("Expected stream[%d],got NULL\n", (int)output2[j]);
-                            ret = -1;
-                        }
-                        else if (stream->stream_id != output2[j]) {
-                            DBG_PRINTF("Expected stream[%d],got %d\n", (int)output2[j], (int)stream->stream_id);
-                            ret = -1;
-                        }
-                        else {
-                            cnx->last_visited_stream = stream;
-                        }
-                    }
+                /* Check that first stream is what we expect */
+                stream = picoquic_find_ready_stream(cnx);
+                if (stream == NULL) {
+                    DBG_PRINTF("Expected stream[%d],got NULL\n", (int)output2[0]);
+                    ret = -1;
+                }
+                else if (stream->stream_id != output2[0]) {
+                    DBG_PRINTF("Expected stream[%d],got %d\n", (int)output2[0], (int)stream->stream_id);
+                    ret = -1;
                 }
             }
 

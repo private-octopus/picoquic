@@ -976,7 +976,7 @@ size_t picoquic_log_max_stream_id_frame(FILE* F, uint8_t* bytes, size_t bytes_ma
     /* Now that the size is good, parse and print it */
     byte_index += picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &rank);
 
-    fprintf(F, "    %s: %" PRIu64 ".\n", picoquic_log_frame_names(frame_id), rank);
+    fprintf(F, "    %s: max rank %" PRIu64 ".\n", picoquic_log_frame_names(frame_id), rank);
 
     return byte_index;
 }
