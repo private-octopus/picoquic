@@ -1185,6 +1185,10 @@ void picoquic_promote_path_to_default(picoquic_cnx_t* cnx, int path_index, uint6
     if (path_index > 0 && path_index < cnx->nb_paths) {
         picoquic_path_t * path_x = cnx->path[path_index];
 
+        if (cnx->quic->F_log != 0) {
+            picoquic_log_path_promotion(cnx->quic->F_log, cnx, path_index, current_time);
+        }
+
         /* Set the congestion algorithm for the new path */
         if (cnx->congestion_alg != NULL) {
             cnx->congestion_alg->alg_init(path_x);
@@ -1598,6 +1602,10 @@ void picoquic_delete_probe(picoquic_cnx_t* cnx, picoquic_probe_t * probe)
         }
     }
 
+    if (cnx->quic->F_log != NULL) {
+        picoquic_log_probe_action(cnx->quic->F_log, cnx, probe, 2, picoquic_get_quic_time(cnx->quic));
+    }
+
     free(probe);
 }
 
@@ -1620,6 +1628,10 @@ void picoquic_delete_failed_probes(picoquic_cnx_t* cnx)
             }
             else {
                 previous->next_probe = probe;
+            }
+
+            if (cnx->quic->F_log != NULL) {
+                picoquic_log_probe_action(cnx->quic->F_log, cnx, abandoned, 2, picoquic_get_quic_time(cnx->quic));
             }
 
             /* Before deleting, post a notification to the peer */
@@ -1661,6 +1673,10 @@ void picoquic_promote_successful_probe(picoquic_cnx_t* cnx, uint64_t current_tim
             path_index = picoquic_create_path(cnx, current_time, NULL, NULL);
 
             if (path_index >= 0) {
+                if (cnx->quic->F_log != NULL) {
+                    picoquic_log_probe_action(cnx->quic->F_log, cnx, probe, 3, current_time);
+                }
+
                 picoquic_fill_path_data_from_probe(cnx, path_index, probe, (struct sockaddr *)&probe->peer_addr,
                     (probe->local_addr_len > 0) ? (struct sockaddr *)&probe->local_addr : (struct sockaddr *)NULL);
 
@@ -1714,6 +1730,7 @@ int picoquic_create_probe(picoquic_cnx_t* cnx, const struct sockaddr* addr_to, c
         cnx->local_parameters.migration_disabled != 0) {
         /* Do not send probes if migration is disabled */
         ret = PICOQUIC_ERROR_MIGRATION_DISABLED;
+        DBG_PRINTF("Tried to create probe with migration diabled = %d", cnx->remote_parameters.migration_disabled);
     }
     else {
         /* Create the probe */
@@ -1726,6 +1743,7 @@ int picoquic_create_probe(picoquic_cnx_t* cnx, const struct sockaddr* addr_to, c
             stashed = picoquic_dequeue_cnxid_stash(cnx);
 
             if (stashed == NULL) {
+                DBG_PRINTF("%s", "Tried to create probe before CNX_ID is available");
                 ret = PICOQUIC_ERROR_CNXID_NOT_AVAILABLE;
                 free(probe);
                 probe = NULL;
@@ -1744,6 +1762,10 @@ int picoquic_create_probe(picoquic_cnx_t* cnx, const struct sockaddr* addr_to, c
                 probe->challenge_required = 1;
                 for (int ichal = 0; ichal < PICOQUIC_CHALLENGE_REPEAT_MAX; ichal++) {
                     probe->challenge[ichal] = picoquic_public_random_64();
+                }
+
+                if (cnx->quic->F_log != NULL) {
+                    picoquic_log_probe_action(cnx->quic->F_log, cnx, probe, 1, picoquic_get_quic_time(cnx->quic));
                 }
 
                 probe->next_probe = cnx->probe_first;

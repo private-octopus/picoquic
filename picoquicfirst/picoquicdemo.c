@@ -355,13 +355,18 @@ static const char * test_scenario_default = "0:index.html;4:test.html;8:/1234567
  * but in many cases the client will be behind a NAT, so it will not know its
  * actual IP address.
  */
-int quic_client_migrate(picoquic_cnx_t * cnx, SOCKET_TYPE * fd, struct sockaddr * server_address, 
-    int force_migration, FILE * F_log) 
+int quic_client_migrate(picoquic_cnx_t * cnx, SOCKET_TYPE * fd, struct sockaddr * server_address, struct sockaddr* client_address,
+    int * address_updated, int force_migration, FILE * F_log) 
 {
     int ret = 0;
 
+    if (server_address == NULL) {
+        server_address = (struct sockaddr*) & cnx->path[0]->peer_addr;
+    }
+
     if (force_migration != 2) {
         SOCKET_TYPE fd_m;
+
 
         fd_m = picoquic_open_client_socket(server_address->sa_family);
         if (fd_m == INVALID_SOCKET) {
@@ -373,8 +378,35 @@ int quic_client_migrate(picoquic_cnx_t * cnx, SOCKET_TYPE * fd, struct sockaddr 
             ret = -1;
         }
         else {
-            SOCKET_CLOSE(*fd);
-            *fd = fd_m;
+            if (force_migration == 3) {
+                uint16_t port = (client_address->sa_family == AF_INET) ?
+                    ((struct sockaddr_in*)client_address)->sin_port :
+                    ((struct sockaddr_in6*)client_address)->sin6_port;
+
+                for (int trial = 0; trial < 4; trial++) {
+                    port++;
+                    ret = picoquic_bind_to_port(fd_m, client_address->sa_family, port);
+                    if (ret == 0) {
+                        if (client_address->sa_family == AF_INET) {
+                            ((struct sockaddr_in*)client_address)->sin_port = port;
+                        }
+                        else {
+                            ((struct sockaddr_in6*)client_address)->sin6_port = port;
+                        }
+                        break;
+                    }
+                }
+                if (ret != 0) {
+                    DBG_PRINTF("Could not bind new socket to port %d", port);
+                }
+            }
+            if (ret == 0) {
+                SOCKET_CLOSE(*fd);
+                *fd = fd_m;
+            }
+            else {
+                SOCKET_CLOSE(fd_m);
+            }
         }
     }
 
@@ -385,6 +417,7 @@ int quic_client_migrate(picoquic_cnx_t * cnx, SOCKET_TYPE * fd, struct sockaddr 
             {
                 fprintf(F_log, "Switch to new port. Will test NAT rebinding support.\n");
             }
+            *address_updated = 0;
         }
         else if (force_migration == 2) {
             ret = picoquic_renew_connection_id(cnx, 0);
@@ -413,7 +446,7 @@ int quic_client_migrate(picoquic_cnx_t * cnx, SOCKET_TYPE * fd, struct sockaddr 
             }
         }
         else {
-            ret = picoquic_create_probe(cnx, server_address, NULL);
+            ret = picoquic_create_probe(cnx, server_address, client_address);
             if (ret != 0) {
                 if (ret == PICOQUIC_ERROR_MIGRATION_DISABLED) {
                     fprintf(stdout, "Migration disabled, will test NAT rebinding support.\n");
@@ -433,6 +466,7 @@ int quic_client_migrate(picoquic_cnx_t * cnx, SOCKET_TYPE * fd, struct sockaddr 
                 }
             }
             else {
+                *address_updated = 1;
                 fprintf(stdout, "Switch to new port, sending probe.\n");
                 if (F_log != stdout && F_log != stderr && F_log != NULL)
                 {
@@ -660,7 +694,6 @@ int quic_client(const char* ip_address_text, int server_port,
             }
             
             if (ret == 0) {
-                /* TODO: once migration is supported, manage addresses */
                 ret = picoquic_prepare_packet(cnx_client, current_time,
                     send_buffer, sizeof(send_buffer), &send_length, NULL, NULL, NULL, NULL);
 
@@ -704,6 +737,7 @@ int quic_client(const char* ip_address_text, int server_port,
                 struct sockaddr_storage local_address;
                 if (picoquic_get_local_address(fd, &local_address) != 0) {
                     memset(&local_address, 0, sizeof(struct sockaddr_storage));
+                    fprintf(stderr, "Could not read local address.\n");
                 }
 
                 address_updated = 1;
@@ -711,16 +745,26 @@ int quic_client(const char* ip_address_text, int server_port,
                 if (client_address.ss_family == AF_INET) {
                     ((struct sockaddr_in *)&client_address)->sin_port =
                         ((struct sockaddr_in *)&local_address)->sin_port;
+                    fprintf(stdout, "IPv4 port: %d.\n", ((struct sockaddr_in*)& client_address)->sin_port);
                 }
                 else {
                     ((struct sockaddr_in6 *)&client_address)->sin6_port =
                         ((struct sockaddr_in6 *)&local_address)->sin6_port;
+                    fprintf(stdout, "IPv6 port: %d.\n", ((struct sockaddr_in6*)& client_address)->sin6_port);
+                }
+                if (F_log != stdout && F_log != stderr && F_log != NULL)
+                {
+                    fprintf(F_log, "Client port (AF=%d): %d.\n",
+                        client_address.ss_family,
+                        (client_address.ss_family == AF_INET)?
+                        ((struct sockaddr_in*) & client_address)->sin_port:
+                        ((struct sockaddr_in6*) & client_address)->sin6_port
+                    );
                 }
                 if (F_log != NULL) {
                     fprintf(F_log, "Local address updated\n");
                 }
             }
-
 
             if (client_address.ss_family == AF_INET) {
                 ((struct sockaddr_in *)&packet_to)->sin_port =
@@ -800,18 +844,24 @@ int quic_client(const char* ip_address_text, int server_port,
 
                     client_ready_loop++;
 
-                    if (force_migration && migration_started == 0 && 
+                    if (force_migration && migration_started == 0 && address_updated && 
+                        picoquic_get_cnx_state(cnx_client) == picoquic_state_ready && cnx_client->probe_first == NULL &&
                         (cnx_client->cnxid_stash_first != NULL || force_migration == 1)
                         && picoquic_get_cnx_state(cnx_client) == picoquic_state_ready) {
-                        int mig_ret = quic_client_migrate(cnx_client, &fd,
-                            (struct sockaddr *)&server_address, force_migration, F_log);
-
-                        migration_started = 1;
-                        address_updated = 0;
-
-                        if (mig_ret != 0) {
-                            fprintf(stdout, "Will not test migration.\n");
+                        if (force_migration == 3 && picoquic_compare_addr(
+                            (struct sockaddr*) & server_address, (struct sockaddr*) & cnx_client->path[0]->peer_addr) != 0) {
+                            fprintf(stdout, "Migration already accumplished to server preferred address!\n");
                             migration_started = -1;
+                        }
+                        else {
+                            int mig_ret = quic_client_migrate(cnx_client, &fd, NULL, (struct sockaddr*) & client_address, &address_updated, force_migration, F_log);
+
+                            migration_started = 1;
+
+                            if (mig_ret != 0) {
+                                fprintf(stdout, "Will not test migration.\n");
+                                migration_started = -1;
+                            }
                         }
                     }
 
@@ -890,12 +940,15 @@ int quic_client(const char* ip_address_text, int server_port,
                     ret = picoquic_prepare_packet(cnx_client, current_time,
                         send_buffer, sizeof(send_buffer), &send_length, &x_to, &x_to_length, &x_from, &x_from_length);
 
-                    if (migration_started && force_migration == 3){
-                        if (address_updated) {
-                            if (picoquic_compare_addr((struct sockaddr *)&x_from, (struct sockaddr *)&client_address) != 0) {
-                                fprintf(F_log, "Dropping packet sent from wrong address\n");
-                                send_length = 0;
+                    if (migration_started && force_migration == 3 && send_length > 0 && address_updated) {
+                        if (picoquic_compare_addr((struct sockaddr*) & x_from, (struct sockaddr*) & client_address) != 0) {
+                            if (F_log != NULL) {
+                                fprintf(F_log, "Dropping packet sent from wrong address, port: %d\n",
+                                    (client_address.ss_family == AF_INET) ?
+                                    ((struct sockaddr_in*) & x_from)->sin_port :
+                                    ((struct sockaddr_in6*) & x_from)->sin6_port);
                             }
+                            send_length = 0;
                         }
                     }
 
