@@ -2626,28 +2626,6 @@ void picoquic_hash_finalize(uint8_t* output, void* hash_context) {
 
 void * picoquic_create_retry_protection_context(int is_enc, uint8_t * key)
 {
-#if 0
-    ptls_aead_algorithm_t *aead = &ptls_openssl_aes128gcm;
-    ptls_aead_context_t *ctx;
-
-    if ((ctx = (ptls_aead_context_t *)malloc(aead->context_size)) != NULL) {
-
-#ifdef _WINDOWS
-#pragma warning(disable:4204)
-#endif
-        *ctx = (ptls_aead_context_t) { aead };
-#ifdef _WINDOWS
-#pragma warning(default:4204)
-#endif
-        memset(ctx->static_iv, 0, aead->iv_size);
-
-        if (aead->setup_crypto(ctx, is_enc, key) != 0) {
-            free(ctx);
-            ctx = NULL;
-        }
-    }
-#endif
-
     return (void *)picoquic_setup_test_aead_context(is_enc, key);
 }
 

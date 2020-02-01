@@ -385,12 +385,7 @@ static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
             }
             if (ret == 0) {
                 stream_ctx->f_name = picoquic_string_duplicate(x_name);
-#if 0
-                stream_ctx->F = picoquic_file_open(x_name, "wb");
-                if (stream_ctx->F == NULL) {
-                    ret = -1;
-                }
-#endif
+                /* In order to reduce the number of open files, we only open the file when we start receiving data.*/
             }
             else {
                 stream_ctx->F = NULL;
@@ -564,9 +559,14 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
                             break;
                         }
                         else if (available_data > 0) {
-                            if (stream_ctx->stream_state.current_frame_read <= available_data &&
-                                stream_ctx->stream_state.current_frame_length >= 0x100000) {
-                                ret = picoquic_open_flow_control(cnx, stream_id, stream_ctx->stream_state.current_frame_length);
+                            if (!stream_ctx->flow_opened){
+                                if (stream_ctx->stream_state.current_frame_length >= 0x100000) {
+                                    stream_ctx->flow_opened = 1;
+                                }
+                                else if (cnx->cnx_state == picoquic_state_ready) {
+                                    stream_ctx->flow_opened = 1;
+                                    ret = picoquic_open_flow_control(cnx, stream_id, stream_ctx->stream_state.current_frame_length);
+                                }
                             }
                             if (ret == 0 && ctx->no_disk == 0) {
                                 ret = (fwrite(bytes, 1, available_data, stream_ctx->F) > 0) ? 0 : -1;
