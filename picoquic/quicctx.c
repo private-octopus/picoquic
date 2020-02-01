@@ -2197,7 +2197,6 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             cnx->pkt_ctx[pc].latest_time_acknowledged = start_time;
             cnx->pkt_ctx[pc].highest_acknowledged_time = start_time;
             cnx->pkt_ctx[pc].ack_needed = 0;
-            cnx->pkt_ctx[pc].ack_delay_local = PICOQUIC_ACK_DELAY_MAX;
         }
 
         cnx->latest_progress_time = start_time;
@@ -2220,12 +2219,12 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             /* No need to reset the state flags, as they are not used for the crypto stream */
         }
         
-        cnx->ack_frequency_sec_local = (uint64_t)((int64_t)-1);
+        cnx->ack_frequency_sequence_local = (uint64_t)((int64_t)-1);
         cnx->ack_frequency_packets_local = 2;
         cnx->ack_frequency_delay_local = PICOQUIC_ACK_DELAY_MAX_DEFAULT;
-        cnx->ack_frequency_sec_remote = (uint64_t)((int64_t)-1);
-        cnx->ack_frequency_packets_remote = 2;
-        cnx->ack_frequency_delay_remote = PICOQUIC_ACK_DELAY_MAX_DEFAULT;
+        cnx->ack_frequency_sequence_remote = (uint64_t)((int64_t)-1);
+        cnx->ack_gap_remote = 2;
+        cnx->ack_delay_remote = PICOQUIC_ACK_DELAY_MAX_DEFAULT;
 
         picosplay_init_tree(&cnx->stream_tree, picoquic_stream_node_compare, picoquic_stream_node_create, picoquic_stream_node_delete, picoquic_stream_node_value);
 

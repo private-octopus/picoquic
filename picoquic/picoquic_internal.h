@@ -635,7 +635,6 @@ typedef struct st_picoquic_packet_context_t {
     uint64_t time_stamp_largest_received;
     uint64_t highest_ack_sent;
     uint64_t highest_ack_sent_time;
-    uint64_t ack_delay_local;
 
     uint64_t nb_retransmit;
     uint64_t latest_retransmit_time;
@@ -730,6 +729,8 @@ typedef struct st_picoquic_cnx_t {
     unsigned int is_loss_bit_enabled_outgoing : 1; /* Insert the loss bits in outgoing packets */
     unsigned int is_one_way_delay_enabled : 1; /* Add time stamp to acks, read on incoming */
     unsigned int is_pmtud_required : 1; /* Force PMTU discovery */
+    unsigned int is_ack_frequency_negotiated : 1; /* Ack Frequency extension negotiated */
+    unsigned int is_ack_frequency_updated : 1; /* Should send an ack frequency frame asap. */
 
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;
@@ -857,12 +858,12 @@ typedef struct st_picoquic_cnx_t {
     /* Management of ongoing probes */
     picoquic_probe_t * probe_first;
     /* Management of ACK frequency */
-    uint64_t ack_frequency_sec_local;
+    uint64_t ack_frequency_sequence_local;
     uint64_t ack_frequency_packets_local;
     uint64_t ack_frequency_delay_local;
-    uint64_t ack_frequency_sec_remote;
-    uint64_t ack_frequency_packets_remote;
-    uint64_t ack_frequency_delay_remote;
+    uint64_t ack_frequency_sequence_remote;
+    uint64_t ack_gap_remote;
+    uint64_t ack_delay_remote;
 
 } picoquic_cnx_t;
 
@@ -1096,6 +1097,10 @@ int picoquic_process_ack_of_ack_frame(
     picoquic_sack_item_t* first_sack,
     uint8_t* bytes, size_t bytes_max, size_t* consumed, int is_ecn, int has_1wd);
 
+uint64_t picoquic_compute_ack_gap(picoquic_cnx_t* cnx, uint64_t data_rate);
+
+uint64_t picoquic_compute_ack_delay_max(uint64_t rtt);
+
 void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, uint64_t send_time,
     picoquic_packet_context_t * pkt_ctx, uint64_t current_time, uint64_t ack_delay, uint64_t remote_time_stamp);
 
@@ -1174,7 +1179,11 @@ int picoquic_queue_handshake_done_frame(picoquic_cnx_t* cnx);
 int picoquic_prepare_first_datagram_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
     size_t bytes_max, size_t* consumed);
 
+uint8_t* picoquic_parse_ack_frequency_frame(uint8_t* bytes, const uint8_t* bytes_max, uint64_t* seq, uint64_t* packets, uint64_t* microsec);
+
 /* send/receive */
+
+int picoquic_prepare_ack_frequency_frame(uint8_t* bytes, size_t length_max, size_t* consumed, picoquic_cnx_t* cnx);
 
 int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_t* bytes, size_t bytes_max,
     int epoch, struct sockaddr* addr_from, struct sockaddr* addr_to, uint64_t current_time);

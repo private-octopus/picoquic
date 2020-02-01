@@ -2624,6 +2624,15 @@ void picoquic_ready_state_transition(picoquic_cnx_t* cnx, uint64_t current_time)
             picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
         }
     }
+
+    /* Ask for ACK frequency update, or initialize variables if not available */
+    if (cnx->is_ack_frequency_negotiated) {
+        cnx->is_ack_frequency_updated = 1;
+    }
+    else {
+        cnx->ack_gap_remote = picoquic_compute_ack_gap(cnx, cnx->path[0]->receive_rate_max);
+        cnx->ack_delay_remote = picoquic_compute_ack_delay_max(cnx->path[0]->rtt_min);
+    }
 }
 
 
@@ -2784,6 +2793,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
             }
 
             if (cnx->cnx_state != picoquic_state_disconnected && path_x->challenge_verified != 0) {
+                /* Send here the frames that are exempt from the pacing control */
                 if (picoquic_is_ack_needed(cnx, current_time, next_wake_time, pc)) {
                     ret = picoquic_prepare_ack_frame(cnx, current_time, pc, &bytes[length],
                         send_buffer_min_max - checksum_overhead - length, &data_bytes);
@@ -2944,6 +2954,22 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                                 send_buffer_max - checksum_overhead - length, &data_bytes);
                             if (ret == 0) {
                                 length += data_bytes;
+                            }
+                        }
+
+                        if (cnx->is_ack_frequency_updated && cnx->is_ack_frequency_negotiated) {
+                            ret = picoquic_prepare_ack_frequency_frame(&bytes[length],
+                                send_buffer_max - checksum_overhead - length, &data_bytes, cnx);
+                            if (ret == 0) {
+                                length += data_bytes;
+                                cnx->is_ack_frequency_updated = 0;
+                            }
+                            else {
+                                if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
+                                    *next_wake_time = current_time;
+                                    SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+                                    ret = 0;
+                                }
                             }
                         }
 

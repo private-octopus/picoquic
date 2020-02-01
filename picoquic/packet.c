@@ -1708,6 +1708,9 @@ int picoquic_incoming_encrypted(
                         cnx->path[path_id]->receive_rate_epoch = current_time;
                         if (cnx->path[path_id]->receive_rate_estimate > cnx->path[path_id]->receive_rate_max) {
                             cnx->path[path_id]->receive_rate_max = cnx->path[path_id]->receive_rate_estimate;
+                            if (path_id == 0 && !cnx->is_ack_frequency_negotiated) {
+                                cnx->ack_gap_remote = picoquic_compute_ack_gap(cnx, cnx->path[0]->receive_rate_max);
+                            }
                         }
                     }
                 }

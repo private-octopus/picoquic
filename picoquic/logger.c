@@ -1264,9 +1264,7 @@ size_t picoquic_log_ack_frequency_frame(FILE* F, uint8_t* bytes, size_t bytes_ma
 
 
     if ((bytes = picoquic_frames_varint_skip(bytes, bytes_end)) == NULL ||
-        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &sequence)) == NULL ||
-        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &packets)) == NULL ||
-        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &microsecs)) == NULL) {
+        (bytes = picoquic_parse_ack_frequency_frame(bytes, bytes_end, &sequence, &packets, &microsecs)) == NULL) {
         fprintf(F, "    Malformed ACK Frequency frame: ");
         /* log format error */
         for (size_t i = 0; i < bytes_max && i < 8; i++) {
