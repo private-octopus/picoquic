@@ -101,7 +101,11 @@ static test_api_stream_desc_t test_scenario_many_streams[] = {
     { 20, 0, 32, 350 },
     { 24, 0, 32, 225 },
     { 28, 0, 32, 700 },
-    { 32, 0, 32, 1500 }
+    { 32, 0, 32, 32 },
+    { 36, 0, 32, 32 },
+    { 40, 0, 32, 32 },
+    { 44, 0, 32, 32 },
+    { 48, 0, 32, 32 }
 };
 
 static test_api_stream_desc_t test_scenario_more_streams[] = {

@@ -490,12 +490,17 @@ static uint8_t h3zero_stream_test_grease[] = {
     0xed, 0x69, 0x89, 0x39, 0x7f
 };
 
-int h3zero_stream_test_one_split(uint8_t * bytes, size_t nb_bytes, size_t split,
+static uint8_t h3zero_stream_test_split3[] = {
+    0x01, 0x40, 0x04, 0x00, 0x00, 0xd9, 0xf5, 0x00, 0x20,
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+    17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32 };
+
+int h3zero_stream_test_one_split(uint8_t * bytes, size_t nb_bytes, 
+    uint8_t ** bmax, int nb_splits,
     uint8_t * data_ref, size_t data_len, int has_trailer)
 {
     int ret = 0;
     h3zero_data_stream_state_t stream_state;
-    uint8_t * bmax[2] = { bytes + split, bytes + nb_bytes };
     size_t nb_data = 0;
     uint8_t data[64];
     size_t available_data;
@@ -503,7 +508,7 @@ int h3zero_stream_test_one_split(uint8_t * bytes, size_t nb_bytes, size_t split,
 
     memset(&stream_state, 0, sizeof(h3zero_data_stream_state_t));
 
-    for (int i = 0; ret == 0 && i < 2; i++) {
+    for (int i = 0; ret == 0 && i < nb_splits; i++) {
         while (bytes != NULL && bytes < bmax[i]) {
             bytes = h3zero_parse_data_stream(bytes, bmax[i], &stream_state, &available_data, &error_found);
             if (bytes != NULL && available_data > 0) {
@@ -520,7 +525,7 @@ int h3zero_stream_test_one_split(uint8_t * bytes, size_t nb_bytes, size_t split,
     }
 
     if (ret == 0) {
-        if (bytes != bmax[1]) {
+        if (bytes != bmax[nb_splits - 1]) {
             DBG_PRINTF("%s", "did not parse to the end!\n");
             ret = -1;
         }
@@ -562,7 +567,8 @@ int h3zero_stream_test_one(uint8_t * bytes, size_t nb_bytes,
     int ret = 0;
 
     for (size_t split = 0; ret == 0 && split < data_len; split++) {
-        ret = h3zero_stream_test_one_split(bytes, nb_bytes, split, data_ref, data_len, has_trailer);
+        uint8_t* bmax[2] = { bytes + split, bytes + nb_bytes };
+        ret = h3zero_stream_test_one_split(bytes, nb_bytes, bmax, 2, data_ref, data_len, has_trailer);
     }
 
     return ret;
@@ -587,8 +593,25 @@ int h3zero_stream_test()
             NULL, 0, 0);
     }
 
+    if (ret == 0) {
+        uint8_t* bytes = h3zero_stream_test_split3;
+        size_t nb_bytes = sizeof(h3zero_stream_test_split3);
+        size_t split_max = 9;
+
+        for (size_t split = 1; ret == 0 && split < split_max; split++) {
+            uint8_t* bmax[3] = { bytes + split, bytes + split_max, bytes + nb_bytes };
+
+            ret = h3zero_stream_test_one_split(bytes, nb_bytes, bmax, 3, bytes + split_max, nb_bytes - split_max, 0);
+
+            if (ret != 0) {
+                DBG_PRINTF("Stream reassembly fails for split: %d - %d - %d\n", (int)split, (int)split_max, (int)nb_bytes);
+            }
+        }
+    }
+
     return ret;
 }
+
 
 /*
  * Test the scenario parsing function

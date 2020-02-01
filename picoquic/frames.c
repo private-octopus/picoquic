@@ -245,8 +245,10 @@ int picoquic_delete_stream_if_closed(picoquic_cnx_t* cnx, picoquic_stream_head_t
 {
     int ret = 0;
 
-    if (picoquic_is_stream_closed(stream, cnx->client_mode)){
-        picoquic_delete_stream(cnx, stream);
+    if (!stream->is_closed && picoquic_is_stream_closed(stream, cnx->client_mode)){
+        picoquic_update_max_stream_ID_local(cnx, stream);
+        stream->is_closed = 1;
+        /* We do not delete the stream, because the context is still need to control retransmissions */
         ret = 1;
     }
 
@@ -1046,14 +1048,21 @@ static int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id
     }
 
     if (ret == 0) {
-        if (!stream->fin_signalled || !picoquic_delete_stream_if_closed(cnx, stream)) {
-            if (!stream->fin_received && !stream->reset_received && 2 * stream->consumed_offset > stream->maxdata_local) {
-                cnx->max_stream_data_needed = 1;
-            }
+        int is_deleted = 0;
+
+        if (stream->fin_signalled) {
+            is_deleted = picoquic_delete_stream_if_closed(cnx, stream);
         }
 
-        if (stream->fin_received || stream->reset_received) {
-            cnx->pkt_ctx[picoquic_packet_context_application].ack_after_fin = 1;
+        if (!is_deleted) {
+            if (!stream->fin_signalled) {
+                if (!stream->fin_received && !stream->reset_received && 2 * stream->consumed_offset > stream->maxdata_local) {
+                    cnx->max_stream_data_needed = 1;
+                }
+            }
+            if (stream->fin_received || stream->reset_received) {
+                cnx->pkt_ctx[picoquic_packet_context_application].ack_after_fin = 1;
+            }
         }
     }
 
@@ -1083,109 +1092,44 @@ uint8_t* picoquic_decode_stream_frame(picoquic_cnx_t* cnx, uint8_t* bytes, const
 
 picoquic_stream_head_t* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
 {
-    picoquic_stream_head_t* start_stream = NULL;
+    picoquic_stream_head_t* first_stream = cnx->first_output_stream;
+    picoquic_stream_head_t* stream = first_stream;
     picoquic_stream_head_t* found_stream = NULL;
     picoquic_stream_head_t* previous_stream = NULL;
-    picoquic_stream_head_t* end_of_second_pass = NULL;
-    int is_second_pass = 0;
 
-    if (cnx->high_priority_stream_id != (uint64_t)((int64_t)-1)) {
-        picoquic_stream_head_t* hi_pri_stream = NULL;
-
-        /* Check parity */
-        if (IS_CLIENT_STREAM_ID(cnx->high_priority_stream_id) == cnx->client_mode) {
-            if (cnx->high_priority_stream_id > ((IS_BIDIR_STREAM_ID(cnx->high_priority_stream_id)) ? cnx->max_stream_id_bidir_remote : cnx->max_stream_id_unidir_remote)) {
-                return NULL;
-            }
-        }
-
-        hi_pri_stream = picoquic_find_stream(cnx, cnx->high_priority_stream_id);
-
-        if (hi_pri_stream == NULL) {
-            cnx->high_priority_stream_id = (uint64_t)((int64_t)-1);
-        }
-        else if (hi_pri_stream->sent_offset >= hi_pri_stream->maxdata_remote ||
-            cnx->maxdata_remote <= cnx->data_sent) {
-            /* Hi priority stream is blocked by peer; waiting for unblock
-             * before allowing any activity on other streams. */
-            return NULL;
-        }
-        else if (hi_pri_stream->is_active ||
-            (hi_pri_stream->send_queue != NULL &&
-                hi_pri_stream->send_queue->length > hi_pri_stream->send_queue->offset)) {
-            /* Data ready on the hi-priority stream */
-            return hi_pri_stream;
-        }
-        else {
-            /* No data on high pri stream. Assume not needed anymore */
-            cnx->high_priority_stream_id = (uint64_t)((int64_t)-1);
-        }
-    }
-
-    /* Skip to the first non visited stream */
-    if (cnx->last_visited_stream != NULL) {
-        previous_stream = cnx->last_visited_stream;
-        start_stream = cnx->last_visited_stream->next_output_stream;
-        end_of_second_pass = start_stream;
-        cnx->last_visited_stream = NULL;
-    }
-
-    if (start_stream == NULL) {
-        previous_stream = NULL;
-        start_stream = cnx->first_output_stream;
-        is_second_pass = 1; 
-    }
 
     /* Look for a ready stream */
-    if (start_stream != NULL) {
-        picoquic_stream_head_t* stream = start_stream;
+    while (stream != NULL) {
+        if ((cnx->maxdata_remote > cnx->data_sent&& stream->sent_offset < stream->maxdata_remote && (stream->is_active ||
+            (stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset) ||
+            (stream->fin_requested && !stream->fin_sent))) ||
+            (stream->reset_requested && !stream->reset_sent) ||
+            (stream->stop_sending_requested && !stream->stop_sending_sent)) {
+            /* Something can be sent */
+            found_stream = stream;
+            break;
+        }
+        else if (((stream->fin_requested && stream->fin_sent) || (stream->reset_requested && stream->reset_sent)) && (!stream->stop_sending_requested || stream->stop_sending_sent)) {
+            picoquic_stream_head_t* next_stream = stream->next_output_stream;
+            /* If stream is exhausted, remove from output list */
+            picoquic_remove_output_stream(cnx, stream, previous_stream);
 
-        do {
-            if ((cnx->maxdata_remote > cnx->data_sent && stream->sent_offset < stream->maxdata_remote && (stream->is_active ||
-                (stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset) ||
-                (stream->fin_requested && !stream->fin_sent))) ||
-                (stream->reset_requested && !stream->reset_sent) ||
-                (stream->stop_sending_requested && !stream->stop_sending_sent)) {
-                /* Something can be sent */
-                found_stream = stream;
-                break;
-            }
-            else if (((stream->fin_requested && stream->fin_sent) || (stream->reset_requested && stream->reset_sent)) && (!stream->stop_sending_requested || stream->stop_sending_sent)) {
-                picoquic_stream_head_t * next_stream = stream->next_output_stream;
-                /* If stream is exhausted, remove from output list */
-                if (stream == end_of_second_pass) {
-                    end_of_second_pass = next_stream;
+            picoquic_delete_stream_if_closed(cnx, stream);
+            stream = next_stream;
+        }
+        else {
+            if (stream->is_active ||
+                (stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset)) {
+                if (stream->sent_offset >= stream->maxdata_remote) {
+                    cnx->stream_blocked = 1;
                 }
-
-                picoquic_remove_output_stream(cnx, stream, previous_stream);
-
-                picoquic_delete_stream_if_closed(cnx, stream);
-                stream = next_stream;
-            }
-            else {
-                if (stream->is_active ||
-                    (stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset)) {
-                    if (stream->sent_offset >= stream->maxdata_remote) {
-                        cnx->stream_blocked = 1;
-                    }
-                    else if (cnx->maxdata_remote <= cnx->data_sent) {
-                        cnx->flow_blocked = 1;
-                    }
+                else if (cnx->maxdata_remote <= cnx->data_sent) {
+                    cnx->flow_blocked = 1;
                 }
-                previous_stream = stream;
-                stream = stream->next_output_stream;
             }
-
-            if (stream == NULL && !is_second_pass) {
-                previous_stream = NULL;
-                stream = cnx->first_output_stream;
-                is_second_pass = 1;
-            }
-            else if (is_second_pass && stream == end_of_second_pass) {
-                stream = NULL;
-                break;
-            }
-        } while (stream != NULL);
+            previous_stream = stream;
+            stream = stream->next_output_stream;
+        }
     }
 
     return found_stream;
@@ -2933,7 +2877,7 @@ int picoquic_is_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t 
 
     if (pkt_ctx->ack_needed) {
         uint64_t ack_gap = 2;
-
+        
         if (pc == picoquic_packet_context_application && pkt_ctx->first_sack_item.end_of_sack_range > 128 && !pkt_ctx->ack_after_fin) {
             if (cnx->path[0]->rtt_min > PICOQUIC_TARGET_RENO_RTT &&
                 cnx->path[0]->receive_rate_estimate > PICOQUIC_BANDWIDTH_MEDIUM) {

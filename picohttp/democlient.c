@@ -384,10 +384,8 @@ static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
                 x_name = repeat_name;
             }
             if (ret == 0) {
-                stream_ctx->F = picoquic_file_open(x_name, "wb");
-                if (stream_ctx->F == NULL) {
-                    ret = -1;
-                }
+                stream_ctx->f_name = picoquic_string_duplicate(x_name);
+                /* In order to reduce the number of open files, we only open the file when we start receiving data.*/
             }
             else {
                 stream_ctx->F = NULL;
@@ -460,6 +458,10 @@ static int picoquic_demo_client_close_stream(
 {
     int ret = 0;
     if (stream_ctx != NULL && stream_ctx->is_open) {
+        if (stream_ctx->f_name != NULL) {
+            free(stream_ctx->f_name);
+            stream_ctx->f_name = NULL;
+        }
         stream_ctx->F = picoquic_file_close(stream_ctx->F);
         stream_ctx->is_open = 0;
         ctx->nb_open_streams--;
@@ -502,6 +504,10 @@ int picoquic_demo_client_start_streams(picoquic_cnx_t* cnx,
             if (ret == 0 && repeat_nb > 1 && !ctx->no_print) {
                 fprintf(stdout, "Repeated stream opening %d times.\n", (int)repeat_nb);
             }
+            
+            if (repeat_nb < ctx->demo_stream[i].repeat_count) {
+                fprintf(stdout, "Could only open %d streams out of %d, ret = %d.\n", (int)repeat_nb, (int)ctx->demo_stream[i].repeat_count, ret);
+            }
         }
     }
 
@@ -529,8 +535,18 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
         if (stream_ctx == NULL) {
             stream_ctx = picoquic_demo_client_find_stream(ctx, stream_id);
         }
-        if (stream_ctx != NULL && stream_ctx->is_open && (stream_ctx->F != NULL || ctx->no_disk != 0)) {
-            if (length > 0) {
+        if (stream_ctx != NULL && stream_ctx->is_open) {
+            if (!stream_ctx->is_file_open && ctx->no_disk == 0) {
+                stream_ctx->F = picoquic_file_open(stream_ctx->f_name, "wb");
+                if (stream_ctx->F == NULL) {
+                    DBG_PRINTF("Could not open file <%s> for stream %d", stream_ctx->f_name, stream_id);
+                    ret = -1;
+                }
+                else {
+                    stream_ctx->is_file_open = 1;
+                }
+            }
+            if (ret == 0 && length > 0) {
                 switch (ctx->alpn) {
                 case picoquic_alpn_http_3: {
                     uint16_t error_found = 0;
@@ -543,9 +559,14 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
                             break;
                         }
                         else if (available_data > 0) {
-                            if (stream_ctx->stream_state.current_frame_read <= available_data &&
-                                stream_ctx->stream_state.current_frame_length >= 0x100000) {
-                                ret = picoquic_open_flow_control(cnx, stream_id, stream_ctx->stream_state.current_frame_length);
+                            if (!stream_ctx->flow_opened){
+                                if (stream_ctx->stream_state.current_frame_length >= 0x100000) {
+                                    stream_ctx->flow_opened = 1;
+                                }
+                                else if (cnx->cnx_state == picoquic_state_ready) {
+                                    stream_ctx->flow_opened = 1;
+                                    ret = picoquic_open_flow_control(cnx, stream_id, stream_ctx->stream_state.current_frame_length);
+                                }
                             }
                             if (ret == 0 && ctx->no_disk == 0) {
                                 ret = (fwrite(bytes, 1, available_data, stream_ctx->F) > 0) ? 0 : -1;
@@ -696,6 +717,11 @@ static void picoquic_demo_client_delete_stream_context(picoquic_demo_callback_ct
     int removed_from_context = 0;
 
     h3zero_delete_data_stream_state(&stream_ctx->stream_state);
+
+    if (stream_ctx->f_name != NULL) {
+        free(stream_ctx->f_name);
+        stream_ctx->f_name = NULL;
+    }
 
     stream_ctx->F = picoquic_file_close(stream_ctx->F);
 
