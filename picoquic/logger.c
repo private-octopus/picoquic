@@ -276,7 +276,7 @@ char const* picoquic_log_ptype_name(picoquic_packet_type_enum ptype)
     return ptype_name;
 }
 
-char const* picoquic_log_frame_names(uint8_t frame_type)
+char const* picoquic_log_frame_names(uint64_t frame_type)
 {
     char const * frame_name = "unknown";
     
@@ -359,6 +359,9 @@ char const* picoquic_log_frame_names(uint8_t frame_type)
         break;
     case picoquic_frame_type_ack_ecn_1wd:
         frame_name = "ack_ecn_1wd";
+        break;
+    case picoquic_frame_type_ack_frequency:
+        frame_name = "ack_frequency";
         break;
     default:
         if (PICOQUIC_IN_RANGE(frame_type, picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
@@ -961,7 +964,7 @@ size_t picoquic_log_max_stream_data_frame(FILE* F, uint8_t* bytes, size_t bytes_
     return byte_index;
 }
 
-size_t picoquic_log_max_stream_id_frame(FILE* F, uint8_t* bytes, size_t bytes_max, uint8_t frame_id)
+size_t picoquic_log_max_stream_id_frame(FILE* F, uint8_t* bytes, size_t bytes_max, uint64_t frame_id)
 {
     size_t byte_index = 1;
     const size_t min_size = 1 + picoquic_varint_skip(bytes + 1);
@@ -1022,7 +1025,7 @@ size_t picoquic_log_stream_blocked_frame(FILE* F, uint8_t* bytes, size_t bytes_m
     return byte_index;
 }
 
-size_t picoquic_log_streams_blocked_frame(FILE* F, uint8_t* bytes, size_t bytes_max, uint8_t frame_id)
+size_t picoquic_log_streams_blocked_frame(FILE* F, uint8_t* bytes, size_t bytes_max, uint64_t frame_id)
 {
     size_t byte_index = 1;
     const size_t min_size = 1 + picoquic_varint_skip(bytes + 1);
@@ -1250,16 +1253,65 @@ size_t picoquic_log_datagram_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
     return byte_index;
 }
 
+size_t picoquic_log_ack_frequency_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
+{
+    uint64_t sequence = 0;
+    uint64_t packets = 0;
+    uint64_t microsecs = 0;
+    uint8_t* bytes_end = bytes + bytes_max;
+    uint8_t* bytes0 = bytes;
+    size_t byte_index = 0;
 
+
+    if ((bytes = picoquic_frames_varint_skip(bytes, bytes_end)) == NULL ||
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &sequence)) == NULL ||
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &packets)) == NULL ||
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &microsecs)) == NULL) {
+        fprintf(F, "    Malformed ACK Frequency frame: ");
+        /* log format error */
+        for (size_t i = 0; i < bytes_max && i < 8; i++) {
+            fprintf(F, "%02x", bytes0[i]);
+        }
+        if (bytes_max > 8) {
+            fprintf(F, "...");
+        }
+        fprintf(F, "\n");
+        byte_index = bytes_max;
+    }
+    else {
+        fprintf(F, "    ACK Frequency: S=%" PRIu64 ", P=%" PRIu64 ", uS=%" PRIu64 "\n", 
+            sequence, packets, microsecs);
+        byte_index = bytes - bytes0;
+    }
+
+    return byte_index;
+}
 
 void picoquic_log_frames(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t length)
 {
     size_t byte_index = 0;
 
     while (byte_index < length) {
-        uint8_t frame_id = bytes[byte_index];
+        uint64_t frame_id = 0;
+        size_t frame_id_ll = picoquic_varint_decode(bytes + byte_index, length - byte_index, &frame_id);
 
         picoquic_log_prefix_initial_cid64(F, cnx_id64);
+
+        if (frame_id_ll == 0 || (frame_id < 64 && frame_id_ll != 1)) {
+            size_t id_length = length - byte_index;
+            char const* id_more = "";
+            if (id_length > 8) {
+                    id_length = 8;
+                    id_more = "...";
+            }
+            fprintf(F, "    Incorrect frame id: ");
+            for (size_t x = 0; x < id_length; x++) {
+                fprintf(F, "%02x", bytes[byte_index++]);
+            }
+            fprintf(F, "%s\n", id_more);
+            byte_index = length;
+            continue;
+        }
 
         if (PICOQUIC_IN_RANGE(frame_id, picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
             byte_index += picoquic_log_stream_frame(F, bytes + byte_index, length - byte_index);
@@ -1363,6 +1415,10 @@ void picoquic_log_frames(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t leng
         case picoquic_frame_type_datagram_l:
             byte_index += picoquic_log_datagram_frame(F, bytes + byte_index, length - byte_index);
             break;
+        case picoquic_frame_type_ack_frequency:
+            byte_index += picoquic_log_ack_frequency_frame(F, bytes + byte_index, length - byte_index);
+            break;
+
         default: {
             /* Not implemented yet! */
             uint64_t frame_id64;

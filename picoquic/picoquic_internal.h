@@ -120,7 +120,8 @@ typedef enum {
     picoquic_frame_type_datagram = 0x30,
     picoquic_frame_type_datagram_l = 0x31,
     picoquic_frame_type_ack_1wd = 0x34,
-    picoquic_frame_type_ack_ecn_1wd = 0x35
+    picoquic_frame_type_ack_ecn_1wd = 0x35,
+    picoquic_frame_type_ack_frequency = 0xAF
 } picoquic_frame_type_enum_t;
 
 /* PMTU discovery requirement status */
@@ -855,6 +856,14 @@ typedef struct st_picoquic_cnx_t {
     picoquic_cnxid_stash_t * cnxid_stash_first;
     /* Management of ongoing probes */
     picoquic_probe_t * probe_first;
+    /* Management of ACK frequency */
+    uint64_t ack_frequency_sec_local;
+    uint64_t ack_frequency_packets_local;
+    uint64_t ack_frequency_delay_local;
+    uint64_t ack_frequency_sec_remote;
+    uint64_t ack_frequency_packets_remote;
+    uint64_t ack_frequency_delay_remote;
+
 } picoquic_cnx_t;
 
 /* Load the stash of retry tokens. */
@@ -950,6 +959,7 @@ size_t picoquic_varint_encode(uint8_t* bytes, size_t max_bytes, uint64_t n64);
 void picoquic_varint_encode_16(uint8_t* bytes, uint16_t n16);
 size_t picoquic_varint_decode(const uint8_t* bytes, size_t max_bytes, uint64_t* n64);
 uint8_t* picoquic_frames_varint_decode(uint8_t* bytes, const uint8_t* bytes_max, uint64_t* n64);
+uint8_t* picoquic_frames_varint_skip(uint8_t* bytes, const uint8_t* bytes_max);
 size_t picoquic_varint_skip(const uint8_t* bytes);
 
 size_t picoquic_encode_varint_length(uint64_t n64);

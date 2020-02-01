@@ -340,6 +340,21 @@ static const uint8_t* picoquic_log_datagram_frame(FILE* f, const uint8_t* bytes,
     return bytes;
 }
 
+static const uint8_t* picoquic_log_ack_frequency_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
+{
+    const uint8_t* bytes_begin = bytes;
+
+    bytes = picoquic_log_varint_skip(bytes, bytes_max); /* frame type as varint */
+    bytes = picoquic_log_varint_skip(bytes, bytes_max); /* Seq num */
+    bytes = picoquic_log_varint_skip(bytes, bytes_max); /* Packet tolerance */
+    bytes = picoquic_log_varint_skip(bytes, bytes_max); /* Max ACK delay */
+
+    picoquic_binlog_frame(f, bytes_begin, bytes);
+
+    return bytes;
+}
+
+
 static const uint8_t* picoquic_log_padding(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
 {
     picoquic_binlog_frame(f, bytes, bytes + 1);
@@ -357,7 +372,19 @@ void picoquic_binlog_frames(FILE * f, const uint8_t* bytes, size_t length)
     const uint8_t* bytes_max = bytes + length;
 
     while (bytes != NULL && bytes < bytes_max) {
-        uint8_t ftype = bytes[0];
+        uint64_t ftype= 0;
+        size_t ftype_ll = picoquic_varint_decode(bytes, length, &ftype);
+
+        if (ftype_ll == 0) {
+            /* Error, incorrect frame type encoding */
+            bytes = NULL;
+            break;
+        }
+        else if (ftype < 64 && ftype_ll != 1) {
+            /* Error, incorrect frame type encoding */
+            bytes = NULL;
+            break;
+        }
 
         if (PICOQUIC_IN_RANGE(ftype, picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
             bytes = picoquic_log_stream_frame(f, bytes, bytes_max);
@@ -430,6 +457,10 @@ void picoquic_binlog_frames(FILE * f, const uint8_t* bytes, size_t length)
         case picoquic_frame_type_datagram_l:
             bytes = picoquic_log_datagram_frame(f, bytes, bytes_max);
             break;
+        case picoquic_frame_type_ack_frequency:
+            bytes = picoquic_log_ack_frequency_frame(f, bytes, bytes_max);
+            break;
+
         default:
             bytes = NULL;
             break;

@@ -104,6 +104,8 @@ const char * ftype2str(picoquic_frame_type_enum_t ftype)
         return "ack_1wd";
     case picoquic_frame_type_ack_ecn_1wd:
         return "ack_ecn_1wd";
+    case picoquic_frame_type_ack_frequency:
+        return "ack_frequency";
     default:
         return "unknown";
     }

@@ -3679,6 +3679,61 @@ int picoquic_prepare_first_datagram_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
     return ret;
 }
 
+/* ACK Frequency frames 
+ */
+uint8_t* picoquic_skip_ack_frequency_frame(uint8_t* bytes, const uint8_t* bytes_max)
+{
+    /* This code assumes that the frame type is already skipped */
+    if ((bytes = picoquic_frames_varint_skip(bytes, bytes_max)) != NULL &&
+        (bytes = picoquic_frames_varint_skip(bytes, bytes_max)) != NULL) {
+        bytes = picoquic_frames_varint_skip(bytes, bytes_max);
+    }
+    return bytes;
+}
+
+uint8_t* picoquic_decode_ack_frequency_frame(uint8_t* bytes, const uint8_t* bytes_max, picoquic_cnx_t * cnx)
+{
+    uint64_t seq = 0;
+    uint64_t packets = 0;
+    uint64_t microsec = 0;
+
+    /* This code assumes that the frame type is already skipped */
+    if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &seq)) != NULL &&
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &packets)) != NULL &&
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &microsec)) != NULL) {
+        int64_t delta = seq - cnx->ack_frequency_sec_remote;
+        if (delta > 0) {
+            cnx->ack_frequency_sec_remote = seq;
+            cnx->ack_frequency_packets_remote = packets;
+            cnx->ack_frequency_delay_remote = microsec;
+        }
+    }
+    return bytes;
+}
+
+int picoquic_prepare_ack_frequency_frame(uint8_t* bytes, size_t length_max, size_t * consumed, picoquic_cnx_t* cnx)
+{
+    int ret = 0;
+    uint8_t* bytes0 = bytes;
+    uint8_t* bytes_max = bytes + length_max;
+    uint64_t seq = cnx->ack_frequency_sec_local + 1;
+
+
+    /* This code assumes that the frame type is already skipped */
+    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, picoquic_frame_type_ack_frequency)) != NULL && 
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, seq)) != NULL &&
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, cnx->ack_frequency_packets_local)) != NULL &&
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, cnx->ack_frequency_delay_local)) != NULL) {
+        *consumed = bytes - bytes0;
+        cnx->ack_frequency_sec_local = seq;
+    }
+    else {
+        *consumed = 0;
+        ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
+    }
+    return ret;
+}
+
 /*
  * Decoding of the received frames.
  *
@@ -3838,9 +3893,17 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_
             default: {
                 uint64_t frame_id64;
                 if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &frame_id64)) != NULL) {
-                    /* Not implemented yet! */
-                    picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, frame_id64);
-                    bytes = NULL;
+                    switch (frame_id64) {
+                    case picoquic_frame_type_ack_frequency:
+                        bytes = picoquic_decode_ack_frequency_frame(bytes, bytes_max, cnx);
+                        ack_needed = 1;
+                        break;
+                    default:
+                        /* Not implemented yet! */
+                        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, frame_id64);
+                        bytes = NULL;
+                        break;
+                    }
                 }
                 break;
             }
@@ -4106,8 +4169,15 @@ int picoquic_skip_frame(uint8_t* bytes, size_t bytes_maxsize, size_t* consumed, 
         default: {
             uint64_t frame_id64;
             if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &frame_id64)) != NULL) {
-                /* Not implemented yet! */
-                bytes = NULL;
+                switch (frame_id64) {
+                case picoquic_frame_type_ack_frequency:
+                    bytes = picoquic_skip_ack_frequency_frame(bytes, bytes_max);
+                    *pure_ack = 0;
+                    break;
+                default:
+                    /* Not implemented yet! */
+                    bytes = NULL;
+                }
             }
             break;
         }

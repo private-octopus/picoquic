@@ -107,8 +107,8 @@ int svg_packet_frame(bytestream * s, void * ptr)
 {
     svg_context_t * svg = (svg_context_t*)ptr;
 
-    uint8_t ftype = 0;
-    byteread_int8(s, &ftype);
+    uint64_t ftype = 0;
+    byteread_vint(s, &ftype);
 
     if (ftype >= picoquic_frame_type_stream_range_min &&
         ftype <= picoquic_frame_type_stream_range_max) {
@@ -116,7 +116,7 @@ int svg_packet_frame(bytestream * s, void * ptr)
         byteread_vint(s, &stream_id);
         fprintf(svg->f_txtlog, " stream[%"PRIu64"] ", stream_id);
     } else {
-        fprintf(svg->f_txtlog, " %s ", ftype2str(ftype));
+        fprintf(svg->f_txtlog, " %s ", ftype2str((picoquic_frame_type_enum_t)ftype));
     }
     return 0;
 }
