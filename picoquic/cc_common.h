@@ -22,7 +22,7 @@
 #ifndef CC_COMMON_H
 #define CC_COMMON_H
 
-#define PICOQUIC_MIN_MAX_RTT_SCOPE 5
+#define PICOQUIC_MIN_MAX_RTT_SCOPE 7
 
 typedef struct st_picoquic_min_max_rtt_t {
     uint64_t last_rtt_sample_time;

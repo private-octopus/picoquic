@@ -725,6 +725,7 @@ void picoquic_init_transport_parameters(picoquic_tp_t* tp, int client_mode)
     tp->max_ack_delay = PICOQUIC_ACK_DELAY_MAX;
     tp->enable_loss_bit = 2;
     tp->enable_one_way_delay = 0;
+    tp->min_ack_delay = PICOQUIC_ACK_DELAY_MIN;
 }
 
 
@@ -2220,7 +2221,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         }
         
         cnx->ack_frequency_sequence_local = (uint64_t)((int64_t)-1);
-        cnx->ack_frequency_packets_local = 2;
+        cnx->ack_gap_local = 2;
         cnx->ack_frequency_delay_local = PICOQUIC_ACK_DELAY_MAX_DEFAULT;
         cnx->ack_frequency_sequence_remote = (uint64_t)((int64_t)-1);
         cnx->ack_gap_remote = 2;

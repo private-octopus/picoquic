@@ -539,6 +539,10 @@ int parse_frame_test()
                     cnx->is_one_way_delay_enabled = 1;
                 }
 
+                /* Set min ack delay */
+                cnx->is_ack_frequency_negotiated = 1;
+                cnx->remote_parameters.min_ack_delay = 1000;
+
                 t_ret = picoquic_decode_frames(cnx, cnx->path[0], buffer, byte_max, test_skip_list[i].epoch, NULL, NULL, simulated_time);
 
                 if (t_ret != 0) {
