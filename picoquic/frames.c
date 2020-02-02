@@ -242,40 +242,39 @@ int picoquic_is_stream_closed(picoquic_stream_head_t* stream, int client_mode)
     return is_closed;
 }
 
+int picoquic_is_stream_acked(picoquic_stream_head_t* stream)
+{
+    int is_acked = 0;
+
+    if (stream->is_closed) {
+        if (stream->reset_sent) {
+            is_acked = 1;
+        }
+        else {
+            /* Check whether the ack was already received */
+            is_acked = picoquic_check_sack_list(&stream->first_sack_item, 0, stream->sent_offset);
+        }
+    }
+
+    return is_acked;
+}
+
 int picoquic_delete_stream_if_closed(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream)
 {
     int ret = 0;
 
-    if (!stream->is_closed && picoquic_is_stream_closed(stream, cnx->client_mode)){
+    if (!stream->is_closed && picoquic_is_stream_closed(stream, cnx->client_mode)) {
         picoquic_update_max_stream_ID_local(cnx, stream);
         stream->is_closed = 1;
-        /* We do not delete the stream, because the context is still need to control retransmissions */
         ret = 1;
+    }
+    
+    /* We only delete the stream if there are no pending retransmissions */
+    if (stream->is_closed && picoquic_is_stream_acked(stream)) {
+        picoquic_delete_stream(cnx, stream);
     }
 
     return ret;
-}
-
-void picoquic_delete_closed_streams(picoquic_cnx_t* cnx)
-{
-    picoquic_stream_head_t* stream = picoquic_first_stream(cnx);
-
-    while (stream != NULL) {
-        int is_closed = picoquic_is_stream_closed(stream, cnx->client_mode);
-
-        /* TODO: should we wait for acknowledgements from the peer that the data has been received? */
-        /* How abou waiting an RTO? */
-
-        if (is_closed) {
-            /* Delete the stream */
-            picoquic_stream_head_t* deleted_stream = stream; 
-            stream = picoquic_next_stream(stream);
-            picoquic_delete_stream(cnx, deleted_stream);
-        }
-        else {
-            stream = picoquic_next_stream(stream);
-        }
-    }
 }
 
 /* if the initial remote has changed, update the existing streams.
@@ -1590,8 +1589,6 @@ int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head_t* s
 
         if (ret == 0) {
             if (!may_close || !picoquic_delete_stream_if_closed(cnx, stream)){
-                /* remember the last stream on which data is sent so each stream is visited in turn. */
-                cnx->last_visited_stream = stream;
                 /* mark the stream as unblocked since we sent something */
                 stream->stream_data_blocked_sent = 0;
                 cnx->sent_blocked_frame = 0;
@@ -2357,7 +2354,8 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, uint8_t* bytes,
         if (ret == 0) {
             stream = picoquic_find_stream(cnx, stream_id);
             if (stream == NULL) {
-                /* the stream was destroyed. Just keep repeating, to be on the safe side. */
+                /* the stream was destroyed. That only happens if it was fully acked. */
+                *no_need_to_repeat = 1;
             }
             else {
                 if (stream->reset_sent) {
@@ -2533,6 +2531,8 @@ static int picoquic_process_ack_of_stream_frame(picoquic_cnx_t* cnx, uint8_t* by
         if (stream != NULL) {
             (void)picoquic_update_sack_list(&stream->first_sack_item,
                 offset, offset + data_length - 1);
+
+            picoquic_delete_stream_if_closed(cnx, stream);
         }
     }
 

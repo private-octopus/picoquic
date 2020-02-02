@@ -839,7 +839,6 @@ typedef struct st_picoquic_cnx_t {
     picosplay_tree_t stream_tree;
     picoquic_stream_head_t * first_output_stream;
     picoquic_stream_head_t * last_output_stream;
-    picoquic_stream_head_t * last_visited_stream;
     uint64_t high_priority_stream_id;
     uint64_t next_stream_id[4];
 
