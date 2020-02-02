@@ -1857,7 +1857,7 @@ int tls_api_very_long_with_err_test()
 
 int tls_api_very_long_congestion_test()
 {
-    return tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0, 128000, 20000, 0, 1010000, NULL, NULL);
+    return tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0, 128000, 20000, 0, 1000000, NULL, NULL);
 }
 
 int unidir_test()

@@ -2080,11 +2080,9 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, u
             old_path->retransmit_timer = 3 * rtt_estimate + old_path->max_ack_delay;
             if (old_path == cnx->path[0]) {
                 /* Only update the ack delay upon measuring the default path */
-                if (!cnx->is_ack_frequency_negotiated) {
+                cnx->is_ack_frequency_updated = cnx->is_ack_frequency_negotiated;
+                if (!cnx->is_ack_frequency_negotiated || cnx->cnx_state != picoquic_state_ready) {
                     cnx->ack_delay_remote = picoquic_compute_ack_delay_max(old_path->rtt_min);
-                }
-                else {
-                    cnx->is_ack_frequency_updated = 1;
                 }
             }
         }
@@ -2106,11 +2104,9 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, u
                 old_path->rtt_min = rtt_estimate;
 
                 if (old_path == cnx->path[0]) {
-                    if (!cnx->is_ack_frequency_negotiated) {
+                    cnx->is_ack_frequency_updated = cnx->is_ack_frequency_negotiated;
+                    if (!cnx->is_ack_frequency_negotiated || cnx->cnx_state != picoquic_state_ready) {
                         cnx->ack_delay_remote = picoquic_compute_ack_delay_max(old_path->rtt_min);
-                    }
-                    else {
-                        cnx->is_ack_frequency_updated = 1;
                     }
                 }
             }
