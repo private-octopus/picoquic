@@ -375,6 +375,14 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(no_ack_frequency)
+        {
+            int ret = no_ack_frequency_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
 		TEST_METHOD(test_tls_api_version_negotiation)
 		{
 			int ret = tls_api_version_negotiation_test();
