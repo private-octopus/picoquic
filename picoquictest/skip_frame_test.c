@@ -230,6 +230,11 @@ static uint8_t test_frame_type_handshake_done[] = {
     picoquic_frame_type_handshake_done
 };
 
+static uint8_t test_frame_type_ack_frequency[] = {
+    0x40, picoquic_frame_type_ack_frequency,
+    17, 0x0A, 0x44, 0x20
+};
+
 #define TEST_SKIP_ITEM(n, x, a, l, e) \
     {                              \
         n, x, sizeof(x), a, l, e     \
@@ -266,6 +271,7 @@ test_skip_frames_t test_skip_list[] = {
     TEST_SKIP_ITEM("datagram", test_frame_type_datagram, 1, 1, 3),
     TEST_SKIP_ITEM("datagram_l", test_frame_type_datagram_l, 1, 0, 3),
     TEST_SKIP_ITEM("handshake_done", test_frame_type_handshake_done, 0, 0, 3),
+    TEST_SKIP_ITEM("ack_frequency", test_frame_type_ack_frequency, 0, 0, 3)
 };
 
 size_t nb_test_skip_list = sizeof(test_skip_list) / sizeof(test_skip_frames_t);
@@ -532,6 +538,10 @@ int parse_frame_test()
                     buffer[0] == picoquic_frame_type_ack_ecn_1wd) {
                     cnx->is_one_way_delay_enabled = 1;
                 }
+
+                /* Set min ack delay */
+                cnx->is_ack_frequency_negotiated = 1;
+                cnx->remote_parameters.min_ack_delay = 1000;
 
                 t_ret = picoquic_decode_frames(cnx, cnx->path[0], buffer, byte_max, test_skip_list[i].epoch, NULL, NULL, simulated_time);
 

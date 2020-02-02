@@ -437,6 +437,11 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         }
     }
 
+    if (bytes != NULL && cnx->local_parameters.min_ack_delay > 0) {
+        bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_min_ack_delay,
+            cnx->local_parameters.min_ack_delay);
+    }
+
     /* Finally, update the parameters length */
     if (bytes == NULL) {
         *consumed = 0;
@@ -690,6 +695,21 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                                 cnx->remote_parameters.enable_one_way_delay = 1;
                             }
                             break;
+                        case picoquic_tp_min_ack_delay:
+                            cnx->remote_parameters.min_ack_delay = 
+                                picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
+                            /* Values of 0 and values larger that 2^24 are not expected */
+                            if (ret == 0 &&
+                                (cnx->remote_parameters.min_ack_delay == 0 ||
+                                    cnx->remote_parameters.min_ack_delay > PICOQUIC_ACK_DELAY_MIN_MAX_VALUE)) {
+                                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0);
+                            }
+                            else {
+                                if (cnx->local_parameters.max_ack_delay > 0) {
+                                    cnx->is_ack_frequency_negotiated = 1;
+                                }
+                            }
+                            break;
                         default:
                             /* ignore unknown extensions */
                             break;
@@ -761,6 +781,11 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     else if (cnx->remote_parameters.enable_one_way_delay) {
         cnx->local_parameters.enable_one_way_delay = 1;
         cnx->is_one_way_delay_enabled = 1;
+    }
+
+    /* ACK Frequency is only enabled on server if negotiated by client */
+    if (!cnx->client_mode && !cnx->is_ack_frequency_negotiated) {
+        cnx->local_parameters.min_ack_delay = 0;
     }
 
     *consumed = byte_index;

@@ -64,6 +64,7 @@ extern "C" {
 #define PICOQUIC_ACK_DELAY_MAX 10000ull /* 10 ms */
 #define PICOQUIC_ACK_DELAY_MAX_DEFAULT 25000ull /* 25 ms, per protocol spec */
 #define PICOQUIC_ACK_DELAY_MIN 1000ull /* 1 ms */
+#define PICOQUIC_ACK_DELAY_MIN_MAX_VALUE 0xFFFFFFull /* max value that can be negotiated by peers */
 #define PICOQUIC_RACK_DELAY 10000ull /* 10 ms */
 #define PICOQUIC_MAX_ACK_DELAY_MAX_MS 0x4000ull /* 2<14 ms */
 #define PICOQUIC_TOKEN_DELAY_LONG (24*60*60*1000000ull) /* 24 hours */
@@ -71,7 +72,7 @@ extern "C" {
 
 #define PICOQUIC_BANDWIDTH_ESTIMATE_MAX 10000000000ull /* 10 GB per second */
 #define PICOQUIC_BANDWIDTH_TIME_INTERVAL_MIN 1000
-#define PICOQUIC_BANDWIDTH_MEDIUM 1250000 /* 10 Mbps, threshold for coalescing 10 packets per ACK */
+#define PICOQUIC_BANDWIDTH_MEDIUM 2000000 /* 16 Mbps, threshold for coalescing 10 packets per ACK */
 
 #define PICOQUIC_SPURIOUS_RETRANSMIT_DELAY_MAX 1000000ull /* one second */
 
@@ -120,7 +121,8 @@ typedef enum {
     picoquic_frame_type_datagram = 0x30,
     picoquic_frame_type_datagram_l = 0x31,
     picoquic_frame_type_ack_1wd = 0x34,
-    picoquic_frame_type_ack_ecn_1wd = 0x35
+    picoquic_frame_type_ack_ecn_1wd = 0x35,
+    picoquic_frame_type_ack_frequency = 0xAF
 } picoquic_frame_type_enum_t;
 
 /* PMTU discovery requirement status */
@@ -302,7 +304,9 @@ typedef enum {
     picoquic_tp_test_large_chello = 3127,
     picoquic_tp_enable_loss_bit_old = 0x1055,
     picoquic_tp_enable_loss_bit = 0x1057,
-    picoquic_tp_enable_one_way_delay = 0x10DE
+    picoquic_tp_enable_one_way_delay = 0x10DE,
+    picoquic_tp_min_ack_delay = 0xDE1A
+
 } picoquic_tp_enum;
 
 /* QUIC context, defining the tables of connections,
@@ -634,7 +638,6 @@ typedef struct st_picoquic_packet_context_t {
     uint64_t time_stamp_largest_received;
     uint64_t highest_ack_sent;
     uint64_t highest_ack_sent_time;
-    uint64_t ack_delay_local;
 
     uint64_t nb_retransmit;
     uint64_t latest_retransmit_time;
@@ -729,6 +732,8 @@ typedef struct st_picoquic_cnx_t {
     unsigned int is_loss_bit_enabled_outgoing : 1; /* Insert the loss bits in outgoing packets */
     unsigned int is_one_way_delay_enabled : 1; /* Add time stamp to acks, read on incoming */
     unsigned int is_pmtud_required : 1; /* Force PMTU discovery */
+    unsigned int is_ack_frequency_negotiated : 1; /* Ack Frequency extension negotiated */
+    unsigned int is_ack_frequency_updated : 1; /* Should send an ack frequency frame asap. */
 
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;
@@ -855,6 +860,13 @@ typedef struct st_picoquic_cnx_t {
     picoquic_cnxid_stash_t * cnxid_stash_first;
     /* Management of ongoing probes */
     picoquic_probe_t * probe_first;
+    /* Management of ACK frequency */
+    uint64_t ack_frequency_sequence_local;
+    uint64_t ack_gap_local;
+    uint64_t ack_frequency_delay_local;
+    uint64_t ack_frequency_sequence_remote;
+    uint64_t ack_gap_remote;
+    uint64_t ack_delay_remote;
 } picoquic_cnx_t;
 
 /* Load the stash of retry tokens. */
@@ -950,6 +962,7 @@ size_t picoquic_varint_encode(uint8_t* bytes, size_t max_bytes, uint64_t n64);
 void picoquic_varint_encode_16(uint8_t* bytes, uint16_t n16);
 size_t picoquic_varint_decode(const uint8_t* bytes, size_t max_bytes, uint64_t* n64);
 uint8_t* picoquic_frames_varint_decode(uint8_t* bytes, const uint8_t* bytes_max, uint64_t* n64);
+uint8_t* picoquic_frames_varint_skip(uint8_t* bytes, const uint8_t* bytes_max);
 size_t picoquic_varint_skip(const uint8_t* bytes);
 
 size_t picoquic_encode_varint_length(uint64_t n64);
@@ -1086,6 +1099,10 @@ int picoquic_process_ack_of_ack_frame(
     picoquic_sack_item_t* first_sack,
     uint8_t* bytes, size_t bytes_max, size_t* consumed, int is_ecn, int has_1wd);
 
+uint64_t picoquic_compute_ack_gap(picoquic_cnx_t* cnx, uint64_t data_rate);
+
+uint64_t picoquic_compute_ack_delay_max(uint64_t rtt);
+
 void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, uint64_t send_time,
     picoquic_packet_context_t * pkt_ctx, uint64_t current_time, uint64_t ack_delay, uint64_t remote_time_stamp);
 
@@ -1164,7 +1181,11 @@ int picoquic_queue_handshake_done_frame(picoquic_cnx_t* cnx);
 int picoquic_prepare_first_datagram_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
     size_t bytes_max, size_t* consumed);
 
+uint8_t* picoquic_parse_ack_frequency_frame(uint8_t* bytes, const uint8_t* bytes_max, uint64_t* seq, uint64_t* packets, uint64_t* microsec);
+
 /* send/receive */
+
+int picoquic_prepare_ack_frequency_frame(uint8_t* bytes, size_t length_max, size_t* consumed, picoquic_cnx_t* cnx);
 
 int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_t* bytes, size_t bytes_max,
     int epoch, struct sockaddr* addr_from, struct sockaddr* addr_to, uint64_t current_time);

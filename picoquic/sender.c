@@ -2624,6 +2624,15 @@ void picoquic_ready_state_transition(picoquic_cnx_t* cnx, uint64_t current_time)
             picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
         }
     }
+
+    /* Ask for ACK frequency update, or initialize variables if not available */
+    if (cnx->is_ack_frequency_negotiated) {
+        cnx->is_ack_frequency_updated = 1;
+    }
+    else {
+        cnx->ack_gap_remote = picoquic_compute_ack_gap(cnx, cnx->path[0]->receive_rate_max);
+        cnx->ack_delay_remote = picoquic_compute_ack_delay_max(cnx->path[0]->rtt_min);
+    }
 }
 
 
@@ -2784,110 +2793,25 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
             }
 
             if (cnx->cnx_state != picoquic_state_disconnected && path_x->challenge_verified != 0) {
-                if (picoquic_is_ack_needed(cnx, current_time, next_wake_time, pc)) {
-                    ret = picoquic_prepare_ack_frame(cnx, current_time, pc, &bytes[length],
-                        send_buffer_min_max - checksum_overhead - length, &data_bytes);
-                    if (ret == 0) {
-                        length += data_bytes;
-                        if (data_bytes > 0 && !cnx->pkt_ctx[pc].ack_of_ack_requested &&
-                            length + checksum_overhead < send_buffer_min_max &&
-                            cnx->pkt_ctx[pc].highest_acknowledged + 64 < cnx->pkt_ctx[pc].send_sequence &&
-                            path_x == cnx->path[0] &&
-                            cnx->pkt_ctx[pc].highest_acknowledged_time + 2 * cnx->path[0]->smoothed_rtt < current_time) {
-                            /* Bundle a Ping with ACK, so as to get trigger an Acknowledgement */
-                            bytes[length++] = picoquic_frame_type_ping;
-                            cnx->pkt_ctx[pc].ack_of_ack_requested = 1;
-                            is_pure_ack = 0;
-                        }
-                    }
-                    else {
-                        if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
-                            *next_wake_time = current_time;
-                            SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
-                            ret = 0;
-                        }
-                    }
-                }
+                /* There are no frames yet that would be exempt from pacing control, but if there
+                 * was they should be sent here. */
 
-                /* if necessary, prepare the MAX STREAM frames */
-                if (ret == 0) {
-                    ret = picoquic_prepare_max_streams_frame_if_needed(cnx,
-                        &bytes[length], send_buffer_min_max - checksum_overhead - length, &data_bytes);
-                    if (ret == 0) {
-                        length += data_bytes;
-                        if (data_bytes > 0)
-                        {
-                            is_pure_ack = 0;
-                        }
-                    }
-                    else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
-                        *next_wake_time = current_time;
-                        ret = 0;
-                    }
-                }
-
-                /* If necessary, encode the max data frame */
-                if (ret == 0 && 2 * cnx->data_received > cnx->maxdata_local) {
-                    ret = picoquic_prepare_max_data_frame(cnx, picoquic_cc_increased_window(cnx, cnx->maxdata_local), &bytes[length],
-                        send_buffer_min_max - checksum_overhead - length, &data_bytes);
-
-                    if (ret == 0) {
-                        length += data_bytes;
-                        if (data_bytes > 0)
-                        {
-                            is_pure_ack = 0;
-                        }
-                    }
-                    else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
-                        *next_wake_time = current_time;
-                        SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
-                        ret = 0;
-                    }
-                }
-
-                /* If necessary, encode the max stream data frames */
-                if (ret == 0 && cnx->max_stream_data_needed) {
-                    ret = picoquic_prepare_required_max_stream_data_frames(cnx, &bytes[length],
-                        send_buffer_min_max - checksum_overhead - length, &data_bytes);
-
-                    if (ret == 0) {
-                        length += data_bytes;
-                        if (data_bytes > 0)
-                        {
-                            is_pure_ack = 0;
-                        }
-                    }
-                    else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
-                        *next_wake_time = current_time;
-                        SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
-                        ret = 0;
-                    }
-                }
-
-
-                if (path_x->cwin < path_x->bytes_in_transit) {
-                    cnx->cwin_blocked = 1;
-                    if (cnx->congestion_alg != NULL) {
-                        cnx->congestion_alg->alg_notify(cnx, path_x,
-                            picoquic_congestion_notification_cwin_blocked,
-                            0, 0, 0, 0, current_time);
-                    }
-                } else if (picoquic_is_sending_authorized_by_pacing(path_x, current_time, next_wake_time)) {
-                    /* Check whether PMTU discovery is required. The call will return
-                     * three values: not needed at all, optional, or required.
-                     * If required, PMTU discovery takes priority over sending data.
-                     */
-                    picoquic_pmtu_discovery_status_enum pmtu_discovery_needed = picoquic_is_mtu_probe_needed(cnx, path_x);
-
-                    /* if present, send tls data */
-                    if (tls_ready) {
-                        ret = picoquic_prepare_crypto_hs_frame(cnx, 3, &bytes[length],
+                if (picoquic_is_sending_authorized_by_pacing(path_x, current_time, next_wake_time)) {
+                    /* Send here the frames that are not exempt from the pacing control,
+                     * but are exempt for congestion control */
+                    if (picoquic_is_ack_needed(cnx, current_time, next_wake_time, pc)) {
+                        ret = picoquic_prepare_ack_frame(cnx, current_time, pc, &bytes[length],
                             send_buffer_min_max - checksum_overhead - length, &data_bytes);
-
                         if (ret == 0) {
                             length += data_bytes;
-                            if (data_bytes > 0)
-                            {
+                            if (data_bytes > 0 && !cnx->pkt_ctx[pc].ack_of_ack_requested &&
+                                length + checksum_overhead < send_buffer_min_max &&
+                                cnx->pkt_ctx[pc].highest_acknowledged + 64 < cnx->pkt_ctx[pc].send_sequence &&
+                                path_x == cnx->path[0] &&
+                                cnx->pkt_ctx[pc].highest_acknowledged_time + 2 * cnx->path[0]->smoothed_rtt < current_time) {
+                                /* Bundle a Ping with ACK, so as to get trigger an Acknowledgement */
+                                bytes[length++] = picoquic_frame_type_ping;
+                                cnx->pkt_ctx[pc].ack_of_ack_requested = 1;
                                 is_pure_ack = 0;
                             }
                         }
@@ -2900,58 +2824,82 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                         }
                     }
 
-                    if (length > header_length || pmtu_discovery_needed != picoquic_pmtu_discovery_required) {
-                        /* If present, send misc frame */
-                        while (cnx->first_misc_frame != NULL) {
-                            ret = picoquic_prepare_first_misc_frame(cnx, &bytes[length],
+                    /* if necessary, prepare the MAX STREAM frames */
+                    if (ret == 0) {
+                        ret = picoquic_prepare_max_streams_frame_if_needed(cnx,
+                            &bytes[length], send_buffer_min_max - checksum_overhead - length, &data_bytes);
+                        if (ret == 0) {
+                            length += data_bytes;
+                            if (data_bytes > 0)
+                            {
+                                is_pure_ack = 0;
+                            }
+                        }
+                        else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
+                            *next_wake_time = current_time;
+                            ret = 0;
+                        }
+                    }
+
+                    /* If necessary, encode the max data frame */
+                    if (ret == 0 && 2 * cnx->data_received > cnx->maxdata_local) {
+                        ret = picoquic_prepare_max_data_frame(cnx, picoquic_cc_increased_window(cnx, cnx->maxdata_local), &bytes[length],
+                            send_buffer_min_max - checksum_overhead - length, &data_bytes);
+
+                        if (ret == 0) {
+                            length += data_bytes;
+                            if (data_bytes > 0)
+                            {
+                                is_pure_ack = 0;
+                            }
+                        }
+                        else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
+                            *next_wake_time = current_time;
+                            SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+                            ret = 0;
+                        }
+                    }
+
+                    /* If necessary, encode the max stream data frames */
+                    if (ret == 0 && cnx->max_stream_data_needed) {
+                        ret = picoquic_prepare_required_max_stream_data_frames(cnx, &bytes[length],
+                            send_buffer_min_max - checksum_overhead - length, &data_bytes);
+
+                        if (ret == 0) {
+                            length += data_bytes;
+                            if (data_bytes > 0)
+                            {
+                                is_pure_ack = 0;
+                            }
+                        }
+                        else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
+                            *next_wake_time = current_time;
+                            SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+                            ret = 0;
+                        }
+                    }
+
+                    if (path_x->cwin < path_x->bytes_in_transit) {
+                        cnx->cwin_blocked = 1;
+                        if (cnx->congestion_alg != NULL) {
+                            cnx->congestion_alg->alg_notify(cnx, path_x,
+                                picoquic_congestion_notification_cwin_blocked,
+                                0, 0, 0, 0, current_time);
+                        }
+                    }
+                    else {
+                        /* Send here the farmes that are subject to both congestion and pacing control.
+                         * this includes the PMTU probes.
+                         * Check whether PMTU discovery is required. The call will return
+                         * three values: not needed at all, optional, or required.
+                         * If required, PMTU discovery takes priority over sending stream data.
+                         */
+                        picoquic_pmtu_discovery_status_enum pmtu_discovery_needed = picoquic_is_mtu_probe_needed(cnx, path_x);
+
+                        /* if present, send tls data */
+                        if (tls_ready) {
+                            ret = picoquic_prepare_crypto_hs_frame(cnx, 3, &bytes[length],
                                 send_buffer_min_max - checksum_overhead - length, &data_bytes);
-                            if (ret == 0) {
-                                length += data_bytes;
-                            }
-                            else {
-                                if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
-                                    *next_wake_time = current_time;
-                                    SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
-                                    ret = 0;
-                                }
-                                break;
-                            }
-                        }
-
-                        /* If there are not enough paths, create and advertise */
-                        while (ret == 0 && cnx->remote_parameters.migration_disabled == 0 &&
-                            cnx->local_parameters.migration_disabled == 0 &&
-                            cnx->nb_paths < (int)(cnx->remote_parameters.active_connection_id_limit) &&
-                            cnx->nb_paths <= PICOQUIC_NB_PATH_TARGET) {
-                            ret = picoquic_prepare_new_path_and_id(cnx, &bytes[length],
-                                send_buffer_min_max - checksum_overhead - length,
-                                current_time, &data_bytes);
-                            if (ret == 0) {
-                                length += data_bytes;
-                            }
-                            else {
-                                if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
-                                    *next_wake_time = current_time;
-                                    SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
-                                    ret = 0;
-                                }
-                                break;
-                            }
-                        }
-
-                        if (length <= header_length && cnx->first_datagram != NULL) {
-                            ret = picoquic_prepare_first_datagram_frame(cnx, &bytes[length],
-                                send_buffer_max - checksum_overhead - length, &data_bytes);
-                            if (ret == 0) {
-                                length += data_bytes;
-                            }
-                        }
-
-                        /* Encode the stream frame, or frames */
-                        while (stream != NULL && length + checksum_overhead < send_buffer_min_max) {
-                            int is_still_active = 0;
-                            ret = picoquic_prepare_stream_frame(cnx, stream, &bytes[length],
-                                send_buffer_min_max - checksum_overhead - length, &data_bytes, &is_still_active);
 
                             if (ret == 0) {
                                 length += data_bytes;
@@ -2959,64 +2907,144 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                                 {
                                     is_pure_ack = 0;
                                 }
+                            }
+                            else {
+                                if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
+                                    *next_wake_time = current_time;
+                                    SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+                                    ret = 0;
+                                }
+                            }
+                        }
 
-                                if (send_buffer_max > checksum_overhead + length + 8) {
-                                    stream = picoquic_find_ready_stream(cnx);
+                        if (length > header_length || pmtu_discovery_needed != picoquic_pmtu_discovery_required) {
+                            /* If present, send misc frame */
+                            while (cnx->first_misc_frame != NULL) {
+                                ret = picoquic_prepare_first_misc_frame(cnx, &bytes[length],
+                                    send_buffer_min_max - checksum_overhead - length, &data_bytes);
+                                if (ret == 0) {
+                                    length += data_bytes;
                                 }
                                 else {
-                                    if (is_still_active) {
-                                      *next_wake_time = current_time;
-                                      SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+                                    if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
+                                        *next_wake_time = current_time;
+                                        SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+                                        ret = 0;
                                     }
                                     break;
                                 }
                             }
-                            else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
-                                *next_wake_time = current_time;
-                                SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
-                                ret = 0;
-                                break;
-                            }
-                            else {
-                                break;
-                            }
-                        }
 
-                        if (length <= header_length) {
-                            /* Mark the bandwidth estimation as application limited */
-                            path_x->delivered_limited_index = path_x->delivered;
-                            /* Notify the peer if something is blocked */
-                            ret = picoquic_prepare_blocked_frames(cnx, &bytes[length],
-                                send_buffer_min_max - checksum_overhead - length, &data_bytes);
-                            if (ret == 0) {
-                                length += data_bytes;
-                                if (data_bytes > 0)
-                                {
-                                    is_pure_ack = 0;
+                            /* If there are not enough paths, create and advertise */
+                            while (ret == 0 && cnx->remote_parameters.migration_disabled == 0 &&
+                                cnx->local_parameters.migration_disabled == 0 &&
+                                cnx->nb_paths < (int)(cnx->remote_parameters.active_connection_id_limit) &&
+                                cnx->nb_paths <= PICOQUIC_NB_PATH_TARGET) {
+                                ret = picoquic_prepare_new_path_and_id(cnx, &bytes[length],
+                                    send_buffer_min_max - checksum_overhead - length,
+                                    current_time, &data_bytes);
+                                if (ret == 0) {
+                                    length += data_bytes;
+                                }
+                                else {
+                                    if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
+                                        *next_wake_time = current_time;
+                                        SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+                                        ret = 0;
+                                    }
+                                    break;
                                 }
                             }
-                        }
-                    }
 
-                    if (length > header_length) {
-                        if (*is_initial_sent && cnx->client_mode) {
-                            length = picoquic_pad_to_target_length(bytes, length, (uint32_t)(send_buffer_min_max - checksum_overhead));
+                            /* Start of CC controlled frames */
+
+                            if (length <= header_length && cnx->first_datagram != NULL) {
+                                ret = picoquic_prepare_first_datagram_frame(cnx, &bytes[length],
+                                    send_buffer_max - checksum_overhead - length, &data_bytes);
+                                if (ret == 0) {
+                                    length += data_bytes;
+                                }
+                            }
+
+                            if (cnx->is_ack_frequency_updated && cnx->is_ack_frequency_negotiated) {
+                                ret = picoquic_prepare_ack_frequency_frame(&bytes[length],
+                                    send_buffer_max - checksum_overhead - length, &data_bytes, cnx);
+                                if (ret == 0) {
+                                    length += data_bytes;
+                                }
+                                else {
+                                    if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
+                                        *next_wake_time = current_time;
+                                        SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+                                        ret = 0;
+                                    }
+                                }
+                            }
+
+                            /* Encode the stream frame, or frames */
+                            while (stream != NULL && length + checksum_overhead < send_buffer_min_max) {
+                                int is_still_active = 0;
+                                ret = picoquic_prepare_stream_frame(cnx, stream, &bytes[length],
+                                    send_buffer_min_max - checksum_overhead - length, &data_bytes, &is_still_active);
+
+                                if (ret == 0) {
+                                    length += data_bytes;
+                                    if (data_bytes > 0)
+                                    {
+                                        is_pure_ack = 0;
+                                    }
+
+                                    if (send_buffer_max > checksum_overhead + length + 8) {
+                                        stream = picoquic_find_ready_stream(cnx);
+                                    }
+                                    else {
+                                        if (is_still_active) {
+                                            *next_wake_time = current_time;
+                                            SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+                                        }
+                                        break;
+                                    }
+                                }
+                                else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
+                                    *next_wake_time = current_time;
+                                    SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+                                    ret = 0;
+                                    break;
+                                }
+                                else {
+                                    break;
+                                }
+                            }
+
+                            if (length <= header_length) {
+                                /* Mark the bandwidth estimation as application limited */
+                                path_x->delivered_limited_index = path_x->delivered;
+                                /* Notify the peer if something is blocked */
+                                ret = picoquic_prepare_blocked_frames(cnx, &bytes[length],
+                                    send_buffer_min_max - checksum_overhead - length, &data_bytes);
+                                if (ret == 0) {
+                                    length += data_bytes;
+                                    if (data_bytes > 0)
+                                    {
+                                        is_pure_ack = 0;
+                                    }
+                                }
+                            }
+                        } /* end of PMTU not required */
+
+                        if (ret == 0 && length <= header_length && send_buffer_max > path_x->send_mtu
+                            && path_x->cwin > path_x->bytes_in_transit&& pmtu_discovery_needed != picoquic_pmtu_discovery_not_needed) {
+                            /* Since there is no data to send, this is an opportunity to send an MTU probe */
+                            length = picoquic_prepare_mtu_probe(cnx, path_x, header_length, checksum_overhead, bytes);
+                            packet->length = length;
+                            packet->send_path = path_x;
+                            packet->is_mtu_probe = 1;
+                            path_x->mtu_probe_sent = 1;
+                            is_pure_ack = 0;
                         }
-                        else {
-                            length = picoquic_pad_to_policy(cnx, bytes, length, (uint32_t)(send_buffer_min_max - checksum_overhead));
-                        }
-                    }
-                    else if (ret == 0 && send_buffer_max > path_x->send_mtu
-                        && path_x->cwin > path_x->bytes_in_transit && pmtu_discovery_needed != picoquic_pmtu_discovery_not_needed) {
-                        length = picoquic_prepare_mtu_probe(cnx, path_x, header_length, checksum_overhead, bytes);
-                        packet->length = length;
-                        packet->send_path = path_x;
-                        packet->is_mtu_probe = 1;
-                        path_x->mtu_probe_sent = 1;
-                        is_pure_ack = 0;
-                    }
-                }
-            }
+                    } /* end of PMTU references */
+                } /* End of pacing */
+            } /* end of CC */
         }
 
         if (length <= header_length) {
@@ -3053,7 +3081,18 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
             }
         }
     }
-    
+
+    if (ret == 0 && length > header_length) {
+        /* Ensure that all packets are properly padded before being sent. */
+
+        if (*is_initial_sent && cnx->client_mode) {
+            length = picoquic_pad_to_target_length(bytes, length, (uint32_t)(send_buffer_min_max - checksum_overhead));
+        }
+        else {
+            length = picoquic_pad_to_policy(cnx, bytes, length, (uint32_t)(send_buffer_min_max - checksum_overhead));
+        }
+    }
+
     picoquic_finalize_and_protect_packet(cnx, packet,
         ret, length, header_length, checksum_overhead,
         send_length, send_buffer, send_buffer_min_max,

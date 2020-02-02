@@ -31,8 +31,6 @@
 #include "qinqserver.h"
 #include "qinqclient.h"
 
-uint8_t* picoquic_frames_varint_skip(uint8_t* bytes, const uint8_t* bytes_max);
-
 struct st_qinq_test_rh_t {
     uint64_t direction;
     uint64_t hcid;

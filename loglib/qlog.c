@@ -95,10 +95,10 @@ int qlog_packet_frame(bytestream * s, void * ptr)
 
     fprintf(f, "{ ");
 
-    uint8_t ftype = 0;
-    byteread_int8(s, &ftype);
+    uint64_t ftype = 0;
+    byteread_vint(s, &ftype);
 
-    fprintf(f, "\"frame_type\": \"%s\"", ftype2str(ftype));
+    fprintf(f, "\"frame_type\": \"%s\"", ftype2str((picoquic_frame_type_enum_t)ftype));
 
     if (ftype >= picoquic_frame_type_stream_range_min &&
         ftype <= picoquic_frame_type_stream_range_max) {

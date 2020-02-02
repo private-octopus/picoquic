@@ -942,7 +942,6 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
 
                 if (sp != NULL) {
                     if (sp->length > 0) {
-
                         *was_active |= 1;
                         memcpy(&packet->addr_from, &sp->addr_local,
                             (sp->addr_local.ss_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
@@ -1828,7 +1827,7 @@ int tls_api_one_scenario_test(test_api_stream_desc_t* scenario,
 
 int tls_api_oneway_stream_test()
 {
-    return tls_api_one_scenario_test(test_scenario_oneway, sizeof(test_scenario_oneway), 0, 0, 0, 0, 0, 70000, NULL, NULL);
+    return tls_api_one_scenario_test(test_scenario_oneway, sizeof(test_scenario_oneway), 0, 0, 0, 0, 0, 75000, NULL, NULL);
 }
 
 int tls_api_q_and_r_stream_test()
@@ -1838,7 +1837,7 @@ int tls_api_q_and_r_stream_test()
 
 int tls_api_q2_and_r2_stream_test()
 {
-    return tls_api_one_scenario_test(test_scenario_q2_and_r2, sizeof(test_scenario_q2_and_r2), 0, 0, 0, 0, 0, 80000, NULL, NULL);
+    return tls_api_one_scenario_test(test_scenario_q2_and_r2, sizeof(test_scenario_q2_and_r2), 0, 0, 0, 0, 0, 85000, NULL, NULL);
 }
 
 int tls_api_very_long_stream_test()

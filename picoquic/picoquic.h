@@ -336,6 +336,7 @@ typedef struct st_picoquic_tp_t {
     uint32_t max_datagram_size;
     int enable_loss_bit;
     int enable_one_way_delay;
+    uint64_t min_ack_delay;
 } picoquic_tp_t;
 
 /*
