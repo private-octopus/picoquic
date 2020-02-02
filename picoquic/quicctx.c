@@ -1854,12 +1854,7 @@ void picoquic_clear_stream(picoquic_stream_head_t* stream)
 
 static void picoquic_stream_node_delete(void * tree, picosplay_node_t * node)
 {
-    picoquic_cnx_t * cnx = (picoquic_cnx_t *)((char*)tree - offsetof(struct st_picoquic_cnx_t, stream_tree));
     picoquic_stream_head_t * stream = picoquic_stream_node_value(node);
-
-    if (cnx->last_visited_stream == stream) {
-        cnx->last_visited_stream = NULL;
-    }
 
     picoquic_clear_stream(stream);
 

@@ -654,6 +654,8 @@ int stream_output_test_delete(picoquic_cnx_t * cnx, uint64_t stream_id, int R_or
         if (R_or_F == 0) {
             stream->fin_requested = 1;
             stream->fin_sent = 1;
+            stream->first_sack_item.start_of_sack_range = 0;
+            stream->first_sack_item.end_of_sack_range = stream->sent_offset;
         }
         else {
             stream->reset_requested = 1;
@@ -668,7 +670,6 @@ int stream_output_test_delete(picoquic_cnx_t * cnx, uint64_t stream_id, int R_or
 
         /* Make sure the search will start at this specific stream */
         if (stream == cnx->first_output_stream && stream->next_output_stream == NULL) {
-            cnx->last_visited_stream = NULL;
             previous = NULL;
             is_last = 1;
         }
@@ -680,7 +681,6 @@ int stream_output_test_delete(picoquic_cnx_t * cnx, uint64_t stream_id, int R_or
                 }
                 previous = previous->next_output_stream;
             }
-            cnx->last_visited_stream = previous;
         }
         /* Call find ready stream to trigger deletion */
         ready_stream = picoquic_find_ready_stream(cnx);
@@ -713,8 +713,8 @@ int stream_output_test_delete(picoquic_cnx_t * cnx, uint64_t stream_id, int R_or
 
         if (ret == 0) {
             /* Verify that stream is deleted */
-            if ((stream = picoquic_find_stream(cnx, stream_id)) != NULL && !stream->is_closed) {
-                DBG_PRINTF("Stream %d not deleted\n", (int)stream_id);
+            if ((stream = picoquic_find_stream(cnx, stream_id)) != NULL ) {
+                DBG_PRINTF("Stream %d not deleted, closed: %d\n", (int)stream_id, stream->is_closed);
                 ret = -1;
             }
         }
