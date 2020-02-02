@@ -2944,6 +2944,14 @@ int picoquic_prepare_ack_frame(picoquic_cnx_t* cnx, uint64_t current_time,
     return ret;
 }
 
+void picoquic_set_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, picoquic_packet_context_enum pc)
+{
+    if (!cnx->pkt_ctx[pc].ack_needed) {
+        cnx->pkt_ctx[pc].ack_needed = 1;
+        cnx->pkt_ctx[pc].time_oldest_unack_packet_received = current_time;
+    }
+}
+
 int picoquic_is_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t * next_wake_time, picoquic_packet_context_enum pc)
 {
     int ret = 0;
@@ -2957,11 +2965,11 @@ int picoquic_is_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t 
         {
             uint64_t ack_gap = (pkt_ctx->first_sack_item.end_of_sack_range < 128) ? 2 : cnx->ack_gap_remote;
             if (pkt_ctx->highest_ack_sent + ack_gap <= pkt_ctx->first_sack_item.end_of_sack_range ||
-                pkt_ctx->highest_ack_sent_time + cnx->ack_delay_remote <= current_time) {
+                pkt_ctx->time_oldest_unack_packet_received + cnx->ack_delay_remote <= current_time) {
                 ret = 1;
             }
-            else if (pkt_ctx->highest_ack_sent_time + cnx->ack_delay_remote < *next_wake_time) {
-                *next_wake_time = pkt_ctx->highest_ack_sent_time + cnx->ack_delay_remote;
+            else if (pkt_ctx->time_oldest_unack_packet_received + cnx->ack_delay_remote < *next_wake_time) {
+                *next_wake_time = pkt_ctx->time_oldest_unack_packet_received + cnx->ack_delay_remote;
                 SET_LAST_WAKE(cnx->quic, PICOQUIC_FRAME);
             }
         }
@@ -3851,7 +3859,6 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_
     const uint8_t *bytes_max = bytes + bytes_maxsize;
     int ack_needed = 0;
     picoquic_packet_context_enum pc = picoquic_context_from_epoch(epoch);
-    picoquic_packet_context_t * pkt_ctx = &cnx->pkt_ctx[pc];
 
     while (bytes != NULL && bytes < bytes_max) {
         uint8_t first_byte = bytes[0];
@@ -4015,7 +4022,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_
 
     if (bytes != NULL && ack_needed != 0) {
         cnx->latest_progress_time = current_time;
-        pkt_ctx->ack_needed = 1;
+        picoquic_set_ack_needed(cnx, current_time, pc);
     }
 
     return bytes != NULL ? 0 : PICOQUIC_ERROR_DETECTED;
