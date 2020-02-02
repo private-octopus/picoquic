@@ -3023,16 +3023,9 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                         }
                     }
 
-                    if (length > header_length) {
-                        if (*is_initial_sent && cnx->client_mode) {
-                            length = picoquic_pad_to_target_length(bytes, length, (uint32_t)(send_buffer_min_max - checksum_overhead));
-                        }
-                        else {
-                            length = picoquic_pad_to_policy(cnx, bytes, length, (uint32_t)(send_buffer_min_max - checksum_overhead));
-                        }
-                    }
-                    else if (ret == 0 && send_buffer_max > path_x->send_mtu
-                        && path_x->cwin > path_x->bytes_in_transit && pmtu_discovery_needed != picoquic_pmtu_discovery_not_needed) {
+                    if (ret == 0 && length <= header_length && send_buffer_max > path_x->send_mtu
+                        && path_x->cwin > path_x->bytes_in_transit&& pmtu_discovery_needed != picoquic_pmtu_discovery_not_needed) {
+                        /* Since there is no data to send, this is an opportunity to send an MTU probe */
                         length = picoquic_prepare_mtu_probe(cnx, path_x, header_length, checksum_overhead, bytes);
                         packet->length = length;
                         packet->send_path = path_x;
@@ -3078,7 +3071,18 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
             }
         }
     }
-    
+
+    if (ret == 0 && length > header_length) {
+        /* Ensure that all packets are properly padded before being sent. */
+
+        if (*is_initial_sent && cnx->client_mode) {
+            length = picoquic_pad_to_target_length(bytes, length, (uint32_t)(send_buffer_min_max - checksum_overhead));
+        }
+        else {
+            length = picoquic_pad_to_policy(cnx, bytes, length, (uint32_t)(send_buffer_min_max - checksum_overhead));
+        }
+    }
+
     picoquic_finalize_and_protect_packet(cnx, packet,
         ret, length, header_length, checksum_overhead,
         send_length, send_buffer, send_buffer_min_max,
