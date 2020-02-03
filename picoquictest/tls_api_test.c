@@ -7405,3 +7405,30 @@ int blackhole_test()
 
     return ret;
 }
+
+/* Verify that the code operates correctly when the ack frequency extension is no used
+ */
+
+int no_ack_frequency_test()
+{
+    int ret = 0;
+    picoquic_tp_t client_parameters;
+    picoquic_tp_t server_parameters;
+
+    for (int i = 1; ret == 0 && i <= 3; i++) {
+        memset(&client_parameters, 0, sizeof(picoquic_tp_t));
+        memset(&server_parameters, 0, sizeof(picoquic_tp_t));
+        picoquic_init_transport_parameters(&client_parameters, 1);
+        picoquic_init_transport_parameters(&server_parameters, 0);
+
+        client_parameters.min_ack_delay = (1-(i & 1))*1000;
+        server_parameters.enable_loss_bit = (1 - ((i > 1) & 1))*1000;
+
+        ret = tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0, 128, 0, 0, 0, 2000000, &client_parameters, &server_parameters);
+        if (ret != 0) {
+            DBG_PRINTF("No min ack delay test fails for client: %d, server: %d, ret = %d", i & 1, i >> 1, ret);
+        }
+    }
+
+    return ret;
+}

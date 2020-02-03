@@ -205,6 +205,7 @@ int fast_nat_rebinding_test();
 int util_memcmp_test();
 int ddos_amplification_test();
 int blackhole_test();
+int no_ack_frequency_test();
 
 int demo_file_sanitize_test();
 int demo_file_access_test();
