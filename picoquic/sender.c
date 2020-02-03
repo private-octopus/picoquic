@@ -2021,7 +2021,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
 
                     }
 
-                    /* If stream zero packets are sent, progress the state */
+                    /* If TLS packets are sent, progress the state */
                     if (ret == 0 && tls_ready != 0 && data_bytes > 0 && 
                         cnx->tls_stream[epoch].send_queue == NULL) {
                         switch (cnx->cnx_state) {
