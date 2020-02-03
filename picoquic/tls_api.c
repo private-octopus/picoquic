@@ -33,6 +33,7 @@
 #include <openssl/err.h>
 #include <openssl/engine.h>
 #include <openssl/conf.h>
+#include <openssl/ssl.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -1146,6 +1147,12 @@ int picoquic_master_tlscontext(picoquic_quic_t* quic,
                     }
                 }
             }
+            else {
+                int ssl_ret = SSL_CTX_set_default_verify_paths(NULL);
+                if (ssl_ret != 0) {
+                    DBG_PRINTF("SSL_CTX_set_default_verify_paths returns %d", ssl_ret);
+                }
+            }
 
             ptls_openssl_init_verify_certificate(verifier, store);
             ctx->verify_certificate = &verifier->super;
@@ -1843,7 +1850,7 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
 
 #ifdef _DEBUG
             if (cnx->cnx_state < picoquic_state_ready) {
-                DBG_PRINTF("State: %d, tls input: %d, ret %x\n",
+                DBG_PRINTF("State: %d, tls input: %d, ret 0x%x\n",
                     cnx->cnx_state, epoch_data, ret);
             }
 #endif
@@ -1996,7 +2003,7 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
                     error_code = PICOQUIC_TRANSPORT_CRYPTO_ERROR(ret);
                 }
 #ifdef _DEBUG
-                DBG_PRINTF("Handshake failed, ret = %x.\n", ret);
+                DBG_PRINTF("Handshake failed, ret = 0x%x.\n", ret);
 #endif
                 (void)picoquic_connection_error(cnx, error_code, 0);
                 ret = 0;

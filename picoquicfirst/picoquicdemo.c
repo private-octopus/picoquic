@@ -516,6 +516,7 @@ int quic_client(const char* ip_address_text, int server_port,
     int is_name = 0;
     int migration_started = 0;
     int address_updated = 0;
+    int use_null_root_crt = 0;
     int64_t delay_max = 10000000;
     int64_t delta_t = 0;
     int notified_ready = 0;
@@ -525,6 +526,11 @@ int quic_client(const char* ip_address_text, int server_port,
     int is_siduck = 0;
     siduck_ctx_t* siduck_ctx = NULL;
     char const* saved_alpn = NULL;
+
+    if (root_crt != NULL && strcmp(root_crt, "-") == 0) {
+        use_null_root_crt = 1;
+        root_crt = NULL;
+    }
 
     if (alpn != NULL && strcmp(alpn, "siduck") == 0) {
         /* Set a siduck client */
@@ -537,7 +543,6 @@ int quic_client(const char* ip_address_text, int server_port,
         fprintf(stdout, "Getting ready to quack\n");
     }
     else {
-
         if (no_disk) {
             fprintf(stdout, "Files not saved to disk (-D, no_disk)\n");
         }
@@ -623,7 +628,7 @@ int quic_client(const char* ip_address_text, int server_port,
                 }
                 picoquic_set_null_verifier(qclient);
             }
-            else if (root_crt == NULL) {
+            else if (root_crt == NULL && !use_null_root_crt) {
                 /* Standard verifier would crash */
                 fprintf(stdout, "No root crt list specified, certificate will not be verified.\n");
                 if (F_log != stdout && F_log != stderr && F_log != NULL)
