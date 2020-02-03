@@ -1147,12 +1147,6 @@ int picoquic_master_tlscontext(picoquic_quic_t* quic,
                     }
                 }
             }
-            else {
-                int ssl_ret = SSL_CTX_set_default_verify_paths(NULL);
-                if (ssl_ret != 0) {
-                    DBG_PRINTF("SSL_CTX_set_default_verify_paths returns %d", ssl_ret);
-                }
-            }
 
             ptls_openssl_init_verify_certificate(verifier, store);
             ctx->verify_certificate = &verifier->super;
