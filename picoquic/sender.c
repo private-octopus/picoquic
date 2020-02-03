@@ -3819,6 +3819,55 @@ static int picoquic_prepare_alt_challenge(picoquic_cnx_t* cnx,
     return ret;
 }
 
+/*
+ * The version 1 of Quic only supports path migration, not full multipath.
+ * This code finds whether there is a path being probed that could become the
+ * default path, or that needs an immediate challenge sent or replied to.
+ *
+ * If no other path is suitable, the code returns the default path.
+ */
+
+static int picoquic_select_next_path(picoquic_cnx_t * cnx, uint64_t current_time, uint64_t * next_wake_time)
+{
+    int path_id = -1;
+    /* Select the path */
+    for (int i = 1; i < cnx->nb_paths; i++) {
+        if (cnx->path[i]->path_is_demoted) {
+            continue;
+        }
+        else if (cnx->path[i]->challenge_verified) {
+            /* TODO: selection logic if multiple paths are available! */
+            /* This path becomes the new default */
+            picoquic_promote_path_to_default(cnx, i, current_time);
+            path_id = 0;
+            break;
+        }
+        else if (path_id < 0) {
+            if (cnx->path[i]->response_required) {
+                path_id = i;
+            }
+            else if (cnx->path[i]->challenge_required) {
+                uint64_t next_challenge_time = (cnx->path[i]->challenge_time + cnx->path[i]->retransmit_timer);
+                if (cnx->path[i]->challenge_repeat_count == 0 ||
+                    current_time >= next_challenge_time) {
+                    /* will try this path, unless a validated path came in */
+                    path_id = i;
+                }
+                else if (next_challenge_time < *next_wake_time) {
+                    *next_wake_time = next_challenge_time;
+                    SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+                }
+            }
+        }
+    }
+
+    if (path_id < 0) {
+        path_id = 0;
+    }
+
+    return path_id;
+}
+
 /* Prepare next packet to send, or nothing.. */
 int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
@@ -3865,39 +3914,8 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     }
 
     if (ret == 0 && *send_length == 0) {
-        int path_id = -1;
-        /* Select the path */
-        for (int i = 1; i < cnx->nb_paths; i++) {
-            if (cnx->path[i]->path_is_demoted) {
-                continue;
-            } else if (cnx->path[i]->challenge_verified) {
-                /* TODO: selection logic if multiple paths are available! */
-                /* This path becomes the new default */
-                picoquic_promote_path_to_default(cnx, i, current_time);
-                path_id = 0;
-                break;
-            }
-            else if (path_id < 0) {
-                if (cnx->path[i]->response_required) {
-                    path_id = i;
-                } else if (cnx->path[i]->challenge_required) {
-                    uint64_t next_challenge_time = (cnx->path[i]->challenge_time + cnx->path[i]->retransmit_timer);
-                    if (cnx->path[i]->challenge_repeat_count == 0 ||
-                        current_time >= next_challenge_time) {
-                        /* will try this path, unless a validated path came in */
-                        path_id = i;
-                    }
-                    else if (next_challenge_time < next_wake_time) {
-                        next_wake_time = next_challenge_time;
-                        SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
-                    }
-                }
-            }
-        }
-
-        if (path_id < 0) {
-            path_id = 0;
-        }
+        /* Select the next path, and the corresponding addresses */
+        int path_id = picoquic_select_next_path(cnx, current_time, &next_wake_time);
 
         (void)picoquic_store_addr(&addr_to_log, (struct sockaddr *)&cnx->path[path_id]->peer_addr);
 
