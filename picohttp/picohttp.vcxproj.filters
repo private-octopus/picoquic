@@ -10,9 +10,6 @@
     <ClCompile Include="h3zero.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="http0dot9.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="siduck.c">
       <Filter>Source Files</Filter>
     </ClCompile>

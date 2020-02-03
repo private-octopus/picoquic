@@ -127,16 +127,16 @@ typedef enum {
 
 /* PMTU discovery requirement status */
 
-    typedef enum {
-        picoquic_pmtu_discovery_not_needed = 0,
-        picoquic_pmtu_discovery_optional,
-        picoquic_pmtu_discovery_required
-    } picoquic_pmtu_discovery_status_enum;
+typedef enum {
+    picoquic_pmtu_discovery_not_needed = 0,
+    picoquic_pmtu_discovery_optional,
+    picoquic_pmtu_discovery_required
+} picoquic_pmtu_discovery_status_enum;
 
-    /*
-     * Efficient range operations that assume range containing bitfields.
-     * Namely, it assumes max&min==min, min&bits==0, max&bits==bits.
-     */
+/*
+ * Efficient range operations that assume range containing bitfields.
+ * Namely, it assumes max&min==min, min&bits==0, max&bits==bits.
+ */
 #define PICOQUIC_IN_RANGE(v, min, max)                  (((v) & ~((min)^(max))) == (min))
      // Is v between min and max and has all given bits set/clear?
 #define PICOQUIC_BITS_SET_IN_RANGE(  v, min, max, bits) (((v) & ~((min)^(max)^(bits))) == ((min)^(bits)))
@@ -323,8 +323,6 @@ typedef struct st_picoquic_packet_t {
 
 picoquic_packet_t* picoquic_create_packet(picoquic_quic_t* quic);
 void picoquic_recycle_packet(picoquic_quic_t* quic, picoquic_packet_t* packet);
-
-
 
 /*
  * Definition of the session ticket store and connection token
@@ -548,8 +546,8 @@ typedef struct st_picoquic_quic_t {
 picoquic_packet_context_enum picoquic_context_from_epoch(int epoch);
 
 /*
-    * SACK dashboard item, part of connection context.
-    */
+ * SACK dashboard item, part of connection context.
+ */
 
 typedef struct st_picoquic_sack_item_t {
     struct st_picoquic_sack_item_t* next_sack;
