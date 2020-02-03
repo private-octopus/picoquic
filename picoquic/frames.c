@@ -3619,6 +3619,11 @@ uint8_t* picoquic_decode_handshake_done_frame(picoquic_cnx_t* cnx, uint8_t* byte
              * The handshake is complete, all the handshake packets are implicitly acknowledged */
             picoquic_ready_state_transition(cnx, current_time);
         }
+        else if (cnx->cnx_state < picoquic_state_client_ready_start) {
+            DBG_PRINTF("Handshake done (0x%x) not expected in state %d", bytes[0], cnx->cnx_state);
+            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, picoquic_frame_type_handshake_done);
+            bytes = NULL;
+        }
     }
     return bytes;
 }

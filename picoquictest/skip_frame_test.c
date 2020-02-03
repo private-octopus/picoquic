@@ -539,9 +539,14 @@ int parse_frame_test()
                     cnx->is_one_way_delay_enabled = 1;
                 }
 
-                /* Set min ack delay */
+                /* Set min ack delay so there is no issue with ack frequency frame */
                 cnx->is_ack_frequency_negotiated = 1;
                 cnx->remote_parameters.min_ack_delay = 1000;
+
+                /* if testing handshake done, set state to ready so frame is ignored. */
+                if (buffer[0] == picoquic_frame_type_handshake_done) {
+                    cnx->cnx_state = picoquic_state_ready;
+                }
 
                 t_ret = picoquic_decode_frames(cnx, cnx->path[0], buffer, byte_max, test_skip_list[i].epoch, NULL, NULL, simulated_time);
 
