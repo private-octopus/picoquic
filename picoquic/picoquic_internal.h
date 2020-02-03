@@ -645,6 +645,7 @@ typedef struct st_picoquic_packet_context_t {
     uint64_t highest_acknowledged;
     uint64_t latest_time_acknowledged; /* time at which the highest acknowledged was sent */
     uint64_t highest_acknowledged_time; /* time at which the highest ack was received */
+    uint64_t time_oldest_unack_packet_received; /* first packet that has not been acked yet */
     picoquic_packet_t* retransmit_newest;
     picoquic_packet_t* retransmit_oldest;
     picoquic_packet_t* retransmitted_newest;
@@ -1143,6 +1144,7 @@ int picoquic_prepare_crypto_hs_frame(picoquic_cnx_t* cnx, int epoch,
 int picoquic_prepare_ack_frame(picoquic_cnx_t* cnx, uint64_t current_time,
     picoquic_packet_context_enum pc,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
+void picoquic_set_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, picoquic_packet_context_enum pc);
 int picoquic_prepare_connection_close_frame(picoquic_cnx_t* cnx,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
 int picoquic_prepare_application_close_frame(picoquic_cnx_t* cnx,

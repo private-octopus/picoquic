@@ -872,7 +872,8 @@ void picoquic_queue_stateless_retry(picoquic_cnx_t* cnx,
 void picoquic_ignore_incoming_handshake(
     picoquic_cnx_t* cnx,
     uint8_t* bytes,
-    picoquic_packet_header* ph)
+    picoquic_packet_header* ph,
+    uint64_t current_time)
 {
     /* The data starts at ph->index, and its length
      * is ph->payload_length. */
@@ -880,7 +881,7 @@ void picoquic_ignore_incoming_handshake(
     size_t byte_index = 0;
     int ack_needed = 0;
     picoquic_packet_context_enum pc;
-    
+
     if (ph->ptype == picoquic_packet_initial) {
         pc = picoquic_packet_context_initial;
     }
@@ -908,7 +909,7 @@ void picoquic_ignore_incoming_handshake(
     /* If the packet contains ackable data, mark ack needed
      * in the relevant packet context */
     if (ret == 0 && ack_needed) {
-        cnx->pkt_ctx[pc].ack_needed = 1;
+        picoquic_set_ack_needed(cnx, current_time, pc);
     }
 }
 
@@ -1003,7 +1004,7 @@ int picoquic_incoming_client_initial(
         }
         else if ((*pcnx)->cnx_state < picoquic_state_ready) {
             /* Require an acknowledgement if the packet contains ackable frames */
-            picoquic_ignore_incoming_handshake(*pcnx, bytes, ph);
+            picoquic_ignore_incoming_handshake(*pcnx, bytes, ph, current_time);
         }
         else {
             /* Initial keys should have been discarded, treat packet as unexpected */
@@ -1183,7 +1184,7 @@ int picoquic_incoming_server_initial(
         }
         else if (cnx->cnx_state < picoquic_state_ready) {
             /* Require an acknowledgement if the packet contains ackable frames */
-            picoquic_ignore_incoming_handshake(cnx, bytes, ph);
+            picoquic_ignore_incoming_handshake(cnx, bytes, ph, current_time);
         }
         else {
             /* Initial keys should have been discarded, treat packet as unexpected */
@@ -1291,8 +1292,8 @@ int picoquic_incoming_client_handshake(
          * we need to keep it for the duration of the connection.
          * Process the incoming frames, ignore them, but 
          * require an acknowledgement if the packet contains ackable frames */
-        picoquic_ignore_incoming_handshake(cnx, bytes, ph);
-    }
+        picoquic_ignore_incoming_handshake(cnx, bytes, ph, current_time);
+    } 
     else {
         /* Not expected. Log and ignore. */
         ret = PICOQUIC_ERROR_UNEXPECTED_PACKET;
@@ -1660,7 +1661,7 @@ int picoquic_incoming_encrypted(
                         }
                     }
                     else {
-                        cnx->pkt_ctx[ph->pc].ack_needed = 1;
+                        picoquic_set_ack_needed(cnx, current_time, ph->pc);
                     }
                 }
             }
@@ -1904,7 +1905,7 @@ int picoquic_incoming_segment(
     } else if (ret == PICOQUIC_ERROR_DUPLICATE) {
         /* Bad packets are dropped silently, but duplicates should be acknowledged */
         if (cnx != NULL) {
-            cnx->pkt_ctx[ph.pc].ack_needed = 1;
+            picoquic_set_ack_needed(cnx, current_time, ph.pc);
         }
         ret = -1;
     } else if (ret == PICOQUIC_ERROR_AEAD_CHECK || ret == PICOQUIC_ERROR_INITIAL_TOO_SHORT ||

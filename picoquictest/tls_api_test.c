@@ -1837,7 +1837,7 @@ int tls_api_q_and_r_stream_test()
 
 int tls_api_q2_and_r2_stream_test()
 {
-    return tls_api_one_scenario_test(test_scenario_q2_and_r2, sizeof(test_scenario_q2_and_r2), 0, 0, 0, 0, 0, 85000, NULL, NULL);
+    return tls_api_one_scenario_test(test_scenario_q2_and_r2, sizeof(test_scenario_q2_and_r2), 0, 0, 0, 0, 0, 86000, NULL, NULL);
 }
 
 int tls_api_very_long_stream_test()
@@ -4448,12 +4448,12 @@ int rebinding_stress_test()
             uint64_t server_arrival = test_ctx->c_to_s_link->last_packet->arrival_time;
 
             if (server_arrival > last_inject_time) {
-                /* 20% chance of packet injection, 15% chances of reusing test address */
+                /* 15% chance of packet injection, 10% chances of reusing test address */
                 uint64_t rand100 = picoquic_test_uniform_random(&random_context, 100);
                 last_inject_time = server_arrival;
-                if (rand100 < 20) {
+                if (rand100 < 15) {
                     struct sockaddr * bad_address;
-                    if (rand100 < 15) {
+                    if (rand100 < 10) {
                         bad_address = (struct sockaddr *)&hack_address;
                     }
                     else {
@@ -6342,7 +6342,7 @@ int bbr_performance_test()
     uint64_t simulated_time = 0;
     uint64_t max_completion_time = 1000000;
     uint64_t latency = 10000;
-    uint64_t jitter = 5000;
+    uint64_t jitter = 3000;
     uint64_t picoseq_per_byte_100 = (1000000ull * 8) / 100;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     picoquic_congestion_algorithm_t* ccalgo = picoquic_bbr_algorithm;
@@ -6455,7 +6455,7 @@ int satellite_basic_test()
 
 int satellite_loss_test()
 {
-    return satellite_test_one(picoquic_bbr_algorithm, 10000000, 0, 1);
+    return satellite_test_one(picoquic_bbr_algorithm, 9000000, 0, 1);
 }
 
 /* Test that different CID length are properly supported */
