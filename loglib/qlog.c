@@ -162,6 +162,21 @@ int qlog_packet_frame(bytestream * s, void * ptr)
         }
         break;
     }
+    case picoquic_frame_type_ack_frequency:
+    {
+        uint64_t sequence_number = 0;
+        uint64_t packet_tolerance = 0;
+        uint64_t max_ack_delay = 0;
+        byteread_vint(s, &sequence_number);
+        fprintf(f, ", \"sequence_number\": %"PRIu64"", sequence_number);
+        byteread_vint(s, &packet_tolerance);
+        fprintf(f, ", \"packet_tolerance\": %"PRIu64"", packet_tolerance);
+        byteread_vint(s, &max_ack_delay);
+        fprintf(f, ", \"max_ack_delay\": %"PRIu64" ", max_ack_delay);
+        break;
+    }
+    default:
+        break;
     }
 
     fprintf(f, "}");
