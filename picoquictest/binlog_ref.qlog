@@ -35,4 +35,4 @@
 [0, "TRANSPORT", "PACKET_SENT", { "packet_type": "1rtt", "header": { "packet_number": "27", "packet_size": 17, "payload_length": 17, "scid": "05060708", "dcid": "01020304" }, "frames": [{ "frame_type": "datagram"}]}],
 [0, "TRANSPORT", "PACKET_SENT", { "packet_type": "1rtt", "header": { "packet_number": "28", "packet_size": 18, "payload_length": 18, "scid": "05060708", "dcid": "01020304" }, "frames": [{ "frame_type": "datagram"}]}],
 [0, "TRANSPORT", "PACKET_SENT", { "packet_type": "1rtt", "header": { "packet_number": "29", "packet_size": 1, "payload_length": 1, "scid": "05060708", "dcid": "01020304" }, "frames": [{ "frame_type": "handshake_done"}]}],
-[0, "TRANSPORT", "PACKET_SENT", { "packet_type": "1rtt", "header": { "packet_number": "30", "packet_size": 6, "payload_length": 6, "scid": "05060708", "dcid": "01020304" }, "frames": [{ "frame_type": "ack_frequency"}]}]]}]}
+[0, "TRANSPORT", "PACKET_SENT", { "packet_type": "1rtt", "header": { "packet_number": "30", "packet_size": 6, "payload_length": 6, "scid": "05060708", "dcid": "01020304" }, "frames": [{ "frame_type": "ack_frequency", "sequence_number": 17, "packet_tolerance": 10, "max_ack_delay": 1056 }]}]]}]}
