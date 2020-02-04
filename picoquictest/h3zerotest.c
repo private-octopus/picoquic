@@ -462,6 +462,52 @@ int h3zero_prepare_qpack_test()
     return ret;
 }
 
+/* Fuzz test of the qpack parser.
+ * Start from valid frames, stick several of them in a buffer,
+ * and then perform random changes in the packet.
+ * Verify that the parser does not crash or loop.
+ */
+
+int h3zero_qpack_fuzz_test()
+{
+    uint8_t* bytes = malloc(PICOQUIC_MAX_PACKET_SIZE);
+    size_t length = 0;
+    uint64_t random_context = 0x123456789ABCDEF0;
+    int ret = (bytes == NULL) ? -1 : 0;
+    int n_good = 0;
+    int n_trials = 0;
+
+    for (int i = 0; ret == 0 && i < 512; i++) {
+        size_t x = (size_t)picoquic_test_uniform_random(&random_context, nb_qpack_test_case);
+
+        memcpy(bytes, qpack_test_case[x].bytes, qpack_test_case[x].bytes_length);
+        length = qpack_test_case[x].bytes_length;
+
+        for (x = 0; x < length; x++) {
+            h3zero_header_parts_t parts;
+            uint8_t* parsed = bytes;
+            uint8_t* bytes_max = bytes + length;
+            size_t y = (size_t)picoquic_test_uniform_random(&random_context, length);
+            size_t m = (size_t)picoquic_test_uniform_random(&random_context, 8);
+            bytes[y] ^= (uint8_t)(1 << m);
+
+            while (parsed != NULL && parsed < bytes_max) {
+                /* Attempt to parse the next header.
+                 * the test succeeds if that does not cause a crash */
+                parsed = h3zero_parse_qpack_header_frame(parsed, bytes_max, &parts);
+                n_good += (parsed != NULL) ? 1 : 0;
+                n_trials++;
+            }
+        }
+    }
+    if (ret == 0) {
+        DBG_PRINTF("qpack_fuzz: %d goods out of %d trials", n_good, n_trials);
+    }
+
+    return ret;
+}
+
+
 /*
  * Test of the stream decoding filter
  */
