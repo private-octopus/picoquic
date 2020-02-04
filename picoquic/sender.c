@@ -1047,7 +1047,8 @@ static uint64_t picoquic_current_retransmit_timer(picoquic_cnx_t* cnx, picoquic_
     if (rto > PICOQUIC_MAX_RETRANSMIT_TIMER) {
         rto = PICOQUIC_MAX_RETRANSMIT_TIMER;
     }
-    else if (cnx->pkt_ctx[pc].nb_retransmit > 3 && rto < PICOQUIC_INITIAL_RETRANSMIT_TIMER) {
+    else if (cnx->cnx_state < picoquic_state_ready &&
+        cnx->pkt_ctx[pc].nb_retransmit > 3 && rto < PICOQUIC_INITIAL_RETRANSMIT_TIMER) {
         rto = PICOQUIC_INITIAL_RETRANSMIT_TIMER;
     }
 
@@ -1226,8 +1227,10 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                 continue;
             }
             else {
-                *next_wake_time = next_retransmit_time;
-                SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+                if (next_retransmit_time < *next_wake_time) {
+                    *next_wake_time = next_retransmit_time;
+                    SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+                }
                 break;
             }
         } else if (old_p->is_ack_trap){
@@ -1339,7 +1342,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                     length = 0;
                 } else {
                     if (timer_based_retransmit != 0) {
-                        if (cnx->pkt_ctx[pc].nb_retransmit > 5) {
+                        if (cnx->pkt_ctx[pc].nb_retransmit > 5 && cnx->cnx_state >= picoquic_state_ready) {
                             /*
                              * Max retransmission count was exceeded. Disconnect.
                              */
