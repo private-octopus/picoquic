@@ -254,6 +254,13 @@ static uint8_t qpack_test_post_zzz[] = {
     0x80 | 3, QPACK_TEST_HEADER_QPACK_PATH, 0xC0 | 53
 };
 
+static uint8_t qpack_status200_akamai[] = {
+    0x00, 0x00, 0xd9, 0x54, 0x84, 0x08, 0x04, 0xd0,
+    0x3f, 0x5f, 0x1d, 0x90, 0x1d, 0x75, 0xd0, 0x62,
+    0x0d, 0x26, 0x3d, 0x4c, 0x1c, 0x89, 0x2a, 0x56,
+    0x42, 0x6c, 0x28, 0xe9, 0xe3
+};
+
 static uint8_t qpack_test_string_index_html[] = { QPACK_TEST_HEADER_INDEX_HTML };
 static uint8_t qpack_test_string_slash[] = { '/' };
 static uint8_t qpack_test_string_zzz[] = { 'Z', 'Z', 'Z' };
@@ -322,6 +329,10 @@ static qpack_test_case_t qpack_test_case[] = {
     {
         qpack_test_post_zzz, sizeof(qpack_test_post_zzz),
         { h3zero_method_post, qpack_test_string_zzz, sizeof(qpack_test_string_zzz), 0, h3zero_content_type_text_plain}
+    },
+    {
+        qpack_status200_akamai, sizeof(qpack_status200_akamai),
+        { h3zero_method_none, NULL, 0, 200, h3zero_content_type_not_supported}
     }
 };
 
