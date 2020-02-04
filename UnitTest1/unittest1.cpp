@@ -1005,6 +1005,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(gbps_performance)
+        {
+            int ret = gbps_performance_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(long_rtt)
         {
             int ret = long_rtt_test();
