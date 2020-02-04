@@ -146,28 +146,6 @@ typedef enum {
     picoquic_context_server_busy = 8
 } picoquic_context_flags;
 
-/*
-* Nominal packet types. These are the packet types used internally by the
-* implementation. The wire encoding depends on the version.
-*/
-typedef enum {
-    picoquic_packet_error = 0,
-    picoquic_packet_version_negotiation,
-    picoquic_packet_initial,
-    picoquic_packet_retry,
-    picoquic_packet_handshake,
-    picoquic_packet_0rtt_protected,
-    picoquic_packet_1rtt_protected,
-    picoquic_packet_type_max
-} picoquic_packet_type_enum;
-
-typedef enum {
-    picoquic_packet_context_application = 0,
-    picoquic_packet_context_handshake = 1,
-    picoquic_packet_context_initial = 2,
-    picoquic_nb_packet_context = 3
-} picoquic_packet_context_enum;
-
 typedef enum {
     picoquic_spinbit_basic = 0, /* default spin bit behavior, as specified in spin bit draft */
     picoquic_spinbit_random = 1, /* alternative spin bit behavior, randomized for each packet */
@@ -193,87 +171,6 @@ typedef struct st_ptls_iovec_t ptls_iovec_t;
  */
 int picoquic_is_handshake_error(uint16_t error_code);
 
-/* Packet header structure.
- */
-
-typedef struct st_picoquic_packet_header_t {
-    picoquic_connection_id_t dest_cnx_id;
-    picoquic_connection_id_t srce_cnx_id;
-    uint32_t pn;
-    uint32_t vn;
-    size_t offset;
-    size_t pn_offset;
-    picoquic_packet_type_enum ptype;
-    uint64_t pnmask;
-    uint64_t pn64;
-    size_t payload_length;
-    int version_index;
-    int epoch;
-    picoquic_packet_context_enum pc;
-
-    unsigned int key_phase : 1;
-    unsigned int spin : 1;
-    unsigned int has_spin_bit : 1;
-    unsigned int has_reserved_bit_set : 1;
-    unsigned int has_loss_bits : 1;
-    unsigned int loss_bit_Q : 1;
-    unsigned int loss_bit_L : 1;
-
-    size_t token_length;
-    uint8_t* token_bytes;
-    size_t pl_val;
-} picoquic_packet_header;
-
-#define PICOQUIC_LOSS_BIT_Q_HALF_PERIOD 64
-
-/*
-* The stateless packet structure is used to temporarily store
-* stateless packets before they can be sent by servers.
-*/
-
-typedef struct st_picoquic_stateless_packet_t {
-    struct st_picoquic_stateless_packet_t* next_packet;
-    struct sockaddr_storage addr_to;
-    struct sockaddr_storage addr_local;
-    unsigned long if_index_local;
-    size_t length;
-
-    uint64_t cnxid_log64;
-    picoquic_connection_id_t initial_cid;
-
-    uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE];
-} picoquic_stateless_packet_t;
-
-/*
- * The simple packet structure is used to store packets that
- * have been sent but are not yet acknowledged.
- * Packets are stored in unencrypted format.
- * The checksum length is the difference between encrypted and unencrypted.
- */
-
-typedef struct st_picoquic_packet_t {
-    struct st_picoquic_packet_t* previous_packet;
-    struct st_picoquic_packet_t* next_packet;
-    struct st_picoquic_path_t * send_path;
-    uint64_t sequence_number;
-    uint64_t send_time;
-    uint64_t delivered_prior;
-    uint64_t delivered_time_prior;
-    uint64_t delivered_sent_prior;
-    size_t length;
-    size_t checksum_overhead;
-    size_t offset;
-    picoquic_packet_type_enum ptype;
-    picoquic_packet_context_enum pc;
-    unsigned int is_evaluated : 1;
-    unsigned int is_pure_ack : 1;
-    unsigned int contains_crypto : 1;
-    unsigned int is_mtu_probe : 1;
-    unsigned int is_ack_trap : 1;
-    unsigned int delivered_app_limited : 1;
-
-    uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE];
-} picoquic_packet_t;
 
 typedef struct st_picoquic_quic_t picoquic_quic_t;
 typedef struct st_picoquic_cnx_t picoquic_cnx_t;
@@ -296,18 +193,6 @@ typedef enum {
     picoquic_callback_request_alpn_list, /* Provide the list of supported ALPN */
     picoquic_callback_set_alpn /* Set ALPN to negotiated value */
 } picoquic_call_back_event_t;
-
-
-/* Defined in spec as:
- *  struct {
- *    opaque ipv4Address[4];
- *    uint16 ipv4Port;
- *    opaque ipv6Address[16];
- *    uint16 ipv6Port;
- *    opaque connectionId<0..18>;
- *    opaque statelessResetToken[16];
- *  } PreferredAddress;
- */
 
 typedef struct st_picoquic_tp_prefered_address_t {
     int is_defined;
@@ -635,12 +520,10 @@ int picoquic_queue_misc_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t 
 /* Send datagram frame */
 int picoquic_queue_datagram_frame(picoquic_cnx_t* cnx, size_t length, const uint8_t* bytes);
 
-/* Send and receive network packets */
-/* Handling of stateless packets */
-picoquic_stateless_packet_t* picoquic_create_stateless_packet(picoquic_quic_t* quic);
-void picoquic_queue_stateless_packet(picoquic_quic_t* quic, picoquic_stateless_packet_t* sp);
-picoquic_stateless_packet_t* picoquic_dequeue_stateless_packet(picoquic_quic_t* quic);
-void picoquic_delete_stateless_packet(picoquic_stateless_packet_t* sp);
+/* The incoming packet API is used to pass incoming packets to a 
+ * Quic context. The API handles the decryption of the packets
+ * and their processing in the context of connections.
+ */
 
 int picoquic_incoming_packet(
     picoquic_quic_t* quic,
@@ -652,16 +535,21 @@ int picoquic_incoming_packet(
     unsigned char received_ecn,
     uint64_t current_time);
 
-picoquic_packet_t* picoquic_create_packet(picoquic_quic_t * quic);
-void picoquic_recycle_packet(picoquic_quic_t * quic, picoquic_packet_t* packet);
-
-int picoquic_prepare_packet(picoquic_cnx_t* cnx,
-    uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
-    struct sockaddr_storage * p_addr_to, int * to_len, struct sockaddr_storage * p_addr_from, int * from_len);
+/* Applications must regularly poll the "next packet" API to obtain the
+ * next packet that will be set over the network. The API for that is
+ * picoquic_prepare_next_packet", which operates on a "quic context".
+ * The API "picoquic_prepare_packet" does the same but for just one
+ * connection at a time. 
+ */
 
 int picoquic_prepare_next_packet(picoquic_quic_t* quic,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
     struct sockaddr_storage* p_addr_to, int* to_len, struct sockaddr_storage* p_addr_from, int* from_len, int* if_index);
+
+int picoquic_prepare_packet(picoquic_cnx_t* cnx,
+    uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
+    struct sockaddr_storage* p_addr_to, int* to_len, struct sockaddr_storage* p_addr_from, int* from_len);
+
 
 /* Associate stream with app context */
 int picoquic_set_app_stream_ctx(picoquic_cnx_t* cnx,
@@ -741,50 +629,6 @@ uint64_t picoquic_get_next_local_stream_id(picoquic_cnx_t* cnx, int is_unidir);
 int picoquic_stop_sending(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint16_t local_stream_error);
 
-/* Congestion algorithm definition */
-typedef enum {
-    picoquic_congestion_notification_acknowledgement,
-    picoquic_congestion_notification_repeat,
-    picoquic_congestion_notification_timeout,
-    picoquic_congestion_notification_spurious_repeat,
-    picoquic_congestion_notification_rtt_measurement,
-    picoquic_congestion_notification_bw_measurement,
-    picoquic_congestion_notification_ecn_ec,
-    picoquic_congestion_notification_cwin_blocked
-} picoquic_congestion_notification_t;
-
-typedef void (*picoquic_congestion_algorithm_init)(picoquic_path_t* path_x);
-typedef void (*picoquic_congestion_algorithm_notify)(
-    picoquic_cnx_t * cnx,
-    picoquic_path_t* path_x,
-    picoquic_congestion_notification_t notification,
-    uint64_t rtt_measurement,
-    uint64_t one_way_delay,
-    uint64_t nb_bytes_acknowledged,
-    uint64_t lost_packet_number,
-    uint64_t current_time);
-typedef void (*picoquic_congestion_algorithm_delete)(picoquic_path_t* cnx);
-
-typedef struct st_picoquic_congestion_algorithm_t {
-    uint32_t congestion_algorithm_id;
-    picoquic_congestion_algorithm_init alg_init;
-    picoquic_congestion_algorithm_notify alg_notify;
-    picoquic_congestion_algorithm_delete alg_delete;
-} picoquic_congestion_algorithm_t;
-
-extern picoquic_congestion_algorithm_t* picoquic_newreno_algorithm;
-extern picoquic_congestion_algorithm_t* picoquic_cubic_algorithm;
-extern picoquic_congestion_algorithm_t* picoquic_dcubic_algorithm;
-extern picoquic_congestion_algorithm_t* picoquic_fastcc_algorithm;
-extern picoquic_congestion_algorithm_t* picoquic_bbr_algorithm;
-
-#define PICOQUIC_DEFAULT_CONGESTION_ALGORITHM picoquic_newreno_algorithm;
-
-picoquic_congestion_algorithm_t const* picoquic_get_congestion_algorithm(char const* alg_name);
-
-void picoquic_set_default_congestion_algorithm(picoquic_quic_t* quic, picoquic_congestion_algorithm_t const* algo);
-
-void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_algorithm_t const* algo);
 
 /* 
  * Set the optimistic ack policy. The holes will be inserted at random locations,
@@ -793,10 +637,6 @@ void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_
  */
 
 void picoquic_set_optimistic_ack_policy(picoquic_quic_t* quic, uint32_t sequence_hole_pseudo_period);
-
-/* For building a basic HTTP 0.9 test server */
-int http0dot9_get(uint8_t* command, size_t command_length,
-    uint8_t* response, size_t response_max, size_t* response_length);
 
 /* Enables keep alive for a connection.
  * If `interval` is `0`, it is set to `idle_timeout / 2`.

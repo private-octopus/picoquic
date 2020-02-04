@@ -366,7 +366,7 @@ void BBREnterProbeBW(picoquic_bbr_state_t* bbr_state, uint64_t current_time)
 {
     bbr_state->state = picoquic_bbr_alg_probe_bw;
     bbr_state->pacing_gain = 1.0;
-    bbr_state->cwnd_gain = 1.125;
+    bbr_state->cwnd_gain = 1.5;
     bbr_state->cycle_index = 4;  /* TODO: random_int_in_range(0, 5); */
     BBRAdvanceCyclePhase(bbr_state, current_time);
 }

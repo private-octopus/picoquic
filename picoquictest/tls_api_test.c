@@ -6208,7 +6208,7 @@ static int congestion_control_test(picoquic_congestion_algorithm_t * ccalgo, uin
         picoquic_set_cc_log(test_ctx->qserver, ".");
 
         ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
-            test_scenario_sustained, sizeof(test_scenario_sustained), 0, 0, 0, 20000, max_completion_time);
+            test_scenario_sustained, sizeof(test_scenario_sustained), 0, 0, 0, 20000 + 2*jitter, max_completion_time);
     }
 
     /* Free the resource, which will close the log file.
@@ -6366,7 +6366,7 @@ int bbr_performance_test()
         test_ctx->s_to_c_link->jitter = jitter;
 
         if (ret == 0) {
-            ret = tls_api_one_scenario_body(test_ctx, &simulated_time, test_scenario_10mb, sizeof(test_scenario_10mb), 0, 0, 0, 2 * latency, max_completion_time);
+            ret = tls_api_one_scenario_body(test_ctx, &simulated_time, test_scenario_10mb, sizeof(test_scenario_10mb), 0, 0, 0, 2 * (latency+jitter), max_completion_time);
         }
     }
 

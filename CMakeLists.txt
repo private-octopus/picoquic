@@ -74,13 +74,11 @@ set(PICOHTTP_LIBRARY_FILES
     picohttp/democlient.c
     picohttp/demoserver.c
     picohttp/h3zero.c
-    picohttp/http0dot9.c
 	picohttp/siduck.c
 )
 
 set(PICOHTTP_TEST_LIBRARY_FILES
     picoquictest/h3zerotest.c
-    picoquictest/http0dot9test.c
 )
 
 set(PICOQINQ_LIBRARY_FILES
