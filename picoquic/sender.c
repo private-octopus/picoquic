@@ -1047,7 +1047,8 @@ static uint64_t picoquic_current_retransmit_timer(picoquic_cnx_t* cnx, picoquic_
     if (rto > PICOQUIC_MAX_RETRANSMIT_TIMER) {
         rto = PICOQUIC_MAX_RETRANSMIT_TIMER;
     }
-    else if (cnx->pkt_ctx[pc].nb_retransmit > 3 && rto < PICOQUIC_INITIAL_RETRANSMIT_TIMER) {
+    else if (cnx->cnx_state < picoquic_state_ready &&
+        cnx->pkt_ctx[pc].nb_retransmit > 3 && rto < PICOQUIC_INITIAL_RETRANSMIT_TIMER) {
         rto = PICOQUIC_INITIAL_RETRANSMIT_TIMER;
     }
 
@@ -1226,8 +1227,10 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                 continue;
             }
             else {
-                *next_wake_time = next_retransmit_time;
-                SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+                if (next_retransmit_time < *next_wake_time) {
+                    *next_wake_time = next_retransmit_time;
+                    SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+                }
                 break;
             }
         } else if (old_p->is_ack_trap){
@@ -1339,7 +1342,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                     length = 0;
                 } else {
                     if (timer_based_retransmit != 0) {
-                        if (cnx->pkt_ctx[pc].nb_retransmit > 5) {
+                        if (cnx->pkt_ctx[pc].nb_retransmit > 5 && cnx->cnx_state >= picoquic_state_ready) {
                             /*
                              * Max retransmission count was exceeded. Disconnect.
                              */
@@ -3472,7 +3475,7 @@ static int picoquic_check_idle_timer(picoquic_cnx_t* cnx, uint64_t* next_wake_ti
     int ret = 0;
     uint64_t idle_timer = 0;
 
-    if (cnx->cnx_state >= picoquic_state_server_false_start) {
+    if (cnx->cnx_state >= picoquic_state_ready) {
         uint64_t rto = picoquic_current_retransmit_timer(cnx, picoquic_packet_context_application);
         idle_timer = cnx->idle_timeout;
         if (idle_timer < 3 * rto) {
@@ -3508,7 +3511,7 @@ int picoquic_prepare_segment(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoq
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
     uint64_t* next_wake_time, int* is_initial_sent)
 {
-    int ret = picoquic_check_idle_timer(cnx, next_wake_time, current_time);
+    int ret = 0;
 
     if (ret == 0){
         /* Prepare header -- depend on connection state */
@@ -3874,43 +3877,47 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     struct sockaddr_storage * p_addr_to, int * to_len, struct sockaddr_storage * p_addr_from, int * from_len)
 {
 
-    int ret = 0;
+    int ret;
     picoquic_packet_t * packet = NULL;
     struct sockaddr_storage addr_to_log;
+    int is_initial_sent = 0;
     uint64_t next_wake_time = cnx->latest_progress_time + 2*PICOQUIC_MICROSEC_SILENCE_MAX;
-    int is_initial_sent=0;
 
     SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
 
     memset(&addr_to_log, 0, sizeof(addr_to_log));
     *send_length = 0;
 
-    /* Promote successful probe */
-    picoquic_promote_successful_probe(cnx, current_time);
+    ret = picoquic_check_idle_timer(cnx, &next_wake_time, current_time);
 
-    /* Remove delete paths */
-    if (cnx->path_demotion_needed) {
-        picoquic_delete_abandoned_paths(cnx, current_time, &next_wake_time);
-    }
+    if (ret == 0) {
+        /* Promote successful probe */
+        picoquic_promote_successful_probe(cnx, current_time);
 
-    /* Check whether to insert a hole in the sequence of packets */
-    if (cnx->pkt_ctx[0].send_sequence >= cnx->pkt_ctx[0].next_sequence_hole) {
-        picoquic_insert_hole_in_send_sequence_if_needed(cnx, current_time, &next_wake_time);
-    }
+        /* Remove delete paths */
+        if (cnx->path_demotion_needed) {
+            picoquic_delete_abandoned_paths(cnx, current_time, &next_wake_time);
+        }
 
-    if (cnx->probe_first != NULL) {
-        /* Remove failed probes */
-        picoquic_delete_failed_probes(cnx);
+        /* Check whether to insert a hole in the sequence of packets */
+        if (cnx->pkt_ctx[0].send_sequence >= cnx->pkt_ctx[0].next_sequence_hole) {
+            picoquic_insert_hole_in_send_sequence_if_needed(cnx, current_time, &next_wake_time);
+        }
 
-        /* If probes are in waiting, send the first one */
-        ret = picoquic_prepare_probe(cnx, current_time, send_buffer, send_buffer_max, send_length,
-            p_addr_to, to_len, p_addr_from, from_len, &addr_to_log, &next_wake_time);
-    }
+        if (cnx->probe_first != NULL) {
+            /* Remove failed probes */
+            picoquic_delete_failed_probes(cnx);
 
-    /* If alternate challenges are waiting, send them */
-    if (ret == 0 && *send_length == 0 && cnx->alt_path_challenge_needed) {
-        ret = picoquic_prepare_alt_challenge(cnx, current_time, send_buffer, send_buffer_max, send_length,
-            p_addr_to, to_len, p_addr_from, from_len, &addr_to_log, &next_wake_time);
+            /* If probes are in waiting, send the first one */
+            ret = picoquic_prepare_probe(cnx, current_time, send_buffer, send_buffer_max, send_length,
+                p_addr_to, to_len, p_addr_from, from_len, &addr_to_log, &next_wake_time);
+        }
+
+        /* If alternate challenges are waiting, send them */
+        if (ret == 0 && *send_length == 0 && cnx->alt_path_challenge_needed) {
+            ret = picoquic_prepare_alt_challenge(cnx, current_time, send_buffer, send_buffer_max, send_length,
+                p_addr_to, to_len, p_addr_from, from_len, &addr_to_log, &next_wake_time);
+        }
     }
 
     if (ret == 0 && *send_length == 0) {

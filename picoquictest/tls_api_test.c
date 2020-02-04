@@ -7420,9 +7420,6 @@ static int blackhole_test_one(picoquic_congestion_algorithm_t* ccalgo, uint64_t 
         }
     }
 
-    /* Free the resource, which will close the log file.
-     */
-
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;
@@ -7464,3 +7461,132 @@ int no_ack_frequency_test()
 
     return ret;
 }
+
+/* Check that a connection does fail in a reasonable time after a transmission
+ * drops.
+ */
+
+static int connection_drop_test_one(picoquic_state_enum target_client_state, picoquic_state_enum target_server_state, int target_is_client)
+{
+    uint64_t simulated_time = 0;
+    uint64_t target_time = PICOQUIC_MICROSEC_HANDSHAKE_MAX;
+    const char* target_name = (target_is_client) ? "client" : "server";
+    picoquic_cnx_t* target_cnx = NULL;
+
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+
+    if (ret == 0) {
+        int nb_trials = 0;
+        int nb_inactive = 0;
+
+        while (ret == 0 && nb_trials < 1024 && nb_inactive < 512 && (!TEST_CLIENT_READY || (test_ctx->cnx_server == NULL || !TEST_SERVER_READY))) {
+            int was_active = 0;
+            nb_trials++;
+
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+
+            if (test_ctx->cnx_client->cnx_state == picoquic_state_disconnected &&
+                (test_ctx->cnx_server == NULL || test_ctx->cnx_server->cnx_state == picoquic_state_disconnected)) {
+                break;
+            }
+
+            if (test_ctx->cnx_client->cnx_state >= target_client_state ||
+                (test_ctx->cnx_server != NULL && test_ctx->cnx_server->cnx_state >= target_server_state)) {
+                break;
+            }
+        }
+    }
+
+    if (ret == 0) {
+        target_cnx = (target_is_client) ? test_ctx->cnx_client : test_ctx->cnx_server;
+
+        if (target_cnx == NULL) {
+            DBG_PRINTF("Target connection (%s) already dropped", target_name);
+            ret = -1;
+        }
+        else if (target_cnx->cnx_state >= picoquic_state_ready) {
+            DBG_PRINTF("Target connection (%s) already ready", target_name);
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        int nb_trials = 0;
+        int nb_inactive = 0;
+        int disconnected_in_time = 0;
+
+        while (ret == 0 && nb_trials < 1024 && nb_inactive < 512) {
+            struct sockaddr_storage a_from;
+            struct sockaddr_storage a_to;
+            int a_from_len;
+            int a_to_len;
+            uint8_t packet[PICOQUIC_MAX_PACKET_SIZE];
+            size_t length = 0;
+
+            if (target_cnx->next_wake_time > simulated_time) {
+                simulated_time = target_cnx->next_wake_time;
+            }
+
+            if (simulated_time > target_time + target_cnx->start_time) {
+                break;
+            }
+
+            ret = picoquic_prepare_packet(target_cnx, simulated_time, packet, PICOQUIC_MAX_PACKET_SIZE,
+                &length, &a_to, &a_to_len, &a_from, &a_from_len);
+
+            if (ret == PICOQUIC_ERROR_DISCONNECTED) {
+                ret = 0;
+            }
+
+            if (target_cnx->cnx_state == picoquic_state_disconnected) {
+                disconnected_in_time = 1;
+                break;
+            }
+        }
+
+        if (ret == 0 && !disconnected_in_time) {
+            DBG_PRINTF("Connection not disconnected after %lld microsec", simulated_time);
+            ret = -1;
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+int connection_drop_test()
+{
+    int ret = 0;
+    picoquic_state_enum target_state[11] = {
+        picoquic_state_client_init_sent,
+        picoquic_state_client_renegotiate,
+        picoquic_state_client_init_resent,
+        picoquic_state_server_init,
+        picoquic_state_server_handshake,
+        picoquic_state_client_handshake_start,
+        picoquic_state_client_handshake_progress,
+        picoquic_state_client_almost_ready,
+        picoquic_state_server_false_start,
+        picoquic_state_server_almost_ready,
+        picoquic_state_client_ready_start };
+    int target_is_client[] = {
+        1, 1, 1, 0, 0, 1, 1, 1, 0, 0, 0 };
+
+    for (int i = 0; ret == 0 && i < 11; i++) {
+        picoquic_state_enum c_state = (target_is_client[i]) ? target_state[i] : picoquic_state_ready;
+        picoquic_state_enum s_state = (target_is_client[i]) ? picoquic_state_ready : target_state[i];
+
+        ret = connection_drop_test_one(c_state, s_state, target_is_client[i]);
+        if (ret == -1) {
+            DBG_PRINTF("connection drop test %d fails", i);
+        }
+    }
+
+    return ret;
+}
+
