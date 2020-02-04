@@ -438,6 +438,9 @@ char const* picoquic_log_tp_name(uint64_t tp_number)
     case picoquic_tp_enable_one_way_delay:
         tp_name = "enable_one_way_delay";
         break;
+    case picoquic_tp_min_ack_delay:
+        tp_name = "min_ack_delay";
+        break;
     default:
         break;
     }
