@@ -48,9 +48,6 @@
     <ClCompile Include="sim_link.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="http0dot9test.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="ack_of_ack_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>

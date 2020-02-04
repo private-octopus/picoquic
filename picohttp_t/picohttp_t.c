@@ -43,7 +43,6 @@ typedef enum {
 } test_status_t;
 
 static const picoquic_test_def_t test_table[] = {
-    { "http0dot9", http0dot9_test },
     { "h3zero_integer", h3zero_integer_test },
     { "qpack_huffman", qpack_huffman_test },
     { "h3zero_parse_qpack", h3zero_parse_qpack_test },

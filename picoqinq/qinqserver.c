@@ -27,6 +27,9 @@
 #include "util.h"
 #include "picohash.h"
 #include "picoquic.h"
+
+#include "picoquic_internal.h" /* This is only requred because of the reference to stateless packet */
+
 #include "qinqproto.h"
 #include "qinqserver.h"
 
