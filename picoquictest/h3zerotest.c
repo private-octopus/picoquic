@@ -478,7 +478,7 @@ int h3zero_qpack_fuzz_test()
     int n_trials = 0;
 
     for (int i = 0; ret == 0 && i < 512; i++) {
-        size_t x = picoquic_test_uniform_random(&random_context, nb_qpack_test_case);
+        size_t x = (size_t)picoquic_test_uniform_random(&random_context, nb_qpack_test_case);
 
         memcpy(bytes, qpack_test_case[x].bytes, qpack_test_case[x].bytes_length);
         length = qpack_test_case[x].bytes_length;
@@ -487,8 +487,8 @@ int h3zero_qpack_fuzz_test()
             h3zero_header_parts_t parts;
             uint8_t* parsed = bytes;
             uint8_t* bytes_max = bytes + length;
-            size_t y = picoquic_test_uniform_random(&random_context, length);
-            size_t m = picoquic_test_uniform_random(&random_context, 8);
+            size_t y = (size_t)picoquic_test_uniform_random(&random_context, length);
+            size_t m = (size_t)picoquic_test_uniform_random(&random_context, 8);
             bytes[y] ^= (uint8_t)(1 << m);
 
             while (parsed != NULL && parsed < bytes_max) {
