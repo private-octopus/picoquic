@@ -93,6 +93,7 @@ static const picoquic_test_def_t test_table[] = {
     { "ddos_amplification", ddos_amplification_test},
     { "blackhole", blackhole_test },
     { "no_ack_frequency", no_ack_frequency_test },
+    { "connection_drop", connection_drop_test },
     { "transport_param_stream_id", transport_param_stream_id_test },
     { "stream_rank", stream_rank_test },
     { "stream_id_to_rank", stream_id_to_rank_test},
