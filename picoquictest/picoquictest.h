@@ -199,12 +199,14 @@ int bbr_test();
 int bbr_jitter_test();
 int bbr_long_test();
 int bbr_performance_test();
+int gbps_performance_test();
 int large_client_hello_test();
 int fast_nat_rebinding_test();
 int util_memcmp_test();
 int ddos_amplification_test();
 int blackhole_test();
 int no_ack_frequency_test();
+int connection_drop_test();
 
 int demo_file_sanitize_test();
 int demo_file_access_test();

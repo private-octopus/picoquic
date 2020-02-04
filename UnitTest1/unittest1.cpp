@@ -383,6 +383,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(connection_drop)
+        {
+            int ret = connection_drop_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
 		TEST_METHOD(test_tls_api_version_negotiation)
 		{
 			int ret = tls_api_version_negotiation_test();
@@ -1001,6 +1008,13 @@ namespace UnitTest1
         TEST_METHOD(bbr_performance)
         {
             int ret = bbr_performance_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(gbps_performance)
+        {
+            int ret = gbps_performance_test();
 
             Assert::AreEqual(ret, 0);
         }
