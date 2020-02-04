@@ -402,7 +402,7 @@ int picoquic_remove_header_protection(picoquic_cnx_t* cnx,
         DBG_PRINTF("PN dec not ready, type: %d, epoch: %d, pc: %d, pn: %d\n",
             ph->ptype, ph->epoch, ph->pc, (int)ph->pn);
 
-        ret = -1;
+        ret = PICOQUIC_ERROR_AEAD_NOT_READY;
     }
 
     return ret;
@@ -576,7 +576,9 @@ int picoquic_parse_header_and_decrypt(
                             ret = PICOQUIC_ERROR_STATELESS_RESET;
                         }
                         else {
-                            ret = PICOQUIC_ERROR_AEAD_CHECK;
+                            if (ret != PICOQUIC_ERROR_AEAD_NOT_READY) {
+                                ret = PICOQUIC_ERROR_AEAD_CHECK;
+                            }
                             if (*new_ctx_created) {
                                 picoquic_delete_cnx(*pcnx);
                                 *pcnx = NULL;
@@ -1731,6 +1733,28 @@ int picoquic_incoming_encrypted(
     return ret;
 }
 
+/* Procesing of packets received before they could be fully decrypted
+ */
+void picoquic_incoming_not_decrypted(
+    picoquic_cnx_t* cnx,
+    picoquic_packet_header* ph,
+    uint64_t current_time)
+{
+    if (cnx->cnx_state < picoquic_state_ready) {
+        if (cnx->path[0]->local_cnxid.id_len > 0 &&
+            picoquic_compare_connection_id(&cnx->path[0]->local_cnxid, &ph->dest_cnx_id) == 0)
+        {
+            /* verifying the destination cnx id is a strong hint that the peer is responding */
+            if (cnx->path[0]->smoothed_rtt == PICOQUIC_INITIAL_RTT
+                && cnx->path[0]->rtt_variant == 0) {
+                /* We received a first packet from the peer! */
+                picoquic_update_path_rtt(cnx, cnx->path[0], cnx->start_time,
+                    &cnx->pkt_ctx[picoquic_packet_context_initial], current_time, 0, 0);
+            }
+        }
+    }
+}
+
 /*
 * Processing of the packet that was just received from the network.
 */
@@ -1778,6 +1802,10 @@ int picoquic_incoming_segment(
         else if (picoquic_compare_connection_id(previous_dest_id, &ph.dest_cnx_id) != 0) {
             ret = PICOQUIC_ERROR_CNXID_SEGMENT;
         }
+    }
+    else if (ret == PICOQUIC_ERROR_AEAD_NOT_READY &&
+        cnx != NULL) {
+        picoquic_incoming_not_decrypted(cnx, &ph, current_time);
     }
 
     /* Log the incoming packet */
@@ -1914,14 +1942,15 @@ int picoquic_incoming_segment(
         ret == PICOQUIC_ERROR_CNXID_CHECK || 
         ret == PICOQUIC_ERROR_RETRY || ret == PICOQUIC_ERROR_DETECTED ||
         ret == PICOQUIC_ERROR_CONNECTION_DELETED ||
-        ret == PICOQUIC_ERROR_CNXID_SEGMENT) {
+        ret == PICOQUIC_ERROR_CNXID_SEGMENT ||
+        ret == PICOQUIC_ERROR_AEAD_NOT_READY) {
         /* Bad packets are dropped silently */
 
         DBG_PRINTF("Packet (%d) dropped, t: %d, e: %d, pc: %d, pn: %d, l: %d, ret : %x\n",
             (cnx == NULL) ? -1 : cnx->client_mode, ph.ptype, ph.epoch, ph.pc, (int)ph.pn, 
             length, ret);
 
-        if (ret == PICOQUIC_ERROR_AEAD_CHECK) {
+        if (ret == PICOQUIC_ERROR_AEAD_CHECK || ret == PICOQUIC_ERROR_AEAD_NOT_READY) {
             ret = 0;
         }
         else {
