@@ -6332,18 +6332,15 @@ int bbr_long_test()
     return ret;
 }
 
-/* BBR Performance test.
- * Verify that 10 MB can be downloaded in less than 1 second on a 100 mbps link.
+/* Performance test.
+ * Check a variety of challenging scenarios
  */
 
-int bbr_performance_test()
+int performance_test(uint64_t max_completion_time, uint64_t mbps, uint64_t latency, uint64_t jitter, uint64_t buffer_size)
 {
-
     uint64_t simulated_time = 0;
-    uint64_t max_completion_time = 1000000;
-    uint64_t latency = 10000;
-    uint64_t jitter = 3000;
-    uint64_t picoseq_per_byte_100 = (1000000ull * 8) / 100;
+    uint64_t picoseq_per_byte_100 = (1000000ull * 8) / mbps;
+
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     picoquic_congestion_algorithm_t* ccalgo = picoquic_bbr_algorithm;
     int ret = 0;
@@ -6358,6 +6355,8 @@ int bbr_performance_test()
         picoquic_set_default_congestion_algorithm(test_ctx->qserver, ccalgo);
         picoquic_set_congestion_algorithm(test_ctx->cnx_client, ccalgo);
 
+        picoquic_set_cc_log(test_ctx->qserver, ".");
+
         test_ctx->c_to_s_link->jitter = jitter;
         test_ctx->c_to_s_link->microsec_latency = latency;
         test_ctx->c_to_s_link->picosec_per_byte = picoseq_per_byte_100;
@@ -6366,7 +6365,7 @@ int bbr_performance_test()
         test_ctx->s_to_c_link->jitter = jitter;
 
         if (ret == 0) {
-            ret = tls_api_one_scenario_body(test_ctx, &simulated_time, test_scenario_10mb, sizeof(test_scenario_10mb), 0, 0, 0, 2 * (latency+jitter), max_completion_time);
+            ret = tls_api_one_scenario_body(test_ctx, &simulated_time, test_scenario_10mb, sizeof(test_scenario_10mb), 0, 0, 0, buffer_size, max_completion_time);
         }
     }
 
@@ -6380,6 +6379,39 @@ int bbr_performance_test()
 
     return ret;
 }
+
+/* BBR Performance test.
+ * Verify that 10 MB can be downloaded in less than 1 second on a 100 mbps link.
+ */
+
+int bbr_performance_test()
+{
+    uint64_t max_completion_time = 1000000;
+    uint64_t latency = 10000;
+    uint64_t jitter = 3000;
+    uint64_t buffer = 2 * (latency + jitter);
+    uint64_t mbps = 100;
+
+    int ret = performance_test(max_completion_time, mbps, latency, jitter, buffer);
+
+    return ret;
+}
+
+/* AWS like performance test 
+ * Verify that 10MB can be downloaded very fast on a low latency Gbps link. */
+int gbps_performance_test()
+{
+    uint64_t max_completion_time = 250000;
+    uint64_t latency = 4000;
+    uint64_t jitter = 2000;
+    uint64_t buffer = 2 * (latency + jitter);
+    uint64_t mbps = 1000;
+
+    int ret = performance_test(max_completion_time, mbps, latency, jitter, buffer);
+
+    return ret;
+}
+
 
 /* This is similar to the long rtt test, but operating at a higher speed.
  * We allow for loss simulation and jitter simulation to simulate wi-fi + satellite.
