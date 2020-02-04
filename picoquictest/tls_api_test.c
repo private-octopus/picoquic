@@ -7434,12 +7434,10 @@ int no_ack_frequency_test()
  * drops.
  */
 
-static connection_drop_test_one(picoquic_state_enum target_client_state, picoquic_state_enum target_server_state, int target_is_client)
+static int connection_drop_test_one(picoquic_state_enum target_client_state, picoquic_state_enum target_server_state, int target_is_client)
 {
-    uint64_t loss_mask = 0;
     uint64_t simulated_time = 0;
     uint64_t target_time = PICOQUIC_MICROSEC_HANDSHAKE_MAX;
-    int was_active = 0;
     const char* target_name = (target_is_client) ? "client" : "server";
     picoquic_cnx_t* target_cnx = NULL;
 
