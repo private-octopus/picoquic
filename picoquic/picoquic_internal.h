@@ -550,6 +550,7 @@ typedef struct st_picoquic_quic_t {
     int wake_line;
 
     unsigned int use_long_log : 1;
+    unsigned int dont_coalesce_init : 1; /* test option to turn of packet coalescing on server */
 } picoquic_quic_t;
 
 picoquic_packet_context_enum picoquic_context_from_epoch(int epoch);
@@ -1001,6 +1002,7 @@ typedef struct st_picoquic_cnx_t {
     uint64_t nb_bytes_queued;
     uint32_t nb_zero_rtt_sent;
     uint32_t nb_zero_rtt_acked;
+    uint32_t nb_zero_rtt_received;
     uint64_t nb_retransmission_total;
     uint64_t nb_spurious;
     unsigned int cwin_blocked : 1;

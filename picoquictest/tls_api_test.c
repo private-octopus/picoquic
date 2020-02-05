@@ -2420,7 +2420,7 @@ int session_resume_test()
 /*
  * Zero RTT test. Like the session resume test, but with a twist...
  */
-int zero_rtt_test_one(int use_badcrypt, int hardreset, unsigned int early_loss)
+int zero_rtt_test_one(int use_badcrypt, int hardreset, unsigned int early_loss, unsigned int no_coal)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -2439,6 +2439,10 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, unsigned int early_loss)
             ret = tls_api_init_ctx(&test_ctx, 
                 (i==0)?0: proposed_version, sni, alpn, &simulated_time, ticket_file_name, NULL, 0, 0,
                 (i == 0)?0:use_badcrypt);
+
+            if (ret == 0 && no_coal) {
+                test_ctx->qserver->dont_coalesce_init = 1;
+            }
 
             if (ret == 0 && hardreset != 0 && i == 1) {
                 picoquic_set_cookie_mode(test_ctx->qserver, 1);
@@ -2482,9 +2486,15 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, unsigned int early_loss)
             }
         }
 
-        if (ret == 0 && i == 0) {
-            /* Before closing, wait for the session ticket to arrive */
-            ret = session_resume_wait_for_ticket(test_ctx, &simulated_time);
+        if (ret == 0) {
+            if (i == 0) {
+                /* Before closing, wait for the session ticket to arrive */
+                ret = session_resume_wait_for_ticket(test_ctx, &simulated_time);
+            }
+            else {
+                /* Before closing, wait for all data to be acknowledged, etc. */
+                ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, 0, 1);
+            }
         }
 
         if (ret == 0) {
@@ -2508,6 +2518,12 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, unsigned int early_loss)
                     test_ctx->cnx_client->nb_zero_rtt_acked != test_ctx->cnx_client->nb_zero_rtt_sent) {
                     DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), no zero RTT acked.\n",
                         use_badcrypt, hardreset);
+                    ret = -1;
+                }
+                else if (early_loss == 0 && no_coal && test_ctx->cnx_server != NULL &&
+                        test_ctx->cnx_client->nb_zero_rtt_sent != test_ctx->cnx_server->nb_zero_rtt_received) {
+                    DBG_PRINTF("Zero RTT test sent %d 0RTT, received %d\n",
+                        test_ctx->cnx_client->nb_zero_rtt_sent, test_ctx->cnx_server->nb_zero_rtt_received);
                     ret = -1;
                 }
             } else {
@@ -2558,7 +2574,7 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, unsigned int early_loss)
 
 int zero_rtt_test()
 {
-    return zero_rtt_test_one(0, 0, 0);
+    return zero_rtt_test_one(0, 0, 0, 0);
 }
 
 /*
@@ -2576,7 +2592,7 @@ int zero_rtt_loss_test()
     int ret = 0;
 
     for (unsigned int i = 1; ret == 0 && i < 16; i++) {
-        ret = zero_rtt_test_one(0, 0, i);
+        ret = zero_rtt_test_one(0, 0, i, 0);
         if (ret != 0) {
             DBG_PRINTF("Zero RTT test fails when packet #%d is lost.\n", i);
         }
@@ -2594,7 +2610,7 @@ int zero_rtt_loss_test()
 
 int zero_rtt_spurious_test()
 {
-    return zero_rtt_test_one(1, 0, 0);
+    return zero_rtt_test_one(1, 0, 0, 0);
 }
 
 /*
@@ -2606,7 +2622,19 @@ int zero_rtt_spurious_test()
 
 int zero_rtt_retry_test()
 {
-    return zero_rtt_test_one(0, 1, 0);
+    return zero_rtt_test_one(0, 1, 0, 0);
+}
+
+/*
+* Zero RTT No Coalesced Packets test
+* Check what happens if the server does not coalesce packets.
+* We expect the client to send an ACK of the Initial packet, and if
+* zero RTT is enabled to add a padded 0-RTT packet
+*/
+
+int zero_rtt_no_coal_test()
+{
+    return zero_rtt_test_one(0, 0, 0, 1);
 }
 
 /*
@@ -7590,4 +7618,3 @@ int connection_drop_test()
 
     return ret;
 }
-
