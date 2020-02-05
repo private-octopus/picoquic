@@ -1636,7 +1636,7 @@ int picoquic_prepare_packet_0rtt(picoquic_cnx_t* cnx, picoquic_path_t * path_x, 
     picoquic_finalize_and_protect_packet(cnx, packet,
         ret, length, header_length, checksum_overhead,
         send_length, send_buffer, send_buffer_max,
-        &cnx->initial_cnxid,
+        &path_x->remote_cnxid,
         &path_x->local_cnxid,
         path_x, current_time);
 

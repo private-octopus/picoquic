@@ -2440,8 +2440,8 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, unsigned int early_loss, 
                 (i==0)?0: proposed_version, sni, alpn, &simulated_time, ticket_file_name, NULL, 0, 0,
                 (i == 0)?0:use_badcrypt);
 
-            if (ret == 0) {
-                test_ctx->qserver->dont_coalesce_init = no_coal;
+            if (ret == 0 && no_coal) {
+                test_ctx->qserver->dont_coalesce_init = 1;
             }
 
             if (ret == 0 && hardreset != 0 && i == 1) {
@@ -2515,8 +2515,7 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, unsigned int early_loss, 
                     ret = -1;
                 }
                 else if (early_loss == 0 &&
-                    test_ctx->cnx_client->nb_zero_rtt_acked + no_coal != test_ctx->cnx_client->nb_zero_rtt_sent) {
-                    /* In the no coal test, there is a second "pure padding" RTT packet that is never acked */
+                    test_ctx->cnx_client->nb_zero_rtt_acked != test_ctx->cnx_client->nb_zero_rtt_sent) {
                     DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), no zero RTT acked.\n",
                         use_badcrypt, hardreset);
                     ret = -1;
