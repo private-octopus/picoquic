@@ -3038,7 +3038,7 @@ uint8_t* picoquic_decode_connection_close_frame(picoquic_cnx_t* cnx, uint8_t* by
             picoquic_frame_type_connection_close);
     }
     else {
-        cnx->cnx_state = (cnx->cnx_state < picoquic_state_client_ready_start || cnx->crypto_context[3].aead_decrypt == NULL) ? picoquic_state_disconnected : picoquic_state_closing_received;
+        cnx->cnx_state = (cnx->cnx_state < picoquic_state_client_ready_start || cnx->crypto_context[picoquic_epoch_1rtt].aead_decrypt == NULL) ? picoquic_state_disconnected : picoquic_state_closing_received;
 
         if (cnx->callback_fn) {
             (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx, NULL);
