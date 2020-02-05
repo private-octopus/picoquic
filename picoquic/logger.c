@@ -1501,14 +1501,13 @@ void picoquic_log_outgoing_segment(void* F_log, int log_cnxid, picoquic_cnx_t* c
 {
     picoquic_cnx_t* pcnx = cnx;
     picoquic_packet_header ph;
-    size_t checksum_length = (cnx != NULL) ? picoquic_get_checksum_length(cnx, 0) : 16;
     struct sockaddr_in default_addr;
+    size_t checksum_length = 16;
     int ret;
 
     if (F_log == NULL) {
         return;
     }
-
     memset(&default_addr, 0, sizeof(struct sockaddr_in));
     default_addr.sin_family = AF_INET;
 
@@ -1519,6 +1518,15 @@ void picoquic_log_outgoing_segment(void* F_log, int log_cnxid, picoquic_cnx_t* c
     ph.pn64 = sequence_number;
     ph.pn = (uint32_t)ph.pn64;
     if (ph.ptype != picoquic_packet_retry) {
+        if (cnx != NULL) {
+            picoquic_epoch_enum epoch = (ph.ptype == picoquic_packet_1rtt_protected) ? picoquic_epoch_1rtt :
+                ((ph.ptype == picoquic_packet_0rtt_protected) ? picoquic_epoch_0rtt :
+                ((ph.ptype == picoquic_packet_handshake) ? picoquic_epoch_handshake : picoquic_epoch_initial));
+            if (cnx->crypto_context[epoch].aead_encrypt != NULL) {
+                checksum_length = picoquic_get_checksum_length(cnx, epoch);
+            }
+        }
+
         if (ph.pn_offset != 0) {
             ph.offset = ph.pn_offset + pn_length;
             ph.payload_length -= pn_length;
