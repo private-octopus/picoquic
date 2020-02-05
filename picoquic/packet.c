@@ -1348,6 +1348,7 @@ int picoquic_incoming_0rtt(
                 ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0);
             }
             else {
+                cnx->nb_zero_rtt_received++;
                 ret = picoquic_decode_frames(cnx, cnx->path[0],
                     bytes + ph->offset, ph->payload_length, ph->epoch, NULL, NULL, current_time);
             }

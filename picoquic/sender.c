@@ -3985,6 +3985,10 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
                     }
                     break;
                 }
+
+                if (cnx->quic->dont_coalesce_init) {
+                    break;
+                }
             }
         }
     }
