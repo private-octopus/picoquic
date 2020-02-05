@@ -1200,7 +1200,7 @@ size_t picoquic_predict_packet_header_length(
 void picoquic_update_payload_length(
     uint8_t* bytes, size_t pnum_index, size_t header_length, size_t packet_length);
 
-size_t picoquic_get_checksum_length(picoquic_cnx_t* cnx, int is_cleartext_mode);
+size_t picoquic_get_checksum_length(picoquic_cnx_t* cnx, picoquic_epoch_enum is_cleartext_mode);
 
 uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t pn);
 

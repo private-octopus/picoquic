@@ -1719,7 +1719,7 @@ size_t picoquic_aead_decrypt_generic(uint8_t* output, uint8_t* input, size_t inp
     size_t decrypted = 0;
 
     if (aead_ctx == NULL) {
-        decrypted = (uint64_t)(-1ll);
+        decrypted = SIZE_MAX;
     } else {
         decrypted = ptls_aead_decrypt((ptls_aead_context_t*)aead_ctx,
             (void*)output, (const void*)input, input_length, seq_num,
