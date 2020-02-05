@@ -2375,7 +2375,7 @@ picoquic_state_enum picoquic_get_cnx_state(picoquic_cnx_t* cnx)
 
 uint64_t picoquic_is_0rtt_available(picoquic_cnx_t* cnx)
 {
-    return (cnx->crypto_context[1].aead_encrypt == NULL) ? 0 : 1;
+    return (cnx->crypto_context[picoquic_epoch_0rtt].aead_encrypt == NULL) ? 0 : 1;
 }
 
 void picoquic_cnx_set_padding_policy(picoquic_cnx_t * cnx, uint32_t padding_multiple, uint32_t padding_minsize)
