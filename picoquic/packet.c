@@ -102,7 +102,7 @@ int picoquic_parse_long_packet_header(
 
                     size_t bytes_left = bytes_max - bytes;
 
-                    ph->epoch = 0;
+                    ph->epoch = picoquic_epoch_initial;
                     if (bytes == NULL || bytes_left < tok_len) {
                         /* packet is malformed */
                         ph->ptype = picoquic_packet_error;
@@ -123,17 +123,17 @@ int picoquic_parse_long_packet_header(
                 case 5: /* 0-RTT Protected */
                     ph->ptype = picoquic_packet_0rtt_protected;
                     ph->pc = picoquic_packet_context_application;
-                    ph->epoch = 1;
+                    ph->epoch = picoquic_epoch_0rtt;
                     break;
                 case 6: /* Handshake */
                     ph->ptype = picoquic_packet_handshake;
                     ph->pc = picoquic_packet_context_handshake;
-                    ph->epoch = 2;
+                    ph->epoch = picoquic_epoch_handshake;
                     break;
                 case 7: /* Retry */
                     ph->ptype = picoquic_packet_retry;
                     ph->pc = picoquic_packet_context_initial;
-                    ph->epoch = 0;
+                    ph->epoch = picoquic_epoch_initial;
                     break;
                 default: /* Not a valid packet type */
                     DBG_PRINTF("Packet type is not recognized: 0x%02x\n", flags);
@@ -233,7 +233,7 @@ int picoquic_parse_short_packet_header(
 
     if (*pcnx != NULL) {
         int has_loss_bit = (receiving && (*pcnx)->is_loss_bit_enabled_incoming) || ((!receiving && (*pcnx)->is_loss_bit_enabled_outgoing));
-        ph->epoch = 3;
+        ph->epoch = picoquic_epoch_1rtt;
         ph->version_index = (*pcnx)->version_index;
 
         if ((bytes[0] & 0x40) != 0x40) {
@@ -429,12 +429,12 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
         }
     }
 
-    if (ph->epoch == 3) {
+    if (ph->epoch == picoquic_epoch_1rtt) {
         /* Manage key rotation */
         if (ph->key_phase == cnx->key_phase_dec) {
             /* AEAD Decrypt, in place */
             decoded = picoquic_aead_decrypt_generic(bytes + ph->offset,
-                bytes + ph->offset, ph->payload_length, ph->pn64, bytes, ph->offset, cnx->crypto_context[3].aead_decrypt);
+                bytes + ph->offset, ph->payload_length, ph->pn64, bytes, ph->offset, cnx->crypto_context[picoquic_epoch_1rtt].aead_decrypt);
         }
         else if (ph->pn64 < cnx->crypto_rotation_sequence) {
             /* This packet claims to be encoded with the old key */
@@ -1276,6 +1276,10 @@ int picoquic_incoming_client_handshake(
             if (ret == 0) {
                 /* Any successful handshake packet is an explicit ack of initial packets */
                 picoquic_implicit_handshake_ack(cnx, picoquic_packet_context_initial, current_time);
+                if (picoquic_supported_versions[cnx->version_index].version != PICOQUIC_FOURTEENTH_INTEROP_VERSION &&
+                    picoquic_supported_versions[cnx->version_index].version != PICOQUIC_FIFTEENTH_INTEROP_VERSION) {
+                    picoquic_crypto_context_free(&cnx->crypto_context[picoquic_epoch_initial]);
+                }
 
                 /* If TLS data present, progress the TLS state */
                 ret = picoquic_tls_stream_process(cnx);
@@ -1698,7 +1702,8 @@ int picoquic_incoming_encrypted(
 
             if (ret == 0) {
                 /* Compute receive bandwidth */
-                cnx->path[path_id]->received += ph->offset + ph->payload_length + picoquic_get_checksum_length(cnx, 0);
+                cnx->path[path_id]->received += ph->offset + ph->payload_length + 
+                    picoquic_get_checksum_length(cnx, picoquic_epoch_1rtt);
                 if (cnx->path[path_id]->receive_rate_epoch == 0) {
                     cnx->path[path_id]->received_prior = cnx->path[path_id]->received;
                     cnx->path[path_id]->receive_rate_epoch = current_time;
