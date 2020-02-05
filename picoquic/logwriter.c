@@ -557,7 +557,7 @@ void binlog_outgoing_packet(FILE * f, picoquic_cnx_t* cnx,
 {
     picoquic_cnx_t* pcnx = cnx;
     picoquic_packet_header ph;
-    size_t checksum_length = (cnx != NULL) ? picoquic_get_checksum_length(cnx, 0) : 16;
+    size_t checksum_length = 16;
     struct sockaddr_in default_addr;
 
     const picoquic_connection_id_t * cnxid = (cnx != NULL) ? &cnx->initial_cnxid : &picoquic_null_connection_id;
@@ -568,6 +568,15 @@ void binlog_outgoing_packet(FILE * f, picoquic_cnx_t* cnx,
     picoquic_parse_packet_header((cnx == NULL) ? NULL : cnx->quic, send_buffer, send_length,
         ((cnx == NULL || cnx->path[0] == NULL) ? (struct sockaddr *)&default_addr :
         (struct sockaddr *)&cnx->path[0]->local_addr), &ph, &pcnx, 0);
+
+    if (cnx != NULL) {
+        picoquic_epoch_enum epoch = (ph.ptype == picoquic_packet_1rtt_protected) ? picoquic_epoch_1rtt :
+            ((ph.ptype == picoquic_packet_0rtt_protected) ? picoquic_epoch_0rtt :
+            ((ph.ptype == picoquic_packet_handshake) ? picoquic_epoch_handshake : picoquic_epoch_initial));
+        if (cnx->crypto_context[epoch].aead_encrypt != NULL) {
+            checksum_length = picoquic_get_checksum_length(cnx, epoch);
+        }
+    }
 
     ph.pn64 = sequence_number;
     ph.pn = (uint32_t)ph.pn64;

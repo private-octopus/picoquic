@@ -2623,8 +2623,13 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
         /* Verify first that there is no need for retransmit or ack
          * on initial or handshake context. */
 
-        length = picoquic_prepare_packet_old_context(cnx, picoquic_packet_context_initial,
-            path_x, packet, send_buffer_min_max, current_time, next_wake_time, &header_length);
+        if (cnx->crypto_context[picoquic_epoch_initial].aead_encrypt != NULL) {
+            length = picoquic_prepare_packet_old_context(cnx, picoquic_packet_context_initial,
+                path_x, packet, send_buffer_min_max, current_time, next_wake_time, &header_length);
+        }
+        else {
+            length = 0;
+        }
 
         if (length == 0) {
             length = picoquic_prepare_packet_old_context(cnx, picoquic_packet_context_handshake,
