@@ -2551,12 +2551,10 @@ void picoquic_ready_state_transition(picoquic_cnx_t* cnx, uint64_t current_time)
         if (!cnx->client_mode) {
             (void)picoquic_queue_handshake_done_frame(cnx);
         }
-#if 0
         /* Remove handshake and initial keys if they are still around */
         picoquic_crypto_context_free(&cnx->crypto_context[picoquic_epoch_initial]);
         picoquic_crypto_context_free(&cnx->crypto_context[picoquic_epoch_0rtt]);
         picoquic_crypto_context_free(&cnx->crypto_context[picoquic_epoch_handshake]);
-#endif
     }
 
     /* Start migration to server preferred address if present */
