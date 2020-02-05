@@ -1276,7 +1276,10 @@ int picoquic_incoming_client_handshake(
             if (ret == 0) {
                 /* Any successful handshake packet is an explicit ack of initial packets */
                 picoquic_implicit_handshake_ack(cnx, picoquic_packet_context_initial, current_time);
-                picoquic_crypto_context_free(&cnx->crypto_context[picoquic_epoch_initial]);
+                if (picoquic_supported_versions[cnx->version_index].version != PICOQUIC_FOURTEENTH_INTEROP_VERSION &&
+                    picoquic_supported_versions[cnx->version_index].version != PICOQUIC_FIFTEENTH_INTEROP_VERSION) {
+                    picoquic_crypto_context_free(&cnx->crypto_context[picoquic_epoch_initial]);
+                }
 
                 /* If TLS data present, progress the TLS state */
                 ret = picoquic_tls_stream_process(cnx);

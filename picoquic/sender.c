@@ -2082,7 +2082,11 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
         if (length > 0 && packet->ptype == picoquic_packet_handshake && !is_ack_only) {
             /* Sending an ack eliciting handshake packet terminates the use of the initial context */
             picoquic_implicit_handshake_ack(cnx, picoquic_packet_context_initial, current_time);
-            picoquic_crypto_context_free(&cnx->crypto_context[picoquic_epoch_initial]);
+
+            if (picoquic_supported_versions[cnx->version_index].version != PICOQUIC_FOURTEENTH_INTEROP_VERSION &&
+                picoquic_supported_versions[cnx->version_index].version != PICOQUIC_FIFTEENTH_INTEROP_VERSION) {
+                picoquic_crypto_context_free(&cnx->crypto_context[picoquic_epoch_initial]);
+            }
         }
 
         picoquic_finalize_and_protect_packet(cnx, packet,
