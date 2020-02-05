@@ -5474,7 +5474,6 @@ int false_migration_inject(picoquic_test_tls_api_ctx_t* test_ctx, int target_cli
         size_t checksum_overhead = 8;
         uint32_t header_length = 0;
         size_t length = 0;
-        int is_cleartext_mode = 0;
         picoquic_epoch_enum epoch;
         picoquic_path_t * path_x = cnx->path[0];
 
