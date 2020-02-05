@@ -53,9 +53,6 @@ extern "C" {
 #define PICOQUIC_NB_PATH_DEFAULT 2
 #define PICOQUIC_MAX_PACKETS_IN_POOL 0x8000
 
-#define PICOQUIC_NUMBER_OF_EPOCHS 4
-#define PICOQUIC_NUMBER_OF_EPOCH_OFFSETS (PICOQUIC_NUMBER_OF_EPOCHS+1)
-
 #define PICOQUIC_INITIAL_RTT 250000ull /* 250 ms */
 #define PICOQUIC_TARGET_RENO_RTT 100000ull /* 100 ms */
 #define PICOQUIC_INITIAL_RETRANSMIT_TIMER 1000000ull /* one second */
@@ -187,6 +184,19 @@ extern const size_t picoquic_nb_supported_versions;
 
 int picoquic_get_version_index(uint32_t proposed_version);
 
+/* Quic defines 4 epochs, which are used for managing the
+ * crypto contexts
+ */
+#define PICOQUIC_NUMBER_OF_EPOCHS 4
+#define PICOQUIC_NUMBER_OF_EPOCH_OFFSETS (PICOQUIC_NUMBER_OF_EPOCHS+1)
+
+typedef enum {
+    picoquic_epoch_initial = 0,
+    picoquic_epoch_0rtt = 1,
+    picoquic_epoch_handshake = 2,
+    picoquic_epoch_1rtt = 3
+} picoquic_epoch_enum;
+
 /*
 * Nominal packet types. These are the packet types used internally by the
 * implementation. The wire encoding depends on the version.
@@ -226,7 +236,7 @@ typedef struct st_picoquic_packet_header_t {
     uint64_t pn64;
     size_t payload_length;
     int version_index;
-    int epoch;
+    picoquic_epoch_enum epoch;
     picoquic_packet_context_enum pc;
 
     unsigned int key_phase : 1;
@@ -241,7 +251,6 @@ typedef struct st_picoquic_packet_header_t {
     uint8_t* token_bytes;
     size_t pl_val;
 } picoquic_packet_header;
-
 
 /* There are two loss bits in the packet header. On is used
  * to report errors, the other to build an observable square
@@ -1193,7 +1202,7 @@ size_t picoquic_predict_packet_header_length(
 void picoquic_update_payload_length(
     uint8_t* bytes, size_t pnum_index, size_t header_length, size_t packet_length);
 
-size_t picoquic_get_checksum_length(picoquic_cnx_t* cnx, int is_cleartext_mode);
+size_t picoquic_get_checksum_length(picoquic_cnx_t* cnx, picoquic_epoch_enum is_cleartext_mode);
 
 uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t pn);
 

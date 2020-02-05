@@ -296,7 +296,7 @@ static int test_api_stream0_prepare(picoquic_cnx_t* cnx, picoquic_test_tls_api_c
 }
 
 static int tls_api_inject_packet(picoquic_test_tls_api_ctx_t* test_ctx, int from_client,
-    int epoch, const uint8_t* payload, size_t p_length, int path_id, uint64_t current_time)
+    picoquic_epoch_enum epoch, const uint8_t* payload, size_t p_length, int path_id, uint64_t current_time)
 {
     int ret = 0;
     /* Identify the connection */
@@ -320,7 +320,7 @@ static int tls_api_inject_packet(picoquic_test_tls_api_ctx_t* test_ctx, int from
         picoquic_packet_context_enum pc;
         size_t length = 0;
         size_t header_length;
-        size_t checksum_overhead = picoquic_get_checksum_length(cnx, (epoch == 0 || epoch == 2));
+        size_t checksum_overhead = picoquic_get_checksum_length(cnx, epoch);
         switch (epoch) {
         case 0:
             packet_type = picoquic_packet_initial;
@@ -5503,21 +5503,22 @@ int false_migration_inject(picoquic_test_tls_api_ctx_t* test_ctx, int target_cli
         size_t checksum_overhead = 8;
         uint32_t header_length = 0;
         size_t length = 0;
-        int is_cleartext_mode = 0;
+        picoquic_epoch_enum epoch;
         picoquic_path_t * path_x = cnx->path[0];
 
         switch (false_pc) {
         case picoquic_packet_context_application:
             packet->ptype = picoquic_packet_1rtt_protected;
+            epoch = picoquic_epoch_1rtt;
             break;
         case picoquic_packet_context_handshake:
             packet->ptype = picoquic_packet_handshake;
-            is_cleartext_mode = 1;
+            epoch = picoquic_epoch_handshake;
             break;
         case picoquic_packet_context_initial:
         default:
             packet->ptype = picoquic_packet_initial;
-            is_cleartext_mode = 1;
+            epoch = picoquic_epoch_initial;
             break;
         }
 
@@ -5530,7 +5531,7 @@ int false_migration_inject(picoquic_test_tls_api_ctx_t* test_ctx, int target_cli
         false_address.sin_port += 1234;
 
 
-        checksum_overhead = picoquic_get_checksum_length(cnx, is_cleartext_mode);
+        checksum_overhead = picoquic_get_checksum_length(cnx, epoch);
         packet->checksum_overhead = checksum_overhead;
         packet->pc = false_pc;
         length = checksum_overhead + 32;
