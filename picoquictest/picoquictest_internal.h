@@ -228,6 +228,12 @@ double picoquic_test_gauss_random(uint64_t* random_context); /* random gaussian 
 int picoquic_get_test_address(const char* ip_address_text, int server_port,
     struct sockaddr_storage* server_address);
 
+int tls_api_one_scenario_test(test_api_stream_desc_t* scenario,
+    size_t sizeof_scenario, size_t stream0_target,
+    uint64_t init_loss_mask, uint64_t max_data, uint64_t queue_delay_max,
+    uint32_t proposed_version, uint64_t max_completion_microsec,
+    picoquic_tp_t* client_params, picoquic_tp_t* server_params);
+
 uint64_t demo_server_test_time_from_esni_rr(char const* esni_rr_file);
 
 #ifdef __cplusplus

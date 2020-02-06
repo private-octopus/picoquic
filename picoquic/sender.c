@@ -1044,13 +1044,17 @@ void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet_t
 
 static uint64_t picoquic_current_retransmit_timer(picoquic_cnx_t* cnx, picoquic_packet_context_enum pc)
 {
-    uint64_t rto = cnx->path[0]->retransmit_timer << cnx->pkt_ctx[pc].nb_retransmit;
-    if (rto > PICOQUIC_MAX_RETRANSMIT_TIMER) {
-        rto = PICOQUIC_MAX_RETRANSMIT_TIMER;
-    }
-    else if (cnx->cnx_state < picoquic_state_ready &&
-        cnx->pkt_ctx[pc].nb_retransmit > 3 && rto < PICOQUIC_INITIAL_RETRANSMIT_TIMER) {
-        rto = PICOQUIC_INITIAL_RETRANSMIT_TIMER;
+    uint64_t rto = cnx->path[0]->retransmit_timer;
+    
+    if (rto != PICOQUIC_INITIAL_RETRANSMIT_TIMER) {
+        rto <<= cnx->pkt_ctx[pc].nb_retransmit;
+        if (rto > PICOQUIC_MAX_RETRANSMIT_TIMER) {
+            rto = PICOQUIC_MAX_RETRANSMIT_TIMER;
+        }
+        else if (cnx->cnx_state < picoquic_state_ready &&
+            cnx->pkt_ctx[pc].nb_retransmit > 6 && rto < PICOQUIC_INITIAL_RETRANSMIT_TIMER) {
+            rto = PICOQUIC_INITIAL_RETRANSMIT_TIMER;
+        }
     }
 
     return rto;
@@ -1355,7 +1359,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                     length = 0;
                 } else {
                     if (timer_based_retransmit != 0) {
-                        if (cnx->pkt_ctx[pc].nb_retransmit > 5 && cnx->cnx_state >= picoquic_state_ready) {
+                        if (cnx->pkt_ctx[pc].nb_retransmit > 7 && cnx->cnx_state >= picoquic_state_ready) {
                             /*
                              * Max retransmission count was exceeded. Disconnect.
                              */
@@ -1899,7 +1903,8 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
         *is_initial_sent |= (length > 0);
     }
 
-    if (ret == 0 && epoch > picoquic_epoch_0rtt && length == 0) {
+    if (ret == 0 && epoch > picoquic_epoch_0rtt && length == 0 &&
+        cnx->crypto_context[picoquic_epoch_0rtt].aead_encrypt != NULL) {
         length = picoquic_prepare_packet_old_context(cnx, picoquic_packet_context_application,
             path_x, packet, send_buffer_max, current_time, next_wake_time, &header_length);
     }
