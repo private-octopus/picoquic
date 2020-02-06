@@ -2667,7 +2667,6 @@ int zero_rtt_no_coal_test()
 
 int zero_rtt_many_losses_test()
 {
-    uint64_t loss_mask = 0;
     int ret = 0;
     uint64_t random_context = 0x1055ca45c001babaull;
 
