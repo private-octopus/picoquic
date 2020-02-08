@@ -23,7 +23,7 @@
 #include <string.h>
 
 #include "picoquic_internal.h"
-#include "util.h"
+#include "picoquic_utils.h"
 #include "tls_api.h"
 #include "picoquictest_internal.h"
 

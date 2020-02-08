@@ -22,7 +22,7 @@
 #include "getopt.h"
 #endif
 #include "picoquic.h"
-#include "util.h"
+#include "picoquic_utils.h"
 #include "picoquictest.h"
 #include <stdio.h>
 #include <string.h>
@@ -147,6 +147,8 @@ static const picoquic_test_def_t test_table[] = {
     { "pn_vector", cleartext_pn_vector_test },
     { "zero_rtt_spurious", zero_rtt_spurious_test },
     { "zero_rtt_retry", zero_rtt_retry_test },
+    { "zero_rtt_no_coal", zero_rtt_no_coal_test },
+    { "zero_rtt_many_losses", zero_rtt_many_losses_test },
     { "random_tester", random_tester_test},
     { "random_gauss", random_gauss_test},
     { "random_public_tester", random_public_tester_test},

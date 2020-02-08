@@ -26,7 +26,7 @@
 extern "C" {
 #endif
 
-/* From picoquic/util.h */
+/* From picoquic/picoquic_utils.h */
 void debug_printf_suspend();
 
 /* Setting the solution dir when not executing from default location */
@@ -118,6 +118,8 @@ int packet_enc_dec_test();
 int cleartext_pn_vector_test();
 int zero_rtt_spurious_test();
 int zero_rtt_retry_test();
+int zero_rtt_no_coal_test();
+int zero_rtt_many_losses_test();
 int parse_frame_test();
 int stress_test();
 int splay_test();

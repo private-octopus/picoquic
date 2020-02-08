@@ -36,7 +36,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
-#include "util.h"
+#include "picoquic_utils.h"
 
 /* clang-format on */
 

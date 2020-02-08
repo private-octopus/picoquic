@@ -20,7 +20,7 @@
 */
 
 #include "picosocks.h"
-#include "util.h"
+#include "picoquic_utils.h"
 
 int picoquic_bind_to_port(SOCKET_TYPE fd, int af, int port)
 {

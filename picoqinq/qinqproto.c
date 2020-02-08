@@ -21,7 +21,7 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include "util.h"
+#include "picoquic_utils.h"
 #include "qinqproto.h"
 
 uint8_t* picoquic_frames_fixed_skip(uint8_t* bytes, const uint8_t* bytes_max, size_t size);

@@ -20,7 +20,7 @@
 */
 
 #include "picoquic_internal.h"
-#include "util.h"
+#include "picoquic_utils.h"
 #include "tls_api.h"
 #include "picoquictest_internal.h"
 #ifdef _WINDOWS
@@ -1509,11 +1509,14 @@ int tls_api_loss_test(uint64_t mask)
     return tls_api_test_with_loss(&loss_mask, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN);
 }
 
+/* Test that connection establishment succeeds in presence of many losses */
 int tls_api_many_losses()
 {
     uint64_t loss_mask = 0;
     int ret = 0;
+    uint64_t random_context = 0x1055ca45c001babaull;
 
+    /* We first test with a set of preprogrammed masks, checking consecutive drops */
     for (int i = 0; ret == 0 && i < 6; i++) {
         for (int j = 0; ret == 0 && j < 4; j++) {
             uint64_t j_mask = ~(UINT64_MAX << j);
@@ -1529,6 +1532,25 @@ int tls_api_many_losses()
             if (ret != 0) {
                 DBG_PRINTF("Handshake fails for mask %d, %d = %llx", i, j,  (unsigned long long)loss_mask);
             }
+        }
+    }
+
+    /* Then we verify that we can establish 50 connections with packet drop rate=30% */
+    for (int i = 0; ret == 0 &&  i < 50; i++)
+    {
+        uint64_t loss_mask = 0;
+        for (int j = 0; j < 64; j++)
+        {
+            loss_mask <<= 1;
+
+            if (picoquic_test_uniform_random(&random_context, 1000) < 300) {
+                loss_mask |= 1;
+            }
+        }
+
+        ret = tls_api_one_scenario_test(test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0, loss_mask, 128000, 0, 0, 0, NULL, NULL);
+        if (ret != 0) {
+            DBG_PRINTF("Handshake fails for random mask %d, mask = %llx", i, (unsigned long long)loss_mask);
         }
     }
 
@@ -2420,7 +2442,7 @@ int session_resume_test()
 /*
  * Zero RTT test. Like the session resume test, but with a twist...
  */
-int zero_rtt_test_one(int use_badcrypt, int hardreset, unsigned int early_loss)
+int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss, unsigned int no_coal)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -2440,6 +2462,10 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, unsigned int early_loss)
                 (i==0)?0: proposed_version, sni, alpn, &simulated_time, ticket_file_name, NULL, 0, 0,
                 (i == 0)?0:use_badcrypt);
 
+            if (ret == 0 && no_coal) {
+                test_ctx->qserver->dont_coalesce_init = 1;
+            }
+
             if (ret == 0 && hardreset != 0 && i == 1) {
                 picoquic_set_cookie_mode(test_ctx->qserver, 1);
             }
@@ -2448,14 +2474,14 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, unsigned int early_loss)
         if (ret == 0 && i == 1) {
             uint8_t test_data[8] = { 't', 'e', 's', 't', '0', 'r', 't', 't' };
             /* set the link delays to 100 ms, for realistic testing */
-            test_ctx->c_to_s_link->microsec_latency = 100000ull;
-            test_ctx->s_to_c_link->microsec_latency = 100000ull;
+            test_ctx->c_to_s_link->microsec_latency = 50000ull;
+            test_ctx->s_to_c_link->microsec_latency = 50000ull;
 
             /* Queue an initial frame on the client connection */
             (void)picoquic_add_to_stream(test_ctx->cnx_client, 0, test_data, sizeof(test_data), 1);
 
             if (early_loss > 0) {
-                loss_mask = 1ull << (early_loss - 1);
+                loss_mask = early_loss;
             }
         }
 
@@ -2482,9 +2508,15 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, unsigned int early_loss)
             }
         }
 
-        if (ret == 0 && i == 0) {
-            /* Before closing, wait for the session ticket to arrive */
-            ret = session_resume_wait_for_ticket(test_ctx, &simulated_time);
+        if (ret == 0) {
+            if (i == 0) {
+                /* Before closing, wait for the session ticket to arrive */
+                ret = session_resume_wait_for_ticket(test_ctx, &simulated_time);
+            }
+            else {
+                /* Before closing, wait for all data to be acknowledged, etc. */
+                ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, 0, 1);
+            }
         }
 
         if (ret == 0) {
@@ -2508,6 +2540,12 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, unsigned int early_loss)
                     test_ctx->cnx_client->nb_zero_rtt_acked != test_ctx->cnx_client->nb_zero_rtt_sent) {
                     DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), no zero RTT acked.\n",
                         use_badcrypt, hardreset);
+                    ret = -1;
+                }
+                else if (early_loss == 0 && no_coal && test_ctx->cnx_server != NULL &&
+                        test_ctx->cnx_client->nb_zero_rtt_sent != test_ctx->cnx_server->nb_zero_rtt_received) {
+                    DBG_PRINTF("Zero RTT test sent %d 0RTT, received %d\n",
+                        test_ctx->cnx_client->nb_zero_rtt_sent, test_ctx->cnx_server->nb_zero_rtt_received);
                     ret = -1;
                 }
             } else {
@@ -2558,7 +2596,7 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, unsigned int early_loss)
 
 int zero_rtt_test()
 {
-    return zero_rtt_test_one(0, 0, 0);
+    return zero_rtt_test_one(0, 0, 0, 0);
 }
 
 /*
@@ -2576,7 +2614,8 @@ int zero_rtt_loss_test()
     int ret = 0;
 
     for (unsigned int i = 1; ret == 0 && i < 16; i++) {
-        ret = zero_rtt_test_one(0, 0, i);
+        uint64_t early_loss = 1ull << i;
+        ret = zero_rtt_test_one(0, 0, early_loss, 0);
         if (ret != 0) {
             DBG_PRINTF("Zero RTT test fails when packet #%d is lost.\n", i);
         }
@@ -2594,7 +2633,7 @@ int zero_rtt_loss_test()
 
 int zero_rtt_spurious_test()
 {
-    return zero_rtt_test_one(1, 0, 0);
+    return zero_rtt_test_one(1, 0, 0, 0);
 }
 
 /*
@@ -2606,7 +2645,50 @@ int zero_rtt_spurious_test()
 
 int zero_rtt_retry_test()
 {
-    return zero_rtt_test_one(0, 1, 0);
+    return zero_rtt_test_one(0, 1, 0, 0);
+}
+
+/*
+* Zero RTT No Coalesced Packets test
+* Check what happens if the server does not coalesce packets.
+* We expect the client to send an ACK of the Initial packet, and if
+* zero RTT is enabled to add a padded 0-RTT packet
+*/
+
+int zero_rtt_no_coal_test()
+{
+    return zero_rtt_test_one(0, 0, 0, 1);
+}
+
+/* Test the robustness of the connection in a zero RTT scenario,
+ * which uses a slightly different path than the regular connections.
+ * We test that 50 connections succeed in presence of 30% packet drops.
+ */
+
+int zero_rtt_many_losses_test()
+{
+    int ret = 0;
+    uint64_t random_context = 0x1055ca45c001babaull;
+
+    for (int i = 0; ret == 0 && i < 50; i++)
+    {
+        uint64_t loss_mask = 0;
+        for (int j = 0; j < 64; j++)
+        {
+            loss_mask <<= 1;
+
+            if (picoquic_test_uniform_random(&random_context, 1000) < 300) {
+                loss_mask |= 1;
+            }
+        }
+
+        ret = zero_rtt_test_one(0, 0, loss_mask, 0);
+        if (ret != 0) {
+            DBG_PRINTF("Handshake fails for mask %d, mask = %llx", i, (unsigned long long)loss_mask);
+        }
+    }
+
+    return ret;
 }
 
 /*
@@ -7590,4 +7672,3 @@ int connection_drop_test()
 
     return ret;
 }
-
