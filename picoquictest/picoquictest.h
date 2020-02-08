@@ -26,7 +26,7 @@
 extern "C" {
 #endif
 
-/* From picoquic/util.h */
+/* From picoquic/picoquic_utils.h */
 void debug_printf_suspend();
 
 /* Setting the solution dir when not executing from default location */

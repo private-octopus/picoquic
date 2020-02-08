@@ -24,7 +24,7 @@
 #include <string.h>
 #include <stdint.h>
 
-#include "util.h"
+#include "picoquic_utils.h"
 #include "picohash.h"
 #include "picoquic.h"
 

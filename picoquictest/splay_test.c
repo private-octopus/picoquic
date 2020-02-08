@@ -25,7 +25,7 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "util.h"
+#include "picoquic_utils.h"
 #include "picosplay.h"
 
 typedef struct st_int_node_t {

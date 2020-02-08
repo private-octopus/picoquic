@@ -22,7 +22,7 @@
 #include "getopt.h"
 #endif
 #include "picoquic.h"
-#include "util.h"
+#include "picoquic_utils.h"
 #include "picoquictest.h"
 #include <stdio.h>
 #include <string.h>
