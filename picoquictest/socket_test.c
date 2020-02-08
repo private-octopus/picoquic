@@ -20,7 +20,7 @@
 */
 
 #include "picosocks.h"
-#include "util.h"
+#include "picoquic_utils.h"
 
 static int socket_ping_pong(SOCKET_TYPE fd, struct sockaddr* server_addr, int server_address_length,
     picoquic_server_sockets_t* server_sockets)

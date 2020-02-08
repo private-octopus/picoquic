@@ -24,7 +24,6 @@
  */
 
 #include "picoquic_internal.h"
-#include "util.h"
 #include "tls_api.h"
 #include <string.h>
 

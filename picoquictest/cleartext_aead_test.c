@@ -24,7 +24,7 @@
 #endif
 #include "picoquic_internal.h"
 #include "tls_api.h"
-#include "util.h"
+#include "picoquic_utils.h"
 #include "picotls.h"
 #include "picotls/openssl.h"
 #include "picotls/minicrypto.h"

@@ -28,7 +28,7 @@
 #include "picoquic.h"
 #include "picoquic_internal.h"
 #include "picosocks.h"
-#include "util.h"
+#include "picoquic_utils.h"
 #include "h3zero.c"
 #include "democlient.h"
 

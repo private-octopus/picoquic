@@ -21,7 +21,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "cidset.h"
-#include "util.h"
+#include "picoquic_utils.h"
 
 /* Hash and compare for CNX hash tables */
 static uint64_t picoquic_cid_hash(const void* key)

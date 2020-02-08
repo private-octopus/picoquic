@@ -30,7 +30,7 @@
 #include "picosplay.h"
 #include "picoquic.h"
 #include "picotlsapi.h"
-#include "util.h"
+#include "picoquic_utils.h"
 
 #ifdef __cplusplus
 extern "C" {
