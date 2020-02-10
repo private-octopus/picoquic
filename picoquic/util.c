@@ -683,7 +683,7 @@ static void picoquic_set_abs_delay(struct timespec* ts, uint64_t microsec_wait) 
     clock_gettime(CLOCK_REALTIME, ts);
     ts->tv_sec += (unsigned long)(microsec_wait / 1000000);
     ts->tv_nsec += (unsigned long)((microsec_wait % 1000000)*1000);
-    if (ts->tv_usec > 1000000000) {
+    if (ts->tv_nsec > 1000000000) {
         ts->tv_sec++;
         ts->tv_nsec -= 1000000000;
     }
@@ -716,7 +716,7 @@ void picoquic_delete_thread(picoquic_thread_t * thread)
     CloseHandle(*thread);
     *thread = NULL;
 #else
-    if (pthread_join(thread, NULL) != 0) {
+    if (pthread_join(*thread, NULL) != 0) {
         (void)pthread_cancel(*thread);
     }
 #endif
