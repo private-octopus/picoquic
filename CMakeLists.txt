@@ -1,12 +1,10 @@
 cmake_minimum_required(VERSION 2.8.11)
 cmake_policy(SET CMP0003 NEW)
-find_package (Threads)
-
 project(picoquic)
 
 set(CMAKE_C_STANDARD 11)
 
-# FIND_PACKAGE(PkgConfig REQUIRED)
+find_package (Threads)
 
 set(CMAKE_C_FLAGS "-std=c99 -Wall -Werror -O2 -g ${CC_WARNING_FLAGS} ${CMAKE_C_FLAGS}")
 

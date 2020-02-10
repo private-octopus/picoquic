@@ -678,28 +678,6 @@ int picoquic_constant_time_memcmp(const uint8_t* x, const uint8_t* y, size_t l)
 /* Minimal support for threads.
  */
 
-#ifdef _WINDOWS
-#define picoquic_thread_t HANDLE
-#define picoquic_thread_return_t DWORD
-typedef picoquic_thread_return_t (*picoquic_thread_fn)(LPVOID lpParam);
-#define picoquic_mutex_t HANDLE
-#define picoquic_event_t HANDLE
-
-
-#else
-/* Linux routine returns */
-#define picoquic_thread_t pthread_t
-#define picoquic_thread_return_t void
-typedef picoquic_threat_return_t (*picoquic_thread_fn) (void* lpParam);
-#define picoquic_mutex_t pthread_mutex_t 
-
-typedef struct st_picoquic_event_t {
-    pthread_mutex_t mutex;
-    pthread_cond_t cond;
-} picoquic_event_t;
-
-#endif
-
 #ifndef _WINDOWS
 static void picoquic_set_abs_delay(struct timespec* ts, uint64_t microsec_wait) {
     clock_gettime(CLOCK_REALTIME, ts);

@@ -157,8 +157,8 @@ int picoquic_constant_time_memcmp(const uint8_t* x, const uint8_t* y, size_t l);
  */
 #ifdef _WINDOWS
 #define picoquic_thread_t HANDLE
-#define picoquic_thread_return_t DWORD
-typedef picoquic_thread_return_t(*picoquic_thread_fn)(LPVOID lpParam);
+#define picoquic_thread_return_t DWORD WINAPI
+typedef DWORD (WINAPI* picoquic_thread_fn)(LPVOID lpParam);
 #define picoquic_mutex_t HANDLE
 #define picoquic_event_t HANDLE
 #define picoquic_thread_do_return return 0
