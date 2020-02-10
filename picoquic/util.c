@@ -682,10 +682,10 @@ int picoquic_constant_time_memcmp(const uint8_t* x, const uint8_t* y, size_t l)
 static void picoquic_set_abs_delay(struct timespec* ts, uint64_t microsec_wait) {
     clock_gettime(CLOCK_REALTIME, ts);
     ts->tv_sec += (unsigned long)(microsec_wait / 1000000);
-    ts->tv_usec += (unsigned long)(microsec_wait % 1000000);
-    if (ts->tv_usec > 1000000) {
+    ts->tv_nsec += (unsigned long)((microsec_wait % 1000000)*1000);
+    if (ts->tv_usec > 1000000000) {
         ts->tv_sec++;
-        ts->tv_usec -= 1000000;
+        ts->tv_nsec -= 1000000000;
     }
 }
 #endif
@@ -717,7 +717,7 @@ void picoquic_delete_thread(picoquic_thread_t * thread)
     *thread = NULL;
 #else
     if (pthread_join(thread, NULL) != 0) {
-        (void)pthread_cancel(thread);
+        (void)pthread_cancel(*thread);
     }
 #endif
 }
@@ -787,7 +787,7 @@ int picoquic_create_event(picoquic_event_t* event)
     int ret;
 
     memset(event, 0, sizeof(picoquic_event_t));
-    ret = pthread_mutex_init(&evet->mutex, NULL);
+    ret = pthread_mutex_init(&event->mutex, NULL);
     if (ret == 0) {
         ret = pthread_cond_init(&event->cond, NULL);
     }
@@ -836,6 +836,7 @@ int picoquic_wait_for_event(picoquic_event_t* event, uint64_t microsec_wait)
         ret = -1;
     }
 #else
+    int ret;
     (void)pthread_mutex_lock(&event->mutex);
     if (microsec_wait == UINT64_MAX) {
         ret = pthread_cond_wait(&event->cond, &event->mutex);

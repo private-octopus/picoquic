@@ -165,8 +165,8 @@ typedef DWORD (WINAPI* picoquic_thread_fn)(LPVOID lpParam);
 #else
  /* Linux routine returns */
 #define picoquic_thread_t pthread_t
-#define picoquic_thread_return_t void 
-typedef void (*picoquic_thread_fn) (void* lpParam);
+#define picoquic_thread_return_t void*
+typedef void* (*picoquic_thread_fn) (void* lpParam);
 #define picoquic_mutex_t pthread_mutex_t 
 #define picoquic_thread_do_return return
 
