@@ -132,6 +132,7 @@ target_link_libraries(picoquicdemo
     ${PTLS_LIBRARIES}
     ${OPENSSL_LIBRARIES}
     ${CMAKE_DL_LIBS}
+    ${CMAKE_THREAD_LIBS_INIT}
 )
 
 target_include_directories(picoquicdemo PRIVATE loglib picohttp)
@@ -146,6 +147,7 @@ target_link_libraries(picoquic_c2csv
     ${PTLS_LIBRARIES}
     ${OPENSSL_LIBRARIES}
     ${CMAKE_DL_LIBS}
+    ${CMAKE_THREAD_LIBS_INIT}
 )
 
 target_include_directories(picoquic_c2csv PRIVATE loglib)
@@ -160,6 +162,7 @@ target_link_libraries(picolog_t
     ${PTLS_LIBRARIES}
     ${OPENSSL_LIBRARIES}
     ${CMAKE_DL_LIBS}
+    ${CMAKE_THREAD_LIBS_INIT}
 )
 
 target_include_directories(picolog_t PRIVATE loglib)
@@ -191,6 +194,7 @@ target_link_libraries(picohttp_ct
     ${PTLS_LIBRARIES}
     ${OPENSSL_LIBRARIES}
     ${CMAKE_DL_LIBS}
+    ${CMAKE_THREAD_LIBS_INIT}
 )
 
 target_include_directories(picohttp_ct PRIVATE loglib picohttp)
@@ -209,6 +213,7 @@ target_link_libraries(picoqinq_ct
     ${PTLS_LIBRARIES}
     ${OPENSSL_LIBRARIES}
     ${CMAKE_DL_LIBS}
+    ${CMAKE_THREAD_LIBS_INIT}
 )
 
 target_include_directories(picoqinq_ct PRIVATE loglib picohttp picoqinq)
