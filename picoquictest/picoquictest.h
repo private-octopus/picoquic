@@ -40,6 +40,8 @@ extern uint64_t picoquic_stress_test_duration; /* In microseconds; defaults to 2
 int util_connection_id_print_test();
 int util_connection_id_parse_test();
 int util_sprintf_test();
+int util_memcmp_test();
+int util_threading_test();
 int picohash_test();
 int bytestream_test();
 int cnxcreation_test();
@@ -205,7 +207,6 @@ int bbr_performance_test();
 int gbps_performance_test();
 int large_client_hello_test();
 int fast_nat_rebinding_test();
-int util_memcmp_test();
 int ddos_amplification_test();
 int blackhole_test();
 int no_ack_frequency_test();

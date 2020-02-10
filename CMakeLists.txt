@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 2.8.11)
 cmake_policy(SET CMP0003 NEW)
+find_package (Threads)
 
 project(picoquic)
 
@@ -175,6 +176,7 @@ target_link_libraries(picoquic_ct
     ${PTLS_LIBRARIES}
     ${OPENSSL_LIBRARIES}
     ${CMAKE_DL_LIBS}
+    ${CMAKE_THREAD_LIBS_INIT}
 )
 
 target_include_directories(picoquic_ct PRIVATE loglib)

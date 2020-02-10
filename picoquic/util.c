@@ -31,6 +31,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <errno.h>
+#include <pthread.h>
 #endif
 #include "picoquic_internal.h"
 #include <stdarg.h>
@@ -672,4 +673,201 @@ int picoquic_constant_time_memcmp(const uint8_t* x, const uint8_t* y, size_t l)
     }
 
     return (ret == 0)?0:-1;
+}
+
+/* Minimal support for threads.
+ */
+
+#ifdef _WINDOWS
+#define picoquic_thread_t HANDLE
+#define picoquic_thread_return_t DWORD
+typedef picoquic_thread_return_t (*picoquic_thread_fn)(LPVOID lpParam);
+#define picoquic_mutex_t HANDLE
+#define picoquic_event_t HANDLE
+
+
+#else
+/* Linux routine returns */
+#define picoquic_thread_t pthread_t
+#define picoquic_thread_return_t void
+typedef picoquic_threat_return_t (*picoquic_thread_fn) (void* lpParam);
+#define picoquic_mutex_t pthread_mutex_t 
+
+typedef struct st_picoquic_event_t {
+    pthread_mutex_t mutex;
+    pthread_cond_t cond;
+} picoquic_event_t;
+
+#endif
+
+#ifndef _WINDOWS
+static void picoquic_set_abs_delay(struct timespec* ts, uint64_t microsec_wait) {
+    clock_gettime(CLOCK_REALTIME, ts);
+    ts->tv_sec += (unsigned long)(microsec_wait / 1000000);
+    ts->tv_usec += (unsigned long)(microsec_wait % 1000000);
+    if (ts->tv_usec > 1000000) {
+        ts->tv_sec++;
+        ts->tv_usec -= 1000000;
+    }
+}
+#endif
+
+int picoquic_create_thread(picoquic_thread_t * thread, picoquic_thread_fn thread_fn, void * arg)
+{
+#ifdef _WINDOWS
+    int ret = 0;
+    *thread = CreateThread(NULL, 0, thread_fn, arg, 0, NULL);
+    if (*thread == NULL) {
+        ret = GetLastError();
+    }
+#else
+    int ret = pthread_create(thread, NULL, thread_fn, arg);
+#endif
+    return ret;
+}
+
+void picoquic_delete_thread(picoquic_thread_t * thread)
+{
+#ifdef _WINDOWS
+    /* Wait until background thread has terminated, or timeout in milliseconds */
+    if (WaitForMultipleObjects(1, thread, TRUE, 1000) == WAIT_TIMEOUT) {
+        /* if soft wait fails, then hard cancel */
+        TerminateThread(*thread, 0);
+    }
+    /* Close the thread handle */
+    CloseHandle(*thread);
+    *thread = NULL;
+#else
+    if (pthread_join(thread, NULL) != 0) {
+        (void)pthread_cancel(thread);
+    }
+#endif
+}
+
+int picoquic_create_mutex(picoquic_mutex_t * mutex)
+{
+#ifdef _WINDOWS
+    int ret = 0;
+    *mutex = CreateMutex(NULL, FALSE, NULL);
+    if (*mutex == NULL) {
+        ret = -1;
+    }
+#else
+    int ret = pthread_mutex_init(mutex, NULL);
+#endif
+    return ret;
+}
+
+int picoquic_delete_mutex(picoquic_mutex_t* mutex)
+{
+#ifdef _WINDOWS
+    int ret = 0;
+    CloseHandle(*mutex);
+    *mutex = NULL;
+#else
+    int ret = pthread_mutex_destroy(mutex);
+#endif
+    return ret;
+}
+
+int picoquic_lock_mutex(picoquic_mutex_t  * mutex)
+{
+#ifdef _WINDOWS
+    int ret = 0;
+    DWORD w_ret = WaitForSingleObject(*mutex, INFINITE);
+    if (w_ret != WAIT_OBJECT_0) {
+        ret = -1;
+    }
+#else 
+    int ret = pthread_mutex_lock(mutex);
+#endif
+    return ret;
+}
+
+int picoquic_unlock_mutex(picoquic_mutex_t * mutex)
+{
+#ifdef _WINDOWS
+    int ret = 0;
+    if (!ReleaseMutex(*mutex)) {
+        ret = -1;
+    }
+#else 
+    int ret = pthread_mutex_unlock(mutex);
+#endif
+    return ret;
+}
+
+int picoquic_create_event(picoquic_event_t* event)
+{
+#ifdef _WINDOWS
+    int ret = 0;
+    *event = CreateEvent(NULL, TRUE, FALSE, NULL);
+    if (*event == NULL) {
+        ret = -1;
+    }
+#else
+    int ret;
+
+    memset(event, 0, sizeof(picoquic_event_t));
+    ret = pthread_mutex_init(&evet->mutex, NULL);
+    if (ret == 0) {
+        ret = pthread_cond_init(&event->cond, NULL);
+    }
+#endif
+    return ret;
+}
+
+void picoquic_delete_event(picoquic_event_t* event)
+{
+#ifdef _WINDOWS
+    CloseHandle(*event);
+    *event = NULL;
+#else 
+    (void)pthread_mutex_destroy(&event->mutex);
+    (void)pthread_cond_destroy(&event->cond);
+    memset(event, 0, sizeof(picoquic_event_t));
+#endif
+}
+
+int picoquic_signal_event(picoquic_event_t* event)
+{
+#ifdef _WINDOWS
+    int ret = 0;
+    if (!SetEvent(*event)){
+        ret = -1;
+    }
+#else 
+    int ret;
+    (void)pthread_mutex_lock(&event->mutex);
+    ret = pthread_cond_broadcast(&event->cond);
+    (void)pthread_mutex_unlock(&event->mutex);
+#endif
+    return ret;
+}
+
+int picoquic_wait_for_event(picoquic_event_t* event, uint64_t microsec_wait)
+{
+#ifdef _WINDOWS
+    int ret = 0;
+    DWORD dwWaitResult;
+    DWORD millisec_wait = (microsec_wait == UINT64_MAX) ? INFINITE : (DWORD)(microsec_wait / 1000);
+    dwWaitResult = WaitForSingleObject(*event, millisec_wait);
+    if (dwWaitResult == WAIT_OBJECT_0) {
+        (void)ResetEvent(*event);
+    } else {
+        ret = -1;
+    }
+#else
+    (void)pthread_mutex_lock(&event->mutex);
+    if (microsec_wait == UINT64_MAX) {
+        ret = pthread_cond_wait(&event->cond, &event->mutex);
+    }
+    else {
+        struct timespec abstime;
+        picoquic_set_abs_delay(&abstime, microsec_wait);
+        ret = pthread_cond_timedwait(&event->cond, &event->mutex, &abstime);
+    }
+    (void)pthread_mutex_unlock(&event->mutex);
+#endif
+    return ret;
 }

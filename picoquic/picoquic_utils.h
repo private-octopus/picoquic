@@ -152,6 +152,44 @@ uint8_t* picoquic_frames_cid_encode(uint8_t* bytes, const uint8_t* bytes_max, co
 /* Constant time memory comparison may be required on some platforms for testing reset secrets */
 int picoquic_constant_time_memcmp(const uint8_t* x, const uint8_t* y, size_t l);
 
+/* A set of portable function enables minimal support for
+ * thread, mutex and event in Windows and Linux
+ */
+#ifdef _WINDOWS
+#define picoquic_thread_t HANDLE
+#define picoquic_thread_return_t DWORD
+typedef picoquic_thread_return_t(*picoquic_thread_fn)(LPVOID lpParam);
+#define picoquic_mutex_t HANDLE
+#define picoquic_event_t HANDLE
+#define picoquic_thread_do_return return 0
+#else
+ /* Linux routine returns */
+#define picoquic_thread_t pthread_t
+#define picoquic_thread_return_t void *
+typedef picoquic_threat_return_t(*picoquic_thread_fn) (void* lpParam);
+#define picoquic_mutex_t pthread_mutex_t 
+#define picoquic_thread_do_return return
+
+typedef struct st_picoquic_event_t {
+    pthread_mutex_t mutex;
+    pthread_cond_t cond;
+} picoquic_event_t;
+#endif
+
+int picoquic_create_thread(picoquic_thread_t* thread, picoquic_thread_fn thread_fn, void* arg);
+void picoquic_delete_thread(picoquic_thread_t thread);
+
+int picoquic_create_mutex(picoquic_mutex_t* mutex);
+int picoquic_delete_mutex(picoquic_mutex_t* mutex);
+int picoquic_lock_mutex(picoquic_mutex_t* mutex);
+int picoquic_unlock_mutex(picoquic_mutex_t* mutex);
+
+int picoquic_create_event(picoquic_event_t* event);
+void picoquic_delete_event(picoquic_event_t* event);
+int picoquic_signal_event(picoquic_event_t* event);
+int picoquic_wait_for_event(picoquic_event_t* event, uint64_t microsec_wait);
+
+
 #ifdef __cplusplus
 }
 #endif
