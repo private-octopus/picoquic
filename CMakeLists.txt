@@ -1,11 +1,10 @@
 cmake_minimum_required(VERSION 2.8.11)
 cmake_policy(SET CMP0003 NEW)
-
-project(picoquic)
+project(picoquic C CXX)
+find_package (Threads REQUIRED)
 
 set(CMAKE_C_STANDARD 11)
 
-# FIND_PACKAGE(PkgConfig REQUIRED)
 
 set(CMAKE_C_FLAGS "-std=c99 -Wall -Werror -O2 -g ${CC_WARNING_FLAGS} ${CMAKE_C_FLAGS}")
 
@@ -133,6 +132,7 @@ target_link_libraries(picoquicdemo
     ${PTLS_LIBRARIES}
     ${OPENSSL_LIBRARIES}
     ${CMAKE_DL_LIBS}
+    ${CMAKE_THREAD_LIBS_INIT}
 )
 
 target_include_directories(picoquicdemo PRIVATE loglib picohttp)
@@ -147,6 +147,7 @@ target_link_libraries(picoquic_c2csv
     ${PTLS_LIBRARIES}
     ${OPENSSL_LIBRARIES}
     ${CMAKE_DL_LIBS}
+    ${CMAKE_THREAD_LIBS_INIT}
 )
 
 target_include_directories(picoquic_c2csv PRIVATE loglib)
@@ -161,6 +162,7 @@ target_link_libraries(picolog_t
     ${PTLS_LIBRARIES}
     ${OPENSSL_LIBRARIES}
     ${CMAKE_DL_LIBS}
+    ${CMAKE_THREAD_LIBS_INIT}
 )
 
 target_include_directories(picolog_t PRIVATE loglib)
@@ -175,6 +177,7 @@ target_link_libraries(picoquic_ct
     ${PTLS_LIBRARIES}
     ${OPENSSL_LIBRARIES}
     ${CMAKE_DL_LIBS}
+    ${CMAKE_THREAD_LIBS_INIT}
 )
 
 target_include_directories(picoquic_ct PRIVATE loglib)
@@ -191,6 +194,7 @@ target_link_libraries(picohttp_ct
     ${PTLS_LIBRARIES}
     ${OPENSSL_LIBRARIES}
     ${CMAKE_DL_LIBS}
+    ${CMAKE_THREAD_LIBS_INIT}
 )
 
 target_include_directories(picohttp_ct PRIVATE loglib picohttp)
@@ -209,6 +213,7 @@ target_link_libraries(picoqinq_ct
     ${PTLS_LIBRARIES}
     ${OPENSSL_LIBRARIES}
     ${CMAKE_DL_LIBS}
+    ${CMAKE_THREAD_LIBS_INIT}
 )
 
 target_include_directories(picoqinq_ct PRIVATE loglib picohttp picoqinq)
