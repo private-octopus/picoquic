@@ -168,7 +168,7 @@ typedef DWORD (WINAPI* picoquic_thread_fn)(LPVOID lpParam);
 #define picoquic_thread_return_t void*
 typedef void* (*picoquic_thread_fn) (void* lpParam);
 #define picoquic_mutex_t pthread_mutex_t 
-#define picoquic_thread_do_return return
+#define picoquic_thread_do_return return (void *)NULL
 
 typedef struct st_picoquic_event_t {
     pthread_mutex_t mutex;

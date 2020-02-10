@@ -314,7 +314,6 @@ static picoquic_thread_return_t thread_test_function(void* vctx )
 {
     thread_test_data_t* ctx = (thread_test_data_t*)vctx;
     uint64_t x;
-    int signalled = 0;
 
     for (int i = 0; i < 20; i++)
     {
