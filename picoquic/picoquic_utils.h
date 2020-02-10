@@ -165,8 +165,8 @@ typedef DWORD (WINAPI* picoquic_thread_fn)(LPVOID lpParam);
 #else
  /* Linux routine returns */
 #define picoquic_thread_t pthread_t
-#define picoquic_thread_return_t void *
-typedef picoquic_threat_return_t(*picoquic_thread_fn) (void* lpParam);
+#define picoquic_thread_return_t void 
+typedef void (*picoquic_thread_fn) (void* lpParam);
 #define picoquic_mutex_t pthread_mutex_t 
 #define picoquic_thread_do_return return
 
@@ -177,7 +177,7 @@ typedef struct st_picoquic_event_t {
 #endif
 
 int picoquic_create_thread(picoquic_thread_t* thread, picoquic_thread_fn thread_fn, void* arg);
-void picoquic_delete_thread(picoquic_thread_t thread);
+void picoquic_delete_thread(picoquic_thread_t* thread);
 
 int picoquic_create_mutex(picoquic_mutex_t* mutex);
 int picoquic_delete_mutex(picoquic_mutex_t* mutex);
