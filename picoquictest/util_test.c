@@ -296,3 +296,104 @@ int util_memcmp_test()
 
     return ret;
 }
+
+/* Testing the minimal thread support.
+ *
+ * We create one mutex and one event to synchronize two threads: one as a mutex demo,
+ * the other as a start on event demo. The mutex
+ *
+ */
+
+typedef struct st_thread_test_data_t {
+    uint64_t data;
+    picoquic_mutex_t mutex;
+    picoquic_event_t event;
+} thread_test_data_t;
+
+static picoquic_thread_return_t thread_test_function(void* vctx )
+{
+    thread_test_data_t* ctx = (thread_test_data_t*)vctx;
+    uint64_t x;
+
+    for (int i = 0; i < 20; i++)
+    {
+        picoquic_lock_mutex(&ctx->mutex);
+        x = ctx->data;
+        ctx->data = x + 1;
+        picoquic_unlock_mutex(&ctx->mutex);
+
+        picoquic_signal_event(&ctx->event);
+    }
+
+    picoquic_thread_do_return;
+}
+
+int util_threading_test()
+{
+    thread_test_data_t ctx;
+    picoquic_thread_t thread;
+    uint64_t x;
+    int ret;
+
+    memset(&ctx, 0, sizeof(ctx));
+    ret = picoquic_create_mutex(&ctx.mutex);
+    if (ret != 0) {
+        DBG_PRINTF("Create mutex returns %d (0x%x)", ret, ret);
+    }
+
+    if (ret == 0){
+        ret = picoquic_create_event(&ctx.event);
+        if (ret != 0) {
+            DBG_PRINTF("Create event returns %d (0x%x)", ret, ret);
+        }
+    }
+
+    if (ret == 0) {
+        ret = picoquic_create_thread(&thread, thread_test_function, &ctx);
+        if (ret != 0) {
+            DBG_PRINTF("Create thread returns %d (0x%x)", ret, ret);
+        }
+    }
+
+    while (ret == 0 && ctx.data == 0) {
+        ret = picoquic_wait_for_event(&ctx.event, 10000);
+        if (ret != 0) {
+            DBG_PRINTF("Cannot wait for event, ret = %d (0x%x)", ret, ret);
+        }
+    }
+
+    for (int i = 0; ret == 0 && i < 10; i++)
+    {
+        ret = picoquic_lock_mutex(&ctx.mutex);
+        if (ret == 0) {
+            x = ctx.data;
+            ctx.data = x + 1;
+            ret = picoquic_unlock_mutex(&ctx.mutex);
+            if (ret != 0) {
+                DBG_PRINTF("Cannot unlock the mutex, ret = %d (0x%x)", ret, ret);
+            }
+        }
+        else {
+            DBG_PRINTF("Cannot lock the mutex, ret = %d (0x%x)", ret, ret);
+        }
+    }
+
+    while (ret == 0 && ctx.data < 30) {
+        ret = picoquic_wait_for_event(&ctx.event, 10000);
+        if (ret != 0) {
+            DBG_PRINTF("Cannot wait for event, ret = %d (0x%x)", ret, ret);
+        }
+    }
+
+    picoquic_delete_thread(&thread);
+    picoquic_delete_event(&ctx.event);
+    picoquic_delete_mutex(&ctx.mutex);
+
+    if (ret == 0 && ctx.data != 30) {
+        DBG_PRINTF("Could not count to %d, got %d", 30, ctx.data);
+        ret = -1;
+
+    }
+
+    return ret;
+}
