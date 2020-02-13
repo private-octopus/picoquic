@@ -288,6 +288,7 @@ typedef struct st_picoquic_stateless_packet_t {
 
     uint64_t cnxid_log64;
     picoquic_connection_id_t initial_cid;
+    picoquic_packet_type_enum ptype;
 
     uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE];
 } picoquic_stateless_packet_t;
@@ -1070,8 +1071,8 @@ typedef struct st_picoquic_cnx_t {
     uint64_t ack_gap_remote;
     uint64_t ack_delay_remote;
     /* Copies of packets received too soon */
-    picoquic_packet_t* first_sooner;
-    picoquic_packet_t* last_sooner;
+    picoquic_stateless_packet_t* first_sooner;
+    picoquic_stateless_packet_t* last_sooner;
 } picoquic_cnx_t;
 
 /* Load the stash of retry tokens. */

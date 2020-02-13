@@ -713,15 +713,12 @@ int picoquic_prepare_version_negotiation(
 
         /* Set length and addresses, and queue. */
         sp->length = byte_index;
-        memset(&sp->addr_to, 0, sizeof(sp->addr_to));
-        memcpy(&sp->addr_to, addr_from,
-            (addr_from->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
-        memset(&sp->addr_local, 0, sizeof(sp->addr_local));
-        memcpy(&sp->addr_local, addr_to,
-            (addr_to->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
+        picoquic_store_addr(&sp->addr_to, addr_from);
+        picoquic_store_addr(&sp->addr_local, addr_to);
         sp->if_index_local = if_index_to;
         sp->initial_cid = ph->dest_cnx_id;
         sp->cnxid_log64 = picoquic_val64_connection_id(sp->initial_cid);
+        sp->ptype = picoquic_packet_version_negotiation;
 
         if (quic->F_log != NULL) {
             picoquic_log_outgoing_segment(quic->F_log, 1, NULL,
@@ -778,12 +775,9 @@ void picoquic_process_unexpected_cnxid(
             (void)picoquic_create_cnxid_reset_secret(quic, ph->dest_cnx_id, bytes + byte_index);
             byte_index += PICOQUIC_RESET_SECRET_SIZE;
             sp->length = byte_index;
-            memset(&sp->addr_to, 0, sizeof(sp->addr_to));
-            memcpy(&sp->addr_to, addr_from,
-                (addr_from->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
-            memset(&sp->addr_local, 0, sizeof(sp->addr_local));
-            memcpy(&sp->addr_local, addr_to,
-                (addr_to->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
+            sp->ptype = picoquic_packet_1rtt_protected;
+            picoquic_store_addr(&sp->addr_to, addr_from);
+            picoquic_store_addr(&sp->addr_local, addr_to);
             sp->if_index_local = if_index_to;
             sp->initial_cid = ph->dest_cnx_id;
             sp->cnxid_log64 = picoquic_val64_connection_id(sp->initial_cid);
@@ -845,13 +839,10 @@ void picoquic_queue_stateless_retry(picoquic_cnx_t* cnx,
 
         sp->length = byte_index;
 
+        sp->ptype = picoquic_packet_1rtt_protected;
 
-        memset(&sp->addr_to, 0, sizeof(sp->addr_to));
-        memcpy(&sp->addr_to, addr_from,
-            (addr_from->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
-        memset(&sp->addr_local, 0, sizeof(sp->addr_local));
-        memcpy(&sp->addr_local, addr_to,
-            (addr_to->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
+        picoquic_store_addr(&sp->addr_to, addr_from);
+        picoquic_store_addr(&sp->addr_local, addr_to);
         sp->if_index_local = if_index_to;
         sp->cnxid_log64 = picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx));
 
@@ -1749,7 +1740,10 @@ void picoquic_incoming_not_decrypted(
     picoquic_packet_header* ph,
     uint64_t current_time,
     uint8_t * bytes,
-    size_t length)
+    size_t length,
+    struct sockaddr * addr_from,
+    struct sockaddr* addr_to,
+    int if_index_to)
 {
     if (cnx->cnx_state < picoquic_state_ready) {
         if (cnx->path[0]->local_cnxid.id_len > 0 &&
@@ -1763,26 +1757,22 @@ void picoquic_incoming_not_decrypted(
                 picoquic_update_path_rtt(cnx, cnx->path[0], cnx->start_time,
                     &cnx->pkt_ctx[picoquic_packet_context_initial], current_time, 0, 0);
             }
-        }
 
-        if (cnx->client_mode && length <= PICOQUIC_MAX_PACKET_SIZE &&
-            (ph->ptype == picoquic_packet_handshake || ph->ptype == picoquic_packet_1rtt_protected)) {
-            /* stash a copy of the incoming message for processing once the keys are available */
-            picoquic_packet_t * packet = picoquic_create_packet(cnx->quic);
+            if (length <= PICOQUIC_MAX_PACKET_SIZE &&
+                ((ph->ptype == picoquic_packet_handshake && cnx->client_mode) || ph->ptype == picoquic_packet_1rtt_protected)) {
+                /* stash a copy of the incoming message for processing once the keys are available */
+                picoquic_stateless_packet_t* packet = picoquic_create_stateless_packet(cnx->quic);
 
-            if (packet != NULL) {
-                packet->length = length;
-                packet->ptype = ph->ptype;
-                memcpy(packet->bytes, bytes, length);
-                packet->next_packet = NULL;
-                if (cnx->last_sooner == NULL) {
+                if (packet != NULL) {
+                    packet->length = length;
+                    packet->ptype = ph->ptype;
+                    memcpy(packet->bytes, bytes, length);
+                    packet->next_packet = cnx->first_sooner;
                     cnx->first_sooner = packet;
+                    picoquic_store_addr(&packet->addr_local, addr_to);
+                    picoquic_store_addr(&packet->addr_to, addr_from);
+                    packet->if_index_local = if_index_to;
                 }
-                else {
-                    cnx->last_sooner->next_packet = packet;
-                }
-                packet->previous_packet = cnx->last_sooner;
-                cnx->last_sooner = packet;
             }
         }
     }
@@ -1838,7 +1828,7 @@ int picoquic_incoming_segment(
     }
     else if (ret == PICOQUIC_ERROR_AEAD_NOT_READY &&
         cnx != NULL) {
-        picoquic_incoming_not_decrypted(cnx, &ph, current_time, bytes, length);
+        picoquic_incoming_not_decrypted(cnx, &ph, current_time, bytes, length, addr_from, addr_to, if_index_to);
     }
 
     /* Log the incoming packet */
@@ -2049,13 +2039,13 @@ int picoquic_incoming_packet(
 /* Processing of stashed packets after acquiring encryption context */
 void picoquic_process_sooner_packets(picoquic_cnx_t* cnx, uint64_t current_time)
 {
-    picoquic_packet_t* packet = cnx->first_sooner;
-    picoquic_packet_t* packet_last_old = cnx->last_sooner;
+    picoquic_stateless_packet_t* packet = cnx->first_sooner;
+    picoquic_stateless_packet_t* previous = NULL;
 
     cnx->recycle_sooner_needed = 0;
 
     while (packet != NULL) {
-        picoquic_packet_t* next_packet = packet->next_packet;
+        picoquic_stateless_packet_t* next_packet = packet->next_packet;
         int could_try_now = 1;
         picoquic_epoch_enum epoch = 0;
         switch (packet->ptype) {
@@ -2073,42 +2063,28 @@ void picoquic_process_sooner_packets(picoquic_cnx_t* cnx, uint64_t current_time)
         if (could_try_now &&
             (cnx->crypto_context[epoch].aead_decrypt != NULL || cnx->crypto_context[epoch].pn_dec != NULL))
         {
-            struct sockaddr_storage from;
-            struct sockaddr_storage to;
             int ret;
 
             DBG_PRINTF("De-stashing packet type %d, %d bytes", (int)packet->ptype, (int)packet->length);
-
-            picoquic_store_addr(&from, (struct sockaddr*) & cnx->path[0]->peer_addr);
-            picoquic_store_addr(&to, (struct sockaddr*) & cnx->path[0]->peer_addr);
             ret = picoquic_incoming_packet(cnx->quic, packet->bytes, packet->length,
-                (struct sockaddr*) & from, (struct sockaddr*) & to, cnx->path[0]->if_index_dest, 0, current_time);
+                (struct sockaddr*) & packet->addr_to, (struct sockaddr*) & packet->addr_local, packet->if_index_local, 0, current_time);
 
             if (ret != 0) {
                 DBG_PRINTF("Processing sooner packet type %d returns %d (0x%d)", (int)packet->ptype, ret, ret);
             }
 
-            if (packet->previous_packet == NULL) {
+            if (previous == NULL) {
                 cnx->first_sooner = packet->next_packet;
             }
             else {
-                packet->previous_packet->next_packet = packet->next_packet;
+                previous->next_packet = packet->next_packet;
             }
-
-            if (packet->next_packet == NULL) {
-                cnx->last_sooner = packet->previous_packet;
-            }
-            else {
-                packet->next_packet->previous_packet = packet->previous_packet;
-            }
-
-            picoquic_recycle_packet(cnx->quic, packet);
+            picoquic_delete_stateless_packet(packet);
+        }
+        else {
+            previous = packet;
         }
 
-        if (packet == packet_last_old) {
-            /* This test to prevent loops if for some reason a packet is copied again in the sooner list */
-            break;
-        }
         packet = next_packet;
     }
 }

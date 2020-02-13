@@ -751,7 +751,7 @@ static int picoquic_update_traffic_key_callback(ptls_update_traffic_key_t * self
 #endif
 
     int ret = picoquic_set_key_from_secret(cipher, is_enc, 0, &cnx->crypto_context[epoch], secret);
-    if (cnx->client_mode && cnx->cnx_state < picoquic_state_ready) {
+    if (cnx->cnx_state < picoquic_state_ready) {
         cnx->recycle_sooner_needed = 1;
     }
 
