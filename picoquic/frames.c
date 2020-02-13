@@ -2069,6 +2069,10 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, u
             old_path->max_ack_delay = ack_delay;
         }
 
+        if (rtt_estimate > 2000000) {
+            DBG_PRINTF("Measured RTT = %llu", (unsigned long long)rtt_estimate);
+        }
+
         if (old_path->smoothed_rtt == PICOQUIC_INITIAL_RTT && old_path->rtt_variant == 0) {
             old_path->smoothed_rtt = rtt_estimate;
             old_path->rtt_variant = rtt_estimate / 2;

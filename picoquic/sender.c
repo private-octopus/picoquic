@@ -2152,7 +2152,6 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
         epoch = picoquic_epoch_handshake;
         pc = picoquic_packet_context_handshake;
         packet_type = picoquic_packet_handshake;
-        epoch = picoquic_epoch_handshake;
     }
 
     send_buffer_max = (send_buffer_max > path_x->send_mtu) ? path_x->send_mtu : send_buffer_max;
@@ -3925,6 +3924,10 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     uint64_t next_wake_time = cnx->latest_progress_time + 2*PICOQUIC_MICROSEC_SILENCE_MAX;
 
     SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+
+    if (cnx->recycle_sooner_needed) {
+        picoquic_process_sooner_packets(cnx, current_time);
+    }
 
     memset(&addr_to_log, 0, sizeof(addr_to_log));
     *send_length = 0;
