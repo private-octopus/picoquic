@@ -2885,6 +2885,19 @@ int picoquic_start_key_rotation(picoquic_cnx_t* cnx)
     return ret;
 }
 
+void picoquic_delete_sooner_packets(picoquic_cnx_t* cnx)
+{
+    picoquic_packet_t* packet = cnx->first_sooner;
+
+    while (packet != NULL) {
+        picoquic_packet_t* next_packet = packet->next_packet;
+        picoquic_recycle_packet(cnx->quic, packet);
+        packet = next_packet;
+    }
+    cnx->first_sooner = NULL;
+    cnx->last_sooner = NULL;
+}
+
 void picoquic_delete_cnx(picoquic_cnx_t* cnx)
 {
     picoquic_cnxid_stash_t* stashed_cnxid;
@@ -2915,6 +2928,8 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
             free(cnx->retry_token);
             cnx->retry_token = NULL;
         }
+
+        picoquic_delete_sooner_packets(cnx);
 
         picoquic_remove_cnx_from_list(cnx);
         picoquic_remove_cnx_from_wake_list(cnx);

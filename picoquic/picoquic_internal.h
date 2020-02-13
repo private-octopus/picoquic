@@ -935,6 +935,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int is_pmtud_required : 1; /* Force PMTU discovery */
     unsigned int is_ack_frequency_negotiated : 1; /* Ack Frequency extension negotiated */
     unsigned int is_ack_frequency_updated : 1; /* Should send an ack frequency frame asap. */
+    unsigned int recycle_sooner_needed : 1; /* There may be a need to recycle "sooner" packets */
 
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;
@@ -1068,6 +1069,9 @@ typedef struct st_picoquic_cnx_t {
     uint64_t ack_frequency_sequence_remote;
     uint64_t ack_gap_remote;
     uint64_t ack_delay_remote;
+    /* Copies of packets received too soon */
+    picoquic_packet_t* first_sooner;
+    picoquic_packet_t* last_sooner;
 } picoquic_cnx_t;
 
 /* Load the stash of retry tokens. */
@@ -1415,6 +1419,9 @@ int picoquic_decode_closing_frames(uint8_t* bytes, size_t bytes_max, int* closin
 
 uint64_t picoquic_decode_transport_param_stream_id(uint64_t rank, int extension_mode, int stream_type);
 uint64_t picoquic_prepare_transport_param_stream_id(uint64_t stream_id);
+
+void picoquic_process_sooner_packets(picoquic_cnx_t* cnx, uint64_t current_time);
+void picoquic_delete_sooner_packets(picoquic_cnx_t* cnx);
 
 /* handling of transport extensions.
  */

@@ -7652,13 +7652,10 @@ int connection_drop_test()
         picoquic_state_server_init,
         picoquic_state_server_handshake,
         picoquic_state_client_handshake_start,
-        picoquic_state_client_handshake_progress,
-        picoquic_state_client_almost_ready,
         picoquic_state_server_false_start,
-        picoquic_state_server_almost_ready,
-        picoquic_state_client_ready_start };
+        picoquic_state_server_almost_ready};
     int target_is_client[] = {
-        1, 1, 1, 0, 0, 1, 1, 1, 0, 0, 0 };
+        1, 1, 1, 0, 0, 1, 0, 0 };
 
     for (int i = 0; ret == 0 && i < 11; i++) {
         picoquic_state_enum c_state = (target_is_client[i]) ? target_state[i] : picoquic_state_ready;

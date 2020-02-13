@@ -3516,7 +3516,7 @@ static int picoquic_check_idle_timer(picoquic_cnx_t* cnx, uint64_t* next_wake_ti
     int ret = 0;
     uint64_t idle_timer = 0;
 
-    if (cnx->cnx_state >= picoquic_state_ready) {
+    if (cnx->cnx_state >= picoquic_state_client_ready_start) {
         uint64_t rto = picoquic_current_retransmit_timer(cnx, picoquic_packet_context_application);
         idle_timer = cnx->idle_timeout;
         if (idle_timer < 3 * rto) {
@@ -3925,6 +3925,10 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     uint64_t next_wake_time = cnx->latest_progress_time + 2*PICOQUIC_MICROSEC_SILENCE_MAX;
 
     SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+
+    if (cnx->recycle_sooner_needed) {
+        picoquic_process_sooner_packets(cnx, current_time);
+    }
 
     memset(&addr_to_log, 0, sizeof(addr_to_log));
     *send_length = 0;

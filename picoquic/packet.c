@@ -186,6 +186,9 @@ int picoquic_parse_long_packet_header(
                         if (*pcnx == NULL && (ph->ptype == picoquic_packet_initial || ph->ptype == picoquic_packet_0rtt_protected)) {
                             *pcnx = picoquic_cnx_by_icid(quic, &ph->dest_cnx_id, addr_from);
                         }
+                        else if (*pcnx == NULL) {
+                            DBG_PRINTF("Dropped packet of type %d, no connection", ph->ptype);
+                        }
                     }
                 }
             }
@@ -1739,12 +1742,14 @@ int picoquic_incoming_encrypted(
     return ret;
 }
 
-/* Procesing of packets received before they could be fully decrypted
+/* Processing of packets received before they could be fully decrypted
  */
 void picoquic_incoming_not_decrypted(
     picoquic_cnx_t* cnx,
     picoquic_packet_header* ph,
-    uint64_t current_time)
+    uint64_t current_time,
+    uint8_t * bytes,
+    size_t length)
 {
     if (cnx->cnx_state < picoquic_state_ready) {
         if (cnx->path[0]->local_cnxid.id_len > 0 &&
@@ -1752,10 +1757,32 @@ void picoquic_incoming_not_decrypted(
         {
             /* verifying the destination cnx id is a strong hint that the peer is responding */
             if (cnx->path[0]->smoothed_rtt == PICOQUIC_INITIAL_RTT
-                && cnx->path[0]->rtt_variant == 0) {
+                && cnx->path[0]->rtt_variant == 0 &&
+                current_time - cnx->start_time < cnx->path[0]->smoothed_rtt) {
                 /* We received a first packet from the peer! */
                 picoquic_update_path_rtt(cnx, cnx->path[0], cnx->start_time,
                     &cnx->pkt_ctx[picoquic_packet_context_initial], current_time, 0, 0);
+            }
+        }
+
+        if (cnx->client_mode && length <= PICOQUIC_MAX_PACKET_SIZE &&
+            (ph->ptype == picoquic_packet_handshake || ph->ptype == picoquic_packet_1rtt_protected)) {
+            /* stash a copy of the incoming message for processing once the keys are available */
+            picoquic_packet_t * packet = picoquic_create_packet(cnx->quic);
+
+            if (packet != NULL) {
+                packet->length = length;
+                packet->ptype = ph->ptype;
+                memcpy(packet->bytes, bytes, length);
+                packet->next_packet = NULL;
+                if (cnx->last_sooner == NULL) {
+                    cnx->first_sooner = packet;
+                }
+                else {
+                    cnx->last_sooner->next_packet = packet;
+                }
+                packet->previous_packet = cnx->last_sooner;
+                cnx->last_sooner = packet;
             }
         }
     }
@@ -1811,7 +1838,7 @@ int picoquic_incoming_segment(
     }
     else if (ret == PICOQUIC_ERROR_AEAD_NOT_READY &&
         cnx != NULL) {
-        picoquic_incoming_not_decrypted(cnx, &ph, current_time);
+        picoquic_incoming_not_decrypted(cnx, &ph, current_time, bytes, length);
     }
 
     /* Log the incoming packet */
@@ -2017,4 +2044,71 @@ int picoquic_incoming_packet(
     }
 
     return ret;
+}
+
+/* Processing of stashed packets after acquiring encryption context */
+void picoquic_process_sooner_packets(picoquic_cnx_t* cnx, uint64_t current_time)
+{
+    picoquic_packet_t* packet = cnx->first_sooner;
+    picoquic_packet_t* packet_last_old = cnx->last_sooner;
+
+    cnx->recycle_sooner_needed = 0;
+
+    while (packet != NULL) {
+        picoquic_packet_t* next_packet = packet->next_packet;
+        int could_try_now = 1;
+        picoquic_epoch_enum epoch = 0;
+        switch (packet->ptype) {
+        case picoquic_packet_handshake:
+            epoch = picoquic_epoch_handshake;
+            break;
+        case picoquic_packet_1rtt_protected:
+            epoch = picoquic_epoch_1rtt;
+            break;
+        default:
+            could_try_now = 0;
+            break;
+        }
+
+        if (could_try_now &&
+            (cnx->crypto_context[epoch].aead_decrypt != NULL || cnx->crypto_context[epoch].pn_dec != NULL))
+        {
+            struct sockaddr_storage from;
+            struct sockaddr_storage to;
+            int ret;
+
+            DBG_PRINTF("De-stashing packet type %d, %d bytes", (int)packet->ptype, (int)packet->length);
+
+            picoquic_store_addr(&from, (struct sockaddr*) & cnx->path[0]->peer_addr);
+            picoquic_store_addr(&to, (struct sockaddr*) & cnx->path[0]->peer_addr);
+            ret = picoquic_incoming_packet(cnx->quic, packet->bytes, packet->length,
+                (struct sockaddr*) & from, (struct sockaddr*) & to, cnx->path[0]->if_index_dest, 0, current_time);
+
+            if (ret != 0) {
+                DBG_PRINTF("Processing sooner packet type %d returns %d (0x%d)", (int)packet->ptype, ret, ret);
+            }
+
+            if (packet->previous_packet == NULL) {
+                cnx->first_sooner = packet->next_packet;
+            }
+            else {
+                packet->previous_packet->next_packet = packet->next_packet;
+            }
+
+            if (packet->next_packet == NULL) {
+                cnx->last_sooner = packet->previous_packet;
+            }
+            else {
+                packet->next_packet->previous_packet = packet->previous_packet;
+            }
+
+            picoquic_recycle_packet(cnx->quic, packet);
+        }
+
+        if (packet == packet_last_old) {
+            /* This test to prevent loops if for some reason a packet is copied again in the sooner list */
+            break;
+        }
+        packet = next_packet;
+    }
 }
