@@ -2152,7 +2152,6 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
         epoch = picoquic_epoch_handshake;
         pc = picoquic_packet_context_handshake;
         packet_type = picoquic_packet_handshake;
-        epoch = picoquic_epoch_handshake;
     }
 
     send_buffer_max = (send_buffer_max > path_x->send_mtu) ? path_x->send_mtu : send_buffer_max;
