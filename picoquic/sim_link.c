@@ -30,7 +30,7 @@
  */
 
 #include "picoquic_internal.h"
-#include "picoquictest_internal.h"
+#include "picoquic_utils.h"
 #include <stdlib.h>
 #include <string.h>
 

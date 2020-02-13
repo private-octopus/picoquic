@@ -30,6 +30,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/quicctx.c
     picoquic/sacks.c
     picoquic/sender.c
+    picoquic/sim_link.c
     picoquic/spinbit.c
     picoquic/ticket_store.c
     picoquic/token_store.c
@@ -58,7 +59,6 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/pn2pn64test.c
     picoquictest/sacktest.c
     picoquictest/skip_frame_test.c
-    picoquictest/sim_link.c
     picoquictest/socket_test.c
     picoquictest/splay_test.c
     picoquictest/stream0_frame_test.c
