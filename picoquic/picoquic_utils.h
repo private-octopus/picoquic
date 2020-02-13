@@ -247,6 +247,29 @@ picoquictest_sim_packet_t* picoquictest_sim_link_dequeue(picoquictest_sim_link_t
 void picoquictest_sim_link_submit(picoquictest_sim_link_t* link, picoquictest_sim_packet_t* packet,
     uint64_t current_time);
 
+/* SNI, Stores and Certificates used for test
+ */
+
+#define PICOQUIC_TEST_SNI "test.example.com"
+
+#ifdef _WINDOWS
+#define PICOQUIC_TEST_FILE_SERVER_CERT "certs\\cert.pem"
+#define PICOQUIC_TEST_FILE_SERVER_BAD_CERT "certs\\badcert.pem"
+#define PICOQUIC_TEST_FILE_SERVER_KEY "certs\\key.pem"
+#define PICOQUIC_TEST_FILE_CERT_STORE "certs\\test-ca.crt"
+#define PICOQUIC_TEST_FILE_ESNI_KEY "certs\\esni-secp256r1.key"
+#define PICOQUIC_TEST_FILE_ESNI_RR "certs\\esni-rr.bin"
+#else
+#define PICOQUIC_TEST_FILE_SERVER_CERT "certs/cert.pem"
+#define PICOQUIC_TEST_FILE_SERVER_BAD_CERT "certs/badcert.pem"
+#define PICOQUIC_TEST_FILE_SERVER_KEY "certs/key.pem"
+#define PICOQUIC_TEST_FILE_CERT_STORE "certs/test-ca.crt"
+#define PICOQUIC_TEST_FILE_ESNI_KEY "certs/esni-secp256r1.key"
+#define PICOQUIC_TEST_FILE_ESNI_RR "certs/esni-rr.bin"
+#endif
+
+ /* To set the solution directory for tests */
+extern char const* picoquic_test_solution_dir;
 #ifdef __cplusplus
 }
 #endif

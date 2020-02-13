@@ -29,11 +29,14 @@
 extern "C" {
 #endif
 
-/* SNI, ALPN, Stores and Certificates used for test
+/*  ALPN used for test
  */
 
-#define PICOQUIC_TEST_SNI "test.example.com"
 #define PICOQUIC_TEST_ALPN "picoquic-test"
+
+#if 0
+
+#define PICOQUIC_TEST_SNI "test.example.com"
 
 #ifdef _WINDOWS
 #define PICOQUIC_TEST_FILE_SERVER_CERT "certs\\cert.pem"
@@ -53,6 +56,7 @@ extern "C" {
 
  /* To set the solution directory for tests */
 extern char const * picoquic_test_solution_dir;
+#endif
 
 #if 0
 /* Really basic network simulator, only simulates a simple link using a
