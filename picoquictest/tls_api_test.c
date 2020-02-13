@@ -7645,7 +7645,7 @@ static int connection_drop_test_one(picoquic_state_enum target_client_state, pic
 int connection_drop_test()
 {
     int ret = 0;
-    picoquic_state_enum target_state[11] = {
+    picoquic_state_enum target_state[9] = {
         picoquic_state_client_init_sent,
         picoquic_state_client_renegotiate,
         picoquic_state_client_init_resent,
@@ -7653,11 +7653,13 @@ int connection_drop_test()
         picoquic_state_server_handshake,
         picoquic_state_client_handshake_start,
         picoquic_state_server_false_start,
-        picoquic_state_server_almost_ready};
-    int target_is_client[] = {
-        1, 1, 1, 0, 0, 1, 0, 0 };
+        picoquic_state_server_almost_ready,
+        picoquic_state_client_almost_ready
+    };
+    int target_is_client[9] = {
+        1, 1, 1, 0, 0, 1, 0, 0, 1 };
 
-    for (int i = 0; ret == 0 && i < 11; i++) {
+    for (int i = 0; ret == 0 && i < 9; i++) {
         picoquic_state_enum c_state = (target_is_client[i]) ? target_state[i] : picoquic_state_ready;
         picoquic_state_enum s_state = (target_is_client[i]) ? picoquic_state_ready : target_state[i];
 
