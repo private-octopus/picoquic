@@ -3516,7 +3516,7 @@ static int picoquic_check_idle_timer(picoquic_cnx_t* cnx, uint64_t* next_wake_ti
     int ret = 0;
     uint64_t idle_timer = 0;
 
-    if (cnx->cnx_state >= picoquic_state_client_ready_start) {
+    if (cnx->cnx_state >= picoquic_state_ready) {
         uint64_t rto = picoquic_current_retransmit_timer(cnx, picoquic_packet_context_application);
         idle_timer = cnx->idle_timeout;
         if (idle_timer < 3 * rto) {
