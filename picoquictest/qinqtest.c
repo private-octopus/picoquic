@@ -385,7 +385,7 @@ int qinq_address_table_test()
     }
 
     for (size_t i = 0; ret == 0 && i < QINQ_NB_TEST_ADDRESS; i++) {
-        if ((ret = picoquic_get_test_address(address_list[i].ip_addr, address_list[i].port, &addr_s[i])) != 0) {
+        if ((ret = picoquic_store_text_addr(&addr_s[i], address_list[i].ip_addr, address_list[i].port)) != 0) {
             DBG_PRINTF("Cannot parse address %s, port %d, ret=%d\n", address_list[i].ip_addr, address_list[i].port, ret);
         }
     }
@@ -515,7 +515,7 @@ struct st_picoqinq_test_ctx_t* picoqinq_test_ctx_init()
         }
 
         for (int i = 0; ret == 0 && i < PICOQINQ_SIM_NB_CTX; i++) {
-            if ((ret = picoquic_get_test_address(addr_txt[i], 443, &test_ctx->addr_s[i])) != 0) {
+            if ((ret = picoquic_store_text_addr(&test_ctx->addr_s[i], addr_txt[i], 443)) != 0) {
                 DBG_PRINTF("Cannot initialize addresses, ret=%d\n", ret);
             }
         }

@@ -450,6 +450,33 @@ void picoquic_get_ip_addr(struct sockaddr * addr, uint8_t ** ip_addr, uint8_t * 
     }
 }
 
+/* Store a test address */
+int picoquic_store_text_addr(struct sockaddr_storage* stored_addr, const char* ip_address_text, uint16_t port)
+{
+    int ret = 0;
+    struct sockaddr_in* ipv4_addr = (struct sockaddr_in*)stored_addr;
+    struct sockaddr_in6* ipv6_addr = (struct sockaddr_in6*)stored_addr;
+
+    /* get the IP address of the server */
+    memset(stored_addr, 0, sizeof(struct sockaddr_storage));
+
+    if (inet_pton(AF_INET, ip_address_text, &ipv4_addr->sin_addr) == 1) {
+        /* Valid IPv4 address */
+        ipv4_addr->sin_family = AF_INET;
+        ipv4_addr->sin_port = htons((unsigned short)port);
+    }
+    else if (inet_pton(AF_INET6, ip_address_text, &ipv6_addr->sin6_addr) == 1) {
+        /* Valid IPv6 address */
+        ipv6_addr->sin6_family = AF_INET6;
+        ipv6_addr->sin6_port = htons((unsigned short)port);
+    }
+    else {
+        ret = -1;
+    }
+
+    return ret;
+}
+
 /* Return a directory path based on solution dir and file name */
 int picoquic_get_input_path(char * target_file_path, size_t file_path_max, const char * solution_path, const char * file_name)
 {

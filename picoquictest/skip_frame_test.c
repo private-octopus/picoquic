@@ -1701,34 +1701,6 @@ int test_copy_for_retransmit()
     return ret;
 }
 
-/* Store a test address */
-int picoquic_get_test_address(const char* ip_address_text, int server_port,
-    struct sockaddr_storage* server_address)
-{
-    int ret = 0;
-    struct sockaddr_in* ipv4_dest = (struct sockaddr_in*)server_address;
-    struct sockaddr_in6* ipv6_dest = (struct sockaddr_in6*)server_address;
-
-    /* get the IP address of the server */
-    memset(server_address, 0, sizeof(struct sockaddr_storage));
-
-    if (inet_pton(AF_INET, ip_address_text, &ipv4_dest->sin_addr) == 1) {
-        /* Valid IPv4 address */
-        ipv4_dest->sin_family = AF_INET;
-        ipv4_dest->sin_port = htons((unsigned short)server_port);
-    }
-    else if (inet_pton(AF_INET6, ip_address_text, &ipv6_dest->sin6_addr) == 1) {
-        /* Valid IPv6 address */
-        ipv6_dest->sin6_family = AF_INET6;
-        ipv6_dest->sin6_port = htons((unsigned short)server_port);
-    }
-    else {
-        ret = -1;
-    }
-
-    return ret;
-}
-
 /* Testing the sending of blocked frames */
 struct st_stream_blocked_test_t {
     uint64_t stream_id;
@@ -1766,7 +1738,7 @@ int send_stream_blocked_test_one(const struct st_stream_blocked_test_t * test)
         ret = -1;
     }
     else {
-        ret = picoquic_get_test_address("10.0.0.1", 1234, &addr);
+        ret = picoquic_store_text_addr(&addr, "10.0.0.1", 1234);
         if (ret == 0) {
             cnx = picoquic_create_client_cnx(quic, (struct sockaddr*) & addr, simulated_time, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, NULL, NULL);
             if (cnx == NULL) {

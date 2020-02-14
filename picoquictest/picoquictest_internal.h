@@ -229,9 +229,6 @@ int test_one_pn_enc_pair(uint8_t * seqnum, size_t seqnum_len, void * pn_enc, voi
 int picoquic_test_compare_text_files(char const* fname1, char const* fname2);
 int picoquic_test_compare_binary_files(char const* fname1, char const* fname2);
 
-int picoquic_get_test_address(const char* ip_address_text, int server_port,
-    struct sockaddr_storage* server_address);
-
 int tls_api_one_scenario_test(test_api_stream_desc_t* scenario,
     size_t sizeof_scenario, size_t stream0_target,
     uint64_t init_loss_mask, uint64_t max_data, uint64_t queue_delay_max,
