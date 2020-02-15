@@ -29,11 +29,14 @@
 extern "C" {
 #endif
 
-/* SNI, ALPN, Stores and Certificates used for test
+/*  ALPN used for test
  */
 
-#define PICOQUIC_TEST_SNI "test.example.com"
 #define PICOQUIC_TEST_ALPN "picoquic-test"
+
+#if 0
+
+#define PICOQUIC_TEST_SNI "test.example.com"
 
 #ifdef _WINDOWS
 #define PICOQUIC_TEST_FILE_SERVER_CERT "certs\\cert.pem"
@@ -53,7 +56,9 @@ extern "C" {
 
  /* To set the solution directory for tests */
 extern char const * picoquic_test_solution_dir;
+#endif
 
+#if 0
 /* Really basic network simulator, only simulates a simple link using a
  * packet structure.
  * Init: link creation. Returns a link structure with defined bandwidth,
@@ -86,6 +91,7 @@ typedef struct st_picoquictest_sim_link_t {
     picoquictest_sim_packet_t* first_packet;
     picoquictest_sim_packet_t* last_packet;
 } picoquictest_sim_link_t;
+#endif
 
 #define PICOQUIC_TEST_SNI "test.example.com"
 #define PICOQUIC_TEST_ALPN "picoquic-test"
@@ -185,6 +191,8 @@ extern test_skip_frames_t test_skip_list[];
 
 extern size_t nb_test_skip_list;
 
+#if 0
+
 picoquictest_sim_link_t* picoquictest_sim_link_create(double data_rate_in_gps,
     uint64_t microsec_latency, uint64_t* loss_mask, uint64_t queue_delay_max, uint64_t current_time);
 
@@ -199,6 +207,7 @@ picoquictest_sim_packet_t* picoquictest_sim_link_dequeue(picoquictest_sim_link_t
 
 void picoquictest_sim_link_submit(picoquictest_sim_link_t* link, picoquictest_sim_packet_t* packet,
     uint64_t current_time);
+#endif
 
 int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_version,
     char const* sni, char const* alpn, uint64_t* p_simulated_time,
@@ -219,14 +228,6 @@ int test_one_pn_enc_pair(uint8_t * seqnum, size_t seqnum_len, void * pn_enc, voi
 
 int picoquic_test_compare_text_files(char const* fname1, char const* fname2);
 int picoquic_test_compare_binary_files(char const* fname1, char const* fname2);
-
-uint64_t picoquic_test_random(uint64_t * random_context);
-void picoquic_test_random_bytes(uint64_t * random_context, uint8_t * bytes, size_t bytes_max);
-uint64_t picoquic_test_uniform_random(uint64_t * random_context, uint64_t rnd_max);
-double picoquic_test_gauss_random(uint64_t* random_context); /* random gaussian of variance 1.0, average 0 */
-
-int picoquic_get_test_address(const char* ip_address_text, int server_port,
-    struct sockaddr_storage* server_address);
 
 int tls_api_one_scenario_test(test_api_stream_desc_t* scenario,
     size_t sizeof_scenario, size_t stream0_target,

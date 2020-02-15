@@ -450,6 +450,33 @@ void picoquic_get_ip_addr(struct sockaddr * addr, uint8_t ** ip_addr, uint8_t * 
     }
 }
 
+/* Store a test address */
+int picoquic_store_text_addr(struct sockaddr_storage* stored_addr, const char* ip_address_text, uint16_t port)
+{
+    int ret = 0;
+    struct sockaddr_in* ipv4_addr = (struct sockaddr_in*)stored_addr;
+    struct sockaddr_in6* ipv6_addr = (struct sockaddr_in6*)stored_addr;
+
+    /* get the IP address of the server */
+    memset(stored_addr, 0, sizeof(struct sockaddr_storage));
+
+    if (inet_pton(AF_INET, ip_address_text, &ipv4_addr->sin_addr) == 1) {
+        /* Valid IPv4 address */
+        ipv4_addr->sin_family = AF_INET;
+        ipv4_addr->sin_port = htons((unsigned short)port);
+    }
+    else if (inet_pton(AF_INET6, ip_address_text, &ipv6_addr->sin6_addr) == 1) {
+        /* Valid IPv6 address */
+        ipv6_addr->sin6_family = AF_INET6;
+        ipv6_addr->sin6_port = htons((unsigned short)port);
+    }
+    else {
+        ret = -1;
+    }
+
+    return ret;
+}
+
 /* Return a directory path based on solution dir and file name */
 int picoquic_get_input_path(char * target_file_path, size_t file_path_max, const char * solution_path, const char * file_name)
 {
@@ -849,4 +876,72 @@ int picoquic_wait_for_event(picoquic_event_t* event, uint64_t microsec_wait)
     (void)pthread_mutex_unlock(&event->mutex);
 #endif
     return ret;
+}
+
+
+/* Pseudo random generation suitable for tests. Guaranties that the
+* same seed will produce the same sequence, allows for specific
+* random sequence for a given test.
+* Adapted from http://xoroshiro.di.unimi.it/splitmix64.c,
+* Written in 2015 by Sebastiano Vigna (vigna@acm.org)  */
+
+uint64_t picoquic_test_random(uint64_t* random_context)
+{
+    uint64_t z;
+    *random_context += 0x9e3779b97f4a7c15;
+    z = *random_context;
+    z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9ull;
+    z = (z ^ (z >> 27)) * 0x94d049bb133111ebull;
+    return z ^ (z >> 31);
+}
+
+void picoquic_test_random_bytes(uint64_t* random_context, uint8_t* bytes, size_t bytes_max)
+{
+    size_t byte_index = 0;
+
+    while (byte_index < bytes_max) {
+        uint64_t v = picoquic_test_random(random_context);
+
+        for (int i = 0; i < 8 && byte_index < bytes_max; i++) {
+            bytes[byte_index++] = v & 0xFF;
+            v >>= 8;
+        }
+    }
+}
+
+uint64_t picoquic_test_uniform_random(uint64_t* random_context, uint64_t rnd_max)
+{
+    uint64_t rnd = 0;
+
+    if (rnd_max > 0) {
+        uint64_t rnd_min = ((uint64_t)((int64_t)-1)) % rnd_max;
+
+        do {
+            rnd = picoquic_test_random(random_context);
+        } while (rnd < rnd_min);
+        rnd %= rnd_max;
+    }
+
+    return rnd;
+}
+
+double picoquic_test_gauss_random(uint64_t* random_context)
+{
+    double dx = 0;
+
+    /* Sum of 12 variables in [0..1], provides
+     * average = 6.0, stdev = 3.0 */
+    for (int i = 0; i < 12; i++) {
+        double d;
+        uint64_t r = picoquic_test_random(random_context);
+        r ^= r >> 17;
+        r ^= r >> 34;
+        d = (double)(r & 0x1ffff) + 0.5;
+        d /= (double)(0x20000);
+        dx += d;
+    }
+
+    dx -= 6.0;
+
+    return dx;
 }

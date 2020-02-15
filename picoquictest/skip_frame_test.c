@@ -276,81 +276,6 @@ test_skip_frames_t test_skip_list[] = {
 
 size_t nb_test_skip_list = sizeof(test_skip_list) / sizeof(test_skip_frames_t);
 
-/*
- * export a list of test frames, to be used in other test
- */
-
-
-
-
-/* Pseudo random generation suitable for tests. Guaranties that the
-* same seed will produce the same sequence, allows for specific
-* random sequence for a given test.
-* Adapted from http://xoroshiro.di.unimi.it/splitmix64.c,
-* Written in 2015 by Sebastiano Vigna (vigna@acm.org)  */
-
-uint64_t picoquic_test_random(uint64_t * random_context)
-{
-    uint64_t z;
-    *random_context += 0x9e3779b97f4a7c15;
-    z = *random_context;
-    z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9ull;
-    z = (z ^ (z >> 27)) * 0x94d049bb133111ebull;
-    return z ^ (z >> 31);
-}
-
-void picoquic_test_random_bytes(uint64_t * random_context, uint8_t * bytes, size_t bytes_max)
-{
-    size_t byte_index = 0;
-
-    while (byte_index < bytes_max) {
-        uint64_t v = picoquic_test_random(random_context);
-
-        for (int i = 0; i < 8 && byte_index < bytes_max; i++) {
-            bytes[byte_index++] = v & 0xFF;
-            v >>= 8;
-        }
-    }
-}
-
-uint64_t picoquic_test_uniform_random(uint64_t * random_context, uint64_t rnd_max)
-{
-    uint64_t rnd = 0;
-
-    if (rnd_max > 0) {
-        uint64_t rnd_min = ((uint64_t)((int64_t)-1)) % rnd_max;
-
-        do {
-            rnd = picoquic_test_random(random_context);
-        } while (rnd < rnd_min);
-        rnd %= rnd_max;
-    }
-
-    return rnd;
-}
-
-double picoquic_test_gauss_random(uint64_t* random_context)
-{
-    double dx = 0;
-
-    /* Sum of 12 variables in [0..1], provides
-     * average = 6.0, stdev = 3.0 */
-    for (int i = 0; i < 12; i++) {
-        double d;
-        uint64_t r = picoquic_test_random(random_context);
-        r ^= r >> 17;
-        r ^= r >> 34;
-        d = (double)(r& 0x1ffff) + 0.5;
-        d /= (double)(0x20000);
-        dx += d;
-    }
-
-    dx -= 6.0;
-
-    return dx;
-}
-
-
 static size_t format_random_packet(uint8_t * bytes, size_t bytes_max, uint64_t * random_context)
 {
     size_t byte_index = 0;
@@ -1776,34 +1701,6 @@ int test_copy_for_retransmit()
     return ret;
 }
 
-/* Store a test address */
-int picoquic_get_test_address(const char* ip_address_text, int server_port,
-    struct sockaddr_storage* server_address)
-{
-    int ret = 0;
-    struct sockaddr_in* ipv4_dest = (struct sockaddr_in*)server_address;
-    struct sockaddr_in6* ipv6_dest = (struct sockaddr_in6*)server_address;
-
-    /* get the IP address of the server */
-    memset(server_address, 0, sizeof(struct sockaddr_storage));
-
-    if (inet_pton(AF_INET, ip_address_text, &ipv4_dest->sin_addr) == 1) {
-        /* Valid IPv4 address */
-        ipv4_dest->sin_family = AF_INET;
-        ipv4_dest->sin_port = htons((unsigned short)server_port);
-    }
-    else if (inet_pton(AF_INET6, ip_address_text, &ipv6_dest->sin6_addr) == 1) {
-        /* Valid IPv6 address */
-        ipv6_dest->sin6_family = AF_INET6;
-        ipv6_dest->sin6_port = htons((unsigned short)server_port);
-    }
-    else {
-        ret = -1;
-    }
-
-    return ret;
-}
-
 /* Testing the sending of blocked frames */
 struct st_stream_blocked_test_t {
     uint64_t stream_id;
@@ -1841,7 +1738,7 @@ int send_stream_blocked_test_one(const struct st_stream_blocked_test_t * test)
         ret = -1;
     }
     else {
-        ret = picoquic_get_test_address("10.0.0.1", 1234, &addr);
+        ret = picoquic_store_text_addr(&addr, "10.0.0.1", 1234);
         if (ret == 0) {
             cnx = picoquic_create_client_cnx(quic, (struct sockaddr*) & addr, simulated_time, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, NULL, NULL);
             if (cnx == NULL) {

@@ -92,6 +92,7 @@ uint8_t picoquic_create_packet_header_cnxid_lengths(uint8_t dest_len, uint8_t sr
 int picoquic_compare_addr(const struct sockaddr * expected, const struct sockaddr * actual);
 int picoquic_store_addr(struct sockaddr_storage * stored_addr, const struct sockaddr * addr);
 void picoquic_get_ip_addr(struct sockaddr * addr, uint8_t ** ip_addr, uint8_t * ip_addr_len);
+int picoquic_store_text_addr(struct sockaddr_storage* stored_addr, const char* ip_address_text, uint16_t port);
 
 int picoquic_get_input_path(char * target_file_path, size_t file_path_max, const char * solution_path, const char * file_name);
 
@@ -189,7 +190,87 @@ void picoquic_delete_event(picoquic_event_t* event);
 int picoquic_signal_event(picoquic_event_t* event);
 int picoquic_wait_for_event(picoquic_event_t* event, uint64_t microsec_wait);
 
+/* Set of random number generation functions, designed for tests.
+ * The random numbers are defined by a 64 bit context, initialized to a seed.
+ * The same seed will always generate the same sequence.
+ */
 
+uint64_t picoquic_test_random(uint64_t* random_context);
+void picoquic_test_random_bytes(uint64_t* random_context, uint8_t* bytes, size_t bytes_max);
+uint64_t picoquic_test_uniform_random(uint64_t* random_context, uint64_t rnd_max);
+double picoquic_test_gauss_random(uint64_t* random_context); /* random gaussian of variance 1.0, average 0 */
+
+/* Really basic network simulator, only simulates a simple link using a
+ * packet structure.
+ * Init: link creation. Returns a link structure with defined bandwidth,
+ * latency, loss pattern and initial time. The link is empty. The loss
+ * pattern is a 64 bit bit mask.
+ * Submit packet of length L at time t. The packet is queued to the link.
+ * Get packet out of link at time T + L + Queue.
+ */
+
+typedef struct st_picoquictest_sim_packet_t {
+    struct st_picoquictest_sim_packet_t* next_packet;
+    uint64_t arrival_time;
+    size_t length;
+    struct sockaddr_storage addr_from;
+    struct sockaddr_storage addr_to;
+    uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE];
+} picoquictest_sim_packet_t;
+
+typedef struct st_picoquictest_sim_link_t {
+    uint64_t next_send_time;
+    uint64_t queue_time;
+    uint64_t queue_delay_max;
+    uint64_t picosec_per_byte;
+    uint64_t microsec_latency;
+    uint64_t* loss_mask;
+    uint64_t packets_dropped;
+    uint64_t packets_sent;
+    uint64_t jitter;
+    uint64_t jitter_seed;
+    picoquictest_sim_packet_t* first_packet;
+    picoquictest_sim_packet_t* last_packet;
+} picoquictest_sim_link_t;
+
+picoquictest_sim_link_t* picoquictest_sim_link_create(double data_rate_in_gps,
+    uint64_t microsec_latency, uint64_t* loss_mask, uint64_t queue_delay_max, uint64_t current_time);
+
+void picoquictest_sim_link_delete(picoquictest_sim_link_t* link);
+
+picoquictest_sim_packet_t* picoquictest_sim_link_create_packet();
+
+uint64_t picoquictest_sim_link_next_arrival(picoquictest_sim_link_t* link, uint64_t current_time);
+
+picoquictest_sim_packet_t* picoquictest_sim_link_dequeue(picoquictest_sim_link_t* link,
+    uint64_t current_time);
+
+void picoquictest_sim_link_submit(picoquictest_sim_link_t* link, picoquictest_sim_packet_t* packet,
+    uint64_t current_time);
+
+/* SNI, Stores and Certificates used for test
+ */
+
+#define PICOQUIC_TEST_SNI "test.example.com"
+
+#ifdef _WINDOWS
+#define PICOQUIC_TEST_FILE_SERVER_CERT "certs\\cert.pem"
+#define PICOQUIC_TEST_FILE_SERVER_BAD_CERT "certs\\badcert.pem"
+#define PICOQUIC_TEST_FILE_SERVER_KEY "certs\\key.pem"
+#define PICOQUIC_TEST_FILE_CERT_STORE "certs\\test-ca.crt"
+#define PICOQUIC_TEST_FILE_ESNI_KEY "certs\\esni-secp256r1.key"
+#define PICOQUIC_TEST_FILE_ESNI_RR "certs\\esni-rr.bin"
+#else
+#define PICOQUIC_TEST_FILE_SERVER_CERT "certs/cert.pem"
+#define PICOQUIC_TEST_FILE_SERVER_BAD_CERT "certs/badcert.pem"
+#define PICOQUIC_TEST_FILE_SERVER_KEY "certs/key.pem"
+#define PICOQUIC_TEST_FILE_CERT_STORE "certs/test-ca.crt"
+#define PICOQUIC_TEST_FILE_ESNI_KEY "certs/esni-secp256r1.key"
+#define PICOQUIC_TEST_FILE_ESNI_RR "certs/esni-rr.bin"
+#endif
+
+ /* To set the solution directory for tests */
+extern char const* picoquic_test_solution_dir;
 #ifdef __cplusplus
 }
 #endif
