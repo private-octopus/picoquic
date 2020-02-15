@@ -1541,7 +1541,7 @@ http_stress_client_context_t* http_stress_client_create(size_t client_id, uint64
             size_t nb_written = 0;
 
             if ((ret = picoquic_sprintf(test_addr, sizeof(test_addr), &nb_written, "2::%x:%x", (uint16_t)(client_id >> 16), (uint16_t)client_id & 0xFFFF)) == 0) {
-                ret = picoquic_get_test_address(test_addr, 4443, &ctx->client_address);
+                ret = picoquic_store_text_addr(&ctx->client_address, test_addr, 4443);
             }
         }
         
@@ -1589,7 +1589,7 @@ int http_stress_test()
     struct sockaddr_storage server_address;
     uint64_t server_time = 0;
 
-    ret = picoquic_get_test_address("1::1", 443, &server_address);
+    ret = picoquic_store_text_addr(&server_address, "1::1", 443);
 
     if (ret == 0) {
         ret = serve_file_test_set_param(&file_param, file_name_buffer, sizeof(file_name_buffer));
