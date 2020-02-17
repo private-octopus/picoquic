@@ -73,6 +73,9 @@ void debug_printf_resume(void);
 int debug_printf_reset(int suspended);
 void debug_dump(const void * x, int len);
 
+/* utilities */
+char* picoquic_string_create(const char* original, size_t len);
+char* picoquic_string_duplicate(const char* original);
 int picoquic_sprintf(char* buf, size_t buf_len, size_t * nb_chars, const char* fmt, ...);
 
 extern const picoquic_connection_id_t picoquic_null_connection_id;
