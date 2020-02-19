@@ -969,6 +969,7 @@ void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet_t
     if (ret == 0 && length > 0) {
         packet->length = length;
         cnx->pkt_ctx[packet->pc].send_sequence++;
+        path_x->latest_sent_time = current_time;
         packet->delivered_prior = path_x->delivered_last;
         packet->delivered_time_prior = path_x->delivered_time_last;
         packet->delivered_sent_prior = path_x->delivered_sent_last;
@@ -2056,6 +2057,48 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                             break;
                         }
                     }
+                }
+            }
+        }
+    }
+
+    if (ret == 0 && length == 0) {
+        /* In some circumstances, there is a risk that the handshakes stops because the
+         * server is performing anti-dos mitigation and the client has nothing to repeat */
+        if ((packet->ptype == picoquic_packet_initial && cnx->crypto_context[picoquic_epoch_handshake].aead_encrypt == NULL &&
+            cnx->pkt_ctx[picoquic_packet_context_initial].retransmit_newest == NULL &&
+            cnx->pkt_ctx[picoquic_packet_context_initial].first_sack_item.end_of_sack_range >= 0) ||
+            (packet->ptype == picoquic_packet_handshake &&
+                cnx->pkt_ctx[picoquic_packet_context_handshake].retransmit_newest == NULL &&
+                cnx->pkt_ctx[picoquic_packet_context_handshake].first_sack_item.end_of_sack_range == UINT64_MAX &&
+                cnx->pkt_ctx[picoquic_packet_context_handshake].send_sequence == 0))
+        {
+            uint64_t try_time_next = cnx->path[0]->latest_sent_time + cnx->path[0]->smoothed_rtt;
+            if (current_time < try_time_next) {
+                /* schedule a wake time to repeat the probing. */
+                if (*next_wake_time > try_time_next) {
+                    *next_wake_time = try_time_next;
+                    SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+                }
+            }
+            else {
+                length = header_length;
+                packet->offset = length;
+                if (packet->ptype == picoquic_packet_initial) {
+                    /* Repeat an ACK because it helps. */
+                    ret = picoquic_prepare_ack_frame(cnx, current_time, pc, &bytes[length],
+                        send_buffer_max - checksum_overhead - length, &data_bytes);
+                    if (ret == 0) {
+                        length += data_bytes;
+                    }
+                    else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
+                        /* Really strange. Just ignore */
+                        ret = 0;
+                    }
+                    length = picoquic_pad_to_target_length(bytes, length, send_buffer_max - checksum_overhead);
+                }
+                else {
+                    length = picoquic_pad_to_target_length(bytes, length, length + 8);
                 }
             }
         }
