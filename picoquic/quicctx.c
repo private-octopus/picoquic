@@ -529,6 +529,14 @@ picoquic_stateless_packet_t* picoquic_dequeue_stateless_packet(picoquic_quic_t* 
     return sp;
 }
 
+int picoquic_cnx_is_still_logging(picoquic_cnx_t* cnx)
+{
+    int ret =
+        (cnx->pkt_ctx[picoquic_packet_context_application].send_sequence < PICOQUIC_LOG_PACKET_MAX_SEQUENCE || cnx->quic->use_long_log);
+
+    return ret;
+}
+
 /* Connection context creation and registration */
 int picoquic_register_cnx_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, picoquic_path_t * path_x, picoquic_connection_id_t cnx_id)
 {

@@ -1121,7 +1121,7 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
     picoquic_h09_server_callback_ctx_t* ctx = NULL;
     picohttp_server_stream_ctx_t* stream_ctx = (picohttp_server_stream_ctx_t*)v_stream_ctx;
 
-    if (cnx->quic->F_log != NULL) {
+    if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
         fprintf(cnx->quic->F_log, "%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
         picoquic_log_time(cnx->quic->F_log, cnx, picoquic_current_time(), "", " : ");
         fprintf(cnx->quic->F_log, "Server CB, Stream: %" PRIu64 ", %" PRIst " bytes, fin=%d (%s)\n",
