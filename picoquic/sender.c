@@ -2067,7 +2067,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
          * server is performing anti-dos mitigation and the client has nothing to repeat */
         if ((packet->ptype == picoquic_packet_initial && cnx->crypto_context[picoquic_epoch_handshake].aead_encrypt == NULL &&
             cnx->pkt_ctx[picoquic_packet_context_initial].retransmit_newest == NULL &&
-            cnx->pkt_ctx[picoquic_packet_context_initial].first_sack_item.end_of_sack_range >= 0) ||
+            cnx->pkt_ctx[picoquic_packet_context_initial].first_sack_item.end_of_sack_range != UINT64_MAX) ||
             (packet->ptype == picoquic_packet_handshake &&
                 cnx->pkt_ctx[picoquic_packet_context_handshake].retransmit_newest == NULL &&
                 cnx->pkt_ctx[picoquic_packet_context_handshake].first_sack_item.end_of_sack_range == UINT64_MAX &&
@@ -3069,7 +3069,12 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
 
     packet->pc = pc;
 
-    if ((length = picoquic_retransmit_needed(cnx, pc, path_x, current_time, next_wake_time, packet, 
+    /* The first action is normally to retransmit lost packets. But if retransmit follows an
+     * MTU drop, the stream frame will be fragmented and a fragment will be queued as a
+     * misc frame. These fragments should have chance to go out before more retransmit is
+     * permitted, hence the test here for the misc-frame */
+    if (cnx->first_misc_frame == NULL &&
+        (length = picoquic_retransmit_needed(cnx, pc, path_x, current_time, next_wake_time, packet, 
         send_buffer_min_max, &header_length)) > 0) {
         /* Check whether it makes sense to add an ACK at the end of the retransmission */
         /* Don't do that if it risks mixing clear text and encrypted ack */
