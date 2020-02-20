@@ -659,6 +659,8 @@ uint64_t picoquic_get_data_sent(picoquic_cnx_t * cnx);
 
 uint64_t picoquic_get_data_received(picoquic_cnx_t * cnx);
 
+int picoquic_cnx_is_still_logging(picoquic_cnx_t* cnx);
+
 #ifdef __cplusplus
 }
 #endif
