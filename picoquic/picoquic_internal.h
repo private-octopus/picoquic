@@ -762,6 +762,7 @@ typedef struct st_picoquic_path_t {
     uint64_t max_spurious_rtt;
     uint64_t max_reorder_delay;
     uint64_t max_reorder_gap;
+    uint64_t latest_sent_time;
 
     /* MTU */
     size_t send_mtu;
