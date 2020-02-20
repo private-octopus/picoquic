@@ -3066,6 +3066,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
     size_t length = 0;
     size_t checksum_overhead = picoquic_get_checksum_length(cnx, picoquic_epoch_1rtt);
     size_t send_buffer_min_max = (send_buffer_max > path_x->send_mtu) ? path_x->send_mtu : send_buffer_max;
+    int split_repeat_queued = 0;
 
     packet->pc = pc;
 
@@ -3297,6 +3298,8 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                             ret = picoquic_prepare_first_misc_frame(cnx, &bytes[length],
                                 send_buffer_min_max - checksum_overhead - length, &data_bytes);
                             if (ret == 0) {
+                                split_repeat_queued |= (data_bytes > 0 &&
+                                    PICOQUIC_IN_RANGE(bytes[length], picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max));
                                 length += data_bytes;
                             }
                             else {
@@ -3356,7 +3359,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                         }
 
                         /* Encode the stream frame, or frames */
-                        while (stream != NULL && length + checksum_overhead < send_buffer_min_max) {
+                        while (!split_repeat_queued && stream != NULL && length + checksum_overhead < send_buffer_min_max) {
                             int is_still_active = 0;
                             ret = picoquic_prepare_stream_frame(cnx, stream, &bytes[length],
                                 send_buffer_min_max - checksum_overhead - length, &data_bytes, &is_still_active);
