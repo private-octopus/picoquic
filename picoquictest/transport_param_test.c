@@ -126,194 +126,176 @@ static picoquic_tp_t transport_param_test10 = {
 };
 
 uint8_t client_param1[] = {
-    0, 0x30,
-    0, picoquic_tp_initial_max_stream_data_bidi_local, 0, 4, 0x80, 0, 0xFF, 0xFF,
-    0, picoquic_tp_initial_max_data, 0, 4, 0x80, 0x40, 0, 0,
-    0, picoquic_tp_initial_max_streams_bidi, 0, 4, 0x80, 0, 0x40, 0x00,
-    0, picoquic_tp_idle_timeout, 0, 1, 0x1E,
-    0, picoquic_tp_max_packet_size, 0, 2, 0x45, 0xC8,
-    0, picoquic_tp_initial_max_streams_uni, 0, 4, 0x80, 0, 0x40, 0x00,
-    0, picoquic_tp_active_connection_id_limit, 0, 1, PICOQUIC_NB_PATH_TARGET
+    picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x80, 0, 0xFF, 0xFF,
+    picoquic_tp_initial_max_data, 4, 0x80, 0x40, 0, 0,
+    picoquic_tp_initial_max_streams_bidi, 4, 0x80, 0, 0x40, 0x00,
+    picoquic_tp_idle_timeout, 1, 0x1E,
+    picoquic_tp_max_packet_size, 2, 0x45, 0xC8,
+    picoquic_tp_initial_max_streams_uni, 4, 0x80, 0, 0x40, 0x00,
+    picoquic_tp_active_connection_id_limit, 1, PICOQUIC_NB_PATH_TARGET
 };
 
 uint8_t client_param2[] = {
-    0, 0x30,
-    0, picoquic_tp_initial_max_stream_data_bidi_local, 0, 4, 0x81, 0, 0, 0,
-    0, picoquic_tp_initial_max_data, 0, 4, 0x81, 0, 0, 0,
-    0, picoquic_tp_initial_max_streams_bidi, 0, 1, 0x01,
-    0, picoquic_tp_idle_timeout, 0, 2, 0x40, 0xFF,
-    0, picoquic_tp_max_packet_size, 0, 2, 0x45, 0xC8,
-    0, picoquic_tp_max_datagram_size, 0, 2,0x45, 0xC8,
-    0x10, 0x57, 0x00, 0x01, 1,
-    0x10, 0xDE, 0x00, 0x00
+    picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x81, 0, 0, 0,
+    picoquic_tp_initial_max_data, 4, 0x81, 0, 0, 0,
+    picoquic_tp_initial_max_streams_bidi, 1, 0x01,
+    picoquic_tp_idle_timeout, 2, 0x40, 0xFF,
+    picoquic_tp_max_packet_size, 2, 0x45, 0xC8,
+    picoquic_tp_max_datagram_size, 2,0x45, 0xC8,
+    0x50, 0x57, 0x01, 1,
+    0x50, 0xDE, 0x00
 };
 
 uint8_t client_param3[] = {
-    0, 0x1F,
-    0, picoquic_tp_initial_max_stream_data_bidi_local, 0, 4, 0x81, 0, 0, 0,
-    0, picoquic_tp_initial_max_data, 0, 4, 0x81, 0, 0, 0,
-    0, picoquic_tp_initial_max_streams_bidi, 0, 1, 0x01,
-    0, picoquic_tp_idle_timeout, 0, 2, 0x40, 0xFF,
-    0x10, 0xDE, 0x00, 0x00
+    picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x81, 0, 0, 0,
+    picoquic_tp_initial_max_data, 4, 0x81, 0, 0, 0,
+    picoquic_tp_initial_max_streams_bidi, 1, 0x01,
+    picoquic_tp_idle_timeout, 2, 0x40, 0xFF,
+    0x50, 0xDE, 0x00
 };
 
 uint8_t client_param4[] = {
-    0, 0x1F,
-    0, picoquic_tp_initial_max_stream_data_bidi_local, 0, 4, 0x80, 0x01, 0, 0,
-    0, picoquic_tp_initial_max_data, 0, 8, 0xC0, 0, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF,
-    0, picoquic_tp_idle_timeout, 0, 1, 0x1E,
-    0, picoquic_tp_max_packet_size, 0, 2, 0x45, 0xC8
+    picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x80, 0x01, 0, 0,
+    picoquic_tp_initial_max_data, 8, 0xC0, 0, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF,
+    picoquic_tp_idle_timeout, 1, 0x1E,
+    picoquic_tp_max_packet_size, 2, 0x45, 0xC8
 };
 
 uint8_t client_param5[] = {
-    0, 0x26,
-    0, picoquic_tp_idle_timeout, 0, 0x02, 0x40, 0x0A,
-    0, picoquic_tp_initial_max_streams_bidi, 0, 1, 0x02,
-    0, picoquic_tp_initial_max_stream_data_bidi_local, 0, 0x04, 0x80, 0, 0x20, 0,
-    0, picoquic_tp_initial_max_data, 0, 0x04, 0x80, 0, 0x40, 0,
-    0, picoquic_tp_max_packet_size, 0, 0x02, 0x45, 0xC0,
-    0, picoquic_tp_ack_delay_exponent, 0, 0x01, 0x11
+    picoquic_tp_idle_timeout, 2, 0x40, 0x0A,
+    picoquic_tp_initial_max_streams_bidi, 1, 0x02,
+    picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x80, 0, 0x20, 0,
+    picoquic_tp_initial_max_data, 4, 0x80, 0, 0x40, 0,
+    picoquic_tp_max_packet_size, 2, 0x45, 0xC0,
+    picoquic_tp_ack_delay_exponent, 1, 0x11
 };
 
-uint8_t server_param1[] = {
-    0, 0x37,
-    0, picoquic_tp_initial_max_stream_data_bidi_local, 0, 4, 0x80, 0, 0xFF, 0xFF,
-    0, picoquic_tp_initial_max_data, 0, 4, 0x80, 0x40, 0, 0,
-    0, picoquic_tp_initial_max_streams_bidi,  0, 4, 0x80, 0, 0x40, 0x00,
-    0, picoquic_tp_idle_timeout, 0, 1, 0x1E,
-    0, picoquic_tp_max_packet_size, 0, 2, 0x45, 0xC8,
-    0, picoquic_tp_stateless_reset_token, 0, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
+uint8_t server_param1[] = {\
+    picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x80, 0, 0xFF, 0xFF,
+    picoquic_tp_initial_max_data, 4, 0x80, 0x40, 0, 0,
+    picoquic_tp_initial_max_streams_bidi, 4, 0x80, 0, 0x40, 0x00,
+    picoquic_tp_idle_timeout, 1, 0x1E,
+    picoquic_tp_max_packet_size, 2, 0x45, 0xC8,
+    picoquic_tp_stateless_reset_token, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
 };
 
 uint8_t server_param2[] = {
-    0, 0x35,
-    0, picoquic_tp_initial_max_stream_data_bidi_local, 0, 4, 0x81, 0, 0, 0,
-    0, picoquic_tp_initial_max_data, 0, 4, 0x81, 0, 0, 0,
-    0, picoquic_tp_initial_max_streams_bidi, 0, 1, 2,
-    0, picoquic_tp_idle_timeout, 0, 2, 0x40, 0xFF,
-    0, picoquic_tp_max_packet_size, 0, 2, 0x45, 0xC8,
-    0, picoquic_tp_stateless_reset_token, 0, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
+    picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x81, 0, 0, 0,
+    picoquic_tp_initial_max_data, 4, 0x81, 0, 0, 0,
+    picoquic_tp_initial_max_streams_bidi, 1, 2,
+    picoquic_tp_idle_timeout, 2, 0x40, 0xFF,
+    picoquic_tp_max_packet_size, 2, 0x45, 0xC8,
+    picoquic_tp_stateless_reset_token, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
 };
 
 uint8_t client_param8[] = {
-    0, 0x1B,
-    0, picoquic_tp_initial_max_stream_data_bidi_local, 0, 4, 0x80, 0, 0xFF, 0xFF,
-    0, picoquic_tp_initial_max_data, 0, 4, 0x80, 0x40, 0, 0,
-    0, picoquic_tp_idle_timeout, 0, 1, 0x1E,
-    0, picoquic_tp_max_packet_size, 0, 2, 0x45, 0xC8,
+    picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x80, 0, 0xFF, 0xFF,
+    picoquic_tp_initial_max_data, 4, 0x80, 0x40, 0, 0,
+    picoquic_tp_idle_timeout, 1, 0x1E,
+    picoquic_tp_max_packet_size, 2, 0x45, 0xC8,
 };
 
 uint8_t server_param3[] = {
-    0, 102,
-    0, picoquic_tp_initial_max_stream_data_bidi_local, 0, 4, 0x81, 0, 0, 0,
-    0, picoquic_tp_initial_max_data, 0, 4, 0x81, 0, 0, 0,
-    0, picoquic_tp_initial_max_streams_bidi, 0, 1, 2,
-    0, picoquic_tp_idle_timeout, 0, 2, 0x40, 0xFF,
-    0, picoquic_tp_max_packet_size, 0, 2, 0x45, 0xC8,
-    0, picoquic_tp_stateless_reset_token, 0, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
-    0, picoquic_tp_server_preferred_address, 0, 45,
+    picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x81, 0, 0, 0,
+    picoquic_tp_initial_max_data, 4, 0x81, 0, 0, 0,
+    picoquic_tp_initial_max_streams_bidi, 1, 2,
+    picoquic_tp_idle_timeout, 2, 0x40, 0xFF,
+    picoquic_tp_max_packet_size, 2, 0x45, 0xC8,
+    picoquic_tp_stateless_reset_token, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+    picoquic_tp_server_preferred_address, 45,
     10, 0, 0, 1, 0x11, 0x51, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     4, 1, 2, 3, 4, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
 };
 
 uint8_t client_param9[] = {
-    0, 0x2F,
-    0, picoquic_tp_initial_max_stream_data_bidi_local, 0, 4, 0x80, 0, 0xFF, 0xFF,
-    0, picoquic_tp_initial_max_data, 0, 4, 0x80, 0x40, 0, 0,
-    0, picoquic_tp_initial_max_streams_bidi,  0, 4, 0x80, 0, 0x40, 0x00,
-    0, picoquic_tp_idle_timeout, 0, 1, 0x1E,
-    0, picoquic_tp_max_packet_size, 0, 2, 0x45, 0xC8,
-    0, picoquic_tp_initial_max_streams_uni,  0, 4, 0x80, 0, 0x40, 0x00,
-    0, picoquic_tp_disable_migration, 0, 0
+    picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x80, 0, 0xFF, 0xFF,
+    picoquic_tp_initial_max_data, 4, 0x80, 0x40, 0, 0,
+    picoquic_tp_initial_max_streams_bidi, 4, 0x80, 0, 0x40, 0x00,
+    picoquic_tp_idle_timeout, 1, 0x1E,
+    picoquic_tp_max_packet_size, 2, 0x45, 0xC8,
+    picoquic_tp_initial_max_streams_uni, 4, 0x80, 0, 0x40, 0x00,
+    picoquic_tp_disable_migration, 0
 };
 
 uint8_t client_param10[] = {
-    0, 0x23,
-    0, picoquic_tp_initial_max_stream_data_bidi_local, 0, 4, 0x80, 0, 0xFF, 0xFF,
-    0, picoquic_tp_initial_max_data, 0, 4, 0x80, 0x40, 0, 0,
-    0, picoquic_tp_idle_timeout, 0, 1, 0x1E,
-    0, picoquic_tp_max_packet_size, 0, 2, 0x45, 0xC8,
+    picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x80, 0, 0xFF, 0xFF,
+    picoquic_tp_initial_max_data, 4, 0x80, 0x40, 0, 0,
+    picoquic_tp_idle_timeout, 1, 0x1E,
+    picoquic_tp_max_packet_size, 2, 0x45, 0xC8,
     /* Add "grease" parameter to test greasing */
-    0x0C, 0x56, 0, 4, 0xde, 0xad, 0xbe, 0xef
+    0x4C, 0x56, 4, 0xde, 0xad, 0xbe, 0xef
 };
 
 uint8_t client_param11[] = {
-    0, 0x36,
-    0, picoquic_tp_initial_max_stream_data_bidi_local, 0, 4, 0x80, 0, 0xFF, 0xFF,
-    0, picoquic_tp_initial_max_data, 0, 4, 0x80, 0x40, 0, 0,
-    0, picoquic_tp_initial_max_streams_bidi, 0, 4, 0x80, 0, 0x40, 0x00,
-    0, picoquic_tp_idle_timeout, 0, 1, 0x1E,
-    0, picoquic_tp_max_packet_size, 0, 2, 0x45, 0xC8,
-    0, picoquic_tp_initial_max_streams_uni, 0, 4, 0x80, 0, 0x40, 0x00,
-    0, picoquic_tp_active_connection_id_limit, 0, 1, PICOQUIC_NB_PATH_TARGET,
+    picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x80, 0, 0xFF, 0xFF,
+    picoquic_tp_initial_max_data, 4, 0x80, 0x40, 0, 0,
+    picoquic_tp_initial_max_streams_bidi, 4, 0x80, 0, 0x40, 0x00,
+    picoquic_tp_idle_timeout, 1, 0x1E,
+    picoquic_tp_max_packet_size, 2, 0x45, 0xC8,
+    picoquic_tp_initial_max_streams_uni, 4, 0x80, 0, 0x40, 0x00,
+    picoquic_tp_active_connection_id_limit, 1, PICOQUIC_NB_PATH_TARGET,
     /* Add same grease value that the server will generate */
-    0, 0x59, 0, 2, 0x42, 0x03
+    0x40, 0x59, 2, 0x42, 0x03
 };
 
 /* Error 2: wrong option length, larger than message size */
 uint8_t client_param_err2[] = {
-    0, 0x2B,
-    0, picoquic_tp_initial_max_stream_data_bidi_local, 0, 4, 0x80, 0, 0xFF, 0xFF,
-    0, picoquic_tp_initial_max_data, 0, 4, 0x80, 0x40, 0, 0,
-    0, picoquic_tp_initial_max_streams_bidi,  0, 4, 0x80, 0, 0x40, 0x00,
-    0, picoquic_tp_idle_timeout, 0, 1, 0x1E,
-    0, picoquic_tp_max_packet_size, 0, 2, 0x45, 0xC8,
-    0, picoquic_tp_initial_max_streams_uni, 0, 2, 0x80, 0, 0x40, 0x00
+    picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x80, 0, 0xFF, 0xFF,
+    picoquic_tp_initial_max_data, 4, 0x80, 0x40, 0, 0,
+    picoquic_tp_initial_max_streams_bidi, 4, 0x80, 0, 0x40, 0x00,
+    picoquic_tp_idle_timeout, 1, 0x1E,
+    picoquic_tp_max_packet_size, 2, 0x45, 0xC8,
+    picoquic_tp_initial_max_streams_uni, 2, 0x80, 0, 0x40, 0x00
 };
 
 /* Error 3: wrong option length, one byte shorter than last parameter */
 uint8_t client_param_err3[] = {
-    0, 0x28,
-    0, picoquic_tp_initial_max_stream_data_bidi_local, 0, 4, 0x80, 0, 0xFF, 0xFF,
-    0, picoquic_tp_initial_max_data, 0, 4, 0x80, 0x40, 0, 0,
-    0, picoquic_tp_initial_max_streams_bidi,  0, 4, 0x80, 0, 0x40, 0x00,
-    0, picoquic_tp_idle_timeout, 0, 1, 0x1E,
-    0, picoquic_tp_max_packet_size, 0, 2, 0x45, 0xC8,
-    0, picoquic_tp_initial_max_streams_uni, 0, 2, 0x80, 0, 0x40, 0x00
+    picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x80, 0, 0xFF, 0xFF,
+    picoquic_tp_initial_max_data, 4, 0x80, 0x40, 0, 0,
+    picoquic_tp_initial_max_streams_bidi, 4, 0x80, 0, 0x40, 0x00,
+    picoquic_tp_idle_timeout, 1, 0x1E,
+    picoquic_tp_max_packet_size, 2, 0x45, 0xC8,
+    picoquic_tp_initial_max_streams_uni, 2, 0x80, 0, 0x40, 0x00
 };
 
 /* Error 4: parameter 0 not the right size */
 uint8_t client_param_err4[] = {
-    0, 0x25,
-    0, picoquic_tp_initial_max_stream_data_bidi_local, 0, 2, 0xFF, 0xFF,
-    0, picoquic_tp_initial_max_data, 0, 4, 0x80, 0x40, 0, 0,
-    0, picoquic_tp_initial_max_streams_bidi,  0, 4, 0x80, 0, 0x40, 0x00,
-    0, picoquic_tp_idle_timeout, 0, 1, 0x1E,
-    0, picoquic_tp_max_packet_size, 0, 2, 0x45, 0xC8,
-    0, picoquic_tp_initial_max_streams_uni, 0, 2, 0x80, 0, 0x40, 0x00
+    picoquic_tp_initial_max_stream_data_bidi_local, 2, 0xFF, 0xFF,
+    picoquic_tp_initial_max_data, 4, 0x80, 0x40, 0, 0,
+    picoquic_tp_initial_max_streams_bidi, 4, 0x80, 0, 0x40, 0x00,
+    picoquic_tp_idle_timeout, 1, 0x1E,
+    picoquic_tp_max_packet_size, 2, 0x45, 0xC8,
+    picoquic_tp_initial_max_streams_uni, 2, 0x80, 0, 0x40, 0x00
 };
 
 /* Error 5: parameter 1 not the right size */
 uint8_t client_param_err5[] = {
-    0, 0x29,
-    0, picoquic_tp_initial_max_stream_data_bidi_local, 0, 4, 0x80, 0x40, 0, 0,
-    0, picoquic_tp_initial_max_data, 0, 2, 0xFF, 0xFF,
-    0, picoquic_tp_initial_max_streams_bidi,  0, 4, 0x80, 0, 0x40, 0x00,
-    0, picoquic_tp_idle_timeout, 0, 1, 0x1E,
-    0, picoquic_tp_max_packet_size, 0, 2, 0x45, 0xC8,
-    0, picoquic_tp_initial_max_streams_uni, 0, 2, 0x80, 0, 0x40, 0x00
+    picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x80, 0x40, 0, 0,
+    picoquic_tp_initial_max_data, 2, 0xFF, 0xFF,
+    picoquic_tp_initial_max_streams_bidi, 4, 0x80, 0, 0x40, 0x00,
+    picoquic_tp_idle_timeout, 1, 0x1E,
+    picoquic_tp_max_packet_size, 2, 0x45, 0xC8,
+    picoquic_tp_initial_max_streams_uni, 2, 0x80, 0, 0x40, 0x00
 };
 
 /* Error 6: parameter 2 not the right size */
 uint8_t client_param_err6[] = {
-    0, 0x2B,
-    0, picoquic_tp_initial_max_stream_data_bidi_local, 0, 4, 0x80, 0x40, 0, 0,
-    0, picoquic_tp_initial_max_data, 0, 4, 0x40, 0x40, 0, 0,
-    0, picoquic_tp_initial_max_streams_bidi, 0, 4, 0x80, 0x40, 0, 0,
-    0, picoquic_tp_idle_timeout, 0, 1, 0x1E,
-    0, picoquic_tp_max_packet_size, 0, 2, 0x45, 0xC8,
-    0, picoquic_tp_initial_max_streams_uni, 0, 4, 0x80, 0, 0x40, 0x00
+    picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x80, 0x40, 0, 0,
+    picoquic_tp_initial_max_data, 4, 0x40, 0x40, 0, 0,
+    picoquic_tp_initial_max_streams_bidi, 4, 0x80, 0x40, 0, 0,
+    picoquic_tp_idle_timeout, 1, 0x1E,
+    picoquic_tp_max_packet_size, 2, 0x45, 0xC8,
+    picoquic_tp_initial_max_streams_uni, 4, 0x80, 0, 0x40, 0x00
 };
 
 /* Error 7: parameter 3 not the right size */
 uint8_t client_param_err7[] = {
-    0, 0x2C,
-    0, picoquic_tp_initial_max_stream_data_bidi_local, 0, 4, 0x80, 0, 0xFF, 0xFF,
-    0, picoquic_tp_initial_max_data, 0, 4, 0x80, 0x40, 0, 0,
-    0, picoquic_tp_initial_max_streams_bidi,  0, 4, 0x00, 0, 0x40, 0x00,
-    0, picoquic_tp_idle_timeout, 0, 4, 0, 0, 0, 0x1E,
-    0, picoquic_tp_max_packet_size, 0, 2, 0x45, 0xC8,
-    0, picoquic_tp_initial_max_streams_uni, 0, 4, 0x80, 0, 0x40, 0x00
+    picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x80, 0, 0xFF, 0xFF,
+    picoquic_tp_initial_max_data, 4, 0x80, 0x40, 0, 0,
+    picoquic_tp_initial_max_streams_bidi, 4, 0x00, 0, 0x40, 0x00,
+    picoquic_tp_idle_timeout, 4, 0, 0, 0, 0x1E,
+    picoquic_tp_max_packet_size, 2, 0x45, 0xC8,
+    picoquic_tp_initial_max_streams_uni, 4, 0x80, 0, 0x40, 0x00
 };
 
 
@@ -453,7 +435,7 @@ int transport_param_set_contexts(picoquic_quic_t ** quic_ctx, picoquic_cnx_t ** 
 {
     int ret = 0;
     picoquic_connection_id_t initial_cnx_id = { { 1, 2, 3, 4, 5, 6, 7, 8, 0, 0, 0, 0, 0, 0, 0, 0 }, 8 };
-    picoquic_connection_id_t remote_cnx_id = { { 0, 1, 2, 3, 4, 5, 6, 7,  0, 0, 0, 0, 0, 0, 0, 0 }, 8 };
+    picoquic_connection_id_t remote_cnx_id = { { 0, 1, 2, 3, 4, 5, 6, 7, 0, 0, 0, 0, 0, 0, 0, 0 }, 8 };
     struct sockaddr_in addr;
     char test_server_cert_file[512];
     char test_server_key_file[512];
