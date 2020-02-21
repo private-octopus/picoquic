@@ -2130,10 +2130,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
         if (length > 0 && packet->ptype == picoquic_packet_handshake && !is_ack_only) {
             /* Sending an ack eliciting handshake packet terminates the use of the initial context */
             picoquic_implicit_handshake_ack(cnx, picoquic_packet_context_initial, current_time);
-
-            if (picoquic_supported_versions[cnx->version_index].version != PICOQUIC_FIFTEENTH_INTEROP_VERSION) {
-                picoquic_crypto_context_free(&cnx->crypto_context[picoquic_epoch_initial]);
-            }
+            picoquic_crypto_context_free(&cnx->crypto_context[picoquic_epoch_initial]);
         }
 
         picoquic_finalize_and_protect_packet(cnx, packet,
@@ -2596,17 +2593,16 @@ void picoquic_ready_state_transition(picoquic_cnx_t* cnx, uint64_t current_time)
     picoquic_implicit_handshake_ack(cnx, picoquic_packet_context_initial, current_time);
     picoquic_implicit_handshake_ack(cnx, picoquic_packet_context_handshake, current_time);
 
-    (void) picoquic_register_net_secret(cnx);
+    (void)picoquic_register_net_secret(cnx);
 
-    if (picoquic_supported_versions[cnx->version_index].version != PICOQUIC_FIFTEENTH_INTEROP_VERSION) {
-        if (!cnx->client_mode) {
-            (void)picoquic_queue_handshake_done_frame(cnx);
-        }
-        /* Remove handshake and initial keys if they are still around */
-        picoquic_crypto_context_free(&cnx->crypto_context[picoquic_epoch_initial]);
-        picoquic_crypto_context_free(&cnx->crypto_context[picoquic_epoch_0rtt]);
-        picoquic_crypto_context_free(&cnx->crypto_context[picoquic_epoch_handshake]);
+    if (!cnx->client_mode) {
+        (void)picoquic_queue_handshake_done_frame(cnx);
     }
+
+    /* Remove handshake and initial keys if they are still around */
+    picoquic_crypto_context_free(&cnx->crypto_context[picoquic_epoch_initial]);
+    picoquic_crypto_context_free(&cnx->crypto_context[picoquic_epoch_0rtt]);
+    picoquic_crypto_context_free(&cnx->crypto_context[picoquic_epoch_handshake]);
 
     /* Start migration to server preferred address if present */
     if (cnx->client_mode) {
@@ -2628,7 +2624,6 @@ void picoquic_ready_state_transition(picoquic_cnx_t* cnx, uint64_t current_time)
         cnx->ack_gap_remote = picoquic_compute_ack_gap(cnx, cnx->path[0]->receive_rate_max);
         cnx->ack_delay_remote = picoquic_compute_ack_delay_max(cnx->path[0]->rtt_min);
     }
-
 }
 
 /* Prepare the next packet to send when in one the ready states 
