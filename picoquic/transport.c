@@ -55,7 +55,7 @@ uint8_t* picoquic_transport_param_varint_encode_old(uint8_t* bytes, const uint8_
 uint64_t picoquic_transport_param_varint_decode(picoquic_cnx_t * cnx, uint8_t* bytes, uint64_t extension_length, int* ret) 
 {
     uint64_t n64 = 0;
-    size_t l_v = picoquic_varint_decode(bytes, extension_length, &n64);
+    uint64_t l_v = picoquic_varint_decode(bytes, (size_t)extension_length, &n64);
 
     if (l_v == 0 || l_v != extension_length) {
         *ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
@@ -1041,8 +1041,8 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                     }
                     case picoquic_tp_server_preferred_address:
                     {
-                        size_t coded_length = picoquic_decode_transport_param_prefered_address(
-                            bytes + byte_index, extension_length, &cnx->remote_parameters.prefered_address);
+                        uint64_t coded_length = picoquic_decode_transport_param_prefered_address(
+                            bytes + byte_index, (size_t)extension_length, &cnx->remote_parameters.prefered_address);
 
                         if (coded_length != extension_length) {
                             ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
@@ -1134,7 +1134,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                     }
 
                     if (ret == 0) {
-                        byte_index += extension_length;
+                        byte_index += (size_t)extension_length;
                     }
                 }
             }
