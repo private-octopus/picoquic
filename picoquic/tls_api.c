@@ -880,17 +880,16 @@ int picoquic_setup_initial_traffic_keys(picoquic_cnx_t* cnx)
  * The key update is defined in RFC 8446 section 7.2 as:
  * application_traffic_secret_N+1 =
  *         HKDF-Expand-Label(application_traffic_secret_N,
- *                            "quic ku" (was "traffic upd" in draft 23), "", Hash.length)
+ *                            "quic ku", "", Hash.length)
   * Label: PICOQUIC_LABEL_TRAFFIC_UPDATE
  */
-int picoquic_rotate_app_secret(ptls_cipher_suite_t * cipher, uint8_t * secret, int compat23)
+int picoquic_rotate_app_secret(ptls_cipher_suite_t * cipher, uint8_t * secret)
 {
     int ret = 0;
     uint8_t new_secret[PTLS_MAX_DIGEST_SIZE];
 
     ret = ptls_hkdf_expand_label(cipher->hash, new_secret,
-        cipher->hash->digest_size, ptls_iovec_init(secret, cipher->hash->digest_size),
-        (compat23)? PICOQUIC_LABEL_TRAFFIC_UPDATE_23: PICOQUIC_LABEL_TRAFFIC_UPDATE,
+        cipher->hash->digest_size, ptls_iovec_init(secret, cipher->hash->digest_size), PICOQUIC_LABEL_TRAFFIC_UPDATE,
         ptls_iovec_init(NULL, 0), PICOQUIC_LABEL_QUIC_BASE);
     if (ret == 0) {
         memcpy(secret, new_secret, cipher->hash->digest_size);
@@ -937,7 +936,7 @@ int picoquic_compute_new_rotated_keys(picoquic_cnx_t * cnx)
 
     /* Recompute the secrets */
     if (ret == 0) {
-        ret = picoquic_rotate_app_secret(cipher, tls_ctx->app_secret_enc, (picoquic_supported_versions[cnx->version_index].version == PICOQUIC_FOURTEENTH_INTEROP_VERSION));
+        ret = picoquic_rotate_app_secret(cipher, tls_ctx->app_secret_enc);
 #ifdef _DEBUG
         if (ret == 0) {
             DBG_PRINTF("Rotated Encryption Secret (%d):\n", (int)cipher->hash->digest_size);
@@ -954,7 +953,7 @@ int picoquic_compute_new_rotated_keys(picoquic_cnx_t * cnx)
     }
 
     if (ret == 0) {
-        ret = picoquic_rotate_app_secret(cipher, tls_ctx->app_secret_dec, (picoquic_supported_versions[cnx->version_index].version == PICOQUIC_FOURTEENTH_INTEROP_VERSION));
+        ret = picoquic_rotate_app_secret(cipher, tls_ctx->app_secret_dec);
 #ifdef _DEBUG
         if (ret == 0) {
             DBG_PRINTF("Rotated Decryption Secret (%d):\n", (int)cipher->hash->digest_size);

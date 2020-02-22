@@ -16,12 +16,19 @@ DNS over QUIC. Then there are plenty of other features we may dream off,
 such as support for multipath, or support for peer-to-peer applications.
 That's on the horizon, but not there now.
 
-The code in this repo is a work in progress. In fact, the specification itself
-is a work in progress. The working group is progressing by running a series
-of meetings and of interop trials between several implementations, listed
-at https://github.com/quicwg/base-drafts/wiki/Implementations. The current
-interoperability matrix is listed at
-https://docs.google.com/spreadsheets/d/1D0tW89vOoaScs3IY9RGC0UesWGAwE6xyLk0l4JtvTVg/edit#gid=273618597.
+The code in this repo is a work in progress, but it is getting stable, just
+like the specification itself. The working group just issued draft-27, which
+is meant as the stabilization draft. We may expect a few draft changes in the
+next months, but these should not affect the wire format. At this stage the
+changes in Picoquic will be mostly driven by performance issues, or API
+improvements. And bug fixing, too.
+
+There are many implementations of Quic, listed
+at https://github.com/quicwg/base-drafts/wiki/Implementations. The interop
+goals are defined at https://github.com/quicwg/base-drafts/wiki/17th-Implementation-Draft,
+which points to the current interoperability matrix. Several implementations provide
+docker images to the "Quic Interop Runner" project, with results updated daily
+at https://interop.seemann.io/.
 
 Bastian Köcher has developed bindings of the picoquic library to [RUST](https://www.rust-lang.org/en-US/). 
 His repository can be found [here](https://github.com/bkchr/picoquic-rs).
@@ -49,12 +56,15 @@ builds, the tests are run through a command line program.
 As explained in the Wiki, Picoquic is actively tested against other implementations
 during the QUIC Interop days. See https://github.com/private-octopus/picoquic/wiki/QUIC-milestones-and-interop-testing.
 
-The current version is aligned with draft 23. All big features are supported, including
+The current version is aligned with draft 27. All big features are supported, including
 the interface between QUIC and TLS, 0-RTT, migration and key rollover. The state of
 development is tracked in the list of issues in this repository.
 
-In parallel, we still plan to do an implementation
-of [DNS over QUIC](https://datatracker.ietf.org/doc/draft-huitema-quic-dnsoquic/).
+we have started an implementation
+of [DNS over QUIC](https://datatracker.ietf.org/doc/draft-huitema-quic-dnsoquic/)
+as [Quicdoq](https://github.com/private-octopus/quicdoq). DNS over Quic is interesting
+by itself, but it also provides an example for building an application different than
+HTTP on top of Picoquic.
 
 We are spending time bettering the implementation. Until now 
 the focus has been on correctness rather than performance. We will keep correctness,
@@ -123,8 +133,8 @@ release. The sources are in "picoquicfirst/picoquicdemo.c".
 ## Testing previous versions
 
 The code is constantly updated to track the latest version of the specification. It currently
-conforms to draft-22, and will negotiate support for the corresponding version `0xFF000016`.
-It will also accept negotiation of version `0xFF000014`, draft-20. 
+conforms to draft-27, and will negotiate support for the corresponding version `0xFF00001b`.
+It will also accept negotiation of version `0xFF000019`, draft-25. 
 
 # Creating QLOG Log Files
 
