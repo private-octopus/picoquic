@@ -36,7 +36,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "0.24d"
+#define PICOQUIC_VERSION "0.27a"
 
 #ifndef PICOQUIC_MAX_PACKET_SIZE
 #define PICOQUIC_MAX_PACKET_SIZE 1536
@@ -159,16 +159,17 @@ typedef enum {
 #define PICOQUIC_TWELFTH_INTEROP_DRAFT19 0xFF000013
 #define PICOQUIC_TWELFTH_INTEROP_VERSION 0xFF000014
 #define PICOQUIC_THIRTEENTH_INTEROP_VERSION 0xFF000016
-#endif
 #define PICOQUIC_FOURTEENTH_INTEROP_VERSION 0xFF000017
 #define PICOQUIC_FIFTEENTH_INTEROP_VERSION 0xFF000018
+#endif
 #define PICOQUIC_SIXTEENTH_INTEROP_VERSION 0xFF000019
+#define PICOQUIC_SEVENTEENTH_INTEROP_VERSION 0xFF00001B
 #define PICOQUIC_INTERNAL_TEST_VERSION_1 0x50435130
 #define PICOQUIC_INTERNAL_TEST_VERSION_2 0x50435131
 
 #define PICOQUIC_INTEROP_VERSION_INDEX 1
 
-#define PICOQUIC_INTEROP_VERSION_LATEST PICOQUIC_FIFTEENTH_INTEROP_VERSION
+#define PICOQUIC_INTEROP_VERSION_LATEST PICOQUIC_SIXTEENTH_INTEROP_VERSION
 
 
 typedef struct st_picoquic_version_parameters_t {
@@ -1248,6 +1249,7 @@ void picoquic_log_prefix_initial_cid64(FILE* F, uint64_t log_cnxid64);
 void picoquic_log_error_packet(FILE* F, uint8_t* bytes, size_t bytes_max, int ret);
 void picoquic_log_processing(FILE* F, picoquic_cnx_t* cnx, size_t length, int ret);
 void picoquic_log_transport_ids(FILE* F, picoquic_cnx_t* cnx, int log_cnxid);
+void picoquic_log_transport_extension_old(FILE* F, picoquic_cnx_t* cnx, int received, int log_cnxid, uint8_t* bytes, size_t bytes_max);
 void picoquic_log_transport_extension(FILE* F, picoquic_cnx_t* cnx, int received, int log_cnxid, uint8_t* bytes, size_t bytes_max);
 void picoquic_log_negotiated_alpn(FILE* F, picoquic_cnx_t* cnx, int received, int log_cnxid, const ptls_iovec_t* list, size_t count);
 void picoquic_log_congestion_state(FILE* F, picoquic_cnx_t* cnx, uint64_t current_time);

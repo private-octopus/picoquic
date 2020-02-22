@@ -35,10 +35,8 @@
 #define PICOHTTP_FIRST_COMMAND_MAX 256
 #define PICOHTTP_RESPONSE_MAX (1 << 20)
 
-#define PICOHTTP_ALPN_H3_LATEST "h3-25"
-#define PICOHTTP_ALPN_HQ_LATEST "hq-25"
-
-
+#define PICOHTTP_ALPN_H3_LATEST "h3-27"
+#define PICOHTTP_ALPN_HQ_LATEST "hq-27"
 
   /* Define the per URL callback used to implement POST and other
    * REST-like interactions
