@@ -63,10 +63,14 @@ int qlog_packet_start(uint64_t time, uint64_t size, const picoquic_packet_header
         fprintf(f, "\n");
     }
 
-    fprintf(f, "[%"PRId64", \"TRANSPORT\", \"%s\", { \"packet_type\": \"%s\", \"header\": { \"packet_number\": \"%"PRIu64"\", \"packet_size\": %"PRIu64", \"payload_length\": %zu",
-        delta_time, (rxtx == 0)?"PACKET_SENT":"PACKET_RECEIVED", ptype2str(ph->ptype), ph->pn64, size, ph->payload_length);
+    fprintf(f, "[%"PRId64", \"TRANSPORT\", \"%s\", { \"packet_type\": \"%s\", \"header\": { \"packet_number\": \"%"PRIu64"\", \"packet_size\": %"PRIu64 ,
+        delta_time, (rxtx == 0)?"PACKET_SENT":"PACKET_RECEIVED", ptype2str(ph->ptype), ph->pn64, size);
 
-    if (ph->srce_cnx_id.id_len > 0) {
+    if (ph->ptype != picoquic_packet_1rtt_protected) {
+        fprintf(f, ", \"payload_length\": %zu", ph->payload_length);
+    }
+
+    if (ph->ptype != picoquic_packet_1rtt_protected && ph->srce_cnx_id.id_len > 0) {
         char scid_name[2 * PICOQUIC_CONNECTION_ID_MAX_SIZE + 1];
         picoquic_print_connection_id_hexa(scid_name, sizeof(scid_name), &ph->srce_cnx_id);
         fprintf(f, ", \"scid\": \"%s\"", scid_name);
@@ -98,7 +102,7 @@ int qlog_packet_frame(bytestream * s, void * ptr)
     uint64_t ftype = 0;
     byteread_vint(s, &ftype);
 
-    fprintf(f, "\"frame_type\": \"%s\"", ftype2str((picoquic_frame_type_enum_t)ftype));
+    fprintf(f, "\n    \"frame_type\": \"%s\"", ftype2str((picoquic_frame_type_enum_t)ftype));
 
     if (ftype >= picoquic_frame_type_stream_range_min &&
         ftype <= picoquic_frame_type_stream_range_max) {
