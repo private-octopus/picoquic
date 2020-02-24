@@ -96,7 +96,7 @@ static uint8_t test_frame_type_blocked[] = {
 static uint8_t test_frame_type_stream_blocked[] = {
     picoquic_frame_type_stream_data_blocked,
     0x80, 1, 0, 0,
-    0x80, 0x01, 0, 0
+    0x80, 0x02, 0, 0
 };
 
 static uint8_t test_frame_type_streams_blocked_bidir[] = {

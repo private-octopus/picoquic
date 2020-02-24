@@ -88,6 +88,276 @@ int qlog_packet_start(uint64_t time, uint64_t size, const picoquic_packet_header
     return 0;
 }
 
+void qlog_truncated_sting(FILE* f, bytestream* s, uint64_t l, uint64_t l_max)
+{
+    uint64_t ll = (l < l_max) ? l : l_max;
+    uint64_t x;
+    int error_found = (s->ptr + (size_t)ll > s->size);
+
+    fprintf(f, "\"");
+
+    for (x = 0; x < ll && s->ptr < s->size; x++) {
+        fprintf(f, "%02x", s->data[s->ptr++]);
+    }
+
+    if (error_found) {
+        fprintf(f, "... coding error!");
+    }
+    else if (l > l_max){
+        fprintf(f, "...");
+    }
+
+    fprintf(f, "\"");
+}
+
+void qlog_reset_stream_frame(FILE* f, bytestream* s)
+{
+    uint64_t stream_id = 0;
+    uint64_t error_code = 0;
+    uint64_t final_size = 0;
+
+    byteread_vint(s, &stream_id);
+    fprintf(f, ", \"stream_id\": %"PRIu64"", stream_id);
+    byteread_vint(s, &error_code);
+    fprintf(f, ", \"error_code\": %"PRIu64"", error_code);
+    byteread_vint(s, &final_size);
+    fprintf(f, ", \"final_size\": %"PRIu64"", final_size);
+}
+
+void qlog_stop_sending_frame(FILE* f, bytestream* s)
+{
+    uint64_t stream_id = 0;
+    uint64_t error_code = 0;
+
+    byteread_vint(s, &stream_id);
+    fprintf(f, ", \"stream_id\": %"PRIu64"", stream_id);
+    byteread_vint(s, &error_code);
+    fprintf(f, ", \"error_code\": %"PRIu64"", error_code);
+}
+
+void qlog_closing_frame(uint64_t ftype, FILE* f, bytestream* s)
+{
+    uint64_t error_code = 0;
+    uint64_t offending_frame_type = 0;
+    uint64_t reason_length = 0;
+    char const* offensive_type_name = NULL;
+
+    fprintf(f, ", \"error_space\": \"%s\"", 
+        (ftype == picoquic_frame_type_connection_close)?"transport":"application");
+    byteread_vint(s, &error_code);
+    fprintf(f, ", \"raw_error_code\": %"PRIu64"", error_code);
+    
+    if (ftype == picoquic_frame_type_connection_close) {
+        byteread_vint(s, &offending_frame_type);
+        offensive_type_name = ftype2str(offending_frame_type);
+        if (strcmp(offensive_type_name, "unknown") == 0) {
+            fprintf(f, ", \"offending_frame_type\": \"%"PRIx64"\"", offending_frame_type);
+        }
+        else {
+            fprintf(f, ", \"offending_frame_type\": \"%s\"", offensive_type_name);
+        }
+    }
+
+    byteread_vint(s, &reason_length);
+    if (reason_length > 0){
+        fprintf(f, ", \"reason\": \"");
+        for (uint64_t i = 0; i < reason_length && s->ptr < s->size; i++) {
+            int c = s->data[s->ptr++];
+
+            if (c < 0x20 || c > 0x7E) {
+                c = '.';
+            }
+            fprintf(f, "%c", c);
+        }
+        fprintf(f, "\"");
+    }
+}
+
+void qlog_max_data_frame(FILE* f, bytestream* s)
+{
+    uint64_t maximum = 0;
+    byteread_vint(s, &maximum);
+    fprintf(f, ", \"maximum\": %"PRIu64"", maximum);
+}
+
+void qlog_max_stream_data_frame(FILE* f, bytestream* s)
+{
+    uint64_t stream_id = 0;
+    uint64_t maximum = 0;
+
+    byteread_vint(s, &stream_id);
+    fprintf(f, ", \"stream_id\": %"PRIu64"", stream_id);
+    byteread_vint(s, &maximum);
+    fprintf(f, ", \"maximum\": %"PRIu64"", maximum);
+}
+
+void qlog_max_streams_frame(uint64_t ftype, FILE* f, bytestream* s)
+{
+    uint64_t maximum;
+
+    fprintf(f, ", \"stream_type\": \"%s\"",
+        (ftype == picoquic_frame_type_max_streams_bidir) ?
+        "bidirectional" : "unidirectional");
+
+    byteread_vint(s, &maximum);
+    fprintf(f, ", \"maximum\": %"PRIu64"", maximum);
+}
+
+void qlog_blocked_frame(FILE* f, bytestream* s)
+{
+    uint64_t limit = 0;
+
+    byteread_vint(s, &limit);
+    fprintf(f, ", \"limit\": %"PRIu64"", limit);
+}
+
+void qlog_stream_blocked_frame(FILE* f, bytestream* s)
+{
+    uint64_t stream_id = 0;
+    uint64_t limit = 0;
+
+    byteread_vint(s, &stream_id);
+    fprintf(f, ", \"stream_id\": %"PRIu64"", stream_id);
+    byteread_vint(s, &limit);
+    fprintf(f, ", \"limit\": %"PRIu64"", limit);
+}
+
+void qlog_streams_blocked_frame(uint64_t ftype, FILE* f, bytestream* s)
+{
+    uint64_t limit;
+
+    fprintf(f, ", \"stream_type\": \"%s\"", 
+        (ftype == picoquic_frame_type_streams_blocked_bidir)?
+        "bidirectional":"unidirectional");
+
+    byteread_vint(s, &limit);
+    fprintf(f, ", \"limit\": %"PRIu64"", limit);
+}
+
+void qlog_new_connection_id_frame(FILE* f, bytestream* s)
+{
+    uint64_t sequence_number = 0;
+    uint64_t retire_before = 0;
+    uint64_t cid_length = 0;
+
+    byteread_vint(s, &sequence_number);
+    fprintf(f, ", \"sequence_number\": %"PRIu64"", sequence_number);
+    byteread_vint(s, &retire_before);
+    fprintf(f, ", \"retire_before\": %"PRIu64"", retire_before);
+    byteread_vint(s, &cid_length);
+    fprintf(f, ", \"connection_id\": ");
+    qlog_truncated_sting(f, s, cid_length, cid_length);
+    fprintf(f, ", \"reset_token\": ");
+    qlog_truncated_sting(f, s, 16, 16);
+}
+
+void qlog_retire_connection_id_frame(FILE* f, bytestream* s)
+{
+    uint64_t sequence_number = 0;
+    byteread_vint(s, &sequence_number);
+    fprintf(f, ", \"sequence_number\": %"PRIu64"", sequence_number);
+}
+
+void qlog_new_token_frame(FILE* f, bytestream* s)
+{
+    uint64_t toklen = 0;
+
+    fprintf(f, ", \"new_token\": ");
+    byteread_vint(s, &toklen);
+    qlog_truncated_sting(f, s, toklen, toklen);
+}
+
+void qlog_path_frame(uint64_t ftype, FILE* f, bytestream* s)
+{
+    if (ftype == picoquic_frame_type_path_challenge) {
+        fprintf(f, ", \"path_challenge\": ");
+    }
+    else {
+        fprintf(f, ", \"path_response\": ");
+    }
+    qlog_truncated_sting(f, s, 8, 8);
+}
+
+void qlog_crypto_hs_frame(FILE* f, bytestream* s)
+{
+    uint64_t offset = 0;
+    uint64_t data_length = 0;
+
+
+    byteread_vint(s, &offset);
+    fprintf(f, ", \"offset\": %"PRIu64"", offset);
+    byteread_vint(s, &data_length);
+    fprintf(f, ", \"length\": %"PRIu64"", data_length);
+}
+
+void qlog_datagram_frame(uint64_t ftype, FILE* f, bytestream* s)
+{
+    unsigned int has_length = ftype & 1;
+    uint64_t length = 0;
+
+    if (has_length) {
+        byteread_vint(s, &length);
+        fprintf(f, ", length: %zu", length);
+    }
+}
+
+void qlog_ack_frequency_frame(FILE* f, bytestream* s)
+{
+    uint64_t sequence_number = 0;
+    uint64_t packet_tolerance = 0;
+    uint64_t max_ack_delay = 0;
+    byteread_vint(s, &sequence_number);
+    fprintf(f, ", \"sequence_number\": %"PRIu64"", sequence_number);
+    byteread_vint(s, &packet_tolerance);
+    fprintf(f, ", \"packet_tolerance\": %"PRIu64"", packet_tolerance);
+    byteread_vint(s, &max_ack_delay);
+    fprintf(f, ", \"max_ack_delay\": %"PRIu64" ", max_ack_delay);
+}
+
+void qlog_ack_frame(uint64_t ftype, FILE * f, bytestream* s)
+{
+    uint64_t largest = 0;
+    byteread_vint(s, &largest);
+    uint64_t ack_delay = 0;
+    uint64_t remote_time_stamp = 0;
+    if (ftype == picoquic_frame_type_ack_1wd ||
+        ftype == picoquic_frame_type_ack_ecn_1wd) {
+        byteread_vint(s, &remote_time_stamp);
+        fprintf(f, ", \"remote_time_stamp\": %"PRIu64"", remote_time_stamp);
+    }
+    byteread_vint(s, &ack_delay);
+    fprintf(f, ", \"ack_delay\": %"PRIu64"", ack_delay);
+    uint64_t num = 0;
+    byteread_vint(s, &num);
+    fprintf(f, ", \"acked_ranges\": [");
+    for (uint64_t i = 0; i <= num; i++) {
+        uint64_t skip = 0;
+        if (i != 0) {
+            byteread_vint(s, &skip);
+            skip++;
+
+            largest -= skip;
+            fprintf(f, ", ");
+        }
+        uint64_t range = 0;
+        byteread_vint(s, &range);
+
+        fprintf(f, "[%"PRIu64", %"PRIu64"]", largest - range, largest);
+        largest -= range + 1;
+    }
+    fprintf(f, "]");
+    if (ftype == picoquic_frame_type_ack_ecn ||
+        ftype == picoquic_frame_type_ack_ecn_1wd) {
+        fprintf(f, ", \"ecn\": [");
+        for (int ecnx = 0; ecnx < 3; ecnx++) {
+            uint64_t ecn_v = 0;
+            byteread_vint(s, &ecn_v);
+            fprintf(f, "%s%"PRIu64, (ecnx == 0) ? "" : ",", ecn_v);
+        }
+        fprintf(f, "]");
+    }
+}
+
 int qlog_packet_frame(bytestream * s, void * ptr)
 {
     qlog_context_t * ctx = (qlog_context_t*)ptr;
@@ -123,62 +393,61 @@ int qlog_packet_frame(bytestream * s, void * ptr)
     case picoquic_frame_type_ack_ecn:
     case picoquic_frame_type_ack_1wd:
     case picoquic_frame_type_ack_ecn_1wd:
-    {
-        uint64_t largest = 0;
-        byteread_vint(s, &largest);
-        uint64_t ack_delay = 0;
-        uint64_t remote_time_stamp = 0;
-        if (ftype == picoquic_frame_type_ack_1wd ||
-            ftype == picoquic_frame_type_ack_ecn_1wd) {
-            byteread_vint(s, &remote_time_stamp);
-            fprintf(f, ", \"remote_time_stamp\": %"PRIu64"", remote_time_stamp);
-        }
-        byteread_vint(s, &ack_delay);
-        fprintf(f, ", \"ack_delay\": %"PRIu64"", ack_delay);
-        uint64_t num = 0;
-        byteread_vint(s, &num);
-        fprintf(f, ", \"acked_ranges\": [");
-        for (uint64_t i = 0; i <= num; i++) {
-            uint64_t skip = 0;
-            if (i != 0) {
-                byteread_vint(s, &skip);
-                skip++;
-
-                largest -= skip;
-                fprintf(f, ", ");
-            }
-            uint64_t range = 0;
-            byteread_vint(s, &range);
-
-            fprintf(f, "[%"PRIu64", %"PRIu64"]", largest - range, largest);
-            largest -= range + 1;
-        }
-        fprintf(f, "]");
-        if (ftype == picoquic_frame_type_ack_ecn ||
-            ftype == picoquic_frame_type_ack_ecn_1wd) {
-            fprintf(f, ", \"ecn\": [");
-            for (int ecnx = 0; ecnx < 3; ecnx++) {
-                uint64_t ecn_v = 0;
-                byteread_vint(s, &ecn_v);
-                fprintf(f, "%s%"PRIu64, (ecnx == 0) ? "" : ",", ecn_v);
-            }
-            fprintf(f, "]");
-        }
+        qlog_ack_frame(ftype, f, s);
         break;
-    }
     case picoquic_frame_type_ack_frequency:
-    {
-        uint64_t sequence_number = 0;
-        uint64_t packet_tolerance = 0;
-        uint64_t max_ack_delay = 0;
-        byteread_vint(s, &sequence_number);
-        fprintf(f, ", \"sequence_number\": %"PRIu64"", sequence_number);
-        byteread_vint(s, &packet_tolerance);
-        fprintf(f, ", \"packet_tolerance\": %"PRIu64"", packet_tolerance);
-        byteread_vint(s, &max_ack_delay);
-        fprintf(f, ", \"max_ack_delay\": %"PRIu64" ", max_ack_delay);
+        qlog_ack_frequency_frame(f, s);
         break;
-    }
+    case picoquic_frame_type_datagram:
+    case picoquic_frame_type_datagram_l:
+        qlog_datagram_frame(ftype, f, s);
+        break;
+    case picoquic_frame_type_crypto_hs:
+        qlog_crypto_hs_frame(f, s);
+        break;
+    case picoquic_frame_type_path_challenge:
+    case picoquic_frame_type_path_response:
+        qlog_path_frame(ftype, f, s);
+        break;
+    case picoquic_frame_type_new_token:
+        qlog_new_token_frame(f, s);
+        break;
+    case picoquic_frame_type_retire_connection_id:
+        qlog_retire_connection_id_frame(f, s);
+        break;
+    case picoquic_frame_type_new_connection_id:
+        qlog_new_connection_id_frame(f, s);
+        break;
+    case picoquic_frame_type_streams_blocked_bidir:
+    case picoquic_frame_type_streams_blocked_unidir:
+        qlog_streams_blocked_frame(ftype, f, s);
+        break;
+    case picoquic_frame_type_stream_data_blocked:
+        qlog_stream_blocked_frame(f, s);
+        break;
+    case picoquic_frame_type_data_blocked:
+        qlog_blocked_frame(f, s);
+        break;
+    case picoquic_frame_type_max_streams_bidir:
+    case picoquic_frame_type_max_streams_unidir:
+        qlog_max_streams_frame(ftype, f, s);
+        break;
+    case picoquic_frame_type_max_stream_data:
+        qlog_max_stream_data_frame(f, s);
+        break;
+    case picoquic_frame_type_max_data:
+        qlog_max_data_frame(f, s);
+        break;
+    case picoquic_frame_type_connection_close:
+    case picoquic_frame_type_application_close:
+        qlog_closing_frame(ftype, f, s);
+        break;
+    case picoquic_frame_type_stop_sending:
+        qlog_stop_sending_frame(f, s);
+        break;
+    case picoquic_frame_type_reset_stream:
+        qlog_reset_stream_frame(f, s);
+        break;
     default:
         break;
     }

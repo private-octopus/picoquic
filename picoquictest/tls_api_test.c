@@ -6276,6 +6276,8 @@ int qlog_trace_test()
     picoquic_connection_id_t initial_cid = { {1, 2, 3, 4, 5, 6, 7, 8}, 8 };
     picoquic_connection_id_t cnxfn_data_client = { {1, 1, 1, 1, 1, 1, 1, 1}, 8 };
     picoquic_connection_id_t cnxfn_data_server = { {2, 2, 2, 2, 2, 2, 2, 2}, 8 };
+    uint8_t reset_seed_client[PICOQUIC_RESET_SECRET_SIZE] = { 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25 };
+    uint8_t reset_seed_server[PICOQUIC_RESET_SECRET_SIZE] = { 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35 };
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
@@ -6291,6 +6293,9 @@ int qlog_trace_test()
         test_ctx->qserver->cnx_id_callback_fn = qlog_trace_cid_fn;
         test_ctx->qclient->cnx_id_callback_ctx = (void*)&cnxfn_data_client;
         test_ctx->qclient->cnx_id_callback_fn = qlog_trace_cid_fn;
+        memcpy(test_ctx->qclient->reset_seed, reset_seed_client, PICOQUIC_RESET_SECRET_SIZE);
+        memcpy(test_ctx->qserver->reset_seed, reset_seed_server, PICOQUIC_RESET_SECRET_SIZE);
+
         /* Delete the old connection */
         picoquic_delete_cnx(test_ctx->cnx_client);
         /* re-create a client connection, this time picking up the required connection ID */

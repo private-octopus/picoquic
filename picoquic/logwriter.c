@@ -253,9 +253,9 @@ static const uint8_t* picoquic_log_new_connection_id_frame(FILE* f, const uint8_
         bytes = picoquic_log_fixed_skip(bytes, bytes_max, ((size_t)1) + bytes[0]);
     }
 
-    picoquic_binlog_frame(f, bytes_begin, bytes);
-
     bytes = picoquic_log_fixed_skip(bytes, bytes_max, PICOQUIC_RESET_SECRET_SIZE);
+
+    picoquic_binlog_frame(f, bytes_begin, bytes);
     return bytes;
 }
 
@@ -278,9 +278,9 @@ static const uint8_t* picoquic_log_new_token_frame(FILE* f, const uint8_t* bytes
     bytes = picoquic_log_fixed_skip(bytes, bytes_max, 1);
     bytes = picoquic_log_length(bytes, bytes_max, &length);
 
-    picoquic_binlog_frame(f, bytes_begin, bytes);
-
     bytes = picoquic_log_fixed_skip(bytes, bytes_max, length);
+
+    picoquic_binlog_frame(f, bytes_begin, bytes);
     return bytes;
 }
 

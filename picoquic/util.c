@@ -201,7 +201,7 @@ int picoquic_print_connection_id_hexa(char* buf, size_t buf_len, const picoquic_
         buf[i * 2u + 1u] = hex_to_char[cnxid->id[i] & 0x0f];
     }
 
-    buf[cnxid->id_len * 2u] = '\0';
+    buf[cnxid->id_len * 2u] = 0;
 
     return 0;
 }

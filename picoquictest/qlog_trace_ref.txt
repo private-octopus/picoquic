@@ -6,23 +6,23 @@
 "events": [
 
 [0, "TRANSPORT", "PACKET_RECEIVED", { "packet_type": "initial", "header": { "packet_number": "0", "packet_size": 1252, "payload_length": 1206, "scid": "0203040506070809", "dcid": "0102030405060708" }, "frames": [{ 
-    "frame_type": "crypto"}, { 
+    "frame_type": "crypto", "offset": 0, "length": 301}, { 
     "frame_type": "padding"}]}],
 [0, "TRANSPORT", "PACKET_SENT", { "packet_type": "initial", "header": { "packet_number": "0", "packet_size": 194, "payload_length": 164, "scid": "030405060708090a", "dcid": "0203040506070809" }, "frames": [{ 
     "frame_type": "ack", "ack_delay": 0, "acked_ranges": [[0, 0]]}, { 
-    "frame_type": "crypto"}]}],
+    "frame_type": "crypto", "offset": 0, "length": 155}]}],
 [0, "TRANSPORT", "PACKET_SENT", { "packet_type": "handshake", "header": { "packet_number": "0", "packet_size": 1026, "payload_length": 997, "scid": "030405060708090a", "dcid": "0203040506070809" }, "frames": [{ 
-    "frame_type": "crypto"}]}],
+    "frame_type": "crypto", "offset": 0, "length": 993}]}],
 [0, "TRANSPORT", "PACKET_SENT", { "packet_type": "handshake", "header": { "packet_number": "1", "packet_size": 278, "payload_length": 249, "scid": "030405060708090a", "dcid": "0203040506070809" }, "frames": [{ 
-    "frame_type": "crypto"}]}],
+    "frame_type": "crypto", "offset": 993, "length": 244}]}],
 [0, "TRANSPORT", "PACKET_SENT", { "packet_type": "1rtt", "header": { "packet_number": "0", "packet_size": 206, "dcid": "0203040506070809" }, "frames": [{ 
-    "frame_type": "new_connection_id"}, { 
-    "frame_type": "new_connection_id"}, { 
-    "frame_type": "new_connection_id"}, { 
-    "frame_type": "new_connection_id"}, { 
-    "frame_type": "new_connection_id"}, { 
-    "frame_type": "new_connection_id"}, { 
-    "frame_type": "new_connection_id"}]}],
+    "frame_type": "new_connection_id", "sequence_number": 1, "retire_before": 0, "connection_id": "040405060708090a", "reset_token": "d6e409cb9d35622d49e3e583c238ea9e"}, { 
+    "frame_type": "new_connection_id", "sequence_number": 2, "retire_before": 0, "connection_id": "050405060708090a", "reset_token": "7ed70f3ad290d13907d8f7d09b75ee1f"}, { 
+    "frame_type": "new_connection_id", "sequence_number": 3, "retire_before": 0, "connection_id": "060405060708090a", "reset_token": "47b95f2634e0ca5b33fb859374efb571"}, { 
+    "frame_type": "new_connection_id", "sequence_number": 4, "retire_before": 0, "connection_id": "070405060708090a", "reset_token": "75da8ae8af3ddcff90c521a067d12e7c"}, { 
+    "frame_type": "new_connection_id", "sequence_number": 5, "retire_before": 0, "connection_id": "080405060708090a", "reset_token": "295a4f380f9f9fc3cdccc828fdee2e7c"}, { 
+    "frame_type": "new_connection_id", "sequence_number": 6, "retire_before": 0, "connection_id": "090405060708090a", "reset_token": "6f44e15195c11c82e4e48ba81cd58b13"}, { 
+    "frame_type": "new_connection_id", "sequence_number": 7, "retire_before": 0, "connection_id": "0a0405060708090a", "reset_token": "4a461f6bf59ca273a5b764438d7b7906"}]}],
 [0, "TRANSPORT", "PACKET_SENT", { "packet_type": "1rtt", "header": { "packet_number": "1", "packet_size": 1424, "dcid": "0203040506070809" }, "frames": [{ 
     "frame_type": "ping"}, { 
     "frame_type": "padding"}]}],
@@ -36,15 +36,15 @@
     "frame_type": "ack", "ack_delay": 0, "acked_ranges": [[0, 0]]}]}],
 [22295, "TRANSPORT", "PACKET_RECEIVED", { "packet_type": "handshake", "header": { "packet_number": "1", "packet_size": 89, "payload_length": 44, "scid": "0203040506070809", "dcid": "030405060708090a" }, "frames": [{ 
     "frame_type": "ack", "ack_delay": 0, "acked_ranges": [[0, 1]]}, { 
-    "frame_type": "crypto"}]}],
+    "frame_type": "crypto", "offset": 0, "length": 36}]}],
 [22295, "TRANSPORT", "PACKET_RECEIVED", { "packet_type": "1rtt", "header": { "packet_number": "0", "packet_size": 222, "dcid": "030405060708090a" }, "frames": [{ 
-    "frame_type": "new_connection_id"}, { 
-    "frame_type": "new_connection_id"}, { 
-    "frame_type": "new_connection_id"}, { 
-    "frame_type": "new_connection_id"}, { 
-    "frame_type": "new_connection_id"}, { 
-    "frame_type": "new_connection_id"}, { 
-    "frame_type": "new_connection_id"}]}],
+    "frame_type": "new_connection_id", "sequence_number": 1, "retire_before": 0, "connection_id": "0303040506070809", "reset_token": "053eb6a0de938613052030c0fbf65e05"}, { 
+    "frame_type": "new_connection_id", "sequence_number": 2, "retire_before": 0, "connection_id": "0403040506070809", "reset_token": "f6a690832b3e443e1cabc8ffcbf5b11a"}, { 
+    "frame_type": "new_connection_id", "sequence_number": 3, "retire_before": 0, "connection_id": "0503040506070809", "reset_token": "f4522daa3e83e5786ac2679fd899e971"}, { 
+    "frame_type": "new_connection_id", "sequence_number": 4, "retire_before": 0, "connection_id": "0603040506070809", "reset_token": "42ccd34b9fdca6a9efe68f7637904804"}, { 
+    "frame_type": "new_connection_id", "sequence_number": 5, "retire_before": 0, "connection_id": "0703040506070809", "reset_token": "cbf38915760d994ae0bdda3fd5000b90"}, { 
+    "frame_type": "new_connection_id", "sequence_number": 6, "retire_before": 0, "connection_id": "0803040506070809", "reset_token": "067b59f6cd452cc9b3d45e1349c3d427"}, { 
+    "frame_type": "new_connection_id", "sequence_number": 7, "retire_before": 0, "connection_id": "0903040506070809", "reset_token": "cdb10de67904bc850f26f43cede090d0"}]}],
 [22295, "TRANSPORT", "PACKET_SENT", { "packet_type": "1rtt", "header": { "packet_number": "3", "packet_size": 39, "dcid": "0203040506070809" }, "frames": [{ 
     "frame_type": "handshake_done"}, { 
     "frame_type": "padding"}]}],
@@ -122,6 +122,6 @@
     "frame_type": "padding"}]}],
 [84421, "TRANSPORT", "PACKET_RECEIVED", { "packet_type": "1rtt", "header": { "packet_number": "13", "packet_size": 34, "dcid": "030405060708090a" }, "frames": [{ 
     "frame_type": "ack", "ack_delay": 0, "acked_ranges": [[16, 17]]}, { 
-    "frame_type": "application_close"}]}],
+    "frame_type": "connection_close", "error_space": "application", "raw_error_code": 0}]}],
 [84421, "TRANSPORT", "PACKET_SENT", { "packet_type": "1rtt", "header": { "packet_number": "18", "packet_size": 15, "dcid": "0203040506070809" }, "frames": [{ 
-    "frame_type": "connection_close"}]}]]}]}
+    "frame_type": "connection_close", "error_space": "transport", "raw_error_code": 0, "offending_frame_type": "padding"}]}]]}]}
