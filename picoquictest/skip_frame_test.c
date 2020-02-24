@@ -768,7 +768,7 @@ int binlog_test()
     uint64_t random_context = 0xF00BAB;
     int ret = 0;
 
-    const picoquic_connection_id_t srce_cid = {
+    const picoquic_connection_id_t initial_cid = {
         { 1, 2, 3, 4 }, 4
     };
 
@@ -800,7 +800,7 @@ int binlog_test()
 
         struct sockaddr_in saddr;
         memset(&saddr, 0, sizeof(struct sockaddr_in));
-        picoquic_cnx_t* cnx = picoquic_create_cnx(quic, srce_cid, dest_cid, (struct sockaddr*) & saddr,
+        picoquic_cnx_t* cnx = picoquic_create_cnx(quic, initial_cid, dest_cid, (struct sockaddr*) & saddr,
             simulated_time, 0, "test-sni", "test-alpn", 1);
 
         if (cnx == NULL) {
@@ -814,13 +814,13 @@ int binlog_test()
 
                 ph.ptype = picoquic_packet_1rtt_protected;
                 ph.pn64 = i;
-                ph.dest_cnx_id = srce_cid;
+                ph.dest_cnx_id = initial_cid;
                 ph.srce_cnx_id = dest_cid;
 
                 ph.offset = 0;
                 ph.payload_length = test_skip_list[i].len;
 
-                binlog_packet(quic->f_binlog, &srce_cid, 0, 0, &ph, test_skip_list[i].val, test_skip_list[i].len);
+                binlog_packet(quic->f_binlog, &initial_cid, 0, 0, &ph, test_skip_list[i].val, test_skip_list[i].len);
             }
 
             picoquic_delete_cnx(cnx);
@@ -839,7 +839,7 @@ int binlog_test()
         uint64_t log_time = 0;
         FILE* f_binlog = picoquic_open_cc_log_file_for_read(binlog_test_file, &log_time);
         
-        ret = qlog_convert(&srce_cid, f_binlog, binlog_test_file, ".");
+        ret = qlog_convert(&initial_cid, f_binlog, binlog_test_file, NULL, ".");
         if (ret != 0) {
             DBG_PRINTF("%s", "Cannot convert the binary log into QLOG.\n");
         } else {

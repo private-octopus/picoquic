@@ -263,7 +263,7 @@ int convert_svg(const picoquic_connection_id_t * cid, void * ptr)
 int convert_qlog(const picoquic_connection_id_t * cid, void * ptr)
 {
     const app_conversion_context_t* appctx = (const app_conversion_context_t*)ptr;
-    return qlog_convert(cid, appctx->f_binlog, appctx->binlog_name, appctx->out_dir);
+    return qlog_convert(cid, appctx->f_binlog, appctx->binlog_name, NULL, appctx->out_dir);
 }
 
 int filedump_binlog(FILE* bin_log, FILE* bin_dump)

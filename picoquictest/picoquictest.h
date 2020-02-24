@@ -154,6 +154,7 @@ int stream_id_max_test();
 int stream_id_to_rank_test();
 int padding_test();
 int packet_trace_test();
+int qlog_trace_test();
 int rebinding_stress_test();
 int many_short_loss_test();
 int ready_to_send_test();

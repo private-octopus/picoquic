@@ -61,9 +61,7 @@ void binlog_packet(FILE * f, const picoquic_connection_id_t* cid, int receiving,
 
 /* binary alternative to picoquic_log_outgoing_segment() */
 void binlog_outgoing_packet(FILE * f, picoquic_cnx_t* cnx,
-    uint8_t * bytes,
-    uint64_t sequence_number,
-    size_t length,
+    uint8_t * bytes, uint64_t sequence_number, size_t pn_length, size_t length,
     uint8_t* send_buffer, size_t send_length, uint64_t current_time);
 
 /* binary alternative to picoquic_log_transport_extension() */

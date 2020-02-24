@@ -28,4 +28,4 @@ int qlog_connection_start(uint64_t time, const picoquic_connection_id_t * cid, i
     uint32_t proposed_version, const picoquic_connection_id_t * remote_cnxid, void * ptr);
 int qlog_connection_end(uint64_t time, void * ptr);
 
-int qlog_convert(const picoquic_connection_id_t* cid, FILE * f_binlog, const char * binlog_name, const char * out_dir);
+int qlog_convert(const picoquic_connection_id_t* cid, FILE * f_binlog, const char * binlog_name, const char* txt_name, const char * out_dir);

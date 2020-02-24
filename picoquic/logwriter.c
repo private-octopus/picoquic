@@ -550,9 +550,7 @@ void binlog_packet(FILE* f, const picoquic_connection_id_t* cid, int receiving, 
 }
 
 void binlog_outgoing_packet(FILE * f, picoquic_cnx_t* cnx,
-    uint8_t * bytes,
-    uint64_t sequence_number,
-    size_t length,
+    uint8_t * bytes, uint64_t sequence_number, size_t pn_length, size_t length,
     uint8_t* send_buffer, size_t send_length, uint64_t current_time)
 {
     picoquic_cnx_t* pcnx = cnx;
@@ -582,8 +580,8 @@ void binlog_outgoing_packet(FILE * f, picoquic_cnx_t* cnx,
     ph.pn = (uint32_t)ph.pn64;
     if (ph.ptype != picoquic_packet_retry) {
         if (ph.pn_offset != 0) {
-            ph.offset = ph.pn_offset + 4; /* todo: should provide the actual length */
-            ph.payload_length -= 4;
+            ph.offset = ph.pn_offset + pn_length; /* todo: should provide the actual length */
+            ph.payload_length -= pn_length;
         }
     }
     if (ph.ptype != picoquic_packet_version_negotiation) {

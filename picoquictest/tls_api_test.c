@@ -33,6 +33,7 @@
 #include <openssl/pem.h>
 #include "logwriter.h"
 #include "csv.h"
+#include "qlog.h"
 
 #define RANDOM_PUBLIC_TEST_SEED 0xDEADBEEFCAFEC001ull
 
@@ -1760,18 +1761,21 @@ int tls_api_one_scenario_body_verify(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t * simulated_time,
     uint64_t max_completion_microsec)
 {
+
+    uint64_t close_time = 0;
     int ret = tls_api_one_scenario_verify(test_ctx);
 
     if (ret == 0) {
-        ret = picoquic_close(test_ctx->cnx_client, 0);
+        close_time = *simulated_time;
+        tls_api_attempt_to_close(test_ctx, simulated_time);
         if (ret != 0)
         {
-            DBG_PRINTF("Picoquic close returns %d\n", ret);
+            DBG_PRINTF("Attempt to close returns %d\n", ret);
         }
     }
 
     if (ret == 0 && max_completion_microsec != 0) {
-        if (*simulated_time - test_ctx->cnx_client->start_time > max_completion_microsec)
+        if (close_time - test_ctx->cnx_client->start_time > max_completion_microsec)
         {
             DBG_PRINTF("Scenario completes in %llu microsec, more than %llu\n",
                 (unsigned long long)*simulated_time, (unsigned long long)max_completion_microsec);
@@ -6228,6 +6232,110 @@ int packet_trace_test()
         }
         else {
             ret = picoquic_test_compare_text_files(PACKET_TRACE_CSV, packet_trace_test_ref);
+        }
+    }
+
+    return ret;
+}
+
+
+/*
+ * Test whether packet tracing works correctly by setting up a basic connection
+ * and verifying that the log file is what we expect.
+ */
+#ifdef _WINDOWS
+#define QLOG_TRACE_TEST_REF "picoquictest\\qlog_trace_ref.txt"
+#else
+#define QLOG_TRACE_TEST_REF "picoquictest/qlog_trace_ref.txt"
+#endif
+#define QLOG_TRACE_BIN "qlog_trace.bin"
+#define QLOG_TRACE_QLOG "qlog_trace.qlog"
+
+void qlog_trace_cid_fn(picoquic_quic_t* quic, picoquic_connection_id_t cnx_id_local,
+    picoquic_connection_id_t cnx_id_remote, void* cnx_id_cb_data, picoquic_connection_id_t* cnx_id_returned)
+{
+    picoquic_connection_id_t* cnxfn_data = (picoquic_connection_id_t*)cnx_id_cb_data;
+    cnx_id_returned->id_len = cnx_id_local.id_len;
+    for (uint8_t i = 0; i < cnx_id_local.id_len; i++) {
+        cnx_id_returned->id[i] = cnx_id_remote.id[i] + cnxfn_data->id[i];
+    }
+
+    for (uint8_t i = 0; i < cnx_id_local.id_len; i++) {
+        cnxfn_data->id[i] += 1;
+        if (cnxfn_data->id[i] != 0) {
+            break;
+        }
+    }
+}
+
+int qlog_trace_test()
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
+    picoquic_connection_id_t initial_cid = { {1, 2, 3, 4, 5, 6, 7, 8}, 8 };
+    picoquic_connection_id_t cnxfn_data_client = { {1, 1, 1, 1, 1, 1, 1, 1}, 8 };
+    picoquic_connection_id_t cnxfn_data_server = { {2, 2, 2, 2, 2, 2, 2, 2}, 8 };
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+
+    /* Set the logging policy on the server side, to store data in the
+     * current working directory, and run a basic test scenario */
+    if (ret == 0) {
+        picoquic_set_binlog(test_ctx->qserver, QLOG_TRACE_BIN);
+        picoquic_set_default_spinbit_policy(test_ctx->qserver, picoquic_spinbit_null);
+        picoquic_set_default_spinbit_policy(test_ctx->qclient, picoquic_spinbit_null);
+        test_ctx->qserver->cnx_id_callback_ctx = (void*)&cnxfn_data_server;
+        test_ctx->qserver->cnx_id_callback_fn = qlog_trace_cid_fn;
+        test_ctx->qclient->cnx_id_callback_ctx = (void*)&cnxfn_data_client;
+        test_ctx->qclient->cnx_id_callback_fn = qlog_trace_cid_fn;
+        /* Delete the old connection */
+        picoquic_delete_cnx(test_ctx->cnx_client);
+        /* re-create a client connection, this time picking up the required connection ID */
+        test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
+            initial_cid, picoquic_null_connection_id,
+            (struct sockaddr*) & test_ctx->server_addr, 0,
+            PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
+
+        ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+            test_scenario_q2_and_r2, sizeof(test_scenario_q2_and_r2), 0, 0, 0, 20000, 1000000);
+    }
+
+    /* Free the resource, which will close the log file.
+     */
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    /* Create a QLOG file from the .bin log file */
+    if (ret == 0) {
+        uint64_t log_time = 0;
+        FILE* f_binlog = picoquic_open_cc_log_file_for_read(QLOG_TRACE_BIN, &log_time);
+        if (f_binlog == NULL) {
+            ret = -1;
+        }
+        else {
+            ret = qlog_convert(&initial_cid, f_binlog, QLOG_TRACE_BIN, QLOG_TRACE_QLOG, NULL);
+            picoquic_file_close(f_binlog);
+        }
+    }
+
+    /* compare the log file to the expected value */
+    if (ret == 0)
+    {
+        char qlog_trace_test_ref[512];
+
+        ret = picoquic_get_input_path(qlog_trace_test_ref, sizeof(qlog_trace_test_ref), picoquic_test_solution_dir, QLOG_TRACE_TEST_REF);
+
+        if (ret != 0) {
+            DBG_PRINTF("%s", "Cannot set the qlog trace test ref file name.\n");
+        }
+        else {
+            ret = picoquic_test_compare_text_files(QLOG_TRACE_QLOG, qlog_trace_test_ref);
         }
     }
 

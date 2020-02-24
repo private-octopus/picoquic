@@ -225,47 +225,51 @@ int qlog_connection_end(uint64_t time, void * ptr)
     return 0;
 }
 
-int qlog_convert(const picoquic_connection_id_t* cid, FILE * f_binlog, const char * binlog_name, const char * out_dir)
+int qlog_convert(const picoquic_connection_id_t* cid, FILE* f_binlog, const char* binlog_name, const char* txt_name, const char* out_dir)
 {
     int ret = 0;
-
+    FILE* f_txtlog = NULL;
     char cid_name[2 * PICOQUIC_CONNECTION_ID_MAX_SIZE + 1];
+
     if (picoquic_print_connection_id_hexa(cid_name, sizeof(cid_name), cid) != 0) {
         DBG_PRINTF("Cannot convert connection id for %s", binlog_name);
         ret = -1;
     }
+    else if (txt_name == NULL) {
+        f_txtlog = open_outfile(cid_name, binlog_name, out_dir, "qlog");
+    }
+    else {
+        f_txtlog = picoquic_file_open(txt_name, "w");
+    }
+
+    if (f_txtlog == NULL) {
+        ret = -1;
+    }
     else {
 
-        FILE* f_txtlog = open_outfile(cid_name, binlog_name, out_dir, "qlog");
-        if (f_txtlog == NULL) {
-            ret = -1;
+        qlog_context_t qlog;
+        qlog.f_txtlog = f_txtlog;
+        qlog.cid_name = cid_name;
+        qlog.start_time = 0;
+        qlog.packet_count = 0;
+        qlog.state = 0;
+
+        binlog_convert_cb_t ctx;
+        ctx.connection_start = qlog_connection_start;
+        ctx.connection_end = qlog_connection_end;
+        ctx.pdu = qlog_pdu;
+        ctx.packet_start = qlog_packet_start;
+        ctx.packet_frame = qlog_packet_frame;
+        ctx.packet_end = qlog_packet_end;
+        ctx.ptr = &qlog;
+
+        ret = binlog_convert(f_binlog, cid, &ctx);
+
+        if (qlog.state == 1) {
+            qlog_connection_end(0, &qlog);
         }
-        else {
 
-            qlog_context_t qlog;
-            qlog.f_txtlog = f_txtlog;
-            qlog.cid_name = cid_name;
-            qlog.start_time = 0;
-            qlog.packet_count = 0;
-            qlog.state = 0;
-
-            binlog_convert_cb_t ctx;
-            ctx.connection_start = qlog_connection_start;
-            ctx.connection_end = qlog_connection_end;
-            ctx.pdu = qlog_pdu;
-            ctx.packet_start = qlog_packet_start;
-            ctx.packet_frame = qlog_packet_frame;
-            ctx.packet_end = qlog_packet_end;
-            ctx.ptr = &qlog;
-
-            ret = binlog_convert(f_binlog, cid, &ctx);
-
-            if (qlog.state == 1) {
-                qlog_connection_end(0, &qlog);
-            }
-
-            picoquic_file_close(f_txtlog);
-        }
+        picoquic_file_close(f_txtlog);
     }
 
     return ret;
