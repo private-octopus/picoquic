@@ -749,7 +749,7 @@ void binlog_close(picoquic_quic_t * quic)
 
 void picoquic_cc_dump(picoquic_cnx_t * cnx, uint64_t current_time)
 {
-    if (cnx->cc_log == NULL && cnx->quic->f_binlog == NULL) {
+    if (cnx->quic->f_binlog == NULL) {
         return;
     }
 
@@ -793,11 +793,6 @@ void picoquic_cc_dump(picoquic_cnx_t * cnx, uint64_t current_time)
     bytestream * ps_head = bytestream_buf_init(&stream_head, BYTESTREAM_MAX_BUFFER_SIZE);
 
     bytewrite_int32(ps_head, (uint32_t)bytestream_length(ps_msg));
-
-    if (cnx->cc_log != NULL) {
-        (void)fwrite(bytestream_data(ps_head), bytestream_length(ps_head), 1, cnx->cc_log);
-        (void)fwrite(bytestream_data(ps_msg), bytestream_length(ps_msg), 1, cnx->cc_log);
-    }
 
     if (cnx->quic->f_binlog != NULL) {
         (void)fwrite(bytestream_data(ps_head), bytestream_length(ps_head), 1, cnx->quic->f_binlog);

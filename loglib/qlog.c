@@ -88,23 +88,19 @@ int qlog_packet_start(uint64_t time, uint64_t size, const picoquic_packet_header
     return 0;
 }
 
-void qlog_truncated_sting(FILE* f, bytestream* s, uint64_t l, uint64_t l_max)
+void qlog_string(FILE* f, bytestream* s, uint64_t l)
 {
-    uint64_t ll = (l < l_max) ? l : l_max;
     uint64_t x;
-    int error_found = (s->ptr + (size_t)ll > s->size);
+    int error_found = (s->ptr + (size_t)l > s->size);
 
     fprintf(f, "\"");
 
-    for (x = 0; x < ll && s->ptr < s->size; x++) {
+    for (x = 0; x < l && s->ptr < s->size; x++) {
         fprintf(f, "%02x", s->data[s->ptr++]);
     }
 
     if (error_found) {
         fprintf(f, "... coding error!");
-    }
-    else if (l > l_max){
-        fprintf(f, "...");
     }
 
     fprintf(f, "\"");
@@ -246,9 +242,9 @@ void qlog_new_connection_id_frame(FILE* f, bytestream* s)
     fprintf(f, ", \"retire_before\": %"PRIu64"", retire_before);
     byteread_vint(s, &cid_length);
     fprintf(f, ", \"connection_id\": ");
-    qlog_truncated_sting(f, s, cid_length, cid_length);
+    qlog_string(f, s, cid_length);
     fprintf(f, ", \"reset_token\": ");
-    qlog_truncated_sting(f, s, 16, 16);
+    qlog_string(f, s, 16);
 }
 
 void qlog_retire_connection_id_frame(FILE* f, bytestream* s)
@@ -264,7 +260,7 @@ void qlog_new_token_frame(FILE* f, bytestream* s)
 
     fprintf(f, ", \"new_token\": ");
     byteread_vint(s, &toklen);
-    qlog_truncated_sting(f, s, toklen, toklen);
+    qlog_string(f, s, toklen);
 }
 
 void qlog_path_frame(uint64_t ftype, FILE* f, bytestream* s)
@@ -275,7 +271,7 @@ void qlog_path_frame(uint64_t ftype, FILE* f, bytestream* s)
     else {
         fprintf(f, ", \"path_response\": ");
     }
-    qlog_truncated_sting(f, s, 8, 8);
+    qlog_string(f, s, 8);
 }
 
 void qlog_crypto_hs_frame(FILE* f, bytestream* s)
