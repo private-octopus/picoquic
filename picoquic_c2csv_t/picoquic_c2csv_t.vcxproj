@@ -170,9 +170,6 @@
       <AdditionalDependencies>picoquic.lib;loglib.lib;picotls-core.lib;picotls-esni.lib;picotls-minicrypto.lib;picotls-minicrypto-deps.lib;picotls-openssl.lib;ws2_32.lib;libcrypto.lib;bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
-  <ItemGroup>
-    <ClCompile Include="picoquic_c2csv_t.c" />
-  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

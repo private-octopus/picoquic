@@ -56,17 +56,15 @@ const char * ftype2str(picoquic_frame_type_enum_t ftype)
     case picoquic_frame_type_reset_stream:
         return "reset_stream";
     case picoquic_frame_type_connection_close:
-        return "connection_close";
     case picoquic_frame_type_application_close:
-        return "application_close";
+        return "connection_close";
     case picoquic_frame_type_max_data:
         return "max_data";
     case picoquic_frame_type_max_stream_data:
         return "max_stream_data";
     case picoquic_frame_type_max_streams_bidir:
-        return "max_streams_bidir";
     case picoquic_frame_type_max_streams_unidir:
-        return "max_streams_unidir";
+        return "max_streams";
     case picoquic_frame_type_ping:
         return "ping";
     case picoquic_frame_type_data_blocked:
@@ -74,9 +72,8 @@ const char * ftype2str(picoquic_frame_type_enum_t ftype)
     case picoquic_frame_type_stream_data_blocked:
         return "stream_data_blocked";
     case picoquic_frame_type_streams_blocked_bidir:
-        return "streams_blocked_bidir";
     case picoquic_frame_type_streams_blocked_unidir:
-        return "streams_blocked_unidir";
+        return "streams_blocked";
     case picoquic_frame_type_new_connection_id:
         return "new_connection_id";
     case picoquic_frame_type_stop_sending:

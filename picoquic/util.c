@@ -201,7 +201,7 @@ int picoquic_print_connection_id_hexa(char* buf, size_t buf_len, const picoquic_
         buf[i * 2u + 1u] = hex_to_char[cnxid->id[i] & 0x0f];
     }
 
-    buf[cnxid->id_len * 2u] = '\0';
+    buf[cnxid->id_len * 2u] = 0;
 
     return 0;
 }
@@ -667,8 +667,10 @@ uint8_t* picoquic_frames_l_v_encode(uint8_t* bytes, const uint8_t* bytes_max, si
 {
     if ((bytes = picoquic_frames_varlen_encode(bytes, bytes_max, l)) != NULL &&
         (bytes + l) <= bytes_max) {
-        memcpy(bytes, v, l);
-        bytes += l;
+        if (l > 0) {
+            memcpy(bytes, v, l);
+            bytes += l;
+        }
     }
     else {
         bytes = NULL;

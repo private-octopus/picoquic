@@ -654,7 +654,7 @@ static size_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     }
     if (cnx->quic->f_binlog != NULL && (cnx->pkt_ctx[picoquic_packet_context_application].send_sequence < PICOQUIC_LOG_PACKET_MAX_SEQUENCE || cnx->quic->use_long_log)) {
         binlog_outgoing_packet(cnx->quic->f_binlog, cnx,
-            bytes, sequence_number, length,
+            bytes, sequence_number, pn_length, length,
             send_buffer, send_length, current_time);
     }
 
@@ -3036,9 +3036,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
         *next_wake_time = current_time;
         SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
 
-        if (ret == 0 && cnx->cc_log != NULL) {
-            picoquic_cc_dump(cnx, current_time);
-        }
+        picoquic_cc_dump(cnx, current_time);
     }
 
     return ret;
@@ -3471,7 +3469,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
         *next_wake_time = current_time;
         SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
 
-        if (ret == 0 && cnx->cc_log != NULL) {
+        if (ret == 0) {
             picoquic_cc_dump(cnx, current_time);
         }
     }
