@@ -835,7 +835,7 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
             test_ctx->s_to_c_link->picosec_per_byte = 800000;
             picoquic_set_default_congestion_algorithm(test_ctx->qserver, picoquic_bbr_algorithm);
             picoquic_set_congestion_algorithm(test_ctx->cnx_client, picoquic_bbr_algorithm);
-            picoquic_set_cc_log(test_ctx->qserver, ".");
+
             memset(&client_parameters, 0, sizeof(picoquic_tp_t));
             picoquic_init_transport_parameters(&client_parameters, 1);
             client_parameters.enable_one_way_delay = 1;

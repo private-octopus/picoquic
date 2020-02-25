@@ -61,9 +61,7 @@ void binlog_packet(FILE * f, const picoquic_connection_id_t* cid, int receiving,
 
 /* binary alternative to picoquic_log_outgoing_segment() */
 void binlog_outgoing_packet(FILE * f, picoquic_cnx_t* cnx,
-    uint8_t * bytes,
-    uint64_t sequence_number,
-    size_t length,
+    uint8_t * bytes, uint64_t sequence_number, size_t pn_length, size_t length,
     uint8_t* send_buffer, size_t send_length, uint64_t current_time);
 
 /* binary alternative to picoquic_log_transport_extension() */
@@ -79,6 +77,4 @@ void binlog_close_connection(picoquic_cnx_t * cnx);
 int binlog_open(picoquic_quic_t * quic, char const * binlog_file);
 void binlog_close(picoquic_quic_t * quic);
 
-int picoquic_open_cc_dump(picoquic_cnx_t * cnx);
-void picoquic_close_cc_dump(picoquic_cnx_t * cnx);
 void picoquic_cc_dump(picoquic_cnx_t * cnx, uint64_t current_time);

@@ -1105,6 +1105,8 @@ int picoquic_incoming_retry(
     }
 
     if (ret == 0) {
+        /* Close the log, because it is keyed by initial_cnxid */
+        binlog_close_connection(cnx);
         /* if this is the first reset, reset the original cid */
         if (cnx->original_cnxid.id_len == 0) {
             cnx->original_cnxid = cnx->initial_cnxid;
@@ -1719,7 +1721,7 @@ int picoquic_incoming_encrypted(
                 ret = picoquic_tls_stream_process(cnx);
             }
 
-            if (ret == 0 && cnx->cc_log != NULL) {
+            if (ret == 0) {
                 picoquic_cc_dump(cnx, current_time);
             }
         }
@@ -1895,7 +1897,6 @@ int picoquic_incoming_segment(
                 }
                 break;
             case picoquic_packet_retry:
-                /* TODO: server retry is completely revised in the new version. */
                 ret = picoquic_incoming_retry(cnx, bytes, &ph, current_time);
                 break;
             case picoquic_packet_handshake:
