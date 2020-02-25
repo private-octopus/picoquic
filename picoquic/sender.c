@@ -3036,9 +3036,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
         *next_wake_time = current_time;
         SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
 
-        if (ret == 0 && cnx->cc_log != NULL) {
-            picoquic_cc_dump(cnx, current_time);
-        }
+        picoquic_cc_dump(cnx, current_time);
     }
 
     return ret;
@@ -3471,7 +3469,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
         *next_wake_time = current_time;
         SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
 
-        if (ret == 0 && cnx->cc_log != NULL) {
+        if (ret == 0) {
             picoquic_cc_dump(cnx, current_time);
         }
     }

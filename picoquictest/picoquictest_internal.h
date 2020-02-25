@@ -34,65 +34,6 @@ extern "C" {
 
 #define PICOQUIC_TEST_ALPN "picoquic-test"
 
-#if 0
-
-#define PICOQUIC_TEST_SNI "test.example.com"
-
-#ifdef _WINDOWS
-#define PICOQUIC_TEST_FILE_SERVER_CERT "certs\\cert.pem"
-#define PICOQUIC_TEST_FILE_SERVER_BAD_CERT "certs\\badcert.pem"
-#define PICOQUIC_TEST_FILE_SERVER_KEY "certs\\key.pem"
-#define PICOQUIC_TEST_FILE_CERT_STORE "certs\\test-ca.crt"
-#define PICOQUIC_TEST_FILE_ESNI_KEY "certs\\esni-secp256r1.key"
-#define PICOQUIC_TEST_FILE_ESNI_RR "certs\\esni-rr.bin"
-#else
-#define PICOQUIC_TEST_FILE_SERVER_CERT "certs/cert.pem"
-#define PICOQUIC_TEST_FILE_SERVER_BAD_CERT "certs/badcert.pem"
-#define PICOQUIC_TEST_FILE_SERVER_KEY "certs/key.pem"
-#define PICOQUIC_TEST_FILE_CERT_STORE "certs/test-ca.crt"
-#define PICOQUIC_TEST_FILE_ESNI_KEY "certs/esni-secp256r1.key"
-#define PICOQUIC_TEST_FILE_ESNI_RR "certs/esni-rr.bin"
-#endif
-
- /* To set the solution directory for tests */
-extern char const * picoquic_test_solution_dir;
-#endif
-
-#if 0
-/* Really basic network simulator, only simulates a simple link using a
- * packet structure.
- * Init: link creation. Returns a link structure with defined bandwidth,
- * latency, loss pattern and initial time. The link is empty. The loss
- * pattern is a 64 bit bit mask.
- * Submit packet of length L at time t. The packet is queued to the link.
- * Get packet out of link at time T + L + Queue.
- */
-
-typedef struct st_picoquictest_sim_packet_t {
-    struct st_picoquictest_sim_packet_t* next_packet;
-    uint64_t arrival_time;
-    size_t length;
-    struct sockaddr_storage addr_from;
-    struct sockaddr_storage addr_to;
-    uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE];
-} picoquictest_sim_packet_t;
-
-typedef struct st_picoquictest_sim_link_t {
-    uint64_t next_send_time;
-    uint64_t queue_time;
-    uint64_t queue_delay_max;
-    uint64_t picosec_per_byte;
-    uint64_t microsec_latency;
-    uint64_t* loss_mask;
-    uint64_t packets_dropped;
-    uint64_t packets_sent;
-    uint64_t jitter;
-    uint64_t jitter_seed;
-    picoquictest_sim_packet_t* first_packet;
-    picoquictest_sim_packet_t* last_packet;
-} picoquictest_sim_link_t;
-#endif
-
 #define PICOQUIC_TEST_SNI "test.example.com"
 #define PICOQUIC_TEST_ALPN "picoquic-test"
 #define PICOQUIC_TEST_WRONG_ALPN "picoquic-bla-bla"
@@ -190,24 +131,6 @@ typedef struct st_test_skip_frames_t {
 extern test_skip_frames_t test_skip_list[];
 
 extern size_t nb_test_skip_list;
-
-#if 0
-
-picoquictest_sim_link_t* picoquictest_sim_link_create(double data_rate_in_gps,
-    uint64_t microsec_latency, uint64_t* loss_mask, uint64_t queue_delay_max, uint64_t current_time);
-
-void picoquictest_sim_link_delete(picoquictest_sim_link_t* link);
-
-picoquictest_sim_packet_t* picoquictest_sim_link_create_packet();
-
-uint64_t picoquictest_sim_link_next_arrival(picoquictest_sim_link_t* link, uint64_t current_time);
-
-picoquictest_sim_packet_t* picoquictest_sim_link_dequeue(picoquictest_sim_link_t* link,
-    uint64_t current_time);
-
-void picoquictest_sim_link_submit(picoquictest_sim_link_t* link, picoquictest_sim_packet_t* packet,
-    uint64_t current_time);
-#endif
 
 int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_version,
     char const* sni, char const* alpn, uint64_t* p_simulated_time,

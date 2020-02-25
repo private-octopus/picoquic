@@ -1719,7 +1719,7 @@ int picoquic_incoming_encrypted(
                 ret = picoquic_tls_stream_process(cnx);
             }
 
-            if (ret == 0 && cnx->cc_log != NULL) {
+            if (ret == 0) {
                 picoquic_cc_dump(cnx, current_time);
             }
         }

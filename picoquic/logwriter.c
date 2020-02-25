@@ -742,62 +742,6 @@ void binlog_close(picoquic_quic_t * quic)
 }
 
 /*
- * Check whether dumping of transmission traces is required. If it is,
- * the master context specifies the directory where to log the file.
- */
-
-int picoquic_open_cc_dump(picoquic_cnx_t * cnx)
-{
-    if (cnx->cc_log != NULL) {
-        DBG_PRINTF("%s", "CC LOG File is already open!\n");
-        return -1;
-    }
-
-    if (cnx->quic->cc_log_dir == NULL) {
-        DBG_PRINTF("%s", "CC LOG directory not set!\n");
-        return -1;
-    }
-
-    char cc_log_file_name[512];
-    char cnxid_str[2 * PICOQUIC_CONNECTION_ID_MAX_SIZE + 1];
-    int ret = 0;
-
-    if (picoquic_print_connection_id_hexa(cnxid_str, sizeof(cnxid_str), &cnx->initial_cnxid) != 0
-        || picoquic_sprintf(cc_log_file_name, sizeof(cc_log_file_name), NULL, "%s%s%s-log.bin", cnx->quic->cc_log_dir, PICOQUIC_FILE_SEPARATOR, cnxid_str) != 0)
-    {
-        DBG_PRINTF("Cannot format file name into folder %s, id_len = %d\n", cnx->quic->cc_log_dir, cnx->initial_cnxid.id_len);
-        ret = -1;
-    }
-    else {
-        cnx->cc_log = picoquic_file_open(cc_log_file_name, "wb");
-        if (cnx->cc_log == NULL) {
-            DBG_PRINTF("Cannot open file %s for write.\n", cc_log_file_name);
-            ret = -1;
-        }
-        else {
-            /* Write a header text with version identifier and current date  */
-            bytestream_buf stream;
-            bytestream* ps = bytestream_buf_init(&stream, 16);
-            bytewrite_int32(ps, FOURCC('q', 'l', 'o', 'g'));
-            bytewrite_int32(ps, 0x01);
-            bytewrite_int64(ps, picoquic_get_quic_time(cnx->quic));
-
-            if (fwrite(bytestream_data(ps), bytestream_length(ps), 1, cnx->cc_log) <= 0) {
-                DBG_PRINTF("Cannot write header for file %s.\n", cc_log_file_name);
-                cnx->cc_log = picoquic_file_close(cnx->cc_log);
-            }
-        }
-    }
-
-    return ret;
-}
-
-void picoquic_close_cc_dump(picoquic_cnx_t * cnx)
-{
-    cnx->cc_log = picoquic_file_close(cnx->cc_log);
-}
-
-/*
  * Log the state of the congestion management, retransmission, etc.
  * Call either just after processing a received packet, or just after
  * sending a packet.
@@ -805,7 +749,7 @@ void picoquic_close_cc_dump(picoquic_cnx_t * cnx)
 
 void picoquic_cc_dump(picoquic_cnx_t * cnx, uint64_t current_time)
 {
-    if (cnx->cc_log == NULL) {
+    if (cnx->cc_log == NULL && cnx->quic->f_binlog == NULL) {
         return;
     }
 
@@ -850,8 +794,15 @@ void picoquic_cc_dump(picoquic_cnx_t * cnx, uint64_t current_time)
 
     bytewrite_int32(ps_head, (uint32_t)bytestream_length(ps_msg));
 
-    (void)fwrite(bytestream_data(ps_head), bytestream_length(ps_head), 1, cnx->cc_log);
-    (void)fwrite(bytestream_data(ps_msg), bytestream_length(ps_msg), 1, cnx->cc_log);
+    if (cnx->cc_log != NULL) {
+        (void)fwrite(bytestream_data(ps_head), bytestream_length(ps_head), 1, cnx->cc_log);
+        (void)fwrite(bytestream_data(ps_msg), bytestream_length(ps_msg), 1, cnx->cc_log);
+    }
+
+    if (cnx->quic->f_binlog != NULL) {
+        (void)fwrite(bytestream_data(ps_head), bytestream_length(ps_head), 1, cnx->quic->f_binlog);
+        (void)fwrite(bytestream_data(ps_msg), bytestream_length(ps_msg), 1, cnx->quic->f_binlog);
+    }
 
     cnx->cwin_blocked = 0;
     cnx->flow_blocked = 0;

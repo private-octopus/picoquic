@@ -77,6 +77,4 @@ void binlog_close_connection(picoquic_cnx_t * cnx);
 int binlog_open(picoquic_quic_t * quic, char const * binlog_file);
 void binlog_close(picoquic_quic_t * quic);
 
-int picoquic_open_cc_dump(picoquic_cnx_t * cnx);
-void picoquic_close_cc_dump(picoquic_cnx_t * cnx);
 void picoquic_cc_dump(picoquic_cnx_t * cnx, uint64_t current_time);

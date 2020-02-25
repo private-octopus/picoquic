@@ -2264,10 +2264,6 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
     if (cnx != NULL) {
         picoquic_register_path(cnx, cnx->path[0]);
 
-        if (cnx->quic->cc_log_dir != NULL) {
-            (void)picoquic_open_cc_dump(cnx);
-        }
-
         binlog_new_connection(cnx);
     }
 
@@ -2568,11 +2564,6 @@ void picoquic_set_fuzz(picoquic_quic_t * quic, picoquic_fuzz_fn fuzz_fn, void * 
 {
     quic->fuzz_fn = fuzz_fn;
     quic->fuzz_ctx = fuzz_ctx;
-}
-
-void picoquic_set_cc_log(picoquic_quic_t * quic, char const * cc_log_dir)
-{
-    quic->cc_log_dir = cc_log_dir;
 }
 
 void picoquic_set_binlog(picoquic_quic_t * quic, char const * binlog_file)
@@ -2987,8 +2978,6 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
         while (cnx->probe_first != NULL) {
             picoquic_delete_probe(cnx, cnx->probe_first);
         }
-
-        picoquic_close_cc_dump(cnx);
 
         free(cnx);
     }
