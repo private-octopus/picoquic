@@ -141,16 +141,17 @@ void qlog_closing_frame(uint64_t ftype, FILE* f, bytestream* s)
     fprintf(f, ", \"error_space\": \"%s\"", 
         (ftype == picoquic_frame_type_connection_close)?"transport":"application");
     byteread_vint(s, &error_code);
-    fprintf(f, ", \"raw_error_code\": %"PRIu64"", error_code);
+    fprintf(f, ", \"error_code\": %"PRIu64"", error_code);
     
-    if (ftype == picoquic_frame_type_connection_close) {
+    if (ftype == picoquic_frame_type_connection_close &&
+        error_code != 0) {
         byteread_vint(s, &offending_frame_type);
         offensive_type_name = ftype2str(offending_frame_type);
         if (strcmp(offensive_type_name, "unknown") == 0) {
-            fprintf(f, ", \"offending_frame_type\": \"%"PRIx64"\"", offending_frame_type);
+            fprintf(f, ", \"trigger_frame_type\": \"%"PRIx64"\"", offending_frame_type);
         }
         else {
-            fprintf(f, ", \"offending_frame_type\": \"%s\"", offensive_type_name);
+            fprintf(f, ", \"trigger_frame_type\": \"%s\"", offensive_type_name);
         }
     }
 

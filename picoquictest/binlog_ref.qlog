@@ -10,11 +10,11 @@
 [0, "TRANSPORT", "PACKET_SENT", { "packet_type": "1rtt", "header": { "packet_number": "1", "packet_size": 4, "dcid": "01020304" }, "frames": [{ 
     "frame_type": "reset_stream", "stream_id": 17, "error_code": 1, "final_size": 1}]}],
 [0, "TRANSPORT", "PACKET_SENT", { "packet_type": "1rtt", "header": { "packet_number": "2", "packet_size": 16, "dcid": "01020304" }, "frames": [{ 
-    "frame_type": "connection_close", "error_space": "transport", "raw_error_code": 53247, "offending_frame_type": "padding", "reason": "123456789"}]}],
+    "frame_type": "connection_close", "error_space": "transport", "error_code": 53247, "trigger_frame_type": "padding", "reason": "123456789"}]}],
 [0, "TRANSPORT", "PACKET_SENT", { "packet_type": "1rtt", "header": { "packet_number": "3", "packet_size": 3, "dcid": "01020304" }, "frames": [{ 
-    "frame_type": "connection_close", "error_space": "application", "raw_error_code": 0}]}],
+    "frame_type": "connection_close", "error_space": "application", "error_code": 0}]}],
 [0, "TRANSPORT", "PACKET_SENT", { "packet_type": "1rtt", "header": { "packet_number": "4", "packet_size": 8, "dcid": "01020304" }, "frames": [{ 
-    "frame_type": "connection_close", "error_space": "application", "raw_error_code": 1028, "reason": "test"}]}],
+    "frame_type": "connection_close", "error_space": "application", "error_code": 1028, "reason": "test"}]}],
 [0, "TRANSPORT", "PACKET_SENT", { "packet_type": "1rtt", "header": { "packet_number": "5", "packet_size": 9, "dcid": "01020304" }, "frames": [{ 
     "frame_type": "max_data", "maximum": 1099511627776}]}],
 [0, "TRANSPORT", "PACKET_SENT", { "packet_type": "1rtt", "header": { "packet_number": "6", "packet_size": 6, "dcid": "01020304" }, "frames": [{ 

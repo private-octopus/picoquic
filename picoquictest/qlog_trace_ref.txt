@@ -122,6 +122,6 @@
     "frame_type": "padding"}]}],
 [84421, "TRANSPORT", "PACKET_RECEIVED", { "packet_type": "1rtt", "header": { "packet_number": "13", "packet_size": 34, "dcid": "030405060708090a" }, "frames": [{ 
     "frame_type": "ack", "ack_delay": 0, "acked_ranges": [[16, 17]]}, { 
-    "frame_type": "connection_close", "error_space": "application", "raw_error_code": 0}]}],
+    "frame_type": "connection_close", "error_space": "application", "error_code": 0}]}],
 [84421, "TRANSPORT", "PACKET_SENT", { "packet_type": "1rtt", "header": { "packet_number": "18", "packet_size": 15, "dcid": "0203040506070809" }, "frames": [{ 
-    "frame_type": "connection_close", "error_space": "transport", "raw_error_code": 0, "offending_frame_type": "padding"}]}]]}]}
+    "frame_type": "connection_close", "error_space": "transport", "error_code": 0}]}]]}]}
