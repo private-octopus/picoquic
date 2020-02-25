@@ -137,21 +137,6 @@ target_link_libraries(picoquicdemo
 
 target_include_directories(picoquicdemo PRIVATE loglib picohttp)
 
-add_executable(picoquic_c2csv
-    picoquic_c2csv_t/picoquic_c2csv_t.c
-)
-
-target_link_libraries(picoquic_c2csv
-    picoquic-log
-    picoquic-core
-    ${PTLS_LIBRARIES}
-    ${OPENSSL_LIBRARIES}
-    ${CMAKE_DL_LIBS}
-    ${CMAKE_THREAD_LIBS_INIT}
-)
-
-target_include_directories(picoquic_c2csv PRIVATE loglib)
-
 add_executable(picolog_t
     picolog/picolog.c
 )
