@@ -379,12 +379,19 @@ int qlog_packet_frame(bytestream * s, void * ptr)
         if ((ftype & 4) != 0) {
             byteread_vint(s, &offset);
         }
-        uint64_t length = bytestream_remain(s);
-        if ((ftype & 2) != 0) {
-            byteread_vint(s, &length);
-        }
+        uint64_t length = 0;
+        byteread_vint(s, &length);
         fprintf(f, ", \"id\": %"PRIu64", \"offset\": %"PRIu64", \"length\": %"PRIu64", \"fin\": %s ",
             stream_id, offset, length, (ftype & 1) ? "true":"false");
+        if ((ftype & 2) == 0) {
+            fprintf(f, ", \"has_length\": false");
+        }
+        uint64_t extra_bytes = bytestream_remain(s);
+        if (extra_bytes > 0) {
+            fprintf(f, ", \"begins_with\": ");
+            qlog_string(f, s, extra_bytes);
+        }
+
     } else switch (ftype) {
     case picoquic_frame_type_ack:
     case picoquic_frame_type_ack_ecn:
