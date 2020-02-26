@@ -1011,7 +1011,6 @@ typedef struct st_picoquic_cnx_t {
     unsigned int cwin_blocked : 1;
     unsigned int flow_blocked : 1;
     unsigned int stream_blocked : 1;
-    FILE * cc_log; /* File where congestion control data is logged */
 
     /* ECN Counters */
     uint64_t ecn_ect0_total_local;

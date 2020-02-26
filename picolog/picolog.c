@@ -274,7 +274,7 @@ int filedump_binlog(FILE* bin_log, FILE* bin_dump)
 
     fseek(bin_log, 16, SEEK_SET);
 
-    fprintf(bin_dump, "MDG-len, I-CID, Time, ID, Comment\n");
+    fprintf(bin_dump, "MSG-len, I-CID, Time, ID, Comment\n");
 
     while (ret == 0 && fread(head, sizeof(head), 1, bin_log) > 0) {
 

@@ -667,10 +667,8 @@ uint8_t* picoquic_frames_l_v_encode(uint8_t* bytes, const uint8_t* bytes_max, si
 {
     if ((bytes = picoquic_frames_varlen_encode(bytes, bytes_max, l)) != NULL &&
         (bytes + l) <= bytes_max) {
-        if (l > 0) {
-            memcpy(bytes, v, l);
-            bytes += l;
-        }
+        memcpy(bytes, v, l);
+        bytes += l;
     }
     else {
         bytes = NULL;
