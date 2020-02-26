@@ -88,23 +88,19 @@ int qlog_packet_start(uint64_t time, uint64_t size, const picoquic_packet_header
     return 0;
 }
 
-void qlog_truncated_sting(FILE* f, bytestream* s, uint64_t l, uint64_t l_max)
+void qlog_string(FILE* f, bytestream* s, uint64_t l)
 {
-    uint64_t ll = (l < l_max) ? l : l_max;
     uint64_t x;
-    int error_found = (s->ptr + (size_t)ll > s->size);
+    int error_found = (s->ptr + (size_t)l > s->size);
 
     fprintf(f, "\"");
 
-    for (x = 0; x < ll && s->ptr < s->size; x++) {
+    for (x = 0; x < l && s->ptr < s->size; x++) {
         fprintf(f, "%02x", s->data[s->ptr++]);
     }
 
     if (error_found) {
         fprintf(f, "... coding error!");
-    }
-    else if (l > l_max){
-        fprintf(f, "...");
     }
 
     fprintf(f, "\"");
@@ -145,16 +141,17 @@ void qlog_closing_frame(uint64_t ftype, FILE* f, bytestream* s)
     fprintf(f, ", \"error_space\": \"%s\"", 
         (ftype == picoquic_frame_type_connection_close)?"transport":"application");
     byteread_vint(s, &error_code);
-    fprintf(f, ", \"raw_error_code\": %"PRIu64"", error_code);
+    fprintf(f, ", \"error_code\": %"PRIu64"", error_code);
     
-    if (ftype == picoquic_frame_type_connection_close) {
+    if (ftype == picoquic_frame_type_connection_close &&
+        error_code != 0) {
         byteread_vint(s, &offending_frame_type);
         offensive_type_name = ftype2str(offending_frame_type);
         if (strcmp(offensive_type_name, "unknown") == 0) {
-            fprintf(f, ", \"offending_frame_type\": \"%"PRIx64"\"", offending_frame_type);
+            fprintf(f, ", \"trigger_frame_type\": \"%"PRIx64"\"", offending_frame_type);
         }
         else {
-            fprintf(f, ", \"offending_frame_type\": \"%s\"", offensive_type_name);
+            fprintf(f, ", \"trigger_frame_type\": \"%s\"", offensive_type_name);
         }
     }
 
@@ -246,9 +243,9 @@ void qlog_new_connection_id_frame(FILE* f, bytestream* s)
     fprintf(f, ", \"retire_before\": %"PRIu64"", retire_before);
     byteread_vint(s, &cid_length);
     fprintf(f, ", \"connection_id\": ");
-    qlog_truncated_sting(f, s, cid_length, cid_length);
+    qlog_string(f, s, cid_length);
     fprintf(f, ", \"reset_token\": ");
-    qlog_truncated_sting(f, s, 16, 16);
+    qlog_string(f, s, 16);
 }
 
 void qlog_retire_connection_id_frame(FILE* f, bytestream* s)
@@ -264,7 +261,7 @@ void qlog_new_token_frame(FILE* f, bytestream* s)
 
     fprintf(f, ", \"new_token\": ");
     byteread_vint(s, &toklen);
-    qlog_truncated_sting(f, s, toklen, toklen);
+    qlog_string(f, s, toklen);
 }
 
 void qlog_path_frame(uint64_t ftype, FILE* f, bytestream* s)
@@ -275,7 +272,7 @@ void qlog_path_frame(uint64_t ftype, FILE* f, bytestream* s)
     else {
         fprintf(f, ", \"path_response\": ");
     }
-    qlog_truncated_sting(f, s, 8, 8);
+    qlog_string(f, s, 8);
 }
 
 void qlog_crypto_hs_frame(FILE* f, bytestream* s)
@@ -382,12 +379,19 @@ int qlog_packet_frame(bytestream * s, void * ptr)
         if ((ftype & 4) != 0) {
             byteread_vint(s, &offset);
         }
-        uint64_t length = bytestream_remain(s);
-        if ((ftype & 2) != 0) {
-            byteread_vint(s, &length);
-        }
+        uint64_t length = 0;
+        byteread_vint(s, &length);
         fprintf(f, ", \"id\": %"PRIu64", \"offset\": %"PRIu64", \"length\": %"PRIu64", \"fin\": %s ",
             stream_id, offset, length, (ftype & 1) ? "true":"false");
+        if ((ftype & 2) == 0) {
+            fprintf(f, ", \"has_length\": false");
+        }
+        uint64_t extra_bytes = bytestream_remain(s);
+        if (extra_bytes > 0) {
+            fprintf(f, ", \"begins_with\": ");
+            qlog_string(f, s, extra_bytes);
+        }
+
     } else switch (ftype) {
     case picoquic_frame_type_ack:
     case picoquic_frame_type_ack_ecn:
