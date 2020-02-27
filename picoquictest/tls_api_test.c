@@ -850,7 +850,7 @@ int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_versi
                 /* Apply the zero share parameter if required */
                 if (force_zero_share != 0)
                 {
-                    test_ctx->qclient->flags |= picoquic_context_client_zero_share;
+                    test_ctx->qclient->client_zero_share = 1;
                 }
 
                 /* Create a client connection */
@@ -2021,7 +2021,7 @@ int tls_api_bad_server_reset_test()
 
 static char const* token_file_name = "retry_tests_tokens.bin";
 
-int tls_retry_token_test()
+int tls_retry_token_test_one(int token_mode)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -2035,8 +2035,8 @@ int tls_retry_token_test()
     }
 
     if (ret == 0) {
-        /* Set the server in HRR/Cookies mode */
-        picoquic_set_cookie_mode(test_ctx->qserver, 1);
+        /* Set the server in requested token mode -- either check or merely provide */
+        picoquic_set_cookie_mode(test_ctx->qserver, token_mode);
         /* Try the connection */
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
     }
@@ -2094,6 +2094,24 @@ int tls_retry_token_test()
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+int tls_retry_token_test()
+{
+    int ret = tls_retry_token_test_one(1);
+
+    if (ret != 0) {
+        DBG_PRINTF("Retry token test returns %d", ret);
+    }
+    else {
+        ret = tls_retry_token_test_one(2);
+
+        if (ret != 0) {
+            DBG_PRINTF("Provide token test returns %d", ret);
+        }
     }
 
     return ret;
@@ -4905,7 +4923,7 @@ int server_busy_test()
     int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
 
     if (ret == 0) {
-        test_ctx->qserver->flags |= picoquic_context_server_busy;
+        test_ctx->qserver->server_busy = 1;
         (void) tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
 
         if (test_ctx->cnx_server != NULL &&
@@ -4925,7 +4943,7 @@ int server_busy_test()
     }
 
     if (ret == 0) {
-        test_ctx->qserver->flags &= ~picoquic_context_server_busy;
+        test_ctx->qserver->server_busy = 0;
 
         if (test_ctx->cnx_server != NULL) {
             picoquic_delete_cnx(test_ctx->cnx_server);

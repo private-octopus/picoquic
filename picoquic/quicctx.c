@@ -262,7 +262,7 @@ picoquic_quic_t* picoquic_create(uint32_t nb_connections,
         quic->padding_minsize_default = PICOQUIC_RESET_PACKET_MIN_SIZE;
 
         if (cnx_id_callback != NULL) {
-            quic->flags |= picoquic_context_unconditional_cnx_id;
+            quic->unconditional_cnx_id = 1;
         }
 
         if (ticket_file_name != NULL) {
@@ -474,11 +474,19 @@ void picoquic_set_null_verifier(picoquic_quic_t* quic) {
 
 void picoquic_set_cookie_mode(picoquic_quic_t* quic, int cookie_mode)
 {
-    if (cookie_mode) {
-        quic->flags |= picoquic_context_check_token;
+    if (cookie_mode&1) {
+        quic->check_token = 1;
         picoquic_crypto_random(quic, quic->retry_seed, PICOQUIC_RETRY_SECRET_SIZE);
     } else {
-        quic->flags &= ~picoquic_context_check_token;
+        quic->check_token = 0;
+    }
+
+    if (cookie_mode & 2) {
+        quic->provide_token = 1;
+        picoquic_crypto_random(quic, quic->retry_seed, PICOQUIC_RETRY_SECRET_SIZE);
+    }
+    else {
+        quic->provide_token = 0;
     }
 }
 

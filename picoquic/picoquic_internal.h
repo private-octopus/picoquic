@@ -502,11 +502,16 @@ typedef struct st_picoquic_quic_t {
     picoquic_stored_ticket_t * p_first_ticket;
     picoquic_stored_token_t * p_first_token;
     uint32_t mtu_max;
-    uint32_t flags;
     uint32_t padding_multiple_default;
     uint32_t padding_minsize_default;
     uint32_t sequence_hole_pseudo_period; /* Optimistic ack defense */
     picoquic_spinbit_version_enum default_spin_policy;
+    /* Flags */
+    unsigned int check_token : 1;
+    unsigned int provide_token : 1;
+    unsigned int unconditional_cnx_id : 1;
+    unsigned int client_zero_share : 1;
+    unsigned int server_busy : 1;
 
     picoquic_stateless_packet_t* pending_stateless_packet;
 
