@@ -142,8 +142,8 @@ uint8_t client_param2[] = {
     picoquic_tp_idle_timeout, 2, 0x40, 0xFF,
     picoquic_tp_max_packet_size, 2, 0x45, 0xC8,
     picoquic_tp_max_datagram_size, 2,0x45, 0xC8,
-    0x50, 0x57, 0x01, 1,
-    0x50, 0xDE, 0x00
+    0x50, 0x57, 0x01, 0x01,
+    0x80, 0, 0x71, 0x57, 0x00
 };
 
 uint8_t client_param3[] = {
@@ -151,7 +151,7 @@ uint8_t client_param3[] = {
     picoquic_tp_initial_max_data, 4, 0x81, 0, 0, 0,
     picoquic_tp_initial_max_streams_bidi, 1, 0x01,
     picoquic_tp_idle_timeout, 2, 0x40, 0xFF,
-    0x50, 0xDE, 0x00,
+    0x80, 0, 0xDE, 0x1A, 2, 0x43, 0xE8,
     0x80, 0, 0x71, 0x57, 0x00
 };
 
@@ -421,11 +421,6 @@ static int transport_param_compare(picoquic_tp_t* param, picoquic_tp_t* ref) {
     else if (param->enable_loss_bit != ref->enable_loss_bit) {
         DBG_PRINTF("enable_loss_bit: got %d, expected %d\n",
             param->enable_loss_bit, ref->enable_loss_bit);
-        ret = -1;
-    }
-    else if (param->enable_one_way_delay != ref->enable_one_way_delay) {
-        DBG_PRINTF("enable_one_way_delay: got %d, expected %d\n",
-            param->enable_one_way_delay, ref->enable_one_way_delay);
         ret = -1;
     }
     else if (param->enable_time_stamp != ref->enable_time_stamp) {

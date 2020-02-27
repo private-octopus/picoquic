@@ -155,9 +155,9 @@ static void picoquic_newreno_notify(
             /* Using RTT increases as signal to get out of initial slow start */
             if (nr_state->alg_state == picoquic_newreno_alg_slow_start &&
                 nr_state->ssthresh == (uint64_t)((int64_t)-1) &&
-                picoquic_hystart_test(&nr_state->rtt_filter, (cnx->is_one_way_delay_enabled)?one_way_delay:rtt_measurement, 
+                picoquic_hystart_test(&nr_state->rtt_filter, (cnx->is_time_stamp_enabled)?one_way_delay:rtt_measurement, 
                     cnx->path[0]->pacing_packet_time_microsec, current_time, 
-                    cnx->is_one_way_delay_enabled)) {
+                    cnx->is_time_stamp_enabled)) {
                 /* RTT increased too much, get out of slow start! */
                 nr_state->ssthresh = path_x->cwin;
                 nr_state->alg_state = picoquic_newreno_alg_congestion_avoidance;

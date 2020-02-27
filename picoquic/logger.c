@@ -354,12 +354,6 @@ char const* picoquic_log_frame_names(uint64_t frame_type)
     case picoquic_frame_type_datagram_l:
         frame_name = "datagram";
         break;
-    case picoquic_frame_type_ack_1wd:
-        frame_name = "ack_1wd";
-        break;
-    case picoquic_frame_type_ack_ecn_1wd:
-        frame_name = "ack_ecn_1wd";
-        break;
     case picoquic_frame_type_ack_frequency:
         frame_name = "ack_frequency";
         break;
@@ -437,9 +431,6 @@ char const* picoquic_log_tp_name(uint64_t tp_number)
         break;
     case picoquic_tp_enable_loss_bit:
         tp_name = "enable_loss_bit";
-        break;
-    case picoquic_tp_enable_one_way_delay:
-        tp_name = "enable_one_way_delay";
         break;
     case picoquic_tp_min_ack_delay:
         tp_name = "min_ack_delay";
@@ -637,19 +628,18 @@ size_t picoquic_log_stream_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
     return byte_index + data_length;
 }
 
-size_t picoquic_log_ack_frame(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t bytes_max, int is_ecn, int has_one_way_delay)
+size_t picoquic_log_ack_frame(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t bytes_max, int is_ecn)
 {
     size_t byte_index;
     uint64_t num_block;
     uint64_t largest;
     uint64_t ack_delay;
     uint64_t ecnx3[3];
-    uint64_t time_stamp = 0;
     int suspended = debug_printf_reset(1);
     int ret;
 
     ret = picoquic_parse_ack_header(bytes, bytes_max, &num_block,
-            &largest, &ack_delay, &byte_index, 0, (has_one_way_delay)?&time_stamp:NULL);
+        &largest, &ack_delay, &byte_index, 0);
 
     (void)debug_printf_reset(suspended);
 
@@ -657,21 +647,11 @@ size_t picoquic_log_ack_frame(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t
         return bytes_max;
 
     /* Now that the size is good, print it */
-    if (has_one_way_delay) {
-        if (is_ecn) {
-            fprintf(F, "    ACK_ECN_1WD %" PRIx64 ", (nb=%u)", time_stamp, (int)num_block);
-        }
-        else {
-            fprintf(F, "    ACK_1WD %" PRIx64 ", (nb=%u)", time_stamp, (int)num_block);
-        }
+    if (is_ecn) {
+        fprintf(F, "    ACK_ECN (nb=%u)", (int)num_block);
     }
     else {
-        if (is_ecn) {
-            fprintf(F, "    ACK_ECN (nb=%u)", (int)num_block);
-        }
-        else {
-            fprintf(F, "    ACK (nb=%u)", (int)num_block);
-        }
+        fprintf(F, "    ACK (nb=%u)", (int)num_block);
     }
 
     /* decoding the acks */
@@ -691,7 +671,8 @@ size_t picoquic_log_ack_frame(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t
             fprintf(F, "    Malformed ACK RANGE, requires %d bytes out of %d", (int)picoquic_varint_skip(bytes),
                 (int)(bytes_max - byte_index));
             break;
-        } else {
+        }
+        else {
             byte_index += l_range;
         }
 
@@ -725,7 +706,8 @@ size_t picoquic_log_ack_frame(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t
             fprintf(F, "    Malformed ACK GAP, %d blocks remain.", (int)num_block);
             byte_index = bytes_max;
             break;
-        } else {
+        }
+        else {
             size_t l_gap = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &block_to_block);
             if (l_gap == 0) {
                 byte_index = bytes_max;
@@ -736,7 +718,8 @@ size_t picoquic_log_ack_frame(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t
                 fprintf(F, "    Malformed ACK GAP, requires %d bytes out of %d", (int)picoquic_varint_skip(bytes),
                     (int)(bytes_max - byte_index));
                 break;
-            } else {
+            }
+            else {
                 byte_index += l_gap;
                 block_to_block += 1;
                 block_to_block += range;
@@ -774,7 +757,8 @@ size_t picoquic_log_ack_frame(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t
 
         fprintf(F, ", ect0=%llu, ect1=%llu, ce=%llu\n",
             (unsigned long long)ecnx3[0], (unsigned long long)ecnx3[1], (unsigned long long)ecnx3[2]);
-    } else {
+    }
+    else {
         fprintf(F, "\n");
     }
 
@@ -1357,16 +1341,10 @@ void picoquic_log_frames(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t leng
 
         switch (frame_id) {
         case picoquic_frame_type_ack:
-            byte_index += picoquic_log_ack_frame(F, cnx_id64, bytes + byte_index, length - byte_index, 0, 0);
+            byte_index += picoquic_log_ack_frame(F, cnx_id64, bytes + byte_index, length - byte_index, 0);
             break;
         case picoquic_frame_type_ack_ecn:
-            byte_index += picoquic_log_ack_frame(F, cnx_id64, bytes + byte_index, length - byte_index, 1, 0);
-            break;
-        case picoquic_frame_type_ack_1wd:
-            byte_index += picoquic_log_ack_frame(F, cnx_id64, bytes + byte_index, length - byte_index, 0, 1);
-            break;
-        case picoquic_frame_type_ack_ecn_1wd:
-            byte_index += picoquic_log_ack_frame(F, cnx_id64, bytes + byte_index, length - byte_index, 1, 1);
+            byte_index += picoquic_log_ack_frame(F, cnx_id64, bytes + byte_index, length - byte_index, 1);
             break;
         case picoquic_frame_type_retire_connection_id:
             byte_index += picoquic_log_retire_connection_id_frame(F, bytes + byte_index, length - byte_index);

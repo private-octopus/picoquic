@@ -353,8 +353,7 @@ int picoquic_prepare_transport_extensions_old(picoquic_cnx_t* cnx, int extension
         int n = 31 * (cnx->initial_cnxid.id[0] + cnx->client_mode) + 27;
         uint64_t v = cnx->initial_cnxid.id[1];
         while (n == picoquic_tp_test_large_chello ||
-            n == picoquic_tp_enable_loss_bit_old ||
-            n == picoquic_tp_enable_one_way_delay){
+            n == picoquic_tp_enable_loss_bit_old){
             n += 31;
         }
         v = (v << 8) + cnx->initial_cnxid.id[2];
@@ -378,18 +377,6 @@ int picoquic_prepare_transport_extensions_old(picoquic_cnx_t* cnx, int extension
     if (cnx->local_parameters.enable_loss_bit > 0 && bytes != NULL) {
         bytes = picoquic_transport_param_type_varint_encode_old(bytes, bytes_max, picoquic_tp_enable_loss_bit,
             (cnx->local_parameters.enable_loss_bit > 1) ? 1 : 0);
-    }
-
-    if (cnx->local_parameters.enable_one_way_delay > 0 && bytes != NULL) {
-        if (bytes + 4 > bytes_max) {
-            bytes = NULL;
-        }
-        else {
-            picoformat_16(bytes, picoquic_tp_enable_one_way_delay);
-            bytes += 2;
-            picoformat_16(bytes, 0);
-            bytes += 2;
-        }
     }
 
     if (bytes != NULL && cnx->local_parameters.min_ack_delay > 0) {
@@ -518,8 +505,7 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         int n = 31 * (cnx->initial_cnxid.id[0] + cnx->client_mode) + 27;
         uint64_t v = cnx->initial_cnxid.id[1];
         while (n == picoquic_tp_test_large_chello ||
-            n == picoquic_tp_enable_loss_bit_old ||
-            n == picoquic_tp_enable_one_way_delay) {
+            n == picoquic_tp_enable_loss_bit_old) {
             n += 31;
         }
         v = (v << 8) + cnx->initial_cnxid.id[2];
@@ -541,10 +527,6 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     if (cnx->local_parameters.enable_loss_bit > 0 && bytes != NULL) {
         bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_enable_loss_bit,
             (cnx->local_parameters.enable_loss_bit > 1) ? 1 : 0);
-    }
-
-    if (cnx->local_parameters.enable_one_way_delay > 0 && bytes != NULL) {
-        bytes = picoquic_transport_param_type_flag_encode(bytes, bytes_max, picoquic_tp_enable_one_way_delay);
     }
 
     if (bytes != NULL && cnx->local_parameters.min_ack_delay > 0) {
@@ -592,7 +574,7 @@ void picoquic_clear_transport_extensions(picoquic_cnx_t* cnx)
     cnx->remote_parameters.max_datagram_size = 0;
     cnx->remote_parameters.active_connection_id_limit = 0;
     cnx->remote_parameters.enable_loss_bit = 0;
-    cnx->remote_parameters.enable_one_way_delay = 0;
+    cnx->remote_parameters.enable_time_stamp = 0;
 }
 
 int picoquic_receive_transport_extensions_old(picoquic_cnx_t* cnx, int extension_mode,
@@ -797,14 +779,6 @@ int picoquic_receive_transport_extensions_old(picoquic_cnx_t* cnx, int extension
                             }
                             break;
                         }
-                        case picoquic_tp_enable_one_way_delay:
-                            if (extension_length != 0) {
-                                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
-                            }
-                            else {
-                                cnx->remote_parameters.enable_one_way_delay = 1;
-                            }
-                            break;
                         case picoquic_tp_min_ack_delay:
                             cnx->remote_parameters.min_ack_delay = 
                                 picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
@@ -883,15 +857,6 @@ int picoquic_receive_transport_extensions_old(picoquic_cnx_t* cnx, int extension
     /* Loss bit is only enabled if negotiated by both parties */
     cnx->is_loss_bit_enabled_outgoing = (cnx->local_parameters.enable_loss_bit > 1) && (cnx->remote_parameters.enable_loss_bit > 0);
     cnx->is_loss_bit_enabled_incoming = (cnx->local_parameters.enable_loss_bit > 0) && (cnx->remote_parameters.enable_loss_bit > 1);
-
-    /* One way delay only enabled if asked by client and accepted by server */
-    if (cnx->client_mode) {
-        cnx->is_one_way_delay_enabled = cnx->local_parameters.enable_one_way_delay && cnx->remote_parameters.enable_one_way_delay;
-    }
-    else if (cnx->remote_parameters.enable_one_way_delay) {
-        cnx->local_parameters.enable_one_way_delay = 1;
-        cnx->is_one_way_delay_enabled = 1;
-    }
 
     /* ACK Frequency is only enabled on server if negotiated by client */
     if (!cnx->client_mode && !cnx->is_ack_frequency_negotiated) {
@@ -1109,14 +1074,6 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                         }
                         break;
                     }
-                    case picoquic_tp_enable_one_way_delay:
-                        if (extension_length != 0) {
-                            ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
-                        }
-                        else {
-                            cnx->remote_parameters.enable_one_way_delay = 1;
-                        }
-                        break;
                     case picoquic_tp_min_ack_delay:
                         cnx->remote_parameters.min_ack_delay =
                             picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
@@ -1205,12 +1162,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
 
     /* One way delay only enabled if asked by client and accepted by server */
     if (cnx->client_mode) {
-        cnx->is_one_way_delay_enabled = cnx->local_parameters.enable_one_way_delay && cnx->remote_parameters.enable_one_way_delay;
         cnx->is_time_stamp_enabled = cnx->local_parameters.enable_time_stamp && cnx->remote_parameters.enable_time_stamp;
-    }
-    else if (cnx->remote_parameters.enable_one_way_delay) {
-        cnx->local_parameters.enable_one_way_delay = 1;
-        cnx->is_one_way_delay_enabled = 1;
     }
     else if (cnx->remote_parameters.enable_time_stamp) {
         cnx->local_parameters.enable_time_stamp = 1;

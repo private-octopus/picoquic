@@ -838,7 +838,6 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
 
             memset(&client_parameters, 0, sizeof(picoquic_tp_t));
             picoquic_init_transport_parameters(&client_parameters, 1);
-            client_parameters.enable_one_way_delay = 1;
             client_parameters.enable_time_stamp = 1;
             picoquic_set_transport_parameters(test_ctx->cnx_client, &client_parameters);
         }
@@ -907,6 +906,10 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
     time_out = simulated_time + 30000000;
     while (ret == 0 && picoquic_get_cnx_state(test_ctx->cnx_client) != picoquic_state_disconnected) {
         ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
+
+        if (ret == -1) {
+            break;
+        }
 
         if (picoquic_is_cnx_backlog_empty(test_ctx->cnx_client)) {
             if (callback_ctx.nb_open_streams == 0) {
@@ -1550,7 +1553,6 @@ http_stress_client_context_t* http_stress_client_create(size_t client_id, uint64
         {
             /* Requires TP grease, for interop tests */
             ctx->cnx_client->grease_transport_parameters = 1;
-            ctx->cnx_client->local_parameters.enable_one_way_delay = 1;
             ctx->cnx_client->local_parameters.enable_time_stamp = 1;
             ctx->client_time = *simulated_time;
 

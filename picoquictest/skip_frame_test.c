@@ -160,29 +160,6 @@ static uint8_t test_frame_type_ack_ecn[] = {
     3, 0, 1
 };
 
-static uint8_t test_frame_type_ack_1wd[] = {
-    picoquic_frame_type_ack_1wd,
-    0xC0, 0, 0, 1, 2, 3, 4, 5,
-    0x81, 0, 0, 2,
-    0x44, 0,
-    2,
-    5,
-    0, 0,
-    5, 12
-};
-
-static uint8_t test_frame_type_ack_ecn_1wd[] = {
-    picoquic_frame_type_ack_ecn_1wd,
-    0x3F,
-    0x44, 2,
-    0x44, 0,
-    2,
-    5,
-    0, 0,
-    5, 12,
-    3, 0, 1
-};
-
 static uint8_t test_frame_type_stream_range_min[] = {
     picoquic_frame_type_stream_range_min,
     1,
@@ -267,8 +244,6 @@ test_skip_frames_t test_skip_list[] = {
     TEST_SKIP_ITEM("new_token", test_frame_type_new_token, 0, 0, 3),
     TEST_SKIP_ITEM("ack", test_frame_type_ack, 1, 0, 3),
     TEST_SKIP_ITEM("ack_ecn", test_frame_type_ack_ecn, 1, 0, 3),
-    TEST_SKIP_ITEM("ack_1wd", test_frame_type_ack_1wd, 1, 0, 3),
-    TEST_SKIP_ITEM("ack_ecn_1wd", test_frame_type_ack_ecn_1wd, 1, 0, 3),
     TEST_SKIP_ITEM("stream_min", test_frame_type_stream_range_min, 0, 1, 3),
     TEST_SKIP_ITEM("stream_max", test_frame_type_stream_range_max, 0, 0, 3),
     TEST_SKIP_ITEM("crypto_hs", test_frame_type_crypto_hs, 0, 0, 2),
@@ -277,7 +252,7 @@ test_skip_frames_t test_skip_list[] = {
     TEST_SKIP_ITEM("datagram_l", test_frame_type_datagram_l, 1, 0, 3),
     TEST_SKIP_ITEM("handshake_done", test_frame_type_handshake_done, 0, 0, 3),
     TEST_SKIP_ITEM("ack_frequency", test_frame_type_ack_frequency, 0, 0, 3),
-    TEST_SKIP_ITEM("time_stamp", test_frame_type_time_stamp, 0, 0, 3)
+    TEST_SKIP_ITEM("time_stamp", test_frame_type_time_stamp, 1, 0, 3)
 };
 
 size_t nb_test_skip_list = sizeof(test_skip_list) / sizeof(test_skip_frames_t);
@@ -463,12 +438,6 @@ int parse_frame_test()
 
                 /* create a path which can be retired with a connection_id_retire frame */
                 picoquic_create_path(cnx, cnx->start_time, (struct sockaddr*)&cnx->path[0]->local_addr, NULL);
-
-                /* enable one way delay if used in test */
-                if (buffer[0] == picoquic_frame_type_ack_1wd ||
-                    buffer[0] == picoquic_frame_type_ack_ecn_1wd) {
-                    cnx->is_one_way_delay_enabled = 1;
-                }
 
                 /* enable time stamp if used in test */
                 if (buffer[0] == test_frame_type_time_stamp[0] &&
