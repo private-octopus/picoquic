@@ -21,8 +21,6 @@
     NEW TOKEN[17]: 0x0102030405060708090a0b0c0d0e0f10...
     ACK (nb=2), 4328719360-4328719365, 4328719358, 4328719339-4328719351
     ACK_ECN (nb=2), 4328719360-4328719365, 4328719358, 4328719339-4328719351, ect0=3, ect1=0, ce=1
-    ACK_1WD 1000002, (nb=2), 4328719360-4328719365, 4328719358, 4328719339-4328719351
-    ACK_ECN_1WD 402, (nb=2), 58-63, 56, 37-49, ect0=3, ect1=0, ce=1
     Stream 1, offset 0, length 16, fin = 0: a0a1a2a3a4a5a6a7...
     Stream 1, offset 1024, length 16, fin = 0: a0a1a2a3a4a5a6a7...
     Crypto HS frame, offset 0, length 16: a0a1a2a3a4a5a6a7...
@@ -31,6 +29,7 @@
     Datagram frame, length: 16: a0a1a2a3a4a5a6a7...
     handshake_done
     ACK Frequency: S=17, P=10, uS=1056
+    Time Stamp: 1024
 0b0c0d0e0f101112: ticket time = 1548462100832, kx = 17, suite = 1302, 61 ticket, 48 secret.
 0b0c0d0e0f101112: lifetime = 7200, age_add = 3fc0960b, 8 nonce, 32 ticket, 8 extensions.
 0b0c0d0e0f101112: ticket extensions: 42(ED: ffffffff),

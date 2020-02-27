@@ -246,8 +246,8 @@ static void picoquic_cubic_notify(
             case picoquic_congestion_notification_rtt_measurement:
                 /* Using RTT increases as signal to get out of initial slow start */
                 if (cubic_state->ssthresh == (uint64_t)((int64_t)-1) && 
-                    picoquic_hystart_test(&cubic_state->rtt_filter, (cnx->is_one_way_delay_enabled) ? one_way_delay : rtt_measurement,
-                        cnx->path[0]->pacing_packet_time_microsec, current_time, cnx->is_one_way_delay_enabled)) {
+                    picoquic_hystart_test(&cubic_state->rtt_filter, (cnx->is_time_stamp_enabled) ? one_way_delay : rtt_measurement,
+                        cnx->path[0]->pacing_packet_time_microsec, current_time, cnx->is_time_stamp_enabled)) {
                     /* RTT increased too much, get out of slow start! */
                     if (cubic_state->rtt_filter.rtt_filtered_min > PICOQUIC_TARGET_RENO_RTT) {
                         double correction = (double)PICOQUIC_TARGET_RENO_RTT / (double)cubic_state->rtt_filter.rtt_filtered_min;
@@ -427,8 +427,8 @@ static void picoquic_dcubic_notify(
                 /* Using RTT increases as congestion signal. This is used
                  * for getting out of slow start, but also for ending a cycle
                  * during congestion avoidance */
-                if (picoquic_hystart_test(&cubic_state->rtt_filter, (cnx->is_one_way_delay_enabled) ? one_way_delay : rtt_measurement,
-                    cnx->path[0]->pacing_packet_time_microsec, current_time, cnx->is_one_way_delay_enabled)) {
+                if (picoquic_hystart_test(&cubic_state->rtt_filter, (cnx->is_time_stamp_enabled) ? one_way_delay : rtt_measurement,
+                    cnx->path[0]->pacing_packet_time_microsec, current_time, cnx->is_time_stamp_enabled)) {
                     if (cubic_state->ssthresh == (uint64_t)((int64_t)-1)) {
                         if (cubic_state->rtt_filter.rtt_filtered_min > PICOQUIC_TARGET_RENO_RTT) {
                             double correction = (double)PICOQUIC_TARGET_RENO_RTT / (double)cubic_state->rtt_filter.rtt_filtered_min;
@@ -490,8 +490,8 @@ static void picoquic_dcubic_notify(
             case picoquic_congestion_notification_timeout:
                 /* do nothing */
             case picoquic_congestion_notification_rtt_measurement:
-                if (picoquic_hystart_test(&cubic_state->rtt_filter, (cnx->is_one_way_delay_enabled) ? one_way_delay : rtt_measurement,
-                    cnx->path[0]->pacing_packet_time_microsec, current_time, cnx->is_one_way_delay_enabled)) {
+                if (picoquic_hystart_test(&cubic_state->rtt_filter, (cnx->is_time_stamp_enabled) ? one_way_delay : rtt_measurement,
+                    cnx->path[0]->pacing_packet_time_microsec, current_time, cnx->is_time_stamp_enabled)) {
                     if (current_time - cubic_state->start_of_epoch > path_x->smoothed_rtt ||
                         cubic_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx)) {
                         /* re-enter recovery if this is a new event */
@@ -540,8 +540,8 @@ static void picoquic_dcubic_notify(
                 cubic_state->last_sequence_blocked = picoquic_cc_get_sequence_number(cnx);
                 break;
             case picoquic_congestion_notification_rtt_measurement:
-                if (picoquic_hystart_test(&cubic_state->rtt_filter, (cnx->is_one_way_delay_enabled) ? one_way_delay : rtt_measurement,
-                    cnx->path[0]->pacing_packet_time_microsec, current_time, cnx->is_one_way_delay_enabled)) {
+                if (picoquic_hystart_test(&cubic_state->rtt_filter, (cnx->is_time_stamp_enabled) ? one_way_delay : rtt_measurement,
+                    cnx->path[0]->pacing_packet_time_microsec, current_time, cnx->is_time_stamp_enabled)) {
                     if (current_time - cubic_state->start_of_epoch > path_x->smoothed_rtt ||
                         cubic_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx)) {
                         /* re-enter recovery */

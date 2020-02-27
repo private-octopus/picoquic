@@ -106,6 +106,14 @@ void qlog_string(FILE* f, bytestream* s, uint64_t l)
     fprintf(f, "\"");
 }
 
+void qlog_time_stamp_frame(FILE* f, bytestream* s)
+{
+    uint64_t time_stamp = 0;
+
+    byteread_vint(s, &time_stamp);
+    fprintf(f, ", \"time_stamp\": %"PRIu64"", time_stamp);
+}
+
 void qlog_reset_stream_frame(FILE* f, bytestream* s)
 {
     uint64_t stream_id = 0;
@@ -316,12 +324,6 @@ void qlog_ack_frame(uint64_t ftype, FILE * f, bytestream* s)
     uint64_t largest = 0;
     byteread_vint(s, &largest);
     uint64_t ack_delay = 0;
-    uint64_t remote_time_stamp = 0;
-    if (ftype == picoquic_frame_type_ack_1wd ||
-        ftype == picoquic_frame_type_ack_ecn_1wd) {
-        byteread_vint(s, &remote_time_stamp);
-        fprintf(f, ", \"remote_time_stamp\": %"PRIu64"", remote_time_stamp);
-    }
     byteread_vint(s, &ack_delay);
     fprintf(f, ", \"ack_delay\": %"PRIu64"", ack_delay);
     uint64_t num = 0;
@@ -343,8 +345,7 @@ void qlog_ack_frame(uint64_t ftype, FILE * f, bytestream* s)
         largest -= range + 1;
     }
     fprintf(f, "]");
-    if (ftype == picoquic_frame_type_ack_ecn ||
-        ftype == picoquic_frame_type_ack_ecn_1wd) {
+    if (ftype == picoquic_frame_type_ack_ecn) {
         fprintf(f, ", \"ecn\": [");
         for (int ecnx = 0; ecnx < 3; ecnx++) {
             uint64_t ecn_v = 0;
@@ -395,8 +396,6 @@ int qlog_packet_frame(bytestream * s, void * ptr)
     } else switch (ftype) {
     case picoquic_frame_type_ack:
     case picoquic_frame_type_ack_ecn:
-    case picoquic_frame_type_ack_1wd:
-    case picoquic_frame_type_ack_ecn_1wd:
         qlog_ack_frame(ftype, f, s);
         break;
     case picoquic_frame_type_ack_frequency:
@@ -451,6 +450,9 @@ int qlog_packet_frame(bytestream * s, void * ptr)
         break;
     case picoquic_frame_type_reset_stream:
         qlog_reset_stream_frame(f, s);
+        break;
+    case picoquic_frame_type_time_stamp:
+        qlog_time_stamp_frame(f, s);
         break;
     default:
         break;
@@ -522,7 +524,7 @@ int qlog_convert(const picoquic_connection_id_t* cid, FILE* f_binlog, const char
     if (f_txtlog == NULL) {
         ret = -1;
     }
-    else {
+    else  if (ret == 0) {
 
         qlog_context_t qlog;
         qlog.f_txtlog = f_txtlog;

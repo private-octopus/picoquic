@@ -679,8 +679,8 @@ static void picoquic_bbr_notify(
                 BBREnterStartupLongRTT(bbr_state, path_x);
             }
             if (bbr_state->state == picoquic_bbr_alg_startup_long_rtt) {
-                if (picoquic_hystart_test(&bbr_state->rtt_filter, (cnx->is_one_way_delay_enabled) ? one_way_delay : rtt_measurement,
-                    cnx->path[0]->pacing_packet_time_microsec, current_time, cnx->is_one_way_delay_enabled)) {
+                if (picoquic_hystart_test(&bbr_state->rtt_filter, (cnx->is_time_stamp_enabled) ? one_way_delay : rtt_measurement,
+                    cnx->path[0]->pacing_packet_time_microsec, current_time, cnx->is_time_stamp_enabled)) {
                     BBRExitStartupLongRtt(bbr_state, path_x, current_time);
                 }
             }
