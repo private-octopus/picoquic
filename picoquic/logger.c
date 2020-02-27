@@ -444,6 +444,9 @@ char const* picoquic_log_tp_name(uint64_t tp_number)
     case picoquic_tp_min_ack_delay:
         tp_name = "min_ack_delay";
         break;
+    case picoquic_tp_enable_time_stamp:
+        tp_name = "enable_time_stamp";
+        break;
     default:
         break;
     }

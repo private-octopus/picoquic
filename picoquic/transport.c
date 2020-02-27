@@ -552,6 +552,10 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
             cnx->local_parameters.min_ack_delay);
     }
 
+    if (cnx->local_parameters.enable_time_stamp > 0 && bytes != NULL) {
+        bytes = picoquic_transport_param_type_flag_encode(bytes, bytes_max, picoquic_tp_enable_time_stamp);
+    }
+
     if (bytes == NULL) {
         *consumed = 0;
         ret = PICOQUIC_ERROR_EXTENSION_BUFFER_TOO_SMALL;
@@ -1128,6 +1132,14 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                             }
                         }
                         break;
+                    case picoquic_tp_enable_time_stamp:
+                        if (extension_length != 0) {
+                            ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+                        }
+                        else {
+                            cnx->remote_parameters.enable_time_stamp = 1;
+                        }
+                        break;
                     default:
                         /* ignore unknown extensions */
                         break;
@@ -1194,10 +1206,15 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     /* One way delay only enabled if asked by client and accepted by server */
     if (cnx->client_mode) {
         cnx->is_one_way_delay_enabled = cnx->local_parameters.enable_one_way_delay && cnx->remote_parameters.enable_one_way_delay;
+        cnx->is_time_stamp_enabled = cnx->local_parameters.enable_time_stamp && cnx->remote_parameters.enable_time_stamp;
     }
     else if (cnx->remote_parameters.enable_one_way_delay) {
         cnx->local_parameters.enable_one_way_delay = 1;
         cnx->is_one_way_delay_enabled = 1;
+    }
+    else if (cnx->remote_parameters.enable_time_stamp) {
+        cnx->local_parameters.enable_time_stamp = 1;
+        cnx->is_time_stamp_enabled = 1;
     }
 
     /* ACK Frequency is only enabled on server if negotiated by client */

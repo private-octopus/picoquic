@@ -839,6 +839,7 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
             memset(&client_parameters, 0, sizeof(picoquic_tp_t));
             picoquic_init_transport_parameters(&client_parameters, 1);
             client_parameters.enable_one_way_delay = 1;
+            client_parameters.enable_time_stamp = 1;
             picoquic_set_transport_parameters(test_ctx->cnx_client, &client_parameters);
         }
     }
@@ -1550,6 +1551,7 @@ http_stress_client_context_t* http_stress_client_create(size_t client_id, uint64
             /* Requires TP grease, for interop tests */
             ctx->cnx_client->grease_transport_parameters = 1;
             ctx->cnx_client->local_parameters.enable_one_way_delay = 1;
+            ctx->cnx_client->local_parameters.enable_time_stamp = 1;
             ctx->client_time = *simulated_time;
 
             if (ret == 0) {

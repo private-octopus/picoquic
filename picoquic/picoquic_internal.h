@@ -434,8 +434,8 @@ typedef enum {
     picoquic_tp_enable_loss_bit_old = 0x1055,
     picoquic_tp_enable_loss_bit = 0x1057,
     picoquic_tp_enable_one_way_delay = 0x10DE,
-    picoquic_tp_min_ack_delay = 0xDE1A
-
+    picoquic_tp_min_ack_delay = 0xDE1A,
+    picoquic_tp_enable_time_stamp = 0x7157
 } picoquic_tp_enum;
 
 /* Congestion algorithm definition */
