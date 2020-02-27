@@ -660,7 +660,7 @@ int quic_client(const char* ip_address_text, int server_port,
 
                 /* Requires TP grease, for interop tests */
                 cnx_client->grease_transport_parameters = 1;
-                cnx_client->local_parameters.enable_one_way_delay = 1;
+                cnx_client->local_parameters.enable_time_stamp = 1;
 
                 if (callback_ctx.tp != NULL) {
                     picoquic_set_transport_parameters(cnx_client, callback_ctx.tp);

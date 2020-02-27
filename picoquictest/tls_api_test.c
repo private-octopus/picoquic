@@ -1775,10 +1775,11 @@ int tls_api_one_scenario_body_verify(picoquic_test_tls_api_ctx_t* test_ctx,
     }
 
     if (ret == 0 && max_completion_microsec != 0) {
-        if (close_time - test_ctx->cnx_client->start_time > max_completion_microsec)
+        uint64_t completion_time = close_time - test_ctx->cnx_client->start_time;
+        if (completion_time > max_completion_microsec)
         {
             DBG_PRINTF("Scenario completes in %llu microsec, more than %llu\n",
-                (unsigned long long)*simulated_time, (unsigned long long)max_completion_microsec);
+                (unsigned long long)completion_time, (unsigned long long)max_completion_microsec);
             ret = -1;
         }
     }
@@ -6620,7 +6621,7 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, uint64_t 
 
     memset(&client_parameters, 0, sizeof(picoquic_tp_t));
     picoquic_init_transport_parameters(&client_parameters, 1);
-    client_parameters.enable_one_way_delay = 1;
+    client_parameters.enable_time_stamp = 1;
 
     ret = tls_api_one_scenario_init(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, &client_parameters, NULL);
 
@@ -6650,6 +6651,7 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, uint64_t 
         picoquic_cnx_set_pmtud_required(test_ctx->cnx_client, 1);
 
         picoquic_set_binlog(test_ctx->qclient, binlog_file_name);
+        test_ctx->qclient->use_long_log = 1;
 
         if (ret == 0) {
             ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
@@ -6675,7 +6677,7 @@ int satellite_basic_test()
 
 int satellite_loss_test()
 {
-    return satellite_test_one(picoquic_bbr_algorithm, 9000000, 0, 1);
+    return satellite_test_one(picoquic_bbr_algorithm, 9500000, 0, 1);
 }
 
 /* Test that different CID length are properly supported */
