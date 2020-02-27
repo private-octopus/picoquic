@@ -235,6 +235,11 @@ static uint8_t test_frame_type_ack_frequency[] = {
     17, 0x0A, 0x44, 0x20
 };
 
+static uint8_t test_frame_type_time_stamp[] = {
+    (uint8_t)(0x40 | (picoquic_frame_type_time_stamp >> 8)), (uint8_t)(picoquic_frame_type_time_stamp & 0xFF),
+    0x44, 0
+};
+
 #define TEST_SKIP_ITEM(n, x, a, l, e) \
     {                              \
         n, x, sizeof(x), a, l, e     \
@@ -271,7 +276,8 @@ test_skip_frames_t test_skip_list[] = {
     TEST_SKIP_ITEM("datagram", test_frame_type_datagram, 1, 1, 3),
     TEST_SKIP_ITEM("datagram_l", test_frame_type_datagram_l, 1, 0, 3),
     TEST_SKIP_ITEM("handshake_done", test_frame_type_handshake_done, 0, 0, 3),
-    TEST_SKIP_ITEM("ack_frequency", test_frame_type_ack_frequency, 0, 0, 3)
+    TEST_SKIP_ITEM("ack_frequency", test_frame_type_ack_frequency, 0, 0, 3),
+    TEST_SKIP_ITEM("time_stamp", test_frame_type_time_stamp, 0, 0, 3)
 };
 
 size_t nb_test_skip_list = sizeof(test_skip_list) / sizeof(test_skip_frames_t);
@@ -462,6 +468,12 @@ int parse_frame_test()
                 if (buffer[0] == picoquic_frame_type_ack_1wd ||
                     buffer[0] == picoquic_frame_type_ack_ecn_1wd) {
                     cnx->is_one_way_delay_enabled = 1;
+                }
+
+                /* enable time stamp if used in test */
+                if (buffer[0] == test_frame_type_time_stamp[0] &&
+                    buffer[1] == test_frame_type_time_stamp[1]) {
+                    cnx->is_time_stamp_enabled = 1;
                 }
 
                 /* Set min ack delay so there is no issue with ack frequency frame */

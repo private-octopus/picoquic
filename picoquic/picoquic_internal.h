@@ -119,7 +119,8 @@ typedef enum {
     picoquic_frame_type_datagram_l = 0x31,
     picoquic_frame_type_ack_1wd = 0x34,
     picoquic_frame_type_ack_ecn_1wd = 0x35,
-    picoquic_frame_type_ack_frequency = 0xAF
+    picoquic_frame_type_ack_frequency = 0xAF,
+    picoquic_frame_type_time_stamp = 757
 } picoquic_frame_type_enum_t;
 
 /* PMTU discovery requirement status */
@@ -938,6 +939,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int is_ack_frequency_negotiated : 1; /* Ack Frequency extension negotiated */
     unsigned int is_ack_frequency_updated : 1; /* Should send an ack frequency frame asap. */
     unsigned int recycle_sooner_needed : 1; /* There may be a need to recycle "sooner" packets */
+    unsigned int is_time_stamp_enabled : 1; /* Add time stamp before acks, read on incoming */
 
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;
@@ -1058,11 +1060,14 @@ typedef struct st_picoquic_cnx_t {
     int nb_paths;
     int nb_path_alloc;
     uint64_t path_sequence_next;
+
     /* Management of the CNX-ID stash */
     uint64_t retire_cnxid_before;
     picoquic_cnxid_stash_t * cnxid_stash_first;
+
     /* Management of ongoing probes */
     picoquic_probe_t * probe_first;
+
     /* Management of ACK frequency */
     uint64_t ack_frequency_sequence_local;
     uint64_t ack_gap_local;
@@ -1070,9 +1075,13 @@ typedef struct st_picoquic_cnx_t {
     uint64_t ack_frequency_sequence_remote;
     uint64_t ack_gap_remote;
     uint64_t ack_delay_remote;
+
     /* Copies of packets received too soon */
     picoquic_stateless_packet_t* first_sooner;
     picoquic_stateless_packet_t* last_sooner;
+
+    /* Last time stamp received */
+    uint64_t last_time_stamp_received;
 } picoquic_cnx_t;
 
 /* Load the stash of retry tokens. */

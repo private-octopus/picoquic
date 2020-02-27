@@ -363,6 +363,9 @@ char const* picoquic_log_frame_names(uint64_t frame_type)
     case picoquic_frame_type_ack_frequency:
         frame_name = "ack_frequency";
         break;
+    case picoquic_frame_type_time_stamp:
+        frame_name = "time_stamp";
+        break;
     default:
         if (PICOQUIC_IN_RANGE(frame_type, picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
             frame_name = "stream";
@@ -1288,6 +1291,36 @@ size_t picoquic_log_ack_frequency_frame(FILE* F, uint8_t* bytes, size_t bytes_ma
     return byte_index;
 }
 
+size_t picoquic_log_time_stamp_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
+{
+    uint64_t time_stamp = 0;
+    uint8_t* bytes_end = bytes + bytes_max;
+    uint8_t* bytes0 = bytes;
+    size_t byte_index = 0;
+
+
+    if ((bytes = picoquic_frames_varint_skip(bytes, bytes_end)) == NULL ||
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &time_stamp)) == NULL) {
+        fprintf(F, "    Malformed Time Stamp frame: ");
+        /* log format error */
+        for (size_t i = 0; i < bytes_max && i < 8; i++) {
+            fprintf(F, "%02x", bytes0[i]);
+        }
+        if (bytes_max > 8) {
+            fprintf(F, "...");
+        }
+        fprintf(F, "\n");
+        byte_index = bytes_max;
+    }
+    else {
+        fprintf(F, "    Time Stamp: %" PRIu64 "\n",
+            time_stamp);
+        byte_index = bytes - bytes0;
+    }
+
+    return byte_index;
+}
+
 void picoquic_log_frames(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t length)
 {
     size_t byte_index = 0;
@@ -1418,6 +1451,9 @@ void picoquic_log_frames(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t leng
             break;
         case picoquic_frame_type_ack_frequency:
             byte_index += picoquic_log_ack_frequency_frame(F, bytes + byte_index, length - byte_index);
+            break;
+        case picoquic_frame_type_time_stamp:
+            byte_index += picoquic_log_time_stamp_frame(F, bytes + byte_index, length - byte_index);
             break;
 
         default: {

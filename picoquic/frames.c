@@ -2501,6 +2501,9 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, uint8_t* bytes,
                     }
                     break;
                 }
+                case picoquic_frame_type_time_stamp:
+                    *no_need_to_repeat = 1;
+                    break;
                 default:
                     break;
                 }
@@ -3852,6 +3855,59 @@ int picoquic_prepare_ack_frequency_frame(uint8_t* bytes, size_t length_max, size
 }
 
 
+/* ACK Frequency frames
+ */
+uint8_t* picoquic_skip_time_stamp_frame(uint8_t* bytes, const uint8_t* bytes_max)
+{
+    /* This code assumes that the frame type is already skipped */
+    bytes = picoquic_frames_varint_skip(bytes, bytes_max);
+    return bytes;
+}
+
+uint8_t* picoquic_parse_time_stamp_frame(uint8_t* bytes, const uint8_t* bytes_max,
+    uint64_t* time_stamp)
+{
+    bytes = picoquic_frames_varint_decode(bytes, bytes_max, time_stamp);
+    return bytes;
+}
+
+uint8_t* picoquic_decode_time_stamp_frame(uint8_t* bytes, const uint8_t* bytes_max, picoquic_cnx_t* cnx)
+{
+    uint64_t time_stamp = 0;
+
+    /* This code assumes that the frame type is already skipped */
+    if ((bytes = picoquic_parse_time_stamp_frame(bytes, bytes_max, &time_stamp)) != NULL) {
+        if (!cnx->is_time_stamp_enabled) {
+            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
+                picoquic_frame_type_time_stamp);
+            bytes = NULL;
+        }
+        else {
+            cnx->last_time_stamp_received = (time_stamp << cnx->remote_parameters.ack_delay_exponent);
+        }
+    }
+    return bytes;
+}
+
+int picoquic_prepare_time_stamp_frame(uint8_t* bytes, size_t length_max, size_t* consumed, picoquic_cnx_t* cnx, uint64_t current_time)
+{
+    int ret = 0;
+    uint8_t* bytes0 = bytes;
+    uint8_t* bytes_max = bytes + length_max;
+    uint64_t time_stamp = (current_time - cnx->start_time) >> cnx->local_parameters.ack_delay_exponent;
+
+    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, picoquic_frame_type_time_stamp)) != NULL &&
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, time_stamp)) != NULL) {
+        *consumed = bytes - bytes0;
+    }
+    else {
+        *consumed = 0;
+        ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
+    }
+
+    return ret;
+}
+
 
 /*
  * Decoding of the received frames.
@@ -3883,7 +3939,8 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_
             bytes = picoquic_decode_stream_frame(cnx, bytes, bytes_max, current_time);
             ack_needed = 1;
 
-        } else if (first_byte == picoquic_frame_type_ack) {
+        }
+        else if (first_byte == picoquic_frame_type_ack) {
             if (epoch == 1) {
                 DBG_PRINTF("Ack frame (0x%x) not expected in 0-RTT packet", first_byte);
                 picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, first_byte);
@@ -3891,14 +3948,15 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_
                 break;
             }
             bytes = picoquic_decode_ack_frame(cnx, bytes, bytes_max, current_time, epoch, 0, 0);
-        } else if (first_byte == picoquic_frame_type_ack_ecn) {
+        }
+        else if (first_byte == picoquic_frame_type_ack_ecn) {
             if (epoch == 1) {
                 DBG_PRINTF("Ack-ECN frame (0x%x) not expected in 0-RTT packet", first_byte);
                 picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, first_byte);
                 bytes = NULL;
                 break;
             }
-            bytes = picoquic_decode_ack_frame(cnx, bytes, bytes_max, current_time, epoch, 1, 0); 
+            bytes = picoquic_decode_ack_frame(cnx, bytes, bytes_max, current_time, epoch, 1, 0);
         }
         else if (first_byte == picoquic_frame_type_ack_1wd) {
             if (epoch == 1) {
@@ -3919,14 +3977,15 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_
             bytes = picoquic_decode_ack_frame(cnx, bytes, bytes_max, current_time, epoch, 1, 1);
         }
         else if (epoch != 1 && epoch != 3 && first_byte != picoquic_frame_type_padding
-                                            && first_byte != picoquic_frame_type_ping
-                                            && first_byte != picoquic_frame_type_connection_close
-                                            && first_byte != picoquic_frame_type_crypto_hs) {
+            && first_byte != picoquic_frame_type_ping
+            && first_byte != picoquic_frame_type_connection_close
+            && first_byte != picoquic_frame_type_crypto_hs) {
             picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, first_byte);
             bytes = NULL;
             break;
 
-        } else {
+        }
+        else {
             switch (first_byte) {
             case picoquic_frame_type_padding:
                 bytes = picoquic_skip_0len_frame(bytes, bytes_max);
@@ -4014,6 +4073,10 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_
                     switch (frame_id64) {
                     case picoquic_frame_type_ack_frequency:
                         bytes = picoquic_decode_ack_frequency_frame(bytes, bytes_max, cnx);
+                        ack_needed = 1;
+                        break;
+                    case picoquic_frame_type_time_stamp:
+                        bytes = picoquic_decode_time_stamp_frame(bytes, bytes_max, cnx);
                         ack_needed = 1;
                         break;
                     default:
@@ -4290,6 +4353,10 @@ int picoquic_skip_frame(uint8_t* bytes, size_t bytes_maxsize, size_t* consumed, 
                 switch (frame_id64) {
                 case picoquic_frame_type_ack_frequency:
                     bytes = picoquic_skip_ack_frequency_frame(bytes, bytes_max);
+                    *pure_ack = 0;
+                    break;
+                case picoquic_frame_type_time_stamp:
+                    bytes = picoquic_skip_time_stamp_frame(bytes, bytes_max);
                     *pure_ack = 0;
                     break;
                 default:

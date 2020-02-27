@@ -106,6 +106,14 @@ void qlog_string(FILE* f, bytestream* s, uint64_t l)
     fprintf(f, "\"");
 }
 
+void qlog_time_stamp_frame(FILE* f, bytestream* s)
+{
+    uint64_t time_stamp = 0;
+
+    byteread_vint(s, &time_stamp);
+    fprintf(f, ", \"time_stamp\": %"PRIu64"", time_stamp);
+}
+
 void qlog_reset_stream_frame(FILE* f, bytestream* s)
 {
     uint64_t stream_id = 0;
@@ -451,6 +459,9 @@ int qlog_packet_frame(bytestream * s, void * ptr)
         break;
     case picoquic_frame_type_reset_stream:
         qlog_reset_stream_frame(f, s);
+        break;
+    case picoquic_frame_type_time_stamp:
+        qlog_time_stamp_frame(f, s);
         break;
     default:
         break;

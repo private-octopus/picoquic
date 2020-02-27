@@ -66,4 +66,6 @@
 [0, "TRANSPORT", "PACKET_SENT", { "packet_type": "1rtt", "header": { "packet_number": "29", "packet_size": 1, "dcid": "01020304" }, "frames": [{ 
     "frame_type": "handshake_done"}]}],
 [0, "TRANSPORT", "PACKET_SENT", { "packet_type": "1rtt", "header": { "packet_number": "30", "packet_size": 6, "dcid": "01020304" }, "frames": [{ 
-    "frame_type": "ack_frequency", "sequence_number": 17, "packet_tolerance": 10, "max_ack_delay": 1056 }]}]]}]}
+    "frame_type": "ack_frequency", "sequence_number": 17, "packet_tolerance": 10, "max_ack_delay": 1056 }]}],
+[0, "TRANSPORT", "PACKET_SENT", { "packet_type": "1rtt", "header": { "packet_number": "31", "packet_size": 4, "dcid": "01020304" }, "frames": [{ 
+    "frame_type": "time_stamp", "time_stamp": 1024}]}]]}]}
