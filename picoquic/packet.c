@@ -929,9 +929,9 @@ int picoquic_incoming_client_initial(
 
     /* Logic to test the retry token.
      * TODO: this should probably be implemented as a callback */
-    if (((*pcnx)->quic->flags&picoquic_context_check_token) &&
+    if (((*pcnx)->quic->check_token) &&
         (*pcnx)->cnx_state == picoquic_state_server_init &&
-        ((*pcnx)->quic->flags&picoquic_context_server_busy) == 0) {
+        !(*pcnx)->quic->server_busy) {
         if (picoquic_verify_retry_token((*pcnx)->quic, addr_from, current_time,
             &(*pcnx)->original_cnxid, ph->token_bytes, ph->token_length) != 0) {
             uint8_t token_buffer[256];
@@ -967,7 +967,7 @@ int picoquic_incoming_client_initial(
         }
 
         if ((*pcnx)->cnx_state == picoquic_state_server_init && 
-            (*pcnx)->quic->flags & picoquic_context_server_busy) {
+            (*pcnx)->quic->server_busy) {
             (*pcnx)->local_error = PICOQUIC_TRANSPORT_SERVER_BUSY;
             (*pcnx)->cnx_state = picoquic_state_handshake_failure;
         }
@@ -1721,7 +1721,8 @@ int picoquic_incoming_encrypted(
                 ret = picoquic_tls_stream_process(cnx);
             }
 
-            if (ret == 0) {
+            if (ret == 0 && (cnx->pkt_ctx[picoquic_packet_context_application].send_sequence < PICOQUIC_LOG_PACKET_MAX_SEQUENCE ||
+                cnx->quic->use_long_log)) {
                 picoquic_cc_dump(cnx, current_time);
             }
         }

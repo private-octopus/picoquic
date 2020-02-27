@@ -2244,7 +2244,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                 if (epoch == picoquic_epoch_handshake && picoquic_tls_client_authentication_activated(cnx->quic) == 0) {
                     cnx->cnx_state = picoquic_state_server_false_start;
                     /* On a server that does address validation, send a NEW TOKEN frame */
-                    if (cnx->client_mode == 0 && (cnx->quic->flags&picoquic_context_check_token) != 0) {
+                    if (!cnx->client_mode && (cnx->quic->check_token || cnx->quic->provide_token)) {
                         uint8_t token_buffer[256];
                         size_t token_size;
                         picoquic_connection_id_t n_cid = picoquic_null_connection_id;
@@ -3036,7 +3036,10 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
         *next_wake_time = current_time;
         SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
 
-        picoquic_cc_dump(cnx, current_time);
+        if (cnx->pkt_ctx[picoquic_packet_context_application].send_sequence < PICOQUIC_LOG_PACKET_MAX_SEQUENCE ||
+            cnx->quic->use_long_log) {
+            picoquic_cc_dump(cnx, current_time);
+        }
     }
 
     return ret;
@@ -3469,7 +3472,8 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
         *next_wake_time = current_time;
         SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
 
-        if (ret == 0) {
+        if (ret == 0 && (cnx->pkt_ctx[picoquic_packet_context_application].send_sequence < PICOQUIC_LOG_PACKET_MAX_SEQUENCE ||
+            cnx->quic->use_long_log)) {
             picoquic_cc_dump(cnx, current_time);
         }
     }
