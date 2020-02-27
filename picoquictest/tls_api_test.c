@@ -2050,13 +2050,17 @@ int tls_retry_token_test_one(int token_mode)
         ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
     }
 
-    /* Now we remove the client connection and create a new one */
+    /* Now we remove the client connection and create a new one.
+     * Force the retry token flag, in case it was not set before, to ensure token retry mode.
+     */
     if (ret == 0) {
         picoquic_delete_cnx(test_ctx->cnx_client);
         if (test_ctx->cnx_server != NULL) {
             picoquic_delete_cnx(test_ctx->cnx_server);
             test_ctx->cnx_server = NULL;
         }
+
+        test_ctx->qserver->check_token = 1;
 
         test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
             picoquic_null_connection_id, picoquic_null_connection_id,
@@ -6198,6 +6202,7 @@ int packet_trace_test()
      * current working directory, and run a basic test scenario */
     if (ret == 0) {
         picoquic_set_binlog(test_ctx->qserver, PACKET_TRACE_BIN);
+        test_ctx->qserver->use_long_log = 1;
         ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
             test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0, 0, 20000, 1000000);
     }
