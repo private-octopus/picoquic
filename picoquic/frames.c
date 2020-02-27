@@ -2629,7 +2629,7 @@ static int picoquic_process_ack_range(
 }
 
 uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
-    const uint8_t* bytes_max, uint64_t current_time, int epoch, int is_ecn, unsigned int has_1wd)
+    const uint8_t* bytes_max, uint64_t current_time, int epoch, int is_ecn)
 {
     uint64_t num_block;
     uint64_t largest;
@@ -2729,7 +2729,8 @@ uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
         if (old_path != NULL && is_new_ack) {
             picoquic_estimate_path_bandwidth(cnx, old_path, largest_sent_time, 
                 delivered_prior, delivered_time_prior, delivered_sent_prior,
-                (has_1wd) ? remote_time_stamp : current_time, current_time, rs_is_path_limited);
+                (cnx->last_time_stamp_received == 0)? current_time: cnx->last_time_stamp_received,
+                current_time, rs_is_path_limited);
 
             if (cnx->congestion_alg != NULL) {
                 cnx->congestion_alg->alg_notify(cnx, old_path,
@@ -3933,7 +3934,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_
                 bytes = NULL;
                 break;
             }
-            bytes = picoquic_decode_ack_frame(cnx, bytes, bytes_max, current_time, epoch, 0, 0);
+            bytes = picoquic_decode_ack_frame(cnx, bytes, bytes_max, current_time, epoch, 0);
         }
         else if (first_byte == picoquic_frame_type_ack_ecn) {
             if (epoch == 1) {
@@ -3942,7 +3943,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_
                 bytes = NULL;
                 break;
             }
-            bytes = picoquic_decode_ack_frame(cnx, bytes, bytes_max, current_time, epoch, 1, 0);
+            bytes = picoquic_decode_ack_frame(cnx, bytes, bytes_max, current_time, epoch, 1);
         }
         else if (epoch != 1 && epoch != 3 && first_byte != picoquic_frame_type_padding
             && first_byte != picoquic_frame_type_ping
@@ -4165,14 +4166,6 @@ static uint8_t* picoquic_skip_ack_frame(uint8_t* bytes, const uint8_t* bytes_max
 
 static uint8_t* picoquic_skip_ack_ecn_frame(uint8_t* bytes, const uint8_t* bytes_max) {
     return picoquic_skip_ack_frame_maybe_ecn(bytes, bytes_max, 1, 0);
-}
-
-static uint8_t* picoquic_skip_ack_1wd_frame(uint8_t* bytes, const uint8_t* bytes_max) {
-    return picoquic_skip_ack_frame_maybe_ecn(bytes, bytes_max, 0, 1);
-}
-
-static uint8_t* picoquic_skip_ack_ecn_1wd_frame(uint8_t* bytes, const uint8_t* bytes_max) {
-    return picoquic_skip_ack_frame_maybe_ecn(bytes, bytes_max, 1, 1);
 }
 
 /* Lots of simple frames...

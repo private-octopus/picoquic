@@ -524,7 +524,7 @@ int qlog_convert(const picoquic_connection_id_t* cid, FILE* f_binlog, const char
     if (f_txtlog == NULL) {
         ret = -1;
     }
-    else {
+    else  if (ret == 0) {
 
         qlog_context_t qlog;
         qlog.f_txtlog = f_txtlog;
