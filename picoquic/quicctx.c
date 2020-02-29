@@ -310,6 +310,8 @@ picoquic_quic_t* picoquic_create(uint32_t nb_connections,
                     picoquic_crypto_random(quic, quic->reset_seed, sizeof(quic->reset_seed));
                 else
                     memcpy(quic->reset_seed, reset_seed, sizeof(quic->reset_seed));
+
+                picoquic_crypto_random(quic, quic->retry_seed, sizeof(quic->retry_seed));
             }
         }
         
@@ -476,14 +478,12 @@ void picoquic_set_cookie_mode(picoquic_quic_t* quic, int cookie_mode)
 {
     if (cookie_mode&1) {
         quic->check_token = 1;
-        picoquic_crypto_random(quic, quic->retry_seed, PICOQUIC_RETRY_SECRET_SIZE);
     } else {
         quic->check_token = 0;
     }
 
     if (cookie_mode & 2) {
         quic->provide_token = 1;
-        picoquic_crypto_random(quic, quic->retry_seed, PICOQUIC_RETRY_SECRET_SIZE);
     }
     else {
         quic->provide_token = 0;
