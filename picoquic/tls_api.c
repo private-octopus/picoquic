@@ -1573,8 +1573,7 @@ int picoquic_initialize_tls_stream(picoquic_cnx_t* cnx, uint64_t current_time)
 
     /* No resumption if no alpn specified upfront, because it would make the negotiation and
      * the handling of 0-RTT way too messy */
-    if (cnx->sni != NULL && cnx->alpn != NULL &&
-        (cnx->quic->flags & picoquic_context_client_zero_share) == 0) {
+    if (cnx->sni != NULL && cnx->alpn != NULL && !cnx->quic->client_zero_share) {
         uint8_t* ticket = NULL;
         uint16_t ticket_length = 0;
 
@@ -1591,7 +1590,7 @@ int picoquic_initialize_tls_stream(picoquic_cnx_t* cnx, uint64_t current_time)
         }
     }
 
-    if ((cnx->quic->flags&picoquic_context_client_zero_share) != 0 &&
+    if (cnx->quic->client_zero_share &&
         cnx->cnx_state == picoquic_state_client_init)
     {
         ctx->handshake_properties.client.negotiate_before_key_exchange = 1;
@@ -1935,7 +1934,7 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
                         cnx->cnx_state = picoquic_state_server_false_start;
 
                         /* On a server that does address validation, send a NEW TOKEN frame */
-                        if (cnx->client_mode == 0 && (cnx->quic->flags&picoquic_context_check_token) != 0) {
+                        if (!cnx->client_mode && (cnx->quic->check_token||cnx->quic->provide_token)) {
                             uint8_t token_buffer[256];
                             size_t token_size;
                             picoquic_connection_id_t n_cid = picoquic_null_connection_id;

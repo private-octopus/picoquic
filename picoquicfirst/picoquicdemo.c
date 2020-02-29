@@ -164,7 +164,7 @@ static void picoquic_set_key_log_file_from_env(picoquic_quic_t* quic)
 
 int quic_server(const char* server_name, int server_port,
     const char* pem_cert, const char* pem_key,
-    int just_once, int do_hrr, picoquic_connection_id_cb_fn cnx_id_callback,
+    int just_once, int do_retry, picoquic_connection_id_cb_fn cnx_id_callback,
     void* cnx_id_callback_ctx, uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE],
     int dest_if, int mtu_max, uint32_t proposed_version, 
     const char * esni_key_file_name, const char * esni_rr_file_name,
@@ -214,8 +214,11 @@ int quic_server(const char* server_name, int server_port,
             ret = -1;
         } else {
             picoquic_set_alpn_select_fn(qserver, picoquic_demo_server_callback_select_alpn);
-            if (do_hrr != 0) {
+            if (do_retry != 0) {
                 picoquic_set_cookie_mode(qserver, 1);
+            }
+            else {
+                picoquic_set_cookie_mode(qserver, 2);
             }
             qserver->mtu_max = mtu_max;
 
@@ -594,7 +597,7 @@ int quic_client(const char* ip_address_text, int server_port,
             }
 
             if (force_zero_share) {
-                qclient->flags |= picoquic_context_client_zero_share;
+                qclient->client_zero_share = 1;
             }
             qclient->mtu_max = mtu_max;
 
@@ -1136,7 +1139,7 @@ int main(int argc, char** argv)
     uint32_t proposed_version = 0;
     int is_client = 0;
     int just_once = 0;
-    int do_hrr = 0;
+    int do_retry = 0;
     int force_zero_share = 0;
     int force_migration = 0;
     int large_client_hello = 0;
@@ -1198,7 +1201,7 @@ int main(int argc, char** argv)
             just_once = 1;
             break;
         case 'r':
-            do_hrr = 1;
+            do_retry = 1;
             break;
         case 's':
             if (optind + 1 > argc) {
@@ -1344,10 +1347,10 @@ int main(int argc, char** argv)
         }
 
         /* Run as server */
-        printf("Starting Picoquic server (v%s) on port %d, server name = %s, just_once = %d, hrr= %d\n",
-            PICOQUIC_VERSION, server_port, server_name, just_once, do_hrr);
+        printf("Starting Picoquic server (v%s) on port %d, server name = %s, just_once = %d, do_retry = %d\n",
+            PICOQUIC_VERSION, server_port, server_name, just_once, do_retry);
         ret = quic_server(server_name, server_port,
-            server_cert_file, server_key_file, just_once, do_hrr,
+            server_cert_file, server_key_file, just_once, do_retry,
             (cnx_id_cbdata == NULL) ? NULL : picoquic_connection_id_callback,
             (cnx_id_cbdata == NULL) ? NULL : (void*)cnx_id_cbdata,
             (uint8_t*)reset_seed, dest_if, mtu_max, proposed_version,
