@@ -1080,10 +1080,18 @@ typedef struct st_picoquic_cnx_t {
     /* Copies of packets received too soon */
     picoquic_stateless_packet_t* first_sooner;
     picoquic_stateless_packet_t* last_sooner;
-
-    /* Last time stamp received */
-    uint64_t last_time_stamp_received;
 } picoquic_cnx_t;
+
+typedef struct st_picoquic_packet_data_t {
+    picoquic_path_t* acked_path;
+    uint64_t last_ack_delay;
+    uint64_t last_time_stamp_received;
+    uint64_t largest_sent_time;
+    uint64_t delivered_prior;
+    uint64_t delivered_time_prior;
+    uint64_t delivered_sent_prior;
+    int rs_is_path_limited;
+} picoquic_packet_data_t;
 
 /* Load the stash of retry tokens. */
 int picoquic_load_token_file(picoquic_quic_t* quic, char const * token_file_name);
@@ -1306,7 +1314,7 @@ uint64_t picoquic_compute_ack_delay_max(uint64_t rtt);
 
 /* Update the path RTT upon receiving an explict or implicit acknowledgement */
 void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, uint64_t send_time,
-    picoquic_packet_context_t * pkt_ctx, uint64_t current_time, uint64_t ack_delay, uint64_t remote_time_stamp);
+    uint64_t current_time, uint64_t ack_delay);
 
 /* stream management */
 picoquic_stream_head_t* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t stream_id);
