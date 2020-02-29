@@ -304,7 +304,7 @@ picoquic_quic_t* picoquic_create(uint32_t nb_connections,
             else {
                 /* the random generator was initialized as part of the TLS context.
                  * Use it to create the seed for generating the per context stateless
-                 * resets. */
+                 * resets and the retry tokens */
 
                 if (!reset_seed)
                     picoquic_crypto_random(quic, quic->reset_seed, sizeof(quic->reset_seed));
@@ -312,6 +312,8 @@ picoquic_quic_t* picoquic_create(uint32_t nb_connections,
                     memcpy(quic->reset_seed, reset_seed, sizeof(quic->reset_seed));
 
                 picoquic_crypto_random(quic, quic->retry_seed, sizeof(quic->retry_seed));
+
+                /* If there is no root certificate context specified, use a null certifier. */
             }
         }
         
@@ -2173,6 +2175,15 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             }
 
             cnx->initial_cnxid = initial_cnx_id;
+
+            if (!quic->is_cert_store_not_empty || sni == NULL) {
+                /* This is a hack. The open SSL certifier crashes if no name is specified,
+                 * and always fails if no certificate is stored, so we just use a NULL verifier */
+                DBG_PRINTF("%s -- certificate will not be verified.\n",
+                    (sni == NULL) ? "No server name specified" : "No root crt list specified");
+
+                picoquic_set_null_verifier(quic);
+            }
         } else {
             for (int epoch = 0; epoch < PICOQUIC_NUMBER_OF_EPOCHS; epoch++) {
                 cnx->tls_stream[epoch].send_queue = NULL;

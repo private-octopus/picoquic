@@ -608,26 +608,6 @@ int quic_client(const char* ip_address_text, int server_port,
             if (bin_file != NULL) {
                 picoquic_set_binlog(qclient, bin_file);
             }
-
-            if (sni == NULL) {
-                /* Standard verifier would crash */
-                fprintf(stdout, "No server name specified, certificate will not be verified.\n");
-                if (F_log != stdout && F_log != stderr && F_log != NULL)
-                {
-                    fprintf(F_log, "No server name specified, certificate will not be verified.\n");
-                }
-                picoquic_set_null_verifier(qclient);
-            }
-            else if (root_crt == NULL) {
-                /* Standard verifier would crash */
-                fprintf(stdout, "No root crt list specified, certificate will not be verified.\n");
-                if (F_log != stdout && F_log != stderr && F_log != NULL)
-                {
-                    fprintf(F_log, "No root crt list specified, certificate will not be verified.\n");
-                }
-                picoquic_set_null_verifier(qclient);
-            }
-
         }
     }
 

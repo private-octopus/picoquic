@@ -512,6 +512,7 @@ typedef struct st_picoquic_quic_t {
     unsigned int unconditional_cnx_id : 1;
     unsigned int client_zero_share : 1;
     unsigned int server_busy : 1;
+    unsigned int is_cert_store_not_empty : 1;
 
     picoquic_stateless_packet_t* pending_stateless_packet;
 

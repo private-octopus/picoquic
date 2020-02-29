@@ -615,6 +615,7 @@ int picoquic_enable_custom_verify_certificate_callback(picoquic_quic_t* quic) {
         verifier->quic = quic;
         verifier->cb.cb = verify_certificate_callback;
         ctx->verify_certificate = &verifier->cb;
+        quic->is_cert_store_not_empty = 1;
 
         return 0;
     }
@@ -1133,19 +1134,17 @@ int picoquic_master_tlscontext(picoquic_quic_t* quic,
         if (verifier == NULL) {
             ctx->verify_certificate = NULL;
         } else {
-            X509_STORE *store = NULL;
+            X509_STORE *store = X509_STORE_new();
 
-            if (cert_root_file_name != NULL)
-            {
-                store = X509_STORE_new();
-
-                if (store != NULL) {
-                    int file_ret = 0;
-                    X509_LOOKUP *lookup = X509_STORE_add_lookup(store, X509_LOOKUP_file());
-                    if ((file_ret = X509_LOOKUP_load_file(lookup, cert_root_file_name, X509_FILETYPE_PEM)) != 1) {
-                        DBG_PRINTF("Cannot load X509 store (%s), ret = %d\n",
-                            cert_root_file_name, ret);
-                    }
+            if (cert_root_file_name != NULL && store != NULL) {
+                int file_ret = 0;
+                X509_LOOKUP* lookup = X509_STORE_add_lookup(store, X509_LOOKUP_file());
+                if ((file_ret = X509_LOOKUP_load_file(lookup, cert_root_file_name, X509_FILETYPE_PEM)) != 1) {
+                    DBG_PRINTF("Cannot load X509 store (%s), ret = %d\n",
+                        cert_root_file_name, ret);
+                }
+                else {
+                    quic->is_cert_store_not_empty = 1;
                 }
             }
 
@@ -2074,6 +2073,8 @@ int picoquic_set_tls_root_certificates(picoquic_quic_t* quic, ptls_iovec_t* cert
             X509_free(cert);
             return -2;
         }
+
+        quic->is_cert_store_not_empty = 1;
 
         X509_free(cert);
     }
