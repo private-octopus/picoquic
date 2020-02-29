@@ -2585,9 +2585,40 @@ void picoquic_set_fuzz(picoquic_quic_t * quic, picoquic_fuzz_fn fuzz_fn, void * 
     quic->fuzz_ctx = fuzz_ctx;
 }
 
-void picoquic_set_binlog(picoquic_quic_t * quic, char const * binlog_file)
+int picoquic_set_binlog(picoquic_quic_t * quic, char const * binlog_file)
 {
-    binlog_open(quic, binlog_file);
+    return binlog_open(quic, binlog_file);
+}
+
+int picoquic_set_textlog(picoquic_quic_t* quic, char const* textlog_file)
+{
+    int ret = 0;
+    FILE* F_log;
+
+    if (quic->F_log != NULL && quic->should_close_log) {
+        (void)picoquic_file_close(quic->F_log);
+        quic->F_log = NULL;
+    }
+
+    if (textlog_file != NULL) {
+        F_log = picoquic_file_open(textlog_file, "w");
+        if (F_log == NULL) {
+            DBG_PRINTF("Cannot create log file <%s>\n", textlog_file);
+            ret = -1;
+        }
+        else {
+            quic->F_log = F_log;
+            quic->should_close_log = 1;
+        }
+    }
+
+    return ret;
+}
+
+void picoquic_set_log_level(picoquic_quic_t* quic, int log_level)
+{
+    /* Only two level for now: log first 100 packets, or log everything. */
+    quic->use_long_log = (log_level > 0) ? 1 : 0;
 }
 
 int picoquic_set_default_connection_id_length(picoquic_quic_t* quic, uint8_t cid_length)

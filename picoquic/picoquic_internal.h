@@ -513,6 +513,10 @@ typedef struct st_picoquic_quic_t {
     unsigned int client_zero_share : 1;
     unsigned int server_busy : 1;
     unsigned int is_cert_store_not_empty : 1;
+    unsigned int use_long_log : 1;
+    unsigned int should_close_log : 1;
+    unsigned int dont_coalesce_init : 1; /* test option to turn of packet coalescing on server */
+
 
     picoquic_stateless_packet_t* pending_stateless_packet;
 
@@ -553,9 +557,6 @@ typedef struct st_picoquic_quic_t {
     void* fuzz_ctx;
     int wake_file;
     int wake_line;
-
-    unsigned int use_long_log : 1;
-    unsigned int dont_coalesce_init : 1; /* test option to turn of packet coalescing on server */
 } picoquic_quic_t;
 
 picoquic_packet_context_enum picoquic_context_from_epoch(int epoch);
