@@ -2107,3 +2107,21 @@ void picoquic_log_probe_action(FILE* F, picoquic_cnx_t* cnx, picoquic_probe_t * 
     picoquic_log_address(F, (struct sockaddr*) & probe->peer_addr);
     fprintf(F, "\n");
 }
+
+void picoquic_log_app_message(picoquic_cnx_t* cnx, const char* fmt, ...)
+{
+    FILE* F = cnx->quic->F_log;
+
+    if (F != NULL) {
+        picoquic_log_prefix_initial_cid64(F, picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
+
+        va_list args;
+        va_start(args, fmt);
+#ifdef _WINDOWS
+        (void)vfprintf_s(F, fmt, args);
+#else
+        (void)vfprintf(F, fmt, args);
+#endif
+        va_end(args);
+    }
+}

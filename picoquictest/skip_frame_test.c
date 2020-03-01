@@ -636,6 +636,7 @@ int logger_test()
     uint8_t fuzz_buffer[PICOQUIC_MAX_PACKET_SIZE];
     uint64_t random_context = 0xF00BAB;
     picoquic_cnx_t cnx;
+    picoquic_quic_t quic;
     memset(&cnx, 0, sizeof(cnx));
 
     if ((F = picoquic_file_open(log_test_file, "w")) == NULL) {
@@ -648,6 +649,14 @@ int logger_test()
         }
         picoquic_log_picotls_ticket(F, logger_test_cid,
             log_test_ticket, (uint16_t) sizeof(log_test_ticket));
+
+        cnx.initial_cnxid = logger_test_cid;
+        cnx.quic = &quic;
+        quic.F_log = F;
+
+        picoquic_log_app_message(&cnx, "%s.\n", "This is an app message test");
+        picoquic_log_app_message(&cnx, "This is app message test #%d, severity %d.\n", 1, 2);
+
         (void)picoquic_file_close(F);
     }
 
