@@ -187,7 +187,7 @@ static void picoquic_newreno_delete(picoquic_path_t* path_x)
 
 /* Definition record for the New Reno algorithm */
 
-#define PICOQUIC_NEWRENO_ID 0x4E523838 /* NR88 */
+#define PICOQUIC_NEWRENO_ID "newreno" /* NR88 */
 
 picoquic_congestion_algorithm_t picoquic_newreno_algorithm_struct = {
     PICOQUIC_NEWRENO_ID,

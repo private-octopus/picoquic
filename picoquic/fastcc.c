@@ -240,9 +240,9 @@ void picoquic_fastcc_delete(picoquic_path_t* path_x)
     }
 }
 
-/* Definition record for the BAYES CC algorithm */
+/* Definition record for the FAST CC algorithm */
 
-#define picoquic_fastcc_ID 0x42415945 /* BAYE */
+#define picoquic_fastcc_ID "fast" 
 
 picoquic_congestion_algorithm_t picoquic_fastcc_algorithm_struct = {
     picoquic_fastcc_ID,

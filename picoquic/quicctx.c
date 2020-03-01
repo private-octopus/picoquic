@@ -304,12 +304,16 @@ picoquic_quic_t* picoquic_create(uint32_t nb_connections,
             else {
                 /* the random generator was initialized as part of the TLS context.
                  * Use it to create the seed for generating the per context stateless
-                 * resets. */
+                 * resets and the retry tokens */
 
                 if (!reset_seed)
                     picoquic_crypto_random(quic, quic->reset_seed, sizeof(quic->reset_seed));
                 else
                     memcpy(quic->reset_seed, reset_seed, sizeof(quic->reset_seed));
+
+                picoquic_crypto_random(quic, quic->retry_seed, sizeof(quic->retry_seed));
+
+                /* If there is no root certificate context specified, use a null certifier. */
             }
         }
         
@@ -476,14 +480,12 @@ void picoquic_set_cookie_mode(picoquic_quic_t* quic, int cookie_mode)
 {
     if (cookie_mode&1) {
         quic->check_token = 1;
-        picoquic_crypto_random(quic, quic->retry_seed, PICOQUIC_RETRY_SECRET_SIZE);
     } else {
         quic->check_token = 0;
     }
 
     if (cookie_mode & 2) {
         quic->provide_token = 1;
-        picoquic_crypto_random(quic, quic->retry_seed, PICOQUIC_RETRY_SECRET_SIZE);
     }
     else {
         quic->provide_token = 0;
@@ -2101,6 +2103,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
                 }
             }
         }
+
         if (cnx->quic->mtu_max > 0)
         {
             cnx->local_parameters.max_packet_size = cnx->quic->mtu_max;
@@ -2173,6 +2176,15 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             }
 
             cnx->initial_cnxid = initial_cnx_id;
+
+            if (!quic->is_cert_store_not_empty || sni == NULL) {
+                /* This is a hack. The open SSL certifier crashes if no name is specified,
+                 * and always fails if no certificate is stored, so we just use a NULL verifier */
+                DBG_PRINTF("%s -- certificate will not be verified.\n",
+                    (sni == NULL) ? "No server name specified" : "No root crt list specified");
+
+                picoquic_set_null_verifier(quic);
+            }
         } else {
             for (int epoch = 0; epoch < PICOQUIC_NUMBER_OF_EPOCHS; epoch++) {
                 cnx->tls_stream[epoch].send_queue = NULL;
@@ -2574,9 +2586,40 @@ void picoquic_set_fuzz(picoquic_quic_t * quic, picoquic_fuzz_fn fuzz_fn, void * 
     quic->fuzz_ctx = fuzz_ctx;
 }
 
-void picoquic_set_binlog(picoquic_quic_t * quic, char const * binlog_file)
+int picoquic_set_binlog(picoquic_quic_t * quic, char const * binlog_file)
 {
-    binlog_open(quic, binlog_file);
+    return binlog_open(quic, binlog_file);
+}
+
+int picoquic_set_textlog(picoquic_quic_t* quic, char const* textlog_file)
+{
+    int ret = 0;
+    FILE* F_log;
+
+    if (quic->F_log != NULL && quic->should_close_log) {
+        (void)picoquic_file_close(quic->F_log);
+        quic->F_log = NULL;
+    }
+
+    if (textlog_file != NULL) {
+        F_log = picoquic_file_open(textlog_file, "w");
+        if (F_log == NULL) {
+            DBG_PRINTF("Cannot create log file <%s>\n", textlog_file);
+            ret = -1;
+        }
+        else {
+            quic->F_log = F_log;
+            quic->should_close_log = 1;
+        }
+    }
+
+    return ret;
+}
+
+void picoquic_set_log_level(picoquic_quic_t* quic, int log_level)
+{
+    /* Only two level for now: log first 100 packets, or log everything. */
+    quic->use_long_log = (log_level > 0) ? 1 : 0;
 }
 
 int picoquic_set_default_connection_id_length(picoquic_quic_t* quic, uint8_t cid_length)
@@ -2596,6 +2639,11 @@ int picoquic_set_default_connection_id_length(picoquic_quic_t* quic, uint8_t cid
     }
 
     return ret;
+}
+
+void picoquic_set_mtu_max(picoquic_quic_t* quic, uint32_t mtu_max)
+{
+    quic->mtu_max = mtu_max;
 }
 
 void picoquic_set_alpn_select_fn(picoquic_quic_t* quic, picoquic_alpn_select_fn alpn_select_fn)
@@ -3105,6 +3153,11 @@ picoquic_congestion_algorithm_t const* picoquic_get_congestion_algorithm(char co
 void picoquic_set_default_congestion_algorithm(picoquic_quic_t* quic, picoquic_congestion_algorithm_t const* alg)
 {
     quic->default_congestion_alg = alg;
+}
+
+void picoquic_set_default_congestion_algorithm_by_name(picoquic_quic_t* quic, char const * alg_name)
+{
+    quic->default_congestion_alg = picoquic_get_congestion_algorithm(alg_name);
 }
 
 /*
