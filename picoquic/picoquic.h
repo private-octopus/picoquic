@@ -448,6 +448,8 @@ int picoquic_is_local_cid(picoquic_quic_t* quic, picoquic_connection_id_t* cid);
  * Value must be compatible with what the cnx_id_callback() expects on a server */
 int picoquic_set_default_connection_id_length(picoquic_quic_t* quic, uint8_t cid_length);
 
+void picoquic_set_mtu_max(picoquic_quic_t* quic, uint32_t mtu_max);
+
 void picoquic_set_alpn_select_fn(picoquic_quic_t* quic, picoquic_alpn_select_fn alpn_select_fn);
 
 void picoquic_set_default_callback(picoquic_quic_t * quic, picoquic_stream_data_cb_fn callback_fn, void * callback_ctx);
@@ -673,6 +675,55 @@ uint64_t picoquic_get_data_sent(picoquic_cnx_t * cnx);
 uint64_t picoquic_get_data_received(picoquic_cnx_t * cnx);
 
 int picoquic_cnx_is_still_logging(picoquic_cnx_t* cnx);
+
+/* Congestion algorithm definition */
+
+typedef enum {
+    picoquic_congestion_notification_acknowledgement,
+    picoquic_congestion_notification_repeat,
+    picoquic_congestion_notification_timeout,
+    picoquic_congestion_notification_spurious_repeat,
+    picoquic_congestion_notification_rtt_measurement,
+    picoquic_congestion_notification_bw_measurement,
+    picoquic_congestion_notification_ecn_ec,
+    picoquic_congestion_notification_cwin_blocked
+} picoquic_congestion_notification_t;
+
+typedef void (*picoquic_congestion_algorithm_init)(picoquic_path_t* path_x);
+typedef void (*picoquic_congestion_algorithm_notify)(
+    picoquic_cnx_t* cnx,
+    picoquic_path_t* path_x,
+    picoquic_congestion_notification_t notification,
+    uint64_t rtt_measurement,
+    uint64_t one_way_delay,
+    uint64_t nb_bytes_acknowledged,
+    uint64_t lost_packet_number,
+    uint64_t current_time);
+typedef void (*picoquic_congestion_algorithm_delete)(picoquic_path_t* cnx);
+
+typedef struct st_picoquic_congestion_algorithm_t {
+    char const * congestion_algorithm_id;
+    picoquic_congestion_algorithm_init alg_init;
+    picoquic_congestion_algorithm_notify alg_notify;
+    picoquic_congestion_algorithm_delete alg_delete;
+} picoquic_congestion_algorithm_t;
+
+extern picoquic_congestion_algorithm_t* picoquic_newreno_algorithm;
+extern picoquic_congestion_algorithm_t* picoquic_cubic_algorithm;
+extern picoquic_congestion_algorithm_t* picoquic_dcubic_algorithm;
+extern picoquic_congestion_algorithm_t* picoquic_fastcc_algorithm;
+extern picoquic_congestion_algorithm_t* picoquic_bbr_algorithm;
+
+#define PICOQUIC_DEFAULT_CONGESTION_ALGORITHM picoquic_newreno_algorithm;
+
+picoquic_congestion_algorithm_t const* picoquic_get_congestion_algorithm(char const* alg_name);
+
+void picoquic_set_default_congestion_algorithm(picoquic_quic_t* quic, picoquic_congestion_algorithm_t const* algo);
+
+void picoquic_set_default_congestion_algorithm_by_name(picoquic_quic_t* quic, char const* alg_name);
+
+void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_algorithm_t const* algo);
+
 
 #ifdef __cplusplus
 }

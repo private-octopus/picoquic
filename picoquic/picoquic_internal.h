@@ -433,53 +433,6 @@ typedef enum {
     picoquic_tp_enable_time_stamp = 0x7157
 } picoquic_tp_enum;
 
-/* Congestion algorithm definition */
-
-typedef enum {
-    picoquic_congestion_notification_acknowledgement,
-    picoquic_congestion_notification_repeat,
-    picoquic_congestion_notification_timeout,
-    picoquic_congestion_notification_spurious_repeat,
-    picoquic_congestion_notification_rtt_measurement,
-    picoquic_congestion_notification_bw_measurement,
-    picoquic_congestion_notification_ecn_ec,
-    picoquic_congestion_notification_cwin_blocked
-} picoquic_congestion_notification_t;
-
-typedef void (*picoquic_congestion_algorithm_init)(picoquic_path_t* path_x);
-typedef void (*picoquic_congestion_algorithm_notify)(
-    picoquic_cnx_t* cnx,
-    picoquic_path_t* path_x,
-    picoquic_congestion_notification_t notification,
-    uint64_t rtt_measurement,
-    uint64_t one_way_delay,
-    uint64_t nb_bytes_acknowledged,
-    uint64_t lost_packet_number,
-    uint64_t current_time);
-typedef void (*picoquic_congestion_algorithm_delete)(picoquic_path_t* cnx);
-
-typedef struct st_picoquic_congestion_algorithm_t {
-    uint32_t congestion_algorithm_id;
-    picoquic_congestion_algorithm_init alg_init;
-    picoquic_congestion_algorithm_notify alg_notify;
-    picoquic_congestion_algorithm_delete alg_delete;
-} picoquic_congestion_algorithm_t;
-
-extern picoquic_congestion_algorithm_t* picoquic_newreno_algorithm;
-extern picoquic_congestion_algorithm_t* picoquic_cubic_algorithm;
-extern picoquic_congestion_algorithm_t* picoquic_dcubic_algorithm;
-extern picoquic_congestion_algorithm_t* picoquic_fastcc_algorithm;
-extern picoquic_congestion_algorithm_t* picoquic_bbr_algorithm;
-
-#define PICOQUIC_DEFAULT_CONGESTION_ALGORITHM picoquic_newreno_algorithm;
-
-picoquic_congestion_algorithm_t const* picoquic_get_congestion_algorithm(char const* alg_name);
-
-void picoquic_set_default_congestion_algorithm(picoquic_quic_t* quic, picoquic_congestion_algorithm_t const* algo);
-
-void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_algorithm_t const* algo);
-
-
 /* QUIC context, defining the tables of connections,
  * open sockets, etc.
  */

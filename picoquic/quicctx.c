@@ -2103,6 +2103,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
                 }
             }
         }
+
         if (cnx->quic->mtu_max > 0)
         {
             cnx->local_parameters.max_packet_size = cnx->quic->mtu_max;
@@ -2640,6 +2641,11 @@ int picoquic_set_default_connection_id_length(picoquic_quic_t* quic, uint8_t cid
     return ret;
 }
 
+void picoquic_set_mtu_max(picoquic_quic_t* quic, uint32_t mtu_max)
+{
+    quic->mtu_max = mtu_max;
+}
+
 void picoquic_set_alpn_select_fn(picoquic_quic_t* quic, picoquic_alpn_select_fn alpn_select_fn)
 {
     if (quic->default_alpn != NULL) {
@@ -3147,6 +3153,11 @@ picoquic_congestion_algorithm_t const* picoquic_get_congestion_algorithm(char co
 void picoquic_set_default_congestion_algorithm(picoquic_quic_t* quic, picoquic_congestion_algorithm_t const* alg)
 {
     quic->default_congestion_alg = alg;
+}
+
+void picoquic_set_default_congestion_algorithm_by_name(picoquic_quic_t* quic, char const * alg_name)
+{
+    quic->default_congestion_alg = picoquic_get_congestion_algorithm(alg_name);
 }
 
 /*

@@ -575,8 +575,8 @@ static void picoquic_cubic_delete(picoquic_path_t* path_x)
 
 /* Definition record for the Cubic algorithm */
 
-#define picoquic_cubic_ID 0x43424942 /* CBIC */
-#define picoquic_dcubic_ID 0x44424942 /* DBIC */
+#define picoquic_cubic_ID "cubic" /* CBIC */
+#define picoquic_dcubic_ID "dcubic" /* DBIC */
 
 picoquic_congestion_algorithm_t picoquic_cubic_algorithm_struct = {
     picoquic_cubic_ID,
