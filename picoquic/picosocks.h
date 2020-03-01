@@ -104,7 +104,12 @@
 #endif
 #endif
 
-#include "picoquic_internal.h"
+#include "picoquic.h"
+
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #ifdef _WINDOWS
 typedef struct st_picoquic_recvmsg_async_ctx_t {
@@ -177,4 +182,15 @@ int picoquic_get_server_address(const char* ip_address_text, int server_port,
     int* server_addr_length,
     int* is_name);
 
+/* Wireshark needs the session keys in order to decrypt and analyze packets.
+ * In Unix and Windows, Wireshark reads these keys from a file. The name
+ * of the file is passed in the environment variable SSLKEYLOGFILE,
+ * which is accessed through system dependent API.
+ */
+
+void picoquic_set_key_log_file_from_env(picoquic_quic_t* quic);
+
+#ifdef __cplusplus
+}
+#endif
 #endif

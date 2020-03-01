@@ -101,6 +101,8 @@ extern "C" {
 #define PICOQUIC_TLS_HANDSHAKE_FAILED (0x201)
 
 #define PICOQUIC_MAX_PACKET_SIZE 1536
+#define PICOQUIC_INITIAL_MTU_IPV4 1252
+#define PICOQUIC_INITIAL_MTU_IPV6 1232
 #define PICOQUIC_RESET_SECRET_SIZE 16
 #define PICOQUIC_RESET_PACKET_PAD_SIZE 23
 #define PICOQUIC_RESET_PACKET_MIN_SIZE (PICOQUIC_RESET_PACKET_PAD_SIZE + PICOQUIC_RESET_SECRET_SIZE)
@@ -350,6 +352,12 @@ int picoquic_set_textlog(picoquic_quic_t* quic, char const* textlog_file);
  * 1: log all packets
  * 0: only log the first 100 packets for each connection. */
 void picoquic_set_log_level(picoquic_quic_t* quic, int log_level);
+
+/* Require Picoquic to log the session keys in the specified files.
+ * Instead of calling this API directly, consider calling the 
+ * function picoquic_set_key_log_file_from_env() defined in 
+ * picosocks.h */
+void picoquic_set_key_log_file(picoquic_quic_t* quic, char const* keylog_filename);
 
 /* Set the ESNI key.
  * May be called several times to set several keys.

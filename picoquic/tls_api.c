@@ -1335,9 +1335,10 @@ static void picoquic_log_event_call_back(ptls_log_event_t *_self, ptls_t *tls, c
  * Sets the output file handle for writing traffic secrets in a format that can
  * be recognized by Wireshark.
  */
-void picoquic_set_key_log_file(picoquic_quic_t *quic, FILE* F_keylog)
+void picoquic_set_key_log_file(picoquic_quic_t *quic, char const * keylog_filename)
 {
     ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
+    FILE* F_keylog = picoquic_file_open(keylog_filename, "a");
 
     if (F_keylog != NULL) {
         struct st_picoquic_log_event_t *log_event;

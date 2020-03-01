@@ -1221,3 +1221,30 @@ int picoquic_get_server_address(const char* ip_address_text, int server_port,
 
     return ret;
 }
+
+/* Wireshark needs the session keys in order to decrypt and analyze packets.
+ * In Unix and Windows, Wireshark reads these keys from a file. The name
+ * of the file is passed in the environment variable SSLKEYLOGFILE,
+ * which is accessed through system dependent API.
+ */
+
+void picoquic_set_key_log_file_from_env(picoquic_quic_t* quic)
+{
+    char* keylog_filename = NULL;
+
+#ifdef _WINDOWS
+    size_t len;
+    
+    if (_dupenv_s(&keylog_filename, &len, "SSLKEYLOGFILE") != 0 ||
+        keylog_filename == NULL) {
+        return;
+    }
+#else
+    keylog_filename = getenv("SSLKEYLOGFILE");
+    if (keylog_filename == NULL) {
+        return;
+    }
+#endif
+
+    picoquic_set_key_log_file(quic, keylog_filename);
+}

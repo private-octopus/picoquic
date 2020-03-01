@@ -126,42 +126,6 @@ void print_address(FILE* F_log, struct sockaddr* address, char* label, picoquic_
     }
 }
 
-static void picoquic_set_key_log_file_from_env(picoquic_quic_t* quic)
-{
-    char * keylog_filename = NULL;
-    FILE* F = NULL;
-
-#ifdef _WINDOWS
-    size_t len; 
-    errno_t err = _dupenv_s(&keylog_filename, &len, "SSLKEYLOGFILE");
-
-    if (keylog_filename == NULL) {
-        return;
-    }
-
-    if (err == 0) {
-        err = fopen_s(&F, keylog_filename, "a");
-
-        free(keylog_filename);
-
-        if (err != 0 || F == NULL) {
-            return;
-        }
-    }
-#else
-    keylog_filename = getenv("SSLKEYLOGFILE");
-    if (keylog_filename == NULL) {
-        return;
-    }
-    F = fopen(keylog_filename, "a");
-    if (F == NULL) {
-        return;
-    }
-#endif
-
-    picoquic_set_key_log_file(quic, F);
-}
-
 int quic_server(const char* server_name, int server_port,
     const char* pem_cert, const char* pem_key,
     int just_once, int do_retry, picoquic_connection_id_cb_fn cnx_id_callback,

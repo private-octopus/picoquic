@@ -42,8 +42,6 @@ extern "C" {
 #define PICOQUIC_MAX_PACKET_SIZE 1536
 #endif
 #define PICOQUIC_MIN_SEGMENT_SIZE 256
-#define PICOQUIC_INITIAL_MTU_IPV4 1252
-#define PICOQUIC_INITIAL_MTU_IPV6 1232
 #define PICOQUIC_ENFORCED_INITIAL_MTU 1200
 #define PICOQUIC_ENFORCED_INITIAL_CID_LENGTH 8
 #define PICOQUIC_PRACTICAL_MAX_MTU 1440
@@ -1281,8 +1279,6 @@ void picoquic_log_time(FILE* F, picoquic_cnx_t* cnx, uint64_t current_time,
     const char* label1, const char* label2);
 
 #define PICOQUIC_SET_LOG(quic, F) (quic)->F_log = (void*)(F)
-
-void picoquic_set_key_log_file(picoquic_quic_t *quic, FILE* F_keylog);
 
 /* handling of ACK logic */
 int picoquic_is_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t * next_wake_time, picoquic_packet_context_enum pc);
