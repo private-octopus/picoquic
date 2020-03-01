@@ -696,7 +696,7 @@ void binlog_new_connection(picoquic_cnx_t * cnx)
     bytewrite_cid(msg, &cnx->path[0]->remote_cnxid);
 
     /* Algorithms used */
-    bytewrite_vint(msg, cnx->congestion_alg->congestion_algorithm_id);
+    bytewrite_cstr(msg, cnx->congestion_alg->congestion_algorithm_id);
     bytewrite_vint(msg, cnx->spin_policy);
 
     bytestream_buf stream_head;

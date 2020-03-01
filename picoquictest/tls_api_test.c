@@ -6404,7 +6404,7 @@ static int congestion_control_test(picoquic_congestion_algorithm_t * ccalgo, uin
         test_ctx->c_to_s_link->jitter = jitter;
         test_ctx->s_to_c_link->jitter = jitter;
 
-        (void)picoquic_sprintf(bin_log_name, sizeof(bin_log_name), &bin_log_name_len, "congestion_%x_j%" PRIu64 ".bin", ccalgo->congestion_algorithm_id, jitter);
+        (void)picoquic_sprintf(bin_log_name, sizeof(bin_log_name), &bin_log_name_len, "congestion_%s_j%" PRIu64 ".bin", ccalgo->congestion_algorithm_id, jitter);
 
         picoquic_set_binlog(test_ctx->qserver, bin_log_name);
 
@@ -6658,7 +6658,7 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, uint64_t 
         char binlog_file_name[256];
         size_t binlog_file_name_len = 0;
         (void)picoquic_sprintf(binlog_file_name, sizeof(binlog_file_name), &binlog_file_name_len,
-            "satellite_%x_j%" PRIu64 "%s.bin", ccalgo->congestion_algorithm_id, jitter, (has_loss) ? "_loss" : "");
+            "satellite_%s_j%" PRIu64 "%s.bin", ccalgo->congestion_algorithm_id, jitter, (has_loss) ? "_loss" : "");
 
         picoquic_set_default_congestion_algorithm(test_ctx->qserver, ccalgo);
         picoquic_set_congestion_algorithm(test_ctx->cnx_client, ccalgo);

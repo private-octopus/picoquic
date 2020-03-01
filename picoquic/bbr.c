@@ -722,7 +722,7 @@ static void picoquic_bbr_notify(
     }
 }
 
-#define picoquic_bbr_ID 0x42424F00 /* BBR */
+#define picoquic_bbr_ID "bbr" /* BBR */
 
 picoquic_congestion_algorithm_t picoquic_bbr_algorithm_struct = {
     picoquic_bbr_ID,

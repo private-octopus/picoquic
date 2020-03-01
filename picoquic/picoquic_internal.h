@@ -42,8 +42,6 @@ extern "C" {
 #define PICOQUIC_MAX_PACKET_SIZE 1536
 #endif
 #define PICOQUIC_MIN_SEGMENT_SIZE 256
-#define PICOQUIC_INITIAL_MTU_IPV4 1252
-#define PICOQUIC_INITIAL_MTU_IPV6 1232
 #define PICOQUIC_ENFORCED_INITIAL_MTU 1200
 #define PICOQUIC_ENFORCED_INITIAL_CID_LENGTH 8
 #define PICOQUIC_PRACTICAL_MAX_MTU 1440
@@ -435,53 +433,6 @@ typedef enum {
     picoquic_tp_enable_time_stamp = 0x7157
 } picoquic_tp_enum;
 
-/* Congestion algorithm definition */
-
-typedef enum {
-    picoquic_congestion_notification_acknowledgement,
-    picoquic_congestion_notification_repeat,
-    picoquic_congestion_notification_timeout,
-    picoquic_congestion_notification_spurious_repeat,
-    picoquic_congestion_notification_rtt_measurement,
-    picoquic_congestion_notification_bw_measurement,
-    picoquic_congestion_notification_ecn_ec,
-    picoquic_congestion_notification_cwin_blocked
-} picoquic_congestion_notification_t;
-
-typedef void (*picoquic_congestion_algorithm_init)(picoquic_path_t* path_x);
-typedef void (*picoquic_congestion_algorithm_notify)(
-    picoquic_cnx_t* cnx,
-    picoquic_path_t* path_x,
-    picoquic_congestion_notification_t notification,
-    uint64_t rtt_measurement,
-    uint64_t one_way_delay,
-    uint64_t nb_bytes_acknowledged,
-    uint64_t lost_packet_number,
-    uint64_t current_time);
-typedef void (*picoquic_congestion_algorithm_delete)(picoquic_path_t* cnx);
-
-typedef struct st_picoquic_congestion_algorithm_t {
-    uint32_t congestion_algorithm_id;
-    picoquic_congestion_algorithm_init alg_init;
-    picoquic_congestion_algorithm_notify alg_notify;
-    picoquic_congestion_algorithm_delete alg_delete;
-} picoquic_congestion_algorithm_t;
-
-extern picoquic_congestion_algorithm_t* picoquic_newreno_algorithm;
-extern picoquic_congestion_algorithm_t* picoquic_cubic_algorithm;
-extern picoquic_congestion_algorithm_t* picoquic_dcubic_algorithm;
-extern picoquic_congestion_algorithm_t* picoquic_fastcc_algorithm;
-extern picoquic_congestion_algorithm_t* picoquic_bbr_algorithm;
-
-#define PICOQUIC_DEFAULT_CONGESTION_ALGORITHM picoquic_newreno_algorithm;
-
-picoquic_congestion_algorithm_t const* picoquic_get_congestion_algorithm(char const* alg_name);
-
-void picoquic_set_default_congestion_algorithm(picoquic_quic_t* quic, picoquic_congestion_algorithm_t const* algo);
-
-void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_algorithm_t const* algo);
-
-
 /* QUIC context, defining the tables of connections,
  * open sockets, etc.
  */
@@ -512,6 +463,11 @@ typedef struct st_picoquic_quic_t {
     unsigned int unconditional_cnx_id : 1;
     unsigned int client_zero_share : 1;
     unsigned int server_busy : 1;
+    unsigned int is_cert_store_not_empty : 1;
+    unsigned int use_long_log : 1;
+    unsigned int should_close_log : 1;
+    unsigned int dont_coalesce_init : 1; /* test option to turn of packet coalescing on server */
+
 
     picoquic_stateless_packet_t* pending_stateless_packet;
 
@@ -552,9 +508,6 @@ typedef struct st_picoquic_quic_t {
     void* fuzz_ctx;
     int wake_file;
     int wake_line;
-
-    unsigned int use_long_log : 1;
-    unsigned int dont_coalesce_init : 1; /* test option to turn of packet coalescing on server */
 } picoquic_quic_t;
 
 picoquic_packet_context_enum picoquic_context_from_epoch(int epoch);
@@ -1279,8 +1232,6 @@ void picoquic_log_time(FILE* F, picoquic_cnx_t* cnx, uint64_t current_time,
     const char* label1, const char* label2);
 
 #define PICOQUIC_SET_LOG(quic, F) (quic)->F_log = (void*)(F)
-
-void picoquic_set_key_log_file(picoquic_quic_t *quic, FILE* F_keylog);
 
 /* handling of ACK logic */
 int picoquic_is_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t * next_wake_time, picoquic_packet_context_enum pc);

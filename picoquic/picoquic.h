@@ -101,6 +101,8 @@ extern "C" {
 #define PICOQUIC_TLS_HANDSHAKE_FAILED (0x201)
 
 #define PICOQUIC_MAX_PACKET_SIZE 1536
+#define PICOQUIC_INITIAL_MTU_IPV4 1252
+#define PICOQUIC_INITIAL_MTU_IPV6 1232
 #define PICOQUIC_RESET_SECRET_SIZE 16
 #define PICOQUIC_RESET_PACKET_PAD_SIZE 23
 #define PICOQUIC_RESET_PACKET_MIN_SIZE (PICOQUIC_RESET_PACKET_PAD_SIZE + PICOQUIC_RESET_SECRET_SIZE)
@@ -339,7 +341,23 @@ void picoquic_set_fuzz(picoquic_quic_t* quic, picoquic_fuzz_fn fuzz_fn, void * f
 /* Set the binary log file and start tracing into it.
  * Set to NULL value to stop binary tracing.
  */
-void picoquic_set_binlog(picoquic_quic_t * quic, char const * binlog_file);
+int picoquic_set_binlog(picoquic_quic_t * quic, char const * binlog_file);
+
+/* Set the binary log file and start tracing into it.
+ * Set to NULL value to stop text log.
+ */
+int picoquic_set_textlog(picoquic_quic_t* quic, char const* textlog_file);
+
+/* Set the log level:
+ * 1: log all packets
+ * 0: only log the first 100 packets for each connection. */
+void picoquic_set_log_level(picoquic_quic_t* quic, int log_level);
+
+/* Require Picoquic to log the session keys in the specified files.
+ * Instead of calling this API directly, consider calling the 
+ * function picoquic_set_key_log_file_from_env() defined in 
+ * picosocks.h */
+void picoquic_set_key_log_file(picoquic_quic_t* quic, char const* keylog_filename);
 
 /* Set the ESNI key.
  * May be called several times to set several keys.
@@ -429,6 +447,8 @@ int picoquic_is_local_cid(picoquic_quic_t* quic, picoquic_connection_id_t* cid);
  * Cannot be changed if there are active connections in the context.
  * Value must be compatible with what the cnx_id_callback() expects on a server */
 int picoquic_set_default_connection_id_length(picoquic_quic_t* quic, uint8_t cid_length);
+
+void picoquic_set_mtu_max(picoquic_quic_t* quic, uint32_t mtu_max);
 
 void picoquic_set_alpn_select_fn(picoquic_quic_t* quic, picoquic_alpn_select_fn alpn_select_fn);
 
@@ -655,6 +675,55 @@ uint64_t picoquic_get_data_sent(picoquic_cnx_t * cnx);
 uint64_t picoquic_get_data_received(picoquic_cnx_t * cnx);
 
 int picoquic_cnx_is_still_logging(picoquic_cnx_t* cnx);
+
+/* Congestion algorithm definition */
+
+typedef enum {
+    picoquic_congestion_notification_acknowledgement,
+    picoquic_congestion_notification_repeat,
+    picoquic_congestion_notification_timeout,
+    picoquic_congestion_notification_spurious_repeat,
+    picoquic_congestion_notification_rtt_measurement,
+    picoquic_congestion_notification_bw_measurement,
+    picoquic_congestion_notification_ecn_ec,
+    picoquic_congestion_notification_cwin_blocked
+} picoquic_congestion_notification_t;
+
+typedef void (*picoquic_congestion_algorithm_init)(picoquic_path_t* path_x);
+typedef void (*picoquic_congestion_algorithm_notify)(
+    picoquic_cnx_t* cnx,
+    picoquic_path_t* path_x,
+    picoquic_congestion_notification_t notification,
+    uint64_t rtt_measurement,
+    uint64_t one_way_delay,
+    uint64_t nb_bytes_acknowledged,
+    uint64_t lost_packet_number,
+    uint64_t current_time);
+typedef void (*picoquic_congestion_algorithm_delete)(picoquic_path_t* cnx);
+
+typedef struct st_picoquic_congestion_algorithm_t {
+    char const * congestion_algorithm_id;
+    picoquic_congestion_algorithm_init alg_init;
+    picoquic_congestion_algorithm_notify alg_notify;
+    picoquic_congestion_algorithm_delete alg_delete;
+} picoquic_congestion_algorithm_t;
+
+extern picoquic_congestion_algorithm_t* picoquic_newreno_algorithm;
+extern picoquic_congestion_algorithm_t* picoquic_cubic_algorithm;
+extern picoquic_congestion_algorithm_t* picoquic_dcubic_algorithm;
+extern picoquic_congestion_algorithm_t* picoquic_fastcc_algorithm;
+extern picoquic_congestion_algorithm_t* picoquic_bbr_algorithm;
+
+#define PICOQUIC_DEFAULT_CONGESTION_ALGORITHM picoquic_newreno_algorithm;
+
+picoquic_congestion_algorithm_t const* picoquic_get_congestion_algorithm(char const* alg_name);
+
+void picoquic_set_default_congestion_algorithm(picoquic_quic_t* quic, picoquic_congestion_algorithm_t const* algo);
+
+void picoquic_set_default_congestion_algorithm_by_name(picoquic_quic_t* quic, char const* alg_name);
+
+void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_algorithm_t const* algo);
+
 
 #ifdef __cplusplus
 }
