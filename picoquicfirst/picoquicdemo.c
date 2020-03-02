@@ -546,6 +546,8 @@ int quic_client(const char* ip_address_text, int server_port,
                     picoquic_demo_client_set_alpn_from_tickets(cnx_client, &callback_ctx, current_time);
                     if (cnx_client->alpn != NULL) {
                         fprintf(stdout, "Set ALPN to %s based on stored ticket\n", cnx_client->alpn);
+                        picoquic_log_app_message(cnx_client,
+                            "Set ALPN to %s based on stored ticket\n", cnx_client->alpn);
                     }
                 }
 
@@ -665,14 +667,20 @@ int quic_client(const char* ip_address_text, int server_port,
                 if (picoquic_get_cnx_state(cnx_client) == picoquic_state_client_almost_ready && notified_ready == 0) {
                     if (picoquic_tls_is_psk_handshake(cnx_client)) {
                         fprintf(stdout, "The session was properly resumed!\n");
+                        picoquic_log_app_message(cnx_client,
+                            "%s", "The session was properly resumed!\n");
                     }
 
                     if (cnx_client->zero_rtt_data_accepted) {
                         fprintf(stdout, "Zero RTT data is accepted!\n");
+                        picoquic_log_app_message(cnx_client,
+                            "%s", "Zero RTT data is accepted!\n");
                     }
 
                     if (cnx_client->alpn != NULL) {
                         fprintf(stdout, "Negotiated ALPN: %s\n", cnx_client->alpn);
+                        picoquic_log_app_message(cnx_client,
+                            "Negotiated ALPN: %s\n", cnx_client->alpn);
                         saved_alpn = picoquic_string_duplicate(cnx_client->alpn);
                     }
                     fprintf(stdout, "Almost ready!\n\n");
@@ -698,6 +706,11 @@ int quic_client(const char* ip_address_text, int server_port,
                         printf("Connection established. Version = %x, I-CID: %llx\n",
                             picoquic_supported_versions[cnx_client->version_index].version,
                             (unsigned long long)picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx_client)));
+
+                        picoquic_log_app_message(cnx_client,
+                            "Connection established. Version = %x, I-CID: %llx\n",
+                            picoquic_supported_versions[cnx_client->version_index].version,
+                            (unsigned long long)picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx_client)));
                         established = 1;
 
                         if (zero_rtt_available == 0 && !is_siduck) {
@@ -717,6 +730,7 @@ int quic_client(const char* ip_address_text, int server_port,
                             (struct sockaddr*) & server_address, (struct sockaddr*) & cnx_client->path[0]->peer_addr) != 0) {
                             fprintf(stdout, "Migration already accumplished to server preferred address!\n");
                             migration_started = -1;
+                            picoquic_log_app_message(cnx_client, "%s", "Migration already accumplished to server preferred address!\n");
                         }
                         else {
                             int mig_ret = quic_client_migrate(cnx_client, &fd, NULL, (struct sockaddr*) & client_address, &address_updated, force_migration);
@@ -725,6 +739,7 @@ int quic_client(const char* ip_address_text, int server_port,
 
                             if (mig_ret != 0) {
                                 fprintf(stdout, "Will not test migration.\n");
+                                picoquic_log_app_message(cnx_client, "%s", "Will not test migration.\n");
                                 migration_started = -1;
                             }
                         }
@@ -736,10 +751,12 @@ int quic_client(const char* ip_address_text, int server_port,
                         int key_rot_ret = picoquic_start_key_rotation(cnx_client);
                         if (key_rot_ret != 0) {
                             fprintf(stdout, "Will not test key rotation.\n");
+                            picoquic_log_app_message(cnx_client, "%s", "Will not test key rotation.\n");
                             key_update_done = (uint64_t)-1;
                         }
                         else {
                             fprintf(stdout, "Key rotation started.\n");
+                            picoquic_log_app_message(cnx_client, "%s", "Key rotation started.\n");
                             key_update_done = 1;
                         }
                     }
@@ -749,9 +766,11 @@ int quic_client(const char* ip_address_text, int server_port,
                             if (cnx_client->nb_zero_rtt_sent != 0) {
                                 fprintf(stdout, "Out of %d zero RTT packets, %d were acked by the server.\n",
                                     cnx_client->nb_zero_rtt_sent, cnx_client->nb_zero_rtt_acked);
+                                picoquic_log_app_message(cnx_client, "Out of %d zero RTT packets, %d were acked by the server.\n",
+                                    cnx_client->nb_zero_rtt_sent, cnx_client->nb_zero_rtt_acked);
                             }
                             fprintf(stdout, "All done, Closing the connection.\n");
-                            
+                            picoquic_log_app_message(cnx_client, "%s", "All done, Closing the connection.\n");
                             if (picoquic_get_data_received(cnx_client) > 0) {
                                 double duration_usec = (double)(current_time - picoquic_get_cnx_start_time(cnx_client));
 
@@ -760,6 +779,9 @@ int quic_client(const char* ip_address_text, int server_port,
                                     fprintf(stdout, "Received %llu bytes in %f seconds, %f Mbps.\n",
                                         (unsigned long long)picoquic_get_data_received(cnx_client),
                                         duration_usec/1000000.0, receive_rate_mbps);
+                                    picoquic_log_app_message(cnx_client, "Received %llu bytes in %f seconds, %f Mbps.\n",
+                                        (unsigned long long)picoquic_get_data_received(cnx_client),
+                                        duration_usec / 1000000.0, receive_rate_mbps);
                                 }
                             }
 
@@ -769,6 +791,7 @@ int quic_client(const char* ip_address_text, int server_port,
                             current_time > callback_ctx.last_interaction_time && current_time - callback_ctx.last_interaction_time > 10000000ull
                             && picoquic_is_cnx_backlog_empty(cnx_client)) {
                             fprintf(stdout, "No progress for 10 seconds. Closing. \n");
+                            picoquic_log_app_message(cnx_client, "%s", "No progress for 10 seconds. Closing. \n");
                             ret = picoquic_close(cnx_client, 0);
                         }
                     }
@@ -793,6 +816,10 @@ int quic_client(const char* ip_address_text, int server_port,
                                 (client_address.ss_family == AF_INET) ?
                                 ((struct sockaddr_in*) & x_from)->sin_port :
                                 ((struct sockaddr_in6*) & x_from)->sin6_port);
+                            picoquic_log_app_message(cnx_client, "Dropping packet sent from wrong address, port: %d\n",
+                                (client_address.ss_family == AF_INET) ?
+                                ((struct sockaddr_in*) & x_from)->sin_port :
+                                ((struct sockaddr_in6*) & x_from)->sin6_port);
                         }
                         send_length = 0;
                     }
@@ -804,6 +831,7 @@ int quic_client(const char* ip_address_text, int server_port,
                         if (bytes_sent <= 0)
                         {
                             fprintf(stdout, "Cannot send packet to server, returns %d\n", bytes_sent);
+                            picoquic_log_app_message(cnx_client, "Cannot send packet to server, returns %d\n", bytes_sent);
                         }
                     }
                 }

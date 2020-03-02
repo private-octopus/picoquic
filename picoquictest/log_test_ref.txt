@@ -33,3 +33,5 @@
 0b0c0d0e0f101112: ticket time = 1548462100832, kx = 17, suite = 1302, 61 ticket, 48 secret.
 0b0c0d0e0f101112: lifetime = 7200, age_add = 3fc0960b, 8 nonce, 32 ticket, 8 extensions.
 0b0c0d0e0f101112: ticket extensions: 42(ED: ffffffff),
+0b0c0d0e0f101112: This is an app message test.
+0b0c0d0e0f101112: This is app message test #1, severity 2.
