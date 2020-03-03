@@ -2109,12 +2109,12 @@ void picoquic_log_probe_action(FILE* F, picoquic_cnx_t* cnx, picoquic_probe_t * 
     fprintf(F, "\n");
 }
 
-void picoquic_log_app_message(picoquic_cnx_t* cnx, const char* fmt, ...)
+void picoquic_log_app_message(picoquic_quic_t* quic, picoquic_connection_id_t * icid,  const char* fmt, ...)
 {
-    FILE* F = cnx->quic->F_log;
+    FILE* F = quic->F_log;
 
     if (F != NULL) {
-        picoquic_log_prefix_initial_cid64(F, picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
+        picoquic_log_prefix_initial_cid64(F, picoquic_val64_connection_id(*icid));
 
         va_list args;
         va_start(args, fmt);
