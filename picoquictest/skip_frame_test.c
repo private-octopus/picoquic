@@ -654,8 +654,8 @@ int logger_test()
         cnx.quic = &quic;
         quic.F_log = F;
 
-        picoquic_log_app_message(&cnx, "%s.\n", "This is an app message test");
-        picoquic_log_app_message(&cnx, "This is app message test #%d, severity %d.\n", 1, 2);
+        picoquic_log_app_message(&quic, &cnx.initial_cnxid, "%s.\n", "This is an app message test");
+        picoquic_log_app_message(&quic, &cnx.initial_cnxid, "This is app message test #%d, severity %d.\n", 1, 2);
 
         (void)picoquic_file_close(F);
     }
