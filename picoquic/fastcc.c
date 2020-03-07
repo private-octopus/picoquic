@@ -240,6 +240,16 @@ void picoquic_fastcc_delete(picoquic_path_t* path_x)
     }
 }
 
+
+/* Observe the state of congestion control */
+
+void picoquic_fastcc_observe(picoquic_path_t* path_x, uint64_t* cc_state, uint64_t* cc_param)
+{
+    picoquic_fastcc_state_t* fastcc_state = (picoquic_fastcc_state_t*)path_x->congestion_alg_state;
+    *cc_state = (uint64_t)fastcc_state->alg_state;
+    *cc_param = fastcc_state->rolling_rtt_min;
+}
+
 /* Definition record for the FAST CC algorithm */
 
 #define picoquic_fastcc_ID "fast" 
@@ -248,7 +258,8 @@ picoquic_congestion_algorithm_t picoquic_fastcc_algorithm_struct = {
     picoquic_fastcc_ID,
     picoquic_fastcc_init,
     picoquic_fastcc_notify,
-    picoquic_fastcc_delete
+    picoquic_fastcc_delete,
+    picoquic_fastcc_observe
 };
 
 picoquic_congestion_algorithm_t* picoquic_fastcc_algorithm = &picoquic_fastcc_algorithm_struct;

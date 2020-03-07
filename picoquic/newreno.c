@@ -50,7 +50,7 @@ static void picoquic_newreno_init(picoquic_path_t* path_x)
         memset(nr_state, 0, sizeof(picoquic_newreno_state_t));
         path_x->congestion_alg_state = (void*)nr_state;
         nr_state->alg_state = picoquic_newreno_alg_slow_start;
-        nr_state->ssthresh = (uint64_t)((int64_t)-1);
+        nr_state->ssthresh = UINT64_MAX;
         path_x->cwin = PICOQUIC_CWIN_INITIAL;
     }
     else {
@@ -185,6 +185,15 @@ static void picoquic_newreno_delete(picoquic_path_t* path_x)
     }
 }
 
+/* Observe the state of congestion control */
+
+void picoquic_newreno_observe(picoquic_path_t* path_x, uint64_t* cc_state, uint64_t* cc_param)
+{
+    picoquic_newreno_state_t* nr_state = (picoquic_newreno_state_t*)path_x->congestion_alg_state;
+    *cc_state = (uint64_t)nr_state->alg_state;
+    *cc_param = (nr_state->ssthresh == UINT64_MAX) ? 0 : nr_state->ssthresh;
+}
+
 /* Definition record for the New Reno algorithm */
 
 #define PICOQUIC_NEWRENO_ID "newreno" /* NR88 */
@@ -193,7 +202,8 @@ picoquic_congestion_algorithm_t picoquic_newreno_algorithm_struct = {
     PICOQUIC_NEWRENO_ID,
     picoquic_newreno_init,
     picoquic_newreno_notify,
-    picoquic_newreno_delete
+    picoquic_newreno_delete,
+    picoquic_newreno_observe
 };
 
 picoquic_congestion_algorithm_t* picoquic_newreno_algorithm = &picoquic_newreno_algorithm_struct;
