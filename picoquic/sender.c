@@ -973,7 +973,7 @@ void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet_t
         packet->delivered_prior = path_x->delivered_last;
         packet->delivered_time_prior = path_x->delivered_time_last;
         packet->delivered_sent_prior = path_x->delivered_sent_last;
-        packet->delivered_app_limited = (path_x->delivered_limited_index != 0);
+        packet->delivered_app_limited = (cnx->cnx_state < picoquic_state_ready || path_x->delivered_limited_index != 0);
 
         switch (packet->ptype) {
         case picoquic_packet_version_negotiation:

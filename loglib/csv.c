@@ -79,6 +79,8 @@ int picoquic_cc_bin_to_csv(FILE * f_binlog, FILE * f_csvlog)
     ret |= fprintf(f_csvlog, "cwin blkd, ") <= 0;
     ret |= fprintf(f_csvlog, "flow blkd, ") <= 0;
     ret |= fprintf(f_csvlog, "stream blkd, ") <= 0;
+    ret |= fprintf(f_csvlog, "cc_state, ") <= 0;
+    ret |= fprintf(f_csvlog, "cc_param, ") <= 0;
     ret |= fprintf(f_csvlog, "\n") <= 0;
 
     if (ret == 0) {
@@ -137,6 +139,8 @@ int csv_cb(bytestream * s, void * ptr)
         uint64_t cwin_blkd = 0;
         uint64_t flow_blkd = 0;
         uint64_t stream_blkd = 0;
+        uint64_t cc_state = 0;
+        uint64_t cc_param = 0;
 
         ret |= byteread_vint(s, &sequence);
         ret |= byteread_vint(s, &packet_rcvd);
@@ -160,10 +164,13 @@ int csv_cb(bytestream * s, void * ptr)
         ret |= byteread_vint(s, &flow_blkd);
         ret |= byteread_vint(s, &stream_blkd);
 
-        if (ret != 0 || fprintf(f_csvlog, "%" PRIu64 ", %" PRIu64 ", %" PRId64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", ",
+        (void)byteread_vint(s, &cc_state);
+        (void)byteread_vint(s, &cc_param);
+
+        if (ret != 0 || fprintf(f_csvlog, "%" PRIu64 ", %" PRIu64 ", %" PRId64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", % " PRIu64 ", % " PRIu64 ", ",
             time, sequence, (int64_t)highest_ack, high_ack_time, last_time_ack,
             cwin, one_way_delay, rtt_sample, SRTT, RTT_min, bandwidth_estimate, receive_rate_estimate, Send_MTU, pacing_packet_time,
-            nb_retrans, nb_spurious, cwin_blkd, flow_blkd, stream_blkd) <= 0) {
+            nb_retrans, nb_spurious, cwin_blkd, flow_blkd, stream_blkd, cc_state, cc_param) <= 0) {
             ret = -1;
         }
         if (ret != 0 || fprintf(f_csvlog, "\n") <= 0) {

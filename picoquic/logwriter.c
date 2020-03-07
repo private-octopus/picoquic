@@ -820,6 +820,19 @@ void picoquic_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
     bytewrite_vint(ps_msg, cnx->flow_blocked);
     bytewrite_vint(ps_msg, cnx->stream_blocked);
 
+    if (cnx->congestion_alg == NULL) {
+        bytewrite_vint(ps_msg, 0);
+        bytewrite_vint(ps_msg, 0);
+    }
+    else {
+        uint64_t cc_state;
+        uint64_t cc_param;
+
+        cnx->congestion_alg->alg_observe(cnx->path[0], &cc_state, &cc_param);
+        bytewrite_vint(ps_msg, cc_state);
+        bytewrite_vint(ps_msg, cc_param);
+    }
+
     bytestream_buf stream_head;
     bytestream* ps_head = bytestream_buf_init(&stream_head, BYTESTREAM_MAX_BUFFER_SIZE);
 

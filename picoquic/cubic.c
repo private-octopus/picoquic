@@ -573,6 +573,16 @@ static void picoquic_cubic_delete(picoquic_path_t* path_x)
     }
 }
 
+/* Observe the state of congestion control */
+
+void picoquic_cubic_observe(picoquic_path_t* path_x, uint64_t* cc_state, uint64_t* cc_param)
+{
+    picoquic_cubic_state_t* cubic_state = (picoquic_cubic_state_t*)path_x->congestion_alg_state;
+    *cc_state = (uint64_t)cubic_state->alg_state;
+    *cc_param = (uint64_t)cubic_state->W_max;
+}
+
+
 /* Definition record for the Cubic algorithm */
 
 #define picoquic_cubic_ID "cubic" /* CBIC */
@@ -582,14 +592,16 @@ picoquic_congestion_algorithm_t picoquic_cubic_algorithm_struct = {
     picoquic_cubic_ID,
     picoquic_cubic_init,
     picoquic_cubic_notify,
-    picoquic_cubic_delete
+    picoquic_cubic_delete,
+    picoquic_cubic_observe
 };
 
 picoquic_congestion_algorithm_t picoquic_dcubic_algorithm_struct = {
     picoquic_dcubic_ID,
     picoquic_cubic_init,
     picoquic_dcubic_notify,
-    picoquic_cubic_delete
+    picoquic_cubic_delete,
+    picoquic_cubic_observe
 };
 
 picoquic_congestion_algorithm_t* picoquic_cubic_algorithm = &picoquic_cubic_algorithm_struct;
