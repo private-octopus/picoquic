@@ -34,19 +34,90 @@ typedef struct qlog_context_st {
     FILE * f_txtlog;      /*!< The file handle of the opened output file. */
 
     const char * cid_name; /*!< Name of the connection, default = initial connection id */
+    struct sockaddr_storage addr_peer;
+    struct sockaddr_storage addr_local;
 
     uint64_t start_time;  /*!< Timestamp is very first log event reported. */
+    int event_count;
     int packet_count;
     int frame_count;
 
     int state;
 } qlog_context_t;
 
-int qlog_pdu(uint64_t time, int rxtx, void * ptr)
+static void qlog_log_addr(FILE* f, struct sockaddr* addr_peer)
 {
-    (void)time;
-    (void)rxtx;
-    (void)ptr;
+    if (addr_peer->sa_family == AF_INET) {
+        struct sockaddr_in* s4 = (struct sockaddr_in*)addr_peer;
+        uint8_t* addr = (uint8_t*)&s4->sin_addr;
+
+        fprintf(f, "\"ip_v4\": \"%d.%d.%d.%d\", \"port_v4\":%d",
+            addr[0], addr[1], addr[2], addr[3],
+            ntohs(s4->sin_port));
+    }
+    else {
+        struct sockaddr_in6* s6 = (struct sockaddr_in6*)addr_peer;
+        uint8_t* addr = (uint8_t*)&s6->sin6_addr;
+
+        fprintf(f, "{ \"ip_v6\": \"");
+        for (int i = 0; i < 8; i++) {
+            if (i != 0) {
+                fprintf(f, ":");
+            }
+
+            if (addr[2 * i] != 0) {
+                fprintf(f, "%x%02x", addr[2 * i], addr[(2 * i) + 1]);
+            }
+            else {
+                fprintf(f, "%x", addr[(2 * i) + 1]);
+            }
+        }
+        fprintf(f, "\" \"port_v6\" :%d", ntohs(s6->sin6_port));
+    }
+}
+
+int qlog_pdu(uint64_t time, int rxtx, bytestream* s, void * ptr)
+{
+    qlog_context_t* ctx = (qlog_context_t*)ptr;
+    int64_t delta_time = time - ctx->start_time;
+    FILE* f = ctx->f_txtlog;
+    struct sockaddr_storage addr_peer = { 0 };
+    struct sockaddr_storage addr_local = { 0 };
+    uint64_t byte_length = 0;
+    int ret_local;
+
+    byteread_addr(s, &addr_peer);
+    byteread_vint(s, &byte_length);
+    ret_local = byteread_addr(s, &addr_local);
+
+    if (ctx->event_count != 0) {
+        fprintf(f, ",\n");
+    }
+    else {
+        fprintf(f, "\n");
+    }
+
+    fprintf(f, "[%"PRId64", \"TRANSPORT\", \"%s\", { \"byte_length\": %" PRIu64,
+        delta_time, (rxtx == 0) ? "DATAGRAM_SENT" : "DATAGRAM_RECEIVED", byte_length);
+
+    if (addr_peer.ss_family != 0 &&
+        picoquic_compare_addr((struct sockaddr*)&addr_peer, (struct sockaddr*) & ctx->addr_peer) != 0) {
+        fprintf(f, ", \"%s\" : {", (rxtx == 0) ? "addr_to" : "addr_from");
+        qlog_log_addr(f, (struct sockaddr*) & addr_peer);
+        fprintf(f, "}");
+        picoquic_store_addr(&ctx->addr_peer, (struct sockaddr*) & addr_peer);
+    }
+
+    if (ret_local == 0 && addr_local.ss_family != 0 &&
+        picoquic_compare_addr((struct sockaddr*) & addr_local, (struct sockaddr*) & ctx->addr_local) != 0) {
+        fprintf(f, ", \"%s\" : {", (rxtx != 0) ? "addr_to" : "addr_from");
+        qlog_log_addr(f, (struct sockaddr*) & addr_local);
+        fprintf(f, "}");
+        picoquic_store_addr(&ctx->addr_local, (struct sockaddr*) & addr_local);
+    }
+
+    fprintf(f, "}]");
+    ctx->event_count++;
     return 0;
 }
 
@@ -57,7 +128,7 @@ int qlog_packet_start(uint64_t time, uint64_t size, const picoquic_packet_header
 
     int64_t delta_time = time - ctx->start_time;
 
-    if (ctx->packet_count != 0) {
+    if (ctx->event_count != 0) {
         fprintf(f, ",\n");
     } else {
         fprintf(f, "\n");
@@ -468,7 +539,8 @@ int qlog_packet_end(void * ptr)
     qlog_context_t * ctx = (qlog_context_t*)ptr;
     FILE * f = ctx->f_txtlog;
     fprintf(f, "]}]");
-    ctx->packet_count++;
+    ctx->packet_count++; 
+    ctx->event_count++;
     return 0;
 }
 
@@ -480,6 +552,9 @@ int qlog_connection_start(uint64_t time, const picoquic_connection_id_t * cid, i
 
     ctx->start_time = time;
     ctx->packet_count = 0;
+    ctx->event_count = 0;
+    memset(&ctx->addr_peer, 0, sizeof(struct sockaddr_storage));
+    memset(&ctx->addr_local, 0, sizeof(struct sockaddr_storage));
 
     fprintf(f, "{ \"qlog_version\": \"draft-00\", \"title\": \"picoquic\", \"traces\": [\n");
     fprintf(f, "{ \"vantage_point\": { \"name\": \"backend-67\", \"type\": \"%s\" },\n",
@@ -489,7 +564,7 @@ int qlog_connection_start(uint64_t time, const picoquic_connection_id_t * cid, i
     fprintf(f, "\"event_fields\": [\"relative_time\", \"CATEGORY\", \"EVENT_TYPE\", \"DATA\"],\n");
     fprintf(f, "\"configuration\": {\"time_units\": \"us\"},\n");
     fprintf(f, "\"common_fields\": { \"protocol_type\": \"QUIC_HTTP3\", \"reference_time\": \"%"PRIu64"\"},\n", ctx->start_time);
-    fprintf(f, "\"events\": [\n");
+    fprintf(f, "\"events\": [");
     ctx->state = 1;
     return 0;
 }

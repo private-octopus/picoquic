@@ -40,10 +40,11 @@ typedef struct svg_context_st {
     int state;
 } svg_context_t;
 
-int svg_pdu(uint64_t time, int rxtx, void * ptr)
+int svg_pdu(uint64_t time, int rxtx, bytestream* s, void * ptr)
 {
     (void)time;
     (void)rxtx;
+    (void)s;
     (void)ptr;
     return 0;
 }

@@ -111,7 +111,7 @@ static int binlog_convert_event(bytestream * s, void * ptr)
 
     if (id == picoquic_log_event_pdu_recv || id == picoquic_log_event_pdu_sent) {
         int rxtx = id == picoquic_log_event_pdu_recv;
-        ret |= ctx->callbacks->pdu(time, rxtx, cbptr);
+        ret |= ctx->callbacks->pdu(time, rxtx, s, cbptr);
     }
 
     if (id == picoquic_log_event_packet_recv || id == picoquic_log_event_packet_sent) {

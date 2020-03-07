@@ -655,7 +655,7 @@ int bytestream_test_vint()
     return ret;
 }
 
-int bytestream_test_addr_version(const struct sockaddr * in, struct sockaddr * out, size_t addr_size, const char * type_name)
+int bytestream_test_addr_version(const struct sockaddr * in, struct sockaddr_storage * out, size_t addr_size, const char * type_name)
 {
     int ret = 0;
 
@@ -666,6 +666,8 @@ int bytestream_test_addr_version(const struct sockaddr * in, struct sockaddr * o
     ret |= bytewrite_addr(s, in);
 
     bytestream_reset(s);
+
+    memset(out, 0, sizeof(struct sockaddr_storage));
 
     ret |= byteskip_addr(s);
     ret |= byteread_addr(s, out);
@@ -683,15 +685,15 @@ int bytestream_test_addr()
 {
     int ret = 0;
 
+    struct sockaddr_storage addr_out = { 0 };
     struct sockaddr_in addr_in = { 0 };
     addr_in.sin_family = AF_INET;
     addr_in.sin_addr.s_addr = 0x01020304;
     addr_in.sin_port = 1234;
 
-    struct sockaddr_in addr_in_res = { 0 };
     ret |= bytestream_test_addr_version(
         (const struct sockaddr*)&addr_in,
-        (struct sockaddr*)&addr_in_res,
+        & addr_out,
         sizeof(struct sockaddr_in),
         "sockaddr_in");
 
@@ -700,10 +702,9 @@ int bytestream_test_addr()
     addr_in6.sin6_addr.s6_addr[0] = 12;
     addr_in6.sin6_port = 1234;
 
-    struct sockaddr_in6 addr_in6_res = { 0 };
     ret |= bytestream_test_addr_version(
         (const struct sockaddr*)&addr_in6,
-        (struct sockaddr*)&addr_in6_res,
+        &addr_out,
         sizeof(struct sockaddr_in6),
         "sockaddr_in6");
 

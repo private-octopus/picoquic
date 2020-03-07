@@ -501,7 +501,7 @@ void picoquic_binlog_frames(FILE * f, const uint8_t* bytes, size_t length)
 
 
 void binlog_pdu(FILE* f, const picoquic_connection_id_t* cid, int receiving, uint64_t current_time,
-    const struct sockaddr* addr_peer, size_t packet_length)
+    const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length)
 {
     bytestream_buf stream_msg;
     bytestream* msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
@@ -514,6 +514,7 @@ void binlog_pdu(FILE* f, const picoquic_connection_id_t* cid, int receiving, uin
     /* PDU information */
     bytewrite_addr(msg, addr_peer);
     bytewrite_vint(msg, packet_length);
+    bytewrite_addr(msg, addr_local);
 
     uint8_t head[4] = { 0 };
     picoformat_32(head, (uint32_t)bytestream_length(msg));

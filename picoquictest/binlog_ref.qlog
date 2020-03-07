@@ -4,7 +4,6 @@
 "configuration": {"time_units": "us"},
 "common_fields": { "protocol_type": "QUIC_HTTP3", "reference_time": "0"},
 "events": [
-
 [0, "TRANSPORT", "PACKET_SENT", { "packet_type": "1rtt", "header": { "packet_number": "0", "packet_size": 3, "dcid": "01020304" }, "frames": [{ 
     "frame_type": "padding"}]}],
 [0, "TRANSPORT", "PACKET_SENT", { "packet_type": "1rtt", "header": { "packet_number": "1", "packet_size": 4, "dcid": "01020304" }, "frames": [{ 
