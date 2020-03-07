@@ -704,12 +704,15 @@ typedef void (*picoquic_congestion_algorithm_notify)(
     uint64_t lost_packet_number,
     uint64_t current_time);
 typedef void (*picoquic_congestion_algorithm_delete)(picoquic_path_t* cnx);
+typedef void (*picoquic_congestion_algorithm_observe)(
+    picoquic_path_t* path_x, uint64_t * cc_state, uint64_t * cc_param);
 
 typedef struct st_picoquic_congestion_algorithm_t {
     char const * congestion_algorithm_id;
     picoquic_congestion_algorithm_init alg_init;
     picoquic_congestion_algorithm_notify alg_notify;
     picoquic_congestion_algorithm_delete alg_delete;
+    picoquic_congestion_algorithm_observe alg_observe;
 } picoquic_congestion_algorithm_t;
 
 extern picoquic_congestion_algorithm_t* picoquic_newreno_algorithm;

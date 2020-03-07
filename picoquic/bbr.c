@@ -561,10 +561,10 @@ void BBRSetCwnd(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64
         else if (path_x->cwin < bbr_state->target_cwnd || path_x->delivered < PICOQUIC_CWIN_INITIAL)
         {
             path_x->cwin += bytes_delivered;
-            if (path_x->cwin < BBR_MIN_PIPE_CWND(path_x->send_mtu))
-            {
-                path_x->cwin = BBR_MIN_PIPE_CWND(path_x->send_mtu);
-            }
+        }
+        if (path_x->cwin < BBR_MIN_PIPE_CWND(path_x->send_mtu))
+        {
+            path_x->cwin = BBR_MIN_PIPE_CWND(path_x->send_mtu);
         }
     }
 
@@ -722,13 +722,23 @@ static void picoquic_bbr_notify(
     }
 }
 
+/* Observe the state of congestion control */
+
+void picoquic_bbr_observe(picoquic_path_t* path_x, uint64_t* cc_state, uint64_t* cc_param)
+{
+    picoquic_bbr_state_t* bbr_state = (picoquic_bbr_state_t*)path_x->congestion_alg_state;
+    *cc_state = (uint64_t)bbr_state->state;
+    *cc_param = bbr_state->btl_bw;
+}
+
 #define picoquic_bbr_ID "bbr" /* BBR */
 
 picoquic_congestion_algorithm_t picoquic_bbr_algorithm_struct = {
     picoquic_bbr_ID,
     picoquic_bbr_init,
     picoquic_bbr_notify,
-    picoquic_bbr_delete
+    picoquic_bbr_delete,
+    picoquic_bbr_observe
 };
 
 picoquic_congestion_algorithm_t* picoquic_bbr_algorithm = &picoquic_bbr_algorithm_struct;
