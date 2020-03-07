@@ -1535,6 +1535,21 @@ int picoquic_add_proposed_alpn(void* tls_context, const char* alpn)
     return ret;
 }
 
+/* Log OPENSSL errors */
+void picoquic_log_openssl_errors(picoquic_cnx_t* cnx, int ret)
+{
+    unsigned long openssl_err;
+    char const* err_file = NULL;
+    int err_line = 0;
+
+    while ((openssl_err = ERR_get_error_line(&err_file, &err_line)) != 0) {
+        picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "OpenSSL error: %lu, file %s, line %d", openssl_err,
+            (err_file == NULL) ? "?" : err_file, err_line);
+    }
+    
+    picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "Picotls returns error: %d (0x%x) ", ret, ret);
+}
+
 /* Prepare the initial message when starting a connection.
  */
 
@@ -1604,6 +1619,9 @@ int picoquic_initialize_tls_stream(picoquic_cnx_t* cnx, uint64_t current_time)
 
     ptls_buffer_init(&sendbuf, "", 0);
 
+    /* Clearing the global error state of openssl before calling handle message.
+     * This allows detection of errors during processing. */
+    ERR_clear_error(); 
     ret = ptls_handle_message(ctx->tls, &sendbuf, epoch_offsets, 0, NULL, 0, &ctx->handshake_properties);
 
     /* assume that all the data goes to epoch 0, initial */
@@ -1623,6 +1641,7 @@ int picoquic_initialize_tls_stream(picoquic_cnx_t* cnx, uint64_t current_time)
             ret = 0;
         }
     } else {
+        picoquic_log_openssl_errors(cnx, ret);
         ret = -1;
     }
 
@@ -1840,6 +1859,10 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
 
             ptls_buffer_init(&sendbuf, "", 0);
 
+            /* Clearing the global error state of openssl before calling handle message.
+             * This allows detection of errors during processing. */
+            ERR_clear_error();
+
             ret = ptls_handle_message(ctx->tls, &sendbuf, send_offset, epoch,
                 data->bytes + start, epoch_data, &ctx->handshake_properties);
 
@@ -1884,6 +1907,9 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
                         break;
                     }
                 }
+            }
+            else {
+                picoquic_log_openssl_errors(cnx, ret);
             }
 
             stream->consumed_offset += epoch_data;
