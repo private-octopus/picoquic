@@ -167,7 +167,7 @@ int csv_cb(bytestream * s, void * ptr)
         (void)byteread_vint(s, &cc_state);
         (void)byteread_vint(s, &cc_param);
 
-        if (ret != 0 || fprintf(f_csvlog, "%" PRIu64 ", %" PRIu64 ", %" PRId64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", % " PRIu64 ", % " PRIu64 ", ",
+        if (ret != 0 || fprintf(f_csvlog, "%" PRIu64 ", %" PRIu64 ", %" PRId64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ",",
             time, sequence, (int64_t)highest_ack, high_ack_time, last_time_ack,
             cwin, one_way_delay, rtt_sample, SRTT, RTT_min, bandwidth_estimate, receive_rate_estimate, Send_MTU, pacing_packet_time,
             nb_retrans, nb_spurious, cwin_blkd, flow_blkd, stream_blkd, cc_state, cc_param) <= 0) {
