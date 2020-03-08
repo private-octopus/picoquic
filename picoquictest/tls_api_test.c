@@ -812,7 +812,7 @@ int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_versi
 #ifdef _WINDOWS
             test_ctx->server_addr.sin_addr.S_un.S_addr = htonl(0x0A000001);
 #else
-            test_ctx->server_addr.sin_addr.s_addr = htonl((0x0A000001);
+            test_ctx->server_addr.sin_addr.s_addr = htonl(0x0A000001);
 #endif
             test_ctx->server_addr.sin_port = htons(4321);
 
