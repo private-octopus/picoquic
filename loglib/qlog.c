@@ -356,6 +356,53 @@ int qlog_param_update(uint64_t time, bytestream* s, void* ptr)
     return 0;
 }
 
+int qlog_packet_lost(uint64_t time, bytestream* s, void* ptr)
+{
+    qlog_context_t* ctx = (qlog_context_t*)ptr;
+    int64_t delta_time = time - ctx->start_time;
+    FILE* f = ctx->f_txtlog;
+    uint64_t packet_type = 0;
+    uint64_t sequence = 0;
+    uint64_t trigger_length;
+    uint64_t packet_size = 0;
+    uint8_t cid_len = 0;
+    int ret = 0;
+
+    ret |= byteread_vint(s, &packet_type);
+    ret |= byteread_vint(s, &sequence);
+    ret |= byteread_vint(s, &trigger_length);
+
+    if (ctx->event_count != 0) {
+        fprintf(f, ",\n");
+    }
+    else {
+        fprintf(f, "\n");
+    }
+
+    fprintf(f, "[%"PRId64", \"RECOVERY\", \"PACKET_LOST\", {\n", delta_time);
+    fprintf(f, "    \"packet_type\" : \"%s\"", ptype2str((picoquic_packet_type_enum)packet_type));
+    fprintf(f, ",\n    \"packet_number\" : %" PRIu64, sequence);
+    if (trigger_length > 0) {
+        fprintf(f, ",\n    \"trigger\": ");
+        ret |= qlog_chars(f, s, trigger_length);
+    }
+    fprintf(f, ",\n    \"header\": {");
+    fprintf(f, "\n        \"packet_type\" : \"%s\"", ptype2str((picoquic_packet_type_enum)packet_type));
+    fprintf(f, ",\n        \"packet_number\" : %" PRIu64, sequence);
+    ret |= byteread_int8(s, &cid_len);
+    if (ret == 0 && cid_len > 0) {
+        fprintf(f, ",\n        \"dcid\" : ");
+        qlog_string(f, s, cid_len);
+    }
+    ret |= byteread_vint(s, &packet_size);
+    fprintf(f, ",\n        \"packet_size\" : %" PRIu64, packet_size);
+    fprintf(f, "}}]");
+
+    ctx->event_count++;
+
+    return 0;
+}
+
 int qlog_pdu(uint64_t time, int rxtx, bytestream* s, void * ptr)
 {
     qlog_context_t* ctx = (qlog_context_t*)ptr;
@@ -949,6 +996,7 @@ int qlog_convert(const picoquic_connection_id_t* cid, FILE* f_binlog, const char
         ctx.packet_start = qlog_packet_start;
         ctx.packet_frame = qlog_packet_frame;
         ctx.packet_end = qlog_packet_end;
+        ctx.packet_lost = qlog_packet_lost;
         ctx.ptr = &qlog;
 
         ret = binlog_convert(f_binlog, cid, &ctx);

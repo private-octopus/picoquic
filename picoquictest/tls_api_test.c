@@ -6305,7 +6305,7 @@ int qlog_trace_test()
             PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
 
         ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
-            test_scenario_q2_and_r2, sizeof(test_scenario_q2_and_r2), 0, 0, 0, 20000, 1000000);
+            test_scenario_q2_and_r2, sizeof(test_scenario_q2_and_r2), 0, 0x00004281, 0, 20000, 2000000);
     }
 
     /* Free the resource, which will close the log file.

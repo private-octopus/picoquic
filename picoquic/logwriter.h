@@ -37,6 +37,7 @@ typedef enum {
     picoquic_log_event_new_connection = 0x0010,
     picoquic_log_event_connection_close = 0x0011,
     picoquic_log_event_connection_id_update = 0x0012,
+    picoquic_log_event_packet_lost = 0x0013,
 
     picoquic_log_event_tls_key_update = 0x0020,
     picoquic_log_event_tls_key_retired = 0x0021,
@@ -63,6 +64,12 @@ void binlog_packet(FILE * f, const picoquic_connection_id_t* cid, int receiving,
 void binlog_outgoing_packet(FILE * f, picoquic_cnx_t* cnx,
     uint8_t * bytes, uint64_t sequence_number, size_t pn_length, size_t length,
     uint8_t* send_buffer, size_t send_length, uint64_t current_time);
+
+/* Logging packet lost events */
+void binlog_packet_lost(FILE* f, picoquic_cnx_t* cnx,
+    picoquic_packet_type_enum ptype, uint64_t sequence_number, char const* trigger,
+    picoquic_connection_id_t* dcid, size_t packet_size,
+    uint64_t current_time);
 
 /* binary alternative to picoquic_log_transport_extension() */
 void binlog_transport_extension(FILE * f, picoquic_cnx_t * cnx, int is_local,

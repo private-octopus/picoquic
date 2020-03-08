@@ -1353,6 +1353,13 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                 /* Update the number of bytes in transit and remove old packet from queue */
                 /* If not pure ack, the packet will be placed in the "retransmitted" queue,
                  * in order to enable detection of spurious restransmissions */
+
+                if (cnx->quic->f_binlog != NULL) {
+                    binlog_packet_lost(cnx->quic->f_binlog, cnx, old_p->ptype, old_p->sequence_number,
+                        (timer_based_retransmit == 0) ? "repeat" : "timer",
+                        (old_p->send_path == NULL) ? NULL : &old_p->send_path->remote_cnxid,
+                        old_p->length, current_time);
+                }
                 old_p = picoquic_dequeue_retransmit_packet(cnx, old_p, packet_is_pure_ack & do_not_detect_spurious);
 
                 /* If we have a good packet, return it */

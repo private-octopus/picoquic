@@ -24,7 +24,7 @@
 
 #include "picoquic_internal.h"
 
-#define BYTESTREAM_MAX_BUFFER_SIZE 2048
+#define BYTESTREAM_MAX_BUFFER_SIZE 2560
 
 typedef struct {
     uint8_t * data;
