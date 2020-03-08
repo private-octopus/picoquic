@@ -123,14 +123,14 @@ static void qlog_log_addr(FILE* f, struct sockaddr* addr_peer)
     }
 }
 
-void qlog_vint_transport_extension(FILE* f, char const* ext_name, bytestream* s, size_t len)
+void qlog_vint_transport_extension(FILE* f, char const* ext_name, bytestream* s, uint64_t len)
 {
     uint64_t val;
     size_t current_ptr = s->ptr;
     int ret = byteread_vint(s, &val);
 
     fprintf(f, "\"%s\" : ", ext_name);
-    if (ret != 0 || current_ptr + len != s->ptr) {
+    if (ret != 0 || current_ptr + (size_t)len != s->ptr) {
         s->ptr = current_ptr;
         qlog_string(f, s, len);
     }
@@ -139,7 +139,7 @@ void qlog_vint_transport_extension(FILE* f, char const* ext_name, bytestream* s,
     }
 }
 
-void qlog_boolean_transport_extension(FILE* f, char const* ext_name, bytestream* s, size_t len)
+void qlog_boolean_transport_extension(FILE* f, char const* ext_name, bytestream* s, uint64_t len)
 {
     fprintf(f, "\"%s\" : ", ext_name);
     if (len != 0) {
@@ -150,14 +150,14 @@ void qlog_boolean_transport_extension(FILE* f, char const* ext_name, bytestream*
     }
 }
 
-void qlog_preferred_address(FILE* f, bytestream* s, size_t len)
+void qlog_preferred_address(FILE* f, bytestream* s, uint64_t len)
 {
     uint16_t port4 =0;
     uint16_t port6 = 0;
     uint8_t cid_len;
     size_t old_size = s->size;
 
-    s->size = s->ptr + len;
+    s->size = s->ptr + (size_t) len;
 
     fprintf(f, "\"ip_v4\": \"");
     for (int i = 0; i < 4 && s->ptr < s->size; i++, s->ptr++) {
@@ -344,7 +344,7 @@ int qlog_param_update(uint64_t time, bytestream* s, void* ptr)
     ret |= byteread_vint(s, &tp_length);
 
     if (tp_length > 0) {
-        qlog_transport_extensions(f, s, tp_length);
+        qlog_transport_extensions(f, s, (size_t)tp_length);
     }
     
     fprintf(f, "}]");
