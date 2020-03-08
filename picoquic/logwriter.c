@@ -565,7 +565,7 @@ void binlog_packet(FILE* f, const picoquic_connection_id_t* cid, int receiving, 
 
     /* frame information */
     if (ph->ptype == picoquic_packet_version_negotiation || ph->ptype == picoquic_packet_retry) {
-        picoquic_binlog_frame(f, bytes, bytes + bytes_max);
+        picoquic_binlog_frame(f, bytes + ph->offset, bytes + bytes_max);
     }
     else if (ph->ptype != picoquic_packet_error) {
         picoquic_binlog_frames(f, bytes + ph->offset, ph->payload_length);

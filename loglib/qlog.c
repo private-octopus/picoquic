@@ -33,6 +33,7 @@ typedef struct qlog_context_st {
 
     FILE * f_txtlog;      /*!< The file handle of the opened output file. */
 
+    uint32_t version_number;
     const char * cid_name; /*!< Name of the connection, default = initial connection id */
     struct sockaddr_storage addr_peer;
     struct sockaddr_storage addr_local;
@@ -41,6 +42,7 @@ typedef struct qlog_context_st {
     int event_count;
     int packet_count;
     int frame_count;
+    picoquic_packet_type_enum packet_type;
 
     int state;
 } qlog_context_t;
@@ -412,11 +414,23 @@ int qlog_packet_start(uint64_t time, uint64_t size, const picoquic_packet_header
         fprintf(f, "\n");
     }
 
-    fprintf(f, "[%"PRId64", \"TRANSPORT\", \"%s\", { \"packet_type\": \"%s\", \"header\": { \"packet_number\": \"%"PRIu64"\", \"packet_size\": %"PRIu64 ,
-        delta_time, (rxtx == 0)?"PACKET_SENT":"PACKET_RECEIVED", ptype2str(ph->ptype), ph->pn64, size);
+    fprintf(f, "[%"PRId64", \"TRANSPORT\", \"%s\", { \"packet_type\": \"%s\", \"header\": { \"packet_size\": %"PRIu64 ,
+        delta_time, (rxtx == 0)?"PACKET_SENT":"PACKET_RECEIVED", ptype2str(ph->ptype), size);
+
+    if (ph->ptype != picoquic_packet_version_negotiation &&
+        ph->ptype != picoquic_packet_retry) {
+        fprintf(f, ", \"packet_number\": %"PRIu64, ph->pn64);
+    }
 
     if (ph->ptype != picoquic_packet_1rtt_protected) {
-        fprintf(f, ", \"payload_length\": %zu", ph->payload_length);
+        if (ctx->version_number != ph->vn) {
+            fprintf(f, ", \"version\": \"%08x\"", ph->vn);
+            ctx->version_number = ph->vn;
+        }
+        if (ph->ptype != picoquic_packet_version_negotiation &&
+            ph->ptype != picoquic_packet_retry) {
+            fprintf(f, ", \"payload_length\": %zu", ph->payload_length);
+        }
     }
 
     if (ph->ptype != picoquic_packet_1rtt_protected && ph->srce_cnx_id.id_len > 0) {
@@ -431,7 +445,22 @@ int qlog_packet_start(uint64_t time, uint64_t size, const picoquic_packet_header
         fprintf(f, ", \"dcid\": \"%s\"", dcid_name);
     }
 
-    fprintf(f, " }, \"frames\": [");
+    if (ph->ptype == picoquic_packet_initial && ph->token_length > 0) {
+        bytestream token;
+        bytestream_ref_init(&token, ph->token_bytes, ph->token_length);
+        fprintf(f, ", \"token\": ");
+        qlog_string(f, &token, ph->token_length);
+    }
+
+    ctx->packet_type = ph->ptype;
+
+    if (ctx->packet_type == picoquic_packet_version_negotiation ||
+        ctx->packet_type == picoquic_packet_retry) {
+        fprintf(f, " }");
+    }
+    else {
+        fprintf(f, " }, \"frames\": [");
+    }
 
     ctx->frame_count = 0;
     return 0;
@@ -687,10 +716,46 @@ void qlog_ack_frame(uint64_t ftype, FILE * f, bytestream* s)
     }
 }
 
+int qlog_proposed_versions(FILE* f, bytestream* s)
+{
+    int nb_versions = 0;
+    fprintf(f, ",\n    \"proposed_versions\": [");
+
+    while (bytestream_remain(s) > 0) {
+        if (nb_versions > 0) {
+            fprintf(f, ", ");
+        }
+        qlog_string(f, s, 4);
+        nb_versions++;
+    }
+    fprintf(f, "]");
+    return 0;
+}
+
+int qlog_retry_token(FILE* f, bytestream* s)
+{
+    size_t l = bytestream_remain(s);
+
+    if (l > 0) {
+        fprintf(f, ",\n    \"retry_token\": ");
+        qlog_string(f, s, l);
+    }
+    return 0;
+}
+
+
+
 int qlog_packet_frame(bytestream * s, void * ptr)
 {
     qlog_context_t * ctx = (qlog_context_t*)ptr;
     FILE * f = ctx->f_txtlog;
+
+    if (ctx->packet_type == picoquic_packet_version_negotiation) {
+        return qlog_proposed_versions(f, s);
+    }
+    else if (ctx->packet_type == picoquic_packet_retry) {
+        return qlog_retry_token(f, s);
+    }
 
     if (ctx->frame_count != 0) {
         fprintf(f, ", ");
@@ -798,7 +863,14 @@ int qlog_packet_end(void * ptr)
 {
     qlog_context_t * ctx = (qlog_context_t*)ptr;
     FILE * f = ctx->f_txtlog;
-    fprintf(f, "]}]");
+
+    if (ctx->packet_type == picoquic_packet_version_negotiation ||
+        ctx->packet_type == picoquic_packet_retry) {
+        fprintf(f, "}]");
+    }
+    else {
+        fprintf(f, "]}]");
+    }
     ctx->packet_count++; 
     ctx->event_count++;
     return 0;
@@ -813,6 +885,7 @@ int qlog_connection_start(uint64_t time, const picoquic_connection_id_t * cid, i
     ctx->start_time = time;
     ctx->packet_count = 0;
     ctx->event_count = 0;
+    ctx->version_number = 0;
     memset(&ctx->addr_peer, 0, sizeof(struct sockaddr_storage));
     memset(&ctx->addr_local, 0, sizeof(struct sockaddr_storage));
 

@@ -220,11 +220,17 @@ static int byteread_packet_header(bytestream * s, picoquic_packet_header * ph)
         ptype != picoquic_packet_version_negotiation) {
         byteread_int32(s, &ph->vn);
     }
+    else {
+        ph->vn = 0;
+    }
+
+    ph->token_length = 0;
+    ph->token_bytes = NULL;
 
     if (ptype == picoquic_packet_initial) {
-        size_t token_length = 0;
-        byteread_vlen(s, &token_length);
-        bytestream_skip(s, token_length);
+        byteread_vlen(s, &ph->token_length);
+        ph->token_bytes = s->data + s->ptr;
+        bytestream_skip(s, ph->token_length);
     }
 
     return ret;

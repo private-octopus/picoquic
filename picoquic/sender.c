@@ -3950,7 +3950,6 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
             (void)picoquic_store_addr(&addr_from_log, (struct sockaddr*) & cnx->path[path_id]->local_addr);
         }
 
-
         if (p_addr_to != NULL && to_len != NULL) {
             *to_len = picoquic_store_addr(p_addr_to, (struct sockaddr *)&cnx->path[path_id]->peer_addr);
         }
