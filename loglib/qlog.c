@@ -45,6 +45,53 @@ typedef struct qlog_context_st {
     int state;
 } qlog_context_t;
 
+int qlog_string(FILE* f, bytestream* s, uint64_t l)
+{
+    uint64_t x;
+    int error_found = (s->ptr + (size_t)l > s->size);
+
+    fprintf(f, "\"");
+
+    for (x = 0; x < l && s->ptr < s->size; x++) {
+        fprintf(f, "%02x", s->data[s->ptr++]);
+    }
+
+    if (error_found) {
+        fprintf(f, "... coding error!");
+    }
+
+    fprintf(f, "\"");
+    return (error_found) ? -1 : 0;
+}
+
+int qlog_chars(FILE* f, bytestream* s, uint64_t l)
+{
+    uint64_t x;
+    int error_found = (s->ptr + (size_t)l > s->size);
+
+    fprintf(f, "\"");
+
+    for (x = 0; x < l && s->ptr < s->size; x++) {
+        int c = s->data[s->ptr++];
+        if (c == '"' || c == '\\') {
+            fprintf(f, "\\%c", c);
+        }
+        else if (c >= ' ' && c < 127) {
+            fprintf(f, "%c", c);
+        }
+        else {
+            fprintf(f, "\\%02x", c);
+        }
+    }
+
+    if (error_found) {
+        fprintf(f, "... coding error!");
+    }
+
+    fprintf(f, "\"");
+    return (error_found) ? -1 : 0;
+}
+
 static void qlog_log_addr(FILE* f, struct sockaddr* addr_peer)
 {
     if (addr_peer->sa_family == AF_INET) {
@@ -74,6 +121,184 @@ static void qlog_log_addr(FILE* f, struct sockaddr* addr_peer)
         }
         fprintf(f, "\" \"port_v6\" :%d", ntohs(s6->sin6_port));
     }
+}
+
+void qlog_vint_transport_extension(FILE* f, char const* ext_name, bytestream* s, size_t len)
+{
+    uint64_t val;
+    size_t current_ptr = s->ptr;
+    int ret = byteread_vint(s, &val);
+
+    fprintf(f, "\"%s\" : ", ext_name);
+    if (ret != 0 || current_ptr + len != s->ptr) {
+        s->ptr = current_ptr;
+        qlog_string(f, s, len);
+    }
+    else {
+        fprintf(f, "%" PRIu64, val);
+    }
+}
+
+void qlog_boolean_transport_extension(FILE* f, char const* ext_name, bytestream* s, size_t len)
+{
+    fprintf(f, "\"%s\" : ", ext_name);
+    if (len != 0) {
+        qlog_string(f, s, len);
+    }
+    else {
+        fprintf(f, "\"\"");
+    }
+}
+
+int qlog_transport_extensions(FILE* f, bytestream* s, size_t tp_length)
+{
+    int ret = 0;
+    size_t ptr_max = s->ptr + tp_length;
+
+    if (ptr_max < s->size) {
+        fprintf(f, ",\n    \"transport_parameter_length\": %zu", tp_length);
+        fprintf(f, ",\n    \"bytes_available\": %zu" PRIu64, s->size - s->ptr);
+    } else {
+        while (ret == 0 && s->ptr < ptr_max) {
+            uint64_t extension_type = UINT64_MAX;
+            uint64_t extension_length = 0;
+            size_t current_ptr = s->ptr;
+
+
+            ret |= byteread_vint(s, &extension_type);
+            ret |= byteread_vint(s, &extension_length);
+
+            fprintf(f, ",\n    ");
+
+            if (ret != 0 || bytestream_remain(s) < extension_length) {
+                size_t len = bytestream_remain(s);
+                ret = -1;
+                s->ptr = current_ptr;
+                /* Print invalid parameter there */
+                fprintf(f, "\"Parameter_coding_error\": ");
+                qlog_string(f, s, len);
+                break;
+            }
+            else {
+                switch (extension_type) {
+                case picoquic_tp_initial_max_stream_data_bidi_local:
+                    qlog_vint_transport_extension(f, "initial_max_stream_data_bidi_local", s, extension_length);
+                    break;
+                case picoquic_tp_initial_max_stream_data_bidi_remote:
+                    qlog_vint_transport_extension(f, "initial_max_stream_data_bidi_remote", s, extension_length);
+                    break;
+                case picoquic_tp_initial_max_stream_data_uni:
+                    qlog_vint_transport_extension(f, "initial_max_stream_data_uni", s, extension_length);
+                    break;
+                case picoquic_tp_initial_max_data:
+                    qlog_vint_transport_extension(f, "initial_max_data", s, extension_length);
+                    break;
+                case picoquic_tp_initial_max_streams_bidi:
+                    qlog_vint_transport_extension(f, "initial_max_streams_bidi", s, extension_length);
+                    break;
+                case picoquic_tp_idle_timeout:
+                    qlog_vint_transport_extension(f, "idle_timeout", s, extension_length);
+                    break;
+                case picoquic_tp_max_packet_size:
+                    qlog_vint_transport_extension(f, "max_packet_size", s, extension_length);
+                    break;
+                case picoquic_tp_stateless_reset_token:
+                    fprintf(f, "\"stateless_reset_token\": ");
+                    qlog_string(f, s, extension_length);
+                    break;
+                case picoquic_tp_ack_delay_exponent:
+                    qlog_vint_transport_extension(f, "ack_delay_exponent", s, extension_length);
+                    break;
+                case picoquic_tp_initial_max_streams_uni:
+                    qlog_vint_transport_extension(f, "initial_max_streams_uni", s, extension_length);
+                    break;
+                case picoquic_tp_server_preferred_address:
+                    fprintf(f, "\"server_preferred_address\": ");
+                    qlog_string(f, s, extension_length);
+                    break;
+                case picoquic_tp_disable_migration:
+                    qlog_boolean_transport_extension(f, "disable_migration", s, extension_length);
+                    break;
+                case picoquic_tp_max_ack_delay:
+                    qlog_vint_transport_extension(f, "max_ack_delay", s, extension_length);
+                    break;
+                case picoquic_tp_original_connection_id:
+                    fprintf(f, "\"original_connection_id\": ");
+                    qlog_string(f, s, extension_length);
+                    break;
+                case picoquic_tp_active_connection_id_limit:
+                    qlog_vint_transport_extension(f, "active_connection_id_limit", s, extension_length);
+                    break;
+                case picoquic_tp_max_datagram_size:
+                    qlog_vint_transport_extension(f, "max_datagram_size", s, extension_length);
+                    break;
+                case picoquic_tp_enable_loss_bit:
+                    qlog_vint_transport_extension(f, "enable_loss_bit", s, extension_length);
+                    break;
+                case picoquic_tp_min_ack_delay:
+                    qlog_vint_transport_extension(f, "min_ack_delay", s, extension_length);
+                    break;
+                case picoquic_tp_enable_time_stamp:
+                    qlog_boolean_transport_extension(f, "enable_time_stamp", s, extension_length);
+                    break;
+                default:
+                    /* dump unknown extensions */
+                    fprintf(f, "\"%" PRIx64 "\": ", extension_type);
+                    qlog_string(f, s, extension_length);
+                    break;
+                }
+            }
+        }
+    }
+
+    return ret;
+}
+
+int qlog_param_update(uint64_t time, bytestream* s, void* ptr)
+{
+    qlog_context_t* ctx = (qlog_context_t*)ptr;
+    int64_t delta_time = time - ctx->start_time;
+    FILE* f = ctx->f_txtlog;
+    uint64_t owner = 0;
+    uint64_t sni_length = 0;
+    uint64_t alpn_length = 0;
+    uint64_t tp_length = 0;
+    int ret = 0;
+
+    ret |= byteread_vint(s, &owner);
+
+    if (ctx->event_count != 0) {
+        fprintf(f, ",\n");
+    }
+    else {
+        fprintf(f, "\n");
+    }
+
+    ret |= byteread_vint(s, &sni_length);
+    fprintf(f, "[%"PRId64", \"TRANSPORT\", \"parameters_set\", {\n    \"owner\": \"%s\"",
+        delta_time, (owner)?"local":"remote");
+    if (sni_length > 0) {
+        fprintf(f, ",\n    \"sni\": ");
+        ret |= qlog_chars(f, s, sni_length);
+    }
+
+    ret |= byteread_vint(s, &alpn_length);
+    if (alpn_length > 0) {
+        fprintf(f, ",\n    \"alpn\": ");
+        qlog_chars(f, s, alpn_length);
+    }
+
+    ret |= byteread_vint(s, &tp_length);
+
+    if (tp_length > 0) {
+        qlog_transport_extensions(f, s, tp_length);
+    }
+    
+    fprintf(f, "}]");
+
+    ctx->event_count++;
+
+    return 0;
 }
 
 int qlog_pdu(uint64_t time, int rxtx, bytestream* s, void * ptr)
@@ -157,24 +382,6 @@ int qlog_packet_start(uint64_t time, uint64_t size, const picoquic_packet_header
 
     ctx->frame_count = 0;
     return 0;
-}
-
-void qlog_string(FILE* f, bytestream* s, uint64_t l)
-{
-    uint64_t x;
-    int error_found = (s->ptr + (size_t)l > s->size);
-
-    fprintf(f, "\"");
-
-    for (x = 0; x < l && s->ptr < s->size; x++) {
-        fprintf(f, "%02x", s->data[s->ptr++]);
-    }
-
-    if (error_found) {
-        fprintf(f, "... coding error!");
-    }
-
-    fprintf(f, "\"");
 }
 
 void qlog_time_stamp_frame(FILE* f, bytestream* s)
@@ -611,6 +818,7 @@ int qlog_convert(const picoquic_connection_id_t* cid, FILE* f_binlog, const char
         binlog_convert_cb_t ctx;
         ctx.connection_start = qlog_connection_start;
         ctx.connection_end = qlog_connection_end;
+        ctx.param_update = qlog_param_update;
         ctx.pdu = qlog_pdu;
         ctx.packet_start = qlog_packet_start;
         ctx.packet_frame = qlog_packet_frame;

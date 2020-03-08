@@ -65,7 +65,9 @@ void binlog_outgoing_packet(FILE * f, picoquic_cnx_t* cnx,
     uint8_t* send_buffer, size_t send_length, uint64_t current_time);
 
 /* binary alternative to picoquic_log_transport_extension() */
-void binlog_transport_extension(FILE * f, picoquic_cnx_t * cnx);
+void binlog_transport_extension(FILE * f, picoquic_cnx_t * cnx, int is_local,
+    uint8_t const* sni, size_t sni_len, uint8_t const* alpn, size_t alpn_len,
+    size_t param_length, uint8_t* params);
 
 /* binary alternative to picoquic_log_tls_ticket() */
 void binlog_picotls_ticket(FILE* f, picoquic_connection_id_t cnx_id,

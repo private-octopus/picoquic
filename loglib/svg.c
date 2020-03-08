@@ -49,6 +49,14 @@ int svg_pdu(uint64_t time, int rxtx, bytestream* s, void * ptr)
     return 0;
 }
 
+int svg_param_update(uint64_t time, bytestream* s, void* ptr)
+{
+    (void)time;
+    (void)s;
+    (void)ptr;
+    return 0;
+}
+
 int svg_connection_start(uint64_t time, const picoquic_connection_id_t * cid, int client_mode,
     uint32_t proposed_version, const picoquic_connection_id_t * remote_cnxid, void * ptr)
 {

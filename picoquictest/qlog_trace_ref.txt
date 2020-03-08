@@ -8,6 +8,39 @@
 [0, "TRANSPORT", "PACKET_RECEIVED", { "packet_type": "initial", "header": { "packet_number": "0", "packet_size": 1252, "payload_length": 1206, "scid": "0203040506070809", "dcid": "0102030405060708" }, "frames": [{ 
     "frame_type": "crypto", "offset": 0, "length": 301}, { 
     "frame_type": "padding"}]}],
+[0, "TRANSPORT", "parameters_set", {
+    "owner": "remote",
+    "sni": "test.example.com",
+    "alpn": "picoquic-test"}],
+[0, "TRANSPORT", "parameters_set", {
+    "owner": "remote",
+    "initial_max_stream_data_bidi_local" : 2097152,
+    "initial_max_data" : 1048576,
+    "initial_max_streams_bidi" : 513,
+    "idle_timeout" : 15000,
+    "max_packet_size" : 1440,
+    "initial_max_streams_uni" : 513,
+    "initial_max_stream_data_bidi_remote" : 65635,
+    "initial_max_stream_data_uni" : 65535,
+    "active_connection_id_limit" : 8,
+    "max_ack_delay" : 10,
+    "enable_loss_bit" : 1,
+    "min_ack_delay" : 1000}],
+[0, "TRANSPORT", "parameters_set", {
+    "owner": "local",
+    "initial_max_stream_data_bidi_local" : 2097152,
+    "initial_max_data" : 1048576,
+    "initial_max_streams_bidi" : 513,
+    "idle_timeout" : 15000,
+    "max_packet_size" : 1440,
+    "stateless_reset_token": "230e17ae186336770e58ec2e8cd5470e",
+    "initial_max_streams_uni" : 513,
+    "initial_max_stream_data_bidi_remote" : 65635,
+    "initial_max_stream_data_uni" : 65535,
+    "active_connection_id_limit" : 8,
+    "max_ack_delay" : 10,
+    "enable_loss_bit" : 1,
+    "min_ack_delay" : 1000}],
 [0, "TRANSPORT", "PACKET_SENT", { "packet_type": "initial", "header": { "packet_number": "0", "packet_size": 194, "payload_length": 164, "scid": "030405060708090a", "dcid": "0203040506070809" }, "frames": [{ 
     "frame_type": "ack", "ack_delay": 0, "acked_ranges": [[0, 0]]}, { 
     "frame_type": "crypto", "offset": 0, "length": 155}]}],

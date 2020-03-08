@@ -499,7 +499,6 @@ void picoquic_binlog_frames(FILE * f, const uint8_t* bytes, size_t length)
     }
 }
 
-
 void binlog_pdu(FILE* f, const picoquic_connection_id_t* cid, int receiving, uint64_t current_time,
     const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length)
 {
@@ -628,28 +627,29 @@ void binlog_outgoing_packet(FILE * f, picoquic_cnx_t* cnx,
     binlog_packet(f, cnxid, 0, current_time, &ph, bytes, length);
 }
 
-void binlog_transport_extension(FILE * f, picoquic_cnx_t* cnx)
+void binlog_transport_extension(FILE * f, picoquic_cnx_t* cnx, int is_local,
+    uint8_t const * sni, size_t sni_len, uint8_t const* alpn, size_t alpn_len,
+    size_t param_length, uint8_t * params)
 {
-    char const* sni = picoquic_tls_get_sni(cnx);
-    char const* alpn = picoquic_tls_get_negotiated_alpn(cnx);
-
-    uint8_t* bytes = NULL;
-    size_t bytes_max = 0;
-    int ext_received_return = 0;
-    int client_mode = 1;
-    picoquic_provide_received_transport_extensions(cnx,
-        &bytes, &bytes_max, &ext_received_return, &client_mode);
-
     bytestream_buf stream_msg;
     bytestream* msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
     bytewrite_cid(msg, &cnx->initial_cnxid);
-    bytewrite_vint(msg, 0);
+    bytewrite_vint(msg, picoquic_get_quic_time(cnx->quic));
     bytewrite_vint(msg, picoquic_log_event_param_update);
 
-    bytewrite_cstr(msg, sni);
-    bytewrite_cstr(msg, alpn);
-    bytewrite_vint(msg, bytes_max);
-    bytewrite_buffer(msg, bytes, bytes_max);
+    bytewrite_vint(msg, is_local);
+    bytewrite_vint(msg, sni_len);
+    if (sni_len > 0) {
+        bytewrite_buffer(msg, sni, sni_len);
+    }
+    bytewrite_vint(msg, alpn_len);
+    if (alpn_len > 0) {
+        bytewrite_buffer(msg, alpn, alpn_len);
+    }
+    bytewrite_vint(msg, param_length);
+    if (param_length > 0) {
+        bytewrite_buffer(msg, params, param_length);
+    }
 
     bytestream_buf stream_head;
     bytestream* head = bytestream_buf_init(&stream_head, 4);

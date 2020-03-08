@@ -87,7 +87,8 @@ static int binlog_convert_event(bytestream * s, void * ptr)
     uint64_t id = 0;
     ret |= byteread_vint(s, &id);
 
-    if (id == picoquic_log_event_new_connection) {
+    switch (id) {
+    case picoquic_log_event_new_connection: {
 
         uint8_t client_mode = 0;
         ret |= byteread_int8(s, &client_mode);
@@ -101,21 +102,24 @@ static int binlog_convert_event(bytestream * s, void * ptr)
         if (ret == 0) {
             ret |= ctx->callbacks->connection_start(time, &cid, client_mode, proposed_version, &remote_cnxid, cbptr);
         }
+        break;
     }
-
-    if (id == picoquic_log_event_connection_close) {
+    case picoquic_log_event_connection_close: {
         if (ret == 0) {
             ret |= ctx->callbacks->connection_end(time, cbptr);
         }
-    }
-
-    if (id == picoquic_log_event_pdu_recv || id == picoquic_log_event_pdu_sent) {
+        break;
+    } 
+    case picoquic_log_event_pdu_recv:
+    case picoquic_log_event_pdu_sent:
+    {
         int rxtx = id == picoquic_log_event_pdu_recv;
         ret |= ctx->callbacks->pdu(time, rxtx, s, cbptr);
+        break;
     }
-
-    if (id == picoquic_log_event_packet_recv || id == picoquic_log_event_packet_sent) {
-
+    case picoquic_log_event_packet_recv:
+    case picoquic_log_event_packet_sent:
+    {
         int rxtx = id == picoquic_log_event_packet_recv;
 
         uint64_t packet_length = 0;
@@ -147,6 +151,17 @@ static int binlog_convert_event(bytestream * s, void * ptr)
         if (ret == 0) {
             ret = ctx->callbacks->packet_end(cbptr);
         }
+
+        break;
+    }
+    case picoquic_log_event_param_update:
+        if (ret == 0) {
+            ret = ctx->callbacks->param_update(time, s, cbptr);
+        }
+        break;
+    default:
+        /* This event is ignored for now */
+        break;
     }
 
     return ret;
