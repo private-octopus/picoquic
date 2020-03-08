@@ -25,6 +25,7 @@
 #include "logwriter.h"
 #include "bytestream.h"
 #include "tls_api.h"
+#include "picotls.h"
 
 #define VARINT_LEN(bytes) ((size_t)1 << (((bytes)[0] & 0xC0) >> 6))
 
@@ -629,6 +630,7 @@ void binlog_outgoing_packet(FILE * f, picoquic_cnx_t* cnx,
 
 void binlog_transport_extension(FILE * f, picoquic_cnx_t* cnx, int is_local,
     uint8_t const * sni, size_t sni_len, uint8_t const* alpn, size_t alpn_len,
+    const ptls_iovec_t* alpn_list, size_t alpn_count,
     size_t param_length, uint8_t * params)
 {
     bytestream_buf stream_msg;
@@ -642,10 +644,20 @@ void binlog_transport_extension(FILE * f, picoquic_cnx_t* cnx, int is_local,
     if (sni_len > 0) {
         bytewrite_buffer(msg, sni, sni_len);
     }
+
+    bytewrite_vint(msg, alpn_count);
+    if (alpn_count > 0) {
+        for (size_t i = 0; i < alpn_count; i++) {
+            bytewrite_vint(msg, alpn_list[i].len);
+            bytewrite_buffer(msg, alpn_list[i].base, alpn_list[i].len);
+        }
+    }
+
     bytewrite_vint(msg, alpn_len);
     if (alpn_len > 0) {
         bytewrite_buffer(msg, alpn, alpn_len);
     }
+
     bytewrite_vint(msg, param_length);
     if (param_length > 0) {
         bytewrite_buffer(msg, params, param_length);

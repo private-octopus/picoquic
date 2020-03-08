@@ -438,11 +438,13 @@ int picoquic_client_hello_call_back(ptls_on_client_hello_t* on_hello_cb_ctx,
 
     if (quic->f_binlog != NULL) {
         binlog_transport_extension(quic->f_binlog, quic->cnx_in_progress, 
-            0, params->server_name.base, params->server_name.len, alpn_found, alpn_found_length, 0, NULL);
+            0, params->server_name.base, params->server_name.len, alpn_found, alpn_found_length, 
+            params->negotiated_protocols.list, params->negotiated_protocols.count,
+            0, NULL);
     }
 
     /* ALPN is mandatory in Quic. Return an error if no match found. */
-    if (alpn_found == 0) {
+    if (alpn_found == NULL) {
         ret = PTLS_ALERT_NO_APPLICATION_PROTOCOL;
     }
 
@@ -1595,6 +1597,13 @@ int picoquic_initialize_tls_stream(picoquic_cnx_t* cnx, uint64_t current_time)
     if (cnx->quic->F_log != NULL) {
         picoquic_log_negotiated_alpn(cnx->quic->F_log, cnx, 0, 1, ctx->handshake_properties.client.negotiated_protocols.list, ctx->handshake_properties.client.negotiated_protocols.count);
     }
+    if (cnx->quic->f_binlog != NULL) {
+        binlog_transport_extension(cnx->quic->f_binlog, cnx,
+            1, (const uint8_t *)cnx->sni, strlen(cnx->sni), NULL, 0,
+            ctx->handshake_properties.client.negotiated_protocols.list, 
+            ctx->handshake_properties.client.negotiated_protocols.count,
+            0, NULL);
+    }
 
     /* No resumption if no alpn specified upfront, because it would make the negotiation and
      * the handling of 0-RTT way too messy */
@@ -1897,6 +1906,11 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
 
                         if (alpn != NULL){
                             cnx->alpn = picoquic_string_duplicate(alpn);
+
+                            if (cnx->quic->f_binlog != NULL) {
+                                binlog_transport_extension(cnx->quic->f_binlog, cnx, 0, NULL, 0, 
+                                    (const uint8_t *)alpn, strlen(alpn), NULL, 0, 0, NULL);
+                            }
 
                             if (cnx->callback_fn != NULL) {
                                 cnx->callback_fn(cnx, 0, (uint8_t*)alpn, 0, picoquic_callback_set_alpn, cnx->callback_ctx, NULL);

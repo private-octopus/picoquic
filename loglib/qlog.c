@@ -106,7 +106,7 @@ static void qlog_log_addr(FILE* f, struct sockaddr* addr_peer)
         struct sockaddr_in6* s6 = (struct sockaddr_in6*)addr_peer;
         uint8_t* addr = (uint8_t*)&s6->sin6_addr;
 
-        fprintf(f, "{ \"ip_v6\": \"");
+        fprintf(f, " \"ip_v6\": \"");
         for (int i = 0; i < 8; i++) {
             if (i != 0) {
                 fprintf(f, ":");
@@ -119,7 +119,7 @@ static void qlog_log_addr(FILE* f, struct sockaddr* addr_peer)
                 fprintf(f, "%x", addr[(2 * i) + 1]);
             }
         }
-        fprintf(f, "\" \"port_v6\" :%d", ntohs(s6->sin6_port));
+        fprintf(f, "\", \"port_v6\" :%d", ntohs(s6->sin6_port));
     }
 }
 
@@ -148,6 +148,41 @@ void qlog_boolean_transport_extension(FILE* f, char const* ext_name, bytestream*
     else {
         fprintf(f, "\"\"");
     }
+}
+
+void qlog_preferred_address(FILE* f, bytestream* s, size_t len)
+{
+    uint16_t port4 =0;
+    uint16_t port6 = 0;
+    uint8_t cid_len;
+    size_t old_size = s->size;
+
+    s->size = s->ptr + len;
+
+    fprintf(f, "\"ip_v4\": \"");
+    for (int i = 0; i < 4 && s->ptr < s->size; i++, s->ptr++) {
+        fprintf(f, "%s%d", (i == 0) ? "" : ".", s->data[s->ptr]);
+    }
+    byteread_int16(s, &port4);
+    fprintf(f, "\", \"port_v4\":%d", port4);
+    fprintf(f, ", \"ip_v6\": \"");
+    for (int i = 0; i < 8; i++) {
+        uint16_t chunk = 0;
+        byteread_int16(s, &chunk);
+        fprintf(f, "%s%x", (i == 0) ? "" : ":", chunk);
+    }
+    byteread_int16(s, &port6);
+    fprintf(f, "\", \"port_v6\" : %d", port6);
+    byteread_int8(s, &cid_len);
+    fprintf(f, ", \"connection_id\": ");
+    qlog_string(f, s, cid_len);
+    fprintf(f, ", \"stateless_reset_token\": ");
+    qlog_string(f, s, 16);
+    if (s->ptr < s->size) {
+        fprintf(f, "\", \"extra_bytes\": ");
+        qlog_string(f, s, bytestream_remain(s));
+    }
+    s->size = old_size;
 }
 
 int qlog_transport_extensions(FILE* f, bytestream* s, size_t tp_length)
@@ -212,9 +247,10 @@ int qlog_transport_extensions(FILE* f, bytestream* s, size_t tp_length)
                 case picoquic_tp_initial_max_streams_uni:
                     qlog_vint_transport_extension(f, "initial_max_streams_uni", s, extension_length);
                     break;
-                case picoquic_tp_server_preferred_address:
-                    fprintf(f, "\"server_preferred_address\": ");
-                    qlog_string(f, s, extension_length);
+                case picoquic_tp_server_preferred_address: 
+                    fprintf(f, "\"server_preferred_address\": {"); 
+                    qlog_preferred_address(f, s, extension_length);
+                    fprintf(f, "}");
                     break;
                 case picoquic_tp_disable_migration:
                     qlog_boolean_transport_extension(f, "disable_migration", s, extension_length);
@@ -263,6 +299,7 @@ int qlog_param_update(uint64_t time, bytestream* s, void* ptr)
     uint64_t sni_length = 0;
     uint64_t alpn_length = 0;
     uint64_t tp_length = 0;
+    uint64_t alpn_count = 0;
     int ret = 0;
 
     ret |= byteread_vint(s, &owner);
@@ -281,6 +318,22 @@ int qlog_param_update(uint64_t time, bytestream* s, void* ptr)
         fprintf(f, ",\n    \"sni\": ");
         ret |= qlog_chars(f, s, sni_length);
     }
+
+    ret |= byteread_vint(s, &alpn_count);
+    if (ret == 0 && alpn_count > 0) {
+        fprintf(f, ",\n    \"proposed_alpn\": [");
+
+        for (size_t i = 0; i < alpn_count; i++) {
+            uint64_t len;
+            if (i != 0) {
+                fprintf(f, ", ");
+            }
+            ret |= byteread_vint(s, &len);
+            ret |= qlog_chars(f, s, len);
+        }
+        fprintf(f, "]");
+    }
+
 
     ret |= byteread_vint(s, &alpn_length);
     if (alpn_length > 0) {

@@ -11,6 +11,7 @@
 [0, "TRANSPORT", "parameters_set", {
     "owner": "remote",
     "sni": "test.example.com",
+    "proposed_alpn": ["picoquic-test"],
     "alpn": "picoquic-test"}],
 [0, "TRANSPORT", "parameters_set", {
     "owner": "remote",
