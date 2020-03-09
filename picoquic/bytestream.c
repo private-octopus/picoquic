@@ -398,7 +398,7 @@ int bytewrite_addr(bytestream* s, const struct sockaddr* addr)
     return ret;
 }
 
-int byteread_addr(bytestream* s, struct sockaddr* addr)
+int byteread_addr(bytestream* s, struct sockaddr_storage * addr)
 {
     uint64_t family = 0;
     int ret = byteread_vint(s, &family);

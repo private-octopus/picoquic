@@ -43,10 +43,12 @@ typedef struct binlog_convert_cb_st {
 
     int (*connection_start)(uint64_t time, const picoquic_connection_id_t * cid, int client_mode,
         uint32_t proposed_version, const picoquic_connection_id_t * remote_cnxid, void * cbptr);
-    int (*pdu)(uint64_t time, int rxtx, void * ptr);
+    int(*param_update)(uint64_t time, bytestream* s, void* ptr);
+    int (*pdu)(uint64_t time, int rxtx, bytestream* s, void * ptr);
     int (*packet_start)(uint64_t time, uint64_t size, const picoquic_packet_header * ph, int rxtx, void * ptr);
     int (*packet_frame)(bytestream * s, void * ptr);
     int (*packet_end)(void * ptr);
+    int (*packet_lost)(uint64_t time, bytestream* s, void* ptr);
     int (*connection_end)(uint64_t time, void * ptr);
 
     /*! Caller provided context pointer that is passed through to the callbacks */
