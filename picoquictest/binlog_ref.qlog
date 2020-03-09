@@ -4,7 +4,7 @@
 "configuration": {"time_units": "us"},
 "common_fields": { "protocol_type": "QUIC_HTTP3", "reference_time": "0"},
 "events": [
-[0, "TRANSPORT", "PACKET_SENT", { "packet_type": "1rtt", "header": { "packet_size": 3, "packet_number": 0, "dcid": "01020304", "key_phase": 0 }, "frames": [{ 
+[0, "TRANSPORT", "PACKET_SENT", { "packet_type": "1rtt", "header": { "packet_size": 3, "packet_number": 0, "dcid": "01020304", "key_phase": 0, "spin": 0 }, "frames": [{ 
     "frame_type": "padding"}]}],
 [0, "TRANSPORT", "PACKET_SENT", { "packet_type": "1rtt", "header": { "packet_size": 4, "packet_number": 1, "dcid": "01020304" }, "frames": [{ 
     "frame_type": "reset_stream", "stream_id": 17, "error_code": 1, "final_size": 1}]}],

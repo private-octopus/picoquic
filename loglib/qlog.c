@@ -47,6 +47,8 @@ typedef struct qlog_context_st {
     unsigned int key_phase_sent : 1;
     unsigned int key_phase_received_last : 1;
     unsigned int key_phase_received : 1;
+    unsigned int spin_bit_sent_last : 1;
+    unsigned int spin_bit_sent : 1;
 
 
     int state;
@@ -506,10 +508,14 @@ int qlog_packet_start(uint64_t time, uint64_t size, const picoquic_packet_header
 
     if (ph->ptype == picoquic_packet_1rtt_protected) {
         int need_key_phase = 0;
+        int need_spin = 0;
         if (rxtx == 0) {
             need_key_phase = !ctx->key_phase_sent || (ctx->key_phase_sent_last != ph->key_phase);
             ctx->key_phase_sent = 1;
             ctx->key_phase_sent_last = ph->key_phase;
+            need_spin = !ctx->spin_bit_sent || (ctx->spin_bit_sent_last != ph->spin);
+            ctx->spin_bit_sent = 1;
+            ctx->spin_bit_sent_last = ph->spin;
         }
         else {
             need_key_phase = !ctx->key_phase_received || (ctx->key_phase_received_last != ph->key_phase);
@@ -518,6 +524,9 @@ int qlog_packet_start(uint64_t time, uint64_t size, const picoquic_packet_header
         }
         if (need_key_phase) {
             fprintf(f, ", \"key_phase\": %d", ph->key_phase);
+        }
+        if (need_spin) {
+            fprintf(f, ", \"spin\": %d", ph->spin);
         }
     }
 
@@ -962,6 +971,8 @@ int qlog_connection_start(uint64_t time, const picoquic_connection_id_t * cid, i
     ctx->key_phase_sent = 0;
     ctx->key_phase_received_last = 0;
     ctx->key_phase_received = 0;
+    ctx->spin_bit_sent_last = 0;
+    ctx->spin_bit_sent = 0;
 
     fprintf(f, "{ \"qlog_version\": \"draft-00\", \"title\": \"picoquic\", \"traces\": [\n");
     fprintf(f, "{ \"vantage_point\": { \"name\": \"backend-67\", \"type\": \"%s\" },\n",
