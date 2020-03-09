@@ -801,20 +801,20 @@ int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_versi
             memset(&test_ctx->client_addr, 0, sizeof(struct sockaddr_in));
             test_ctx->client_addr.sin_family = AF_INET;
 #ifdef _WINDOWS
-            test_ctx->client_addr.sin_addr.S_un.S_addr = 0x0A000002;
+            test_ctx->client_addr.sin_addr.S_un.S_addr = htonl(0x0A000002);
 #else
-            test_ctx->client_addr.sin_addr.s_addr = 0x0A000002;
+            test_ctx->client_addr.sin_addr.s_addr = htonl(0x0A000002);
 #endif
-            test_ctx->client_addr.sin_port = 1234;
+            test_ctx->client_addr.sin_port = htons(1234);
 
             memset(&test_ctx->server_addr, 0, sizeof(struct sockaddr_in));
             test_ctx->server_addr.sin_family = AF_INET;
 #ifdef _WINDOWS
-            test_ctx->server_addr.sin_addr.S_un.S_addr = 0x0A000001;
+            test_ctx->server_addr.sin_addr.S_un.S_addr = htonl(0x0A000001);
 #else
-            test_ctx->server_addr.sin_addr.s_addr = 0x0A000001;
+            test_ctx->server_addr.sin_addr.s_addr = htonl(0x0A000001);
 #endif
-            test_ctx->server_addr.sin_port = 4321;
+            test_ctx->server_addr.sin_port = htons(4321);
 
             /* Test the creation of the client and server contexts */
             test_ctx->qclient = picoquic_create(8, NULL, NULL, test_server_cert_store_file, NULL, test_api_callback,
@@ -6305,7 +6305,7 @@ int qlog_trace_test()
             PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
 
         ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
-            test_scenario_q2_and_r2, sizeof(test_scenario_q2_and_r2), 0, 0, 0, 20000, 1000000);
+            test_scenario_q2_and_r2, sizeof(test_scenario_q2_and_r2), 0, 0x00004281, 0, 20000, 2000000);
     }
 
     /* Free the resource, which will close the log file.

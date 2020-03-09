@@ -24,7 +24,7 @@
 
 #include "picoquic_internal.h"
 
-#define BYTESTREAM_MAX_BUFFER_SIZE 2048
+#define BYTESTREAM_MAX_BUFFER_SIZE 2560
 
 typedef struct {
     uint8_t * data;
@@ -85,7 +85,7 @@ int byteread_cstr(bytestream* s, char* cstr, size_t max_len);
 int byteskip_cstr(bytestream* s);
 
 int bytewrite_addr(bytestream * s, const struct sockaddr * addr);
-int byteread_addr(bytestream * s, struct sockaddr * addr);
+int byteread_addr(bytestream * s, struct sockaddr_storage * addr);
 int byteskip_addr(bytestream * s);
 
 #endif /* PICOQUIC_BYTESTREAM_H */
