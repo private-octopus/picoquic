@@ -43,6 +43,11 @@ typedef struct qlog_context_st {
     int packet_count;
     int frame_count;
     picoquic_packet_type_enum packet_type;
+    unsigned int key_phase_sent_last : 1;
+    unsigned int key_phase_sent : 1;
+    unsigned int key_phase_received_last : 1;
+    unsigned int key_phase_received : 1;
+
 
     int state;
 } qlog_context_t;
@@ -499,6 +504,23 @@ int qlog_packet_start(uint64_t time, uint64_t size, const picoquic_packet_header
         qlog_string(f, &token, ph->token_length);
     }
 
+    if (ph->ptype == picoquic_packet_1rtt_protected) {
+        int need_key_phase = 0;
+        if (rxtx == 0) {
+            need_key_phase = !ctx->key_phase_sent || (ctx->key_phase_sent_last != ph->key_phase);
+            ctx->key_phase_sent = 1;
+            ctx->key_phase_sent_last = ph->key_phase;
+        }
+        else {
+            need_key_phase = !ctx->key_phase_received || (ctx->key_phase_received_last != ph->key_phase);
+            ctx->key_phase_received_last = ph->key_phase;
+            ctx->key_phase_received = 1;
+        }
+        if (need_key_phase) {
+            fprintf(f, ", \"key_phase\": %d", ph->key_phase);
+        }
+    }
+
     ctx->packet_type = ph->ptype;
 
     if (ctx->packet_type == picoquic_packet_version_negotiation ||
@@ -935,6 +957,11 @@ int qlog_connection_start(uint64_t time, const picoquic_connection_id_t * cid, i
     ctx->version_number = 0;
     memset(&ctx->addr_peer, 0, sizeof(struct sockaddr_storage));
     memset(&ctx->addr_local, 0, sizeof(struct sockaddr_storage));
+
+    ctx->key_phase_sent_last = 0;
+    ctx->key_phase_sent = 0;
+    ctx->key_phase_received_last = 0;
+    ctx->key_phase_received = 0;
 
     fprintf(f, "{ \"qlog_version\": \"draft-00\", \"title\": \"picoquic\", \"traces\": [\n");
     fprintf(f, "{ \"vantage_point\": { \"name\": \"backend-67\", \"type\": \"%s\" },\n",
