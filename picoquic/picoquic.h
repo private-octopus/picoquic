@@ -504,8 +504,8 @@ void picoquic_cnx_set_pmtud_required(picoquic_cnx_t* cnx, int is_pmtud_required)
 
 int picoquic_tls_is_psk_handshake(picoquic_cnx_t* cnx);
 
-void picoquic_get_peer_addr(picoquic_cnx_t* cnx, struct sockaddr** addr, int* addr_len);
-void picoquic_get_local_addr(picoquic_cnx_t* cnx, struct sockaddr** addr, int* addr_len);
+void picoquic_get_peer_addr(picoquic_cnx_t* cnx, struct sockaddr** addr);
+void picoquic_get_local_addr(picoquic_cnx_t* cnx, struct sockaddr** addr);
 unsigned long picoquic_get_local_if_index(picoquic_cnx_t* cnx);
 
 int picoquic_set_local_addr(picoquic_cnx_t* cnx, struct sockaddr* addr);
@@ -564,11 +564,11 @@ int picoquic_incoming_packet(
 
 int picoquic_prepare_next_packet(picoquic_quic_t* quic,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
-    struct sockaddr_storage* p_addr_to, int* to_len, struct sockaddr_storage* p_addr_from, int* from_len, int* if_index);
+    struct sockaddr_storage* p_addr_to, struct sockaddr_storage* p_addr_from, int* if_index);
 
 int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
-    struct sockaddr_storage* p_addr_to, int* to_len, struct sockaddr_storage* p_addr_from, int* from_len);
+    struct sockaddr_storage* p_addr_to, struct sockaddr_storage* p_addr_from);
 
 
 /* Associate stream with app context */

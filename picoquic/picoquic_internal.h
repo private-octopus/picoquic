@@ -664,9 +664,7 @@ typedef struct st_picoquic_path_t {
 
     /* Peer address. */
     struct sockaddr_storage peer_addr;
-    int peer_addr_len;
     struct sockaddr_storage local_addr;
-    int local_addr_len;
     unsigned long if_index_dest;
     /* Public reset secret, provisioned by the peer */
     uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE];
@@ -678,9 +676,7 @@ typedef struct st_picoquic_path_t {
     uint8_t challenge_repeat_count;
     /* Alternative address, used when validating NAT rebinding */
     struct sockaddr_storage alt_peer_addr;
-    int alt_peer_addr_len;
     struct sockaddr_storage alt_local_addr;
-    int alt_local_addr_len;
     unsigned long alt_if_index_dest;
     /* Challenge used for the NAT rebinding tests */
     uint64_t alt_challenge_response;
@@ -836,9 +832,7 @@ typedef struct st_picoquic_probe_t {
     uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE];
     /* Addresses with which the probe was sent */
     struct sockaddr_storage peer_addr;
-    int peer_addr_len;
     struct sockaddr_storage local_addr;
-    int local_addr_len;
     unsigned long if_index_dest;
     /* Challenge used by this probe */
     uint64_t challenge[PICOQUIC_CHALLENGE_REPEAT_MAX];

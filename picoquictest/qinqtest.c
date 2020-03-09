@@ -623,8 +623,6 @@ int picoqinq_test_sim_step(struct st_picoqinq_test_ctx_t* test_ctx)
     }
     else if (selected_ctx >= 0) {
         picoquictest_sim_packet_t* packet = picoquictest_sim_link_create_packet();
-        int peer_addr_len = 0;
-        int local_addr_len = 0;
 
         if (packet == NULL) {
             ret = -1;
@@ -636,10 +634,8 @@ int picoqinq_test_sim_step(struct st_picoqinq_test_ctx_t* test_ctx)
                 ret = -1;
             } else {
                 if (sp->length > 0) {
-                    memcpy(&packet->addr_from, &sp->addr_local,
-                        (sp->addr_local.ss_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
-                    memcpy(&packet->addr_to, &sp->addr_to,
-                        (sp->addr_to.ss_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6));
+                    picoquic_store_addr(&packet->addr_from, (struct sockaddr*) & sp->addr_local);
+                    picoquic_store_addr(&packet->addr_to, (struct sockaddr*) & sp->addr_to);
                     memcpy(packet->bytes, sp->bytes, sp->length);
                     packet->length = sp->length;
                 }
@@ -654,7 +650,7 @@ int picoqinq_test_sim_step(struct st_picoqinq_test_ctx_t* test_ctx)
 
             ret = picoquic_prepare_packet(test_ctx->qctx[selected_ctx]->cnx_wake_first, test_ctx->simulated_time,
                 packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length,
-                &packet->addr_to, &peer_addr_len, &packet->addr_from, &local_addr_len);
+                &packet->addr_to, &packet->addr_from);
             if (ret != 0)
             {
                 /* useless test, but makes it easier to add a breakpoint under debugger */
@@ -672,7 +668,7 @@ int picoqinq_test_sim_step(struct st_picoqinq_test_ctx_t* test_ctx)
         if (ret == 0 && packet->length > 0) {
              /* Verify that addresses are what we expect */
             int target_link = -1;
-            if (local_addr_len == 0) {
+            if (packet->addr_from.ss_family == 0) {
                 (void)picoquic_store_addr(&packet->addr_from, (struct sockaddr*) & test_ctx->addr_s[selected_ctx]);
             }
             else if (picoquic_compare_addr((struct sockaddr*) &packet->addr_from, (struct sockaddr*) & test_ctx->addr_s[selected_ctx]) != 0) {

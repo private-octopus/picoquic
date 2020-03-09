@@ -416,21 +416,28 @@ int picoquic_compare_addr(const struct sockaddr * expected, const struct sockadd
     return ret;
 }
 
-/* Copy a sockaddr to a storage value, and return the copied address length */
-int picoquic_store_addr(struct sockaddr_storage * stored_addr, const struct sockaddr * addr)
+int picoquic_addr_length(const struct sockaddr* addr)
 {
     int len = 0;
-    
-    if (addr != NULL && addr->sa_family != 0) {
-        len = (int)((addr->sa_family == AF_INET) ? sizeof(struct sockaddr_in) :
-            sizeof(struct sockaddr_in6));
-        memcpy(stored_addr, addr, len);
+    if (addr->sa_family == AF_INET) {
+        len = (int)sizeof(struct sockaddr_in);
+    } else if (addr->sa_family == AF_INET6) {
+        len = (int)sizeof(struct sockaddr_in6);
+    }
+    return len;
+}
+
+/* Copy a sockaddr to a storage value, and return the copied address length */
+void picoquic_store_addr(struct sockaddr_storage * stored_addr, const struct sockaddr * addr)
+{
+    int len = 0;
+
+    if (addr == NULL || (len = picoquic_addr_length(addr)) == 0) {
+        stored_addr->ss_family = 0;
     }
     else {
-        memset(stored_addr, 0, sizeof(struct sockaddr_storage));
+        memcpy(stored_addr, addr, len);
     }
-
-    return len;
 }
 
 /* Return a pointer to the IP address and IP length in a sockaddr */

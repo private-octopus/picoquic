@@ -1114,12 +1114,12 @@ int picoquic_select(SOCKET_TYPE* sockets,
 
 int picoquic_send_through_socket(
     SOCKET_TYPE fd,
-    struct sockaddr* addr_dest, socklen_t dest_length,
-    struct sockaddr* addr_from, socklen_t from_length, unsigned long from_if,
+    struct sockaddr* addr_dest,
+    struct sockaddr* addr_from, unsigned long from_if,
     const char* bytes, int length)
 {
-    int sent = picoquic_sendmsg(fd, addr_dest, dest_length,
-        addr_from, from_length, from_if, bytes, length);
+    int sent = picoquic_sendmsg(fd, addr_dest, picoquic_addr_length(addr_dest),
+        addr_from, picoquic_addr_length(addr_from), from_if, bytes, length);
 
 #ifndef DISABLE_DEBUG_PRINTF
     if (sent <= 0) {
@@ -1138,14 +1138,14 @@ int picoquic_send_through_socket(
 
 int picoquic_send_through_server_sockets(
     picoquic_server_sockets_t* sockets,
-    struct sockaddr* addr_dest, socklen_t dest_length,
-    struct sockaddr* addr_from, socklen_t from_length, unsigned long from_if,
+    struct sockaddr* addr_dest,
+    struct sockaddr* addr_from, unsigned long from_if,
     const char* bytes, int length)
 {
     /* Both Linux and Windows use separate sockets for V4 and V6 */
     int socket_index = (addr_dest->sa_family == AF_INET) ? 1 : 0;
 
-    return picoquic_send_through_socket(sockets->s_socket[socket_index], addr_dest, dest_length, addr_from, from_length, from_if, bytes, length);
+    return picoquic_send_through_socket(sockets->s_socket[socket_index], addr_dest, addr_from, from_if, bytes, length);
 }
 
 int picoquic_get_server_address(const char* ip_address_text, int server_port,
