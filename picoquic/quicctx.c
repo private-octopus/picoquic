@@ -965,8 +965,8 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, struct sockad
             cnx->path_sequence_next++;
 
             /* Set the addresses */
-            path_x->peer_addr_len = picoquic_store_addr(&path_x->peer_addr, peer_addr);
-            path_x->local_addr_len = picoquic_store_addr(&path_x->local_addr, local_addr);
+            picoquic_store_addr(&path_x->peer_addr, peer_addr);
+            picoquic_store_addr(&path_x->local_addr, local_addr);
 
             /* Set the challenge used for this path */
             for (int ichal = 0; ichal < PICOQUIC_CHALLENGE_REPEAT_MAX; ichal++) {
@@ -1033,7 +1033,7 @@ void picoquic_register_path(picoquic_cnx_t* cnx, picoquic_path_t * path_x)
         (void)picoquic_register_cnx_id(cnx->quic, cnx, path_x, path_x->local_cnxid);
     }
 
-    if (path_x->peer_addr_len != 0) {
+    if (path_x->peer_addr.ss_family != 0) {
         (void)picoquic_register_net_id(cnx->quic, cnx, cnx->path[0], (struct sockaddr *)&path_x->peer_addr);
     }
 
@@ -1237,10 +1237,10 @@ void picoquic_fill_path_data_from_probe(picoquic_cnx_t* cnx, int path_id, picoqu
     cnx->path[path_id]->challenge_failed = probe->challenge_failed;
     /* No challenge required, since we already sent one for the probe. */
     if (addr_peer != NULL) {
-        cnx->path[path_id]->peer_addr_len = picoquic_store_addr(&cnx->path[path_id]->peer_addr, addr_peer);
+        picoquic_store_addr(&cnx->path[path_id]->peer_addr, addr_peer);
     }
     if (addr_local != NULL) {
-        cnx->path[path_id]->local_addr_len = picoquic_store_addr(&cnx->path[path_id]->local_addr, addr_local);
+        picoquic_store_addr(&cnx->path[path_id]->local_addr, addr_local);
     }
 
     /* Delete the probe, since the data have moved to the path */
@@ -1581,7 +1581,7 @@ picoquic_probe_t * picoquic_find_probe_by_addr(const picoquic_cnx_t* cnx,
 
     while (next != NULL) {
         if (picoquic_compare_addr((struct sockaddr *)&next->peer_addr, peer_addr) == 0) {
-            if (next->local_addr_len == 0) {
+            if (next->local_addr.ss_family == 0) {
                 partial_match = next;
             }
             else if (picoquic_compare_addr((struct sockaddr *)&next->local_addr, local_addr) == 0) {
@@ -1696,7 +1696,7 @@ void picoquic_promote_successful_probe(picoquic_cnx_t* cnx, uint64_t current_tim
                 }
 
                 picoquic_fill_path_data_from_probe(cnx, path_index, probe, (struct sockaddr *)&probe->peer_addr,
-                    (probe->local_addr_len > 0) ? (struct sockaddr *)&probe->local_addr : (struct sockaddr *)NULL);
+                    (probe->local_addr.ss_family > 0) ? (struct sockaddr *)&probe->local_addr : (struct sockaddr *)NULL);
 
                 /* set the CNX_ID len to the default value for the connection, without actually registering the path. */
                 cnx->path[path_index]->local_cnxid.id_len = cnx->path[0]->local_cnxid.id_len;
@@ -1773,9 +1773,9 @@ int picoquic_create_probe(picoquic_cnx_t* cnx, const struct sockaddr* addr_to, c
                 probe->remote_cnxid = stashed->cnx_id;
                 memcpy(probe->reset_secret, stashed->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
                 free(stashed);
-
-                probe->peer_addr_len = picoquic_store_addr(&probe->peer_addr, addr_to);
-                probe->local_addr_len = picoquic_store_addr(&probe->local_addr, addr_from);
+                
+                picoquic_store_addr(&probe->peer_addr, addr_to);
+                picoquic_store_addr(&probe->local_addr, addr_from);
 
                 probe->challenge_required = 1;
                 for (int ichal = 0; ichal < PICOQUIC_CHALLENGE_REPEAT_MAX; ichal++) {
@@ -3192,8 +3192,9 @@ int picoquic_set_local_addr(picoquic_cnx_t* cnx, struct sockaddr* addr)
 {
     int ret = 0;
 
-    if (cnx != NULL && cnx->path[0] != NULL && cnx->path[0]->local_addr_len == 0) {
-        ret = ((cnx->path[0]->local_addr_len = picoquic_store_addr(&cnx->path[0]->local_addr, addr)) > 0) ? 0 : -1;
+    if (cnx != NULL && cnx->path[0] != NULL && cnx->path[0]->local_addr.ss_family == 0) {
+        picoquic_store_addr(&cnx->path[0]->local_addr, addr);
+        ret = (cnx->path[0]->local_addr.ss_family == 0) ? -1 : 0;
     }
     else {
         ret = -1;

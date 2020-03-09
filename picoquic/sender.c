@@ -3686,13 +3686,13 @@ int picoquic_prepare_probe(picoquic_cnx_t* cnx,
 
                 /* set the return addresses */
                 if (p_addr_to != NULL) {
-                    (void)picoquic_store_addr(p_addr_to, (struct sockaddr*)&probe->peer_addr);
+                    picoquic_store_addr(p_addr_to, (struct sockaddr*)&probe->peer_addr);
                 }
                 /* Remember the log address */
-                (void)picoquic_store_addr(addr_to_log, (struct sockaddr*)&(probe->peer_addr));
+                picoquic_store_addr(addr_to_log, (struct sockaddr*)&(probe->peer_addr));
                 /* Set the source address */
                 if (p_addr_from != NULL) {
-                    (void)picoquic_store_addr(p_addr_from, (struct sockaddr*)(&probe->local_addr));
+                    picoquic_store_addr(p_addr_from, (struct sockaddr*)(&probe->local_addr));
                 }
 
                 /* final protection */
@@ -3797,7 +3797,7 @@ static int picoquic_prepare_alt_challenge(picoquic_cnx_t* cnx,
                         picoquic_store_addr(p_addr_to, (struct sockaddr*)&cnx->path[i]->alt_peer_addr);
                     }
                     /* Remember the log address */
-                    (void)picoquic_store_addr(addr_to_log, (struct sockaddr*)&cnx->path[i]->alt_peer_addr);
+                    picoquic_store_addr(addr_to_log, (struct sockaddr*)&cnx->path[i]->alt_peer_addr);
                     /* Set the source address */
                     if (p_addr_from != NULL) {
                         picoquic_store_addr(p_addr_from, (struct sockaddr*)&cnx->path[i]->alt_local_addr);
@@ -3940,7 +3940,7 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
         /* Select the next path, and the corresponding addresses */
         int path_id = picoquic_select_next_path(cnx, current_time, &next_wake_time);
 
-        (void)picoquic_store_addr(&addr_to_log, (struct sockaddr *)&cnx->path[path_id]->peer_addr);
+        picoquic_store_addr(&addr_to_log, (struct sockaddr *)&cnx->path[path_id]->peer_addr);
 
         if (p_addr_to != NULL) {
             picoquic_store_addr(p_addr_to, (struct sockaddr *)&cnx->path[path_id]->peer_addr);

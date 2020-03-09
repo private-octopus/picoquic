@@ -94,7 +94,7 @@ uint8_t picoquic_create_packet_header_cnxid_lengths(uint8_t dest_len, uint8_t sr
 
 int picoquic_compare_addr(const struct sockaddr * expected, const struct sockaddr * actual);
 int picoquic_addr_length(const struct sockaddr* addr);
-int picoquic_store_addr(struct sockaddr_storage * stored_addr, const struct sockaddr * addr);
+void picoquic_store_addr(struct sockaddr_storage * stored_addr, const struct sockaddr * addr);
 void picoquic_get_ip_addr(struct sockaddr * addr, uint8_t ** ip_addr, uint8_t * ip_addr_len);
 int picoquic_store_text_addr(struct sockaddr_storage* stored_addr, const char* ip_address_text, uint16_t port);
 

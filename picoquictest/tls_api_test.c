@@ -6989,14 +6989,10 @@ int optimistic_hole_test()
 typedef struct st_tls_api_address_are_documented_t {
     /* addresses returned by almost ready callback */
     int nb_almost_ready;
-    int local_addr_almost_ready_len;
-    int remote_addr_almost_ready_len;
     struct sockaddr_storage local_addr_almost_ready;
     struct sockaddr_storage remote_addr_almost_ready;
     /* addresses returned by ready callback */
     int nb_ready;
-    int local_addr_ready_len;
-    int remote_addr_ready_len;
     struct sockaddr_storage local_addr_ready;
     struct sockaddr_storage remote_addr_ready;
     /* Pointer to the underlying callback */
@@ -7020,12 +7016,10 @@ static int test_local_address_callback(picoquic_cnx_t* cnx,
         cb_ctx->nb_almost_ready++;
         if (cb_ctx->nb_almost_ready == 1) {
             if (local_addr != NULL && local_addr->sa_family != 0) {
-                cb_ctx->local_addr_almost_ready_len = picoquic_store_addr(&cb_ctx->local_addr_almost_ready,
-                    local_addr);
+                picoquic_store_addr(&cb_ctx->local_addr_almost_ready, local_addr);
             }
             if (remote_addr != NULL && remote_addr->sa_family != 0) {
-                cb_ctx->remote_addr_almost_ready_len = picoquic_store_addr(&cb_ctx->remote_addr_almost_ready,
-                    remote_addr);
+                picoquic_store_addr(&cb_ctx->remote_addr_almost_ready, remote_addr);
             }
         }
     }
@@ -7035,12 +7029,10 @@ static int test_local_address_callback(picoquic_cnx_t* cnx,
         cb_ctx->nb_ready++;
         if (cb_ctx->nb_ready == 1) {
             if (local_addr != NULL && local_addr->sa_family != 0) {
-                cb_ctx->local_addr_ready_len = picoquic_store_addr(&cb_ctx->local_addr_ready,
-                    local_addr);
+                picoquic_store_addr(&cb_ctx->local_addr_ready, local_addr);
             }
             if (remote_addr != NULL && remote_addr->sa_family != 0) {
-                cb_ctx->remote_addr_ready_len = picoquic_store_addr(&cb_ctx->remote_addr_ready,
-                    remote_addr);
+                picoquic_store_addr(&cb_ctx->remote_addr_ready, remote_addr);
             }
         }
     };
@@ -7075,8 +7067,8 @@ int document_addresses_check(tls_api_address_are_documented_t * test_cb_ctx,
         ret = -1;
     }
 
-    if (ret == 0 && test_cb_ctx->local_addr_almost_ready_len == 0) {
-        DBG_PRINTF("%s", "Expected almost ready local address, got length = 0\n");
+    if (ret == 0 && test_cb_ctx->local_addr_almost_ready.ss_family == 0) {
+        DBG_PRINTF("%s", "Expected almost ready local address, got AF = 0\n");
         ret = -1;
     }
 
@@ -7086,8 +7078,8 @@ int document_addresses_check(tls_api_address_are_documented_t * test_cb_ctx,
         ret = -1;
     }
 
-    if (ret == 0 && test_cb_ctx->remote_addr_almost_ready_len == 0) {
-        DBG_PRINTF("%s", "Expected almost ready remote address, got length = 0\n");
+    if (ret == 0 && test_cb_ctx->remote_addr_almost_ready.ss_family == 0) {
+        DBG_PRINTF("%s", "Expected almost ready remote address, got AF = 0\n");
         ret = -1;
     }
 
@@ -7102,8 +7094,8 @@ int document_addresses_check(tls_api_address_are_documented_t * test_cb_ctx,
         ret = -1;
     }
 
-    if (ret == 0 && test_cb_ctx->local_addr_ready_len == 0) {
-        DBG_PRINTF("%s", "Expected ready local address, got length = 0\n");
+    if (ret == 0 && test_cb_ctx->local_addr_ready.ss_family == 0) {
+        DBG_PRINTF("%s", "Expected ready local address, got AF = 0\n");
         ret = -1;
     }
 
@@ -7113,8 +7105,8 @@ int document_addresses_check(tls_api_address_are_documented_t * test_cb_ctx,
         ret = -1;
     }
 
-    if (ret == 0 && test_cb_ctx->remote_addr_ready_len == 0) {
-        DBG_PRINTF("%s", "Expected ready remote address, got length = 0\n");
+    if (ret == 0 && test_cb_ctx->remote_addr_ready.ss_family == 0) {
+        DBG_PRINTF("%s", "Expected ready remote address, got AF = 0\n");
         ret = -1;
     }
 

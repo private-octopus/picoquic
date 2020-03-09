@@ -428,7 +428,7 @@ int picoquic_addr_length(const struct sockaddr* addr)
 }
 
 /* Copy a sockaddr to a storage value, and return the copied address length */
-int picoquic_store_addr(struct sockaddr_storage * stored_addr, const struct sockaddr * addr)
+void picoquic_store_addr(struct sockaddr_storage * stored_addr, const struct sockaddr * addr)
 {
     int len = 0;
 
@@ -438,8 +438,6 @@ int picoquic_store_addr(struct sockaddr_storage * stored_addr, const struct sock
     else {
         memcpy(stored_addr, addr, len);
     }
-
-    return len;
 }
 
 /* Return a pointer to the IP address and IP length in a sockaddr */
