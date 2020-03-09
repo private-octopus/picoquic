@@ -531,7 +531,7 @@ picoquic_stateless_packet_t* picoquic_dequeue_stateless_packet(picoquic_quic_t* 
         }
         if (quic->f_binlog != NULL) {
             binlog_pdu(quic->f_binlog, &sp->initial_cid, 0, picoquic_get_quic_time(quic),
-                (struct sockaddr*)&sp->addr_to, sp->length);
+                (struct sockaddr*)&sp->addr_to, (struct sockaddr*) & sp->addr_local, sp->length);
         }
     }
 

@@ -1816,7 +1816,7 @@ int picoquic_incoming_segment(
                     cnx, addr_from, 1, packet_length, current_time);
             }
             if (quic->f_binlog != NULL && (cnx == NULL || cnx->pkt_ctx[picoquic_packet_context_application].send_sequence < PICOQUIC_LOG_PACKET_MAX_SEQUENCE || quic->use_long_log)) {
-                binlog_pdu(quic->f_binlog, log_cnxid, 1, current_time, addr_from, packet_length);
+                binlog_pdu(quic->f_binlog, log_cnxid, 1, current_time, addr_from, addr_to, packet_length);
             }
         }
         else if (picoquic_compare_connection_id(previous_dest_id, &ph.dest_cnx_id) != 0) {
