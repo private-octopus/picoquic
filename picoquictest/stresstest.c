@@ -566,8 +566,6 @@ static int stress_handle_packet_prepare(picoquic_stress_ctx_t * ctx, picoquic_qu
         /* Check that the client connection was properly terminated */
         picoquic_stress_client_callback_ctx_t* c_ctx = (c_index >= 0) ?
             (picoquic_stress_client_callback_ctx_t*)picoquic_get_callback_context(cnx) : NULL;
-        int peer_addr_len = 0;
-        int local_addr_len = 0;
 
         /* Check whether immediate abrubt disconnection is required */
         if (c_ctx != NULL && cnx->cnx_state != picoquic_state_disconnected &&
@@ -602,11 +600,11 @@ static int stress_handle_packet_prepare(picoquic_stress_ctx_t * ctx, picoquic_qu
             || simulate_disconnect == 0) { 
             ret = picoquic_prepare_packet(cnx, ctx->simulated_time,
                 packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length,
-                &packet->addr_to, &peer_addr_len, &packet->addr_from, &local_addr_len);
+                &packet->addr_to, &packet->addr_from);
         }
 
         if (ret == 0 && packet->length > 0) {
-            if (local_addr_len == 0) {
+            if (packet->addr_from.ss_family == 0) {
                 if (c_index >= 0) {
                     memcpy(&packet->addr_from, (struct sockaddr *)&ctx->c_ctx[c_index]->client_addr, 
                         sizeof(ctx->c_ctx[c_index]->client_addr));

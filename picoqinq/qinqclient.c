@@ -187,7 +187,6 @@ int picoqinq_client_callback_datagram(picoquic_cnx_t * cnx, picoqinq_client_call
     picoquic_connection_id_t* cid;
     picoquic_connection_id_t in_cid;
     struct sockaddr* peer_addr = NULL;
-    int peer_addr_len = 0;
     uint8_t* bytes_max = bytes0 + length;
     int ret = picoqinq_datagram_to_packet(bytes0, bytes_max, &addr_s, &cid, packet, sizeof(packet), &packet_length, &ctx->receive_hc, current_time);
 
@@ -214,7 +213,7 @@ int picoqinq_client_callback_datagram(picoquic_cnx_t * cnx, picoqinq_client_call
         }
 
         /* Whether the packet is confirmed local or not, pass it to the local quic server */
-        picoquic_get_peer_addr(cnx, &peer_addr, &peer_addr_len);
+        picoquic_get_peer_addr(cnx, &peer_addr);
 
         ret = picoquic_incoming_packet(ctx->quic, packet, packet_length, (struct sockaddr*) & addr_s, peer_addr, 0, 0, current_time);
     }
@@ -439,9 +438,8 @@ picoquic_cnx_t* picoqinq_create_proxied_cnx(picoquic_cnx_t* cnx_proxy,
 
     if (cnx != NULL) {
         struct sockaddr* addr = NULL;
-        int addr_len = 0;
 
-        picoquic_get_peer_addr(cnx_proxy, &addr, &addr_len);
+        picoquic_get_peer_addr(cnx_proxy, &addr);
         if (picoquic_set_local_addr(cnx, addr) != 0) {
             picoquic_delete_cnx(cnx);
             cnx = NULL;

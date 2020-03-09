@@ -2339,16 +2339,14 @@ void picoquic_set_transport_parameters(picoquic_cnx_t * cnx, picoquic_tp_t const
     cnx->max_stream_id_unidir_local = cnx->local_parameters.initial_max_stream_id_unidir;
 }
 
-void picoquic_get_peer_addr(picoquic_cnx_t* cnx, struct sockaddr** addr, int* addr_len)
+void picoquic_get_peer_addr(picoquic_cnx_t* cnx, struct sockaddr** addr)
 {
     *addr = (struct sockaddr*)&cnx->path[0]->peer_addr;
-    *addr_len = cnx->path[0]->peer_addr_len;
 }
 
-void picoquic_get_local_addr(picoquic_cnx_t* cnx, struct sockaddr** addr, int* addr_len)
+void picoquic_get_local_addr(picoquic_cnx_t* cnx, struct sockaddr** addr)
 {
     *addr = (struct sockaddr*)&cnx->path[0]->local_addr;
-    *addr_len = cnx->path[0]->local_addr_len;
 }
 
 unsigned long picoquic_get_local_if_index(picoquic_cnx_t* cnx)
