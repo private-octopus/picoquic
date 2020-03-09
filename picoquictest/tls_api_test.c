@@ -958,8 +958,6 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
             }
             else if (next_action == 2) {
                 /* check whether the client has something to send */
-                int peer_addr_len = 0;
-                int local_addr_len = 0;
                 uint8_t coalesced_length = 0;
 
                 if (test_ctx->do_bad_coalesce_test && test_ctx->cnx_client->cnx_state > picoquic_state_server_handshake) {
