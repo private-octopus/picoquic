@@ -141,7 +141,7 @@ int main(int argc, char ** argv)
             }
             else {
                 ret = filedump_binlog(appctx.f_binlog, bin_dump);
-                bin_dump = picoquic_file_close(bin_dump);
+                (void)picoquic_file_close(bin_dump);
             }
         }
     }

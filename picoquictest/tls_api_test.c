@@ -958,8 +958,6 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
             }
             else if (next_action == 2) {
                 /* check whether the client has something to send */
-                int peer_addr_len = 0;
-                int local_addr_len = 0;
                 uint8_t coalesced_length = 0;
 
                 if (test_ctx->do_bad_coalesce_test && test_ctx->cnx_client->cnx_state > picoquic_state_server_handshake) {
@@ -980,7 +978,7 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                 }
                 ret = picoquic_prepare_packet(test_ctx->cnx_client, *simulated_time,
                     packet->bytes + coalesced_length, PICOQUIC_MAX_PACKET_SIZE - coalesced_length, &packet->length,
-                    &packet->addr_to, &peer_addr_len, &packet->addr_from, &local_addr_len);
+                    &packet->addr_to, &packet->addr_from);
                 if (ret != 0)
                 {
                     /* useless test, but makes it easier to add a breakpoint under debugger */
@@ -989,19 +987,16 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                 else if (packet->length > 0) {
                     packet->length += coalesced_length;
                     /* queue in c_to_s */
-                    if (local_addr_len == 0) {
+                    if (packet->addr_from.ss_family == 0) {
                         memcpy(&packet->addr_from, &test_ctx->client_addr, sizeof(struct sockaddr_in));
                     }
                     target_link = test_ctx->c_to_s_link;
                 }
             }
             else if (next_action == 3) {
-                int peer_addr_len = 0;
-                int local_addr_len = 0;
-
                 ret = picoquic_prepare_packet(test_ctx->cnx_server, *simulated_time,
                     packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length,
-                    &packet->addr_to, &peer_addr_len, &packet->addr_from, &local_addr_len);
+                    &packet->addr_to, &packet->addr_from);
                 if (ret == PICOQUIC_ERROR_DISCONNECTED) {
                     ret = 0;
                 } else if (ret != 0)
@@ -1011,7 +1006,7 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                 }
                 else if (packet->length > 0) {
                     /* copy and queue in s to c */
-                    if (local_addr_len == 0) {
+                    if (packet->addr_from.ss_family == 0) {
                         memcpy(&packet->addr_from, &test_ctx->server_addr, sizeof(struct sockaddr_in));
                     }
                     target_link = test_ctx->s_to_c_link;
@@ -6992,14 +6987,10 @@ int optimistic_hole_test()
 typedef struct st_tls_api_address_are_documented_t {
     /* addresses returned by almost ready callback */
     int nb_almost_ready;
-    int local_addr_almost_ready_len;
-    int remote_addr_almost_ready_len;
     struct sockaddr_storage local_addr_almost_ready;
     struct sockaddr_storage remote_addr_almost_ready;
     /* addresses returned by ready callback */
     int nb_ready;
-    int local_addr_ready_len;
-    int remote_addr_ready_len;
     struct sockaddr_storage local_addr_ready;
     struct sockaddr_storage remote_addr_ready;
     /* Pointer to the underlying callback */
@@ -7012,39 +7003,34 @@ static int test_local_address_callback(picoquic_cnx_t* cnx,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx)
 {
     int ret = 0;
-    int local_addr_len, remote_addr_len;
     struct sockaddr * local_addr;
     struct sockaddr * remote_addr;
 
     tls_api_address_are_documented_t* cb_ctx = (tls_api_address_are_documented_t*)callback_ctx;
 
     if (fin_or_event == picoquic_callback_almost_ready) {
-        picoquic_get_peer_addr(cnx, &remote_addr, &remote_addr_len);
-        picoquic_get_local_addr(cnx, &local_addr, &local_addr_len);
+        picoquic_get_peer_addr(cnx, &remote_addr);
+        picoquic_get_local_addr(cnx, &local_addr);
         cb_ctx->nb_almost_ready++;
         if (cb_ctx->nb_almost_ready == 1) {
-            if (local_addr_len > 0 && local_addr != NULL) {
-                cb_ctx->local_addr_almost_ready_len = picoquic_store_addr(&cb_ctx->local_addr_almost_ready,
-                    local_addr);
+            if (local_addr != NULL && local_addr->sa_family != 0) {
+                picoquic_store_addr(&cb_ctx->local_addr_almost_ready, local_addr);
             }
-            if (remote_addr_len > 0 && remote_addr != NULL) {
-                cb_ctx->remote_addr_almost_ready_len = picoquic_store_addr(&cb_ctx->remote_addr_almost_ready,
-                    remote_addr);
+            if (remote_addr != NULL && remote_addr->sa_family != 0) {
+                picoquic_store_addr(&cb_ctx->remote_addr_almost_ready, remote_addr);
             }
         }
     }
     else if (fin_or_event == picoquic_callback_ready) {
-        picoquic_get_peer_addr(cnx, &remote_addr, &remote_addr_len);
-        picoquic_get_local_addr(cnx, &local_addr, &local_addr_len);
+        picoquic_get_peer_addr(cnx, &remote_addr);
+        picoquic_get_local_addr(cnx, &local_addr);
         cb_ctx->nb_ready++;
         if (cb_ctx->nb_ready == 1) {
-            if (local_addr_len > 0 && local_addr != NULL) {
-                cb_ctx->local_addr_ready_len = picoquic_store_addr(&cb_ctx->local_addr_ready,
-                    local_addr);
+            if (local_addr != NULL && local_addr->sa_family != 0) {
+                picoquic_store_addr(&cb_ctx->local_addr_ready, local_addr);
             }
-            if (remote_addr_len > 0 && remote_addr != NULL) {
-                cb_ctx->remote_addr_ready_len = picoquic_store_addr(&cb_ctx->remote_addr_ready,
-                    remote_addr);
+            if (remote_addr != NULL && remote_addr->sa_family != 0) {
+                picoquic_store_addr(&cb_ctx->remote_addr_ready, remote_addr);
             }
         }
     };
@@ -7079,8 +7065,8 @@ int document_addresses_check(tls_api_address_are_documented_t * test_cb_ctx,
         ret = -1;
     }
 
-    if (ret == 0 && test_cb_ctx->local_addr_almost_ready_len == 0) {
-        DBG_PRINTF("%s", "Expected almost ready local address, got length = 0\n");
+    if (ret == 0 && test_cb_ctx->local_addr_almost_ready.ss_family == 0) {
+        DBG_PRINTF("%s", "Expected almost ready local address, got AF = 0\n");
         ret = -1;
     }
 
@@ -7090,8 +7076,8 @@ int document_addresses_check(tls_api_address_are_documented_t * test_cb_ctx,
         ret = -1;
     }
 
-    if (ret == 0 && test_cb_ctx->remote_addr_almost_ready_len == 0) {
-        DBG_PRINTF("%s", "Expected almost ready remote address, got length = 0\n");
+    if (ret == 0 && test_cb_ctx->remote_addr_almost_ready.ss_family == 0) {
+        DBG_PRINTF("%s", "Expected almost ready remote address, got AF = 0\n");
         ret = -1;
     }
 
@@ -7106,8 +7092,8 @@ int document_addresses_check(tls_api_address_are_documented_t * test_cb_ctx,
         ret = -1;
     }
 
-    if (ret == 0 && test_cb_ctx->local_addr_ready_len == 0) {
-        DBG_PRINTF("%s", "Expected ready local address, got length = 0\n");
+    if (ret == 0 && test_cb_ctx->local_addr_ready.ss_family == 0) {
+        DBG_PRINTF("%s", "Expected ready local address, got AF = 0\n");
         ret = -1;
     }
 
@@ -7117,8 +7103,8 @@ int document_addresses_check(tls_api_address_are_documented_t * test_cb_ctx,
         ret = -1;
     }
 
-    if (ret == 0 && test_cb_ctx->remote_addr_ready_len == 0) {
-        DBG_PRINTF("%s", "Expected ready remote address, got length = 0\n");
+    if (ret == 0 && test_cb_ctx->remote_addr_ready.ss_family == 0) {
+        DBG_PRINTF("%s", "Expected ready remote address, got AF = 0\n");
         ret = -1;
     }
 
@@ -7359,8 +7345,6 @@ int ddos_amplification_test()
     uint32_t proposed_version = PICOQUIC_INTEROP_VERSION_LATEST;
     int ret = tls_api_init_ctx(&test_ctx, proposed_version, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
     picoquictest_sim_packet_t* packet = picoquictest_sim_link_create_packet();
-    int peer_addr_len = 0;
-    int local_addr_len = 0;
     size_t data_sent_by_client = 0;
     size_t data_sent_by_server = 0;
     int nb_server_packets = 0;
@@ -7377,7 +7361,7 @@ int ddos_amplification_test()
         /* Prepare a first packet from the client to the server */
         ret = picoquic_prepare_packet(test_ctx->cnx_client, simulated_time,
             packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length,
-            &packet->addr_to, &peer_addr_len, &packet->addr_from, &local_addr_len);
+            &packet->addr_to, &packet->addr_from);
 
         if (packet->length == 0) {
             ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
@@ -7415,13 +7399,11 @@ int ddos_amplification_test()
         /* Update the time to the next server time */
         simulated_time = test_ctx->cnx_server->next_wake_time;
         packet->length = 0;
-        peer_addr_len = 0;
-        local_addr_len = 0;
         nb_loops++;
 
         ret = picoquic_prepare_packet(test_ctx->cnx_server, simulated_time,
             packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length,
-            &packet->addr_to, &peer_addr_len, &packet->addr_from, &local_addr_len);
+            &packet->addr_to, &packet->addr_from);
 
         if (ret == PICOQUIC_ERROR_DISCONNECTED) {
             ret = 0;
@@ -7737,8 +7719,6 @@ static int connection_drop_test_one(picoquic_state_enum target_client_state, pic
         while (ret == 0 && nb_trials < 1024 && nb_inactive < 512) {
             struct sockaddr_storage a_from;
             struct sockaddr_storage a_to;
-            int a_from_len;
-            int a_to_len;
             uint8_t packet[PICOQUIC_MAX_PACKET_SIZE];
             size_t length = 0;
 
@@ -7751,7 +7731,7 @@ static int connection_drop_test_one(picoquic_state_enum target_client_state, pic
             }
 
             ret = picoquic_prepare_packet(target_cnx, simulated_time, packet, PICOQUIC_MAX_PACKET_SIZE,
-                &length, &a_to, &a_to_len, &a_from, &a_from_len);
+                &length, &a_to, &a_from);
 
             if (ret == PICOQUIC_ERROR_DISCONNECTED) {
                 ret = 0;

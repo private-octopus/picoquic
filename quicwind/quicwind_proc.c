@@ -914,9 +914,7 @@ DWORD WINAPI quicwind_background_thread(LPVOID lpParam)
 
                 (void)picoquic_send_through_socket(s,
                     (struct sockaddr*)&sp->addr_to,
-                    (sp->addr_to.ss_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6),
                     (struct sockaddr*)&sp->addr_local,
-                    (sp->addr_local.ss_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6),
                     sp->if_index_local,
                     (const char*)sp->bytes, (int)sp->length);
 
@@ -935,7 +933,7 @@ DWORD WINAPI quicwind_background_thread(LPVOID lpParam)
 
                 ret = picoquic_prepare_packet(cnx_next, current_time,
                     send_buffer, sizeof(send_buffer), &send_length,
-                    &peer_addr, &peer_addr_len, &local_addr, &local_addr_len);
+                    &peer_addr, &local_addr);
 
                 if (ret == PICOQUIC_ERROR_DISCONNECTED) {
                     ret = 0;
@@ -953,7 +951,7 @@ DWORD WINAPI quicwind_background_thread(LPVOID lpParam)
                         SOCKET s = sock_ctx[i_sock]->fd;
 
                         (void)picoquic_send_through_socket(s,
-                            (struct sockaddr *)&peer_addr, peer_addr_len, (struct sockaddr *)&local_addr, local_addr_len,
+                            (struct sockaddr *)&peer_addr, (struct sockaddr *)&local_addr, 
                             picoquic_get_local_if_index(cnx_next),
                             (const char*)send_buffer, (int)send_length);
 

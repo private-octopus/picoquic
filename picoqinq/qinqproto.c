@@ -99,10 +99,14 @@ uint8_t * picoqinq_decode_datagram_header(uint8_t * bytes, uint8_t * bytes_max,
             if (hc == NULL) {
                 bytes = NULL;
             }
-            else if (picoquic_store_addr(addr_s, (struct sockaddr*) & hc->addr_s) == 0) {
-                bytes = NULL;
-            } else {
-                *cid = &hc->cid;
+            else {
+                picoquic_store_addr(addr_s, (struct sockaddr*) & hc->addr_s);
+                if (addr_s->ss_family == 0) {
+                    bytes = NULL;
+                }
+                else {
+                    *cid = &hc->cid;
+                }
             }
         }
     }

@@ -253,23 +253,20 @@ int quic_server(const char* server_name, int server_port,
             loop_time = current_time;
 
             do {
-                int peer_addr_len = 0;
                 struct sockaddr_storage peer_addr;
-                int local_addr_len = 0;
                 struct sockaddr_storage local_addr;
                 int if_index = dest_if;
 
 
                 ret = picoquic_prepare_next_packet(qserver, loop_time,
                     send_buffer, sizeof(send_buffer), &send_length,
-                    &peer_addr, &peer_addr_len, &local_addr, &local_addr_len,
-                    &if_index);
+                    &peer_addr, &local_addr, &if_index);
 
                 if (ret == 0 && send_length > 0) {
                     loop_count_time = current_time;
                     nb_loops = 0;
                     (void)picoquic_send_through_server_sockets(&server_sockets,
-                        (struct sockaddr*) & peer_addr, peer_addr_len, (struct sockaddr*) & local_addr, local_addr_len, if_index,
+                        (struct sockaddr*) & peer_addr, (struct sockaddr*) & local_addr, if_index,
                         (const char*)send_buffer, (int)send_length);
                 }
 
@@ -585,7 +582,7 @@ int quic_client(const char* ip_address_text, int server_port,
             
             if (ret == 0) {
                 ret = picoquic_prepare_packet(cnx_client, current_time,
-                    send_buffer, sizeof(send_buffer), &send_length, NULL, NULL, NULL, NULL);
+                    send_buffer, sizeof(send_buffer), &send_length, NULL, NULL);
 
                 if (ret == 0 && send_length > 0) {
                     bytes_sent = sendto(fd, (const char*)send_buffer, (int)send_length, 0,
@@ -799,16 +796,14 @@ int quic_client(const char* ip_address_text, int server_port,
 
                 if (ret == 0) {
                     struct sockaddr_storage x_to;
-                    int  x_to_length;
                     struct sockaddr_storage x_from;
-                    int  x_from_length;
 
                     send_length = PICOQUIC_MAX_PACKET_SIZE;
 
                     current_time = picoquic_get_quic_time(qclient);
 
                     ret = picoquic_prepare_packet(cnx_client, current_time,
-                        send_buffer, sizeof(send_buffer), &send_length, &x_to, &x_to_length, &x_from, &x_from_length);
+                        send_buffer, sizeof(send_buffer), &send_length, &x_to, &x_from);
 
                     if (migration_started && force_migration == 3 && send_length > 0 && address_updated) {
                         if (picoquic_compare_addr((struct sockaddr*) & x_from, (struct sockaddr*) & client_address) != 0) {
@@ -826,7 +821,7 @@ int quic_client(const char* ip_address_text, int server_port,
 
                     if (ret == 0 && send_length > 0) {
                         bytes_sent = sendto(fd, (const char*)send_buffer, (int)send_length, 0,
-                            (struct sockaddr*)&x_to, x_to_length);
+                            (struct sockaddr*) & x_to, picoquic_addr_length((struct sockaddr*) & x_to));
 
                         if (bytes_sent <= 0)
                         {

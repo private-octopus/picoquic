@@ -1693,16 +1693,15 @@ int http_stress_test()
             else {
                 /* ask server to prepare next packet */
                 int if_index = -1;
-                int to_len;
-                int from_len;
+
                 ret = picoquic_prepare_next_packet(qready, simulated_time, prepared->bytes, sizeof(prepared->bytes),
-                    &prepared->length, &prepared->addr_to, &to_len, &prepared->addr_from, &from_len, &if_index);
+                    &prepared->length, &prepared->addr_to, &prepared->addr_from, &if_index);
 
                 if (prepared->length == 0) {
                     free(prepared);
                 }
                 else {
-                    if (from_len == 0) {
+                    if (prepared->addr_from.ss_family == 0) {
                         picoquic_store_addr(&prepared->addr_from, ready_from);
                     }
                     picoquictest_sim_link_submit(lan, prepared, simulated_time);

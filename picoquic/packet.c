@@ -978,11 +978,11 @@ int picoquic_incoming_client_initial(
         }
         else if ((*pcnx)->cnx_state < picoquic_state_server_almost_ready) {
             /* Document the incoming addresses */
-            if ((*pcnx)->path[0]->local_addr_len == 0 && addr_to != NULL) {
-                (*pcnx)->path[0]->local_addr_len = picoquic_store_addr(&(*pcnx)->path[0]->local_addr, addr_to);
+            if ((*pcnx)->path[0]->local_addr.ss_family == 0 && addr_to != NULL) {
+                picoquic_store_addr(&(*pcnx)->path[0]->local_addr, addr_to);
             }
-            if ((*pcnx)->path[0]->peer_addr_len == 0 && addr_from != NULL) {
-                (*pcnx)->path[0]->peer_addr_len = picoquic_store_addr(&(*pcnx)->path[0]->peer_addr, addr_from);
+            if ((*pcnx)->path[0]->peer_addr.ss_family == 0 && addr_from != NULL) {
+                picoquic_store_addr(&(*pcnx)->path[0]->peer_addr, addr_from);
             }
 
             /* decode the incoming frames */
@@ -1157,7 +1157,7 @@ int picoquic_incoming_server_initial(
     if (picoquic_is_connection_id_null(&cnx->path[0]->remote_cnxid) && restricted == 0) {
         /* On first response from the server, copy the cnx ID and the incoming address */
         cnx->path[0]->remote_cnxid = ph->srce_cnx_id;
-        cnx->path[0]->local_addr_len = picoquic_store_addr(&cnx->path[0]->local_addr, addr_to);
+        picoquic_store_addr(&cnx->path[0]->local_addr, addr_to);
     }
     else if (picoquic_compare_connection_id(&cnx->path[0]->remote_cnxid, &ph->srce_cnx_id) != 0) {
         ret = PICOQUIC_ERROR_CNXID_CHECK; /* protocol error */
@@ -1422,7 +1422,7 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header * ph
         for (int i = 0; i < cnx->nb_paths; i++) {
             if (picoquic_compare_addr((struct sockaddr *)&cnx->path[i]->peer_addr,
                 addr_from) == 0 &&
-                (cnx->path[i]->local_addr_len == 0 ||
+                (cnx->path[i]->local_addr.ss_family == 0 ||
                     picoquic_compare_addr((struct sockaddr *)&cnx->path[i]->local_addr,
                         addr_to) == 0)) {
                 path_id = i;
@@ -1441,8 +1441,8 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header * ph
         }
     }
 
-    if (ret == 0 && cnx->path[path_id]->local_addr_len == 0) {
-        cnx->path[path_id]->local_addr_len = picoquic_store_addr(&cnx->path[path_id]->local_addr, addr_to);
+    if (ret == 0 && cnx->path[path_id]->local_addr.ss_family == 0) {
+        picoquic_store_addr(&cnx->path[path_id]->local_addr, addr_to);
         path0_updated |= (path_id == 0);
     }
 
@@ -1485,8 +1485,8 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header * ph
                     cnx->path[path_id]->challenge_required = cnx->path[0]->challenge_required;
                     cnx->path[path_id]->challenge_verified = cnx->path[0]->challenge_verified;
                     cnx->path[path_id]->challenge_failed = cnx->path[0]->challenge_failed;
-                    cnx->path[path_id]->peer_addr_len = picoquic_store_addr(&cnx->path[path_id]->peer_addr, addr_from);
-                    cnx->path[path_id]->local_addr_len = picoquic_store_addr(&cnx->path[path_id]->local_addr, addr_to);
+                    picoquic_store_addr(&cnx->path[path_id]->peer_addr, addr_from);
+                    picoquic_store_addr(&cnx->path[path_id]->local_addr, addr_to);
                     cnx->path[0]->remote_cnxid = picoquic_null_connection_id;
                     picoquic_promote_path_to_default(cnx, path_id, current_time);
                     path_id = 0;
@@ -1507,8 +1507,8 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header * ph
                         free(available_cnxid);
                         /* New challenge required there */
                         new_challenge_required = 1;
-                        cnx->path[path_id]->peer_addr_len = picoquic_store_addr(&cnx->path[path_id]->peer_addr, addr_from);
-                        cnx->path[path_id]->local_addr_len = picoquic_store_addr(&cnx->path[path_id]->local_addr, addr_to);
+                        picoquic_store_addr(&cnx->path[path_id]->peer_addr, addr_from);
+                        picoquic_store_addr(&cnx->path[path_id]->local_addr, addr_to);
                         path0_updated |= (path_id == 0);
                     }
                     else {
@@ -1535,15 +1535,15 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header * ph
                         new_challenge_required = 1;
                     }
                 }
-                else if (((cnx->path[path_id]->alt_peer_addr_len == 0 &&
-                    cnx->path[path_id]->alt_local_addr_len == 0) ||
+                else if (((cnx->path[path_id]->alt_peer_addr.ss_family == 0 &&
+                    cnx->path[path_id]->alt_local_addr.ss_family == 0) ||
                     cnx->path[path_id]->alt_challenge_timeout > current_time) &&
                     ph->pn64 >= cnx->pkt_ctx[picoquic_packet_context_application].first_sack_item.end_of_sack_range) {
                     /* The addresses are different, and this is a most recent
                      * packet. This probably indicates a NAT rebinding, but it could also be
                      * some kind of attack. */
-                    cnx->path[path_id]->alt_peer_addr_len = picoquic_store_addr(&cnx->path[path_id]->alt_peer_addr, addr_from);
-                    cnx->path[path_id]->alt_local_addr_len = picoquic_store_addr(&cnx->path[path_id]->alt_local_addr, addr_to);
+                    picoquic_store_addr(&cnx->path[path_id]->alt_peer_addr, addr_from);
+                    picoquic_store_addr(&cnx->path[path_id]->alt_local_addr, addr_to);
                     for (int ichal = 0; ichal < PICOQUIC_CHALLENGE_REPEAT_MAX; ichal++) {
                         cnx->path[path_id]->alt_challenge[ichal] = picoquic_public_random_64();
                     }
