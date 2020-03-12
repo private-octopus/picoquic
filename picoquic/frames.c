@@ -633,7 +633,7 @@ uint8_t* picoquic_decode_retire_connection_id_frame(picoquic_cnx_t* cnx, uint8_t
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
             picoquic_frame_type_retire_connection_id);
     }
-    else if (sequence >= cnx->local_cnxid_sequence_next || cnx->path[0]->p_local_cnxid->cnx_id.id_len == 0) {
+    else if (sequence >= cnx->local_cnxid_sequence_next) {
         /* If there is no matching path, trigger an error */
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
             picoquic_frame_type_retire_connection_id);
