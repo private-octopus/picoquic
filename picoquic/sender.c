@@ -2157,7 +2157,7 @@ uint64_t picoquic_next_challenge_time(picoquic_cnx_t* cnx, picoquic_path_t* path
 {
     uint64_t next_challenge_time = path_x->challenge_time;
 
-    if (path_x->challenge_repeat_count <= 1) {
+    if (path_x->challenge_repeat_count >= 1) {
         next_challenge_time += path_x->retransmit_timer << path_x->challenge_repeat_count;
     }
     else {
@@ -3166,7 +3166,16 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                 }
                 else {
                     if (path_x == cnx->path[0]) {
-                        /* TODO: consider alt address. Also, consider other available path. */
+                        /* Try to find an alternate path */
+                        for (int i = 1; i < cnx->nb_paths; i++) {
+                            if (cnx->path[i]->challenge_failed == 0) {
+                                cnx->path[0] = cnx->path[i];
+                                cnx->path[i] = path_x;
+                            }
+                        }
+                    }
+
+                    if (path_x == cnx->path[0]) {
                         DBG_PRINTF("%s\n", "Too many challenge retransmits, disconnect");
                         cnx->cnx_state = picoquic_state_disconnected;
                         if (cnx->callback_fn) {
@@ -3599,6 +3608,7 @@ int picoquic_prepare_segment(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoq
     return ret;
 }
 
+#if 0
 /* Prepare next probe if one is needed, returns send_length == 0 if none necessary */
 int picoquic_prepare_probe(picoquic_cnx_t* cnx,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
@@ -3877,7 +3887,7 @@ static int picoquic_prepare_alt_challenge(picoquic_cnx_t* cnx,
 
     return ret;
 }
-
+#endif
 /*
  * The version 1 of Quic only supports path migration, not full multipath.
  * This code finds whether there is a path being probed that could become the
@@ -3906,7 +3916,7 @@ static int picoquic_select_next_path(picoquic_cnx_t * cnx, uint64_t current_time
                 path_id = i;
             }
             else if (cnx->path[i]->challenge_required) {
-                uint64_t next_challenge_time = (cnx->path[i]->challenge_time + cnx->path[i]->retransmit_timer);
+                uint64_t next_challenge_time = picoquic_next_challenge_time(cnx, cnx->path[i]);
                 if (cnx->path[i]->challenge_repeat_count == 0 ||
                     current_time >= next_challenge_time) {
                     /* will try this path, unless a validated path came in */
@@ -3952,6 +3962,7 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
 
     ret = picoquic_check_idle_timer(cnx, &next_wake_time, current_time);
 
+#if 0
     if (ret == 0) {
         /* Promote successful probe */
         picoquic_promote_successful_probe(cnx, current_time);
@@ -3981,10 +3992,20 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
                 p_addr_to, p_addr_from, &addr_to_log, &addr_from_log, &next_wake_time);
         }
     }
+#endif
+    if (ret == 0) {
+        int path_id;
 
-    if (ret == 0 && *send_length == 0) {
+        /* Remove old failed paths */
+        picoquic_delete_failed_paths(cnx);
+
+        /* Check whether to insert a hole in the sequence of packets */
+        if (cnx->pkt_ctx[0].send_sequence >= cnx->pkt_ctx[0].next_sequence_hole) {
+            picoquic_insert_hole_in_send_sequence_if_needed(cnx, current_time, &next_wake_time);
+        }
+
         /* Select the next path, and the corresponding addresses */
-        int path_id = picoquic_select_next_path(cnx, current_time, &next_wake_time);
+        path_id = picoquic_select_next_path(cnx, current_time, &next_wake_time);
 
 
         picoquic_store_addr(&addr_to_log, (struct sockaddr *)&cnx->path[path_id]->peer_addr);
