@@ -303,8 +303,8 @@ static const char * test_scenario_default = "0:index.html;4:test.html;8:/1234567
  * but in many cases the client will be behind a NAT, so it will not know its
  * actual IP address.
  */
-int quic_client_migrate(picoquic_cnx_t * cnx, SOCKET_TYPE * fd, struct sockaddr * server_address, struct sockaddr* client_address,
-    int * address_updated, int force_migration) 
+int quic_client_migrate(picoquic_cnx_t * cnx, SOCKET_TYPE * fd, struct sockaddr * server_address, 
+    struct sockaddr* client_address, int * address_updated, int force_migration, uint64_t current_time) 
 {
     int ret = 0;
 
@@ -374,7 +374,7 @@ int quic_client_migrate(picoquic_cnx_t * cnx, SOCKET_TYPE * fd, struct sockaddr 
             }
         }
         else {
-            ret = picoquic_create_probe(cnx, server_address, client_address);
+            ret = picoquic_probe_new_path(cnx, server_address, client_address, current_time);
             if (ret != 0) {
                 if (ret == PICOQUIC_ERROR_MIGRATION_DISABLED) {
                     fprintf(stdout, "Migration disabled, will test NAT rebinding support.\n");
@@ -730,7 +730,8 @@ int quic_client(const char* ip_address_text, int server_port,
                             picoquic_log_app_message(qclient, &cnx_client->initial_cnxid, "%s", "Migration already accumplished to server preferred address!\n");
                         }
                         else {
-                            int mig_ret = quic_client_migrate(cnx_client, &fd, NULL, (struct sockaddr*) & client_address, &address_updated, force_migration);
+                            int mig_ret = quic_client_migrate(cnx_client, &fd, NULL, (struct sockaddr*) & client_address,
+                                &address_updated, force_migration, current_time);
 
                             migration_started = 1;
 

@@ -620,6 +620,22 @@ typedef struct st_picoquic_misc_frame_header_t {
     size_t length;
 } picoquic_misc_frame_header_t;
 
+/* Local CID.
+ * Local CID are created on demand, and stashed in the CID list.
+ * When the CID is created, it is registered in the QUIC context as 
+ * pointing to the local connection. We manage collisions, so two
+ * connections do not use the same context.
+ * When a CID is associated with a path, we set a pointer from the
+ * path to the entry in the CID list. If a CID is retired, these pointers
+ * are nullified.
+*/
+typedef struct st_picoquic_local_cnxid_t {
+    struct st_picoquic_local_cnxid_t* next;
+    struct st_picoquic_cnx_id_key_t* first_cnx_id;
+    uint64_t sequence;
+    picoquic_connection_id_t cnx_id;
+} picoquic_local_cnxid_t;
+
 /*
 * Per path context.
 * Path contexts are created:
@@ -653,7 +669,7 @@ typedef struct st_picoquic_misc_frame_header_t {
 
 typedef struct st_picoquic_path_t {
     /* Local connection ID identifies a path */
-    picoquic_connection_id_t local_cnxid;
+    picoquic_local_cnxid_t * p_local_cnxid;
     picoquic_connection_id_t remote_cnxid;
 
     struct st_picoquic_cnx_id_key_t* first_cnx_id;
@@ -1013,6 +1029,11 @@ typedef struct st_picoquic_cnx_t {
     uint64_t retire_cnxid_before;
     picoquic_cnxid_stash_t * cnxid_stash_first;
 
+    /* management of local CID stash */
+    uint64_t local_cnxid_sequence_next;
+    int nb_local_cnxid;
+    picoquic_local_cnxid_t* local_cnxid_first;
+
     /* Management of ongoing probes */
     picoquic_probe_t * probe_first;
 
@@ -1048,20 +1069,25 @@ int picoquic_set_default_tp(picoquic_quic_t* quic, picoquic_tp_t * tp);
 void picoquic_init_transport_parameters(picoquic_tp_t* tp, int client_mode);
 
 /* Registration of per path connection ID in server context */
-int picoquic_register_cnx_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, picoquic_path_t* path, picoquic_connection_id_t cnx_id);
+int picoquic_register_cnx_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, picoquic_local_cnxid_t* l_cid);
 
 /* Register or update default address and reset secret */
 int picoquic_register_net_secret(picoquic_cnx_t* cnx);
 
 /* Management of path */
 int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time,
-    struct sockaddr* local_addr, struct sockaddr* peer_addr);
+    const struct sockaddr* local_addr, const struct sockaddr* peer_addr);
 void picoquic_register_path(picoquic_cnx_t* cnx, picoquic_path_t * path_x);
 void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index);
 void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_time);
 void picoquic_promote_path_to_default(picoquic_cnx_t* cnx, int path_index, uint64_t current_time);
 void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t * next_wake_time);
 void picoquic_fill_path_data_from_probe(picoquic_cnx_t* cnx, int path_id, picoquic_probe_t * probe, struct sockaddr * addr_peer, struct sockaddr * addr_local);
+void picoquic_set_path_challenge(picoquic_cnx_t* cnx, int path_id, uint64_t current_time);
+
+int picoquic_find_path_by_address(picoquic_cnx_t* cnx, const struct sockaddr* addr_to, const struct sockaddr* addr_from, int* partial_match);
+
+int picoquic_assign_peer_cnxid_to_path(picoquic_cnx_t* cnx, int path_id);
 
 /* Management of the CNX-ID stash */
 picoquic_cnxid_stash_t * picoquic_dequeue_cnxid_stash(picoquic_cnx_t* cnx);
@@ -1344,11 +1370,15 @@ int picoquic_prepare_max_streams_frame_if_needed(picoquic_cnx_t* cnx,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
 void picoquic_clear_stream(picoquic_stream_head_t* stream);
 void picoquic_delete_stream(picoquic_cnx_t * cnx, picoquic_stream_head_t * stream);
+picoquic_local_cnxid_t* picoquic_create_local_cnxid(picoquic_cnx_t* cnx, picoquic_connection_id_t* suggested_value);
+void picoquic_delete_local_cnxid(picoquic_cnx_t* cnx, picoquic_local_cnxid_t* l_cid);
+void picoquic_retire_local_cnxid(picoquic_cnx_t* cnx, uint64_t sequence);
+picoquic_local_cnxid_t* picoquic_find_local_cnxid(picoquic_cnx_t* cnx, picoquic_connection_id_t* cnxid);
 int picoquic_prepare_path_challenge_frame(uint8_t* bytes,
     size_t bytes_max, size_t* consumed, uint64_t challenge);
 int picoquic_prepare_path_response_frame(uint8_t* bytes,
     size_t bytes_max, size_t* consumed, uint64_t challenge);
-int picoquic_prepare_new_connection_id_frame(picoquic_cnx_t * cnx, picoquic_path_t * path_x,
+int picoquic_prepare_new_connection_id_frame(picoquic_cnx_t * cnx, picoquic_local_cnxid_t* l_cid,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
 int picoquic_prepare_blocked_frames(picoquic_cnx_t* cnx, uint8_t* bytes, size_t bytes_max, size_t* consumed);
 int picoquic_queue_retire_connection_id_frame(picoquic_cnx_t * cnx, uint64_t sequence);

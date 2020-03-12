@@ -2077,7 +2077,7 @@ int picoquic_is_tls_complete(picoquic_cnx_t* cnx)
  * decide to use the minicrypto API.
  */
 
-int picoquic_create_cnxid_reset_secret(picoquic_quic_t* quic, picoquic_connection_id_t cnx_id,
+int picoquic_create_cnxid_reset_secret(picoquic_quic_t* quic, picoquic_connection_id_t * cnx_id,
     uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE])
 {
     /* Using OpenSSL for now: ptls_hash_algorithm_t ptls_openssl_sha256 */
@@ -2091,7 +2091,7 @@ int picoquic_create_cnxid_reset_secret(picoquic_quic_t* quic, picoquic_connectio
         memset(reset_secret, 0, PICOQUIC_RESET_SECRET_SIZE);
     } else {
         hash_ctx->update(hash_ctx, quic->reset_seed, sizeof(quic->reset_seed));
-        hash_ctx->update(hash_ctx, &cnx_id, sizeof(cnx_id));
+        hash_ctx->update(hash_ctx, cnx_id, sizeof(picoquic_connection_id_t));
         hash_ctx->final(hash_ctx, final_hash, PTLS_HASH_FINAL_MODE_FREE);
         memcpy(reset_secret, final_hash, PICOQUIC_RESET_SECRET_SIZE);
     }

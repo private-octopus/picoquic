@@ -58,6 +58,7 @@ int cnxcreation_test()
     const uint8_t test_ipv6[16] = { 0x20, 0x01, 0x0D, 0xB8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01 };
     const uint8_t test_ipv4l[4] = { 127, 0, 0, 1 };
     const uint8_t test_ipv6l[16] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01 };
+    picoquic_connection_id_t test_cid[TEST_CNX_COUNT];
 
     const picoquic_connection_id_t test_cnx_id[TEST_CNX_COUNT] = {
         TEST_CNX_ID(1), TEST_CNX_ID(2), TEST_CNX_ID(3), TEST_CNX_ID(4),
@@ -130,6 +131,9 @@ int cnxcreation_test()
         if (test_cnx[i] == NULL) {
             ret = -1;
         }
+        else {
+            test_cid[i] = test_cnx[i]->path[0]->p_local_cnxid->cnx_id;
+        }
     }
 
     /*
@@ -192,6 +196,17 @@ int cnxcreation_test()
         if (cnx != NULL && (i & 1) == 0) {
             ret = -1;
         } else if (cnx == NULL && (i & 1) != 0) {
+            ret = -1;
+        }
+    }
+
+    for (int i = 0; ret == 0 && i < TEST_CNX_COUNT; i++) {
+        picoquic_cnx_t* cnx = picoquic_cnx_by_id(quic, test_cid[i]);
+
+        if (cnx != NULL && (i & 1) == 0) {
+            ret = -1;
+        }
+        else if (cnx == NULL && (i & 1) != 0) {
             ret = -1;
         }
     }

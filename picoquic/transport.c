@@ -273,7 +273,7 @@ int picoquic_prepare_transport_extensions_old(picoquic_cnx_t* cnx, int extension
             bytes += 2;
             picoformat_16(bytes, PICOQUIC_RESET_SECRET_SIZE);
             bytes += 2;
-            (void)picoquic_create_cnxid_reset_secret(cnx->quic, cnx->path[0]->local_cnxid, bytes);
+            (void)picoquic_create_cnxid_reset_secret(cnx->quic, &cnx->path[0]->p_local_cnxid->cnx_id, bytes);
             bytes += PICOQUIC_RESET_SECRET_SIZE;
         }
     }
@@ -438,7 +438,7 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
             (bytes = picoquic_frames_varint_encode(bytes, bytes_max, picoquic_tp_stateless_reset_token)) != NULL &&
             (bytes = picoquic_frames_varint_encode(bytes, bytes_max, PICOQUIC_RESET_SECRET_SIZE)) != NULL){
             if (bytes + PICOQUIC_RESET_SECRET_SIZE < bytes_max) {
-                (void)picoquic_create_cnxid_reset_secret(cnx->quic, cnx->path[0]->local_cnxid, bytes);
+                (void)picoquic_create_cnxid_reset_secret(cnx->quic, &cnx->path[0]->p_local_cnxid->cnx_id, bytes);
                 bytes += PICOQUIC_RESET_SECRET_SIZE;
             }
             else {
@@ -832,7 +832,7 @@ int picoquic_receive_transport_extensions_old(picoquic_cnx_t* cnx, int extension
     }
 
     if (ret == 0 && (present_flag & (1ull << picoquic_tp_active_connection_id_limit)) == 0) {
-        if (cnx->path[0]->local_cnxid.id_len == 0) {
+        if (cnx->path[0]->p_local_cnxid->cnx_id.id_len == 0) {
             cnx->remote_parameters.active_connection_id_limit = 0;
         }
         else {
@@ -1129,7 +1129,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     }
 
     if (ret == 0 && (present_flag & (1ull << picoquic_tp_active_connection_id_limit)) == 0) {
-        if (cnx->path[0]->local_cnxid.id_len == 0) {
+        if (cnx->path[0]->p_local_cnxid->cnx_id.id_len == 0) {
             cnx->remote_parameters.active_connection_id_limit = 0;
         }
         else {

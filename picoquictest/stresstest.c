@@ -586,7 +586,7 @@ static int stress_handle_packet_prepare(picoquic_stress_ctx_t * ctx, picoquic_qu
             cnx->pkt_ctx[picoquic_packet_context_application].send_sequence > c_ctx->message_migration_trigger){
             /* Simulate a migration */
             ctx->c_ctx[c_index]->client_addr.sin_port++;
-            ret = picoquic_create_probe(cnx, (struct sockaddr *)&ctx->server_addr, NULL);
+            ret = picoquic_probe_new_path(cnx, (struct sockaddr *)&ctx->server_addr, NULL, ctx->simulated_time);
             if (ret != 0) {
                 ret = stress_debug_break(0);
             } else {
