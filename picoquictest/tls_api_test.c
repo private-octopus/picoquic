@@ -3608,7 +3608,6 @@ int nat_rebinding_test_one(uint64_t loss_mask_data)
     uint64_t next_time = 0;
     uint64_t loss_mask = 0;
     uint64_t initial_challenge = 0;
-    uint64_t client_challenge = 0;
     int nb_inactive = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
@@ -3624,7 +3623,6 @@ int nat_rebinding_test_one(uint64_t loss_mask_data)
 
     if (ret == 0) {
         initial_challenge = test_ctx->cnx_server->path[0]->challenge[0];
-        client_challenge = test_ctx->cnx_client->path[0]->challenge[0];
         loss_mask = loss_mask_data; 
         
         /* Change the client address */
