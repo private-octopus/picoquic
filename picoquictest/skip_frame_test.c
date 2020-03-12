@@ -400,8 +400,6 @@ int parse_frame_test()
     picoquic_quic_t * qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
         NULL, NULL, NULL, NULL, simulated_time,
         &simulated_time, NULL, NULL, 0);
-    picoquic_local_cnxid_t * local_cid = NULL;
-
 
     memset(&saddr, 0, sizeof(struct sockaddr_in));
     if (qclient == NULL) {
@@ -438,7 +436,7 @@ int parse_frame_test()
                 cnx->pkt_ctx[0].send_sequence = 0x0102030406;
 
                 /* create a local cid  which can be retired with a connection_id_retire frame */
-                local_cid = picoquic_create_local_cnxid(cnx, NULL);
+                (void)picoquic_create_local_cnxid(cnx, NULL);
 
                 /* enable time stamp if used in test */
                 if (buffer[0] == test_frame_type_time_stamp[0] &&

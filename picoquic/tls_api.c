@@ -1599,7 +1599,7 @@ int picoquic_initialize_tls_stream(picoquic_cnx_t* cnx, uint64_t current_time)
     }
     if (cnx->quic->f_binlog != NULL) {
         binlog_transport_extension(cnx->quic->f_binlog, cnx,
-            1, (const uint8_t *)cnx->sni, strlen(cnx->sni), NULL, 0,
+            1, (const uint8_t *)cnx->sni, (cnx->sni == NULL)?0:strlen(cnx->sni), NULL, 0,
             ctx->handshake_properties.client.negotiated_protocols.list, 
             ctx->handshake_properties.client.negotiated_protocols.count,
             0, NULL);

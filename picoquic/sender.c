@@ -2576,6 +2576,8 @@ int picoquic_prepare_new_local_id(picoquic_cnx_t* cnx, uint8_t* bytes, size_t by
     int ret = 0;
     picoquic_local_cnxid_t* l_cid = picoquic_create_local_cnxid(cnx, NULL);
 
+    *consumed = 0;
+
     if (l_cid == NULL) {
     }
     else {
