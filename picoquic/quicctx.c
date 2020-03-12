@@ -1340,25 +1340,6 @@ int picoquic_probe_new_path(picoquic_cnx_t* cnx, const struct sockaddr* addr_fro
 }
 
 /*
- * Paths may be abandoned if they are tried too many times without success.
- */
-
-void picoquic_delete_failed_paths(picoquic_cnx_t* cnx)
-{
-    int path_id = 1;
-
-    while(path_id < cnx->nb_paths) {
-        if (cnx->path[path_id]->challenge_failed) {
-            picoquic_delete_path(cnx, path_id);
-        }
-        else {
-            path_id++;
-        }
-    }
-}
-
-
-/*
  * Manage the stash of connection IDs sent by the peer 
  */
 

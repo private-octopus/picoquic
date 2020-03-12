@@ -2818,6 +2818,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                         else {
                             DBG_PRINTF("%s\n", "Too many challenge retransmits, abandon path");
                             path_x->challenge_failed = 1;
+                            cnx->path_demotion_needed = 1;
                         }
                     }
                 }
@@ -3996,8 +3997,10 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     if (ret == 0) {
         int path_id;
 
-        /* Remove old failed paths */
-        picoquic_delete_failed_paths(cnx);
+        /* Remove delete paths */
+        if (cnx->path_demotion_needed) {
+            picoquic_delete_abandoned_paths(cnx, current_time, &next_wake_time);
+        }
 
         /* Check whether to insert a hole in the sequence of packets */
         if (cnx->pkt_ctx[0].send_sequence >= cnx->pkt_ctx[0].next_sequence_hole) {
