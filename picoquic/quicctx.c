@@ -1252,20 +1252,40 @@ int picoquic_find_path_by_address(picoquic_cnx_t* cnx, const struct sockaddr* ad
     const struct sockaddr* addr_from, int * partial_match)
 {
     int path_id = -1;
+    int is_null_from = 0;
+    struct sockaddr_storage null_addr;
 
     *partial_match = -1;
 
-    /* Find whether an existing path matches the  pair of addresses */
-    for (int i = 0; i < cnx->nb_paths; i++) {
-        if (picoquic_compare_addr((struct sockaddr*) & cnx->path[i]->peer_addr,
-            addr_from) == 0) {
-            if (cnx->path[i]->local_addr.ss_family == 0) {
-                *partial_match = i;
+    if (addr_from != NULL || addr_to != NULL) {
+        if (addr_from == NULL || addr_to == NULL) {
+            memset(&null_addr, 0, sizeof(struct sockaddr_storage));
+            if (addr_from == NULL) {
+                addr_from = (struct sockaddr*) & null_addr;
             }
-            else if (picoquic_compare_addr((struct sockaddr*) & cnx->path[i]->local_addr,
-                addr_to) == 0) {
-                path_id = i;
-                break;
+            else {
+                addr_to = (struct sockaddr*) & null_addr;
+            }
+            is_null_from = 1;
+        }
+
+        /* Find whether an existing path matches the  pair of addresses */
+        for (int i = 0; i < cnx->nb_paths; i++) {
+            if (picoquic_compare_addr((struct sockaddr*) & cnx->path[i]->peer_addr,
+                addr_from) == 0) {
+                if (cnx->path[i]->local_addr.ss_family == 0) {
+                    *partial_match = i;
+                }
+                else if (picoquic_compare_addr((struct sockaddr*) & cnx->path[i]->local_addr,
+                    addr_to) == 0) {
+                    path_id = i;
+                    break;
+                }
+            }
+
+            if (path_id < 0 && is_null_from) {
+                path_id = *partial_match;
+                *partial_match = -1;
             }
         }
     }
