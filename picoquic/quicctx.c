@@ -136,34 +136,6 @@ static int picoquic_net_secret_compare(const void* key1, const void* key2)
     return ret;
 }
 
-#if 0
-/* Not used yet, should be used in ordering connections by wake time. */
-static int picoquic_compare_cnx_waketime(void * v_cnxleft, void * v_cnxright) {
-    /* Example:  return *((int*)l) - *((int*)r); */
-    int ret = 0;
-    if (v_cnxleft != v_cnxright) {
-        picoquic_cnx_t * cnx_l = (picoquic_cnx_t *)v_cnxleft;
-        picoquic_cnx_t * cnx_r = (picoquic_cnx_t *)v_cnxright;
-
-        if (cnx_l->next_wake_time > cnx_r->next_wake_time) {
-            ret = 1;
-        }
-        else if (cnx_l->next_wake_time < cnx_r->next_wake_time) {
-            ret = -1;
-        }
-        else {
-            if (((intptr_t)v_cnxleft) > ((intptr_t)v_cnxright)) {
-                ret = 1;
-            }
-            else {
-                ret = -1;
-            }
-        }
-    }
-    return ret;
-}
-#endif
-
 picoquic_packet_context_enum picoquic_context_from_epoch(int epoch)
 {
     static picoquic_packet_context_enum const pc[4] = {
@@ -1205,32 +1177,6 @@ void picoquic_promote_path_to_default(picoquic_cnx_t* cnx, int path_index, uint6
     }
 }
 
-/* Fill path data from probe */
-void picoquic_fill_path_data_from_probe(picoquic_cnx_t* cnx, int path_id, picoquic_probe_t * probe, struct sockaddr * addr_peer, struct sockaddr * addr_local)
-{
-    cnx->path[path_id]->path_is_activated = 1;
-    cnx->path[path_id]->remote_cnxid = probe->remote_cnxid;
-    cnx->path[path_id]->remote_cnxid_sequence = probe->sequence;
-    for (int ichal = 0; ichal < PICOQUIC_CHALLENGE_REPEAT_MAX; ichal++) {
-        cnx->path[path_id]->challenge[ichal] = probe->challenge[ichal];
-    }
-    cnx->path[path_id]->challenge_time = probe->challenge_time;
-    cnx->path[path_id]->challenge_repeat_count = probe->challenge_repeat_count;
-    cnx->path[path_id]->challenge_required = probe->challenge_required;
-    cnx->path[path_id]->challenge_verified = probe->challenge_verified;
-    cnx->path[path_id]->challenge_failed = probe->challenge_failed;
-    /* No challenge required, since we already sent one for the probe. */
-    if (addr_peer != NULL) {
-        picoquic_store_addr(&cnx->path[path_id]->peer_addr, addr_peer);
-    }
-    if (addr_local != NULL) {
-        picoquic_store_addr(&cnx->path[path_id]->local_addr, addr_local);
-    }
-
-    /* Delete the probe, since the data have moved to the path */
-    picoquic_delete_probe(cnx, probe);
-}
-
 /* Set or renew challenge for a path */
 void picoquic_set_path_challenge(picoquic_cnx_t* cnx, int path_id, uint64_t current_time)
 {
@@ -1386,7 +1332,6 @@ int picoquic_enqueue_cnxid_stash(picoquic_cnx_t* cnx,
     picoquic_cnxid_stash_t* next_stash = cnx->cnxid_stash_first;
     picoquic_cnxid_stash_t* last_stash = NULL;
     picoquic_cnxid_stash_t* stashed = NULL;
-    picoquic_probe_t* next_probe = cnx->probe_first;
     uint64_t cnxid_mask = 0;
 
     /* verify the format */
@@ -1452,41 +1397,6 @@ int picoquic_enqueue_cnxid_stash(picoquic_cnx_t* cnx,
                 }
             }
         }
-    }
-
-    while (ret == 0 && is_duplicate == 0 && next_probe != NULL) {
-        if (sequence == next_probe->sequence) {
-            if (picoquic_compare_connection_id(&cnx_id, &next_probe->remote_cnxid) == 0)
-            {
-                if (memcmp(secret_bytes, next_probe->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0) {
-                    is_duplicate = 1;
-                }
-                else {
-                    ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
-                }
-                break;
-            }
-            else {
-                ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
-            }
-        }
-        else if (picoquic_compare_connection_id(&cnx_id, &next_probe->remote_cnxid) == 0) {
-            ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
-        }
-        else if (memcmp(secret_bytes, next_probe->reset_secret, PICOQUIC_RESET_SECRET_SIZE) == 0) {
-            ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
-        }
-        else {
-            if (next_probe->challenge_repeat_count < PICOQUIC_CHALLENGE_REPEAT_MAX) {
-                uint64_t check = ((uint64_t)1) << next_probe->sequence;
-                if ((cnxid_mask & check) == 0) {
-                    nb_cid_received++;
-                    cnxid_mask |= check;
-                }
-            }
-        }
-
-        next_probe = next_probe->next_probe;
     }
     
     while (ret == 0 && is_duplicate == 0 && next_stash != NULL) {
@@ -1554,9 +1464,7 @@ int picoquic_remove_not_before_cid(picoquic_cnx_t* cnx, uint64_t not_before, uin
     int ret = 0;
     picoquic_cnxid_stash_t * next_stash = cnx->cnxid_stash_first;
     picoquic_cnxid_stash_t * previous_stash = NULL;
-    picoquic_probe_t * next_probe = cnx->probe_first;
 
-    /* Destash all probes with old CID*/
     while (ret == 0 && next_stash != NULL) {
         if (next_stash->sequence < not_before) {
             ret = picoquic_queue_retire_connection_id_frame(cnx, next_stash->sequence);
@@ -1574,21 +1482,6 @@ int picoquic_remove_not_before_cid(picoquic_cnx_t* cnx, uint64_t not_before, uin
             previous_stash = next_stash;
             next_stash = next_stash->next_in_stash;
         }
-    }
-
-
-    /* Mark all probes with all CID as failed. We cannot just delete the probe
-     * context, because we might receive an incoming response to a probe in flight.
-     * The code would create a connection error if the response could not be
-     * matched to a pending probe, so we need to keep the context around for at least
-     * one full round trip time. Instead of just deleting the probe, we bump up
-     * the number of transmissions, so the probe is deleted after a time-out. */
-    while (ret == 0 && next_probe != NULL) {
-        if (next_probe->sequence < not_before) {
-            /* Probe is using the old sequence */
-            next_probe->challenge_repeat_count = PICOQUIC_CHALLENGE_REPEAT_MAX + 1;
-        }
-        next_probe = next_probe->next_probe;
     }
 
     /* We need to stop transmitting data to the old CID. But we cannot just delete
@@ -1664,258 +1557,6 @@ int picoquic_renew_connection_id(picoquic_cnx_t* cnx, int path_id)
             /* If default path, reset the secret pointer */
             if (path_id == 0) {
                 ret = picoquic_register_net_secret(cnx);
-            }
-        }
-    }
-
-    return ret;
-}
-
-/*
- * Manage the list of ongoing probes.
- */
-
-picoquic_probe_t * picoquic_find_probe_by_challenge(const picoquic_cnx_t* cnx, uint64_t challenge)
-{
-    picoquic_probe_t * next = cnx->probe_first;
-
-    if (challenge != 0) {
-        while (next != NULL) {
-            int is_found = 0;
-
-            for (int ichal = 0; ichal < PICOQUIC_CHALLENGE_REPEAT_MAX; ichal++) {
-                if (next->challenge[ichal] == challenge) {
-                    is_found = 1;
-                    break;
-                }
-            }
-
-            if (is_found) {
-                break;
-            }
-
-            next = next->next_probe;
-        }
-    }
-
-    return next;
-}
-
-picoquic_probe_t * picoquic_find_probe_by_addr(const picoquic_cnx_t* cnx,
-    const struct sockaddr * peer_addr, const struct sockaddr * local_addr) 
-{
-    picoquic_probe_t * next = cnx->probe_first;
-    picoquic_probe_t * partial_match = NULL;
-
-    while (next != NULL) {
-        if (picoquic_compare_addr((struct sockaddr *)&next->peer_addr, peer_addr) == 0) {
-            if (next->local_addr.ss_family == 0) {
-                partial_match = next;
-            }
-            else if (picoquic_compare_addr((struct sockaddr *)&next->local_addr, local_addr) == 0) {
-                break;
-            }
-        }
-        next = next->next_probe;
-    }
-
-    if (next == NULL && partial_match != NULL) {
-        next = partial_match;
-    }
-
-    return next;
-}
-
-
-void picoquic_delete_probe(picoquic_cnx_t* cnx, picoquic_probe_t * probe)
-{
-    picoquic_probe_t * previous = NULL;
-    picoquic_probe_t * next = cnx->probe_first;
-
-    while (next != NULL) {
-        if (next == probe) {
-            if (previous == NULL) {
-                cnx->probe_first = probe->next_probe;
-            }
-            else {
-                previous->next_probe = probe->next_probe;
-            }
-            break;
-        }
-        else {
-            previous = next;
-            next = next->next_probe;
-        }
-    }
-
-    if (cnx->quic->F_log != NULL) {
-        picoquic_log_probe_action(cnx->quic->F_log, cnx, probe, 2, picoquic_get_quic_time(cnx->quic));
-    }
-
-    free(probe);
-}
-
-/*
- * Probes may be abandoned if they are tried too many times without success. 
- */
-
-void picoquic_delete_failed_probes(picoquic_cnx_t* cnx)
-{
-    picoquic_probe_t * probe = cnx->probe_first;
-    picoquic_probe_t * previous = NULL;
-
-    while (probe != NULL) {
-        if (probe->challenge_failed) {
-            picoquic_probe_t * abandoned = probe;
-            probe = probe->next_probe;
-
-            if (previous == NULL) {
-                cnx->probe_first = probe;
-            }
-            else {
-                previous->next_probe = probe;
-            }
-
-            if (cnx->quic->F_log != NULL) {
-                picoquic_log_probe_action(cnx->quic->F_log, cnx, abandoned, 2, picoquic_get_quic_time(cnx->quic));
-            }
-
-            /* Before deleting, post a notification to the peer */
-            (void)picoquic_queue_retire_connection_id_frame(cnx, abandoned->sequence);
-
-            free(abandoned);
-        }
-        else {
-            previous = probe;
-            probe = probe->next_probe;
-        }
-    }
-}
-
-/* Promote successful probe if one was acknowledged by the previously received packet */
-void picoquic_promote_successful_probe(picoquic_cnx_t* cnx, uint64_t current_time)
-{
-    if (cnx->has_successful_probe && (
-        cnx->cnx_state == picoquic_state_ready ||
-        cnx->cnx_state == picoquic_state_client_ready_start)) {
-        picoquic_probe_t * probe = cnx->probe_first;
-        picoquic_probe_t * previous_probe;
-
-        cnx->has_successful_probe = 0;
-
-        while (probe != NULL) {
-            if (!probe->challenge_verified) {
-                /* Nothing to promote here */
-                probe = probe->next_probe;
-            }
-            else {
-                break;
-            }
-        }
-
-        if (probe != NULL) {
-            int path_index;
-
-            path_index = picoquic_create_path(cnx, current_time, NULL, NULL);
-
-            if (path_index >= 0) {
-                if (cnx->quic->F_log != NULL) {
-                    picoquic_log_probe_action(cnx->quic->F_log, cnx, probe, 3, current_time);
-                }
-
-                picoquic_fill_path_data_from_probe(cnx, path_index, probe, (struct sockaddr *)&probe->peer_addr,
-                    (probe->local_addr.ss_family > 0) ? (struct sockaddr *)&probe->local_addr : (struct sockaddr *)NULL);
-
-                /* set the CNX_ID len to the default value for the connection, without actually registering the path. */
-                cnx->path[path_index]->p_local_cnxid->cnx_id.id_len = cnx->path[0]->p_local_cnxid->cnx_id.id_len;
-
-                picoquic_promote_path_to_default(cnx, path_index, current_time);
-            }
-
-            /* We should remove all other successful probes from the list, because either probing
-             * was successful, or we do not have the resource to create the required path*/
-            probe = cnx->probe_first;
-            previous_probe = NULL;
-
-            while (probe != NULL) {
-                if (!probe->challenge_verified) {
-                    previous_probe = probe;
-                    probe = probe->next_probe;
-                }
-                else {
-                    picoquic_probe_t * abandoned = probe;
-                    probe = probe->next_probe;
-
-                    if (previous_probe == NULL) {
-                        cnx->probe_first = probe;
-                    }
-                    else {
-                        previous_probe->next_probe = probe;
-                    }
-
-                    /* Before deleting, post a notification to the peer */
-                    (void)picoquic_queue_retire_connection_id_frame(cnx, abandoned->sequence);
-                    free(abandoned);
-                }
-            }
-        }
-    }
-}
-
-/* Create probe */
-
-int picoquic_create_probe(picoquic_cnx_t* cnx, const struct sockaddr* addr_to, const struct sockaddr* addr_from)
-{
-    int ret = 0;
-    picoquic_probe_t * probe = NULL;
-    picoquic_cnxid_stash_t * stashed = NULL;
-
-    /* TODO: Check for duplicates: is there a similar outgoing probe? */
-
-    if (cnx->remote_parameters.migration_disabled != 0 ||
-        cnx->local_parameters.migration_disabled != 0) {
-        /* Do not send probes if migration is disabled */
-        ret = PICOQUIC_ERROR_MIGRATION_DISABLED;
-        DBG_PRINTF("Tried to create probe with migration diabled = %d", cnx->remote_parameters.migration_disabled);
-    }
-    else {
-        /* Create the probe */
-        probe = (picoquic_probe_t *)malloc(sizeof(picoquic_probe_t));
-
-        if (probe == NULL) {
-            ret = PICOQUIC_ERROR_MEMORY;
-        }
-        else {
-            stashed = picoquic_dequeue_cnxid_stash(cnx);
-
-            if (stashed == NULL) {
-                DBG_PRINTF("%s", "Tried to create probe before CNX_ID is available");
-                ret = PICOQUIC_ERROR_CNXID_NOT_AVAILABLE;
-                free(probe);
-                probe = NULL;
-            }
-            else {
-                memset(probe, 0, sizeof(picoquic_probe_t));
-
-                probe->sequence = stashed->sequence;
-                probe->remote_cnxid = stashed->cnx_id;
-                memcpy(probe->reset_secret, stashed->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
-                free(stashed);
-                
-                picoquic_store_addr(&probe->peer_addr, addr_to);
-                picoquic_store_addr(&probe->local_addr, addr_from);
-
-                probe->challenge_required = 1;
-                for (int ichal = 0; ichal < PICOQUIC_CHALLENGE_REPEAT_MAX; ichal++) {
-                    probe->challenge[ichal] = picoquic_public_random_64();
-                }
-
-                if (cnx->quic->F_log != NULL) {
-                    picoquic_log_probe_action(cnx->quic->F_log, cnx, probe, 1, picoquic_get_quic_time(cnx->quic));
-                }
-
-                probe->next_probe = cnx->probe_first;
-                cnx->probe_first = probe;
             }
         }
     }
@@ -3136,47 +2777,6 @@ int picoquic_reset_cnx(picoquic_cnx_t* cnx, uint64_t current_time)
     return ret;
 }
 
-#if 0
-/* TODO: consider restoring this code once draft 20 stabilizes */
-int picoquic_reset_cnx_version(picoquic_cnx_t* cnx, uint8_t* bytes, size_t length, uint64_t current_time)
-{
-    /* First parse the incoming connection negotiation to choose the
-	* new version. If none is available, return an error */
-    size_t byte_index = 0;
-    uint32_t proposed_version = 0;
-    int ret = -1;
-
-    if (cnx->cnx_state == picoquic_state_client_init || cnx->cnx_state == picoquic_state_client_init_sent) {
-        while (cnx->cnx_state != picoquic_state_client_renegotiate && byte_index + 4 <= length) {
-            /* parsing the list of proposed versions encoded in renegotiation packet */
-            proposed_version = PICOPARSE_32(bytes + byte_index);
-            byte_index += 4;
-
-            for (size_t i = 0; i < picoquic_nb_supported_versions; i++) {
-                if (proposed_version == picoquic_supported_versions[i].version) {
-                    cnx->version_index = (int)i;
-                    cnx->cnx_state = picoquic_state_client_renegotiate;
-                    break;
-                }
-            }
-        }
-
-        if (cnx->cnx_state != picoquic_state_client_renegotiate) {
-            /* No acceptable version */
-            ret = PICOQUIC_ERROR_UNEXPECTED_PACKET;
-        } else {
-            ret = picoquic_reset_cnx(cnx, current_time);
-        }
-    }
-    else {
-        /* Not in a state for negotiation */
-        ret = PICOQUIC_ERROR_UNEXPECTED_PACKET;
-    }
-
-    return ret;
-}
-#endif
-
 int picoquic_connection_error(picoquic_cnx_t* cnx, uint16_t local_error, uint64_t frame_type)
 {
     if (cnx->cnx_state == picoquic_state_ready || 
@@ -3322,10 +2922,6 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
 
         while ((stashed_cnxid = picoquic_dequeue_cnxid_stash(cnx)) != NULL) {
             free(stashed_cnxid);
-        }
-
-        while (cnx->probe_first != NULL) {
-            picoquic_delete_probe(cnx, cnx->probe_first);
         }
 
         free(cnx);

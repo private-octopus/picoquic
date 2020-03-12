@@ -720,7 +720,7 @@ int quic_client(const char* ip_address_text, int server_port,
                     client_ready_loop++;
 
                     if (force_migration && migration_started == 0 && address_updated && 
-                        picoquic_get_cnx_state(cnx_client) == picoquic_state_ready && cnx_client->probe_first == NULL &&
+                        picoquic_get_cnx_state(cnx_client) == picoquic_state_ready &&
                         (cnx_client->cnxid_stash_first != NULL || force_migration == 1)
                         && picoquic_get_cnx_state(cnx_client) == picoquic_state_ready) {
                         if (force_migration == 3 && picoquic_compare_addr(

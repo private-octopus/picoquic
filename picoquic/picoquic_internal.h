@@ -690,15 +690,6 @@ typedef struct st_picoquic_path_t {
     uint64_t challenge_time;
     uint64_t demotion_time;
     uint8_t challenge_repeat_count;
-    /* Alternative address, used when validating NAT rebinding */
-    struct sockaddr_storage alt_peer_addr;
-    struct sockaddr_storage alt_local_addr;
-    unsigned long alt_if_index_dest;
-    /* Challenge used for the NAT rebinding tests */
-    uint64_t alt_challenge_response;
-    uint64_t alt_challenge[PICOQUIC_CHALLENGE_REPEAT_MAX];
-    uint64_t alt_challenge_timeout;
-    uint8_t alt_challenge_repeat_count;
 
     /* flags */
     unsigned int mtu_probe_sent : 1;
@@ -709,8 +700,6 @@ typedef struct st_picoquic_path_t {
     unsigned int challenge_failed : 1;
     unsigned int response_required : 1;
     unsigned int path_is_demoted : 1;
-    unsigned int alt_challenge_required : 1;
-    unsigned int alt_response_required : 1;
     unsigned int current_spin : 1;
     unsigned int path_is_registered : 1;
     unsigned int last_bw_estimate_path_limited : 1;
@@ -1034,9 +1023,6 @@ typedef struct st_picoquic_cnx_t {
     int nb_local_cnxid;
     picoquic_local_cnxid_t* local_cnxid_first;
 
-    /* Management of ongoing probes */
-    picoquic_probe_t * probe_first;
-
     /* Management of ACK frequency */
     uint64_t ack_frequency_sequence_local;
     uint64_t ack_gap_local;
@@ -1082,7 +1068,6 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index);
 void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_time);
 void picoquic_promote_path_to_default(picoquic_cnx_t* cnx, int path_index, uint64_t current_time);
 void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t * next_wake_time);
-void picoquic_fill_path_data_from_probe(picoquic_cnx_t* cnx, int path_id, picoquic_probe_t * probe, struct sockaddr * addr_peer, struct sockaddr * addr_local);
 void picoquic_set_path_challenge(picoquic_cnx_t* cnx, int path_id, uint64_t current_time);
 int picoquic_find_path_by_address(picoquic_cnx_t* cnx, const struct sockaddr* addr_to, const struct sockaddr* addr_from, int* partial_match);
 int picoquic_assign_peer_cnxid_to_path(picoquic_cnx_t* cnx, int path_id);
@@ -1095,16 +1080,6 @@ int picoquic_enqueue_cnxid_stash(picoquic_cnx_t * cnx,
     const uint8_t * secret_bytes, picoquic_cnxid_stash_t ** pstashed);
 
 int picoquic_remove_not_before_cid(picoquic_cnx_t* cnx, uint64_t not_before, uint64_t current_time);
-
-/* Management of probes */
-picoquic_probe_t * picoquic_find_probe_by_challenge(const picoquic_cnx_t* cnx, uint64_t challenge);
-
-picoquic_probe_t * picoquic_find_probe_by_addr(const picoquic_cnx_t* cnx,
-    const struct sockaddr * peer_addr, const struct sockaddr * local_addr);
-
-void picoquic_delete_probe(picoquic_cnx_t* cnx, picoquic_probe_t * probe);
-void picoquic_delete_failed_probes(picoquic_cnx_t* cnx);
-void picoquic_promote_successful_probe(picoquic_cnx_t* cnx, uint64_t current_time);
 
 /* handling of retransmission queue */
 picoquic_packet_t* picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet_t* p, int should_free);
