@@ -526,7 +526,7 @@ int transport_param_one_test(int mode, int grease, uint32_t version, uint32_t pr
             else {
                 uint8_t target_secret[PICOQUIC_RESET_SECRET_SIZE];
 
-                (void)picoquic_create_cnxid_reset_secret(quic_ctx, test_cnx->path[0]->local_cnxid,
+                (void)picoquic_create_cnxid_reset_secret(quic_ctx, &test_cnx->path[0]->p_local_cnxid->cnx_id,
                     target_secret);
 
                 if (memcmp(buffer, target, target_length - PICOQUIC_RESET_SECRET_SIZE) != 0) {

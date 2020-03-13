@@ -303,8 +303,8 @@ static const char * test_scenario_default = "0:index.html;4:test.html;8:/1234567
  * but in many cases the client will be behind a NAT, so it will not know its
  * actual IP address.
  */
-int quic_client_migrate(picoquic_cnx_t * cnx, SOCKET_TYPE * fd, struct sockaddr * server_address, struct sockaddr* client_address,
-    int * address_updated, int force_migration) 
+int quic_client_migrate(picoquic_cnx_t * cnx, SOCKET_TYPE * fd, struct sockaddr * server_address, 
+    struct sockaddr* client_address, int * address_updated, int force_migration, uint64_t current_time) 
 {
     int ret = 0;
 
@@ -374,7 +374,7 @@ int quic_client_migrate(picoquic_cnx_t * cnx, SOCKET_TYPE * fd, struct sockaddr 
             }
         }
         else {
-            ret = picoquic_create_probe(cnx, server_address, client_address);
+            ret = picoquic_probe_new_path(cnx, server_address, client_address, current_time);
             if (ret != 0) {
                 if (ret == PICOQUIC_ERROR_MIGRATION_DISABLED) {
                     fprintf(stdout, "Migration disabled, will test NAT rebinding support.\n");
@@ -430,6 +430,7 @@ int quic_client(const char* ip_address_text, int server_port,
     int established = 0;
     int is_name = 0;
     int migration_started = 0;
+    int migrated_to_preferred = 0;
     int address_updated = 0;
     int64_t delay_max = 10000000;
     int64_t delta_t = 0;
@@ -719,26 +720,29 @@ int quic_client(const char* ip_address_text, int server_port,
 
                     client_ready_loop++;
 
-                    if (force_migration && migration_started == 0 && address_updated && 
-                        picoquic_get_cnx_state(cnx_client) == picoquic_state_ready && cnx_client->probe_first == NULL &&
-                        (cnx_client->cnxid_stash_first != NULL || force_migration == 1)
-                        && picoquic_get_cnx_state(cnx_client) == picoquic_state_ready) {
-                        if (force_migration == 3 && picoquic_compare_addr(
+                    if (cnx_client->remote_parameters.prefered_address.is_defined && !migrated_to_preferred) {
+                        if (picoquic_compare_addr(
                             (struct sockaddr*) & server_address, (struct sockaddr*) & cnx_client->path[0]->peer_addr) != 0) {
-                            fprintf(stdout, "Migration already accumplished to server preferred address!\n");
-                            migration_started = -1;
-                            picoquic_log_app_message(qclient, &cnx_client->initial_cnxid, "%s", "Migration already accumplished to server preferred address!\n");
+                            fprintf(stdout, "Migrated to server preferred address!\n");
+                            picoquic_log_app_message(qclient, &cnx_client->initial_cnxid, "%s", "Migrated to server preferred address!\n");
+                            migrated_to_preferred = 1;
                         }
-                        else {
-                            int mig_ret = quic_client_migrate(cnx_client, &fd, NULL, (struct sockaddr*) & client_address, &address_updated, force_migration);
+                    }
 
-                            migration_started = 1;
+                    if (force_migration && migration_started == 0 && address_updated &&
+                        picoquic_get_cnx_state(cnx_client) == picoquic_state_ready &&
+                        (cnx_client->cnxid_stash_first != NULL || force_migration == 1) &&
+                        picoquic_get_cnx_state(cnx_client) == picoquic_state_ready &&
+                        (!cnx_client->remote_parameters.prefered_address.is_defined || migrated_to_preferred)) {
+                        int mig_ret = quic_client_migrate(cnx_client, &fd, NULL, (struct sockaddr*) & client_address,
+                            &address_updated, force_migration, current_time);
 
-                            if (mig_ret != 0) {
-                                fprintf(stdout, "Will not test migration.\n");
-                                picoquic_log_app_message(qclient, &cnx_client->initial_cnxid, "%s", "Will not test migration.\n");
-                                migration_started = -1;
-                            }
+                        migration_started = 1;
+
+                        if (mig_ret != 0) {
+                            fprintf(stdout, "Will not test migration.\n");
+                            picoquic_log_app_message(qclient, &cnx_client->initial_cnxid, "%s", "Will not test migration.\n");
+                            migration_started = -1;
                         }
                     }
 
@@ -766,6 +770,12 @@ int quic_client(const char* ip_address_text, int server_port,
                                 picoquic_log_app_message(qclient, &cnx_client->initial_cnxid, "Out of %d zero RTT packets, %d were acked by the server.\n",
                                     cnx_client->nb_zero_rtt_sent, cnx_client->nb_zero_rtt_acked);
                             }
+                            if (force_migration && !migration_started) {
+                                fprintf(stdout, "Could not start testing migration.\n");
+                                picoquic_log_app_message(qclient, &cnx_client->initial_cnxid, "%s", "Could not start testing migration.\n");
+                                migration_started = -1;
+                            }
+
                             fprintf(stdout, "All done, Closing the connection.\n");
                             picoquic_log_app_message(qclient, &cnx_client->initial_cnxid, "%s", "All done, Closing the connection.\n");
                             if (picoquic_get_data_received(cnx_client) > 0) {

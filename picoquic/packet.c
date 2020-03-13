@@ -570,7 +570,6 @@ int picoquic_parse_header_and_decrypt(
                         decoded_length = ph->payload_length + 1;
                     }
 
-                    /* TODO: consider the error "too soon" */
                     if (decoded_length > (length - ph->offset)) {
                         if (ph->ptype == picoquic_packet_1rtt_protected &&
                             length >= PICOQUIC_RESET_PACKET_MIN_SIZE &&
@@ -648,7 +647,7 @@ int picoquic_incoming_version_negotiation(
     UNREFERENCED_PARAMETER(current_time);
 #endif
 
-    if (picoquic_compare_connection_id(&ph->dest_cnx_id, &cnx->path[0]->local_cnxid) != 0 || ph->vn != 0) {
+    if (picoquic_compare_connection_id(&ph->dest_cnx_id, &cnx->path[0]->p_local_cnxid->cnx_id) != 0 || ph->vn != 0) {
         /* Packet that do not match the "echo" checks should be logged and ignored */
         ret = 0;
     } else {
@@ -772,7 +771,7 @@ void picoquic_process_unexpected_cnxid(
             picoquic_public_random(bytes + byte_index, pad_size);
             byte_index += pad_size;
             /* Add the public reset secret */
-            (void)picoquic_create_cnxid_reset_secret(quic, ph->dest_cnx_id, bytes + byte_index);
+            (void)picoquic_create_cnxid_reset_secret(quic, &ph->dest_cnx_id, bytes + byte_index);
             byte_index += PICOQUIC_RESET_SECRET_SIZE;
             sp->length = byte_index;
             sp->ptype = picoquic_packet_1rtt_protected;
@@ -818,7 +817,7 @@ void picoquic_queue_stateless_retry(picoquic_cnx_t* cnx,
         cnx->path[0]->remote_cnxid = ph->srce_cnx_id;
 
         byte_index = header_length = picoquic_create_packet_header(cnx, picoquic_packet_retry,
-            0, &cnx->path[0]->remote_cnxid, &cnx->path[0]->local_cnxid, 0,
+            0, &cnx->path[0]->remote_cnxid, &cnx->path[0]->p_local_cnxid->cnx_id, 0,
             bytes, &pn_offset, &pn_length);
 
         /* In the old drafts, there is no header protection and the sender copies the ODCID
@@ -957,7 +956,7 @@ int picoquic_incoming_client_initial(
     }
 
     if (ret == 0) {
-        if (picoquic_compare_connection_id(&ph->dest_cnx_id, &(*pcnx)->path[0]->local_cnxid) == 0) {
+        if (picoquic_compare_connection_id(&ph->dest_cnx_id, &(*pcnx)->path[0]->p_local_cnxid->cnx_id) == 0) {
             (*pcnx)->initial_validated = 1;
         }
 
@@ -1328,7 +1327,7 @@ int picoquic_incoming_0rtt(
     int ret = 0;
 
     if (!(picoquic_compare_connection_id(&ph->dest_cnx_id, &cnx->initial_cnxid) == 0 ||
-        picoquic_compare_connection_id(&ph->dest_cnx_id, &cnx->path[0]->local_cnxid) == 0) ||
+        picoquic_compare_connection_id(&ph->dest_cnx_id, &cnx->path[0]->p_local_cnxid->cnx_id) == 0) ||
         picoquic_compare_connection_id(&ph->srce_cnx_id, &cnx->path[0]->remote_cnxid) != 0) {
         ret = PICOQUIC_ERROR_CNXID_CHECK;
     } else if (cnx->cnx_state == picoquic_state_server_almost_ready || 
@@ -1362,225 +1361,145 @@ int picoquic_incoming_0rtt(
 }
 
 /*
- * Find path of incoming encrypted packet. (This code is not used during the
- * handshake, or if the connection is closing.)
- *
- * Check whether this matches a path defined by Local & Remote Addr, Local CNXID:
- *  - if local CID length > 0 and does not match: no match;
- *  - if local addr defined and does not match: no match;
- *  - if peer addr defined and does not match: no match.
- *
- * If no path matches: new path. Check whether the addresses match a pending probe.
- * If they do, merge probe, retain probe's CID as dest CID. If they don't, get CID
- * from stash or use null CID if peer uses null CID; initiated required probing. If
- * no CID available, accept packet but no not create a path.
- *
- * If CNXID matches but address don't, use NAT rebinding logic. Keep track of
- * the new addresses without deleting the old ones, and launch challenges on both old
- * and new addresses. If the challenge on the new address succeeds, it is promoted.
- * But if traffic comes from the old address after that, there will be new
- * challenges, and it too will be promoted in turn.
- *
- * If path matched: existing path. If peer address changed: NAT rebinding. If
- * source address changed: if undef, update; else NAT rebinding. If NAT rebinding:
- * change the probe secret; mark probe as required.
- */
+Find path of incoming packet
 
-int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header * ph,
+A path is defined by a pair of addresses. The path is created by the client
+when it learns about a new local or remote address. It is created by the
+server when it receives data from a not yet identified address pair.
+
+We associate a local CID with a path. This is the CID that the peer uses
+to send packet. This is a loose association. When a packet is received, the
+packet is associated with a path based on the address tuple. If this is a
+new tuple, a new path should be created, unless too many paths have been
+created already (some heuristics needed there). 
+
+Different scenarios play here:
+
+ - If the incoming CID has not yet been seen, we treat arrival as a
+   migration attempt and pursue the validation sequence.
+
+ - If this is the same incoming CID as an existing path, we treat it
+   as an indication of NAT rebinding. We may need some heuristic to
+   decide whether this is legit or an attack. If this may be legit, we
+   create a new path and send challenges on both the new and the old path.
+
+ - If this is the same tuple and a different incoming CID, we treat that
+   as an attempt by the peer to change the CID for privacy reason. On this
+   event, the server picks a new CID for the path if available. (May need
+   some safety there, e.g. only pick a new CID if the incoming CID sequence
+   is higher than the old one.)
+   
+NAT rebinding should only happen if the address was changed in the
+network, either by a NAT or by an attacker. NATs are:
+
+ - rare but not unheard of in front of servers
+
+ - rare with IPv6
+ 
+  - rare if the connection is sustained
+  
+A small problem here is that the QUIC test suite include some pretty
+unrealistic NAT rebinding simulations, so we cannot be too strict. In
+order to pass the test suites, we will accept the first rebinding
+attempt as genuine, and be more picky with the next ones. They may have
+to wait until validation timers expire.
+
+Local CID are kept in a list, and are associated with paths by a reference.
+If a local CID is retired, the reference is zeroed. When a new packet arrives
+on path with a new CID, the reference is reset.
+
+If we cannot associate an existing path with a packet and also
+cannot create a new path, we treat the packet as arriving on the
+default path.
+*/
+
+int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
     struct sockaddr* addr_from,
     struct sockaddr* addr_to,
     uint64_t current_time,
-    int * p_path_id)
+    int* p_path_id)
 {
     int ret = 0;
-    int path_id = -1;
-    int new_challenge_required = 0;
-    int path0_updated = 0;
+    int partial_match_path = -1;
+    int nat_rebinding_path = -1;
+    int nat_rebinding_total = 0;
+    int path_id = picoquic_find_path_by_address(cnx, addr_to, addr_from, &partial_match_path);
 
-    if (cnx->path[0]->local_cnxid.id_len > 0) {
-        /* Paths must have been created in advance, when the local connection ID was
-         * created and announced to the peer.
-         */
-        for (int i = 0; i < cnx->nb_paths; i++) {
-            if (cnx->path[i]->path_is_registered &&
-                picoquic_compare_connection_id(&ph->dest_cnx_id, &cnx->path[i]->local_cnxid) == 0) {
-                path_id = i;
-                break;
+    if (path_id < 0 && partial_match_path >= 0) {
+        /* Document the source address and promote to full match. */
+        path_id = partial_match_path;
+        picoquic_store_addr(&cnx->path[path_id]->local_addr, addr_to);
+    }
+
+    if (path_id >= 0) {
+        /* Packet arriving on an existing path */
+        if (cnx->path[path_id]->p_local_cnxid == NULL) {
+            /* First packet from the peer. Remember the CNX ID. No further action */
+            cnx->path[path_id]->p_local_cnxid = picoquic_find_local_cnxid(cnx, &ph->dest_cnx_id);
+        } else if (picoquic_compare_connection_id(&cnx->path[path_id]->p_local_cnxid->cnx_id, &ph->dest_cnx_id) != 0) {
+            /* The peer switched to a new CID */
+            cnx->path[path_id]->p_local_cnxid = picoquic_find_local_cnxid(cnx, &ph->dest_cnx_id);
+            if (cnx->client_mode == 0 && cnx->cnxid_stash_first != NULL && path_id == 0) {
+                /* If on a server, dereference the current CID, and pick a new one */
+                (void)picoquic_renew_connection_id(cnx, path_id);
             }
         }
-
-        if (path_id < 0) {
-            ret = PICOQUIC_ERROR_CNXID_CHECK;
-        }
-    }
-    else if (ph->dest_cnx_id.id_len != 0) {
-        ret = PICOQUIC_ERROR_CNXID_CHECK;
     }
     else {
-        /* Paths to the peer are strictly defined by the address pairs, and are not
-         * created in advance, because the address pair is unpredictable */
+        /* No valid path. Need to create one, but only if this is
+         * within our resource boundaries. This is the place where
+         * we might want to do some heuristics.
+         *
+         * Check whether this is a duplicate of an existing path.
+         */
+
         for (int i = 0; i < cnx->nb_paths; i++) {
-            if (picoquic_compare_addr((struct sockaddr *)&cnx->path[i]->peer_addr,
-                addr_from) == 0 &&
-                (cnx->path[i]->local_addr.ss_family == 0 ||
-                    picoquic_compare_addr((struct sockaddr *)&cnx->path[i]->local_addr,
-                        addr_to) == 0)) {
-                path_id = i;
-                break;
+            if (cnx->path[i]->p_local_cnxid != NULL &&
+                picoquic_compare_connection_id(&cnx->path[i]->p_local_cnxid->cnx_id, &ph->dest_cnx_id) == 0) {
+                if (nat_rebinding_total == 0) {
+                    nat_rebinding_path = i;
+                }
+                nat_rebinding_total++;
             }
         }
 
-        if (path_id < 0) {
-            ret = picoquic_create_path(cnx, current_time, addr_to, addr_from);
-            if (ret == 0) {
-                path_id = cnx->nb_paths - 1;
-                cnx->path[path_id]->path_is_published = 1; /* No need to send NEW CNXID frame */
-                picoquic_register_path(cnx, cnx->path[path_id]);
-                new_challenge_required = 1;
+        if (cnx->nb_paths < PICOQUIC_NB_PATH_TARGET
+            && picoquic_create_path(cnx, current_time, addr_to, addr_from) > 0) {
+            /* The peer is probing for a new path, or there was a path rebinding */
+            path_id = cnx->nb_paths - 1;
+
+            if (picoquic_assign_peer_cnxid_to_path(cnx, path_id) != 0){
+                /* Copy the destination ID from an existing path */
+                int alt_path = (nat_rebinding_path >= 0) ? nat_rebinding_path : 0;
+                cnx->path[path_id]->remote_cnxid = cnx->path[alt_path]->remote_cnxid;
+                cnx->path[path_id]->remote_cnxid_sequence = cnx->path[alt_path]->remote_cnxid_sequence;
+                memcpy(cnx->path[path_id]->reset_secret, cnx->path[alt_path]->reset_secret,
+                    PICOQUIC_RESET_SECRET_SIZE);
             }
-        }
-    }
 
-    if (ret == 0 && cnx->path[path_id]->local_addr.ss_family == 0) {
-        picoquic_store_addr(&cnx->path[path_id]->local_addr, addr_to);
-        path0_updated |= (path_id == 0);
-    }
+            cnx->path[path_id]->path_is_published = 1; 
+            cnx->path[path_id]->p_local_cnxid = picoquic_find_local_cnxid(cnx, &ph->dest_cnx_id);
+            picoquic_register_path(cnx, cnx->path[path_id]);
+            picoquic_set_path_challenge(cnx, path_id, current_time);
 
-
-    if (ret == 0) {
-        if (picoquic_compare_addr((struct sockaddr *)&cnx->path[path_id]->peer_addr, addr_from) == 0) {
-            if (picoquic_compare_addr((struct sockaddr *)&cnx->path[path_id]->local_addr, addr_to) != 0) {
-                picoquic_store_addr(&cnx->path[path_id]->local_addr, addr_to);
+            /* If this is a NAT rebinding, also set a challenge on the original path */
+            if (nat_rebinding_path >= 0) {
+                /* Treat this as a NAT rebinding. Mark the old path for validation */
+                picoquic_set_path_challenge(cnx, nat_rebinding_path, current_time);
             }
-            /* All is good. Consider the path activated */
-            cnx->path[path_id]->path_is_activated = 1;
         }
         else {
-            /* If this is a newly activated path, try document the remote connection ID
-             * and request a probe if this is possible. Else, treat this as a NAT rebinding
-             * and request a probe */
-            if (!picoquic_is_connection_id_null(&cnx->path[0]->remote_cnxid) &&
-                picoquic_is_connection_id_null(&cnx->path[path_id]->remote_cnxid)) {
-                /* if there is a probe in progress, find it. */
-                picoquic_probe_t * probe = picoquic_find_probe_by_addr(cnx, addr_from, addr_to);
-                if (probe != NULL) {
-                    picoquic_fill_path_data_from_probe(cnx, path_id, probe, addr_from, addr_to);
-                }
-                else if (cnx->client_mode && (picoquic_compare_addr((struct sockaddr *)&cnx->path[0]->peer_addr,
-                    (struct sockaddr *)addr_from) == 0 &&
-                    picoquic_compare_addr((struct sockaddr *)&cnx->path[0]->local_addr,
-                        addr_to) == 0)) {
-                    /* Only the connection ID changed from path 0. Use the path[0] remote ID, validate this path, invalidate path[0]. */
-                    cnx->path[path_id]->remote_cnxid = cnx->path[0]->remote_cnxid;
-                    cnx->path[path_id]->remote_cnxid_sequence = cnx->path[0]->remote_cnxid_sequence;
-                    memcpy(cnx->path[path_id]->reset_secret, cnx->path[0]->reset_secret,
-                        PICOQUIC_RESET_SECRET_SIZE);
-                    cnx->path[path_id]->path_is_activated = 1;
-                    cnx->path[path_id]->challenge_required = cnx->path[0]->challenge_required;
-                    for (int ichal = 0; ichal < PICOQUIC_CHALLENGE_REPEAT_MAX; ichal++) {
-                        cnx->path[path_id]->challenge[ichal] = cnx->path[0]->challenge[ichal];
-                    }
-                    cnx->path[path_id]->challenge_time = cnx->path[0]->challenge_time;
-                    cnx->path[path_id]->challenge_repeat_count = cnx->path[0]->challenge_repeat_count;
-                    cnx->path[path_id]->challenge_required = cnx->path[0]->challenge_required;
-                    cnx->path[path_id]->challenge_verified = cnx->path[0]->challenge_verified;
-                    cnx->path[path_id]->challenge_failed = cnx->path[0]->challenge_failed;
-                    picoquic_store_addr(&cnx->path[path_id]->peer_addr, addr_from);
-                    picoquic_store_addr(&cnx->path[path_id]->local_addr, addr_to);
-                    cnx->path[0]->remote_cnxid = picoquic_null_connection_id;
-                    picoquic_promote_path_to_default(cnx, path_id, current_time);
-                    path_id = 0;
-                    /* No new challenge required there */
-                    new_challenge_required = 0;
-                    path0_updated = 1;
-                }
-                else if (cnx->path[path_id]->path_is_activated == 0) {
-                    /* The peer is probing for a new path */
-                    /* If there is no matching probe, try find a stashed ID */
-                    picoquic_cnxid_stash_t * available_cnxid = picoquic_dequeue_cnxid_stash(cnx);
-                    if (available_cnxid != NULL) {
-                        cnx->path[path_id]->remote_cnxid = available_cnxid->cnx_id;
-                        cnx->path[path_id]->remote_cnxid_sequence = available_cnxid->sequence;
-                        memcpy(cnx->path[path_id]->reset_secret, available_cnxid->reset_secret,
-                            PICOQUIC_RESET_SECRET_SIZE);
-                        cnx->path[path_id]->path_is_activated = 1;
-                        free(available_cnxid);
-                        /* New challenge required there */
-                        new_challenge_required = 1;
-                        picoquic_store_addr(&cnx->path[path_id]->peer_addr, addr_from);
-                        picoquic_store_addr(&cnx->path[path_id]->local_addr, addr_to);
-                        path0_updated |= (path_id == 0);
-                    }
-                    else {
-                        /* Do not activate the path if no connection ID is available */
-                        cnx->path[path_id]->path_is_activated = 0;
-                        cnx->path[path_id]->challenge_required = 0;
-                        new_challenge_required = 0;
-                    }
-                }
+            DBG_PRINTF("%s", "Cannot create new path for incoming packet");
+            if (nat_rebinding_path >= 0) {
+                path_id = nat_rebinding_path;
             }
             else {
-                /* Since the CNXID is documented but the addresses do not match, consider this as
-                 * a NAT rebinding attempt. We will only keep one such attempt validated at a time. */
-                if ((picoquic_compare_addr((struct sockaddr *)&cnx->path[path_id]->alt_peer_addr,
-                    (struct sockaddr *)addr_from) == 0 &&
-                    picoquic_compare_addr((struct sockaddr *)&cnx->path[path_id]->alt_local_addr,
-                        addr_to) == 0)) {
-                    /* New packet received for the same alt address */
-                    if (current_time > cnx->path[path_id]->alt_challenge_timeout) {
-                        cnx->path[path_id]->alt_challenge_timeout = 0;
-                        cnx->path[path_id]->alt_challenge_required = 1;
-                        cnx->path[path_id]->alt_challenge_repeat_count = 0;
-                        cnx->alt_path_challenge_needed = 1;
-                        new_challenge_required = 1;
-                    }
-                }
-                else if (((cnx->path[path_id]->alt_peer_addr.ss_family == 0 &&
-                    cnx->path[path_id]->alt_local_addr.ss_family == 0) ||
-                    cnx->path[path_id]->alt_challenge_timeout > current_time) &&
-                    ph->pn64 >= cnx->pkt_ctx[picoquic_packet_context_application].first_sack_item.end_of_sack_range) {
-                    /* The addresses are different, and this is a most recent
-                     * packet. This probably indicates a NAT rebinding, but it could also be
-                     * some kind of attack. */
-                    picoquic_store_addr(&cnx->path[path_id]->alt_peer_addr, addr_from);
-                    picoquic_store_addr(&cnx->path[path_id]->alt_local_addr, addr_to);
-                    for (int ichal = 0; ichal < PICOQUIC_CHALLENGE_REPEAT_MAX; ichal++) {
-                        cnx->path[path_id]->alt_challenge[ichal] = picoquic_public_random_64();
-                    }
-                    cnx->path[path_id]->alt_challenge_required = 1;
-                    cnx->path[path_id]->alt_challenge_timeout = 0;
-                    cnx->path[path_id]->alt_challenge_repeat_count = 0;
-                    cnx->alt_path_challenge_needed = 1;
-                    /* Require a new challenge on the normal path */
-                    new_challenge_required = 1;
-                }
-                else {
-                    /* Can't use the new addresses. Treat packet as if it was just received
-                     * on the matching path, ignore the addresses for most purposes,
-                     * do not require a new challenge */
-                }
+                path_id = 0;
             }
         }
-    }
-
-
-    if (ret == 0 && new_challenge_required) {
-        /* Reset the path challenge */
-        cnx->path[path_id]->challenge_required = 1;
-        for (int ichal = 0; ichal < PICOQUIC_CHALLENGE_REPEAT_MAX; ichal++) {
-            cnx->path[path_id]->challenge[ichal] = picoquic_public_random_64();
-            cnx->path[path_id]->alt_challenge[ichal] = picoquic_public_random_64();
-        }
-        cnx->path[path_id]->challenge_verified = 0;
-        cnx->path[path_id]->challenge_time = current_time;
-        cnx->path[path_id]->challenge_repeat_count = 0;
     }
 
     *p_path_id = path_id;
-
-    if (ret == 0 && path0_updated) {
-        ret = picoquic_register_net_secret(cnx);
-    }
 
     return ret;
 }
@@ -1744,8 +1663,8 @@ void picoquic_incoming_not_decrypted(
     int if_index_to)
 {
     if (cnx->cnx_state < picoquic_state_ready) {
-        if (cnx->path[0]->local_cnxid.id_len > 0 &&
-            picoquic_compare_connection_id(&cnx->path[0]->local_cnxid, &ph->dest_cnx_id) == 0)
+        if (cnx->path[0]->p_local_cnxid->cnx_id.id_len > 0 &&
+            picoquic_compare_connection_id(&cnx->path[0]->p_local_cnxid->cnx_id, &ph->dest_cnx_id) == 0)
         {
             /* verifying the destination cnx id is a strong hint that the peer is responding */
             if (cnx->path[0]->smoothed_rtt == PICOQUIC_INITIAL_RTT
@@ -1871,7 +1790,7 @@ int picoquic_incoming_segment(
             case picoquic_packet_initial:
                 /* Initial packet: either crypto handshakes or acks. */
                 if ((!cnx->client_mode && picoquic_compare_connection_id(&ph.dest_cnx_id, &cnx->initial_cnxid) == 0) ||
-                    picoquic_compare_connection_id(&ph.dest_cnx_id, &cnx->path[0]->local_cnxid) == 0) {
+                    picoquic_compare_connection_id(&ph.dest_cnx_id, &cnx->path[0]->p_local_cnxid->cnx_id) == 0) {
                     /* Verify that the source CID matches expectation */
                     if (picoquic_is_connection_id_null(&cnx->path[0]->remote_cnxid)) {
                         cnx->path[0]->remote_cnxid = ph.srce_cnx_id;
