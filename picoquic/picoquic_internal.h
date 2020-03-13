@@ -1044,7 +1044,6 @@ typedef struct st_picoquic_packet_data_t {
 int picoquic_load_token_file(picoquic_quic_t* quic, char const * token_file_name);
 
 /* Init of transport parameters */
-int picoquic_set_default_tp(picoquic_quic_t* quic, picoquic_tp_t * tp);
 void picoquic_init_transport_parameters(picoquic_tp_t* tp, int client_mode);
 
 /* Registration of per path connection ID in server context */
