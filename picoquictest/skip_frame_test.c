@@ -401,7 +401,6 @@ int parse_frame_test()
         NULL, NULL, NULL, NULL, simulated_time,
         &simulated_time, NULL, NULL, 0);
 
-
     memset(&saddr, 0, sizeof(struct sockaddr_in));
     if (qclient == NULL) {
         DBG_PRINTF("%s", "Cannot create QUIC context\n");
@@ -436,8 +435,8 @@ int parse_frame_test()
 
                 cnx->pkt_ctx[0].send_sequence = 0x0102030406;
 
-                /* create a path which can be retired with a connection_id_retire frame */
-                picoquic_create_path(cnx, cnx->start_time, (struct sockaddr*)&cnx->path[0]->local_addr, NULL);
+                /* create a local cid  which can be retired with a connection_id_retire frame */
+                (void)picoquic_create_local_cnxid(cnx, NULL);
 
                 /* enable time stamp if used in test */
                 if (buffer[0] == test_frame_type_time_stamp[0] &&
@@ -945,7 +944,7 @@ int cnxid_stash_test()
             ret = -1;
         } else {
             /* init the various connection id to a length compatible with test */
-            cnx->path[0]->local_cnxid = stash_test_init_local;
+            cnx->path[0]->p_local_cnxid->cnx_id = stash_test_init_local;
             cnx->path[0]->remote_cnxid = stash_test_init_remote;
         }
 
@@ -1024,25 +1023,24 @@ int new_cnxid_test()
             ret = -1;
         }
         else {
-            /* Create a new path */
-            int path_index;
-            saddr.sin_port = 1000;
-            path_index = picoquic_create_path(cnx, simulated_time, (struct sockaddr *)&saddr, NULL);
-
-            if (path_index != 1) {
-                DBG_PRINTF("Cannot create new path, index = %d\n", path_index);
+            /* Create a new local CID */
+            picoquic_local_cnxid_t* local_cid = picoquic_create_local_cnxid(cnx, NULL);
+            
+            if (local_cid == NULL) {
+                DBG_PRINTF("%s", "Cannot create local cnxid\n");
                 ret = -1;
             }
-            else if (cnx->nb_paths != 2) {
-                DBG_PRINTF("Expected 2 paths, got %d\n", cnx->nb_paths);
+            if (cnx->nb_local_cnxid != 2) {
+                DBG_PRINTF("Expected 2 CID, got %d\n", cnx->nb_local_cnxid);
                 ret = -1;
             }
-            else {
-                picoquic_register_path(cnx, cnx->path[path_index]);
+            else if (cnx->local_cnxid_first == NULL || cnx->local_cnxid_first->next == NULL) {
+                DBG_PRINTF("%s", "Pointer to CID is NULL in cnx context\n");
+                ret = -1;
             }
 
             if (ret == 0) {
-                ret = picoquic_prepare_new_connection_id_frame(cnx, cnx->path[1],
+                ret = picoquic_prepare_new_connection_id_frame(cnx, local_cid, 
                     frame_buffer, sizeof(frame_buffer), &consumed);
 
                 if (ret != 0) {

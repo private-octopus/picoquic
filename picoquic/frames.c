@@ -452,7 +452,7 @@ uint8_t* picoquic_decode_stream_reset_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
  * New Connection ID frame
  */
 
-int picoquic_prepare_new_connection_id_frame(picoquic_cnx_t * cnx, picoquic_path_t * path_x,
+int picoquic_prepare_new_connection_id_frame(picoquic_cnx_t * cnx, picoquic_local_cnxid_t* l_cid,
     uint8_t* bytes, size_t bytes_max, size_t* consumed)
 {
     int ret = 0;
@@ -461,13 +461,13 @@ int picoquic_prepare_new_connection_id_frame(picoquic_cnx_t * cnx, picoquic_path
 
     *consumed = 0;
 
-    if (path_x->path_sequence > 0 && path_x->local_cnxid.id_len > 0 && path_x->path_is_registered) {
+    if (l_cid != NULL && l_cid->sequence != 0 && l_cid->cnx_id.id_len > 0) {
         if (bytes_max < 2) {
             ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
         } else {
             bytes[byte_index++] = picoquic_frame_type_new_connection_id;
             ls = picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index,
-                path_x->path_sequence);
+                l_cid->sequence);
             byte_index += ls;
             if (ls == 0) {
                 ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
@@ -477,14 +477,14 @@ int picoquic_prepare_new_connection_id_frame(picoquic_cnx_t * cnx, picoquic_path
                     bytes[byte_index] = 0;
                 }
                 byte_index++;
-                if (byte_index + 1 + path_x->local_cnxid.id_len + PICOQUIC_RESET_SECRET_SIZE > bytes_max) {
+                if (byte_index + 1 + l_cid->cnx_id.id_len + PICOQUIC_RESET_SECRET_SIZE > bytes_max) {
                     ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
                 }
                 else {
-                    bytes[byte_index++] = path_x->local_cnxid.id_len;
-                    memcpy(bytes + byte_index, path_x->local_cnxid.id, path_x->local_cnxid.id_len);
-                    byte_index += path_x->local_cnxid.id_len;
-                    (void)picoquic_create_cnxid_reset_secret(cnx->quic, path_x->local_cnxid,
+                    bytes[byte_index++] = l_cid->cnx_id.id_len;
+                    memcpy(bytes + byte_index, l_cid->cnx_id.id, l_cid->cnx_id.id_len);
+                    byte_index += l_cid->cnx_id.id_len;
+                    (void)picoquic_create_cnxid_reset_secret(cnx->quic, &l_cid->cnx_id,
                         bytes + byte_index);
                     byte_index += PICOQUIC_RESET_SECRET_SIZE;
                     *consumed = byte_index;
@@ -633,13 +633,14 @@ uint8_t* picoquic_decode_retire_connection_id_frame(picoquic_cnx_t* cnx, uint8_t
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
             picoquic_frame_type_retire_connection_id);
     }
-    else if (sequence >= cnx->path_sequence_next || cnx->path[0]->local_cnxid.id_len == 0) {
+    else if (sequence >= cnx->local_cnxid_sequence_next) {
         /* If there is no matching path, trigger an error */
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
             picoquic_frame_type_retire_connection_id);
         bytes = NULL;
     }
-    else if (sequence == path_x->path_sequence && path_x->path_is_registered) {
+    else if (path_x->p_local_cnxid != NULL &&
+        sequence == path_x->p_local_cnxid->sequence) {
         /* Cannot delete the path through which it arrives */
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
             picoquic_frame_type_retire_connection_id);
@@ -647,14 +648,7 @@ uint8_t* picoquic_decode_retire_connection_id_frame(picoquic_cnx_t* cnx, uint8_t
     }
     else {
         /* Go through the list of paths to find the connection ID */
-
-        for (int i = 0; i < cnx->nb_paths; i++) {
-            if (cnx->path[i]->path_sequence == sequence && cnx->path[i]->path_is_registered) {
-                /* Mark the corresponding path as demoted */
-                picoquic_demote_path(cnx, i, current_time);
-                break;
-            }
-        }
+        picoquic_retire_local_cnxid(cnx, sequence);
     }
 
     return bytes;
@@ -3431,12 +3425,6 @@ uint8_t* picoquic_decode_path_challenge_frame(picoquic_cnx_t* cnx, uint8_t* byte
             (addr_to == NULL || picoquic_compare_addr(addr_to, (struct sockaddr *)&path_x->local_addr) == 0)) {
             path_x->challenge_response = challenge_response;
             path_x->response_required = 1;
-        }
-        else if (addr_from != NULL && picoquic_compare_addr(addr_from, (struct sockaddr *)&path_x->alt_peer_addr) == 0 &&
-            addr_to != NULL && picoquic_compare_addr(addr_to, (struct sockaddr *)&path_x->alt_local_addr) == 0) {
-            path_x->alt_challenge_response = challenge_response;
-            path_x->alt_response_required = 1;
-            cnx->alt_path_challenge_needed = 1;
         } else {
             DBG_PRINTF("%s", "Path challenge ignored, wrong addresses\n");
         }
@@ -3486,43 +3474,6 @@ uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, uint8_t* bytes
             if (found_challenge) {
                 cnx->path[i]->challenge_verified = 1;
                 break;
-            }
-            else {
-                for (int ichal = 0; ichal < PICOQUIC_CHALLENGE_REPEAT_MAX; ichal++) {
-                    if (response == cnx->path[i]->alt_challenge[ichal]) {
-                        found_challenge = 1;
-                        break;
-                    }
-                }
-                if (found_challenge) {
-                    if (cnx->path[i]->alt_challenge_required && !cnx->path[i]->challenge_verified) {
-                        /* Promote the alt address to valid address */
-                        picoquic_store_addr(&cnx->path[i]->peer_addr, (struct sockaddr*) & cnx->path[i]->alt_peer_addr);
-                        picoquic_store_addr(&cnx->path[i]->local_addr, (struct sockaddr*) & cnx->path[i]->alt_local_addr);
-                        memset(&cnx->path[i]->alt_peer_addr, 0, sizeof(cnx->path[i]->alt_peer_addr));
-                        memset(&cnx->path[i]->alt_local_addr, 0, sizeof(cnx->path[i]->alt_local_addr));
-                        cnx->path[i]->challenge_response = cnx->path[i]->alt_challenge_response;
-                        cnx->path[i]->response_required = cnx->path[i]->alt_response_required;
-                        cnx->path[i]->alt_challenge_timeout = 0;
-                        cnx->path[i]->challenge_verified = 1;
-                        cnx->path[i]->alt_challenge_required = 0;
-                        cnx->path[i]->alt_response_required = 0;
-                        cnx->path[i]->alt_challenge_response = 0;
-                    }
-                    else {
-                        DBG_PRINTF("Duplicate challenge response: %16llx\n", (unsigned long long)response);
-                    }
-                    break;
-                }  
-            }
-        }
-
-        if (found_challenge == 0) {
-            picoquic_probe_t * probe = picoquic_find_probe_by_challenge(cnx, response);
-
-            if (probe != NULL) {
-                probe->challenge_verified = 1;
-                cnx->has_successful_probe = 1;
             }
         }
     }

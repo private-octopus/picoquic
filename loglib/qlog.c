@@ -345,14 +345,14 @@ int qlog_param_update(uint64_t time, bytestream* s, void* ptr)
 
 
     ret |= byteread_vint(s, &alpn_length);
-    if (alpn_length > 0) {
+    if (ret == 0 && alpn_length > 0) {
         fprintf(f, ",\n    \"alpn\": ");
         qlog_chars(f, s, alpn_length);
     }
 
     ret |= byteread_vint(s, &tp_length);
 
-    if (tp_length > 0) {
+    if (ret == 0 && tp_length > 0) {
         qlog_transport_extensions(f, s, (size_t)tp_length);
     }
     
@@ -402,7 +402,9 @@ int qlog_packet_lost(uint64_t time, bytestream* s, void* ptr)
         qlog_string(f, s, cid_len);
     }
     ret |= byteread_vint(s, &packet_size);
-    fprintf(f, ",\n        \"packet_size\" : %" PRIu64, packet_size);
+    if (ret == 0) {
+        fprintf(f, ",\n        \"packet_size\" : %" PRIu64, packet_size);
+    }
     fprintf(f, "}}]");
 
     ctx->event_count++;
