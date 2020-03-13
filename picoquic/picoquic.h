@@ -408,7 +408,9 @@ void picoquic_free(picoquic_quic_t* quic);
 /* Set cookie mode on QUIC context when under stress */
 void picoquic_set_cookie_mode(picoquic_quic_t* quic, int cookie_mode);
 
-/* Set the transport parameters */
+/* Init of transport parameters per quic context */
+int picoquic_set_default_tp(picoquic_quic_t* quic, picoquic_tp_t* tp);
+/* Set the transport parameters per connection */
 void picoquic_set_transport_parameters(picoquic_cnx_t * cnx, picoquic_tp_t const * tp);
 
 /* Set the TLS certificate chain(DER format) for the QUIC context. The context will take ownership over the certs pointer. */
