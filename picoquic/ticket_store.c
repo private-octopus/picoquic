@@ -1,3 +1,4 @@
+#include "picoquic_internal.h"
 /*
 * Author: Christian Huitema
 * Copyright (c) 2017, Private Octopus, Inc.
@@ -389,4 +390,20 @@ void picoquic_free_tickets(picoquic_stored_ticket_t** pp_first_ticket)
 
         free(next);
     }
+}
+
+int picoquic_save_session_tickets(picoquic_quic_t* quic, char const* ticket_store_filename)
+{
+    return picoquic_save_tickets(quic->p_first_ticket, picoquic_get_quic_time(quic), ticket_store_filename);
+}
+
+
+int picoquic_load_retry_tokens(picoquic_quic_t* quic, char const* token_store_filename)
+{
+    return picoquic_load_tokens(&quic->p_first_token, picoquic_get_quic_time(quic), token_store_filename);
+}
+
+int picoquic_save_retry_tokens(picoquic_quic_t* quic, char const* ticket_store_filename)
+{
+    return picoquic_save_tokens(quic->p_first_token, picoquic_get_quic_time(quic), ticket_store_filename);
 }
