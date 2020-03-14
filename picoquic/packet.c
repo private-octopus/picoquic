@@ -933,21 +933,24 @@ int picoquic_incoming_client_initial(
         !(*pcnx)->quic->server_busy) {
         if (picoquic_verify_retry_token((*pcnx)->quic, addr_from, current_time,
             &(*pcnx)->original_cnxid, ph->token_bytes, ph->token_length) != 0) {
-            uint8_t token_buffer[256];
-            size_t token_size;
-
-            if (picoquic_prepare_retry_token((*pcnx)->quic, addr_from, 
-                current_time + PICOQUIC_TOKEN_DELAY_SHORT, &ph->dest_cnx_id,
-                token_buffer, sizeof(token_buffer), &token_size) != 0){ 
-                ret = PICOQUIC_ERROR_MEMORY;
-            }
-            else if (ph->token_length == 0){
-                picoquic_queue_stateless_retry(*pcnx, ph,
-                    addr_from, addr_to, if_index_to, token_buffer, token_size);
-                ret = PICOQUIC_ERROR_RETRY;
+            if (ph->token_length != 0) {
+                (void)picoquic_connection_error(*pcnx, PICOQUIC_TRANSPORT_INVALID_TOKEN, 0);
+                ret = PICOQUIC_ERROR_INVALID_TOKEN;
             }
             else {
-                ret = picoquic_connection_error(*pcnx, PICOQUIC_TRANSPORT_INVALID_TOKEN, 0);
+                uint8_t token_buffer[256];
+                size_t token_size;
+
+                if (picoquic_prepare_retry_token((*pcnx)->quic, addr_from,
+                    current_time + PICOQUIC_TOKEN_DELAY_SHORT, &ph->dest_cnx_id,
+                    token_buffer, sizeof(token_buffer), &token_size) != 0) {
+                    ret = PICOQUIC_ERROR_MEMORY;
+                }
+                else {
+                    picoquic_queue_stateless_retry(*pcnx, ph,
+                        addr_from, addr_to, if_index_to, token_buffer, token_size);
+                    ret = PICOQUIC_ERROR_RETRY;
+                }
             }
         }
         else {
@@ -1005,6 +1008,10 @@ int picoquic_incoming_client_initial(
             /* Initial keys should have been discarded, treat packet as unexpected */
             ret = PICOQUIC_ERROR_UNEXPECTED_PACKET;
         }
+    }
+
+    if (ret == PICOQUIC_ERROR_INVALID_TOKEN && (*pcnx)->cnx_state == picoquic_state_handshake_failure) {
+        ret = 0;
     }
 
     if (ret != 0 || (*pcnx)->cnx_state == picoquic_state_disconnected) {

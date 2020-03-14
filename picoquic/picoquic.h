@@ -447,6 +447,14 @@ uint8_t picoquic_get_local_cid_length(picoquic_quic_t* quic);
 /* Check whether a CID is locally defined */
 int picoquic_is_local_cid(picoquic_quic_t* quic, picoquic_connection_id_t* cid);
 
+/* Manage session tickets and retry tokens.
+ * There is no explicit call to load tickets, this must be done by passing
+ * the ticket store name as an argument to picoquic_create().
+ */
+int picoquic_load_retry_tokens(picoquic_quic_t* quic, char const* token_store_filename);
+int picoquic_save_session_tickets(picoquic_quic_t* quic, char const* ticket_store_filename);
+int picoquic_save_retry_tokens(picoquic_quic_t* quic, char const* token_store_filename);
+
 /* Set default connection ID length for the context.
  * All valid values are supported on the client.
  * Using a null value on the server is not tested, may not work.

@@ -494,7 +494,8 @@ int quic_client(const char* ip_address_text, int server_port,
     callback_ctx.last_interaction_time = current_time;
 
     if (ret == 0) {
-        qclient = picoquic_create(8, NULL, NULL, root_crt, alpn, NULL, NULL, NULL, NULL, NULL, current_time, NULL, ticket_store_filename, NULL, 0);
+        qclient = picoquic_create(8, NULL, NULL, root_crt, alpn, NULL, NULL, NULL, NULL, NULL, current_time, NULL,
+            ticket_store_filename, NULL, 0);
 
         if (qclient == NULL) {
             ret = -1;
@@ -504,7 +505,7 @@ int quic_client(const char* ip_address_text, int server_port,
             }
             picoquic_set_default_congestion_algorithm(qclient, cc_algorithm);
 
-            if (picoquic_load_tokens(&qclient->p_first_token, current_time, token_store_filename) != 0) {
+            if (picoquic_load_retry_tokens(qclient, token_store_filename) != 0) {
                 fprintf(stderr, "Could not load tokens from <%s>.\n", token_store_filename);
             }
 
@@ -868,12 +869,11 @@ int quic_client(const char* ip_address_text, int server_port,
             picoquic_log_picotls_ticket(stdout, picoquic_null_connection_id, ticket, ticket_length);
         }
 
-        if (picoquic_save_tickets(qclient->p_first_ticket, current_time, ticket_store_filename) != 0) {
+        if (picoquic_save_session_tickets(qclient, ticket_store_filename) != 0) {
             fprintf(stderr, "Could not store the saved session tickets.\n");
         }
 
-
-        if (picoquic_save_tokens(qclient->p_first_token, current_time, token_store_filename) != 0) {
+        if (picoquic_save_retry_tokens(qclient, token_store_filename) != 0) {
             fprintf(stderr, "Could not save tokens to <%s>.\n", token_store_filename);
         }
 
