@@ -638,8 +638,7 @@ int picoquic_incoming_version_negotiation(
     picoquic_packet_header* ph,
     uint64_t current_time)
 {
-    /* Parse the content */
-    int ret = -1;
+    int ret = 0;
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(bytes);
     UNREFERENCED_PARAMETER(length);
@@ -647,20 +646,51 @@ int picoquic_incoming_version_negotiation(
     UNREFERENCED_PARAMETER(current_time);
 #endif
 
-    if (picoquic_compare_connection_id(&ph->dest_cnx_id, &cnx->path[0]->p_local_cnxid->cnx_id) != 0 || ph->vn != 0) {
+    /* Check the connection state */
+    if (cnx->cnx_state != picoquic_state_client_init_sent) {
+        /* This is an unexpected packet. Log and drop.*/
+        DBG_PRINTF("Unexpected VN packet (%d), state %d, type: %d, epoch: %d, pc: %d, pn: %d\n",
+            cnx->client_mode, cnx->cnx_state, ph->ptype, ph->epoch, ph->pc, (int)ph->pn);
+    } else if (picoquic_compare_connection_id(&ph->dest_cnx_id, &cnx->path[0]->p_local_cnxid->cnx_id) != 0 || ph->vn != 0) {
         /* Packet that do not match the "echo" checks should be logged and ignored */
-        ret = 0;
+        DBG_PRINTF("VN packet (%d), does not pass echo test.\n", cnx->client_mode);
+        ret = PICOQUIC_ERROR_DETECTED;
     } else {
-        /* TODO: add DOS resilience */
-        /* Signal VN to the application */
-        if (cnx->callback_fn && length > ph->offset) {
-            (void)(cnx->callback_fn)(cnx, 0, bytes + ph->offset, length - ph->offset,
-                picoquic_callback_version_negotiation, cnx->callback_ctx, NULL);
+        /* Add DOS resilience */
+        uint8_t * v_bytes = bytes + ph->offset;
+        uint8_t* bytes_max = bytes + length;
+        int nb_vn = 0;
+        while (v_bytes < bytes_max) {
+            uint32_t vn = 0;
+            if ((v_bytes = picoquic_frames_uint32_decode(v_bytes, bytes_max, &vn)) == NULL){
+                DBG_PRINTF("VN packet (%d), length %uz, coding error after %d version numbers.\n",
+                    cnx->client_mode, length, nb_vn);
+                ret = PICOQUIC_ERROR_DETECTED;
+                break;
+            } else if (vn == cnx->proposed_version) {
+                DBG_PRINTF("VN packet (%d), proposed_version[%d] = 0x%08x.\n", cnx->client_mode, nb_vn, vn);
+                ret = PICOQUIC_ERROR_DETECTED;
+                break;
+            }
+            nb_vn++;
         }
-        /* TODO: consider rewriting the version negotiation code */
-        DBG_PRINTF("%s", "Disconnect upon receiving version negotiation.\n");
-        cnx->cnx_state = picoquic_state_disconnected;
-        ret = 0;
+        if (ret == 0) {
+            if (nb_vn == 0) {
+                DBG_PRINTF("VN packet (%d), does not propose any version.\n", cnx->client_mode);
+                ret = PICOQUIC_ERROR_DETECTED;
+            }
+            else {
+                /* Signal VN to the application */
+                if (cnx->callback_fn && length > ph->offset) {
+                    (void)(cnx->callback_fn)(cnx, 0, bytes + ph->offset, length - ph->offset,
+                        picoquic_callback_version_negotiation, cnx->callback_ctx, NULL);
+                }
+                /* TODO: consider rewriting the version negotiation code */
+                DBG_PRINTF("%s", "Disconnect upon receiving version negotiation.\n");
+                cnx->cnx_state = picoquic_state_disconnected;
+                ret = 0;
+            }
+        }
     }
 
     return ret;
@@ -1782,17 +1812,8 @@ int picoquic_incoming_segment(
         else {
             switch (ph.ptype) {
             case picoquic_packet_version_negotiation:
-                if (cnx->cnx_state == picoquic_state_client_init_sent) {
-                    /* Proceed with version negotiation*/
-                    ret = picoquic_incoming_version_negotiation(
-                        cnx, bytes, length, addr_from, &ph, current_time);
-                }
-                else {
-                    /* This is an unexpected packet. Log and drop.*/
-                    DBG_PRINTF("Unexpected packet (%d), type: %d, epoch: %d, pc: %d, pn: %d\n",
-                        cnx->client_mode, ph.ptype, ph.epoch, ph.pc, (int) ph.pn);
-                    ret = PICOQUIC_ERROR_DETECTED;
-                }
+                ret = picoquic_incoming_version_negotiation(
+                    cnx, bytes, length, addr_from, &ph, current_time);
                 break;
             case picoquic_packet_initial:
                 /* Initial packet: either crypto handshakes or acks. */
