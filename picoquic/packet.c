@@ -143,6 +143,11 @@ int picoquic_parse_long_packet_header(
                     break;
                 }
             }
+            else {
+                DBG_PRINTF("Version is not recognized: 0x%08x\n", ph->vn);
+                ph->ptype = picoquic_packet_error;
+                ph->pc = 0;
+            }
 
             if (ph->ptype == picoquic_packet_retry) {
                 /* No segment length or sequence number in retry packets */
@@ -640,8 +645,6 @@ int picoquic_incoming_version_negotiation(
 {
     int ret = 0;
 #ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(bytes);
-    UNREFERENCED_PARAMETER(length);
     UNREFERENCED_PARAMETER(addr_from);
     UNREFERENCED_PARAMETER(current_time);
 #endif
@@ -709,53 +712,72 @@ int picoquic_prepare_version_negotiation(
     picoquic_packet_header* ph)
 {
     int ret = -1;
-    picoquic_stateless_packet_t* sp = picoquic_create_stateless_packet(quic);
+    picoquic_cnx_t* cnx = NULL;
 
-    if (sp != NULL) {
-        uint8_t* bytes = sp->bytes;
-        size_t byte_index = 0;
-        uint32_t rand_vn;
+    /* Verify that this is not a spurious error by checking whether a connection context
+     * already exists */
+    if (ph->dest_cnx_id.id_len == quic->local_cnxid_length) {
+        if (quic->local_cnxid_length == 0) {
+            cnx = picoquic_cnx_by_net(quic, addr_from);
+        }
+        else {
+            cnx = picoquic_cnx_by_id(quic, ph->dest_cnx_id);
+        }
+    }
+    if (cnx == NULL) {
+        cnx = picoquic_cnx_by_icid(quic, &ph->dest_cnx_id, addr_from);
+    }
 
-        /* Packet type set to random value for version negotiation */
-        picoquic_public_random(bytes + byte_index, 1);
-        bytes[byte_index++] |= 0x80;
-        /* Set the version number to zero */
-        picoformat_32(bytes + byte_index, 0);
-        byte_index += 4;
+    /* If no connection context exists, send back a version negotiation */
+    if (cnx == NULL) {
+        picoquic_stateless_packet_t* sp = picoquic_create_stateless_packet(quic);
 
-        bytes[byte_index++] = ph->srce_cnx_id.id_len;
-        byte_index += picoquic_format_connection_id(bytes + byte_index, PICOQUIC_MAX_PACKET_SIZE - byte_index, ph->srce_cnx_id);
-        bytes[byte_index++] = ph->dest_cnx_id.id_len;
-        byte_index += picoquic_format_connection_id(bytes + byte_index, PICOQUIC_MAX_PACKET_SIZE - byte_index, ph->dest_cnx_id);
+        if (sp != NULL) {
+            uint8_t* bytes = sp->bytes;
+            size_t byte_index = 0;
+            uint32_t rand_vn;
 
-        /* Set the payload to the list of versions */
-        for (size_t i = 0; i < picoquic_nb_supported_versions; i++) {
-            picoformat_32(bytes + byte_index, picoquic_supported_versions[i].version);
+            /* Packet type set to random value for version negotiation */
+            picoquic_public_random(bytes + byte_index, 1);
+            bytes[byte_index++] |= 0x80;
+            /* Set the version number to zero */
+            picoformat_32(bytes + byte_index, 0);
             byte_index += 4;
+
+            bytes[byte_index++] = ph->srce_cnx_id.id_len;
+            byte_index += picoquic_format_connection_id(bytes + byte_index, PICOQUIC_MAX_PACKET_SIZE - byte_index, ph->srce_cnx_id);
+            bytes[byte_index++] = ph->dest_cnx_id.id_len;
+            byte_index += picoquic_format_connection_id(bytes + byte_index, PICOQUIC_MAX_PACKET_SIZE - byte_index, ph->dest_cnx_id);
+
+            /* Set the payload to the list of versions */
+            for (size_t i = 0; i < picoquic_nb_supported_versions; i++) {
+                picoformat_32(bytes + byte_index, picoquic_supported_versions[i].version);
+                byte_index += 4;
+            }
+            /* Add random reserved value as grease, but be careful to not match proposed version */
+            do {
+                rand_vn = (((uint32_t)picoquic_public_random_64()) & 0xF0F0F0F0) | 0x0A0A0A0A;
+            } while (rand_vn == ph->vn);
+            picoformat_32(bytes + byte_index, rand_vn);
+            byte_index += 4;
+
+            /* Set length and addresses, and queue. */
+            sp->length = byte_index;
+            picoquic_store_addr(&sp->addr_to, addr_from);
+            picoquic_store_addr(&sp->addr_local, addr_to);
+            sp->if_index_local = if_index_to;
+            sp->initial_cid = ph->dest_cnx_id;
+            sp->cnxid_log64 = picoquic_val64_connection_id(sp->initial_cid);
+            sp->ptype = picoquic_packet_version_negotiation;
+
+            if (quic->F_log != NULL) {
+                picoquic_log_outgoing_segment(quic->F_log, 1, NULL,
+                    bytes, 0, sp->length,
+                    bytes, sp->length, 0);
+            }
+
+            picoquic_queue_stateless_packet(quic, sp);
         }
-        /* Add random reserved value as grease, but be careful to not match proposed version */
-        do {
-            rand_vn = (((uint32_t)picoquic_public_random_64()) & 0xF0F0F0F0) | 0x0A0A0A0A;
-        } while (rand_vn == ph->vn);
-        picoformat_32(bytes + byte_index, rand_vn);
-        byte_index += 4;
-
-        /* Set length and addresses, and queue. */
-        sp->length = byte_index;
-        picoquic_store_addr(&sp->addr_to, addr_from);
-        picoquic_store_addr(&sp->addr_local, addr_to);
-        sp->if_index_local = if_index_to;
-        sp->initial_cid = ph->dest_cnx_id;
-        sp->cnxid_log64 = picoquic_val64_connection_id(sp->initial_cid);
-        sp->ptype = picoquic_packet_version_negotiation;
-
-        if (quic->F_log != NULL) {
-            picoquic_log_outgoing_segment(quic->F_log, 1, NULL,
-                bytes, 0, sp->length,
-                bytes, sp->length, 0);
-        }
-
-        picoquic_queue_stateless_packet(quic, sp);
     }
 
     return ret;
