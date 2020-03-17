@@ -221,6 +221,7 @@ int h09_satellite_test();
 int h09_lone_fin_test();
 int http_stress_test();
 int http_esni_test();
+int h3_long_file_name_test();
 
 int qinq_rh_test();
 int qinq_incoming_datagram_parse_test();

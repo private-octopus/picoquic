@@ -444,6 +444,7 @@ static int test_api_callback(picoquic_cnx_t* cnx,
         if (ctx != NULL) {
             ctx->received_version_negotiation = 1;
         }
+        return 0;
     }
 
     if (fin_or_event == picoquic_callback_stateless_reset) {

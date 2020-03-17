@@ -81,7 +81,7 @@ uint8_t * h3zero_qpack_int_encode(uint8_t * bytes, uint8_t * bytes_max,
     else {
         val -= mask;
         *bytes++ |= mask;
-        while (val > 0x80 && bytes < bytes_max) {
+        while (val >= 0x80 && bytes < bytes_max) {
             *bytes++ = 0x80 | (val & 0x7F);
             val >>= 7;
         }

@@ -62,6 +62,7 @@ static const picoquic_test_def_t test_table[] = {
     { "h3zero_satellite", h3zero_satellite_test },
     { "h09_satellite", h09_satellite_test },
     { "h09_lone_fin", h09_lone_fin_test },
+    { "h3_long_file_name", h3_long_file_name_test },
     { "http_stress", http_stress_test }
 };
 
