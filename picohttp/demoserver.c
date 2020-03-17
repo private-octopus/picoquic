@@ -520,7 +520,7 @@ static int h3zero_server_callback_data(
                     }
                 }
                 
-                if (fin_or_event == picoquic_callback_stream_fin) {
+                if (ret == 0 && fin_or_event == picoquic_callback_stream_fin) {
                     /* Process the request header. */
                     if (stream_ctx->ps.stream_state.header_found) {
                         ret = h3zero_server_process_request_frame(cnx, stream_ctx, ctx);

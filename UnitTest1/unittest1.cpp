@@ -1261,6 +1261,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(h3_long_file_name) {
+            int ret = h3_long_file_name_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(http_stress) {
             int ret = http_stress_test();
 
