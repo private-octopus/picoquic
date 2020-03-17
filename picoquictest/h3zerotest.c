@@ -45,6 +45,7 @@ static uint8_t h3zero_pref127_valmax[] = {
     0xFF, 0x80, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x3F };
 static uint8_t h3zero_pref7_err1[] = { 0x07 };
 static uint8_t h3zero_pref7_err2[] = { 0x07, 0xFF, 0xFF, 0x80, 0x80, 0x80 };
+static uint8_t h3zero_pref127_val255[] = { 0x1F, 0xE0, 0x01 };
 
 typedef struct st_h3zero_test_integer_case_t {
     uint64_t test_value;
@@ -60,7 +61,8 @@ static h3zero_test_integer_case_t h3zero_int_case[] = {
     { 0, 0x7F, h3zero_pref127_val0, sizeof(h3zero_pref127_val0)},
     { 0x3FFFFFFFFFFFFFFFull, 0x7F, h3zero_pref127_valmax, sizeof(h3zero_pref127_valmax)},
     { 0xFFFFFFFFFFFFFFFFull, 0x07, h3zero_pref7_err1, sizeof(h3zero_pref7_err1)},
-    { 0xFFFFFFFFFFFFFFFFull, 0x07, h3zero_pref7_err2, sizeof(h3zero_pref7_err2)}
+    { 0xFFFFFFFFFFFFFFFFull, 0x07, h3zero_pref7_err2, sizeof(h3zero_pref7_err2)},
+    { 0xFF, 0x7F, h3zero_pref127_val255, sizeof(h3zero_pref127_val255)}
 };
 
 static size_t nb_h3zero_int_case = sizeof(h3zero_int_case) / sizeof(h3zero_test_integer_case_t);
