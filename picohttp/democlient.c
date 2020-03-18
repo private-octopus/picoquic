@@ -554,6 +554,10 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
                         bytes = h3zero_parse_data_stream(bytes, bytes_max, &stream_ctx->stream_state, &available_data, &error_found);
                         if (bytes == NULL) {
                             ret = picoquic_close(cnx, error_found);
+                            if (ret != 0) {
+                                picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid,
+                                    "Could not parse incoming data from stream %" PRIu64 ", error 0x%x", stream_id, error_found);
+                            }
                             break;
                         }
                         else if (available_data > 0) {
@@ -568,6 +572,10 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
                             }
                             if (ret == 0 && ctx->no_disk == 0) {
                                 ret = (fwrite(bytes, 1, available_data, stream_ctx->F) > 0) ? 0 : -1;
+                                if (ret != 0) {
+                                    picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid,
+                                        "Could not write data from stream %" PRIu64 ", error 0x%x", stream_id, ret);
+                                }
                             }
                             stream_ctx->received_length += available_data;
                             bytes += available_data;
@@ -578,6 +586,10 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
                 case picoquic_alpn_http_0_9:
                     if (ctx->no_disk == 0) {
                         ret = (fwrite(bytes, 1, length, stream_ctx->F) > 0) ? 0 : -1;
+                        if (ret != 0) {
+                            picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid,
+                                "Could not write data from stream %" PRIu64 ", error 0x%x", stream_id, ret);
+                        }
                     }
                     stream_ctx->received_length += length;
                     break;
