@@ -3857,7 +3857,13 @@ void process_decoded_packet_data(picoquic_cnx_t* cnx, uint64_t current_time, pic
 {
     if (packet_data->acked_path != NULL) {
         uint64_t one_way_delay = 0;
-        if (cnx->congestion_alg != NULL && cnx->is_time_stamp_enabled) {
+
+        if (packet_data->acked_path->rtt_sample == 0) {
+            uint64_t cnx_time = current_time - cnx->start_time;
+            picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "RTT Sample = 0 after %" PRIu64 "us.", cnx_time);
+        }
+
+        if (cnx->congestion_alg != NULL && cnx->is_time_stamp_enabled && packet_data->acked_path->rtt_sample > 0) {
             if (packet_data->last_time_stamp_received > 0) {
                 picoquic_update_1wd(cnx, packet_data->acked_path,
                     packet_data->largest_sent_time, packet_data->last_ack_delay, packet_data->last_time_stamp_received);
@@ -3875,7 +3881,7 @@ void process_decoded_packet_data(picoquic_cnx_t* cnx, uint64_t current_time, pic
             (packet_data->last_time_stamp_received == 0) ? current_time : packet_data->last_time_stamp_received,
             current_time, packet_data->rs_is_path_limited);
 
-        if (cnx->congestion_alg != NULL) {
+        if (cnx->congestion_alg != NULL && packet_data->acked_path->rtt_sample > 0) {
             cnx->congestion_alg->alg_notify(cnx, packet_data->acked_path,
                 picoquic_congestion_notification_bw_measurement,
                 packet_data->acked_path->rtt_sample, one_way_delay, 0, 0, current_time);

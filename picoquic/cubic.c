@@ -46,7 +46,7 @@ typedef struct st_picoquic_cubic_state_t {
     uint64_t last_sequence_blocked;
 } picoquic_cubic_state_t;
 
-static void picoquic_cubic_init(picoquic_path_t* path_x)
+static void picoquic_cubic_init(picoquic_path_t* path_x, uint64_t current_time)
 {
     /* Initialize the state of the congestion control algorithm */
     picoquic_cubic_state_t* cubic_state = (picoquic_cubic_state_t*)malloc(sizeof(picoquic_cubic_state_t));
@@ -60,7 +60,7 @@ static void picoquic_cubic_init(picoquic_path_t* path_x)
         cubic_state->W_max = cubic_state->W_last_max;
         cubic_state->C = 0.4;
         cubic_state->beta = 7.0 / 8.0;
-        cubic_state->start_of_epoch = 0;
+        cubic_state->start_of_epoch = current_time;
         cubic_state->previous_start_of_epoch = 0;
         cubic_state->W_reno = PICOQUIC_CWIN_INITIAL;
         cubic_state->recovery_sequence = 0;
