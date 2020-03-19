@@ -939,7 +939,7 @@ int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
                 } else if (bytes[processed] == '\n') {
                     crlf_present = 1;
                 }
-                else if (stream_ctx->ps.hq.command_length < sizeof(stream_ctx->frame)) {
+                else if (stream_ctx->ps.hq.command_length < sizeof(stream_ctx->frame) - 1) {
                     stream_ctx->frame[stream_ctx->ps.hq.command_length++] = bytes[processed];
                 }
                 else {
@@ -1101,12 +1101,18 @@ int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
         }
         else if (stream_ctx->response_length == 0 && stream_ctx->echo_length == 0 && stream_ctx->method == 0) {
             char buf[256];
-            stream_ctx->frame[stream_ctx->ps.hq.command_length] = 0;
-            if (cnx->quic->F_log != NULL) {
-                fprintf(cnx->quic->F_log, "%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
-                fprintf(cnx->quic->F_log, "Server CB, Stream: %" PRIu64 ", Partial command: %s\n",
-                    stream_id, strip_endofline(buf, sizeof(buf), (char*)&stream_ctx->frame));
-                fflush(cnx->quic->F_log);
+            if (stream_ctx->ps.hq.command_length < sizeof(stream_ctx->frame)){
+                stream_ctx->frame[stream_ctx->ps.hq.command_length] = 0;
+
+                if (cnx->quic->F_log != NULL) {
+                    fprintf(cnx->quic->F_log, "%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
+                    fprintf(cnx->quic->F_log, "Server CB, Stream: %" PRIu64 ", Partial command: %s\n",
+                        stream_id, strip_endofline(buf, sizeof(buf), (char*)&stream_ctx->frame));
+                    fflush(cnx->quic->F_log);
+                }
+            }
+            else {
+
             }
         }
     }

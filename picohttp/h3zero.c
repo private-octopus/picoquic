@@ -994,7 +994,7 @@ const size_t h3zero_default_setting_frame_size = sizeof(h3zero_default_setting_f
  */
 int h3zero_send_initial_settings(picoquic_cnx_t * cnx, uint64_t stream_id) {
     int ret = picoquic_add_to_stream(cnx, stream_id, h3zero_default_setting_frame,
-        sizeof(h3zero_default_setting_frame), 0);
+        h3zero_default_setting_frame_size, 0);
     return ret;
 }
 
@@ -1365,8 +1365,14 @@ int hzero_qpack_huffman_decode(uint8_t * bytes, uint8_t * bytes_max, uint8_t * d
                 } else if (decoded_index < max_decoded) {
                     decoded[decoded_index++] = (uint8_t) h3zero_qpack_huffman_table[symbol_index].code;
                     consumed_bits += nb_bits;
-                    val_in <<= nb_bits;
-                    bits_in -= nb_bits;
+                    if (nb_bits < 64) {
+                        val_in <<= nb_bits;
+                        bits_in -= nb_bits;
+                    }
+                    else {
+                        val_in = 0;
+                        bits_in = 0;
+                    }
                 }
                 else {
                     /* input is too long */

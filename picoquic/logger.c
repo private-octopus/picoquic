@@ -1590,11 +1590,9 @@ void picoquic_log_transport_extension_content_old(FILE* F, int log_cnxid, uint64
             }
             else {
                 uint16_t extensions_size = PICOPARSE_16(bytes + byte_index);
-                size_t extensions_end;
                 byte_index += 2;
-                extensions_end = byte_index + extensions_size;
 
-                if (extensions_end > bytes_max) {
+                if (extensions_size > bytes_max - byte_index) {
                     if (log_cnxid != 0) {
                         picoquic_log_prefix_initial_cid64(F, cnx_id_64);
                     }
@@ -1602,6 +1600,8 @@ void picoquic_log_transport_extension_content_old(FILE* F, int log_cnxid, uint64
                         (uint32_t)extensions_size, (uint32_t)(bytes_max - byte_index));
                 }
                 else {
+                    size_t extensions_end = byte_index + extensions_size;
+
                     if (log_cnxid != 0) {
                         picoquic_log_prefix_initial_cid64(F, cnx_id_64);
                     }
@@ -1914,14 +1914,11 @@ static void picoquic_log_tls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
 
                 extension_length = PICOPARSE_16(ticket + byte_index);
                 byte_index += 2;
-                min_length += extension_length;
-                if (ticket_length < min_length) {
-                    ret = -1;
+                if (extension_length > ticket_length - min_length){
+                    ret = -2;
                 } else {
                     extension_ptr = &ticket[byte_index];
-                    if (ticket_length > min_length) {
-                        ret = -2;
-                    }
+                    min_length += extension_length;
                 }
             }
         }

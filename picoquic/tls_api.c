@@ -436,7 +436,7 @@ int picoquic_client_hello_call_back(ptls_on_client_hello_t* on_hello_cb_ctx,
         }
     }
 
-    if (quic->f_binlog != NULL) {
+    if (quic->f_binlog != NULL && quic->cnx_in_progress != NULL) {
         binlog_transport_extension(quic->f_binlog, quic->cnx_in_progress, 
             0, params->server_name.base, params->server_name.len, alpn_found, alpn_found_length, 
             params->negotiated_protocols.list, params->negotiated_protocols.count,
@@ -1361,6 +1361,8 @@ void picoquic_set_key_log_file(picoquic_quic_t *quic, char const * keylog_filena
             log_event->super.cb = picoquic_log_event_call_back;
             ctx->log_event = (ptls_log_event_t *)log_event;
         }
+
+        picoquic_file_close(F_keylog);
     }
 }
 
@@ -2450,7 +2452,7 @@ int picoquic_esni_load_key(picoquic_quic_t * quic, char const * esni_key_file_na
         esni_key_exchange_count++;
 
     if (quic->esni_key_exchange[esni_key_exchange_count] != 0) {
-        DBG_PRINTF("Too many ESNI private key file, %d already\n", esni_key_exchange_count);
+        DBG_PRINTF("Too many ESNI private key file, %zu already\n", esni_key_exchange_count);
         ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
 #if 0
     }
@@ -2478,7 +2480,7 @@ int picoquic_esni_load_key(picoquic_quic_t * quic, char const * esni_key_file_na
                 DBG_PRINTF("%s", "no memory for ESNI private key\n");
                 ret = PICOQUIC_ERROR_MEMORY;
             } else if ((ret = ptls_openssl_create_key_exchange(&quic->esni_key_exchange[esni_key_exchange_count], pkey)) != 0) {
-                DBG_PRINTF("failed to load private key from file:%s:picotls-error:%d", picoquic_file_open, ret);
+                DBG_PRINTF("failed to load private key from file:%s:picotls-error:%d", esni_key_file_name, ret);
                 ret = PICOQUIC_ERROR_INVALID_FILE;
                 free(quic->esni_key_exchange[esni_key_exchange_count]);
                 quic->esni_key_exchange[esni_key_exchange_count] = NULL;
@@ -2605,7 +2607,7 @@ int picoquic_esni_client_from_file(picoquic_cnx_t * cnx, char const * esni_rr_fi
         free(esnikeys);
     }
     else {
-        DBG_PRINTF("failed to allocate memory(%d) for parsing esni record\n", picoquic_esnikeys_max_rr);
+        DBG_PRINTF("failed to allocate memory(%zu) for parsing esni record\n", picoquic_esnikeys_max_rr);
         ret = PICOQUIC_ERROR_MEMORY;
     }
 

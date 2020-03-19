@@ -3756,7 +3756,7 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
                         break;
                     }
                     else if (segment_length == 0) {
-                        DBG_PRINTF("Send bug: segment length = %d, packet length = %d\n", segment_length, packet->length);
+                        DBG_PRINTF("Send bug: segment length = %zu, packet length = %zu\n", segment_length, packet->length);
                         break;
                     }
                 }

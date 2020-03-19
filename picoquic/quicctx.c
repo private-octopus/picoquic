@@ -1050,7 +1050,7 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
 
         while (p != NULL) {
             if (p->send_path == path_x) {
-                DBG_PRINTF("Erase path for packet pc: %d, seq:%d\n", pc, p->sequence_number);
+                DBG_PRINTF("Erase path for packet pc: %d, seq:%" PRIu64 "\n", pc, p->sequence_number);
                 p->send_path = NULL;
             }
             p = p->next_packet;
@@ -1059,7 +1059,7 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
         p = cnx->pkt_ctx[pc].retransmitted_newest;
         while (p != NULL) {
             if (p->send_path == path_x) {
-                DBG_PRINTF("Erase path for old packet pc: %d, seq:%d\n", pc, p->sequence_number);
+                DBG_PRINTF("Erase path for old packet pc: %d, seq:%" PRIu64 "\n", pc, p->sequence_number);
                 p->send_path = NULL;
             }
             p = p->next_packet;
@@ -1545,7 +1545,7 @@ int picoquic_renew_connection_id(picoquic_cnx_t* cnx, int path_id)
             if (nb_cnxid_ref <= 1) {
                 /* if this was the last reference, retire the old cnxid */
                 if (picoquic_queue_retire_connection_id_frame(cnx, cnx->path[path_id]->remote_cnxid_sequence) != 0) {
-                    DBG_PRINTF("Could not properly retire CID[%d]", cnx->path[path_id]->remote_cnxid_sequence);
+                    DBG_PRINTF("Could not properly retire CID[%u]", cnx->path[path_id]->remote_cnxid_sequence);
                 }
             }
 

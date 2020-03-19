@@ -309,46 +309,42 @@ int picoquic_load_tokens(picoquic_stored_token_t** pp_first_token,
             /* end of file */
             break;
         }
+        else if (storage_size > 2048 ||
+            (record_size = storage_size + offsetof(struct st_picoquic_stored_token_t, time_valid_until)) > 2048) {
+            ret = PICOQUIC_ERROR_INVALID_FILE;
+            break;
+        }
         else {
-            record_size = storage_size + offsetof(struct st_picoquic_stored_token_t, time_valid_until);
-           
-            if (record_size > 2048) {
+            uint8_t buffer[2048];
+            if (fread(buffer, 1, storage_size, F) != storage_size) {
                 ret = PICOQUIC_ERROR_INVALID_FILE;
-                break;
             }
             else {
-                uint8_t buffer[2048];
-                if (fread(buffer, 1, storage_size, F)
-                    != storage_size) {
+                size_t consumed = 0;
+                ret = picoquic_deserialize_token(&next, buffer, storage_size, &consumed);
+
+                if (ret == 0 && (consumed != storage_size || next == NULL)) {
                     ret = PICOQUIC_ERROR_INVALID_FILE;
                 }
-                else {
-                    size_t consumed = 0;
-                    ret = picoquic_deserialize_token(&next, buffer, storage_size, &consumed);
 
-                    if (ret == 0 && (consumed != storage_size || next == NULL)) {
-                        ret = PICOQUIC_ERROR_INVALID_FILE;
+                if (ret == 0 && next != NULL) {
+                    if (next->time_valid_until < current_time) {
+                        free(next);
+                        next = NULL;
                     }
-
-                    if (ret == 0 && next != NULL) {
-                        if (next->time_valid_until < current_time) {
-                            free(next);
-                            next = NULL;
+                    else {
+                        next->sni = ((char*)next) + sizeof(picoquic_stored_token_t);
+                        next->ip_addr = ((uint8_t*)next->sni) + next->sni_length + 1;
+                        next->token = (uint8_t*)(next->ip_addr + next->ip_addr_length + 1);
+                        next->next_token = NULL;
+                        if (previous == NULL) {
+                            *pp_first_token = next;
                         }
                         else {
-                            next->sni = ((char*)next) + sizeof(picoquic_stored_token_t);
-                            next->ip_addr = ((uint8_t*)next->sni) + next->sni_length + 1;
-                            next->token = (uint8_t*)(next->ip_addr + next->ip_addr_length + 1);
-                            next->next_token = NULL;
-                            if (previous == NULL) {
-                                *pp_first_token = next;
-                            }
-                            else {
-                                previous->next_token = next;
-                            }
-
-                            previous = next;
+                            previous->next_token = next;
                         }
+
+                        previous = next;
                     }
                 }
             }

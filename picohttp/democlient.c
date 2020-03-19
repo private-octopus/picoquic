@@ -398,14 +398,14 @@ static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
 
     if (ret == 0) {
         size_t request_length = 0;
-        uint8_t name_buffer[512];
+        uint8_t name_buffer[514];
         uint8_t * path;
         size_t path_len;
 
 		/* make sure that the doc name is properly formated */
         path = (uint8_t *)doc_name;
         path_len = strlen(doc_name);
-        if (doc_name[0] != '/' && path_len + 1 <= sizeof(name_buffer)) {
+        if (doc_name[0] != '/' && path_len + 2 <= sizeof(name_buffer)) {
             name_buffer[0] = '/';
             if (path_len > 0) {
                 memcpy(&name_buffer[1], doc_name, path_len);
@@ -537,7 +537,7 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
             if (!stream_ctx->is_file_open && ctx->no_disk == 0) {
                 stream_ctx->F = picoquic_file_open(stream_ctx->f_name, "wb");
                 if (stream_ctx->F == NULL) {
-                    DBG_PRINTF("Could not open file <%s> for stream %d", stream_ctx->f_name, stream_id);
+                    DBG_PRINTF("Could not open file <%s> for stream %" PRIu64, stream_ctx->f_name, stream_id);
                     ret = -1;
                 }
                 else {
