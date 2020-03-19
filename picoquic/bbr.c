@@ -224,7 +224,7 @@ void BBRUpdateTargetCwnd(picoquic_bbr_state_t* bbr_state)
     bbr_state->target_cwnd = BBRInflight(bbr_state, bbr_state->cwnd_gain);
 }
 
-static void picoquic_bbr_init(picoquic_path_t* path_x)
+static void picoquic_bbr_init(picoquic_path_t* path_x, uint64_t current_time)
 {
     /* Initialize the state of the congestion control algorithm */
     picoquic_bbr_state_t* bbr_state = (picoquic_bbr_state_t*)malloc(sizeof(picoquic_bbr_state_t));
@@ -233,6 +233,10 @@ static void picoquic_bbr_init(picoquic_path_t* path_x)
         memset(bbr_state, 0, sizeof(picoquic_bbr_state_t));
         path_x->cwin = PICOQUIC_CWIN_INITIAL;
         bbr_state->rt_prop = UINT64_MAX;
+
+        bbr_state->rt_prop_stamp = current_time;
+        bbr_state->cycle_stamp = current_time;
+
         BBREnterStartup(bbr_state);
         BBRSetSendQuantum(bbr_state, path_x);
         BBRUpdateTargetCwnd(bbr_state);
