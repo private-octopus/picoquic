@@ -41,10 +41,13 @@ typedef struct st_picoquic_newreno_state_t {
     uint64_t last_sequence_blocked;
 } picoquic_newreno_state_t;
 
-static void picoquic_newreno_init(picoquic_path_t* path_x)
+static void picoquic_newreno_init(picoquic_path_t* path_x, uint64_t current_time)
 {
     /* Initialize the state of the congestion control algorithm */
     picoquic_newreno_state_t* nr_state = (picoquic_newreno_state_t*)malloc(sizeof(picoquic_newreno_state_t));
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(current_time);
+#endif
 
     if (nr_state != NULL) {
         memset(nr_state, 0, sizeof(picoquic_newreno_state_t));
