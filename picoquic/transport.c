@@ -220,7 +220,7 @@ size_t picoquic_decode_transport_param_prefered_address(uint8_t * bytes, size_t 
         byte_index += 2;
         cnx_id_length = bytes[byte_index++];
         if (cnx_id_length > 0 && cnx_id_length <= PICOQUIC_CONNECTION_ID_MAX_SIZE &&
-            byte_index + cnx_id_length + 16 <= bytes_max &&
+            byte_index + (size_t)cnx_id_length + 16 <= bytes_max &&
             cnx_id_length == picoquic_parse_connection_id(bytes + byte_index, cnx_id_length,
                 &prefered_address->connection_id)){
             byte_index += cnx_id_length;
@@ -613,7 +613,7 @@ int picoquic_receive_transport_extensions_old(picoquic_cnx_t* cnx, int extension
             ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
         }
         else {
-            size_t extensions_end = byte_index + extensions_size;
+            size_t extensions_end = byte_index + (size_t)extensions_size;
 
             while (ret == 0 && byte_index < extensions_end) {
                 if (byte_index + 4 > extensions_end) {
