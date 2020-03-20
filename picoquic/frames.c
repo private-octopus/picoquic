@@ -891,7 +891,7 @@ void picoquic_stream_data_callback(picoquic_cnx_t* cnx, picoquic_stream_head_t* 
 
         if (cnx->callback_fn(cnx, stream->stream_id, data->bytes + start, data_length, fin_now,
             cnx->callback_ctx, stream->app_stream_ctx) != 0) {
-            picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "Data callback on stream %" PRIu64 " returns error 0x%x",
+            picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "Data callback on stream %" PRIu64 " returns error 0x%x\n",
                 stream->stream_id, PICOQUIC_TRANSPORT_INTERNAL_ERROR);
             picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
         }
@@ -905,7 +905,7 @@ void picoquic_stream_data_callback(picoquic_cnx_t* cnx, picoquic_stream_head_t* 
         stream->fin_signalled = 1;
         if (cnx->callback_fn(cnx, stream->stream_id, NULL, 0, picoquic_callback_stream_fin,
             cnx->callback_ctx, stream->app_stream_ctx) != 0) {
-            picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "FIN callback on stream %" PRIu64 " returns error 0x%x", 
+            picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "FIN callback on stream %" PRIu64 " returns error 0x%x\n", 
                 stream->stream_id, PICOQUIC_TRANSPORT_INTERNAL_ERROR);
             picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
         }

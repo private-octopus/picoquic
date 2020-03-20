@@ -73,6 +73,7 @@ typedef struct st_picoquic_demo_client_callback_ctx_t {
     picoquic_demo_client_stream_ctx_t* first_stream;
     picoquic_demo_stream_desc_t const * demo_stream;
     picoquic_tp_t const * tp;
+    char const* out_dir;
     uint64_t last_interaction_time;
 
     size_t nb_demo_streams;
