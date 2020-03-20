@@ -1050,7 +1050,7 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
 
         while (p != NULL) {
             if (p->send_path == path_x) {
-                DBG_PRINTF("Erase path for packet pc: %d, seq:%d\n", pc, p->sequence_number);
+                DBG_PRINTF("Erase path for packet pc: %d, seq:%" PRIu64 "\n", pc, p->sequence_number);
                 p->send_path = NULL;
             }
             p = p->next_packet;
@@ -1059,7 +1059,7 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
         p = cnx->pkt_ctx[pc].retransmitted_newest;
         while (p != NULL) {
             if (p->send_path == path_x) {
-                DBG_PRINTF("Erase path for old packet pc: %d, seq:%d\n", pc, p->sequence_number);
+                DBG_PRINTF("Erase path for old packet pc: %d, seq:%" PRIu64 "\n", pc, p->sequence_number);
                 p->send_path = NULL;
             }
             p = p->next_packet;
@@ -1164,7 +1164,7 @@ void picoquic_promote_path_to_default(picoquic_cnx_t* cnx, int path_index, uint6
 
         /* Set the congestion algorithm for the new path */
         if (cnx->congestion_alg != NULL) {
-            cnx->congestion_alg->alg_init(path_x);
+            cnx->congestion_alg->alg_init(path_x, current_time);
         }
 
         /* Mark old path as demoted */
@@ -1545,7 +1545,7 @@ int picoquic_renew_connection_id(picoquic_cnx_t* cnx, int path_id)
             if (nb_cnxid_ref <= 1) {
                 /* if this was the last reference, retire the old cnxid */
                 if (picoquic_queue_retire_connection_id_frame(cnx, cnx->path[path_id]->remote_cnxid_sequence) != 0) {
-                    DBG_PRINTF("Could not properly retire CID[%d]", cnx->path[path_id]->remote_cnxid_sequence);
+                    DBG_PRINTF("Could not properly retire CID[%u]", cnx->path[path_id]->remote_cnxid_sequence);
                 }
             }
 
@@ -2187,7 +2187,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
 
         cnx->congestion_alg = cnx->quic->default_congestion_alg;
         if (cnx->congestion_alg != NULL) {
-            cnx->congestion_alg->alg_init(cnx->path[0]);
+            cnx->congestion_alg->alg_init(cnx->path[0], start_time);
         }
     }
 
@@ -2791,6 +2791,7 @@ int picoquic_connection_error(picoquic_cnx_t* cnx, uint16_t local_error, uint64_
         }
         cnx->cnx_state = picoquic_state_disconnecting;
 
+        picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "Protocol error 0x%x", local_error);
         DBG_PRINTF("Protocol error (%x)", local_error);
     } else if (cnx->cnx_state < picoquic_state_server_false_start) {
         if (cnx->cnx_state != picoquic_state_handshake_failure &&
@@ -3072,7 +3073,7 @@ void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_
     if (cnx->congestion_alg != NULL) {
         if (cnx->path != NULL) {
             for (int i = 0; i < cnx->nb_paths; i++) {
-                cnx->congestion_alg->alg_init(cnx->path[i]);
+                cnx->congestion_alg->alg_init(cnx->path[i], picoquic_get_quic_time(cnx->quic));
             }
         }
     }

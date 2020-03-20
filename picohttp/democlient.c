@@ -398,14 +398,14 @@ static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
 
     if (ret == 0) {
         size_t request_length = 0;
-        uint8_t name_buffer[512];
+        uint8_t name_buffer[514];
         uint8_t * path;
         size_t path_len;
 
 		/* make sure that the doc name is properly formated */
         path = (uint8_t *)doc_name;
         path_len = strlen(doc_name);
-        if (doc_name[0] != '/' && path_len + 1 <= sizeof(name_buffer)) {
+        if (doc_name[0] != '/' && path_len + 2 <= sizeof(name_buffer)) {
             name_buffer[0] = '/';
             if (path_len > 0) {
                 memcpy(&name_buffer[1], doc_name, path_len);
@@ -537,7 +537,7 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
             if (!stream_ctx->is_file_open && ctx->no_disk == 0) {
                 stream_ctx->F = picoquic_file_open(stream_ctx->f_name, "wb");
                 if (stream_ctx->F == NULL) {
-                    DBG_PRINTF("Could not open file <%s> for stream %d", stream_ctx->f_name, stream_id);
+                    DBG_PRINTF("Could not open file <%s> for stream %" PRIu64, stream_ctx->f_name, stream_id);
                     ret = -1;
                 }
                 else {
@@ -554,6 +554,10 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
                         bytes = h3zero_parse_data_stream(bytes, bytes_max, &stream_ctx->stream_state, &available_data, &error_found);
                         if (bytes == NULL) {
                             ret = picoquic_close(cnx, error_found);
+                            if (ret != 0) {
+                                picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid,
+                                    "Could not parse incoming data from stream %" PRIu64 ", error 0x%x", stream_id, error_found);
+                            }
                             break;
                         }
                         else if (available_data > 0) {
@@ -568,6 +572,10 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
                             }
                             if (ret == 0 && ctx->no_disk == 0) {
                                 ret = (fwrite(bytes, 1, available_data, stream_ctx->F) > 0) ? 0 : -1;
+                                if (ret != 0) {
+                                    picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid,
+                                        "Could not write data from stream %" PRIu64 ", error 0x%x", stream_id, ret);
+                                }
                             }
                             stream_ctx->received_length += available_data;
                             bytes += available_data;
@@ -578,6 +586,10 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
                 case picoquic_alpn_http_0_9:
                     if (ctx->no_disk == 0) {
                         ret = (fwrite(bytes, 1, length, stream_ctx->F) > 0) ? 0 : -1;
+                        if (ret != 0) {
+                            picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid,
+                                "Could not write data from stream %" PRIu64 ", error 0x%x", stream_id, ret);
+                        }
                     }
                     stream_ctx->received_length += length;
                     break;

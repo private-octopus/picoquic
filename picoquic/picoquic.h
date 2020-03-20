@@ -704,7 +704,7 @@ typedef enum {
     picoquic_congestion_notification_cwin_blocked
 } picoquic_congestion_notification_t;
 
-typedef void (*picoquic_congestion_algorithm_init)(picoquic_path_t* path_x);
+typedef void (*picoquic_congestion_algorithm_init)(picoquic_path_t* path_x, uint64_t current_time);
 typedef void (*picoquic_congestion_algorithm_notify)(
     picoquic_cnx_t* cnx,
     picoquic_path_t* path_x,

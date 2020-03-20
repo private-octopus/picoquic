@@ -444,6 +444,7 @@ static int test_api_callback(picoquic_cnx_t* cnx,
         if (ctx != NULL) {
             ctx->received_version_negotiation = 1;
         }
+        return 0;
     }
 
     if (fin_or_event == picoquic_callback_stateless_reset) {
@@ -6502,7 +6503,7 @@ int bbr_long_test()
 
 int performance_test(uint64_t max_completion_time, uint64_t mbps, uint64_t latency, uint64_t jitter, uint64_t buffer_size)
 {
-    uint64_t simulated_time = 0;
+    uint64_t simulated_time = 0x0005a138fbde8743; /* Init to non zero time to test handling of time in cc algorithm */
     uint64_t picoseq_per_byte_100 = (1000000ull * 8) / mbps;
 
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;

@@ -225,7 +225,7 @@ int picoquic_parse_hexa_digit(char x) {
 size_t picoquic_parse_hexa(char const * hex_input, size_t input_length, uint8_t * bin_output, size_t output_max)
 {
     size_t ret = 0;
-    if (input_length > 0 || (input_length & 1) == 0 || 2 * output_max >= input_length) {
+    if (input_length > 0 && (input_length & 1) == 0 && 2*output_max >= input_length) {
         size_t offset = 0;
 
         while (offset < input_length) {
@@ -282,8 +282,8 @@ uint8_t picoquic_format_connection_id(uint8_t* bytes, size_t bytes_max, picoquic
 
 int picoquic_is_connection_id_length_valid(uint8_t len) {
     int ret = 0;
-    if (len >= PICOQUIC_CONNECTION_ID_MIN_SIZE && len <= PICOQUIC_CONNECTION_ID_MAX_SIZE) {
-        ret = len;
+    if (len <= PICOQUIC_CONNECTION_ID_MAX_SIZE) {
+        ret = 1;
     }
     return ret;
 }

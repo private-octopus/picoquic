@@ -205,6 +205,8 @@ picoquic_stream_head_t* picoquic_create_missing_streams(picoquic_cnx_t* cnx, uin
         while (stream_id >= cnx->next_stream_id[STREAM_TYPE_FROM_ID(stream_id)]) {
             stream = picoquic_create_stream(cnx, cnx->next_stream_id[STREAM_TYPE_FROM_ID(stream_id)]);
             if (stream == NULL) {
+                picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "Create stream %" PRIu64 " returns error 0x%x",
+                    stream->stream_id, PICOQUIC_TRANSPORT_INTERNAL_ERROR);
                 picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
                 break;
             }
@@ -783,6 +785,8 @@ uint8_t* picoquic_decode_stop_sending_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
 
         if (cnx->callback_fn != NULL && !stream->stop_sending_signalled) {
             if (cnx->callback_fn(cnx, stream->stream_id, NULL, 0, picoquic_callback_stop_sending, cnx->callback_ctx, stream->app_stream_ctx) != 0) {
+                picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "Stop sending callback on stream %" PRIu64 " returns error 0x%x",
+                    stream->stream_id, PICOQUIC_TRANSPORT_INTERNAL_ERROR);
                 picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR,
                     picoquic_frame_type_stop_sending);
             }
@@ -887,6 +891,8 @@ void picoquic_stream_data_callback(picoquic_cnx_t* cnx, picoquic_stream_head_t* 
 
         if (cnx->callback_fn(cnx, stream->stream_id, data->bytes + start, data_length, fin_now,
             cnx->callback_ctx, stream->app_stream_ctx) != 0) {
+            picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "Data callback on stream %" PRIu64 " returns error 0x%x",
+                stream->stream_id, PICOQUIC_TRANSPORT_INTERNAL_ERROR);
             picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
         }
 
@@ -899,6 +905,8 @@ void picoquic_stream_data_callback(picoquic_cnx_t* cnx, picoquic_stream_head_t* 
         stream->fin_signalled = 1;
         if (cnx->callback_fn(cnx, stream->stream_id, NULL, 0, picoquic_callback_stream_fin,
             cnx->callback_ctx, stream->app_stream_ctx) != 0) {
+            picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "FIN callback on stream %" PRIu64 " returns error 0x%x", 
+                stream->stream_id, PICOQUIC_TRANSPORT_INTERNAL_ERROR);
             picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
         }
     }
@@ -1492,6 +1500,7 @@ int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head_t* s
 
                 if ((cnx->callback_fn)(cnx, stream->stream_id, (uint8_t*)&stream_data_context, allowed_space, picoquic_callback_prepare_to_send, cnx->callback_ctx, stream->app_stream_ctx) != 0) {
                     /* something went wrong */
+                    picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "Prepare to send returns error 0x%x", PICOQUIC_TRANSPORT_INTERNAL_ERROR);
                     ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
                 }
                 else {
@@ -1959,13 +1968,8 @@ void picoquic_estimate_path_bandwidth(picoquic_cnx_t * cnx, picoquic_path_t* pat
                     receive_interval = send_interval;
                 }
 
-                if (receive_interval == 0) {
-                    bw_estimate = PICOQUIC_BANDWIDTH_ESTIMATE_MAX;
-                }
-                else {
-                    bw_estimate = delivered * 1000000;
-                    bw_estimate /= receive_interval;
-                }
+                bw_estimate = delivered * 1000000;
+                bw_estimate /= receive_interval;
 
                 if (!rs_is_path_limited || bw_estimate > path_x->bandwidth_estimate) {
                     path_x->bandwidth_estimate = bw_estimate;
@@ -2668,7 +2672,7 @@ uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
             }
         }
 
-        while (bytes != NULL) {
+        do {
             uint64_t range;
             uint64_t block_to_block;
 
@@ -2719,7 +2723,7 @@ uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
             }
 
             largest -= block_to_block;
-        }
+        } while (bytes != NULL);
 
         picoquic_dequeue_old_retransmitted_packets(cnx, pc);
 
@@ -3617,7 +3621,7 @@ uint8_t* picoquic_decode_datagram_frame(picoquic_cnx_t* cnx, uint8_t* bytes, con
             /* submit the data to the app */
             if (cnx->callback_fn(cnx, 0, bytes, (size_t)length, picoquic_callback_datagram,
                 cnx->callback_ctx, NULL) != 0) {
-                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
+                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, picoquic_frame_type_datagram);
                 bytes = NULL;
             }
         }
@@ -3848,7 +3852,13 @@ void process_decoded_packet_data(picoquic_cnx_t* cnx, uint64_t current_time, pic
 {
     if (packet_data->acked_path != NULL) {
         uint64_t one_way_delay = 0;
-        if (cnx->congestion_alg != NULL && cnx->is_time_stamp_enabled) {
+
+        if (packet_data->acked_path->rtt_sample == 0) {
+            uint64_t cnx_time = current_time - cnx->start_time;
+            picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "RTT Sample = 0 after %" PRIu64 "us.", cnx_time);
+        }
+
+        if (cnx->congestion_alg != NULL && cnx->is_time_stamp_enabled && packet_data->acked_path->rtt_sample > 0) {
             if (packet_data->last_time_stamp_received > 0) {
                 picoquic_update_1wd(cnx, packet_data->acked_path,
                     packet_data->largest_sent_time, packet_data->last_ack_delay, packet_data->last_time_stamp_received);
@@ -3866,14 +3876,13 @@ void process_decoded_packet_data(picoquic_cnx_t* cnx, uint64_t current_time, pic
             (packet_data->last_time_stamp_received == 0) ? current_time : packet_data->last_time_stamp_received,
             current_time, packet_data->rs_is_path_limited);
 
-        if (cnx->congestion_alg != NULL) {
+        if (cnx->congestion_alg != NULL && packet_data->acked_path->rtt_sample > 0) {
             cnx->congestion_alg->alg_notify(cnx, packet_data->acked_path,
                 picoquic_congestion_notification_bw_measurement,
                 packet_data->acked_path->rtt_sample, one_way_delay, 0, 0, current_time);
         }
     }
 }
-
 
 int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_t* bytes,
     size_t bytes_maxsize, int epoch,

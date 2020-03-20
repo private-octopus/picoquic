@@ -46,7 +46,7 @@ typedef struct st_picoquic_cubic_state_t {
     uint64_t last_sequence_blocked;
 } picoquic_cubic_state_t;
 
-static void picoquic_cubic_init(picoquic_path_t* path_x)
+static void picoquic_cubic_init(picoquic_path_t* path_x, uint64_t current_time)
 {
     /* Initialize the state of the congestion control algorithm */
     picoquic_cubic_state_t* cubic_state = (picoquic_cubic_state_t*)malloc(sizeof(picoquic_cubic_state_t));
@@ -60,7 +60,7 @@ static void picoquic_cubic_init(picoquic_path_t* path_x)
         cubic_state->W_max = cubic_state->W_last_max;
         cubic_state->C = 0.4;
         cubic_state->beta = 7.0 / 8.0;
-        cubic_state->start_of_epoch = 0;
+        cubic_state->start_of_epoch = current_time;
         cubic_state->previous_start_of_epoch = 0;
         cubic_state->W_reno = PICOQUIC_CWIN_INITIAL;
         cubic_state->recovery_sequence = 0;
@@ -281,47 +281,39 @@ static void picoquic_cubic_notify(
             }
             break;
         case picoquic_cubic_alg_recovery:
-            /* If the notification is coming less than 1RTT after start,
+            /* If the congestion notification is coming less than 1RTT after start,
 			 * ignore it, unless it is a spurious retransmit detection */
-            if (notification == picoquic_congestion_notification_spurious_repeat) {
-                /* if spurious repeat of initial loss detected,
-                 * exit recovery and reset threshold to pre-entry cwin.
-                 */
-                picoquic_cubic_correct_spurious(path_x, cubic_state, current_time);
-            } else{
-                switch (notification) {
-                case picoquic_congestion_notification_acknowledgement:
-                    /* exit recovery, move to CA or SS, depending on CWIN */
-                    cubic_state->alg_state = picoquic_cubic_alg_slow_start;
-                    path_x->cwin += nb_bytes_acknowledged;
-                    /* if cnx->cwin exceeds SSTHRESH, exit and go to CA */
-                    if (path_x->cwin >= cubic_state->ssthresh) {
-                        cubic_state->alg_state = picoquic_cubic_alg_congestion_avoidance;
-                    }
-                    break;
-                case picoquic_congestion_notification_spurious_repeat:
-                    picoquic_cubic_correct_spurious(path_x, cubic_state, current_time);
-                    break;
-                case picoquic_congestion_notification_ecn_ec:
-                case picoquic_congestion_notification_repeat:
-                case picoquic_congestion_notification_timeout:
-                    if (current_time - cubic_state->start_of_epoch > path_x->smoothed_rtt ||
-                        cubic_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx)) {
-                        /* re-enter recovery if this is a new loss */
-                        picoquic_cubic_enter_recovery(cnx, path_x, notification, cubic_state, current_time);
-                    }
-                    break;
-                case picoquic_congestion_notification_rtt_measurement:
-                case picoquic_congestion_notification_cwin_blocked:
-                    cubic_state->last_sequence_blocked = picoquic_cc_get_sequence_number(cnx);
-                    break;
-                default:
-                    /* ignore */
-                    break;
+            switch (notification) {
+            case picoquic_congestion_notification_acknowledgement:
+                /* exit recovery, move to CA or SS, depending on CWIN */
+                cubic_state->alg_state = picoquic_cubic_alg_slow_start;
+                path_x->cwin += nb_bytes_acknowledged;
+                /* if cnx->cwin exceeds SSTHRESH, exit and go to CA */
+                if (path_x->cwin >= cubic_state->ssthresh) {
+                    cubic_state->alg_state = picoquic_cubic_alg_congestion_avoidance;
                 }
-            } 
+                break;
+            case picoquic_congestion_notification_spurious_repeat:
+                picoquic_cubic_correct_spurious(path_x, cubic_state, current_time);
+                break;
+            case picoquic_congestion_notification_ecn_ec:
+            case picoquic_congestion_notification_repeat:
+            case picoquic_congestion_notification_timeout:
+                if (current_time - cubic_state->start_of_epoch > path_x->smoothed_rtt ||
+                    cubic_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx)) {
+                    /* re-enter recovery if this is a new loss */
+                    picoquic_cubic_enter_recovery(cnx, path_x, notification, cubic_state, current_time);
+                }
+                break;
+            case picoquic_congestion_notification_rtt_measurement:
+            case picoquic_congestion_notification_cwin_blocked:
+                cubic_state->last_sequence_blocked = picoquic_cc_get_sequence_number(cnx);
+                break;
+            default:
+                /* ignore */
+                break;
+            }
             break;
-
         case picoquic_cubic_alg_congestion_avoidance:
             switch (notification) {
             case picoquic_congestion_notification_acknowledgement: 
