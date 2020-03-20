@@ -206,7 +206,7 @@ picoquic_stream_head_t* picoquic_create_missing_streams(picoquic_cnx_t* cnx, uin
             stream = picoquic_create_stream(cnx, cnx->next_stream_id[STREAM_TYPE_FROM_ID(stream_id)]);
             if (stream == NULL) {
                 picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "Create stream %" PRIu64 " returns error 0x%x",
-                    stream->stream_id, PICOQUIC_TRANSPORT_INTERNAL_ERROR);
+                    stream_id, PICOQUIC_TRANSPORT_INTERNAL_ERROR);
                 picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
                 break;
             }
@@ -536,7 +536,7 @@ uint8_t* picoquic_decode_new_connection_id_frame(picoquic_cnx_t* cnx, uint8_t* b
         bytes = picoquic_frames_fixed_skip(bytes, bytes_max, (size_t)cid_length + PICOQUIC_RESET_SECRET_SIZE);
     }
 
-    if (bytes == NULL || picoquic_is_connection_id_length_valid(cid_length) == 0 ||
+    if (bytes == NULL || cid_length > PICOQUIC_CONNECTION_ID_MAX_SIZE ||
         retire_before > sequence) {
         picoquic_connection_error(cnx, (bytes == NULL) ? PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR : PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
             picoquic_frame_type_new_connection_id);
@@ -3414,7 +3414,6 @@ uint8_t* picoquic_decode_path_challenge_frame(picoquic_cnx_t* cnx, uint8_t* byte
     if (bytes_max - bytes <= (int) challenge_length) {
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, picoquic_frame_type_path_challenge);
         bytes = NULL;
-
     } else if (path_x != NULL) {
         /*
          * Queue a response frame as response to path challenge.

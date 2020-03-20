@@ -1545,7 +1545,7 @@ int picoquic_renew_connection_id(picoquic_cnx_t* cnx, int path_id)
             if (nb_cnxid_ref <= 1) {
                 /* if this was the last reference, retire the old cnxid */
                 if (picoquic_queue_retire_connection_id_frame(cnx, cnx->path[path_id]->remote_cnxid_sequence) != 0) {
-                    DBG_PRINTF("Could not properly retire CID[%u]", cnx->path[path_id]->remote_cnxid_sequence);
+                    DBG_PRINTF("Could not properly retire CID[%" PRIu64 "]", cnx->path[path_id]->remote_cnxid_sequence);
                 }
             }
 

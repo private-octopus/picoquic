@@ -666,7 +666,7 @@ int picoquic_incoming_version_negotiation(
         while (v_bytes < bytes_max) {
             uint32_t vn = 0;
             if ((v_bytes = picoquic_frames_uint32_decode(v_bytes, bytes_max, &vn)) == NULL){
-                DBG_PRINTF("VN packet (%d), length %uz, coding error after %d version numbers.\n",
+                DBG_PRINTF("VN packet (%d), length %zu, coding error after %d version numbers.\n",
                     cnx->client_mode, length, nb_vn);
                 ret = PICOQUIC_ERROR_DETECTED;
                 break;
@@ -1934,7 +1934,7 @@ int picoquic_incoming_segment(
         ret == PICOQUIC_ERROR_AEAD_NOT_READY) {
         /* Bad packets are dropped silently */
 
-        DBG_PRINTF("Packet (%d) dropped, t: %d, e: %d, pc: %d, pn: %d, l: %d, ret : %x\n",
+        DBG_PRINTF("Packet (%d) dropped, t: %d, e: %d, pc: %d, pn: %d, l: %zu, ret : 0x%x\n",
             (cnx == NULL) ? -1 : cnx->client_mode, ph.ptype, ph.epoch, ph.pc, (int)ph.pn, 
             length, ret);
 
@@ -1954,7 +1954,7 @@ int picoquic_incoming_segment(
         ret = -1;
     }
     else if (ret != 0) {
-        DBG_PRINTF("Packet (%d) error, t: %d, e: %d, pc: %d, pn: %d, l: %zu, ret : %x\n",
+        DBG_PRINTF("Packet (%d) error, t: %d, e: %d, pc: %d, pn: %d, l: %zu, ret : 0x%x\n",
             (cnx == NULL) ? -1 : cnx->client_mode, ph.ptype, ph.epoch, ph.pc, (int)ph.pn, length, ret);
         ret = -1;
     }

@@ -101,7 +101,7 @@ int siduck_callback(picoquic_cnx_t* cnx,
         case picoquic_callback_stop_sending: /* Client asks server to reset stream #x */
         case picoquic_callback_stream_gap:
         case picoquic_callback_prepare_to_send:
-            DBG_PRINTF("Unxepected callback, code %d, length = %d", fin_or_event, length);
+            DBG_PRINTF("Unxepected callback, code %d, length = %zu", fin_or_event, length);
             if (ctx != NULL) {
                 if (ctx->is_auto_alloc) {
                     free(ctx);

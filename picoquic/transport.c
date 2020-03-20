@@ -219,8 +219,8 @@ size_t picoquic_decode_transport_param_prefered_address(uint8_t * bytes, size_t 
         prefered_address->ipv6Port = PICOPARSE_16(bytes + byte_index);
         byte_index += 2;
         cnx_id_length = bytes[byte_index++];
-        if (byte_index + cnx_id_length + 16 <= bytes_max &&
-            cnx_id_length > 0 &&
+        if (cnx_id_length > 0 && cnx_id_length <= PICOQUIC_CONNECTION_ID_MAX_SIZE &&
+            byte_index + cnx_id_length + 16 <= bytes_max &&
             cnx_id_length == picoquic_parse_connection_id(bytes + byte_index, cnx_id_length,
                 &prefered_address->connection_id)){
             byte_index += cnx_id_length;
