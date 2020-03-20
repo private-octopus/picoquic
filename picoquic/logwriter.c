@@ -101,10 +101,14 @@ static const uint8_t* picoquic_log_stream_frame(FILE* f, const uint8_t* bytes, c
 
         memcpy(log_buffer, bytes_begin, l_head);
         log_next += l_head;
-        log_next = picoquic_frames_varint_encode(log_next, log_buffer + 256, length);
-        memcpy(log_next, bytes, extra_bytes);
-        log_next += extra_bytes;
-        picoquic_binlog_frame(f, log_buffer, log_next);
+        if ((log_next = picoquic_frames_varint_encode(log_next, log_buffer + 256, length)) != NULL) {
+            memcpy(log_next, bytes, extra_bytes);
+            log_next += extra_bytes;
+            picoquic_binlog_frame(f, log_buffer, log_next);
+        }
+        else {
+            picoquic_binlog_frame(f, log_buffer, log_buffer + l_head);
+        }
     }
 
     bytes = picoquic_log_fixed_skip(bytes, bytes_max, length);

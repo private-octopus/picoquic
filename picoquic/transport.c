@@ -602,19 +602,19 @@ int picoquic_receive_transport_extensions_old(picoquic_cnx_t* cnx, int extension
     }
     else {
         uint16_t extensions_size = PICOPARSE_16(bytes + byte_index);
-        size_t extensions_end;
         byte_index += 2;
-        extensions_end = byte_index + extensions_size;
 
         /* Set the parameters to default value zero */
         memset(&cnx->remote_parameters, 0, sizeof(picoquic_tp_t));
         /* Except for ack_delay_exponent, whose default is 3 */
         cnx->remote_parameters.ack_delay_exponent = 3;
 
-        if (extensions_end > bytes_max) {
+        if (extensions_size > bytes_max - byte_index) {
             ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
         }
         else {
+            size_t extensions_end = byte_index + extensions_size;
+
             while (ret == 0 && byte_index < extensions_end) {
                 if (byte_index + 4 > extensions_end) {
                     ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);

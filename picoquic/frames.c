@@ -1968,13 +1968,8 @@ void picoquic_estimate_path_bandwidth(picoquic_cnx_t * cnx, picoquic_path_t* pat
                     receive_interval = send_interval;
                 }
 
-                if (receive_interval == 0) {
-                    bw_estimate = PICOQUIC_BANDWIDTH_ESTIMATE_MAX;
-                }
-                else {
-                    bw_estimate = delivered * 1000000;
-                    bw_estimate /= receive_interval;
-                }
+                bw_estimate = delivered * 1000000;
+                bw_estimate /= receive_interval;
 
                 if (!rs_is_path_limited || bw_estimate > path_x->bandwidth_estimate) {
                     path_x->bandwidth_estimate = bw_estimate;
@@ -2677,7 +2672,7 @@ uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
             }
         }
 
-        while (bytes != NULL) {
+        do {
             uint64_t range;
             uint64_t block_to_block;
 
@@ -2728,7 +2723,7 @@ uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
             }
 
             largest -= block_to_block;
-        }
+        } while (bytes != NULL);
 
         picoquic_dequeue_old_retransmitted_packets(cnx, pc);
 
@@ -3888,7 +3883,6 @@ void process_decoded_packet_data(picoquic_cnx_t* cnx, uint64_t current_time, pic
         }
     }
 }
-
 
 int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_t* bytes,
     size_t bytes_maxsize, int epoch,
