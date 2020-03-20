@@ -375,14 +375,31 @@ static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
             stream_ctx->F = NULL;
         }
         else {
+#ifdef _WINDOWS
+            char const* sep = "\\";
+#else
+            char const* sep = "/";
+#endif
             char const * x_name = fname;
-            char repeat_name[512];
-            if (nb_repeat > 0) {
-                ret = picoquic_sprintf(repeat_name, sizeof(repeat_name), NULL, "r%dx%s", (int)nb_repeat, fname);
-                x_name = repeat_name;
+            char path_name[1024];
+
+            if (ctx->out_dir != NULL && (x_name[0] == '/' || x_name[0] == '_')) {
+                /* If writing in the specified directory, remove the initial "/",
+                 * or '_' if it was sanitized to that before. */
+                x_name++;
             }
+
+            if (nb_repeat > 0) {
+                ret = picoquic_sprintf(path_name, sizeof(path_name), NULL, "%s%sr%dx%s",
+                    (ctx->out_dir == NULL)?".": ctx->out_dir, sep, (int)nb_repeat, x_name);
+            }
+            else {
+                ret = picoquic_sprintf(path_name, sizeof(path_name), NULL, "%s%s%s",
+                    (ctx->out_dir == NULL) ? "." : ctx->out_dir, sep, x_name);
+            }
+
             if (ret == 0) {
-                stream_ctx->f_name = picoquic_string_duplicate(x_name);
+                stream_ctx->f_name = picoquic_string_duplicate(path_name);
                 /* In order to reduce the number of open files, we only open the file when we start receiving data.*/
             }
             else {
@@ -392,7 +409,8 @@ static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
         if (ret == 0) {
             stream_ctx->is_open = 1;
         }else {
-            fprintf(stdout, "Cannot create file: %s\n", fname);
+            picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "Cannot create file name: %s\n", fname);
+            fprintf(stdout, "Cannot create file name: %s\n", fname);
         }
     }
 
@@ -537,6 +555,8 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
             if (!stream_ctx->is_file_open && ctx->no_disk == 0) {
                 stream_ctx->F = picoquic_file_open(stream_ctx->f_name, "wb");
                 if (stream_ctx->F == NULL) {
+                    picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid,
+                        "Could not open file <%s> for stream %" PRIu64 "\n", stream_ctx->f_name, stream_id);
                     DBG_PRINTF("Could not open file <%s> for stream %" PRIu64, stream_ctx->f_name, stream_id);
                     ret = -1;
                 }

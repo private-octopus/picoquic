@@ -1577,7 +1577,7 @@ size_t picoquic_prepare_mtu_probe(picoquic_cnx_t* cnx,
  */
 int picoquic_prepare_packet_0rtt(picoquic_cnx_t* cnx, picoquic_path_t * path_x, picoquic_packet_t* packet,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
-    int padding_required)
+    int padding_required, uint64_t * next_wake_time)
 {
     int ret = 0;
     picoquic_stream_head_t* stream = NULL;
@@ -1630,11 +1630,15 @@ int picoquic_prepare_packet_0rtt(picoquic_cnx_t* cnx, picoquic_path_t * path_x, 
                     stream = picoquic_find_ready_stream(cnx);
                 }
                 else {
+                    *next_wake_time = current_time;
+                    SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
                     break;
                 }
             }
             else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
                 ret = 0;
+                *next_wake_time = current_time;
+                SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
                 break;
             }
         }
@@ -2116,7 +2120,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
     if (ret == 0 && length == 0 && cnx->crypto_context[1].aead_encrypt != NULL) {
         /* Consider sending 0-RTT */
         ret = picoquic_prepare_packet_0rtt(cnx, path_x, packet, current_time, send_buffer, send_buffer_max, send_length,
-            *is_initial_sent);
+            *is_initial_sent, next_wake_time);
     }
     else {
         if (ret == 0 && *is_initial_sent) {
