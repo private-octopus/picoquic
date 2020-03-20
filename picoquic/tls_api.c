@@ -2565,7 +2565,7 @@ int picoquic_esni_server_setup(picoquic_quic_t * quic, char const * esni_rr_file
         free(esnikeys);
     }
     else {
-        DBG_PRINTF("failed to allocate memory(%d) for parsing esni record\n", picoquic_esnikeys_max_rr);
+        DBG_PRINTF("failed to allocate memory(%zu) for parsing esni record\n", picoquic_esnikeys_max_rr);
         ret = PICOQUIC_ERROR_MEMORY;
     }
 
