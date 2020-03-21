@@ -984,7 +984,8 @@ int picoquic_incoming_client_initial(
         (*pcnx)->cnx_state == picoquic_state_server_init &&
         !(*pcnx)->quic->server_busy) {
         if (picoquic_verify_retry_token((*pcnx)->quic, addr_from, current_time,
-            &(*pcnx)->original_cnxid, ph->token_bytes, ph->token_length) != 0) {
+            &(*pcnx)->original_cnxid, &ph->dest_cnx_id,
+            ph->token_bytes, ph->token_length) != 0) {
             if (ph->token_length != 0) {
                 (void)picoquic_connection_error(*pcnx, PICOQUIC_TRANSPORT_INVALID_TOKEN, 0);
                 ret = PICOQUIC_ERROR_INVALID_TOKEN;
@@ -995,6 +996,7 @@ int picoquic_incoming_client_initial(
 
                 if (picoquic_prepare_retry_token((*pcnx)->quic, addr_from,
                     current_time + PICOQUIC_TOKEN_DELAY_SHORT, &ph->dest_cnx_id,
+                    &(*pcnx)->path[0]->p_local_cnxid->cnx_id,
                     token_buffer, sizeof(token_buffer), &token_size) != 0) {
                     ret = PICOQUIC_ERROR_MEMORY;
                 }

@@ -221,7 +221,7 @@ typedef struct st_picoquic_tp_t {
     uint8_t ack_delay_exponent;
     unsigned int migration_disabled;
     picoquic_tp_prefered_address_t prefered_address;
-    uint32_t max_datagram_size;
+    uint32_t max_datagram_frame_size;
     int enable_loss_bit;
     int enable_time_stamp;
     uint64_t min_ack_delay;

@@ -24,15 +24,6 @@
 #include "picoquic_utils.h"
 #include "qinqproto.h"
 
-uint8_t* picoquic_frames_fixed_skip(uint8_t* bytes, const uint8_t* bytes_max, size_t size);
-uint8_t* picoquic_frames_varint_decode(uint8_t* bytes, const uint8_t* bytes_max, uint64_t* n64);
-uint8_t* picoquic_frames_varlen_decode(uint8_t* bytes, const uint8_t* bytes_max, size_t* n);
-uint8_t* picoquic_frames_uint8_decode(uint8_t* bytes, const uint8_t* bytes_max, uint8_t* n);
-uint8_t* picoquic_frames_uint16_decode(uint8_t* bytes, const uint8_t* bytes_max, uint16_t* n);
-uint8_t* picoquic_frames_uint32_decode(uint8_t* bytes, const uint8_t* bytes_max, uint32_t* n);
-uint8_t* picoquic_frames_uint64_decode(uint8_t* bytes, const uint8_t* bytes_max, uint64_t* n);
-uint8_t* picoquic_frames_cid_decode(uint8_t* bytes, const uint8_t* bytes_max, picoquic_connection_id_t* n);
-
 int qinq_copy_address(struct sockaddr_storage* addr_s, size_t address_length, const uint8_t* address, uint16_t port) {
     int ret = 0;
     memset(addr_s, 0, sizeof(struct sockaddr_storage));
@@ -299,7 +290,7 @@ uint8_t* picoqinq_encode_reserve_header(uint8_t* bytes, uint8_t* bytes_max,
     if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, QINQ_PROTO_RESERVE_HEADER)) != NULL &&
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, direction)) != NULL &&
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, hcid)) != NULL &&
-        (bytes = picoquic_frames_l_v_encode(bytes, bytes_max, address_length, addr_bytes)) != NULL &&
+        (bytes = picoquic_frames_length_data_encode(bytes, bytes_max, address_length, addr_bytes)) != NULL &&
         (bytes = picoquic_frames_uint16_encode(bytes, bytes_max, port)) != NULL) {
         bytes = picoquic_frames_cid_encode(bytes, bytes_max, cid);
     }

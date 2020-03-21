@@ -537,7 +537,7 @@ int quic_client(const char* ip_address_text, int server_port,
         else {
             if (is_siduck) {
                 picoquic_set_callback(cnx_client, siduck_callback, siduck_ctx);
-                cnx_client->local_parameters.max_datagram_size = 128;
+                cnx_client->local_parameters.max_datagram_frame_size = 128;
             }
             else {
                 picoquic_set_callback(cnx_client, picoquic_demo_client_callback, &callback_ctx);

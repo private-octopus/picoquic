@@ -141,6 +141,20 @@ FILE * picoquic_file_open_ex(char const * file_name, char const * flags, int * l
 FILE * picoquic_file_open(char const * file_name, char const * flags);
 FILE * picoquic_file_close(FILE * F);
 
+/* Skip and decoding functions */
+uint8_t* picoquic_frames_fixed_skip(uint8_t * bytes, const uint8_t * bytes_max, size_t size);
+uint8_t* picoquic_frames_varint_skip(uint8_t * bytes, const uint8_t * bytes_max);
+uint8_t* picoquic_frames_varint_decode(uint8_t * bytes, const uint8_t * bytes_max, uint64_t * n64);
+uint8_t* picoquic_frames_varlen_decode(uint8_t * bytes, const uint8_t * bytes_max, size_t * n);
+uint8_t* picoquic_frames_uint8_decode(uint8_t * bytes, const uint8_t * bytes_max, uint8_t * n);
+uint8_t* picoquic_frames_uint16_decode(uint8_t * bytes, const uint8_t * bytes_max, uint16_t * n);
+uint8_t* picoquic_frames_uint32_decode(uint8_t * bytes, const uint8_t * bytes_max, uint32_t * n);
+uint8_t* picoquic_frames_uint64_decode(uint8_t * bytes, const uint8_t * bytes_max, uint64_t * n);
+uint8_t* picoquic_frames_length_data_skip(uint8_t * bytes, const uint8_t * bytes_max);
+uint8_t* picoquic_frames_cid_decode(uint8_t * bytes, const uint8_t * bytes_max, picoquic_connection_id_t * cid);
+
+#define VARINT_LEN(bytes) ((size_t)1 << (((bytes)[0] & 0xC0) >> 6))
+
 /* Encoding functions of the form uint8_t * picoquic_frame_XXX_encode(uint8_t * bytes, uint8_t * bytes-max, ...)
  */
 uint8_t* picoquic_frames_varint_encode(uint8_t* bytes, const uint8_t* bytes_max, uint64_t n64);
@@ -150,8 +164,9 @@ uint8_t* picoquic_frames_uint16_encode(uint8_t* bytes, const uint8_t* bytes_max,
 uint8_t* picoquic_frames_uint24_encode(uint8_t * bytes, const uint8_t * bytes_max, uint32_t n);
 uint8_t* picoquic_frames_uint32_encode(uint8_t* bytes, const uint8_t* bytes_max, uint32_t n);
 uint8_t* picoquic_frames_uint64_encode(uint8_t* bytes, const uint8_t* bytes_max, uint64_t n);
-uint8_t* picoquic_frames_l_v_encode(uint8_t* bytes, const uint8_t* bytes_max, size_t l, const uint8_t* v);
+uint8_t* picoquic_frames_length_data_encode(uint8_t* bytes, const uint8_t* bytes_max, size_t l, const uint8_t* v);
 uint8_t* picoquic_frames_cid_encode(uint8_t* bytes, const uint8_t* bytes_max, const picoquic_connection_id_t* cid);
+
 
 /* Constant time memory comparison may be required on some platforms for testing reset secrets */
 int picoquic_constant_time_memcmp(const uint8_t* x, const uint8_t* y, size_t l);

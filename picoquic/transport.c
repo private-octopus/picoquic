@@ -111,6 +111,27 @@ uint8_t* picoquic_transport_param_type_flag_encode(uint8_t* bytes, const uint8_t
     return bytes;
 }
 
+uint8_t* picoquic_transport_param_cid_encode(uint8_t* bytes, const uint8_t* bytes_max, picoquic_tp_enum tp_type, picoquic_connection_id_t * cid)
+{
+    if (bytes != NULL &&
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, tp_type)) != NULL) {
+        /* frame encoding includes length and the value. */
+        bytes = picoquic_frames_cid_encode(bytes, bytes_max, cid);
+    }
+    return bytes;
+}
+
+int picoquic_transport_param_cid_decode(picoquic_cnx_t * cnx, uint8_t* bytes, uint64_t extension_length, picoquic_connection_id_t* cid)
+{
+    int ret = 0;
+    cid->id_len = (uint8_t)picoquic_parse_connection_id(bytes, (uint8_t)extension_length, cid);
+    if ((size_t)cid->id_len != extension_length) {
+        ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+    }
+
+    return ret;
+}
+
 uint64_t picoquic_decode_transport_param_stream_id(uint64_t rank, int extension_mode, int stream_type) 
 {
     uint64_t stream_id = 0xFFFFFFFFFFFFFFFFull;
@@ -140,7 +161,7 @@ uint8_t* picoquic_encode_transport_param_prefered_address_old(uint8_t* bytes, ui
     picoquic_tp_prefered_address_t* prefered_address)
 {
     /* first compute the length */
-    uint16_t coded_length = 4 + 2 + 16 + 2 + 1 + prefered_address->connection_id.id_len + 16;
+    uint16_t coded_length = 4u + 2u + 16u + 2u + 1u + prefered_address->connection_id.id_len + 16u;
 
     if (bytes == NULL || bytes + coded_length > bytes_max) {
         bytes = NULL;
@@ -172,7 +193,7 @@ uint8_t * picoquic_encode_transport_param_prefered_address(uint8_t * bytes, uint
     picoquic_tp_prefered_address_t * prefered_address)
 {
     /* first compute the length */
-    uint64_t coded_length = 4 + 2 + 16 + 2 + 1 + prefered_address->connection_id.id_len + 16;
+    uint64_t coded_length = 4u + 2u + 16u + 2u + 1u + prefered_address->connection_id.id_len + 16u;
 
     if (bytes != NULL &&
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, picoquic_tp_server_preferred_address)) != NULL &&
@@ -206,7 +227,7 @@ size_t picoquic_decode_transport_param_prefered_address(uint8_t * bytes, size_t 
     /* first compute the minimal length */
     size_t byte_index = 0;
     uint8_t cnx_id_length = 0;
-    size_t minimal_length = 4 + 2 + 16 + 2 + 1 /* + prefered_address->connection_id.id_len */ + 16;
+    size_t minimal_length = 4u + 2u + 16u + 2u + 1u /* + prefered_address->connection_id.id_len */ + 16u;
     size_t ret = 0;
 
     if (bytes_max >= minimal_length) {
@@ -220,7 +241,7 @@ size_t picoquic_decode_transport_param_prefered_address(uint8_t * bytes, size_t 
         byte_index += 2;
         cnx_id_length = bytes[byte_index++];
         if (cnx_id_length > 0 && cnx_id_length <= PICOQUIC_CONNECTION_ID_MAX_SIZE &&
-            byte_index + (size_t)cnx_id_length + 16 <= bytes_max &&
+            byte_index + (size_t)cnx_id_length + 16u <= bytes_max &&
             cnx_id_length == picoquic_parse_connection_id(bytes + byte_index, cnx_id_length,
                 &prefered_address->connection_id)){
             byte_index += cnx_id_length;
@@ -339,14 +360,14 @@ int picoquic_prepare_transport_extensions_old(picoquic_cnx_t* cnx, int extension
         }
     }
 
-    if (!cnx->client_mode && cnx->local_parameters.max_datagram_size == 0 &&
-        cnx->remote_parameters.max_datagram_size > 0) {
-        cnx->local_parameters.max_datagram_size = PICOQUIC_MAX_PACKET_SIZE;
+    if (!cnx->client_mode && cnx->local_parameters.max_datagram_frame_size == 0 &&
+        cnx->remote_parameters.max_datagram_frame_size > 0) {
+        cnx->local_parameters.max_datagram_frame_size = PICOQUIC_MAX_PACKET_SIZE;
     }
 
-    if (cnx->local_parameters.max_datagram_size > 0 && bytes != NULL) {
-        bytes = picoquic_transport_param_type_varint_encode_old(bytes, bytes_max, picoquic_tp_max_datagram_size,
-            cnx->local_parameters.max_datagram_size);
+    if (cnx->local_parameters.max_datagram_frame_size > 0 && bytes != NULL) {
+        bytes = picoquic_transport_param_type_varint_encode_old(bytes, bytes_max, picoquic_tp_max_datagram_frame_size,
+            cnx->local_parameters.max_datagram_frame_size);
     }
 
     if (cnx->grease_transport_parameters) {
@@ -433,20 +454,6 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_max_packet_size,
         cnx->local_parameters.max_packet_size);
 
-    if (extension_mode == 1) {
-        if (bytes != NULL &&
-            (bytes = picoquic_frames_varint_encode(bytes, bytes_max, picoquic_tp_stateless_reset_token)) != NULL &&
-            (bytes = picoquic_frames_varint_encode(bytes, bytes_max, PICOQUIC_RESET_SECRET_SIZE)) != NULL){
-            if (bytes + PICOQUIC_RESET_SECRET_SIZE < bytes_max) {
-                (void)picoquic_create_cnxid_reset_secret(cnx->quic, &cnx->path[0]->p_local_cnxid->cnx_id, bytes);
-                bytes += PICOQUIC_RESET_SECRET_SIZE;
-            }
-            else {
-                bytes = NULL;
-            }
-        }
-    }
-
     if (cnx->local_parameters.ack_delay_exponent != 3) {
         bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_ack_delay_exponent,
             cnx->local_parameters.ack_delay_exponent);
@@ -486,19 +493,34 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
             (cnx->local_parameters.max_ack_delay + 999) / 1000); /* Max ACK delay in milliseconds */
     }
 
-    if (extension_mode == 1 && cnx->original_cnxid.id_len > 0 && bytes != NULL &&
-        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, picoquic_tp_original_connection_id)) != NULL) {
-        bytes = picoquic_frames_cid_encode(bytes, bytes_max, &cnx->original_cnxid);
+    if (extension_mode == 1 && cnx->original_cnxid.id_len > 0){
+        bytes = picoquic_transport_param_cid_encode(bytes, bytes_max, picoquic_tp_original_connection_id, &cnx->original_cnxid);
+        bytes = picoquic_transport_param_cid_encode(bytes, bytes_max, picoquic_tp_retry_connection_id, &cnx->initial_cnxid);
+    }
+    bytes = picoquic_transport_param_cid_encode(bytes, bytes_max, picoquic_tp_handshake_connection_id, &cnx->path[0]->p_local_cnxid->cnx_id);
+
+    if (extension_mode == 1) {
+        if (bytes != NULL &&
+            (bytes = picoquic_frames_varint_encode(bytes, bytes_max, picoquic_tp_stateless_reset_token)) != NULL &&
+            (bytes = picoquic_frames_varint_encode(bytes, bytes_max, PICOQUIC_RESET_SECRET_SIZE)) != NULL) {
+            if (bytes + PICOQUIC_RESET_SECRET_SIZE < bytes_max) {
+                (void)picoquic_create_cnxid_reset_secret(cnx->quic, &cnx->path[0]->p_local_cnxid->cnx_id, bytes);
+                bytes += PICOQUIC_RESET_SECRET_SIZE;
+            }
+            else {
+                bytes = NULL;
+            }
+        }
     }
 
-    if (!cnx->client_mode && cnx->local_parameters.max_datagram_size == 0 &&
-        cnx->remote_parameters.max_datagram_size > 0) {
-        cnx->local_parameters.max_datagram_size = PICOQUIC_MAX_PACKET_SIZE;
+    if (!cnx->client_mode && cnx->local_parameters.max_datagram_frame_size == 0 &&
+        cnx->remote_parameters.max_datagram_frame_size > 0) {
+        cnx->local_parameters.max_datagram_frame_size = PICOQUIC_MAX_PACKET_SIZE;
     }
 
-    if (cnx->local_parameters.max_datagram_size > 0 && bytes != NULL) {
-        bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_max_datagram_size,
-            cnx->local_parameters.max_datagram_size);
+    if (cnx->local_parameters.max_datagram_frame_size > 0 && bytes != NULL) {
+        bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_max_datagram_frame_size,
+            cnx->local_parameters.max_datagram_frame_size);
     }
 
     if (cnx->grease_transport_parameters) {
@@ -576,7 +598,7 @@ void picoquic_clear_transport_extensions(picoquic_cnx_t* cnx)
     cnx->max_stream_id_unidir_remote = 0;
     cnx->remote_parameters.migration_disabled = 0;
     cnx->remote_parameters.max_ack_delay = PICOQUIC_ACK_DELAY_MAX_DEFAULT;
-    cnx->remote_parameters.max_datagram_size = 0;
+    cnx->remote_parameters.max_datagram_frame_size = 0;
     cnx->remote_parameters.active_connection_id_limit = 0;
     cnx->remote_parameters.enable_loss_bit = 0;
     cnx->remote_parameters.enable_time_stamp = 0;
@@ -759,8 +781,8 @@ int picoquic_receive_transport_extensions_old(picoquic_cnx_t* cnx, int extension
                             picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
                             /* TODO: may need to check the value, but conditions are unclear */
                             break;
-                        case picoquic_tp_max_datagram_size:
-                            cnx->remote_parameters.max_datagram_size = (uint32_t)
+                        case picoquic_tp_max_datagram_frame_size:
+                            cnx->remote_parameters.max_datagram_frame_size = (uint32_t)
                                 picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
                             break;
                         case picoquic_tp_enable_loss_bit_old:
@@ -880,6 +902,8 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     size_t byte_index = 0;
     uint64_t present_flag = 0;
     picoquic_connection_id_t original_connection_id = picoquic_null_connection_id;
+    picoquic_connection_id_t handshake_connection_id = picoquic_null_connection_id;
+    picoquic_connection_id_t retry_connection_id = picoquic_null_connection_id;
 
     if (picoquic_supported_versions[cnx->version_index].version == PICOQUIC_SIXTEENTH_INTEROP_VERSION) {
         return picoquic_receive_transport_extensions_old(cnx, extension_mode, bytes, bytes_max, consumed);
@@ -1035,23 +1059,21 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                     }
                     break;
                 case picoquic_tp_original_connection_id:
-                    if (extension_length >= 256) {
-                        ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
-                    }
-                    else {
-                        original_connection_id.id_len = (uint8_t)picoquic_parse_connection_id(bytes + byte_index, (uint8_t)extension_length, &original_connection_id);
-                        if (original_connection_id.id_len == 0) {
-                            ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
-                        }
-                    }
+                    ret = picoquic_transport_param_cid_decode(cnx, bytes + byte_index, extension_length, &original_connection_id);
+                    break;
+                case picoquic_tp_retry_connection_id:
+                    ret = picoquic_transport_param_cid_decode(cnx, bytes + byte_index, extension_length, &retry_connection_id);
+                    break;
+                case picoquic_tp_handshake_connection_id:
+                    ret = picoquic_transport_param_cid_decode(cnx, bytes + byte_index, extension_length, &handshake_connection_id);
                     break;
                 case picoquic_tp_active_connection_id_limit:
                     cnx->remote_parameters.active_connection_id_limit = (uint32_t)
                         picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
                     /* TODO: may need to check the value, but conditions are unclear */
                     break;
-                case picoquic_tp_max_datagram_size:
-                    cnx->remote_parameters.max_datagram_size = (uint32_t)
+                case picoquic_tp_max_datagram_frame_size:
+                    cnx->remote_parameters.max_datagram_frame_size = (uint32_t)
                         picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
                     break;
                 case picoquic_tp_enable_loss_bit_old:
@@ -1137,23 +1159,47 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         }
     }
 
-    /* Clients must not include reset token, server address, or original cid  */
+    /* Clients must not include reset token, server address, retry cid or original cid  */
 
     if (ret == 0 && extension_mode == 0 &&
         ((present_flag & (1ull << picoquic_tp_stateless_reset_token)) != 0 ||
         (present_flag & (1ull << picoquic_tp_server_preferred_address)) != 0 ||
-            (present_flag & (1ull << picoquic_tp_original_connection_id)) != 0)) {
+            (present_flag & (1ull << picoquic_tp_original_connection_id)) != 0 ||
+            (present_flag & (1ull << picoquic_tp_retry_connection_id)) != 0)) {
         ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
     }
 
     /* Original connection ID should be NULL at the client and at the server if
      * there was no retry, should exactly match otherwise. Mismatch is trated
-     * as a transport parameter error */
+     * as a transport parameter error. In versions after draft 27, also check
+     * that the retry DCID was not modified in transit. The original and
+     * retry DCID shall not be sent by clients. */
     if (ret == 0 && extension_mode == 1) {
-        if (cnx->original_cnxid.id_len != 0 &&
-            picoquic_compare_connection_id(&cnx->original_cnxid, &original_connection_id) != 0) {
-            ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+        if (picoquic_supported_versions[cnx->version_index].version == PICOQUIC_SEVENTEENTH_INTEROP_VERSION) {
+            if (cnx->original_cnxid.id_len != 0 &&
+                picoquic_compare_connection_id(&cnx->original_cnxid, &original_connection_id) != 0) {
+                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+            }
         }
+        else {
+            if ((cnx->original_cnxid.id_len != 0 && (
+                picoquic_compare_connection_id(&cnx->original_cnxid, &original_connection_id) != 0 ||
+                (present_flag & (1ull << picoquic_tp_retry_connection_id)) != 0 ||
+                picoquic_compare_connection_id(&cnx->initial_cnxid, &retry_connection_id) != 0)
+                )
+                ||
+                (cnx->original_cnxid.id_len == 0 &&
+                (present_flag & (1ull << picoquic_tp_retry_connection_id)) != 0)
+                ) {
+                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+            }
+        }
+    }
+
+    if (picoquic_supported_versions[cnx->version_index].version != PICOQUIC_SEVENTEENTH_INTEROP_VERSION &&
+        ((present_flag & (1ull << picoquic_tp_handshake_connection_id)) == 0 ||
+            picoquic_compare_connection_id(&cnx->path[0]->remote_cnxid, &handshake_connection_id) != 0)) {
+        ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
     }
 
     /* Loss bit is only enabled if negotiated by both parties */
