@@ -2257,6 +2257,10 @@ int picoquic_prepare_retry_token(picoquic_quic_t* quic, const struct sockaddr* a
     if ((bytes = picoquic_frames_uint64_encode(bytes, bytes_max, token_time)) != NULL &&
         (bytes = picoquic_frames_cid_encode(bytes, bytes_max, odcid)) != NULL &&
         (bytes = picoquic_frames_cid_encode(bytes, bytes_max, rcid)) != NULL) {
+        /* Pad to min token size */
+        while (bytes < text + PICOQUIC_RETRY_TOKEN_PAD_SIZE) {
+            *bytes++ = 0;
+        }
         /* Encode the clear text components */
         ret = picoquic_server_encrypt_retry_token(quic, addr_peer, token, token_size, token_max, text, bytes - text);
     }
