@@ -68,11 +68,11 @@ uint64_t picoquic_public_uniform_random(uint64_t rnd_max);
 
 size_t picoquic_aead_get_checksum_length(void* aead_context);
 
-size_t picoquic_aead_encrypt_generic(uint8_t* output, uint8_t* input, size_t input_length,
-    uint64_t seq_num, uint8_t* auth_data, size_t auth_data_length, void* aead_context);
+size_t picoquic_aead_encrypt_generic(uint8_t* output, const uint8_t* input, size_t input_length,
+    uint64_t seq_num, const uint8_t* auth_data, size_t auth_data_length, void* aead_context);
 
-size_t picoquic_aead_decrypt_generic(uint8_t* output, uint8_t* input, size_t input_length,
-    uint64_t seq_num, uint8_t* auth_data, size_t auth_data_length, void* aead_ctx);
+size_t picoquic_aead_decrypt_generic(uint8_t* output, const uint8_t* input, size_t input_length,
+    uint64_t seq_num, const uint8_t* auth_data, size_t auth_data_length, void* aead_ctx);
 
 void picoquic_aead_free(void* aead_context);
 
@@ -129,13 +129,13 @@ void picoquic_tls_set_client_authentication(picoquic_quic_t* quic, int client_au
 
 int picoquic_tls_client_authentication_activated(picoquic_quic_t* quic);
 
-int picoquic_prepare_retry_token(picoquic_quic_t* quic, struct sockaddr * addr_peer,
-    uint64_t current_time, picoquic_connection_id_t * odcid,
+int picoquic_prepare_retry_token(picoquic_quic_t* quic, const struct sockaddr * addr_peer,
+    uint64_t current_time, const picoquic_connection_id_t * odcid, const picoquic_connection_id_t* rcid,
     uint8_t * token, size_t token_max, size_t * token_size);
 
-int picoquic_verify_retry_token(picoquic_quic_t* quic, struct sockaddr * addr_peer,
-    uint64_t current_time, picoquic_connection_id_t * odcid,
-    uint8_t * token, size_t token_size);
+int picoquic_verify_retry_token(picoquic_quic_t* quic, const struct sockaddr * addr_peer,
+    uint64_t current_time, picoquic_connection_id_t * odcid, const picoquic_connection_id_t* rcid,
+    const uint8_t * token, size_t token_size);
 
 void picoquic_cid_free_under_mask_ctx(void * v_pn_enc);
 int picoquic_cid_get_under_mask_ctx(void ** v_pn_enc, const void * secret);

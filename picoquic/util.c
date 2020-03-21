@@ -534,6 +534,127 @@ FILE * picoquic_file_close(FILE * F)
     return NULL;
 }
 
+ /* Skip and decode function.
+  * These functions return NULL in case of a failure (insufficient buffer).
+  */
+
+uint8_t* picoquic_frames_fixed_skip(uint8_t* bytes, const uint8_t* bytes_max, size_t size)
+{
+    return (bytes += size) <= bytes_max ? bytes : NULL;
+}
+
+
+uint8_t* picoquic_frames_varint_skip(uint8_t* bytes, const uint8_t* bytes_max)
+{
+    return bytes < bytes_max ? picoquic_frames_fixed_skip(bytes, bytes_max, VARINT_LEN(bytes)) : NULL;
+}
+
+
+/* Parse a varint. In case of an error, *n64 is unchanged, and NULL is returned */
+uint8_t* picoquic_frames_varint_decode(uint8_t* bytes, const uint8_t* bytes_max, uint64_t* n64)
+{
+    uint8_t length;
+
+    if (bytes < bytes_max && bytes + (length = (uint8_t)VARINT_LEN(bytes)) <= bytes_max) {
+        uint64_t v = *bytes++ & 0x3F;
+
+        while (--length > 0) {
+            v <<= 8;
+            v += *bytes++;
+        }
+
+        *n64 = v;
+    }
+    else {
+        bytes = NULL;
+    }
+
+    return bytes;
+}
+
+uint8_t* picoquic_frames_varlen_decode(uint8_t* bytes, const uint8_t* bytes_max, size_t* n)
+{
+    uint64_t len = 0;
+    bytes = picoquic_frames_varint_decode(bytes, bytes_max, &len);
+    *n = (size_t)len;
+    return (*n == len) ? bytes : NULL;
+}
+
+uint8_t* picoquic_frames_uint8_decode(uint8_t* bytes, const uint8_t* bytes_max, uint8_t* n)
+{
+    if (bytes < bytes_max) {
+        *n = *bytes++;
+    }
+    else {
+        bytes = NULL;
+    }
+    return bytes;
+}
+
+
+uint8_t* picoquic_frames_uint16_decode(uint8_t* bytes, const uint8_t* bytes_max, uint16_t* n)
+{
+    if (bytes + sizeof(*n) <= bytes_max) {
+        *n = PICOPARSE_16(bytes);
+        bytes += sizeof(*n);
+    }
+    else {
+        bytes = NULL;
+    }
+    return bytes;
+}
+
+uint8_t* picoquic_frames_uint32_decode(uint8_t* bytes, const uint8_t* bytes_max, uint32_t* n)
+{
+    if (bytes + sizeof(*n) <= bytes_max) {
+        *n = PICOPARSE_32(bytes);
+        bytes += sizeof(*n);
+    }
+    else {
+        bytes = NULL;
+    }
+    return bytes;
+}
+
+uint8_t* picoquic_frames_uint64_decode(uint8_t* bytes, const uint8_t* bytes_max, uint64_t* n)
+{
+    if (bytes + sizeof(*n) <= bytes_max) {
+        *n = PICOPARSE_64(bytes);
+        bytes += sizeof(*n);
+    }
+    else {
+        bytes = NULL;
+    }
+    return bytes;
+}
+
+uint8_t* picoquic_frames_length_data_skip(uint8_t* bytes, const uint8_t* bytes_max)
+{
+    uint64_t length;
+    if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &length)) != NULL) {
+        bytes = picoquic_frames_fixed_skip(bytes, bytes_max, (size_t)length);
+    }
+    return bytes;
+}
+
+uint8_t* picoquic_frames_cid_decode(uint8_t* bytes, const uint8_t* bytes_max, picoquic_connection_id_t* cid)
+{
+    bytes = picoquic_frames_uint8_decode(bytes, bytes_max, &cid->id_len);
+
+    if (cid->id_len > PICOQUIC_CONNECTION_ID_MAX_SIZE ||
+        bytes + cid->id_len > bytes_max) {
+        bytes = NULL;
+    }
+    else {
+        memset(cid->id, 0, sizeof(cid->id));
+        memcpy(cid->id, bytes, cid->id_len);
+        bytes += cid->id_len;
+    }
+
+    return bytes;
+}
+
+
 /* Encoding functions of the form uint8_t * picoquic_frame_XXX_encode(uint8_t * bytes, uint8_t * bytes-max, ...)
  */
 uint8_t* picoquic_frames_varint_encode(uint8_t* bytes, const uint8_t* bytes_max, uint64_t n64)
@@ -662,7 +783,7 @@ uint8_t* picoquic_frames_uint64_encode(uint8_t* bytes, const uint8_t* bytes_max,
 
 }
 
-uint8_t* picoquic_frames_l_v_encode(uint8_t* bytes, const uint8_t* bytes_max, size_t l, const uint8_t* v)
+uint8_t* picoquic_frames_length_data_encode(uint8_t* bytes, const uint8_t* bytes_max, size_t l, const uint8_t* v)
 {
     if ((bytes = picoquic_frames_varlen_encode(bytes, bytes_max, l)) != NULL &&
         (bytes + l) <= bytes_max) {
@@ -678,7 +799,7 @@ uint8_t* picoquic_frames_l_v_encode(uint8_t* bytes, const uint8_t* bytes_max, si
 
 uint8_t* picoquic_frames_cid_encode(uint8_t* bytes, const uint8_t* bytes_max, const picoquic_connection_id_t* cid)
 {
-    return picoquic_frames_l_v_encode(bytes, bytes_max, cid->id_len, cid->id);
+    return picoquic_frames_length_data_encode(bytes, bytes_max, cid->id_len, cid->id);
 }
 
 /* Constant time memory comparison. This is only required now for
