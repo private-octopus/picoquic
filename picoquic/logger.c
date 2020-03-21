@@ -380,7 +380,7 @@ char const* picoquic_log_tp_name(uint64_t tp_number)
         tp_name = "ocid";
         break;
     case picoquic_tp_idle_timeout:
-        tp_name = "ocid";
+        tp_name = "idle_timeout";
         break;
     case picoquic_tp_stateless_reset_token:
         tp_name = "stateless_reset_token";
@@ -421,8 +421,14 @@ char const* picoquic_log_tp_name(uint64_t tp_number)
     case picoquic_tp_active_connection_id_limit:
         tp_name = "active_connection_id_limit";
         break;
-    case picoquic_tp_max_datagram_size:
-        tp_name = "max_datagram_size";
+    case picoquic_tp_retry_connection_id:
+        tp_name = "rcid";
+        break;
+    case picoquic_tp_handshake_connection_id:
+        tp_name = "hcid";
+        break;
+    case picoquic_tp_max_datagram_frame_size:
+        tp_name = "max_datagram_frame_size";
         break;
     case picoquic_tp_test_large_chello:
         tp_name = "large_chello";

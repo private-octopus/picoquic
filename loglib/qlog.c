@@ -271,11 +271,19 @@ int qlog_transport_extensions(FILE* f, bytestream* s, size_t tp_length)
                     fprintf(f, "\"original_connection_id\": ");
                     qlog_string(f, s, extension_length);
                     break;
+                case picoquic_tp_retry_connection_id:
+                    fprintf(f, "\"retry_connection_id\": ");
+                    qlog_string(f, s, extension_length);
+                    break;
+                case picoquic_tp_handshake_connection_id:
+                    fprintf(f, "\"handshake_connection_id\": ");
+                    qlog_string(f, s, extension_length);
+                    break;
                 case picoquic_tp_active_connection_id_limit:
                     qlog_vint_transport_extension(f, "active_connection_id_limit", s, extension_length);
                     break;
-                case picoquic_tp_max_datagram_size:
-                    qlog_vint_transport_extension(f, "max_datagram_size", s, extension_length);
+                case picoquic_tp_max_datagram_frame_size:
+                    qlog_vint_transport_extension(f, "max_datagram_frame_size", s, extension_length);
                     break;
                 case picoquic_tp_enable_loss_bit:
                     qlog_vint_transport_extension(f, "enable_loss_bit", s, extension_length);
@@ -286,6 +294,7 @@ int qlog_transport_extensions(FILE* f, bytestream* s, size_t tp_length)
                 case picoquic_tp_enable_time_stamp:
                     qlog_boolean_transport_extension(f, "enable_time_stamp", s, extension_length);
                     break;
+                 
                 default:
                     /* dump unknown extensions */
                     fprintf(f, "\"%" PRIx64 "\": ", extension_type);

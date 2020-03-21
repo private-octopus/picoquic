@@ -129,7 +129,7 @@ int siduck_callback(picoquic_cnx_t* cnx,
             break;
         case picoquic_callback_ready:
             /* Check that the transport parameters are what Http3 expects */
-            if (cnx->remote_parameters.max_datagram_size < sizeof(quack)) {
+            if (cnx->remote_parameters.max_datagram_frame_size < sizeof(quack)) {
                 if (ctx != NULL) {
                     ctx->nb_other_errors++;
                 }
