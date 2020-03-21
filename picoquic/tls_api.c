@@ -2177,7 +2177,7 @@ static int picoquic_server_encrypt_retry_token(picoquic_quic_t * quic, const str
     uint8_t* auth_data;
     size_t auth_data_length;
 
-    if (text_length + 1 + 16 > token_max) {
+    if (text_length + 1u + 16u > token_max) {
         ret = -1;
         *token_length = 0;
     }

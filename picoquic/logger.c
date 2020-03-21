@@ -1047,7 +1047,7 @@ size_t picoquic_log_streams_blocked_frame(FILE* F, uint8_t* bytes, size_t bytes_
 size_t picoquic_log_new_connection_id_frame(FILE* F, uint8_t* bytes, size_t bytes_max)
 {
     size_t byte_index = 1;
-    size_t min_size = 2 + 16;
+    size_t min_size = 2u + 16u;
     uint64_t sequence;
     uint64_t retire_before = 0;
     picoquic_connection_id_t new_cnx_id = picoquic_null_connection_id;

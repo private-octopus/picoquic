@@ -1114,7 +1114,7 @@ static uint32_t basic_fuzzer(void * fuzz_ctx, picoquic_cnx_t* cnx,
     if (should_fuzz) {
         /* Once in 16, fuzz by changing the length */
         if ((fuzz_pilot & 0xF) == 0xD) {
-            uint32_t fuzz_length_max = (uint32_t)(length + 16);
+            uint32_t fuzz_length_max = (uint32_t)(length + 16u);
             uint32_t fuzzed_length;
 
             if (fuzz_length_max > bytes_max) {

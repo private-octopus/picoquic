@@ -161,7 +161,7 @@ uint8_t* picoquic_encode_transport_param_prefered_address_old(uint8_t* bytes, ui
     picoquic_tp_prefered_address_t* prefered_address)
 {
     /* first compute the length */
-    uint16_t coded_length = 4 + 2 + 16 + 2 + 1 + prefered_address->connection_id.id_len + 16;
+    uint16_t coded_length = 4u + 2u + 16u + 2u + 1u + prefered_address->connection_id.id_len + 16u;
 
     if (bytes == NULL || bytes + coded_length > bytes_max) {
         bytes = NULL;
@@ -193,7 +193,7 @@ uint8_t * picoquic_encode_transport_param_prefered_address(uint8_t * bytes, uint
     picoquic_tp_prefered_address_t * prefered_address)
 {
     /* first compute the length */
-    uint64_t coded_length = 4 + 2 + 16 + 2 + 1 + prefered_address->connection_id.id_len + 16;
+    uint64_t coded_length = 4u + 2u + 16u + 2u + 1u + prefered_address->connection_id.id_len + 16u;
 
     if (bytes != NULL &&
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, picoquic_tp_server_preferred_address)) != NULL &&
@@ -227,7 +227,7 @@ size_t picoquic_decode_transport_param_prefered_address(uint8_t * bytes, size_t 
     /* first compute the minimal length */
     size_t byte_index = 0;
     uint8_t cnx_id_length = 0;
-    size_t minimal_length = 4 + 2 + 16 + 2 + 1 /* + prefered_address->connection_id.id_len */ + 16;
+    size_t minimal_length = 4u + 2u + 16u + 2u + 1u /* + prefered_address->connection_id.id_len */ + 16u;
     size_t ret = 0;
 
     if (bytes_max >= minimal_length) {
@@ -241,7 +241,7 @@ size_t picoquic_decode_transport_param_prefered_address(uint8_t * bytes, size_t 
         byte_index += 2;
         cnx_id_length = bytes[byte_index++];
         if (cnx_id_length > 0 && cnx_id_length <= PICOQUIC_CONNECTION_ID_MAX_SIZE &&
-            byte_index + (size_t)cnx_id_length + 16 <= bytes_max &&
+            byte_index + (size_t)cnx_id_length + 16u <= bytes_max &&
             cnx_id_length == picoquic_parse_connection_id(bytes + byte_index, cnx_id_length,
                 &prefered_address->connection_id)){
             byte_index += cnx_id_length;
