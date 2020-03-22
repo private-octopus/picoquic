@@ -844,10 +844,10 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
     picoquic_tp_t client_parameters;
 
     if (do_esni) {
-        ret = picoquic_get_input_path(test_server_esni_key_file, sizeof(test_server_esni_key_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_ESNI_KEY);
+        ret = picoquic_get_input_path(test_server_esni_key_file, sizeof(test_server_esni_key_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_ESNI_KEY);
 
         if (ret == 0) {
-            ret = picoquic_get_input_path(test_server_esni_rr_file, sizeof(test_server_esni_rr_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_ESNI_RR);
+            ret = picoquic_get_input_path(test_server_esni_rr_file, sizeof(test_server_esni_rr_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_ESNI_RR);
         }
 
         if (ret == 0) {
@@ -1348,7 +1348,7 @@ static size_t nb_file_test_scenario = sizeof(file_test_scenario) / sizeof(picoqu
 
 int serve_file_test_set_param(picohttp_server_parameters_t* file_param, char * buf, size_t buf_size)
 {
-    int ret = picoquic_get_input_path(buf, buf_size, picoquic_test_solution_dir, PICOQUIC_TEST_FILE_DEMO_FOLDER);
+    int ret = picoquic_get_input_path(buf, buf_size, picoquic_solution_dir, PICOQUIC_TEST_FILE_DEMO_FOLDER);
 
     memset(file_param, 0, sizeof(picohttp_server_parameters_t));
     file_param->web_folder = buf;
@@ -1664,11 +1664,11 @@ int http_stress_test()
     }
 
     if (ret == 0) {
-        ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_SERVER_CERT);
+        ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_CERT);
     }
 
     if (ret == 0) {
-        ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY);
+        ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY);
     }
     if (ret == 0) {
         qserver = picoquic_create(256, test_server_cert_file, test_server_key_file, NULL, NULL,

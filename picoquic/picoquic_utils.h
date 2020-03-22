@@ -97,6 +97,8 @@ void picoquic_store_addr(struct sockaddr_storage * stored_addr, const struct soc
 void picoquic_get_ip_addr(struct sockaddr * addr, uint8_t ** ip_addr, uint8_t * ip_addr_len);
 int picoquic_store_text_addr(struct sockaddr_storage* stored_addr, const char* ip_address_text, uint16_t port);
 
+/* Setting the solution dir when not executing from default location */
+void picoquic_set_solution_dir(char const* solution_dir);
 int picoquic_get_input_path(char * target_file_path, size_t file_path_max, const char * solution_path, const char * file_name);
 
 #ifndef MAX
@@ -288,7 +290,7 @@ void picoquictest_sim_link_submit(picoquictest_sim_link_t* link, picoquictest_si
 #endif
 
  /* To set the solution directory for tests */
-extern char const* picoquic_test_solution_dir;
+extern char const* picoquic_solution_dir;
 #ifdef __cplusplus
 }
 #endif

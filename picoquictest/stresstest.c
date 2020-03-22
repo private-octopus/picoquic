@@ -889,7 +889,7 @@ static int stress_create_client_context(int client_index, picoquic_stress_ctx_t 
             /* Create the quic context for this client*/
             char test_server_cert_store_file[512];
 
-            ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE);
+            ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE);
 
             if (ret != 0) {
                 DBG_PRINTF("%s", "Cannot set the cert store file name.\n");
@@ -974,14 +974,14 @@ static int stress_or_fuzz_test(picoquic_fuzz_fn fuzz_fn, void * fuzz_ctx, uint64
         char test_server_key_file[512];
         char test_server_cert_store_file[512];
 
-        ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_SERVER_CERT);
+        ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_CERT);
 
         if (ret == 0) {
-            ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY);
+            ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY);
         }
 
         if (ret == 0) {
-            ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE);
+            ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE);
         }
 
         if (ret != 0) {

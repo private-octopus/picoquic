@@ -324,7 +324,7 @@ int main(int argc, char** argv)
                 }
                 break;
             case 'S':
-                picoquic_test_set_solution_dir(optarg);
+                picoquic_set_solution_dir(optarg);
                 break;
             case 'n':
                 disable_debug = 1;

@@ -29,9 +29,6 @@ extern "C" {
 /* From picoquic/picoquic_utils.h */
 void debug_printf_suspend();
 
-/* Setting the solution dir when not executing from default location */
-void picoquic_test_set_solution_dir(char const * solution_dir);
-
 /* Control variables for the duration of the stress test */
 
 extern uint64_t picoquic_stress_test_duration; /* In microseconds; defaults to 2 minutes */

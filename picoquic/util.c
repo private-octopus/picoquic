@@ -476,7 +476,15 @@ int picoquic_store_text_addr(struct sockaddr_storage* stored_addr, const char* i
     return ret;
 }
 
+
 /* Return a directory path based on solution dir and file name */
+char const* picoquic_solution_dir = NULL;
+
+void picoquic_set_solution_dir(char const* solution_dir)
+{
+    picoquic_solution_dir = solution_dir;
+}
+
 int picoquic_get_input_path(char * target_file_path, size_t file_path_max, const char * solution_path, const char * file_name)
 {
     if (solution_path == NULL) {

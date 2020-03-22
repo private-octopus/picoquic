@@ -37,8 +37,6 @@
 
 #define RANDOM_PUBLIC_TEST_SEED 0xDEADBEEFCAFEC001ull
 
-char const * picoquic_test_solution_dir = NULL;
-
 static const uint8_t test_ticket_encrypt_key[32] = {
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
     16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
@@ -142,12 +140,6 @@ static test_api_stream_desc_t test_scenario_10mb[] = {
     { 36, 0, 257, 1000000 },
     { 40, 0, 257, 1000000 }
 };
-
-
-void picoquic_test_set_solution_dir(char const * solution_dir)
-{
-    picoquic_test_solution_dir = solution_dir;
-}
 
 static int test_api_init_stream_buffers(size_t len, uint8_t** src_bytes, uint8_t** rcv_bytes)
 {
@@ -775,14 +767,14 @@ int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_versi
     char test_server_key_file[512];
     char test_server_cert_store_file[512];
 
-    ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_SERVER_CERT);
+    ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_CERT);
 
     if (ret == 0) {
-        ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY);
+        ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY);
     }
 
     if (ret == 0) {
-        ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE);
+        ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE);
     }
 
     if (ret != 0) {
@@ -2981,14 +2973,14 @@ int bad_certificate_test()
     int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
 
     if (ret == 0) {
-        ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_SERVER_BAD_CERT);
+        ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_BAD_CERT);
 
         if (ret == 0) {
-            ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY);
+            ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY);
         }
 
         if (ret == 0) {
-            ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE);
+            ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE);
         }
 
         if (ret != 0) {
@@ -3079,15 +3071,15 @@ int set_verify_certificate_callback_test()
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
 
     if (ret == 0) {
-        ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_SERVER_CERT);
+        ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_CERT);
     }
 
     if (ret == 0) {
-        ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY);
+        ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY);
     }
 
     if (ret == 0) {
-        ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE);
+        ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE);
     }
 
     if (ret != 0) {
@@ -3172,7 +3164,7 @@ int virtual_time_test()
     picoquic_quic_t * qsimul = NULL;
     picoquic_quic_t * qdirect = NULL;
 
-    ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE);
+    ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE);
 
     if (ret != 0) {
         DBG_PRINTF("%s", "Cannot set the cert, key or store file names.\n");
@@ -3310,15 +3302,15 @@ int set_certificate_and_key_test()
     int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
 
     if (ret == 0) {
-        ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_SERVER_CERT);
+        ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_CERT);
     }
 
     if (ret == 0) {
-        ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY);
+        ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY);
     }
 
     if (ret == 0) {
-        ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE);
+        ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE);
     }
 
     if (ret != 0) {
@@ -3426,14 +3418,14 @@ int request_client_authentication_test()
     char test_server_cert_file[512];
     char test_server_key_file[512];
     char test_server_cert_store_file[512];
-    int ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_SERVER_CERT);
+    int ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_CERT);
 
     if (ret == 0) {
-        ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY);
+        ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY);
     }
 
     if (ret == 0) {
-        ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE);
+        ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE);
     }
 
     if (ret != 0) {
@@ -3512,14 +3504,14 @@ int bad_client_certificate_test()
     char test_server_cert_file[512];
     char test_server_key_file[512];
     char test_server_cert_store_file[512];
-    int ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_SERVER_BAD_CERT);
+    int ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_BAD_CERT);
 
     if (ret == 0) {
-        ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY);
+        ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY);
     }
 
     if (ret == 0) {
-        ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE);
+        ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE);
     }
 
     if (ret != 0) {
@@ -6189,7 +6181,7 @@ int packet_trace_test()
     {
         char packet_trace_test_ref[512];
 
-        ret = picoquic_get_input_path(packet_trace_test_ref, sizeof(packet_trace_test_ref), picoquic_test_solution_dir, PACKET_TRACE_TEST_REF);
+        ret = picoquic_get_input_path(packet_trace_test_ref, sizeof(packet_trace_test_ref), picoquic_solution_dir, PACKET_TRACE_TEST_REF);
 
         if (ret != 0) {
             DBG_PRINTF("%s", "Cannot set the packet trace test ref file name.\n");
@@ -6298,7 +6290,7 @@ int qlog_trace_test()
     {
         char qlog_trace_test_ref[512];
 
-        ret = picoquic_get_input_path(qlog_trace_test_ref, sizeof(qlog_trace_test_ref), picoquic_test_solution_dir, QLOG_TRACE_TEST_REF);
+        ret = picoquic_get_input_path(qlog_trace_test_ref, sizeof(qlog_trace_test_ref), picoquic_solution_dir, QLOG_TRACE_TEST_REF);
 
         if (ret != 0) {
             DBG_PRINTF("%s", "Cannot set the qlog trace test ref file name.\n");
@@ -7483,10 +7475,10 @@ int esni_test()
     int ret = 0;
 
     /* Locate the esni record and key files */
-    ret = picoquic_get_input_path(test_server_esni_key_file, sizeof(test_server_esni_key_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_ESNI_KEY);
+    ret = picoquic_get_input_path(test_server_esni_key_file, sizeof(test_server_esni_key_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_ESNI_KEY);
 
     if (ret == 0) {
-        ret = picoquic_get_input_path(test_server_esni_rr_file, sizeof(test_server_esni_rr_file), picoquic_test_solution_dir, PICOQUIC_TEST_FILE_ESNI_RR);
+        ret = picoquic_get_input_path(test_server_esni_rr_file, sizeof(test_server_esni_rr_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_ESNI_RR);
     }
 
     /* Set the simulated time to conform to the ESNI ticket */

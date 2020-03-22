@@ -662,7 +662,7 @@ int logger_test()
     if (ret == 0) {
         char log_test_ref[512];
 
-        ret = picoquic_get_input_path(log_test_ref, sizeof(log_test_ref), picoquic_test_solution_dir, LOG_TEST_REF);
+        ret = picoquic_get_input_path(log_test_ref, sizeof(log_test_ref), picoquic_solution_dir, LOG_TEST_REF);
 
         if (ret != 0) {
             DBG_PRINTF("%s", "Cannot set the log ref file name.\n");
@@ -766,10 +766,10 @@ int binlog_test()
     };
 
     char log_test_ref[512];
-    int ret_bin = picoquic_get_input_path(log_test_ref, sizeof(log_test_ref), picoquic_test_solution_dir, BINLOG_TEST_REF);
+    int ret_bin = picoquic_get_input_path(log_test_ref, sizeof(log_test_ref), picoquic_solution_dir, BINLOG_TEST_REF);
 
     char qlog_test_ref[512];
-    int ret_qlog = picoquic_get_input_path(qlog_test_ref, sizeof(qlog_test_ref), picoquic_test_solution_dir, QLOG_TEST_REF);
+    int ret_qlog = picoquic_get_input_path(qlog_test_ref, sizeof(qlog_test_ref), picoquic_solution_dir, QLOG_TEST_REF);
 
     uint64_t simulated_time = 0;
     picoquic_quic_t* quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
