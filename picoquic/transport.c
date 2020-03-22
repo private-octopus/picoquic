@@ -1066,6 +1066,10 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                     break;
                 case picoquic_tp_handshake_connection_id:
                     ret = picoquic_transport_param_cid_decode(cnx, bytes + byte_index, extension_length, &handshake_connection_id);
+                    if (ret == 0 &&
+                        picoquic_compare_connection_id(&cnx->path[0]->remote_cnxid, &handshake_connection_id) != 0) {
+                        ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+                    }
                     break;
                 case picoquic_tp_active_connection_id_limit:
                     cnx->remote_parameters.active_connection_id_limit = (uint32_t)
@@ -1180,6 +1184,11 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                 picoquic_compare_connection_id(&cnx->original_cnxid, &original_connection_id) != 0) {
                 ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
             }
+
+            if ((present_flag & (1ull << picoquic_tp_retry_connection_id)) != 0 &&
+                picoquic_compare_connection_id(&cnx->initial_cnxid, &retry_connection_id) != 0) {
+                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+            }
         }
         else {
             if ((cnx->original_cnxid.id_len != 0 && (
@@ -1197,8 +1206,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     }
 
     if (picoquic_supported_versions[cnx->version_index].version != PICOQUIC_SEVENTEENTH_INTEROP_VERSION &&
-        ((present_flag & (1ull << picoquic_tp_handshake_connection_id)) == 0 ||
-            picoquic_compare_connection_id(&cnx->path[0]->remote_cnxid, &handshake_connection_id) != 0)) {
+        (present_flag & (1ull << picoquic_tp_handshake_connection_id)) == 0) {
         ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
     }
 
