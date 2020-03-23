@@ -2128,7 +2128,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             max_data = send_buffer_max;
         }
         if (max_data > PICOQUIC_MIN_SEGMENT_SIZE) {
-            ret = picoquic_prepare_packet_0rtt(cnx, path_x, packet, current_time, send_buffer, max_data, send_length,
+            ret = picoquic_prepare_packet_0rtt(cnx, path_x, packet, current_time, send_buffer, (size_t)max_data, send_length,
                 *is_initial_sent, next_wake_time);
         }
     }
