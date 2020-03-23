@@ -1700,8 +1700,11 @@ size_t picoquic_prepare_packet_old_context(picoquic_cnx_t* cnx, picoquic_packet_
     picoquic_epoch_enum epoch = (pc == picoquic_packet_context_initial) ? picoquic_epoch_initial :
         (pc == picoquic_packet_context_application) ? picoquic_epoch_0rtt : picoquic_epoch_handshake;
     size_t length = 0;
-    size_t data_bytes = 0;
+    uint8_t* bytes = packet->bytes;
+    int more_data = 0;
     size_t checksum_overhead = picoquic_get_checksum_length(cnx, epoch);
+    uint8_t* bytes_max = bytes + send_buffer_max - checksum_overhead;
+    uint8_t* bytes_next;
 
     *header_length = 0;
 
@@ -1731,11 +1734,8 @@ size_t picoquic_prepare_packet_old_context(picoquic_cnx_t* cnx, picoquic_packet_
     if (length > 0) {
         if (packet->ptype != picoquic_packet_0rtt_protected && cnx->initial_validated) {
             /* Check whether it makes sens to add an ACK at the end of the retransmission */
-            if (picoquic_prepare_ack_frame(cnx, current_time, pc, &packet->bytes[length],
-                send_buffer_max - checksum_overhead - length, &data_bytes)
-                == 0) {
-                length += data_bytes;
-            }
+            bytes_next = picoquic_format_ack_frame(cnx, bytes + length, bytes_max, &more_data, current_time, pc);
+            length = bytes_next - bytes;
         }
         packet->length = length;
         /* document the send time & overhead */
@@ -1846,15 +1846,18 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
     int ret = 0;
     int tls_ready = 0;
     picoquic_packet_type_enum packet_type = 0;
-    size_t checksum_overhead = 8;
+    size_t checksum_overhead = 16;
     int is_cleartext_mode = 1;
     size_t data_bytes = 0;
     int retransmit_possible = 0;
     size_t header_length = 0;
     uint8_t* bytes = packet->bytes;
+    uint8_t* bytes_max;
+    uint8_t* bytes_next;
     size_t length = 0;
     int epoch = 0;
     int is_ack_only = 1;
+    int more_data = 0;
     picoquic_packet_context_enum pc = picoquic_packet_context_initial;
 
     if (*next_wake_time > cnx->start_time + PICOQUIC_MICROSEC_HANDSHAKE_MAX) {
@@ -1926,6 +1929,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
     if (length == 0) {
         checksum_overhead = picoquic_get_checksum_length(cnx, epoch);
         packet->checksum_overhead = checksum_overhead;
+        bytes_max = bytes + send_buffer_max - checksum_overhead;
         packet->pc = pc;
 
         tls_ready = picoquic_is_tls_stream_ready(cnx);
@@ -1934,16 +1938,8 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             (length = picoquic_retransmit_needed(cnx, pc, path_x, current_time, next_wake_time, packet, send_buffer_max, &header_length)) > 0) {
             /* Check whether it makes sens to add an ACK at the end of the retransmission */
             if (epoch != picoquic_epoch_0rtt) {
-                ret = picoquic_prepare_ack_frame(cnx, current_time, pc, &bytes[length],
-                    send_buffer_max - checksum_overhead - length, &data_bytes);
-                if (ret == 0) {
-                    length += data_bytes;
-                }
-                else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
-                    ret = 0;
-                    *next_wake_time = current_time;
-                    SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
-                }
+                bytes_next = picoquic_format_ack_frame(cnx, bytes + length, bytes_max, &more_data, current_time, pc);
+                length = bytes_next - bytes;
             } 
             /* document the send time & overhead */
             packet->length = length;
@@ -1978,17 +1974,10 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                 }
                 else {
                     if (epoch != 1 && cnx->pkt_ctx[pc].ack_needed) {
-                        ret = picoquic_prepare_ack_frame(cnx, current_time, pc, &bytes[length],
-                            send_buffer_max - checksum_overhead - length, &data_bytes);
-                        if (ret == 0) {
-                            length += data_bytes;
-                            data_bytes = 0;
-                        }
-                        else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
-                            ret = 0;
-                            *next_wake_time = current_time;
-                            SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
-                        }
+
+                        bytes_max = bytes + send_buffer_max - checksum_overhead;
+                        bytes_next = picoquic_format_ack_frame(cnx, bytes + length, bytes_max, &more_data, current_time, pc);
+                        length = bytes_next - bytes;
                     }
 
                     /* If present, send misc frame */
@@ -2099,15 +2088,10 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                 packet->offset = length;
                 if (packet->ptype == picoquic_packet_initial) {
                     /* Repeat an ACK because it helps. */
-                    ret = picoquic_prepare_ack_frame(cnx, current_time, pc, &bytes[length],
-                        send_buffer_max - checksum_overhead - length, &data_bytes);
-                    if (ret == 0) {
-                        length += data_bytes;
-                    }
-                    else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
-                        /* Really strange. Just ignore */
-                        ret = 0;
-                    }
+                    bytes_max = bytes + send_buffer_max - checksum_overhead;
+                    bytes_next = picoquic_format_ack_frame(cnx, bytes + length, bytes_max, &more_data, current_time, pc);
+                    length = bytes_next - bytes;
+
                     length = picoquic_pad_to_target_length(bytes, length, send_buffer_max - checksum_overhead);
                 }
                 else {
@@ -2133,6 +2117,11 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
         }
     }
     else {
+        if (ret == 0 && more_data) {
+            *next_wake_time = current_time;
+            SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+        }
+
         if (ret == 0 && *is_initial_sent) {
             if (packet->ptype == picoquic_packet_initial) {
                 if (length > 0 && cnx->crypto_context[1].aead_encrypt == NULL && 
@@ -2195,7 +2184,10 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
     size_t data_bytes = 0;
     size_t header_length = 0;
     uint8_t* bytes = packet->bytes;
+    uint8_t* bytes_max;
+    uint8_t* bytes_next;
     size_t length = 0;
+    int more_data = 0;
 
     if (*next_wake_time > cnx->start_time + PICOQUIC_MICROSEC_HANDSHAKE_MAX) {
         *next_wake_time = cnx->start_time + PICOQUIC_MICROSEC_HANDSHAKE_MAX;
@@ -2241,12 +2233,9 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
 
         if ((tls_ready != 0 && path_x->cwin > path_x->bytes_in_transit) 
             || cnx->pkt_ctx[pc].ack_needed) {
-            if (picoquic_prepare_ack_frame(cnx, current_time, pc, &bytes[length],
-                send_buffer_max - checksum_overhead - length, &data_bytes)
-                == 0) {
-                length += data_bytes;
-                data_bytes = 0;
-            }
+            bytes_max = bytes + send_buffer_max - checksum_overhead;
+            bytes_next = picoquic_format_ack_frame(cnx, bytes + length, bytes_max, &more_data, current_time, pc);
+            length = bytes_next - bytes;
 
             /* Encode the crypto frame */
             ret = picoquic_prepare_crypto_hs_frame(cnx, epoch, &bytes[length],
@@ -2300,19 +2289,12 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             /* Set the new checksum length */
             checksum_overhead = picoquic_get_checksum_length(cnx, epoch);
             cnx->initial_repeat_needed = 0;
+            /* Check whether it makes sens to add an ACK at the end of the retransmission */
             if (cnx->initial_validated) {
-                /* Check whether it makes sens to add an ACK at the end of the retransmission */
-                ret = picoquic_prepare_ack_frame(cnx, current_time, pc, &bytes[length],
-                    send_buffer_max - checksum_overhead - length, &data_bytes);
-                if (ret == 0) {
-                    length += data_bytes;
-                    packet->length = length;
-                }
-                else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
-                    ret = 0;
-                    *next_wake_time = current_time;
-                    SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
-                }
+                bytes_max = bytes + send_buffer_max - checksum_overhead;
+                bytes_next = picoquic_format_ack_frame(cnx, bytes + length, bytes_max, &more_data, current_time, pc);
+                length = bytes_next - bytes;
+                packet->length = length;
             }
             /* document the send time & overhead */
             packet->send_time = current_time;
@@ -2322,21 +2304,18 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             /* when in a handshake mode, send acks asap. */
             length = picoquic_predict_packet_header_length(cnx, packet_type);
 
-            ret = picoquic_prepare_ack_frame(cnx, current_time, pc, &bytes[length],
-                send_buffer_max - checksum_overhead - length, &data_bytes);
-            if (ret == 0) {
-                length += data_bytes;
-                packet->length = length;
-            }
-            else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
-                ret = 0;
-                *next_wake_time = current_time;
-                SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
-            }
+            bytes_max = bytes + send_buffer_max - checksum_overhead;
+            bytes_next = picoquic_format_ack_frame(cnx, bytes + length, bytes_max, &more_data, current_time, pc);
+            length = bytes_next - bytes;
         } else {
             length = 0;
             packet->length = 0;
         }
+    }
+
+    if (ret == 0 && more_data) {
+        *next_wake_time = current_time;
+        SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
     }
 
     picoquic_finalize_and_protect_packet(cnx, packet,
@@ -2357,6 +2336,9 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
     size_t checksum_overhead = 8;
     size_t header_length = 0;
     uint8_t* bytes = packet->bytes;
+    uint8_t* bytes_max;
+    uint8_t* bytes_next;
+    int more_data = 0;
     size_t length = 0;
     picoquic_packet_context_enum pc = picoquic_packet_context_application;
     picoquic_epoch_enum epoch = picoquic_epoch_1rtt;
@@ -2525,13 +2507,10 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
         }
 
         /* add a final ack so receiver gets clean state */
-        ret = picoquic_prepare_ack_frame(cnx, current_time, pc, &bytes[length],
-            send_buffer_max - checksum_overhead - length, &consumed);
-        if (ret == 0) {
-            length += consumed;
-        }
+        bytes_max = bytes + send_buffer_max - checksum_overhead;
+        bytes_next = picoquic_format_ack_frame(cnx, bytes + length, bytes_max, &more_data, current_time, pc);
+        length = bytes_next - bytes;
 
-        consumed = 0;
         /* Send the disconnect frame */
         if (cnx->local_error == 0) {
             ret = picoquic_prepare_application_close_frame(cnx, bytes + length,
@@ -2714,6 +2693,9 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
     size_t length = 0;
     size_t checksum_overhead = picoquic_get_checksum_length(cnx, picoquic_epoch_1rtt);
     size_t send_buffer_min_max = (send_buffer_max > path_x->send_mtu) ? path_x->send_mtu : send_buffer_max;
+    uint8_t* bytes_max = bytes + send_buffer_min_max - checksum_overhead;
+    uint8_t* bytes_next = NULL;
+    int more_data = 0;
 
     /*
      * Manage the end of false start transition.
@@ -2742,11 +2724,13 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
             if (length > 0) {
                 epoch = picoquic_epoch_handshake;
                 checksum_overhead = picoquic_get_checksum_length(cnx, picoquic_epoch_handshake);
+                bytes_max = bytes + send_buffer_min_max - checksum_overhead;
             }
         }
         else {
             epoch = picoquic_epoch_initial;
             checksum_overhead = picoquic_get_checksum_length(cnx, picoquic_epoch_initial);
+            bytes_max = bytes + send_buffer_min_max - checksum_overhead;
 
             *is_initial_sent = 1;
         }
@@ -2772,12 +2756,9 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
             /* Check whether it makes sense to add an ACK at the end of the retransmission */
             /* Don't do that if it risks mixing clear text and encrypted ack */
             if (is_cleartext_mode == 0 && packet->ptype != picoquic_packet_0rtt_protected) {
-                if (picoquic_prepare_ack_frame(cnx, current_time, pc, &bytes[length],
-                    send_buffer_min_max - checksum_overhead - length, &data_bytes)
-                    == 0) {
-                    length += data_bytes;
-                    packet->length = length;
-                }
+                bytes_max = bytes + send_buffer_min_max - checksum_overhead;
+                bytes_next = picoquic_format_ack_frame(cnx, bytes + length, bytes_max, &more_data, current_time, pc);
+                length = bytes_next - bytes;
             }
             /* document the send time & overhead */
             is_pure_ack = 0;
@@ -2809,20 +2790,11 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                         }
 
                         /* add an ACK just to be nice */
-                        ret = picoquic_prepare_ack_frame(cnx, current_time, pc, &bytes[length],
-                            send_buffer_max - checksum_overhead - length, &data_bytes);
-                        /* Restore the ACK needed flags, because challenges are not reliable. */
-                        cnx->pkt_ctx[pc].ack_needed = ack_needed;
-
-                        if (ret == 0) {
-                            length += data_bytes;
-                        }
-                        else {
-                            if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
-                                *next_wake_time = current_time;
-                                SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
-                                ret = 0;
-                            }
+                        if (ack_needed) {
+                            bytes_next = picoquic_format_ack_frame(cnx, bytes + length, bytes_max, &more_data, current_time, pc);
+                            length = bytes_next - bytes;
+                            /* Restore the ACK needed flags, because challenges are not reliable. */
+                            cnx->pkt_ctx[pc].ack_needed = ack_needed;
                         }
                     }
                     else {
@@ -2865,18 +2837,9 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                     /* Send here the frames that are not exempt from the pacing control,
                      * but are exempt for congestion control */
                     if (picoquic_is_ack_needed(cnx, current_time, next_wake_time, pc)) {
-                        ret = picoquic_prepare_ack_frame(cnx, current_time, pc, &bytes[length],
-                            send_buffer_min_max - checksum_overhead - length, &data_bytes);
-                        if (ret == 0) {
-                            length += data_bytes;
-                        }
-                        else {
-                            if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
-                                *next_wake_time = current_time;
-                                SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
-                                ret = 0;
-                            }
-                        }
+                        bytes_next = picoquic_format_ack_frame(cnx, bytes + length, bytes_max, &more_data,
+                            current_time, pc);
+                        length = bytes_next - bytes;
                     }
 
                     if (path_x->cwin < path_x->bytes_in_transit) {
@@ -3072,6 +3035,12 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
     }
 
     if (ret == 0 && length > header_length) {
+        if (more_data) {
+            *next_wake_time = current_time;
+            SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+            ret = 0;
+        }
+
         /* Ensure that all packets are properly padded before being sent. */
 
         if (*is_initial_sent && cnx->client_mode) {
@@ -3111,11 +3080,14 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
     int is_pure_ack = 1;
     size_t data_bytes = 0;
     size_t header_length = 0;
-    uint8_t* bytes = packet->bytes;
     size_t length = 0;
     size_t checksum_overhead = picoquic_get_checksum_length(cnx, picoquic_epoch_1rtt);
     size_t send_buffer_min_max = (send_buffer_max > path_x->send_mtu) ? path_x->send_mtu : send_buffer_max;
     int split_repeat_queued = 0;
+    uint8_t* bytes = packet->bytes;
+    uint8_t* bytes_max = bytes + send_buffer_min_max - checksum_overhead;
+    int more_data = 0;
+    int ack_sent = 0;
 
     packet->pc = pc;
 
@@ -3128,12 +3100,9 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
         send_buffer_min_max, &header_length)) > 0) {
         /* Check whether it makes sense to add an ACK at the end of the retransmission */
         /* Don't do that if it risks mixing clear text and encrypted ack */
-        if (picoquic_prepare_ack_frame(cnx, current_time, pc, &bytes[length],
-            send_buffer_min_max - checksum_overhead - length, &data_bytes)
-            == 0) {
-            length += data_bytes;
-            packet->length = length;
-        }
+        uint8_t* bytes_next = picoquic_format_ack_frame(cnx, bytes + length, bytes_max, &more_data,
+            current_time, pc);
+        length = bytes_next - bytes;
         /* document the send time & overhead */
         is_pure_ack = 0;
         packet->send_time = current_time;
@@ -3168,20 +3137,12 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                     }
 
                     /* add an ACK just to be nice */
-                    ret = picoquic_prepare_ack_frame(cnx, current_time, pc, &bytes[length],
-                        send_buffer_max - checksum_overhead - length, &data_bytes);
-                    /* Restore the ACK needed flags, because challenges are not reliable. */
-                    cnx->pkt_ctx[pc].ack_needed = ack_needed;
-
-                    if (ret == 0) {
-                        length += data_bytes;
-                    }
-                    else {
-                        if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
-                            *next_wake_time = current_time;
-                            SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
-                            ret = 0;
-                        }
+                    if (ack_needed) {
+                        uint8_t* bytes_next = picoquic_format_ack_frame(cnx, bytes + length, bytes_max, &more_data,
+                            current_time, pc);
+                        length = bytes_next - bytes;
+                        /* Restore the ACK needed flags, because challenges are not reliable. */
+                        cnx->pkt_ctx[pc].ack_needed = ack_needed;
                     }
                 }
                 else {
@@ -3232,28 +3193,10 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                 /* Send here the frames that are not exempt from the pacing control,
                  * but are exempt for congestion control */
                 if (picoquic_is_ack_needed(cnx, current_time, next_wake_time, pc)) {
-                    ret = picoquic_prepare_ack_frame(cnx, current_time, pc, &bytes[length],
-                        send_buffer_min_max - checksum_overhead - length, &data_bytes);
-                    if (ret == 0) {
-                        length += data_bytes;
-                        if (data_bytes > 0 && !cnx->pkt_ctx[pc].ack_of_ack_requested &&
-                            length + checksum_overhead < send_buffer_min_max &&
-                            cnx->pkt_ctx[pc].highest_acknowledged + 64 < cnx->pkt_ctx[pc].send_sequence &&
-                            path_x == cnx->path[0] &&
-                            cnx->pkt_ctx[pc].highest_acknowledged_time + 2 * cnx->path[0]->smoothed_rtt < current_time) {
-                            /* Bundle a Ping with ACK, so as to get trigger an Acknowledgement */
-                            bytes[length++] = picoquic_frame_type_ping;
-                            cnx->pkt_ctx[pc].ack_of_ack_requested = 1;
-                            is_pure_ack = 0;
-                        }
-                    }
-                    else {
-                        if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
-                            *next_wake_time = current_time;
-                            SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
-                            ret = 0;
-                        }
-                    }
+                    uint8_t* bytes_next = picoquic_format_ack_frame(cnx, bytes + length, bytes_max, &more_data,
+                        current_time, pc);
+                    ack_sent = (bytes_next > bytes);
+                    length = bytes_next - bytes;
                 }
 
                 /* if necessary, prepare the MAX STREAM frames */
@@ -3476,14 +3419,30 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
     }
 
     if (cnx->cnx_state != picoquic_state_disconnected) {
-        /* If necessary, encode and send the keep alive packet.
-         * We only send keep alive packets when no other data is sent.
-         */
+        if (is_pure_ack && ack_sent && length > 0) {
+            /* If we have sent many ACKs, add a PING to get an ack of ack */
+            uint8_t* bytes_next = bytes + length;
+            if (!cnx->pkt_ctx[pc].ack_of_ack_requested &&
+                bytes_next < bytes_max &&
+                cnx->pkt_ctx[pc].highest_acknowledged + 64 < cnx->pkt_ctx[pc].send_sequence &&
+                path_x == cnx->path[0] &&
+                cnx->pkt_ctx[pc].highest_acknowledged_time + 2 * cnx->path[0]->smoothed_rtt < current_time) {
+                /* Bundle a Ping with ACK, so as to get trigger an Acknowledgement */
+                *bytes_next++ = picoquic_frame_type_ping;
+                cnx->pkt_ctx[pc].ack_of_ack_requested = 1;
+                is_pure_ack = 0;
+            }
+            length = bytes_next - bytes;
+        }
+
         if (is_pure_ack == 0)
         {
             cnx->latest_progress_time = current_time;
         }
         else if (cnx->keep_alive_interval != 0) {
+            /* If necessary, encode and send the keep alive packet.
+             * We only send keep alive packets when no other data is sent.
+             */
             if (cnx->latest_progress_time + cnx->keep_alive_interval <= current_time && length == 0) {
                 length = picoquic_predict_packet_header_length(
                     cnx, packet_type);
@@ -3502,6 +3461,12 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                 *next_wake_time = cnx->latest_progress_time + cnx->keep_alive_interval;
                 SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
             }
+        }
+
+        if (more_data) {
+            *next_wake_time = current_time;
+            SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+            ret = 0;
         }
     }
 

@@ -2631,168 +2631,99 @@ uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
     return bytes;
 }
 
-static int encode_ecn_block(picoquic_cnx_t* cnx, uint8_t* bytes, size_t bytes_max, size_t* byte_index)
+uint8_t * picoquic_format_ack_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t * bytes_max, 
+    int * more_data, uint64_t current_time, picoquic_packet_context_enum pc)
 {
-    int ret = 0;
-    size_t l_ect0 = 0;
-    size_t l_ect1 = 0;
-    size_t l_ce = 0;
-
-    l_ect0 = picoquic_varint_encode(bytes + *byte_index, bytes_max - *byte_index,
-        cnx->ecn_ect0_total_local);
-    *byte_index += l_ect0;
-
-    l_ect1 = picoquic_varint_encode(bytes + *byte_index, bytes_max - *byte_index,
-        cnx->ecn_ect1_total_local);
-    *byte_index += l_ect1;
-
-    l_ce = picoquic_varint_encode(bytes + *byte_index, bytes_max - *byte_index,
-        cnx->ecn_ce_total_local);
-    *byte_index += l_ce;
-
-    if (l_ect0 == 0 || l_ect1 == 0 || l_ce == 0) {
-        ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
-    }
-
-    return ret;
-}
-
-int picoquic_prepare_ack_frame(picoquic_cnx_t* cnx, uint64_t current_time,
-    picoquic_packet_context_enum pc,
-    uint8_t* bytes, size_t bytes_max, size_t* consumed)
-{
-    int ret = 0;
-    size_t byte_index = 0;
     uint64_t num_block = 0;
-    size_t l_largest = 0;
-    size_t l_delay = 0;
-    size_t l_first_range = 0;
-    picoquic_packet_context_t * pkt_ctx = &cnx->pkt_ctx[pc];
+    picoquic_packet_context_t* pkt_ctx = &cnx->pkt_ctx[pc];
     picoquic_sack_item_t* next_sack = pkt_ctx->first_sack_item.next_sack;
     uint64_t ack_delay = 0;
     uint64_t ack_range = 0;
     uint64_t ack_gap = 0;
     uint64_t lowest_acknowledged = 0;
-    size_t num_block_index = 0;
     int is_ecn = cnx->sending_ecn_ack;
+    uint8_t* after_stamp = bytes;
     int has_time_stamp = (pc == picoquic_packet_context_application && cnx->is_time_stamp_enabled);
-    uint8_t ack_type_byte = 
-        ((is_ecn) ? picoquic_frame_type_ack_ecn : picoquic_frame_type_ack);
+    uint8_t ack_type_byte = ((is_ecn) ? picoquic_frame_type_ack_ecn : picoquic_frame_type_ack);
 
-    /* Check that there is enough room in the packet, and something to acknowledge */
-    if (pkt_ctx->first_sack_item.start_of_sack_range == (uint64_t)((int64_t)-1)) {
-        *consumed = 0;
-    }
-    else if (bytes_max < 13 + ((has_time_stamp) ? picoquic_encode_time_stamp_length(cnx, current_time) : 0)) {
-        /* A valid ACK, with our encoding, uses at least 13 bytes.
-        * plus extra bytes if the time stamp is required
-        * If there is not enough space, don't attempt to encode it.
-        */
-        *consumed = 0;
-        ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
-    } else {
+    /* Check that there something to acknowledge */
+    if (pkt_ctx->first_sack_item.start_of_sack_range != UINT64_MAX) {
+        uint8_t* num_block_byte = NULL;
+
+        if (current_time > pkt_ctx->time_stamp_largest_received) {
+            ack_delay = current_time - pkt_ctx->time_stamp_largest_received;
+            ack_delay >>= cnx->local_parameters.ack_delay_exponent;
+        }
+
         if (has_time_stamp) {
-            size_t stamp_length = 0;
-            ret = picoquic_prepare_time_stamp_frame(bytes + byte_index, bytes_max - byte_index, &stamp_length,
-                cnx, current_time);
-            if (ret == 0) {
-                byte_index += stamp_length;
-            }
+            bytes = picoquic_format_time_stamp_frame(cnx, bytes, bytes_max, more_data, current_time);
+            after_stamp = bytes;
         }
 
-        if (ret == 0) {
-            /* Encode the first byte */
-            bytes[byte_index++] = ack_type_byte;
-            /* Encode the largest seen */
-            l_largest = picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index,
-                pkt_ctx->first_sack_item.end_of_sack_range);
-            byte_index += l_largest;
-            /* Encode the ack delay */
-            if (byte_index < bytes_max) {
-                if (current_time > pkt_ctx->time_stamp_largest_received) {
-                    ack_delay = current_time - pkt_ctx->time_stamp_largest_received;
-                    ack_delay >>= cnx->local_parameters.ack_delay_exponent;
-                }
-                l_delay = picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index,
-                    ack_delay);
-                byte_index += l_delay;
-            }
-
+        if ((bytes = picoquic_frames_uint8_encode(bytes, bytes_max, ack_type_byte)) != NULL &&
+            (bytes = picoquic_frames_varint_encode(bytes, bytes_max, pkt_ctx->first_sack_item.end_of_sack_range)) != NULL &&
+            (bytes = picoquic_frames_varint_encode(bytes, bytes_max, ack_delay)) != NULL) {
             /* Reserve one byte for the number of blocks */
-            num_block_index = byte_index;
-            byte_index++;
+            num_block_byte = bytes++;
             /* Encode the size of the first ack range */
-            if (byte_index < bytes_max) {
-                ack_range = pkt_ctx->first_sack_item.end_of_sack_range - pkt_ctx->first_sack_item.start_of_sack_range;
-                l_first_range = picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index,
-                    ack_range);
-                byte_index += l_first_range;
-            }
-
-            if (l_delay == 0 || l_largest == 0 || l_first_range == 0 || byte_index > bytes_max) {
-                /* not enough space */
-                *consumed = 0;
-                ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
-            }
-            else {
-                /* Set the lowest acknowledged */
-                lowest_acknowledged = pkt_ctx->first_sack_item.start_of_sack_range;
-                /* Encode the ack blocks that fit in the allocated space */
-                while (num_block < 32 && next_sack != NULL) {
-                    size_t l_gap = 0;
-                    size_t l_range = 0;
-
-                    if (byte_index < bytes_max) {
-                        ack_gap = lowest_acknowledged - next_sack->end_of_sack_range - 2; /* per spec */
-                        l_gap = picoquic_varint_encode(bytes + byte_index,
-                            bytes_max - byte_index, ack_gap);
-                    }
-
-                    if (byte_index + l_gap < bytes_max) {
-                        ack_range = next_sack->end_of_sack_range - next_sack->start_of_sack_range;
-                        l_range = picoquic_varint_encode(bytes + byte_index + l_gap,
-                            bytes_max - byte_index - l_gap, ack_range);
-                    }
-
-                    if (l_gap == 0 || l_range == 0) {
-                        /* Not enough space to encode this gap. */
-                        break;
-                    }
-                    else {
-                        byte_index += l_gap + l_range;
-                        lowest_acknowledged = next_sack->start_of_sack_range;
-                        next_sack = next_sack->next_sack;
-                        num_block++;
-                    }
-                }
-                /* When numbers are lower than 64, varint encoding fits on one byte */
-                bytes[num_block_index] = (uint8_t)num_block;
-
-                /* Remember the ACK value and time */
-                pkt_ctx->highest_ack_sent = pkt_ctx->first_sack_item.end_of_sack_range;
-                pkt_ctx->highest_ack_sent_time = current_time;
-
-                *consumed = byte_index;
-            }
+            ack_range = pkt_ctx->first_sack_item.end_of_sack_range - pkt_ctx->first_sack_item.start_of_sack_range;
+            bytes = picoquic_frames_varint_encode(bytes, bytes_max, ack_range);
         }
 
-        if (ret == 0 && is_ecn) {
-            ret = encode_ecn_block(cnx, bytes, bytes_max, &byte_index);
-            if (ret != 0) {
-                *consumed = 0;
+        if (bytes == NULL || num_block_byte == NULL) {
+            bytes = after_stamp;
+            *more_data = 1;
+        }
+        else {
+            /* Set the lowest acknowledged */
+            lowest_acknowledged = pkt_ctx->first_sack_item.start_of_sack_range;
+            /* Encode the ack blocks that fit in the allocated space */
+            while (num_block < 32 && next_sack != NULL) {
+                uint8_t* bytes_start_range = bytes;
+
+                ack_gap = lowest_acknowledged - next_sack->end_of_sack_range - 2; /* per spec */
+                ack_range = next_sack->end_of_sack_range - next_sack->start_of_sack_range;
+
+                if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, ack_gap)) == NULL ||
+                    (bytes = picoquic_frames_varint_encode(bytes, bytes_max, ack_range)) == NULL) {
+                    bytes = bytes_start_range;
+                    *more_data = 1;
+                    break;
+                }
+                else {
+                    lowest_acknowledged = next_sack->start_of_sack_range;
+                    next_sack = next_sack->next_sack;
+                    num_block++;
+                }
             }
-            else {
-                *consumed = byte_index;
+            /* When numbers are lower than 64, varint encoding fits on one byte */
+            *num_block_byte = (uint8_t)num_block;
+
+            /* Remember the ACK value and time */
+            pkt_ctx->highest_ack_sent = pkt_ctx->first_sack_item.end_of_sack_range;
+            pkt_ctx->highest_ack_sent_time = current_time;
+        }
+
+        if (bytes > after_stamp && is_ecn) {
+            /* Try to encode the ECN bytes */
+            uint8_t* bytes_ecn = bytes;
+            if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, cnx->ecn_ect0_total_local)) == NULL ||
+                (bytes = picoquic_frames_varint_encode(bytes, bytes_max, cnx->ecn_ect1_total_local)) == NULL ||
+                (bytes = picoquic_frames_varint_encode(bytes, bytes_max, cnx->ecn_ce_total_local)) == NULL)
+            {
+                bytes = bytes_ecn;
+                *more_data = 1;
+                *after_stamp = picoquic_frame_type_ack;
             }
         }
     }
 
-    if (ret == 0) {
+    if (bytes > after_stamp) {
         pkt_ctx->ack_needed = 0;
         pkt_ctx->ack_after_fin = 0;
     }
 
-    return ret;
+    return bytes;
 }
 
 void picoquic_set_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, picoquic_packet_context_enum pc)
@@ -3652,6 +3583,40 @@ int picoquic_prepare_ack_frequency_frame(uint8_t* bytes, size_t length_max, size
     return ret;
 }
 
+uint8_t* picoquic_format_ack_frequency_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data)
+{
+    uint8_t* bytes0 = bytes;
+    uint64_t seq = cnx->ack_frequency_sequence_local + 1;
+    uint64_t ack_gap;
+    uint64_t ack_delay_max;
+
+    /* Compute the desired value of the ack frequency*/
+    ack_delay_max = picoquic_compute_ack_delay_max(cnx->path[0]->rtt_min);
+    ack_gap = picoquic_compute_ack_gap(cnx, cnx->path[0]->bandwidth_estimate); if (ack_gap <= cnx->ack_gap_local &&
+        ack_delay_max == cnx->ack_frequency_delay_local) {
+        cnx->is_ack_frequency_updated = 0;
+    }
+    else {
+        if (ack_gap < cnx->ack_gap_local) {
+            ack_gap = cnx->ack_gap_local;
+        }
+        if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, picoquic_frame_type_ack_frequency)) != NULL &&
+            (bytes = picoquic_frames_varint_encode(bytes, bytes_max, seq)) != NULL &&
+            (bytes = picoquic_frames_varint_encode(bytes, bytes_max, ack_gap)) != NULL &&
+            (bytes = picoquic_frames_varint_encode(bytes, bytes_max, ack_delay_max)) != NULL) {
+            cnx->ack_frequency_sequence_local = seq;
+            cnx->ack_gap_local = ack_gap;
+            cnx->ack_frequency_delay_local = ack_delay_max;
+            cnx->is_ack_frequency_updated = 0;
+        }
+        else {
+            bytes = bytes0;
+            *more_data = 1;
+        }
+    }
+    return bytes;
+}
+
 
 /* ACK Frequency frames
  */
@@ -3709,6 +3674,22 @@ int picoquic_prepare_time_stamp_frame(uint8_t* bytes, size_t length_max, size_t*
     }
 
     return ret;
+}
+
+
+
+uint8_t* picoquic_format_time_stamp_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, uint64_t current_time)
+{
+    uint8_t* bytes0 = bytes;
+    uint64_t time_stamp = (current_time - cnx->start_time) >> cnx->local_parameters.ack_delay_exponent;
+
+    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, picoquic_frame_type_time_stamp)) == NULL ||
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, time_stamp)) == NULL) {
+        bytes = bytes0;
+        *more_data = 1;
+    }
+
+    return bytes;
 }
 
 size_t picoquic_encode_time_stamp_length(picoquic_cnx_t* cnx, uint64_t current_time)

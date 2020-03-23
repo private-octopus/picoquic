@@ -2632,7 +2632,8 @@ picoquic_misc_frame_header_t* picoquic_create_misc_frame(const uint8_t* bytes, s
     }
 }
 
-int picoquic_queue_misc_or_dg_frame(picoquic_cnx_t * cnx, picoquic_misc_frame_header_t** first, picoquic_misc_frame_header_t** last, const uint8_t* bytes, size_t length)
+int picoquic_queue_misc_or_dg_frame(picoquic_cnx_t * cnx, picoquic_misc_frame_header_t** first, 
+    picoquic_misc_frame_header_t** last, const uint8_t* bytes, size_t length)
 {
     int ret = 0;
     picoquic_misc_frame_header_t* misc_frame = picoquic_create_misc_frame(bytes, length);
