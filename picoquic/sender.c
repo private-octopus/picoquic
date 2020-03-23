@@ -2119,14 +2119,16 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
 
     if (ret == 0 && length == 0 && cnx->crypto_context[1].aead_encrypt != NULL &&
         path_x->bytes_in_transit < 10*PICOQUIC_ENFORCED_INITIAL_MTU) {
+        uint64_t max_data = 10 * PICOQUIC_ENFORCED_INITIAL_MTU;
         /* Consider sending 0-RTT */
         if (path_x->bytes_in_transit + send_buffer_max > 10 * PICOQUIC_ENFORCED_INITIAL_MTU) {
-            uint64_t max_data = 10 * PICOQUIC_ENFORCED_INITIAL_MTU;
             max_data -= path_x->bytes_in_transit;
-            send_buffer_max = max_data;
         }
-        if (send_buffer_max > PICOQUIC_MIN_SEGMENT_SIZE) {
-            ret = picoquic_prepare_packet_0rtt(cnx, path_x, packet, current_time, send_buffer, send_buffer_max, send_length,
+        else {
+            max_data = send_buffer_max;
+        }
+        if (max_data > PICOQUIC_MIN_SEGMENT_SIZE) {
+            ret = picoquic_prepare_packet_0rtt(cnx, path_x, packet, current_time, send_buffer, max_data, send_length,
                 *is_initial_sent, next_wake_time);
         }
     }
