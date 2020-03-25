@@ -26,38 +26,7 @@
 #include "picoquic_internal.h"
 #include "tls_api.h"
 
-/* ****************************************************
- * Frames private declarations
- * ****************************************************/
-
 static const size_t challenge_length = 8;
-
-
-/**
- * Frame decoder function
- * Inputs:
- *   cnx       - [in/out] picoquic Context
- *   bytes     - [in]     pointer to the beginning of the frame (frame type)
- *   bytes_max - [in]     pointer to the end of the packet (one past the last byte)
- * Returns:
- *   Pointer to the data following the end of this frame, if the frame has been decoded successfully;
- *   or NULL if, decoding failed (in which case, picoquic_connection_error has been called).
- */
-typedef uint8_t* (*decode_frame_fn)(picoquic_cnx_t* cnx, uint8_t* bytes, const uint8_t* bytes_max);
-
-/**
- * Frame skip function
- * Inputs:
- *   bytes     - [in]     pointer to the beginning of the frame (frame type)
- *   bytes_max - [in]     pointer to the end of the packet (one past the last byte)
- * Returns:
- *   Pointer to the data following the end of this frame, if the frame has been skipped successfully;
- *   or NULL if, skipping failed.
- */
-typedef uint8_t* (*skip_frame_fn)(uint8_t* bytes, const uint8_t* bytes_max);
-
-
-/* ****************************************************** */
 
 picoquic_stream_head_t* picoquic_create_missing_streams(picoquic_cnx_t* cnx, uint64_t stream_id, int is_remote)
 {
@@ -1343,37 +1312,6 @@ uint8_t* picoquic_provide_stream_data_buffer(void* context, size_t length, int i
     return buffer;
 }
 
-static int picoquic_prepare_stream_frame_header(uint8_t* bytes, size_t bytes_max, uint64_t stream_id, uint64_t offset, size_t* consumed)
-{
-    int ret = 0;
-    size_t byte_index = 0;
-    size_t l_stream = 0;
-    size_t l_off = 0;
-
-    bytes[byte_index++] = picoquic_frame_type_stream_range_min;
-
-    if (bytes_max > byte_index) {
-        l_stream = picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index, stream_id);
-        byte_index += l_stream;
-    }
-
-    if (offset > 0 && bytes_max > byte_index) {
-        bytes[0] |= 4; /* Indicates presence of offset */
-        l_off = picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index, offset);
-        byte_index += l_off;
-    }
-
-    if (l_stream == 0 || (offset > 0 && l_off == 0)) {
-        *consumed = 0;
-        ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
-    }
-    else {
-        *consumed = byte_index;
-    }
-
-    return ret;
-}
-
 static uint8_t* picoquic_format_stream_frame_header(uint8_t* bytes, uint8_t* bytes_max, uint64_t stream_id, uint64_t offset)
 {
     uint8_t* bytes0 = bytes;
@@ -1386,177 +1324,6 @@ static uint8_t* picoquic_format_stream_frame_header(uint8_t* bytes, uint8_t* byt
     }
 
     return bytes;
-}
-
-int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream,
-    uint8_t* bytes, size_t bytes_max, size_t* consumed, int* is_still_active)
-{
-    int ret = 0;
-    int may_close = 0;
-
-    /* Check parity */
-    if (IS_CLIENT_STREAM_ID(stream->stream_id) == cnx->client_mode) {
-        if (stream->stream_id > ((IS_BIDIR_STREAM_ID(stream->stream_id)) ? cnx->max_stream_id_bidir_remote : cnx->max_stream_id_unidir_remote)){
-            *consumed = 0;
-            return 0;
-        }
-    }
-
-    if (stream->reset_requested && !stream->reset_sent) {
-        return picoquic_prepare_stream_reset_frame(cnx, stream, bytes, bytes_max, consumed);
-    }
-
-    if (stream->stop_sending_requested && !stream->stop_sending_sent) {
-        return picoquic_prepare_stop_sending_frame(stream, bytes, bytes_max, consumed);
-    }
-    
-    if (!stream->is_active &&
-        (stream->send_queue == NULL || stream->send_queue->length <= stream->send_queue->offset) &&
-        (!stream->fin_requested || stream->fin_sent)) {
-        *consumed = 0;
-    } else {
-        size_t byte_index = 0;
-        size_t length = 0;
-
-        ret = picoquic_prepare_stream_frame_header(bytes, bytes_max, stream->stream_id, stream->sent_offset, &byte_index);
-
-        if (ret != 0 || byte_index + 3 > bytes_max) {
-            *consumed = 0;
-            ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
-        }
-        else {
-            /* Compute the length */
-            size_t byte_space = bytes_max - byte_index;
-            size_t allowed_space = byte_space;
-
-            /* Enforce maxdata per stream on all streams, including stream 0
-             * This may result in very short encoding, but we still send whatever is
-             * allowed by flow control. Doing otherwise may cause a loop if the
-             * "find_ready_stream" function did not completely replicate the
-             * flow control test */
-            if (allowed_space > (stream->maxdata_remote - stream->sent_offset)) {
-                allowed_space = (size_t)(stream->maxdata_remote - stream->sent_offset);
-            }
-
-            if (allowed_space > (cnx->maxdata_remote - cnx->data_sent)) {
-                allowed_space = (size_t)(cnx->maxdata_remote - cnx->data_sent);
-            }
-
-            if (stream->is_active && stream->send_queue == NULL && !stream->fin_requested) {
-                /* The application requested active polling for this stream */
-                picoquic_stream_data_buffer_argument_t stream_data_context;
-
-                stream_data_context.bytes = bytes;
-                stream_data_context.byte_index = byte_index;
-                stream_data_context.allowed_space = allowed_space;
-                stream_data_context.byte_space = bytes_max - byte_index;
-                stream_data_context.length = 0;
-                stream_data_context.is_fin = 0;
-                stream_data_context.is_still_active = 0;
-                stream_data_context.app_buffer = NULL;
-
-                if ((cnx->callback_fn)(cnx, stream->stream_id, (uint8_t*)&stream_data_context, allowed_space, picoquic_callback_prepare_to_send, cnx->callback_ctx, stream->app_stream_ctx) != 0) {
-                    /* something went wrong */
-                    picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "Prepare to send returns error 0x%x", PICOQUIC_TRANSPORT_INTERNAL_ERROR);
-                    ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
-                }
-                else {
-                    byte_index = stream_data_context.byte_index + stream_data_context.length;
-                    stream->sent_offset += stream_data_context.length;
-                    cnx->data_sent += stream_data_context.length;
-                    *consumed = byte_index;
-
-                    if (stream_data_context.length > 0) {
-                        if (stream_data_context.app_buffer == NULL ||
-                            stream_data_context.app_buffer < bytes ||
-                            stream_data_context.app_buffer >= bytes + bytes_max) {
-                            long long delta_buf = (long long)(stream_data_context.app_buffer - bytes);
-                            DBG_PRINTF("Stream data buffer corruption, delta = %lld\n", delta_buf);
-                            ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
-                        }
-                    }
-
-                    if (stream_data_context.is_fin) {
-                        stream->is_active = 0;
-                        stream->fin_requested = 1;
-                        stream->fin_sent = 1;
-                        picoquic_update_max_stream_ID_local(cnx, stream);
-                        may_close = 1;
-
-                        if (is_still_active != NULL) {
-                          *is_still_active = 0;
-                        }
-                    }
-                    else {
-                        stream->is_active = stream_data_context.is_still_active;
-                        if (is_still_active != NULL) {
-                          *is_still_active = stream_data_context.is_still_active;
-                        }
-                    }
-                }
-            }
-            else {
-                /* The application queued data for this stream */
-                size_t start_index = 0;
-
-                if (stream->send_queue == NULL) {
-                    length = 0;
-                }
-                else {
-                    length = (size_t)(stream->send_queue->length - stream->send_queue->offset);
-                }
-
-                if (length >= allowed_space) {
-                    length = allowed_space;
-                }
-
-                byte_index = picoquic_encode_length_of_stream_frame(bytes, byte_index, byte_space, length, &start_index);
-
-                if (length > 0 && stream->send_queue != NULL && stream->send_queue->bytes != NULL) {
-                    memcpy(&bytes[byte_index], stream->send_queue->bytes + stream->send_queue->offset, length);
-                    byte_index += length;
-
-                    stream->send_queue->offset += length;
-                    if (stream->send_queue->offset >= stream->send_queue->length) {
-                        picoquic_stream_data_node_t* next = stream->send_queue->next_stream_data;
-                        free(stream->send_queue->bytes);
-                        free(stream->send_queue);
-                        stream->send_queue = next;
-                    }
-
-                    stream->sent_offset += length;
-                    cnx->data_sent += length;
-                }
-                *consumed = byte_index;
-
-                if (stream->send_queue == NULL) {
-                    if (stream->fin_requested) {
-                        /* Set the fin bit */
-                        stream->fin_sent = 1;
-                        bytes[start_index] |= 1;
-
-                        picoquic_update_max_stream_ID_local(cnx, stream);
-                        may_close = 1;
-                    }
-                }
-                else if (length == 0) {
-                    /* No point in sending a silly packet */
-                    *consumed = 0;
-                    ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
-                }
-            }
-        }
-
-        if (ret == 0) {
-            if (!may_close || !picoquic_delete_stream_if_closed(cnx, stream)){
-                /* mark the stream as unblocked since we sent something */
-                stream->stream_data_blocked_sent = 0;
-                cnx->sent_blocked_frame = 0;
-            }
-        }
-    }
-
-    return ret;
 }
 
 uint8_t * picoquic_format_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream,
@@ -1742,17 +1509,22 @@ int picoquic_split_stream_frame(uint8_t* frame, size_t frame_length, uint8_t* b1
     size_t data_length;
     int fin;
     size_t consumed;
+    uint8_t* b1_max_b = b1 + b1_max;
+    uint8_t* b2_max_b = b2 + b2_max;
+    uint8_t* b1_b = b1;
+    uint8_t* b2_b = b2;
+
 
     if ((ret = picoquic_parse_stream_header(frame, frame_length, &stream_id, &offset, &data_length, &fin, &consumed)) == 0) {
         /* Does the whole frame fit in b1? */
         size_t b1_index = 0;
         size_t b1_length = 0;
 
-        if (picoquic_prepare_stream_frame_header(b1, b1_max, stream_id, offset, &b1_index) != 0){
+        if ((b1_b = picoquic_format_stream_frame_header(b1_b, b1_max_b, stream_id, offset)) == NULL){
             *lb1 = 0;
         }
         else {
-            size_t b1_available = b1_max - b1_index;
+            size_t b1_available = b1_max_b - b1_b;
 
             if (data_length > b1_available && b1_available < 3) {
                 /* do not send silly frames */
@@ -1763,7 +1535,7 @@ int picoquic_split_stream_frame(uint8_t* frame, size_t frame_length, uint8_t* b1
 
                 b1_length = (data_length > b1_available) ? b1_available : data_length;
 
-                b1_index = picoquic_encode_length_of_stream_frame(b1, b1_index, b1_available, b1_length, &start_index);
+                b1_index = picoquic_encode_length_of_stream_frame(b1, b1_b - b1, b1_available, b1_length, &start_index);
 
                 memcpy(b1 + b1_index, frame + consumed, b1_length);
 
@@ -1784,12 +1556,12 @@ int picoquic_split_stream_frame(uint8_t* frame, size_t frame_length, uint8_t* b1
             size_t b2_length = data_length - b1_length;
             size_t b2_index = 0;
 
-            if (picoquic_prepare_stream_frame_header(b2, b2_max, stream_id, offset + b1_length, &b2_index) != 0) {
+            if ((b2_b = picoquic_format_stream_frame_header(b2_b, b2_max_b, stream_id, offset + b1_length)) == NULL) {
                 *lb2 = 0;
                 ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
             }
             else {
-                size_t b2_available = b2_max - b2_index;
+                size_t b2_available = b2_max_b - b2_b;
 
                 if (b2_length + 2 > b2_available) {
                     /* Reserve at least 2 bytes for length encoding, because we don't want to
@@ -1799,7 +1571,7 @@ int picoquic_split_stream_frame(uint8_t* frame, size_t frame_length, uint8_t* b1
                 }
                 else {
                     size_t start_index = 0;
-                    b2_index = picoquic_encode_length_of_stream_frame(b2, b2_index, b2_available, b2_length, &start_index);
+                    b2_index = picoquic_encode_length_of_stream_frame(b2, b2_b - b2, b2_available, b2_length, &start_index);
 
                     memcpy(b2 + b2_index, frame + consumed, b2_length);
 
