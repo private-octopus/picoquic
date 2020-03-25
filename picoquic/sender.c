@@ -3321,39 +3321,26 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                         }
 
                         /* Encode the stream frame, or frames */
-                        while (ret == 0 && !split_repeat_queued && stream != NULL && length + checksum_overhead < send_buffer_min_max) {
+                        bytes_next = bytes + length;
+                        while (ret == 0 && !split_repeat_queued && stream != NULL && bytes_next < bytes_max) {
                             int is_still_active = 0;
-                            ret = picoquic_prepare_stream_frame(cnx, stream, &bytes[length],
-                                send_buffer_min_max - checksum_overhead - length, &data_bytes, &is_still_active);
+
+                            bytes_next = picoquic_format_stream_frame(cnx, stream, bytes_next, bytes_max, &more_data, &is_pure_ack, &is_still_active, &ret);
 
                             if (ret == 0) {
-                                length += data_bytes;
-                                if (data_bytes > 0)
-                                {
-                                    is_pure_ack = 0;
-                                }
-
-                                if (send_buffer_max > checksum_overhead + length + 8) {
+                                if (bytes_next + 8 < bytes_max) {
                                     stream = picoquic_find_ready_stream(cnx);
                                 }
                                 else {
-                                    if (is_still_active) {
-                                        *next_wake_time = current_time;
-                                        SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
-                                    }
+                                    more_data = 1;
                                     break;
                                 }
-                            }
-                            else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
-                                *next_wake_time = current_time;
-                                SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
-                                ret = 0;
-                                break;
                             }
                             else {
                                 break;
                             }
                         }
+                        length = bytes_next - bytes;
 
                         if (length <= header_length) {
                             /* Mark the bandwidth estimation as application limited */
