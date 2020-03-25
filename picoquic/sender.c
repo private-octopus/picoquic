@@ -2568,67 +2568,34 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
     return ret;
 }
 
-/* Create a new ID, register it, and file the corresponding connection ID frame */
-int picoquic_prepare_new_local_id(picoquic_cnx_t* cnx, uint8_t* bytes, size_t bytes_max, uint64_t current_time, size_t* consumed)
+/* Create required ID, register, and format the corresponding connection ID frame */
+uint8_t * picoquic_format_new_local_id_as_needed(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t * bytes_max, int * more_data, int * is_pure_ack)
 {
-    int ret = 0;
-    picoquic_local_cnxid_t* l_cid = picoquic_create_local_cnxid(cnx, NULL);
-
-    *consumed = 0;
-
-    if (l_cid == NULL) {
-    }
-    else {
-
-        ret = picoquic_prepare_new_connection_id_frame(cnx, l_cid, bytes, bytes_max, consumed);
-
-        if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
-            /* Oops. Try again next time. */
-            picoquic_delete_local_cnxid(cnx, l_cid);
-            cnx->local_cnxid_sequence_next--;
-            *consumed = 0;
-        }
-    }
-
-    return ret;
-}
-
-int picoquic_prepare_new_local_id_as_needed(picoquic_cnx_t* cnx, uint8_t* bytes, size_t bytes_max, uint64_t current_time, uint64_t *next_wake_time, size_t* consumed)
-{
-    int ret = 0;
-
-    *consumed = 0;
-
-    while (ret == 0 && cnx->remote_parameters.migration_disabled == 0 &&
+    while (cnx->remote_parameters.migration_disabled == 0 &&
         cnx->local_parameters.migration_disabled == 0 &&
         cnx->nb_local_cnxid < (int)(cnx->remote_parameters.active_connection_id_limit) &&
         cnx->nb_local_cnxid <= PICOQUIC_NB_PATH_TARGET) {
-        size_t data_bytes;
+        uint8_t* bytes0 = bytes;
+        picoquic_local_cnxid_t* l_cid = picoquic_create_local_cnxid(cnx, NULL);
 
-        ret = picoquic_prepare_new_local_id(cnx, bytes, bytes_max, current_time, &data_bytes);
-
-        if (ret == 0) {
-            *consumed += data_bytes;
-            bytes += data_bytes;
-            if (bytes_max > data_bytes) {
-                bytes_max -= data_bytes;
-            }
-            else {
-                bytes_max = 0;
-            }
-        }
-        else {
-            if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
-                *next_wake_time = current_time;
-                SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
-                ret = 0;
-            }
+        if (l_cid == NULL) {
+            /* OOPS, memory error */
             break;
+        } else {
+            bytes = picoquic_format_new_connection_id_frame(cnx, bytes, bytes_max, more_data, is_pure_ack, l_cid);
+
+            if (bytes == bytes0) {
+                /* Oops. Try again next time. */
+                picoquic_delete_local_cnxid(cnx, l_cid);
+                cnx->local_cnxid_sequence_next--;
+                break;
+            }
         }
     }
 
-    return ret;
+    return bytes;
 }
+
 
 void picoquic_ready_state_transition(picoquic_cnx_t* cnx, uint64_t current_time)
 {
@@ -2903,12 +2870,8 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
 
                             /* If there are not enough published CID, create and advertise */
                             if (ret == 0) {
-                                ret = picoquic_prepare_new_local_id_as_needed(cnx, &bytes[length],
-                                    send_buffer_min_max - checksum_overhead - length,
-                                    current_time, next_wake_time, &data_bytes);
-                                if (ret == 0) {
-                                    length += data_bytes;
-                                }
+                                bytes_next = picoquic_format_new_local_id_as_needed(cnx, bytes + length, bytes_max, &more_data, &is_pure_ack);
+                                length = bytes_next - bytes;
                             }
 
                             /* Start of CC controlled frames */
@@ -3280,14 +3243,10 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                             }
                         }
 
-                        /* If there are not enough paths, create and advertise */
+                        /* If there are not enough local CID published, create and advertise */
                         if (ret == 0) {
-                            ret = picoquic_prepare_new_local_id_as_needed(cnx, &bytes[length],
-                                send_buffer_min_max - checksum_overhead - length,
-                                current_time, next_wake_time, &data_bytes);
-                            if (ret == 0) {
-                                length += data_bytes;
-                            }
+                            bytes_next = picoquic_format_new_local_id_as_needed(cnx, bytes + length, bytes_max, &more_data, &is_pure_ack);
+                            length = bytes_next - bytes;
                         }
 
                         /* Start of CC controlled frames */

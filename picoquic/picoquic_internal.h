@@ -1350,8 +1350,7 @@ int picoquic_prepare_path_challenge_frame(uint8_t* bytes,
     size_t bytes_max, size_t* consumed, uint64_t challenge);
 int picoquic_prepare_path_response_frame(uint8_t* bytes,
     size_t bytes_max, size_t* consumed, uint64_t challenge);
-int picoquic_prepare_new_connection_id_frame(picoquic_cnx_t * cnx, picoquic_local_cnxid_t* l_cid,
-    uint8_t* bytes, size_t bytes_max, size_t* consumed);
+uint8_t* picoquic_format_new_connection_id_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, picoquic_local_cnxid_t* l_cid);
 int picoquic_prepare_blocked_frames(picoquic_cnx_t* cnx, uint8_t* bytes, size_t bytes_max, size_t* consumed);
 int picoquic_queue_retire_connection_id_frame(picoquic_cnx_t * cnx, uint64_t sequence);
 int picoquic_queue_new_token_frame(picoquic_cnx_t * cnx, uint8_t * token, size_t token_length);
