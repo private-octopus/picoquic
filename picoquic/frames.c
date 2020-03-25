@@ -376,33 +376,22 @@ uint8_t* picoquic_decode_new_connection_id_frame(picoquic_cnx_t* cnx, uint8_t* b
  * Format a retire connection ID frame.
  */
 
-int picoquic_prepare_retire_connection_id_frame(uint64_t sequence, 
-    uint8_t* bytes, size_t bytes_max, size_t* consumed)
+uint8_t * picoquic_format_retire_connection_id_frame(uint8_t* bytes, uint8_t* bytes_max, int * more_data, int * is_pure_ack, uint64_t sequence)
 {
-    int ret = 0;
-    size_t byte_index = 0;
+    uint8_t * bytes0 = bytes;
 
-    *consumed = 0;
-    
-    if (bytes_max < 2) {
-        ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
+    if ((bytes = picoquic_frames_uint8_encode(bytes, bytes_max, picoquic_frame_type_retire_connection_id)) == NULL ||
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, sequence)) == NULL){
+        bytes = bytes0;
+        *more_data = 1;
     }
     else {
-        size_t ls;
-        bytes[byte_index++] = picoquic_frame_type_retire_connection_id;
-        ls = picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index, sequence);
-        byte_index += ls;
-
-        if (ls == 0) {
-            ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
-        }
-        else {
-            *consumed = byte_index;
-        }
+        *is_pure_ack = 0;
     }
 
-    return ret;
+    return bytes;
 }
+
 
 /*
  * Queue a retire connection id frame when a probe or a path is abandoned.
@@ -410,12 +399,15 @@ int picoquic_prepare_retire_connection_id_frame(uint64_t sequence,
 
 int picoquic_queue_retire_connection_id_frame(picoquic_cnx_t * cnx, uint64_t sequence)
 {
+    int ret = 0;
     size_t consumed = 0;
     uint8_t frame_buffer[258];
-    int ret = picoquic_prepare_retire_connection_id_frame(sequence, frame_buffer, sizeof(frame_buffer), &consumed);
-
-    if (ret == 0 && consumed > 0) {
-        ret = picoquic_queue_misc_frame(cnx, frame_buffer, consumed);
+    int is_pure_ack = 1;
+    int more_data = 0;
+    uint8_t * bytes_next = picoquic_format_retire_connection_id_frame(frame_buffer, frame_buffer + sizeof(frame_buffer), &more_data, &is_pure_ack, sequence);
+    
+    if ((consumed = bytes_next - frame_buffer) > 0) {
+        ret = picoquic_queue_misc_frame(cnx, frame_buffer, consumed, is_pure_ack);
     }
 
     return ret;
@@ -509,7 +501,7 @@ int picoquic_queue_new_token_frame(picoquic_cnx_t * cnx, uint8_t * token, size_t
     int ret = picoquic_prepare_new_token_frame(token, token_length, frame_buffer, sizeof(frame_buffer), &consumed);
 
     if (ret == 0 && consumed > 0) {
-        ret = picoquic_queue_misc_frame(cnx, frame_buffer, consumed);
+        ret = picoquic_queue_misc_frame(cnx, frame_buffer, consumed, 1);
     }
 
     return ret;
@@ -3066,43 +3058,32 @@ uint8_t* picoquic_decode_max_streams_frame(picoquic_cnx_t* cnx, uint8_t* bytes, 
 
 /* Common code for datagrams and misc frames
  */
-int picoquic_prepare_first_misc_or_dg_frame(picoquic_misc_frame_header_t ** first, picoquic_misc_frame_header_t ** last, uint8_t* bytes,
-    size_t bytes_max, size_t* consumed)
-{
-    int ret = picoquic_prepare_misc_frame(*first, bytes, bytes_max, consumed);
 
-    if (ret == 0) {
+uint8_t * picoquic_format_first_misc_or_dg_frame(uint8_t* bytes, uint8_t * bytes_max, int * more_data, int * is_pure_ack,
+    picoquic_misc_frame_header_t** first, picoquic_misc_frame_header_t** last)
+{
+    picoquic_misc_frame_header_t* misc_frame = *first;
+
+    if (bytes + misc_frame->length > bytes_max) {
+        *more_data = 1;
+    } else {
+        uint8_t* frame = ((uint8_t*)misc_frame) + sizeof(picoquic_misc_frame_header_t);
+        memcpy(bytes, frame, misc_frame->length);
+        bytes += misc_frame->length;
+        *is_pure_ack &= misc_frame->is_pure_ack;
         picoquic_delete_misc_or_dg(first, last, *first);
     }
 
-    return ret;
+    return bytes;
 }
 
 /*
  * Sending of miscellaneous frames
  */
 
-int picoquic_prepare_first_misc_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
-                                      size_t bytes_max, size_t* consumed)
+uint8_t* picoquic_format_first_misc_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack)
 {
-    return picoquic_prepare_first_misc_or_dg_frame(&cnx->first_misc_frame, &cnx->last_misc_frame, bytes, bytes_max, consumed);
-}
-
-int picoquic_prepare_misc_frame(picoquic_misc_frame_header_t* misc_frame, uint8_t* bytes,
-                                size_t bytes_max, size_t* consumed)
-{
-    int ret = 0;
-
-    if (misc_frame->length > bytes_max) {
-        ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
-        *consumed = 0;
-    } else {
-        uint8_t* frame = ((uint8_t*)misc_frame) + sizeof(picoquic_misc_frame_header_t);
-        memcpy(bytes, frame, misc_frame->length);
-        *consumed = misc_frame->length;
-    }
-
-    return ret;
+    return picoquic_format_first_misc_or_dg_frame(bytes, bytes_max, more_data, is_pure_ack, &cnx->first_misc_frame, &cnx->last_misc_frame);
 }
 
 /*
@@ -3278,7 +3259,7 @@ int picoquic_queue_handshake_done_frame(picoquic_cnx_t* cnx)
     uint8_t frame_buffer = picoquic_frame_type_handshake_done;
 
     return picoquic_queue_misc_or_dg_frame(cnx, &cnx->first_datagram, &cnx->last_datagram,
-            &frame_buffer, 1);
+            &frame_buffer, 1, 0);
 }
 
 /* Handling of datagram frames.
@@ -3348,60 +3329,59 @@ uint8_t* picoquic_decode_datagram_frame(picoquic_cnx_t* cnx, uint8_t* bytes, con
     return bytes;
 }
 
-int picoquic_prepare_datagram_frame(size_t length, const uint8_t* src, uint8_t* bytes, size_t bytes_max, size_t* consumed)
+uint8_t * picoquic_format_datagram_frame(uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, size_t length, const uint8_t* src)
 {
-    int ret = 0;
-    size_t byte_index = 0;
-    size_t l_l = 0;
+    uint8_t* bytes0 = bytes;
 
-    bytes[byte_index++] = picoquic_frame_type_datagram_l;
+    if ((bytes = picoquic_frames_uint8_encode(bytes, bytes_max, picoquic_frame_type_datagram_l)) != NULL &&
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, length)) != NULL &&
+        bytes + length <= bytes_max) {
+        memcpy(bytes, src, length);
+        bytes += length;
+        *is_pure_ack = 0;
+    }
+    else {
+        *more_data = 1;
+        bytes = bytes0;
+    }
 
-    l_l = picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index, length);
-    byte_index += l_l;
+    return bytes;
+}
 
-    if (l_l > 0 && byte_index + length <= bytes_max) {
-        memcpy(bytes + byte_index, src, length);
-        byte_index += length;
+int picoquic_queue_datagram_frame(picoquic_cnx_t * cnx, size_t length, const uint8_t * src)
+{
+    int ret;
+    size_t consumed = 0;
+    uint8_t frame_buffer[PICOQUIC_MAX_PACKET_SIZE];
+    int more_data = 0;
+    int is_pure_ack = 1;
+    uint8_t * bytes_next = picoquic_format_datagram_frame(frame_buffer, frame_buffer + sizeof(frame_buffer), &more_data, &is_pure_ack, length, src);
+
+    if ((consumed = bytes_next - frame_buffer) > 0) {
+        ret = picoquic_queue_misc_or_dg_frame(cnx, &cnx->first_datagram, &cnx->last_datagram, 
+            frame_buffer, consumed, 0);
     }
     else {
         ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
-        byte_index = 0;
-    }
-
-    *consumed = byte_index;
-
-    return ret;
-}
-
-int picoquic_queue_datagram_frame(picoquic_cnx_t * cnx, size_t length, const uint8_t * bytes)
-{
-    size_t consumed = 0;
-    uint8_t frame_buffer[PICOQUIC_MAX_PACKET_SIZE];
-    int ret = picoquic_prepare_datagram_frame(length, bytes, frame_buffer, sizeof(frame_buffer), &consumed);
-
-    if (ret == 0 && consumed > 0) {
-        return picoquic_queue_misc_or_dg_frame(cnx, &cnx->first_datagram, &cnx->last_datagram, 
-            frame_buffer, consumed);
     }
 
     return ret;
 }
 
-int picoquic_prepare_first_datagram_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
-    size_t bytes_max, size_t* consumed)
+uint8_t * picoquic_format_first_datagram_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
+    uint8_t *bytes_max, int * more_data, int * is_pure_ack)
 {
-    int ret = 0;
-    if (cnx->first_datagram->length > bytes_max) {
+    if (bytes + cnx->first_datagram->length > bytes_max) {
         /* TODO: don't do that if this is a coalesced packet... */
         /* This datagram is not compatible with the path. Just drop. */
         picoquic_delete_misc_or_dg(&cnx->first_datagram, &cnx->last_datagram, cnx->first_datagram);
-        *consumed = 0;
     }
     else {
-        ret = picoquic_prepare_first_misc_or_dg_frame(&cnx->first_datagram, &cnx->last_datagram, bytes, bytes_max, consumed);
+        bytes = picoquic_format_first_misc_or_dg_frame(bytes, bytes_max, more_data, is_pure_ack, 
+            &cnx->first_datagram, &cnx->last_datagram);
     }
 
-    return ret;
+    return bytes;
 }
 
 /* ACK Frequency frames 

@@ -2618,7 +2618,8 @@ void * picoquic_get_callback_context(picoquic_cnx_t * cnx)
     return cnx->callback_ctx;
 }
 
-picoquic_misc_frame_header_t* picoquic_create_misc_frame(const uint8_t* bytes, size_t length) {
+picoquic_misc_frame_header_t* picoquic_create_misc_frame(const uint8_t* bytes, size_t length, int is_pure_ack)
+{
     uint8_t* misc_frame = (uint8_t*)malloc(sizeof(picoquic_misc_frame_header_t) + length);
 
     if (misc_frame == NULL) {
@@ -2627,16 +2628,17 @@ picoquic_misc_frame_header_t* picoquic_create_misc_frame(const uint8_t* bytes, s
         picoquic_misc_frame_header_t* head = (picoquic_misc_frame_header_t*)misc_frame;
         memset(head, 0, sizeof(picoquic_misc_frame_header_t));
         head->length = length;
+        head->is_pure_ack = is_pure_ack;
         memcpy(misc_frame + sizeof(picoquic_misc_frame_header_t), bytes, length);
         return head;
     }
 }
 
 int picoquic_queue_misc_or_dg_frame(picoquic_cnx_t * cnx, picoquic_misc_frame_header_t** first, 
-    picoquic_misc_frame_header_t** last, const uint8_t* bytes, size_t length)
+    picoquic_misc_frame_header_t** last, const uint8_t* bytes, size_t length, int is_pure_ack)
 {
     int ret = 0;
-    picoquic_misc_frame_header_t* misc_frame = picoquic_create_misc_frame(bytes, length);
+    picoquic_misc_frame_header_t* misc_frame = picoquic_create_misc_frame(bytes, length, is_pure_ack);
 
     if (misc_frame == NULL) {
         ret = PICOQUIC_ERROR_MEMORY;
@@ -2657,9 +2659,9 @@ int picoquic_queue_misc_or_dg_frame(picoquic_cnx_t * cnx, picoquic_misc_frame_he
     return ret;
 }
 
-int picoquic_queue_misc_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t length)
+int picoquic_queue_misc_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t length, int is_pure_ack)
 {
-    return picoquic_queue_misc_or_dg_frame(cnx, &cnx->first_misc_frame, &cnx->last_misc_frame, bytes, length);
+    return picoquic_queue_misc_or_dg_frame(cnx, &cnx->first_misc_frame, &cnx->last_misc_frame, bytes, length, is_pure_ack);
 }
 
 void picoquic_delete_misc_or_dg(picoquic_misc_frame_header_t** first, picoquic_misc_frame_header_t** last, picoquic_misc_frame_header_t* frame)

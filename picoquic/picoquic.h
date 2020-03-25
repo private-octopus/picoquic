@@ -546,7 +546,7 @@ picoquic_stream_data_cb_fn picoquic_get_callback_function(picoquic_cnx_t * cnx);
 void * picoquic_get_callback_context(picoquic_cnx_t* cnx);
 
 /* Send extra frames */
-int picoquic_queue_misc_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t length);
+int picoquic_queue_misc_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t length, int is_pure_ack);
 
 /* Send datagram frame */
 int picoquic_queue_datagram_frame(picoquic_cnx_t* cnx, size_t length, const uint8_t* bytes);
