@@ -1847,7 +1847,6 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
     picoquic_packet_type_enum packet_type = 0;
     size_t checksum_overhead = 16;
     int is_cleartext_mode = 1;
-    size_t data_bytes = 0;
     int retransmit_possible = 0;
     size_t header_length = 0;
     uint8_t* bytes = packet->bytes;
@@ -1993,19 +1992,11 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                     if (ret == 0 && path_x->cwin > path_x->bytes_in_transit) {
                         /* Encode the crypto handshake frame */
                         if (tls_ready != 0) {
-                            ret = picoquic_prepare_crypto_hs_frame(cnx, epoch,
-                                &bytes[length],
-                                send_buffer_max - checksum_overhead - length, &data_bytes);
-
-                            if (ret == 0) {
-                                length += data_bytes;
-                                is_pure_ack &= (data_bytes == 0);
-                            }
-                            else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
-                                ret = 0;
-                                *next_wake_time = current_time;
-                                SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
-                            }
+                            /* Encode the crypto frame */
+                            bytes_next = bytes + length;
+                            bytes_next = picoquic_format_crypto_hs_frame(&cnx->tls_stream[epoch],
+                                bytes_next, bytes_max, &more_data, &is_pure_ack);
+                            length = bytes_next - bytes;
                         }
 
                         if (packet_type == picoquic_packet_initial) {
@@ -2022,7 +2013,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                     }
 
                     /* If TLS packets are sent, progress the state */
-                    if (ret == 0 && tls_ready != 0 && data_bytes > 0 && 
+                    if (ret == 0 && tls_ready != 0 && 
                         cnx->tls_stream[epoch].send_queue == NULL) {
                         switch (cnx->cnx_state) {
                         case picoquic_state_client_init:
@@ -2173,13 +2164,18 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
     picoquic_packet_type_enum packet_type = picoquic_packet_initial;
     picoquic_packet_context_enum pc = picoquic_packet_context_initial;
     size_t checksum_overhead = 8;
+#if 0
     size_t data_bytes = 0;
+#endif
     size_t header_length = 0;
     uint8_t* bytes = packet->bytes;
     uint8_t* bytes_max;
     uint8_t* bytes_next;
     size_t length = 0;
     int more_data = 0;
+#if 1
+    int is_pure_ack = 1;
+#endif
 
     if (*next_wake_time > cnx->start_time + PICOQUIC_MICROSEC_HANDSHAKE_MAX) {
         *next_wake_time = cnx->start_time + PICOQUIC_MICROSEC_HANDSHAKE_MAX;
@@ -2211,8 +2207,12 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
 
     if (length == 0) {
         checksum_overhead = picoquic_get_checksum_length(cnx, epoch);
-
+#if 1
+        tls_ready = (cnx->tls_stream[epoch].send_queue != NULL &&
+            cnx->tls_stream[epoch].send_queue->length > cnx->tls_stream[epoch].send_queue->offset);
+#else
         tls_ready = picoquic_is_tls_stream_ready(cnx);
+#endif
 
         length = picoquic_predict_packet_header_length(cnx, packet_type);
         packet->ptype = packet_type;
@@ -2228,8 +2228,13 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             bytes_max = bytes + send_buffer_max - checksum_overhead;
             bytes_next = picoquic_format_ack_frame(cnx, bytes + length, bytes_max, &more_data, current_time, pc);
             length = bytes_next - bytes;
-
+#if 1
             /* Encode the crypto frame */
+            bytes_next = bytes + length;
+            bytes_next = picoquic_format_crypto_hs_frame(&cnx->tls_stream[epoch],
+                bytes_next, bytes_max, &more_data, &is_pure_ack);
+            length = bytes_next - bytes;
+#else
             ret = picoquic_prepare_crypto_hs_frame(cnx, epoch, &bytes[length],
                 send_buffer_max - checksum_overhead - length, &data_bytes);
             if (ret == 0) {
@@ -2241,10 +2246,11 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                 *next_wake_time = current_time;
                 SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
             }
+#endif
 
             /* progress the state if the epoch data is all sent */
 
-            if (ret == 0 && tls_ready != 0 && data_bytes > 0 && cnx->tls_stream[epoch].send_queue == NULL) {
+            if (ret == 0 && tls_ready != 0 && cnx->tls_stream[epoch].send_queue == NULL) {
                 if (epoch == picoquic_epoch_handshake && picoquic_tls_client_authentication_activated(cnx->quic) == 0) {
                     cnx->cnx_state = picoquic_state_server_false_start;
                     /* On a server that does address validation, send a NEW TOKEN frame */
@@ -2305,7 +2311,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
         }
     }
 
-    if (ret == 0 && more_data) {
+    if (ret == 0 && length == 0 && more_data) {
         *next_wake_time = current_time;
         SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
     }
@@ -2820,23 +2826,10 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
 
                         /* if present, send tls data */
                         if (tls_ready) {
-                            ret = picoquic_prepare_crypto_hs_frame(cnx, 3, &bytes[length],
-                                send_buffer_min_max - checksum_overhead - length, &data_bytes);
-
-                            if (ret == 0) {
-                                length += data_bytes;
-                                if (data_bytes > 0)
-                                {
-                                    is_pure_ack = 0;
-                                }
-                            }
-                            else {
-                                if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
-                                    *next_wake_time = current_time;
-                                    SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
-                                    ret = 0;
-                                }
-                            }
+                            bytes_next = bytes + length;
+                            bytes_next = picoquic_format_crypto_hs_frame(&cnx->tls_stream[picoquic_epoch_1rtt],
+                                bytes_next, bytes_max, &more_data, &is_pure_ack);
+                            length = bytes_next - bytes;
                         }
 
                         if (length > header_length || pmtu_discovery_needed != picoquic_pmtu_discovery_required) {
@@ -3183,23 +3176,10 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                     
                     /* if present, send tls data */
                     if (picoquic_is_tls_stream_ready(cnx)) {
-                        ret = picoquic_prepare_crypto_hs_frame(cnx, 3, &bytes[length],
-                            send_buffer_min_max - checksum_overhead - length, &data_bytes);
-
-                        if (ret == 0) {
-                            length += data_bytes;
-                            if (data_bytes > 0)
-                            {
-                                is_pure_ack = 0;
-                            }
-                        }
-                        else {
-                            if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
-                                *next_wake_time = current_time;
-                                SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
-                                ret = 0;
-                            }
-                        }
+                        bytes_next = bytes + length;
+                        bytes_next = picoquic_format_crypto_hs_frame(&cnx->tls_stream[picoquic_epoch_1rtt],
+                            bytes_next, bytes_max, &more_data, &is_pure_ack);
+                        length = bytes_next - bytes;
                     }
 
                     if (length > header_length || pmtu_discovery_needed != picoquic_pmtu_discovery_required) {

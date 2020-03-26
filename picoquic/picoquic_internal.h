@@ -1327,8 +1327,7 @@ int picoquic_parse_ack_header(
     uint8_t ack_delay_exponent);
 uint8_t* picoquic_decode_crypto_hs_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
     const uint8_t* bytes_max, int epoch);
-int picoquic_prepare_crypto_hs_frame(picoquic_cnx_t* cnx, int epoch,
-    uint8_t* bytes, size_t bytes_max, size_t* consumed);
+uint8_t* picoquic_format_crypto_hs_frame(picoquic_stream_head_t* stream, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
 uint8_t* picoquic_format_ack_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, uint64_t current_time, picoquic_packet_context_enum pc);
 int picoquic_prepare_connection_close_frame(picoquic_cnx_t* cnx,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);

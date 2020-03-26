@@ -173,7 +173,7 @@ int siduck_callback(picoquic_cnx_t* cnx,
                         fprintf(ctx->F, "Received: datagram, but not a quack-ack\n");
                     }
                     else {
-                        DBG_PRINTF("Received a datagram, but not a quack ack, length = %d", length);
+                        DBG_PRINTF("Received a datagram, but not a quack ack, length = %zu", length);
                     }
 
                     if (ctx != NULL) {

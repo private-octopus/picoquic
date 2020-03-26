@@ -1353,6 +1353,9 @@ void picoquic_set_key_log_file(picoquic_quic_t *quic, char const * keylog_filena
             log_event->super.cb = picoquic_log_event_call_back;
             ctx->log_event = (ptls_log_event_t *)log_event;
         }
+        else {
+            picoquic_file_close(F_keylog);
+        }
     }
 }
 

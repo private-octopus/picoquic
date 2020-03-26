@@ -1536,86 +1536,60 @@ uint8_t* picoquic_decode_crypto_hs_frame(picoquic_cnx_t* cnx, uint8_t* bytes, co
     return bytes;
 }
 
-int picoquic_prepare_crypto_hs_frame(picoquic_cnx_t* cnx, int epoch,
-    uint8_t* bytes, size_t bytes_max, size_t* consumed)
+uint8_t* picoquic_format_crypto_hs_frame(picoquic_stream_head_t* stream, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack)
 {
-    int ret = 0;
-    picoquic_stream_head_t* stream = &cnx->tls_stream[epoch];
+    uint8_t* bytes0 = bytes;
 
-    if (stream->send_queue == NULL || stream->send_queue->length <= stream->send_queue->offset) {
-        *consumed = 0;
-    } else {
-        size_t byte_index = 0;
-        size_t l_off = 0;
-        size_t length = 0;
+    if (stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset) {
+        /* Check that there is enough room for at least 2 content bytes */
+        if ((bytes = picoquic_frames_uint8_encode(bytes, bytes_max, picoquic_frame_type_crypto_hs)) != NULL &&
+            (bytes = picoquic_frames_varint_encode(bytes, bytes_max, stream->sent_offset)) != NULL) {
+            /* As there is enough room, estimate the actual length, then encode the packet */
+            size_t length = stream->send_queue->length - (size_t)stream->send_queue->offset;
+            uint8_t* bytes_l;
 
-        bytes[byte_index++] = picoquic_frame_type_crypto_hs;
+            if (bytes + length > bytes_max) {
+                length = bytes_max - bytes;
+            }
 
-        if (bytes_max > byte_index) {
-            l_off = picoquic_varint_encode(bytes + byte_index, bytes_max - byte_index, stream->sent_offset);
-            byte_index += l_off;
-        }
+            if ((bytes_l = picoquic_frames_varint_encode(bytes, bytes_max, length)) == NULL) {
+                /* *more_data = 1; */
+                bytes = bytes0;
+            }
+            else {
+                if (bytes_l + length > bytes_max) {
+                    length = bytes_max - bytes_l;
+                    bytes = picoquic_frames_varint_encode(bytes, bytes_max, length);
+                }
+                else {
+                    bytes = bytes_l;
+                }
+                if (length > 0) {
+                    memcpy(bytes, stream->send_queue->bytes + stream->send_queue->offset, length);
+                    bytes += length;
 
-        if (byte_index > bytes_max || (stream->sent_offset > 0 && l_off == 0)) {
-            *consumed = 0;
-            ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
+                    stream->send_queue->offset += length;
+                    if (stream->send_queue->offset >= stream->send_queue->length) {
+                        picoquic_stream_data_node_t* next = stream->send_queue->next_stream_data;
+                        free(stream->send_queue->bytes);
+                        free(stream->send_queue);
+                        stream->send_queue = next;
+                    }
+
+                    stream->sent_offset += length;
+                    *is_pure_ack = 0;
+                }
+            }
         }
         else {
-            /* Compute the length */
-            size_t space = bytes_max - byte_index;
-
-            if (space < 2) {
-                length = 0;
-            } else {
-                size_t l_len = 0;
-                size_t available = stream->send_queue->length - (size_t)stream->send_queue->offset;
-
-                length = available;
-                /* Trial encoding */
-                l_len = picoquic_varint_encode(bytes + byte_index, space,
-                    (uint64_t)length);
-
-                if (length + l_len >= space) {
-                    if (space < l_len) {
-                        /* Will not try a silly encoding */
-                        *consumed = 0;
-                        ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
-                    }
-                    else {
-                        /* New encoding with appropriate length */
-                        length = space - l_len;
-                        l_len = picoquic_varint_encode(bytes + byte_index, space,
-                            (uint64_t)length);
-                    }
-                }
-                /* This is good */
-                byte_index += l_len;
-            }
-
-            if (ret == 0 && length > 0) {
-                memcpy(&bytes[byte_index], stream->send_queue->bytes + stream->send_queue->offset, length);
-                byte_index += length;
-
-                stream->send_queue->offset += length;
-                if (stream->send_queue->offset >= stream->send_queue->length) {
-                    picoquic_stream_data_node_t* next = stream->send_queue->next_stream_data;
-                    free(stream->send_queue->bytes);
-                    free(stream->send_queue);
-                    stream->send_queue = next;
-                }
-
-                stream->sent_offset += length;
-                *consumed = byte_index;
-            } else if (ret == 0 && length == 0) {
-                /* No point in sending a silly packet */
-                *consumed = 0;
-                ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
-            }
+            /* *more_data = 1; */
+            bytes = bytes0;
         }
     }
 
-    return ret;
+    return bytes;
 }
+
 
 /*
  * ACK Frames

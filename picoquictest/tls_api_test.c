@@ -1134,6 +1134,12 @@ int tls_api_connection_loop(picoquic_test_tls_api_ctx_t* test_ctx,
             break;
         }
 
+        if (nb_trials == 512) {
+            DBG_PRINTF("After %d trials, client state = %d, server state = %d",
+                nb_trials, (int)test_ctx->cnx_client->cnx_state,
+                (test_ctx->cnx_server == NULL) ? -1 : test_ctx->cnx_server->cnx_state);
+        }
+
         if (was_active) {
             nb_inactive = 0;
         } else {
