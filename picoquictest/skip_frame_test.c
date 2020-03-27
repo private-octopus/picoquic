@@ -1725,7 +1725,6 @@ int send_stream_blocked_test_one(const struct st_stream_blocked_test_t * test)
     picoquic_cnx_t * cnx = NULL;
     struct sockaddr_storage addr;
     picoquic_stream_head_t* stream = NULL;
-    size_t consumed = 0;
 
     if (quic == NULL) {
         ret = -1;
