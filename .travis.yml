@@ -61,7 +61,7 @@ before_script:
   - if [ "$CHECK" == "cppcheck" ]; then ./ci/build_cppcheck.sh; fi
   - if [ "$TRAVIS_OS_NAME" == "linux" ]; then sudo sh -c 'echo 0 > /proc/sys/net/ipv6/conf/all/disable_ipv6'; fi
 script:
-  # Now build picoquic examples and test
+  # Now build picoquic examples and run tests
   - echo $CC
   - echo $CXX
   - $CC --version
