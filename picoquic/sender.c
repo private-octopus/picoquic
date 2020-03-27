@@ -2616,7 +2616,6 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
     int tls_ready = 0;
     int is_cleartext_mode = 0;
     int is_pure_ack = 1;
-    size_t data_bytes = 0;
     size_t header_length = 0;
     uint8_t* bytes = packet->bytes;
     size_t length = 0;
@@ -2682,10 +2681,10 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
             picoquic_retransmit_needed(cnx, pc, path_x, current_time, next_wake_time, packet, send_buffer_min_max, &header_length)) > 0) {
             /* Set the new checksum length */
             checksum_overhead = picoquic_get_checksum_length(cnx, epoch);
+            bytes_max = bytes + send_buffer_min_max - checksum_overhead;
             /* Check whether it makes sense to add an ACK at the end of the retransmission */
             /* Don't do that if it risks mixing clear text and encrypted ack */
             if (is_cleartext_mode == 0 && packet->ptype != picoquic_packet_0rtt_protected) {
-                bytes_max = bytes + send_buffer_min_max - checksum_overhead;
                 bytes_next = picoquic_format_ack_frame(cnx, bytes + length, bytes_max, &more_data, current_time, pc);
                 length = bytes_next - bytes;
             }
@@ -2703,28 +2702,29 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
             packet->sequence_number = cnx->pkt_ctx[pc].send_sequence;
             packet->send_time = current_time;
             packet->send_path = path_x;
+            bytes_next = bytes + length;
 
             if (path_x->challenge_verified == 0 && path_x->challenge_failed == 0) {
                 uint64_t next_challenge_time = picoquic_next_challenge_time(cnx, path_x);
                 if (next_challenge_time <= current_time || path_x->challenge_repeat_count == 0) {
                     if (path_x->challenge_repeat_count < PICOQUIC_CHALLENGE_REPEAT_MAX) {
                         int ack_needed = cnx->pkt_ctx[pc].ack_needed;
-                        /* When blocked, repeat the path challenge or wait */
-                        if (picoquic_prepare_path_challenge_frame(&bytes[length],
-                            send_buffer_max - checksum_overhead - length, &data_bytes,
-                            path_x->challenge[path_x->challenge_repeat_count]) == 0) {
-                            length += data_bytes;
+                        uint8_t* bytes_challenge = bytes_next;
+                        
+                        bytes_next = picoquic_format_path_challenge_frame(bytes_next, bytes_max, &more_data, &is_pure_ack,
+                            path_x->challenge[path_x->challenge_repeat_count]);
+                        if (bytes_next > bytes_challenge) {
                             path_x->challenge_time = current_time;
                             path_x->challenge_repeat_count++;
                         }
 
                         /* add an ACK just to be nice */
                         if (ack_needed) {
-                            bytes_next = picoquic_format_ack_frame(cnx, bytes + length, bytes_max, &more_data, current_time, pc);
-                            length = bytes_next - bytes;
+                            bytes_next = picoquic_format_ack_frame(cnx, bytes_next, bytes_max, &more_data, current_time, pc);
                             /* Restore the ACK needed flags, because challenges are not reliable. */
                             cnx->pkt_ctx[pc].ack_needed = ack_needed;
                         }
+                        length = bytes_next - bytes;
                     }
                     else {
                         if (path_x == cnx->path[0]) {
@@ -2751,10 +2751,11 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
             }
 
             if (path_x->response_required) {
-                if (picoquic_prepare_path_response_frame(&bytes[length],
-                    send_buffer_max - checksum_overhead - length, &data_bytes, path_x->challenge_response) == 0) {
-                    length += data_bytes;
+                uint8_t* bytes_response = bytes + length;
+                if ((bytes_next = picoquic_format_path_response_frame(bytes_response, bytes_max,
+                    &more_data, &is_pure_ack, path_x->challenge_response)) > bytes_response) {
                     path_x->response_required = 0;
+                    length = bytes_next - bytes;
                 }
             }
 
@@ -2951,7 +2952,6 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
     picoquic_packet_type_enum packet_type = picoquic_packet_1rtt_protected;
     picoquic_packet_context_enum pc = picoquic_packet_context_application;
     int is_pure_ack = 1;
-    size_t data_bytes = 0;
     size_t header_length = 0;
     size_t length = 0;
     size_t checksum_overhead = picoquic_get_checksum_length(cnx, picoquic_epoch_1rtt);
@@ -2991,6 +2991,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
         packet->sequence_number = cnx->pkt_ctx[pc].send_sequence;
         packet->send_time = current_time;
         packet->send_path = path_x;
+        bytes_next = bytes + length;
 
         /* If required, prepare challenge and response frames.
          * These frames will be sent immediately, regardless of pacing or flow control.
@@ -3002,22 +3003,23 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                 if (path_x->challenge_repeat_count < PICOQUIC_CHALLENGE_REPEAT_MAX) {
                     int ack_needed = cnx->pkt_ctx[pc].ack_needed;
                     /* When blocked, repeat the path challenge or wait */
-                    if (picoquic_prepare_path_challenge_frame(&bytes[length],
-                        send_buffer_max - checksum_overhead - length, &data_bytes,
-                        path_x->challenge[path_x->challenge_repeat_count]) == 0) {
-                        length += data_bytes;
+                    uint8_t* bytes_challenge = bytes_next;
+
+                    bytes_next = picoquic_format_path_challenge_frame(bytes_next, bytes_max, &more_data, &is_pure_ack,
+                        path_x->challenge[path_x->challenge_repeat_count]);
+                    if (bytes_next > bytes_challenge) {
                         path_x->challenge_time = current_time;
                         path_x->challenge_repeat_count++;
                     }
 
                     /* add an ACK just to be nice */
                     if (ack_needed) {
-                        bytes_next = picoquic_format_ack_frame(cnx, bytes + length, bytes_max, &more_data,
+                        bytes_next = picoquic_format_ack_frame(cnx, bytes_next, bytes_max, &more_data,
                             current_time, pc);
-                        length = bytes_next - bytes;
                         /* Restore the ACK needed flags, because challenges are not reliable. */
                         cnx->pkt_ctx[pc].ack_needed = ack_needed;
                     }
+                    length = bytes_next - bytes;
                 }
                 else {
                     if (path_x == cnx->path[0]) {
@@ -3052,10 +3054,11 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
         }
 
         if (path_x->response_required) {
-            if (picoquic_prepare_path_response_frame(&bytes[length],
-                send_buffer_max - checksum_overhead - length, &data_bytes, path_x->challenge_response) == 0) {
-                length += data_bytes;
+            uint8_t* bytes_response = bytes + length;
+            if ((bytes_next = picoquic_format_path_response_frame(bytes_response, bytes_max,
+                &more_data, &is_pure_ack, path_x->challenge_response)) > bytes_response) {
                 path_x->response_required = 0;
+                length = bytes_next - bytes;
             }
         }
 
@@ -3075,19 +3078,8 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
 
                 /* if necessary, prepare the MAX STREAM frames */
                 if (ret == 0) {
-                    ret = picoquic_prepare_max_streams_frame_if_needed(cnx,
-                        &bytes[length], send_buffer_min_max - checksum_overhead - length, &data_bytes);
-                    if (ret == 0) {
-                        length += data_bytes;
-                        if (data_bytes > 0)
-                        {
-                            is_pure_ack = 0;
-                        }
-                    }
-                    else if (ret == PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
-                        *next_wake_time = current_time;
-                        ret = 0;
-                    }
+                    bytes_next = picoquic_format_max_streams_frame_if_needed(cnx, bytes + length, bytes_max, &more_data, &is_pure_ack);
+                    length = bytes_next - bytes;
                 }
 
                 /* If necessary, encode the max data frame */

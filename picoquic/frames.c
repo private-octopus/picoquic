@@ -2811,68 +2811,45 @@ uint8_t * picoquic_format_required_max_stream_data_frames(picoquic_cnx_t* cnx,
 /*
  * Max stream ID frames
  */
-int picoquic_prepare_max_streams_frame_if_needed(picoquic_cnx_t* cnx,
-    uint8_t* bytes, size_t bytes_max, size_t* consumed)
+
+uint8_t * picoquic_format_max_streams_frame_if_needed(picoquic_cnx_t* cnx,
+    uint8_t* bytes, uint8_t * bytes_max, int * more_data, int * is_pure_ack)
 {
-    int ret = 0;
-    size_t byte_index = 0;
+    uint8_t* bytes0 = bytes;
     uint64_t new_bidir_local = cnx->max_stream_id_bidir_local;
     uint64_t new_unidir_local = cnx->max_stream_id_unidir_local;
 
-    *consumed = 0;
+    if (cnx->max_stream_id_bidir_local_computed + 
+        (cnx->local_parameters.initial_max_stream_id_bidir >> 1) > cnx->max_stream_id_bidir_local) {
+        new_bidir_local = cnx->max_stream_id_bidir_local + 
+            4 * STREAM_RANK_FROM_ID(cnx->local_parameters.initial_max_stream_id_bidir) + 4;
+        if ((bytes = picoquic_frames_uint8_encode(bytes, bytes_max, picoquic_frame_type_max_streams_bidir)) != NULL &&
+            (bytes = picoquic_frames_varint_encode(bytes, bytes_max, STREAM_RANK_FROM_ID(new_bidir_local))) != NULL) {
+            cnx->max_stream_id_bidir_local = new_bidir_local;
+            *is_pure_ack = 0;
+            bytes0 = bytes;
+        } else {
+            *more_data = 1;
+            bytes = bytes0;
+        }
+    }
     
-    if (cnx->max_stream_id_bidir_local_computed + (cnx->local_parameters.initial_max_stream_id_bidir >> 1) > cnx->max_stream_id_bidir_local) {
-        if (1 > bytes_max) {
-            ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
+    if (cnx->max_stream_id_unidir_local_computed +
+        (cnx->local_parameters.initial_max_stream_id_unidir >> 1) > cnx->max_stream_id_unidir_local) {
+        new_unidir_local = cnx->max_stream_id_unidir_local + cnx->local_parameters.initial_max_stream_id_unidir + 4;
+
+        if ((bytes = picoquic_frames_uint8_encode(bytes, bytes_max, picoquic_frame_type_max_streams_unidir)) != NULL &&
+            (bytes = picoquic_frames_varint_encode(bytes, bytes_max, STREAM_RANK_FROM_ID(new_unidir_local))) != NULL) {
+            cnx->max_stream_id_unidir_local = new_unidir_local;
+            *is_pure_ack = 0;
         }
         else {
-            size_t l1;
-            
-            new_bidir_local = cnx->max_stream_id_bidir_local + 4* STREAM_RANK_FROM_ID(cnx->local_parameters.initial_max_stream_id_bidir) + 4;
-            
-            l1 = picoquic_varint_encode(bytes + 1, bytes_max - 1, STREAM_RANK_FROM_ID(new_bidir_local));
-
-            if (l1 == 0) {
-                ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
-            }
-            else {
-                bytes[0] = picoquic_frame_type_max_streams_bidir;
-
-                byte_index = 1 + l1;
-            }
+            *more_data = 1;
+            bytes = bytes0;
         }
     }
 
-    if (ret == 0) {
-
-        if (cnx->max_stream_id_unidir_local_computed + (cnx->local_parameters.initial_max_stream_id_unidir >> 1) > cnx->max_stream_id_unidir_local) {
-            if (byte_index + 1 > bytes_max) {
-                ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
-            }
-            else {
-                size_t l1;
-                new_unidir_local = cnx->max_stream_id_unidir_local + cnx->local_parameters.initial_max_stream_id_unidir + 4;
-
-                l1 = picoquic_varint_encode(bytes + 1, bytes_max - 1, new_unidir_local);
-
-                if (l1 == 0) {
-                    ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
-                }
-                else {
-                    bytes[0] = picoquic_frame_type_max_streams_unidir;
-                    byte_index += 1 + l1;
-                }
-            }
-        }
-    }
-
-    if (ret == 0) {
-        cnx->max_stream_id_bidir_local = new_bidir_local;
-        cnx->max_stream_id_unidir_local = new_unidir_local;
-        *consumed = byte_index;
-    }
-
-    return ret;
+    return bytes;
 }
 
 void picoquic_update_max_stream_ID_local(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream)
@@ -2968,21 +2945,21 @@ uint8_t* picoquic_format_first_misc_frame(picoquic_cnx_t* cnx, uint8_t* bytes, u
  * Path Challenge and Response frames
  */
 
-int picoquic_prepare_path_challenge_frame(uint8_t* bytes,
-    size_t bytes_max, size_t* consumed, uint64_t challenge)
+uint8_t* picoquic_format_path_challenge_frame(uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack,
+    uint64_t challenge)
 {
-    int ret = 0;
-    if (bytes_max < (1 + 8)) {
-        ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
-        *consumed = 0;
-    } else {
-        bytes[0] = picoquic_frame_type_path_challenge;
-        picoformat_64(bytes + 1, challenge);
-        *consumed = 1 + 8;
+    uint8_t* bytes0 = 0;
+    if ((bytes = picoquic_frames_uint8_encode(bytes, bytes_max, picoquic_frame_type_path_challenge)) != NULL &&
+        (bytes = picoquic_frames_uint64_encode(bytes, bytes_max, challenge)) != NULL) {
+        *is_pure_ack = 0;
     }
-
-    return ret;
+    else {
+        *more_data = 1;
+        bytes = bytes0;
+    }
+    return bytes;
 }
+
 
 uint8_t* picoquic_decode_path_challenge_frame(picoquic_cnx_t* cnx, uint8_t* bytes, const uint8_t* bytes_max,
     picoquic_path_t * path_x, struct sockaddr* addr_from, struct sockaddr* addr_to)
@@ -3012,22 +2989,21 @@ uint8_t* picoquic_decode_path_challenge_frame(picoquic_cnx_t* cnx, uint8_t* byte
     return bytes;
 }
 
-int picoquic_prepare_path_response_frame(uint8_t* bytes,
-    size_t bytes_max, size_t* consumed, uint64_t challenge)
+uint8_t * picoquic_format_path_response_frame(uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack,
+    uint64_t challenge)
 {
-    int ret = 0;
-    if (bytes_max < (1 + 8)) {
-        ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
-        *consumed = 0;
+    uint8_t* bytes0 = 0;
+    if ((bytes = picoquic_frames_uint8_encode(bytes, bytes_max, picoquic_frame_type_path_response)) != NULL &&
+        (bytes = picoquic_frames_uint64_encode(bytes, bytes_max, challenge)) != NULL) {
+        *is_pure_ack = 0;
     }
     else {
-        bytes[0] = picoquic_frame_type_path_response;
-        picoformat_64(bytes + 1, challenge);
-        *consumed = 1 + 8;
+        *more_data = 1;
+        bytes = bytes0;
     }
-
-    return ret;
+    return bytes;
 }
+
 
 uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, uint8_t* bytes, const uint8_t* bytes_max)
 {
