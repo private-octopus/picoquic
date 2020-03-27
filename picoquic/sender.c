@@ -2852,15 +2852,8 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                                 /* Mark the bandwidth estimation as application limited */
                                 path_x->delivered_limited_index = path_x->delivered;
                                 /* Notify the peer if something is blocked */
-                                ret = picoquic_prepare_blocked_frames(cnx, &bytes[length],
-                                    send_buffer_min_max - checksum_overhead - length, &data_bytes);
-                                if (ret == 0) {
-                                    length += data_bytes;
-                                    if (data_bytes > 0)
-                                    {
-                                        is_pure_ack = 0;
-                                    }
-                                }
+                                bytes_next = picoquic_format_blocked_frames(cnx, &bytes[length], bytes_max, &more_data, &is_pure_ack);
+                                length = bytes_next - bytes;
                             }
                         } /* end of PMTU not required */
 
@@ -3196,15 +3189,8 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                             /* Mark the bandwidth estimation as application limited */
                             path_x->delivered_limited_index = path_x->delivered;
                             /* Notify the peer if something is blocked */
-                            ret = picoquic_prepare_blocked_frames(cnx, &bytes[length],
-                                send_buffer_min_max - checksum_overhead - length, &data_bytes);
-                            if (ret == 0) {
-                                length += data_bytes;
-                                if (data_bytes > 0)
-                                {
-                                    is_pure_ack = 0;
-                                }
-                            }
+                            bytes_next = picoquic_format_blocked_frames(cnx, &bytes[length], bytes_max, &more_data, &is_pure_ack);
+                            length = bytes_next - bytes;
                         }
                     } /* end of PMTU not required */
 

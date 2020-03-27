@@ -1775,7 +1775,17 @@ int send_stream_blocked_test_one(const struct st_stream_blocked_test_t * test)
         }
         if (ret == 0) {
             /* Call the blocked frame API */
-            ret = picoquic_prepare_one_blocked_frame(cnx, bytes, sizeof(bytes), stream, &consumed);
+            uint8_t* bytes_next;
+            int is_pure_ack = 1;
+            int more_data = 0;
+
+            bytes_next = picoquic_format_one_blocked_frame(cnx, bytes, bytes + sizeof(bytes), &more_data, &is_pure_ack, stream);
+
+            if (bytes_next != bytes && (is_pure_ack || more_data)) {
+                DBG_PRINTF("Error formatting blocked frames, stream: %" PRIu64", length: %zu, more: %d, pure ack: %d",
+                    test->stream_id, bytes_next - bytes, more_data, is_pure_ack);
+                ret = -1;
+            }
         }
 
         if (ret == 0 &&
