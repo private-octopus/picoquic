@@ -1593,7 +1593,7 @@ int picoquic_prepare_packet_0rtt(picoquic_cnx_t* cnx, picoquic_path_t * path_x, 
             send_buffer_max = 0;
         }
         else {
-            send_buffer_max = (size_t)PICOQUIC_DEFAULT_0RTT_WINDOW - path_x->bytes_in_transit;
+            send_buffer_max = (size_t)PICOQUIC_DEFAULT_0RTT_WINDOW - (size_t)path_x->bytes_in_transit;
         }
     }
     bytes_max = bytes + send_buffer_max - checksum_overhead;
