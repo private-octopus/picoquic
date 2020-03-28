@@ -1588,6 +1588,14 @@ int picoquic_prepare_packet_0rtt(picoquic_cnx_t* cnx, picoquic_path_t * path_x, 
     int is_pure_ack = 1;
 
     send_buffer_max = (send_buffer_max > path_x->send_mtu) ? path_x->send_mtu : send_buffer_max;
+    if (path_x->bytes_in_transit + send_buffer_max > PICOQUIC_DEFAULT_0RTT_WINDOW) {
+        if (path_x->bytes_in_transit > PICOQUIC_DEFAULT_0RTT_WINDOW) {
+            send_buffer_max = 0;
+        }
+        else {
+            send_buffer_max = (size_t)PICOQUIC_DEFAULT_0RTT_WINDOW - (size_t)path_x->bytes_in_transit;
+        }
+    }
     bytes_max = bytes + send_buffer_max - checksum_overhead;
 
     stream = picoquic_find_ready_stream(cnx);
@@ -1602,8 +1610,11 @@ int picoquic_prepare_packet_0rtt(picoquic_cnx_t* cnx, picoquic_path_t * path_x, 
     packet->checksum_overhead = checksum_overhead;
     bytes_next = bytes + length;
 
+
+    
+    /* Consider sending 0-RTT */
     if ((stream == NULL && cnx->first_misc_frame == NULL && padding_required == 0) || 
-        (PICOQUIC_DEFAULT_0RTT_WINDOW <= path_x->bytes_in_transit + send_buffer_max)) {
+        send_buffer_max < PICOQUIC_MIN_SEGMENT_SIZE) {
         length = 0;
     } else {
         /* If present, send misc frame */
@@ -2080,20 +2091,9 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
         }
     }
 
-    if (ret == 0 && length == 0 && cnx->crypto_context[1].aead_encrypt != NULL &&
-        path_x->bytes_in_transit < 10*PICOQUIC_ENFORCED_INITIAL_MTU) {
-        uint64_t max_data = 10 * PICOQUIC_ENFORCED_INITIAL_MTU;
-        /* Consider sending 0-RTT */
-        if (path_x->bytes_in_transit + send_buffer_max > 10 * PICOQUIC_ENFORCED_INITIAL_MTU) {
-            max_data -= path_x->bytes_in_transit;
-        }
-        else {
-            max_data = send_buffer_max;
-        }
-        if (max_data > PICOQUIC_MIN_SEGMENT_SIZE) {
-            ret = picoquic_prepare_packet_0rtt(cnx, path_x, packet, current_time, send_buffer, (size_t)max_data, send_length,
+    if (ret == 0 && length == 0 && cnx->crypto_context[1].aead_encrypt != NULL) {
+        ret = picoquic_prepare_packet_0rtt(cnx, path_x, packet, current_time, send_buffer, send_buffer_max, send_length,
                 *is_initial_sent, next_wake_time);
-        }
     }
     else {
         if (ret == 0 && more_data) {

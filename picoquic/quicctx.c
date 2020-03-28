@@ -2058,11 +2058,13 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         /* Initialize remote variables to some plausible value. 
 		 * Hopefully, this will be overwritten by the parameters received in
 		 * the TLS transport parameter extension */
+#if 0
         cnx->maxdata_remote = PICOQUIC_DEFAULT_0RTT_WINDOW;
         cnx->remote_parameters.initial_max_stream_data_bidi_remote = PICOQUIC_DEFAULT_0RTT_WINDOW;
         cnx->remote_parameters.initial_max_stream_data_uni = PICOQUIC_DEFAULT_0RTT_WINDOW;
         cnx->max_stream_id_bidir_remote = (cnx->client_mode) ? 4 : 0;
         cnx->max_stream_id_unidir_remote = (cnx->client_mode) ? 10 : 0;
+#endif
 
         /* Initialize padding policy to default for context */
         cnx->padding_multiple = quic->padding_multiple_default;
@@ -2248,6 +2250,12 @@ picoquic_cnx_t* picoquic_create_client_cnx(picoquic_quic_t* quic,
 int picoquic_start_client_cnx(picoquic_cnx_t * cnx)
 {
     int ret = picoquic_initialize_tls_stream(cnx, picoquic_get_quic_time(cnx->quic));
+    /* A remote session ticket may have been loaded as part of initializing TLS,
+     * and remote parameters may have been initialized to the initial value
+     * of the previous session. Apply these new parameters. */
+    cnx->maxdata_remote = cnx->remote_parameters.initial_max_data;
+    cnx->max_stream_id_bidir_remote = cnx->remote_parameters.initial_max_stream_id_bidir;
+    cnx->max_stream_id_unidir_remote = cnx->remote_parameters.initial_max_stream_id_unidir;
 
     picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
 
