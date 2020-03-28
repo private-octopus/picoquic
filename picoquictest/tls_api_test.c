@@ -2527,7 +2527,6 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss, unsi
         }
 
         if (ret == 0 && i == 1) {
-            uint8_t test_data[8] = { 't', 'e', 's', 't', '0', 'r', 't', 't' };
             /* set the link delays to 100 ms, for realistic testing */
             test_ctx->c_to_s_link->microsec_latency = 50000ull;
             test_ctx->s_to_c_link->microsec_latency = 50000ull;
@@ -2535,7 +2534,7 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss, unsi
             if (long_data) {
                 for (uint64_t x = 0; x <= 16; x++) {
                     uint64_t stream_id = 4u * x + 4u;
-                    test_ctx->nb_test_streams = x + 1;
+                    test_ctx->nb_test_streams = (size_t)(x + 1);
                     if (test_api_init_test_stream(&test_ctx->test_stream[x], stream_id, UINT64_MAX, 256, 32) != 0){
                         DBG_PRINTF("Could not initialize data for stream %d", (int)stream_id);
                         ret = -1;
