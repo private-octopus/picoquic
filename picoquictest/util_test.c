@@ -141,7 +141,7 @@ int util_memcmp_test()
     uint64_t random_seed = 0xbabac001;
     uint64_t time_start;
     uint64_t const_compare_time[16];
-#ifndef PICOQUIC_USE_CONSTANT_TIME_MEMCMP
+#if 0
     uint64_t memcmp_time[2];
 #endif
     uint64_t carry;
@@ -238,7 +238,7 @@ int util_memcmp_test()
         }
     }
 
-#ifndef PICOQUIC_USE_CONSTANT_TIME_MEMCMP
+    #if 0
     while (ret == 0) {
         for (size_t i = 0; ret == 0 && i < 2; i++) {
             /* prepare the y string */

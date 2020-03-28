@@ -34,7 +34,6 @@ test_script:
  - ps: if ($Env:Platform -eq "x64") { cd x64 }
  - ps: cd "$Env:Configuration"
  - ps: vstest.console /logger:Appveyor UnitTest1.dll
- - ps: .\picoquic_t memcmp
  # Alternative to UnitTest1 (running the same tests):
  # - ps: .\picoquic_t -n -r -x fuzz_initial
 
