@@ -1134,6 +1134,12 @@ int tls_api_connection_loop(picoquic_test_tls_api_ctx_t* test_ctx,
             break;
         }
 
+        if (nb_trials == 512) {
+            DBG_PRINTF("After %d trials, client state = %d, server state = %d",
+                nb_trials, (int)test_ctx->cnx_client->cnx_state,
+                (test_ctx->cnx_server == NULL) ? -1 : test_ctx->cnx_server->cnx_state);
+        }
+
         if (was_active) {
             nb_inactive = 0;
         } else {
@@ -3999,7 +4005,7 @@ int client_error_test_modal(int mode)
         if (mode == 0) {
             /* Queue a data frame on stream 4, which was already closed */
             uint8_t stream_error_frame[] = { 0x17, 0x04, 0x41, 0x01, 0x08, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 };
-            picoquic_queue_misc_frame(test_ctx->cnx_client, stream_error_frame, sizeof(stream_error_frame));
+            picoquic_queue_misc_frame(test_ctx->cnx_client, stream_error_frame, sizeof(stream_error_frame), 0);
         }
         else if (mode == 1) {
             /* Test injection of a wrong NEW CONNECTION ID */
@@ -4016,7 +4022,7 @@ int client_error_test_modal(int mode)
             /* deliberate error: repeat the reset secret defined for path[0] */
             memcpy(x, test_ctx->cnx_server->path[0]->reset_secret, PICOQUIC_RESET_SECRET_SIZE);
             x += PICOQUIC_RESET_SECRET_SIZE;
-            picoquic_queue_misc_frame(test_ctx->cnx_client, new_cnxid_error, x - new_cnxid_error);
+            picoquic_queue_misc_frame(test_ctx->cnx_client, new_cnxid_error, x - new_cnxid_error, 0);
         }
         else {
             DBG_PRINTF("Error mode %d is not defined yet", mode);

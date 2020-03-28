@@ -276,7 +276,6 @@ int sendacktest()
     uint64_t current_time;
     uint64_t received_mask = 0;
     uint8_t bytes[256];
-    size_t consumed;
     picoquic_packet_context_enum pc = 0;
 
     memset(&cnx, 0, sizeof(cnx));
@@ -291,13 +290,13 @@ int sendacktest()
         }
 
         if (ret == 0) {
-            consumed = 0;
-            ret = picoquic_prepare_ack_frame(&cnx, 0, pc, bytes, sizeof(bytes), &consumed);
+            int more_data = 0;
+            uint8_t* bytes_next = picoquic_format_ack_frame(&cnx, bytes, bytes + sizeof(bytes), &more_data, 0, pc);
 
             received_mask |= 1ull << (test_pn64[i] & 63);
 
             if (ret == 0) {
-                ret = basic_ack_parse(bytes, consumed, &expected_ack[i], received_mask);
+                ret = basic_ack_parse(bytes, bytes_next - bytes, &expected_ack[i], received_mask);
             }
 
             if (ret != 0) {

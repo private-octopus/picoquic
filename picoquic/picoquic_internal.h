@@ -621,6 +621,7 @@ typedef struct st_picoquic_misc_frame_header_t {
     struct st_picoquic_misc_frame_header_t* next_misc_frame;
     struct st_picoquic_misc_frame_header_t* previous_misc_frame;
     size_t length;
+    int is_pure_ack;
 } picoquic_misc_frame_header_t;
 
 /* Local CID.
@@ -1282,8 +1283,9 @@ picoquic_stream_head_t* picoquic_find_ready_stream(picoquic_cnx_t* cnx);
 int picoquic_is_tls_stream_ready(picoquic_cnx_t* cnx);
 uint8_t* picoquic_decode_stream_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
     const uint8_t* bytes_max, uint64_t current_time);
-int picoquic_prepare_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream,
-    uint8_t* bytes, size_t bytes_max, size_t* consumed, int* is_still_active);
+
+uint8_t* picoquic_format_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream, 
+    uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, int* is_still_active, int* ret);
 
 void picoquic_update_max_stream_ID_local(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream);
 
@@ -1325,59 +1327,37 @@ int picoquic_parse_ack_header(
     uint8_t ack_delay_exponent);
 uint8_t* picoquic_decode_crypto_hs_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
     const uint8_t* bytes_max, int epoch);
-int picoquic_prepare_crypto_hs_frame(picoquic_cnx_t* cnx, int epoch,
-    uint8_t* bytes, size_t bytes_max, size_t* consumed);
-int picoquic_prepare_ack_frame(picoquic_cnx_t* cnx, uint64_t current_time,
-    picoquic_packet_context_enum pc,
-    uint8_t* bytes, size_t bytes_max, size_t* consumed);
-int picoquic_prepare_connection_close_frame(picoquic_cnx_t* cnx,
-    uint8_t* bytes, size_t bytes_max, size_t* consumed);
-int picoquic_prepare_application_close_frame(picoquic_cnx_t* cnx,
-    uint8_t* bytes, size_t bytes_max, size_t* consumed);
-int picoquic_prepare_required_max_stream_data_frames(picoquic_cnx_t* cnx,
-    uint8_t* bytes, size_t bytes_max, size_t* consumed);
-int picoquic_prepare_max_data_frame(picoquic_cnx_t* cnx, uint64_t maxdata_increase,
-    uint8_t* bytes, size_t bytes_max, size_t* consumed);
-int picoquic_prepare_max_stream_data_frame(picoquic_stream_head_t* stream,
-    uint8_t* bytes, size_t bytes_max, uint64_t new_max_data, size_t* consumed);
+uint8_t* picoquic_format_crypto_hs_frame(picoquic_stream_head_t* stream, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
+uint8_t* picoquic_format_ack_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, uint64_t current_time, picoquic_packet_context_enum pc);
+uint8_t* picoquic_format_connection_close_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
+uint8_t* picoquic_format_application_close_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
+uint8_t* picoquic_format_required_max_stream_data_frames(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
+uint8_t* picoquic_format_max_data_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, uint64_t maxdata_increase);
+uint8_t* picoquic_format_max_stream_data_frame(picoquic_stream_head_t* stream, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, uint64_t new_max_data);
 uint64_t picoquic_cc_increased_window(picoquic_cnx_t* cnx, uint64_t previous_window); /* Trigger sending more data if window increases */
-int picoquic_prepare_max_streams_frame_if_needed(picoquic_cnx_t* cnx,
-    uint8_t* bytes, size_t bytes_max, size_t* consumed);
+uint8_t* picoquic_format_max_streams_frame_if_needed(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
 void picoquic_clear_stream(picoquic_stream_head_t* stream);
 void picoquic_delete_stream(picoquic_cnx_t * cnx, picoquic_stream_head_t * stream);
 picoquic_local_cnxid_t* picoquic_create_local_cnxid(picoquic_cnx_t* cnx, picoquic_connection_id_t* suggested_value);
 void picoquic_delete_local_cnxid(picoquic_cnx_t* cnx, picoquic_local_cnxid_t* l_cid);
 void picoquic_retire_local_cnxid(picoquic_cnx_t* cnx, uint64_t sequence);
 picoquic_local_cnxid_t* picoquic_find_local_cnxid(picoquic_cnx_t* cnx, picoquic_connection_id_t* cnxid);
-int picoquic_prepare_path_challenge_frame(uint8_t* bytes,
-    size_t bytes_max, size_t* consumed, uint64_t challenge);
-int picoquic_prepare_path_response_frame(uint8_t* bytes,
-    size_t bytes_max, size_t* consumed, uint64_t challenge);
-int picoquic_prepare_new_connection_id_frame(picoquic_cnx_t * cnx, picoquic_local_cnxid_t* l_cid,
-    uint8_t* bytes, size_t bytes_max, size_t* consumed);
-int picoquic_prepare_blocked_frames(picoquic_cnx_t* cnx, uint8_t* bytes, size_t bytes_max, size_t* consumed);
+uint8_t* picoquic_format_path_challenge_frame(uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, uint64_t challenge);
+uint8_t* picoquic_format_path_response_frame(uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, uint64_t challenge);
+uint8_t* picoquic_format_new_connection_id_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, picoquic_local_cnxid_t* l_cid);
+uint8_t* picoquic_format_blocked_frames(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
 int picoquic_queue_retire_connection_id_frame(picoquic_cnx_t * cnx, uint64_t sequence);
 int picoquic_queue_new_token_frame(picoquic_cnx_t * cnx, uint8_t * token, size_t token_length);
-int picoquic_prepare_one_blocked_frame(picoquic_cnx_t* cnx, uint8_t* bytes, size_t bytes_max, picoquic_stream_head_t* stream, size_t* data_bytes);
-
-int picoquic_prepare_first_misc_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
-    size_t bytes_max, size_t* consumed);
-int picoquic_prepare_misc_frame(picoquic_misc_frame_header_t* misc_frame, uint8_t* bytes,
-    size_t bytes_max, size_t* consumed);
-int picoquic_queue_misc_or_dg_frame(picoquic_cnx_t* cnx, picoquic_misc_frame_header_t** first, picoquic_misc_frame_header_t** last, const uint8_t* bytes, size_t length);
+uint8_t* picoquic_format_one_blocked_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, picoquic_stream_head_t* stream);
+uint8_t* picoquic_format_first_misc_or_dg_frame(uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, picoquic_misc_frame_header_t** first, picoquic_misc_frame_header_t** last);
+uint8_t* picoquic_format_first_misc_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
+int picoquic_queue_misc_or_dg_frame(picoquic_cnx_t* cnx, picoquic_misc_frame_header_t** first, picoquic_misc_frame_header_t** last, const uint8_t* bytes, size_t length, int is_pure_ack);
 void picoquic_delete_misc_or_dg(picoquic_misc_frame_header_t** first, picoquic_misc_frame_header_t** last, picoquic_misc_frame_header_t* frame);
 int picoquic_queue_handshake_done_frame(picoquic_cnx_t* cnx);
-int picoquic_prepare_first_datagram_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
-    size_t bytes_max, size_t* consumed);
-
+uint8_t* picoquic_format_first_datagram_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
 uint8_t* picoquic_parse_ack_frequency_frame(uint8_t* bytes, const uint8_t* bytes_max, uint64_t* seq, uint64_t* packets, uint64_t* microsec);
-
-/* send/receive */
-
-int picoquic_prepare_ack_frequency_frame(uint8_t* bytes, size_t length_max, size_t* consumed, picoquic_cnx_t* cnx);
-
-int picoquic_prepare_time_stamp_frame(uint8_t* bytes, size_t length_max, size_t* consumed, picoquic_cnx_t* cnx, uint64_t current_time);
-
+uint8_t* picoquic_format_ack_frequency_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data);
+uint8_t* picoquic_format_time_stamp_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, uint64_t current_time);
 size_t picoquic_encode_time_stamp_length(picoquic_cnx_t* cnx, uint64_t current_time);
 
 int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_t* bytes, size_t bytes_max,
@@ -1402,7 +1382,7 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
 int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mode,
     uint8_t* bytes, size_t bytes_max, size_t* consumed);
 
-picoquic_misc_frame_header_t* picoquic_create_misc_frame(const uint8_t* bytes, size_t length);
+picoquic_misc_frame_header_t* picoquic_create_misc_frame(const uint8_t* bytes, size_t length, int is_pure_ack);
 
 #ifdef __cplusplus
 }

@@ -1040,10 +1040,15 @@ int new_cnxid_test()
             }
 
             if (ret == 0) {
-                ret = picoquic_prepare_new_connection_id_frame(cnx, local_cid, 
-                    frame_buffer, sizeof(frame_buffer), &consumed);
+                int more_data = 0;
+                int is_pure_ack = 1;
+                uint8_t* bytes_next = picoquic_format_new_connection_id_frame(cnx, frame_buffer, frame_buffer + sizeof(frame_buffer),
+                    &more_data, &is_pure_ack, local_cid);
 
-                if (ret != 0) {
+                consumed = bytes_next - frame_buffer;
+
+                if (consumed == 0) {
+                    ret = -1;
                     DBG_PRINTF("Cannot encode new connection ID frame, ret = %x\n", ret);
                 }
             }
@@ -1720,7 +1725,6 @@ int send_stream_blocked_test_one(const struct st_stream_blocked_test_t * test)
     picoquic_cnx_t * cnx = NULL;
     struct sockaddr_storage addr;
     picoquic_stream_head_t* stream = NULL;
-    size_t consumed = 0;
 
     if (quic == NULL) {
         ret = -1;
@@ -1770,7 +1774,17 @@ int send_stream_blocked_test_one(const struct st_stream_blocked_test_t * test)
         }
         if (ret == 0) {
             /* Call the blocked frame API */
-            ret = picoquic_prepare_one_blocked_frame(cnx, bytes, sizeof(bytes), stream, &consumed);
+            uint8_t* bytes_next;
+            int is_pure_ack = 1;
+            int more_data = 0;
+
+            bytes_next = picoquic_format_one_blocked_frame(cnx, bytes, bytes + sizeof(bytes), &more_data, &is_pure_ack, stream);
+
+            if (bytes_next != bytes && (is_pure_ack || more_data)) {
+                DBG_PRINTF("Error formatting blocked frames, stream: %" PRIu64", length: %zu, more: %d, pure ack: %d",
+                    test->stream_id, bytes_next - bytes, more_data, is_pure_ack);
+                ret = -1;
+            }
         }
 
         if (ret == 0 &&
