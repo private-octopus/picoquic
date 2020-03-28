@@ -526,7 +526,7 @@ static int test_api_callback(picoquic_cnx_t* cnx,
                         }
                         else if (cb_ctx->error_detected == 0) {
                             /* send a response */
-                            if (picoquic_add_to_stream(ctx->cnx_server, stream_id,
+                            if (picoquic_add_to_stream(cnx, stream_id,
                                 ctx->test_stream[stream_index].r_src,
                                 ctx->test_stream[stream_index].r_len, 1)
                                 != 0) {
@@ -554,7 +554,7 @@ static int test_api_callback(picoquic_cnx_t* cnx,
                         }
                         else if (cb_ctx->error_detected == 0) {
                             /* send a response */
-                            if (picoquic_add_to_stream(ctx->cnx_client, stream_id,
+                            if (picoquic_add_to_stream(cnx, stream_id,
                                 ctx->test_stream[stream_index].r_src,
                                 ctx->test_stream[stream_index].r_len, 1)
                                 != 0) {
@@ -2497,7 +2497,7 @@ int session_resume_test()
 /*
  * Zero RTT test. Like the session resume test, but with a twist...
  */
-int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss, unsigned int no_coal)
+int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss, unsigned int no_coal, unsigned int long_data)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -2532,8 +2532,30 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss, unsi
             test_ctx->c_to_s_link->microsec_latency = 50000ull;
             test_ctx->s_to_c_link->microsec_latency = 50000ull;
 
-            /* Queue an initial frame on the client connection */
-            (void)picoquic_add_to_stream(test_ctx->cnx_client, 0, test_data, sizeof(test_data), 1);
+            if (long_data) {
+                for (uint64_t x = 0; x <= 16; x++) {
+                    uint64_t stream_id = 4u * x + 4u;
+                    test_ctx->nb_test_streams = x + 1;
+                    if (test_api_init_test_stream(&test_ctx->test_stream[x], stream_id, UINT64_MAX, 256, 32) != 0){
+                        DBG_PRINTF("Could not initialize data for stream %d", (int)stream_id);
+                        ret = -1;
+                    }
+                    /* Queue an initial frame on each stream */
+                    if (picoquic_add_to_stream(test_ctx->cnx_client, stream_id, 
+                        test_ctx->test_stream[x].q_src, test_ctx->test_stream[x].q_len, 1) != 0) {
+                        DBG_PRINTF("Could not write data for stream %d", (int)stream_id);
+                        ret = -1;
+                    }
+                }
+            }
+            else {
+                uint8_t test_data[8] = { 't', 'e', 's', 't', '0', 'r', 't', 't' };
+                /* Queue an initial frame on the client connection */
+                if (picoquic_add_to_stream(test_ctx->cnx_client, 0, test_data, sizeof(test_data), 1) != 0) {
+                    DBG_PRINTF("Could not write data for stream %d", 0);
+                    ret = -1;
+                }
+            }
 
             if (early_loss > 0) {
                 loss_mask = early_loss;
@@ -2603,6 +2625,11 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss, unsi
                         test_ctx->cnx_client->nb_zero_rtt_sent, test_ctx->cnx_server->nb_zero_rtt_received);
                     ret = -1;
                 }
+                else if (long_data && test_ctx->cnx_client->nb_zero_rtt_sent < 3) {
+                    DBG_PRINTF("Zero RTT long test (badcrypt: %d, hard: %d), only %d zero RTT sent.\n",
+                        use_badcrypt, hardreset, (int)test_ctx->cnx_client->nb_zero_rtt_sent);
+                    ret = -1;
+                }
             } else {
                 if (test_ctx->cnx_client->nb_zero_rtt_sent == 0) {
                     DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), no zero RTT sent.\n",
@@ -2651,7 +2678,7 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss, unsi
 
 int zero_rtt_test()
 {
-    return zero_rtt_test_one(0, 0, 0, 0);
+    return zero_rtt_test_one(0, 0, 0, 0, 0);
 }
 
 /*
@@ -2670,7 +2697,7 @@ int zero_rtt_loss_test()
 
     for (unsigned int i = 1; ret == 0 && i < 16; i++) {
         uint64_t early_loss = 1ull << i;
-        ret = zero_rtt_test_one(0, 0, early_loss, 0);
+        ret = zero_rtt_test_one(0, 0, early_loss, 0, 0);
         if (ret != 0) {
             DBG_PRINTF("Zero RTT test fails when packet #%d is lost.\n", i);
         }
@@ -2688,7 +2715,7 @@ int zero_rtt_loss_test()
 
 int zero_rtt_spurious_test()
 {
-    return zero_rtt_test_one(1, 0, 0, 0);
+    return zero_rtt_test_one(1, 0, 0, 0, 0);
 }
 
 /*
@@ -2700,7 +2727,7 @@ int zero_rtt_spurious_test()
 
 int zero_rtt_retry_test()
 {
-    return zero_rtt_test_one(0, 1, 0, 0);
+    return zero_rtt_test_one(0, 1, 0, 0, 0);
 }
 
 /*
@@ -2712,7 +2739,7 @@ int zero_rtt_retry_test()
 
 int zero_rtt_no_coal_test()
 {
-    return zero_rtt_test_one(0, 0, 0, 1);
+    return zero_rtt_test_one(0, 0, 0, 1, 0);
 }
 
 /* Test the robustness of the connection in a zero RTT scenario,
@@ -2737,13 +2764,22 @@ int zero_rtt_many_losses_test()
             }
         }
 
-        ret = zero_rtt_test_one(0, 0, loss_mask, 0);
+        ret = zero_rtt_test_one(0, 0, loss_mask, 0, 0);
         if (ret != 0) {
             DBG_PRINTF("Handshake fails for mask %d, mask = %llx", i, (unsigned long long)loss_mask);
         }
     }
 
     return ret;
+}
+
+/*
+* 0-RTT long test. Verify that the client can send several 0-RTT packets
+*/
+
+int zero_rtt_long_test()
+{
+    return zero_rtt_test_one(0, 0, 0, 0, 1);
 }
 
 /*

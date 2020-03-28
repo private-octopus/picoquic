@@ -119,6 +119,7 @@ int zero_rtt_spurious_test();
 int zero_rtt_retry_test();
 int zero_rtt_no_coal_test();
 int zero_rtt_many_losses_test();
+int zero_rtt_long_test();
 int parse_frame_test();
 int stress_test();
 int splay_test();

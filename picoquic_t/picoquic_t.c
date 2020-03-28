@@ -150,6 +150,7 @@ static const picoquic_test_def_t test_table[] = {
     { "zero_rtt_retry", zero_rtt_retry_test },
     { "zero_rtt_no_coal", zero_rtt_no_coal_test },
     { "zero_rtt_many_losses", zero_rtt_many_losses_test },
+    { "zero_rtt_long", zero_rtt_long_test },
     { "random_tester", random_tester_test},
     { "random_gauss", random_gauss_test},
     { "random_public_tester", random_public_tester_test},
