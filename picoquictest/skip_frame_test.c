@@ -1745,23 +1745,31 @@ int send_stream_blocked_test_one(const struct st_stream_blocked_test_t * test)
             cnx->client_mode = 0;
         }
         if (test->is_id_blocked) {
-            cnx->remote_parameters.initial_max_stream_id_bidir = 0;
+            cnx->remote_parameters.initial_max_stream_id_bidir = 4;
             cnx->remote_parameters.initial_max_stream_id_unidir = 0;
         }
         else {
             cnx->remote_parameters.initial_max_stream_id_bidir = 1024;
             cnx->remote_parameters.initial_max_stream_id_unidir = 1024;
         }
+
+        cnx->max_stream_id_bidir_remote = cnx->remote_parameters.initial_max_stream_id_bidir;
+        cnx->max_stream_id_unidir_remote = cnx->remote_parameters.initial_max_stream_id_unidir;
+
         if (test->is_data_blocked) {
             cnx->remote_parameters.initial_max_stream_data_bidi_local = 0;
             cnx->remote_parameters.initial_max_stream_data_bidi_remote = 0;
             cnx->remote_parameters.initial_max_stream_data_uni = 0;
+            cnx->remote_parameters.initial_max_data = PICOQUIC_DEFAULT_0RTT_WINDOW;
         }
         else {
             cnx->remote_parameters.initial_max_stream_data_bidi_local = 100000;
             cnx->remote_parameters.initial_max_stream_data_bidi_remote = 100000;
             cnx->remote_parameters.initial_max_stream_data_uni = 100000;
+            cnx->remote_parameters.initial_max_data = 1000000;
         }
+        cnx->maxdata_remote = cnx->remote_parameters.initial_max_data;
+
         /* Create the stream so it picks the required parameters */
         stream = picoquic_create_stream(cnx, test->stream_id);
         if (stream != NULL) {
