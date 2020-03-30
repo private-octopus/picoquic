@@ -643,7 +643,7 @@ int packet_enc_dec_test()
         test_addr_c.sin_port = 12345;
 
         cnx_client = picoquic_create_cnx(qclient, picoquic_null_connection_id, picoquic_null_connection_id,
-            (struct sockaddr*)&test_addr_c, 0, 0, NULL, NULL, 1);
+            (struct sockaddr*)&test_addr_c, 0, 0, NULL, PICOQUIC_TEST_ALPN, 1);
         if (cnx_client == NULL) {
             DBG_PRINTF("%s", "Could not create client connection context.\n");
             ret = -1;

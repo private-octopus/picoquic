@@ -1589,6 +1589,12 @@ int picoquic_initialize_tls_stream(picoquic_cnx_t* cnx, uint64_t current_time)
         }
     }
 
+    /* ALPN is mandatory, there should be at least one */
+    if (ret == 0 && ctx->handshake_properties.client.negotiated_protocols.count == 0) {
+        ret = PICOQUIC_ERROR_NO_ALPN_PROVIDED;
+        DBG_PRINTF("No ALPN provided, error 0x%x", ret);
+    }
+
     if (cnx->quic->F_log != NULL) {
         picoquic_log_negotiated_alpn(cnx->quic->F_log, cnx, 0, 1, ctx->handshake_properties.client.negotiated_protocols.list, ctx->handshake_properties.client.negotiated_protocols.count);
     }
@@ -1629,37 +1635,42 @@ int picoquic_initialize_tls_stream(picoquic_cnx_t* cnx, uint64_t current_time)
         ctx->handshake_properties.client.negotiate_before_key_exchange = 0;
     }
 
-    picoquic_tls_set_extensions(cnx, ctx);
+    if (ret != 0) {
+        DBG_PRINTF("Could not set up TLS parameters, error 0x%x, abandoning connection", ret);
+        cnx->cnx_state = picoquic_state_disconnected;
+    } else {
+        picoquic_tls_set_extensions(cnx, ctx);
 
-    ptls_buffer_init(&sendbuf, "", 0);
+        ptls_buffer_init(&sendbuf, "", 0);
 
-    /* Clearing the global error state of openssl before calling handle message.
-     * This allows detection of errors during processing. */
-    ERR_clear_error(); 
-    ret = ptls_handle_message(ctx->tls, &sendbuf, epoch_offsets, 0, NULL, 0, &ctx->handshake_properties);
+        /* Clearing the global error state of openssl before calling handle message.
+         * This allows detection of errors during processing. */
+        ERR_clear_error();
+        ret = ptls_handle_message(ctx->tls, &sendbuf, epoch_offsets, 0, NULL, 0, &ctx->handshake_properties);
 
-    /* assume that all the data goes to epoch 0, initial */
-    if ((ret == 0 || ret == PTLS_ERROR_IN_PROGRESS)) {
+        /* assume that all the data goes to epoch 0, initial */
+        if ((ret == 0 || ret == PTLS_ERROR_IN_PROGRESS)) {
 #ifdef PTLS_ESNI_NONCE_SIZE
-        /* Find the ESNI secret if any, and copy key values to picoquic tls context */
-        struct st_ptls_esni_secret_t * esni = ptls_get_esni_secret(ctx->tls);
-        if (esni != NULL) {
-            ctx->esni_version = esni->version;
-            memcpy(ctx->esni_nonce, esni->nonce, PTLS_ESNI_NONCE_SIZE);
-        }
+            /* Find the ESNI secret if any, and copy key values to picoquic tls context */
+            struct st_ptls_esni_secret_t* esni = ptls_get_esni_secret(ctx->tls);
+            if (esni != NULL) {
+                ctx->esni_version = esni->version;
+                memcpy(ctx->esni_nonce, esni->nonce, PTLS_ESNI_NONCE_SIZE);
+            }
 #endif
-        if (sendbuf.off > 0) {
-            ret = picoquic_add_to_tls_stream(cnx, sendbuf.base, sendbuf.off, 0);
+            if (sendbuf.off > 0) {
+                ret = picoquic_add_to_tls_stream(cnx, sendbuf.base, sendbuf.off, 0);
+            }
+            else {
+                ret = 0;
+            }
         }
         else {
-            ret = 0;
+            picoquic_log_openssl_errors(cnx, ret);
+            ret = -1;
         }
-    } else {
-        picoquic_log_openssl_errors(cnx, ret);
-        ret = -1;
+        ptls_buffer_dispose(&sendbuf);
     }
-
-    ptls_buffer_dispose(&sendbuf);
 
     return ret;
 }
