@@ -210,6 +210,7 @@ int ddos_amplification_test();
 int blackhole_test();
 int no_ack_frequency_test();
 int connection_drop_test();
+int pacing_update_test();
 
 int demo_file_sanitize_test();
 int demo_file_access_test();
@@ -220,11 +221,6 @@ int h09_lone_fin_test();
 int http_stress_test();
 int http_esni_test();
 int h3_long_file_name_test();
-
-int qinq_rh_test();
-int qinq_incoming_datagram_parse_test();
-int qinq_address_table_test();
-int qinq_e2e_basic_test();
 
 #ifdef __cplusplus
 }

@@ -454,6 +454,16 @@ static int test_api_callback(picoquic_cnx_t* cnx,
         }
     }
 
+    if (fin_or_event == picoquic_callback_pacing_changed)
+    {
+        if (ctx->bw_update != NULL) {
+            fprintf(ctx->bw_update, "%" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 "\n",
+                picoquic_get_quic_time(cnx->quic), stream_id, picoquic_get_pacing_rate(cnx),
+                picoquic_get_cwin(cnx), picoquic_get_rtt(cnx));
+        }
+        return 0;
+    }
+
     if (bytes != NULL) {
         if (cb_ctx->client_mode) {
             ctx->sum_data_received_at_client += (int) length;
@@ -481,7 +491,6 @@ static int test_api_callback(picoquic_cnx_t* cnx,
             ctx->test_finished = 1;
         }
     } else {
-
         for (stream_index = 0; stream_index < ctx->nb_test_streams; stream_index++) {
             if (ctx->test_stream[stream_index].stream_id == stream_id) {
                 break;
@@ -733,6 +742,10 @@ static int verify_version(picoquic_cnx_t* cnx_client, picoquic_cnx_t* cnx_server
 
 void tls_api_delete_ctx(picoquic_test_tls_api_ctx_t* test_ctx)
 {
+    if (test_ctx->bw_update != NULL) {
+        (void)picoquic_file_close(test_ctx->bw_update);
+    }
+
     if (test_ctx->qclient != NULL) {
         picoquic_free(test_ctx->qclient);
     }
@@ -7798,6 +7811,70 @@ int connection_drop_test()
         ret = connection_drop_test_one(c_state, s_state, target_is_client[i]);
         if (ret == -1) {
             DBG_PRINTF("connection drop test %d fails", i);
+        }
+    }
+
+    return ret;
+}
+
+/* testing the pacing rate update function and the congestion
+ * control parameter assessors.
+ */
+
+#ifdef _WINDOWS
+#define PACING_RATE_TEST_REF "picoquictest\\pacing_rate_ref.txt"
+#else
+#define PACING_RATE_TEST_REF "picoquictest/pacing_rate_ref.txt"
+#endif
+#define PACING_RATE_CSV "pacing_rate.csv"
+
+
+int pacing_update_test()
+{
+    uint64_t simulated_time = 0;
+
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+    if (ret == 0) {
+        /* Open a file to log bandwidth updates and document it in context */
+        test_ctx->bw_update = picoquic_file_open(PACING_RATE_CSV, "w");
+        if (test_ctx->bw_update == NULL) {
+            DBG_PRINTF("Could not write file <%s>", PACING_RATE_CSV);
+        }
+    }
+
+    if (ret == 0){
+        fprintf(test_ctx->bw_update, "Time, Stream_ID, Pacing_rate, CWIN, RTT\n");
+        /* Request bandwidth updates */
+        picoquic_subscribe_pacing_rate_updates(test_ctx->cnx_client, 0x8000, 0x10000);
+
+        /* Start a standard scenario, pushing 1MB from the client*/
+        ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+            test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 1000000, 0, 0, 20000, 3600000);
+    }
+
+    /* Free the test contex, which closes the trace file  */
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    /* compare the trace to the expected value */
+    if (ret == 0)
+    {
+        char pacing_rate_ref[512];
+
+        ret = picoquic_get_input_path(pacing_rate_ref, sizeof(pacing_rate_ref), picoquic_solution_dir, PACING_RATE_TEST_REF);
+
+        if (ret != 0) {
+            DBG_PRINTF("%s", "Cannot set the pacing rate test ref file name.\n");
+        }
+        else {
+            ret = picoquic_test_compare_text_files(PACING_RATE_CSV, pacing_rate_ref);
         }
     }
 

@@ -360,7 +360,7 @@ static void picoquic_cubic_notify(
         }
 
         /* Compute pacing data */
-        picoquic_update_pacing_data(path_x);
+        picoquic_update_pacing_data(cnx, path_x);
     }
 }
 
@@ -551,7 +551,7 @@ static void picoquic_dcubic_notify(
         }
 
         /* Compute pacing data */
-        picoquic_update_pacing_data(path_x);
+        picoquic_update_pacing_data(cnx, path_x);
     }
 }
 

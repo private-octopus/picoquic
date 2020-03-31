@@ -751,12 +751,15 @@ typedef struct st_picoquic_path_t {
 
     /*
     * Pacing uses a set of per path variables:
+    * - pacing_rate: bytes per second.
     * - pacing_evaluation_time: last time the path was evaluated.
     * - pacing_bucket_nanosec: number of nanoseconds of transmission time that are allowed.
     * - pacing_bucket_max: maximum value (capacity) of the leaky bucket.
     * - pacing_packet_time_nanosec: number of nanoseconds required to send a full size packet.
     * - pacing_packet_time_microsec: max of (packet_time_nano_sec/1024, 1) microsec.
     */
+
+    uint64_t pacing_rate;
     uint64_t pacing_evaluation_time;
     uint64_t pacing_bucket_nanosec;
     uint64_t pacing_bucket_max;
@@ -897,6 +900,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int is_ack_frequency_updated : 1; /* Should send an ack frequency frame asap. */
     unsigned int recycle_sooner_needed : 1; /* There may be a need to recycle "sooner" packets */
     unsigned int is_time_stamp_enabled : 1; /* Add time stamp before acks, read on incoming */
+    unsigned int is_pacing_update_requested : 1; /* Whether the application subscribed to pacing updates */
 
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;
@@ -981,6 +985,9 @@ typedef struct st_picoquic_cnx_t {
 
     /* Congestion algorithm */
     picoquic_congestion_algorithm_t const* congestion_alg;
+    uint64_t pacing_rate_signalled;
+    uint64_t pacing_increase_threshold;
+    uint64_t pacing_decrease_threshold;
 
     /* Flow control information */
     uint64_t data_sent;
@@ -1111,9 +1118,9 @@ picoquic_cnx_t* picoquic_cnx_by_icid(picoquic_quic_t* quic, picoquic_connection_
 picoquic_cnx_t* picoquic_cnx_by_secret(picoquic_quic_t* quic, uint8_t* reset_secret, struct sockaddr* addr);
 
 /* Reset the pacing data after CWIN is updated */
-void picoquic_update_pacing_data(picoquic_path_t * path_x);
+void picoquic_update_pacing_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x);
 /* Reset pacing data if congestion algorithm computes it directly */
-void picoquic_update_pacing_rate(picoquic_path_t* path_x, double pacing_rate, uint64_t quantum);
+void picoquic_update_pacing_rate(picoquic_cnx_t* cnx, picoquic_path_t* path_x, double pacing_rate, uint64_t quantum);
 
 /* Next time is used to order the list of available connections,
         * so ready connections are polled first */
