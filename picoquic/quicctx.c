@@ -3090,6 +3090,28 @@ void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_
     }
 }
 
+void picoquic_subscribe_pacing_rate_updates(picoquic_cnx_t* cnx, uint64_t decrease_threshold, uint64_t increase_threshold)
+{
+    cnx->pacing_decrease_threshold = decrease_threshold;
+    cnx->pacing_increase_threshold = increase_threshold;
+    cnx->is_pacing_update_requested = (decrease_threshold != UINT64_MAX || increase_threshold != UINT64_MAX);
+}
+
+uint64_t picoquic_get_pacing_rate(picoquic_cnx_t* cnx)
+{
+    return cnx->path[0]->pacing_rate;
+}
+
+uint64_t picoquic_get_cwin(picoquic_cnx_t* cnx)
+{
+    return cnx->path[0]->cwin;
+}
+
+uint64_t picoquic_get_rtt(picoquic_cnx_t* cnx)
+{
+    return cnx->path[0]->smoothed_rtt;
+}
+
 int picoquic_set_local_addr(picoquic_cnx_t* cnx, struct sockaddr* addr)
 {
     int ret = 0;

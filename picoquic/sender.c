@@ -714,10 +714,12 @@ int picoquic_is_sending_authorized_by_pacing(picoquic_path_t * path_x, uint64_t 
 
 /* Reset the pacing data after recomputing the pacing rate
  */
-void picoquic_update_pacing_rate(picoquic_path_t* path_x, double pacing_rate, uint64_t quantum)
+void picoquic_update_pacing_rate(picoquic_cnx_t * cnx, picoquic_path_t* path_x, double pacing_rate, uint64_t quantum)
 {
     double packet_time = (double)path_x->send_mtu / pacing_rate;
     double quantum_time = (double)quantum / pacing_rate;
+
+    path_x->pacing_rate = (uint64_t)pacing_rate;
 
     path_x->pacing_packet_time_nanosec = (uint64_t)(packet_time * 1000000000.0);
 
@@ -741,6 +743,17 @@ void picoquic_update_pacing_rate(picoquic_path_t* path_x, double pacing_rate, ui
     if (path_x->pacing_bucket_nanosec > path_x->pacing_bucket_max) {
         path_x->pacing_bucket_nanosec = path_x->pacing_bucket_max;
     }
+
+    if (cnx->is_pacing_update_requested && path_x == cnx->path[0] &&
+        cnx->callback_fn != NULL) {
+        if ((path_x->pacing_rate > cnx->pacing_rate_signalled &&
+            (path_x->pacing_rate - cnx->pacing_rate_signalled >= cnx->pacing_increase_threshold)) ||
+            (path_x->pacing_rate < cnx->pacing_rate_signalled &&
+            (cnx->pacing_rate_signalled - path_x->pacing_rate > cnx->pacing_decrease_threshold))){
+            (void)cnx->callback_fn(cnx, path_x->pacing_rate, NULL, 0, picoquic_callback_pacing_changed, cnx->callback_ctx, NULL);
+            cnx->pacing_rate_signalled = path_x->pacing_rate;
+        }
+    }
 }
 
 /*
@@ -748,7 +761,7 @@ void picoquic_update_pacing_rate(picoquic_path_t* path_x, double pacing_rate, ui
  * The max bucket is set to contain at least 2 packets more than 1/8th of the congestion window.
  */
 
-void picoquic_update_pacing_data(picoquic_path_t * path_x)
+void picoquic_update_pacing_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x)
 {
     uint64_t rtt_nanosec = path_x->smoothed_rtt * 1000;
 
@@ -773,7 +786,7 @@ void picoquic_update_pacing_data(picoquic_path_t * path_x)
             quantum = 16ull * path_x->send_mtu;
         }
 
-        picoquic_update_pacing_rate(path_x, pacing_rate, quantum);
+        picoquic_update_pacing_rate(cnx, path_x, pacing_rate, quantum);
     }
 }
 

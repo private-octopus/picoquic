@@ -194,7 +194,8 @@ typedef enum {
     picoquic_callback_datagram, /* Datagram frame has been received */
     picoquic_callback_version_negotiation, /* version negotiation requested */
     picoquic_callback_request_alpn_list, /* Provide the list of supported ALPN */
-    picoquic_callback_set_alpn /* Set ALPN to negotiated value */
+    picoquic_callback_set_alpn, /* Set ALPN to negotiated value */
+    picoquic_callback_pacing_changed /* Pacing rate for the connection changed */
 } picoquic_call_back_event_t;
 
 typedef struct st_picoquic_tp_prefered_address_t {
@@ -741,6 +742,34 @@ void picoquic_set_default_congestion_algorithm(picoquic_quic_t* quic, picoquic_c
 void picoquic_set_default_congestion_algorithm_by_name(picoquic_quic_t* quic, char const* alg_name);
 
 void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_algorithm_t const* algo);
+
+/* Bandwidth update and congestion control parameters value.
+ * Congestion control in picoquic is characterized by three values:
+ * - pacing rate, expressed in bytes per second (for example, 10Mbps would be noted as 1250000)
+ * - congestion window, expressed in bytes
+ * - RTT, expressed in microseconds
+ * 
+ * If an application subscribes to pacing rate updates, it will start receiving callback events
+ * of type "picoquic_callback_pacing_changed". The subscription to the updates specifies
+ * two levels:
+ * - decrease threshold, in bytes per second
+ * - increase threshold, in bytes per second
+ * An event will be generated each time the bandwidth increases or decreases by a value
+ * larger than the specified threshold. The "stream_id" parameter of the callback will 
+ * indicate the new pacing rate, in bytes per second.
+ *
+ * By default, the threshold values are set to UINT64_MAX, and no event is generated.
+ * 
+ * Applications may also use a set of accessor functions to obtain the current values
+ * of the key congestion control parameters, for the currently selected transmission
+ * path.
+ */
+
+void picoquic_subscribe_pacing_rate_updates(picoquic_cnx_t* cnx, uint64_t decrease_threshold, uint64_t increase_threshold);
+uint64_t picoquic_get_pacing_rate(picoquic_cnx_t* cnx);
+uint64_t picoquic_get_cwin(picoquic_cnx_t* cnx);
+uint64_t picoquic_get_rtt(picoquic_cnx_t* cnx);
+
 
 
 #ifdef __cplusplus
