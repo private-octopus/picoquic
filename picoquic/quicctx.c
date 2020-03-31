@@ -2055,17 +2055,6 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         cnx->max_stream_id_unidir_local = cnx->local_parameters.initial_max_stream_id_unidir;
         cnx->max_stream_id_unidir_local_computed = STREAM_TYPE_FROM_ID(cnx->local_parameters.initial_max_stream_id_unidir);
 
-        /* Initialize remote variables to some plausible value. 
-		 * Hopefully, this will be overwritten by the parameters received in
-		 * the TLS transport parameter extension */
-#if 0
-        cnx->maxdata_remote = PICOQUIC_DEFAULT_0RTT_WINDOW;
-        cnx->remote_parameters.initial_max_stream_data_bidi_remote = PICOQUIC_DEFAULT_0RTT_WINDOW;
-        cnx->remote_parameters.initial_max_stream_data_uni = PICOQUIC_DEFAULT_0RTT_WINDOW;
-        cnx->max_stream_id_bidir_remote = (cnx->client_mode) ? 4 : 0;
-        cnx->max_stream_id_unidir_remote = (cnx->client_mode) ? 10 : 0;
-#endif
-
         /* Initialize padding policy to default for context */
         cnx->padding_multiple = quic->padding_multiple_default;
         cnx->padding_minsize = quic->padding_minsize_default;
@@ -2718,7 +2707,7 @@ void picoquic_reset_packet_context(picoquic_cnx_t* cnx,
 }
 
 /*
-* Reset the version to a new supported value.
+* Reset the connection after an incoming retry packet.
 *
 * Can only happen after sending the client init packet.
 * Result of reset:

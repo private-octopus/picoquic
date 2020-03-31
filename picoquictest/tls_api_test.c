@@ -1644,9 +1644,24 @@ int tls_api_sni_test()
     return tls_api_test_with_loss(NULL, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN);
 }
 
+/* The ALPN test checks that the connection fails if no ALPN is specified.
+ */
+
 int tls_api_alpn_test()
 {
-    return tls_api_test_with_loss(NULL, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN);
+    int ret = tls_api_test_with_loss(NULL, 0, PICOQUIC_TEST_SNI, NULL);
+
+    if (ret == PICOQUIC_ERROR_NO_ALPN_PROVIDED) {
+        ret = 0;
+    } else if (ret == 0) {
+        DBG_PRINTF("ALPN test succeeds while no ALPN is specified, ret = 0x%x", ret);
+        ret = -1;
+    }
+    else {
+        DBG_PRINTF("ALPN test does not return expected error code, ret = 0x%x", ret);
+        ret = -1;
+    }
+    return ret;
 }
 
 int tls_api_wrong_alpn_test()

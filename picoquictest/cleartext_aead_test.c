@@ -435,7 +435,7 @@ int cleartext_pn_enc_test()
         qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL, NULL,
             NULL, NULL, NULL, 0, NULL, NULL, NULL, 0);
         qserver = picoquic_create(8, test_server_cert_file, test_server_key_file,
-            NULL, "test", NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, 0);
+            NULL, PICOQUIC_TEST_ALPN, NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, 0);
         if (qclient == NULL || qserver == NULL) {
             DBG_PRINTF("%s", "Could not create Quic contexts.\n");
             ret = -1;
@@ -449,7 +449,7 @@ int cleartext_pn_enc_test()
         test_addr_c.sin_port = 12345;
 
         cnx_client = picoquic_create_cnx(qclient, picoquic_null_connection_id, picoquic_null_connection_id,
-            (struct sockaddr*)&test_addr_c, 0, 0, NULL, NULL, 1);
+            (struct sockaddr*)&test_addr_c, 0, 0, NULL, PICOQUIC_TEST_ALPN, 1);
         if (cnx_client == NULL) {
             DBG_PRINTF("%s", "Could not create client connection context.\n");
             ret = -1;
