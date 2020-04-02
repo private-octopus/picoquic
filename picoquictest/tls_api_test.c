@@ -218,6 +218,12 @@ static void test_api_delete_test_stream(test_api_stream_t* test_stream)
         free(test_stream->r_rcv);
     }
 
+    while (test_stream->first_direct_hole != NULL) {
+        test_api_stream_hole_t* deleted = test_stream->first_direct_hole;
+        test_stream->first_direct_hole = test_stream->first_direct_hole->next_hole;
+        free(deleted);
+    }
+
     memset(test_stream, 0, sizeof(test_api_stream_t));
 }
 
@@ -402,6 +408,172 @@ static int test_api_queue_initial_queries(picoquic_test_tls_api_ctx_t* test_ctx,
     } else {
         test_ctx->test_finished = 0;
         test_ctx->streams_finished = 0;
+    }
+
+    return ret;
+}
+
+static int test_api_direct_receive_callback(picoquic_cnx_t* cnx,
+    uint64_t stream_id, int fin, uint8_t* bytes, uint64_t offset, size_t length, void* direct_receive_ctx)
+{
+    int ret = 0;
+    test_api_callback_t* cb_ctx = (test_api_callback_t*)direct_receive_ctx;
+    size_t stream_index;
+    picoquic_test_tls_api_ctx_t* ctx = NULL;
+
+    if (cb_ctx->client_mode) {
+        ctx = (picoquic_test_tls_api_ctx_t*)(((char*)direct_receive_ctx) - offsetof(struct st_picoquic_test_tls_api_ctx_t, client_callback));
+    }
+    else {
+        /* Only testing the direct receive on the client side */
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        for (stream_index = 0; stream_index < ctx->nb_test_streams; stream_index++) {
+            if (ctx->test_stream[stream_index].stream_id == stream_id) {
+                break;
+            }
+        }
+
+        if (stream_index >= ctx->nb_test_streams) {
+            cb_ctx->error_detected |= test_api_fail_data_on_unknown_stream;
+            ret = -1;
+        }
+        else if (offset + length > ctx->test_stream[stream_index].r_len) {
+            cb_ctx->error_detected |= test_api_fail_data_on_unknown_stream;
+            ret = -1;
+        }
+        else {
+            uint64_t last_offset = offset + length;
+            memcpy(ctx->test_stream[stream_index].r_rcv, bytes, length);
+
+            if (memcmp(ctx->test_stream[stream_index].r_src + (size_t)offset, bytes, length) != 0)
+            {
+                cb_ctx->error_detected |= test_api_fail_data_does_not_match;
+                ret = -1;
+            }
+            else if (offset > ctx->test_stream[stream_index].next_direct_offset) {
+                /* Need to create a hole. They are ordered from lowest to highest offset */
+                test_api_stream_hole_t* hole = ctx->test_stream[stream_index].first_direct_hole;
+                test_api_stream_hole_t* previous_hole = NULL;
+                test_api_stream_hole_t* new_hole = (test_api_stream_hole_t*)malloc(sizeof(test_api_stream_hole_t));
+                if (new_hole == NULL) {
+                    ret = PICOQUIC_ERROR_MEMORY;
+                }
+                else {
+                    while (hole != NULL) {
+                        previous_hole = ctx->test_stream[stream_index].first_direct_hole;
+                        hole = previous_hole->next_hole;
+                    }
+                    new_hole->offset = ctx->test_stream[stream_index].next_direct_offset;
+                    new_hole->last_offset = offset;
+                    new_hole->next_hole = NULL;
+                    if (previous_hole == NULL) {
+                        ctx->test_stream[stream_index].first_direct_hole = new_hole;
+                    }
+                    else {
+                        previous_hole->next_hole = new_hole;
+                    }
+                    ctx->test_stream[stream_index].r_recv_nb += length;
+                    ctx->test_stream[stream_index].next_direct_offset = last_offset;
+                }
+            }
+            else {
+                test_api_stream_hole_t* hole = ctx->test_stream[stream_index].first_direct_hole;
+                test_api_stream_hole_t* previous_hole = NULL;
+
+                if (last_offset > ctx->test_stream[stream_index].next_direct_offset) {
+                    /* At least some of the segment comes after the current max offset */
+                    uint64_t new_direct_offset = last_offset;
+                    ctx->test_stream[stream_index].r_recv_nb += (size_t)(last_offset - ctx->test_stream[stream_index].next_direct_offset);
+                    last_offset = ctx->test_stream[stream_index].next_direct_offset;
+                    ctx->test_stream[stream_index].next_direct_offset = new_direct_offset;
+                }
+
+                while (hole != NULL && offset < last_offset) {
+                    test_api_stream_hole_t* next_hole = hole->next_hole;
+                    if (last_offset <= hole->offset) {
+                        /* Segment is entirely covered by previously received data */
+                        offset = last_offset;
+                        break;
+                    }
+                    else if (offset <= hole->offset) {
+                        /* Beginning of segment already received */
+                        offset = hole->offset;
+                    }
+
+                    if (offset <= hole->last_offset) {
+                        if (last_offset >= hole->last_offset) {
+                            /* segment extends past the end of the hole */
+                            uint64_t new_offset = hole->last_offset;
+                            ctx->test_stream[stream_index].r_recv_nb += (size_t)(hole->last_offset - offset);
+                            hole->last_offset = offset;
+                            offset = new_offset;
+                            if (hole->last_offset == hole->offset) {
+                                /* Hole has been filled */
+                                if (previous_hole == NULL) {
+                                    ctx->test_stream[stream_index].first_direct_hole = next_hole;
+                                }
+                                else {
+                                    previous_hole->next_hole = next_hole;
+                                }
+                                free(hole);
+                            }
+                            else {
+                                previous_hole = hole;
+                            }
+                        }
+                        else if (offset == hole->offset) {
+                            /* segment starts at begining of hole */
+                            ctx->test_stream[stream_index].r_recv_nb += (size_t)(last_offset - offset);
+                            offset = last_offset;
+                            hole->offset = last_offset;
+                            previous_hole = hole;
+                        }
+                        else {
+                            /* overlap, need a new hole */
+                            test_api_stream_hole_t* new_hole = (test_api_stream_hole_t*)malloc(sizeof(test_api_stream_hole_t));
+                            if (new_hole == NULL) {
+                                ret = PICOQUIC_ERROR_MEMORY;
+                            }
+                            else {
+                                new_hole->offset = last_offset;
+                                new_hole->last_offset = hole->last_offset;
+                                new_hole->next_hole = hole->next_hole;
+                                hole->last_offset = offset;
+                                hole->next_hole = new_hole;
+                                ctx->test_stream[stream_index].r_recv_nb += (size_t)(last_offset - offset);
+                                offset = last_offset;
+                            }
+                            break;
+                        }
+                    }
+                    else {
+                        previous_hole = hole;
+                    }
+
+                    hole = next_hole;
+                }
+            }
+
+            /* If fin received and no hole, mark received and signal fin */
+            if (fin && ctx->test_stream[stream_index].direct_fin_received == 0) {
+                ctx->test_stream[stream_index].direct_fin_received = fin;
+            }
+
+            if (ctx->test_stream[stream_index].first_direct_hole == NULL && ctx->test_stream[stream_index].direct_fin_received) {
+                ctx->test_stream[stream_index].r_received = 1;
+                ret = PICOQUIC_STREAM_RECEIVE_COMPLETE;
+
+                if (cb_ctx->error_detected == 0) {
+                    /* queue the new queries initiated by that stream */
+                    if (test_api_queue_initial_queries(ctx, stream_id) != 0) {
+                        cb_ctx->error_detected |= test_api_fail_cannot_send_query;
+                    }
+                }
+            }
+        }
     }
 
     return ret;
@@ -1568,11 +1740,11 @@ int tls_api_many_losses()
                 DBG_PRINTF("Handshake fails for mask %d-%d = %llx", i, j, (unsigned long long)loss_mask);
             }
         }
-        for (int j = 8; ret == 0 && j < 11; j++) {
+        for (uint64_t j = 8; ret == 0 && j < 11; j++) {
             loss_mask = (j | (j << 4) | (j << 8))<<i;
             ret = tls_api_loss_test(loss_mask);
             if (ret != 0) {
-                DBG_PRINTF("Handshake fails for mask %d, %d = %llx", i, j,  (unsigned long long)loss_mask);
+                DBG_PRINTF("Handshake fails for mask %d, %" PRIu64" = %llx", i, j,  (unsigned long long)loss_mask);
             }
         }
     }
@@ -7680,7 +7852,7 @@ int no_ack_frequency_test()
         picoquic_init_transport_parameters(&client_parameters, 1);
         picoquic_init_transport_parameters(&server_parameters, 0);
 
-        client_parameters.min_ack_delay = (1-(i & 1))*1000;
+        client_parameters.min_ack_delay = ((uint64_t)(1u-(i & 1)))*1000u;
         server_parameters.enable_loss_bit = (1 - ((i > 1) & 1))*1000;
 
         ret = tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0, 128, 0, 0, 0, 2000000, &client_parameters, &server_parameters);
@@ -7844,17 +8016,17 @@ int pacing_update_test()
         test_ctx->bw_update = picoquic_file_open(PACING_RATE_CSV, "w");
         if (test_ctx->bw_update == NULL) {
             DBG_PRINTF("Could not write file <%s>", PACING_RATE_CSV);
+            ret = -1;
         }
-    }
+        else {
+            fprintf(test_ctx->bw_update, "Time, Stream_ID, Pacing_rate, CWIN, RTT\n");
+            /* Request bandwidth updates */
+            picoquic_subscribe_pacing_rate_updates(test_ctx->cnx_client, 0x8000, 0x10000);
 
-    if (ret == 0){
-        fprintf(test_ctx->bw_update, "Time, Stream_ID, Pacing_rate, CWIN, RTT\n");
-        /* Request bandwidth updates */
-        picoquic_subscribe_pacing_rate_updates(test_ctx->cnx_client, 0x8000, 0x10000);
-
-        /* Start a standard scenario, pushing 1MB from the client*/
-        ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
-            test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 1000000, 0, 0, 20000, 3600000);
+            /* Start a standard scenario, pushing 1MB from the client*/
+            ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+                test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 1000000, 0, 0, 20000, 3600000);
+        }
     }
 
     /* Free the test contex, which closes the trace file  */
@@ -7876,6 +8048,67 @@ int pacing_update_test()
         else {
             ret = picoquic_test_compare_text_files(PACING_RATE_CSV, pacing_rate_ref);
         }
+    }
+
+    return ret;
+}
+
+/* Test the direct receive API
+ */
+
+int direct_receive_test()
+{
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    uint64_t loss_mask = 8;
+    uint64_t max_completion_microsec = 3500000;
+
+    ret = tls_api_one_scenario_init(&test_ctx, &simulated_time,
+        0, NULL, NULL);
+
+    if (ret == 0) {
+        int ret = tls_api_one_scenario_body_connect(test_ctx, &simulated_time, 0, 0, 0);
+
+        /* Prepare to send data */
+        if (ret == 0) {
+            test_ctx->stream0_target = 0;
+            ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_very_long, sizeof(test_scenario_very_long));
+
+            if (ret != 0)
+            {
+                DBG_PRINTF("Init send receive scenario returns %d\n", ret);
+            }
+        }
+
+        /* Set the direct receive API for the stream number 4. */
+        if (ret == 0) {
+            ret = picoquic_mark_direct_receive_stream(test_ctx->cnx_client, 4, test_api_direct_receive_callback, (void*)&test_ctx->client_callback);
+
+            if (ret != 0)
+            {
+                DBG_PRINTF("Mark direct receive stream returns %d\n", ret);
+            }
+        }
+
+        /* Perform a data sending loop */
+        if (ret == 0) {
+            ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 0);
+
+            if (ret != 0)
+            {
+                DBG_PRINTF("Data sending loop returns %d\n", ret);
+            }
+        }
+
+        if (ret == 0) {
+            ret = tls_api_one_scenario_body_verify(test_ctx, &simulated_time, max_completion_microsec);
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
     }
 
     return ret;

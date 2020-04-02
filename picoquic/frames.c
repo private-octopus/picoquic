@@ -805,16 +805,17 @@ static int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id
     if ((stream = picoquic_find_or_create_stream(cnx, stream_id, 1)) == NULL) {
         if (stream_id < cnx->next_stream_id[STREAM_TYPE_FROM_ID(stream_id)]) {
             return 0;
-        } else {
+        }
+        else {
             ret = 1;  // Error already signaled
         }
-    } else if (stream->fin_received) {
-
+    }
+    else if (stream->fin_received) {
         if (fin != 0 ? stream->fin_offset != new_fin_offset : new_fin_offset > stream->fin_offset) {
             ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FINAL_OFFSET_ERROR, 0);
         }
-
-    } else {
+    }
+    else {
         if (fin) {
             stream->fin_received = 1;
             should_notify = 1;
@@ -827,23 +828,45 @@ static int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id
         }
     }
 
-    if (ret == 0) {
-        int new_data_available = 0;
+    /* If the application provided a direct receive callback, it wil receive the data as they
+     * arrive. If not, the data segments are organized in a splay and passed to the
+     * application in strict order.
+     */
 
-        ret = picoquic_queue_network_input(&stream->stream_data_tree, stream->consumed_offset,
-            offset, bytes, length, &new_data_available);
-        if (ret != 0) {
-            ret = picoquic_connection_error(cnx, (int16_t)ret, 0);
-        } else if (new_data_available) {
-            should_notify = 1;
-            cnx->latest_progress_time = current_time;
+    if (ret == 0) {
+        if (stream->direct_receive_fn != NULL) {
+            ret = stream->direct_receive_fn(cnx, stream_id, fin, bytes, offset, length, stream->direct_receive_ctx);
+            if (ret == PICOQUIC_STREAM_RECEIVE_COMPLETE && stream->fin_received) {
+                stream->fin_signalled = 1;
+                ret = 0;
+            }
+            else if (ret != 0) {
+                int err = (ret >= PICOQUIC_ERROR_CLASS) ? PICOQUIC_TRANSPORT_INTERNAL_ERROR : ret;
+                ret = picoquic_connection_error(cnx, (uint16_t)err, 0);
+            }
+        }
+        else {
+            int new_data_available = 0;
+
+            ret = picoquic_queue_network_input(&stream->stream_data_tree, stream->consumed_offset,
+                offset, bytes, length, &new_data_available);
+            if (ret != 0) {
+                ret = picoquic_connection_error(cnx, (int16_t)ret, 0);
+            }
+            else if (new_data_available) {
+                should_notify = 1;
+                cnx->latest_progress_time = current_time;
+            }
+
+            if (ret == 0 && should_notify != 0 && cnx->callback_fn != NULL) {
+                /* check how much data there is to send */
+                picoquic_stream_data_callback(cnx, stream);
+            }
         }
     }
 
-    if (ret == 0 && should_notify != 0 && cnx->callback_fn != NULL) {
-        /* check how much data there is to send */
-        picoquic_stream_data_callback(cnx, stream);
-    }
+    /* Either the direct receive or the data queueing can set the "fin_signalled" bit when all data expected
+     * on the stream has been received. The stream can be closed when all data is sent and received */
 
     if (ret == 0) {
         int is_deleted = 0;

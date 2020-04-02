@@ -201,6 +201,7 @@ static const picoquic_test_def_t test_table[] = {
     { "send_stream_blocked", send_stream_blocked_test },
     { "queue_network_input", queue_network_input_test },
     { "pacing_update", pacing_update_test },
+    { "direct_receive", direct_receive_test },
     { "stress", stress_test },
     { "fuzz", fuzz_test },
     { "fuzz_initial", fuzz_initial_test}
