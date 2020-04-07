@@ -1211,20 +1211,14 @@ int picoquic_incoming_server_initial(
         cnx->cnx_state = picoquic_state_client_handshake_start;
     }
 
-    int restricted = cnx->cnx_state != picoquic_state_client_handshake_start;
-
     /* Check the server cnx id */
-    if (picoquic_is_connection_id_null(&cnx->path[0]->remote_cnxid) && restricted == 0) {
-        /* On first response from the server, copy the cnx ID and the incoming address */
-        cnx->path[0]->remote_cnxid = ph->srce_cnx_id;
-        picoquic_store_addr(&cnx->path[0]->local_addr, addr_to);
-    }
-    else if (picoquic_compare_connection_id(&cnx->path[0]->remote_cnxid, &ph->srce_cnx_id) != 0) {
+    if ((!picoquic_is_connection_id_null(&cnx->path[0]->remote_cnxid) || cnx->cnx_state > picoquic_state_client_handshake_start) &&
+        picoquic_compare_connection_id(&cnx->path[0]->remote_cnxid, &ph->srce_cnx_id) != 0) {
         ret = PICOQUIC_ERROR_CNXID_CHECK; /* protocol error */
     }
 
     if (ret == 0) {
-        if (cnx->cnx_state < picoquic_state_client_handshake_progress) {
+        if (cnx->cnx_state <= picoquic_state_client_handshake_start) {
             /* Accept the incoming frames */
             if (ph->payload_length == 0) {
                 /* empty payload! */
@@ -1236,7 +1230,7 @@ int picoquic_incoming_server_initial(
             }
 
             /* processing of initial packet */
-            if (ret == 0 && restricted == 0) {
+            if (ret == 0) {
                 ret = picoquic_tls_stream_process(cnx);
             }
         }
@@ -1267,8 +1261,7 @@ int picoquic_incoming_server_handshake(
     UNREFERENCED_PARAMETER(addr_to);
     UNREFERENCED_PARAMETER(if_index_to);
 #endif
-
-    int restricted = cnx->cnx_state != picoquic_state_client_handshake_start && cnx->cnx_state != picoquic_state_client_handshake_progress;
+    int restricted = cnx->cnx_state != picoquic_state_client_handshake_start;
     
     if (picoquic_compare_connection_id(&cnx->path[0]->remote_cnxid, &ph->srce_cnx_id) != 0) {
         ret = PICOQUIC_ERROR_CNXID_CHECK; /* protocol error */

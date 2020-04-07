@@ -1921,9 +1921,6 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
     case picoquic_state_client_handshake_start:
         retransmit_possible = 1;
         break;
-    case picoquic_state_client_handshake_progress:
-        retransmit_possible = 1;
-        break;
     case picoquic_state_client_almost_ready:
         break;
     default:
@@ -3328,7 +3325,6 @@ int picoquic_prepare_segment(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoq
         case picoquic_state_client_init_resent:
         case picoquic_state_client_renegotiate:
         case picoquic_state_client_handshake_start:
-        case picoquic_state_client_handshake_progress:
         case picoquic_state_client_almost_ready:
             ret = picoquic_prepare_packet_client_init(cnx, path_x, packet, current_time, send_buffer, send_buffer_max, send_length, next_wake_time, is_initial_sent);
             break;

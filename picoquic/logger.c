@@ -199,9 +199,6 @@ char const* picoquic_log_state_name(picoquic_state_enum state)
     case picoquic_state_client_handshake_start: 
         state_name = "client_handshake_start"; 
         break;
-    case picoquic_state_client_handshake_progress: 
-        state_name = "client_handshake_progress"; 
-        break;
     case picoquic_state_client_almost_ready: 
         state_name = "client_almost_ready";
         break;
