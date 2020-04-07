@@ -1055,16 +1055,15 @@ void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet_t
 static uint64_t picoquic_current_retransmit_timer(picoquic_cnx_t* cnx, picoquic_packet_context_enum pc)
 {
     uint64_t rto = cnx->path[0]->retransmit_timer;
-    
-    if (rto != PICOQUIC_INITIAL_RETRANSMIT_TIMER) {
-        rto <<= cnx->pkt_ctx[pc].nb_retransmit;
-        if (rto > PICOQUIC_MAX_RETRANSMIT_TIMER) {
-            rto = PICOQUIC_MAX_RETRANSMIT_TIMER;
+
+    rto <<= cnx->pkt_ctx[pc].nb_retransmit;
+    if (cnx->cnx_state < picoquic_state_ready) {
+        if (rto > PICOQUIC_INITIAL_MAX_RETRANSMIT_TIMER) {
+            rto = PICOQUIC_INITIAL_MAX_RETRANSMIT_TIMER;
         }
-        else if (cnx->cnx_state < picoquic_state_ready &&
-            cnx->pkt_ctx[pc].nb_retransmit > 6 && rto < PICOQUIC_INITIAL_RETRANSMIT_TIMER) {
-            rto = PICOQUIC_INITIAL_RETRANSMIT_TIMER;
-        }
+    }
+    else if (rto > PICOQUIC_MAX_RETRANSMIT_TIMER) {
+        rto = PICOQUIC_MAX_RETRANSMIT_TIMER;
     }
 
     return rto;
@@ -1413,7 +1412,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                     if (old_path != NULL) {
                         old_path->nb_losses_found++;
 
-                        if (cnx->congestion_alg != NULL) {
+                        if (cnx->congestion_alg != NULL && cnx->cnx_state >= picoquic_state_ready) {
                             cnx->congestion_alg->alg_notify(cnx, old_path,
                                 (timer_based_retransmit == 0) ? picoquic_congestion_notification_repeat : picoquic_congestion_notification_timeout,
                                 0, 0, 0, lost_packet_number, current_time);
@@ -1775,22 +1774,21 @@ void picoquic_implicit_handshake_ack(picoquic_cnx_t* cnx, picoquic_packet_contex
 {
     picoquic_packet_t* p = cnx->pkt_ctx[pc].retransmit_oldest;
 
+    if (p != NULL && cnx->path[0]->smoothed_rtt == PICOQUIC_INITIAL_RTT && cnx->path[0]->rtt_variant == 0) {
+        picoquic_update_path_rtt(cnx, cnx->path[0], cnx->start_time, current_time, 0);
+    }
+
     /* Remove packets from the retransmit queue */
     while (p != NULL) {
         picoquic_packet_t* p_next = p->next_packet;
         picoquic_path_t * old_path = p->send_path;
 
-        /* Update the congestion control state for the path */
-        if (old_path != NULL) {
-            if (old_path->smoothed_rtt == PICOQUIC_INITIAL_RTT && old_path->rtt_variant == 0) {
-                picoquic_update_path_rtt(cnx, old_path, p->send_time, current_time, 0);
-            }
-
-            if (cnx->congestion_alg != NULL) {
-                cnx->congestion_alg->alg_notify(cnx, old_path,
-                    picoquic_congestion_notification_acknowledgement,
-                    0, 0, p->length, 0, current_time);
-            }
+        /* Update the congestion control state for the path, but only for the packets sent
+         * before the initial timer. */
+        if (old_path != NULL && cnx->congestion_alg != NULL && p->send_time < cnx->start_time + PICOQUIC_INITIAL_RTT) {
+            cnx->congestion_alg->alg_notify(cnx, old_path,
+                picoquic_congestion_notification_acknowledgement,
+                0, 0, p->length, 0, current_time);
         }
         /* Update the number of bytes in transit and remove old packet from queue */
         /* The packet will not be placed in the "retransmitted" queue */

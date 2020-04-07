@@ -1126,8 +1126,8 @@ void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_
     if (!cnx->path[path_index]->path_is_demoted) {
         uint64_t demote_timer = cnx->path[path_index]->retransmit_timer;
 
-        if (demote_timer < PICOQUIC_INITIAL_RETRANSMIT_TIMER) {
-            demote_timer = PICOQUIC_INITIAL_RETRANSMIT_TIMER;
+        if (demote_timer < PICOQUIC_INITIAL_MAX_RETRANSMIT_TIMER) {
+            demote_timer = PICOQUIC_INITIAL_MAX_RETRANSMIT_TIMER;
         }
 
         cnx->path[path_index]->path_is_demoted = 1;
