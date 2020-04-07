@@ -57,6 +57,12 @@ typedef struct st_test_api_stream_desc_t {
     size_t r_len;
 } test_api_stream_desc_t;
 
+typedef struct st_test_api_stream_hole_t {
+    struct st_test_api_stream_hole_t* next_hole;
+    uint64_t offset;
+    uint64_t last_offset;
+} test_api_stream_hole_t;
+
 typedef struct st_test_api_stream_t {
     uint64_t stream_id;
     uint64_t previous_stream_id;
@@ -68,6 +74,9 @@ typedef struct st_test_api_stream_t {
     size_t q_recv_nb;
     size_t r_len;
     size_t r_recv_nb;
+    uint64_t next_direct_offset;
+    struct st_test_api_stream_hole_t* first_direct_hole;
+    int direct_fin_received;
     uint8_t* q_src;
     uint8_t* q_rcv;
     uint8_t* r_src;

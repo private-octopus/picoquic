@@ -1140,6 +1140,11 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(direct_receive) {
+            int ret = direct_receive_test();
+
+            Assert::AreEqual(ret, 0);
+        }
 
         TEST_METHOD(stress)
         {

@@ -80,6 +80,8 @@ extern "C" {
 #define PICOQUIC_ERROR_KEY_ROTATION_NOT_READY (PICOQUIC_ERROR_CLASS + 40)
 #define PICOQUIC_ERROR_AEAD_NOT_READY (PICOQUIC_ERROR_CLASS + 41)
 #define PICOQUIC_ERROR_NO_ALPN_PROVIDED (PICOQUIC_ERROR_CLASS + 42)
+#define PICOQUIC_ERROR_NO_CALLBACK_PROVIDED (PICOQUIC_ERROR_CLASS + 43)
+#define PICOQUIC_STREAM_RECEIVE_COMPLETE (PICOQUIC_ERROR_CLASS + 44)
 
 /*
  * Protocol errors defined in the QUIC spec
@@ -583,6 +585,46 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
     struct sockaddr_storage* p_addr_to, struct sockaddr_storage* p_addr_from);
 
+/* Handling of out of sequence stream data delivery.
+ *
+ * For applications like video communication, it is important to process stream data
+ * as soon as it arrives, even if it arrives out of order. For example, it might be
+ * better to play the next video frame than to wait for the complete transmission
+ * of the previous one. Picoquic enables that with the "direct receive" marking. If
+ * a stream is marked as "direct receive", picoquic will hand data receive on
+ * that stream to the application immediately, even if it is out of sequence.
+ * 
+ * The data will be delivered to a direct receive callback function, which will
+ * pass the pointer to the data, the stream offset and length of the data, and
+ * also indicates if a fin mark was received. When the fin mark is present, the
+ * fin offset of the stream is located at the sum of offset and length, and
+ * the length may be null.
+ *
+ * The function picoquic_mark_direct_receive_stream is used to mark a stream
+ * as `direct receive` and provide the callback function and context for that
+ * stream. Calling that function with a NULL callback function pointer results
+ * in an error.
+ *
+ * If stream data was queued at the time the picoquic_mark_direct_receive_stream
+ * function is called, the callback will be activated immediately.
+ *
+ * The callback function shall return:
+ * - 0 if the data was processed normally.
+ * - PICOQUIC_STREAM_RECEIVE_COMPLETE if the fin bit was received once and all
+ *   expected bytes on the stream have been received.
+ * - An appropriate error code if an error was encountered.
+ *
+ * Returning an error code will cause picoquic to close the connection with the
+ * corresponding transport error, or PICOQUIC_TRANSPORT_INTERNAL_ERROR if the
+ * error code in the range of the PICOQUIC_ERROR_CLASS.
+ */
+
+typedef int (*picoquic_stream_direct_receive_fn)(picoquic_cnx_t* cnx,
+    uint64_t stream_id, int fin, uint8_t* bytes, uint64_t offset, size_t length,
+    void* direct_receive_ctx);
+
+int picoquic_mark_direct_receive_stream(picoquic_cnx_t* cnx,
+    uint64_t stream_id, picoquic_stream_direct_receive_fn direct_receive_fn, void* direct_receive_ctx);
 
 /* Associate stream with app context */
 int picoquic_set_app_stream_ctx(picoquic_cnx_t* cnx,

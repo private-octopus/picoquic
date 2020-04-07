@@ -1816,6 +1816,66 @@ void picoquic_delete_stream(picoquic_cnx_t * cnx, picoquic_stream_head_t* stream
     picosplay_delete(&cnx->stream_tree, stream);
 }
 
+int picoquic_mark_direct_receive_stream(picoquic_cnx_t* cnx, uint64_t stream_id, picoquic_stream_direct_receive_fn direct_receive_fn, void* direct_receive_ctx)
+{
+    int ret = 0;
+    picoquic_stream_head_t* stream = picoquic_find_stream(cnx, stream_id);
+    picoquic_stream_data_node_t* data;
+
+    if (stream == NULL) {
+        ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
+    }
+    else if (!IS_BIDIR_STREAM_ID(stream_id) && IS_LOCAL_STREAM_ID(stream_id, cnx->client_mode)) {
+        ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
+    }
+    else if (direct_receive_fn == NULL) {
+        /* This is illegal! */
+        ret = PICOQUIC_ERROR_NO_CALLBACK_PROVIDED;
+    }
+    else {
+        stream->direct_receive_fn = direct_receive_fn;
+        stream->direct_receive_ctx = direct_receive_ctx;
+        /* If there is pending data, pass it. */
+        while ((data = (picoquic_stream_data_node_t*)picosplay_first(&stream->stream_data_tree)) != NULL) {
+            size_t length = data->length;
+            uint64_t offset = data->offset;
+            uint8_t* bytes = data->bytes;
+
+            if (offset < stream->consumed_offset) {
+                if (offset + length < stream->consumed_offset) {
+                    length = 0;
+                }
+                else {
+                    size_t delta_offset = (size_t)(stream->consumed_offset - offset);
+                    length -= delta_offset;
+                    offset += delta_offset;
+                    bytes += delta_offset;
+                }
+            }
+
+            if (length > 0) {
+                ret = direct_receive_fn(cnx, stream_id, 0, data->bytes, data->offset, data->length, direct_receive_ctx);
+            }
+
+            if (ret == 0) {
+                picosplay_delete_hint(&stream->stream_data_tree, &data->stream_data_node);
+            }
+            else {
+                break;
+            }
+        }
+
+        /* If there is a fin offset, pass it. */
+        if (ret == 0 && stream->fin_received && !stream->fin_signalled) {
+            uint8_t fin_bytes[8];
+            ret = direct_receive_fn(cnx, stream_id, 1, fin_bytes, stream->fin_offset, 0, direct_receive_ctx);
+        }
+    }
+
+    return ret;
+}
+
+
 /* Management of local CID.
  * Local CID are created and registered on demand.
  */

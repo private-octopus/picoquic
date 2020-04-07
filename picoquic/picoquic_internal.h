@@ -576,6 +576,8 @@ typedef struct st_picoquic_stream_head_t {
     uint64_t sent_offset; /* Amount of data sent in the stream */
     picoquic_stream_data_node_t* send_queue; /* if the stream is not "active", list of data segments ready to send */
     void * app_stream_ctx;
+    picoquic_stream_direct_receive_fn direct_receive_fn; /* direct receive function, if not NULL */
+    void* direct_receive_ctx; /* direct receive context */
     picoquic_sack_item_t first_sack_item; /* Track which parts of the stream were acknowledged by the peer */
     /* Flags describing the state of the stream */
     unsigned int is_active : 1; /* The application is actively managing data sending through callbacks */
