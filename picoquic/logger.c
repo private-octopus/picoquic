@@ -2078,40 +2078,6 @@ void picoquic_log_path_promotion(FILE* F, picoquic_cnx_t* cnx, int path_index, u
     fprintf(F, "\n");
 }
 
-void picoquic_log_probe_action(FILE* F, picoquic_cnx_t* cnx, picoquic_probe_t * probe, int probe_action, uint64_t current_time)
-{
-    uint64_t cnx_id64 = picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx));
-    char const* probe_string = "???";
-
-    switch (probe_action) {
-    case 1:
-        probe_string = "created";
-        break;
-    case 2:
-        probe_string = "deleted";
-        break;
-    case 3:
-        probe_string = "promoted";
-        break;
-    default:
-        break;
-    }
-
-    picoquic_log_prefix_initial_cid64(F, cnx_id64);
-    fprintf(F, "Probe %s at T=", probe_string);
-    picoquic_log_time(F, cnx, current_time, "", "\n");
-    picoquic_log_prefix_initial_cid64(F, cnx_id64);
-    if (probe->local_addr.ss_family != 0) {
-        fprintf(F, "    Local address:");
-        picoquic_log_address(F, (struct sockaddr*) & probe->local_addr);
-        fprintf(F, "\n");
-    }
-    picoquic_log_prefix_initial_cid64(F, cnx_id64);
-    fprintf(F, "    Peer address:");
-    picoquic_log_address(F, (struct sockaddr*) & probe->peer_addr);
-    fprintf(F, "\n");
-}
-
 void picoquic_log_app_message(picoquic_quic_t* quic, picoquic_connection_id_t * icid,  const char* fmt, ...)
 {
     FILE* F = quic->F_log;

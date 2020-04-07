@@ -646,22 +646,9 @@ typedef struct st_picoquic_local_cnxid_t {
 * Per path context.
 * Path contexts are created:
 * - At the beginning of the connection for path[0]
-* - When advertising a new connection ID to the peer.
-* When a path is created, the corresponding connection ID is added to the hash table
-* of connection ID in the master QUIC context, so incoming packets can be routed to
-* that path. When a path is deleted, the corresponding ID is removed from the table.
-*
-* On the server side, paths are activated after receiving the first packet on that path.
-* The server will then schedule allocate a non-zero challenge value for the path,
-* consume a connection ID advertised by the client, and allocate it as remote
-* connection ID for the path. (TODO: what if no new connection ID is available?).
-*
-* On the client side, challenges are initially sent without creating a path context,
-* by "half-consuming" a connection ID sent by the peer. Challenges can be repeated
-* up to 3 times before the probe is declared lost. The first response from the
-* peer will arrive on an unitialized path. The client will check whether the
-* challenge value correspond to a probe, and allocate the corresponding connection
-* ID to the path.
+* - When sending or receiving packets to a or from new addresses and ports.
+* When a path is created, it is assigned a local connection idand a remote connection ID.
+* After that, the path has to be validated by a successful challenge/response.
 *
 * As soon as a path is validated, it moves to position 0. The old path[0] moves to the
 * last position, and is marked as deprecated. After about 1 RTT, the path resource
@@ -674,11 +661,9 @@ typedef struct st_picoquic_local_cnxid_t {
 */
 
 typedef struct st_picoquic_path_t {
-    /* Local connection ID identifies a path */
-    picoquic_local_cnxid_t * p_local_cnxid;
+    picoquic_local_cnxid_t* p_local_cnxid;
     picoquic_connection_id_t remote_cnxid;
 
-    struct st_picoquic_cnx_id_key_t* first_cnx_id;
     struct st_picoquic_net_id_key_t* first_net_id;
 
     uint64_t path_sequence;
@@ -1231,7 +1216,6 @@ void picoquic_log_picotls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
     uint8_t* ticket, uint16_t ticket_length);
 void picoquic_log_retry_packet_error(FILE * F, picoquic_cnx_t * cnx, char const * message);
 void picoquic_log_path_promotion(FILE* F, picoquic_cnx_t* cnx, int path_index, uint64_t current_time);
-void picoquic_log_probe_action(FILE* F, picoquic_cnx_t* cnx, picoquic_probe_t* probe, int probe_action, uint64_t current_time);
 const char * picoquic_log_fin_or_event_name(picoquic_call_back_event_t ev);
 void picoquic_log_time(FILE* F, picoquic_cnx_t* cnx, uint64_t current_time,
     const char* label1, const char* label2);
