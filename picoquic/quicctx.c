@@ -1001,19 +1001,6 @@ void picoquic_register_path(picoquic_cnx_t* cnx, picoquic_path_t * path_x)
 
 static void picoquic_clear_path_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x) 
 {
-    /* Remove the registration in hash tables */
-    while (path_x->first_cnx_id != NULL) {
-        picohash_item* item;
-        picoquic_cnx_id_key_t* cnx_id_key = path_x->first_cnx_id;
-        path_x->first_cnx_id = cnx_id_key->next_cnx_id;
-        cnx_id_key->next_cnx_id = NULL;
-
-        item = picohash_retrieve(cnx->quic->table_cnx_by_id, cnx_id_key);
-        if (item != NULL) {
-            picohash_delete_item(cnx->quic->table_cnx_by_id, item, 1);
-        }
-    }
-
     while (path_x->first_net_id != NULL) {
         picohash_item* item;
         picoquic_net_id_key_t* net_id_key = path_x->first_net_id;
@@ -1139,8 +1126,8 @@ void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_
     if (!cnx->path[path_index]->path_is_demoted) {
         uint64_t demote_timer = cnx->path[path_index]->retransmit_timer;
 
-        if (demote_timer < PICOQUIC_INITIAL_RETRANSMIT_TIMER) {
-            demote_timer = PICOQUIC_INITIAL_RETRANSMIT_TIMER;
+        if (demote_timer < PICOQUIC_INITIAL_MAX_RETRANSMIT_TIMER) {
+            demote_timer = PICOQUIC_INITIAL_MAX_RETRANSMIT_TIMER;
         }
 
         cnx->path[path_index]->path_is_demoted = 1;

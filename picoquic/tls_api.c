@@ -1964,7 +1964,6 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
                 case picoquic_state_client_renegotiate:
                 case picoquic_state_client_init_resent:
                 case picoquic_state_client_handshake_start:
-                case picoquic_state_client_handshake_progress:
                     if (ptls_handshake_is_complete(ctx->tls)) {
                         if (cnx->remote_parameters_received == 0) {
 
