@@ -821,30 +821,6 @@ typedef struct st_picoquic_cnxid_stash_t {
 } picoquic_cnxid_stash_t;
 
 /*
-* Probe in progress, waiting for validation in path.
-* or upon reception of the first data packet from the peer otherwise.
-* TODO: re-think that logic if using null CID.
-*/
-typedef struct st_picoquic_probe_t {
-    struct st_picoquic_probe_t * next_probe;
-    uint64_t sequence;
-    picoquic_connection_id_t remote_cnxid;
-    uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE];
-    /* Addresses with which the probe was sent */
-    struct sockaddr_storage peer_addr;
-    struct sockaddr_storage local_addr;
-    unsigned long if_index_dest;
-    /* Challenge used by this probe */
-    uint64_t challenge[PICOQUIC_CHALLENGE_REPEAT_MAX];
-    uint64_t challenge_time;
-    uint8_t challenge_repeat_count;
-    /* Flags */
-    unsigned int challenge_required : 1;
-    unsigned int challenge_verified : 1;
-    unsigned int challenge_failed : 1;
-} picoquic_probe_t;
-
-/*
 * Per connection context.
 */
 typedef struct st_picoquic_cnx_t {

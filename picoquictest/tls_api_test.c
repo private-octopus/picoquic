@@ -2352,7 +2352,7 @@ int tls_retry_token_test()
 int tls_api_retry_test()
 {
     uint64_t simulated_time = 0;
-    const uint64_t target_time = 220000ull;
+    const uint64_t target_time = 230000ull;
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
