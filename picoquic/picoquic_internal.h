@@ -1228,7 +1228,7 @@ int picoquic_process_ack_of_ack_frame(
 
 uint64_t picoquic_compute_ack_gap(picoquic_cnx_t* cnx, uint64_t data_rate);
 
-uint64_t picoquic_compute_ack_delay_max(uint64_t rtt);
+uint64_t picoquic_compute_ack_delay_max(uint64_t rtt, uint64_t remote_min_ack_delay);
 
 /* Update the path RTT upon receiving an explict or implicit acknowledgement */
 void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, uint64_t send_time,
