@@ -1753,16 +1753,17 @@ uint64_t picoquic_compute_ack_gap(picoquic_cnx_t* cnx, uint64_t data_rate)
     return ack_gap;
 }
 
-uint64_t picoquic_compute_ack_delay_max(uint64_t rtt)
+uint64_t picoquic_compute_ack_delay_max(uint64_t rtt, uint64_t remote_min_ack_delay)
 {
     uint64_t ack_delay_max = rtt / 4;
-    if (ack_delay_max < PICOQUIC_ACK_DELAY_MIN) {
-        ack_delay_max = PICOQUIC_ACK_DELAY_MIN;
-    }
-    else if (ack_delay_max > PICOQUIC_ACK_DELAY_MAX) {
+
+    if (ack_delay_max > PICOQUIC_ACK_DELAY_MAX) {
         ack_delay_max = PICOQUIC_ACK_DELAY_MAX;
     }
 
+    if (ack_delay_max < remote_min_ack_delay) {
+        ack_delay_max = remote_min_ack_delay;
+    }
     return ack_delay_max;
 }
 
@@ -1815,7 +1816,7 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, u
                 /* Only update the ack delay upon measuring the default path */
                 cnx->is_ack_frequency_updated = cnx->is_ack_frequency_negotiated;
                 if (!cnx->is_ack_frequency_negotiated || cnx->cnx_state != picoquic_state_ready) {
-                    cnx->ack_delay_remote = picoquic_compute_ack_delay_max(old_path->rtt_min);
+                    cnx->ack_delay_remote = picoquic_compute_ack_delay_max(old_path->rtt_min, PICOQUIC_ACK_DELAY_MIN);
                 }
             }
         }
@@ -1839,7 +1840,7 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, u
                 if (old_path == cnx->path[0]) {
                     cnx->is_ack_frequency_updated = cnx->is_ack_frequency_negotiated;
                     if (!cnx->is_ack_frequency_negotiated || cnx->cnx_state != picoquic_state_ready) {
-                        cnx->ack_delay_remote = picoquic_compute_ack_delay_max(old_path->rtt_min);
+                        cnx->ack_delay_remote = picoquic_compute_ack_delay_max(old_path->rtt_min, PICOQUIC_ACK_DELAY_MIN);
                     }
                 }
             }
@@ -3316,8 +3317,10 @@ uint8_t* picoquic_format_ack_frequency_frame(picoquic_cnx_t* cnx, uint8_t* bytes
     uint64_t ack_delay_max;
 
     /* Compute the desired value of the ack frequency*/
-    ack_delay_max = picoquic_compute_ack_delay_max(cnx->path[0]->rtt_min);
-    ack_gap = picoquic_compute_ack_gap(cnx, cnx->path[0]->bandwidth_estimate); if (ack_gap <= cnx->ack_gap_local &&
+    ack_delay_max = picoquic_compute_ack_delay_max(cnx->path[0]->rtt_min, cnx->remote_parameters.min_ack_delay);
+    ack_gap = picoquic_compute_ack_gap(cnx, cnx->path[0]->bandwidth_estimate);
+    
+    if (ack_gap <= cnx->ack_gap_local &&
         ack_delay_max == cnx->ack_frequency_delay_local) {
         cnx->is_ack_frequency_updated = 0;
     }
