@@ -1146,6 +1146,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(app_limit_cc) {
+            int ret = app_limit_cc_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(stress)
         {
             int ret = stress_test();

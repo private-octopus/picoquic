@@ -3134,14 +3134,35 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                 }
 
                 /* If necessary, encode the max data frame */
-                if (ret == 0 && 2 * cnx->data_received > cnx->maxdata_local) {
-                    bytes_next = picoquic_format_max_data_frame(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack,
-                        picoquic_cc_increased_window(cnx, cnx->maxdata_local));
+                if (ret == 0){
+                    if (cnx->is_flow_control_limited) {
+                        if (cnx->data_received + (cnx->local_parameters.initial_max_data / 2) > cnx->maxdata_local) {
+                            bytes_next = picoquic_format_max_data_frame(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack,
+                                cnx->data_received + cnx->local_parameters.initial_max_data);
+                        }
+                    }
+                    else if (2 * cnx->data_received > cnx->maxdata_local) {
+                        bytes_next = picoquic_format_max_data_frame(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack,
+                            picoquic_cc_increased_window(cnx, cnx->maxdata_local));
+                    }
                 }
 
                 /* If necessary, encode the max stream data frames */
                 if (ret == 0 && cnx->max_stream_data_needed) {
                     bytes_next = picoquic_format_required_max_stream_data_frames(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack);
+                }
+
+                /* If present, send misc frame */
+                while (cnx->first_misc_frame != NULL) {
+                    uint8_t* bytes_misc = bytes_next;
+                    bytes_next = picoquic_format_first_misc_frame(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack);
+                    if (bytes_next > bytes_misc) {
+                        split_repeat_queued |=
+                            PICOQUIC_IN_RANGE(*bytes_misc, picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max);
+                    }
+                    else {
+                        break;
+                    }
                 }
 
                 /* Compute the length before entering the CC block */
@@ -3172,19 +3193,6 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                     }
 
                     if (length > header_length || pmtu_discovery_needed != picoquic_pmtu_discovery_required) {
-                        /* If present, send misc frame */
-                        while (cnx->first_misc_frame != NULL) {
-                            uint8_t* bytes_misc = bytes_next;
-                            bytes_next = picoquic_format_first_misc_frame(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack);
-                            if (bytes_next > bytes_misc) {
-                                split_repeat_queued |=
-                                    PICOQUIC_IN_RANGE(*bytes_misc, picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max);
-                            }
-                            else {
-                                break;
-                            }
-                        }
-
                         /* If there are not enough local CID published, create and advertise */
                         if (ret == 0) {
                             bytes_next = picoquic_format_new_local_id_as_needed(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack);

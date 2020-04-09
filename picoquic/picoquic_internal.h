@@ -865,6 +865,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int recycle_sooner_needed : 1; /* There may be a need to recycle "sooner" packets */
     unsigned int is_time_stamp_enabled : 1; /* Add time stamp before acks, read on incoming */
     unsigned int is_pacing_update_requested : 1; /* Whether the application subscribed to pacing updates */
+    unsigned int is_flow_control_limited : 1; /* Flow control window limited to initial value, mostly for tests */
 
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;
