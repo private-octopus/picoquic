@@ -1756,13 +1756,14 @@ uint64_t picoquic_compute_ack_gap(picoquic_cnx_t* cnx, uint64_t data_rate)
 uint64_t picoquic_compute_ack_delay_max(uint64_t rtt, uint64_t remote_min_ack_delay)
 {
     uint64_t ack_delay_max = rtt / 4;
-    if (ack_delay_max < remote_min_ack_delay) {
-        ack_delay_max = remote_min_ack_delay;
-    }
-    else if (ack_delay_max > PICOQUIC_ACK_DELAY_MAX) {
+
+    if (ack_delay_max > PICOQUIC_ACK_DELAY_MAX) {
         ack_delay_max = PICOQUIC_ACK_DELAY_MAX;
     }
 
+    if (ack_delay_max < remote_min_ack_delay) {
+        ack_delay_max = remote_min_ack_delay;
+    }
     return ack_delay_max;
 }
 
