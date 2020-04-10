@@ -6995,7 +6995,7 @@ int long_rtt_test()
          * but could not completely fix. */
         ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
             test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0, 0, 2*latency,
-            3500000);
+            3600000);
     }
 
     if (test_ctx != NULL) {
@@ -8122,15 +8122,14 @@ int direct_receive_test()
 #define APP_LIMIT_TRACE_CSV "app_limit_trace.csv"
 #define APP_LIMIT_TRACE_BIN "app_limit_trace.bin"
 
-int app_limit_cc_test()
+int app_limit_cc_test_one(
+    picoquic_congestion_algorithm_t* ccalgo, uint64_t max_completion_time)
 {
     uint64_t simulated_time = 0;
     uint64_t latency = 300000;
     uint64_t picoseq_per_byte_1 = (1000000ull * 8) / 1;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     picoquic_tp_t client_parameters;
-    picoquic_congestion_algorithm_t* ccalgo = picoquic_bbr_algorithm;
-    uint64_t max_completion_time = 22000000;
     uint64_t cwin_limit = 100000;
     int ret = 0;
 
@@ -8230,6 +8229,32 @@ int app_limit_cc_test()
     return ret;
 }
 
+int app_limit_cc_test()
+{
 
+    picoquic_congestion_algorithm_t* ccalgos[] = {
+        picoquic_newreno_algorithm,
+        picoquic_cubic_algorithm,
+        picoquic_dcubic_algorithm,
+        picoquic_bbr_algorithm,
+        picoquic_fastcc_algorithm };
+    uint64_t max_completion_times[] = {
+        22000000,
+        22000000,
+        22000000,
+        22000000,
+        26000000 };
+    int ret = 0;
+
+    for (size_t i = 0; i < sizeof(ccalgos) / sizeof(picoquic_congestion_algorithm_t*); i++) {
+        ret = app_limit_cc_test_one(ccalgos[i], max_completion_times[i]);
+        if (ret != 0) {
+            DBG_PRINTF("Appplication limited congestion test fails for <%s>", ccalgos[i]->congestion_algorithm_id);
+            break;
+        }
+    }
+
+    return ret;
+}
 
 
