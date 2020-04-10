@@ -8130,8 +8130,8 @@ int app_limit_cc_test()
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     picoquic_tp_t client_parameters;
     picoquic_congestion_algorithm_t* ccalgo = picoquic_bbr_algorithm;
-    uint64_t max_completion_time = 20000000;
-    uint64_t cwin_limit = 50000;
+    uint64_t max_completion_time = 22000000;
+    uint64_t cwin_limit = 100000;
     int ret = 0;
 
     memset(&client_parameters, 0, sizeof(picoquic_tp_t));

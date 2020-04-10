@@ -735,6 +735,8 @@ typedef struct st_picoquic_path_t {
     /* Congestion control state */
     uint64_t cwin;
     uint64_t bytes_in_transit;
+    uint64_t last_sender_limited_time;
+    uint64_t last_time_acked_data_frame_sent;
     void* congestion_alg_state;
 
     /*
@@ -1271,6 +1273,8 @@ void picoquic_update_max_stream_ID_local(picoquic_cnx_t* cnx, picoquic_stream_he
 int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, uint8_t* bytes,
     size_t bytes_max, int* no_need_to_repeat);
 
+uint8_t* picoquic_format_available_stream_frames(picoquic_cnx_t* cnx, uint8_t* bytes_next, uint8_t* bytes_max,
+    int* more_data, int* is_pure_ack, int* stream_tried_and_failed, int* ret);
 int picoquic_split_stream_frame(uint8_t* frame, size_t frame_length,
     uint8_t* b1, size_t b1_max, size_t *lb1, uint8_t* b2, size_t b2_max, size_t *lb2);
 int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
