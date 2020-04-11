@@ -495,7 +495,6 @@ static int test_api_direct_receive_callback(picoquic_cnx_t* cnx,
                     test_api_stream_hole_t* next_hole = hole->next_hole;
                     if (last_offset <= hole->offset) {
                         /* Segment is entirely covered by previously received data */
-                        offset = last_offset;
                         break;
                     }
                     else if (offset <= hole->offset) {
@@ -544,7 +543,6 @@ static int test_api_direct_receive_callback(picoquic_cnx_t* cnx,
                                 hole->last_offset = offset;
                                 hole->next_hole = new_hole;
                                 ctx->test_stream[stream_index].r_recv_nb += (size_t)(last_offset - offset);
-                                offset = last_offset;
                             }
                             break;
                         }
