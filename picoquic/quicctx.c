@@ -1826,6 +1826,7 @@ int picoquic_mark_direct_receive_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
         while ((data = (picoquic_stream_data_node_t*)picosplay_first(&stream->stream_data_tree)) != NULL) {
             size_t length = data->length;
             uint64_t offset = data->offset;
+            uint8_t* bytes = data->bytes;
 
             if (offset < stream->consumed_offset) {
                 if (offset + length < stream->consumed_offset) {
@@ -1834,11 +1835,12 @@ int picoquic_mark_direct_receive_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
                 else {
                     size_t delta_offset = (size_t)(stream->consumed_offset - offset);
                     length -= delta_offset;
+                    offset += delta_offset;
                 }
             }
 
             if (length > 0) {
-                ret = direct_receive_fn(cnx, stream_id, 0, data->bytes, data->offset, data->length, direct_receive_ctx);
+                ret = direct_receive_fn(cnx, stream_id, 0, bytes, offset, length, direct_receive_ctx);
             }
 
             if (ret == 0) {
