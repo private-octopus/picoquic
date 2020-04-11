@@ -2654,8 +2654,6 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
     int* is_initial_sent)
 {
     int ret = 0;
-    /* TODO: manage multiple streams. */
-    picoquic_stream_head_t* stream = NULL;
     picoquic_packet_type_enum packet_type = picoquic_packet_1rtt_protected;
     picoquic_packet_context_enum pc = picoquic_packet_context_application;
     picoquic_epoch_enum epoch = picoquic_epoch_1rtt;
@@ -2721,7 +2719,6 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
 
     if (length == 0) {
         tls_ready = picoquic_is_tls_stream_ready(cnx);
-        stream = picoquic_find_ready_stream(cnx);
         packet->pc = pc;
 
         if (cnx->initial_validated && (length = 
@@ -2989,7 +2986,6 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
     uint8_t* bytes_next;
     int more_data = 0;
     int ack_sent = 0;
-    int data_sent = 0;
 
     packet->pc = pc;
 
@@ -3007,7 +3003,6 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
         length = bytes_next - bytes;
         /* document the send time & overhead */
         is_pure_ack = 0;
-        data_sent = 1;
         packet->send_time = current_time;
         packet->checksum_overhead = checksum_overhead;
     }
