@@ -29,7 +29,6 @@
 #include "picohash.h"
 #include "picosplay.h"
 #include "picoquic.h"
-#include "picotlsapi.h"
 #include "picoquic_utils.h"
 
 #ifdef __cplusplus

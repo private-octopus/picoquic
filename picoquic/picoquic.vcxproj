@@ -179,7 +179,6 @@
     <ClInclude Include="picoquic_internal.h" />
     <ClInclude Include="picosocks.h" />
     <ClInclude Include="picosplay.h" />
-    <ClInclude Include="picotlsapi.h" />
     <ClInclude Include="picoquic.h" />
     <ClInclude Include="tls_api.h" />
     <ClInclude Include="picoquic_utils.h" />
