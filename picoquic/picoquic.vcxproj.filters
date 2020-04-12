@@ -98,9 +98,6 @@
     <ClInclude Include="picohash.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="picotlsapi.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="wincompat.h">
       <Filter>Header Files</Filter>
     </ClInclude>
