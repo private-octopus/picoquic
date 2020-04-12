@@ -1351,6 +1351,43 @@ uint8_t * picoquic_format_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head
     return bytes;
 }
 
+/* Format all available stream frames that fit in the packet.
+ * Update more_data if more stream data is available
+ * Update is_pure_ack if formated frames require ack
+ * Set stream_tried_and_failed if there was nothing to send, indicating the app limited condition.
+ */
+uint8_t* picoquic_format_available_stream_frames(picoquic_cnx_t* cnx, uint8_t* bytes_next, uint8_t* bytes_max, int* more_data,
+    int* is_pure_ack, int* stream_tried_and_failed, int* ret)
+{
+    uint8_t* bytes_previous = bytes_next;
+    picoquic_stream_head_t* stream = picoquic_find_ready_stream(cnx);
+    int more_stream_data = 0;
+
+    while (*ret == 0 && stream != NULL && bytes_next < bytes_max) {
+        int is_still_active = 0;
+
+        bytes_next = picoquic_format_stream_frame(cnx, stream, bytes_next, bytes_max, &more_stream_data, is_pure_ack, &is_still_active, ret);
+
+        if (*ret == 0) {
+            if (bytes_next + 8 < bytes_max) {
+                stream = picoquic_find_ready_stream(cnx);
+            }
+            else {
+                more_stream_data = 1;
+                break;
+            }
+        }
+        else {
+            break;
+        }
+    }
+
+    *stream_tried_and_failed = (!more_stream_data && bytes_next == bytes_previous);
+    *more_data |= more_stream_data;
+
+    return bytes_next;
+}
+
 int picoquic_split_stream_frame(uint8_t* frame, size_t frame_length, uint8_t* b1, size_t b1_max, size_t *lb1, uint8_t* b2, size_t b2_max, size_t *lb2) 
 {
     int ret;
@@ -2257,7 +2294,7 @@ static int picoquic_process_ack_of_stream_frame(picoquic_cnx_t* cnx, uint8_t* by
     return ret;
 }
 
-void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t* cnx, picoquic_packet_t* p)
+void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t* cnx, picoquic_packet_t* p, uint64_t current_time)
 {
     int ret = 0;
     size_t byte_index;
@@ -2283,7 +2320,15 @@ void picoquic_process_possible_ack_of_ack_frame(picoquic_cnx_t* cnx, picoquic_pa
         else if (PICOQUIC_IN_RANGE(p->bytes[byte_index], picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
             ret = picoquic_process_ack_of_stream_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);
             byte_index += frame_length;
+            if (p->send_path != NULL && p->send_time > p->send_path->last_time_acked_data_frame_sent) {
+                p->send_path->last_time_acked_data_frame_sent = p->send_time;
+            }
         } else {
+            if (PICOQUIC_IN_RANGE(p->bytes[byte_index], picoquic_frame_type_datagram, picoquic_frame_type_datagram_l) &&
+                p->send_path != NULL && p->send_time > p->send_path->last_time_acked_data_frame_sent) {
+                p->send_path->last_time_acked_data_frame_sent = p->send_time;
+            }
+
             ret = picoquic_skip_frame(&p->bytes[byte_index],
                 p->length - byte_index, &frame_length, &frame_is_pure_ack);
             byte_index += frame_length;
@@ -2330,7 +2375,7 @@ static int picoquic_process_ack_range(
                 }
 
                 /* If the packet contained an ACK frame, perform the ACK of ACK pruning logic */
-                picoquic_process_possible_ack_of_ack_frame(cnx, p);
+                picoquic_process_possible_ack_of_ack_frame(cnx, p, current_time);
 
                 /* Keep track of reception of ACK of 1RTT data */
                 if (p->ptype == picoquic_packet_1rtt_protected &&

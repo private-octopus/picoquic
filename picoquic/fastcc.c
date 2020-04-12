@@ -56,7 +56,6 @@ typedef struct st_picoquic_fastcc_state_t {
     uint64_t last_rtt_min[FASTCC_NB_PERIOD];
     int nb_cc_events;
     picoquic_min_max_rtt_t rtt_filter;
-    uint64_t last_sequence_blocked;
 } picoquic_fastcc_state_t;
 
 uint64_t picoquic_fastcc_delay_threshold(uint64_t rtt_min)
@@ -212,7 +211,9 @@ void picoquic_fastcc_notify(
                     }
 
                     /* Increase the window if it is not frozen */
-                    path_x->cwin += (uint64_t)(alpha * (double)fastcc_state->nb_bytes_ack_since_rtt);
+                    if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
+                        path_x->cwin += (uint64_t)(alpha * (double)fastcc_state->nb_bytes_ack_since_rtt);
+                    }
                     fastcc_state->nb_bytes_ack_since_rtt = 0;
                 }
                 else {
@@ -223,7 +224,7 @@ void picoquic_fastcc_notify(
         }
         break;
         case picoquic_congestion_notification_cwin_blocked:
-            fastcc_state->last_sequence_blocked = picoquic_cc_get_sequence_number(cnx);
+
             break;
         default:
             /* ignore */

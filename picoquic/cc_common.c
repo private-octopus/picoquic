@@ -122,11 +122,6 @@ void picoquic_hystart_increase(picoquic_path_t * path_x, picoquic_min_max_rtt_t*
     }
 }
 
-int picoquic_cc_was_cwin_blocked(picoquic_cnx_t* cnx, uint64_t last_sequence_blocked)
-{
-    return (last_sequence_blocked == 0 || picoquic_cc_get_ack_number(cnx) <= last_sequence_blocked);
-}
-
 uint64_t picoquic_cc_increased_window(picoquic_cnx_t* cnx, uint64_t previous_window)
 {
     uint64_t new_window;

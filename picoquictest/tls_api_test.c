@@ -495,7 +495,6 @@ static int test_api_direct_receive_callback(picoquic_cnx_t* cnx,
                     test_api_stream_hole_t* next_hole = hole->next_hole;
                     if (last_offset <= hole->offset) {
                         /* Segment is entirely covered by previously received data */
-                        offset = last_offset;
                         break;
                     }
                     else if (offset <= hole->offset) {
@@ -544,7 +543,6 @@ static int test_api_direct_receive_callback(picoquic_cnx_t* cnx,
                                 hole->last_offset = offset;
                                 hole->next_hole = new_hole;
                                 ctx->test_stream[stream_index].r_recv_nb += (size_t)(last_offset - offset);
-                                offset = last_offset;
                             }
                             break;
                         }
@@ -6995,7 +6993,7 @@ int long_rtt_test()
          * but could not completely fix. */
         ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
             test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0, 0, 2*latency,
-            3500000);
+            3600000);
     }
 
     if (test_ctx != NULL) {
@@ -8113,3 +8111,148 @@ int direct_receive_test()
 
     return ret;
 }
+
+/*
+* Application limited test.
+* The application is set to limit the max data values to stay lower than a set flow control window.
+* We verify that in these scenario the CWIN does not grow too much above the flow control window.
+*/
+#define APP_LIMIT_TRACE_CSV "app_limit_trace.csv"
+#define APP_LIMIT_TRACE_BIN "app_limit_trace.bin"
+
+int app_limit_cc_test_one(
+    picoquic_congestion_algorithm_t* ccalgo, uint64_t max_completion_time)
+{
+    uint64_t simulated_time = 0;
+    uint64_t latency = 300000;
+    uint64_t picoseq_per_byte_1 = (1000000ull * 8) / 1;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_tp_t client_parameters;
+    uint64_t cwin_limit = 100000;
+    int ret = 0;
+
+    memset(&client_parameters, 0, sizeof(picoquic_tp_t));
+    picoquic_init_transport_parameters(&client_parameters, 1);
+    client_parameters.initial_max_data = 40000;
+
+    ret = tls_api_one_scenario_init(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, &client_parameters, NULL);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+
+    if (ret == 0) {
+
+        picoquic_set_default_congestion_algorithm(test_ctx->qserver, ccalgo);
+        picoquic_set_congestion_algorithm(test_ctx->cnx_client, ccalgo);
+        picoquic_set_binlog(test_ctx->qserver, APP_LIMIT_TRACE_BIN);
+        test_ctx->qserver->use_long_log = 1;
+        test_ctx->cnx_client->is_flow_control_limited = 1;
+
+        test_ctx->c_to_s_link->jitter = 0;
+        test_ctx->c_to_s_link->microsec_latency = latency;
+        test_ctx->c_to_s_link->picosec_per_byte = picoseq_per_byte_1;
+        test_ctx->s_to_c_link->microsec_latency = latency;
+        test_ctx->s_to_c_link->picosec_per_byte = picoseq_per_byte_1;
+        test_ctx->s_to_c_link->jitter = 0;
+
+        if (ret == 0) {
+            ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+                test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0, 0, 2 * latency, max_completion_time);
+        }
+    }
+
+    /* Free the resource, which will close the log file.
+     */
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    /* Create a CSV file from the .bin log file */
+    if (ret == 0) {
+        ret = picoquic_cc_log_file_to_csv(APP_LIMIT_TRACE_BIN, APP_LIMIT_TRACE_CSV);
+    }
+
+    /* Compute the max CWIN from the trace file */
+    if (ret == 0)
+    {
+        FILE* F = picoquic_file_open(APP_LIMIT_TRACE_CSV, "r");
+        uint64_t cwin_max = 0;
+
+        if (F == NULL) {
+            DBG_PRINTF("Cannot open <%s>", APP_LIMIT_TRACE_CSV);
+            ret = -1;
+        }
+        else {
+            char buffer[512];
+
+            while (fgets(buffer, 512, F) != NULL) {
+                /* only consider number lines line */
+                if (buffer[0] >= '0' && buffer[0] <= '9') {
+                    uint64_t cwin = 0;
+                    int nb_comma = 0;
+                    int c_index = 0;
+
+                    while (nb_comma < 5 && buffer[c_index] != 0 && c_index < 512) {
+                        if (buffer[c_index] == ',') {
+                            nb_comma++;
+                        }
+                        c_index++;
+                    }
+                    while (c_index < 512 && buffer[c_index] == ' ') {
+                        c_index++;
+                    }
+                    while (c_index < 512 && buffer[c_index] >= '0' && buffer[c_index] <= '9') {
+                        cwin *= 10;
+                        cwin += buffer[c_index] - '0';
+                        c_index++;
+                    }
+                    if (cwin > cwin_max) {
+                        cwin_max = cwin;
+                    }
+                }
+            }
+
+            (void)picoquic_file_close(F);
+
+            if (cwin_max > cwin_limit) {
+                DBG_PRINTF("MAX CWIN = %" PRIu64 ", larger than %" PRIu64, cwin_max, cwin_limit);
+                ret = -1;
+            }
+        }
+    }
+
+    return ret;
+}
+
+int app_limit_cc_test()
+{
+
+    picoquic_congestion_algorithm_t* ccalgos[] = {
+        picoquic_newreno_algorithm,
+        picoquic_cubic_algorithm,
+        picoquic_dcubic_algorithm,
+        picoquic_bbr_algorithm,
+        picoquic_fastcc_algorithm };
+    uint64_t max_completion_times[] = {
+        22000000,
+        22000000,
+        22000000,
+        22000000,
+        26000000 };
+    int ret = 0;
+
+    for (size_t i = 0; i < sizeof(ccalgos) / sizeof(picoquic_congestion_algorithm_t*); i++) {
+        ret = app_limit_cc_test_one(ccalgos[i], max_completion_times[i]);
+        if (ret != 0) {
+            DBG_PRINTF("Appplication limited congestion test fails for <%s>", ccalgos[i]->congestion_algorithm_id);
+            break;
+        }
+    }
+
+    return ret;
+}
+
+

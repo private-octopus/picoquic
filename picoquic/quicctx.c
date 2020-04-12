@@ -1836,12 +1836,11 @@ int picoquic_mark_direct_receive_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
                     size_t delta_offset = (size_t)(stream->consumed_offset - offset);
                     length -= delta_offset;
                     offset += delta_offset;
-                    bytes += delta_offset;
                 }
             }
 
             if (length > 0) {
-                ret = direct_receive_fn(cnx, stream_id, 0, data->bytes, data->offset, data->length, direct_receive_ctx);
+                ret = direct_receive_fn(cnx, stream_id, 0, bytes, offset, length, direct_receive_ctx);
             }
 
             if (ret == 0) {
