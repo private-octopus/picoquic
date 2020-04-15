@@ -244,7 +244,7 @@ static void picoquic_cubic_notify(
                 break;
             case picoquic_congestion_notification_rtt_measurement:
                 /* Using RTT increases as signal to get out of initial slow start */
-                if (cubic_state->ssthresh == (uint64_t)((int64_t)-1) && 
+                if (cubic_state->ssthresh == (uint64_t)((int64_t)-1) &&
                     picoquic_hystart_test(&cubic_state->rtt_filter, (cnx->is_time_stamp_enabled) ? one_way_delay : rtt_measurement,
                         cnx->path[0]->pacing_packet_time_microsec, current_time, cnx->is_time_stamp_enabled)) {
                     /* RTT increased too much, get out of slow start! */
@@ -273,8 +273,17 @@ static void picoquic_cubic_notify(
                 break;
             case picoquic_congestion_notification_cwin_blocked:
                 break;
+            case picoquic_congestion_notification_bw_measurement: {
+                /* RTT measurements will happen after the bandwidth is estimated */
+                uint64_t max_win = path_x->max_bandwidth_estimate * path_x->smoothed_rtt / 1000000;
+                uint64_t min_win = max_win /= 2;
+                if (path_x->cwin < min_win) {
+                    path_x->cwin = min_win;
+                    picoquic_update_pacing_data(cnx, path_x);
+                }
+                break;
+            }
             default:
-                /* ignore */
                 break;
             }
             break;

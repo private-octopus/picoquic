@@ -69,6 +69,8 @@ extern "C" {
 #define PICOQUIC_BANDWIDTH_ESTIMATE_MAX 10000000000ull /* 10 GB per second */
 #define PICOQUIC_BANDWIDTH_TIME_INTERVAL_MIN 1000
 #define PICOQUIC_BANDWIDTH_MEDIUM 2000000 /* 16 Mbps, threshold for coalescing 10 packets per ACK */
+#define PICOQUIC_MAX_BANDWIDTH_TIME_INTERVAL_MIN 5000
+#define PICOQUIC_MAX_BANDWIDTH_TIME_INTERVAL_MAX 15000
 
 #define PICOQUIC_SPURIOUS_RETRANSMIT_DELAY_MAX 1000000ull /* one second */
 
@@ -718,12 +720,17 @@ typedef struct st_picoquic_path_t {
 
     /* Bandwidth measurement */
     uint64_t delivered; /* The total amount of data delivered so far on the path */
-    uint64_t delivered_last;
-    uint64_t delivered_time_last;
-    uint64_t delivered_sent_last;
+    uint64_t delivered_last; /* Amount delivered by last bandwidth estimation */
+    uint64_t delivered_time_last; /* time last delivered packet was delivered */
+    uint64_t delivered_sent_last; /* time last delivered packet was sent */
     uint64_t delivered_limited_index;
     uint64_t delivered_last_packet;
     uint64_t bandwidth_estimate; /* In bytes per second */
+    uint64_t max_sample_acked_time; /* Time max sample was delivered */
+    uint64_t max_sample_sent_time; /* Time max sample was sent */
+    uint64_t max_sample_delivered; /* Delivered value at time of max sample */
+    uint64_t max_bandwidth_estimate; /* In bytes per second */
+
 
     uint64_t received; /* Total amount of bytes received from the path */
     uint64_t receive_rate_epoch; /* Time of last receive rate measurement */
@@ -1014,14 +1021,14 @@ typedef struct st_picoquic_cnx_t {
 } picoquic_cnx_t;
 
 typedef struct st_picoquic_packet_data_t {
-    picoquic_path_t* acked_path;
-    uint64_t last_ack_delay;
+    picoquic_path_t* acked_path; /* path for which ACK was received */
+    uint64_t last_ack_delay; /* ACK Delay in ACK frame */
     uint64_t last_time_stamp_received;
-    uint64_t largest_sent_time;
-    uint64_t delivered_prior;
-    uint64_t delivered_time_prior;
-    uint64_t delivered_sent_prior;
-    int rs_is_path_limited;
+    uint64_t largest_sent_time; /* Send time of ACKed packet (largest number acked) */
+    uint64_t delivered_prior; /* Amount delivered prior to that packet */
+    uint64_t delivered_time_prior; /* Time last delivery before acked packet sent */
+    uint64_t delivered_sent_prior; /* Time this last delivery packet was sent */
+    int rs_is_path_limited; /* Whether the path was app limited when packet was sent */
 } picoquic_packet_data_t;
 
 /* Load the stash of retry tokens. */

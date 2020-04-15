@@ -262,6 +262,11 @@ void BBRUpdateBtlBw(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x)
 {
     uint64_t bandwidth_estimate = path_x->bandwidth_estimate;
 
+    if (bbr_state->state == picoquic_bbr_alg_startup &&
+        bandwidth_estimate < (path_x->max_bandwidth_estimate / 2)) {
+        bandwidth_estimate = path_x->max_bandwidth_estimate/2;
+    }
+
     if (path_x->delivered_last_packet >= bbr_state->next_round_delivered)
     {
         bbr_state->next_round_delivered = path_x->delivered;
@@ -692,6 +697,9 @@ static void picoquic_bbr_notify(
         case picoquic_congestion_notification_bw_measurement:
             /* RTT measurements will happen after the bandwidth is estimated */
             if (bbr_state->state == picoquic_bbr_alg_startup_long_rtt) {
+                uint64_t max_win = path_x->max_bandwidth_estimate * path_x->smoothed_rtt / 1000000;
+                uint64_t min_win = max_win /= 2;
+
                 BBRUpdateBtlBw(bbr_state, path_x);
                 if (rtt_measurement <= bbr_state->rt_prop) {
                     bbr_state->rt_prop = rtt_measurement;
@@ -701,6 +709,10 @@ static void picoquic_bbr_notify(
                     picoquic_hystart_increase(path_x, &bbr_state->rtt_filter, bbr_state->bytes_delivered);
                 }
                 bbr_state->bytes_delivered = 0;
+
+                if (path_x->cwin < min_win) {
+                    path_x->cwin =min_win;
+                }
 
                 picoquic_update_pacing_data(cnx, path_x);
             } else {
