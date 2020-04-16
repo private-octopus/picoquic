@@ -357,8 +357,9 @@ void picoquic_log_pn_dec_trial(picoquic_cnx_t* cnx)
             picoquic_pn_encrypt(pn_dec, test_iv, demask_bytes, demask_bytes, mask_length);
         }
 
-        fprintf(cnx->quic->F_log, "%016llx: 1RTT PN ENC/ DEC Check constant = %02x%02x%02x%02x%02x, %02x%02x%02x%02x%02x\n",
+        fprintf(cnx->quic->F_log, "%016llx: 1RTT PN ENC/DEC, Phi: %d, signature = %02x%02x%02x%02x%02x, %02x%02x%02x%02x%02x\n",
             (unsigned long long)picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)),
+            cnx->key_phase_enc,
             mask_bytes[0], mask_bytes[1], mask_bytes[2], mask_bytes[3], mask_bytes[4],
             demask_bytes[0], demask_bytes[1], demask_bytes[2], demask_bytes[3], demask_bytes[4]);
     }
