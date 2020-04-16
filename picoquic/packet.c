@@ -331,6 +331,41 @@ uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t 
     return pn64;
 }
 
+/* Debug code used to test whether the PN decryption works as expected.
+ */
+
+void picoquic_log_pn_dec_trial(picoquic_cnx_t* cnx)
+{
+    if (cnx->quic->F_log != NULL)
+    {
+        void* pn_dec = cnx->crypto_context[picoquic_epoch_1rtt].pn_dec;
+        void* pn_enc = cnx->crypto_context[picoquic_epoch_1rtt].pn_enc;
+        uint8_t test_iv[32] = {
+            0, 1, 3, 4, 4, 6, 7, 8, 9,
+            0, 1, 3, 4, 4, 6, 7, 8, 9,
+            0, 1, 3, 4, 4, 6, 7, 8, 9,
+            0, 1 };
+        size_t mask_length = 5;
+        uint8_t mask_bytes[5] = { 0, 0, 0, 0, 0 };
+        uint8_t demask_bytes[5] = { 0, 0, 0, 0, 0 };
+
+        if (pn_enc != NULL) {
+            picoquic_pn_encrypt(pn_enc, test_iv, mask_bytes, mask_bytes, mask_length);
+        }
+
+        if (pn_dec != NULL) {
+            picoquic_pn_encrypt(pn_dec, test_iv, demask_bytes, demask_bytes, mask_length);
+        }
+
+        fprintf(cnx->quic->F_log, "%016llx: 1RTT PN ENC/DEC, Phi: %d, signature = %02x%02x%02x%02x%02x, %02x%02x%02x%02x%02x\n",
+            (unsigned long long)picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)),
+            cnx->key_phase_enc,
+            mask_bytes[0], mask_bytes[1], mask_bytes[2], mask_bytes[3], mask_bytes[4],
+            demask_bytes[0], demask_bytes[1], demask_bytes[2], demask_bytes[3], demask_bytes[4]);
+    }
+}
+
+
 /*
  * Remove header protection 
  */
@@ -500,6 +535,11 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
         else {
             decoded = ph->payload_length + 1;
         }
+    }
+
+    /* Add here a check that the PN key is still valid. */
+    if (decoded > ph->payload_length) {
+        picoquic_log_pn_dec_trial(cnx);
     }
     
     /* by conventions, values larger than input indicate error */
@@ -1796,9 +1836,20 @@ int picoquic_incoming_segment(
             ret = PICOQUIC_ERROR_CNXID_SEGMENT;
         }
     }
-    else if (ret == PICOQUIC_ERROR_AEAD_NOT_READY &&
-        cnx != NULL) {
-        picoquic_incoming_not_decrypted(cnx, &ph, current_time, bytes, length, addr_from, addr_to, if_index_to);
+    else
+    {
+        /* Log packet arrival if not already there */
+        if (picoquic_is_connection_id_null(previous_dest_id) && quic->F_log != NULL && 
+            (cnx == NULL || cnx->pkt_ctx[picoquic_packet_context_application].send_sequence < PICOQUIC_LOG_PACKET_MAX_SEQUENCE || quic->use_long_log)) {
+            picoquic_log_packet_address(quic->F_log,
+                picoquic_val64_connection_id((cnx == NULL) ? ph.dest_cnx_id : picoquic_get_logging_cnxid(cnx)),
+                cnx, addr_from, 1, packet_length, current_time);
+        }
+        /* Store packet if received in advance of encryption keys */
+        if (ret == PICOQUIC_ERROR_AEAD_NOT_READY &&
+            cnx != NULL) {
+            picoquic_incoming_not_decrypted(cnx, &ph, current_time, bytes, length, addr_from, addr_to, if_index_to);
+        }
     }
 
     /* Log the incoming packet */
