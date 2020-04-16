@@ -1147,6 +1147,8 @@ size_t picoquic_get_checksum_length(picoquic_cnx_t* cnx, picoquic_epoch_enum is_
 
 uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t pn);
 
+void picoquic_log_pn_dec_trial(picoquic_cnx_t* cnx); /* For debugging potential PN_ENC corruption */
+
 void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet_t * packet, int ret,
     size_t length, size_t header_length, size_t checksum_overhead,
     size_t * send_length, uint8_t * send_buffer, size_t send_buffer_max,
