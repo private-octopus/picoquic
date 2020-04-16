@@ -2643,6 +2643,9 @@ void picoquic_ready_state_transition(picoquic_cnx_t* cnx, uint64_t current_time)
         cnx->ack_gap_remote = picoquic_compute_ack_gap(cnx, cnx->path[0]->receive_rate_max);
         cnx->ack_delay_remote = picoquic_compute_ack_delay_max(cnx->path[0]->rtt_min, PICOQUIC_ACK_DELAY_MIN);
     }
+
+    /* Perform a check of the PN decryption key, for sanity */
+    picoquic_log_pn_dec_trial(cnx);
 }
 
 /* Prepare the next packet to send when in one the ready states 

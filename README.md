@@ -89,7 +89,13 @@ To build Picoquic on Windows, you need to:
  * Document the location of the Openssl install in the environment variable OPENSSLDIR
    (OPENSSL64DIR for the x64 builds)
 
- * Clone and compile Picotls, using the Picotls for Windows options
+ * Make sure that a copy of `libcrypto.lib` is available at that location, and that
+   a copy of `applink.c` is available at the `include` location: $(OPENSSLDIR)\include\
+   for win32 builds, $(OPENSSL64DIR)\include\ for the x64 builds.
+
+ * Clone and compile Picotls, using the Picotls for Windows options. The picotls project
+   should be in the same directory level as the picoquic project, and the folder name 
+   should be kept as  picotls.
 
  * Clone and compile Picoquic, using the Visual Studio 2017 solution picoquic.sln included in 
    the sources.
