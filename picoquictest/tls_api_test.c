@@ -6757,8 +6757,9 @@ int performance_test(uint64_t max_completion_time, uint64_t mbps, uint64_t laten
 
         picoquic_set_default_congestion_algorithm(test_ctx->qserver, ccalgo);
         picoquic_set_congestion_algorithm(test_ctx->cnx_client, ccalgo);
+        test_ctx->qserver->use_long_log = 1;
 
-        picoquic_set_binlog(test_ctx->qserver, "binlog_file_name");
+        picoquic_set_binlog(test_ctx->qserver, binlog_file_name);
 
         test_ctx->c_to_s_link->jitter = jitter;
         test_ctx->c_to_s_link->microsec_latency = latency;
@@ -6799,6 +6800,24 @@ int bbr_performance_test()
 
     return ret;
 }
+
+/* BBR Performance test on a slow long link
+ * Verify that 10 MB can be downloaded in less than 100 seconds on a 1 mbps link.
+ */
+
+int bbr_slow_long_test()
+{
+    uint64_t max_completion_time = 100000000;
+    uint64_t latency = 300000;
+    uint64_t jitter = 3000;
+    uint64_t buffer = 2 * (latency + jitter);
+    uint64_t mbps = 1;
+
+    int ret = performance_test(max_completion_time, mbps, latency, jitter, buffer);
+
+    return ret;
+}
+
 
 /* AWS like performance test 
  * Verify that 10MB can be downloaded very fast on a low latency Gbps link. */

@@ -244,7 +244,7 @@ static void picoquic_cubic_notify(
                 break;
             case picoquic_congestion_notification_rtt_measurement:
                 /* Using RTT increases as signal to get out of initial slow start */
-                if (cubic_state->ssthresh == (uint64_t)((int64_t)-1) &&
+                if (cubic_state->ssthresh == UINT64_MAX &&
                     picoquic_hystart_test(&cubic_state->rtt_filter, (cnx->is_time_stamp_enabled) ? one_way_delay : rtt_measurement,
                         cnx->path[0]->pacing_packet_time_microsec, current_time, cnx->is_time_stamp_enabled)) {
                     /* RTT increased too much, get out of slow start! */
@@ -279,7 +279,6 @@ static void picoquic_cubic_notify(
                 uint64_t min_win = max_win /= 2;
                 if (path_x->cwin < min_win) {
                     path_x->cwin = min_win;
-                    picoquic_update_pacing_data(cnx, path_x);
                 }
                 break;
             }
@@ -365,7 +364,8 @@ static void picoquic_cubic_notify(
         }
 
         /* Compute pacing data */
-        picoquic_update_pacing_data(cnx, path_x);
+        picoquic_update_pacing_data(cnx, path_x, cubic_state->alg_state == picoquic_cubic_alg_slow_start &&
+            cubic_state->ssthresh == UINT64_MAX);
     }
 }
 
@@ -426,7 +426,7 @@ static void picoquic_dcubic_notify(
                  * during congestion avoidance */
                 if (picoquic_hystart_test(&cubic_state->rtt_filter, (cnx->is_time_stamp_enabled) ? one_way_delay : rtt_measurement,
                     cnx->path[0]->pacing_packet_time_microsec, current_time, cnx->is_time_stamp_enabled)) {
-                    if (cubic_state->ssthresh == (uint64_t)((int64_t)-1)) {
+                    if (cubic_state->ssthresh == UINT64_MAX) {
                         if (cubic_state->rtt_filter.rtt_filtered_min > PICOQUIC_TARGET_RENO_RTT) {
                             double correction = (double)PICOQUIC_TARGET_RENO_RTT / (double)cubic_state->rtt_filter.rtt_filtered_min;
                             uint64_t base_window = (uint64_t)(correction * (double)path_x->cwin);
@@ -553,7 +553,8 @@ static void picoquic_dcubic_notify(
         }
 
         /* Compute pacing data */
-        picoquic_update_pacing_data(cnx, path_x);
+        picoquic_update_pacing_data(cnx, path_x, 
+            cubic_state->alg_state == picoquic_cubic_alg_slow_start && cubic_state->ssthresh == UINT64_MAX);
     }
 }
 

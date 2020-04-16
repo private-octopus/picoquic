@@ -1091,7 +1091,7 @@ picoquic_cnx_t* picoquic_cnx_by_icid(picoquic_quic_t* quic, picoquic_connection_
 picoquic_cnx_t* picoquic_cnx_by_secret(picoquic_quic_t* quic, uint8_t* reset_secret, struct sockaddr* addr);
 
 /* Reset the pacing data after CWIN is updated */
-void picoquic_update_pacing_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x);
+void picoquic_update_pacing_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x, int slow_start);
 /* Reset pacing data if congestion algorithm computes it directly */
 void picoquic_update_pacing_rate(picoquic_cnx_t* cnx, picoquic_path_t* path_x, double pacing_rate, uint64_t quantum);
 

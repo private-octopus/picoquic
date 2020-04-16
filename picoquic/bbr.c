@@ -714,7 +714,7 @@ static void picoquic_bbr_notify(
                     path_x->cwin =min_win;
                 }
 
-                picoquic_update_pacing_data(cnx, path_x);
+                picoquic_update_pacing_data(cnx, path_x, 1);
             } else {
                 BBRUpdateOnACK(bbr_state, path_x,
                     rtt_measurement, path_x->bytes_in_transit, 0 /* packets_lost */, bbr_state->bytes_delivered,
