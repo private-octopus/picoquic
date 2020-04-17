@@ -397,14 +397,7 @@ static void picoquic_dcubic_notify(
             case picoquic_congestion_notification_acknowledgement:
                 /* Same as Cubic */
                 if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
-                    if (path_x->smoothed_rtt <= PICOQUIC_TARGET_RENO_RTT || cubic_state->rtt_filter.past_threshold) {
-                        path_x->cwin += nb_bytes_acknowledged;
-                    }
-                    else {
-                        double delta = ((double)path_x->smoothed_rtt) / ((double)PICOQUIC_TARGET_RENO_RTT);
-                        delta *= (double)nb_bytes_acknowledged;
-                        path_x->cwin += (uint64_t)delta;
-                    }
+                    picoquic_hystart_increase(path_x, &cubic_state->rtt_filter, nb_bytes_acknowledged);
                     /* if cnx->cwin exceeds SSTHRESH, exit and go to CA */
                     if (path_x->cwin >= cubic_state->ssthresh) {
                         cubic_state->W_reno = ((double)path_x->cwin) / 2.0;
