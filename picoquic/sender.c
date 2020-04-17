@@ -761,7 +761,7 @@ void picoquic_update_pacing_rate(picoquic_cnx_t * cnx, picoquic_path_t* path_x, 
  * The max bucket is set to contain at least 2 packets more than 1/8th of the congestion window.
  */
 
-void picoquic_update_pacing_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x)
+void picoquic_update_pacing_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x, int slow_start)
 {
     uint64_t rtt_nanosec = path_x->smoothed_rtt * 1000;
 
@@ -782,8 +782,13 @@ void picoquic_update_pacing_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x)
         if (quantum < 2ull * path_x->send_mtu) {
             quantum = 2ull * path_x->send_mtu;
         }
-        else if (quantum > 16ull * path_x->send_mtu) {
-            quantum = 16ull * path_x->send_mtu;
+        else {
+            if (slow_start && path_x->smoothed_rtt > 4*PICOQUIC_MAX_BANDWIDTH_TIME_INTERVAL_MAX) {
+                quantum = (uint64_t)(pacing_rate*PICOQUIC_MAX_BANDWIDTH_TIME_INTERVAL_MAX);
+            }
+            else if (quantum > 16ull * path_x->send_mtu) {
+                quantum = 16ull * path_x->send_mtu;
+            }
         }
 
         picoquic_update_pacing_rate(cnx, path_x, pacing_rate, quantum);

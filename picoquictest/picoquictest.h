@@ -200,6 +200,7 @@ int bbr_test();
 int bbr_jitter_test();
 int bbr_long_test();
 int bbr_performance_test();
+int bbr_slow_long_test();
 int gbps_performance_test();
 int large_client_hello_test();
 int fast_nat_rebinding_test();

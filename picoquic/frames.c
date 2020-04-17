@@ -1760,6 +1760,48 @@ void picoquic_estimate_path_bandwidth(picoquic_cnx_t * cnx, picoquic_path_t* pat
     }
 }
 
+void picoquic_estimate_max_path_bandwidth(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t send_time,
+    uint64_t delivery_time, uint64_t current_time)
+{
+    /* Test whether there is enough time since the last max bandwidth estimate */
+    if (send_time >= path_x->max_sample_sent_time) {
+        if (path_x->max_sample_sent_time == 0) {
+            /* No sample set yet, need to initialize the variables */
+            path_x->max_sample_delivered = path_x->delivered;
+            path_x->max_sample_acked_time = delivery_time;
+            path_x->max_sample_sent_time = send_time;
+        }
+        else {
+            /* Compute a max bandwidth estimate */
+            uint64_t receive_interval = delivery_time - path_x->max_sample_acked_time;
+
+            if (receive_interval > PICOQUIC_BANDWIDTH_TIME_INTERVAL_MIN) {
+                uint64_t delivered = path_x->delivered - path_x->max_sample_delivered;
+                uint64_t send_interval = send_time - path_x->max_sample_sent_time;
+                uint64_t bw_estimate;
+
+                if (send_interval > receive_interval) {
+                    receive_interval = send_interval;
+                }
+
+                bw_estimate = delivered * 1000000;
+                bw_estimate /= receive_interval;
+                /* Retain if larger than previous estimate */
+                if (bw_estimate > path_x->max_bandwidth_estimate) {
+                    path_x->max_bandwidth_estimate = bw_estimate;
+                }
+
+                if (receive_interval > PICOQUIC_BANDWIDTH_TIME_INTERVAL_MIN) {
+                    /* Change the reference point if estimate duration is long enough */
+                    path_x->max_sample_delivered = path_x->delivered;
+                    path_x->max_sample_acked_time = delivery_time;
+                    path_x->max_sample_sent_time = send_time;
+                }
+            }
+        }
+    }
+}
+
 /* Compute the desired number of packets coalesce in a single ACK.
  * This will be used to compute the value sent to the peer in the ACK FREQUENCY frame,
  * using the bandwidth estimate computed from received ACKs.
@@ -3483,6 +3525,10 @@ void process_decoded_packet_data(picoquic_cnx_t* cnx, uint64_t current_time, pic
             packet_data->delivered_prior, packet_data->delivered_time_prior, packet_data->delivered_sent_prior,
             (packet_data->last_time_stamp_received == 0) ? current_time : packet_data->last_time_stamp_received,
             current_time, packet_data->rs_is_path_limited);
+
+        picoquic_estimate_max_path_bandwidth(cnx, packet_data->acked_path, packet_data->largest_sent_time,
+            (packet_data->last_time_stamp_received == 0) ? current_time : packet_data->last_time_stamp_received,
+            current_time);
 
         if (cnx->congestion_alg != NULL && packet_data->acked_path->rtt_sample > 0) {
             cnx->congestion_alg->alg_notify(cnx, packet_data->acked_path,

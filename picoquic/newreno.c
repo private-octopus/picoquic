@@ -169,14 +169,26 @@ static void picoquic_newreno_notify(
             break;
         case picoquic_congestion_notification_cwin_blocked:
             break;
+        case picoquic_congestion_notification_bw_measurement:
+            if (nr_state->alg_state == picoquic_newreno_alg_slow_start &&
+                nr_state->ssthresh == UINT64_MAX) {
+                /* RTT measurements will happen after the bandwidth is estimated */
+                uint64_t max_win = path_x->max_bandwidth_estimate * path_x->smoothed_rtt / 1000000;
+                uint64_t min_win = max_win /= 2;
+                if (path_x->cwin < min_win) {
+                    path_x->cwin = min_win;
+                }
+            }
+            break;
         default:
             /* ignore */
             break;
         }
-    }
 
-    /* Compute pacing data */
-    picoquic_update_pacing_data(cnx, path_x);
+        /* Compute pacing data */
+        picoquic_update_pacing_data(cnx, path_x, nr_state->alg_state == picoquic_newreno_alg_slow_start &&
+            nr_state->ssthresh == UINT64_MAX);
+    }
 }
 
 /* Release the state of the congestion control algorithm */
