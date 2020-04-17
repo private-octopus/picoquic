@@ -1443,23 +1443,16 @@ int h09_lone_fin_test()
     return ret;
 }
 
-#ifdef _WINDOWS
-/* In contrast to Unix, the path size in Windows is limited to 260 bytes. 
- * This means that the maximum path size depends on the size of the path
- * to the working directory. It has to be kept small enough! */
-#define FILE_NAME_NOT_SO_LONG FILE_100Z , FILE_100Z , '3', '2'
-const char doc_name_long[] = { '/', FILE_NAME_NOT_SO_LONG , 0 };
-const char file_name_long[] = { '.', '/', FILE_NAME_NOT_SO_LONG , 0 };
-#else
+#ifndef _WINDOWS
 const char doc_name_long[] = { '/', FILE_NAME_LONG, 0};
 const char file_name_long[] = { '.', '/', FILE_NAME_LONG, 0 };
-#endif
 
 static const picoquic_demo_stream_desc_t long_file_name_scenario[] = {
     { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, doc_name_long, file_name_long, 0 }
 };
 
 static const size_t nb_long_file_name_scenario = sizeof(long_file_name_scenario) / sizeof(picoquic_demo_stream_desc_t);
+#endif
 
 static size_t const long_file_name_stream_length[] = {
     32
@@ -1467,8 +1460,56 @@ static size_t const long_file_name_stream_length[] = {
 
 int h3_long_file_name_test()
 {
-    return demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, NULL, 0, long_file_name_scenario, nb_long_file_name_scenario, 
+    int ret = 0;
+#ifdef _WINDOWS
+    /* In contrast to Unix, the path size in Windows is limited to 260 bytes.
+     * This means that the maximum path size depends on the size of the path
+     * to the working directory. It has to be kept small enough! */
+    DWORD current_directory_length = GetCurrentDirectory(0, NULL);
+    picoquic_demo_stream_desc_t scenario_line;
+    char file_name_var[MAX_PATH];
+    char doc_name_var[MAX_PATH];
+    size_t name_length = 0;
+    size_t file_name_length = 0;
+    size_t doc_name_length = 0;
+
+    if (current_directory_length + 7 >= MAX_PATH) {
+        DBG_PRINTF("Current Directory too long for test: %d chars", current_directory_length);
+        ret = -1;
+    }
+    else {
+        name_length = MAX_PATH - current_directory_length - 7;
+        if (name_length > 253) {
+            name_length = 253;
+        }
+        file_name_var[file_name_length++] = '.';
+        file_name_var[file_name_length++] = '\\';
+        doc_name_var[doc_name_length++] = '/';
+        for (size_t i = 0; i < name_length; i++) {
+            file_name_var[file_name_length++] = '0';
+            doc_name_var[doc_name_length++] = '0';
+        }
+        file_name_var[file_name_length++] = '3';
+        doc_name_var[doc_name_length++] = '3';
+        file_name_var[file_name_length++] = '2';
+        doc_name_var[doc_name_length++] = '2';
+        file_name_var[file_name_length++] = 0;
+        doc_name_var[doc_name_length++] = 0;
+        scenario_line.repeat_count = 0;
+        scenario_line.stream_id = 0;
+        scenario_line.previous_stream_id = PICOQUIC_DEMO_STREAM_ID_INITIAL;
+        scenario_line.doc_name = doc_name_var;
+        scenario_line.f_name = file_name_var;
+        scenario_line.post_size = 0;
+
+        ret = demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, NULL, 0, &scenario_line, 1,
+            long_file_name_stream_length, 0, 400000, 0);
+    }
+#else
+    ret = demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, NULL, 0, long_file_name_scenario, nb_long_file_name_scenario, 
         long_file_name_stream_length, 0, 400000, 0);
+#endif
+    return ret;
 }
 
 /* HTTP Server stress.
