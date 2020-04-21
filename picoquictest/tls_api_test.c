@@ -8274,4 +8274,101 @@ int app_limit_cc_test()
     return ret;
 }
 
+/* Initial race condition.
+* What happens if the client immediately repeats the Initial packet?
+*/
 
+int initial_race_test()
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    int nb_inactive = 0;
+    int nb_trials = 0;
+    int natted = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = PICOQUIC_ERROR_MEMORY;
+    }
+
+    /* Run an initial loop to make to send the client's first packet, and then replicate it. */
+    if (ret == 0) {
+        int was_active = 0;
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+
+        if (ret == 0) {
+            /* Force a repeat of the first packet */
+            simulated_time += 100;
+            test_ctx->cnx_client->initial_repeat_needed = 1;
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+            test_ctx->cnx_client->initial_repeat_needed = 0;
+            /* Verify that there are two packets in the initial queue */
+            if (ret == 0) {
+                if (test_ctx->c_to_s_link->first_packet == NULL) {
+                    DBG_PRINTF("%s", "No packet queued");
+                    ret = -1;
+                }
+                else if (test_ctx->c_to_s_link->last_packet == test_ctx->c_to_s_link->first_packet) {
+                    DBG_PRINTF("%s", "Only one packet queued");
+                    ret = -1;
+                }
+            }
+        }
+
+        while (ret == 0 && test_ctx->s_to_c_link->first_packet == NULL){
+            /* run a couple of simulation round to process the first server packets,
+             * but make sure the server sends only one packet */
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+        }
+
+        if (ret == 0) {
+            if (test_ctx->cnx_server == NULL) {
+                DBG_PRINTF("%s", "No server connection");
+                ret = -1;
+
+            }
+            else {
+                /* Make sure that the server waits before sending the next packet. */
+                test_ctx->cnx_server->next_wake_time += 2000;
+            }
+        }
+    }
+
+    /* Run a connection loop */
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    /* Prepare to send data */
+    if (ret == 0) {
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_q2_and_r2, sizeof(test_scenario_q2_and_r2));
+    }
+
+    /* Try send data */
+    if (ret == 0) {
+        ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 0);
+    }
+
+    /* Check that the data was sent and received */
+    if (ret == 0) {
+        ret = tls_api_one_scenario_verify(test_ctx);
+    }
+
+    if (ret == 0) {
+        ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
+
+        if (ret != 0)
+        {
+            DBG_PRINTF("Connection close returns %d\n", ret);
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
