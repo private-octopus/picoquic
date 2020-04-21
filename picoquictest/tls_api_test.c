@@ -8282,9 +8282,6 @@ int initial_race_test()
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
-    int nb_inactive = 0;
-    int nb_trials = 0;
-    int natted = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
