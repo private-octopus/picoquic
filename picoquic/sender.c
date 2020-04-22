@@ -784,7 +784,16 @@ void picoquic_update_pacing_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x, 
         }
         else {
             if (slow_start && path_x->smoothed_rtt > 4*PICOQUIC_MAX_BANDWIDTH_TIME_INTERVAL_MAX) {
-                quantum = (uint64_t)(pacing_rate*PICOQUIC_MAX_BANDWIDTH_TIME_INTERVAL_MAX);
+                const uint64_t quantum_min = 0x8000;
+                if (quantum  < quantum_min){
+                    quantum = quantum_min;
+                }
+                else {
+                    uint64_t quantum2 = (uint64_t)((pacing_rate * PICOQUIC_MAX_BANDWIDTH_TIME_INTERVAL_MAX) / 1000000.0);
+                    if (quantum2 > quantum_min) {
+                        quantum = quantum2;
+                    }
+                }
             }
             else if (quantum > 16ull * path_x->send_mtu) {
                 quantum = 16ull * path_x->send_mtu;
