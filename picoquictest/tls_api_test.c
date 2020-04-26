@@ -8115,7 +8115,7 @@ int direct_receive_test()
         0, NULL, NULL);
 
     if (ret == 0) {
-        int ret = tls_api_one_scenario_body_connect(test_ctx, &simulated_time, 0, 0, 0);
+        ret = tls_api_one_scenario_body_connect(test_ctx, &simulated_time, 0, 0, 0);
 
         /* Prepare to send data */
         if (ret == 0) {
