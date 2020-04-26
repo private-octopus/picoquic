@@ -159,7 +159,8 @@ typedef struct st_picoquic_bbr_state_t {
     double pacing_gain;
     double cwnd_gain;
     double pacing_rate;
-    size_t cycle_index;
+    int cycle_index;
+    int cycle_start;
     int round_count;
     int full_bw_count;
     int filled_pipe : 1;
@@ -168,6 +169,7 @@ typedef struct st_picoquic_bbr_state_t {
     int probe_rtt_round_done : 1;
     int idle_restart : 1;
     int packet_conservation : 1;
+    int btl_bw_increased : 1;
 } picoquic_bbr_state_t;
 
 void BBREnterStartupLongRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x)
@@ -298,6 +300,7 @@ void BBRUpdateBtlBw(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x)
         bbr_state->btl_bw_filter[0] =bandwidth_estimate;
         if (bandwidth_estimate > bbr_state->btl_bw) {
             bbr_state->btl_bw = bandwidth_estimate;
+            bbr_state->btl_bw_increased = 1;
         }
     }
 }
@@ -343,11 +346,19 @@ void BBRAdvanceCyclePhase(picoquic_bbr_state_t* bbr_state, uint64_t current_time
     bbr_state->cycle_stamp = current_time;
     bbr_state->cycle_index++;
     if (bbr_state->cycle_index >= BBR_GAIN_CYCLE_LEN) {
-        int start = (int)(bbr_state->rt_prop / PICOQUIC_TARGET_RENO_RTT);
-        if (start > BBR_GAIN_CYCLE_MAX_START) {
-            start = BBR_GAIN_CYCLE_MAX_START;
+        int start = bbr_state->cycle_start;
+        if (bbr_state->btl_bw_increased) {
+            bbr_state->btl_bw_increased = 0;
+            start++;
+            if (start > BBR_GAIN_CYCLE_MAX_START) {
+                start = BBR_GAIN_CYCLE_MAX_START;
+            }
+        }
+        else if (start > 0) {
+            start--;
         }
         bbr_state->cycle_index = start;
+        bbr_state->cycle_start = start;
     }
    
     bbr_state->pacing_gain = bbr_pacing_gain_cycle[bbr_state->cycle_index];
@@ -379,10 +390,25 @@ void BBRCheckFullPipe(picoquic_bbr_state_t* bbr_state, int rs_is_app_limited)
 
 void BBREnterProbeBW(picoquic_bbr_state_t* bbr_state, uint64_t current_time)
 {
+    int start = 0;
     bbr_state->state = picoquic_bbr_alg_probe_bw;
     bbr_state->pacing_gain = 1.0;
     bbr_state->cwnd_gain = 1.5;
-    bbr_state->cycle_index = 4;  /* TODO: random_int_in_range(0, 5); */
+
+    if (bbr_state->rt_prop > PICOQUIC_TARGET_RENO_RTT) {
+        start = (int)(bbr_state->rt_prop / PICOQUIC_TARGET_RENO_RTT);
+        if (start > BBR_GAIN_CYCLE_MAX_START) {
+            start = BBR_GAIN_CYCLE_MAX_START;
+        }
+    }
+    else {
+        start = 2;
+    }
+
+    bbr_state->cycle_index = start;
+    bbr_state->cycle_start = start;
+    bbr_state->btl_bw_increased = 1;
+
     BBRAdvanceCyclePhase(bbr_state, current_time);
 }
 

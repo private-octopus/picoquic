@@ -700,15 +700,6 @@ int picoquic_is_sending_authorized_by_pacing(picoquic_path_t * path_x, uint64_t 
     int ret = 1;
 
     picoquic_update_pacing_bucket(path_x, current_time);
-#if 0
-    if (path_x->pacing_bucket_nanosec <= 0) {
-        uint64_t next_pacing_time = current_time + path_x->pacing_packet_time_microsec;
-        if (next_pacing_time < *next_time) {
-            *next_time = next_pacing_time;
-        }
-        ret = 0;
-    }
-#else
     if (path_x->pacing_bucket_nanosec < path_x->pacing_packet_time_nanosec) {
         int64_t bucket_required = (int64_t)path_x->pacing_packet_time_nanosec - path_x->pacing_bucket_nanosec;
 
@@ -718,9 +709,6 @@ int picoquic_is_sending_authorized_by_pacing(picoquic_path_t * path_x, uint64_t 
         }
         ret = 0;
     }
-
-#endif
-
 
     return ret;
 }
@@ -811,6 +799,11 @@ void picoquic_update_pacing_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x, 
             else if (quantum > 16ull * path_x->send_mtu) {
                 quantum = 16ull * path_x->send_mtu;
             }
+
+        }
+
+        if (slow_start) {
+            pacing_rate *= 1.25;
         }
 
         picoquic_update_pacing_rate(cnx, path_x, pacing_rate, quantum);
