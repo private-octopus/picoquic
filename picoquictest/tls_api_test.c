@@ -8411,7 +8411,6 @@ int pacing_test()
     picoquic_quic_t* quic = NULL;
     picoquic_cnx_t* cnx = NULL;
     struct sockaddr_in saddr;
-    const uint64_t test_rtt = 250000;
     const uint64_t test_byte_per_sec = 1250000;
     const uint64_t test_quantum = 0x4000;
     int nb_sent = 0;
