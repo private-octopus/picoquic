@@ -1775,7 +1775,7 @@ void picoquic_estimate_max_path_bandwidth(picoquic_cnx_t* cnx, picoquic_path_t* 
             /* Compute a max bandwidth estimate */
             uint64_t receive_interval = delivery_time - path_x->max_sample_acked_time;
 
-            if (receive_interval > PICOQUIC_BANDWIDTH_TIME_INTERVAL_MIN) {
+            if (receive_interval > PICOQUIC_MAX_BANDWIDTH_TIME_INTERVAL_MIN) {
                 uint64_t delivered = path_x->delivered - path_x->max_sample_delivered;
                 uint64_t send_interval = send_time - path_x->max_sample_sent_time;
                 uint64_t bw_estimate;
@@ -1791,12 +1791,10 @@ void picoquic_estimate_max_path_bandwidth(picoquic_cnx_t* cnx, picoquic_path_t* 
                     path_x->max_bandwidth_estimate = bw_estimate;
                 }
 
-                if (receive_interval > PICOQUIC_BANDWIDTH_TIME_INTERVAL_MIN) {
-                    /* Change the reference point if estimate duration is long enough */
-                    path_x->max_sample_delivered = path_x->delivered;
-                    path_x->max_sample_acked_time = delivery_time;
-                    path_x->max_sample_sent_time = send_time;
-                }
+                /* Change the reference point if estimate duration is long enough */
+                path_x->max_sample_delivered = path_x->delivered;
+                path_x->max_sample_acked_time = delivery_time;
+                path_x->max_sample_sent_time = send_time;
             }
         }
     }

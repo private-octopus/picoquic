@@ -682,7 +682,7 @@ static size_t picoquic_protect_packet(picoquic_cnx_t* cnx,
 static void picoquic_update_pacing_bucket(picoquic_path_t * path_x, uint64_t current_time)
 {
     if (current_time > path_x->pacing_evaluation_time) {
-        path_x->pacing_bucket_nanosec += (current_time - path_x->pacing_evaluation_time) << 10;
+        path_x->pacing_bucket_nanosec += (current_time - path_x->pacing_evaluation_time) * 1000;
         path_x->pacing_evaluation_time = current_time;
         if (path_x->pacing_bucket_nanosec > path_x->pacing_bucket_max) {
             path_x->pacing_bucket_nanosec = path_x->pacing_bucket_max;
@@ -700,7 +700,7 @@ int picoquic_is_sending_authorized_by_pacing(picoquic_path_t * path_x, uint64_t 
     int ret = 1;
 
     picoquic_update_pacing_bucket(path_x, current_time);
-
+#if 0
     if (path_x->pacing_bucket_nanosec <= 0) {
         uint64_t next_pacing_time = current_time + path_x->pacing_packet_time_microsec;
         if (next_pacing_time < *next_time) {
@@ -708,6 +708,19 @@ int picoquic_is_sending_authorized_by_pacing(picoquic_path_t * path_x, uint64_t 
         }
         ret = 0;
     }
+#else
+    if (path_x->pacing_bucket_nanosec < path_x->pacing_packet_time_nanosec) {
+        int64_t bucket_required = (int64_t)path_x->pacing_packet_time_nanosec - path_x->pacing_bucket_nanosec;
+
+        uint64_t next_pacing_time = current_time + 1 + bucket_required / 1000;
+        if (next_pacing_time < *next_time) {
+            *next_time = next_pacing_time;
+        }
+        ret = 0;
+    }
+
+#endif
+
 
     return ret;
 }
@@ -811,11 +824,16 @@ void picoquic_update_pacing_after_send(picoquic_path_t * path_x, uint64_t curren
 {
     picoquic_update_pacing_bucket(path_x, current_time);
 
+#if 0
     if (path_x->pacing_bucket_nanosec < path_x->pacing_packet_time_nanosec) {
         path_x->pacing_bucket_nanosec = 0;
     } else {
         path_x->pacing_bucket_nanosec -= path_x->pacing_packet_time_nanosec;
     }
+#else
+    path_x->pacing_bucket_nanosec -= path_x->pacing_packet_time_nanosec;
+#endif
+
 }
 
 /*

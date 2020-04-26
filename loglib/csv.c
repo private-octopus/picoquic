@@ -82,6 +82,7 @@ int picoquic_cc_bin_to_csv(FILE * f_binlog, FILE * f_csvlog)
     ret |= fprintf(f_csvlog, "cc_state, ") <= 0;
     ret |= fprintf(f_csvlog, "cc_param, ") <= 0;
     ret |= fprintf(f_csvlog, "bw_max, ") <= 0;
+    ret |= fprintf(f_csvlog, "transit, ") <= 0;
     ret |= fprintf(f_csvlog, "\n") <= 0;
 
     if (ret == 0) {
@@ -143,6 +144,7 @@ int csv_cb(bytestream * s, void * ptr)
         uint64_t cc_state = 0;
         uint64_t cc_param = 0;
         uint64_t bw_max = 0;
+        uint64_t bytes_in_transit = 0;
 
         ret |= byteread_vint(s, &sequence);
         ret |= byteread_vint(s, &packet_rcvd);
@@ -169,11 +171,12 @@ int csv_cb(bytestream * s, void * ptr)
         (void)byteread_vint(s, &cc_state);
         (void)byteread_vint(s, &cc_param);
         (void)byteread_vint(s, &bw_max);
+        (void)byteread_vint(s, &bytes_in_transit);
 
-        if (ret != 0 || fprintf(f_csvlog, "%" PRIu64 ", %" PRIu64 ", %" PRId64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ",",
+        if (ret != 0 || fprintf(f_csvlog, "%" PRIu64 ", %" PRIu64 ", %" PRId64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ",",
             time, sequence, (int64_t)highest_ack, high_ack_time, last_time_ack,
             cwin, one_way_delay, rtt_sample, SRTT, RTT_min, bandwidth_estimate, receive_rate_estimate, Send_MTU, pacing_packet_time,
-            nb_retrans, nb_spurious, cwin_blkd, flow_blkd, stream_blkd, cc_state, cc_param, bw_max) <= 0) {
+            nb_retrans, nb_spurious, cwin_blkd, flow_blkd, stream_blkd, cc_state, cc_param, bw_max, bytes_in_transit) <= 0) {
             ret = -1;
         }
         if (ret != 0 || fprintf(f_csvlog, "\n") <= 0) {

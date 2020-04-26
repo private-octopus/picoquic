@@ -69,7 +69,7 @@ extern "C" {
 #define PICOQUIC_BANDWIDTH_ESTIMATE_MAX 10000000000ull /* 10 GB per second */
 #define PICOQUIC_BANDWIDTH_TIME_INTERVAL_MIN 1000
 #define PICOQUIC_BANDWIDTH_MEDIUM 2000000 /* 16 Mbps, threshold for coalescing 10 packets per ACK */
-#define PICOQUIC_MAX_BANDWIDTH_TIME_INTERVAL_MIN 5000
+#define PICOQUIC_MAX_BANDWIDTH_TIME_INTERVAL_MIN 1000
 #define PICOQUIC_MAX_BANDWIDTH_TIME_INTERVAL_MAX 15000
 
 #define PICOQUIC_SPURIOUS_RETRANSMIT_DELAY_MAX 1000000ull /* one second */
@@ -757,9 +757,9 @@ typedef struct st_picoquic_path_t {
 
     uint64_t pacing_rate;
     uint64_t pacing_evaluation_time;
-    uint64_t pacing_bucket_nanosec;
-    uint64_t pacing_bucket_max;
-    uint64_t pacing_packet_time_nanosec;
+    int64_t pacing_bucket_nanosec;
+    int64_t pacing_bucket_max;
+    int64_t pacing_packet_time_nanosec;
     uint64_t pacing_packet_time_microsec;
 
     /* Loss bit data */
@@ -1092,6 +1092,8 @@ picoquic_cnx_t* picoquic_cnx_by_secret(picoquic_quic_t* quic, uint8_t* reset_sec
 
 /* Reset the pacing data after CWIN is updated */
 void picoquic_update_pacing_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x, int slow_start);
+void picoquic_update_pacing_after_send(picoquic_path_t* path_x, uint64_t current_time);
+int picoquic_is_sending_authorized_by_pacing(picoquic_path_t* path_x, uint64_t current_time, uint64_t* next_time);
 /* Reset pacing data if congestion algorithm computes it directly */
 void picoquic_update_pacing_rate(picoquic_cnx_t* cnx, picoquic_path_t* path_x, double pacing_rate, uint64_t quantum);
 

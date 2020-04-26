@@ -300,6 +300,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(pacing)
+        {
+            int ret = pacing_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
 		TEST_METHOD(test_tls_api)
 		{
 			int ret = tls_api_test();
@@ -1081,6 +1088,35 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(satellite_jitter)
+        {
+            int ret = satellite_jitter_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(satellite_medium)
+        {
+            int ret = satellite_medium_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(satellite_small)
+        {
+            int ret = satellite_small_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(satellite_small_up)
+        {
+            int ret = satellite_small_up_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(cid_length)
         {
             int ret = cid_length_test();

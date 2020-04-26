@@ -6664,11 +6664,13 @@ int bbr_long_test()
         picoquic_set_default_congestion_algorithm(test_ctx->qserver, picoquic_bbr_algorithm);
         picoquic_set_congestion_algorithm(test_ctx->cnx_client, picoquic_bbr_algorithm);
 
+
         test_ctx->c_to_s_link->jitter = 0;
         test_ctx->s_to_c_link->jitter = 0;
         test_ctx->c_to_s_link->picosec_per_byte = 8000000; /* Simulate 1 Mbps */
 
         picoquic_set_binlog(test_ctx->qserver, "bbr_long.bin");
+        test_ctx->qserver->use_long_log = 1;
 
         ret = tls_api_one_scenario_body_connect(test_ctx, &simulated_time, 0, 0, 0);
         if (ret != 0)
@@ -6715,7 +6717,7 @@ int bbr_long_test()
     }
 
     if (ret == 0) {
-        ret = tls_api_one_scenario_body_verify(test_ctx, &simulated_time, 13000000);
+        ret = tls_api_one_scenario_body_verify(test_ctx, &simulated_time, 15000000);
     }
 
     /* Free the resource, which will close the log file. */
@@ -6846,12 +6848,13 @@ int gbps_performance_test()
  * in order to execut the test in reasonable time. There should be two test
  * variants: 0% loss, and 1 %loss.
  */
-static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, uint64_t max_completion_time, uint64_t jitter, int has_loss)
+static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t data_size, uint64_t max_completion_time, 
+    uint64_t mbps_up, uint64_t mbps_down, uint64_t jitter, int has_loss)
 {
     uint64_t simulated_time = 0;
     uint64_t latency = 300000;
-    uint64_t picoseq_per_byte_250 = (1000000ull * 8) / 250;
-    uint64_t picoseq_per_byte_3 = (1000000ull * 8) / 3;
+    uint64_t picoseq_per_byte_250 = (1000000ull * 8) / mbps_up;
+    uint64_t picoseq_per_byte_3 = (1000000ull * 8) / mbps_down;
     picoquic_tp_t client_parameters;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = 0;
@@ -6872,7 +6875,8 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, uint64_t 
         char binlog_file_name[256];
         size_t binlog_file_name_len = 0;
         (void)picoquic_sprintf(binlog_file_name, sizeof(binlog_file_name), &binlog_file_name_len,
-            "satellite_%s_j%" PRIu64 "%s.bin", ccalgo->congestion_algorithm_id, jitter, (has_loss) ? "_loss" : "");
+            "satellite_%s_u%" PRIu64 "_d%" PRIu64 "_j%" PRIu64 "%s.bin", ccalgo->congestion_algorithm_id, 
+            mbps_up, mbps_down, jitter, (has_loss) ? "_loss" : "");
 
         picoquic_set_default_congestion_algorithm(test_ctx->qserver, ccalgo);
         picoquic_set_congestion_algorithm(test_ctx->cnx_client, ccalgo);
@@ -6892,7 +6896,7 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, uint64_t 
 
         if (ret == 0) {
             ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
-                NULL, 0, 100000000, (has_loss) ? 0x10000000:0, 0, 2 * latency, max_completion_time);
+                NULL, 0, data_size, (has_loss) ? 0x10000000:0, 0, 2 * latency, max_completion_time);
         }
     }
 
@@ -6909,12 +6913,38 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, uint64_t 
 
 int satellite_basic_test()
 {
-    return satellite_test_one(picoquic_bbr_algorithm, 5250000, 0, 0);
+    /* Should be less than 7 sec per draft etosat. */
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 5800000, 250, 3, 0, 0);
 }
 
 int satellite_loss_test()
 {
-    return satellite_test_one(picoquic_bbr_algorithm, 8200000, 0, 1);
+    /* Should be less than 10 sec per draft etosat. */
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 8200000, 250, 3, 0, 1);
+}
+
+int satellite_jitter_test()
+{
+    /* Should be less than 7 sec per draft etosat. */
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 8000000, 250, 3, 3000, 0);
+}
+
+int satellite_medium_test()
+{
+    /* Should be less than 20 sec per draft etosat. */
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 20000000, 50, 10, 0, 0);
+}
+
+int satellite_small_test()
+{
+    /* Should be less than 85 sec per draft etosat. */
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 85000000, 10, 2, 0, 0);
+}
+
+int satellite_small_up_test()
+{
+    /* Should be less than 420 sec per draft etosat. */
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 420000000, 2, 10, 0, 0);
 }
 
 /* Test that different CID length are properly supported */
@@ -8036,7 +8066,7 @@ int pacing_update_test()
             ret = -1;
         }
         else {
-            fprintf(test_ctx->bw_update, "Time, Stream_ID, Pacing_rate, CWIN, RTT\n");
+            fprintf(test_ctx->bw_update, "Time, Pacing_rate_CB, Pacing_rate, CWIN, RTT\n");
             /* Request bandwidth updates */
             picoquic_subscribe_pacing_rate_updates(test_ctx->cnx_client, 0x8000, 0x10000);
 
@@ -8085,7 +8115,7 @@ int direct_receive_test()
         0, NULL, NULL);
 
     if (ret == 0) {
-        int ret = tls_api_one_scenario_body_connect(test_ctx, &simulated_time, 0, 0, 0);
+        ret = tls_api_one_scenario_body_connect(test_ctx, &simulated_time, 0, 0, 0);
 
         /* Prepare to send data */
         if (ret == 0) {
@@ -8260,7 +8290,7 @@ int app_limit_cc_test()
         22000000,
         22000000,
         22000000,
-        26000000 };
+        29000000 };
     int ret = 0;
 
     for (size_t i = 0; i < sizeof(ccalgos) / sizeof(picoquic_congestion_algorithm_t*); i++) {
@@ -8365,6 +8395,98 @@ int initial_race_test()
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+/* Test of the pacing functions.
+ */
+
+int pacing_test()
+{
+    /* Create a connection so as to instantiate the pacing context */
+    int ret = 0;
+    uint64_t current_time = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    struct sockaddr_in saddr;
+    const uint64_t test_byte_per_sec = 1250000;
+    const uint64_t test_quantum = 0x4000;
+    int nb_sent = 0;
+    int nb_round = 0;
+    const int nb_target = 10000;
+
+    quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, current_time,
+        &current_time, NULL, NULL, 0);
+
+    memset(&saddr, 0, sizeof(struct sockaddr_in));
+    saddr.sin_family = AF_INET;
+    saddr.sin_port = 1000;
+
+    if (quic == NULL) {
+        DBG_PRINTF("%s", "Cannot create QUIC context\n");
+        ret = -1;
+    }
+    else {
+        cnx = picoquic_create_cnx(quic,
+            picoquic_null_connection_id, picoquic_null_connection_id, (struct sockaddr*) & saddr,
+            current_time, 0, "test-sni", "test-alpn", 1);
+
+        if (cnx == NULL) {
+            DBG_PRINTF("%s", "Cannot create connection\n");
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        /* Set pacing parameters to specified value */
+        picoquic_update_pacing_rate(cnx, cnx->path[0], (double)test_byte_per_sec, test_quantum);
+        /* Run a loop of N tests based on next wake time. */
+        while (ret == 0 && nb_sent < nb_target) {
+            nb_round++;
+            if (nb_round > 4 * nb_target) {
+                DBG_PRINTF("Pacing needs more that %d rounds for %d packets", nb_round, nb_target);
+                ret = -1;
+            }
+            else {
+                uint64_t next_time = current_time + 10000000;
+                if (picoquic_is_sending_authorized_by_pacing(cnx->path[0], current_time, &next_time)) {
+                    nb_sent++;
+                    picoquic_update_pacing_after_send(cnx->path[0], current_time);
+                }
+                else {
+                    if (current_time < next_time) {
+                        current_time = next_time;
+                    }
+                    else {
+                        DBG_PRINTF("Pacing next = %" PRIu64", current = %d" PRIu64, next_time, current_time);
+                        ret = -1;
+                    }
+                }
+            }
+        }
+
+        /* Verify that the total send time matches expectations */
+        if (ret == 0) {
+            uint64_t volume_sent = nb_target * cnx->path[0]->send_mtu;
+            uint64_t time_max = ((volume_sent * 1000000) / test_byte_per_sec) + 1;
+            uint64_t time_min = (((volume_sent - test_quantum) * 1000000) / test_byte_per_sec) + 1;
+
+            if (current_time > time_max) {
+                DBG_PRINTF("Pacing used = %" PRIu64", expected max = %d" PRIu64, current_time, time_max);
+                ret = -1;
+            }
+            else if (current_time < time_min) {
+                DBG_PRINTF("Pacing used = %" PRIu64", expected min = %d" PRIu64, current_time, time_min);
+                ret = -1;
+            }
+        }
+    }
+
+    if (quic != NULL) {
+        picoquic_free(quic);
     }
 
     return ret;
