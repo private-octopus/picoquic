@@ -6848,7 +6848,7 @@ int gbps_performance_test()
  * in order to execut the test in reasonable time. There should be two test
  * variants: 0% loss, and 1 %loss.
  */
-static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, uint64_t data_size, uint64_t max_completion_time, 
+static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t data_size, uint64_t max_completion_time, 
     uint64_t mbps_up, uint64_t mbps_down, uint64_t jitter, int has_loss)
 {
     uint64_t simulated_time = 0;
