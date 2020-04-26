@@ -6914,7 +6914,7 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
 int satellite_basic_test()
 {
     /* Should be less than 7 sec per draft etosat. */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 5800000, 250, 3, 0, 0);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 5400000, 250, 3, 0, 0);
 }
 
 int satellite_loss_test()
@@ -6926,7 +6926,7 @@ int satellite_loss_test()
 int satellite_jitter_test()
 {
     /* Should be less than 7 sec per draft etosat. */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 8000000, 250, 3, 3000, 0);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 6200000, 250, 3, 3000, 0);
 }
 
 int satellite_medium_test()
@@ -8286,7 +8286,7 @@ int app_limit_cc_test()
         picoquic_bbr_algorithm,
         picoquic_fastcc_algorithm };
     uint64_t max_completion_times[] = {
-        22000000,
+        23000000,
         22000000,
         22000000,
         22000000,
