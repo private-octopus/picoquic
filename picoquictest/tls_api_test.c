@@ -6932,19 +6932,19 @@ int satellite_jitter_test()
 int satellite_medium_test()
 {
     /* Should be less than 20 sec per draft etosat. */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 20000000, 50, 10, 0, 0);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 18000000, 50, 10, 0, 0);
 }
 
 int satellite_small_test()
 {
     /* Should be less than 85 sec per draft etosat. */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 85000000, 10, 2, 0, 0);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 81000000, 10, 2, 0, 0);
 }
 
 int satellite_small_up_test()
 {
     /* Should be less than 420 sec per draft etosat. */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 420000000, 2, 10, 0, 0);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 400000000, 2, 10, 0, 0);
 }
 
 /* Test that different CID length are properly supported */
