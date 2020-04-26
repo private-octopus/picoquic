@@ -312,6 +312,12 @@ void BBRUpdateRTprop(picoquic_bbr_state_t* bbr_state, uint64_t rtt_sample, uint6
         bbr_state->rt_prop = rtt_sample;
         bbr_state->rt_prop_stamp = current_time;
     }
+    else {
+        uint64_t delta = rtt_sample - bbr_state->rt_prop;
+        if (20 * delta < bbr_state->rt_prop) {
+            bbr_state->rt_prop_stamp = current_time;
+        }
+    }
 }
 
 int BBRIsNextCyclePhase(picoquic_bbr_state_t* bbr_state, uint64_t prior_in_flight, uint64_t packets_lost, uint64_t current_time)
@@ -325,7 +331,7 @@ int BBRIsNextCyclePhase(picoquic_bbr_state_t* bbr_state, uint64_t prior_in_fligh
                     prior_in_flight >= BBRInflight(bbr_state, bbr_state->pacing_gain));
         }
         else {  /*  (BBR.pacing_gain < 1) */
-            is_full_length |= prior_in_flight <= BBRInflight(bbr_state, 1.0);
+            is_full_length &= prior_in_flight <= BBRInflight(bbr_state, 1.0);
         }
     }
     return is_full_length;

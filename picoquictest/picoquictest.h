@@ -161,6 +161,10 @@ int cubic_test();
 int cubic_jitter_test();
 int satellite_basic_test();
 int satellite_loss_test();
+int satellite_jitter_test();
+int satellite_medium_test();
+int satellite_small_test();
+int satellite_small_up_test();
 int long_rtt_test();
 int cid_length_test();
 int initial_server_close_test();
@@ -212,6 +216,7 @@ int pacing_update_test();
 int direct_receive_test();
 int app_limit_cc_test();
 int initial_race_test();
+int pacing_test();
 
 int h3zero_post_test();
 int h09_post_test();
