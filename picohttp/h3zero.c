@@ -33,7 +33,7 @@
  */
 #include <string.h>
 #include <stdlib.h>
-#include "picoquic_internal.h"
+#include <stdint.h>
 #include "h3zero.h"
 
 /*
@@ -44,6 +44,38 @@
  * Both clients and servers SHOULD send a value of three or
  * greater for the QUIC transport parameter initial_max_uni_streams.
  */
+
+/* Varint are used in many frame encodings. We want to ensure that h3zero can be used without
+ * referencing the picoquic libraries, and thus we have to duplicate here two utility
+ * functions: h3zeo_varint_decode and h3zero_varint_skip. */
+
+size_t h3zero_varint_skip(const uint8_t* bytes)
+{
+    return ((size_t)1u) << ((bytes[0] & 0xC0) >> 6);
+}
+
+size_t h3zero_varint_decode(const uint8_t* bytes, size_t max_bytes, uint64_t* n64)
+{
+    size_t length = h3zero_varint_skip(bytes);
+
+    if (length > max_bytes) {
+        length = 0;
+        *n64 = 0;
+    }
+    else {
+        uint64_t v = *bytes++ & 0x3F;
+
+        for (size_t i = 1; i < length; i++) {
+            v <<= 8;
+            v += *bytes++;
+        }
+
+        *n64 = v;
+    }
+
+    return length;
+}
+
 
 /*
  * Prefixed integers are used throughout QPACK encoding. This is 
@@ -818,7 +850,7 @@ uint8_t * h3zero_parse_data_stream(uint8_t * bytes, uint8_t * bytes_max,
         if (stream_state->frame_header_read < 1) {
             stream_state->frame_header[stream_state->frame_header_read++] = *bytes++;
         }
-        frame_type_length = picoquic_varint_skip(stream_state->frame_header);
+        frame_type_length = h3zero_varint_skip(stream_state->frame_header);
 
         while (stream_state->frame_header_read < frame_type_length && bytes < bytes_max) {
             stream_state->frame_header[stream_state->frame_header_read++] = *bytes++;
@@ -829,14 +861,14 @@ uint8_t * h3zero_parse_data_stream(uint8_t * bytes, uint8_t * bytes_max,
             return bytes;
         }
 
-        (void)picoquic_varint_decode(stream_state->frame_header, frame_type_length,
+        (void)h3zero_varint_decode(stream_state->frame_header, frame_type_length,
             &stream_state->current_frame_type);
 
         while (stream_state->frame_header_read < frame_type_length + 1) {
             stream_state->frame_header[stream_state->frame_header_read++] = *bytes++;
         }
 
-        frame_header_length = picoquic_varint_skip(stream_state->frame_header + frame_type_length) + frame_type_length;
+        frame_header_length = h3zero_varint_skip(stream_state->frame_header + frame_type_length) + frame_type_length;
 
         if (frame_header_length > sizeof(stream_state->frame_header)) {
             *error_found = H3ZERO_INTERNAL_ERROR;
@@ -848,7 +880,7 @@ uint8_t * h3zero_parse_data_stream(uint8_t * bytes, uint8_t * bytes_max,
         }
 
         if (stream_state->frame_header_read >= frame_header_length) {
-            (void)picoquic_varint_decode(stream_state->frame_header + frame_type_length, frame_header_length - frame_type_length,
+            (void)h3zero_varint_decode(stream_state->frame_header + frame_type_length, frame_header_length - frame_type_length,
                 &stream_state->current_frame_length);
             stream_state->current_frame_read = 0;
             stream_state->frame_header_parsed = 1;
@@ -985,18 +1017,6 @@ static uint8_t const h3zero_default_setting_frame_val[] = {
 uint8_t const * h3zero_default_setting_frame = h3zero_default_setting_frame_val;
 
 const size_t h3zero_default_setting_frame_size = sizeof(h3zero_default_setting_frame_val);
-
-/*
- * Server or client initialization.
- * Send the setting frame on the control stream.
- * This is the first available unidirectional server stream, i.e. stream 1
- * for a client, stream 3 for a server.
- */
-int h3zero_send_initial_settings(picoquic_cnx_t * cnx, uint64_t stream_id) {
-    int ret = picoquic_add_to_stream(cnx, stream_id, h3zero_default_setting_frame,
-        h3zero_default_setting_frame_size, 0);
-    return ret;
-}
 
 /* There is no way in QPACK to prevent sender from using Huffman 
  * encoding. We need a simple decoding function to be used 
