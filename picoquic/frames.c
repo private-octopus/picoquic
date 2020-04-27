@@ -1321,9 +1321,9 @@ uint8_t * picoquic_format_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head
 
                 if (stream->send_queue == NULL) {
                     if (stream->fin_requested) {
-                        /* Set the fin bit */
+                        /* Set the fin bit -- target the start_index octet, to match behavior of length encoding */
                         stream->fin_sent = 1;
-                        *bytes0 |= 1;
+                        bytes0[start_index] |= 1;
 
                         picoquic_update_max_stream_ID_local(cnx, stream);
                         may_close = 1;
