@@ -27,7 +27,6 @@
 #include "picoquic_utils.h"
 #include "picotls.h"
 #include "picotls/openssl.h"
-#include "picotls/minicrypto.h"
 #include <string.h>
 #include "picoquictest_internal.h"
 
