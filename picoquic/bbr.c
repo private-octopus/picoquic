@@ -716,7 +716,7 @@ static void picoquic_bbr_notify(
         case picoquic_congestion_notification_spurious_repeat:
             break;
         case picoquic_congestion_notification_rtt_measurement:
-            if (bbr_state->state == picoquic_bbr_alg_startup && path_x->smoothed_rtt > PICOQUIC_TARGET_RENO_RTT) {
+            if (bbr_state->state == picoquic_bbr_alg_startup && path_x->rtt_min > PICOQUIC_TARGET_RENO_RTT) {
                 BBREnterStartupLongRTT(bbr_state, path_x);
             }
             if (bbr_state->state == picoquic_bbr_alg_startup_long_rtt) {
