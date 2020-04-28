@@ -1,6 +1,7 @@
-dist: xenial
-language: minimal
-sudo: required
+dist: bionic
+os: linux
+language: c
+
 addons:
   apt:
     sources:
@@ -8,13 +9,13 @@ addons:
     packages:
     - cmake
     - cmake-data
-    - libssl-dev 
+    - libssl-dev
     - gdb
-matrix:
+jobs:
     include:
         - name: Linux (gcc-8)
           os: linux
-          dist: xenial
+          dist: bionic
           addons:
             apt:
                 sources:
@@ -27,20 +28,20 @@ matrix:
               - EXTRA_LDFLAGS="-fuse-ld=gold"
         - name: Linux (clang)
           os: linux
-          dist: xenial
+          dist: bionic
           env:
               - CC=clang
               - CXX=clang++
         - name: Linux (scan-build)
           os: linux
-          dist: xenial
+          dist: bionic
           env:
               - CC=/usr/local/clang/libexec/ccc-analyzer
               - CXX=/usr/local/clang/libexec/c++-analyzer
               - EXTRA="scan-build"
         - name: Linux (cppcheck)
           os: linux
-          dist: xenial
+          dist: bionic
           env:
               - CHECK="cppcheck"
         - name: macOS (xcode)
@@ -69,8 +70,8 @@ script:
   - if [ "$CHECK" == "cppcheck" ]; then cppcheck --project=compile_commands.json --quiet; fi
   - ${EXTRA} make
   - ulimit -c unlimited -S
-  - ./picoquic_ct -n -r && QUICRESULT=$? 
-  - ./picohttp_ct -n -r && HTTPRESULT=$? 
+  - ./picoquic_ct -n -r && QUICRESULT=$?
+  - ./picohttp_ct -n -r && HTTPRESULT=$?
   - if [[ ${QUICRESULT} != 0 ]]; then for i in $(find ./ -maxdepth 1 -name 'core*' -print); do gdb $(pwd)/picoquic_ct core* -ex "thread apply all bt" -ex "set pagination 0" -batch; done; fi;
   - if [[ ${HTTPRESULT} != 0 ]]; then for i in $(find ./ -maxdepth 1 -name 'core*' -print); do gdb $(pwd)/picohttp_ct core* -ex "thread apply all bt" -ex "set pagination 0" -batch; done; fi;
   - if [[ ${QUICRESULT} == 0 ]] && [[ ${HTTPRESULT} == 0 ]]; then exit 0; fi;
