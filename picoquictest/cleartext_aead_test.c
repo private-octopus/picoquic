@@ -1046,15 +1046,24 @@ static const uint8_t key_rotation_test_target_poly[] = {
 
 static ptls_cipher_suite_t *key_rotation_test_suites[] = {
     &ptls_openssl_aes256gcmsha384, &ptls_openssl_aes128gcmsha256,
-    &ptls_minicrypto_chacha20poly1305sha256, NULL };
+#ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
+    &ptls_openssl_chacha20poly1305sha256,
+#endif
+    NULL };
 
 static const uint8_t * key_rotation_test_target[] = {
     key_rotation_test_target_sha384, key_rotation_test_target_sha256,
-    key_rotation_test_target_poly, NULL };
+#ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
+    key_rotation_test_target_poly, 
+#endif
+    NULL };
 
 static const size_t key_rotation_test_target_size[] = {
     sizeof(key_rotation_test_target_sha384), sizeof(key_rotation_test_target_sha256),
-    sizeof(key_rotation_test_target_poly), 0 };
+#ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
+    sizeof(key_rotation_test_target_poly),
+#endif
+    0 };
 
 int key_rotation_vector_test()
 {
