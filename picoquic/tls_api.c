@@ -73,6 +73,11 @@ typedef struct st_picoquic_tls_ctx_t {
     uint8_t app_secret_dec[PTLS_MAX_DIGEST_SIZE];
 } picoquic_tls_ctx_t;
 
+struct st_picoquic_log_event_t {
+    ptls_log_event_t super;
+    FILE* fp;
+};
+
 int picoquic_server_setup_ticket_aead_contexts(picoquic_quic_t* quic,
     ptls_context_t* tls_ctx,
     const uint8_t* secret, size_t secret_length);
@@ -1242,6 +1247,10 @@ void picoquic_master_tlscontext_free(picoquic_quic_t* quic)
         }
 
         if (ctx->log_event != NULL) {
+            struct st_picoquic_log_event_t* picoquic_log_event = (struct st_picoquic_log_event_t*)ctx->log_event;
+            if (picoquic_log_event != NULL && picoquic_log_event->fp != NULL) {
+                picoquic_file_close(picoquic_log_event->fp);
+            }
             free(ctx->log_event);
         }
     }
@@ -1311,14 +1320,8 @@ int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint6
     return ret;
 }
 
-/* This function was copied from the test function in the picotls source.
- * TODO: We need to verify that it does work with wireshark.
+/* Set the log event to record keys for use by Wireshark.
  */
-
-struct st_picoquic_log_event_t {
-    ptls_log_event_t super;
-    FILE *fp;
-};
 
 static void picoquic_log_event_call_back(ptls_log_event_t *_self, ptls_t *tls, const char *type, const char *fmt, ...)
 {

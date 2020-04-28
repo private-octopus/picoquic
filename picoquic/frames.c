@@ -1556,7 +1556,7 @@ uint8_t* picoquic_format_crypto_hs_frame(picoquic_stream_head_t* stream, uint8_t
                 else {
                     bytes = bytes_l;
                 }
-                if (length > 0) {
+                if (bytes != NULL && length > 0) {
                     memcpy(bytes, stream->send_queue->bytes + stream->send_queue->offset, length);
                     bytes += length;
 
