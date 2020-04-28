@@ -27,7 +27,6 @@
 #include "picoquic_utils.h"
 #include "picotls.h"
 #include "picotls/openssl.h"
-#include "picotls/minicrypto.h"
 #include <string.h>
 #include "picoquictest_internal.h"
 
@@ -1039,23 +1038,34 @@ static const uint8_t key_rotation_test_target_sha256[] = {
     0x0e, 0x34, 0x09, 0x19, 0x1b, 0x28, 0x46, 0x3c,
     0x38, 0xaf, 0x43, 0x34, 0x99, 0x43, 0x72, 0x57 };
 
+#ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
 static const uint8_t key_rotation_test_target_poly[] = {
     0x00, 0x70, 0x0d, 0x33, 0x5b, 0x1c, 0x49, 0xd1,
     0xe6, 0x37, 0x1e, 0x22, 0xd4, 0xa0, 0x17, 0x6d,
     0x0e, 0x34, 0x09, 0x19, 0x1b, 0x28, 0x46, 0x3c,
     0x38, 0xaf, 0x43, 0x34, 0x99, 0x43, 0x72, 0x57 };
+#endif
 
 static ptls_cipher_suite_t *key_rotation_test_suites[] = {
     &ptls_openssl_aes256gcmsha384, &ptls_openssl_aes128gcmsha256,
-    &ptls_minicrypto_chacha20poly1305sha256, NULL };
+#ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
+    &ptls_openssl_chacha20poly1305sha256,
+#endif
+    NULL };
 
 static const uint8_t * key_rotation_test_target[] = {
     key_rotation_test_target_sha384, key_rotation_test_target_sha256,
-    key_rotation_test_target_poly, NULL };
+#ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
+    key_rotation_test_target_poly, 
+#endif
+    NULL };
 
 static const size_t key_rotation_test_target_size[] = {
     sizeof(key_rotation_test_target_sha384), sizeof(key_rotation_test_target_sha256),
-    sizeof(key_rotation_test_target_poly), 0 };
+#ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
+    sizeof(key_rotation_test_target_poly),
+#endif
+    0 };
 
 int key_rotation_vector_test()
 {

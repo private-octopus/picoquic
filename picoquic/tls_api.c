@@ -26,7 +26,6 @@
 #include "picotls.h"
 #include "picoquic_internal.h"
 #include "picotls/openssl.h"
-#include "picotls/minicrypto.h"
 #include "picotls/ffx.h"
 #include "tls_api.h"
 #include <openssl/pem.h>
@@ -1038,14 +1037,18 @@ void picoquic_crypto_context_free(picoquic_crypto_context_t * ctx)
 
 /* Definition of supported key exchange algorithms */
 
-ptls_key_exchange_algorithm_t *picoquic_key_exchanges[] = { &ptls_openssl_secp256r1, &ptls_minicrypto_x25519, NULL };
+ptls_key_exchange_algorithm_t *picoquic_key_exchanges[] = { &ptls_openssl_secp256r1,                                                         
+#ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
+                                                           &ptls_openssl_x25519,
+#endif
+                                                           NULL };
 ptls_cipher_suite_t *picoquic_cipher_suites[] = { 
     &ptls_openssl_aes128gcmsha256,
     &ptls_openssl_aes256gcmsha384,
 #ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
     &ptls_openssl_chacha20poly1305sha256,
 #else
-    &ptls_minicrypto_chacha20poly1305sha256,
+    /* No support for ChaCha 20 */
 #endif
     NULL };
 
@@ -2652,10 +2655,10 @@ void* picoquic_hash_create(char const* algorithm_name) {
     ptls_hash_context_t* ctx;
 
     if (strcmp(algorithm_name, "SHA256") == 0) {
-        ctx = ptls_minicrypto_sha256.create();
+        ctx = ptls_openssl_sha256.create();
     }
     else if (strcmp(algorithm_name, "SHA384") == 0) {
-        ctx = ptls_minicrypto_sha384.create();
+        ctx = ptls_openssl_sha384.create();
     }
     else {
         ctx = NULL;
@@ -2668,10 +2671,10 @@ size_t picoquic_hash_get_length(char const* algorithm_name) {
     size_t len;
 
     if (strcmp(algorithm_name, "SHA256") == 0) {
-        len = ptls_minicrypto_sha256.digest_size;
+        len = ptls_openssl_sha256.digest_size;
     }
     else if (strcmp(algorithm_name, "SHA384") == 0) {
-        len = ptls_minicrypto_sha384.digest_size;
+        len = ptls_openssl_sha384.digest_size;
     }
     else {
         len = 0;
