@@ -1032,14 +1032,18 @@ void picoquic_crypto_context_free(picoquic_crypto_context_t * ctx)
 
 /* Definition of supported key exchange algorithms */
 
-ptls_key_exchange_algorithm_t *picoquic_key_exchanges[] = { &ptls_openssl_secp256r1, &ptls_openssl_x25519, NULL };
+ptls_key_exchange_algorithm_t *picoquic_key_exchanges[] = { &ptls_openssl_secp256r1,                                                         
+#ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
+                                                           &ptls_openssl_x25519,
+#endif
+                                                           NULL };
 ptls_cipher_suite_t *picoquic_cipher_suites[] = { 
     &ptls_openssl_aes128gcmsha256,
     &ptls_openssl_aes256gcmsha384,
 #ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
     &ptls_openssl_chacha20poly1305sha256,
 #else
-    &ptls_openssl_chacha20poly1305sha256,
+    /* No support for ChaCha 20 */
 #endif
     NULL };
 
