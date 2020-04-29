@@ -2410,6 +2410,7 @@ void picoquic_cid_free_encrypt_global_ctx(void ** v_cid_enc)
     }
 }
 
+#if 0
 int picoquic_cid_get_encrypt_global_ctx(void ** v_cid_enc, int is_enc, const void *secret, size_t cid_length)
 {
     uint8_t cidkey[PTLS_MAX_SECRET_SIZE];
@@ -2437,6 +2438,7 @@ int picoquic_cid_get_encrypt_global_ctx(void ** v_cid_enc, int is_enc, const voi
 
     return ret;
 }
+#endif
 
 void picoquic_cid_encrypt_global(void *cid_enc, const picoquic_connection_id_t * cid_in, picoquic_connection_id_t * cid_out)
 {
