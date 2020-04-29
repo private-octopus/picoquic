@@ -6446,6 +6446,13 @@ int packet_trace_test()
 #define QLOG_TRACE_BIN "qlog_trace.bin"
 #define QLOG_TRACE_QLOG "qlog_trace.qlog"
 
+#ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
+const int has_chacha_poly = 1;
+#else
+const int has_chacha_poly = 0;
+#endif
+
+
 void qlog_trace_cid_fn(picoquic_quic_t* quic, picoquic_connection_id_t cnx_id_local,
     picoquic_connection_id_t cnx_id_remote, void* cnx_id_cb_data, picoquic_connection_id_t* cnx_id_returned)
 {
@@ -6476,6 +6483,12 @@ int qlog_trace_test()
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
+    }
+
+    if (!has_chacha_poly) {
+        /* Do not run this test if chacha20 is not available, because
+         * the TLS messages would be different from expected */
+        return 0;
     }
 
     /* Set the logging policy on the server side, to store data in the
