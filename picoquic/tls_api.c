@@ -26,7 +26,6 @@
 #include "picotls.h"
 #include "picoquic_internal.h"
 #include "picotls/openssl.h"
-#include "picotls/minicrypto.h"
 #include "picotls/ffx.h"
 #include "tls_api.h"
 #include <openssl/pem.h>
@@ -72,6 +71,11 @@ typedef struct st_picoquic_tls_ctx_t {
     uint8_t app_secret_enc[PTLS_MAX_DIGEST_SIZE];
     uint8_t app_secret_dec[PTLS_MAX_DIGEST_SIZE];
 } picoquic_tls_ctx_t;
+
+struct st_picoquic_log_event_t {
+    ptls_log_event_t super;
+    FILE* fp;
+};
 
 int picoquic_server_setup_ticket_aead_contexts(picoquic_quic_t* quic,
     ptls_context_t* tls_ctx,
@@ -1033,14 +1037,18 @@ void picoquic_crypto_context_free(picoquic_crypto_context_t * ctx)
 
 /* Definition of supported key exchange algorithms */
 
-ptls_key_exchange_algorithm_t *picoquic_key_exchanges[] = { &ptls_openssl_secp256r1, &ptls_minicrypto_x25519, NULL };
+ptls_key_exchange_algorithm_t *picoquic_key_exchanges[] = { &ptls_openssl_secp256r1,                                                         
+#ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
+                                                           &ptls_openssl_x25519,
+#endif
+                                                           NULL };
 ptls_cipher_suite_t *picoquic_cipher_suites[] = { 
     &ptls_openssl_aes128gcmsha256,
     &ptls_openssl_aes256gcmsha384,
 #ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
     &ptls_openssl_chacha20poly1305sha256,
 #else
-    &ptls_minicrypto_chacha20poly1305sha256,
+    /* No support for ChaCha 20 */
 #endif
     NULL };
 
@@ -1242,6 +1250,10 @@ void picoquic_master_tlscontext_free(picoquic_quic_t* quic)
         }
 
         if (ctx->log_event != NULL) {
+            struct st_picoquic_log_event_t* picoquic_log_event = (struct st_picoquic_log_event_t*)ctx->log_event;
+            if (picoquic_log_event != NULL && picoquic_log_event->fp != NULL) {
+                picoquic_file_close(picoquic_log_event->fp);
+            }
             free(ctx->log_event);
         }
     }
@@ -1311,14 +1323,8 @@ int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint6
     return ret;
 }
 
-/* This function was copied from the test function in the picotls source.
- * TODO: We need to verify that it does work with wireshark.
+/* Set the log event to record keys for use by Wireshark.
  */
-
-struct st_picoquic_log_event_t {
-    ptls_log_event_t super;
-    FILE *fp;
-};
 
 static void picoquic_log_event_call_back(ptls_log_event_t *_self, ptls_t *tls, const char *type, const char *fmt, ...)
 {
@@ -2404,6 +2410,7 @@ void picoquic_cid_free_encrypt_global_ctx(void ** v_cid_enc)
     }
 }
 
+#if 0
 int picoquic_cid_get_encrypt_global_ctx(void ** v_cid_enc, int is_enc, const void *secret, size_t cid_length)
 {
     uint8_t cidkey[PTLS_MAX_SECRET_SIZE];
@@ -2431,6 +2438,7 @@ int picoquic_cid_get_encrypt_global_ctx(void ** v_cid_enc, int is_enc, const voi
 
     return ret;
 }
+#endif
 
 void picoquic_cid_encrypt_global(void *cid_enc, const picoquic_connection_id_t * cid_in, picoquic_connection_id_t * cid_out)
 {
@@ -2649,10 +2657,10 @@ void* picoquic_hash_create(char const* algorithm_name) {
     ptls_hash_context_t* ctx;
 
     if (strcmp(algorithm_name, "SHA256") == 0) {
-        ctx = ptls_minicrypto_sha256.create();
+        ctx = ptls_openssl_sha256.create();
     }
     else if (strcmp(algorithm_name, "SHA384") == 0) {
-        ctx = ptls_minicrypto_sha384.create();
+        ctx = ptls_openssl_sha384.create();
     }
     else {
         ctx = NULL;
@@ -2665,10 +2673,10 @@ size_t picoquic_hash_get_length(char const* algorithm_name) {
     size_t len;
 
     if (strcmp(algorithm_name, "SHA256") == 0) {
-        len = ptls_minicrypto_sha256.digest_size;
+        len = ptls_openssl_sha256.digest_size;
     }
     else if (strcmp(algorithm_name, "SHA384") == 0) {
-        len = ptls_minicrypto_sha384.digest_size;
+        len = ptls_openssl_sha384.digest_size;
     }
     else {
         len = 0;
