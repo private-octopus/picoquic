@@ -257,21 +257,20 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
-
+#if 0
         TEST_METHOD(cid_global_encrypt)
         {
             int ret = cid_global_encrypt_test();
 
             Assert::AreEqual(ret, 0);
         }
-
         TEST_METHOD(cid_mask_encrypt)
         {
             int ret = cid_mask_encrypt_test();
 
             Assert::AreEqual(ret, 0);
         }
-
+#endif
         TEST_METHOD(retry_protection_vector)
         {
             int ret = retry_protection_vector_test();

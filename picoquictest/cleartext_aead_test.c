@@ -1097,6 +1097,7 @@ int key_rotation_vector_test()
     return ret;
 }
 
+#if 0
 /* Test of the FFX function used for CNX-ID encryption.
  * Verify that encryption and decryption works for all lengths between 4 and 18
  */
@@ -1232,6 +1233,7 @@ int cid_mask_encrypt_test()
 
     return ret;
 }
+#endif
 
 /* Retry protection test vector */
 

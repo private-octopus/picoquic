@@ -2487,6 +2487,7 @@ void picoquic_connection_id_callback(picoquic_quic_t * quic, picoquic_connection
             picoquic_cid_encrypt_under_mask(ctx->cid_enc, cnx_id_returned, &ctx->cnx_id_mask, cnx_id_returned);
         }
         break;
+#if 0
     case picoquic_connection_id_encrypt_global:
         /* global encryption */
         if (ctx->cid_enc == NULL) {
@@ -2499,6 +2500,7 @@ void picoquic_connection_id_callback(picoquic_quic_t * quic, picoquic_connection
             picoquic_cid_encrypt_global(ctx->cid_enc, cnx_id_returned, cnx_id_returned);
         }
         break;
+#endif
     default:
         /* Leave it unencrypted */
         break;
