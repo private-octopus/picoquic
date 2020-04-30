@@ -701,7 +701,7 @@ typedef struct st_picoquic_path_t {
     uint64_t retrans_count;
 
     /* Time measurement */
-    uint64_t phase_delay;
+    int64_t phase_delay;
     uint64_t max_ack_delay;
     uint64_t rtt_sample;
     uint64_t one_way_delay_sample;
@@ -961,6 +961,10 @@ typedef struct st_picoquic_cnx_t {
     uint64_t pacing_rate_signalled;
     uint64_t pacing_increase_threshold;
     uint64_t pacing_decrease_threshold;
+
+    /* Data accounting for limiting amplification attacks */
+    uint64_t initial_data_received;
+    uint64_t initial_data_sent;
 
     /* Flow control information */
     uint64_t data_sent;

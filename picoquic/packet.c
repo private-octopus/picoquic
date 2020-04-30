@@ -1809,6 +1809,7 @@ int picoquic_incoming_segment(
     picoquic_cnx_t* cnx = NULL;
     picoquic_packet_header ph;
     int new_context_created = 0;
+    int is_first_segment = 0;
 
     /* Parse the header and decrypt the segment */
     ret = picoquic_parse_header_and_decrypt(quic, bytes, length, packet_length, addr_from,
@@ -1821,6 +1822,7 @@ int picoquic_incoming_segment(
         if (picoquic_is_connection_id_null(previous_dest_id)) {
             /* This is the first segment in the incoming packet */
             *previous_dest_id = ph.dest_cnx_id;
+            is_first_segment = 1;
 
             /* if needed, log that the packet is received */
             if (quic->F_log != NULL && (cnx == NULL || cnx->pkt_ctx[picoquic_packet_context_application].send_sequence < PICOQUIC_LOG_PACKET_MAX_SEQUENCE || quic->use_long_log)) {
@@ -1897,6 +1899,12 @@ int picoquic_incoming_segment(
                     }
                     if (ret == 0) {
                         if (cnx->client_mode == 0) {
+                            if (is_first_segment) {
+                                /* Account for the data received in handshake, but only
+                                 * count the packet once. Do not count it again if it is not
+                                 * the first segment in packet */
+                                cnx->initial_data_received += packet_length;
+                            }
                             ret = picoquic_incoming_client_initial(&cnx, bytes, packet_length,
                                 addr_from, addr_to, if_index_to, &ph, current_time, new_context_created);
                         }
@@ -1925,6 +1933,12 @@ int picoquic_incoming_segment(
                 }
                 break;
             case picoquic_packet_0rtt_protected:
+                if (is_first_segment) {
+                    /* Account for the data received in handshake, but only
+                     * count the packet once. Do not count it again if it is not
+                     * the first segment in packet */
+                    cnx->initial_data_received += packet_length;
+                }
                 ret = picoquic_incoming_0rtt(cnx, bytes, &ph, current_time);
                 break;
             case picoquic_packet_1rtt_protected:

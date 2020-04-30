@@ -158,13 +158,23 @@ static void picoquic_newreno_notify(
         case picoquic_congestion_notification_rtt_measurement:
             /* Using RTT increases as signal to get out of initial slow start */
             if (nr_state->alg_state == picoquic_newreno_alg_slow_start &&
-                nr_state->ssthresh == (uint64_t)((int64_t)-1) &&
-                picoquic_hystart_test(&nr_state->rtt_filter, (cnx->is_time_stamp_enabled)?one_way_delay:rtt_measurement, 
-                    cnx->path[0]->pacing_packet_time_microsec, current_time, 
+                nr_state->ssthresh == (uint64_t)((int64_t)-1)){
+
+                if (path_x->rtt_min > PICOQUIC_TARGET_RENO_RTT) {
+                    /* Increase initial CWIN for long delay links. */
+                    uint64_t min_win = (uint64_t)((double)PICOQUIC_CWIN_INITIAL * (double)path_x->rtt_min / (double)PICOQUIC_TARGET_RENO_RTT);
+                    if (min_win > path_x->cwin) {
+                        path_x->cwin = min_win;
+                    }
+                }
+
+                if (picoquic_hystart_test(&nr_state->rtt_filter, (cnx->is_time_stamp_enabled) ? one_way_delay : rtt_measurement,
+                    cnx->path[0]->pacing_packet_time_microsec, current_time,
                     cnx->is_time_stamp_enabled)) {
-                /* RTT increased too much, get out of slow start! */
-                nr_state->ssthresh = path_x->cwin;
-                nr_state->alg_state = picoquic_newreno_alg_congestion_avoidance;
+                    /* RTT increased too much, get out of slow start! */
+                    nr_state->ssthresh = path_x->cwin;
+                    nr_state->alg_state = picoquic_newreno_alg_congestion_avoidance;
+                }
             }
             break;
         case picoquic_congestion_notification_cwin_blocked:

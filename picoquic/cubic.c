@@ -54,7 +54,7 @@ static void picoquic_cubic_init(picoquic_path_t* path_x, uint64_t current_time)
         memset(&cubic_state->rtt_filter, 0, sizeof(picoquic_min_max_rtt_t));
         memset(cubic_state, 0, sizeof(picoquic_cubic_state_t));
         cubic_state->alg_state = picoquic_cubic_alg_slow_start;
-        cubic_state->ssthresh = (uint64_t)((int64_t)-1);
+        cubic_state->ssthresh = UINT64_MAX;
         cubic_state->W_last_max = (double)cubic_state->ssthresh / (double)path_x->send_mtu;
         cubic_state->W_max = cubic_state->W_last_max;
         cubic_state->C = 0.4;
@@ -142,7 +142,7 @@ static void picoquic_cubic_enter_recovery(picoquic_cnx_t * cnx,
         /* If things are that bad, fall back to slow start */
         cubic_state->ssthresh = PICOQUIC_CWIN_MINIMUM;
         cubic_state->alg_state = picoquic_cubic_alg_slow_start;
-        cubic_state->ssthresh = (uint64_t)((int64_t)-1);
+        cubic_state->ssthresh = UINT64_MAX;
         cubic_state->previous_start_of_epoch = cubic_state->start_of_epoch;
         cubic_state->start_of_epoch = current_time;
         cubic_state->W_reno = PICOQUIC_CWIN_MINIMUM;
@@ -186,12 +186,14 @@ static void picoquic_cubic_correct_spurious(picoquic_path_t* path_x,
     picoquic_cubic_state_t* cubic_state,
     uint64_t current_time)
 {
-    cubic_state->W_max = cubic_state->W_last_max;
-    picoquic_cubic_enter_avoidance(cubic_state, cubic_state->previous_start_of_epoch);
-    double W_cubic = picoquic_cubic_W_cubic(cubic_state, current_time);
-    cubic_state->W_reno = W_cubic * (double)path_x->send_mtu;
-    cubic_state->ssthresh = (uint64_t)(cubic_state->W_max * cubic_state->beta * (double)path_x->send_mtu);
-    path_x->cwin = (uint64_t)cubic_state->W_reno;
+    if (cubic_state->ssthresh != UINT64_MAX) {
+        cubic_state->W_max = cubic_state->W_last_max;
+        picoquic_cubic_enter_avoidance(cubic_state, cubic_state->previous_start_of_epoch);
+        double W_cubic = picoquic_cubic_W_cubic(cubic_state, current_time);
+        cubic_state->W_reno = W_cubic * (double)path_x->send_mtu;
+        cubic_state->ssthresh = (uint64_t)(cubic_state->W_max * cubic_state->beta * (double)path_x->send_mtu);
+        path_x->cwin = (uint64_t)cubic_state->W_reno;
+    }
 }
 
 /*
@@ -323,9 +325,15 @@ static void picoquic_cubic_notify(
             switch (notification) {
             case picoquic_congestion_notification_acknowledgement: 
                 if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
+                    double W_cubic;
+                    uint64_t win_cubic;
+                    /* Protection against limited senders. */
+                    if (cubic_state->start_of_epoch < path_x->last_sender_limited_time) {
+                        cubic_state->start_of_epoch = path_x->last_sender_limited_time;
+                    }
                     /* Compute the cubic formula */
-                    double W_cubic = picoquic_cubic_W_cubic(cubic_state, current_time);
-                    uint64_t win_cubic = (uint64_t)(W_cubic * (double)path_x->send_mtu);
+                    W_cubic = picoquic_cubic_W_cubic(cubic_state, current_time);
+                    win_cubic = (uint64_t)(W_cubic * (double)path_x->send_mtu);
                     /* Also compute the Reno formula */
                     cubic_state->W_reno += ((double)nb_bytes_acknowledged) * ((double)path_x->send_mtu) / cubic_state->W_reno;
 
@@ -414,19 +422,21 @@ static void picoquic_dcubic_notify(
                 /* Unlike Cubic, losses have no effect so do nothing here */
                 break;
             case picoquic_congestion_notification_rtt_measurement:
+                /* if in slow start, increase the window for long delay RTT */
+                if (path_x->rtt_min > PICOQUIC_TARGET_RENO_RTT && cubic_state->ssthresh == UINT64_MAX) {
+                    uint64_t min_cwnd = (uint64_t)((double)PICOQUIC_CWIN_INITIAL * (double)path_x->rtt_min / (double)PICOQUIC_TARGET_RENO_RTT);
+
+                    if (min_cwnd > path_x->cwin) {
+                        path_x->cwin = min_cwnd;
+                    }
+                }
+
                 /* Using RTT increases as congestion signal. This is used
                  * for getting out of slow start, but also for ending a cycle
                  * during congestion avoidance */
                 if (picoquic_hystart_test(&cubic_state->rtt_filter, (cnx->is_time_stamp_enabled) ? one_way_delay : rtt_measurement,
                     cnx->path[0]->pacing_packet_time_microsec, current_time, cnx->is_time_stamp_enabled)) {
                     if (cubic_state->ssthresh == UINT64_MAX) {
-                        if (cubic_state->rtt_filter.rtt_filtered_min > PICOQUIC_TARGET_RENO_RTT) {
-                            double correction = (double)PICOQUIC_TARGET_RENO_RTT / (double)cubic_state->rtt_filter.rtt_filtered_min;
-                            uint64_t base_window = (uint64_t)(correction * (double)path_x->cwin);
-                            uint64_t delta_window = path_x->cwin - base_window;
-                            path_x->cwin -= (delta_window / 2);
-                        }
-
                         cubic_state->ssthresh = path_x->cwin;
                         cubic_state->W_max = (double)path_x->cwin / (double)path_x->send_mtu;
                         cubic_state->W_last_max = cubic_state->W_max;
@@ -479,6 +489,15 @@ static void picoquic_dcubic_notify(
             case picoquic_congestion_notification_timeout:
                 /* do nothing */
             case picoquic_congestion_notification_rtt_measurement:
+                /* if in slow start, increase the window for long delay RTT */
+                if (path_x->rtt_min > PICOQUIC_TARGET_RENO_RTT&& cubic_state->ssthresh == UINT64_MAX) {
+                    uint64_t min_cwnd = (uint64_t)((double)PICOQUIC_CWIN_INITIAL * (double)path_x->rtt_min / (double)PICOQUIC_TARGET_RENO_RTT);
+
+                    if (min_cwnd > path_x->cwin) {
+                        path_x->cwin = min_cwnd;
+                    }
+                }
+
                 if (picoquic_hystart_test(&cubic_state->rtt_filter, (cnx->is_time_stamp_enabled) ? one_way_delay : rtt_measurement,
                     cnx->path[0]->pacing_packet_time_microsec, current_time, cnx->is_time_stamp_enabled)) {
                     if (current_time - cubic_state->start_of_epoch > path_x->smoothed_rtt ||
@@ -500,9 +519,15 @@ static void picoquic_dcubic_notify(
             switch (notification) {
             case picoquic_congestion_notification_acknowledgement:
                 if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
+                    double W_cubic;
+                    uint64_t win_cubic;
+                    /* Protection against limited senders. */
+                    if (cubic_state->start_of_epoch < path_x->last_sender_limited_time) {
+                        cubic_state->start_of_epoch = path_x->last_sender_limited_time;
+                    }
                     /* Compute the cubic formula */
-                    double W_cubic = picoquic_cubic_W_cubic(cubic_state, current_time);
-                    uint64_t win_cubic = (uint64_t)(W_cubic * (double)path_x->send_mtu);
+                    W_cubic = picoquic_cubic_W_cubic(cubic_state, current_time);
+                    win_cubic = (uint64_t)(W_cubic * (double)path_x->send_mtu);
                     /* Also compute the Reno formula */
                     cubic_state->W_reno += ((double)nb_bytes_acknowledged) * ((double)path_x->send_mtu) / cubic_state->W_reno;
 
