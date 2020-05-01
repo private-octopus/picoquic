@@ -2695,7 +2695,8 @@ int session_resume_test()
 /*
  * Zero RTT test. Like the session resume test, but with a twist...
  */
-int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss, unsigned int no_coal, unsigned int long_data)
+int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss, 
+    unsigned int no_coal, unsigned int long_data, uint64_t extra_delay)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -2709,6 +2710,10 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss, unsi
     ret = picoquic_save_tickets(NULL, simulated_time, ticket_file_name);
 
     for (int i = 0; i < 2; i++) {
+        /* Insert a delay before the second connection attempt */
+        if (i == 1) {
+            simulated_time += extra_delay;
+        }
         /* Set up the context, while setting the ticket store parameter for the client */
         if (ret == 0) {
             ret = tls_api_init_ctx(&test_ctx, 
@@ -2875,7 +2880,7 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss, unsi
 
 int zero_rtt_test()
 {
-    return zero_rtt_test_one(0, 0, 0, 0, 0);
+    return zero_rtt_test_one(0, 0, 0, 0, 0, 0);
 }
 
 /*
@@ -2894,7 +2899,7 @@ int zero_rtt_loss_test()
 
     for (unsigned int i = 1; ret == 0 && i < 16; i++) {
         uint64_t early_loss = 1ull << i;
-        ret = zero_rtt_test_one(0, 0, early_loss, 0, 0);
+        ret = zero_rtt_test_one(0, 0, early_loss, 0, 0, 0);
         if (ret != 0) {
             DBG_PRINTF("Zero RTT test fails when packet #%d is lost.\n", i);
         }
@@ -2912,7 +2917,7 @@ int zero_rtt_loss_test()
 
 int zero_rtt_spurious_test()
 {
-    return zero_rtt_test_one(1, 0, 0, 0, 0);
+    return zero_rtt_test_one(1, 0, 0, 0, 0, 0);
 }
 
 /*
@@ -2924,7 +2929,7 @@ int zero_rtt_spurious_test()
 
 int zero_rtt_retry_test()
 {
-    return zero_rtt_test_one(0, 1, 0, 0, 0);
+    return zero_rtt_test_one(0, 1, 0, 0, 0, 0);
 }
 
 /*
@@ -2936,7 +2941,7 @@ int zero_rtt_retry_test()
 
 int zero_rtt_no_coal_test()
 {
-    return zero_rtt_test_one(0, 0, 0, 1, 0);
+    return zero_rtt_test_one(0, 0, 0, 1, 0, 0);
 }
 
 /* Test the robustness of the connection in a zero RTT scenario,
@@ -2961,7 +2966,7 @@ int zero_rtt_many_losses_test()
             }
         }
 
-        ret = zero_rtt_test_one(0, 0, loss_mask, 0, 0);
+        ret = zero_rtt_test_one(0, 0, loss_mask, 0, 0, 0);
         if (ret != 0) {
             DBG_PRINTF("Handshake fails for mask %d, mask = %llx", i, (unsigned long long)loss_mask);
         }
@@ -2976,9 +2981,34 @@ int zero_rtt_many_losses_test()
 
 int zero_rtt_long_test()
 {
-    return zero_rtt_test_one(0, 0, 0, 0, 1);
+    return zero_rtt_test_one(0, 0, 0, 0, 1, 0);
 }
 
+/*
+* 0-RTT delay test. Verify that the tickets as old as the specified delay are still accepted.
+*/
+
+int zero_rtt_delay_test()
+{
+    int ret = 0;
+    int bad_ret;
+    const uint64_t nominal_delay_sec = 100000;
+    const uint64_t nominal_delay = nominal_delay_sec * 1000000;
+
+    bad_ret = zero_rtt_test_one(0, 0, 0, 0, 1, nominal_delay + 1000000);
+    if (bad_ret == 0) {
+        DBG_PRINTF("Zero RTT succeed despite delay = %" PRIu64, " + 1 second.", nominal_delay_sec);
+        ret = -1;
+    }
+    else {
+        ret = zero_rtt_test_one(0, 0, 0, 0, 1, nominal_delay - 2000000);
+        if (ret != 0) {
+            DBG_PRINTF("Zero RTT fails for delay = %" PRIu64, " - 2 seconds.", nominal_delay_sec);
+        }
+    }
+
+    return ret;
+}
 /*
  * Stop sending test. Start a long transmission, but after receiving some bytes,
  * send a stop sending request. Then ask for another transmission. The

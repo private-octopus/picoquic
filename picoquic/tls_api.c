@@ -511,8 +511,16 @@ int picoquic_server_encrypt_ticket_call_back(ptls_encrypt_ticket_t* encrypt_tick
             if (decrypted > src.len - 8) {
                 /* decryption error */
                 ret = -1;
+                if (quic->F_log != NULL) {
+                    picoquic_log_app_message(quic, &quic->cnx_in_progress->initial_cnxid, "%s",
+                        "Session ticket could not be decrypted");
+                }
             } else {
                 dst->off += decrypted;
+                if (quic->F_log != NULL) {
+                    picoquic_log_app_message(quic, &quic->cnx_in_progress->initial_cnxid, "%s",
+                        "Session ticket properly decrypted");
+                }
             }
         }
     }
@@ -2177,7 +2185,7 @@ int picoquic_tls_client_authentication_activated(picoquic_quic_t* quic) {
  * This is encrypted using the same AEAD contexts as the encryption of session tickets.
  * The encrypted structure is:
  * - 64 bit random sequence number.
- * - Encrypted value of the ticket.
+ * - Encrypted value of the token.
  * - AEAD checksum.
  * When invoking AEAD, the sequence number is used to update the IV, and the IP address
  * is passed as "authenticated" data. The 64 bit random number alleviates the concern of
@@ -2188,10 +2196,6 @@ int picoquic_tls_client_authentication_activated(picoquic_quic_t* quic) {
 static int picoquic_server_encrypt_retry_token(picoquic_quic_t * quic, const struct sockaddr * addr_peer,
     uint8_t * token, size_t * token_length, size_t token_max, const uint8_t * text, size_t text_length)
 {
-    /* Assume that the keys are in the quic context
-     * The tickets are composed of a 64 bit "sequence number"
-     * followed by the result of the clear text encryption.
-     */
     int ret = 0;
     uint64_t sequence;
     uint8_t* auth_data;
