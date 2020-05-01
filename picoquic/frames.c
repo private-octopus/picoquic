@@ -1648,7 +1648,7 @@ picoquic_packet_t* picoquic_check_spurious_retransmission(picoquic_cnx_t* cnx,
                     if (old_path->send_mtu > old_path->send_mtu_max_tried) {
                         old_path->send_mtu_max_tried = old_path->send_mtu;
                     }
-                    old_path->mtu_probe_sent = 0;
+                    old_path->mtu_probe_sent = 0; 
                 }
 
                 if (max_spurious_rtt > old_path->max_spurious_rtt) {
@@ -1663,7 +1663,12 @@ picoquic_packet_t* picoquic_check_spurious_retransmission(picoquic_cnx_t* cnx,
                     old_path->max_reorder_gap = max_reorder_gap;
                 }
 
-                if (cnx->congestion_alg != NULL ) {
+                if (old_path->smoothed_rtt == PICOQUIC_INITIAL_RTT && old_path->rtt_variant == 0) {
+                    /* If the RTT has not been set, use it to update the path RTT */
+                    picoquic_update_path_rtt(cnx, old_path, p->send_time, current_time, 0);
+                }
+
+                if (cnx->congestion_alg != NULL) {
                     cnx->congestion_alg->alg_notify(cnx, old_path, picoquic_congestion_notification_spurious_repeat,
                         0, 0, 0, p->sequence_number, current_time);
                 }
@@ -1850,19 +1855,17 @@ void picoquic_update_1wd(picoquic_cnx_t * cnx, picoquic_path_t * old_path,
     int64_t one_way_delay = 0;
 
     if (remote_time_stamp > 0) {
-        int64_t time_stamp_local = remote_time_stamp - ack_delay + cnx->start_time;
-
-        if (cnx->client_mode) {
-            time_stamp_local += old_path->phase_delay;
-        }
-        else {
-            time_stamp_local -= old_path->phase_delay;
-        }
+        int64_t time_stamp_local = remote_time_stamp - ack_delay + cnx->start_time + old_path->phase_delay;
 
         one_way_delay = time_stamp_local - send_time;
+
         if (one_way_delay < 0) {
-            old_path->phase_delay -= one_way_delay;
-            one_way_delay = 0;
+            int64_t correct_1wd = old_path->rtt_sample / 2;
+            picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid,
+                "BAD 1WD! RTS=%" PRIu64 ", AD=%"PRIu64 ", Start=%" PRIu64 ", Phi=%"PRIi64 ", Send=%" PRIu64 ", OWD=%"PRIu64,
+                remote_time_stamp, ack_delay, cnx->start_time, old_path->phase_delay, send_time, one_way_delay);
+            old_path->phase_delay += correct_1wd - one_way_delay;
+            one_way_delay = correct_1wd;
         }
         old_path->one_way_delay_sample = one_way_delay;
     }
@@ -1887,6 +1890,11 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, u
             old_path->smoothed_rtt = rtt_estimate;
             old_path->rtt_variant = rtt_estimate / 2;
             old_path->phase_delay = rtt_estimate / 2;
+
+            if (!cnx->client_mode) {
+                old_path->phase_delay = -old_path->phase_delay;
+            }
+
             old_path->rtt_min = rtt_estimate;
             old_path->retransmit_timer = 3 * rtt_estimate + old_path->max_ack_delay;
             if (old_path == cnx->path[0]) {
