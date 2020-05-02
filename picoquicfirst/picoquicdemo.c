@@ -442,7 +442,7 @@ int quic_client(const char* ip_address_text, int server_port,
     siduck_ctx_t* siduck_ctx = NULL;
     char const* saved_alpn = NULL;
 
-    if (alpn != NULL && strcmp(alpn, "siduck") == 0) {
+    if (alpn != NULL && (strcmp(alpn, "siduck") == 0 || strcmp(alpn, "siduck-00") == 0)) {
         /* Set a siduck client */
         is_siduck = 1;
         siduck_ctx = siduck_create_ctx(stdout);
