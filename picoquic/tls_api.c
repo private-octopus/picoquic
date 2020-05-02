@@ -512,13 +512,13 @@ int picoquic_server_encrypt_ticket_call_back(ptls_encrypt_ticket_t* encrypt_tick
                 /* decryption error */
                 ret = -1;
                 if (quic->F_log != NULL) {
-                    picoquic_log_app_message(quic, &quic->cnx_in_progress->initial_cnxid, "%s",
+                    picoquic_log_app_message(quic, &quic->cnx_in_progress->initial_cnxid, "%s\n",
                         "Session ticket could not be decrypted");
                 }
             } else {
                 dst->off += decrypted;
                 if (quic->F_log != NULL) {
-                    picoquic_log_app_message(quic, &quic->cnx_in_progress->initial_cnxid, "%s",
+                    picoquic_log_app_message(quic, &quic->cnx_in_progress->initial_cnxid, "%s\n",
                         "Session ticket properly decrypted");
                 }
             }
