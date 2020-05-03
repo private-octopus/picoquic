@@ -45,4 +45,35 @@ int picoquic_hystart_test(picoquic_min_max_rtt_t* rtt_track, uint64_t rtt_measur
 
 void picoquic_hystart_increase(picoquic_path_t* path_x, picoquic_min_max_rtt_t* rtt_filter, uint64_t nb_delivered);
 
+/* Many congestion control algorithms run a parallel version of new reno in order
+ * to provide a lower bound estimate of either the congestion window or the
+ * the minimal bandwidth. This implementation of new reno does not directly
+ * refer to the connection and path variables (e.g. cwin) but instead sets
+ * its entire state in memory.
+ */
+
+typedef enum {
+    picoquic_newreno_alg_slow_start = 0,
+    picoquic_newreno_alg_congestion_avoidance
+} picoquic_newreno_alg_state_t;
+
+typedef struct st_picoquic_newreno_sim_state_t {
+    picoquic_newreno_alg_state_t alg_state;
+    uint64_t cwin;
+    uint64_t residual_ack;
+    uint64_t ssthresh;
+    uint64_t recovery_start;
+    uint64_t recovery_sequence;
+} picoquic_newreno_sim_state_t;
+
+void picoquic_newreno_sim_reset(picoquic_newreno_sim_state_t* nrss);
+
+void picoquic_newreno_sim_notify(
+    picoquic_newreno_sim_state_t* nr_state,
+    picoquic_cnx_t* cnx,
+    picoquic_path_t* path_x,
+    picoquic_congestion_notification_t notification,
+    uint64_t nb_bytes_acknowledged,
+    uint64_t current_time);
+
 #endif

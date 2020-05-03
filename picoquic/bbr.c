@@ -163,13 +163,13 @@ typedef struct st_picoquic_bbr_state_t {
     int cycle_start;
     int round_count;
     int full_bw_count;
-    int filled_pipe : 1;
-    int round_start : 1;
-    int rt_prop_expired : 1;
-    int probe_rtt_round_done : 1;
-    int idle_restart : 1;
-    int packet_conservation : 1;
-    int btl_bw_increased : 1;
+    unsigned int filled_pipe : 1;
+    unsigned int round_start : 1;
+    unsigned int rt_prop_expired : 1;
+    unsigned int probe_rtt_round_done : 1;
+    unsigned int idle_restart : 1;
+    unsigned int packet_conservation : 1;
+    unsigned int btl_bw_increased : 1;
 } picoquic_bbr_state_t;
 
 void BBREnterStartupLongRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x)
@@ -393,7 +393,7 @@ void BBREnterProbeBW(picoquic_bbr_state_t* bbr_state, uint64_t current_time)
     int start = 0;
     bbr_state->state = picoquic_bbr_alg_probe_bw;
     bbr_state->pacing_gain = 1.0;
-    bbr_state->cwnd_gain = 1.5;
+    bbr_state->cwnd_gain = 2.0;
 
     if (bbr_state->rt_prop > PICOQUIC_TARGET_RENO_RTT) {
         start = (int)(bbr_state->rt_prop / PICOQUIC_TARGET_RENO_RTT);
