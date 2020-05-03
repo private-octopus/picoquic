@@ -269,6 +269,14 @@ void BBRUpdateBtlBw(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x)
         bandwidth_estimate = path_x->max_bandwidth_estimate/2;
     }
 
+    if (bbr_state->rt_prop > 0) {
+        /* Stop the bandwidth estimate from falling too low. */
+        uint64_t min_bandwidth = (((uint64_t)PICOQUIC_CWIN_MINIMUM) * 1000000) / bbr_state->rt_prop;
+        if (bandwidth_estimate < min_bandwidth) {
+            bandwidth_estimate = min_bandwidth;
+        }
+    }
+
     if (path_x->delivered_last_packet >= bbr_state->next_round_delivered)
     {
         bbr_state->next_round_delivered = path_x->delivered;
@@ -340,6 +348,21 @@ int BBRIsNextCyclePhase(picoquic_bbr_state_t* bbr_state, uint64_t prior_in_fligh
     return is_full_length;
 }
 
+void BBRSetMinimalGain(picoquic_bbr_state_t* bbr_state)
+{
+    if (bbr_state->pacing_gain > 1.0 && bbr_state->rt_prop > 0) {
+        uint64_t target_cwin = bbr_state->btl_bw * bbr_state->rt_prop / 1000000;
+
+        if (target_cwin < 4 * PICOQUIC_MAX_PACKET_SIZE) {
+            double d_target = (double)target_cwin;
+            double d_gain = ((double)(4 * PICOQUIC_MAX_PACKET_SIZE)) / d_target;
+
+            if (d_gain > bbr_state->pacing_gain) {
+                bbr_state->pacing_gain = d_gain;
+            }
+        }
+    }
+}
 
 void BBRAdvanceCyclePhase(picoquic_bbr_state_t* bbr_state, uint64_t current_time)
 {
@@ -362,6 +385,7 @@ void BBRAdvanceCyclePhase(picoquic_bbr_state_t* bbr_state, uint64_t current_time
     }
    
     bbr_state->pacing_gain = bbr_pacing_gain_cycle[bbr_state->cycle_index];
+    BBRSetMinimalGain(bbr_state);
 }
 
 void BBRCheckCyclePhase(picoquic_bbr_state_t* bbr_state, uint64_t packets_lost, uint64_t current_time)
