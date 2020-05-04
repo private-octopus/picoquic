@@ -425,6 +425,7 @@ int quic_client(const char* ip_address_text, int server_port,
     int bytes_recv;
     int bytes_sent;
     uint64_t current_time = 0;
+    uint64_t loop_time = 0;
     int client_ready_loop = 0;
     int client_receive_loop = 0;
     int established = 0;
@@ -613,6 +614,8 @@ int quic_client(const char* ip_address_text, int server_port,
     }
 
     /* Wait for packets */
+    loop_time = current_time;
+
     while (ret == 0 && picoquic_get_cnx_state(cnx_client) != picoquic_state_disconnected) {
         unsigned char received_ecn;
 
@@ -709,8 +712,10 @@ int quic_client(const char* ip_address_text, int server_port,
              * and may eventually drop the connection for lack of acks. So we limit
              * the number of packets that can be received before sending responses. */
 
-            if (bytes_recv == 0 || (ret == 0 && client_receive_loop > PICOQUIC_DEMO_CLIENT_MAX_RECEIVE_BATCH)) {
+            if (bytes_recv == 0 || (ret == 0 && client_receive_loop > PICOQUIC_DEMO_CLIENT_MAX_RECEIVE_BATCH) ||
+                (current_time - loop_time) > 25000) {
                 client_receive_loop = 0;
+                loop_time = current_time;
 
                 if (ret == 0 && (picoquic_get_cnx_state(cnx_client) == picoquic_state_ready || 
                     picoquic_get_cnx_state(cnx_client) == picoquic_state_client_ready_start)) {
