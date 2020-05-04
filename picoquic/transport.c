@@ -853,12 +853,21 @@ int picoquic_receive_transport_extensions_old(picoquic_cnx_t* cnx, int extension
         cnx->remote_parameters.max_ack_delay = PICOQUIC_ACK_DELAY_MAX_DEFAULT;
     }
 
-    if (ret == 0 && (present_flag & (1ull << picoquic_tp_active_connection_id_limit)) == 0) {
-        if (cnx->path[0]->p_local_cnxid->cnx_id.id_len == 0) {
-            cnx->remote_parameters.active_connection_id_limit = 0;
+    if (ret == 0) {
+        if ((present_flag & (1ull << picoquic_tp_active_connection_id_limit)) == 0) {
+            if (cnx->path[0]->p_local_cnxid->cnx_id.id_len == 0) {
+                cnx->remote_parameters.active_connection_id_limit = 0;
+            }
+            else {
+                cnx->remote_parameters.active_connection_id_limit = PICOQUIC_NB_PATH_DEFAULT;
+            }
         }
         else {
-            cnx->remote_parameters.active_connection_id_limit = PICOQUIC_NB_PATH_DEFAULT;
+            if (cnx->path[0]->p_local_cnxid->cnx_id.id_len > 0 &&
+                cnx->remote_parameters.active_connection_id_limit < 2) {
+                DBG_PRINTF("Invalid number of Active CID limit: %d", (int)cnx->remote_parameters.active_connection_id_limit);
+                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+            }
         }
     }
 
