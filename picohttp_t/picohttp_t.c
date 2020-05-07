@@ -45,6 +45,7 @@ typedef enum {
 static const picoquic_test_def_t test_table[] = {
     { "h3zero_integer", h3zero_integer_test },
     { "qpack_huffman", qpack_huffman_test },
+    { "qpack_huffman_base", qpack_huffman_base_test},
     { "h3zero_parse_qpack", h3zero_parse_qpack_test },
     { "h3zero_prepare_qpack", h3zero_prepare_qpack_test },
     { "h3zero_qpack_fuzz", h3zero_qpack_fuzz_test },
