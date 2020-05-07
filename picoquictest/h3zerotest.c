@@ -501,7 +501,7 @@ int qpack_huffman_base_test()
     /* Second, test a set of valid terminators */
     for (size_t i = 1; ret == 0 && i < 4; i++) {
         input_length = 0;
-        for (int l = 0; l < i; l++) {
+        for (size_t l = 0; l < i; l++) {
             input[input_length++] = 0xFF;
         }
 
