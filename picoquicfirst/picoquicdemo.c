@@ -844,8 +844,8 @@ int quic_client(const char* ip_address_text, int server_port,
                                 (client_address.ss_family == AF_INET) ?
                                 ((struct sockaddr_in*) & x_from)->sin_port :
                                 ((struct sockaddr_in6*) & x_from)->sin6_port);
+                            send_length = 0;
                         }
-                        send_length = 0;
                     }
 
                     if (ret == 0 && send_length > 0) {
