@@ -3391,7 +3391,7 @@ uint8_t* picoquic_decode_ack_frequency_frame(uint8_t* bytes, const uint8_t* byte
     /* This code assumes that the frame type is already skipped */
     if ((bytes = picoquic_parse_ack_frequency_frame(bytes, bytes_max, &seq, &packets, &microsec)) != NULL){
         if (!cnx->is_ack_frequency_negotiated ||
-            cnx->ack_delay_remote < cnx->remote_parameters.min_ack_delay ||
+            microsec < cnx->local_parameters.min_ack_delay ||
             packets == 0) {
             picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
                 picoquic_frame_type_ack_frequency);
