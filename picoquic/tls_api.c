@@ -1565,11 +1565,11 @@ void picoquic_log_openssl_errors(picoquic_cnx_t* cnx, int ret)
     int err_line = 0;
 
     while ((openssl_err = ERR_get_error_line(&err_file, &err_line)) != 0) {
-        picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "OpenSSL error: %lu, file %s, line %d", openssl_err,
+        picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "OpenSSL error: %lu, file %s, line %d\n", openssl_err,
             (err_file == NULL) ? "?" : err_file, err_line);
     }
     
-    picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "Picotls returns error: %d (0x%x) ", ret, ret);
+    picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "Picotls returns error: %d (0x%x)\n", ret, ret);
 }
 
 /* Prepare the initial message when starting a connection.
