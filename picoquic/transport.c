@@ -492,12 +492,17 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_max_ack_delay,
             (cnx->local_parameters.max_ack_delay + 999) / 1000); /* Max ACK delay in milliseconds */
     }
-
-    if (extension_mode == 1 && cnx->original_cnxid.id_len > 0){
-        bytes = picoquic_transport_param_cid_encode(bytes, bytes_max, picoquic_tp_original_connection_id, &cnx->original_cnxid);
-        bytes = picoquic_transport_param_cid_encode(bytes, bytes_max, picoquic_tp_retry_connection_id, &cnx->initial_cnxid);
-    }
     bytes = picoquic_transport_param_cid_encode(bytes, bytes_max, picoquic_tp_handshake_connection_id, &cnx->path[0]->p_local_cnxid->cnx_id);
+
+    if (extension_mode == 1){
+        if (cnx->original_cnxid.id_len > 0) {
+            bytes = picoquic_transport_param_cid_encode(bytes, bytes_max, picoquic_tp_original_connection_id, &cnx->original_cnxid);
+            bytes = picoquic_transport_param_cid_encode(bytes, bytes_max, picoquic_tp_retry_connection_id, &cnx->initial_cnxid);
+        }
+        else if (cnx->is_hcid_verified) {
+            bytes = picoquic_transport_param_cid_encode(bytes, bytes_max, picoquic_tp_original_connection_id, &cnx->initial_cnxid);
+        }
+    }
 
     if (extension_mode == 1) {
         if (bytes != NULL &&
@@ -1075,9 +1080,13 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                     break;
                 case picoquic_tp_handshake_connection_id:
                     ret = picoquic_transport_param_cid_decode(cnx, bytes + byte_index, extension_length, &handshake_connection_id);
-                    if (ret == 0 &&
-                        picoquic_compare_connection_id(&cnx->path[0]->remote_cnxid, &handshake_connection_id) != 0) {
-                        ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+                    if (ret == 0) {
+                        if (picoquic_compare_connection_id(&cnx->path[0]->remote_cnxid, &handshake_connection_id) != 0) {
+                            ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+                        }
+                        else {
+                            cnx->is_hcid_verified = 1;
+                        }
                     }
                     break;
                 case picoquic_tp_active_connection_id_limit:
@@ -1182,41 +1191,53 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
     }
 
-    /* Original connection ID should be NULL at the client and at the server if
-     * there was no retry, should exactly match otherwise. Mismatch is trated
-     * as a transport parameter error. In versions after draft 27, also check
-     * that the retry DCID was not modified in transit. The original and
-     * retry DCID shall not be sent by clients. */
-    if (ret == 0 && extension_mode == 1) {
-        if (picoquic_supported_versions[cnx->version_index].version == PICOQUIC_SEVENTEENTH_INTEROP_VERSION) {
-            if (cnx->original_cnxid.id_len != 0 &&
-                picoquic_compare_connection_id(&cnx->original_cnxid, &original_connection_id) != 0) {
-                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
-            }
+    /* In the old versions, there was only one parameter: original CID. In the new versions,
+     * there are also retry CID and handshake CID, and the verification logic changed. 
+     * If the new extensions are not used and the version is old, we support the
+     * old behavior. If the HCID extension is present, we support the new behavior.
+     * Most of the verifications happen on the client side, upon receiving server
+     * parameters. 
+     * TODO: clean up when removing support for version 27.
+     */
 
-            if ((present_flag & (1ull << picoquic_tp_retry_connection_id)) != 0 &&
-                picoquic_compare_connection_id(&cnx->initial_cnxid, &retry_connection_id) != 0) {
-                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
-            }
-        }
-        else {
-            if ((cnx->original_cnxid.id_len != 0 && (
-                picoquic_compare_connection_id(&cnx->original_cnxid, &original_connection_id) != 0 ||
-                (present_flag & (1ull << picoquic_tp_retry_connection_id)) != 0 ||
-                picoquic_compare_connection_id(&cnx->initial_cnxid, &retry_connection_id) != 0)
-                )
-                ||
-                (cnx->original_cnxid.id_len == 0 &&
-                (present_flag & (1ull << picoquic_tp_retry_connection_id)) != 0)
-                ) {
-                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
-            }
-        }
+    if (ret == 0 && picoquic_supported_versions[cnx->version_index].version != PICOQUIC_SEVENTEENTH_INTEROP_VERSION &&
+        (present_flag & (1ull << picoquic_tp_handshake_connection_id)) == 0) {
+        /* HCID extension becomes mandatory after draft 27 */
+        ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
     }
 
-    if (picoquic_supported_versions[cnx->version_index].version != PICOQUIC_SEVENTEENTH_INTEROP_VERSION &&
-        (present_flag & (1ull << picoquic_tp_handshake_connection_id)) == 0) {
-        ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+    if (ret == 0 && extension_mode == 1) {
+        /* Reeciving server parameters */
+        if ((present_flag & (1ull << picoquic_tp_handshake_connection_id)) != 0) {
+            /* The HCID extension is present. Verify that the original and retry cnxid are as expected */
+            if (cnx->original_cnxid.id_len != 0) {
+                /* OCID should be present and match original_cid.
+                 * RCID should be present and match initial_cid, since token parsing
+                 * verified that initial_cid matches source CID of retry packet. */
+                if ((present_flag & (1ull << picoquic_tp_retry_connection_id)) == 0 ||
+                    (present_flag & (1ull << picoquic_tp_original_connection_id)) == 0 ||
+                    picoquic_compare_connection_id(&cnx->original_cnxid, &original_connection_id) != 0 ||
+                    picoquic_compare_connection_id(&cnx->initial_cnxid, &retry_connection_id) != 0) {
+                    ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+                }
+            }
+            else {
+                /* RCID should not be present, OCID should be present and match initial_cid */
+                if ((present_flag & (1ull << picoquic_tp_retry_connection_id)) != 0 ||
+                    (present_flag & (1ull << picoquic_tp_original_connection_id)) == 0 ||
+                    picoquic_compare_connection_id(&cnx->initial_cnxid, &original_connection_id) != 0) {
+                    ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+                }
+            }
+        }
+        else  if (picoquic_supported_versions[cnx->version_index].version == PICOQUIC_SEVENTEENTH_INTEROP_VERSION) {
+            /* Old behavior. Original CID only present if retry */
+            if (cnx->original_cnxid.id_len != 0 &&
+                ((present_flag & (1ull << picoquic_tp_original_connection_id)) == 0 ||
+                    picoquic_compare_connection_id(&cnx->original_cnxid, &original_connection_id) != 0)) {
+                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+            }
+        }
     }
 
     /* Loss bit is only enabled if negotiated by both parties */

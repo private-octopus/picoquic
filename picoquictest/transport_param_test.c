@@ -126,6 +126,8 @@ static picoquic_tp_t transport_param_test10 = {
 };
 
 #define LOCAL_CONNECTION_ID  2, 3, 4, 5, 6, 7, 8, 9
+#define INITIAL_CONNECTION_ID  1, 2, 3, 4, 5, 6, 7, 8
+
 
 uint8_t client_param1[] = {
     picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x80, 0, 0xFF, 0xFF,
@@ -185,6 +187,7 @@ uint8_t server_param1[] = {\
     picoquic_tp_idle_timeout, 1, 0x1E,
     picoquic_tp_max_packet_size, 2, 0x45, 0xC8,
     picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID,
+    picoquic_tp_original_connection_id, 8, INITIAL_CONNECTION_ID,
     picoquic_tp_stateless_reset_token, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
 };
 
@@ -195,6 +198,7 @@ uint8_t server_param2[] = {
     picoquic_tp_idle_timeout, 2, 0x40, 0xFF,
     picoquic_tp_max_packet_size, 2, 0x45, 0xC8,
     picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID,
+    picoquic_tp_original_connection_id, 8, INITIAL_CONNECTION_ID,
     picoquic_tp_stateless_reset_token, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
 };
 
@@ -213,6 +217,7 @@ uint8_t server_param3[] = {
     picoquic_tp_idle_timeout, 2, 0x40, 0xFF,
     picoquic_tp_max_packet_size, 2, 0x45, 0xC8,
     picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID,
+    picoquic_tp_original_connection_id, 8, INITIAL_CONNECTION_ID,
     picoquic_tp_stateless_reset_token, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
     picoquic_tp_server_preferred_address, 45,
     10, 0, 0, 1, 0x11, 0x51, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -455,7 +460,7 @@ static int transport_param_compare(picoquic_tp_t* param, picoquic_tp_t* ref) {
 int transport_param_set_contexts(picoquic_quic_t ** quic_ctx, picoquic_cnx_t ** test_cnx, uint64_t * p_simulated_time, int mode)
 {
     int ret = 0;
-    picoquic_connection_id_t initial_cnx_id = { { 1, 2, 3, 4, 5, 6, 7, 8, 0, 0, 0, 0, 0, 0, 0, 0 }, 8 };
+    picoquic_connection_id_t initial_cnx_id = { { INITIAL_CONNECTION_ID, 0, 0, 0, 0, 0, 0, 0, 0 }, 8 };
     picoquic_connection_id_t remote_cnx_id = { { LOCAL_CONNECTION_ID, 0, 0, 0, 0, 0, 0, 0, 0 }, 8 };
     struct sockaddr_in addr;
     char test_server_cert_file[512];
@@ -527,6 +532,10 @@ int transport_param_one_test(int mode, int grease, uint32_t version, uint32_t pr
 
         if (grease) {
             test_cnx->grease_transport_parameters = 1;
+        }
+
+        if (mode == 1) {
+            test_cnx->is_hcid_verified = 1;
         }
 
         ret = picoquic_prepare_transport_extensions(test_cnx, mode, buffer, sizeof(buffer), &encoded);
