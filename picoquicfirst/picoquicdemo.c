@@ -720,14 +720,16 @@ int quic_client(const char* ip_address_text, int server_port,
                 if (ret == 0 && (picoquic_get_cnx_state(cnx_client) == picoquic_state_ready || 
                     picoquic_get_cnx_state(cnx_client) == picoquic_state_client_ready_start)) {
                     if (established == 0) {
-                        printf("Connection established. Version = %x, I-CID: %llx\n",
+                        printf("Connection established. Version = %x, I-CID: %llx, verified: %d\n",
                             picoquic_supported_versions[cnx_client->version_index].version,
-                            (unsigned long long)picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx_client)));
+                            (unsigned long long)picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx_client)),
+                            cnx_client->is_hcid_verified);
 
                         picoquic_log_app_message(qclient, &cnx_client->initial_cnxid,
-                            "Connection established. Version = %x, I-CID: %llx\n",
+                            "Connection established. Version = %x, I-CID: %llx, verified: %d\n",
                             picoquic_supported_versions[cnx_client->version_index].version,
-                            (unsigned long long)picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx_client)));
+                            (unsigned long long)picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx_client)),
+                            cnx_client->is_hcid_verified);
                         established = 1;
 
                         if (zero_rtt_available == 0 && !is_siduck) {
