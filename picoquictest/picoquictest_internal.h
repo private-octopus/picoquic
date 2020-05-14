@@ -128,13 +128,16 @@ typedef struct st_picoquic_test_tls_api_ctx_t {
     int client_use_multiple_addresses;
     int do_bad_coalesce_test;
     struct sockaddr_in client_addr;
+    struct sockaddr_in client_addr_2; /* for use in multipath tests */
     struct sockaddr_in server_addr;
     test_api_callback_t client_callback;
     test_api_callback_t server_callback;
     size_t nb_test_streams;
     test_api_stream_t test_stream[PICOQUIC_TEST_MAX_TEST_STREAMS];
     picoquictest_sim_link_t* c_to_s_link;
+    picoquictest_sim_link_t* c_to_s_link_2; /* for use in multipath tests */
     picoquictest_sim_link_t* s_to_c_link;
+    picoquictest_sim_link_t* s_to_c_link_2;
     int received_version_negotiation;
 
     /* Stream 0 is reserved for the "infinite stream" simulation */
