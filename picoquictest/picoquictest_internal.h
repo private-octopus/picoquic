@@ -128,13 +128,16 @@ typedef struct st_picoquic_test_tls_api_ctx_t {
     int client_use_multiple_addresses;
     int do_bad_coalesce_test;
     struct sockaddr_in client_addr;
+    struct sockaddr_in client_addr_2; /* for use in multipath tests */
     struct sockaddr_in server_addr;
     test_api_callback_t client_callback;
     test_api_callback_t server_callback;
     size_t nb_test_streams;
     test_api_stream_t test_stream[PICOQUIC_TEST_MAX_TEST_STREAMS];
     picoquictest_sim_link_t* c_to_s_link;
+    picoquictest_sim_link_t* c_to_s_link_2; /* for use in multipath tests */
     picoquictest_sim_link_t* s_to_c_link;
+    picoquictest_sim_link_t* s_to_c_link_2;
     int received_version_negotiation;
 
     /* Stream 0 is reserved for the "infinite stream" simulation */
@@ -179,11 +182,32 @@ int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_versi
 
 void tls_api_delete_ctx(picoquic_test_tls_api_ctx_t* test_ctx);
 
+int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
+    uint64_t* simulated_time, uint64_t time_out, int* was_active);
+
+int tls_api_one_scenario_init(
+    picoquic_test_tls_api_ctx_t** p_test_ctx, uint64_t* simulated_time,
+    uint32_t proposed_version,
+    picoquic_tp_t* client_params, picoquic_tp_t* server_params);
+
 int tls_api_connection_loop(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* loss_mask, uint64_t queue_delay_max, uint64_t* simulated_time);
 
-int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
-    uint64_t* simulated_time, uint64_t time_out, int* was_active);
+int test_api_init_send_recv_scenario(picoquic_test_tls_api_ctx_t* test_ctx,
+    test_api_stream_desc_t* stream_desc, size_t size_of_scenarios);
+
+int tls_api_one_scenario_body_connect(picoquic_test_tls_api_ctx_t* test_ctx,
+    uint64_t* simulated_time, size_t stream0_target, uint64_t max_data, uint64_t queue_delay_max);
+
+int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
+    uint64_t* loss_mask, uint64_t* simulated_time, int max_trials);
+
+int tls_api_one_scenario_body_verify(picoquic_test_tls_api_ctx_t* test_ctx,
+    uint64_t* simulated_time,
+    uint64_t max_completion_microsec);
+
+int wait_client_connection_ready(picoquic_test_tls_api_ctx_t* test_ctx,
+    uint64_t* simulated_time);
 
 void picoquic_set_test_address(struct sockaddr_in * addr, uint32_t addr_val, uint16_t port);
 

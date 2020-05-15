@@ -55,6 +55,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/cnx_creation_test.c
     picoquictest/hashtest.c
     picoquictest/intformattest.c
+    picoquictest/multipath_test.c
     picoquictest/parseheadertest.c
     picoquictest/pn2pn64test.c
     picoquictest/sacktest.c
