@@ -772,7 +772,7 @@ static int test_api_callback(picoquic_cnx_t* cnx,
     return 0;
 }
 
-static int test_api_init_send_recv_scenario(picoquic_test_tls_api_ctx_t* test_ctx,
+int test_api_init_send_recv_scenario(picoquic_test_tls_api_ctx_t* test_ctx,
     test_api_stream_desc_t* stream_desc, size_t size_of_scenarios)
 {
     int ret = 0;
@@ -932,8 +932,16 @@ void tls_api_delete_ctx(picoquic_test_tls_api_ctx_t* test_ctx)
         picoquictest_sim_link_delete(test_ctx->c_to_s_link);
     }
 
+    if (test_ctx->c_to_s_link_2 != NULL) {
+        picoquictest_sim_link_delete(test_ctx->c_to_s_link_2);
+    }
+
     if (test_ctx->s_to_c_link != NULL) {
         picoquictest_sim_link_delete(test_ctx->s_to_c_link);
+    }
+
+    if (test_ctx->s_to_c_link_2 != NULL) {
+        picoquictest_sim_link_delete(test_ctx->s_to_c_link_2);
     }
 
     free(test_ctx);
@@ -1318,7 +1326,6 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
 
         test_ctx->cnx_server = next;
     }
-
     return ret;
 }
 
@@ -1365,7 +1372,7 @@ int tls_api_connection_loop(picoquic_test_tls_api_ctx_t* test_ctx,
     return ret;
 }
 
-static int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
+int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* loss_mask, uint64_t* simulated_time, int max_trials)
 {
     int ret = 0;
@@ -1486,21 +1493,26 @@ static int wait_application_aead_ready(picoquic_test_tls_api_ctx_t* test_ctx,
     return ret;
 }
 
-static int wait_client_connection_ready(picoquic_test_tls_api_ctx_t* test_ctx,
+int wait_client_connection_ready(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* simulated_time)
 {
     int ret = 0;
     uint64_t time_out = *simulated_time + 4000000;
     int nb_trials = 0;
     int nb_inactive = 0;
+    int was_active = 0;
 
     while (*simulated_time < time_out &&
         test_ctx->cnx_client->cnx_state < picoquic_state_ready &&
         nb_trials < 1024 &&
         nb_inactive < 64 &&
         ret == 0) {
-        int was_active = 0;
+        was_active = 0;
         nb_trials++;
+
+        if (nb_trials == 2) {
+            DBG_PRINTF("%s", "BUG");
+        }
 
         ret = tls_api_one_sim_round(test_ctx, simulated_time, time_out, &was_active);
 
@@ -1520,6 +1532,7 @@ static int wait_client_connection_ready(picoquic_test_tls_api_ctx_t* test_ctx,
 
     return ret;
 }
+
 static int tls_api_attempt_to_close(
     picoquic_test_tls_api_ctx_t* test_ctx, uint64_t* simulated_time)
 {

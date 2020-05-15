@@ -213,6 +213,7 @@ static const picoquic_test_def_t test_table[] = {
     { "direct_receive", direct_receive_test },
     { "app_limit_cc", app_limit_cc_test },
     { "initial_race", initial_race_test },
+    { "controlled_migration", controlled_migration_test },
     { "stress", stress_test },
     { "fuzz", fuzz_test },
     { "fuzz_initial", fuzz_initial_test}

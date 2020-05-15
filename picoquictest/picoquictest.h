@@ -221,6 +221,7 @@ int direct_receive_test();
 int app_limit_cc_test();
 int initial_race_test();
 int pacing_test();
+int controlled_migration_test();
 
 int h3zero_post_test();
 int h09_post_test();
