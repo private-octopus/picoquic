@@ -75,7 +75,7 @@
     <ClCompile Include="bytestream_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="mutipath_test.c">
+    <ClCompile Include="multipath_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
