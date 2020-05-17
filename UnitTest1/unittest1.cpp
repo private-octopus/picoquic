@@ -1207,6 +1207,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(chacha20) {
+            int ret = chacha20_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(controlled_migration) {
             int ret = controlled_migration_test();
 

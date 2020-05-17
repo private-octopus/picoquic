@@ -31,6 +31,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <openssl/pem.h>
+#include <picotls/openssl.h>
 #include "logwriter.h"
 #include "csv.h"
 #include "qlog.h"
@@ -6560,12 +6561,6 @@ int qlog_trace_test()
         ret = -1;
     }
 
-    if (!has_chacha_poly) {
-        /* Do not run this test if chacha20 is not available, because
-         * the TLS messages would be different from expected */
-        return 0;
-    }
-
     /* Set the logging policy on the server side, to store data in the
      * current working directory, and run a basic test scenario */
     if (ret == 0) {
@@ -6579,6 +6574,13 @@ int qlog_trace_test()
         memcpy(test_ctx->qclient->reset_seed, reset_seed_client, PICOQUIC_RESET_SECRET_SIZE);
         memcpy(test_ctx->qserver->reset_seed, reset_seed_server, PICOQUIC_RESET_SECRET_SIZE);
 
+        /* Force ciphersuite to AES128, so Client Hello has a constant format */
+        if (picoquic_set_cipher_suite(test_ctx->qclient, 128) != 0) {
+            DBG_PRINTF("Could not set ciphersuite to %d", 128);
+        }
+        if (picoquic_set_key_exchange(test_ctx->qclient, 128) != 0) {
+            DBG_PRINTF("Could not set key exchange to %d", 128);
+        }
         /* Delete the old connection */
         picoquic_delete_cnx(test_ctx->cnx_client);
         /* re-create a client connection, this time picking up the required connection ID */
@@ -8580,147 +8582,39 @@ int pacing_test()
     return ret;
 }
 
-#ifdef TCP_SIM_IN_PROGRESS
-
-/* Simulate a TCP connection:
- * Basic implementation of a TCP-New Reno connection. Presents four API
- *  1- Init context
- *  2- Departure time
- *  3- Packet arrival
- *  4- Delete context
- * Init context: specify whether sender or receiver. 
- * Departure time: provide next departure time. If receiver, this tells whether an ACK is ready.
- * If sender, this tells whether CWIN is empty enough.
- * Arrival: if sender, process ACK per New Reno. If receiver, schedule ACK.
- * New Reno processing: controlled by state variable.
- * - Slow-start vs Congestion-Avoidance
- * - In recovery or not.
- * On loss: if in recovery, ignore. Else set ssthresh to 1/2 current window or min window, set recovery=true.
- * On ACK: if ACK > recovery target, set recovery=false. If slow start, CWIN += nback. If CWIN > ssthresh, move to avoidance.
- * if avoidance, CWIN += 1/CWIN.
+/*
+ * Test connection establishment with ChaCha20
  */
 
-picoquic_test_tcp_sim_ctx_t* test_api_tcp_init_ctx(unsigned int is_sender, size_t mtu)
+int chacha20_test()
 {
-    picoquic_test_tcp_sim_ctx_t* tcp_ctx = (picoquic_test_tcp_sim_ctx_t*)malloc(sizeof(picoquic_test_tcp_sim_ctx_t));
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
 
-    if (tcp_ctx != NULL) {
-        memset(tcp_ctx, 0, sizeof(picoquic_test_tcp_sim_ctx_t));
-        tcp_ctx->is_sender = is_sender;
-        tcp_ctx->in_slow_start = 1;
-        tcp_ctx->mtu = mtu;
-        tcp_ctx->cwin = 10;
-        tcp_ctx->ssthresh = UINT64_MAX;
-        
-    }
-
-    return tcp_ctx;
-}
-
-int test_api_tcp_next_time(picoquic_test_tcp_sim_ctx_t* tcp_ctx)
-{
-
-}
-
-int test_api_tcp_prepare(picoquic_test_tcp_sim_ctx_t* tcp_ctx, uint64_t current_time,
-    uint8_t* bytes, size_t bytes_size, size_t* length,
-    struct sockaddr_storage* addr_to, struct sockaddr_storage* addr_from)
-{
-    int ret = 0;
-
-    if (bytes_size < 24) {
+    if (ret == 0 && test_ctx == NULL) {
         ret = -1;
-    } else if ((tcp_ctx->is_sender && (tcp_ctx->send_sequence < tcp_ctx->lowest_not_acked + tcp_ctx->cwin)) ||
-        (!tcp_ctx->is_sender && tcp_ctx->highest_received > tcp_ctx->highest_ack_sent)) {
-        /* Ready to send */
-        picoformat_64(bytes, tcp_ctx->send_sequence);
-        picoformat_64(bytes + 8, tcp_ctx->highest_received);
-        picoformat_64(bytes + 16, tcp_ctx->nb_holes_found);
-        if (tcp_ctx->is_sender) {
-            *length = tcp_ctx->mtu;
-            if (*length > bytes_size) {
-                *length = bytes_size;
-            }
-            memset(bytes + 24, 0, *length - 24);
-        }
-        else {
-            *length = 24;
-        }
-        /* Copy addresses */
-    }
-    else {
-        *length = 0;
     }
 
-    return ret;
-}
+    /* Set the cipher suite to chacha20
+     */
+    if (ret == 0 && has_chacha_poly) {
+        ret = picoquic_set_cipher_suite(test_ctx->qclient, 20);
+    }
 
-int test_api_tcp_prepare(picoquic_test_tcp_sim_ctx_t* tcp_ctx, uint64_t current_time,
-    uint8_t* bytes, size_t length,
-    struct sockaddr* addr_to, struct sockaddr* addr_from)
-{
-    int ret = 0;
+    /* Run a basic test scenario */
+    if (ret == 0) {
+        ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+            test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0, 0, 0, 0, 250000);
+    }
 
-    if (length >= 24) {
-        uint64_t sequence = PICOPARSE_64(bytes);
-        uint64_t ack = PICOPARSE_64(bytes+8);
-        uint64_t nb_holes = PICOPARSE_64(bytes+16);
+    /* And then free the resource
+     */
 
-        if (sequence > tcp_ctx->highest_received) {
-            uint64_t delta = sequence - tcp_ctx->highest_received;
-            tcp_ctx->highest_received = sequence;
-            if (delta > 1) {
-                tcp_ctx->nb_holes_found += delta - 1;
-            }
-        }
-
-        if (ack >= tcp_ctx->lowest_not_acked) {
-            uint64_t nb_lost = 0;
-            uint64_t nb_ack = (ack + 1) - tcp_ctx->lowest_not_acked;
-            tcp_ctx->lowest_not_acked = ack + 1;
-
-            if (nb_holes > tcp_ctx->nb_lost) {
-                nb_lost = nb_holes - tcp_ctx->nb_lost;
-                tcp_ctx->nb_lost = nb_holes;
-            }
-
-            if (ack >= tcp_ctx->recovery_sequence) {
-                tcp_ctx->in_recovery = 0;
-            }
-
-            if (nb_lost > 0 && !tcp_ctx->in_recovery) {
-                /* Loss detected, slow down. */
-                tcp_ctx->ssthresh = tcp_ctx->cwin;
-                tcp_ctx->cwin = (tcp_ctx->cwin + 1) / 2;
-                if (tcp_ctx->cwin < 2) {
-                    tcp_ctx->cwin = 2;
-                }
-                tcp_ctx->in_slow_start = 1;
-                tcp_ctx->in_recovery = 1;
-                tcp_ctx->recovery_sequence = tcp_ctx->send_sequence + 1;
-            }
-            else if (nb_ack > 0) {
-                /* Packets acked, increase cwin. */
-                if (tcp_ctx->in_slow_start) {
-                    tcp_ctx->cwin += nb_ack;
-                    if (tcp_ctx->cwin > tcp_ctx->ssthresh) {
-                        tcp_ctx->cwin_delta_avoid = tcp_ctx->cwin - tcp_ctx->ssthresh;
-                        tcp_ctx->cwin = tcp_ctx->ssthresh;
-                        tcp_ctx->in_slow_start = 0;
-                    }
-                }
-                else {
-                    tcp_ctx->cwin_delta_avoid += nb_ack;
-                    while (tcp_ctx->cwin_delta_avoid >= tcp_ctx->cwin) {
-                        tcp_ctx->cwin_delta_avoid -= tcp_ctx->cwin;
-                        tcp_ctx->cwin++;
-                    }
-                }
-            }
-            tcp_ctx->lowest_not_acked = ack + 1;
-        }
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
     }
 
     return ret;
 }
-#endif

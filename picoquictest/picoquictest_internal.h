@@ -39,31 +39,6 @@ extern "C" {
 #define PICOQUIC_TEST_WRONG_ALPN "picoquic-bla-bla"
 #define PICOQUIC_TEST_MAX_TEST_STREAMS 18
 
-#ifdef TCP_SIM_IN_PROGRESS
-
-/* TCP Simulation for congestion tests */
-
-typedef struct st_picoquic_test_tcp_sim_ctx_t {
-    unsigned int is_sender : 1;
-    unsigned int in_slow_start : 1;
-    unsigned int in_recovery : 1;
-    size_t mtu;
-    uint64_t cwin;
-    uint64_t cwin_delta_avoid;
-    uint64_t ssthresh;
-    uint64_t send_sequence; /* Next sequence number */
-    uint64_t lowest_not_acked; /* Largest ack received from peer + 1 */
-    uint64_t recovery_sequence; /* First packet transmitted after recovery  */
-    uint64_t nb_lost; /* total number of losses signalled by peer */
-    uint64_t highest_received; /* Largest number received from peer */
-    uint64_t highest_ack_sent; /* Largest number acked to peer */
-    uint64_t nb_holes_found;
-    uint64_t next_departure_time;
-    struct sockaddr_storage addr_to;
-    struct sockaddr_storage addr_from;
-} picoquic_test_tcp_sim_ctx_t;
-#endif
-
 /* Test context
  */
 
