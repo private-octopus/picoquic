@@ -1050,6 +1050,13 @@ ptls_key_exchange_algorithm_t *picoquic_key_exchanges[] = { &ptls_openssl_secp25
                                                            &ptls_openssl_x25519,
 #endif
                                                            NULL };
+
+ptls_key_exchange_algorithm_t* picoquic_key_secp256r1[] = { &ptls_openssl_secp256r1, NULL };
+
+#ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
+ptls_key_exchange_algorithm_t* picoquic_key_x25519[] = { & ptls_openssl_x25519, NULL };
+#endif
+
 ptls_cipher_suite_t *picoquic_cipher_suites[] = { 
     &ptls_openssl_aes128gcmsha256,
     &ptls_openssl_aes256gcmsha384,
@@ -1270,6 +1277,42 @@ int picoquic_set_cipher_suite(picoquic_quic_t* quic, int cipher_suite_id)
     }
     return ret;
 }
+
+int picoquic_set_key_exchange(picoquic_quic_t* quic, int key_exchange_id)
+{
+    ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
+    int ret = 0;
+
+    if (ctx == NULL) {
+        ret = -1;
+    }
+    else {
+        switch (key_exchange_id) {
+        case 0:
+            ctx->key_exchanges = picoquic_key_exchanges;
+            break;
+        case 20:
+#ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
+            ctx->key_exchanges = picoquic_key_x25519;
+            break;
+#else
+            ret = -1;
+            break;
+#endif
+        case 128:
+            ctx->key_exchanges = picoquic_key_secp256r1;
+            break;
+        case 256:
+            ctx->key_exchanges = picoquic_key_secp256r1;
+            break;
+        default:
+            ret = -1;
+            break;
+        }
+    }
+    return ret;
+}
+
 
 void picoquic_master_tlscontext_free(picoquic_quic_t* quic)
 {

@@ -6578,7 +6578,9 @@ int qlog_trace_test()
         if (picoquic_set_cipher_suite(test_ctx->qclient, 128) != 0) {
             DBG_PRINTF("Could not set ciphersuite to %d", 128);
         }
-
+        if (picoquic_set_key_exchange(test_ctx->qclient, 128) != 0) {
+            DBG_PRINTF("Could not set key exchange to %d", 128);
+        }
         /* Delete the old connection */
         picoquic_delete_cnx(test_ctx->cnx_client);
         /* re-create a client connection, this time picking up the required connection ID */

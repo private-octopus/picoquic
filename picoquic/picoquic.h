@@ -420,6 +420,15 @@ void picoquic_set_cookie_mode(picoquic_quic_t* quic, int cookie_mode);
  */
 int picoquic_set_cipher_suite(picoquic_quic_t* quic, int cipher_suite_id);
 
+/* Set key exchange algorithms, for tests.
+ * 0: default values
+ * 20: ptls_openssl_x25519
+ * 128: ptls_openssl_secp256r1
+ * 256: ptls_openssl_secp256r1
+ * returns 0 if OK, -1 if the specified ciphersuite is not supported.
+ */
+int picoquic_set_key_exchange(picoquic_quic_t* quic, int key_exchange_id);
+
 /* Init of transport parameters per quic context */
 int picoquic_set_default_tp(picoquic_quic_t* quic, picoquic_tp_t* tp);
 /* Set the transport parameters per connection */
