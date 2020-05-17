@@ -402,7 +402,7 @@ int quic_client(const char* ip_address_text, int server_port,
     int nb_packets_before_key_update, int mtu_max, char const * log_file, char const* bin_file,
     int client_cnx_id_length, char const * client_scenario_text, 
     int no_disk, int use_long_log, picoquic_congestion_algorithm_t const* cc_algorithm,
-    int large_client_hello, char const * out_dir)
+    int large_client_hello, char const * out_dir, int cipher_suite_id)
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
@@ -522,6 +522,12 @@ int quic_client(const char* ip_address_text, int server_port,
             picoquic_set_binlog(qclient, bin_file);
             picoquic_set_textlog(qclient, log_file);
             picoquic_set_log_level(qclient, use_long_log);
+
+            if (cipher_suite_id != 0) {
+                if (picoquic_set_cipher_suite(qclient, cipher_suite_id) != 0) {
+                    fprintf(stderr, "Could not set cipher suite #%d.\n", cipher_suite_id);
+                }
+            }
         }
     }
 
@@ -973,6 +979,7 @@ void usage()
     fprintf(stderr, "  -k file               key file (default: %s)\n", SERVER_KEY_FILE);
     fprintf(stderr, "  -K file               ESNI private key file (default: don't use ESNI)\n");
     fprintf(stderr, "  -E file               ESNI RR file (default: don't use ESNI)\n");
+    fprintf(stderr, "  -C cipher_suite_id    specify cipher suite (e.g. -C 20 = chacha20)\n");
     fprintf(stderr, "  -o folder             Folder where client writes downloaded files,\n");
     fprintf(stderr, "                        defaults to current directory.\n");
     fprintf(stderr, "  -w folder             Folder containing web pages served by server\n");
@@ -1042,6 +1049,7 @@ int main(int argc, char** argv)
     int client_cnx_id_length = 8;
     int no_disk = 0;
     int use_long_log = 0;
+    int cipher_suite_id = 0;
     picoquic_connection_id_callback_ctx_t * cnx_id_cbdata = NULL;
     uint64_t* reset_seed = NULL;
     uint64_t reset_seed_x[2];
@@ -1059,7 +1067,7 @@ int main(int argc, char** argv)
 
     /* Get the parameters */
     int opt;
-    while ((opt = getopt(argc, argv, "c:k:K:p:u:v:o:w:f:i:s:e:E:l:b:m:n:a:t:S:I:G:1rhzDLQ")) != -1) {
+    while ((opt = getopt(argc, argv, "c:k:K:p:u:v:o:w:f:i:s:e:E:C:l:b:m:n:a:t:S:I:G:1rhzDLQ")) != -1) {
         switch (opt) {
         case 'c':
             server_cert_file = optarg;
@@ -1121,6 +1129,9 @@ int main(int argc, char** argv)
             break;
         case 'e':
             dest_if = atoi(optarg);
+            break;
+        case 'C':
+            cipher_suite_id = atoi(optarg);
             break;
         case 'E':
             esni_rr_file = optarg;
@@ -1243,7 +1254,7 @@ int main(int argc, char** argv)
         printf("Starting Picoquic (v%s) connection to server = %s, port = %d\n", PICOQUIC_VERSION, server_name, server_port);
         ret = quic_client(server_name, server_port, sni, esni_rr_file, alpn, root_trust_file, proposed_version, force_zero_share, 
             force_migration, nb_packets_before_update, mtu_max, log_file, bin_file, client_cnx_id_length, client_scenario,
-            no_disk, use_long_log, cc_algorithm, large_client_hello, out_dir);
+            no_disk, use_long_log, cc_algorithm, large_client_hello, out_dir, cipher_suite_id);
 
         printf("Client exit with code = %d\n", ret);
     }

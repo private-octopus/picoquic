@@ -1060,6 +1060,22 @@ ptls_cipher_suite_t *picoquic_cipher_suites[] = {
 #endif
     NULL };
 
+ptls_cipher_suite_t* picoquic_cipher_suite_aes128gcmsha256[] = {
+    &ptls_openssl_aes128gcmsha256,
+    NULL
+};
+
+ptls_cipher_suite_t* picoquic_cipher_suite_aes256gcmsha384[] = {
+    &ptls_openssl_aes256gcmsha384,
+    NULL
+};
+
+#ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
+ptls_cipher_suite_t* picoquic_cipher_suite_chacha20poly1305sha256[] = {
+    & ptls_openssl_chacha20poly1305sha256,
+    NULL };
+#endif
+
 /*
  * Setting the master TLS context.
  * On servers, this implies setting the "on hello" call back
@@ -1218,6 +1234,41 @@ static void free_certificates_list(ptls_iovec_t* certs, size_t len) {
         free(certs[i].base);
     }
     free(certs);
+}
+
+int picoquic_set_cipher_suite(picoquic_quic_t* quic, int cipher_suite_id)
+{
+    ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
+    int ret = 0;
+
+    if (ctx == NULL) {
+        ret = -1;
+    }
+    else {
+        switch (cipher_suite_id) {
+        case 0:
+            ctx->cipher_suites = picoquic_cipher_suites;
+            break;
+        case 20:
+#ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
+            ctx->cipher_suites = picoquic_cipher_suite_chacha20poly1305sha256;
+            break;
+#else
+            ret = -1;
+            break;
+#endif
+        case 128:
+            ctx->cipher_suites = picoquic_cipher_suite_aes128gcmsha256;
+            break;
+        case 256:
+            ctx->cipher_suites = picoquic_cipher_suite_aes256gcmsha384;
+            break;
+        default:
+            ret = -1;
+            break;
+        }
+    }
+    return ret;
 }
 
 void picoquic_master_tlscontext_free(picoquic_quic_t* quic)

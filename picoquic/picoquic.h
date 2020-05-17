@@ -411,6 +411,15 @@ void picoquic_free(picoquic_quic_t* quic);
 /* Set cookie mode on QUIC context when under stress */
 void picoquic_set_cookie_mode(picoquic_quic_t* quic, int cookie_mode);
 
+/* Set cipher suite, for tests. 
+ * 0: default values
+ * 20: chacha20poly1305sha256
+ * 128: aes128gcmsha256
+ * 256: aes256gcmsha384
+ * returns 0 if OK, -1 if the specified ciphersuite is not supported.
+ */
+int picoquic_set_cipher_suite(picoquic_quic_t* quic, int cipher_suite_id);
+
 /* Init of transport parameters per quic context */
 int picoquic_set_default_tp(picoquic_quic_t* quic, picoquic_tp_t* tp);
 /* Set the transport parameters per connection */
