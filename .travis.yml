@@ -52,6 +52,7 @@ jobs:
           os: osx
           osx_image: xcode10.1
           env:
+              - XTEST="-x qlog_trace"
               - CMAKE_OPTS=" -DOPENSSL_ROOT_DIR=/usr/local/opt/openssl/"
 before_install:
   - cmake --version
@@ -70,8 +71,7 @@ script:
   - if [ "$CHECK" == "cppcheck" ]; then cppcheck --project=compile_commands.json --quiet; fi
   - ${EXTRA} make
   - ulimit -c unlimited -S
-  - ./picoquic_ct qlog_trace
-  - ./picoquic_ct -n -r && QUICRESULT=$?
+  - ./picoquic_ct -n -r $XTEST && QUICRESULT=$?
   - ./picohttp_ct -n -r && HTTPRESULT=$?
   - if [[ ${QUICRESULT} != 0 ]]; then for i in $(find ./ -maxdepth 1 -name 'core*' -print); do gdb $(pwd)/picoquic_ct core* -ex "thread apply all bt" -ex "set pagination 0" -batch; done; fi;
   - if [[ ${HTTPRESULT} != 0 ]]; then for i in $(find ./ -maxdepth 1 -name 'core*' -print); do gdb $(pwd)/picohttp_ct core* -ex "thread apply all bt" -ex "set pagination 0" -batch; done; fi;
