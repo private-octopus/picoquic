@@ -1503,8 +1503,7 @@ int picoquic_remove_not_before_cid(picoquic_cnx_t* cnx, uint64_t not_before, uin
 
 /* Start using a new connection ID for the existing path
  */
-
-int picoquic_renew_connection_id(picoquic_cnx_t* cnx, int path_id)
+int picoquic_renew_path_connection_id(picoquic_cnx_t* cnx, picoquic_path_t* path_x)
 {
     int ret = 0;
     picoquic_cnxid_stash_t * stashed = NULL;
@@ -1524,30 +1523,44 @@ int picoquic_renew_connection_id(picoquic_cnx_t* cnx, int path_id)
             int nb_cnxid_ref = 0;
 
             for (int i = 0; i < cnx->nb_paths; i++) {
-                if (cnx->path[i]->remote_cnxid_sequence == cnx->path[path_id]->remote_cnxid_sequence) {
+                if (cnx->path[i]->remote_cnxid_sequence == path_x->remote_cnxid_sequence) {
                     nb_cnxid_ref++;
                 }
             }
 
             if (nb_cnxid_ref <= 1) {
                 /* if this was the last reference, retire the old cnxid */
-                if (picoquic_queue_retire_connection_id_frame(cnx, cnx->path[path_id]->remote_cnxid_sequence) != 0) {
-                    DBG_PRINTF("Could not properly retire CID[%" PRIu64 "]", cnx->path[path_id]->remote_cnxid_sequence);
+                if (picoquic_queue_retire_connection_id_frame(cnx, path_x->remote_cnxid_sequence) != 0) {
+                    DBG_PRINTF("Could not properly retire CID[%" PRIu64 "]", path_x->remote_cnxid_sequence);
                 }
             }
 
             /* Install the new value */
-            cnx->path[path_id]->remote_cnxid = stashed->cnx_id;
-            cnx->path[path_id]->remote_cnxid_sequence = stashed->sequence;
-            memcpy(cnx->path[path_id]->reset_secret, stashed->reset_secret,
+            path_x->remote_cnxid = stashed->cnx_id;
+            path_x->remote_cnxid_sequence = stashed->sequence;
+            memcpy(path_x->reset_secret, stashed->reset_secret,
                 PICOQUIC_RESET_SECRET_SIZE);
             free(stashed);
 
             /* If default path, reset the secret pointer */
-            if (path_id == 0) {
+            if (path_x == cnx->path[0]) {
                 ret = picoquic_register_net_secret(cnx);
             }
         }
+    }
+
+    return ret;
+}
+
+int picoquic_renew_connection_id(picoquic_cnx_t* cnx, int path_id)
+{
+    int ret;
+
+    if (path_id >= cnx->nb_paths) {
+        ret = -1;
+    }
+    else {
+        ret = picoquic_renew_path_connection_id(cnx, cnx->path[path_id]);
     }
 
     return ret;

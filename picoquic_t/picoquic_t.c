@@ -214,6 +214,7 @@ static const picoquic_test_def_t test_table[] = {
     { "app_limit_cc", app_limit_cc_test },
     { "initial_race", initial_race_test },
     { "chacha20", chacha20_test },
+    { "cid_quiescence", cid_quiescence_test },
     { "controlled_migration", controlled_migration_test },
     { "stress", stress_test },
     { "fuzz", fuzz_test },

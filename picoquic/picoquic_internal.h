@@ -65,6 +65,7 @@ extern "C" {
 #define PICOQUIC_MAX_ACK_DELAY_MAX_MS 0x4000ull /* 2<14 ms */
 #define PICOQUIC_TOKEN_DELAY_LONG (24*60*60*1000000ull) /* 24 hours */
 #define PICOQUIC_TOKEN_DELAY_SHORT (2*60*1000000ull) /* 2 minutes */
+#define PICOQUIC_CID_REFRESH_DELAY (5*1000000ull) /* if idle for 5 seconds, refresh the CID */
 
 #define PICOQUIC_BANDWIDTH_ESTIMATE_MAX 10000000000ull /* 10 GB per second */
 #define PICOQUIC_BANDWIDTH_TIME_INTERVAL_MIN 1000
@@ -696,6 +697,7 @@ typedef struct st_picoquic_path_t {
     unsigned int current_spin : 1;
     unsigned int path_is_registered : 1;
     unsigned int last_bw_estimate_path_limited : 1;
+    unsigned int path_cid_rotated : 1;
 
     /* number of retransmissions observed on path */
     uint64_t retrans_count;
@@ -912,7 +914,6 @@ typedef struct st_picoquic_cnx_t {
     uint16_t retry_token_length;
     uint8_t * retry_token;
 
-
     /* Next time sending data is expected */
     uint64_t next_wake_time;
     struct st_picoquic_cnx_t* next_by_wake_time;
@@ -933,7 +934,6 @@ typedef struct st_picoquic_cnx_t {
 
     /* Liveness detection */
     uint64_t latest_progress_time; /* last local time at which the connection progressed */
-
 
     /* Sequence and retransmission state */
     picoquic_packet_context_t pkt_ctx[picoquic_nb_packet_context];
@@ -1068,6 +1068,7 @@ int picoquic_enqueue_cnxid_stash(picoquic_cnx_t * cnx,
     const uint8_t * secret_bytes, picoquic_cnxid_stash_t ** pstashed);
 
 int picoquic_remove_not_before_cid(picoquic_cnx_t* cnx, uint64_t not_before, uint64_t current_time);
+int picoquic_renew_path_connection_id(picoquic_cnx_t* cnx, picoquic_path_t* path_x);
 
 /* handling of retransmission queue */
 picoquic_packet_t* picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet_t* p, int should_free);

@@ -222,6 +222,7 @@ int app_limit_cc_test();
 int initial_race_test();
 int pacing_test();
 int chacha20_test();
+int cid_quiescence_test();
 int controlled_migration_test();
 
 int h3zero_post_test();

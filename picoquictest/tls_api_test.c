@@ -1511,10 +1511,6 @@ int wait_client_connection_ready(picoquic_test_tls_api_ctx_t* test_ctx,
         was_active = 0;
         nb_trials++;
 
-        if (nb_trials == 2) {
-            DBG_PRINTF("%s", "BUG");
-        }
-
         ret = tls_api_one_sim_round(test_ctx, simulated_time, time_out, &was_active);
 
         if (was_active) {
@@ -8611,6 +8607,63 @@ int chacha20_test()
     /* And then free the resource
      */
 
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+/*
+ * Test CID renewal on quiescence larger than PICOQUIC_CID_REFRESH_DELAY
+ */
+int cid_quiescence_test()
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_connection_id_t previous_remote_id = picoquic_null_connection_id;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+
+    /* Set up the connection */
+    if (ret == 0) {
+        /* establish the connection */
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    if (ret == 0) {
+        previous_remote_id = test_ctx->cnx_client->path[0]->remote_cnxid;
+        /* Prepare to send data */
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_very_long, sizeof(test_scenario_very_long));
+    }
+
+    if (ret == 0) {
+        ret = wait_client_connection_ready(test_ctx, &simulated_time);
+    }
+
+    if (ret == 0) {
+        previous_remote_id = test_ctx->cnx_client->path[0]->remote_cnxid;
+        simulated_time += PICOQUIC_CID_REFRESH_DELAY;
+    }
+
+    /* Perform a data sending loop */
+    if (ret == 0) {
+        ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 0);
+    }
+
+    /* verify that the transmission was complete */
+    if (ret == 0) {
+        ret = tls_api_one_scenario_body_verify(test_ctx, &simulated_time, 0);
+    }
+    
+    /* Verify that the CID has rotated */
+    if (ret == 0 &&
+        picoquic_compare_connection_id(&previous_remote_id, &test_ctx->cnx_client->path[0]->remote_cnxid) == 0) {
+        ret = -1;
+    }
+    
+    /* And then free the resource  */
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;
