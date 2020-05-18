@@ -4329,6 +4329,11 @@ int client_error_test_modal(int mode)
             x += PICOQUIC_RESET_SECRET_SIZE;
             picoquic_queue_misc_frame(test_ctx->cnx_client, new_cnxid_error, x - new_cnxid_error, 0);
         }
+        else if (mode == 2) {
+            /* Queue a stop sending on stream 2, which is unidir */
+            uint8_t stop_sending_error_frame[] = { (uint8_t)picoquic_frame_type_stop_sending, 2, 0 };
+            picoquic_queue_misc_frame(test_ctx->cnx_client, stop_sending_error_frame, sizeof(stop_sending_error_frame), 0);
+        }
         else {
             DBG_PRINTF("Error mode %d is not defined yet", mode);
         }
@@ -4397,7 +4402,7 @@ int client_error_test_modal(int mode)
 int client_error_test()
 {
     int ret = 0;
-    char const* mode_name[] = { "stream", "new_connection_id" };
+    char const* mode_name[] = { "stream", "new_connection_id", "stop_sending" };
     int nb_modes = (int)(sizeof(mode_name) / sizeof(char const*));
 
     for (int mode = 0; mode < nb_modes; mode++) {
