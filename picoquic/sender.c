@@ -1004,6 +1004,7 @@ void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet_t
         packet->length = length;
         cnx->pkt_ctx[packet->pc].send_sequence++;
         path_x->latest_sent_time = current_time;
+        path_x->path_cid_rotated = 0;
         packet->delivered_prior = path_x->delivered_last;
         packet->delivered_time_prior = path_x->delivered_time_last;
         packet->delivered_sent_prior = path_x->delivered_sent_last;
@@ -3044,6 +3045,19 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
     int ack_sent = 0;
 
     packet->pc = pc;
+
+    /* If there was no packet sent on this path for a long time, rotate the
+     * CID prior to sending a new packet. The point is to make it harder for
+     * casual observers to track traffic, especially across NAT resets */
+    if (cnx->client_mode &&
+        path_x->challenge_verified &&
+        !path_x->path_cid_rotated &&
+        path_x->latest_sent_time + PICOQUIC_CID_REFRESH_DELAY < current_time)
+    {
+        /* Ignore renewal failure mode, since this is an optional feature */
+        (void)picoquic_renew_path_connection_id(cnx, path_x);
+        path_x->path_cid_rotated = 1;
+    }
 
     /* The first action is normally to retransmit lost packets. But if retransmit follows an
      * MTU drop, the stream frame will be fragmented and a fragment will be queued as a
