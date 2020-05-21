@@ -60,7 +60,7 @@ The current version is aligned with draft 27. All big features are supported, in
 the interface between QUIC and TLS, 0-RTT, migration and key rollover. The state of
 development is tracked in the list of issues in this repository.
 
-we have started an implementation
+We have started an implementation
 of [DNS over QUIC](https://datatracker.ietf.org/doc/draft-huitema-quic-dnsoquic/)
 as [Quicdoq](https://github.com/private-octopus/quicdoq). DNS over Quic is interesting
 by itself, but it also provides an example for building an application different than
@@ -140,8 +140,8 @@ release. The sources are in "picoquicfirst/picoquicdemo.c".
 ## Testing previous versions
 
 The code is constantly updated to track the latest version of the specification. It currently
-conforms to draft-27, and will negotiate support for the corresponding version `0xFF00001b`.
-It will also accept negotiation of version `0xFF000019`, draft-25. 
+conforms to draft-28, and will negotiate support for the corresponding version `0xFF00001c`.
+It will also accept negotiation of version `0xFF00001b`, draft-27. 
 
 # Creating QLOG Log Files
 
