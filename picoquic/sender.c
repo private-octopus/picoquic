@@ -1954,57 +1954,59 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
 
     /* If context is handshake, verify first that there is no need for retransmit or ack
      * on initial context */
-#if 0
-    if (ret == 0 && epoch > picoquic_epoch_initial) {
-        length = picoquic_prepare_packet_old_context(cnx, picoquic_packet_context_initial,
-            path_x, packet, send_buffer_max, current_time, next_wake_time, &header_length);
-        *is_initial_sent |= (length > 0);
-    }
-        if (ret == 0 && epoch > picoquic_epoch_initial) {
-#else
     int force_handshake_padding = 0;
 
-    if (ret == 0 && epoch > picoquic_epoch_initial) {
-        if (cnx->crypto_context[picoquic_epoch_handshake].aead_encrypt != NULL) {
-            if (cnx->pkt_ctx[picoquic_packet_context_initial].ack_needed) {
-                /* Apply some ack delay, because handshake from server arrive in trains */
-                uint64_t ack_delay = cnx->path[0]->smoothed_rtt / 8;
-                uint64_t ack_time;
-                if (ack_delay > PICOQUIC_ACK_DELAY_MAX) {
-                    ack_delay = PICOQUIC_ACK_DELAY_MAX;
+    if (ret == 0) {
+        if (epoch > picoquic_epoch_initial) {
+            if (cnx->crypto_context[picoquic_epoch_handshake].aead_encrypt != NULL) {
+                if (cnx->pkt_ctx[picoquic_packet_context_initial].ack_needed) {
+                    /* Apply some ack delay, because handshake from server arrive in trains */
+                    uint64_t ack_delay = cnx->path[0]->smoothed_rtt / 8;
+                    uint64_t ack_time;
+                    if (ack_delay > PICOQUIC_ACK_DELAY_MAX) {
+                        ack_delay = PICOQUIC_ACK_DELAY_MAX;
+                    }
+                    ack_time = cnx->pkt_ctx[picoquic_packet_context_initial].time_oldest_unack_packet_received + ack_delay;
+                    if (ack_time <= current_time) {
+                        force_handshake_padding = 1;
+                    }
+                    else if (ack_time < *next_wake_time) {
+                        *next_wake_time = ack_time;
+                        SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+                    }
                 }
-                ack_time = cnx->pkt_ctx[picoquic_packet_context_initial].time_oldest_unack_packet_received + ack_delay;
-                if (ack_time <= current_time) {
-                    force_handshake_padding = 1;
-                }
-                else if (ack_time < *next_wake_time) {
-                    *next_wake_time = ack_time;
-                    SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
-                }
-            } else if (!force_handshake_padding && cnx->pkt_ctx[pc].retransmit_newest != NULL) {
-                /* There is a risk of deadlock if the server is doing DDOS mitigation
-                 * and does not receive the Handshake sent by the client. If more than RTT has elapsed since
-                 * the last handshake packet was sent, force another one to be sent. */
-                uint64_t rto = picoquic_current_retransmit_timer(cnx, picoquic_packet_context_handshake);
-                uint64_t repeat_time = cnx->pkt_ctx[pc].retransmit_newest->send_time + rto;
+                else if (!force_handshake_padding && cnx->pkt_ctx[pc].retransmit_newest != NULL) {
+                    /* There is a risk of deadlock if the server is doing DDOS mitigation
+                     * and does not receive the Handshake sent by the client. If more than RTT has elapsed since
+                     * the last handshake packet was sent, force another one to be sent. */
+                    uint64_t rto = picoquic_current_retransmit_timer(cnx, picoquic_packet_context_handshake);
+                    uint64_t repeat_time = cnx->pkt_ctx[pc].retransmit_newest->send_time + rto;
 
-                if (repeat_time <= current_time) {
-                    force_handshake_padding = 1;
-                    cnx->pkt_ctx[pc].nb_retransmit++;
+                    if (repeat_time <= current_time) {
+                        force_handshake_padding = 1;
+                        cnx->pkt_ctx[pc].nb_retransmit++;
+                    }
+                    else if (repeat_time < *next_wake_time) {
+                        *next_wake_time = repeat_time;
+                        SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+                    }
                 }
-                else if (repeat_time < *next_wake_time) {
-                    *next_wake_time = repeat_time;
-                    SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
-                }
+            }
+            else {
+                length = picoquic_prepare_packet_old_context(cnx, picoquic_packet_context_initial,
+                    path_x, packet, send_buffer_max, current_time, next_wake_time, &header_length);
+                *is_initial_sent |= (length > 0);
             }
         }
         else {
-            length = picoquic_prepare_packet_old_context(cnx, picoquic_packet_context_initial,
-                path_x, packet, send_buffer_max, current_time, next_wake_time, &header_length);
-            *is_initial_sent |= (length > 0);
+            /* There is a risk of deadlock if the server is doing DDOS mitigation
+             * and does not repeat an initial or handshake packet that was lost. If more than RTT has elapsed since
+             * the last initial packet was sent, force another one to be sent. */
+            uint64_t rto = picoquic_current_retransmit_timer(cnx, picoquic_packet_context_initial);
+            uint64_t repeat_time = cnx->path[0]->latest_sent_time + rto;
+            force_handshake_padding = (repeat_time <= current_time);
         }
     }
-#endif
 
     if (ret == 0 && epoch > picoquic_epoch_0rtt && length == 0 &&
         cnx->crypto_context[picoquic_epoch_0rtt].aead_encrypt != NULL) {
@@ -2034,11 +2036,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             packet->checksum_overhead = checksum_overhead;
         }
         else if (ret == 0 && is_cleartext_mode && tls_ready == 0
-#if 0
-            && cnx->first_misc_frame == NULL && cnx->pkt_ctx[pc].ack_needed == 0) {
-#else
             && cnx->first_misc_frame == NULL && !cnx->pkt_ctx[pc].ack_needed && !force_handshake_padding) {
-#endif
             /* when in a clear text mode, only send packets if there is
             * actually something to send, or resend. */
 
@@ -3669,7 +3667,8 @@ int picoquic_close(picoquic_cnx_t* cnx, uint16_t reason_code)
         cnx->application_error = reason_code;
     } else if (cnx->cnx_state < picoquic_state_client_ready_start) {
         cnx->cnx_state = picoquic_state_handshake_failure;
-        cnx->application_error = reason_code;
+        cnx->application_error = 0;
+        cnx->local_error = PICOQUIC_TRANSPORT_APPLICATION_ERROR;
     } else {
         ret = -1;
     }

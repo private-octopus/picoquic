@@ -3583,7 +3583,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_
 
         }
         else if (first_byte == picoquic_frame_type_ack) {
-            if (epoch == 1) {
+            if (epoch == picoquic_epoch_0rtt) {
                 DBG_PRINTF("Ack frame (0x%x) not expected in 0-RTT packet", first_byte);
                 picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, first_byte);
                 bytes = NULL;
@@ -3592,7 +3592,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_
             bytes = picoquic_decode_ack_frame(cnx, bytes, bytes_max, current_time, epoch, 0, &packet_data);
         }
         else if (first_byte == picoquic_frame_type_ack_ecn) {
-            if (epoch == 1) {
+            if (epoch == picoquic_epoch_0rtt) {
                 DBG_PRINTF("Ack-ECN frame (0x%x) not expected in 0-RTT packet", first_byte);
                 picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, first_byte);
                 bytes = NULL;
@@ -3600,14 +3600,13 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_
             }
             bytes = picoquic_decode_ack_frame(cnx, bytes, bytes_max, current_time, epoch, 1, &packet_data);
         }
-        else if (epoch != 1 && epoch != 3 && first_byte != picoquic_frame_type_padding
+        else if (epoch != picoquic_epoch_0rtt && epoch != picoquic_epoch_1rtt && first_byte != picoquic_frame_type_padding
             && first_byte != picoquic_frame_type_ping
             && first_byte != picoquic_frame_type_connection_close
             && first_byte != picoquic_frame_type_crypto_hs) {
             picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, first_byte);
             bytes = NULL;
             break;
-
         }
         else {
             switch (first_byte) {
