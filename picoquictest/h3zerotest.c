@@ -1859,7 +1859,7 @@ int h3_long_file_name_test()
     }
 #else
     ret = demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, NULL, 0, long_file_name_scenario, nb_long_file_name_scenario, 
-        long_file_name_stream_length, 0, 400000, 0);
+        long_file_name_stream_length, 0, 400000, 0, NULL);
 #endif
     return ret;
 }
@@ -1915,7 +1915,6 @@ static int demo_test_create_file(char const* dir_path, char const* file_name, si
 
 static void demo_test_delete_file(char const* dir_path, char const* file_name)
 {
-    int ret = 0;
     char name[1024];
     size_t nb_sprintf;
 
@@ -2030,7 +2029,7 @@ static void demo_test_multi_scenario_free(picoquic_demo_stream_desc_t** scenario
             }
             if ((*scenario)[i].f_name != NULL) {
                 free((char*)((*scenario)[i].f_name));
-                (char*)(*scenario)[i].f_name = NULL;
+                (*scenario)[i].f_name = NULL;
             }
         }
         free(*scenario);
@@ -2050,7 +2049,7 @@ int h3_multi_file_test()
     char const* dir_www = "h3-m-www";
     char const* dir_download = "h3-m-download";
 #ifdef _WINDOWS
-    size_t const nb_files = 255;
+    size_t const nb_files = 256;
 #else
     size_t const nb_files = 1999;
 #endif
