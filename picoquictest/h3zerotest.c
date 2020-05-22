@@ -2042,17 +2042,15 @@ static void demo_test_multi_scenario_free(picoquic_demo_stream_desc_t** scenario
     }
 }
 
+size_t picohttp_test_multifile_number = 128;
+
 int h3_multi_file_test()
 {
     picoquic_demo_stream_desc_t* scenario = NULL;
     size_t* stream_length = NULL;
     char const* dir_www = "h3-m-www";
     char const* dir_download = "h3-m-download";
-#ifdef _WINDOWS
-    size_t const nb_files = 256;
-#else
-    size_t const nb_files = 1999;
-#endif
+    size_t nb_files = picohttp_test_multifile_number;
     size_t const name_length = 10;
     size_t const file_length = 32;
     uint64_t const random_seed = 0xab8acadab8aull;
