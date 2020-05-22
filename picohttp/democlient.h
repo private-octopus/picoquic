@@ -79,6 +79,7 @@ typedef struct st_picoquic_demo_client_callback_ctx_t {
     size_t nb_demo_streams;
 
     int nb_open_streams;
+    int nb_open_files;
     uint32_t nb_client_streams;
 
     picoquic_alpn_enum alpn;

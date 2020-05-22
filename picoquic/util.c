@@ -537,6 +537,7 @@ FILE* picoquic_file_open(char const* file_name, char const* flags)
 FILE * picoquic_file_close(FILE * F)
 {
     if (F != NULL) {
+        (void)fflush(F);
         (void)fclose(F);
     }
     return NULL;

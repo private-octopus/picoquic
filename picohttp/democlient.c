@@ -482,8 +482,12 @@ static int picoquic_demo_client_close_stream(
             stream_ctx->f_name = NULL;
         }
         stream_ctx->F = picoquic_file_close(stream_ctx->F);
+        if (stream_ctx->is_file_open) {
+            ctx->nb_open_files--;
+            stream_ctx->is_file_open = 0;
+        }
         stream_ctx->is_open = 0;
-        ctx->nb_open_streams--;
+        ctx->nb_open_streams--; 
         ret = 1;
     }
     return ret;
@@ -533,6 +537,28 @@ int picoquic_demo_client_start_streams(picoquic_cnx_t* cnx,
     return ret;
 }
 
+int picoquic_demo_client_open_stream_file(picoquic_cnx_t* cnx, picoquic_demo_callback_ctx_t* ctx, picoquic_demo_client_stream_ctx_t* stream_ctx)
+{
+    int ret = 0;
+
+    if (!stream_ctx->is_file_open && ctx->no_disk == 0) {
+        int last_err = 0;
+        stream_ctx->F = picoquic_file_open_ex(stream_ctx->f_name, "wb", &last_err);
+        if (stream_ctx->F == NULL) {
+            picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid,
+                "Could not open file <%s> for stream %" PRIu64 ", error %d (0x%x)\n", stream_ctx->f_name, stream_ctx->stream_id, last_err, last_err);
+            DBG_PRINTF("Could not open file <%s> for stream %" PRIu64 ", error %d (0x%x)", stream_ctx->f_name, stream_ctx->stream_id, last_err, last_err);
+            ret = -1;
+        }
+        else {
+            stream_ctx->is_file_open = 1;
+            ctx->nb_open_files++;
+        }
+    }
+
+    return ret;
+}
+
 int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx)
@@ -555,18 +581,21 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
             stream_ctx = picoquic_demo_client_find_stream(ctx, stream_id);
         }
         if (stream_ctx != NULL && stream_ctx->is_open) {
+#if 0
             if (!stream_ctx->is_file_open && ctx->no_disk == 0) {
-                stream_ctx->F = picoquic_file_open(stream_ctx->f_name, "wb");
+                int last_err = 0;
+                stream_ctx->F = picoquic_file_open_ex(stream_ctx->f_name, "wb", &last_err);
                 if (stream_ctx->F == NULL) {
                     picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid,
-                        "Could not open file <%s> for stream %" PRIu64 "\n", stream_ctx->f_name, stream_id);
-                    DBG_PRINTF("Could not open file <%s> for stream %" PRIu64, stream_ctx->f_name, stream_id);
+                        "Could not open file <%s> for stream %" PRIu64 ", error %d (0x%x)\n", stream_ctx->f_name, stream_id, last_err, last_err);
+                    DBG_PRINTF("Could not open file <%s> for stream %" PRIu64 ", error %d (0x%x)", stream_ctx->f_name, stream_id, last_err, last_err);
                     ret = -1;
                 }
                 else {
                     stream_ctx->is_file_open = 1;
                 }
             }
+#endif
             if (ret == 0 && length > 0) {
                 switch (ctx->alpn) {
                 case picoquic_alpn_http_3: {
@@ -585,7 +614,7 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
                         }
                         else if (available_data > 0) {
                             if (!stream_ctx->flow_opened){
-                                if (stream_ctx->stream_state.current_frame_length >= 0x100000) {
+                                if (stream_ctx->stream_state.current_frame_length < 0x100000) {
                                     stream_ctx->flow_opened = 1;
                                 }
                                 else if (cnx->cnx_state == picoquic_state_ready) {
@@ -594,10 +623,15 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
                                 }
                             }
                             if (ret == 0 && ctx->no_disk == 0) {
-                                ret = (fwrite(bytes, 1, available_data, stream_ctx->F) > 0) ? 0 : -1;
-                                if (ret != 0) {
-                                    picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid,
-                                        "Could not write data from stream %" PRIu64 ", error 0x%x", stream_id, ret);
+                                if (!stream_ctx->is_file_open) {
+                                    ret = picoquic_demo_client_open_stream_file(cnx, ctx, stream_ctx);
+                                }
+                                if (ret == 0) {
+                                    ret = (fwrite(bytes, 1, available_data, stream_ctx->F) > 0) ? 0 : -1;
+                                    if (ret != 0) {
+                                        picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid,
+                                            "Could not write data from stream %" PRIu64 ", error 0x%x", stream_id, ret);
+                                    }
                                 }
                             }
                             stream_ctx->received_length += available_data;
@@ -608,10 +642,15 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
                 }
                 case picoquic_alpn_http_0_9:
                     if (ctx->no_disk == 0) {
-                        ret = (fwrite(bytes, 1, length, stream_ctx->F) > 0) ? 0 : -1;
-                        if (ret != 0) {
-                            picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid,
-                                "Could not write data from stream %" PRIu64 ", error 0x%x", stream_id, ret);
+                        if (!stream_ctx->is_file_open) {
+                            ret = picoquic_demo_client_open_stream_file(cnx, ctx, stream_ctx);
+                        }
+                        if (ret == 0) {
+                            ret = (fwrite(bytes, 1, length, stream_ctx->F) > 0) ? 0 : -1;
+                            if (ret != 0) {
+                                picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid,
+                                    "Could not write data from stream %" PRIu64 ", error 0x%x", stream_id, ret);
+                            }
                         }
                     }
                     stream_ctx->received_length += length;
@@ -629,6 +668,10 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
                     if (stream_id <= 64 && !ctx->no_print) {
                         fprintf(stdout, "Stream %d ended after %d bytes\n",
                             (int)stream_id, (int)stream_ctx->received_length);
+                    }
+                    if (stream_ctx->received_length == 0) {
+                        picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "Stream %d ended after %d bytes, ret=0x%x\n",
+                            (int)stream_id, (int)stream_ctx->received_length, ret);
                     }
                 }
             }
