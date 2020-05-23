@@ -570,6 +570,9 @@ int h3zero_server_callback_prepare_to_send(picoquic_cnx_t* cnx,
             /* default reply for known URL */
             ret = demo_client_prepare_to_send(context, space, stream_ctx->echo_length, &stream_ctx->echo_sent,
                 stream_ctx->F);
+            if (stream_ctx->F != NULL && stream_ctx->echo_sent >= stream_ctx->echo_length) {
+                stream_ctx->F = picoquic_file_close(stream_ctx->F);
+            }
         }
     }
 
@@ -656,6 +659,10 @@ int h3zero_server_callback(picoquic_cnx_t* cnx,
                 /* reset post callback. */
                 if (stream_ctx->path_callback != NULL) {
                     ret = stream_ctx->path_callback(NULL, NULL, 0, picohttp_callback_reset, stream_ctx);
+                }
+
+                if (stream_ctx->F != NULL) {
+                    stream_ctx->F = picoquic_file_close(stream_ctx->F);
                 }
             }
             picoquic_reset_stream(cnx, stream_id, 0);
@@ -1189,6 +1196,9 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
             printf("Server CB, Stop Sending Stream: %" PRIu64 ", resetting the local stream.\n",
                 stream_id);
         }
+        if (stream_ctx != NULL && stream_ctx->F != NULL) {
+            stream_ctx->F = picoquic_file_close(stream_ctx->F);
+        }
         return 0;
     case picoquic_callback_stream_reset:
         /* TODO-POST: notify callback. */
@@ -1198,6 +1208,9 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
             fprintf(cnx->quic->F_log, "%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
             fprintf(cnx->quic->F_log, "Server CB, Reset Stream: %" PRIu64 ", resetting the local stream.\n",
                 stream_id);
+        }
+        if (stream_ctx != NULL && stream_ctx->F != NULL) {
+            stream_ctx->F = picoquic_file_close(stream_ctx->F);
         }
         return 0;
     case picoquic_callback_prepare_to_send:
@@ -1213,8 +1226,12 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
                 }
                 else {
                     /* TODO-POST: notify callback. */
-                    return demo_client_prepare_to_send((void*)bytes, length, stream_ctx->echo_length, &stream_ctx->echo_sent,
+                    int ret = demo_client_prepare_to_send((void*)bytes, length, stream_ctx->echo_length, &stream_ctx->echo_sent,
                         stream_ctx->F);
+                    if (stream_ctx->F != NULL && stream_ctx->echo_sent >= stream_ctx->echo_length) {
+                        stream_ctx->F = picoquic_file_close(stream_ctx->F);
+                    }
+                    return ret;
                 }
             }
     default:
