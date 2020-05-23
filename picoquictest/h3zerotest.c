@@ -2059,7 +2059,7 @@ static void demo_test_multi_scenario_free(picoquic_demo_stream_desc_t** scenario
     }
 }
 
-size_t picohttp_test_multifile_number = 1999;
+size_t picohttp_test_multifile_number = 64;
 #define MULTI_FILE_CLIENT_BIN "multi_file_client_trace.bin"
 #define MULTI_FILE_SERVER_BIN "multi_file_server_trace.bin"
 
