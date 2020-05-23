@@ -583,6 +583,7 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
         if (stream_ctx != NULL && stream_ctx->is_open) {
             if (!stream_ctx->is_file_open && ctx->no_disk == 0) {
                 ret = picoquic_demo_client_open_stream_file(cnx, ctx, stream_ctx);
+                stream_ctx->is_file_open = 1;
             }
             if (ret == 0 && length > 0) {
                 switch (ctx->alpn) {
@@ -777,7 +778,10 @@ static void picoquic_demo_client_delete_stream_context(picoquic_demo_callback_ct
         stream_ctx->f_name = NULL;
     }
 
-    stream_ctx->F = picoquic_file_close(stream_ctx->F);
+    if (stream_ctx->F != NULL) {
+        DBG_PRINTF("Stream %d, file open after %d bytes\n", stream_ctx->stream_id, stream_ctx->received_length);
+        stream_ctx->F = picoquic_file_close(stream_ctx->F);
+    }
 
     if (stream_ctx == ctx->first_stream) {
         ctx->first_stream = stream_ctx->next_stream;

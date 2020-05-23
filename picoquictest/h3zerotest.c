@@ -1950,6 +1950,7 @@ static char * demo_test_create_random_file_name(size_t name_length, uint64_t * r
 
 static int demo_test_check_file(char const* www_path, char const* download_path, char const* file_name)
 {
+    int ret;
     char name1[1024];
     char name2[1024];
     size_t nb_written;
@@ -1957,7 +1958,10 @@ static int demo_test_check_file(char const* www_path, char const* download_path,
     (void)picoquic_sprintf(name1, sizeof(name1), &nb_written, "%s%s%s", www_path, PICOQUIC_FILE_SEPARATOR, file_name);
     (void)picoquic_sprintf(name2, sizeof(name2), &nb_written, "%s%s%s", download_path, PICOQUIC_FILE_SEPARATOR, file_name);
 
-    return picoquic_test_compare_binary_files(name1, name2);
+    if ((ret = picoquic_test_compare_binary_files(name1, name2)) != 0) {
+        DBG_PRINTF("Files %s != %s", name1, name2);
+    }
+    return ret;
 }
 
 static int demo_test_multi_scenario_create(picoquic_demo_stream_desc_t** scenario, size_t** stream_length, uint64_t seed, size_t nb_files, size_t name_length, size_t length,
@@ -2023,6 +2027,9 @@ static int demo_test_multi_scenario_check(picoquic_demo_stream_desc_t* scenario,
 
     for (size_t i = 0; ret == 0 && i < nb_files; i++) {
         ret = demo_test_check_file(dir_www, dir_download, scenario[i].doc_name);
+        if (ret != 0) {
+            DBG_PRINTF("File #%d differs", i);
+        }
     }
 
     return ret;
@@ -2051,7 +2058,7 @@ static void demo_test_multi_scenario_free(picoquic_demo_stream_desc_t** scenario
     }
 }
 
-size_t picohttp_test_multifile_number = 128;
+size_t picohttp_test_multifile_number = 1999;
 #define MULTI_FILE_CLIENT_BIN "multi_file_client_trace.bin"
 #define MULTI_FILE_SERVER_BIN "multi_file_server_trace.bin"
 

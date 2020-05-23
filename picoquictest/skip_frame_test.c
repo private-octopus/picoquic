@@ -562,9 +562,11 @@ static int picoquic_compare_binary_files(char const* fname1, char const* fname2,
         size_t len2 = fread(buffer2, 1, sizeof(buffer2), f2);
 
         if (ret == 0 && len1 != len2) {
+            DBG_PRINTF("Length %s=%z, %s=%z", fname1, len1, fname2, len2);
             ret = -1;
         }
         if (ret == 0 && memcmp(buffer1, buffer2, len1) != 0) {
+            DBG_PRINTF("Content does not match for  %s, %s", fname1, fname2);
             ret = -1;
         }
 
