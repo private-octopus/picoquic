@@ -1867,7 +1867,8 @@ int h3_long_file_name_test()
             long_file_name_stream_length, 0, 400000, 0, NULL, NULL, NULL);
     }
 #else
-    ret = demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, NULL, 0, long_file_name_scenario, nb_long_file_name_scenario, 
+    ret = demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_server_callback, NULL, 0, 
+        long_file_name_scenario, nb_long_file_name_scenario, 
         long_file_name_stream_length, 0, 400000, 0, NULL, NULL, NULL);
 #endif
     return ret;
