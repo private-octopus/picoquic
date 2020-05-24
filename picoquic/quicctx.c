@@ -361,6 +361,15 @@ int picoquic_is_local_cid(picoquic_quic_t* quic, picoquic_connection_id_t* cid)
 void picoquic_free(picoquic_quic_t* quic)
 {
     if (quic != NULL) {
+
+        /* delete all the connection contexts -- do this before any other
+         * action, as deleting connections may add packets to queues or
+         * change connection lists */
+        while (quic->cnx_list != NULL) {
+            picoquic_delete_cnx(quic->cnx_list);
+        }
+
+        /* Delete TLS and AEAD cntexts */
         picoquic_delete_retry_protection_contexts(quic);
 
         if (quic->aead_encrypt_ticket_ctx != NULL) {
@@ -381,22 +390,18 @@ void picoquic_free(picoquic_quic_t* quic)
         /* delete the stored tickets */
         picoquic_free_tickets(&quic->p_first_ticket);
 
+        /* delete packets in pool */
         while (quic->p_first_packet != NULL) {
             picoquic_packet_t * p = quic->p_first_packet->next_packet;
             free(quic->p_first_packet);
             quic->p_first_packet = p;
         }
 
-        /* delete all pending packets */
+        /* delete all pending stateless packets */
         while (quic->pending_stateless_packet != NULL) {
             picoquic_stateless_packet_t* to_delete = quic->pending_stateless_packet;
             quic->pending_stateless_packet = to_delete->next_packet;
             free(to_delete);
-        }
-
-        /* delete all the connection contexts */
-        while (quic->cnx_list != NULL) {
-            picoquic_delete_cnx(quic->cnx_list);
         }
 
         if (quic->table_cnx_by_id != NULL) {
