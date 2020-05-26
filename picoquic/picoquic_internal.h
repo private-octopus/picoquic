@@ -337,6 +337,17 @@ typedef struct st_picoquic_packet_t {
 picoquic_packet_t* picoquic_create_packet(picoquic_quic_t* quic);
 void picoquic_recycle_packet(picoquic_quic_t* quic, picoquic_packet_t* packet);
 
+/* Definition of the token register used to prevent repeated usage of
+ * the same new token, retry token, or session ticket.
+ */
+
+typedef struct st_picoquic_registered_token_t {
+    picosplay_node_t registered_token_node;
+    uint64_t token_time;
+    uint64_t token_hash; /* The last 8 bytes of the token, normally taken from AEAD checksum */
+    int count;
+} picoquic_registered_token_t;
+
 /*
  * Definition of the session ticket store and connection token
  * store that can be associated with a
@@ -459,6 +470,7 @@ typedef struct st_picoquic_quic_t {
     char const* token_file_name;
     picoquic_stored_ticket_t * p_first_ticket;
     picoquic_stored_token_t * p_first_token;
+    picosplay_tree_t token_reuse_tree; /* detection of token reuse */
     uint32_t mtu_max;
     uint32_t padding_multiple_default;
     uint32_t padding_minsize_default;
@@ -518,6 +530,10 @@ typedef struct st_picoquic_quic_t {
 } picoquic_quic_t;
 
 picoquic_packet_context_enum picoquic_context_from_epoch(int epoch);
+
+int picoquic_registered_token_check_reuse(picoquic_quic_t* quic, const uint8_t* token, size_t token_length, uint64_t expiry_time);
+
+void picoquic_registered_token_clear(picoquic_quic_t* quic, uint64_t expiry_time_max);
 
 /*
  * SACK dashboard item, part of connection context. Each item

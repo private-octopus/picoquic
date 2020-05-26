@@ -371,3 +371,88 @@ int token_store_test()
 
     return ret;
 }
+
+/* Check the protection against token reuse */
+typedef struct st_token_reuse_api_case_t {
+    uint64_t expiry_date;
+    uint8_t token[16];
+    size_t token_length;
+} token_reuse_api_case_t;
+
+static token_reuse_api_case_t token_reuse_api_cases[] = {
+    { 2, { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}, 12},
+    { 3, { 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14}, 12},
+    { 3, { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}, 12},
+    { 3, { 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}, 12},
+    { 5, { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}, 12},
+    { 7, { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}, 12},
+    { 1, { 1, 2, 3, 4, 5, 6, 7, 8}, 8},
+};
+
+static size_t nb_token_reuse_api_cases = sizeof(token_reuse_api_cases) / sizeof(token_reuse_api_case_t);
+
+int token_reuse_api_test()
+{
+    int ret = 0;
+    uint64_t test_time = 4;
+    uint64_t simulated_time = 0;
+    picoquic_quic_t * quic = picoquic_create(4, NULL, NULL, NULL, "test", NULL, NULL, NULL, NULL,
+        NULL, 0, &simulated_time, NULL, NULL, 0);
+
+    if (quic == NULL) {
+        DBG_PRINTF("%s", "Cannot create QUIC context");
+        ret = -1;
+    }
+    else {
+        /* Test that all tokens can be created */
+        for (size_t i = 0; ret == 0 && i < nb_token_reuse_api_cases; i++) {
+            if (picoquic_registered_token_check_reuse(quic,
+                token_reuse_api_cases[i].token,
+                token_reuse_api_cases[i].token_length,
+                token_reuse_api_cases[i].expiry_date) != 0) {
+                DBG_PRINTF("Token[%z] already used?", i);
+                ret = -1;
+            }
+        }
+        /* Test that all tokens can be detected as in use */
+        for (size_t i = 0; ret == 0 && i < nb_token_reuse_api_cases; i++) {
+            if (picoquic_registered_token_check_reuse(quic,
+                token_reuse_api_cases[i].token,
+                token_reuse_api_cases[i].token_length,
+                token_reuse_api_cases[i].expiry_date) == 0) {
+                DBG_PRINTF("Token[%z] not already used?", i);
+                ret = -1;
+            }
+        }
+        /* Remove tokens with t <= test_time */
+        picoquic_registered_token_clear(quic, test_time);
+        /* Test that all deleted tokens are absent and others are not */
+        for (size_t i = 0; ret == 0 && i < nb_token_reuse_api_cases; i++) {
+            int x = picoquic_registered_token_check_reuse(quic,
+                token_reuse_api_cases[i].token,
+                token_reuse_api_cases[i].token_length,
+                token_reuse_api_cases[i].expiry_date);
+            if (x == 0 && token_reuse_api_cases[i].expiry_date >= test_time){
+                DBG_PRINTF("Token[%z], time %" PRIu64 " not already used?", i, token_reuse_api_cases[i].expiry_date);
+                ret = -1;
+            }
+            if (x != 0 && token_reuse_api_cases[i].expiry_date < test_time) {
+                DBG_PRINTF("Token[%z], time %" PRIu64 " already used?", i, token_reuse_api_cases[i].expiry_date);
+                ret = -1;
+            }
+        }
+        /* Check refusal with length < 8 */
+        for (size_t l = 0; ret == 0 && l < 8; l++) {
+            if (picoquic_registered_token_check_reuse(quic,
+                token_reuse_api_cases[0].token, l,
+                token_reuse_api_cases[0].expiry_date) == 0) {
+                DBG_PRINTF("Token[1] length %z accepted?", l);
+                ret = -1;
+            }
+        }
+
+        picoquic_free(quic);
+    }
+
+    return ret;
+}
