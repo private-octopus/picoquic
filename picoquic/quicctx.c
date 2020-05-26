@@ -148,6 +148,81 @@ picoquic_packet_context_enum picoquic_context_from_epoch(int epoch)
     return (epoch >= 0 && epoch < 4) ? pc[epoch] : 0;
 }
 
+/* Token reuse management */
+
+static int64_t picoquic_registered_token_compare(void* l, void* r)
+{
+    /* STream values are from 0 to 2^62-1, which means we are not worried with rollover */
+    picoquic_registered_token_t* rt_l = (picoquic_registered_token_t*)l;
+    picoquic_registered_token_t* rt_r = (picoquic_registered_token_t*)r;
+    int64_t ret = rt_l->token_time - rt_r->token_time;
+    if (ret == 0) {
+        ret = rt_l->token_hash - rt_r->token_hash;
+    }
+    return ret;
+}
+
+static picosplay_node_t* picoquic_registered_token_create(void* value)
+{
+    return &((picoquic_registered_token_t*)value)->registered_token_node;
+}
+
+
+static void* picoquic_registered_token_value(picosplay_node_t* node)
+{
+    return (void*)((char*)node - offsetof(struct st_picoquic_registered_token_t, registered_token_node));
+}
+
+static void picoquic_registered_token_delete(void* tree, picosplay_node_t* node)
+{
+    picoquic_registered_token_t* rt = (picoquic_registered_token_t*)picoquic_registered_token_value(node);
+    free(rt);
+}
+
+int picoquic_registered_token_check_reuse(picoquic_quic_t * quic,
+    const uint8_t * token, size_t token_length, uint64_t expiry_time)
+{
+    int ret = -1;
+    if (token_length >= 8) {
+        picoquic_registered_token_t* rt = (picoquic_registered_token_t*)malloc(sizeof(picoquic_registered_token_t));
+        if (rt != NULL) {
+            picosplay_node_t* rt_n = NULL;
+            memset(rt, 0, sizeof(picoquic_registered_token_t));
+            rt->token_time = expiry_time;
+            rt->token_hash = PICOPARSE_64(token + token_length - 8);
+            rt->count = 1;
+            rt_n = picosplay_find(&quic->token_reuse_tree, rt);
+            if (rt_n != NULL) {
+                free(rt);
+                rt = (picoquic_registered_token_t*)picoquic_registered_token_value(rt_n);
+                rt->count++;
+                DBG_PRINTF("Token reuse detected, count=%d", rt->count);
+            }
+            else {
+                (void)picosplay_insert(&quic->token_reuse_tree, rt);
+                ret = 0;
+            }
+        }
+    }
+
+    return ret;
+}
+
+void picoquic_registered_token_clear(picoquic_quic_t* quic, uint64_t expiry_time_max)
+{
+    int end_reached = 0;
+    do {
+        picoquic_registered_token_t* rt_first = (picoquic_registered_token_t*)
+            picoquic_registered_token_value(picosplay_first(&quic->token_reuse_tree));
+        if (rt_first == NULL || rt_first->token_time >= expiry_time_max) {
+            end_reached = 1;
+        }
+        else {
+            picosplay_delete_hint(&quic->token_reuse_tree, &rt_first->registered_token_node);
+        }
+    } while (!end_reached);
+}
+
 /*
  * Supported versions. Specific versions may mandate different processing of different
  * formats.
@@ -195,6 +270,8 @@ const picoquic_version_parameters_t picoquic_supported_versions[] = {
 };
 
 const size_t picoquic_nb_supported_versions = sizeof(picoquic_supported_versions) / sizeof(picoquic_version_parameters_t);
+
+/* Manage token reuse registry */
 
 
 /* QUIC context create and dispose */
@@ -263,6 +340,9 @@ picoquic_quic_t* picoquic_create(uint32_t nb_connections,
 
             quic->table_cnx_by_secret = picohash_create((size_t)nb_connections * 4,
                 picoquic_net_secret_hash, picoquic_net_secret_compare);
+
+            picosplay_init_tree(&quic->token_reuse_tree, picoquic_registered_token_compare,
+                picoquic_registered_token_create, picoquic_registered_token_delete, picoquic_registered_token_value);
 
             if (quic->table_cnx_by_id == NULL || quic->table_cnx_by_net == NULL ||
                 quic->table_cnx_by_icid == NULL || quic->table_cnx_by_secret == NULL) {
@@ -389,6 +469,9 @@ void picoquic_free(picoquic_quic_t* quic)
 
         /* delete the stored tickets */
         picoquic_free_tickets(&quic->p_first_ticket);
+
+        /* Deelete the reused tokens tree */
+        picosplay_empty_tree(&quic->token_reuse_tree);
 
         /* delete packets in pool */
         while (quic->p_first_packet != NULL) {

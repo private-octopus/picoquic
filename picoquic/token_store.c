@@ -163,53 +163,39 @@ int picoquic_store_token(picoquic_stored_token_t** pp_first_token,
 
     if (token_length < 1 || sni == NULL || sni_length == 0) {
         ret = PICOQUIC_ERROR_INVALID_TOKEN;
-    } else {
-        uint64_t token_issued_time;
-        uint64_t ttl_seconds;
-        uint64_t time_valid_until;
-
-        token_issued_time = PICOPARSE_64(token);
-        ttl_seconds = PICOPARSE_32(token + 13);
-
-        if (ttl_seconds > (7 * 24 * 3600)) {
-            ttl_seconds = (7 * 24 * 3600);
+    }
+    else {
+        /* There is no explicit TTL for tokens. We assume they are OK for 24 hours */
+        uint64_t time_valid_until = current_time + ((uint64_t)24 * 3600) * ((uint64_t)1000000);
+        picoquic_stored_token_t* stored = picoquic_format_token(time_valid_until, sni, sni_length,
+            ip_addr, ip_addr_length, token, token_length);
+        if (stored == NULL) {
+            ret = PICOQUIC_ERROR_MEMORY;
         }
+        else {
+            picoquic_stored_token_t* next;
+            picoquic_stored_token_t** pprevious;
 
-        time_valid_until = (token_issued_time * 1000) + (ttl_seconds * 1000000);
+            stored->next_token = next = *pp_first_token;
+            *pp_first_token = stored;
+            pprevious = &stored->next_token;
 
-        if (current_time != 0 && time_valid_until < current_time) {
-            ret = PICOQUIC_ERROR_INVALID_TOKEN;
-        } else {
-            picoquic_stored_token_t* stored = picoquic_format_token(time_valid_until, sni, sni_length,
-                    ip_addr, ip_addr_length, token, token_length);
-            if (stored == NULL) {
-                ret = PICOQUIC_ERROR_MEMORY;
-            }
-            else {
-                picoquic_stored_token_t* next;
-                picoquic_stored_token_t** pprevious;
-
-
-                stored->next_token = next = *pp_first_token;
-                *pp_first_token = stored;
-                pprevious = &stored->next_token;
-
-                /* Now remove the old tokens for that SNI & ip_addr */
-                while (next != NULL) {
-                    if (next->time_valid_until <= stored->time_valid_until && next->sni_length == sni_length && next->ip_addr_length == ip_addr_length && memcmp(next->sni, sni, sni_length) == 0 && memcmp(next->ip_addr, ip_addr, ip_addr_length) == 0) {
-                        picoquic_stored_token_t* deleted = next;
-                        next = next->next_token;
-                        *pprevious = next;
-                        memset((uint8_t*)&deleted->token, 0, deleted->token_length);
-                        free(deleted);
-                    } else {
-                        pprevious = &next->next_token;
-                        next = next->next_token;
-                    }
+            /* Now remove the old tokens for that SNI & ip_addr */
+            while (next != NULL) {
+                if (next->time_valid_until <= stored->time_valid_until && next->sni_length == sni_length && next->ip_addr_length == ip_addr_length && memcmp(next->sni, sni, sni_length) == 0 && memcmp(next->ip_addr, ip_addr, ip_addr_length) == 0) {
+                    picoquic_stored_token_t* deleted = next;
+                    next = next->next_token;
+                    *pprevious = next;
+                    memset((uint8_t*)&deleted->token, 0, deleted->token_length);
+                    free(deleted);
+                }
+                else {
+                    pprevious = &next->next_token;
+                    next = next->next_token;
                 }
             }
         }
-    }
+    } 
 
     return ret;
 }

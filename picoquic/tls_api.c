@@ -2319,7 +2319,7 @@ static int picoquic_server_encrypt_retry_token(picoquic_quic_t * quic, const str
     return ret;
 }
 
-static int picoquic_server_decrypt_retry_token(picoquic_quic_t* quic, const struct sockaddr * addr_peer,
+int picoquic_server_decrypt_retry_token(picoquic_quic_t* quic, const struct sockaddr * addr_peer,
     const uint8_t * token, size_t token_length, uint8_t * text, size_t *text_length)
 {
     int ret = 0;
@@ -2415,10 +2415,17 @@ int picoquic_verify_retry_token(picoquic_quic_t* quic, const struct sockaddr * a
                 /* Invalid token, too old */
                 ret = -1;
             }
-            else if (odcid->id_len > 0 &&
-                picoquic_compare_connection_id(rcid, &cid) != 0) {
-                /* Invalid token, bad rcid */
-                ret = -1;
+            else {
+                /* Remove old tickets before testing this one. */
+                picoquic_registered_token_clear(quic, current_time);
+                if ((ret = picoquic_registered_token_check_reuse(quic, token, token_size, token_time)) != 0) {
+                    DBG_PRINTF("Duplicate token test resturns %d", ret);
+                }
+                else if (odcid->id_len > 0 &&
+                    picoquic_compare_connection_id(rcid, &cid) != 0) {
+                    /* Invalid token, bad rcid */
+                    ret = -1;
+                }
             }
         }
         else {

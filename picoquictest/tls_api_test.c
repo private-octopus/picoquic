@@ -2289,7 +2289,7 @@ int tls_api_bad_server_reset_test()
 
 static char const* token_file_name = "retry_tests_tokens.bin";
 
-int tls_retry_token_test_one(int token_mode)
+int tls_retry_token_test_one(int token_mode, int dup_token)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -2327,37 +2327,79 @@ int tls_retry_token_test_one(int token_mode)
             picoquic_delete_cnx(test_ctx->cnx_server);
             test_ctx->cnx_server = NULL;
         }
+        /* If testing token duplication, simulate previous use of token */
+        if (dup_token) {
+            uint8_t * token = NULL;
+            uint16_t token_length = 0;
 
-        test_ctx->qserver->check_token = 1;
-
-        test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
-            picoquic_null_connection_id, picoquic_null_connection_id,
-            (struct sockaddr*)&test_ctx->server_addr, 0,
-            0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
-
-        if (test_ctx->cnx_client == NULL) {
-            ret = -1;
+            ret = picoquic_get_token(test_ctx->qclient->p_first_token, simulated_time,
+                PICOQUIC_TEST_SNI, (uint16_t)strlen(PICOQUIC_TEST_SNI),
+                NULL, 0,
+                &token, &token_length, 0);
+            if (ret != 0){
+                DBG_PRINTF("picoquic_get_token returns %d\n", ret);
+            }
+            else {
+                uint8_t text[256];
+                size_t text_len = 256;
+                ret = picoquic_server_decrypt_retry_token(test_ctx->qserver, (struct sockaddr*) & test_ctx->client_addr,
+                    token, token_length, text, &text_len);
+                if (ret != 0) {
+                    DBG_PRINTF("cannot decrypt the token, ret= %d\n", ret);
+                }
+                else if (text_len < 8 ) {
+                    DBG_PRINTF("Token too short, len=%z\n", text_len);
+                    ret = -1;
+                }
+                else {
+                    uint64_t valid_until = PICOPARSE_64(text);
+                    ret = picoquic_registered_token_check_reuse(test_ctx->qserver, token, token_length, valid_until);
+                    if (ret != 0) {
+                        DBG_PRINTF("Token already registered, ret= %d\n", ret);
+                    }
+                }
+            }
         }
-        else {
-            ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+
+        if (ret == 0) {
+            test_ctx->qserver->check_token = 1;
+
+            test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
+                picoquic_null_connection_id, picoquic_null_connection_id,
+                (struct sockaddr*) & test_ctx->server_addr, 0,
+                0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
+
+            if (test_ctx->cnx_client == NULL) {
+                ret = -1;
+            }
+            else {
+                ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+            }
         }
     }
 
     if (ret == 0) {
         /* Try the new connection */
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
-    }
 
-    if (ret == 0) {
-        ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
-    }
+        if (dup_token) {
+            if (ret == 0 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected){
+                ret = -1;
+                DBG_PRINTF("Connection succeeds despite duplicate token, ret= %d\n", ret);
+            }
+        }
+        else {
+            if (ret == 0) {
+                ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
+            }
 
-    if (ret == 0 && test_ctx->cnx_client->original_cnxid.id_len != 0) {
-        DBG_PRINTF("Second retry did not use the stored token, odcil len=%d\n", 
-            test_ctx->cnx_client->original_cnxid.id_len);
-        ret = -1;
+            if (ret == 0 && test_ctx->cnx_client->original_cnxid.id_len != 0) {
+                DBG_PRINTF("Second retry did not use the stored token, odcil len=%d\n",
+                    test_ctx->cnx_client->original_cnxid.id_len);
+                ret = -1;
+            }
+        }
     }
-
     if (ret == 0) {
         /* Not strictly needed, but allows for inspection */
         ret = picoquic_save_tokens(test_ctx->qclient->p_first_token, simulated_time, token_file_name);
@@ -2373,16 +2415,22 @@ int tls_retry_token_test_one(int token_mode)
 
 int tls_retry_token_test()
 {
-    int ret = tls_retry_token_test_one(1);
+    int ret = tls_retry_token_test_one(1,0);
 
     if (ret != 0) {
         DBG_PRINTF("Retry token test returns %d", ret);
     }
     else {
-        ret = tls_retry_token_test_one(2);
+        ret = tls_retry_token_test_one(2,0);
 
         if (ret != 0) {
             DBG_PRINTF("Provide token test returns %d", ret);
+        }
+        else {
+            ret = tls_retry_token_test_one(1, 1);
+            if (ret != 0){
+                DBG_PRINTF("Duplicate token test returns %d", ret);
+            }
         }
     }
 

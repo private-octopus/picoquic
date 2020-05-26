@@ -224,6 +224,7 @@ int pacing_test();
 int chacha20_test();
 int cid_quiescence_test();
 int controlled_migration_test();
+int token_reuse_api_test();
 
 int h3zero_post_test();
 int h09_post_test();
