@@ -916,7 +916,7 @@ DWORD WINAPI quicwind_background_thread(LPVOID lpParam)
                     (struct sockaddr*)&sp->addr_to,
                     (struct sockaddr*)&sp->addr_local,
                     sp->if_index_local,
-                    (const char*)sp->bytes, (int)sp->length);
+                    (const char*)sp->bytes, (int)sp->length, NULL);
 
                 /* TODO: log stateless packet */
 
@@ -953,7 +953,7 @@ DWORD WINAPI quicwind_background_thread(LPVOID lpParam)
                         (void)picoquic_send_through_socket(s,
                             (struct sockaddr *)&peer_addr, (struct sockaddr *)&local_addr, 
                             picoquic_get_local_if_index(cnx_next),
-                            (const char*)send_buffer, (int)send_length);
+                            (const char*)send_buffer, (int)send_length, NULL);
 
                         AppendText(_T("Packet sent\r\n"));
 

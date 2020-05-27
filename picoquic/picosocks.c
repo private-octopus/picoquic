@@ -1116,7 +1116,7 @@ int picoquic_send_through_socket(
     SOCKET_TYPE fd,
     struct sockaddr* addr_dest,
     struct sockaddr* addr_from, unsigned long from_if,
-    const char* bytes, int length)
+    const char* bytes, int length, int* sock_err)
 {
     int sent = picoquic_sendmsg(fd, addr_dest, picoquic_addr_length(addr_dest),
         addr_from, picoquic_addr_length(addr_from), from_if, bytes, length);
@@ -1130,6 +1130,9 @@ int picoquic_send_through_socket(
 #endif
         DBG_PRINTF("Could not send packet on UDP socket[AF=%d]= %d!\n",
             addr_dest->sa_family, last_error);
+        if (sock_err != NULL) {
+            *sock_err = last_error;
+        }
     }
 #endif
 
@@ -1140,12 +1143,12 @@ int picoquic_send_through_server_sockets(
     picoquic_server_sockets_t* sockets,
     struct sockaddr* addr_dest,
     struct sockaddr* addr_from, unsigned long from_if,
-    const char* bytes, int length)
+    const char* bytes, int length, int* sock_err)
 {
     /* Both Linux and Windows use separate sockets for V4 and V6 */
     int socket_index = (addr_dest->sa_family == AF_INET) ? 1 : 0;
 
-    return picoquic_send_through_socket(sockets->s_socket[socket_index], addr_dest, addr_from, from_if, bytes, length);
+    return picoquic_send_through_socket(sockets->s_socket[socket_index], addr_dest, addr_from, from_if, bytes, length, sock_err);
 }
 
 int picoquic_get_server_address(const char* ip_address_text, int server_port,

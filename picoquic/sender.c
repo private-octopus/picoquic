@@ -3685,7 +3685,8 @@ int picoquic_close(picoquic_cnx_t* cnx, uint16_t reason_code)
 
 int picoquic_prepare_next_packet(picoquic_quic_t* quic,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
-    struct sockaddr_storage* p_addr_to, struct sockaddr_storage* p_addr_from, int * if_index)
+    struct sockaddr_storage* p_addr_to, struct sockaddr_storage* p_addr_from, int * if_index,
+    picoquic_connection_id_t * log_cid)
 {
     int ret = 0;
     picoquic_stateless_packet_t* sp = picoquic_dequeue_stateless_packet(quic);
@@ -3700,6 +3701,9 @@ int picoquic_prepare_next_packet(picoquic_quic_t* quic,
             picoquic_store_addr(p_addr_to, (struct sockaddr*) & sp->addr_to);
             picoquic_store_addr(p_addr_from, (struct sockaddr*) & sp->addr_local);
             *if_index = sp->if_index_local;
+            if (log_cid != NULL) {
+                *log_cid = sp->initial_cid;
+            }
         }
         picoquic_delete_stateless_packet(sp);
     }
@@ -3711,6 +3715,9 @@ int picoquic_prepare_next_packet(picoquic_quic_t* quic,
         }
         else {
             ret = picoquic_prepare_packet(cnx, current_time, send_buffer, send_buffer_max, send_length, p_addr_to, p_addr_from);
+            if (log_cid != NULL) {
+                *log_cid = sp->initial_cid;
+            }
 
             if (ret == PICOQUIC_ERROR_DISCONNECTED) {
                 ret = 0;
