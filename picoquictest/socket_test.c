@@ -69,6 +69,7 @@ static int socket_ping_pong(SOCKET_TYPE fd, struct sockaddr* server_addr, int se
 
     /* Convert message using XOR  and send to address from which the message was received */
     if (ret == 0) {
+        int sock_err = 0;
         for (int i = 0; i < bytes_recv; i++) {
             buffer[i] ^= 0xFF;
         }
@@ -76,8 +77,9 @@ static int socket_ping_pong(SOCKET_TYPE fd, struct sockaddr* server_addr, int se
         if (picoquic_send_through_server_sockets(server_sockets,
                 (struct sockaddr*)&addr_from,
                 (struct sockaddr*)&addr_dest, dest_if,
-                (char*)buffer, bytes_recv)
+                (char*)buffer, bytes_recv, &sock_err)
             != bytes_recv) {
+            DBG_PRINTF("Send_through_server_sockets return %d, err %d", ret, sock_err);
             ret = -1;
         }
     }

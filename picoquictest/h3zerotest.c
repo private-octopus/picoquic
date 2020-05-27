@@ -2382,7 +2382,7 @@ int http_stress_test()
                 int if_index = -1;
 
                 ret = picoquic_prepare_next_packet(qready, simulated_time, prepared->bytes, sizeof(prepared->bytes),
-                    &prepared->length, &prepared->addr_to, &prepared->addr_from, &if_index);
+                    &prepared->length, &prepared->addr_to, &prepared->addr_from, &if_index, NULL);
 
                 if (prepared->length == 0) {
                     free(prepared);

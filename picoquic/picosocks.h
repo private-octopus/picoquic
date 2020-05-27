@@ -169,13 +169,13 @@ int picoquic_send_through_socket(
     SOCKET_TYPE fd,
     struct sockaddr* addr_dest,
     struct sockaddr* addr_from, unsigned long from_if,
-    const char* bytes, int length);
+    const char* bytes, int length, int* sock_err);
 
 int picoquic_send_through_server_sockets(
     picoquic_server_sockets_t* sockets,
     struct sockaddr* addr_dest, 
     struct sockaddr* addr_from, unsigned long from_if,
-    const char* bytes, int length);
+    const char* bytes, int length, int * sock_err);
 
 int picoquic_get_server_address(const char* ip_address_text, int server_port,
     struct sockaddr_storage* server_address,

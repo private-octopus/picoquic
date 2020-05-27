@@ -154,6 +154,7 @@ int quic_server(const char* server_name, int server_port,
     picohttp_server_parameters_t picoquic_file_param;
     uint64_t loop_count_time = 0;
     int nb_loops = 0;
+    picoquic_connection_id_t log_cid;
     int first_connection_seen = 0;
 
     memset(&picoquic_file_param, 0, sizeof(picohttp_server_parameters_t));
@@ -223,11 +224,13 @@ int quic_server(const char* server_name, int server_port,
             delta_t, &current_time);
 
         nb_loops++;
-        if (nb_loops >= 10000) {
+        if (nb_loops >= 100) {
             uint64_t loop_delta = current_time - loop_count_time;
             loop_count_time = current_time;
 
-            fprintf(stdout, "Looped %d times in %llu microsec, file: %d, line: %d\n",
+            DBG_PRINTF("Looped %d times in %llu microsec, file: %d, line: %d\n",
+                nb_loops, (unsigned long long) loop_delta, qserver->wake_file, qserver->wake_line);
+            picoquic_log_app_message(qserver, &log_cid, "Looped %d times in %llu microsec, file: %d, line: %d\n",
                 nb_loops, (unsigned long long) loop_delta, qserver->wake_file, qserver->wake_line);
             
             nb_loops = 0;
@@ -236,7 +239,7 @@ int quic_server(const char* server_name, int server_port,
         if (bytes_recv < 0) {
             ret = -1;
         } else {
-            uint64_t loop_time;
+            uint64_t loop_time = current_time;
 
             if (bytes_recv > 0) {
                 /* Submit the packet to the server */
@@ -250,24 +253,29 @@ int quic_server(const char* server_name, int server_port,
                     fprintf(stdout, "First connection noticed.\n");
                 }
             }
-            loop_time = current_time;
 
             do {
                 struct sockaddr_storage peer_addr;
                 struct sockaddr_storage local_addr;
                 int if_index = dest_if;
+                int sock_ret = 0;
+                int sock_err = 0;
 
 
                 ret = picoquic_prepare_next_packet(qserver, loop_time,
                     send_buffer, sizeof(send_buffer), &send_length,
-                    &peer_addr, &local_addr, &if_index);
+                    &peer_addr, &local_addr, &if_index, &log_cid);
 
                 if (ret == 0 && send_length > 0) {
                     loop_count_time = current_time;
                     nb_loops = 0;
-                    (void)picoquic_send_through_server_sockets(&server_sockets,
+                    sock_ret = picoquic_send_through_server_sockets(&server_sockets,
                         (struct sockaddr*) & peer_addr, (struct sockaddr*) & local_addr, if_index,
-                        (const char*)send_buffer, (int)send_length);
+                        (const char*)send_buffer, (int)send_length, &sock_err);
+                    if (sock_ret <= 0) {
+                        picoquic_log_app_message(qserver, &log_cid, "Could not send message to AF_to=%d, AF_from=%d, ret=%d, err=%d\n",
+                            peer_addr.ss_family, local_addr.ss_family, sock_ret, sock_err);
+                    }
                 }
 
             } while (ret == 0 && send_length > 0);
