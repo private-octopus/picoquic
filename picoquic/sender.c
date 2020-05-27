@@ -3716,7 +3716,7 @@ int picoquic_prepare_next_packet(picoquic_quic_t* quic,
         else {
             ret = picoquic_prepare_packet(cnx, current_time, send_buffer, send_buffer_max, send_length, p_addr_to, p_addr_from);
             if (log_cid != NULL) {
-                *log_cid = sp->initial_cid;
+                *log_cid = cnx->initial_cnxid;
             }
 
             if (ret == PICOQUIC_ERROR_DISCONNECTED) {
