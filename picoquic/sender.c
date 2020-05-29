@@ -695,17 +695,17 @@ static void picoquic_update_pacing_bucket(picoquic_path_t * path_x, uint64_t cur
  * If if is not, update the next wait time to reflect pacing.
  * -
  */
-int picoquic_is_sending_authorized_by_pacing(picoquic_path_t * path_x, uint64_t current_time, uint64_t * next_time)
+int picoquic_is_sending_authorized_by_pacing(picoquic_cnx_t * cnx, picoquic_path_t * path_x, uint64_t current_time, uint64_t * next_time)
 {
     int ret = 1;
 
     picoquic_update_pacing_bucket(path_x, current_time);
     if (path_x->pacing_bucket_nanosec < path_x->pacing_packet_time_nanosec) {
-        int64_t bucket_required = (int64_t)path_x->pacing_packet_time_nanosec - path_x->pacing_bucket_nanosec;
-
+        int64_t bucket_required = path_x->pacing_packet_time_nanosec - path_x->pacing_bucket_nanosec;
         uint64_t next_pacing_time = current_time + 1 + bucket_required / 1000;
         if (next_pacing_time < *next_time) {
             *next_time = next_pacing_time;
+            SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
         }
         ret = 0;
     }
@@ -719,20 +719,20 @@ void picoquic_update_pacing_rate(picoquic_cnx_t * cnx, picoquic_path_t* path_x, 
 {
     double packet_time = (double)path_x->send_mtu / pacing_rate;
     double quantum_time = (double)quantum / pacing_rate;
+    uint64_t rtt_nanosec = path_x->smoothed_rtt * 1000;
 
     path_x->pacing_rate = (uint64_t)pacing_rate;
 
     path_x->pacing_packet_time_nanosec = (uint64_t)(packet_time * 1000000000.0);
-
-    if (path_x->pacing_packet_time_nanosec > 1000000000) {
-        path_x->pacing_packet_time_nanosec = 1000000000;
-    }
 
     if (path_x->pacing_packet_time_nanosec <= 0) {
         path_x->pacing_packet_time_nanosec = 1;
         path_x->pacing_packet_time_microsec = 1;
     }
     else {
+        if ((uint64_t)path_x->pacing_packet_time_nanosec > rtt_nanosec) {
+            path_x->pacing_packet_time_nanosec = rtt_nanosec;
+        }
         path_x->pacing_packet_time_microsec = (path_x->pacing_packet_time_nanosec + 1023ull) / 1000;
     }
 
@@ -1338,7 +1338,7 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
 
             if (should_retransmit != 0) {
                 if (packet->ptype == picoquic_packet_1rtt_protected &&
-                    !picoquic_is_sending_authorized_by_pacing(path_x, current_time, next_wake_time)) {
+                    !picoquic_is_sending_authorized_by_pacing(cnx, path_x, current_time, next_wake_time)) {
                     /* Cannot retransmit now, will have to wait. */
                     /* We do this test when we are almost sure that there is something to retransmit,
                      * so as to not cause a gratuitous "pacing" wakeup when there is nothing to send. */
@@ -2334,7 +2334,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                     }
                     if (cnx->callback_fn != NULL) {
                         if (cnx->callback_fn(cnx, 0, NULL, 0, picoquic_callback_almost_ready, cnx->callback_ctx, NULL) != 0) {
-                            picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "Callback almost ready returns error 0x%x", PICOQUIC_TRANSPORT_INTERNAL_ERROR);
+                            picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "Callback almost ready returns error 0x%x\n", PICOQUIC_TRANSPORT_INTERNAL_ERROR);
                             picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
                         }
                     }
@@ -2673,7 +2673,7 @@ void picoquic_ready_state_transition(picoquic_cnx_t* cnx, uint64_t current_time)
     /* Notify the application */
     if (cnx->callback_fn != NULL) {
         if (cnx->callback_fn(cnx, 0, NULL, 0, picoquic_callback_ready, cnx->callback_ctx, NULL) != 0) {
-            picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "Callback ready returns error 0x%x", PICOQUIC_TRANSPORT_INTERNAL_ERROR);
+            picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "Callback ready returns error 0x%x\n", PICOQUIC_TRANSPORT_INTERNAL_ERROR);
             picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
         }
     }
@@ -2858,7 +2858,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                 /* There are no frames yet that would be exempt from pacing control, but if there
                  * was they should be sent here. */
 
-                if (picoquic_is_sending_authorized_by_pacing(path_x, current_time, next_wake_time)) {
+                if (picoquic_is_sending_authorized_by_pacing(cnx, path_x, current_time, next_wake_time)) {
                     /* Send here the frames that are not exempt from the pacing control,
                      * but are exempt for congestion control */
                     if (picoquic_is_ack_needed(cnx, current_time, next_wake_time, pc)) {
@@ -2946,7 +2946,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                     } /* end of PMTU references */
                 } /* end of CC */
             } /* End of pacing */
-        }
+        } /* End of challenge verified */
 
         if (length <= header_length) {
             length = 0;
@@ -3159,7 +3159,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
             /* There are no frames yet that would be exempt from pacing control, but if there
              * was they should be sent here. */
 
-            if (picoquic_is_sending_authorized_by_pacing(path_x, current_time, next_wake_time)) {
+            if (picoquic_is_sending_authorized_by_pacing(cnx, path_x, current_time, next_wake_time)) {
                 /* Send here the frames that are not exempt from the pacing control,
                  * but are exempt for congestion control */
                 if (picoquic_is_ack_needed(cnx, current_time, next_wake_time, pc)) {
@@ -3419,50 +3419,48 @@ int picoquic_prepare_segment(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoq
 {
     int ret = 0;
 
-    if (ret == 0){
-        /* Prepare header -- depend on connection state */
-        /* TODO: 0-RTT work. */
-        switch (cnx->cnx_state) {
-        case picoquic_state_client_init:
-        case picoquic_state_client_init_sent:
-        case picoquic_state_client_init_resent:
-        case picoquic_state_client_renegotiate:
-        case picoquic_state_client_handshake_start:
-        case picoquic_state_client_almost_ready:
-            ret = picoquic_prepare_packet_client_init(cnx, path_x, packet, current_time, send_buffer, send_buffer_max, send_length, next_wake_time, is_initial_sent);
-            break;
-        case picoquic_state_server_almost_ready:
-        case picoquic_state_server_init:
-        case picoquic_state_server_handshake:
-            ret = picoquic_prepare_packet_server_init(cnx, path_x, packet, current_time, send_buffer, send_buffer_max, send_length, next_wake_time);
-            break;
-        case picoquic_state_server_false_start:
-        case picoquic_state_client_ready_start:
-            ret = picoquic_prepare_packet_almost_ready(cnx, path_x, packet, current_time, send_buffer, send_buffer_max, send_length, next_wake_time, is_initial_sent);
-            break;
-        case picoquic_state_ready:
-            ret = picoquic_prepare_packet_ready(cnx, path_x, packet, current_time, send_buffer, send_buffer_max, send_length, next_wake_time, is_initial_sent);
-            break;
-        case picoquic_state_handshake_failure:
-        case picoquic_state_handshake_failure_resend:
-        case picoquic_state_disconnecting:
-        case picoquic_state_closing_received:
-        case picoquic_state_closing:
-        case picoquic_state_draining:
-            ret = picoquic_prepare_packet_closing(cnx, path_x, packet, current_time, send_buffer, send_buffer_max, send_length, next_wake_time);
-            break;
-        case picoquic_state_disconnected:
-            ret = PICOQUIC_ERROR_DISCONNECTED;
-            break;
-        case picoquic_state_client_retry_received:
-            DBG_PRINTF("Unexpected connection state: %d\n", cnx->cnx_state);
-            ret = PICOQUIC_ERROR_UNEXPECTED_STATE;
-            break;
-        default:
-            DBG_PRINTF("Unexpected connection state: %d\n", cnx->cnx_state);
-            ret = PICOQUIC_ERROR_UNEXPECTED_STATE;
-            break;
-        }
+    /* Prepare header -- depend on connection state */
+    /* TODO: 0-RTT work. */
+    switch (cnx->cnx_state) {
+    case picoquic_state_client_init:
+    case picoquic_state_client_init_sent:
+    case picoquic_state_client_init_resent:
+    case picoquic_state_client_renegotiate:
+    case picoquic_state_client_handshake_start:
+    case picoquic_state_client_almost_ready:
+        ret = picoquic_prepare_packet_client_init(cnx, path_x, packet, current_time, send_buffer, send_buffer_max, send_length, next_wake_time, is_initial_sent);
+        break;
+    case picoquic_state_server_almost_ready:
+    case picoquic_state_server_init:
+    case picoquic_state_server_handshake:
+        ret = picoquic_prepare_packet_server_init(cnx, path_x, packet, current_time, send_buffer, send_buffer_max, send_length, next_wake_time);
+        break;
+    case picoquic_state_server_false_start:
+    case picoquic_state_client_ready_start:
+        ret = picoquic_prepare_packet_almost_ready(cnx, path_x, packet, current_time, send_buffer, send_buffer_max, send_length, next_wake_time, is_initial_sent);
+        break;
+    case picoquic_state_ready:
+        ret = picoquic_prepare_packet_ready(cnx, path_x, packet, current_time, send_buffer, send_buffer_max, send_length, next_wake_time, is_initial_sent);
+        break;
+    case picoquic_state_handshake_failure:
+    case picoquic_state_handshake_failure_resend:
+    case picoquic_state_disconnecting:
+    case picoquic_state_closing_received:
+    case picoquic_state_closing:
+    case picoquic_state_draining:
+        ret = picoquic_prepare_packet_closing(cnx, path_x, packet, current_time, send_buffer, send_buffer_max, send_length, next_wake_time);
+        break;
+    case picoquic_state_disconnected:
+        ret = PICOQUIC_ERROR_DISCONNECTED;
+        break;
+    case picoquic_state_client_retry_received:
+        DBG_PRINTF("Unexpected connection state: %d\n", cnx->cnx_state);
+        ret = PICOQUIC_ERROR_UNEXPECTED_STATE;
+        break;
+    default:
+        DBG_PRINTF("Unexpected connection state: %d\n", cnx->cnx_state);
+        ret = PICOQUIC_ERROR_UNEXPECTED_STATE;
+        break;
     }
 
     return ret;
@@ -3482,6 +3480,10 @@ static int picoquic_select_next_path(picoquic_cnx_t * cnx, uint64_t current_time
     /* Select the path */
     for (int i = 1; i < cnx->nb_paths; i++) {
         if (cnx->path[i]->path_is_demoted) {
+            continue;
+        }
+        else if (cnx->path[i]->challenge_failed) {
+            picoquic_demote_path(cnx, i, current_time);
             continue;
         }
         else if (cnx->path[i]->challenge_verified) {

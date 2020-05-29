@@ -8591,7 +8591,7 @@ int pacing_test()
             }
             else {
                 uint64_t next_time = current_time + 10000000;
-                if (picoquic_is_sending_authorized_by_pacing(cnx->path[0], current_time, &next_time)) {
+                if (picoquic_is_sending_authorized_by_pacing(cnx, cnx->path[0], current_time, &next_time)) {
                     nb_sent++;
                     picoquic_update_pacing_after_send(cnx->path[0], current_time);
                 }

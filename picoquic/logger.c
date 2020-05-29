@@ -1443,11 +1443,15 @@ void picoquic_log_frames(FILE* F, uint64_t cnx_id64, uint8_t* bytes, size_t leng
 
         default: {
             /* Not implemented yet! */
-            uint64_t frame_id64;
-            if (picoquic_varint_decode(bytes, length - byte_index, &frame_id64) > 0) {
-                fprintf(F, "    Unknown frame, type: %llu\n", (unsigned long long)frame_id64);
-            } else {
-                fprintf(F, "    Truncated frame type\n");
+            fprintf(F, "    Unknown frame, type: %" PRIu64 " (0x", frame_id);
+            for (size_t i = 0; i < 8 && byte_index + i < length; i++) {
+                fprintf(F, "%02x", bytes[byte_index + i]);
+            }
+            if (byte_index + 8 < length) {
+                fprintf(F, "... + %zu bytes)\n", length - byte_index - 8);
+            }
+            else {
+                fprintf(F, ")");
             }
             byte_index = length;
             break;

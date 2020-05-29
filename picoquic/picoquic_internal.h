@@ -1116,7 +1116,7 @@ picoquic_cnx_t* picoquic_cnx_by_secret(picoquic_quic_t* quic, uint8_t* reset_sec
 /* Reset the pacing data after CWIN is updated */
 void picoquic_update_pacing_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x, int slow_start);
 void picoquic_update_pacing_after_send(picoquic_path_t* path_x, uint64_t current_time);
-int picoquic_is_sending_authorized_by_pacing(picoquic_path_t* path_x, uint64_t current_time, uint64_t* next_time);
+int picoquic_is_sending_authorized_by_pacing(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time, uint64_t* next_time);
 /* Reset pacing data if congestion algorithm computes it directly */
 void picoquic_update_pacing_rate(picoquic_cnx_t* cnx, picoquic_path_t* path_x, double pacing_rate, uint64_t quantum);
 
