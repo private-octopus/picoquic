@@ -1169,6 +1169,10 @@ void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time,
                 current_time >= cnx->path[path_index_current]->demotion_time) ||
             (path_index_current > 0 && cnx->path[path_index_current]->challenge_verified &&
                 cnx->path[path_index_current]->latest_sent_time + cnx->idle_timeout < current_time)) {
+            /* Demote any failed path */
+            if (!cnx->path[path_index_current]->path_is_demoted) {
+                picoquic_demote_path(cnx, path_index_current, current_time);
+            }
             /* Only increment the current index */
             is_demotion_in_progress |= cnx->path[path_index_current]->path_is_demoted;
             path_index_current++;
@@ -2940,7 +2944,7 @@ int picoquic_connection_error(picoquic_cnx_t* cnx, uint16_t local_error, uint64_
         }
         cnx->cnx_state = picoquic_state_disconnecting;
 
-        picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "Protocol error 0x%x", local_error);
+        picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "Protocol error 0x%x\n", local_error);
         DBG_PRINTF("Protocol error (%x)", local_error);
     } else if (cnx->cnx_state < picoquic_state_server_false_start) {
         if (cnx->cnx_state != picoquic_state_handshake_failure &&
