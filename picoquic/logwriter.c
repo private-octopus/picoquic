@@ -392,6 +392,16 @@ static const uint8_t* picoquic_log_ack_frequency_frame(FILE* f, const uint8_t* b
     return bytes;
 }
 
+static const uint8_t* picoquic_log_erroring_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
+{
+    size_t frame_size = bytes_max - bytes;
+    size_t copied = (frame_size > 8) ? 8 : frame_size;
+
+    picoquic_binlog_frame(f, bytes, bytes + copied);
+
+    return NULL;
+}
+
 static const uint8_t* picoquic_log_padding(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
 {
     picoquic_binlog_frame(f, bytes, bytes + 1);
@@ -498,9 +508,8 @@ void picoquic_binlog_frames(FILE * f, const uint8_t* bytes, size_t length)
         case picoquic_frame_type_time_stamp:
             bytes = picoquic_log_time_stamp_frame(f, bytes, bytes_max);
             break;
-
         default:
-            bytes = NULL;
+            bytes = picoquic_log_erroring_frame(f, bytes, bytes_max);
             break;
         }
     }

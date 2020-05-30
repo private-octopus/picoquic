@@ -813,6 +813,17 @@ void qlog_ack_frame(uint64_t ftype, FILE * f, bytestream* s)
     }
 }
 
+void qlog_erroring_frame(FILE* f, bytestream* s, uint64_t ftype)
+{
+    size_t extra_bytes = s->size - s->ptr;
+
+    fprintf(f, "\"unknown_type\": %" PRIu64 ",", ftype);
+
+    fprintf(f, "\"begins_with\": ");
+
+    qlog_string(f, s, (extra_bytes > 8) ? 8 : extra_bytes);
+}
+
 int qlog_proposed_versions(FILE* f, bytestream* s)
 {
     int nb_versions = 0;
@@ -861,6 +872,7 @@ int qlog_packet_frame(bytestream * s, void * ptr)
     fprintf(f, "{ ");
 
     uint64_t ftype = 0;
+    size_t ptr_before_type = s->ptr;
     byteread_vint(s, &ftype);
 
     fprintf(f, "\n    \"frame_type\": \"%s\"", ftype2str((picoquic_frame_type_enum_t)ftype));
@@ -887,67 +899,75 @@ int qlog_packet_frame(bytestream * s, void * ptr)
         }
 
     } else switch (ftype) {
+    case picoquic_frame_type_padding:
+        break;
+    case picoquic_frame_type_ping: 
+        break;
     case picoquic_frame_type_ack:
     case picoquic_frame_type_ack_ecn:
         qlog_ack_frame(ftype, f, s);
         break;
-    case picoquic_frame_type_ack_frequency:
-        qlog_ack_frequency_frame(f, s);
+    case picoquic_frame_type_reset_stream:
+        qlog_reset_stream_frame(f, s);
         break;
-    case picoquic_frame_type_datagram:
-    case picoquic_frame_type_datagram_l:
-        qlog_datagram_frame(ftype, f, s);
+    case picoquic_frame_type_stop_sending:
+        qlog_stop_sending_frame(f, s);
         break;
     case picoquic_frame_type_crypto_hs:
         qlog_crypto_hs_frame(f, s);
         break;
-    case picoquic_frame_type_path_challenge:
-    case picoquic_frame_type_path_response:
-        qlog_path_frame(ftype, f, s);
-        break;
     case picoquic_frame_type_new_token:
         qlog_new_token_frame(f, s);
         break;
-    case picoquic_frame_type_retire_connection_id:
-        qlog_retire_connection_id_frame(f, s);
+    case picoquic_frame_type_max_data:
+        qlog_max_data_frame(f, s);
         break;
-    case picoquic_frame_type_new_connection_id:
-        qlog_new_connection_id_frame(f, s);
-        break;
-    case picoquic_frame_type_streams_blocked_bidir:
-    case picoquic_frame_type_streams_blocked_unidir:
-        qlog_streams_blocked_frame(ftype, f, s);
-        break;
-    case picoquic_frame_type_stream_data_blocked:
-        qlog_stream_blocked_frame(f, s);
-        break;
-    case picoquic_frame_type_data_blocked:
-        qlog_blocked_frame(f, s);
+    case picoquic_frame_type_max_stream_data:
+        qlog_max_stream_data_frame(f, s);
         break;
     case picoquic_frame_type_max_streams_bidir:
     case picoquic_frame_type_max_streams_unidir:
         qlog_max_streams_frame(ftype, f, s);
         break;
-    case picoquic_frame_type_max_stream_data:
-        qlog_max_stream_data_frame(f, s);
+    case picoquic_frame_type_data_blocked:
+        qlog_blocked_frame(f, s);
         break;
-    case picoquic_frame_type_max_data:
-        qlog_max_data_frame(f, s);
+    case picoquic_frame_type_stream_data_blocked:
+        qlog_stream_blocked_frame(f, s);
+        break;
+    case picoquic_frame_type_streams_blocked_bidir:
+    case picoquic_frame_type_streams_blocked_unidir:
+        qlog_streams_blocked_frame(ftype, f, s);
+        break;
+    case picoquic_frame_type_new_connection_id:
+        qlog_new_connection_id_frame(f, s);
+        break;
+    case picoquic_frame_type_retire_connection_id:
+        qlog_retire_connection_id_frame(f, s);
+        break;
+    case picoquic_frame_type_path_challenge:
+    case picoquic_frame_type_path_response:
+        qlog_path_frame(ftype, f, s);
         break;
     case picoquic_frame_type_connection_close:
     case picoquic_frame_type_application_close:
         qlog_closing_frame(ftype, f, s);
         break;
-    case picoquic_frame_type_stop_sending:
-        qlog_stop_sending_frame(f, s);
+    case picoquic_frame_type_handshake_done:
         break;
-    case picoquic_frame_type_reset_stream:
-        qlog_reset_stream_frame(f, s);
+    case picoquic_frame_type_datagram:
+    case picoquic_frame_type_datagram_l:
+        qlog_datagram_frame(ftype, f, s);
+        break;
+    case picoquic_frame_type_ack_frequency:
+        qlog_ack_frequency_frame(f, s);
         break;
     case picoquic_frame_type_time_stamp:
         qlog_time_stamp_frame(f, s);
         break;
     default:
+        s->ptr = ptr_before_type;
+        qlog_erroring_frame(f, s, ftype);
         break;
     }
 
