@@ -2079,6 +2079,10 @@ void picoquic_log_path_promotion(FILE* F, picoquic_cnx_t* cnx, int path_index, u
     fprintf(F, "\n");
 }
 
+/* Adding here a declaration of binlog message defined in logwriter.c,
+ * so the call the log_app_message writes on both log file and binlog */
+void picoquic_binlog_message_v(picoquic_quic_t* quic, picoquic_connection_id_t* icid, const char* fmt, va_list vargs);
+
 void picoquic_log_app_message(picoquic_quic_t* quic, picoquic_connection_id_t * icid,  const char* fmt, ...)
 {
     FILE* F = quic->F_log;
@@ -2093,6 +2097,14 @@ void picoquic_log_app_message(picoquic_quic_t* quic, picoquic_connection_id_t * 
 #else
         (void)vfprintf(F, fmt, args);
 #endif
+        va_end(args);
+        fputc('\n', F);
+    }
+
+    if (quic->f_binlog != NULL) {
+        va_list args;
+        va_start(args, fmt);
+        picoquic_binlog_message_v(quic, icid, fmt, args);
         va_end(args);
     }
 }

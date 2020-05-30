@@ -2334,7 +2334,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                     }
                     if (cnx->callback_fn != NULL) {
                         if (cnx->callback_fn(cnx, 0, NULL, 0, picoquic_callback_almost_ready, cnx->callback_ctx, NULL) != 0) {
-                            picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "Callback almost ready returns error 0x%x\n", PICOQUIC_TRANSPORT_INTERNAL_ERROR);
+                            picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "Callback almost ready returns error 0x%x", PICOQUIC_TRANSPORT_INTERNAL_ERROR);
                             picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
                         }
                     }
@@ -2673,7 +2673,7 @@ void picoquic_ready_state_transition(picoquic_cnx_t* cnx, uint64_t current_time)
     /* Notify the application */
     if (cnx->callback_fn != NULL) {
         if (cnx->callback_fn(cnx, 0, NULL, 0, picoquic_callback_ready, cnx->callback_ctx, NULL) != 0) {
-            picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "Callback ready returns error 0x%x\n", PICOQUIC_TRANSPORT_INTERNAL_ERROR);
+            picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "Callback ready returns error 0x%x", PICOQUIC_TRANSPORT_INTERNAL_ERROR);
             picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
         }
     }

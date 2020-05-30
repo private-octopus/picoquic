@@ -47,6 +47,7 @@ typedef enum {
     picoquic_log_event_alpn_update = 0x0037,
     picoquic_log_event_cc_update = 0x0038,
     picoquic_log_event_stream_update = 0x0039,
+    picoquic_log_event_info_message = 0x003a,
 
     picoquic_log_event_frame_sent = 0x0082,
     picoquic_log_event_frame_recv = 0x0083,

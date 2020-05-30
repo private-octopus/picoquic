@@ -1093,7 +1093,29 @@ int qlog_cc_update(uint64_t time, bytestream* s, void* ptr)
         ctx->event_count++;
     }
 
-    return 0;
+    return ret;
+}
+
+int qlog_info_message(uint64_t time, bytestream* s, void* ptr)
+{
+    int ret = 0;
+    qlog_context_t* ctx = (qlog_context_t*)ptr;
+    FILE* f = ctx->f_txtlog;
+    int64_t delta_time = time - ctx->start_time;
+
+    if (ctx->event_count != 0) {
+        fprintf(f, ",\n");
+    }
+    else {
+        fprintf(f, "\n");
+    }
+
+    fprintf(f, "[%"PRId64", \"info\", \"message\", { \"message\": \"", delta_time);
+    fwrite(bytestream_ptr(s), bytestream_remain(s), 1, f);
+    fprintf(f, "\"}]");
+    ctx->event_count++;
+
+    return ret;
 }
 
 int qlog_connection_start(uint64_t time, const picoquic_connection_id_t * cid, int client_mode,
@@ -1187,6 +1209,7 @@ int qlog_convert(const picoquic_connection_id_t* cid, FILE* f_binlog, const char
         ctx.packet_end = qlog_packet_end;
         ctx.packet_lost = qlog_packet_lost;
         ctx.cc_update = qlog_cc_update;
+        ctx.info_message = qlog_info_message;
         ctx.ptr = &qlog;
 
         ret = binlog_convert(f_binlog, cid, &ctx);

@@ -639,6 +639,7 @@ int logger_test()
     picoquic_cnx_t cnx;
     picoquic_quic_t quic;
     memset(&cnx, 0, sizeof(cnx));
+    quic.f_binlog = NULL;
 
     if ((F = picoquic_file_open(log_test_file, "w")) == NULL) {
         DBG_PRINTF("failed to open file:%s\n", log_test_file);
@@ -655,8 +656,8 @@ int logger_test()
         cnx.quic = &quic;
         quic.F_log = F;
 
-        picoquic_log_app_message(&quic, &cnx.initial_cnxid, "%s.\n", "This is an app message test");
-        picoquic_log_app_message(&quic, &cnx.initial_cnxid, "This is app message test #%d, severity %d.\n", 1, 2);
+        picoquic_log_app_message(&quic, &cnx.initial_cnxid, "%s.", "This is an app message test");
+        picoquic_log_app_message(&quic, &cnx.initial_cnxid, "This is app message test #%d, severity %d.", 1, 2);
 
         (void)picoquic_file_close(F);
     }
