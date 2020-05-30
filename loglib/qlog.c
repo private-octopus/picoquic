@@ -43,6 +43,14 @@ typedef struct qlog_context_st {
     int packet_count;
     int frame_count;
     picoquic_packet_type_enum packet_type;
+
+    uint64_t cwin;
+    uint64_t rtt_sample;
+    uint64_t SRTT;
+    uint64_t RTT_min;
+    uint64_t bytes_in_transit;
+    uint64_t pacing_packet_time;
+
     unsigned int key_phase_sent_last : 1;
     unsigned int key_phase_sent : 1;
     unsigned int key_phase_received_last : 1;
@@ -965,6 +973,129 @@ int qlog_packet_end(void * ptr)
     return 0;
 }
 
+/* Qlog records evolution of congestion control with events of the form:
+* [559,"transport","packet_sent","DEFAULT",{"packet_type":"handshake","header":{"packet_size":668,"packet_number":0}}],
+* [904,"recovery","metrics_updated","default",{"bytes_in_flight":822}],
+* [45228,"recovery","metrics_updated","default",{"bytes_in_flight":668,"cwnd":12154,"smoothed_rtt":46151,
+*                          "min_rtt":46151,"latest_rtt":46151}],
+*/
+
+int qlog_cc_update(uint64_t time, bytestream* s, void* ptr)
+{
+    int ret = 0;
+    uint64_t sequence = 0;
+    uint64_t packet_rcvd = 0;
+    uint64_t highest_ack = (uint64_t)(int64_t)-1;
+    uint64_t high_ack_time = 0;
+    uint64_t last_time_ack = 0;
+    uint64_t cwin = 0;
+    uint64_t one_way_delay = 0;
+    uint64_t rtt_sample = 0;
+    uint64_t SRTT = 0;
+    uint64_t RTT_min = 0;
+    uint64_t bandwidth_estimate = 0;
+    uint64_t receive_rate_estimate = 0;
+    uint64_t Send_MTU = 0;
+    uint64_t pacing_packet_time = 0;
+    uint64_t nb_retrans = 0;
+    uint64_t nb_spurious = 0;
+    uint64_t cwin_blkd = 0;
+    uint64_t flow_blkd = 0;
+    uint64_t stream_blkd = 0;
+    uint64_t cc_state = 0;
+    uint64_t cc_param = 0;
+    uint64_t bw_max = 0;
+    uint64_t bytes_in_transit = 0;
+    qlog_context_t* ctx = (qlog_context_t*)ptr;
+    FILE* f = ctx->f_txtlog;
+
+    ret |= byteread_vint(s, &sequence);
+    ret |= byteread_vint(s, &packet_rcvd);
+    if (packet_rcvd != 0) {
+        ret |= byteread_vint(s, &highest_ack);
+        ret |= byteread_vint(s, &high_ack_time);
+        ret |= byteread_vint(s, &last_time_ack);
+    }
+    ret |= byteread_vint(s, &cwin);
+    ret |= byteread_vint(s, &one_way_delay);
+    ret |= byteread_vint(s, &rtt_sample);
+    ret |= byteread_vint(s, &SRTT);
+    ret |= byteread_vint(s, &RTT_min);
+    ret |= byteread_vint(s, &bandwidth_estimate);
+    ret |= byteread_vint(s, &receive_rate_estimate);
+    ret |= byteread_vint(s, &Send_MTU);
+    ret |= byteread_vint(s, &pacing_packet_time);
+    ret |= byteread_vint(s, &nb_retrans);
+    ret |= byteread_vint(s, &nb_spurious);
+    ret |= byteread_vint(s, &cwin_blkd);
+    ret |= byteread_vint(s, &flow_blkd);
+    ret |= byteread_vint(s, &stream_blkd);
+
+    ret |= byteread_vint(s, &cc_state);
+    ret |= byteread_vint(s, &cc_param);
+    ret |= byteread_vint(s, &bw_max);
+    ret |= byteread_vint(s, &bytes_in_transit);
+
+    if (ret == 0 &&
+        (cwin != ctx->cwin || rtt_sample != ctx->rtt_sample || SRTT != ctx->SRTT ||
+            RTT_min != ctx->RTT_min || bytes_in_transit != ctx->bytes_in_transit || 
+            pacing_packet_time != ctx->pacing_packet_time)) {
+        /* Something changed. Report the event. */
+        int64_t delta_time = time - ctx->start_time;
+        char* comma = "";
+
+        if (ctx->event_count != 0) {
+            fprintf(f, ",\n");
+        }
+        else {
+            fprintf(f, "\n");
+        }
+
+        fprintf(f, "[%"PRId64", \"recovery\", \"metrics_updated\", {", delta_time);
+        if (cwin != ctx->cwin) {
+            fprintf(f, "%s\"cwnd\": %" PRIu64, comma, cwin);
+            ctx->cwin = cwin;
+            comma = ",";
+        }
+
+        if (pacing_packet_time != ctx->pacing_packet_time && pacing_packet_time > 0) {
+            double bps = ((double)Send_MTU * 8) * 1000000.0 / pacing_packet_time;
+            uint64_t bits_per_second = (uint64_t)bps;
+            fprintf(f, "%s\"pacing_rate\": %" PRIu64, comma, bits_per_second);
+            ctx->pacing_packet_time = pacing_packet_time;
+            comma = ",";
+        }
+
+        if (bytes_in_transit != ctx->bytes_in_transit) {
+            fprintf(f, "%s\"bytes_in_flight\": %" PRIu64, comma, bytes_in_transit);
+            ctx->bytes_in_transit = bytes_in_transit;
+            comma = ",";
+        }
+
+        if (SRTT != ctx->SRTT) {
+            fprintf(f, "%s\"smoothed_rtt\": %" PRIu64, comma, SRTT);
+            comma = ",";
+        }
+
+        if (RTT_min != ctx->RTT_min) {
+            fprintf(f, "%s\"min_rtt\": %" PRIu64, comma, RTT_min);
+            ctx->RTT_min = RTT_min;
+            comma = ",";
+        }
+
+        if (rtt_sample != ctx->rtt_sample) {
+            fprintf(f, "%s\"latest_rtt\": %" PRIu64, comma, rtt_sample);
+            ctx->rtt_sample = rtt_sample;
+            comma = ",";
+        }
+
+        fprintf(f, "}]");
+        ctx->event_count++;
+    }
+
+    return 0;
+}
+
 int qlog_connection_start(uint64_t time, const picoquic_connection_id_t * cid, int client_mode,
     uint32_t proposed_version, const picoquic_connection_id_t * remote_cnxid, void * ptr)
 {
@@ -975,8 +1106,17 @@ int qlog_connection_start(uint64_t time, const picoquic_connection_id_t * cid, i
     ctx->packet_count = 0;
     ctx->event_count = 0;
     ctx->version_number = 0;
+
+
     memset(&ctx->addr_peer, 0, sizeof(struct sockaddr_storage));
     memset(&ctx->addr_local, 0, sizeof(struct sockaddr_storage));
+
+    ctx->cwin = 0;
+    ctx->bytes_in_transit = 0;
+    ctx->SRTT = PICOQUIC_INITIAL_RTT;
+    ctx->RTT_min = 0;
+    ctx->rtt_sample = 0;
+    ctx->pacing_packet_time = 1;
 
     ctx->key_phase_sent_last = 0;
     ctx->key_phase_sent = 0;
@@ -1046,6 +1186,7 @@ int qlog_convert(const picoquic_connection_id_t* cid, FILE* f_binlog, const char
         ctx.packet_frame = qlog_packet_frame;
         ctx.packet_end = qlog_packet_end;
         ctx.packet_lost = qlog_packet_lost;
+        ctx.cc_update = qlog_cc_update;
         ctx.ptr = &qlog;
 
         ret = binlog_convert(f_binlog, cid, &ctx);
