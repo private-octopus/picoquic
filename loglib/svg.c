@@ -147,6 +147,26 @@ int svg_packet_end(void * ptr)
     return 0;
 }
 
+int svg_cc_update(uint64_t time, bytestream* s, void* ptr)
+{
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(time);
+    UNREFERENCED_PARAMETER(s);
+    UNREFERENCED_PARAMETER(ptr);
+#endif
+    return 0;
+}
+
+int svg_info_message(uint64_t time, bytestream* s, void* ptr)
+{
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(time);
+    UNREFERENCED_PARAMETER(s);
+    UNREFERENCED_PARAMETER(ptr);
+#endif
+    return 0;
+}
+
 int svg_convert(const picoquic_connection_id_t * cid, FILE * f_binlog, FILE * f_template, const char * binlog_name, const char * out_dir)
 {
     int ret = 0;
@@ -173,6 +193,8 @@ int svg_convert(const picoquic_connection_id_t * cid, FILE * f_binlog, FILE * f_
     ctx.packet_frame = svg_packet_frame;
     ctx.packet_end = svg_packet_end;
     ctx.packet_lost = svg_packet_lost;
+    ctx.cc_update = svg_cc_update;
+    ctx.info_message = svg_info_message;
     ctx.ptr = &svg;
 
     char line[256];

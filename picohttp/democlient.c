@@ -412,7 +412,7 @@ static int picoquic_demo_client_open_stream(picoquic_cnx_t* cnx,
         if (ret == 0) {
             stream_ctx->is_open = 1;
         }else {
-            picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "Cannot create file name: %s\n", fname);
+            picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "Cannot create file name: %s", fname);
             fprintf(stdout, "Cannot create file name: %s\n", fname);
         }
     }
@@ -649,7 +649,7 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
                             (int)stream_id, (int)stream_ctx->received_length);
                     }
                     if (stream_ctx->received_length == 0) {
-                        picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "Stream %d ended after %d bytes, ret=0x%x\n",
+                        picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "Stream %d ended after %d bytes, ret=0x%x",
                             (int)stream_id, (int)stream_ctx->received_length, ret);
                     }
                 }

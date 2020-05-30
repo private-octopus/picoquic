@@ -49,6 +49,8 @@ typedef struct binlog_convert_cb_st {
     int (*packet_frame)(bytestream * s, void * ptr);
     int (*packet_end)(void * ptr);
     int (*packet_lost)(uint64_t time, bytestream* s, void* ptr);
+    int (*cc_update)(uint64_t time, bytestream* s, void* ptr);
+    int (*info_message)(uint64_t time, bytestream* s, void* ptr);
     int (*connection_end)(uint64_t time, void * ptr);
 
     /*! Caller provided context pointer that is passed through to the callbacks */

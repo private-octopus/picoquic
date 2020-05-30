@@ -22,6 +22,8 @@
 /*
 * Packet logging.
 */
+
+#include <stdarg.h>
 #include "logwriter.h"
 #include "bytestream.h"
 #include "tls_api.h"
@@ -390,6 +392,16 @@ static const uint8_t* picoquic_log_ack_frequency_frame(FILE* f, const uint8_t* b
     return bytes;
 }
 
+static const uint8_t* picoquic_log_erroring_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
+{
+    size_t frame_size = bytes_max - bytes;
+    size_t copied = (frame_size > 8) ? 8 : frame_size;
+
+    picoquic_binlog_frame(f, bytes, bytes + copied);
+
+    return NULL;
+}
+
 static const uint8_t* picoquic_log_padding(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
 {
     picoquic_binlog_frame(f, bytes, bytes + 1);
@@ -496,9 +508,8 @@ void picoquic_binlog_frames(FILE * f, const uint8_t* bytes, size_t length)
         case picoquic_frame_type_time_stamp:
             bytes = picoquic_log_time_stamp_frame(f, bytes, bytes_max);
             break;
-
         default:
-            bytes = NULL;
+            bytes = picoquic_log_erroring_frame(f, bytes, bytes_max);
             break;
         }
     }
@@ -894,4 +905,35 @@ void picoquic_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
     cnx->cwin_blocked = 0;
     cnx->flow_blocked = 0;
     cnx->stream_blocked = 0;
+}
+
+/*
+ * Write an information message frame, for free form debugging.
+ */
+
+void picoquic_binlog_message_v(picoquic_quic_t* quic, picoquic_connection_id_t* icid, const char* fmt, va_list vargs)
+{
+    if (quic->f_binlog == NULL) {
+        return;
+    }
+    bytestream_buf stream_msg;
+    bytestream* ps_msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
+
+    bytewrite_cid(ps_msg, icid);
+    bytewrite_vint(ps_msg, picoquic_get_quic_time(quic));
+    bytewrite_vint(ps_msg, picoquic_log_event_info_message);
+#ifdef _WINDOWS
+    (void)vsprintf_s((char *)(ps_msg->data + ps_msg->ptr), ps_msg->size - ps_msg->ptr, fmt, vargs);
+#else
+    (void)vsprintf((char*)(ps_msg->data + ps_msg->ptr), fmt, vargs);
+#endif
+    ps_msg->ptr += strlen((char *)(ps_msg->data + ps_msg->ptr));
+
+    bytestream_buf stream_head;
+    bytestream* ps_head = bytestream_buf_init(&stream_head, BYTESTREAM_MAX_BUFFER_SIZE);
+
+    bytewrite_int32(ps_head, (uint32_t)bytestream_length(ps_msg));
+
+    (void)fwrite(bytestream_data(ps_head), bytestream_length(ps_head), 1, quic->f_binlog);
+    (void)fwrite(bytestream_data(ps_msg), bytestream_length(ps_msg), 1, quic->f_binlog);
 }
