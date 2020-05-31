@@ -858,23 +858,30 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(test_migration)
+        TEST_METHOD(migration)
         {
             int ret = migration_test();
 
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(test_migration_long)
+        TEST_METHOD(migration_long)
         {
             int ret = migration_test_long();
 
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(test_migration_loss)
+        TEST_METHOD(migration_loss)
         {
             int ret = migration_test_loss();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(migration_fail)
+        {
+            int ret = migration_fail_test();
 
             Assert::AreEqual(ret, 0);
         }

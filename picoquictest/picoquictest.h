@@ -137,6 +137,7 @@ int probe_api_test();
 int migration_test();
 int migration_test_long(); 
 int migration_test_loss();
+int migration_fail_test();
 int cnxid_renewal_test();
 int retire_cnxid_test();
 int server_busy_test();
