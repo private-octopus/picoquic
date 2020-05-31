@@ -864,7 +864,7 @@ uint8_t * h3zero_parse_data_stream(uint8_t * bytes, uint8_t * bytes_max,
         (void)h3zero_varint_decode(stream_state->frame_header, frame_type_length,
             &stream_state->current_frame_type);
 
-        while (stream_state->frame_header_read < frame_type_length + 1) {
+        while (stream_state->frame_header_read < frame_type_length + 1 && bytes < bytes_max) {
             stream_state->frame_header[stream_state->frame_header_read++] = *bytes++;
         }
 
