@@ -4787,6 +4787,73 @@ int migration_test_loss()
     return migration_test_scenario(test_scenario_q_and_r, sizeof(test_scenario_q_and_r), loss_mask);
 }
 
+/* Failed migration test.
+ * Start a transfer, start a migration to a non existant address,
+ * verify that the transfer completes */
+
+int migration_fail_test()
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+
+    /* establish the connection*/
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    /* Prepare to send data */
+    if (ret == 0) {
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_very_long, sizeof(test_scenario_very_long));
+
+        if (ret != 0)
+        {
+            DBG_PRINTF("Init send receive scenario returns %d\n", ret);
+        }
+    }
+
+    /* Perform a loop until the connection is in ready state */
+    if (ret == 0) {
+        ret = wait_client_connection_ready(test_ctx, &simulated_time);
+    }
+
+    /* Start migration to bogus address */
+    if (ret == 0) {
+        struct sockaddr_in bogus_addr = test_ctx->client_addr;
+        bogus_addr.sin_port += 1;
+
+        ret = picoquic_probe_new_path(test_ctx->cnx_client,
+            (struct sockaddr*) & test_ctx->server_addr, (struct sockaddr*) & bogus_addr, simulated_time);
+        if (ret != 0) {
+            DBG_PRINTF("Probe new path returns %d\n", ret);
+        }
+    }
+
+    /* Perform a data sending loop */
+    if (ret == 0) {
+        ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 0);
+
+        if (ret != 0)
+        {
+            DBG_PRINTF("Data sending loop returns %d\n", ret);
+        }
+    }
+
+    if (ret == 0) {
+        ret = tls_api_one_scenario_body_verify(test_ctx, &simulated_time, 1000000);
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+
 /* Migration stress test. 
  * This simulates an attack, during which a man on the side injects fake migration
  * packets from false addresses. One of the addresses is maintained so that packets sent
