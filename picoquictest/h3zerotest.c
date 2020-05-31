@@ -938,25 +938,33 @@ int h3zero_stream_test_one_split(uint8_t * bytes, size_t nb_bytes,
     h3zero_data_stream_state_t stream_state;
     size_t nb_data = 0;
     uint8_t data[64];
+    uint8_t packet_buffer[256];
     size_t available_data;
     uint16_t error_found;
 
     memset(&stream_state, 0, sizeof(h3zero_data_stream_state_t));
 
-    for (int i = 0; ret == 0 && i < nb_splits; i++) {
-        while (bytes != NULL && bytes < bmax[i]) {
-            bytes = h3zero_parse_data_stream(bytes, bmax[i], &stream_state, &available_data, &error_found);
-            if (bytes != NULL && available_data > 0) {
+    for (int i = 0; ret == 0 && i < nb_splits && bytes != NULL; i++) {
+        uint8_t* p = packet_buffer;
+        uint8_t* p_max;
+        size_t p_len = bmax[i] - bytes;
+        memset(p, 0, sizeof(packet_buffer));
+        memcpy(p, bytes, p_len);
+        p_max = packet_buffer + p_len;
+        while (p != NULL && p < p_max) {
+            p = h3zero_parse_data_stream(p, p_max, &stream_state, &available_data, &error_found);
+            if (p != NULL && available_data > 0) {
                 if (nb_data + available_data > 64) {
                     ret = -1;
                 }
                 else {
-                    memcpy(&data[nb_data], bytes, available_data);
-                    bytes += available_data;
+                    memcpy(&data[nb_data], p, available_data);
+                    p += available_data;
                     nb_data += available_data;
                 }
             }
         }
+        bytes = (p == NULL) ? NULL : bytes + (p - packet_buffer);
     }
 
     if (ret == 0) {
