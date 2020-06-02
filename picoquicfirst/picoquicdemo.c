@@ -439,7 +439,6 @@ int quic_client(const char* ip_address_text, int server_port,
     int established = 0;
     int is_name = 0;
     int migration_started = 0;
-    int migrated_to_preferred = 0;
     int migration_to_preferred_started = 0;
     int migration_to_preferred_finished = 0;
     int address_updated = 0;
@@ -762,7 +761,6 @@ int quic_client(const char* ip_address_text, int server_port,
                             (struct sockaddr*) & server_address, (struct sockaddr*) & cnx_client->path[0]->peer_addr) != 0) {
                             fprintf(stdout, "Migrated to server preferred address!\n");
                             picoquic_log_app_message(qclient, &cnx_client->initial_cnxid, "%s", "Migrated to server preferred address!");
-                            migrated_to_preferred = 1;
                             migration_to_preferred_finished = 1;
                         }
                         else if (cnx_client->nb_paths > 1 && !migration_to_preferred_started) {
