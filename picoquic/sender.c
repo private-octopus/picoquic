@@ -2228,7 +2228,7 @@ uint64_t picoquic_next_challenge_time(picoquic_cnx_t* cnx, picoquic_path_t* path
 {
     uint64_t next_challenge_time = path_x->challenge_time;
 
-    if (path_x->challenge_repeat_count >= 1) {
+    if (path_x->challenge_repeat_count >= 2) {
         next_challenge_time += path_x->retransmit_timer << path_x->challenge_repeat_count;
     }
     else {
@@ -2824,6 +2824,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                         if (path_x == cnx->path[0]) {
                             /* TODO: consider alt address. Also, consider other available path. */
                             DBG_PRINTF("%s\n", "Too many challenge retransmits, disconnect");
+                            picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "%s", "Too many challenge retransmits, disconnect");
                             cnx->cnx_state = picoquic_state_disconnected;
                             if (cnx->callback_fn) {
                                 (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx, NULL);
@@ -2831,6 +2832,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                         }
                         else {
                             DBG_PRINTF("%s\n", "Too many challenge retransmits, abandon path");
+                            picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "%s", "Too many challenge retransmits, abandon path");
                             path_x->challenge_failed = 1;
                             cnx->path_demotion_needed = 1;
                         }
@@ -3125,6 +3127,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
 
                     if (path_x == cnx->path[0]) {
                         DBG_PRINTF("%s\n", "Too many challenge retransmits, disconnect");
+                        picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "%s", "Too many challenge retransmits, disconnect");
                         cnx->cnx_state = picoquic_state_disconnected;
                         if (cnx->callback_fn) {
                             (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx, NULL);
@@ -3132,6 +3135,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                     }
                     else {
                         DBG_PRINTF("%s\n", "Too many challenge retransmits, abandon path");
+                        picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "%s", "Too many challenge retransmits, abandon path");
                         path_x->challenge_failed = 1;
                     }
                 }

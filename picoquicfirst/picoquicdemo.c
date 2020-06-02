@@ -439,7 +439,8 @@ int quic_client(const char* ip_address_text, int server_port,
     int established = 0;
     int is_name = 0;
     int migration_started = 0;
-    int migrated_to_preferred = 0;
+    int migration_to_preferred_started = 0;
+    int migration_to_preferred_finished = 0;
     int address_updated = 0;
     int64_t delay_max = 10000000;
     int64_t delta_t = 0;
@@ -755,12 +756,23 @@ int quic_client(const char* ip_address_text, int server_port,
 
                     client_ready_loop++;
 
-                    if (cnx_client->remote_parameters.prefered_address.is_defined && !migrated_to_preferred) {
+                    if (cnx_client->remote_parameters.prefered_address.is_defined && !migration_to_preferred_finished) {
                         if (picoquic_compare_addr(
                             (struct sockaddr*) & server_address, (struct sockaddr*) & cnx_client->path[0]->peer_addr) != 0) {
                             fprintf(stdout, "Migrated to server preferred address!\n");
                             picoquic_log_app_message(qclient, &cnx_client->initial_cnxid, "%s", "Migrated to server preferred address!");
-                            migrated_to_preferred = 1;
+                            migration_to_preferred_finished = 1;
+                        }
+                        else if (cnx_client->nb_paths > 1 && !migration_to_preferred_started) {
+                            migration_to_preferred_started = 1;
+                            fprintf(stdout, "Attempting migration to server preferred address.\n");
+                            picoquic_log_app_message(qclient, &cnx_client->initial_cnxid, "%s", "Attempting migration to server preferred address.");
+
+                        }
+                        else if (cnx_client->nb_paths == 1 && migration_to_preferred_started) {
+                            fprintf(stdout, "Could not migrate to server preferred address!\n");
+                            picoquic_log_app_message(qclient, &cnx_client->initial_cnxid, "%s", "Could not migrate to server preferred address!");
+                            migration_to_preferred_finished = 1;
                         }
                     }
 
@@ -768,7 +780,7 @@ int quic_client(const char* ip_address_text, int server_port,
                         picoquic_get_cnx_state(cnx_client) == picoquic_state_ready &&
                         (cnx_client->cnxid_stash_first != NULL || force_migration == 1) &&
                         picoquic_get_cnx_state(cnx_client) == picoquic_state_ready &&
-                        (!cnx_client->remote_parameters.prefered_address.is_defined || migrated_to_preferred)) {
+                        (force_migration != 3 || !cnx_client->remote_parameters.prefered_address.is_defined || migration_to_preferred_finished)) {
                         int mig_ret = quic_client_migrate(cnx_client, &fd, NULL, (struct sockaddr*) & client_address,
                             &address_updated, force_migration, current_time);
 
