@@ -191,6 +191,6 @@ int picoquic_get_server_address(const char* ip_address_text, int server_port,
 void picoquic_set_key_log_file_from_env(picoquic_quic_t* quic);
 
 #ifdef __cplusplus
-} a
+}
 #endif
 #endif
