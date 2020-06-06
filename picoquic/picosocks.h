@@ -106,7 +106,6 @@
 
 #include "picoquic.h"
 
-
 #ifdef __cplusplus
 extern "C" {
 #endif

@@ -1398,9 +1398,14 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-
         TEST_METHOD(http_esni) {
             int ret = http_esni_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cplusplus) {
+            int ret = cplusplustest();
 
             Assert::AreEqual(ret, 0);
         }

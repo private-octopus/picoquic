@@ -240,6 +240,8 @@ int http_esni_test();
 int h3_long_file_name_test();
 int h3_multi_file_test();
 
+int cplusplustest();
+
 #ifdef __cplusplus
 }
 #endif

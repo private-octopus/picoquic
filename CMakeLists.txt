@@ -52,6 +52,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/ack_of_ack_test.c
     picoquictest/bytestream_test.c
     picoquictest/cleartext_aead_test.c
+    picoquictest/cplusplus.cpp
     picoquictest/cnx_creation_test.c
     picoquictest/hashtest.c
     picoquictest/intformattest.c
