@@ -218,6 +218,7 @@ static const picoquic_test_def_t test_table[] = {
     { "chacha20", chacha20_test },
     { "cid_quiescence", cid_quiescence_test },
     { "controlled_migration", controlled_migration_test },
+    { "cplusplus", cplusplustest },
     { "stress", stress_test },
     { "fuzz", fuzz_test },
     { "fuzz_initial", fuzz_initial_test}

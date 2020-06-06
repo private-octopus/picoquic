@@ -22,12 +22,11 @@
 #ifndef PICOQUICTEST_INTERNAL_H
 #define PICOQUICTEST_INTERNAL_H
 
-#include "picoquic_internal.h"
-#include "picoquictest_internal.h"
-
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#include "picoquic_internal.h"
 
 /*  ALPN used for test
  */
