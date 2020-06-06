@@ -962,6 +962,7 @@ typedef struct st_picoquic_cnx_t {
     uint32_t nb_zero_rtt_received;
     uint64_t nb_retransmission_total;
     uint64_t nb_spurious;
+    uint64_t nb_split_retrans;
     unsigned int cwin_blocked : 1;
     unsigned int flow_blocked : 1;
     unsigned int stream_blocked : 1;

@@ -1208,6 +1208,7 @@ int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
                     if (ret == 0) {
                         *length += copied_length;
                         if (overflow_length > 0) {
+                            cnx->nb_split_retrans++;
                             ret = picoquic_queue_misc_frame(cnx, overflow, overflow_length, 0);
                         }
                     }

@@ -249,6 +249,7 @@ typedef struct st_picoquictest_sim_link_t {
     uint64_t packets_sent;
     uint64_t jitter;
     uint64_t jitter_seed;
+    size_t path_mtu;
     picoquictest_sim_packet_t* first_packet;
     picoquictest_sim_packet_t* last_packet;
 } picoquictest_sim_link_t;

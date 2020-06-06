@@ -1233,8 +1233,14 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(controlled_migration) {
-            int ret = controlled_migration_test();
+        TEST_METHOD(migration_controlled) {
+            int ret = migration_controlled_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(migration_mtu_drop) {
+            int ret = migration_mtu_drop_test();
 
             Assert::AreEqual(ret, 0);
         }

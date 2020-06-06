@@ -53,6 +53,7 @@ picoquictest_sim_link_t* picoquictest_sim_link_create(double data_rate_in_gps,
         link->loss_mask = loss_mask;
         link->jitter_seed = 0xDEADBEEFBABAC001ull;
         link->jitter = 0;
+        link->path_mtu = PICOQUIC_MAX_PACKET_SIZE;
     }
 
     return link;
@@ -151,7 +152,7 @@ void picoquictest_sim_link_submit(picoquictest_sim_link_t* link, picoquictest_si
 
         link->queue_time = current_time + queue_delay + transmit_time;
 
-        if (picoquictest_sim_link_testloss(link->loss_mask) != 0) {
+        if (packet->length > link->path_mtu || picoquictest_sim_link_testloss(link->loss_mask) != 0) {
             link->packets_dropped++;
             free(packet);
         } else {
