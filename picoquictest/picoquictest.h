@@ -93,6 +93,7 @@ int zero_rtt_loss_test();
 int stop_sending_test();
 int unidir_test();
 int mtu_discovery_test();
+int mtu_drop_test();
 int spurious_retransmit_test();
 int pn_ctr_test();
 int cleartext_pn_enc_test();

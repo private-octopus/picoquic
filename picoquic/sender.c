@@ -1001,6 +1001,11 @@ void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet_t
     }
 
     if (ret == 0 && length > 0) {
+#if 1
+        if (packet->sequence_number >= 242) {
+            DBG_PRINTF("%s", "Got it");
+        }
+#endif
         packet->length = length;
         cnx->pkt_ctx[packet->pc].send_sequence++;
         path_x->latest_sent_time = current_time;
@@ -1401,6 +1406,18 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                 if (old_p == NULL || packet_is_pure_ack) {
                     length = 0;
                 } else {
+                    if (old_p->send_path != NULL && 
+                        (old_p->length + old_p->checksum_overhead) == old_p->send_path->send_mtu) {
+                        old_p->send_path->nb_mtu_losses++;
+                        if (old_p->send_path->nb_mtu_losses > PICOQUIC_MTU_LOSS_THRESHOLD) {
+                            picoquic_reset_path_mtu(old_p->send_path);
+                            picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid,
+                                "Reset path MTU after %d retransmissions, %d MTU losses",
+                                cnx->pkt_ctx[pc].nb_retransmit,
+                                old_p->send_path->nb_mtu_losses);
+                        }
+                    }
+
                     if (timer_based_retransmit != 0) {
                         if (cnx->pkt_ctx[pc].nb_retransmit > 7 && cnx->cnx_state >= picoquic_state_ready) {
                             /*
@@ -3548,6 +3565,12 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     *send_length = 0;
 
     ret = picoquic_check_idle_timer(cnx, &next_wake_time, current_time);
+
+#if 1
+    if (cnx->pkt_ctx[0].send_sequence > 1000 && cnx->cnx_state == picoquic_state_ready) {
+        ret = picoquic_connection_error(cnx, 0, 0);
+    }
+#endif
 
     if (ret == 0) {
         int path_id;

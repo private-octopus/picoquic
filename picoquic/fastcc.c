@@ -67,6 +67,17 @@ uint64_t picoquic_fastcc_delay_threshold(uint64_t rtt_min)
     return delay;
 }
 
+void picoquic_fastcc_reset(picoquic_fastcc_state_t* fastcc_state, picoquic_path_t* path_x, uint64_t current_time)
+{
+    memset(fastcc_state, 0, sizeof(picoquic_fastcc_state_t));
+    fastcc_state->alg_state = picoquic_fastcc_initial;
+    fastcc_state->rtt_min = path_x->smoothed_rtt;
+    fastcc_state->rolling_rtt_min = fastcc_state->rtt_min;
+    fastcc_state->delay_threshold = picoquic_fastcc_delay_threshold(fastcc_state->rtt_min);
+    fastcc_state->end_of_epoch = current_time + FASTCC_PERIOD;
+    path_x->cwin = PICOQUIC_CWIN_INITIAL;
+}
+
 void picoquic_fastcc_init(picoquic_path_t* path_x, uint64_t current_time)
 {
     /* Initialize the state of the congestion control algorithm */
@@ -224,7 +235,9 @@ void picoquic_fastcc_notify(
         }
         break;
         case picoquic_congestion_notification_cwin_blocked:
-
+            break;
+        case picoquic_congestion_notification_reset:
+            picoquic_fastcc_reset(fastcc_state, path_x, current_time);
             break;
         default:
             /* ignore */

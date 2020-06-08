@@ -1386,6 +1386,17 @@ int picoquic_probe_new_path(picoquic_cnx_t* cnx, const struct sockaddr* addr_fro
     return ret;
 }
 
+/* Reset the path MTU, for example if too many packet losses are detected */
+void picoquic_reset_path_mtu(picoquic_path_t* path_x)
+{
+    /* Re-initialize the MTU */
+    path_x->send_mtu = (path_x->peer_addr.ss_family == 0 || path_x->peer_addr.ss_family == AF_INET) ?
+        PICOQUIC_INITIAL_MTU_IPV4 : PICOQUIC_INITIAL_MTU_IPV6;
+    /* Reset the MTU discovery context */
+    path_x->send_mtu_max_tried = 0;
+    path_x->mtu_probe_sent = 0;
+}
+
 /*
  * Manage the stash of connection IDs sent by the peer 
  */

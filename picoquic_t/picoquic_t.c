@@ -131,6 +131,7 @@ static const picoquic_test_def_t test_table[] = {
     { "stop_sending", stop_sending_test },
     { "unidir", unidir_test },
     { "mtu_discovery", mtu_discovery_test },
+    { "mtu_drop", mtu_drop_test },
     { "spurious_retransmit", spurious_retransmit_test },
     { "tls_zero_share", tls_zero_share_test },
     { "transport_param_log", transport_param_log_test },

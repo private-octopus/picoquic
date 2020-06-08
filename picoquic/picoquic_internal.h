@@ -66,6 +66,7 @@ extern "C" {
 #define PICOQUIC_TOKEN_DELAY_LONG (24*60*60*1000000ull) /* 24 hours */
 #define PICOQUIC_TOKEN_DELAY_SHORT (2*60*1000000ull) /* 2 minutes */
 #define PICOQUIC_CID_REFRESH_DELAY (5*1000000ull) /* if idle for 5 seconds, refresh the CID */
+#define PICOQUIC_MTU_LOSS_THRESHOLD 10 /* if threshold of full MTU packetlost, reset MTU */
 
 #define PICOQUIC_BANDWIDTH_ESTIMATE_MAX 10000000000ull /* 10 GB per second */
 #define PICOQUIC_BANDWIDTH_TIME_INTERVAL_MIN 1000
@@ -781,6 +782,9 @@ typedef struct st_picoquic_path_t {
     int64_t pacing_packet_time_nanosec;
     uint64_t pacing_packet_time_microsec;
 
+    /* MTU safety tracking */
+    uint64_t nb_mtu_losses;
+
     /* Loss bit data */
     uint64_t nb_losses_found;
     uint64_t nb_losses_reported;
@@ -1077,6 +1081,7 @@ void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time,
 void picoquic_set_path_challenge(picoquic_cnx_t* cnx, int path_id, uint64_t current_time);
 int picoquic_find_path_by_address(picoquic_cnx_t* cnx, const struct sockaddr* addr_to, const struct sockaddr* addr_from, int* partial_match);
 int picoquic_assign_peer_cnxid_to_path(picoquic_cnx_t* cnx, int path_id);
+void picoquic_reset_path_mtu(picoquic_path_t* path_x);
 
 /* Management of the CNX-ID stash */
 picoquic_cnxid_stash_t * picoquic_dequeue_cnxid_stash(picoquic_cnx_t* cnx);
