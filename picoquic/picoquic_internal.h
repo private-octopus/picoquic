@@ -830,7 +830,11 @@ typedef struct st_picoquic_packet_context_t {
     picoquic_packet_t* retransmit_oldest;
     picoquic_packet_t* retransmitted_newest;
     picoquic_packet_t* retransmitted_oldest;
-
+    /* Retransmit queue contains congestion controlled frames that should
+     * be sent in priority when the congestion window opens. */
+    struct st_picoquic_misc_frame_header_t* stream_retransmit_queue;
+    struct st_picoquic_misc_frame_header_t* tail_retransmit_queue;
+    /* Flags */
     unsigned int ack_needed : 1;
     unsigned int ack_of_ack_requested : 1;
     unsigned int ack_after_fin : 1;

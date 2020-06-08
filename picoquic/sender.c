@@ -1150,6 +1150,89 @@ static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t* cnx,
     return should_retransmit;
 }
 
+int picoquic_queue_stream_frame_for_retransmit(
+    picoquic_cnx_t* cnx, picoquic_packet_context_enum pc,
+    uint8_t * bytes, size_t length)
+{
+    int ret = 0;
+    picoquic_misc_frame_header_t* misc = picoquic_create_misc_frame(bytes, length, 0);
+
+    if (misc == NULL) {
+        ret = PICOQUIC_ERROR_MEMORY;
+    }
+    else {
+        misc->next_misc_frame = NULL;
+        if (cnx->pkt_ctx[pc].tail_retransmit_queue == NULL) {
+            cnx->pkt_ctx[pc].stream_retransmit_queue = misc;
+            cnx->pkt_ctx[pc].tail_retransmit_queue = misc;
+        }
+        else {
+            misc->previous_misc_frame = cnx->pkt_ctx[pc].tail_retransmit_queue;
+            cnx->pkt_ctx[pc].tail_retransmit_queue->next_misc_frame = misc;
+            cnx->pkt_ctx[pc].tail_retransmit_queue = misc;
+        }
+    }
+
+    return ret;
+}
+
+uint8_t * picoquic_format_stream_frame_for_retransmit(picoquic_cnx_t* cnx, picoquic_packet_context_enum pc,
+    uint8_t* bytes_next, uint8_t* bytes_max, int* more_data, int* is_pure_ack)
+{
+    picoquic_misc_frame_header_t* misc = cnx->pkt_ctx[pc].stream_retransmit_queue;
+    uint8_t* frame = ((uint8_t*)misc) + sizeof(picoquic_misc_frame_header_t);
+    uint8_t overflow[PICOQUIC_MAX_PACKET_SIZE];
+    size_t copied_length = 0;
+    size_t overflow_length = 0;
+
+    if (bytes_next + misc->length > bytes_max) {
+        /* There is only space for part of the frame. Need to decode,
+         * split, reencode */
+    }
+    else {
+        /* The frame can be copied in full */
+        if ((frame[0] & 2) == 0) {
+            /* Length is not encoded. If it fits just fine, copy. Else, need to be smarter */
+            size_t insert_pad = (bytes_max - bytes_next) - misc->length;
+            if (insert_pad <= 2) {
+                /* pad, and then copy frame */
+                while (insert_pad > 0) {
+                    *bytes_next = 0;
+                    bytes_next++;
+                    insert_pad--;
+                }
+                memcpy(bytes_next, frame, misc->length);
+                bytes_next += misc->length;
+            }
+            else {
+                /* Need to reencode the header, then copy */
+            }
+        }
+        else {
+            memcpy(bytes_next, frame, misc->length);
+            bytes_next += misc->length;
+        }
+    }
+
+    return bytes_next;
+}
+        
+
+    /* Check that there is space for the whole frame, plus a length indicator */
+
+    /* By default, copy to new frame, but if that does not fit also create overflow frame */
+    ret = picoquic_split_stream_frame(&old_p->bytes[byte_index], frame_length,
+        &new_bytes[*length], send_buffer_max_minus_checksum - *length, &copied_length,
+        overflow, sizeof(overflow), &overflow_length);
+
+    if (ret == 0) {
+        *length += copied_length;
+        if (overflow_length > 0) {
+            ret = picoquic_queue_misc_frame(cnx, overflow, overflow_length, 0);
+        }
+    }
+}
+
 int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
     picoquic_cnx_t * cnx,
     uint8_t * new_bytes,
@@ -1196,21 +1279,8 @@ int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
             /* Prepare retransmission if needed */
             if (ret == 0 && !frame_is_pure_ack) {
                 if (PICOQUIC_IN_RANGE(old_p->bytes[byte_index], picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
-                    uint8_t overflow[PICOQUIC_MAX_PACKET_SIZE];
-                    size_t copied_length = 0;
-                    size_t overflow_length = 0;
-
-                    /* By default, copy to new frame, but if that does not fit also create overflow frame */
-                    ret = picoquic_split_stream_frame(&old_p->bytes[byte_index], frame_length,
-                        &new_bytes[*length], send_buffer_max_minus_checksum - *length, &copied_length,
-                        overflow, sizeof(overflow), &overflow_length);
-
-                    if (ret == 0) {
-                        *length += copied_length;
-                        if (overflow_length > 0) {
-                            ret = picoquic_queue_misc_frame(cnx, overflow, overflow_length, 0);
-                        }
-                    }
+                    ret = picoquic_queue_stream_frame_for_retransmit(cnx, old_p->pc,
+                        &old_p->bytes[byte_index], frame_length);
                 }
                 else {
                     if (frame_length > send_buffer_max_minus_checksum - *length &&
