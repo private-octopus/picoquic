@@ -216,13 +216,19 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(copy_for_retransmit)
+        TEST_METHOD(stream_retransmit_copy)
         {
             int ret = test_copy_for_retransmit();
 
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(stream_retransmit_format)
+        {
+            int ret = test_format_for_retransmit();
+
+            Assert::AreEqual(ret, 0);
+        }
 		TEST_METHOD(test_sendack)
 		{
 			int ret = sendacktest();

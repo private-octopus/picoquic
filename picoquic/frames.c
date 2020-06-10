@@ -1478,10 +1478,10 @@ int picoquic_split_stream_frame(uint8_t* frame, size_t frame_length, uint8_t* b1
     return ret;
 }
 
-uint8_t* picoquic_format_stream_frame_for_retransmit(picoquic_cnx_t* cnx, picoquic_packet_context_enum pc,
+uint8_t* picoquic_format_stream_frame_for_retransmit(picoquic_cnx_t* cnx,
     uint8_t* bytes_next, uint8_t* bytes_max, int* is_pure_ack)
 {
-    picoquic_misc_frame_header_t* misc = cnx->pkt_ctx[pc].stream_frame_retransmit_queue;
+    picoquic_misc_frame_header_t* misc = cnx->stream_frame_retransmit_queue;
     uint8_t* frame = ((uint8_t*)misc) + sizeof(picoquic_misc_frame_header_t);
     uint64_t stream_id;
     uint64_t offset;
@@ -1521,6 +1521,7 @@ uint8_t* picoquic_format_stream_frame_for_retransmit(picoquic_cnx_t* cnx, picoqu
                         (bytes_next = picoquic_frames_varint_encode(bytes_next, bytes_max, data_length)) != NULL) {
                         memcpy(bytes_next, frame + consumed, data_length);
                         bytes_next += data_length;
+                        *bytes_first |= 2; /* length present */
                         *bytes_first |= fin;
                     }
                     else {
@@ -1543,23 +1544,28 @@ uint8_t* picoquic_format_stream_frame_for_retransmit(picoquic_cnx_t* cnx, picoqu
                 if (after_length != NULL && after_length < bytes_max &&
                     (available = bytes_max - after_length) > 0) {
                     size_t remain = data_length - available;
-                    if (remain + consumed + 2 < misc->length) {
-                        uint8_t* next_frame;
-                        uint8_t* frame_max = frame + misc->length;
+                    uint8_t trial_pad[32]; /* max header = 1 + 8(stream) + 8(offset) +8(length)*/
+                    uint8_t* trial_max = trial_pad + sizeof(trial_pad);
+                    uint8_t* trial_next;
+                    size_t trial_size = 0;
 
+                    if ((trial_next = picoquic_format_stream_frame_header(trial_pad, trial_max, stream_id, offset + available)) != NULL &&
+                        (trial_next = picoquic_frames_varint_encode(trial_next, trial_max, remain)) != NULL &&
+                        (trial_size = trial_next - trial_pad) <= consumed + available) {
+                        /* There are enough bytes available to reformat the frame after copying */
+                        /* Finish encoding the copied bytes */
                         bytes_next = picoquic_frames_varint_encode(bytes_next, bytes_max, available);
+                        *bytes_first |= 2;
                         memcpy(bytes_next, frame + consumed, available);
                         bytes_next += available;
-
-                        if ((next_frame = picoquic_format_stream_frame_header(frame, frame_max, stream_id, offset)) != NULL &&
-                            (next_frame = picoquic_frames_varint_encode(bytes_next, bytes_max, remain)) != NULL) {
-                            memmove(next_frame, frame + consumed + available, remain);
-                            next_frame += remain;
-                            misc->length = next_frame - frame;
-                            frame[0] |= fin;
-                            success = 1;
-                            *is_pure_ack = 0;
-                        }
+                        /* Reformat the stored bytes to only keep the remains */
+                        trial_pad[0] |= 2;
+                        memcpy(frame, trial_pad, trial_size);
+                        memmove(frame + trial_size, frame + consumed + available, remain);
+                        misc->length = trial_size + remain;
+                        frame[0] |= fin;
+                        success = 1;
+                        *is_pure_ack = 0;
                     }
                 }
             }
@@ -1571,7 +1577,7 @@ uint8_t* picoquic_format_stream_frame_for_retransmit(picoquic_cnx_t* cnx, picoqu
     }
 
     if (all_sent) {
-        picoquic_delete_misc_or_dg(&cnx->pkt_ctx[pc].stream_frame_retransmit_queue, &cnx->pkt_ctx[pc].stream_frame_retransmit_queue_last, misc);
+        picoquic_delete_misc_or_dg(&cnx->stream_frame_retransmit_queue, &cnx->stream_frame_retransmit_queue_last, misc);
     }
 
     return bytes_next;

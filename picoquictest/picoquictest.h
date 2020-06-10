@@ -195,6 +195,7 @@ int cid_mask_encrypt_test();
 #endif
 int retry_protection_vector_test();
 int test_copy_for_retransmit();
+int test_format_for_retransmit();
 int bad_coalesce_test();
 int bad_cnxid_test();
 int stream_splay_test();

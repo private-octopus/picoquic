@@ -1150,9 +1150,7 @@ static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t* cnx,
     return should_retransmit;
 }
 
-int picoquic_queue_stream_frame_for_retransmit(
-    picoquic_cnx_t* cnx, picoquic_packet_context_enum pc,
-    uint8_t * bytes, size_t length)
+int picoquic_queue_stream_frame_for_retransmit(picoquic_cnx_t* cnx, uint8_t * bytes, size_t length)
 {
     int ret = 0;
     picoquic_misc_frame_header_t* misc = picoquic_create_misc_frame(bytes, length, 0);
@@ -1162,14 +1160,14 @@ int picoquic_queue_stream_frame_for_retransmit(
     }
     else {
         misc->next_misc_frame = NULL;
-        if (cnx->pkt_ctx[pc].stream_frame_retransmit_queue_last == NULL) {
-            cnx->pkt_ctx[pc].stream_frame_retransmit_queue = misc;
-            cnx->pkt_ctx[pc].stream_frame_retransmit_queue_last = misc;
+        if (cnx->stream_frame_retransmit_queue_last == NULL) {
+            cnx->stream_frame_retransmit_queue = misc;
+            cnx->stream_frame_retransmit_queue_last = misc;
         }
         else {
-            misc->previous_misc_frame = cnx->pkt_ctx[pc].stream_frame_retransmit_queue_last;
-            cnx->pkt_ctx[pc].stream_frame_retransmit_queue_last->next_misc_frame = misc;
-            cnx->pkt_ctx[pc].stream_frame_retransmit_queue_last = misc;
+            misc->previous_misc_frame = cnx->stream_frame_retransmit_queue_last;
+            cnx->stream_frame_retransmit_queue_last->next_misc_frame = misc;
+            cnx->stream_frame_retransmit_queue_last = misc;
         }
     }
 
@@ -1222,8 +1220,7 @@ int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
             /* Prepare retransmission if needed */
             if (ret == 0 && !frame_is_pure_ack) {
                 if (PICOQUIC_IN_RANGE(old_p->bytes[byte_index], picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
-                    ret = picoquic_queue_stream_frame_for_retransmit(cnx, old_p->pc,
-                        &old_p->bytes[byte_index], frame_length);
+                    ret = picoquic_queue_stream_frame_for_retransmit(cnx, &old_p->bytes[byte_index], frame_length);
                 }
                 else {
                     if (frame_length > send_buffer_max_minus_checksum - *length &&
@@ -2928,15 +2925,15 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                             }
 
                             /* If present, send stream frames queued for retransmission */
-                            while (cnx->pkt_ctx[picoquic_packet_context_application].stream_frame_retransmit_queue != NULL) {
+                            while (cnx->stream_frame_retransmit_queue != NULL) {
                                 uint8_t* bytes_misc = bytes_next;
-                                bytes_next = picoquic_format_stream_frame_for_retransmit(cnx, picoquic_packet_context_application,
+                                bytes_next = picoquic_format_stream_frame_for_retransmit(cnx,
                                     bytes_next, bytes_max, &is_pure_ack);
                                 if (bytes_next == bytes_misc) {
                                     break;
                                 }
                             }
-                            more_data |= (cnx->pkt_ctx[picoquic_packet_context_application].stream_frame_retransmit_queue != NULL);
+                            more_data |= (cnx->stream_frame_retransmit_queue != NULL);
 
                             if (cnx->is_ack_frequency_updated && cnx->is_ack_frequency_negotiated) {
                                 bytes_next = picoquic_format_ack_frequency_frame(cnx, bytes_next, bytes_max, &more_data);
@@ -3280,15 +3277,15 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                         }
 
                         /* If present, send stream frames queued for retransmission */
-                        while (cnx->pkt_ctx[picoquic_packet_context_application].stream_frame_retransmit_queue != NULL) {
+                        while (cnx->stream_frame_retransmit_queue != NULL) {
                             uint8_t* bytes_misc = bytes_next;
-                            bytes_next = picoquic_format_stream_frame_for_retransmit(cnx, picoquic_packet_context_application,
+                            bytes_next = picoquic_format_stream_frame_for_retransmit(cnx,
                                 bytes_next, bytes_max, &is_pure_ack);
                             if (bytes_next == bytes_misc) {
                                 break;
                             }
                         }
-                        more_data |= (cnx->pkt_ctx[picoquic_packet_context_application].stream_frame_retransmit_queue != NULL);
+                        more_data |= (cnx->stream_frame_retransmit_queue != NULL);
 
                         if (ret == 0 && cnx->is_ack_frequency_updated && cnx->is_ack_frequency_negotiated) {
                             bytes_next = picoquic_format_ack_frequency_frame(cnx, bytes_next, bytes_max, &more_data);

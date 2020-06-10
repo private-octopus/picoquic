@@ -2863,11 +2863,6 @@ void picoquic_reset_packet_context(picoquic_cnx_t* cnx,
 
     pkt_ctx->retransmitted_oldest = NULL;
 
-    while (pkt_ctx->stream_frame_retransmit_queue != NULL) {
-        picoquic_delete_misc_or_dg(&pkt_ctx->stream_frame_retransmit_queue, &pkt_ctx->stream_frame_retransmit_queue_last,
-            pkt_ctx->stream_frame_retransmit_queue);
-    }
-
     while (pkt_ctx->first_sack_item.next_sack != NULL) {
         picoquic_sack_item_t * next = pkt_ctx->first_sack_item.next_sack;
         pkt_ctx->first_sack_item.next_sack = next->next_sack;
@@ -2906,6 +2901,12 @@ int picoquic_reset_cnx(picoquic_cnx_t* cnx, uint64_t current_time)
         if (pc != picoquic_packet_context_application) {
             picoquic_reset_packet_context(cnx, pc);
         }
+    }
+
+    /* Delete stream frames queued for retransmission */
+    while (cnx->stream_frame_retransmit_queue != NULL) {
+        picoquic_delete_misc_or_dg(&cnx->stream_frame_retransmit_queue, &cnx->stream_frame_retransmit_queue_last,
+            cnx->stream_frame_retransmit_queue);
     }
 
     /* Reset the crypto stream */
