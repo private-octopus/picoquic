@@ -1166,16 +1166,6 @@ static uint8_t ct_test_packet6[] = {
     SPLIT_FRAME_TEST_SOURCE_CONTENT_INIT_32
 };
 
-
-static uint8_t ct_test_frame_35_67[] = {
-    picoquic_frame_type_stream_range_min | 6, 0x00, 0x20, 0x23,
-    SPLIT_FRAME_TEST_SOURCE_CONTENT_LAST_35 };
-
-static uint8_t ct_test_frame_68_77[] = {
-    picoquic_frame_type_stream_range_min | 6, 0x00, 0x40, 67, 0x0A,
-    SPLIT_FRAME_TEST_SOURCE_68_77
-};
-
 static uint8_t ct_test_mtu_probe[] = {
     COPY_PACKET_HEADER_1RTT,
     picoquic_frame_type_ping,
@@ -1545,9 +1535,6 @@ static int test_format_for_retransmit_one(uint8_t* frame, size_t frame_length, s
     uint8_t new_bytes[PICOQUIC_MAX_PACKET_SIZE];
     uint8_t* bytes_max = new_bytes + packet_length;
     uint8_t* next_bytes = NULL;
-    uint8_t* bytes_copied = NULL;
-    int packet_is_pure_ack = 0;
-    int do_not_detect_spurious = 1;
     uint64_t simulated_time = 0;
     struct sockaddr_in saddr;
     int is_pure_ack = 1;
@@ -1580,7 +1567,7 @@ static int test_format_for_retransmit_one(uint8_t* frame, size_t frame_length, s
         ret = -1;
     }
     else {
-        if (ret = picoquic_parse_stream_header(frame, frame_length, &stream_id, &offset, &data_length, &fin, &consumed) != 0) {
+        if ((ret = picoquic_parse_stream_header(frame, frame_length, &stream_id, &offset, &data_length, &fin, &consumed)) != 0) {
             DBG_PRINTF("%s", "Cannot parse test frame\n");
         }
         else if (consumed + data_length != frame_length) {
@@ -1653,8 +1640,8 @@ static int test_format_for_retransmit_one(uint8_t* frame, size_t frame_length, s
             pad1++;
             bytes++;
         }
-        if (ret = picoquic_parse_stream_header(bytes, bytes_max - bytes, &stream_id1, &offset1, &data_length1,
-            &fin1, &consumed1) != 0) {
+        if ((ret = picoquic_parse_stream_header(bytes, bytes_max - bytes, &stream_id1, &offset1, &data_length1,
+            &fin1, &consumed1)) != 0) {
             DBG_PRINTF("%s", "Cannot parse copied frame\n");
         }
         else {
@@ -1691,7 +1678,8 @@ static int test_format_for_retransmit_one(uint8_t* frame, size_t frame_length, s
         else {
             uint8_t* misc_frame = ((uint8_t *)misc) + sizeof(picoquic_misc_frame_header_t);
 
-            if (ret = picoquic_parse_stream_header(misc_frame, misc->length, &stream_id2, &offset2, &data_length2, &fin2, &consumed2) != 0) {
+            if ((ret = picoquic_parse_stream_header(misc_frame, misc->length, &stream_id2, &offset2, &data_length2, 
+                &fin2, &consumed2)) != 0) {
                 DBG_PRINTF("%s", "Cannot parse copied frame\n");
             }
             else {
