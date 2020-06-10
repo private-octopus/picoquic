@@ -1150,6 +1150,30 @@ static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t* cnx,
     return should_retransmit;
 }
 
+int picoquic_queue_stream_frame_for_retransmit(picoquic_cnx_t* cnx, uint8_t * bytes, size_t length)
+{
+    int ret = 0;
+    picoquic_misc_frame_header_t* misc = picoquic_create_misc_frame(bytes, length, 0);
+
+    if (misc == NULL) {
+        ret = PICOQUIC_ERROR_MEMORY;
+    }
+    else {
+        misc->next_misc_frame = NULL;
+        if (cnx->stream_frame_retransmit_queue_last == NULL) {
+            cnx->stream_frame_retransmit_queue = misc;
+            cnx->stream_frame_retransmit_queue_last = misc;
+        }
+        else {
+            misc->previous_misc_frame = cnx->stream_frame_retransmit_queue_last;
+            cnx->stream_frame_retransmit_queue_last->next_misc_frame = misc;
+            cnx->stream_frame_retransmit_queue_last = misc;
+        }
+    }
+
+    return ret;
+}
+
 int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
     picoquic_cnx_t * cnx,
     uint8_t * new_bytes,
@@ -1196,21 +1220,7 @@ int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
             /* Prepare retransmission if needed */
             if (ret == 0 && !frame_is_pure_ack) {
                 if (PICOQUIC_IN_RANGE(old_p->bytes[byte_index], picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
-                    uint8_t overflow[PICOQUIC_MAX_PACKET_SIZE];
-                    size_t copied_length = 0;
-                    size_t overflow_length = 0;
-
-                    /* By default, copy to new frame, but if that does not fit also create overflow frame */
-                    ret = picoquic_split_stream_frame(&old_p->bytes[byte_index], frame_length,
-                        &new_bytes[*length], send_buffer_max_minus_checksum - *length, &copied_length,
-                        overflow, sizeof(overflow), &overflow_length);
-
-                    if (ret == 0) {
-                        *length += copied_length;
-                        if (overflow_length > 0) {
-                            ret = picoquic_queue_misc_frame(cnx, overflow, overflow_length, 0);
-                        }
-                    }
+                    ret = picoquic_queue_stream_frame_for_retransmit(cnx, &old_p->bytes[byte_index], frame_length);
                 }
                 else {
                     if (frame_length > send_buffer_max_minus_checksum - *length &&
@@ -2914,6 +2924,12 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                                 bytes_next = picoquic_format_first_datagram_frame(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack);
                             }
 
+                            /* If present, send stream frames queued for retransmission */
+                            if (ret == 0) {
+                                bytes_next = picoquic_format_stream_frames_queued_for_retransmit(cnx, bytes_next, bytes_max,
+                                    &more_data, &is_pure_ack);
+                            }
+                        
                             if (cnx->is_ack_frequency_updated && cnx->is_ack_frequency_negotiated) {
                                 bytes_next = picoquic_format_ack_frequency_frame(cnx, bytes_next, bytes_max, &more_data);
                             }
@@ -3253,6 +3269,12 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                             else {
                                 datagram_tried_and_failed = 1;
                             }
+                        }
+
+                        /* If present, send stream frames queued for retransmission */
+                        if (ret == 0) {
+                            bytes_next = picoquic_format_stream_frames_queued_for_retransmit(cnx, bytes_next, bytes_max,
+                                &more_data, &is_pure_ack);
                         }
 
                         if (ret == 0 && cnx->is_ack_frequency_updated && cnx->is_ack_frequency_negotiated) {
