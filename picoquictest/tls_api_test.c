@@ -7015,7 +7015,7 @@ int bbr_performance_test()
 
 int bbr_slow_long_test()
 {
-    uint64_t max_completion_time = 100000000;
+    uint64_t max_completion_time = 82000000;
     uint64_t latency = 300000;
     uint64_t jitter = 3000;
     uint64_t buffer = 2 * (latency + jitter);
