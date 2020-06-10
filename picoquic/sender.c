@@ -2925,16 +2925,11 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                             }
 
                             /* If present, send stream frames queued for retransmission */
-                            while (cnx->stream_frame_retransmit_queue != NULL) {
-                                uint8_t* bytes_misc = bytes_next;
-                                bytes_next = picoquic_format_stream_frame_for_retransmit(cnx,
-                                    bytes_next, bytes_max, &is_pure_ack);
-                                if (bytes_next == bytes_misc) {
-                                    break;
-                                }
+                            if (ret == 0) {
+                                bytes_next = picoquic_format_stream_frames_queued_for_retransmit(cnx, bytes_next, bytes_max,
+                                    &more_data, &is_pure_ack);
                             }
-                            more_data |= (cnx->stream_frame_retransmit_queue != NULL);
-
+                        
                             if (cnx->is_ack_frequency_updated && cnx->is_ack_frequency_negotiated) {
                                 bytes_next = picoquic_format_ack_frequency_frame(cnx, bytes_next, bytes_max, &more_data);
                             }
@@ -3277,15 +3272,10 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                         }
 
                         /* If present, send stream frames queued for retransmission */
-                        while (cnx->stream_frame_retransmit_queue != NULL) {
-                            uint8_t* bytes_misc = bytes_next;
-                            bytes_next = picoquic_format_stream_frame_for_retransmit(cnx,
-                                bytes_next, bytes_max, &is_pure_ack);
-                            if (bytes_next == bytes_misc) {
-                                break;
-                            }
+                        if (ret == 0) {
+                            bytes_next = picoquic_format_stream_frames_queued_for_retransmit(cnx, bytes_next, bytes_max,
+                                &more_data, &is_pure_ack);
                         }
-                        more_data |= (cnx->stream_frame_retransmit_queue != NULL);
 
                         if (ret == 0 && cnx->is_ack_frequency_updated && cnx->is_ack_frequency_negotiated) {
                             bytes_next = picoquic_format_ack_frequency_frame(cnx, bytes_next, bytes_max, &more_data);

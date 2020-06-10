@@ -208,14 +208,6 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
-
-        TEST_METHOD(split_stream_frame)
-        {
-            int ret = split_stream_frame_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
         TEST_METHOD(stream_retransmit_copy)
         {
             int ret = test_copy_for_retransmit();

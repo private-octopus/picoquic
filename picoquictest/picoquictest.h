@@ -158,7 +158,6 @@ int qlog_trace_test();
 int rebinding_stress_test();
 int many_short_loss_test();
 int ready_to_send_test();
-int split_stream_frame_test();
 int cubic_test();
 int cubic_jitter_test();
 int satellite_basic_test();

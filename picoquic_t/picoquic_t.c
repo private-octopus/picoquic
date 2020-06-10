@@ -63,7 +63,6 @@ static const picoquic_test_def_t test_table[] = {
     { "StreamZeroFrame", StreamZeroFrameTest },
     { "stream_splay", stream_splay_test },
     { "stream_output", stream_output_test },
-    { "split_stream_frame", split_stream_frame_test },
     { "stream_retransmit_copy", test_copy_for_retransmit },
     { "stream_retransmit_format", test_format_for_retransmit },
     { "sendack", sendacktest },

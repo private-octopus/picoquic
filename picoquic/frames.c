@@ -1391,92 +1391,7 @@ uint8_t* picoquic_format_available_stream_frames(picoquic_cnx_t* cnx, uint8_t* b
     return bytes_next;
 }
 
-int picoquic_split_stream_frame(uint8_t* frame, size_t frame_length, uint8_t* b1, size_t b1_max, size_t *lb1, uint8_t* b2, size_t b2_max, size_t *lb2) 
-{
-    int ret;
-    uint64_t stream_id;
-    uint64_t offset;
-    size_t data_length;
-    int fin;
-    size_t consumed;
-    uint8_t* b1_max_b = b1 + b1_max;
-    uint8_t* b2_max_b = b2 + b2_max;
-    uint8_t* b1_b = b1;
-    uint8_t* b2_b = b2;
-
-
-    if ((ret = picoquic_parse_stream_header(frame, frame_length, &stream_id, &offset, &data_length, &fin, &consumed)) == 0) {
-        /* Does the whole frame fit in b1? */
-        size_t b1_index = 0;
-        size_t b1_length = 0;
-
-        if ((b1_b = picoquic_format_stream_frame_header(b1_b, b1_max_b, stream_id, offset)) == NULL){
-            *lb1 = 0;
-        }
-        else {
-            size_t b1_available = b1_max_b - b1_b;
-
-            if (data_length > b1_available && b1_available < 3) {
-                /* do not send silly frames */
-                *lb1 = 0;
-            }
-            else {
-                size_t start_index = 0;
-
-                b1_length = (data_length > b1_available) ? b1_available : data_length;
-
-                b1_index = picoquic_encode_length_of_stream_frame(b1, b1_b - b1, b1_available, b1_length, &start_index);
-
-                memcpy(b1 + b1_index, frame + consumed, b1_length);
-
-                if (fin && b1_length >= data_length) {
-                    /* Encode fin bit if all data sent */
-                    b1[start_index] |= 1;
-                }
-
-                consumed += b1_length;
-
-                *lb1 = b1_index + b1_length;
-            }
-        }
-
-        if (b1_length >= data_length && b1_index != 0) {
-            *lb2 = 0;
-        }else {
-            size_t b2_length = data_length - b1_length;
-            size_t b2_index = 0;
-
-            if ((b2_b = picoquic_format_stream_frame_header(b2_b, b2_max_b, stream_id, offset + b1_length)) == NULL) {
-                *lb2 = 0;
-                ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
-            }
-            else {
-                size_t b2_available = b2_max_b - b2_b;
-
-                if (b2_length + 2 > b2_available) {
-                    /* Reserve at least 2 bytes for length encoding, because we don't want to
-                     * use implict incoding for the second frame */
-                    *lb2 = 0;
-                    ret = PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL;
-                }
-                else {
-                    size_t start_index = 0;
-                    b2_index = picoquic_encode_length_of_stream_frame(b2, b2_b - b2, b2_available, b2_length, &start_index);
-
-                    memcpy(b2 + b2_index, frame + consumed, b2_length);
-
-                    if (fin) {
-                        /* Encode fin bit if all data sent */
-                        b2[start_index] |= 1;
-                    }
-
-                    *lb2 = b2_index + b2_length;
-                }
-            }
-        }
-    }
-    return ret;
-}
+/* Format the stream frames that were queued for retransmit */
 
 uint8_t* picoquic_format_stream_frame_for_retransmit(picoquic_cnx_t* cnx,
     uint8_t* bytes_next, uint8_t* bytes_max, int* is_pure_ack)
@@ -1582,6 +1497,23 @@ uint8_t* picoquic_format_stream_frame_for_retransmit(picoquic_cnx_t* cnx,
     if (all_sent) {
         picoquic_delete_misc_or_dg(&cnx->stream_frame_retransmit_queue, &cnx->stream_frame_retransmit_queue_last, misc);
     }
+
+    return bytes_next;
+}
+
+uint8_t* picoquic_format_stream_frames_queued_for_retransmit(picoquic_cnx_t* cnx,
+    uint8_t* bytes_next, uint8_t* bytes_max, int* more_data, int* is_pure_ack)
+{
+    picoquic_misc_frame_header_t* misc;
+
+    while ((misc = cnx->stream_frame_retransmit_queue) != NULL && bytes_next < bytes_max) {
+        bytes_next = picoquic_format_stream_frame_for_retransmit(cnx, bytes_next, bytes_max, is_pure_ack);
+        if (misc == cnx->stream_frame_retransmit_queue) {
+            break;
+        }
+    }
+
+    *more_data |= (cnx->stream_frame_retransmit_queue != NULL);
 
     return bytes_next;
 }
