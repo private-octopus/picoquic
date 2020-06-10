@@ -1499,8 +1499,11 @@ uint8_t* picoquic_format_stream_frame_for_retransmit(picoquic_cnx_t* cnx,
     else {
         uint8_t* bytes_first = bytes_next;
         size_t available = bytes_max - bytes_next;
-
-        if (bytes_next + misc->length <= bytes_max) {
+        picoquic_stream_head_t* stream = picoquic_find_stream(cnx, stream_id);
+        if (stream == NULL || stream->reset_sent || picoquic_check_sack_list(&stream->first_sack_item, offset, offset + data_length)) {
+            /* That frame is not needed anymore */
+            all_sent = 1;
+        } else if (bytes_next + misc->length <= bytes_max) {
             /* The frame can be copied in full */
             if ((frame[0] & 2) == 0) {
                 /* Length is not encoded. If it fits just fine, copy. Else, need to be smarter */

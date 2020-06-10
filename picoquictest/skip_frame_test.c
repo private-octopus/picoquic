@@ -1871,6 +1871,14 @@ static int test_format_for_retransmit_one(uint8_t* frame, size_t frame_length, s
             if (cnx == NULL) {
                 ret = -1;
             }
+            else {
+                /* Create stream 0 so the later tests succeed */
+                memset(new_bytes, 0, sizeof(new_bytes));
+                if ((ret = picoquic_add_to_stream(cnx, 0, new_bytes, sizeof(new_bytes), 0)) != 0) {
+                    DBG_PRINTF("%s", "Cannot initialize stream 0\n");
+                    ret = -1;
+                }
+            }
         }
     }
 
