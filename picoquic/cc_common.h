@@ -23,6 +23,8 @@
 #define CC_COMMON_H
 
 #define PICOQUIC_MIN_MAX_RTT_SCOPE 7
+#define PICOQUIC_SMOOTHED_LOSS_FACTOR (1.0/16.0)
+#define PICOQUIC_SMOOTHED_LOSS_THRESHOLD (0.5)
 
 typedef struct st_picoquic_min_max_rtt_t {
     uint64_t last_rtt_sample_time;
@@ -30,6 +32,7 @@ typedef struct st_picoquic_min_max_rtt_t {
     int nb_rtt_excess;
     int sample_current;
     int is_init;
+    double smoothed_drop_rate;
     uint64_t sample_min;
     uint64_t sample_max;
     uint64_t samples[PICOQUIC_MIN_MAX_RTT_SCOPE];
@@ -40,6 +43,8 @@ uint64_t picoquic_cc_get_sequence_number(picoquic_cnx_t* cnx);
 uint64_t picoquic_cc_get_ack_number(picoquic_cnx_t* cnx);
 
 void picoquic_filter_rtt_min_max(picoquic_min_max_rtt_t* rtt_track, uint64_t rtt);
+
+int picoquic_hystart_loss_test(picoquic_min_max_rtt_t* rtt_track, picoquic_congestion_notification_t event);
 
 int picoquic_hystart_test(picoquic_min_max_rtt_t* rtt_track, uint64_t rtt_measurement, uint64_t packet_time, uint64_t current_time, int is_one_way_delay_enabled);
 

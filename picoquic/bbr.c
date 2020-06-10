@@ -729,13 +729,21 @@ static void picoquic_bbr_notify(
         switch (notification) {
         case picoquic_congestion_notification_acknowledgement: 
             /* sum the amount of data acked per packet */
+            if (bbr_state->state == picoquic_bbr_alg_startup_long_rtt) {
+                (void)picoquic_hystart_loss_test(&bbr_state->rtt_filter, notification);
+            }
             bbr_state->bytes_delivered += nb_bytes_acknowledged;
             break;
         case picoquic_congestion_notification_ecn_ec:
-        case picoquic_congestion_notification_repeat:
+            /* TODO: study ECN use in BBR */
             break;
+        case picoquic_congestion_notification_repeat:
         case picoquic_congestion_notification_timeout:
             /* enter recovery */
+            if (bbr_state->state == picoquic_bbr_alg_startup_long_rtt &&
+                picoquic_hystart_loss_test(&bbr_state->rtt_filter, notification)){
+                BBRExitStartupLongRtt(bbr_state, path_x, current_time);
+            }
             break;
         case picoquic_congestion_notification_spurious_repeat:
             break;
