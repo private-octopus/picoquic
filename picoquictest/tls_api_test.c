@@ -1391,6 +1391,11 @@ int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
         int was_active = 0;
 
         nb_trials++;
+#if 1
+        if (test_ctx->cnx_server != NULL && test_ctx->cnx_server->path[0]->bytes_in_transit == 0) {
+            was_active = 0;
+        }
+#endif
 
         ret = tls_api_one_sim_round(test_ctx, simulated_time, 0, &was_active);
 
@@ -3340,15 +3345,15 @@ int mtu_drop_test()
         picoquic_bbr_algorithm
     };
     uint64_t algo_time[5] = {
-        15000000,
-        16000000,
         13000000,
-        13000000,
-        13000000
+        10000000,
+        10000000,
+        10000000,
+        10000000
     };
     int ret = 0;
 
-    for (int i = 4; i < 5 && ret == 0; i++) {
+    for (int i = 0; i < 5 && ret == 0; i++) {
         ret = mtu_drop_cc_algotest(algo_list[i], algo_time[i]);
         if (ret != 0) {
             DBG_PRINTF("MTU drop test fails for CC=%s", algo_list[i]->congestion_algorithm_id);
