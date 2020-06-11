@@ -45,25 +45,29 @@ typedef struct st_picoquic_cubic_state_t {
     picoquic_min_max_rtt_t rtt_filter;
 } picoquic_cubic_state_t;
 
+static void picoquic_cubic_reset(picoquic_cubic_state_t* cubic_state, picoquic_path_t* path_x, uint64_t current_time) {
+    memset(&cubic_state->rtt_filter, 0, sizeof(picoquic_min_max_rtt_t));
+    memset(cubic_state, 0, sizeof(picoquic_cubic_state_t));
+    cubic_state->alg_state = picoquic_cubic_alg_slow_start;
+    cubic_state->ssthresh = UINT64_MAX;
+    cubic_state->W_last_max = (double)cubic_state->ssthresh / (double)path_x->send_mtu;
+    cubic_state->W_max = cubic_state->W_last_max;
+    cubic_state->C = 0.4;
+    cubic_state->beta = 7.0 / 8.0;
+    cubic_state->start_of_epoch = current_time;
+    cubic_state->previous_start_of_epoch = 0;
+    cubic_state->W_reno = PICOQUIC_CWIN_INITIAL;
+    cubic_state->recovery_sequence = 0;
+    path_x->cwin = PICOQUIC_CWIN_INITIAL;
+}
+
 static void picoquic_cubic_init(picoquic_path_t* path_x, uint64_t current_time)
 {
     /* Initialize the state of the congestion control algorithm */
     picoquic_cubic_state_t* cubic_state = (picoquic_cubic_state_t*)malloc(sizeof(picoquic_cubic_state_t));
     path_x->congestion_alg_state = (void*)cubic_state;
     if (cubic_state != NULL) {
-        memset(&cubic_state->rtt_filter, 0, sizeof(picoquic_min_max_rtt_t));
-        memset(cubic_state, 0, sizeof(picoquic_cubic_state_t));
-        cubic_state->alg_state = picoquic_cubic_alg_slow_start;
-        cubic_state->ssthresh = UINT64_MAX;
-        cubic_state->W_last_max = (double)cubic_state->ssthresh / (double)path_x->send_mtu;
-        cubic_state->W_max = cubic_state->W_last_max;
-        cubic_state->C = 0.4;
-        cubic_state->beta = 7.0 / 8.0;
-        cubic_state->start_of_epoch = current_time;
-        cubic_state->previous_start_of_epoch = 0;
-        cubic_state->W_reno = PICOQUIC_CWIN_INITIAL;
-        cubic_state->recovery_sequence = 0;
-        path_x->cwin = PICOQUIC_CWIN_INITIAL;
+        picoquic_cubic_reset(cubic_state, path_x, current_time);
     }
 }
 
@@ -284,6 +288,9 @@ static void picoquic_cubic_notify(
                 }
                 break;
             }
+            case picoquic_congestion_notification_reset:
+                picoquic_cubic_reset(cubic_state, path_x, current_time);
+                break;
             default:
                 break;
             }
@@ -315,6 +322,9 @@ static void picoquic_cubic_notify(
                 break;
             case picoquic_congestion_notification_rtt_measurement:
             case picoquic_congestion_notification_cwin_blocked:
+                break;
+            case picoquic_congestion_notification_reset:
+                picoquic_cubic_reset(cubic_state, path_x, current_time);
                 break;
             default:
                 /* ignore */
@@ -362,6 +372,10 @@ static void picoquic_cubic_notify(
             case picoquic_congestion_notification_cwin_blocked:
                 break;
             case picoquic_congestion_notification_rtt_measurement:
+                break;
+            case picoquic_congestion_notification_reset:
+                picoquic_cubic_reset(cubic_state, path_x, current_time);
+                break;
             default:
                 /* ignore */
                 break;
@@ -463,6 +477,9 @@ static void picoquic_dcubic_notify(
                 break;
             case picoquic_congestion_notification_cwin_blocked:
                 break;
+            case picoquic_congestion_notification_reset:
+                picoquic_cubic_reset(cubic_state, path_x, current_time);
+                break;
             default:
                 /* ignore */
                 break;
@@ -508,6 +525,9 @@ static void picoquic_dcubic_notify(
                 }
                 break;
             case picoquic_congestion_notification_cwin_blocked:
+                break;
+            case picoquic_congestion_notification_reset:
+                picoquic_cubic_reset(cubic_state, path_x, current_time);
                 break;
             default:
                 /* ignore */
@@ -560,6 +580,9 @@ static void picoquic_dcubic_notify(
                         picoquic_cubic_enter_recovery(cnx, path_x, notification, cubic_state, current_time);
                     }
                 }
+                break;
+            case picoquic_congestion_notification_reset:
+                picoquic_cubic_reset(cubic_state, path_x, current_time);
                 break;
             default:
                 /* ignore */

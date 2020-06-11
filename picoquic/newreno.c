@@ -124,6 +124,9 @@ void picoquic_newreno_sim_notify(
         break;
     case picoquic_congestion_notification_bw_measurement:
         break;
+    case picoquic_congestion_notification_reset:
+        picoquic_newreno_sim_reset(nr_state);
+        break;
     default:
         /* ignore */
         break;
@@ -139,6 +142,13 @@ typedef struct st_picoquic_newreno_state_t {
     picoquic_min_max_rtt_t rtt_filter;
 } picoquic_newreno_state_t;
 
+static void picoquic_newreno_reset(picoquic_newreno_state_t* nr_state, picoquic_path_t* path_x)
+{
+    memset(nr_state, 0, sizeof(picoquic_newreno_state_t));
+    picoquic_newreno_sim_reset(&nr_state->nrss);
+    path_x->cwin = nr_state->nrss.cwin;
+}
+
 static void picoquic_newreno_init(picoquic_path_t* path_x, uint64_t current_time)
 {
     /* Initialize the state of the congestion control algorithm */
@@ -148,8 +158,7 @@ static void picoquic_newreno_init(picoquic_path_t* path_x, uint64_t current_time
 #endif
 
     if (nr_state != NULL) {
-        memset(nr_state, 0, sizeof(picoquic_newreno_state_t));
-        picoquic_newreno_sim_reset(&nr_state->nrss);
+        picoquic_newreno_reset(nr_state, path_x);
         path_x->congestion_alg_state = nr_state;
     }
     else {
@@ -182,7 +191,6 @@ static void picoquic_newreno_notify(
     if (nr_state != NULL) {
         switch (notification) {
         case picoquic_congestion_notification_acknowledgement:
-
             if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
                 picoquic_newreno_sim_notify(&nr_state->nrss, cnx, path_x, notification, nb_bytes_acknowledged, current_time);
                 path_x->cwin = nr_state->nrss.cwin;
@@ -235,6 +243,9 @@ static void picoquic_newreno_notify(
                     path_x->cwin = min_win;
                 }
             }
+            break;
+        case picoquic_congestion_notification_reset:
+            picoquic_newreno_reset(nr_state, path_x);
             break;
         default:
             /* ignore */

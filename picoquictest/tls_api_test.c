@@ -1391,6 +1391,11 @@ int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
         int was_active = 0;
 
         nb_trials++;
+#if 1
+        if (test_ctx->cnx_server != NULL && test_ctx->cnx_server->path[0]->bytes_in_transit == 0) {
+            was_active = 0;
+        }
+#endif
 
         ret = tls_api_one_sim_round(test_ctx, simulated_time, 0, &was_active);
 
@@ -1489,6 +1494,35 @@ static int wait_application_aead_ready(picoquic_test_tls_api_ctx_t* test_ctx,
         DBG_PRINTF("Could not obtain the 1-RTT decryption key, state = %d\n",
             test_ctx->cnx_server->cnx_state);
         ret = -1;
+    }
+
+    return ret;
+}
+
+static int wait_for_timeout(picoquic_test_tls_api_ctx_t* test_ctx,
+    uint64_t* simulated_time, uint64_t time_out_delay)
+{
+    int ret = 0;
+    uint64_t time_out = *simulated_time + time_out_delay;
+    int nb_trials = 0;
+    int nb_inactive = 0;
+
+    while (*simulated_time < time_out &&
+        TEST_CLIENT_READY &&
+        TEST_SERVER_READY &&
+        nb_inactive < 64 &&
+        ret == 0) {
+        int was_active = 0;
+        nb_trials++;
+
+        ret = tls_api_one_sim_round(test_ctx, simulated_time, time_out, &was_active);
+
+        if (was_active) {
+            nb_inactive = 0;
+        }
+        else {
+            nb_inactive++;
+        }
     }
 
     return ret;
@@ -3219,6 +3253,117 @@ int mtu_discovery_test()
 
     return ret;
 }
+
+/*
+* MTU discovery test. Perform a long duration transmission.
+* Verify that MTU was properly set to expected value, then
+* simulate a routing event that causes the MTU to drop.
+* Check that the MTU gets reduced, and the transmission
+* completes.
+*/
+
+static int mtu_drop_cc_algotest(picoquic_congestion_algorithm_t* cc_algo, uint64_t target_time)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    const uint64_t mtu_drop_latency = 100000;
+    const uint64_t picosec_1mbps = 8000000;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+
+    if (ret == 0) {
+        char binlog_file_name[512];
+
+        /* Set long delays, 1 Mbps each way */
+        test_ctx->c_to_s_link->microsec_latency = mtu_drop_latency;
+        test_ctx->c_to_s_link->picosec_per_byte = picosec_1mbps;
+        test_ctx->s_to_c_link->microsec_latency = mtu_drop_latency;
+        test_ctx->s_to_c_link->picosec_per_byte = picosec_1mbps;
+        /* Set the CC algorithm to selected value */
+        picoquic_set_default_congestion_algorithm(test_ctx->qserver, cc_algo);
+        /* Set the bin log, so we can debug based on traces */
+        (void)picoquic_sprintf(binlog_file_name, sizeof(binlog_file_name), NULL,
+            "mtu_drop_%s_trace.bin", cc_algo->congestion_algorithm_id);
+        picoquic_set_binlog(test_ctx->qserver, binlog_file_name);
+        test_ctx->qserver->use_long_log = 1;
+    }
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 2*mtu_drop_latency, &simulated_time);
+    }
+
+    /* Prepare to send data */
+    if (ret == 0) {
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_very_long, sizeof(test_scenario_very_long));
+    }
+
+    /* Send for 1 seconds, check that MTU is discovered, and then drop the MTU size in the s_to_c direction */
+    if (ret == 0) {
+        ret = wait_for_timeout(test_ctx, &simulated_time, 1000000);
+    }
+
+    if (ret == 0) {
+        if (test_ctx->cnx_client->path[0]->send_mtu != test_ctx->cnx_server->local_parameters.max_packet_size) {
+            ret = -1;
+        }
+        else if (test_ctx->cnx_server->path[0]->send_mtu != test_ctx->cnx_client->local_parameters.max_packet_size) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        test_ctx->c_to_s_link->path_mtu = (PICOQUIC_INITIAL_MTU_IPV4 + test_ctx->c_to_s_link->path_mtu) / 2;
+        test_ctx->s_to_c_link->path_mtu = (PICOQUIC_INITIAL_MTU_IPV4 + test_ctx->s_to_c_link->path_mtu) / 2;
+    }
+
+    /* Try to complete the data sending loop */
+    if (ret == 0) {
+        ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 0);
+    }
+
+    /* verify that the transmission was complete */
+    if (ret == 0) {
+        ret = tls_api_one_scenario_body_verify(test_ctx, &simulated_time, target_time);
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+int mtu_drop_test()
+{
+    picoquic_congestion_algorithm_t* algo_list[5] = {
+        picoquic_newreno_algorithm,
+        picoquic_cubic_algorithm,
+        picoquic_dcubic_algorithm,
+        picoquic_fastcc_algorithm,
+        picoquic_bbr_algorithm
+    };
+    uint64_t algo_time[5] = {
+        13000000,
+        10000000,
+        10000000,
+        10000000,
+        10000000
+    };
+    int ret = 0;
+
+    for (int i = 0; i < 5 && ret == 0; i++) {
+        ret = mtu_drop_cc_algotest(algo_list[i], algo_time[i]);
+        if (ret != 0) {
+            DBG_PRINTF("MTU drop test fails for CC=%s", algo_list[i]->congestion_algorithm_id);
+        }
+    }
+
+    return ret;
+}
+
+
 
 /*
  * Trying to reproduce the scenario that resulted in
@@ -6998,7 +7143,7 @@ int performance_test(uint64_t max_completion_time, uint64_t mbps, uint64_t laten
 
 int bbr_performance_test()
 {
-    uint64_t max_completion_time = 1000000;
+    uint64_t max_completion_time = 1050000;
     uint64_t latency = 10000;
     uint64_t jitter = 3000;
     uint64_t buffer = 2 * (latency + jitter);

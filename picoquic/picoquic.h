@@ -764,7 +764,8 @@ typedef enum {
     picoquic_congestion_notification_rtt_measurement,
     picoquic_congestion_notification_bw_measurement,
     picoquic_congestion_notification_ecn_ec,
-    picoquic_congestion_notification_cwin_blocked
+    picoquic_congestion_notification_cwin_blocked,
+    picoquic_congestion_notification_reset
 } picoquic_congestion_notification_t;
 
 typedef void (*picoquic_congestion_algorithm_init)(picoquic_path_t* path_x, uint64_t current_time);

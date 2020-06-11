@@ -418,7 +418,11 @@ int picoquic_remove_header_protection(picoquic_cnx_t* cnx,
                 pn_val += bytes[ph->offset++];
                 ph->pnmask <<= 8;
             }
-
+#if 1
+            if (pn_val >= 241) {
+                DBG_PRINTF("%s", "Got it");
+            }
+#endif
             ph->pn = pn_val;
             ph->payload_length -= pn_l;
             /* Only set the key phase byte if short header */
@@ -562,6 +566,11 @@ int picoquic_parse_header_and_decrypt(
     int already_received = 0;
     size_t decoded_length = 0;
     int ret = picoquic_parse_packet_header(quic, bytes, length, addr_from, ph, pcnx, 1);
+#if 1
+    if (ph->pn >= 241) {
+        already_received = 0;
+    }
+#endif
 
     *new_ctx_created = 0;
 

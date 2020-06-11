@@ -93,6 +93,7 @@ int zero_rtt_loss_test();
 int stop_sending_test();
 int unidir_test();
 int mtu_discovery_test();
+int mtu_drop_test();
 int spurious_retransmit_test();
 int pn_ctr_test();
 int cleartext_pn_enc_test();
@@ -224,7 +225,8 @@ int initial_race_test();
 int pacing_test();
 int chacha20_test();
 int cid_quiescence_test();
-int controlled_migration_test();
+int migration_controlled_test();
+int migration_mtu_drop_test();
 int token_reuse_api_test();
 
 int h3zero_post_test();

@@ -639,9 +639,16 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(test_mtu_discovery)
+        TEST_METHOD(mtu_discovery)
         {
             int ret = mtu_discovery_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(mtu_drop)
+        {
+            int ret = mtu_drop_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -1231,8 +1238,14 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(controlled_migration) {
-            int ret = controlled_migration_test();
+        TEST_METHOD(migration_controlled) {
+            int ret = migration_controlled_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(migration_mtu_drop) {
+            int ret = migration_mtu_drop_test();
 
             Assert::AreEqual(ret, 0);
         }

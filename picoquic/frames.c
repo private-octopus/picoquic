@@ -2434,6 +2434,7 @@ static int picoquic_process_ack_range(
 {
     picoquic_packet_t* p = *ppacket;
     int ret = 0;
+
     /* Compare the range to the retransmit queue */
     while (p != NULL && range > 0) {
         if (p->sequence_number > highest) {
@@ -2453,6 +2454,13 @@ static int picoquic_process_ack_range(
                     old_path->delivered += p->length;
 
                     if (cnx->congestion_alg != NULL) {
+#if 0
+                        if (cnx->pkt_ctx[pc].nb_retransmit >= 2 && p->sequence_number >= cnx->pkt_ctx[pc].retransmit_sequence) {
+                            cnx->congestion_alg->alg_notify(cnx, old_path,
+                                picoquic_congestion_notification_reset,
+                                0, 0, p->length, 0, current_time);
+                        }
+#endif
                         cnx->congestion_alg->alg_notify(cnx, old_path,
                             picoquic_congestion_notification_acknowledgement,
                             0, 0, p->length, 0, current_time);
@@ -2460,7 +2468,9 @@ static int picoquic_process_ack_range(
 
 
                     /* If packet is larger than the current MTU, update the MTU */
-                    if ((p->length + p->checksum_overhead) > old_path->send_mtu) {
+                    if ((p->length + p->checksum_overhead) == old_path->send_mtu) {
+                        old_path->nb_mtu_losses = 0;
+                    } else if ((p->length + p->checksum_overhead) > old_path->send_mtu) {
                         old_path->send_mtu = p->length + p->checksum_overhead;
                         old_path->mtu_probe_sent = 0;
                     }
@@ -2478,10 +2488,13 @@ static int picoquic_process_ack_range(
                     picoquic_ready_state_transition(cnx, current_time);
                 }
 
+                if (cnx->pkt_ctx[pc].nb_retransmit > 0 && p->sequence_number >= cnx->pkt_ctx[pc].retransmit_sequence) {
+                    /* Acknowledgement larger than retransmit number show progress */
+                    cnx->pkt_ctx[pc].nb_retransmit = 0;
+                }
+
                 (void)picoquic_dequeue_retransmit_packet(cnx, p, 1);
                 p = next;
-                /* Any acknowledgement shows progress */
-                cnx->pkt_ctx[pc].nb_retransmit = 0;
             }
 
             range--;

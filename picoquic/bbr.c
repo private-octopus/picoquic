@@ -226,22 +226,27 @@ void BBRUpdateTargetCwnd(picoquic_bbr_state_t* bbr_state)
     bbr_state->target_cwnd = BBRInflight(bbr_state, bbr_state->cwnd_gain);
 }
 
+static void picoquic_bbr_reset(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time)
+{
+    memset(bbr_state, 0, sizeof(picoquic_bbr_state_t));
+    path_x->cwin = PICOQUIC_CWIN_INITIAL;
+    bbr_state->rt_prop = UINT64_MAX;
+
+    bbr_state->rt_prop_stamp = current_time;
+    bbr_state->cycle_stamp = current_time;
+
+    BBREnterStartup(bbr_state);
+    BBRSetSendQuantum(bbr_state, path_x);
+    BBRUpdateTargetCwnd(bbr_state);
+}
+
 static void picoquic_bbr_init(picoquic_path_t* path_x, uint64_t current_time)
 {
     /* Initialize the state of the congestion control algorithm */
     picoquic_bbr_state_t* bbr_state = (picoquic_bbr_state_t*)malloc(sizeof(picoquic_bbr_state_t));
     path_x->congestion_alg_state = (void*)bbr_state;
     if (bbr_state != NULL) {
-        memset(bbr_state, 0, sizeof(picoquic_bbr_state_t));
-        path_x->cwin = PICOQUIC_CWIN_INITIAL;
-        bbr_state->rt_prop = UINT64_MAX;
-
-        bbr_state->rt_prop_stamp = current_time;
-        bbr_state->cycle_stamp = current_time;
-
-        BBREnterStartup(bbr_state);
-        BBRSetSendQuantum(bbr_state, path_x);
-        BBRUpdateTargetCwnd(bbr_state);
+        picoquic_bbr_reset(bbr_state, path_x, current_time);
     }
 }
 
@@ -585,11 +590,11 @@ void BBRSetPacingRate(picoquic_bbr_state_t* bbr_state)
 
 /* TODO: clarity on bytes vs packets  */
 void BBRModulateCwndForRecovery(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, 
-    uint64_t bytes_in_transit, uint64_t packets_lost, uint64_t bytes_delivered)
+    uint64_t bytes_in_transit, uint64_t bytes_lost, uint64_t bytes_delivered)
 {
-    if (packets_lost > 0) {
-        if (path_x->cwin > packets_lost) {
-            path_x->cwin -= packets_lost;
+    if (bytes_lost > 0) {
+        if (path_x->cwin > bytes_lost) {
+            path_x->cwin -= bytes_lost;
         }
         else {
             path_x->cwin = path_x->send_mtu;
@@ -727,11 +732,12 @@ static void picoquic_bbr_notify(
 
     if (bbr_state != NULL) {
         switch (notification) {
-        case picoquic_congestion_notification_acknowledgement: 
-            /* sum the amount of data acked per packet */
+        case picoquic_congestion_notification_acknowledgement:
+            /* Update the packet loss rate */
             if (bbr_state->state == picoquic_bbr_alg_startup_long_rtt) {
                 (void)picoquic_hystart_loss_test(&bbr_state->rtt_filter, notification);
             }
+            /* sum the amount of data acked per packet */
             bbr_state->bytes_delivered += nb_bytes_acknowledged;
             break;
         case picoquic_congestion_notification_ecn_ec:
@@ -741,10 +747,9 @@ static void picoquic_bbr_notify(
         case picoquic_congestion_notification_timeout:
             /* enter recovery */
             if (bbr_state->state == picoquic_bbr_alg_startup_long_rtt &&
-                picoquic_hystart_loss_test(&bbr_state->rtt_filter, notification)){
+                picoquic_hystart_loss_test(&bbr_state->rtt_filter, notification)) {
                 BBRExitStartupLongRtt(bbr_state, path_x, current_time);
             }
-            break;
         case picoquic_congestion_notification_spurious_repeat:
             break;
         case picoquic_congestion_notification_rtt_measurement:
@@ -798,6 +803,9 @@ static void picoquic_bbr_notify(
             }
             break;
         case picoquic_congestion_notification_cwin_blocked:
+            break;
+        case picoquic_congestion_notification_reset:
+            picoquic_bbr_reset(bbr_state, path_x, current_time);
             break;
         default:
             /* ignore */
