@@ -35,12 +35,12 @@ typedef struct st_picoquic_alpn_list_t {
 } picoquic_alpn_list_t;
 
 static picoquic_alpn_list_t alpn_list[] = {
+    { picoquic_alpn_http_3, "h3-29" },
+    { picoquic_alpn_http_0_9, "hq-29"},
     { picoquic_alpn_http_3, "h3-28" },
     { picoquic_alpn_http_0_9, "hq-28"},
     { picoquic_alpn_http_3, "h3-27" },
     { picoquic_alpn_http_0_9, "hq-27"},
-    { picoquic_alpn_http_3, "h3-25" },
-    { picoquic_alpn_http_0_9, "hq-25"},
     { picoquic_alpn_http_3, "h3" },
     { picoquic_alpn_http_0_9, "hq"},
     { picoquic_alpn_siduck, "siduck"},

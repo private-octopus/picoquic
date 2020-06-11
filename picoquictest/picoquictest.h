@@ -72,6 +72,7 @@ int tls_api_very_long_max_test();
 int tls_api_very_long_with_err_test();
 int tls_api_very_long_congestion_test();
 int tls_api_retry_test();
+int tls_api_retry_large_test();
 int ackrange_test();
 int ack_of_ack_test();
 int tls_api_two_connections_test();

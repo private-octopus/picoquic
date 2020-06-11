@@ -2389,7 +2389,7 @@ int picoquic_prepare_retry_token(picoquic_quic_t* quic, const struct sockaddr* a
 
 int picoquic_verify_retry_token(picoquic_quic_t* quic, const struct sockaddr * addr_peer,
     uint64_t current_time, picoquic_connection_id_t * odcid, const picoquic_connection_id_t* rcid,
-    const uint8_t * token, size_t token_size)
+    const uint8_t * token, size_t token_size, int new_context_created)
 {
     int ret = 0;
     uint8_t text[128];
@@ -2418,8 +2418,8 @@ int picoquic_verify_retry_token(picoquic_quic_t* quic, const struct sockaddr * a
             else {
                 /* Remove old tickets before testing this one. */
                 picoquic_registered_token_clear(quic, current_time);
-                if ((ret = picoquic_registered_token_check_reuse(quic, token, token_size, token_time)) != 0) {
-                    DBG_PRINTF("Duplicate token test resturns %d", ret);
+                if (new_context_created && (ret = picoquic_registered_token_check_reuse(quic, token, token_size, token_time)) != 0) {
+                    picoquic_log_app_message(quic, rcid, "Duplicate token test resturns %d", ret);
                 }
                 else if (odcid->id_len > 0 &&
                     picoquic_compare_connection_id(rcid, &cid) != 0) {
