@@ -7138,7 +7138,7 @@ int performance_test(uint64_t max_completion_time, uint64_t mbps, uint64_t laten
 
 int bbr_performance_test()
 {
-    uint64_t max_completion_time = 1000000;
+    uint64_t max_completion_time = 1050000;
     uint64_t latency = 10000;
     uint64_t jitter = 3000;
     uint64_t buffer = 2 * (latency + jitter);

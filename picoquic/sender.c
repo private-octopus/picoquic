@@ -1248,7 +1248,6 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
 {
     picoquic_packet_t* old_p = cnx->pkt_ctx[pc].retransmit_oldest;
     size_t length = 0;
-    picoquic_packet_type_enum incoming_type = packet->ptype;
 
     /* TODO: while packets are pure ACK, drop them from retransmit queue */
     while (old_p != NULL) {
@@ -1347,17 +1346,6 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
             }
 
             if (should_retransmit != 0) {
-                if (packet->ptype == picoquic_packet_1rtt_protected &&
-                    !picoquic_is_sending_authorized_by_pacing(cnx, path_x, current_time, next_wake_time)) {
-                    /* Cannot retransmit now, will have to wait. */
-                    /* We do this test when we are almost sure that there is something to retransmit,
-                     * so as to not cause a gratuitous "pacing" wakeup when there is nothing to send. */
-                    length = 0;
-                    packet->ptype = incoming_type;
-                    packet->offset = 0;
-                    break;
-                }
-
                 packet->sequence_number = cnx->pkt_ctx[pc].send_sequence;
                 packet->send_path = path_x;
                 packet->pc = pc;
@@ -1410,6 +1398,18 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                 if (old_p == NULL || packet_is_pure_ack) {
                     length = 0;
                 } else {
+                    if (old_p->send_path != NULL &&
+                        (old_p->length + old_p->checksum_overhead) == old_p->send_path->send_mtu) {
+                        old_p->send_path->nb_mtu_losses++;
+                        if (old_p->send_path->nb_mtu_losses > PICOQUIC_MTU_LOSS_THRESHOLD) {
+                            picoquic_reset_path_mtu(old_p->send_path);
+                            picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid,
+                                "Reset path MTU after %d retransmissions, %d MTU losses",
+                                cnx->pkt_ctx[pc].nb_retransmit,
+                                old_p->send_path->nb_mtu_losses);
+                        }
+                    }
+
                     if (timer_based_retransmit != 0) {
                         if (cnx->pkt_ctx[pc].nb_retransmit > 7 && cnx->cnx_state >= picoquic_state_ready) {
                             /*

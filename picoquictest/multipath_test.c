@@ -223,13 +223,6 @@ int migration_test_one(int mtu_drop)
         }
     }
 
-    if (ret == 0 && mtu_drop) {
-        if (test_ctx->cnx_server->nb_split_retrans == 0) {
-            DBG_PRINTF("%s", "No split retransmission tested");
-            ret = -1;
-        }
-    }
-
     /* Delete the context */
     if (test_ctx == NULL) {
         tls_api_delete_ctx(test_ctx);

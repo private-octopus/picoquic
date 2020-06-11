@@ -2454,11 +2454,13 @@ static int picoquic_process_ack_range(
                     old_path->delivered += p->length;
 
                     if (cnx->congestion_alg != NULL) {
+#if 0
                         if (cnx->pkt_ctx[pc].nb_retransmit >= 2 && p->sequence_number >= cnx->pkt_ctx[pc].retransmit_sequence) {
                             cnx->congestion_alg->alg_notify(cnx, old_path,
                                 picoquic_congestion_notification_reset,
                                 0, 0, p->length, 0, current_time);
                         }
+#endif
                         cnx->congestion_alg->alg_notify(cnx, old_path,
                             picoquic_congestion_notification_acknowledgement,
                             0, 0, p->length, 0, current_time);
