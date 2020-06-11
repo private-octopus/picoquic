@@ -834,7 +834,7 @@ typedef struct st_picoquic_packet_context_t {
     picoquic_packet_t* retransmit_oldest;
     picoquic_packet_t* retransmitted_newest;
     picoquic_packet_t* retransmitted_oldest;
-
+    /* Flags */
     unsigned int ack_needed : 1;
     unsigned int ack_of_ack_requested : 1;
     unsigned int ack_after_fin : 1;
@@ -1011,6 +1011,11 @@ typedef struct st_picoquic_cnx_t {
     picoquic_stream_head_t * last_output_stream;
     uint64_t high_priority_stream_id;
     uint64_t next_stream_id[4];
+
+    /* Retransmit queue contains congestion controlled frames that should
+     * be sent in priority when the congestion window opens. */
+    struct st_picoquic_misc_frame_header_t* stream_frame_retransmit_queue;
+    struct st_picoquic_misc_frame_header_t* stream_frame_retransmit_queue_last;
 
     /* Management of datagrams */
     picoquic_misc_frame_header_t* first_datagram;
@@ -1314,8 +1319,9 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, uint8_t* bytes,
 
 uint8_t* picoquic_format_available_stream_frames(picoquic_cnx_t* cnx, uint8_t* bytes_next, uint8_t* bytes_max,
     int* more_data, int* is_pure_ack, int* stream_tried_and_failed, int* ret);
-int picoquic_split_stream_frame(uint8_t* frame, size_t frame_length,
-    uint8_t* b1, size_t b1_max, size_t *lb1, uint8_t* b2, size_t b2_max, size_t *lb2);
+uint8_t* picoquic_format_stream_frame_for_retransmit(picoquic_cnx_t* cnx, 
+    uint8_t* bytes_next, uint8_t* bytes_max, int* is_pure_ack);
+uint8_t* picoquic_format_stream_frames_queued_for_retransmit(picoquic_cnx_t* cnx, uint8_t* bytes_next, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
 int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
     picoquic_cnx_t * cnx,
     uint8_t * new_bytes,

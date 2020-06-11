@@ -2176,7 +2176,7 @@ int tls_api_very_long_max_test()
 
 int tls_api_very_long_with_err_test()
 {
-    return tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0x30000, 128000, 0, 0, 2100000, NULL, NULL);
+    return tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0x30000, 128000, 0, 0, 2150000, NULL, NULL);
 }
 
 int tls_api_very_long_congestion_test()
@@ -7155,7 +7155,7 @@ int bbr_performance_test()
 
 int bbr_slow_long_test()
 {
-    uint64_t max_completion_time = 100000000;
+    uint64_t max_completion_time = 82500000;
     uint64_t latency = 300000;
     uint64_t jitter = 3000;
     uint64_t buffer = 2 * (latency + jitter);

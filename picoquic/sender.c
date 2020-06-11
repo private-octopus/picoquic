@@ -1001,11 +1001,6 @@ void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet_t
     }
 
     if (ret == 0 && length > 0) {
-#if 1
-        if (packet->sequence_number >= 242) {
-            DBG_PRINTF("%s", "Got it");
-        }
-#endif
         packet->length = length;
         cnx->pkt_ctx[packet->pc].send_sequence++;
         path_x->latest_sent_time = current_time;
@@ -1155,6 +1150,30 @@ static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t* cnx,
     return should_retransmit;
 }
 
+int picoquic_queue_stream_frame_for_retransmit(picoquic_cnx_t* cnx, uint8_t * bytes, size_t length)
+{
+    int ret = 0;
+    picoquic_misc_frame_header_t* misc = picoquic_create_misc_frame(bytes, length, 0);
+
+    if (misc == NULL) {
+        ret = PICOQUIC_ERROR_MEMORY;
+    }
+    else {
+        misc->next_misc_frame = NULL;
+        if (cnx->stream_frame_retransmit_queue_last == NULL) {
+            cnx->stream_frame_retransmit_queue = misc;
+            cnx->stream_frame_retransmit_queue_last = misc;
+        }
+        else {
+            misc->previous_misc_frame = cnx->stream_frame_retransmit_queue_last;
+            cnx->stream_frame_retransmit_queue_last->next_misc_frame = misc;
+            cnx->stream_frame_retransmit_queue_last = misc;
+        }
+    }
+
+    return ret;
+}
+
 int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
     picoquic_cnx_t * cnx,
     uint8_t * new_bytes,
@@ -1201,22 +1220,7 @@ int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
             /* Prepare retransmission if needed */
             if (ret == 0 && !frame_is_pure_ack) {
                 if (PICOQUIC_IN_RANGE(old_p->bytes[byte_index], picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
-                    uint8_t overflow[PICOQUIC_MAX_PACKET_SIZE];
-                    size_t copied_length = 0;
-                    size_t overflow_length = 0;
-
-                    /* By default, copy to new frame, but if that does not fit also create overflow frame */
-                    ret = picoquic_split_stream_frame(&old_p->bytes[byte_index], frame_length,
-                        &new_bytes[*length], send_buffer_max_minus_checksum - *length, &copied_length,
-                        overflow, sizeof(overflow), &overflow_length);
-
-                    if (ret == 0) {
-                        *length += copied_length;
-                        if (overflow_length > 0) {
-                            cnx->nb_split_retrans++;
-                            ret = picoquic_queue_misc_frame(cnx, overflow, overflow_length, 0);
-                        }
-                    }
+                    ret = picoquic_queue_stream_frame_for_retransmit(cnx, &old_p->bytes[byte_index], frame_length);
                 }
                 else {
                     if (frame_length > send_buffer_max_minus_checksum - *length &&
@@ -1406,18 +1410,6 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                 if (old_p == NULL || packet_is_pure_ack) {
                     length = 0;
                 } else {
-                    if (old_p->send_path != NULL && 
-                        (old_p->length + old_p->checksum_overhead) == old_p->send_path->send_mtu) {
-                        old_p->send_path->nb_mtu_losses++;
-                        if (old_p->send_path->nb_mtu_losses > PICOQUIC_MTU_LOSS_THRESHOLD) {
-                            picoquic_reset_path_mtu(old_p->send_path);
-                            picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid,
-                                "Reset path MTU after %d retransmissions, %d MTU losses",
-                                cnx->pkt_ctx[pc].nb_retransmit,
-                                old_p->send_path->nb_mtu_losses);
-                        }
-                    }
-
                     if (timer_based_retransmit != 0) {
                         if (cnx->pkt_ctx[pc].nb_retransmit > 7 && cnx->cnx_state >= picoquic_state_ready) {
                             /*
@@ -2932,6 +2924,12 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                                 bytes_next = picoquic_format_first_datagram_frame(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack);
                             }
 
+                            /* If present, send stream frames queued for retransmission */
+                            if (ret == 0) {
+                                bytes_next = picoquic_format_stream_frames_queued_for_retransmit(cnx, bytes_next, bytes_max,
+                                    &more_data, &is_pure_ack);
+                            }
+                        
                             if (cnx->is_ack_frequency_updated && cnx->is_ack_frequency_negotiated) {
                                 bytes_next = picoquic_format_ack_frequency_frame(cnx, bytes_next, bytes_max, &more_data);
                             }
@@ -3273,6 +3271,12 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                             }
                         }
 
+                        /* If present, send stream frames queued for retransmission */
+                        if (ret == 0) {
+                            bytes_next = picoquic_format_stream_frames_queued_for_retransmit(cnx, bytes_next, bytes_max,
+                                &more_data, &is_pure_ack);
+                        }
+
                         if (ret == 0 && cnx->is_ack_frequency_updated && cnx->is_ack_frequency_negotiated) {
                             bytes_next = picoquic_format_ack_frequency_frame(cnx, bytes_next, bytes_max, &more_data);
                         }
@@ -3565,12 +3569,6 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     *send_length = 0;
 
     ret = picoquic_check_idle_timer(cnx, &next_wake_time, current_time);
-
-#if 1
-    if (cnx->pkt_ctx[0].send_sequence > 1000 && cnx->cnx_state == picoquic_state_ready) {
-        ret = picoquic_connection_error(cnx, 0, 0);
-    }
-#endif
 
     if (ret == 0) {
         int path_id;
