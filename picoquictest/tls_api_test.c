@@ -2471,13 +2471,21 @@ int tls_retry_token_test()
     return ret;
 }
 
-int tls_api_retry_test()
+int tls_api_retry_test_one(int large_client_hello)
 {
     uint64_t simulated_time = 0;
     const uint64_t target_time = 230000ull;
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
+
+    if (ret == 0) {
+        if (large_client_hello) {
+            test_ctx->cnx_client->test_large_chello = 1;
+        }
+        ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+    }
+
 
     if (ret == 0) {
         /* Set the server in HRR/Cookies mode */
@@ -2503,6 +2511,15 @@ int tls_api_retry_test()
     return ret;
 }
 
+int tls_api_retry_test()
+{
+    return tls_api_retry_test_one(0);
+}
+
+int tls_api_retry_large_test()
+{
+    return tls_api_retry_test_one(1);
+}
 /*
 * verify that a connection is correctly established
 * if the client does not initially provide a key share

@@ -354,7 +354,7 @@ int picoquic_set_textlog(picoquic_quic_t* quic, char const* textlog_file);
 
 /* Log application messages or other messages to the text log.
  */
-void picoquic_log_app_message(picoquic_quic_t* quic, picoquic_connection_id_t * icid, const char* fmt, ...);
+void picoquic_log_app_message(picoquic_quic_t* quic, const picoquic_connection_id_t * icid, const char* fmt, ...);
 
 /* Set the log level:
  * 1: log all packets

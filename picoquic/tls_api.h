@@ -137,7 +137,7 @@ int picoquic_prepare_retry_token(picoquic_quic_t* quic, const struct sockaddr * 
 
 int picoquic_verify_retry_token(picoquic_quic_t* quic, const struct sockaddr * addr_peer,
     uint64_t current_time, picoquic_connection_id_t * odcid, const picoquic_connection_id_t* rcid,
-    const uint8_t * token, size_t token_size);
+    const uint8_t * token, size_t token_size, int new_context_created);
 
 void picoquic_cid_free_under_mask_ctx(void * v_pn_enc);
 int picoquic_cid_get_under_mask_ctx(void ** v_pn_enc, const void * secret);

@@ -1034,7 +1034,7 @@ int picoquic_incoming_client_initial(
         !(*pcnx)->quic->server_busy) {
         if (picoquic_verify_retry_token((*pcnx)->quic, addr_from, current_time,
             &(*pcnx)->original_cnxid, &ph->dest_cnx_id,
-            ph->token_bytes, ph->token_length) != 0) {
+            ph->token_bytes, ph->token_length, new_context_created) != 0) {
             if (ph->token_length != 0) {
                 (void)picoquic_connection_error(*pcnx, PICOQUIC_TRANSPORT_INVALID_TOKEN, 0);
                 ret = PICOQUIC_ERROR_INVALID_TOKEN;
