@@ -147,6 +147,8 @@ int initial_close_test();
 int fuzz_initial_test();
 int new_rotated_key_test();
 int key_rotation_test();
+int key_rotation_auto_server();
+int key_rotation_auto_client();
 int false_migration_test();
 int nat_handshake_test();
 int key_rotation_vector_test();

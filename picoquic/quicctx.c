@@ -324,6 +324,7 @@ picoquic_quic_t* picoquic_create(uint32_t nb_connections,
         quic->local_cnxid_length = 8; /* TODO: should be lower on clients-only implementation */
         quic->padding_multiple_default = 0; /* TODO: consider default = 128 */
         quic->padding_minsize_default = PICOQUIC_RESET_PACKET_MIN_SIZE;
+        quic->crypto_epoch_length_max = PICOQUIC_DEFAULT_CRYPTO_EPOCH_LENGTH;
 
         if (cnx_id_callback != NULL) {
             quic->unconditional_cnx_id = 1;
@@ -441,6 +442,29 @@ void picoquic_set_default_spinbit_policy(picoquic_quic_t * quic, picoquic_spinbi
 {
     quic->default_spin_policy = default_spinbit_policy;
 }
+
+void picoquic_set_default_crypto_epoch_length(picoquic_quic_t* quic, uint64_t crypto_epoch_length_max)
+{
+    quic->crypto_epoch_length_max = (crypto_epoch_length_max == 0) ?
+        PICOQUIC_DEFAULT_CRYPTO_EPOCH_LENGTH : crypto_epoch_length_max;
+}
+
+uint64_t picoquic_get_default_crypto_epoch_length(picoquic_quic_t* quic)
+{
+    return quic->crypto_epoch_length_max;
+}
+
+void picoquic_set_crypto_epoch_length(picoquic_cnx_t* cnx, uint64_t crypto_epoch_length_max)
+{
+    cnx->crypto_epoch_length_max = (crypto_epoch_length_max == 0) ?
+        PICOQUIC_DEFAULT_CRYPTO_EPOCH_LENGTH : crypto_epoch_length_max;
+}
+
+uint64_t picoquic_get_crypto_epoch_length(picoquic_cnx_t* cnx)
+{
+    return cnx->crypto_epoch_length_max;
+}
+
 
 uint8_t picoquic_get_local_cid_length(picoquic_quic_t* quic)
 {
@@ -2271,6 +2295,10 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
         cnx->callback_ctx = quic->default_callback_ctx;
         cnx->congestion_alg = quic->default_congestion_alg;
 
+        /* Initialize key rotation interval to default value */
+        cnx->crypto_epoch_length_max = quic->crypto_epoch_length_max;
+
+        /* Perform different initializations for clients and servers */
         if (cnx->client_mode) {
             if (preferred_version == 0) {
                 cnx->proposed_version = picoquic_supported_versions[0].version;

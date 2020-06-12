@@ -463,6 +463,10 @@ void picoquic_set_default_padding(picoquic_quic_t* quic, uint32_t padding_multip
 /* Set default spin bit policy for the context */
 void picoquic_set_default_spinbit_policy(picoquic_quic_t * quic, picoquic_spinbit_version_enum default_spinbit_policy);
 
+void picoquic_set_default_crypto_epoch_length(picoquic_quic_t* quic, uint64_t crypto_epoch_length_max);
+
+uint64_t picoquic_get_default_crypto_epoch_length(picoquic_quic_t* quic);
+
 /* Get the local CID length */
 uint8_t picoquic_get_local_cid_length(picoquic_quic_t* quic);
 
@@ -532,6 +536,10 @@ void picoquic_cnx_set_padding_policy(picoquic_cnx_t * cnx, uint32_t padding_mult
 void picoquic_cnx_get_padding_policy(picoquic_cnx_t * cnx, uint32_t * padding_multiple, uint32_t * padding_minsize);
 /* Set spin bit policy for the connection */
 void picoquic_cnx_set_spinbit_policy(picoquic_cnx_t * cnx, picoquic_spinbit_version_enum spinbit_policy);
+
+/* Set max packet interval between key rotations */
+void picoquic_set_crypto_epoch_length(picoquic_cnx_t* cnx, uint64_t crypto_epoch_length_max);
+uint64_t picoquic_get_crypto_epoch_length(picoquic_cnx_t* cnx);
 
 void picoquic_cnx_set_pmtud_required(picoquic_cnx_t* cnx, int is_pmtud_required);
 

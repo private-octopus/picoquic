@@ -35,6 +35,7 @@
 #include "logwriter.h"
 #include "csv.h"
 #include "qlog.h"
+#include "picoquictest.h"
 
 #define RANDOM_PUBLIC_TEST_SEED 0xDEADBEEFCAFEC001ull
 
@@ -91,6 +92,11 @@ static test_api_stream_desc_t test_scenario_sustained[] = {
     { 8, 4, 257, 1000000 },
     { 12, 8, 257, 1000000 },
     { 16, 12, 257, 1000000 }
+};
+
+static test_api_stream_desc_t test_scenario_key_rotation[] = {
+    { 4, 0, 257, 1000000 },
+    { 8, 4, 1000000, 257 }
 };
 
 static test_api_stream_desc_t test_scenario_many_streams[] = {
@@ -5963,6 +5969,76 @@ int key_rotation_test()
     }
 
     return ret;
+}
+
+static int key_rotation_auto_one(uint64_t epoch_length, int client_test)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    int nb_trials = 0;
+    int nb_inactive = 0;
+    int max_trials = 100000;
+    uint64_t rotation_sequence = 100;
+    uint64_t injection_sequence = 50;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = PICOQUIC_ERROR_MEMORY;
+    }
+
+    if (ret == 0) {
+        if (client_test) {
+            picoquic_set_crypto_epoch_length(test_ctx->cnx_client, epoch_length);
+        }
+        else {
+            picoquic_set_default_crypto_epoch_length(test_ctx->qserver, epoch_length);
+        }
+        /* Run a basic test scenario */
+
+        ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+            test_scenario_key_rotation, sizeof(test_scenario_key_rotation), 0, 0, 0, 0, 2000000);
+    }
+
+    if (ret == 0) {
+        uint64_t nb_rotation_expected;
+        uint64_t nb_rotation_max;
+        uint64_t nb_packets;
+        picoquic_cnx_t* cnx = (client_test) ? test_ctx->cnx_client : test_ctx->cnx_server;
+
+        nb_packets = cnx->pkt_ctx[picoquic_packet_context_application].send_sequence;
+        nb_rotation_expected = nb_packets / (epoch_length + 10);
+        nb_rotation_max = nb_packets / (epoch_length - 10);
+
+        if (nb_rotation_expected > cnx->nb_crypto_key_rotations) {
+            DBG_PRINTF("Only %" PRIu64 " key rotations completed instead of at least %" PRIu64 "\n",
+                cnx->nb_crypto_key_rotations, nb_rotation_expected);
+            ret = -1;
+        }
+        else if (nb_rotation_max < cnx->nb_crypto_key_rotations) {
+            DBG_PRINTF("Over %" PRIu64 " key rotations completed instead of at most %" PRIu64 "\n",
+                cnx->nb_crypto_key_rotations, nb_rotation_expected);
+            ret = -1;
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+int key_rotation_auto_server()
+{
+    return key_rotation_auto_one(300, 0);
+}
+
+int key_rotation_auto_client()
+{
+    return key_rotation_auto_one(400, 1);
 }
 
 /*

@@ -960,6 +960,20 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+        
+        TEST_METHOD(key_rotation_server)
+        {
+            int ret = key_rotation_auto_server();
+
+            Assert::AreEqual(ret, 0);
+        }
+        
+        TEST_METHOD(key_rotation_client)
+        {
+            int ret = key_rotation_auto_client();
+
+            Assert::AreEqual(ret, 0);
+        }
 
         TEST_METHOD(key_rotation_stress)
         {
