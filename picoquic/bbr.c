@@ -750,6 +750,7 @@ static void picoquic_bbr_notify(
                 picoquic_hystart_loss_test(&bbr_state->rtt_filter, notification)) {
                 BBRExitStartupLongRtt(bbr_state, path_x, current_time);
             }
+            break;
         case picoquic_congestion_notification_spurious_repeat:
             break;
         case picoquic_congestion_notification_rtt_measurement:

@@ -1449,8 +1449,15 @@ int picoquic_retransmit_needed(picoquic_cnx_t* cnx,
                                 0, 0, 0, lost_packet_number, current_time);
                         }
                     }
-
-                    break;
+                    
+                    if (length <= packet->offset) {
+                        /* Pace down the next retransmission so as to not pile up error upon error */
+                        length = 0;
+                        path_x->pacing_bucket_nanosec -= path_x->pacing_packet_time_nanosec;
+                    }
+                    else {
+                        break;
+                    }
                 }
             }
         }
