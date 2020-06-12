@@ -5974,12 +5974,6 @@ int key_rotation_test()
 static int key_rotation_auto_one(uint64_t epoch_length, int client_test)
 {
     uint64_t simulated_time = 0;
-    uint64_t loss_mask = 0;
-    int nb_trials = 0;
-    int nb_inactive = 0;
-    int max_trials = 100000;
-    uint64_t rotation_sequence = 100;
-    uint64_t injection_sequence = 50;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
