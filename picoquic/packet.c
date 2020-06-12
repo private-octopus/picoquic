@@ -516,6 +516,7 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
                     cnx->crypto_rotation_time_guard = current_time + cnx->path[0]->retransmit_timer;
                     cnx->crypto_rotation_sequence = ph->pn64;
                     picoquic_apply_rotated_keys(cnx, 0);
+                    cnx->nb_crypto_key_rotations++;
 
                     if (cnx->crypto_context_new.aead_encrypt != NULL) {
                         /* If that move was not already validated, move to the new encryption keys */

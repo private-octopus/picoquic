@@ -3070,6 +3070,18 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
         path_x->path_cid_rotated = 1;
     }
 
+    /* If the number of packets sent is larger that the max length of
+     * a crypto epoch, prepare a key rotation */
+    if (cnx->pkt_ctx[picoquic_packet_context_application].send_sequence >
+        cnx->crypto_epoch_sequence + cnx->crypto_epoch_length_max &&
+        cnx->crypto_epoch_sequence <
+        cnx->pkt_ctx[picoquic_packet_context_application].first_sack_item.end_of_sack_range) {
+        if (picoquic_start_key_rotation(cnx) != 0) {
+            picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid, "Cannot start key rotation after %"PRIu64" packets",
+                cnx->pkt_ctx[picoquic_packet_context_application].send_sequence);
+        }
+    }
+
     /* The first action is normally to retransmit lost packets. But if retransmit follows an
      * MTU drop, the stream frame will be fragmented and a fragment will be queued as a
      * misc frame. These fragments should have chance to go out before more retransmit is

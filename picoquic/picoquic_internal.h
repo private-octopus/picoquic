@@ -83,6 +83,8 @@ extern "C" {
 #define PICOQUIC_CWIN_INITIAL (10 * PICOQUIC_MAX_PACKET_SIZE)
 #define PICOQUIC_CWIN_MINIMUM (2 * PICOQUIC_MAX_PACKET_SIZE)
 
+#define PICOQUIC_DEFAULT_CRYPTO_EPOCH_LENGTH (1<<22)
+
 #define PICOQUIC_SPIN_RESERVE_MOD_256 17
 
 #define PICOQUIC_CHALLENGE_REPEAT_MAX 3
@@ -478,6 +480,7 @@ typedef struct st_picoquic_quic_t {
     uint32_t padding_minsize_default;
     uint32_t sequence_hole_pseudo_period; /* Optimistic ack defense */
     picoquic_spinbit_version_enum default_spin_policy;
+    uint64_t crypto_epoch_length_max; /* Default packet interval between key rotations */
     /* Flags */
     unsigned int check_token : 1;
     unsigned int provide_token : 1;
@@ -943,6 +946,7 @@ typedef struct st_picoquic_cnx_t {
 
     /* TLS context, TLS Send Buffer, streams, epochs */
     void* tls_ctx;
+    uint64_t crypto_epoch_length_max;
     uint64_t crypto_epoch_sequence;
     uint64_t crypto_rotation_sequence;
     uint64_t crypto_rotation_time_guard;
@@ -967,6 +971,7 @@ typedef struct st_picoquic_cnx_t {
     uint32_t nb_zero_rtt_received;
     uint64_t nb_retransmission_total;
     uint64_t nb_spurious;
+    uint64_t nb_crypto_key_rotations;
     unsigned int cwin_blocked : 1;
     unsigned int flow_blocked : 1;
     unsigned int stream_blocked : 1;
