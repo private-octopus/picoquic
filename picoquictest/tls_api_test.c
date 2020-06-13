@@ -7247,7 +7247,7 @@ int bbr_performance_test()
 
 int bbr_slow_long_test()
 {
-    uint64_t max_completion_time = 82500000;
+    uint64_t max_completion_time = 81000000;
     uint64_t latency = 300000;
     uint64_t jitter = 3000;
     uint64_t buffer = 2 * (latency + jitter);
@@ -7358,7 +7358,7 @@ int satellite_basic_test()
 int satellite_loss_test()
 {
     /* Should be less than 10 sec per draft etosat. */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 8700000, 250, 3, 0, 1);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 8000000, 250, 3, 0, 1);
 }
 
 int satellite_jitter_test()
@@ -8724,14 +8724,14 @@ int app_limit_cc_test()
         picoquic_bbr_algorithm,
         picoquic_fastcc_algorithm };
     uint64_t max_completion_times[] = {
+        21000000,
         23000000,
-        24000000,
-        22000000,
-        22000000,
-        39000000 };
+        21000000,
+        21000000,
+        27000000 };
     int ret = 0;
 
-    for (size_t i = 1; i < sizeof(ccalgos) / sizeof(picoquic_congestion_algorithm_t*); i++) {
+    for (size_t i = 0; i < sizeof(ccalgos) / sizeof(picoquic_congestion_algorithm_t*); i++) {
         ret = app_limit_cc_test_one(ccalgos[i], max_completion_times[i]);
         if (ret != 0) {
             DBG_PRINTF("Appplication limited congestion test fails for <%s>", ccalgos[i]->congestion_algorithm_id);
