@@ -380,6 +380,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(ddos_amplification_0rtt)
+        {
+            int ret = ddos_amplification_0rtt_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(blackhole)
         {
             int ret = blackhole_test();

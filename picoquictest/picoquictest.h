@@ -218,6 +218,7 @@ int gbps_performance_test();
 int large_client_hello_test();
 int fast_nat_rebinding_test();
 int ddos_amplification_test();
+int ddos_amplification_0rtt_test();
 int blackhole_test();
 int no_ack_frequency_test();
 int connection_drop_test();
