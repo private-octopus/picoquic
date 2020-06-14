@@ -65,6 +65,10 @@ static test_api_stream_desc_t test_scenario_q2_and_r2[] = {
     { 8, 0, 531, 11000 }
 };
 
+static test_api_stream_desc_t test_scenario_q_and_r5000[] = {
+    { 4, 0, 257, 5000 }
+};
+
 static test_api_stream_desc_t test_scenario_very_long[] = {
     { 4, 0, 257, 1000000 }
 };
@@ -8025,12 +8029,13 @@ int large_client_hello_test()
  * of data sent by the client.
  */
 
-int ddos_amplification_test()
+int ddos_amplification_test_one(int use_0rtt)
 {
     uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     uint32_t proposed_version = PICOQUIC_INTEROP_VERSION_LATEST;
-    int ret = tls_api_init_ctx(&test_ctx, proposed_version, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+    int ret; 
     picoquictest_sim_packet_t* packet = picoquictest_sim_link_create_packet();
     size_t data_sent_by_client = 0;
     size_t data_sent_by_server = 0;
@@ -8038,10 +8043,68 @@ int ddos_amplification_test()
     int nb_loops = 0;
     int nb_inactive = 0;
 
+    ret = picoquic_save_tickets(NULL, simulated_time, ticket_file_name);
+
+    if (ret == 0) {
+        ret = tls_api_init_ctx(&test_ctx, proposed_version, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time,
+            ticket_file_name, NULL, 0, 0, 0);
+    }
+
     if (ret != 0 || packet == NULL)
     {
         DBG_PRINTF("Could not create the QUIC test contexts for V=%x\n", proposed_version);
         ret = -1;
+    }
+
+    if (ret == 0 && use_0rtt) {
+        /* Complete a first connection in order to obtain ticket and token for the client. */
+        if (ret == 0) {
+            ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_q_and_r5000, sizeof(test_scenario_q_and_r5000));
+        }
+
+        if (ret == 0) {
+            ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+
+            if (ret != 0) {
+                DBG_PRINTF("%", "Ticket grabbing connection failed\n");
+            }
+        }
+
+        if (ret == 0) {
+            /* Before closing, wait for the session ticket to arrive */
+            ret = session_resume_wait_for_ticket(test_ctx, &simulated_time);
+
+            /* Verify that the client has obtained a ticket */
+            if (ret != 0 || test_ctx->qclient->p_first_ticket == NULL) {
+                DBG_PRINTF("%s", "No resumption ticket obtained.\n");
+                ret = -1;
+            }
+        }
+
+        /* Delete this client connection and create a new one. */
+        if (ret == 0) {
+            /* Delete the old server connection */
+            picoquic_delete_cnx(test_ctx->cnx_server);
+            /* Delete the old client connection */
+            picoquic_delete_cnx(test_ctx->cnx_client);
+            /* re-create a client connection, this time picking up the required connection ID */
+            test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
+                picoquic_null_connection_id, picoquic_null_connection_id,
+                (struct sockaddr*) & test_ctx->server_addr, 0,
+                PICOQUIC_INTEROP_VERSION_LATEST, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
+            if (test_ctx->cnx_client == NULL) {
+                DBG_PRINTF("Could not create the second connection for version =  %08x\n", proposed_version);
+                ret = -1;
+            }
+            else {
+                ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+            }
+        }
+
+        /* Set a scenario for sending packets from the server  */
+        if (ret == 0) {
+            ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_q_and_r5000, sizeof(test_scenario_q_and_r5000));
+        }
     }
 
     if (ret == 0) {
@@ -8131,6 +8194,16 @@ int ddos_amplification_test()
     }
 
     return ret;
+}
+
+int ddos_amplification_test()
+{
+    return ddos_amplification_test_one(0);
+}
+
+int ddos_amplification_0rtt_test()
+{
+    return ddos_amplification_test_one(1);
 }
 
 /* ESNI Test. */
