@@ -674,8 +674,6 @@ static int picoquic_set_aead_from_secret(void ** v_aead,ptls_cipher_suite_t * ci
         DBG_PRINTF("AEAD %s IV (%d):\n", 
             (is_enc)?"Encryption":"Decryption",
             (int)cipher->aead->iv_size);
-        debug_dump(((ptls_aead_context_t *)(*v_aead))->static_iv, 
-            (int)cipher->aead->iv_size);
     }
 #endif
 
@@ -1916,6 +1914,8 @@ static void picoquic_setup_cleartext_aead_salt(size_t version_index, ptls_iovec_
     }
 }
 
+#if 0
+/* TODO: find a replacement for this test. */
 /* Compare AEAD context parameters. This is done just by comparing the IV,
  * which is accessible in the context */
 int picoquic_compare_cleartext_aead_contexts(picoquic_cnx_t* cnx1, picoquic_cnx_t* cnx2)
@@ -1941,6 +1941,7 @@ int picoquic_compare_cleartext_aead_contexts(picoquic_cnx_t* cnx1, picoquic_cnx_
 
     return ret;
 }
+#endif
 
 /* Input stream zero data to TLS context.
  *
