@@ -2365,7 +2365,7 @@ int http_stress_test_one(int do_corrupt, int do_drop)
             }
 
             for (size_t i = 0; ret == 0 && i < picohttp_nb_stress_clients; i++) {
-                if (ctx_client[i]->client_time < next_time && !ctx_client[i]->is_not_sending) {
+                if (ctx_client[i] != NULL && ctx_client[i]->client_time < next_time && !ctx_client[i]->is_not_sending) {
                     qready = ctx_client[i]->qclient;
                     ready_from = (struct sockaddr*) & ctx_client[i]->client_address;
                     next_time = ctx_client[i]->client_time;
@@ -2407,7 +2407,7 @@ int http_stress_test_one(int do_corrupt, int do_drop)
                 }
             }
 
-            if (client_id < picohttp_nb_stress_clients) {
+            if (client_id < picohttp_nb_stress_clients && ctx_client[client_id] != NULL) {
                 if (ctx_client[client_id]->is_dropped) {
                     uint64_t should_not_send = picoquic_test_uniform_random(&random_context, 5);
                     ctx_client[client_id]->is_not_sending = should_not_send == 3;
@@ -2446,7 +2446,7 @@ int http_stress_test_one(int do_corrupt, int do_drop)
                 else {
                     int is_matched = 0;
                     for (size_t i = 0; ret == 0 && i < picohttp_nb_stress_clients; i++) {
-                        if (!ctx_client[i]->is_dropped &&
+                        if (ctx_client[i] != NULL && !ctx_client[i]->is_dropped &&
                             picoquic_compare_addr((struct sockaddr*) & arrival->addr_to, (struct sockaddr*) & ctx_client[i]->client_address) == 0) {
                             /* submit to client */
                             ret = picoquic_incoming_packet(ctx_client[i]->qclient, arrival->bytes, arrival->length,
@@ -2477,13 +2477,15 @@ int http_stress_test_one(int do_corrupt, int do_drop)
     if (!do_corrupt && !do_drop) {
         /* verify that each client scenario is properly completed */
         for (size_t i = 0; ret == 0 && i < picohttp_nb_stress_clients; i++) {
-            if (!ctx_client[i]->callback_ctx.connection_ready) {
-                DBG_PRINTF("Connection #%d failed", (int)i);
-                ret = -1;
-            }
-            else if (!ctx_client[i]->callback_ctx.connection_closed) {
-                DBG_PRINTF("Connection #%d not closed", (int)i);
-                ret = -1;
+            if (ctx_client[i] != NULL) {
+                if (!ctx_client[i]->callback_ctx.connection_ready) {
+                    DBG_PRINTF("Connection #%d failed", (int)i);
+                    ret = -1;
+                }
+                else if (!ctx_client[i]->callback_ctx.connection_closed) {
+                    DBG_PRINTF("Connection #%d not closed", (int)i);
+                    ret = -1;
+                }
             }
         }
     }
