@@ -193,7 +193,7 @@ uint8_t * picoquic_encode_transport_param_prefered_address(uint8_t * bytes, uint
     picoquic_tp_prefered_address_t * prefered_address)
 {
     /* first compute the length */
-    uint64_t coded_length = 4u + 2u + 16u + 2u + 1u + prefered_address->connection_id.id_len + 16u;
+    uint64_t coded_length = ((uint64_t)(4 + 2 + 16 + 2 + 1)) + prefered_address->connection_id.id_len + ((uint64_t)16);
 
     if (bytes != NULL &&
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, picoquic_tp_server_preferred_address)) != NULL &&

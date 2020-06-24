@@ -2159,7 +2159,8 @@ typedef struct st_http_stress_client_context_t {
     picoquic_demo_callback_ctx_t callback_ctx;
     struct sockaddr_storage client_address;
     uint64_t client_time;
-
+    int is_dropped;
+    int is_not_sending;
 } http_stress_client_context_t;
 
 http_stress_client_context_t* http_stress_client_delete(http_stress_client_context_t* ctx)
@@ -2211,12 +2212,14 @@ http_stress_client_context_t* http_stress_client_create(size_t client_id, uint64
             picoquic_set_default_congestion_algorithm(ctx->qclient, picoquic_bbr_algorithm);
             picoquic_set_null_verifier(ctx->qclient);
 
-            i_cid.id_len = 8;
             id64 ^= (uint64_t)client_id;
             for (int i = 0; i < 8; i++) {
                 i_cid.id[i] = (uint8_t)id64;
                 id64 >>= 8;
             }
+
+            /* Use various values for local CID length*/
+            ctx->qclient->local_cnxid_length = client_id % 9;
 
             /* Create a client connection */
             ctx->cnx_client = picoquic_create_cnx(ctx->qclient, i_cid, picoquic_null_connection_id, server_address, *simulated_time, 0, PICOQUIC_TEST_FILE_SERVER_CERT, alpn, 1);
@@ -2271,7 +2274,7 @@ http_stress_client_context_t* http_stress_client_create(size_t client_id, uint64
 
 size_t picohttp_nb_stress_clients = 128;
 
-int http_stress_test()
+int http_stress_test_one(int do_corrupt, int do_drop)
 {
     /* initialize the server, address 1::1 */
     /* Create QUIC context */
@@ -2287,6 +2290,7 @@ int http_stress_test()
     picoquictest_sim_link_t* lan = NULL;
     struct sockaddr_storage server_address;
     uint64_t server_time = 0;
+    uint64_t random_context = 0x12345678;
 
     ret = picoquic_store_text_addr(&server_address, "1::1", 443);
 
@@ -2361,7 +2365,7 @@ int http_stress_test()
             }
 
             for (size_t i = 0; ret == 0 && i < picohttp_nb_stress_clients; i++) {
-                if (ctx_client[i]->client_time < next_time) {
+                if (ctx_client[i]->client_time < next_time && !ctx_client[i]->is_not_sending) {
                     qready = ctx_client[i]->qclient;
                     ready_from = (struct sockaddr*) & ctx_client[i]->client_address;
                     next_time = ctx_client[i]->client_time;
@@ -2404,9 +2408,15 @@ int http_stress_test()
             }
 
             if (client_id < picohttp_nb_stress_clients) {
-                ctx_client[client_id]->client_time = picoquic_get_next_wake_time(ctx_client[client_id]->qclient, simulated_time);
-                if (ctx_client[client_id]->client_time == UINT64_MAX) {
-                    DBG_PRINTF("End of client %d", (int)client_id);
+                if (ctx_client[client_id]->is_dropped) {
+                    uint64_t should_not_send = picoquic_test_uniform_random(&random_context, 5);
+                    ctx_client[client_id]->is_not_sending = should_not_send == 3;
+                }
+                if (!ctx_client[client_id]->is_not_sending) {
+                    ctx_client[client_id]->client_time = picoquic_get_next_wake_time(ctx_client[client_id]->qclient, simulated_time);
+                    if (ctx_client[client_id]->client_time == UINT64_MAX) {
+                        DBG_PRINTF("End of client %d", (int)client_id);
+                    }
                 }
             }
             else {
@@ -2420,6 +2430,13 @@ int http_stress_test()
             picoquictest_sim_packet_t* arrival = picoquictest_sim_link_dequeue(lan, simulated_time);
 
             if (arrival != NULL) {
+                if (do_corrupt) {
+                    /* simulate packet corruption in flight */
+                    uint64_t lost_byte = picoquic_test_uniform_random(&random_context, arrival->length * 4);
+                    if (lost_byte < arrival->length) {
+                        arrival->bytes[lost_byte] ^= 0xFF;
+                    }
+                }
                 if (picoquic_compare_addr((struct sockaddr*) & arrival->addr_to, (struct sockaddr*) & server_address) == 0) {
                     /* submit to server */
                     ret = picoquic_incoming_packet(qserver, arrival->bytes, arrival->length,
@@ -2429,12 +2446,18 @@ int http_stress_test()
                 else {
                     int is_matched = 0;
                     for (size_t i = 0; ret == 0 && i < picohttp_nb_stress_clients; i++) {
-                        if (picoquic_compare_addr((struct sockaddr*) & arrival->addr_to, (struct sockaddr*) & ctx_client[i]->client_address) == 0) {
+                        if (!ctx_client[i]->is_dropped &&
+                            picoquic_compare_addr((struct sockaddr*) & arrival->addr_to, (struct sockaddr*) & ctx_client[i]->client_address) == 0) {
                             /* submit to client */
                             ret = picoquic_incoming_packet(ctx_client[i]->qclient, arrival->bytes, arrival->length,
                                 (struct sockaddr*) & arrival->addr_from, (struct sockaddr*) & arrival->addr_to, 0, 0, simulated_time);
                             ctx_client[i]->client_time = picoquic_get_next_wake_time(ctx_client[i]->qclient, simulated_time);
                             is_matched = 1;
+
+                            if (do_drop && ctx_client[i]->qclient->cnx_list != NULL) {
+                                uint64_t should_drop = picoquic_test_uniform_random(&random_context, 11);
+                                ctx_client[i]->is_dropped = should_drop == 3;
+                            }
                         }
                     }
                     if (!is_matched) {
@@ -2451,15 +2474,17 @@ int http_stress_test()
         }
     }
 
-    /* verify that each client scenario is properly completed */
-    for (size_t i = 0; ret == 0 && i < picohttp_nb_stress_clients; i++) {
-        if (!ctx_client[i]->callback_ctx.connection_ready) {
-            DBG_PRINTF("Connection #%d failed", (int)i);
-            ret = -1;
-        }
-        else if (!ctx_client[i]->callback_ctx.connection_closed) {
-            DBG_PRINTF("Connection #%d not closed", (int)i);
-            ret = -1;
+    if (!do_corrupt && !do_drop) {
+        /* verify that each client scenario is properly completed */
+        for (size_t i = 0; ret == 0 && i < picohttp_nb_stress_clients; i++) {
+            if (!ctx_client[i]->callback_ctx.connection_ready) {
+                DBG_PRINTF("Connection #%d failed", (int)i);
+                ret = -1;
+            }
+            else if (!ctx_client[i]->callback_ctx.connection_closed) {
+                DBG_PRINTF("Connection #%d not closed", (int)i);
+                ret = -1;
+            }
         }
     }
 
@@ -2489,4 +2514,19 @@ int http_stress_test()
     }
 
     return ret;
+}
+
+int http_stress_test()
+{
+    return http_stress_test_one(0, 0);
+}
+
+int http_corrupt_test()
+{
+    return http_stress_test_one(1, 0);
+}
+
+int http_drop_test()
+{
+    return http_stress_test_one(0, 1);
 }

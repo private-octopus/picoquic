@@ -3768,13 +3768,17 @@ int picoquic_prepare_next_packet(picoquic_quic_t* quic,
 
             if (ret == PICOQUIC_ERROR_DISCONNECTED) {
                 ret = 0;
+
+                picoquic_log_app_message(quic, &cnx->initial_cnxid, "Closed. Retrans= %d, spurious= %d, max sp gap = %d, max sp delay = %d\n",
+                    (int)cnx->nb_retransmission_total, (int)cnx->nb_spurious,
+                    (int)cnx->path[0]->max_reorder_gap, (int)cnx->path[0]->max_spurious_rtt);
+
                 if (quic->F_log != NULL) {
-                    fprintf(quic->F_log, "%llx: ", (unsigned long long)picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
-                    picoquic_log_time(quic->F_log, cnx, picoquic_current_time(), "", " : ");
-                    fprintf(quic->F_log, "Closed. Retrans= %d, spurious= %d, max sp gap = %d, max sp delay = %d\n",
-                        (int)cnx->nb_retransmission_total, (int)cnx->nb_spurious,
-                        (int)cnx->path[0]->max_reorder_gap, (int)cnx->path[0]->max_spurious_rtt);
                     fflush(quic->F_log);
+                }
+
+                if (quic->f_binlog != NULL) {
+                    fflush(quic->f_binlog);
                 }
 
                 picoquic_delete_cnx(cnx);
