@@ -1462,7 +1462,7 @@ uint8_t* picoquic_format_stream_frame_for_retransmit(picoquic_cnx_t* cnx,
                 if (after_length != NULL && after_length < bytes_max &&
                     (available = bytes_max - after_length) > 0) {
                     size_t remain = data_length - available;
-                    uint8_t trial_pad[32]; /* max header = 1 + 8(stream) + 8(offset) +8(length)*/
+                    uint8_t trial_pad[32] = { 0 }; /* max header = 1 + 8(stream) + 8(offset) +8(length)*/
                     uint8_t* trial_max = trial_pad + sizeof(trial_pad);
                     uint8_t* trial_next;
                     size_t trial_size = 0;

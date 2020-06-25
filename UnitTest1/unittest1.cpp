@@ -1437,6 +1437,18 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(http_corrupt) {
+            int ret = http_corrupt_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(http_drop) {
+            int ret = http_drop_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(http_esni) {
             int ret = http_esni_test();
 

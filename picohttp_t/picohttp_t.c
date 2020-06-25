@@ -66,7 +66,9 @@ static const picoquic_test_def_t test_table[] = {
     { "h09_lone_fin", h09_lone_fin_test },
     { "h3_long_file_name", h3_long_file_name_test },
     { "h3_multi_file", h3_multi_file_test },
-    { "http_stress", http_stress_test }
+    { "http_stress", http_stress_test },
+    { "http_corrupt", http_corrupt_test},
+    { "http_drop", http_drop_test}
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);
@@ -228,6 +230,20 @@ int main(int argc, char** argv)
         if (ret == 0 && (stress_clients > 0 || nb_multi_file > 0)) {
             if (optind >= argc && found_exclusion == 0) {
                 for (size_t i = 0; i < nb_tests; i++) {
+                    if (strcmp(test_table[i].test_name, "http_drop") == 0)
+                    {
+                        if (do_stress == 0) {
+                            test_status[i] = test_excluded;
+                        }
+                    }
+                    else
+                    if (strcmp(test_table[i].test_name, "http_corrupt") == 0)
+                    {
+                        if (do_stress == 0) {
+                            test_status[i] = test_excluded;
+                        }
+                    }
+                    else
                     if (strcmp(test_table[i].test_name, "http_stress") == 0)
                     {
                         if (do_stress == 0) {

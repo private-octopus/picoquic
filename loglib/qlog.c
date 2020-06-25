@@ -1106,7 +1106,7 @@ int qlog_cc_update(uint64_t time, bytestream* s, void* ptr)
         if (rtt_sample != ctx->rtt_sample) {
             fprintf(f, "%s\"latest_rtt\": %" PRIu64, comma, rtt_sample);
             ctx->rtt_sample = rtt_sample;
-            comma = ",";
+            /* comma = ","; (not useful since last block of function) */
         }
 
         fprintf(f, "}]");

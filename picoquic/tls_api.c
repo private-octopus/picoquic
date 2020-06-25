@@ -2171,6 +2171,10 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx)
         }
     }
 
+
+    /* Reset indication of current connection */
+    cnx->quic->cnx_in_progress = NULL;
+
     return ret;
 }
 
