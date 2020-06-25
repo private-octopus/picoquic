@@ -205,7 +205,7 @@ int migration_test_one(int mtu_drop)
 
     /* Check that the default client address on the server was migrated,
      * as well as the default source address on the client */
-    if (test_ctx->cnx_server == NULL) {
+    if (ret == 0 && test_ctx->cnx_server == NULL) {
         /* No server connection! */
         ret = -1;
     }

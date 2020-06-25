@@ -242,6 +242,8 @@ int h3zero_satellite_test();
 int h09_satellite_test();
 int h09_lone_fin_test();
 int http_stress_test();
+int http_corrupt_test();
+int http_drop_test();
 int http_esni_test();
 int h3_long_file_name_test();
 int h3_multi_file_test();

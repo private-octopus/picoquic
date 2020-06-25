@@ -128,9 +128,9 @@ void picohash_delete_key(picohash_table* hash_table, void* key, int delete_key_t
 void picohash_delete(picohash_table* hash_table, int delete_key_too)
 {
     for (uint32_t i = 0; i < hash_table->nb_bin; i++) {
-        for (picohash_item * item = hash_table->hash_bin[i]; item != NULL;) {
-
-            picohash_item * tmp = item;
+        picohash_item* item = hash_table->hash_bin[i];
+        while (item != NULL) {
+            picohash_item* tmp = item;
             item = item->next_in_bin;
 
             if (delete_key_too) {

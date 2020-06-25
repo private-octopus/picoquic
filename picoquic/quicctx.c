@@ -2041,7 +2041,6 @@ picoquic_local_cnxid_t* picoquic_create_local_cnxid(picoquic_cnx_t* cnx, picoqui
     int is_unique = 0;
 
     l_cid = (picoquic_local_cnxid_t*)malloc(sizeof(picoquic_local_cnxid_t));
-    memset(l_cid, 0, sizeof(picoquic_local_cnxid_t));
 
     if (l_cid != NULL) {
         memset(l_cid, 0, sizeof(picoquic_local_cnxid_t));
@@ -2838,17 +2837,25 @@ void * picoquic_get_callback_context(picoquic_cnx_t * cnx)
 
 picoquic_misc_frame_header_t* picoquic_create_misc_frame(const uint8_t* bytes, size_t length, int is_pure_ack)
 {
-    uint8_t* misc_frame = (uint8_t*)malloc(sizeof(picoquic_misc_frame_header_t) + length);
+    size_t l_alloc = sizeof(picoquic_misc_frame_header_t) + length;
 
-    if (misc_frame == NULL) {
+    if (l_alloc < sizeof(picoquic_misc_frame_header_t)) {
         return NULL;
-    } else {
-        picoquic_misc_frame_header_t* head = (picoquic_misc_frame_header_t*)misc_frame;
-        memset(head, 0, sizeof(picoquic_misc_frame_header_t));
-        head->length = length;
-        head->is_pure_ack = is_pure_ack;
-        memcpy(misc_frame + sizeof(picoquic_misc_frame_header_t), bytes, length);
-        return head;
+    }
+    else {
+        uint8_t* misc_frame = (uint8_t*)malloc(l_alloc);
+
+        if (misc_frame == NULL) {
+            return NULL;
+        }
+        else {
+            picoquic_misc_frame_header_t* head = (picoquic_misc_frame_header_t*)misc_frame;
+            memset(head, 0, sizeof(picoquic_misc_frame_header_t));
+            head->length = length;
+            head->is_pure_ack = is_pure_ack;
+            memcpy(misc_frame + sizeof(picoquic_misc_frame_header_t), bytes, length);
+            return head;
+        }
     }
 }
 
@@ -3075,7 +3082,6 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
     picoquic_cnxid_stash_t* stashed_cnxid;
 
     if (cnx != NULL) {
-
         binlog_close_connection(cnx);
 
         if (cnx->cnx_state < picoquic_state_disconnected) {

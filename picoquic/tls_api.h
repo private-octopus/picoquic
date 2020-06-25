@@ -107,7 +107,10 @@ void picoquic_crypto_context_free(picoquic_crypto_context_t * ctx);
 void * picoquic_setup_test_aead_context(int is_encrypt, const uint8_t * secret);
 void * picoquic_pn_enc_create_for_test(const uint8_t * secret);
 
+#if 0
+/* TODO: find replacement for this test */
 int picoquic_compare_cleartext_aead_contexts(picoquic_cnx_t* cnx1, picoquic_cnx_t* cnx2);
+#endif
 
 int picoquic_create_cnxid_reset_secret(picoquic_quic_t* quic, picoquic_connection_id_t * cnx_id,
     uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE]);
