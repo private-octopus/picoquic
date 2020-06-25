@@ -1152,9 +1152,7 @@ int picoquic_send_through_server_sockets(
 }
 
 int picoquic_get_server_address(const char* ip_address_text, int server_port,
-    struct sockaddr_storage* server_address,
-    int* server_addr_length,
-    int* is_name)
+    struct sockaddr_storage* server_address, int* is_name)
 {
     int ret = 0;
     struct sockaddr_in* ipv4_dest = (struct sockaddr_in*)server_address;
@@ -1163,18 +1161,15 @@ int picoquic_get_server_address(const char* ip_address_text, int server_port,
     /* get the IP address of the server */
     memset(server_address, 0, sizeof(struct sockaddr_storage));
     *is_name = 0;
-    *server_addr_length = 0;
 
     if (inet_pton(AF_INET, ip_address_text, &ipv4_dest->sin_addr) == 1) {
         /* Valid IPv4 address */
         ipv4_dest->sin_family = AF_INET;
         ipv4_dest->sin_port = htons((unsigned short)server_port);
-        *server_addr_length = sizeof(struct sockaddr_in);
     } else if (inet_pton(AF_INET6, ip_address_text, &ipv6_dest->sin6_addr) == 1) {
         /* Valid IPv6 address */
         ipv6_dest->sin6_family = AF_INET6;
         ipv6_dest->sin6_port = htons((unsigned short)server_port);
-        *server_addr_length = sizeof(struct sockaddr_in6);
     } else {
         /* Server is described by name. Do a lookup for the IP address,
         * and then use the name as SNI parameter */
@@ -1201,7 +1196,6 @@ int picoquic_get_server_address(const char* ip_address_text, int server_port,
 #else
                 ipv4_dest->sin_addr.s_addr = ((struct sockaddr_in*)result->ai_addr)->sin_addr.s_addr;
 #endif
-                *server_addr_length = sizeof(struct sockaddr_in);
                 break;
             case AF_INET6:
                 ipv6_dest->sin6_family = AF_INET6;
@@ -1209,7 +1203,6 @@ int picoquic_get_server_address(const char* ip_address_text, int server_port,
                 memcpy(&ipv6_dest->sin6_addr,
                     &((struct sockaddr_in6*)result->ai_addr)->sin6_addr,
                     sizeof(ipv6_dest->sin6_addr));
-                *server_addr_length = sizeof(struct sockaddr_in6);
                 break;
             default:
                 fprintf(stderr, "Error getting IPv6 address for %s, family = %d\n",

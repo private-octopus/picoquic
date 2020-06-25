@@ -22,7 +22,7 @@
 #include "picosocks.h"
 #include "picoquic_utils.h"
 
-static int socket_ping_pong(SOCKET_TYPE fd, struct sockaddr* server_addr, int server_address_length,
+static int socket_ping_pong(SOCKET_TYPE fd, struct sockaddr* server_addr,
     picoquic_server_sockets_t* server_sockets)
 {
     int ret = 0;
@@ -37,7 +37,8 @@ static int socket_ping_pong(SOCKET_TYPE fd, struct sockaddr* server_addr, int se
     socklen_t dest_length;
     unsigned long dest_if;
     struct sockaddr_storage addr_back;
-    socklen_t back_length;
+    socklen_t back_length; 
+    int server_address_length = (server_addr->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
 
     for (size_t i = 0; i < sizeof(message);) {
         for (int j = 0; j < 64 && i < sizeof(message); j += 8, i++) {
@@ -114,12 +115,11 @@ static int socket_test_one(char const* addr_text, int server_port, int should_be
 {
     int ret = 0;
     struct sockaddr_storage server_address;
-    int server_address_length;
     int is_name;
     SOCKET_TYPE fd = INVALID_SOCKET;
 
     /* Resolve the server address -- check the "is_name" property */
-    ret = picoquic_get_server_address(addr_text, server_port, &server_address, &server_address_length, &is_name);
+    ret = picoquic_get_server_address(addr_text, server_port, &server_address, &is_name);
 
     if (ret == 0) {
         if (is_name != should_be_name) {
@@ -129,7 +129,7 @@ static int socket_test_one(char const* addr_text, int server_port, int should_be
             if (fd == INVALID_SOCKET) {
                 ret = -1;
             } else {
-                ret = socket_ping_pong(fd, (struct sockaddr*)&server_address, server_address_length, server_sockets);
+                ret = socket_ping_pong(fd, (struct sockaddr*)&server_address, server_sockets);
             }
 
             SOCKET_CLOSE(fd);

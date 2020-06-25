@@ -419,13 +419,13 @@ int quic_client(const char* ip_address_text, int server_port,
     picoquic_demo_callback_ctx_t callback_ctx;
     SOCKET_TYPE fd = INVALID_SOCKET;
     struct sockaddr_storage server_address;
+    int server_addr_length = 0;
     struct sockaddr_storage client_address;
     struct sockaddr_storage packet_from;
     struct sockaddr_storage packet_to;
     unsigned long if_index_to;
     socklen_t from_length;
     socklen_t to_length;
-    int server_addr_length = 0;
     uint8_t buffer[1536];
     uint8_t send_buffer[1536];
     size_t send_length = 0;
@@ -485,7 +485,8 @@ int quic_client(const char* ip_address_text, int server_port,
     }
 
     if (ret == 0) {
-        ret = picoquic_get_server_address(ip_address_text, server_port, &server_address, &server_addr_length, &is_name);
+        ret = picoquic_get_server_address(ip_address_text, server_port, &server_address, &is_name);
+        server_addr_length = (server_address.ss_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
         if (sni == NULL && is_name != 0) {
             sni = ip_address_text;
         }

@@ -178,7 +178,6 @@ int picoquic_send_through_server_sockets(
 
 int picoquic_get_server_address(const char* ip_address_text, int server_port,
     struct sockaddr_storage* server_address,
-    int* server_addr_length,
     int* is_name);
 
 /* Wireshark needs the session keys in order to decrypt and analyze packets.
