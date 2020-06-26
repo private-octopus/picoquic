@@ -159,8 +159,8 @@ typedef struct st_picoquic_bbr_state_t {
     double pacing_gain;
     double cwnd_gain;
     double pacing_rate;
-    int cycle_index;
-    int cycle_start;
+    unsigned int cycle_index;
+    unsigned int cycle_start;
     int round_count;
     int full_bw_count;
     unsigned int filled_pipe : 1;
@@ -234,6 +234,8 @@ static void picoquic_bbr_reset(picoquic_bbr_state_t* bbr_state, picoquic_path_t*
 
     bbr_state->rt_prop_stamp = current_time;
     bbr_state->cycle_stamp = current_time;
+    bbr_state->cycle_index = 0;
+    bbr_state->cycle_start = 0;
 
     BBREnterStartup(bbr_state);
     BBRSetSendQuantum(bbr_state, path_x);
@@ -374,7 +376,7 @@ void BBRAdvanceCyclePhase(picoquic_bbr_state_t* bbr_state, uint64_t current_time
     bbr_state->cycle_stamp = current_time;
     bbr_state->cycle_index++;
     if (bbr_state->cycle_index >= BBR_GAIN_CYCLE_LEN) {
-        int start = bbr_state->cycle_start;
+        unsigned int start = bbr_state->cycle_start;
         if (bbr_state->btl_bw_increased) {
             bbr_state->btl_bw_increased = 0;
             start++;
@@ -419,7 +421,7 @@ void BBRCheckFullPipe(picoquic_bbr_state_t* bbr_state, int rs_is_app_limited)
 
 void BBREnterProbeBW(picoquic_bbr_state_t* bbr_state, uint64_t current_time)
 {
-    int start = 0;
+    unsigned int start = 0;
     bbr_state->state = picoquic_bbr_alg_probe_bw;
     bbr_state->pacing_gain = 1.0;
     bbr_state->cwnd_gain = 2.0;
@@ -469,6 +471,13 @@ void BBRExitStartupLongRtt(picoquic_bbr_state_t* bbr_state, picoquic_path_t* pat
     bbr_state->full_bw = bbr_state->btl_bw;
     bbr_state->full_bw_count = 3;
     bbr_state->filled_pipe = 1;
+    /* Check the RTT measurement for pathological cases */
+    if ((bbr_state->rtt_filter.is_init || bbr_state->rtt_filter.sample_current > 0) &&
+        bbr_state->rt_prop > 30000000 &&
+        bbr_state->rtt_filter.sample_max < bbr_state->rt_prop) {
+        bbr_state->rt_prop = bbr_state->rtt_filter.sample_max;
+        bbr_state->rt_prop_stamp = current_time;
+    }
     /* Enter drain */
     BBREnterDrain(bbr_state);
     /* If there were just few bytes in transit, enter probe */
