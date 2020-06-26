@@ -83,6 +83,8 @@ typedef struct st_sample_client_ctx_t {
     sample_client_stream_ctx_t* first_stream;
     sample_client_stream_ctx_t* last_stream;
     int nb_files;
+    int nb_files_received;
+    int nb_files_failed;
     int is_disconnected;
 } sample_client_ctx_t;
 
@@ -142,10 +144,10 @@ int sample_client_callback(picoquic_cnx_t* cnx,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx)
 {
     int ret = 0;
-    sample_client_ctx_t* ctx = (sample_client_ctx_t*)callback_ctx;
+    sample_client_ctx_t* client_ctx = (sample_client_ctx_t*)callback_ctx;
     sample_client_stream_ctx_t* stream_ctx = (sample_client_stream_ctx_t*)v_stream_ctx;
 
-    if (callback_ctx == NULL) {
+    if (client_ctx == NULL) {
         /* This should never happen, because the callback context for the client is initialized 
          * when creating the client connection. */
         return -1;
@@ -156,31 +158,149 @@ int sample_client_callback(picoquic_cnx_t* cnx,
         case picoquic_callback_stream_data:
         case picoquic_callback_stream_fin:
             /* Data arrival on stream #x, maybe with fin mark */
+            if (stream_ctx == NULL) {
+                /* This is unexpected, as all contexts were declared when initializing the
+                 * connection. */
+                return -1;
+            }
+            else if (!stream_ctx->is_name_sent) {
+                /* Unexpected: should not receive data before sending the file name to the server */
+                return -1;
+            }
+            else if (stream_ctx->is_stream_reset || stream_ctx->is_stream_finished) {
+                /* Unexpected: receive after fin */
+                return -1;
+            }
+            else
+            {
+                if (stream_ctx->F == NULL) {
+                    /* Open the file to receive the data. This is done at the last possible moment,
+                     * to minimize the number of files open simultaneously */
+                    char file_path[1024];
+#ifdef _WINDOWS
+                    char* sep = "\\";
+#else
+                    char* sep = "/";
+#endif
+                    if (picoquic_sprintf(file_path, sizeof(file_path), NULL, "%s%s%s",
+                        client_ctx->default_dir, sep, client_ctx->file_names[stream_ctx->file_rank]) != 0) {
+                        /* Unexpected: could not format the file name */
+                        ret = -1;
+                    }
+                    else {
+                        stream_ctx->F = picoquic_file_open(file_path, "wb");
+
+                        if (stream_ctx->F == NULL) {
+                            /* Could not open the file */
+                            ret = -1;
+                        }
+                    }
+                }
+
+                if (ret == 0 && length > 0) {
+                    if (fwrite(bytes, length, 1, stream_ctx->F) != 1) {
+                        /* Could not write file to disk */
+                        ret = -1;
+                    }
+                }
+
+                if (ret == 0 && fin_or_event == picoquic_callback_stream_fin) {
+                    stream_ctx->F = picoquic_file_close(stream_ctx->F);
+                    stream_ctx->is_stream_finished = 1;
+                    client_ctx->nb_files_received++;
+
+                    if ((client_ctx->nb_files_received + client_ctx->nb_files_failed) >= client_ctx->nb_files) {
+                        /* everything is done, close the connection */
+                        ret = picoquic_close(cnx, 0);
+                    }
+                }
+            }
             break;
-        case picoquic_callback_stream_reset: /* Server reset stream #x */
         case picoquic_callback_stop_sending: /* Should not happen, treated as reset */
             /* Mark stream as abandoned, close the file, etc. */
             picoquic_reset_stream(cnx, stream_id, 0);
+            /* Fall through */
+        case picoquic_callback_stream_reset: /* Server reset stream #x */
+            if (stream_ctx == NULL) {
+                /* This is unexpected, as all contexts were declared when initializing the
+                 * connection. */
+                return -1;
+            }
+            else if (stream_ctx->is_stream_reset || stream_ctx->is_stream_finished) {
+                /* Unexpected: receive after fin */
+                return -1;
+            }
+            else {
+                client_ctx->nb_files_failed++;
+
+                if ((client_ctx->nb_files_received + client_ctx->nb_files_failed) >= client_ctx->nb_files) {
+                    /* everything is done, close the connection */
+                    ret = picoquic_close(cnx, 0);
+                }
+            }
             break;
         case picoquic_callback_stateless_reset:
         case picoquic_callback_close: /* Received connection close */
         case picoquic_callback_application_close: /* Received application close */
-            /* Delete the server application context */
+            /* Mark the connection as completed */
+            client_ctx->is_disconnected = 1;
+            /* Remove the application callback */
             picoquic_set_callback(cnx, NULL, NULL);
             break;
         case picoquic_callback_version_negotiation:
-            /* The server should never receive a version negotiation response */
+            /* The client did not get the right version.
+             * TODO: some form of negotiation?
+             */
+            fprintf(stdout, "Received a version negotiation request:");
+            for (size_t byte_index = 0; byte_index + 4 <= length; byte_index += 4) {
+                uint32_t vn = 0;
+                for (int i = 0; i < 4; i++) {
+                    vn <<= 8;
+                    vn += bytes[byte_index + i];
+                }
+                fprintf(stdout, "%s%08x", (byte_index == 0) ? " " : ", ", vn);
+            }
+            fprintf(stdout, "\n");
             break;
         case picoquic_callback_stream_gap:
             /* This callback is never used. */
             break;
         case picoquic_callback_prepare_to_send:
             /* Active sending API */
-            /* ret = h3zero_client_callback_prepare_to_send(cnx, stream_id, stream_ctx, (void*)bytes, length, ctx); */
+            if (stream_ctx == NULL) {
+                /* Decidedly unexpected */
+                return -1;
+            } else if (stream_ctx->name_sent_length < stream_ctx->name_length){
+                uint8_t* buffer;
+                size_t available = stream_ctx->name_length - stream_ctx->name_sent_length;
+                int is_fin = 1;
+
+                /* The length parameter marks the space available in the packet */
+                if (available > length) {
+                    available = length;
+                    is_fin = 0;
+                }
+                /* Needs to retrieve a pointer to the actual buffer 
+                 * the "bytes" parameter points to the sending context 
+                 */
+                buffer = picoquic_provide_stream_data_buffer(bytes, available, is_fin, !is_fin);
+                if (buffer != NULL) {
+                    char const* filename = client_ctx->file_names[stream_ctx->file_rank];
+                    memcpy(buffer, filename + stream_ctx->name_sent_length, available);
+                    stream_ctx->name_sent_length += available;
+                    stream_ctx->is_name_sent = is_fin;
+                }
+                else {
+                    ret = -1;
+                }
+            }
+            else {
+                /* Nothing to send, just return */
+            }
             break;
         case picoquic_callback_almost_ready:
         case picoquic_callback_ready:
-            /* Check that the transport parameters are what the sample expects */
+            /* TODO: Check that the transport parameters are what the sample expects */
             break;
         default:
             /* unexpected -- just ignore. */
