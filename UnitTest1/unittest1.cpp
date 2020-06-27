@@ -1114,7 +1114,14 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(gbps_performance)
+        TEST_METHOD(bbr_one_second)
+        {
+            int ret = bbr_one_second_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(bbr_gbps)
         {
             int ret = gbps_performance_test();
 
