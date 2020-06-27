@@ -5,7 +5,6 @@ find_package (Threads REQUIRED)
 
 set(CMAKE_C_STANDARD 11)
 
-
 set(CMAKE_C_FLAGS "-std=c99 -Wall -Werror -O2 -g ${CC_WARNING_FLAGS} ${CMAKE_C_FLAGS}")
 
 if(DISABLE_DEBUG_PRINTF)

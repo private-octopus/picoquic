@@ -1078,13 +1078,17 @@ static uint64_t picoquic_current_retransmit_timer(picoquic_cnx_t* cnx, picoquic_
     uint64_t rto = cnx->path[0]->retransmit_timer;
 
     rto <<= cnx->pkt_ctx[pc].nb_retransmit;
-    if (cnx->cnx_state < picoquic_state_ready) {
+    if (cnx->cnx_state < picoquic_state_client_ready_start) {
         if (rto > PICOQUIC_INITIAL_MAX_RETRANSMIT_TIMER) {
             rto = PICOQUIC_INITIAL_MAX_RETRANSMIT_TIMER;
         }
     }
-    else if (rto > PICOQUIC_MAX_RETRANSMIT_TIMER) {
-        rto = PICOQUIC_MAX_RETRANSMIT_TIMER;
+    else if (rto > PICOQUIC_LARGE_RETRANSMIT_TIMER &&
+        cnx->path[0]->rtt_min > PICOQUIC_TARGET_SATELLITE_RTT) {
+        uint64_t alt_rto = (cnx->path[0]->smoothed_rtt*3) >> 1;
+        if (alt_rto < rto) {
+            rto = alt_rto;
+        }
     }
 
     return rto;
@@ -1100,16 +1104,18 @@ static int picoquic_retransmit_needed_by_packet(picoquic_cnx_t* cnx,
     int is_timer_based = 0;
 
     if (delta_seq > 0) {
-        /* By default, we use timer based RACK logic to absorb out of order deliveries */
+        /* By default, we use an RTO  */
         retransmit_time = p->send_time + cnx->path[0]->retransmit_timer;
         /* RACK logic works best when the amount of reordering is not too large */
         if (delta_seq < 3) {
+            /* When just a few ulterior packets are acknowledged, we work from the right edge. */
             uint64_t rack_timer_min = cnx->pkt_ctx[pc].highest_acknowledged_time +
                 cnx->remote_parameters.max_ack_delay + (cnx->path[0]->smoothed_rtt >> 2);
             if (retransmit_time > rack_timer_min) {
                 retransmit_time = rack_timer_min;
             }
         } else {
+            /* When enough ulterior packets are acknowledged, we work from the right edge. */
             uint64_t rack_timer_min = p->send_time + (cnx->path[0]->smoothed_rtt >> 2);
             if (rack_timer_min < cnx->pkt_ctx[pc].latest_time_acknowledged) {
                 retransmit_time = cnx->pkt_ctx[pc].highest_acknowledged_time;

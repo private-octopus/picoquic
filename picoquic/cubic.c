@@ -254,8 +254,14 @@ static void picoquic_cubic_notify(
                     picoquic_hystart_test(&cubic_state->rtt_filter, (cnx->is_time_stamp_enabled) ? one_way_delay : rtt_measurement,
                         cnx->path[0]->pacing_packet_time_microsec, current_time, cnx->is_time_stamp_enabled)) {
                     /* RTT increased too much, get out of slow start! */
-                    if (cubic_state->rtt_filter.rtt_filtered_min > PICOQUIC_TARGET_RENO_RTT) {
-                        double correction = (double)PICOQUIC_TARGET_RENO_RTT / (double)cubic_state->rtt_filter.rtt_filtered_min;
+                    if (cubic_state->rtt_filter.rtt_filtered_min > PICOQUIC_TARGET_RENO_RTT){
+                        double correction;
+                        if (cubic_state->rtt_filter.rtt_filtered_min > PICOQUIC_TARGET_SATELLITE_RTT) {
+                            correction = (double)PICOQUIC_TARGET_SATELLITE_RTT / (double)cubic_state->rtt_filter.rtt_filtered_min;
+                        }
+                        else {
+                            correction = (double)PICOQUIC_TARGET_RENO_RTT / (double)cubic_state->rtt_filter.rtt_filtered_min;
+                        }
                         uint64_t base_window = (uint64_t)(correction * (double)path_x->cwin);
                         uint64_t delta_window = path_x->cwin - base_window;
                         path_x->cwin -= (delta_window / 2);
@@ -438,7 +444,14 @@ static void picoquic_dcubic_notify(
             case picoquic_congestion_notification_rtt_measurement:
                 /* if in slow start, increase the window for long delay RTT */
                 if (path_x->rtt_min > PICOQUIC_TARGET_RENO_RTT && cubic_state->ssthresh == UINT64_MAX) {
-                    uint64_t min_cwnd = (uint64_t)((double)PICOQUIC_CWIN_INITIAL * (double)path_x->rtt_min / (double)PICOQUIC_TARGET_RENO_RTT);
+                    uint64_t min_cwnd;
+
+                    if (path_x->rtt_min > PICOQUIC_TARGET_SATELLITE_RTT) {
+                        min_cwnd = (uint64_t)((double)PICOQUIC_CWIN_INITIAL * (double)PICOQUIC_TARGET_SATELLITE_RTT / (double)PICOQUIC_TARGET_RENO_RTT);
+                    }
+                    else {
+                        min_cwnd = (uint64_t)((double)PICOQUIC_CWIN_INITIAL * (double)path_x->rtt_min / (double)PICOQUIC_TARGET_RENO_RTT);
+                    }
 
                     if (min_cwnd > path_x->cwin) {
                         path_x->cwin = min_cwnd;
@@ -507,8 +520,15 @@ static void picoquic_dcubic_notify(
                 /* do nothing */
             case picoquic_congestion_notification_rtt_measurement:
                 /* if in slow start, increase the window for long delay RTT */
-                if (path_x->rtt_min > PICOQUIC_TARGET_RENO_RTT&& cubic_state->ssthresh == UINT64_MAX) {
-                    uint64_t min_cwnd = (uint64_t)((double)PICOQUIC_CWIN_INITIAL * (double)path_x->rtt_min / (double)PICOQUIC_TARGET_RENO_RTT);
+                if (path_x->rtt_min > PICOQUIC_TARGET_RENO_RTT && cubic_state->ssthresh == UINT64_MAX) {
+                    uint64_t min_cwnd;
+
+                    if (path_x->rtt_min > PICOQUIC_TARGET_SATELLITE_RTT) {
+                        min_cwnd = (uint64_t)((double)PICOQUIC_CWIN_INITIAL * (double)PICOQUIC_TARGET_SATELLITE_RTT / (double)PICOQUIC_TARGET_RENO_RTT);
+                    }
+                    else {
+                        min_cwnd = (uint64_t)((double)PICOQUIC_CWIN_INITIAL * (double)path_x->rtt_min / (double)PICOQUIC_TARGET_RENO_RTT);
+                    }
 
                     if (min_cwnd > path_x->cwin) {
                         path_x->cwin = min_cwnd;

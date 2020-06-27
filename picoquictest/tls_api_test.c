@@ -7270,6 +7270,23 @@ int bbr_slow_long_test()
     return ret;
 }
 
+/* BBR Performance test on a pathological long link, with 2 seconds RTT
+ * Verify that 10 MB can be downloaded in less than 120 seconds on a 1 mbps link.
+ */
+
+int bbr_one_second_test()
+{
+    uint64_t max_completion_time = 120000000;
+    uint64_t latency = 1000000;
+    uint64_t jitter = 3000;
+    uint64_t buffer = 2 * (latency + jitter);
+    uint64_t mbps = 1;
+
+    int ret = performance_test(max_completion_time, mbps, latency, jitter, buffer);
+
+    return ret;
+}
+
 
 /* AWS like performance test 
  * Verify that 10MB can be downloaded very fast on a low latency Gbps link. */
