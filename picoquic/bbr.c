@@ -178,7 +178,12 @@ void BBREnterStartupLongRTT(picoquic_bbr_state_t* bbr_state, picoquic_path_t* pa
     bbr_state->state = picoquic_bbr_alg_startup_long_rtt;
 
     if (path_x->rtt_min > PICOQUIC_TARGET_RENO_RTT) {
-        cwnd = (uint64_t)((double)cwnd * (double)path_x->rtt_min / (double)PICOQUIC_TARGET_RENO_RTT);
+        if (path_x->rtt_min > PICOQUIC_TARGET_SATELLITE_RTT) {
+            cwnd = (uint64_t)((double)cwnd * (double)PICOQUIC_TARGET_SATELLITE_RTT / (double)PICOQUIC_TARGET_RENO_RTT);
+        }
+        else {
+            cwnd = (uint64_t)((double)cwnd * (double)path_x->rtt_min / (double)PICOQUIC_TARGET_RENO_RTT);
+        }
     }
     if (cwnd > path_x->cwin) {
         path_x->cwin = cwnd;
@@ -427,7 +432,8 @@ void BBREnterProbeBW(picoquic_bbr_state_t* bbr_state, uint64_t current_time)
     bbr_state->cwnd_gain = 2.0;
 
     if (bbr_state->rt_prop > PICOQUIC_TARGET_RENO_RTT) {
-        start = (int)(bbr_state->rt_prop / PICOQUIC_TARGET_RENO_RTT);
+        uint64_t ref_rt = (bbr_state->rt_prop > PICOQUIC_TARGET_SATELLITE_RTT) ? PICOQUIC_TARGET_SATELLITE_RTT : bbr_state->rt_prop;
+        start = (unsigned int)(ref_rt / PICOQUIC_TARGET_RENO_RTT);
         if (start > BBR_GAIN_CYCLE_MAX_START) {
             start = BBR_GAIN_CYCLE_MAX_START;
         }

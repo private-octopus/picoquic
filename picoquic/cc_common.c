@@ -138,7 +138,7 @@ uint64_t picoquic_cc_increased_window(picoquic_cnx_t* cnx, uint64_t previous_win
     else {
         double w = (double)previous_window;
         w /= (double)PICOQUIC_TARGET_RENO_RTT;
-        w *= cnx->path[0]->rtt_min;
+        w *= (cnx->path[0]->rtt_min > PICOQUIC_TARGET_SATELLITE_RTT)? PICOQUIC_TARGET_SATELLITE_RTT: cnx->path[0]->rtt_min;
         new_window = (uint64_t)w;
     }
     return new_window;

@@ -1114,7 +1114,14 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(gbps_performance)
+        TEST_METHOD(bbr_one_second)
+        {
+            int ret = bbr_one_second_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(bbr_gbps)
         {
             int ret = gbps_performance_test();
 
@@ -1124,48 +1131,6 @@ namespace UnitTest1
         TEST_METHOD(long_rtt)
         {
             int ret = long_rtt_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(satellite_basic)
-        {
-            int ret = satellite_basic_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(satellite_loss)
-        {
-            int ret = satellite_loss_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(satellite_jitter)
-        {
-            int ret = satellite_jitter_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(satellite_medium)
-        {
-            int ret = satellite_medium_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(satellite_small)
-        {
-            int ret = satellite_small_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(satellite_small_up)
-        {
-            int ret = satellite_small_up_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -1274,27 +1239,6 @@ namespace UnitTest1
 
         TEST_METHOD(migration_mtu_drop) {
             int ret = migration_mtu_drop_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(stress)
-        {
-            int ret = stress_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(fuzz)
-        {
-            int ret = fuzz_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(fuzz_initial)
-        {
-            int ret = fuzz_initial_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -1427,18 +1371,6 @@ namespace UnitTest1
 
         TEST_METHOD(h3_multi_file) {
             int ret = h3_multi_file_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(http_stress) {
-            int ret = http_stress_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(http_corrupt) {
-            int ret = http_corrupt_test();
 
             Assert::AreEqual(ret, 0);
         }

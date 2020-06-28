@@ -392,7 +392,6 @@ int util_threading_test()
     if (ret == 0 && ctx.data != 30) {
         DBG_PRINTF("Could not count to %d, got %d", 30, ctx.data);
         ret = -1;
-
     }
 
     return ret;

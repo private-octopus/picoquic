@@ -212,8 +212,15 @@ static void picoquic_newreno_notify(
                 nr_state->nrss.ssthresh == UINT64_MAX){
 
                 if (path_x->rtt_min > PICOQUIC_TARGET_RENO_RTT) {
-                    /* Increase initial CWIN for long delay links. */
-                    uint64_t min_win = (uint64_t)((double)PICOQUIC_CWIN_INITIAL * (double)path_x->rtt_min / (double)PICOQUIC_TARGET_RENO_RTT);
+                    uint64_t min_win;
+
+                    if (path_x->rtt_min > PICOQUIC_TARGET_SATELLITE_RTT) {
+                        min_win = (uint64_t)((double)PICOQUIC_CWIN_INITIAL * (double)PICOQUIC_TARGET_SATELLITE_RTT / (double)PICOQUIC_TARGET_RENO_RTT);
+                    }
+                    else {
+                        /* Increase initial CWIN for long delay links. */
+                        min_win = (uint64_t)((double)PICOQUIC_CWIN_INITIAL * (double)path_x->rtt_min / (double)PICOQUIC_TARGET_RENO_RTT);
+                    }
                     if (min_win > nr_state->nrss.cwin) {
                         nr_state->nrss.cwin = min_win;
                         path_x->cwin = min_win;

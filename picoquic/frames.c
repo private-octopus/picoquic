@@ -1974,7 +1974,8 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, u
                 }
             }
 
-            if (4 * old_path->rtt_variant < old_path->rtt_min) {
+            if (4 * old_path->rtt_variant < old_path->rtt_min &&
+                old_path->rtt_min < PICOQUIC_TARGET_SATELLITE_RTT) {
                 old_path->rtt_variant = old_path->rtt_min / 4;
             }
 
