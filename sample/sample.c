@@ -82,7 +82,7 @@ int main(int argc, char** argv)
         }
         else {
             int server_port = get_port(argv[0], argv[3]);
-            char** file_names = argv + 5;
+            char const** file_names = (char const **)(argv + 5);
             int nb_files = argc - 5;
 
             exit_code = picoquic_sample_client(argv[2], server_port, argv[4], nb_files, file_names);
@@ -94,7 +94,8 @@ int main(int argc, char** argv)
         }
         else {
             int server_port = get_port(argv[0], argv[2]);
-                exit_code = picoquic_sample_server(server_port, argv[3], argv[4], argv[5]);}
+            exit_code = picoquic_sample_server(server_port, argv[3], argv[4], argv[5]);
+        }
     }
     else
     {
