@@ -683,7 +683,7 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
             if (cmsg->cmsg_level == IPPROTO_IP) {
 #ifdef IP_PKTINFO
                 if (cmsg->cmsg_type == IP_PKTINFO) {
-                    if (addr_dest != NULL && dest_length != NULL) {
+                    if (addr_dest != NULL) {
                         struct in_pktinfo* pPktInfo = (struct in_pktinfo*)CMSG_DATA(cmsg);
                         ((struct sockaddr_in*)addr_dest)->sin_family = AF_INET;
                         ((struct sockaddr_in*)addr_dest)->sin_port = 0;
@@ -697,7 +697,7 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
 #else
                 /* The IP_PKTINFO structure is not defined on BSD */
                 if (cmsg->cmsg_type == IP_RECVDSTADDR) {
-                    if (addr_dest != NULL && dest_length != NULL) {
+                    if (addr_dest != NULL) {
                         struct in_addr* pPktInfo = (struct in_addr*)CMSG_DATA(cmsg);
                         ((struct sockaddr_in*)addr_dest)->sin_family = AF_INET;
                         ((struct sockaddr_in*)addr_dest)->sin_port = 0;
@@ -717,7 +717,7 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
             }
             else if (cmsg->cmsg_level == IPPROTO_IPV6) {
                 if (cmsg->cmsg_type == IPV6_PKTINFO) {
-                    if (addr_dest != NULL && dest_length != NULL) {
+                    if (addr_dest != NULL) {
                         struct in6_pktinfo* pPktInfo6 = (struct in6_pktinfo*)CMSG_DATA(cmsg);
 
                         ((struct sockaddr_in6*)addr_dest)->sin6_family = AF_INET6;
@@ -744,9 +744,7 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
 
 int picoquic_sendmsg(SOCKET_TYPE fd,
     struct sockaddr* addr_dest,
-    socklen_t dest_length,
     struct sockaddr* addr_from,
-    socklen_t from_length,
     unsigned long dest_if,
     const char* bytes, int length)
 #ifdef _WINDOWS
@@ -779,7 +777,7 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
 
         memset(&msg, 0, sizeof(msg));
         msg.name = addr_dest;
-        msg.namelen = dest_length;
+        msg.namelen = picoquic_addr_length(addr_dest);
         dataBuf.buf = (char*)bytes;
         dataBuf.len = length;
         msg.lpBuffers = &dataBuf;
@@ -790,7 +788,7 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
         /* Format the control message */
         cmsg = WSA_CMSG_FIRSTHDR(&msg);
 
-        if (addr_from != NULL && from_length != 0) {
+        if (addr_from != NULL && addr_from->sa_family != 0) {
             if (addr_from->sa_family == AF_INET) {
                 memset(cmsg, 0, WSA_CMSG_SPACE(sizeof(struct in_pktinfo)));
                 cmsg->cmsg_level = IPPROTO_IP;
@@ -878,7 +876,7 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
 
     memset(&msg, 0, sizeof(msg));
     msg.msg_name = addr_dest;
-    msg.msg_namelen = dest_length;
+    msg.msg_namelen = picoquic_addr_length(addr_dest);
     msg.msg_iov = &dataBuf;
     msg.msg_iovlen = 1;
     msg.msg_control = (void*)cmsg_buffer;
@@ -887,7 +885,7 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
     /* Format the control message */
     cmsg = CMSG_FIRSTHDR(&msg);
 
-    if (addr_from != NULL && from_length != 0) {
+    if (addr_from != NULL && addr_from->sa_family != 0) {
         if (addr_from->sa_family == AF_INET) {
 #ifdef IP_PKTINFO
             memset(cmsg, 0, CMSG_SPACE(sizeof(struct in_pktinfo)));
@@ -1097,8 +1095,7 @@ int picoquic_send_through_socket(
     struct sockaddr* addr_from, unsigned long from_if,
     const char* bytes, int length, int* sock_err)
 {
-    int sent = picoquic_sendmsg(fd, addr_dest, picoquic_addr_length(addr_dest),
-        addr_from, picoquic_addr_length(addr_from), from_if, bytes, length);
+    int sent = picoquic_sendmsg(fd, addr_dest, addr_from, from_if, bytes, length);
 
 #ifndef DISABLE_DEBUG_PRINTF
     if (sent <= 0) {
