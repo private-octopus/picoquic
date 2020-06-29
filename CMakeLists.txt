@@ -171,6 +171,23 @@ target_link_libraries(picohttp_ct
 
 target_include_directories(picohttp_ct PRIVATE loglib picohttp)
 
+add_executable(picoquic_sample
+    sample/sample.c
+    sample/sample_client.c
+    sample/sample_server.c
+)
+
+target_link_libraries(picoquic_sample
+    picoquic-log
+    picoquic-core
+    ${PTLS_LIBRARIES}
+    ${OPENSSL_LIBRARIES}
+    ${CMAKE_DL_LIBS}
+    ${CMAKE_THREAD_LIBS_INIT}
+)
+
+target_include_directories(picoquic_sample PRIVATE loglib picoquic)
+
 set(TEST_EXES picoquic_ct picohttp_ct)
 
 # get all project files for formatting
