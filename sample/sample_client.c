@@ -119,9 +119,32 @@ static int sample_client_create_stream(picoquic_cnx_t* cnx,
         if (ret != 0) {
             fprintf(stdout, "Error %d, cannot initialize stream for file number %d\n", ret, (int)file_rank);
         }
+        else {
+            printf("Opened stream %d for file %s\n", 4 * file_rank, client_ctx->file_names[file_rank]);
+        }
     }
 
     return ret;
+}
+
+static void sample_client_report(sample_client_ctx_t* client_ctx)
+{
+    sample_client_stream_ctx_t* stream_ctx = client_ctx->first_stream;
+
+    while (stream_ctx != NULL) {
+        char const* status;
+        if (stream_ctx->is_stream_finished) {
+            status = "complete";
+        }
+        else if (stream_ctx->is_stream_reset) {
+            status = "reset";
+        }
+        else {
+            status = "unknown status";
+        }
+        printf("%s: %s, received %zu bytes\n", client_ctx->file_names[stream_ctx->file_rank], status, stream_ctx->bytes_received);
+        stream_ctx = stream_ctx->next_stream;
+    }
 }
 
 static void sample_client_free_context(sample_client_ctx_t* client_ctx)
@@ -185,6 +208,7 @@ int sample_client_callback(picoquic_cnx_t* cnx,
                     if (picoquic_sprintf(file_path, sizeof(file_path), NULL, "%s%s%s",
                         client_ctx->default_dir, sep, client_ctx->file_names[stream_ctx->file_rank]) != 0) {
                         /* Unexpected: could not format the file name */
+                        fprintf(stderr, "Could not format the file name.\n");
                         ret = -1;
                     }
                     else {
@@ -192,6 +216,7 @@ int sample_client_callback(picoquic_cnx_t* cnx,
 
                         if (stream_ctx->F == NULL) {
                             /* Could not open the file */
+                            fprintf(stderr, "Could not open the file: %s\n", file_path);
                             ret = -1;
                         }
                     }
@@ -200,7 +225,11 @@ int sample_client_callback(picoquic_cnx_t* cnx,
                 if (ret == 0 && length > 0) {
                     if (fwrite(bytes, length, 1, stream_ctx->F) != 1) {
                         /* Could not write file to disk */
+                        fprintf(stderr, "Could not write data to disk.\n");
                         ret = -1;
+                    }
+                    else {
+                        stream_ctx->bytes_received += length;
                     }
                 }
 
@@ -231,6 +260,7 @@ int sample_client_callback(picoquic_cnx_t* cnx,
                 return -1;
             }
             else {
+                stream_ctx->is_stream_reset = 1;
                 client_ctx->nb_files_failed++;
 
                 if ((client_ctx->nb_files_received + client_ctx->nb_files_failed) >= client_ctx->nb_files) {
@@ -325,7 +355,7 @@ int sample_client_callback(picoquic_cnx_t* cnx,
  * - The loop breaks if the client connection is finished.
  */
 
-int sample_client(char const * server_name, int server_port, char const * default_dir, 
+int picoquic_sample_client(char const * server_name, int server_port, char const * default_dir,
     int nb_files, char const ** file_names)
 {
     int ret = 0;
@@ -333,9 +363,9 @@ int sample_client(char const * server_name, int server_port, char const * defaul
     char const* sni = PICOQUIC_SAMPLE_SNI;
     SOCKET_TYPE fd = INVALID_SOCKET;
     picoquic_quic_t* quic = NULL;
-    char const* ticket_store_filename = "sample_ticket_store.bin";
-    char const* token_store_filename = "sample_token_store.bin";
-    char const* binlog_filename = "sample_client_log.bin";
+    char const* ticket_store_filename = PICOQUIC_SAMPLE_CLIENT_TICKET_STORE;
+    char const* token_store_filename = PICOQUIC_SAMPLE_CLIENT_TOKEN_STORE;
+    char const* binlog_filename = PICOQUIC_SAMPLE_CLIENT_BINLOG_FILE;
     sample_client_ctx_t client_ctx = { 0 };
     picoquic_cnx_t* cnx = NULL;
     uint8_t recv_buffer[1536];
@@ -376,12 +406,12 @@ int sample_client(char const * server_name, int server_port, char const * defaul
      * - instantiate a binary log option, and log all packets.
      */
     if (ret == 0) {
-        quic = picoquic_create(1, NULL, NULL, NULL, PICOQUIC_SAMPLE_ALPN, sample_client_callback, NULL,
+        quic = picoquic_create(1, NULL, NULL, NULL, PICOQUIC_SAMPLE_ALPN, NULL, NULL,
             NULL, NULL, NULL, current_time, NULL,
             ticket_store_filename, NULL, 0);
-        ret = -1;
 
         if (quic == NULL) {
+            fprintf(stderr, "Could not create quic context\n");
             ret = -1;
         }
         else {
@@ -401,26 +431,38 @@ int sample_client(char const * server_name, int server_port, char const * defaul
      * We use minimal options on the client side, keeping the transport
      * parameter values set by default for picoquic. This could be fixed later.
      */
+
     if (ret == 0) {
         client_ctx.default_dir = default_dir;
         client_ctx.file_names = file_names;
         client_ctx.nb_files = nb_files;
+
+        printf("Starting connection to %s, port %d\n", server_name, server_port);
 
         /* Create a client connection */
         cnx = picoquic_create_cnx(quic, picoquic_null_connection_id, picoquic_null_connection_id,
             (struct sockaddr*) & server_address, current_time, 0, sni, PICOQUIC_SAMPLE_ALPN, 1);
 
         if (cnx == NULL) {
+            fprintf(stderr, "Could not create connection context\n");
             ret = -1;
         }
         else {
+            /* Set the client callback context */
+            picoquic_set_callback(cnx, sample_client_callback, &client_ctx);
             /* Client connection parameters could be set here, before starting the connection. */
             ret = picoquic_start_client_cnx(cnx);
+            if (ret < 0) {
+                fprintf(stderr, "Could not activate connection\n");
+            }
         }
 
         /* Create a stream context for all the files that should be downloaded */
-        for (int i = 0; i < client_ctx.nb_files; i++) {
+        for (int i = 0; ret == 0 && i < client_ctx.nb_files; i++) {
             ret = sample_client_create_stream(cnx, &client_ctx, i);
+            if (ret < 0) {
+                fprintf(stderr, "Could not initiate stream for fi\n");
+            }
         }
     }
 
@@ -483,7 +525,7 @@ int sample_client(char const * server_name, int server_port, char const * defaul
     }
 
     /* Done. At this stage, we could print out statistics, etc. */
-
+    sample_client_report(&client_ctx);
 
     /* Free the QUIC context */
     if (quic != NULL) {
@@ -493,5 +535,5 @@ int sample_client(char const * server_name, int server_port, char const * defaul
     /* Free the Client context */
     sample_client_free_context(&client_ctx);
 
-    return 0;
+    return ret;
 }

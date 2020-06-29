@@ -1182,7 +1182,12 @@ int picoquic_get_server_address(const char* ip_address_text, int server_port,
         hints.ai_protocol = IPPROTO_UDP;
 
         if ((ret = getaddrinfo(ip_address_text, NULL, &hints, &result)) != 0) {
-            fprintf(stderr, "Cannot get IP address for %s, err = %d (0x%x)\n", ip_address_text, ret, ret);
+#ifdef _WINDOWS
+            int err = GetLastError();
+#else
+            int err = ret;
+#endif
+            fprintf(stderr, "Cannot get IP address for %s, err = %d (0x%x)\n", ip_address_text, err, err);
             ret = -1;
         } else {
             *is_name = 1;

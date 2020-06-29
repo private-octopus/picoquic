@@ -83,10 +83,10 @@ typedef struct st_sample_server_ctx_t {
 
 sample_server_stream_ctx_t * sample_server_create_stream_context(sample_server_ctx_t* server_ctx, uint64_t stream_id)
 {
-    sample_server_stream_ctx_t* stream_ctx = (sample_server_stream_ctx_t*)malloc(sizeof(sample_server_stream_ctx_t*));
+    sample_server_stream_ctx_t* stream_ctx = (sample_server_stream_ctx_t*)malloc(sizeof(sample_server_stream_ctx_t));
 
     if (stream_ctx != NULL) {
-        memset(stream_ctx, 0, sizeof(stream_ctx));
+        memset(stream_ctx, 0, sizeof(sample_server_stream_ctx_t));
 
         if (server_ctx->last_stream == NULL) {
             server_ctx->last_stream = stream_ctx;
@@ -214,6 +214,7 @@ int sample_server_callback(picoquic_cnx_t* cnx,
                 memset(server_ctx, 0, sizeof(sample_server_ctx_t));
                 server_ctx->default_dir = "";
             }
+            picoquic_set_callback(cnx, sample_server_callback, server_ctx);
         }
     }
 
@@ -355,17 +356,13 @@ int sample_server_callback(picoquic_cnx_t* cnx,
  * - The loop breaks if the socket return an error. 
  */
 
-int sample_server(const char* server_name, int server_port,
-    const char* pem_cert, const char* pem_key,
-    uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE],
-    int dest_if,
-    char const* log_file, char const* bin_file,
-    picoquic_congestion_algorithm_t const* cc_algorithm, char const* default_dir)
+int picoquic_sample_server(int server_port, const char* server_cert, const char* server_key, const char * default_dir)
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
     picoquic_quic_t* quic = NULL;
     picoquic_server_sockets_t server_sockets;
+    char const* binlog_filename = PICOQUIC_SAMPLE_SERVER_BINLOG_FILE;
     struct sockaddr_storage addr_from;
     struct sockaddr_storage addr_to;
     unsigned long if_index_to;
@@ -387,17 +384,20 @@ int sample_server(const char* server_name, int server_port,
 
     /* Open a UDP socket */
     ret = picoquic_open_server_sockets(&server_sockets, server_port);
+    if (ret != 0) {
+        fprintf(stderr, "Could not open sockets on port %d\n", server_port);
+    }
+    else {
 
-    /* Create the QUIC context for the server */
-    if (ret == 0) {
+        /* Create the QUIC context for the server */
         current_time = picoquic_current_time();
         loop_count_time = current_time;
         /* Create QUIC context */
-        quic = picoquic_create(8, pem_cert, pem_key, NULL, PICOQUIC_SAMPLE_ALPN,
-            sample_server_callback, &default_context, NULL, NULL, reset_seed, current_time, NULL, NULL, NULL, 0);
+        quic = picoquic_create(8, server_cert, server_key, NULL, PICOQUIC_SAMPLE_ALPN,
+            sample_server_callback, &default_context, NULL, NULL, NULL, current_time, NULL, NULL, NULL, 0);
 
         if (quic == NULL) {
-            printf("Could not create server context\n");
+            fprintf(stderr, "Could not create server context\n");
             ret = -1;
         }
         else {
@@ -405,11 +405,13 @@ int sample_server(const char* server_name, int server_port,
 
             picoquic_set_default_congestion_algorithm(quic, picoquic_bbr_algorithm);
 
-            picoquic_set_binlog(quic, bin_file);
+            picoquic_set_binlog(quic, binlog_filename);
 
             picoquic_set_log_level(quic, 1);
 
             picoquic_set_key_log_file_from_env(quic);
+
+            printf("Server ready on port %d\n", server_port);
         }
     }
 
@@ -443,7 +445,7 @@ int sample_server(const char* server_name, int server_port,
             do {
                 struct sockaddr_storage peer_addr;
                 struct sockaddr_storage local_addr;
-                int if_index = dest_if;
+                int if_index = 0;
                 int sock_ret = 0;
                 int sock_err = 0;
 
