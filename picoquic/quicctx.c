@@ -2964,12 +2964,6 @@ int picoquic_reset_cnx(picoquic_cnx_t* cnx, uint64_t current_time)
         }
     }
 
-    /* Delete stream frames queued for retransmission */
-    while (cnx->stream_frame_retransmit_queue != NULL) {
-        picoquic_delete_misc_or_dg(&cnx->stream_frame_retransmit_queue, &cnx->stream_frame_retransmit_queue_last,
-            cnx->stream_frame_retransmit_queue);
-    }
-
     /* Reset the crypto stream */
     for (int epoch = 0; epoch < PICOQUIC_NUMBER_OF_EPOCHS; epoch++) {
         picoquic_clear_stream(&cnx->tls_stream[epoch]);
