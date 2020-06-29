@@ -539,9 +539,7 @@ int picoquic_recvmsg_async_start(picoquic_recvmsg_async_ctx_t * ctx)
 
 int picoquic_recvmsg(SOCKET_TYPE fd,
     struct sockaddr_storage* addr_from,
-    socklen_t* from_length,
     struct sockaddr_storage* addr_dest,
-    socklen_t* dest_length,
     unsigned long* dest_if,
     unsigned char* received_ecn,
     uint8_t* buffer, int buffer_max)
@@ -557,10 +555,6 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
     int recv_ret = 0;
     int bytes_recv;
     int last_error;
-
-    if (dest_length != NULL) {
-        *dest_length = 0;
-    }
 
     if (dest_if != NULL) {
         *dest_if = 0;
@@ -580,13 +574,12 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
         DBG_PRINTF("Could not initialize WSARecvMsg) on UDP socket %d= %d!\n",
             (int)fd, last_error);
         bytes_recv = -1;
-        *from_length = 0;
     } else {
         dataBuf.buf = (char*)buffer;
         dataBuf.len = buffer_max;
 
         msg.name = (struct sockaddr*)addr_from;
-        msg.namelen = *from_length;
+        msg.namelen = sizeof(struct sockaddr_storage);
         msg.lpBuffers = &dataBuf;
         msg.dwBufferCount = 1;
         msg.dwFlags = 0;
@@ -600,23 +593,20 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
             DBG_PRINTF("Could not receive message (WSARecvMsg) on UDP socket %d = %d!\n",
                 (int)fd, last_error);
             bytes_recv = -1;
-            *from_length = 0;
         } else {
             struct cmsghdr* cmsg;
 
             bytes_recv = NumberOfBytes;
-            *from_length = msg.namelen;
 
             /* Get the control information */
             for (cmsg = WSA_CMSG_FIRSTHDR(&msg); cmsg != NULL; cmsg = WSA_CMSG_NXTHDR(&msg, cmsg)) {
                 if (cmsg->cmsg_level == IPPROTO_IP){
                     if (cmsg->cmsg_type == IP_PKTINFO) {
-                        if (addr_dest != NULL && dest_length != NULL) {
+                        if (addr_dest != NULL) {
                             IN_PKTINFO* pPktInfo = (IN_PKTINFO*)WSA_CMSG_DATA(cmsg);
                             ((struct sockaddr_in*)addr_dest)->sin_family = AF_INET;
                             ((struct sockaddr_in*)addr_dest)->sin_port = 0;
                             ((struct sockaddr_in*)addr_dest)->sin_addr.s_addr = pPktInfo->ipi_addr.s_addr;
-                            *dest_length = sizeof(struct sockaddr_in);
 
                             if (dest_if != NULL) {
                                 *dest_if = pPktInfo->ipi_ifindex;
@@ -630,12 +620,11 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
                     }
                 } else if (cmsg->cmsg_level == IPPROTO_IPV6) {
                     if (cmsg->cmsg_type == IPV6_PKTINFO) {
-                        if (addr_dest != NULL && dest_length != NULL) {
+                        if (addr_dest != NULL) {
                             IN6_PKTINFO* pPktInfo6 = (IN6_PKTINFO*)WSA_CMSG_DATA(cmsg);
                                 ((struct sockaddr_in6*)addr_dest)->sin6_family = AF_INET6;
                                 ((struct sockaddr_in6*)addr_dest)->sin6_port = 0;
                                 memcpy(&((struct sockaddr_in6*)addr_dest)->sin6_addr, &pPktInfo6->ipi6_addr, sizeof(IN6_ADDR));
-                                *dest_length = sizeof(struct sockaddr_in6);
 
                                 if (dest_if != NULL) {
                                     *dest_if = pPktInfo6->ipi6_ifindex;
@@ -667,10 +656,6 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
     struct iovec dataBuf;
     char cmsg_buffer[1024];
 
-    if (dest_length != NULL) {
-        *dest_length = 0;
-    }
-
     if (dest_if != NULL) {
         *dest_if = 0;
     }
@@ -679,7 +664,7 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
     dataBuf.iov_len = buffer_max;
 
     msg.msg_name = (struct sockaddr*)addr_from;
-    msg.msg_namelen = *from_length;
+    msg.msg_namelen = sizeof(struct sockaddr_storage);
     msg.msg_iov = &dataBuf;
     msg.msg_iovlen = 1;
     msg.msg_flags = 0;
@@ -688,12 +673,11 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
 
     bytes_recv = recvmsg(fd, &msg, 0);
 
-    if (bytes_recv <= 0) {
-        *from_length = 0;
+    if (bytes_recv > 0) {
+        addr_from->ss_family = 0;
     } else {
         /* Get the control information */
         struct cmsghdr* cmsg;
-        *from_length = msg.msg_namelen;
 
         for (cmsg = CMSG_FIRSTHDR(&msg); cmsg != NULL; cmsg = CMSG_NXTHDR(&msg, cmsg)) {
             if (cmsg->cmsg_level == IPPROTO_IP) {
@@ -704,7 +688,6 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
                         ((struct sockaddr_in*)addr_dest)->sin_family = AF_INET;
                         ((struct sockaddr_in*)addr_dest)->sin_port = 0;
                         ((struct sockaddr_in*)addr_dest)->sin_addr.s_addr = pPktInfo->ipi_addr.s_addr;
-                        *dest_length = sizeof(struct sockaddr_in);
 
                         if (dest_if != NULL) {
                             *dest_if = pPktInfo->ipi_ifindex;
@@ -719,7 +702,6 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
                         ((struct sockaddr_in*)addr_dest)->sin_family = AF_INET;
                         ((struct sockaddr_in*)addr_dest)->sin_port = 0;
                         ((struct sockaddr_in*)addr_dest)->sin_addr.s_addr = pPktInfo->s_addr;
-                        *dest_length = sizeof(struct sockaddr_in);
 
                         if (dest_if != NULL) {
                             *dest_if = 0;
@@ -741,7 +723,6 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
                         ((struct sockaddr_in6*)addr_dest)->sin6_family = AF_INET6;
                         ((struct sockaddr_in6*)addr_dest)->sin6_port = 0;
                         memcpy(&((struct sockaddr_in6*)addr_dest)->sin6_addr, &pPktInfo6->ipi6_addr, sizeof(struct in6_addr));
-                        *dest_length = sizeof(struct sockaddr_in6);
 
                         if (dest_if != NULL) {
                             *dest_if = pPktInfo6->ipi6_ifindex;
@@ -1034,9 +1015,7 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
 int picoquic_select(SOCKET_TYPE* sockets,
     int nb_sockets,
     struct sockaddr_storage* addr_from,
-    socklen_t* from_length,
     struct sockaddr_storage* addr_dest,
-    socklen_t* dest_length,
     unsigned long* dest_if,
     unsigned char * received_ecn,
     uint8_t* buffer, int buffer_max,
@@ -1083,8 +1062,8 @@ int picoquic_select(SOCKET_TYPE* sockets,
     } else if (ret_select > 0) {
         for (int i = 0; i < nb_sockets; i++) {
             if (FD_ISSET(sockets[i], &readfds)) {
-                bytes_recv = picoquic_recvmsg(sockets[i], addr_from, from_length,
-                    addr_dest, dest_length, dest_if, received_ecn,
+                bytes_recv = picoquic_recvmsg(sockets[i], addr_from,
+                    addr_dest, dest_if, received_ecn,
                     buffer, buffer_max);
 
                 if (bytes_recv <= 0) {

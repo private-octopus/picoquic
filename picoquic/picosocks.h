@@ -155,9 +155,7 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
 
 int picoquic_select(SOCKET_TYPE* sockets, int nb_sockets,
     struct sockaddr_storage* addr_from,
-    socklen_t* from_length,
     struct sockaddr_storage* addr_dest,
-    socklen_t* dest_length,
     unsigned long* dest_if,
     unsigned char * received_ecn,
     uint8_t* buffer, int buffer_max,

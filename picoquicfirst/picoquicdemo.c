@@ -142,8 +142,6 @@ int quic_server(const char* server_name, int server_port,
     struct sockaddr_storage addr_from;
     struct sockaddr_storage addr_to;
     unsigned long if_index_to;
-    socklen_t from_length;
-    socklen_t to_length;
     uint8_t buffer[1536];
     uint8_t send_buffer[1536];
     size_t send_length = 0;
@@ -214,12 +212,11 @@ int quic_server(const char* server_name, int server_port,
         int64_t delta_t = picoquic_get_next_wake_delay(qserver, current_time, delay_max);
         unsigned char received_ecn;
 
-        from_length = to_length = sizeof(struct sockaddr_storage);
         if_index_to = 0;
 
         bytes_recv = picoquic_select(server_sockets.s_socket, PICOQUIC_NB_SERVER_SOCKETS,
-            &addr_from, &from_length,
-            &addr_to, &to_length, &if_index_to, &received_ecn,
+            &addr_from, 
+            &addr_to, &if_index_to, &received_ecn,
             buffer, sizeof(buffer),
             delta_t, &current_time);
 
@@ -424,8 +421,6 @@ int quic_client(const char* ip_address_text, int server_port,
     struct sockaddr_storage packet_from;
     struct sockaddr_storage packet_to;
     int if_index_to;
-    socklen_t from_length;
-    unsigned long to_length;
     uint8_t buffer[1536];
     uint8_t send_buffer[1536];
     size_t send_length = 0;
@@ -635,15 +630,13 @@ int quic_client(const char* ip_address_text, int server_port,
     while (ret == 0 && picoquic_get_cnx_state(cnx_client) != picoquic_state_disconnected) {
         unsigned char received_ecn;
 
-        from_length = to_length = sizeof(struct sockaddr_storage);
-
-        bytes_recv = picoquic_select(&fd, 1, &packet_from, &from_length,
-            &packet_to, &to_length, &if_index_to, &received_ecn,
+        bytes_recv = picoquic_select(&fd, 1, &packet_from, 
+            &packet_to, &if_index_to, &received_ecn,
             buffer, sizeof(buffer),
             delta_t,
             &current_time);
 
-        if (bytes_recv != 0 && to_length != 0) {
+        if (bytes_recv != 0 && packet_to.ss_family != 0) {
             /* Keeping track of the addresses and ports, as we 
              * need them to verify the migration behavior */
             if (!address_updated) {

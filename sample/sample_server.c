@@ -421,12 +421,10 @@ int picoquic_sample_server(int server_port, const char* server_cert, const char*
         unsigned char received_ecn;
         int64_t delta_t = picoquic_get_next_wake_delay(quic, current_time, delay_max);
 
-        from_length = to_length = (socklen_t) sizeof(struct sockaddr_storage);
         if_index_to = 0;
 
         bytes_recv = picoquic_select(server_sockets.s_socket, PICOQUIC_NB_SERVER_SOCKETS,
-            &addr_from, &from_length,
-            &addr_to, &to_length, &if_index_to, &received_ecn,
+            &addr_from, &addr_to, &if_index_to, &received_ecn,
             recv_buffer, sizeof(recv_buffer),
             delta_t, &current_time);
 

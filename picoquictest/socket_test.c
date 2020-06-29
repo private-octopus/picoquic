@@ -32,12 +32,9 @@ static int socket_ping_pong(SOCKET_TYPE fd, struct sockaddr* server_addr,
     int bytes_sent = 0;
     int bytes_recv = 0;
     struct sockaddr_storage addr_from;
-    socklen_t from_length;
     struct sockaddr_storage addr_dest;
-    socklen_t dest_length;
     unsigned long dest_if;
     struct sockaddr_storage addr_back;
-    socklen_t back_length; 
     int server_address_length = (server_addr->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
 
     for (size_t i = 0; i < sizeof(message);) {
@@ -57,10 +54,9 @@ static int socket_ping_pong(SOCKET_TYPE fd, struct sockaddr* server_addr,
     if (ret == 0) {
         unsigned char received_ecn;
         memset(buffer, 0, sizeof(buffer));
-        from_length = (socklen_t)sizeof(struct sockaddr_storage);
 
         bytes_recv = picoquic_select(server_sockets->s_socket, PICOQUIC_NB_SERVER_SOCKETS,
-            &addr_from, &from_length, &addr_dest, &dest_length, &dest_if, &received_ecn,
+            &addr_from, &addr_dest,&dest_if, &received_ecn,
             buffer, sizeof(buffer), 1000000, &current_time);
 
         if (bytes_recv != bytes_sent) {
@@ -89,9 +85,8 @@ static int socket_ping_pong(SOCKET_TYPE fd, struct sockaddr* server_addr,
     if (ret == 0) {
         memset(buffer, 0, sizeof(buffer));
 
-        back_length = (socklen_t)sizeof(addr_back);
         bytes_recv = picoquic_select(&fd, 1,
-            &addr_back, &back_length, NULL, NULL, NULL, NULL,
+            &addr_back, NULL, NULL, NULL,
             buffer, sizeof(buffer), 1000000, &current_time);
 
         if (bytes_recv != bytes_sent) {

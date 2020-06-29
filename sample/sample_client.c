@@ -485,8 +485,7 @@ int picoquic_sample_client(char const * server_name, int server_port, char const
 
         /* Check whether packets arrive before delta_t */
         recv_length = picoquic_select(&fd, 1,
-            &peer_addr, &from_length,
-            &local_addr, &to_length, &if_index, &received_ecn,
+            &peer_addr, &local_addr, &if_index, &received_ecn,
             recv_buffer, sizeof(recv_buffer),
             delta_t, &current_time);
 
