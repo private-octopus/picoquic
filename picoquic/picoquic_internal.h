@@ -291,7 +291,7 @@ typedef struct st_picoquic_stateless_packet_t {
     struct st_picoquic_stateless_packet_t* next_packet;
     struct sockaddr_storage addr_to;
     struct sockaddr_storage addr_local;
-    unsigned long if_index_local;
+    int if_index_local;
     size_t length;
 
     uint64_t cnxid_log64;

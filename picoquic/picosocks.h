@@ -122,7 +122,7 @@ typedef struct st_picoquic_recvmsg_async_ctx_t {
     socklen_t from_length;
     socklen_t dest_length;
     SOCKET_TYPE fd;
-    unsigned long dest_if;
+    int dest_if;
     unsigned char received_ecn;
     int bytes_recv;
     int is_started;

@@ -470,11 +470,11 @@ int picoquic_sample_client(char const * server_name, int server_port, char const
      * because all the files are donloaded */
     while (ret == 0 && !client_ctx.is_disconnected) {
         int64_t delta_t;
-        int from_length;
-        int to_length;
+        socklen_t from_length;
+        socklen_t to_length;
         struct sockaddr_storage peer_addr;
         struct sockaddr_storage local_addr;
-        unsigned long if_index = 0;
+        int if_index = 0;
         unsigned char received_ecn;
         picoquic_connection_id_t log_cid;
         int sock_ret = 0;
@@ -494,31 +494,27 @@ int picoquic_sample_client(char const * server_name, int server_port, char const
             fprintf(stderr, "Could not receive packets on socket");
             ret = -1;
         }
-        else {
-            uint64_t loop_time = current_time;
-
-            if (recv_length > 0) {
+        else if (recv_length > 0) {
                 /* Submit the packet to the server */
                 (void)picoquic_incoming_packet(quic, recv_buffer,
                     (size_t)recv_length, (struct sockaddr*) & peer_addr,
                     (struct sockaddr*) & local_addr, if_index, received_ecn,
                     current_time);
             }
-            else {
-                /* No incoming packet, so check whether there is something to send */
-                ret = picoquic_prepare_next_packet(quic, picoquic_current_time(),
-                    send_buffer, sizeof(send_buffer), &send_length,
-                    &peer_addr, &local_addr, &if_index, &log_cid);
+        else {
+            /* No incoming packet, so check whether there is something to send */
+            ret = picoquic_prepare_next_packet(quic, picoquic_current_time(),
+                send_buffer, sizeof(send_buffer), &send_length,
+                &peer_addr, &local_addr, &if_index, &log_cid);
 
-                if (ret == 0 && send_length > 0) {
-                    /* Send the packet that was just prepared */
-                    sock_ret = picoquic_send_through_socket(fd,
-                        (struct sockaddr*) & peer_addr, (struct sockaddr*) & local_addr, if_index,
-                        (const char*)send_buffer, (int)send_length, &sock_err);
-                    if (sock_ret <= 0) {
-                        picoquic_log_app_message(quic, &log_cid, "Could not send message to AF_to=%d, AF_from=%d, ret=%d, err=%d",
-                            peer_addr.ss_family, local_addr.ss_family, sock_ret, sock_err);
-                    }
+            if (ret == 0 && send_length > 0) {
+                /* Send the packet that was just prepared */
+                sock_ret = picoquic_send_through_socket(fd,
+                    (struct sockaddr*) & peer_addr, (struct sockaddr*) & local_addr, if_index,
+                    (const char*)send_buffer, (int)send_length, &sock_err);
+                if (sock_ret <= 0) {
+                    picoquic_log_app_message(quic, &log_cid, "Could not send message to AF_to=%d, AF_from=%d, ret=%d, err=%d",
+                        peer_addr.ss_family, local_addr.ss_family, sock_ret, sock_err);
                 }
             }
         }
