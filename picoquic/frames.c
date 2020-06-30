@@ -145,6 +145,11 @@ void picoquic_update_stream_initial_remote(picoquic_cnx_t* cnx)
                 }
             }
         }
+        else if (IS_BIDIR_STREAM_ID(stream->stream_id)) {
+            if (stream->maxdata_remote < cnx->remote_parameters.initial_max_stream_data_bidi_local) {
+                stream->maxdata_remote = cnx->remote_parameters.initial_max_stream_data_bidi_local;
+            }
+        }
         stream = picoquic_next_stream(stream);
     };
 }
