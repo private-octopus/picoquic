@@ -99,7 +99,7 @@ static int socket_ping_pong(SOCKET_TYPE fd, struct sockaddr* server_addr,
 
             for (int i = 0; ret == 0 && i < bytes_recv; i++) {
                 if (message[i] != (buffer[i] ^ 0xFF)) {
-                    BG_PRINTF("Second select, message mismatch at position %d\n", i);
+                    DBG_PRINTF("Second select, message mismatch at position %d\n", i);
                     ret = -1;
                 }
             }
