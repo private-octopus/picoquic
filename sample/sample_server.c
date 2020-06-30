@@ -365,9 +365,7 @@ int picoquic_sample_server(int server_port, const char* server_cert, const char*
     char const* binlog_filename = PICOQUIC_SAMPLE_SERVER_BINLOG_FILE;
     struct sockaddr_storage addr_from;
     struct sockaddr_storage addr_to;
-    unsigned long if_index_to;
-    socklen_t from_length;
-    socklen_t to_length;
+    int if_index_to;
     uint8_t recv_buffer[1536];
     uint8_t send_buffer[1536];
     size_t send_length = 0;

@@ -441,7 +441,7 @@ int picoquic_recvmsg_async_finish(
                     ((struct sockaddr_in*)&ctx->addr_dest)->sin_port = 0;
                     ((struct sockaddr_in*)&ctx->addr_dest)->sin_addr.s_addr = pPktInfo->ipi_addr.s_addr;
                     ctx->dest_length = sizeof(struct sockaddr_in);
-                    ctx->dest_if = pPktInfo->ipi_ifindex;
+                    ctx->dest_if = (int) pPktInfo->ipi_ifindex;
                 }
                 else if (cmsg->cmsg_type == IP_TOS && cmsg->cmsg_len > 0) {
                     ctx->received_ecn = *((unsigned char *)WSA_CMSG_DATA(cmsg));
@@ -454,7 +454,7 @@ int picoquic_recvmsg_async_finish(
                     ((struct sockaddr_in6*)&ctx->addr_dest)->sin6_port = 0;
                     memcpy(&((struct sockaddr_in6*)&ctx->addr_dest)->sin6_addr, &pPktInfo6->ipi6_addr, sizeof(IN6_ADDR));
                     ctx->dest_length = sizeof(struct sockaddr_in6);
-                    ctx->dest_if = pPktInfo6->ipi6_ifindex;
+                    ctx->dest_if = (int) pPktInfo6->ipi6_ifindex;
                 }
                 else if (cmsg->cmsg_type == IPV6_TCLASS
 #ifdef IPV6_ECN
@@ -540,7 +540,7 @@ int picoquic_recvmsg_async_start(picoquic_recvmsg_async_ctx_t * ctx)
 int picoquic_recvmsg(SOCKET_TYPE fd,
     struct sockaddr_storage* addr_from,
     struct sockaddr_storage* addr_dest,
-    unsigned long* dest_if,
+    int* dest_if,
     unsigned char* received_ecn,
     uint8_t* buffer, int buffer_max)
 #ifdef _WINDOWS
@@ -609,7 +609,7 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
                             ((struct sockaddr_in*)addr_dest)->sin_addr.s_addr = pPktInfo->ipi_addr.s_addr;
 
                             if (dest_if != NULL) {
-                                *dest_if = pPktInfo->ipi_ifindex;
+                                *dest_if = (int) pPktInfo->ipi_ifindex;
                             }
                         }
                         else if (cmsg->cmsg_type == IP_TOS && cmsg->cmsg_len > 0) {
@@ -627,7 +627,7 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
                                 memcpy(&((struct sockaddr_in6*)addr_dest)->sin6_addr, &pPktInfo6->ipi6_addr, sizeof(IN6_ADDR));
 
                                 if (dest_if != NULL) {
-                                    *dest_if = pPktInfo6->ipi6_ifindex;
+                                    *dest_if = (int) pPktInfo6->ipi6_ifindex;
                                 }
                         }
                     }
@@ -690,7 +690,7 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
                         ((struct sockaddr_in*)addr_dest)->sin_addr.s_addr = pPktInfo->ipi_addr.s_addr;
 
                         if (dest_if != NULL) {
-                            *dest_if = pPktInfo->ipi_ifindex;
+                            *dest_if = (int) pPktInfo->ipi_ifindex;
                         }
                     }
                 }
@@ -725,7 +725,7 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
                         memcpy(&((struct sockaddr_in6*)addr_dest)->sin6_addr, &pPktInfo6->ipi6_addr, sizeof(struct in6_addr));
 
                         if (dest_if != NULL) {
-                            *dest_if = pPktInfo6->ipi6_ifindex;
+                            *dest_if = (int) pPktInfo6->ipi6_ifindex;
                         }
                     }
                 }
@@ -745,7 +745,7 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
 int picoquic_sendmsg(SOCKET_TYPE fd,
     struct sockaddr* addr_dest,
     struct sockaddr* addr_from,
-    unsigned long dest_if,
+    int dest_if,
     const char* bytes, int length)
 #ifdef _WINDOWS
 {
@@ -796,7 +796,7 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
                 cmsg->cmsg_len = WSA_CMSG_LEN(sizeof(struct in_pktinfo));
                 struct in_pktinfo* pktinfo = (struct in_pktinfo*)WSA_CMSG_DATA(cmsg);
                 pktinfo->ipi_addr.s_addr = ((struct sockaddr_in*)addr_from)->sin_addr.s_addr;
-                pktinfo->ipi_ifindex = dest_if;
+                pktinfo->ipi_ifindex = (unsigned long) dest_if;
 
                 control_length += WSA_CMSG_SPACE(sizeof(struct in_pktinfo));
             }
@@ -807,7 +807,7 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
                 cmsg->cmsg_len = WSA_CMSG_LEN(sizeof(struct in6_pktinfo));
                 struct in6_pktinfo* pktinfo6 = (struct in6_pktinfo*)WSA_CMSG_DATA(cmsg);
                 memcpy(&pktinfo6->ipi6_addr.u, &((struct sockaddr_in6*)addr_from)->sin6_addr.u, sizeof(IN6_ADDR));
-                pktinfo6->ipi6_ifindex = dest_if;
+                pktinfo6->ipi6_ifindex = (unsigned long) dest_if;
 
                 control_length += WSA_CMSG_SPACE(sizeof(struct in6_pktinfo));
             }
@@ -894,7 +894,7 @@ int picoquic_sendmsg(SOCKET_TYPE fd,
             cmsg->cmsg_len = CMSG_LEN(sizeof(struct in_pktinfo));
             struct in_pktinfo* pktinfo = (struct in_pktinfo*)CMSG_DATA(cmsg);
             pktinfo->ipi_addr.s_addr = ((struct sockaddr_in*)addr_from)->sin_addr.s_addr;
-            pktinfo->ipi_ifindex = dest_if;
+            pktinfo->ipi_ifindex = (unsigned int) dest_if;
             control_length += CMSG_SPACE(sizeof(struct in_pktinfo));
 #else
             /* The IP_PKTINFO structure is not defined on BSD */
@@ -1014,7 +1014,7 @@ int picoquic_select(SOCKET_TYPE* sockets,
     int nb_sockets,
     struct sockaddr_storage* addr_from,
     struct sockaddr_storage* addr_dest,
-    unsigned long* dest_if,
+    int* dest_if,
     unsigned char * received_ecn,
     uint8_t* buffer, int buffer_max,
     int64_t delta_t,
