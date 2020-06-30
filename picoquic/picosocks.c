@@ -1092,7 +1092,7 @@ int picoquic_select(SOCKET_TYPE* sockets,
 int picoquic_send_through_socket(
     SOCKET_TYPE fd,
     struct sockaddr* addr_dest,
-    struct sockaddr* addr_from, unsigned long from_if,
+    struct sockaddr* addr_from, int from_if,
     const char* bytes, int length, int* sock_err)
 {
     int sent = picoquic_sendmsg(fd, addr_dest, addr_from, from_if, bytes, length);
@@ -1118,7 +1118,7 @@ int picoquic_send_through_socket(
 int picoquic_send_through_server_sockets(
     picoquic_server_sockets_t* sockets,
     struct sockaddr* addr_dest,
-    struct sockaddr* addr_from, unsigned long from_if,
+    struct sockaddr* addr_from, int from_if,
     const char* bytes, int length, int* sock_err)
 {
     /* Both Linux and Windows use separate sockets for V4 and V6 */

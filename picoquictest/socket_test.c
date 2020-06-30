@@ -33,7 +33,7 @@ static int socket_ping_pong(SOCKET_TYPE fd, struct sockaddr* server_addr,
     int bytes_recv = 0;
     struct sockaddr_storage addr_from;
     struct sockaddr_storage addr_dest;
-    unsigned long dest_if;
+    int dest_if;
     struct sockaddr_storage addr_back;
     int server_address_length = (server_addr->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
 
@@ -56,7 +56,7 @@ static int socket_ping_pong(SOCKET_TYPE fd, struct sockaddr* server_addr,
         memset(buffer, 0, sizeof(buffer));
 
         bytes_recv = picoquic_select(server_sockets->s_socket, PICOQUIC_NB_SERVER_SOCKETS,
-            &addr_from, &addr_dest,&dest_if, &received_ecn,
+            &addr_from, &addr_dest, &dest_if, &received_ecn,
             buffer, sizeof(buffer), 1000000, &current_time);
 
         if (bytes_recv != bytes_sent) {
