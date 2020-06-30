@@ -70,6 +70,7 @@ script:
   - if [ "$CHECK" == "cppcheck" ]; then cppcheck --project=compile_commands.json --quiet; fi
   - ${EXTRA} make
   - ulimit -c unlimited -S
+  - ./picoquic_ct sockets
   - ./picoquic_ct -n -r && QUICRESULT=$?
   - ./picohttp_ct -n -r -x http_corrupt && HTTPRESULT=$?
   - if [[ ${QUICRESULT} != 0 ]]; then for i in $(find ./ -maxdepth 1 -name 'core*' -print); do gdb $(pwd)/picoquic_ct core* -ex "thread apply all bt" -ex "set pagination 0" -batch; done; fi;

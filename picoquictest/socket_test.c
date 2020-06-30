@@ -47,6 +47,7 @@ static int socket_ping_pong(SOCKET_TYPE fd, struct sockaddr* server_addr,
     bytes_sent = sendto(fd, (const char*)&message, sizeof(message), 0, server_addr, server_address_length);
 
     if (bytes_sent != (int)sizeof(message)) {
+        DBG_PRINTF("Sendto sent %d bytes, expected %d\n", bytes_sent, (int)sizeof(message));
         ret = -1;
     }
 
@@ -60,6 +61,7 @@ static int socket_ping_pong(SOCKET_TYPE fd, struct sockaddr* server_addr,
             buffer, sizeof(buffer), 1000000, &current_time);
 
         if (bytes_recv != bytes_sent) {
+            DBG_PRINTF("Select returns %d bytes, expected %d\n", bytes_recv, bytes_sent);
             ret = -1;
         }
     }
@@ -90,12 +92,14 @@ static int socket_ping_pong(SOCKET_TYPE fd, struct sockaddr* server_addr,
             buffer, sizeof(buffer), 1000000, &current_time);
 
         if (bytes_recv != bytes_sent) {
+            DBG_PRINTF("Second select returns %d bytes, expected %d\n", bytes_recv, bytes_sent);
             ret = -1;
         } else {
             /* Check that the message matches what was sent initially */
 
             for (int i = 0; ret == 0 && i < bytes_recv; i++) {
                 if (message[i] != (buffer[i] ^ 0xFF)) {
+                    BG_PRINTF("Second select, message mismatch at position %d\n", i);
                     ret = -1;
                 }
             }
