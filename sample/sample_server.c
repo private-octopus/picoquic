@@ -372,9 +372,7 @@ int picoquic_sample_server(int server_port, const char* server_cert, const char*
     int bytes_recv;
     uint64_t current_time = 0;
     int64_t delay_max = 10000000;
-    uint64_t loop_count_time = 0;
     picoquic_connection_id_t log_cid;
-    int first_connection_seen = 0;
     sample_server_ctx_t default_context = { 0 };
 
     default_context.default_dir = default_dir;
@@ -389,7 +387,6 @@ int picoquic_sample_server(int server_port, const char* server_cert, const char*
 
         /* Create the QUIC context for the server */
         current_time = picoquic_current_time();
-        loop_count_time = current_time;
         /* Create QUIC context */
         quic = picoquic_create(8, server_cert, server_key, NULL, PICOQUIC_SAMPLE_ALPN,
             sample_server_callback, &default_context, NULL, NULL, NULL, current_time, NULL, NULL, NULL, 0);
@@ -452,7 +449,6 @@ int picoquic_sample_server(int server_port, const char* server_cert, const char*
                     &peer_addr, &local_addr, &if_index, &log_cid);
 
                 if (ret == 0 && send_length > 0) {
-                    loop_count_time = current_time;
                     sock_ret = picoquic_send_through_server_sockets(&server_sockets,
                         (struct sockaddr*) & peer_addr, (struct sockaddr*) & local_addr, if_index,
                         (const char*)send_buffer, (int)send_length, &sock_err);
