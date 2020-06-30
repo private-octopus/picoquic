@@ -122,7 +122,7 @@ typedef struct st_picoquic_recvmsg_async_ctx_t {
     socklen_t from_length;
     socklen_t dest_length;
     SOCKET_TYPE fd;
-    unsigned long dest_if;
+    int dest_if;
     unsigned char received_ecn;
     int bytes_recv;
     int is_started;
@@ -155,10 +155,8 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
 
 int picoquic_select(SOCKET_TYPE* sockets, int nb_sockets,
     struct sockaddr_storage* addr_from,
-    socklen_t* from_length,
     struct sockaddr_storage* addr_dest,
-    socklen_t* dest_length,
-    unsigned long* dest_if,
+    int* dest_if,
     unsigned char * received_ecn,
     uint8_t* buffer, int buffer_max,
     int64_t delta_t,
@@ -167,18 +165,17 @@ int picoquic_select(SOCKET_TYPE* sockets, int nb_sockets,
 int picoquic_send_through_socket(
     SOCKET_TYPE fd,
     struct sockaddr* addr_dest,
-    struct sockaddr* addr_from, unsigned long from_if,
+    struct sockaddr* addr_from, int from_if,
     const char* bytes, int length, int* sock_err);
 
 int picoquic_send_through_server_sockets(
     picoquic_server_sockets_t* sockets,
     struct sockaddr* addr_dest, 
-    struct sockaddr* addr_from, unsigned long from_if,
+    struct sockaddr* addr_from, int from_if,
     const char* bytes, int length, int * sock_err);
 
 int picoquic_get_server_address(const char* ip_address_text, int server_port,
     struct sockaddr_storage* server_address,
-    int* server_addr_length,
     int* is_name);
 
 /* Wireshark needs the session keys in order to decrypt and analyze packets.

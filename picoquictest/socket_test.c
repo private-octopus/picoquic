@@ -22,7 +22,7 @@
 #include "picosocks.h"
 #include "picoquic_utils.h"
 
-static int socket_ping_pong(SOCKET_TYPE fd, struct sockaddr* server_addr, int server_address_length,
+static int socket_ping_pong(SOCKET_TYPE fd, struct sockaddr* server_addr,
     picoquic_server_sockets_t* server_sockets)
 {
     int ret = 0;
@@ -32,12 +32,10 @@ static int socket_ping_pong(SOCKET_TYPE fd, struct sockaddr* server_addr, int se
     int bytes_sent = 0;
     int bytes_recv = 0;
     struct sockaddr_storage addr_from;
-    socklen_t from_length;
     struct sockaddr_storage addr_dest;
-    socklen_t dest_length;
-    unsigned long dest_if;
+    int dest_if;
     struct sockaddr_storage addr_back;
-    socklen_t back_length;
+    int server_address_length = (server_addr->sa_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
 
     for (size_t i = 0; i < sizeof(message);) {
         for (int j = 0; j < 64 && i < sizeof(message); j += 8, i++) {
@@ -49,6 +47,7 @@ static int socket_ping_pong(SOCKET_TYPE fd, struct sockaddr* server_addr, int se
     bytes_sent = sendto(fd, (const char*)&message, sizeof(message), 0, server_addr, server_address_length);
 
     if (bytes_sent != (int)sizeof(message)) {
+        DBG_PRINTF("Sendto sent %d bytes, expected %d\n", bytes_sent, (int)sizeof(message));
         ret = -1;
     }
 
@@ -56,13 +55,13 @@ static int socket_ping_pong(SOCKET_TYPE fd, struct sockaddr* server_addr, int se
     if (ret == 0) {
         unsigned char received_ecn;
         memset(buffer, 0, sizeof(buffer));
-        from_length = (socklen_t)sizeof(struct sockaddr_storage);
 
         bytes_recv = picoquic_select(server_sockets->s_socket, PICOQUIC_NB_SERVER_SOCKETS,
-            &addr_from, &from_length, &addr_dest, &dest_length, &dest_if, &received_ecn,
+            &addr_from, &addr_dest, &dest_if, &received_ecn,
             buffer, sizeof(buffer), 1000000, &current_time);
 
         if (bytes_recv != bytes_sent) {
+            DBG_PRINTF("Select returns %d bytes, expected %d\n", bytes_recv, bytes_sent);
             ret = -1;
         }
     }
@@ -88,18 +87,19 @@ static int socket_ping_pong(SOCKET_TYPE fd, struct sockaddr* server_addr, int se
     if (ret == 0) {
         memset(buffer, 0, sizeof(buffer));
 
-        back_length = (socklen_t)sizeof(addr_back);
         bytes_recv = picoquic_select(&fd, 1,
-            &addr_back, &back_length, NULL, NULL, NULL, NULL,
+            &addr_back, NULL, NULL, NULL,
             buffer, sizeof(buffer), 1000000, &current_time);
 
         if (bytes_recv != bytes_sent) {
+            DBG_PRINTF("Second select returns %d bytes, expected %d\n", bytes_recv, bytes_sent);
             ret = -1;
         } else {
             /* Check that the message matches what was sent initially */
 
             for (int i = 0; ret == 0 && i < bytes_recv; i++) {
                 if (message[i] != (buffer[i] ^ 0xFF)) {
+                    DBG_PRINTF("Second select, message mismatch at position %d\n", i);
                     ret = -1;
                 }
             }
@@ -114,12 +114,11 @@ static int socket_test_one(char const* addr_text, int server_port, int should_be
 {
     int ret = 0;
     struct sockaddr_storage server_address;
-    int server_address_length;
     int is_name;
     SOCKET_TYPE fd = INVALID_SOCKET;
 
     /* Resolve the server address -- check the "is_name" property */
-    ret = picoquic_get_server_address(addr_text, server_port, &server_address, &server_address_length, &is_name);
+    ret = picoquic_get_server_address(addr_text, server_port, &server_address, &is_name);
 
     if (ret == 0) {
         if (is_name != should_be_name) {
@@ -129,7 +128,7 @@ static int socket_test_one(char const* addr_text, int server_port, int should_be
             if (fd == INVALID_SOCKET) {
                 ret = -1;
             } else {
-                ret = socket_ping_pong(fd, (struct sockaddr*)&server_address, server_address_length, server_sockets);
+                ret = socket_ping_pong(fd, (struct sockaddr*)&server_address, server_sockets);
             }
 
             SOCKET_CLOSE(fd);

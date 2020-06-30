@@ -423,7 +423,6 @@ int quicwind_start_connection(picoquic_quic_t * qclient,
     int ret = 0;
     int port = 443;
     struct sockaddr_storage server_address;
-    int server_addr_length = 0;
     int is_name = 0;
     picoquic_cnx_t * cnx_client = NULL;
 
@@ -437,7 +436,7 @@ int quicwind_start_connection(picoquic_quic_t * qclient,
     }
 
     if (ret == 0) {
-        ret = picoquic_get_server_address(name, port, &server_address, &server_addr_length, &is_name);
+        ret = picoquic_get_server_address(name, port, &server_address, &is_name);
         if (sni == NULL && is_name != 0) {
             sni = name;
         }
