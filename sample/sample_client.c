@@ -467,11 +467,9 @@ int picoquic_sample_client(char const * server_name, int server_port, char const
     }
 
     /* Run a loop until the client connection finishes, either because it broke or
-     * because all the files are donloaded */
+     * because all the files are downloaded */
     while (ret == 0 && !client_ctx.is_disconnected) {
         int64_t delta_t;
-        socklen_t from_length;
-        socklen_t to_length;
         struct sockaddr_storage peer_addr;
         struct sockaddr_storage local_addr;
         int if_index = 0;

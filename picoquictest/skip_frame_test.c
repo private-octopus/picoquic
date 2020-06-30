@@ -1667,75 +1667,77 @@ static int test_format_for_retransmit_one(uint8_t* frame, size_t frame_length, s
         }
     }
 
-    if (ret == 0 && cnx->stream_frame_retransmit_queue != NULL) {
-        /* verify that the leftover frame can be properly decoded */
-        misc = cnx->stream_frame_retransmit_queue;
+    if (ret == 0) {
+        if (cnx->stream_frame_retransmit_queue != NULL) {
+            /* verify that the leftover frame can be properly decoded */
+            misc = cnx->stream_frame_retransmit_queue;
 
-        if (misc->length > frame_length) {
-            DBG_PRINTF("Misc frame now too long, %zu vs %zu\n", misc->length, frame_length);
-            ret = -1;
-        }
-        else {
-            uint8_t* misc_frame = ((uint8_t *)misc) + sizeof(picoquic_misc_frame_header_t);
-
-            if ((ret = picoquic_parse_stream_header(misc_frame, misc->length, &stream_id2, &offset2, &data_length2, 
-                &fin2, &consumed2)) != 0) {
-                DBG_PRINTF("%s", "Cannot parse copied frame\n");
+            if (misc->length > frame_length) {
+                DBG_PRINTF("Misc frame now too long, %zu vs %zu\n", misc->length, frame_length);
+                ret = -1;
             }
             else {
-                data_val2 = misc_frame + consumed2;
-                if (consumed2 + data_length2 > misc->length) {
-                    DBG_PRINTF("Leftover frame too long, %zu + %zu bytes vs %zu\n", consumed2, data_length2, misc->length);
-                    ret = -1;
+                uint8_t* misc_frame = ((uint8_t*)misc) + sizeof(picoquic_misc_frame_header_t);
+
+                if ((ret = picoquic_parse_stream_header(misc_frame, misc->length, &stream_id2, &offset2, &data_length2,
+                    &fin2, &consumed2)) != 0) {
+                    DBG_PRINTF("%s", "Cannot parse copied frame\n");
                 }
-                else if (stream_id2 != stream_id) {
-                    DBG_PRINTF("Stream_id1 = %" PRIu64 "instead of %" PRIu64 ".\n", stream_id1, stream_id);
-                    ret = -1;
-                }
-                else if (next_bytes == new_bytes) {
-                    /* The leftover frame should be equivalent to the original frame */
-                    if (data_length2 != data_length) {
-                        DBG_PRINTF("Data_length2 = %zu vs %zu.\n", data_length2, data_length);
+                else {
+                    data_val2 = misc_frame + consumed2;
+                    if (consumed2 + data_length2 > misc->length) {
+                        DBG_PRINTF("Leftover frame too long, %zu + %zu bytes vs %zu\n", consumed2, data_length2, misc->length);
                         ret = -1;
                     }
-                    else if (offset2 != offset) {
-                        DBG_PRINTF("Offset2 = %" PRIu64 " vs %" PRIu64 ".\n", offset2, offset);
+                    else if (stream_id2 != stream_id) {
+                        DBG_PRINTF("Stream_id1 = %" PRIu64 "instead of %" PRIu64 ".\n", stream_id1, stream_id);
                         ret = -1;
                     }
-                    else if (fin2 != fin) {
-                        DBG_PRINTF("Fin2 = %d vs %d.\n", fin2, fin);
-                        ret = -1;
-                    }
-                    else if (memcmp(data_val, data_val2, data_length) != 0) {
-                        DBG_PRINTF("%s", "Leftover data != original data\n");
-                        ret = -1;
+                    else if (next_bytes == new_bytes) {
+                        /* The leftover frame should be equivalent to the original frame */
+                        if (data_length2 != data_length) {
+                            DBG_PRINTF("Data_length2 = %zu vs %zu.\n", data_length2, data_length);
+                            ret = -1;
+                        }
+                        else if (offset2 != offset) {
+                            DBG_PRINTF("Offset2 = %" PRIu64 " vs %" PRIu64 ".\n", offset2, offset);
+                            ret = -1;
+                        }
+                        else if (fin2 != fin) {
+                            DBG_PRINTF("Fin2 = %d vs %d.\n", fin2, fin);
+                            ret = -1;
+                        }
+                        else if (memcmp(data_val, data_val2, data_length) != 0) {
+                            DBG_PRINTF("%s", "Leftover data != original data\n");
+                            ret = -1;
+                        }
                     }
                 }
             }
         }
-    }
-    else
-    {
-        if (next_bytes == new_bytes) {
-            /* Nothing was produced! */
-            if (data_length != 0 || fin) {
-                DBG_PRINTF("Nothing produced, data length %zu, fin %d\n", data_length, fin);
-                ret = -1;
+        else
+        {
+            if (next_bytes == new_bytes) {
+                /* Nothing was produced! */
+                if (data_length != 0 || fin) {
+                    DBG_PRINTF("Nothing produced, data length %zu, fin %d\n", data_length, fin);
+                    ret = -1;
+                }
             }
-        }
-        else {
-            /* Copied frame should be equivalent to original frame */
-            if (data_length1 != data_length) {
-                DBG_PRINTF("Data_length1 = %zu vs %zu.\n", data_length1, data_length);
-                ret = -1;
-            }
-            else if (fin1 != fin) {
-                DBG_PRINTF("Fin1 = %d vs %d.\n", fin1, fin);
-                ret = -1;
-            }
-            else if (memcmp(data_val, data_val1, data_length) != 0) {
-                DBG_PRINTF("%s", "Copied data != original data\n");
-                ret = -1;
+            else {
+                /* Copied frame should be equivalent to original frame */
+                if (data_length1 != data_length) {
+                    DBG_PRINTF("Data_length1 = %zu vs %zu.\n", data_length1, data_length);
+                    ret = -1;
+                }
+                else if (fin1 != fin) {
+                    DBG_PRINTF("Fin1 = %d vs %d.\n", fin1, fin);
+                    ret = -1;
+                }
+                else if (memcmp(data_val, data_val1, data_length) != 0) {
+                    DBG_PRINTF("%s", "Copied data != original data\n");
+                    ret = -1;
+                }
             }
         }
     }
