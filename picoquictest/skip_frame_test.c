@@ -1734,7 +1734,7 @@ static int test_format_for_retransmit_one(uint8_t* frame, size_t frame_length, s
                     DBG_PRINTF("Fin1 = %d vs %d.\n", fin1, fin);
                     ret = -1;
                 }
-                else if (memcmp(data_val, data_val1, data_length) != 0) {
+                else if (data_val1 != NULL && memcmp(data_val, data_val1, data_length) != 0) {
                     DBG_PRINTF("%s", "Copied data != original data\n");
                     ret = -1;
                 }

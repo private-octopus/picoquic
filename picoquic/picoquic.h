@@ -592,7 +592,7 @@ int picoquic_incoming_packet(
     size_t length,
     struct sockaddr* addr_from,
     struct sockaddr* addr_to,
-    unsigned long if_index_to,
+    int if_index_to,
     unsigned char received_ecn,
     uint64_t current_time);
 
