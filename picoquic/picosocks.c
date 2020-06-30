@@ -673,7 +673,7 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
 
     bytes_recv = recvmsg(fd, &msg, 0);
 
-    if (bytes_recv > 0) {
+    if (bytes_recv <= 0) {
         addr_from->ss_family = 0;
     } else {
         /* Get the control information */
