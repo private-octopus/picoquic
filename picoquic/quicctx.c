@@ -28,7 +28,6 @@
 #include <string.h>
 #ifndef _WINDOWS
 #include <sys/time.h>
-#include "quicctx.h"
 #endif
 
 /*
