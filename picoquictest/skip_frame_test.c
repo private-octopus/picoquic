@@ -302,16 +302,6 @@ static uint8_t test_frame_type_bad_max_streams_unidir[] = {
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
 };
 
-static uint8_t test_frame_type_bad_streams_blocked_bidir[] = {
-    picoquic_frame_type_streams_blocked_bidir,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-};
-
-static uint8_t test_frame_type_bad_streams_blocked_unidir[] = {
-    picoquic_frame_type_streams_blocked_unidir,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-};
-
 static uint8_t test_frame_type_bad_new_cid_length[] = {
     picoquic_frame_type_new_connection_id,
     7,
@@ -1024,8 +1014,6 @@ int logger_test()
         for (int sharp_end = 0; ret == 0 && sharp_end < 2; sharp_end++) {
             uint8_t extra_bytes[4] = { 0, 0, 0, 0 };
             size_t bytes_max = 0;
-            int t_ret = 0;
-            int ack_needed = 0;
             FILE* F = NULL;
 
             if ((F = picoquic_file_open(log_error_test_file, "w")) == NULL) {
@@ -1183,8 +1171,6 @@ int binlog_test()
         for (int sharp_end = 0; ret == 0 && sharp_end < 2; sharp_end++) {
             uint8_t extra_bytes[4] = { 0, 0, 0, 0 };
             size_t bytes_max = 0;
-            int t_ret = 0;
-            int ack_needed = 0;
             FILE* F = NULL;
 
             if ((F = picoquic_file_open(binlog_error_test_file, "wb")) == NULL) {
