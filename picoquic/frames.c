@@ -357,6 +357,7 @@ uint8_t* picoquic_decode_new_connection_id_frame(picoquic_cnx_t* cnx, uint8_t* b
         retire_before > sequence) {
         picoquic_connection_error(cnx, (bytes == NULL) ? PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR : PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
             picoquic_frame_type_new_connection_id);
+        bytes = NULL;
     } else {
         uint16_t ret = 0;
 
@@ -583,6 +584,7 @@ uint8_t* picoquic_decode_stop_sending_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
     } else if (!IS_BIDIR_STREAM_ID(stream_id) && !IS_LOCAL_STREAM_ID(stream_id, cnx->client_mode)) {
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
             picoquic_frame_type_stop_sending);
+        bytes = NULL;
     } else if (!stream->stop_sending_received && !stream->reset_requested) {
         stream->stop_sending_received = 1;
         stream->remote_stop_error = error_code;
@@ -910,6 +912,7 @@ uint8_t* picoquic_decode_stream_frame(picoquic_cnx_t* cnx, uint8_t* bytes, const
         bytes = NULL;
     }else if (offset + data_length >= (1ull<<62)){
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FINAL_OFFSET_ERROR, 0);
+        bytes = NULL;
     } else if (picoquic_stream_network_input(cnx, stream_id, offset, fin, (bytes += consumed), data_length, current_time) != 0) {
         bytes = NULL;
     } else {
