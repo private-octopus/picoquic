@@ -23,7 +23,7 @@ At this stage the
 changes in Picoquic will be mostly driven by performance issues, or API
 improvements. And bug fixing, too.
 
-**About bugs: just fixed bug #969, remote DDOS with malformed frame. Please update your copy to the latest build!**
+**About bugs: just fixed bug [#969](https://github.com/private-octopus/picoquic/issues/969), remote DDOS with malformed frame. Please update your copy to the latest build!**
 
 There are many implementations of Quic, listed
 at https://github.com/quicwg/base-drafts/wiki/Implementations. The interop
