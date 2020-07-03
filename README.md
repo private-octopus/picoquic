@@ -17,11 +17,14 @@ such as support for multipath, or support for peer-to-peer applications.
 That's on the horizon, but not there now.
 
 The code in this repo is a work in progress, but it is getting stable, just
-like the specification itself. The working group just issued draft-27, which
-is meant as the stabilization draft. We may expect a few draft changes in the
-next months, but these should not affect the wire format. At this stage the
+like the specification itself. The working group just issued draft-29, which
+is meant as the stabilization draft, and the Working Group Last Call is out!
+At this stage the
 changes in Picoquic will be mostly driven by performance issues, or API
 improvements. And bug fixing, too.
+
+**About bugs: just fixed bug #969, remote DDOS with malformed frame**
+**Please update your copy to the latest build**
 
 There are many implementations of Quic, listed
 at https://github.com/quicwg/base-drafts/wiki/Implementations. The interop
@@ -33,7 +36,6 @@ at https://interop.seemann.io/.
 Bastian Köcher has developed bindings of the picoquic library to [RUST](https://www.rust-lang.org/en-US/). 
 His repository can be found [here](https://github.com/bkchr/picoquic-rs).
 You may want to check it.
-
 
 # Development
 
@@ -135,13 +137,15 @@ has been tested so far.
 
 Sorry, not all that much documentation yet. This will come as we populate the wiki. Your
 best bet is to look at the demonstration program "picoquicdemo" that is included in the
-release. The sources are in "picoquicfirst/picoquicdemo.c".
+release. The sources are in "picoquicfirst/picoquicdemo.c". The `sample` folder
+contains a code sample for a simplistic file transfer protocol, which might
+be a good place to start.
 
 ## Testing previous versions
 
 The code is constantly updated to track the latest version of the specification. It currently
-conforms to draft-28, and will negotiate support for the corresponding version `0xFF00001c`.
-It will also accept negotiation of version `0xFF00001b`, draft-27. 
+conforms to draft-29, and will negotiate support for the corresponding version `0xFF00001d`.
+It will also accept negotiation of version `0xFF00001c`, draft-28, and `0xFF00001b`, draft-27. 
 
 # Creating QLOG Log Files
 
