@@ -3433,11 +3433,14 @@ static void picoquic_lb_compat_cid_generate_obfuscated(picoquic_quic_t* quic,
     uint64_t obfuscator = 0;
     uint64_t obfuscated;
 
+    cnx_id_returned->id[0] = lb_ctx->first_byte;
     for (size_t i = 0; i < lb_ctx->routing_bits_length; i++) {
-        obfuscator = obfuscator * 8 + cnx_id_returned->id[i + 1];
+        obfuscator <<= 8;
+        obfuscator += cnx_id_returned->id[i + 1];
         obfuscator %= obfuscation_max;
     }
     obfuscated = obfuscator* lb_ctx->divider;
+    obfuscated += lb_ctx->server_id64;
 
     for (size_t i = 0; i < lb_ctx->routing_bits_length; i++) {
         size_t j = lb_ctx->routing_bits_length - i; /* varies from lb_ctx->routing_bits_length to 1 */
@@ -3452,6 +3455,7 @@ static void picoquic_lb_compat_cid_generate_stream_cipher(picoquic_quic_t* quic,
     uint8_t mask[16];
     size_t id_offset = 1 + lb_ctx->nonce_length;
 
+    cnx_id_returned->id[0] = lb_ctx->first_byte;
     /* Set the obfuscation value */
     memset(mask, 0, sizeof(mask));
     memcpy(mask, cnx_id_returned->id + 1, lb_ctx->nonce_length);
@@ -3466,12 +3470,14 @@ static void picoquic_lb_compat_cid_generate_stream_cipher(picoquic_quic_t* quic,
 static void picoquic_lb_compat_cid_generate_block_cipher(picoquic_quic_t* quic,
     picoquic_load_balancer_cid_context_t* lb_ctx, picoquic_connection_id_t* cnx_id_returned)
 {
+    cnx_id_returned->id[0] = lb_ctx->first_byte;
     /* Copy the server ID */
     memcpy(cnx_id_returned->id + 1, lb_ctx->server_id, lb_ctx->server_id_length);
     /* Set the zeropad value */
     memset(cnx_id_returned->id + 1 + lb_ctx->server_id_length, 0, lb_ctx->zero_pad_length);
     /* encrypt 16 bytes */
     picoquic_aes128_ecb_encrypt(lb_ctx->cid_encryption_context, cnx_id_returned->id + 1, cnx_id_returned->id + 1, 16);
+    cnx_id_returned->id[0] = lb_ctx->first_byte;
 }
 
 void picoquic_lb_compat_cid_generate(picoquic_quic_t* quic, picoquic_connection_id_t cnx_id_local,
@@ -3507,7 +3513,8 @@ static uint64_t picoquic_lb_compat_cid_verify_clear(picoquic_quic_t* quic,
     uint64_t s_id64 = 0;
 
     for (size_t i = 0; i < lb_ctx->server_id_length; i++) {
-        s_id64 = s_id64 * 8 + cnx_id->id[i + 1];
+        s_id64 <<= 8;
+        s_id64 += cnx_id->id[i + 1];
     }
 
     return s_id64;
@@ -3519,7 +3526,8 @@ static uint64_t picoquic_lb_compat_cid_verify_obfuscated(picoquic_quic_t* quic,
     uint64_t s_id64 = 0;
 
     for (size_t i = 0; i < lb_ctx->routing_bits_length; i++) {
-        s_id64 = s_id64 * 8 + cnx_id->id[i + 1];
+        s_id64 <<= 8;
+        s_id64 += cnx_id->id[i + 1];
         s_id64 %= lb_ctx->divider;
     }
 
@@ -3540,7 +3548,8 @@ static uint64_t picoquic_lb_compat_cid_verify_stream_cipher(picoquic_quic_t* qui
     picoquic_aes128_ecb_encrypt(lb_ctx->cid_encryption_context, mask, mask, sizeof(mask));
     /* Unmask and decode the server ID */
     for (size_t i = 0; i < lb_ctx->server_id_length; i++) {
-        s_id64 = s_id64*8 + (cnx_id->id[id_offset + i] ^ mask[i]);
+        s_id64 <<= 8;
+        s_id64 += (cnx_id->id[id_offset + i] ^ mask[i]);
     }
 
     return s_id64;
@@ -3553,7 +3562,7 @@ static uint64_t picoquic_lb_compat_cid_verify_block_cipher(picoquic_quic_t* quic
     uint64_t s_id64 = 0;
 
     /* decrypt 16 bytes */
-    picoquic_aes128_ecb_encrypt(lb_ctx->cid_encryption_context, decoded, cnx_id->id + 1, 16);
+    picoquic_aes128_ecb_encrypt(lb_ctx->cid_decryption_context, decoded, cnx_id->id + 1, 16);
 
     /* Check that the nonce is all zeros */
     for (size_t i = 0; i < lb_ctx->zero_pad_length; i++) {
@@ -3565,7 +3574,8 @@ static uint64_t picoquic_lb_compat_cid_verify_block_cipher(picoquic_quic_t* quic
     /* Decode the server ID */
     if (s_id64 == 0) {
         for (size_t i = 0; i < lb_ctx->server_id_length; i++) {
-            s_id64 = s_id64 * 8 + decoded[i];
+            s_id64 <<= 8;
+            s_id64 += decoded[i];
         }
     }
 
@@ -3626,15 +3636,15 @@ int picoquic_lb_compat_cid_config(picoquic_quic_t* quic, picoquic_load_balancer_
             switch (lb_config->method) {
             case picoquic_load_balancer_cid_clear:
                 /* Require at least 2 bytes to make the CID unique */
-                if (lb_config->server_id_length + 1 + 2 < lb_config->connection_id_length) {
+                if (lb_config->server_id_length + 1 + 2 > lb_config->connection_id_length) {
                     ret = -1;
                 }
                 break;
             case picoquic_load_balancer_cid_obfuscated:
                 /* Require at least 2 bytes to obfuscate the server CID,
                  * cannot handle undivided values larger than 8 bytes */
-                if (lb_config->routing_bits_length + 1 < lb_config->connection_id_length ||
-                    lb_config->server_id_length + 2 < lb_config->routing_bits_length ||
+                if (lb_config->routing_bits_length + 1 > lb_config->connection_id_length ||
+                    lb_config->server_id_length + 2 > lb_config->routing_bits_length ||
                     lb_config->routing_bits_length > 8 ||
                     lb_config->divider == 0) {
                     ret = -1;
@@ -3652,7 +3662,7 @@ int picoquic_lb_compat_cid_config(picoquic_quic_t* quic, picoquic_load_balancer_
                  * there should be at least 2 bytes available for uniqueness,
                  * zero padding length should be 4 bytes for security */
                 if (lb_config->connection_id_length < 17 ||
-                    lb_config->server_id_length + lb_config->zero_pad_length + 1 + 2 < lb_config->connection_id_length ||
+                    lb_config->server_id_length + lb_config->zero_pad_length + 1 + 2 > lb_config->connection_id_length ||
                     lb_config->zero_pad_length < 4 ) {
                     ret = -1;
                 }
@@ -3665,29 +3675,30 @@ int picoquic_lb_compat_cid_config(picoquic_quic_t* quic, picoquic_load_balancer_
         }
         if (ret == 0) {
             /* Create a copy */
-            picoquic_load_balancer_cid_context_t* cfg = (picoquic_load_balancer_cid_context_t*)malloc(sizeof(picoquic_load_balancer_cid_context_t));
+            picoquic_load_balancer_cid_context_t* lb_ctx = (picoquic_load_balancer_cid_context_t*)malloc(sizeof(picoquic_load_balancer_cid_context_t));
 
-            if (cfg == NULL) {
+            if (lb_ctx == NULL) {
                 ret = -1;
             }
             else {
                 /* if allocated, create the necessary encryption contexts or variables */
-                uint64_t s_id64 = cfg->server_id64;
-                memset(cfg, 0, sizeof(picoquic_load_balancer_cid_context_t));
-                cfg->method = lb_config->method;
-                cfg->server_id_length = lb_config->server_id_length;
-                cfg->routing_bits_length = lb_config->routing_bits_length;
-                cfg->nonce_length = lb_config->nonce_length;
-                cfg->zero_pad_length = lb_config->zero_pad_length;
-                cfg->connection_id_length = lb_config->connection_id_length;
-                cfg->first_byte = lb_config->first_byte;
-                cfg->server_id64 = lb_config->server_id64;
-                cfg->cid_encryption_context = NULL;
-                cfg->cid_decryption_context = NULL;
+                uint64_t s_id64 = lb_config->server_id64;
+                memset(lb_ctx, 0, sizeof(picoquic_load_balancer_cid_context_t));
+                lb_ctx->method = lb_config->method;
+                lb_ctx->server_id_length = lb_config->server_id_length;
+                lb_ctx->routing_bits_length = lb_config->routing_bits_length;
+                lb_ctx->nonce_length = lb_config->nonce_length;
+                lb_ctx->zero_pad_length = lb_config->zero_pad_length;
+                lb_ctx->connection_id_length = lb_config->connection_id_length;
+                lb_ctx->first_byte = lb_config->first_byte;
+                lb_ctx->server_id64 = lb_config->server_id64;
+                lb_ctx->divider = lb_config->divider;
+                lb_ctx->cid_encryption_context = NULL;
+                lb_ctx->cid_decryption_context = NULL;
                 /* Compute the server ID bytes and set encryption contexts */
-                for (size_t i = 0; i < cfg->server_id_length; i++) {
-                    size_t j = cfg->server_id_length - 1;
-                    cfg->server_id[j] = (uint8_t)s_id64;
+                for (size_t i = 0; i < lb_ctx->server_id_length; i++) {
+                    size_t j = lb_ctx->server_id_length - i - 1;
+                    lb_ctx->server_id[j] = (uint8_t)s_id64;
                     s_id64 >>= 8;
                 }
                 if (s_id64 != 0) {
@@ -3695,28 +3706,28 @@ int picoquic_lb_compat_cid_config(picoquic_quic_t* quic, picoquic_load_balancer_
                     ret = -1;
                 } else if (lb_config->method == picoquic_load_balancer_cid_stream_cipher ||
                     lb_config->method == picoquic_load_balancer_cid_block_cipher) {
-                    cfg->cid_encryption_context = picoquic_aes128_ecb_create(1, lb_config->cid_encryption_key);
-                    if (cfg->cid_encryption_context == NULL) {
+                    lb_ctx->cid_encryption_context = picoquic_aes128_ecb_create(1, lb_config->cid_encryption_key);
+                    if (lb_ctx->cid_encryption_context == NULL) {
                         ret = -1;
                     }
                     else if (lb_config->method == picoquic_load_balancer_cid_block_cipher) {
-                        cfg->cid_decryption_context = picoquic_aes128_ecb_create(0, lb_config->cid_encryption_key);
-                        if (cfg->cid_decryption_context == NULL) {
-                            picoquic_aes128_ecb_free(cfg->cid_encryption_context);
-                            cfg->cid_encryption_context = NULL;
+                        lb_ctx->cid_decryption_context = picoquic_aes128_ecb_create(0, lb_config->cid_encryption_key);
+                        if (lb_ctx->cid_decryption_context == NULL) {
+                            picoquic_aes128_ecb_free(lb_ctx->cid_encryption_context);
+                            lb_ctx->cid_encryption_context = NULL;
                             ret = -1;
                         }
                     }
                 }
                 if (ret != 0) {
                     /* if context allocation failed, free the copy */
-                    free(cfg);
-                    cfg = NULL;
+                    free(lb_ctx);
+                    lb_ctx = NULL;
                 } else {
                     /* Configure the CID generation */
-                    quic->local_cnxid_length = cfg->connection_id_length;
+                    quic->local_cnxid_length = lb_ctx->connection_id_length;
                     quic->cnx_id_callback_fn = picoquic_lb_compat_cid_generate;
-                    quic->cnx_id_callback_ctx = (void*)cfg;
+                    quic->cnx_id_callback_ctx = (void*)lb_ctx;
                 }
             }
         }
