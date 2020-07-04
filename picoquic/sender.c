@@ -402,8 +402,14 @@ size_t picoquic_create_packet_header(
     if (packet_type == picoquic_packet_1rtt_protected) {
         /* Create a short packet -- using 32 bit sequence numbers for now */
         uint8_t K = (cnx->key_phase_enc) ? 0x04 : 0;
-        const uint8_t C = 0x40; /* set the QUIC bit */
+        uint8_t C = 0x40; /* set the QUIC bit */
         size_t pn_l = 4;  /* default packet length to 4 bytes */
+
+        if (cnx->do_grease_quic_bit) {
+            C &= (uint8_t)picoquic_public_random_64();
+            cnx->quic_bit_greased |= (C == 0);
+        }
+
         length = 0;
         bytes[length++] = (K | C | picoquic_spin_function_table[cnx->spin_policy].spinbit_outgoing(cnx));
         length += picoquic_format_connection_id(&bytes[length], PICOQUIC_MAX_PACKET_SIZE - length, dest_cnx_id);

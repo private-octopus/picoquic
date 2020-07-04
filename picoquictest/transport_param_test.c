@@ -74,42 +74,42 @@
 
 static picoquic_tp_t transport_param_test1 = {
     65535, 0, 0, 0x400000, 65533, 65535, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT,
-    PICOQUIC_NB_PATH_TARGET, 3, 0,  TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0
+    PICOQUIC_NB_PATH_TARGET, 3, 0,  TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test2 = {
     0x1000000, 0, 0, 0x1000000, 1, 0, 255, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 1480, 2, 1, 0
+    TRANSPORT_PREFERED_ADDRESS_NULL, 1480, 2, 1, 0, 0
 };
 
 static picoquic_tp_t transport_param_test3 = {
     0x1000000, 0, 0, 0x1000000, 1, 0, 255, 0, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 1, 1
+    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 1, 1, 0
 };
 
 static picoquic_tp_t transport_param_test4 = {
     65535, 0, 0, 0x400000, 65532, 0, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0,
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0
+    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test5 = {
     0x1000000, 0, 0, 0x1000000, 4, 0, 255, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0
+    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test6 = {
     0x10000, 0, 0, 0xffffffff, 0, 0, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0,
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0
+    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test7 = {
     8192, 0, 0, 16384, 5, 0, 10, 1472, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 17, 0, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0
+    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test8 = {
     65535, 0, 0, 0x400000, 0, 0, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0
+    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test9 = {
@@ -117,17 +117,21 @@ static picoquic_tp_t transport_param_test9 = {
     { 1, { 10, 0, 0, 1}, 4433, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 0,
     {{1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },4},
         { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 }},
-        0, 0, 0, 0
+        0, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test10 = {
     65535, 0, 0, 0x400000, 65533, 65535, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 1, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0
+    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0
+};
+
+static picoquic_tp_t transport_param_test11 = {
+    65535, 0, 0, 0x400000, 65533, 65535, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT,
+    PICOQUIC_NB_PATH_TARGET, 3, 0,  TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 1
 };
 
 #define LOCAL_CONNECTION_ID  2, 3, 4, 5, 6, 7, 8, 9
 #define INITIAL_CONNECTION_ID  1, 2, 3, 4, 5, 6, 7, 8
-
 
 uint8_t client_param1[] = {
     picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x80, 0, 0xFF, 0xFF,
@@ -256,6 +260,18 @@ uint8_t client_param11[] = {
     picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID,
     /* Add same grease value that the server will generate */
     0x40, 0x59, 2, 0x42, 0x03
+};
+
+uint8_t client_param12[] = {
+    picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x80, 0, 0xFF, 0xFF,
+    picoquic_tp_initial_max_data, 4, 0x80, 0x40, 0, 0,
+    picoquic_tp_initial_max_streams_bidi, 4, 0x80, 0, 0x40, 0x00,
+    picoquic_tp_idle_timeout, 1, 0x1E,
+    picoquic_tp_max_packet_size, 2, 0x45, 0xC8,
+    picoquic_tp_initial_max_streams_uni, 4, 0x80, 0, 0x40, 0x00,
+    picoquic_tp_active_connection_id_limit, 1, PICOQUIC_NB_PATH_TARGET,
+    picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID,
+    (0x40 |(picoquic_tp_grease_quic_bit>>8)), (picoquic_tp_grease_quic_bit&0xFF), 0
 };
 
 /* Error 2: wrong option length, larger than message size */
@@ -451,6 +467,11 @@ static int transport_param_compare(picoquic_tp_t* param, picoquic_tp_t* ref) {
     else if (param->enable_time_stamp != ref->enable_time_stamp) {
         DBG_PRINTF("enable_time_stamp: got %d, expected %d\n",
             param->enable_time_stamp, ref->enable_time_stamp);
+        ret = -1;
+    }
+    else if (param->do_grease_quic_bit != ref->do_grease_quic_bit) {
+        DBG_PRINTF("grease_quic_bit: got %d, expected %d\n",
+            param->do_grease_quic_bit, ref->do_grease_quic_bit);
         ret = -1;
     }
 
@@ -851,6 +872,13 @@ int transport_param_test()
         }
     }
 
+    if (ret == 0) {
+        ret = transport_param_one_test(0, 0, version_default, version_default,
+            &transport_param_test11, client_param12, sizeof(client_param12));
+        if (ret != 0) {
+            DBG_PRINTF("Param test TP11, CP12 returns %x\n", ret);
+        }
+    }
 
     for (size_t i = 0; ret == 0 && i < nb_transport_param_error_case; i++) {
         ret = transport_param_error_test(transport_param_error_case[i].mode, transport_param_error_case[i].target, 

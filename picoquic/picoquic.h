@@ -229,6 +229,7 @@ typedef struct st_picoquic_tp_t {
     int enable_loss_bit;
     int enable_time_stamp;
     uint64_t min_ack_delay;
+    int do_grease_quic_bit;
 } picoquic_tp_t;
 
 /*

@@ -92,6 +92,8 @@ int picoquic_parse_long_packet_header(
                 * describes the encoding. */
                 ph->spin = 0;
                 ph->has_spin_bit = 0;
+                ph->quic_bit = (flags & 0x40) == 0x40;
+
                 switch ((flags >> 4) & 7) {
                 case 4: /* Initial */
                 {
@@ -244,11 +246,12 @@ int picoquic_parse_short_packet_header(
         ph->epoch = picoquic_epoch_1rtt;
         ph->version_index = (*pcnx)->version_index;
 
-        if ((bytes[0] & 0x40) != 0x40) {
+        ph->quic_bit = (bytes[0] & 0x40) == 0x40;
+        if (ph->quic_bit ||(*pcnx)->do_grease_quic_bit) {
+            ph->ptype = picoquic_packet_1rtt_protected;
+        } else {
             /* Check for QUIC bit failed! */
             ph->ptype = picoquic_packet_error;
-        } else {
-            ph->ptype = picoquic_packet_1rtt_protected;
         }
 
         ph->has_spin_bit = 1;
@@ -567,11 +570,6 @@ int picoquic_parse_header_and_decrypt(
     int already_received = 0;
     size_t decoded_length = 0;
     int ret = picoquic_parse_packet_header(quic, bytes, length, addr_from, ph, pcnx, 1);
-#if 1
-    if (ph->pn >= 241) {
-        already_received = 0;
-    }
-#endif
 
     *new_ctx_created = 0;
 
