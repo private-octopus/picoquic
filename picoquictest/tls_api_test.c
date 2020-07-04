@@ -9121,3 +9121,48 @@ int cid_quiescence_test()
 
     return ret;
 }
+
+/*
+ * Test that the Quic Bit is properly greased.
+ * Negotiate the Quic Bit parameter, transfer packets,
+ * verify at the end that the quic bit was greased.
+ */
+
+int grease_quic_bit_test()
+{
+    int ret;
+    picoquic_tp_t client_parameters;
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+
+    memset(&client_parameters, 0, sizeof(picoquic_tp_t));
+    picoquic_init_transport_parameters(&client_parameters, 1);
+
+    client_parameters.do_grease_quic_bit = 1;
+
+    ret = tls_api_one_scenario_init(&test_ctx, &simulated_time, 0, &client_parameters, NULL);
+
+    if (ret == 0) {
+        ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+            test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0, 0, 0, 0);
+    }
+
+    if (ret == 0) {
+        if (!test_ctx->cnx_client->quic_bit_greased) {
+            DBG_PRINTF("%s", "Quic bit was not greased on client");
+            ret = -1;
+        }
+
+        if (test_ctx->cnx_server == NULL || !test_ctx->cnx_server->quic_bit_greased) {
+            DBG_PRINTF("%s", "Quic bit was not greased on server");
+            ret = -1;
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}

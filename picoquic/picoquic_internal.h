@@ -254,6 +254,7 @@ typedef struct st_picoquic_packet_header_t {
     unsigned int has_loss_bits : 1;
     unsigned int loss_bit_Q : 1;
     unsigned int loss_bit_L : 1;
+    unsigned int quic_bit : 1;
 
     size_t token_length;
     uint8_t* token_bytes;
@@ -453,7 +454,8 @@ typedef enum {
     picoquic_tp_enable_loss_bit_old = 0x1055,
     picoquic_tp_enable_loss_bit = 0x1057,
     picoquic_tp_min_ack_delay = 0xDE1A,
-    picoquic_tp_enable_time_stamp = 0x7157
+    picoquic_tp_enable_time_stamp = 0x7157,
+    picoquic_tp_grease_quic_bit = 0x2ab2
 } picoquic_tp_enum;
 
 /* QUIC context, defining the tables of connections,
@@ -903,7 +905,8 @@ typedef struct st_picoquic_cnx_t {
     unsigned int is_pacing_update_requested : 1; /* Whether the application subscribed to pacing updates */
     unsigned int is_flow_control_limited : 1; /* Flow control window limited to initial value, mostly for tests */
     unsigned int is_hcid_verified : 1; /* Whether the HCID was received from the peer */
-
+    unsigned int do_grease_quic_bit : 1; /* Negotiated grease of QUIC bit */
+    unsigned int quic_bit_greased : 1; /* Indicate whether the quic bit was greased at least once */
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;
     /* Idle timeout in microseconds */

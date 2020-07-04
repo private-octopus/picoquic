@@ -394,6 +394,10 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         bytes = picoquic_transport_param_type_flag_encode(bytes, bytes_max, picoquic_tp_enable_time_stamp);
     }
 
+    if (cnx->local_parameters.do_grease_quic_bit > 0 && bytes != NULL) {
+        bytes = picoquic_transport_param_type_flag_encode(bytes, bytes_max, picoquic_tp_grease_quic_bit);
+    }
+
     if (bytes == NULL) {
         *consumed = 0;
         ret = PICOQUIC_ERROR_EXTENSION_BUFFER_TOO_SMALL;
@@ -435,6 +439,8 @@ void picoquic_clear_transport_extensions(picoquic_cnx_t* cnx)
     cnx->remote_parameters.active_connection_id_limit = 0;
     cnx->remote_parameters.enable_loss_bit = 0;
     cnx->remote_parameters.enable_time_stamp = 0;
+    cnx->remote_parameters.min_ack_delay = 0;
+    cnx->remote_parameters.do_grease_quic_bit = 0;
 }
 
 int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mode,
@@ -666,6 +672,14 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                         cnx->remote_parameters.enable_time_stamp = 1;
                     }
                     break;
+                case picoquic_tp_grease_quic_bit:
+                    if (extension_length != 0) {
+                        ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+                    }
+                    else {
+                        cnx->remote_parameters.do_grease_quic_bit = 1;
+                    }
+                    break;
                 default:
                     /* ignore unknown extensions */
                     break;
@@ -768,13 +782,19 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     cnx->is_loss_bit_enabled_outgoing = (cnx->local_parameters.enable_loss_bit > 1) && (cnx->remote_parameters.enable_loss_bit > 0);
     cnx->is_loss_bit_enabled_incoming = (cnx->local_parameters.enable_loss_bit > 0) && (cnx->remote_parameters.enable_loss_bit > 1);
 
-    /* One way delay only enabled if asked by client and accepted by server */
+    /* One way delay and Quic_bit_grease only enabled if asked by client and accepted by server */
     if (cnx->client_mode) {
         cnx->is_time_stamp_enabled = cnx->local_parameters.enable_time_stamp && cnx->remote_parameters.enable_time_stamp;
+        cnx->do_grease_quic_bit = cnx->local_parameters.do_grease_quic_bit && cnx->remote_parameters.do_grease_quic_bit;
     }
-    else if (cnx->remote_parameters.enable_time_stamp) {
-        cnx->local_parameters.enable_time_stamp = 1;
-        cnx->is_time_stamp_enabled = 1;
+    else
+    {
+        if (cnx->remote_parameters.enable_time_stamp) {
+            cnx->local_parameters.enable_time_stamp = 1;
+            cnx->is_time_stamp_enabled = 1;
+        }
+        cnx->local_parameters.do_grease_quic_bit = cnx->remote_parameters.do_grease_quic_bit;
+        cnx->do_grease_quic_bit = cnx->remote_parameters.do_grease_quic_bit;
     }
 
     /* ACK Frequency is only enabled on server if negotiated by client */
