@@ -191,11 +191,8 @@ int optimistic_hole_test();
 int document_addresses_test();
 int socket_ecn_test();
 int null_sni_test();
-int preferred_address_test();
-#if 0
-int cid_global_encrypt_test();
-int cid_mask_encrypt_test();
-#endif
+int preferred_address_test(); 
+int cid_for_lb_test();
 int retry_protection_vector_test();
 int test_copy_for_retransmit();
 int test_format_for_retransmit();

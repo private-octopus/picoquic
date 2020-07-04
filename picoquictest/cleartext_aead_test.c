@@ -1109,144 +1109,6 @@ int key_rotation_vector_test()
     return ret;
 }
 
-#if 0
-/* Test of the FFX function used for CNX-ID encryption.
- * Verify that encryption and decryption works for all lengths between 4 and 18
- */
-
-static uint8_t cid_test_secret[16] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
-
-static const picoquic_connection_id_t test_cid[] = {
-    { {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18}, 18 },
-    { {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 0, 0}, 16 },
-    { {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 0, 0, 0, 0, 0, 0}, 12 },
-    { {1, 2, 3, 4, 5, 6, 7, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 8 },
-    { {1, 2, 3, 4, 5, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 6 },
-    { {1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 4 }
-};
-
-static const picoquic_connection_id_t test_cid_global_crypt[] = {
-    {{0x37, 0xfe, 0x11, 0xd1, 0x8a, 0xbf, 0xaf, 0x0e, 0x79, 0x6d, 0x21, 0x75, 0x39, 0xcd, 0x64, 0x44, 0xcc, 0x3b}, 18},
-    {{0xc1, 0x44, 0xe0, 0x7b, 0x48, 0x40, 0x67, 0x2a, 0xed, 0x81, 0x4d, 0x14, 0x14, 0x2d, 0x8e, 0x3d, 0x00, 0x00}, 16},
-    {{0xb0, 0xe5, 0xd0, 0x29, 0x27, 0xb4, 0xce, 0x30, 0x76, 0x52, 0xa5, 0x87, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, 12},
-    {{0x27, 0x20, 0xaf, 0x95, 0x5e, 0x62, 0xd7, 0x36, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, 8},
-    {{0xe2, 0x66, 0x18, 0x9d, 0x2f, 0xac, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, 6},
-    {{0xf0, 0x7d, 0xf5, 0x36, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, 4}
-};
-
-static const picoquic_connection_id_t test_cid_mask[] = {
-    { {0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}, 18 },
-    { {0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00}, 16 },
-    { {0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, 12 },
-    { {0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, 8 },
-    { {0x00, 0x3F, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, 6 },
-    { {0x0F, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, 4 }
-};
-
-static const picoquic_connection_id_t test_cid_mask_crypt[] = {
-    {{0xfe, 0xe9, 0xc7, 0x9f, 0x64, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12}, 18},
-    {{0x1d, 0x13, 0x75, 0x99, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x00, 0x00}, 16},
-    {{0xae, 0x17, 0x04, 0x32, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0xa6, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, 12},
-    {{0x79, 0x9a, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, 8},
-    {{0x2c, 0x02, 0x03, 0x04, 0x05, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, 6},
-    {{0xb1, 0x02, 0x03, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, 4}
-};
-
-static const size_t nb_test_cid = sizeof(test_cid) / sizeof(picoquic_connection_id_t);
-
-int cid_global_encrypt_test()
-{
-    int ret = 0;
-    void * cid_enc = NULL;
-    void * cid_dec = NULL;
-    picoquic_connection_id_t encrypted_cid;
-    picoquic_connection_id_t decrypted_cid;
-
-    for (size_t i = 0; ret == 0 && i < nb_test_cid; i++) {
-        memset(&decrypted_cid, 0, sizeof(picoquic_connection_id_t));
-        ret = picoquic_cid_get_encrypt_global_ctx(&cid_enc, 1, cid_test_secret, test_cid[i].id_len);
-        if (ret == 0) {
-            picoquic_cid_encrypt_global(cid_enc, &test_cid[i], &encrypted_cid);
-            if (picoquic_compare_connection_id(&encrypted_cid, &test_cid_global_crypt[i]) != 0) {
-                DBG_PRINTF("Encrypted (len=%d) != expected[%d] (len = %d)\n", encrypted_cid.id_len, (int)i, test_cid_global_crypt[i].id_len);
-                ret = -1;
-            }
-
-            picoquic_cid_free_encrypt_global_ctx(cid_enc);
-            cid_enc = NULL;
-        }
-        if (ret == 0) {
-            ret = picoquic_cid_get_encrypt_global_ctx(&cid_dec, 0, cid_test_secret, test_cid[i].id_len);
-        }
-        if (ret == 0) {
-            picoquic_cid_encrypt_global(cid_dec, &encrypted_cid, &decrypted_cid);
-            if (picoquic_compare_connection_id(&decrypted_cid, &test_cid[i]) != 0) {
-                DBG_PRINTF("Decrypted (len=%d) != test[%d] (len = %d)\n", decrypted_cid.id_len, (int)i, test_cid[i].id_len);
-                ret = -1;
-            }
-
-            picoquic_cid_free_encrypt_global_ctx(cid_dec);
-            cid_dec = NULL;
-        }
-    }
-
-    if (cid_enc != NULL) {
-        picoquic_cid_free_encrypt_global_ctx(cid_enc);
-    }
-
-    if (cid_dec != NULL) {
-        picoquic_cid_free_encrypt_global_ctx(cid_dec);
-    }
-
-    return ret;
-}
-
-int cid_mask_encrypt_test()
-{
-    int ret = 0;
-    void * cid_enc = NULL;
-    void * cid_dec = NULL;
-    picoquic_connection_id_t encrypted_cid;
-    picoquic_connection_id_t decrypted_cid;
-
-    for (size_t i = 0; ret == 0 && i < nb_test_cid; i++) {
-        memset(&decrypted_cid, 0, sizeof(picoquic_connection_id_t));
-        ret = picoquic_cid_get_under_mask_ctx(&cid_enc, cid_test_secret);
-        if (ret == 0) {
-            picoquic_cid_encrypt_under_mask(cid_enc, &test_cid[i], &test_cid_mask[i], &encrypted_cid);
-            if (picoquic_compare_connection_id(&encrypted_cid, &test_cid_mask_crypt[i]) != 0) {
-                DBG_PRINTF("Encrypted (len=%d) != expected[%d] (len = %d)\n", encrypted_cid.id_len, (int)i, test_cid_mask_crypt[i].id_len);
-                ret = -1;
-            }
-            picoquic_cid_free_under_mask_ctx(cid_enc);
-            cid_enc = NULL;
-        }
-        if (ret == 0) {
-            ret = picoquic_cid_get_under_mask_ctx(&cid_dec, cid_test_secret);
-        }
-        if (ret == 0) {
-            picoquic_cid_decrypt_under_mask(cid_dec, &encrypted_cid, &test_cid_mask[i], &decrypted_cid);
-            if (picoquic_compare_connection_id(&decrypted_cid, &test_cid[i]) != 0) {
-                DBG_PRINTF("Decrypted (len=%d) != test[%d] (len = %d)\n", decrypted_cid.id_len, (int)i, test_cid[i].id_len);
-                ret = -1;
-            }
-            picoquic_cid_free_encrypt_global_ctx(cid_dec);
-            cid_dec = NULL;
-        }
-    }
-
-    if (cid_enc != NULL) {
-        picoquic_cid_free_encrypt_global_ctx(cid_enc);
-    }
-
-    if (cid_dec != NULL) {
-        picoquic_cid_free_encrypt_global_ctx(cid_dec);
-    }
-
-    return ret;
-}
-#endif
-
 /* Retry protection test vector */
 
 #define RETRY_PROTECTION_FIRST_BYTE 0xF5
@@ -1443,5 +1305,138 @@ int retry_protection_vector_test()
         }
     }
 
+    return ret;
+}
+
+
+/* Test of the CID generation function.
+ */
+#define CID_ENCRYPTION_KEY 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16
+
+picoquic_load_balancer_config_t cid_for_lb_test_config[4] = {
+    {
+        picoquic_load_balancer_cid_clear,
+        3,
+        3,
+        0,
+        0,
+        8,
+        0x08,
+        0x0123,
+        { 0 },
+        0
+    },
+    {
+        picoquic_load_balancer_cid_obfuscated,
+        2,
+        8,
+        0,
+        0,
+        9,
+        0x09,
+        0x1234,
+        { 0 },
+        8047
+    },
+    {
+        picoquic_load_balancer_cid_stream_cipher,
+        2,
+        0,
+        8,
+        0,
+        11,
+        0x8B,
+        0x2345,
+        { CID_ENCRYPTION_KEY },
+        0
+    },
+    {
+        picoquic_load_balancer_cid_block_cipher,
+        2,
+        0,
+        0,
+        4,
+        17,
+        0x97,
+        0x3456,
+        { CID_ENCRYPTION_KEY },
+        0
+    }
+};
+
+picoquic_connection_id_t cid_for_lb_test_ref[4] = {
+    { { 0x08, 0x00, 0x01, 0x23, 0x84, 0x85, 0x86, 0x87 }, 8 },
+    { { 0x09, 0xf5, 0x84, 0x12, 0xa1, 0x31, 0xb7, 0xe3, 0x5a }, 9 },
+    { { 0x8b, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x81, 0x92 }, 11 },
+    { { 0x97, 0x42, 0xa4, 0x35, 0x97, 0x2b, 0xfc, 0x60, 0x51, 0x69, 0x1d, 0x28, 0x1a, 0x65, 0x13, 0xcf, 0x4a }, 17 }
+};
+
+int cid_for_lb_test_one(picoquic_quic_t* quic, int test_id, picoquic_load_balancer_config_t* config,
+    picoquic_connection_id_t* target_cid)
+{
+    int ret = 0;
+    picoquic_connection_id_t result;
+
+    /* Configure the policy */
+    ret = picoquic_lb_compat_cid_config(quic, config);
+
+    if (ret != 0) {
+        DBG_PRINTF("CID test #%d fails, could not configure the context.\n", test_id);
+    }
+    else {
+        /* Create a CID. */
+        memset(&result, 0, sizeof(picoquic_connection_id_t));
+        for (size_t i = 0; i < quic->local_cnxid_length; i++) {
+            result.id[i] = (uint8_t)(0x80 + i);
+        }
+        result.id_len = quic->local_cnxid_length;
+
+        if (quic->cnx_id_callback_fn) {
+            quic->cnx_id_callback_fn(quic, picoquic_null_connection_id, picoquic_null_connection_id,
+                quic->cnx_id_callback_ctx, &result);
+        }
+
+        if (picoquic_compare_connection_id(&result, target_cid) != 0) {
+            DBG_PRINTF("CID test #%d fails, result does not match.\n", test_id);
+            ret = -1;
+        }
+        else {
+            uint64_t server_id64 = picoquic_lb_compat_cid_verify(quic, quic->cnx_id_callback_ctx, &result);
+
+            if (server_id64 != config->server_id64) {
+                DBG_PRINTF("CID test #%d fails, server id decode to %" PRIu64 " instead of %" PRIu64,
+                    test_id, server_id64, config->server_id64);
+                ret = -1;
+            }
+        }
+    }
+
+    /* Free the configured policy */
+    picoquic_lb_compat_cid_config_free(quic);
+
+    return ret;
+}
+
+
+int cid_for_lb_test()
+{
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    picoquic_quic_t* quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
+
+    if (quic == NULL) {
+        DBG_PRINTF("%s", "Could not create the quic context.");
+    }
+    else {
+        for (int i = 0; i < 4 && ret == 0; i++) {
+            ret = cid_for_lb_test_one(quic, i, &cid_for_lb_test_config[i], &cid_for_lb_test_ref[i]);
+        }
+
+        if (quic != NULL) {
+            picoquic_free(quic);
+        }
+    }
     return ret;
 }

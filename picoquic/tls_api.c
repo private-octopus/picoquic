@@ -705,6 +705,20 @@ static int picoquic_set_pn_enc_from_secret(void ** v_pn_enc, ptls_cipher_suite_t
     return ret;
 }
 
+void* picoquic_aes128_ecb_create(int is_enc, const void* ecb_key)
+{
+    return (void*) ptls_cipher_new(&ptls_openssl_aes128ecb, is_enc, ecb_key);
+}
+
+void picoquic_aes128_ecb_free(void * v_aesecb)
+{
+    ptls_cipher_free((ptls_cipher_context_t *)v_aesecb);
+}
+
+void picoquic_aes128_ecb_encrypt(void* v_aesecb, uint8_t * output, const uint8_t * input, size_t len)
+{
+    ptls_cipher_encrypt((ptls_cipher_context_t*)v_aesecb, output, input, len);
+}
 
 static int picoquic_set_key_from_secret(ptls_cipher_suite_t * cipher, int is_enc, int is_rotation, picoquic_crypto_context_t * ctx, const void *secret)
 {

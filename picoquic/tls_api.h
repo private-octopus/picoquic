@@ -172,4 +172,11 @@ void picoquic_delete_retry_protection_contexts(picoquic_quic_t * quic);
 size_t picoquic_encode_retry_protection(void * integrity_aead, uint8_t * bytes, size_t bytes_max, size_t byte_index, const picoquic_connection_id_t * odcid);
 int picoquic_verify_retry_protection(void * integrity_aead, uint8_t * bytes, size_t * length, size_t byte_index, const picoquic_connection_id_t * odcid);
 
+/* AES ECB function used for CID encryption */
+void* picoquic_aes128_ecb_create(int is_enc, const void* ecb_key);
+
+void picoquic_aes128_ecb_free(void* v_aesecb);
+
+void picoquic_aes128_ecb_encrypt(void* v_aesecb, uint8_t* output, const uint8_t* input, size_t len);
+
 #endif /* TLS_API_H */
