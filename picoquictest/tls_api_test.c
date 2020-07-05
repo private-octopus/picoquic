@@ -7358,8 +7358,11 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
 
         picoquic_cnx_set_pmtud_required(test_ctx->cnx_client, 1);
 
+        /* set the binary log on the client side */
         picoquic_set_binlog(test_ctx->qclient, binlog_file_name);
         test_ctx->qclient->use_long_log = 1;
+        /* Since the client connection was created before the binlog was set, force log of connection header */
+        binlog_new_connection(test_ctx->cnx_client);
 
         if (ret == 0) {
             ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
