@@ -2850,16 +2850,17 @@ picoquic_misc_frame_header_t* picoquic_create_misc_frame(const uint8_t* bytes, s
     else {
         uint8_t* misc_frame = (uint8_t*)malloc(l_alloc);
 
-        if (misc_frame == NULL) {
-            return NULL;
-        }
-        else {
+        if (misc_frame != NULL) {
             picoquic_misc_frame_header_t* head = (picoquic_misc_frame_header_t*)misc_frame;
             memset(head, 0, sizeof(picoquic_misc_frame_header_t));
             head->length = length;
             head->is_pure_ack = is_pure_ack;
             memcpy(misc_frame + sizeof(picoquic_misc_frame_header_t), bytes, length);
+
             return head;
+        }
+        else {
+            return NULL;
         }
     }
 }

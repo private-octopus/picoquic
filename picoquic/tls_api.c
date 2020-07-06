@@ -83,6 +83,8 @@ int picoquic_server_setup_ticket_aead_contexts(picoquic_quic_t* quic,
 
 static void picoquic_setup_cleartext_aead_salt(size_t version_index, ptls_iovec_t* salt);
 
+static void picoquic_free_log_event(picoquic_quic_t* quic);
+
 /*
  * Make sure that openssl is properly initialized.
  * 
@@ -1363,13 +1365,7 @@ void picoquic_master_tlscontext_free(picoquic_quic_t* quic)
             free(ctx->save_ticket);
         }
 
-        if (ctx->log_event != NULL) {
-            struct st_picoquic_log_event_t* picoquic_log_event = (struct st_picoquic_log_event_t*)ctx->log_event;
-            if (picoquic_log_event != NULL && picoquic_log_event->fp != NULL) {
-                picoquic_file_close(picoquic_log_event->fp);
-            }
-            free(ctx->log_event);
-        }
+        picoquic_free_log_event(quic);
     }
 }
 
@@ -1431,6 +1427,10 @@ int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint6
             }
         }
     }
+    
+    if (cnx->tls_ctx != NULL) {
+        picoquic_tlscontext_free(cnx->tls_ctx);
+    }
 
     cnx->tls_ctx = (void*)ctx;
 
@@ -1458,6 +1458,25 @@ static void picoquic_log_event_call_back(ptls_log_event_t *_self, ptls_t *tls, c
 }
 
 /**
+ * Free the log-event call back, either when the TLS master context is freed,
+ * or when the key log file is reset.
+ */
+static void picoquic_free_log_event(picoquic_quic_t* quic)
+{
+    ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
+
+    if (ctx->log_event != NULL) {
+        struct st_picoquic_log_event_t* picoquic_log_event = (struct st_picoquic_log_event_t*)ctx->log_event;
+        if (picoquic_log_event != NULL && picoquic_log_event->fp != NULL) {
+            picoquic_file_close(picoquic_log_event->fp);
+        }
+        free(ctx->log_event);
+        ctx->log_event = NULL;
+    }
+}
+
+
+/**
  * Sets the output file handle for writing traffic secrets in a format that can
  * be recognized by Wireshark.
  */
@@ -1468,6 +1487,9 @@ void picoquic_set_key_log_file(picoquic_quic_t *quic, char const * keylog_filena
 
     if (F_keylog != NULL) {
         struct st_picoquic_log_event_t *log_event;
+
+        picoquic_free_log_event(quic);
+
         log_event = (struct st_picoquic_log_event_t*)malloc(sizeof(struct st_picoquic_log_event_t));
         if (log_event != NULL) {
             log_event->fp = F_keylog;
