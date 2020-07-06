@@ -81,22 +81,24 @@ void picoquic_fastcc_reset(picoquic_fastcc_state_t* fastcc_state, picoquic_path_
 void picoquic_fastcc_init(picoquic_path_t* path_x, uint64_t current_time)
 {
     /* Initialize the state of the congestion control algorithm */
-    picoquic_fastcc_state_t* fastcc_state = (picoquic_fastcc_state_t*)malloc(sizeof(picoquic_fastcc_state_t));
+    picoquic_fastcc_state_t* fastcc_state = path_x->congestion_alg_state;
+    
+    if (fastcc_state == NULL) {
+        fastcc_state = (picoquic_fastcc_state_t*)malloc(sizeof(picoquic_fastcc_state_t));
+    }
     
     if (fastcc_state != NULL) {
         memset(fastcc_state, 0, sizeof(picoquic_fastcc_state_t));
-        path_x->congestion_alg_state = (void*)fastcc_state;
-
-        if (path_x->congestion_alg_state != NULL) {
-            memset(fastcc_state, 0, sizeof(picoquic_fastcc_state_t));
-            fastcc_state->alg_state = picoquic_fastcc_initial;
-            fastcc_state->rtt_min = path_x->smoothed_rtt;
-            fastcc_state->rolling_rtt_min = fastcc_state->rtt_min;
-            fastcc_state->delay_threshold = picoquic_fastcc_delay_threshold(fastcc_state->rtt_min);
-            fastcc_state->end_of_epoch = current_time + FASTCC_PERIOD;
-            path_x->cwin = PICOQUIC_CWIN_INITIAL;
-        }
+        memset(fastcc_state, 0, sizeof(picoquic_fastcc_state_t));
+        fastcc_state->alg_state = picoquic_fastcc_initial;
+        fastcc_state->rtt_min = path_x->smoothed_rtt;
+        fastcc_state->rolling_rtt_min = fastcc_state->rtt_min;
+        fastcc_state->delay_threshold = picoquic_fastcc_delay_threshold(fastcc_state->rtt_min);
+        fastcc_state->end_of_epoch = current_time + FASTCC_PERIOD;
+        path_x->cwin = PICOQUIC_CWIN_INITIAL;
     }
+
+    path_x->congestion_alg_state = (void*)fastcc_state;
 }
 
 void fastcc_process_cc_event(picoquic_cnx_t * cnx, 
