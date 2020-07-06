@@ -1483,23 +1483,28 @@ static void picoquic_free_log_event(picoquic_quic_t* quic)
 void picoquic_set_key_log_file(picoquic_quic_t *quic, char const * keylog_filename)
 {
     ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
-    FILE* F_keylog = picoquic_file_open(keylog_filename, "a");
+    struct st_picoquic_log_event_t* log_event = (struct st_picoquic_log_event_t*)ctx->log_event;
 
-    if (F_keylog != NULL) {
-        struct st_picoquic_log_event_t *log_event;
-
-        picoquic_free_log_event(quic);
-
+    if (log_event == NULL) {
         log_event = (struct st_picoquic_log_event_t*)malloc(sizeof(struct st_picoquic_log_event_t));
         if (log_event != NULL) {
-            log_event->fp = F_keylog;
             log_event->super.cb = picoquic_log_event_call_back;
-            ctx->log_event = (ptls_log_event_t *)log_event;
-        }
-        else {
-            picoquic_file_close(F_keylog);
         }
     }
+    else {
+        if (log_event->fp != NULL) {
+            picoquic_file_close(log_event->fp);
+            log_event->fp = NULL;
+        }
+    }
+
+    if (log_event != NULL) {
+        log_event->fp = picoquic_file_open(keylog_filename, "a");
+        log_event->super.cb = picoquic_log_event_call_back;
+        ctx->log_event = (ptls_log_event_t*)log_event;
+    }
+
+    ctx->log_event = (ptls_log_event_t*)log_event;
 }
 
 /*
