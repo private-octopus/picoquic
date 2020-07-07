@@ -793,7 +793,9 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
             cnx->local_parameters.enable_time_stamp = 1;
             cnx->is_time_stamp_enabled = 1;
         }
-        cnx->local_parameters.do_grease_quic_bit = cnx->remote_parameters.do_grease_quic_bit;
+        /* When the one way option is set, the server will grease the quic bit if the client supports that,
+         * but will not announce support of the grease quic bit, thus asking the client to not set it */
+        cnx->local_parameters.do_grease_quic_bit = cnx->remote_parameters.do_grease_quic_bit && !cnx->quic->one_way_grease_quic_bit;
         cnx->do_grease_quic_bit = cnx->remote_parameters.do_grease_quic_bit;
     }
 

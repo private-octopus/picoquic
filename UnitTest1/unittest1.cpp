@@ -1385,6 +1385,12 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(grease_quic_bit_one_way) {
+            int ret = grease_quic_bit_one_way_test();
+
+            Assert::AreEqual(ret, 0);
+        }
         TEST_METHOD(cplusplus) {
             int ret = cplusplustest();
 
