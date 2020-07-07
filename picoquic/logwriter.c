@@ -918,6 +918,8 @@ void picoquic_binlog_message_v(picoquic_quic_t* quic, picoquic_connection_id_t* 
     }
     bytestream_buf stream_msg;
     bytestream* ps_msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
+    size_t message_len;
+    char* message_text;
 
     bytewrite_cid(ps_msg, icid);
     bytewrite_vint(ps_msg, picoquic_get_quic_time(quic));
@@ -927,7 +929,15 @@ void picoquic_binlog_message_v(picoquic_quic_t* quic, picoquic_connection_id_t* 
 #else
     (void)vsprintf((char*)(ps_msg->data + ps_msg->ptr), fmt, vargs);
 #endif
-    ps_msg->ptr += strlen((char *)(ps_msg->data + ps_msg->ptr));
+    message_text = (char*)(ps_msg->data + ps_msg->ptr);
+    message_len = strlen(message_text);
+    for (size_t i = 0; i < message_len; i++) {
+        int c = message_text[i];
+        if (c < 0x20 || c > 0x7e) {
+            message_text[i] = '?';
+        }
+    }
+    ps_msg->ptr += message_len;
 
     bytestream_buf stream_head;
     bytestream* ps_head = bytestream_buf_init(&stream_head, BYTESTREAM_MAX_BUFFER_SIZE);
