@@ -2766,11 +2766,6 @@ int picoquic_is_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t 
                     *next_wake_time = pkt_ctx->time_oldest_unack_packet_received + cnx->ack_delay_remote;
                     SET_LAST_WAKE(cnx->quic, PICOQUIC_FRAME);
                 }
-
-                picoquic_log_app_message(cnx->quic, &cnx->initial_cnxid,
-                    "Delayed ACK, gap=%" PRIu64 " (%" PRIu64 "),delay=%" PRIu64 " (%" PRIu64 ")",
-                    ack_gap, (uint64_t)(pkt_ctx->first_sack_item.end_of_sack_range - pkt_ctx->highest_ack_sent),
-                    cnx->ack_delay_remote, (uint64_t)(current_time - pkt_ctx->time_oldest_unack_packet_received));
             }
         }
     }

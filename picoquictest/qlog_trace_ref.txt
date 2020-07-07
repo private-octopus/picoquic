@@ -89,13 +89,11 @@
     "frame_type": "new_connection_id", "sequence_number": 6, "retire_before": 0, "connection_id": "0803040506070809", "reset_token": "067b59f6cd452cc9b3d45e1349c3d427"}, { 
     "frame_type": "new_connection_id", "sequence_number": 7, "retire_before": 0, "connection_id": "0903040506070809", "reset_token": "cdb10de67904bc850f26f43cede090d0"}]}],
 [21652, "recovery", "metrics_updated", {"pacing_rate": 7273783,"bytes_in_flight": 1717,"smoothed_rtt": 21116,"latest_rtt": 21652}],
-[21652, "info", "message", { "message": "Delayed ACK, gap=2 (0),delay=5260 (0)"}],
 [21652, "TRANSPORT", "PACKET_SENT", { "packet_type": "1rtt", "header": { "packet_size": 39, "packet_number": 3, "dcid": "0203040506070809" }, "frames": [{ 
     "frame_type": "handshake_done"}, { 
     "frame_type": "padding"}]}],
 [21652, "recovery", "metrics_updated", {"bytes_in_flight": 1772,"smoothed_rtt": 21116}],
 [21652, "TRANSPORT", "DATAGRAM_SENT", { "byte_length": 55}],
-[21652, "info", "message", { "message": "Delayed ACK, gap=2 (0),delay=5260 (0)"}],
 [24926, "TRANSPORT", "DATAGRAM_RECEIVED", { "byte_length": 1440}],
 [24926, "TRANSPORT", "PACKET_RECEIVED", { "packet_type": "1rtt", "header": { "packet_size": 1440, "packet_number": 2, "dcid": "030405060708090a" }, "frames": [{ 
     "frame_type": "ping"}, { 
@@ -140,7 +138,6 @@
     "frame_type": "ack", "ack_delay": 1921, "acked_ranges": [[5, 6]]}, { 
     "frame_type": "padding"}]}],
 [97279, "recovery", "metrics_updated", {"bytes_in_flight": 0,"smoothed_rtt": 21017}],
-[97279, "info", "message", { "message": "Delayed ACK, gap=2 (1),delay=5021 (0)"}],
 [97936, "TRANSPORT", "DATAGRAM_RECEIVED", { "byte_length": 822}],
 [97936, "TRANSPORT", "PACKET_RECEIVED", { "packet_type": "1rtt", "header": { "packet_size": 822, "packet_number": 9, "dcid": "030405060708090a" }, "frames": [{ 
     "frame_type": "stream", "id": 4, "offset": 0, "length": 257, "fin": true , "begins_with": "0001020304050607"}, { 
