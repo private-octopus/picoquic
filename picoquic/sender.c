@@ -406,6 +406,7 @@ size_t picoquic_create_packet_header(
         size_t pn_l = 4;  /* default packet length to 4 bytes */
 
         if (cnx->do_grease_quic_bit) {
+            /* we grease the quic bit if both local and remote agreed to do so */
             C &= (uint8_t)picoquic_public_random_64();
             cnx->quic_bit_greased |= (C == 0);
         }

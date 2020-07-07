@@ -247,7 +247,8 @@ int picoquic_parse_short_packet_header(
         ph->version_index = (*pcnx)->version_index;
 
         ph->quic_bit = (bytes[0] & 0x40) == 0x40;
-        if (ph->quic_bit ||(*pcnx)->do_grease_quic_bit) {
+        if (ph->quic_bit ||(*pcnx)->local_parameters.do_grease_quic_bit) {
+            /* We do not check the quic bit if the local endpoint advertised greasing. */
             ph->ptype = picoquic_packet_1rtt_protected;
         } else {
             /* Check for QUIC bit failed! */
