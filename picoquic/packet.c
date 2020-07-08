@@ -92,7 +92,7 @@ int picoquic_parse_long_packet_header(
                 * describes the encoding. */
                 ph->spin = 0;
                 ph->has_spin_bit = 0;
-                ph->quic_bit = (flags & 0x40) == 0x40;
+                ph->quic_bit_is_zero = (flags & 0x40) == 0;
 
                 switch ((flags >> 4) & 7) {
                 case 4: /* Initial */
@@ -245,9 +245,9 @@ int picoquic_parse_short_packet_header(
         int has_loss_bit = (receiving && (*pcnx)->is_loss_bit_enabled_incoming) || ((!receiving && (*pcnx)->is_loss_bit_enabled_outgoing));
         ph->epoch = picoquic_epoch_1rtt;
         ph->version_index = (*pcnx)->version_index;
-        ph->quic_bit = (bytes[0] & 0x40) == 0x40;
+        ph->quic_bit_is_zero = (bytes[0] & 0x40) == 0;
 
-        if (ph->quic_bit ||(*pcnx)->local_parameters.do_grease_quic_bit) {
+        if (!ph->quic_bit_is_zero ||(*pcnx)->local_parameters.do_grease_quic_bit) {
             /* We do not check the quic bit if the local endpoint advertised greasing. */
             ph->ptype = picoquic_packet_1rtt_protected;
         } else {
@@ -1885,7 +1885,7 @@ int picoquic_incoming_segment(
             }
         }
         else {
-            cnx->quic_bit_received_0 |= !ph.quic_bit;
+            cnx->quic_bit_received_0 |= ph.quic_bit_is_zero;
             switch (ph.ptype) {
             case picoquic_packet_version_negotiation:
                 ret = picoquic_incoming_version_negotiation(

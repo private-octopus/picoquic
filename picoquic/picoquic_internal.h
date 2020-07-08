@@ -254,7 +254,7 @@ typedef struct st_picoquic_packet_header_t {
     unsigned int has_loss_bits : 1;
     unsigned int loss_bit_Q : 1;
     unsigned int loss_bit_L : 1;
-    unsigned int quic_bit : 1;
+    unsigned int quic_bit_is_zero : 1;
 
     size_t token_length;
     uint8_t* token_bytes;
