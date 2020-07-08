@@ -1817,21 +1817,6 @@ void picoquic_implicit_handshake_ack(picoquic_cnx_t* cnx, picoquic_packet_contex
 {
     picoquic_packet_t* p = cnx->pkt_ctx[pc].retransmit_oldest;
 
-#if 0
-    if (p != NULL && cnx->path[0]->smoothed_rtt == PICOQUIC_INITIAL_RTT && cnx->path[0]->rtt_variant == 0 &&
-        cnx->path[0]->retrans_count == 0 && cnx->client_mode) {
-        picoquic_update_path_rtt(cnx, cnx->path[0], cnx->start_time, current_time, 0);
-        /* Update path RTT will not call the congestion algorithm if the time stamp is enabled,
-         * so we need to do it here. */
-        if (cnx->congestion_alg != NULL && cnx->is_time_stamp_enabled) {
-            uint64_t rtt_estimate = current_time - cnx->start_time;
-            cnx->congestion_alg->alg_notify(cnx, cnx->path[0],
-                picoquic_congestion_notification_rtt_measurement,
-                rtt_estimate, rtt_estimate/2, 0, 0, current_time);
-        }
-    }
-#endif
-
     /* Remove packets from the retransmit queue */
     while (p != NULL) {
         picoquic_packet_t* p_next = p->next_packet;

@@ -254,7 +254,7 @@ typedef struct st_picoquic_packet_header_t {
     unsigned int has_loss_bits : 1;
     unsigned int loss_bit_Q : 1;
     unsigned int loss_bit_L : 1;
-    unsigned int quic_bit : 1;
+    unsigned int quic_bit_is_zero : 1;
 
     size_t token_length;
     uint8_t* token_bytes;
@@ -494,7 +494,7 @@ typedef struct st_picoquic_quic_t {
     unsigned int use_long_log : 1;
     unsigned int should_close_log : 1;
     unsigned int dont_coalesce_init : 1; /* test option to turn of packet coalescing on server */
-
+    unsigned int one_way_grease_quic_bit : 1; /* Grease of QUIC bit, but do not announce support */
 
     picoquic_stateless_packet_t* pending_stateless_packet;
 
@@ -907,6 +907,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int is_hcid_verified : 1; /* Whether the HCID was received from the peer */
     unsigned int do_grease_quic_bit : 1; /* Negotiated grease of QUIC bit */
     unsigned int quic_bit_greased : 1; /* Indicate whether the quic bit was greased at least once */
+    unsigned int quic_bit_received_0 : 1; /* Indicate whether the quic bit was received as zero at least once */
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;
     /* Idle timeout in microseconds */

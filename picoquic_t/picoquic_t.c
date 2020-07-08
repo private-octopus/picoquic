@@ -223,6 +223,7 @@ static const picoquic_test_def_t test_table[] = {
     { "migration_controlled", migration_controlled_test },
     { "migration_mtu_drop", migration_mtu_drop_test },
     { "grease_quic_bit", grease_quic_bit_test },
+    { "grease_quic_bit_one_way", grease_quic_bit_one_way_test },
     { "cplusplus", cplusplustest },
     { "stress", stress_test },
     { "fuzz", fuzz_test },

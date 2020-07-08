@@ -528,6 +528,7 @@ int qlog_packet_start(uint64_t time, uint64_t size, const picoquic_packet_header
     if (ph->ptype == picoquic_packet_1rtt_protected) {
         int need_key_phase = 0;
         int need_spin = 0;
+
         if (rxtx == 0) {
             need_key_phase = !ctx->key_phase_sent || (ctx->key_phase_sent_last != ph->key_phase);
             ctx->key_phase_sent = 1;
@@ -546,6 +547,9 @@ int qlog_packet_start(uint64_t time, uint64_t size, const picoquic_packet_header
         }
         if (need_spin) {
             fprintf(f, ", \"spin\": %d", ph->spin);
+        }
+        if (ph->quic_bit_is_zero) {
+            fprintf(f, ", \"quic_bit\": 0");
         }
     }
 

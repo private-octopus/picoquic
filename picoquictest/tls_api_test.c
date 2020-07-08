@@ -9131,7 +9131,7 @@ int cid_quiescence_test()
  * verify at the end that the quic bit was greased.
  */
 
-int grease_quic_bit_test()
+int grease_quic_bit_test_one(unsigned int one_way_grease_quic_bit)
 {
     int ret;
     picoquic_tp_t client_parameters;
@@ -9145,19 +9145,38 @@ int grease_quic_bit_test()
 
     ret = tls_api_one_scenario_init(&test_ctx, &simulated_time, 0, &client_parameters, NULL);
 
+    if (ret == 0 && one_way_grease_quic_bit) {
+        test_ctx->qserver->one_way_grease_quic_bit = 1;
+    }
+
     if (ret == 0) {
         ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
             test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0, 0, 0, 0);
     }
 
     if (ret == 0) {
-        if (!test_ctx->cnx_client->quic_bit_greased) {
-            DBG_PRINTF("%s", "Quic bit was not greased on client");
-            ret = -1;
+        if (one_way_grease_quic_bit) {
+            if (test_ctx->cnx_client->quic_bit_greased) {
+                DBG_PRINTF("%s", "Quic bit was greased on client");
+                ret = -1;
+            }
+        }
+        else {
+            if (!test_ctx->cnx_client->quic_bit_greased) {
+                DBG_PRINTF("%s", "Quic bit was not greased on client");
+                ret = -1;
+            } else if (test_ctx->cnx_server == NULL || !test_ctx->cnx_server->quic_bit_received_0) {
+                DBG_PRINTF("%s", "Quic bit was not received greased on server");
+                ret = -1;
+            }
         }
 
         if (test_ctx->cnx_server == NULL || !test_ctx->cnx_server->quic_bit_greased) {
             DBG_PRINTF("%s", "Quic bit was not greased on server");
+            ret = -1;
+        }
+        else if (!test_ctx->cnx_client->quic_bit_received_0) {
+            DBG_PRINTF("%s", "Quic bit not received greased on client");
             ret = -1;
         }
     }
@@ -9168,4 +9187,14 @@ int grease_quic_bit_test()
     }
 
     return ret;
+}
+
+int grease_quic_bit_test()
+{
+    return  grease_quic_bit_test_one(0);
+}
+
+int grease_quic_bit_one_way_test()
+{
+    return  grease_quic_bit_test_one(1);
 }
