@@ -245,8 +245,8 @@ int picoquic_parse_short_packet_header(
         int has_loss_bit = (receiving && (*pcnx)->is_loss_bit_enabled_incoming) || ((!receiving && (*pcnx)->is_loss_bit_enabled_outgoing));
         ph->epoch = picoquic_epoch_1rtt;
         ph->version_index = (*pcnx)->version_index;
-
         ph->quic_bit = (bytes[0] & 0x40) == 0x40;
+
         if (ph->quic_bit ||(*pcnx)->local_parameters.do_grease_quic_bit) {
             /* We do not check the quic bit if the local endpoint advertised greasing. */
             ph->ptype = picoquic_packet_1rtt_protected;
@@ -422,11 +422,7 @@ int picoquic_remove_header_protection(picoquic_cnx_t* cnx,
                 pn_val += bytes[ph->offset++];
                 ph->pnmask <<= 8;
             }
-#if 1
-            if (pn_val >= 241) {
-                DBG_PRINTF("%s", "Got it");
-            }
-#endif
+
             ph->pn = pn_val;
             ph->payload_length -= pn_l;
             /* Only set the key phase byte if short header */
@@ -1889,6 +1885,7 @@ int picoquic_incoming_segment(
             }
         }
         else {
+            cnx->quic_bit_received_0 |= !ph.quic_bit;
             switch (ph.ptype) {
             case picoquic_packet_version_negotiation:
                 ret = picoquic_incoming_version_negotiation(

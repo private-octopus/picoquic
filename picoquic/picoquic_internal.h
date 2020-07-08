@@ -907,6 +907,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int is_hcid_verified : 1; /* Whether the HCID was received from the peer */
     unsigned int do_grease_quic_bit : 1; /* Negotiated grease of QUIC bit */
     unsigned int quic_bit_greased : 1; /* Indicate whether the quic bit was greased at least once */
+    unsigned int quic_bit_received_0 : 1; /* Indicate whether the quic bit was received as zero at least once */
     /* Spin bit policy */
     picoquic_spinbit_version_enum spin_policy;
     /* Idle timeout in microseconds */

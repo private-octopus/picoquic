@@ -1442,19 +1442,21 @@ int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint6
 
 static void picoquic_log_event_call_back(ptls_log_event_t *_self, ptls_t *tls, const char *type, const char *fmt, ...)
 {
-    struct st_picoquic_log_event_t *self = (void *)_self;
+    struct st_picoquic_log_event_t *self = (struct st_picoquic_log_event_t*)_self;
     char randomhex[PTLS_HELLO_RANDOM_SIZE * 2 + 1];
     va_list args;
 
-    ptls_hexdump(randomhex, ptls_get_client_random(tls).base, PTLS_HELLO_RANDOM_SIZE);
-    fprintf(self->fp, "%s %s ", type, randomhex);
+    if (self->fp != NULL) {
+        ptls_hexdump(randomhex, ptls_get_client_random(tls).base, PTLS_HELLO_RANDOM_SIZE);
+            fprintf(self->fp, "%s %s ", type, randomhex);
 
-    va_start(args, fmt);
-    vfprintf(self->fp, fmt, args);
-    va_end(args);
+            va_start(args, fmt);
+            vfprintf(self->fp, fmt, args);
+            va_end(args);
 
-    fprintf(self->fp, "\n");
-    fflush(self->fp);
+            fprintf(self->fp, "\n");
+            fflush(self->fp);
+    }
 }
 
 /**

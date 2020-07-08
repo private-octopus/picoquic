@@ -9165,11 +9165,18 @@ int grease_quic_bit_test_one(unsigned int one_way_grease_quic_bit)
             if (!test_ctx->cnx_client->quic_bit_greased) {
                 DBG_PRINTF("%s", "Quic bit was not greased on client");
                 ret = -1;
+            } else if (test_ctx->cnx_server == NULL || !test_ctx->cnx_server->quic_bit_received_0) {
+                DBG_PRINTF("%s", "Quic bit was not received greased on server");
+                ret = -1;
             }
         }
 
         if (test_ctx->cnx_server == NULL || !test_ctx->cnx_server->quic_bit_greased) {
             DBG_PRINTF("%s", "Quic bit was not greased on server");
+            ret = -1;
+        }
+        else if (!test_ctx->cnx_client->quic_bit_received_0) {
+            DBG_PRINTF("%s", "Quic bit not received greased on client");
             ret = -1;
         }
     }

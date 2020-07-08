@@ -558,7 +558,7 @@ void binlog_packet(FILE* f, const picoquic_connection_id_t* cid, int receiving, 
     bytewrite_vint(msg, bytes_max);
 
     /* packet header */
-    bytewrite_int8(msg, (uint8_t)(2 * ph->spin + ph->key_phase));
+    bytewrite_int8(msg, (uint8_t)(64*ph->quic_bit + 2 * ph->spin + ph->key_phase));
     bytewrite_vint(msg, ph->payload_length);
     bytewrite_vint(msg, ph->ptype);
     bytewrite_vint(msg, ph->pn64);
