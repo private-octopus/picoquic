@@ -91,7 +91,7 @@ int picoquic_parse_long_packet_header(
                 /* If the version is supported now, the format field in the version table
                 * describes the encoding. */
                 ph->spin = 0;
-                ph->has_spin_bit = 7;
+                ph->has_spin_bit = 0;
                 ph->quic_bit_is_zero = (flags & 0x40) == 0;
 
                 switch ((flags >> 4) & 3) {
