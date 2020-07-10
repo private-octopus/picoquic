@@ -138,7 +138,8 @@ Sorry, not all that much documentation yet. This will come as we populate the wi
 best bet is to look at the demonstration program "picoquicdemo" that is included in the
 release. The sources are in "picoquicfirst/picoquicdemo.c". The `sample` folder
 contains a code sample for a simplistic file transfer protocol, which might
-be a good place to start.
+be a good place to start. Look at the README.md file in the sample folder for
+more details.
 
 ## Testing previous versions
 
