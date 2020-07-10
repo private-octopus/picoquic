@@ -26,7 +26,9 @@
 #include "picotls.h"
 #include "picoquic_internal.h"
 #include "picotls/openssl.h"
+#if 0
 #include "picotls/ffx.h"
+#endif
 #include "tls_api.h"
 #include <openssl/pem.h>
 #include <openssl/err.h>
@@ -2555,57 +2557,14 @@ void picoquic_cid_decrypt_under_mask(void *cid_enc, const picoquic_connection_id
 {
     picoquic_cid_encrypt_under_mask(cid_enc, cid_in, mask, cid_out);
 }
-
+#if 0
 void picoquic_cid_free_encrypt_global_ctx(void ** v_cid_enc)
 {
     if (v_cid_enc != NULL) {
         ptls_cipher_free((ptls_cipher_context_t *)v_cid_enc);
     }
 }
-
-#if 0
-int picoquic_cid_get_encrypt_global_ctx(void ** v_cid_enc, int is_enc, const void *secret, size_t cid_length)
-{
-    uint8_t cidkey[PTLS_MAX_SECRET_SIZE];
-    uint8_t long_secret[PTLS_MAX_DIGEST_SIZE];
-    ptls_cipher_suite_t cipher = { 0, &ptls_openssl_aes128gcm, &ptls_openssl_sha256 };
-    int ret;
-
-    picoquic_cid_free_encrypt_global_ctx(*v_cid_enc);
-    *v_cid_enc = NULL;
-    /* Secret is only guaranteed to be 16 bytes long. Avoid excess length issues */
-    memset(long_secret, 0, sizeof(long_secret));
-    memcpy(long_secret, secret, 16);
-
-    if ((ret = ptls_hkdf_expand_label(cipher.hash, cidkey,
-        cipher.aead->ctr_cipher->key_size, ptls_iovec_init(long_secret, cipher.hash->digest_size),
-        PICOQUIC_LABEL_CID_GLOBAL, ptls_iovec_init(NULL, 0), PICOQUIC_LABEL_QUIC_KEY_BASE)) == 0) {
-#ifdef _DEBUG
-        DBG_PRINTF("CID Global Encryption key (%d):\n", (int)cipher.aead->ctr_cipher->key_size);
-        debug_dump(cidkey, (int)cipher.aead->ctr_cipher->key_size);
 #endif
-        if ((*v_cid_enc = ptls_ffx_new(cipher.aead->ctr_cipher, is_enc, PICOQUIC_LABEL_CID_GLOBAL_ROUNDS, cid_length*8u, cidkey)) == NULL) {
-            ret = PTLS_ERROR_NO_MEMORY;
-        }
-    }
-
-    return ret;
-}
-#endif
-
-void picoquic_cid_encrypt_global(void *cid_enc, const picoquic_connection_id_t * cid_in, picoquic_connection_id_t * cid_out)
-{
-    ptls_cipher_encrypt((ptls_cipher_context_t *)cid_enc, cid_out->id, cid_in->id, cid_in->id_len);
-    cid_out->id_len = cid_in->id_len;
-    if (cid_out->id_len < 18) {
-        memset(cid_out->id + cid_out->id_len, 0, 18 - cid_out->id_len);
-    }
-}
-
-void picoquic_cid_decrypt_global(void *cid_enc, const picoquic_connection_id_t * cid_in, picoquic_connection_id_t * cid_out)
-{
-    picoquic_cid_encrypt_global(cid_enc, cid_in, cid_out);
-}
 
 /* Support for encrypted SNI (ESNI).
  */

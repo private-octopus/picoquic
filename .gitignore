@@ -20,3 +20,4 @@ Release
 */*.xbf
 */*.ilk
 *.b
+/picoquic/qlogger.c

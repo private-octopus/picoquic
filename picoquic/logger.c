@@ -1578,115 +1578,6 @@ void picoquic_log_processing(FILE* F, picoquic_cnx_t* cnx, size_t length, int re
         ret);
 }
 
-void picoquic_log_transport_extension_content_old(FILE* F, int log_cnxid, uint64_t cnx_id_64,
-    uint8_t * bytes, size_t bytes_max)
-{
-    int ret = 0;
-    size_t byte_index = 0;
-
-    if (bytes_max < 256)
-    {
-        if (ret == 0)
-        {
-            if (byte_index + 2 > bytes_max) {
-                if (log_cnxid != 0) {
-                    picoquic_log_prefix_initial_cid64(F, cnx_id_64);
-                }
-                fprintf(F, "    Malformed extension list, only %d byte available.\n", (int)(bytes_max - byte_index));
-                ret = -1;
-            }
-            else {
-                uint16_t extensions_size = PICOPARSE_16(bytes + byte_index);
-                byte_index += 2;
-
-                if (extensions_size > bytes_max - byte_index) {
-                    if (log_cnxid != 0) {
-                        picoquic_log_prefix_initial_cid64(F, cnx_id_64);
-                    }
-                    fprintf(F, "    Extension list too long (%d bytes vs %d)\n",
-                        (uint32_t)extensions_size, (uint32_t)(bytes_max - byte_index));
-                }
-                else {
-                    size_t extensions_end = byte_index + extensions_size;
-
-                    if (log_cnxid != 0) {
-                        picoquic_log_prefix_initial_cid64(F, cnx_id_64);
-                    }
-                    fprintf(F, "    Extension list (%d bytes):\n",
-                        (uint32_t)extensions_size);
-                    while (ret == 0 && byte_index < extensions_end) {
-                        if (byte_index + 4 > extensions_end) {
-                            if (log_cnxid != 0) {
-                                picoquic_log_prefix_initial_cid64(F, cnx_id_64);
-                            }
-                            fprintf(F, "        Malformed extension -- only %d bytes avaliable for type and length.\n",
-                                (int)(extensions_end - byte_index));
-                            ret = -1;
-                        }
-                        else {
-                            uint16_t extension_type = PICOPARSE_16(bytes + byte_index);
-                            uint16_t extension_length = PICOPARSE_16(bytes + byte_index + 2);
-                            byte_index += 4;
-
-                            if (log_cnxid != 0) {
-                                picoquic_log_prefix_initial_cid64(F, cnx_id_64);
-                            }
-                            fprintf(F, "        Extension type: %d (%s), length %d%s",
-                                extension_type, picoquic_log_tp_name(extension_type), extension_length,
-                                (extension_length == 0)?"":", ");
-
-                            if (byte_index + extension_length > extensions_end) {
-                                if (log_cnxid != 0) {
-                                    picoquic_log_prefix_initial_cid64(F, cnx_id_64);
-                                }
-                                fprintf(F, "Malformed extension, only %d bytes available.\n", (int)(extensions_end - byte_index));
-                                ret = -1;
-                            }
-                            else {
-                                for (uint16_t i = 0; i < extension_length; i++) {
-                                    fprintf(F, "%02x", bytes[byte_index++]);
-                                }
-                                fprintf(F, "\n");
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        if (ret == 0 && byte_index < bytes_max) {
-            if (log_cnxid != 0) {
-                picoquic_log_prefix_initial_cid64(F, cnx_id_64);
-            }
-            fprintf(F, "    Remaining bytes (%d)\n", (uint32_t)(bytes_max - byte_index));
-        }
-    }
-    else {
-        if (log_cnxid != 0) {
-            picoquic_log_prefix_initial_cid64(F, cnx_id_64);
-        }
-        fprintf(F, "Received transport parameter TLS extension (%d bytes):\n", (uint32_t)bytes_max);
-        if (log_cnxid != 0) {
-            picoquic_log_prefix_initial_cid64(F, cnx_id_64);
-        }
-        fprintf(F, "    First bytes (%d):\n", (uint32_t)(bytes_max - byte_index));
-    }
-
-    if (ret == 0)
-    {
-        while (byte_index < bytes_max && byte_index < 128) {
-            if (log_cnxid != 0) {
-                fprintf(F, "%" PRIx64 ": ", cnx_id_64);
-            }
-            fprintf(F, "        ");
-            for (int i = 0; i < 32 && byte_index < bytes_max && byte_index < 128; i++) {
-                fprintf(F, "%02x", bytes[byte_index++]);
-            }
-            fprintf(F, "\n");
-        }
-    }
-}
-
 void picoquic_log_transport_extension_content(FILE* F, int log_cnxid, uint64_t cnx_id_64,
     uint8_t* bytes, size_t bytes_max)
 {
@@ -1782,15 +1673,6 @@ void picoquic_log_transport_extension_content(FILE* F, int log_cnxid, uint64_t c
             fprintf(F, "\n");
         }
     }
-}
-
-void picoquic_log_transport_extension_old(FILE* F, picoquic_cnx_t* cnx, int received, int log_cnxid, uint8_t* bytes, size_t bytes_max)
-{
-    uint64_t cnx_id_64 = (log_cnxid) ? picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)) : 0;
-
-    picoquic_log_prefix_initial_cid64(F, cnx_id_64);
-    fprintf(F, "%s transport parameter TLS extension (%d bytes):\n", (received)?"Received":"Sending", (uint32_t)bytes_max);
-    picoquic_log_transport_extension_content_old(F, log_cnxid, cnx_id_64, bytes, bytes_max);
 }
 
 void picoquic_log_transport_extension(FILE* F, picoquic_cnx_t* cnx, int received, int log_cnxid, uint8_t* bytes, size_t bytes_max)

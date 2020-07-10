@@ -2717,10 +2717,12 @@ void picoquic_connection_id_callback_free_ctx(void * cnx_id_cb_data)
             /* encryption under mask */
             picoquic_cid_free_under_mask_ctx(ctx->cid_enc);
             break;
+#if 0
         case picoquic_connection_id_encrypt_global:
             /* global encryption */
             picoquic_cid_free_encrypt_global_ctx(ctx->cid_enc);
             break;
+#endif
         default:
             /* Guessing for the most common, assuming free will work... */
             picoquic_cid_free_under_mask_ctx(ctx->cid_enc);
