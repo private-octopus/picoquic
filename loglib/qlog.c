@@ -501,7 +501,8 @@ int qlog_packet_start(uint64_t time, uint64_t size, const picoquic_packet_header
             ctx->version_number = ph->vn;
         }
         if (ph->ptype != picoquic_packet_version_negotiation &&
-            ph->ptype != picoquic_packet_retry) {
+            ph->ptype != picoquic_packet_retry &&
+            ph->ptype != picoquic_packet_error) {
             fprintf(f, ", \"payload_length\": %zu", ph->payload_length);
         }
     }
@@ -548,9 +549,10 @@ int qlog_packet_start(uint64_t time, uint64_t size, const picoquic_packet_header
         if (need_spin) {
             fprintf(f, ", \"spin\": %d", ph->spin);
         }
-        if (ph->quic_bit_is_zero) {
-            fprintf(f, ", \"quic_bit\": 0");
-        }
+    }
+
+    if (ph->quic_bit_is_zero) {
+        fprintf(f, ", \"quic_bit\": 0");
     }
 
     ctx->packet_type = ph->ptype;
