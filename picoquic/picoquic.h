@@ -316,9 +316,6 @@ typedef enum {
     picoquic_connection_id_random = 0,
     picoquic_connection_id_remote = 1,
     picoquic_connection_id_encrypt_basic = 2
-#if 0
-    picoquic_connection_id_encrypt_global = 3
-#endif
 } picoquic_connection_id_encrypt_enum;
 
 

@@ -1955,20 +1955,6 @@ picoquic_stream_head_t* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t str
 
 void picoquic_delete_stream(picoquic_cnx_t * cnx, picoquic_stream_head_t* stream)
 {
-#if 0
-    picoquic_stream_data_node_t* first;
-    picoquic_sack_item_t* sack;
-
-    while ((first = stream->send_queue) != NULL) {
-        stream->send_queue = first->next_stream_data;
-        free(first);
-    }
-    while ((sack = stream->first_sack_item.next_sack) != NULL) {
-        stream->first_sack_item.next_sack = sack->next_sack;
-        free(sack);
-    }
-    picosplay_empty_tree(&stream->stream_data_tree);
-#endif
     picosplay_delete(&cnx->stream_tree, stream);
 }
 
@@ -2664,20 +2650,6 @@ void picoquic_connection_id_callback(picoquic_quic_t * quic, picoquic_connection
             picoquic_cid_encrypt_under_mask(ctx->cid_enc, cnx_id_returned, &ctx->cnx_id_mask, cnx_id_returned);
         }
         break;
-#if 0
-    case picoquic_connection_id_encrypt_global:
-        /* global encryption */
-        if (ctx->cid_enc == NULL) {
-            int ret = picoquic_cid_get_encrypt_global_ctx(&ctx->cid_enc, 1, quic->reset_seed, quic->local_cnxid_length);
-            if (ret != 0) {
-                DBG_PRINTF("Cannot create CID encryption context, ret=%d\n", ret);
-            }
-        }
-        if (ctx->cid_enc != NULL) {
-            picoquic_cid_encrypt_global(ctx->cid_enc, cnx_id_returned, cnx_id_returned);
-        }
-        break;
-#endif
     default:
         /* Leave it unencrypted */
         break;
@@ -2717,12 +2689,6 @@ void picoquic_connection_id_callback_free_ctx(void * cnx_id_cb_data)
             /* encryption under mask */
             picoquic_cid_free_under_mask_ctx(ctx->cid_enc);
             break;
-#if 0
-        case picoquic_connection_id_encrypt_global:
-            /* global encryption */
-            picoquic_cid_free_encrypt_global_ctx(ctx->cid_enc);
-            break;
-#endif
         default:
             /* Guessing for the most common, assuming free will work... */
             picoquic_cid_free_under_mask_ctx(ctx->cid_enc);
