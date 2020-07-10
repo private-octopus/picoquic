@@ -458,6 +458,11 @@ size_t picoquic_create_packet_header(
             bytes[0] = 0xFF; /* Will cause an error... */
             break;
         }
+
+        if (cnx->do_grease_quic_bit) {
+            bytes[0] &= 0xBF;
+        }
+
         length = 1;
         if ((cnx->cnx_state == picoquic_state_client_init || cnx->cnx_state == picoquic_state_client_init_sent) && packet_type == picoquic_packet_initial) {
             picoformat_32(&bytes[length], cnx->proposed_version);

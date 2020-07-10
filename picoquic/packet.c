@@ -94,8 +94,8 @@ int picoquic_parse_long_packet_header(
                 ph->has_spin_bit = 0;
                 ph->quic_bit_is_zero = (flags & 0x40) == 0;
 
-                switch ((flags >> 4) & 7) {
-                case 4: /* Initial */
+                switch ((flags >> 4) & 3) {
+                case 0: /* Initial */
                 {
                     /* special case of the initial packets. They contain a retry token between the header
                     * and the encrypted payload */
@@ -122,17 +122,17 @@ int picoquic_parse_long_packet_header(
 
                     break;
                 }
-                case 5: /* 0-RTT Protected */
+                case 1: /* 0-RTT Protected */
                     ph->ptype = picoquic_packet_0rtt_protected;
                     ph->pc = picoquic_packet_context_application;
                     ph->epoch = picoquic_epoch_0rtt;
                     break;
-                case 6: /* Handshake */
+                case 2: /* Handshake */
                     ph->ptype = picoquic_packet_handshake;
                     ph->pc = picoquic_packet_context_handshake;
                     ph->epoch = picoquic_epoch_handshake;
                     break;
-                case 7: /* Retry */
+                case 3: /* Retry */
                     ph->ptype = picoquic_packet_retry;
                     ph->pc = picoquic_packet_context_initial;
                     ph->epoch = picoquic_epoch_initial;
@@ -196,6 +196,21 @@ int picoquic_parse_long_packet_header(
                         else if (*pcnx == NULL) {
                             DBG_PRINTF("Dropped packet of type %d, no connection", ph->ptype);
                         }
+                    }
+                }
+
+                if (ph->quic_bit_is_zero && *pcnx != NULL && !(*pcnx)->local_parameters.do_grease_quic_bit) {
+                    ph->ptype = picoquic_packet_error;
+                }
+            }
+            else {
+                /* Try to find the connection context, for logging purpose. */
+                if (*pcnx == NULL) {
+                    if (quic->local_cnxid_length == 0) {
+                        *pcnx = picoquic_cnx_by_net(quic, addr_from);
+                    }
+                    else if (ph->dest_cnx_id.id_len == quic->local_cnxid_length) {
+                        *pcnx = picoquic_cnx_by_id(quic, ph->dest_cnx_id);
                     }
                 }
             }
@@ -570,8 +585,9 @@ int picoquic_parse_header_and_decrypt(
 
     *new_ctx_created = 0;
 
-    if (ret == 0) {
-        if (ph->ptype != picoquic_packet_version_negotiation && ph->ptype != picoquic_packet_retry) {
+    if (ret == 0 ) {
+        if (ph->ptype != picoquic_packet_version_negotiation && 
+            ph->ptype != picoquic_packet_retry && ph->ptype != picoquic_packet_error) {
             /* TODO: clarify length, payload length, packet length -- special case of initial packet */
             length = ph->offset + ph->payload_length;
             *consumed = length;
