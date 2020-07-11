@@ -131,8 +131,15 @@ int migration_test_one(int mtu_drop)
     uint64_t loss_mask = 0;
     uint64_t max_completion_microsec = 1800000;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
-        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+    picoquic_connection_id_t initial_cid = { {0x1a, 0x10, 0xc0, 4, 5, 6, 7, 8}, 8 };
+    int ret;
+
+    if (mtu_drop) {
+        initial_cid.id[2] = 0xcd;
+    }
+    
+    ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, &initial_cid);
 
     if (mtu_drop) {
         /* The MTU drop test is specifically orientated towards verifying retransmissions,
@@ -144,7 +151,7 @@ int migration_test_one(int mtu_drop)
         ret = -1;
     }
     else {
-        picoquic_set_binlog(test_ctx->qserver, MIGRATION_TRACE_BIN);
+        picoquic_set_binlog(test_ctx->qserver, ".");
         test_ctx->qserver->use_long_log = 1;
     }
 

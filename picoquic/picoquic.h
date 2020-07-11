@@ -798,6 +798,7 @@ typedef void (*picoquic_congestion_algorithm_observe)(
 
 typedef struct st_picoquic_congestion_algorithm_t {
     char const * congestion_algorithm_id;
+    uint8_t congestion_algorithm_number;
     picoquic_congestion_algorithm_init alg_init;
     picoquic_congestion_algorithm_notify alg_notify;
     picoquic_congestion_algorithm_delete alg_delete;
