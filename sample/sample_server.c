@@ -362,7 +362,7 @@ int picoquic_sample_server(int server_port, const char* server_cert, const char*
     int ret = 0;
     picoquic_quic_t* quic = NULL;
     picoquic_server_sockets_t server_sockets;
-    char const* binlog_filename = PICOQUIC_SAMPLE_SERVER_BINLOG_FILE;
+    char const* binlog_dir = PICOQUIC_SAMPLE_SERVER_BINLOG_DIR;
     struct sockaddr_storage addr_from;
     struct sockaddr_storage addr_to;
     int if_index_to;
@@ -400,7 +400,7 @@ int picoquic_sample_server(int server_port, const char* server_cert, const char*
 
             picoquic_set_default_congestion_algorithm(quic, picoquic_bbr_algorithm);
 
-            picoquic_set_binlog(quic, binlog_filename);
+            picoquic_set_binlog(quic, binlog_dir);
 
             picoquic_set_log_level(quic, 1);
 
