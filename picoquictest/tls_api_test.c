@@ -958,10 +958,10 @@ void tls_api_delete_ctx(picoquic_test_tls_api_ctx_t* test_ctx)
     free(test_ctx);
 }
 
-int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_version,
+int tls_api_init_ctx_ex(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_version,
     char const* sni, char const* alpn, uint64_t* p_simulated_time, 
     char const* ticket_file_name, char const* token_file_name,
-    int force_zero_share, int delayed_init, int use_bad_crypt)
+    int force_zero_share, int delayed_init, int use_bad_crypt, picoquic_connection_id_t * icid)
 {
     int ret = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -1050,7 +1050,8 @@ int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_versi
 
                 /* Create a client connection */
                 test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
-                    picoquic_null_connection_id, picoquic_null_connection_id,
+                    (icid == NULL)? picoquic_null_connection_id: *icid,
+                    picoquic_null_connection_id,
                     (struct sockaddr*)&test_ctx->server_addr, *p_simulated_time,
                     proposed_version, sni, alpn, 1);
 
@@ -1072,6 +1073,14 @@ int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_versi
     *pctx = test_ctx;
 
     return ret;
+}
+
+int tls_api_init_ctx(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_version,
+    char const* sni, char const* alpn, uint64_t* p_simulated_time,
+    char const* ticket_file_name, char const* token_file_name,
+    int force_zero_share, int delayed_init, int use_bad_crypt)
+{
+    return tls_api_init_ctx_ex(pctx, proposed_version, sni, alpn, p_simulated_time, ticket_file_name, token_file_name, force_zero_share, delayed_init, use_bad_crypt, NULL);
 }
 
 static int tls_api_one_sim_link_arrival(picoquictest_sim_link_t* sim_link, struct sockaddr* target_addr, 
@@ -1972,14 +1981,15 @@ int tls_api_wrong_alpn_test()
  * Scenario based transmission tests.
  */
 
-int tls_api_one_scenario_init(
+int tls_api_one_scenario_init_ex(
     picoquic_test_tls_api_ctx_t** p_test_ctx, uint64_t * simulated_time,
     uint32_t proposed_version,
-    picoquic_tp_t * client_params, picoquic_tp_t * server_params)
+    picoquic_tp_t * client_params, picoquic_tp_t * server_params,
+    picoquic_connection_id_t * icid)
 {
-    int ret = tls_api_init_ctx(p_test_ctx,
+    int ret = tls_api_init_ctx_ex(p_test_ctx,
         (proposed_version == 0) ? PICOQUIC_INTERNAL_TEST_VERSION_1 : proposed_version,
-        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, simulated_time, NULL, NULL, 0, 1, 0);
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, simulated_time, NULL, NULL, 0, 1, 0, icid);
 
     if (ret != 0) {
         DBG_PRINTF("Could not create the QUIC test contexts for V=%x\n", proposed_version);
@@ -2003,6 +2013,14 @@ int tls_api_one_scenario_init(
     }
 
     return ret;
+}
+
+int tls_api_one_scenario_init(
+    picoquic_test_tls_api_ctx_t** p_test_ctx, uint64_t* simulated_time,
+    uint32_t proposed_version,
+    picoquic_tp_t* client_params, picoquic_tp_t* server_params)
+{
+    return tls_api_one_scenario_init_ex(p_test_ctx, simulated_time, proposed_version, client_params, server_params, NULL);
 }
 
 int tls_api_one_scenario_verify(picoquic_test_tls_api_ctx_t* test_ctx) {
@@ -6817,13 +6835,14 @@ int bad_cnxid_test()
 #define PACKET_TRACE_TEST_REF "picoquictest/packet_trace_ref.txt"
 #endif
 #define PACKET_TRACE_CSV "packet_trace.csv"
-#define PACKET_TRACE_BIN "packet_trace.bin"
+#define PACKET_TRACE_BIN "ace1020304050607.log"
 
 int packet_trace_test()
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
+    picoquic_connection_id_t initial_cid = { {0xac, 0xe1, 2, 3, 4, 5, 6, 7}, 8 };
+    int ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
@@ -8742,7 +8761,7 @@ int direct_receive_test()
 * We verify that in these scenario the CWIN does not grow too much above the flow control window.
 */
 #define APP_LIMIT_TRACE_CSV "app_limit_trace.csv"
-#define APP_LIMIT_TRACE_BIN "app_limit_trace.bin"
+#define APP_LIMIT_TRACE_BIN "acc1020304050607.log"
 
 int app_limit_cc_test_one(
     picoquic_congestion_algorithm_t* ccalgo, uint64_t max_completion_time)
@@ -8753,13 +8772,14 @@ int app_limit_cc_test_one(
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     picoquic_tp_t client_parameters;
     uint64_t cwin_limit = 100000;
+    picoquic_connection_id_t initial_cid = { {0xac, 0xc1, 2, 3, 4, 5, 6, 7}, 8 };
     int ret = 0;
 
     memset(&client_parameters, 0, sizeof(picoquic_tp_t));
     picoquic_init_transport_parameters(&client_parameters, 1);
     client_parameters.initial_max_data = 40000;
 
-    ret = tls_api_one_scenario_init(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, &client_parameters, NULL);
+    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, &client_parameters, NULL, &initial_cid);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
@@ -8769,7 +8789,7 @@ int app_limit_cc_test_one(
 
         picoquic_set_default_congestion_algorithm(test_ctx->qserver, ccalgo);
         picoquic_set_congestion_algorithm(test_ctx->cnx_client, ccalgo);
-        picoquic_set_binlog(test_ctx->qserver, APP_LIMIT_TRACE_BIN);
+        picoquic_set_binlog(test_ctx->qserver, ".");
         test_ctx->qserver->use_long_log = 1;
         test_ctx->cnx_client->is_flow_control_limited = 1;
 
