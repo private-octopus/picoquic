@@ -1955,20 +1955,6 @@ picoquic_stream_head_t* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t str
 
 void picoquic_delete_stream(picoquic_cnx_t * cnx, picoquic_stream_head_t* stream)
 {
-#if 0
-    picoquic_stream_data_node_t* first;
-    picoquic_sack_item_t* sack;
-
-    while ((first = stream->send_queue) != NULL) {
-        stream->send_queue = first->next_stream_data;
-        free(first);
-    }
-    while ((sack = stream->first_sack_item.next_sack) != NULL) {
-        stream->first_sack_item.next_sack = sack->next_sack;
-        free(sack);
-    }
-    picosplay_empty_tree(&stream->stream_data_tree);
-#endif
     picosplay_delete(&cnx->stream_tree, stream);
 }
 
@@ -2664,20 +2650,6 @@ void picoquic_connection_id_callback(picoquic_quic_t * quic, picoquic_connection
             picoquic_cid_encrypt_under_mask(ctx->cid_enc, cnx_id_returned, &ctx->cnx_id_mask, cnx_id_returned);
         }
         break;
-#if 0
-    case picoquic_connection_id_encrypt_global:
-        /* global encryption */
-        if (ctx->cid_enc == NULL) {
-            int ret = picoquic_cid_get_encrypt_global_ctx(&ctx->cid_enc, 1, quic->reset_seed, quic->local_cnxid_length);
-            if (ret != 0) {
-                DBG_PRINTF("Cannot create CID encryption context, ret=%d\n", ret);
-            }
-        }
-        if (ctx->cid_enc != NULL) {
-            picoquic_cid_encrypt_global(ctx->cid_enc, cnx_id_returned, cnx_id_returned);
-        }
-        break;
-#endif
     default:
         /* Leave it unencrypted */
         break;
@@ -2716,10 +2688,6 @@ void picoquic_connection_id_callback_free_ctx(void * cnx_id_cb_data)
         case picoquic_connection_id_encrypt_basic:
             /* encryption under mask */
             picoquic_cid_free_under_mask_ctx(ctx->cid_enc);
-            break;
-        case picoquic_connection_id_encrypt_global:
-            /* global encryption */
-            picoquic_cid_free_encrypt_global_ctx(ctx->cid_enc);
             break;
         default:
             /* Guessing for the most common, assuming free will work... */
@@ -3443,22 +3411,37 @@ static void picoquic_lb_compat_cid_generate_obfuscated(picoquic_quic_t* quic,
     }
 }
 
+static void picoquic_lb_compat_cid_one_pass_stream(void * enc_ctx, uint8_t * nonce, size_t nonce_length, uint8_t * target, size_t target_length)
+{
+    uint8_t mask[16];
+    /* Set the obfuscation value */
+    memset(mask, 0, sizeof(mask));
+    memcpy(mask, nonce, nonce_length);
+    /* Encrypt with ECB */
+    picoquic_aes128_ecb_encrypt(enc_ctx, mask, mask, sizeof(mask));
+    /* Apply the mask */
+    for (size_t i = 0; i < target_length; i++) {
+        target[i] ^= mask[i];
+    }
+}
+
 static void picoquic_lb_compat_cid_generate_stream_cipher(picoquic_quic_t* quic,
     picoquic_load_balancer_cid_context_t* lb_ctx, picoquic_connection_id_t* cnx_id_returned)
 {
-    uint8_t mask[16];
     size_t id_offset = 1 + lb_ctx->nonce_length;
-
+    /* Prepare a clear text server ID */
     cnx_id_returned->id[0] = lb_ctx->first_byte;
-    /* Set the obfuscation value */
-    memset(mask, 0, sizeof(mask));
-    memcpy(mask, cnx_id_returned->id + 1, lb_ctx->nonce_length);
-    /* Encrypt with ECB */
-    picoquic_aes128_ecb_encrypt(lb_ctx->cid_encryption_context, mask, mask, sizeof(mask));
-    /* Copy the masked server id */
-    for (size_t i = 0; i < lb_ctx->server_id_length; i++) {
-        cnx_id_returned->id[id_offset + i] = lb_ctx->server_id[i] ^ mask[i];
-    }
+    memcpy(cnx_id_returned->id + id_offset, lb_ctx->server_id, lb_ctx->server_id_length);
+    /* First pass -- obtain intermediate server ID */
+    picoquic_lb_compat_cid_one_pass_stream(lb_ctx->cid_encryption_context, cnx_id_returned->id + 1, lb_ctx->nonce_length,
+        cnx_id_returned->id + id_offset, lb_ctx->server_id_length);
+    /* Second pass -- obtain encrypted nonce */
+    picoquic_lb_compat_cid_one_pass_stream(lb_ctx->cid_encryption_context, 
+        cnx_id_returned->id + id_offset, lb_ctx->server_id_length,
+        cnx_id_returned->id + 1, lb_ctx->nonce_length);
+    /* Third pass -- obtain encrypted server-id */
+    picoquic_lb_compat_cid_one_pass_stream(lb_ctx->cid_encryption_context, cnx_id_returned->id + 1, lb_ctx->nonce_length,
+        cnx_id_returned->id + id_offset, lb_ctx->server_id_length);
 }
 
 static void picoquic_lb_compat_cid_generate_block_cipher(picoquic_quic_t* quic,
@@ -3531,19 +3514,23 @@ static uint64_t picoquic_lb_compat_cid_verify_obfuscated(picoquic_quic_t* quic,
 static uint64_t picoquic_lb_compat_cid_verify_stream_cipher(picoquic_quic_t* quic,
     picoquic_load_balancer_cid_context_t* lb_ctx, picoquic_connection_id_t const* cnx_id)
 {
-    uint8_t mask[16];
     size_t id_offset = 1 + lb_ctx->nonce_length;
     uint64_t s_id64 = 0;
+    picoquic_connection_id_t target = *cnx_id;
+    /* First pass -- obtain intermediate server ID */
+    picoquic_lb_compat_cid_one_pass_stream(lb_ctx->cid_encryption_context, target.id + 1, lb_ctx->nonce_length,
+        target.id + id_offset, lb_ctx->server_id_length);
+    /* Second pass -- obtain nonce */
+    picoquic_lb_compat_cid_one_pass_stream(lb_ctx->cid_encryption_context,
+        target.id + id_offset, lb_ctx->server_id_length, target.id + 1, lb_ctx->nonce_length);
+    /* First pass -- obtain server-id */
+    picoquic_lb_compat_cid_one_pass_stream(lb_ctx->cid_encryption_context, target.id + 1, lb_ctx->nonce_length,
+        target.id + id_offset, lb_ctx->server_id_length);
 
-    /* Set the obfuscation value */
-    memset(mask, 0, sizeof(mask));
-    memcpy(mask, cnx_id->id + 1, lb_ctx->nonce_length);
-    /* Encrypt with ECB */
-    picoquic_aes128_ecb_encrypt(lb_ctx->cid_encryption_context, mask, mask, sizeof(mask));
-    /* Unmask and decode the server ID */
+    /* decode the server ID */
     for (size_t i = 0; i < lb_ctx->server_id_length; i++) {
         s_id64 <<= 8;
-        s_id64 += (cnx_id->id[id_offset + i] ^ mask[i]);
+        s_id64 += target.id[id_offset + i];
     }
 
     return s_id64;
@@ -3617,7 +3604,7 @@ int picoquic_lb_compat_cid_config(picoquic_quic_t* quic, picoquic_load_balancer_
         ret = -1;
     }
     else if (quic->cnx_id_callback_fn != NULL && quic->cnx_id_callback_ctx != NULL){
-        /* Error. Some other CID generation is configured, cannt be changed */
+        /* Error. Some other CID generation is configured, cannot be changed */
         ret = -1;
     }
     else {

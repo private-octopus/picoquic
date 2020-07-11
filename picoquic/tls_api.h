@@ -148,9 +148,6 @@ void picoquic_cid_encrypt_under_mask(void * cid_enc, const picoquic_connection_i
 void picoquic_cid_decrypt_under_mask(void * cid_enc, const picoquic_connection_id_t * cid_in, const picoquic_connection_id_t * mask, picoquic_connection_id_t * cid_out);
 
 void picoquic_cid_free_encrypt_global_ctx(void ** v_cid_enc);
-int picoquic_cid_get_encrypt_global_ctx(void ** v_cid_enc, int is_enc, const void * secret, size_t cid_length);
-void picoquic_cid_encrypt_global(void * cid_enc, const picoquic_connection_id_t * cid_in, picoquic_connection_id_t * cid_out);
-void picoquic_cid_decrypt_global(void * cid_ffx, const picoquic_connection_id_t * cid_in, picoquic_connection_id_t * cid_out);
 
 int picoquic_esni_load_rr(char const * esni_rr_file_name, uint8_t *esnikeys, size_t esnikeys_max, size_t *esnikeys_len);
 struct st_ptls_esni_secret_t * picoquic_esni_secret(picoquic_cnx_t * cnx);
